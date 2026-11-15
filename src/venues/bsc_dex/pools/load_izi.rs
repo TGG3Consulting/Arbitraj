@@ -24,8 +24,9 @@ use super::abi_izi::{IIziPool as P, IIziState as S};
 use super::families::Family;
 use super::load_metric_ladder::{self, Quoter};
 
-/// Состояние пула на блоке. Принимает: окружение, токены, вид, пул, пару записи (по возрастанию), USDT, тег. Монета —
-/// сторона пары, не USDT (лесенка — только у пары с USDT, как у Metric). Ошибки: узел, вызов откатился или ответ не
+/// Состояние пула на блоке. Принимает: окружение, токены, вид, пул, пару записи (по возрастанию), встречный токен
+/// записи (Entry.usdt: USDT или промежуточная, решение 52), тег. Монета — сторона пары, не встречный токен (лесенка —
+/// только у пары с USDT площадки, решение 297: load_metric_ladder.rs). Ошибки: узел, вызов откатился или ответ не
 /// по ABI, токены пула — не пара записи (BadResponse).
 #[allow(clippy::too_many_arguments)]
 pub async fn load(
@@ -34,7 +35,7 @@ pub async fn load(
     f: &Family,
     pool: Address,
     pair: (Address, Address),
-    usdt: Address,
+    counter: Address,
     tag: &str,
 ) -> GatewayResult<PoolState> {
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("iZiSwap {pool}: {what}"));
@@ -58,7 +59,7 @@ pub async fn load(
     if (x, y) != pair {
         return Err(bad(format!("токены пула {x:#x} / {y:#x} — не пара записи")));
     }
-    let coin = if pair.0 == usdt { pair.1 } else { pair.0 };
+    let coin = if pair.0 == counter { pair.1 } else { pair.0 };
     let quote = if pair.0 == coin { pair.1 } else { pair.0 };
     let q = Quoter {
         name: "iZiSwap",
@@ -68,7 +69,7 @@ pub async fn load(
     let (ladder_quote_in, ladder_base_in) = if sqrt.is_zero() {
         (Vec::new(), Vec::new())
     } else {
-        load_metric_ladder::read_with(ctx, tokens, f.id, pool, coin, quote, usdt, x, tag, q).await?
+        load_metric_ladder::read_with(ctx, tokens, f.id, pool, coin, quote, x, tag, q).await?
     };
     Ok(state(pair, coin, sqrt, ladder_quote_in, ladder_base_in))
 }

@@ -23,8 +23,9 @@ use super::abi_metric::IMetricOmmPool as P;
 use super::families::Family;
 use super::load_metric_ladder;
 
-/// Состояние пула на блоке. Принимает: окружение, токены, вид, пул, пару записи (по возрастанию), USDT, тег. Монета —
-/// сторона пары, не USDT (лесенка — только у пары с USDT; без USDT монета = token0 записи, лесенки нет).
+/// Состояние пула на блоке. Принимает: окружение, токены, вид, пул, пару записи (по возрастанию), встречный токен
+/// записи (Entry.usdt: USDT или промежуточная, решение 52), тег. Монета — сторона пары, не встречный токен (лесенка —
+/// только у пары с USDT площадки, решение 297: load_metric_ladder.rs).
 /// Ошибки: узел, getImmutables откатился или не по ABI, токены пула — не пара записи.
 #[allow(clippy::too_many_arguments)]
 pub async fn load(
@@ -33,7 +34,7 @@ pub async fn load(
     f: &Family,
     pool: Address,
     pair: (Address, Address),
-    usdt: Address,
+    counter: Address,
     tag: &str,
 ) -> GatewayResult<PoolState> {
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("Metric {pool}: {what}"));
@@ -60,10 +61,10 @@ pub async fn load(
         Ok(b) => Some(call::decode::<P::getSellAndBuyPricesCall>(b)?),
         Err(_) => None,
     };
-    let coin = if pair.0 == usdt { pair.1 } else { pair.0 };
+    let coin = if pair.0 == counter { pair.1 } else { pair.0 };
     let quote = if pair.0 == coin { pair.1 } else { pair.0 };
     let (ladder_quote_in, ladder_base_in) = if price.is_some() {
-        load_metric_ladder::read(ctx, tokens, f.id, pool, coin, quote, usdt, im.token0, tag).await?
+        load_metric_ladder::read(ctx, tokens, f.id, pool, coin, quote, im.token0, tag).await?
     } else {
         (Vec::new(), Vec::new())
     };

@@ -291,3 +291,33 @@ fn review_t118_rules() {
         "Metric — как раньше (needs)"
     );
 }
+
+/// Решение 297 (t128): лесенка dex.pmm_ladder_usd — только у пары, где встречный токен = USDT площадки. Пары и токены —
+/// из записанных пулов probe.json (блок 133668333): у всех четырёх tokenX = USDT — лесенка есть; встречный токен WBNB
+/// (tokenY записанного пула USDT/WBNB — так встречный токен записи реестра выглядит у пары монета / WBNB, решение 52) —
+/// лесенки нет; USDT площадки не задан — лесенки нет. Чтение лесенки с узлом (load_metric_ladder.rs read_with,
+/// load_woo_ladder.rs read) этим тестом не покрыто — записанных ответов узла для пары не к USDT нет (docs/TASKS.md).
+#[test]
+fn ladder_only_for_usdt_quote_t128() {
+    use arb::venues::bsc_dex::pools::load_woo_ladder::usdt_quote;
+    let probe = json("probe.json");
+    let usdt = addr(USDT);
+    let wbnb = addr("0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c");
+    let mut seen_wbnb = false;
+    for p in probe["pools"].as_array().unwrap() {
+        let (x, y) = (
+            addr(p["tokenX"].as_str().unwrap()),
+            addr(p["tokenY"].as_str().unwrap()),
+        );
+        assert_eq!(x, usdt, "записанные пулы — пары с USDT");
+        assert!(usdt_quote(Some(usdt), x), "встречный USDT — лесенка есть");
+        assert!(
+            !usdt_quote(Some(usdt), y),
+            "встречный {y:#x} не USDT — лесенки нет"
+        );
+        assert!(!usdt_quote(None, x), "USDT площадки не задан — лесенки нет");
+        seen_wbnb |= y == wbnb;
+    }
+    assert!(seen_wbnb, "WBNB есть среди записанных токенов");
+    assert!(!usdt_quote(Some(usdt), wbnb));
+}

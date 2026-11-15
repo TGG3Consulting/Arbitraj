@@ -28,7 +28,7 @@ use super::abi_woo::{IWooPP, IWooracle, implementation_slot};
 use super::load_woo_ladder;
 
 /// Состояние пары на блоке. Принимает: окружение, токены, вид, общий контракт, базовую монету, пару (token0, token1),
-/// USDT, тег. Ошибки: узел, ответ не по ABI, не задана dex.oracle, оракул пула не тот (InvalidAddress).
+/// тег (лесенка — только у пары с USDT площадки, решение 297: load_woo_ladder.rs usdt_quote). Ошибки: узел, ответ не по ABI, не задана dex.oracle, оракул пула не тот (InvalidAddress).
 #[allow(clippy::too_many_arguments)]
 pub async fn load(
     ctx: &Ctx,
@@ -37,7 +37,6 @@ pub async fn load(
     pool: Address,
     coin: Address,
     pair: (Address, Address),
-    usdt: Address,
     tag: &str,
 ) -> GatewayResult<PoolState> {
     let oracle = ctx.dex_addr("dex.oracle", f.id)?;
@@ -95,7 +94,7 @@ pub async fn load(
     let live = !paused && feasible && pinned == Some(implementation);
     let quote = if pair.0 == coin { pair.1 } else { pair.0 };
     let (ladder_quote_in, ladder_base_in) = if live {
-        load_woo_ladder::read(ctx, tokens, f.id, pool, coin, quote, usdt, tag).await?
+        load_woo_ladder::read(ctx, tokens, f.id, pool, coin, quote, tag).await?
     } else {
         (Vec::new(), Vec::new())
     };

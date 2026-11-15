@@ -63,7 +63,7 @@ pub async fn fresh(q: &Quoting, c: &DexCycle) -> GatewayResult<(Vec<Leg>, u64)> 
             token1: e.pool.token1,
         })
         .collect();
-    let fetch = load_batch::states(ctx, &q.tokens, &wants, block);
+    let fetch = load_batch::states(ctx, &q.tokens, &q.reg, &wants, block);
     let loaded = tokio::time::timeout(Duration::from_millis(timeout_ms), fetch)
         .await
         .map_err(|_| {

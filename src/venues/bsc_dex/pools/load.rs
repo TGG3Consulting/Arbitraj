@@ -22,7 +22,7 @@ use super::families::Family;
 use super::families::Proto;
 use super::fee_fresh;
 use super::hooks::DYNAMIC_FEE_FLAG;
-use super::registry::Entry;
+use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
     load_algebra, load_algebra_integral, load_balancer, load_bin, load_cl, load_curve, load_curve_ng, load_dmm, load_dodo,
@@ -42,12 +42,14 @@ pub struct Loaded {
 
 /// Чтение состояния пула на блоке.
 /// Принимает: вид, ссылку, tickSpacing, binStep, USDT и пару (token0, token1) (кто из них Y у Bin; индексы пары у
-/// StableSwap), токены (decimals USDT и монет StableSwap), блок.
+/// StableSwap), токены (decimals USDT и монет StableSwap), реестр (решение 306: курс встречного токена к USDT для
+/// лесенки цен пула пары не с USDT — pools/ladder_counter.rs; другим видам не нужен), блок.
 /// Ошибки: не задана нужная настройка, узел, ответ не по ABI, нет tickSpacing/binStep у пула.
 #[allow(clippy::too_many_arguments)]
 pub async fn state(
     ctx: &Ctx,
     tokens: &Tokens,
+    reg: &Registry,
     f: &Family,
     reference: &PoolRef,
     spacing: Option<i32>,
@@ -116,7 +118,7 @@ pub async fn state(
     if f.proto == Proto::MetricOmm {
         if let PoolRef::Contract(a) = reference {
             return Ok(Loaded {
-                state: load_metric::load(ctx, tokens, f, *a, pair, usdt, &tag).await?,
+                state: load_metric::load(ctx, tokens, reg, f, *a, pair, usdt, &tag).await?,
                 ticks: None,
                 bins: None,
                 fee_pips: None,
@@ -131,7 +133,7 @@ pub async fn state(
     if matches!(f.proto, Proto::IziSwap | Proto::BiswapV3) {
         if let PoolRef::Contract(a) = reference {
             return Ok(Loaded {
-                state: load_izi::load(ctx, tokens, f, *a, pair, usdt, &tag).await?,
+                state: load_izi::load(ctx, tokens, reg, f, *a, pair, usdt, &tag).await?,
                 ticks: None,
                 bins: None,
                 fee_pips: None,
@@ -227,7 +229,7 @@ pub async fn state(
                 load_inf_stable::load(ctx, f, *a, pair, &tag).await?
             }
             (Proto::WooPP, PoolRef::Member { contract, coin }) => {
-                load_woo::load(ctx, tokens, f, *contract, *coin, pair, &tag).await?
+                load_woo::load(ctx, tokens, reg, f, *contract, *coin, pair, &tag).await?
             }
             _ => {
                 return Err(ctx.err(
@@ -394,6 +396,7 @@ pub async fn state(
 pub async fn entry(
     ctx: &Ctx,
     tokens: &Tokens,
+    reg: &Registry,
     p: &Found,
     ticker: &str,
     usdt: Address,
@@ -402,6 +405,7 @@ pub async fn entry(
     let l = state(
         ctx,
         tokens,
+        reg,
         p.family,
         &p.reference,
         p.tick_spacing,
@@ -449,13 +453,21 @@ pub fn built(ctx: &Ctx, p: &Found, ticker: &str, usdt: Address, block: u64, l: L
     }
 }
 
-/// Перечитывает состояние записи на блоке. Принимает: запись. Возвращает: обновлённую запись (valid = true).
+/// Перечитывает состояние записи на блоке. Принимает: окружение, токены, реестр (как у state), запись.
+/// Возвращает: обновлённую запись (valid = true).
 /// Ошибки: как у state.
-pub async fn refresh(ctx: &Ctx, tokens: &Tokens, e: &Entry, block: u64) -> GatewayResult<Entry> {
+pub async fn refresh(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    reg: &Registry,
+    e: &Entry,
+    block: u64,
+) -> GatewayResult<Entry> {
     let p = &e.pool;
     let l = state(
         ctx,
         tokens,
+        reg,
         e.family,
         &p.reference,
         p.tick_spacing,

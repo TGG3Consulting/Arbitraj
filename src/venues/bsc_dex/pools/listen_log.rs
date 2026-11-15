@@ -93,7 +93,7 @@ pub async fn on_log(p: &Pools, log: &Log, waiting: bool) -> Result<bool, End> {
                     e.family.title, e.ticker
                 );
                 p.ctx.log(Level::Info, "dex.pool", msg, None).await;
-                load::refresh(&p.ctx, &p.tokens, &e, block)
+                load::refresh(&p.ctx, &p.tokens, &p.reg, &e, block)
                     .await
                     .map(|x| p.reg.put(x))
             }
@@ -119,10 +119,12 @@ pub async fn on_log(p: &Pools, log: &Log, waiting: bool) -> Result<bool, End> {
                 Ok(block)
             };
             match at {
-                Ok(at) => load::refresh(&p.ctx, &p.tokens, &entry, at).await.map(|e| {
-                    p.reg.put(e);
-                    p.signals.pool_ready();
-                }),
+                Ok(at) => load::refresh(&p.ctx, &p.tokens, &p.reg, &entry, at)
+                    .await
+                    .map(|e| {
+                        p.reg.put(e);
+                        p.signals.pool_ready();
+                    }),
                 Err(e) => Err(e),
             }
         }

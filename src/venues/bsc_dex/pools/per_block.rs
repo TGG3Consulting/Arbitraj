@@ -11,7 +11,8 @@
 //! • Metric OMM (решение 285): цена провайдера меняется каждым блоком (лесенка ответов пула — на каждом блоке).
 //! • iZiSwap / Biswap V3 (решение 286): лесенка ответов пула; у Biswap V3 комиссия голосуемая, событие
 //!   ChangeLiquidityState не слушается — перечитывание на каждом блоке (и на события пула, events_izi.rs). Ревью t118:
-//!   только пулы с USDT в паре (each_block) — у остальных лесенки нет никогда, перечитывать нечего.
+//!   только пулы с USDT в паре (each_block) — у остальных лесенки нет никогда, перечитывать нечего. Решение 306: при
+//!   dex.pmm_ladder_counter = да у DEX лесенка есть и у пар не с USDT — они тоже каждым блоком (ladder_counter.rs).
 //! • Nomiswap Stable (решение 284): setSwapFee пары события не шлёт, A — рампа по времени блока (getA).
 //! • KyberSwap Classic DMM (решение 287): комиссия getTradeInfo считается по номеру блока (EMA объёма) — меняется
 //!   каждым блоком без событий пула; котировку получает каждый пул (своя формула), поэтому перечитываются все.
@@ -28,8 +29,8 @@
 //! Решение 295: пары многомонетного пула (PoolRef::Multi) видов «каждым блоком» (Curve NG) — одно чтение на контракт
 //! (reload_many::load_group → load_site.rs); Balancer — per_block_balancer.rs (тоже по контракту).
 //! Кто вызывает: pools/session.rs.
-//! От чего зависит: listen.rs (Pools, End), reload.rs (load_one), discover.rs (Found), families.rs.
-//! Настройки: нет (через вызываемые — dex.*).
+//! От чего зависит: listen.rs (Pools, End), reload.rs (load_one), discover.rs (Found), families.rs, ladder_counter.rs.
+//! Настройки: dex.pmm_ladder_counter, dex.pmm_ladder_usd [DEX] (ladder_counter.rs each_block); через вызываемые — dex.*.
 
 use alloy::rpc::types::Log;
 use alloy_primitives::Address;
@@ -39,7 +40,7 @@ use crate::core::types::PoolRef;
 use super::discover::Found;
 use super::families::{Family, Proto};
 use super::listen::{End, Pools};
-use super::{per_block_balancer, per_block_lb, reload, reload_many};
+use super::{ladder_counter, per_block_balancer, per_block_lb, reload, reload_many};
 
 /// Перечитывается ли вид на каждом блоке. Ошибок нет.
 pub fn needs(f: &Family) -> bool {
@@ -87,7 +88,9 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
     let mut lb = Vec::new();
     // Решение 295: пары многомонетного пула (PoolRef::Multi) прочих видов — одно чтение на контракт (sites).
     let mut sites: Vec<(PoolRef, Vec<(&Found, &str)>)> = Vec::new();
-    for x in pools.iter().filter(|(f, _)| each_block(f, usdt)) {
+    // Решение 306: при dex.pmm_ladder_counter = да — и пулы iZiSwap / Biswap V3 без USDT в паре (ladder_counter.rs).
+    let per = |f: &Found| each_block(f, usdt) || ladder_counter::each_block(&p.ctx, f, usdt);
+    for x in pools.iter().filter(|(f, _)| per(f)) {
         let (f, t) = x;
         if p.reg.get(&f.reference).is_none() {
             continue;

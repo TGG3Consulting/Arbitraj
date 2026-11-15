@@ -26,6 +26,11 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 305 (t135, с ревью; `wc -l`): сверх ориентира 200 — src/venues/bsc_dex/pools/factory_calls.rs 287 строк (было
+  247, +40: пары WooFi по quoteToken()), pools/factory_scan.rs 229 (было 216: чтение quoteToken() и счёт вызовов),
+  directory/mod.rs 204 (было 199: ban для пары WooFi). В пределах: pools/multi_pair.rs 200, pools/market.rs 189,
+  pools/woo_quote.rs 84, tests/bsc_dex_woofi_pairs_retune.rs. Дробить factory_calls.rs — вынести ветку WooFi и
+  уровни/шаги (tiers / spacings / lookup_max) в factory_levels.rs; factory_scan.rs — sort / off / failed (см. 292).
 - Решение 296 (t127): тест на записи SHOPINX/WBNB (fit_volume_2026-11-15, ветка t125) — после её слияния (TASKS 296 п. 2); off_map перецентрирует карту только по полосе глубины, не по полосе чтения (TASKS 296 п. 4). Размеры: load_v2v3.rs 156, load_algebra.rs 120 строк — в ориентире.
 - Решение 292 (t123, с ревью): src/venues/bsc_dex/pools/factory_scan.rs 216 строк (было 207; вызов источника
   stable_list.rs и счёт вызовов) — сверх ориентира 200 и до правки; pools/stable_list.rs 211 (ревью: разбор пачки sort

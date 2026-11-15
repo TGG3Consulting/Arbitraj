@@ -114,15 +114,21 @@ impl Directory {
     /// на все пары контракта и на форму ссылки после смены dex.multi_pair; у прочих ссылок site() = ссылка — ключ прежний.
     pub fn ban(&self, r: &PoolRef, why: &str) -> bool {
         self.with(|s| {
-            let key = pool_key(r);
-            s.taken.remove(&key);
-            s.status
-                .insert(key, DirectoryStatus::Rejected(why.to_string()));
+            // Решение 305 (ревью): у пары WooFi (Member) ключ строки зависит от режима dex.multi_pair (с парой или строка
+            // контракта) — статус пишется только под ключами её взятых записей (поиск по site ниже), не под pool_key:
+            // в режиме «да» запись под строкой контракта была бы сиротой. Не взята — «отклонён» запишет record() по
+            // banned при следующей проверке, под верным ключом.
+            if !matches!(r, PoolRef::Member { .. }) {
+                let key = pool_key(r);
+                s.taken.remove(&key);
+                s.status
+                    .insert(key, DirectoryStatus::Rejected(why.to_string()));
+            }
             // Остальные взятые пары того же контракта (только у Multi). Задумано: запрет — по контракту, поэтому снимается и
             // запись того же контракта под другим id DEX или с ссылкой Contract (site() тот же) — проверка «кто меняет»
             // осудила контракт, а не пару.
-            // Решение 305: пара WooFi (Member) при dex.multi_pair = да взята под ключом с парой (multi_pair::dir_key),
-            // не под pool_key — снимается тем же поиском по физическому пулу (у Member site() = сама пара).
+            // Решение 305: пара WooFi (Member) взята под ключом режима (multi_pair::dir_key) — снимается тем же поиском по
+            // физическому пулу (у Member site() = сама пара), статус — под тем же ключом.
             if matches!(r, PoolRef::Multi { .. } | PoolRef::Member { .. }) {
                 let site = r.site();
                 let same: Vec<String> = s

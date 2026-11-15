@@ -9,7 +9,9 @@
   WooPPV2) — по строке справочника на пару при dex.multi_pair = да у DEX woofi_v2 (DECISIONS 305; живой бот: 0 пулов WooFi из 8
   пар). Новых настроек нет. **Задать в интерфейсе:** «Настройки» → DEX → id WooFi → `dex.multi_pair` = да (и как раньше
   dex.pmm_pool, dex.oracle, dex.pool_implementation, index.factory_scan). Открыто:
-  1. **Тест ждёт записи с живого узла** (записанных ответов WooPPV2 в репозитории нет): на одном блоке N — `quoteToken()`
+  0. Ревью t135 (DECISIONS 305, дополнение): исправлены В1 (реестр после «да → нет»), В5 (тест логики retune/ключей —
+     tests/bsc_dex_woofi_pairs_retune.rs), статус ban пары WooFi, селектор quoteToken() в тесте abi_woo.rs.
+  1. **Тест прохода ждёт записи с живого узла** (записанных ответов WooPPV2 в репозитории нет): на одном блоке N — `quoteToken()`
      (0x217a4b70) и `wooracle()` контракта dex.pmm_pool, `state(base)` оракула dex.oracle по 8 базовым монетам, слот реализации
      EIP-1967 → tests/data/woofi/pairs.json; по ним — тест прохода справочника (index_pass::take_with с разборами verify_woo на
      записи): 8 строк WooFi с ключом-парой — 8 взятых.
@@ -18,6 +20,9 @@
      8 ожидаемых пар; какая строка WooFi была первой в проходе на живом боте (причина «0» выведена по коду, журнал бота не сверен).
   3. Строки WooFi со встречным ≠ quoteToken(), уже лежащие в справочнике (индексатор, прежние проходы фабрик), при настройке
      проверяются и получают «отклонён» с причиной verify_woo (одна запись журнала на пул и причину) — не скрываются.
+  4. Не покрыто тестом: multi_pair::entry_fits (нужна запись реестра Entry и окружение) и пересборка подписки
+     market.rs целиком — проверено чтением кода; на живом боте после выкладки: «да → нет» — в реестре WooFi остаётся
+     одна пара, «нет → да» — все пары, без дублей.
 - **Решение 304 (15.11.2026, ветка t135/nomi-depth-woofi-pairs от rel/dex-all) — сделано, ждёт ревью и приёмки.** Глубина
   стейбл-пула в полосе не обнуляется от округления: поиск в quote/stable_depth.rs и quote/solidly_depth.rs стартует с
   пробы (баланс входа / vault_depth::PROBE_DIV), а не с 1 wei (DECISIONS 304; живой бот: nomiswap_stable USDT/USDC
@@ -30,6 +35,9 @@
      нужны metadata() и getAmountOut пула THENA V1 / Topaz stable на одном блоке); Curve/Saddle/PancakeSwap StableSwap/Lista
      идут той же веткой, отдельной записи для глубины нет. Покрыто: три пары Nomiswap Stable на блоке 133650877
      (tests/bsc_dex_nomiswap_stable_depth.rs).
+  3. **Подтвердить на живом боте после выкладки (ревью В2):** правка действует без настройки на все StableSwap
+     (Ellipsis, Nerve, PancakeSwap Stable, Lista, NG, Infinity Stable, Nomiswap) и стабильный Solidly — список пулов, чья
+     глубина в полосе изменилась с 0 на ненулевую (они начнут проходить dex.min_pool_liquidity_usd и попадут в маршруты).
 
 - **Решение 299 (15.11.2026, ветка t130/bundle-skip-single от rel/dex-all) — сделано, ждёт ревью и приёмки.** Новая
   необязательная настройка send.bundle_skip_single: да — одиночные каналы исключаются из отправки бандла (DECISIONS 299;

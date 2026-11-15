@@ -91,8 +91,15 @@ pub fn fits(f: &Family, r: &PoolRef, multi: &HashSet<String>) -> bool {
 }
 
 /// Что делает: запись реестра подходит под режим (market.rs, retain при пересборке подписки). Принимает: окружение,
-/// запись. Возвращает: как fits. Ошибок нет.
-pub fn entry_fits(ctx: &Ctx, e: &Entry) -> bool {
+/// запись, ссылки пулов, найденных для этой подписки (взятые справочника после retune и пары через промежуточные).
+/// Возвращает: многомонетный вид — Multi ⇔ DEX в режиме (как fits); решение 305 (ревью В1): WooFi — только если её
+/// пара среди найденных (ссылка Member в обоих режимах dex.multi_pair одна, поэтому вид ссылки режим не выдаёт: после
+/// «да → нет» retune снимает взятые пары с ключом-парой, и запись реестра без этой сверки осталась бы без слушателя —
+/// пачки слушания строятся только из найденного); прочие виды — true. Ошибок нет.
+pub fn entry_fits(ctx: &Ctx, e: &Entry, known: &HashSet<PoolRef>) -> bool {
+    if e.family.proto == Proto::WooPP {
+        return known.contains(&e.pool.reference);
+    }
     !e.family.proto.is_multi_coin() || matches!(e.pool.reference, PoolRef::Multi { .. }) == enabled(ctx, e.family)
 }
 

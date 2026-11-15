@@ -42,7 +42,8 @@ impl Snapshot {
             pairs: vec![],
         };
         for a in assets {
-            let Some(p) = symbols.state(&a.ticker) else {
+            // Решение 293: без minQty / maxQty по venue.ignore_deprecated_qty (Symbols::state_for).
+            let Some(p) = symbols.state_for(a) else {
                 s.missing.push(a.ticker.clone());
                 continue;
             };
@@ -81,8 +82,20 @@ impl Snapshot {
             .collect()
     }
 
-    /// Решение 293 (ревью): снимки отличаются только пределами количества пар (minQty / maxQty) — например после смены
-    /// venue.ignore_deprecated_qty. Принимает: прежний снимок. Возвращает: да — всё прочее совпадает. Ошибок нет.
+    /// Решение 293 (ревью): у каких пар сменились пределы количества (minQty / maxQty) — например после смены
+    /// venue.ignore_deprecated_qty. Принимает: прежний снимок. Возвращает: да — хотя бы у одной пары. Ошибок нет.
+    pub fn qty_changed(&self, old: &Snapshot) -> bool {
+        let q = |s: &Snapshot| -> Vec<_> {
+            s.pairs
+                .iter()
+                .map(|p| (p.ticker.clone(), p.min_qty, p.max_qty))
+                .collect()
+        };
+        q(self) != q(old)
+    }
+
+    /// Решение 293 (ревью): снимки отличаются только пределами количества пар. Принимает: прежний снимок.
+    /// Возвращает: да — всё прочее совпадает. Ошибок нет.
     pub fn only_qty_changed(&self, old: &Snapshot) -> bool {
         let strip = |s: &Snapshot| {
             let mut x = s.clone();

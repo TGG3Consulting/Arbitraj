@@ -203,7 +203,7 @@ pub mod reserve;
 pub mod risk;
 pub mod risk_count;
 mod risk_ready;
-mod route_pause;
+pub mod route_pause;
 pub mod rules_apply;
 mod rules_stop;
 pub mod sell;

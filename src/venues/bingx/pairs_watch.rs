@@ -87,6 +87,8 @@ pub async fn run(
             } else if now.only_qty_changed(&last) {
                 // Решение 293 (ревью): например смена venue.ignore_deprecated_qty.
                 " — только пределы количества (minQty / maxQty)"
+            } else if now.qty_changed(&last) {
+                " — покупка/продажа через API и пределы количества (minQty / maxQty)"
             } else {
                 " — только покупка/продажа через API"
             }

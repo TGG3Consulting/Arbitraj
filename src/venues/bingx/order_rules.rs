@@ -4,8 +4,8 @@
 //! apiStateSell), количество — вниз до stepSize, цена — до tickSize в безопасную сторону (покупка — вниз, продажа —
 //! вверх), количество в пределах minQty / maxQty, сумма в пределах minNotional / maxNotional, задан
 //! venue.order_time_in_force. Правила в одном месте — проверка до покупки и ордер не расходятся.
-//! Решение 293: при venue.ignore_deprecated_qty пределов количества у пары нет (их убирает symbols_qty.rs при разборе
-//! справочника) — проверка количества здесь пропускается сама (min_qty / max_qty = None), сумма проверяется как раньше.
+//! Решение 293: при venue.ignore_deprecated_qty = да у пары (монета или площадка) пределов количества у неё нет
+//! (Symbols::get_for, symbols_qty.rs) — проверка количества пропускается сама (None), сумма проверяется как раньше.
 //! Пробного ордера (test order) у спота BingX НЕТ: в официальном справочнике спотовой торговли перечислены order,
 //! batchOrders, cancel*, cancelReplace, query, openOrders, historyOrders, myTrades — test есть только у бессрочных
 //! фьючерсов (POST /openApi/swap/v2/trade/order/test), фьючерсов в проекте нет. Поэтому у BingX — только правила.
@@ -120,7 +120,8 @@ pub fn check_rules(
 /// вызывающего), запрос. Возвращает: Prepared. Ошибки: OrderRejected (правила), NotConfigured (venue.order_time_in_force),
 /// BadResponse (пары нет в справочнике).
 pub fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<Prepared> {
-    let rules = symbols.get(ctx, &req.asset.ticker)?;
+    // Решение 293: правила пары монеты запроса (без minQty / maxQty по venue.ignore_deprecated_qty).
+    let rules = symbols.get_for(ctx, &req.asset)?;
     let (qty, price) = check_rules(&rules, req.side, req.qty, req.worst_price)
         .map_err(|m| ctx.tag(GatewayError::new(ErrorCode::OrderRejected, None, m)))?;
     let tif = ctx.text("venue.order_time_in_force")?;

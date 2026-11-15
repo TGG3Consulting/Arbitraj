@@ -3,18 +3,22 @@
 //! в реестре — настоящий адаптер BingX без сети (справочник пар — записанный ответ symbols SHOPINX-USDT 15.11.2026,
 //! tests/data/bingx_minqty_2026-11-15). Продажа SHOPINX на BingX отклонена: текст отказа — настоящий ответ правил ордера
 //! адаптера (order_rules::ready на записанном справочнике: «количество 11000 меньше minQty 57505» — так откажет и
-//! локальная проверка при «да → нет», и, по смыслу, биржа). Проверяется:
-//! 1) sell_unsent::decide — Retry::No (стартовое правило), alert — сделка ждёт человека (WaitingHuman);
-//! 2) после alert направление этой сделки (DEX → BingX, SHOPINX) на паузе signal.route_cooldown_s: на ценах, на которых
-//!    до отказа был «кандидат», фильтр сигнала даёт Cooldown (новая сделка начинается только из Candidate —
-//!    core/evaluate.rs); обратное направление не на паузе;
-//! 3) signal.route_cooldown_s не задана — паузы нет (как ledger::finish_paused), Warn в журнале core.ledger;
-//! 4) отказ продажи на площадке не из реестра бирж (DEX) — паузы нет (rejected_on_cex).
+//! локальная проверка при «да → нет»). Путь: sell_unsent::decide = Retry::No → alert → сделка ждёт человека.
+//! 1) stuck.reject_route_pause не задана — как на 52ca0c10: паузы нет и записей core.ledger нет (и при заданной
+//!    signal.route_cooldown_s); «да» у системы и «нет» у площадки — паузы нет (площадка сильнее);
+//! 2) «да» — пауза ровно одного направления сделки (DEX → BingX, SHOPINX): на ценах, где до отказа был «кандидат»,
+//!    фильтр сигнала даёт Cooldown (новая сделка — только из Candidate, core/evaluate.rs); обратное — не на паузе;
+//! 3) «да», а signal.route_cooldown_s не задана — паузы нет, Warn в журнале core.ledger (как ledger::finish_paused);
+//! 4) rejected_on_cex: площадки нет в реестре — нет; площадка вида DEX — нет; BingX — да.
 //!
-//! Цены сигнала — первый сопоставленный лот отчёта о чужих сделках SHOPINX 13.11 (покупка 100 USDT → 8362.877206745749506115
-//! SHOPINX на DEX; продажа на BingX 8362.877206 → 103.63605112047 USDT, публичная лента исполнений), комиссии 0.
+//! Цены сигнала — лот 1 отчёта о чужих сделках SHOPINX 13.11 (tests/data/shopinx_trades_2026-11-15/lot1.txt: покупка
+//! 100 USDT → 8362.877206745749506115 SHOPINX на DEX; «Публичные исполнения: 8362.877206 SHOPINX / 103.63605112047
+//! USDT» на BingX), комиссии 0.
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::core (engine, sell_unsent, signal, deal), arb::venues::bingx, arb::settings, arb::storage.
+//! От чего зависит: tests/bingx_293_common, arb::core (engine, sell_unsent, route_pause, signal, deal),
+//! arb::venues::bingx, arb::settings, arb::storage.
+
+mod bingx_293_common;
 
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -24,9 +28,11 @@ use arb::core::Core;
 use arb::core::deal::{Deal, Step};
 use arb::core::deps::Deps;
 use arb::core::op_error::OpError;
+use arb::core::route_pause;
 use arb::core::sell_unsent::{self, Retry};
 use arb::core::signal::{Params, Prices, State};
 use arb::core::types::{Asset, Direction, Side, TradeRequest, VenueId};
+use arb::gateway::contract::VenueKind;
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
 use arb::settings::store::Store;
@@ -156,13 +162,23 @@ fn deal(at: &str) -> Deal {
     x
 }
 
-/// Состояние фильтра сигнала направления на ценах первого лота (кандидат без паузы).
+/// Число из строки отчёта после метки (до пробела).
+fn after(t: &str, mark: &str) -> Decimal {
+    let i = t.find(mark).unwrap() + mark.len();
+    d(t[i..].split_whitespace().next().unwrap())
+}
+
+/// Состояние фильтра сигнала направления на ценах лота 1 отчёта (tests/data/shopinx_trades_2026-11-15/lot1.txt):
+/// покупка «KyberSwap 100.00 <монет>», продажа «Публичные исполнения: <монет> SHOPINX / <USDT> USDT»; комиссии 0.
 fn state(core: &Core, dir: &Direction) -> State {
+    let t = bingx_293_common::lot1();
+    let (spent, bought) = (after(&t, "KyberSwap "), after(&t, "KyberSwap 100.00 "));
+    let (sold, got) = (after(&t, "Публичные исполнения: "), after(&t, "SHOPINX / "));
     let p = Prices {
-        buy: d("100") / d("8362.877206745749506115"),
-        sell: d("103.63605112047") / d("8362.877206"),
+        buy: spent / bought,
+        sell: got / sold,
         fees_pct: Decimal::ZERO,
-        qty: d("8362.877206"),
+        qty: sold,
     };
     let par = Ok(Params {
         hold_ms: 0,
@@ -183,29 +199,71 @@ fn rejected(why: &str) -> OpError {
     }
 }
 
+/// Задать настройку в области (система или площадка).
+async fn put(s: &Store, name: &str, sc: Scope, v: Value) {
+    s.set(name, sc, Some(v), "тест").await.unwrap();
+}
+
+/// Сколько записей журнала core.ledger.
+async fn ledger_logs(j: &Journal) -> usize {
+    let log = j.list(500, None).await.unwrap();
+    log.iter().filter(|e| e.kind == "core.ledger").count()
+}
+
+/// Отказ продажи на BingX и алерт (путь sell.rs → decide → alert). Возвращает: сделку после алерта.
+async fn reject_and_alert(core: &Core, why: &str) -> Deal {
+    let x = deal("bingx");
+    let e = rejected(why);
+    assert!(route_pause::rejected_on_cex(core, &x, &e));
+    let r = sell_unsent::decide(core, &x, &e, "выгодно");
+    assert_eq!(r, Retry::No);
+    sell_unsent::alert(core, x.clone(), &e, &r).await;
+    core.deals().into_iter().find(|v| v.id == x.id).unwrap()
+}
+
 #[tokio::test]
-async fn rejected_sale_pauses_direction() {
+async fn not_set_is_as_before() {
+    let p = dir("notset");
+    let (core, s, journal, why) = start(&p).await;
+    let dir = dex_to_bingx();
+    // stuck.reject_route_pause не задана, signal.route_cooldown_s не задана — паузы нет, записей core.ledger нет.
+    let before = ledger_logs(&journal).await;
+    assert_eq!(reject_and_alert(&core, &why).await.step, Step::WaitingHuman);
+    assert_eq!(state(&core, &dir), State::Candidate);
+    assert_eq!(ledger_logs(&journal).await, before);
+    // signal.route_cooldown_s задана, а stuck.reject_route_pause нет — паузы тоже нет.
+    put(&s, "signal.route_cooldown_s", Scope::Global, json!(600)).await;
+    reject_and_alert(&core, &why).await;
+    assert_eq!(state(&core, &dir), State::Candidate);
+    // «Да» у системы, «нет» у площадки BingX — значение площадки сильнее: паузы нет.
+    put(&s, route_pause::REJECT_PAUSE, Scope::Global, json!(true)).await;
+    put(
+        &s,
+        route_pause::REJECT_PAUSE,
+        Scope::Venue("bingx".into()),
+        json!(false),
+    )
+    .await;
+    reject_and_alert(&core, &why).await;
+    assert_eq!(state(&core, &dir), State::Candidate);
+}
+
+#[tokio::test]
+async fn yes_pauses_one_direction() {
     let p = dir("pause");
     let (core, s, _, why) = start(&p).await;
     assert!(why.contains("minQty 57505"), "{why}");
-    s.set(
-        "signal.route_cooldown_s",
-        Scope::Global,
-        Some(json!(600)),
-        "тест",
+    put(&s, "signal.route_cooldown_s", Scope::Global, json!(600)).await;
+    put(
+        &s,
+        route_pause::REJECT_PAUSE,
+        Scope::Venue("bingx".into()),
+        json!(true),
     )
-    .await
-    .unwrap();
+    .await;
     let dir = dex_to_bingx();
     assert_eq!(state(&core, &dir), State::Candidate);
-    let x = deal("bingx");
-    let e = rejected(&why);
-    assert!(sell_unsent::rejected_on_cex(&core, &x, &e));
-    let r = sell_unsent::decide(&core, &x, &e, "выгодно");
-    assert_eq!(r, Retry::No);
-    sell_unsent::alert(&core, x.clone(), &e, &r).await;
-    let now = core.deals().into_iter().find(|v| v.id == x.id).unwrap();
-    assert_eq!(now.step, Step::WaitingHuman);
+    assert_eq!(reject_and_alert(&core, &why).await.step, Step::WaitingHuman);
     assert!(matches!(state(&core, &dir), State::Cooldown { .. }));
     // Обратное направление (BingX → DEX) не на паузе.
     let back = Direction {
@@ -217,19 +275,33 @@ async fn rejected_sale_pauses_direction() {
 }
 
 #[tokio::test]
-async fn no_setting_or_not_cex_no_pause() {
-    let p = dir("nopause");
-    let (core, _, journal, why) = start(&p).await;
-    let dir = dex_to_bingx();
+async fn yes_without_cooldown_warns() {
+    let p = dir("warn");
+    let (core, s, journal, why) = start(&p).await;
+    put(&s, route_pause::REJECT_PAUSE, Scope::Global, json!(true)).await;
+    reject_and_alert(&core, &why).await;
     // signal.route_cooldown_s не задана — как ledger::finish_paused: паузы нет, Warn в журнале core.ledger.
-    let x = deal("bingx");
-    let e = rejected(&why);
-    sell_unsent::alert(&core, x, &e, &Retry::No).await;
-    assert_eq!(state(&core, &dir), State::Candidate);
+    assert_eq!(state(&core, &dex_to_bingx()), State::Candidate);
     let log = journal.list(500, None).await.unwrap();
     assert!(log.iter().any(|j| j.kind == "core.ledger"
         && j.level == Level::Warn
         && j.message.contains("signal.route_cooldown_s")));
-    // Монеты на площадке не из реестра бирж (DEX) — не «отказ биржи».
-    assert!(!sell_unsent::rejected_on_cex(&core, &deal("bsc_dex"), &e));
+}
+
+#[tokio::test]
+async fn not_cex_is_not_exchange_reject() {
+    let p = dir("dex");
+    let (core, _, _, why) = start(&p).await;
+    let e = rejected(&why);
+    // Площадки нет в реестре — вид неизвестен.
+    assert!(!route_pause::rejected_on_cex(&core, &deal("bsc_dex"), &e));
+    // Площадка вида DEX в реестре видов ядра — не «отказ биржи».
+    core.inner
+        .kinds
+        .write()
+        .unwrap()
+        .push((VenueId("bsc_dex".into()), VenueKind::Dex));
+    assert!(!route_pause::rejected_on_cex(&core, &deal("bsc_dex"), &e));
+    // BingX (Cex) — «отказ биржи».
+    assert!(route_pause::rejected_on_cex(&core, &deal("bingx"), &e));
 }

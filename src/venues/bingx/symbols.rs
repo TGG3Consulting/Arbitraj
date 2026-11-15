@@ -5,7 +5,7 @@
 //! pairs_watch.rs (обновление раз в venue.symbols_refresh_s).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, symbols_qty.rs.
 //! Настройки: venue.quote_asset, venue.symbols_refresh_s (как часто перечитывать правила пар),
-//! venue.ignore_deprecated_qty (решение 293: не соблюдать устаревшие minQty / maxQty — symbols_qty.rs).
+//! venue.ignore_deprecated_qty (решение 293: не соблюдать устаревшие minQty / maxQty по паре — symbols_qty.rs).
 //!
 //! Официальная документация: «Spot trading symbols» GET /openApi/spot/v1/common/symbols
 //! https://bingx-api.github.io/docs-v3/#/en/Spot/Market%20Data/Spot%20trading%20symbols
@@ -44,8 +44,8 @@ pub struct SymbolRules {
     /// minQty / maxQty (решение 66): docs-v3 «Spot trading symbols» — «Deprecated; can be calculated using
     /// minQty=minNotional/price»; api-ai-skills skills/spot-market/api-reference.md — обычные поля «Minimum / Maximum
     /// order quantity». Живой ответ 2026-10-24: CAKE-USDT minQty 2.672 ≠ minNotional / price. Соблюдаются оба предела.
-    /// Решение 293 (Тигран 15.11): venue.ignore_deprecated_qty = да — оба поля None у всех пар (symbols_qty.rs): живой
-    /// ответ 15.11 SHOPINX-USDT minQty 57505 (≈500 USDT), а продажи по 8 362 … 11 756 SHOPINX на BingX прошли.
+    /// Решение 293: здесь — как ответил BingX; venue.ignore_deprecated_qty = да у пары (монета или площадка) — оба поля
+    /// None при чтении (symbols_qty.rs get_for / state_for). Живой ответ 15.11: SHOPINX-USDT minQty 57505 (≈500 USDT).
     pub min_qty: Option<Decimal>,
     pub max_qty: Option<Decimal>,
     /// Статус по документации.
@@ -68,17 +68,22 @@ pub struct Symbols {
     loaded: Arc<RwLock<Option<Instant>>>,
     /// Время успешного получения по часам (для ядра: свежесть справочника, core/pairs_fresh.rs).
     loaded_at: Arc<RwLock<Option<DateTime<Utc>>>>,
+    /// Решение 293: хранилище настроек для state_for (ставит symbols_qty::take; None — пределы как ответил BingX).
+    pub(super) qty_store: Arc<RwLock<Option<crate::settings::store::Store>>>,
 }
 
 impl Symbols {
-    /// Загружает все пары с котируемой монетой venue.quote_asset (решение 293: без minQty / maxQty, если включена
-    /// venue.ignore_deprecated_qty — symbols_qty.rs). Возвращает: число пар. Ошибки: связь, ответ BingX, настройки.
+    /// Загружает все пары с котируемой монетой venue.quote_asset (решение 293: разбор и загрузка — symbols_qty::take;
+    /// неверные значения venue.ignore_deprecated_qty — Warn, symbols_qty::warn_bad). Возвращает: число пар.
+    /// Ошибки: связь, ответ BingX, настройки.
     pub async fn refresh(&self, ctx: &Ctx) -> GatewayResult<usize> {
         // Настройка до сети: не задана venue.quote_asset — без запроса, как раньше.
         ctx.text("venue.quote_asset")?;
         let data = rest::public(ctx, "/openApi/spot/v1/common/symbols", vec![]).await?;
-        // Решение 293: разбор, venue.ignore_deprecated_qty (minQty / maxQty) и загрузка — symbols_qty.rs.
-        super::symbols_qty::take(ctx, self, &data, Utc::now())
+        // Решение 293: разбор и загрузка — symbols_qty.rs (пределы по настройке снимаются при чтении).
+        let n = super::symbols_qty::take(ctx, self, &data, Utc::now())?;
+        super::symbols_qty::warn_bad(ctx).await;
+        Ok(n)
     }
 
     /// Ставит разобранный справочник (parse_list) и время получения at (ядру — SpotPairs.loaded_at). Вызывает

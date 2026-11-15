@@ -1,10 +1,12 @@
 //! Файл: venues/bsc_dex/pools/reload_many.rs
 //! Что делает: чтение многих пулов пачками (решение 61) — приём пачки и повтор чтения: группы пулов, у каждой свежий
-//! блок, внутри — ступени load_batch.rs; прочитанные пулы — в реестр и ядру (как reload::load_one).
+//! блок, внутри — ступени load_batch.rs; прочитанные пулы — в реестр и ядру (как reload::load_one). Решение 298:
+//! пулы видов, читаемых по одному последовательно, — каждый на своём свежем блоке (fresh_each).
 //! Кто вызывает: pools/admit.rs, pools/reload.rs (retry); load_group — ещё per_block.rs, listen_site.rs (решение 295).
 //! От чего зависит: load_batch.rs, load.rs, listen_log.rs, http_wait.rs, registry.rs.
 //! Настройки: dex.load_batch [bsc_dex]; через load_batch.rs — dex.multicall3, dex.tick_words, dex.tick_lens, dex.state_view.
 
+use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayError;
 
 use super::discover::Found;
@@ -16,9 +18,11 @@ use super::{http_wait, listen_log, load};
 /// раньше `min_block`), чтобы узел ещё отдавал его состояние, пока очередь дойдёт до следующих групп; события пула до
 /// этого блока включительно уже учтены в чтении и при применении пропускаются (registry.rs: synced_block).
 /// В группе не больше dex.load_batch / 2 пулов: у пула в ступени 1 до двух вызовов — ступень 1 группы помещается
-/// в одну пачку Multicall3. Прочитанные — ядру.
-/// Принимает: (пул, тикер) по порядку, наименьший блок. Возвращает: по каждому Ok — прочитан, Err(причина) — нет.
-/// Ошибки: End — ядро закрыло канал.
+/// в одну пачку Multicall3. Решение 298: пулы видов, читаемых по одному последовательными вызовами (fresh_each), —
+/// каждый на СВОЁМ свежем блоке после остальных пулов группы: иначе к концу группы чтение шло на блоке, которого у
+/// не архивного узла уже нет; остальные пулы группы — как раньше, вместе на одном блоке. Прочитанные — ядру.
+/// Принимает: (пул, тикер) по порядку, наименьший блок. Возвращает: по каждому (в том же порядке) Ok — прочитан,
+/// Err(причина) — нет. Ошибки: End — ядро закрыло канал.
 pub async fn load_many(
     p: &Pools,
     items: &[(&Found, &str)],
@@ -28,18 +32,57 @@ pub async fn load_many(
         Ok(n) => (n / 2).max(1),
         Err(e) => return Ok(items.iter().map(|_| Err(e.clone())).collect()),
     };
-    let mut out = Vec::with_capacity(items.len());
-    for group in items.chunks(per) {
-        let block = p
-            .heads
-            .latest()
-            .map_or(min_block, |h| h.number.max(min_block));
-        match http_wait::http_reached(p, block).await {
-            Ok(()) => out.extend(load_group(p, group, block).await?),
-            Err(e) => out.extend(group.iter().map(|_| Err(e.clone()))),
+    let mut out: Vec<Option<Result<(), GatewayError>>> = items.iter().map(|_| None).collect();
+    for (n, group) in items.chunks(per).enumerate() {
+        let base = n * per;
+        let (each, together): (Vec<usize>, Vec<usize>) =
+            (0..group.len()).partition(|&k| fresh_each(group[k].0));
+        if !together.is_empty() {
+            let list: Vec<(&Found, &str)> = together.iter().map(|&k| group[k]).collect();
+            for (&k, r) in together.iter().zip(at_fresh(p, &list, min_block).await?) {
+                out[base + k] = Some(r);
+            }
+        }
+        for k in each {
+            let r = at_fresh(p, &group[k..=k], min_block).await?;
+            out[base + k] = r.into_iter().next();
         }
     }
-    Ok(out)
+    Ok(out
+        .into_iter()
+        .map(|o| {
+            o.unwrap_or_else(|| {
+                Err(load_batch::miss(
+                    "состояние пула не собрано (внутренняя ошибка)",
+                ))
+            })
+        })
+        .collect())
+}
+
+/// Что делает: решение 298 — пулу свой свежий блок: вид читается по одному последовательными вызовами
+/// (load_batch::one_by_one), и это не пара многомонетного пула (PoolRef::Multi: пары контракта читаются одним чтением
+/// на одном блоке, решение 295 — остаются в группе). Принимает: найденный пул. Возвращает: true — свой блок. Ошибок нет.
+pub fn fresh_each(f: &Found) -> bool {
+    load_batch::one_by_one(f.family) && !matches!(f.reference, PoolRef::Multi { .. })
+}
+
+/// Что делает: пулы на свежем блоке (последний известный, не раньше `min_block`) — ждёт узел HTTP до него и читает
+/// одной группой (load_group). Принимает: (пул, тикер), наименьший блок. Возвращает: по каждому Ok или причину (узел
+/// HTTP не дошёл — та же причина у всех). Ошибки: End — ядро закрыло канал.
+async fn at_fresh(
+    p: &Pools,
+    items: &[(&Found, &str)],
+    min_block: u64,
+) -> Result<Vec<Result<(), GatewayError>>, End> {
+    let block = p
+        .heads
+        .latest()
+        .map_or(min_block, |h| h.number.max(min_block));
+    match http_wait::http_reached(p, block).await {
+        Ok(()) => load_group(p, items, block).await,
+        Err(e) => Ok(items.iter().map(|_| Err(e.clone())).collect()),
+    }
 }
 
 /// Одна группа на одном блоке: пачечное чтение и отправка ядру. Решение 295: пары одного многомонетного пула в группе

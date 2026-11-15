@@ -98,7 +98,7 @@ pub async fn trade(
             prep = prepare(&v, &req, leg, mins.as_deref(), decs, is_native).await?;
             (p, at) = build(q, &prep, wallet).await?;
             no_new_approvals(ctx, &p)?;
-            rebuilt_notice(env, &req);
+            rebuilt_notice(env, &req, at.number);
         }
         let router = is_native.then_some(p.router);
         let entries: Vec<&Entry> = prep.path.hops.iter().map(|h| &h.entry).collect();

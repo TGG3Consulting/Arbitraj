@@ -5,6 +5,8 @@
 //! Каждый канал — свой файл по своей официальной документации; общий вид — channel.rs, отправка — ready.rs.
 //! Решение 154: ни один канал не принял — свой узел проверяет, что транзакции нет ни в блоке, ни в пуле (absent.rs);
 //! только тогда ChannelRejected, иначе транзакция считается отправленной «без ясного ответа» и идёт к трекеру.
+//! Решение 303, дополнение (журнал): строка send.channel_rejected по каналу — с данными ошибки канала, расшифровкой
+//! Permit2, хешем транзакции и пределом блока бандла (reject_log.rs).
 //! Кто вызывает: exec/*, wallet/transfer.rs, mod.rs (send_channels, check_send_channel).
 //! От чего зависит: файлы этой папки, ctx.rs.
 //! Настройки: channel.* [канал], send.* [bsc_dex].
@@ -33,6 +35,7 @@ pub mod nodereal_api;
 pub mod public;
 pub mod ready;
 pub mod receipt;
+pub mod reject_log;
 pub mod settle;
 pub mod stats;
 pub mod tip_gas;
@@ -133,11 +136,11 @@ pub async fn dispatch(
         if let (SendMethod::Bundle, Some(t)) = (r.method, tip_tx) {
             txs.push(t.clone());
         }
-        async move { (r.ch.id, r.send(ctx, &txs, max_block).await) }
+        async move { (r.ch.id, r.method, r.send(ctx, &txs, max_block).await) }
     });
     let mut all = vec![tx.clone()];
     all.extend(tip_tx.cloned());
-    classify(ctx, stats, join_all(jobs).await, &all).await
+    classify(ctx, stats, join_all(jobs).await, &all, max_block).await
 }
 
 /// Отправляет весь бандл из нескольких транзакций (решение 84) во все выбранные каналы параллельно. Все каналы должны
@@ -163,23 +166,25 @@ pub async fn dispatch_slice(
     }
     let jobs = ready
         .iter()
-        .map(|r| async move { (r.ch.id, r.send(ctx, txs, max_block).await) });
-    classify(ctx, stats, join_all(jobs).await, txs).await
+        .map(|r| async move { (r.ch.id, r.method, r.send(ctx, txs, max_block).await) });
+    classify(ctx, stats, join_all(jobs).await, txs, max_block).await
 }
 
-/// Разбор итогов отправки по каналам: счётчики, журнал, кто принял и кто не ответил ясно. Принимает: итоги каналов и
-/// отправленные транзакции (для проверки решения 154). Ошибки: ChannelRejected — ни один канал не принял и свой узел
-/// не знает ни одной из транзакций (транзакции точно нигде нет; причины всех каналов в тексте).
+/// Разбор итогов отправки по каналам: счётчики, журнал, кто принял и кто не ответил ясно. Принимает: итоги каналов
+/// (id, способ, итог), отправленные транзакции (для проверки решения 154 и хеша в журнале), предел блока бандла (для
+/// журнала). Ошибки: ChannelRejected — ни один канал не принял и свой узел не знает ни одной из транзакций
+/// (транзакции точно нигде нет; причины всех каналов в тексте).
 async fn classify(
     ctx: &Ctx,
     stats: &Stats,
-    results: Vec<(&'static str, GatewayResult<()>)>,
+    results: Vec<(&'static str, SendMethod, GatewayResult<()>)>,
     txs: &[Bytes],
+    max_block: u64,
 ) -> GatewayResult<Dispatched> {
     let mut out = Dispatched::default();
     let mut why = Vec::new();
-    let ids: Vec<String> = results.iter().map(|(id, _)| id.to_string()).collect();
-    for (id, res) in results {
+    let ids: Vec<String> = results.iter().map(|(id, _, _)| id.to_string()).collect();
+    for (id, method, res) in results {
         match res {
             Ok(()) => {
                 stats.update(id, |s| s.sent += 1);
@@ -192,10 +197,11 @@ async fn classify(
                         reason: e.message.clone(),
                     };
                 });
+                // Решение 303, дополнение: данные ошибки канала, Permit2, хеш и предел блока — для разбора (reject_log.rs).
                 ctx.log(
                     Level::Warn,
                     "send.channel_rejected",
-                    format!("{id}: {}", e.message),
+                    reject_log::line(id, &e, txs, method, max_block),
                     None,
                 )
                 .await;

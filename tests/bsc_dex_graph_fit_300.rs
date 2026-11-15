@@ -10,7 +10,9 @@
 //! (б) «да» и exec_quote = да: лучший неисполним → на сделку исполнимый маршрут, не хуже классики (pick: объём, затем
 //!     итог после газа); граф-победитель подписан в Quote.pick («S1 …»), неисполнимый — в signal_route, если лучше;
 //!     хотя бы на одном объёме записи выигрывает исполнимый граф;
-//! (в) лучший исполним — без повторов: graph_route::quote_fit(fit = да) отдаёт Fit = None, котировка 1 в 1.
+//! (в) лучший исполним — без повторов: с настоящим бандловым каналом (club48) лучший маршрут, в том числе с шагом
+//!     Uniswap V3 (исполним только бандлом — проверяется, что такие есть), исполним; graph_route::quote_fit(fit = да)
+//!     отдаёт Fit = None, котировка 1 в 1 с graph_route::quote.
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/route_common, arb::venues::bsc_dex::quote::{routing, graph_route, pick}.
 
@@ -185,11 +187,13 @@ async fn off_is_unchanged_on_picks_executable_not_worse_than_classic() {
 
 #[tokio::test]
 async fn executable_best_has_no_fit() {
-    let mut seen = 0;
+    let (mut seen, mut uni) = (0, 0);
     for dir in DIRS {
         let p = scene(dir, false).await;
-        // Канал бандла: все UR записи — один адрес → маршрут исполним бандлом (лучший исполним — повтора нет).
-        route_common::channel(&p, "t300", "bundle").await;
+        // Настоящий бандловый канал (send/channels ALL — club48, как в других тестах бандла): send::planned_bundle_ok
+        // = Ok. В route_common UR строк PancakeSwap и Uniswap — один адрес, поэтому путь через Uniswap V3 собирается в
+        // бандл (collectable: один роутер ≤ dex.bundle_max_routers) — лучший маршрут с долей Uniswap исполним как есть.
+        route_common::channel(&p, "club48", "bundle").await;
         set(&p, "dex.bundle_max_routers", Some(json!(2))).await;
         set(&p, "dex.graph_exec_fallback", Some(json!(true))).await;
         let mut q = p.quoting();
@@ -217,6 +221,20 @@ async fn executable_best_has_no_fit() {
                     continue;
                 };
                 if g.route.as_ref().is_some_and(|r| r.executable) {
+                    // Маршрут с шагом Uniswap V3 — исполним только бандлом (не один UR PancakeSwap): тот самый случай.
+                    // Смесь Uniswap V3 и PancakeSwap в одном маршруте — не прямая форма и не один UR PancakeSwap.
+                    let via_uni = g.route.as_ref().is_some_and(|r| {
+                        let fams: Vec<&str> = r
+                            .legs
+                            .iter()
+                            .flat_map(|l| &l.hops)
+                            .map(|h| h.family.as_str())
+                            .collect();
+                        fams.contains(&"uniswap_v3") && fams.iter().any(|f| *f != "uniswap_v3")
+                    });
+                    if via_uni {
+                        uni += 1;
+                    }
                     assert!(
                         fit.is_none(),
                         "{dir} {side:?} {qty}: исполнимый лучший — без повторов"
@@ -232,4 +250,9 @@ async fn executable_best_has_no_fit() {
         seen > 0,
         "нет ни одного исполнимого лучшего маршрута на записях"
     );
+    assert!(
+        uni > 0,
+        "нет ни одного исполнимого бандлом лучшего маршрута с шагом Uniswap V3 — тест не проверил бандловый случай"
+    );
+    println!("исполнимый лучший: {seen} котировок, из них с шагом Uniswap V3 (бандл): {uni}");
 }

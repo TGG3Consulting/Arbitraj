@@ -12,10 +12,14 @@
 //! Во всех подмножествах путь через промежуточную с пулом с налогом стороны > 0 — только V2 (решение 39, как executable).
 //! Подмножество пустое или равно всему набору (итог был бы тем же неисполнимым) — не считается. Каждый итог снова
 //! проходит executable и costs::quote (газ); лучший среди исполнимых — pick.rs (больше объём, затем чистый итог после
-//! газа), как у существующего выбора. Дополнительных сплитов — не больше числа подмножеств (3).
-//! Где считается: только котировка решения/исполнения (Quoting.exec_quote — финальная котировка ядра
-//! quote_stage::is_final или котировка для исполнения patience::is_exec; ставит quote/mod.rs) и настройка «да»; подбор
-//! объёма (сотни котировок) — без повторов.
+//! газа), как у существующего выбора. Дополнительных сплитов — не больше числа подмножеств (3); при заданной
+//! dex.route_search_max_paths перед каждым — ещё отбор route_best::best на подмножестве. Газ approve и чаевые в
+//! сравнение не входят (их добавляет quote/mod.rs после выбора) — как у graph_route::merge.
+//! Где считается: только котировка решения/исполнения (Quoting.exec_quote, ставит quote/mod.rs) и настройка «да»:
+//! признак final (gateway::quote_stage::is_final) — финальная котировка ядра (core/profit.rs final_calc, final_fillable),
+//! быстрая предпроверка (core/precheck_fast.rs → final_calc), точки окна открытых сделок (core/window_deal_run.rs
+//! final_if); признак exec (gateway::patience::is_exec) — котировка продажи перед ордером (core/trade_ops.rs
+//! sell_quote_of) и своя котировка сделки «лучший из двух» (best_of/trade.rs). Подбор объёма — без повторов.
 //! Кто вызывает: quote/graph_route.rs (quote_fit — best), quote/routing.rs (enabled, parts, merge, finish).
 //! От чего зависит: quote/{graph_split, graph_exec, graph_executor, route_best, costs, pick, pool_tax}.rs,
 //! pools/{families, exec_kind}.rs, exec/executor/{entry, mod}.rs, send/mod.rs (planned_bundle_ok).

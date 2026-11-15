@@ -35,7 +35,7 @@ use arb::gateway::contract::VenueKind;
 use arb::gateway::tap::{TapData, TapFrame, TapInfo, TapStream};
 use arb::report::sig_build::build;
 use arb::report::sig_model::Sig;
-use arb::report::sig_parts::files;
+use arb::report::sig_parts::{File, files};
 use arb::report::sig_period::{Period, parse_range};
 use arb::report::sig_stream::stream;
 use arb::report::sig_xlsx::MAIN;
@@ -387,6 +387,40 @@ fn unzip(b: &[u8]) -> HashMap<String, String> {
     out
 }
 
+/// Запись zip книги с меткой времени создания (rust_xlsxwriter: связь «core-properties», src/packager.rs:345).
+const CORE_XML: &str = "docProps/core.xml";
+
+/// Что делает: предел на байт меньше книги целиком и деление по нему (`run`) — устойчиво к метке времени книги.
+/// Почему: rust_xlsxwriter 0.102 пишет в docProps/core.xml время создания с точностью до секунды (Workbook::new →
+/// DocProperties::new → ExcelDateTime::utc_now: src/workbook.rs:422, src/properties.rs:376, src/datetime.rs:1296;
+/// запись — src/core.rs:147–158), и сжатый размер этой записи zip зависит от цифр метки; дата файлов внутри zip
+/// постоянная (src/packager.rs:101), остальные записи от времени не зависят. Две сборки одной книги в разные секунды
+/// могут разниться на байты, и вторая может уложиться в предел «первая − 1» одним файлом (сбой run 43774487553).
+/// Тогда, только если книги различаются одной docProps/core.xml (проверяется), предел опускается на байт ниже этой
+/// сборки и деление повторяется. Каждый новый предел строго меньше всех прежних сборок, а уложиться может только
+/// сборка с меньшей сжатой core.xml — повторов не больше её размера в байтах, цикл конечен.
+/// Принимает: байты книги целиком, деление по пределу. Возвращает: (предел, файлы — не меньше двух). Ошибок нет
+/// (паника — провал теста).
+fn split_below(whole: &[u8], run: &mut dyn FnMut(usize) -> Vec<File>) -> (usize, Vec<File>) {
+    let mut want = unzip(whole);
+    assert!(want.remove(CORE_XML).is_some(), "в книге нет {CORE_XML}");
+    let mut max = whole.len() - 1;
+    loop {
+        let got = run(max);
+        if got.len() != 1 {
+            return (max, got);
+        }
+        let mut one = unzip(&got[0].bytes);
+        assert!(one.remove(CORE_XML).is_some(), "в книге нет {CORE_XML}");
+        assert!(
+            one == want,
+            "книга {} байт уложилась в предел {max} не из-за метки времени (отличаются не только {CORE_XML})",
+            got[0].bytes.len()
+        );
+        max = got[0].bytes.len() - 1;
+    }
+}
+
 /// Строк данных на листе (без шапки). Ошибок нет.
 fn data_rows(sheet: &str) -> usize {
     sheet.matches("<row ").count().saturating_sub(1)
@@ -484,8 +518,9 @@ async fn big_file_splits_without_loss() {
     let (src, root) = scene("split").await;
     let sigs = build(&src, None, None);
     let whole = files(&sigs, usize::MAX, "p", "c", &[]).unwrap();
-    let max = whole[0].bytes.len() - 1;
-    let parts = files(&sigs, max, "p", "c", &[]).unwrap();
+    let (max, parts) = split_below(&whole[0].bytes, &mut |m| {
+        files(&sigs, m, "p", "c", &[]).unwrap()
+    });
     assert!(parts.len() >= 2);
     assert!(parts.iter().all(|p| p.bytes.len() <= max));
     assert!(
@@ -506,8 +541,8 @@ async fn big_file_splits_without_loss() {
     let one: Vec<Sig> = vec![sigs[0].clone()];
     let full = files(&one, usize::MAX, "p", "c", &[]).unwrap()[0]
         .bytes
-        .len();
-    let cut = files(&one, full - 1, "p", "c", &[]).unwrap();
+        .clone();
+    let (_, cut) = split_below(&full, &mut |m| files(&one, m, "p", "c", &[]).unwrap());
     assert!(
         cut.len() >= 2 && cut[0].caption.contains("доля"),
         "{}",
@@ -530,13 +565,23 @@ async fn big_file_splits_without_loss() {
     })
     .unwrap();
     assert_eq!((n, got[0].name.as_str()), (1, "s.xlsx"));
-    let mut got = vec![];
-    let n = stream(&src, None, None, max, "s", "c", &[], &mut |f| {
-        got.push(f);
-        true
-    })
-    .unwrap();
-    assert!(n >= 2 && got[0].name == "s_part1.xlsx" && got.iter().all(|f| f.bytes.len() <= max));
+    let (max, got) = split_below(&whole[0].bytes, &mut |m| {
+        let mut got = vec![];
+        let n = stream(&src, None, None, m, "s", "c", &[], &mut |f| {
+            got.push(f);
+            true
+        })
+        .unwrap();
+        assert_eq!(n, got.len(), "число отданных файлов");
+        got
+    });
+    let sizes: Vec<usize> = got.iter().map(|f| f.bytes.len()).collect();
+    assert!(
+        got.len() >= 2 && got[0].name == "s_part1.xlsx" && sizes.iter().all(|&b| b <= max),
+        "частей {}, первая {}, размеры {sizes:?}, предел {max}",
+        got.len(),
+        got[0].name
+    );
     let main: usize = got
         .iter()
         .map(|p| data_rows(&unzip(&p.bytes)["xl/worksheets/sheet1.xml"]))

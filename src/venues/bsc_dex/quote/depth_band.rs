@@ -74,7 +74,22 @@ pub fn band_depth(
     usdt_dec: u8,
     pct: Decimal,
 ) -> Result<Band, String> {
-    let (buy, sell, full) = band_units(e, pct)?;
+    let units = band_units(e, pct)?;
+    band_from_units(ctx, reg, tokens, e, usdt_dec, units)
+}
+
+/// Решение 301 (б): перевод глубины во встречном токене (band_units) в USDT — вторая половина band_depth, отдельно,
+/// чтобы книга глубины (pools/depth_book.rs) запоминала неудачу только расчёта по состоянию пула. Принимает: окружение,
+/// реестр, токены, запись, знаки USDT, итог band_units. Возвращает: глубину в USDT. Ошибки (текст): нет USDT, нет курса
+/// встречного токена к USDT, глубина не переводится в USDT.
+pub fn band_from_units(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    e: &Entry,
+    usdt_dec: u8,
+    (buy, sell, full): (U256, U256, bool),
+) -> Result<Band, String> {
     let usdt = tokens.usdt(ctx).map_err(|e| e.message)?;
     let to = |a: U256| -> Result<Decimal, String> {
         let u = rate::to_usdt(ctx, reg, usdt, e.usdt, a).map_err(|e| e.message)?;

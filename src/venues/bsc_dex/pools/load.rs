@@ -25,7 +25,7 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::Entry;
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_algebra_integral, load_bin, load_cl, load_curve, load_curve_ng, load_dmm, load_dodo,
+    load_algebra, load_algebra_integral, load_balancer, load_bin, load_cl, load_curve, load_curve_ng, load_dmm, load_dodo,
     load_elastic, load_inf_stable, load_izi, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
@@ -148,6 +148,18 @@ pub async fn state(
         };
         return Ok(Loaded {
             state: load_dmm::load(ctx, *a, &tag).await?,
+            ticks: None,
+            bins: None,
+            fee_pips: None,
+        });
+    }
+    // Balancer V2 (решение 289): вид ядра VaultPool, пул — отдельный контракт, токены — в хранилище (load_balancer.rs).
+    if f.proto == Proto::BalancerV2 {
+        let PoolRef::Contract(a) = reference else {
+            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул Balancer не того вида", f.title)));
+        };
+        return Ok(Loaded {
+            state: load_balancer::load(ctx, f, *a, pair, &tag).await?,
             ticks: None,
             bins: None,
             fee_pips: None,

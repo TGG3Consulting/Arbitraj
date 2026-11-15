@@ -54,6 +54,9 @@ contract ArbExecutor {
     // Решение 288 (только v2): пара SmarDex — swap(to, zeroForOne по порядку адресов, +сумма, «») + smardexSwapCallback →
     // _pay (пара платит выход до обратного вызова, затем проверяет, что вход пришёл). data пусто.
     uint8 internal constant SMARDEX = 16;
+    // Решение 289 (только v2): пул Balancer V2 (ACSI Finance) — обмен в Vault: s.pool = Vault, data = abi.encode(bytes32
+    // poolId); approve Vault ровно на шаг → Vault.swap(GIVEN_IN, вход, получатель `to`) → разрешение после шага — 0.
+    uint8 internal constant BALANCER = 17;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -71,7 +74,8 @@ contract ArbExecutor {
     // Шаг маршрута. shareBps — доля ТЕКУЩЕГО баланса исполнителя по tokenIn (10000 — весь остаток).
     // data: V2 — abi.encode(uint32 feePips); CURVE — abi.encode(int128 i, int128 j); STABLE_U256 — abi.encode(uint256 i,
     // uint256 j); SADDLE — abi.encode(uint8 i, uint8 j); STABLE_U256_BNB — abi.encode(uint256 i, uint256 j, bool bnbIn)
-    // (bnbIn: true — монета i пула нативная, tokenIn = WBNB; false — монета j нативная, tokenOut = WBNB); остальные — пусто.
+    // (bnbIn: true — монета i пула нативная, tokenIn = WBNB; false — монета j нативная, tokenOut = WBNB); METRIC — abi.encode(bool
+    // zeroForOne); BALANCER — abi.encode(bytes32 poolId); остальные — пусто.
     struct Step {
         uint8 kind;
         address pool;
@@ -299,6 +303,8 @@ contract ArbExecutor {
         } else if (k == SMARDEX) {
             _expect(s.pool, s.tokenIn, amount);
             ISmardexPair(s.pool).swap(to, zeroIn, _int(amount), "");
+        } else if (k == BALANCER) {
+            _balancer(s, amount, to);
         } else if (k == ELASTIC) {
             _expect(s.pool, s.tokenIn, amount);
             IElasticPool(s.pool).swap(to, _int(amount), zeroIn, zeroIn ? MIN_PRICE : MAX_PRICE, "");
@@ -345,6 +351,24 @@ contract ArbExecutor {
             ISaddleSwap(s.pool).swap(i, j, amount, 0, block.timestamp);
         }
         require(IERC20(s.tokenOut).balanceOf(address(this)) > had, "out");
+        if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
+            _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
+        }
+    }
+
+    // Balancer V2 (решение 289): s.pool — Vault, data — poolId. Vault сам списывает вход transferFrom(исполнитель → Vault,
+    // сумма шага) (Swaps.sol L100, AssetTransfersHandler.sol L76) — approve ровно на шаг; выход Vault переводит `to`
+    // (Swaps.sol L101). GIVEN_IN = 0 (IVault.sol L498), limit 1 — нулевой выход откатывает (Swaps.sol L98), итог маршрута
+    // проверяет minOut; срок — block.timestamp (срок транзакции проверен в execute). Разрешение после шага — 0.
+    function _balancer(Step calldata s, uint256 amount, address to) internal {
+        bytes32 poolId = abi.decode(s.data, (bytes32));
+        _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount)));
+        IBalancerVault(s.pool).swap(
+            IBalancerVault.SingleSwap(poolId, 0, s.tokenIn, s.tokenOut, amount, ""),
+            IBalancerVault.FundManagement(address(this), false, payable(to), false),
+            1,
+            block.timestamp
+        );
         if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
             _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
         }
@@ -412,6 +436,8 @@ contract ArbExecutor {
         return zeroIn ? _dmmFormula(got, v0, v1, fee) : _dmmFormula(got, v1, v0, fee);
     }
 
+    // Формула DMMLibrary.getAmountOut (DMMLibrary.sol L75-L91) по уже полученному входу: вход·(1e18 − комиссия)/1e18,
+    // затем x·y=k по виртуальным резервам. Отдельная функция — из-за «Stack too deep» в _dmmOut.
     function _dmmFormula(uint256 got, uint256 vIn, uint256 vOut, uint256 fee) internal pure returns (uint256) {
         uint256 inFee = got * (DMM_PRECISION - fee) / DMM_PRECISION;
         return inFee * vOut / (vIn + inFee);

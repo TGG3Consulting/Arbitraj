@@ -11,7 +11,7 @@ use alloy_primitives::B256;
 use super::families::{Family, Proto};
 use super::registry::Entry;
 use super::{
-    events_algebra, events_algebra_integral, events_bin, events_cl, events_curve, events_curve_ng, events_dmm,
+    events_algebra, events_algebra_integral, events_balancer, events_bin, events_cl, events_curve, events_curve_ng, events_dmm,
     events_dodo, events_metric, events_elastic, events_izi, events_maverick, events_nomi, events_smardex, events_solidly, events_stable_u,
     events_v2, events_v3,
 };
@@ -49,6 +49,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::IziSwap | Proto::BiswapV3 => events_izi::topics(f.proto),
         Proto::KyberDmm => events_dmm::topics(),
         Proto::Smardex => events_smardex::topics(),
+        Proto::BalancerV2 => events_balancer::topics(),
         // PancakeSwap / Lista StableSwap, Saddle, WooFi — решение 122 F, 3; Infinity Stable (события крючка) —
         // решение «122 (Infinity Stable)» (events_stable_u.rs).
         Proto::PancakeStable
@@ -88,6 +89,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::IziSwap | Proto::BiswapV3 => events_izi::liquidity_topics(f.proto),
         Proto::KyberDmm => events_dmm::liquidity_topics(),
         Proto::Smardex => events_smardex::liquidity_topics(),
+        Proto::BalancerV2 => events_balancer::liquidity_topics(),
         Proto::PancakeStable
         | Proto::ListaStable
         | Proto::SaddleStable
@@ -116,6 +118,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::IziSwap | Proto::BiswapV3 => events_izi::apply(e, log),
         Proto::KyberDmm => events_dmm::apply(e, log),
         Proto::Smardex => events_smardex::apply(e, log),
+        Proto::BalancerV2 => events_balancer::apply(e, log),
         Proto::PancakeStable
         | Proto::ListaStable
         | Proto::SaddleStable

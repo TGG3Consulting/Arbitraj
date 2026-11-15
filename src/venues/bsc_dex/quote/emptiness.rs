@@ -67,5 +67,9 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::AmpV2(d) => d.reserve0.is_zero() || d.reserve1.is_zero(),
         // Пара с фиктивными резервами (решение 288): пуста при нулевом резерве или фиктивном резерве (getAmountOut откатит).
         PoolState::Fictive(d) => [d.reserve0, d.reserve1, d.fictive0, d.fictive1].iter().any(|x| x.is_zero()),
+        // Пул в общем хранилище (решение 289): пуст на паузе или при нулевом балансе любого токена пары.
+        PoolState::VaultPool(d) => d.paused || [d.i0, d.i1]
+            .iter()
+            .any(|i| d.balances.get(*i as usize).is_none_or(|b| b.is_zero())),
     }
 }

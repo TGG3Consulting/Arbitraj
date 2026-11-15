@@ -118,6 +118,18 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
+        // Решение 289: пул Balancer V2 — шаг вызывает хранилище (dex.vault), data — id пула из прочитанного состояния;
+        // пул на паузе не исполняется.
+        ExecKind::Balancer => match &e.pool.state {
+            PoolState::VaultPool(d) if !d.paused => {
+                let vault = ctx.dex_addr("dex.vault", e.family.id)?;
+                return Ok((Params::Balancer { pool_id: d.pool_id }, vault));
+            }
+            _ => {
+                let why = format!("{}: у пула Balancer нет состояния или он на паузе", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
             stable(e, k, token_in, stable_native::wrapped(ctx))
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?

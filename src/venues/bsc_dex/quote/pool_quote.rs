@@ -22,7 +22,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    bin_swap, dmm, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
+    balancer_math, bin_swap, dmm, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
     stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
@@ -453,6 +453,18 @@ pub fn swap(
             let p = smardex_swap::side(d, zero_for_one);
             let out = smardex_swap::swap_out(&p, d.price_average_ts, d.block_ts, amount).ok_or_else(none)?;
             Ok(Swapped { amount_in: amount, amount_out: out, complete: true })
+        }
+        // Пул в общем хранилище (Balancer V2, решение 289): формула пула как по вызову хранилища (math/balancer_math.rs):
+        // комиссия, множители точности, весовая / стейблсвап; индексы пары — из состояния (i0 — token0).
+        (PoolState::VaultPool(d), PoolKind::VaultPool) => {
+            let (i, j) = if zero_for_one { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            let r = if exact_in {
+                balancer_math::amount_out(d, i.into(), j.into(), amount).map(|o| (amount, o))
+            } else {
+                balancer_math::amount_in(d, i.into(), j.into(), amount).map(|x| (x, amount))
+            };
+            r.map(|(amount_in, amount_out)| Swapped { amount_in, amount_out, complete: true })
+                .ok_or_else(none)
         }
         _ => Err(none()),
     }

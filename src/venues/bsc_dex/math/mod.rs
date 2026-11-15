@@ -5,6 +5,10 @@
 //! От чего зависит: alloy-primitives.
 //! Настройки: нет.
 
+pub mod balancer_log_exp;
+pub mod balancer_log_exp_table;
+pub mod balancer_math;
+pub mod balancer_stable;
 pub mod bin_price;
 pub mod bin_swap;
 pub mod curve_math;

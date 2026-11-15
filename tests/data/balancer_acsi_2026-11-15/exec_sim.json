@@ -1,0 +1,127 @@
+{
+ "block": 133699740,
+ "executor": "eth_call с подменой кода ArbExecutor v2 решения 289 (15 946 байт, sha256 байтов 27687db860a5b0ca…, = contracts/out/ArbExecutor.bin-runtime) по адресу 0x…e0e0 от владельца 0x…0b0b (слот 0), слот 1 = WBNB; execute(tokenIn, 0, tokenOut, 0, срок, шаги) — вход — баланс исполнителя (подмена баланса: BUSD, USDT, BTCB — слот 1 mapping, WBNB — 3; slot — подобран проверкой balanceOf под подменой); шаг (17, Vault, tokenIn, tokenOut, 10000, abi.encode(poolId)); queryBatchSwap_out — Vault.queryBatchSwap на том же блоке (у маршрута — цепочкой: query_mid → второй пул)",
+ "exec": [
+  {
+   "pool": "0x894ed9026de37afd9cce1e6c0be7d6b510e3ffe5",
+   "i": 3,
+   "j": 2,
+   "token_in": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+   "token_out": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "balance_in": "3678878779914325427",
+   "received": "6203941527029636",
+   "slot": 1,
+   "queryBatchSwap_out": "6203941527029636"
+  },
+  {
+   "pool": "0x894ed9026de37afd9cce1e6c0be7d6b510e3ffe5",
+   "i": 2,
+   "j": 3,
+   "token_in": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "token_out": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+   "balance_in": "18773064749991316",
+   "received": "10798315249647663341",
+   "slot": 3,
+   "queryBatchSwap_out": "10798315249647663341"
+  },
+  {
+   "pool": "0x7ea9f435c7ccb2eef266f5366fe13ea6c9f3e245",
+   "i": 1,
+   "j": 2,
+   "token_in": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+   "token_out": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "balance_in": "142559541514289",
+   "received": "15393913373043170",
+   "slot": 1,
+   "queryBatchSwap_out": "15393913373043170"
+  },
+  {
+   "pool": "0x7ea9f435c7ccb2eef266f5366fe13ea6c9f3e245",
+   "i": 2,
+   "j": 0,
+   "token_in": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "token_out": "0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+   "balance_in": "15563261829485069",
+   "received": "5062836106099869",
+   "slot": 3,
+   "queryBatchSwap_out": "5062836106099869"
+  },
+  {
+   "pool": "0x6e5dbc9aa884f06324ad95e51f931dcf029859dc",
+   "i": 1,
+   "j": 0,
+   "token_in": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "token_out": "0x361c60b7c2828fcab80988d00d1d542c83387b50",
+   "balance_in": "6636419181879507",
+   "received": "8232968873913734299422",
+   "slot": 3,
+   "queryBatchSwap_out": "8232968873913734299422"
+  },
+  {
+   "pool": "0xc889543ea115d4403d00f8103980b25f70c107d6",
+   "i": 1,
+   "j": 0,
+   "token_in": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "token_out": "0x582c12b30f85162fa393e5dbe2573f9f601f9d91",
+   "balance_in": "35949518617876192",
+   "received": "2650785791634114435533",
+   "slot": 3,
+   "queryBatchSwap_out": "2650785791634114435533"
+  },
+  {
+   "pool": "0xa22f3e51939488962aa26d42799df75f72816ce0",
+   "i": 1,
+   "j": 3,
+   "token_in": "0x55d398326f99059ff775485246999027b3197955",
+   "token_out": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+   "balance_in": "361578129812476559",
+   "received": "361423946287665422",
+   "slot": 1,
+   "queryBatchSwap_out": "361423946287665422"
+  },
+  {
+   "pool": "0xa22f3e51939488962aa26d42799df75f72816ce0",
+   "i": 3,
+   "j": 1,
+   "token_in": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+   "token_out": "0x55d398326f99059ff775485246999027b3197955",
+   "balance_in": "198421563652275515",
+   "received": "198463534571065713",
+   "slot": 1,
+   "queryBatchSwap_out": "198463534571065713"
+  },
+  {
+   "pool": "0xbaca526c79b49a66f7f29123a2f4d7c17d083636",
+   "i": 2,
+   "j": 1,
+   "token_in": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+   "token_out": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+   "balance_in": "4731758393432942069",
+   "received": "4731303447602205722",
+   "slot": 1,
+   "queryBatchSwap_out": "4731303447602205722"
+  },
+  {
+   "route": [
+    "0xa22f3e51939488962aa26d42799df75f72816ce0",
+    "0x894ed9026de37afd9cce1e6c0be7d6b510e3ffe5"
+   ],
+   "token_in": "0x55d398326f99059ff775485246999027b3197955",
+   "mid": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+   "token_out": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+   "balance_in": "361578129812476559",
+   "received": "613143544616150",
+   "query_mid": "361423946287665422",
+   "queryBatchSwap_out": "613143544616150"
+  }
+ ],
+ "negative": {
+  "note": "шаг 17 с poolId пула 0xbaca526c (USDT не среди его токенов) — откат",
+  "pool_id_of": "0xbaca526c79b49a66f7f29123a2f4d7c17d083636",
+  "token_in": "0x55d398326f99059ff775485246999027b3197955",
+  "token_out": "0xe9e7cea3dedca5984780bafc599bd69add087d56",
+  "balance_in": "361578129812476559",
+  "received": null,
+  "err": "{\"code\":3,\"message\":\"execution reverted: BAL#521\",\"data\":\"<hex>\"}"
+ }
+}

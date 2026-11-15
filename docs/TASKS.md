@@ -84,6 +84,43 @@
      и 20261114185055295; все поля записи) и capital/config/getall по USDT. Через веб-интерфейс (GET) бот справочник
      сетей USDT не отдаёт (/api/coins/{адрес USDT} — 404: USDT нет в справочнике монет). На итог сделки не влияет (комиссия учтена
      как «ушло − зачислено»). Сопоставление вывода идёт по id (withdrawal_status), не по тикеру.
+- **Решение 289 (15.11.2026, ветка t120/exec-balancer от rel/dex-all fc06d328) — сделано, ждёт приёмки.** Balancer V2
+  (ACSI Finance BSC): вид `balancer_v2` (ядро VaultPool), порт WeightedMath / StableMath / LogExpMath (= Vault.queryBatchSwap
+  в 95 из 95 ответов GIVEN_IN и 63 из 63 GIVEN_OUT на блоке 133699740), сверка Vault.queryBatchSwap, шаг исполнителя v2
+  BALANCER = 17 (код в сети v2 15 946 байт; на цепи шаг 17 = queryBatchSwap 10 из 10). **Открыто:**
+  1. Значения настроек (id DEX `acsi-finance` — id у GeckoTerminal, факт 15.11: /networks/bsc/dexes/acsi-finance/pools — 200,
+     24 пула): dex.kind = balancer_v2, dex.vault = 0xa82f327bbbf0667356d2935c6532d164b06ceced, dex.factory =
+     0xb7238020c331e8cdfd26db299cfd2076df812e6f (WeightedPoolFactory), dex.balancer_stable_factory =
+     0xd2eada8bffdabb9321e1512d897afd3537dbc1a3 (StablePoolFactory), dex.pool_enabled = да. dex.quoter и
+     dex.quoter_virtual не нужны (квотер — само хранилище). dex.multicall3 желательна (чтение пула — одна пачка на блок).
+  2. Ликвидность малая (GeckoTerminal 15.11): ACS/WAV/WBNB 6 702 USD, XMT/WBNB 4 591, ACS/ACSI/WBNB/BUSD 3 754,
+     ETH/BTCB/WBNB 2 740, ADA/ETH/SOL/DOT/WBNB 1 451, остальные — сотни USD и меньше; сумма 24 пулов ≈ 24,0 тыс. USD. Пары с
+     USDT: стейблсвапы DAI/USDT/USDC/BUSD (93 USD), TUSD/UST/USDT/BUSD/MIM (119 USD — все запросы хранилища откатываются
+     BAL#322, несходимость), ACS/USDT (2 USD), USDT/BTCB (0xb978bd52 — не берётся, см. п. 3).
+  3. Не установлено: исходник трёх пулов acsi-finance с кодом 19 408 байт (0xb978bd52, 0x86ddc49f, 0xdaae64e8): не из фабрик
+     dex.factory / dex.balancer_stable_factory (isPoolFromFactory = 0), Sourcify 404, код не равен WeightedPool2Tokens
+     20210418 (19 384 байта). Проверка их отклонит. Их фабрика (если есть) — не установлена.
+  4. Не установлено: полный список пулов хранилища — eth_getLogs (PoolRegistered) с блока развёртывания на публичном узле
+     недоступен (архивный запрос); по id пулов справочника номер регистрации доходит до 50 (≥ 51 пула), в справочнике 24.
+     Бот берёт пулы из справочника индексатора.
+  5. Переразвернуть исполнитель v2 (docs/notes/executor-v2-redeploy.md: SHA-256 кода создания после ревью 289 —
+     d1abbc26…5bceb58); сухая сделка на живом пуле — после выкладки (на цепи — только eth_call с подменой кода,
+     tests/data/balancer_acsi_2026-11-15/exec_sim.json).
+  6. Налог монеты на входе: хранилище считает вход по сумме transferFrom, не по пришедшему (AssetTransfersHandler.sol L76) —
+     шаг BALANCER не в списке видов с прямым входом (graph_executor tax), монета с налогом на входе через него не идёт.
+  7. Ревью 289 — одна пара на пул: пул с 3–6 токенами даёт в графе ОДНУ пару (факт кода: справочник берёт у пула только
+     пару base/quote индексатора — directory/gt_parse.rs IndexedPool L33-L34; take() берёт один кандидат на адрес пула —
+     pools/index.rs L78 `seen.insert(p.pool)`, первый по порядку ctx.index.relevant() — обход HashMap монет
+     (directory/mod.rs L56, L118-L131), порядок не задан; монета — токен справочника, встречный — второй токен его пары,
+     если он среди встречных/промежуточных — is_relevant L156-L165; реестр — одна запись на ссылку пула,
+     registry_index.rs L89-L95). Все пары пула в граф — общий путь справочника и ключа реестра для всех видов,
+     добавочно не сделано (DECISIONS 289, ROADMAP).
+  8. Не установлено (ревью 289): настоящий пул-самозванец (контракт, называющий хранилище ACSI и чужой id) и настоящий пул
+     ДРУГОГО хранилища Balancer V2 на BSC не найдены (в списке /networks/bsc/dexes GeckoTerminal поиск по названию
+     «bal», «vault», «beethoven» дал только acsi-finance и wault_finance) — отказы проверки на них тестом не покрыты; покрыты: пул не из фабрик (0xb978…),
+     настоящий пул PancakeSwap V2 (getVault откатывается), монета не из токенов пула.
+  9. Замерить on_head на живом узле после выкладки: все пулы Balancer за блок — одна пачка (per_block_balancer.rs,
+     5 вызовов на пул, частями по dex.load_batch).
 - **Решение 288 (15.11.2026, ветка t119/exec-kyber-smardex) — сделано, ждёт приёмки.** SmarDex: вид `smardex` (ядро
   Fictive), порт SmardexLibrary.getAmountOut со средней ценой к времени блока (= выходу самой пары в 24 из 24 ответов цепи),
   сверка виртуальным квотером quoteSmardex, шаг исполнителя v2 SMARDEX = 16 (код в сети v2 15 128 байт). **Открыто:**
@@ -103,12 +140,11 @@
      пары; ветка «last_ts = 0 + пересчёт фиктивных резервов» — только 2 случая с откатом в _update (выход getAmountOut
      сверен, итог — None). Точный выход (getAmountIn) не портирован: котировка точного выхода — ошибка (pool_quote.rs).
      Не установлено: поведение на настоящем обмене в окне 0 < dt < 300 (на цепи такого обмена не записано).
-  6. Комментарии контракта — вместе со следующим изменением контракта (ревью 287/288): в IPools.sol строка «Uniswap V3 /
-     PancakeSwap V3 / Slipstream / Algebra V1.9 — одна и та же подпись swap:» стоит над блоком IDmmPool — перенести к IV3Pool;
-     у ArbExecutor._dmmFormula нет комментария (вынесена из _dmmOut из-за «Stack too deep»); в комментарии IIziPool ссылка
-     swapX2Y.sol L321-L328 → L323-L331 (по ревью координатора; в этой ветке исходник iZiSwap не сверялся). Проба 15.11:
-     только эти правки комментариев меняют SHA-256 ArbExecutor.bin (34e40929…0bbf80 → 2c041eaa…89a9ee, метаданные
-     исходника; размер кода в сети тот же — 15 128 байт) — правки откачены, код и хеш решения 288 не тронуты.
+  6. ~~Комментарии контракта — вместе со следующим изменением контракта~~ — **закрыто решением 289** (ветка t120): строка
+     «Uniswap V3 / PancakeSwap V3 / Slipstream / Algebra V1.9 — одна и та же подпись swap:» перенесена к IV3Pool;
+     у ArbExecutor._dmmFormula — комментарий; ссылка IIziPool swapX2Y.sol L321-L328 → L323-L331 (сверено по
+     tests/data/izi_2026-11-15/source_excerpt.txt: L326 перевод получателю, L330 swapX2YCallback, L331 проверка «XE»).
+     Хеш кода создания — общий с шагом BALANCER (docs/notes/executor-v2-redeploy.md).
 - **Решение 287 (15.11.2026, ветка t119/exec-kyber-smardex от rel/dex-all 4e214db4) — сделано, ждёт приёмки.** KyberSwap
   Classic DMM: вид `kyber_dmm` (ядро AmpV2), порт DMMLibrary.getAmountOut (= DMMRouter02 в 24 из 24 ответов цепи),
   сверка DMMRouter02.getAmountsOut, шаг исполнителя v2 KYBER_DMM = 15 (код в сети v2 14 960 байт). **Открыто:**

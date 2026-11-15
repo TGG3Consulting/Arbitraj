@@ -13,9 +13,10 @@
 //! проверяется по сверенной версии (pools/exec_callback.rs) — нет: NoRoute (no_path), а не проба с откатом.
 //! Кто вызывает: check/probe.rs (part, emitter).
 //! От чего зависит: exec/executor/{mod, call, entry, onchain}.rs, exec/chain.rs (Step), exec/plan.rs (Order),
-//! wallet/approve_executor.rs, pools/exec_kind.rs, check/emitter.rs, check/simulate.rs (SimLog).
-//! Настройки: exec.executor_address [bsc_dex]; через вызываемые — dex.deadline_s, dex.approve_unlimited,
-//! dex.v2_fee_pct [DEX].
+//! wallet/approve_executor.rs, pools/exec_kind.rs, pools/abi_balancer.rs (событие Swap хранилища Balancer, решение 289),
+//! check/emitter.rs, check/simulate.rs (SimLog).
+//! Настройки: exec.executor_address [bsc_dex]; dex.vault [DEX вида balancer_v2]; через вызываемые — dex.deadline_s,
+//! dex.approve_unlimited, dex.v2_fee_pct [DEX].
 //!
 //! Как налог через исполнитель сопоставлен с настоящей сделкой — docs/notes/probe-executor-2026-11-03.md.
 //! Кратко: покупка — выход шага получает кошелёк (у видов со своим выходом — прямо от пула, у StableSwap — через
@@ -25,14 +26,17 @@
 //! quote/graph_executor.rs::tax), остальные виды с налогом на входе неисполнимы (сигнал), и это решает сама котировка
 //! по измеренному налогу.
 
+use alloy::sol_types::SolEvent;
 use alloy_primitives::{Address, Bytes};
 
+use crate::core::types::PoolState;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::exec::chain::Step;
 use super::super::exec::executor::{self, call, entry, onchain};
 use super::super::exec::plan::Order;
+use super::super::pools::abi_balancer::IBalancerVault;
 use super::super::pools::{exec_callback, exec_kind};
 use super::super::pools::registry::Entry;
 use super::super::wallet::approve::Approval;
@@ -127,6 +131,17 @@ pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()>
         .1;
     if logs.iter().any(|l| l.address == pool) {
         return Ok(());
+    }
+    // Решение 289: у Balancer V2 событие обмена выпускает хранилище — Vault.Swap с id пула в topic1 (IVault.sol L598-L604,
+    // Swaps.sol L297); пул (onSwap — view) событий не шлёт.
+    if let PoolState::VaultPool(d) = &e.pool.state {
+        let vault = ctx.dex_addr("dex.vault", e.family.id)?;
+        let swap = IBalancerVault::Swap::SIGNATURE_HASH;
+        if logs.iter().any(|l| {
+            l.address == vault && l.topics.first() == Some(&swap) && l.topics.get(1) == Some(&d.pool_id)
+        }) {
+            return Ok(());
+        }
     }
     let why = format!(
         "{}: обмен через исполнитель прошёл, но пул {pool:#x} не выпустил ни одного события — проба не засчитана",

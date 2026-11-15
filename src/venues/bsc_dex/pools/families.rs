@@ -171,6 +171,14 @@ pub enum Proto {
     /// и обратный вызов smardexSwapCallback. Математика — math/smardex.rs, квотер — только виртуальный (quoteSmardex). Перечитывание
     /// каждым блоком. Исполнение — шаг SMARDEX исполнителя v2. Вид ядра — Fictive.
     Smardex,
+    /// Balancer V2 (решение 289; balancer_v2, DEX acsi-finance — ACSI Finance BSC): хранилище Vault (Sourcify exact_match =
+    /// balancer-deployments 20210418-vault) и пулы его фабрик — весовой WeightedPool (dex.factory) и StablePool
+    /// (dex.balancer_stable_factory), тексты = build-info Balancer. Токены всех пулов — в хранилище; обмен —
+    /// Vault.swap по id пула; формула — пула (math/balancer_math.rs, balancer_stable.rs). Проверка — getVault/getPoolId
+    /// пула, getPool(id) хранилища, isPoolFromFactory, getPoolTokens (verify_balancer.rs); новые пулы — из справочника;
+    /// перечитывание каждым блоком (балансы меняют события хранилища, не пула). Квотер — Vault.queryBatchSwap
+    /// (dex.vault). Исполнение — шаг BALANCER исполнителя v2. Вид ядра — VaultPool.
+    BalancerV2,
 }
 
 impl Proto {
@@ -303,6 +311,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "kyber_dmm" => (PoolKind::AmpV2, Proto::KyberDmm, true, false, false),
         // SmarDex (решение 288): в графе и сигналах (своя формула по времени блока); исполнение — шаг SMARDEX (только v2).
         "smardex" => (PoolKind::Fictive, Proto::Smardex, true, false, false),
+        // Balancer V2 (решение 289): в графе и сигналах (формулы пулов); исполнение — шаг BALANCER (только v2).
+        "balancer_v2" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; шага
         // исполнителя нет (обмен с индексами uint256 / uint8 + deadline — не CURVE), исполнения нет.
         "pancake_stableswap" => (
@@ -536,6 +546,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // SmarDex (решение 288): фабрика (getPair / PairCreated — как V2); квотер — только виртуальный (quoteSmardex,
         // dex.quoter_virtual = да убирает dex.quoter): официального квотера пары у SmarDex нет.
         Proto::Smardex => list.extend(["dex.factory", "dex.quoter"]),
+        // Balancer V2 (решение 289): хранилище (getPool / getPoolTokens, обмен и квотер queryBatchSwap) и фабрика весовых
+        // пулов (isPoolFromFactory). Фабрика стейблсвапов dex.balancer_stable_factory — по желанию (не задана — только
+        // весовые пулы).
+        Proto::BalancerV2 => list.extend(["dex.vault", "dex.factory"]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

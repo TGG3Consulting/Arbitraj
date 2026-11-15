@@ -63,7 +63,6 @@ interface ISmardexPair {
         returns (int256 amount0, int256 amount1);
 }
 
-// Uniswap V3 / PancakeSwap V3 / Slipstream (Topaz) / Algebra V1.9 (THENA Fusion) — одна и та же подпись swap:
 // KyberSwap Classic DMM (решение 287): KyberNetwork/dmm-smart-contracts@e557b57 contracts/DMMPool.sol L240-L265
 // getTradeInfo (реальные и виртуальные резервы, комиссия блока над 1e18; при ampBps = BPS виртуальные = реальные), L162
 // swap (подпись и селектор как у пары V2 — IV2Pair). Код BSC: фабрика 0x878dfe97…934c — Sourcify match (DMMPool в том же
@@ -75,6 +74,7 @@ interface IDmmPool {
         returns (uint112 reserve0, uint112 reserve1, uint112 vReserve0, uint112 vReserve1, uint256 feeInPrecision);
 }
 
+// Uniswap V3 / PancakeSwap V3 / Slipstream (Topaz) / Algebra V1.9 (THENA Fusion) — одна и та же подпись swap:
 // Uniswap/v3-core@5ea68a77 contracts/interfaces/pool/IUniswapV3PoolActions.sol L75-L81;
 // pancakeswap/pancake-v3-contracts@98684794 projects/v3-core/contracts/interfaces/pool/IPancakeV3PoolActions.sol L75-L81;
 // velodrome-finance/slipstream@193a6b85 contracts/core/interfaces/pool/ICLPoolActions.sol L131-L137;
@@ -154,7 +154,7 @@ interface IMaverickV2Pool {
 }
 
 // iZiSwap (решение 286): izumiFinance/iZiSwap-core@3fe21eba contracts/iZiSwapPool.sol L383-L438 (swapY2X / swapX2Y —
-// delegatecall в модуль), contracts/swapX2Y.sol L123-L131 (lowPt = max(lowPt, leftMostPt)), L321-L328 (выход —
+// delegatecall в модуль), contracts/swapX2Y.sol L123-L131 (lowPt = max(lowPt, leftMostPt)), L323-L331 (выход —
 // recipient до обратного вызова; оплата x в swapX2YCallback, проверка balanceX() ≥ bx + amountX), swapY2X.sol
 // L123-L131, L290-L297 (то же для y и swapY2XCallback); interfaces/IiZiSwapCallback.sol L19-L39. Biswap V3
 // (BiswapPoolV3, verified Sourcify exact_match 56/0x76008e4007ab26142dbeafee24d6113de47eb76b, BiswapPoolV3.sol
@@ -165,4 +165,31 @@ interface IMaverickV2Pool {
 interface IIziPool {
     function swapX2Y(address recipient, uint128 amount, int24 lowPt, bytes calldata data) external;
     function swapY2X(address recipient, uint128 amount, int24 highPt, bytes calldata data) external;
+}
+
+// Balancer V2 Vault (решение 289; ACSI Finance BSC 0xa82f327bbbf0667356d2935c6532d164b06ceced — Sourcify exact_match,
+// исходник = balancer/balancer-deployments@b55dc2b v2/tasks/20210418-vault build-info, 45 из 45 файлов совпали):
+// contracts/vault/interfaces/IVault.sol L498 (SwapKind), L513-L518 (swap), L530-L537 (SingleSwap), L623-L628
+// (FundManagement). Swaps.sol L56-L104: swap — whenNotPaused, authenticateFor(funds.sender) (вызывающий = sender — без
+// relayer), выход пула → _receiveAsset: transferFrom(sender → Vault, amountIn) (AssetTransfersHandler.sol L44-L79; нужен
+// approve sender → Vault), _sendAsset → recipient; обратных вызовов к вызывающему нет. GIVEN_IN: limit — минимум выхода.
+interface IBalancerVault {
+    struct SingleSwap {
+        bytes32 poolId;
+        uint8 kind;
+        address assetIn;
+        address assetOut;
+        uint256 amount;
+        bytes userData;
+    }
+    struct FundManagement {
+        address sender;
+        bool fromInternalBalance;
+        address payable recipient;
+        bool toInternalBalance;
+    }
+    function swap(SingleSwap memory singleSwap, FundManagement memory funds, uint256 limit, uint256 deadline)
+        external
+        payable
+        returns (uint256);
 }

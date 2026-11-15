@@ -86,6 +86,10 @@ pub fn request(
     if e.family.proto == Proto::KyberDmm {
         return super::quoter_dmm::request(ctx, e, token_in, amount);
     }
+    // Balancer V2 (решение 289): квотер — само хранилище, Vault.queryBatchSwap через eth_call (quoter_balancer.rs).
+    if e.family.proto == Proto::BalancerV2 {
+        return super::quoter_balancer::request(ctx, e, token_in, amount);
+    }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
     // DODO PMM (решение 86b): квотер — сам пул (querySellBase/querySellQuote; отдельного квотера нет). Сверка
     // идёт тем же трейдером FEE_TRADER, что и чтение комиссии getUserFeeRate (load_dodo.rs) — выход включает
@@ -390,6 +394,9 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     }
     if e.family.proto == Proto::KyberDmm {
         return super::quoter_dmm::decode(out);
+    }
+    if e.family.proto == Proto::BalancerV2 {
+        return super::quoter_balancer::decode(out);
     }
     // Infinity Stable: основной квотер — CLQuoter (amountOut, gasEstimate), как у Infinity CL (ветка PoolKey ниже).
     // StableSwap (остальные шаблоны) и WooFi query: один uint256 — выход после комиссии (одно слово — разбор одинаков).

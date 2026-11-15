@@ -17,6 +17,10 @@
 //!   каждым блоком без событий пула; котировку получает каждый пул (своя формула), поэтому перечитываются все.
 //! • SmarDex (решение 288): средняя цена пары зависит от времени блока, резерв — от баланса пары (перевод в пару события
 //!   не шлёт); котировку получает каждая пара — перечитываются все.
+//! • Balancer V2 (решение 289): балансы пула меняет хранилище своими событиями (Swap, PoolBalanceChanged,
+//!   PoolBalanceManaged — лог от адреса Vault с id пула, Swaps.sol L297, PoolBalances.sol), подписка по адресу пула их
+//!   не видит; A стейблсвапа во время рампы меняется по времени блока без событий (StablePool.sol L628-L651) —
+//!   перечитываются все пулы — одной пачкой на блок (ревью 289, per_block_balancer.rs).
 //! Ещё — события общего контракта WooFi (WooSwap, Upgraded, Paused…): ссылка пар — PoolRef::Member (контракт,
 //! монета), лог приходит от адреса контракта — перечитываются все пары этого контракта на блоке события.
 //! Кто вызывает: pools/session.rs.
@@ -31,7 +35,7 @@ use crate::core::types::PoolRef;
 use super::discover::Found;
 use super::families::{Family, Proto};
 use super::listen::{End, Pools};
-use super::reload;
+use super::{per_block_balancer, reload};
 
 /// Перечитывается ли вид на каждом блоке. Ошибок нет.
 pub fn needs(f: &Family) -> bool {
@@ -47,6 +51,7 @@ pub fn needs(f: &Family) -> bool {
             | Proto::BiswapV3
             | Proto::KyberDmm
             | Proto::Smardex
+            | Proto::BalancerV2
     )
 }
 
@@ -73,15 +78,22 @@ pub fn each_block(f: &Found, usdt: Option<Address>) -> bool {
 /// пул недостоверен (valid = false) до следующего удачного чтения. Ошибки: End — ядро закрыло канал.
 pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result<(), End> {
     let usdt = p.tokens.usdt(&p.ctx).ok();
-    for (f, t) in pools.iter().filter(|(f, _)| each_block(f, usdt)) {
+    let mut balancer = Vec::new();
+    for x in pools.iter().filter(|(f, _)| each_block(f, usdt)) {
+        let (f, t) = x;
         if p.reg.get(&f.reference).is_none() {
+            continue;
+        }
+        // Ревью 289: пулы Balancer V2 — все вместе одной пачкой после остальных (per_block_balancer.rs).
+        if f.family.proto == Proto::BalancerV2 {
+            balancer.push(x);
             continue;
         }
         if reload::load_one(p, f, t, block).await?.is_err() {
             p.reg.update(&f.reference, |e| e.valid = false);
         }
     }
-    Ok(())
+    per_block_balancer::on_head(p, &balancer, block).await
 }
 
 /// Лог общего контракта (пары PoolRef::Member): перечитать на блоке лога все пары контракта. Возвращает: true — лог

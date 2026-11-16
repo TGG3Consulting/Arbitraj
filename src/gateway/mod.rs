@@ -12,6 +12,7 @@ pub mod contract;
 pub mod core_out;
 pub mod core_out_book;
 pub mod core_out_item;
+mod core_out_reg;
 pub mod core_out_side;
 pub mod delist_ann;
 pub mod delist_html;

@@ -5,9 +5,9 @@
 //! стаканы не голодают.
 //! Где живёт набор: канал ядра создаёт ядро (core/engine.rs, market_tx) и раздаёт адаптерам через контракт
 //! (Venue::subscribe_market(…, out: Sender<MarketEvent>)). Ни ядро, ни контракт не меняются: набор находится по самому
-//! каналу — `of(&out)` ищет в реестре процесса запись с тем же каналом (Sender::same_channel; реестр держит только
-//! WeakSender — канал не держится открытым) и создаёт её при первом обращении. Все клоны одного Sender получают один
-//! и тот же набор; мёртвые записи (все Sender сняты или канал закрыт) выбрасываются при следующем обращении.
+//! каналу — `of(&out)` (gateway/core_out_reg.rs) ищет в реестре процесса запись с тем же каналом
+//! (Sender::same_channel; реестр держит только WeakSender — канал не держится открытым) и создаёт её при первом
+//! обращении. Все клоны одного Sender получают один и тот же набор; мёртвые записи выбрасываются.
 //! Доставщик — задача tokio, запускается при первом откладывании (Offer::Deferred { start: true }), держит Sender
 //! только пока набор не пуст. Набор опустел — вызываются крючки «опустел» классов (запись журнала, on_drain).
 //! Ревью 324 (Б2): состояние класса вне замка набора (настройки в памяти, счёт потерь, часы журнала) — Feed::side,
@@ -20,9 +20,9 @@
 //! Настроек нет (откладывать ли — решает вызывающий: dex.pool_events_keep, venue.book_events_keep).
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
-use tokio::sync::mpsc::{Sender, WeakSender};
+use tokio::sync::mpsc::Sender;
 
 use crate::core::types::VenueId;
 
@@ -71,34 +71,12 @@ impl Check<Key, MarketEvent> for Pools {
     }
 }
 
-/// Реестр наборов процесса: канал (слабая ссылка) → набор.
-type Reg = Mutex<Vec<(WeakSender<MarketEvent>, Feed)>>;
-
-/// Реестр наборов (один на процесс). Ошибок нет.
-fn reg() -> &'static Reg {
-    static REG: OnceLock<Reg> = OnceLock::new();
-    REG.get_or_init(Reg::default)
-}
-
 /// Замок без паники на отравлении. Ошибок нет.
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// Набор канала ядра (см. шапку). Принимает: канал. Возвращает: общий набор этого канала. Ошибок нет.
-pub fn of(out: &Sender<MarketEvent>) -> Feed {
-    let mut r = lock(reg());
-    r.retain(|(w, _)| w.upgrade().is_some_and(|s| !s.is_closed()));
-    if let Some((_, f)) = r
-        .iter()
-        .find(|(w, _)| w.upgrade().is_some_and(|s| s.same_channel(out)))
-    {
-        return f.clone();
-    }
-    let f = Feed::default();
-    r.push((out.downgrade(), f.clone()));
-    f
-}
+pub use super::core_out_reg::of;
 
 impl Feed {
     /// Быстрый путь (keep_last.rs fast): набор пуст — без замка. Принимает: канал. Возвращает: Fast. Ошибок нет.

@@ -13,8 +13,10 @@
 //! emit вынесен в emit_pool.rs (здесь — реэкспорт для прежних вызывающих) — при dex.pool_events_keep = да событие не
 //! теряется, а ждёт места в канале (gateway/core_out.rs, решение 324).
 //! Решение 314: перечитывания по событию (off_map, Refresh, Bins) — классом dex.event_refresh_urgency (refresh_urgency.rs).
+//! Решение 332: после бинов события (Infinity Bin, LB V2.1) — проверка «цена ушла за прочитанную полосу бинов» и
+//! перечитывание пула целиком (off_map_bins.rs after, при dex.bin_reread_left_pct у DEX; не задана — как раньше).
 //! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s, dex.event_refresh_urgency,
-//! dex.pool_events_keep).
+//! dex.pool_events_keep, dex.bin_reread_left_pct, dex.bin_depth_usd).
 //!
 //! removed: true при реорге — execution-apis subscribe.yaml#L1-L60; порядок применения — (blockNumber, logIndex),
 //! как присылает узел (research/flow/bsc_dex.md, раздел 4).
@@ -115,8 +117,13 @@ pub async fn on_log(
         {
             Ok(())
         }
+        // Решение 332: после бинов события — прочитанного в сторону цены меньше dex.bin_reread_left_pct от
+        // dex.bin_depth_usd (или активный бин за полосой) — пул целиком на блоке события (off_map_bins.rs).
         Applied::Bins(ids) => {
-            refresh_urgency::urgent(&p.ctx, reread_bins(p, &r, &ids, block)).await
+            match refresh_urgency::urgent(&p.ctx, reread_bins(p, &r, &ids, block)).await {
+                Ok(()) => super::off_map_bins::after(p, &r, block, queued).await,
+                Err(e) => Err(e),
+            }
         }
         Applied::Refresh(why) => {
             p.ctx

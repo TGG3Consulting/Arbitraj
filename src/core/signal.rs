@@ -8,10 +8,12 @@
 //! или по направлению идёт пауза после сделки или ошибки (signal.route_cooldown_s).
 //! Решение 317: при signal.dex_event_skip_hold = да кандидат от события пула DEX выдаётся без удержания, если цена
 //! стороны биржи не менялась не меньше signal.min_hold_ms (signal_fast.rs); не задана — побайтно прежний фильтр.
+//! Решение 318: при signal.hold_timer = да у «держится» есть срок дозревания ripen_at = max(above_since +
+//! signal.min_hold_ms, сейчас) — по нему таймер (signal_ripen.rs) сам ставит пересчёт; не задана — срока нет.
 //! Кто вызывает: core/evaluate.rs на каждый пересчёт монеты (после prices.rs).
 //! От чего зависит: core/types, core/signal_fast.rs, settings.
 //! Настройки: signal.min_hold_ms, signal.min_hold_updates, signal.anomaly_spread_pct, signal.route_cooldown_s,
-//! signal.dex_event_skip_hold (решение 317).
+//! signal.dex_event_skip_hold (решение 317), signal.hold_timer (решение 318).
 
 use std::collections::HashMap;
 
@@ -30,6 +32,8 @@ pub struct Params {
     pub anomaly_pct: Decimal,
     /// Решение 317: signal.dex_event_skip_hold (необязательна; не задана — нет).
     pub skip_on_pool: bool,
+    /// Решение 318: signal.hold_timer (необязательна; не задана — нет).
+    pub ripen: bool,
 }
 
 impl Params {
@@ -45,6 +49,7 @@ impl Params {
                 .decimal("signal.anomaly_spread_pct", at)
                 .map_err(|e| e.message)?,
             skip_on_pool: s.flag("signal.dex_event_skip_hold", at).unwrap_or(false),
+            ripen: s.flag("signal.hold_timer", at).unwrap_or(false),
         })
     }
 }
@@ -103,6 +108,7 @@ impl Signals {
             trigger: ctx.trigger,
             skipped_hold: false,
             cex_still_ms: None,
+            ripen_at: None,
         };
         let p = match prices {
             Ok(p) => p,
@@ -156,6 +162,13 @@ impl Signals {
                     view.skipped_hold = true;
                     State::Candidate
                 } else {
+                    // Решение 318: срок дозревания — когда пройдёт удержание; прошло, а обновлений мало — сейчас
+                    // (следующий пересчёт — не раньше signal.eval_min_interval_ms, его держит tick.rs).
+                    if par.ripen {
+                        view.ripen_at = t
+                            .above_since
+                            .map(|s| (s + Duration::milliseconds(par.hold_ms as i64)).max(now));
+                    }
                     State::Holding
                 }
             }

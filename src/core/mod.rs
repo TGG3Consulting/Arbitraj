@@ -216,6 +216,7 @@ pub mod signal_ctx;
 pub mod signal_fast;
 pub mod signal_hold_log;
 pub mod signal_probe;
+pub mod signal_ripen;
 pub mod signal_types;
 pub mod signals_src;
 pub mod size;

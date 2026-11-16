@@ -7,8 +7,10 @@
 //! Событие пула толкает поиск циклов DEX ↔ DEX для исполнения (решение 124, cycle_watch.rs). Стакан и пул отмечают живость потока площадки (решение 196,
 //! feed_live.rs). Решение 245: событие пула маршрута нашей открытой сделки — отметка задаче точек цены DEX на объём
 //! сделки (window_deal.rs touched, только память).
+//! Решение 318: после каждого пересчёта монеты — таймер дозревания (signal_ripen.rs arm); сработавший таймер ставит
+//! пересчёт сюда же (schedule_set) — тем же путём, с тем же signal.eval_min_interval_ms.
 //! Кто вызывает: core/engine.rs (задача run); schedule — ещё core/feed_rest_book.rs (t79: ответ REST стал стаканом
-//! тихой пары).
+//! тихой пары); schedule_set — core/signal_ripen.rs (решение 318).
 //! От чего зависит: engine.rs, market_state.rs, evaluate.rs (пересчёт монеты), view.rs.
 //! Настройки: signal.eval_min_interval_ms (решение 109); через evaluate.rs — signal.*, money.max_per_trade_usd,
 //! profit.sigma_window_min.
@@ -153,20 +155,28 @@ fn assets_by_tokens(
 pub(super) fn schedule(core: &Core, asset: Asset, venue: VenueId) {
     // Тик монеты — тем, кто ждёт её цены (режим «Ожидание», stuck.rs).
     let _ = core.inner.coin_ticks.send(asset.clone());
+    schedule_set(core, asset, [venue].into());
+}
+
+/// Ставит пересчёт монеты по площадкам (schedule без отметки тика монеты — так ставит и таймер дозревания, решение
+/// 318: нового тика не было). Идёт пересчёт — площадки в повтор; нет — задача. Ошибок нет.
+pub(super) fn schedule_set(core: &Core, asset: Asset, venues: HashSet<VenueId>) {
     {
         let mut t = lk(&core.inner.ticking);
         if let Some(pending) = t.get_mut(&asset) {
-            pending.insert(venue);
+            pending.extend(venues);
             return;
         }
         t.insert(asset.clone(), HashSet::new());
     }
     let core = core.clone();
     tokio::spawn(async move {
-        let mut venues: HashSet<VenueId> = [venue].into();
+        let mut venues = venues;
         loop {
             let started = Instant::now();
             super::evaluate::evaluate(&core, &asset, &venues).await;
+            // Решение 318: «держится» без новых тиков — таймер на срок дозревания (не задан signal.hold_timer — нет).
+            super::signal_ripen::arm(&core, &asset);
             if let Some(min) = min_interval(&core) {
                 let spent = started.elapsed();
                 if spent < min {

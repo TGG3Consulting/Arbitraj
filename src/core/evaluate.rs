@@ -4,7 +4,8 @@
 //! Монета с непроверенными налогами (решения 30, 61) — строка «налоги не проверены: причина» без котировок.
 //! Сигнал вышел из «кандидата» при открытом эпизоде — эпизод закрывается с причиной (решение 74, episode_run.rs).
 //! Решение 317: сигналу передаются обстоятельства пересчёта (signal_ctx.rs — сторона DEX, событие пула); направление
-//! стало кандидатом — запись core.signal_hold (signal_hold_log.rs, при log.signal_hold = да).
+//! стало кандидатом — запись core.signal_hold (signal_hold_log.rs, при log.signal_hold = да). Решение 318: срок
+//! дозревания «держится» — в план таймера (signal_ripen.rs); пересчёт, поставленный таймером, помечается «таймер».
 //! Кто вызывает: core/tick.rs.
 //! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, signal_ctx.rs, signal_hold_log.rs,
 //! vol.rs, candidates.rs, episode_run.rs, view.rs.
@@ -69,11 +70,20 @@ pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::Has
             vol.sample(a, &dir.asset, Side::Buy, b, p.buy, now, w);
             vol.sample(b, &dir.asset, Side::Sell, a, p.sell, now, w);
         }
-        let ctx = super::signal_ctx::of(core, &dir, venues, false);
+        let timer = lk(&core.inner.ripen).take_fired(&dir);
+        let ctx = super::signal_ctx::of(core, &dir, venues, timer);
         let mut view = lk(&core.inner.signals).update_with(&dir, prices, &params, Utc::now(), &ctx);
         if let Some(w) = &waiting {
             view.state = State::TaxesNotChecked(w.clone());
         }
+        // Решение 318: срок дозревания (только «держится» при signal.hold_timer = да) или снятие срока. В пересчёт
+        // таймер ставит площадку биржи направления (DEX ↔ DEX — площадку A): её тик не путается с событием пула.
+        let venue = if ctx.dex_side == Some(crate::core::types::Side::Buy) {
+            &dir.sell_on
+        } else {
+            &dir.buy_on
+        };
+        lk(&core.inner.ripen).set(&dir, view.ripen_at, venue);
         let (was_anomaly, was_candidate) = rd(&core.inner.spreads)
             .get(&dir)
             .map_or((false, false), |v| {

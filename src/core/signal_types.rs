@@ -66,4 +66,6 @@ pub struct SpreadView {
     pub skipped_hold: bool,
     /// Решение 317: сколько мс не менялась цена стороны биржи (только биржа ↔ DEX).
     pub cex_still_ms: Option<u64>,
+    /// Решение 318: срок дозревания «держится» — таймер сам поставит пересчёт (только при signal.hold_timer = да).
+    pub ripen_at: Option<DateTime<Utc>>,
 }

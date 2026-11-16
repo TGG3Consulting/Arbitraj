@@ -65,6 +65,10 @@
             {v.trigger === 'Pool' ? 'событие пула' : v.trigger === 'Timer' ? 'таймер дозревания (signal.hold_timer)' : 'тик биржи'}
             {#if v.skipped_hold}<span class="ok"> — кандидат без удержания (signal.dex_event_skip_hold)</span>{/if}
           </dd>
+          {#if v.ripen_at}
+            <dt>Таймер дозревания</dt>
+            <dd>пересчёт в {showTime(v.ripen_at)} (signal.hold_timer)</dd>
+          {/if}
           {#if v.cex_still_ms != null}
             <dt>Цена биржи стоит</dt>
             <dd><code>{v.cex_still_ms}</code> мс</dd>

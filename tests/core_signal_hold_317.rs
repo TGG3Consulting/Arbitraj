@@ -39,6 +39,7 @@ fn params(skip: bool) -> Result<Params, String> {
         hold_updates: 2,
         anomaly_pct: d("1000"),
         skip_on_pool: skip,
+        ripen: false,
     })
 }
 

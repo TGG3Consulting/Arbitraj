@@ -240,13 +240,9 @@ pub async fn evaluate_capped<S: Source>(
     let spend_fee = super::costs_types::quote_fee_at_worst(&qa, &cx.quote[0], worst_a);
     let profit = proceeds - invested - costs_usdt;
     // Решение 357 (только журнал): запас и прибыль по σ на горизонте T рядом с прежними; решение — по прежним.
-    let sigma_check = cx.sigma_check.as_ref().map(|c| {
-        let (buy, sell) = (qa.avg_price, qb.avg_price);
-        let r = costs.iter().find(|l| l.kind == CostKind::PriceMoveReserve);
-        let r = r.and_then(|l| l.usdt).unwrap_or_default();
-        let c = super::reserve_check::priced(c, cx, sqrt_t, proceeds, buy, sell, r, profit, &rates);
-        Box::new(c)
-    });
+    // Не-async функция (reserve_check.rs priced_box): значения сравнения не живут в кадре этого будущего.
+    let sigma_check =
+        super::reserve_check::priced_box(cx, &costs, sqrt_t, proceeds, &qa, &qb, profit, &rates);
     Ok(Calc {
         direction: d.clone(),
         qty,

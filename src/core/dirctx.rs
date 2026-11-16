@@ -209,15 +209,7 @@ impl DirCtx {
         };
         // Решение 357 (только журнал): σ на горизонте T рядом со σ плана — только у плана входа.
         let sigma_check = match &at_m {
-            Moment::Entry => super::reserve_check::of(
-                &mut lk(&core.inner.vol),
-                s,
-                dir,
-                sigma,
-                transit_s,
-                chrono::Utc::now(),
-            )
-            .map(Box::new),
+            Moment::Entry => super::reserve_check::entry(core, s, dir, sigma, transit_s),
             _ => None,
         };
         // Решение 240: доля закрытия разницы — не у сделки, которая уже идёт.

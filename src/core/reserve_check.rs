@@ -8,7 +8,9 @@
 //! Зачем: разбор docs/notes/t161-price-risk-2026-11-16.md — доказать завышение σ на шуме цены нельзя без рядов цены,
 //! их нет в записях; с этим полем факт виден на живом боте.
 //! Не задана или «нет» — поля нет (None, в JSON не пишется), счёта нет.
-//! Кто вызывает: core/dirctx.rs (of — план входа), core/costs.rs (priced).
+//! Обёртки entry и priced_box — обычные (не async) функции, отдают Option<Box<…>>: в будущих пути расчёта и
+//! предпроверки (стек, CI t161) не остаётся ни SigmaCheck, ни промежуточных значений — только указатель.
+//! Кто вызывает: core/dirctx.rs (entry — план входа), core/costs.rs (priced_box); of и priced — тесты и обёртки.
 //! От чего зависит: core/vol.rs, core/vol_horizon.rs, core/reserve.rs, core/convert.rs, settings.
 //! Настройки: log.sigma_horizon, profit.sigma_window_min, profit.sigma_floor_per_s [B] (через reserve.rs).
 
@@ -16,12 +18,14 @@ use chrono::{DateTime, Utc};
 use rust_decimal::{Decimal, MathematicalOps};
 use serde::Serialize;
 
-use crate::core::types::{Cost, CostKind, Direction, Side};
+use crate::core::types::{Cost, CostKind, Direction, Quote, Side};
 use crate::settings::read::At;
 use crate::settings::store::Store;
 
 use super::convert::{self, Rates};
+use super::costs_types::CostLine;
 use super::dirctx::DirCtx;
+use super::engine::{Core, lk};
 use super::vol::Volatility;
 use super::vol_horizon::Horizon;
 
@@ -141,4 +145,43 @@ pub fn priced(
         out.profit_t_usd = Some(profit + reserve_usdt - u);
     }
     out
+}
+
+/// Что делает: сравнение σ плана входа для DirCtx (of по рядам ядра, сейчас) — в куче. Принимает: ядро, хранилище,
+/// направление, σ и T плана. Возвращает: None — log.sigma_horizon не «да». Ошибок нет.
+pub fn entry(
+    core: &Core,
+    s: &Store,
+    d: &Direction,
+    sigma_plan: Decimal,
+    horizon_s: Decimal,
+) -> Option<Box<SigmaCheck>> {
+    let mut vol = lk(&core.inner.vol);
+    of(&mut vol, s, d, sigma_plan, horizon_s, Utc::now()).map(Box::new)
+}
+
+/// Что делает: запас и прибыль по σ_T для Calc (priced) — в куче. Принимает: контекст (без сравнения — None), строки
+/// затрат расчёта (прежний запас в USDT — строка PriceMoveReserve), √T, выручку, котировки покупки и продажи, прибыль,
+/// курсы. Возвращает: Option<Box<SigmaCheck>>. Ошибок нет.
+#[allow(clippy::too_many_arguments)]
+pub fn priced_box(
+    cx: &DirCtx,
+    costs: &[CostLine],
+    sqrt_t: Decimal,
+    proceeds: Decimal,
+    qa: &Quote,
+    qb: &Quote,
+    profit: Decimal,
+    rates: &Rates,
+) -> Option<Box<SigmaCheck>> {
+    let c = cx.sigma_check.as_deref()?;
+    let r = costs
+        .iter()
+        .find(|l| l.kind == CostKind::PriceMoveReserve)
+        .and_then(|l| l.usdt)
+        .unwrap_or_default();
+    let (buy, sell) = (qa.avg_price, qb.avg_price);
+    Some(Box::new(priced(
+        c, cx, sqrt_t, proceeds, buy, sell, r, profit, rates,
+    )))
 }

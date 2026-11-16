@@ -24,6 +24,7 @@ pub mod delist_ann;
 pub mod delist_html;
 pub mod delist_page;
 pub mod delist_time;
+pub mod deposit_min;
 pub mod errors;
 pub mod events;
 pub mod exit_scope;

@@ -16,7 +16,8 @@
 //! Решения разбора (что в документации не определено — не угадывается):
 //! - ненулевой deflation_rate у сети BSC — смысл одной строкой («Deflation rate»): комиссия вывода считается
 //!   неизвестной (None — ядро не выводит по ней), монета — в журнал (вопрос Тиграну);
-//! - min_deposit_amount «0» или пусто — смысл не описан → None, а при venue.deposit_min_absent_ok = да — 0 (урок 21);
+//! - min_deposit_amount (решение 370, Тигран 17.11): «0» — минимум 0 (документация не определяет); нет поля / null —
+//!   по venue.deposit_min_absent_ok; нечитаемое — неизвестен (gateway/deposit_min.rs);
 //! - подтверждения депозита — safe_confirmations («considered safe»; после скольких зачисляет CoinEx, не сказано);
 //! - is_memo_required_for_deposit у сети BSC — в журнал (депозит с memo не поддерживается, deposit_addr.rs);
 //! - ненулевой deposit_delay_minutes у сети BSC — в журнал (смысл не описан, вопрос Тиграну: удержание ли это вывода).
@@ -29,6 +30,7 @@ use rust_decimal::Decimal;
 use serde_json::Value;
 
 use crate::core::types::{Asset, CoinNetworkInfo, VenueId};
+use crate::gateway::deposit_min as dmin;
 use crate::gateway::errors::GatewayResult;
 
 use super::num;
@@ -99,6 +101,9 @@ pub fn parse(
                 (coin_dep, coin_wd),
             ) {
                 Ok((info, deflation)) => {
+                    if let Some(x) = dmin::note(MIN_FIELD, &min_raw(n)) {
+                        p.skipped.push(format!("{ticker}/{chain}: {x}"));
+                    }
                     if is_bsc {
                         note_bsc(&mut p, n, &ticker, contract.is_none(), deflation);
                     }
@@ -147,9 +152,10 @@ fn network(
 ) -> GatewayResult<(CoinNetworkInfo, Option<Decimal>)> {
     let deflation = num::dec_opt(n, "deflation_rate")?.filter(|r| !r.is_zero());
     let fee = num::dec_opt(n, "withdrawal_fee")?;
-    let deposit_min = num::dec_opt(n, "min_deposit_amount")?
-        .filter(|m| !m.is_zero())
-        .or(min_ok.then_some(Decimal::ZERO));
+    // Решение 370 (Тигран 17.11; документация смысл «0» не определяет): «0» — минимум 0; нет поля — по
+    // venue.deposit_min_absent_ok; нечитаемое — неизвестен (gateway/deposit_min.rs).
+    // Get Deposit and Withdrawal Configuration (https://docs.coinex.com/api/v2/assets/deposit-withdrawal/http/list-all-deposit-withdrawal-config): min_deposit_amount «Min. deposit amount», строка.
+    let deposit_min = dmin::resolve(&min_raw(n), min_ok);
     let info = CoinNetworkInfo {
         venue: venue.clone(),
         asset: Asset {
@@ -172,4 +178,12 @@ fn network(
         updated_at: Utc::now(),
     };
     Ok((info, deflation))
+}
+
+/// Решение 370: имя поля минимума депозита сети (Get Deposit and Withdrawal Configuration, chains[n]).
+const MIN_FIELD: &str = "min_deposit_amount";
+
+/// Решение 370: вид значения минимума депозита сети (gateway/deposit_min.rs). Ошибок нет.
+fn min_raw(n: &Value) -> dmin::Raw {
+    dmin::classify(num::dec_opt(n, MIN_FIELD).map_err(|e| e.message))
 }

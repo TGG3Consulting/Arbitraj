@@ -28,10 +28,10 @@
 use std::collections::HashMap;
 
 use chrono::Utc;
-use rust_decimal::Decimal;
 use serde_json::Value;
 
 use crate::core::types::{Asset, CoinNetworkInfo, VenueId};
+use crate::gateway::deposit_min as dmin;
 use crate::gateway::errors::GatewayResult;
 
 use super::ctx::ticker;
@@ -132,8 +132,12 @@ fn one(
     let dep_fee = num::dec_opt(n, "depositFeeRate").map_err(e)?;
     let mut deposit = flag(n, "depositEnabled")?;
     // Ревью t163 Н1: нечитаемый depositMinAmount (пустая строка, не число, меньше нуля) не выбрасывает сеть (с ней ушёл
-    // бы и вывод с XT, а до решения 365 поле не читалось) — считается «поля нет» (решает настройка), причина — в журнал.
-    let (dep_min, min_note) = deposit_min(n);
+    // бы и вывод с XT, а до решения 365 поле не читалось), причина — в журнал (gateway/deposit_min.rs).
+    // Решения 369, 370 (Тигран 17.11; документация смысл «0» не определяет): «0» — минимум 0; нет поля — по
+    // venue.deposit_min_absent_ok; нечитаемое (не число, меньше нуля) — неизвестен при любой настройке (ревью Н7).
+    // https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetSupportedCurrencies: depositMinAmount «Minimum deposit amount».
+    let dm = dmin::classify(num::dec_opt(n, "depositMinAmount").map_err(e));
+    let min_note = dmin::note("depositMinAmount", &dm);
     let note = match dep_fee {
         Some(f) if !f.is_zero() && deposit => {
             deposit = false;
@@ -163,7 +167,7 @@ fn one(
         // t163 (решение 365, решение 369): минимум депозита сети — depositMinAmount, «0» — минимум 0 (решение владельца
         // 17.11); нет поля или не прочитано — по venue.deposit_min_absent_ok, иначе None и ядро сделку с переводом на XT
         // не делает (решение 35).
-        deposit_min: dep_min.or(absent_ok.then_some(Decimal::ZERO)),
+        deposit_min: dmin::resolve(&dm, absent_ok),
         // Ревью t163 Н3: «Deposit confirmation block count» (doc.xt.com GetSupportedCurrencies); нечитаемое — None.
         deposit_confirmations: num::text_opt(n, "depositConfirmations")
             .and_then(|s| s.parse().ok()),
@@ -172,33 +176,6 @@ fn one(
         updated_at: Utc::now(),
     };
     Ok((info, note))
-}
-
-/// Минимум депозита сети из depositMinAmount (решение 365, ревью t163 Н1, решение 369). Возвращает: минимум (≥ 0;
-/// «0» — минимума нет, решение владельца 17.11, документация не определяет) или None (поля нет; нечитаемое значение —
-/// пустая строка, не число, меньше нуля — как «поля нет») и пояснение для журнала, если значение не прочитано.
-/// Ошибок нет.
-fn deposit_min(n: &Value) -> (Option<Decimal>, Option<String>) {
-    match num::dec_opt(n, "depositMinAmount") {
-        // Решение 369 (Тигран 17.11): «0» — известный минимум 0, депозит любой суммы. Документация XT
-        // (https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetSupportedCurrencies: depositMinAmount «Minimum deposit
-        // amount») смысл «0» не определяет — это решение владельца, а не факт документации.
-        Ok(Some(m)) if m >= Decimal::ZERO => (Some(m), None),
-        Ok(Some(m)) => (
-            None,
-            Some(format!(
-                "depositMinAmount = {m} меньше нуля — как нет поля (venue.deposit_min_absent_ok)"
-            )),
-        ),
-        Ok(None) => (None, None),
-        Err(e) => (
-            None,
-            Some(format!(
-                "{} — как нет поля (venue.deposit_min_absent_ok)",
-                e.message
-            )),
-        ),
-    }
 }
 
 /// Флаг сети — boolean. Ошибка — текст (сеть пропускается).

@@ -144,8 +144,6 @@ pub fn decide(
         let mut quiet_new = vec![];
         for p in &conn.pairs {
             let key = (conn.conn.clone(), p.ticker.clone());
-            // Решение 366 (ревью Н2): пара нужна торговле — ранняя проверка и приоритет в ведре.
-            let need = st.needed.contains(&p.ticker) || deals.contains_key(&p.ticker);
             let fresh = p.last_ms.is_some_and(|l| now - l <= dead_after);
             // Решение 213 / t163: кадр пришёл после последней проверки — замолчит снова, проверка сразу (ведро позволит),
             // прежний срок не держит; запомненный ответ «кадры потеряны» (дополнение 10.11, feed_rest_ref.rs) к новой
@@ -156,7 +154,22 @@ pub fn decide(
                 cs.next_at = 0;
                 cs.lost_ref = None;
                 cs.suspect = None;
+                cs.sticky = false;
             }
+            // Решение 366 (ревью Н2): пара нужна торговле — ранняя проверка и приоритет в ведре. Повторное ревью t163,
+            // Н1: устаревший стакан выбивает направление из «держится» / «кандидат» (сигнал без цены), поэтому пара,
+            // ставшая нужной при тишине выше порога ранней проверки, остаётся нужной (sticky), пока биржа не
+            // подтвердит книгу или не придёт новый кадр (сброс выше).
+            let want_now = st.needed.contains(&p.ticker) || deals.contains_key(&p.ticker);
+            if want_now && queue::due(p, now, c) {
+                let cs = st.checks.entry(key.clone()).or_default();
+                if !cs.sticky {
+                    cs.sticky = true;
+                    // Кадры до этого момента сброса не вызывают — только новые.
+                    cs.asked_ms = cs.asked_ms.max(p.last_ms.unwrap_or(0));
+                }
+            }
+            let need = want_now || st.checks.get(&key).is_some_and(|cs| cs.sticky);
             if fresh {
                 if st
                     .pairs

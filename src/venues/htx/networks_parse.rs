@@ -24,10 +24,10 @@
 use std::collections::HashMap;
 
 use chrono::Utc;
-use rust_decimal::Decimal;
 use serde_json::Value;
 
 use crate::core::types::{Asset, CoinNetworkInfo, VenueId};
+use crate::gateway::deposit_min as dmin;
 use crate::gateway::errors::GatewayResult;
 
 use super::ctx::ticker;
@@ -100,6 +100,9 @@ pub fn parse(
                 .and_then(|a| a.parse().ok());
             match network(n, &t, &net, contract, delisted, venue, min_ok) {
                 Ok(info) => {
+                    if let Some(x) = dmin::note(MIN_FIELD, &min_raw(n)) {
+                        p.skipped.push(format!("{t}/{chain}: {x}"));
+                    }
                     if is_bsc && info.withdraw_fee.is_none() {
                         // Решение 199: сырые поля комиссии как пришли — формула circulated / ratio не описана.
                         let kind = num::text_opt(n, "withdrawFeeType").unwrap_or_default();
@@ -138,9 +141,10 @@ fn network(
         None
     };
     let allowed = |f: &str| !delisted && num::text_opt(n, f).as_deref() == Some("allowed");
-    let deposit_min = num::dec_opt(n, "minDepositAmt")?
-        .filter(|m| !m.is_zero())
-        .or(min_ok.then_some(Decimal::ZERO));
+    // Решение 370 (Тигран 17.11; документация смысл «0» не определяет): «0» — минимум 0; нет поля — по
+    // venue.deposit_min_absent_ok; нечитаемое — неизвестен (gateway/deposit_min.rs).
+    // APIv2 Currency & Chains (https://huobiapi.github.io/docs/spot/v1/en/#apiv2-currency-amp-chains): minDepositAmt «Minimal deposit amount in each request», строка.
+    let deposit_min = dmin::resolve(&min_raw(n), min_ok);
     Ok(CoinNetworkInfo {
         venue: venue.clone(),
         asset: Asset {
@@ -185,4 +189,12 @@ pub fn contracts(data: &Value, field: &str) -> GatewayResult<Contracts> {
         out.insert((ticker(&cur), chain), addr);
     }
     Ok(out)
+}
+
+/// Решение 370: имя поля минимума депозита сети (APIv2 Currency & Chains, chains[]).
+const MIN_FIELD: &str = "minDepositAmt";
+
+/// Решение 370: вид значения минимума депозита сети (gateway/deposit_min.rs). Ошибок нет.
+fn min_raw(n: &Value) -> dmin::Raw {
+    dmin::classify(num::dec_opt(n, MIN_FIELD).map_err(|e| e.message))
 }

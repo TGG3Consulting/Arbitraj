@@ -276,6 +276,11 @@ impl Venue for Htx {
         self.books.confirm(ticker, until_ms);
     }
 
+    /// Решение 366 (повторное ревью t163, Б1): снять подтверждение тихой пары (book.rs unconfirm).
+    fn book_unconfirmed(&self, ticker: &str) {
+        self.books.unconfirm(ticker);
+    }
+
     /// Решение 202: переподписать одну пару в её соединении (unsub + sub темы mbp.refresh, ws_conn.rs).
     async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
         use crate::gateway::feed_health::Cmd;

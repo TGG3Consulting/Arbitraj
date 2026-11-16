@@ -273,6 +273,11 @@ impl Venue for CoinEx {
         self.books.confirm(ticker, until_ms);
     }
 
+    /// Решение 366 (повторное ревью t163, Б1): снять подтверждение тихой пары (book.rs unconfirm).
+    fn book_unconfirmed(&self, ticker: &str) {
+        self.books.unconfirm(ticker);
+    }
+
     /// Решение 202: переподписать пару в её соединении (depth.unsubscribe всех + depth.subscribe всех рынков
     /// соединения, ws_conn.rs).
     async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {

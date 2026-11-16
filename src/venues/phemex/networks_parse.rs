@@ -15,17 +15,18 @@
 //!   minWithdrawAmountWithFeeRv, withdrawFeeRv «withdraw fee required for user input withdraw amount»,
 //!   receiveAmountRv}]}.
 //!
-//! Адрес контракта сети BSC — из обоих; разные — сеть пропускается (не угадываем, какой верный). Минимум депозита «0»
-//! или пусто — смысл не описан → None, а при venue.deposit_min_absent_ok = да — 0 (урок 21). Точность и шаг суммы
+//! Адрес контракта сети BSC — из обоих; разные — сеть пропускается (не угадываем, какой верный). Минимум депозита (решение 370,
+//! Тигран 17.11): «0» — минимум 0 (документация не определяет); пусто / нет поля — по venue.deposit_min_absent_ok;
+//! нечитаемое — неизвестен (gateway/deposit_min.rs). Точность и шаг суммы
 //! вывода в документации не описаны — None (ядро не округляет по ним; проверить малым выводом).
 
 use std::collections::BTreeMap;
 
 use chrono::Utc;
-use rust_decimal::Decimal;
 use serde_json::Value;
 
 use crate::core::types::{Asset, CoinNetworkInfo, VenueId};
+use crate::gateway::deposit_min as dmin;
 use crate::gateway::errors::GatewayResult;
 
 use super::num;
@@ -69,7 +70,12 @@ pub fn merge(
     let mut p = Parsed::default();
     for (chain, (d, w)) in chains {
         match network(ticker, &chain, d, w, chain == bsc, venue, min_ok) {
-            Ok(info) => p.list.push(info),
+            Ok(info) => {
+                if let Some(x) = dmin::note(MIN_FIELD, &min_raw(d)) {
+                    p.skipped.push(format!("{ticker}/{chain}: {x}"));
+                }
+                p.list.push(info)
+            }
             Err(why) => p.skipped.push(format!("{ticker}/{chain}: {why}")),
         }
     }
@@ -104,9 +110,10 @@ fn network(
         Some(v) => num::dec_opt(v, f).map_err(m),
         None => Ok(None),
     };
-    let deposit_min = dec(d, "minAmountRv")?
-        .filter(|x| !x.is_zero())
-        .or(min_ok.then_some(Decimal::ZERO));
+    // Решение 370 (Тигран 17.11; документация смысл «0» не определяет): «0» — минимум 0; нет поля — по
+    // venue.deposit_min_absent_ok; нечитаемое — неизвестен (gateway/deposit_min.rs).
+    // Query deposit chain settings (https://phemex-docs.github.io/#query-deposit-chain-settings): minAmountRv «minimal deposit amount», строка, необязательное, в примере «0».
+    let deposit_min = dmin::resolve(&min_raw(d), min_ok);
     Ok(CoinNetworkInfo {
         venue: venue.clone(),
         asset: Asset {
@@ -129,4 +136,16 @@ fn network(
         withdraw_step: None,
         updated_at: Utc::now(),
     })
+}
+
+/// Решение 370: имя поля минимума депозита сети (Query deposit chain settings).
+const MIN_FIELD: &str = "minAmountRv";
+
+/// Решение 370: вид значения минимума депозита сети по записи депозита (нет записи депозита — поля нет;
+/// gateway/deposit_min.rs). Ошибок нет.
+fn min_raw(d: Option<&Value>) -> dmin::Raw {
+    match d {
+        Some(d) => dmin::classify(num::dec_opt(d, MIN_FIELD).map_err(|e| e.message)),
+        None => dmin::Raw::Absent,
+    }
 }

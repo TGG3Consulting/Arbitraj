@@ -59,6 +59,9 @@ pub(super) struct CheckSt {
     /// Решение 366 (ревью Н2): первая ранняя проверка сказала «книга новее» — время её запроса (unix мс); повторная
     /// сверка следующим проходом, переподписка — только при втором «новее» без кадра между ними. Кадр — сброс.
     pub(super) suspect: Option<i64>,
+    /// Повторное ревью t163, Н1: пара была нужна торговле, когда её тишина перешла порог ранней проверки, — остаётся
+    /// нужной, пока книгу не подтвердят (Quiet, Unchanged) или не придёт новый кадр (feed_watch_logic.rs).
+    pub(super) sticky: bool,
     /// Дополнение 10.11: ответ REST, давший «кадры потеряны» (feed_rest_ref.rs); тихая или свежая пара — None.
     pub(super) lost_ref: Option<LostRef>,
 }
@@ -220,18 +223,32 @@ pub fn apply(
     // а кадр с изменением ещё в пути (пуш у бирж — раз в 100–1000 мс). Не переподписывать: повторная сверка следующим
     // проходом (venue.pair_resub_interval_ms); кадр придёт — сверка снимается (feed_watch_logic.rs, сброс по кадру).
     // Второе «новее» без кадра — кадры потеряны, как всегда. Обычная (не ранняя) проверка — как до правки.
+    // Повторное ревью t163, Б1: книга на бирже новее — старое подтверждение тихой пары снимается сразу (Unconfirm),
+    // иначе котировка до его срока шла бы по книге, про которую уже известно, что она изменилась.
     if matches!(v, Verdict::Lost(_)) && cs.early && cs.suspect.is_none() {
         cs.suspect = Some(sent_ms);
         cs.next_at = 0;
         st.stats.early_suspect += 1;
+        out.push(Action::Unconfirm {
+            conn: key.0.clone(),
+            ticker: key.1.clone(),
+        });
         return out;
     }
     let early = cs.early;
-    cs.suspect = None;
+    // Повторное ревью t163, Н4: ошибка REST (Unknown) сверку не снимает — иначе чередование «новее» / ошибка
+    // откладывало бы переподписку бесконечно; снимают только ответы по существу.
+    if !matches!(v, Verdict::Unknown(_)) {
+        cs.suspect = None;
+    }
     match &v {
         Verdict::Quiet if early => st.stats.early_confirmed += 1,
         Verdict::Lost(_) if early => st.stats.early_lost += 1,
         _ => {}
+    }
+    // Повторное ревью t163, Н1: книга подтверждена или принята как есть — приоритет «нужной» больше не держится.
+    if matches!(v, Verdict::Quiet | Verdict::Unchanged) {
+        cs.sticky = false;
     }
     let told = match &v {
         Verdict::Quiet => Told::Quiet,

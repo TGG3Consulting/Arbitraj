@@ -9,6 +9,9 @@
 //! как до правки; ведро — по сроку ожидания, нужные первыми, старые ждущие не голодают; первое «книга новее» ранней
 //! проверки — без переподписки (повторная сверка), второе подряд — переподписка; кадр между ними — сверка снята;
 //! сводка журнала показывает «отложено ведром» и исходы проверок нужных пар.
+//! Повторное ревью t163: Б1 — первое «книга новее» снимает подтверждение сразу (Action::Unconfirm); Н4 — ошибка REST
+//! между двумя «новее» сверку не снимает (переподписка не откладывается); Н1 — пара, ставшая нужной, остаётся в
+//! приоритете, пока книгу не подтвердят или не придёт кадр, даже если сигнал её больше не держит.
 //! Вход — снимок свежести формата стыка (gateway/feed_health.rs), числа — советы docs/FIRST_RUN.md, как в
 //! feed_confirm_tests.rs. Без моков сети.
 //! Кто вызывает: cargo test.
@@ -92,6 +95,13 @@ fn by_id(id: i64) -> Result<BookVersion, String> {
         id: Some(id),
         ..Default::default()
     })
+}
+
+fn unconfirm() -> Action {
+    Action::Unconfirm {
+        conn: "m1".into(),
+        ticker: "GMT".into(),
+    }
 }
 
 fn check() -> Action {
@@ -216,7 +226,11 @@ fn first_early_newer_book_rechecks_without_resub() {
         &c,
         &mut st,
     );
-    assert!(a.is_empty(), "{a:?}");
+    assert_eq!(
+        a,
+        vec![unconfirm()],
+        "первое «новее» — подтверждение снимается сразу (Б1), без переподписки"
+    );
     // Кадр пришёл (101) — сверка снята, проверять нечего.
     assert!(decide(&health(42_500, 41_000, 101), 42_500, &c, &none, &mut st).is_empty());
     // Снова тихо; ранняя проверка — «новее», затем второй проход — опять «новее» без кадра: кадры потеряны.
@@ -234,7 +248,11 @@ fn first_early_newer_book_rechecks_without_resub() {
         &c,
         &mut st,
     );
-    assert!(a.is_empty(), "{a:?}");
+    assert_eq!(
+        a,
+        vec![unconfirm()],
+        "первое «новее» — подтверждение снимается сразу (Б1), без переподписки"
+    );
     assert_eq!(
         decide(&health(46_200, 41_000, 101), 46_200, &c, &none, &mut st),
         vec![check()],
@@ -336,4 +354,116 @@ fn summary_shows_deferred_and_early_outcomes() {
     let s = lg.summary(&h, 40_600, &c, &st).expect("сводка");
     assert!(s.contains("отложено ведром 1"), "{s}");
     assert!(s.contains("проверок нужных торговле пар 1"), "{s}");
+}
+
+#[test]
+fn rest_error_between_newer_answers_does_not_delay_resub() {
+    let (c, mut st, none) = (cfg(), need(&["GMT"]), HashMap::new());
+    let h = |n| health(n, 38_500, 100);
+    assert_eq!(
+        decide(&h(40_600), 40_600, &c, &none, &mut st),
+        vec![check()]
+    );
+    let a = apply(
+        &h(40_700),
+        "m1",
+        "GMT",
+        by_id(101),
+        40_600,
+        40_700,
+        &c,
+        &mut st,
+    );
+    assert_eq!(a, vec![unconfirm()]);
+    // Повторная сверка — ошибка REST: сверка остаётся.
+    assert_eq!(
+        decide(&h(43_600), 43_600, &c, &none, &mut st),
+        vec![check()]
+    );
+    let err = Err("HTTP 503".to_string());
+    let a = apply(&h(43_700), "m1", "GMT", err, 43_600, 43_700, &c, &mut st);
+    assert!(matches!(&a[..], [Action::CheckFailed { .. }]), "{a:?}");
+    // Следующий ответ «новее» — уже второй: кадры потеряны и переподписка.
+    assert_eq!(
+        decide(&h(73_700), 73_700, &c, &none, &mut st),
+        vec![check()]
+    );
+    let a = apply(
+        &h(73_800),
+        "m1",
+        "GMT",
+        by_id(101),
+        73_700,
+        73_800,
+        &c,
+        &mut st,
+    );
+    assert!(
+        matches!(
+            &a[..],
+            [Action::Lost { .. }, Action::Resub { attempt: 1, .. }]
+        ),
+        "{a:?}"
+    );
+}
+
+#[test]
+fn needed_pair_keeps_priority_until_confirmed_or_frame() {
+    let mut c = cfg();
+    c.quiet = QuietCfg::Confirm {
+        min_ms: 30_000,
+        max_per_s: 1,
+    };
+    let none = HashMap::new();
+    let mut st = need(&["GMT"]);
+    let h = |n| many(n, &[("OLD", 10_000), ("GMT", 38_500)]);
+    let n = |a: &[Action]| -> Vec<String> {
+        a.iter()
+            .filter_map(|x| match x {
+                Action::Check { ticker, .. } => Some(ticker.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    // GMT нужна и ранняя: ведро ей; затем GMT выпала из «нужных» (сигнал без цены), но остаётся в приоритете.
+    assert_eq!(
+        n(&decide(&h(40_600), 40_600, &c, &none, &mut st)),
+        vec!["GMT"]
+    );
+    st.needed.clear();
+    let a = apply(
+        &h(40_700),
+        "m1",
+        "GMT",
+        Ok(BookVersion {
+            id: Some(101),
+            ..Default::default()
+        }),
+        40_600,
+        40_700,
+        &c,
+        &mut st,
+    );
+    assert_eq!(a, vec![unconfirm()]);
+    // Повторная сверка GMT (sticky) — раньше OLD, хотя GMT больше не в State.needed.
+    assert_eq!(
+        n(&decide(&h(41_600), 41_600, &c, &none, &mut st)),
+        vec!["GMT"]
+    );
+    // Подтверждена (книга 100 = кадр 100) — приоритет снят: следующий запрос ведра — OLD.
+    let a = apply(
+        &h(41_700),
+        "m1",
+        "GMT",
+        by_id(100),
+        41_600,
+        41_700,
+        &c,
+        &mut st,
+    );
+    assert!(matches!(&a[..], [Action::Confirmed { .. }]), "{a:?}");
+    assert_eq!(
+        n(&decide(&h(42_600), 42_600, &c, &none, &mut st)),
+        vec!["OLD"]
+    );
 }

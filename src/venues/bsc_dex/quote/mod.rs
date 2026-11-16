@@ -224,7 +224,9 @@ impl Quoting {
         // Решение 300: признаки задачи tokio — здесь (счёт маршрута уходит в другой поток, quote/cpu.rs их не переносит).
         pick.exec_quote =
             crate::gateway::quote_stage::is_final() || crate::gateway::patience::is_exec();
-        let mut q = cpu::run(ctx, routing::run(pick, input)).await?;
+        // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
+        // (quote/cpu.rs run).
+        let mut q = cpu::run(ctx, Box::pin(routing::run(pick, input))).await?;
         // Решение 273: пул Solidly маршрута на паузе фабрики или цена газа выше его maxGasPrice — маршрут неисполним
         // (сигнал с причиной; exec/trade.rs не исполняет executable = нет). После отбора по plan_gas — страховка.
         if let Some(r) = q.route.as_mut() {

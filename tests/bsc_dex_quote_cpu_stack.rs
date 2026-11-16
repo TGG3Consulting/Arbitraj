@@ -11,6 +11,8 @@
 //! разойдутся, тест упадёт с понятным текстом, а не процесс со stack overflow.
 //! Расчёт «без потолка» (core/uncapped_queue.rs run, решение 141): uncapped::compute голый, под urgency::scope по
 //! значению (как до правки) и в uncapped_queue::scoped из кучи — по типу; тот же сторож.
+//! Ревью В2: будущее cpu::run (работа из кучи — Pin<Box<F>>) с настоящей и крошечной работой — сторож; размеры
+//! будущих Quoting::quote, cycle_scan::scan, profit::decide — по типу, в ту же строку.
 //! Будущие не опрашиваются. Цепочка по значению меряется по типу (ret_size: размер результата функции без вызова) —
 //! в самом тесте она не собирается, чтобы не переполнить стек потока теста.
 //! Данные — запись маршрута CAKE (tests/data/routes_2026-10-29, route_common), как tests/bsc_dex_quote_cpu.rs.
@@ -31,10 +33,11 @@ use alloy_primitives::U256;
 use rust_decimal::Decimal;
 
 use arb::core::types::{Asset, Side, TokenTaxes};
-use arb::core::{uncapped, uncapped_queue};
+use arb::core::{profit, uncapped, uncapped_queue};
+use arb::gateway::errors::{GatewayError, GatewayResult};
 use arb::gateway::urgency::Urgency;
 use arb::gateway::{calc_meter, quote_stage, urgency};
-use arb::venues::bsc_dex::quote::{Quoting, abandon, cpu, routing};
+use arb::venues::bsc_dex::quote::{Quoting, abandon, cpu, cycle_scan, routing};
 
 use route_common::{CAKE, USDT};
 
@@ -136,6 +139,30 @@ fn uncapped_sizes<A, B, C, D, R: Future>(_: fn(A, B, C, D) -> R) -> [usize; 4] {
     ]
 }
 
+/// Размер результата функции двух / трёх / четырёх аргументов — по типу, без вызова. Ошибок нет.
+fn ret_size2<A, B, R>(_: fn(A, B) -> R) -> usize {
+    size_of::<R>()
+}
+
+/// См. ret_size2. Ошибок нет.
+fn ret_size3<A, B, C, R>(_: fn(A, B, C) -> R) -> usize {
+    size_of::<R>()
+}
+
+/// См. ret_size2. Ошибок нет.
+fn ret_size4<A, B, C, D, R>(_: fn(A, B, C, D) -> R) -> usize {
+    size_of::<R>()
+}
+
+/// Размер будущего cpu::run над работой типа F (по типу, без вызова): с Pin<Box<F>> он не зависит от F. Ошибок нет.
+fn cpu_run_size<F, T>(_: &F) -> usize
+where
+    F: Future<Output = GatewayResult<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    ret_size2(cpu::run::<F, T>)
+}
+
 #[tokio::test]
 async fn future_sizes_t132() {
     let p = route_common::parts().await;
@@ -145,6 +172,12 @@ async fn future_sizes_t132() {
     let bare = size_of_val(&work);
     // (б) цепочка обёрток с работой по значению — как в quote/cpu.rs run до 8bef5371 (dd74d9b9).
     let [s1, s2, s3, s4] = chain_sizes(&work);
+    // Ревью В2: cpu::run принимает работу из кучи — его будущее (а с ним Quoting::quote) не несёт работу по значению.
+    let run_real = cpu_run_size(&work);
+    let run_tiny = cpu_run_size(&std::future::ready(Ok::<(), GatewayError>(())));
+    let quote_fut = ret_size4(Quoting::quote);
+    let scan_fut = ret_size2(cycle_scan::scan);
+    let decide_fut = ret_size3(profit::decide);
     // (в) то, что run ведёт сейчас: cpu::scoped с работой из кучи.
     let (_g1, flag1) = abandon::guard();
     let boxed = cpu::scoped(flag1, None, None, false, Box::pin(work));
@@ -160,7 +193,10 @@ async fn future_sizes_t132() {
          + final_if {s1}, + calc_meter::scope_opt {s2}, + urgency::scope_opt {s3}, + abandon::scope {s4}; \
          сейчас cpu::scoped (Box::pin) {now}; cpu::scoped с крошечной работой {tiny_size}; указатель {ptr}; \
          uncapped::compute {u_bare}, + urgency::scope по значению (до правки) {u_scope}, \
-         сейчас uncapped_queue::scoped (Box::pin) {u_now}, с крошечной работой {u_tiny}"
+         сейчас uncapped_queue::scoped (Box::pin) {u_now}, с крошечной работой {u_tiny}; \
+         cpu::run над routing::run {run_real}, над крошечной работой {run_tiny} (до правки В2 работа по значению \
+         в состоянии run: не меньше {bare}); Quoting::quote {quote_fut}; cycle_scan::scan {scan_fut}; \
+         profit::decide {decide_fut}"
     );
     say(&text);
     // Сторож: работа в куче — на стеке потока счёта указатель и обёртки, размер от работы не зависит.
@@ -170,6 +206,12 @@ async fn future_sizes_t132() {
     );
     // Работа из кучи не крупнее цепочки по значению (иначе замер не показывает выигрыша — нужен иной разбор).
     assert!(now < s4, "{text}");
+    // Сторож В2: будущее cpu::run не зависит от размера работы (работа из кучи) — на рабочем потоке tokio и в
+    // состоянии Quoting::quote / поиска циклов остаётся указатель.
+    assert_eq!(
+        run_real, run_tiny,
+        "будущее cpu::run зависит от размера работы — работа снова по значению: {text}"
+    );
     // Тот же сторож для расчёта «без потолка» (core/uncapped_queue.rs).
     assert_eq!(
         u_now, u_tiny,

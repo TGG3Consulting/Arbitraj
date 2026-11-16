@@ -33,8 +33,12 @@
 //! общего контракта по логу (on_member_log) — одним чтением группы с тем же пределом. Не задана — как раньше, по очереди.
 //! Решение 339 (pool_fail.rs): при dex.pool_fail_pause_ms не прочитавшийся пул отмечается с причиной (экран «Монеты»,
 //! журнал) и следующие блоки / логи его не читают, пока не прошла растущая пауза; не задана — как раньше, каждым блоком.
+//! Задача t160 (dex.per_block_skip_same, reload.rs): чтение каждым блоком, не изменившее состояние пула, ядру не шлётся
+//! (load_one_block, reload_many::load_group_block, put_emit в per_block_balancer.rs / per_block_lb.rs); пары общего
+//! контракта по логу (on_member_log) — как раньше. Не задана — как раньше.
 //! Кто вызывает: pools/session.rs.
-//! От чего зависит: listen.rs (Pools, End), reload.rs (load_one), reload_many.rs (load_group, load_group_with),
+//! От чего зависит: listen.rs (Pools, End), reload.rs (load_one, load_one_block), reload_many.rs (load_group_block,
+//! load_group_with),
 //! per_block_par.rs, load_batch_par.rs (limit), pool_fail.rs, discover.rs (Found), families.rs, ladder_counter.rs,
 //! refresh_urgency.rs (решение 314: лог общего контракта — класс очереди узла, только при парах контракта).
 //! Настройки: dex.pmm_ladder_counter, dex.pmm_ladder_usd [DEX] (ladder_counter.rs each_block); dex.event_refresh_urgency
@@ -138,8 +142,8 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
             singles.push((f, t.as_str()));
             continue;
         }
-        if let Err(why) = reload::load_one(p, f, t, block).await? {
-            pool_fail::block_failed(p, f, &why.message).await;
+        if let Err(why) = reload::load_one_block(p, f, t, block).await? {
+            pool_fail::block_failed(p, f, &why).await;
         }
     }
     if let Some(n) = par {
@@ -152,9 +156,12 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
         return per_block_par::on_head(p, lists, block, n).await;
     }
     for (_, items) in sites {
-        for ((f, _), r) in items.iter().zip(reload_many::load_group(p, &items, block).await?) {
+        for ((f, _), r) in items
+            .iter()
+            .zip(reload_many::load_group_block(p, &items, block, None).await?)
+        {
             if let Err(why) = r {
-                pool_fail::block_failed(p, f, &why.message).await;
+                pool_fail::block_failed(p, f, &why).await;
             }
         }
     }
@@ -197,7 +204,7 @@ pub async fn on_member_log(p: &Pools, pools: &[(Found, String)], log: &Log) -> R
     let work = async {
         for (f, t) in members {
             if let Err(why) = reload::load_one(p, f, t, block).await? {
-                pool_fail::block_failed(p, f, &why.message).await;
+                pool_fail::block_failed(p, f, &why).await;
             }
         }
         Ok::<bool, End>(true)

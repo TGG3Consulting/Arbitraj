@@ -126,7 +126,7 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
                     let (f, t) = &m.pools[i];
                     p.reg.update(&f.reference, |x| x.valid = false);
                     super::invalidated::send(p, f.coin, t.clone());
-                    pool_fail::note(p, &f.reference, f.family.title, t, &e.message).await;
+                    pool_fail::note(p, &f.reference, f.family.title, t, &e).await;
                     stale_read::requeue(&mut m.missing, &mut m.abandoned, i);
                 }
                 return Ok(true);
@@ -163,7 +163,7 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
         p.reg.update(&f.reference, |x| x.valid = false);
         super::invalidated::send(p, f.coin, t.to_string());
         if !stale_read::is_stale(&e) {
-            pool_fail::note(p, &f.reference, f.family.title, t, &e.message).await;
+            pool_fail::note(p, &f.reference, f.family.title, t, &e).await;
         } else if let Some(entry) = p.reg.get(&f.reference) {
             stale_read::note(p, &entry, at, &e).await;
         }

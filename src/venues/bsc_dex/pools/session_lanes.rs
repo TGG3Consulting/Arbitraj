@@ -14,13 +14,18 @@
 //!   пул в очередь повтора (requeue) при завершении — до запуска следующего события пула;
 //! • новый блок (повтор и чтения каждым блоком) ждёт только полосы своих пулов (settle); приём новых пулов, пересинхрон
 //!   ленты и смена настроек — после обработки всего принятого (drain), как раньше по очереди;
-//! • обрыв сессии останавливает полосы (JoinSet), пулы — как раньше (недостоверны или держатся по
-//!   dex.keep_pools_on_break), переподключение читает их заново.
+//! • обрыв сессии останавливает полосы и ЖДЁТ их остановки (shutdown, ревью t153 Н1) — до того, как сессия объявит
+//!   пулы пачки недостоверными (session.rs run → invalidate): задача полосы не запишет пул достоверным после этого;
+//!   пулы — как раньше (недостоверны или держатся по dex.keep_pools_on_break), переподключение читает их заново;
+//! • событие, которое не удалось положить в полосу, — явный обрыв сессии (End::Broken, ревью t153 Н2), не молча;
+//! • итог true (опоздало, ошибка пула при 339 или событие недостоверного пула — ревью t153 Б1) ставит пул в очередь
+//!   повтора через pool_fail::requeue (при 339 брошенный из-за незаданной настройки остаётся брошенным).
 //! Класс очереди узла — как раньше: задача полосы без класса (фон), перечитывание — dex.event_refresh_urgency.
-//! Замер решения 313 (queued) — сколько событий ЭТОГО пула ждёт в его полосе.
+//! Замер решения 313 (queued) — сколько событий ЭТОГО пула ждёт в его полосе (при полосах; без полос — как раньше,
+//! сколько сообщений ждёт в канале всей пачки: числа «до» и «после» включения полос не сравнимы — ревью t153 Н8).
 //! Кто вызывает: pools/session.rs.
-//! От чего зависит: lanes.rs, listen_log.rs (on_log), stale_read.rs, admit.rs (Members), group.rs (Msg), listen.rs
-//! (Pools, End), load_batch_par.rs (limit), per_block.rs (needs).
+//! От чего зависит: lanes.rs, listen_log.rs (on_log), stale_read.rs, pool_fail.rs (requeue, base), admit.rs (Members),
+//! group.rs (Msg), listen.rs (Pools, End), load_batch_par.rs (limit), per_block.rs (needs).
 //! Настройки: dex.event_lanes_max [bsc_dex] (необязательная; не задана — события по очереди в сессии, как раньше).
 
 use std::collections::HashMap;
@@ -34,7 +39,7 @@ use super::admit::Members;
 use super::group::Msg;
 use super::lanes::Lanes;
 use super::listen::{End, Pools};
-use super::{listen_log, load_batch_par, per_block, stale_read};
+use super::{listen_log, load_batch_par, per_block, pool_fail, stale_read};
 
 /// Настройка предела одновременных полос.
 pub const MAX: &str = "dex.event_lanes_max";
@@ -53,6 +58,8 @@ pub struct EventLanes {
     plan: Lanes<usize>,
     chans: HashMap<usize, Chan>,
     set: JoinSet<Done>,
+    /// Решение 339 включено (pool_fail::base) — по последнему dispatch; для requeue в finish (ревью t153 Б1).
+    isolate: bool,
 }
 
 impl Default for EventLanes {
@@ -61,6 +68,7 @@ impl Default for EventLanes {
             plan: Lanes::new(),
             chans: HashMap::new(),
             set: JoinSet::new(),
+            isolate: false,
         }
     }
 }
@@ -79,16 +87,21 @@ impl EventLanes {
     }
 
     /// Что делает: лог глубокого пула `i` — в конец его полосы (запуск — dispatch). Принимает: индекс пула, сырой лог.
-    /// Ошибок нет.
-    pub fn push(&mut self, i: usize, raw: Box<RawValue>) {
+    /// Ошибки: End::Broken — канал полосы закрыт (по коду недостижимо: приёмник у сессии в карте или у задачи полосы в
+    /// JoinSet сессии; ревью t153 Н2 — событие не теряется молча, сессия переподключается и перечитывает пулы).
+    pub fn push(&mut self, i: usize, raw: Box<RawValue>) -> Result<(), End> {
         let c = self.chans.entry(i).or_insert_with(|| {
             let (tx, rx) = mpsc::unbounded_channel();
             Chan { tx, rx: Some(rx) }
         });
-        // Приёмник у сессии (в карте) или у задачи полосы, которую держит JoinSet сессии, — отправка не падает.
-        if c.tx.send(Msg::Log(raw)).is_ok() {
-            self.plan.push(i);
+        if c.tx.send(Msg::Log(raw)).is_err() {
+            return Err(End::Broken(
+                "событие пула не положено в его полосу — канал полосы закрыт (внутренняя ошибка)"
+                    .into(),
+            ));
         }
+        self.plan.push(i);
+        Ok(())
     }
 
     /// Что делает: запускает ждущие события в пределах dex.event_lanes_max (снята — 1, пока принятое не обработано).
@@ -96,6 +109,8 @@ impl EventLanes {
     pub fn dispatch(&mut self, p: &Pools, m: &Members) -> Result<(), End> {
         let max = load_batch_par::limit(&p.ctx, MAX).unwrap_or(1);
         while let Some(i) = self.plan.next(max) {
+            // Ревью t153 (Б1): включено ли 339 — для requeue в finish; читается, только когда событие запускается.
+            self.isolate = pool_fail::base(&p.ctx).is_some();
             let mut rx = self
                 .chans
                 .get_mut(&i)
@@ -128,8 +143,8 @@ impl EventLanes {
         self.set.join_next().await
     }
 
-    /// Что делает: завершение события: канал — на место, полоса свободна, «опоздало» (StaleData) — пул в очередь
-    /// повтора (stale_read::requeue, как session.rs раньше). Принимает: пачку, итог. Ошибки: End — ошибка события
+    /// Что делает: завершение события: канал — на место, полоса свободна, итог true (StaleData, ошибка пула при 339,
+    /// событие недостоверного пула — ревью t153 Б1) — пул в очередь повтора (pool_fail::requeue). Принимает: пачку, итог. Ошибки: End — ошибка события
     /// (пул уже недостоверен — listen_log.rs) или задача полосы прервана.
     pub fn finish(&mut self, m: &mut Members, done: Result<Done, JoinError>) -> Result<(), End> {
         let (i, rx, r) =
@@ -139,9 +154,15 @@ impl EventLanes {
         }
         self.plan.done(i);
         if r? {
-            stale_read::requeue(&mut m.missing, &mut m.abandoned, i);
+            pool_fail::requeue(self.isolate, &mut m.missing, &mut m.abandoned, i);
         }
         Ok(())
+    }
+
+    /// Что делает: ревью t153 (Н1) — обрыв сессии: прервать задачи полос и ДОЖДАТЬСЯ их остановки (JoinSet::shutdown),
+    /// чтобы ни одна не записала пул после того, как сессия объявит пачку недостоверной. Ошибок нет.
+    pub async fn shutdown(&mut self) {
+        self.set.shutdown().await;
     }
 
     /// Что делает: ждёт, пока не останется выполняющихся событий пулов, для которых `hit` — да (новые не запускает).

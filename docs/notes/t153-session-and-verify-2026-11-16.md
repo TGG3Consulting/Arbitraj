@@ -158,3 +158,24 @@ LbV21; остальные — неприменимо (их состояние м
 Ok(true); }` — строки 165-168 (`if super::pool_fail::note(...).await { return Ok(true); }` перед прежним
 `return Err(End::Broken(e.message))`). Ветка Bins (t154) и чтение (t152) не тронуты.
 
+
+## 9. Независимое ревью ветки и правки (16.11.2026)
+
+Каждое замечание перепроверено по коду efd9fd5d. Номера строк ревью для `session_lanes.rs` (240-242) и
+`per_block_par.rs` (266-271) не совпадают с файлами (188 и 66 строк) — выводы по сути верные, места найдены по коду.
+
+| Замечание | Факт кода (efd9fd5d) | Что сделано |
+| --- | --- | --- |
+| Б1 брошенный пул | `reload.rs:90-112` — после dex.pool_load_retries пул в `abandoned`; `listen_log.rs` — Applied::Updated без off_map не перечитывает; при 339 переподключений по ошибке пула нет | верно. При dex.pool_fail_pause_ms пул не бросается (кроме ждущего незаданную настройку), после предела — одна запись Error, повтор с паузой; событие недостоверного пула не на паузе, не перечитавшее его, — итог true → очередь повтора (`pool_fail::requeue`); пары Multi перечитываются любым логом, «каждым блоком» — каждым блоком после паузы |
+| Н1 обрыв с полосами | JoinSet снимался drop при возврате из listen | верно (гонка возможна по коду). `session.rs listen` → `events`, затем `lanes.shutdown().await` до возврата в `run` (invalidate) |
+| Н2 молчаливый сброс | `session_lanes.rs:88-91` — `if send.is_ok()` | верно. `push` → `End::Broken` |
+| Н3 паника | `pool_fail.rs:94` `now + Duration` | верно. `pool_fail::later` — checked_add, пауза делится пополам |
+| Н4 ошибки узла | `listen_log.rs` / `reload.rs` — любая ошибка → `note` на пул, сравнение причины по тексту | верно. Unreachable / Timeout / RateLimited (как `node/failover.rs switchable`) — пауза начальная, без роста; журнал одной записью на сбой узла; причина — по коду |
+| Н5 замок без 339 | `registry.rs put` → `fails.clear` под Mutex | верно. Атомарный счётчик отметок |
+| Н6 отметки не чистятся | карта только растёт | верно. `registry.rs retain` → `forget`, `market.rs` → `keep_only(known)` |
+| Н7 Telegram | события нет | сделано: dex.pool_unread_alert_s, событие dex.pool_unread |
+| Н8 queued | смысл разный при полосах и без | описано: SETTINGS (log.pool_refresh_timing), `refresh_timing.rs`, `session_lanes.rs`, DECISIONS |
+| Н9 тесты | — | `tests/bsc_dex_review_t153.rs` |
+
+Задача t160 (зона ветки): dex.per_block_skip_same — см. DECISIONS «339 (ревью, t153)». Без dex.pool_events_keep = да
+не действует (решение 313: событие при полном канале теряется, повтор каждым блоком был единственной доставкой).

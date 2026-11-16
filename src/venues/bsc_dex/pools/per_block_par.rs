@@ -3,13 +3,14 @@
 //! dex.block_read_parallel_max: свои пулы (WooFi, Lista, Infinity Stable, Nomiswap Stable, Metric, iZiSwap / Biswap
 //! V3, KyberSwap DMM, SmarDex — все виды «по одному», load_batch::one_by_one) и пары многомонетных пулов (Curve NG —
 //! одно чтение на контракт) — одним чтением группы на блоке головы с пределом одновременных чтений
-//! (reload_many::load_group_with → load_batch_par.rs); пулы Balancer V2 (per_block_balancer.rs) и Liquidity Book V2.1
+//! (reload_many::load_group_block → load_batch_par.rs; задача t160 — неизменившееся состояние ядру не шлётся при
+//! dex.per_block_skip_same); пулы Balancer V2 (per_block_balancer.rs) и Liquidity Book V2.1
 //! (per_block_lb.rs) — своими пачками, одновременно с группой. Раньше — друг за другом, каждый пул со всеми своими
 //! обращениями к узлу. Итог тот же: те же функции чтения на том же блоке; не прочитался — пул недостоверен до
 //! следующего удачного чтения, при dex.pool_fail_pause_ms — с причиной и паузой (pool_fail.rs, решение 339), как
 //! per_block.rs. Сами вызовы вида не объединяются в Multicall3 (это внутренности load_*.rs — зона задачи t152).
 //! Кто вызывает: pools/per_block.rs (on_head, on_member_log — failed).
-//! От чего зависит: reload_many.rs (load_group_with), per_block_balancer.rs, per_block_lb.rs, pool_fail.rs,
+//! От чего зависит: reload_many.rs (load_group_block), per_block_balancer.rs, per_block_lb.rs, pool_fail.rs,
 //! listen.rs (Pools, End), discover.rs (Found).
 //! Настройки: dex.block_read_parallel_max [bsc_dex] (предел передаёт per_block.rs).
 
@@ -40,7 +41,7 @@ pub async fn on_head(p: &Pools, lists: Lists<'_>, block: u64, par: usize) -> Res
         if items.is_empty() {
             return Ok(());
         }
-        let res = reload_many::load_group_with(p, &items, block, Some(par)).await?;
+        let res = reload_many::load_group_block(p, &items, block, Some(par)).await?;
         failed(p, &items, &res).await;
         Ok::<(), End>(())
     };
@@ -60,7 +61,7 @@ pub async fn on_head(p: &Pools, lists: Lists<'_>, block: u64, par: usize) -> Res
 pub async fn failed(p: &Pools, items: &[(&Found, &str)], res: &[Result<(), GatewayError>]) {
     for ((f, _), r) in items.iter().zip(res) {
         if let Err(why) = r {
-            pool_fail::block_failed(p, f, &why.message).await;
+            pool_fail::block_failed(p, f, why).await;
         }
     }
 }

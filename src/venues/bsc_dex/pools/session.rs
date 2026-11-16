@@ -12,6 +12,8 @@
 //! (session_lanes.rs): перечитывание одного пула не держит события других пулов пачки, порядок событий пула прежний.
 //! Новый блок ждёт только полосы своих пулов (повтор, «каждым блоком»), приём пулов / пересинхрон / настройки — всё
 //! принятое. Не задана — события по очереди в сессии, как раньше.
+//! Ревью t153: Н1 — на обрыве полосы останавливаются и дожидаются остановки ДО invalidate (listen → events); Б1 —
+//! итог true события пула ставит его в очередь повтора через pool_fail::requeue (pool_fail_note.rs).
 //! Кто вызывает: pools/listen.rs.
 //! От чего зависит: group.rs, admit.rs, reload.rs, listen_log.rs, events.rs, node/heads.rs, link.rs, settings (рассылка),
 //! session_lanes.rs (решение 330), stale_read.rs.
@@ -91,8 +93,26 @@ pub async fn run(
     end
 }
 
-/// События пачки до обрыва. Возвращает: (конец, true — состояние загружалось).
+/// События пачки до обрыва. Ревью t153 (Н1): полосы событий (решение 330) останавливаются и ДОЖИДАЮТСЯ остановки до
+/// возврата — run объявляет пачку недостоверной (invalidate) только после этого. Возвращает: (конец, true —
+/// состояние загружалось).
 async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Adds>) -> (End, bool) {
+    // Решение 330: полосы событий глубоких пулов (session_lanes.rs); без dex.event_lanes_max пусты — всё как раньше.
+    let mut lanes = EventLanes::new();
+    let out = Box::pin(events(p, g, m, adds, &mut lanes)).await;
+    lanes.shutdown().await;
+    out
+}
+
+/// События пачки до обрыва (тело listen). Принимает ещё полосы событий. Возвращает: (конец, true — состояние
+/// загружалось).
+async fn events(
+    p: &Pools,
+    g: &mut Group,
+    m: &mut Members,
+    adds: &mut Option<Adds>,
+    lanes: &mut EventLanes,
+) -> (End, bool) {
     // Источник могли сменить, пока шёл приём пулов (admit) — сразу переподключение через новый (решение 68).
     if g.conn.stale(&p.ctx) {
         return (
@@ -108,8 +128,6 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
     let mut resync = p.feed.resync_watch();
     let mut idx = group::index(&m.pools);
     let mut sites = group::multi_sites(&m.pools);
-    // Решение 330: полосы событий глубоких пулов (session_lanes.rs); без dex.event_lanes_max пусты — всё как раньше.
-    let mut lanes = EventLanes::new();
     loop {
         tokio::select! {
             done = lanes.next_done(), if lanes.running() => {
@@ -130,7 +148,7 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                     Ok(l) => l,
                     Err(e) => return (End::Broken(format!("лог не разобран: {e}")), true),
                 };
-                if let Err(end) = on_log(p, g, m, (&idx, &sites), &log, (&mut lanes, raw)).await {
+                if let Err(end) = on_log(p, g, m, (&idx, &sites), &log, (&mut *lanes, raw)).await {
                     return (end, true);
                 }
             }
@@ -265,14 +283,16 @@ async fn on_log(
         {
             // Решение 330: полосы — событие в конец полосы пула (порядок пула прежний), запуск в пределах.
             if lanes.wants(p) {
-                lanes.push(i, raw);
+                lanes.push(i, raw)?;
                 return lanes.dispatch(p, m);
             }
             // Решение 298: чтение на блоке события опоздало (StaleData) — пул в очередь повтора, сессия идёт дальше;
             // пока ждёт — события без перечитывания.
             let waiting = super::stale_read::waiting(&m.missing, i);
             if listen_log::on_log(p, log, waiting, &g.rx).await? {
-                super::stale_read::requeue(&mut m.missing, &mut m.abandoned, i);
+                // Ревью t153 (Б1): при 339 брошенный из-за незаданной настройки остаётся брошенным (pool_fail_note.rs).
+                let isolate = super::pool_fail::base(&p.ctx).is_some();
+                super::pool_fail::requeue(isolate, &mut m.missing, &mut m.abandoned, i);
             }
         }
         return Ok(());

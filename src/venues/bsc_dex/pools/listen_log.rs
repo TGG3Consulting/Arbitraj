@@ -14,7 +14,8 @@
 //! теряется, а ждёт места в канале (gateway/core_out.rs, решение 324).
 //! Решение 314: перечитывания по событию (off_map, Refresh, Bins) — классом dex.event_refresh_urgency (refresh_urgency.rs).
 //! Решение 339 (pool_fail.rs): при dex.pool_fail_pause_ms прочая ошибка чтения тоже не рвёт сессию — пул недостоверен,
-//! в очередь повтора с растущей паузой; пул на паузе по событию не читается (как ждущий повтора).
+//! в очередь повтора с растущей паузой; пул на паузе по событию не читается (как ждущий повтора). Ревью t153 (Б1):
+//! событие недостоверного пула не на паузе, которое его не перечитало, — итог true (пул в очередь повтора).
 //! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s, dex.event_refresh_urgency,
 //! dex.pool_events_keep, dex.pool_fail_pause_ms).
 //!
@@ -50,7 +51,8 @@ use super::{load_bin, load_lb_bins};
 /// Возвращает: true — чтение на блоке события опоздало (StaleData, решение 298): пул недостоверен, Invalidated ушло,
 /// вызывающий ставит пул в очередь повтора (stale_read::requeue); false — обработан как раньше.
 /// `queued` — канал сессии пачки: сколько сообщений ждёт, пока пул перечитывается (замер решения 313).
-/// Решение 339: при dex.pool_fail_pause_ms true и при прочей ошибке чтения (пул на паузе, pool_fail.rs).
+/// Решение 339: при dex.pool_fail_pause_ms true и при прочей ошибке чтения (пул на паузе, pool_fail.rs); ревью t153
+/// (Б1) — и когда пул недостоверен, не на паузе, не ждёт повтора, а событие его не перечитало.
 /// Ошибки: End — прочая ошибка чтения без dex.pool_fail_pause_ms (пул недостоверен), лог без позиции, ядро закрыло канал.
 pub async fn on_log(
     p: &Pools,
@@ -77,13 +79,17 @@ pub async fn on_log(
     };
     // Решение 339: пул на паузе после неудач чтения — события без перечитывания, как у ждущего повтора.
     let waiting = waiting || super::pool_fail::paused(p, &r);
+    // Ревью t153 (Б1): при dex.pool_fail_pause_ms событие НЕДОСТОВЕРНОГО пула не на паузе и не в очереди повтора
+    // ставит его на перечитку (итог true — вызывающий ставит в очередь повтора), если событие само его не перечитало:
+    // иначе пул, чьи события только применяются (Applied::Updated), остался бы недостоверным навсегда.
+    let revive = !waiting && !entry.valid && super::pool_fail::base(&p.ctx).is_some();
     let (Some(block), Some(index)) = (log.block_number, log.log_index) else {
         return Err(End::Broken(
             "лог подписки без blockNumber/logIndex — порядок событий неизвестен".into(),
         ));
     };
     if !log.removed && entry.has_applied(block, index) {
-        return Ok(false);
+        return Ok(revive);
     }
     let applied = if log.removed {
         Applied::Refresh("реорг: событие отменено (removed)".into())
@@ -93,7 +99,7 @@ pub async fn on_log(
             .unwrap_or(Applied::Ignored)
     };
     let res = match applied {
-        Applied::Ignored => return Ok(false),
+        Applied::Ignored => return Ok(revive),
         // Решение 298: пул ждёт повтора — не читаем (повтор на новых блоках прочитает его не раньше этого события).
         Applied::Refresh(_) if waiting => {
             if !log.removed {
@@ -163,7 +169,7 @@ pub async fn on_log(
             return Ok(true);
         }
         // Решение 339: задана dex.pool_fail_pause_ms — ошибка касается только этого пула: в очередь повтора с паузой.
-        if super::pool_fail::note(p, &r, entry.family.title, &entry.ticker, &e.message).await {
+        if super::pool_fail::note(p, &r, entry.family.title, &entry.ticker, &e).await {
             return Ok(true);
         }
         return Err(End::Broken(e.message));
@@ -171,7 +177,9 @@ pub async fn on_log(
     match p.reg.get(&r) {
         Some(e) => {
             note_refill(p, &e);
-            emit(p, e.pool).map(|()| false)
+            // Б1: событие пул не перечитало (запись всё ещё недостоверна) — в очередь повтора.
+            let again = revive && !e.valid;
+            emit(p, e.pool).map(|()| again)
         }
         None => Ok(false),
     }

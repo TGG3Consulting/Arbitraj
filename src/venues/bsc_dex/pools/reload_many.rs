@@ -6,7 +6,8 @@
 //! по-прежнему на СВОЁМ свежем блоке (блок берётся, когда чтение пула начинается); load_group_with — чтение группы с
 //! пределом одновременных чтений видов «по одному» (load_batch_par.rs, решение 331). Не задана — как раньше, по очереди.
 //! Кто вызывает: pools/admit.rs, pools/reload.rs (retry); load_group — ещё per_block.rs, listen_site.rs (решение 295);
-//! load_group_with — per_block.rs, per_block_par.rs (решение 330).
+//! load_group_with — per_block.rs (on_member_log); load_group_block — per_block.rs, per_block_par.rs (решение 330;
+//! задача t160: при dex.per_block_skip_same неизменившееся состояние ядру не шлётся, reload.rs put_new).
 //! От чего зависит: load_batch.rs, load_batch_par.rs, load.rs, listen_log.rs, http_wait.rs, registry.rs.
 //! Настройки: dex.load_batch, dex.block_read_parallel_max [bsc_dex]; через load_batch.rs — dex.multicall3,
 //! dex.tick_words, dex.tick_lens, dex.state_view.
@@ -141,6 +142,30 @@ pub async fn load_group_with(
     block: u64,
     par: Option<usize>,
 ) -> Result<Vec<Result<(), GatewayError>>, End> {
+    group(p, items, block, par, false).await
+}
+
+/// Что делает: задача t160 — как load_group_with для чтения «каждым блоком» (per_block.rs, per_block_par.rs): при
+/// dex.per_block_skip_same пул, чьё поколение состояния после записи то же, ядру не шлётся (reload.rs skip_same,
+/// put_new). Принимает: (пул, тикер), блок, предел. Возвращает: по каждому Ok или причину. Ошибки: End — ядро закрыло
+/// канал.
+pub async fn load_group_block(
+    p: &Pools,
+    items: &[(&Found, &str)],
+    block: u64,
+    par: Option<usize>,
+) -> Result<Vec<Result<(), GatewayError>>, End> {
+    group(p, items, block, par, super::reload::skip_same(p)).await
+}
+
+/// Чтение группы (load_group_with); `skip` — не слать ядру неизменившееся (put_new). Ошибки: End — ядро закрыло канал.
+async fn group(
+    p: &Pools,
+    items: &[(&Found, &str)],
+    block: u64,
+    par: Option<usize>,
+    skip: bool,
+) -> Result<Vec<Result<(), GatewayError>>, End> {
     let known: Vec<_> = items.iter().map(|(f, _)| p.reg.get(&f.reference)).collect();
     let wants: Vec<Want> = items
         .iter()
@@ -182,9 +207,11 @@ pub async fn load_group_with(
         };
         listen_log::note_refill(p, &entry);
         let pool = entry.pool.clone();
-        p.reg.put(entry);
+        let fresh = super::reload::put_new(p, entry, skip);
         p.loading.done(&f.reference);
-        listen_log::emit(p, pool)?;
+        if fresh {
+            listen_log::emit(p, pool)?;
+        }
         out.push(Ok(()));
     }
     // Прочитанные уходят из «загружается» (loading.rs).

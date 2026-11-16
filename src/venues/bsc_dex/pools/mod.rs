@@ -170,6 +170,7 @@ pub mod per_block_balancer;
 pub mod per_block_lb;
 pub mod per_block_par;
 pub mod pool_fail;
+pub mod pool_fail_note;
 pub mod progress;
 pub mod refresh_event;
 pub mod refresh_timing;

@@ -62,6 +62,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "dex.receipts_stuck" => (WARN, "Данные блоков BSC отстают — пулы перечитаны"),
         "dex.node_stalled" => (STOP, "Узел BSC: блок не растёт"),
         "dex.node_resumed" => (OK, "Узел BSC: блоки снова идут"),
+        "dex.pool_unread" => (WARN, "Пул DEX не читается"),
         "dex.graph_stale" => (WARN, "Граф маршрутов DEX отстал — котировки по классике"),
         "dex.graph_mismatch" => (WARN, "Граф маршрутов DEX: самопроверка нашла расхождение — снимок заменён"),
         "dex.graph_owner_failed" => (WARN, "Фоновая задача графа маршрутов DEX перезапущена"),

@@ -2,7 +2,7 @@
 //! Что делает: решение 339 — расписание повтора пула после неудач чтения (pools/pool_fail.rs) и каталог настроек.
 //! Проверяется: пауза удваивается с каждой неудачей подряд и упирается в потолок (потолок меньше начальной — начальная);
 //! отметка пула: «пора читать» до первой неудачи, «нет» сразу после, «да» после паузы; журнал — только на первую
-//! неудачу и на смену причины; снятие отметки; отметки разных пулов независимы (ошибка одного пула не трогает
+//! неудачу и на смену КОДА причины (ревью t153, Н4); снятие отметки; отметки разных пулов независимы (ошибка одного пула не трогает
 //! другие). Ключи — адреса двух пулов из записанных квитанций BSC (tests/data/receipts_2026-10-25/responses.json).
 //! Чего здесь нет (нужна запись с живого бота, docs/TASKS.md t153): ответ узла «execution reverted: KJUDGE_ERROR»
 //! на eth_call пула DODO — сам путь сессии с ним не прогоняется.
@@ -16,6 +16,7 @@ use alloy_primitives::Address;
 use serde_json::Value;
 
 use arb::core::types::PoolRef;
+use arb::gateway::errors::ErrorCode;
 use arb::settings::catalog;
 use arb::settings::schema::{Kind, VenueFor};
 use arb::venues::bsc_dex::pools::pool_fail::{Fails, pause_after};
@@ -74,20 +75,49 @@ fn one_pool_fail_does_not_touch_others() {
     let (a, b) = two_pools();
     let f = Fails::default();
     let t0 = Instant::now();
+    // Откат eth_call узел отдаёт текстом «execution reverted…» — код SwapReverted (venues/bsc_dex/errors.rs from_rpc).
+    let kj = (
+        Some(ErrorCode::SwapReverted),
+        "execution reverted: KJUDGE_ERROR",
+    );
     assert!(f.due(&a, t0) && f.due(&b, t0), "без неудач — пора читать");
-    let (x, fresh) = f.record(&a, "execution reverted: KJUDGE_ERROR", 1_000, 4_000, t0);
+    let (x, fresh) = f.record(&a, kj, 1_000, 4_000, t0);
     assert!(fresh, "первая неудача — запись в журнал");
     assert_eq!((x.tries, x.pause_ms), (1, 1_000));
     assert!(!f.due(&a, t0), "пул на паузе");
     assert!(f.due(&b, t0), "другой пул пачки не затронут");
     assert!(f.due(&a, t0 + Duration::from_millis(1_000)), "пауза прошла");
-    let (x, fresh) = f.record(&a, "execution reverted: KJUDGE_ERROR", 1_000, 4_000, t0);
+    let (x, fresh) = f.record(&a, kj, 1_000, 4_000, t0);
     assert!(!fresh, "та же причина — журнал не повторяется");
     assert_eq!((x.tries, x.pause_ms), (2, 2_000));
-    let (x, fresh) = f.record(&a, "иная причина", 1_000, 4_000, t0);
-    assert!(fresh, "смена причины — запись в журнал");
-    assert_eq!((x.tries, x.pause_ms), (3, 4_000));
-    let (x, _) = f.record(&a, "иная причина", 1_000, 4_000, t0);
+    // Ревью t153 (Н4): причина сравнивается по коду ошибки — другой текст с тем же кодом журнал не повторяет.
+    let (_, fresh) = f.record(
+        &a,
+        (
+            Some(ErrorCode::SwapReverted),
+            "execution reverted: другой текст",
+        ),
+        1_000,
+        4_000,
+        t0,
+    );
+    assert!(!fresh, "тот же код — журнал не повторяется");
+    let (x, fresh) = f.record(
+        &a,
+        (Some(ErrorCode::BadResponse), "иная причина"),
+        1_000,
+        4_000,
+        t0,
+    );
+    assert!(fresh, "смена кода причины — запись в журнал");
+    assert_eq!((x.tries, x.pause_ms), (4, 4_000));
+    let (x, _) = f.record(
+        &a,
+        (Some(ErrorCode::BadResponse), "иная причина"),
+        1_000,
+        4_000,
+        t0,
+    );
     assert_eq!(x.pause_ms, 4_000, "не больше потолка");
     assert!(f.get(&b).is_none());
     f.clear(&a);

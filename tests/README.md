@@ -986,3 +986,10 @@ tests/bsc_dex_dodo_kjudge_2026_11_16.rs: журнал (493 записи — од
 данные отката Error(string) «KJUDGE_ERROR»; пять пулов на блоке 133993452: состояние getPMMStateForCall нашим ABI,
 K и резервы = геттерам, версии из списка _kjudge, условия «K = 0 и нулевой резерв» нет, mtFeeRate =
 feeRateImpl.getFeeRate(пул, 0); пул DPP ETH с резервами 0/0 читается, но не котируется (swap_dodo → None).
+
+Досъёмка 28 пулов DODO, которые бот не читает (tests/data/dodo_kjudge_2026-11-16_2, блок 133995628) —
+tests/bsc_dex_dodo_dead_pools_2026_11_16.rs: по 328 пулам фабрик KJUDGE_ERROR у getUserFeeRate(0x0) ⇔ K = 0 и
+нулевой резерв (21 из 21); у всех 28 не из /api/coins обе котировки querySell* откатываются (21 KJUDGE, 6 «DPP Oracle
+1.1.0» — ORACLE_NOT_FEASIBLE, резервы 0/0; 1 «DVM 1.0.0» — откат без данных); в байткоде feeRateImpl строки
+KJUDGE_ERROR нет; наш load_dodo.rs на записанных ответах (локальный узел): рабочий пул читается, мёртвые — SwapReverted
+(не сбой связи узла), пауза 339 растёт; журнал 539 записей KJUDGE_ERROR.

@@ -9,7 +9,8 @@
 //! Пул, не прочитанный при приёме, слушается полностью и перечитывается на новых блоках (reload.rs).
 //! Решение 339 (ревью t153): пул на паузе после неудач при приёме (переподключение пачки) не читается — сразу в
 //! очередь повтора с числом неудач из отметки; новый пул и пул без отметки читаются как раньше. В записях журнала —
-//! адрес пула (depth_book::label, как у dex.pool_refresh).
+//! адрес пула (depth_book::label, как у dex.pool_refresh). При изоляции неудача чтения при приёме — отметка 339
+//! (pool_fail::note: журнал на первую неудачу эпизода и смену кода причины), число повторов — из отметки.
 //! Кто вызывает: pools/session.rs.
 //! От чего зависит: group.rs, depth.rs, depth_book.rs (label), reload.rs, pool_fail.rs (paused, отметки), http_wait.rs,
 //! listen.rs (Pools, End).
@@ -42,6 +43,15 @@ fn broken(e: crate::gateway::errors::GatewayError) -> End {
     End::Broken(e.message)
 }
 
+/// Что делает: сколько ПОВТОРОВ уже было у пула для очереди повтора (reload.rs Missing.tries — без первого чтения):
+/// неудач подряд по отметке 339 минус одна (отметки нет — 0, как раньше). Принимает: окружение, ссылку. Ошибок нет.
+fn done_tries(p: &Pools, r: &crate::core::types::PoolRef) -> u64 {
+    p.reg
+        .fails()
+        .get(r)
+        .map_or(0, |f| u64::from(f.tries.saturating_sub(1)))
+}
+
 /// Принимает в пачку пулы с индексами `new` (см. шапку). Ошибки: End — обрыв, сбой узла или ядро закрыло канал.
 pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -> Result<(), End> {
     if new.is_empty() {
@@ -64,8 +74,10 @@ pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -
     for &i in &later {
         let r = &m.pools[i].0.reference;
         p.reg.update(r, |e| e.valid = false);
-        let tries = p.reg.fails().get(r).map_or(0, |f| u64::from(f.tries));
-        m.missing.push(Missing { i, tries });
+        m.missing.push(Missing {
+            i,
+            tries: done_tries(p, r),
+        });
         m.deep[i] = true;
         depth::mark(p, r, false);
     }
@@ -83,16 +95,27 @@ pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -
         let (found, ticker) = &m.pools[i];
         if let Err(why) = res {
             p.reg.update(&found.reference, |e| e.valid = false);
-            let msg = format!(
-                "{} {ticker} ({}): состояние пула не прочитано: {} — повтор на новых блоках",
-                found.family.title,
-                label(&found.reference),
-                why.message
-            );
-            p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
+            let r = &found.reference;
+            // Решение 339 (журнал и приём): при изоляции неудача — отметка с паузой (pool_fail::note: журнал только на
+            // первую неудачу эпизода и смену кода причины, а не на каждое переподключение), попытки — из отметки;
+            // StaleData — как раньше (без паузы). Не задана dex.pool_fail_pause_ms — запись на каждую неудачу.
+            let noted = !super::stale_read::is_stale(&why)
+                && super::pool_fail::note(p, r, found.family.title, ticker, &why).await;
+            if !noted {
+                let msg = format!(
+                    "{} {ticker} ({}): состояние пула не прочитано: {} — повтор на новых блоках",
+                    found.family.title,
+                    label(r),
+                    why.message
+                );
+                p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
+            }
             // Ждёт незаданную настройку — «застрял»: сводку первого прохода не держит (loading.rs).
-            p.loading.stuck(p, &found.reference, why.setting.is_some());
-            m.missing.push(Missing { i, tries: 0 });
+            p.loading.stuck(p, r, why.setting.is_some());
+            m.missing.push(Missing {
+                i,
+                tries: done_tries(p, r),
+            });
             m.deep[i] = true;
             depth::mark(p, &found.reference, false);
             continue;

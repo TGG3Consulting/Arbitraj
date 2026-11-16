@@ -8,6 +8,8 @@
 //! Решение 208 (07.11.2026, Тигран: «в офф доках об этом прямо написано»): пустой ответ GET — адрес создаётся
 //! запросом Add Deposit Address V3 (create) с зачислением на TRADE; раньше — отказ «создайте в кабинете» (живые
 //! сделки UMXM и QAIT: перегон на KuCoin не состоялся, у всех монет кроме USDT ответ GET был пустым).
+//! Решение 316 (доработка): под признаком задачи «без создания адреса» (gateway/addr_claim.rs — ставит фоновый прогрев
+//! адресов) пустой ответ GET — NotApplicable, Add Deposit Address не вызывается.
 //! Кто вызывает: mod.rs (deposit_address), fund_move.rs (на какой счёт приходит депозит).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
 //! Настройки: venue.deposit_to_spot [kucoin] (да — допускается адрес MAIN).
@@ -48,7 +50,8 @@ pub struct DepositAddrs {
 impl DepositAddrs {
     /// Что делает: адрес депозита монеты в сети — из памяти или запросом.
     /// Принимает: окружение, монету, chainId. Возвращает: DepositAddr.
-    /// Ошибки: InvalidAddress — адрес не создан (решение 208) или требует memo; связь, коды KuCoin.
+    /// Ошибки: InvalidAddress — адрес не создан (решение 208) или требует memo; NotApplicable — адреса нет, а создание
+    /// запрещено признаком задачи (решение 316, gateway/addr_claim.rs); связь, коды KuCoin.
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, chain: &str) -> GatewayResult<DepositAddr> {
         let key = (asset.ticker.clone(), chain.to_string());
         if let Some(a) = self.map.read().unwrap_or_else(|p| p.into_inner()).get(&key) {
@@ -76,8 +79,18 @@ impl DepositAddrs {
             .map(|r| (*r).clone());
         // Решение 208: «If the returned data is empty, you may need to add the deposit address first» — адреса нет,
         // создаём его официальным запросом (Add Deposit Address V3), с зачислением на торговый счёт.
+        // Решение 316 (доработка): задача под запретом создания (фоновый прогрев, gateway/addr_claim.rs) — адрес не
+        // создаётся, ответ NotApplicable; уже существующий адрес выше читается как раньше.
         let owned = match found {
             Some(v) => v,
+            None if !crate::gateway::addr_claim::allowed() => {
+                let m = format!(
+                    "Адреса депозита KuCoin {} в сети {chain} нет, а создание адреса в этой задаче запрещено \
+                     (прогрев адресов, venue.deposit_warm_create не «да»)",
+                    asset.ticker
+                );
+                return Err(ctx.tag(GatewayError::new(ErrorCode::NotApplicable, None, m)));
+            }
             None => create(ctx, asset, chain).await?,
         };
         let pick = &owned;

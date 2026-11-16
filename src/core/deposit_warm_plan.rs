@@ -1,21 +1,27 @@
 //! Файл: core/deposit_warm_plan.rs
 //! Что делает: решение 316 — чистая логика прогрева адресов депозита (без запросов и без ядра): какие монеты биржи
-//! прогревать (направления, где биржа — B, по одному на монету), что запоминать после ответа и когда прекратить проход.
+//! прогревать (направления, где биржа — B, по одному на монету; биржа занята сделкой — ни одной), что запоминать после
+//! ответа и когда прекратить проход.
 //! Память прогрева (Memo) — по ключу адаптерного кэша (тикер монеты на бирже, сеть BSC биржи):
 //! - адрес получен — ключ «готов», больше не запрашивается (адрес уже в памяти адаптера до перезапуска);
-//! - отказ по монете (нет адреса, требуется memo, прочий ответ биржи) — ключ «не вышло», повтор только после
-//!   разблокировки/смены секретов или изменения настроек прогрева (forget_failed), а не на каждой пересборке справочника;
-//! - отказ доступа или связи (секреты закрыты, ключ, IP, права, лимит запросов, таймаут, нет связи) — проход по этой
-//!   бирже прекращается, ключ не запоминается (повтор — со следующим толчком).
+//! - отказ по монете (нет адреса, требуется memo, создание запрещено — NotApplicable, прочий ответ биржи) — ключ
+//!   «не вышло», повтор только после разблокировки/смены секретов или изменения настроек прогрева (forget_failed);
+//! - ответ не разобран (BadResponse) — дальше по монетам, ключ не запоминается (повтор со следующим толчком);
+//! - отказ доступа или связи (секреты закрыты, ключ, IP, права, аккаунт, лимит запросов, таймаут, нет связи, адаптер не
+//!   подключён) — проход по этой бирже прекращается, ключ не запоминается (повтор — со следующим толчком).
 //!
-//! Кто вызывает: core/deposit_warm.rs; тест tests/core_deposit_warm_316.rs.
-//! От чего зависит: core/types (Direction, VenueId), gateway/errors.rs (ErrorCode).
-//! Настройки: нет (venue.deposit_warm, venue.deposit_warm_gap_ms читает deposit_warm.rs).
+//! Строка журнала (Tally) — без значений из ответа биржи: код ошибки и короткая причина (reason), не текст адаптера
+//! (в нём бывает значение memo/tag).
+//! Кто вызывает: core/deposit_warm.rs, deposit_warm_pass.rs; тест tests/core_deposit_warm_316.rs.
+//! От чего зависит: core/types (Direction, VenueId), gateway/errors.rs (ErrorCode), deposit_warm_busy.rs (Busy).
+//! Настройки: нет (venue.deposit_warm* читают deposit_warm.rs и deposit_warm_pass.rs).
 
 use std::collections::HashSet;
 
 use crate::core::types::{Direction, VenueId};
 use crate::gateway::errors::ErrorCode;
+
+use super::deposit_warm_busy::Busy;
 
 /// Ключ адреса — как у кэша адаптера: (тикер монеты на бирже, название сети BSC биржи).
 pub type Key = (String, String);
@@ -38,17 +44,47 @@ pub fn after(code: &ErrorCode) -> After {
         | ErrorCode::InvalidCredentials
         | ErrorCode::InsufficientPermissions
         | ErrorCode::IpNotAllowed
+        | ErrorCode::AccountRestricted
         | ErrorCode::RateLimited
         | ErrorCode::Timeout
-        | ErrorCode::Unreachable => After::Stop,
+        | ErrorCode::Unreachable
+        | ErrorCode::VenueNotConnected => After::Stop,
         _ => After::Next,
     }
 }
 
+/// Что делает: короткая причина отказа для журнала — по коду, без значений из ответа биржи (текст адаптера может
+/// содержать memo/tag). Принимает: код ошибки. Возвращает: текст. Ошибок нет.
+pub fn reason(code: &ErrorCode) -> &'static str {
+    match code {
+        ErrorCode::InvalidAddress => "адреса нет, адрес требует memo/tag или не подходит",
+        ErrorCode::NotApplicable => "адреса нет, создание адреса прогревом запрещено",
+        ErrorCode::BadResponse => "ответ биржи не разобран",
+        ErrorCode::RateLimited => "лимит запросов биржи",
+        ErrorCode::Timeout | ErrorCode::Unreachable => "нет связи с биржей",
+        ErrorCode::SecretsLocked | ErrorCode::NotConfigured => {
+            "секреты закрыты или настройка не задана"
+        }
+        ErrorCode::InvalidCredentials
+        | ErrorCode::InsufficientPermissions
+        | ErrorCode::IpNotAllowed
+        | ErrorCode::AccountRestricted => "доступ к бирже отклонён",
+        ErrorCode::VenueNotConnected => "адаптер биржи не подключён",
+        _ => "отказ биржи",
+    }
+}
+
 /// Что делает: направления, где биржа `venue` — площадка продажи B (у неё нужен адрес депозита), по одному на монету
-/// (тикер + адрес контракта), в порядке справочника. Принимает: направления справочника, биржу. Возвращает: список.
-/// Ошибок нет.
-pub fn pick(dirs: impl IntoIterator<Item = Direction>, venue: &VenueId) -> Vec<Direction> {
+/// (тикер + адрес контракта), в порядке справочника. Прогрев уступает сделке: биржа занята (`busy`) — пусто, запросов
+/// нет. Принимает: направления справочника, биржу, занятость бирж. Возвращает: список. Ошибок нет.
+pub fn pick(
+    dirs: impl IntoIterator<Item = Direction>,
+    venue: &VenueId,
+    busy: &Busy,
+) -> Vec<Direction> {
+    if busy.has(venue) {
+        return Vec::new();
+    }
     let mut seen = HashSet::new();
     dirs.into_iter()
         .filter(|d| &d.sell_on == venue)
@@ -70,7 +106,7 @@ impl Memo {
     }
 
     /// Что делает: запоминает ответ биржи. Принимает: ключ, Ok(()) или код ошибки.
-    /// Возвращает: After (Stop — ключ не запоминается). Ошибок нет.
+    /// Возвращает: After (Stop и BadResponse — ключ не запоминается). Ошибок нет.
     pub fn record(&mut self, key: Key, res: Result<(), &ErrorCode>) -> After {
         match res {
             Ok(()) => {
@@ -80,7 +116,7 @@ impl Memo {
             }
             Err(code) => {
                 let a = after(code);
-                if a == After::Next {
+                if a == After::Next && *code != ErrorCode::BadResponse {
                     self.failed.insert(key);
                 }
                 a
@@ -109,9 +145,9 @@ pub struct Tally {
     pub got: usize,
     /// Сколько отказов.
     pub failed: usize,
-    /// Первая причина отказа (монета: текст ошибки адаптера; адреса в тексте нет).
+    /// Первая причина отказа (монета: код ошибки и короткая причина — reason; значений из ответа биржи нет).
     pub first_err: Option<String>,
-    /// Почему проход прерван (код ошибки или «прогрев выключен»).
+    /// Почему проход прерван (код ошибки, «прогрев выключен» или «биржа занята сделкой»).
     pub stopped: Option<String>,
     /// Проход упёрся в закрытые секреты (SecretsLocked) — до разблокировки; разблокировка сама толкнёт прогрев.
     pub locked: bool,

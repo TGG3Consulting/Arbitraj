@@ -3,6 +3,8 @@
 //! новый адрес (claim) только при venue.deposit_address_claim = да (у метода предел неиспользованных адресов, обычно 5 —
 //! не плодить). Кэш в памяти (адрес нужен в предпроверке каждой сделки — решение 118, урок 25) с учётом expire_time.
 //! Адрес с tag/memo — ошибка «требует memo — не поддерживается»; такой не кэшируется.
+//! Решение 316 (доработка): под признаком задачи «без создания адреса» (gateway/addr_claim.rs — ставит фоновый прогрев
+//! адресов) claim не выполняется — NotApplicable.
 //! Кто вызывает: mod.rs (deposit_address).
 //! От чего зависит: rest.rs, num.rs, wallet.rs (method_id), methods.rs, ctx.rs.
 //! Настройки: venue.deposit_address_claim [kraken] (необязательная), venue.funding_list_limit [kraken].
@@ -128,7 +130,8 @@ fn crypto(d: Option<&Value>) -> Result<String, String> {
 }
 
 /// Новый адрес (claim) — только при venue.deposit_address_claim = да. Ошибки: InvalidAddress — запрещено настройкой,
-/// memo; TooManyDepositAddresses и прочие ответы Kraken.
+/// memo; NotApplicable — создание запрещено признаком задачи (решение 316, gateway/addr_claim.rs);
+/// TooManyDepositAddresses и прочие ответы Kraken.
 async fn claim(ctx: &Ctx, ticker: &str, network: &str, method_id: &str) -> GatewayResult<Entry> {
     if !ctx.flag("venue.deposit_address_claim").unwrap_or(false) {
         return Err(invalid(
@@ -138,6 +141,15 @@ async fn claim(ctx: &Ctx, ticker: &str, network: &str, method_id: &str) -> Gatew
                  или включите venue.deposit_address_claim"
             ),
         ));
+    }
+    // Решение 316 (доработка): задача под запретом создания (фоновый прогрев, gateway/addr_claim.rs) — claim не
+    // выполняется; выданные адреса (список v2) выше читаются как раньше.
+    if !crate::gateway::addr_claim::allowed() {
+        let m = format!(
+            "У {ticker} в сети {network} нет выданного адреса депозита Kraken, а создание адреса в этой задаче запрещено \
+             (прогрев адресов, venue.deposit_warm_create не «да»)"
+        );
+        return Err(ctx.tag(GatewayError::new(ErrorCode::NotApplicable, None, m)));
     }
     let body = json!({"method_id": method_id});
     let v = rest::funding(

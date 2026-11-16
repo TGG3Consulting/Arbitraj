@@ -11,7 +11,7 @@
 //! биржу — как раньше (решение 76).
 //! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон — send_trade, решение 227), usdt_relay_retry.rs (USDT).
 //! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
-//! credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
+//! precheck_deposit.rs (target_on — монета и сеть адреса получателя, решение 316), credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
 //! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
 //! Решение 166: вывод отклонён «средства временно заблокированы для вывода» (WithdrawLocked) — повтор того же вывода
 //! по transfer.locked_retry_ms / transfer.locked_retries_max площадки-отправителя (transfer_locked.rs), затем — как раньше.
@@ -184,10 +184,14 @@ async fn go(
     let gw_from = deps.gw.get_as(from, acc).await.map_err(|e| e.message)?;
     let gw_to = deps.gw.get_as(to, acc).await.map_err(|e| e.message)?;
     let net_from = network(core, asset, from)?;
-    let net_to = network(core, asset, to)?;
+    // Решение 316: монета и сеть адреса получателя — тот же target_on, что у предпроверки и прогрева адресов
+    // (precheck_deposit.rs): ключ кэша адаптера один по построению.
+    let super::precheck_deposit::Target {
+        on: on_to,
+        net: net_to,
+    } = super::precheck_deposit::target_on(core, asset, to)?;
     // Решение 211: каждой площадке — её тикер монеты (адрес тот же).
     let on_from = super::venue_ticker::on_venue(core, asset, from);
-    let on_to = super::venue_ticker::on_venue(core, asset, to);
     let address = gw_to
         .deposit_address(&on_to, &net_to)
         .await

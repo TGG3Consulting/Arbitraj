@@ -17,6 +17,8 @@
 | 369 | 370 | решение владельца: XT depositMinAmount «0» |
 | 370 | 371 | решение владельца: Bitget, HTX, Phemex, CoinEx |
 
+Правка теста t163 a9b20ebf (src/core/feed_confirm_early_tests.rs) долита отдельным слиянием; номеров решений в ней нет.
+
 ## t162/proven-sieve (9e8df59b)
 
 | Было | Стало | О чём |

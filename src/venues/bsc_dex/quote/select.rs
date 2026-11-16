@@ -228,9 +228,10 @@ pub fn deep_side_with(
     if e.asleep {
         return Ok(Some(ASLEEP.into()));
     }
+    let book = reg.depth();
     let d = match prep {
-        Some(p) => reg.depth().depth_prep(ctx, reg, tokens, e, usdt_decimals, p)?,
-        None => reg.depth().depth(ctx, reg, tokens, e, usdt_decimals)?,
+        Some(p) => book.depth_prep(ctx, reg, tokens, e, usdt_decimals, p)?,
+        None => book.depth(ctx, reg, tokens, e, usdt_decimals)?,
     };
     let buy = (d.deep_buy, "покупки", d.band.buy);
     let sell = (d.deep_sell, "продажи", d.band.sell);

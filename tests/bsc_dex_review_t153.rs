@@ -321,7 +321,7 @@ async fn parallel_read_equals_sequential_on_recorded_answers() {
     let wants: Vec<Want> = ps
         .iter()
         .map(|(f, r, sp)| Want {
-            family: *f,
+            family: f,
             reference: r,
             spacing: *sp,
             step: None,

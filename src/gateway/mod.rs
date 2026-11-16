@@ -27,6 +27,7 @@ pub mod http;
 pub mod http_bind;
 pub mod keep_last;
 mod keep_last_decide;
+mod keep_last_deliver;
 mod keep_last_kinds;
 mod keep_last_state;
 pub mod log_clock;

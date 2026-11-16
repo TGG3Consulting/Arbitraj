@@ -12,12 +12,8 @@
 //!   очередь пуста — без ожидания, полон — `keep`: да — в очередь (Deferred), нет — Lost. Срочное — без ожидания,
 //!   полон — в начало очереди без чтения настройки.
 //! - offer — fast + slow с готовым ключом (тесты и вызывающие, у которых ключ дешёвый).
-//! - deliver: задача-доставщик (одна на набор; запускает вызывающий по start: true у Deferred и Replaced — Н3: доставщик
-//!   упал, а дальше только слияния ждущих ключей). Ждёт место в канале
-//!   (Sender::reserve — без опроса), под замком набора снимает первый ключ и отправляет его сообщение тем же
-//!   разрешением — между снятием и отправкой нет await, новое событие того же ключа не обгонит старое. Остаток слота
-//!   (Take::Send(_, Some)) ждёт в начале очереди. Набор пуст — завершается; канал закрыт — набор очищается. Guard:
-//!   паника или снятие задачи — признак «доставщик работает» сбрасывается.
+//! - deliver (gateway/keep_last_deliver.rs): задача-доставщик, одна на набор; запускает вызывающий по start: true у
+//!   Deferred и Replaced (Н3: доставщик упал, а дальше только слияния ждущих ключей).
 //!
 //! Гарантия порядка быстрого пути (ревью 324, Б1). busy меняется только под замком набора и публикуется (Release) ПОСЛЕ
 //! каждого изменения: откладывание — +1 до снятия замка; доставка — −1 только ПОСЛЕ отправки сообщения в канал. Пусть
@@ -34,7 +30,7 @@
 //!
 //! Кто вызывает: gateway/core_out.rs (общий набор канала ядра); тесты.
 //! От чего зависит: tokio::sync::mpsc, gateway/keep_last_kinds.rs (типы), gateway/keep_last_state.rs (состояние под
-//! замком и его шаги).
+//! замком и его шаги), gateway/keep_last_decide.rs (решение медленного пути), gateway/keep_last_deliver.rs (доставщик).
 //! Настроек нет (откладывать ли — решает вызывающий через keep).
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -72,12 +68,13 @@ impl<K: Keyed, S> Default for Pending<K, S> {
 }
 
 impl<K: Keyed, S: Slot> Pending<K, S> {
-    fn lock(&self) -> MutexGuard<'_, State<K, S>> {
+    /// Замок состояния (без паники на отравлении). Ошибок нет.
+    pub(super) fn lock(&self) -> MutexGuard<'_, State<K, S>> {
         self.0.state.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     /// Публикует busy (вызывать под замком, после изменения состояния). Ошибок нет.
-    fn publish(&self, s: &State<K, S>) {
+    pub(super) fn publish(&self, s: &State<K, S>) {
         self.0.busy.store(s.busy(), Ordering::Release);
     }
 
@@ -129,41 +126,6 @@ impl<K: Keyed, S: Slot> Pending<K, S> {
         }
     }
 
-    /// Доставщик (см. шапку). Принимает: канал, проверку «ещё годно». Возвращает: true — всё доставлено (набор
-    /// пуст), false — канал закрыт (набор очищен). Ошибок нет.
-    pub async fn deliver(self, out: Sender<S::Msg>, check: impl Check<K, S::Msg>) -> bool {
-        let mut guard = Running {
-            set: self.clone(),
-            armed: true,
-        };
-        loop {
-            if self.lock().stop_if_empty() {
-                guard.armed = false;
-                return true;
-            }
-            let Ok(permit) = out.reserve().await else {
-                let mut s = self.lock();
-                s.clear();
-                self.publish(&s);
-                guard.armed = false;
-                return false;
-            };
-            let mut s = self.lock();
-            // Ключи снимает только доставщик — после проверки выше очередь не пуста.
-            let Some(key) = s.order.pop_front() else {
-                s.running = false;
-                self.publish(&s);
-                guard.armed = false;
-                return true;
-            };
-            if let Some(e) = s.last.remove(&key) {
-                s.deliver_one(key, e, permit, &check);
-            }
-            // busy −1 — только после отправки (см. шапку).
-            self.publish(&s);
-        }
-    }
-
     /// Забирает счёт класса с прошлой записи (обнуляет; waiting — сколько ждёт сейчас). Ошибок нет.
     pub fn take(&self, class: &K::Class) -> Counts {
         let mut s = self.lock();
@@ -187,21 +149,5 @@ impl<K: Keyed, S: Slot> Pending<K, S> {
     /// Сколько ключей ждёт сейчас (все классы). Ошибок нет.
     pub fn waiting(&self) -> usize {
         self.lock().order.len()
-    }
-}
-
-/// Признак «доставщик работает» сбрасывается, если задача кончилась не штатно (паника, снятие). Ошибок нет.
-struct Running<K: Keyed, S: Slot> {
-    set: Pending<K, S>,
-    armed: bool,
-}
-
-impl<K: Keyed, S: Slot> Drop for Running<K, S> {
-    fn drop(&mut self) {
-        if self.armed {
-            let mut s = self.set.lock();
-            s.running = false;
-            self.set.publish(&s);
-        }
     }
 }

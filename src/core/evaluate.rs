@@ -3,10 +3,13 @@
 //! замеры волатильности (vol.rs) → сигнал (signal.rs) → строка «Живого экрана»; кандидат — в очередь расчёта.
 //! Монета с непроверенными налогами (решения 30, 61) — строка «налоги не проверены: причина» без котировок.
 //! Сигнал вышел из «кандидата» при открытом эпизоде — эпизод закрывается с причиной (решение 74, episode_run.rs).
+//! Решение 317: сигналу передаются обстоятельства пересчёта (signal_ctx.rs — сторона DEX, событие пула); направление
+//! стало кандидатом — запись core.signal_hold (signal_hold_log.rs, при log.signal_hold = да).
 //! Кто вызывает: core/tick.rs.
-//! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, vol.rs, candidates.rs, episode_run.rs, view.rs.
+//! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, signal_ctx.rs, signal_hold_log.rs,
+//! vol.rs, candidates.rs, episode_run.rs, view.rs.
 //! Настройки: signal.* (через signal.rs), money.max_per_trade_usd (через prices.rs), profit.sigma_window_min,
-//! live.spread_min_interval_ms (решение 109).
+//! live.spread_min_interval_ms (решение 109), log.signal_hold (через signal_hold_log.rs).
 
 use chrono::Utc;
 
@@ -66,18 +69,25 @@ pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::Has
             vol.sample(a, &dir.asset, Side::Buy, b, p.buy, now, w);
             vol.sample(b, &dir.asset, Side::Sell, a, p.sell, now, w);
         }
-        let mut view = lk(&core.inner.signals).update(&dir, prices, &params, Utc::now());
+        let ctx = super::signal_ctx::of(core, &dir, venues, false);
+        let mut view = lk(&core.inner.signals).update_with(&dir, prices, &params, Utc::now(), &ctx);
         if let Some(w) = &waiting {
             view.state = State::TaxesNotChecked(w.clone());
         }
-        let was_anomaly = rd(&core.inner.spreads)
+        let (was_anomaly, was_candidate) = rd(&core.inner.spreads)
             .get(&dir)
-            .is_some_and(|v| v.state == State::Anomaly);
+            .map_or((false, false), |v| {
+                (v.state == State::Anomaly, v.state == State::Candidate)
+            });
         if view.state == State::Anomaly && !was_anomaly {
             // ТЗ, шаг 3: аномальный спред — перечитать статусы ввода и вывода напрямую из API.
             core.inner.kick_networks.notify_waiters();
         }
         if view.state == State::Candidate {
+            if !was_candidate {
+                // Решения 317, 318: как и почему направление стало кандидатом (только при log.signal_hold = да).
+                super::signal_hold_log::note(core, &view);
+            }
             super::candidates::enqueue(core, &dir);
         } else if lk(&core.inner.dry_told).contains(&dir)
             || super::episode_run::is_open(core, &dir)

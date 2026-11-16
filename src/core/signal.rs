@@ -6,16 +6,19 @@
 //! мигает (держится меньше signal.min_hold_ms или меньше signal.min_hold_updates обновлений подряд),
 //! аномально велик (выше signal.anomaly_spread_pct — нужна перепроверка статусов ввода/вывода)
 //! или по направлению идёт пауза после сделки или ошибки (signal.route_cooldown_s).
-//! Кто вызывает: core/engine.rs на каждый тик монеты (после prices.rs).
-//! От чего зависит: core/types, settings.
-//! Настройки: signal.min_hold_ms, signal.min_hold_updates, signal.anomaly_spread_pct, signal.route_cooldown_s.
+//! Решение 317: при signal.dex_event_skip_hold = да кандидат от события пула DEX выдаётся без удержания, если цена
+//! стороны биржи не менялась не меньше signal.min_hold_ms (signal_fast.rs); не задана — побайтно прежний фильтр.
+//! Кто вызывает: core/evaluate.rs на каждый пересчёт монеты (после prices.rs).
+//! От чего зависит: core/types, core/signal_fast.rs, settings.
+//! Настройки: signal.min_hold_ms, signal.min_hold_updates, signal.anomaly_spread_pct, signal.route_cooldown_s,
+//! signal.dex_event_skip_hold (решение 317).
 
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
-use serde::Serialize;
 
+use super::signal_fast::{Ctx, Sides};
 use crate::core::types::Direction;
 use crate::settings::read::At;
 use crate::settings::store::Store;
@@ -25,6 +28,8 @@ pub struct Params {
     pub hold_ms: u64,
     pub hold_updates: u64,
     pub anomaly_pct: Decimal,
+    /// Решение 317: signal.dex_event_skip_hold (необязательна; не задана — нет).
+    pub skip_on_pool: bool,
 }
 
 impl Params {
@@ -39,59 +44,12 @@ impl Params {
             anomaly_pct: s
                 .decimal("signal.anomaly_spread_pct", at)
                 .map_err(|e| e.message)?,
+            skip_on_pool: s.flag("signal.dex_event_skip_hold", at).unwrap_or(false),
         })
     }
 }
 
-/// Цены направления на объём сравнения (prices.rs).
-#[derive(Debug, Clone, Serialize)]
-pub struct Prices {
-    /// Средняя цена покупки на A.
-    pub buy: Decimal,
-    /// Средняя цена продажи на B.
-    pub sell: Decimal,
-    /// Сумма процентных комиссий обеих сторон, которых нет в цене (торговая комиссия биржи), %.
-    pub fees_pct: Decimal,
-    /// Объём сравнения, монет: меньшая из глубин на потолке (решение 87) или, если задан signal.probe_usd, на объёме
-    /// проверки сигнала (решение 260, core/signal_probe.rs).
-    pub qty: Decimal,
-}
-
-/// Состояние направления на «Живом экране».
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum State {
-    /// Нет цены на одной из сторон — причина как есть.
-    NoPrice(String),
-    /// Не заданы пороги фильтра шума.
-    NotConfigured(String),
-    /// Спред не покрывает комиссии.
-    Below,
-    /// Спред выше порога, но ещё не продержался нужное время / число обновлений.
-    Holding,
-    /// Спред аномально велик — нужна перепроверка статусов ввода и вывода.
-    Anomaly,
-    /// Пауза направления после сделки или ошибки.
-    Cooldown { until: DateTime<Utc> },
-    /// Кандидат: прошёл порог и все фильтры — уходит в полный расчёт.
-    Candidate,
-    /// Налоги монеты ещё не проверены (решение 30): строка видна, торговли нет — причина ожидания.
-    TaxesNotChecked(String),
-}
-
-/// Строка «Живого экрана».
-#[derive(Debug, Clone, Serialize)]
-pub struct SpreadView {
-    pub direction: Direction,
-    pub prices: Option<Prices>,
-    /// Грубый спред, %.
-    pub spread_pct: Option<Decimal>,
-    pub state: State,
-    /// С какого момента спред держится выше порога.
-    pub above_since: Option<DateTime<Utc>>,
-    /// Сколько обновлений подряд выше порога.
-    pub updates: u64,
-    pub at: DateTime<Utc>,
-}
+pub use super::signal_types::{Prices, SpreadView, State};
 
 /// Память фильтра по направлению.
 #[derive(Default)]
@@ -99,6 +57,8 @@ struct Track {
     above_since: Option<DateTime<Utc>>,
     updates: u64,
     cooldown_until: Option<DateTime<Utc>>,
+    /// Решение 317: цены сторон биржа ↔ DEX и с каких пор стоит цена биржи (signal_fast.rs).
+    sides: Sides,
 }
 
 /// Фильтр шума по всем направлениям.
@@ -108,7 +68,7 @@ pub struct Signals {
 }
 
 impl Signals {
-    /// Обновляет направление новым тиком.
+    /// Обновляет направление новым тиком без обстоятельств пересчёта (как до решения 317).
     /// Принимает: направление, цены (Err — причина, почему цены нет), пороги, время.
     /// Возвращает: строку «Живого экрана». Ошибок нет.
     pub fn update(
@@ -117,6 +77,19 @@ impl Signals {
         prices: Result<Prices, String>,
         params: &Result<Params, String>,
         now: DateTime<Utc>,
+    ) -> SpreadView {
+        self.update_with(dir, prices, params, now, &Ctx::default())
+    }
+
+    /// Обновляет направление пересчётом. Принимает: как update и обстоятельства пересчёта (решение 317: сторона DEX,
+    /// что запустило). Возвращает: строку «Живого экрана». Ошибок нет.
+    pub fn update_with(
+        &mut self,
+        dir: &Direction,
+        prices: Result<Prices, String>,
+        params: &Result<Params, String>,
+        now: DateTime<Utc>,
+        ctx: &Ctx,
     ) -> SpreadView {
         let t = self.map.entry(dir.clone()).or_default();
         let mut view = SpreadView {
@@ -127,10 +100,14 @@ impl Signals {
             above_since: None,
             updates: 0,
             at: now,
+            trigger: ctx.trigger,
+            skipped_hold: false,
+            cex_still_ms: None,
         };
         let p = match prices {
             Ok(p) => p,
             Err(e) => {
+                // Нет цены — счётчики и память сторон (решение 317) сбрасываются: «стоит» только то, что видели.
                 *t = Track {
                     cooldown_until: t.cooldown_until,
                     ..Track::default()
@@ -146,6 +123,9 @@ impl Signals {
         };
         view.spread_pct = Some(spread);
         view.prices = Some(p.clone());
+        // Решение 317: стороны наблюдаются на каждом пересчёте, и ниже порога тоже — цена биржи «стоит» с тех пор.
+        let seen = t.sides.observe(ctx, p.buy, p.sell, now);
+        view.cex_still_ms = seen.map(|s| s.cex_still_ms);
         if spread <= p.fees_pct {
             t.above_since = None;
             t.updates = 0;
@@ -155,7 +135,7 @@ impl Signals {
         t.updates += 1;
         view.above_since = t.above_since;
         view.updates = t.updates;
-        view.state = match (params, t.cooldown_until) {
+        let state = match (params, t.cooldown_until) {
             (Err(e), _) => State::NotConfigured(e.clone()),
             (_, Some(until)) if until > now => State::Cooldown { until },
             (Ok(par), _) if spread > par.anomaly_pct => State::Anomaly,
@@ -164,13 +144,23 @@ impl Signals {
                     .above_since
                     .map(|s| (now - s).num_milliseconds().max(0) as u64)
                     .unwrap_or(0);
+                let skip = super::signal_fast::skip_hold(
+                    par.skip_on_pool,
+                    par.hold_ms,
+                    ctx,
+                    seen.as_ref(),
+                );
                 if held >= par.hold_ms && t.updates >= par.hold_updates {
+                    State::Candidate
+                } else if skip {
+                    view.skipped_hold = true;
                     State::Candidate
                 } else {
                     State::Holding
                 }
             }
         };
+        view.state = state;
         view
     }
 

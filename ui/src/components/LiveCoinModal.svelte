@@ -59,6 +59,16 @@
           <dd>
             {#if v.above_since}с {showTime(v.above_since)}, обновлений подряд: {v.updates}{:else}нет{/if}
           </dd>
+          <!-- Решения 317, 318: что запустило пересчёт и сколько стоит цена стороны биржи. -->
+          <dt>Пересчёт запустил</dt>
+          <dd>
+            {v.trigger === 'Pool' ? 'событие пула' : v.trigger === 'Timer' ? 'таймер дозревания (signal.hold_timer)' : 'тик биржи'}
+            {#if v.skipped_hold}<span class="ok"> — кандидат без удержания (signal.dex_event_skip_hold)</span>{/if}
+          </dd>
+          {#if v.cex_still_ms != null}
+            <dt>Цена биржи стоит</dt>
+            <dd><code>{v.cex_still_ms}</code> мс</dd>
+          {/if}
           <dt>Обновлено</dt>
           <dd>{showTime(v.at)}</dd>
         </dl>

@@ -28,6 +28,7 @@ use arb::core::types::{
 };
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::exec::chain;
+use arb::venues::bsc_dex::exec::hook_trade::TradeHooks;
 use arb::venues::bsc_dex::exec::live_hops;
 use arb::venues::bsc_dex::exec::plan::Order;
 use arb::venues::bsc_dex::exec::{swap_v4, ur};
@@ -112,7 +113,7 @@ async fn live_three_hops_match_quote() {
         coin_dec: 18,
         usdt_dec: 18,
     };
-    let live = live_hops::path(&v, &hops, Decimal::ONE)
+    let live = live_hops::path(&v, &hops, Decimal::ONE, &TradeHooks::default())
         .await
         .expect("живой путь 3 хопов");
     assert_eq!(live.hops.len(), 3);

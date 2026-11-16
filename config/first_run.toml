@@ -1738,8 +1738,8 @@ prefill = { kind = "Venue", id = "xt" }
 name = "venue.deposit_min_absent_ok"
 area = "площадка XT"
 unit = "да/нет"
-method = "решение Тиграна: минимума депозита в API XT нет; до него не задавать"
-source = "Документация XT: supportedCurrenciesGet.md, depositAddressGet.md"
+method = "решает Тигран (решение 365): минимум депозита XT — depositMinAmount справочника сетей, читается сам; настройка — только для сетей с depositMinAmount «0» или без поля (живой ответ 17.11: WIN в BNB Smart Chain — 0): да — считать минимум 0 и торговать с переводом на XT, не задано — по таким монетам перевода на XT нет"
+source = "https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetSupportedCurrencies: depositMinAmount «Minimum deposit amount»; смысл «0» не описан"
 rationale = "Урок 21"
 prefill = { kind = "Venue", id = "xt" }
 # --- Биржа Poloniex (решение 169) ---

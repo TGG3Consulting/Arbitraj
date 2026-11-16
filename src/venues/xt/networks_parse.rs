@@ -1,7 +1,8 @@
 //! Файл: venues/xt/networks_parse.rs
 //! Что делает: разбор справочников монет и сетей XT.com в сети формата ядра (CoinNetworkInfo): название сети, адрес
-//! контракта у сети BSC, ввод/вывод по сети и по монете, комиссия и минимум вывода, минимум депозита по решению
-//! человека; ненулевая комиссия депозита depositFeeRate — ввод по сети не используется (смысл числа не описан).
+//! контракта у сети BSC, ввод/вывод по сети и по монете, комиссия и минимум вывода, минимум депозита depositMinAmount
+//! (t163, решение 365; «0» или нет поля — по решению человека); ненулевая комиссия депозита depositFeeRate — ввод по сети
+//! не используется.
 //! Кто вызывает: wallet.rs (в spawn_blocking), tests/xt_real_data.rs.
 //! От чего зависит: num.rs, errors.rs, ctx.rs (тикер), core/types.
 //! Настройки: нет (название сети BSC и правило минимума депозита передаёт wallet.rs).
@@ -10,13 +11,17 @@
 //! - GET /v4/public/wallet/support/currency (https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetSupportedCurrencies,
 //!   `_deposit_withdrawal/supportedCurrenciesGet.md`): [{currency, supportChains[{chain, depositEnabled,
 //!   withdrawEnabled, withdrawFeeAmount, withdrawMinAmount, depositFeeRate, contract}]}]; «The currency and chain in
-//!   the response need to be used in other deposit/withdrawal API».
+//!   the response need to be used in other deposit/withdrawal API». t163 (решение 365): текущая страница doc.xt.com
+//!   описывает ещё depositMinAmount («Minimum deposit amount»), depositFeeRate («Deposit fee rate (percentage)»),
+//!   depositConfirmations, withdrawPrecision, withdrawFeeCurrency; в старом зеркале на GitHub (xt-com/xt4-api) их нет.
+//!   Живой ответ 17.11.2026: depositMinAmount есть у сетей, сеть BSC — «BNB Smart Chain» (USDT 0.1, USDC 0.01, WIN 0).
 //! - GET /v4/public/currencies (https://doc.xt.com/docs/spot/Balance/GetCurrencies, `_balance/currenciesGet.md`): [{currency, depositStatus,
 //!   withdrawStatus («0 close 1 open»), maxPrecision}]. Живой ответ 05.11.2026 (решение 184): result — объект
 //!   {time, version, currencies[...]}, статусы — числа; разбор принимает и массив, и result.currencies.
 //!
-//! Чего в документации НЕТ: минимума депозита, числа подтверждений, точности суммы вывода по сети (есть только
-//! WITHDRAW_010 «precision of withdrawal is invalid»), смысла depositFeeRate (доля? процент?) — не придумываем.
+//! Чего в документации НЕТ: смысла depositMinAmount = 0 («минимума нет» или «не указан» — урок 21: решает человек,
+//! venue.deposit_min_absent_ok), смысла withdrawPrecision (число знаков или шаг — не сказано; не читается) — не
+//! придумываем.
 
 use std::collections::HashMap;
 
@@ -64,7 +69,7 @@ pub fn parse_statuses(data: &Value) -> GatewayResult<HashMap<String, (bool, bool
 }
 
 /// Что делает: разбор справочника сетей. Принимает: ответ support/currency, статусы монет, название сети BSC,
-/// площадку, считать ли нулём отсутствующий минимум депозита (venue.deposit_min_absent_ok).
+/// площадку, считать ли нулём минимум депозита, когда depositMinAmount = 0 или поля нет (venue.deposit_min_absent_ok).
 /// Возвращает: Parsed — сеть с неразборчивым полем исключается, остальные работают.
 /// Ошибка BadResponse — ответ не массив или у монеты нет currency.
 pub fn parse_networks(
@@ -145,7 +150,12 @@ fn one(
         withdraw_fee_pct: None,
         withdraw_min: num::dec_opt(n, "withdrawMinAmount").map_err(e)?,
         withdraw_max: None,
-        deposit_min: absent_ok.then_some(Decimal::ZERO),
+        // t163 (решение 365): минимум депозита сети — depositMinAmount; «0» или нет поля — смысл не описан (урок 21):
+        // по venue.deposit_min_absent_ok, иначе None и ядро сделку с переводом на XT не делает (решение 35).
+        deposit_min: num::dec_opt(n, "depositMinAmount")
+            .map_err(e)?
+            .filter(|m| !m.is_zero())
+            .or(absent_ok.then_some(Decimal::ZERO)),
         deposit_confirmations: None,
         withdraw_precision: None,
         withdraw_step: None,

@@ -118,6 +118,18 @@ impl Venue for BscDex {
         scope(class, self.p.quoting().fills(asset, side, qty)).await
     }
 
+    /// Решение 344 (задача t159): изломы кривых пулов монеты по объёму — quote/breaks.rs (только память реестра).
+    /// Ошибки: NoRoute (нет адреса монеты), NotConfigured (тикер USDT), узел (decimals).
+    async fn quote_breaks(
+        &self,
+        asset: &Asset,
+        side: Side,
+        max_qty: Decimal,
+        per_pool: u32,
+    ) -> GatewayResult<Vec<Decimal>> {
+        super::quote::breaks::breaks(&self.p.quoting(), asset, side, max_qty, per_pool).await
+    }
+
     /// Решение 217: снимок котировки на момент решения — `Arc` записей пулов, разрешения, блок (frozen.rs). Только
     /// память. Ошибки: StaleData (блок, лента событий), NotConfigured (тикер USDT), NoRoute (нет адреса монеты).
     async fn quote_snapshot(

@@ -15,6 +15,7 @@
 //! Решение 308: каждая запись, сменившая версию (put, update существующего, retain), отмечает пул в наборе изменений
 //! фонового графа (graph_changes.rs) под замком записи и ДО роста версии; слежение выключено — одно атомарное чтение.
 //! Решение 217: замороженный реестр из снимка записей (снимок и сборка — registry_frozen.rs).
+//! Решение 339: отметки неудач чтения пулов (pool_fail.rs Fails) — здесь же; put достоверной записи их снимает.
 //! Настройки: нет.
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -77,6 +78,8 @@ pub struct Registry {
     pub(super) graph: super::graph::Cache,
     /// Решение 301 (е2): последнее выданное поколение состояния.
     pub(super) gens: Arc<AtomicU64>,
+    /// Решение 339: неудачи чтения пулов (причина, пауза повтора — pool_fail.rs); снимаются при put достоверной записи.
+    pub(super) fails: super::pool_fail::Fails,
 }
 
 impl Entry {
@@ -100,6 +103,11 @@ impl Registry {
         self.version.load(Ordering::Acquire)
     }
 
+    /// Решение 339: отметки неудач чтения пулов (pool_fail.rs). Ошибок нет.
+    pub fn fails(&self) -> &super::pool_fail::Fails {
+        &self.fails
+    }
+
     /// Кэш графа маршрутов (решение 129, graph.rs). Ошибок нет.
     pub fn graph_cache(&self) -> &super::graph::Cache {
         &self.graph
@@ -113,6 +121,10 @@ impl Registry {
     /// Добавляет или заменяет запись. Поколение (решение 301 е2): прежнее, если состояние фактически то же, иначе новое.
     /// Ошибок нет.
     pub fn put(&self, mut e: Entry) {
+        // Решение 339: достоверная запись — пул прочитан, отметка неудачи (pool_fail.rs) снимается.
+        if e.valid {
+            self.fails.clear(&e.pool.reference);
+        }
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
         e.state_gen = match m.get(&e.pool.reference) {
             Some(old) if old.state_gen != 0 && super::state_gen::same(old, &e) => old.state_gen,

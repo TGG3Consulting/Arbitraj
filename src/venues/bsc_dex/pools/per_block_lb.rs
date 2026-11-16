@@ -8,6 +8,7 @@
 //! Кто вызывает: pools/per_block.rs (on_head).
 //! От чего зависит: load_lb.rs, load.rs (renewed, Loaded), load_batch.rs (batch), load_smardex.rs (block_secs),
 //! node/call.rs, node/multicall.rs, listen_log.rs, reload.rs.
+//! Решение 339: не прочитавшийся пул — pool_fail.rs block_failed (причина, пауза повтора при dex.pool_fail_pause_ms).
 //! Настройки: dex.load_batch, dex.multicall3 [bsc_dex].
 
 use alloy_primitives::{Address, Bytes};
@@ -31,8 +32,9 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
             .is_some_and(|e| matches!(e.pool.state, PoolState::LbBin(_)) && e.bins.is_some());
         if ready {
             items.push(f);
-        } else if reload::load_one(p, f, t, block).await?.is_err() {
-            p.reg.update(&f.reference, |e| e.valid = false);
+        } else if let Err(why) = reload::load_one(p, f, t, block).await? {
+            // Решение 339: причина и пауза повтора — pool_fail.rs (не задана dex.pool_fail_pause_ms — только valid).
+            super::pool_fail::block_failed(p, f, &why.message).await;
         }
     }
     if items.is_empty() {
@@ -63,13 +65,18 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
             part.iter().map(|x| x.clone().and_then(|r| r)).collect();
         let st = match (answers, ts, &e.pool.state) {
             (Ok(a), Some(ts), PoolState::LbBin(d)) => {
-                load_lb::decode(&a, d.x_is_token0, d.bin_step, ts).ok()
+                load_lb::decode(&a, d.x_is_token0, d.bin_step, ts)
             }
-            _ => None,
+            (Err(why), _, _) => Err(why),
+            (_, None, _) => Err("время блока не прочитано".to_string()),
+            _ => Err("у записи нет состояния LB".to_string()),
         };
-        let Some(d) = st else {
-            p.reg.update(&f.reference, |e| e.valid = false);
-            continue;
+        let d = match st {
+            Ok(d) => d,
+            Err(why) => {
+                super::pool_fail::block_failed(p, f, &why).await;
+                continue;
+            }
         };
         let loaded = Loaded {
             state: PoolState::LbBin(Box::new(d)),

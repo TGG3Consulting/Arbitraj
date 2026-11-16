@@ -5,6 +5,23 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 339 (16.11.2026, задача t153, ветка t153/session-verify-parallel от rel/dex-all 8fe83aa1) — ошибка
+  одного пула не рвёт пачку подписки (все виды пулов, все пути); ждёт сборки и тестов в GitHub, ревью и включения.**
+  Локально не собиралось (правило задачи). pools/pool_fail.rs; настройки dex.pool_fail_pause_ms,
+  dex.pool_fail_pause_max_ms (не заданы — как раньше). Разбор и таблица мест — docs/notes/t153-session-and-verify-2026-11-16.md.
+  **Как включать (перезапуск не нужен):** «Настройки» → «DEX», площадка bsc_dex: dex.pool_fail_pause_ms = 3000,
+  dex.pool_fail_pause_max_ms = 600000 (советы, docs/FIRST_RUN.md). **Что смотреть:** журнал dex.pool — записи
+  «… (решение 339)» вместо цикла «так и не прочитано за 6 попыток» на каждом переподключении; link.down пачек с причиной
+  ошибки пула пропадают; экран «Монеты» у пула DODO — «не прочитан: … KJUDGE_ERROR …». Откат — очистить dex.pool_fail_pause_ms.
+  **Открыто (а) — нужна запись с сервера (только чтение), промпт серверному ИИ:**
+  «Только чтение, ничего не менять, бот не трогать. 1) В журнале бота (таблица журнала SQLite) за последние сутки выбери
+  записи вида dex.pool с текстом KJUDGE_ERROR и записи link.down (обрыв пачки пулов) — время, текст целиком (адрес пула /
+  тикер, причина обрыва). 2) Для 3–5 разных пулов DODO из этих записей через свой узел BSC (HTTP, eth_call на latest)
+  запиши сырые ответы: pool.version() (селектор keccak('version()')), pool._MT_FEE_RATE_MODEL_(), pool._K_(),
+  pool._BASE_RESERVE_(), pool._QUOTE_RESERVE_(), pool.getPMMStateForCall(), pool.getUserFeeRate(0x000…000);
+  затем у адреса _MT_FEE_RATE_MODEL_: feeRateImpl(); у адреса feeRateImpl: version() и getFeeRate(pool, 0x000…000).
+  Сохрани запросы и ответы как есть (JSON: метод, params, result/error) в tests/data/dodo_kjudge_<дата>/ с README:
+  узел, номер блока, время.» По этой записи — тест на ответе KJUDGE_ERROR и факт «K = 0 и нулевой резерв» на BSC.
 - **Решение 316 (16.11.2026, задача t145, ветка t145/deposit-addr-store от rel/dex-all a510c7a1) — прогрев адресов
   депозита бирж; ждёт сборки и тестов в GitHub, ревью и включения.** Сделано: core/deposit_warm.rs (задача ядра),
   core/deposit_warm_plan.rs (чистая логика), precheck_deposit.rs::target (общий ключ монета + сеть), толчки из

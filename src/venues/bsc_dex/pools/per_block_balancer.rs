@@ -7,6 +7,7 @@
 //! Кто вызывает: pools/per_block.rs (on_head).
 //! От чего зависит: load_balancer.rs, load_balancer_fixed.rs, load.rs (renewed, Loaded), load_batch.rs (batch),
 //! node/call.rs (try_chunks, block_tag), listen_log.rs, loading (через Pools), reload.rs.
+//! Решение 339: не прочитавшийся пул — pool_fail.rs block_failed (причина, пауза повтора при dex.pool_fail_pause_ms).
 //! Настройки: dex.vault [DEX вида balancer_v2]; dex.load_batch, dex.multicall3 [bsc_dex].
 
 use alloy_primitives::{Address, Bytes};
@@ -42,8 +43,9 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
         match (cached(a), p.ctx.dex_addr("dex.vault", f.family.id)) {
             (Some(fx), Ok(v)) => items.push((vec![f], fx, v, a)),
             _ => {
-                if reload::load_one(p, f, t, block).await?.is_err() {
-                    p.reg.update(&f.reference, |e| e.valid = false);
+                if let Err(why) = reload::load_one(p, f, t, block).await? {
+                    // Решение 339: причина и пауза повтора — pool_fail.rs (не задана — только valid = false).
+                    super::pool_fail::block_failed(p, f, &why.message).await;
                 }
             }
         }
@@ -66,9 +68,12 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
             let st = answers
                 .clone()
                 .and_then(|a| lb::decode(fx, &a, (e.pool.token0, e.pool.token1)));
-            let Ok(state) = st else {
-                p.reg.update(&f.reference, |e| e.valid = false);
-                continue;
+            let state = match st {
+                Ok(s) => s,
+                Err(why) => {
+                    super::pool_fail::block_failed(p, f, &why).await;
+                    continue;
+                }
             };
             let loaded = Loaded {
                 state,

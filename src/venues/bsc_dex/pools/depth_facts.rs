@@ -3,6 +3,7 @@
 //! цены и вердикт (pools/depth_book.rs — посчитанное на текущем состоянии пула, иначе считается сейчас), спит ли пул,
 //! достоверен ли, итог сверки с квотером (check/state.rs — по сторонам, cross_check_buy / cross_check_sell), tickSpacing, «не сверено (блок)» по сторонам и «память отстаёт от сети» (решение 261) — строками в details; пауза по сверке
 //! на одном блоке — итог стороны «failed» с причиной «пауза: …» (цифры и блок в тексте).
+//! Решение 339: отметка неудачи чтения пула (pool_fail.rs) — строкой «не прочитан: причина …» в details.
 //! Кто вызывает: venue.rs (pool_depths; pool_depths_of — только пулы маршрута, карточка сигнала решения 74).
 //! От чего зависит: registry.rs, depth_book.rs, check/state.rs, tokens.rs, ctx.rs.
 //! Настройки: через depth_book.rs.
@@ -73,6 +74,12 @@ pub async fn all(
                 .chain(q.buy_note.as_ref().map(|n| format!("покупка: {n}")))
                 .chain(q.sell_note.as_ref().map(|n| format!("продажа: {n}")))
                 .chain(q.memory.clone())
+                // Решение 339: пул не прочитался — причина и когда следующее чтение (pool_fail.rs).
+                .chain(
+                    reg.fails()
+                        .get(&r)
+                        .map(|f| super::pool_fail::detail(&f, std::time::Instant::now())),
+                )
                 .collect(),
         });
     }

@@ -6,7 +6,9 @@
 //! Кто вызывает: pools/session.rs, pools/admit.rs. Возврат брошенных из-за настройки — revive.rs.
 //! Прочитанный (или окончательно не прочитанный) пул уходит из «загружается» (loading.rs).
 //! От чего зависит: pools/load.rs, loading.rs, listen_log.rs (emit, note_refill, found_usdt), registry.rs, progress.rs.
-//! Настройки: dex.pool_load_retries [bsc_dex].
+//! Решение 339 (pool_fail.rs): при dex.pool_fail_pause_ms пул на паузе после неудач в этот блок не читается (попытка не
+//! тратится), прочая (не StaleData) неудача повтора удлиняет паузу; брошенный пул читается снова по своему событию.
+//! Настройки: dex.pool_load_retries [bsc_dex]; через pool_fail.rs — dex.pool_fail_pause_ms, dex.pool_fail_pause_max_ms.
 
 use crate::storage::journal::Level;
 
@@ -52,8 +54,15 @@ pub async fn retry(
             return Ok(());
         }
     };
-    let mut keep = Vec::new();
-    let waiting = std::mem::take(missing);
+    // Решение 339: пулы на паузе после неудач (pool_fail.rs) ждут дальше, попытка не тратится; не задана — пауз нет.
+    let (waiting, later): (Vec<Missing>, Vec<Missing>) = std::mem::take(missing)
+        .into_iter()
+        .partition(|m| !super::pool_fail::paused(p, &pools[m.i].0.reference));
+    let mut keep = later;
+    if waiting.is_empty() {
+        *missing = keep;
+        return Ok(());
+    }
     let items: Vec<(&Found, &str)> = waiting
         .iter()
         .map(|m| (&pools[m.i].0, pools[m.i].1.as_str()))
@@ -63,6 +72,12 @@ pub async fn retry(
         let (found, ticker) = &pools[m.i];
         m.tries += 1;
         let title = found.family.title;
+        // Решение 339: прочая неудача — пауза растёт (журнал — только при смене причины); StaleData — без паузы.
+        if let Err(why) = &res
+            && !super::stale_read::is_stale(why)
+        {
+            super::pool_fail::note(p, &found.reference, title, ticker, &why.message).await;
+        }
         match res {
             Ok(()) => {
                 let msg = format!(

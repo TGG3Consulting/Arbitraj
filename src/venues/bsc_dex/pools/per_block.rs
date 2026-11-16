@@ -28,6 +28,8 @@
 //! монета), лог приходит от адреса контракта — перечитываются все пары этого контракта на блоке события.
 //! Решение 295: пары многомонетного пула (PoolRef::Multi) видов «каждым блоком» (Curve NG) — одно чтение на контракт
 //! (reload_many::load_group → load_site.rs); Balancer — per_block_balancer.rs (тоже по контракту).
+//! Решение 339 (pool_fail.rs): при dex.pool_fail_pause_ms не прочитавшийся пул отмечается с причиной (экран «Монеты»,
+//! журнал) и следующие блоки / логи его не читают, пока не прошла растущая пауза; не задана — как раньше, каждым блоком.
 //! Кто вызывает: pools/session.rs.
 //! От чего зависит: listen.rs (Pools, End), reload.rs (load_one), discover.rs (Found), families.rs, ladder_counter.rs,
 //! refresh_urgency.rs (решение 314: лог общего контракта — класс очереди узла, только при парах контракта).
@@ -42,7 +44,7 @@ use crate::core::types::PoolRef;
 use super::discover::Found;
 use super::families::{Family, Proto};
 use super::listen::{End, Pools};
-use super::{ladder_counter, per_block_balancer, per_block_lb, reload, reload_many};
+use super::{ladder_counter, per_block_balancer, per_block_lb, pool_fail, reload, reload_many};
 
 /// Перечитывается ли вид на каждом блоке. Ошибок нет.
 pub fn needs(f: &Family) -> bool {
@@ -91,7 +93,11 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
     // Решение 295: пары многомонетного пула (PoolRef::Multi) прочих видов — одно чтение на контракт (sites).
     let mut sites: Vec<(PoolRef, Vec<(&Found, &str)>)> = Vec::new();
     // Решение 306: при dex.pmm_ladder_counter = да — и пулы iZiSwap / Biswap V3 без USDT в паре (ladder_counter.rs).
-    let per = |f: &Found| each_block(f, usdt) || ladder_counter::each_block(&p.ctx, f, usdt);
+    // Решение 339: пул на паузе после неудач чтения (pool_fail.rs) в этот блок не читается.
+    let per = |f: &Found| {
+        (each_block(f, usdt) || ladder_counter::each_block(&p.ctx, f, usdt))
+            && !pool_fail::paused(p, &f.reference)
+    };
     for x in pools.iter().filter(|(f, _)| per(f)) {
         let (f, t) = x;
         if p.reg.get(&f.reference).is_none() {
@@ -115,14 +121,14 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
             lb.push(x);
             continue;
         }
-        if reload::load_one(p, f, t, block).await?.is_err() {
-            p.reg.update(&f.reference, |e| e.valid = false);
+        if let Err(why) = reload::load_one(p, f, t, block).await? {
+            pool_fail::block_failed(p, f, &why.message).await;
         }
     }
     for (_, items) in sites {
         for ((f, _), r) in items.iter().zip(reload_many::load_group(p, &items, block).await?) {
-            if r.is_err() {
-                p.reg.update(&f.reference, |e| e.valid = false);
+            if let Err(why) = r {
+                pool_fail::block_failed(p, f, &why.message).await;
             }
         }
     }
@@ -143,14 +149,19 @@ pub async fn on_member_log(p: &Pools, pools: &[(Found, String)], log: &Log) -> R
     if members.is_empty() {
         return Ok(false);
     }
+    // Решение 339: пары на паузе после неудач чтения (pool_fail.rs) по логу не читаются.
+    let members: Vec<&(Found, String)> = members
+        .into_iter()
+        .filter(|(f, _)| !pool_fail::paused(p, &f.reference))
+        .collect();
     let Some(block) = log.block_number else {
         return Ok(true);
     };
     // Решение 314 (ревью): класс dex.event_refresh_urgency — только когда есть пары и блок (есть работа узлу).
     let work = async {
         for (f, t) in members {
-            if reload::load_one(p, f, t, block).await?.is_err() {
-                p.reg.update(&f.reference, |e| e.valid = false);
+            if let Err(why) = reload::load_one(p, f, t, block).await? {
+                pool_fail::block_failed(p, f, &why.message).await;
             }
         }
         Ok::<bool, End>(true)

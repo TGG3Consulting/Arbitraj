@@ -166,6 +166,7 @@ pub mod order;
 pub mod per_block;
 pub mod per_block_balancer;
 pub mod per_block_lb;
+pub mod pool_fail;
 pub mod progress;
 pub mod refresh_event;
 pub mod refresh_timing;

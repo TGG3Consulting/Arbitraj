@@ -51,9 +51,7 @@ pub async fn trade(
     // eth_simulateV1 на голове (exec/cycle_exec.rs, exec/cycle_bundle_trade.rs) — крючки исполняются на точной сумме,
     // итог не ниже minOut, иначе сделки нет (до отправки, без газа). Проба квотером дала бы тот же отказ (minOut —
     // граница ядра) и лишний круг до узла.
-    for l in &mut legs {
-        l.usable.hook.open = true;
-    }
+    open(&mut legs);
     let expected = cycle::eval(ctx, &legs, req.input)?.usdt;
     cycle_exec::below(ctx, expected, req.min_out)?;
     let rates = cycle_cost::rates(q, req.cycle.base).await?;
@@ -89,5 +87,14 @@ pub async fn trade(
             e.message = format!("[{by}] {}", e.message);
             Err(e)
         }
+    }
+}
+
+/// Решение «335 (лесенка влияния)», ревью 2 Н4 / ревью 3 Н-е: лесенка крючка шагов цикла — оценка вне измеренного
+/// (quote/hook_curve.rs open); факт — проба eth_simulateV1 всего цикла. Общая для живого и сухого цикла
+/// (exec/cycle_dry.rs) — сухой отражает живой. Ошибок нет.
+pub fn open(legs: &mut [super::super::quote::route_calc::Leg]) {
+    for l in legs {
+        l.usable.hook.open = true;
     }
 }

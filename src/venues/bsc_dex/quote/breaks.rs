@@ -12,6 +12,7 @@
 //! подбора, не данные решения. Налог и крючок — из допуска пула (select.rs usable, pool_tax.rs step_pct) и налогов
 //! монеты из проверки (direct.rs taxes); не известны — keep = 1.
 //! Только память реестра: ни одного запроса к узлу, кроме decimals монеты и USDT (кэш tokens.rs).
+//! Решение «335 (лесенка влияния)», ревью 3: у пула с крючком B/C — ещё ступени лесенки влияния (quote/breaks_hook.rs).
 //! Кто вызывает: venue.rs (контракт quote_breaks).
 //! От чего зависит: quote/breaks_pool.rs, quote/select.rs, quote/pool_tax.rs, quote/route_calc.rs (keep),
 //! quote/direct.rs (taxes), pools/registry.rs, tokens.rs, num.rs.
@@ -86,6 +87,9 @@ pub async fn breaks(
             };
             out.push(if sell { x / (share * k) } else { x * k / share });
         }
+        // Решение «335 (лесенка влияния)», ревью 3: ступени лесенки влияния крючка — тоже изломы (quote/breaks_hook.rs).
+        let hook = super::breaks_hook::steps(q, &e, side, usdt_dec, (share, k), dec);
+        out.extend(hook.into_iter().filter(|x| *x <= max_qty));
     }
     out.sort_unstable();
     out.dedup();

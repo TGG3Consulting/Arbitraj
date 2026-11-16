@@ -25,7 +25,7 @@
 //!   вставляется; затем лесенка выравнивается накопленным максимумом (значения только растут — верхняя оценка).
 //!
 //! Кто вызывает: quote/select.rs (Usable.hook), quote/direct.rs, quote/route_calc.rs, quote/graph_seq.rs,
-//! check/hook_fold.rs (merge, merge_impact), exec/trade_probe.rs; тесты на записях узла.
+//! check/hook_fold.rs (merge), check/reprobe_rule.rs (merge); тесты на записях узла.
 //! От чего зависит: core/types (HookStep).
 //! Настройки: нет своих (лимит передаёт quote/select.rs).
 
@@ -34,7 +34,7 @@ use std::sync::Arc;
 use alloy_primitives::U256;
 use rust_decimal::Decimal;
 
-use crate::core::types::{HookImpact, HookStep};
+use crate::core::types::HookStep;
 
 /// Влияние крючка стороны пула для котировки.
 #[derive(Debug, Clone, Default)]
@@ -47,11 +47,24 @@ pub struct HookCurve {
     pub open: bool,
 }
 
-/// Неубывающая ли лесенка (по влиянию, отрицательное — 0). Ошибок нет.
+/// Разрешение влияния точки, % (ревью 3 Н-д): выход квотера известен с точностью до одной минимальной единицы, значит
+/// влияние — до 100 / выход; выход не сохранён — 0. Ошибок нет.
+pub fn resolution(s: &HookStep) -> Decimal {
+    s.quoter_out
+        .and_then(|o| super::super::num::to_decimal(o, 0))
+        .filter(|o| *o > Decimal::ZERO)
+        .and_then(|o| Decimal::ONE_HUNDRED.checked_div(o))
+        .unwrap_or(Decimal::ZERO)
+}
+
+/// Неубывающая ли лесенка (по влиянию, отрицательное — 0). Ревью 3 Н-д: падение не больше разрешения двух соседних
+/// точек (resolution) — шум измерения, не убывание; значение at при этом — наибольшее по точкам до ближайшей большей
+/// (шумовое падение не делает расчёт лучше факта). Ошибок нет.
 pub fn monotone(steps: &[HookStep]) -> bool {
-    steps
-        .windows(2)
-        .all(|w| w[0].pct.max(Decimal::ZERO) <= w[1].pct.max(Decimal::ZERO))
+    steps.windows(2).all(|w| {
+        let tol = resolution(&w[0]) + resolution(&w[1]);
+        w[0].pct.max(Decimal::ZERO) <= w[1].pct.max(Decimal::ZERO) + tol
+    })
 }
 
 /// Что делает: влияние на входе `x` (см. шапку). Принимает: лесенку (по возрастанию входа), вход. Возвращает: влияние,
@@ -63,7 +76,8 @@ pub fn at(steps: &[HookStep], x: U256) -> Option<Decimal> {
         return None;
     }
     let v = if monotone(steps) {
-        steps.iter().find(|s| s.amount_in >= x)?.pct
+        let j = steps.iter().position(|s| s.amount_in >= x)?;
+        steps[..=j].iter().map(|s| s.pct).max()?
     } else if x < low.amount_in {
         return None;
     } else {
@@ -99,34 +113,6 @@ pub fn merge(steps: &[HookStep], p: HookStep) -> Vec<HookStep> {
         s.pct = run;
     }
     out
-}
-
-/// Что делает: влияние после пробы перед сделкой — точки новой пробы влиты в лесенки прежнего итога (merge) по
-/// сторонам; наибольшее влияние стороны пересчитано. Прежнего итога нет — новый как есть. Принимает: прежний итог
-/// (если есть), новый. Возвращает: итог. Ошибок нет.
-pub fn merge_impact(old: Option<&HookImpact>, new: &HookImpact) -> HookImpact {
-    let Some(old) = old else {
-        return new.clone();
-    };
-    let side = |was: &[HookStep], add: &[HookStep], was_pct: Decimal| -> (Vec<HookStep>, Decimal) {
-        if add.is_empty() {
-            return (was.to_vec(), was_pct);
-        }
-        let mut out = was.to_vec();
-        for p in add {
-            out = merge(&out, p.clone());
-        }
-        let top = out.iter().map(|s| s.pct).max().unwrap_or(was_pct);
-        (out, top)
-    };
-    let (buy, buy_pct) = side(&old.buy, &new.buy, old.buy_pct);
-    let (sell, sell_pct) = side(&old.sell, &new.sell, old.sell_pct);
-    HookImpact {
-        buy_pct,
-        sell_pct,
-        buy,
-        sell,
-    }
 }
 
 impl HookCurve {

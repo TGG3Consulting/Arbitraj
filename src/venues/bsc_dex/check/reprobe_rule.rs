@@ -69,6 +69,13 @@ pub fn only_side(old: &HookImpact, new: &HookImpact, side: Side) -> HookImpact {
         *steps = merge_step(steps, p.clone());
     }
     *pct = steps.iter().map(|s| s.pct).max().unwrap_or(*pct);
+    // Ревью 3: сторона снова измерена — «не прошла» снимается.
+    if side == Side::Buy {
+        i.buy_fail = None;
+    } else {
+        i.sell_fail = None;
+    }
+    i.refused.clear();
     i
 }
 

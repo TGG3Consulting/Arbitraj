@@ -71,7 +71,8 @@ pub fn ladder_usd(lo: Decimal, hi: Decimal, n: u64) -> Vec<Decimal> {
         }
         .unwrap_or_else(|| lo + (hi - lo) * Decimal::from(i) / steps)
         .round_dp(2);
-        if v < hi && out.last().is_none_or(|l| *l < v) {
+        // Ревью 3 (Н-к): сумма, округлённая до 0, — не точка (вход 0).
+        if v > Decimal::ZERO && v < hi && out.last().is_none_or(|l| *l < v) {
             out.push(v);
         }
     }

@@ -16,6 +16,7 @@ use rust_decimal::Decimal;
 use crate::core::types::{RouteHop, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
+use super::super::check::quoter_amount;
 use super::super::pools::registry::Entry;
 use super::super::quote::path::Path;
 use super::super::quote::route_calc::{self, Leg};
@@ -85,7 +86,12 @@ async fn eval(v: &Via<'_>, found: &[Entry], qty: Decimal, th: &TradeHooks) -> Ga
             .ok_or_else(|| no("ребро не соединяет токены хопа".into()))?;
         let mut usable = select::usable(q, &e, hs, v.usdt_dec)
             .map_err(|why| no(format!("{}: {why}", e.family.title)))?;
-        th.apply(&e, hs, &mut usable);
+        th.apply(
+            &e.pool.reference,
+            hs,
+            quoter_amount::hooked(&e),
+            &mut usable,
+        );
         // Решение 39 по налогу пула (решение 146): пул с налогом стороны > 0 — только V2.
         pool_tax::v2_only(&e, &usable).map_err(|w| no(format!("{}: {w}", e.family.title)))?;
         let dec_in = q.tokens.decimals(ctx, token_in).await?;

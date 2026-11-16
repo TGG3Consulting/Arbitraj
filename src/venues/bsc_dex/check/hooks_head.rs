@@ -101,7 +101,9 @@ pub async fn probe(p: &Pools, e: &Entry) -> Probe {
         Ok(Err(why)) => return failed(why, None, Some(block)),
         Err(err) => return failed(err.message, err.setting, None),
     };
-    match hooks_probe::measure_plan(&p.ctx, &fresh, &plan, &tag).await {
+    // Ревью 3 (Б4): отказ квотера на точке — эта точка и большие суммы стороны; пул «не прошла» — только обе стороны.
+    let got = hooks_probe::measure_plan(&p.ctx, &fresh, &plan, &tag).await;
+    match hooks_probe::settled(got, &plan) {
         Ok(Ok(i)) => {
             let i = refined(p, &fresh, &sides, i, &tag).await;
             let pc = hooks_probe::pool_check(&p.ctx, e, group, CheckState::Known(i));
@@ -129,6 +131,7 @@ async fn refined(
 ) -> HookImpact {
     if sides.flat {
         (i.buy, i.sell) = (Vec::new(), Vec::new());
+        i.refused.clear();
         return i;
     }
     let (buy, sell) = (
@@ -136,20 +139,38 @@ async fn refined(
         hook_fold::refine(&i.sell, sides.extra),
     );
     if buy.is_empty() && sell.is_empty() {
+        i.refused.clear();
         return i;
     }
     let plan = match hooks_probe::ladder(&p.ctx, &p.tokens, &p.reg, fresh, (&buy, &sell)).await {
         Ok(Ok(plan)) => plan,
-        _ => return i,
+        _ => {
+            i.refused.clear();
+            return i;
+        }
     };
     if let Ok(Ok(j)) = hooks_probe::measure_plan(&p.ctx, fresh, &plan, tag).await {
-        i.buy = hook_fold::insert(&i.buy, &j.buy);
-        i.sell = hook_fold::insert(&i.sell, &j.sell);
+        // Отказ квотера на точке доуточнения — она и большие суммы стороны не измерены (как в первом пакете).
+        let cut = |b: bool| -> Vec<_> {
+            j.refused
+                .iter()
+                .filter(|r| r.0 == b)
+                .map(|r| (r.1, r.2.clone()))
+                .collect()
+        };
+        let (buy, buy_fail) =
+            hook_fold::judge_side(hook_fold::insert(&i.buy, &j.buy), &cut(true), true);
+        let (sell, sell_fail) =
+            hook_fold::judge_side(hook_fold::insert(&i.sell, &j.sell), &cut(false), true);
+        (i.buy, i.sell) = (buy, sell);
+        i.buy_fail = i.buy_fail.take().or(buy_fail);
+        i.sell_fail = i.sell_fail.take().or(sell_fail);
         let top = |s: &[crate::core::types::HookStep], was: rust_decimal::Decimal| {
             s.iter().map(|x| x.pct).max().unwrap_or(was)
         };
         (i.buy_pct, i.sell_pct) = (top(&i.buy, i.buy_pct), top(&i.sell, i.sell_pct));
     }
+    i.refused.clear();
     i
 }
 

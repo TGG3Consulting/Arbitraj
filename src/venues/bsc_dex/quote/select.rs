@@ -174,13 +174,14 @@ fn hook(
         )
     };
     let (impact, steps) = match facts.hook.as_ref().map(|c| &c.impact) {
-        Some(CheckState::Known(i)) => {
-            if side == Side::Buy {
-                (i.buy_pct, &i.buy)
-            } else {
-                (i.sell_pct, &i.sell)
+        // Ревью 3 (Б4, Н-в): сторона «не прошла» (квотер отказал на её наименьшей сумме) — только эта сторона.
+        Some(CheckState::Known(i)) => match (side, &i.buy_fail, &i.sell_fail) {
+            (Side::Buy, Some(why), _) | (Side::Sell, _, Some(why)) => {
+                return Err(format!("проверка крючка на эту сторону не прошла: {why}"));
             }
-        }
+            (Side::Buy, ..) => (i.buy_pct, &i.buy),
+            (Side::Sell, ..) => (i.sell_pct, &i.sell),
+        },
         // Не хватает ликвидности на пробу крючка — свойство пула, причина как есть (check/hooks_probe.rs SHORT).
         Some(CheckState::Failed { reason })
             if reason.starts_with(super::super::check::hooks_probe::SHORT) =>

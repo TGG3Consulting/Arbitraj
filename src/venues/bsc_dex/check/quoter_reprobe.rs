@@ -113,7 +113,8 @@ pub async fn again(
                     sell: vec![point],
                 }
             };
-            let i = match hooks_probe::measure_plan(&p.ctx, t.fresh, &plan, &tag).await {
+            let got = hooks_probe::measure_plan(&p.ctx, t.fresh, &plan, &tag).await;
+            let i = match hooks_probe::settled(got, &plan) {
                 Ok(Ok(i)) => i,
                 Ok(Err(why)) => return Ok(note(first, &failed(t.block, &why))),
                 Err(err) => return Ok(note(first, &failed(t.block, &err.message))),

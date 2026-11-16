@@ -220,6 +220,18 @@ impl Checks {
         }
     }
 
+    /// Решение «335 (лесенка влияния)» × 363, ревью 3: отметка итога крючка пула — блок замера на блоке и время итога
+    /// (меняется при каждой записи влияния: цикл, проба перед сделкой, перемер) — без копии всех фактов пула. Для
+    /// свежести допуска в коробе подбора (quote/usable_reuse.rs). Ошибок нет.
+    pub fn hook_mark(&self, r: &PoolRef) -> (Option<u64>, Option<chrono::DateTime<chrono::Utc>>) {
+        let m = self.pools.read().unwrap_or_else(|p| p.into_inner());
+        let f = m.get(r);
+        (
+            f.and_then(|f| f.hook_head.as_ref().map(|h| h.0)),
+            f.and_then(|f| f.hook.as_ref().and_then(|c| c.checked_at)),
+        )
+    }
+
     /// Факты о пуле (пустые, если проверок не было); t78: у копии продажи сделки налоги пула — из перепроверки кошельком
     /// сделки, если пул в ней пробовался. Ошибок нет.
     pub fn pool(&self, r: &PoolRef) -> PoolFacts {
@@ -247,10 +259,23 @@ impl Checks {
 
     /// Изменяет факты о пуле. Принимает: ссылку и функцию. Ошибок нет.
     pub fn update_pool(&self, r: &PoolRef, f: impl FnOnce(&mut PoolFacts)) {
+        self.update_pool_if(r, |facts| {
+            f(facts);
+            true
+        });
+    }
+
+    /// Решение 352 × «335 (лесенка влияния)», ревью 3: как update_pool, но поколение итогов (эпоха котировки) растёт,
+    /// только если `f` что-то записал (вернул true) — проба, которая ничего не пишет, эпоху не сбрасывает.
+    /// Принимает: пул, правку. Возвращает: записано ли. Ошибок нет.
+    pub fn update_pool_if(&self, r: &PoolRef, f: impl FnOnce(&mut PoolFacts) -> bool) -> bool {
         let mut m = self.pools.write().unwrap_or_else(|p| p.into_inner());
-        f(m.entry(r.clone()).or_default());
+        let wrote = f(m.entry(r.clone()).or_default());
         // Ревью t160 Н4: поколение — под замком записи, вместе с фактами.
-        self.bump();
+        if wrote {
+            self.bump();
+        }
         drop(m);
+        wrote
     }
 }

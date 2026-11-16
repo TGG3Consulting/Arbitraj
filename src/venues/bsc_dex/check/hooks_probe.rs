@@ -39,6 +39,7 @@ use super::super::quote::{
 };
 use super::super::tokens::Tokens;
 use super::hook_batch_read::quoted;
+use super::hook_fold;
 
 /// Итог пробы: влияние или причина, почему не посчитать.
 pub type Measured = GatewayResult<Result<HookImpact, String>>;
@@ -176,29 +177,33 @@ pub async fn measure_plan(ctx: &Ctx, e: &Entry, plan: &Plan, tag: &str) -> Measu
     judge_plan(ctx, e, plan, remote)
 }
 
-/// Что делает: влияние по точкам плана (см. шапку). Принимает: окружение, запись на блоке квотера, план, ответы
-/// квотера по точкам (сначала покупка, затем продажа). Возвращает: Measured. Ошибки: первая ошибка ответа квотера;
-/// математика пула.
+/// Что делает: влияние по точкам плана (см. шапку). Ревью 3: отказ квотера на точке (откат крючка, «не хватает
+/// ликвидности») — эта точка и большие суммы стороны не измерены, меньшие работают (Б4, check/hook_fold.rs
+/// judge_side); не сошлась наша математика — точка не измерена, отказом квотера не считается (Н-б). Сторона без
+/// точек — buy_fail / sell_fail; отказы квотера — в refused. Пул целиком «не прошла» решает settled. Принимает:
+/// окружение, запись на блоке квотера, план, ответы квотера по точкам (сначала покупка, затем продажа). Возвращает:
+/// Measured. Ошибки: сбой узла в ответе (не откат), ответов меньше точек (BadResponse); математика пула.
 pub fn judge_plan(ctx: &Ctx, e: &Entry, plan: &Plan, remote: Vec<Quoted>) -> Measured {
     let mut remote = remote.into_iter();
-    let mut why = None;
-    let mut side = |points: &[Point], token_in: Address| -> GatewayResult<Vec<HookStep>> {
-        let mut out = Vec::with_capacity(points.len());
+    type Got = (Vec<HookStep>, Vec<(U256, String)>);
+    let mut side = |points: &[Point], token_in: Address| -> GatewayResult<Got> {
+        let (mut out, mut refused) = (Vec::with_capacity(points.len()), Vec::new());
         for p in points {
+            // Ревью Н10: квотер вернул 0 при ненулевой математике — крючок забрал всё: влияние 100 % (impact).
             let r = match remote.next() {
-                Some(r) => r?,
+                Some(Ok(Ok(r))) => r,
+                Some(Ok(Err(short))) => {
+                    refused.push((p.amount_in, short));
+                    continue;
+                }
+                Some(Err(err)) if err.code == ErrorCode::SwapReverted => {
+                    refused.push((p.amount_in, err.message));
+                    continue;
+                }
+                Some(Err(err)) => return Err(err),
                 None => {
                     let why = "ответов квотера меньше, чем точек пробы";
                     return Err(ctx.err(ErrorCode::BadResponse, why));
-                }
-            };
-            // Ревью Н10: квотер вернул 0 при ненулевой математике — крючок забрал всё: влияние 100 % (impact), а не
-            // пропуск точки.
-            let r = match r {
-                Ok(r) => r,
-                Err(short) => {
-                    why = Some(short);
-                    continue;
                 }
             };
             let local = pool_quote::swap(ctx, e, token_in, true, p.amount_in)?;
@@ -211,24 +216,47 @@ pub fn judge_plan(ctx: &Ctx, e: &Entry, plan: &Plan, remote: Vec<Quoted>) -> Mea
                 });
             }
         }
-        Ok(out)
+        Ok((out, refused))
     };
-    let buy = side(&plan.buy, e.usdt)?;
-    let sell = side(&plan.sell, e.coin)?;
-    let lost =
-        (!plan.buy.is_empty() && buy.is_empty()) || (!plan.sell.is_empty() && sell.is_empty());
-    if lost {
-        return Ok(Err(why.unwrap_or_else(|| {
-            "математика пула дала 0 — влияние не определить".into()
-        })));
-    }
+    let (buy, buy_ref) = side(&plan.buy, e.usdt)?;
+    let (sell, sell_ref) = side(&plan.sell, e.coin)?;
+    let ours = "наша математика пула не сошлась на суммах пробы — влияние не определить";
+    let fin = |steps: Vec<HookStep>, refused: &[(U256, String)], asked: bool| {
+        let (kept, fail) = hook_fold::judge_side(steps, refused, asked);
+        let fail = fail.or_else(|| (asked && kept.is_empty()).then(|| ours.to_string()));
+        (kept, fail)
+    };
+    let (buy, buy_fail) = fin(buy, &buy_ref, !plan.buy.is_empty());
+    let (sell, sell_fail) = fin(sell, &sell_ref, !plan.sell.is_empty());
     let top = |s: &[HookStep]| s.iter().map(|p| p.pct).max().unwrap_or(Decimal::ZERO);
+    let tag = |b: bool, v: Vec<(U256, String)>| v.into_iter().map(move |(x, w)| (b, x, w));
     Ok(Ok(HookImpact {
         buy_pct: top(&buy),
         sell_pct: top(&sell),
         buy,
         sell,
+        buy_fail,
+        sell_fail,
+        refused: tag(true, buy_ref).chain(tag(false, sell_ref)).collect(),
     }))
+}
+
+/// Что делает: итог замера для цикла крючков и перемера (ревью 3): все запрошенные стороны «не прошли» — пул «не
+/// прошла» (причина первой стороны), иначе как есть (сторона без точек — только она). Принимает: итог, план. Возвращает:
+/// Measured. Ошибок нет.
+pub fn settled(m: Measured, plan: &Plan) -> Measured {
+    let i = match m {
+        Ok(Ok(i)) => i,
+        other => return other,
+    };
+    let failed = |asked: bool, f: &Option<String>| !asked || f.is_some();
+    let all = (!plan.buy.is_empty() || !plan.sell.is_empty())
+        && failed(!plan.buy.is_empty(), &i.buy_fail)
+        && failed(!plan.sell.is_empty(), &i.sell_fail);
+    match (all, i.buy_fail.clone().or_else(|| i.sell_fail.clone())) {
+        (true, Some(why)) => Ok(Err(why)),
+        _ => Ok(Ok(i)),
+    }
 }
 
 /// (математика − квотер) / математика · 100 (тесты на записях узла — та же формула). None — математика 0 или числа

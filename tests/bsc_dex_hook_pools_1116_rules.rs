@@ -10,6 +10,7 @@
 //!    (check/hook_batch_parse.rs classify); ликвидность пула 0 на всех трёх блоках.
 //! 3. Группа крючка по ключу (pools/hooks.rs info) — B у всех 37 пулов; beforeSwap есть у всех, ReturnsDelta — ни у одного.
 //! 4. Ревью Н6 решения «335 (лесенка влияния)»: без hooks.impact_points — одно число на все суммы, как до лесенки.
+//! 5. Ревью 3 Б4: откат квотера BLESS на точке — точка не измерена, «не прошла» только сторона (judge_side).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/hook_pools_common, arb::venues::bsc_dex::{quote::{pool_quote, quoter, quoter_revert},
@@ -24,7 +25,7 @@ use rust_decimal::Decimal;
 
 use arb::core::types::{HookGroup, HookStep};
 use arb::venues::bsc_dex::check::hook_batch_parse::{Fail, classify};
-use arb::venues::bsc_dex::check::hook_fold::local;
+use arb::venues::bsc_dex::check::hook_fold::{judge_side, local};
 use arb::venues::bsc_dex::check::hooks_probe::impact;
 use arb::venues::bsc_dex::check::quoter_compare::{Cmp, Nums};
 use arb::venues::bsc_dex::check::reprobe_rule::safe;
@@ -139,7 +140,10 @@ fn flat_impact_without_points_as_before() {
         pct: Decimal::ZERO,
         quoter_out: None,
     };
-    assert_eq!(local(&[], flat, &[point])[0].pct, flat.max(Decimal::ZERO));
+    assert_eq!(
+        local(&[], flat, &[point], None)[0].pct,
+        flat.max(Decimal::ZERO)
+    );
 }
 
 #[test]
@@ -166,6 +170,13 @@ fn bless_quoter_revert_is_not_enough_liquidity() {
             classify(&text),
             Fail::Short(B256::from_str(id).expect("PoolId"))
         );
+        // Ревью 3 Б4 «335 (лесенка влияния)»: этот отказ квотера на точке — точка и большие суммы стороны не измерены
+        // (check/hook_fold.rs judge_side); точек стороны не осталось — «не прошла» только сторона.
+        let why =
+            arb::venues::bsc_dex::check::hooks_probe::short(B256::from_str(id).expect("PoolId"));
+        let (kept, fail) = judge_side(Vec::new(), &[(q.amount, why.clone())], true);
+        assert!(kept.is_empty());
+        assert_eq!(fail, Some(why));
         n += 1;
     }
     assert_eq!(n, 4 * 9);

@@ -31,10 +31,12 @@ use alloy_primitives::U256;
 use rust_decimal::Decimal;
 
 use arb::core::types::{CheckState, HookImpact, HookStep};
-use arb::venues::bsc_dex::check::hook_fold::{covered, local, on_failure, on_success, refine};
+use arb::venues::bsc_dex::check::hook_fold::{
+    covered, local, merge_impact, on_failure, on_success, refine,
+};
 use arb::venues::bsc_dex::check::hook_points::{first_round, ladder_usd, widen};
 use arb::venues::bsc_dex::check::hooks_probe::impact;
-use arb::venues::bsc_dex::quote::hook_curve::{HookCurve, at, merge};
+use arb::venues::bsc_dex::quote::hook_curve::{HookCurve, at, merge, monotone, resolution};
 use arb::venues::bsc_dex::quote::quoter::less_hook;
 use hook_ticks_common::{Pool, Quote, load, map, ours, pools, quotes};
 
@@ -102,7 +104,7 @@ fn b1_trade_above_top_gets_fact() {
         assert!(!covered(&low, &[], x));
         // Проба на сумме сделки → лесенка сделки: покрыто, влияние = факт на 100 USDT, наш не выше квотера.
         let fresh = vec![top.clone()];
-        let l = local(&low, Decimal::ZERO, &fresh);
+        let l = local(&low, Decimal::ZERO, &fresh, None);
         assert!(covered(&l, &fresh, x));
         let pct = curve(l, false).pct_at(Decimal::ZERO, x).expect("факт");
         assert_eq!(pct, top.pct);
@@ -120,6 +122,7 @@ fn b2_failure_cuts_side_only() {
         sell_pct: sell[2].pct,
         buy: buy.clone(),
         sell: sell.clone(),
+        ..Default::default()
     };
     match on_failure(&old, true, buy[2].amount_in, "нет ликвидности".into()) {
         Some(CheckState::Known(i)) => {
@@ -129,15 +132,33 @@ fn b2_failure_cuts_side_only() {
         }
         x => panic!("ожидалась обрезанная лесенка: {x:?}"),
     }
+    // Ревью 3 Н-в: отказ на наименьшей точке — «не прошла» только покупка, продажа работает.
+    let one = match on_failure(&old, true, buy[0].amount_in, "откат".into()) {
+        Some(CheckState::Known(i)) => i,
+        x => panic!("ожидалась сторона «не прошла»: {x:?}"),
+    };
+    assert!(one.buy.is_empty() && one.buy_fail.is_some());
+    assert_eq!(
+        (one.sell.clone(), one.sell_fail.clone()),
+        (sell.clone(), None)
+    );
+    // Пул целиком «не прошла» — только когда не прошли обе стороны.
     assert!(matches!(
-        on_failure(&old, true, buy[0].amount_in, "откат".into()),
+        on_failure(&one, false, sell[0].amount_in, "откат".into()),
         Some(CheckState::Failed { .. })
     ));
+    // Новая точка на стороне «не прошла» — сторона снова измерена.
+    let back = merge_impact(
+        &one,
+        &HookImpact {
+            buy: vec![buy[0].clone()],
+            ..Default::default()
+        },
+    );
+    assert_eq!((back.buy, back.buy_fail), (vec![buy[0].clone()], None));
     let flat = HookImpact {
         buy_pct: buy[1].pct,
-        sell_pct: Decimal::ZERO,
-        buy: Vec::new(),
-        sell: Vec::new(),
+        ..Default::default()
     };
     assert!(on_failure(&flat, true, buy[2].amount_in, "откат".into()).is_none());
     assert!(on_success(&flat, &old).is_none());
@@ -150,28 +171,33 @@ fn n1_trade_fact_used_directly() {
     let (_, buy, _, _) = pool("0x62166b8a");
     let stored = vec![buy[0].clone(), buy[2].clone()];
     let fresh = vec![buy[1].clone()];
-    let l = local(&stored, Decimal::ZERO, &fresh);
+    let l = local(&stored, Decimal::ZERO, &fresh, None);
     assert!(covered(&l, &fresh, buy[1].amount_in));
     assert_eq!(at(&l, buy[1].amount_in), Some(buy[1].pct));
     let fifty = buy[0].amount_in * U256::from(50u64);
     assert!(!covered(&l, &fresh, fifty));
 }
 
+/// Ревью 3 (Н-и): одна лесенка одного пула (BTCMT, покупка). Неубывающая — ниже наименьшей точки берётся наименьшая;
+/// разрешение точки (100 / выход квотера, Н-д) — больше 0 и меньше 1e-15 %, шум такого размера убыванием не считается.
+/// Лесенки с настоящим убыванием в записях нет — ветка «с убыванием» проверяется только правилом at на этих точках.
 #[test]
-fn n2_decreasing_ladder_below_low_not_measured() {
-    let (_, gaib, _, _) = pool("0x5c1b4d20");
+fn n2_one_pool_ladder() {
     let (_, btcmt, _, _) = pool("0x62166b8a");
-    // Значения записи: 0,744 % (BTCMT, 20 USDT) на меньшем входе, 0,674 % (GAIB, 100 USDT) на большем — убывание
-    // (вход обоих — USDT, суммы сравнимы).
-    let steps = vec![btcmt[1].clone(), gaib[2].clone()];
-    assert!(steps[0].pct > steps[1].pct && steps[0].amount_in < steps[1].amount_in);
-    assert_eq!(at(&steps, steps[0].amount_in - U256::from(1u64)), None);
-    assert_eq!(at(&steps, steps[1].amount_in), Some(steps[0].pct));
-    // Неубывающая — ниже наименьшей точки берётся наименьшая (как раньше).
+    assert!(monotone(&btcmt));
     assert_eq!(
         at(&btcmt, U256::from(1u64)),
         Some(btcmt[0].pct.max(Decimal::ZERO))
     );
+    for s in &btcmt {
+        let r = resolution(s);
+        assert!(r > Decimal::ZERO && r < d("0.000000000000001"), "{r}");
+    }
+    // Шумовое падение в пределах разрешения — по-прежнему неубывающая; значение at не ниже наибольшего слева.
+    let mut noisy = btcmt.clone();
+    noisy[2].pct = noisy[1].pct - resolution(&noisy[1]);
+    assert!(monotone(&noisy));
+    assert_eq!(at(&noisy, noisy[2].amount_in), Some(noisy[1].pct));
 }
 
 #[test]
@@ -182,7 +208,7 @@ fn n6_flat_as_before() {
     for s in &buy {
         assert_eq!(c.pct_at(flat, s.amount_in), Ok(flat));
     }
-    let l = local(&[], flat, &[buy[0].clone(), buy[2].clone()]);
+    let l = local(&[], flat, &[buy[0].clone(), buy[2].clone()], None);
     assert_eq!(l[0].pct, flat);
     assert_eq!(l[1].pct, buy[2].pct);
 }

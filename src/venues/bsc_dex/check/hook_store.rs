@@ -42,22 +42,21 @@ pub fn put_head(
     pc: &PoolCheck,
     wait: Option<String>,
 ) -> bool {
-    let mut done = false;
-    checks.update_pool(r, |f| {
+    checks.update_pool_if(r, |f| {
         if newer(f.hook_head.as_ref().map(|(b, _)| *b), block) {
-            return;
+            return false;
         }
         f.hook = Some(pc.clone());
         f.hook_wait = wait;
         f.hook_head = Some((block, pc.clone()));
-        done = true;
-    });
-    done
+        true
+    })
 }
 
 /// Что делает: ревью Н1 (лесенка влияния) — итог пробы перед сделкой вливается в записанный итог под ОДНИМ замком
 /// хранилища (чтение и запись вместе: две сделки через один пул не затирают точки друг друга); записанное на блоке
-/// новее `block` не трогается (расчёт сделки берёт свой факт напрямую — exec/hook_trade.rs). Принимает: проверки,
+/// новее `block` не трогается (расчёт сделки берёт свой факт напрямую — exec/hook_trade.rs). Ревью 3: блок записанного
+/// замера не продвигается (Н-а); ничего не записано — эпоха котировки не сбрасывается (решение 352). Принимает: проверки,
 /// пул, блок пробы, правило `f` (записанный итог → новый; None — не писать; check/hook_fold.rs). Возвращает: записан
 /// ли. Ошибок нет.
 pub fn fold_head(
@@ -66,20 +65,22 @@ pub fn fold_head(
     block: u64,
     f: impl FnOnce(&PoolCheck) -> Option<PoolCheck>,
 ) -> bool {
-    let mut done = false;
-    checks.update_pool(r, |facts| {
+    checks.update_pool_if(r, |facts| {
         if newer(facts.hook_head.as_ref().map(|(b, _)| *b), block) {
-            return;
+            return false;
         }
         let Some(pc) = facts.hook.as_ref().and_then(f) else {
-            return;
+            return false;
         };
         facts.hook = Some(pc.clone());
         facts.hook_wait = None;
-        facts.hook_head = Some((block, pc));
-        done = true;
-    });
-    done
+        // Ревью 3 (Н-а): блок записанного замера НЕ продвигается — точка пробы не вытесняет полный замер цикла на
+        // блоке между ними (put_head цикла сравнивает с этим блоком); итог замера на блоке — с точкой.
+        if let Some((b, _)) = facts.hook_head.take() {
+            facts.hook_head = Some((b, pc));
+        }
+        true
+    })
 }
 
 /// Что делает: влияние крючка для сверки с квотером (см. шапку; было quoter_verify.rs hook_pct). Принимает: проверки,

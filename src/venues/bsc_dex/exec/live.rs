@@ -16,6 +16,7 @@ use rust_decimal::Decimal;
 use crate::core::types::{RouteHop, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
+use super::super::check::quoter_amount;
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::super::quote::direct::{self, Candidate};
@@ -80,7 +81,7 @@ async fn eval(
     for e in found.iter().cloned() {
         let mut u = select::usable(q, &e, v.side, v.usdt_dec)
             .map_err(|why| ctx.err(ErrorCode::NoRoute, format!("{}: {why}", e.family.title)))?;
-        th.apply(&e, v.side, &mut u);
+        th.apply(&e.pool.reference, v.side, quoter_amount::hooked(&e), &mut u);
         entries.push((e, u));
     }
     match entries.as_slice() {

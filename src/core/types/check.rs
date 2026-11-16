@@ -85,7 +85,11 @@ pub struct ExitGap {
 /// Решение «335 (лесенка влияния)»: влияние — функция суммы и стороны. buy / sell — лесенка точек стороны (по
 /// возрастанию входа в пул), buy_pct / sell_pct — наибольшее влияние по точкам стороны (верхняя оценка для мест, где
 /// сумма неизвестна). Пустая лесенка — влияние одно на все суммы (buy_pct / sell_pct), как до решения.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Ревью 3 (Б4, Н-в): сторона может «не пройти» отдельно — buy_fail / sell_fail (причина): квотер отказал уже на
+/// наименьшей сумме стороны; другая сторона работает. refused — отказы квотера по точкам последнего замера (сторона —
+/// покупка ли, вход, причина): точка и большие суммы стороны не измерены; не хранится (только итог замера для пробы
+/// перед сделкой — exec/trade_probe.rs).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct HookImpact {
     pub buy_pct: Decimal,
     pub sell_pct: Decimal,
@@ -93,6 +97,12 @@ pub struct HookImpact {
     pub buy: Vec<HookStep>,
     #[serde(default)]
     pub sell: Vec<HookStep>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub buy_fail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sell_fail: Option<String>,
+    #[serde(skip)]
+    pub refused: Vec<(bool, alloy_primitives::U256, String)>,
 }
 
 /// Точка лесенки влияния крючка (решение «335 (лесенка влияния)»): вход в пул стороны в минимальных единицах токена

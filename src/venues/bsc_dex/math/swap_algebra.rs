@@ -16,11 +16,13 @@
 //! СЫРОЙ тик (rowNumber = tick >> 8, bitNumber = tick & 0xFF), БЕЗ деления на tickSpacing (в V3 — compressed =
 //! tick / spacing). Поэтому свой поиск следующего тика (next_init по карте) и своё окно прочитанных слов в сырых тиках.
 //! Ликвидность одна (u128), reinvestL у Algebra нет (это Elastic).
-//! (4) Решение 323: текущий тик вне прочитанного окна (вниз — tick < lo или > hi, вверх — ещё и tick = hi) — неполный
-//! итог с нулями (complete = false), как у V3 (swap_cl), а не шаг к краю окна по другую сторону цены. Общая функция для
-//! THENA Fusion (V1/V1.9) и Algebra Integral, котировки (quote/pool_quote.rs) и глубины (quote/depth_band_algebra.rs).
+//! (4) Решение 323: текущий тик вне окна, нужного обмену (вниз — lo ≤ tick ≤ hi, вверх — lo − 1 ≤ tick < hi, как V3
+//! swap_cl::next_tick), — неполный итог с нулями (complete = false), как у V3, а не шаг к краю окна по другую сторону
+//! цены. Общая функция для THENA Fusion (V1/V1.9) и Algebra Integral, котировки (quote/pool_quote.rs) и глубины
+//! (quote/depth_band_algebra.rs); то же правило — blocked_by_window для перечитывания (pools/off_map_algebra.rs).
 //! ЭТОТ модуль — только математика (без сети): чтение состояния/тиков, события, квотер, граф — фаза B.
-//! Кто вызывает: quote/pool_quote.rs (котировка), quote/depth_band_algebra.rs (глубина, swap_to); тесты.
+//! Кто вызывает: quote/pool_quote.rs (котировка), quote/depth_band_algebra.rs (глубина, swap_to),
+//! pools/off_map_algebra.rs (blocked_by_window); тесты.
 //! От чего зависит: math/swap_step.rs (step_v3), math/tick_math.rs, pools/ticks.rs (TickMap).
 //! Настройки: нет (комиссия пула s.fee читается с контракта в фазе B).
 //!
@@ -188,15 +190,26 @@ fn window_ticks(t: &TickMap) -> (i32, i32) {
 }
 
 /// Решение 323: можно ли начинать обмен от тика `tick` в окне [lo; hi] — как у V3 (swap_cl::next_tick: слово нужной
-/// позиции не прочитано — None). Вниз (lte) нужен сам тик: lo ≤ tick ≤ hi. Вверх ищется тик строго выше текущего,
-/// поэтому нужен и tick + 1: lo ≤ tick < hi (при tick = hi граница hi лежит НИЖЕ цены — шаг пошёл бы вниз). Пустое
-/// окно (lo > hi) — false. Ошибок нет.
+/// позиции не прочитано — None; вниз позиция compressed, вверх — compressed + 1). Вниз (lte) нужен сам тик:
+/// lo ≤ tick ≤ hi. Вверх ищется тик строго выше текущего — нужна позиция tick + 1: lo − 1 ≤ tick < hi. При tick = hi
+/// граница hi лежит НИЖЕ цены (шаг пошёл бы вниз). При tick = lo − 1 цена в [цена(lo − 1); цена(lo)): между ней и lo
+/// инициализированных тиков нет, текущая ликвидность — ликвидность этого отрезка, next_init (range(lo..)) находит
+/// первый тик карты не ниже lo, включая сам lo, — расчёт верен. lo не ниже MIN_TICK (window_ticks) — lo − 1 без
+/// переполнения. Пустое окно (lo > hi) — false в обе стороны. Ошибок нет.
 fn starts_in_window(tick: i32, lo: i32, hi: i32, zero_for_one: bool) -> bool {
     if zero_for_one {
         (lo..=hi).contains(&tick)
     } else {
-        (lo..hi).contains(&tick)
+        (lo.saturating_sub(1)..hi).contains(&tick)
     }
+}
+
+/// Решение 323 к 320: обмен хотя бы в одну сторону от тика `tick` невозможен из-за края прочитанного окна карты `t`
+/// (то же правило starts_in_window, что у swap_to, — «расчёт вернул нули из-за окна» ⇔ true). Итог: tick < lo или
+/// tick ≥ hi. Кто вызывает: pools/off_map_algebra.rs (перечитывание Algebra Integral). Ошибок нет.
+pub fn blocked_by_window(t: &TickMap, tick: i32) -> bool {
+    let (lo, hi) = window_ticks(t);
+    !starts_in_window(tick, lo, hi, true) || !starts_in_window(tick, lo, hi, false)
 }
 
 /// Частичный итог (цена вышла за прочитанное окно тиков): complete = false. Ошибок нет.

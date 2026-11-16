@@ -10,12 +10,24 @@
 //! - Algebra V1/V1.9: окно сырого битмапа вокруг нового тика (load_algebra::raw_word_range) не совпадает с прочитанным —
 //!   перечитывание сдвинет окно; совпадает — ничего не добавит (не чаще раза на слово = 256 тиков);
 //! - Algebra Integral: отрезок списка тиков от нового тика заранее неизвестен (dex.integral_tick_steps — тики, а не
-//!   слова) — перечитывание только когда САМ текущий тик вышел за окно (после чтения он в окне, иначе загрузка — ошибка,
-//!   load_algebra_integral.rs); полоса частично вне окна при тике в окне — частичный итог, как раньше.
+//!   слова) — перечитывание только когда обмен хотя бы в одну сторону невозможен из-за края окна — то же правило, что
+//!   у математики (math/swap_algebra.rs blocked_by_window: tick < lo или tick ≥ hi; решение 323 к 320), поэтому
+//!   «расчёт вернул нули из-за окна» всегда ведёт к перечитыванию. Тик вне [lo; hi] — перечитывать (после чтения он в
+//!   окне, иначе загрузка — ошибка, load_algebra_integral.rs). Тик ровно hi (загрузчик это допускает: окно — целые
+//!   слова внутри прочитанного отрезка) — перечитывать, только если в карте выше тика меньше dex.integral_tick_steps
+//!   тиков: перечитывание идёт вверх от nextTickGlobal (> tick) ровно на dex.integral_tick_steps тиков и все их кладёт
+//!   в карту (load_algebra_integral.rs walk — тики вне окна тоже); если столько уже есть — прочитанный отрезок не
+//!   вырастет, окно то же (без перечитывания на каждом Swap). После перечитывания у тика hi их не меньше шагов — повтора
+//!   нет. Опирается на то, что в списке Integral только тики с liquidityTotal > 0, кроме концов MIN_TICK / MAX_TICK
+//!   (TickManagement.sol update/insertTick/removeTick), и что карта Integral событиями не правится (Mint/Burn — Refresh,
+//!   events_algebra.rs / events_algebra_integral.rs). Полоса частично вне окна при обмене, возможном в обе стороны, —
+//!   частичный итог, как раньше.
 //!
 //! Кто вызывает: pools/depth.rs (off_map).
-//! От чего зависит: ctx.rs, families.rs (Proto), load_algebra.rs (raw_word_range), registry.rs, ticks.rs.
-//! Настройки: dex.algebra_off_map_reread [bsc_dex] (необязательная, да/нет; не задана или нет — false, как до 320).
+//! От чего зависит: ctx.rs, families.rs (Proto), load_algebra.rs (raw_word_range), registry.rs, ticks.rs,
+//! math/swap_algebra.rs (blocked_by_window).
+//! Настройки: dex.algebra_off_map_reread [bsc_dex] (необязательная, да/нет; не задана или нет — false, как до 320);
+//! dex.integral_tick_steps [bsc_dex] (Integral, тик ровно hi; не задана — не перечитывать).
 //!
 //! Сырой битмап Algebra: rowNumber = tick >> 8 (TickTable.sol — cryptoalgebra/AlgebraV1.9
 //! src/core/contracts/libraries/TickTable.sol), поэтому TickMap.covers при spacing 1 считает слово так же, как
@@ -23,6 +35,7 @@
 //! (load_algebra_integral.rs window).
 
 use super::super::ctx::Ctx;
+use super::super::math::swap_algebra::blocked_by_window;
 use super::families::Proto;
 use super::load_algebra::raw_word_range;
 use super::registry::Entry;
@@ -40,7 +53,24 @@ pub fn enabled(ctx: &Ctx) -> bool {
 pub fn helps(ctx: &Ctx, e: &Entry, map: &TickMap, tick: i32) -> bool {
     match e.family.proto {
         Proto::Algebra => raw_word_range(ctx, tick).is_ok_and(|w| w != map.words),
-        Proto::AlgebraIntegral => !map.covers(tick),
+        Proto::AlgebraIntegral => integral_helps(ctx, map, tick),
         _ => false,
     }
+}
+
+/// Algebra Integral (см. шапку): обмен в какую-то сторону невозможен из-за края окна, и перечитывание вокруг тика
+/// `tick` может расширить окно. Принимает: окружение, карту, текущий тик. Возвращает: true — перечитывать; обмен в обе
+/// стороны возможен, тик ровно hi и выше него в карте уже не меньше dex.integral_tick_steps тиков, или настройка не
+/// задана — false. Ошибок нет.
+fn integral_helps(ctx: &Ctx, map: &TickMap, tick: i32) -> bool {
+    if !blocked_by_window(map, tick) {
+        return false;
+    }
+    if !map.covers(tick) {
+        return true;
+    }
+    // Тик в окне, но вверх обмен невозможен — тик ровно hi (при spacing 1 covers = окно window_ticks).
+    let above = map.ticks.range(tick.saturating_add(1)..).count() as u64;
+    ctx.int("dex.integral_tick_steps")
+        .is_ok_and(|steps| above < steps.max(1))
 }

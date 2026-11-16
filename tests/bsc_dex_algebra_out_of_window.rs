@@ -8,9 +8,13 @@
 //! тика по TickMath (как tests/bsc_dex_off_map_algebra.rs moved): это состояние пула, не ответ площадки.
 //! 1. Записанный тик в узком окне — выход равен ЗАПИСАННОМУ ответу виртуального квотера ($1 и $100, обе стороны):
 //!    правка внутри окна ничего не меняет.
-//! 2. Тик hi + 1 и lo − 1 — обмен в обе стороны и глубина в полосе 2% в обе стороны — нули, complete/дошли = false.
+//! 2. Тик hi + 1 — обмен и глубина в полосе 2% в обе стороны — нули, complete/дошли = false; тик lo − 1 — то же вниз.
 //! 3. Тик ровно hi, цена внутри тика hi: вверх — нули (следующий тик hi + 1 за окном, как V3 next_tick), вниз — считается.
-//! 4. Пустое окно (первое слово после последнего) — нули при записанном тике.
+//! 4. Тик lo − 1, цена тика lo − 1, ликвидность этого отрезка (записанная минус liquidityDelta тиков [lo; записанный] —
+//!    как после Swap вниз): вверх считается (lo − 1 ≤ tick < hi, как V3 next_tick: позиция tick + 1 = lo в окне) и
+//!    равен тому же обмену на ПОЛНОЙ карте записи (независимый путь: окно полной карты шире, край узкого не участвует) —
+//!    $1 и $100 до цены тика hi и глубина 2% вверх.
+//! 5. Пустое окно (первое слово после последнего) — нули при записанном тике.
 //!
 //! THENA Fusion (Algebra V1/V1.9) — та же функция math/swap_algebra.rs swap_to (PoolState::Algebra, quote/pool_quote.rs и
 //! quote/depth_band_algebra.rs), своей записи нет.
@@ -53,7 +57,7 @@ fn narrowed(m: &TickMap, w: (i16, i16)) -> TickMap {
     }
 }
 
-/// Пул thena-v3 записи: запись пула, цена, тик, ликвидность, комиссия, карта в одном слове вокруг тика.
+/// Пул thena-v3 записи: запись пула, цена, тик, ликвидность, комиссия, карта в одном слове вокруг тика, полная карта.
 struct Pool<'a> {
     p: &'a Value,
     sqrt: U256,
@@ -61,6 +65,7 @@ struct Pool<'a> {
     liq: u128,
     fee: u32,
     m: TickMap,
+    full: TickMap,
 }
 
 /// Пулы thena-v3 записи. Ошибок нет (тест падает).
@@ -80,6 +85,7 @@ fn pools(d: &Value) -> Vec<Pool<'_>> {
                 liq,
                 fee,
                 m: narrowed(&m, (w, w)),
+                full: m,
             }
         })
         .collect()
@@ -110,6 +116,7 @@ fn in_window_unchanged_against_recorded_quoter() {
         liq,
         fee,
         m,
+        ..
     } in pools(&d)
     {
         let s = AlgebraState {
@@ -145,7 +152,8 @@ fn tick_outside_window_gives_zero_incomplete() {
     {
         let w = (tick >> 8) as i16;
         let (lo, hi) = (i32::from(w) * 256, i32::from(w) * 256 + 255);
-        for t in [hi + 1, lo - 1] {
+        // hi + 1 — нули в обе стороны; lo − 1 — только вниз (вверх считается — tick_below_lower_edge_up_as_full_map).
+        for (t, ways) in [(hi + 1, &[true, false][..]), (lo - 1, &[true][..])] {
             let sqrt = sqrt_ratio_at_tick(t).unwrap();
             let s = AlgebraState {
                 sqrt_price: sqrt,
@@ -155,11 +163,14 @@ fn tick_outside_window_gives_zero_incomplete() {
                 ticks: &m,
             };
             for (zfo, amount, _) in small_quotes(p) {
+                if !ways.contains(&zfo) {
+                    continue;
+                }
                 let r = swap_algebra::swap(&s, zfo, true, amount).expect("расчёт");
                 assert_eq!(r, NONE, "{} тик {t} {zfo}: не нули", p["pool"]);
             }
             let s0 = AlgebraState { fee: 0, ..s };
-            for zfo in [true, false] {
+            for &zfo in ways {
                 let got = depth_band_algebra::algebra(&s0, zfo, 0.02, !zfo).expect("глубина");
                 assert_eq!(
                     got,
@@ -222,6 +233,7 @@ fn empty_window_gives_zero_incomplete() {
         liq,
         fee,
         m,
+        ..
     } in pools(&d)
     {
         let w = (tick >> 8) as i16;
@@ -237,5 +249,68 @@ fn empty_window_gives_zero_incomplete() {
             let r = swap_algebra::swap(&s, zfo, true, amount).expect("расчёт");
             assert_eq!(r, NONE, "{} {zfo}: пустое окно не нули", p["pool"]);
         }
+    }
+}
+
+/// Состояние пула на карте `map`: цена, тик, ликвидность, комиссия. Ошибок нет.
+fn at(map: &TickMap, sqrt: U256, tick: i32, liq: u128, fee: u32) -> AlgebraState<'_> {
+    AlgebraState {
+        sqrt_price: sqrt,
+        tick,
+        liquidity: liq,
+        fee,
+        ticks: map,
+    }
+}
+
+#[test]
+fn tick_below_lower_edge_up_as_full_map() {
+    let d = probe();
+    for Pool {
+        p,
+        tick,
+        liq,
+        fee,
+        m,
+        full,
+        ..
+    } in pools(&d)
+    {
+        let w = (tick >> 8) as i16;
+        let (lo, hi) = (i32::from(w) * 256, i32::from(w) * 256 + 255);
+        // Ликвидность отрезка тика lo − 1: Swap вниз от записанного тика пересёк тики [lo; tick] — каждый вычитает свою
+        // liquidityDelta (AlgebraPool: zeroToOne вычитает), цена остановилась на цене тика lo − 1 (тик lo − 1 не пересечён).
+        let crossed: i128 = full.ticks.range(lo..=tick).map(|(_, x)| x.net).sum();
+        let below =
+            u128::try_from(i128::try_from(liq).unwrap() - crossed).expect("ликвидность ниже lo");
+        let sqrt = sqrt_ratio_at_tick(lo - 1).unwrap();
+        let (narrow, wide) = (
+            at(&m, sqrt, lo - 1, below, fee),
+            at(&full, sqrt, lo - 1, below, fee),
+        );
+        // Предел — цена тика hi: узкая карта не упирается в свой край раньше полной.
+        let limit = sqrt_ratio_at_tick(hi).unwrap();
+        for (zfo, amount, _) in small_quotes(p) {
+            if zfo {
+                continue;
+            }
+            let (r, _) =
+                swap_algebra::swap_to(&narrow, false, true, amount, limit).expect("расчёт узкой");
+            let (f, _) =
+                swap_algebra::swap_to(&wide, false, true, amount, limit).expect("расчёт полной");
+            assert!(
+                !r.amount_in.is_zero(),
+                "{}: вверх от lo − 1 нули",
+                p["pool"]
+            );
+            assert_eq!(r, f, "{}: вверх от lo − 1 ≠ полная карта", p["pool"]);
+        }
+        let up = depth_band_algebra::algebra(&AlgebraState { fee: 0, ..narrow }, false, 0.02, true)
+            .expect("глубина узкой");
+        let up_full =
+            depth_band_algebra::algebra(&AlgebraState { fee: 0, ..wide }, false, 0.02, true)
+                .expect("глубина полной");
+        assert!(up.2, "{}: глубина вверх от lo − 1 не дошла", p["pool"]);
+        assert_eq!(up, up_full, "{}: глубина вверх ≠ полная карта", p["pool"]);
     }
 }

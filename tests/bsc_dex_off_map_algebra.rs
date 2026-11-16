@@ -6,8 +6,13 @@
 //!   только тик за окном);
 //! - полоса внутри окна — false; окно уже такое, каким его дало бы перечитывание вокруг тика (полоса глубины шире
 //!   окна по настройкам), — false (без перечитывания на каждом Swap);
-//! - V3 — off_map один и тот же при заданной и не заданной настройке.
-//!   THENA Fusion / Algebra Integral в записи depth_2026-10-25 нет. Карта — пул PancakeSwap V3 AAVE/USDT 0x2e31285a…
+//! - V3 — off_map один и тот же при заданной и не заданной настройке;
+//! - решение 323 к 320: Algebra Integral, тик ровно на верхнем крае окна hi (обмен вверх — нули,
+//!   math/swap_algebra.rs blocked_by_window) — true, пока выше тика в карте меньше dex.integral_tick_steps тиков
+//!   (перечитывание расширит прочитанный отрезок); не меньше — false (без перечитывания на каждом Swap); тик hi − 1 —
+//!   false; dex.integral_tick_steps не задана — false.
+//!
+//! THENA Fusion / Algebra Integral в записи depth_2026-10-25 нет. Карта — пул PancakeSwap V3 AAVE/USDT 0x2e31285a…
 //!   с tickSpacing 1 этой записи (tests/tick_band_common aave_ts1, слова ±8): при шаге 1 слово компрессированного
 //!   битмапа V3 = tick >> 8 — то же слово, что у сырого битмапа Algebra (TickTable.sol: rowNumber = tick >> 8), поэтому
 //!   эта карта — ровно то, что дало бы чтение сырого битмапа по тем же словам. Тик «после Swap» — край окна или первый
@@ -17,7 +22,7 @@
 //! От чего зависит: tests/tick_band_common, tests/depth_common, tests/native_common,
 //! arb::venues::bsc_dex::pools::{depth, families, load_algebra}, arb::venues::bsc_dex::math::tick_math.
 //! Настройки теста: dex.tick_words = 2 (значение сервера 15.11), dex.depth_band_pct = 2 (сервер 15.11) или 10 (полоса
-//! шире окна), dex.algebra_off_map_reread — по случаю.
+//! шире окна), dex.algebra_off_map_reread и dex.integral_tick_steps — по случаю.
 
 mod depth_common;
 mod native_common;
@@ -32,6 +37,7 @@ use arb::venues::bsc_dex::pools::depth::off_map;
 use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::load_algebra::raw_word_range;
 use arb::venues::bsc_dex::pools::registry::Entry;
+use arb::venues::bsc_dex::pools::ticks::TickMap;
 
 use depth_common::rec;
 use tick_band_common::{aave_ts1, ctx, narrowed, set};
@@ -172,4 +178,57 @@ async fn algebra_no_reread_when_window_is_already_centered() {
         &c,
         &narrowed(&base, raw_word_range(&c, t0).unwrap())
     ));
+}
+
+#[tokio::test]
+async fn integral_reread_on_upper_edge_without_loop() {
+    let r = rec();
+    let base = aave_ts1(&r);
+    let c = ctx("off-map-algebra-integral-edge").await;
+    set(&c, "dex.tick_words", Some(json!(2))).await;
+    set(&c, "dex.depth_band_pct", Some(json!(2))).await;
+    let win = raw_word_range(&c, tick_of(&base)).unwrap();
+    let top = i32::from(win.1) * 256 + 255;
+    // Карта, как после чтения списка Integral: окно — целые слова win, а тики выше окна, прочитанные обходом вверх,
+    // тоже в карте (load_algebra_integral.rs walk кладёт все прочитанные тики).
+    let mut kept = narrowed(&base, win);
+    kept.ticks = Some(TickMap {
+        words: win,
+        ..base.ticks.clone().unwrap()
+    });
+    let above = kept
+        .ticks
+        .as_ref()
+        .unwrap()
+        .ticks
+        .range((top + 1)..)
+        .count() as u64;
+    assert!(above > 0, "в записи нет тиков выше окна");
+    let edge = moved(&algebra(&kept, "algebra_integral"), top);
+    set(&c, "dex.integral_tick_steps", None).await;
+    assert_eq!(
+        by_flag(&c, &edge).await,
+        (false, false, false),
+        "шаги не заданы"
+    );
+    set(&c, "dex.integral_tick_steps", Some(json!(above + 1))).await;
+    assert_eq!(
+        by_flag(&c, &edge).await,
+        (false, false, true),
+        "выше тика меньше шагов — перечитать"
+    );
+    set(&c, "dex.integral_tick_steps", Some(json!(above))).await;
+    assert_eq!(
+        by_flag(&c, &edge).await,
+        (false, false, false),
+        "выше тика не меньше шагов — перечитывание окно не расширит"
+    );
+    // Узкая карта (выше окна тиков нет), шаг 1: тик hi — перечитать; тик hi − 1 (обмен в обе стороны) — нет.
+    set(&c, "dex.integral_tick_steps", Some(json!(1))).await;
+    let bare = algebra(&narrowed(&base, win), "algebra_integral");
+    assert_eq!(by_flag(&c, &moved(&bare, top)).await, (false, false, true));
+    assert_eq!(
+        by_flag(&c, &moved(&bare, top - 1)).await,
+        (false, false, false)
+    );
 }

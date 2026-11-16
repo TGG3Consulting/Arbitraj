@@ -12,7 +12,7 @@
 //! уходит (его закрывают логи или settle_close.rs); не прочитался на голове — settle_head.rs head_failed (недостоверен;
 //! достоверность вернёт только удачная голова — тому, что сняла сама; ревью 332, п. 2 «найдено»).
 //! Кто вызывает: pools/per_block.rs (on_head).
-//! От чего зависит: load_lb.rs, load.rs (renewed, Loaded), load_batch.rs (batch), load_smardex.rs (block_secs),
+//! От чего зависит: load_lb.rs, load_batch.rs (batch), load_smardex.rs (block_secs),
 //! node/call.rs, node/multicall.rs, listen_log.rs, reload.rs (load_one_block, skip_same), lb_head.rs (ревью 332),
 //! settle.rs (pending), settle_head.rs (head_failed — решение 357), pool_fail.rs (block_failed — решение 339).
 //! Задача t160: при dex.per_block_skip_same неизменившееся состояние пула ядру не шлётся (lb_head::put через

@@ -12,7 +12,8 @@
 //! Настройки: money.max_per_trade_usd [площадка DEX; решение 242 — DEX · «DEX ↔ DEX», venue_dir.rs], money.max_per_coin_usd, dry.budget_usdt (сухой режим),
 //! dex_dex.size_step_base, dex_dex.min_profit_usd, exec.dex_slippage_pct [площадка DEX], size.bisect_steps,
 //! size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals; size.parallel_points, size.bisect_probes
-//! (решение 336, необязательные); size.early_exit_margin_usd (решение 337, необязательная).
+//! (решение 336, необязательные); size.early_exit_margin_usd (решение 337, необязательная); size.pool_breaks_max
+//! (решение 344, необязательная).
 
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -107,8 +108,18 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         // использования допуска пулов: точка цикла всегда по полному допуску (gateway/calc_share.rs).
         reuse: false,
         par_blocked,
-        // Задача t159: у цикла порога % нет; участки, срок — не включаются (как до t159).
-        ext: Default::default(),
+        // Задача t159 (ревью t159 Н7): у цикла порога % нет (342 неприменимо); участков 343 нет — бирж нет, вложение =
+        // вход × курс (монотонно), «слишком большой» — шаг пути не исполним целиком (cycle_curve.rs): путь цикла один,
+        // вход каждого шага не убывает с входом цикла ⇒ нехватка ёмкости шага монотонна, бисекция точна (иные причины
+        // NoRoute у адаптера тоже идут в TooLarge — их монотонность не доказана, docs/TASKS.md); мягкого срока 345
+        // нет — у плана цикла нет внешнего
+        // общего срока (cycle_watch.rs); изломы 344 — первого пула (cycle_curve.rs breaks).
+        ext: super::size_extra::Extra {
+            min_usd: Some(min_usd),
+            budget_monotone: true,
+            breaks_max: super::size_extra::flags(s).breaks_max,
+            ..Default::default()
+        },
     };
     // Решение 337: пол раннего выхода — порог dex_dex.min_profit_usd минус size.early_exit_margin_usd.
     p.early_floor = super::size_early::floor(s, min_usd);

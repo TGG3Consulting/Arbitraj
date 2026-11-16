@@ -6,10 +6,11 @@
 //! Решение 265: каждый расчёт объёма (at, beyond) — часть подробного замера «расчёт объёма» (calc_detail.rs, только при log.step_timing).
 //! Решение 336: короб подбора для адаптеров (gateway/calc_share.rs) — только когда нужен (точки параллельно или
 //! dex.quote_reuse; ставит size_par.rs with_share), иначе расчёт точки как до 336; пачки точек — size_par.rs at_many.
-//! Решение 345 (задача t159): мягкий срок подбора (size_extra.rs) — после него новых точек нет, как при исчерпанном
-//! size.max_evals (capped); точка «вне предела» (force, решение 237) срок не останавливает.
-//! Решение 342: best_pct — лучшая точка среди проходящих порог % (size_pct.rs).
-//! Кто вызывает: core/size_bounds.rs, core/size_search.rs, core/size_par.rs; over_budget — ещё core/costs.rs.
+//! Решение 345 (задача t159, ревью t159 Б2): мягкий срок подбора — size_gate.rs (ставится после границ и действует,
+//! только когда посчитан объём, проходящий оба порога); после него новых точек нет, как при исчерпанном size.max_evals
+//! (capped); точка «вне предела» (force, решение 237) срок не останавливает. Порог % — size_gate.rs best_pct.
+//! Кто вызывает: core/size_bounds.rs, core/size_search.rs, core/size_par.rs; over_budget — ещё core/costs.rs;
+//! is_over_budget — core/size_scan.rs (ревью t159 Б3).
 //! От чего зависит: core/size.rs, core/calc_timing.rs, gateway/calc_share.rs.
 //! Настройки: нет (size.parallel_points и признак dex.quote_reuse — через Params, size_par.rs with_share).
 
@@ -30,12 +31,24 @@ pub const EVAL: &str = "расчёт объёма";
 /// Решение 336: имя части замера «пачка расчётов объёма» (size.parallel_points > 1) — время пачки по часам стены.
 pub const EVAL_BATCH: &str = "пачка расчётов объёма";
 
+/// Ревью t159 Б3: метки текста отказа «вложение больше бюджета» — по ним is_over_budget отличает его от других
+/// «слишком большой» (глубина, maxNotional, исполнимость). Текст отказа тот же, что до t159.
+const OVER_HEAD: &str = "объём ";
+const OVER_MID: &str = ": вложение ";
+const OVER_TAIL: &str = " больше бюджета ";
+
 /// Что делает: отказ «вложение больше бюджета» — один текст у проверки точки (Memo::at) и у ранней проверки расчёта
 /// (решение 246, costs.rs evaluate_capped). Принимает: объём, списание, бюджет. Возвращает: Fail::TooLarge. Ошибок нет.
 pub fn over_budget(qty: Decimal, invested: Decimal, budget: Decimal) -> Fail {
     Fail::TooLarge(format!(
-        "объём {qty}: вложение {invested} больше бюджета {budget}"
+        "{OVER_HEAD}{qty}{OVER_MID}{invested}{OVER_TAIL}{budget}"
     ))
+}
+
+/// Что делает: ревью t159 Б3 — отказ точки — «вложение больше бюджета» (over_budget), а не иная причина «слишком
+/// большой». Принимает: отказ. Возвращает: да/нет. Ошибок нет.
+pub fn is_over_budget(f: &Fail) -> bool {
+    matches!(f, Fail::TooLarge(t) if t.starts_with(OVER_HEAD) && t.contains(OVER_MID) && t.contains(OVER_TAIL))
 }
 
 /// Расчёты кривой по номеру шага.
@@ -52,8 +65,12 @@ pub struct Memo<'a, C: Curve> {
     /// Решение 336: короб этого подбора для адаптеров (gateway/calc_share.rs); None — не нужен (ревью t157 Б1: точки по
     /// одной и повторное использование не включено — расчёт точки как до 336).
     pub(super) share: Option<Arc<Share>>,
-    /// Решение 345: мягкий срок подбора; None — без срока (как до t159).
+    /// Решение 345: мягкий срок подбора (ставит size_gate.rs arm после границ); None — без срока (как до t159).
     pub(super) deadline: Option<Instant>,
+    /// Решение 342 / 345: пороги направления — признак «точка проходит оба порога» (size_gate.rs).
+    pub(super) gate: super::size_gate::Gate,
+    /// Решение 345: среди посчитанных есть точка, проходящая оба порога (ведётся только при заданном сроке).
+    pub(super) passed: bool,
 }
 
 impl<'a, C: Curve> Memo<'a, C> {
@@ -69,18 +86,9 @@ impl<'a, C: Curve> Memo<'a, C> {
             par: 1,
             share: None,
             deadline: None,
+            gate: Default::default(),
+            passed: false,
         }
-    }
-
-    /// Решение 345: мягкий срок подбора. Принимает: срок (None — без срока). Возвращает: себя. Ошибок нет.
-    pub fn with_deadline(mut self, deadline: Option<Instant>) -> Self {
-        self.deadline = deadline;
-        self
-    }
-
-    /// Решение 345: мягкий срок наступил. Ошибок нет.
-    pub fn late(&self) -> bool {
-        self.deadline.is_some_and(|d| Instant::now() >= d)
     }
 
     /// Предел расчётов исчерпан. Ошибок нет.
@@ -120,7 +128,8 @@ impl<'a, C: Curve> Memo<'a, C> {
             return r.clone();
         }
         if n > 0 && self.capped() {
-            // Решение 345: мягкий срок — свой текст (итог подбора — лучшая из посчитанных).
+            // Решение 345: мягкий срок — свой текст. Сюда срок не доходит: он ставится после границ (size_gate.rs arm),
+            // а дальше точки берутся через profit / at_many / value, которые при capped новых точек не просят.
             if self.late() {
                 return Err(Fail::Stop(
                     "наступил мягкий срок подбора size.soft_deadline_pct".into(),
@@ -146,6 +155,8 @@ impl<'a, C: Curve> Memo<'a, C> {
                 r => r,
             }
         };
+        // Решение 345: признак «проходящий оба порога посчитан» (только при сроке).
+        self.note(&r);
         self.map.insert(n, r.clone());
         r
     }
@@ -191,21 +202,6 @@ impl<'a, C: Curve> Memo<'a, C> {
         let mut best: Option<&Point<C::Data>> = None;
         for p in self.map.values().flatten() {
             if best.is_none_or(|b| p.profit > b.profit) {
-                best = Some(p);
-            }
-        }
-        best.cloned()
-    }
-
-    /// Решение 342: лучшая допустимая точка среди тех, чей процент прибыли (Curve::pct) не ниже порога: наибольшая
-    /// прибыль, при равной — меньший объём. Принимает: порог %. Возвращает: точку; None — ни одна не проходит или
-    /// кривая процента не знает. Ошибок нет.
-    pub fn best_pct(&self, min_pct: Decimal) -> Option<Point<C::Data>> {
-        let mut best: Option<&Point<C::Data>> = None;
-        for p in self.map.values().flatten() {
-            if C::pct(&p.data).is_some_and(|v| v >= min_pct)
-                && best.is_none_or(|b| p.profit > b.profit)
-            {
                 best = Some(p);
             }
         }

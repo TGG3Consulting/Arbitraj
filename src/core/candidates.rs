@@ -140,12 +140,14 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
     // Режим — один раз на расчёт: бюджет считается в нём же, решение по исполнителю — тоже (решение 74).
     let mode = super::dry::mode(&core.inner.deps.settings);
     let t = Timing::new(queued_at);
+    // Решение 345 (ревью t159 Б2): начало общего срока profit.calc_timeout_ms — от него мягкий срок подбора.
+    let from = Instant::now();
     // Расчёт кандидата — путь сделки: котировки площадок идут классом Trade (gateway/urgency.rs, решение 61).
     let work = urgency::scope(
         Urgency::Trade,
         calc_meter::scope(
             t.meter.clone(),
-            calc_timing::scope(t.clone(), profit::decide(core, d, &mode)),
+            calc_timing::scope(t.clone(), profit::decide_within(core, d, &mode, from)),
         ),
     );
     // Ключ повтора причины в журнале: у отказа по сроку — без чисел замера (иначе каждый повтор — новая строка).

@@ -306,8 +306,10 @@ async fn one(core: &Core, d: &Direction) -> Outcome {
     let s = &core.inner.deps.settings;
     let mode = super::dry::mode(s);
     // Бюджет — без вычета текущей сделки монеты (busy_budget.rs: признак задачи, действует только здесь).
+    // Решение 345 (ревью t159 Б2): начало общего срока profit.calc_timeout_ms — от него мягкий срок подбора.
+    let from = std::time::Instant::now();
     let calc = async {
-        match profit::decide(core, d, &mode).await {
+        match profit::decide_within(core, d, &mode, from).await {
             Verdict::Accept(c) => Outcome::Accept(Box::new(best(core, &c, &mode))),
             Verdict::Reject { reason, .. } => Outcome::Reject(reason),
         }

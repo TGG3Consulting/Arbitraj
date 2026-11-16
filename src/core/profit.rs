@@ -20,10 +20,11 @@
 //! Решение 266: пересчёт предпроверки при precheck.fast_recalc = да — сначала один финальный расчёт на объёме кандидата
 //! (precheck_fast.rs recalc_boxed, после параметров подбора и до самого подбора); не прошёл — полный подбор, как раньше.
 //! Решение 337: ранний выход подбора (size_early.rs, size.early_exit_margin_usd) — отказ без финальной котировки.
-//! Задача t159: решение 342 — при size.pct_constraint порог % направления — ограничение подбора (size_pct.rs: лучший по
-//! USDT среди проходящих %); решение 345 — мягкий срок подбора size.soft_deadline_pct от начала расчёта (size_extra.rs):
-//! по сроку итог подбора — лучший из посчитанных, дальше финальная котировка, как обычно; решение 344 — изломы пулов
-//! стороны DEX в точки подбора (size_breaks.rs, size.pool_breaks_max).
+//! Задача t159 (ревью t159): решение 342 — порог % направления — ограничение подбора (в логике; size_pct.rs: лучший по
+//! USDT среди проходящих оба порога; на объёме у границы % финальная не прошла % — один пересчёт на ближайшем меньшем
+//! проходящем, size_retry.rs); решение 345 — мягкий срок size.soft_deadline_pct только при внешнем общем сроке
+//! (decide_within: candidates.rs, busy_calc.rs; в предпроверке и refit его нет); решение 344 — изломы пулов DEX
+//! маршрута — внутри подбора (size_breaks.rs, после быстрого пересчёта 266); size_extra.rs apply.
 //! Решение 242: пороги прибыли — с областью «площадка + тип направления» (venue_dir.rs thresholds), не задано — как раньше.
 //! Настройки: money.min_profit_usd, money.min_profit_pct [вся система, площадка + тип направления], tax.max_age_s (tax_age.rs), kyber.final_gate_usd (решение 111; только при exec.via_kyber =
 //! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
@@ -54,23 +55,33 @@ pub enum Verdict {
 /// Расчёт кандидата. Принимает: ядро, направление, режим (зафиксирован вызывающим: очередь кандидатов — на расчёт,
 /// предпроверка сделки — всегда Live, решение 74). Возвращает: Verdict. Ошибок нет — всё в Reject.
 pub async fn decide(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Verdict {
-    decide_capped(core, d, mode, None, None).await
+    decide_capped(core, d, mode, None, None, None).await
+}
+
+/// То же под внешним общим сроком profit.calc_timeout_ms, начатым в `from` (решение 345, ревью t159 Б2: мягкий срок
+/// подбора — только здесь; candidates.rs, busy_calc.rs). Принимает: ядро, направление, режим, начало срока. Ошибок нет.
+pub async fn decide_within(
+    core: &Core,
+    d: &Direction,
+    mode: &super::dry::Mode,
+    from: std::time::Instant,
+) -> Verdict {
+    decide_capped(core, d, mode, None, None, Some(from)).await
 }
 
 /// То же, но бюджет не больше `cap` (решение 103: свободный баланс A прямо перед ордером меньше бюджета — объём
 /// подбирается заново под свободный остаток, refit.rs). Принимает: ядро, направление, режим, предел, объём кандидата
-/// (решение 266: пересчёт предпроверки при precheck.fast_recalc = да — precheck_fast.rs; None — как раньше).
-/// Ошибок нет.
+/// (решение 266: пересчёт предпроверки при precheck.fast_recalc = да — precheck_fast.rs; None — как раньше), начало
+/// внешнего общего срока (решение 345; None — его нет: мягкого срока подбора нет). Ошибок нет.
 pub async fn decide_capped(
     core: &Core,
     d: &Direction,
     mode: &super::dry::Mode,
     cap: Option<Decimal>,
     want: Option<&mut super::precheck_fast::Want>,
+    outer_from: Option<std::time::Instant>,
 ) -> Verdict {
     let reject = |reason: String, best: Option<Calc>| Verdict::Reject { reason, best };
-    // Решение 345: начало расчёта — от него мягкий срок подбора (size.soft_deadline_pct).
-    let started = std::time::Instant::now();
     // Сухой режим без бюджета — сигналов нет, считать нечего (решение 74).
     if let super::dry::Mode::Dry(Err(e)) = mode {
         return reject(e.clone(), None);
@@ -125,15 +136,8 @@ pub async fn decide_capped(
     };
     // Решение 337: пол раннего выхода подбора — порог прибыли направления минус size.early_exit_margin_usd.
     p.early_floor = super::size_early::floor(s, min_usd);
-    // Задача t159: порог % — ограничение поиска (342), мягкий срок (345), изломы пулов DEX (344). Не заданы — как раньше.
-    let flags = super::size_extra::flags(s);
-    if flags.pct {
-        p.ext.min_pct = Some(min_pct);
-    }
-    p.ext.deadline = super::size_extra::deadline(s, flags.soft_pct, started);
-    if let Some(per_pool) = flags.pool_breaks {
-        Box::pin(super::size_breaks::add(core, &cx, &mut p, per_pool)).await;
-    }
+    // Задача t159: пороги — ограничение поиска (342), изломы пулов DEX (344, внутри подбора), мягкий срок (345).
+    super::size_extra::apply(s, &mut p, (min_usd, min_pct), outer_from);
     // Решение 266: объём кандидата на свежих данных — один финальный расчёт; прошёл пороги — план без подбора, иначе
     // (ошибка, ниже порога, внешний исполнитель) — полный подбор ниже, как раньше. Будущее — в куче и собирается не
     // здесь (recalc_boxed): кадр расчёта кандидата не растёт; объём задан только у пересчёта предпроверки.
@@ -166,7 +170,7 @@ pub async fn decide_capped(
     if p.par_blocked {
         choice.why.push_str(super::size_par::PAR_BLOCKED);
     }
-    if let Some(min_pct) = p.ext.min_pct {
+    if found.pct_moved {
         choice.why.push_str(&super::size_extra::pct_note(min_pct));
     }
     if found.late {
@@ -227,6 +231,22 @@ pub async fn decide_capped(
         );
     }
     if c.profit_pct < min_pct {
+        // Ревью t159 Н2: объём у границы порога % — один пересчёт на ближайшем меньшем проходящем (size_retry.rs).
+        if let Some(fb) = found.fallback.as_ref() {
+            let fb = (fb.qty, fb.profit);
+            let retry = super::size_retry::retry(
+                core,
+                &cx,
+                fb,
+                budget,
+                p.step,
+                (min_usd, min_pct),
+                &choice,
+            );
+            if let Some(c2) = Box::pin(retry).await {
+                return Verdict::Accept(c2);
+            }
+        }
         return reject(
             format!(
                 "прибыль {}% ниже порога {min_pct}% ({})",

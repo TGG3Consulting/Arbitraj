@@ -6,14 +6,17 @@
 //! настройки size.* тогда из копии на момент решения (Frozen.decided.settings).
 //! Решение 218: SourceCurve — та же кривая над любым источником данных (costs_source.rs; пересчёт старых записей «без
 //! потолка» по окнам), search_params — параметры поиска из настроек size.* при известных шаге и изломах.
+//! Параметры поиска (params, search_params, cumulative) — core/size_params.rs (ревью t159: вынесено), пути прежние.
 //! Кто вызывает: core/profit.rs, card_max.rs, uncapped.rs, uncapped_recompute.rs (SourceCurve, search_params).
 //! От чего зависит: costs.rs, costs_source.rs, dirctx.rs, deps.rs, engine.rs (рынок), size.rs, settings.
 //! Бюджет каждой точки — по наибольшему списанию Calc.spend_max (количество × худшая цена покупки); решение 246 —
 //! у кривой боя (profit.rs) бюджет проверяется уже после стороны A (CoreCurve.budget), без котировок B.
 //! Решение 336: batch — пачка точек одновременно (join_all на одной задаче: котировки DEX каждой точки уходят в свои
 //! потоки счёта адаптера, ожидание — общее); size.parallel_points и size.bisect_probes — в Params (size_par.rs).
-//! Задача t159: Curve::pct — процент прибыли расчёта (решение 342); search_params читает необязательные size.* t159
-//! (size_extra.rs), params — концы участков допустимости продажи по стакану B (решение 343, size_scan.rs regions).
+//! Задача t159 (ревью t159): Curve::pct и pct_base — процент прибыли расчёта и его база Calc.invested (решение 342);
+//! CoreCurve::breaks — изломы пулов DEX-сторон маршрута точки (решение 344, size_breaks.rs); search_params читает
+//! size.scan_above_pct (size_extra.rs); params — участки допустимости продажи по стакану B (решение 343, size_scan.rs
+//! regions, в логике), признаки «бюджет монотонен» (A — биржа) и «есть сторона DEX» (Б3).
 //! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (общие; значений нет —
 //! не задана хоть одна — подбора нет, сделки нет); size.parallel_points, size.bisect_probes (необязательные, решение 336);
 //! dex.quote_reuse [площадка направления] — признак короба с повторным использованием (решение 336, один раз на подбор).
@@ -22,15 +25,14 @@ use async_trait::async_trait;
 use futures_util::future::join_all;
 use rust_decimal::Decimal;
 
-use crate::core::types::{OrderBook, PriceLevel};
-use crate::settings::read::At;
-use crate::settings::store::Store;
-
 use super::costs::{self, Calc, Source};
 use super::dirctx::DirCtx;
-use super::engine::{Core, rd};
+use super::engine::Core;
 use super::frozen::Frozen;
-use super::size::{Curve, Fail, Params, Point};
+use super::size::{Curve, Fail, Point};
+
+/// Параметры поиска вынесены в size_params.rs (ревью t159: файл перерос 200 строк) — пути прежние.
+pub use super::size_params::{cumulative, params, search_params};
 
 /// Кривая по полному расчёту направления.
 pub struct CoreCurve<'a> {
@@ -63,6 +65,25 @@ impl Curve for CoreCurve<'_> {
     /// Решение 342: процент прибыли расчёта от вложенного (Calc.profit_pct, costs.rs). Ошибок нет.
     fn pct(data: &Calc) -> Option<Decimal> {
         Some(data.profit_pct)
+    }
+
+    /// Ревью t159 Б1: база процента — Calc.invested (объём × средняя цена покупки, costs.rs). Ошибок нет.
+    fn pct_base(data: &Calc) -> Option<Decimal> {
+        Some(data.invested)
+    }
+
+    /// Решение 344: изломы пулов DEX-сторон маршрута точки (size_breaks.rs core_breaks); у снимка рынка — нет (живые
+    /// пулы другого момента). Ошибок нет.
+    async fn breaks(
+        &mut self,
+        data: &Calc,
+        max_qty: Decimal,
+        limit: u32,
+    ) -> (Vec<Decimal>, Vec<Decimal>) {
+        if self.src.is_some() {
+            return (Vec::new(), Vec::new());
+        }
+        super::size_breaks::core_breaks(self.core, self.cx, data, max_qty, limit).await
     }
 }
 
@@ -103,6 +124,11 @@ impl<S: Source> Curve for SourceCurve<'_, S> {
     fn pct(data: &Calc) -> Option<Decimal> {
         Some(data.profit_pct)
     }
+
+    /// Ревью t159 Б1: база процента — Calc.invested. Ошибок нет.
+    fn pct_base(data: &Calc) -> Option<Decimal> {
+        Some(data.invested)
+    }
 }
 
 impl<S: Source> SourceCurve<'_, S> {
@@ -123,130 +149,4 @@ fn point(qty: Decimal, c: Calc) -> Point<Calc> {
         profit: c.profit_usd,
         data: c,
     }
-}
-
-/// Параметры поиска. Принимает: ядро, контекст направления, бюджет, оценку цены покупки (> 0), снимок рынка (решение
-/// 217: изломы — по стаканам снимка; None — живые стаканы ядра).
-/// Ошибки: текст — не задана настройка size.*, шаг количества неизвестен (ни одна сторона не биржа).
-pub fn params(
-    core: &Core,
-    cx: &DirCtx,
-    budget: Decimal,
-    price: Decimal,
-    src: Option<&Frozen>,
-) -> Result<Params, String> {
-    let step = cx
-        .pair_a
-        .as_ref()
-        .or(cx.pair_b.as_ref())
-        .map(|p| p.step_size)
-        .ok_or("шаг количества неизвестен: ни одна сторона сделки не биржа")?;
-    let d = &cx.dir;
-    // Решение 211: стаканы — по тикеру площадки (Presence::ticker стороны направления).
-    let (ta, tb) = (&cx.a.ticker, &cx.b.ticker);
-    let cum = |b: Option<&OrderBook>, buy: bool| -> Vec<Decimal> {
-        b.map(|b| cumulative(if buy { &b.asks } else { &b.bids }))
-            .unwrap_or_default()
-    };
-    // Решение 239: у снимка со входами момента решения — настройки на тот момент.
-    let s = src
-        .and_then(|f| f.decided.as_deref())
-        .map_or(&core.inner.deps.settings, |x| &x.settings);
-    // Решение 343: концы участков допустимости продажи — только при size.feasible_scan (иначе стакан не трогаем).
-    let scan = super::size_extra::flags(s).scan;
-    let regions = |b: Option<&OrderBook>| -> Vec<Decimal> {
-        match (scan, b) {
-            (true, Some(b)) => super::size_scan::regions(&b.bids, cx.pair_b.as_ref()),
-            _ => Vec::new(),
-        }
-    };
-    let (buy_breaks, sell_breaks, sell_regions) = {
-        let market = rd(&core.inner.market);
-        match src {
-            Some(f) => (
-                cum(f.book(false), true),
-                cum(f.book(true), false),
-                regions(f.book(true)),
-            ),
-            None => (
-                cum(market.book(&d.buy_on, ta), true),
-                cum(market.book(&d.sell_on, tb), false),
-                regions(market.book(&d.sell_on, tb)),
-            ),
-        }
-    };
-    let mut p = search_params(s, step, budget, price, buy_breaks, sell_breaks)?;
-    p.reuse = reuse_on(s, d);
-    p.ext.sell_regions = sell_regions;
-    Ok(p)
-}
-
-/// Что делает: решение 336 — повторное использование в подборе: dex.quote_reuse = да на одной из площадок направления
-/// (настройка области «площадка», у DEX). Читается один раз на подбор, адаптер её на горячем пути не читает (ревью t157
-/// Б1). Принимает: настройки, направление. Возвращает: да/нет (не задана — нет). Ошибок нет.
-fn reuse_on(s: &Store, d: &crate::core::types::Direction) -> bool {
-    [&d.buy_on, &d.sell_on].iter().any(|v| {
-        let at = At {
-            venue: Some(&v.0),
-            coin: None,
-        };
-        s.flag("dex.quote_reuse", at).unwrap_or(false)
-    })
-}
-
-/// Что делает: параметры поиска при известных шаге количества и изломах (решение 218: общий кусок params и пересчёта
-/// по окнам). Принимает: настройки, шаг, бюджет, оценку цены покупки (> 0), изломы покупки и продажи.
-/// Возвращает: Params. Ошибки: текст — не задана настройка size.*.
-pub fn search_params(
-    s: &Store,
-    step: Decimal,
-    budget: Decimal,
-    price: Decimal,
-    buy_breaks: Vec<Decimal>,
-    sell_breaks: Vec<Decimal>,
-) -> Result<Params, String> {
-    let int = |name: &str| -> Result<u32, String> {
-        let v = s.integer(name, At::default()).map_err(|e| e.message)?;
-        u32::try_from(v).map_err(|_| format!("{name} = {v}: вне пределов"))
-    };
-    let tolerance_pct = s
-        .decimal("size.tolerance_pct", At::default())
-        .map_err(|e| e.message)?;
-    // Решение 336: необязательные; не заданы — 1 (как до 336).
-    let (par_points, bisect_probes, par_blocked) = super::size_par::par_settings(s)?;
-    Ok(Params {
-        step,
-        budget,
-        guess: budget / price,
-        buy_breaks,
-        sell_breaks,
-        bisect_steps: int("size.bisect_steps")?,
-        grid_points: int("size.grid_points")?,
-        refine_steps: int("size.refine_steps")?,
-        max_evals: int("size.max_evals")?,
-        tolerance_pct,
-        par_points,
-        bisect_probes,
-        // Решение 337: пол раннего выхода ставит вызывающий (profit.rs / ниже) — здесь без него.
-        early_floor: None,
-        reuse: false,
-        par_blocked,
-        // Задача t159: участки допустимости — флаг здесь, концы участков ставит params; порог % и срок — profit.rs.
-        ext: super::size_extra::Extra {
-            scan: super::size_extra::flags(s).scan,
-            ..Default::default()
-        },
-    })
-}
-
-/// Накопленные объёмы уровней от лучшего (изломы средней цены). Ошибок нет.
-pub fn cumulative(levels: &[PriceLevel]) -> Vec<Decimal> {
-    let mut cum = Decimal::ZERO;
-    levels
-        .iter()
-        .map(|l| {
-            cum += l.qty;
-            cum
-        })
-        .collect()
 }

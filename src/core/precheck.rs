@@ -516,5 +516,5 @@ pub async fn replan_sized(
     cap: Option<Decimal>,
     want: Option<&mut Want>,
 ) -> Verdict {
-    profit::decide_capped(core, d, &super::dry::Mode::Live, cap, want).await
+    profit::decide_capped(core, d, &super::dry::Mode::Live, cap, want, None).await
 }

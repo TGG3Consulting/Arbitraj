@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, PoolDirectory, PoolKind, Quote,
-    SendChannelInfo, Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue,
+    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, DexRoute, PoolDirectory, PoolKind,
+    Quote, SendChannelInfo, Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue,
     WithdrawRequest,
 };
 
@@ -123,18 +123,20 @@ pub trait Venue: Send + Sync {
         self.quote(asset, side, qty).await.map(|q| q.fillable_qty)
     }
 
-    /// Решение 344 (задача t159): изломы кривой площадки по объёму монеты — объёмы, на которых у пулов монеты меняется
-    /// кусок кривой (пересечение тика, конец бина, точка лесенки цен): точки подбора объёма ядра (core/size_breaks.rs),
-    /// чтобы пик прибыли между двумя точками сетки не терялся. Только память адаптера, без запросов к площадке. По
+    /// Решение 344 (задача t159, ревью t159 Б4, Н4): изломы кривой площадки по объёму монеты — объёмы, на которых у
+    /// пулов МАРШРУТА котировки меняется кусок кривой (пересечение тика, конец бина, точка лесенки цен): точки подбора
+    /// объёма ядра (core/size_breaks.rs). Объём — монеты всей стороны: адаптер учитывает долю сплита, налог монеты и
+    /// крючок шага монеты, комиссию на вход у бинов при продаже. Только память адаптера, без запросов к площадке. По
     /// умолчанию — пусто (у биржи изломы — уровни стакана, их ядро берёт само). Принимает: монету, сторону (покупка —
-    /// монета на выходе пула, продажа — на входе), наибольший объём (монет), сколько изломов на пул. Возвращает:
-    /// объёмы монеты по возрастанию. Ошибки: как у котировки до расчёта (нет адреса монеты, настройка).
+    /// монета на выходе пула, продажа — на входе), маршрут котировки (Quote.route), наибольший объём (монет), сколько
+    /// изломов наибольшим числом. Возвращает: объёмы монеты по возрастанию. Ошибки: как у котировки до расчёта.
     async fn quote_breaks(
         &self,
         _asset: &Asset,
         _side: Side,
+        _route: &DexRoute,
         _max_qty: Decimal,
-        _per_pool: u32,
+        _limit: u32,
     ) -> GatewayResult<Vec<Decimal>> {
         Ok(Vec::new())
     }

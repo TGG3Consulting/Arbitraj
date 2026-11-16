@@ -1,33 +1,31 @@
 //! Файл: venues/bsc_dex/quote/breaks_pool.rs
-//! Что делает: решение 344 (задача t159) — изломы кривой одного пула по объёму монеты (минимальные единицы): объёмы
-//! монеты, на которых у пула меняется кусок кривой обмена в нужном направлении. Это точки подбора объёма, не
-//! данные решения: значения считаются той же математикой пула, где она есть, и без комиссии там, где излом — граница
-//! ёмкости (бины). Виды:
+//! Что делает: решение 344 (задача t159, ревью t159 Н4) — изломы кривой одного пула по объёму монеты НА ЭТОМ ПУЛЕ
+//! (минимальные единицы): объёмы, на которых у пула меняется кусок кривой обмена в нужном направлении. Это точки
+//! подбора объёма, не данные решения; значения — той же математикой пула, что котировка (с комиссией). Виды:
 //! - V3 (PancakeSwap / Uniswap V3, Slipstream) и Cl (Infinity CL, Uniswap V4): объём монеты до каждого следующего
 //!   инициализированного тика по направлению обмена — обмен до предела цены тика (math/swap_cl.rs swap_to — та же
-//!   математика и комиссия, что котировка, pool_quote.rs); продажа — вход, покупка — выход;
-//! - Bin (Infinity Bin) и LbBin (Liquidity Book V2.1): накопленная ёмкость бинов от активного по направлению обмена
-//!   (выход — резерв бина; вход — резерв выхода по цене бина, math/bin_price.rs price_from_id, Y за 1 X ·2^128);
+//!   математика и комиссия на вход, что котировка, pool_quote.rs); продажа — вход, покупка — выход;
+//! - Bin (Infinity Bin) и LbBin (Liquidity Book V2.1) — quote/breaks_bins.rs (ёмкость бинов; при продаже — вход с
+//!   комиссией);
 //! - OraclePmm (WooFi, Metric, iZiSwap, Biswap V3): точки лесенки цен пула нужного направления (pool_quote.rs ветка
 //!   OraclePmm, quote/pmm_ladder.rs) — на них средняя цена меняет отрезок интерполяции.
 //!
 //! Прочие виды (V2, Solidly, StableSwap, DMM, Balancer — гладкие кривые без изломов; Algebra, Elastic — нет общей
 //! функции «обмен до тика»; DODO, SmarDex, Maverick — переходы не выведены, docs/notes/t159-…) — изломов нет (пусто).
+//! Перевод в объём монеты всей стороны (доля сплита, налог, крючок) — quote/breaks.rs.
 //! Кто вызывает: quote/breaks.rs.
-//! От чего зависит: math/swap_cl.rs, math/tick_math.rs, math/bin_price.rs, math/full_math.rs, quote/pool_quote.rs
-//! (swap_fee), pools/registry.rs (Entry), core/types (PoolKind, PoolState).
+//! От чего зависит: math/swap_cl.rs, math/tick_math.rs, quote/breaks_bins.rs, quote/pool_quote.rs (swap_fee),
+//! pools/registry.rs (Entry), core/types (PoolKind, PoolState).
 //! Настройки: нет (число изломов и наибольший объём даёт вызывающий).
 
 use alloy_primitives::{Address, U256};
 
 use crate::core::types::{PoolKind, PoolState};
 
-use super::super::math::bin_price::{SCALE_OFFSET, price_from_id};
-use super::super::math::full_math::mul_div;
 use super::super::math::swap_cl::{self, ClState, Version};
 use super::super::math::tick_math::sqrt_ratio_at_tick;
-use super::super::pools::bins::BinMap;
 use super::super::pools::registry::Entry;
+use super::breaks_bins::{BinSide, bins};
 use super::pool_quote::swap_fee;
 
 /// Что делает: изломы пула. Принимает: запись пула, адрес монеты, продажа ли (монета на входе), наибольший объём
@@ -85,12 +83,21 @@ pub fn pool(e: &Entry, coin: Address, sell: bool, max: U256, n: u32) -> Vec<U256
                 n,
             )
         }
-        (PoolState::Bin { active_id, .. }, PoolKind::Bin) => {
-            match (e.bins.as_ref(), e.pool.bin_step) {
-                (Some(b), Some(step)) => bins(b, *active_id, step, coin0, sell, max, n),
-                _ => Vec::new(),
+        (
+            PoolState::Bin {
+                active_id,
+                protocol_fee,
+                lp_fee,
+            },
+            PoolKind::Bin,
+        ) => match (e.bins.as_ref(), e.pool.bin_step) {
+            // Bin: X = currency0; комиссия обмена — по направлению (pool_quote.rs ветка Bin).
+            (Some(b), Some(step)) => {
+                let fee = BinSide::Inf(swap_fee(*protocol_fee, *lp_fee, zfo));
+                bins(b, *active_id, step, coin0, sell, fee, max, n)
             }
-        }
+            _ => Vec::new(),
+        },
         (PoolState::LbBin(d), PoolKind::LbBin) => match e.bins.as_ref() {
             // X — token0 записи, если x_is_token0 (pool_quote.rs ветка LbBin).
             Some(b) => bins(
@@ -99,6 +106,7 @@ pub fn pool(e: &Entry, coin: Address, sell: bool, max: U256, n: u32) -> Vec<U256
                 d.bin_step,
                 coin0 == d.x_is_token0,
                 sell,
+                BinSide::Lb(d),
                 max,
                 n,
             ),
@@ -179,54 +187,6 @@ fn cl(
             break;
         }
         out.push(v);
-    }
-    out
-}
-
-/// Накопленная ёмкость бинов от активного по направлению обмена (в единицах монеты). Принимает: бины, активный id,
-/// binStep, монета — X, продажа ли, наибольший объём, сколько изломов. Ошибок нет.
-fn bins(
-    b: &BinMap,
-    active: u32,
-    step: u32,
-    x_coin: bool,
-    sell: bool,
-    max: U256,
-    n: usize,
-) -> Vec<U256> {
-    let one = U256::from(1u8) << SCALE_OFFSET;
-    // Выход X — бины от активного вверх; выход Y — от активного вниз (Liquidity Book: X выше активного, Y ниже).
-    let x_out = (x_coin && !sell) || (!x_coin && sell);
-    let ids: Vec<(u32, (u128, u128))> = if x_out {
-        b.reserves.range(active..).map(|(i, r)| (*i, *r)).collect()
-    } else {
-        b.reserves
-            .range(..=active)
-            .rev()
-            .map(|(i, r)| (*i, *r))
-            .collect()
-    };
-    let mut cum = U256::ZERO;
-    let mut out = Vec::new();
-    for (id, (rx, ry)) in ids {
-        let Some(price) = price_from_id(id, step) else {
-            break;
-        };
-        // Сколько монеты проходит через бин: выход монеты — её резерв; вход монеты — резерв выхода по цене бина.
-        let add = match (x_coin, sell) {
-            (true, false) => Some(U256::from(rx)),
-            (false, false) => Some(U256::from(ry)),
-            (true, true) => mul_div(U256::from(ry), one, price),
-            (false, true) => mul_div(U256::from(rx), price, one),
-        };
-        let Some(add) = add.filter(|a| !a.is_zero()) else {
-            continue;
-        };
-        cum = cum.saturating_add(add);
-        if cum > max || out.len() >= n {
-            break;
-        }
-        out.push(cum);
     }
     out
 }

@@ -13,13 +13,12 @@
 //! build_decided.
 //! От чего зависит: engine.rs, registry.rs, vol.rs, reserve.rs, settings.
 //! Правила пар и свежесть справочника сетей — dirctx_venue.rs (venue.networks_stale_s).
-//! Решение 358 (только журнал): план входа при log.sigma_horizon = да несёт сравнение σ (reserve_check.rs), решение не
-//! меняется.
+//! Решения 358, 364 (только журнал): план входа всегда несёт сравнение σ (reserve_check.rs), решение не меняется.
 //! Решение 242: profit.price_move_k и profit.closure_share — сначала площадка + тип направления (core/venue_dir.rs);
 //! дополнение п. 2 (Тигран 09.11): у profit.price_move_k монета сильнее пары (монета → пара → вся система).
 //! Настройки: venue.quote_asset, profit.price_move_k (можно по монете), profit.liquidity_share_h (по B),
 //! profit.sigma_window_min, usdt_return.mode (+ transit.rs), profit.closure_share, profit.sigma_floor_per_s,
-//! profit.sigma_min_changes (reserve.rs), log.sigma_horizon (reserve_check.rs).
+//! profit.sigma_min_changes (reserve.rs).
 
 use rust_decimal::Decimal;
 
@@ -54,7 +53,8 @@ pub struct DirCtx {
     pub k: Decimal,
     /// Решение 240: доля закрытия разницы profit.closure_share [B]; None — не задана (запас как раньше).
     pub closure_share: Option<Decimal>,
-    /// Решение 358: сравнение σ только для журнала (log.sigma_horizon = да, план входа); None — нет. На решение не влияет.
+    /// Решения 358, 364: сравнение σ только для журнала (у плана входа — всегда); None — не план входа. На решение не
+    /// влияет.
     /// Box — значение не растит DirCtx, который держат будущие пути расчёта и предпроверки (стек).
     pub sigma_check: Option<Box<super::reserve_check::SigmaCheck>>,
     pub h: Decimal,
@@ -209,7 +209,7 @@ impl DirCtx {
         };
         // Решение 358 (только журнал): σ на горизонте T рядом со σ плана — только у плана входа.
         let sigma_check = match &at_m {
-            Moment::Entry => super::reserve_check::entry(core, s, dir, sigma, transit_s),
+            Moment::Entry => Some(super::reserve_check::entry(core, s, dir, sigma, transit_s)),
             _ => None,
         };
         // Решение 240: доля закрытия разницы — не у сделки, которая уже идёт.

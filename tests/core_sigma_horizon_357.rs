@@ -7,7 +7,8 @@
 //! 2) σ на горизонте T (vol_horizon.rs через Volatility::horizon) — та же, что независимый счёт по ценам: цена конца
 //!    каждого отрезка длины T назад от «сейчас» — последний замер не позже него, Rⱼ = ln(P конца / P начала),
 //!    σ_T = √(ΣRⱼ²/(m·T)); ρ₁ = Σrᵢrᵢ₋₁/Σrᵢ²;
-//! 3) reserve_check::of: log.sigma_horizon не задана — None; «да» — σ ряда и σ_T те же, что у vol.rs; граница
+//! 3) reserve_check::of (решение 364 — всегда, без настройки): σ ряда и σ_T те же, что у vol.rs; по копии одного ряда
+//!    (Volatility::copy_of — счёт вне замка ядра) — то же сравнение; граница
 //!    profit.sigma_floor_per_s [B] — σ_T плана = max(σ_T, граница), σ ряда не меняется;
 //! 4) cand_signal_note::data: прежнее поле data (Calc записанного расчёта CAKE, tests/size_common) не меняется, к нему
 //!    добавлено signal_note; строки сигнала нет — signal = null; возраст котировок расчёта — мс от их времени до расчёта.
@@ -191,7 +192,7 @@ async fn set(s: &Store, name: &str, scope: Scope, v: Value) {
 }
 
 #[tokio::test]
-async fn check_follows_flag_and_floor() {
+async fn check_always_and_floor() {
     let (_core, s) = core("check").await;
     set(&s, "profit.sigma_window_min", Scope::Global, json!(60)).await;
     let frames = gate_bids();
@@ -203,10 +204,11 @@ async fn check_follows_flag_and_floor() {
     };
     let mut vol = series(&frames);
     let plan = d("0.00001");
-    // 3) Не задана — сравнения нет.
-    assert!(reserve_check::of(&mut vol, &s, &gd, plan, d("2"), now).is_none());
-    set(&s, "log.sigma_horizon", Scope::Global, json!(true)).await;
-    let c = reserve_check::of(&mut vol, &s, &gd, plan, d("2"), now).unwrap();
+    // 3) Решение 364: сравнение всегда, без настройки; по копии одного ряда (вне замка ядра) — те же поля, что по рядам.
+    let c = reserve_check::of(&mut vol, &s, &gd, plan, d("2"), now);
+    let mut one = vol.copy_of(&v("gate"), &cake(), Side::Sell, &v("bsc_dex"));
+    let c1 = reserve_check::of(&mut one, &s, &gd, plan, d("2"), now);
+    assert_eq!(format!("{c:?}"), format!("{c1:?}"));
     let (sigma, _) = vol
         .measure(&v("gate"), &cake(), Side::Sell, &v("bsc_dex"), 60, now)
         .unwrap();
@@ -235,7 +237,7 @@ async fn check_follows_flag_and_floor() {
         json!(floor.to_string()),
     )
     .await;
-    let c = reserve_check::of(&mut vol, &s, &gd, plan, d("2"), now).unwrap();
+    let c = reserve_check::of(&mut vol, &s, &gd, plan, d("2"), now);
     assert_eq!(c.sigma_t_plan, Some(floor));
     assert_eq!(c.sigma_series, Some(sigma));
 }

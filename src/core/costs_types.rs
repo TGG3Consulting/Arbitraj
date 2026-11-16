@@ -63,8 +63,8 @@ pub struct Calc {
     pub profit_pct: Decimal,
     pub transit_s: Decimal,
     pub sigma: Decimal,
-    /// Решение 358 (только журнал, log.sigma_horizon = да): σ на горизонте T рядом со σ плана, запас и прибыль с ней.
-    /// None — режим выключен или не план входа; в JSON тогда поля нет.
+    /// Решения 358, 364 (только журнал): σ на горизонте T рядом со σ плана, запас и прибыль с ней.
+    /// None — не план входа (сделка идёт, план момента решения); в JSON тогда поля нет.
     #[serde(skip_serializing_if = "Option::is_none")]
     /// Box — Calc живёт в будущих пути расчёта и предпроверки, значение по месту растило бы их стек.
     pub sigma_check: Option<Box<super::reserve_check::SigmaCheck>>,

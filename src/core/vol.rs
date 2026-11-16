@@ -9,7 +9,7 @@
 //! Решение 358 (только журнал): шаг хранит лог-доходность со знаком (квадрат — при сложении, σ та же); horizon — σ на
 //! горизонте T и автокорреляция шагов по тому же окну (core/vol_horizon.rs) для сравнения со σ рядом.
 //! Кто вызывает: core/evaluate.rs (замеры цен сигнала), core/dirctx.rs (σ на B), core/reserve.rs (measure),
-//! core/reserve_check.rs (horizon).
+//! core/reserve_check.rs (horizon, copy_of).
 //! От чего зависит: rust_decimal (ln, sqrt), chrono, core/vol_horizon.rs.
 //! Настройки: profit.sigma_window_min (окно передаёт вызывающий).
 
@@ -146,6 +146,29 @@ impl Volatility {
             .sqrt()
             .map(|sigma| (sigma, changes))
             .ok_or_else(|| "волатильность не вычисляется".to_string())
+    }
+
+    /// Решение 364: копия ОДНОГО ряда (площадка, монета, сторона, напарник) — для счёта сравнения σ вне замка рядов ядра
+    /// (core/reserve_check.rs entry). Шаги — Copy: копирование памяти. Принимает: как measure без окна. Возвращает:
+    /// Volatility только с этим рядом (ряда нет — пустую). Ошибок нет.
+    pub fn copy_of(
+        &self,
+        venue: &VenueId,
+        asset: &Asset,
+        side: Side,
+        partner: &VenueId,
+    ) -> Volatility {
+        let key = (
+            venue.clone(),
+            asset.clone(),
+            side == Side::Sell,
+            partner.clone(),
+        );
+        let mut map = HashMap::new();
+        if let Some(s) = self.map.get(&key) {
+            map.insert(key, s.clone());
+        }
+        Volatility { map }
     }
 
     /// Решение 358 (только журнал): σ на горизонте `horizon_s` и автокорреляция шагов по окну window_min

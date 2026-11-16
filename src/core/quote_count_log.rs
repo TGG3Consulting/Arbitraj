@@ -4,8 +4,11 @@
 //! shadow, window, card, exec, check, unmarked — gateway/quote_purpose.rs), полных и быстрого пути, и в секунду. Счётчики
 //! ведёт адаптер при входе в котировку (атомики, без записи на каждую котировку); здесь — только разница между
 //! снимками. Не задана или 0 — сводки нет: задача ждёт смены настройки (без опроса по времени).
+//! Решения 349, 352: в той же записи — сколько событий промежуточных пулов будили монеты и сколько монет (mid_wake.rs),
+//! сколько котировок DEX сигнала взято из памяти по отпечатку и сколько заново (signal_dex.rs).
 //! Кто вызывает: core/engine.rs (задача при запуске ядра).
-//! От чего зависит: gateway/quote_purpose.rs (snapshot), deps.rs (журнал), settings (подписка на изменения).
+//! От чего зависит: gateway/quote_purpose.rs (snapshot), mid_wake.rs, signal_dex.rs (counts), deps.rs (журнал),
+//! settings (подписка на изменения).
 //! Настройки: log.quote_count_s.
 
 use std::time::{Duration, Instant};
@@ -27,6 +30,7 @@ pub async fn run(core: Core) {
     // Подписка — до чтения: изменение между чтением и ожиданием не теряется.
     let mut rx = core.inner.deps.settings.subscribe();
     let mut prev = quote_purpose::snapshot();
+    let mut prev_x = extra();
     let mut since = Instant::now();
     loop {
         let every = interval(&core);
@@ -37,14 +41,17 @@ pub async fn run(core: Core) {
                 Err(RecvError::Closed) => return,
             }
             prev = quote_purpose::snapshot();
+            prev_x = extra();
             since = Instant::now();
             continue;
         };
         tokio::select! {
             _ = tokio::time::sleep(every) => {
                 let now = quote_purpose::snapshot();
-                write(&core, &prev, &now, since.elapsed()).await;
+                let now_x = extra();
+                write(&core, &prev, &now, (prev_x, now_x), since.elapsed()).await;
                 prev = now;
+                prev_x = now_x;
                 since = Instant::now();
             }
             r = rx.recv() => {
@@ -70,7 +77,13 @@ fn interval(core: &Core) -> Option<Duration> {
 
 /// Одна запись dex.quote_count: разница счётчиков за интервал. Принимает: ядро, прошлый и новый снимок, длительность.
 /// Ошибок нет.
-async fn write(core: &Core, prev: &[(Who, u64, u64)], now: &[(Who, u64, u64)], took: Duration) {
+async fn write(
+    core: &Core,
+    prev: &[(Who, u64, u64)],
+    now: &[(Who, u64, u64)],
+    x: ([u64; 4], [u64; 4]),
+    took: Duration,
+) {
     let secs = took.as_secs_f64().max(f64::MIN_POSITIVE);
     let mut data = Map::new();
     let mut parts = Vec::new();
@@ -87,9 +100,24 @@ async fn write(core: &Core, prev: &[(Who, u64, u64)], now: &[(Who, u64, u64)], t
         }
     }
     data.insert("total".into(), json!(total));
+    // Решения 349, 352: пробуждения монет промежуточными пулами и котировки DEX сигнала из памяти за интервал.
+    let names = [
+        "mid_wake_events",
+        "mid_wake_coins",
+        "dex_memo_hits",
+        "dex_memo_misses",
+    ];
+    let mut more = Vec::new();
+    for (i, n) in names.iter().enumerate() {
+        let v = x.1[i].saturating_sub(x.0[i]);
+        data.insert((*n).into(), json!(v));
+        if v > 0 {
+            more.push(format!("{n} {v}"));
+        }
+    }
     data.insert("seconds".into(), json!(secs));
     let per_s = total as f64 / secs;
-    let msg = format!(
+    let mut msg = format!(
         "котировки DEX за {secs:.0} с: {total} ({per_s:.1}/с) — {}",
         if parts.is_empty() {
             "нет".to_string()
@@ -97,9 +125,21 @@ async fn write(core: &Core, prev: &[(Who, u64, u64)], now: &[(Who, u64, u64)], t
             parts.join(", ")
         }
     );
+    if !more.is_empty() {
+        msg.push_str("; ");
+        msg.push_str(&more.join(", "));
+    }
     let d = Some(serde_json::Value::Object(data));
     core.inner
         .deps
         .log(Level::Info, "dex.quote_count", None, msg, d)
         .await;
+}
+
+/// Решения 349, 352: счётчики с запуска — [событий промежуточных пулов, разбуженных монет, котировок DEX сигнала из
+/// памяти, заново]. Ошибок нет.
+fn extra() -> [u64; 4] {
+    let (events, coins) = super::mid_wake::counts();
+    let (hits, misses) = super::signal_dex::counts();
+    [events, coins, hits, misses]
 }

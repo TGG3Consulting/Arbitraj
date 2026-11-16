@@ -15,6 +15,7 @@
 //! минимумов площадок из памяти (signal_probe.rs) вместо потолка; не задан — побайтно прежний расчёт.
 //! Решение 317 (страховка): в Prices — время котировки каждой стороны (Quote.at; у биржи — кадр стакана адаптера).
 //! Решение 348: котировки сигнала — с назначением «сигнал» (gateway/quote_purpose.rs, только замер).
+//! Решение 352: при signal.book_same_skip = да сторона DEX — из памяти по отпечатку входов (signal_dex.rs).
 //! Кто вызывает: core/evaluate.rs на каждый тик монеты.
 //! От чего зависит: gateway (реестр, котировка), market_state.rs, quote_cache.rs, signal_probe.rs, settings.
 //! Настройки: money.max_per_trade_usd (по площадке A; решение 242 — площадка + тип направления, venue_dir.rs), venue.quote_asset (по площадке), signal.dex_quote_cache_ms,
@@ -77,6 +78,13 @@ async fn side_quote(
     let dex = rd(&core.inner.kinds)
         .iter()
         .any(|(v, k)| v == venue && *k == VenueKind::Dex);
+    // Решение 352: signal.book_same_skip = да — котировка DEX из памяти по отпечатку входов (signal_dex.rs), без срока
+    // signal.dex_quote_cache_ms; не задана — как раньше.
+    if let (true, Some(token)) = (dex, dir.asset.bsc_contract)
+        && super::signal_dex::on(core)
+    {
+        return super::signal_dex::quote(core, dir, venue, token, side, qty).await;
+    }
     let ttl = deps
         .settings
         .integer("signal.dex_quote_cache_ms", At::default())

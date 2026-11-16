@@ -39,6 +39,7 @@ pub mod resubscribe;
 pub mod resubscribe_wallets;
 pub mod send;
 pub mod settings_wait;
+pub mod signal_epoch;
 pub mod tokens;
 pub mod trade_path;
 pub mod venue;

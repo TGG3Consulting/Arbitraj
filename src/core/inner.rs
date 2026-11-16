@@ -81,6 +81,8 @@ pub struct Inner {
     pub ripen: Mutex<super::signal_ripen::Plan>,
     /// Память котировок DEX для тика (решение 109, quote_cache.rs).
     pub quote_cache: Mutex<super::quote_cache::QuoteCache>,
+    /// Решение 352: котировки стороны DEX сигнала по отпечатку входов (signal_dex.rs; signal.book_same_skip).
+    pub signal_dex: super::signal_dex::Memo,
     /// Последняя отправка строки «Живого экрана» по направлению: когда и с каким состоянием (решение 109).
     pub spread_sent: Mutex<HashMap<Direction, (std::time::Instant, super::signal::State)>>,
     /// Очередь тяжёлого расчёта (candidates.rs; с моментом постановки — замер очереди, решение 129) и направления,
@@ -223,6 +225,7 @@ impl Inner {
             ticking: Mutex::default(),
             ripen: Mutex::default(),
             quote_cache: Mutex::default(),
+            signal_dex: Default::default(),
             spread_sent: Mutex::default(),
             cand_tx,
             queued: Mutex::default(),

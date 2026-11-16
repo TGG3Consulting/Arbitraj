@@ -9,6 +9,7 @@
 //! Событие пула толкает поиск циклов DEX ↔ DEX для исполнения (решение 124, cycle_watch.rs). Стакан и пул отмечают живость потока площадки (решение 196,
 //! feed_live.rs). Решение 245: событие пула маршрута нашей открытой сделки — отметка задаче точек цены DEX на объём
 //! сделки (window_deal.rs touched, только память).
+//! Решение 349: событие пула с промежуточной монетой будит монеты, чьи маршруты идут через него (mid_wake.rs).
 //! Решение 318: после каждого пересчёта монеты — таймер дозревания (signal_ripen.rs arm); сработавший таймер ставит
 //! пересчёт тем же путём (tick_sched.rs schedule_set), с тем же signal.eval_min_interval_ms.
 //! Кто вызывает: core/engine.rs (задача run); schedule — ещё core/feed_rest_book.rs (t79: ответ REST стал стаканом
@@ -91,6 +92,8 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 for a in assets_by_tokens(&core, tokens) {
                     super::tick_sched::schedule_pool(&core, a, venue.clone(), mark);
                 }
+                // Решение 349: пул промежуточной пары — пересчёт монет, чьи маршруты идут через него (signal.mid_pool_wake).
+                super::mid_wake::wake(&core, &venue, tokens, mark);
             }
             Touched::Invalidated {
                 venue,

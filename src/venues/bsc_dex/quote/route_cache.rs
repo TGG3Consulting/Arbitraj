@@ -14,7 +14,9 @@
 //! Не задана dex.route_paths_ttl_ms — ТОЧНО как раньше (граф и перебор на каждой котировке).
 //! Решение 217 (исправление по проверке): lookup — набор путей монеты из кэша для снимка рынка (frozen.rs); у
 //! замороженного реестра набор закреплён (graph_cache.rs pinned) и берётся без срока.
-//! Кто вызывает: quote/graph_route.rs; venues/bsc_dex/frozen.rs (lookup).
+//! Решение 308: при dex.graph_background = да (и запущенном владельце) пути промаха кэша тоже гидратируются (hydrate) —
+//! цена всегда по реестру на момент котировки; поиск циклов (cycle_scan.rs) гидратирует так же.
+//! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (hydrate); venues/bsc_dex/frozen.rs (lookup).
 //! От чего зависит: pools/graph.rs (cached, Cache: paths_get/paths_put), pools/registry.rs, quote/route_paths.rs,
 //! quote/route_best.rs, ctx.rs.
 //! Настройки: dex.route_paths_ttl_ms [bsc_dex] (необязательная); через вызывающего — dex.route_max_hops,
@@ -29,7 +31,8 @@ use alloy_primitives::Address;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
-use super::super::pools::graph::{self, Edge, PathsKey, Skeleton};
+use super::super::pools::graph::{Edge, PathsKey, Skeleton};
+use super::super::pools::graph_read;
 use super::super::pools::registry::Registry;
 use super::super::tokens::Tokens;
 use super::route_best;
@@ -79,7 +82,8 @@ pub fn paths(
     {
         return Ok(sk.iter().filter_map(|p| fresh(reg, p)).collect());
     }
-    let g = graph::cached(ctx, reg, tokens, usdt_dec)?;
+    // Повторное ревью (д): режим читается один раз — снимок фонового графа всегда идёт с гидратацией.
+    let (g, hydrated) = graph_read::graph_for(ctx, reg, tokens, usdt_dec)?;
     let found = match s.cap {
         Some(c) => route_best::enumerate(&g, s.usdt, s.coin, s.allowed, s.max_hops, c),
         None => route_paths::enumerate(&g, s.usdt, s.coin, s.allowed, s.max_hops, s.max_paths),
@@ -88,7 +92,22 @@ pub fn paths(
         reg.graph_cache()
             .paths_put(key, found.iter().map(skeleton).collect(), t);
     }
+    // Решение 308: в режиме «граф без ожидания» состояние пулов и на промахе кэша путей — свежее из реестра (снимок
+    // графа — только топология); в t132 здесь копии записей из графа (как было).
+    if hydrated {
+        return Ok(hydrate(reg, &found));
+    }
     Ok(found)
+}
+
+/// Решение 308: пути с записями пулов СВЕЖИМИ из реестра (гидратация): топология — из снимка графа, состояние — на
+/// момент котировки. Путь с пропавшим, недостоверным, спящим пулом отбрасывается (как fresh). Принимает: реестр,
+/// пути. Возвращает: годные пути. Ошибок нет.
+pub fn hydrate(reg: &Registry, paths: &[RoutePath]) -> Vec<RoutePath> {
+    paths
+        .iter()
+        .filter_map(|p| fresh(reg, &skeleton(p)))
+        .collect()
 }
 
 /// Решение 217 (исправление по проверке): набор путей монеты, уже найденный живым кэшем и ещё не устаревший, — для

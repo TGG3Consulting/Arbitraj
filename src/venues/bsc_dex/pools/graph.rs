@@ -17,8 +17,12 @@
 //! каждого пула — счёт в задаче tokio без отдачи управления. Результат тот же: граф зависит только от реестра,
 //! настроек и токенов — всё это в ключе кэша.
 //! Кэш графа (cached, один на состояние реестра) — pools/graph_cache.rs.
-//! Решение 301 (в): брошенный расчёт (quote/abandon.rs) прерывает построение на ближайшем пуле — граф не кладётся в кэш.
-//! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (cached), graph_cache.rs (build).
+//! Решение 301 (в), уточнение t137 (В1 ревью t132): начатое построение брошенный расчёт НЕ прерывает — получивший замок
+//! достраивает граф и кладёт его в кэш (работа не пропадает, следующий ждущий берёт готовый); проверка признака — до
+//! ожидания замка и после построения (pools/graph_cache.rs).
+//! Решение 308: при dex.graph_background = да граф строит фоновый владелец (graph_owner.rs, накопительно — graph_work.rs,
+//! с нуля — graph_full.rs); build остаётся путём при выключенной настройке и для реестра без владельца.
+//! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (cached), graph_cache.rs (build), graph_work.rs (from_edges).
 //! От чего зависит: pools/registry.rs, pools/depth_book.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.route_max_pools_per_edge [bsc_dex]; через depth_book — dex.min_pool_liquidity_usd,
 //! dex.depth_band_pct, dex.depth_hysteresis_pct [bsc_dex].
@@ -32,7 +36,6 @@ use rust_decimal::Decimal;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
-use super::super::quote::abandon;
 use super::super::tokens::Tokens;
 use super::depth_book;
 use super::registry::{Entry, Registry};
@@ -56,9 +59,11 @@ impl Edge {
 }
 
 /// Граф токенов — снимок реестра пулов. Узлы индексируются по токену, рёбра — по индексу в `edges`.
+/// Решение 308: рёбра за Arc — снимок фоновой сборки (graph_work.rs) собирается из готовых рёбер без копирования записей;
+/// внешний API (edges_from, between, len) тот же.
 #[derive(Default)]
 pub struct Graph {
-    pub(super) edges: Vec<Edge>,
+    pub(super) edges: Vec<Arc<Edge>>,
     /// Токен → индексы рёбер, у которых он один из концов.
     adj: HashMap<Address, Vec<usize>>,
 }
@@ -80,20 +85,30 @@ impl Graph {
             .get(&token)
             .into_iter()
             .flatten()
-            .map(move |&i| &self.edges[i])
+            .map(move |&i| self.edges[i].as_ref())
     }
 
     /// Рёбра между парой токенов (концы в любом порядке). Ошибок нет.
     pub fn between(&self, x: Address, y: Address) -> Vec<&Edge> {
         self.edges_from(x).filter(|e| e.other(x) == y).collect()
     }
+
+    /// Решение 308: граф из готовых рёбер (снимок фоновой сборки, graph_work.rs publish) — индекс «токен → рёбра» по
+    /// концам a, b. Принимает: рёбра. Возвращает: граф. Ошибок нет.
+    pub(super) fn from_edges(edges: Vec<Arc<Edge>>) -> Graph {
+        let mut adj: HashMap<Address, Vec<usize>> = HashMap::new();
+        for (i, e) in edges.iter().enumerate() {
+            adj.entry(e.a).or_default().push(i);
+            adj.entry(e.b).or_default().push(i);
+        }
+        Graph { edges, adj }
+    }
 }
 
 /// Построение графа из реестра (решение 80). Берёт достоверные, не спящие пулы торгуемых DEX, глубокие хотя бы по
 /// одной стороне (решение 73), и оставляет на пару токенов не больше dex.route_max_pools_per_edge самых глубоких.
 /// Принимает: окружение, реестр, токены, знаки USDT. Возвращает: граф (может быть пустым — путей нет).
-/// Ошибки: NotConfigured (не задана настройка глубины или dex.route_max_pools_per_edge); Timeout — расчёт брошен
-/// (решение 301, quote/abandon.rs).
+/// Ошибки: NotConfigured (не задана настройка глубины или dex.route_max_pools_per_edge).
 pub fn build(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8) -> GatewayResult<Graph> {
     build_measured(ctx, reg, tokens, usdt_dec).map(|(g, _)| g)
 }
@@ -134,8 +149,6 @@ pub fn build_measured(
     let snap = reg.snapshot();
     stats.pools = snap.len();
     for e in snap {
-        // Решение 301 (в): срок расчёта вышел — дальше не строим (атомарное чтение признака на пул).
-        abandon::check(ctx, "построение графа")?;
         // graphable, не tradable (решение 82): V2-форк входит в граф для поиска/сигналов, хотя авто-сделкой не
         // исполняется (допуск к сделке — quote/graph_route::executable). Исключены недостоверные, спящие и не-graphable.
         if !e.valid || e.asleep || !e.family.graphable {
@@ -167,11 +180,11 @@ pub fn build_measured(
         for (_, e) in list {
             let (a, b) = (e.coin, e.usdt);
             let i = g.edges.len();
-            g.edges.push(Edge {
+            g.edges.push(Arc::new(Edge {
                 entry: (*e).clone(),
                 a,
                 b,
-            });
+            }));
             g.adj.entry(a).or_default().push(i);
             g.adj.entry(b).or_default().push(i);
         }
@@ -183,6 +196,6 @@ pub fn build_measured(
 type Ranked = (Decimal, Arc<Entry>);
 
 /// Ключ неориентированной пары: концы по возрастанию адреса. Ошибок нет.
-fn pair_key(x: Address, y: Address) -> (Address, Address) {
+pub(super) fn pair_key(x: Address, y: Address) -> (Address, Address) {
     if x <= y { (x, y) } else { (y, x) }
 }

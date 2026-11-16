@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/parts.rs
 //! Что делает: общее состояние адаптера DEX в памяти (блоки, токены, пулы, проверки, цена газа, очередь кошелька,
 //! ожидаемые поступления, счётчики каналов, сигнал «перепроверить»; кошельковое — по счетам, parts_wallet.rs) и сборка окружений для котировки, сделки и слушателей пулов.
+//! Решение 308: pools() запускает фонового владельца графа маршрутов (pools/graph_owner.rs ensure).
 //! Кто вызывает: mod.rs.
 //! От чего зависит: ctx.rs, node/heads.rs, tokens.rs, pools/*, check/state.rs, check/deal_taxes.rs, quote/*, exec/txs.rs, send/stats.rs, wallet/nonce.rs,
 //! wallet/inflows.rs.
@@ -116,6 +117,9 @@ impl Parts {
         self.lag.on_clear(signals.ready.clone());
         // Направление пула стало глубоким — «пул готов» (решение 73, pools/depth_book.rs).
         self.registry.depth().on_rise(signals.ready.clone());
+        // Решение 308: фоновый владелец графа маршрутов — запуск при первой подписке, при пересборке подписки (ленты пулов
+        // переподключены) — полная пересборка графа (pools/graph_owner.rs). Работает только при dex.graph_background = да.
+        super::pools::graph_owner::ensure(&self.ctx, &self.registry, &self.tokens, out.clone());
         Pools {
             ctx: self.ctx.clone(),
             reg: self.registry.clone(),

@@ -13,6 +13,7 @@ pub mod delist;
 pub mod dex;
 pub mod dex_dry;
 pub mod dex_executor;
+pub mod dex_graph;
 pub mod episodes;
 pub mod first_run;
 pub mod guard;

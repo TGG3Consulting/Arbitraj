@@ -12,6 +12,8 @@
 //! Решение 301 (е2): поколение состояния записи (Entry.state_gen, pools/state_gen.rs) — присваивает put / update: новое,
 //! только если состояние, тики, бины, достоверность или комиссия пула фактически сменились; pair_marks — поколения пулов
 //! пары (ключ глубины). Решение 301 (е3): update пула, которого нет, версию не меняет (реестр не изменился).
+//! Решение 308: каждая запись, сменившая версию (put, update существующего, retain), отмечает пул в наборе изменений
+//! фонового графа (graph_changes.rs) под замком записи и ДО роста версии; слежение выключено — одно атомарное чтение.
 //! Решение 217: замороженный реестр из снимка записей (снимок и сборка — registry_frozen.rs).
 //! Настройки: нет.
 
@@ -116,6 +118,8 @@ impl Registry {
             Some(old) if old.state_gen != 0 && super::state_gen::same(old, &e) => old.state_gen,
             _ => self.next_gen(),
         };
+        // Решение 308: отметка для фонового графа — под замком записи и до роста версии (graph_changes.rs, И4).
+        self.graph.bg().changes.mark(&e.pool.reference);
         m.insert(e);
         self.version.fetch_add(1, Ordering::AcqRel);
     }
@@ -123,6 +127,11 @@ impl Registry {
     /// Копия записи. None — пула нет.
     pub fn get(&self, r: &PoolRef) -> Option<Entry> {
         self.read().get(r).map(|e| (**e).clone())
+    }
+
+    /// Решение 308: запись без копирования (Arc) — оценка пула фоновым графом (graph_eval.rs). None — пула нет.
+    pub fn entry(&self, r: &PoolRef) -> Option<Arc<Entry>> {
+        self.read().get(r).cloned()
     }
 
     /// Изменение записи на месте. Принимает: ссылку и функцию. Возвращает: её результат; None — пула нет.
@@ -141,6 +150,8 @@ impl Registry {
         // Версия — до снятия блокировки: читатель, увидевший новое состояние, увидит и новую версию. Решение 301 (е3):
         // пула нет — реестр не изменился, версия прежняя.
         if out.is_some() {
+            // Решение 308: отметка для фонового графа — под замком записи и до роста версии (И4).
+            self.graph.bg().changes.mark(r);
             self.version.fetch_add(1, Ordering::AcqRel);
         }
         out
@@ -194,10 +205,10 @@ impl Registry {
 
     /// Удаляет пулы монет, которых больше нет в подписке. Принимает: функцию «оставить ли». Ошибок нет.
     pub fn retain(&self, keep: impl Fn(&Entry) -> bool) {
-        self.inner
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .retain(keep);
+        let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
+        let gone = m.retain(keep);
+        // Решение 308: удалённые пулы — отметка для фонового графа под замком записи и до роста версии (И4).
+        self.graph.bg().changes.mark_all(&gone);
         self.version.fetch_add(1, Ordering::AcqRel);
     }
 }

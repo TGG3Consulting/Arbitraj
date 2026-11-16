@@ -299,6 +299,38 @@ impl Venue for BscDex {
         Ok(pools::families::for_ui(&self.p.ctx))
     }
 
+    /// Решение 308: состояние фонового владельца графа маршрутов для экрана «Площадки» — pools/graph_stats.rs. Ошибок нет.
+    async fn dex_graph_state(&self) -> GatewayResult<crate::core::types::DexGraphState> {
+        Ok(pools::graph_stats::view(&self.p.ctx, &self.p.registry))
+    }
+
+    /// Решение 308: полная пересборка графа маршрутов со сверкой по команде (кнопка «Пересобрать граф», REST) — действующий
+    /// снимок работает до замены. Ошибки: NotConfigured — dex.graph_background не «да»; VenueNotConnected — DEX не
+    /// подписан на рынок (фонового владельца нет).
+    async fn dex_graph_rebuild(&self, by: &str) -> GatewayResult<()> {
+        let p = &self.p;
+        if !pools::graph_read::background(&p.ctx) {
+            return Err(p.ctx.not_set(
+                "dex.graph_background",
+                "Пересборка графа: dex.graph_background не включена — граф строит расчёт, как раньше",
+            ));
+        }
+        let bg = p.registry.graph_cache().bg();
+        if !bg.started() {
+            return Err(p.ctx.err(
+                ErrorCode::VenueNotConnected,
+                "Пересборка графа: DEX не подписан на рынок — фоновой задачи графа нет",
+            ));
+        }
+        bg.request_full(format!("команда «Пересобрать граф» ({by})"));
+        pools::graph_alarm::info(
+            &p.ctx,
+            bg,
+            format!("Запрошена полная пересборка графа маршрутов со сверкой ({by})"),
+        );
+        Ok(())
+    }
+
     /// Справочник пулов от индексатора (решение 58) — directory/. Ошибок нет: нет данных — пустые списки и причина.
     async fn pool_directory(&self) -> GatewayResult<PoolDirectory> {
         Ok(directory::snapshot(&self.p.ctx))

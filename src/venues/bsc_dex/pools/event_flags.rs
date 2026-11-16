@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/pools/event_flags.rs
 //! Что делает: ревью 325 (Н1) — настройки решения 325 по одному DEX (область «DEX») для пути события пула без чтения
 //! хранилища на каждое событие: dex.event_refresh_batch (перечитывание по событию с ответами, прочитанными заранее —
-//! prefetch_read.rs; бины Infinity Bin пачкой — reread_bins.rs) и dex.event_refresh_fee_only (только комиссия Algebra
+//! prefetch_read.rs; бины событий Infinity Bin и LB читаются пачкой всегда, без настройки — settle_read.rs, решение 357) и dex.event_refresh_fee_only (только комиссия Algebra
 //! Integral — integral_fee.rs). Значение — в ячейке памяти (gateway/setting_cell.rs watch_in, как dex.pool_events_keep
 //! решения 324): чтение — одна загрузка OnceLock и одна атомарная загрузка ячейки, без строки, без замка хранилища.
 //! Ячейка создаётся при первом вопросе по этому DEX (одно чтение хранилища) и перечитывается задачей tokio по
@@ -10,7 +10,7 @@
 //! Ячейка привязана к хранилищу, с которым создана (Store::same): спросили с другим хранилищем (снимок решения 239,
 //! тесты со своей базой) — чтение прямо из хранилища, как до ревью. Нет рантайма tokio — тоже прямое чтение (ячейку
 //! некому обновлять).
-//! Кто вызывает: pools/prefetch_read.rs (size), pools/reread_bins.rs, pools/integral_fee.rs (fits).
+//! Кто вызывает: pools/prefetch_read.rs (size), pools/integral_fee.rs (fits).
 //! От чего зависит: gateway/setting_cell.rs (watch_in, Cell, bool_of), settings/scope.rs (Scope), settings/store.rs
 //! (same), ctx.rs (dex_flag — прямое чтение), families.rs (Family — ячейки живут в виде DEX).
 //! Настройки: dex.event_refresh_batch [DEX], dex.event_refresh_fee_only [DEX].

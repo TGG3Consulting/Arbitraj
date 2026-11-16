@@ -9,12 +9,13 @@
 //! при согласии с памятью (lb_head.rs same); активный бин, бины и отметка учтённого не меняются — события блока не
 //! отбрасываются. Не согласовано — lb_head::at_synced (сравнение на блоке памяти).
 //! Решение 357: пул «в обновлении» (settle.rs pending — логи обмена применены не все) на голове не читается и ядру не
-//! уходит (его закрывают логи или settle_close.rs); не прочитался на голове — settle_head.rs head_failed (недостоверен;
-//! достоверность вернёт только удачная голова — тому, что сняла сама; ревью 332, п. 2 «найдено»).
+//! уходит (его закрывают логи или settle_close.rs); не прочитался на голове — settle_head.rs head_failed (недостоверен,
+//! «нужно полное чтение»): следующие головы читают его ЦЕЛИКОМ (reload::load_one_block), голова достоверность не
+//! поднимает никогда (ревью слияния «357 × 339», Б1).
 //! Кто вызывает: pools/per_block.rs (on_head).
 //! От чего зависит: load_lb.rs, load_batch.rs (batch), load_smardex.rs (block_secs),
 //! node/call.rs, node/multicall.rs, listen_log.rs, reload.rs (load_one_block, skip_same), lb_head.rs (ревью 332),
-//! settle.rs (pending), settle_head.rs (head_failed — решение 357), pool_fail.rs (block_failed — решение 339).
+//! settle.rs (pending), settle_head.rs (head_failed, needs_full — решение 357), pool_fail.rs (block_failed — решение 339).
 //! Задача t160: при dex.per_block_skip_same неизменившееся состояние пула ядру не шлётся (lb_head::put через
 //! reload::put_new — как reload::put_emit у прочих видов).
 //! Решение 339: не прочитавшийся пул — pool_fail.rs block_failed (причина, пауза повтора при dex.pool_fail_pause_ms);
@@ -44,7 +45,10 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
             .reg
             .get(&f.reference)
             .is_some_and(|e| matches!(e.pool.state, PoolState::LbBin(_)) && e.bins.is_some());
-        if ready {
+        // Решение 357 (ревью слияния, Б1): «нужно полное чтение» (голова не прочиталась — settle_head.rs) — пул
+        // целиком (состояние и все бины полосы); удачное чтение (registry.rs put) снимает отметку. Голова ему
+        // достоверность не вернёт: «равны» не видит неактивных бинов, изменённых пропущенными событиями.
+        if ready && !p.holds.needs_full(&f.reference) {
             items.push(f);
         } else if let Err(why) = reload::load_one_block(p, f, t, block).await? {
             // Решение 339: причина и пауза повтора — pool_fail.rs (не задана dex.pool_fail_pause_ms — только valid).
@@ -93,7 +97,7 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
         let (d, bin) = match st {
             Ok(x) => x,
             Err(why) => {
-                // Решение 357: недостоверен; вернёт удачная голова (lb_head::put), если сняла она.
+                // Решение 357 (ревью слияния, Б1): недостоверен; вернёт ТОЛЬКО полное чтение (следующие головы).
                 p.holds.head_failed(&p.reg, &f.reference);
                 // Решение 339: причина и пауза повтора (не задана dex.pool_fail_pause_ms — только valid = false).
                 super::pool_fail::block_failed(p, f, &why).await;

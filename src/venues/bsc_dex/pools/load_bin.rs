@@ -1,9 +1,9 @@
 //! Файл: venues/bsc_dex/pools/load_bin.rs
 //! Что делает: чтение состояния пула Infinity Bin на заданном блоке: slot0 (активный бин, комиссии) и резервы
 //! непустых бинов в обе стороны от активного, пока стоимость прочитанных бинов в каждой стороне не достигнет
-//! dex.bin_depth_usd (или бины не кончатся). Плюс перечитывание отдельных бинов после событий (bin; решение 325 —
-//! many: пачкой, pools/reread_bins.rs).
-//! Кто вызывает: pools/load.rs, pools/events_bin.rs, pools/reread_bins.rs.
+//! dex.bin_depth_usd (или бины не кончатся). Плюс отдельные бины (bin, many — бины событий читает settle_read.rs вместе
+//! с активным бином, решение 357).
+//! Кто вызывает: pools/load.rs, pools/events_bin.rs.
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_v4.rs, bins.rs, math/bin_price.rs, tokens.rs, num.rs.
 //! Настройки: dex.bin_depth_usd [bsc_dex].
 //!

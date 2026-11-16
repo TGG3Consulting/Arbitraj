@@ -5,6 +5,8 @@
 //! core/presence.rs), монеты с найденными, но ещё не прочитанными пулами DEX — из событий адаптеров.
 //! Данные, которые площадка объявила недостоверными, удаляются: по ним сделок нет.
 //! Решение 317 (доработка): у стакана — отметки последнего изменения содержимого (book_still.rs), не время кадра.
+//! Отметки считаются только при включённом признаке marks_on (book_marks_on.rs: signal.dex_event_skip_hold или
+//! log.signal_hold); выключен — на кадр стакана одна проверка признака, отметок нет (нагрузка как до решения 317).
 //! Чтение состояния (стаканы, пулы, пары, проверки) — market_read.rs.
 //! Кто вызывает: core/engine.rs (применяет события), registry.rs, signal.rs, prices.rs, позже executor.rs.
 //! От чего зависит: core/types, gateway/events.
@@ -30,6 +32,8 @@ pub struct MarketState {
     /// Решение 317 (доработка): когда последний раз менялось СОДЕРЖИМОЕ стакана (по префиксам уровней, book_still.rs);
     /// кадр с тем же содержимым отметки не двигает. Ключ — как у books.
     pub(super) book_marks: HashMap<(VenueId, String), super::book_still::BookMarks>,
+    /// Решение 317 (ревью 16.11): отметки нужны (book_marks_on.rs). Выключено — note не вызывается, book_marks пуст.
+    pub(super) marks_on: bool,
     pub(super) pools: HashMap<(VenueId, PoolRef), Pool>,
     /// Индекс пулов по паре токенов (решение 129): (площадка, меньший адрес, больший адрес) → пулы. Справочник монет
     /// искал пулы пары проходом ВСЕХ пулов на каждую монету и промежуточную (O(монеты × пулы)) — у MEXC это тысячи ×
@@ -72,16 +76,37 @@ impl MarketState {
         match ev {
             MarketEvent::Book(b) => {
                 let key = (b.venue.clone(), b.asset.ticker.clone());
-                let (venue, ticker) = key.clone();
-                self.book_marks
-                    .entry(key.clone())
-                    .or_default()
-                    .note(self.books.get(&key), &b);
-                let first = self.books.insert(key, b).is_none();
-                Touched::Book {
-                    venue,
-                    ticker,
-                    first,
+                // Один поиск стакана (get_mut + замена; нет — вставка). Отметки — только при включённом признаке.
+                match self.books.get_mut(&key) {
+                    Some(slot) => {
+                        if self.marks_on {
+                            super::book_marks_on::note(
+                                &mut self.book_marks,
+                                &key,
+                                Some(&*slot),
+                                &b,
+                            );
+                        }
+                        *slot = b;
+                        let (venue, ticker) = key;
+                        Touched::Book {
+                            venue,
+                            ticker,
+                            first: false,
+                        }
+                    }
+                    None => {
+                        if self.marks_on {
+                            super::book_marks_on::note(&mut self.book_marks, &key, None, &b);
+                        }
+                        let (venue, ticker) = key.clone();
+                        self.books.insert(key, b);
+                        Touched::Book {
+                            venue,
+                            ticker,
+                            first: true,
+                        }
+                    }
                 }
             }
             MarketEvent::Pool(p) => {

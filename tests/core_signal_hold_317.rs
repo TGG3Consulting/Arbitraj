@@ -178,6 +178,14 @@ fn cake(received: DateTime<Utc>) -> OrderBook {
         .unwrap()
 }
 
+/// Состояние рынка с включёнными отметками стакана (решение 317, ревью 16.11: признак book_marks_on.rs — при
+/// signal.dex_event_skip_hold или log.signal_hold).
+fn marked() -> MarketState {
+    let mut m = MarketState::default();
+    m.set_book_marks(true);
+    m
+}
+
 /// С какого момента стоят покупатели (продажа на бирже) на объёме qty.
 fn since(m: &MarketState, qty: &str) -> Option<DateTime<Utc>> {
     m.book_still_since(&VenueId("bingx".into()), "CAKE", Side::Sell, d(qty))
@@ -185,7 +193,7 @@ fn since(m: &MarketState, qty: &str) -> Option<DateTime<Utc>> {
 
 #[test]
 fn same_book_frame_does_not_move_mark() {
-    let mut m = MarketState::default();
+    let mut m = marked();
     let t0 = Utc::now();
     m.apply(MarketEvent::Book(cake(t0)));
     // Снимок с тем же содержимым через 400 и 900 мс (снимки потоком) — отметка остаётся t0.
@@ -200,7 +208,7 @@ fn same_book_frame_does_not_move_mark() {
 fn deep_level_change_moves_mark_only_for_volume_reaching_it() {
     // Покупатели записи: 12.903, 1089.137, 849.992, 1054.736, 2191.916, 1229.615, … — объём 3000 покрывают первые 4
     // уровня, 6000 — 6. Меняется количество 5-го уровня (индекс 4).
-    let mut m = MarketState::default();
+    let mut m = marked();
     let t0 = Utc::now();
     m.apply(MarketEvent::Book(cake(t0)));
     let mut b = cake(at(t0, 400));
@@ -217,7 +225,7 @@ fn deep_level_change_moves_mark_only_for_volume_reaching_it() {
 fn blinking_best_level_moves_mark() {
     // Появился новый лучший уровень покупателей (призрачный) — отметка с этого кадра для любого объёма: через 100 мс
     // стакан «стоит» 100 мс < signal.min_hold_ms → обычное удержание.
-    let mut m = MarketState::default();
+    let mut m = marked();
     let t0 = Utc::now();
     m.apply(MarketEvent::Book(cake(t0)));
     let mut b = cake(at(t0, 1000));
@@ -246,7 +254,7 @@ fn blinking_best_level_moves_mark() {
 
 #[test]
 fn invalidated_restarts_mark() {
-    let mut m = MarketState::default();
+    let mut m = marked();
     let t0 = Utc::now();
     m.apply(MarketEvent::Book(cake(t0)));
     m.apply(MarketEvent::Invalidated {

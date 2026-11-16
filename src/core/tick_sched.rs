@@ -48,7 +48,8 @@ pub(super) fn schedule_set(core: &Core, asset: Asset, venues: HashSet<VenueId>) 
 
 /// Тик в план: новая задача, повтор или пробуждение спящей задачи (решение 322). Ошибок нет.
 fn put(core: &Core, asset: Asset, venues: HashSet<VenueId>, pool: Option<PoolMark>) {
-    let pool_now = pool.is_some() && cfg(core).pool_now;
+    // Ревью Н1: на тик нужна только signal.pool_event_now — и только у события пула.
+    let pool_now = pool.is_some() && pool_now(core);
     let put = lk(&core.inner.ticking).put(&asset, venues, pool, pool_now, Instant::now());
     match put {
         Put::Queued => {}
@@ -95,7 +96,9 @@ async fn task(core: Core, asset: Asset, mut run: Run) {
 }
 
 /// Настройки плана: signal.eval_min_interval_ms (решение 109; не задан или 0 — None), signal.pool_event_now (не задана —
-/// нет), signal.pool_event_min_interval_ms (решение 322; не задан или 0 — None). Ошибок нет.
+/// нет), signal.pool_event_min_interval_ms (решение 322; не задан или 0 — None). Ревью Н1: ограничитель читается только
+/// при signal.pool_event_now = да — без неё план его не использует (tick_plan.rs next: early и first — только при
+/// pool_now), поведение то же. Ошибок нет.
 fn cfg(core: &Core) -> Cfg {
     let s = &core.inner.deps.settings;
     let ms = |name: &str| {
@@ -104,11 +107,23 @@ fn cfg(core: &Core) -> Cfg {
             .filter(|ms| *ms > 0)
             .map(Duration::from_millis)
     };
+    let pool_now = pool_now(core);
     Cfg {
         min: ms("signal.eval_min_interval_ms"),
-        pool_now: s
-            .flag("signal.pool_event_now", At::default())
-            .unwrap_or(false),
-        pool_min: ms("signal.pool_event_min_interval_ms"),
+        pool_now,
+        pool_min: if pool_now {
+            ms("signal.pool_event_min_interval_ms")
+        } else {
+            None
+        },
     }
+}
+
+/// signal.pool_event_now (решение 322; не задана — нет). Ошибок нет.
+fn pool_now(core: &Core) -> bool {
+    core.inner
+        .deps
+        .settings
+        .flag("signal.pool_event_now", At::default())
+        .unwrap_or(false)
 }

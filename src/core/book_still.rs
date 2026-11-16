@@ -8,7 +8,8 @@
 //! с отметки префикса n. Адаптеры шлют стакан целиком (снимок потоком — MEXC, решение 109) — сравнение содержимого
 //! отличает «тот же стакан» от «изменился» без знания площадки.
 //!
-//! Кто вызывает: core/market_state.rs (note на каждый стакан), core/market_read.rs (book_still_since).
+//! Кто вызывает: core/book_marks_on.rs note (из market_state.rs на каждый стакан — только при включённом признаке
+//! отметок), core/market_read.rs (book_still_since).
 //! От чего зависит: core/types (OrderBook, PriceLevel, Side), chrono, rust_decimal.
 //! Настройки: нет.
 

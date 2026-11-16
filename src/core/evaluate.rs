@@ -33,7 +33,7 @@ pub async fn evaluate(
     started: chrono::DateTime<Utc>,
 ) {
     let venues = &run.venues;
-    let (dirs, ref_price, waiting) = {
+    let (dirs, ref_price, waiting, marks_on) = {
         // Решение 131: место монеты — из карты пересборки (ticker_index.rs), проход справочника — только если
         // карта ещё от прежнего справочника.
         let coins = rd(&core.inner.coins);
@@ -41,6 +41,8 @@ pub async fn evaluate(
             return;
         };
         let market = rd(&core.inner.market);
+        // Решение 317 (ревью 16.11): отметки стакана включены (book_marks_on.rs) — иначе «сколько стоит» не считается.
+        let marks_on = market.book_marks_on();
         let ref_price = entry
             .presence
             .iter()
@@ -67,7 +69,7 @@ pub async fn evaluate(
                 .unwrap_or_else(|| "проверка ещё не выполнена".into());
             format!("налоги не проверены: {why}")
         });
-        (dirs, ref_price, waiting)
+        (dirs, ref_price, waiting, marks_on)
     };
     let params = Params::read(&core.inner.deps.settings);
     for dir in dirs {
@@ -96,8 +98,9 @@ pub async fn evaluate(
             ctx.pool = run.pool;
         }
         ctx.started = Some(started);
-        // Решение 317 (доработка): сколько стоят уровни стакана биржи на объёме сравнения — из состояния рынка.
-        if let Ok(p) = &prices {
+        // Решение 317 (доработка): сколько стоят уровни стакана биржи на объёме сравнения — из состояния рынка; только
+        // при включённых отметках (signal.dex_event_skip_hold или log.signal_hold).
+        if let (Ok(p), true) = (&prices, marks_on) {
             ctx.cex_still_ms = super::signal_ctx::cex_still_ms(core, &dir, &ctx, p.qty, now);
         }
         let mut view = lk(&core.inner.signals).update_with(&dir, prices, &params, now, &ctx);

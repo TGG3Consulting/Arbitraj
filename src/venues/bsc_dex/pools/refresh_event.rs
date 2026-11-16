@@ -5,10 +5,12 @@
 //! общее время, каждое обращение к узлу («ожидание в очереди / сам запрос», node/req_trail.rs), слова карты, сколько
 //! сообщений ждало в канале сессии к концу. Не задана / нет — тот же вызов load::refresh без замера.
 //! Запись журнала «полоса цены вышла за прочитанные слова битмапа» (off_map) — здесь же, текст прежний.
+//! Решение 314: чтение идёт классом очереди узла dex.event_refresh_urgency (refresh_urgency.rs) — только на время
+//! чтения; не задана — класс прежний.
 //! Кто вызывает: pools/listen_log.rs (ветки off_map и Refresh).
 //! От чего зависит: load.rs (refresh), refresh_timing.rs, node/req_trail.rs, gateway/urgency.rs (класс для записи),
 //! group.rs (Msg — канал сессии).
-//! Настройки: log.pool_refresh_timing (через refresh_timing.rs).
+//! Настройки: log.pool_refresh_timing (через refresh_timing.rs), dex.event_refresh_urgency (через refresh_urgency.rs).
 
 use std::time::Instant;
 
@@ -23,6 +25,7 @@ use super::group::Msg;
 use super::listen::Pools;
 use super::load;
 use super::refresh_timing::{self, Rec};
+use super::refresh_urgency;
 use super::registry::Entry;
 
 /// Что вызвало перечитывание.
@@ -66,12 +69,14 @@ pub async fn off_map(
 /// Перечитывает пул по событию на блоке `at`. Принимает: окружение пачки, запись пула, блок чтения, событие.
 /// Возвращает: обновлённую запись (valid = true). Ошибки: как у load::refresh.
 pub async fn refresh(p: &Pools, e: &Entry, at: u64, ev: &Event<'_>) -> GatewayResult<Entry> {
+    // Решение 314: класс очереди узла — только на время этого чтения (refresh_urgency.rs); не задан — как раньше.
+    let class = refresh_urgency::class(&p.ctx);
     if !refresh_timing::on(&p.ctx) {
-        return read(p, e, at).await;
+        return refresh_urgency::with(class, read(p, e, at)).await;
     }
     let trail = Trail::default();
     let t0 = Instant::now();
-    let res = req_trail::scope(trail.clone(), read(p, e, at)).await;
+    let res = req_trail::scope(trail.clone(), refresh_urgency::with(class, read(p, e, at))).await;
     let rec = Rec {
         entry: e,
         cause: ev.cause,
@@ -79,7 +84,7 @@ pub async fn refresh(p: &Pools, e: &Entry, at: u64, ev: &Event<'_>) -> GatewayRe
         at,
         total: t0.elapsed(),
         steps: trail.take(),
-        class: format!("{:?}", urgency::current()),
+        class: format!("{:?}", class.unwrap_or_else(urgency::current)),
         words: res
             .as_ref()
             .ok()

@@ -10,7 +10,8 @@
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, load_lb_bins.rs (ревью 290), registry.rs,
 //! stale_read.rs (решение 298), refresh_event.rs (перечитывание по событию; решение 313 — замер), lost_events.rs.
 //! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs).
-//! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s).
+//! Решение 314: перечитывания по событию (off_map, Refresh, Bins) — классом dex.event_refresh_urgency (refresh_urgency.rs).
+//! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s, dex.event_refresh_urgency).
 //!
 //! removed: true при реорге — execution-apis subscribe.yaml#L1-L60; порядок применения — (blockNumber, logIndex),
 //! как присылает узел (research/flow/bsc_dex.md, раздел 4).
@@ -36,6 +37,7 @@ use super::events::{self, Applied};
 use super::group::Msg;
 use super::listen::{End, Pools};
 use super::refresh_event::{self, Event};
+use super::refresh_urgency;
 use super::registry::Entry;
 use super::{load_bin, load_lb_bins};
 
@@ -104,7 +106,10 @@ pub async fn on_log(
             }
             _ => Ok(()),
         },
-        Applied::Bins(ids) => reread_bins(p, &r, &ids, block).await,
+        // Решение 314: бины на блоке события — классом dex.event_refresh_urgency (не задана — как раньше).
+        Applied::Bins(ids) => {
+            refresh_urgency::urgent(&p.ctx, reread_bins(p, &r, &ids, block)).await
+        }
         Applied::Refresh(why) => {
             p.ctx
                 .log(
@@ -119,7 +124,7 @@ pub async fn on_log(
                 .await;
             // Реорг: читаем текущий блок; иначе — конец блока события (поздние события блока уже учтены в нём).
             let at = if log.removed {
-                latest(p).await
+                refresh_urgency::urgent(&p.ctx, latest(p)).await
             } else {
                 Ok(block)
             };

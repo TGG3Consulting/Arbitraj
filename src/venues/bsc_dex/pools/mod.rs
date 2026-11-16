@@ -166,6 +166,7 @@ pub mod per_block_lb;
 pub mod progress;
 pub mod refresh_event;
 pub mod refresh_timing;
+pub mod refresh_urgency;
 pub mod registry;
 pub mod registry_frozen;
 pub mod registry_index;

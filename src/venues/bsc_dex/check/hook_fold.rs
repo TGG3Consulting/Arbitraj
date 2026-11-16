@@ -96,7 +96,10 @@ pub fn merge_impact(old: &HookImpact, new: &HookImpact) -> HookImpact {
 /// Что делает: итог хранилища после удачной пробы перед сделкой (см. шапку). Принимает: прежний итог, итог пробы.
 /// Возвращает: новый итог; None — без лесенки, не писать. Ошибок нет.
 pub fn on_success(old: &HookImpact, new: &HookImpact) -> Option<HookImpact> {
-    (!old.buy.is_empty() || !old.sell.is_empty()).then(|| merge_impact(old, new))
+    // Ревью 4 (Н5): итог не изменился (новой точки нет) — не писать: эпоха котировки и короб допуска не сбрасываются.
+    (!old.buy.is_empty() || !old.sell.is_empty())
+        .then(|| merge_impact(old, new))
+        .filter(|m| m != old)
 }
 
 /// Что делает: итог хранилища после отказа пробы перед сделкой на сумме x (см. шапку). Принимает: прежний итог,

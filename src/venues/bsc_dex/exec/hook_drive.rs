@@ -161,6 +161,8 @@ pub struct Drive {
     probes: u64,
     limit: u64,
     lifted: bool,
+    /// Ревью 4 (Б5): на каком числе проб подъём уже ставился — второй подъём без новой пробы не ставится.
+    lift_used: Option<u64>,
 }
 
 impl Drive {
@@ -170,6 +172,7 @@ impl Drive {
             probes: 0,
             limit: points.unwrap_or(2).max(2),
             lifted: false,
+            lift_used: None,
         }
     }
 
@@ -180,6 +183,12 @@ impl Drive {
 
     /// Что делает: следующий шаг по входам пути после последнего расчёта (см. шапку). Принимает: факты сделки
     /// (подъём ставится и снимается здесь), входы шагов с крючком. Возвращает: Next. Ошибок нет.
+    /// Ревью 4 (Б5) — конечность: Done и Fail завершают; Probe увеличивает probes (никогда больше limit: перед каждой
+    /// пробой после первой проверено probes < limit); Eval бывает только (а) при постановке подъёма — не больше одного
+    /// раза на одно значение probes (lift_used), (б) сразу после расчёта с подъёмом (lifted снимается). Значит, между
+    /// двумя ростами probes не больше трёх вызовов, а всего — не больше 3 · (limit + 1) + 1: цикл конечен. Подъём уже
+    /// был на этом числе проб, а вход всё равно не покрыт (пул сдвинулся между расчётами) — проба сразу на
+    /// непокрытых входах без подъёма.
     pub fn next(&mut self, th: &mut TradeHooks, wants: &[Want]) -> Next {
         if self.lifted {
             self.lifted = false;
@@ -206,6 +215,11 @@ impl Drive {
                 self.limit
             ));
         }
+        if self.lift_used == Some(self.probes) {
+            self.probes += 1;
+            return Next::Probe(need);
+        }
+        self.lift_used = Some(self.probes);
         th.lift = need
             .iter()
             .map(|w| (w.pool.clone(), w.buy, th.lift_of(w)))

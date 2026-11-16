@@ -116,7 +116,12 @@ fn admit(
     };
     // Решение 363: поколение настроек — до допуска (запись помнит то, на чём допуск посчитан).
     let settings_gen = q.ctx.settings.generation();
-    let hook = q.checks.hook_mark(&e.pool.reference);
+    // Ревью 4 (Н6): отметка крючка — только у пулов с крючком B/C (у остальных замок итогов не берётся).
+    let hook = if super::super::check::quoter_amount::hooked(e) {
+        q.checks.hook_mark(&e.pool.reference)
+    } else {
+        (None, None)
+    };
     let hit = a
         .map
         .read()

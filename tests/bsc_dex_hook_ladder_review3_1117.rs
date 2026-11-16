@@ -11,6 +11,7 @@
 //! 2. Н-а — точка пробы перед сделкой (check/hook_store.rs fold_head) не продвигает блок записанного замера: полный
 //!    замер цикла на блоке между ними принимается (put_head); fold_head, который ничего не пишет, не сбрасывает
 //!    эпоху котировки (решение 352, Checks::generation).
+//! 4. Ревью 4 Б5 — Drive конечен: сценарий ревью (лесенка хранилища, сдвиг пула) завершается за две пробы.
 //! 3. Б4 — отказ квотера на точке (check/hook_fold.rs judge_side): эта точка и большие суммы стороны не измерены,
 //!    меньшие работают; не осталось точек — «не прошла» только сторона; пул целиком — обе (check/hooks_probe.rs
 //!    settled). Текст отказа — квотер записи 16.11 (BLESS 0x6e398c95, NotEnoughLiquidity) — в tests/
@@ -220,4 +221,66 @@ fn b4_refusal_cuts_point_and_above_only() {
         ..Default::default()
     };
     assert!(matches!(settled(Ok(Ok(both)), &plan), Ok(Err(_))));
+}
+
+/// Ревью 4 (Б5): сценарий ревью на суммах записи GAIB (единица — вход точки 1 USDT записи): лесенка хранилища
+/// 45 USDT → 0,30 %, 100 USDT → 0,70 % (значения сценария ревью); проба на 45,23 USDT даёт 0,40 %; пул сдвинулся —
+/// расчёт без подъёма даёт вход 44,98 (ближайшая точка ≥ — 45 хранилища, не покрыто), с подъёмом — 45,02 (покрыто
+/// точкой сделки 45,23). Старый Drive чередовал «подъём → покрыто → пересчёт → не покрыто → подъём» без счёта кругов;
+/// новый — после подъёма на том же числе проб пробует непокрытый вход сразу. Число шагов теста ограничено.
+#[test]
+fn b5_drive_is_finite() {
+    let (_, buy, _, r) = gaib();
+    let unit = buy[0].amount_in;
+    let at = |c: u64| unit * U256::from(c) / U256::from(100u64);
+    let pct = |s: &str| Decimal::from_str(s).expect("%");
+    let step = |c: u64, p: &str| HookStep {
+        amount_in: at(c),
+        usd: Decimal::ZERO,
+        pct: pct(p),
+        quoter_out: None,
+    };
+    let stored = vec![step(4500, "0.30"), step(10000, "0.70")];
+    let flat = pct("0.70");
+    let (mut drive, mut th) = (Drive::new(None), TradeHooks::default());
+    let mut done = false;
+    for _ in 0..20 {
+        let (steps, applied, fact) = th.curve(&r, true, &stored, flat);
+        let lifted = !th.fresh.is_empty() && !fact;
+        let x = match (th.fresh.len(), lifted) {
+            (0, _) => at(4523),
+            (_, true) => at(4502),
+            (_, false) => at(4498),
+        };
+        let w = Want {
+            pool: r.clone(),
+            buy: true,
+            x,
+            applied,
+            steps,
+        };
+        match drive.next(&mut th, std::slice::from_ref(&w)) {
+            Next::Done => {
+                done = true;
+                break;
+            }
+            Next::Eval => {}
+            Next::Probe(need) => {
+                for n in need {
+                    th.fresh.push(Fresh {
+                        pool: r.clone(),
+                        buy: true,
+                        step: HookStep {
+                            amount_in: n.x,
+                            ..step(0, "0.40")
+                        },
+                        est: n.applied,
+                    });
+                }
+            }
+            Next::Fail(why) => panic!("сделка потеряна: {why}"),
+        }
+    }
+    assert!(done, "Drive не завершился за 20 шагов");
+    assert_eq!(drive.probes(), 2);
 }

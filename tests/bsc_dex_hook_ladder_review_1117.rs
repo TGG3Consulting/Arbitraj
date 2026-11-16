@@ -162,8 +162,17 @@ fn b2_failure_cuts_side_only() {
     };
     assert!(on_failure(&flat, true, buy[2].amount_in, "откат".into()).is_none());
     assert!(on_success(&flat, &old).is_none());
-    let merged = on_success(&old, &old).expect("лесенка");
-    assert_eq!(merged.buy, buy);
+    // Ревью 4 Н5: проба без новой точки итог не меняет — не пишется; новая точка (100 USDT в лесенку 1/20) — пишется.
+    assert!(on_success(&old, &old).is_none());
+    let short = HookImpact {
+        buy: buy[..2].to_vec(),
+        ..old.clone()
+    };
+    let top = HookImpact {
+        buy: vec![buy[2].clone()],
+        ..Default::default()
+    };
+    assert_eq!(on_success(&short, &top).expect("лесенка").buy, buy);
 }
 
 #[test]

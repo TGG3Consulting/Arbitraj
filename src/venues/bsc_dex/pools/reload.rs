@@ -115,11 +115,12 @@ pub async fn load_one(
     block: u64,
 ) -> Result<Result<(), GatewayError>, End> {
     let res = match p.reg.get(&found.reference) {
-        Some(e) => load::refresh(&p.ctx, &p.tokens, &e, block).await,
+        Some(e) => load::refresh(&p.ctx, &p.tokens, &p.reg, &e, block).await,
         None => {
             load::entry(
                 &p.ctx,
                 &p.tokens,
+                &p.reg,
                 found,
                 ticker,
                 listen_log::found_usdt(found),

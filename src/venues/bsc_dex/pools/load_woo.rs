@@ -8,7 +8,7 @@
 //! Кто вызывает: pools/load.rs (ветка Proto::WooPP); перечитывается на каждом новом блоке (pools/session.rs) — у
 //! оракула нет событий.
 //! От чего зависит: ctx.rs, node/call.rs, node/rpc.rs, abi_woo.rs.
-//! Настройки: dex.oracle, dex.pool_implementation, dex.pmm_ladder_usd [DEX].
+//! Настройки: dex.oracle, dex.pool_implementation, dex.pmm_ladder_usd, dex.pmm_ladder_counter [DEX].
 //!
 //! Источники: abi_woo.rs (IWooPPV2.sol, IWooracleV2_2.sol woonetwork/WooPoolV2 f73a0f64; EIP-1967);
 //! eth_getStorageAt — execution-apis 16caee27 src/eth/state.yaml.
@@ -26,13 +26,15 @@ use super::super::pools::families::Family;
 use super::super::tokens::Tokens;
 use super::abi_woo::{IWooPP, IWooracle, implementation_slot};
 use super::load_woo_ladder;
+use super::registry::Registry;
 
-/// Состояние пары на блоке. Принимает: окружение, токены, вид, общий контракт, базовую монету, пару (token0, token1),
-/// тег (лесенка — только у пары с USDT площадки, решение 297: load_woo_ladder.rs usdt_quote). Ошибки: узел, ответ не по ABI, не задана dex.oracle, оракул пула не тот (InvalidAddress).
+/// Состояние пары на блоке. Принимает: окружение, токены, реестр (курс встречного к USDT для лесенки, решение 306), вид, общий контракт, базовую монету, пару (token0, token1),
+/// тег (лесенка — у пары с USDT площадки, решение 297; при dex.pmm_ladder_counter = да — и не с USDT, решение 306: ladder_counter.rs). Ошибки: узел, ответ не по ABI, не задана dex.oracle, оракул пула не тот (InvalidAddress).
 #[allow(clippy::too_many_arguments)]
 pub async fn load(
     ctx: &Ctx,
     tokens: &Tokens,
+    reg: &Registry,
     f: &Family,
     pool: Address,
     coin: Address,
@@ -94,7 +96,7 @@ pub async fn load(
     let live = !paused && feasible && pinned == Some(implementation);
     let quote = if pair.0 == coin { pair.1 } else { pair.0 };
     let (ladder_quote_in, ladder_base_in) = if live {
-        load_woo_ladder::read(ctx, tokens, f.id, pool, coin, quote, tag).await?
+        load_woo_ladder::read(ctx, tokens, reg, f.id, pool, coin, quote, tag).await?
     } else {
         (Vec::new(), Vec::new())
     };

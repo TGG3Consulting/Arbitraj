@@ -370,9 +370,10 @@ impl Venue for BscDex {
         // Ревью 273: пулы Solidly с пределом цены газа фабрики ниже этой цены — не в циклы (quote/select.rs plan_gas).
         let mut qc = q.clone();
         qc.plan_gas = Some(gas);
+        // Решение 301 (дополнение — стек): работа — в кучу (quote/cpu.rs run принимает только Pin<Box<F>>).
         let signals = quote::cpu::run(
             &q.ctx,
-            async move { quote::cycle_scan::scan(&qc, gas).await },
+            Box::pin(async move { quote::cycle_scan::scan(&qc, gas).await }),
         )
         .await?;
         let venue = self.id();

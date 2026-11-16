@@ -8,11 +8,14 @@
 //! DEX не подключена (families::classify) — не ищется, причина в заметках прохода. Только сборка вызовов и разбор
 //! ответа — без сети.
 //! Кто вызывает: pools/factory_scan.rs.
-//! От чего зависит: families.rs (all, classify, Proto), abi_v2v3.rs (IV2Factory, IV3Factory), ctx.rs.
+//! От чего зависит: families.rs (all, classify, Proto), abi_v2v3.rs (IV2Factory, IV3Factory), ctx.rs, multi_pair.rs
+//! (woo_pairs), woo_quote.rs (quote_of).
 //! Maverick V2 (решение 122 F) — lookup(tokenA, tokenB, 0, dex.pair_lookup_max) (не задана — по фабрике не ищется).
 //! PancakeSwap Stable / Lista: пара с обёрткой BNB спрашивается и с меткой 0xEeee… (пул с нативным BNB фабрика хранит
 //! под меткой; решение «122 X (нативный BNB в стейблсвапах)», stable_native.rs) — найденный пул записан с обёрткой.
-//! Настройки: dex.factory, dex.v3_fee_tiers, dex.cl_tick_spacings, dex.pair_lookup_max [DEX]; через classify — dex.kind, dex.pool_enabled и адреса dex.*.
+//! WooFi (решение 305, при dex.multi_pair = да): state(монета) оракула — только со встречным = quoteToken() контракта
+//! dex.pmm_pool (woo_quote.rs); не задана / нет — со всеми встречными, как раньше.
+//! Настройки: dex.factory, dex.v3_fee_tiers, dex.cl_tick_spacings, dex.pair_lookup_max, dex.pmm_pool, dex.multi_pair [DEX]; через classify — dex.kind, dex.pool_enabled и адреса dex.*.
 //!
 //! Сигнатуры — официальные интерфейсы фабрик (abi_v2v3.rs):
 //! getPair(address,address) returns (address) — https://github.com/Uniswap/v2-core/blob/6a9e7c97860676e0992f22a49665760444c1cdf5/contracts/interfaces/IUniswapV2Factory.sol#L9
@@ -32,7 +35,9 @@ use super::super::ctx::Ctx;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::factory_ask::{Q, encode_q};
 use super::families::{self, Family, Proto};
+use super::multi_pair;
 use super::stable_native;
+use super::woo_quote::{self, WooQuotes};
 
 /// Предел uint24 (комиссия V3 в getPool) — из ABI: uint24 = 24 бита.
 const U24_MAX: u32 = (1 << 24) - 1;
@@ -55,9 +60,14 @@ pub struct Plan {
 }
 
 /// Собирает вопросы по всем подключённым DEX вида V2 / V3 / Solidly / Algebra / DODO. Принимает: монеты подписки, встречные токены (USDT и
-/// промежуточные). Возвращает: план. Ошибки: Internal (dex.factory не читается у подключённой DEX — не бывает
-/// после classify, но не молчим).
-pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<Plan> {
+/// промежуточные), котируемые монеты контрактов WooFi с цепи (woo_quote.rs read; решение 305). Возвращает: план.
+/// Ошибки: Internal (dex.factory не читается у подключённой DEX — не бывает после classify, но не молчим).
+pub fn plan(
+    ctx: &Ctx,
+    coins: &[Address],
+    quotes: &[Address],
+    woo: &WooQuotes,
+) -> GatewayResult<Plan> {
     let mut out = Plan::default();
     for f in families::all(ctx) {
         let v3 = matches!(f.proto, Proto::PancakeV3 | Proto::UniswapV3);
@@ -129,11 +139,38 @@ pub fn plan(ctx: &Ctx, coins: &[Address], quotes: &[Address]) -> GatewayResult<P
                 }
             }
         }
+        // Решение 305 (dex.multi_pair = да у WooFi, multi_pair::woo_pairs): пара WooFi — (монета, quoteToken() КОНТРАКТА,
+        // IWooPPV2.sol L67), state(монета) спрашивается только с этим встречным. Не прочитан (узел, откат) или не среди
+        // встречных токенов подписки — WooFi этого прохода не ищется. Режим не включён — со всеми встречными, как раньше.
+        let woo_q = if multi_pair::woo_pairs(ctx, f) {
+            match woo_quote::quote_of(woo, f.id, ctx.dex_addr("dex.pmm_pool", f.id).ok()) {
+                Some(q) if quotes.contains(&q) => Some(q),
+                Some(q) => {
+                    out.notes.push(format!(
+                        "{}: quoteToken() контракта {q:#x} — не среди встречных токенов подписки — пары не ищутся",
+                        f.id
+                    ));
+                    continue;
+                }
+                None => {
+                    out.notes.push(format!(
+                        "{}: quoteToken() контракта dex.pmm_pool не прочитан — пары не ищутся",
+                        f.id
+                    ));
+                    continue;
+                }
+            }
+        } else {
+            None
+        };
         let before = out.calls.len();
         let stable_u = matches!(f.proto, Proto::PancakeStable | Proto::ListaStable);
         let wrapped = stable_native::wrapped(ctx);
         for &coin in coins {
-            for &quote in quotes.iter().filter(|q| **q != coin) {
+            for &quote in quotes
+                .iter()
+                .filter(|q| **q != coin && woo_q.is_none_or(|w| **q == w))
+            {
                 // Вопрос с той парой, что спрашиваем, и (стейблсвап Pancake / Lista) — с меткой BNB вместо обёртки.
                 let alt = stable_u
                     .then(|| stable_native::registry_pair(coin, quote, wrapped))

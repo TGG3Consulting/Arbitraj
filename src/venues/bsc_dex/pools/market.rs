@@ -79,17 +79,23 @@ pub async fn subscribe(
     // Поиск по фабрикам на своём узле (решение 121, C3) — вторая задача справочника, тот же канал «монета обновлена».
     let (refresh, dir_rx) = index::begin(&p.ctx, &all, usdt, &mid_list).await;
     tasks.extend(refresh);
+    // Решение 305 (ревью В1): режим справочника — по текущим настройкам и тогда, когда проверка при старте (begin → take)
+    // не выполнялась: взятые с ключом не того вида (смена dex.multi_pair) не попадут в найденное. retune идемпотентен.
+    let mode = multi_pair::multi_dex(&p.ctx);
+    p.ctx.index.with(|s| multi_pair::retune(s, &mode));
     let mut found = discover::find_all(&p.ctx, &all, usdt);
     let (via, watches) = market_mids::find(&p.ctx, &coins, &mid_list);
     let mut seen: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
     found.extend(via.into_iter().filter(|f| seen.insert(f.reference.clone())));
     let is_mid = |a: &Address| mid_list.iter().any(|m| m.address == *a);
+    let known: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
     // Решение 295: запись многомонетного вида, чья ссылка не совпадает с режимом dex.multi_pair (сменили на лету),
-    // снимается (multi_pair::entry_fits; у прочих видов — всегда да).
+    // снимается (multi_pair::entry_fits); решение 305 (ревью В1): запись WooFi — если её пары нет среди найденных
+    // (после «да → нет»); у прочих видов — всегда да.
     p.reg.retain(|e| {
         ((e.usdt == usdt && all.contains_key(&e.coin))
             || (is_mid(&e.usdt) && coins.contains_key(&e.coin) && e.coin != e.usdt))
-            && multi_pair::entry_fits(&p.ctx, e)
+            && multi_pair::entry_fits(&p.ctx, e, &known)
     });
     let msg = format!(
         "DEX: пулов из справочника (проверены на узле) с {quote} и промежуточными монетами ({}): {} по {} монетам",
@@ -99,7 +105,6 @@ pub async fn subscribe(
     );
     p.ctx.log(Level::Info, "dex.pool", msg, None).await;
 
-    let known: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
     // Стартовые пачки; налоги монеты проверяются, как только прочитаны её пулы (pools/loading.rs, решение 63).
     let start = chunks(&found, &all, per);
     // Пулы ждут первого чтения — ядро покажет «пулы найдены, загружаются» (решение 61).

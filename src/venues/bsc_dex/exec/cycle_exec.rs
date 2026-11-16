@@ -75,7 +75,7 @@ pub async fn trade(
             let why = "после approve свежий цикл требует нового разрешения исполнителю — своп не отправлен";
             return Err(ctx.err(ErrorCode::QuoteMismatch, why));
         }
-        rebuilt_notice(env, &tr);
+        rebuilt_notice(env, &tr, at.0);
     }
     let (got, gas) = probe(ctx, &c, wallet, at).await?;
     let out = super::super::num::to_decimal(got, dec)

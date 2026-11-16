@@ -6,7 +6,7 @@
 //! Цена провайдера меняется каждым блоком — вид перечитывается на каждом новом блоке (per_block.rs).
 //! Кто вызывает: pools/load.rs (ветка Proto::MetricOmm).
 //! От чего зависит: ctx.rs, node/call.rs, tokens.rs, abi_metric.rs, load_metric_ladder.rs, core/types.
-//! Настройки: dex.pmm_ladder_usd [DEX] (через load_metric_ladder.rs).
+//! Настройки: dex.pmm_ladder_usd, dex.pmm_ladder_counter [DEX] (через load_metric_ladder.rs).
 //!
 //! Подписи — abi_metric.rs (SDK @nradko/metric-omm-sdk-v1@0.4.5 + селекторы в коде пула BSC, tests/data/metric_2026-11-15).
 
@@ -22,15 +22,17 @@ use super::super::tokens::Tokens;
 use super::abi_metric::IMetricOmmPool as P;
 use super::families::Family;
 use super::load_metric_ladder;
+use super::registry::Registry;
 
-/// Состояние пула на блоке. Принимает: окружение, токены, вид, пул, пару записи (по возрастанию), встречный токен
+/// Состояние пула на блоке. Принимает: окружение, токены, реестр (курс встречного к USDT для лесенки, решение 306), вид, пул, пару записи (по возрастанию), встречный токен
 /// записи (Entry.usdt: USDT или промежуточная, решение 52), тег. Монета — сторона пары, не встречный токен (лесенка —
-/// только у пары с USDT площадки, решение 297: load_metric_ladder.rs).
+/// у пары с USDT площадки, решение 297; при dex.pmm_ladder_counter = да — и не с USDT, решение 306).
 /// Ошибки: узел, getImmutables откатился или не по ABI, токены пула — не пара записи.
 #[allow(clippy::too_many_arguments)]
 pub async fn load(
     ctx: &Ctx,
     tokens: &Tokens,
+    reg: &Registry,
     f: &Family,
     pool: Address,
     pair: (Address, Address),
@@ -64,7 +66,7 @@ pub async fn load(
     let coin = if pair.0 == counter { pair.1 } else { pair.0 };
     let quote = if pair.0 == coin { pair.1 } else { pair.0 };
     let (ladder_quote_in, ladder_base_in) = if price.is_some() {
-        load_metric_ladder::read(ctx, tokens, f.id, pool, coin, quote, im.token0, tag).await?
+        load_metric_ladder::read(ctx, tokens, reg, f.id, pool, coin, quote, im.token0, tag).await?
     } else {
         (Vec::new(), Vec::new())
     };

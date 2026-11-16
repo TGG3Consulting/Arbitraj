@@ -139,7 +139,7 @@ pub async fn trade(
             let why = "после approve свежий маршрут требует нового разрешения исполнителю — своп не отправлен";
             return Err(ctx.err(ErrorCode::QuoteMismatch, why));
         }
-        rebuilt_notice(env, &req);
+        rebuilt_notice(env, &req, at.0);
     }
     // Решение 261: «в нашу сторону» — в журнал один раз, по последней подготовке (ревью: после approve — второй раз).
     super::super::quoter_favour::log(ctx, &req, &favour).await;

@@ -8,7 +8,7 @@
 //! Кто вызывает: pools/load.rs (ветки Proto::IziSwap, Proto::BiswapV3).
 //! От чего зависит: ctx.rs, node/call.rs, tokens.rs, abi_izi.rs, load_metric_ladder.rs, quote/virtual_quoter.rs,
 //! core/types.
-//! Настройки: dex.pmm_ladder_usd [DEX] (через load_metric_ladder.rs; не задана — лесенки нет, пул без котировки).
+//! Настройки: dex.pmm_ladder_usd, dex.pmm_ladder_counter [DEX] (через load_metric_ladder.rs; не задана — лесенки нет, пул без котировки).
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
@@ -23,15 +23,17 @@ use super::super::tokens::Tokens;
 use super::abi_izi::{IIziPool as P, IIziState as S};
 use super::families::Family;
 use super::load_metric_ladder::{self, Quoter};
+use super::registry::Registry;
 
-/// Состояние пула на блоке. Принимает: окружение, токены, вид, пул, пару записи (по возрастанию), встречный токен
+/// Состояние пула на блоке. Принимает: окружение, токены, реестр (курс встречного к USDT для лесенки, решение 306), вид, пул, пару записи (по возрастанию), встречный токен
 /// записи (Entry.usdt: USDT или промежуточная, решение 52), тег. Монета — сторона пары, не встречный токен (лесенка —
-/// только у пары с USDT площадки, решение 297: load_metric_ladder.rs). Ошибки: узел, вызов откатился или ответ не
+/// у пары с USDT площадки, решение 297; при dex.pmm_ladder_counter = да — и не с USDT, решение 306). Ошибки: узел, вызов откатился или ответ не
 /// по ABI, токены пула — не пара записи (BadResponse).
 #[allow(clippy::too_many_arguments)]
 pub async fn load(
     ctx: &Ctx,
     tokens: &Tokens,
+    reg: &Registry,
     f: &Family,
     pool: Address,
     pair: (Address, Address),
@@ -69,7 +71,7 @@ pub async fn load(
     let (ladder_quote_in, ladder_base_in) = if sqrt.is_zero() {
         (Vec::new(), Vec::new())
     } else {
-        load_metric_ladder::read_with(ctx, tokens, f.id, pool, coin, quote, x, tag, q).await?
+        load_metric_ladder::read_with(ctx, tokens, reg, f.id, pool, coin, quote, x, tag, q).await?
     };
     Ok(state(pair, coin, sqrt, ladder_quote_in, ladder_base_in))
 }

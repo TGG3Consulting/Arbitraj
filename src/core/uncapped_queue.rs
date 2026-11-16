@@ -20,6 +20,8 @@
 //! От чего зависит: uncapped_permit.rs (место расчёта), uncapped.rs (compute), uncapped_state.rs, uncapped_store.rs, gateway/urgency.rs, settings.
 //! Настройки: uncapped.enabled, uncapped.max_concurrent, uncapped.min_interval_ms, uncapped.queue_max.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
@@ -161,6 +163,14 @@ fn later(core: &Core, key: Key, wait: Duration) {
     });
 }
 
+/// Будущее, которое run ведёт в потоке расчёта (block_on): работа под классом срочности Background. Работа
+/// принимается только из кучи (`Pin<Box<F>>`): размер итога не зависит от размера работы (решение 301, дополнение —
+/// стек; сторож — tests/bsc_dex_quote_cpu_stack.rs). pub — точка входа для тестов-сторожей (боевой вызов — run).
+/// Принимает: работу. Возвращает: будущее с её итогом. Ошибок нет.
+pub fn scoped<F: Future>(work: Pin<Box<F>>) -> impl Future<Output = F::Output> {
+    urgency::scope(Urgency::Background, work)
+}
+
 /// Расчёт работы в потоке блокирующих задач, итог — в хранилище; затем ожидающая работа ключа. Ошибок нет.
 async fn run(core: Core, key: Key, job: Job) {
     let st = &core.inner.uncapped;
@@ -177,10 +187,17 @@ async fn run(core: Core, key: Key, job: Job) {
             let (d, battle, src) = (job.dir.clone(), job.battle.clone(), job.src);
             let r = tokio::task::spawn_blocking(move || {
                 let _held = held;
-                rt.block_on(urgency::scope(
-                    Urgency::Background,
-                    super::uncapped::compute(&c, &d, battle, src),
-                ))
+                // Решение 301 (дополнение — стек): будущее расчёта — сразу в кучу (Box::pin), обёртка признака
+                // (scoped, async fn — хранит и аргумент, и будущее, его содержащее) держит только указатель: стек
+                // потока блокирующих задач (2 МиБ) не несёт расчёт под обёрткой по значению (как quote/cpu.rs run).
+                // В кучу — здесь, а не до spawn_blocking: будущее заимствует c и d замыкания, а перенос до
+                // spawn_blocking требует Send будущего расчёта — по коду не установлено. Одно выделение на расчёт.
+                // Ревью t132 В3: в отладочной сборке будущее сначала создаётся в кадре замыкания и копируется в кучу;
+                // место под него остаётся в кадре на всё время block_on — 11704 байт (замер run 43776529778:
+                // uncapped::compute 11704, под urgency::scope по значению 23440, сейчас scoped 40) из 2 МиБ стека
+                // потока — риск не реален, оставлено так (обоснование — цифра).
+                let work = Box::pin(super::uncapped::compute(&c, &d, battle, src));
+                rt.block_on(scoped(work))
             })
             .await
             .map_err(|e| format!("поток расчёта без потолка прерван: {e}"))

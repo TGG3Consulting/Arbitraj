@@ -34,6 +34,7 @@ use super::load_batch_cl as cl;
 use super::load_batch_ticks as ticks3;
 use super::load_batch_v2v3::{PoolStateTick, head, parse_head, run, v3_ticks, words};
 use super::load_v2v3::word_range;
+use super::registry::Registry;
 use super::ticks::TickMap;
 
 /// Что читать: вид, ссылка, tickSpacing, binStep, USDT и token1 (Bin), как у load::state.
@@ -64,10 +65,12 @@ pub type Answers = Vec<Result<Vec<Bytes>, String>>;
 /// Итог по каждому пулу, пока собирается (None — ещё в работе).
 pub type Out = Vec<Option<Result<Loaded, Miss>>>;
 
-/// Состояния пулов на блоке. Принимает: пулы, блок. Возвращает: по каждому — Loaded или причина. Ошибок нет.
+/// Состояния пулов на блоке. Принимает: окружение, токены, реестр (решение 306: курс встречного к USDT для лесенки —
+/// load.rs state), пулы, блок. Возвращает: по каждому — Loaded или причина. Ошибок нет.
 pub async fn states(
     ctx: &Ctx,
     tokens: &Tokens,
+    reg: &Registry,
     wants: &[Want<'_>],
     block: u64,
 ) -> Vec<Result<Loaded, Miss>> {
@@ -100,6 +103,7 @@ pub async fn states(
             let r = load::state(
                 ctx,
                 tokens,
+                reg,
                 w.family,
                 w.reference,
                 w.spacing,

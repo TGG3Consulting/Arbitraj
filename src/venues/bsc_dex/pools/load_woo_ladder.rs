@@ -4,16 +4,16 @@
 //! котируемая (USDT) → базовая на суммах лесенки; проход 2 — базовая → котируемая на полученных в проходе 1 количествах
 //! базовой (тот же объём в долларах). Оба прохода — Multicall3 на одном блоке. Откат квотера в точке (пределы пула) —
 //! край лесенки: точек после него нет. Своих формул пула нет — только ответы квотера.
-//! Кто вызывает: pools/load_woo.rs.
-//! От чего зависит: ctx.rs, node/call.rs, tokens.rs, abi_woo.rs, core/types (LadderPoint).
-//! Настройки: dex.pmm_ladder_usd [DEX] (не задана — лесенки нет, пара остаётся сигналом).
+//! Кто вызывает: pools/load_woo.rs; usd и usdt_quote — ещё pools/ladder_counter.rs (решение 306).
+//! От чего зависит: ctx.rs, node/call.rs, tokens.rs, abi_woo.rs, ladder_counter.rs, registry.rs, core/types (LadderPoint).
+//! Настройки: dex.pmm_ladder_usd, dex.pmm_ladder_counter [DEX] (не задана — лесенки нет, пара остаётся сигналом).
 //! Решение 297: лесенка — только у пары, где встречный токен = USDT площадки (tokens.rs usdt, venue.quote_asset) —
-//! правило usdt_quote, общее для WooFi, Metric, iZiSwap / Biswap V3 (load_metric_ladder.rs).
+//! правило usdt_quote, общее для WooFi, Metric, iZiSwap / Biswap V3 (load_metric_ladder.rs). Решение 306: при
+//! dex.pmm_ladder_counter = да — и пары не с USDT, суммы во встречном токене по курсу к USDT (ladder_counter.rs).
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 use rust_decimal::Decimal;
-use rust_decimal::prelude::ToPrimitive;
 
 use crate::core::types::LadderPoint;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -22,6 +22,8 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::super::tokens::Tokens;
 use super::abi_woo::IWooPP;
+use super::ladder_counter;
+use super::registry::Registry;
 
 /// Лесенка в долларах из dex.pmm_ladder_usd: суммы > 0 по возрастанию. Принимает: окружение, id DEX.
 /// Возвращает: список; пусто — настройка не задана. Ошибки: NotConfigured — значение не число > 0 или не по возрастанию.
@@ -59,29 +61,25 @@ pub fn usdt_quote(usdt: Option<Address>, quote: Address) -> bool {
     usdt == Some(quote)
 }
 
-/// Обе стороны лесенки на блоке. Принимает: окружение, токены, id DEX, контракт, базовую, котируемую (встречный
-/// токен пары), тег. Возвращает: (котируемая → базовая, базовая → котируемая); пусто — лесенки нет (не задана;
-/// котируемая не USDT площадки — usdt_quote, решение 297). Ошибки: узел, ответ не по ABI, неверная dex.pmm_ladder_usd.
+/// Обе стороны лесенки на блоке. Принимает: окружение, токены, реестр (курс встречного к USDT, решение 306), id DEX,
+/// контракт, базовую, котируемую (встречный токен пары), тег. Возвращает: (котируемая → базовая, базовая →
+/// котируемая); пусто — лесенки нет (не задана; котируемая не USDT площадки и dex.pmm_ladder_counter не «да» или нет
+/// курса — ladder_counter.rs amounts, решения 297 и 306). Ошибки: узел, ответ не по ABI, неверная dex.pmm_ladder_usd.
 #[allow(clippy::too_many_arguments)]
 pub async fn read(
     ctx: &Ctx,
     tokens: &Tokens,
+    reg: &Registry,
     id: &str,
     pool: Address,
     coin: Address,
     quote: Address,
     tag: &str,
 ) -> GatewayResult<(Vec<LadderPoint>, Vec<LadderPoint>)> {
-    let ladder = usd(ctx, id)?;
-    if ladder.is_empty() || !usdt_quote(tokens.usdt(ctx).ok(), quote) {
+    let amounts = ladder_counter::amounts(ctx, tokens, reg, id, quote).await?;
+    if amounts.is_empty() {
         return Ok((Vec::new(), Vec::new()));
     }
-    let dec = tokens.decimals(ctx, quote).await?;
-    let unit = Decimal::from(10u64.pow(u32::from(dec)));
-    let amounts: Vec<U256> = ladder
-        .iter()
-        .filter_map(|v| (*v * unit).trunc().to_u128().map(U256::from))
-        .collect();
     let quote_in = pass(ctx, pool, quote, coin, &amounts, tag).await?;
     let base_amounts: Vec<U256> = quote_in.iter().map(|p| p.amount_out).collect();
     let base_in = pass(ctx, pool, coin, quote, &base_amounts, tag).await?;

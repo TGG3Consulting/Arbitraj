@@ -4,9 +4,10 @@
 //! (check/emitter.rs) — Universal Router сам находит пары по своей фабрике, адрес проверенного пула ему не передаётся.
 //! Чужой пул — пул исключается, сделки нет. Проба откатилась — сделки нет (с текстом узла); откат «срок транзакции
 //! вышел» — StaleData (наша помеха, не свойство пула).
+//! Решение 303: откат Permit2 (AllowanceExpired / InsufficientAllowance) — понятными словами в тексте (exec/permit2_err.rs).
 //! Решение 248: run и judge — по отдельности для пере-замера Universal Router (exec/ur_remeasure.rs).
 //! Кто вызывает: exec/trade_direct.rs, exec/trade_smart.rs, exec/ur_remeasure.rs.
-//! От чего зависит: check/simulate.rs (Base — голова + 1 с, решение 127), check/emitter.rs, exec/plan.rs (Plan), wallet/balances.rs, pools/registry.rs.
+//! От чего зависит: check/simulate.rs (Base — голова + 1 с, решение 127), check/emitter.rs, exec/permit2_err.rs, exec/plan.rs (Plan), wallet/balances.rs, pools/registry.rs.
 //! Настройки: нет (узел — bsc.node_http_url).
 //!
 //! eth_simulateV1 — execution-apis 16caee27 src/eth/execute.yaml#L137-L260 (CallResult.logs).
@@ -80,8 +81,11 @@ pub async fn judge(ctx: &Ctx, res: &[CallResult], entries: &[&Entry]) -> Gateway
             );
             return Err(ctx.err(ErrorCode::StaleData, msg));
         }
+        // Решение 303: откат Permit2 — расшифровка понятными словами (срок разрешения истёк / не хватает суммы).
+        let p2 = super::permit2_err::explain(&r.return_data, text)
+            .map_or(String::new(), |s| format!(" — {s}"));
         let msg = format!(
-            "проба сделки перед отправкой: шаг {i} откатился — {}",
+            "проба сделки перед отправкой: шаг {i} откатился — {}{p2}",
             r.why()
         );
         return Err(ctx.err(ErrorCode::NoRoute, msg));

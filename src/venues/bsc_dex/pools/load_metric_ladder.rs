@@ -7,14 +7,13 @@
 //! пауза, белый список расширения) или взял не весь вход (ликвидность кончилась), — край лесенки. Своих формул нет.
 //! Решение 286: тот же проход для пулов iZiSwap / Biswap V3 (read_with с quoteIzi — load_izi.rs).
 //! Решение 297: лесенка — только у пары, где котируемая = USDT площадки (tokens.rs usdt; load_woo_ladder.rs
-//! usdt_quote), а не встречный токен записи (он бывает промежуточной монетой — WBNB).
+//! usdt_quote), а не встречный токен записи (он бывает промежуточной монетой — WBNB). Решение 306: при
+//! dex.pmm_ladder_counter = да — и пара не с USDT: суммы в котируемой по курсу к USDT (ladder_counter.rs amounts).
 //! Кто вызывает: pools/load_metric.rs, pools/load_izi.rs.
-//! От чего зависит: ctx.rs, node/rpc.rs, tokens.rs, quote/virtual_quoter.rs, load_woo_ladder.rs (usd, usdt_quote), core/types.
-//! Настройки: dex.pmm_ladder_usd [DEX] (не задана — лесенки нет, пул без котировки).
+//! От чего зависит: ctx.rs, node/rpc.rs, tokens.rs, registry.rs, quote/virtual_quoter.rs, ladder_counter.rs (amounts), core/types.
+//! Настройки: dex.pmm_ladder_usd, dex.pmm_ladder_counter [DEX] (не задана — лесенки нет, пул без котировки).
 
 use alloy_primitives::{Address, Bytes, U256};
-use rust_decimal::Decimal;
-use rust_decimal::prelude::ToPrimitive;
 use serde_json::{Value, json};
 
 use crate::core::types::LadderPoint;
@@ -24,16 +23,19 @@ use super::super::ctx::Ctx;
 use super::super::node::rpc;
 use super::super::quote::virtual_quoter;
 use super::super::tokens::Tokens;
-use super::load_woo_ladder;
+use super::ladder_counter;
+use super::registry::Registry;
 
-/// Обе стороны лесенки на блоке. Принимает: окружение, токены, id DEX, пул, монету, котируемую (встречный токен
-/// пары), token0 САМОГО пула (порядок пула — для zeroForOne), тег. Возвращает: (котируемая → монета, монета →
-/// котируемая); пусто — лесенки нет (не задана; котируемая не USDT площадки — решение 297). Ошибки: узел, неверная
-/// dex.pmm_ladder_usd, код квотера не сверен (Internal).
+/// Обе стороны лесенки на блоке. Принимает: окружение, токены, реестр (курс встречного к USDT, решение 306), id DEX,
+/// пул, монету, котируемую (встречный токен пары), token0 САМОГО пула (порядок пула — для zeroForOne), тег.
+/// Возвращает: (котируемая → монета, монета → котируемая); пусто — лесенки нет (не задана; котируемая не USDT
+/// площадки и dex.pmm_ladder_counter не «да» или нет курса — ladder_counter.rs, решения 297 и 306). Суммы прохода 1 —
+/// в единицах котируемой. Ошибки: узел, неверная dex.pmm_ladder_usd, код квотера не сверен (Internal).
 #[allow(clippy::too_many_arguments)]
 pub async fn read(
     ctx: &Ctx,
     tokens: &Tokens,
+    reg: &Registry,
     id: &str,
     pool: Address,
     coin: Address,
@@ -42,7 +44,7 @@ pub async fn read(
     tag: &str,
 ) -> GatewayResult<(Vec<LadderPoint>, Vec<LadderPoint>)> {
     let q = Quoter { name: "Metric", func: "quoteMetric", data: virtual_quoter::data_metric };
-    read_with(ctx, tokens, id, pool, coin, quote, pool_token0, tag, q).await
+    read_with(ctx, tokens, reg, id, pool, coin, quote, pool_token0, tag, q).await
 }
 
 /// Вызов виртуального квотера для прохода лесенки: имя вида (в тексте ошибок) и вход вызова (пул, zeroForOne в
@@ -61,6 +63,7 @@ pub struct Quoter {
 pub async fn read_with(
     ctx: &Ctx,
     tokens: &Tokens,
+    reg: &Registry,
     id: &str,
     pool: Address,
     coin: Address,
@@ -69,16 +72,10 @@ pub async fn read_with(
     tag: &str,
     q: Quoter,
 ) -> GatewayResult<(Vec<LadderPoint>, Vec<LadderPoint>)> {
-    let ladder = load_woo_ladder::usd(ctx, id)?;
-    if ladder.is_empty() || !load_woo_ladder::usdt_quote(tokens.usdt(ctx).ok(), quote) {
+    let amounts = ladder_counter::amounts(ctx, tokens, reg, id, quote).await?;
+    if amounts.is_empty() {
         return Ok((Vec::new(), Vec::new()));
     }
-    let dec = tokens.decimals(ctx, quote).await?;
-    let unit = Decimal::from(10u64.pow(u32::from(dec)));
-    let amounts: Vec<U256> = ladder
-        .iter()
-        .filter_map(|v| (*v * unit).trunc().to_u128().map(U256::from))
-        .collect();
     let quote_in = pass(ctx, pool, quote == pool_token0, &amounts, tag, q).await?;
     let base_amounts: Vec<U256> = quote_in.iter().map(|p| p.amount_out).collect();
     let base_in = pass(ctx, pool, coin == pool_token0, &base_amounts, tag, q).await?;

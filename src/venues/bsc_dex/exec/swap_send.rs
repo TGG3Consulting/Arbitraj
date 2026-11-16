@@ -3,8 +3,11 @@
 //! новом разрешении после пересборки (решение 121 B1), уведомление dex.rebuilt_after_approve и сам обмен (база
 //! проверки баланса — прямо перед подписью, чаевые — к обмену, резерв BNB у нативной продажи). Решение 236, дополнение
 //! (техлид 09.11): газ разрешений — в итог обмена (with_approve_gas), ядро берёт его в затраты сделки.
+//! Решение 303 (t134): после разрешений — ожидание, пока голова опроса блоков дойдёт до блока последнего approve
+//! (exec/approve_seen.rs): проба и отправка обмена идут по состоянию, где approve уже есть. Дополнение 303 (журнал):
+//! строки dex.approve_seen (хеш и блок каждого approve, голова опроса) и блок пробы в dex.rebuilt_after_approve.
 //! Кто вызывает: exec/trade_direct.rs, exec/trade_smart.rs (через реэкспорт exec/trade.rs).
-//! От чего зависит: exec/txs.rs, exec/swap_ctx.rs (отметка approve в «чем найти», решение 231), exec/plan.rs, exec/native.rs, wallet/approve.rs, wallet/balances.rs,
+//! От чего зависит: exec/txs.rs, exec/approve_seen.rs, exec/swap_ctx.rs (отметка approve в «чем найти», решение 231), exec/plan.rs, exec/native.rs, wallet/approve.rs, wallet/balances.rs,
 //! wallet/inflows.rs, wallet/nonce.rs.
 //! Настройки: через вызываемые — send.*, channel.*, risk.min_bnb_balance.
 
@@ -30,13 +33,17 @@ use super::txs::{self, Env};
 /// None — разрешений не было. Решение 236, дополнение (техлид 09.11): газ разрешений — в затраты сделки (ядро,
 /// core/deal_gas.rs): вызывающий кладёт его в итог обмена (with_approve_gas); у ошибки здесь — газ разрешений, уже
 /// в блоке до неё (GatewayError::approve_gas_bnb; газ самого не прошедшего разрешения — в его факте tx).
-/// Ошибки: каналы, OutcomeUnknown (nonce занят, квитанции нет), SwapReverted (разрешение не прошло — с фактом).
+/// Решение 303: перед возвратом — ожидание головы опроса блоков не старше блока последнего approve (approve_seen.rs
+/// settle; там же строки журнала dex.approve_seen).
+/// Ошибки: каналы, OutcomeUnknown (nonce занят, квитанции нет), SwapReverted (разрешение не прошло — с фактом);
+/// StaleData — голова не дошла до блока approve за feed.stale_after_ms (с газом разрешений).
 pub async fn send_approvals(
     env: &Env,
     slot: &Slot,
     approvals: &[Approval],
 ) -> GatewayResult<Option<Decimal>> {
     let mut gas: Option<Decimal> = None;
+    let mut seen: Vec<super::approve_seen::Seen> = Vec::new();
     for (to, data) in approvals {
         // Решение 231 (дополнение): исход разрешения неизвестен — отметка approve в «чем найти» (обмен не отправлялся).
         let d = txs::send(env, slot, *to, data.clone(), U256::ZERO, false, None)
@@ -70,7 +77,19 @@ pub async fn send_approvals(
         }
         // Квитанция в блоке — газ по ней (gasUsed × effectiveGasPrice, exec/chain_tx.rs).
         gas = Some(gas.unwrap_or_default() + d.chain.gas_bnb.unwrap_or_default());
+        // Дополнение 303 (журнал): хеш, блок квитанции и голова опроса блоков в этот момент — для разбора.
+        seen.push(super::approve_seen::Seen {
+            hash: d.chain.hash,
+            block: d.chain.block,
+            head: env.heads.latest().map(|h| h.number),
+        });
     }
+    // Решение 303 (кейс FOREST 15.11): квитанция approve — со своего узла, а проба и предел блока бандла — от головы
+    // опроса блоков, которая могла не дойти до блока approve. Ждём её (не дольше feed.stale_after_ms); строки журнала
+    // dex.approve_seen — внутри.
+    super::approve_seen::settle(&env.ctx, &env.heads, &seen)
+        .await
+        .map_err(|e| e.with_approve_gas(gas))?;
     Ok(gas)
 }
 
@@ -126,14 +145,16 @@ pub fn no_new_approvals(ctx: &Ctx, p: &Plan) -> GatewayResult<()> {
 }
 
 /// Уведомление «после approve маршрут собран заново» (решение 121 B1) — в журнале интерфейса и в Telegram, если
-/// событие dex.rebuilt_after_approve включено. Принимает: окружение, запрос. Ошибок нет.
-pub fn rebuilt_notice(env: &Env, req: &TradeRequest) {
+/// событие dex.rebuilt_after_approve включено. Дополнение 303 (журнал): в тексте — базовый блок пробы после пересборки
+/// (голова опроса блоков, от неё же срок транзакции). Принимает: окружение, запрос, номер базового блока пробы.
+/// Ошибок нет.
+pub fn rebuilt_notice(env: &Env, req: &TradeRequest, probe_block: u64) {
     env.stats.emit(MarketEvent::Notice {
         venue: env.ctx.venue(),
         code: "dex.rebuilt_after_approve".into(),
         text: format!(
             "{:?} {} {}: разрешения (approve) отправлены — маршрут, минимумы и транзакция обмена собраны заново и \
-             снова сверены с худшей ценой {}",
+             снова сверены с худшей ценой {}; проба перед отправкой — на блоке {probe_block}",
             req.side, req.qty, req.asset.ticker, req.worst_price
         ),
     });

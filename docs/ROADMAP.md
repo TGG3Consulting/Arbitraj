@@ -32,6 +32,12 @@
   pools/graph_cache.rs 159 → 230 (очередь построений cached_as_of, замер), quote/graph_route.rs 216 → 261 (в релизе
   254 после решения 300; t132 — проверки abandon), pools/registry.rs 174 → 203 (поколение состояния state_gen),
   quote/depth_band.rs 457 → 472 (band_from_units).
+- Решение 303, дополнение (t134, ревью): src/venues/bsc_dex/send/mod.rs — 275 строк (было 269 до дополнения; сверх ориентира 200 и до правки: способ канала и предел блока в classify для журнала). Дробить — вынести classify (разбор итогов каналов) в send/classify.rs; reject_log.rs — 107 строк.
+- Решение 305 (t135, с ревью; `wc -l`): сверх ориентира 200 — src/venues/bsc_dex/pools/factory_calls.rs 287 строк (было
+  247, +40: пары WooFi по quoteToken()), pools/factory_scan.rs 229 (было 216: чтение quoteToken() и счёт вызовов),
+  directory/mod.rs 204 (было 199: ban для пары WooFi). В пределах: pools/multi_pair.rs 200, pools/market.rs 189,
+  pools/woo_quote.rs 84, tests/bsc_dex_woofi_pairs_retune.rs. Дробить factory_calls.rs — вынести ветку WooFi и
+  уровни/шаги (tiers / spacings / lookup_max) в factory_levels.rs; factory_scan.rs — sort / off / failed (см. 292).
 - Решение 296 (t127): тест на записи SHOPINX/WBNB (fit_volume_2026-11-15, ветка t125) — после её слияния (TASKS 296 п. 2); off_map перецентрирует карту только по полосе глубины, не по полосе чтения (TASKS 296 п. 4). Размеры: load_v2v3.rs 156, load_algebra.rs 120 строк — в ориентире.
 - Решение 292 (t123, с ревью): src/venues/bsc_dex/pools/factory_scan.rs 216 строк (было 207; вызов источника
   stable_list.rs и счёт вызовов) — сверх ориентира 200 и до правки; pools/stable_list.rs 211 (ревью: разбор пачки sort

@@ -12,7 +12,7 @@
 //! Кто вызывает: rest.rs (send — перед запросом и после ответа), mod.rs (set_out — канал событий из подписки на рынок).
 //! От чего зависит: ctx.rs, gateway/errors.rs, gateway/events.rs, storage/journal.rs.
 //! Решение 333: уведомление ядру — gateway/core_out_must.rs (полный канал не теряет его молча).
-//! Настройки: venue.rate_limit_pause_ms [bingx]; через core_out_must.rs — venue.info_events_keep,
+//! Настройки: venue.rate_limit_pause_ms [bingx]; через core_out_must.rs — venue.info_events_max,
 //! log.events_lost_interval_s.
 //!
 //! Официально: error-codes.md (https://github.com/BingX-API/api-ai-skills/blob/main/skills/references/error-codes.md):
@@ -181,8 +181,8 @@ async fn on_418(ctx: &Ctx, path: &str, retry_after_s: Option<u64>) -> String {
     let text =
         format!("BingX: HTTP 418 — IP заблокирован за запросы после 429 (ответ на {path}); {note}");
     let first = !BANNED.swap(true, Ordering::Relaxed);
-    // Решение 333: событие — через очередь «ждут места» шлюза (полный канал ядра: venue.info_events_keep = да — ждёт
-    // места; иначе потеря со счётом в журнале venue.core_events_lost), а не молчаливый try_send.
+    // Решение 333: событие — через очередь «ждут места» шлюза (полный канал ядра — ждёт места, решение
+    // 362; сверх venue.info_events_max — потеря со счётом в журнале venue.core_events_lost), а не молчаливый try_send.
     let fed = if first {
         let out = OUT.lock().unwrap_or_else(|p| p.into_inner()).clone();
         out.map(|o| {
@@ -198,11 +198,9 @@ async fn on_418(ctx: &Ctx, path: &str, retry_after_s: Option<u64>) -> String {
     let tail = match (first, fed) {
         (false, _) => " (уведомление уже отправлено в этом эпизоде)",
         (true, Some(Fed::Sent)) => "",
-        (true, Some(Fed::Kept)) => {
-            " (канал событий ядра полон — уведомление ждёт места, venue.info_events_keep)"
-        }
+        (true, Some(Fed::Kept)) => " (канал событий ядра полон — уведомление ждёт места)",
         (true, Some(Fed::Lost)) => {
-            " (уведомление потеряно: канал событий ядра полон — venue.info_events_keep не «да» или очередь достигла venue.info_events_max; счёт в venue.core_events_lost)"
+            " (уведомление потеряно: канал событий ядра полон и очередь достигла venue.info_events_max; счёт в venue.core_events_lost)"
         }
         (true, Some(Fed::Closed)) => " (уведомление не отправлено: канал событий ядра закрыт)",
         (true, None) => {

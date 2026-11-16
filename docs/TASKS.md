@@ -268,7 +268,7 @@
 - **Решения 333/334 (16.11.2026, задача t155, ветка t155/no-silent-loss от rel/dex-all 8fe83aa1) — ни одно сообщение
   ядру и ни один кандидат не теряются молча; ждёт сборки и тестов в GitHub, ревью и включения.** Локально не собиралось.
   Таблица всех мест отправки — docs/notes/t155-no-silent-loss-2026-11-16.md. Настройки (все необязательные, вся система):
-  venue.info_events_keep, venue.info_events_max, venue.money_events_alert_ms, profit.calc_wait_ms,
+  venue.info_events_max, venue.money_events_alert_ms, profit.calc_wait_ms (venue.info_events_keep — в логике, решение 362),
   log.events_lost_interval_s (stuck.tick_lag_wake — в логике, решение 361) (venue.money_events_keep удалена ревью — см. ниже).
   **Ревью (DECISIONS «333/334 (ревью, t155)») — исправлено:** Б1 денежные события не теряются всегда (без настройки);
   Б2 порядок CoinCheck одной монеты (send_in_task); Н1–Н9, Н11 (core_out_must.rs разделён на 4 файла, UI.md).
@@ -290,7 +290,7 @@
   теряется, FIFO) вместе с переводом Pool этой монеты в ту же очередь. (2) venues/bsc_dex/node/head_stall_send.rs:35-39
   и node/receipts_notice.rs:30-35 — уведомления «узел встал / ожил» (и квитанции) при полном канале — каждое своей
   задачей: «ожил» может прийти раньше «встал» (в Telegram — неверная последовательность). Предложение: слать через
-  `MustOut::send` (очередь Info FIFO; при venue.info_events_keep не «да» — потеря со счётом вместо нынешнего «не
+  `MustOut::send` (очередь Info FIFO; при venue.info_events_keep не «да» (до решения 362) — потеря со счётом вместо нынешнего «не
   теряется») либо одна задача-отправитель на источник (mpsc без предела → `send().await` по порядку).
 - **Решение 324 (16.11.2026, задача t151, ветка t151/book-events-keep от rel/dex-all 163fd8cf) — стаканы бирж не
   теряются при полном канале ядра, Invalidated бирж не теряется никогда; ждёт сборки и тестов в GitHub, ревью и

@@ -92,9 +92,6 @@ pub fn lost(
     ev: &MarketEvent,
 ) {
     let what = match why {
-        Why::NotKept => {
-            "канал событий ядра полон — уведомление / счётчик / проверка потеряны (venue.info_events_keep не «да»)"
-        }
         Why::Max(_) => {
             "канал событий ядра полон — уведомление / счётчик потеряны: очередь достигла предела venue.info_events_max"
         }

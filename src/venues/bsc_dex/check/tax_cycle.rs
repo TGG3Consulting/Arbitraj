@@ -15,7 +15,7 @@
 //! Все запросы к узлу — в общем темпе node/pace.rs (bsc.node_http_rps): проход идёт ровно, а не залпом.
 //! Кто вызывает: pools/market.rs (запуск при подписке).
 //! От чего зависит: check/tax_pass.rs, check/taxes.rs, check/recheck.rs, check/tax_wallet.rs, pools/listen.rs (Pools), pools/progress.rs.
-//! Решение 333 (ревью Б2): «не проверена» в начале цикла — gateway/core_out_must.rs send_in_task (venue.info_events_keep):
+//! Решение 333 (ревью Б2): «не проверена» в начале цикла — gateway/core_out_must.rs send_in_task (ждёт места, решение 362):
 //! тем же путём этой же задачи, что и итоги проверки монеты, — итог не приходит ядру раньше «не проверена».
 //! Настройки: tax.recheck_interval_s, tax.retry_s (вся система), check.probe_usdt [bsc_dex].
 
@@ -66,8 +66,7 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
         };
         p.checks.set_coin(c.clone());
         // Решение 333, ревью Б2: «не проверена» — тем же путём, что итоги этой монеты (tax_pass.rs, taxes_util.rs —
-        // `send().await` этой же задачи): venue.info_events_keep = да — ждёт места здесь же (итог не обгонит её);
-        // не «да» — как раньше без ожидания, полный канал — потеря со счётом в журнале venue.core_events_lost.
+        // `send().await` этой же задачи): ждёт места здесь же (итог не обгонит её; решение 362 — всегда, не теряется).
         MustOut::new(p.out.clone(), &p.ctx.settings, &p.ctx.journal)
             .send_in_task(MarketEvent::CoinCheck(c))
             .await;

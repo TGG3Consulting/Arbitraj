@@ -3,8 +3,8 @@
 //! Feed::must). Две очереди по порядку (FIFO): Money и Info; доставщик (gateway/core_out_must_deliver.rs) ждёт место
 //! в канале и отдаёт СНАЧАЛА Money, затем Info (ревью, Н1: «остановлена» не стоит за сотнями уведомлений).
 //! - Money: очередь рода пуста — try_reserve; канал полон — в очередь ВСЕГДА (Б1, без настройки).
-//! - Info: очередь рода пуста — try_reserve; полон — в очередь, если «откладывать» (venue.info_events_keep = да), иначе
-//!   потеря. Очередь Info не пуста — новое встаёт в конец при любой настройке (порядок). Предел venue.info_events_max
+//! - Info: очередь рода пуста — try_reserve; полон — в очередь всегда (решение 362, в логику: была
+//!   venue.info_events_keep). Очередь Info не пуста — новое встаёт в конец (порядок). Предел venue.info_events_max
 //!   (Н2): достигнут — потеря со счётом; не задан — без предела.
 //! - Денежное событие ждало места дольше venue.money_events_alert_ms (Н9) — после его доставки в очередь Money
 //!   ставится уведомление venue.money_event_delayed (Telegram — notify.event.*; не теряется, как Money).
@@ -12,11 +12,11 @@
 //!   следующее сообщение запустит нового (start = !running), очередь не застревает навсегда.
 //! - Канал закрыт — очереди очищаются (слать некому), счёт «сброшено» — в журнал.
 //!
-//! Под замком нет await; чтение настроек (keep, max) под замком — синхронное (память хранилища).
+//! Под замком нет await; чтение настройки (max) под замком — синхронное (память хранилища).
 //! Кто вызывает: gateway/core_out_must.rs (put), gateway/core_out_must_deliver.rs (State), gateway/core_out_must_log.rs
 //! (snapshot), core_out.rs (Default).
 //! От чего зависит: gateway/core_out_must_log.rs (журнал, уведомление о задержке), gateway/lost_log.rs (Lost), tokio.
-//! Настройки: venue.info_events_keep, venue.info_events_max — чтения передаёт вызывающий (core_out_must.rs).
+//! Настройки: venue.info_events_max — чтение передаёт вызывающий (core_out_must.rs).
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -95,8 +95,6 @@ pub enum Put {
 /// Почему потеряно.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Why {
-    /// Info: канал полон, venue.info_events_keep не «да».
-    NotKept,
     /// Info: очередь достигла venue.info_events_max.
     Max(u64),
     /// Нужен доставщик, а рантайма tokio нет.
@@ -119,8 +117,8 @@ impl Queue {
         }
     }
 
-    /// Решение по одному сообщению (см. шапку). Принимает: канал, сообщение, род, есть ли рантайм, «откладывать ли
-    /// Info» и предел Info (читаются, только когда нужны). Возвращает: Put или (почему, сообщение) — потеряно.
+    /// Решение по одному сообщению (см. шапку). Принимает: канал, сообщение, род, есть ли рантайм, предел Info
+    /// (читается, только когда нужен). Возвращает: Put или (почему, сообщение) — потеряно.
     /// Ошибок нет.
     pub(super) fn put(
         &self,
@@ -128,7 +126,6 @@ impl Queue {
         ev: MarketEvent,
         kind: Kind,
         rt: bool,
-        keep: impl FnOnce() -> bool,
         max: impl FnOnce() -> Option<u64>,
     ) -> Result<Put, Box<(Why, MarketEvent)>> {
         let mut s = lock(&self.state);
@@ -144,9 +141,6 @@ impl Queue {
                 }
                 Err(TrySendError::Closed(())) => return Ok(Put::Closed),
                 Err(TrySendError::Full(())) => {}
-            }
-            if kind == Kind::Info && !keep() {
-                return Err(Box::new((Why::NotKept, ev)));
             }
         }
         if kind == Kind::Info

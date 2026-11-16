@@ -5,7 +5,7 @@
 //! «Уведомления»). Один раз на вывод: статус опрашивается многократно, повторов в Telegram нет.
 //! Кто вызывает: transfers.rs (withdrawal_status), mod.rs (канал событий — с подпиской на рынок).
 //! От чего зависит: gateway/events.rs (MarketEvent::Notice), storage/journal.rs, ctx.rs, num.rs.
-//! Решение 333: событие ядру — gateway/core_out_must.rs (venue.info_events_keep, log.events_lost_interval_s).
+//! Решение 333: событие ядру — gateway/core_out_must.rs (venue.info_events_max, log.events_lost_interval_s).
 //! Настройки: нет своих (включение события — notify.event.* с областью «событие», код — notify/catalog.rs).
 //!
 //! Официальная документация: API v4 → Wallet → «Retrieve withdrawal records» GET /wallet/withdrawals
@@ -65,11 +65,9 @@ impl Notices {
         });
         let note = match fed {
             Some(Fed::Sent) => "",
-            Some(Fed::Kept) => {
-                " (канал событий ядра полон — событие ждёт места, venue.info_events_keep)"
-            }
+            Some(Fed::Kept) => " (канал событий ядра полон — событие ждёт места)",
             Some(Fed::Lost) => {
-                " (событие потеряно: канал событий ядра полон — venue.info_events_keep не «да» или очередь достигла venue.info_events_max; счёт в venue.core_events_lost)"
+                " (событие потеряно: канал событий ядра полон и очередь достигла venue.info_events_max; счёт в venue.core_events_lost)"
             }
             Some(Fed::Closed) => " (событие не отправлено: канал событий ядра закрыт)",
             None => {

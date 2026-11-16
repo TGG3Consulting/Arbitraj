@@ -8,24 +8,23 @@
 //!   ТЕРЯЮТСЯ НИКОГДА, без настройки (как Invalidated в решении 324): потеря «остановлена» ведёт к сделке в
 //!   остановленный кошелёк. Своя очередь, ВПЕРЕДИ Info (ревью, Н1): доставщик берёт сначала Money.
 //! - Info — уведомления (Notice), счётчики каналов отправки (SendChannel), «монета не проверена» (CoinCheck).
-//!   venue.info_events_keep = да — ждут места по порядку (не больше venue.info_events_max; не задана — без предела);
-//!   не «да» — как раньше потеряны, но не молча: счёт и запись журнала venue.core_events_lost.
+//!   Ждут места по порядку всегда (решение 362, в логику: была venue.info_events_keep) — не больше venue.info_events_max
+//!   (не задана — без предела); сверх предела — потеря, но не молча: счёт и запись журнала venue.core_events_lost.
 //!
-//! Порядок одного рода: очередь рода не пуста — новое встаёт в её конец (при любой настройке). Очередь рода пуста —
+//! Порядок одного рода: очередь рода не пуста — новое встаёт в её конец. Очередь рода пуста —
 //! без ожидания (try_reserve), как раньше. Money может обогнать ждущие Info (приоритет), наоборот — нет.
-//! Ревью 333, Б2: CoinCheck одной монеты шлётся ОДНИМ путём — send_in_task (без очереди: «да» — send().await той же
-//! задачей, что и итоги проверки; не «да» — как раньше без ожидания), иначе итог мог прийти раньше «не проверена».
+//! Ревью 333, Б2: CoinCheck одной монеты шлётся ОДНИМ путём — send_in_task (без очереди: send().await той же задачей,
+//! что и итоги проверки), иначе итог мог прийти раньше «не проверена».
 //! Кто вызывает: venues/bsc_dex/send/stats.rs (WalletQueue, ExitGap, Notice исполнения, SendChannel),
 //! venues/bsc_dex/resubscribe_wallets.rs, venues/bsc_dex/check/{tax_cycle,tax_pass}.rs, venues/bingx/rate_pause.rs,
 //! venues/gate/withdraw_notice.rs; тесты.
 //! От чего зависит: gateway/core_out.rs, gateway/core_out_must_queue.rs, gateway/core_out_must_deliver.rs,
 //! gateway/core_out_must_log.rs,
 //! gateway/core_out_book.rs (Fed), settings, storage/journal.rs, tokio.
-//! Настройки: venue.info_events_keep, venue.info_events_max, venue.money_events_alert_ms (вся система;
+//! Настройки: venue.info_events_max, venue.money_events_alert_ms (вся система;
 //! необязательные); журнал — log.events_lost_interval_s.
 
 use tokio::sync::mpsc::Sender;
-use tokio::sync::mpsc::error::TrySendError;
 
 use crate::settings::read::At;
 use crate::settings::store::Store;
@@ -36,12 +35,10 @@ pub use super::core_out_book::Fed;
 use super::core_out_must_deliver::deliver;
 use super::core_out_must_log as log;
 pub use super::core_out_must_log::{ALERT_MS, DELAYED_CODE, LOST_KIND, QUEUE_KIND};
-use super::core_out_must_queue::{Put, Why};
+use super::core_out_must_queue::Put;
 pub use super::core_out_must_queue::{Queue, Snapshot};
 use super::events::MarketEvent;
 
-/// Настройка рода Info: ждать ли места.
-pub const KEEP_INFO: &str = "venue.info_events_keep";
 /// Предел очереди рода Info (сообщений); не задана — без предела.
 pub const INFO_MAX: &str = "venue.info_events_max";
 
@@ -110,9 +107,8 @@ impl MustOut {
         let kind = Kind::of(&ev);
         let q = self.queue();
         let rt = tokio::runtime::Handle::try_current().ok();
-        let keep = || matches!(self.settings.flag(KEEP_INFO, At::default()), Ok(true));
         let max = || self.settings.integer(INFO_MAX, At::default()).ok();
-        match q.put(&self.out, ev, kind, rt.is_some(), keep, max) {
+        match q.put(&self.out, ev, kind, rt.is_some(), max) {
             Ok(Put::Sent) => Fed::Sent,
             Ok(Put::Closed) => Fed::Closed,
             Ok(Put::Kept { start }) => {
@@ -132,32 +128,13 @@ impl MustOut {
     }
 
     /// Ревью 333, Б2: сообщение рода Info, которое должно идти ОДНИМ путём с другими сообщениями той же задачи (CoinCheck
-    /// «не проверена» и итог проверки монеты — check/tax_cycle.rs и вызываемые им): очередь не используется.
-    /// venue.info_events_keep = да — `send().await` (ждёт места той же задачей — порядок с её следующими `send().await`
-    /// сохраняется); не «да» — как раньше без ожидания, полный канал — потеря со счётом и журналом. Возвращает: Fed
-    /// (Kept не бывает). Ошибок нет.
+    /// «не проверена» и итог проверки монеты — check/tax_cycle.rs и вызываемые им): очередь не используется —
+    /// `send().await` (ждёт места той же задачей — порядок с её следующими `send().await` сохраняется; решение 362: всегда,
+    /// не теряется). Возвращает: Fed — Sent или Closed (Kept и Lost не бывает). Ошибок нет.
     pub async fn send_in_task(&self, ev: MarketEvent) -> Fed {
-        if matches!(self.settings.flag(KEEP_INFO, At::default()), Ok(true)) {
-            return match self.out.send(ev).await {
-                Ok(()) => Fed::Sent,
-                Err(_) => Fed::Closed,
-            };
-        }
-        match self.out.try_send(ev) {
+        match self.out.send(ev).await {
             Ok(()) => Fed::Sent,
-            Err(TrySendError::Closed(_)) => Fed::Closed,
-            Err(TrySendError::Full(ev)) => {
-                let q = self.queue();
-                log::lost(
-                    &q,
-                    &self.settings,
-                    &self.journal,
-                    Kind::of(&ev),
-                    Why::NotKept,
-                    &ev,
-                );
-                Fed::Lost
-            }
+            Err(_) => Fed::Closed,
         }
     }
 }

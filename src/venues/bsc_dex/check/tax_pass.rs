@@ -11,7 +11,7 @@
 //! для продажи этой сделки, tax_wallet::deal_check; вид итога — Pass::deal_done), и, как до t77, кошельком строки
 //! «Пробы» — общие налоги, событие ядру, журнал и счётчики прохода.
 //! Решение 333: уведомление «не задана настройка» — gateway/core_out_must.rs (не теряется молча).
-//! Настройки: через вызываемые; venue.info_events_keep (core_out_must.rs).
+//! Настройки: через вызываемые; venue.info_events_max (core_out_must.rs).
 
 use std::collections::{HashMap, HashSet};
 
@@ -199,7 +199,7 @@ pub async fn check(
                         .await;
                     let code = "dex.check_not_configured".to_string();
                     let venue = p.ctx.venue();
-                    // Решение 333: полный канал ядра — ждёт места (venue.info_events_keep) или потеря со счётом.
+                    // Решения 333, 362: полный канал ядра — ждёт места (сверх venue.info_events_max — потеря со счётом).
                     let must = MustOut::new(p.out.clone(), &p.ctx.settings, &p.ctx.journal);
                     must.send(MarketEvent::Notice { venue, code, text });
                 }

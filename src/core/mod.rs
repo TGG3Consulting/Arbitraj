@@ -113,9 +113,13 @@ pub mod exec_book;
 pub mod exec_book_fail;
 pub mod executor;
 pub mod feed_confirm;
+pub mod feed_confirm_queue;
+#[cfg(test)]
+mod feed_confirm_early_tests;
 #[cfg(test)]
 mod feed_confirm_tests;
 pub mod feed_hold;
+pub mod feed_need;
 pub mod feed_print;
 pub mod feed_rest_book;
 pub mod feed_rest_ref;

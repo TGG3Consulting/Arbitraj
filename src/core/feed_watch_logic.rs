@@ -19,6 +19,14 @@
 //! - иначе, если по документации кадры идут по расписанию (FeedHealth.scheduled) — как в решении 202;
 //! - иначе — только журнал (раз на пару), не переподписывать вслепую.
 //!
+//! t163 (решение 367, для всех бирж; доработка по ревью Н2): в режиме подтверждения пару, НУЖНУЮ торговле (State.needed
+//! и монеты идущих сделок), спрашивают раньше — когда она станет устаревшей для котировки до следующего прохода (тишина
+//! больше venue.book_stale_ms − venue.pair_resub_interval_ms); остальные тихие пары — как до правки (после
+//! book_stale_ms × pair_dead_mult). Раньше нужная пара, молчащая между book_stale_ms и book_stale_ms × pair_dead_mult
+//! (книга не менялась — биржа не шлёт кадр), стояла в отказе «кадра стакана пары нет». Запросы прохода делит ведро по
+//! сроку ожидания (feed_confirm_queue.rs: приоритет нужных, без бесконечного голодания). Срок проверки пары
+//! сбрасывается, только когда ПОСЛЕ неё пришёл новый кадр.
+//!
 //! Кто вызывает: core/feed_watch.rs. Шаг по пачке — feed_watch_conn.rs; подтверждение — feed_confirm.rs.
 //! От чего зависит: gateway/feed_health.rs, feed_confirm.rs, feed_watch_action.rs (действия).
 //! Настройки: значения приходят в Cfg (читает feed_watch.rs).
@@ -28,6 +36,7 @@ use std::collections::{HashMap, HashSet};
 use crate::gateway::feed_health::FeedHealth;
 
 use super::feed_confirm::{self as confirm, QuietCfg};
+use super::feed_confirm_queue as queue;
 pub use super::feed_watch_action::Action;
 
 /// Кругов попыток по паре, после которых пара считается в доле мёртвых пачки — из ТЗ Тиграна («после двух неудачных
@@ -96,6 +105,12 @@ pub struct State {
     /// Решение 213: проверки тихих пар и ведро запросов площадки.
     pub(super) checks: HashMap<(String, String), confirm::CheckSt>,
     pub(super) bucket: confirm::Bucket,
+    /// Решение 367 (ревью Н2): тикеры площадки, нужные торговле сейчас (сигнал «держится» / «кандидат», очередь
+    /// расчёта — core/feed_need.rs; ставит feed_watch.rs перед проходом). Пусто — ранних проверок нет (как до 367),
+    /// кроме монет идущих сделок (аргумент deals прохода).
+    pub needed: HashSet<String>,
+    /// Решение 367 (ревью Н2): счётчики для сводки журнала (отложено ведром, ранние проверки и их исходы).
+    pub(super) stats: super::feed_confirm_queue::Stats,
 }
 
 /// Один проход. Принимает: снимок свежести, сейчас (unix мс), настройки, монеты идущих сделок площадки
@@ -108,6 +123,7 @@ pub fn decide(
     st: &mut State,
 ) -> Vec<Action> {
     let mut out = vec![];
+    let mut wants: Vec<queue::Want> = vec![];
     let dead_after = c.book_stale_ms * c.dead_mult;
     let present: HashSet<(String, String)> = h
         .conns
@@ -129,6 +145,31 @@ pub fn decide(
         for p in &conn.pairs {
             let key = (conn.conn.clone(), p.ticker.clone());
             let fresh = p.last_ms.is_some_and(|l| now - l <= dead_after);
+            // Решение 213 / t163: кадр пришёл после последней проверки — замолчит снова, проверка сразу (ведро позволит),
+            // прежний срок не держит; запомненный ответ «кадры потеряны» (дополнение 10.11, feed_rest_ref.rs) к новой
+            // тишине не относится.
+            if let Some(cs) = st.checks.get_mut(&key)
+                && p.last_ms.is_some_and(|l| l > cs.asked_ms)
+            {
+                cs.next_at = 0;
+                cs.lost_ref = None;
+                cs.suspect = None;
+                cs.sticky = false;
+            }
+            // Решение 367 (ревью Н2): пара нужна торговле — ранняя проверка и приоритет в ведре. Повторное ревью t163,
+            // Н1: устаревший стакан выбивает направление из «держится» / «кандидат» (сигнал без цены), поэтому пара,
+            // ставшая нужной при тишине выше порога ранней проверки, остаётся нужной (sticky), пока биржа не
+            // подтвердит книгу или не придёт новый кадр (сброс выше).
+            let want_now = st.needed.contains(&p.ticker) || deals.contains_key(&p.ticker);
+            if want_now && queue::due(p, now, c) {
+                let cs = st.checks.entry(key.clone()).or_default();
+                if !cs.sticky {
+                    cs.sticky = true;
+                    // Кадры до этого момента сброса не вызывают — только новые.
+                    cs.asked_ms = cs.asked_ms.max(p.last_ms.unwrap_or(0));
+                }
+            }
+            let need = want_now || st.checks.get(&key).is_some_and(|cs| cs.sticky);
             if fresh {
                 if st
                     .pairs
@@ -140,11 +181,15 @@ pub fn decide(
                         ticker: p.ticker.clone(),
                     });
                 }
-                // Решение 213: замолчит снова — проверка сразу (ведро позволит), прежний срок не держит; запомненный
-                // ответ «кадры потеряны» (дополнение 10.11, feed_rest_ref.rs) к новой тишине не относится.
-                if let Some(cs) = st.checks.get_mut(&key) {
-                    cs.next_at = 0;
-                    cs.lost_ref = None;
+                // t163 (решение 367): пара нужна торговле и скоро устареет для котировки — спросить биржу заранее (не
+                // ждать book_stale_ms × pair_dead_mult). Вне круга переподписки (свежая пара его уже закрыла выше).
+                if let Mode::Confirm(min_ms, _) = &mode
+                    && h.per_pair
+                    && need
+                    && queue::due(p, now, c)
+                    && let Some(w) = queue::wanted(st, &key, p, now, c, *min_ms, true)
+                {
+                    wants.push(w);
                 }
                 continue;
             }
@@ -161,8 +206,8 @@ pub fn decide(
             match &mode {
                 _ if in_round => round_step(st, &key, now, c, &mut out),
                 Mode::Resub if silent => round_step(st, &key, now, c, &mut out),
-                Mode::Confirm(min_ms, per_s) if silent => {
-                    confirm::want(st, &key, now, *min_ms, *per_s, &mut out)
+                Mode::Confirm(min_ms, _) if silent => {
+                    wants.extend(queue::wanted(st, &key, p, now, c, *min_ms, need))
                 }
                 Mode::Journal(_) if silent && confirm::note_quiet(st, &key) => {
                     quiet_new.push(p.ticker.clone())
@@ -185,6 +230,10 @@ pub fn decide(
             });
         }
         super::feed_watch_conn::step(conn, dead, now, c, deals, st, &mut out);
+    }
+    // Решение 367 (ревью Н2): ведро прохода — по сроку ожидания, нужные торговле — первыми (feed_confirm_queue.rs).
+    if let Mode::Confirm(min_ms, per_s) = &mode {
+        queue::serve(st, wants, now, *min_ms, *per_s, &mut out);
     }
     out
 }

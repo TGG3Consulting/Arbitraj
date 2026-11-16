@@ -12,6 +12,9 @@
 //! venue.feed_watch_log_ms решает feed_watch_log.rs.
 //! t79 (Тигран 10.11: согласовано): у бирж по содержимому такой Unchanged несёт уровни ЭТОГО ответа REST (RestBook) —
 //! ядро ставит их стаканом пары (feed_rest_book.rs); Lost, Quiet, ошибка — без стакана.
+//! t163 (решение 366): due — пора спросить биржу, пока котировка ещё не признала стакан устаревшим (тишина больше
+//! venue.book_stale_ms − venue.pair_resub_interval_ms); ответ отбрасывается, только если кадр пары пришёл ПОСЛЕ отправки
+//! запроса (раньше — «кадр моложе book_stale_ms × pair_dead_mult», из-за чего ранний ответ терялся).
 //! Без ожиданий и ввода-вывода — проверяется тестами (feed_confirm_tests.rs, feed_print_tests.rs).
 //! Кто вызывает: core/feed_watch_logic.rs (want, note_quiet), core/feed_watch.rs (apply).
 //! От чего зависит: gateway/feed_health.rs, feed_watch_logic.rs (Action, Cfg, State, start_round), feed_print.rs,
@@ -47,6 +50,8 @@ pub(super) enum Told {
 pub(super) struct CheckSt {
     /// Следующая проверка — не раньше (unix мс).
     pub(super) next_at: i64,
+    /// t163: когда биржу спросили в последний раз (unix мс): кадр позже — срок проверки сброшен (feed_watch_logic.rs).
+    pub(super) asked_ms: i64,
     pub(super) told: Option<Told>,
     /// Дополнение 10.11: ответ REST, давший «кадры потеряны» (feed_rest_ref.rs); тихая или свежая пара — None.
     pub(super) lost_ref: Option<LostRef>,
@@ -153,11 +158,25 @@ pub(super) fn want(
     if !st.bucket.take(now, per_s) {
         return;
     }
-    st.checks.entry(key.clone()).or_default().next_at = now + min_ms;
+    let cs = st.checks.entry(key.clone()).or_default();
+    cs.next_at = now + min_ms;
+    cs.asked_ms = now;
     out.push(Action::Check {
         conn: key.0.clone(),
         ticker: key.1.clone(),
     });
+}
+
+/// t163 (решение 366): пора ли спрашивать биржу о паре, по которой кадры ещё приходят «недавно»: прогрев после
+/// (пере)подписки прошёл и тишина (от последнего кадра или (пере)подписки — что позже) больше venue.book_stale_ms −
+/// venue.pair_resub_interval_ms (не меньше нуля) — до следующего прохода сторожа пара стала бы устаревшей для котировки.
+/// Принимает: пару, сейчас (unix мс), настройки. Возвращает: да/нет. Ошибок нет.
+pub(super) fn due(p: &PairHealth, now: i64, c: &Cfg) -> bool {
+    if now < p.since_ms + c.warmup_ms {
+        return false;
+    }
+    let from = p.last_ms.unwrap_or(0).max(p.since_ms);
+    now - from > (c.book_stale_ms - c.interval_ms).max(0)
 }
 
 /// Тихая пара без подтверждения (адаптер не умеет или настройка не задана) и без расписания кадров: только журнал.
@@ -196,10 +215,9 @@ pub fn apply(
     else {
         return out;
     };
-    // Пока шёл запрос, пришёл свежий кадр — пара живая, ответ уже не нужен.
-    if p.last_ms
-        .is_some_and(|l| recv_ms - l <= c.book_stale_ms * c.dead_mult)
-    {
+    // Пока шёл запрос, пришёл кадр — стакан в памяти новее ответа, пара живая, ответ уже не нужен. t163 (решение 366):
+    // по времени отправки, а не по «кадр моложе book_stale_ms × pair_dead_mult» — иначе ранний ответ (due) терялся.
+    if p.last_ms.is_some_and(|l| l > sent_ms) {
         return out;
     }
     let rest = r.as_ref().ok().and_then(RestRef::of);
@@ -209,6 +227,8 @@ pub fn apply(
     };
     let key = (conn.to_string(), ticker.to_string());
     let cs = st.checks.entry(key.clone()).or_default();
+    // t163: запрос этого ответа отправлен в sent_ms — кадр раньше него к сбросу срока проверки не ведёт.
+    cs.asked_ms = cs.asked_ms.max(sent_ms);
     // Дополнение 10.11: тот же ответ REST, что дал «кадры потеряны», а пара с тех пор переподписана — книга не
     // менялась с переподписки (тихая, не мёртвая); иначе запомнить ответ для следующей проверки.
     // t79: уровни этого ответа (у бирж по содержимому) — стакан пары; только здесь, ни при каком другом исходе.

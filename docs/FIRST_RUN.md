@@ -215,6 +215,10 @@ Bitget, KuCoin, OKX, CoinEx, HTX, Kraken, Phemex, Poloniex — необязат�
 (07.11.2026): подтверждение тихой пары по REST — venue.quiet_confirm_* (без них у Gate, MEXC, Bitget, XT, Binance тихие пары только в
 журнале; Gate — по номеру книги, MEXC и Bitget — по содержимому стакана, Тигран 08.11; XT — по номеру при
 venue.book_stream = depth_update, по содержимому при depth; Binance — по содержимому).
+Решение 366 (t163, 17.11.2026): при заданных venue.quiet_confirm_* сторож спрашивает биржу уже при тишине пары дольше
+venue.book_stale_ms − venue.pair_resub_interval_ms (раньше — после book_stale_ms × pair_dead_mult): тихих пар в проверке
+становится больше — venue.quiet_confirm_max_per_s × venue.quiet_confirm_min_ms / 1000 должно покрывать и их (в сводке
+core.feed_watch они пока считаются «свежими» до book_stale_ms × pair_dead_mult); venue.book_stale_ms ставить больше venue.pair_resub_interval_ms, иначе проверяются все пары.
 
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |

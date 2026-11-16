@@ -19,6 +19,12 @@
 //! - иначе, если по документации кадры идут по расписанию (FeedHealth.scheduled) — как в решении 202;
 //! - иначе — только журнал (раз на пару), не переподписывать вслепую.
 //!
+//! t163 (решение 366, для всех бирж): в режиме подтверждения биржу спрашивают не после тишины book_stale_ms ×
+//! pair_dead_mult, а когда пара станет устаревшей для котировки раньше следующего прохода — тишина больше
+//! venue.book_stale_ms − venue.pair_resub_interval_ms (feed_confirm.rs due). Раньше пара, молчащая между book_stale_ms и
+//! book_stale_ms × pair_dead_mult (книга не менялась — биржа не шлёт кадр), стояла в отказе «кадра стакана пары нет» и
+//! ни разу не подтверждалась. Срок проверки пары сбрасывается, только когда ПОСЛЕ неё пришёл новый кадр.
+//!
 //! Кто вызывает: core/feed_watch.rs. Шаг по пачке — feed_watch_conn.rs; подтверждение — feed_confirm.rs.
 //! От чего зависит: gateway/feed_health.rs, feed_confirm.rs, feed_watch_action.rs (действия).
 //! Настройки: значения приходят в Cfg (читает feed_watch.rs).
@@ -129,6 +135,15 @@ pub fn decide(
         for p in &conn.pairs {
             let key = (conn.conn.clone(), p.ticker.clone());
             let fresh = p.last_ms.is_some_and(|l| now - l <= dead_after);
+            // Решение 213 / t163: кадр пришёл после последней проверки — замолчит снова, проверка сразу (ведро позволит),
+            // прежний срок не держит; запомненный ответ «кадры потеряны» (дополнение 10.11, feed_rest_ref.rs) к новой
+            // тишине не относится.
+            if let Some(cs) = st.checks.get_mut(&key)
+                && p.last_ms.is_some_and(|l| l > cs.asked_ms)
+            {
+                cs.next_at = 0;
+                cs.lost_ref = None;
+            }
             if fresh {
                 if st
                     .pairs
@@ -140,11 +155,13 @@ pub fn decide(
                         ticker: p.ticker.clone(),
                     });
                 }
-                // Решение 213: замолчит снова — проверка сразу (ведро позволит), прежний срок не держит; запомненный
-                // ответ «кадры потеряны» (дополнение 10.11, feed_rest_ref.rs) к новой тишине не относится.
-                if let Some(cs) = st.checks.get_mut(&key) {
-                    cs.next_at = 0;
-                    cs.lost_ref = None;
+                // t163 (решение 366): пара скоро устареет для котировки — спросить биржу заранее (не ждать
+                // book_stale_ms × pair_dead_mult). Вне круга переподписки (свежая пара его уже закрыла выше).
+                if let Mode::Confirm(min_ms, per_s) = &mode
+                    && h.per_pair
+                    && confirm::due(p, now, c)
+                {
+                    confirm::want(st, &key, now, *min_ms, *per_s, &mut out);
                 }
                 continue;
             }

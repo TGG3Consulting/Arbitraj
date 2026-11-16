@@ -30,7 +30,8 @@
 //! (uncapped_entry.rs, очередь не ждёт); прежний итог «без потолка» в строке остаётся до нового.
 //! Кто вызывает: core/tick.rs (enqueue), core/engine.rs (задача run), тесты (accepted).
 //! От чего зависит: engine.rs, profit.rs, dry.rs, executor.rs, card_job.rs, episode_run.rs, view.rs, calc_timing.rs,
-//! calc_report.rs, reject_log.rs, reject_shape.rs, gateway/calc_meter.rs, busy_calc.rs (решение 267).
+//! calc_report.rs, reject_log.rs, reject_shape.rs, gateway/calc_meter.rs, busy_calc.rs (решение 267),
+//! cand_signal_note.rs (решение 358: сигнал и возраст цен — в data записи отказа).
 //! Настройки: через profit.rs, dry.rs, card.rs, episode_cfg.rs; journal.repeat_flush_ms (решение 155).
 
 use std::sync::Arc;
@@ -140,6 +141,8 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
     // Режим — один раз на расчёт: бюджет считается в нём же, решение по исполнителю — тоже (решение 74).
     let mode = super::dry::mode(&core.inner.deps.settings);
     let t = Timing::new(queued_at);
+    // Решение 358: сигнал на начало расчёта — в запись отказа (только журнал).
+    let sig = super::cand_signal_note::start(core, d);
     // Расчёт кандидата — путь сделки: котировки площадок идут классом Trade (gateway/urgency.rs, решение 61).
     let work = urgency::scope(
         Urgency::Trade,
@@ -191,7 +194,7 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
                 shape: reject_shape::shape(&exact),
                 exact,
                 message: format!("{pair}: отказ — {reason}"),
-                data: best.and_then(|b| serde_json::to_value(b).ok()),
+                data: super::cand_signal_note::data(best.as_ref(), &sig),
             };
             let deps = &core.inner.deps;
             core.inner

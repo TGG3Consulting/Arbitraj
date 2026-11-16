@@ -81,6 +81,7 @@ pub fn calc(rec: &Rec, qty: Decimal) -> Calc {
         profit_pct: profit / spent * Decimal::ONE_HUNDRED,
         transit_s: Decimal::ZERO,
         sigma: Decimal::ZERO,
+        sigma_check: None,
         buy_quote: quote("bingx", Side::Buy, qty, buy_avg),
         sell_quote: quote("bsc_dex", Side::Sell, qty, sell_avg),
         at: Utc::now(),

@@ -194,6 +194,7 @@ pub fn prepare(
         k,
         h,
         closure_share,
+        sigma_check: None,
         return_per_trade: plan.returns(),
         pair_a: None,
         pair_b: None,

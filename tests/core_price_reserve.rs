@@ -183,6 +183,7 @@ fn cx(rec: &Rec, d_: Direction, sigma: Decimal, share: Option<Decimal>) -> DirCt
         k: d("1"),
         h: d("1"),
         closure_share: share,
+        sigma_check: None,
         return_per_trade: false,
         pair_a: (!dex_a).then(|| rec.pair.clone()),
         pair_b: (!dex_b).then(|| rec.pair.clone()),

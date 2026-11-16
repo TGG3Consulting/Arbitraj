@@ -19,8 +19,8 @@
 //! Кто вызывает: sell.rs, sell_unsent.rs, relay.rs (executor.rs — через sell.rs; перевод не состоялся — relay_here.rs, решение 220).
 //! От чего зависит: sell.rs, trade_ops.rs, stuck_quote.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
 //! Решение 334: ожидание тика монеты — stuck_lag.rs Ticks (подписка одна на всё ожидание — ревью 333, Н4; отставание —
-//! счёт, журнал, stuck.tick_lag_wake).
-//! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays; stuck.tick_lag_wake (stuck_lag.rs).
+//! счёт, журнал и проверка сразу — решение 361).
+//! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
 
 use std::time::Duration;
 

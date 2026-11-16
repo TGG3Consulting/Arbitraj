@@ -268,14 +268,14 @@
 - **Решения 333/334 (16.11.2026, задача t155, ветка t155/no-silent-loss от rel/dex-all 8fe83aa1) — ни одно сообщение
   ядру и ни один кандидат не теряются молча; ждёт сборки и тестов в GitHub, ревью и включения.** Локально не собиралось.
   Таблица всех мест отправки — docs/notes/t155-no-silent-loss-2026-11-16.md. Настройки (все необязательные, вся система):
-  venue.info_events_keep, venue.info_events_max, venue.money_events_alert_ms, profit.calc_wait_ms, stuck.tick_lag_wake,
-  log.events_lost_interval_s (venue.money_events_keep удалена ревью — см. ниже).
+  venue.info_events_keep, venue.info_events_max, venue.money_events_alert_ms, profit.calc_wait_ms,
+  log.events_lost_interval_s (stuck.tick_lag_wake — в логике, решение 361) (venue.money_events_keep удалена ревью — см. ниже).
   **Ревью (DECISIONS «333/334 (ревью, t155)») — исправлено:** Б1 денежные события не теряются всегда (без настройки);
   Б2 порядок CoinCheck одной монеты (send_in_task); Н1–Н9, Н11 (core_out_must.rs разделён на 4 файла, UI.md).
   Тест: tests/gateway_core_out_must_333.rs — логика очереди на явных значениях (не запись площадки): приоритет Money,
   Money без настройки, порядок CoinCheck, доставщик при закрытом канале, предел Info, уведомление о задержке.
   **Не покрыто тестами:** ожидание кандидата и цикл run (core/cand_wait.rs, candidates.rs — park/pop/expire, смена
-  profit.calc_concurrency) и Ticks застрявшей сделки (core/stuck_lag.rs) — нужен Core; пометки BingX 418 и Gate.
+  profit.calc_concurrency) (Ticks застрявшей сделки при отставании — tests/core_sell_unsent.rs lagged_ticks_wake_at_once, решение 361); пометки BingX 418 и Gate.
   **Размер:** core/candidates.rs — ~400 строк (до ветки 341), делить отдельной задачей.
   **Открыто (вопрос Тиграну):** (а) закрыто ревью — денежные не теряются всегда. (б) Стаканы 324 / пулы 321 без
   log.pool_events_lost_interval_s — потеря только в tracing; подписчики настроек (settings/live.rs) и raw_log — потеря

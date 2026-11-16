@@ -13,6 +13,8 @@
 //! Решение 300: dex.graph_exec_fallback = да и котировка решения/исполнения (Quoting.exec_quote) — лучший маршрут графа
 //! неисполним → лучший исполнимый маршрут графа (quote/graph_fit.rs) против выбранной котировки (pick); в ветке 271 и
 //! 294 — с той же проверкой mids_ok. Не задана / «нет» — Fit нет, всё как было.
+//! Решение 312: замер этапов (quote/quote_timing.rs) — классика (Classic) и выбор котировки-на-сделку (Merge); граф
+//! меряет graph_route.rs. Не включён — now() = None, часов нет.
 //! Кто вызывает: quote/mod.rs (Quoting::quote через cpu::run).
 //! От чего зависит: quote/{smart_quote, classic_direct, graph_route, via, steps}.rs, pools/registry.rs, pools/mids.rs.
 //! Настройки: dex.router_mode, dex.intermediate_partial_fill (решение 294; только при неполной классике), dex.graph_exec_fallback (решение 300) [bsc_dex]; через вызываемые — dex.*, smart.* (см. их шапки).
@@ -25,6 +27,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
+use super::quote_timing::{self, Stage};
 use super::steps::Names;
 use super::via::Via;
 use super::{Quoting, classic_direct, graph_fit, graph_route, smart_quote};
@@ -72,6 +75,7 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
     };
     let (asset, qty, gas) = (&i.asset, i.qty, i.gas);
     // Классика (решения 29, 38): прямой или умный режим. При dex.router_mode = graph ниже сравним с графом.
+    let t = quote_timing::now();
     let classic = if i.smart {
         smart_quote::quote(&v, &names, asset, qty, i.entries, &i.mids, gas).await
     } else {
@@ -80,6 +84,7 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
         // котировку как Direct, а видны только как signal_route (quote/classic_direct.rs).
         classic_direct::quote(&v, &names, asset, qty, i.entries, &i.mids, &|_| true, gas).await
     };
+    quote_timing::add(Stage::Classic, t);
     let graph_on = ctx.text("dex.router_mode").ok().as_deref() == Some("graph");
     let mut out = match classic {
         Ok(c) => c,
@@ -103,7 +108,10 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
                         .as_ref()
                         .is_some_and(|r| mids_ok(&v, r, &i.mids)) =>
                 {
-                    Ok(graph_fit::finish(&q, f, i.side, i.usdt_dec).await)
+                    let t = quote_timing::now();
+                    let out = graph_fit::finish(&q, f, i.side, i.usdt_dec).await;
+                    quote_timing::add(Stage::Merge, t);
+                    Ok(out)
                 }
                 _ => Err(e),
             };
@@ -121,6 +129,7 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
             graph_fit::parts(graph_route::quote_fit(&v, &names, asset, qty, gas, fit_on).await);
         // Решение 294: классика неполная (fillable < qty) и dex.intermediate_partial_fill = да — выбор среди
         // исполнимых; ошибка графа NoRoute — без записи Warn на каждую котировку (route_fit.rs merge). Иначе — merge, как было.
+        let t = quote_timing::now();
         if out.fillable_qty < qty && ctx.flag("dex.intermediate_partial_fill").unwrap_or(false) {
             let ok = g.as_ref().ok().and_then(|g| g.route.as_ref());
             let ok = ok.is_some_and(|r| r.executable && mids_ok(&v, r, &i.mids));
@@ -131,10 +140,13 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
                     .is_some_and(|r| mids_ok(&v, r, &i.mids))
             });
             let out = super::route_fit::merge(&q, out, g, ok, i.side, i.usdt_dec).await;
-            return Ok(graph_fit::merge(&q, out, fit, i.side, i.usdt_dec).await);
+            let out = graph_fit::merge(&q, out, fit, i.side, i.usdt_dec).await;
+            quote_timing::add(Stage::Merge, t);
+            return Ok(out);
         }
         out = graph_route::merge(&q, out, g, i.side, i.usdt_dec).await;
         out = graph_fit::merge(&q, out, fit, i.side, i.usdt_dec).await;
+        quote_timing::add(Stage::Merge, t);
     }
     Ok(out)
 }

@@ -20,16 +20,22 @@
 //! проявит котировка самой продажи на sell_qty, которая идёт следом (core/costs.rs) и проходит те же шаги; отличие —
 //! только у ошибки, которая есть на sell_qty / h и нет на sell_qty (разрешение кошелька меньше sell_qty / h, но не
 //! меньше sell_qty, и газ разрешений не измерен): раньше отказ «расчёт невозможен», теперь — нет (решение 250).
+//! Решение 312: замер быстрого пути (quote/quote_timing_outer.rs begin_fast) — запись dex.quote_timing с fast = да:
+//! всё время, decimals монеты и USDT, лучший одиночный пул, остаток; answered — ответил ли быстрый путь. Пишется только
+//! у попытки (продажа, dex.swap_mode = direct); не ответил — следом своя запись полной котировки (priced).
 //! Кто вызывает: venue.rs (контракт quote_fills).
 //! От чего зависит: quote/mod.rs (Quoting), quote/direct.rs (best, taxes), quote/classic_direct.rs (tradable),
-//! exec/native.rs, send/mod.rs (planned_floor), pools/registry.rs, tokens.rs.
-//! Настройки: dex.swap_mode, venue.quote_asset [bsc_dex], feed.stale_after_ms; через вызываемые — как у quote.
+//! exec/native.rs, send/mod.rs (planned_floor), pools/registry.rs, tokens.rs, quote/quote_timing_outer.rs (замер).
+//! Настройки: dex.swap_mode, venue.quote_asset [bsc_dex], feed.stale_after_ms; log.quote_timing,
+//! log.quote_timing_min_ms (вся система, решение 312); через вызываемые — как у quote.
 
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
+use super::quote_timing_outer::{Outcome, Outer};
+use super::quote_timing_stages::Part;
 use super::{Quoting, classic_direct, direct};
 
 impl Quoting {
@@ -57,6 +63,28 @@ pub async fn fast(q: &Quoting, asset: &Asset, side: Side, qty: Decimal) -> Gatew
     if side != Side::Sell || ctx.text("dex.swap_mode").ok().as_deref() != Some("direct") {
         return Ok(false);
     }
+    // Решение 312: замер попытки — одно чтение log.quote_timing; выключен — пустой, часов нет.
+    let mut tm = Outer::begin_fast(ctx, &asset.ticker, side, qty);
+    let out = fast_at(q, asset, side, qty, &mut tm).await;
+    // Итог — замыкание: без замера Outcome не строится.
+    tm.finish(|| {
+        let mut o = Outcome::of(&out);
+        o.answered = out.as_ref().ok().copied();
+        o
+    });
+    out
+}
+
+/// Попытка быстрого ответа (продажа, прямой режим) под замером `tm` (решение 312: только часы вокруг шагов).
+/// Принимает, возвращает и ошибки: как fast.
+async fn fast_at(
+    q: &Quoting,
+    asset: &Asset,
+    side: Side,
+    qty: Decimal,
+    tm: &mut Outer,
+) -> GatewayResult<bool> {
+    let ctx = &q.ctx;
     // Предварительные шаги priced — те же и в том же порядке (их ошибки — ошибки полной котировки).
     direct::taxes(q, asset)?;
     let usdt = q.tokens.usdt(ctx)?;
@@ -69,8 +97,10 @@ pub async fn fast(q: &Quoting, asset: &Asset, side: Side, qty: Decimal) -> Gatew
     if super::super::exec::native::is_native(ctx, asset) {
         return Ok(false);
     }
+    let t = tm.now();
     let coin_dec = q.tokens.decimals(ctx, coin).await?;
     let usdt_dec = q.tokens.decimals(ctx, usdt).await?;
+    tm.add(Part::Decimals, t);
     // «Один пул» классики прямого режима: те же пулы, что у classic_direct (исполнимые, не форк).
     let pools: Vec<_> = q
         .reg
@@ -81,6 +111,8 @@ pub async fn fast(q: &Quoting, asset: &Asset, side: Side, qty: Decimal) -> Gatew
     if pools.is_empty() {
         return Ok(false);
     }
-    Ok(direct::best(q, asset, side, qty, pools, coin_dec, usdt_dec)
-        .is_ok_and(|(c, _)| c.swapped.complete))
+    let t = tm.now();
+    let best = direct::best(q, asset, side, qty, pools, coin_dec, usdt_dec);
+    tm.add(Part::OnePool, t);
+    Ok(best.is_ok_and(|(c, _)| c.swapped.complete))
 }

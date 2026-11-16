@@ -16,6 +16,7 @@
 //! замороженного реестра набор закреплён (graph_cache.rs pinned) и берётся без срока.
 //! Решение 308: при dex.graph_background = да (и запущенном владельце) пути промаха кэша тоже гидратируются (hydrate) —
 //! цена всегда по реестру на момент котировки; поиск циклов (cycle_scan.rs) гидратирует так же.
+//! Решение 312: в замере котировки (quote/quote_timing.rs) — части набора путей: из кэша, граф, перебор, гидратация.
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (hydrate); venues/bsc_dex/frozen.rs (lookup).
 //! От чего зависит: pools/graph.rs (cached, Cache: paths_get/paths_put), pools/registry.rs, quote/route_paths.rs,
 //! quote/route_best.rs, ctx.rs.
@@ -35,6 +36,7 @@ use super::super::pools::graph::{Edge, PathsKey, Skeleton};
 use super::super::pools::graph_read;
 use super::super::pools::registry::Registry;
 use super::super::tokens::Tokens;
+use super::quote_timing::{self, Stage, stage};
 use super::route_best;
 use super::route_paths::{self, RoutePath, Step};
 
@@ -72,22 +74,29 @@ pub fn paths(
     s: &Search,
 ) -> GatewayResult<Vec<RoutePath>> {
     let key = key(ctx, s);
+    // Решение 312: признак замера котировки — один раз (части набора путей).
+    let on = quote_timing::active();
     // Решение 217: замороженный реестр — закреплённый набор путей момента снимка (без срока и без графа).
     if let Some(sk) = reg.graph_cache().paths_pinned(&key) {
-        return Ok(sk.iter().filter_map(|p| fresh(reg, p)).collect());
+        let fresh_all = || sk.iter().filter_map(|p| fresh(reg, p)).collect::<Vec<_>>();
+        return Ok(stage(Stage::PathsCached, on, fresh_all));
     }
     let ttl = ttl(ctx)?;
     if let Some(t) = ttl
         && let Some(sk) = reg.graph_cache().paths_get(&key, t)
     {
-        return Ok(sk.iter().filter_map(|p| fresh(reg, p)).collect());
+        let fresh_all = || sk.iter().filter_map(|p| fresh(reg, p)).collect::<Vec<_>>();
+        return Ok(stage(Stage::PathsCached, on, fresh_all));
     }
     // Повторное ревью (д): режим читается один раз — снимок фонового графа всегда идёт с гидратацией.
-    let (g, hydrated) = graph_read::graph_for(ctx, reg, tokens, usdt_dec)?;
+    let read = || graph_read::graph_for(ctx, reg, tokens, usdt_dec);
+    let (g, hydrated) = stage(Stage::GraphRead, on, read)?;
+    let t = quote_timing::now_if(on);
     let found = match s.cap {
         Some(c) => route_best::enumerate(&g, s.usdt, s.coin, s.allowed, s.max_hops, c),
         None => route_paths::enumerate(&g, s.usdt, s.coin, s.allowed, s.max_hops, s.max_paths),
     };
+    quote_timing::add(Stage::Enumerate, t);
     if let Some(t) = ttl {
         reg.graph_cache()
             .paths_put(key, found.iter().map(skeleton).collect(), t);
@@ -95,7 +104,7 @@ pub fn paths(
     // Решение 308: в режиме «граф без ожидания» состояние пулов и на промахе кэша путей — свежее из реестра (снимок
     // графа — только топология); в t132 здесь копии записей из графа (как было).
     if hydrated {
-        return Ok(hydrate(reg, &found));
+        return Ok(stage(Stage::Hydrate, on, || hydrate(reg, &found)));
     }
     Ok(found)
 }

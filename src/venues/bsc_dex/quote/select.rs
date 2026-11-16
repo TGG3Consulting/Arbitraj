@@ -6,6 +6,8 @@
 //! tax.max_sell_pct (решение 146); глубина нужного направления в полосе цены не ниже dex.min_pool_liquidity_usd (решение 73).
 //! Ревью 273: задана плановая цена газа (Quoting.plan_gas) — пул Solidly с пределом цены газа фабрики ниже неё не
 //! допущен (math/solidly_fee.rs blocked), как пул на паузе.
+//! Решение 311 (А): usable_with / deep_side_with — с одной подготовкой глубины (Prep) на котировку графа: настройки
+//! глубины и пулы «встречный — USDT» читаются один раз на котировку, а не на каждый хоп (quote/graph_legs.rs).
 //! Кто вызывает: quote/direct.rs и все сборщики ног маршрута (graph_legs, via_pools, smart_ways, cycle*, verify_decide, exec/live*).
 //! От чего зависит: math/solidly_fee.rs, check/state.rs, quote/pool_tax.rs (налог пула, решение 146), pools/registry.rs, pools/depth_book.rs, tokens.rs.
 //! Настройки: dex.kind, dex.pool_enabled и адреса [DEX] (families::still), dex.stable_hooks [DEX Infinity Stable], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
@@ -27,6 +29,7 @@ use crate::settings::read::At;
 use super::super::check::state::PoolFacts;
 use super::super::ctx::Ctx;
 use super::super::math::solidly_fee;
+use super::super::pools::depth_key::Prep;
 use super::super::pools::families::{self, Proto};
 use super::super::pools::registry::{Entry, Registry};
 use super::super::pools::verify_inf_stable;
@@ -48,6 +51,19 @@ pub struct Usable {
 
 /// Проверка пула. Возвращает: Ok(Usable) или Err(причина, почему пул не используется).
 pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<Usable, String> {
+    usable_with(q, e, side, usdt_decimals, None)
+}
+
+/// Решение 311 (А): то же, что usable, с готовой подготовкой глубины (pools/depth_key.rs Prep) — одной на котировку
+/// графа для всех хопов всех путей (quote/graph_legs.rs legs_prep). None — подготовка на этот пул заново, как usable.
+/// Принимает и возвращает: как usable. Ошибки: как usable.
+pub fn usable_with(
+    q: &Quoting,
+    e: &Entry,
+    side: Side,
+    usdt_decimals: u8,
+    prep: Option<&Prep>,
+) -> Result<Usable, String> {
     let (ctx, checks) = (&q.ctx, &q.checks);
     if !e.valid {
         return Err("данные пула недостоверны (обрыв или перечитывание)".into());
@@ -63,7 +79,8 @@ pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<U
     {
         return Err(why);
     }
-    if let Some(why) = deep_side(ctx, &q.reg, &q.tokens, e, usdt_decimals, Need::Side(side))? {
+    let need = Need::Side(side);
+    if let Some(why) = deep_side_with(ctx, &q.reg, &q.tokens, e, usdt_decimals, need, prep)? {
         return Err(why);
     }
     // DEX подключена и её вид не менялся на лету (pools/families.rs); пул не исключён проверкой «кто меняет».
@@ -194,10 +211,28 @@ pub fn deep_side(
     usdt_decimals: u8,
     need: Need,
 ) -> Result<Option<String>, String> {
+    deep_side_with(ctx, reg, tokens, e, usdt_decimals, need, None)
+}
+
+/// Решение 311 (А): то же, что deep_side, с готовой подготовкой глубины (`prep`; Book::depth = Book::prep +
+/// depth_prep — тот же расчёт). None — подготовка заново, как deep_side. Принимает, возвращает, ошибки: как deep_side.
+pub fn deep_side_with(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    e: &Entry,
+    usdt_decimals: u8,
+    need: Need,
+    prep: Option<&Prep>,
+) -> Result<Option<String>, String> {
     if e.asleep {
         return Ok(Some(ASLEEP.into()));
     }
-    let d = reg.depth().depth(ctx, reg, tokens, e, usdt_decimals)?;
+    let book = reg.depth();
+    let d = match prep {
+        Some(p) => book.depth_prep(ctx, reg, tokens, e, usdt_decimals, p)?,
+        None => book.depth(ctx, reg, tokens, e, usdt_decimals)?,
+    };
     let buy = (d.deep_buy, "покупки", d.band.buy);
     let sell = (d.deep_sell, "продажи", d.band.sell);
     let short: Vec<_> = match need {

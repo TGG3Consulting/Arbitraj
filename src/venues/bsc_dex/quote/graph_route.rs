@@ -12,11 +12,15 @@
 //! Нативную монету (BNB) не маршрутизирует через V4 / Infinity (решение 62, native_ok). Выбор котировки-на-сделку
 //! среди исполнимых маршрутов — merge() (решение 84 вариант Б): graph-режим не исполняет хуже классики.
 //! Решение 300: quote_fit — при неисполнимом лучшем маршруте ещё лучший исполнимый (quote/graph_fit.rs); quote — без него.
+//! Решение 311 (А): подготовка глубины (pools/depth_key.rs Prep) — одна на котировку для допуска всех хопов всех путей;
+//! dex.quote_prep_once = нет — на каждый хоп, как до 311 А (не задана — одна на котировку, решение Тиграна 16.11).
+//! Решение 312: замер этапов (quote/quote_timing.rs stage) — только когда котировка меряется; иначе часов нет. Отдельные
+//! этапы — и подготовка глубины (Prep), и снимок путей для повтора (Snapshot).
 //! Кто вызывает: quote/routing.rs за переключателем dex.router_mode (merge, quote; решение 271 — quote и при NoRoute
 //! классики); exec/trade.rs, exec/executor/mod.rs, exec/dry_build.rs (graph_form — реэкспорт из graph_exec.rs); тесты.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs (и decimals), quote/graph_split.rs, quote/abandon.rs (решение 301: брошенный расчёт — до отбора и сплита выход, без записи журнала),
 //! quote/graph_exec.rs, quote/route_best.rs, quote/route_gas.rs, quote/costs.rs, quote/select.rs, quote/via.rs (Via), quote/steps.rs, tokens.rs.
-//! Настройки: dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,
+//! Настройки: dex.quote_prep_once (решение 311 А, через graph_legs::prep_once), dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,
 //! dex.native_wrapped (газ в USDT при учёте газа), smart.split_step_pct, smart.max_splits, dex.intermediate_* [bsc_dex];
 //! через вызываемые — глубина (решение 73), допуск пула, channel.*, dex.bundle_max_routers.
 
@@ -31,8 +35,10 @@ use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
 use super::super::exec::{native, native_exec};
+use super::super::pools::depth_book::Book;
 use super::super::pools::graph_read;
 use super::graph_split::{self, Cand};
+use super::quote_timing::{self, Count, Stage, stage};
 use super::route_gas::{self, GasUsdt};
 use super::route_paths::RoutePath;
 use super::steps::Names;
@@ -89,7 +95,11 @@ pub async fn quote_fit(
         max_paths,
         cap,
     };
-    let mut paths = route_cache::paths(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec, &search)?;
+    // Решение 312: признак замера — один раз на котировку графа.
+    let on = quote_timing::active();
+    let mut paths = stage(Stage::Paths, on, || {
+        route_cache::paths(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec, &search)
+    })?;
     // Решение 62: нативную монету (BNB) не маршрутизируем через V4 / Infinity (CL, Bin) — путь не проверен живой
     // записью; как в классике (quote/mod.rs фильтрует пулы по native::pool_ok). Для ненативных монет — без фильтра.
     if native::is_native(ctx, asset) {
@@ -101,28 +111,52 @@ pub async fn quote_fit(
             format!("{}: граф не нашёл путей USDT ↔ монета", asset.ticker),
         ));
     }
-    let dec = graph_legs::decimals(v, &paths).await?;
+    let t = quote_timing::now_if(on);
+    let dec = graph_legs::decimals(v, &paths).await;
+    quote_timing::add(Stage::Decimals, t);
+    let dec = dec?;
     // R1 (решение 122): газ пути в USDT для выбора — только при dex.route_gas_aware = да.
     let gas_aware = route_gas::enabled(ctx);
     let conv = if gas_aware {
-        Some(GasUsdt::new(ctx, &v.q.reg, (v.usdt, v.usdt_dec), gas)?)
+        Some(stage(Stage::GasUsdt, on, || {
+            GasUsdt::new(ctx, &v.q.reg, (v.usdt, v.usdt_dec), gas)
+        })?)
     } else {
         None
     };
+    quote_timing::paths_in(on, &paths);
     let mut cands = Vec::new();
     let mut why = Vec::new();
-    for p in &paths {
-        match graph_legs::legs_for(v.q, p, v.side, v.usdt_dec, &dec) {
-            Ok(legs) => {
-                let g = match &conv {
-                    Some(c) => c.path(&legs)?,
-                    None => Decimal::ZERO,
-                };
-                cands.push(Cand::new(legs, g));
+    {
+        // Решение 311 (А): одна подготовка глубины (настройки глубины, USDT, пулы «встречный — USDT») на все хопы всех
+        // путей котировки — раньше заново на каждый хоп (select.rs → depth_book.rs Book::depth). Не готова (настройка
+        // глубины не задана или неверна) — None: каждый хоп готовит сам и даёт ту же причину, что раньше.
+        // Подготовка (RefCell внутри) живёт только в этом блоке без await: в состояние future не попадает.
+        // Выключатель dex.quote_prep_once = нет (решение 311 А, Тигран 16.11) — общей подготовки нет (этап prep не
+        // замеряется), каждый хоп готовит сам, как до 311 А; не задана / да — одна на котировку.
+        let prep = if graph_legs::prep_once(ctx) {
+            stage(Stage::Prep, on, || Book::prep(ctx, &v.q.tokens).ok())
+        } else {
+            None
+        };
+        // Решение 311 (В): пути больше не нужны — отдаются во владение (запись пула в ногу без копии).
+        for p in paths {
+            let legs = stage(Stage::Legs, on, || {
+                graph_legs::legs_prep(v.q, p, v.side, v.usdt_dec, &dec, prep.as_ref())
+            });
+            match legs {
+                Ok(legs) => {
+                    let g = match &conv {
+                        Some(c) => stage(Stage::GasUsdt, on, || c.path(&legs))?,
+                        None => Decimal::ZERO,
+                    };
+                    cands.push(Cand::new(legs, g));
+                }
+                Err(w) => why.push(w),
             }
-            Err(w) => why.push(w),
         }
     }
+    quote_timing::count(Count::PathsOk, cands.len() as u64);
     if cands.is_empty() {
         return Err(ctx.err(
             ErrorCode::NoRoute,
@@ -136,9 +170,11 @@ pub async fn quote_fit(
     // Решение 301 (в): срок расчёта вышел — отбор и сплит не считаем.
     abandon::check(ctx, "отбор путей и сплит графа")?;
     // Решение 300: снимок путей до отбора — только когда повтор возможен (иначе без затрат).
-    let pool = fit.then(|| graph_fit::snapshot(&cands));
+    let pool = fit.then(|| stage(Stage::Snapshot, on, || graph_fit::snapshot(&cands)));
     if cap.is_some() {
-        cands = route_best::best(ctx, cands, v.side, qty, v.taxes, max_paths)?;
+        cands = stage(Stage::Best, on, || {
+            route_best::best(ctx, cands, v.side, qty, v.taxes, max_paths)
+        })?;
         if cands.is_empty() {
             return Err(ctx.err(
                 ErrorCode::NoRoute,
@@ -150,20 +186,17 @@ pub async fn quote_fit(
         }
     }
     abandon::check(ctx, "сплит графа")?;
-    let legs = graph_split::split(ctx, &mut cands, v.side, qty, v.taxes, gas_aware)?;
+    let legs = stage(Stage::Split, on, || {
+        graph_split::split(ctx, &mut cands, v.side, qty, v.taxes, gas_aware)
+    })?;
     // Решения 39 и 146: налоговые правила исполнимости — по налогу ПУЛА каждого шага (Usable.tax_pct), не монеты.
-    let exec = graph_exec::executable(ctx, &legs, native::is_native(ctx, asset));
-    let mut quote = costs::quote(
-        ctx,
-        asset,
-        v.side,
-        qty,
-        &legs,
-        RouteMode::Graph,
-        v.taxes,
-        gas,
-        names,
-    )?;
+    let exec = stage(Stage::Exec, on, || {
+        graph_exec::executable(ctx, &legs, native::is_native(ctx, asset))
+    });
+    let mut quote = stage(Stage::Costs, on, || {
+        let m = RouteMode::Graph;
+        costs::quote(ctx, asset, v.side, qty, &legs, m, v.taxes, gas, names)
+    })?;
     let failed = exec.is_err();
     if let Some(r) = quote.route.as_mut() {
         r.executable = exec.is_ok();
@@ -183,7 +216,10 @@ pub async fn quote_fit(
                 max_paths,
                 gas_aware,
             };
-            graph_fit::best(&a, &pool, &quote).await
+            let t = quote_timing::now_if(on);
+            let found = graph_fit::best(&a, &pool, &quote).await;
+            quote_timing::add(Stage::Fit, t);
+            found
         }
         _ => None,
     };

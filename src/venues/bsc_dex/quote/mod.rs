@@ -12,12 +12,17 @@
 //! (executable = нет, причина; exec/solidly_gate.rs reason). Ревью 273: такой пул исключается уже при выборе пулов
 //! (Quoting.plan_gas → quote/select.rs) — маршрут строится через другие пулы.
 //! Решение 300: Quoting.exec_quote — котировка решения/исполнения (финальная или для исполнения) — для quote/graph_fit.rs.
+//! Решение 312: замер котировки (quote/quote_timing_outer.rs Outer) — priced целиком: до работы (decimals, цена газа),
+//! cpu::run (работа под quote_timing::timed — этапы в потоке счёта), после работы (газ разрешений, обёртки, чаевые);
+//! запись dex.quote_timing — после хвоста (priced_at — прежнее тело priced, порядок шагов и ошибок тот же). Не задана /
+//! нет — пустой Outer: часов нет, timed без замера.
 //! Кто вызывает: mod.rs (контракт quote).
 //! От чего зависит: quote/direct.rs, quote/smart_quote.rs, quote/costs.rs, quote/gas.rs, check/state.rs,
 //! pools/registry.rs, tokens.rs, node/heads.rs, wallet/approve.rs, send/mod.rs (минимум газа и чаевые каналов),
 //! exec/trade.rs (sends_tip — путь исполнения маршрута).
 //! Настройки: dex.swap_mode, venue.quote_asset [bsc_dex]; разрешения — dex.universal_router, dex.permit2 [вид пула]
-//! (прямой маршрут) или smart.universal_router, smart.permit2 [bsc_dex] (умный); feed.stale_after_ms [bsc_dex].
+//! (прямой маршрут) или smart.universal_router, smart.permit2 [bsc_dex] (умный); feed.stale_after_ms [bsc_dex];
+//! log.quote_timing, log.quote_timing_min_ms (вся система, решение 312).
 
 pub mod abandon;
 pub mod approve_bundle;
@@ -63,6 +68,10 @@ pub mod quoter_lb;
 pub mod quoter_dmm;
 pub mod quoter_maverick;
 pub mod quoter_revert;
+pub mod quote_timing;
+pub mod quote_timing_log;
+pub mod quote_timing_outer;
+pub mod quote_timing_stages;
 pub mod rate;
 pub mod route_best;
 pub mod route_cache;
@@ -108,6 +117,8 @@ use super::pools::registry::Registry;
 use super::tokens::Tokens;
 use super::wallet::balances::BNB;
 use gas::GasPrice;
+use quote_timing_outer::{Outcome, Outer};
+use quote_timing_stages::Part;
 
 /// Всё, что нужно котировке. Дешёво клонируется.
 #[derive(Clone)]
@@ -164,6 +175,23 @@ impl Quoting {
     /// Котировка без проверки свежести блока и ленты событий: у живой её делает quote, у замороженной (решение 217,
     /// frozen.rs) — снимок в момент решения. Принимает и ошибки: как quote (кроме свежести).
     pub async fn priced(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
+        // Решение 312: замер всей priced — одно чтение log.quote_timing; выключен — пустой, часов нет. Брошенный
+        // вызывающим priced пишет запись сам (Drop Outer).
+        let mut tm = Outer::begin(&self.ctx, &asset.ticker, side, qty);
+        let out = self.priced_at(asset, side, qty, &mut tm).await;
+        // Итог — замыкание: без замера Outcome не строится (решение 312).
+        tm.finish(|| Outcome::of(&out));
+        out
+    }
+
+    /// Тело priced под замером `tm` (решение 312: только часы вокруг шагов). Принимает и ошибки: как priced.
+    async fn priced_at(
+        &self,
+        asset: &Asset,
+        side: Side,
+        qty: Decimal,
+        tm: &mut Outer,
+    ) -> GatewayResult<Quote> {
         let ctx = &self.ctx;
         let mode = self.swap_mode()?;
         // Налоги — до любого запроса к узлу (decimals, цена газа, разрешения): не проверены — сразу отказ.
@@ -186,6 +214,7 @@ impl Quoting {
             // BNB (решение 62) — только пулы V2/V3: путь через V4 / Infinity не проверен живой записью.
             .filter(|e| !native || super::exec::native::pool_ok(e.pool.kind))
             .collect();
+        let t = tm.now();
         let coin_dec = self.tokens.decimals(ctx, coin).await?;
         let usdt_dec = self.tokens.decimals(ctx, usdt).await?;
         let mut mids = Vec::new();
@@ -193,12 +222,15 @@ impl Quoting {
             let d = self.tokens.decimals(ctx, m.address).await?;
             mids.push((m, d));
         }
+        tm.add(Part::Decimals, t);
         // Цена газа — как при отправке: eth_gasPrice с надбавкой, не ниже минимума готовых каналов (exec/txs.rs).
+        let t = tm.now();
         let gas = self
             .gas
             .wei(ctx, &self.heads)
             .await?
             .max(super::send::planned_floor(ctx)?);
+        tm.add(Part::Gas, t);
         let usdt_ticker = ctx.text("venue.quote_asset")?;
         // Выбор маршрута — счёт CPU: вне рабочих потоков tokio (quote/cpu.rs, решение 129 часть 2), срок расчёта
         // ядра срабатывает вовремя. Логика выбора — quote/routing.rs (перенесена без изменений).
@@ -226,7 +258,11 @@ impl Quoting {
             crate::gateway::quote_stage::is_final() || crate::gateway::patience::is_exec();
         // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
         // (quote/cpu.rs run).
-        let mut q = cpu::run(ctx, Box::pin(routing::run(pick, input))).await?;
+        // Решение 312: замер этапов работы — tm.run() = None (выключен): timed сразу ведёт работу без замера.
+        let work = quote_timing::timed(tm.run(), routing::run(pick, input));
+        let q = cpu::run(ctx, Box::pin(work)).await;
+        tm.back();
+        let mut q = q?;
         // Решение 273: пул Solidly маршрута на паузе фабрики или цена газа выше его maxGasPrice — маршрут неисполним
         // (сигнал с причиной; exec/trade.rs не исполняет executable = нет). После отбора по plan_gas — страховка.
         if let Some(r) = q.route.as_mut() {
@@ -247,6 +283,7 @@ impl Quoting {
             Some(s) => c.with_step(s.clone()),
             None => c,
         };
+        let t = tm.now();
         if let Some(units) = approve_gas::units(self, &q, coin_dec, usdt_dec).await? {
             let wei = gas.saturating_mul(U256::from(units));
             let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
@@ -258,6 +295,8 @@ impl Quoting {
             q.costs
                 .push(with_step(Cost::new(CostKind::ApproveGas, bnb, BNB, false)));
         }
+        tm.add(Part::Approve, t);
+        let t = tm.now();
         // Нативная монета BNB (решение 62): газ WRAP_ETH / UNWRAP_WETH сверх обмена токеном — quote/native_gas.rs.
         if let Some((c, units)) = native_gas::cost(self, &q, gas)? {
             q.costs.push(with_step(c));
@@ -265,6 +304,8 @@ impl Quoting {
                 r.gas_units += units;
             }
         }
+        tm.add(Part::Native, t);
+        let t = tm.now();
         // Тигран 09.11 (согласовано, план = факт): чаевые и газ их перевода — только если путь исполнения маршрута их
         // отправляет (одна транзакция); бандл свопов графа их не шлёт (exec/trade.rs sends_tip — тот же выбор пути).
         let tip_sent = super::exec::trade::sends_tip(ctx, q.route.as_ref(), native);
@@ -281,6 +322,7 @@ impl Quoting {
                     .push(with_step(Cost::new(CostKind::ChannelTip, g, BNB, false)));
             }
         }
+        tm.add(Part::Tip, t);
         Ok(q)
     }
 }

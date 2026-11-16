@@ -22,6 +22,10 @@
 //! Не заданы — ровно как до 336 (по одной точке).
 //! Решение 337: Params.early_floor задан — сначала границы и сетка; лучшая прибыль ниже пола (size_early.rs) — изломы
 //! и уточнение не считаются, Found.early (вызывающий отклоняет без финальной котировки). Не задан — как до 337.
+//! Задача t159: решение 343 — при size.feasible_scan точки и вне отрезка бисекции (size_scan.rs: концы участков
+//! допустимости по minNotional / maxNotional продажи и равномерные точки ниже и выше) — их пики уточняются так же;
+//! решение 342 — при size.pct_constraint итог — лучший по USDT среди проходящих порог % (size_pct.rs); решение 345 —
+//! мягкий срок (size_memo.rs): новых точек нет, итог — лучший из посчитанных, Found.late. Не заданы — как до t159.
 //! Кто вызывает: core/profit.rs, core/cycle_plan.rs, core/size_uncapped.rs, core/size_max.rs, тесты
 //! (tests/core_size_optimum.rs, tests/core_size_parallel.rs — записанные стакан и пул).
 //! От чего зависит: core/size.rs, core/size_memo.rs, core/size_bounds.rs, core/size_par.rs, core/calc_detail.rs.
@@ -43,6 +47,8 @@ use super::size_refine::{refine, tolerance};
 pub const BOUNDS: &str = "границы (бисекция)";
 pub const POINTS: &str = "точки (изломы и сетка)";
 pub const REFINE: &str = "уточнение";
+/// Решение 343: имя части замера «точки вне отрезка бисекции» (calc_detail.rs).
+pub const SCAN: &str = "участки допустимости";
 
 /// Поиск. Принимает: кривую, параметры. Возвращает: лучшую точку и сводку (why пустой — текст пишет profit.rs).
 /// Ошибки: Stop — расчёт невозможен; TooSmall / TooLarge — ни один объём в пределах бюджета не подходит.
@@ -53,7 +59,9 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
             p.step
         )));
     }
-    let mut m = Memo::new(curve, p.step, p.budget, p.max_evals).with_share(p.par_points, p.reuse);
+    let mut m = Memo::new(curve, p.step, p.budget, p.max_evals)
+        .with_share(p.par_points, p.reuse)
+        .with_deadline(p.ext.deadline);
     search_in(&mut m, p).await
 }
 
@@ -75,7 +83,14 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
     }))
     .await?;
     // Решение 337: при поле раннего выхода сначала границы и сетка, ниже пола — без изломов и уточнения.
-    let (ok, early) = Box::pin(stage_detail(|| POINTS.into(), points(m, p, lo, hi))).await?;
+    let (mut ok, early) = Box::pin(stage_detail(|| POINTS.into(), points(m, p, lo, hi))).await?;
+    // Решение 343: допустимые точки вне отрезка бисекции — в общий список (их пики уточняются так же).
+    if p.ext.scan && !early {
+        let more = super::size_scan::extra(m, p, lo, hi, guess);
+        ok.extend(Box::pin(stage_detail(|| SCAN.into(), more)).await?);
+        ok.sort_unstable_by_key(|x| x.0);
+        ok.dedup_by_key(|x| x.0);
+    }
     let early = early || below(m, p.early_floor);
     let tol = tolerance(hi, p.tolerance_pct);
     let mut peaks = 0u32;
@@ -112,15 +127,23 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
         ))
         .await?;
     }
-    let best = m
+    let mut best = m
         .best()
         .ok_or_else(|| Fail::Stop("ни один объём не посчитан".into()))?;
+    // Решение 342: порог % — ограничение поиска: лучший по USDT среди проходящих % (нет таких — как раньше).
+    if let Some(min_pct) = p.ext.min_pct
+        && !early
+        && let Some(b) = Box::pin(super::size_pct::best(m, min_pct, p.refine_steps, tol)).await?
+    {
+        best = b;
+    }
     // Точка hi посчитана при поиске границы (в памяти) — предел расчётов её не трогает.
     let top = Box::pin(m.at(hi)).await?;
     let choice = SizeChoice {
         qty: best.qty,
         profit: best.profit,
-        min_qty: m.qty(lo),
+        // Решение 343: допустимый объём ниже границы бисекции — наименьший допустимый.
+        min_qty: m.qty(ok.first().map_or(lo, |x| x.0.min(lo))),
         max_qty: top.qty,
         budget: p.budget,
         at_budget_profit: top.profit,
@@ -134,5 +157,6 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
         best,
         choice,
         early,
+        late: m.late(),
     })
 }

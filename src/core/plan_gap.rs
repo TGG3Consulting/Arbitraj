@@ -63,6 +63,11 @@ impl<C: Curve> Curve for PlanGap<C> {
         }
         rs
     }
+
+    /// Решение 342: процент прибыли — у обёрнутой кривой. Ошибок нет.
+    fn pct(data: &C::Data) -> Option<Decimal> {
+        C::pct(data)
+    }
 }
 
 impl<C: Curve> PlanGap<C> {

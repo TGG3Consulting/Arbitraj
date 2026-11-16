@@ -107,6 +107,8 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         // использования допуска пулов: точка цикла всегда по полному допуску (gateway/calc_share.rs).
         reuse: false,
         par_blocked,
+        // Задача t159: у цикла порога % нет; участки, срок — не включаются (как до t159).
+        ext: Default::default(),
     };
     // Решение 337: пол раннего выхода — порог dex_dex.min_profit_usd минус size.early_exit_margin_usd.
     p.early_floor = super::size_early::floor(s, min_usd);

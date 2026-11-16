@@ -38,6 +38,7 @@ mod okx;
 mod phemex;
 mod send;
 mod signals;
+mod sizing;
 mod trade;
 mod uncapped;
 mod window;
@@ -116,6 +117,7 @@ const DIR_ALL: &[DirKind] = &DirKind::ALL;
 static PARTS: &[&[SettingDef]] = &[
     base::BASE,
     cpu::CPU,
+    sizing::SIZING,
     trade::TRADE,
     signals::SIGNALS,
     uncapped::UNCAPPED,

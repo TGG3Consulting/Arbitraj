@@ -50,6 +50,10 @@ impl<C: Curve> Memo<'_, C> {
             .collect();
         todo.truncate(usize::try_from(self.max.saturating_sub(self.done)).unwrap_or(0));
         for chunk in todo.chunks(self.par.max(1)) {
+            // Решение 345: мягкий срок — следующие пачки не считаются (как предел size.max_evals).
+            if self.late() {
+                break;
+            }
             let qs: Vec<Decimal> = chunk.iter().map(|&n| self.qty(n)).collect();
             self.done += u32::try_from(chunk.len()).unwrap_or(u32::MAX);
             // Уступаем рабочий поток перед пачкой (решение 90, как at).

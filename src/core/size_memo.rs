@@ -6,12 +6,16 @@
 //! Решение 265: каждый расчёт объёма (at, beyond) — часть подробного замера «расчёт объёма» (calc_detail.rs, только при log.step_timing).
 //! Решение 336: короб подбора для адаптеров (gateway/calc_share.rs) — только когда нужен (точки параллельно или
 //! dex.quote_reuse; ставит size_par.rs with_share), иначе расчёт точки как до 336; пачки точек — size_par.rs at_many.
+//! Решение 345 (задача t159): мягкий срок подбора (size_extra.rs) — после него новых точек нет, как при исчерпанном
+//! size.max_evals (capped); точка «вне предела» (force, решение 237) срок не останавливает.
+//! Решение 342: best_pct — лучшая точка среди проходящих порог % (size_pct.rs).
 //! Кто вызывает: core/size_bounds.rs, core/size_search.rs, core/size_par.rs; over_budget — ещё core/costs.rs.
 //! От чего зависит: core/size.rs, core/calc_timing.rs, gateway/calc_share.rs.
 //! Настройки: нет (size.parallel_points и признак dex.quote_reuse — через Params, size_par.rs with_share).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
@@ -48,6 +52,8 @@ pub struct Memo<'a, C: Curve> {
     /// Решение 336: короб этого подбора для адаптеров (gateway/calc_share.rs); None — не нужен (ревью t157 Б1: точки по
     /// одной и повторное использование не включено — расчёт точки как до 336).
     pub(super) share: Option<Arc<Share>>,
+    /// Решение 345: мягкий срок подбора; None — без срока (как до t159).
+    pub(super) deadline: Option<Instant>,
 }
 
 impl<'a, C: Curve> Memo<'a, C> {
@@ -62,12 +68,24 @@ impl<'a, C: Curve> Memo<'a, C> {
             done: 0,
             par: 1,
             share: None,
+            deadline: None,
         }
+    }
+
+    /// Решение 345: мягкий срок подбора. Принимает: срок (None — без срока). Возвращает: себя. Ошибок нет.
+    pub fn with_deadline(mut self, deadline: Option<Instant>) -> Self {
+        self.deadline = deadline;
+        self
+    }
+
+    /// Решение 345: мягкий срок наступил. Ошибок нет.
+    pub fn late(&self) -> bool {
+        self.deadline.is_some_and(|d| Instant::now() >= d)
     }
 
     /// Предел расчётов исчерпан. Ошибок нет.
     pub fn capped(&self) -> bool {
-        self.done >= self.max
+        self.done >= self.max || self.late()
     }
 
     /// Номер шага объёма с округлением вниз. Принимает: объём ≥ 0. Возвращает: n; None — объём не помещается в u64.
@@ -86,10 +104,11 @@ impl<'a, C: Curve> Memo<'a, C> {
         if self.map.contains_key(&n) || !self.capped() {
             return self.at(n).await;
         }
-        let max = self.max;
+        let (max, deadline) = (self.max, self.deadline.take());
         self.max = self.done + 1;
         let r = self.at(n).await;
         self.max = max;
+        self.deadline = deadline;
         r
     }
 
@@ -101,6 +120,12 @@ impl<'a, C: Curve> Memo<'a, C> {
             return r.clone();
         }
         if n > 0 && self.capped() {
+            // Решение 345: мягкий срок — свой текст (итог подбора — лучшая из посчитанных).
+            if self.late() {
+                return Err(Fail::Stop(
+                    "наступил мягкий срок подбора size.soft_deadline_pct".into(),
+                ));
+            }
             return Err(Fail::Stop(format!(
                 "исчерпан предел расчётов size.max_evals = {}",
                 self.max
@@ -166,6 +191,21 @@ impl<'a, C: Curve> Memo<'a, C> {
         let mut best: Option<&Point<C::Data>> = None;
         for p in self.map.values().flatten() {
             if best.is_none_or(|b| p.profit > b.profit) {
+                best = Some(p);
+            }
+        }
+        best.cloned()
+    }
+
+    /// Решение 342: лучшая допустимая точка среди тех, чей процент прибыли (Curve::pct) не ниже порога: наибольшая
+    /// прибыль, при равной — меньший объём. Принимает: порог %. Возвращает: точку; None — ни одна не проходит или
+    /// кривая процента не знает. Ошибок нет.
+    pub fn best_pct(&self, min_pct: Decimal) -> Option<Point<C::Data>> {
+        let mut best: Option<&Point<C::Data>> = None;
+        for p in self.map.values().flatten() {
+            if C::pct(&p.data).is_some_and(|v| v >= min_pct)
+                && best.is_none_or(|b| p.profit > b.profit)
+            {
                 best = Some(p);
             }
         }

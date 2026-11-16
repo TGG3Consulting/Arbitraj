@@ -221,6 +221,7 @@ fn params(rec: &Rec, a: &OrderBook, b: &OrderBook) -> Params {
         early_floor: None,
         reuse: false,
         par_blocked: false,
+        ext: Default::default(),
     }
 }
 

@@ -7,6 +7,7 @@
 | `mod.rs` | Короткая запись `d()`, наборы областей, `all()` и `find()` по всем частям |
 | `base.rs` | Деньги и риск, расчёт, сигнал, исполнение, переводы, площадки (биржи), уведомления, безопасность, система |
 | `trade.rs` | Налоги и крючки, возврат USDT, застрявшие монеты, ручной чёрный список (решения 30, 32, 34, 36, 37); решение 293 (ревью) — stuck.reject_route_pause |
+| `sizing.rs` | Решения 342–345 (задача t159): size.pct_constraint, size.feasible_scan, size.pool_breaks_max, size.soft_deadline_pct — подбор объёма без потери прибыльных объёмов (все необязательные) |
 | `cpu.rs` | Решения 336–338 (задача t157): size.parallel_points, size.bisect_probes, size.early_exit_margin_usd, cpu.threads_max, cpu.reserve_deal, cpu.reserve_calc, cpu.helper_threads, dex.quote_reuse, dex.quote_threads, dex.graph_threads — счёт процессора (все необязательные) |
 | `dex.rs` | Узел BSC, режим обмена, пулы, умный режим, адреса контрактов вида пула (решения 29, 31, 38) |
 | `dex_fit.rs` | Решение 294: dex.intermediate_partial_fill — путь через промежуточную отдаёт помещающуюся часть (отдельный файл: dex.rs — зона другого разработчика); решение 300: dex.graph_exec_fallback — лучший исполнимый маршрут графа |

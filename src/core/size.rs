@@ -6,6 +6,8 @@
 //! От чего зависит: rust_decimal, async_trait, serde.
 //! Решение 336: Curve::batch — пачка независимых точек (по умолчанию по одной); Params.par_points, bisect_probes.
 //! Решение 337: Params.early_floor и Found.early — ранний выход подбора (size_search.rs).
+//! Задача t159 (решения 342, 343, 345): Params.ext — необязательные части подбора (size_extra.rs); Curve::pct — процент
+//! прибыли точки для порога % как ограничения поиска; Found.late — подбор остановлен мягким сроком.
 //! Настройки: нет (параметры поиска читает size_curve.rs: size.*).
 
 use std::fmt;
@@ -80,6 +82,12 @@ pub trait Curve: Send {
         }
         out
     }
+
+    /// Решение 342: процент прибыли точки от вложенного (для порога % как ограничения поиска, size_pct.rs). По
+    /// умолчанию — None (кривая процента не знает: ограничение не действует). Принимает: данные точки. Ошибок нет.
+    fn pct(_data: &Self::Data) -> Option<Decimal> {
+        None
+    }
 }
 
 /// Параметры поиска. Все из настроек и данных площадок — значений по умолчанию нет.
@@ -121,6 +129,8 @@ pub struct Params {
     pub reuse: bool,
     /// Ревью t157 Н3: size.parallel_points задана, а cpu.threads_max нет — точки по одной, пояснение в why (profit.rs).
     pub par_blocked: bool,
+    /// Задача t159: необязательные части подбора (решения 342, 343, 345; size_extra.rs). По умолчанию — выключены.
+    pub ext: super::size_extra::Extra,
 }
 
 /// Итог подбора — для журнала и «Кандидатов».
@@ -154,4 +164,6 @@ pub struct Found<T> {
     pub choice: SizeChoice,
     /// Решение 337: подбор остановлен ранним выходом (лучшая прибыль ниже Params.early_floor) — уточнения не было.
     pub early: bool,
+    /// Решение 345: подбор остановлен мягким сроком size.soft_deadline_pct — итог из посчитанных.
+    pub late: bool,
 }

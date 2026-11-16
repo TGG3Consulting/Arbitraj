@@ -135,6 +135,7 @@ pub fn params(rec: &Rec, dir: Dir, budget: Decimal) -> Params {
         early_floor: None,
         reuse: false,
         par_blocked: false,
+        ext: Default::default(),
     }
 }
 

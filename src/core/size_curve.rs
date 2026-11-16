@@ -12,6 +12,8 @@
 //! у кривой боя (profit.rs) бюджет проверяется уже после стороны A (CoreCurve.budget), без котировок B.
 //! Решение 336: batch — пачка точек одновременно (join_all на одной задаче: котировки DEX каждой точки уходят в свои
 //! потоки счёта адаптера, ожидание — общее); size.parallel_points и size.bisect_probes — в Params (size_par.rs).
+//! Задача t159: Curve::pct — процент прибыли расчёта (решение 342); search_params читает необязательные size.* t159
+//! (size_extra.rs), params — концы участков допустимости продажи по стакану B (решение 343, size_scan.rs regions).
 //! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (общие; значений нет —
 //! не задана хоть одна — подбора нет, сделки нет); size.parallel_points, size.bisect_probes (необязательные, решение 336);
 //! dex.quote_reuse [площадка направления] — признак короба с повторным использованием (решение 336, один раз на подбор).
@@ -57,6 +59,11 @@ impl Curve for CoreCurve<'_> {
         let me = &*self;
         join_all(qtys.into_iter().map(|q| me.eval(q))).await
     }
+
+    /// Решение 342: процент прибыли расчёта от вложенного (Calc.profit_pct, costs.rs). Ошибок нет.
+    fn pct(data: &Calc) -> Option<Decimal> {
+        Some(data.profit_pct)
+    }
 }
 
 impl CoreCurve<'_> {
@@ -90,6 +97,11 @@ impl<S: Source> Curve for SourceCurve<'_, S> {
     async fn batch(&mut self, qtys: Vec<Decimal>) -> Vec<Result<Point<Calc>, Fail>> {
         let me = &*self;
         join_all(qtys.into_iter().map(|q| me.eval(q))).await
+    }
+
+    /// Решение 342: процент прибыли расчёта от вложенного (Calc.profit_pct, costs.rs). Ошибок нет.
+    fn pct(data: &Calc) -> Option<Decimal> {
+        Some(data.profit_pct)
     }
 }
 
@@ -136,22 +148,36 @@ pub fn params(
         b.map(|b| cumulative(if buy { &b.asks } else { &b.bids }))
             .unwrap_or_default()
     };
-    let (buy_breaks, sell_breaks) = {
-        let market = rd(&core.inner.market);
-        match src {
-            Some(f) => (cum(f.book(false), true), cum(f.book(true), false)),
-            None => (
-                cum(market.book(&d.buy_on, ta), true),
-                cum(market.book(&d.sell_on, tb), false),
-            ),
-        }
-    };
     // Решение 239: у снимка со входами момента решения — настройки на тот момент.
     let s = src
         .and_then(|f| f.decided.as_deref())
         .map_or(&core.inner.deps.settings, |x| &x.settings);
+    // Решение 343: концы участков допустимости продажи — только при size.feasible_scan (иначе стакан не трогаем).
+    let scan = super::size_extra::flags(s).scan;
+    let regions = |b: Option<&OrderBook>| -> Vec<Decimal> {
+        match (scan, b) {
+            (true, Some(b)) => super::size_scan::regions(&b.bids, cx.pair_b.as_ref()),
+            _ => Vec::new(),
+        }
+    };
+    let (buy_breaks, sell_breaks, sell_regions) = {
+        let market = rd(&core.inner.market);
+        match src {
+            Some(f) => (
+                cum(f.book(false), true),
+                cum(f.book(true), false),
+                regions(f.book(true)),
+            ),
+            None => (
+                cum(market.book(&d.buy_on, ta), true),
+                cum(market.book(&d.sell_on, tb), false),
+                regions(market.book(&d.sell_on, tb)),
+            ),
+        }
+    };
     let mut p = search_params(s, step, budget, price, buy_breaks, sell_breaks)?;
     p.reuse = reuse_on(s, d);
+    p.ext.sell_regions = sell_regions;
     Ok(p)
 }
 
@@ -205,6 +231,11 @@ pub fn search_params(
         early_floor: None,
         reuse: false,
         par_blocked,
+        // Задача t159: участки допустимости — флаг здесь, концы участков ставит params; порог % и срок — profit.rs.
+        ext: super::size_extra::Extra {
+            scan: super::size_extra::flags(s).scan,
+            ..Default::default()
+        },
     })
 }
 

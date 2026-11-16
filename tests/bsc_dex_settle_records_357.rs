@@ -160,7 +160,7 @@ async fn lb_two_bins_one_swap_held_then_once() {
     let ids: Vec<u32> = all
         .iter()
         .map(|l| {
-            let d = l.data().data.as_ref();
+            let d = l.inner.data.data.as_ref();
             U256::from_be_slice(&d[0..32]).to::<u32>()
         })
         .collect();
@@ -249,9 +249,10 @@ fn infinity_bin_two_txs_same_active_not_held() {
         "разные tx"
     );
     // Swap(id, sender, amount0, amount1, activeId, fee, protocolFee): activeId — третье слово данных.
-    let active = |l: &Log| U256::from_be_slice(&l.data().data[64..96]).to::<u32>();
-    let word =
-        |l: &Log, i: usize| U256::from_be_slice(&l.data().data[i * 32..(i + 1) * 32]).to::<u32>();
+    let active = |l: &Log| U256::from_be_slice(&l.inner.data.data[64..96]).to::<u32>();
+    let word = |l: &Log, i: usize| {
+        U256::from_be_slice(&l.inner.data.data[i * 32..(i + 1) * 32]).to::<u32>()
+    };
     assert_eq!((active(&all[0]), active(&all[1])), (8_387_666, 8_387_666));
     let end = active(&all[1]);
     let mut e = native_common::entry("pancakeswap_infinity_bin", None);

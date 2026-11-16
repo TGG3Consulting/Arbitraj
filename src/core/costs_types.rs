@@ -4,8 +4,9 @@
 //! исполнителя DEX из котировок (решение 123) для хронологии сделки (executor.rs). Решение 219: комиссия покупки в
 //! котируемой монете по худшей цене (spend_fee) — часть списания spend_max; предел цены ордера под неё (order_cap).
 //! Решение 262: худшая цена покупки плана (buy_worst) — лимит ордера покупки на бирже.
+//! Решение 358: sigma_check — сравнение σ запаса только для журнала (core/reserve_check.rs), на прибыль не влияет.
 //! Кто вызывает: core/costs.rs (собирает), profit.rs, candidates.rs, executor.rs, partial.rs, интерфейс (JSON).
-//! От чего зависит: core/types, core/size.rs (SizeChoice).
+//! От чего зависит: core/types, core/size.rs (SizeChoice), core/reserve_check.rs (SigmaCheck).
 //! Настройки: нет.
 
 use chrono::{DateTime, Utc};
@@ -62,6 +63,11 @@ pub struct Calc {
     pub profit_pct: Decimal,
     pub transit_s: Decimal,
     pub sigma: Decimal,
+    /// Решение 358 (только журнал, log.sigma_horizon = да): σ на горизонте T рядом со σ плана, запас и прибыль с ней.
+    /// None — режим выключен или не план входа; в JSON тогда поля нет.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Box — Calc живёт в будущих пути расчёта и предпроверки, значение по месту растило бы их стек.
+    pub sigma_check: Option<Box<super::reserve_check::SigmaCheck>>,
     /// Котировки — для худшей цены ордеров и маршрута DEX при исполнении.
     pub buy_quote: Quote,
     pub sell_quote: Quote,

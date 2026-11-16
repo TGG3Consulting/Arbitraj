@@ -25,9 +25,11 @@
 //! (котировки B, вывод, возврат и курсы не считаются); итог в бюджете — тот же Calc, что у evaluate_with.
 //! Решение 250: проверка доли глубины h — Source::fillable (исполнимость без цены; у bsc_dex — без полной котировки,
 //! если лучший одиночный пул исполняет объём целиком: quote/fills.rs).
+//! Решение 358 (только журнал): при сравнении σ в контексте (DirCtx::sigma_check) — запас и прибыль по σ на горизонте T
+//! рядом с прежними (reserve_check.rs priced); прибыль и решение — по прежнему запасу.
 //! Кто вызывает: core/size_curve.rs (подбор объёма: CoreCurve — evaluate_capped, SourceCurve), core/partial.rs.
-//! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_source.rs, costs_withdraw.rs, dirctx.rs, reserve.rs, size.rs,
-//! engine.rs (шлюз).
+//! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_source.rs, costs_withdraw.rs, dirctx.rs, reserve.rs,
+//! reserve_check.rs, size.rs, engine.rs (шлюз).
 //! Настройки: через dirctx.rs (profit.*, usdt_return.mode).
 
 use chrono::Utc;
@@ -237,6 +239,10 @@ pub async fn evaluate_capped<S: Source>(
     // Решение 219: комиссия покупки в котируемой монете A по худшей цене — часть списания (MEXC 30004).
     let spend_fee = super::costs_types::quote_fee_at_worst(&qa, &cx.quote[0], worst_a);
     let profit = proceeds - invested - costs_usdt;
+    // Решение 358 (только журнал): запас и прибыль по σ на горизонте T рядом с прежними; решение — по прежним.
+    // Не-async функция (reserve_check.rs priced_box): значения сравнения не живут в кадре этого будущего.
+    let sigma_check =
+        super::reserve_check::priced_box(cx, &costs, sqrt_t, proceeds, &qa, &qb, profit, &rates);
     Ok(Calc {
         direction: d.clone(),
         qty,
@@ -256,6 +262,7 @@ pub async fn evaluate_capped<S: Source>(
         },
         transit_s: cx.transit_s,
         sigma: cx.sigma,
+        sigma_check,
         buy_quote: qa,
         sell_quote: qb,
         at: Utc::now(),

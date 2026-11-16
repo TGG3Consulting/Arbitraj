@@ -6,8 +6,11 @@
 //! Решение 118 (Я-6): ряд — по направлению: (площадка, монета, сторона, площадка-напарник). Объём сравнения у каждого
 //! направления свой, и замеры продажи на MEXC от BingX → MEXC и от DEX → MEXC в одном ряду выглядели бы движением цены.
 //! Решение 240: measure — σ вместе с числом ненулевых изменений цены в окне (profit.sigma_min_changes, core/reserve.rs).
-//! Кто вызывает: core/evaluate.rs (замеры цен сигнала), core/dirctx.rs (σ на B), core/reserve.rs (measure).
-//! От чего зависит: rust_decimal (ln, sqrt), chrono.
+//! Решение 358 (только журнал): шаг хранит лог-доходность со знаком (квадрат — при сложении, σ та же); horizon — σ на
+//! горизонте T и автокорреляция шагов по тому же окну (core/vol_horizon.rs) для сравнения со σ рядом.
+//! Кто вызывает: core/evaluate.rs (замеры цен сигнала), core/dirctx.rs (σ на B), core/reserve.rs (measure),
+//! core/reserve_check.rs (horizon).
+//! От чего зависит: rust_decimal (ln, sqrt), chrono, core/vol_horizon.rs.
 //! Настройки: profit.sigma_window_min (окно передаёт вызывающий).
 
 use std::collections::{HashMap, VecDeque};
@@ -17,11 +20,14 @@ use rust_decimal::{Decimal, MathematicalOps};
 
 use crate::core::types::{Asset, Side, VenueId};
 
-/// Ряд цен: последняя цена и шаги внутри окна (время шага, квадрат лог-доходности, Δt в секундах).
+/// Шаг ряда: время замера, лог-доходность ln pᵢ/pᵢ₋₁ со знаком (решение 358), Δt с прошлого замера в секундах.
+pub type Step = (DateTime<Utc>, Decimal, Decimal);
+
+/// Ряд цен: последняя цена и шаги внутри окна.
 #[derive(Default, Clone)]
 struct Series {
     last: Option<(Decimal, DateTime<Utc>)>,
-    steps: VecDeque<(DateTime<Utc>, Decimal, Decimal)>,
+    steps: VecDeque<Step>,
 }
 
 impl Series {
@@ -74,7 +80,7 @@ impl Volatility {
             (Some((prev, t)), Some(w)) => {
                 let dt = Decimal::from((at - t).num_milliseconds()) / Decimal::ONE_THOUSAND;
                 let r = (p / prev).ln();
-                s.steps.push_back((at, r * r, dt));
+                s.steps.push_back((at, r, dt));
                 s.prune(at - Duration::minutes(w as i64));
             }
             (_, None) => s.steps.clear(),
@@ -130,7 +136,7 @@ impl Volatility {
             .steps
             .iter()
             .fold((Decimal::ZERO, Decimal::ZERO), |(a, b), (_, r, d)| {
-                (a + r, b + d)
+                (a + r * r, b + d)
             });
         if dt <= Decimal::ZERO {
             return Err(none());
@@ -140,5 +146,30 @@ impl Volatility {
             .sqrt()
             .map(|sigma| (sigma, changes))
             .ok_or_else(|| "волатильность не вычисляется".to_string())
+    }
+
+    /// Решение 358 (только журнал): σ на горизонте `horizon_s` и автокорреляция шагов по окну window_min
+    /// (core/vol_horizon.rs). Принимает: как measure и горизонт T в секундах. Возвращает: None — ряда нет.
+    /// Ошибок нет.
+    #[allow(clippy::too_many_arguments)]
+    pub fn horizon(
+        &mut self,
+        venue: &VenueId,
+        asset: &Asset,
+        side: Side,
+        partner: &VenueId,
+        window_min: u64,
+        now: DateTime<Utc>,
+        horizon_s: Decimal,
+    ) -> Option<super::vol_horizon::Horizon> {
+        let key = (
+            venue.clone(),
+            asset.clone(),
+            side == Side::Sell,
+            partner.clone(),
+        );
+        let s = self.map.get_mut(&key)?;
+        s.prune(now - Duration::minutes(window_min as i64));
+        Some(super::vol_horizon::of(&s.steps, now, horizon_s))
     }
 }

@@ -26,6 +26,7 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решения 358, 359 (t161; `wc -l`): сверх ориентира 200 строк выросли core/dirctx.rs 304 → 321 (сравнение σ у плана входа), core/costs.rs 268 → 278 (запас по σ_T рядом с прежним), core/candidates.rs 341 → 344 (signal_note). Разнести при правке оценки σ (решение 360).
 - Решение 308 (t137; размеры по wc -l после пятого ревью): сверх ориентира 200 строк — pools/graph_cache.rs 256 (было 230 до t137: кэш t132 + переключатель режима; после приёмки 308 и отказа от пути t132 — удалить замок building и кэш по Stamp), pools/graph_owner.rs 213, pools/graph_finish.rs 209, pools/graph_alarm.rs 203, pools/graph_stats.rs 203 (вынести Buckets в graph_buckets.rs), pools/graph_snap.rs 202, pools/graph.rs 202, venue.rs ~610 (до правки 578).
 - Решение 301 (t132, после слияния с rel/dex-all; `wc -l` на итоговом коде): файлы сверх ориентира 200 строк
   (до t132 → стало) — pools/depth_book.rs 240 → 286 (depth_prep_r, книга неудач depth_fail, счётчик calcs),

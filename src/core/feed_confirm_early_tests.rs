@@ -409,14 +409,14 @@ fn rest_error_between_newer_answers_does_not_delay_resub() {
 
 #[test]
 fn needed_pair_keeps_priority_until_confirmed_or_frame() {
+    // Снимок many(): у всех пар номер книги последнего кадра — 1 (сравнение REST — с ним).
     let mut c = cfg();
     c.quiet = QuietCfg::Confirm {
         min_ms: 30_000,
         max_per_s: 1,
     };
     let none = HashMap::new();
-    let mut st = need(&["GMT"]);
-    let h = |n| many(n, &[("OLD", 10_000), ("GMT", 38_500)]);
+    let h = |n, gmt_last| many(n, &[("OLD", 10_000), ("GMT", gmt_last)]);
     let n = |a: &[Action]| -> Vec<String> {
         a.iter()
             .filter_map(|x| match x {
@@ -425,45 +425,58 @@ fn needed_pair_keeps_priority_until_confirmed_or_frame() {
             })
             .collect()
     };
-    // GMT нужна и ранняя: ведро ей; затем GMT выпала из «нужных» (сигнал без цены), но остаётся в приоритете.
+    // 1) Снятие приоритета новым кадром. GMT нужна, тишина 2,1 с — ранняя проверка, ведро (1 запрос/с) ей, OLD
+    // (ждёт с 25 с) отложена.
+    let mut st = need(&["GMT"]);
     assert_eq!(
-        n(&decide(&h(40_600), 40_600, &c, &none, &mut st)),
+        n(&decide(&h(40_600, 38_500), 40_600, &c, &none, &mut st)),
         vec!["GMT"]
     );
+    // GMT выпала из «нужных» (сигнал без цены). Ответ: книга 2 новее кадра 1 — первое «новее»: подтверждение снято.
     st.needed.clear();
     let a = apply(
-        &h(40_700),
+        &h(40_700, 38_500),
         "m1",
         "GMT",
-        Ok(BookVersion {
-            id: Some(101),
-            ..Default::default()
-        }),
+        by_id(2),
         40_600,
         40_700,
         &c,
         &mut st,
     );
     assert_eq!(a, vec![unconfirm()]);
-    // Повторная сверка GMT (sticky) — раньше OLD, хотя GMT больше не в State.needed.
+    // Через секунду ведро снова даёт запрос: повторная сверка GMT — раньше OLD, хотя GMT нет в State.needed (sticky).
     assert_eq!(
-        n(&decide(&h(41_600), 41_600, &c, &none, &mut st)),
+        n(&decide(&h(41_600, 38_500), 41_600, &c, &none, &mut st)),
         vec!["GMT"]
     );
-    // Подтверждена (книга 100 = кадр 100) — приоритет снят: следующий запрос ведра — OLD.
+    // Пришёл кадр GMT (42 000) — приоритет и сверка сняты, GMT свежа; ведро — OLD.
+    assert_eq!(
+        n(&decide(&h(42_600, 42_000), 42_600, &c, &none, &mut st)),
+        vec!["OLD"]
+    );
+
+    // 2) Снятие приоритета подтверждением. GMT нужна — ведро ей; выпала из «нужных»; биржа: книга 1 = кадр 1 —
+    // подтверждена; через секунду ведро — OLD (GMT больше не в приоритете и свежа по подтверждению).
+    let mut st = need(&["GMT"]);
+    assert_eq!(
+        n(&decide(&h(40_600, 38_500), 40_600, &c, &none, &mut st)),
+        vec!["GMT"]
+    );
+    st.needed.clear();
     let a = apply(
-        &h(41_700),
+        &h(40_700, 38_500),
         "m1",
         "GMT",
-        by_id(100),
-        41_600,
-        41_700,
+        by_id(1),
+        40_600,
+        40_700,
         &c,
         &mut st,
     );
     assert!(matches!(&a[..], [Action::Confirmed { .. }]), "{a:?}");
     assert_eq!(
-        n(&decide(&h(42_600), 42_600, &c, &none, &mut st)),
+        n(&decide(&h(41_600, 38_500), 41_600, &c, &none, &mut st)),
         vec!["OLD"]
     );
 }

@@ -35,12 +35,17 @@ pub async fn path(v: &Via<'_>, hops: &[RouteHop], qty: Decimal) -> GatewayResult
     let mids = q.mids.active(ctx);
     let mut running = start;
     let mut legs = Vec::with_capacity(hops.len());
-    for (i, h) in hops.iter().enumerate() {
-        let e = q
-            .reg
-            .get(&h.pool)
-            .ok_or_else(|| no("Пул маршрута больше не в реестре".into()))?;
-        precheck::hook_again(q, &e).await?;
+    let found = hops
+        .iter()
+        .map(|h| {
+            q.reg
+                .get(&h.pool)
+                .ok_or_else(|| no("Пул маршрута больше не в реестре".into()))
+        })
+        .collect::<GatewayResult<Vec<_>>>()?;
+    // Решение «335 (В1, пакет)»: крючки всех пулов доли — одним пакетом на одном блоке (exec/precheck.rs hooks_again).
+    precheck::hooks_again(q, &found).await?;
+    for (i, e) in found.into_iter().enumerate() {
         let token_in = running;
         let token_out = if e.usdt == token_in {
             e.coin

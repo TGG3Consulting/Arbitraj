@@ -143,6 +143,8 @@ pub fn decide(
         fresh_quote: Box::new(fresh_quote),
         amount_out_min,
         block,
+        // Решение «335 (В1, пакет)»: свежие записи — наружу, для пробы крючков перед сделкой (тот же блок).
+        pools: std::sync::Arc::new(fresh.clone()),
     }
 }
 

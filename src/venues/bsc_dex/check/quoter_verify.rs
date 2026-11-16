@@ -9,16 +9,18 @@
 //! (check/quoter_amount.rs; пул с крючком B/C — прежняя check.probe_usdt), для пула с промежуточной монетой — пересчёт
 //! во встречный токен по живому пулу (решение 52, quote/rate.rs). Итог: прошла / пауза (расхождение на одном блоке) /
 //! иная причина / «не сверено (блок)».
+//! Решение 335: влияние крючка — check/hook_store.rs for_verify; пауза у пула с крючком B/C в безопасную сторону —
+//! перемер на том же H и повтор (check/quoter_reprobe.rs). Настройки не заданы — как раньше.
 //! Кто вызывает: check/quoter_one.rs.
-//! От чего зависит: check/quoter_block.rs, check/quoter_compare.rs, check/quoter_amount.rs, quote/emptiness.rs, quote/rate.rs, quote/spot.rs,
-//! check/state.rs, pools/registry.rs, tokens.rs, num.rs.
-//! Настройки: dex.quoter_max_diff_pct (через quoter_compare.rs), money.max_per_trade_usd, check.probe_usdt [bsc_dex]
-//! (через quoter_amount.rs).
+//! От чего зависит: check/quoter_block.rs, check/quoter_compare.rs, check/quoter_amount.rs, check/hook_store.rs,
+//! check/quoter_reprobe.rs, quote/emptiness.rs, quote/rate.rs, quote/spot.rs, pools/registry.rs, tokens.rs, num.rs.
+//! Настройки: dex.quoter_max_diff_pct, money.max_per_trade_usd, check.probe_usdt,
+//! hooks.reprobe_before_pause [bsc_dex] (через вызываемые).
 
 use alloy_primitives::U256;
 use rust_decimal::Decimal;
 
-use crate::core::types::{CheckState, HookGroup, Side};
+use crate::core::types::{HookImpact, Side};
 use crate::gateway::errors::ErrorCode;
 use crate::storage::journal::Level;
 
@@ -29,7 +31,8 @@ use super::super::quote::{emptiness, rate};
 use super::quoter_amount;
 use super::quoter_block::{self, Head, NOT_CHECKED};
 use super::quoter_compare::{self, Cmp, Nums};
-use super::state::Checks;
+use super::quoter_reprobe::{self, Try};
+use super::{hook_store, reprobe_rule};
 
 /// Причина «влияние крючка ещё не измерено»: такой пул сверяется снова, как только крючок измерен (check/cycle.rs
 /// будит цикл сигналом «пул готов», check/quoter_cycle.rs hook_measured).
@@ -70,22 +73,25 @@ pub enum Verdict {
 /// Сверка стороны пула (после фильтра глубины этой стороны; решение 73 — стороны независимо): покупка — сумма стороны
 /// во встречном токене в пул; продажа — монеты на эту сумму по цене пула на H (quote/spot.rs, без обмена). Настройки
 /// (влияние крючка, сумма, допуск) — до обращения к узлу (ревью #65); голова и свежее чтение — в `head` (одно на пул:
-/// None — ещё не читали). Принимает: пулы, запись из памяти, голову пула, знаки USDT, сторону. Возвращает: итог.
-/// Ошибок нет.
+/// None — ещё не читали); перемер влияния на блоке (решение 335) — в `cache` (один на пул). Принимает: пулы, запись
+/// из памяти, голову пула, перемер, знаки USDT, сторону. Возвращает: итог. Ошибок нет.
 pub async fn verify(
     p: &Pools,
     e: &Entry,
-    head: &mut Option<Head>,
+    (head, cache): (&mut Option<Head>, &mut Option<(u64, HookImpact)>),
     usdt_dec: u8,
     side: Side,
 ) -> Verdict {
     if emptiness::empty(e) {
         return Verdict::Fail(plain(emptiness::EMPTY));
     }
-    let pct = match hook_pct(&p.checks, e, side) {
+    let old = match hook_store::for_verify(&p.checks, e) {
         Ok(v) => v,
         Err(why) => return Verdict::Fail(plain(why)),
     };
+    let pct = old
+        .as_ref()
+        .map_or(Decimal::ZERO, |i| reprobe_rule::side_pct(i, side));
     // Сумма — по глубине стороны в памяти (её же фильтр глубины пропустил сторону; кэш глубины свежим чтением не
     // трогается).
     let a = match quoter_amount::side_usd(p, e, usdt_dec, side) {
@@ -126,6 +132,17 @@ pub async fn verify(
     };
     let sum = format!("сумма сверки {} USDT — {}", a.usd.round_dp(2), a.source);
     let got = quoter_compare::compare(&p.ctx, fresh, token_in, amount, pct, block).await;
+    // Решение 335 (а): пауза у пула с крючком B/C — перемер влияния на том же H и повтор (hooks.reprobe_before_pause).
+    let t = Try {
+        fresh,
+        block,
+        side,
+        token_in,
+        amount,
+        old,
+        cache,
+    };
+    let got = quoter_reprobe::again(p, e, t, got).await;
     verdict(p, e, got, sum, a.usd).await
 }
 
@@ -169,30 +186,6 @@ async fn verdict(
 pub async fn usdt_decimals(p: &Pools) -> Result<u8, String> {
     let usdt = p.tokens.usdt(&p.ctx).map_err(|e| e.message)?;
     p.tokens.decimals(&p.ctx, usdt).await.map_err(|e| e.message)
-}
-
-/// Влияние крючка на сторону, %: 0 — крючка B/C нет. Err — влияние ещё не измерено или проверка крючка не прошла.
-fn hook_pct(checks: &Checks, e: &Entry, side: Side) -> Result<Decimal, String> {
-    if e.pool
-        .hooks
-        .as_ref()
-        .is_none_or(|h| h.group == HookGroup::A)
-    {
-        return Ok(Decimal::ZERO);
-    }
-    match checks.pool(&e.pool.reference).hook.map(|c| c.impact) {
-        Some(CheckState::Known(i)) => Ok(if side == Side::Buy {
-            i.buy_pct
-        } else {
-            i.sell_pct
-        }),
-        // Не хватает ликвидности на пробу — свойство пула, не провал крючка: причина как есть.
-        Some(CheckState::Failed { reason }) if reason.starts_with(super::hooks_probe::SHORT) => {
-            Err(reason)
-        }
-        Some(CheckState::Failed { reason }) => Err(format!("проверка крючка не прошла: {reason}")),
-        _ => Err(HOOK_WAIT.into()),
-    }
 }
 
 /// Сумма сверки USDT → встречный токен пула (минимальные единицы): для пула с промежуточной монетой (решение 52) —

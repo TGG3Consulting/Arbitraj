@@ -23,6 +23,7 @@ use crate::core::types::{DexRoute, Quote, Side, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::events::MarketEvent;
 
+use super::super::check::hook_batch::RouteFresh;
 use super::super::ctx::Ctx;
 use super::super::quote::steps::Names;
 use super::super::quote::verify::{self, Verdict};
@@ -31,11 +32,13 @@ use super::super::quote::{Quoting, direct};
 use super::super::send;
 use super::txs::Env;
 
-/// Итог успешной верификации графового маршрута: свежие минимумы выхода по ногам (решение 84) и блок перечтения.
+/// Итог успешной верификации графового маршрута: свежие минимумы выхода по ногам (решение 84), блок перечтения и
+/// свежие записи пулов маршрута на нём (решение «335 (В1, пакет)»: проба крючков перед сделкой — по ним, exec/trade.rs).
 #[derive(Debug, Clone)]
 pub struct Verified {
     pub amount_out_min: Vec<Decimal>,
     pub block: u64,
+    pub fresh: RouteFresh,
 }
 
 /// Верификация графового маршрута перед сделкой. Принимает: окружение котировки, окружение отправки (для уведомления),
@@ -121,10 +124,12 @@ pub fn outcome(ctx: &Ctx, verdict: Verdict) -> GatewayResult<Verified> {
         Verdict::Ok {
             amount_out_min,
             block,
+            pools,
             ..
         } => Ok(Verified {
             amount_out_min,
             block,
+            fresh: RouteFresh { block, pools },
         }),
         Verdict::Reject { reason, drift } => {
             let code = if drift.is_some() {

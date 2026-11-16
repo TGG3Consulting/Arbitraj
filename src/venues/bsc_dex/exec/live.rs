@@ -37,13 +37,18 @@ pub async fn path(
     if hops.len() > 2 {
         return super::live_hops::path(v, hops, qty).await;
     }
+    let found = hops
+        .iter()
+        .map(|h| {
+            q.reg
+                .get(&h.pool)
+                .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))
+        })
+        .collect::<GatewayResult<Vec<Entry>>>()?;
+    // Решение «335 (В1, пакет)»: крючки всех пулов доли — одним пакетом на одном блоке (exec/precheck.rs hooks_again).
+    precheck::hooks_again(q, &found).await?;
     let mut entries = Vec::with_capacity(hops.len());
-    for h in hops {
-        let e = q
-            .reg
-            .get(&h.pool)
-            .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))?;
-        precheck::hook_again(q, &e).await?;
+    for e in found {
         let u = select::usable(q, &e, v.side, v.usdt_dec)
             .map_err(|why| ctx.err(ErrorCode::NoRoute, format!("{}: {why}", e.family.title)))?;
         entries.push((e, u));

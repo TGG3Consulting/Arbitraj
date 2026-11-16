@@ -42,6 +42,8 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
     // Решение 261: голова H и пул, прочитанный на ней, — один раз на пул, лениво (первая глубокая сторона с заданными
     // настройками, check/quoter_verify.rs).
     let mut head = None;
+    // Решение 335 (ревью Н4): перемер влияния крючка на блоке H — один на пул (check/quoter_reprobe.rs).
+    let mut reprobed = None;
     // Стороны — независимо (решение 73): сторона сверяется, когда она глубокая; мелкая — без итога, другая не меняется.
     let mut now = p.checks.pool(r).quoter;
     for side in [Side::Buy, Side::Sell] {
@@ -61,7 +63,7 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
         // Итог и имя незаданной настройки — из ошибки там, где она возникла (решение 75): по нему сторона
         // перепроверяется при задании именно этой настройки. Глубина — её настройки (pools/depth_book.rs).
         let v = match deep {
-            Ok((None, dec)) => verify(p, &e, &mut head, dec, side).await,
+            Ok((None, dec)) => verify(p, &e, (&mut head, &mut reprobed), dec, side).await,
             Ok((Some(_), _)) => {
                 now.set(side, None);
                 now.set_wait(side, None);

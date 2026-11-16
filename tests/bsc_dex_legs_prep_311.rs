@@ -4,7 +4,9 @@
 //! CAKE-USDT ×2, CAKE-WBNB, WBNB-USDT, CAKE-BTCB, BTCB-WBNB; у CAKE-WBNB и BTCB-WBNB встречный токен WBNB — глубина
 //! переводится в USDT через пул WBNB-USDT, Prep::rate). Для каждого пути графа (до 3 хопов) и обеих сторон:
 //! допуск хопов (Usable), пулы, токены, decimals — те же; расчёт пути (route_calc::eval) на нескольких объёмах —
-//! те же суммы.
+//! те же суммы. Перед каждым вариантом слоты книги глубины помечаются устаревшими (Book::invalidate — вердикт
+//! гистерезиса и кривая band_units остаются): иначе graph::build уже заполнил книгу по тем же ключам, и оба варианта
+//! взяли бы глубину из слота (depth_book.rs depth_prep_r: попадание по ключу), не проверяя перевод в USDT через Prep.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{pools::{graph, depth_book}, quote::{graph_legs, route_best, route_calc}},
 //! tests/route_common.
@@ -73,7 +75,10 @@ async fn one_prep_same_legs_and_sums() {
     let mut checked = 0;
     for side in [Side::Buy, Side::Sell] {
         for path in &paths {
+            // Пересчёт глубины в обоих вариантах: ключи слотов устарели — depth_prep_r считает заново (курс Prep::rate).
+            q.reg.depth().invalidate();
             let old = graph_legs::legs_for(&q, path, side, 18, &dec);
+            q.reg.depth().invalidate();
             let new = graph_legs::legs_prep(&q, path.clone(), side, 18, &dec, Some(&prep));
             match (&old, &new) {
                 (Ok(a), Ok(b)) => {

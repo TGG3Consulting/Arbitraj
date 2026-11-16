@@ -8,6 +8,7 @@
 //! Решение 298: перечитывание пула по событию опоздало (у узла нет состояния блока) — пул в очередь повтора на новых
 //! блоках (stale_read.rs), без обрыва сессии.
 //! Решение 295: лог контракта пар многомонетного пула (PoolRef::Multi) — listen_site.rs (одна перечитка на контракт).
+//! Решение 357: новая голова закрывает пулы «в обновлении», чьи логи блока не пришли (settle_close.rs).
 //! Кто вызывает: pools/listen.rs.
 //! От чего зависит: group.rs, admit.rs, reload.rs, listen_log.rs, events.rs, node/heads.rs, link.rs, settings (рассылка).
 //! Настройки: через вызываемые (feed.stale_after_ms, dex.pool_load_retries, dex.min_pool_liquidity_usd).
@@ -138,11 +139,19 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                     g.conn.resynced(epoch);
                 }
             }
-            changed = heads.changed(), if !m.missing.is_empty() || per_block::any(&m.pools) => {
+            // Решение 357: и когда есть пулы «в обновлении» — их закрывает голова (settle_close.rs).
+            changed = heads.changed(), if !m.missing.is_empty() || per_block::any(&m.pools) || p.holds.any() => {
                 if changed.is_err() {
                     return (End::Broken("поток новых блоков остановлен".into()), true);
                 }
                 let at = heads.borrow_and_update().as_ref().map(|h| h.number);
+                // Решение 357: логи блока пула «в обновлении» не пришли к голове при пустом канале — полное чтение
+                // пула на голове (до повтора: не прочитавшийся встаёт в очередь повтора).
+                if let Some(at) = at
+                    && let Err(end) = super::settle_close::on_head(p, m, at, g.rx.len()).await
+                {
+                    return (end, true);
+                }
                 if let Some(at) = at
                     && !m.missing.is_empty()
                     && let Err(end) = reload::retry(p, &m.pools, &mut m.missing, &mut m.abandoned, at).await

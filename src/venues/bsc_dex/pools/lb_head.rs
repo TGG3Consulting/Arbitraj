@@ -23,9 +23,15 @@
 //! применяются, бины перечитываются на B, off_map_bins проверяет полосу. Голова B+1 раньше логов B — то же, что (2).
 //! Активный бин вне прочитанной полосы — резервов памяти нет, «равны» не проверить — не равны (ничего не пишется).
 //! Это исправление ошибки с риском денег — НЕ под настройкой (DECISIONS «332 (ревью)»).
-//! Кто вызывает: pools/per_block_lb.rs (calls, decode, same, renewed, at_synced).
+//! Решение 357 (п. 2 «найдено» ревью 332): чтение на голове НЕ поднимает достоверность (renewed — valid записи как
+//! был): раньше load::renewed ставил valid = true и пулу, ждущему полного перечитывания после StaleData (решение 298) с
+//! неперечитанными бинами события (вывод из неактивного бина — лишняя ликвидность в памяти, «равны» на голове её не
+//! видит). Достоверность возвращается только той, что сняла сама голова (settle_head.rs head_failed → head_ok в put);
+//! недостоверная запись ядру не отправляется.
+//! Кто вызывает: pools/per_block_lb.rs (calls, decode, same, renewed, at_synced, put).
 //! От чего зависит: load_lb.rs (calls, decode, time_call, decode_time), load.rs (renewed, Loaded), abi_lb.rs (getBin),
-//! node/call.rs, node/multicall.rs, load_batch.rs, load_smardex.rs (block_secs), listen_log.rs, registry.rs.
+//! node/call.rs, node/multicall.rs, load_batch.rs, load_smardex.rs (block_secs), listen_log.rs, registry.rs,
+//! settle_head.rs (head_ok, решение 357).
 //! Настройки: через вызываемые (dex.load_batch, dex.multicall3 [bsc_dex]).
 //!
 //! Источник: lfj-gg/joe-v2@v2.1.0 — src/LBPair.sol L181-L183 getBin, L171-L173 getActiveId, L499-L550 swap, L603-L613
@@ -95,7 +101,8 @@ pub fn same(e: &Entry, read: &LbBinData, bin: (u128, u128)) -> bool {
 }
 
 /// Запись с комиссией и временем блока чтения (активный бин и бины — памяти, они равны прочитанному по same) на блоке
-/// `block`; отметка учтённого (synced_block, synced_log) — прежняя: события не отбрасываются. Ошибок нет.
+/// `block`; отметка учтённого (synced_block, synced_log) — прежняя: события не отбрасываются; достоверность — прежняя
+/// (решение 357: голова её не поднимает — только put по отметке head). Ошибок нет.
 pub fn renewed(e: &Entry, block: u64, d: LbBinData) -> Entry {
     let loaded = Loaded {
         state: PoolState::LbBin(Box::new(d)),
@@ -106,16 +113,25 @@ pub fn renewed(e: &Entry, block: u64, d: LbBinData) -> Entry {
     let mut out = load::renewed(e, block, loaded);
     out.synced_block = e.synced_block;
     out.synced_log = e.synced_log;
+    out.valid = e.valid;
     out
 }
 
-/// Запись в реестр и ядру — как у per_block_lb.rs. Ошибки: End — ядро закрыло канал.
-pub async fn put(p: &Pools, f: &Found, e: Entry) -> Result<(), End> {
+/// Запись в реестр и ядру — как у per_block_lb.rs. Решение 357: отметку head (чтение головы не прочиталось, settle_head.rs)
+/// снимает удачная голова — достоверность возвращается той, что была до неё; недостоверная запись ядру не уходит.
+/// Ошибки: End — ядро закрыло канал.
+pub async fn put(p: &Pools, f: &Found, mut e: Entry) -> Result<(), End> {
+    if p.holds.head_ok(&f.reference) == Some(true) {
+        e.valid = true;
+    }
     listen_log::note_refill(p, &e);
-    let pool = e.pool.clone();
+    let (pool, valid) = (e.pool.clone(), e.valid);
     p.reg.put(e);
     p.loading.done(&f.reference);
     p.loading.publish(p).await;
+    if !valid {
+        return Ok(());
+    }
     listen_log::emit(p, pool)
 }
 

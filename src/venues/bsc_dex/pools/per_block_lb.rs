@@ -8,9 +8,13 @@
 //! Ревью 332 (Б1): в пачке ещё getBin(активный бин памяти); в память пишутся только комиссия и время блока и только
 //! при согласии с памятью (lb_head.rs same); активный бин, бины и отметка учтённого не меняются — события блока не
 //! отбрасываются. Не согласовано — lb_head::at_synced (сравнение на блоке памяти).
+//! Решение 357: пул «в обновлении» (settle.rs pending — логи обмена применены не все) на голове не читается и ядру не
+//! уходит (его закрывают логи или settle_close.rs); не прочитался на голове — settle_head.rs head_failed (недостоверен;
+//! достоверность вернёт только удачная голова — тому, что сняла сама; ревью 332, п. 2 «найдено»).
 //! Кто вызывает: pools/per_block.rs (on_head).
 //! От чего зависит: load_lb.rs, load.rs (renewed, Loaded), load_batch.rs (batch), load_smardex.rs (block_secs),
-//! node/call.rs, node/multicall.rs, listen_log.rs, reload.rs, lb_head.rs (ревью 332).
+//! node/call.rs, node/multicall.rs, listen_log.rs, reload.rs, lb_head.rs (ревью 332), settle.rs (pending), settle_head.rs
+//! (head_failed — решение 357).
 //! Настройки: dex.load_batch, dex.multicall3 [bsc_dex].
 
 use alloy_primitives::{Address, Bytes};
@@ -28,6 +32,10 @@ use super::{load_batch, load_smardex, reload};
 pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Result<(), End> {
     let mut items: Vec<&Found> = Vec::new();
     for (f, t) in pools.iter().copied() {
+        // Решение 357: «в обновлении» — не трогаем (ни полного чтения, ни головы).
+        if p.holds.pending(&f.reference) {
+            continue;
+        }
         let ready = p
             .reg
             .get(&f.reference)
@@ -74,7 +82,8 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
             _ => None,
         };
         let Some(d) = st else {
-            p.reg.update(&f.reference, |e| e.valid = false);
+            // Решение 357: недостоверен; вернёт удачная голова (lb_head::put), если сняла она.
+            p.holds.head_failed(&p.reg, &f.reference);
             continue;
         };
         let (d, bin) = d;

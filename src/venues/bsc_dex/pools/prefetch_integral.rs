@@ -6,20 +6,28 @@
 //! не сделать: адрес следующего вызова есть только в ответе предыдущего. Но тики списка — ровно установленные биты
 //! дерева поиска пула (TickTree.sol: лист переключается вместе со вставкой/удалением тика, TickStructure.sol L36-L64),
 //! поэтому порядок обхода известен по битам заранее:
-//! first — голова (те же 5 вызовов), весь второй слой дерева (какие листы не пусты; 28 узлов на весь диапазон тиков),
-//! листы tickTable, где лежали тики записи и тик записи, и ticks() тиков записи;
-//! more — по nextTickGlobal / prevTickGlobal из книги и битам листов: цепочка обхода (walk_plan — тот же порядок и та же
-//! остановка, что у walk: не больше dex.integral_tick_steps тиков, конец списка — MAX_TICK / MIN_TICK) → ticks() её
-//! тиков; не хватает прочитанного листа — его и следующие непустые листы (их не больше, чем осталось шагов).
+//! first — нужное коду чтения: голова (globalState, liquidity, nextTickGlobal, prevTickGlobal); вспомогательное (в
+//! порядке): весь второй слой дерева (какие листы не пусты; 28 узлов на весь диапазон тиков), листы tickTable, где
+//! лежали тики записи и тик записи. Ревью 325 (Н5): ticks() тиков карты заранее НЕ читаются (их даёт цепочка), fee() —
+//! только при DYNAMIC_FEE (more, по globalState из книги): так нужное — ровно поодиночные вызовы кода чтения;
+//! more — нужное: fee() при DYNAMIC_FEE и ticks() цепочки обхода по nextTickGlobal / prevTickGlobal из книги и битам
+//! листов (prefetch_walk.rs walk_plan — тот же порядок и та же остановка, что у walk: не больше
+//! dex.integral_tick_steps тиков, конец списка — MAX_TICK / MIN_TICK); вспомогательное: листы, которых не хватило (их не
+//! больше, чем осталось шагов). Вспомогательное берётся, только пока частей обращения не больше нужных вызовов
+//! (prefetch_ask.rs pick) — обращений не больше, чем у чтения по одному, при любом dex.load_batch.
 //! Обычно 1–2 обращения, лист далеко — 3. Код обхода (walk) не меняется и сам проверяет каждое звено по ответу пула:
 //! если подсказка разошлась со списком, недостающий тик он спросит у узла — итог тот же, что у чтения без книги.
-//! Кто вызывает: pools/prefetch_plan.rs.
+//! Кто вызывает: pools/prefetch_plan.rs; tests/bsc_dex_prefetch_325.rs (leaf, nodes, nonempty).
 //! От чего зависит: abi_algebra_integral.rs, load_cl.rs (i24), math/tick_math.rs (MIN_TICK, MAX_TICK),
-//! prefetch_plan.rs (enc, got), node/prefetch.rs (Book), registry.rs (Entry).
+//! prefetch_plan.rs (enc, got), prefetch_ask.rs (Ask), prefetch_walk.rs (walk_plan), integral_fee.rs (dynamic),
+//! node/prefetch.rs (Book), registry.rs (Entry).
 //! Настройки: dex.integral_tick_steps [bsc_dex] (как у load_algebra_integral.rs).
 //!
-//! ABI и индексы — abi_algebra_integral.rs (IAlgebraPoolState.sol L44, L57-L69, L99, L117, L143, L156, L161, L173;
-//! TickTree.sol L10, _toggleBitInNode, getNextTick).
+//! ABI и индексы — abi_algebra_integral.rs: IAlgebraPoolState.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/interfaces/pool/IAlgebraPoolState.sol
+//! (L44, L57-L69, L99, L117, L143, L156, L161, L173); TickTree.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/libraries/TickTree.sol
+//! (L10, _toggleBitInNode, getNextTick).
 
 use alloy_primitives::{Address, U256};
 
@@ -30,8 +38,11 @@ use super::super::math::tick_math::{MAX_TICK, MIN_TICK};
 use super::super::node::prefetch::{Book, Call};
 use super::abi_algebra_integral::{IAlgebraIntegralPool as P, SECOND_LAYER_OFFSET};
 use super::load_cl::i24;
+use super::prefetch_ask::Ask;
 use super::prefetch_plan::{enc, got};
 use super::registry::Entry;
+
+pub use super::prefetch_walk::{Plan, walk_plan};
 
 /// Лист дерева (tickTable) сырого тика: sar(8, tick). Ошибок нет.
 pub fn leaf(t: i32) -> i16 {
@@ -53,66 +64,75 @@ pub fn nonempty(layer: &[U256], l: i16) -> bool {
         .is_some_and(|w| w.bit((i & 0xFF) as usize))
 }
 
-/// Голова, второй слой, листы и тики записи. Ошибок нет.
-pub fn first(ctx: &Ctx, e: &Entry, pool: Address) -> Vec<Call> {
-    let mut l = vec![
+/// Голова (нужное), второй слой и листы записи (вспомогательное). Ошибок нет.
+pub fn first(e: &Entry, pool: Address) -> Ask {
+    let useful = vec![
         enc(pool, &P::globalStateCall {}),
         enc(pool, &P::liquidityCall {}),
-        enc(pool, &P::feeCall {}),
         enc(pool, &P::nextTickGlobalCall {}),
         enc(pool, &P::prevTickGlobalCall {}),
     ];
-    l.extend(nodes().map(|node| enc(pool, &P::tickTreeSecondLayerCall { node })));
-    let mut known: Vec<i32> = e
+    let layer: Vec<Call> = nodes()
+        .map(|node| enc(pool, &P::tickTreeSecondLayerCall { node }))
+        .collect();
+    let mut leaves: Vec<i16> = e
         .ticks
         .as_ref()
-        .map(|m| m.ticks.keys().copied().collect())
+        .map(|m| m.ticks.keys().map(|t| leaf(*t)).collect())
         .unwrap_or_default();
-    let mut leaves: Vec<i16> = known.iter().map(|t| leaf(*t)).collect();
     if let PoolState::Algebra { tick, .. } = e.pool.state {
         leaves.push(leaf(tick));
     }
+    leaves.sort_unstable();
     leaves.dedup();
-    l.extend(
-        leaves
-            .into_iter()
-            .map(|w| enc(pool, &P::tickTableCall { wordPosition: w })),
-    );
-    known.retain(|t| (MIN_TICK..=MAX_TICK).contains(t));
-    l.extend(ticks_calls(ctx, pool, &known));
-    l
+    let words: Vec<Call> = leaves
+        .into_iter()
+        .map(|w| enc(pool, &P::tickTableCall { wordPosition: w }))
+        .collect();
+    Ask {
+        useful,
+        extra: vec![layer, words],
+    }
 }
 
-/// Цепочка обхода по книге → ticks() её тиков и недостающие листы. Ошибок нет (нет ответа — пусто).
-pub fn more(ctx: &Ctx, pool: Address, b: &Book) -> Vec<Call> {
+/// fee() при DYNAMIC_FEE и цепочка обхода по книге (нужное), недостающие листы (вспомогательное). Ошибок нет (нет
+/// ответа — пусто).
+pub fn more(ctx: &Ctx, pool: Address, b: &Book) -> Ask {
+    let mut ask = Ask::default();
+    if let Some(gs) = got(b, pool, &P::globalStateCall {})
+        && super::integral_fee::dynamic(gs.pluginConfig)
+    {
+        ask.useful.push(enc(pool, &P::feeCall {}));
+    }
     let Ok(steps) = ctx.int("dex.integral_tick_steps") else {
-        return Vec::new();
+        return ask;
     };
     let (Some(next), Some(prev)) = (
         got(b, pool, &P::nextTickGlobalCall {}),
         got(b, pool, &P::prevTickGlobalCall {}),
     ) else {
-        return Vec::new();
+        return ask;
     };
     let layer: Option<Vec<U256>> = nodes()
         .map(|node| got(b, pool, &P::tickTreeSecondLayerCall { node }))
         .collect();
     let Some(layer) = layer else {
-        return Vec::new();
+        return ask;
     };
     let ne = |l: i16| nonempty(&layer, l);
     let bits = |l: i16| got(b, pool, &P::tickTableCall { wordPosition: l });
-    let mut out = Vec::new();
+    let mut need = Vec::new();
     for (start, up) in [(next.as_i32(), true), (prev.as_i32(), false)] {
         let p = walk_plan(start, up, steps, &ne, &bits);
-        out.extend(ticks_calls(ctx, pool, &p.ticks));
-        out.extend(
+        ask.useful.extend(ticks_calls(ctx, pool, &p.ticks));
+        need.extend(
             p.need
                 .into_iter()
                 .map(|w| enc(pool, &P::tickTableCall { wordPosition: w })),
         );
     }
-    out
+    ask.extra.push(need);
+    ask
 }
 
 /// ticks() тиков списком. Тик вне int24 пропускается (код чтения сам вернёт ошибку). Ошибок нет.
@@ -122,96 +142,4 @@ fn ticks_calls(ctx: &Ctx, pool: Address, ticks: &[i32]) -> Vec<Call> {
         .filter_map(|t| i24(ctx, *t).ok())
         .map(|tick| enc(pool, &P::ticksCall { tick }))
         .collect()
-}
-
-/// Цепочка обхода одной стороны: тики, которые прочитает walk (load_algebra_integral.rs), и листы, которых не хватило.
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct Plan {
-    pub ticks: Vec<i32>,
-    pub need: Vec<i16>,
-}
-
-/// Следующее звено: тик или «лист не прочитан».
-enum Next {
-    Tick(i32),
-    Unknown(i16),
-}
-
-/// Порядок walk по битам дерева: от `start` не больше max(steps, 1) тиков; конец списка — MAX_TICK (вверх) /
-/// MIN_TICK (вниз) включительно. Принимает: начало, сторону, шаги, «лист не пуст», биты листа (None — не прочитан).
-/// Ошибок нет.
-pub fn walk_plan(
-    start: i32,
-    up: bool,
-    steps: u64,
-    ne: &dyn Fn(i16) -> bool,
-    bits: &dyn Fn(i16) -> Option<U256>,
-) -> Plan {
-    let mut p = Plan::default();
-    let mut t = start;
-    for _ in 0..steps.max(1) {
-        p.ticks.push(t);
-        if (up && t >= MAX_TICK) || (!up && t <= MIN_TICK) {
-            break;
-        }
-        match neighbor(t, up, ne, bits) {
-            Next::Tick(n) => t = n,
-            Next::Unknown(l) => {
-                let left = steps.max(1) as usize - p.ticks.len();
-                p.need = leaves_from(l, up, left.max(1), ne);
-                break;
-            }
-        }
-    }
-    p
-}
-
-/// Ближайший установленный бит строго выше (up) / ниже `t`; битов нет до края — MAX_TICK / MIN_TICK. Ошибок нет.
-fn neighbor(
-    t: i32,
-    up: bool,
-    ne: &dyn Fn(i16) -> bool,
-    bits: &dyn Fn(i16) -> Option<U256>,
-) -> Next {
-    let (w0, b0) = (leaf(t), (t & 0xFF) as usize);
-    let (lo, hi) = (leaf(MIN_TICK), leaf(MAX_TICK));
-    let mut w = w0;
-    loop {
-        if ne(w) {
-            let Some(word) = bits(w) else {
-                return Next::Unknown(w);
-            };
-            let found = if up {
-                let from = if w == w0 { b0 + 1 } else { 0 };
-                (from..256).find(|i| word.bit(*i))
-            } else {
-                let to = if w == w0 { b0 } else { 256 };
-                (0..to).rev().find(|i| word.bit(*i))
-            };
-            if let Some(i) = found {
-                return Next::Tick(i32::from(w) * 256 + i as i32);
-            }
-        }
-        if (up && w >= hi) || (!up && w <= lo) {
-            return Next::Tick(if up { MAX_TICK } else { MIN_TICK });
-        }
-        w = if up { w + 1 } else { w - 1 };
-    }
-}
-
-/// Непустые листы от `l` в сторону обхода, не больше `n`. Ошибок нет.
-fn leaves_from(l: i16, up: bool, n: usize, ne: &dyn Fn(i16) -> bool) -> Vec<i16> {
-    let (lo, hi) = (leaf(MIN_TICK), leaf(MAX_TICK));
-    let mut out = Vec::new();
-    let mut w = l;
-    while out.len() < n {
-        if ne(w) {
-            out.push(w);
-        }
-        if (up && w >= hi) || (!up && w <= lo) {
-            break;
-        }
-        w = if up { w + 1 } else { w - 1 };
-    }
-    out
 }

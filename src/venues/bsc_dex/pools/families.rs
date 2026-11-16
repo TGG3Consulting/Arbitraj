@@ -258,6 +258,9 @@ pub struct Family {
     /// Вид шага контракта-исполнителя (решение 122, часть F; pools/exec_kind.rs). None — исполнитель пулы этого вида
     /// не вызывает. Исполнимость через исполнитель — exec_kind::via_executor (нужен ещё exec.executor_address).
     pub executor_kind: Option<ExecKind>,
+    /// Ревью 325 (Н1): настройки решения 325 этого DEX в ячейках памяти (event_flags.rs) — путь события пула не
+    /// читает хранилище на каждое событие.
+    pub event: super::event_flags::EventFlags,
 }
 
 /// Вариант dex.kind (список — settings::catalog::dex::DEX_KINDS, один на код и каталог) → математика, протокол,
@@ -411,6 +414,7 @@ pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
                 tradable,
                 fork,
                 executor_kind,
+                event: super::event_flags::EventFlags::new(),
             }))
         });
     Some(*f)

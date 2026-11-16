@@ -7,7 +7,13 @@
 //! От чего зависит: alloy::sol!.
 //! Настройки: нет.
 //!
-//! Сигнатуры — официальный код cryptoalgebra/Algebra, пакет @cryptoalgebra/integral-core 1.2.10 (коммит 1ff43e1):
+//! Сигнатуры — официальный код cryptoalgebra/Algebra, пакет @cryptoalgebra/integral-core 1.2.10 (коммит 1ff43e1;
+//! ревью 325 Н8 — полные ссылки, коммит 1ff43e11407872f7c09b001cdeee1a59d2c334ec):
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/interfaces/pool/IAlgebraPoolState.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/interfaces/pool/IAlgebraPoolEvents.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/libraries/TickTree.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/base/TickStructure.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/libraries/Plugins.sol
 //! - IAlgebraPoolState.sol: globalState() → (uint160 price, int24 tick, uint16 lastFee, uint8 pluginConfig,
 //!   uint16 communityFee, bool unlocked) (L44); ticks(int24) → (uint256 liquidityTotal, int128 liquidityDelta,
 //!   int24 prevTick, int24 nextTick, uint256 outerFeeGrowth0Token, uint256 outerFeeGrowth1Token) (L57-L69) — тики

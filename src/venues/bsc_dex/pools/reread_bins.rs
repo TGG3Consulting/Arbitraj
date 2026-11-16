@@ -3,9 +3,12 @@
 //! (load_lb_bins::many, ревью 290); Infinity Bin — по одному getBin, решение 325: при dex.event_refresh_batch для DEX
 //! пула — все одной пачкой (load_bin::many: node/call.rs view_many — один eth_call к Multicall3 при dex.multicall3, иначе
 //! пачка JSON-RPC одним HTTP-запросом), те же ответы и тот же разбор. Вынесено из pools/listen_log.rs (предел размера).
+//! Пачке бинов не нужны ни dex.multicall3, ни dex.load_batch (ревью 325, Н6): без Multicall3 view_many — пачка JSON-RPC
+//! одним HTTP-запросом, на части не делится.
 //! Кто вызывает: pools/listen_log.rs.
-//! От чего зависит: load_bin.rs, load_lb_bins.rs, registry.rs, listen.rs (Pools), node/call.rs (block_tag).
-//! Настройки: dex.event_refresh_batch [DEX]; через вызываемые — dex.multicall3.
+//! От чего зависит: load_bin.rs, load_lb_bins.rs, registry.rs, listen.rs (Pools), node/call.rs (block_tag),
+//! event_flags.rs (настройка в памяти).
+//! Настройки: dex.event_refresh_batch [DEX] (ячейка памяти — event_flags.rs); через вызываемые — dex.multicall3.
 //!
 //! getBin — ICLPoolManager / IBinPoolManager PancakeSwap Infinity (abi_v4.rs IInfinityBin, research/flow/bsc_v4.md);
 //! LBPair.getBin — load_lb_bins.rs.
@@ -46,10 +49,8 @@ pub async fn reread(
     let PoolRef::Singleton { manager, id } = r else {
         return Ok(());
     };
-    if p.ctx
-        .dex_flag("dex.event_refresh_batch", f.id)
-        .unwrap_or(false)
-    {
+    // Ревью 325 (Н1): настройка — из ячейки памяти (event_flags.rs), не чтением хранилища на каждое событие.
+    if super::event_flags::batch(&p.ctx, f) {
         let list: Vec<u32> = uniq.into_iter().collect();
         for (bin, x, y) in load_bin::many(&p.ctx, *manager, *id, &list, &tag).await? {
             p.reg.update(r, |e| {

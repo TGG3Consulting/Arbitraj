@@ -105,7 +105,14 @@
   dex.event_refresh_batch — ответы, прочитанные заранее одним eth_call Multicall3 (pools/prefetch_read.rs), и бины
   Infinity Bin события одной пачкой; dex.event_refresh_fee_only — у Algebra Integral событие только комиссии читает
   только её (pools/integral_fee.rs). Не заданы — 1 в 1 как раньше. **Тест:** tests/bsc_dex_prefetch_325.rs (walk_plan
-  по записанному списку тиков Integral, индексы дерева, книга на записанном globalState; локально не собирался).
+  по записанному списку тиков Integral, индексы дерева, книга на записанном globalState; локально не собирался). **Ревью 325 (16.11, правки Н1–Н8 — DECISIONS «325 (ревью, t152)», разбор п. 7):** без настроек — без
+  лишней работы (prefetch::active; настройки в ячейках памяти pools/event_flags.rs, смена на лету); «только комиссия» —
+  только достоверный пул с состоянием Algebra, замер с причиной «fee»; обращений не больше, чем без книги, при любом
+  dex.load_batch (prefetch_ask.rs; Elastic — ticks() одним view_many; Integral — без тиков карты). Тест —
+  tests/bsc_dex_prefetch_325_review.rs (локально не собирался). Промпт серверному ИИ на записи aggregate3 по видам и
+  tickTable / tickTreeSecondLayer — разбор п. 8. **Отложено:** «Fee(uint16) без узла» (нужны pluginConfig в записи пула
+  и подписка PluginConfig — тип ядра); деление listen_log.rs (238 строк; правят t153/t154); многомонетные пары через
+  книгу — только если книга начнёт хранить откаты внутри aggregate3 (сейчас выигрыша нет: одно обращение).
   **Ждёт записи (код есть, тест ждёт записи):** Integral (tickTable / tickTreeSecondLayer и aggregate3), CL, Slipstream,
   Algebra V1.9, Elastic, DODO, Infinity Bin (getBin пачкой) — нет записанного ответа aggregate3 на узле, по которому
   проверить «ответ из книги = отдельный eth_call» по байтам. **Промпт серверному ИИ (только чтение своего узла, бот и

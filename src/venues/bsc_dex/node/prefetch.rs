@@ -7,8 +7,8 @@
 //! тот же, ошибка вызова (откат, ошибка узла) в книгу не попадает — такой вызов уходит к узлу и даёт ту же ошибку, что
 //! без книги. Книга помнит, какие вызовы сделал код чтения (на её блоке), — для следующего перечитывания этого пула
 //! (pools/prefetch_memo.rs).
-//! Кто вызывает: node/call.rs (view), node/multicall.rs (aggregate), pools/solidly_fee_read.rs (fee) — hit;
-//! pools/prefetch_read.rs — Book, scope.
+//! Кто вызывает: node/call.rs (view), node/multicall.rs (aggregate: active, затем hit), pools/solidly_fee_read.rs
+//! (fee) — hit; pools/prefetch_read.rs — Book, scope.
 //! От чего зависит: tokio (task_local).
 //! Настроек нет (включает вызывающий — dex.event_refresh_batch, решение 325).
 //!
@@ -128,4 +128,10 @@ pub async fn scope<F: Future>(book: Book, work: F) -> F::Output {
 /// Принимает: контракт, данные вызова, блок-тег запроса. Ошибок нет.
 pub fn hit(to: Address, data: &Bytes, tag: &str) -> Option<Bytes> {
     BOOK.try_with(|b| b.look(to, data, tag)).ok().flatten()
+}
+
+/// Ревью 325 (Н1): стоит ли книга на задаче — одна проверка task_local, без поиска и выделений (node/multicall.rs
+/// aggregate: книги нет — сразу к узлу, как до решения 325). Ошибок нет.
+pub fn active() -> bool {
+    BOOK.try_with(|_| ()).is_ok()
 }

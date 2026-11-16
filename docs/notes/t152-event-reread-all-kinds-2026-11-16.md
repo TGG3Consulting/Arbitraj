@@ -29,7 +29,7 @@
 | CL: Infinity CL, Uniswap V4 (`load_cl.rs:50-51 / 54-61, 70 / 102, 81 / 113`) | off_map, Refresh | 4 | нет | 1–2, тик ушёл — 3 |
 | Algebra V1.9, THENA Fusion (`load_algebra.rs:43,44,62,73`) | Refresh (Mint/Burn), off_map (при off_map_algebra) | 4 | нет | 1–2, тик ушёл — 3 |
 | Algebra Integral: thena-v3, dexswap (`load_algebra_integral.rs:41-57`, обход `walk:100-121`) | Refresh (Mint/Burn, Burn 1.2.x), off_map; Fee / SwapFee / Swap 1.2.x с добавкой плагина — тоже полный Refresh | 4–5 + до 2 × dex.integral_tick_steps | нет | событие только комиссии — 1 (`dex.event_refresh_fee_only`); полное — 1–2, лист дерева не прочитан — 3 |
-| KyberSwap Elastic (`load_elastic.rs:43,44,45,55,76`) | Refresh (off_map не применяется — состояние Elastic, `depth.rs:105-108`) | 5 | нет | 1–2 (голова + список; ticks()) |
+| KyberSwap Elastic (`load_elastic.rs:43,44,45,55,76`) | Refresh (off_map не применяется — состояние Elastic, `depth.rs:105-108`) | 5 | нет | ревью 325: ceil(4 / dex.load_batch) + 1 ≤ 5 (голова + getTicksInRange заранее; ticks() — одним view_many кода чтения, как до 325) |
 | DODO PMM (`load_dodo.rs:33-42`) | Refresh на каждое событие кривой, в т. ч. DODOSwap (`events_dodo.rs:50`) | 4 (два из них — _BASE_TOKEN_, _QUOTE_TOKEN_) | нет | 1 (все четыре одним eth_call) |
 | Infinity Bin — бины события (`reread_bins.rs`, было `listen_log.rs`) | Bins | по одному getBin на бин подряд | нет (у LB уже пачка, ревью 290) | 1 (`load_bin::many`, `node/call.rs` view_many) |
 | Infinity Bin — полное (`load_bin.rs:58,75,122`) | Refresh | 2 + 2 на каждый пройденный бин (getNextNonEmptyBin → getBin, следующий id — из ответа) | нет | вызовы прошлого раза одним обращением; новые бины — по одному (цепочка) |
@@ -72,7 +72,7 @@
   `load_lb_bins.rs:62`) — дерева бинов у пула через view нет в нашем ABI; подсказка — вызовы прошлого раза (что не
   изменилось — из книги, новые бины — по одному). Integral — решено деревом (п. 3).
 - Слова → тики (V3 TickLens нет: CL, Slipstream, Algebra V1.9): данные тиков зависят от битов слов, биты — от тика головы.
-  Слова читаются заранее вокруг тика события (запись после применения события), тики — по битам: 2 обращения; если тик
+  Слова читаются заранее вокруг тика записи (у off_map и после «только комиссии» — запись после события; у Refresh — запись ДО события, listen_log.rs передаёт её; это только подсказка, итог не меняет — ревью 325 Н6), тики — по битам: 2 обращения; если тик
   на блоке чтения ушёл из этих слов — 3. С вызовами прошлого раза (биты не менялись) — 1.
 - Лесенки Metric / iZi (`load_metric_ladder.rs:104-111`): eth_call к виртуальному квотеру с state override (код квотера
   подставляется в вызов) пачкой JSON-RPC; в Multicall3 без state override не уходит, второй проход зависит от первого.
@@ -100,3 +100,77 @@
   `refresh_timing.rs:47,112`); цифр queued в фактах задачи нет — смотреть в журнале живого бота. Отдельная задача.
 - Проверка маршрута перед сделкой (quote/verify.rs, cycle_legs.rs), off_map для Bin/LB, per_block, первая загрузка.
 - `check/quoter_block.rs:76` и `reload.rs:118` тоже зовут `load::refresh` — не перечитывание по событию, не тронуты.
+
+## 7. Ревью 325 (t152, 16.11.2026) — что исправлено
+
+Ревью: 9 неблокирующих (Н1–Н9). Каждое перепроверено по коду ветки.
+
+- **Н1 (нагрузка без настройки) — исправлено.** `node/multicall.rs` aggregate: сначала `node/prefetch.rs` `active()`
+  (одна проверка task_local) — книги нет → сразу `aggregate_raw`, без Vec и поиска. dex.event_refresh_batch /
+  dex.event_refresh_fee_only на пути события — из ячейки памяти `pools/event_flags.rs` (`gateway/setting_cell.rs`
+  `watch_in` — область «DEX», образец решения 324): ячейка — в виде DEX (`families.rs` Family::event, OnceLock),
+  перечитывается задачей по рассылке изменений хранилища (смена на лету); с другим хранилищем (снимок 239, тесты) —
+  прямое чтение (`Store::same`). Читают: `prefetch_read.rs` size, `reread_bins.rs`, `integral_fee.rs` fits.
+- **Н2 — исправлено.** «Только комиссия» — только у достоверного пула (`integral_fee::fits`: valid); недостоверный —
+  прежний Refresh (renewed даёт valid = true и «пул готов», `listen_log.rs` ветка Refresh).
+- **Н3 — исправлено.** fits требует состояние Algebra (иначе прежний Refresh); `set_fee` не у Algebra ничего не пишет и
+  возвращает false — `apply` даёт Internal, событие НЕ отмечается учтённым, пул недостоверен (как любая ошибка чтения).
+- **Н4 — исправлено.** `refresh_event.rs` `fee`: класс dex.event_refresh_urgency и замер log.pool_refresh_timing —
+  запись dex.pool_refresh с причиной «fee» (слов карты нет).
+- **Н5 — исправлено, доказательство.** `prefetch_ask.rs`: план — нужное коду чтения (поодиночные `call::view`) и
+  вспомогательное; обращение заранее берёт вспомогательное, только пока частей (по dex.load_batch = B) не больше нужных
+  вызовов. Каждый нужный вызов в книге снимает одно поодиночное обращение кода чтения (тот же блок и байты).
+  - Elastic (`load_elastic.rs:43-45,55` view ×4, `:76` view_many): до — 4 + 1 = 5 (view_many при dex.multicall3 —
+    один aggregate3, на части не делится). Теперь заранее — только 4 (голова + getTicksInRange), ticks() — тем же одним
+    view_many (книга активна, попаданий нет → `aggregate_raw` одним вызовом), memo не берётся: ceil(4 / B) + 1 ≤ 5.
+  - Integral (`load_algebra_integral.rs` — все вызовы поодиночные): first — нужное 4 (globalState, liquidity,
+    nextTickGlobal, prevTickGlobal), fee() — в more и только при DYNAMIC_FEE по globalState из книги (поодиночный вызов
+    кода чтения ровно в этом случае), ticks() карты заранее НЕ читаются; ticks() цепочки — нужное (их прочитает walk:
+    биты дерева = список по TickTree.sol / TickStructure.sol), листы и второй слой — вспомогательное. Каждое обращение:
+    частей ≤ нужных ≤ снятых → всего не больше, чем до ветки. Оговорка — только факт протокола «бит = тик списка»:
+    если на узле он не подтвердится (запись — п. 8), лишние ticks() станут обращениями сверх.
+  - Прочие виды — как были (всё в «нужном», отбор не меняет).
+- **Н6 — исправлено.** Шапка multicall.rs (prefetch_read идёт try_chunks → try_many → aggregate ВНЕ книги); SETTINGS и
+  каталог — пачке бинов не нужны ни dex.multicall3, ни dex.load_batch; «тик записи после события» — у Refresh запись до
+  события (подсказка; prefetch_plan.rs first, prefetch_ticks.rs, п. 4 выше).
+- **Н7 — исключение с причиной (не обёрнуто).** Многомонетные пары: `listen_site.rs` → `reload_many::load_group` →
+  `load_batch::states` → `load_site.rs` states: на контракт — одно сетевое чтение вида, и это ОДИН `try_many`
+  (`load_curve.rs:80`, `load_saddle.rs:98`, `load_curve_ng.rs:93` — N_COINS в памяти после первого раза
+  `load_curve_ng.rs:33-55`, `load_stable_u.rs:108`, `load_balancer.rs:60` — неизменяемое в памяти
+  `load_balancer_fixed.rs`; decimals — память `tokens.rs:126-133`). try_many при dex.multicall3 — один eth_call
+  aggregate3 без деления на части (`node/call.rs` try_many). Книга не даст меньше одного обращения, а «тем же способом»
+  дала бы больше: чтение заранее идёт частями по dex.load_batch, а откаты в книгу не кладутся — у Curve/Saddle/Stable
+  coins(k) за последней монетой откатывается (разбор «до первого отката coins», `load_curve.rs` read) → эти вызовы ушли
+  бы к узлу вторым обращением. Поэтому load_group — мимо книги (шапка listen_site.rs).
+- **Лесенки Metric / iZi / Biswap V3 — мимо книги:** eth_call с подменой кода (state override, третий параметр,
+  `load_metric_ladder.rs:104-111`) — книга хранит ответы обычного eth_call (контракт, данные, блок), подменённый вызов
+  в Multicall3 не уходит; лесенка уже одна пачка JSON-RPC одним HTTP-запросом, второй проход зависит от первого.
+- **WooFi eth_getStorageAt — мимо книги:** `load_woo.rs:86` — не eth_call (слот хранилища прокси), Multicall3 его не
+  читает; одно обращение на перечитывание.
+- **Н8 — исправлено:** prefetch_integral.rs поделён (обход по битам — `prefetch_walk.rs`); память вызовов прошлого раза
+  чистится от снятых пулов (`registry.rs` retain → `prefetch_memo::forget`); полные ссылки на ABI с хешем коммита
+  1ff43e11407872f7c09b001cdeee1a59d2c334ec (abi_algebra_integral.rs, integral_fee.rs, prefetch_integral.rs,
+  prefetch_walk.rs). `listen_log.rs` (238 строк, больше 200 и до ветки) не делил — его одновременно правят t153/t154.
+  **Оптимизация «Fee(uint16) без узла» — НЕ сделана, отложена:** правило комиссии зависит от флага DYNAMIC_FEE в
+  pluginConfig (`AlgebraPoolBase.sol#L145-L150` fee()), а pluginConfig в записи пула нет (PoolState::Algebra — тип ядра)
+  и событие PluginConfig(uint8) (`IAlgebraPoolEvents.sol#L118`, коммит 1ff43e1) не слушается.
+  В THENA 1.2.0 (тег v1.2-integral, AlgebraPool.sol L520-L527) setFee зовёт сам плагин ПРИ включённом DYNAMIC_FEE —
+  Fee приходит и при динамической комиссии, где fee() ≠ lastFee возможно. Строго по ABI без чтения узла нельзя.
+- **Н9** — допущение «ответ внутри aggregate3 = отдельный eth_call» — проверяется записью (п. 8), до включения.
+
+## 8. Промпт серверному ИИ (только чтение; бот и настройки не трогать)
+
+«Сними с узла BSC на одном блоке B (сначала eth_blockNumber, B = он − 5) и сохрани в
+tests/data/prefetch_325_<дата>/probe.json: для одного пула каждого вида — thena-v3 (Algebra Integral), thena_fusion
+(Algebra V1.9), Slipstream, PancakeSwap Infinity CL, Uniswap V4 (StateView), KyberSwap Elastic, DODO, PancakeSwap
+Infinity Bin, Solidly, Curve NG — (1) по отдельности eth_call на B каждого view-вызова чтения пула, как их делает бот
+(src/venues/bsc_dex/pools/load_<вид>.rs); у Algebra Integral дополнительно tickTreeSecondLayer(int16) для узлов 0..27
+и tickTable(int16) для каждого листа, где лежат тики обхода списка (лист = tick >> 8), и ticks(t) обхода списка вверх
+от nextTickGlobal и вниз от prevTickGlobal до конца списка или 50 шагов; у Infinity Bin — getBin для пяти непустых
+бинов вокруг активного; (2) один eth_call на B к Multicall3 (адрес — значение настройки dex.multicall3 бота, только
+чтение) aggregate3 с allowFailure = true и ТЕМИ ЖЕ вызовами в том же порядке — по одному aggregate3 на вид. Формат — как
+tests/data/algebra_integral_2026-11-06/probe.json: для каждого вызова to, data (hex), raw (hex ответа узла как есть;
+ошибка — текст ошибки узла); для aggregate3 — data и raw целиком; рядом README.md: блок, пулы, что снято.»
+
+По записи — тесты: decode ответа (2) = ответам (1) по байтам у каждого вида; биты tickTable = тики записанного списка
+(Integral); load::refresh с книгой из (2) = разбору (1).

@@ -11,16 +11,20 @@
 //! иначе — load::refresh.
 //! Решение 325: не применилось 315 — при dex.event_refresh_batch для DEX пула чтение с ответами, прочитанными заранее
 //! (prefetch_read.rs: одно-два обращения к узлу вместо цепочки; тот же код чтения load::refresh, тот же итог).
-//! Кто вызывает: pools/listen_log.rs (ветки off_map и Refresh).
+//! Ревью 325 (Н4): «только комиссия» Algebra Integral (fee → integral_fee.rs apply) — тем же классом очереди и тем же
+//! замером: запись dex.pool_refresh с причиной «fee» (слов карты — нет: карта не читается).
+//! Кто вызывает: pools/listen_log.rs (ветки off_map, Refresh и Fee).
 //! От чего зависит: load.rs (refresh), refresh_timing.rs, node/req_trail.rs, gateway/urgency.rs (класс для записи),
-//! group.rs (Msg — канал сессии).
+//! group.rs (Msg — канал сессии), integral_fee.rs (apply).
 //! Настройки: log.pool_refresh_timing (через refresh_timing.rs), dex.event_refresh_urgency (через refresh_urgency.rs),
-//! dex.event_refresh_one_call (через load_v3_once.rs), dex.event_refresh_batch (через prefetch_read.rs).
+//! dex.event_refresh_one_call (через load_v3_once.rs), dex.event_refresh_batch (через prefetch_read.rs),
+//! dex.event_refresh_fee_only (решает listen_log.rs через integral_fee.rs fits).
 
 use std::time::Instant;
 
 use tokio::sync::mpsc::UnboundedReceiver;
 
+use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 use crate::gateway::urgency;
 use crate::storage::journal::Level;
@@ -31,11 +35,12 @@ use super::listen::Pools;
 use super::refresh_timing::{self, Rec};
 use super::refresh_urgency;
 use super::registry::Entry;
-use super::{load, load_v3_once, prefetch_read};
+use super::{integral_fee, load, load_v3_once, prefetch_read};
 
 /// Что вызвало перечитывание.
 pub struct Event<'a> {
-    /// «off_map» — полоса глубины вышла за карту; «refresh» — событие требует перечитать пул.
+    /// «off_map» — полоса глубины вышла за карту; «refresh» — событие требует перечитать пул; «fee» — только комиссия
+    /// (ревью 325, fee).
     pub cause: &'static str,
     /// Блок события.
     pub block: u64,
@@ -96,6 +101,40 @@ pub async fn refresh(p: &Pools, e: &Entry, at: u64, ev: &Event<'_>) -> GatewayRe
             .and_then(|x| x.ticks.as_ref())
             .map(|t| i32::from(t.words.1) - i32::from(t.words.0) + 1),
         queued: ev.queued.len(),
+        err: res.as_ref().err().map(|x| x.message.clone()),
+    };
+    refresh_timing::report(&p.ctx, rec);
+    res
+}
+
+/// Ревью 325 (Н4): только комиссия Algebra Integral на блоке события (integral_fee.rs apply) — классом
+/// dex.event_refresh_urgency и с замером log.pool_refresh_timing (причина «fee», слов карты нет). Принимает: окружение
+/// пачки, запись пула до события, ссылку, блок и logIndex события, канал сессии. Ошибки: как у integral_fee::apply.
+pub async fn fee(
+    p: &Pools,
+    e: &Entry,
+    r: &PoolRef,
+    (block, index): (u64, Option<u64>),
+    queued: &UnboundedReceiver<Msg>,
+) -> GatewayResult<()> {
+    let class = refresh_urgency::class(&p.ctx);
+    let work = integral_fee::apply(p, r, block, index);
+    if !refresh_timing::on(&p.ctx) {
+        return refresh_urgency::with(class, work).await;
+    }
+    let trail = Trail::default();
+    let t0 = Instant::now();
+    let res = req_trail::scope(trail.clone(), refresh_urgency::with(class, work)).await;
+    let rec = Rec {
+        entry: e,
+        cause: "fee",
+        block,
+        at: block,
+        total: t0.elapsed(),
+        steps: trail.take(),
+        class: format!("{:?}", class.unwrap_or_else(urgency::current)),
+        words: None,
+        queued: queued.len(),
         err: res.as_ref().err().map(|x| x.message.clone()),
     };
     refresh_timing::report(&p.ctx, rec);

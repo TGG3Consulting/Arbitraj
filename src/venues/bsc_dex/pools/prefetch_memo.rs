@@ -6,7 +6,9 @@
 //! — одно обращение; у вида с цепочкой (обход бинов, списка тиков) — всё, что не изменилось с прошлого раза.
 //! Хранится в памяти процесса по (площадка, ссылка на пул); последнее чтение заменяет прежнее. Неверная подсказка
 //! итог не меняет: вызов, которого нет в книге, идёт к узлу как раньше.
-//! Кто вызывает: pools/prefetch_read.rs.
+//! Ревью 325 (Н8): пулы, снятые из реестра (registry.rs retain), убираются отсюда (forget) — память не растёт по числу
+//! пулов за жизнь процесса.
+//! Кто вызывает: pools/prefetch_read.rs (get, put), pools/registry.rs (forget).
 //! От чего зависит: node/prefetch.rs (Call), core/types (PoolRef, VenueId).
 //! Настроек нет (включает вызывающий — dex.event_refresh_batch).
 
@@ -41,4 +43,18 @@ pub fn put(venue: &VenueId, r: &PoolRef, calls: Vec<Call>) {
     } else {
         g.insert(key, calls);
     }
+}
+
+/// Ревью 325 (Н8): забывает вызовы снятых пулов (по ссылке, любой площадки — подсказка, итог не меняет). Пустой список —
+/// без замка. Принимает: ссылки снятых пулов. Ошибок нет.
+pub fn forget(gone: &[PoolRef]) {
+    if gone.is_empty() {
+        return;
+    }
+    let mut g = MEMO.lock().unwrap_or_else(|p| p.into_inner());
+    if g.is_empty() {
+        return;
+    }
+    let gone: std::collections::HashSet<&PoolRef> = gone.iter().collect();
+    g.retain(|(_, r), _| !gone.contains(r));
 }

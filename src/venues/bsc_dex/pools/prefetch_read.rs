@@ -9,12 +9,22 @@
 //! задаче (node/prefetch.rs): что есть в книге — без узла, чего нет — к узлу как раньше. Итог — ровно итог
 //! последовательного чтения на этом блоке: тот же код, тот же разбор, те же ошибки (ошибка заранее прочитанного
 //! вызова в книгу не попадает — код чтения спросит узел сам и получит ту же ошибку). Вызовы кода чтения
-//! запоминаются для следующего раза (prefetch_memo.rs).
+//! запоминаются для следующего раза (prefetch_memo.rs; у Elastic и Integral не берутся — prefetch_plan.rs memo).
+//! Ревью 325 (Н5), обращений не больше, чем до решения 325, при любом dex.load_batch (B): каждое обращение заранее —
+//! prefetch_ask.rs pick: частей ≤ нужных вызовов, каждый нужный в книге снимает одно поодиночное обращение кода чтения.
+//! Elastic (load_elastic.rs): до — 4 поодиночных + 1 view_many (один aggregate3, на части не делится) = 5; теперь —
+//! ceil(4 / B) + 1 ≤ 5 (ticks() заранее не читаются). Integral (load_algebra_integral.rs): до — 4 (+ fee() при
+//! DYNAMIC_FEE) + обход ticks() по одному; теперь каждое обращение заранее снимает не меньше поодиночных вызовов, чем
+//! стоит (голова 4; fee() — только при DYNAMIC_FEE по globalState из книги; тики цепочки — тики, которые прочитает walk,
+//! если биты дерева совпадают со списком — TickTree.sol / TickStructure.sol; сверка на записи узла — docs/TASKS.md).
+//! Сбой части обращения заранее — её вызовы код чтения спросит сам (как при сбое узла и без книги).
 //! Включаемый: dex.event_refresh_batch = да для DEX пула (область «DEX», id DEX) И заданы dex.multicall3, dex.load_batch.
 //! Нет / не задана — путь не применяется (None), чтение прежнее.
+//! Настройка dex.event_refresh_batch — из ячейки памяти (event_flags.rs, ревью 325 Н1).
 //! Кто вызывает: pools/refresh_event.rs (read).
 //! От чего зависит: node/prefetch.rs (Book, scope), node/call.rs (try_chunks, block_tag), node/multicall.rs (address),
-//! load.rs (refresh), load_batch.rs (batch), prefetch_memo.rs, prefetch_plan.rs, registry.rs (Entry), tokens.rs.
+//! load.rs (refresh), load_batch.rs (batch), prefetch_memo.rs, prefetch_plan.rs, prefetch_ask.rs (pick), event_flags.rs,
+//! registry.rs (Entry), tokens.rs.
 //! Настройки: dex.event_refresh_batch [DEX], dex.multicall3, dex.load_batch [bsc_dex].
 //!
 //! Multicall3.aggregate3 — https://github.com/mds1/multicall3/blob/main/src/Multicall3.sol#L98 (node/multicall.rs).
@@ -27,15 +37,13 @@ use super::super::node::multicall;
 use super::super::node::prefetch::{self, Book, Call};
 use super::super::tokens::Tokens;
 use super::registry::{Entry, Registry};
-use super::{load, load_batch, prefetch_memo, prefetch_plan};
+use super::{event_flags, load, load_batch, prefetch_ask, prefetch_memo, prefetch_plan};
 
 /// Включено ли для DEX пула (и есть ли Multicall3 и размер части). Возвращает: размер части пачки или None.
-/// Ошибок нет: не задано — None.
+/// Ошибок нет: не задано — None. Ревью 325 (Н1): dex.event_refresh_batch — из ячейки памяти (event_flags.rs); не
+/// задана — одна атомарная загрузка, хранилище не читается.
 pub fn size(ctx: &Ctx, e: &Entry) -> Option<usize> {
-    if !ctx
-        .dex_flag("dex.event_refresh_batch", e.family.id)
-        .unwrap_or(false)
-    {
+    if !event_flags::batch(ctx, e.family) {
         return None;
     }
     multicall::address(ctx)?;
@@ -58,10 +66,15 @@ pub async fn refresh(
     let tag = block_tag(at);
     let book = Book::new(&tag);
     let venue = ctx.venue();
-    let mut ask = prefetch_memo::get(&venue, &e.pool.reference);
-    ask.extend(prefetch_plan::first(ctx, e));
+    let mut ask = prefetch_plan::first(ctx, e);
+    if prefetch_plan::memo(e) {
+        let mut calls = prefetch_memo::get(&venue, &e.pool.reference);
+        calls.append(&mut ask.useful);
+        ask.useful = calls;
+    }
     loop {
-        let calls = book.fresh(ask);
+        // Ревью 325 (Н5): частей обращения не больше, чем нужных коду чтения вызовов (prefetch_ask.rs).
+        let calls = prefetch_ask::pick(&book, ask, part);
         if calls.is_empty() {
             break;
         }

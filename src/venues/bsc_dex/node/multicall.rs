@@ -2,8 +2,11 @@
 //! Что делает: несколько view-вызовов одним eth_call через Multicall3.aggregate3 (allowFailure = true — ответ
 //! каждого вызова отдельно). У NodeReal eth_call — 20 CU за вызов, а пачка JSON-RPC из N eth_call — N вызовов
 //! (node/pace.rs считает так же); через Multicall3 — один eth_call на всю пачку.
-//! Кто вызывает: node/call.rs (view_many), wallet/balances_mc.rs, connection_extra.rs (getBlockNumber);
-//! aggregate_raw — pools/prefetch_read.rs (решение 325: чтение заранее, мимо книги node/prefetch.rs).
+//! Кто вызывает: node/call.rs (view_many, try_many), wallet/balances_mc.rs, connection_extra.rs (getBlockNumber).
+//! Решение 325: aggregate сначала одной проверкой «книга есть» (node/prefetch.rs active) — книги нет (вся система, кроме
+//! кода чтения пула при dex.event_refresh_batch) — сразу aggregate_raw, без выделений и поиска по вызовам (ревью 325,
+//! Н1); книга есть — ответы из неё, к узлу только остальные (merge — по порядку). Само чтение заранее
+//! (pools/prefetch_read.rs) идёт через try_chunks → try_many → aggregate ВНЕ книги (книга ставится только на код чтения).
 //! От чего зависит: node/rpc.rs, errors.rs, alloy::sol!.
 //! Настройки: dex.multicall3 [bsc_dex] — адрес Multicall3. Не задан — view_many идёт пачкой JSON-RPC, как раньше.
 //!
@@ -93,6 +96,10 @@ pub async fn aggregate(
     calls: &[(Address, Bytes)],
     block: &str,
 ) -> GatewayResult<Vec<Result<Bytes, String>>> {
+    // Ревью 325 (Н1): книги нет — одна проверка task_local, дальше как до решения 325.
+    if !super::prefetch::active() {
+        return aggregate_raw(ctx, multicall, calls, block).await;
+    }
     let known: Vec<Option<Bytes>> = calls
         .iter()
         .map(|(to, data)| super::prefetch::hit(*to, data, block))
@@ -106,27 +113,35 @@ pub async fn aggregate(
         .filter(|(_, k)| k.is_none())
         .map(|(c, _)| c.clone())
         .collect();
-    let mut got = if rest.is_empty() {
+    let got = if rest.is_empty() {
         Vec::new()
     } else {
         aggregate_raw(ctx, multicall, &rest, block).await?
-    }
-    .into_iter();
-    let mut out = Vec::with_capacity(calls.len());
-    for k in known {
-        out.push(match k {
+    };
+    Ok(merge(known, got))
+}
+
+/// Решение 325: ответы по порядку вызовов — из книги (Some) и от узла (по порядку тех, кого в книге нет).
+/// Принимает: ответы книги по каждому вызову, ответы узла на вызовы без ответа книги. Возвращает: ответ каждого
+/// вызова. Ошибок нет: ответов узла меньше — у недостающих Err (decode уже проверил, что их столько же).
+pub fn merge(
+    known: Vec<Option<Bytes>>,
+    got: Vec<Result<Bytes, String>>,
+) -> Vec<Result<Bytes, String>> {
+    let mut got = got.into_iter();
+    known
+        .into_iter()
+        .map(|k| match k {
             Some(b) => Ok(b),
-            // decode проверил: ответов столько же, сколько вызовов в rest.
             None => got
                 .next()
                 .unwrap_or_else(|| Err("aggregate3: ответов меньше, чем вызовов".to_string())),
-        });
-    }
-    Ok(out)
+        })
+        .collect()
 }
 
-/// Пачка вызовов одним eth_call к Multicall3 на блоке, без книги заранее прочитанных ответов (так читает и сама
-/// книга — pools/prefetch_read.rs). Принимает: адрес Multicall3, вызовы, блок.
+/// Пачка вызовов одним eth_call к Multicall3 на блоке, без книги заранее прочитанных ответов (книги нет — aggregate
+/// идёт сюда сразу). Принимает: адрес Multicall3, вызовы, блок.
 /// Возвращает: ответ каждого вызова отдельно. Ошибки: узел, BadResponse.
 pub async fn aggregate_raw(
     ctx: &Ctx,

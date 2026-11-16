@@ -86,11 +86,10 @@ pub async fn on_log(
             .update(&r, |e| events::apply(e, log))
             .unwrap_or(Applied::Ignored)
     };
-    // Решение 325: «только комиссия» — при dex.event_refresh_fee_only и пуле не в очереди повтора; иначе прежний Refresh.
+    // Решение 325: «только комиссия» — при dex.event_refresh_fee_only, пуле не в очереди повтора, достоверном и с
+    // состоянием Algebra (ревью 325, Н2/Н3 — integral_fee::fits); иначе прежний Refresh.
     let applied = match applied {
-        Applied::Fee(why) if waiting || !integral_fee::on(&p.ctx, entry.family) => {
-            Applied::Refresh(why)
-        }
+        Applied::Fee(why) if !integral_fee::fits(&p.ctx, &entry, waiting) => Applied::Refresh(why),
         x => x,
     };
     let res = match applied {
@@ -115,9 +114,8 @@ pub async fn on_log(
         },
         // Решение 325: только комиссия на блоке события, дальше — как Updated (цена из события могла уйти за карту).
         Applied::Fee(_) => {
-            match refresh_urgency::urgent(&p.ctx, integral_fee::apply(p, &r, block, log.log_index))
-                .await
-            {
+            // Ревью 325 (Н4): класс очереди и замер (причина «fee») — refresh_event.rs fee.
+            match refresh_event::fee(p, &entry, &r, (block, log.log_index), queued).await {
                 Ok(()) => match p.reg.get(&r) {
                     Some(e) if super::depth::off_map(&p.ctx, &e) => {
                         refresh_event::off_map(p, &e, block, queued)

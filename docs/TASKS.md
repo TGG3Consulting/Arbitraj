@@ -13,7 +13,8 @@
   schedule_set). Тест tests/core_signal_ripen_318.rs (локально не собирался и не запускался).
   Сделано (317, с доработкой 16.11 по ревью): signal.dex_event_skip_hold — кандидат от события пула без удержания,
   если уровни стакана биржи на объёме сравнения не менялись ≥ signal.min_hold_ms — отметка из состояния рынка ядра
-  (core/book_still.rs), срабатывает на первом событии пула (core/signal_fast.rs, core/signal_ctx.rs); log.signal_hold — запись core.signal_hold при переходе
+  (core/book_still.rs), срабатывает на первом событии пула (core/signal_fast.rs, core/signal_ctx.rs); после пропуска
+  кандидат держится, пока спред выше порога (не мигает, эпизод не закрывается); log.signal_hold — запись core.signal_hold при переходе
   в кандидата (core/signal_hold_log.rs). Тест tests/core_signal_hold_317.rs (локально не собирался и не запускался).
   Сделано (322): signal.pool_event_now — событие пула будит сон задачи монеты, пересчёт сразу (core/tick_plan.rs,
   core/tick_sched.rs); ограничитель signal.pool_event_min_interval_ms. Тест tests/core_tick_plan_322.rs (локально не

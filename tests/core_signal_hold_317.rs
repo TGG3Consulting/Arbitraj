@@ -7,7 +7,9 @@
 //! (2) отметки изменения стакана в состоянии рынка ядра (core/book_still.rs через MarketState): тот же стакан
 //! повторным кадром отметку не двигает; изменение уровня глубже объёма не двигает отметку для меньшего объёма (смена
 //! объёма сравнения при неподвижных уровнях не мешает правилу); новый лучший уровень (мигающий) двигает отметку;
-//! после «недостоверно» — отсчёт заново.
+//! после «недостоверно» — отсчёт заново;
+//! (3) шаг после пропуска удержания: кандидат не мигает (следующий пересчёт с held < min_hold_ms — кандидат), спред
+//! ниже порога снимает пометку; правило выключили — прежний фильтр.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::signal, arb::core::signal_fast, arb::core::market_state, arb::core::types,
@@ -254,4 +256,55 @@ fn invalidated_restarts_mark() {
     assert_eq!(since(&m, "10"), None);
     m.apply(MarketEvent::Book(cake(at(t0, 2000))));
     assert_eq!(since(&m, "10"), Some(at(t0, 2000)));
+}
+
+#[test]
+fn step_after_skip_keeps_candidate() {
+    // Пропуск удержания в t0; следующий пересчёт через 100 мс (тик биржи, held 100 < 500, обновлений 2) — кандидат
+    // остаётся (эпизод и окно не закрываются); спред ушёл ниже порога — пометка снята, новое событие пула при
+    // недавно изменённом стакане — обычное удержание.
+    let mut s = Signals::default();
+    let t0 = Utc::now();
+    let p = params(true);
+    let pool = ctx(Some(Side::Buy), Trigger::Pool, Some(600));
+    let book = ctx(Some(Side::Buy), Trigger::Book, Some(50));
+    let v = s.update_with(&dir(), crash(), &p, t0, &pool);
+    assert_eq!((v.state, v.skipped_hold), (State::Candidate, true));
+    let v = s.update_with(&dir(), crash(), &p, at(t0, 100), &book);
+    assert_eq!((v.state, v.updates), (State::Candidate, 2));
+    let below = Ok(Prices {
+        buy: d("0.0055"),
+        sell: d("0.0055"),
+        fees_pct: d("0.2"),
+        qty: d("1000"),
+    });
+    assert_eq!(
+        s.update_with(&dir(), below, &p, at(t0, 200), &book).state,
+        State::Below
+    );
+    let recent = ctx(Some(Side::Buy), Trigger::Pool, Some(100));
+    let v = s.update_with(&dir(), crash(), &p, at(t0, 300), &recent);
+    assert_eq!((v.state, v.skipped_hold), (State::Holding, false));
+}
+
+#[test]
+fn step_after_skip_rule_off_is_old_filter() {
+    // Пропуск был, правило выключили — следующий пересчёт по прежнему фильтру («держится»).
+    let mut s = Signals::default();
+    let t0 = Utc::now();
+    s.update_with(
+        &dir(),
+        crash(),
+        &params(true),
+        t0,
+        &ctx(Some(Side::Buy), Trigger::Pool, Some(600)),
+    );
+    let v = s.update_with(
+        &dir(),
+        crash(),
+        &params(false),
+        at(t0, 100),
+        &ctx(Some(Side::Buy), Trigger::Book, Some(700)),
+    );
+    assert_eq!(v.state, State::Holding);
 }

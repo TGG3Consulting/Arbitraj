@@ -8,7 +8,8 @@
 //! или по направлению идёт пауза после сделки или ошибки (signal.route_cooldown_s).
 //! Решение 317: при signal.dex_event_skip_hold = да кандидат от события пула DEX выдаётся без удержания, если уровни
 //! стакана биржи на объёме сравнения не менялись не меньше signal.min_hold_ms (signal_fast.rs; отметка — из состояния
-//! рынка ядра, book_still.rs); не задана — побайтно прежний фильтр.
+//! рынка ядра, book_still.rs); не задана — побайтно прежний фильтр. Пропущенное удержание держится, пока спред выше
+//! порога без перерыва: следующий пересчёт не возвращает «держится» (кандидат не мигает, эпизод не закрывается).
 //! Решение 318: при signal.hold_timer = да у «держится» есть срок дозревания ripen_at = max(above_since +
 //! signal.min_hold_ms, сейчас) — по нему таймер (signal_ripen.rs) сам ставит пересчёт; не задана — срока нет.
 //! Кто вызывает: core/evaluate.rs на каждый пересчёт монеты (после prices.rs).
@@ -66,6 +67,10 @@ struct Track {
     above_since: Option<DateTime<Utc>>,
     updates: u64,
     cooldown_until: Option<DateTime<Utc>>,
+    /// Решение 317: удержание пропущено по событию пула — кандидат, пока спред выше порога без перерыва (не мигает на
+    /// следующем пересчёте с held < signal.min_hold_ms). Сбрасывается вместе с above_since (ниже порога, нет цены,
+    /// пауза направления).
+    passed: bool,
 }
 
 /// Фильтр шума по всем направлениям.
@@ -134,6 +139,7 @@ impl Signals {
         if spread <= p.fees_pct {
             t.above_since = None;
             t.updates = 0;
+            t.passed = false;
             return view;
         }
         t.above_since.get_or_insert(now);
@@ -152,7 +158,11 @@ impl Signals {
                 let skip = super::signal_fast::skip_hold(par.skip_on_pool, par.hold_ms, ctx);
                 if held >= par.hold_ms && t.updates >= par.hold_updates {
                     State::Candidate
-                } else if skip {
+                } else if skip || (par.skip_on_pool && t.passed) {
+                    // Решение 317: пропуск удержания держится до конца эпизода выше порога — иначе следующий
+                    // пересчёт с held < signal.min_hold_ms вернул бы «держится» и закрыл бы эпизод и окно. Правило
+                    // выключили — пометка не действует (прежний фильтр).
+                    t.passed = true;
                     view.skipped_hold = true;
                     State::Candidate
                 } else {
@@ -178,5 +188,6 @@ impl Signals {
         t.cooldown_until = Some(now + Duration::seconds(secs as i64));
         t.above_since = None;
         t.updates = 0;
+        t.passed = false;
     }
 }

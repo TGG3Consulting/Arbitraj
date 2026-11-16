@@ -71,6 +71,7 @@ fn ctx(dex_side: Option<Side>, trigger: Trigger, still: Option<u64>) -> Ctx {
         dex_side,
         trigger,
         cex_still_ms: still,
+        ..Default::default()
     }
 }
 

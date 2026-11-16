@@ -6,7 +6,8 @@
 //! Решение 317: сигналу передаются обстоятельства пересчёта (signal_ctx.rs — сторона DEX, событие пула); направление
 //! стало кандидатом — запись core.signal_hold (signal_hold_log.rs, при log.signal_hold = да). Решение 318: срок
 //! дозревания «держится» — в план таймера (signal_ripen.rs); пересчёт, поставленный таймером, помечается «таймер».
-//! Решение 322: направления площадки события пула считаются первыми (tick_plan.rs Run.first).
+//! Решение 322: направления площадки события пула считаются первыми (tick_plan.rs Run.first); отметка события пула и
+//! начало пересчёта — в строку экрана и запись core.signal_hold (замер «событие → пересчёт → кандидат»).
 //! Кто вызывает: core/tick_sched.rs.
 //! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, signal_ctx.rs, signal_hold_log.rs,
 //! vol.rs, candidates.rs, episode_run.rs, view.rs.
@@ -23,8 +24,14 @@ use super::view::CoreEvent;
 
 /// Пересчёт направлений монеты, где участвует любая из площадок тика (решение 109: тики нескольких площадок сливаются
 /// в один пересчёт). Принимает: ядро, монету, пересчёт плана (tick_plan.rs Run — площадки; решение 322 — площадки
-/// события пула первыми). Ошибок нет: причины — в строках экрана.
-pub async fn evaluate(core: &Core, asset: &Asset, run: &super::tick_plan::Run) {
+/// события пула первыми, отметка события пула), время начала пересчёта (замер core.signal_hold). Ошибок нет: причины —
+/// в строках экрана.
+pub async fn evaluate(
+    core: &Core,
+    asset: &Asset,
+    run: &super::tick_plan::Run,
+    started: chrono::DateTime<Utc>,
+) {
     let venues = &run.venues;
     let (dirs, ref_price, waiting) = {
         // Решение 131: место монеты — из карты пересборки (ticker_index.rs), проход справочника — только если
@@ -83,6 +90,12 @@ pub async fn evaluate(core: &Core, asset: &Asset, run: &super::tick_plan::Run) {
         let timer = lk(&core.inner.ripen).take_fired(&dir);
         let now = Utc::now();
         let mut ctx = super::signal_ctx::of(core, &dir, venues, timer);
+        // Замер (решения 317, 322): событие пула (приход в ядро, блок) — только у пересчёта от события пула по DEX
+        // направления; начало пересчёта монеты.
+        if ctx.trigger == super::signal_fast::Trigger::Pool {
+            ctx.pool = run.pool;
+        }
+        ctx.started = Some(started);
         // Решение 317 (доработка): сколько стоят уровни стакана биржи на объёме сравнения — из состояния рынка.
         if let Ok(p) = &prices {
             ctx.cex_still_ms = super::signal_ctx::cex_still_ms(core, &dir, &ctx, p.qty, now);

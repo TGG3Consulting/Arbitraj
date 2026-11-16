@@ -69,4 +69,10 @@ pub struct SpreadView {
     pub cex_still_ms: Option<u64>,
     /// Решение 318: срок дозревания «держится» — таймер сам поставит пересчёт (только при signal.hold_timer = да).
     pub ripen_at: Option<DateTime<Utc>>,
+    /// Замер (решения 317, 322): первое событие пула пересчёта пришло в поток тика (только запуск «событие пула»).
+    pub pool_at: Option<DateTime<Utc>>,
+    /// Замер: номер блока состояния пула этого события.
+    pub pool_block: Option<u64>,
+    /// Замер: начало пересчёта монеты.
+    pub eval_started: Option<DateTime<Utc>>,
 }

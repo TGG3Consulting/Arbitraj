@@ -2,11 +2,15 @@
 //! Что делает: решения 317 и 318 — запись журнала core.signal_hold, когда направление СТАЛО кандидатом (раньше было
 //! не кандидатом): когда спред впервые стал выше порога (above_since), сколько мс он держался и сколько обновлений,
 //! что запустило кандидата (тик биржи / событие пула / таймер дозревания / пропуск удержания по событию пула),
-//! сколько мс не менялись уровни стакана биржи на объёме сравнения. Нужна, чтобы на живом боте доказать выигрыш по времени (сравнить с
-//! core.window «Окно открыто» и core.candidate_rejected «финальная котировка»).
+//! сколько мс не менялись уровни стакана биржи на объёме сравнения; замер решения 322 — когда событие пула пришло в
+//! поток тика (pool_at) и номер блока (pool_block), когда начался пересчёт (eval_started), отрезки «событие →
+//! пересчёт» (pool_to_eval_ms) и «пересчёт → кандидат» (eval_to_candidate_ms); у запуска не от события пула — пусто.
+//! Нужна, чтобы на живом боте доказать выигрыш по времени (сравнить с core.window «Окно открыто» и
+//! core.candidate_rejected «финальная котировка»).
 //! Запись идёт своей задачей — пересчёт монеты журнал не ждёт (как решение 129).
 //! Кто вызывает: core/evaluate.rs.
-//! От чего зависит: core/engine.rs (Deps.log), core/signal.rs (SpreadView), core/signal_fast.rs (Trigger), settings.
+//! От чего зависит: core/engine.rs (Deps.log), core/signal.rs (SpreadView: замеры из signal_fast.rs Ctx, tick_plan.rs
+//! PoolMark), core/signal_fast.rs (Trigger), settings.
 //! Настройки: log.signal_hold (необязательна; не задана или нет — записи нет, одно чтение настройки на переход).
 
 use serde_json::json;
@@ -43,9 +47,17 @@ pub fn note(core: &Core, v: &SpreadView) {
         return;
     }
     let held_ms = v.above_since.map(|s| (v.at - s).num_milliseconds().max(0));
+    // Решения 317, 322: отрезки «событие пула пришло в ядро → пересчёт начат → кандидат», мс.
+    let pool_to_eval_ms = v
+        .pool_at
+        .zip(v.eval_started)
+        .map(|(p, e)| (e - p).num_milliseconds());
+    let eval_to_candidate_ms = v.eval_started.map(|e| (v.at - e).num_milliseconds());
+    let ms = |m: Option<i64>| m.map(|m| m.to_string()).unwrap_or_else(|| "—".into());
     let d = &v.direction;
     let text = format!(
-        "Кандидат {} ({} → {}): запуск — {}; спред выше порога с {} ({} мс), обновлений {}; стакан биржи стоит {} мс",
+        "Кандидат {} ({} → {}): запуск — {}; спред выше порога с {} ({} мс), обновлений {}; стакан биржи стоит {} мс; \
+         событие пула (блок {}) → пересчёт {} мс → кандидат {} мс",
         d.asset.ticker,
         d.buy_on.0,
         d.sell_on.0,
@@ -53,11 +65,12 @@ pub fn note(core: &Core, v: &SpreadView) {
         v.above_since
             .map(|s| s.format("%H:%M:%S%.3f").to_string())
             .unwrap_or_else(|| "—".into()),
-        held_ms.map(|m| m.to_string()).unwrap_or_else(|| "—".into()),
+        ms(held_ms),
         v.updates,
-        v.cex_still_ms
-            .map(|m| m.to_string())
-            .unwrap_or_else(|| "—".into()),
+        ms(v.cex_still_ms.map(|m| m as i64)),
+        ms(v.pool_block.map(|b| b as i64)),
+        ms(pool_to_eval_ms),
+        ms(eval_to_candidate_ms),
     );
     let data = json!({
         "asset": d.asset.ticker,
@@ -70,6 +83,11 @@ pub fn note(core: &Core, v: &SpreadView) {
         "updates": v.updates,
         "cex_still_ms": v.cex_still_ms,
         "spread_pct": v.spread_pct,
+        "pool_at": v.pool_at,
+        "pool_block": v.pool_block,
+        "eval_started": v.eval_started,
+        "pool_to_eval_ms": pool_to_eval_ms,
+        "eval_to_candidate_ms": eval_to_candidate_ms,
         "at": v.at,
     });
     let venue = d.buy_on.0.clone();

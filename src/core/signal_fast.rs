@@ -8,11 +8,13 @@
 //! объёма сравнения. Биржа ↔ биржа и DEX ↔ DEX — правило не действует (dex_side = None).
 //!
 //! Кто вызывает: core/signal.rs (Signals::update_with), core/evaluate.rs и core/signal_ctx.rs (Ctx).
-//! От чего зависит: core/types (Side).
+//! От чего зависит: core/types (Side), core/tick_plan.rs (PoolMark — замер), chrono.
 //! Настройки: signal.dex_event_skip_hold (читает signal.rs Params; не задана — правило выключено).
 
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 
+use super::tick_plan::PoolMark;
 use crate::core::types::Side;
 
 /// Что запустило пересчёт направления (журнал core.signal_hold и «Живой экран»).
@@ -37,6 +39,11 @@ pub struct Ctx {
     /// Сколько мс не менялись уровни стакана биржи на объёме сравнения (только биржа ↔ DEX и есть цена; None — нет
     /// стакана или направление не биржа ↔ DEX).
     pub cex_still_ms: Option<u64>,
+    /// Замер (запись core.signal_hold): первое событие пула пересчёта — когда пришло в поток тика (tick.rs) и номер
+    /// блока; только при пересчёте от события пула по DEX направления (Trigger::Pool).
+    pub pool: Option<PoolMark>,
+    /// Замер: когда начался пересчёт монеты (tick_sched.rs).
+    pub started: Option<DateTime<Utc>>,
 }
 
 /// Что делает: правило решения 317 — пропустить удержание.

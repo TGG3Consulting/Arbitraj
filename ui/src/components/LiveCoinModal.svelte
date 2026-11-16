@@ -65,6 +65,11 @@
             {v.trigger === 'Pool' ? 'событие пула' : v.trigger === 'Timer' ? 'таймер дозревания (signal.hold_timer)' : 'тик биржи'}
             {#if v.skipped_hold}<span class="ok"> — кандидат без удержания (signal.dex_event_skip_hold)</span>{/if}
           </dd>
+          {#if v.pool_at}
+            <!-- Решение 322: замер «событие пула пришло в ядро → пересчёт начат». -->
+            <dt>Событие пула</dt>
+            <dd>блок <code>{v.pool_block ?? '—'}</code>, пришло в {showTime(v.pool_at)}{#if v.eval_started}, пересчёт начат в {showTime(v.eval_started)}{/if}</dd>
+          {/if}
           {#if v.ripen_at}
             <dt>Таймер дозревания</dt>
             <dd>пересчёт в {showTime(v.ripen_at)} (signal.hold_timer)</dd>

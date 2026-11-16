@@ -116,6 +116,9 @@ impl Signals {
             skipped_hold: false,
             cex_still_ms: ctx.cex_still_ms,
             ripen_at: None,
+            pool_at: ctx.pool.map(|m| m.at),
+            pool_block: ctx.pool.map(|m| m.block),
+            eval_started: ctx.started,
         };
         let p = match prices {
             Ok(p) => p,

@@ -16,6 +16,8 @@
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
+use chrono::Utc;
+
 use crate::core::types::{Asset, VenueId};
 use crate::settings::read::At;
 
@@ -61,7 +63,7 @@ fn put(core: &Core, asset: Asset, venues: HashSet<VenueId>, pool: Option<PoolMar
 async fn task(core: Core, asset: Asset, mut run: Run) {
     loop {
         let started = Instant::now();
-        super::evaluate::evaluate(&core, &asset, &run).await;
+        super::evaluate::evaluate(&core, &asset, &run, Utc::now()).await;
         // Решение 318: «держится» без новых тиков — таймер на срок дозревания (не задан signal.hold_timer — нет).
         super::signal_ripen::arm(&core, &asset);
         loop {

@@ -11,6 +11,9 @@
 //!   попытка круга, ожила — каждый раз); задана — одна строка вида решения по паре не чаще раза в столько мс
 //!   (повторы того же решения тоже видны, но не засоряют журнал).
 //!
+//! Решение 366 (t163, ревью Н2): в сводке — сколько проверок отложено пустым ведром и что дали проверки пар, нужных
+//! торговле (подтверждены, первое «книга новее» с повторной сверкой, кадры потеряны) — с прошлой сводки.
+//!
 //! Чистая логика без ввода-вывода; пишет core/feed_watch_act.rs (строки пар) и core/feed_watch.rs (сводка).
 //! Кто вызывает: core/feed_watch.rs, core/feed_watch_act.rs.
 //! От чего зависит: gateway/feed_health.rs, feed_watch_logic.rs (Cfg, State), feed_confirm.rs (QuietCfg, Told),
@@ -37,6 +40,8 @@ pub struct LogGate {
     recovered: usize,
     reconnects: usize,
     announced: bool,
+    /// Решение 366 (ревью Н2): счётчики сторожа на прошлой сводке — в строке прирост с неё.
+    prev: super::feed_confirm_queue::Stats,
 }
 
 impl LogGate {
@@ -142,7 +147,18 @@ impl LogGate {
             self.reconnects
         );
         (self.resubs, self.recovered, self.reconnects) = (0, 0, 0);
-        Some(line)
+        // Решение 366 (ревью Н2): хватает ли ведра и что дают проверки пар, нужных торговле.
+        let (s, p) = (st.stats, self.prev);
+        self.prev = s;
+        Some(format!(
+            "{line}; отложено ведром {}; проверок нужных торговле пар {} — подтверждены {}, «книга новее» впервые (повторная \
+             сверка без переподписки) {}, кадры потеряны {}",
+            s.deferred - p.deferred,
+            s.early_checks - p.early_checks,
+            s.early_confirmed - p.early_confirmed,
+            s.early_suspect - p.early_suspect,
+            s.early_lost - p.early_lost
+        ))
     }
 }
 

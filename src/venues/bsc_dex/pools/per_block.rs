@@ -28,13 +28,17 @@
 //! монета), лог приходит от адреса контракта — перечитываются все пары этого контракта на блоке события.
 //! Решение 295: пары многомонетного пула (PoolRef::Multi) видов «каждым блоком» (Curve NG) — одно чтение на контракт
 //! (reload_many::load_group → load_site.rs); Balancer — per_block_balancer.rs (тоже по контракту).
+//! Решение 330: при dex.block_read_parallel_max — пулы блока читаются одновременно (per_block_par.rs: свои пулы видов
+//! «по одному» и пары многомонетных — одним чтением группы с пределом, Balancer и LB — одновременно с ними), пары
+//! общего контракта по логу (on_member_log) — одним чтением группы с тем же пределом. Не задана — как раньше, по очереди.
 //! Решение 339 (pool_fail.rs): при dex.pool_fail_pause_ms не прочитавшийся пул отмечается с причиной (экран «Монеты»,
 //! журнал) и следующие блоки / логи его не читают, пока не прошла растущая пауза; не задана — как раньше, каждым блоком.
 //! Кто вызывает: pools/session.rs.
-//! От чего зависит: listen.rs (Pools, End), reload.rs (load_one), discover.rs (Found), families.rs, ladder_counter.rs,
+//! От чего зависит: listen.rs (Pools, End), reload.rs (load_one), reload_many.rs (load_group, load_group_with),
+//! per_block_par.rs, load_batch_par.rs (limit), pool_fail.rs, discover.rs (Found), families.rs, ladder_counter.rs,
 //! refresh_urgency.rs (решение 314: лог общего контракта — класс очереди узла, только при парах контракта).
 //! Настройки: dex.pmm_ladder_counter, dex.pmm_ladder_usd [DEX] (ladder_counter.rs each_block); dex.event_refresh_urgency
-//! (on_member_log); через вызываемые — dex.*.
+//! (on_member_log); dex.block_read_parallel_max [bsc_dex] (решение 330); через вызываемые — dex.*.
 
 use alloy::rpc::types::Log;
 use alloy_primitives::Address;
@@ -44,7 +48,13 @@ use crate::core::types::PoolRef;
 use super::discover::Found;
 use super::families::{Family, Proto};
 use super::listen::{End, Pools};
-use super::{ladder_counter, per_block_balancer, per_block_lb, pool_fail, reload, reload_many};
+use super::{
+    ladder_counter, load_batch_par, per_block_balancer, per_block_lb, per_block_par, pool_fail,
+    reload, reload_many,
+};
+
+/// Настройка предела одновременных чтений пулов блока, пар общего контракта и приёма / повтора (решение 330).
+pub const PAR: &str = "dex.block_read_parallel_max";
 
 /// Перечитывается ли вид на каждом блоке. Ошибок нет.
 pub fn needs(f: &Family) -> bool {
@@ -98,6 +108,9 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
         (each_block(f, usdt) || ladder_counter::each_block(&p.ctx, f, usdt))
             && !pool_fail::paused(p, &f.reference)
     };
+    // Решение 330: задан предел — свои пулы копятся и читаются одновременно (per_block_par.rs); не задан — по одному.
+    let par = load_batch_par::limit(&p.ctx, PAR);
+    let mut singles: Vec<(&Found, &str)> = Vec::new();
     for x in pools.iter().filter(|(f, _)| per(f)) {
         let (f, t) = x;
         if p.reg.get(&f.reference).is_none() {
@@ -121,9 +134,22 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
             lb.push(x);
             continue;
         }
+        if par.is_some() {
+            singles.push((f, t.as_str()));
+            continue;
+        }
         if let Err(why) = reload::load_one(p, f, t, block).await? {
             pool_fail::block_failed(p, f, &why.message).await;
         }
+    }
+    if let Some(n) = par {
+        let lists = per_block_par::Lists {
+            singles,
+            sites: sites.into_iter().flat_map(|(_, items)| items).collect(),
+            balancer: &balancer,
+            lb: &lb,
+        };
+        return per_block_par::on_head(p, lists, block, n).await;
     }
     for (_, items) in sites {
         for ((f, _), r) in items.iter().zip(reload_many::load_group(p, &items, block).await?) {
@@ -158,6 +184,16 @@ pub async fn on_member_log(p: &Pools, pools: &[(Found, String)], log: &Log) -> R
         return Ok(true);
     };
     // Решение 314 (ревью): класс dex.event_refresh_urgency — только когда есть пары и блок (есть работа узлу).
+    // Решение 330: задан предел — все пары контракта одним чтением группы одновременно (тот же блок лога).
+    if let Some(n) = load_batch_par::limit(&p.ctx, PAR) {
+        let items: Vec<(&Found, &str)> = members.iter().map(|(f, t)| (f, t.as_str())).collect();
+        let work = async {
+            let res = reload_many::load_group_with(p, &items, block, Some(n)).await?;
+            per_block_par::failed(p, &items, &res).await;
+            Ok::<bool, End>(true)
+        };
+        return super::refresh_urgency::urgent(&p.ctx, work).await;
+    }
     let work = async {
         for (f, t) in members {
             if let Err(why) = reload::load_one(p, f, t, block).await? {

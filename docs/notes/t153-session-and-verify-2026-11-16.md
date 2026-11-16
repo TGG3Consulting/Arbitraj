@@ -85,3 +85,76 @@
   BiswapV3, KyberDmm, Smardex, BalancerV2) — действует (`load_batch.rs one_by_one`); пары Multi — одно чтение на
   контракт, группы контрактов одновременно.
 
+## 5. Решение 330: кто кого ждёт в сессии пачки (факт кода 8fe83aa1)
+
+- Пачка пулов подписки — одна задача tokio `listen::run` → `session::run` → `listen` (`session.rs:87`): один цикл
+  `tokio::select!` по веткам: лог (`g.rx.recv()`), новые пулы, пересинхрон ленты, новый блок, настройки.
+- Ветка лога ждёт `on_log` до конца; для глубокого пула — `listen_log::on_log`, а тот — перечитывание по событию
+  (`listen_log.rs:104` off_map, `:119` бины, `:141` Refresh). Пока идёт перечитывание, логи ВСЕХ пулов пачки лежат в
+  канале `g.rx` (поле queued записи dex.pool_refresh — `refresh_event.rs:96`).
+- Ветка нового блока так же ждёт `reload::retry` и `per_block::on_head` (пулы по одному, `per_block.rs:110-118`).
+
+Стало:
+
+| Путь | dex.event_lanes_max | dex.block_read_parallel_max |
+| --- | --- | --- |
+| Перечитывание по событию (off_map, Refresh, бины, реорг) и применение событий глубокого пула | полоса пула — отдельная задача; другие пулы идут (`session.rs` on_log → `session_lanes.rs`) | — |
+| Пробуждение мелкого пула (`admit::wake`), пары Multi (`listen_site`), пары WooFi (`on_member_log`) | в сессии, как раньше (меняют подписку `g.set` и очередь повтора `&mut Members`); полосы других пулов при этом идут | пары WooFi — одной группой с пределом |
+| Каждым блоком (`per_block::on_head`) | ждёт только полосы своих пулов (`settle_block`) | одной группой с пределом + Balancer / LB одновременно (`per_block_par.rs`) |
+| Повтор (`reload::retry`), приём (`admit`), пересинхрон (`depth_sync`) → `load_many` | повтор — после полос своих пулов; приём / пересинхрон / настройки — после всех полос (`drain`) | виды «по одному» одновременно с пределом, каждый на своём свежем блоке (`reload_many.rs` at_fresh — блок берётся при начале чтения пула) |
+
+Вид × «ожидание пачки»: события своих пулов (Contract / Singleton) всех видов — V2, PancakeV3, UniswapV3, InfinityCl,
+UniswapV4, InfinityBin, LbV21, KyberElastic, Dodo*, Algebra, AlgebraIntegral, Solidly, SolidlyV1, Slipstream,
+Curve/Pancake/Saddle/Lista/Nomi/InfinityStable, CurveNg, Maverick, MetricOmm, IziSwap, BiswapV3, KyberDmm, Smardex,
+BalancerV2 — действует (лог находит пул по индексу пачки, `session.rs` on_log). WooPP (Member) и пары Multi
+(Curve*/Pancake/Saddle/CurveNg/Balancer при dex.multi_pair) — неприменимо к полосам: обработка меняет общие для пачки
+подписку и очередь повтора (`listen_site.rs` on_log(&mut Group, &mut Members), `admit.rs wake`); для них — пары
+одной группой (dex.block_read_parallel_max). Каждым блоком — только виды `per_block::needs` (`per_block.rs:50-66`):
+ListaStable, WooPP, InfinityStable, CurveNg, NomiStable, MetricOmm, IziSwap, BiswapV3, KyberDmm, Smardex, BalancerV2,
+LbV21; остальные — неприменимо (их состояние меняют только события).
+
+Порядок и гонки (полосы):
+- Порядок одного пула: свой канал; следующее событие пула запускается только после завершения предыдущего
+  (`lanes.rs next/done`). Событие, пришедшее во время перечитывания, ждёт в канале и применяется после — не теряется;
+  уже учтённое перечитыванием пропускается по позиции (`listen_log.rs` has_applied).
+- Двойное перечитывание одного пула полосами невозможно (у ключа не больше одной работы). Полоса и чтение блока одного
+  пула: новый блок ждёт полосы пулов из очереди повтора и видов `per_block::needs` (`settle_block`), новые не
+  запускает до конца чтения блока.
+- Очередь повтора: «ждёт ли пул повтора» берётся при запуске события; итог `Ok(true)` (StaleData или решение 339)
+  ставит пул в очередь при завершении — до следующего события пула. Пул на паузе 339 — `listen_log` сам не читает.
+- Реорг (`removed: true`): событие идёт в полосу своего пула по порядку; перечитывание на текущем блоке — как раньше.
+- Предел — dex.event_lanes_max (читается при каждом запуске; снята — принятое дорабатывается по одной, потом сессия
+  снова по очереди). Узел: каждый запрос — общая очередь `node/pace.rs` (bsc.node_http_rps); класс перечитывания —
+  dex.event_refresh_urgency (task_local на время чтения), задача полосы — без класса (фон, как задача пачки).
+- Обрыв: JoinSet полос останавливается вместе с сессией; пулы — как раньше (недостоверны или dex.keep_pools_on_break),
+  переподключение читает их заново.
+- Остаётся: повтор и «каждым блоком» идут в ветке нового блока сессии — на это время новые логи в полосы не
+  раздаются (сами чтения — одновременно); per_block одним Multicall3 не сделан (внутренности load_*.rs — t152).
+
+## 6. Что не покрыто тестом и чего нет в записях
+
+- `tests/bsc_dex_pool_fail_339.rs` — расписание паузы и независимость отметок пулов; каталог 339. Нет записи ответа
+  KJUDGE_ERROR (промпт — docs/TASKS.md, 339).
+- `tests/bsc_dex_session_lanes_330.rs` — расписание полос на 2305 реальных логах (квитанции 4 блоков BSC,
+  `tests/data/receipts_2026-10-25`): порядок пула, предел, «медленный пул не держит других»; каталог.
+- `tests/bsc_dex_read_parallel_331.rs` — каталог. Нет записи времени verify с настройкой и без (промпт — TASKS, 331).
+- Сами пути сессии (задачи tokio, узел) тестом не прогоняются — нужен узел; замер dex.pool_refresh — TASKS, 330.
+
+## 7. Что взято из черновика b21c1825 и что переделано
+
+- Взято: `lanes.rs` (расписание; `next` переписан без get_mut в match), `session_lanes.rs`, правки `session.rs`,
+  `load_batch_par.rs`, `per_block_par.rs`, правки `reload_many.rs`, `verify.rs`, `cycle_legs.rs`, `load_batch.rs`
+  (Want: Copy), тест полос, строки настроек.
+- Переделано: черновик не трогал главное (339) — сделано заново (`pool_fail.rs` и пути); per_block / пары WooFi /
+  приём — номер решения 330 (не 331); `per_block_par::invalid` → `failed` (причина и пауза 339); в docs/SETTINGS.md у
+  строк t153 не было столбцов «единица» и «область»; в `pools/mod.rs` черновика не хватало объявлений; коммит разбит
+  на А / В / Б.
+
+## 8. Правки listen_log.rs (для слияния с t152 / t154)
+
+Только решение 339, три места (по коммиту А): шапка — строки 16-19 (две строки «Решение 339 …» и настройка в
+«Настройки:»); комментарий on_log — строки 53-54; в `on_log` после `let Some(entry) = p.reg.get(&r)` — строки 78-79
+(`let waiting = waiting || super::pool_fail::paused(p, &r);`); в ветке ошибки после `stale_read::note … return
+Ok(true); }` — строки 165-168 (`if super::pool_fail::note(...).await { return Ok(true); }` перед прежним
+`return Err(End::Broken(e.message))`). Ветка Bins (t154) и чтение (t152) не тронуты.
+

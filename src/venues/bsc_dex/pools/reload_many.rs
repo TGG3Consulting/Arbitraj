@@ -2,9 +2,16 @@
 //! Что делает: чтение многих пулов пачками (решение 61) — приём пачки и повтор чтения: группы пулов, у каждой свежий
 //! блок, внутри — ступени load_batch.rs; прочитанные пулы — в реестр и ядру (как reload::load_one). Решение 298:
 //! пулы видов, читаемых по одному последовательно, — каждый на своём свежем блоке (fresh_each).
-//! Кто вызывает: pools/admit.rs, pools/reload.rs (retry); load_group — ещё per_block.rs, listen_site.rs (решение 295).
-//! От чего зависит: load_batch.rs, load.rs, listen_log.rs, http_wait.rs, registry.rs.
-//! Настройки: dex.load_batch [bsc_dex]; через load_batch.rs — dex.multicall3, dex.tick_words, dex.tick_lens, dex.state_view.
+//! Решение 330: при dex.block_read_parallel_max пулы fresh_each читаются одновременно (не больше столько сразу), каждый
+//! по-прежнему на СВОЁМ свежем блоке (блок берётся, когда чтение пула начинается); load_group_with — чтение группы с
+//! пределом одновременных чтений видов «по одному» (load_batch_par.rs, решение 331). Не задана — как раньше, по очереди.
+//! Кто вызывает: pools/admit.rs, pools/reload.rs (retry); load_group — ещё per_block.rs, listen_site.rs (решение 295);
+//! load_group_with — per_block.rs, per_block_par.rs (решение 330).
+//! От чего зависит: load_batch.rs, load_batch_par.rs, load.rs, listen_log.rs, http_wait.rs, registry.rs.
+//! Настройки: dex.load_batch, dex.block_read_parallel_max [bsc_dex]; через load_batch.rs — dex.multicall3,
+//! dex.tick_words, dex.tick_lens, dex.state_view.
+
+use futures_util::StreamExt;
 
 use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayError;
@@ -13,7 +20,7 @@ use super::discover::Found;
 use super::listen::{End, Pools};
 use super::load_batch::{self, Want};
 use super::registry::Registry;
-use super::{http_wait, listen_log, load};
+use super::{http_wait, listen_log, load, load_batch_par};
 
 /// Чтение многих пулов пачками (load_batch.rs) группами: у каждой группы — свежий блок (последний известный, не
 /// раньше `min_block`), чтобы узел ещё отдавал его состояние, пока очередь дойдёт до следующих групп; события пула до
@@ -44,9 +51,25 @@ pub async fn load_many(
                 out[base + k] = Some(r);
             }
         }
-        for k in each {
-            let r = at_fresh(p, &group[k..=k], min_block).await?;
-            out[base + k] = r.into_iter().next();
+        // Решение 330: при dex.block_read_parallel_max — одновременно (поток future: блок пула берётся, когда его
+        // чтение началось, — тот же смысл «свой свежий блок»); не задана — по очереди, как раньше.
+        match load_batch_par::limit(&p.ctx, super::per_block::PAR) {
+            Some(lim) => {
+                let reads = futures_util::stream::iter(each.iter().copied())
+                    .map(|k| at_fresh(p, &group[k..=k], min_block))
+                    .buffered(lim)
+                    .collect::<Vec<_>>()
+                    .await;
+                for (k, r) in each.into_iter().zip(reads) {
+                    out[base + k] = r?.into_iter().next();
+                }
+            }
+            None => {
+                for k in each {
+                    let r = at_fresh(p, &group[k..=k], min_block).await?;
+                    out[base + k] = r.into_iter().next();
+                }
+            }
         }
     }
     Ok(out
@@ -106,6 +129,18 @@ pub async fn load_group(
     items: &[(&Found, &str)],
     block: u64,
 ) -> Result<Vec<Result<(), GatewayError>>, End> {
+    load_group_with(p, items, block, None).await
+}
+
+/// Что делает: как load_group, но с пределом одновременных чтений видов «по одному» и групп пар многомонетных пулов
+/// (решения 330, 331: load_batch_par.rs); None — ровно load_group (как раньше). Принимает: (пул, тикер), блок, предел.
+/// Возвращает: по каждому Ok или причину. Ошибки: End — ядро закрыло канал.
+pub async fn load_group_with(
+    p: &Pools,
+    items: &[(&Found, &str)],
+    block: u64,
+    par: Option<usize>,
+) -> Result<Vec<Result<(), GatewayError>>, End> {
     let known: Vec<_> = items.iter().map(|(f, _)| p.reg.get(&f.reference)).collect();
     let wants: Vec<Want> = items
         .iter()
@@ -131,7 +166,7 @@ pub async fn load_group(
             },
         })
         .collect();
-    let loaded = load_batch::states(&p.ctx, &p.tokens, &p.reg, &wants, block).await;
+    let loaded = load_batch_par::states_with(&p.ctx, &p.tokens, &p.reg, &wants, block, par).await;
     let mut out = Vec::with_capacity(items.len());
     for (((f, ticker), e), l) in items.iter().zip(&known).zip(loaded) {
         let l = match l {

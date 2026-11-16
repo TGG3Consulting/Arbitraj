@@ -4,8 +4,9 @@
 //! Решение 353: учёт ядра (core_state, daily_result, wallet_queue) — в своём файле ledger.sqlite рядом со своим
 //! писателем (storage/ledger_db.rs, доступ — Db::ledger); таблицы в основной базе остаются (схема), код их больше не
 //! пишет — при открытии недостающее переносится (storage/ledger_move.rs).
-//! Кто вызывает: main.rs (открывает), settings/store.rs, storage/journal.rs, storage/rules.rs; call_sync —
-//! storage/journal_queue.rs (свой поток писателя журнала, решение 341); ledger — core/persist.rs, core/daily_*.rs,
+//! Решение 341: очередь записи журнала — одна на базу (Inner.journal); база закрывается — очередь дописывается.
+//! Кто вызывает: main.rs (открывает), settings/store.rs, storage/journal.rs, storage/rules.rs; call_sync — тесты;
+//! journal_queue / conn_arc — storage/journal.rs, journal_counted.rs; ledger — core/persist.rs, core/daily_*.rs,
 //! storage/wallet_queue.rs.
 //! От чего зависит: rusqlite, tokio, storage/ledger_db.rs.
 //! Миграции: новые столбцы старых таблиц — ADDED_COLUMNS (добавляются при открытии, если их нет).
@@ -16,6 +17,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use rusqlite::Connection;
 
+use super::journal_queue::Queue;
 use super::ledger_db::{self, LedgerDb};
 use crate::gateway::rules::Rule;
 
@@ -183,13 +185,26 @@ pub struct Db {
     inner: Arc<Inner>,
 }
 
+/// Снимок правил шлюза (решение 354): отдельный Arc — функции над соединением держат его, а не Db (закрытие базы
+/// внутри такой функции ждало бы писателя журнала под замком соединения).
+pub(super) type Rules = Arc<RwLock<Option<Vec<Rule>>>>;
+
 /// Содержимое Db: соединение основной базы и учёт ядра.
 struct Inner {
     conn: Arc<Mutex<Connection>>,
     /// Решение 353: учёт ядра — свой файл и свой писатель (storage/ledger_db.rs).
     ledger: LedgerDb,
     /// Решение 354: снимок правил шлюза (storage/rules.rs); None — ещё не прочитан или не прочитался.
-    rules: RwLock<Option<Vec<Rule>>>,
+    rules: Rules,
+    /// Решение 341: очередь записи журнала этой базы (одна на все журналы базы).
+    journal: Arc<Queue>,
+}
+
+impl Drop for Inner {
+    /// База закрывается (последний клон Db удалён) — очередь журнала дописывается (Queue::shutdown ждёт писателя).
+    fn drop(&mut self) {
+        self.journal.shutdown();
+    }
 }
 
 impl Db {
@@ -202,12 +217,13 @@ impl Db {
         migrate(&conn)?;
         let ledger = LedgerDb::open(&ledger_db::path_near(path), &conn)?;
         // Решение 354: снимок правил шлюза — сразу (не прочитались — прочитаются при первом list, с той же ошибкой).
-        let rules = RwLock::new(super::rules::read_all(&conn).ok());
+        let rules = Arc::new(RwLock::new(super::rules::read_all(&conn).ok()));
         Ok(Self {
             inner: Arc::new(Inner {
                 conn: Arc::new(Mutex::new(conn)),
                 ledger,
                 rules,
+                journal: Arc::default(),
             }),
         })
     }
@@ -250,13 +266,30 @@ impl Db {
             inner: Arc::new(Inner {
                 conn,
                 ledger,
-                rules: RwLock::new(None),
+                rules: Rules::default(),
+                journal: Arc::default(),
             }),
         })
     }
 
+    /// Очередь записи журнала базы (решение 341, storage/journal_queue.rs). Ошибок нет.
+    pub(super) fn journal_queue(&self) -> &Arc<Queue> {
+        &self.inner.journal
+    }
+
+    /// Соединение основной базы (для потока-писателя журнала). Ошибок нет.
+    pub(super) fn conn_arc(&self) -> &Arc<Mutex<Connection>> {
+        &self.inner.conn
+    }
+
+    /// Решение 341: ждёт записи всего, что поставлено в очередь журнала до вызова (читатели таблицы journal мимо
+    /// Journal::list — core/usdt_sent_backfill.rs). Ошибок нет.
+    pub async fn journal_flushed(&self) {
+        self.inner.journal.flushed().await;
+    }
+
     /// Снимок правил шлюза (решение 354, storage/rules.rs). Ошибок нет.
-    pub(super) fn rules_cache(&self) -> &RwLock<Option<Vec<Rule>>> {
+    pub(super) fn rules_cache(&self) -> &Rules {
         &self.inner.rules
     }
 
@@ -265,8 +298,8 @@ impl Db {
         &self.inner.ledger
     }
 
-    /// Что делает: решение 341 — выполняет функцию с соединением В ТЕКУЩЕМ потоке (замок соединения — тот же, что у
-    /// call). Только для своих потоков ОС (писатель журнала storage/journal_queue.rs), не для задач tokio.
+    /// Что делает: выполняет функцию с соединением В ТЕКУЩЕМ потоке (замок соединения — тот же, что у call). Только для
+    /// своих потоков ОС и spawn_blocking, не для задач tokio.
     /// Принимает: функцию над &mut Connection. Возвращает: её результат. Ошибки: SQLite, замок отравлен.
     pub fn call_sync<T>(
         &self,

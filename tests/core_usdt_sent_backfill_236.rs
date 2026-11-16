@@ -124,6 +124,8 @@ async fn backfill_writes_only_sent_and_core_uses_it() {
         )
         .await
         .unwrap();
+        // Решение 341: журнал пишется очередью — дописать до открытия базы второй раз.
+        j.idle().await;
     }
     let db = Db::open(&p.join("t.sqlite")).unwrap();
     let (mut deals, sents) = bf::load(&db).await.unwrap();

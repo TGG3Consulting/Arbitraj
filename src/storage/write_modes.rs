@@ -1,11 +1,11 @@
 //! Файл: storage/write_modes.rs
-//! Что делает: режимы записи хранилища из настроек, на лету. Решение 341 — journal.queue_max: очередь записи журнала
-//! (Journal::set_queue_max; при первом включении — обработчик остановки journal_stop.rs), journal.batch_max — предел
-//! записей в одной транзакции пачки (Journal::set_batch_max). Решение 353 — ledger.synchronous: PRAGMA synchronous
-//! писателя файла учёта ядра (storage/ledger_db.rs). Не заданы — как раньше. Смена настройки применяется сразу
-//! (подписка на изменения).
+//! Что делает: пределы и режимы записи хранилища из настроек, на лету. Решение 341 (очередь журнала работает всегда):
+//! journal.queue_max — предел длины очереди (Journal::set_queue_max; не задан — без предела), journal.batch_max — предел
+//! записей в одной транзакции пачки (Journal::set_batch_max; не задан — всё накопленное). Решение 353 —
+//! ledger.synchronous: PRAGMA synchronous писателя файла учёта ядра (storage/ledger_db.rs; не задана — значение SQLite
+//! при открытии). Смена настройки применяется сразу (подписка на изменения).
 //! Кто вызывает: main.rs (apply при запуске до адаптеров, run — задача на всё время работы).
-//! От чего зависит: storage/journal.rs, storage/db.rs (ledger), storage/ledger_db.rs, storage/journal_stop.rs,
+//! От чего зависит: storage/journal.rs, storage/db.rs (ledger), storage/ledger_db.rs,
 //! settings (Store, Watch).
 //! Настройки: journal.queue_max, journal.batch_max, ledger.synchronous (все необязательные).
 
@@ -16,7 +16,7 @@ use crate::settings::store::Store;
 use super::db::Db;
 use super::journal::Journal;
 
-/// Предел очереди записи журнала (решение 341).
+/// Предел длины очереди записи журнала (решение 341).
 pub const JOURNAL_MAX: &str = "journal.queue_max";
 /// Предел записей в одной транзакции пачки журнала (решение 341).
 pub const JOURNAL_BATCH: &str = "journal.batch_max";
@@ -33,12 +33,8 @@ pub fn names() -> Vec<String> {
 
 /// Применяет текущие значения настроек. Принимает: журнал, базу, настройки. Ошибок нет.
 pub fn apply(journal: &Journal, db: &Db, settings: &Store) {
-    let max = settings.integer(JOURNAL_MAX, At::default()).ok();
+    journal.set_queue_max(settings.integer(JOURNAL_MAX, At::default()).ok());
     journal.set_batch_max(settings.integer(JOURNAL_BATCH, At::default()).ok());
-    journal.set_queue_max(max);
-    if max.is_some_and(|m| m > 0) {
-        super::journal_stop::install(journal.clone());
-    }
     let sync = settings
         .text(LEDGER_SYNC, At::default())
         .ok()

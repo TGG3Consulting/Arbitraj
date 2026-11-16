@@ -1,42 +1,48 @@
 //! Файл: storage/journal_op.rs
-//! Что делает: решение 354 (задача t158) — операции очереди записи журнала и их выполнение потоком-писателем
-//! (storage/journal_queue.rs): обычная запись; «повторяющаяся» строка (решение 155, счётчик повторов) с номером-меткой,
-//! выданным в памяти; её обновление по метке или по настоящему id; «забыть» метку. Метка нужна, чтобы строка отказов
-//! и её обновления не ждали основную базу ради id: id строки знает только писатель (карта метка → id), обновления идут
-//! той же очередью после вставки — порядок «строка → обновления» держит сама очередь (один поток, по порядку).
-//! Кто вызывает: storage/journal_queue.rs (Op, apply), storage/journal_counted.rs (постановка).
-//! От чего зависит: storage/journal.rs (Entry, insert, COLUMNS, row_entry), rusqlite.
+//! Что делает: решения 341, 354 (задача t158) — операции очереди записи журнала и их выполнение потоком-писателем
+//! (storage/journal_writer.rs): обычная запись; «повторяющаяся» строка (решение 155, счётчик повторов) с меткой,
+//! выданной в памяти; её обновление по метке; «забыть» метку. Метка нужна, чтобы строка отказов и её обновления не
+//! ждали основную базу ради id: id строки знает только писатель (карта метка → id), обновления идут той же очередью
+//! после вставки — порядок «строка → обновления» держит сама очередь (один поток, по порядку постановки). У записи
+//! и обновления — свой живой поток (того журнала, который их поставил): после записи пачки запись с настоящим id
+//! уходит туда.
+//! Кто вызывает: storage/journal.rs, storage/journal_counted.rs (постановка), storage/journal_writer.rs (apply).
+//! От чего зависит: storage/journal.rs (Entry, insert, COLUMNS, row_entry), rusqlite, tokio::sync::broadcast.
 //! Настройки: нет.
 
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
+use tokio::sync::broadcast;
 
 use super::journal::{COLUMNS, Entry, insert, row_entry};
 
-/// Какую строку обновить: по метке (строка вставлена очередью) или по настоящему id (вставлена прямо).
-#[derive(Debug, Clone, Copy)]
-pub enum Target {
-    Token(u64),
-    Id(i64),
+/// Живой поток журнала (интерфейс).
+pub type Live = broadcast::Sender<Entry>;
+
+/// Запись и живой поток, куда отдать её после записи (None — никуда: запись о потерях без журнала-источника).
+pub struct Row {
+    pub e: Entry,
+    pub live: Option<Live>,
 }
 
-/// Обновление повторяющейся строки: счётчик, время последнего, текст и данные — последние.
+/// Обновление повторяющейся строки по метке: счётчик, время последнего, текст и данные — последние.
 pub struct Upd {
-    pub target: Target,
+    pub token: u64,
     pub repeats: i64,
     pub last_at: DateTime<Utc>,
     pub message: String,
     pub data: Option<serde_json::Value>,
+    pub live: Live,
 }
 
 /// Операция очереди журнала (большие части — в куче: размер операции — пара слов).
 pub enum Op {
     /// Обычная запись.
-    Insert(Box<Entry>),
+    Insert(Box<Row>),
     /// Повторяющаяся строка (счётчик 1) с меткой.
-    Counted(u64, Box<Entry>),
+    Counted(u64, Box<Row>),
     /// Обновление повторяющейся строки.
     Update(Box<Upd>),
     /// Метка больше не нужна (строка закрыта).
@@ -47,42 +53,51 @@ impl Op {
     /// Вид записи для лога потерь. Ошибок нет.
     pub fn kind(&self) -> &str {
         match self {
-            Op::Insert(e) | Op::Counted(_, e) => &e.kind,
+            Op::Insert(r) | Op::Counted(_, r) => &r.e.kind,
             Op::Update(_) => "обновление строки повторов",
             Op::Forget(_) => "метка строки повторов",
+        }
+    }
+
+    /// Живой поток операции (если есть). Ошибок нет.
+    pub fn live(&self) -> Option<&Live> {
+        match self {
+            Op::Insert(r) | Op::Counted(_, r) => r.live.as_ref(),
+            Op::Update(u) => Some(&u.live),
+            Op::Forget(_) => None,
         }
     }
 }
 
 /// Что делает: выполняет операцию в транзакции пачки. Принимает: соединение (транзакцию), операцию, карту меток,
-/// записи для живого потока (дописываются), метки, вставленные этой пачкой (дописываются — при откате пачки их
+/// записи для живых потоков (дописываются), метки, вставленные этой пачкой (дописываются — при откате пачки их
 /// убирают из карты). Возвращает: ничего. Ошибки: SQLite (пачка откатывается целиком).
 pub fn apply(
     c: &Connection,
     op: Op,
     ids: &mut HashMap<u64, i64>,
-    live: &mut Vec<Entry>,
+    out: &mut Vec<(Entry, Option<Live>)>,
     fresh: &mut Vec<u64>,
 ) -> rusqlite::Result<()> {
     match op {
-        Op::Insert(mut e) => {
+        Op::Insert(r) => {
+            let Row { mut e, live } = *r;
             e.id = insert(c, &e)?;
-            live.push(*e);
+            out.push((e, live));
         }
-        Op::Counted(token, mut e) => {
+        Op::Counted(token, r) => {
+            let Row { mut e, live } = *r;
             e.id = insert_counted(c, &e)?;
             ids.insert(token, e.id);
             fresh.push(token);
-            live.push(*e);
+            out.push((e, live));
         }
         Op::Update(u) => {
-            let id = match u.target {
-                Target::Id(id) => Some(id),
-                Target::Token(t) => ids.get(&t).copied(),
-            };
             // Метки нет — строка не записалась (пачка с ней не прошла): обновлять нечего (потеря уже посчитана).
-            if let Some(e) = id.map(|id| update(c, id, &u)).transpose()?.flatten() {
-                live.push(e);
+            if let Some(&id) = ids.get(&u.token)
+                && let Some(e) = update(c, id, &u)?
+            {
+                out.push((e, Some(u.live)));
             }
         }
         Op::Forget(token) => {
@@ -92,8 +107,8 @@ pub fn apply(
     Ok(())
 }
 
-/// Вставляет повторяющуюся строку (счётчик 1, время последнего = время записи; как Journal::write_counted).
-/// Принимает: соединение, запись. Возвращает: id. Ошибки: SQLite.
+/// Вставляет повторяющуюся строку (счётчик 1, время последнего = время записи). Принимает: соединение, запись.
+/// Возвращает: id. Ошибки: SQLite.
 fn insert_counted(c: &Connection, e: &Entry) -> rusqlite::Result<i64> {
     c.execute(
         "INSERT INTO journal (at, level, kind, venue, message, data, repeats, last_at)
@@ -110,8 +125,9 @@ fn insert_counted(c: &Connection, e: &Entry) -> rusqlite::Result<i64> {
     Ok(c.last_insert_rowid())
 }
 
-/// Обновляет повторяющуюся строку (как Journal::update_counted: счётчик только растёт). Принимает: соединение, id,
-/// обновление. Возвращает: запись после обновления (None — записи нет или обновление опоздало). Ошибки: SQLite.
+/// Обновляет повторяющуюся строку (счётчик только растёт: опоздавшее обновление ничего не меняет). Принимает:
+/// соединение, id, обновление. Возвращает: запись после обновления (None — записи нет или обновление опоздало).
+/// Ошибки: SQLite.
 fn update(c: &Connection, id: i64, u: &Upd) -> rusqlite::Result<Option<Entry>> {
     let n = c.execute(
         "UPDATE journal SET repeats = ?2, last_at = ?3, message = ?4, data = ?5

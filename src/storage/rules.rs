@@ -13,7 +13,7 @@ use rusqlite::params;
 
 use crate::gateway::rules::Rule;
 
-use super::db::{Db, DbError};
+use super::db::{Db, DbError, Rules};
 
 /// Все правила. Ошибки: база, повреждённая запись.
 /// Решение 354: из снимка в памяти (Db::rules_cache) — без обращения к SQLite (правила читает путь сделки при ошибке,
@@ -24,10 +24,10 @@ pub async fn list(db: &Db) -> Result<Vec<Rule>, DbError> {
     if let Some(v) = cached(db) {
         return Ok(v);
     }
-    let d = db.clone();
+    let cache = db.rules_cache().clone();
     db.call(move |c| {
         let v = read_all(c)?;
-        put(&d, v.clone());
+        *cache.write().unwrap_or_else(|p| p.into_inner()) = Some(v.clone());
         Ok(v)
     })
     .await
@@ -39,11 +39,6 @@ fn cached(db: &Db) -> Option<Vec<Rule>> {
         .read()
         .unwrap_or_else(|p| p.into_inner())
         .clone()
-}
-
-/// Ставит снимок правил. Ошибок нет.
-fn put(db: &Db, v: Vec<Rule>) {
-    *db.rules_cache().write().unwrap_or_else(|p| p.into_inner()) = Some(v);
 }
 
 /// Что делает: все правила из таблицы rules (синхронно, над соединением). Принимает: соединение.
@@ -66,7 +61,7 @@ pub(super) fn read_all(c: &rusqlite::Connection) -> rusqlite::Result<Vec<Rule>> 
 /// Возвращает: правило с присвоенным id. Ошибки: база.
 pub async fn create(db: &Db, mut rule: Rule) -> Result<Rule, DbError> {
     let body = serde_json::to_string(&rule).map_err(|e| DbError::Json(e.to_string()))?;
-    let d = db.clone();
+    let cache = db.rules_cache().clone();
     let id = db
         .call(move |c| {
             c.execute(
@@ -75,7 +70,7 @@ pub async fn create(db: &Db, mut rule: Rule) -> Result<Rule, DbError> {
             )?;
             let id = c.last_insert_rowid();
             // Решение 354: снимок — сразу после изменения, под тем же замком.
-            refresh(&d, c);
+            refresh(&cache, c);
             Ok(id)
         })
         .await?;
@@ -88,7 +83,7 @@ pub async fn create(db: &Db, mut rule: Rule) -> Result<Rule, DbError> {
 pub async fn update(db: &Db, rule: Rule) -> Result<bool, DbError> {
     let id = rule.id;
     let body = serde_json::to_string(&rule).map_err(|e| DbError::Json(e.to_string()))?;
-    let d = db.clone();
+    let cache = db.rules_cache().clone();
     let n = db
         .call(move |c| {
             let n = c.execute(
@@ -96,7 +91,7 @@ pub async fn update(db: &Db, rule: Rule) -> Result<bool, DbError> {
                 params![body, Utc::now().to_rfc3339(), id],
             )?;
             // Решение 354: снимок — сразу после изменения, под тем же замком.
-            refresh(&d, c);
+            refresh(&cache, c);
             Ok(n)
         })
         .await?;
@@ -104,9 +99,9 @@ pub async fn update(db: &Db, rule: Rule) -> Result<bool, DbError> {
 }
 
 /// Решение 354: перечитывает снимок правил после изменения (под замком основной базы). Не прочиталось — снимок
-/// снимается (следующее чтение пойдёт в базу и вернёт ту же ошибку, что раньше). Принимает: базу, соединение.
+/// снимается (следующее чтение пойдёт в базу и вернёт ту же ошибку, что раньше). Принимает: снимок, соединение.
 /// Ошибок нет.
-fn refresh(db: &Db, c: &rusqlite::Connection) {
+fn refresh(cache: &Rules, c: &rusqlite::Connection) {
     let v = read_all(c).ok();
-    *db.rules_cache().write().unwrap_or_else(|p| p.into_inner()) = v;
+    *cache.write().unwrap_or_else(|p| p.into_inner()) = v;
 }

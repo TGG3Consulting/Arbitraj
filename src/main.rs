@@ -67,9 +67,11 @@ async fn run() -> Result<(), String> {
             .write(Level::Info, "storage.ledger", None, m, None)
             .await;
     }
-    // Решения 341, 353: режимы записи хранилища (очередь и пачки журнала, synchronous учёта ядра) — до первых записей
+    // Решения 341, 353: пределы записи хранилища (длина очереди и пачки журнала, synchronous учёта ядра) — до первых записей
     // адаптеров и до загрузки сделок ядром; дальше — на лету (storage/write_modes.rs).
     arb::storage::write_modes::apply(&journal, &db, &settings);
+    // Решение 341 (по решению владельца — всегда): Ctrl+C / SIGTERM дописывает очереди уведомлений и журнала.
+    arb::storage::journal_stop::install(journal.clone());
     tokio::spawn(arb::storage::write_modes::run(
         journal.clone(),
         db.clone(),

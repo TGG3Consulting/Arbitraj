@@ -2,13 +2,14 @@
 //! Что делает: журнал системы в SQLite — ошибки, уведомления, изменения настроек, события.
 //! Каждая запись также уходит в живой поток для интерфейса (broadcast).
 //! Решение 155: запись может быть «повторяющейся» — одна строка на смену причины со счётчиком повторов (`repeats`) и
-//! временем последнего (`last_at`); запись и обновление таких строк — journal_repeat.rs. У обычных записей оба пусты.
-//! Решение 341: при заданной journal.queue_max запись не ждётся — она уходит в очередь, отдельный поток ОС пишет
-//! накопленное одной транзакцией по порядку (storage/journal_queue.rs); не задана — как раньше (запись ждётся).
-//! Кто вызывает: settings/store.rs (изменения настроек), notify/, api/; позже шлюз (ошибки).
-//! От чего зависит: storage/db.rs, storage/journal_queue.rs, tokio::sync::broadcast.
-//! Настройки: journal.queue_max (включает очередь), journal.batch_max (размер пачки) — читает storage/write_modes.rs и
-//! передаёт set_queue_max, set_batch_max.
+//! временем последнего (`last_at`); такие строки ставит storage/journal_counted.rs. У обычных записей оба пусты.
+//! Решение 341 (по решению владельца 16.11 — всегда, без выключателя): запись не ждётся — уходит в очередь журнала базы,
+//! отдельный поток ОС пишет накопленное пачками по порядку (storage/journal_queue.rs, journal_writer.rs); чтение
+//! (list) дожидается записи всего, что поставлено до него.
+//! Кто вызывает: settings/store.rs (изменения настроек), notify/, api/, ядро и адаптеры (через Deps::log, ctx.log).
+//! От чего зависит: storage/db.rs (очередь журнала базы), storage/journal_op.rs, tokio::sync::broadcast.
+//! Настройки: journal.queue_max (предел длины очереди), journal.batch_max (размер пачки) — читает
+//! storage/write_modes.rs и передаёт set_queue_max, set_batch_max.
 
 use chrono::{DateTime, Utc};
 use rusqlite::params;
@@ -16,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 use super::db::{Db, DbError};
-use super::journal_queue::Queue;
+use super::journal_op::{Op, Row};
 
 /// Уровень записи.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,19 +55,13 @@ pub struct Entry {
 pub struct Journal {
     pub(super) db: Db,
     pub(super) live: broadcast::Sender<Entry>,
-    /// Решение 341: очередь записи (выключена, пока не задана journal.queue_max).
-    pub(super) queue: std::sync::Arc<Queue>,
 }
 
 impl Journal {
     /// Создаёт журнал.
     /// Принимает: базу и отправителя живого потока (его же слушает api/ws).
     pub fn new(db: Db, live: broadcast::Sender<Entry>) -> Self {
-        Self {
-            db,
-            live,
-            queue: std::sync::Arc::new(Queue::default()),
-        }
+        Self { db, live }
     }
 
     /// База журнала — для компонентов, которым нужно своё хранение (например, очередь кошелька DEX). Ошибок нет.
@@ -74,11 +69,12 @@ impl Journal {
         &self.db
     }
 
-    /// Пишет запись. Ошибки базы не теряются: выводятся в лог процесса и возвращаются.
-    /// Принимает: уровень, вид, площадку, текст, данные. Возвращает: сохранённую запись.
-    /// Решение 341: очередь включена (journal.queue_max) — запись уходит в очередь и не ждётся; возвращается запись с
-    /// id = 0 (настоящий id — в живом потоке после записи пачки; результат write никто в коде не читает — разбор t158);
-    /// очередь полна — запись потеряна со счётом (запись journal.queue_lost пишет поток очереди).
+    /// Пишет запись. Решение 341 (по решению владельца — всегда): запись уходит в очередь журнала базы
+    /// (storage/journal_queue.rs) и не ждётся — ни одна запись журнала не задерживает сделку и расчёт; поток-писатель
+    /// пишет её пачкой и отдаёт в живой поток с настоящим id. Принимает: уровень, вид, площадку, текст, данные.
+    /// Возвращает: запись с id = 0 (результат write в рабочем коде не читает никто — разбор t158, таблица 1).
+    /// Ошибки: нет (очередь полна или пачка не записалась — счёт потерь и запись journal.queue_lost, не молча;
+    /// Result оставлен ради прежней сигнатуры у ~90 вызовов).
     pub async fn write(
         &self,
         level: Level,
@@ -87,74 +83,63 @@ impl Journal {
         message: impl Into<String>,
         data: Option<serde_json::Value>,
     ) -> Result<Entry, DbError> {
-        let mut e = Entry {
+        Ok(self.enqueue(level, kind, venue, message.into(), data))
+    }
+
+    /// Ставит запись в очередь (не-async: временные значения не попадают в будущие вызывающих). Принимает: как write.
+    /// Возвращает: запись (id = 0). Ошибок нет.
+    fn enqueue(
+        &self,
+        level: Level,
+        kind: &str,
+        venue: Option<&str>,
+        message: String,
+        data: Option<serde_json::Value>,
+    ) -> Entry {
+        let e = Entry {
             id: 0,
             at: Utc::now(),
             level,
             kind: kind.to_string(),
             venue: venue.map(str::to_string),
-            message: message.into(),
+            message,
             data,
             repeats: None,
             last_at: None,
         };
-        // Решение 341: очередь — в отдельной не-async функции (временные значения не попадают в будущее write).
-        if self.enqueue(&e) {
-            return Ok(e);
-        }
-        let row = e.clone();
-        // Будущее записи — в куче: write ждут почти все шаги сделки и расчёта, её размер входит в их будущие (CI t158,
-        // переполнение стека tests/core_dry_mode.rs).
-        let res = Box::pin(self.db.call(move |c| insert(c, &row))).await;
-        match res {
-            Ok(id) => {
-                e.id = id;
-                // Нет слушателей — не ошибка: интерфейс может быть закрыт.
-                let _ = self.live.send(e.clone());
-                Ok(e)
-            }
-            Err(err) => {
-                tracing::error!(%err, kind = %e.kind, "не удалось записать в журнал");
-                Err(err)
-            }
-        }
+        let row = Row {
+            e: e.clone(),
+            live: Some(self.live.clone()),
+        };
+        let _ = self
+            .db
+            .journal_queue()
+            .push_op(self.db.conn_arc(), Op::Insert(Box::new(row)));
+        e
     }
 
-    /// Решение 341: ставит копию записи в очередь, если очередь включена (или ещё не пуста). Принимает: запись.
-    /// Возвращает: true — поставлена или потеряна со счётом (писать прямо не нужно). Ошибок нет.
-    fn enqueue(&self, e: &Entry) -> bool {
-        if !self.queue.on() {
-            return false;
-        }
-        self.queue.push(&self.db, &self.live, e.clone()).is_none()
-    }
-
-    /// Решение 341: включена ли очередь записи (или в ней ещё есть записи) — запись журнала сейчас не ждётся.
-    /// Ошибок нет.
-    pub fn queued(&self) -> bool {
-        self.queue.on()
-    }
-
-    /// Решение 341: предел очереди записи (journal.queue_max); None или 0 — очередь выключена (как раньше). Ошибок нет.
+    /// Решение 341: предел длины очереди записи (journal.queue_max); None или 0 — без предела. Ошибок нет.
     pub fn set_queue_max(&self, max: Option<u64>) {
-        self.queue.set_max(max);
+        self.db.journal_queue().set_max(max);
     }
 
     /// Решение 341: предел записей в одной транзакции пачки (journal.batch_max); None или 0 — всё накопленное.
     /// Ошибок нет.
     pub fn set_batch_max(&self, max: Option<u64>) {
-        self.queue.set_batch_max(max);
+        self.db.journal_queue().set_batch_max(max);
     }
 
-    /// Решение 341: ждёт, пока очередь записи опустеет (всё записано в базу). Очереди нет — сразу. Ошибок нет.
+    /// Решение 341: ждёт, пока очередь записи журнала опустеет (всё записано в базу). Ошибок нет.
     pub async fn idle(&self) {
-        self.queue.idle().await;
+        self.db.journal_queue().idle().await;
     }
 
     /// Читает записи журнала, новые первыми.
     /// Принимает: сколько записей (задаёт интерфейс) и номер, до которого читать (для листания).
     /// Ошибки: база.
+    /// Решение 341: сначала дожидается записи всего, что поставлено в очередь до вызова («записал — прочитал»).
     pub async fn list(&self, limit: u32, before_id: Option<i64>) -> Result<Vec<Entry>, DbError> {
+        self.db.journal_queue().flushed().await;
         self.db
             .call(move |c| {
                 let mut st = c.prepare(&format!(
@@ -184,7 +169,7 @@ pub(super) fn insert(c: &rusqlite::Connection, row: &Entry) -> rusqlite::Result<
     Ok(c.last_insert_rowid())
 }
 
-/// Столбцы записи для row_entry — в этом порядке (list и journal_repeat.rs).
+/// Столбцы записи для row_entry — в этом порядке (list и journal_op.rs).
 pub(super) const COLUMNS: &str = "id, at, level, kind, venue, message, data, repeats, last_at";
 
 /// Время из текста базы (RFC 3339). Принимает: номер столбца, текст. Ошибки: не время.

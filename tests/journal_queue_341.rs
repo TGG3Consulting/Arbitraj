@@ -1,9 +1,9 @@
 //! Файл: tests/journal_queue_341.rs
-//! Что делает: решение 341 (задача t158) — очередь записи журнала (storage/journal_queue.rs): без journal.queue_max — как
-//! раньше (запись ждётся, у неё id); с пределом — write возвращается сразу (id = 0), поток-писатель пишет по порядку
-//! постановки (пачками, в том числе по одной записи — journal.batch_max = 1), живой поток получает записи с настоящим
-//! id; запись не ждёт основную базу, занятую долгой транзакцией; полная очередь — потеря со счётом и записью
-//! journal.queue_lost. Настоящая SQLite во временной папке, без моков.
+//! Что делает: решение 341 (задача t158; по решению владельца — всегда) — очередь записи журнала
+//! (storage/journal_queue.rs): write возвращается сразу (id = 0), чтение дожидается записанного до него; поток-писатель
+//! пишет по порядку постановки (пачками, в том числе по одной записи — journal.batch_max = 1), живой поток получает
+//! записи с настоящим id; запись не ждёт основную базу, занятую долгой транзакцией; предел journal.queue_max — полная
+//! очередь даёт потерю со счётом и записью journal.queue_lost. Настоящая SQLite во временной папке, без моков.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::storage (db, journal, journal_queue).
 
@@ -51,22 +51,22 @@ fn hold_main(j: &Journal, for_: Duration) -> tokio::task::JoinHandle<()> {
 }
 
 #[tokio::test]
-async fn without_setting_write_waits_as_before() {
-    let (j, _rx) = journal("off");
-    assert!(!j.queued());
+async fn list_sees_own_writes() {
+    // Очередь всегда (решение владельца): запись не ждётся, а чтение дожидается записанного до него.
+    let (j, _rx) = journal("rw");
     let e = j
-        .write(Level::Info, "t.off", None, "раз", None)
+        .write(Level::Info, "t.rw", None, "раз", None)
         .await
         .unwrap();
-    assert!(e.id > 0, "запись ждётся и получает id");
+    assert_eq!(e.id, 0, "write не ждёт базу — id ещё нет");
+    let got = j.list(10, None).await.unwrap();
+    assert!(got.iter().any(|x| x.kind == "t.rw" && x.id > 0), "{got:?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn queued_write_keeps_order_and_does_not_wait() {
     let (j, mut rx) = journal("order");
-    j.set_queue_max(Some(10_000));
     j.set_batch_max(Some(1));
-    assert!(j.queued());
     let hold = hold_main(&j, Duration::from_millis(800));
     let t0 = Instant::now();
     for i in 0..20 {

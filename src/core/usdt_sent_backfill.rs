@@ -247,6 +247,8 @@ pub async fn load(db: &Db) -> Result<(Vec<(String, Value)>, Vec<Sent>), DbError>
             serde_json::from_str(&body).map_err(|e| DbError::Json(format!("сделка {id}: {e}")))?;
         deals.push((id, v));
     }
+    // Решение 341: записи журнала, поставленные в очередь этой базы, — сначала дописать.
+    db.journal_flushed().await;
     let lines: Vec<(String, String)> = db
         .call(|c| {
             let mut st =

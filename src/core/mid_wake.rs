@@ -13,11 +13,13 @@
 //! Каждой разбуженной монете — сброс памяти котировок сигнала (quote_cache bump) и пересчёт тем же путём, что событие
 //! её пула (tick_sched::schedule_pool): события одного блока сливаются планом (tick_plan.rs: по монете не больше одного
 //! идущего пересчёта и одного ждущего, сколько бы событий ни пришло), пауз по времени нет.
-//! Включается необязательной signal.mid_pool_wake; не задана или нет — 1 в 1 как раньше (одно чтение настройки на событие
-//! пула). Счётчики событий и разбуженных монет — для сводки (core/quote_count_log.rs).
+//! Базовое поведение (Тигран 16.11: покрыто тестами — в логику): tests/core_mid_wake_349.rs (ядро с записанными пулами
+//! routes_2026-10-29: будится каждая монета с маршрутом через пул, монета без связи — нет, память сброшена) и
+//! tests/bsc_dex_route_paths.rs (сверка с перечнем путей адаптера). Счётчики событий и разбуженных монет — для сводки
+//! (core/quote_count_log.rs).
 //! Кто вызывает: core/tick.rs (событие пула).
 //! От чего зависит: market_state.rs (peers), intermediate.rs, ticker_index.rs, quote_cache.rs, tick_sched.rs, settings.
-//! Настройки: signal.mid_pool_wake; читает dex.intermediate_enabled, dex.intermediate_tokens, dex.router_mode,
+//! Настройки: читает dex.intermediate_enabled, dex.intermediate_tokens, dex.router_mode,
 //! dex.route_max_hops [площадка DEX].
 
 use std::collections::HashSet;
@@ -45,28 +47,15 @@ pub fn counts() -> (u64, u64) {
 }
 
 /// Что делает: будит монеты, чьи маршруты идут через пул события (см. шапку). Принимает: ядро, площадку DEX, токены
-/// пула, отметку события пула. Ошибок нет: настройка не задана, промежуточные выключены или USDT не известен — ничего.
+/// пула, отметку события пула. Ошибок нет: промежуточные выключены или не заданы, USDT не известен — ничего.
 pub fn wake(core: &Core, venue: &VenueId, tokens: (Address, Address), mark: PoolMark) {
     let s = &core.inner.deps.settings;
-    if !s
-        .flag("signal.mid_pool_wake", At::default())
-        .unwrap_or(false)
-    {
-        return;
-    }
     let super::intermediate::Intermediate::On(mids) = super::intermediate::read(s, venue) else {
         return;
     };
     let Ok(usdt) = rd(&core.inner.usdt).clone() else {
         return;
     };
-    let start: Vec<Address> = [tokens.0, tokens.1]
-        .into_iter()
-        .filter(|t| mids.contains(t))
-        .collect();
-    if start.is_empty() {
-        return;
-    }
     let depth = extra_hops(core, venue, mids.len());
     // Соседи — под замком чтения рынка; монеты по адресам — после него (замки не вложены).
     let tokens_out: Vec<Address> = {
@@ -78,12 +67,11 @@ pub fn wake(core: &Core, venue: &VenueId, tokens: (Address, Address), mark: Pool
                 .map(|p| p.iter().copied().collect())
                 .unwrap_or_default()
         };
-        let mut out = Vec::new();
-        for r in reach(&peers, &start, &mids, depth) {
-            out.extend(peers(r).into_iter().filter(|p| *p != usdt));
-        }
-        out
+        woken_tokens(&peers, tokens, &mids, depth, usdt)
     };
+    if tokens_out.is_empty() {
+        return;
+    }
     let coins: HashSet<Asset> = {
         let tickers = rd(&core.inner.tickers);
         tokens_out
@@ -119,6 +107,31 @@ fn extra_hops(core: &Core, venue: &VenueId, mids: usize) -> usize {
         Ok(h) => (h as usize).saturating_sub(2),
         Err(_) => mids,
     }
+}
+
+/// Что делает: токены, монеты которых будит событие пула (см. шапку): у пула есть промежуточная — достижимые от
+/// промежуточных пула (reach) и все их соседи по пулам, кроме USDT. Принимает: соседей токена, токены пула,
+/// промежуточные, шаги «промежуточная — промежуточная», USDT. Возвращает: токены (пусто — в пуле нет промежуточной).
+/// Ошибок нет.
+pub fn woken_tokens(
+    peers: &dyn Fn(Address) -> Vec<Address>,
+    pool: (Address, Address),
+    mids: &[Address],
+    depth: usize,
+    usdt: Address,
+) -> Vec<Address> {
+    let start: Vec<Address> = [pool.0, pool.1]
+        .into_iter()
+        .filter(|t| mids.contains(t))
+        .collect();
+    if start.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for r in reach(peers, &start, mids, depth) {
+        out.extend(peers(r).into_iter().filter(|p| *p != usdt));
+    }
+    out
 }
 
 /// Что делает: промежуточные монеты, достижимые от `start` по пулам «промежуточная — промежуточная» не больше чем за

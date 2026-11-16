@@ -138,6 +138,20 @@ impl Cache {
             .map(|(_, v)| v.clone())
     }
 
+    /// Решение 352: наборы путей монеты в кэше — для эпохи котировки (signal_epoch.rs): по каждому ключу (usdt, монета,
+    /// пределы) — пределы, момент записи и годен ли ещё при `ttl` (устаревание меняет строку — котировка заново).
+    /// Принимает: USDT, монету, срок. Возвращает: строки по порядку пределов. Ошибок нет.
+    pub fn paths_of(&self, usdt: Address, coin: Address, ttl: Duration) -> Vec<String> {
+        let m = self.paths.lock().unwrap_or_else(|p| p.into_inner());
+        let mut out: Vec<String> = m
+            .iter()
+            .filter(|(k, _)| k.0 == usdt && k.1 == coin)
+            .map(|(k, (at, _))| format!("{}@{at:?}:{}", k.2, at.elapsed() <= ttl))
+            .collect();
+        out.sort();
+        out
+    }
+
     /// Запомнить набор путей; заодно выбросить устаревшие (старше `ttl`). Ошибок нет.
     pub fn paths_put(&self, key: PathsKey, v: Vec<Skeleton>, ttl: Duration) {
         let mut m = self.paths.lock().unwrap_or_else(|p| p.into_inner());

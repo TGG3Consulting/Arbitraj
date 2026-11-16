@@ -4,10 +4,11 @@
 //! любого изменения глубже) идёт как раньше: котировка биржи — заново (дёшево, ставка комиссии биржи — из памяти
 //! адаптера, событием ядру не приходит), сигнал засчитывает обновление, удержание и постановка кандидата — те же. Дорогая
 //! котировка DEX берётся из памяти, если тот же объём и тот же отпечаток входов:
-//! - эпоха адаптера DEX (контракт signal_epoch: голова и цена газа этой головы, минимум каналов, версия реестра пулов,
-//!   число расчётов глубины, поколение итогов проверок — налоги и факты пулов, граф, промежуточные, настройки);
-//! - поколение пулов монеты в ядре (quote_cache generation: события пулов монеты, снятие пулов, при
-//!   signal.mid_pool_wake — события промежуточных пулов) и поколение настроек ядра.
+//! - эпоха адаптера DEX для монеты (контракт signal_epoch: голова и цена газа этой головы, минимум каналов, версия
+//!   реестра пулов, число расчётов глубины, поколение итогов проверок — налоги и факты пулов, граф, промежуточные,
+//!   настройки, наборы путей монеты в кэше с их устареванием);
+//! - поколение пулов монеты в ядре (quote_cache generation: события пулов монеты, снятие пулов, события промежуточных
+//!   пулов — mid_wake.rs) и поколение настроек ядра.
 //!
 //! Эпохи нет (голова не свежая, лента отстаёт, цены газа этой головы в памяти нет) — котировка заново, как раньше.
 //! Почему итог тот же: котировка DEX — функция объёма и входов, перечисленных в docs/notes/t160-signal-sieve-2026-11-16.md
@@ -16,6 +17,10 @@
 //! цены, спред, порог и состояние сигнала — те же, что при котировке заново, и кандидат появляется в тот же пересчёт.
 //! Память — последний отпечаток на (площадка, токен, сторона); новый отпечаток стирает прежние объёмы.
 //! Включается необязательной signal.book_same_skip; не задана или нет — 1 в 1 как раньше (prices.rs side_quote).
+//! Под настройкой (Тигран 16.11: что тестами не доказано — настройкой): основа проверена тестом
+//! tests/bsc_dex_signal_epoch_352.rs (повторная котировка на том же состоянии побитово та же, эпоха меняется от каждого
+//! входа), но полной котировки DEX через ядро (голова, цена газа с узла, кошелёк маппинга) на записи нет — равенство
+//! «из памяти = заново» и моменты кандидата сквозь ядро тестом не проверены.
 //! Кто вызывает: core/prices.rs (side_quote), core/quote_count_log.rs (counts).
 //! От чего зависит: engine.rs, dex_account.rs, venue_ticker.rs, quote_cache.rs (generation), gateway (signal_epoch,
 //! quote), settings (generation).
@@ -28,7 +33,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
-use crate::core::types::{Direction, Quote, Side, VenueId};
+use crate::core::types::{Asset, Direction, Quote, Side, VenueId};
 use crate::settings::read::At;
 
 use super::engine::{Core, lk};
@@ -76,7 +81,7 @@ pub async fn quote(
     let key = (venue.clone(), token, side == Side::Buy);
     // Отпечаток — ДО котировки: состояние, сменившееся во время котировки, даст другой отпечаток следующему вызову
     // (номер головы, версии и поколения только растут).
-    let now = stamp(core, venue, token).await;
+    let now = stamp(core, venue, &dir.asset, token).await;
     if let Some(st) = &now
         && let Some(q) = get(core, &key, st, qty)
     {
@@ -102,8 +107,15 @@ pub async fn quote(
 
 /// Отпечаток сейчас. None — у площадки нет эпохи (биржа, голова не свежая и т. п.) или площадка не подключена.
 /// Ошибок нет.
-async fn stamp(core: &Core, venue: &VenueId, token: Address) -> Option<Stamp> {
-    let epoch = core.inner.deps.gw.get(venue).await.ok()?.signal_epoch()?;
+async fn stamp(core: &Core, venue: &VenueId, asset: &Asset, token: Address) -> Option<Stamp> {
+    let epoch = core
+        .inner
+        .deps
+        .gw
+        .get(venue)
+        .await
+        .ok()?
+        .signal_epoch(asset)?;
     let pools = lk(&core.inner.quote_cache).generation(venue, token);
     Some((epoch, pools, core.inner.deps.settings.generation()))
 }

@@ -9,23 +9,29 @@
 //! Ревью 313 (горячий путь): настройка интервала читается без построения текста ошибки (Store::resolve, а не ctx.int)
 //! и, пока она задана, — только когда по прочитанному в прошлый раз интервалу запись уже могла бы быть пора (Clock::due);
 //! новое значение интервала действует с ближайшей такой проверки.
-//! Решение 321: при dex.pool_events_keep = да события не теряются (emit_pool.rs, pending_events.rs) — та же запись
+//! Решение 321: при dex.pool_events_keep = да события не теряются (emit_pool.rs, gateway/keep_last.rs) — та же запись
 //! dex.pool_events_lost (тот же интервал) пишет счёт набора «отложено, заменено, доставлено, снято, ждут» (kept).
+//! Решение 324: набор — общий на канал ядра (gateway/core_out.rs), счёт — класса «пулы этой площадки»; часы записи
+//! (Clock) перенесены в gateway/log_clock.rs (здесь — реэкспорт).
 //! Кто вызывает: pools/emit_pool.rs (emit — note, kept; доставщик — kept).
-//! От чего зависит: ctx.rs (настройка, журнал), pending_events.rs (счёт набора), tokio (запись отдельной задачей).
+//! От чего зависит: ctx.rs (настройка, журнал), gateway/core_out.rs (счёт набора), gateway/log_clock.rs, tokio
+//! (запись отдельной задачей).
 //! Настройки: log.pool_events_lost_interval_s (вся система; необязательная).
 
-use std::hash::Hash;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::json;
 
+use crate::gateway::core_out::Feed;
+use crate::gateway::core_out_item::Class;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
-use super::pending_events::Pending;
+
+/// Часы записи — общие со стаканами бирж (решение 324: перенесены в шлюз; прежний путь сохранён).
+pub use crate::gateway::log_clock::Clock;
 
 /// Имя настройки интервала записи.
 const INTERVAL: &str = "log.pool_events_lost_interval_s";
@@ -37,45 +43,6 @@ pub struct Lost {
     count: Arc<AtomicU64>,
     /// Когда была прошлая запись и какой интервал прочитан.
     clock: Arc<Mutex<Clock>>,
-}
-
-/// Часы записи (чистая логика, без окружения): прошлая запись и прочитанный при ней интервал.
-#[derive(Debug, Default)]
-pub struct Clock {
-    /// Когда была прошлая запись (None — ещё не было).
-    last: Option<Instant>,
-    /// Интервал, прочитанный в прошлую проверку (None — не задан или ещё не читался).
-    every: Option<Duration>,
-}
-
-impl Clock {
-    /// Пора ли писать. Принимает: «сейчас», чтение интервала (вызывается, только если без него не решить: интервал не
-    /// прочитан / не задан или прочитанный уже прошёл). Возвращает: None — не писать (не задан или рано);
-    /// Some(с прошлой записи; None — первая запись). Ошибок нет.
-    pub fn due(
-        &mut self,
-        now: Instant,
-        read: impl FnOnce() -> Option<Duration>,
-    ) -> Option<Option<Duration>> {
-        if let (Some(t), Some(e)) = (self.last, self.every)
-            && now.duration_since(t) < e
-        {
-            return None;
-        }
-        let Some(every) = read() else {
-            self.every = None;
-            return None;
-        };
-        self.every = Some(every);
-        if let Some(t) = self.last
-            && now.duration_since(t) < every
-        {
-            return None;
-        }
-        let since = self.last.map(|t| now.duration_since(t));
-        self.last = Some(now);
-        Some(since)
-    }
 }
 
 impl Lost {
@@ -108,13 +75,14 @@ impl Lost {
 
     /// Решение 321 (dex.pool_events_keep = да): событие отложено или набор опустел — если пора, запись того же вида
     /// dex.pool_events_lost со счётом набора: отложено, заменено, доставлено, снято, ждут (и потеряно — если настройку
-    /// включили между потерями). Принимает: окружение, набор. Ошибок нет.
-    pub fn kept<K: Eq + Hash + Clone, T>(&self, ctx: &Ctx, set: &Pending<K, T>) {
+    /// включили между потерями). Счёт — класса «пулы этой площадки» общего набора канала ядра (решение 324,
+    /// gateway/core_out.rs). Принимает: окружение, общий набор. Ошибок нет.
+    pub fn kept(&self, ctx: &Ctx, feed: &Feed) {
         let Some(since) = self.due(ctx) else {
             return;
         };
         let lost = self.count.swap(0, Ordering::Relaxed);
-        let c = set.take();
+        let c = feed.take(&Class::Pool(ctx.venue()));
         let msg = format!(
             "события пулов: канал событий ядра полон — не потеряны (dex.pool_events_keep): отложено {}, заменено \
              более свежими {}, доставлено {}, снято {} (пул недостоверен или снят), ждут {}, потеряно {lost} {}",

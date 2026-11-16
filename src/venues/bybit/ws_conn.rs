@@ -5,6 +5,8 @@
 //! недостоверен и пересподписка этой пары (новый снимок); второй разрыв той же пары раньше venue.ws_reconnect_pause_ms —
 //! переподключение соединения с паузой (урок 12: без бесконечного круга ресинков). Отказ подписки — стаканы её пачки
 //! недостоверны.
+//! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
+//! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
 //! Кто вызывает: ws.rs.
 //! От чего зависит: depth.rs, local_book.rs, book.rs, book_print.rs (U_LEVELS), ctx.rs, gateway/feed_reg.rs,
 //! tokio-tungstenite.
@@ -30,11 +32,11 @@ use std::sync::atomic::Ordering;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TrySendError;
 use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::core::types::{Asset, OrderBook, VenueId};
+use crate::gateway::core_out_book::{BookOut, Fed};
 use crate::gateway::events::MarketEvent;
 use crate::gateway::tap::{TapData, TapStream, now_ns};
 use crate::storage::journal::Level;
@@ -95,6 +97,8 @@ pub async fn session(
     let mut ping = tokio::time::interval(cfg.ping);
     let mut last_rx = Instant::now();
     let mut dropped = 0u64;
+    // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
+    let kept = BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal);
     let depth = cfg.levels as usize;
     let venue = VenueId(ID.to_string());
     loop {
@@ -179,10 +183,10 @@ pub async fn session(
                                     received_at: chrono::Utc::now(),
                                 };
                                 books.put(book.clone(), alive.clone());
-                                match out.try_send(MarketEvent::Book(book)) {
-                                    Ok(()) => {}
-                                    Err(TrySendError::Closed(_)) => return End::Done,
-                                    Err(TrySendError::Full(_)) => dropped += 1,
+                                match kept.book(out, book) {
+                                    Fed::Sent | Fed::Kept => {}
+                                    Fed::Closed => return End::Done,
+                                    Fed::Lost => dropped += 1,
                                 }
                             }
                             Applied::Repeat => books.touch(&asset.ticker),

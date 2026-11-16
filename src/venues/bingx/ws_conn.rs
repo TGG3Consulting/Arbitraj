@@ -4,6 +4,8 @@
 //! отказ подписки или неразборчивый стакан → стакан этой пары недостоверен. Монета пишется окном (решение 125) —
 //! текст её кадра стакана (после GZIP) со временем получения уходит в приёмник окна (ctx.taps), ядро не ждёт.
 //! Ядру стаканы отдаются без ожидания (try_send): медленное ядро не задерживает ответ на ping.
+//! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
+//! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
 //! Кто вызывает: ws.rs.
 //! От чего зависит: depth.rs, book.rs, ctx.rs, gateway/feed_reg.rs, tokio-tungstenite.
 //! Настройки: приходят из ws.rs (Cfg).
@@ -22,10 +24,10 @@ use std::sync::atomic::Ordering;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TrySendError;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::core::types::Asset;
+use crate::gateway::core_out_book::{BookOut, Fed};
 use crate::gateway::events::MarketEvent;
 use crate::gateway::tap::{TapData, TapStream, now_ns};
 use crate::storage::journal::Level;
@@ -77,6 +79,8 @@ pub async fn session(
     let mut sub_ids: HashMap<String, String> = HashMap::new();
     let mut sub_tick = tokio::time::interval(cfg.sub_gap);
     let mut dropped = 0u64;
+    // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
+    let kept = BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal);
     loop {
         tokio::select! {
             _ = sub_tick.tick(), if !pending.is_empty() => {
@@ -138,11 +142,11 @@ pub async fn session(
                         ctx.taps.push(ID, &asset.ticker, TapStream::Book, name, rx_ns, || TapData::Text(text.clone()));
                         let book = depth::to_book((*asset).clone(), bids, asks, exchange_time);
                         books.put(book.clone(), alive.clone());
-                        match out.try_send(MarketEvent::Book(book)) {
-                            Ok(()) => {}
-                            Err(TrySendError::Closed(_)) => return End::Done,
+                        match kept.book(out, book) {
+                            Fed::Sent | Fed::Kept => {}
+                            Fed::Closed => return End::Done,
                             // Ядро не успевает: событие пропущено, свежий стакан уже в памяти для котировок.
-                            Err(TrySendError::Full(_)) => dropped += 1,
+                            Fed::Lost => dropped += 1,
                         }
                     }
                     Msg::BadDepth { symbol, reason } => {

@@ -157,9 +157,11 @@ impl Venue for Bitget {
             // Снимок — и в память адаптера, и ядру (худшая цена ордера core/worst.rs берёт стакан ядра). Ядро
             // принимает событие асинхронно: если ордер успеет раньше — худшая цена по прежнему стакану ядра.
             if self.books.put_rest(book.clone())
-                && let Some(tx) = self.subs.sender()
+                && let Some((tx, kept)) = self.subs.sender()
             {
-                let _ = tx.try_send(MarketEvent::Book(book.clone()));
+                // Решение 324: через общий набор канала ядра — не обгонит ждущий кадр потока той же пары; BookOut —
+                // один на подписку (ревью 324, Н1).
+                let _ = kept.book(&tx, book.clone());
             }
             return book::priced(&self.ctx, &self.fees, &symbol, asset, side, qty, book);
         }
@@ -204,9 +206,11 @@ impl Venue for Bitget {
             .symbol;
         let book = rest_book::snapshot(&self.ctx, &symbol, asset).await?;
         if self.books.put_rest(book.clone())
-            && let Some(tx) = self.subs.sender()
+            && let Some((tx, kept)) = self.subs.sender()
         {
-            let _ = tx.try_send(MarketEvent::Book(book.clone()));
+            // Решение 324: через общий набор канала ядра — не обгонит ждущий кадр потока той же пары; BookOut —
+            // один на подписку (ревью 324, Н1).
+            let _ = kept.book(&tx, book.clone());
         }
         let f = book::frozen(&self.ctx, &self.fees, &symbol, asset, side, book)?;
         Ok(std::sync::Arc::new(f))

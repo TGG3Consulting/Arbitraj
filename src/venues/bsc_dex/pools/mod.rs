@@ -163,7 +163,6 @@ pub mod mids;
 pub mod multi_pair;
 pub mod off_map_algebra;
 pub mod order;
-pub mod pending_events;
 pub mod per_block;
 pub mod per_block_balancer;
 pub mod per_block_lb;

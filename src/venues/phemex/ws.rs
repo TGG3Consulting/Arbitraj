@@ -112,11 +112,8 @@ pub async fn run(
 /// Объявляет стакан монеты недостоверным: убирает из памяти и сообщает ядру (без ожидания).
 pub fn invalidate(ctx: &Ctx, books: &Books, out: &mpsc::Sender<MarketEvent>, ticker: &str) {
     books.drop_ticker(ticker);
-    let _ = out.try_send(MarketEvent::Invalidated {
-        venue: ctx.venue(),
-        ticker: ticker.to_string(),
-        address: None,
-    });
+    // Решение 324: не теряется при полном канале ядра (в общий набор срочным, старый кадр пары снимается).
+    crate::gateway::core_out_book::invalidated(out, ctx.venue(), ticker);
 }
 
 /// Ping и тишина (общие для рынка и потока аккаунта). Ошибка — текст «не задана …» или «вне пределов документации».

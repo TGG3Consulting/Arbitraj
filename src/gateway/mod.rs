@@ -6,8 +6,14 @@
 //! Настройки: правила шлюза (хранятся в SQLite, меняются из интерфейса).
 
 pub mod addr_claim;
+pub mod book_lost_log;
 pub mod calc_meter;
 pub mod contract;
+pub mod core_out;
+pub mod core_out_book;
+pub mod core_out_item;
+mod core_out_reg;
+pub mod core_out_side;
 pub mod delist_ann;
 pub mod delist_html;
 pub mod delist_page;
@@ -20,6 +26,12 @@ pub mod feed_reg;
 pub mod frozen;
 pub mod http;
 pub mod http_bind;
+pub mod keep_last;
+mod keep_last_decide;
+mod keep_last_deliver;
+mod keep_last_kinds;
+mod keep_last_state;
+pub mod log_clock;
 pub mod network_hint;
 pub mod patience;
 pub mod pending;
@@ -27,6 +39,7 @@ pub mod quote_stage;
 pub mod registry;
 pub mod rest_book;
 pub mod rules;
+pub mod setting_cell;
 pub mod step_meter;
 pub mod tap;
 pub mod tx_hash;

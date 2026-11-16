@@ -3,6 +3,8 @@
 //! (venue.ws_subs_per_sec), свой spot.ping раз в venue.ws_ping_ms, Pong на Ping-кадр сервера, запись сырых кадров,
 //! снимки стаканов → память и ядру; отказ подписки или неразборчивый стакан → стакан этой пары недостоверен;
 //! spot.system upgrade → переподключение. Ядру стаканы отдаются без ожидания (try_send).
+//! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
+//! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
 //! Кто вызывает: ws.rs.
 //! От чего зависит: depth.rs, book.rs, ctx.rs, gateway/tap.rs, tokio-tungstenite.
 //! Настройки: приходят из ws.rs (Cfg); raw.book_frames [gate] — писать ли кадры стаканов в сырой журнал.
@@ -25,11 +27,11 @@ use std::sync::atomic::Ordering;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TrySendError;
 use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::core::types::Asset;
+use crate::gateway::core_out_book::{BookOut, Fed};
 use crate::gateway::events::MarketEvent;
 use crate::gateway::tap::{TapData, TapStream, now_ns};
 use crate::storage::journal::Level;
@@ -82,6 +84,8 @@ pub async fn session(
     let mut ping = tokio::time::interval(cfg.ping);
     let mut last_rx = Instant::now();
     let mut dropped = 0u64;
+    // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
+    let kept = BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal);
     // Последний отданный ядру номер стакана по символу (решение 109).
     let mut last: HashMap<String, i64> = HashMap::new();
     loop {
@@ -156,10 +160,10 @@ pub async fn session(
                         last.insert(symbol, update_id);
                         let book = depth::to_book((*asset).clone(), bids, asks, exchange_time);
                         books.put(book.clone(), alive.clone());
-                        match out.try_send(MarketEvent::Book(book)) {
-                            Ok(()) => {}
-                            Err(TrySendError::Closed(_)) => return End::Done,
-                            Err(TrySendError::Full(_)) => dropped += 1,
+                        match kept.book(out, book) {
+                            Fed::Sent | Fed::Kept => {}
+                            Fed::Closed => return End::Done,
+                            Fed::Lost => dropped += 1,
                         }
                     }
                     Msg::Bad { symbol, reason } => {

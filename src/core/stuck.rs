@@ -18,7 +18,9 @@
 //! дополнение 10.11, t78 — Тигран: согласовано; прежде без пере-замера).
 //! Кто вызывает: sell.rs, sell_unsent.rs, relay.rs (executor.rs — через sell.rs; перевод не состоялся — relay_here.rs, решение 220).
 //! От чего зависит: sell.rs, trade_ops.rs, stuck_quote.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
-//! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
+//! Решение 334: ожидание тика монеты — stuck_lag.rs Ticks (подписка одна на всё ожидание — ревью 333, Н4; отставание —
+//! счёт, журнал, stuck.tick_lag_wake).
+//! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays; stuck.tick_lag_wake (stuck_lag.rs).
 
 use std::time::Duration;
 
@@ -31,6 +33,7 @@ use crate::storage::journal::Level;
 use super::deal::{Deal, Step};
 use super::engine::Core;
 use super::remeasure::Guard;
+use super::stuck_lag::Ticks;
 use super::stuck_quote as q;
 use super::stuck_reason::StuckReason;
 
@@ -101,26 +104,6 @@ pub async fn handle_as_is(core: &Core, mut deal: Deal, why: StuckReason) {
     }
 }
 
-/// Ждёт следующего тика монеты (или времени `until`). Возвращает: false — время вышло.
-pub async fn next_tick(core: &Core, deal: &Deal, until: Option<Instant>) -> bool {
-    let mut rx = core.inner.coin_ticks.subscribe();
-    loop {
-        let recv = rx.recv();
-        let got = match until {
-            Some(t) => match tokio::time::timeout_at(t, recv).await {
-                Ok(r) => r,
-                Err(_) => return false,
-            },
-            None => recv.await,
-        };
-        match got {
-            Ok(a) if a == deal.direction.asset => return true,
-            Ok(_) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-            Err(_) => return false,
-        }
-    }
-}
-
 /// «Ожидание»: стало выгодно — продаём; время вышло — по рынку.
 async fn wait(core: &Core, mut deal: Deal) {
     let ms = match core
@@ -132,9 +115,11 @@ async fn wait(core: &Core, mut deal: Deal) {
         Ok(v) => v,
         Err(e) => return super::ledger::finish(core, &mut deal, Step::Halted, &e.message).await,
     };
+    // Ревью 333, Н4: подписка на тики — одна на всё ожидание: тик монеты, пришедший во время котировки, не теряется.
+    let mut ticks = Ticks::new(core);
     let until = Instant::now() + Duration::from_millis(ms);
     let mut first = true;
-    while next_tick(core, &deal, Some(until)).await {
+    while ticks.next(core, &deal, Some(until)).await {
         match super::trade_ops::deal_quote(core, &deal).await {
             // Решение 47: выгодно — итог сделки не ниже нуля.
             Ok((v, _, _)) if super::sell::profitable(&deal, v) => {
@@ -170,13 +155,15 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
     // Нет котировки — ждём тика монеты: оценивать убыток вслепую нельзя. Решение 238 (ревью, п. 2): не задана
     // настройка (NotConfigured) — не ждём (без предела ждали бы вечно без алерта), сделка остановлена.
     let mut first = true;
+    // Ревью 333, Н4: подписка на тики — до первой котировки и на всё ожидание (тик во время котировки не теряется).
+    let mut ticks = Ticks::new(core);
     let value = loop {
         match super::trade_ops::deal_quote(core, &deal).await {
             Ok((v, _, _)) => break v,
             Err(e) if q::not_configured(&e) => return q::halt_not_configured(core, deal, &e).await,
             Err(e) => {
                 q::no_quote_once(core, &deal, &e, &mut first).await;
-                if !next_tick(core, &deal, None).await {
+                if !ticks.next(core, &deal, None).await {
                     return super::ledger::finish(core, &mut deal, Step::Halted, &e.message).await;
                 }
             }

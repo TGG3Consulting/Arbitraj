@@ -14,7 +14,10 @@
 //! одно на класс (gateway/core_out_side.rs). Ревью 324 (Б1): быстрый путь Feed::fast (набор пуст — одна атомарная
 //! загрузка и try_reserve, без замка, ключа и настройки), медленный Feed::slow; проверка «пул годен» (Live) — одна на
 //! площадку DEX (Feed::live), доставщик зовёт её по ключу пула (keep_last Check), а не клон Live в каждом слоте.
+//! Решение 333: здесь же живёт очередь «ждут места» сообщений, по которым ядро решает о деньгах, и уведомлений
+//! (Feed::must, gateway/core_out_must.rs) — одна на канал, по самому каналу, как набор.
 //! Кто вызывает: venues/bsc_dex/pools/emit_pool.rs (пулы), gateway/core_out_book.rs (стаканы и Invalidated бирж),
+//! gateway/core_out_must.rs (Feed::must),
 //! venues/bsc_dex/pools/lost_events.rs и gateway/book_lost_log.rs (счёт).
 //! От чего зависит: gateway/keep_last.rs, gateway/core_out_item.rs, gateway/core_out_side.rs, gateway/events.rs, tokio.
 //! Настроек нет (откладывать ли — решает вызывающий: dex.pool_events_keep, venue.book_events_keep).
@@ -43,6 +46,8 @@ pub struct Feed {
     sides: Arc<Mutex<HashMap<Class, Arc<Side>>>>,
     /// Проверка «пул годен» по площадке DEX (ревью 324, Б1).
     lives: Lives,
+    /// Решение 333: очередь «ждут места» сообщений рода Money / Info этого канала (gateway/core_out_must.rs).
+    must: Arc<super::core_out_must::Queue>,
 }
 
 /// Проверки «пул годен» по площадке.
@@ -134,6 +139,11 @@ impl Feed {
     /// Счёт класса без обнуления (keep_last.rs peek). Ошибок нет.
     pub fn peek(&self, class: &Class) -> Counts {
         self.set.peek(class)
+    }
+
+    /// Решение 333: очередь «ждут места» сообщений рода Money / Info этого канала (core_out_must.rs). Ошибок нет.
+    pub fn must(&self) -> Arc<super::core_out_must::Queue> {
+        self.must.clone()
     }
 
     /// Сколько ключей ждёт (все классы). Ошибок нет.

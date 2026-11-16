@@ -100,6 +100,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "outcome.resolved" => (OK, "Исход операции выяснен ботом"),
         "outcome.unresolved" => (STOP, "Исход операции бот не выяснил — нужна проверка"),
         "send.queue_halted" => (STOP, "Кошелёк DEX остановлен до проверки"),
+        "venue.money_event_delayed" => (WARN, "Бот узнал о событии по деньгам с задержкой"),
         "dex.swap_waits_inflow" => (WARN, "Обмен на DEX ждёт поступления в кошелёк"),
         "dex.rebuilt_after_approve" => (INFO, "Обмен на DEX пересобран после разрешения"),
         "send.queue_released" => (OK, "Кошелёк DEX снова работает"),

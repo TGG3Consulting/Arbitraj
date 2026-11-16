@@ -178,6 +178,8 @@ pub struct Inner {
     /// Решение 267: замер «что было выгодно, пока монета занята сделкой» — очередь теневых расчётов, отметки
     /// направлений и сводки (busy_calc.rs); при window.busy_calc = нет / не задана — пусто.
     pub busy_calc: super::busy_calc::State,
+    /// Решение 334: кандидаты, ждущие места расчёта (profit.calc_wait_ms), и счёт потерь кандидатов (cand_wait.rs).
+    pub cand_wait: super::cand_wait::Waiting,
 }
 
 impl Inner {
@@ -201,6 +203,7 @@ impl Inner {
         Inner {
             live: Live::new(deps.buffer),
             busy_calc: super::busy_calc::State::new(deps.buffer),
+            cand_wait: Default::default(),
             deps,
             market: RwLock::default(),
             networks: RwLock::default(),

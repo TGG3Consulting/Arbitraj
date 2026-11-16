@@ -43,6 +43,11 @@
 | `setting_cell.rs` | Ревью 324: значение настройки в памяти (атомарно), перечитывается по рассылке изменений хранилища |
 | `core_out_item.rs` | Решение 324: ключ (пул DEX / стакан биржи), класс, слот (последнее событие с проверкой «годно» или «недостоверно» + кадр после него) |
 | `core_out_book.rs` | Решение 324: помощник адаптеров бирж — `BookOut::book` (venue.book_events_keep), `invalidated` (не теряется никогда) |
+| `core_out_must.rs` | Решение 333 (t155) и ревью: `MustOut` — сообщения адаптеров ядру; род (Kind::of — явный список всех вариантов): «деньги» (WalletQueue, ExitGap) — не теряются никогда, без настройки (Б1); «уведомления» (Notice, SendChannel) — venue.info_events_keep, предел venue.info_events_max; `send_in_task` — CoinCheck тем же путём, что итоги задачи (Б2) |
+| `core_out_must_queue.rs` | Ревью 333: очередь «ждут места» канала ядра (Feed::must) — две FIFO (Money впереди Info), решение по сообщению (`put`), глубина (`snapshot`) |
+| `core_out_must_deliver.rs` | Ревью 333: доставщик очереди — ждёт место, отдаёт Money раньше Info, Guard Running (паника / снятие), канал закрыт — очистка; уведомление о задержке денежного (venue.money_events_alert_ms) |
+| `core_out_must_log.rs` | Ревью 333: журнал venue.core_events_lost (с площадкой) и venue.core_events_queue (отложено / доставлено / ждут), уведомление venue.money_event_delayed |
+| `lost_log.rs` | Решение 334 (t155): общий счёт потерь одного места и запись журнала Warn (на 1-ю, 2-ю, 4-ю… потерю или не чаще log.events_lost_interval_s) |
 | `book_lost_log.rs` | Решение 324: запись venue.book_events_lost (интервал log.pool_events_lost_interval_s) |
 | `log_clock.rs` | Часы записи журнала «не чаще интервала» (из bsc_dex/pools/lost_events.rs, решение 313; общие решением 324) |
 | `network_hint.rs` | Решение 200 Б: имена сетей котируемой монеты из живого справочника биржи (venue.bsc_network не задана) — «Проверить подключение» и ошибка справочника (core/registry_sync.rs). Склейка тикеров решений 200/206 убрана решением 211 |

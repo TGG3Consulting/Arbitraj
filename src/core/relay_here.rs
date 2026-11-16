@@ -6,13 +6,13 @@
 //! сделка ждёт решения. Настройка не задана — функция не работает: алерт с причиной «не задана настройка» (правило
 //! проекта: стартовых значений нет). Нет котировки — алерт с причиной (убыток неизвестен, вслепую не продаём).
 //! Котировка — кошельком сделки (trade_ops::deal_value, решение 220 часть А).
-//! Ответы Тиграна 08.11.2026 к решению 220: (1) нет котировки — сначала ждём следующей цены монеты (stuck::next_tick:
+//! Ответы Тиграна 08.11.2026 к решению 220: (1) нет котировки — сначала ждём следующей цены монеты (stuck_lag::Ticks:
 //! первый же тик — новая котировка, без лишнего ожидания), не дольше stuck.no_quote_wait_ms; не задана или время
 //! вышло — алерт, как раньше. (2) Перевод не состоялся (отказ вывода в «Перегоне», «перевод не состоялся» после
 //! покупки в executor.rs) — вывод не повторяем: монеты на месте (баланс площадки) — продажа здесь по тем же правилам;
 //! монет нет — сделка остановлена, решает человек (transfer_failed).
 //! Кто вызывает: core/relay.rs, core/executor.rs (transfer_failed).
-//! От чего зависит: trade_ops.rs, stuck.rs (sold_by_market, next_tick), manual.rs (raise_alert), manual_halted.rs
+//! От чего зависит: trade_ops.rs, stuck.rs (sold_by_market), stuck_lag.rs (Ticks), manual.rs (raise_alert), manual_halted.rs
 //! (on_hand, set_qty), ledger.rs, deal.rs.
 //! Настройки: stuck.relay_max_loss_pct, stuck.no_quote_wait_ms.
 
@@ -106,7 +106,7 @@ pub async fn sell_here(core: &Core, deal: Deal, why: &str) {
 }
 
 /// Котировка продажи здесь с ожиданием цены (ответ Тиграна 08.11, п. 3). Есть сразу — сразу; нет — ждём тика монеты
-/// (stuck::next_tick) и котируем снова на каждом тике, не дольше `wait_ms`. Принимает: ядро, сделку (монета тика),
+/// (stuck_lag::Ticks) и котируем снова на каждом тике, не дольше `wait_ms`. Принимает: ядро, сделку (монета тика),
 /// stuck.no_quote_wait_ms (None — не задана: без ожидания), котировку (выручка USDT или текст причины).
 /// Возвращает: выручку; Err — котировки нет (текст с причиной и тем, сколько ждали). Ошибок сверх этого нет.
 pub async fn quote_or_wait<F, Fut>(
@@ -119,6 +119,8 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<Decimal, String>>,
 {
+    // Ревью 333, Н4: подписка на тики — до первой котировки и на всё ожидание (тик во время котировки не теряется).
+    let mut ticks = super::stuck_lag::Ticks::new(core);
     let mut last = match quote().await {
         Ok(v) => return Ok(v),
         Err(e) => e,
@@ -127,7 +129,7 @@ where
         return Err(format!("{last} ({WAIT} не задана — цену не ждали)"));
     };
     let until = Instant::now() + Duration::from_millis(ms);
-    while super::stuck::next_tick(core, deal, Some(until)).await {
+    while ticks.next(core, deal, Some(until)).await {
         match quote().await {
             Ok(v) => return Ok(v),
             Err(e) => last = e,

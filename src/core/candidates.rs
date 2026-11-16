@@ -28,10 +28,14 @@
 //! отказов); его очередь разбирает run после очереди кандидатов. Выключено / не задано — как раньше.
 //! Решение 141: прошедший без запущенной сделки и отклонённый с расчётом — в фоновый расчёт «без потолка»
 //! (uncapped_entry.rs, очередь не ждёт); прежний итог «без потолка» в строке остаётся до нового.
+//! Решение 334 (задача t155): кандидат не пропадает молча — очередь полна или достигнут предел: profit.calc_wait_ms
+//! задана — ждёт места не дольше неё (cand_wait.rs; ждущие стартуют первыми, по порядку, раньше теневых); не задана —
+//! как раньше снимается, но со счётом и записью журнала core.candidate_lost.
 //! Кто вызывает: core/tick.rs (enqueue), core/engine.rs (задача run), тесты (accepted).
 //! От чего зависит: engine.rs, profit.rs, dry.rs, executor.rs, card_job.rs, episode_run.rs, view.rs, calc_timing.rs,
-//! calc_report.rs, reject_log.rs, reject_shape.rs, gateway/calc_meter.rs, busy_calc.rs (решение 267).
-//! Настройки: через profit.rs, dry.rs, card.rs, episode_cfg.rs; journal.repeat_flush_ms (решение 155).
+//! calc_report.rs, reject_log.rs, reject_shape.rs, gateway/calc_meter.rs, busy_calc.rs (решение 267), cand_wait.rs (334).
+//! Настройки: через profit.rs, dry.rs, card.rs, episode_cfg.rs; journal.repeat_flush_ms (решение 155);
+//! profit.calc_concurrency, profit.calc_wait_ms (решение 334), log.events_lost_interval_s (cand_wait.rs).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -47,6 +51,7 @@ use crate::storage::journal::Level;
 
 use super::calc_report;
 use super::calc_timing::{self, Timing};
+use super::cand_wait::{self, Why};
 use super::card_job::{Job, submit};
 use super::costs::Calc;
 use super::dry::Mode;
@@ -60,8 +65,9 @@ use super::view::CoreEvent;
 use crate::gateway::calc_meter;
 use crate::gateway::urgency::{self, Urgency};
 
-/// Ставит направление в очередь расчёта (если его там ещё нет). Очередь полна — пропуск
-/// (следующий тик поставит снова). Ошибок нет.
+/// Ставит направление в очередь расчёта (если его там ещё нет). Очередь полна — решение 334 (cand_wait.rs):
+/// profit.calc_wait_ms задана — ждёт места в памяти ядра; не задана — пропуск (следующий тик поставит снова) со счётом и
+/// записью журнала core.candidate_lost. Ошибок нет.
 pub fn enqueue(core: &Core, d: &Direction) {
     // По монете уже идёт сделка — новый расчёт не нужен (решение 118, Я-2: одна сделка на монету).
     if lk(&core.inner.active).contains(&super::coin_key::CoinKey::of(&d.asset)) {
@@ -73,19 +79,24 @@ pub fn enqueue(core: &Core, d: &Direction) {
     if !lk(&core.inner.queued).insert(d.clone()) {
         return;
     }
-    if core
-        .inner
-        .cand_tx
-        .try_send((d.clone(), Instant::now()))
-        .is_err()
-    {
-        lk(&core.inner.queued).remove(d);
+    let now = Instant::now();
+    match core.inner.cand_tx.try_send((d.clone(), now)) {
+        Ok(()) => {}
+        // Решение 334: очередь полна — ждать места (profit.calc_wait_ms) или потеря со счётом; не молча.
+        Err(mpsc::error::TrySendError::Full(_)) => match cand_wait::wait_for(core) {
+            Some(w) => core.inner.cand_wait.park(d.clone(), now, w),
+            None => cand_wait::lost(core, d, Why::Full),
+        },
+        Err(mpsc::error::TrySendError::Closed(_)) => {
+            lk(&core.inner.queued).remove(d);
+        }
     }
 }
 
 /// Задача очереди: раздаёт расчёты параллельно — на каждый кандидат свой расчёт (решение 88), ни один не ждёт другого.
-/// Предел одновременных расчётов — profit.calc_concurrency (0 или не задана — без предела); достигнут — направление
-/// снимается из очереди, следующий тик поставит снова (как при полном канале). Работает, пока жив канал.
+/// Предел одновременных расчётов — profit.calc_concurrency (0 или не задана — без предела); достигнут — решение 334
+/// (cand_wait.rs): profit.calc_wait_ms задана — кандидат ждёт места (ждущие стартуют первыми, по порядку); не задана —
+/// снимается из очереди со счётом и записью журнала, следующий тик поставит снова. Работает, пока жив канал.
 /// Решение 267: та же задача разбирает очередь теневых расчётов занятых монет (busy_calc.rs Shadows) — под тем же
 /// пределом и только когда очередь кандидатов пуста; условие допуска кандидата прежнее (теневые в inflight не входят).
 pub async fn run(core: Core, mut rx: mpsc::Receiver<(Direction, Instant)>) {
@@ -93,44 +104,91 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<(Direction, Instant)>) {
     // Решение 267: теневые расчёты занятых монет — своя очередь; берётся, только когда очередь кандидатов пуста
     // (biased: кандидат всегда первый). Замер выключен — очередь теневых пуста всегда.
     let mut shadows = super::busy_calc::Shadows::take(&core);
+    let wait = &core.inner.cand_wait;
+    // Ревью 333, Н6: смена profit.calc_concurrency будит ждущих (слушается, только пока ждущие есть).
+    let mut changes = Some(core.inner.deps.settings.subscribe());
     loop {
+        // Решение 334: ждущие места кандидаты — первыми, пока место есть (ждущих нет — одно чтение пустой очереди).
+        if !wait.is_empty() && !full(&core, &inflight) {
+            if let Some((d, at)) = wait.pop(&core) {
+                start(&core, &inflight, &mut shadows, d, at);
+            }
+            continue;
+        }
+        // Ревью 333, Н5: ждущий без срока (огромная profit.calc_wait_ms) — ждущие есть, а срока нет.
+        let parked = !wait.is_empty();
+        let due = wait.next_due();
         let (d, at) = tokio::select! {
             biased;
+            // Место освободилось (или поставлен ждущий) — снова к ждущим.
+            _ = wait.free.notified(), if parked => continue,
+            // Ревью 333, Н6: предел сменился — снова к ждущим (поднятый предел пускает их сразу).
+            _ = cand_wait::cap_changed(&mut changes), if parked => continue,
+            // Срок ждущего вышел — потеря со счётом, направление снимается из очереди.
+            _ = tokio::time::sleep_until(due.unwrap_or_else(Instant::now).into()), if due.is_some() => {
+                wait.expire(&core);
+                continue;
+            }
             m = rx.recv() => match m {
                 Some(m) => m,
                 None => return,
             },
-            s = shadows.recv() => {
+            s = shadows.recv(), if !parked => {
                 shadows.start(&core, s, inflight.load(Ordering::Acquire));
                 continue;
             }
         };
-        let cap = core
-            .inner
-            .deps
-            .settings
-            .integer("profit.calc_concurrency", At::default())
-            .ok()
-            .filter(|n| *n > 0)
-            .map(|n| n as usize);
-        if cap.is_some_and(|c| inflight.load(Ordering::Acquire) >= c) {
-            // Предел одновременных расчётов достигнут — не ждём: снять из очереди, следующий тик поставит снова.
-            lk(&core.inner.queued).remove(&d);
+        if full(&core, &inflight) {
+            // Предел одновременных расчётов достигнут (решение 334): ждать места или потеря со счётом — не молча.
+            match cand_wait::wait_for(&core) {
+                Some(w) => wait.park(d, at, w),
+                None => cand_wait::lost(&core, &d, Why::Cap),
+            }
             continue;
         }
-        inflight.fetch_add(1, Ordering::AcqRel);
-        // Решение 267: кандидат занял место — лишний теневой расчёт снимается (теневых нет — ничего).
-        shadows.give_way(cap, inflight.load(Ordering::Acquire));
-        let core = core.clone();
-        let inflight = inflight.clone();
-        // Свой расчёт на каждый кандидат: тяжёлый счёт (в памяти) идёт параллельно, узел не нагружается
-        // (цена газа — общий кэш на блок, пулы из стрима). Класс Trade ставится внутри задачи (task_local не наследуется).
-        tokio::spawn(async move {
-            calc_one(&core, &d, at).await;
-            lk(&core.inner.queued).remove(&d);
-            inflight.fetch_sub(1, Ordering::AcqRel);
-        });
+        start(&core, &inflight, &mut shadows, d, at);
     }
+}
+
+/// profit.calc_concurrency (0 или не задана — без предела). Ошибок нет.
+fn cap(core: &Core) -> Option<usize> {
+    core.inner
+        .deps
+        .settings
+        .integer(cand_wait::CAP, At::default())
+        .ok()
+        .filter(|n| *n > 0)
+        .map(|n| n as usize)
+}
+
+/// Предел одновременных расчётов достигнут. Принимает: ядро, счётчик идущих. Ошибок нет.
+fn full(core: &Core, inflight: &AtomicUsize) -> bool {
+    cap(core).is_some_and(|c| inflight.load(Ordering::Acquire) >= c)
+}
+
+/// Запускает расчёт кандидата своей задачей; конец расчёта — толчок ждущим (решение 334). Принимает: ядро, счётчик
+/// идущих, теневые расчёты, направление, момент постановки в очередь. Ошибок нет.
+fn start(
+    core: &Core,
+    inflight: &Arc<AtomicUsize>,
+    shadows: &mut super::busy_calc::Shadows,
+    d: Direction,
+    at: Instant,
+) {
+    inflight.fetch_add(1, Ordering::AcqRel);
+    // Решение 267: кандидат занял место — лишний теневой расчёт снимается (теневых нет — ничего).
+    shadows.give_way(cap(core), inflight.load(Ordering::Acquire));
+    let core = core.clone();
+    let inflight = inflight.clone();
+    // Свой расчёт на каждый кандидат: тяжёлый счёт (в памяти) идёт параллельно, узел не нагружается
+    // (цена газа — общий кэш на блок, пулы из стрима). Класс Trade ставится внутри задачи (task_local не наследуется).
+    tokio::spawn(async move {
+        calc_one(&core, &d, at).await;
+        lk(&core.inner.queued).remove(&d);
+        inflight.fetch_sub(1, Ordering::AcqRel);
+        // Решение 334: место освободилось — задача очереди проверит ждущих (ждущих нет — толчок ничего не меняет).
+        core.inner.cand_wait.free.notify_one();
+    });
 }
 
 /// Один расчёт кандидата. Режим и общий срок фиксируются на расчёт. Срок profit.calc_timeout_ms не даёт расчёту

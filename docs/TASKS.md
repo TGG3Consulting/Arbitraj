@@ -24,6 +24,21 @@
   чтения. **Как включать:** после замера 313; сначала `quote`, перезапуск не нужен. **Что мерить:** dex.pool_refresh —
   class и wait_ms шагов до/после; core.window — время от «карта перечитывается» до окна; отказы «расчёт не уложился в
   срок» и время предпроверки (не выросли ли — перечитывания теперь впереди фона/проверок). При проблеме — очистить.
+  **315 — одно обращение (сделано, нужна запись):** dex.event_refresh_one_call (да/нет, только при dex.multicall3) —
+  пул V3 (ABI PancakeSwap/Uniswap V3) при перечитывании по событию: голова + слова TickLens одним eth_call Multicall3.
+  Тест tests/bsc_dex_event_one_call_315.rs — разбор на записанных ответах eth_call SquadSwap V3 (блок 133618816), а
+  НЕ на записанном ответе aggregate3: такой записи в tests/data нет. **Снять с узла (только чтение, один блок B,
+  сначала eth_blockNumber):** для двух-трёх пулов PancakeSwap V3 и одного Uniswap V3 (в том числе пул SHOPINX
+  0x3079ae2e… — полный адрес взять из журнала) — (1) по отдельности eth_call на B: пул.slot0(), пул.liquidity(),
+  пул.tickSpacing(), TickLens(dex.tick_lens этого DEX).getPopulatedTicksInWord(пул, w) для w = слово тика ±10;
+  (2) один eth_call на B к Multicall3 (dex.multicall3) aggregate3 с allowFailure = true и вызовами в порядке
+  load_batch_v2v3.rs head + words: [slot0, liquidity, getPopulatedTicksInWord(w − 10 … w + 10)]; (3) то же для пула с
+  dex.v3_fee_source = pool_fee_each_read (SquadSwap V3) — с fee() пула после liquidity. Ответы — как вернул узел (как
+  tests/data/squadswap_v3_2026-11-15). По записи — тест: node/multicall.rs decode ответа (2) = ответам (1) по байтам и
+  load_v3_once assemble по нему = последовательному разбору. **Как включать:** после теста по записи;
+  dex.event_refresh_one_call = да (перезапуск не нужен). **Что мерить:** dex.pool_refresh — steps (1 вместо ≥3;
+  2 — когда диапазон по slot0 вышел за слова события), total_ms до/после, error (откаты, StaleData); время «карта
+  перечитывается» → core.window. При ошибках — очистить.
 
 - **Решение 310 (16.11.2026, задача t141, ветка t141/due-read-only от rel/dex-all c9b0cc19) — сделано, ждёт прогона в
   GitHub, ревью и включения.** Сделано: check/fresh.rs due() при dex.check_due_read_only = да читает достоверность пула

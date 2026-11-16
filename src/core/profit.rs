@@ -19,6 +19,7 @@
 //! объём у исполнителя в финальной котировке — их время видно в «Время по шагам» предпроверки (calc_steps.rs).
 //! Решение 266: пересчёт предпроверки при precheck.fast_recalc = да — сначала один финальный расчёт на объёме кандидата
 //! (precheck_fast.rs recalc_boxed, после параметров подбора и до самого подбора); не прошёл — полный подбор, как раньше.
+//! Решение 337: ранний выход подбора (size_early.rs, size.early_exit_margin_usd) — отказ без финальной котировки.
 //! Решение 242: пороги прибыли — с областью «площадка + тип направления» (venue_dir.rs thresholds), не задано — как раньше.
 //! Настройки: money.min_profit_usd, money.min_profit_pct [вся система, площадка + тип направления], tax.max_age_s (tax_age.rs), kyber.final_gate_usd (решение 111; только при exec.via_kyber =
 //! да на DEX направления — решение 121 B5, через gateway/quote_stage.rs), size.* (+ всё, что читают costs.rs, dirctx.rs, limits.rs).
@@ -112,10 +113,12 @@ pub async fn decide_capped(
         Some(p) if !p.is_zero() => p,
         _ => return reject("нет цены покупки на A".into(), None),
     };
-    let p = match params(core, &cx, budget, price, None) {
+    let mut p = match params(core, &cx, budget, price, None) {
         Ok(p) => p,
         Err(e) => return reject(e, None),
     };
+    // Решение 337: пол раннего выхода подбора — порог прибыли направления минус size.early_exit_margin_usd.
+    p.early_floor = super::size_early::floor(s, min_usd);
     // Решение 266: объём кандидата на свежих данных — один финальный расчёт; прошёл пороги — план без подбора, иначе
     // (ошибка, ниже порога, внешний исполнитель) — полный подбор ниже, как раньше. Будущее — в куче и собирается не
     // здесь (recalc_boxed): кадр расчёта кандидата не растёт; объём задан только у пересчёта предпроверки.
@@ -144,6 +147,12 @@ pub async fn decide_capped(
     };
     let mut choice = found.choice;
     choice.why = why(&choice, &d.asset.ticker);
+    // Решение 337: ранний выход — уже по границам и сетке ниже порога с запасом: без уточнения и финальной котировки.
+    if found.early {
+        let margin = super::size_early::margin(s);
+        let text = super::size_early::reason(choice.profit, min_usd, margin, &choice.why);
+        return reject(text, Some(found.best.data));
+    }
     // Решение 111: фильтр финальной котировки (kyber.final_gate_usd). У направления с DEX при exec.via_kyber = да
     // финальная котировка — запрос к KyberSwap (лимит запросов); своя математика заведомо минусовая — не тратим запрос.
     // Решение 121 B5: при своём сборщике (exec.via_kyber = нет) фильтр не действует. 0 или не задано — без фильтра.

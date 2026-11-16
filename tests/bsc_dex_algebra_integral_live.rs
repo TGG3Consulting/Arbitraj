@@ -11,82 +11,15 @@
 //!    найденного входа без предела цены (без комиссии) даёт тот же выход (полоса — честный предел обмена).
 //!
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bsc_dex::{math::swap_algebra, pools::{ticks, load_algebra_integral}}, serde_json.
+//! От чего зависит: tests/algebra_integral_common (запись, разбор, состояние пула), arb::venues::bsc_dex::math::swap_algebra.
 
-use std::collections::BTreeMap;
+mod algebra_integral_common;
 
 use alloy_primitives::U256;
-use serde_json::Value;
 
 use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState};
-use arb::venues::bsc_dex::pools::load_algebra_integral::window;
-use arb::venues::bsc_dex::pools::ticks::{TickData, TickMap};
 
-fn probe() -> Value {
-    let p = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/data/algebra_integral_2026-11-06/probe.json"
-    );
-    serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap()
-}
-
-/// Слово `i` ответа (беззнаковое).
-fn word(raw: &str, i: usize) -> U256 {
-    let h = raw.trim_start_matches("0x");
-    U256::from_str_radix(&h[64 * i..64 * (i + 1)], 16).unwrap()
-}
-
-/// Слово `i` как знаковое целое (int24 / int128 в слове ABI — дополнение до двух).
-fn signed(raw: &str, i: usize) -> i128 {
-    let w = word(raw, i);
-    if w.bit(255) {
-        let neg = (!w).wrapping_add(U256::from(1u8));
-        -(neg.to::<u128>() as i128)
-    } else {
-        w.to::<u128>() as i128
-    }
-}
-
-/// Состояние пула и карта тиков из записи.
-fn pool_state(p: &Value) -> (U256, i32, u128, u32, TickMap) {
-    let gs = p["calls"]["globalState"]["raw"].as_str().unwrap();
-    let sqrt = word(gs, 0);
-    let tick = signed(gs, 1) as i32;
-    let fee_raw = p["calls"]["fee"]["raw"].as_str().unwrap();
-    let fee = word(fee_raw, 0).to::<u32>();
-    let liq = word(p["calls"]["liquidity"]["raw"].as_str().unwrap(), 0).to::<u128>();
-    let mut map = BTreeMap::new();
-    let mut ends = Vec::new();
-    for side in ["ticks_up", "ticks_down"] {
-        let list = p[side].as_array().unwrap();
-        for t in list {
-            let raw = t["raw"].as_str().unwrap();
-            let total = word(raw, 0);
-            if !total.is_zero() {
-                map.insert(
-                    t["tick"].as_i64().unwrap() as i32,
-                    TickData {
-                        gross: total.to::<u128>(),
-                        net: signed(raw, 1),
-                    },
-                );
-            }
-        }
-        ends.push(list.last().unwrap()["tick"].as_i64().unwrap() as i32);
-    }
-    let words = window(ends[1], ends[0]).expect("окно");
-    (
-        sqrt,
-        tick,
-        liq,
-        fee,
-        TickMap {
-            spacing: 1,
-            ticks: map.into(),
-            words,
-        },
-    )
-}
+use algebra_integral_common::{pool_state, probe, word};
 
 #[test]
 fn abi_and_window_match_live_pools() {

@@ -7,7 +7,7 @@
 //! Решение 131: неподвижные монеты (без адреса контракта) — только при смене их входов (coin_book.rs).
 //! Уведомляет о входе и выходе монеты из чёрного списка и об исключении пула по крючку.
 //! Кто вызывает: core/engine.rs (запускает задачи run и watch_settings).
-//! От чего зависит: engine.rs, registry.rs, blacklist.rs, subscribe.rs, episode_run.rs (закрыть эпизоды пропавших направлений), settings.
+//! От чего зависит: engine.rs, registry.rs, blacklist.rs, subscribe.rs, episode_run.rs (закрыть эпизоды пропавших направлений), deposit_warm.rs (толчок прогрева адресов, решение 316), settings.
 //! Настройки: venue.enabled, venue.quote_asset, venue.bsc_network, venue.symbols_stale_s (по площадке); coin.*, tax.*, hooks.* — через blacklist.rs.
 
 use std::collections::HashMap;
@@ -182,6 +182,8 @@ pub async fn rebuild(core: &Core) {
         coins: count,
         directions,
     });
+    // Решение 316: новый справочник — прогрев адресов депозита новых монет (deposit_warm.rs; выключен — проход пустой).
+    super::deposit_warm::kick(false);
     super::subscribe::sync(core, &venues).await;
 }
 

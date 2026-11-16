@@ -3,18 +3,40 @@
 //! запрашивался в transfers.rs уже с монетами на руках: у MEXC адреса для монеты может не быть («создайте в
 //! кабинете») — покупка проходила, перевод падал, монета застревала. Теперь ошибка адреса — отказ до покупки, денег
 //! не тронуто. Адреса кэшируют адаптеры (по монете и сети) — повторных запросов к бирже нет.
-//! Кто вызывает: core/precheck.rs (если B — биржа).
+//! Решение 316: монета и сеть запроса — target(); им же пользуется фоновый прогрев адресов (deposit_warm.rs), чтобы
+//! первая сделка после перезапуска брала адрес из памяти адаптера, а не запросом к бирже.
+//! Кто вызывает: core/precheck.rs, precheck_par.rs (если B — биржа); target — ещё core/deposit_warm.rs.
 //! От чего зависит: transfers.rs (название сети BSC получателя), deps.rs (шлюз).
 //! Настройки: venue.bsc_network — через transfers.rs.
 
-use crate::core::types::Direction;
+use crate::core::types::{Asset, Direction};
 
 use super::engine::Core;
+
+/// Решение 316: что именно запрашивается у биржи B — монета её тикером и название её сети BSC. Тот же ключ, по которому
+/// адаптер кэширует адрес (монета, сеть), — им пользуются и предпроверка (ready), и фоновый прогрев (deposit_warm.rs),
+/// и перевод (transfers.rs: on_venue + network) — поэтому прогретый адрес берётся сделкой из памяти адаптера.
+pub struct Target {
+    /// Монета тикером площадки B (решение 211).
+    pub on: Asset,
+    /// Название сети BSC у площадки B (transfers.rs::network).
+    pub net: String,
+}
+
+/// Что делает: монета и сеть запроса адреса депозита у площадки B направления (без запроса к бирже).
+/// Принимает: ядро, направление. Возвращает: Target.
+/// Ошибки: текст — сети BSC у монеты нет (transfers.rs::network).
+pub fn target(core: &Core, d: &Direction) -> Result<Target, String> {
+    let net = super::transfers::network(core, &d.asset, &d.sell_on)?;
+    // Решение 211: площадке — её тикер монеты.
+    let on = super::venue_ticker::on_venue(core, &d.asset, &d.sell_on);
+    Ok(Target { on, net })
+}
 
 /// Есть ли у биржи B адрес депозита монеты в её сети BSC. Принимает: ядро, направление.
 /// Ошибки: текст — сети BSC у B нет, адаптер не дал адреса (нет адреса, требуется memo, сбой запроса).
 pub async fn ready(core: &Core, d: &Direction) -> Result<(), String> {
-    let net = super::transfers::network(core, &d.asset, &d.sell_on)?;
+    let Target { on, net } = target(core, d)?;
     let gw = core
         .inner
         .deps
@@ -22,8 +44,6 @@ pub async fn ready(core: &Core, d: &Direction) -> Result<(), String> {
         .get(&d.sell_on)
         .await
         .map_err(|e| e.message)?;
-    // Решение 211: площадке — её тикер монеты.
-    let on = super::venue_ticker::on_venue(core, &d.asset, &d.sell_on);
     gw.deposit_address(&on, &net)
         .await
         .map(|_| ())

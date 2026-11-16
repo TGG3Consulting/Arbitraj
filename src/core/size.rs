@@ -116,7 +116,7 @@ pub struct Params {
     /// точки, USDT). Лучшая посчитанная точка после сетки (и после изломов) ниже пола — уточнения нет, Found.early.
     /// None — без раннего выхода (как до 337).
     pub early_floor: Option<Decimal>,
-    /// Решение 336: повторное использование того, что не зависит от объёма (dex.quote_reuse на площадке направления) —
+    /// Решение 336: повторное использование того, что не зависит от объёма (у направления с DEX — решение 363, size_curve.rs) —
     /// короб подбора с reuse (gateway/calc_share.rs). false — нет (у цикла DEX ↔ DEX — всегда, cycle_plan.rs).
     pub reuse: bool,
     /// Ревью t157 Н3: size.parallel_points задана, а cpu.threads_max нет — точки по одной, пояснение в why (profit.rs).

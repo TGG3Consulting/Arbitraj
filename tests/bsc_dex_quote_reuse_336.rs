@@ -6,6 +6,8 @@
 //! состоянии реестра даёт ту же котировку, что без короба: побитово тот же текст Debug (объём, цена, маршрут, затраты; время котировки at — не итог, не сравнивается)
 //! — на нескольких объёмах подряд одного короба (вторая и следующие точки — из короба), покупка и продажа, режимы
 //! classic и graph. Путь — как в Quoting::priced: cpu::run(routing::run) (короб переносится в поток счёта).
+//! Решение 363 (в логику): смена настроек внутри одного короба (поколение настроек) — допуск заново, котировка та же,
+//! что без короба (settings_change_seen_within_share).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::quote::{cpu, routing}, arb::gateway::calc_share, tests/route_common.
 
@@ -122,5 +124,47 @@ async fn par_only_share_same_quote() {
         let plain = quote(&q, Side::Buy, qty, None).await;
         let shared = quote(&q, Side::Buy, qty, Some(share.clone())).await;
         assert_eq!(plain, shared, "{qty}");
+    }
+}
+
+/// Решение 363 (в логику, правило 16.11): настройки изменились внутри одного подбора объёма (поколение настроек) — точка
+/// того же короба допускает пулы и пути заново: котировка та же, что без короба. Здесь выключены все три DEX записи
+/// (dex.pool_enabled = нет) — без проверки поколения короб отдал бы прежний допуск и прежний маршрут.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn settings_change_seen_within_share() {
+    let p = route_common::parts().await;
+    let q = p.quoting();
+    let dexes = ["pancakeswap_v3", "uniswap_v3", "pancakeswap_v2"];
+    for router in ["classic", "graph"] {
+        mode(&q, router).await;
+        enable(&q, &dexes, true).await;
+        let share = Arc::new(Share::new(false, true));
+        let before = quote(&q, Side::Buy, 1_000, None).await;
+        assert_eq!(
+            before,
+            quote(&q, Side::Buy, 1_000, Some(share.clone())).await,
+            "{router}: до смены"
+        );
+        enable(&q, &dexes, false).await;
+        let plain = quote(&q, Side::Buy, 1_000, None).await;
+        let reused = quote(&q, Side::Buy, 1_000, Some(share.clone())).await;
+        assert_ne!(plain, before, "{router}: выключение DEX меняет котировку");
+        assert_eq!(plain, reused, "{router}: после смены настроек");
+    }
+}
+
+/// dex.pool_enabled для списка DEX (область «DEX»).
+async fn enable(q: &Quoting, dexes: &[&str], on: bool) {
+    for id in dexes {
+        q.ctx
+            .settings
+            .set(
+                "dex.pool_enabled",
+                Scope::Dex((*id).into()),
+                Some(json!(on)),
+                "тест",
+            )
+            .await
+            .unwrap();
     }
 }

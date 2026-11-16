@@ -16,14 +16,14 @@
 //! dex.quote_prep_once = нет — на каждый хоп, как до 311 А (не задана — одна на котировку, решение Тиграна 16.11).
 //! Решение 312: замер этапов (quote/quote_timing.rs stage) — только когда котировка меряется; иначе часов нет. Отдельные
 //! этапы — и подготовка глубины (Prep), и снимок путей для повтора (Snapshot).
-//! Решение 336 (п. 2б): при dex.quote_reuse = да внутри подбора объёма набор путей, decimals и допуск хопов — один раз
+//! Решения 336 (п. 2б), 363: внутри подбора объёма набор путей, decimals и допуск хопов — один раз
 //! на подбор (quote/graph_reuse.rs, состояние пулов сверяется на каждой точке); отбор и сплит — на dex.quote_threads
 //! потоках (quote/route_best.rs, graph_split.rs). Не заданы — как раньше.
 //! Кто вызывает: quote/routing.rs за переключателем dex.router_mode (merge, quote; решение 271 — quote и при NoRoute
 //! классики); exec/trade.rs, exec/executor/mod.rs, exec/dry_build.rs (graph_form — реэкспорт из graph_exec.rs); тесты.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs (и decimals), quote/graph_split.rs, quote/abandon.rs (решение 301: брошенный расчёт — до отбора и сплита выход, без записи журнала),
 //! quote/graph_exec.rs, quote/route_best.rs, quote/route_gas.rs, quote/costs.rs, quote/select.rs, quote/via.rs (Via), quote/steps.rs, tokens.rs.
-//! Настройки: dex.quote_reuse, dex.quote_threads (решение 336), dex.quote_prep_once (решение 311 А, через graph_legs::prep_once), dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,
+//! Настройки: dex.quote_threads (решение 336), dex.quote_prep_once (решение 311 А, через graph_legs::prep_once), dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,
 //! dex.native_wrapped (газ в USDT при учёте газа), smart.split_step_pct, smart.max_splits, dex.intermediate_* [bsc_dex];
 //! через вызываемые — глубина (решение 73), допуск пула, channel.*, dex.bundle_max_routers.
 
@@ -99,11 +99,15 @@ pub async fn quote_fit(
     };
     // Решение 312: признак замера — один раз на котировку графа.
     let on = quote_timing::active();
-    // Решение 336 (п. 2б): при dex.quote_reuse = да внутри подбора объёма набор путей, decimals и допуск хопов — из
-    // короба подбора (quote/graph_reuse.rs; состояние пулов сверяется на каждой точке). Иначе — как раньше.
+    // Решения 336 (п. 2б), 363: внутри подбора объёма набор путей, decimals и допуск хопов — из короба подбора
+    // (quote/graph_reuse.rs; состояние пулов сверяется на каждой точке, настройки сменились — всё заново). Короба нет —
+    // как раньше.
     let native = native::is_native(ctx, asset);
     let reuse = graph_reuse::slot(v, &search, native);
-    let cached = reuse.as_ref().and_then(|(s, k)| s.get(k));
+    let cached = reuse
+        .as_ref()
+        .and_then(|(s, k)| s.get(k))
+        .filter(|a| a.fresh_settings(ctx.settings.generation()));
     let admitted = match cached {
         Some(a) => graph_reuse::refresh(v, &a, on),
         None => {

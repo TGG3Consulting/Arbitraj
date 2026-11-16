@@ -5,10 +5,10 @@
 //! Решение 246: текст отказа «вложение больше бюджета» — over_budget, общий с ранней проверкой costs.rs evaluate_capped.
 //! Решение 265: каждый расчёт объёма (at, beyond) — часть подробного замера «расчёт объёма» (calc_detail.rs, только при log.step_timing).
 //! Решение 336: короб подбора для адаптеров (gateway/calc_share.rs) — только когда нужен (точки параллельно или
-//! dex.quote_reuse; ставит size_par.rs with_share), иначе расчёт точки как до 336; пачки точек — size_par.rs at_many.
+//! повторное использование — у направления с DEX, решение 363; ставит size_par.rs with_share), иначе расчёт точки как до 336; пачки точек — size_par.rs at_many.
 //! Кто вызывает: core/size_bounds.rs, core/size_search.rs, core/size_par.rs; over_budget — ещё core/costs.rs.
 //! От чего зависит: core/size.rs, core/calc_timing.rs, gateway/calc_share.rs.
-//! Настройки: нет (size.parallel_points и признак dex.quote_reuse — через Params, size_par.rs with_share).
+//! Настройки: нет (size.parallel_points и признак reuse — через Params, size_par.rs with_share).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

@@ -87,7 +87,7 @@ pub enum Count {
     SplitEvals,
     /// Решение 336: допусков пулов классики (вызовов select::usable).
     AdmitCalls,
-    /// Решение 336: из них — из короба подбора (dex.quote_reuse, usable_reuse.rs).
+    /// Решение 336: из них — из короба подбора (решения 336, 363 — usable_reuse.rs).
     AdmitHits,
     /// Решение 336: пар пулов через промежуточную (расчётов пути в Via::best).
     ViaPairs,

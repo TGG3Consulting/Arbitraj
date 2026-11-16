@@ -11,18 +11,19 @@
 //! pools/state_gen.rs), достоверность и «спит» с реестром; совпало у всех пулов пути — берутся ноги из короба (то же
 //! состояние — тот же расчёт); не совпало — путь берётся свежим из реестра (route_cache::hydrate) и допуск считается
 //! заново (пул пропал / недостоверен / спит — путь выпадает, как у кэша путей решения 189). Поколение 0 (запись вне
-//! реестра) — всегда заново.
+//! реестра) — всегда заново. Решение 363: поколение настроек (settings/store.rs generation) сменилось с допуска — весь
+//! допуск заново (как без короба).
 //! Что в пределах одного подбора НЕ видно (видно со следующего кандидата и в финальной котировке): новый путь (новый
-//! пул, пул вырос выше порога графа), смена проверок пула без смены его состояния (квотер, налог, крючок, газ),
-//! смена настроек допуска и курса встречного токена для глубины.
+//! пул, пул вырос выше порога графа — как у кэша путей dex.route_paths_ttl_ms), смена проверок пула без смены его
+//! состояния (квотер, налог, крючок, газ), курса встречного токена для глубины.
 //! Ключ в коробе — всё, от чего зависит набор и допуск: концы, сторона, пределы перебора, промежуточные, подготовка
 //! глубины (dex.quote_prep_once), нативная монета, плановая цена газа (пулы Solidly), снимок рынка.
-//! dex.quote_reuse не задана или нет — короба нет или в нём нет reuse (gateway/calc_share.rs): как до 336 (всё на каждой
-//! точке), без единого лишнего действия на горячем пути.
+//! Короб с reuse — у каждого подбора объёма кандидата с DEX (решение 363, в логику: была dex.quote_reuse); вне подбора и
+//! у цикла DEX ↔ DEX короба или reuse нет (gateway/calc_share.rs): как до 336 (всё на каждой точке).
 //! Кто вызывает: quote/graph_route.rs.
 //! От чего зависит: quote/graph_legs.rs, quote/route_cache.rs, quote/cpu_local.rs, gateway/calc_share.rs,
 //! pools/depth_book.rs (Book::prep), pools/registry.rs, quote/quote_timing.rs.
-//! Настройки: dex.quote_reuse [bsc_dex] (необязательная; читает ядро один раз на подбор).
+//! Настройки: ключ — dex.route_max_pools_per_edge, dex.quote_prep_once; поколение настроек — settings/store.rs.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
@@ -44,6 +45,16 @@ use super::{cpu_local, graph_legs};
 pub struct Admitted {
     list: Vec<(RoutePath, Result<Vec<Leg>, String>)>,
     dec: HashMap<Address, u8>,
+    /// Решение 363: поколение настроек, прочитанное до допуска.
+    settings_gen: u64,
+}
+
+impl Admitted {
+    /// Допуск посчитан при тех же настройках, что сейчас (решение 363). Принимает: поколение настроек сейчас.
+    /// Ошибок нет.
+    pub fn fresh_settings(&self, now: u64) -> bool {
+        self.settings_gen == now
+    }
 }
 
 /// Ключ допуска путей в коробе — всё, от чего набор и допуск зависят (см. шапку); без сборки строки (ревью t157 Б1).
@@ -74,8 +85,8 @@ pub struct Store {
 const SLOT: &str = "bsc_dex.graph_reuse";
 
 /// Место в коробе подбора для этой котировки. Принимает: расчёт путей, что перебирать, нативная ли монета.
-/// Возвращает: (место, ключ); None — короба нет или повторное использование не включено (dex.quote_reuse читает ядро
-/// один раз на подбор — gateway/calc_share.rs). Ошибок нет.
+/// Возвращает: (место, ключ); None — короба нет или в нём нет повторного использования (вне подбора, цикл DEX ↔ DEX —
+/// gateway/calc_share.rs). Ошибок нет.
 pub fn slot(v: &Via<'_>, s: &Search<'_>, native: bool) -> Option<(Arc<Store>, Key)> {
     let share = cpu_local::share().filter(|x| x.reuse())?;
     let ctx = &v.q.ctx;
@@ -129,6 +140,8 @@ pub fn admit(
     keep: bool,
 ) -> (Vec<Result<Vec<Leg>, String>>, Option<Admitted>) {
     let ctx = &v.q.ctx;
+    // Решение 363: поколение настроек — до допуска.
+    let settings_gen = ctx.settings.generation();
     // Подготовка (RefCell внутри) живёт только в этой функции без await.
     let prep = if graph_legs::prep_once(ctx) {
         stage(Stage::Prep, on, || Book::prep(ctx, &v.q.tokens).ok())
@@ -147,7 +160,11 @@ pub fn admit(
         }
         out.push(legs);
     }
-    let adm = keep.then_some(Admitted { list: kept, dec });
+    let adm = keep.then_some(Admitted {
+        list: kept,
+        dec,
+        settings_gen,
+    });
     (out, adm)
 }
 

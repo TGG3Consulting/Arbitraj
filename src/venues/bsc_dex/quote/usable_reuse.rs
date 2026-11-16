@@ -2,24 +2,25 @@
 //! Что делает: решение 336 (задача t157, п. 2а) — допуск пула для классики (quote/select.rs usable: достоверность,
 //! глубина, DEX подключена, бан справочника, крючок, сверка с квотером, газ, налог пула) от объёма НЕ зависит, а
 //! считался на каждой котировке каждой точки подбора объёма — около 15 чтений настроек и 4 общих замка на пул (разбор
-//! docs/notes/t157-cpu-parallel-2026-11-16.md п. 1б). При dex.quote_reuse = да внутри подбора объёма кандидата он
-//! считается один раз на пул и сторону и берётся из короба подбора (gateway/calc_share.rs; короб переносится в поток
-//! счёта quote/cpu.rs → cpu_local.rs).
-//! Свежесть: запись короба помнит поколение состояния пула (Entry.state_gen, pools/state_gen.rs), достоверность и
-//! «спит»; не совпало с записью, по которой котируют сейчас, или поколение 0 (запись вне реестра) — допуск заново.
+//! docs/notes/t157-cpu-parallel-2026-11-16.md п. 1б). Внутри подбора объёма кандидата с DEX (короб с reuse — всегда,
+//! кроме цикла DEX ↔ DEX; решение 363, в логику: была dex.quote_reuse) он считается один раз на пул и сторону и берётся
+//! из короба подбора (gateway/calc_share.rs; короб переносится в поток счёта quote/cpu.rs → cpu_local.rs).
+//! Свежесть: запись короба помнит поколение состояния пула (Entry.state_gen, pools/state_gen.rs), достоверность,
+//! «спит» и поколение настроек (settings/store.rs generation — решение 363); не совпало с тем, по чему котируют сейчас,
+//! или поколение 0 (запись вне реестра) — допуск заново.
 //! Ключ короба — всё, от чего допуск зависит кроме пула: сторона, decimals USDT, плановая цена газа (пулы Solidly,
 //! ревью 273), снимок (frozen_head), продажа выхода (решение 247 п. В).
 //! Что в пределах одного подбора НЕ видно (видно со следующего кандидата и в финальной котировке — она идёт без
-//! короба): смена фактов проверок пула без смены его состояния (квотер, налог, крючок, газ), смена настроек допуска,
-//! бан справочника. Так же, как у графа (quote/graph_reuse.rs).
+//! короба): смена фактов проверок пула без смены его состояния (квотер, налог, крючок, газ), бан справочника. Так же,
+//! как у графа (quote/graph_reuse.rs). Смена настроек видна сразу (поколение настроек).
 //! Вне подбора (финальная котировка, исполнение, экран, проверки) короба нет — допуск каждый раз, как до 336.
-//! dex.quote_reuse не задана или нет — короба или reuse в нём нет (решает ядро один раз на подбор, gateway/calc_share.rs):
-//! допуск как до 336, на горячем пути — только чтение поля потока (ревью t157 Б1). Замер частей — только при reuse.
+//! Короба или reuse в нём нет (вне подбора, цикл DEX ↔ DEX) — допуск как до 336, на горячем пути только чтение поля
+//! потока (ревью t157 Б1). Замер частей — только при reuse.
 //! Замер (решение 312, log.quote_timing): этап «в т.ч. классика: допуск пулов», счётчики допусков и попаданий.
 //! Кто вызывает: quote/select.rs (usable).
 //! От чего зависит: quote/select.rs (usable_with), quote/cpu_local.rs, gateway/calc_share.rs, gateway/exit_scope.rs,
 //! quote/quote_timing.rs.
-//! Настройки: dex.quote_reuse [bsc_dex] (необязательная; читает ядро один раз на подбор).
+//! Настройки: нет своих (поколение настроек — settings/store.rs generation).
 
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -34,8 +35,16 @@ use super::cpu_local;
 use super::quote_timing::{self, Count, Stage};
 use super::select::{self, Usable};
 
-/// Допуск одного пула: на чём посчитан (поколение, достоверен, спит) и итог.
-type Slot = (u64, bool, bool, Result<Usable, String>);
+/// Допуск одного пула: на чём посчитан и итог.
+struct Slot {
+    /// Поколение состояния пула, достоверность, «спит» — как у записи реестра при допуске.
+    state_gen: u64,
+    valid: bool,
+    asleep: bool,
+    /// Решение 363: поколение настроек, прочитанное ДО допуска (смена во время допуска — тоже заново).
+    settings_gen: u64,
+    out: Result<Usable, String>,
+}
 
 /// Ключ допуска: пул и всё, от чего допуск зависит кроме пула (см. шапку) — без сборки строки (ревью t157 Б1).
 #[derive(PartialEq, Eq, Hash)]
@@ -97,20 +106,34 @@ fn admit(
         frozen_head: q.frozen_head,
         exit: crate::gateway::exit_scope::is_exit(),
     };
+    // Решение 363: поколение настроек — до допуска (запись помнит то, на чём допуск посчитан).
+    let settings_gen = q.ctx.settings.generation();
     let hit = a
         .map
         .read()
         .unwrap_or_else(|p| p.into_inner())
         .get(&key)
-        .filter(|s| s.0 == e.state_gen && s.1 == e.valid && s.2 == e.asleep)
-        .map(|s| s.3.clone());
+        .filter(|s| {
+            s.state_gen == e.state_gen
+                && s.valid == e.valid
+                && s.asleep == e.asleep
+                && s.settings_gen == settings_gen
+        })
+        .map(|s| s.out.clone());
     if let Some(h) = hit {
         return (h, true);
     }
     let out = select::usable_with(q, e, side, usdt_dec, None);
+    let slot = Slot {
+        state_gen: e.state_gen,
+        valid: e.valid,
+        asleep: e.asleep,
+        settings_gen,
+        out: out.clone(),
+    };
     a.map
         .write()
         .unwrap_or_else(|p| p.into_inner())
-        .insert(key, (e.state_gen, e.valid, e.asleep, out.clone()));
+        .insert(key, slot);
     (out, false)
 }

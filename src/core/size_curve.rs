@@ -14,7 +14,7 @@
 //! потоки счёта адаптера, ожидание — общее); size.parallel_points и size.bisect_probes — в Params (size_par.rs).
 //! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (общие; значений нет —
 //! не задана хоть одна — подбора нет, сделки нет); size.parallel_points, size.bisect_probes (необязательные, решение 336);
-//! dex.quote_reuse [площадка направления] — признак короба с повторным использованием (решение 336, один раз на подбор).
+//! короб с повторным использованием (решение 336) — у направления с DEX всегда (решение 363, в логику: была dex.quote_reuse).
 
 use async_trait::async_trait;
 use futures_util::future::join_all;
@@ -151,21 +151,11 @@ pub fn params(
         .and_then(|f| f.decided.as_deref())
         .map_or(&core.inner.deps.settings, |x| &x.settings);
     let mut p = search_params(s, step, budget, price, buy_breaks, sell_breaks)?;
-    p.reuse = reuse_on(s, d);
+    // Решения 336, 363 (в логику): повторное использование в подборе — у направления с DEX (сторона без правил пары
+    // биржи, dirctx_venue.rs pair_rules: None — не биржа). Биржа ↔ биржа — короба ради reuse нет (DEX нет, ревью t157
+    // Б1); цикл DEX ↔ DEX строит свои Params без reuse (cycle_plan.rs).
+    p.reuse = cx.pair_a.is_none() || cx.pair_b.is_none();
     Ok(p)
-}
-
-/// Что делает: решение 336 — повторное использование в подборе: dex.quote_reuse = да на одной из площадок направления
-/// (настройка области «площадка», у DEX). Читается один раз на подбор, адаптер её на горячем пути не читает (ревью t157
-/// Б1). Принимает: настройки, направление. Возвращает: да/нет (не задана — нет). Ошибок нет.
-fn reuse_on(s: &Store, d: &crate::core::types::Direction) -> bool {
-    [&d.buy_on, &d.sell_on].iter().any(|v| {
-        let at = At {
-            venue: Some(&v.0),
-            coin: None,
-        };
-        s.flag("dex.quote_reuse", at).unwrap_or(false)
-    })
 }
 
 /// Что делает: параметры поиска при известных шаге количества и изломах (решение 218: общий кусок params и пересчёта

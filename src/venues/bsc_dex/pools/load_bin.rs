@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/pools/load_bin.rs
 //! Что делает: чтение состояния пула Infinity Bin на заданном блоке: slot0 (активный бин, комиссии) и резервы
 //! непустых бинов в обе стороны от активного, пока стоимость прочитанных бинов в каждой стороне не достигнет
-//! dex.bin_depth_usd (или бины не кончатся). Плюс перечитывание отдельных бинов после событий.
+//! dex.bin_depth_usd (или бины не кончатся). Плюс отдельные бины (bin, many — бины событий читает settle_read.rs вместе
+//! с активным бином, решение 357).
 //! Кто вызывает: pools/load.rs, pools/events_bin.rs.
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_v4.rs, bins.rs, math/bin_price.rs, tokens.rs, num.rs.
 //! Настройки: dex.bin_depth_usd [bsc_dex].
@@ -12,6 +13,11 @@
 //! swapForY = false → findFirstLeft — строго выше, нет — 0 (src/pool-bin/libraries/BinPool.sol#L293-L297,
 //! src/pool-bin/libraries/math/TreeMath.sol#L83-L215). Комментарий в IBinPoolManager.sol#L161-L166 говорит обратное.
 //! Стоимость бина в USDT: X = currency0, Y = currency1, цена 128.128 = Y за 1 X (PriceHelper).
+//! Ревью 332 (Н7): обход полосы не держит сессию пачки вдвое-вчетверо дольше нужного — стороны вниз и вверх читаются
+//! одновременно (side), а на каждом шаге стороны getBin(бин) и getNextNonEmptyBin(от этого бина) уходят вместе (оба
+//! зависят только от id бина): один круг к узлу на бин вместо двух подряд. Итог тот же, что у последовательного обхода
+//! (те же вызовы на том же блоке); лишний вызов — один getNextNonEmptyBin на сторону, где обход остановился по
+//! dex.bin_depth_usd. Края «дальше бинов нет» — bins.rs (NONE_BELOW / NONE_ABOVE, Н6).
 
 use std::collections::BTreeMap;
 
@@ -27,12 +33,7 @@ use super::super::math::bin_price::{SCALE_OFFSET, price_from_id};
 use super::super::node::call;
 use super::super::num;
 use super::abi_v4::IInfinityBin;
-use super::bins::BinMap;
-
-/// Конец поиска вниз (findFirstRight): type(uint24).max.
-const NONE_BELOW: u32 = 0xff_ffff;
-/// Конец поиска вверх (findFirstLeft): 0.
-const NONE_ABOVE: u32 = 0;
+use super::bins::{BinMap, NONE_ABOVE, NONE_BELOW};
 
 /// Что нужно для оценки стоимости бина в USDT.
 pub struct Depth {
@@ -56,45 +57,28 @@ pub async fn load(
     let limit = ctx.dec("dex.bin_depth_usd")?;
     let s = call::view(ctx, manager, &IInfinityBin::getSlot0Call { id }, tag).await?;
     let active: u32 = s.activeId.to();
-    let mut reserves = BTreeMap::new();
-    let (x, y) = bin(ctx, manager, id, active, tag).await?;
+    let at = Walk {
+        ctx,
+        manager,
+        id,
+        step,
+        depth,
+        limit,
+        tag,
+    };
+    // Ревью 332 (Н7): активный бин и обе стороны — одновременно.
+    let ((x, y), (below, low), (above, high)) = futures_util::future::try_join3(
+        bin(ctx, manager, id, active, tag),
+        side(&at, active, true),
+        side(&at, active, false),
+    )
+    .await?;
+    let mut reserves: BTreeMap<u32, (u128, u128)> = below.into_iter().chain(above).collect();
     if x != 0 || y != 0 {
         reserves.insert(active, (x, y));
     }
-    let mut range = (active, active);
-    for down in [true, false] {
-        let mut cur = active;
-        let mut value = Decimal::ZERO;
-        loop {
-            let c = IInfinityBin::getNextNonEmptyBinCall {
-                id,
-                swapForY: down,
-                binId: U24::from(cur),
-            };
-            let next: u32 = call::view(ctx, manager, &c, tag).await?.to();
-            if (down && next == NONE_BELOW) || (!down && next == NONE_ABOVE) {
-                // Дальше бинов нет: вся сторона известна (пустая).
-                if down {
-                    range.0 = 0
-                } else {
-                    range.1 = NONE_BELOW
-                }
-                break;
-            }
-            let (x, y) = bin(ctx, manager, id, next, tag).await?;
-            reserves.insert(next, (x, y));
-            if down {
-                range.0 = next
-            } else {
-                range.1 = next
-            }
-            value += usdt_value(ctx, x, y, next, step, depth)?;
-            if value >= limit {
-                break;
-            }
-            cur = next;
-        }
-    }
+    // Сторона до конца пула — край NONE_ABOVE внизу / NONE_BELOW вверху (bins.rs); иначе — последний прочитанный бин.
+    let range = (low.unwrap_or(NONE_ABOVE), high.unwrap_or(NONE_BELOW));
     let state = PoolState::Bin {
         active_id: active,
         protocol_fee: s.protocolFee.to(),
@@ -108,6 +92,57 @@ pub async fn load(
             range,
         },
     ))
+}
+
+/// Сторона полосы: прочитанные бины (id, (X, Y)) и край (None — сторона до конца пула).
+type Side = (Vec<(u32, (u128, u128))>, Option<u32>);
+
+/// Что нужно обходу стороны полосы (см. load).
+struct Walk<'a> {
+    ctx: &'a Ctx,
+    manager: alloy_primitives::Address,
+    id: B256,
+    step: u32,
+    depth: &'a Depth,
+    limit: Decimal,
+    tag: &'a str,
+}
+
+/// Следующий непустой бин строго ниже (down) / выше от `from` (getNextNonEmptyBin). Ошибки: узел, ответ не по ABI.
+async fn next_bin(w: &Walk<'_>, from: u32, down: bool) -> GatewayResult<u32> {
+    let c = IInfinityBin::getNextNonEmptyBinCall {
+        id: w.id,
+        swapForY: down,
+        binId: U24::from(from),
+    };
+    Ok(call::view(w.ctx, w.manager, &c, w.tag).await?.to())
+}
+
+/// Одна сторона полосы от активного бина: непустые бины по порядку, пока их стоимость не достигнет dex.bin_depth_usd
+/// (или бины не кончатся). Принимает: обход, активный бин, сторону (true — вниз). Возвращает: (бины с резервами,
+/// край: Some — последний прочитанный бин, остановка по стоимости; None — дальше бинов нет, сторона до конца пула).
+/// Ошибки: узел, ответ не по ABI, стоимость бина не считается (usdt_value).
+async fn side(w: &Walk<'_>, active: u32, down: bool) -> GatewayResult<Side> {
+    let mut out = Vec::new();
+    let mut value = Decimal::ZERO;
+    let mut next = next_bin(w, active, down).await?;
+    loop {
+        if (down && next == NONE_BELOW) || (!down && next == NONE_ABOVE) {
+            return Ok((out, None));
+        }
+        // Н7: резервы бина и следующий непустой за ним — одним кругом (оба зависят только от id).
+        let (b, after) = futures_util::future::try_join(
+            bin(w.ctx, w.manager, w.id, next, w.tag),
+            next_bin(w, next, down),
+        )
+        .await?;
+        out.push((next, b));
+        value += usdt_value(w.ctx, b.0, b.1, next, w.step, w.depth)?;
+        if value >= w.limit {
+            return Ok((out, Some(next)));
+        }
+        next = after;
+    }
 }
 
 /// Резервы одного бина. Ошибки: узел, ответ не по ABI.
@@ -129,6 +164,32 @@ pub async fn bin(
     )
     .await?;
     Ok((r.binReserveX, r.binReserveY))
+}
+
+/// Решение 325: резервы нескольких бинов одной пачкой (node/call.rs view_many: один eth_call к Multicall3 при
+/// dex.multicall3, иначе пачка JSON-RPC одним HTTP-запросом) — тот же getBin и тот же разбор, что у bin.
+/// Принимает: менеджер, PoolId, номера бинов, блок. Возвращает: (бин, резерв X, резерв Y) по порядку.
+/// Ошибки: узел, ответ не по ABI (любая ошибка любого бина — ошибка целиком, как у view_many).
+pub async fn many(
+    ctx: &Ctx,
+    manager: alloy_primitives::Address,
+    id: B256,
+    bins: &[u32],
+    tag: &str,
+) -> GatewayResult<Vec<(u32, u128, u128)>> {
+    let calls: Vec<_> = bins
+        .iter()
+        .map(|b| IInfinityBin::getBinCall {
+            id,
+            binId: U24::from(*b),
+        })
+        .collect();
+    let got = call::view_many(ctx, manager, &calls, tag).await?;
+    Ok(bins
+        .iter()
+        .zip(got)
+        .map(|(b, r)| (*b, r.binReserveX, r.binReserveY))
+        .collect())
 }
 
 /// Стоимость бина в USDT: резерв USDT + резерв монеты по цене бина.

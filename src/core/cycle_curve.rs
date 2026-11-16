@@ -6,6 +6,10 @@
 //! решения 85 — у адаптера). Приход на B не нужен (перевода нет) — arrive = вход.
 //! Отказ адаптера: NoRoute (шаг не исполним целиком — объём велик) → TooLarge (меньший объём может подойти);
 //! прочее → Stop (расчёт невозможен).
+//! Решение 336: batch — пачка входов одновременно (size.parallel_points).
+//! Решение 344 (ревью t159 Н7): breaks — изломы ПЕРВОГО пула цикла (вход пула = вход цикла: перевод точный; контракт
+//! quote_breaks, продажа базовой). Изломы следующих пулов по входу цикла — через обратный пересчёт выходов предыдущих
+//! шагов (точным выходом), не сделано (docs/TASKS.md).
 //! Кто вызывает: core/cycle_plan.rs.
 //! От чего зависит: core/size.rs (Curve, Point, Fail), gateway (Venue), core/types (DexCycle, CycleQuote).
 //! Настройки: нет.
@@ -13,9 +17,12 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures_util::future::join_all;
 use rust_decimal::Decimal;
 
-use crate::core::types::{CycleQuote, DexCycle};
+use crate::core::types::{
+    Asset, CycleQuote, DexCycle, DexRoute, RouteHop, RouteLeg, RouteMode, Side,
+};
 use crate::gateway::contract::Venue;
 use crate::gateway::errors::ErrorCode;
 
@@ -33,6 +40,57 @@ impl Curve for CycleCurve {
 
     /// Расчёт на вход qty базовой. Ошибки: TooLarge (шаг не исполним целиком), Stop (прочее).
     async fn at(&mut self, qty: Decimal) -> Result<Point<CycleQuote>, Fail> {
+        self.eval(qty).await
+    }
+
+    /// Решение 336: пачка входов одновременно (точки независимы; при параллельных точках адаптер считает цикл в потоке
+    /// счёта — gateway/calc_share.rs par). Ошибки: у каждой — как at.
+    async fn batch(&mut self, qtys: Vec<Decimal>) -> Vec<Result<Point<CycleQuote>, Fail>> {
+        let me = &*self;
+        join_all(qtys.into_iter().map(|q| me.eval(q))).await
+    }
+
+    /// Решение 344 (ревью t159 Н7): изломы первого пула цикла по входу (см. шапку) — объёмы «покупки» (вход цикла).
+    /// Ошибок нет: сбой — пусто.
+    async fn breaks(
+        &mut self,
+        _data: &CycleQuote,
+        max_qty: Decimal,
+        limit: u32,
+    ) -> (Vec<Decimal>, Vec<Decimal>) {
+        let Some(h) = self.cycle.hops.first() else {
+            return (Vec::new(), Vec::new());
+        };
+        let route = DexRoute {
+            mode: RouteMode::Direct,
+            legs: vec![RouteLeg {
+                share: Decimal::ONE,
+                hops: vec![RouteHop {
+                    family: h.family.clone(),
+                    kind: h.kind,
+                    pool: h.pool.clone(),
+                }],
+                expected_out: Decimal::ZERO,
+            }],
+            block: self.cycle.block,
+            gas_units: 0,
+            executable: true,
+            exec_note: None,
+        };
+        let base = Asset {
+            ticker: self.cycle.base_ticker.clone(),
+            bsc_contract: Some(self.cycle.base),
+        };
+        let r = self
+            .venue
+            .quote_breaks(&base, Side::Sell, &route, max_qty, limit);
+        (r.await.unwrap_or_default(), Vec::new())
+    }
+}
+
+impl CycleCurve {
+    /// Расчёт одного входа (общий для at и batch). Ошибки: как at.
+    async fn eval(&self, qty: Decimal) -> Result<Point<CycleQuote>, Fail> {
         match self.venue.dex_cycle_quote(&self.cycle, qty, false).await {
             Ok(c) => Ok(Point {
                 qty,

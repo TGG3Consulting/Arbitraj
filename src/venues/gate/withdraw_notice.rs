@@ -5,6 +5,7 @@
 //! «Уведомления»). Один раз на вывод: статус опрашивается многократно, повторов в Telegram нет.
 //! Кто вызывает: transfers.rs (withdrawal_status), mod.rs (канал событий — с подпиской на рынок).
 //! От чего зависит: gateway/events.rs (MarketEvent::Notice), storage/journal.rs, ctx.rs, num.rs.
+//! Решение 333: событие ядру — gateway/core_out_must.rs (venue.info_events_max, log.events_lost_interval_s).
 //! Настройки: нет своих (включение события — notify.event.* с областью «событие», код — notify/catalog.rs).
 //!
 //! Официальная документация: API v4 → Wallet → «Retrieve withdrawal records» GET /wallet/withdrawals
@@ -17,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
+use crate::gateway::core_out_must::{Fed, MustOut};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
@@ -41,7 +43,7 @@ impl Notices {
 
     /// Что делает: вывод id в статусе FAIL — запись в журнал и событие, один раз на вывод.
     /// Принимает: окружение, ID вывода Gate, запись истории вывода. Ошибок нет: нет канала событий — только журнал
-    /// (с пометкой), полный канал — событие теряется, журнал остаётся.
+    /// (с пометкой); полный канал — решение 333 (ждёт места или потеря со счётом), пометка называет исход.
     pub async fn fail_pending(&self, ctx: &Ctx, id: &str, rec: &Value) {
         if !self
             .seen
@@ -53,18 +55,24 @@ impl Notices {
         }
         let text = fail_text(id, rec);
         let out = self.out.lock().unwrap_or_else(|p| p.into_inner()).clone();
-        let sent = out.is_some_and(|o| {
-            o.try_send(MarketEvent::Notice {
+        // Решение 333: через очередь «ждут места» шлюза — полный канал ядра не теряет событие молча.
+        let fed = out.map(|o| {
+            MustOut::new(o, &ctx.settings, &ctx.journal).send(MarketEvent::Notice {
                 venue: ctx.venue(),
                 code: FAIL_PENDING.to_string(),
                 text: text.clone(),
             })
-            .is_ok()
         });
-        let note = if sent {
-            ""
-        } else {
-            " (событие не отправлено: нет канала событий ядра — подписка на рынок Gate не запущена)"
+        let note = match fed {
+            Some(Fed::Sent) => "",
+            Some(Fed::Kept) => " (канал событий ядра полон — событие ждёт места)",
+            Some(Fed::Lost) => {
+                " (событие потеряно: канал событий ядра полон и очередь достигла venue.info_events_max; счёт в venue.core_events_lost)"
+            }
+            Some(Fed::Closed) => " (событие не отправлено: канал событий ядра закрыт)",
+            None => {
+                " (событие не отправлено: нет канала событий ядра — подписка на рынок Gate не запущена)"
+            }
         };
         let data = json!({ "withdraw_id": id, "record": rec });
         let _ = ctx

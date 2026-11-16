@@ -21,6 +21,9 @@
 //! сменился только курс встречного токена (поколения пулов X–USDT) или порог/гистерезис — пересчитывается только перевод
 //! в USDT (два to_usdt — своп через лучший пул X–USDT, смысл решения 73 тот же); пулы X–USDT — из подготовки (Prep::rate).
 //!
+//! Решение 336 (задача t157): карта слотов — RwLock: попадание по ключу — под общим чтением (раньше один Mutex на все
+//! пулы и все потоки счёта — каждый допуск пула каждой котировки шёл через него по одному); итог тот же.
+//!
 //! Решение 217: seeded — книга замороженного реестра (registry_frozen.rs); прошлый вердикт гистерезиса — копия на
 //! момент снимка (verdicts).
 //! Кто вызывает: quote/select.rs (deep_side), pools/listen_log.rs (emit — пересчёт на каждой смене состояния),
@@ -31,7 +34,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex, RwLock, Weak};
 
 use rust_decimal::Decimal;
 use tokio::sync::Notify;
@@ -76,7 +79,9 @@ pub(super) struct Slot {
 /// Глубина всех пулов площадки. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Book {
-    pub(super) m: Arc<Mutex<HashMap<PoolRef, Slot>>>,
+    /// Решение 336 (задача t157): RwLock — попадание по ключу (глубина из памяти) идёт под общим чтением, без очереди
+    /// всех потоков счёта на одном замке; пересчёт, журнал смен и сброс — под записью (lock).
+    pub(super) m: Arc<RwLock<HashMap<PoolRef, Slot>>>,
     wake: Arc<Mutex<Vec<Weak<Notify>>>>,
     /// Решение 217: книга замороженного реестра — прошлый вердикт гистерезиса, скопированный из живой книги в момент
     /// снимка (verdicts), без журнала и сигналов.
@@ -123,7 +128,7 @@ impl Book {
     /// блокировка, десятки поисков), а не чтение живой книги в момент фонового расчёта.
     /// Принимает: ссылки пулов снимка. Возвращает: вердикты пулов, у которых он уже был. Ошибок нет.
     pub fn verdicts<'a>(&self, refs: impl Iterator<Item = &'a PoolRef>) -> Verdicts {
-        let m = self.lock();
+        let m = self.read();
         refs.filter_map(|r| {
             m.get(r)
                 .map(|s| (r.clone(), (s.depth.deep_buy, s.depth.deep_sell)))
@@ -147,7 +152,7 @@ impl Book {
 
     /// Последняя посчитанная глубина пула (без пересчёта). Ошибок нет.
     pub fn last(&self, r: &PoolRef) -> Option<Depth> {
-        self.lock().get(r).map(|s| s.depth.clone())
+        self.read().get(r).map(|s| s.depth.clone())
     }
 
     /// Глубина пула на его текущем состоянии (см. шапку). Принимает: окружение, реестр, токены, запись, знаки USDT.
@@ -215,7 +220,8 @@ impl Book {
             state_gen: e.state_gen,
             band: band_pct,
         };
-        let (prev, memo) = match self.lock().get(r) {
+        // Решение 336: поиск — под чтением (тот же поиск и копия, что раньше под Mutex).
+        let (prev, memo) = match self.read().get(r) {
             Some(s) if s.key == key => return Ok(s.depth.clone()),
             Some(s) => (
                 Some((s.depth.deep_buy, s.depth.deep_sell)),
@@ -305,8 +311,14 @@ impl Book {
         }
     }
 
-    pub(super) fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<PoolRef, Slot>> {
-        self.m.lock().unwrap_or_else(|p| p.into_inner())
+    /// Запись (пересчёт, журнал смен, сброс ключей). Ошибок нет.
+    pub(super) fn lock(&self) -> std::sync::RwLockWriteGuard<'_, HashMap<PoolRef, Slot>> {
+        self.m.write().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Решение 336: чтение (попадание по ключу, последняя глубина, вердикты). Ошибок нет.
+    fn read(&self) -> std::sync::RwLockReadGuard<'_, HashMap<PoolRef, Slot>> {
+        self.m.read().unwrap_or_else(|p| p.into_inner())
     }
 }
 
@@ -317,6 +329,10 @@ pub fn label(r: &PoolRef) -> String {
         PoolRef::Singleton { id, .. } => id.to_string(),
         PoolRef::Member { contract, coin } => format!("{contract}/{coin}"),
         // Решение 295: пара многомонетного пула — контракт и пара.
-        PoolRef::Multi { contract, token0, token1 } => format!("{contract}/{token0}/{token1}"),
+        PoolRef::Multi {
+            contract,
+            token0,
+            token1,
+        } => format!("{contract}/{token0}/{token1}"),
     }
 }

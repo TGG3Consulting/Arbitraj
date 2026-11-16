@@ -8,10 +8,16 @@
 //! границы сделки ядра (req.worst_price, решение 121 B4) или скачок цены больше грубого предохранителя
 //! verify.max_price_drift_pct (в любую сторону). Порог прибыли — ядро (precheck/profit).
 //! Reject → ордер не формируем (стартовое правило Тиграна) — врезку за правилом шлюза делает exec/verify_gate.rs (80.6b).
+//! Решение 331: «одним батчем» верно только для V2/V3/CL/V4 (ступени Multicall3); пулы видов «по одному» (Algebra,
+//! Slipstream, Bin, LB, DODO, стейблсвапы, WooFi и др., load_batch::one_by_one) читались друг за другом, и ступени
+//! ждали их. При verify.read_parallel_max они читаются одновременно (не больше столько сразу) и одновременно со
+//! ступенями — тот же блок, тот же итог (pools/load_batch_par.rs); не задана — как раньше.
 //! Кто вызывает: exec/verify_gate.rs (предторговый путь DEX, графовый маршрут); тесты.
-//! От чего зависит: pools/load_batch.rs, pools/load.rs, pools/registry.rs, quote/verify_decide.rs, quote/via.rs,
+//! От чего зависит: pools/load_batch.rs, pools/load_batch_par.rs, pools/load.rs, pools/registry.rs,
+//! quote/verify_decide.rs, quote/via.rs,
 //! quote/steps.rs, node/heads.rs, tokens.rs.
-//! Настройки: verify.max_staleness_blocks, verify.max_price_drift_pct, verify.timeout_ms, exec.dex_slippage_pct [bsc_dex].
+//! Настройки: verify.max_staleness_blocks, verify.max_price_drift_pct, verify.timeout_ms, exec.dex_slippage_pct,
+//! verify.read_parallel_max (решение 331, необязательная) [bsc_dex].
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -23,10 +29,14 @@ use crate::core::types::{PoolRef, Quote};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::pools::load;
-use super::super::pools::load_batch::{self, Want};
+use super::super::pools::load_batch::Want;
+use super::super::pools::load_batch_par;
 use super::super::pools::registry::Entry;
 use super::steps::Names;
 use super::via::Via;
+
+/// Настройка предела одновременных чтений пулов маршрута (решение 331); её же читает quote/cycle_legs.rs.
+pub const PAR: &str = "verify.read_parallel_max";
 
 // Пересчёт и вердикт по дрейфу (чистая часть) — отдельный файл, та же фича verify (решение 83).
 pub use super::verify_decide::{Bounds, decide};
@@ -116,8 +126,10 @@ pub async fn run(
             token1: e.pool.token1,
         })
         .collect();
-    // Один целевой Multicall3-батч по пулам маршрута на свежем блоке (решение 83), с таймаутом.
-    let fetch = load_batch::states(ctx, &v.q.tokens, &v.q.reg, &wants, block);
+    // Пулы маршрута на свежем блоке (решение 83), с таймаутом: V2/V3/CL/V4 — ступенями Multicall3; виды «по одному» —
+    // по очереди (не задана verify.read_parallel_max) или одновременно с пределом (решение 331, load_batch_par.rs).
+    let par = load_batch_par::limit(ctx, PAR);
+    let fetch = load_batch_par::states_with(ctx, &v.q.tokens, &v.q.reg, &wants, block, par);
     let loaded = match tokio::time::timeout(Duration::from_millis(timeout_ms), fetch).await {
         Ok(v) => v,
         Err(_) => {

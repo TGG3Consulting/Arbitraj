@@ -32,7 +32,7 @@ use crate::settings::venue_dir::VenueDir;
 use super::vol::Volatility;
 
 /// Необязательное значение: не задано — None; иное (неверный вид) — ошибка с текстом.
-fn opt<T>(r: Result<T, GatewayError>) -> Result<Option<T>, String> {
+pub(super) fn opt<T>(r: Result<T, GatewayError>) -> Result<Option<T>, String> {
     match r {
         Ok(v) => Ok(Some(v)),
         Err(e) if e.code == ErrorCode::NotConfigured => Ok(None),
@@ -41,7 +41,7 @@ fn opt<T>(r: Result<T, GatewayError>) -> Result<Option<T>, String> {
 }
 
 /// Область «площадка B» (продажа, получатель перевода). Принимает: направление. Ошибок нет.
-fn at_b(d: &Direction) -> At<'_> {
+pub(super) fn at_b(d: &Direction) -> At<'_> {
     At {
         venue: Some(&d.sell_on.0),
         coin: None,

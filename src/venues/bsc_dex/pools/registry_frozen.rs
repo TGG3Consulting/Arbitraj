@@ -91,6 +91,11 @@ impl Registry {
             gens: Arc::new(AtomicU64::new(
                 snap.entries.iter().map(|e| e.state_gen).max().unwrap_or(0),
             )),
+            // Решение 339: у снимка отметок неудач нет (только для живого реестра, pool_fail.rs).
+            fails: Default::default(),
+            unread: Default::default(),
+            // Решение 357: у снимка отметок «в обновлении» нет.
+            holds: Default::default(),
         }
     }
 }

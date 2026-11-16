@@ -15,6 +15,8 @@
 //! Все запросы к узлу — в общем темпе node/pace.rs (bsc.node_http_rps): проход идёт ровно, а не залпом.
 //! Кто вызывает: pools/market.rs (запуск при подписке).
 //! От чего зависит: check/tax_pass.rs, check/taxes.rs, check/recheck.rs, check/tax_wallet.rs, pools/listen.rs (Pools), pools/progress.rs.
+//! Решение 333 (ревью Б2): «не проверена» в начале цикла — gateway/core_out_must.rs send_in_task (ждёт места, решение 362):
+//! тем же путём этой же задачи, что и итоги проверки монеты, — итог не приходит ядру раньше «не проверена».
 //! Настройки: tax.recheck_interval_s, tax.retry_s (вся система), check.probe_usdt [bsc_dex].
 
 use std::collections::{HashMap, HashSet};
@@ -23,6 +25,7 @@ use std::time::Duration;
 use alloy_primitives::Address;
 
 use crate::core::types::{Asset, CheckState, CoinCheck};
+use crate::gateway::core_out_must::MustOut;
 use crate::gateway::events::MarketEvent;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
@@ -62,7 +65,11 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             wait: Some("проверка ещё не начиналась: ждёт своих пулов".into()),
         };
         p.checks.set_coin(c.clone());
-        let _ = p.out.try_send(MarketEvent::CoinCheck(c));
+        // Решение 333, ревью Б2: «не проверена» — тем же путём, что итоги этой монеты (tax_pass.rs, taxes_util.rs —
+        // `send().await` этой же задачи): ждёт места здесь же (итог не обгонит её; решение 362 — всегда, не теряется).
+        MustOut::new(p.out.clone(), &p.ctx.settings, &p.ctx.journal)
+            .send_in_task(MarketEvent::CoinCheck(c))
+            .await;
     }
     let all: Vec<(Address, String)> = coins.into_iter().collect();
     let mut seen = HashSet::new();

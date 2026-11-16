@@ -1,7 +1,7 @@
 //! Файл: settings/catalog/mod.rs
 //! Что делает: полный список настроек системы — зеркало docs/SETTINGS.md. Значений нет.
 //! Список разбит по файлам: base.rs (базовые), trade.rs (налоги, крючки, возврат USDT, застрявшие монеты,
-//! ручной чёрный список), dex.rs (адаптер DEX и узел BSC), dex_fit.rs (DEX, решение 294), dex_graph.rs (DEX, решение 308), dex_event.rs (Система и DEX, решения 313–315), index.rs (справочник пулов от индексатора, решение 58),
+//! ручной чёрный список), dex.rs (адаптер DEX и узел BSC), dex_fit.rs (DEX, решение 294), dex_graph.rs (DEX, решение 308), dex_event.rs (Система и DEX, решения 313–315), dex_fail.rs (DEX, решение 339), dex_par.rs (DEX, решения 330–331), index.rs (справочник пулов от индексатора, решение 58),
 //! send.rs (отправка и каналы), signals.rs (сухой режим, карточка сигнала, эпизоды — решение 74), uncapped.rs (расчёт
 //! «без потолка» — решение 141), window.rs (окна —
 //! решение 125), gate.rs, okx.rs, binance.rs, bitget.rs и xt.rs (настройки только одной биржи).
@@ -9,7 +9,9 @@
 //! решение 125), gate.rs, okx.rs, kraken.rs и др. (настройки только одной биржи).
 //! решение 125), gate.rs, okx.rs, coinex.rs (настройки только Gate, только OKX, только CoinEx).
 //! решение 125), gate.rs, okx.rs, htx.rs и др. (настройки одной биржи).
-//! bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
+//! cpu.rs — счёт процессора (решения 336–338, задача t157). bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
+//! lost_events.rs — сообщения ядру и кандидаты не теряются молча (решения 333/334).
+//! write_path.rs — очередь уведомлений, очередь и пачки журнала, synchronous учёта ядра (решения 340, 341, 353).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
@@ -23,8 +25,11 @@ mod bingx;
 mod book_events;
 mod bitget;
 mod coinex;
+mod cpu;
 pub mod dex;
 mod dex_event;
+mod dex_fail;
+mod dex_par;
 mod dex_fit;
 mod dex_graph;
 mod feed_watch;
@@ -33,13 +38,16 @@ mod htx;
 mod index;
 mod kraken;
 mod kyber;
+mod lost_events;
 mod okx;
 mod phemex;
 mod send;
 mod signals;
+mod sizing;
 mod trade;
 mod uncapped;
 mod window;
+mod write_path;
 mod xt;
 
 use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueFor, VenueRole};
@@ -114,12 +122,16 @@ const DIR_ALL: &[DirKind] = &DirKind::ALL;
 /// Все части каталога. Порядок — как в docs/SETTINGS.md.
 static PARTS: &[&[SettingDef]] = &[
     base::BASE,
+    cpu::CPU,
+    sizing::SIZING,
     trade::TRADE,
     signals::SIGNALS,
     uncapped::UNCAPPED,
     window::WINDOW,
     feed_watch::FEED_WATCH,
     book_events::BOOK_EVENTS,
+    lost_events::LOST_EVENTS,
+    write_path::WRITE_PATH,
     bingx::BINGX,
     gate::GATE,
     bitget::BITGET,
@@ -134,6 +146,8 @@ static PARTS: &[&[SettingDef]] = &[
     dex_fit::DEX_FIT,
     dex_graph::DEX_GRAPH,
     dex_event::DEX_EVENT,
+    dex_fail::DEX_FAIL,
+    dex_par::DEX_PAR,
     index::INDEX,
     kyber::KYBER,
     send::SEND,

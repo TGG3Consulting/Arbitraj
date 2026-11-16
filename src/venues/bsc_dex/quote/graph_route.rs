@@ -16,11 +16,14 @@
 //! dex.quote_prep_once = нет — на каждый хоп, как до 311 А (не задана — одна на котировку, решение Тиграна 16.11).
 //! Решение 312: замер этапов (quote/quote_timing.rs stage) — только когда котировка меряется; иначе часов нет. Отдельные
 //! этапы — и подготовка глубины (Prep), и снимок путей для повтора (Snapshot).
+//! Решения 336 (п. 2б), 363: внутри подбора объёма набор путей, decimals и допуск хопов — один раз
+//! на подбор (quote/graph_reuse.rs, состояние пулов сверяется на каждой точке); отбор и сплит — на dex.quote_threads
+//! потоках (quote/route_best.rs, graph_split.rs). Не заданы — как раньше.
 //! Кто вызывает: quote/routing.rs за переключателем dex.router_mode (merge, quote; решение 271 — quote и при NoRoute
 //! классики); exec/trade.rs, exec/executor/mod.rs, exec/dry_build.rs (graph_form — реэкспорт из graph_exec.rs); тесты.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs (и decimals), quote/graph_split.rs, quote/abandon.rs (решение 301: брошенный расчёт — до отбора и сплита выход, без записи журнала),
 //! quote/graph_exec.rs, quote/route_best.rs, quote/route_gas.rs, quote/costs.rs, quote/select.rs, quote/via.rs (Via), quote/steps.rs, tokens.rs.
-//! Настройки: dex.quote_prep_once (решение 311 А, через graph_legs::prep_once), dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,
+//! Настройки: dex.quote_threads (решение 336), dex.quote_prep_once (решение 311 А, через graph_legs::prep_once), dex.route_max_hops, dex.route_max_paths, dex.route_search_max_paths, dex.route_max_pools_per_edge, dex.route_gas_aware,
 //! dex.native_wrapped (газ в USDT при учёте газа), smart.split_step_pct, smart.max_splits, dex.intermediate_* [bsc_dex];
 //! через вызываемые — глубина (решение 73), допуск пула, channel.*, dex.bundle_max_routers.
 
@@ -35,7 +38,6 @@ use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
 use super::super::exec::{native, native_exec};
-use super::super::pools::depth_book::Book;
 use super::super::pools::graph_read;
 use super::graph_split::{self, Cand};
 use super::quote_timing::{self, Count, Stage, stage};
@@ -44,8 +46,8 @@ use super::route_paths::RoutePath;
 use super::steps::Names;
 use super::via::Via;
 use super::{
-    Quoting, abandon, costs, graph_exec, graph_fit, graph_legs, pick, route_best, route_cache,
-    route_paths,
+    Quoting, abandon, costs, graph_exec, graph_fit, graph_legs, graph_reuse, pick, route_best,
+    route_cache, route_paths,
 };
 
 pub use super::graph_exec::{GraphForm, graph_form};
@@ -97,24 +99,45 @@ pub async fn quote_fit(
     };
     // Решение 312: признак замера — один раз на котировку графа.
     let on = quote_timing::active();
-    let mut paths = stage(Stage::Paths, on, || {
-        route_cache::paths(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec, &search)
-    })?;
-    // Решение 62: нативную монету (BNB) не маршрутизируем через V4 / Infinity (CL, Bin) — путь не проверен живой
-    // записью; как в классике (quote/mod.rs фильтрует пулы по native::pool_ok). Для ненативных монет — без фильтра.
-    if native::is_native(ctx, asset) {
-        paths.retain(|p| native_ok_at(ctx, v.coin, p));
-    }
-    if paths.is_empty() {
-        return Err(ctx.err(
-            ErrorCode::NoRoute,
-            format!("{}: граф не нашёл путей USDT ↔ монета", asset.ticker),
-        ));
-    }
-    let t = quote_timing::now_if(on);
-    let dec = graph_legs::decimals(v, &paths).await;
-    quote_timing::add(Stage::Decimals, t);
-    let dec = dec?;
+    // Решения 336 (п. 2б), 363: внутри подбора объёма набор путей, decimals и допуск хопов — из короба подбора
+    // (quote/graph_reuse.rs; состояние пулов сверяется на каждой точке, настройки сменились — всё заново). Короба нет —
+    // как раньше.
+    let native = native::is_native(ctx, asset);
+    let reuse = graph_reuse::slot(v, &search, native);
+    let cached = reuse
+        .as_ref()
+        .and_then(|(s, k)| s.get(k))
+        .filter(|a| a.fresh_settings(ctx.settings.generation()));
+    let admitted = match cached {
+        Some(a) => graph_reuse::refresh(v, &a, on),
+        None => {
+            let mut paths = stage(Stage::Paths, on, || {
+                route_cache::paths(ctx, &v.q.reg, &v.q.tokens, v.usdt_dec, &search)
+            })?;
+            // Решение 62: нативную монету (BNB) не маршрутизируем через V4 / Infinity (CL, Bin) — путь не проверен
+            // живой записью; как в классике (quote/mod.rs фильтрует пулы по native::pool_ok). Для ненативных — без фильтра.
+            if native {
+                paths.retain(|p| native_ok_at(ctx, v.coin, p));
+            }
+            if paths.is_empty() {
+                return Err(ctx.err(
+                    ErrorCode::NoRoute,
+                    format!("{}: граф не нашёл путей USDT ↔ монета", asset.ticker),
+                ));
+            }
+            let t = quote_timing::now_if(on);
+            let dec = graph_legs::decimals(v, &paths).await;
+            quote_timing::add(Stage::Decimals, t);
+            let dec = dec?;
+            quote_timing::paths_in(on, &paths);
+            // Решение 311 (А, В): одна подготовка глубины на котировку, путь во владение — quote/graph_reuse.rs admit.
+            let (list, keep) = graph_reuse::admit(v, paths, dec, on, reuse.is_some());
+            if let (Some((s, k)), Some(a)) = (reuse, keep) {
+                s.put(k, a);
+            }
+            list
+        }
+    };
     // R1 (решение 122): газ пути в USDT для выбора — только при dex.route_gas_aware = да.
     let gas_aware = route_gas::enabled(ctx);
     let conv = if gas_aware {
@@ -124,36 +147,18 @@ pub async fn quote_fit(
     } else {
         None
     };
-    quote_timing::paths_in(on, &paths);
     let mut cands = Vec::new();
     let mut why = Vec::new();
-    {
-        // Решение 311 (А): одна подготовка глубины (настройки глубины, USDT, пулы «встречный — USDT») на все хопы всех
-        // путей котировки — раньше заново на каждый хоп (select.rs → depth_book.rs Book::depth). Не готова (настройка
-        // глубины не задана или неверна) — None: каждый хоп готовит сам и даёт ту же причину, что раньше.
-        // Подготовка (RefCell внутри) живёт только в этом блоке без await: в состояние future не попадает.
-        // Выключатель dex.quote_prep_once = нет (решение 311 А, Тигран 16.11) — общей подготовки нет (этап prep не
-        // замеряется), каждый хоп готовит сам, как до 311 А; не задана / да — одна на котировку.
-        let prep = if graph_legs::prep_once(ctx) {
-            stage(Stage::Prep, on, || Book::prep(ctx, &v.q.tokens).ok())
-        } else {
-            None
-        };
-        // Решение 311 (В): пути больше не нужны — отдаются во владение (запись пула в ногу без копии).
-        for p in paths {
-            let legs = stage(Stage::Legs, on, || {
-                graph_legs::legs_prep(v.q, p, v.side, v.usdt_dec, &dec, prep.as_ref())
-            });
-            match legs {
-                Ok(legs) => {
-                    let g = match &conv {
-                        Some(c) => stage(Stage::GasUsdt, on, || c.path(&legs))?,
-                        None => Decimal::ZERO,
-                    };
-                    cands.push(Cand::new(legs, g));
-                }
-                Err(w) => why.push(w),
+    for legs in admitted {
+        match legs {
+            Ok(legs) => {
+                let g = match &conv {
+                    Some(c) => stage(Stage::GasUsdt, on, || c.path(&legs))?,
+                    None => Decimal::ZERO,
+                };
+                cands.push(Cand::new(legs, g));
             }
+            Err(w) => why.push(w),
         }
     }
     quote_timing::count(Count::PathsOk, cands.len() as u64);

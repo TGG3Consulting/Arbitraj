@@ -12,10 +12,13 @@
 //! (notify/routes.rs NOT_GENERAL); события связи площадки склеиваются по площадке (notify/glue.rs).
 //! Решение 251, дополнение (Тигран 10.11): выключенное событие (notify.event.enabled = нет) — одной записью в журнал,
 //! если у места события своей записи нет (notify/journal_off.rs).
+//! Решение 340 (Тигран 16.11): send / send_with_buttons / send_tagged / later не ждут Telegram — задание уходит в
+//! очередь (notify/queue.rs, порядок постановки сохраняется), вызывающий сразу идёт дальше; отправка, журнал итога и
+//! повторы — как раньше, в фоновой задаче очереди. Карточка сделки — на момент постановки.
 //! От чего зависит: notify/client.rs, notify/catalog.rs, notify/callback.rs, notify/alert.rs, notify/tg_html.rs,
-//! notify/routes.rs, notify/glue.rs, notify/journal_off.rs,
+//! notify/routes.rs, notify/glue.rs, notify/journal_off.rs, notify/queue.rs, notify/alert_card.rs (Snap),
 //! settings, secrets, storage/journal.
-//! Настройки: notify.event.enabled / venues / condition (область «событие»), notify.telegram_*.
+//! Настройки: notify.event.enabled / venues / condition (область «событие»), notify.telegram_*, notify.queue_max.
 //!
 //! notify.event.condition пока не проверяется: формат условия утверждается на этапе 5.
 //! Если условие задано, событие НЕ отправляется, а в журнал пишется причина — чтобы не слать
@@ -64,11 +67,12 @@ impl Notifier {
     /// Принимает: код события из notify/catalog.rs, площадку (если есть), текст.
     /// Ошибок не возвращает: всё, что пошло не так, пишется в журнал.
     /// Решение 251 (г): события связи площадки (notify/glue.rs GLUED) склеиваются — одно сообщение на площадку за пачку.
+    /// Решение 340: не ждёт Telegram — задание в очередь (notify/queue.rs), возврат сразу.
     pub async fn send(&self, code: &str, venue: Option<&str>, text: &str) {
         if super::glue::glued(code) {
             return super::glue::push(self, code, venue, text);
         }
-        self.deliver(code, venue, text, None).await;
+        self.queued(code, venue, text, None);
     }
 
     /// Как send, но ответ 429 — одна повторная попытка ровно через parameters.retry_after (ResponseParameters,
@@ -93,7 +97,8 @@ impl Notifier {
         text: &str,
         object_id: &str,
     ) {
-        self.deliver(code, venue, text, Some(object_id)).await;
+        // Решение 340: не ждёт Telegram — очередь (notify/queue.rs).
+        self.queued(code, venue, text, Some(object_id));
     }
 
     /// Общая часть send и send_with_buttons: фильтры события, сборка клиента, отправка, журнал.

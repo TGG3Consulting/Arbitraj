@@ -35,12 +35,16 @@
 //! свободный баланс A прочитан предпроверкой перед расчётом (precheck_balance.rs) — здесь он повторно не читается и
 //! объём под остаток не подбирается: предел списания ордера — min(бюджет плана, свободно) по прочитанному; биржа A
 //! баланс не отдала — ордер уходит на посчитанный объём с пределом = бюджет (строка об этом — в хронологии).
+//! Решение 340: уведомления сделки (deal.buy_filled и др.) не ждутся — очередь notify/queue.rs; решения 341, 354:
+//! журнал и строки отказов предпроверки — очередь журнала (базу не ждут).
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, relay_here.rs, sell.rs, deal.rs, remeasure.rs
 //! (частичная покупка: продажа на A — пере-замер по порогу «итог ≥ 0», решение 247, дополнение 10.11, t78).
+//! Решение 338 (ревью t157 Н1): задача сделки — ярус счёта «сделка» (gateway/cpu_budget.rs scope).
 //! Настройки: через вызываемые модули.
 
 use crate::core::types::{Direction, Side};
+use crate::gateway::cpu_budget::{self, Tier};
 use crate::gateway::urgency::{self, Urgency};
 use crate::storage::journal::Level;
 
@@ -103,10 +107,15 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
     let handed = on.then(Instant::now);
     // Решение 266: включатели быстрой предпроверки — один раз на сделку (здесь); объём кандидата — Calc.qty.
     let fast = super::precheck_fast::read(&core.inner.deps.settings, &calc);
-    tokio::spawn(urgency::scope(Urgency::Trade, async move {
+    // Решение 338 (ревью t157 Н1): вся задача сделки (предпроверка, пересчёт, котировки) — ярус счёта «сделка».
+    let work = async move {
         run(&core, d.clone(), decided, (on, handed), fast).await;
         lk(&core.inner.active).remove(&key);
-    }));
+    };
+    tokio::spawn(urgency::scope(
+        Urgency::Trade,
+        cpu_budget::scope(Tier::Deal, work),
+    ));
     Start::Started
 }
 
@@ -187,6 +196,7 @@ async fn run(
     let key = format!("precheck|{}", super::candidates::reject_key(&d));
     let (acc, plan, slot) = match pre.await {
         Ok(x) => {
+            // Решения 341, 354: закрытие строки отказов — постановка в очередь журнала, покупка базу не ждёт.
             core.inner.last_reject.close(&deps.journal, &key).await;
             x
         }

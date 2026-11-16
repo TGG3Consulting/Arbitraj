@@ -60,7 +60,8 @@ pub async fn one(
     Ok(Json(row))
 }
 
-/// Кладёт в каждый пул строк `depth` и `depth_unavailable` (решение 73, шлюз `pool_depths` всех площадок реестра).
+/// Кладёт в каждый пул строк `depth` и `depth_unavailable` (решение 73, шлюз `pool_depths` всех площадок реестра);
+/// решение 339 — добавляет в строку монеты её пулы, ни разу не прочитанные площадкой (`depth.unread`, `unread: true`).
 /// Принимает: состояние, строки монет. Возвращает: ничего. Ошибок нет: сбой адаптера — в `depth_unavailable`.
 async fn with_depths<'a>(st: &AppState, rows: impl Iterator<Item = &'a mut serde_json::Value>) {
     let mut depths = std::collections::HashMap::new();
@@ -82,12 +83,63 @@ async fn with_depths<'a>(st: &AppState, rows: impl Iterator<Item = &'a mut serde
             }
         }
     }
-    for p in rows.filter_map(|c| c["pools"].as_array_mut()).flatten() {
-        let venue = p["venue"].to_string();
-        let key = (venue.clone(), p["pool"].to_string());
-        p["depth"] = serde_json::to_value(depths.get(&key)).unwrap_or_default();
-        p["depth_unavailable"] = serde_json::to_value(failed.get(&venue)).unwrap_or_default();
+    // Решение 339 (экран «Монеты»): пулы, ни разу не прочитанные площадкой (depth.unread), — ядро их не знает; они
+    // добавляются в строку своей монеты (по адресу контракта) отдельными пулами с «admission» (в котировки не идут).
+    let mut unread: std::collections::HashMap<String, Vec<serde_json::Value>> = Default::default();
+    for d in depths.values() {
+        if let Some(u) = &d.unread {
+            unread
+                .entry(json_key(&u.coin))
+                .or_default()
+                .push(unread_pool(d, u));
+        }
     }
+    for c in rows {
+        let coin = json_key(&c["asset"]["bsc_contract"]);
+        let Some(pools) = c["pools"].as_array_mut() else {
+            continue;
+        };
+        for p in pools.iter_mut() {
+            let venue = p["venue"].to_string();
+            let key = (venue.clone(), p["pool"].to_string());
+            p["depth"] = serde_json::to_value(depths.get(&key)).unwrap_or_default();
+            p["depth_unavailable"] = serde_json::to_value(failed.get(&venue)).unwrap_or_default();
+        }
+        // Пул ядра с той же ссылкой (прочитан раньше) — уже показан своей строкой.
+        let shown: std::collections::HashSet<String> =
+            pools.iter().map(|p| p["pool"].to_string()).collect();
+        let extra = unread.get(&coin).into_iter().flatten();
+        pools.extend(
+            extra
+                .filter(|p| !shown.contains(&p["pool"].to_string()))
+                .cloned(),
+        );
+    }
+}
+
+/// Пул, ни разу не прочитанный (решение 339), — строка `pools[]` экрана в формате пулов ядра: пара, вид и комиссия —
+/// из справочника площадки (`depth.unread`), состояния, блока и проверки нет, `admission` — почему в котировки не
+/// идёт, `unread: true`. Принимает: что знает адаптер, его поле unread. Ошибок нет.
+fn unread_pool(
+    d: &crate::core::types::PoolDepth,
+    u: &crate::core::types::UnreadPool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "venue": d.venue,
+        "pair": u.pair,
+        "family": u.family,
+        "kind": u.kind,
+        "pool": d.pool,
+        "fee_pips": u.fee_pips,
+        "hooks": null,
+        "check": null,
+        "admission": d.depth_error,
+        "block": null,
+        "received_at": null,
+        "unread": true,
+        "depth": d,
+        "depth_unavailable": null,
+    })
 }
 
 /// Ключ сопоставления «пул ядра ↔ пул адаптера»: JSON значения (тот же вид, что в ответе ядра). Ошибок нет.

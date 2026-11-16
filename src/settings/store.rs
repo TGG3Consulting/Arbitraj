@@ -6,6 +6,7 @@
 //! Настройки: хранит их все. Значений по умолчанию нет: не задано — значит не задано.
 //!
 //! Изменения выполняются строго по одному (writer): база, кэш и рассылка всегда в одном порядке.
+//! Решение 352: поколение значений (generation) растёт на каждое изменение после записи в кэш.
 //! Решение 239: копия значений на момент входа в сделку — settings/pinned.rs (кэш — Arc с копией при записи: снимок —
 //! без копирования всех значений, копия делается только при изменении настройки, пока снимок жив).
 //! Решение 242, дополнение: пара «площадка · тип направления» при записи проверяется по видам площадок шлюза
@@ -49,14 +50,18 @@ pub struct Store {
     pub(super) cache: Arc<RwLock<Arc<HashMap<Key, Value>>>>,
     /// Решение 239: копия на момент входа — только чтение (set отказывает).
     pub(super) pinned: bool,
-    changes: broadcast::Sender<Change>,
-    journal: Journal,
+    pub(super) changes: broadcast::Sender<Change>,
+    pub(super) journal: Journal,
     /// Изменения — строго по одному.
-    writer: Arc<Mutex<()>>,
+    pub(super) writer: Arc<Mutex<()>>,
     /// Кошельки DEX и маппинг «биржа → кошелёк» (решение 132, settings/accounts/) — свои таблицы и история.
     accounts: super::accounts::Accounts,
     /// Решение 211 (ревью В9): тикеры монет по адресу — запасное чтение области «монета» (coin_alias.rs).
     aliases: super::coin_alias::CoinAliases,
+    /// Решение 352: поколение значений — растёт на каждое изменение (set), после записи в кэш; снимки (pinned.rs)
+    /// делят счётчик с живым хранилищем. Ядро сравнивает поколение, чтобы знать «настройки не менялись». Растёт и на
+    /// отметку ядра (store_mark.rs mark_now, решение 355) — она тоже меняет значение.
+    pub(super) generation: Arc<std::sync::atomic::AtomicU64>,
     /// Решение 242, дополнение: виды площадок шлюза — проверка пары «площадка · тип направления» при записи
     /// (venue_kinds.rs; сообщает ядро при запуске).
     venue_kinds: super::venue_kinds::VenueKinds,
@@ -106,12 +111,24 @@ impl Store {
             accounts,
             aliases: Default::default(),
             venue_kinds: Default::default(),
+            generation: Default::default(),
         })
+    }
+
+    /// Решение 352: поколение значений настроек (растёт на каждое изменение). Ошибок нет.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::Acquire)
     }
 
     /// Кошельки DEX и маппинг (решение 132). Ошибок нет.
     pub fn accounts(&self) -> &super::accounts::Accounts {
         &self.accounts
+    }
+
+    /// Ревью 325: то же ли это хранилище (общая копия значений в памяти; снимок решения 239 — другое). Нужно ячейкам
+    /// настроек, привязанным к хранилищу (venues/bsc_dex/pools/event_flags.rs). Ошибок нет.
+    pub fn same(&self, other: &Store) -> bool {
+        Arc::ptr_eq(&self.cache, &other.cache)
     }
 
     /// Значение ровно в этой области (без подстановки из общей).
@@ -253,15 +270,37 @@ impl Store {
                 tx.commit()
             })
             .await?;
-        {
+        let applied = {
             let mut guard = self.cache.write().unwrap_or_else(|p| p.into_inner());
-            // Решение 239: снимки (pinned.rs) держат прежний Arc — копия значений только если снимок жив.
-            let cache = Arc::make_mut(&mut *guard);
             let key = (name.to_string(), scope.clone());
-            match &new {
-                Some(v) => cache.insert(key, v.clone()),
-                None => cache.remove(&key),
-            };
+            // Решение 355: пока шла запись в базу, отметка ядра (store_mark.rs) могла поменять значение в памяти —
+            // она сильнее: значение в памяти не трогаем, отметка сама запишется в базу поверх этого изменения.
+            if guard.get(&key) == old.as_ref() {
+                // Решение 239: снимки (pinned.rs) держат прежний Arc — копия значений только если снимок жив.
+                let cache = Arc::make_mut(&mut *guard);
+                match &new {
+                    Some(v) => cache.insert(key, v.clone()),
+                    None => cache.remove(&key),
+                };
+                // Решение 352 (ревью t160 Н4): поколение растёт под замком записи кэша — вместе со значением.
+                self.generation
+                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                true
+            } else {
+                tracing::warn!(
+                    name,
+                    "настройка изменена в базе, но в памяти осталась отметка ядра (решение 355)"
+                );
+                false
+            }
+        };
+        // Ревью слияния (Н7): значение перебито отметкой ядра — в памяти его нет: журнал «изменено» и рассылку не
+        // делаем (интерфейс не увидит «изменено» на недействующее значение), вызывающему — понятная причина.
+        if !applied {
+            return Err(SetError::Invalid(format!(
+                "«{name}»: пока изменение записывалось, ядро поставило свою отметку этой настройки (решение 355) — \
+                 действует значение отметки, изменение не применено; повторите при необходимости"
+            )));
         }
         let change = Change {
             name: name.to_string(),

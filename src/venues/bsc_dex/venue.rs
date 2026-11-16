@@ -14,8 +14,9 @@ use rust_decimal::Decimal;
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Cost, DexAccountId, PoolDirectory, Quote, SendChannelInfo,
-    Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
+    Asset, Balance, CoinNetworkInfo, Cost, DexAccountId, DexRoute, PoolDirectory, Quote,
+    SendChannelInfo, Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue,
+    WithdrawRequest,
 };
 use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -37,6 +38,11 @@ impl Venue for BscDex {
     /// Вид площадки — DEX. Ошибок нет.
     fn kind(&self) -> VenueKind {
         VenueKind::Dex
+    }
+
+    /// Решение 352: эпоха котировки DEX (signal_epoch.rs). Ошибок нет.
+    fn signal_epoch(&self, asset: &Asset) -> Option<String> {
+        super::signal_epoch::of(&self.p, asset)
     }
 
     /// Решение 132: вид адаптера на кошелёк счёта — venue_account.rs. Ошибки: NotConfigured — нет кошелька.
@@ -116,6 +122,21 @@ impl Venue for BscDex {
         }
         let class = urgency::is_set().unwrap_or(Class::Quote);
         scope(class, self.p.quoting().fills(asset, side, qty)).await
+    }
+
+    /// Решение 344 (задача t159, ревью t159 Б4): изломы кривых пулов маршрута котировки по объёму монеты стороны —
+    /// quote/breaks.rs (только память реестра). Ошибки: NoRoute (нет адреса монеты), NotConfigured (тикер USDT), узел
+    /// (decimals).
+    async fn quote_breaks(
+        &self,
+        asset: &Asset,
+        side: Side,
+        route: &DexRoute,
+        max_qty: Decimal,
+        limit: u32,
+    ) -> GatewayResult<Vec<Decimal>> {
+        let q = self.p.quoting();
+        super::quote::breaks::breaks(&q, asset, side, route, max_qty, limit).await
     }
 
     /// Решение 217: снимок котировки на момент решения — `Arc` записей пулов, разрешения, блок (frozen.rs). Только
@@ -443,6 +464,21 @@ impl Venue for BscDex {
             self.p.ctx.bound()?;
         }
         let q = self.p.quoting();
+        // Решение 336: точки подбора объёма ядра считаются параллельно (gateway/calc_share.rs par) — расчёт цикла
+        // уходит в поток счёта (quote/cpu.rs), иначе одновременные точки шли бы одним рабочим потоком. Иначе — как раньше.
+        if crate::gateway::calc_share::current().is_some_and(|s| s.par()) {
+            let ctx = q.ctx.clone();
+            let cycle = cycle.clone();
+            let run = async move {
+                let legs = quote::cycle_legs::now(&q, &cycle).await?;
+                let r = quote::cycle_cost::rates(&q, cycle.base).await?;
+                quote::cycle_cost::quote(&q, &legs, cycle.base, input, (r, with_wallet)).await
+            };
+            return scope(Class::Quote, async {
+                quote::cpu::run(&ctx, Box::pin(run)).await
+            })
+            .await;
+        }
         let run = async {
             let legs = quote::cycle_legs::now(&q, cycle).await?;
             let r = quote::cycle_cost::rates(&q, cycle.base).await?;

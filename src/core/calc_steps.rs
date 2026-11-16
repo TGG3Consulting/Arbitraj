@@ -72,6 +72,8 @@ fn stage(r: &Row) -> String {
         super::size_search::POINTS,
         super::size_search::REFINE,
         super::size_memo::EVAL,
+        // Решение 336: пачка расчётов объёма (size.parallel_points > 1).
+        super::size_memo::EVAL_BATCH,
     ];
     let mut head = line(r);
     if let Some(e) = r.parts.iter().find(|p| p.name == super::size_memo::EVAL) {

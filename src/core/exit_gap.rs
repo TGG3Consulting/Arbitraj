@@ -11,6 +11,7 @@
 //! дала налог продажи, при котором модельный выход сходится с замером в пределах guard.exit_gap_pct, — отметка,
 //! заметка и налог по замеру снимаются сами (журнал и уведомление); или человек снимает отметку на экране «Монеты».
 //! Уже в ручном списке (человек или другое авто-правило) — отметка и заметка не меняются, только журнал и уведомление.
+//! Решение 355: закрытие монеты — отметкой ядра сразу в памяти настроек (core/coin_mark.rs), в базу — фоном.
 //! Кто вызывает: core/tick_slow.rs (Touched::ExitGap, Touched::CoinCheck).
 //! От чего зависит: blacklist.rs (ручная отметка, область монеты), engine.rs, deps.rs, settings.
 //! Настройки: guard.exit_gap_pct (вся система, необязательная; не задана — авто-закрытия нет, запись в журнал);
@@ -110,28 +111,15 @@ pub async fn on_gap(core: &Core, g: ExitGap) {
         g.model_tax_pct.round_dp(4).normalize(),
         seen.normalize()
     );
+    // Решение 355 (ревью t158 Б1): закрытие действует сразу — в памяти настроек (новый вход по монете уже видит
+    // отметку); в базу — своей задачей хранилища.
     let scope = super::blacklist::coin_scope(&g.asset);
-    let set = async {
-        let seen_v = Value::String(seen.normalize().to_string());
-        s.set(
-            "coin.exit_tax_seen_pct",
-            scope.clone(),
-            Some(seen_v),
-            AUTHOR,
-        )
-        .await?;
-        s.set(
-            "coin.blocked_note",
-            scope.clone(),
-            Some(Value::String(note.clone())),
-            AUTHOR,
-        )
-        .await?;
-        s.set("coin.blocked", scope, Some(Value::Bool(true)), AUTHOR)
-            .await
-    };
-    let text = match set.await {
-        Ok(_) => format!("{}: {note}", g.asset.ticker),
+    let seen_v = Value::String(seen.normalize().to_string());
+    let set = s
+        .mark_now("coin.exit_tax_seen_pct", scope, |_| Some(seen_v), AUTHOR)
+        .and_then(|_| super::coin_mark::block_now(s, &g.asset, &note, AUTHOR));
+    let text = match set {
+        Ok(()) => format!("{}: {note}", g.asset.ticker),
         Err(e) => format!(
             "{}: {note}; закрыть не удалось ({e}) — внесите вручную",
             g.asset.ticker

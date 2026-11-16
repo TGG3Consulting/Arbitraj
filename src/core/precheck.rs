@@ -503,7 +503,10 @@ async fn steps(
 /// Что делает: пересчёт живой сделки перед покупкой — всегда в режиме Live (решение 74): виртуального бюджета у сделки не
 /// бывает, даже если сухой режим включили сейчас. Принимает: ядро, направление. Возвращает: Verdict. Ошибок нет.
 pub async fn replan(core: &Core, d: &Direction) -> Verdict {
-    profit::decide(core, d, &super::dry::Mode::Live).await
+    // Решение 348: назначение «предпроверка» (замер «кто вызвал котировку»).
+    let work = profit::decide(core, d, &super::dry::Mode::Live);
+    crate::gateway::quote_purpose::scope(crate::gateway::quote_purpose::Purpose::Precheck, work)
+        .await
 }
 
 /// Что делает: тот же пересчёт (режим Live) с объёмом кандидата — решение 266 (precheck.fast_recalc = да): сначала один
@@ -516,5 +519,8 @@ pub async fn replan_sized(
     cap: Option<Decimal>,
     want: Option<&mut Want>,
 ) -> Verdict {
-    profit::decide_capped(core, d, &super::dry::Mode::Live, cap, want).await
+    // Решение 348: назначение «предпроверка» (замер «кто вызвал котировку»); решение 345 — без мягкого срока.
+    let work = profit::decide_capped(core, d, &super::dry::Mode::Live, cap, want, None);
+    crate::gateway::quote_purpose::scope(crate::gateway::quote_purpose::Purpose::Precheck, work)
+        .await
 }

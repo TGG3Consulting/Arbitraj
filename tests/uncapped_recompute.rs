@@ -138,6 +138,7 @@ fn cx(rec: &Rec, b: &str) -> DirCtx {
         k: d("1"),
         h: d("1"),
         closure_share: None,
+        sigma_check: None,
         return_per_trade: false,
         pair_a: Some(rec.pair.clone()),
         pair_b: Some(rec.pair.clone()),
@@ -216,6 +217,12 @@ fn params(rec: &Rec, a: &OrderBook, b: &OrderBook) -> Params {
         refine_steps: 30,
         tolerance_pct: d("0.1"),
         max_evals: 400,
+        par_points: 1,
+        bisect_probes: 1,
+        early_floor: None,
+        reuse: false,
+        par_blocked: false,
+        ext: Default::default(),
     }
 }
 

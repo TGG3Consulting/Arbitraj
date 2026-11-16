@@ -19,6 +19,7 @@ pub mod jsonrpc;
 pub mod log_filter;
 pub mod multicall;
 pub mod pace;
+pub mod prefetch;
 pub mod queue;
 pub mod receipts;
 pub mod receipts_budget;

@@ -10,8 +10,12 @@
 //! создают ячейки внутри рантайма).
 //! Хранение: AtomicU64, 0 — «не задана / не того вида», n + 1 — значение n (u64::MAX хранится как u64::MAX − 1 —
 //! насыщение; для секунд интервала и признака да/нет разницы нет).
-//! Кто вызывает: gateway/core_out_side.rs (venue.book_events_keep, dex.pool_events_keep, log.pool_events_lost_interval_s).
-//! От чего зависит: settings/store.rs (resolve, subscribe), tokio (задача, broadcast).
+//! Ревью 325 (Н1): watch_in — то же для ровно одной области (Store::get_exact; область «DEX» — настройки по одному DEX,
+//! например dex.event_refresh_batch / dex.event_refresh_fee_only, pools/event_flags.rs).
+//! Кто вызывает: gateway/core_out_side.rs (venue.book_events_keep, dex.pool_events_keep, log.pool_events_lost_interval_s);
+//! venues/bsc_dex/pools/event_flags.rs (watch_in).
+//! От чего зависит: settings/store.rs (resolve, get_exact, subscribe), settings/scope.rs (Scope), tokio (задача,
+//! broadcast).
 //! Настроек нет (имя настройки передаёт вызывающий).
 
 use std::sync::Arc;
@@ -20,6 +24,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::Value;
 use tokio::sync::broadcast::error::RecvError;
 
+use crate::settings::scope::Scope;
 use crate::settings::store::Store;
 
 /// Разбор значения настройки в число ячейки (None — не того вида: как «не задана»).
@@ -57,13 +62,32 @@ impl Cell {
     }
 }
 
+/// Где читается значение ячейки.
+enum At {
+    /// Store::resolve: площадка (если задана) сильнее всей системы.
+    Resolve(Option<String>),
+    /// Store::get_exact: ровно эта область (ревью 325 — область «DEX»).
+    Exact(Scope),
+}
+
 /// Ячейка настройки с перечитыванием по изменениям (см. шапку). Принимает: хранилище, имя, площадку области (None —
 /// только вся система), разбор. Возвращает: ячейку. Ошибок нет.
 pub fn watch(store: &Store, name: &'static str, venue: Option<String>, parse: Parse) -> Arc<Cell> {
+    start(store, name, At::Resolve(venue), parse)
+}
+
+/// Ревью 325: ячейка настройки ровно одной области (без подстановки других областей) с перечитыванием по изменениям.
+/// Принимает: хранилище, имя, область, разбор. Возвращает: ячейку. Ошибок нет.
+pub fn watch_in(store: &Store, name: &'static str, scope: Scope, parse: Parse) -> Arc<Cell> {
+    start(store, name, At::Exact(scope), parse)
+}
+
+/// Общее для watch / watch_in: подписка, первое чтение, задача перечитывания. Ошибок нет.
+fn start(store: &Store, name: &'static str, at: At, parse: Parse) -> Arc<Cell> {
     let cell = Arc::new(Cell::default());
     // Подписка — до чтения: изменение между чтением и подпиской не теряется.
     let mut rx = store.subscribe();
-    cell.put(read(store, name, venue.as_deref(), parse));
+    cell.put(read(store, name, &at, parse));
     let Ok(rt) = tokio::runtime::Handle::try_current() else {
         return cell;
     };
@@ -79,14 +103,18 @@ pub fn watch(store: &Store, name: &'static str, venue: Option<String>, parse: Pa
                 return;
             };
             if again {
-                cell.put(read(&store, name, venue.as_deref(), parse));
+                cell.put(read(&store, name, &at, parse));
             }
         }
     });
     cell
 }
 
-/// Действующее значение (Store::resolve: площадка сильнее всей системы), без текста ошибки. Ошибок нет.
-fn read(store: &Store, name: &str, venue: Option<&str>, parse: Parse) -> Option<u64> {
-    store.resolve(name, venue, None).as_ref().and_then(parse)
+/// Действующее значение (Resolve: площадка сильнее всей системы; Exact: ровно область), без текста ошибки. Ошибок нет.
+fn read(store: &Store, name: &str, at: &At, parse: Parse) -> Option<u64> {
+    let v = match at {
+        At::Resolve(venue) => store.resolve(name, venue.as_deref(), None),
+        At::Exact(scope) => store.get_exact(name, scope),
+    };
+    v.as_ref().and_then(parse)
 }

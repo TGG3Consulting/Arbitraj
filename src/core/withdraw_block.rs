@@ -19,6 +19,8 @@
 //! закрывает и алерта «проблема в аккаунте» не шлёт: площадка уже на паузе с алертом venue.withdraw_limit
 //! (core/withdraw_limit_pause.rs из rules_apply.rs). Алерт venue.account_problem уходит и в чат «Аккаунты»
 //! (notify.accounts_chat), если он задан (notify/routes.rs).
+//! Решение 355: закрытие входов — сразу в памяти настроек (Store::mark_now, список бирж — из текущего под замком),
+//! в базу — фоном; журнал и уведомление — очереди.
 //! Кто вызывает: core/executor.rs, core/relay.rs, core/manual_relay.rs (после отказа вывода), core/profit.rs (check).
 //! От чего зависит: withdraw_refused.rs (refusal), op_error.rs, trade_ops.rs (вид площадки), settings, deps.rs.
 //! Настройки: coin.entry_blocked_venues, coin.entry_blocked_note (по монете — по адресу, решение 211; пишет ядро,
@@ -84,52 +86,52 @@ pub async fn close(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &O
     ) {
         return account(core, deal, asset, from, e).await;
     }
-    let deps = &core.inner.deps;
-    let scope = super::blacklist::coin_scope(asset);
-    let coin = crate::settings::scope::coin_id(&asset.ticker, asset.bsc_contract.as_ref());
-    let at = At {
-        venue: None,
-        coin: Some(&coin),
-    };
-    let mut list = deps.settings.list(VENUES, at).unwrap_or_default();
-    if !list.contains(&from.0) {
-        list.push(from.0.clone());
-    }
     let note = format!(
         "Авто (решение 253): вывод {} с {} отклонён после повторов — {e} (сделка {deal})",
         asset.ticker, from.0
     );
+    // Решение 355 (ревью t158 Б1): входы закрываются сразу — в памяти настроек, до следующего шага сделки (новый вход
+    // и новый вывод с этой биржи уже видят отметку, withdraw_block::check); в базу — своей задачей хранилища. Список
+    // бирж считается из текущего под замком памяти настроек (Store::mark_now) — два отказа одновременно не теряют
+    // друг друга.
+    let deps = &core.inner.deps;
     let s = &deps.settings;
-    let vals: Vec<Value> = list.iter().cloned().map(Value::String).collect();
-    let set = async {
-        s.set(
+    let scope = super::blacklist::coin_scope(asset);
+    let (ticker, from) = (&asset.ticker, &from.0);
+    let venue = Value::String(from.clone());
+    let set = s
+        .mark_now(
             NOTE,
             scope.clone(),
-            Some(Value::String(note.clone())),
+            |_| Some(Value::String(note.clone())),
             AUTHOR,
         )
-        .await?;
-        s.set(VENUES, scope, Some(Value::Array(vals)), AUTHOR).await
+        .and_then(|_| {
+            s.mark_now(
+                VENUES,
+                scope,
+                |cur| {
+                    let mut list: Vec<Value> =
+                        cur.and_then(Value::as_array).cloned().unwrap_or_default();
+                    if !list.contains(&venue) {
+                        list.push(venue);
+                    }
+                    Some(Value::Array(list))
+                },
+                AUTHOR,
+            )
+        });
+    let text = match set {
+        Ok(_) => format!("{ticker}: новые входы с {from} закрыты — {note}. Снять — экран «Монеты»"),
+        Err(err) => {
+            format!(
+                "{ticker}: {note}; закрыть входы с {from} не удалось ({err}) — закройте вручную"
+            )
+        }
     };
-    let text = match set.await {
-        Ok(_) => format!(
-            "{}: новые входы с {} закрыты — {note}. Снять — экран «Монеты»",
-            asset.ticker, from.0
-        ),
-        Err(err) => format!(
-            "{}: {note}; закрыть входы с {} не удалось ({err}) — закройте вручную",
-            asset.ticker, from.0
-        ),
-    };
-    deps.log(
-        Level::Warn,
-        "core.withdraw_block",
-        Some(&from.0),
-        &text,
-        None,
-    )
-    .await;
-    deps.notify("coin.withdraw_refused", Some(&from.0), &text)
+    deps.log(Level::Warn, "core.withdraw_block", Some(from), &text, None)
+        .await;
+    deps.notify("coin.withdraw_refused", Some(from), &text)
         .await;
 }
 

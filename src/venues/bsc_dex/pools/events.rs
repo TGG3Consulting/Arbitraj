@@ -27,6 +27,10 @@ pub enum Applied {
     Bins(Vec<u32>),
     /// Событие не сходится с картой или не разобрано — пул недостоверен, перечитать целиком.
     Refresh(String),
+    /// Решение 325: событие меняет только комиссию пула (Algebra Integral: Fee, SwapFee / Swap 1.2.x с добавкой
+    /// плагина к lastFee) — перечитать только её (integral_fee.rs) при dex.event_refresh_fee_only; иначе — как Refresh
+    /// с этим же текстом (listen_log.rs).
+    Fee(String),
 }
 
 /// topic0 событий, которые слушаются у пулов этого вида. Ошибок нет.

@@ -9,10 +9,17 @@
 //! подписки: каждая пачка получает лог своей подпиской и перечитывает свои пары. Сбой чтения — перечитываемые пары
 //! недостоверны и событие Invalidated по их монетам, конец сессии с причиной; решение 298 — если у всех упавших пар
 //! StaleData (у узла нет состояния блока), сессия не рвётся: упавшие пары — в очередь повтора (stale_read.rs), а пары,
-//! уже ждущие повтора, по логу не читаются (позиция лога отмечается).
+//! уже ждущие повтора, по логу не читаются (позиция лога отмечается). Решение 339 (pool_fail.rs): при
+//! dex.pool_fail_pause_ms любая ошибка чтения пар (и eth_blockNumber реорга) сессию не рвёт — упавшие пары
+//! недостоверны, в очереди повтора с растущей паузой; пары на паузе по логу не читаются.
 //! Кто вызывает: pools/session.rs (on_log: лог не нашёл пул по Singleton / Contract).
 //! От чего зависит: admit.rs (wake, Members), events.rs, listen_log.rs (latest), reload_many.rs (load_group),
-//! registry.rs, invalidated.rs, stale_read.rs (решение 298), refresh_urgency.rs (решение 314).
+//! registry.rs, invalidated.rs, stale_read.rs (решение 298), refresh_urgency.rs (решение 314), pool_fail.rs (339).
+//! Решение 325 (ревью, Н7): книга заранее прочитанных ответов (dex.event_refresh_batch) сюда не ставится — исключение
+//! с причиной: load_group → load_site.rs читает контракт ОДНИМ try_many (один eth_call aggregate3, на части не делится;
+//! N_COINS Curve NG и неизменяемое Balancer — в памяти процесса после первого чтения), меньше одного обращения книга
+//! не даст; а чтение заранее частями по dex.load_batch и без откатов в книге (coins(k) за последней монетой
+//! откатывается) дало бы второе обращение — больше, чем сейчас. Разбор — docs/notes/t152-event-reread-all-kinds-2026-11-16.md.
 //! Настройки: через вызываемые — dex.load_batch и настройки чтения вида; dex.event_refresh_urgency (класс очереди узла).
 
 use alloy::rpc::types::Log;
@@ -25,7 +32,7 @@ use super::events::{self, Applied};
 use super::group::Group;
 use super::listen::{End, Pools};
 use super::registry::Entry;
-use super::{listen_log, refresh_urgency, reload_many, stale_read};
+use super::{listen_log, pool_fail, refresh_urgency, reload_many, stale_read};
 
 /// Что делает: лог контракта пар Multi. Принимает: окружение, пачку, её пулы, лог. Возвращает: false — пар Multi с
 /// этим адресом в пачке нет (лог — не им); true — обработан. Ошибки: End — сбой чтения или ядро закрыло канал.
@@ -90,16 +97,17 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
     };
     let why = match applied {
         Applied::Ignored => return Ok(true),
-        Applied::Refresh(w) => w,
+        // Решение 325: у Fee (только Algebra Integral, не многомонетный вид) — та же перечитка.
+        Applied::Refresh(w) | Applied::Fee(w) => w,
         // У многомонетных видов точечного применения нет (только перечитка) — на всякий случай тоже перечитка.
         Applied::Updated | Applied::Bins(_) => "событие пула".into(),
     };
     // Решение 298: пары в очереди повтора не читаются (узел на старом блоке не спрашиваем, журнал не пишем) — позиция
     // лога отмечается, повтор прочитает их не раньше неё (stale_read::defer).
-    let (wait, deep): (Vec<usize>, Vec<usize>) = pick
-        .iter()
-        .map(|&k| entries[k].0)
-        .partition(|&i| stale_read::waiting(&m.missing, i));
+    let (wait, deep): (Vec<usize>, Vec<usize>) =
+        pick.iter().map(|&k| entries[k].0).partition(|&i| {
+            stale_read::waiting(&m.missing, i) || pool_fail::paused(p, &m.pools[i].0.reference)
+        });
     if !log.removed {
         for &i in &wait {
             stale_read::defer(&p.reg, &m.pools[i].0.reference, block, index);
@@ -116,9 +124,21 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
     p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
     // Решение 314: чтения по событию — классом dex.event_refresh_urgency (refresh_urgency.rs; не задана — как раньше).
     let at = if log.removed {
-        refresh_urgency::urgent(&p.ctx, listen_log::latest(p))
-            .await
-            .map_err(|e| End::Broken(e.message))?
+        match refresh_urgency::urgent(&p.ctx, listen_log::latest(p)).await {
+            Ok(b) => b,
+            // Решение 339: при dex.pool_fail_pause_ms — пары недостоверны и в очередь повтора, сессия идёт дальше.
+            Err(e) if pool_fail::base(&p.ctx).is_some() => {
+                for &i in &deep {
+                    let (f, t) = &m.pools[i];
+                    p.reg.update(&f.reference, |x| x.valid = false);
+                    super::invalidated::send(p, f.coin, t.clone());
+                    pool_fail::note(p, &f.reference, f.family.title, t, &e).await;
+                    stale_read::requeue(&mut m.missing, &mut m.abandoned, i);
+                }
+                return Ok(true);
+            }
+            Err(e) => return Err(End::Broken(e.message)),
+        }
     } else {
         block
     };
@@ -128,9 +148,12 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
         .collect();
     let res = refresh_urgency::urgent(&p.ctx, reload_many::load_group(p, &items, at)).await?;
     // Прочая ошибка (не StaleData) хоть у одной пары — как раньше: все перечитываемые пары недостоверны, конец сессии.
-    if let Some(e) = res
-        .iter()
-        .find_map(|r| r.as_ref().err().filter(|e| !stale_read::is_stale(e)))
+    // Решение 339: при dex.pool_fail_pause_ms — нет: каждая упавшая пара отдельно (ниже), сессия идёт дальше.
+    let isolate = pool_fail::base(&p.ctx).is_some();
+    if !isolate
+        && let Some(e) = res
+            .iter()
+            .find_map(|r| r.as_ref().err().filter(|e| !stale_read::is_stale(e)))
     {
         for (f, t) in &items {
             p.reg.update(&f.reference, |x| x.valid = false);
@@ -138,13 +161,16 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
         }
         return Err(End::Broken(e.message.clone()));
     }
-    // Решение 298: у узла нет состояния блока — упавшие пары недостоверны и в очередь повтора, сессия идёт дальше.
+    // Решение 298: у узла нет состояния блока — упавшие пары недостоверны и в очередь повтора, сессия идёт дальше;
+    // решение 339 — так же любая ошибка (пауза повтора растёт, pool_fail.rs).
     for (k, r) in res.into_iter().enumerate() {
         let Err(e) = r else { continue };
         let (f, t) = items[k];
         p.reg.update(&f.reference, |x| x.valid = false);
         super::invalidated::send(p, f.coin, t.to_string());
-        if let Some(entry) = p.reg.get(&f.reference) {
+        if !stale_read::is_stale(&e) {
+            pool_fail::note(p, &f.reference, f.family.title, t, &e).await;
+        } else if let Some(entry) = p.reg.get(&f.reference) {
             stale_read::note(p, &entry, at, &e).await;
         }
         stale_read::requeue(&mut m.missing, &mut m.abandoned, deep[k]);

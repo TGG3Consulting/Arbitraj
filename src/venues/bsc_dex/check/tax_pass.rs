@@ -10,13 +10,15 @@
 //! t78 (дополнение 10.11 к 247/252, Тигран: согласовано): монета с кошельком сделки проверяется им отдельно (итог — только
 //! для продажи этой сделки, tax_wallet::deal_check; вид итога — Pass::deal_done), и, как до t77, кошельком строки
 //! «Пробы» — общие налоги, событие ядру, журнал и счётчики прохода.
-//! Настройки: через вызываемые.
+//! Решение 333: уведомление «не задана настройка» — gateway/core_out_must.rs (не теряется молча).
+//! Настройки: через вызываемые; venue.info_events_max (core_out_must.rs).
 
 use std::collections::{HashMap, HashSet};
 
 use alloy_primitives::Address;
 
 use crate::core::types::CheckState;
+use crate::gateway::core_out_must::MustOut;
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
@@ -197,7 +199,9 @@ pub async fn check(
                         .await;
                     let code = "dex.check_not_configured".to_string();
                     let venue = p.ctx.venue();
-                    let _ = p.out.try_send(MarketEvent::Notice { venue, code, text });
+                    // Решения 333, 362: полный канал ядра — ждёт места (сверх venue.info_events_max — потеря со счётом).
+                    let must = MustOut::new(p.out.clone(), &p.ctx.settings, &p.ctx.journal);
+                    must.send(MarketEvent::Notice { venue, code, text });
                 }
                 continue;
             }

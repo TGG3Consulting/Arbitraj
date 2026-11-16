@@ -70,6 +70,7 @@ pub static OWN_RECORD: &[&str] = &[
     "dex.receipts_stuck",        // venue.ws (bsc_dex/node/receipts_task.rs — пропуск на голову)
     "dex.node_stalled",          // venue.head_stall (bsc_dex/node/head_stall.rs, решение 282)
     "dex.node_resumed",          // venue.head_stall (bsc_dex/node/head_stall.rs, решение 282)
+    "dex.pool_unread",           // dex.pool (bsc_dex/pools/pool_fail_note.rs, ревью t153)
     "dex.graph_stale",           // dex.graph (bsc_dex/pools/graph_alarm.rs, решение 308)
     "dex.graph_mismatch",        // dex.graph (bsc_dex/pools/graph_alarm.rs, решение 308)
     "dex.graph_owner_failed",    // dex.graph (bsc_dex/pools/graph_alarm.rs, решение 308)

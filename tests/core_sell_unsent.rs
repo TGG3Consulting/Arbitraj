@@ -11,7 +11,8 @@
 //! случай BRIC: −30 %, −11 USDT по рынку без порога), не задан — алерт; нет котировки — алерт; (4) адаптер: где транзакция по ответу eth_getTransactionByHash (запись узла BSC 2026-10-25);
 //! (6) ответы Тиграна 08.11 к решению 220: «вывод отклонён» (WithdrawRejected, текст Bitget 40938 из живых сделок CHEEMS,
 //! AVA, RWA) не повторяется даже правилом Retry и в повторах возврата USDT; перевод не состоялся — монеты на месте:
-//! продажа здесь, нет — остановка; нет котировки — ждём цену монеты до первого тика, не дольше stuck.no_quote_wait_ms.
+//! продажа здесь, нет — остановка; нет котировки — ждём цену монеты до первого тика, не дольше stuck.no_quote_wait_ms;
+//! (7) решения 334, 361: ожидание тика застрявшей сделки отстало от рассылки тиков — проверка сразу и запись журнала.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::notify, arb::secrets, arb::venues::bsc_dex::send.
 
@@ -504,4 +505,53 @@ async fn sell_here_without_quote_alerts_after_wait() {
         "{:?}",
         y.timeline
     );
+}
+
+/// Решения 334, 361 (в логику, правило 16.11): ожидание тика монеты застрявшей сделки отстало от рассылки тиков ядра
+/// (пропущены тики — среди них мог быть тик монеты сделки) — проверка выгодности сразу, без настройки, и запись журнала
+/// core.coin_ticks_lost; без отставания и без тика монеты — ждём до срока, как раньше.
+#[tokio::test]
+async fn lagged_ticks_wake_at_once() {
+    use arb::core::stuck_lag::{LOST_KIND, Ticks};
+    use std::time::Duration;
+    let d = dir("lag");
+    let (core, _, journal) = start(&d).await;
+    let deal = aster();
+    let mut ticks = Ticks::new(&core);
+    // Ёмкость рассылки тиков — buffer 64 (start): 65 тиков другой монеты до чтения — подписчик отстал на один.
+    let other = Asset {
+        ticker: "CAKE".into(),
+        bsc_contract: None,
+    };
+    for _ in 0..65 {
+        let _ = core.inner.coin_ticks.send(other.clone());
+    }
+    let t0 = std::time::Instant::now();
+    let until = tokio::time::Instant::now() + Duration::from_secs(30);
+    assert!(
+        ticks.next(&core, &deal, Some(until)).await,
+        "отставание — проверка сразу"
+    );
+    assert!(
+        t0.elapsed() < Duration::from_secs(5),
+        "кончилось на отставании, а не на сроке"
+    );
+    let mut n = 0;
+    for _ in 0..100 {
+        n = journal
+            .list(50, None)
+            .await
+            .unwrap()
+            .iter()
+            .filter(|j| j.kind == LOST_KIND)
+            .count();
+        if n >= 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(n >= 1, "запись журнала {LOST_KIND}");
+    // Оставшиеся тики — другой монеты, отставания больше нет: тика монеты сделки нет — срок вышел.
+    let soon = tokio::time::Instant::now() + Duration::from_millis(50);
+    assert!(!ticks.next(&core, &deal, Some(soon)).await);
 }

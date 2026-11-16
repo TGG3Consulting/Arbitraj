@@ -18,11 +18,13 @@
 //! - priced брошен до cpu::run или ошибка до работы — запись без полей работы.
 //!
 //! Логика и порядок расчёта не меняются: только часы вокруг шагов.
+//! Решение 348: при входе (open) — метка «кто вызвал» и класс срочности (gateway/quote_purpose.rs) в запись и счётчик
+//! котировок по метке (каждая котировка, независимо от log.quote_timing).
 //! Кто вызывает: quote/mod.rs (Quoting::priced: begin, now, add, run, back, finish), quote/fills.rs (быстрый путь:
 //! begin_fast, now, add, finish), quote/quote_timing.rs (start — старт работы, hand — конец работы в потоке счёта); тест
 //! tests/bsc_dex_quote_timing_312.rs.
 //! От чего зависит: ctx.rs (настройки), quote/quote_timing.rs (Rec, Meta), quote/quote_timing_stages.rs (Part),
-//! quote/quote_timing_log.rs (запись), gateway/errors.rs.
+//! quote/quote_timing_log.rs (запись), gateway/errors.rs, gateway/quote_purpose.rs (решение 348).
 //! Настройки: log.quote_timing, log.quote_timing_min_ms (вся система).
 
 use std::sync::{Arc, Mutex};
@@ -32,6 +34,7 @@ use rust_decimal::Decimal;
 
 use crate::core::types::Side;
 use crate::gateway::errors::GatewayResult;
+use crate::gateway::quote_purpose;
 
 use super::super::ctx::Ctx;
 use super::quote_timing::{Meta, Rec};
@@ -113,6 +116,10 @@ impl Outer {
     /// Общее начало begin / begin_fast. Принимает: окружение, тикер, сторону, объём, признак быстрого пути.
     /// Возвращает: замер или пустой. Ошибок нет.
     fn open(ctx: &Ctx, ticker: &str, side: Side, qty: Decimal, fast: bool) -> Outer {
+        // Решение 348: кто вызвал — на вызывающей задаче (поток счёта признаков задачи не видит); счётчик — всегда
+        // (атомик, без записи журнала), запись — только при замере.
+        let who = quote_purpose::who();
+        quote_purpose::count(who, fast);
         if !ctx.flag("log.quote_timing").unwrap_or(false) {
             return Outer(None);
         }
@@ -123,6 +130,8 @@ impl Outer {
             ticker: ticker.to_string(),
             side,
             qty,
+            who: who.name(),
+            class: quote_purpose::class_name(),
         };
         Outer(Some(Box::new(Body {
             ctx: ctx.clone(),

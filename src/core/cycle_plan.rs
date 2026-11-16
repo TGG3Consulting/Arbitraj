@@ -11,12 +11,15 @@
 //! От чего зависит: core/{cycle_curve, size, size_search, dry, engine, coin_key}.rs, gateway, settings.
 //! Настройки: money.max_per_trade_usd [площадка DEX; решение 242 — DEX · «DEX ↔ DEX», venue_dir.rs], money.max_per_coin_usd, dry.budget_usdt (сухой режим),
 //! dex_dex.size_step_base, dex_dex.min_profit_usd, exec.dex_slippage_pct [площадка DEX], size.bisect_steps,
-//! size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals.
+//! size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals; size.parallel_points, size.bisect_probes
+//! (решение 336, необязательные); size.early_exit_margin_usd (решение 337, необязательная); size.pool_breaks_max
+//! (решение 344, необязательная).
 
 use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::core::types::{Asset, CycleQuote, DexCycle, Direction, VenueId};
+use crate::gateway::cpu_budget::{self, Tier};
 use crate::settings::read::At;
 
 use super::cycle_curve::CycleCurve;
@@ -85,7 +88,9 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         let x = s.integer(n, At::default()).map_err(|e| e.message)?;
         u32::try_from(x).map_err(|_| format!("{n} = {x}: вне пределов"))
     };
-    let p = Params {
+    // Решение 336: параллельные точки и пробы границ — те же необязательные size.*, что у кандидатов.
+    let (par_points, bisect_probes, par_blocked) = super::size_par::par_settings(s)?;
+    let mut p = Params {
         step,
         budget: cap,
         guess: cap / probe.base_usdt,
@@ -96,14 +101,47 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         refine_steps: int("size.refine_steps")?,
         max_evals: int("size.max_evals")?,
         tolerance_pct: dec("size.tolerance_pct", At::default())?,
+        par_points,
+        bisect_probes,
+        early_floor: None,
+        // Ревью t157 Б2: у цикла план строится прямо из точки подбора (финальной котировки нет) — без повторного
+        // использования допуска пулов: точка цикла всегда по полному допуску (gateway/calc_share.rs).
+        reuse: false,
+        par_blocked,
+        // Задача t159 (ревью t159 Н7): у цикла порога % нет (342 неприменимо); участков 343 нет — бирж нет, вложение =
+        // вход × курс (монотонно), «слишком большой» — шаг пути не исполним целиком (cycle_curve.rs): путь цикла один,
+        // вход каждого шага не убывает с входом цикла ⇒ нехватка ёмкости шага монотонна, бисекция точна (иные причины
+        // NoRoute у адаптера тоже идут в TooLarge — их монотонность не доказана, docs/TASKS.md); мягкого срока 345
+        // нет — у плана цикла нет внешнего
+        // общего срока (cycle_watch.rs); изломы 344 — первого пула (cycle_curve.rs breaks).
+        ext: super::size_extra::Extra {
+            min_usd: Some(min_usd),
+            budget_monotone: true,
+            breaks_max: super::size_extra::flags(s).breaks_max,
+            ..Default::default()
+        },
     };
+    // Решение 337: пол раннего выхода — порог dex_dex.min_profit_usd минус size.early_exit_margin_usd.
+    p.early_floor = super::size_early::floor(s, min_usd);
     let mut curve = CycleCurve {
         venue,
         cycle: c.clone(),
     };
-    let found = super::size_search::search(&mut curve, &p)
+    // Решение 338 (ревью t157 Н1): план цикла — ярус счёта «кандидат» (котировки цикла в потоке счёта при параллельных
+    // точках — venue.rs; без яруса они шли бы «фоном»).
+    let search = super::size_search::search(&mut curve, &p);
+    let found = cpu_budget::scope(Tier::Calc, search)
         .await
         .map_err(|f| format!("подбор входа цикла: {f}"))?;
+    if found.early {
+        let m = super::size_early::margin(s);
+        return Err(super::size_early::reason(
+            found.best.profit,
+            min_usd,
+            m,
+            "подбор входа цикла",
+        ));
+    }
     let q = found.best.data;
     // Порог в USDT (решение 124): одна настройка для базовых USDT и WBNB; в базовую — по курсу пулов адаптера.
     let profit_usd = q.net_base * q.base_usdt;

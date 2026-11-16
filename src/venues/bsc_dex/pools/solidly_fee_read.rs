@@ -13,6 +13,7 @@
 //! Селектор метода из настройки — первые 4 байта keccak256 сигнатуры (как dex.v2_fee_method, pools/verify_calls.rs).
 //! Ревью 273: fee_call / rule — вызов и правило комиссии отдельно (пачка pools/solidly_refresh.rs); ограничения обмена
 //! (gate, has_gate, max_gas) — pools/solidly_gate_read.rs, переэкспорт отсюда.
+//! Решение 325: fee сначала смотрит в книгу заранее прочитанных ответов задачи (node/prefetch.rs; книги нет — как раньше).
 //! Кто вызывает: pools/load_solidly.rs, pools/solidly_refresh.rs, exec/solidly_gate.rs.
 //! От чего зависит: ctx.rs, node/rpc.rs, pools/abi_solidly.rs, families.rs, math/solidly_math.rs (fee_denominator),
 //! core/types (SolidlyFee, SolidlyGate).
@@ -68,7 +69,11 @@ pub async fn fee(
 ) -> GatewayResult<SolidlyFee> {
     let rule = rule(ctx, f, Some(src))?;
     let (to, data) = fee_call(ctx, f, Some(src), (factory, pool, stable))?;
-    let out: Bytes = rpc::call(ctx, "eth_call", json!([{ "to": to, "input": data }, tag])).await?;
+    // Решение 325: ответ, прочитанный заранее на этом блоке (node/prefetch.rs), — без обращения к узлу.
+    let out: Bytes = match super::super::node::prefetch::hit(to, &data, tag) {
+        Some(b) => b,
+        None => rpc::call(ctx, "eth_call", json!([{ "to": to, "input": data }, tag])).await?,
+    };
     checked(ctx, word(ctx, to, &out)?, rule)
 }
 

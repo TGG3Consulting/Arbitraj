@@ -30,7 +30,7 @@ pub fn on(ctx: &Ctx) -> bool {
 pub struct Rec<'a> {
     /// Запись пула до перечитывания (DEX, тикер, ссылка).
     pub entry: &'a Entry,
-    /// «off_map» или «refresh».
+    /// «off_map», «refresh» или «fee» (ревью 325: только комиссия Algebra Integral, refresh_event.rs fee).
     pub cause: &'static str,
     /// Блок события и блок чтения.
     pub block: u64,
@@ -43,7 +43,8 @@ pub struct Rec<'a> {
     pub class: String,
     /// Слов карты тиков в прочитанной записи (None — карты нет или чтение не удалось).
     pub words: Option<i32>,
-    /// Сообщений в канале сессии пачки к концу перечитывания.
+    /// Сообщений в канале к концу перечитывания: без полос — канал сессии пачки (все её пулы); при полосах решения 330
+    /// (dex.event_lanes_max) — полоса этого пула (только его события). Ревью t153 (Н8): смысл разный, не сравнивать.
     pub queued: usize,
     /// Ошибка чтения (None — прочитано).
     pub err: Option<String>,

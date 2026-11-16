@@ -32,6 +32,7 @@ pub fn why(v: &SpreadView) -> &'static str {
         Trigger::Book => "тик биржи",
         Trigger::Pool => "событие пула",
         Trigger::Timer => "таймер дозревания (решение 318)",
+        Trigger::MidPool => "событие промежуточного пула маршрута (решение 349)",
     }
 }
 

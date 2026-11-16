@@ -81,6 +81,10 @@ pub struct Inner {
     pub ripen: Mutex<super::signal_ripen::Plan>,
     /// Память котировок DEX для тика (решение 109, quote_cache.rs).
     pub quote_cache: Mutex<super::quote_cache::QuoteCache>,
+    /// Решение 352: котировки стороны DEX сигнала по отпечатку входов (signal_dex.rs; signal.book_same_skip).
+    pub signal_dex: super::signal_dex::Memo,
+    /// Решение 349: пробуждение монет событием промежуточного пула — ждущие пары, отметки (mid_wake.rs).
+    pub mid_wake: super::mid_wake::State,
     /// Последняя отправка строки «Живого экрана» по направлению: когда и с каким состоянием (решение 109).
     pub spread_sent: Mutex<HashMap<Direction, (std::time::Instant, super::signal::State)>>,
     /// Очередь тяжёлого расчёта (candidates.rs; с моментом постановки — замер очереди, решение 129) и направления,
@@ -178,6 +182,8 @@ pub struct Inner {
     /// Решение 267: замер «что было выгодно, пока монета занята сделкой» — очередь теневых расчётов, отметки
     /// направлений и сводки (busy_calc.rs); при window.busy_calc = нет / не задана — пусто.
     pub busy_calc: super::busy_calc::State,
+    /// Решение 334: кандидаты, ждущие места расчёта (profit.calc_wait_ms), и счёт потерь кандидатов (cand_wait.rs).
+    pub cand_wait: super::cand_wait::Waiting,
 }
 
 impl Inner {
@@ -201,6 +207,7 @@ impl Inner {
         Inner {
             live: Live::new(deps.buffer),
             busy_calc: super::busy_calc::State::new(deps.buffer),
+            cand_wait: Default::default(),
             deps,
             market: RwLock::default(),
             networks: RwLock::default(),
@@ -223,6 +230,8 @@ impl Inner {
             ticking: Mutex::default(),
             ripen: Mutex::default(),
             quote_cache: Mutex::default(),
+            signal_dex: Default::default(),
+            mid_wake: Default::default(),
             spread_sent: Mutex::default(),
             cand_tx,
             queued: Mutex::default(),

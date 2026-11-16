@@ -8,6 +8,7 @@
 //! дозревания «держится» — в план таймера (signal_ripen.rs); пересчёт, поставленный таймером, помечается «таймер».
 //! Решение 322: направления площадки события пула считаются первыми (tick_plan.rs Run.first); отметка события пула и
 //! начало пересчёта — в строку экрана и запись core.signal_hold (замер «событие → пересчёт → кандидат»).
+//! Решение 349 (ревью Б3): монета разбужена промежуточным пулом — пересчёт с пометкой Trigger::MidPool (обычное удержание).
 //! Кто вызывает: core/tick_sched.rs.
 //! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, signal_ctx.rs, signal_hold_log.rs,
 //! vol.rs, candidates.rs, episode_run.rs, view.rs.
@@ -69,6 +70,8 @@ pub async fn evaluate(
         (dirs, ref_price, waiting, marks_on)
     };
     let params = Params::read(&core.inner.deps.settings);
+    // Решение 349: отметка «разбужена промежуточным пулом» — один раз на пересчёт монеты.
+    let mid = super::mid_wake::take_marked(core, asset);
     for dir in dirs {
         // Налоги не проверены — цены не считаются (котировки по таким монетам на каждом тике забивали бы очередь
         // узла): сразу строка с причиной ожидания.
@@ -89,6 +92,10 @@ pub async fn evaluate(
         let timer = lk(&core.inner.ripen).take_fired(&dir);
         let now = Utc::now();
         let mut ctx = super::signal_ctx::of(core, &dir, venues, timer);
+        // Решение 349 (ревью Б3): монету разбудил промежуточный пул — пометка для экрана и журнала, удержание обычное.
+        if mid && ctx.trigger == super::signal_fast::Trigger::Book && ctx.dex_side.is_some() {
+            ctx.trigger = super::signal_fast::Trigger::MidPool;
+        }
         // Замер (решения 317, 322): событие пула (приход в ядро, блок) — только у пересчёта от события пула по DEX
         // направления; начало пересчёта монеты.
         if ctx.trigger == super::signal_fast::Trigger::Pool {

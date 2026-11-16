@@ -99,6 +99,10 @@ impl Core {
         tokio::spawn(super::auto_resume::run(core.clone()));
         tokio::spawn(super::day_roll::run(core.clone()));
         tokio::spawn(super::rebuild::watch_settings(core.clone()));
+        // Решение 348: сводка «кто вызвал котировку» (log.quote_count_s; не задана — ждёт настройку).
+        tokio::spawn(super::quote_count_log::run(core.clone()));
+        // Решение 349 (ревью Б2): рассылка пробуждений промежуточным пулом — своя задача, поток тика только отмечает.
+        tokio::spawn(super::mid_wake::run(core.clone()));
         // Решение 124: исполнение циклов DEX ↔ DEX — одна задача, толчки событий пулов сливаются.
         tokio::spawn(super::cycle_watch::run(core.clone()));
         // Решение 316: прогрев адресов депозита бирж (venue.deposit_warm) — первая сделка после перезапуска без запроса.

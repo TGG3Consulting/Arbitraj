@@ -141,6 +141,7 @@ fn cx(rec: &Rec) -> DirCtx {
         k: d("1"),
         h: d("0.7"),
         closure_share: None,
+        sigma_check: None,
         return_per_trade: false,
         pair_a: Some(rec.pair.clone()),
         pair_b: None,
@@ -155,7 +156,9 @@ fn reason(e: &str) -> &str {
 }
 
 /// Сколько записей журнала об уведомлении «мало BNB» (событие включено, Telegram не настроен — запись «не отправлено»).
+/// Решение 340: уведомления уходят фоновой очередью — сначала дождаться её (notify/queue.rs idle).
 async fn low_bnb_notes(core: &Core) -> usize {
+    arb::notify::queue::idle().await;
     let all = core.inner.deps.journal.list(500, None).await.unwrap();
     all.iter()
         .filter(|e| e.kind == "notify" && e.message.contains("не отправлено"))

@@ -10,7 +10,8 @@
 //!     списка — TickMath.MIN_TICK / MAX_TICK: дошли до конца — сторона известна до края.
 //! (2) комиссия: при флаге DYNAMIC_FEE в pluginConfig — fee() пула (getCurrentFee() плагина), иначе
 //!     globalState.lastFee. Добавку плагина (pluginFee) пул отдаёт только в событии SwapFee — её учитывают события
-//!     (events_algebra_integral.rs), расхождение ловит сверка квотером (виртуальный квотер, решение 186).
+//!     (events_algebra_integral.rs), расхождение ловит сверка квотером (виртуальный квотер, решение 186). Правило —
+//!     integral_fee.rs dynamic (решение 325: одно на полное чтение и на чтение только комиссии).
 //! Окно карты тиков математика считает словами по 256 сырых тиков (swap_algebra::window_ticks), поэтому отрезок
 //! переводится в слова, ЦЕЛИКОМ лежащие внутри него (окно не шире известного — безопасная сторона: край отрезка
 //! внутри неполного слова не используется). Текущий тик вне окна — ошибка (тиков прочитано мало, расчёт невозможен).
@@ -28,7 +29,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::math::tick_math::{MAX_TICK, MIN_TICK};
 use super::super::node::call;
-use super::abi_algebra_integral::{DYNAMIC_FEE, IAlgebraIntegralPool as P};
+use super::abi_algebra_integral::IAlgebraIntegralPool as P;
 use super::load_cl::i24;
 use super::ticks::{TickData, TickMap};
 
@@ -39,7 +40,7 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
     let steps = ctx.int("dex.integral_tick_steps")?;
     let gs = call::view(ctx, pool, &P::globalStateCall {}, tag).await?;
     let liquidity = call::view(ctx, pool, &P::liquidityCall {}, tag).await?;
-    let fee = if gs.pluginConfig & DYNAMIC_FEE != 0 {
+    let fee = if super::integral_fee::dynamic(gs.pluginConfig) {
         call::view(ctx, pool, &P::feeCall {}, tag).await?
     } else {
         gs.lastFee

@@ -9,6 +9,8 @@
 //! передаётся замеру priced (старт — quote_timing_outer::start; конец — quote_timing_outer::hand — запись журнала после хвоста priced; priced уже брошен — запись
 //! сразу). Логика и порядок расчёта не меняются: только часы (Instant) вокруг этапов. Вне timed (тесты, поиск циклов,
 //! другие вызовы) признака нет — ничего не меряется.
+//! Решение 336: Clock — часы этапа до конца области; части этапа «классика» (direct_route.rs, classic_direct.rs,
+//! usable_reuse.rs).
 //! Кто вызывает: quote/mod.rs (timed — через Outer::run); quote/routing.rs (now, add); quote/graph_route.rs (active,
 //! now_if, add, stage, paths_in, count); quote/route_cache.rs (now, add); quote/route_best.rs, quote/graph_split.rs
 //! (count); quote/quote_timing_outer.rs, quote/quote_timing_log.rs (Rec, Meta, ms); тест tests/bsc_dex_quote_timing_312.rs.
@@ -29,13 +31,17 @@ use super::abandon;
 use super::quote_timing_outer::{self, Outcome, Run};
 use super::route_paths::RoutePath;
 
-pub use super::quote_timing_stages::{COUNTS, Count, STAGES, Stage, TOP};
+pub use super::quote_timing_stages::{COUNTS, Count, PATHS_END, STAGES, Stage, TOP};
 
 /// Что котируется (для записи).
 pub struct Meta {
     pub ticker: String,
     pub side: Side,
     pub qty: Decimal,
+    /// Решение 348: кто вызвал котировку (gateway/quote_purpose.rs who) — снято при входе, на вызывающей задаче.
+    pub who: &'static str,
+    /// Решение 348: класс срочности вызывающей задачи (gateway/quote_purpose.rs class_name).
+    pub class: &'static str,
 }
 
 /// Накопленный замер котировки (в потоке счёта).
@@ -143,6 +149,23 @@ pub fn stage<T>(s: Stage, on: bool, f: impl FnOnce() -> T) -> T {
     let out = f();
     add(s, t);
     out
+}
+
+/// Решение 336: часы этапа до конца области видимости (Drop) — для работы с ранним выходом `?` внутри (замыкание
+/// сборки котировки классики, direct_route.rs). Без замера — часов нет.
+pub struct Clock(Stage, Option<Instant>);
+
+impl Clock {
+    /// Часы этапа `s` с этой минуты (если котировка меряется). Ошибок нет.
+    pub fn new(s: Stage) -> Clock {
+        Clock(s, now())
+    }
+}
+
+impl Drop for Clock {
+    fn drop(&mut self) {
+        add(self.0, self.1.take());
+    }
 }
 
 /// Счётчики путей на допуск хопов: путей и хопов (только если `on`). Ошибок нет.

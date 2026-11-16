@@ -6,7 +6,9 @@
 //! Решение 295: пары многомонетного пула (PoolRef::Multi) — вызовы один раз на адрес пула, разбор — по паре каждой записи.
 //! Кто вызывает: pools/per_block.rs (on_head).
 //! От чего зависит: load_balancer.rs, load_balancer_fixed.rs, load.rs (renewed, Loaded), load_batch.rs (batch),
-//! node/call.rs (try_chunks, block_tag), listen_log.rs, loading (через Pools), reload.rs.
+//! node/call.rs (try_chunks, block_tag), loading (через Pools), reload.rs (load_one_block, put_emit, skip_same).
+//! Задача t160: при dex.per_block_skip_same неизменившееся состояние пула ядру не шлётся (reload.rs).
+//! Решение 339: не прочитавшийся пул — pool_fail.rs block_failed (причина, пауза повтора при dex.pool_fail_pause_ms).
 //! Настройки: dex.vault [DEX вида balancer_v2]; dex.load_batch, dex.multicall3 [bsc_dex].
 
 use alloy_primitives::{Address, Bytes};
@@ -19,7 +21,7 @@ use super::listen::{End, Pools};
 use super::load::{self, Loaded};
 use super::load_balancer::{self as lb, PER_POOL};
 use super::load_balancer_fixed::{Fixed, cached};
-use super::{listen_log, load_batch, reload};
+use super::{load_batch, reload};
 
 /// Пул пачки: записи (у пула со своим контрактом — одна; у многомонетного пула в режиме dex.multi_pair — все его пары,
 /// решение 295), неизменяемое, хранилище, адрес пула.
@@ -34,7 +36,9 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
             continue;
         };
         if matches!(f.reference, PoolRef::Multi { .. })
-            && let Some(it) = items.iter_mut().find(|it| it.3 == a && matches!(it.0[0].reference, PoolRef::Multi { .. }))
+            && let Some(it) = items
+                .iter_mut()
+                .find(|it| it.3 == a && matches!(it.0[0].reference, PoolRef::Multi { .. }))
         {
             it.0.push(f);
             continue;
@@ -42,8 +46,9 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
         match (cached(a), p.ctx.dex_addr("dex.vault", f.family.id)) {
             (Some(fx), Ok(v)) => items.push((vec![f], fx, v, a)),
             _ => {
-                if reload::load_one(p, f, t, block).await?.is_err() {
-                    p.reg.update(&f.reference, |e| e.valid = false);
+                if let Err(why) = reload::load_one_block(p, f, t, block).await? {
+                    // Решение 339: причина и пауза повтора — pool_fail.rs (не задана — только valid = false).
+                    super::pool_fail::block_failed(p, f, &why).await;
                 }
             }
         }
@@ -57,6 +62,8 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
         .collect();
     let size = load_batch::batch(&p.ctx).unwrap_or(calls.len()).max(1);
     let got = call::try_chunks(&p.ctx, &calls, &call::block_tag(block), size).await;
+    // Задача t160: неизменившееся состояние ядру не шлётся (reload.rs skip_same, put_emit); не задана — как раньше.
+    let skip = reload::skip_same(p);
     for ((list, fx, _, _), part) in items.iter().zip(got.chunks(PER_POOL)) {
         let answers: Result<Vec<_>, String> = part.iter().cloned().collect();
         for f in list {
@@ -66,9 +73,12 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
             let st = answers
                 .clone()
                 .and_then(|a| lb::decode(fx, &a, (e.pool.token0, e.pool.token1)));
-            let Ok(state) = st else {
-                p.reg.update(&f.reference, |e| e.valid = false);
-                continue;
+            let state = match st {
+                Ok(s) => s,
+                Err(why) => {
+                    super::pool_fail::block_failed(p, f, &why).await;
+                    continue;
+                }
             };
             let loaded = Loaded {
                 state,
@@ -76,13 +86,7 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
                 bins: None,
                 fee_pips: None,
             };
-            let e = load::renewed(&e, block, loaded);
-            listen_log::note_refill(p, &e);
-            let pool = e.pool.clone();
-            p.reg.put(e);
-            p.loading.done(&f.reference);
-            p.loading.publish(p).await;
-            listen_log::emit(p, pool)?;
+            reload::put_emit(p, load::renewed(&e, block, loaded), skip).await?;
         }
     }
     Ok(())

@@ -289,15 +289,16 @@ async fn yesterday_reset_has_no_force() {
             "limit_reset": {"at": at, "base_usd": "-7", "by": "тест"}})
         .to_string();
         let day = y.to_string();
-        db.call(move |c| {
-            c.execute(
-                "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)",
-                rusqlite::params![day, body, "t"],
-            )
-            .map(|_| ())
-        })
-        .await
-        .unwrap();
+        db.ledger()
+            .write(move |c| {
+                c.execute(
+                    "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![day, body, "t"],
+                )
+                .map(|_| ())
+            })
+            .await
+            .unwrap();
     }
     let (core, settings) = start(&d0).await;
     total(&settings, "6").await;

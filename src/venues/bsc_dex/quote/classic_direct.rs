@@ -7,6 +7,7 @@
 //! Сигнал их по-прежнему видит, как граф (решение 84, вариант Б): если лучшая котировка по ВСЕМ не-форк пулам идёт через
 //! неисполнимый пул и лучше исполнимой — её маршрут ложится в signal_route (executable = нет, причина) для карточки,
 //! а цена и сделка — по исполнимой. Исполнимого пула нет совсем — NoRoute с причиной «только сигнал».
+//! Решение 336: второй проход (сигнал) — своя часть замера «классика: второй проход» (log.quote_timing).
 //! Кто вызывает: quote/mod.rs (Quoting::quote, режим direct), quote/smart_quote.rs (прямая сделка вне умного роутера).
 //! От чего зависит: quote/direct_route.rs, quote/pick.rs, quote/via.rs, quote/steps.rs, pools/registry.rs, pools/mids.rs.
 //! Настройки: своих нет (через вызываемые — dex.*, решение 73).
@@ -19,6 +20,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
+use super::quote_timing::{self, Stage};
 use super::steps::Names;
 use super::via::Via;
 use super::{direct_route, pick};
@@ -59,7 +61,10 @@ pub async fn quote(
     if !has_signal_only {
         return exec;
     }
+    // Решение 336: замер второго прохода (часы только при замере котировки).
+    let t = quote_timing::now();
     let sig = direct_route::quote(v, names, asset, qty, entries, mids, &visible, gas).await;
+    quote_timing::add(Stage::ClassicSignal, t);
     match (exec, sig) {
         (Ok(mut t), Ok(s)) => {
             let best = pick::pick(q, t.clone(), s.clone(), v.side, v.usdt_dec).await;

@@ -168,7 +168,14 @@ fn later(core: &Core, key: Key, wait: Duration) {
 /// стек; сторож — tests/bsc_dex_quote_cpu_stack.rs). pub — точка входа для тестов-сторожей (боевой вызов — run).
 /// Принимает: работу. Возвращает: будущее с её итогом. Ошибок нет.
 pub fn scoped<F: Future>(work: Pin<Box<F>>) -> impl Future<Output = F::Output> {
-    urgency::scope(Urgency::Background, work)
+    // Решение 348: назначение «без потолка» (замер «кто вызвал котировку»; признак — указатель-обёртка).
+    urgency::scope(
+        Urgency::Background,
+        crate::gateway::quote_purpose::scope(
+            crate::gateway::quote_purpose::Purpose::Uncapped,
+            work,
+        ),
+    )
 }
 
 /// Расчёт работы в потоке блокирующих задач, итог — в хранилище; затем ожидающая работа ключа. Ошибок нет.

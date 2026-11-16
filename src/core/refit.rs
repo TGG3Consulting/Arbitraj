@@ -24,7 +24,10 @@ pub fn needed(plan: &Calc, cap: Decimal) -> bool {
 
 /// Новый план под предел `cap`. Возвращает: расчёт (выше порогов, списание ≤ cap). Ошибки: текст отказа расчёта.
 pub async fn plan(core: &Core, d: &Direction, cap: Decimal) -> Result<Calc, String> {
-    match profit::decide_capped(core, d, &super::dry::Mode::Live, Some(cap), None).await {
+    // Решение 348: назначение «предпроверка» (замер «кто вызвал котировку»); решение 345 — без мягкого срока.
+    let work = profit::decide_capped(core, d, &super::dry::Mode::Live, Some(cap), None, None);
+    let purpose = crate::gateway::quote_purpose::Purpose::Precheck;
+    match crate::gateway::quote_purpose::scope(purpose, work).await {
         Verdict::Accept(c) if c.spend_max <= cap => Ok(c),
         Verdict::Accept(c) => Err(format!(
             "списание по худшей цене {} больше свободного {cap}",

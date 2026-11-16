@@ -216,7 +216,7 @@ async fn off_no_records_on_records_with_stages() {
     assert!(close(parts_sum, num(d, "total_ms")), "total_ms: {d}");
     let run_sum = num(d, "wait_ms") + num(d, "work_ms") + num(d, "back_ms");
     assert!(close(run_sum, num(d, "run_ms")), "run_ms: {d}");
-    let parts_of_paths: f64 = STAGE_NAMES[quote_timing::TOP..]
+    let parts_of_paths: f64 = STAGE_NAMES[quote_timing::TOP..quote_timing::PATHS_END]
         .iter()
         .map(|(k, _)| num(d, &format!("{k}_ms")))
         .sum();
@@ -224,6 +224,26 @@ async fn off_no_records_on_records_with_stages() {
         parts_of_paths <= num(d, "paths_ms") + eps,
         "части путей больше путей: {d}"
     );
+    // Решение 336: части классики — своя группа (PATHS_END..): один пул, промежуточная и выбор идут по очереди; допуск
+    // пулов и затраты — внутри них и друг с другом не пересекаются; каждая — не больше классики.
+    let classic = num(d, "classic_ms");
+    for (k, _) in &STAGE_NAMES[quote_timing::PATHS_END..] {
+        assert!(
+            num(d, &format!("{k}_ms")) <= classic + eps,
+            "часть классики {k} больше классики: {d}"
+        );
+    }
+    let seq = num(d, "classic_one_ms") + num(d, "classic_via_ms") + num(d, "classic_pick_ms");
+    assert!(
+        seq <= classic + eps,
+        "один пул + промежуточная + выбор больше классики: {d}"
+    );
+    let inner = num(d, "classic_admit_ms") + num(d, "classic_costs_ms");
+    assert!(
+        inner <= classic + eps,
+        "допуск + затраты больше классики: {d}"
+    );
+    assert!(num(d, "admit_hits") <= num(d, "admit_calls"), "{d}");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

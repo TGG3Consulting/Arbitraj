@@ -56,6 +56,26 @@ async fn run() -> Result<(), String> {
     let settings = Store::load(db.clone(), changes.clone(), journal.clone())
         .await
         .map_err(|e| e.to_string())?;
+    // Решение 353: учёт ядра — свой файл ledger.sqlite (Db::open); перенесённое из основной базы — в журнал.
+    let moved = db.ledger().moved();
+    if moved > 0 {
+        let m = format!(
+            "Учёт ядра (сделки, переводы, итог дня, очередь кошелька DEX) перенесён в свой файл {}: {moved} строк",
+            arb::storage::ledger_db::LEDGER_FILE
+        );
+        let _ = journal
+            .write(Level::Info, "storage.ledger", None, m, None)
+            .await;
+    }
+    // Решения 341, 353: пределы записи хранилища (длина очереди и пачки журнала, synchronous учёта ядра) — до первых записей
+    // адаптеров и до загрузки сделок ядром; дальше — на лету (storage/write_modes.rs).
+    arb::storage::write_modes::apply(&journal, &db, &settings);
+    tokio::spawn(arb::storage::write_modes::run(
+        journal.clone(),
+        db.clone(),
+        settings.clone(),
+        Watch::new(changes.subscribe(), arb::storage::write_modes::names()),
+    ));
     let vault = Vault::locked(arb::secrets::file::path_in(&args.data_dir));
     // Редиректы выключены (gateway/http_bind.rs builder — одно место для всех клиентов, решение 178).
     let http = arb::gateway::http_bind::builder()
@@ -303,6 +323,9 @@ async fn run() -> Result<(), String> {
         data_dir: args.data_dir.clone(),
     })
     .await;
+    // Решение 356: Ctrl+C / SIGTERM — сразу «Стоп» новых входов, уведомления — с пределом notify.stop_wait_ms, журнал —
+    // до границы на момент сигнала, затем выход (core/shutdown.rs). До запуска ядра — как раньше (сигнал завершает сразу).
+    arb::core::shutdown::install(core.clone());
 
     // Кнопки и команды Telegram → команды ядру (Core::command, решения 156, 157). wake — сигнал «секреты
     // изменились» от api/secrets.rs: приём начинает заново с актуальным токеном.

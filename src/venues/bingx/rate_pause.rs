@@ -11,7 +11,9 @@
 //! остатком; ручная работа ждёт конец паузы (gateway/patience.rs, решение 201) — rest.rs.
 //! Кто вызывает: rest.rs (send — перед запросом и после ответа), mod.rs (set_out — канал событий из подписки на рынок).
 //! От чего зависит: ctx.rs, gateway/errors.rs, gateway/events.rs, storage/journal.rs.
-//! Настройки: venue.rate_limit_pause_ms [bingx].
+//! Решение 333: уведомление ядру — gateway/core_out_must.rs (полный канал не теряет его молча).
+//! Настройки: venue.rate_limit_pause_ms [bingx]; через core_out_must.rs — venue.info_events_max,
+//! log.events_lost_interval_s.
 //!
 //! Официально: error-codes.md (https://github.com/BingX-API/api-ai-skills/blob/main/skills/references/error-codes.md):
 //! «429 — Too Many Requests — Requests are too frequent, rate-limited by the system»; «418 — Continued access after
@@ -28,6 +30,7 @@ use std::sync::{LazyLock, Mutex, RwLock};
 use serde_json::json;
 use tokio::sync::mpsc;
 
+use crate::gateway::core_out_must::{Fed, MustOut};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
@@ -178,21 +181,29 @@ async fn on_418(ctx: &Ctx, path: &str, retry_after_s: Option<u64>) -> String {
     let text =
         format!("BingX: HTTP 418 — IP заблокирован за запросы после 429 (ответ на {path}); {note}");
     let first = !BANNED.swap(true, Ordering::Relaxed);
-    let sent = first && {
+    // Решение 333: событие — через очередь «ждут места» шлюза (полный канал ядра — ждёт места, решение
+    // 362; сверх venue.info_events_max — потеря со счётом в журнале venue.core_events_lost), а не молчаливый try_send.
+    let fed = if first {
         let out = OUT.lock().unwrap_or_else(|p| p.into_inner()).clone();
-        out.is_some_and(|o| {
-            o.try_send(MarketEvent::Notice {
+        out.map(|o| {
+            MustOut::new(o, &ctx.settings, &ctx.journal).send(MarketEvent::Notice {
                 venue: ctx.venue(),
                 code: EVENT.to_string(),
                 text: text.clone(),
             })
-            .is_ok()
         })
+    } else {
+        None
     };
-    let tail = match (first, sent) {
+    let tail = match (first, fed) {
         (false, _) => " (уведомление уже отправлено в этом эпизоде)",
-        (true, true) => "",
-        (true, false) => {
+        (true, Some(Fed::Sent)) => "",
+        (true, Some(Fed::Kept)) => " (канал событий ядра полон — уведомление ждёт места)",
+        (true, Some(Fed::Lost)) => {
+            " (уведомление потеряно: канал событий ядра полон и очередь достигла venue.info_events_max; счёт в venue.core_events_lost)"
+        }
+        (true, Some(Fed::Closed)) => " (уведомление не отправлено: канал событий ядра закрыт)",
+        (true, None) => {
             " (уведомление не отправлено: нет канала событий ядра — подписка на рынок BingX не запущена)"
         }
     };

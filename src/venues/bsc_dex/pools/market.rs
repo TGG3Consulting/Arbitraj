@@ -97,6 +97,12 @@ pub async fn subscribe(
             || (is_mid(&e.usdt) && coins.contains_key(&e.coin) && e.coin != e.usdt))
             && multi_pair::entry_fits(&p.ctx, e, &known)
     });
+    // Ревью t153 (Н6, решение 339): отметки неудач чтения пулов, которых больше нет среди найденных (и тех, что так
+    // и не прочитались — записи в реестре у них нет), — долой.
+    p.reg.fails().keep_only(&known);
+    p.reg.unread().keep_only(&known);
+    // Решение 357 (ревью слияния, Н4): отметки «в обновлении» пулов, которых больше нет среди найденных.
+    p.reg.holds().keep_only(|r| known.contains(r));
     let msg = format!(
         "DEX: пулов из справочника (проверены на узле) с {quote} и промежуточными монетами ({}): {} по {} монетам",
         mid_list.len(),

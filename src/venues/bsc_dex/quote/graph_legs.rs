@@ -5,11 +5,11 @@
 //! Фаза 80, PR 80.4 — оценка пути и сплит (бэклог §7.3).
 //! decimals всех токенов путей (decimals — вынесено из quote/graph_route.rs).
 //! Решение 311 (А): legs_prep — допуск всех хопов с одной подготовкой глубины (Prep) на котировку; (В) — путь во
-//! владение, запись пула переходит в ногу без копии.
+//! владение, запись пула переходит в ногу без копии. prep_once — выключатель (А) dex.quote_prep_once (не задана — включено).
 //! Кто вызывает: quote/graph_route.rs.
 //! От чего зависит: quote/route_calc.rs (Leg), quote/route_paths.rs (RoutePath), quote/select.rs, pools/registry.rs,
 //! pools/depth_key.rs (Prep).
-//! Настройки: через select.rs — см. его шапку.
+//! Настройки: dex.quote_prep_once [bsc_dex] (решение 311 А, prep_once); через select.rs — см. его шапку.
 
 use std::collections::{HashMap, HashSet};
 
@@ -18,6 +18,7 @@ use alloy_primitives::Address;
 use crate::core::types::Side;
 use crate::gateway::errors::GatewayResult;
 
+use super::super::ctx::Ctx;
 use super::super::pools::depth_key::Prep;
 use super::super::pools::registry::Entry;
 use super::Quoting;
@@ -35,6 +36,13 @@ pub fn hop_side(e: &Entry, token_in: Address) -> Option<Side> {
     } else {
         None
     }
+}
+
+/// Решение 311 А, выключатель (Тигран 16.11.2026: «сделай вкл выкл. по дефолту вкл»): одна подготовка глубины на
+/// котировку графа включена? Принимает: окружение площадки. Возвращает: dex.quote_prep_once = нет — false (подготовка
+/// на каждый хоп, как до 311 А); да, не задана или ошибка чтения — true (по умолчанию включено). Ошибок нет.
+pub fn prep_once(ctx: &Ctx) -> bool {
+    ctx.flag("dex.quote_prep_once").unwrap_or(true)
 }
 
 /// Ноги пути в порядке исполнения стороны сделки. `side` — сторона всей сделки (Buy: USDT→монета; Sell: монета→USDT).

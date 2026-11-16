@@ -130,7 +130,7 @@ impl Queue {
         rt: bool,
         keep: impl FnOnce() -> bool,
         max: impl FnOnce() -> Option<u64>,
-    ) -> Result<Put, (Why, MarketEvent)> {
+    ) -> Result<Put, Box<(Why, MarketEvent)>> {
         let mut s = lock(&self.state);
         let busy = match kind {
             Kind::Money => !s.money.is_empty(),
@@ -146,17 +146,17 @@ impl Queue {
                 Err(TrySendError::Full(())) => {}
             }
             if kind == Kind::Info && !keep() {
-                return Err((Why::NotKept, ev));
+                return Err(Box::new((Why::NotKept, ev)));
             }
         }
         if kind == Kind::Info
             && let Some(m) = max()
             && s.info.len() as u64 >= m
         {
-            return Err((Why::Max(m), ev));
+            return Err(Box::new((Why::Max(m), ev)));
         }
         if !s.running && !rt {
-            return Err((Why::NoRuntime, ev));
+            return Err(Box::new((Why::NoRuntime, ev)));
         }
         let item = Item {
             ev,

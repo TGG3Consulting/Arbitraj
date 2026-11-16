@@ -123,7 +123,8 @@ impl MustOut {
                 log::note(&q, &self.settings, &self.journal);
                 Fed::Kept
             }
-            Err((why, ev)) => {
+            Err(lost) => {
+                let (why, ev) = *lost;
                 log::lost(&q, &self.settings, &self.journal, kind, why, &ev);
                 Fed::Lost
             }

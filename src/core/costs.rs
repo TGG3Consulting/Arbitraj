@@ -244,7 +244,8 @@ pub async fn evaluate_capped<S: Source>(
         let (buy, sell) = (qa.avg_price, qb.avg_price);
         let r = costs.iter().find(|l| l.kind == CostKind::PriceMoveReserve);
         let r = r.and_then(|l| l.usdt).unwrap_or_default();
-        super::reserve_check::priced(c, cx, sqrt_t, proceeds, buy, sell, r, profit, &rates)
+        let c = super::reserve_check::priced(c, cx, sqrt_t, proceeds, buy, sell, r, profit, &rates);
+        Box::new(c)
     });
     Ok(Calc {
         direction: d.clone(),

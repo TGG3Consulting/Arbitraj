@@ -55,7 +55,8 @@ pub struct DirCtx {
     /// Решение 240: доля закрытия разницы profit.closure_share [B]; None — не задана (запас как раньше).
     pub closure_share: Option<Decimal>,
     /// Решение 357: сравнение σ только для журнала (log.sigma_horizon = да, план входа); None — нет. На решение не влияет.
-    pub sigma_check: Option<super::reserve_check::SigmaCheck>,
+    /// Box — значение не растит DirCtx, который держат будущие пути расчёта и предпроверки (стек).
+    pub sigma_check: Option<Box<super::reserve_check::SigmaCheck>>,
     pub h: Decimal,
     pub return_per_trade: bool,
     /// Правила спот-пары биржи на A и на B (решение 66); у DEX — None.
@@ -215,7 +216,8 @@ impl DirCtx {
                 sigma,
                 transit_s,
                 chrono::Utc::now(),
-            ),
+            )
+            .map(Box::new),
             _ => None,
         };
         // Решение 240: доля закрытия разницы — не у сделки, которая уже идёт.

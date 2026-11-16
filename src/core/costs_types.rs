@@ -66,7 +66,8 @@ pub struct Calc {
     /// Решение 357 (только журнал, log.sigma_horizon = да): σ на горизонте T рядом со σ плана, запас и прибыль с ней.
     /// None — режим выключен или не план входа; в JSON тогда поля нет.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sigma_check: Option<super::reserve_check::SigmaCheck>,
+    /// Box — Calc живёт в будущих пути расчёта и предпроверки, значение по месту растило бы их стек.
+    pub sigma_check: Option<Box<super::reserve_check::SigmaCheck>>,
     /// Котировки — для худшей цены ордеров и маршрута DEX при исполнении.
     pub buy_quote: Quote,
     pub sell_quote: Quote,

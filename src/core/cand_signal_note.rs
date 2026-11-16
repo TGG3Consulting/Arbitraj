@@ -27,15 +27,16 @@ use super::engine::{Core, rd};
 use super::signal_types::SpreadView;
 
 /// Сигнал на начало расчёта кандидата.
+/// Строка сигнала — в Box: Start живёт в будущем calc_one через весь расчёт (стек пути расчёта).
 pub struct Start {
-    view: Option<SpreadView>,
+    view: Option<Box<SpreadView>>,
     at: DateTime<Utc>,
 }
 
 /// Что делает: снимок строки сигнала направления на начало расчёта. Принимает: ядро, направление. Ошибок нет.
 pub fn start(core: &Core, d: &Direction) -> Start {
     Start {
-        view: rd(&core.inner.spreads).get(d).cloned(),
+        view: rd(&core.inner.spreads).get(d).cloned().map(Box::new),
         at: Utc::now(),
     }
 }

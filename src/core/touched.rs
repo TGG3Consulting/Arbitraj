@@ -21,11 +21,13 @@ pub enum Touched {
         first: bool,
     },
     /// Новое состояние пула. `first` — пул встречен впервые. `pool` — какой пул (решение 245: пулы маршрута сделки).
+    /// `block` — номер блока состояния (Pool.block; решение 322 — в запись core.signal_hold).
     Pool {
         venue: VenueId,
         tokens: (Address, Address),
         pool: PoolRef,
         first: bool,
+        block: u64,
     },
     /// Площадка объявила данные монеты недостоверными — стакан удалён.
     Invalidated {

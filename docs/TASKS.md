@@ -14,6 +14,9 @@
   Сделано (317): signal.dex_event_skip_hold — кандидат от события пула без удержания, если цена стороны биржи стоит
   ≥ signal.min_hold_ms (core/signal_fast.rs, core/signal_ctx.rs); log.signal_hold — запись core.signal_hold при переходе
   в кандидата (core/signal_hold_log.rs). Тест tests/core_signal_hold_317.rs (локально не собирался и не запускался).
+  Сделано (322): signal.pool_event_now — событие пула будит сон задачи монеты, пересчёт сразу (core/tick_plan.rs,
+  core/tick_sched.rs); ограничитель signal.pool_event_min_interval_ms. Тест tests/core_tick_plan_322.rs (локально не
+  собирался и не запускался).
   **Включение на живом боте (по одной):**
   1. log.signal_hold = да при прежних настройках сигнала, 30–60 минут — база «до»: по core.signal_hold — удержание (мс,
      обновлений) и запуск; по парам core.signal_hold → core.window «Окно открыто» той же монеты и направления — время

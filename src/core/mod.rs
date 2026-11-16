@@ -237,6 +237,8 @@ pub mod sub_state;
 pub mod subscribe;
 pub mod tax_age;
 pub mod tick;
+pub mod tick_plan;
+pub mod tick_sched;
 pub mod tick_slow;
 pub mod ticker_index;
 pub mod to_trading;

@@ -3,20 +3,20 @@
 //! пересчёт только направлений этой монеты, где участвует площадка (2×(N−1)) → signal → «Живой экран»;
 //! кандидат — в очередь полного расчёта (candidates.rs); цены — в замеры волатильности (vol.rs).
 //! Новые стаканы, пулы и проверки (кроме проверки USDT, решение 277) толкают пересборку справочника.
-//! Пересчёт одной монеты идёт отдельной задачей; тики, пришедшие во время пересчёта, сливаются в один повтор.
+//! Пересчёт одной монеты идёт отдельной задачей; тики, пришедшие во время пересчёта, сливаются в один повтор
+//! (core/tick_sched.rs, план — core/tick_plan.rs). Решение 322: событие пула ставится с отметкой — время прихода в
+//! поток тика и номер блока (tick_sched.rs schedule_pool; signal.pool_event_now — будит сон задачи монеты).
 //! Событие пула толкает поиск циклов DEX ↔ DEX для исполнения (решение 124, cycle_watch.rs). Стакан и пул отмечают живость потока площадки (решение 196,
 //! feed_live.rs). Решение 245: событие пула маршрута нашей открытой сделки — отметка задаче точек цены DEX на объём
 //! сделки (window_deal.rs touched, только память).
 //! Решение 318: после каждого пересчёта монеты — таймер дозревания (signal_ripen.rs arm); сработавший таймер ставит
-//! пересчёт сюда же (schedule_set) — тем же путём, с тем же signal.eval_min_interval_ms.
+//! пересчёт тем же путём (tick_sched.rs schedule_set), с тем же signal.eval_min_interval_ms.
 //! Кто вызывает: core/engine.rs (задача run); schedule — ещё core/feed_rest_book.rs (t79: ответ REST стал стаканом
 //! тихой пары); schedule_set — core/signal_ripen.rs (решение 318).
-//! От чего зависит: engine.rs, market_state.rs, evaluate.rs (пересчёт монеты), view.rs.
-//! Настройки: signal.eval_min_interval_ms (решение 109); через evaluate.rs — signal.*, money.max_per_trade_usd,
+//! От чего зависит: engine.rs, market_state.rs, tick_sched.rs (пересчёт монеты), view.rs.
+//! Настройки: через tick_sched.rs — signal.eval_min_interval_ms (решение 109), signal.pool_event_now,
+//! signal.pool_event_min_interval_ms (решение 322); через evaluate.rs — signal.*, money.max_per_trade_usd,
 //! profit.sigma_window_min.
-
-use std::collections::HashSet;
-use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
 
@@ -26,6 +26,8 @@ use crate::gateway::events::MarketEvent;
 use super::engine::{Core, lk, rd, wr};
 use super::market_state::Touched;
 use super::view::CoreEvent;
+
+pub(super) use super::tick_sched::{schedule, schedule_set};
 
 /// Задача приёма событий адаптеров. Работает, пока жив канал.
 pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
@@ -59,7 +61,13 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 tokens,
                 pool,
                 first,
+                block,
             } => {
+                // Решение 322: момент прихода события пула в ядро и блок — с пересчётом в запись core.signal_hold.
+                let mark = super::tick_plan::PoolMark {
+                    at: chrono::Utc::now(),
+                    block,
+                };
                 core.inner.feed_seen.mark(&venue);
                 // Решение 245: пул маршрута нашей сделки — отметка для точки цены DEX на объём сделки (только память).
                 super::window_deal::touched(&core, &venue, &pool);
@@ -81,7 +89,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 // Решение 124: новые состояния пулов — толчок поиска циклов DEX ↔ DEX для исполнения (cycle_watch.rs).
                 core.inner.cycles.kick.notify_one();
                 for a in assets_by_tokens(&core, tokens) {
-                    schedule(&core, a, venue.clone());
+                    super::tick_sched::schedule_pool(&core, a, venue.clone(), mark);
                 }
             }
             Touched::Invalidated {
@@ -146,62 +154,4 @@ fn assets_by_tokens(
     t: (alloy_primitives::Address, alloy_primitives::Address),
 ) -> Vec<Asset> {
     rd(&core.inner.tickers).by_tokens(t)
-}
-
-/// Ставит пересчёт монеты: если он уже идёт — запоминает площадку для повтора, иначе запускает задачу.
-/// Решение 109: пересчёт одной монеты — не чаще signal.eval_min_interval_ms (не задано — без предела): тики, пришедшие
-/// между пересчётами, сливаются в один повтор по всем приславшим площадкам. Так нагрузка зависит от числа монет и
-/// этого интервала, а не от того, как часто биржи шлют стаканы (MEXC — снимками потоком).
-pub(super) fn schedule(core: &Core, asset: Asset, venue: VenueId) {
-    // Тик монеты — тем, кто ждёт её цены (режим «Ожидание», stuck.rs).
-    let _ = core.inner.coin_ticks.send(asset.clone());
-    schedule_set(core, asset, [venue].into());
-}
-
-/// Ставит пересчёт монеты по площадкам (schedule без отметки тика монеты — так ставит и таймер дозревания, решение
-/// 318: нового тика не было). Идёт пересчёт — площадки в повтор; нет — задача. Ошибок нет.
-pub(super) fn schedule_set(core: &Core, asset: Asset, venues: HashSet<VenueId>) {
-    {
-        let mut t = lk(&core.inner.ticking);
-        if let Some(pending) = t.get_mut(&asset) {
-            pending.extend(venues);
-            return;
-        }
-        t.insert(asset.clone(), HashSet::new());
-    }
-    let core = core.clone();
-    tokio::spawn(async move {
-        let mut venues = venues;
-        loop {
-            let started = Instant::now();
-            super::evaluate::evaluate(&core, &asset, &venues).await;
-            // Решение 318: «держится» без новых тиков — таймер на срок дозревания (не задан signal.hold_timer — нет).
-            super::signal_ripen::arm(&core, &asset);
-            if let Some(min) = min_interval(&core) {
-                let spent = started.elapsed();
-                if spent < min {
-                    tokio::time::sleep(min - spent).await;
-                }
-            }
-            let mut t = lk(&core.inner.ticking);
-            match t.get_mut(&asset) {
-                Some(pending) if !pending.is_empty() => venues = std::mem::take(pending),
-                _ => {
-                    t.remove(&asset);
-                    return;
-                }
-            }
-        }
-    });
-}
-
-/// Наименьший промежуток между пересчётами одной монеты (signal.eval_min_interval_ms). None — не задан или 0.
-fn min_interval(core: &Core) -> Option<Duration> {
-    core.inner
-        .deps
-        .settings
-        .integer("signal.eval_min_interval_ms", Default::default())
-        .ok()
-        .filter(|ms| *ms > 0)
-        .map(Duration::from_millis)
 }

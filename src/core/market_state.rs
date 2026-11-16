@@ -80,6 +80,7 @@ impl MarketState {
                 let key = (p.venue.clone(), p.reference.clone());
                 let (venue, tokens) = (p.venue.clone(), (p.token0, p.token1));
                 let r = p.reference.clone();
+                let block = p.block;
                 let first = self.pools.insert(key, p).is_none();
                 if first {
                     self.pool_pairs
@@ -92,6 +93,7 @@ impl MarketState {
                     tokens,
                     pool: r,
                     first,
+                    block,
                 }
             }
             MarketEvent::Invalidated {

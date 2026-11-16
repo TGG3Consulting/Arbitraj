@@ -6,7 +6,8 @@
 //! Решение 317: сигналу передаются обстоятельства пересчёта (signal_ctx.rs — сторона DEX, событие пула); направление
 //! стало кандидатом — запись core.signal_hold (signal_hold_log.rs, при log.signal_hold = да). Решение 318: срок
 //! дозревания «держится» — в план таймера (signal_ripen.rs); пересчёт, поставленный таймером, помечается «таймер».
-//! Кто вызывает: core/tick.rs.
+//! Решение 322: направления площадки события пула считаются первыми (tick_plan.rs Run.first).
+//! Кто вызывает: core/tick_sched.rs.
 //! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, signal_ctx.rs, signal_hold_log.rs,
 //! vol.rs, candidates.rs, episode_run.rs, view.rs.
 //! Настройки: signal.* (через signal.rs), money.max_per_trade_usd (через prices.rs), profit.sigma_window_min,
@@ -14,15 +15,17 @@
 
 use chrono::Utc;
 
-use crate::core::types::{Asset, Side, VenueId};
+use crate::core::types::{Asset, Side};
 
 use super::engine::{Core, lk, rd, wr};
 use super::signal::{Params, State};
 use super::view::CoreEvent;
 
 /// Пересчёт направлений монеты, где участвует любая из площадок тика (решение 109: тики нескольких площадок сливаются
-/// в один пересчёт). Ошибок нет: причины — в строках экрана.
-pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::HashSet<VenueId>) {
+/// в один пересчёт). Принимает: ядро, монету, пересчёт плана (tick_plan.rs Run — площадки; решение 322 — площадки
+/// события пула первыми). Ошибок нет: причины — в строках экрана.
+pub async fn evaluate(core: &Core, asset: &Asset, run: &super::tick_plan::Run) {
+    let venues = &run.venues;
     let (dirs, ref_price, waiting) = {
         // Решение 131: место монеты — из карты пересборки (ticker_index.rs), проход справочника — только если
         // карта ещё от прежнего справочника.
@@ -37,11 +40,18 @@ pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::Has
             .filter(|p| p.info.is_some())
             // Решение 211 (ревью В5): стакан биржи — по её тикеру монеты (Presence::ticker).
             .find_map(|p| market.best(&p.venue, &p.ticker, Side::Buy));
-        let dirs: Vec<_> = entry
+        let mut dirs: Vec<_> = entry
             .shown_directions()
             .into_iter()
             .filter(|d| venues.contains(&d.buy_on) || venues.contains(&d.sell_on))
             .collect();
+        // Решение 322: направления с площадкой события пула — первыми (сортировка устойчивая; first пуст — порядок
+        // прежний).
+        if !run.first.is_empty() {
+            dirs.sort_by_key(|d| {
+                !(run.first.contains(&d.buy_on) || run.first.contains(&d.sell_on))
+            });
+        }
         // Налоги не проверены (решение 30): строка видна с причиной ожидания, торговли нет.
         let waiting = entry.waits_check().then(|| {
             let why = entry

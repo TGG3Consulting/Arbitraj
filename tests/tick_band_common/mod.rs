@@ -4,7 +4,8 @@
 //! 2026-10-25 (tests/data/depth_2026-10-25/responses.json, рекордер tests/recorders/record_depth.js); пул PancakeSwap V3
 //! AAVE/USDT 0x2e31285a… (tickSpacing 1, слова битмапа ±8 вокруг текущего) как запись реестра бота и сужение его карты
 //! до заданных слов — ровно то, что бот прочитал бы TickLens по этим словам (ответ TickLens — по одному слову).
-//! Кто вызывает: tests/bsc_dex_tick_read_band.rs, tests/bsc_dex_tick_read_band_swap.rs.
+//! Кто вызывает: tests/bsc_dex_tick_read_band.rs, tests/bsc_dex_tick_read_band_swap.rs,
+//! tests/bsc_dex_tick_read_band_algebra.rs (решение 319), tests/bsc_dex_off_map_algebra.rs (решение 320).
 //! От чего зависит: tests/depth_common (rec), tests/native_common (entry), arb::settings, arb::venues::bsc_dex.
 //! Настройки: задаёт тест (значения — в вызовах set).
 // Каждый тест берёт часть общего — остальное для него не используется.

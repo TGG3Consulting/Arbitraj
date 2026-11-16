@@ -158,6 +158,7 @@ pub mod market_mids;
 pub mod mid_dex;
 pub mod mids;
 pub mod multi_pair;
+pub mod off_map_algebra;
 pub mod order;
 pub mod per_block;
 pub mod per_block_balancer;

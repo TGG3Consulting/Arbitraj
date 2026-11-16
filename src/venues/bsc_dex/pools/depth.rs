@@ -11,11 +11,14 @@
 //! правилам.
 //! Глубину не посчитать (не задана настройка, нет курса промежуточной монеты, пул не прочитан) — пул глубокий:
 //! слушаем всё, как раньше, причина — одной записью в журнал.
-//! Полоса цены вышла за прочитанные слова битмапа (off_map) — карта перечитывается вокруг нового тика сразу.
+//! Полоса цены вышла за прочитанные слова битмапа (off_map) — карта перечитывается вокруг нового тика сразу; у Algebra —
+//! при dex.algebra_off_map_reread = да (решение 320, pools/off_map_algebra.rs).
 //! Кто вызывает: pools/admit.rs (deep, mark), pools/listen_log.rs (touch — на каждой отправке пула ядру; off_map —
 //! после события).
-//! От чего зависит: quote/select.rs (deep_side), quote/emptiness.rs, registry.rs, depth_book.rs, progress.rs, tokens.rs.
-//! Настройки: bsc.pool_events_source [вся система]; через depth_book.rs — dex.min_pool_liquidity_usd,
+//! От чего зависит: quote/select.rs (deep_side), quote/emptiness.rs, registry.rs, depth_book.rs, progress.rs, tokens.rs,
+//! off_map_algebra.rs (решение 320).
+//! Настройки: bsc.pool_events_source [вся система]; dex.algebra_off_map_reread [bsc_dex] (через off_map_algebra.rs);
+//! через depth_book.rs — dex.min_pool_liquidity_usd,
 //! dex.depth_band_pct, dex.depth_hysteresis_pct, dex.depth_log_min_s [bsc_dex].
 
 use crate::core::types::PoolRef;
@@ -88,7 +91,9 @@ pub fn touch(p: &Pools, r: &PoolRef) {
 /// глубина считалась бы не целиком — карту пора перечитать вокруг нового тика, не дожидаясь переподключения
 /// (pools/listen_log.rs). Края полосы — в пределах TickMath. Не V3/CL, нет карты, полоса не задана — false. Решение 296:
 /// проверяется только полоса глубины dex.depth_band_pct; полоса чтения dex.tick_read_band_pct сюда не входит (карта
-/// перечитывается вокруг нового тика тем же word_range — уже с полосой чтения). Ошибок нет.
+/// перечитывается вокруг нового тика тем же word_range — уже с полосой чтения). Решение 320: Algebra (V1/V1.9 и
+/// Integral) — та же проверка при dex.algebra_off_map_reread = да и только если перечитывание даст другое окно
+/// (pools/off_map_algebra.rs); не задана — false, как раньше. Ошибок нет.
 pub fn off_map(ctx: &super::super::ctx::Ctx, e: &super::registry::Entry) -> bool {
     use super::super::math::tick_math::{MAX_TICK, MIN_TICK};
     use super::super::quote::depth_band::band_ticks;
@@ -99,6 +104,7 @@ pub fn off_map(ctx: &super::super::ctx::Ctx, e: &super::registry::Entry) -> bool
     };
     let tick = match e.pool.state {
         PoolState::V3 { tick, .. } | PoolState::Cl { tick, .. } => tick,
+        PoolState::Algebra { tick, .. } if super::off_map_algebra::enabled(ctx) => tick,
         _ => return false,
     };
     let Some(b) = ctx
@@ -114,5 +120,9 @@ pub fn off_map(ctx: &super::super::ctx::Ctx, e: &super::registry::Entry) -> bool
     let d = up.max(down);
     let lo = tick.saturating_sub(d).clamp(MIN_TICK, MAX_TICK);
     let hi = tick.saturating_add(d).clamp(MIN_TICK, MAX_TICK);
-    !(map.covers(lo) && map.covers(hi))
+    let out = !(map.covers(lo) && map.covers(hi));
+    match e.pool.state {
+        PoolState::Algebra { .. } => out && super::off_map_algebra::helps(ctx, e, map, tick),
+        _ => out,
+    }
 }

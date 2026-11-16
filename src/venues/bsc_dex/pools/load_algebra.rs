@@ -53,8 +53,8 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
     // в каждую сторону (решение 296: не меньше слов полосы чтения; решение 319: полоса — dex.tick_read_band_algebra_pct,
     // не задана — dex.tick_read_band_pct, raw_band_words). Полоса цены dex.depth_band_pct для Algebra не разворачивается
     // в число слов (слово сырого битмапа = 256 тиков ≈ 2,56% цены — заметно шире компрессированного слова V3): если
-    // полоса выйдет за окно,
-    // math/swap_algebra вернёт частичный итог (complete = false), и граф занизит глубину в безопасную сторону.
+    // полоса выйдет за окно, math/swap_algebra вернёт частичный итог (complete = false), и граф занизит глубину в
+    // безопасную сторону. Решение 320: тик, ушедший после Swap за окно, — pools/off_map_algebra.rs.
     let (lo, hi) = raw_word_range(ctx, tick)?;
     let calls: Vec<_> = (lo..=hi)
         .map(|w| IAlgebraPool::tickTableCall { wordPosition: w })

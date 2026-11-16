@@ -22,16 +22,16 @@ use crate::storage::db::{Db, DbError};
 pub async fn save<T: Serialize>(db: &Db, kind: &str, id: &str, v: &T) -> Result<(), DbError> {
     let body = serde_json::to_string(v).map_err(|e| DbError::Json(e.to_string()))?;
     let (kind, id) = (kind.to_string(), id.to_string());
-    db.ledger()
-        .write(move |c| {
-            c.execute(
-                "INSERT INTO core_state (kind, id, body, updated_at) VALUES (?1, ?2, ?3, ?4)
-                 ON CONFLICT(kind, id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
-                params![kind, id, body, Utc::now().to_rfc3339()],
-            )
-            .map(|_| ())
-        })
-        .await
+    // Будущее записи — в куче (Box::pin): будущие шагов сделки не растут на его размер.
+    let write = db.ledger().write(move |c| {
+        c.execute(
+            "INSERT INTO core_state (kind, id, body, updated_at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(kind, id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
+            params![kind, id, body, Utc::now().to_rfc3339()],
+        )
+        .map(|_| ())
+    });
+    Box::pin(write).await
 }
 
 /// Удаляет запись. Ошибки: база.

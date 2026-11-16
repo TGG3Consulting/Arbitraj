@@ -75,19 +75,15 @@ pub(super) async fn commit(core: &Core, date: NaiveDate, book: Book) -> Trip {
     }
     let body = serde_json::to_string(&book).unwrap_or_default();
     let day = date.to_string();
-    let res = core
-        .inner
-        .deps
-        .db
-        .ledger()
-        .write(move |c| {
+    // Будущее записи — в куче (Box::pin): будущее закрытия сделки не растёт на его размер.
+    let res = Box::pin(core.inner.deps.db.ledger().write(move |c| {
             c.execute(
                 "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)
                  ON CONFLICT(day) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
                 params![day, body, Utc::now().to_rfc3339()],
             )
             .map(|_| ())
-        })
+        }))
         .await;
     let deps = &core.inner.deps;
     if let Err(e) = res {

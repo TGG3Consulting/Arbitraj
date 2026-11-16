@@ -31,13 +31,14 @@ pub async fn load(db: &Db, venue: &str) -> Result<Option<String>, DbError> {
 pub async fn save(db: &Db, venue: &str, body: String) -> Result<(), DbError> {
     let v = venue.to_string();
     let at = Utc::now().to_rfc3339();
-    db.ledger().write(move |c| {
+    // Будущее записи — в куче (Box::pin): шаг отправки транзакции DEX не растёт на его размер.
+    Box::pin(db.ledger().write(move |c| {
         c.execute(
             "INSERT INTO wallet_queue (venue, body, updated_at) VALUES (?1, ?2, ?3)
              ON CONFLICT(venue) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
             params![v, body, at],
         )
         .map(|_| ())
-    })
+    }))
     .await
 }

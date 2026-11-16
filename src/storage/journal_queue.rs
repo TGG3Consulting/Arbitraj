@@ -64,21 +64,21 @@ impl Queue {
     }
 
     /// Ставит запись в очередь. Принимает: базу и живой поток (для запуска писателя), запись.
-    /// Возвращает: Ok — поставлена или потеряна со счётом (вызывающий не пишет); Err(запись) — очередь выключена,
-    /// писать прямо. Ошибок иных нет.
+    /// Возвращает: None — поставлена или потеряна со счётом (вызывающий не пишет); Some(запись) — очередь выключена,
+    /// писать прямо. Ошибок нет.
     pub fn push(
         self: &Arc<Self>,
         db: &Db,
         live: &broadcast::Sender<Entry>,
         e: Entry,
-    ) -> Result<(), Entry> {
+    ) -> Option<Entry> {
         if !self.on() {
-            return Err(e);
+            return Some(e);
         }
         let max = self.max.load(Ordering::Acquire);
         if max > 0 && self.pending.load(Ordering::Acquire) >= max {
             self.lose(1, &e.kind);
-            return Ok(());
+            return None;
         }
         let mut tx = self.tx.lock().unwrap_or_else(|p| p.into_inner());
         let sender = tx.get_or_insert_with(|| self.start(db, live));
@@ -91,7 +91,7 @@ impl Queue {
             }
             *tx = Some(s);
         }
-        Ok(())
+        None
     }
 
     /// Ждёт, пока очередь опустеет. Ошибок нет.

@@ -99,9 +99,8 @@ impl Journal {
             last_at: None,
         };
         let row = e.clone();
-        let row = match self.queue.push(&self.db, &self.live, row) {
-            Ok(()) => return Ok(e),
-            Err(row) => row,
+        let Some(row) = self.queue.push(&self.db, &self.live, row) else {
+            return Ok(e);
         };
         let res = self.db.call(move |c| insert(c, &row)).await;
         match res {

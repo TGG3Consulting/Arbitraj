@@ -73,8 +73,8 @@ pub async fn evaluate_with<S: Source>(cx: &DirCtx, qty: Decimal, src: &S) -> Res
 /// Что делает: то же, что evaluate_with, с бюджетом подбора объёма (решение 246): списание по бюджету (spend_max)
 /// известно уже после стороны A — объём сверх бюджета подбор (size_memo.rs) всё равно отбросит, поэтому сторона B
 /// (котировки DEX — самые дорогие), вывод, возврат и курсы на нём не считаются. Отказ — тот же, что у size_memo.rs
-/// (over_budget: вид TooLarge, тот же текст). Принимает: как evaluate_with и бюджет (None — без проверки, как
-/// evaluate_with). Возвращает: Calc. Ошибки: как у evaluate_with; TooLarge — списание больше бюджета.
+/// (over_budget: вид OverBudget, тот же текст). Принимает: как evaluate_with и бюджет (None — без проверки, как
+/// evaluate_with). Возвращает: Calc. Ошибки: как у evaluate_with; OverBudget — списание больше бюджета.
 pub async fn evaluate_capped<S: Source>(
     cx: &DirCtx,
     qty: Decimal,

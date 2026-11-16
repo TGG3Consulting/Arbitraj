@@ -30,7 +30,7 @@ pub async fn upper<C: Curve>(
     k: u32,
 ) -> Result<(u64, bool), Fail> {
     let mut left = steps;
-    let large = |r: &Result<_, Fail>| matches!(r, Err(Fail::TooLarge(_)));
+    let large = |r: &Result<_, Fail>| matches!(r, Err(f) if f.too_large());
     let g = guess.max(1);
     let r = m.at(g).await;
     if let Err(Fail::Stop(e)) = r {
@@ -44,7 +44,7 @@ pub async fn upper<C: Curve>(
         let n = lo.saturating_mul(2);
         match m.at(n).await {
             Err(Fail::Stop(e)) => return Err(Fail::Stop(e)),
-            Err(Fail::TooLarge(_)) => hi = Some(n),
+            Err(f) if f.too_large() => hi = Some(n),
             _ => lo = n,
         }
     }
@@ -60,7 +60,7 @@ pub async fn upper<C: Curve>(
             for n in pts {
                 match m.at(n).await {
                     Err(Fail::Stop(e)) => return Err(Fail::Stop(e)),
-                    Err(Fail::TooLarge(_)) => {
+                    Err(f) if f.too_large() => {
                         hi = n;
                         break;
                     }
@@ -72,7 +72,7 @@ pub async fn upper<C: Curve>(
         let mid = lo + (hi - lo) / 2;
         match m.at(mid).await {
             Err(Fail::Stop(e)) => return Err(Fail::Stop(e)),
-            Err(Fail::TooLarge(_)) => hi = mid,
+            Err(f) if f.too_large() => hi = mid,
             _ => lo = mid,
         }
     }

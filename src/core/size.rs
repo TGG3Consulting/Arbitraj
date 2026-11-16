@@ -25,6 +25,9 @@ pub enum Fail {
     TooSmall(String),
     /// Объём больше возможного (глубина, максимум вывода или суммы ордера, бюджет) — меньший может подойти.
     TooLarge(String),
+    /// Ревью t159 Н-4: вложение (списание по худшей цене) больше бюджета — «слишком большой» со своим видом (без
+    /// разбора текста; size_memo.rs over_budget): меньший объём может подойти; при монотонном списании выше — тоже нет.
+    OverBudget(String),
     /// Расчёт невозможен при любом объёме (нет данных, не задана настройка, сбой шлюза) — сделки нет.
     Stop(String),
 }
@@ -33,8 +36,13 @@ impl Fail {
     /// Текст причины (для журнала и «Кандидатов»). Ошибок нет.
     pub fn text(&self) -> &str {
         match self {
-            Fail::TooSmall(t) | Fail::TooLarge(t) | Fail::Stop(t) => t,
+            Fail::TooSmall(t) | Fail::TooLarge(t) | Fail::OverBudget(t) | Fail::Stop(t) => t,
         }
+    }
+
+    /// «Слишком большой» любого вида (TooLarge или OverBudget) — меньший объём может подойти. Ошибок нет.
+    pub fn too_large(&self) -> bool {
+        matches!(self, Fail::TooLarge(_) | Fail::OverBudget(_))
     }
 }
 

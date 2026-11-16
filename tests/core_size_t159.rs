@@ -14,6 +14,7 @@
 //! - 344: изломы, которые кривая отдаёт сама (Curve::breaks: накопленные уровни записанных bids — изломы стороны B;
 //!   в Params их нет), считаются ПОСЛЕ обычного поиска: при пределе size.max_evals, равном числу точек обычного
 //!   поиска, итог тот же (не вытесняют, ревью Б4), при запасе — точек не больше 2 × предел + уточнение пиков;
+//! - 342, повторное ревью Н-5: порог задан, оптимум по USDT его проходит — точек и объём ровно как без порога;
 //! - 345: мягкий срок уже наступил до подбора: границы им не обрываются (ревью Б2 — раньше Fail::Stop), проходящий
 //!   объём из границ — итог без новых точек; проходящего нет — подбор как без срока (ревью Н11).
 //!
@@ -212,6 +213,23 @@ async fn pct_edge_on_records() {
     );
     let fb = new.fallback.expect("запасной меньший проходящий объём");
     assert!(fb.qty < new.best.qty && fb.data.0 >= thr);
+}
+
+/// Повторное ревью t159 Н-5: порог % задан, а оптимум по USDT его проходит — точки и объём ровно как без порога.
+#[tokio::test]
+async fn pct_passing_optimum_costs_nothing() {
+    let rec = Rec::load("t159-pct-free").await;
+    let p = params(&rec, Dir::DexToBingx, d("20000"));
+    let old = search(&mut pct_curve(&rec), &p).await.unwrap();
+    let mut p2 = p.clone();
+    // Порог — ровно процент оптимума по USDT (проходит: «не ниже»).
+    p2.ext.min_pct = Some(old.best.data.0);
+    let new = search(&mut pct_curve(&rec), &p2).await.unwrap();
+    assert!(!new.pct_moved && new.fallback.is_none());
+    assert_eq!(
+        (new.best.qty, new.choice.evals),
+        (old.best.qty, old.choice.evals)
+    );
 }
 
 /// 343: концы склеенных участков допустимости по minNotional / maxNotional по худшей цене (Б3: по участкам).

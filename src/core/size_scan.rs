@@ -10,7 +10,8 @@
 //!    находит бисекция по глубине): не больше 2 × (участков), а не по концу на каждый уровень;
 //! 2) extra — точки концов участков в объёме покупки: шаг до и после (n, n + 1 — как изломы стаканов, size_points.rs
 //!    around: точка между двумя шагами количества), перевод по приходу (аффинен по объёму, как изломы B);
-//!    выше наибольшего объёма бисекции — только если следующий объём там не «больше бюджета» при монотонном бюджете
+//!    начало участка, в котором лежит наименьший объём бисекции, не считается (его нашла бисекция); выше наибольшего
+//!    объёма бисекции — только если следующий объём там не «больше бюджета» при монотонном бюджете
 //!    (A — биржа: худшая цена asks не убывает; Extra.budget_monotone);
 //! 3) равномерные точки выше наибольшего объёма бисекции — только для немонотонностей без формулы (есть сторона DEX:
 //!    исполнимость сплита, бюджет умного маршрута) и при size.scan_above_pct (на сколько % выше; size.grid_points точек).
@@ -30,7 +31,7 @@ use crate::core::types::PriceLevel;
 use crate::gateway::events::SpotPairState;
 
 use super::size::{Curve, Fail, Params};
-use super::size_memo::{Memo, is_over_budget};
+use super::size_memo::Memo;
 
 /// Участок допустимости продажи: начало и конец (None — до конца стакана: эту границу находит бисекция по глубине).
 pub type Run = (Decimal, Option<Decimal>);
@@ -91,13 +92,24 @@ pub async fn extra<C: Curve>(
         && m.map
             .range(hi.saturating_add(1)..)
             .next()
-            .is_some_and(|(_, r)| matches!(r, Err(f) if is_over_budget(f)));
+            .is_some_and(|(_, r)| matches!(r, Err(Fail::OverBudget(_))));
     let mut pts: Vec<u64> = Vec::new();
     if !p.ext.sell_regions.is_empty()
         && let (Ok(a), Ok(b)) = (m.at(lo).await, m.at(hi).await)
         && b.arrive > a.arrive
     {
-        for s in ends(&p.ext.sell_regions) {
+        // Повторное ревью t159 Н-3: начало участка, в котором лежит наименьший объём бисекции, — граница
+        // «слишком мал», её нашла бисекция; ниже — только отдельные участки, целиком ниже него.
+        let runs: Vec<Run> = p
+            .ext
+            .sell_regions
+            .iter()
+            .map(|&(s, e)| {
+                let holds_lo = s <= a.arrive && e.is_none_or(|e| e >= a.arrive);
+                (if holds_lo { Decimal::ZERO } else { s }, e)
+            })
+            .collect();
+        for s in ends(&runs) {
             let q = a.qty + (s - a.arrive) * (b.qty - a.qty) / (b.arrive - a.arrive);
             if q > Decimal::ZERO
                 && let Some(n) = m.units(q)

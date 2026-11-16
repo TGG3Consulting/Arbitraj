@@ -237,7 +237,12 @@ pub async fn decide_capped(
         // Предел стека (tests/core_dry_mode.rs): расчёт c — в куче через ожидание, будущее пересчёта собирается в своём
         // кадре (size_retry.rs retry_boxed), не в кадре decide_capped.
         let c = Box::new(c);
-        if let Some(fb) = found.fallback.as_ref().map(|f| (f.qty, f.profit)) {
+        // Повторное ревью t159 Н-2: тот же фильтр kyber.final_gate_usd, что у основной финальной котировки (у
+        // внешнего исполнителя пересчёт — ещё один запрос к нему).
+        let gate = final_gate(core, d);
+        if let Some(fb) = found.fallback.as_ref().map(|f| (f.qty, f.profit))
+            && gate.is_none_or(|g| fb.1 >= g)
+        {
             let min = (min_usd, min_pct);
             let retry =
                 super::size_retry::retry_boxed(core, &cx, fb, (budget, p.step), min, &choice);

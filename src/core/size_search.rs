@@ -91,7 +91,9 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
     let (hi, max_exact, lo) = match bounds {
         Ok(b) => b,
         // Ревью t159 Н6: бисекция не нашла допустимого объёма, а участки по стакану B есть — по точке на участок.
-        Err(e @ (Fail::TooSmall(_) | Fail::TooLarge(_))) if !p.ext.sell_regions.is_empty() => {
+        Err(e @ (Fail::TooSmall(_) | Fail::TooLarge(_) | Fail::OverBudget(_)))
+            if !p.ext.sell_regions.is_empty() =>
+        {
             let found = super::size_scan::rescue(m, &p.ext.sell_regions);
             let ok = Box::pin(stage_detail(|| SCAN.into(), found)).await?;
             match (ok.first(), ok.last()) {

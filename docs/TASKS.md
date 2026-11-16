@@ -5,6 +5,13 @@
 
 ## Ждут решения Тиграна
 
+- **Решения 361–365 (16.11.2026, правило «базовое поведение — в логике»): проход по новым выключателям релиза
+  rel/dex-all.** В логике без настройки: stuck.tick_lag_wake (361), venue.info_events_keep (362), dex.quote_reuse (363 —
+  с доработкой: смена настроек внутри подбора видна сразу), log.sigma_horizon (364 — сравнение σ пишется всегда).
+  Остаются выключателями (причина и что нужно — DECISIONS 365): dex.event_refresh_batch / dex.event_refresh_fee_only
+  (запись aggregate3 с узла), dex.per_block_skip_same (разбор видов «каждым блоком» по времени блока + запись),
+  hooks.reprobe_before_pause (сквозной тест с узлом, вопрос 3), signal.mid_pool_wake (замер N_w и ярус «пробуждение»
+  только на свободные места), signal.book_same_skip (запись головы и газа). Локально не собиралось — прогон в GitHub.
 - **Решение 330 (16.11.2026, задача t153, та же ветка) — пачка не ждёт; ждёт сборки и тестов в GitHub, ревью и
   включения.** pools/session_lanes.rs, lanes.rs, per_block_par.rs; dex.event_lanes_max, dex.block_read_parallel_max
   (не заданы — как раньше). **Как включать:** по одной, после 339: сначала log.pool_refresh_timing = да на время

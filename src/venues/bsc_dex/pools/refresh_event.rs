@@ -9,7 +9,8 @@
 //! чтения; не задана — класс прежний.
 //! Решение 315: пул V3 — одним обращением к узлу (load_v3_once.rs) при dex.event_refresh_one_call = да и dex.multicall3;
 //! иначе — load::refresh.
-//! Кто вызывает: pools/listen_log.rs (ветки off_map и Refresh).
+//! Кто вызывает: pools/listen_log.rs (ветки off_map и Refresh), pools/off_map_bins.rs (решение 332: причина off_map_bins —
+//! цена ушла за прочитанную полосу бинов Infinity Bin / LB V2.1).
 //! От чего зависит: load.rs (refresh), refresh_timing.rs, node/req_trail.rs, gateway/urgency.rs (класс для записи),
 //! group.rs (Msg — канал сессии).
 //! Настройки: log.pool_refresh_timing (через refresh_timing.rs), dex.event_refresh_urgency (через refresh_urgency.rs),
@@ -33,7 +34,8 @@ use super::{load, load_v3_once};
 
 /// Что вызвало перечитывание.
 pub struct Event<'a> {
-    /// «off_map» — полоса глубины вышла за карту; «refresh» — событие требует перечитать пул.
+    /// «off_map» — полоса глубины вышла за карту; «refresh» — событие требует перечитать пул; «off_map_bins» — цена
+    /// ушла за прочитанную полосу бинов (решение 332, off_map_bins.rs).
     pub cause: &'static str,
     /// Блок события.
     pub block: u64,

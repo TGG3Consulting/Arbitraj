@@ -144,6 +144,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `depth_sync.rs` | Смена порога, полосы или гистерезиса глубины — пересчёт вердикта пулов пачки сразу, рост — «пул готов», спящий — пробуждение (решение 75) ; пересинхрон пачки после пропуска блока лентой (resync, решение 77) |
 | `off_map_algebra.rs` | Решение 320: выход полосы глубины за карту тиков у Algebra (THENA Fusion, Algebra Integral) — включено ли (dex.algebra_off_map_reread) и поможет ли перечитывание (V1/V1.9 — окно вокруг нового тика другое; Integral — тик вне окна); вызывает depth.rs off_map |
 | `off_map_bins.rs` | Решение 332 (t154): пул из бинов (Infinity Bin, LB V2.1 с USDT) — после события бинов прочитано в сторону цены меньше dex.bin_reread_left_pct от dex.bin_depth_usd (или активный бин за полосой) → пул целиком на блоке события (refresh_event.rs); вызывает listen_log.rs (ветка Bins) |
+| `off_map_bins_log.rs` | Ревью 332 (Н2, Н7): частота записей журнала dex.pool о проверке off_map_bins — Info «перечитывается» и Warn «не считается» не чаще log.bin_reread_interval_s на пул; не задана — записей нет |
 | `depth_facts.rs` | Пулы для экрана «Монеты»: глубина, вердикт, спит ли, сверка с квотером, tickSpacing (Venue::pool_depths, решение 73) |
 | `invalidated.rs` | Событие ядру «пулы монеты недостоверны» без молчаливой потери |
 | `session.rs` | Сессия пачки: приём, события, пробуждение мелких, новые пулы, обрыв |
@@ -151,7 +152,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `revive.rs` | Возврат в чтение пулов, брошенных из-за незаданной настройки (GatewayError.setting), когда её задали; при отставании рассылки настроек — по всем заданным |
 | `deploy_block.rs` | Блок развёртывания менеджера V4: бинарный поиск eth_getCode, хранение в SQLite; доступ узла к истории состояния |
 | `discover.rs`, `discover_v4.rs` | Найденный пул, встречный токен, пулы подписки из справочника; разбор Initialize и пул по ключу V4 |
-| `load.rs`, `load_v2v3.rs`, `load_cl.rs`, `load_bin.rs` | Состояние на блоке: резервы, slot0, ликвидность, тики, бины |
+| `load.rs`, `load_v2v3.rs`, `load_cl.rs`, `load_bin.rs` | Состояние на блоке: резервы, slot0, ликвидность, тики, бины (load_bin.rs, ревью 332 Н7: стороны полосы Infinity Bin — одновременно, getBin и следующий непустой бин — одним кругом) |
 | `load_elastic.rs` | Состояние пула KyberSwap Elastic на блоке (решение 81): getPoolState/getLiquidityState/swapFeeUnits + все тики списка через читатель (getTicksInRange) и ticks() — по одному пулу |
 | `load_dodo.rs` | Состояние пула DODO PMM на блоке (решение 86b): getPMMStateForCall + getUserFeeRate(0) + _BASE_TOKEN_/_QUOTE_TOKEN_ → PoolState::Pmm; net_after_fees, rstate — по одному пулу |
 | `load_curve.rs` | Состояние пула StableSwap на блоке (решение 122 F): coins(k)/balances(k) до первого отката, A(), fee() одним Multicall3 + rates по decimals монет → PoolState::StableSwap |
@@ -163,7 +164,8 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_lb_bins.rs` | Полоса бинов пула Liquidity Book V2.1 (решение 290): getNextNonEmptyBin / getBin пула в обе стороны до dex.bin_depth_usd (у пары без USDT — до конца); many — затронутые событием бины одной пачкой getBin (ревью 290) |
 | `load_balancer.rs` | Состояние пула Balancer V2 на блоке одной пачкой (решение 289): getPoolTokens хранилища, комиссия, пауза пула и хранилища (ревью 289), веса / A; calls / decode — для пачки всех пулов; id, вид кривой (фабрика) и decimals — один раз на пул; PoolState::VaultPool |
 | `load_balancer_fixed.rs` | Неизменяемое у пула Balancer V2 (решение 289): id, вид кривой (какая фабрика создала — isPoolFromFactory), множители точности по decimals; один раз на пул, в памяти |
-| `per_block_lb.rs` | Решение 290: состояние всех пулов Liquidity Book V2.1 на новом блоке одной пачкой (load_lb::calls / decode + одно время блока), бины записи — как есть (меняют только события пула) |
+| `per_block_lb.rs` | Решение 290: комиссия всех пулов Liquidity Book V2.1 на новом блоке одной пачкой (lb_head::calls / decode + одно время блока); ревью 332 (Б1): пишется только при согласии с памятью, активный бин и бины не трогает, события блока не отбрасывает |
+| `lb_head.rs` | Ревью 332 (Б1, деньги): правило чтения LB «каждым блоком» — getBin(активный бин памяти) в пачке; same — активный бин и его резервы на блоке чтения равны памяти → пишутся только комиссия и время блока, отметка учтённого прежняя; иначе — то же сравнение на блоке памяти (at_synced) или ничего (события придут) |
 | `per_block_balancer.rs` | Ревью 289: все прочитанные пулы Balancer V2 на новом блоке — одной пачкой (load_balancer::calls / decode, частями по dex.load_batch), в реестр и ядру как reload::load_one; пул без неизменяемого в памяти — обычным путём |
 | `load_metric.rs` | Состояние пула Metric OMM на блоке (решение 285): getImmutables (token0 пула), getSellAndBuyPrices (пригодна ли цена провайдера) → OraclePmm с лесенкой |
 | `load_metric_ladder.rs` | Лесенка ответов пула Metric через виртуальный квотер quoteMetric (решение 285; суммы dex.pmm_ladder_usd — у пар с USDT, при dex.pmm_ladder_counter = да и не с USDT, решение 306: суммы — ladder_counter.rs amounts); общий проход read_with — и для iZiSwap (quoteIzi, решение 286) |
@@ -184,7 +186,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `solidly_refresh.rs` | Решение 273: перечитывание комиссии и ограничений пулов Solidly с источником из настроек перед каждым проходом сверки с квотером (без события пула; как своя комиссия пар V2). Ревью 273: ограничения фабрики — один раз на DEX за проход, комиссии пулов — пачкой (call::try_chunks частями dex.verify_batch) |
 | `solidly_gate_read.rs` | Решение 273 (вынесено из solidly_fee_read.rs): ограничения обмена с фабрики — пауза, предел цены газа (больше u64 — «предела нет», Info один раз); has_gate — сбой хранилища наружу |
 | `load_slipstream.rs` | Состояние пула Slipstream (Topaz v3; решения 80, 85): slot0 форка + liquidity + тики прямыми геттерами tickBitmap/ticks (не TickLens) → PoolState::V3 + карта тиков — по одному пулу |
-| `ticks.rs`, `bins.rs` | Карта тиков и резервы бинов (в прочитанных пределах) |
+| `ticks.rs`, `bins.rs` | Карта тиков и резервы бинов (в прочитанных пределах); bins.rs — ещё концы поиска getNextNonEmptyBin NONE_BELOW / NONE_ABOVE и края «сторона прочитана до конца» (ревью 332, Н6) |
 | `events.rs`, `events_v2.rs`, `events_v3.rs`, `events_cl.rs`, `events_bin.rs` | Применение событий |
 | `events_elastic.rs` | События KyberSwap Elastic (решение 81): Swap → цена/тик/baseL; Mint/Burn/BurnRTokens → перечитывание (reinvestL/карта тиков) |
 | `events_dodo.rs` | События DODO PMM (решение 86b): любое событие кривой (DODOSwap/BuyShares/SellShares/RChange/DODOFlashLoan) → перечитывание пула (событие не несёт пост-состояние кривой) |

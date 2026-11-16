@@ -84,7 +84,7 @@ async fn full_channel_defers_then_delivers_one_per_pool_in_order() {
     let r = set.offer(&tx, P(2), e(&d, (2, 1)), || true);
     assert_eq!(r, Offer::Deferred { start: false });
     let r = set.offer(&tx, P(1), e(&d, (1, 2)), || true);
-    assert_eq!(r, Offer::Replaced);
+    assert_eq!(r, Offer::Replaced { start: false });
     // Пока ждут — за ждущими без чтения настройки (|| false не вызывается).
     let r = set.offer(&tx, P(3), e(&d, (3, 1)), || false);
     assert_eq!(r, Offer::Deferred { start: false });

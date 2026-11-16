@@ -68,11 +68,12 @@ impl<K: Keyed, S: Slot> State<K, S> {
         waiting > exempt
     }
 
-    /// Ключ уже ждёт — слить новое событие с его слотом; срочное — ключ в начало очереди. Ошибок нет.
+    /// Ключ уже ждёт — слить новое событие с его слотом; срочное — ключ в начало очереди. Доставщика нет (упал
+    /// паникой, а дальше приходят только слияния — ревью 324, Н3) — start: его надо запустить. Ошибок нет.
     pub(super) fn merge(&mut self, key: K, item: S) -> Offer {
         let class = key.class();
         let Some(e) = self.last.get_mut(&key) else {
-            return Offer::Replaced;
+            return Offer::Replaced { start: false };
         };
         let (was, was_urgent) = (e.exempt(), e.slot.urgent());
         let replaced = e.slot.merge(item);
@@ -84,7 +85,9 @@ impl<K: Keyed, S: Slot> State<K, S> {
         if replaced {
             self.count(&class).replaced += 1;
         }
-        Offer::Replaced
+        let start = !self.running;
+        self.running = true;
+        Offer::Replaced { start }
     }
 
     /// Новый ключ в набор: срочное — в начало, остальное — в конец. Возвращает: Deferred (start — запустить

@@ -175,9 +175,12 @@ impl Feed {
         (s, true)
     }
 
-    /// Итог требует доставщика — запускает его. Ошибок нет.
+    /// Итог требует доставщика (первое откладывание; слияние, когда доставщик упал — Н3) — запускает его. Ошибок нет.
     fn started(&self, out: &Sender<MarketEvent>, r: Offer) {
-        if r == (Offer::Deferred { start: true }) {
+        if matches!(
+            r,
+            Offer::Deferred { start: true } | Offer::Replaced { start: true }
+        ) {
             self.spawn(out.clone());
         }
     }

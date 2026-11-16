@@ -150,7 +150,10 @@ async fn pools_and_books_one_fair_queue() {
     // Повторные события ждущего пула 2 место в очереди не двигают — стаканы за ним не голодают.
     for _ in 0..3 {
         let (k, i) = pool(2);
-        assert_eq!(feed.offer(&tx, k, i, || true), Offer::Replaced);
+        assert_eq!(
+            feed.offer(&tx, k, i, || true),
+            Offer::Replaced { start: false }
+        );
     }
     assert_eq!(
         feed.offer(&tx, bk("B"), book_item("B", 1), || true),
@@ -299,5 +302,27 @@ async fn deliverer_guard_resets_on_panic_and_abort() {
     assert_eq!(rx.recv().await, Some(3));
     assert_eq!(rx.recv().await, Some(4));
     assert_eq!(rx.recv().await, Some(5));
+    assert!(worker.await.expect("доставщик"));
+}
+
+/// Ревью 324 (Н3): доставщик упал, дальше приходят только слияния уже ждущих ключей — слияние сообщает «запустить
+/// доставщика» (Offer::Replaced { start: true }), набор не копится без доставки.
+#[tokio::test]
+async fn merge_restarts_deliverer_after_panic() {
+    let (tx, mut rx) = mpsc::channel::<u32>(1);
+    let set: Pending<G, Boom> = Pending::default();
+    assert_eq!(set.offer(&tx, G(1), Boom(1, false), || true), Offer::Sent);
+    let r = set.offer(&tx, G(2), Boom(2, true), || true);
+    assert_eq!(r, Offer::Deferred { start: true });
+    let r = set.offer(&tx, G(3), Boom(3, false), || true);
+    assert_eq!(r, Offer::Deferred { start: false });
+    let worker = tokio::spawn(set.clone().deliver(tx.clone(), ()));
+    assert_eq!(rx.recv().await, Some(1));
+    assert!(worker.await.expect_err("паника").is_panic());
+    // G(3) ждёт, доставщика нет; новое событие G(3) — только слияние.
+    let r = set.offer(&tx, G(3), Boom(33, false), || true);
+    assert_eq!(r, Offer::Replaced { start: true });
+    let worker = tokio::spawn(set.clone().deliver(tx.clone(), ()));
+    assert_eq!(rx.recv().await, Some(33));
     assert!(worker.await.expect("доставщик"));
 }

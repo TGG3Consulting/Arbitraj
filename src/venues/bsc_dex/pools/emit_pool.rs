@@ -107,7 +107,7 @@ pub fn emit(p: &Pools, pool: Pool) -> Result<(), End> {
         }
     };
     match r {
-        Offer::Sent | Offer::Replaced => Ok(()),
+        Offer::Sent | Offer::Replaced { .. } => Ok(()),
         Offer::Closed => Err(End::Closed),
         // Решение 313: канал ядра полон — событие не ушло; счёт и запись не чаще интервала (lost_events.rs).
         Offer::Lost => {

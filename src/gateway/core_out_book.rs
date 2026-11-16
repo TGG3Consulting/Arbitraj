@@ -123,7 +123,7 @@ impl BookOut {
         match r {
             Offer::Sent => Fed::Sent,
             Offer::Closed => Fed::Closed,
-            Offer::Deferred { .. } | Offer::Replaced => {
+            Offer::Deferred { .. } | Offer::Replaced { .. } => {
                 self.note();
                 Fed::Kept
             }

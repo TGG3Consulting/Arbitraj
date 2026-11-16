@@ -55,7 +55,7 @@ pub enum Verdict {
 /// Расчёт кандидата. Принимает: ядро, направление, режим (зафиксирован вызывающим: очередь кандидатов — на расчёт,
 /// предпроверка сделки — всегда Live, решение 74). Возвращает: Verdict. Ошибок нет — всё в Reject.
 pub async fn decide(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Verdict {
-    decide_capped(core, d, mode, None, None, None).await
+    decide_capped(core, d, mode, None, None, None, None).await
 }
 
 /// То же под внешним общим сроком profit.calc_timeout_ms, начатым в `from` (решение 345, ревью t159 Б2: мягкий срок
@@ -66,19 +66,32 @@ pub async fn decide_within(
     mode: &super::dry::Mode,
     from: std::time::Instant,
 ) -> Verdict {
-    decide_capped(core, d, mode, None, None, Some(from)).await
+    decide_capped(core, d, mode, None, None, None, Some(from)).await
+}
+
+/// То же, что decide, с уже построенным контекстом направления (ревью t162, Н7: отсев sieve.rs построил его — второй раз
+/// не строится, σ та же). Принимает: ядро, направление, режим, контекст (None — строится, как в decide). Ошибок нет.
+pub async fn decide_pre(
+    core: &Core,
+    d: &Direction,
+    mode: &super::dry::Mode,
+    pre: Option<Box<DirCtx>>,
+) -> Verdict {
+    decide_capped(core, d, mode, None, None, pre, None).await
 }
 
 /// То же, но бюджет не больше `cap` (решение 103: свободный баланс A прямо перед ордером меньше бюджета — объём
 /// подбирается заново под свободный остаток, refit.rs). Принимает: ядро, направление, режим, предел, объём кандидата
-/// (решение 266: пересчёт предпроверки при precheck.fast_recalc = да — precheck_fast.rs; None — как раньше), начало
-/// внешнего общего срока (решение 345; None — его нет: мягкого срока подбора нет). Ошибок нет.
+/// (решение 266: пересчёт предпроверки при precheck.fast_recalc = да — precheck_fast.rs; None — как раньше), готовый
+/// контекст направления (ревью t162, Н7: от отсева кандидата; None — строится здесь), начало внешнего общего срока
+/// (решение 345; None — его нет: мягкого срока подбора нет). Ошибок нет.
 pub async fn decide_capped(
     core: &Core,
     d: &Direction,
     mode: &super::dry::Mode,
     cap: Option<Decimal>,
     want: Option<&mut super::precheck_fast::Want>,
+    pre: Option<Box<DirCtx>>,
     outer_from: Option<std::time::Instant>,
 ) -> Verdict {
     let reject = |reason: String, best: Option<Calc>| Verdict::Reject { reason, best };
@@ -106,10 +119,13 @@ pub async fn decide_capped(
     ) {
         return reject(e, None);
     }
-    let cx = match stage_sync(|| "контекст направления".into(), || DirCtx::build(core, d))
-    {
-        Ok(c) => c,
-        Err(e) => return reject(e, None),
+    let cx = match pre {
+        Some(c) => *c,
+        None => match stage_sync(|| "контекст направления".into(), || DirCtx::build(core, d))
+        {
+            Ok(c) => c,
+            Err(e) => return reject(e, None),
+        },
     };
     let s = &core.inner.deps.settings;
     // Решение 242: пороги — площадки и типа направления сделки (правило стороны), иначе вся система.

@@ -27,6 +27,11 @@
 pub mod abandon;
 pub mod approve_bundle;
 pub mod approve_gas;
+pub mod bound;
+pub mod bound_cycle;
+pub mod bound_graph;
+pub mod bound_rate;
+pub mod bound_set;
 pub mod breaks;
 pub mod breaks_bins;
 pub mod breaks_pool;

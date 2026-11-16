@@ -16,3 +16,25 @@
 | 368 (и «368 (данные 16.11)») | 369 | проект «второй шанс» финальной котировки |
 | 369 | 370 | решение владельца: XT depositMinAmount «0» |
 | 370 | 371 | решение владельца: Bitget, HTX, Phemex, CoinEx |
+
+## t162/proven-sieve (9e8df59b)
+
+| Было | Стало | О чём |
+| --- | --- | --- |
+| 361 | 372 | отсев кандидата по доказанной верхней границе прибыли |
+| 362 | 373 | отсев цикла DEX ↔ DEX |
+| 363 | 374 | показ отсева |
+| 364 | 375 | контроль отсева на живом боте (sieve.audit_share) |
+| 365 | 376 | правки отсева по ревью |
+| 366 | 377 | контроль отсева и частота строк (sieve.row_interval_ms) |
+
+## Совмещение кода (t162 × релиз)
+
+- `profit::decide_capped` — оба новых параметра: `pre: Option<Box<DirCtx>>` (t162, контекст от отсева) и
+  `outer_from: Option<Instant>` (t159, мягкий срок подбора, решение 345). Все вызовы обновлены: decide, decide_within,
+  decide_pre, precheck.rs replan_sized, refit.rs (оба — без контекста и без срока).
+- `candidates.rs calc_one`: отсев (sieve_gate, Box::pin) → снимок сигнала (решение 359) → `from` → расчёт
+  `quote_purpose::scope(purpose, profit::decide_capped(core, d, &mode, None, None, pre, Some(from)))` с классом и
+  меткой отсева (Trade/Size или Background/Audit). Ожидание t155, строки отказов t158 и контроль отсева t162 — без изменений.
+  `decide_pre` (t162) остаётся в profit.rs (pub), но calc_one вызывает decide_capped напрямую: нужны и контекст, и срок.
+- Отсев остаётся в логике без выключателя; sieve.audit_share и sieve.row_interval_ms — числа.

@@ -47,6 +47,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "exec.verify_rejected" => (WARN, "Сделка DEX отменена перед отправкой: цена уехала"),
         "balance.external" => (WARN, "Баланс изменился не ботом"),
         "risk.stop" => (STOP, "Торговля остановлена"),
+        "core.sieve_violation" => (WARN, "Отсев по границе ошибся: расчёт принял отсечённого"),
         "risk.daily_loss" => (STOP, "Торговля остановлена: дневной лимит убытка"),
         "risk.venue_daily_loss" => (STOP, "Направление на паузе: дневной лимит убытка"),
         "risk.daily_limit_reset" => (INFO, "Лимит дня сброшен"),

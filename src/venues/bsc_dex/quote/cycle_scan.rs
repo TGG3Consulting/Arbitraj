@@ -23,6 +23,7 @@
 //! Кто вызывает: venue.rs (dex_cycles — ядро и «Живой экран»); тесты — напрямую quote/cycle.rs.
 //! От чего зависит: quote/cycle.rs, quote/route_paths.rs, quote/rate.rs, pools/graph.rs, pools/registry.rs, tokens.rs,
 //! send/mod.rs (чаевые канала), exec/cycle_gate.rs (форма исполнения), num.rs.
+//! Решение 373: цикл со строгим верхом отдачи ρ < 1 (quote/bound_cycle.rs) не считается — сигнала нет, счётчик в сводке.
 //! Настройки: dex_dex.enabled, dex_dex.base_tokens, dex_dex.max_cycle_len, dex_dex.max_cycles, dex_dex.probe_input_base,
 //! dex_dex.min_profit_base, dex.graph_threads (решение 336) [bsc_dex]; size.refine_steps (шаги поиска входа); через граф — dex.route_max_pools_per_edge и глубина (решение 73).
 
@@ -193,6 +194,12 @@ fn signal(
 ) -> Option<CycleSignal> {
     let ctx = &q.ctx;
     let legs = cycle::legs_for_cycle(q, path, usdt_dec, dec).ok()?;
+    // Решение 373: строгий верх отдачи цикла ρ < 1 (quote/bound_cycle.rs) ⇒ выход < вход на любом входе ⇒ валовая
+    // и чистая прибыль < 0 ≤ dex_dex.min_profit_base — оптимальный вход не ищется (сигнала нет, счётчик в сводке
+    // dex.quote_count). Порог < 0 или верх не строгий (вид пула, крючок) — расчёт как раньше.
+    if !super::bound_cycle::cycle_may_profit(ctx, &legs) {
+        return None;
+    }
     // Решение 124: оптимальный вход на (0, dex_dex.probe_input_base] (quote/cycle_opt.rs), а не фиксированная проба.
     let p = cycle_opt::best(ctx, &legs, input).ok()?;
     // Тигран 09.11 (согласовано, план = факт): цикл, который пойдёт бандлом свопов (exec/cycle_gate.rs form — тот же

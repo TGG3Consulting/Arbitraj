@@ -11,7 +11,7 @@
 //! stale_read.rs (решение 298), refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321).
 //! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs). Решение 321:
 //! emit вынесен в emit_pool.rs (здесь — реэкспорт для прежних вызывающих) — при dex.pool_events_keep = да событие не
-//! теряется, а ждёт места в канале (pending_events.rs).
+//! теряется, а ждёт места в канале (gateway/core_out.rs, решение 324).
 //! Решение 314: перечитывания по событию (off_map, Refresh, Bins) — классом dex.event_refresh_urgency (refresh_urgency.rs).
 //! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s, dex.event_refresh_urgency,
 //! dex.pool_events_keep).

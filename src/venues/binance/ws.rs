@@ -110,11 +110,8 @@ pub async fn run(
 /// Объявляет стакан монеты недостоверным: убирает из памяти и сообщает ядру (без ожидания). Ошибок нет.
 pub fn invalidate(ctx: &Ctx, books: &Books, out: &mpsc::Sender<MarketEvent>, ticker: &str) {
     books.drop_ticker(ticker);
-    let _ = out.try_send(MarketEvent::Invalidated {
-        venue: ctx.venue(),
-        ticker: ticker.to_string(),
-        address: None,
-    });
+    // Решение 324: не теряется при полном канале ядра (в общий набор срочным, старый кадр пары снимается).
+    crate::gateway::core_out_book::invalidated(out, ctx.venue(), ticker);
 }
 
 /// Читает настройки соединения (и соединений окна, feed.rs). Ошибка — текст причины.

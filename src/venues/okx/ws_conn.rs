@@ -6,6 +6,8 @@
 //! venue.ws_reconnect_pause_ms или исчерпан часовой предел запросов соединения — переподключение (урок 12: без
 //! бесконечного круга ресинков). Отказ подписки (event error с
 //! instId) — стакан пары недостоверен. Сырые кадры стакана — в журнал только при raw.book_frames = да (решение 109).
+//! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
+//! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
 //! Кто вызывает: ws.rs.
 //! От чего зависит: depth.rs, local_book.rs, book.rs, ws.rs (Cfg, End), ws_req.rs (подключение, подписки), ctx.rs,
 //! gateway/feed_reg.rs (решение 202).
@@ -30,11 +32,12 @@ use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::mpsc::{self, error::TrySendError};
+use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::core::types::{Asset, OrderBook};
+use crate::gateway::core_out_book::{BookOut, Fed};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
@@ -86,6 +89,8 @@ pub async fn session(
     let mut last_rx = Instant::now();
     let mut pinged = false;
     let mut dropped = 0u64;
+    // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
+    let kept = BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal);
     loop {
         tokio::select! {
             _ = tokio::time::sleep_until(last_rx + cfg.ping), if !pinged => {
@@ -209,10 +214,10 @@ pub async fn session(
                     received_at: chrono::Utc::now(),
                 };
                 books.put(book.clone(), alive.clone());
-                match out.try_send(MarketEvent::Book(book)) {
-                    Ok(()) => {}
-                    Err(TrySendError::Closed(_)) => return End::Done,
-                    Err(TrySendError::Full(_)) => dropped += 1,
+                match kept.book(out, book) {
+                    Fed::Sent | Fed::Kept => {}
+                    Fed::Closed => return End::Done,
+                    Fed::Lost => dropped += 1,
                 }
                 if dropped > 0 && dropped.is_power_of_two() {
                     tracing::warn!(conn = name, dropped, "ядро не успевает принимать стаканы OKX");

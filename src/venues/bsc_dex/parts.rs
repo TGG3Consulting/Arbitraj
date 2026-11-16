@@ -2,7 +2,8 @@
 //! Что делает: общее состояние адаптера DEX в памяти (блоки, токены, пулы, проверки, цена газа, очередь кошелька,
 //! ожидаемые поступления, счётчики каналов, сигнал «перепроверить»; кошельковое — по счетам, parts_wallet.rs) и сборка окружений для котировки, сделки и слушателей пулов.
 //! Решение 308: pools() запускает фонового владельца графа маршрутов (pools/graph_owner.rs ensure).
-//! Решение 321: набор событий пулов, ждущих места в канале ядра (kept, pools/pending_events.rs) — один на адаптер.
+//! Решение 321: события пулов, ждущие места в канале ядра. Решение 324: набор — общий на канал ядра (gateway/core_out.rs,
+//! находится по каналу в pools(); pools/emit_pool.rs Kept), а не поле адаптера.
 //! Кто вызывает: mod.rs.
 //! От чего зависит: ctx.rs, node/heads.rs, tokens.rs, pools/*, check/state.rs, check/deal_taxes.rs, quote/*, exec/txs.rs, send/stats.rs, wallet/nonce.rs,
 //! wallet/inflows.rs.
@@ -10,7 +11,6 @@
 
 use tokio::sync::mpsc;
 
-use crate::core::types::{Pool, PoolRef};
 use crate::gateway::events::MarketEvent;
 
 use super::check::state::Checks;
@@ -52,9 +52,6 @@ pub struct Parts {
     /// Своё состояние каждого кошелька (решение 132, parts_wallet.rs). Поля nonces, inflows, allow выше — кошелька
     /// окружения: у привязанного к счёту (Parts::bound) — этого счёта; у непривязанного — только чтение и пробы.
     pub wallets: super::parts_wallet::Wallets,
-    /// Решение 321: события пулов, ждущие места в канале ядра (pools/pending_events.rs). Один на адаптер (не на
-    /// подписку): все подписки и пачки отдают пулы через него — новое событие пула не обгонит ждущее старое.
-    pub kept: super::pools::pending_events::Pending<PoolRef, Pool>,
 }
 
 impl Parts {
@@ -76,7 +73,6 @@ impl Parts {
             wake: Default::default(),
             lag: Default::default(),
             wallets: Default::default(),
-            kept: Default::default(),
         }
     }
 
@@ -126,6 +122,10 @@ impl Parts {
         // Решение 308: фоновый владелец графа маршрутов — запуск при первой подписке, при пересборке подписки (ленты пулов
         // переподключены) — полная пересборка графа (pools/graph_owner.rs). Работает только при dex.graph_background = да.
         super::pools::graph_owner::ensure(&self.ctx, &self.registry, &self.tokens, out.clone());
+        // Решения 321/324: общий набор канала ядра (один на канал — все подписки и пачки и биржи) и запись журнала,
+        // когда он опустел.
+        let kept = super::pools::emit_pool::Kept::new(&out, &self.registry);
+        kept.watch(&self.ctx, &signals.lost);
         Pools {
             ctx: self.ctx.clone(),
             reg: self.registry.clone(),
@@ -139,7 +139,7 @@ impl Parts {
             feed: super::node::receipts::Feed::with_lag(self.lag.clone()),
             lag: self.lag.clone(),
             gas: self.gas.clone(),
-            kept: self.kept.clone(),
+            kept,
         }
     }
 }

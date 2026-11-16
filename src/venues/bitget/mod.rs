@@ -58,6 +58,7 @@ use crate::core::types::{
     TradeRequest, TradeResult, Transfer, VenueId, WithdrawRequest,
 };
 use crate::gateway::contract::{AccountRole, ConnectionCheck, DexFamily, Venue, VenueKind};
+use crate::gateway::core_out_book::BookOut;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 use crate::gateway::frozen::QuoteSnapshot;
@@ -159,7 +160,10 @@ impl Venue for Bitget {
             if self.books.put_rest(book.clone())
                 && let Some(tx) = self.subs.sender()
             {
-                let _ = tx.try_send(MarketEvent::Book(book.clone()));
+                // Решение 324: через общий набор канала ядра — не обгонит ждущий кадр потока той же пары.
+                let kept =
+                    BookOut::new(&tx, self.ctx.venue(), &self.ctx.settings, &self.ctx.journal);
+                let _ = kept.book(&tx, book.clone());
             }
             return book::priced(&self.ctx, &self.fees, &symbol, asset, side, qty, book);
         }
@@ -206,7 +210,9 @@ impl Venue for Bitget {
         if self.books.put_rest(book.clone())
             && let Some(tx) = self.subs.sender()
         {
-            let _ = tx.try_send(MarketEvent::Book(book.clone()));
+            // Решение 324: через общий набор канала ядра — не обгонит ждущий кадр потока той же пары.
+            let kept = BookOut::new(&tx, self.ctx.venue(), &self.ctx.settings, &self.ctx.journal);
+            let _ = kept.book(&tx, book.clone());
         }
         let f = book::frozen(&self.ctx, &self.fees, &symbol, asset, side, book)?;
         Ok(std::sync::Arc::new(f))

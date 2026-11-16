@@ -5,6 +5,8 @@
 //! ресинков). Ядру — без ожидания (try_send). Дополнение 10.11 к решениям 202/213 (Тигран: согласовано): при
 //! переподписке пары сторожем ядра — сразу снимок REST из той же очереди (resub), ядро получает свежую книгу, не
 //! дожидаясь кадра (тихая пара после переподписки кадра может не прислать).
+//! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
+//! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
 //! Кто вызывает: ws_conn.rs.
 //! От чего зависит: depth.rs, local_book.rs, snapshots.rs, book.rs, ws.rs, ctx.rs; изменения — ws_diff.rs.
 //! Настройки: из ws.rs (Cfg).
@@ -17,10 +19,11 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use chrono::Utc;
-use tokio::sync::mpsc::{self, error::TrySendError};
+use tokio::sync::mpsc;
 use tokio::time::Instant;
 
 use crate::core::types::{Asset, OrderBook, PriceLevel};
+use crate::gateway::core_out_book::{BookOut, Fed};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
@@ -51,6 +54,8 @@ pub struct Conn<'a> {
     pub(super) not_before: HashMap<String, Instant>,
     pub(super) snap_tx: mpsc::Sender<Done>,
     pub(super) dropped: u64,
+    /// Решение 324: отдача стаканов ядру через общий набор канала ядра (venue.book_events_keep).
+    pub(super) kept: BookOut,
 }
 
 impl<'a> Conn<'a> {
@@ -80,6 +85,7 @@ impl<'a> Conn<'a> {
             not_before: HashMap::new(),
             snap_tx,
             dropped: 0,
+            kept: BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal),
         }
     }
 
@@ -159,10 +165,10 @@ impl<'a> Conn<'a> {
             received_at: Utc::now(),
         };
         self.books.put(ob.clone(), self.alive.clone());
-        match self.out.try_send(MarketEvent::Book(ob)) {
-            Ok(()) => true,
-            Err(TrySendError::Closed(_)) => false,
-            Err(TrySendError::Full(_)) => {
+        match self.kept.book(self.out, ob) {
+            Fed::Sent | Fed::Kept => true,
+            Fed::Closed => false,
+            Fed::Lost => {
                 self.dropped += 1;
                 if self.dropped.is_power_of_two() {
                     tracing::warn!(

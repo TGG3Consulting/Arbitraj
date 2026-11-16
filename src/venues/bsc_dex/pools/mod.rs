@@ -162,7 +162,6 @@ pub mod mid_dex;
 pub mod mids;
 pub mod multi_pair;
 pub mod order;
-pub mod pending_events;
 pub mod per_block;
 pub mod per_block_balancer;
 pub mod per_block_lb;

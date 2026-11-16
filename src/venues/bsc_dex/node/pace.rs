@@ -9,7 +9,8 @@
 //! классы — gateway/urgency.rs.
 //! Кто вызывает: node/rpc.rs (call_raw, batch); правило — ещё directory/limit.rs (индексатор).
 //! От чего зависит: ctx.rs, node/queue.rs, gateway/urgency.rs, gateway/rules.rs, gateway/calc_meter.rs (решение 129:
-//! ожидание очереди и время запроса — в счётчик расчёта кандидата), storage/rules.rs.
+//! ожидание очереди и время запроса — в счётчик расчёта кандидата), node/req_trail.rs (решение 313: те же времена по
+//! каждому запросу — замеру перечитывания пула по событию), storage/rules.rs.
 //! Настройки: bsc.node_http_rps, bsc.node_background_share_pct (вся система; не задана — строгий порядок без доли
 //! фона); правила шлюза для RateLimited.
 //!
@@ -66,7 +67,10 @@ where
         wait(ctx, weight).await?;
         let t1 = std::time::Instant::now();
         let res = send().await;
-        calc_meter::record(Source::Node, weight, t1 - t0, t1.elapsed());
+        let send_took = t1.elapsed();
+        calc_meter::record(Source::Node, weight, t1 - t0, send_took);
+        // Решение 313: тот же запрос отдельной строкой — замеру перечитывания пула по событию (node/req_trail.rs).
+        super::req_trail::record(weight, t1 - t0, send_took);
         let err = match res {
             Err(e) if e.code == ErrorCode::RateLimited => e,
             other => return other,

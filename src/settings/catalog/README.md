@@ -12,6 +12,7 @@
 | `dex_graph.rs` | Решение 308: dex.graph_background, dex.graph_max_lag_ms, dex.graph_hang_ms, dex.graph_retry_pause_s, dex.graph_stage_b_max_ms, dex.graph_verify_s, dex.graph_alert_min_s — граф маршрутов без ожидания (фоновый владелец, предохранитель, сторож, самопроверка); решение 310 — dex.check_due_read_only (достоверность пулов циклами проверок без записи в реестр) |
 | `dex_fit.rs` | Решение 294: dex.intermediate_partial_fill — путь через промежуточную отдаёт помещающуюся часть (отдельный файл: dex.rs — зона другого разработчика); решение 300: dex.graph_exec_fallback — лучший исполнимый маршрут графа; решение 311 А: dex.quote_prep_once — выключатель одной подготовки глубины на котировку графа (не задана — включено) |
 | `dex_graph.rs` | Решение 308: dex.graph_background, dex.graph_max_lag_ms, dex.graph_hang_ms, dex.graph_retry_pause_s, dex.graph_stage_b_max_ms, dex.graph_verify_s, dex.graph_alert_min_s — граф маршрутов без ожидания (фоновый владелец, предохранитель, сторож, самопроверка) |
+| `dex_event.rs` | Задача t144: решение 313 — log.pool_refresh_timing, log.pool_events_lost_interval_s (замер перечитывания пула по событию, потери событий пулов при полном канале ядра) |
 | `index.rs` | Справочник пулов от индексатора: адрес API, сеть, ключ, темп, страницы, частота, порог, подпись (решение 58) |
 | `send.rs` | Отправка транзакций и каналы отправки (решения 33, 41–45) |
 | `signals.rs` | Сигналы и эпизоды: сухой режим, предел поиска максимального объёма, шаблоны ссылок на пару и пул, эпизоды (решение 74) |

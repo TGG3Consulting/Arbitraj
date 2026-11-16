@@ -33,6 +33,7 @@ pub mod receipts_notice;
 pub mod receipts_pipe;
 pub mod receipts_step;
 pub mod receipts_task;
+pub mod req_trail;
 pub mod rpc;
 pub mod rpc_capped;
 pub mod rpc_race;

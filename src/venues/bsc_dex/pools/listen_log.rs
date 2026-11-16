@@ -8,8 +8,9 @@
 //! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, load_lb_bins.rs (ревью 290), registry.rs,
-//! stale_read.rs (решение 298).
-//! Настройки: через вызываемые.
+//! stale_read.rs (решение 298), refresh_event.rs (перечитывание по событию; решение 313 — замер), lost_events.rs.
+//! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs).
+//! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s).
 //!
 //! removed: true при реорге — execution-apis subscribe.yaml#L1-L60; порядок применения — (blockNumber, logIndex),
 //! как присылает узел (research/flow/bsc_dex.md, раздел 4).
@@ -19,6 +20,7 @@ use std::collections::BTreeSet;
 use alloy::rpc::types::Log;
 use alloy_primitives::U64;
 use serde_json::json;
+use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::mpsc::error::TrySendError;
 
 use crate::core::types::PoolRef;
@@ -31,17 +33,25 @@ use super::super::node::rpc;
 use super::super::quote::emptiness;
 use super::discover::Found;
 use super::events::{self, Applied};
+use super::group::Msg;
 use super::listen::{End, Pools};
+use super::refresh_event::{self, Event};
 use super::registry::Entry;
-use super::{load, load_bin, load_lb_bins};
+use super::{load_bin, load_lb_bins};
 
 /// Один лог: найти пул, применить или перечитать, отправить ядру. `waiting` — пул в очереди повтора пачки (решение
 /// 298): событие применяется, но перечитывания нет (узел на старом блоке не спрашивается, журнал не пишется) — позиция
 /// события, требующего перечитывания, отмечается (stale_read::defer), повтор прочитает пул не раньше неё.
 /// Возвращает: true — чтение на блоке события опоздало (StaleData, решение 298): пул недостоверен, Invalidated ушло,
 /// вызывающий ставит пул в очередь повтора (stale_read::requeue); false — обработан как раньше.
+/// `queued` — канал сессии пачки: сколько сообщений ждёт, пока пул перечитывается (замер решения 313).
 /// Ошибки: End — прочая ошибка чтения (пул недостоверен), лог без позиции, ядро закрыло канал.
-pub async fn on_log(p: &Pools, log: &Log, waiting: bool) -> Result<bool, End> {
+pub async fn on_log(
+    p: &Pools,
+    log: &Log,
+    waiting: bool,
+    queued: &UnboundedReceiver<Msg>,
+) -> Result<bool, End> {
     let r = match log.topics().get(1) {
         Some(id)
             if p.reg.contains(&PoolRef::Singleton {
@@ -88,12 +98,7 @@ pub async fn on_log(p: &Pools, log: &Log, waiting: bool) -> Result<bool, End> {
         // а не при переподключении: иначе глубина считалась бы не целиком и вердикт мигал бы.
         Applied::Updated => match p.reg.get(&r) {
             Some(e) if super::depth::off_map(&p.ctx, &e) => {
-                let msg = format!(
-                    "{} {}: полоса цены dex.depth_band_pct вышла за прочитанные слова битмапа — карта тиков перечитывается вокруг нового тика",
-                    e.family.title, e.ticker
-                );
-                p.ctx.log(Level::Info, "dex.pool", msg, None).await;
-                load::refresh(&p.ctx, &p.tokens, &p.reg, &e, block)
+                refresh_event::off_map(p, &e, block, queued)
                     .await
                     .map(|x| p.reg.put(x))
             }
@@ -119,12 +124,14 @@ pub async fn on_log(p: &Pools, log: &Log, waiting: bool) -> Result<bool, End> {
                 Ok(block)
             };
             match at {
-                Ok(at) => load::refresh(&p.ctx, &p.tokens, &p.reg, &entry, at)
-                    .await
-                    .map(|e| {
-                        p.reg.put(e);
-                        p.signals.pool_ready();
-                    }),
+                Ok(at) => {
+                    refresh_event::refresh(p, &entry, at, &Event::new("refresh", block, queued))
+                        .await
+                        .map(|e| {
+                            p.reg.put(e);
+                            p.signals.pool_ready();
+                        })
+                }
                 Err(e) => Err(e),
             }
         }
@@ -202,7 +209,12 @@ pub async fn latest(p: &Pools) -> GatewayResult<u64> {
 pub fn emit(p: &Pools, pool: crate::core::types::Pool) -> Result<(), End> {
     super::depth::touch(p, &pool.reference);
     match p.out.try_send(MarketEvent::Pool(pool)) {
-        Ok(()) | Err(TrySendError::Full(_)) => Ok(()),
+        Ok(()) => Ok(()),
+        // Решение 313: канал ядра полон — событие не ушло; счёт и запись не чаще интервала (lost_events.rs).
+        Err(TrySendError::Full(_)) => {
+            p.signals.lost.note(&p.ctx);
+            Ok(())
+        }
         Err(TrySendError::Closed(_)) => Err(End::Closed),
     }
 }

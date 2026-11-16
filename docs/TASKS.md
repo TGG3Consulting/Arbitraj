@@ -3207,3 +3207,5 @@
 - Настройки (интерфейс): `stuck.mode` = relay, `stuck.max_relays` = 1, `money.max_per_trade_usd` = 44,
   `signal.route_cooldown_s` = 10, `profit.price_move_k` = 4.5, `kyber.rps` = 3 (2 пробовали 02.11 — очередь и срыв расчёта, вернули), `venue.deposit_to_spot` = да (bingx);
   в Telegram выключены deal.candidate, episode.opened, episode.closed.
+
+- **Отсев (решение 378, следующий релиз):** строку отсева писать при изменении причины или чисел — без таймера и без настройки sieve.row_interval_ms; контроль sieve.audit_share на живом боте — временная страховка (Тигран 17.11: 0,1), убрать код контроля после суток без core.sieve_violation.

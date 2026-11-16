@@ -4,10 +4,11 @@
 //! - sieve.rs check (только память) и счётчик итога (sieve_log.rs count);
 //! - не отсечён (граница не исключает сделку или метод не действует) — полный расчёт, ему отдаётся уже построенный
 //!   контекст направления (ревью t162, Н7: DirCtx с замером σ не строится второй раз), отметка частоты снимается;
-//! - отсечён, а интервал показа по направлению не прошёл (sieve_rate.rs, sieve.row_interval_ms; ревью t162, Н4) — только
-//!   счётчик, расчёта нет;
-//! - отсечён и показ — доля sieve.audit_share идёт в контрольный ОБЫЧНЫЙ полный расчёт (sieve_audit.rs; ревью t162, Н3),
-//!   остальные — строка, эпизод и журнал отсева (sieve_log.rs cut); в данные отсева кладутся то, что у отсечённого
+//! - отсечён — доля sieve.audit_share ВСЕХ отсечённых идёт в контрольный ОБЫЧНЫЙ полный расчёт (sieve_audit.rs; ревью
+//!   t162, Н3; решение 378: выбор не зависит от показа);
+//! - отсечён, не контроль, а интервал показа по направлению не прошёл (sieve_rate.rs, sieve.row_interval_ms; ревью
+//!   t162, Н4) — только счётчик, расчёта нет;
+//! - отсечён и показ — строка, эпизод и журнал отсева (sieve_log.rs cut); в данные отсева кладутся то, что у отсечённого
 //!   есть без полного расчёта (ревью t162, Н11): сравнение σ (DirCtx.sigma_check, решение 358 — σ-часть, без прибыли
 //!   по σ_T: её даёт только полный расчёт) и signal_note (cand_signal_note.rs, решение 359).
 //!
@@ -49,13 +50,15 @@ pub async fn run(core: &Core, d: &Direction, mode: &Mode) -> Gate {
         super::sieve_rate::clear(d);
         return Gate::Calc { cx, audit: false };
     };
-    if !super::sieve_rate::due(core, d) {
-        return Gate::Done;
-    }
+    // Решение 378 (Тигран 17.11): контроль выбирается из ВСЕХ отсечённых, а не только из показанных — предел частоты
+    // показа (sieve_rate.rs) на контроль не влияет.
     if super::sieve_audit::pick(core) {
         super::sieve_rate::clear(d);
         super::sieve_log::bump("audit");
         return Gate::Calc { cx, audit: true };
+    }
+    if !super::sieve_rate::due(core, d) {
+        return Gate::Done;
     }
     if let Some(sc) = cx.as_ref().and_then(|c| c.sigma_check.as_ref())
         && let Ok(v) = serde_json::to_value(sc)

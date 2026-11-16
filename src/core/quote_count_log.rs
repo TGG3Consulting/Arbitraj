@@ -6,6 +6,8 @@
 //! снимками. Не задана или 0 — сводки нет: задача ждёт смены настройки (без опроса по времени).
 //! Решения 349, 352: в той же записи — сколько событий промежуточных пулов будили монеты и сколько монет (mid_wake.rs),
 //! сколько котировок DEX сигнала взято из памяти по отпечатку и сколько заново (signal_dex.rs).
+//! Решения 361–363: в той же записи (поле sieve) — сколько кандидатов отсечено границей (по USDT / по %), пропущено в
+//! расчёт, «метод не действует» по классам причин, и сколько циклов DEX ↔ DEX отсечено (sieve_log.rs, gateway/rate_bound.rs).
 //! Кто вызывает: core/engine.rs (задача при запуске ядра).
 //! От чего зависит: gateway/quote_purpose.rs (snapshot), mid_wake.rs, signal_dex.rs (counts), deps.rs (журнал),
 //! settings (подписка на изменения).
@@ -31,6 +33,7 @@ pub async fn run(core: Core) {
     let mut rx = core.inner.deps.settings.subscribe();
     let mut prev = quote_purpose::snapshot();
     let mut prev_x = extra();
+    let mut prev_s = sieve();
     let mut since = Instant::now();
     loop {
         let every = interval(&core);
@@ -42,6 +45,7 @@ pub async fn run(core: Core) {
             }
             prev = quote_purpose::snapshot();
             prev_x = extra();
+            prev_s = sieve();
             since = Instant::now();
             continue;
         };
@@ -50,9 +54,11 @@ pub async fn run(core: Core) {
             _ = tokio::time::sleep_until((since + every).into()) => {
                 let now = quote_purpose::snapshot();
                 let now_x = extra();
-                write(&core, &prev, &now, (prev_x, now_x), since.elapsed()).await;
+                let now_s = sieve();
+                write(&core, &prev, &now, (prev_x, now_x), (&prev_s, &now_s), since.elapsed()).await;
                 prev = now;
                 prev_x = now_x;
+                prev_s = now_s;
                 since = Instant::now();
             }
             r = rx.recv() => {
@@ -83,6 +89,7 @@ async fn write(
     prev: &[(Who, u64, u64)],
     now: &[(Who, u64, u64)],
     x: ([u64; 4], [u64; 4]),
+    sv: (&Counts, &Counts),
     took: Duration,
 ) {
     let secs = took.as_secs_f64().max(f64::MIN_POSITIVE);
@@ -116,6 +123,16 @@ async fn write(
             more.push(format!("{n} {v}"));
         }
     }
+    // Решения 361–363: отсев кандидатов по границе (sieve_log.rs) и циклов DEX ↔ DEX (gateway/rate_bound.rs) за интервал.
+    let mut sieve_data = Map::new();
+    for (k, v) in sv.1 {
+        let d = v.saturating_sub(sv.0.get(k).copied().unwrap_or(0));
+        sieve_data.insert(k.clone(), json!(d));
+        if d > 0 {
+            more.push(format!("sieve {k} {d}"));
+        }
+    }
+    data.insert("sieve".into(), serde_json::Value::Object(sieve_data));
     data.insert("seconds".into(), json!(secs));
     let per_s = total as f64 / secs;
     let mut msg = format!(
@@ -135,6 +152,20 @@ async fn write(
         .deps
         .log(Level::Info, "dex.quote_count", None, msg, d)
         .await;
+}
+
+/// Счётчики отсева с запуска по ключу.
+type Counts = std::collections::BTreeMap<String, u64>;
+
+/// Решения 361–363: счётчики отсева кандидатов (cut_usd, cut_pct, pass, na_<класс>) и циклов (cycle_pass, cycle_cut,
+/// cycle_na) с запуска. Ошибок нет.
+fn sieve() -> Counts {
+    let mut m = super::sieve_log::snapshot();
+    let c = crate::gateway::rate_bound::cycle_counts();
+    for (k, v) in ["cycle_pass", "cycle_cut", "cycle_na"].iter().zip(c) {
+        m.insert((*k).to_string(), v);
+    }
+    m
 }
 
 /// Решения 349, 352: счётчики с запуска — [событий промежуточных пулов, разбуженных монет, котировок DEX сигнала из

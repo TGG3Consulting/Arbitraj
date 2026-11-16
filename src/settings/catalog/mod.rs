@@ -39,6 +39,7 @@ mod index;
 mod kraken;
 mod kyber;
 mod lost_events;
+mod sieve;
 mod okx;
 mod phemex;
 mod send;
@@ -129,6 +130,7 @@ static PARTS: &[&[SettingDef]] = &[
     feed_watch::FEED_WATCH,
     book_events::BOOK_EVENTS,
     lost_events::LOST_EVENTS,
+    sieve::SIEVE,
     write_path::WRITE_PATH,
     bingx::BINGX,
     gate::GATE,

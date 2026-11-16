@@ -40,6 +40,8 @@ pub enum Purpose {
     Window,
     /// Карточка сигнала.
     Card,
+    /// Решение 364: контроль отсева по границе — полный расчёт отсечённого кандидата в фоне (core/sieve_audit.rs).
+    Audit,
 }
 
 /// Итоговая метка котировки (что пишется в запись и счётчики). Порядок — индекс счётчика.
@@ -55,11 +57,12 @@ pub enum Who {
     Card,
     Exec,
     Check,
+    Audit,
     Unmarked,
 }
 
 /// Все метки по порядку индекса (для сводки).
-pub const ALL: [Who; 11] = [
+pub const ALL: [Who; 12] = [
     Who::Signal,
     Who::Size,
     Who::Final,
@@ -70,6 +73,7 @@ pub const ALL: [Who; 11] = [
     Who::Card,
     Who::Exec,
     Who::Check,
+    Who::Audit,
     Who::Unmarked,
 ];
 
@@ -87,6 +91,7 @@ impl Who {
             Who::Card => "card",
             Who::Exec => "exec",
             Who::Check => "check",
+            Who::Audit => "audit",
             Who::Unmarked => "unmarked",
         }
     }
@@ -137,6 +142,7 @@ pub fn who() -> Who {
         Some(Purpose::Shadow) => Who::Shadow,
         Some(Purpose::Window) => Who::Window,
         Some(Purpose::Card) => Who::Card,
+        Some(Purpose::Audit) => Who::Audit,
         None if urgency::is_set() == Some(Urgency::Check) => Who::Check,
         None => Who::Unmarked,
     }

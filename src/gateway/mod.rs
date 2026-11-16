@@ -44,6 +44,7 @@ pub mod patience;
 pub mod pending;
 pub mod quote_purpose;
 pub mod quote_stage;
+pub mod rate_bound;
 pub mod registry;
 pub mod rest_book;
 pub mod rules;

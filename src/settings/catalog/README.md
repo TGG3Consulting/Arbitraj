@@ -17,6 +17,7 @@
 | `write_path.rs` | Решения 340, 341, 353 (задача t158): notify.queue_max, journal.queue_max, journal.batch_max, ledger.synchronous — путь сделки без ожиданий |
 | `book_events.rs` | Решение 324 (задача t151): venue.book_events_keep — кадр стакана биржи при полном канале ядра не теряется (последний кадр пары ждёт в общем наборе канала ядра) |
 | `lost_events.rs` | Решения 333/334 (задача t155): profit.calc_wait_ms, venue.info_events_keep, venue.info_events_max, venue.money_events_alert_ms (ревью 333; venue.money_events_keep удалена — денежные не теряются никогда), stuck.tick_lag_wake, log.events_lost_interval_s — сообщения ядру и кандидаты не теряются молча |
+| `sieve.rs` | Решения 361–364: sieve.audit_share — доля контроля отсева по границе на живом боте |
 | `index.rs` | Справочник пулов от индексатора: адрес API, сеть, ключ, темп, страницы, частота, порог, подпись (решение 58) |
 | `send.rs` | Отправка транзакций и каналы отправки (решения 33, 41–45) |
 | `signals.rs` | Сигналы и эпизоды: сухой режим, предел поиска максимального объёма, шаблоны ссылок на пару и пул, эпизоды (решение 74) |

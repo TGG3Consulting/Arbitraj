@@ -27,6 +27,9 @@
 pub mod abandon;
 pub mod approve_bundle;
 pub mod approve_gas;
+pub mod bound;
+pub mod bound_cycle;
+pub mod bound_rate;
 pub mod classic_direct;
 pub mod costs;
 pub mod cpu;

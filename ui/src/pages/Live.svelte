@@ -150,6 +150,14 @@
       <span class="muted">{showTime(c.at)}</span>
       {#each uniq(delistMarks(c.direction)) as m (m)}<span class="err">{m}</span>{/each}
     </header>
+    {#if c.sieve}
+      <!-- Решения 361, 363: отсев по доказанной границе прибыли — расчёта не было; граница, порог и из чего сложилась. -->
+      <details>
+        <summary>Отсев по границе: прибыль не больше {c.sieve.best?.max_u} USDT (на {c.sieve.best?.q_u}), порог {c.sieve.min_usd} USDT / {c.sieve.min_pct}%{#if c.sieve.best?.max_v != null}, запас до порога % {c.sieve.best.max_v} USDT{/if}</summary>
+        <p class="muted">κ (доля выручки после запаса и комиссии продажи) = {c.sieve.kappa}; вывод: фикс {c.sieve.arrive?.fix}, доля {c.sieve.arrive?.pct}, keep {c.sieve.arrive?.keep}; постоянные {c.sieve.fixed} USDT; проверено изломов {c.sieve.best?.points}, объём до {c.sieve.best?.q_hi}</p>
+        <p class="muted">A: {c.sieve.a}; B: {c.sieve.b}</p>
+      </details>
+    {/if}
     {#if c.start}
       <!-- Решение 147: расчёт прошёл, а исполнитель отказал на входе — точная причина. -->
       <p class="err">{c.start}</p>

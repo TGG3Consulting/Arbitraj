@@ -1,8 +1,9 @@
 //! Файл: venues/bsc_dex/pools/load_bin.rs
 //! Что делает: чтение состояния пула Infinity Bin на заданном блоке: slot0 (активный бин, комиссии) и резервы
 //! непустых бинов в обе стороны от активного, пока стоимость прочитанных бинов в каждой стороне не достигнет
-//! dex.bin_depth_usd (или бины не кончатся). Плюс перечитывание отдельных бинов после событий.
-//! Кто вызывает: pools/load.rs, pools/events_bin.rs.
+//! dex.bin_depth_usd (или бины не кончатся). Плюс перечитывание отдельных бинов после событий (bin; решение 325 —
+//! many: пачкой, pools/reread_bins.rs).
+//! Кто вызывает: pools/load.rs, pools/events_bin.rs, pools/reread_bins.rs.
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_v4.rs, bins.rs, math/bin_price.rs, tokens.rs, num.rs.
 //! Настройки: dex.bin_depth_usd [bsc_dex].
 //!
@@ -129,6 +130,32 @@ pub async fn bin(
     )
     .await?;
     Ok((r.binReserveX, r.binReserveY))
+}
+
+/// Решение 325: резервы нескольких бинов одной пачкой (node/call.rs view_many: один eth_call к Multicall3 при
+/// dex.multicall3, иначе пачка JSON-RPC одним HTTP-запросом) — тот же getBin и тот же разбор, что у bin.
+/// Принимает: менеджер, PoolId, номера бинов, блок. Возвращает: (бин, резерв X, резерв Y) по порядку.
+/// Ошибки: узел, ответ не по ABI (любая ошибка любого бина — ошибка целиком, как у view_many).
+pub async fn many(
+    ctx: &Ctx,
+    manager: alloy_primitives::Address,
+    id: B256,
+    bins: &[u32],
+    tag: &str,
+) -> GatewayResult<Vec<(u32, u128, u128)>> {
+    let calls: Vec<_> = bins
+        .iter()
+        .map(|b| IInfinityBin::getBinCall {
+            id,
+            binId: U24::from(*b),
+        })
+        .collect();
+    let got = call::view_many(ctx, manager, &calls, tag).await?;
+    Ok(bins
+        .iter()
+        .zip(got)
+        .map(|(b, r)| (*b, r.binReserveX, r.binReserveY))
+        .collect())
 }
 
 /// Стоимость бина в USDT: резерв USDT + резерв монеты по цене бина.

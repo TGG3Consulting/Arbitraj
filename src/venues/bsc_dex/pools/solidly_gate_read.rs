@@ -7,6 +7,7 @@
 //! Селектор метода из настройки — первые 4 байта keccak256 сигнатуры (solidly_fee_read.rs selector).
 //! Кто вызывает: pools/{load_solidly, solidly_refresh}.rs, exec/solidly_gate.rs (через solidly_fee_read.rs).
 //! От чего зависит: ctx.rs, node/rpc.rs, pools/solidly_fee_read.rs (optional, selector), core/types (SolidlyGate).
+//! Решение 325: view_sig сначала смотрит в книгу заранее прочитанных ответов задачи (node/prefetch.rs).
 //! Настройки: dex.solidly_pause_method, dex.solidly_max_gas_method [DEX].
 //!
 //! Факт цепи (14.11.2026, tests/data/solidly_fee_2026-11-14): usdfi BasePair — `require(!factory.isPaused())`,
@@ -37,7 +38,11 @@ async fn view_sig<T: SolValue + From<<T::SolType as SolType>::RustType>>(
     tag: &str,
 ) -> GatewayResult<T> {
     let data = Bytes::copy_from_slice(&selector(sig));
-    let out: Bytes = rpc::call(ctx, "eth_call", json!([{ "to": to, "input": data }, tag])).await?;
+    // Решение 325: ответ, прочитанный заранее на этом блоке (node/prefetch.rs), — без обращения к узлу.
+    let out: Bytes = match super::super::node::prefetch::hit(to, &data, tag) {
+        Some(b) => b,
+        None => rpc::call(ctx, "eth_call", json!([{ "to": to, "input": data }, tag])).await?,
+    };
     T::abi_decode(&out).map_err(|e| {
         ctx.err(
             ErrorCode::BadResponse,

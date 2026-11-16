@@ -9,11 +9,13 @@
 //! чтения; не задана — класс прежний.
 //! Решение 315: пул V3 — одним обращением к узлу (load_v3_once.rs) при dex.event_refresh_one_call = да и dex.multicall3;
 //! иначе — load::refresh.
+//! Решение 325: не применилось 315 — при dex.event_refresh_batch для DEX пула чтение с ответами, прочитанными заранее
+//! (prefetch_read.rs: одно-два обращения к узлу вместо цепочки; тот же код чтения load::refresh, тот же итог).
 //! Кто вызывает: pools/listen_log.rs (ветки off_map и Refresh).
 //! От чего зависит: load.rs (refresh), refresh_timing.rs, node/req_trail.rs, gateway/urgency.rs (класс для записи),
 //! group.rs (Msg — канал сессии).
 //! Настройки: log.pool_refresh_timing (через refresh_timing.rs), dex.event_refresh_urgency (через refresh_urgency.rs),
-//! dex.event_refresh_one_call (через load_v3_once.rs).
+//! dex.event_refresh_one_call (через load_v3_once.rs), dex.event_refresh_batch (через prefetch_read.rs).
 
 use std::time::Instant;
 
@@ -29,7 +31,7 @@ use super::listen::Pools;
 use super::refresh_timing::{self, Rec};
 use super::refresh_urgency;
 use super::registry::Entry;
-use super::{load, load_v3_once};
+use super::{load, load_v3_once, prefetch_read};
 
 /// Что вызвало перечитывание.
 pub struct Event<'a> {
@@ -105,6 +107,10 @@ pub async fn refresh(p: &Pools, e: &Entry, at: u64, ev: &Event<'_>) -> GatewayRe
 async fn read(p: &Pools, e: &Entry, at: u64) -> GatewayResult<Entry> {
     if let Some(l) = load_v3_once::read(&p.ctx, e, at).await? {
         return Ok(load::renewed(e, at, l));
+    }
+    // Решение 325: любой вид — с ответами, прочитанными заранее (prefetch_read.rs), при dex.event_refresh_batch.
+    if let Some(x) = prefetch_read::refresh(&p.ctx, &p.tokens, &p.reg, e, at).await? {
+        return Ok(x);
     }
     load::refresh(&p.ctx, &p.tokens, &p.reg, e, at).await
 }

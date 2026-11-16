@@ -99,6 +99,31 @@
   dex.event_refresh_one_call = да (перезапуск не нужен). **Что мерить:** dex.pool_refresh — steps (1 вместо ≥3;
   2 — когда диапазон по slot0 вышел за слова события), total_ms до/после, error (откаты, StaleData); время «карта
   перечитывается» → core.window. При ошибках — очистить.
+- **Решение 325 (16.11.2026, задача t152, ветка t152/event-reread-all-kinds от rel/dex-all 8fe83aa1) — перечитывание
+  пула по событию быстрым у всех видов DEX; сделано, ждёт сборки и тестов в GitHub, ревью и записи с узла.** Разбор по
+  видам — docs/notes/t152-event-reread-all-kinds-2026-11-16.md. Настройки (обе — область «DEX», по одному DEX):
+  dex.event_refresh_batch — ответы, прочитанные заранее одним eth_call Multicall3 (pools/prefetch_read.rs), и бины
+  Infinity Bin события одной пачкой; dex.event_refresh_fee_only — у Algebra Integral событие только комиссии читает
+  только её (pools/integral_fee.rs). Не заданы — 1 в 1 как раньше. **Тест:** tests/bsc_dex_prefetch_325.rs (walk_plan
+  по записанному списку тиков Integral, индексы дерева, книга на записанном globalState; локально не собирался).
+  **Ждёт записи (код есть, тест ждёт записи):** Integral (tickTable / tickTreeSecondLayer и aggregate3), CL, Slipstream,
+  Algebra V1.9, Elastic, DODO, Infinity Bin (getBin пачкой) — нет записанного ответа aggregate3 на узле, по которому
+  проверить «ответ из книги = отдельный eth_call» по байтам. **Промпт серверному ИИ (только чтение своего узла, бот и
+  настройки не трогать):** «Сними с узла BSC на одном блоке B (сначала eth_blockNumber, B = он − 5) и сохрани в
+  tests/data/prefetch_325_<дата>/probe.json: для одного пула каждого вида — thena-v3 (Algebra Integral), thena_fusion
+  (Algebra V1.9), Slipstream (Topaz v3), PancakeSwap Infinity CL, Uniswap V4 (StateView), KyberSwap Elastic, DODO,
+  PancakeSwap Infinity Bin — (1) по отдельности eth_call на B каждого view-вызова чтения пула, как их делает бот
+  (src/venues/bsc_dex/pools/load_<вид>.rs; у Integral дополнительно tickTreeSecondLayer(0..27) и tickTable(лист) для
+  листов тиков обхода, у Bin — getBin для пяти непустых бинов вокруг активного); (2) один eth_call на B к Multicall3
+  (адрес — настройка dex.multicall3 из каталога бота, только чтение) aggregate3 с allowFailure = true и ТЕМИ ЖЕ
+  вызовами в том же порядке. Формат — как tests/data/algebra_integral_2026-11-06/probe.json: для каждого вызова to,
+  data (hex), raw (hex ответа узла как есть); для aggregate3 — data и raw целиком; рядом README.md: блок, пулы, что
+  снято.» По записи — тест: node/multicall.rs decode ответа (2) = ответам (1) по байтам у каждого вида, load::refresh
+  с книгой из (2) = разбору (1). **Как включать:** после теста по записи; сначала thena-v3: dex.event_refresh_fee_only = да
+  и dex.event_refresh_batch = да (перезапуск не нужен), log.pool_refresh_timing = да на время замера; затем по одному
+  DEX остальных видов. **Что мерить:** dex.pool_refresh — steps (у thena-v3 было 16–65; ждём 1–3), total_ms, error;
+  queued — сколько логов пачки ждало (сессия пачки ждёт перечитывания — session.rs, отдельная задача). При ошибках —
+  очистить настройку у этого DEX.
 - **Решения 317, 318, 322 (16.11.2026, задача t146, ветка t146/signal-hold-fast от rel/dex-all a510c7a1) — сигнал
   без лишнего ожидания; сделано, ждёт сборки и тестов в GitHub, ревью и включения.** Требование Тиграна 16.11: «ничего нас
   не должно останавливать чтобы мы могли ловить жир». Живой случай SHOPINX 16.11: от записи о пуле до «Окно открыто»

@@ -2,7 +2,8 @@
 //! Что делает: несколько view-вызовов одним eth_call через Multicall3.aggregate3 (allowFailure = true — ответ
 //! каждого вызова отдельно). У NodeReal eth_call — 20 CU за вызов, а пачка JSON-RPC из N eth_call — N вызовов
 //! (node/pace.rs считает так же); через Multicall3 — один eth_call на всю пачку.
-//! Кто вызывает: node/call.rs (view_many), wallet/balances_mc.rs, connection_extra.rs (getBlockNumber).
+//! Кто вызывает: node/call.rs (view_many), wallet/balances_mc.rs, connection_extra.rs (getBlockNumber);
+//! aggregate_raw — pools/prefetch_read.rs (решение 325: чтение заранее, мимо книги node/prefetch.rs).
 //! От чего зависит: node/rpc.rs, errors.rs, alloy::sol!.
 //! Настройки: dex.multicall3 [bsc_dex] — адрес Multicall3. Не задан — view_many идёт пачкой JSON-RPC, как раньше.
 //!
@@ -82,9 +83,52 @@ pub fn decode(out: &[u8], n: usize) -> GatewayResult<Vec<Result<Bytes, String>>>
         .collect())
 }
 
-/// Пачка вызовов одним eth_call к Multicall3 на блоке. Принимает: адрес Multicall3, вызовы, блок.
-/// Возвращает: ответ каждого вызова отдельно. Ошибки: узел, BadResponse.
+/// Пачка вызовов одним eth_call к Multicall3 на блоке. Решение 325: вызовы, ответ которых уже есть в книге задачи
+/// (node/prefetch.rs, тот же блок), берутся из неё, к узлу идут только остальные (одним eth_call); книги нет или в ней
+/// ничего — как раньше. Принимает: адрес Multicall3, вызовы, блок.
+/// Возвращает: ответ каждого вызова отдельно, по порядку вызовов. Ошибки: узел, BadResponse.
 pub async fn aggregate(
+    ctx: &Ctx,
+    multicall: Address,
+    calls: &[(Address, Bytes)],
+    block: &str,
+) -> GatewayResult<Vec<Result<Bytes, String>>> {
+    let known: Vec<Option<Bytes>> = calls
+        .iter()
+        .map(|(to, data)| super::prefetch::hit(*to, data, block))
+        .collect();
+    if known.iter().all(Option::is_none) {
+        return aggregate_raw(ctx, multicall, calls, block).await;
+    }
+    let rest: Vec<(Address, Bytes)> = calls
+        .iter()
+        .zip(&known)
+        .filter(|(_, k)| k.is_none())
+        .map(|(c, _)| c.clone())
+        .collect();
+    let mut got = if rest.is_empty() {
+        Vec::new()
+    } else {
+        aggregate_raw(ctx, multicall, &rest, block).await?
+    }
+    .into_iter();
+    let mut out = Vec::with_capacity(calls.len());
+    for k in known {
+        out.push(match k {
+            Some(b) => Ok(b),
+            // decode проверил: ответов столько же, сколько вызовов в rest.
+            None => got
+                .next()
+                .unwrap_or_else(|| Err("aggregate3: ответов меньше, чем вызовов".to_string())),
+        });
+    }
+    Ok(out)
+}
+
+/// Пачка вызовов одним eth_call к Multicall3 на блоке, без книги заранее прочитанных ответов (так читает и сама
+/// книга — pools/prefetch_read.rs). Принимает: адрес Multicall3, вызовы, блок.
+/// Возвращает: ответ каждого вызова отдельно. Ошибки: узел, BadResponse.
+pub async fn aggregate_raw(
     ctx: &Ctx,
     multicall: Address,
     calls: &[(Address, Bytes)],

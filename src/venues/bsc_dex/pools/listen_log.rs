@@ -7,19 +7,19 @@
 //! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs; пересчёт
 //! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
-//! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, load_lb_bins.rs (ревью 290), registry.rs,
+//! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, reread_bins.rs (бины; ревью 290), integral_fee.rs, registry.rs,
 //! stale_read.rs (решение 298), refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321).
 //! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs). Решение 321:
 //! emit вынесен в emit_pool.rs (здесь — реэкспорт для прежних вызывающих) — при dex.pool_events_keep = да событие не
 //! теряется, а ждёт места в канале (gateway/core_out.rs, решение 324).
 //! Решение 314: перечитывания по событию (off_map, Refresh, Bins) — классом dex.event_refresh_urgency (refresh_urgency.rs).
+//! Решение 325: Applied::Fee (Algebra Integral) — только комиссия (integral_fee.rs) при dex.event_refresh_fee_only;
+//! бины Infinity Bin — одной пачкой (reread_bins.rs, load_bin::many) при dex.event_refresh_batch. Не заданы — как раньше.
 //! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s, dex.event_refresh_urgency,
-//! dex.pool_events_keep).
+//! dex.pool_events_keep, dex.event_refresh_fee_only, dex.event_refresh_batch).
 //!
 //! removed: true при реорге — execution-apis subscribe.yaml#L1-L60; порядок применения — (blockNumber, logIndex),
 //! как присылает узел (research/flow/bsc_dex.md, раздел 4).
-
-use std::collections::BTreeSet;
 
 use alloy::rpc::types::Log;
 use alloy_primitives::U64;
@@ -30,7 +30,6 @@ use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
-use super::super::node::call::block_tag;
 use super::super::node::rpc;
 use super::super::quote::emptiness;
 use super::discover::Found;
@@ -40,7 +39,7 @@ use super::listen::{End, Pools};
 use super::refresh_event::{self, Event};
 use super::refresh_urgency;
 use super::registry::Entry;
-use super::{load_bin, load_lb_bins};
+use super::{integral_fee, reread_bins};
 
 /// Один лог: найти пул, применить или перечитать, отправить ядру. `waiting` — пул в очереди повтора пачки (решение
 /// 298): событие применяется, но перечитывания нет (узел на старом блоке не спрашивается, журнал не пишется) — позиция
@@ -87,6 +86,13 @@ pub async fn on_log(
             .update(&r, |e| events::apply(e, log))
             .unwrap_or(Applied::Ignored)
     };
+    // Решение 325: «только комиссия» — при dex.event_refresh_fee_only и пуле не в очереди повтора; иначе прежний Refresh.
+    let applied = match applied {
+        Applied::Fee(why) if waiting || !integral_fee::on(&p.ctx, entry.family) => {
+            Applied::Refresh(why)
+        }
+        x => x,
+    };
     let res = match applied {
         Applied::Ignored => return Ok(false),
         // Решение 298: пул ждёт повтора — не читаем (повтор на новых блоках прочитает его не раньше этого события).
@@ -107,6 +113,22 @@ pub async fn on_log(
             }
             _ => Ok(()),
         },
+        // Решение 325: только комиссия на блоке события, дальше — как Updated (цена из события могла уйти за карту).
+        Applied::Fee(_) => {
+            match refresh_urgency::urgent(&p.ctx, integral_fee::apply(p, &r, block, log.log_index))
+                .await
+            {
+                Ok(()) => match p.reg.get(&r) {
+                    Some(e) if super::depth::off_map(&p.ctx, &e) => {
+                        refresh_event::off_map(p, &e, block, queued)
+                            .await
+                            .map(|x| p.reg.put(x))
+                    }
+                    _ => Ok(()),
+                },
+                Err(e) => Err(e),
+            }
+        }
         // Решение 314: бины на блоке события — классом dex.event_refresh_urgency (не задана — как раньше). Ревью 314:
         // настройка читается, только если есть что читать у узла (бины есть, ссылка — свой контракт или Singleton;
         // иначе reread_bins к узлу не идёт: пустой список — call::try_many без запроса).
@@ -116,7 +138,11 @@ pub async fn on_log(
             Ok(())
         }
         Applied::Bins(ids) => {
-            refresh_urgency::urgent(&p.ctx, reread_bins(p, &r, &ids, block)).await
+            refresh_urgency::urgent(
+                &p.ctx,
+                reread_bins::reread(p, entry.family, &r, &ids, block),
+            )
+            .await
         }
         Applied::Refresh(why) => {
             p.ctx
@@ -180,36 +206,6 @@ pub fn note_refill(p: &Pools, e: &Entry) {
     {
         p.signals.refilled(e.pool.reference.clone());
     }
-}
-
-/// Перечитывает резервы бинов на блоке события.
-async fn reread_bins(p: &Pools, r: &PoolRef, ids: &[u32], block: u64) -> GatewayResult<()> {
-    let tag = block_tag(block);
-    let uniq: BTreeSet<u32> = ids.iter().copied().collect();
-    // Ревью 290: пул Liquidity Book V2.1 (свой контракт) — затронутые бины одной пачкой getBin (load_lb_bins::many).
-    if let PoolRef::Contract(pool) = r {
-        let list: Vec<u32> = uniq.into_iter().collect();
-        for (bin, x, y) in load_lb_bins::many(&p.ctx, *pool, &list, &tag).await? {
-            p.reg.update(r, |e| {
-                if let Some(b) = e.bins.as_mut() {
-                    b.set(bin, x, y);
-                }
-            });
-        }
-        return Ok(());
-    }
-    let PoolRef::Singleton { manager, id } = r else {
-        return Ok(());
-    };
-    for bin in uniq {
-        let (x, y) = load_bin::bin(&p.ctx, *manager, *id, bin, &tag).await?;
-        p.reg.update(r, |e| {
-            if let Some(b) = e.bins.as_mut() {
-                b.set(bin, x, y);
-            }
-        });
-    }
-    Ok(())
 }
 
 /// Текущий номер блока узла (HTTP). Ещё — listen_site.rs (реорг у пар многомонетного пула, решение 295).

@@ -90,7 +90,8 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
     };
     let why = match applied {
         Applied::Ignored => return Ok(true),
-        Applied::Refresh(w) => w,
+        // Решение 325: у Fee (только Algebra Integral, не многомонетный вид) — та же перечитка.
+        Applied::Refresh(w) | Applied::Fee(w) => w,
         // У многомонетных видов точечного применения нет (только перечитка) — на всякий случай тоже перечитка.
         Applied::Updated | Applied::Bins(_) => "событие пула".into(),
     };

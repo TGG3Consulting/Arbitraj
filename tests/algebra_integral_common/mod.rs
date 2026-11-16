@@ -5,7 +5,7 @@
 //! load_algebra_integral::window по последним прочитанным тикам списка). Вынесено из tests/bsc_dex_algebra_integral_live.rs
 //! (решение 323: тот же разбор нужен tests/bsc_dex_algebra_out_of_window.rs).
 //! Кто вызывает: tests/bsc_dex_algebra_integral_live.rs, tests/bsc_dex_algebra_out_of_window.rs,
-//! tests/bsc_dex_off_map_algebra.rs.
+//! tests/bsc_dex_off_map_algebra.rs, tests/bsc_dex_prefetch_325.rs.
 //! От чего зависит: arb::venues::bsc_dex::pools::{ticks, load_algebra_integral}, serde_json.
 //! Настройки: нет.
 // Каждый тест берёт часть общего — остальное для него не используется.

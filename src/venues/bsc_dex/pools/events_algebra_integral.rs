@@ -12,6 +12,8 @@
 //! - Fee(uint16 fee) — новая lastFee: пул перечитывается (у плагина с DYNAMIC_FEE комиссию определяет fee() плагина,
 //!   а не lastFee — load_algebra_integral.rs).
 //!
+//! Решение 325: Fee и «добавка плагина к lastFee» (SwapFee, Swap 1.2.x) — Applied::Fee (меняется только комиссия): при
+//! dex.event_refresh_fee_only перечитывается только она (integral_fee.rs), иначе — как раньше Refresh (тот же текст).
 //! Кто вызывает: pools/events.rs.
 //! От чего зависит: pools/abi_algebra_integral.rs, pools/events_algebra.rs, registry.rs.
 //! Настройки: нет.
@@ -51,7 +53,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         return Applied::Ignored;
     };
     if t0 == P::Fee::SIGNATURE_HASH {
-        return Applied::Refresh("Algebra Integral Fee: перечитать комиссию пула".into());
+        return Applied::Fee("Algebra Integral Fee: перечитать комиссию пула".into());
     }
     if t0 == P12::Burn::SIGNATURE_HASH {
         return Applied::Refresh(
@@ -80,7 +82,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     let (over, plugin) = (s.overrideFee.to::<u32>(), s.pluginFee.to::<u32>());
     match fee_after(over, plugin) {
         Swapfee::Keep => Applied::Ignored,
-        Swapfee::Reload => Applied::Refresh(
+        Swapfee::Reload => Applied::Fee(
             "Algebra Integral SwapFee: добавка плагина к lastFee — перечитать комиссию".into(),
         ),
         Swapfee::Set(v) => match &mut e.pool.state {
@@ -113,7 +115,7 @@ fn swap12(e: &mut Entry, sqrt: U256, liq: u128, t: i32, f: Swapfee) -> Applied {
             *fee = v;
             Applied::Updated
         }
-        Swapfee::Reload => Applied::Refresh(
+        Swapfee::Reload => Applied::Fee(
             "Algebra Integral Swap: добавка плагина к lastFee — перечитать комиссию".into(),
         ),
     }

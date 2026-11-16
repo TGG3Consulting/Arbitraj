@@ -202,7 +202,7 @@ async fn on_418(ctx: &Ctx, path: &str, retry_after_s: Option<u64>) -> String {
             " (канал событий ядра полон — уведомление ждёт места, venue.info_events_keep)"
         }
         (true, Some(Fed::Lost)) => {
-            " (уведомление потеряно: канал событий ядра полон, venue.info_events_keep не «да» — счёт в venue.core_events_lost)"
+            " (уведомление потеряно: канал событий ядра полон — venue.info_events_keep не «да» или очередь достигла venue.info_events_max; счёт в venue.core_events_lost)"
         }
         (true, Some(Fed::Closed)) => " (уведомление не отправлено: канал событий ядра закрыт)",
         (true, None) => {

@@ -19,7 +19,8 @@
 
 - **Решение 333** — `gateway/core_out_must.rs` `MustOut::send`: все сообщения адаптеров ядру, что слались
   `let _ = out.try_send`, теперь идут через одну очередь «ждут места» на канал ядра (`Feed::must`, `gateway/core_out.rs`):
-  - род **Money** (ядро по ним решает о деньгах): `WalletQueue`, `ExitGap` — настройка `venue.money_events_keep`;
+  - род **Money** (ядро по ним решает о деньгах): `WalletQueue`, `ExitGap` — настройка `venue.money_events_keep`
+    (**ревью: удалена — денежные не теряются никогда, см. раздел «Ревью» ниже**);
   - род **Info**: `Notice`, `SendChannel`, `CoinCheck` — настройка `venue.info_events_keep`;
   - «да» — при полном канале ждёт места, уходит по порядку (FIFO); не «да» / не задана — как раньше потеряно, но с
     записью журнала `venue.core_events_lost` (счёт).
@@ -124,3 +125,23 @@ keep_last хранит по ключу ПОСЛЕДНЕЕ значение — �
 2. Подписчики изменений настроек (settings/live.rs Watch): отставание — tracing warn, пробуждение по пропущенному
    изменению может не случиться (значения при этом читаются из хранилища при каждом использовании).
 3. storage/raw_log.rs: потеря сырых сообщений на диск — tracing на 1-й, 2-й, 4-й…, не журнал интерфейса.
+
+## Ревью (независимое, 16.11) — что исправлено
+
+Запись DECISIONS «333/334 (ревью, t155)». Каждое замечание перепроверено по коду ветки до правки.
+
+- **Б1 (верно, исправлено).** Без venue.money_events_keep `WalletQueue` «остановлена» и `ExitGap` при полном канале
+  терялись. Теперь род Money ждёт места всегда (gateway/core_out_must_queue.rs `put`), настройка удалена.
+- **Б2 (верно, исправлено).** «Не проверена» шла очередью MustOut, итог — `send().await` мимо неё: итог мог прийти
+  раньше и быть перезаписан (core/market_state.rs CoinCheck). Теперь `MustOut::send_in_task` в check/tax_cycle.rs —
+  тот же путь (`send().await` той же задачи) при «да», без ожидания при не «да». Итоги шлёт та же задача
+  (tax_cycle.rs:87, 161 → tax_pass.rs → taxes_util.rs). USDT (check/service_tax.rs) — другая задача и другой адрес.
+  Другие события двумя путями: WalletQueue, ExitGap, SendChannel — только MustOut (grep). ExitGap после итога
+  перепроверки — монета остаётся закрытой до следующей проверки (core/exit_gap.rs on_check) — сторона безопасности.
+- **Н1** — Money своя очередь, доставщик берёт её первой. **Н2** — venue.core_events_queue и venue.info_events_max.
+  **Н3** — Guard (core_out_must_deliver.rs). **Н4** — core/stuck_lag.rs Ticks. **Н5** — checked_add (ждёт без срока).
+  **Н6** — cand_wait::cap_changed. **Н7** — Kind::of без `_`. **Н8** — площадка в записи потерь.
+  **Н9** — venue.money_events_alert_ms → уведомление venue.money_event_delayed (денежные теперь не теряются, поэтому
+  уведомление — о задержке). **Н10** — тест переписан как логика на явных значениях + новые случаи; cand_wait/run и
+  Ticks тестом не покрыты (нужен Core) — docs/TASKS.md. **Н11** — файл разделён на 4, docs/UI.md.
+- **Н12** — вне ветки: описание и предложение — docs/TASKS.md (t155).

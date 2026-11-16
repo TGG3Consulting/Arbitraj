@@ -4,7 +4,7 @@
 //! 4-ю, 8-ю… потерю (как у очередей окон и эпизодов, core/window_run.rs, core/episode_run.rs: шквал потерь даёт
 //! несколько строк, а не тысячи); задана — не чаще раза в столько секунд (первая — сразу) с числом потерь с прошлой
 //! записи. Счёт и настройка трогаются только при потере (обычный путь отправки — без изменений).
-//! Кто вызывает: gateway/core_out_must.rs (сообщения адаптеров ядру), core/cand_wait.rs и core/candidates.rs
+//! Кто вызывает: gateway/core_out_must_log.rs (сообщения адаптеров ядру), core/cand_wait.rs и core/candidates.rs
 //! (кандидаты), core/busy_calc.rs (теневые расчёты), core/stuck_lag.rs (тики монет), notify/mirror_lag.rs (события
 //! ядра).
 //! От чего зависит: gateway/log_clock.rs (часы «не чаще интервала»), settings (интервал), storage/journal.rs, tokio

@@ -105,6 +105,8 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<(Direction, Instant)>) {
     // (biased: кандидат всегда первый). Замер выключен — очередь теневых пуста всегда.
     let mut shadows = super::busy_calc::Shadows::take(&core);
     let wait = &core.inner.cand_wait;
+    // Ревью 333, Н6: смена profit.calc_concurrency будит ждущих (слушается, только пока ждущие есть).
+    let mut changes = Some(core.inner.deps.settings.subscribe());
     loop {
         // Решение 334: ждущие места кандидаты — первыми, пока место есть (ждущих нет — одно чтение пустой очереди).
         if !wait.is_empty() && !full(&core, &inflight) {
@@ -113,11 +115,15 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<(Direction, Instant)>) {
             }
             continue;
         }
+        // Ревью 333, Н5: ждущий без срока (огромная profit.calc_wait_ms) — ждущие есть, а срока нет.
+        let parked = !wait.is_empty();
         let due = wait.next_due();
         let (d, at) = tokio::select! {
             biased;
             // Место освободилось (или поставлен ждущий) — снова к ждущим.
-            _ = wait.free.notified(), if due.is_some() => continue,
+            _ = wait.free.notified(), if parked => continue,
+            // Ревью 333, Н6: предел сменился — снова к ждущим (поднятый предел пускает их сразу).
+            _ = cand_wait::cap_changed(&mut changes), if parked => continue,
             // Срок ждущего вышел — потеря со счётом, направление снимается из очереди.
             _ = tokio::time::sleep_until(due.unwrap_or_else(Instant::now).into()), if due.is_some() => {
                 wait.expire(&core);
@@ -127,7 +133,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<(Direction, Instant)>) {
                 Some(m) => m,
                 None => return,
             },
-            s = shadows.recv(), if due.is_none() => {
+            s = shadows.recv(), if !parked => {
                 shadows.start(&core, s, inflight.load(Ordering::Acquire));
                 continue;
             }
@@ -149,7 +155,7 @@ fn cap(core: &Core) -> Option<usize> {
     core.inner
         .deps
         .settings
-        .integer("profit.calc_concurrency", At::default())
+        .integer(cand_wait::CAP, At::default())
         .ok()
         .filter(|n| *n > 0)
         .map(|n| n as usize)

@@ -69,7 +69,7 @@ impl Notices {
                 " (канал событий ядра полон — событие ждёт места, venue.info_events_keep)"
             }
             Some(Fed::Lost) => {
-                " (событие потеряно: канал событий ядра полон, venue.info_events_keep не «да» — счёт в venue.core_events_lost)"
+                " (событие потеряно: канал событий ядра полон — venue.info_events_keep не «да» или очередь достигла venue.info_events_max; счёт в venue.core_events_lost)"
             }
             Some(Fed::Closed) => " (событие не отправлено: канал событий ядра закрыт)",
             None => {

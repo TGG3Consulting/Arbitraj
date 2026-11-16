@@ -63,7 +63,7 @@ pub use pool::{
     PoolState, SolidlyFee, SolidlyGate, StableData, StableGuard, StableNg, TickBinData,
     TickReserves, VaultCurve, VaultPoolData,
 };
-pub use pool_depth::{CrossCheck, PoolDepth, SideCheck};
+pub use pool_depth::{CrossCheck, PoolDepth, SideCheck, UnreadPool};
 pub use presell::DexPresell;
 pub use send::{
     ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome, WalletQueue,

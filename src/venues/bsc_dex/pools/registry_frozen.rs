@@ -93,6 +93,7 @@ impl Registry {
             )),
             // Решение 339: у снимка отметок неудач нет (только для живого реестра, pool_fail.rs).
             fails: Default::default(),
+            unread: Default::default(),
         }
     }
 }

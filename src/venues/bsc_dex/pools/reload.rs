@@ -92,6 +92,10 @@ pub async fn retry(
         let (found, ticker) = &pools[m.i];
         m.tries += 1;
         let title = found.family.title;
+        // Экран «Монеты»: пул, ни разу не прочитанный, виден с причиной (pool_unread.rs, admit.rs unread).
+        if let Err(why) = &res {
+            super::admit::unread(p, found, why);
+        }
         // Решение 339: прочая неудача — пауза растёт (журнал — только при смене причины); StaleData — без паузы.
         if let Err(why) = &res
             && !super::stale_read::is_stale(why)

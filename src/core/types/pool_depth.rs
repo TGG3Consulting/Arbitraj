@@ -6,13 +6,16 @@
 //! От чего зависит: core/types/market.rs, core/types/pool.rs, rust_decimal.
 //! Настройки: нет.
 //!
+//! Решение 339 (экран «Монеты», DECISIONS «339 (экран и журнал, t153)»): `unread` — пул, ни разу не прочитанный.
+//!
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
 
+use alloy_primitives::Address;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use super::market::VenueId;
-use super::pool::PoolRef;
+use super::pool::{PoolKind, PoolRef};
 
 /// Итог независимой сверки расчёта пула площадкой. В JSON — «not_checked» | «ok» | «failed».
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,4 +67,24 @@ pub struct PoolDepth {
     pub cross_check_sell: SideCheck,
     /// Подробности площадки строками (например «tickSpacing 1») — ядро их не разбирает, только показывает.
     pub details: Vec<String>,
+    /// Решение 339 (экран «Монеты»): пул ещё ни разу не прочитан — ядро его не знает (в пулах ядра его нет), строка
+    /// экрана строится по этим полям; valid = false, глубины нет, причина и следующая попытка — в details.
+    /// None — пул прочитан (как раньше). В JSON поле есть только у непрочитанного пула.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unread: Option<UnreadPool>,
+}
+
+/// Пул, ни разу не прочитанный площадкой: к какой монете он относится и что показать в строке пула (решение 339).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UnreadPool {
+    /// Монета пула (адрес контракта; не встречный токен).
+    pub coin: Address,
+    /// Второй токен пула — подпись: «USDT», тикер промежуточной монеты или её адрес.
+    pub pair: String,
+    /// Вид пула (id DEX) — как Pool.family.
+    pub family: String,
+    /// Вид кривой — как Pool.kind.
+    pub kind: PoolKind,
+    /// Комиссия пула из справочника (как Pool.fee_pips); None — не из пула.
+    pub fee_pips: Option<u32>,
 }

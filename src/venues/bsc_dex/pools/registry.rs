@@ -16,7 +16,8 @@
 //! фонового графа (graph_changes.rs) под замком записи и ДО роста версии; слежение выключено — одно атомарное чтение.
 //! Решение 217: замороженный реестр из снимка записей (снимок и сборка — registry_frozen.rs).
 //! Решение 339: отметки неудач чтения пулов (pool_fail.rs Fails) — здесь же; put достоверной записи их снимает (без
-//! отметок — без замка, ревью t153 Н5), retain снимает отметки удалённых пулов (Н6).
+//! отметок — без замка, ревью t153 Н5), retain снимает отметки удалённых пулов (Н6). Пулы, ни разу не прочитанные
+//! (pool_unread.rs, экран «Монеты»), — здесь же; любой put снимает отметку.
 //! Настройки: нет.
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -81,6 +82,8 @@ pub struct Registry {
     pub(super) gens: Arc<AtomicU64>,
     /// Решение 339: неудачи чтения пулов (причина, пауза повтора — pool_fail.rs); снимаются при put достоверной записи.
     pub(super) fails: super::pool_fail::Fails,
+    /// Решение 339 (экран «Монеты»): пулы, ни разу не прочитанные (pool_unread.rs); снимаются при любом put.
+    pub(super) unread: super::pool_unread::Book,
 }
 
 impl Entry {
@@ -127,6 +130,8 @@ impl Registry {
         if e.valid {
             self.fails.clear(&e.pool.reference);
         }
+        // Пул записан в реестр — экран видит его записью; отметка «ни разу не прочитан» (pool_unread.rs) долой.
+        self.unread.clear(&e.pool.reference);
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
         e.state_gen = match m.get(&e.pool.reference) {
             Some(old) if old.state_gen != 0 && super::state_gen::same(old, &e) => old.state_gen,

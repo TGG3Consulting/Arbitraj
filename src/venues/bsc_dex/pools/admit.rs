@@ -52,6 +52,14 @@ fn done_tries(p: &Pools, r: &crate::core::types::PoolRef) -> u64 {
         .map_or(0, |f| u64::from(f.tries.saturating_sub(1)))
 }
 
+/// Что делает: пул без записи в реестре (ни разу не прочитан) не прочитался — отметка для экрана «Монеты»
+/// (pool_unread.rs; все виды пулов, без настройки). Принимает: окружение, пул, причину. Ошибок нет.
+pub fn unread(p: &Pools, found: &Found, why: &crate::gateway::errors::GatewayError) {
+    if p.reg.entry(&found.reference).is_none() {
+        p.reg.unread().note(found, &why.message);
+    }
+}
+
 /// Принимает в пачку пулы с индексами `new` (см. шапку). Ошибки: End — обрыв, сбой узла или ядро закрыло канал.
 pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -> Result<(), End> {
     if new.is_empty() {
@@ -96,6 +104,7 @@ pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -
         if let Err(why) = res {
             p.reg.update(&found.reference, |e| e.valid = false);
             let r = &found.reference;
+            unread(p, found, &why);
             // Решение 339 (журнал и приём): при изоляции неудача — отметка с паузой (pool_fail::note: журнал только на
             // первую неудачу эпизода и смену кода причины, а не на каждое переподключение), попытки — из отметки;
             // StaleData — как раньше (без паузы). Не задана dex.pool_fail_pause_ms — запись на каждую неудачу.

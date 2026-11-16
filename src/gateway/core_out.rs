@@ -10,9 +10,11 @@
 //! и тот же набор; мёртвые записи (все Sender сняты или канал закрыт) выбрасываются при следующем обращении.
 //! Доставщик — задача tokio, запускается при первом откладывании (Offer::Deferred { start: true }), держит Sender
 //! только пока набор не пуст. Набор опустел — вызываются крючки «опустел» классов (запись журнала, on_drain).
+//! Ревью 324 (Б2): состояние класса вне замка набора (настройки в памяти, счёт потерь, часы журнала) — Feed::side,
+//! одно на класс (gateway/core_out_side.rs).
 //! Кто вызывает: venues/bsc_dex/pools/emit_pool.rs (пулы), gateway/core_out_book.rs (стаканы и Invalidated бирж),
 //! venues/bsc_dex/pools/lost_events.rs и gateway/book_lost_log.rs (счёт).
-//! От чего зависит: gateway/keep_last.rs, gateway/core_out_item.rs, gateway/log_clock.rs, gateway/events.rs, tokio.
+//! От чего зависит: gateway/keep_last.rs, gateway/core_out_item.rs, gateway/core_out_side.rs, gateway/events.rs, tokio.
 //! Настроек нет (откладывать ли — решает вызывающий: dex.pool_events_keep, venue.book_events_keep).
 
 use std::collections::HashMap;
@@ -21,9 +23,9 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use tokio::sync::mpsc::{Sender, WeakSender};
 
 use super::core_out_item::{Class, Item, Key};
+use super::core_out_side::Side;
 use super::events::MarketEvent;
 use super::keep_last::{Counts, Offer, Pending};
-use super::log_clock::Clock;
 
 /// Крючок «набор опустел» класса (получает сам набор — без кольцевой ссылки). Ошибок нет.
 pub type Hook = Arc<dyn Fn(&Feed) + Send + Sync>;
@@ -33,8 +35,8 @@ pub type Hook = Arc<dyn Fn(&Feed) + Send + Sync>;
 pub struct Feed {
     set: Pending<Key, Item>,
     hooks: Arc<Mutex<HashMap<Class, Hook>>>,
-    /// Часы записи журнала по классу (gateway/book_lost_log.rs).
-    clocks: Arc<Mutex<HashMap<Class, Clock>>>,
+    /// Состояние класса вне замка набора (ревью 324, Б2).
+    sides: Arc<Mutex<HashMap<Class, Arc<Side>>>>,
 }
 
 /// Реестр наборов процесса: канал (слабая ссылка) → набор.
@@ -104,17 +106,16 @@ impl Feed {
         self.set.waiting()
     }
 
-    /// Пора ли запись журнала класса (Clock::due). Принимает: класс, чтение интервала. Возвращает: как Clock::due.
-    /// Ошибок нет.
-    pub fn due(
-        &self,
-        class: &Class,
-        read: impl FnOnce() -> Option<std::time::Duration>,
-    ) -> Option<Option<std::time::Duration>> {
-        lock(&self.clocks)
-            .entry(class.clone())
-            .or_default()
-            .due(std::time::Instant::now(), read)
+    /// Состояние класса вне замка набора (создаётся при первом обращении — make). Принимает: класс, создание.
+    /// Возвращает: (состояние, создано ли сейчас — тогда вызывающий ставит крючок on_drain). Ошибок нет.
+    pub fn side(&self, class: &Class, make: impl FnOnce() -> Side) -> (Arc<Side>, bool) {
+        let mut m = lock(&self.sides);
+        if let Some(s) = m.get(class) {
+            return (s.clone(), false);
+        }
+        let s = Arc::new(make());
+        m.insert(class.clone(), s.clone());
+        (s, true)
     }
 
     /// Запускает доставщика; набор опустел — крючки классов (вне замков). Ошибок нет.

@@ -101,7 +101,6 @@ async fn full_channel_defers_then_delivers_one_per_pool_in_order() {
         replaced: 1,
         delivered: 3,
         dropped: 0,
-        lost: 0,
         waiting: 0,
     };
     assert_eq!(set.take(&0), want);
@@ -141,7 +140,7 @@ async fn not_enabled_is_old_drop_and_closed_is_closed() {
     assert_eq!(set.offer(&tx, P(1), e(&d, (1, 1)), || false), Offer::Sent);
     assert_eq!(set.offer(&tx, P(2), e(&d, (2, 1)), || false), Offer::Lost);
     assert_eq!(set.waiting(), 0, "без настройки ничего не ждёт");
-    assert_eq!(set.take(&0).lost, 1, "потеря посчитана");
+    // Потери считает вызывающий (ревью 324, Б2: без замка набора) — у набора счёта потерь нет.
     assert_eq!(rx.recv().await, Some((1, 1)));
     assert!(rx.try_recv().is_err(), "потерянное не пришло");
     drop(rx);

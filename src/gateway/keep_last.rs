@@ -82,10 +82,8 @@ pub struct Counts {
     pub replaced: u64,
     /// Доставлено доставщиком (сообщений).
     pub delivered: u64,
-    /// Снято при доставке (Take::Skip).
+    /// Снято при доставке (Take::Skip). Потерянные (Offer::Lost) считает вызывающий — без замка набора (ревью 324, Б2).
     pub dropped: u64,
-    /// Потеряно: канал полон, откладывать не велено.
-    pub lost: u64,
     /// Ждут сейчас (ключей).
     pub waiting: usize,
 }
@@ -140,7 +138,6 @@ impl<K: Keyed, S: Slot> Pending<K, S> {
                 if urgent || (s.order.is_empty() && want()) {
                     return s.defer(key, item);
                 }
-                s.count(&class).lost += 1;
                 Offer::Lost
             }
         }

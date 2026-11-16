@@ -19,8 +19,9 @@
 //! per_block_balancer.rs зовут listen_log::emit); parts.rs (Kept::new, Kept::watch).
 //! От чего зависит: listen.rs (Pools: канал, набор), depth.rs (touch), gateway/core_out.rs, gateway/core_out_item.rs,
 //! lost_events.rs, registry.rs (entry — достоверность при доставке).
-//! Настройки: dex.pool_events_keep [bsc_dex] (да/нет, необязательная; читается только при полном канале, когда пулы
-//! площадки не ждут — Store::resolve, без текста ошибки); через lost_events.rs — log.pool_events_lost_interval_s.
+//! Настройки: dex.pool_events_keep [bsc_dex] (да/нет, необязательная; нужна только при полном канале, когда пулы
+//! площадки не ждут; ревью 324, Б2: значение в памяти — gateway/setting_cell.rs, состояние класса Feed::side, без
+//! Store::resolve на событие); через lost_events.rs — log.pool_events_lost_interval_s.
 
 use std::sync::Arc;
 
@@ -29,8 +30,10 @@ use tokio::sync::mpsc::Sender;
 use crate::core::types::Pool;
 use crate::gateway::core_out::{self, Feed};
 use crate::gateway::core_out_item::{Class, Item, Key, Live};
+use crate::gateway::core_out_side::Side;
 use crate::gateway::events::MarketEvent;
 use crate::gateway::keep_last::Offer;
+use crate::gateway::setting_cell::{self, Cell, bool_of};
 
 use super::super::ctx::Ctx;
 use super::listen::{End, Pools};
@@ -45,19 +48,31 @@ const KEEP: &str = "dex.pool_events_keep";
 pub struct Kept {
     pub feed: Feed,
     pub live: Live,
+    /// dex.pool_events_keep в памяти (ревью 324, Б2).
+    pub keep: Arc<Cell>,
 }
 
 impl Kept {
-    /// Набор канала ядра и проверка по реестру. Принимает: канал ядра, реестр. Ошибок нет.
-    pub fn new(out: &Sender<MarketEvent>, reg: &Registry) -> Self {
+    /// Набор канала ядра, проверка по реестру, настройка в памяти (одна на класс «пулы площадки» набора). Принимает:
+    /// канал ядра, реестр, окружение. Ошибок нет.
+    pub fn new(out: &Sender<MarketEvent>, reg: &Registry, ctx: &Ctx) -> Self {
         let reg = reg.clone();
         let live: Live = Arc::new(move |ev: &MarketEvent| match ev {
             MarketEvent::Pool(p) => reg.entry(&p.reference).is_some_and(|e| e.valid),
             _ => true,
         });
+        let feed = core_out::of(out);
+        let venue = ctx.at().venue.map(str::to_string);
+        let (side, _) = feed.side(&Class::Pool(ctx.venue()), || {
+            Side::new(
+                setting_cell::watch(&ctx.settings, KEEP, venue, bool_of),
+                None,
+            )
+        });
         Self {
-            feed: core_out::of(out),
+            feed,
             live,
+            keep: side.keep.clone(),
         }
     }
 
@@ -75,7 +90,7 @@ pub fn emit(p: &Pools, pool: Pool) -> Result<(), End> {
     super::depth::touch(p, &pool.reference);
     let key = Key::Pool(p.ctx.venue(), pool.reference.clone());
     let item = Item::Event(MarketEvent::Pool(pool), Some(p.kept.live.clone()));
-    let keep = || keep_on(p);
+    let keep = || p.kept.keep.on();
     match p.kept.feed.offer(&p.out, key, item, keep) {
         Offer::Sent | Offer::Replaced => Ok(()),
         Offer::Closed => Err(End::Closed),
@@ -90,13 +105,4 @@ pub fn emit(p: &Pools, pool: Pool) -> Result<(), End> {
             Ok(())
         }
     }
-}
-
-/// dex.pool_events_keep = да (не задана / нет / не да-нет — нет). Ошибок нет.
-fn keep_on(p: &Pools) -> bool {
-    p.ctx
-        .settings
-        .resolve(KEEP, p.ctx.at().venue, None)
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
 }

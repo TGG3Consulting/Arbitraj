@@ -124,7 +124,7 @@ impl Parts {
         super::pools::graph_owner::ensure(&self.ctx, &self.registry, &self.tokens, out.clone());
         // Решения 321/324: общий набор канала ядра (один на канал — все подписки и пачки и биржи) и запись журнала,
         // когда он опустел.
-        let kept = super::pools::emit_pool::Kept::new(&out, &self.registry);
+        let kept = super::pools::emit_pool::Kept::new(&out, &self.registry, &self.ctx);
         kept.watch(&self.ctx, &signals.lost);
         Pools {
             ctx: self.ctx.clone(),

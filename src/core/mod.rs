@@ -199,6 +199,7 @@ pub mod registry_merge;
 pub mod registry_native;
 pub mod registry_sync;
 pub mod reject_log;
+pub mod reject_log_q;
 pub mod reject_shape;
 pub mod relay;
 pub mod relay_here;

@@ -12,11 +12,12 @@
 //! Настройки: путь к папке данных — аргумент запуска --data-dir (до старта настроек его взять негде).
 
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use rusqlite::Connection;
 
 use super::ledger_db::{self, LedgerDb};
+use crate::gateway::rules::Rule;
 
 /// Схема базы. Таблицы создаются, если их нет.
 const SCHEMA: &str = "
@@ -177,9 +178,18 @@ pub enum DbError {
 /// Общий доступ к базе. Дешёво клонируется.
 #[derive(Clone)]
 pub struct Db {
+    /// Одно Arc на всё (размер Db — один указатель, как до решения 353: Db и Journal лежат по значению во многих
+    /// будущих пути сделки, лишние байты там растят стек — CI t158, tests/core_dry_mode.rs).
+    inner: Arc<Inner>,
+}
+
+/// Содержимое Db: соединение основной базы и учёт ядра.
+struct Inner {
     conn: Arc<Mutex<Connection>>,
     /// Решение 353: учёт ядра — свой файл и свой писатель (storage/ledger_db.rs).
     ledger: LedgerDb,
+    /// Решение 354: снимок правил шлюза (storage/rules.rs); None — ещё не прочитан или не прочитался.
+    rules: RwLock<Option<Vec<Rule>>>,
 }
 
 impl Db {
@@ -191,9 +201,14 @@ impl Db {
         conn.execute_batch(SCHEMA)?;
         migrate(&conn)?;
         let ledger = LedgerDb::open(&ledger_db::path_near(path), &conn)?;
+        // Решение 354: снимок правил шлюза — сразу (не прочитались — прочитаются при первом list, с той же ошибкой).
+        let rules = RwLock::new(super::rules::read_all(&conn).ok());
         Ok(Self {
-            conn: Arc::new(Mutex::new(conn)),
-            ledger,
+            inner: Arc::new(Inner {
+                conn: Arc::new(Mutex::new(conn)),
+                ledger,
+                rules,
+            }),
         })
     }
 
@@ -231,12 +246,23 @@ impl Db {
         } else {
             LedgerDb::direct(conn.clone())
         };
-        Ok(Self { conn, ledger })
+        Ok(Self {
+            inner: Arc::new(Inner {
+                conn,
+                ledger,
+                rules: RwLock::new(None),
+            }),
+        })
+    }
+
+    /// Снимок правил шлюза (решение 354, storage/rules.rs). Ошибок нет.
+    pub(super) fn rules_cache(&self) -> &RwLock<Option<Vec<Rule>>> {
+        &self.inner.rules
     }
 
     /// Учёт ядра (решение 353): запись — своим писателем, чтение — своим соединением. Ошибок нет.
     pub fn ledger(&self) -> &LedgerDb {
-        &self.ledger
+        &self.inner.ledger
     }
 
     /// Что делает: решение 341 — выполняет функцию с соединением В ТЕКУЩЕМ потоке (замок соединения — тот же, что у
@@ -246,7 +272,7 @@ impl Db {
         &self,
         f: impl FnOnce(&mut Connection) -> Result<T, rusqlite::Error>,
     ) -> Result<T, DbError> {
-        let mut guard = self.conn.lock().map_err(|_| DbError::Poisoned)?;
+        let mut guard = self.inner.conn.lock().map_err(|_| DbError::Poisoned)?;
         f(&mut guard).map_err(DbError::from)
     }
 
@@ -258,7 +284,7 @@ impl Db {
         T: Send + 'static,
         F: FnOnce(&mut Connection) -> Result<T, rusqlite::Error> + Send + 'static,
     {
-        let conn = self.conn.clone();
+        let conn = self.inner.conn.clone();
         tokio::task::spawn_blocking(move || {
             let mut guard = conn.lock().map_err(|_| DbError::Poisoned)?;
             f(&mut guard).map_err(DbError::from)

@@ -7,6 +7,7 @@
 //! остановил бы всю торговлю, а налога у него нет.
 //! Решение 253 (д): каждое зачисление пишет факты перевода (фактическая комиссия, недостача) — withdraw_seen.rs,
 //! независимо от порога transfer.credit_shortfall_pct.
+//! Решение 354: занесение в список, журнал и уведомление — своей задачей tokio (продажа не ждёт основную базу).
 //! Кто вызывает: core/transfers.rs (после зачисления), core/transfer_chain.rs (зачисление по блокчейну — после
 //! фактической комиссии из статуса вывода, решение 253).
 //! От чего зависит: credit_expect.rs, engine.rs, settings (запись ручной отметки), deps.rs (журнал, уведомления).
@@ -97,7 +98,16 @@ pub async fn check(
             from.0, from.0, to.0
         ),
     };
-    let scope = super::blacklist::coin_scope(asset);
+    // Решение 354: чёрный список (запись настроек в основную базу), журнал и уведомление — своей задачей: продажа не
+    // ждёт. Монета занята этой сделкой до конца — новая сделка по ней не начнётся раньше, чем отметка ляжет (оценка: мс).
+    tokio::spawn(block(core.clone(), asset.clone(), to.clone(), note));
+}
+
+/// Что делает: монета — в ручной чёрный список, журнал core.credit_shortfall и уведомление coin.credit_shortfall.
+/// Принимает: ядро, монету, площадку зачисления, заметку. Ошибок нет (не внесена — причина в тексте журнала).
+async fn block(core: Core, asset: Asset, to: VenueId, note: String) {
+    let deps = &core.inner.deps;
+    let scope = super::blacklist::coin_scope(&asset);
     let s = &deps.settings;
     let set = async {
         s.set(

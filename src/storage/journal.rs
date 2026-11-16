@@ -98,11 +98,14 @@ impl Journal {
             repeats: None,
             last_at: None,
         };
-        let row = e.clone();
-        let Some(row) = self.queue.push(&self.db, &self.live, row) else {
+        // Решение 341: очередь — в отдельной не-async функции (временные значения не попадают в будущее write).
+        if self.enqueue(&e) {
             return Ok(e);
-        };
-        let res = self.db.call(move |c| insert(c, &row)).await;
+        }
+        let row = e.clone();
+        // Будущее записи — в куче: write ждут почти все шаги сделки и расчёта, её размер входит в их будущие (CI t158,
+        // переполнение стека tests/core_dry_mode.rs).
+        let res = Box::pin(self.db.call(move |c| insert(c, &row))).await;
         match res {
             Ok(id) => {
                 e.id = id;
@@ -115,6 +118,15 @@ impl Journal {
                 Err(err)
             }
         }
+    }
+
+    /// Решение 341: ставит копию записи в очередь, если очередь включена (или ещё не пуста). Принимает: запись.
+    /// Возвращает: true — поставлена или потеряна со счётом (писать прямо не нужно). Ошибок нет.
+    fn enqueue(&self, e: &Entry) -> bool {
+        if !self.queue.on() {
+            return false;
+        }
+        self.queue.push(&self.db, &self.live, e.clone()).is_none()
     }
 
     /// Решение 341: включена ли очередь записи (или в ней ещё есть записи) — запись журнала сейчас не ждётся.

@@ -8,21 +8,26 @@
 //! journal.queue_lost (Warn: сколько потеряно с прошлой записи и всего) — не молча. Пачка не записалась (ошибка
 //! SQLite) — её записи считаются потерянными (лог процесса и та же запись о потерях). Предел снят, а в очереди ещё
 //! есть записи — новые тоже идут в очередь, пока она не опустеет (порядок не ломается).
-//! Кто вызывает: storage/journal.rs (Journal::write, queued, set_queue_max, idle).
-//! От чего зависит: storage/db.rs (call_sync), storage/journal.rs (Entry, insert), std::sync::mpsc, tokio::sync::Notify.
+//! Решение 354: кроме записей — операции повторяющихся строк (journal_op.rs: строка с меткой, обновление, «забыть»),
+//! метки выдаёт next_token в памяти. Сам поток-писатель — storage/journal_writer.rs.
+//! Кто вызывает: storage/journal.rs (Journal::write, queued, set_queue_max, idle), storage/journal_counted.rs,
+//! storage/journal_writer.rs (lose, done, lost_note, batch_max).
+//! От чего зависит: storage/db.rs, storage/journal.rs (Entry), storage/journal_op.rs, storage/journal_writer.rs,
+//! std::sync::mpsc, tokio::sync::Notify.
 //! Настройки: journal.queue_max, journal.batch_max (передаёт storage/write_modes.rs через Journal::set_queue_max,
 //! set_batch_max).
 
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::mpsc::{Sender, channel};
+use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
 use serde_json::json;
 use tokio::sync::{Notify, broadcast};
 
 use super::db::Db;
-use super::journal::{Entry, Level, insert};
+use super::journal::{Entry, Level};
+use super::journal_op::Op;
 
 /// Вид записи журнала о потерянных записях (очередь полна или пачка не записалась).
 pub const LOST_KIND: &str = "journal.queue_lost";
@@ -40,7 +45,9 @@ pub struct Queue {
     lost: AtomicU64,
     lost_total: AtomicU64,
     /// Отправитель потоку-писателю (поток запускается при первой постановке).
-    tx: Mutex<Option<Sender<Entry>>>,
+    tx: Mutex<Option<Sender<Op>>>,
+    /// Решение 354: последняя выданная метка повторяющейся строки (journal_counted.rs).
+    token: AtomicU64,
     /// Сигнал «очередь опустела».
     idle: Notify,
 }
@@ -72,26 +79,55 @@ impl Queue {
         live: &broadcast::Sender<Entry>,
         e: Entry,
     ) -> Option<Entry> {
-        if !self.on() {
-            return Some(e);
+        match self.push_op(db, live, Op::Insert(Box::new(e)), false) {
+            Pushed::Off(Op::Insert(e)) => Some(*e),
+            _ => None,
         }
+    }
+
+    /// Что делает: ставит операцию в очередь. force — ставить, даже если очередь выключена (операции по метке:
+    /// карту меток знает только писатель), и без предела journal.queue_max для обновлений и «забыть» (их число
+    /// ограничено строками отказов; предел защищает от шквала записей). Принимает: базу, живой поток, операцию, force.
+    /// Возвращает: Queued, Lost (предел, счёт потерь) или Off(операция) — очередь выключена, выполнять прямо.
+    /// Ошибок нет.
+    pub(super) fn push_op(
+        self: &Arc<Self>,
+        db: &Db,
+        live: &broadcast::Sender<Entry>,
+        op: Op,
+        force: bool,
+    ) -> Pushed {
+        if !force && !self.on() {
+            return Pushed::Off(op);
+        }
+        let limited = matches!(op, Op::Insert(_) | Op::Counted(..));
         let max = self.max.load(Ordering::Acquire);
-        if max > 0 && self.pending.load(Ordering::Acquire) >= max {
-            self.lose(1, &e.kind);
-            return None;
+        if limited && max > 0 && self.pending.load(Ordering::Acquire) >= max {
+            self.lose(1, op.kind());
+            return Pushed::Lost;
         }
         let mut tx = self.tx.lock().unwrap_or_else(|p| p.into_inner());
         let sender = tx.get_or_insert_with(|| self.start(db, live));
         self.pending.fetch_add(1, Ordering::AcqRel);
-        if let Err(back) = sender.send(e) {
-            // Поток-писатель завершился (паника) — новый, запись — в него.
+        if let Err(back) = sender.send(op) {
+            // Поток-писатель завершился (паника) — новый, операция — в него.
             let s = self.start(db, live);
             if s.send(back.0).is_err() {
                 self.done(1);
             }
             *tx = Some(s);
         }
-        None
+        Pushed::Queued
+    }
+
+    /// Решение 354: новая метка повторяющейся строки (в памяти, без базы). Ошибок нет.
+    pub(super) fn next_token(&self) -> u64 {
+        self.token.fetch_add(1, Ordering::AcqRel) + 1
+    }
+
+    /// Предел записей в одной пачке (0 — всё накопленное). Ошибок нет.
+    pub(super) fn batch_max(&self) -> usize {
+        self.batch.load(Ordering::Acquire)
     }
 
     /// Ждёт, пока очередь опустеет. Ошибок нет.
@@ -108,7 +144,7 @@ impl Queue {
     }
 
     /// Потеря n записей: счёт и лог процесса. Принимает: число, вид последней. Ошибок нет.
-    fn lose(&self, n: u64, kind: &str) {
+    pub(super) fn lose(&self, n: u64, kind: &str) {
         self.lost.fetch_add(n, Ordering::AcqRel);
         let total = self.lost_total.fetch_add(n, Ordering::AcqRel) + n;
         tracing::warn!(
@@ -119,14 +155,14 @@ impl Queue {
     }
 
     /// n записей ушли из очереди; пусто — сигнал ждущим. Ошибок нет.
-    fn done(&self, n: usize) {
+    pub(super) fn done(&self, n: usize) {
         if self.pending.fetch_sub(n, Ordering::AcqRel) == n {
             self.idle.notify_waiters();
         }
     }
 
     /// Запись о потерях с прошлой (если были). Возвращает: запись или None. Ошибок нет.
-    fn lost_note(&self) -> Option<Entry> {
+    pub(super) fn lost_note(&self) -> Option<Entry> {
         let since = self.lost.swap(0, Ordering::AcqRel);
         (since > 0).then(|| {
             let total = self.lost_total.load(Ordering::Acquire);
@@ -148,12 +184,12 @@ impl Queue {
 
     /// Запускает поток-писатель. Принимает: базу, живой поток. Возвращает: отправителя. Ошибок нет (поток не
     /// запустился — лог процесса; записи будут считаться потерянными при следующей постановке).
-    fn start(self: &Arc<Self>, db: &Db, live: &broadcast::Sender<Entry>) -> Sender<Entry> {
+    fn start(self: &Arc<Self>, db: &Db, live: &broadcast::Sender<Entry>) -> Sender<Op> {
         let (tx, rx) = channel();
         let (db, live, me) = (db.clone(), live.clone(), Arc::downgrade(self));
         let r = std::thread::Builder::new()
             .name("journal-writer".into())
-            .spawn(move || run(rx, db, live, me));
+            .spawn(move || super::journal_writer::run(rx, db, live, me));
         if let Err(e) = r {
             tracing::error!(%e, "поток записи журнала не запущен");
         }
@@ -161,46 +197,12 @@ impl Queue {
     }
 }
 
-/// Поток-писатель: ждёт первую запись, забирает накопленное (не больше journal.batch_max) и пишет одной транзакцией;
-/// затем — в живой поток. Завершается, когда очередь (все клоны Journal) удалена. Принимает: приёмник, базу, живой поток, очередь. Ошибок нет.
-fn run(rx: Receiver<Entry>, db: Db, live: broadcast::Sender<Entry>, q: Weak<Queue>) {
-    while let Ok(first) = rx.recv() {
-        let mut batch = vec![first];
-        let cap = q.upgrade().map_or(0, |q| q.batch.load(Ordering::Acquire));
-        while cap == 0 || batch.len() < cap {
-            let Ok(e) = rx.try_recv() else {
-                break;
-            };
-            batch.push(e);
-        }
-        let taken = batch.len();
-        if let Some(note) = q.upgrade().and_then(|q| q.lost_note()) {
-            batch.push(note);
-        }
-        let res = db.call_sync(|c| {
-            let t = c.transaction()?;
-            for e in batch.iter_mut() {
-                e.id = insert(&t, e)?;
-            }
-            t.commit()
-        });
-        let q = q.upgrade();
-        match res {
-            Ok(()) => {
-                for e in batch {
-                    // Нет слушателей — не ошибка: интерфейс может быть закрыт.
-                    let _ = live.send(e);
-                }
-            }
-            Err(err) => {
-                tracing::error!(%err, n = batch.len(), "пачка журнала не записана");
-                if let Some(q) = &q {
-                    q.lose(taken as u64, "пачка");
-                }
-            }
-        }
-        if let Some(q) = q {
-            q.done(taken);
-        }
-    }
+/// Итог постановки операции.
+pub(super) enum Pushed {
+    /// Поставлена.
+    Queued,
+    /// Не поставлена: очередь полна (потеря посчитана).
+    Lost,
+    /// Очередь выключена — выполнить прямо.
+    Off(Op),
 }

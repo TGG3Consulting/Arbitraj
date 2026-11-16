@@ -265,3 +265,36 @@ ledger_load.rs → «прервана перезапуском», проверк
   core_daily_venue.rs, report_common/mod.rs (`Db::ledger().write/read` вместо `Db::call`).
 - Без теста: обработчик сигнала остановки (journal_stop.rs) — нужен живой процесс с сигналом; внешние программы на
   ledger.sqlite (`open_existing`).
+
+## 9. Обращения к основной базе на пути сделки и расчёта — поиск и итог (решение 354)
+
+Поиск (rg по src/core, src/venues, src/gateway): `.call(`, `call_sync`, `storage::rules`, `venue_state::`,
+`uncapped_db::`, `windows_db::`, `episodes_db::`, `notify_mirror::`, `journal.db()`, `settings.set` / `s.set(`.
+
+| Где | Путь | Было | Стало |
+| --- | --- | --- | --- |
+| core/rules_apply.rs:133 → storage/rules.rs `list` | ошибка операции сделки (покупка, вывод, продажа, цикл) | чтение SQLite под общим замком | снимок в памяти (Db::rules_cache), ставится при открытии и под замком при create / update |
+| venues/bsc_dex/node/pace.rs:91 | 429 узла BSC (котировки, исполнение) | то же | то же |
+| executor.rs:212-215, candidates.rs:198, 222 → reject_log.rs `write_counted` / `update_counted` | отказ предпроверки и кандидата | INSERT / UPDATE ждутся (нужен id) | при journal.queue_max — метка в памяти, очередь (reject_log_q.rs, journal_counted.rs); без настройки — как было |
+| credit_shortfall.rs (transfers.rs:382, transfer_chain.rs:104, 174) | до продажи | Store::set (настройки + история) ждётся | своя задача |
+| sell_slip.rs:133 (sell.rs:263) | после закрытия, до снятия замка монеты | то же | своя задача |
+| withdraw_block.rs `close` (executor.rs:534, relay.rs:278, manual_relay.rs:182) | до продажи здесь / перегона | то же | своя задача, по одной (SERIAL) |
+| storage/wallet_queue.rs, core_state, daily_result | исполнение, учёт | основная база | ledger.sqlite (решение 353) |
+| deal_ceiling.rs:104 (`deal.closed`) | закрытие | чтение «без потолка» | в задании очереди уведомлений (решение 340) |
+| Journal::write | везде | ждётся | при journal.queue_max — очередь (решение 341); без — ждётся (вопрос Тиграну) |
+
+Не на пути сделки (своя задача или фоновый цикл, проверено по коду): uncapped_store.rs (uncapped_queue.rs — `tokio::spawn`),
+window_close.rs / window_cfg.rs (задача окон), episode_worker.rs / episode_cfg.rs (задача эпизодов), notify/mirror_*
+(своя задача), venues/bsc_dex/pools/{deploy_block,history_store}.rs и directory/store.rs (поиск пулов и справочник),
+exit_gap.rs (tick_slow.rs — обработка медленных событий, зона t160; пишет настройки — ждёт обработка события, не сделка),
+отчёты и экраны (window_view, episode_view, uncapped_view, signals_src, daily_rows).
+
+**CI t158 (переполнение стека tests/core_dry_mode.rs precheck_replans_live).** Путь теста: profit::decide,
+precheck::replan, precheck::run — все пишут журнал (`deps.log` → `Journal::write`), уведомления — `Notifier::send`.
+Что t158 добавила в будущие на этом пути (факты кода): `Db` вырос с одного указателя до указателя + LedgerDb
+(storage/db.rs, коммит 554e42f7) — `Db` и `Journal` (его поле) лежат по значению в будущих, державших их клоны;
+`Journal::write` (journal.rs) получил ветку очереди с временными `Entry`. Исправлено: `Db` — снова один `Arc`
+(внутри — соединение, учёт, снимок правил); ветка очереди — в не-async `Journal::enqueue`; будущее прямой записи
+(`Db::call`) — в куче (`Box::pin`), и будущее `write` теперь меньше, чем на базе 8fe83aa1. Точного размера будущих
+замером не установить (локально не собиралось) — **оценка**, проверка — прогон CI. Правка size_search.rs из t157
+(17299acd) не перенесена: на этой ветке файл другой (патч не накладывается), зона t157.

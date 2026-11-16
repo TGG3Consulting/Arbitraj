@@ -6,11 +6,13 @@
 //!   reject_shape.rs), повторы — счётчиком в той же строке (reject_log.rs, частота — journal.repeat_flush_ms): не запись
 //!   на каждый отсев;
 //! - счётчики с запуска: отсечено (по USDT / по %), пропущено в расчёт, «метод не действует» по классам причин — в
-//!   сводку dex.quote_count (quote_count_log.rs, раз в log.quote_count_s), без записи на каждый кандидат.
+//!   сводку dex.quote_count (quote_count_log.rs, раз в log.quote_count_s), без записи на каждый кандидат;
+//! - счётчики контроля (решение 366): audit (взят в контрольный расчёт), audit_violation, audit_moved (sieve_audit.rs).
 //!
-//! Кто вызывает: core/candidates.rs (calc_one), core/quote_count_log.rs (snapshot).
+//! Частота показа — sieve_rate.rs (ревью t162, Н4); контроль — sieve_audit.rs (вызывает sieve_gate.rs, не этот файл).
+//! Кто вызывает: core/sieve_gate.rs (count, cut), core/sieve_audit.rs (bump), core/quote_count_log.rs (snapshot).
 //! От чего зависит: sieve.rs (Sieve), reject_log.rs, reject_shape.rs, episode_run.rs, view.rs, candidates.rs (reject_key,
-//! flush_every), sieve_audit.rs.
+//! flush_every).
 //! Настройки: journal.repeat_flush_ms (через candidates.rs).
 
 use std::collections::BTreeMap;
@@ -40,10 +42,15 @@ pub fn count(s: &Sieve) {
         Sieve::Pass => "pass".to_string(),
         Sieve::Na { class, .. } => format!("na_{class}"),
     };
+    bump(&key);
+}
+
+/// Что делает: +1 к счётчику по ключу (решение 366: audit, audit_violation, audit_moved). Принимает: ключ. Ошибок нет.
+pub fn bump(key: &str) {
     *COUNTS
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .entry(key)
+        .entry(key.to_string())
         .or_default() += 1;
 }
 
@@ -52,8 +59,8 @@ pub fn snapshot() -> BTreeMap<String, u64> {
     COUNTS.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
-/// Что делает: отсечённый кандидат — строка «Кандидатов», эпизод, журнал (см. шапку), аудит отсева (sieve_audit.rs).
-/// Принимает: ядро, направление, причину, данные границы. Ошибок нет.
+/// Что делает: отсечённый кандидат — строка «Кандидатов», эпизод, журнал (см. шапку). Принимает: ядро, направление,
+/// причину, данные границы. Ошибок нет.
 pub async fn cut(core: &Core, d: &Direction, reason: String, data: Value) {
     let row = json!({
         "direction": d,
@@ -93,5 +100,4 @@ pub async fn cut(core: &Core, d: &Direction, reason: String, data: Value) {
             flush,
         )
         .await;
-    super::sieve_audit::maybe(core, d);
 }

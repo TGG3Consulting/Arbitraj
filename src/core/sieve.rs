@@ -1,31 +1,32 @@
 //! Файл: core/sieve.rs
 //! Что делает: решение 361 — отсев кандидата по ДОКАЗАННОЙ верхней границе прибыли перед тяжёлым расчётом (подбор
 //! объёма с котировками DEX). Граница (bound.rs, сборка — bound_in.rs) строится только из памяти: стаканы бирж — снимок
-//! адаптера (quote_snapshot: копия стакана, без запросов), сторона DEX — строгий верх курса адаптера (контракт
-//! rate_bound, без котировок), вывод/возврат/запас — из контекста направления (dirctx.rs, те же функции, что расчёт).
+//! адаптера (quote_snapshot), сторона DEX — строгий верх курса адаптера (контракт rate_bound, без котировок),
+//! вывод/возврат/запас — из контекста направления (dirctx.rs, те же функции, что расчёт); стороны — sieve_side.rs.
 //! Отсекает, только если доказано, что НИ ОДИН объём не пройдёт пороги: max U < money.min_profit_usd или (порог % ≥ 0 и
 //! max(U − порог%·вложение) < 0). Метод не действует (кандидат идёт в расчёт как сейчас): внешний исполнитель
-//! (exec.via_kyber), сторона DEX без строгого верха (вид пула, крючок, налоги, пулы между промежуточными при ≥ 3 хопах,
-//! данные не свежие), нет снимка стакана, вход вне допустимого, любой сбой счёта.
-//! Не в потоке тика: вызывается задачей расчёта кандидата (candidates.rs calc_one); замки рынка не держит (снимки —
-//! копии адаптеров; контекст направления — те же короткие чтения, что у расчёта).
-//! Кто вызывает: core/candidates.rs (calc_one).
-//! От чего зависит: bound.rs, bound_in.rs, dirctx.rs, venue_dir.rs, profit.rs (final_external), dex_account.rs,
-//! venue_ticker.rs, withdraw_seen.rs, gateway (контракт: quote_snapshot, rate_bound).
+//! (exec.via_kyber), проверки до расчёта не пройдены (делистинг, закрытые входы, свежесть налогов — ревью t162, Н9:
+//! полный расчёт откажет с НАСТОЯЩЕЙ причиной, отсев её не подменяет), сторона DEX без строгого верха, нет снимка
+//! стакана, вход вне допустимого, любой сбой счёта.
+//! Ревью t162, Н7: построенный контекст направления (DirCtx — с замером σ) отдаётся дальше (Checked.cx) — полный расчёт
+//! прошедшего кандидата не строит его второй раз.
+//! Не в потоке тика: вызывается задачей расчёта кандидата (sieve_gate.rs из candidates.rs calc_one); замки рынка не
+//! держит (снимки — копии адаптеров; контекст направления — те же короткие чтения, что у расчёта).
+//! Кто вызывает: core/sieve_gate.rs, core/sieve_audit.rs (пересчёт границы при принятии аудитом).
+//! От чего зависит: bound.rs, bound_best.rs, bound_in.rs, sieve_side.rs, dirctx.rs, venue_dir.rs, profit.rs
+//! (final_external), delist_check.rs, withdraw_block.rs, tax_age.rs.
 //! Настройки: money.min_profit_usd, money.min_profit_pct (как расчёт, venue_dir.rs), transfer.seen_cost [площадка A];
-//! через dirctx.rs — profit.*, usdt_return.mode.
+//! через dirctx.rs — profit.*, usdt_return.mode; через проверки — delist.*, tax.max_age_s.
 
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
-use crate::core::types::{Direction, Side, VenueId};
-use crate::gateway::contract::VenueKind;
-use crate::gateway::rate_bound::RateBound;
-use crate::settings::read::At;
+use crate::core::types::{Direction, Side};
 
-use super::bound_in::{SideIn, assemble};
+use super::bound_in::assemble;
 use super::dirctx::DirCtx;
-use super::engine::{Core, rd};
+use super::engine::Core;
+use super::sieve_side::{seen, side};
 
 /// Итог отсева.
 #[derive(Debug, Clone)]
@@ -38,19 +39,48 @@ pub enum Sieve {
     Na { class: &'static str, why: String },
 }
 
-/// Что делает: отсев кандидата (см. шапку). Принимает: ядро, направление. Возвращает: Sieve. Ошибок нет.
-pub async fn check(core: &Core, d: &Direction) -> Sieve {
-    let na = |class: &'static str, why: String| Sieve::Na { class, why };
+/// Итог отсева и построенный контекст направления (None — не строился или не построен).
+pub struct Checked {
+    pub sieve: Sieve,
+    pub cx: Option<Box<DirCtx>>,
+}
+
+/// Что делает: отсев кандидата (см. шапку). Принимает: ядро, направление. Возвращает: Checked. Ошибок нет.
+pub async fn check(core: &Core, d: &Direction) -> Checked {
+    let na = |class: &'static str, why: String| Checked {
+        sieve: Sieve::Na { class, why },
+        cx: None,
+    };
     if super::profit::final_external(core, d) {
         return na(
             "kyber",
             "финальная котировка — у внешнего исполнителя (exec.via_kyber)".into(),
         );
     }
+    // Ревью t162, Н9: проверки до расчёта (только память) — первыми; не пройдены — расчёт откажет с их причиной.
+    let now = chrono::Utc::now();
+    let pre = super::delist_check::check(core, d, now)
+        .await
+        .and_then(|()| super::withdraw_block::check(core, d))
+        .and_then(|()| super::tax_age::check(core, d, now));
+    if let Err(e) = pre {
+        return na("checks", e);
+    }
     let cx = match DirCtx::build(core, d) {
-        Ok(c) => c,
+        Ok(c) => Box::new(c),
         Err(e) => return na("no_data", e),
     };
+    let sieve = verdict(core, d, &cx).await;
+    Checked {
+        sieve,
+        cx: Some(cx),
+    }
+}
+
+/// Что делает: граница и решение по готовому контексту (см. шапку). Принимает: ядро, направление, контекст.
+/// Возвращает: Sieve. Ошибок нет.
+async fn verdict(core: &Core, d: &Direction, cx: &DirCtx) -> Sieve {
+    let na = |class: &'static str, why: String| Sieve::Na { class, why };
     let s = &core.inner.deps.settings;
     let (min_usd, min_pct) = match super::venue_dir::thresholds(s, super::venue_dir::of(core, d)) {
         Ok(t) => t,
@@ -64,8 +94,11 @@ pub async fn check(core: &Core, d: &Direction) -> Sieve {
         Ok(x) => x,
         Err((c, w)) => return na(c, w),
     };
-    let seen = seen(core, &cx);
-    let bound = match assemble(&cx, &a.as_in(), &b.as_in(), seen.as_ref()) {
+    let (Some(ai), Some(bi)) = (a.as_in(), b.as_in()) else {
+        return na("no_data", "снимок без стакана".into());
+    };
+    let seen = seen(core, cx);
+    let bound = match assemble(cx, &ai, &bi, seen.as_ref()) {
         Ok(x) => x,
         Err(e) => return na("inputs", e),
     };
@@ -112,113 +145,4 @@ pub async fn check(core: &Core, d: &Direction) -> Sieve {
         return Sieve::Cut { reason, data };
     }
     Sieve::Pass
-}
-
-/// Данные одной стороны: снимок стакана биржи (стакан + котировка для ставки) или верх DEX.
-enum Got {
-    Book(
-        Box<crate::core::types::OrderBook>,
-        Box<crate::core::types::Quote>,
-        String,
-    ),
-    Dex(crate::gateway::rate_bound::DexBound),
-}
-
-impl Got {
-    /// Вход сборки. Ошибок нет.
-    fn as_in(&self) -> SideIn<'_> {
-        match self {
-            Got::Book(book, sample, ticker) => SideIn::Book {
-                book: book.as_ref(),
-                sample: sample.as_ref(),
-                ticker,
-            },
-            Got::Dex(b) => SideIn::Dex(b),
-        }
-    }
-
-    /// Коротко для причины: стакан (уровни) или верх DEX. Ошибок нет.
-    fn describe(&self) -> String {
-        match self {
-            Got::Book(b, ..) => format!(
-                "стакан {} уровней asks / {} bids",
-                b.asks.len(),
-                b.bids.len()
-            ),
-            Got::Dex(x) => format!(
-                "верх курса DEX {} ({} пулов, ≤ {} хопов)",
-                x.rho.round_dp(10).normalize(),
-                x.pools,
-                x.hops
-            ),
-        }
-    }
-}
-
-/// Сторона направления: DEX — rate_bound; биржа — снимок стакана и котировка снимка на всю глубину (ставка комиссии).
-/// Ошибки: (класс, причина) — метод не действует.
-async fn side(
-    core: &Core,
-    d: &Direction,
-    v: &VenueId,
-    s: Side,
-) -> Result<Got, (&'static str, String)> {
-    let kind = rd(&core.inner.kinds)
-        .iter()
-        .find(|(id, _)| id == v)
-        .map(|(_, k)| *k);
-    let venue = super::dex_account::venue_dir(&core.inner.deps, d, v)
-        .await
-        .map_err(|e| ("no_data", e))?;
-    let on = super::venue_ticker::on_venue(core, &d.asset, v);
-    if kind == Some(VenueKind::Dex) {
-        return match venue.rate_bound(&on, s) {
-            RateBound::Bound(b) => Ok(Got::Dex(b)),
-            RateBound::NotApplicable { class, why } => Err((class, format!("{}: {why}", v.0))),
-        };
-    }
-    let snap = venue
-        .quote_snapshot(&on, s)
-        .await
-        .map_err(|e| ("stale", format!("{}: {}", v.0, e.message)))?;
-    let book = snap
-        .book()
-        .cloned()
-        .ok_or_else(|| ("no_data", format!("{}: снимок без стакана", v.0)))?;
-    let levels = if s == Side::Buy {
-        &book.asks
-    } else {
-        &book.bids
-    };
-    let depth: Decimal = levels.iter().map(|l| l.qty).sum();
-    let sample = snap
-        .quote(depth)
-        .await
-        .map_err(|e| ("no_data", format!("{}: {}", v.0, e.message)))?;
-    Ok(Got::Book(Box::new(book), Box::new(sample), on.ticker))
-}
-
-/// Факт прошлого перевода для поправки вывода (withdraw_seen.rs adjust_at: transfer.seen_cost = да по площадке A,
-/// факт есть, комиссия F сообщена). Ошибок нет: иначе None.
-fn seen(core: &Core, cx: &DirCtx) -> Option<super::bound_in::Seen> {
-    cx.a.info.as_ref()?;
-    let d = &cx.dir;
-    let at = At {
-        venue: Some(&d.buy_on.0),
-        coin: None,
-    };
-    if !core
-        .inner
-        .deps
-        .settings
-        .flag("transfer.seen_cost", at)
-        .unwrap_or(false)
-    {
-        return None;
-    }
-    let s = super::withdraw_seen::get(&d.asset, &d.buy_on)?;
-    Some(super::bound_in::Seen {
-        fee: s.fee?,
-        sent: s.sent,
-    })
 }

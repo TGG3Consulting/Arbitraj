@@ -50,12 +50,24 @@ pub enum Verdict {
 /// Расчёт кандидата. Принимает: ядро, направление, режим (зафиксирован вызывающим: очередь кандидатов — на расчёт,
 /// предпроверка сделки — всегда Live, решение 74). Возвращает: Verdict. Ошибок нет — всё в Reject.
 pub async fn decide(core: &Core, d: &Direction, mode: &super::dry::Mode) -> Verdict {
-    decide_capped(core, d, mode, None, None).await
+    decide_capped(core, d, mode, None, None, None).await
+}
+
+/// То же, что decide, с уже построенным контекстом направления (ревью t162, Н7: отсев sieve.rs построил его — второй раз
+/// не строится, σ та же). Принимает: ядро, направление, режим, контекст (None — строится, как в decide). Ошибок нет.
+pub async fn decide_pre(
+    core: &Core,
+    d: &Direction,
+    mode: &super::dry::Mode,
+    pre: Option<Box<DirCtx>>,
+) -> Verdict {
+    decide_capped(core, d, mode, None, None, pre).await
 }
 
 /// То же, но бюджет не больше `cap` (решение 103: свободный баланс A прямо перед ордером меньше бюджета — объём
 /// подбирается заново под свободный остаток, refit.rs). Принимает: ядро, направление, режим, предел, объём кандидата
-/// (решение 266: пересчёт предпроверки при precheck.fast_recalc = да — precheck_fast.rs; None — как раньше).
+/// (решение 266: пересчёт предпроверки при precheck.fast_recalc = да — precheck_fast.rs; None — как раньше), готовый
+/// контекст направления (ревью t162, Н7: от отсева кандидата; None — строится здесь).
 /// Ошибок нет.
 pub async fn decide_capped(
     core: &Core,
@@ -63,6 +75,7 @@ pub async fn decide_capped(
     mode: &super::dry::Mode,
     cap: Option<Decimal>,
     want: Option<&mut super::precheck_fast::Want>,
+    pre: Option<Box<DirCtx>>,
 ) -> Verdict {
     let reject = |reason: String, best: Option<Calc>| Verdict::Reject { reason, best };
     // Сухой режим без бюджета — сигналов нет, считать нечего (решение 74).
@@ -89,10 +102,13 @@ pub async fn decide_capped(
     ) {
         return reject(e, None);
     }
-    let cx = match stage_sync(|| "контекст направления".into(), || DirCtx::build(core, d))
-    {
-        Ok(c) => c,
-        Err(e) => return reject(e, None),
+    let cx = match pre {
+        Some(c) => *c,
+        None => match stage_sync(|| "контекст направления".into(), || DirCtx::build(core, d))
+        {
+            Ok(c) => c,
+            Err(e) => return reject(e, None),
+        },
     };
     let s = &core.inner.deps.settings;
     // Решение 242: пороги — площадки и типа направления сделки (правило стороны), иначе вся система.

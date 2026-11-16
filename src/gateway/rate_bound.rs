@@ -5,7 +5,7 @@
 //! ρ USDT за монету на любом объёме, покупка — не больше ρ монет за USDT. Котировок нет — только состояния пулов в
 //! памяти адаптера. Метод не действует (NotApplicable с причиной) — ядро кандидата НЕ отсекает и считает, как раньше.
 //! Здесь же — счётчики отсева циклов DEX ↔ DEX (адаптер считает, ядро пишет их в сводку dex.quote_count).
-//! Кто вызывает: contract.rs (Venue::rate_bound), venues/bsc_dex/quote/bound.rs, core/sieve.rs, core/quote_count_log.rs.
+//! Кто вызывает: contract.rs (Venue::rate_bound), venues/bsc_dex/quote/bound.rs, core/sieve_side.rs, core/quote_count_log.rs.
 //! От чего зависит: rust_decimal.
 //! Настройки: нет.
 

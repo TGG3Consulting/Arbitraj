@@ -31,8 +31,9 @@
 //! Решение 334 (задача t155): кандидат не пропадает молча — очередь полна или достигнут предел: profit.calc_wait_ms
 //! задана — ждёт места не дольше неё (cand_wait.rs; ждущие стартуют первыми, по порядку, раньше теневых); не задана —
 //! как раньше снимается, но со счётом и записью журнала core.candidate_lost.
-//! Решение 361: в начале расчёта — отсев по доказанной границе прибыли (sieve.rs, только память): отсечён — строка с
-//! причиной и числами (sieve_log.rs), расчёта нет; иначе расчёт как раньше.
+//! Решение 361: в начале расчёта — отсев по доказанной границе прибыли (sieve_gate.rs, только память): отсечён — строка с
+//! причиной и числами (sieve_log.rs, не чаще sieve.row_interval_ms), расчёта нет; иначе расчёт как раньше. Решение 366:
+//! доля sieve.audit_share отсечённых — контрольный обычный расчёт на том же месте (Background, метка audit).
 //! Кто вызывает: core/tick.rs (enqueue), core/engine.rs (задача run), тесты (accepted).
 //! От чего зависит: engine.rs, profit.rs, dry.rs, executor.rs, card_job.rs, episode_run.rs, view.rs, calc_timing.rs,
 //! calc_report.rs, reject_log.rs, reject_shape.rs, gateway/calc_meter.rs, busy_calc.rs (решение 267), cand_wait.rs (334),
@@ -201,29 +202,30 @@ fn start(
 async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
     // Режим — один раз на расчёт: бюджет считается в нём же, решение по исполнителю — тоже (решение 74).
     let mode = super::dry::mode(&core.inner.deps.settings);
-    // Решение 361: отсев по доказанной границе прибыли (sieve.rs) — до тяжёлого расчёта, только память (без котировок).
-    // Отсечён — строка «Кандидатов» с причиной и числами, журнал по виду причины (sieve_log.rs), расчёта нет; метод не
-    // действует или граница не исключает сделку — расчёт как раньше. Сухой режим без бюджета — причина decide, как было.
-    if !matches!(mode, Mode::Dry(Err(_))) {
-        let s = Box::pin(super::sieve::check(core, d)).await;
-        super::sieve_log::count(&s);
-        if let super::sieve::Sieve::Cut { reason, data } = s {
-            Box::pin(super::sieve_log::cut(core, d, reason, data)).await;
-            return;
-        }
-    }
+    // Решения 361, 366: отсев по доказанной границе прибыли (sieve_gate.rs) — до тяжёлого расчёта, только память.
+    // Отсечён — строка, журнал, эпизод (не чаще sieve.row_interval_ms), расчёта нет; доля sieve.audit_share отсечённых —
+    // контрольный обычный расчёт ниже (класс Background, метка audit); иначе расчёт как раньше, с готовым контекстом.
+    let (pre, audit) = match Box::pin(super::sieve_gate::run(core, d, &mode)).await {
+        super::sieve_gate::Gate::Done => return,
+        super::sieve_gate::Gate::Calc { cx, audit } => (cx, audit),
+    };
+    let (class, purpose) = if audit {
+        (Urgency::Background, Purpose::Audit)
+    } else {
+        (Urgency::Trade, Purpose::Size)
+    };
     let t = Timing::new(queued_at);
     // Решение 359: сигнал на начало расчёта — в запись отказа (только журнал).
     let sig = super::cand_signal_note::start(core, d);
     // Расчёт кандидата — путь сделки: котировки площадок идут классом Trade (gateway/urgency.rs, решение 61).
     let work = urgency::scope(
-        Urgency::Trade,
+        class,
         calc_meter::scope(
             t.meter.clone(),
-            // Решение 348: назначение «подбор» — замер «кто вызвал котировку» (на расчёт не влияет).
+            // Решение 348: назначение «подбор» (контроль отсева — «audit») — замер «кто вызвал котировку».
             calc_timing::scope(
                 t.clone(),
-                quote_purpose::scope(Purpose::Size, profit::decide(core, d, &mode)),
+                quote_purpose::scope(purpose, profit::decide_pre(core, d, &mode, pre)),
             ),
         ),
     );
@@ -250,7 +252,14 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
     };
     let timing = serde_json::to_value(calc_report::report(&t)).unwrap_or_default();
     match verdict {
-        Verdict::Accept(calc) => accepted_timed(core, d, calc, &mode, timing).await,
+        Verdict::Accept(calc) => {
+            // Решение 366: контроль отсева принял отсечённого — сверка границы и запись (sieve_audit.rs); сам кандидат —
+            // обычным путём принятого.
+            if audit {
+                Box::pin(super::sieve_audit::accepted(core, d, &calc)).await;
+            }
+            accepted_timed(core, d, calc, &mode, timing).await
+        }
         Verdict::Reject { reason, best } => {
             let row = json!({ "direction": d, "verdict": Verdict::Reject { reason: reason.clone(), best: best.clone() }, "at": chrono::Utc::now(), "timing": timing });
             publish(core, d, row);

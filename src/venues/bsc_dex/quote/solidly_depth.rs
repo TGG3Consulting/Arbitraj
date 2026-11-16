@@ -8,7 +8,7 @@
 //! DODO PMM, quote/pmm_depth.rs). ВОЛАТИЛЬНЫЙ пул Solidly — обычная V2-формула (quote/depth_band.rs, ветка V2), сюда
 //! не идёт.
 //! Кто вызывает: quote/depth_band.rs (ветка Solidly, stable=true).
-//! От чего зависит: math/swap_solidly.rs, math/full_math.rs.
+//! От чего зависит: math/swap_solidly.rs, math/full_math.rs, quote/vault_depth.rs (PROBE_DIV — проба старта, решение 304).
 //! Настройки: полосу даёт вызывающий (dex.depth_band_pct).
 //!
 //! ЗАМЕЧАНИЕ (на подтверждение Тиграну, как для PMM): решение 73 определило метод полосы для V2/V3/CL/Bin, но не для
@@ -20,6 +20,7 @@ use alloy_primitives::U256;
 
 use super::super::math::full_math::mul_div;
 use super::super::math::swap_solidly;
+use super::vault_depth::PROBE_DIV;
 
 /// Максимум удвоений при поиске верхней границы объёма (цена кривой расходится — граница всегда находится). Предел
 /// итераций, не порог торговли.
@@ -107,13 +108,17 @@ pub fn side(
         let avg = mul_div(cnt_n, e18(), coin_n)?;
         Some(if buy { avg <= limit } else { avg >= limit })
     };
-    // Полоса уже на минимальном объёме не держится — глубины нет.
-    if !within(U256::from(1u8)).unwrap_or(false) {
+    // Решение 304: старт — проба, доля резерва ВХОДА (покупка — встречный, продажа — монета; vault_depth::PROBE_DIV),
+    // а не 1 wei: на 1 wei выход `resOut − get_y(…)` — 0 или 1 в зависимости от того, куда попал Ньютон при текущих
+    // резервах (math/solidly_math.rs get_y), и глубина обнулялась при сдвиге резерва на wei (та же причина, что у
+    // StableSwap, quote/stable_depth.rs). Полоса не держится уже на пробе — глубины нет.
+    let probe = (if buy { cnt_res } else { coin_res }) / U256::from(PROBE_DIV);
+    if probe.is_zero() || !within(probe).unwrap_or(false) {
         return Some((U256::ZERO, true));
     }
-    // Расширение: удваиваем, пока в полосе.
-    let mut lo = U256::from(1u8);
-    let mut hi = U256::from(1u8);
+    // Расширение: удваиваем от пробы, пока в полосе.
+    let mut lo = probe;
+    let mut hi = probe;
     let mut found_hi = false;
     for _ in 0..MAX_DOUBLE {
         let next = hi.checked_mul(U256::from(2u8))?;

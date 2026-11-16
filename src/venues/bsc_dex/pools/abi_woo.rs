@@ -3,7 +3,8 @@
 //! монета, оракул пула, пауза, квотер `query` / `tryQuery`, событие обмена `WooSwap`; оракул — `state(base)`; прокси —
 //! событие `Upgraded` и слот реализации EIP-1967. Только эти вызовы: раскладка `tokenInfos` у развёрнутой реализации
 //! другая, чем в публичном коде (поле capBal) — её не читаем, пока нет проверенного исходника.
-//! Кто вызывает: pools/load_woo.rs, pools/verify_woo.rs, pools/events_woo.rs, pools/factory_ask.rs, quote/quoter_calls.rs.
+//! Кто вызывает: pools/load_woo.rs, pools/verify_woo.rs, pools/events_woo.rs, pools/factory_ask.rs, quote/quoter_calls.rs,
+//! pools/woo_quote.rs (quoteToken, решение 305).
 //! От чего зависит: alloy::sol!, alloy-primitives.
 //! Настройки: нет (адреса — dex.pmm_pool, dex.oracle, dex.pool_implementation).
 //!
@@ -62,6 +63,12 @@ mod tests {
         assert_eq!(
             IWooPP::queryCall::SELECTOR.to_vec(),
             sel("query(address,address,uint256)")
+        );
+        // Решение 305 (ревью): quoteToken() — сигнатура из IWooPPV2.sol L67 (f73a0f64); селектор считается из её текста,
+        // а не берётся числом. Есть ли он в развёрнутой реализации — не подтверждено (docs/TASKS.md, решение 305).
+        assert_eq!(
+            IWooPP::quoteTokenCall::SELECTOR.to_vec(),
+            sel("quoteToken()")
         );
         assert_eq!(
             IWooracle::stateCall::SELECTOR.to_vec(),

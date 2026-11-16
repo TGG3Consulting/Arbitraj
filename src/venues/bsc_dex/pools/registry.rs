@@ -129,7 +129,8 @@ impl Registry {
         self.read().get(r).map(|e| (**e).clone())
     }
 
-    /// Решение 308: запись без копирования (Arc) — оценка пула фоновым графом (graph_eval.rs). None — пула нет.
+    /// Решение 308: запись без копирования (Arc) — оценка пула фоновым графом (graph_eval.rs); решение 310 — чтение
+    /// достоверности циклами проверок без записи (check/fresh.rs). None — пула нет.
     pub fn entry(&self, r: &PoolRef) -> Option<Arc<Entry>> {
         self.read().get(r).cloned()
     }

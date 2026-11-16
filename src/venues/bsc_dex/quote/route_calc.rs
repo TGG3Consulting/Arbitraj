@@ -7,6 +7,7 @@
 //! Налог монеты применяется на стороне монеты (покупка — к выходу последнего хопа, продажа — ко входу первого; долю
 //! keep передаёт вызывающий — налог ИМЕННО пула этого шага, quote/pool_tax.rs coin_keep, решение 146),
 //! крючок каждого пула — к его выходу. Шаг, не исполнимый целиком в прочитанных пределах, — маршрута нет (NoRoute).
+//! Решение 336: eval_from (route_first.rs first) — обмен хопа, который считается первым, можно посчитать один раз (via_pools.rs).
 //! Кто вызывает: quote/via.rs (двухшаговый путь через промежуточную); позже — граф-маршрутизатор (решение 80).
 //! От чего зависит: quote/path.rs (Hop, Path), quote/select.rs (Usable), quote/pool_quote.rs,
 //! quote/direct.rs (ceil_units), pools/registry.rs (Entry), num.rs, math/swap_cl.rs (Swapped).
@@ -54,17 +55,45 @@ pub fn eval(
     qty: Decimal,
     tax_keep: Decimal,
 ) -> GatewayResult<Path> {
+    eval_from(ctx, legs, side, qty, tax_keep, None)
+}
+
+/// Решение 336: то же, что eval, но обмен хопа, который считается первым (покупка — последний хоп «с конца», продажа —
+/// первый хоп), уже посчитан (`first` — итог route_first.rs first); без него — как eval. Арифметика та же. Ошибки: как eval.
+pub fn eval_from(
+    ctx: &Ctx,
+    legs: &[Leg],
+    side: Side,
+    qty: Decimal,
+    tax_keep: Decimal,
+    first: Option<&Swapped>,
+) -> GatewayResult<Path> {
     if legs.is_empty() {
         return Err(ctx.err(ErrorCode::NoRoute, "маршрут без пулов"));
     }
     match side {
-        Side::Buy => buy(ctx, legs, qty, tax_keep),
-        Side::Sell => sell(ctx, legs, qty, tax_keep),
+        Side::Buy => buy(ctx, legs, qty, tax_keep, first),
+        Side::Sell => sell(ctx, legs, qty, tax_keep, first),
+    }
+}
+
+/// keep выхода хопа покупки: крючок пула всегда; у последнего хопа (монета) — ещё налог покупки монеты. Ошибок нет.
+pub(super) fn buy_keep(last: bool, leg: &Leg, tax_keep: Decimal) -> Decimal {
+    if last {
+        tax_keep * keep(leg.usable.hook_pct)
+    } else {
+        keep(leg.usable.hook_pct)
     }
 }
 
 /// Покупка «с конца»: от нужного количества монеты назад к USDT, каждый пул — точный выход. Ошибки: см. eval.
-fn buy(ctx: &Ctx, legs: &[Leg], qty: Decimal, tax_keep: Decimal) -> GatewayResult<Path> {
+fn buy(
+    ctx: &Ctx,
+    legs: &[Leg],
+    qty: Decimal,
+    tax_keep: Decimal,
+    first: Option<&Swapped>,
+) -> GatewayResult<Path> {
     let n = legs.len();
     let mut swaps: Vec<Option<Swapped>> = vec![None; n];
     // Нужный ВЫХОД текущего хопа (в его токене выхода): у последнего (отдаёт монету) — qty, иначе — вход следующего.
@@ -72,16 +101,16 @@ fn buy(ctx: &Ctx, legs: &[Leg], qty: Decimal, tax_keep: Decimal) -> GatewayResul
     for i in (0..n).rev() {
         let leg = &legs[i];
         // keep выхода хопа: крючок пула всегда; у последнего хопа (монета) — ещё налог покупки монеты.
-        let k = if i == n - 1 {
-            tax_keep * keep(leg.usable.hook_pct)
-        } else {
-            keep(leg.usable.hook_pct)
-        };
+        let k = buy_keep(i == n - 1, leg, tax_keep);
         if k <= Decimal::ZERO {
             return Err(ctx.err(ErrorCode::NoRoute, "налог покупки и крючки забирают всё"));
         }
         let pool_out = ceil_units(need_out / k, leg.dec_out).ok_or_else(|| bad(ctx))?;
-        let s = pool_quote::swap(ctx, &leg.entry, leg.token_in, false, pool_out)?;
+        // Решение 336: обмен последнего хопа (считается первым) — готовый, если дан.
+        let s = match first.filter(|_| i == n - 1) {
+            Some(f) => f.clone(),
+            None => pool_quote::swap(ctx, &leg.entry, leg.token_in, false, pool_out)?,
+        };
         need_out = num::to_decimal(s.amount_in, leg.dec_in).ok_or_else(|| bad(ctx))?;
         swaps[i] = Some(s);
     }
@@ -96,14 +125,24 @@ fn buy(ctx: &Ctx, legs: &[Leg], qty: Decimal, tax_keep: Decimal) -> GatewayResul
 }
 
 /// Продажа «с начала»: от количества монеты вперёд к USDT, каждый пул — точный вход. Ошибки: см. eval.
-fn sell(ctx: &Ctx, legs: &[Leg], qty: Decimal, tax_keep: Decimal) -> GatewayResult<Path> {
+fn sell(
+    ctx: &Ctx,
+    legs: &[Leg],
+    qty: Decimal,
+    tax_keep: Decimal,
+    first: Option<&Swapped>,
+) -> GatewayResult<Path> {
     let n = legs.len();
     let mut swaps: Vec<Option<Swapped>> = vec![None; n];
     // В первый пул доходит монета за вычетом налога продажи; дальше — выход предыдущего пула после его крючка.
     let mut amount = num::to_units(qty * tax_keep, legs[0].dec_in).ok_or_else(|| bad(ctx))?;
     let mut usdt = Decimal::ZERO;
     for (i, leg) in legs.iter().enumerate() {
-        let s = pool_quote::swap(ctx, &leg.entry, leg.token_in, true, amount)?;
+        // Решение 336: обмен первого хопа — готовый, если дан.
+        let s = match first.filter(|_| i == 0) {
+            Some(f) => f.clone(),
+            None => pool_quote::swap(ctx, &leg.entry, leg.token_in, true, amount)?,
+        };
         let got = num::to_decimal(s.amount_out, leg.dec_out).ok_or_else(|| bad(ctx))?
             * keep(leg.usable.hook_pct);
         if i + 1 < n {
@@ -153,7 +192,7 @@ fn build(
 }
 
 /// Ошибка перевода суммы в единицы токена. Ошибок нет.
-fn bad(ctx: &Ctx) -> crate::gateway::errors::GatewayError {
+pub(super) fn bad(ctx: &Ctx) -> crate::gateway::errors::GatewayError {
     ctx.err(
         ErrorCode::BadResponse,
         "сумма не переводится в единицы токена",

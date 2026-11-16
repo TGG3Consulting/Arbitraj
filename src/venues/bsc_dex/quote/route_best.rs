@@ -18,13 +18,14 @@
 //! Не задана dex.route_search_max_paths — ТОЧНО как раньше (первые dex.route_max_paths путей обхода, без отбора).
 //! Решение 295: один многомонетный пул (PoolRef::site) — не больше одного шага пути (как route_paths.rs).
 //! Решение 312: число расчётов пути (eval) в отборе — в замер котировки (quote/quote_timing.rs count), один раз за отбор.
+//! Решение 336: расчёт путей в отборе — на dex.quote_threads потоках (quote/par.rs), итоги по порядку путей — отбор тот
+//! же; брошенный расчёт останавливает и помощников.
 //! Кто вызывает: quote/graph_route.rs.
-//! От чего зависит: pools/graph.rs, quote/route_paths.rs (RoutePath, Step), quote/graph_split.rs (Cand, score, better),
+//! От чего зависит: quote/par.rs, quote/abandon.rs, pools/graph.rs, quote/route_paths.rs (RoutePath, Step), quote/graph_split.rs (Cand, score, better),
 //! quote/route_calc.rs (eval), quote/pool_tax.rs (coin_keep).
-//! Настройки: dex.route_search_max_paths [bsc_dex] (необязательная); через вызывающего — dex.route_max_hops,
+//! Настройки: dex.route_search_max_paths, dex.quote_threads (решение 336) [bsc_dex] (необязательные); через вызывающего — dex.route_max_hops,
 //! dex.route_max_paths, smart.split_step_pct, dex.route_gas_aware.
 
-use std::cell::Cell;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -32,7 +33,7 @@ use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
 use crate::core::types::{PoolRef, Side, TokenTaxes};
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::pools::graph::Graph;
@@ -183,27 +184,45 @@ pub fn best(
     }
     let unit = qty * step_pct / Decimal::ONE_HUNDRED;
     // Чистый результат пути на объём: USDT пути ± газ пути (газ = 0, если учёт газа выключен).
-    // Решение 312: счёт расчётов — локально, в замер один раз в конце.
-    let evals = Cell::new(0u64);
     let net = |c: &Cand, q: Decimal| -> Option<Decimal> {
-        evals.set(evals.get() + 1);
         let tax_keep = pool_tax::coin_keep(&c.legs, side, t);
         let p = route_calc::eval(ctx, &c.legs, side, q, tax_keep).ok()?;
         Some(score(side, p.usdt, true, c.gas_usdt))
     };
+    // Путь: на первую долю, и только если она взята, — на весь объём (как раньше).
+    let both = |c: &Cand| -> (Option<Decimal>, Option<Decimal>) {
+        match net(c, unit) {
+            None => (None, None),
+            Some(u) => (Some(u), net(c, qty)),
+        }
+    };
+    // Решение 336: пути считаются независимо — на dex.quote_threads потоках (quote/par.rs; итоги по порядку путей,
+    // выбор тот же). Брошенный расчёт (quote/abandon.rs) — отказ Timeout, как у проверки перед отбором.
+    let want = super::par::want(ctx, "dex.quote_threads");
+    let alive = || !super::abandon::is_set();
+    let res = super::par::map(ctx, want, &cands, both, &alive).ok_or_else(|| {
+        ctx.err(
+            ErrorCode::Timeout,
+            "расчёт брошен (срок расчёта вышел) — отбор путей графа не выполняется",
+        )
+    })?;
     let mut top: Vec<(usize, Decimal)> = Vec::new();
     let mut deep: Vec<(usize, Decimal)> = Vec::new();
-    for (i, c) in cands.iter().enumerate() {
-        let Some(u) = net(c, unit) else { continue };
+    // Решение 312: счёт расчётов — как раньше: первая доля у каждого пути, весь объём — у взявших первую долю.
+    let mut evals = 0u64;
+    for (i, (u, f)) in res.into_iter().enumerate() {
+        evals += 1;
+        let Some(u) = u else { continue };
+        evals += 1;
         top.push((i, u));
-        if let Some(f) = net(c, qty) {
+        if let Some(f) = f {
             deep.push((i, f));
         }
     }
     // Устойчивая сортировка: при равенстве — порядок перебора (короткие первыми).
     top.sort_by(|a, b| order(side, a.1, b.1));
     deep.sort_by(|a, b| order(side, a.1, b.1));
-    quote_timing::count(Count::BestEvals, evals.get());
+    quote_timing::count(Count::BestEvals, evals);
     let picked = interleave(&top, &deep, keep);
     let mut slots: Vec<Option<Cand>> = cands.into_iter().map(Some).collect();
     Ok(picked

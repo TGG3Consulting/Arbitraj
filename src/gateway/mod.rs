@@ -8,7 +8,9 @@
 pub mod addr_claim;
 pub mod book_lost_log;
 pub mod calc_meter;
+pub mod calc_share;
 pub mod contract;
+pub mod cpu_budget;
 pub mod core_out;
 pub mod core_out_book;
 pub mod core_out_item;

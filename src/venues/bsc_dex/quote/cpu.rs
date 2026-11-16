@@ -16,9 +16,17 @@
 //! котировки (quote_stage) — признаки задачи tokio — переносятся в поток счёта.
 //! Предел одновременных счётов — dex.quote_cpu_max (необязательная; 0 или не задана — без предела): сверх него счёт
 //! ждёт места (ожидание — внутри срока расчёта и видно в замере этапов как время котировки без запросов к узлу).
-//! Кто вызывает: quote/mod.rs (Quoting::quote — выбор маршрута).
-//! От чего зависит: ctx.rs, quote/abandon.rs, gateway/{urgency, calc_meter, quote_stage}.rs, tokio.
-//! Настройки: dex.quote_cpu_max [bsc_dex].
+//! Решение 336 (задача t157): сверх dex.quote_cpu_max — место общего предела потоков счёта cpu.threads_max
+//! (gateway/cpu_budget.rs) ярусом задачи: финальная котировка или котировка исполнения — путь сделки, класс Trade —
+//! кандидат, прочее — фон (резервы cpu.reserve_deal, cpu.reserve_calc). Сначала место dex.quote_cpu_max, потом общее
+//! (ожидающий своего места не держит общее). В поток счёта переносятся ещё ярус и короб подбора объёма ядра
+//! (gateway/calc_share.rs) — в поле потока (quote/cpu_local.rs): по ним вспомогательные потоки (quote/par.rs) берут
+//! места, а граф берёт допуск путей из короба (quote/graph_reuse.rs). Не задана cpu.threads_max — как до 336.
+//! Кто вызывает: quote/mod.rs (Quoting::quote — выбор маршрута), venue.rs (dex_cycles; dex_cycle_quote при
+//! параллельных точках подбора).
+//! От чего зависит: ctx.rs, quote/abandon.rs, quote/cpu_local.rs, gateway/{urgency, calc_meter, quote_stage, patience,
+//! cpu_budget, calc_share}.rs, tokio.
+//! Настройки: dex.quote_cpu_max [bsc_dex]; cpu.threads_max, cpu.reserve_deal, cpu.reserve_calc (вся система).
 
 use std::future::Future;
 use std::pin::Pin;
@@ -30,10 +38,10 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use crate::gateway::calc_meter::Meter;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::urgency::Urgency;
-use crate::gateway::{calc_meter, quote_stage, urgency};
+use crate::gateway::{calc_meter, calc_share, cpu_budget, patience, quote_stage, urgency};
 
 use super::super::ctx::Ctx;
-use super::abandon;
+use super::{abandon, cpu_local};
 
 /// Предел одновременных счётов: (значение настройки, семафор). Один на процесс (адаптер DEX один).
 static LIMIT: Mutex<Option<(u64, Arc<Semaphore>)>> = Mutex::new(None);
@@ -78,9 +86,18 @@ where
     let class = urgency::is_set();
     let meter = calc_meter::current();
     let fin = quote_stage::is_final();
+    // Решение 336: ярус счёта и место общего предела (не задан — места нет, как раньше); короб подбора объёма.
+    let tier = cpu_budget::tier_of(class, fin || patience::is_exec());
+    let budget = match cpu_budget::limits(&ctx.settings) {
+        Some(lim) => Some(cpu_budget::acquire(lim, tier).await),
+        None => None,
+    };
+    let share = calc_share::current();
     let rt = tokio::runtime::Handle::current();
     let job = tokio::task::spawn_blocking(move || {
         let _held = held;
+        let _budget = budget;
+        let _local = cpu_local::enter(tier, share);
         rt.block_on(scoped(flag, class, meter, fin, work))
     });
     job.await.map_err(|e| {

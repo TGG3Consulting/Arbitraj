@@ -443,6 +443,21 @@ impl Venue for BscDex {
             self.p.ctx.bound()?;
         }
         let q = self.p.quoting();
+        // Решение 336: точки подбора объёма ядра считаются параллельно (gateway/calc_share.rs par) — расчёт цикла
+        // уходит в поток счёта (quote/cpu.rs), иначе одновременные точки шли бы одним рабочим потоком. Иначе — как раньше.
+        if crate::gateway::calc_share::current().is_some_and(|s| s.par()) {
+            let ctx = q.ctx.clone();
+            let cycle = cycle.clone();
+            let run = async move {
+                let legs = quote::cycle_legs::now(&q, &cycle).await?;
+                let r = quote::cycle_cost::rates(&q, cycle.base).await?;
+                quote::cycle_cost::quote(&q, &legs, cycle.base, input, (r, with_wallet)).await
+            };
+            return scope(Class::Quote, async {
+                quote::cpu::run(&ctx, Box::pin(run)).await
+            })
+            .await;
+        }
         let run = async {
             let legs = quote::cycle_legs::now(&q, cycle).await?;
             let r = quote::cycle_cost::rates(&q, cycle.base).await?;

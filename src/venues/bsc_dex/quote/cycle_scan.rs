@@ -18,11 +18,13 @@
 //! Сам поиск сделок не запускает: сигналы забирает ядро (core/cycle_watch.rs, решение 124) и интерфейс.
 //! Решение 308: при dex.graph_background = да граф — снимок фонового владельца, пути циклов гидратируются
 //! (route_cache::hydrate — состояние пулов свежее из реестра, а не копии из графа).
+//! Решение 336: расчёт найденных циклов (ноги, оптимальный вход, форма, сигнал) — на dex.graph_threads потоках
+//! (quote/par.rs), итоги по порядку путей — тот же список; брошенный поиск (quote/abandon.rs) останавливает помощников.
 //! Кто вызывает: venue.rs (dex_cycles — ядро и «Живой экран»); тесты — напрямую quote/cycle.rs.
 //! От чего зависит: quote/cycle.rs, quote/route_paths.rs, quote/rate.rs, pools/graph.rs, pools/registry.rs, tokens.rs,
 //! send/mod.rs (чаевые канала), exec/cycle_gate.rs (форма исполнения), num.rs.
 //! Настройки: dex_dex.enabled, dex_dex.base_tokens, dex_dex.max_cycle_len, dex_dex.max_cycles, dex_dex.probe_input_base,
-//! dex_dex.min_profit_base [bsc_dex]; size.refine_steps (шаги поиска входа); через граф — dex.route_max_pools_per_edge и глубина (решение 73).
+//! dex_dex.min_profit_base, dex.graph_threads (решение 336) [bsc_dex]; size.refine_steps (шаги поиска входа); через граф — dex.route_max_pools_per_edge и глубина (решение 73).
 
 use std::collections::{HashMap, HashSet};
 
@@ -102,7 +104,10 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
     let wbnb = ctx.addr("dex.native_wrapped").ok();
     let tickers = coin_tickers(&q.reg);
     let tip = tip_bnb(ctx);
-    let mut out = Vec::new();
+    // Решение 336: сначала — все пути циклов (decimals — из кэша или узла, по очереди), затем расчёт каждого цикла
+    // (ноги, оптимальный вход, форма, сигнал — чистый CPU, независимо) — на dex.graph_threads потоках (quote/par.rs);
+    // итоги — по порядку путей, как при проходе по очереди.
+    let mut jobs: Vec<Job> = Vec::new();
     for base in bases {
         let cycles = route_paths::enumerate_cycles(&g, base, max_len, max_cycles);
         // Решение 308: в режиме «граф без ожидания» состояние пулов цикла — свежее из реестра (снимок — топология).
@@ -116,35 +121,32 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             .cloned()
             .unwrap_or_else(|| base.to_string());
         let rate_to_base = bnb_in_base(ctx, &q.reg, base, usdt, wbnb, usdt_dec);
-        for path in &cycles {
+        for path in cycles {
             // Через налоговые токены цикл не строим (quote/via.rs): все НЕбазовые токены должны быть без налогов.
-            if !tax_free(q, &tickers, &base, path) {
+            if !tax_free(q, &tickers, &base, &path) {
                 continue;
             }
-            let dec = match decimals(q, path).await {
+            let dec = match decimals(q, &path).await {
                 Ok(d) => d,
                 Err(_) => continue,
             };
-            let Ok(legs) = cycle::legs_for_cycle(q, path, usdt_dec, &dec) else {
-                continue;
-            };
-            // Решение 124: оптимальный вход на (0, dex_dex.probe_input_base] (quote/cycle_opt.rs), а не фиксированная проба.
-            let Ok(p) = cycle_opt::best(ctx, &legs, input) else {
-                continue;
-            };
-            // Тигран 09.11 (согласовано, план = факт): цикл, который пойдёт бандлом свопов (exec/cycle_gate.rs form —
-            // тот же выбор, что у сделки), чаевых не шлёт — в сигнале их нет. Исполнитель или форма не выбрана — как было.
-            let tip = match cycle_gate::form(ctx, &legs) {
-                Ok(Form::Bundle) => Decimal::ZERO,
-                _ => tip,
-            };
-            if let Ok(sig) =
-                cycle::build_signal(ctx, base, &base_ticker, &p, &legs, gas, tip, rate_to_base)
-            {
-                out.push(sig);
-            }
+            jobs.push(Job {
+                base,
+                base_ticker: base_ticker.clone(),
+                rate_to_base,
+                path,
+                dec,
+            });
         }
     }
+    let one = |j: &Job| signal(q, j, usdt_dec, input, gas, tip);
+    let want = super::par::want(ctx, "dex.graph_threads");
+    let alive = || !super::abandon::is_set();
+    let Some(found) = super::par::map(ctx, want, &jobs, one, &alive) else {
+        super::abandon::check(ctx, "поиск циклов DEX ↔ DEX")?;
+        return Ok(Vec::new());
+    };
+    let mut out: Vec<CycleSignal> = found.into_iter().flatten().collect();
     // Прибыльные (порог) впереди, затем по убыванию чистой прибыли; без чистой прибыли — в конец.
     out.sort_by(|a, b| {
         b.profitable(min_profit)
@@ -152,6 +154,50 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             .then(net_key(b).cmp(&net_key(a)))
     });
     Ok(out)
+}
+
+/// Цикл к расчёту: базовая монета, её тикер и курс BNB в ней, путь, decimals его токенов.
+struct Job {
+    base: Address,
+    base_ticker: String,
+    rate_to_base: Option<Decimal>,
+    path: route_paths::RoutePath,
+    dec: HashMap<Address, u8>,
+}
+
+/// Сигнал одного цикла (было телом цикла scan): ноги, оптимальный вход (решение 124), форма исполнения, сигнал.
+/// Только чтение — можно считать параллельно (решение 336). Принимает: окружение котировки, цикл, decimals USDT, верхнюю
+/// границу входа, цену газа, чаевые (BNB). Возвращает: сигнал; None — цикл не считается (как continue раньше).
+/// Ошибок нет.
+fn signal(
+    q: &Quoting,
+    j: &Job,
+    usdt_dec: u8,
+    input: Decimal,
+    gas: U256,
+    tip: Decimal,
+) -> Option<CycleSignal> {
+    let ctx = &q.ctx;
+    let legs = cycle::legs_for_cycle(q, &j.path, usdt_dec, &j.dec).ok()?;
+    // Решение 124: оптимальный вход на (0, dex_dex.probe_input_base] (quote/cycle_opt.rs), а не фиксированная проба.
+    let p = cycle_opt::best(ctx, &legs, input).ok()?;
+    // Тигран 09.11 (согласовано, план = факт): цикл, который пойдёт бандлом свопов (exec/cycle_gate.rs form — тот же
+    // выбор, что у сделки), чаевых не шлёт — в сигнале их нет. Исполнитель или форма не выбрана — как было.
+    let tip = match cycle_gate::form(ctx, &legs) {
+        Ok(Form::Bundle) => Decimal::ZERO,
+        _ => tip,
+    };
+    cycle::build_signal(
+        ctx,
+        j.base,
+        &j.base_ticker,
+        &p,
+        &legs,
+        gas,
+        tip,
+        j.rate_to_base,
+    )
+    .ok()
 }
 
 /// Ключ сортировки по чистой прибыли (None — минимально). Ошибок нет.

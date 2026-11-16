@@ -164,9 +164,24 @@ fn stages_into(r: &Rec, d: &mut Map<String, Value>, msg: &mut String) {
     for (i, key) in COUNT_NAMES.iter().enumerate() {
         d.insert((*key).into(), json!(r.counts[i]));
     }
-    let [paths_in, paths_ok, hops, best, steps, evals] = r.counts;
+    let [
+        paths_in,
+        paths_ok,
+        hops,
+        best,
+        steps,
+        evals,
+        admits,
+        hits,
+        pairs,
+    ] = r.counts;
     let _ = write!(
         msg,
         "; путей {paths_in} → допущено {paths_ok}, хопов {hops}; eval отбора {best}; сплит шагов {steps}, eval {evals}"
+    );
+    // Решение 336: допуск пулов классики и пары через промежуточную.
+    let _ = write!(
+        msg,
+        "; классика: допусков пулов {admits} (из короба {hits}), пар через промежуточную {pairs}"
     );
 }

@@ -8,6 +8,7 @@
 //! допущен (math/solidly_fee.rs blocked), как пул на паузе.
 //! Решение 311 (А): usable_with / deep_side_with — с одной подготовкой глубины (Prep) на котировку графа: настройки
 //! глубины и пулы «встречный — USDT» читаются один раз на котировку, а не на каждый хоп (quote/graph_legs.rs).
+//! Решение 336: usable внутри подбора объёма при dex.quote_reuse = да — один раз на пул (quote/usable_reuse.rs).
 //! Кто вызывает: quote/direct.rs и все сборщики ног маршрута (graph_legs, via_pools, smart_ways, cycle*, verify_decide, exec/live*).
 //! От чего зависит: math/solidly_fee.rs, check/state.rs, quote/pool_tax.rs (налог пула, решение 146), pools/registry.rs, pools/depth_book.rs, tokens.rs.
 //! Настройки: dex.kind, dex.pool_enabled и адреса [DEX] (families::still), dex.stable_hooks [DEX Infinity Stable], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
@@ -50,8 +51,10 @@ pub struct Usable {
 }
 
 /// Проверка пула. Возвращает: Ok(Usable) или Err(причина, почему пул не используется).
+/// Решение 336: внутри подбора объёма при dex.quote_reuse = да — из короба подбора по поколению состояния пула
+/// (quote/usable_reuse.rs); иначе — usable_with, как раньше.
 pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_decimals: u8) -> Result<Usable, String> {
-    usable_with(q, e, side, usdt_decimals, None)
+    super::usable_reuse::usable(q, e, side, usdt_decimals)
 }
 
 /// Решение 311 (А): то же, что usable, с готовой подготовкой глубины (pools/depth_key.rs Prep) — одной на котировку

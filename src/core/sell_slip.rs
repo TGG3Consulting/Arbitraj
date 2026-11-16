@@ -13,7 +13,7 @@
 //! SQLite — ledger_load.rs), поэтому перезапуск его не обнуляет. Пересчёт идёт по закрытым сделкам монеты в порядке
 //! последней продажи; серия, уже дошедшая до порога раньше (тогда монета ушла в список), начинается заново — снятие
 //! отметки человеком не блокирует монету снова первой же плохой продажей. Пороги берутся текущие.
-//! Решение 354: занесение в список, журнал и уведомление — своей задачей tokio (сделка не ждёт основную базу).
+//! Решение 355: отметка — сразу в памяти настроек (core/coin_mark.rs), в базу — фоном; журнал и уведомление — очереди.
 //! Кто вызывает: core/sell.rs (после закрытия сделки продажей).
 //! От чего зависит: deal.rs, coin_key.rs, blacklist.rs (ручная отметка), engine.rs, deps.rs, settings.
 //! Настройки: guard.sell_slip_pct, guard.sell_slip_count (вся система; не задана любая — защита выключена, одна запись в
@@ -21,7 +21,6 @@
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use serde_json::Value;
 
 use crate::settings::read::At;
 use crate::storage::journal::Level;
@@ -131,11 +130,9 @@ pub async fn after_close(core: &Core, deal: &Deal) {
     if run.len() < count || run.last().map(|o| &o.deal) != Some(&cur.deal) {
         return;
     }
-    // Решение 354: чёрный список (запись настроек в основную базу), журнал и уведомление — своей задачей: сделка
-    // (замок монеты до конца исполнителя) их не ждёт. Монета этой сделки занята ею до конца — новая сделка по ней не
-    // начнётся раньше, чем отметка ляжет (оценка: мс).
-    let (c, d) = (core.clone(), deal.clone());
-    tokio::spawn(async move { block(&c, &d, &run).await });
+    // Решение 355 (ревью t158 Б1): отметка — сразу в памяти настроек, до снятия замка монеты (новая сделка по монете
+    // её уже видит); в базу — своей задачей хранилища; журнал и уведомление — очереди.
+    block(core, deal, &run).await;
 }
 
 /// Пороги защиты. None — не задана любая (одна запись в журнал на смену причины). Ошибок нет.
@@ -178,20 +175,8 @@ async fn block(core: &Core, deal: &Deal, run: &[Obs]) {
             "{label}: {note}; монета уже в ручном чёрном списке — отметка и заметка не менялись"
         )
     } else {
-        let scope = super::blacklist::coin_scope(a);
-        let set = async {
-            s.set(
-                "coin.blocked_note",
-                scope.clone(),
-                Some(Value::String(note.clone())),
-                AUTHOR,
-            )
-            .await?;
-            s.set("coin.blocked", scope, Some(Value::Bool(true)), AUTHOR)
-                .await
-        };
-        match set.await {
-            Ok(_) => format!("{label}: в ручном чёрном списке — {note}"),
+        match super::coin_mark::block_now(s, a, &note, AUTHOR) {
+            Ok(()) => format!("{label}: в ручном чёрном списке — {note}"),
             Err(e) => {
                 format!("{label}: {note}; в чёрный список не внесена ({e}) — внесите вручную")
             }

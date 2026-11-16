@@ -121,3 +121,44 @@ async fn full_queue_loses_with_record() {
         .collect();
     assert_eq!(kept, vec!["0", "после"]);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn failed_batch_retries_one_by_one() {
+    // Ревью t158 Н2: запись, которую база не принимает (здесь — ограничение CHECK таблицы), не уносит с собой пачку.
+    let d = std::env::temp_dir().join(format!("arb-j341-check-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let path = d.join("t.sqlite");
+    {
+        let c = rusqlite::Connection::open(&path).unwrap();
+        c.execute_batch(
+            "CREATE TABLE journal (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, level TEXT NOT NULL,
+             kind TEXT NOT NULL, venue TEXT, message TEXT NOT NULL, data TEXT, CHECK (message <> 'плохая'));",
+        )
+        .unwrap();
+    }
+    let (tx, _rx) = broadcast::channel(64);
+    let j = Journal::new(Db::open(&path).unwrap(), tx);
+    // Замок основной базы взят — три записи копятся и уходят пачкой.
+    let hold = hold_main(&j, Duration::from_millis(300));
+    for m in ["до", "плохая", "после"] {
+        let _ = j.write(Level::Info, "t.check", None, m, None).await;
+    }
+    hold.await.unwrap();
+    j.idle().await;
+    let _ = j.write(Level::Info, "t.check", None, "ещё", None).await;
+    let kept: Vec<String> = of_kind(&j, "t.check")
+        .await
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+    assert_eq!(
+        kept,
+        vec!["до", "после", "ещё"],
+        "теряется только не принятая запись"
+    );
+    let lost = of_kind(&j, LOST_KIND).await;
+    assert_eq!(lost.len(), 1, "{lost:?}");
+    assert_eq!(lost[0].data.as_ref().unwrap()["lost"], 1);
+    let _ = std::fs::remove_dir_all(&d);
+}

@@ -168,3 +168,28 @@ async fn snapshot_card_wins_over_fresh() {
     let got = alert_card::scoped(other, async { alert_card::at_event("D1") }).await;
     assert_eq!(got.map(|c| c.now), Some("в пути".to_string()));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn risk_alert_not_behind_slow_info() {
+    // Решение 356 (ревью t158 Н1): алерт риска — своя полоса, не ждёт обычные уведомления (Telegram лежит).
+    let n = notifier("lanes").await;
+    enable(&n, "risk.stop").await;
+    let slow = Duration::from_secs(2);
+    n.later("deal.closed", None, Snap::default(), async move {
+        tokio::time::sleep(slow).await;
+    });
+    let t0 = Instant::now();
+    n.send("risk.stop", None, "Стоп по риску").await;
+    let title = catalog::find("risk.stop").unwrap().title;
+    loop {
+        let all: Vec<Entry> = n.journal.list(1000, None).await.unwrap();
+        if all
+            .iter()
+            .any(|e| e.kind == "notify" && e.message.starts_with(&format!("«{title}»")))
+        {
+            break;
+        }
+        assert!(t0.elapsed() < slow, "алерт ждал обычную полосу");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}

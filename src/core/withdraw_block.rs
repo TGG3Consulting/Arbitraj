@@ -19,8 +19,8 @@
 //! закрывает и алерта «проблема в аккаунте» не шлёт: площадка уже на паузе с алертом venue.withdraw_limit
 //! (core/withdraw_limit_pause.rs из rules_apply.rs). Алерт venue.account_problem уходит и в чат «Аккаунты»
 //! (notify.accounts_chat), если он задан (notify/routes.rs).
-//! Решение 354: запись закрытия входов, журнал и уведомление — своей задачей tokio (сделка не ждёт основную базу),
-//! задачи — по одной.
+//! Решение 355: закрытие входов — сразу в памяти настроек (Store::mark_now, список бирж — из текущего под замком),
+//! в базу — фоном; журнал и уведомление — очереди.
 //! Кто вызывает: core/executor.rs, core/relay.rs, core/manual_relay.rs (после отказа вывода), core/profit.rs (check).
 //! От чего зависит: withdraw_refused.rs (refusal), op_error.rs, trade_ops.rs (вид площадки), settings, deps.rs.
 //! Настройки: coin.entry_blocked_venues, coin.entry_blocked_note (по монете — по адресу, решение 211; пишет ядро,
@@ -90,44 +90,38 @@ pub async fn close(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &O
         "Авто (решение 253): вывод {} с {} отклонён после повторов — {e} (сделка {deal})",
         asset.ticker, from.0
     );
-    // Решение 354: запись настроек (основная база), журнал и уведомление — своей задачей: сделка (продажа здесь,
-    // перегон) не ждёт. Задачи закрытия идут по одной (SERIAL): список бирж читается и пишется без гонки.
-    tokio::spawn(block(core.clone(), asset.clone(), from.0.clone(), note));
-}
-
-/// Задачи закрытия входов — по одной (чтение и запись списка бирж монеты без гонки двух отказов).
-static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
-/// Что делает: закрывает входы монеты с биржи (VENUES — список плюс эта биржа, NOTE), журнал core.withdraw_block,
-/// уведомление coin.withdraw_refused. Принимает: ядро, монету, биржу, заметку. Ошибок нет (не записалось — причина в
-/// тексте журнала).
-async fn block(core: Core, asset: Asset, from: String, note: String) {
-    let _one = SERIAL.lock().await;
+    // Решение 355 (ревью t158 Б1): входы закрываются сразу — в памяти настроек, до следующего шага сделки (новый вход
+    // и новый вывод с этой биржи уже видят отметку, withdraw_block::check); в базу — своей задачей хранилища. Список
+    // бирж считается из текущего под замком памяти настроек (Store::mark_now) — два отказа одновременно не теряют
+    // друг друга.
     let deps = &core.inner.deps;
-    let scope = super::blacklist::coin_scope(&asset);
-    let coin = crate::settings::scope::coin_id(&asset.ticker, asset.bsc_contract.as_ref());
-    let at = At {
-        venue: None,
-        coin: Some(&coin),
-    };
-    let mut list = deps.settings.list(VENUES, at).unwrap_or_default();
-    if !list.contains(&from) {
-        list.push(from.clone());
-    }
-    let vals: Vec<Value> = list.into_iter().map(Value::String).collect();
-    let ticker = &asset.ticker;
     let s = &deps.settings;
-    let set = async {
-        s.set(
+    let scope = super::blacklist::coin_scope(asset);
+    let (ticker, from) = (&asset.ticker, &from.0);
+    let venue = Value::String(from.clone());
+    let set = s
+        .mark_now(
             NOTE,
             scope.clone(),
-            Some(Value::String(note.clone())),
+            |_| Some(Value::String(note.clone())),
             AUTHOR,
         )
-        .await?;
-        s.set(VENUES, scope, Some(Value::Array(vals)), AUTHOR).await
-    };
-    let text = match set.await {
+        .and_then(|_| {
+            s.mark_now(
+                VENUES,
+                scope,
+                |cur| {
+                    let mut list: Vec<Value> =
+                        cur.and_then(Value::as_array).cloned().unwrap_or_default();
+                    if !list.contains(&venue) {
+                        list.push(venue);
+                    }
+                    Some(Value::Array(list))
+                },
+                AUTHOR,
+            )
+        });
+    let text = match set {
         Ok(_) => format!("{ticker}: новые входы с {from} закрыты — {note}. Снять — экран «Монеты»"),
         Err(err) => {
             format!(
@@ -135,9 +129,9 @@ async fn block(core: Core, asset: Asset, from: String, note: String) {
             )
         }
     };
-    deps.log(Level::Warn, "core.withdraw_block", Some(&from), &text, None)
+    deps.log(Level::Warn, "core.withdraw_block", Some(from), &text, None)
         .await;
-    deps.notify("coin.withdraw_refused", Some(&from), &text)
+    deps.notify("coin.withdraw_refused", Some(from), &text)
         .await;
 }
 

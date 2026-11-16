@@ -129,6 +129,12 @@ impl Journal {
         self.db.journal_queue().set_batch_max(max);
     }
 
+    /// Решение 356: ждёт записи всего, что поставлено в очередь до вызова (граница на момент вызова; новые записи не
+    /// ждёт). Ошибок нет.
+    pub async fn flushed(&self) {
+        self.db.journal_queue().flushed().await;
+    }
+
     /// Решение 341: ждёт, пока очередь записи журнала опустеет (всё записано в базу). Ошибок нет.
     pub async fn idle(&self) {
         self.db.journal_queue().idle().await;

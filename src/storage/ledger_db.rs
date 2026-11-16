@@ -12,7 +12,7 @@
 //! соединение (WAL: читатели и писатель не ждут друг друга, читатель видит последнее подтверждённое состояние).
 //! Долговечность — PRAGMA synchronous писателя (настройка ledger.synchronous; не задана — значение SQLite по умолчанию).
 //! Прямой режим (direct) — для внешних инструментов (src/bin, Db::open_existing): одно соединение, без потока.
-//! Перенос из основной базы — storage/ledger_move.rs (при каждом открытии, только недостающее или более новое).
+//! Перенос из основной базы — storage/ledger_move.rs (один раз, с отметкой в таблице meta этого файла).
 //! Кто вызывает: storage/db.rs (open, open_existing, ledger), core/persist.rs, core/daily_*.rs, storage/wallet_queue.rs,
 //! core/usdt_sent_backfill.rs, storage/write_modes.rs (set_synchronous).
 //! От чего зависит: rusqlite, std::sync::mpsc, tokio (oneshot, spawn_blocking), storage/ledger_move.rs.
@@ -41,6 +41,10 @@ CREATE TABLE IF NOT EXISTS wallet_queue (
     venue TEXT PRIMARY KEY,
     body  TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS core_state (
     kind TEXT NOT NULL,
@@ -84,9 +88,13 @@ impl LedgerDb {
             .name("ledger-db".into())
             .spawn(move || {
                 let mut w = w;
-                // Задания по порядку постановки; выход — когда все клоны удалены.
+                // Задания по порядку постановки; выход — когда все клоны удалены. Ревью t158 Н4: паника задания не
+                // останавливает поток — вызывающий получает ошибку (ответ не пришёл), следующие записи идут дальше.
                 while let Ok(job) = rx.recv() {
-                    job(&mut w);
+                    let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job(&mut w)));
+                    if run.is_err() {
+                        tracing::error!("ledger.sqlite: сбой (паника) задания записи учёта — задание не выполнено");
+                    }
                 }
             })
             .map_err(|e| DbError::Join(e.to_string()))?;
@@ -173,9 +181,9 @@ impl LedgerDb {
     }
 }
 
-/// Ошибка «поток писателя учёта завершился». Ошибок нет.
+/// Ошибка «запись учёта не выполнена» (поток писателя завершился или задание упало). Ошибок нет.
 fn gone() -> DbError {
-    DbError::Join("поток записи учёта ядра (ledger.sqlite) завершился".into())
+    DbError::Join("запись учёта ядра (ledger.sqlite) не выполнена: сбой потока записи".into())
 }
 
 /// Путь файла учёта рядом с основной базой. Принимает: путь основной базы. Ошибок нет.

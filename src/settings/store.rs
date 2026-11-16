@@ -49,10 +49,10 @@ pub struct Store {
     pub(super) cache: Arc<RwLock<Arc<HashMap<Key, Value>>>>,
     /// Решение 239: копия на момент входа — только чтение (set отказывает).
     pub(super) pinned: bool,
-    changes: broadcast::Sender<Change>,
-    journal: Journal,
+    pub(super) changes: broadcast::Sender<Change>,
+    pub(super) journal: Journal,
     /// Изменения — строго по одному.
-    writer: Arc<Mutex<()>>,
+    pub(super) writer: Arc<Mutex<()>>,
     /// Кошельки DEX и маппинг «биржа → кошелёк» (решение 132, settings/accounts/) — свои таблицы и история.
     accounts: super::accounts::Accounts,
     /// Решение 211 (ревью В9): тикеры монет по адресу — запасное чтение области «монета» (coin_alias.rs).
@@ -255,13 +255,22 @@ impl Store {
             .await?;
         {
             let mut guard = self.cache.write().unwrap_or_else(|p| p.into_inner());
-            // Решение 239: снимки (pinned.rs) держат прежний Arc — копия значений только если снимок жив.
-            let cache = Arc::make_mut(&mut *guard);
             let key = (name.to_string(), scope.clone());
-            match &new {
-                Some(v) => cache.insert(key, v.clone()),
-                None => cache.remove(&key),
-            };
+            // Решение 355: пока шла запись в базу, отметка ядра (store_mark.rs) могла поменять значение в памяти —
+            // она сильнее: значение в памяти не трогаем, отметка сама запишется в базу поверх этого изменения.
+            if guard.get(&key) == old.as_ref() {
+                // Решение 239: снимки (pinned.rs) держат прежний Arc — копия значений только если снимок жив.
+                let cache = Arc::make_mut(&mut *guard);
+                match &new {
+                    Some(v) => cache.insert(key, v.clone()),
+                    None => cache.remove(&key),
+                };
+            } else {
+                tracing::warn!(
+                    name,
+                    "настройка изменена в базе, но в памяти осталась отметка ядра (решение 355)"
+                );
+            }
         }
         let change = Change {
             name: name.to_string(),

@@ -228,23 +228,7 @@ async fn refusal_closes_entries_from_that_exchange_only() {
     assert!(arb::core::withdraw_block::check(&core, &dir_of("binance")).is_ok());
     let e = OpError::from(&refusal(-4026, "[031033] User has insufficient balance"));
     arb::core::withdraw_block::close(&core, "20261110120000000CYBER", &cyber, &venue(), &e).await;
-    // Решение 354: запись закрытия — своей задачей (сделка не ждёт): дождаться её записи журнала.
-    let logged = |n: usize| {
-        let j = j.clone();
-        async move {
-            for _ in 0..200 {
-                if usdt_return_common::entries(&j, "core.withdraw_block", "CYBER")
-                    .await
-                    .len()
-                    >= n
-                {
-                    return;
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            }
-        }
-    };
-    logged(1).await;
+    // Решение 355 (ревью t158 Б1): входы закрыты сразу после шага сделки — без ожидания (окна нет).
     let why = arb::core::withdraw_block::check(&core, &dir_of("binance")).unwrap_err();
     assert!(why.contains("входы с binance закрыты"), "{why}");
     assert!(
@@ -257,7 +241,6 @@ async fn refusal_closes_entries_from_that_exchange_only() {
     );
     // Второй отказ той же биржи — не дублирует её в списке.
     arb::core::withdraw_block::close(&core, "x", &cyber, &venue(), &e).await;
-    logged(2).await;
     let scope = arb::core::blacklist::coin_scope(&cyber);
     let id = match &scope {
         Scope::Coin(id) => id.clone(),

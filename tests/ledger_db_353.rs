@@ -1,8 +1,9 @@
 //! Файл: tests/ledger_db_353.rs
 //! Что делает: решение 353 (задача t158) — учёт ядра в своём файле ledger.sqlite (storage/ledger_db.rs): запись учёта не
 //! ждёт замка основной базы (основная база занята долгой транзакцией — запись сделки проходит сразу); перенос из
-//! основной базы при открытии (нет в файле учёта — копируется, в основной новее — заменяет, в файле учёта новее —
-//! остаётся; основная база не меняется); PRAGMA synchronous писателя — по настройке и обратно к значению при открытии.
+//! основной базы — один раз (отметка в meta), «новее по времени» в основной базе не затирает файл учёта, повторный
+//! перенос — только явный (файл учёта убран); основная база не меняется; открытие внешней программой с файлом учёта
+//! и без него; PRAGMA synchronous писателя — по настройке и обратно к значению при открытии.
 //! Настоящая SQLite во временной папке, без моков.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::storage::db, arb::storage::ledger_db, arb::core::persist.
@@ -97,29 +98,52 @@ async fn ledger_write_does_not_wait_main_db() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+/// Убирает файл учёта (и -wal, -shm) — как папка данных версии до t158. Ошибок нет.
+fn drop_ledger(d: &std::path::Path) {
+    for f in ["ledger.sqlite", "ledger.sqlite-wal", "ledger.sqlite-shm"] {
+        let _ = std::fs::remove_file(d.join(f));
+    }
+}
+
 #[tokio::test]
-async fn move_from_main_keeps_newest() {
+async fn move_once_never_again_even_if_main_newer() {
     let d = dir("move");
     let p = d.join("t.sqlite");
     {
+        // Папка данных старой версии: учёт — в основной базе, файла учёта нет.
         let db = Db::open(&p).unwrap();
-        assert_eq!(db.ledger().moved(), 0, "пустая база — переносить нечего");
-        // Старая версия писала в основную базу.
-        put_main(&db, "only_main", "m1", "2026-11-16T10:00:00+00:00").await;
-        put_main(&db, "main_newer", "m2", "2026-11-16T12:00:00.5+00:00").await;
-        put_main(&db, "led_newer", "m3", "2026-11-16T10:00:00+00:00").await;
-        put_main(&db, "bad_time", "m4", "t").await;
-        put_ledger(&db, "main_newer", "l2", "2026-11-16T12:00:00.25+00:00").await;
-        put_ledger(&db, "led_newer", "l3", "2026-11-16T11:00:00+00:00").await;
-        put_ledger(&db, "bad_time", "l4", "2026-11-16T11:00:00+00:00").await;
+        put_main(&db, "D1", "m1", "2026-11-16T10:00:00+00:00").await;
+        put_main(&db, "D2", "m2", "t").await;
+    }
+    drop_ledger(&d);
+    {
+        let db = Db::open(&p).unwrap();
+        assert_eq!(db.ledger().moved(), 2, "первый запуск — перенос всего");
+        assert_eq!(ledger_body(&db, "D1").await.as_deref(), Some("m1"));
+        assert_eq!(ledger_body(&db, "D2").await.as_deref(), Some("m2"));
+        // Новая версия пишет только файл учёта.
+        put_ledger(&db, "D1", "l1", "2026-11-16T09:00:00+00:00").await;
+        // В основной базе строка «новее» (часы назад, запись старой версии после отката без повторного переноса).
+        put_main(&db, "D1", "stale", "2026-11-16T23:59:59+00:00").await;
+        put_main(&db, "D3", "m3", "2026-11-16T23:59:59+00:00").await;
     }
     let db = Db::open(&p).unwrap();
-    assert_eq!(db.ledger().moved(), 2, "only_main и main_newer");
-    assert_eq!(ledger_body(&db, "only_main").await.as_deref(), Some("m1"));
-    assert_eq!(ledger_body(&db, "main_newer").await.as_deref(), Some("m2"));
-    assert_eq!(ledger_body(&db, "led_newer").await.as_deref(), Some("l3"));
-    assert_eq!(ledger_body(&db, "bad_time").await.as_deref(), Some("l4"));
-    // Основная база не тронута (откат на старую версию видит прежние строки).
+    assert_eq!(
+        db.ledger().moved(),
+        0,
+        "перенос — один раз (отметка в meta)"
+    );
+    assert_eq!(
+        ledger_body(&db, "D1").await.as_deref(),
+        Some("l1"),
+        "свежий учёт не затёрт"
+    );
+    assert_eq!(
+        ledger_body(&db, "D3").await,
+        None,
+        "без явного повторного переноса — ничего"
+    );
+    // Основная база не тронута (откат видит прежние строки).
     let main: Vec<String> = db
         .call(|c| {
             let mut st = c.prepare("SELECT body FROM core_state ORDER BY id")?;
@@ -128,11 +152,42 @@ async fn move_from_main_keeps_newest() {
         })
         .await
         .unwrap();
-    assert_eq!(main, vec!["m4", "m3", "m2", "m1"]);
+    assert_eq!(main, vec!["stale", "m2", "m3"]);
     drop(db);
-    // Третье открытие — переносить нечего.
+    // Явный повторный перенос (scripts/ledger_reimport.sh — файл учёта в сторону): всё из основной базы.
+    drop_ledger(&d);
     let db = Db::open(&p).unwrap();
-    assert_eq!(db.ledger().moved(), 0);
+    assert_eq!(db.ledger().moved(), 3);
+    assert_eq!(ledger_body(&db, "D3").await.as_deref(), Some("m3"));
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[tokio::test]
+async fn open_existing_with_and_without_ledger() {
+    let d = dir("existing");
+    let p = d.join("t.sqlite");
+    {
+        let db = Db::open(&p).unwrap();
+        put_ledger(&db, "L", "из файла учёта", "2026-11-16T10:00:00+00:00").await;
+        put_main(&db, "M", "из основной", "2026-11-16T10:00:00+00:00").await;
+    }
+    // Файл учёта есть — внешняя программа читает учёт из него (только чтение).
+    let ro = Db::open_existing(&p, false).unwrap();
+    assert_eq!(
+        ledger_body(&ro, "L").await.as_deref(),
+        Some("из файла учёта")
+    );
+    assert_eq!(ledger_body(&ro, "M").await, None);
+    drop(ro);
+    // Исключительно (бот остановлен) — тоже файл учёта, запись проходит.
+    let ex = Db::open_existing(&p, true).unwrap();
+    put_ledger(&ex, "L", "правка", "2026-11-16T11:00:00+00:00").await;
+    assert_eq!(ledger_body(&ex, "L").await.as_deref(), Some("правка"));
+    drop(ex);
+    // Файла учёта нет (папка старой версии) — учёт из основной базы.
+    drop_ledger(&d);
+    let ro = Db::open_existing(&p, false).unwrap();
+    assert_eq!(ledger_body(&ro, "M").await.as_deref(), Some("из основной"));
     let _ = std::fs::remove_dir_all(&d);
 }
 

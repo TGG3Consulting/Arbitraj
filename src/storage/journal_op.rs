@@ -22,12 +22,14 @@ use super::journal::{COLUMNS, Entry, insert, row_entry};
 pub type Live = broadcast::Sender<Entry>;
 
 /// Запись и живой поток, куда отдать её после записи (None — никуда: запись о потерях без журнала-источника).
+#[derive(Clone)]
 pub struct Row {
     pub e: Entry,
     pub live: Option<Live>,
 }
 
 /// Обновление повторяющейся строки по метке: счётчик, время последнего, текст и данные — последние.
+#[derive(Clone)]
 pub struct Upd {
     pub token: u64,
     pub repeats: i64,
@@ -37,7 +39,9 @@ pub struct Upd {
     pub live: Live,
 }
 
-/// Операция очереди журнала (большие части — в куче: размер операции — пара слов).
+/// Операция очереди журнала (большие части — в куче: размер операции — пара слов). Клонируется — для повтора по
+/// одной после ошибки пачки (journal_writer.rs).
+#[derive(Clone)]
 pub enum Op {
     /// Обычная запись.
     Insert(Box<Row>),
@@ -74,34 +78,34 @@ impl Op {
 /// убирают из карты). Возвращает: ничего. Ошибки: SQLite (пачка откатывается целиком).
 pub fn apply(
     c: &Connection,
-    op: Op,
+    op: &Op,
     ids: &mut HashMap<u64, i64>,
     out: &mut Vec<(Entry, Option<Live>)>,
     fresh: &mut Vec<u64>,
 ) -> rusqlite::Result<()> {
     match op {
         Op::Insert(r) => {
-            let Row { mut e, live } = *r;
+            let mut e = r.e.clone();
             e.id = insert(c, &e)?;
-            out.push((e, live));
+            out.push((e, r.live.clone()));
         }
         Op::Counted(token, r) => {
-            let Row { mut e, live } = *r;
+            let mut e = r.e.clone();
             e.id = insert_counted(c, &e)?;
-            ids.insert(token, e.id);
-            fresh.push(token);
-            out.push((e, live));
+            ids.insert(*token, e.id);
+            fresh.push(*token);
+            out.push((e, r.live.clone()));
         }
         Op::Update(u) => {
             // Метки нет — строка не записалась (пачка с ней не прошла): обновлять нечего (потеря уже посчитана).
             if let Some(&id) = ids.get(&u.token)
-                && let Some(e) = update(c, id, &u)?
+                && let Some(e) = update(c, id, u)?
             {
-                out.push((e, Some(u.live)));
+                out.push((e, Some(u.live.clone())));
             }
         }
         Op::Forget(token) => {
-            ids.remove(&token);
+            ids.remove(token);
         }
     }
     Ok(())

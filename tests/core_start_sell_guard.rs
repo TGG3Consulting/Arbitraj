@@ -294,13 +294,7 @@ async fn sell_slip_blocks_after_n_in_row_and_resets() {
     let x = deal(&rec, "s5", bad, t0 + Duration::seconds(10));
     arb::core::ledger::save(&core, &x).await;
     sell_slip::after_close(&core, &x).await;
-    // Решение 354: занесение в список, журнал и уведомление — своей задачей (сделка не ждёт) — дождаться записи журнала.
-    for _ in 0..200 {
-        if !kinds(&j, "core.sell_slip_block").await.is_empty() {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
+    // Решение 355 (ревью t158 Б1): отметка видна сразу после шага сделки — без ожидания (окна нет).
     let note = blacklist::manual(&s, &coin, &[]).unwrap().unwrap();
     assert!(
         note.starts_with("Авто (решение 148): 3 продаж подряд хуже плана: −"),

@@ -70,8 +70,6 @@ async fn run() -> Result<(), String> {
     // Решения 341, 353: пределы записи хранилища (длина очереди и пачки журнала, synchronous учёта ядра) — до первых записей
     // адаптеров и до загрузки сделок ядром; дальше — на лету (storage/write_modes.rs).
     arb::storage::write_modes::apply(&journal, &db, &settings);
-    // Решение 341 (по решению владельца — всегда): Ctrl+C / SIGTERM дописывает очереди уведомлений и журнала.
-    arb::storage::journal_stop::install(journal.clone());
     tokio::spawn(arb::storage::write_modes::run(
         journal.clone(),
         db.clone(),
@@ -325,6 +323,9 @@ async fn run() -> Result<(), String> {
         data_dir: args.data_dir.clone(),
     })
     .await;
+    // Решение 356: Ctrl+C / SIGTERM — сразу «Стоп» новых входов, уведомления — с пределом notify.stop_wait_ms, журнал —
+    // до границы на момент сигнала, затем выход (core/shutdown.rs). До запуска ядра — как раньше (сигнал завершает сразу).
+    arb::core::shutdown::install(core.clone());
 
     // Кнопки и команды Telegram → команды ядру (Core::command, решения 156, 157). wake — сигнал «секреты
     // изменились» от api/secrets.rs: приём начинает заново с актуальным токеном.

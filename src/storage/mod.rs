@@ -14,7 +14,6 @@ pub mod journal;
 mod journal_counted;
 pub mod journal_op;
 pub mod journal_queue;
-pub mod journal_stop;
 mod journal_writer;
 pub mod ledger_db;
 mod ledger_move;

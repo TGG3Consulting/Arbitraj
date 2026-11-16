@@ -147,12 +147,13 @@ impl Queue {
         self.step.notify_waiters();
     }
 
-    /// Запись о потерях с прошлой (если были). Возвращает: запись или None. Ошибок нет.
-    pub(super) fn lost_note(&self) -> Option<Entry> {
+    /// Запись о потерях с прошлой (если были). Возвращает: запись и сколько она называет (вернуть счёт через unlose,
+    /// если она сама не записалась — ревью Н5), или None. Ошибок нет.
+    pub(super) fn lost_note(&self) -> Option<(Entry, u64)> {
         let since = self.lost.swap(0, Ordering::AcqRel);
         (since > 0).then(|| {
             let total = self.lost_total.load(Ordering::Acquire);
-            Entry {
+            let e = Entry {
                 id: 0,
                 at: Utc::now(),
                 level: Level::Warn,
@@ -164,8 +165,14 @@ impl Queue {
                 data: Some(json!({ "lost": since, "total": total })),
                 repeats: None,
                 last_at: None,
-            }
+            };
+            (e, since)
         })
+    }
+
+    /// Запись о потерях не записалась — её счёт возвращается в «с прошлой записи». Принимает: число. Ошибок нет.
+    pub(super) fn unlose(&self, n: u64) {
+        self.lost.fetch_add(n, Ordering::AcqRel);
     }
 
     /// Запускает поток-писатель. Принимает: соединение основной базы. Возвращает: отправителя. Ошибок нет (поток не

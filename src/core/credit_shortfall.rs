@@ -7,7 +7,7 @@
 //! остановил бы всю торговлю, а налога у него нет.
 //! Решение 253 (д): каждое зачисление пишет факты перевода (фактическая комиссия, недостача) — withdraw_seen.rs,
 //! независимо от порога transfer.credit_shortfall_pct.
-//! Решение 354: занесение в список, журнал и уведомление — своей задачей tokio (продажа не ждёт основную базу).
+//! Решение 355: отметка — сразу в памяти настроек (core/coin_mark.rs), в базу — фоном; журнал и уведомление — очереди.
 //! Кто вызывает: core/transfers.rs (после зачисления), core/transfer_chain.rs (зачисление по блокчейну — после
 //! фактической комиссии из статуса вывода, решение 253).
 //! От чего зависит: credit_expect.rs, engine.rs, settings (запись ручной отметки), deps.rs (журнал, уведомления).
@@ -15,7 +15,6 @@
 //! пишет coin.blocked и coin.blocked_note (по монете — тикер, как ручной список).
 
 use rust_decimal::Decimal;
-use serde_json::Value;
 
 use crate::core::types::{Asset, Cost, VenueId};
 use crate::settings::read::At;
@@ -98,30 +97,10 @@ pub async fn check(
             from.0, from.0, to.0
         ),
     };
-    // Решение 354: чёрный список (запись настроек в основную базу), журнал и уведомление — своей задачей: продажа не
-    // ждёт. Монета занята этой сделкой до конца — новая сделка по ней не начнётся раньше, чем отметка ляжет (оценка: мс).
-    tokio::spawn(block(core.clone(), asset.clone(), to.clone(), note));
-}
-
-/// Что делает: монета — в ручной чёрный список, журнал core.credit_shortfall и уведомление coin.credit_shortfall.
-/// Принимает: ядро, монету, площадку зачисления, заметку. Ошибок нет (не внесена — причина в тексте журнала).
-async fn block(core: Core, asset: Asset, to: VenueId, note: String) {
-    let deps = &core.inner.deps;
-    let scope = super::blacklist::coin_scope(&asset);
-    let s = &deps.settings;
-    let set = async {
-        s.set(
-            "coin.blocked_note",
-            scope.clone(),
-            Some(Value::String(note.clone())),
-            AUTHOR,
-        )
-        .await?;
-        s.set("coin.blocked", scope, Some(Value::Bool(true)), AUTHOR)
-            .await
-    };
-    let text = match set.await {
-        Ok(_) => format!("{}: в ручном чёрном списке — {note}", asset.ticker),
+    // Решение 355 (ревью t158 Б1): отметка действует сразу — в памяти настроек до следующего шага сделки (продажа не
+    // ждёт основную базу, новая сделка по монете уже видит отметку); в базу — своей задачей хранилища.
+    let text = match super::coin_mark::block_now(&deps.settings, asset, &note, AUTHOR) {
+        Ok(()) => format!("{}: в ручном чёрном списке — {note}", asset.ticker),
         Err(e) => format!(
             "{}: {note}; в чёрный список не внесена ({e}) — внесите вручную",
             asset.ticker

@@ -8,7 +8,6 @@
 | `journal_writer.rs` | Решения 341, 354: поток-писатель очереди журнала — пачки по journal.batch_max, карта «метка → id», живой поток с настоящими id |
 | `journal_counted.rs` | Решения 155, 354: повторяющиеся строки журнала через очередь без ожидания базы (counted_queued, update_queued, forget_queued) |
 | `journal_queue.rs` | Решение 341 (всегда): очередь записи журнала, одна на базу — свой поток ОС пишет пачками (journal.batch_max) по порядку; предел длины journal.queue_max (потеря — запись `journal.queue_lost`); чтение дожидается записанного (flushed); закрытие базы дописывает очередь |
-| `journal_stop.rs` | Решение 341: обработчик Ctrl+C / SIGTERM (ставится всегда при запуске) — дописать очереди уведомлений и журнала, выход 0 (второй сигнал — сразу) |
 | `ledger_db.rs` | Решение 353: учёт ядра в своём файле `<data-dir>/ledger.sqlite` (core_state, daily_result, wallet_queue): писатель — своё соединение в своём потоке ОС, чтение — второе соединение; synchronous — ledger.synchronous; прямой режим для src/bin |
 | `ledger_move.rs` | Решение 353: перенос недостающих и более новых строк учёта из основной базы в ledger.sqlite при открытии (основная база не меняется) |
 | `write_modes.rs` | Решения 341, 353: настройки journal.queue_max, journal.batch_max, ledger.synchronous — на лету |

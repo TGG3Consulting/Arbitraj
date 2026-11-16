@@ -70,6 +70,7 @@ fn state(p: Prices) -> (State, Decimal) {
         hold_ms: 0,
         hold_updates: 1,
         anomaly_pct: d("100"),
+        ..Default::default()
     });
     let v = Signals::default().update(&direction(), Ok(p), &par, Utc::now());
     (v.state, v.spread_pct.unwrap())

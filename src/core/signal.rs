@@ -26,6 +26,9 @@ use crate::settings::read::At;
 use crate::settings::store::Store;
 
 /// Пороги фильтра шума — из настроек, читаются на каждый тик (меняются на лету).
+/// Default — только для литералов тестов (`..Default::default()`: необязательные правила выключены, как «не задана»);
+/// движок берёт пороги только из настроек (Params::read).
+#[derive(Default)]
 pub struct Params {
     pub hold_ms: u64,
     pub hold_updates: u64,

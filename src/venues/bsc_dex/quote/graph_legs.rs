@@ -4,8 +4,10 @@
 //! (quote/select.rs) по стороне ПУЛА (направлению свопа на этом хопе, не всей сделки) и decimals токенов из кэша.
 //! Фаза 80, PR 80.4 — оценка пути и сплит (бэклог §7.3).
 //! decimals всех токенов путей (decimals — вынесено из quote/graph_route.rs).
+//! Решение 311 (А): legs_prep — допуск всех хопов с одной подготовкой глубины (Prep) на котировку.
 //! Кто вызывает: quote/graph_route.rs.
-//! От чего зависит: quote/route_calc.rs (Leg), quote/route_paths.rs (RoutePath), quote/select.rs, pools/registry.rs.
+//! От чего зависит: quote/route_calc.rs (Leg), quote/route_paths.rs (RoutePath), quote/select.rs, pools/registry.rs,
+//! pools/depth_key.rs (Prep).
 //! Настройки: через select.rs — см. его шапку.
 
 use std::collections::{HashMap, HashSet};
@@ -15,6 +17,7 @@ use alloy_primitives::Address;
 use crate::core::types::Side;
 use crate::gateway::errors::GatewayResult;
 
+use super::super::pools::depth_key::Prep;
 use super::super::pools::registry::Entry;
 use super::Quoting;
 use super::route_calc::Leg;
@@ -43,6 +46,20 @@ pub fn legs_for(
     usdt_dec: u8,
     dec: &HashMap<Address, u8>,
 ) -> Result<Vec<Leg>, String> {
+    legs_prep(q, path, side, usdt_dec, dec, None)
+}
+
+/// Решение 311 (А): то же, что legs_for, с одной подготовкой глубины (`prep`, pools/depth_key.rs Prep) на все хопы —
+/// её создаёт котировка графа один раз на котировку (quote/graph_route.rs). None — подготовка на каждый хоп, как
+/// legs_for. Принимает, возвращает, ошибки: как legs_for.
+pub fn legs_prep(
+    q: &Quoting,
+    path: &RoutePath,
+    side: Side,
+    usdt_dec: u8,
+    dec: &HashMap<Address, u8>,
+    prep: Option<&Prep>,
+) -> Result<Vec<Leg>, String> {
     // Хопы в порядке исполнения: покупка — как в пути, продажа — обратный с переворотом токенов хопа.
     let order: Vec<(&Entry, Address, Address)> = match side {
         Side::Buy => path
@@ -60,7 +77,7 @@ pub fn legs_for(
     let mut legs = Vec::with_capacity(order.len());
     for (entry, token_in, token_out) in order {
         let hs = hop_side(entry, token_in).ok_or("ребро не соединяет токены хопа")?;
-        let usable = select::usable(q, entry, hs, usdt_dec)
+        let usable = select::usable_with(q, entry, hs, usdt_dec, prep)
             .map_err(|w| format!("{} {}: {w}", entry.family.title, entry.ticker))?;
         let dec_in = *dec.get(&token_in).ok_or("нет decimals токена входа")?;
         let dec_out = *dec.get(&token_out).ok_or("нет decimals токена выхода")?;

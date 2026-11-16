@@ -12,6 +12,7 @@
 //! Нативную монету (BNB) не маршрутизирует через V4 / Infinity (решение 62, native_ok). Выбор котировки-на-сделку
 //! среди исполнимых маршрутов — merge() (решение 84 вариант Б): graph-режим не исполняет хуже классики.
 //! Решение 300: quote_fit — при неисполнимом лучшем маршруте ещё лучший исполнимый (quote/graph_fit.rs); quote — без него.
+//! Решение 311 (А): подготовка глубины (pools/depth_key.rs Prep) — одна на котировку для допуска всех хопов всех путей.
 //! Кто вызывает: quote/routing.rs за переключателем dex.router_mode (merge, quote; решение 271 — quote и при NoRoute
 //! классики); exec/trade.rs, exec/executor/mod.rs, exec/dry_build.rs (graph_form — реэкспорт из graph_exec.rs); тесты.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs (и decimals), quote/graph_split.rs, quote/abandon.rs (решение 301: брошенный расчёт — до отбора и сплита выход, без записи журнала),
@@ -31,6 +32,7 @@ use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
 use super::super::exec::{native, native_exec};
+use super::super::pools::depth_book::Book;
 use super::super::pools::graph_read;
 use super::graph_split::{self, Cand};
 use super::route_gas::{self, GasUsdt};
@@ -111,16 +113,23 @@ pub async fn quote_fit(
     };
     let mut cands = Vec::new();
     let mut why = Vec::new();
-    for p in &paths {
-        match graph_legs::legs_for(v.q, p, v.side, v.usdt_dec, &dec) {
-            Ok(legs) => {
-                let g = match &conv {
-                    Some(c) => c.path(&legs)?,
-                    None => Decimal::ZERO,
-                };
-                cands.push(Cand::new(legs, g));
+    {
+        // Решение 311 (А): одна подготовка глубины (настройки глубины, USDT, пулы «встречный — USDT») на все хопы всех
+        // путей котировки — раньше заново на каждый хоп (select.rs → depth_book.rs Book::depth). Не готова (настройка
+        // глубины не задана или неверна) — None: каждый хоп готовит сам и даёт ту же причину, что раньше.
+        // Подготовка (RefCell внутри) живёт только в этом блоке без await: в состояние future не попадает.
+        let prep = Book::prep(ctx, &v.q.tokens).ok();
+        for p in &paths {
+            match graph_legs::legs_prep(v.q, p, v.side, v.usdt_dec, &dec, prep.as_ref()) {
+                Ok(legs) => {
+                    let g = match &conv {
+                        Some(c) => c.path(&legs)?,
+                        None => Decimal::ZERO,
+                    };
+                    cands.push(Cand::new(legs, g));
+                }
+                Err(w) => why.push(w),
             }
-            Err(w) => why.push(w),
         }
     }
     if cands.is_empty() {

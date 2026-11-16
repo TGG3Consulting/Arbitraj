@@ -38,6 +38,10 @@ pub struct Meta {
     pub ticker: String,
     pub side: Side,
     pub qty: Decimal,
+    /// Решение 348: кто вызвал котировку (gateway/quote_purpose.rs who) — снято при входе, на вызывающей задаче.
+    pub who: &'static str,
+    /// Решение 348: класс срочности вызывающей задачи (gateway/quote_purpose.rs class_name).
+    pub class: &'static str,
 }
 
 /// Накопленный замер котировки (в потоке счёта).

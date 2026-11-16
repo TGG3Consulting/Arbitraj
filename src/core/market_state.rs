@@ -7,7 +7,7 @@
 //! Решение 317 (доработка): у стакана — отметки последнего изменения содержимого (book_still.rs), не время кадра.
 //! Отметки считаются только при включённом признаке marks_on (book_marks_on.rs: signal.dex_event_skip_hold или
 //! log.signal_hold); выключен — на кадр стакана одна проверка признака, отметок нет (нагрузка как до решения 317).
-//! Чтение состояния (стаканы, пулы, пары, проверки) — market_read.rs.
+//! Применение стакана и пула — market_apply.rs; чтение состояния (стаканы, пулы, пары, проверки) — market_read.rs.
 //! Кто вызывает: core/engine.rs (применяет события), registry.rs, signal.rs, prices.rs, позже executor.rs.
 //! От чего зависит: core/types, gateway/events.
 //! Настройки: нет. Свежесть цены проверяет адаптер при каждой котировке (feed.stale_after_ms): только он знает,
@@ -77,62 +77,9 @@ impl MarketState {
     /// Применяет событие адаптера. Принимает: событие. Возвращает: что изменилось. Ошибок нет.
     pub fn apply(&mut self, ev: MarketEvent) -> Touched {
         match ev {
-            MarketEvent::Book(b) => {
-                let key = (b.venue.clone(), b.asset.ticker.clone());
-                // Один поиск стакана (get_mut + замена; нет — вставка). Отметки — только при включённом признаке.
-                match self.books.get_mut(&key) {
-                    Some(slot) => {
-                        if self.marks_on {
-                            super::book_marks_on::note(
-                                &mut self.book_marks,
-                                &key,
-                                Some(&*slot),
-                                &b,
-                                self.book_gap_ms.get(&b.venue).copied(),
-                            );
-                        }
-                        *slot = b;
-                        let (venue, ticker) = key;
-                        Touched::Book {
-                            venue,
-                            ticker,
-                            first: false,
-                        }
-                    }
-                    None => {
-                        if self.marks_on {
-                            super::book_marks_on::note(&mut self.book_marks, &key, None, &b, None);
-                        }
-                        let (venue, ticker) = key.clone();
-                        self.books.insert(key, b);
-                        Touched::Book {
-                            venue,
-                            ticker,
-                            first: true,
-                        }
-                    }
-                }
-            }
-            MarketEvent::Pool(p) => {
-                let key = (p.venue.clone(), p.reference.clone());
-                let (venue, tokens) = (p.venue.clone(), (p.token0, p.token1));
-                let r = p.reference.clone();
-                let block = p.block;
-                let first = self.pools.insert(key, p).is_none();
-                if first {
-                    self.pool_pairs
-                        .entry(pair_key(&venue, tokens.0, tokens.1))
-                        .or_default()
-                        .insert(r.clone());
-                }
-                Touched::Pool {
-                    venue,
-                    tokens,
-                    pool: r,
-                    first,
-                    block,
-                }
-            }
+            // Стакан и пул — market_apply.rs.
+            MarketEvent::Book(b) => self.apply_book(b),
+            MarketEvent::Pool(p) => self.apply_pool(p),
             MarketEvent::Invalidated {
                 venue,
                 ticker,

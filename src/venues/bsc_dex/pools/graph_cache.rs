@@ -80,8 +80,9 @@ impl Stamp {
 pub struct Cache {
     slot: Arc<Mutex<Option<Built>>>,
     building: Arc<Mutex<()>>,
-    /// Решение 189: наборы путей по ключу (USDT, монета, настройки перебора) и время их построения.
-    paths: Arc<Mutex<HashMap<PathsKey, Stored>>>,
+    /// Решение 189: наборы путей по ключу (USDT, монета, настройки перебора) и время их построения. Ревью t160 Н6: по
+    /// паре (USDT, монета), внутри — по настройкам перебора: эпоха котировки читает наборы монеты без прохода всей карты.
+    paths: Arc<Mutex<ByCoin>>,
     /// Решение 217 (исправление по проверке): у замороженного реестра — набор путей монеты из живого кэша на момент
     /// снимка, без срока (снимок не стареет); граф по реестру снимка не строится, пока ключ совпадает.
     pinned: Option<Arc<(PathsKey, Arc<Vec<Skeleton>>)>>,
@@ -99,6 +100,9 @@ pub type Skeleton = Vec<(PoolRef, Address, Address)>;
 
 /// Набор путей и когда построен.
 type Stored = (Instant, Arc<Vec<Skeleton>>);
+
+/// Наборы путей: (USDT, монета) → настройки перебора текстом → набор.
+type ByCoin = HashMap<(Address, Address), HashMap<String, Stored>>;
 
 /// Ключ набора путей: USDT, монета, настройки перебора текстом.
 pub type PathsKey = (Address, Address, String);
@@ -133,16 +137,39 @@ impl Cache {
     /// Набор путей, если построен не раньше `ttl` назад. Ошибок нет.
     pub fn paths_get(&self, key: &PathsKey, ttl: Duration) -> Option<Arc<Vec<Skeleton>>> {
         let m = self.paths.lock().unwrap_or_else(|p| p.into_inner());
-        m.get(key)
+        m.get(&(key.0, key.1))
+            .and_then(|by| by.get(&key.2))
             .filter(|(at, _)| at.elapsed() <= ttl)
             .map(|(_, v)| v.clone())
+    }
+
+    /// Решение 352: наборы путей монеты в кэше — для эпохи котировки (signal_epoch.rs): по каждому ключу (usdt, монета,
+    /// пределы) — пределы, момент записи и годен ли ещё при `ttl` (устаревание меняет строку — котировка заново).
+    /// Принимает: USDT, монету, срок. Возвращает: строки по порядку пределов. Ошибок нет.
+    pub fn paths_of(&self, usdt: Address, coin: Address, ttl: Duration) -> Vec<String> {
+        let m = self.paths.lock().unwrap_or_else(|p| p.into_inner());
+        let Some(by) = m.get(&(usdt, coin)) else {
+            return Vec::new();
+        };
+        let mut out: Vec<String> = by
+            .iter()
+            .map(|(tag, (at, _))| format!("{tag}@{at:?}:{}", at.elapsed() <= ttl))
+            .collect();
+        out.sort();
+        out
     }
 
     /// Запомнить набор путей; заодно выбросить устаревшие (старше `ttl`). Ошибок нет.
     pub fn paths_put(&self, key: PathsKey, v: Vec<Skeleton>, ttl: Duration) {
         let mut m = self.paths.lock().unwrap_or_else(|p| p.into_inner());
-        m.retain(|_, (at, _)| at.elapsed() <= ttl);
-        m.insert(key, (Instant::now(), Arc::new(v)));
+        m.retain(|_, by| {
+            by.retain(|_, (at, _)| at.elapsed() <= ttl);
+            !by.is_empty()
+        });
+        let (usdt, coin, tag) = key;
+        m.entry((usdt, coin))
+            .or_default()
+            .insert(tag, (Instant::now(), Arc::new(v)));
     }
 }
 

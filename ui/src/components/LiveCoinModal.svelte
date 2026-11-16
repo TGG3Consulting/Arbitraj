@@ -62,7 +62,7 @@
           <!-- Решения 317, 318: что запустило пересчёт и сколько не менялись уровни стакана биржи на объёме сравнения. -->
           <dt>Пересчёт запустил</dt>
           <dd>
-            {v.trigger === 'Pool' ? 'событие пула' : v.trigger === 'Timer' ? 'таймер дозревания (signal.hold_timer)' : 'тик биржи'}
+            {v.trigger === 'Pool' ? 'событие пула' : v.trigger === 'Timer' ? 'таймер дозревания (signal.hold_timer)' : v.trigger === 'MidPool' ? 'событие промежуточного пула маршрута (signal.mid_pool_wake)' : 'тик биржи'}
             {#if v.skipped_hold}<span class="ok"> — кандидат без удержания (signal.dex_event_skip_hold)</span>{/if}
           </dd>
           {#if v.pool_at}

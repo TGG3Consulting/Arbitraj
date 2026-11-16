@@ -13,7 +13,8 @@
 //! — счёт проверяет признак и выходит сразу. Шаг, который уже идёт (глубина одного пула, ожидание замка, начатое до
 //! срока, классика котировки, запрос к узлу), доживает до своего конца; итог брошенного счёта выбрасывается.
 //! Класс срочности (urgency), счётчик запросов расчёта (calc_meter) и признак финальной
-//! котировки (quote_stage) — признаки задачи tokio — переносятся в поток счёта.
+//! котировки (quote_stage) — признаки задачи tokio — переносятся в поток счёта; решение 348 — и назначение котировки
+//! (gateway/quote_purpose.rs scope_opt).
 //! Предел одновременных счётов — dex.quote_cpu_max (необязательная; 0 или не задана — без предела): сверх него счёт
 //! ждёт места (ожидание — внутри срока расчёта и видно в замере этапов как время котировки без запросов к узлу).
 //! Решение 338 (задача t157): задана cpu.threads_max — вместо места dex.quote_cpu_max берётся место общего предела
@@ -26,7 +27,7 @@
 //! Кто вызывает: quote/mod.rs (Quoting::quote — выбор маршрута), venue.rs (dex_cycles; dex_cycle_quote при
 //! параллельных точках подбора).
 //! От чего зависит: ctx.rs, quote/abandon.rs, quote/cpu_local.rs, gateway/{urgency, calc_meter, quote_stage, patience,
-//! cpu_budget, calc_share}.rs, tokio.
+//! cpu_budget, calc_share, quote_purpose}.rs, tokio.
 //! Настройки: dex.quote_cpu_max [bsc_dex] (только без cpu.threads_max); cpu.threads_max, cpu.reserve_deal, cpu.reserve_calc
 //! (вся система).
 
@@ -41,7 +42,9 @@ use crate::gateway::calc_meter::Meter;
 use crate::gateway::cpu_budget::Tier;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::urgency::Urgency;
-use crate::gateway::{calc_meter, calc_share, cpu_budget, patience, quote_stage, urgency};
+use crate::gateway::{
+    calc_meter, calc_share, cpu_budget, patience, quote_purpose, quote_stage, urgency,
+};
 
 use super::super::ctx::Ctx;
 use super::{abandon, cpu_local};
@@ -88,6 +91,8 @@ where
     let class = urgency::is_set();
     let meter = calc_meter::current();
     let fin = quote_stage::is_final();
+    // Решение 348 (слияние t157 + t160): назначение «кто вызвал котировку» — в поток счёта, как класс срочности.
+    let purpose = quote_purpose::current();
     // Решение 338: задан общий предел — место по ярусу (без dex.quote_cpu_max, ревью Н1); не задан — как до 336.
     let (held, budget, tier) = match cpu_budget::limits(&ctx.settings) {
         Some(lim) => {
@@ -109,7 +114,10 @@ where
         // Поле потока — только когда есть что переносить (ревью Б1).
         let _local = (tier.is_some() || share.is_some())
             .then(|| cpu_local::enter(tier.unwrap_or(Tier::Background), share));
-        rt.block_on(scoped(flag, class, meter, fin, work))
+        rt.block_on(quote_purpose::scope_opt(
+            purpose,
+            scoped(flag, class, meter, fin, work),
+        ))
     });
     job.await.map_err(|e| {
         ctx.err(

@@ -14,6 +14,8 @@
 //! (остаток вне частей); stages_ms (сумма этапов верхнего уровня ≤ work_ms), rest_ms (work_ms − stages_ms — вне
 //! замеренных этапов); по каждому этапу `<этап>_ms` и `<этап>_n`; счётчики paths_in, paths_ok, hops, best_evals,
 //! split_steps, split_evals. Чего не было (работы, возврата) — null. У быстрого пути rest_ms — всё время вне частей.
+//! Решение 348: who — кто вызвал котировку (signal, size, final, precheck, uncapped, shadow, window, card, exec, check,
+//! unmarked — gateway/quote_purpose.rs), class — класс срочности вызывающей задачи (trade, check, quote, background, «-»).
 //! Кто вызывает: quote/quote_timing_outer.rs (finish, Drop, hand).
 //! От чего зависит: quote/quote_timing_outer.rs (Body, Outcome), quote/quote_timing.rs (Rec, ms), quote/quote_timing_stages.rs (имена),
 //! ctx.rs (настройки, журнал), tokio.
@@ -74,6 +76,9 @@ pub fn report(b: &Body, rec: Option<&Rec>, out: Option<&Outcome>, dropped: bool)
     d.insert("fast".into(), json!(b.fast));
     d.insert("answered".into(), json!(out.and_then(|o| o.answered)));
     d.insert("coin".into(), json!(b.meta.ticker));
+    // Решение 348: кто вызвал котировку и класс срочности вызывающей задачи.
+    d.insert("who".into(), json!(b.meta.who));
+    d.insert("class".into(), json!(b.meta.class));
     d.insert("side".into(), json!(side));
     d.insert("qty".into(), json!(b.meta.qty.to_string()));
     d.insert("ok".into(), json!(out.map(|o| o.ok)));
@@ -113,7 +118,8 @@ pub fn report(b: &Body, rec: Option<&Rec>, out: Option<&Outcome>, dropped: bool)
     } else {
         mode
     };
-    let mut msg = format!("котировка DEX {tick} {dir} {qty} ({kind}): всего {tm:.1} мс");
+    let who = b.meta.who;
+    let mut msg = format!("котировка DEX {tick} {dir} {qty} ({kind}, {who}): всего {tm:.1} мс");
     if dropped {
         msg.push_str(" (брошена вызывающим)");
     }

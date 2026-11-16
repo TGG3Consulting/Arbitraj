@@ -39,6 +39,11 @@ impl Venue for BscDex {
         VenueKind::Dex
     }
 
+    /// Решение 352: эпоха котировки DEX (signal_epoch.rs). Ошибок нет.
+    fn signal_epoch(&self, asset: &Asset) -> Option<String> {
+        super::signal_epoch::of(&self.p, asset)
+    }
+
     /// Решение 132: вид адаптера на кошелёк счёта — venue_account.rs. Ошибки: NotConfigured — нет кошелька.
     fn for_account(&self, account: &DexAccountId) -> GatewayResult<std::sync::Arc<dyn Venue>> {
         self.on_account(account)

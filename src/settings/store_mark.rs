@@ -11,6 +11,7 @@
 //! Кто вызывает: core/sell_slip.rs, core/credit_shortfall.rs, core/withdraw_block.rs, core/exit_gap.rs.
 //! От чего зависит: settings/store.rs (поля Store), settings/catalog, settings/value.rs (validate), storage/db.rs,
 //! storage/journal.rs, tokio.
+//! Решение 352 (t160): отметка, как и set, увеличивает поколение значений хранилища (Store::generation).
 //! Настройки: settings.mark_retry_ms (необязательная).
 
 use std::sync::Arc;
@@ -72,6 +73,10 @@ impl Store {
                 Some(v) => cache.insert(key, v.clone()),
                 None => cache.remove(&key),
             };
+            // Решение 352 (слияние t158 + t160): отметка меняет значение настройки — поколение растёт под тем же
+            // замком записи кэша, что и у set (отпечаток настроек ядра должен смениться).
+            self.generation
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
             (old, new)
         };
         let change = Change {

@@ -551,11 +551,11 @@ async fn rest_failure_is_remembered_for_window() {
                 .unwrap()
         }
     };
-    // Окно — пауза повтора REST (200 мс): запрос + повтор, затем в окне — ни одного запроса.
-    set("exec.rest_book_retry_ms", Some(json!(200))).await;
+    // Окно — пауза повтора REST (2000 мс): запрос + повтор, затем в окне — ни одного запроса.
+    set("exec.rest_book_retry_ms", Some(json!(2000))).await;
     let e = ask(core.clone()).await;
     assert!(
-        e.message.contains("не раньше чем через 200 мс"),
+        e.message.contains("не раньше чем через 2000 мс"),
         "{}",
         e.message
     );
@@ -564,20 +564,20 @@ async fn rest_failure_is_remembered_for_window() {
         let e = ask(core.clone()).await;
         assert!(e.message.contains("не запрашивался"), "{}", e.message);
         assert!(
-            e.message.contains("окно 200 мс (exec.rest_book_retry_ms)"),
+            e.message.contains("окно 2000 мс (exec.rest_book_retry_ms)"),
             "{}",
             e.message
         );
         assert!(!e.retry_safe(), "алерт, а не повтор по тому же стакану");
     }
     assert_eq!(n(), 2, "в окне неудачи REST не запрашивается");
-    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
     ask(core.clone()).await;
     assert_eq!(n(), 4, "окно прошло — снова запрос и повтор");
     // Без exec.rest_book_retry_ms — окно venue.rate_limit_pause_ms (повтора нет: один запрос).
-    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
     set("exec.rest_book_retry_ms", None).await;
-    set("venue.rate_limit_pause_ms", Some(json!(200))).await;
+    set("venue.rate_limit_pause_ms", Some(json!(2000))).await;
     ask(core.clone()).await;
     assert_eq!(n(), 5);
     let e = ask(core.clone()).await;
@@ -589,7 +589,7 @@ async fn rest_failure_is_remembered_for_window() {
     assert_eq!(n(), 5);
     // REST ожил: после окна снимок берётся, неудача снята.
     srv.fail.store(false, Ordering::SeqCst);
-    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
     let w = arb::core::worst::worst_order(&core, &xt(), &btc(), Side::Sell, dec("1"), dec("100"))
         .await
         .unwrap();

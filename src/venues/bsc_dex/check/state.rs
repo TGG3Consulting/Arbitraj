@@ -7,6 +7,8 @@
 //! quote/select.rs (читают).
 //! От чего зависит: core/types (CoinCheck, PoolCheck, PoolRef, Side), check/deal_taxes.rs (DealTax, Overlay).
 //! Настройки: нет.
+//! Решение 352: поколение итогов (generation) — растёт на каждую запись налогов монеты и фактов пула (эпоха котировки,
+//! signal_epoch.rs).
 //! Решение 211 (фаза 2b): монета — адрес контракта BSC. Налоги монеты и газ перевода хранятся по АДРЕСУ, а не по
 //! тикеру: показное имя монеты ядра может меняться (тикер большинства площадок), а у одного адреса под разными
 //! тикерами — одна проверка. Нативная монета (решение 62) — по адресу своей обёртки (dex.native_wrapped).
@@ -95,6 +97,9 @@ pub struct Checks {
     pub(super) deals: Arc<RwLock<HashMap<(String, Address), DealTax>>>,
     /// t78: налоги продажи одной сделки поверх общих (Checks::for_exit); None — общие.
     pub(super) over: Option<Arc<Overlay>>,
+    /// Решение 352: поколение итогов, от которых зависит котировка (налоги монет, факты пулов) — растёт на каждую
+    /// запись set_coin / update_pool; часть эпохи котировки (signal_epoch.rs). У снимка (pinned) — свой счётчик.
+    generation: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl Checks {
@@ -104,10 +109,22 @@ impl Checks {
         let Some(a) = c.asset.bsc_contract else {
             return;
         };
-        self.coins
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(a, c);
+        let mut m = self.coins.write().unwrap_or_else(|p| p.into_inner());
+        m.insert(a, c);
+        // Ревью t160 Н4: поколение — под замком записи, вместе с итогом.
+        self.bump();
+        drop(m);
+    }
+
+    /// Решение 352: поколение итогов (налоги монет, факты пулов). Ошибок нет.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Решение 352: итог записан — поколение растёт (после записи: читающий новое поколение видит новый итог).
+    fn bump(&self) {
+        self.generation
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
 
     /// Проверка монеты по адресу контракта (t78: у копии продажи сделки — итог перепроверки кошельком сделки, если есть).
@@ -199,6 +216,7 @@ impl Checks {
             native_transfer_gas: Arc::new(RwLock::new(pick(&self.native_transfer_gas))),
             deals: Default::default(),
             over: self.over.clone(),
+            generation: Default::default(),
         }
     }
 
@@ -231,5 +249,8 @@ impl Checks {
     pub fn update_pool(&self, r: &PoolRef, f: impl FnOnce(&mut PoolFacts)) {
         let mut m = self.pools.write().unwrap_or_else(|p| p.into_inner());
         f(m.entry(r.clone()).or_default());
+        // Ревью t160 Н4: поколение — под замком записи, вместе с фактами.
+        self.bump();
+        drop(m);
     }
 }

@@ -8,7 +8,8 @@
 //!   не голодает; набор один на канал (клоны Sender — тот же набор);
 //! - Invalidated не теряется (и без настройки) и не обходится старым кадром: ждавший кадр пары снят, кадр после
 //!   Invalidated уходит следом;
-//! - настройка не задана — прежний сброс (Lost), даже когда в наборе ждут пулы;
+//! - настройка не задана — прежний сброс (Lost), даже когда в наборе ждут пулы и когда ждёт кадр после Invalidated
+//!   (ревью 324, Б3);
 //! - guard доставщика: паника / снятие задачи — следующий отложенный снова запускает доставщика.
 //!
 //! Кто вызывает: cargo test.
@@ -212,6 +213,33 @@ async fn not_set_is_old_drop_even_when_pools_wait() {
     assert_eq!(recv(&mut rx, 2).await, ["A@1", "P1"]);
     tokio::task::yield_now().await;
     assert!(rx.try_recv().is_err(), "потерянные кадры не пришли");
+}
+
+/// Ревью 324 (Б3): кадр, пришедший после Invalidated (остаток срочного слота), ждёт «вынужденным» — без настройки
+/// класс стаканов площадки НЕ уходит в режим «откладывать»: новая пара при полном канале теряется, как раньше.
+#[tokio::test]
+async fn rest_after_invalidated_does_not_hold_venue_without_setting() {
+    let (s, j) = fresh("b3").await;
+    let (tx, mut rx) = mpsc::channel::<MarketEvent>(1);
+    let out = BookOut::new(&tx, v("htx"), &s, &j);
+    assert_eq!(out.book(&tx, book("htx", "X", 1)), Fed::Sent);
+    core_out_book::invalidated(&tx, v("htx"), "A");
+    assert_eq!(
+        out.book(&tx, book("htx", "A", 2)),
+        Fed::Kept,
+        "ключ A ждёт — кадр слит при любой настройке"
+    );
+    assert_eq!(recv(&mut rx, 2).await, ["X@1", "inv A"]);
+    // A@2 ждёт в наборе (доставщик стоит в очереди канала и получил освободившееся место) — это остаток срочного
+    // слота, а не отложенное настройкой.
+    assert_eq!(
+        out.book(&tx, book("htx", "B", 1)),
+        Fed::Lost,
+        "настройка не задана — как раньше"
+    );
+    assert_eq!(recv(&mut rx, 1).await, ["A@2"]);
+    tokio::task::yield_now().await;
+    assert!(rx.try_recv().is_err(), "потерянный B не пришёл");
 }
 
 /// Ключ теста guard: один класс.

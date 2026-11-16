@@ -2,6 +2,8 @@
 //! Что делает: состояние набора «ждут доставки» (gateway/keep_last.rs) под замком и его шаги без ожидания: слить с
 //! ждущим, отложить (срочное — в начало), правило 321 по классу (held), доставить один ключ разрешением канала,
 //! очистить при закрытом канале. Отдельный файл — чтобы keep_last.rs держал только порядок offer/deliver.
+//! Правило 321 (held) считает только слоты, отложенные НАСТРОЙКОЙ: срочные (Invalidated) и «вынужденные» (остаток
+//! срочного слота после его доставки — ревью 324, Б3) — не в счёт: без настройки класс не уходит в режим «откладывать».
 //! Кто вызывает: gateway/keep_last.rs.
 //! От чего зависит: gateway/keep_last.rs (Keyed, Slot, Take, Offer, Counts), tokio::sync::mpsc (Permit).
 //! Настроек нет.
@@ -17,13 +19,27 @@ pub(super) struct State<K: Keyed, S> {
     /// Очередь ключей (порядок доставки).
     pub(super) order: VecDeque<K>,
     /// Слот каждого ждущего ключа.
-    pub(super) last: HashMap<K, S>,
+    pub(super) last: HashMap<K, Entry<S>>,
     /// Доставщик запущен.
     pub(super) running: bool,
     /// Счёт по классам.
     counts: HashMap<K::Class, Counts>,
-    /// Ждущих срочных слотов по классу.
-    urgent: HashMap<K::Class, usize>,
+    /// Ждущих слотов класса, отложенных НЕ настройкой (срочные и вынужденные — Entry::exempt).
+    exempt: HashMap<K::Class, usize>,
+}
+
+/// Слот ждущего ключа и признак «вынужденный».
+pub(super) struct Entry<S> {
+    pub(super) slot: S,
+    /// Отложен без настройки (остаток срочного слота после его доставки — ревью 324, Б3).
+    forced: bool,
+}
+
+impl<S: Slot> Entry<S> {
+    /// Отложен не настройкой (срочный или вынужденный) — не держит класс по правилу 321. Ошибок нет.
+    fn exempt(&self) -> bool {
+        self.forced || self.slot.urgent()
+    }
 }
 
 impl<K: Keyed, S> Default for State<K, S> {
@@ -33,7 +49,7 @@ impl<K: Keyed, S> Default for State<K, S> {
             last: HashMap::new(),
             running: false,
             counts: HashMap::new(),
-            urgent: HashMap::new(),
+            exempt: HashMap::new(),
         }
     }
 }
@@ -44,25 +60,25 @@ impl<K: Keyed, S: Slot> State<K, S> {
         self.counts.entry(class.clone()).or_default()
     }
 
-    /// Правило 321 по классу: у класса ждут отложенные настройкой (не срочные) — новое встаёт за ними без чтения
-    /// настройки. Ошибок нет.
+    /// Правило 321 по классу: у класса ждут отложенные настройкой (не срочные и не вынужденные) — новое встаёт за ними
+    /// без чтения настройки. Ошибок нет.
     pub(super) fn held(&self, class: &K::Class) -> bool {
         let waiting = self.counts.get(class).map_or(0, |c| c.waiting);
-        let urgent = self.urgent.get(class).copied().unwrap_or(0);
-        waiting > urgent
+        let exempt = self.exempt.get(class).copied().unwrap_or(0);
+        waiting > exempt
     }
 
     /// Ключ уже ждёт — слить новое событие с его слотом; срочное — ключ в начало очереди. Ошибок нет.
     pub(super) fn merge(&mut self, key: K, item: S) -> Offer {
         let class = key.class();
-        let Some(slot) = self.last.get_mut(&key) else {
+        let Some(e) = self.last.get_mut(&key) else {
             return Offer::Replaced;
         };
-        let was = slot.urgent();
-        let replaced = slot.merge(item);
-        let now = slot.urgent();
-        self.urgent_delta(&class, was, now);
-        if now && !was {
+        let (was, was_urgent) = (e.exempt(), e.slot.urgent());
+        let replaced = e.slot.merge(item);
+        let (now, now_urgent) = (e.exempt(), e.slot.urgent());
+        self.exempt_delta(&class, was, now);
+        if now_urgent && !was_urgent {
             self.raise(&key);
         }
         if replaced {
@@ -81,8 +97,14 @@ impl<K: Keyed, S: Slot> State<K, S> {
         } else {
             self.order.push_back(key.clone());
         }
-        self.last.insert(key, item);
-        self.urgent_delta(&class, false, urgent);
+        self.last.insert(
+            key,
+            Entry {
+                slot: item,
+                forced: false,
+            },
+        );
+        self.exempt_delta(&class, false, urgent);
         let c = self.count(&class);
         c.deferred += 1;
         c.waiting += 1;
@@ -92,22 +114,26 @@ impl<K: Keyed, S: Slot> State<K, S> {
     }
 
     /// Доставщик: отправляет сообщение слота разрешением канала (под замком — без await между снятием и отправкой);
-    /// остаток слота — в начало очереди. Принимает: ключ (уже снят с очереди), слот, разрешение. Ошибок нет.
-    pub(super) fn deliver_one(&mut self, key: K, slot: S, permit: Permit<'_, S::Msg>) {
+    /// остаток слота — в начало очереди «вынужденным» (Б3: без настройки, правило 321 его не считает). Принимает: ключ
+    /// (уже снят с очереди), слот, разрешение. Ошибок нет.
+    pub(super) fn deliver_one(&mut self, key: K, e: Entry<S>, permit: Permit<'_, S::Msg>) {
         let class = key.class();
         // Ключ уже снят: счёт «ждут» уменьшается ДО слота — паника в Slot::take не оставит ложного «класс ждёт».
-        let was = slot.urgent();
-        self.urgent_delta(&class, was, false);
+        self.exempt_delta(&class, e.exempt(), false);
         self.gone(&class);
-        match slot.take() {
+        match e.slot.take() {
             Take::Send(msg, rest) => {
                 permit.send(msg);
                 self.count(&class).delivered += 1;
                 if let Some(rest) = rest {
-                    self.urgent_delta(&class, false, rest.urgent());
+                    self.exempt_delta(&class, false, true);
                     self.count(&class).waiting += 1;
                     self.order.push_front(key.clone());
-                    self.last.insert(key, rest);
+                    let e = Entry {
+                        slot: rest,
+                        forced: true,
+                    };
+                    self.last.insert(key, e);
                 }
             }
             Take::Skip => self.count(&class).dropped += 1,
@@ -127,7 +153,7 @@ impl<K: Keyed, S: Slot> State<K, S> {
     pub(super) fn clear(&mut self) {
         self.order.clear();
         self.last.clear();
-        self.urgent.clear();
+        self.exempt.clear();
         for c in self.counts.values_mut() {
             c.waiting = 0;
         }
@@ -140,12 +166,12 @@ impl<K: Keyed, S: Slot> State<K, S> {
         c.waiting = c.waiting.saturating_sub(1);
     }
 
-    /// Ждущих срочных класса: было / стало. Ошибок нет.
-    fn urgent_delta(&mut self, class: &K::Class, was: bool, now: bool) {
+    /// Ждущих класса, отложенных не настройкой: было / стало. Ошибок нет.
+    fn exempt_delta(&mut self, class: &K::Class, was: bool, now: bool) {
         if was == now {
             return;
         }
-        let n = self.urgent.entry(class.clone()).or_default();
+        let n = self.exempt.entry(class.clone()).or_default();
         *n = if now { *n + 1 } else { n.saturating_sub(1) };
     }
 

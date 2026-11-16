@@ -4,16 +4,24 @@
 //! порядок решения 109 (тики в повторе, повтор — после срока сна, без «первых»); (2) включено: событие пула во время сна
 //! будит задачу и даёт пересчёт сразу, направления его площадки первыми; во время идущего пересчёта — не прерывает
 //! (в повтор, пересчёт сразу после); тик стакана сна не будит; (3) ограничитель signal.pool_event_min_interval_ms;
-//! (4) без signal.eval_min_interval_ms — как раньше; (5) отметка события пула (время, блок) едет с пересчётом.
+//! (4) без signal.eval_min_interval_ms — как раньше; (5) отметка события пула (время, блок) едет с пересчётом;
+//! (6) ревью 16.11: сигнал пробуждения из плана будит сон задачи монеты (тот же tokio::select! sleep / Notify, что в
+//! core/tick_sched.rs task; без ожидания — один опрос future), во время идущего пересчёта сигнала нет; направления
+//! площадки события пула первыми (core/evaluate.rs pool_first, устойчиво).
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::core::tick_plan, arb::core::types. Моков нет: площадки не участвуют.
+//! От чего зависит: arb::core::tick_plan, arb::core::evaluate (pool_first), arb::core::types, tokio, futures-util.
+//! Моков нет: площадки не участвуют.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use arb::core::evaluate::pool_first;
 use arb::core::tick_plan::{Cfg, Next, Plan, PoolMark, Put, Run};
-use arb::core::types::{Asset, VenueId};
+use arb::core::types::{Asset, Direction, VenueId};
 use chrono::Utc;
+use futures_util::FutureExt;
+use tokio::sync::Notify;
 
 fn coin() -> Asset {
     Asset {
@@ -207,4 +215,89 @@ fn first_pool_mark_kept_in_merge() {
         }
         n => panic!("ждали пересчёт, получили {n:?}"),
     }
+}
+
+/// Сон задачи монеты как в core/tick_sched.rs task: срок сна (здесь — час) или сигнал пробуждения. Один опрос без
+/// ожидания: Some(true) — разбужен сигналом, None — спит.
+fn poll_sleep(w: &Arc<Notify>) -> Option<bool> {
+    async {
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(3600)) => false,
+            _ = w.notified() => true,
+        }
+    }
+    .now_or_never()
+}
+
+#[tokio::test]
+async fn wake_signal_ends_task_sleep() {
+    let (mut p, t0, c) = (Plan::default(), Instant::now(), cfg(true, None));
+    sleeping(&mut p, c, t0);
+    // Задача взяла сигнал пробуждения перед сном (tick_sched.rs: t.wake) и спит.
+    let w = p.wake(&coin()).expect("задача монеты есть");
+    assert_eq!(poll_sleep(&w), None);
+    // Событие пула — план отдаёт тот же сигнал, tick_sched.rs put будит (notify_one) — сон кончается сразу.
+    let Put::Wake(n) = p.put(&coin(), set(&["bsc_dex"]), Some(mark(7)), true, t0 + ms(20)) else {
+        panic!("ждали пробуждение");
+    };
+    assert!(Arc::ptr_eq(&w, &n));
+    n.notify_one();
+    assert_eq!(poll_sleep(&w), Some(true));
+}
+
+#[tokio::test]
+async fn running_gets_no_wake_signal() {
+    let (mut p, t0, c) = (Plan::default(), Instant::now(), cfg(true, None));
+    p.put(&coin(), set(&["bingx"]), None, true, t0);
+    let w = p.wake(&coin()).expect("задача монеты есть");
+    // Пересчёт идёт — событие пула только в повтор, сигнала нет: идущий пересчёт не прерывается.
+    assert!(matches!(
+        p.put(
+            &coin(),
+            set(&["bsc_dex"]),
+            Some(mark(8)),
+            true,
+            t0 + ms(100)
+        ),
+        Put::Queued
+    ));
+    assert_eq!(poll_sleep(&w), None);
+    // Следующий шаг задачи после пересчёта — сразу повтор с событием пула.
+    assert!(matches!(
+        p.next(&coin(), Some(t0 + ms(500)), c, t0 + ms(300)),
+        Next::Go(_)
+    ));
+}
+
+fn dir(a: &str, b: &str) -> Direction {
+    Direction {
+        asset: coin(),
+        buy_on: v(a),
+        sell_on: v(b),
+    }
+}
+
+#[test]
+fn pool_venue_directions_first_stable() {
+    let start = vec![
+        dir("bingx", "mexc"),
+        dir("bsc_dex", "bingx"),
+        dir("mexc", "bingx"),
+        dir("bingx", "bsc_dex"),
+    ];
+    let mut d = start.clone();
+    pool_first(&mut d, &set(&["bsc_dex"]));
+    assert_eq!(
+        d,
+        vec![
+            dir("bsc_dex", "bingx"),
+            dir("bingx", "bsc_dex"),
+            dir("bingx", "mexc"),
+            dir("mexc", "bingx"),
+        ]
+    );
+    // Площадок события пула нет — порядок прежний.
+    let mut d = start.clone();
+    pool_first(&mut d, &HashSet::new());
+    assert_eq!(d, start);
 }

@@ -14,9 +14,11 @@
 //! Настройки: signal.* (через signal.rs), money.max_per_trade_usd (через prices.rs), profit.sigma_window_min,
 //! live.spread_min_interval_ms (решение 109), log.signal_hold (через signal_hold_log.rs).
 
+use std::collections::HashSet;
+
 use chrono::Utc;
 
-use crate::core::types::{Asset, Side};
+use crate::core::types::{Asset, Direction, Side, VenueId};
 
 use super::engine::{Core, lk, rd, wr};
 use super::signal::{Params, State};
@@ -54,13 +56,8 @@ pub async fn evaluate(
             .into_iter()
             .filter(|d| venues.contains(&d.buy_on) || venues.contains(&d.sell_on))
             .collect();
-        // Решение 322: направления с площадкой события пула — первыми (сортировка устойчивая; first пуст — порядок
-        // прежний).
-        if !run.first.is_empty() {
-            dirs.sort_by_key(|d| {
-                !(run.first.contains(&d.buy_on) || run.first.contains(&d.sell_on))
-            });
-        }
+        // Решение 322: направления с площадкой события пула — первыми.
+        pool_first(&mut dirs, &run.first);
         // Налоги не проверены (решение 30): строка видна с причиной ожидания, торговли нет.
         let waiting = entry.waits_check().then(|| {
             let why = entry
@@ -142,6 +139,14 @@ pub async fn evaluate(
         if live_due(core, &dir, &view.state) {
             core.inner.live.send(CoreEvent::Spread(view));
         }
+    }
+}
+
+/// Решение 322: направления с площадкой события пула — первыми; сортировка устойчивая (остальные в прежнем порядке);
+/// first пуст — порядок прежний. Принимает: направления, площадки события пула. Ошибок нет.
+pub fn pool_first(dirs: &mut [Direction], first: &HashSet<VenueId>) {
+    if !first.is_empty() {
+        dirs.sort_by_key(|d| !(first.contains(&d.buy_on) || first.contains(&d.sell_on)));
     }
 }
 

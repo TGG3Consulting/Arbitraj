@@ -1,8 +1,10 @@
 //! Файл: storage/db.rs
 //! Что делает: открывает базу SQLite, создаёт таблицы, даёт безопасный доступ из async-кода.
 //! Запросы выполняются в отдельном потоке (spawn_blocking), чтобы не тормозить рыночные задачи.
-//! Кто вызывает: main.rs (открывает), settings/store.rs, storage/journal.rs, storage/rules.rs.
-//! От чего зависит: rusqlite, tokio.
+//! Кто вызывает: main.rs (открывает), settings/store.rs, storage/journal.rs, storage/rules.rs; call_sync —
+//! storage/journal_queue.rs (свой поток писателя журнала, решение 341); учёт сделок в своём файле —
+//! storage/db_ledger.rs (решение 342).
+//! От чего зависит: rusqlite, tokio, storage/ledger_db.rs.
 //! Миграции: новые столбцы старых таблиц — ADDED_COLUMNS (добавляются при открытии, если их нет).
 //! Настройки: путь к папке данных — аргумент запуска --data-dir (до старта настроек его взять негде).
 
@@ -171,6 +173,10 @@ pub enum DbError {
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
+    /// Решение 342: файл учёта сделок рядом с основной базой (storage/ledger_db.rs) и его соединение, если включено
+    /// (ledger.own_db); None — записи сделок в основной базе, как раньше.
+    pub(super) ledger_path: std::path::PathBuf,
+    pub(super) ledger: Arc<Mutex<super::db_ledger::Own>>,
 }
 
 impl Db {
@@ -181,9 +187,7 @@ impl Db {
         conn.execute_batch("PRAGMA journal_mode=WAL;")?;
         conn.execute_batch(SCHEMA)?;
         migrate(&conn)?;
-        Ok(Self {
-            conn: Arc::new(Mutex::new(conn)),
-        })
+        Ok(Self::with(conn, path))
     }
 
     /// Что делает: решение 218 — открывает УЖЕ СУЩЕСТВУЮЩУЮ базу бота для внешнего инструмента (src/bin/
@@ -206,9 +210,27 @@ impl Db {
             conn.busy_timeout(std::time::Duration::ZERO)?;
             conn.execute_batch("PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;")?;
         }
-        Ok(Self {
+        Ok(Self::with(conn, path))
+    }
+
+    /// База из открытого соединения; файл учёта сделок — рядом (решение 342). Ошибок нет.
+    fn with(conn: Connection, path: &Path) -> Self {
+        Self {
             conn: Arc::new(Mutex::new(conn)),
-        })
+            ledger_path: super::ledger_db::path_near(path),
+            ledger: Arc::default(),
+        }
+    }
+
+    /// Что делает: решение 341 — выполняет функцию с соединением В ТЕКУЩЕМ потоке (замок соединения — тот же, что у
+    /// call). Только для своих потоков ОС (писатель журнала storage/journal_queue.rs), не для задач tokio.
+    /// Принимает: функцию над &mut Connection. Возвращает: её результат. Ошибки: SQLite, замок отравлен.
+    pub fn call_sync<T>(
+        &self,
+        f: impl FnOnce(&mut Connection) -> Result<T, rusqlite::Error>,
+    ) -> Result<T, DbError> {
+        let mut guard = self.conn.lock().map_err(|_| DbError::Poisoned)?;
+        f(&mut guard).map_err(DbError::from)
     }
 
     /// Выполняет функцию с соединением в отдельном потоке.

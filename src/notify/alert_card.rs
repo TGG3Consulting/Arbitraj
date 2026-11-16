@@ -4,8 +4,12 @@
 //! ставит поиск карточки по id сделки при запуске (install, core/engine.rs); шаблон перед отправкой в Telegram берёт
 //! свежую карточку по строке «Сделка: <id>» и вставляет строки «Монета», «Путь», «Где сейчас», которых в тексте нет
 //! (enrich). Так путь виден во всех алертах о сделке, даже где ядро передало только id.
-//! Кто вызывает: core/engine.rs (install), core/deal_text.rs (собирает DealCard), notify/alert.rs (lookup, enrich).
-//! От чего зависит: ничего (карточку собирает ядро из учёта сделки — только факты учёта).
+//! Решение 340 (Тигран 16.11): уведомления уходят фоновой очередью (notify/queue.rs) — позже события; карточка
+//! снимается при постановке в очередь (Snap) и передаётся отправке через task-local (scoped); шаблон берёт снимок
+//! (at_event), без снимка — свежую, как раньше (дубль «Ручного управления» — своя задача).
+//! Кто вызывает: core/engine.rs (install), core/deal_text.rs (собирает DealCard), notify/alert.rs (at_event, enrich),
+//! notify/queue.rs и notify/dispatch_role.rs (snap, scoped, current), core/deal_closed.rs (Snap::of).
+//! От чего зависит: tokio (task_local); карточку собирает ядро из учёта сделки — только факты учёта.
 //! Настройки: нет.
 
 use std::sync::{Arc, RwLock};
@@ -89,4 +93,54 @@ pub fn enrich(plain: &str, card: &DealCard) -> String {
         }
     }
     out.join("\n")
+}
+
+/// Решение 340: снимок карточки на момент события — id сделки и её карточка (None — ядро сделку не знало).
+/// Default — снимка нет (шаблон берёт свежую карточку).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Snap(Option<(String, Option<DealCard>)>);
+
+impl Snap {
+    /// Снимок по готовой карточке (закрытие сделки — из копии сделки). Принимает: id, карточку. Ошибок нет.
+    pub fn of(id: &str, card: Option<DealCard>) -> Snap {
+        Snap(Some((id.to_string(), card)))
+    }
+}
+
+tokio::task_local! {
+    /// Снимок карточки задания очереди уведомлений (notify/queue.rs).
+    static SNAP: Snap;
+}
+
+/// Снимает карточку по строке «Сделка: <id>» текста алерта сейчас (на момент события). Нет строки — снимка нет.
+/// Принимает: текст алерта (dispatch::body). Возвращает: Snap. Ошибок нет. Вызывать вне замков ядра.
+pub fn snap(plain: &str) -> Snap {
+    match deal_id(plain) {
+        Some(id) => Snap::of(id, lookup(id)),
+        None => Snap::default(),
+    }
+}
+
+/// Будущее со снимком карточки: шаблон внутри него берёт снимок (at_event). Принимает: снимок, будущее. Ошибок нет.
+pub fn scoped<F: std::future::Future>(s: Snap, f: F) -> impl std::future::Future<Output = F::Output> {
+    SNAP.scope(s, f)
+}
+
+/// Снимок текущего задания (для отправок, которые задание запускает своими задачами). Нет — Default. Ошибок нет.
+pub fn current() -> Snap {
+    SNAP.try_with(Clone::clone).unwrap_or_default()
+}
+
+/// Карточка для алерта сделки id: снимок задания, если снят для этого id (даже пустой — сделки тогда не было), иначе
+/// свежая (lookup). Принимает: id. Возвращает: карточку или None. Ошибок нет.
+pub fn at_event(id: &str) -> Option<DealCard> {
+    let snapped = SNAP.try_with(|s| {
+        s.0.as_ref()
+            .filter(|(i, _)| i == id)
+            .map(|(_, c)| c.clone())
+    });
+    match snapped {
+        Ok(Some(card)) => card,
+        _ => lookup(id),
+    }
 }

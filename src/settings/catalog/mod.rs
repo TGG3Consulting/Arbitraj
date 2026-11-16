@@ -10,6 +10,7 @@
 //! решение 125), gate.rs, okx.rs, coinex.rs (настройки только Gate, только OKX, только CoinEx).
 //! решение 125), gate.rs, okx.rs, htx.rs и др. (настройки одной биржи).
 //! bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
+//! write_path.rs — очередь уведомлений, очередь журнала, учёт сделок в своём файле (решения 340–342).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
@@ -40,6 +41,7 @@ mod signals;
 mod trade;
 mod uncapped;
 mod window;
+mod write_path;
 mod xt;
 
 use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueFor, VenueRole};
@@ -120,6 +122,7 @@ static PARTS: &[&[SettingDef]] = &[
     window::WINDOW,
     feed_watch::FEED_WATCH,
     book_events::BOOK_EVENTS,
+    write_path::WRITE_PATH,
     bingx::BINGX,
     gate::GATE,
     bitget::BITGET,

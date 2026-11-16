@@ -3,9 +3,11 @@
 //! Каждая запись также уходит в живой поток для интерфейса (broadcast).
 //! Решение 155: запись может быть «повторяющейся» — одна строка на смену причины со счётчиком повторов (`repeats`) и
 //! временем последнего (`last_at`); запись и обновление таких строк — journal_repeat.rs. У обычных записей оба пусты.
+//! Решение 341: при заданной journal.queue_max запись не ждётся — она уходит в очередь, отдельный поток ОС пишет
+//! накопленное одной транзакцией по порядку (storage/journal_queue.rs); не задана — как раньше (запись ждётся).
 //! Кто вызывает: settings/store.rs (изменения настроек), notify/, api/; позже шлюз (ошибки).
-//! От чего зависит: storage/db.rs, tokio::sync::broadcast.
-//! Настройки: нет.
+//! От чего зависит: storage/db.rs, storage/journal_queue.rs, tokio::sync::broadcast.
+//! Настройки: journal.queue_max (включает очередь; читает storage/journal_mode.rs и передаёт set_queue_max).
 
 use chrono::{DateTime, Utc};
 use rusqlite::params;
@@ -13,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 use super::db::{Db, DbError};
+use super::journal_queue::Queue;
 
 /// Уровень записи.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,13 +53,19 @@ pub struct Entry {
 pub struct Journal {
     pub(super) db: Db,
     pub(super) live: broadcast::Sender<Entry>,
+    /// Решение 341: очередь записи (выключена, пока не задана journal.queue_max).
+    pub(super) queue: std::sync::Arc<Queue>,
 }
 
 impl Journal {
     /// Создаёт журнал.
     /// Принимает: базу и отправителя живого потока (его же слушает api/ws).
     pub fn new(db: Db, live: broadcast::Sender<Entry>) -> Self {
-        Self { db, live }
+        Self {
+            db,
+            live,
+            queue: std::sync::Arc::new(Queue::default()),
+        }
     }
 
     /// База журнала — для компонентов, которым нужно своё хранение (например, очередь кошелька DEX). Ошибок нет.
@@ -66,6 +75,9 @@ impl Journal {
 
     /// Пишет запись. Ошибки базы не теряются: выводятся в лог процесса и возвращаются.
     /// Принимает: уровень, вид, площадку, текст, данные. Возвращает: сохранённую запись.
+    /// Решение 341: очередь включена (journal.queue_max) — запись уходит в очередь и не ждётся; возвращается запись с
+    /// id = 0 (настоящий id — в живом потоке после записи пачки; результат write никто в коде не читает — разбор t158);
+    /// очередь полна — запись потеряна со счётом (запись journal.queue_lost пишет поток очереди).
     pub async fn write(
         &self,
         level: Level,
@@ -86,23 +98,11 @@ impl Journal {
             last_at: None,
         };
         let row = e.clone();
-        let res = self
-            .db
-            .call(move |c| {
-                c.execute(
-                    "INSERT INTO journal (at, level, kind, venue, message, data) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                    params![
-                        row.at.to_rfc3339(),
-                        format!("{:?}", row.level),
-                        row.kind,
-                        row.venue,
-                        row.message,
-                        row.data.as_ref().map(|d| d.to_string())
-                    ],
-                )?;
-                Ok(c.last_insert_rowid())
-            })
-            .await;
+        let row = match self.queue.push(&self.db, &self.live, row) {
+            Ok(()) => return Ok(e),
+            Err(row) => row,
+        };
+        let res = self.db.call(move |c| insert(c, &row)).await;
         match res {
             Ok(id) => {
                 e.id = id;
@@ -115,6 +115,22 @@ impl Journal {
                 Err(err)
             }
         }
+    }
+
+    /// Решение 341: включена ли очередь записи (или в ней ещё есть записи) — запись журнала сейчас не ждётся.
+    /// Ошибок нет.
+    pub fn queued(&self) -> bool {
+        self.queue.on()
+    }
+
+    /// Решение 341: предел очереди записи (journal.queue_max); None или 0 — очередь выключена (как раньше). Ошибок нет.
+    pub fn set_queue_max(&self, max: Option<u64>) {
+        self.queue.set_max(max);
+    }
+
+    /// Решение 341: ждёт, пока очередь записи опустеет (всё записано в базу). Очереди нет — сразу. Ошибок нет.
+    pub async fn idle(&self) {
+        self.queue.idle().await;
     }
 
     /// Читает записи журнала, новые первыми.
@@ -131,6 +147,23 @@ impl Journal {
             })
             .await
     }
+}
+
+/// Вставляет запись в таблицу journal (без id). Принимает: соединение (или транзакцию), запись. Возвращает: id.
+/// Ошибки: SQLite.
+pub(super) fn insert(c: &rusqlite::Connection, row: &Entry) -> rusqlite::Result<i64> {
+    c.execute(
+        "INSERT INTO journal (at, level, kind, venue, message, data) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            row.at.to_rfc3339(),
+            format!("{:?}", row.level),
+            row.kind,
+            row.venue,
+            row.message,
+            row.data.as_ref().map(|d| d.to_string())
+        ],
+    )?;
+    Ok(c.last_insert_rowid())
 }
 
 /// Столбцы записи для row_entry — в этом порядке (list и journal_repeat.rs).

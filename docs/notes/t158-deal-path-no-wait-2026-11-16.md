@@ -17,7 +17,7 @@
 | Карточка сделки в алерте | notify/alert.rs:61-67 → alert_card::lookup (engine.rs:66-69, замок `inner.deals`) | берётся В МОМЕНТ ОТПРАВКИ (свежая) |
 | `Journal::write` | storage/journal.rs:69-118 | `Db::call(...).await`: spawn_blocking (общий пул блокирующих задач, тот же, что у счёта котировки DEX — quote/cpu.rs:6) → замок `Mutex<Connection>` (одно соединение на весь бот, db.rs:172-174, 222-225) → INSERT отдельной транзакцией (автокоммит) |
 | PRAGMA | storage/db.rs:181 | задан только `journal_mode=WAL`; `synchronous` не задан. rusqlite bundled (libsqlite3-sys 0.38.2, build.rs:152-167) не задаёт `SQLITE_DEFAULT_SYNCHRONOUS` → по документации SQLite (https://www.sqlite.org/pragma.html#pragma_synchronous, https://www.sqlite.org/compile.html) действует FULL: в WAL синхронизация файла WAL на каждом коммите |
-| Результат `Journal::write` | 28 вызовов `journal.write` в src | ни один не использует результат (`let _ = …` или выражение-оператор); проверено поиском (rg по шаблонам `let x = …write`, `match …write`, `…write(…).await?`) — совпадений нет |
+| Результат `Journal::write` | 28 вызовов `journal.write` в одну строку; с переносом строки (`journal\n.write(`) — 93 вызова в 86 файлах src (rg -U) | ни один не использует результат: все — `let _ = …` или оператор; поиск rg -U по шаблонам `let x = …write`, `match …write`, `…write(…).await?`/`.is_err()`/`.map`, хвостовое выражение функции — совпадений нет |
 | `write_counted` / `update_counted` | storage/journal_repeat.rs:20, 77 | id строки нужен для обновлений — остаются прямыми |
 
 ## 2. Утверждения аудита — проверка
@@ -32,7 +32,7 @@
 | Одно соединение под общим Mutex, каждая запись — отдельная транзакция, synchronous не задан | **подтверждено** | db.rs:172-187, 217-229; journal.rs:89-105 (один `execute` без `BEGIN`); db.rs:181 |
 | Блокирующий пул tokio общий с котировками DEX | **подтверждено** | db.rs:223 `spawn_blocking`; quote/cpu.rs:6-9, 84 (`spawn_blocking` + `block_on`). Рантайм — `#[tokio::main]` без своих пределов (main.rs:32) |
 | Запись журнала ждётся на пути сделки и в цикле пачки пулов | **подтверждено** | путь сделки: precheck.rs:210 (предпроверка пройдена — до покупки), transfers.rs:316, 348, transfer_credit.rs:98, 122 и др. (таблица 3); пачка пулов: venues/bsc_dex/ctx.rs:192-203 (`log` ждёт `journal.write`), pools/refresh_event.rs:68 (`off_map` — запись, потом перечитывание пула) |
-| Все 28 вызовов journal.write игнорируют результат | **подтверждено** | см. таблицу 1 |
+| Все 28 вызовов journal.write игнорируют результат | **подтверждено, но вызовов больше** | 93 вызова в 86 файлах (с переносом строки), все игнорируют результат — таблица 1 |
 | Снимок рынка снимает A и B по очереди | **подтверждено** | frozen.rs:89-90 (`side(A).await?`, затем `side(B).await?`); оба — копия из памяти адаптера (mexc/mod.rs:156-160 `books.freeze`, bsc_dex/venue.rs:121-131 `frozen::take`), без сети |
 
 ## 3. Ожидания на пути сделки, которые не являются действием сделки

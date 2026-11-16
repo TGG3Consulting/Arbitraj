@@ -59,7 +59,8 @@ const BOLD_LABELS: &[&str] = &[COIN, PATH, NOW, REASON, BOT, TODO];
 /// Текст алерта для Telegram в HTML: карточка сделки (если есть «Сделка: <id>» и ядро знает сделку), подгонка под
 /// предел длины, разметка. Принимает: текст (Msg::render или любой другой). Возвращает: HTML. Ошибок нет.
 pub fn telegram(plain: &str) -> String {
-    let text = match alert_card::deal_id(plain).and_then(alert_card::lookup) {
+    // Решение 340: карточка — снимок на момент события (задание очереди, alert_card::at_event), иначе свежая.
+    let text = match alert_card::deal_id(plain).and_then(alert_card::at_event) {
         Some(card) => alert_card::enrich(plain, &card),
         None => plain.to_string(),
     };

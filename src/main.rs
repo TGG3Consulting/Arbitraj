@@ -56,6 +56,19 @@ async fn run() -> Result<(), String> {
     let settings = Store::load(db.clone(), changes.clone(), journal.clone())
         .await
         .map_err(|e| e.to_string())?;
+    // Решения 341, 342: режимы записи хранилища (очередь журнала, учёт сделок в своём файле) — до первых записей
+    // адаптеров и до загрузки сделок ядром; дальше — на лету (storage/write_modes.rs).
+    arb::storage::write_modes::apply(&journal, &db, &settings);
+    tokio::spawn(arb::storage::write_modes::run(
+        journal.clone(),
+        db.clone(),
+        settings.clone(),
+        Watch::new(changes.subscribe(), vec![
+            arb::storage::write_modes::JOURNAL_MAX.into(),
+            arb::storage::write_modes::LEDGER_OWN.into(),
+            arb::storage::write_modes::LEDGER_SYNC.into(),
+        ]),
+    ));
     let vault = Vault::locked(arb::secrets::file::path_in(&args.data_dir));
     // Редиректы выключены (gateway/http_bind.rs builder — одно место для всех клиентов, решение 178).
     let http = arb::gateway::http_bind::builder()

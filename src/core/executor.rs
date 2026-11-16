@@ -35,6 +35,8 @@
 //! свободный баланс A прочитан предпроверкой перед расчётом (precheck_balance.rs) — здесь он повторно не читается и
 //! объём под остаток не подбирается: предел списания ордера — min(бюджет плана, свободно) по прочитанному; биржа A
 //! баланс не отдала — ордер уходит на посчитанный объём с пределом = бюджет (строка об этом — в хронологии).
+//! Решение 340: уведомления сделки (deal.buy_filled и др.) не ждутся — очередь notify/queue.rs; решение 341: при
+//! journal.queue_max закрытие строки отказов предпроверки — фоном.
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, relay_here.rs, sell.rs, deal.rs, remeasure.rs
 //! (частичная покупка: продажа на A — пере-замер по порогу «итог ≥ 0», решение 247, дополнение 10.11, t78).
@@ -187,7 +189,17 @@ async fn run(
     let key = format!("precheck|{}", super::candidates::reject_key(&d));
     let (acc, plan, slot) = match pre.await {
         Ok(x) => {
-            core.inner.last_reject.close(&deps.journal, &key).await;
+            // Решение 341: очередь журнала включена (journal.queue_max) — закрытие строки отказов (UPDATE строки
+            // повторов) идёт фоном, покупка его не ждёт. Других отказов этого ключа до конца сделки нет: предпроверку
+            // направления ведёт только исполнитель, а он держит замок монеты (active).
+            if deps.journal.queued() {
+                let (c, k) = (core.clone(), key.clone());
+                tokio::spawn(async move {
+                    c.inner.last_reject.close(&c.inner.deps.journal, &k).await;
+                });
+            } else {
+                core.inner.last_reject.close(&deps.journal, &key).await;
+            }
             x
         }
         Err(e) => {

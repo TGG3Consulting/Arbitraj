@@ -51,7 +51,9 @@ async fn enable(n: &Notifier, code: &str, on: bool) {
 }
 
 /// Записи журнала с видом kind.
+/// Решение 340: отправка идёт фоновой очередью — сначала дождаться её (notify/queue.rs idle).
 async fn of_kind(n: &Notifier, kind: &str) -> Vec<Entry> {
+    arb::notify::queue::idle().await;
     let all = n.journal.list(1000, None).await.unwrap();
     all.into_iter().filter(|e| e.kind == kind).collect()
 }

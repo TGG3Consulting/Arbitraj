@@ -59,8 +59,10 @@ src/venues/<биржа>/
       &ctx.journal);`, на каждом кадре `match kept.book(out, book) { Fed::Sent | Fed::Kept => {} Fed::Closed => конец,
       Fed::Lost => свой счёт dropped }` (venue.book_events_keep; один общий набор и доставщик на канал ядра). Стакан пары
       недостоверен — `core_out_book::invalidated(out, ctx.venue(), тикер)` (не теряется никогда; тикер — тот же, что
-      `book.asset.ticker`). Снимок REST, отданный ядру, — тоже через `BookOut::book` (иначе обгонит ждущий кадр пары).
-      DEX: пул — через `core_out::of(&out)` и ключ `Key::Pool` (образец — venues/bsc_dex/pools/emit_pool.rs). Образцы
+      `book.asset.ticker`). Снимок REST, отданный ядру, — тоже через `BookOut::book` (иначе обгонит ждущий кадр пары); BookOut — один на
+      подписку (держать рядом с каналом, как bitget/subs.rs), а не новый на каждый снимок.
+      DEX: пул — через `core_out::of(&out)`: `Feed::fast` (набор пуст — отправка без замка и без ключа), иначе ключ
+      `Key::Pool` и `Feed::slow` (образец — venues/bsc_dex/pools/emit_pool.rs). Образцы
       бирж — venues/bingx/ws_conn.rs, ws.rs
 - [ ] Стакан, который приходит снимками (не только при изменении), ядру отдаётся только если отличается от прежнего (решение 109, как `venues/mexc/ws_conn.rs`)
 - [ ] Двоичные кадры стаканов пишутся в сырой журнал только при `raw.book_frames` = да (решение 109)

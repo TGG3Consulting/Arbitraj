@@ -9,5 +9,5 @@
 
 Факты записи: у всех 1166 сетей поле `depositMinAmount` есть и это число (строк, null и пустых нет); в сети
 «BNB Smart Chain» (значение venue.bsc_network [xt] на живом боте) 272 сети, из них `depositMinAmount` > 0 у 6 и `0` у 266;
-USDT 0.1, USDC 0.01, WIN 0 (у WIN вывод в BSC закрыт); `depositConfirmations` — целое у всех сетей (BSC — 15).
+USDT 0.1, USDC 0.01, WIN 0 (у WIN вывод в BSC закрыт; «0» — минимум 0, решение 369); `depositConfirmations` — целое у всех сетей (BSC — 15).
 Тест: tests/xt_deposit_min_t163.rs.

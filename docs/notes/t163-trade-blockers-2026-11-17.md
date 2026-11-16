@@ -304,7 +304,42 @@ mexc 6), возврат USDT меньше минимума 199 (bitget, kucoin);
 минусового кандидата не считать умеет решение 337 (size.early_exit_margin_usd, «ранний выход подбора»), его значения в
 выгрузке нет.
 
-## Ревью: XT — счёт зачисления депозита и как держать «→ XT» выключенным (Б1, Б2)
+## Решение владельца 17.11 по XT (решение 369)
+
+- **«0» у XT — минимум 0 («минимума нет, депозит любой»).** Документация XT смысл «0» не определяет — это решение
+  владельца. Нет поля или нечитаемое значение — как прежде (venue.deposit_min_absent_ok, Н1).
+- **Где «0» превращался в «неизвестно» (факт кода, до решения 369):** `venues/xt/networks_parse.rs`, `deposit_min`
+  (ветка `Ok(_) => (None, None)` — и «0», и нет поля) → в `one` `dep_min.or(absent_ok.then_some(0))` → при
+  venue.deposit_min_absent_ok [xt] = нет (живой бот) — `None` → ядро: `core/dirctx_venue.rs:92-104` check_deposit —
+  Stop «минимальный депозит неизвестен — сделки нет»; перегон застрявшей — `core/relay_value.rs:86-87`; ручной перевод
+  USDT — `core/usdt_transfer_check.rs` deposit_min_known. Шлюз значение не трогает (CoinNetworkInfo проходит как есть).
+- **Как «0» трактуют остальные 13 бирж (факт кода, поведение не менялось):**
+
+| Биржа | Поле | «0» в коде |
+| --- | --- | --- |
+| bingx | depositMin | минимум 0 (`bingx/wallet.rs:97`, без отбора нуля) |
+| mexc | — (поля нет) | не бывает; минимум — по venue.deposit_min_absent_ok |
+| gate | min_deposit_amount (адрес депозита) | минимум 0 (`gate/deposit_addr.rs:79`, `wallet.rs` note_deposit) |
+| kucoin | depositMinSize | минимум 0 (`kucoin/networks_parse.rs:105`) |
+| bitget | minDepositAmount | как нет поля → настройка (`bitget/networks_parse.rs:99-101`, отбор нуля) |
+| **xt** | depositMinAmount | **минимум 0 (решение 369)** |
+| poloniex | — | не бывает; по настройке |
+| bybit | depositMin | минимум 0 (`bybit/networks_parse.rs:97`) |
+| binance | depositDust (при venue.deposit_dust_as_min) | минимум 0 (`binance/networks_parse.rs:96-100`); без deposit_dust_as_min — по настройке |
+| okx | minDep | минимум 0 (`okx/networks_parse.rs:100`) |
+| htx | minDepositAmt | как нет поля → настройка (`htx/networks_parse.rs:141-143`) |
+| phemex | minAmountRv | как нет поля → настройка (`phemex/networks_parse.rs:107-109`) |
+| coinex | min_deposit_amount | как нет поля → настройка (`coinex/networks_parse.rs:150-152`) |
+| kraken | minimum_amount | минимум 0 (`kraken/methods.rs:77`, `networks_parse.rs:133`) |
+
+- Тест: `tests/xt_deposit_min_t163.rs` на записи бота 16.11 — минимум известен у всех 272 сетей «BNB Smart Chain»
+  (266 «0», 6 > 0); проверка депозита направления bsc_dex → xt (check_deposit) по WIN («0») — не отказ.
+
+## Ревью: XT — счёт зачисления депозита и как держать «→ XT» выключенным (Б1, Б2) — СНЯТО решением владельца 17.11
+
+Владелец: депозит XT приходит на торговый счёт, «→ XT» после релиза не закрывается; первая живая сделка «→ XT»
+проверяется по факту зачисления. Текст ниже — история разбора, инструкция не действует.
+
 
 - На какой счёт XT зачисляет депозит — **не установлено**: страницы Get deposit history, Get supported currencies и
   Transfer between user systems (POST /v4/balance/transfer, from / to по bizType; в примере SPOT → FUTURES_U) этого не

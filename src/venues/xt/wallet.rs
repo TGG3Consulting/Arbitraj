@@ -5,7 +5,7 @@
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs.
 //! От чего зависит: rest.rs, networks_parse.rs, ctx.rs, core/types.
 //! Настройки: venue.bsc_network [xt] (название сети BSC в поле chain — его принимает вывод и адрес депозита; в
-//! документации не указано — из живого справочника), venue.deposit_min_absent_ok [xt] (depositMinAmount = 0 или нет поля —
+//! документации не указано — из живого справочника), venue.deposit_min_absent_ok [xt] (нет поля depositMinAmount или не прочитано; «0» — минимум 0, решение 369 —
 //! решение человека, урок 21; t163, решение 365), venue.networks_fresh_ms [xt] (необязательная; не задана — запрос каждый раз).
 //!
 //! Официально: GET /v4/public/wallet/support/currency и GET /v4/public/currencies (публичные, без параметров) — весь

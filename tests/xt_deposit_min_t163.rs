@@ -4,10 +4,12 @@
 //! «Minimum deposit amount»). Раньше поле не читалось и минимум был None без venue.deposit_min_absent_ok — направление
 //! «… → XT» не торговалось (отказ «xt: минимальный депозит неизвестен — сделки нет», 2683 раза за 2 ч 16.11).
 //! Проверки: пример ответа из документации (tests/data/xt_doc_2026-11-17) — минимум 1 при любом значении настройки;
-//! «0» и отсутствие поля — по настройке (урок 21: смысл «0» не описан); живой ответ бота 16.11
-//! (tests/data/xt_live_2026-11-16): USDT 0.1, USDC 0.01, WIN «0», из 272 сетей BSC минимум > 0 у 6.
-//! Ревью t163 Н1: строкой "0.1" — минимум; "" и "0" строкой, не число — как нет поля, сеть (и вывод) остаётся, причина —
-//! в пропущенных/ограниченных (журнал); Н3: depositConfirmations примера — 2.
+//! решение 369 (Тигран 17.11; документация смысл «0» не определяет): «0» (числом и строкой) — известный минимум 0 при
+//! любом значении настройки; нет поля — по настройке; живой ответ бота 16.11 (tests/data/xt_live_2026-11-16): USDT 0.1,
+//! USDC 0.01, WIN «0», в «BNB Smart Chain» минимум известен у всех 272 сетей (266 — ноль, 6 — больше нуля), проверка
+//! депозита направления «DEX → XT» по монете с «0» не даёт отказ «минимальный депозит неизвестен».
+//! Ревью t163 Н1: строкой "0.1" — минимум; "" и не число — как нет поля, сеть (и вывод) остаётся, причина — в
+//! пропущенных/ограниченных (журнал); Н3: depositConfirmations примера — 2.
 //! Кто вызывает: cargo test. От чего зависит: arb::venues::xt::networks_parse. Моков нет.
 
 use std::collections::HashMap;
@@ -15,7 +17,9 @@ use std::collections::HashMap;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use arb::core::types::VenueId;
+use arb::core::dirctx::DirCtx;
+use arb::core::registry::Presence;
+use arb::core::types::{Asset, CoinNetworkInfo, Direction, VenueId};
 use arb::core::usdt_transfer_check::deposit_min_known;
 use arb::venues::xt::networks_parse;
 
@@ -57,9 +61,9 @@ fn deposit_min_from_doc_example() {
 }
 
 #[test]
-fn zero_or_missing_deposit_min_follows_setting() {
+fn zero_is_known_and_missing_follows_setting() {
     let base = result("tests/data/xt_doc_2026-11-17/support_currency_example.json");
-    // Тот же пример документации, у сети поле «0» или убрано — смысл не описан (урок 21).
+    // Тот же пример документации, у сети поле «0» или убрано.
     let with = |v: Option<Value>| {
         let mut d = base.clone();
         let n = &mut d[0]["supportChains"][0];
@@ -71,19 +75,69 @@ fn zero_or_missing_deposit_min_follows_setting() {
         }
         d
     };
-    for d in [with(Some(Value::from(0))), with(None)] {
-        let get = |ok| {
-            networks_parse::parse_networks(&d, &open("BTC"), "Bitcoin", &venue(), ok)
-                .unwrap()
-                .list[0]
-                .deposit_min
-        };
-        assert_eq!(
-            get(false),
-            None,
-            "не задано — минимум неизвестен, сделки нет"
-        );
-        assert_eq!(get(true), Some(Decimal::ZERO), "да — минимум 0");
+    let get = |d: &Value, ok| {
+        networks_parse::parse_networks(d, &open("BTC"), "Bitcoin", &venue(), ok)
+            .unwrap()
+            .list[0]
+            .deposit_min
+    };
+    // Решение 369: «0» — минимум 0 при любом значении venue.deposit_min_absent_ok.
+    let zero = with(Some(Value::from(0)));
+    assert_eq!(get(&zero, false), Some(Decimal::ZERO));
+    assert_eq!(get(&zero, true), Some(Decimal::ZERO));
+    // Поля нет — по настройке.
+    let none = with(None);
+    assert_eq!(
+        get(&none, false),
+        None,
+        "не задано — минимум неизвестен, сделки нет"
+    );
+    assert_eq!(get(&none, true), Some(Decimal::ZERO), "да — минимум 0");
+}
+
+/// Контекст направления bsc_dex → xt монеты сети XT (B — биржа XT с её сетью из справочника); остальное для
+/// check_deposit не нужно (проверка смотрит только на сеть B). Поля — как в tests/core_size_budget_early.rs.
+fn cx_to_xt(info: CoinNetworkInfo) -> DirCtx {
+    let asset = info.asset.clone();
+    let p = |v: &str, info| Presence {
+        venue: VenueId(v.into()),
+        ticker: asset.ticker.clone(),
+        network: Some("BNB Smart Chain".into()),
+        can_receive: true,
+        can_send: true,
+        can_buy: true,
+        can_sell: true,
+        excluded: vec![],
+        info,
+        via: None,
+    };
+    DirCtx {
+        dir: Direction {
+            asset: asset.clone(),
+            buy_on: VenueId("bsc_dex".into()),
+            sell_on: VenueId("xt".into()),
+        },
+        a: p("bsc_dex", None),
+        b: p("xt", Some(info)),
+        net_a: "BNB Smart Chain".into(),
+        net_b: "BNB Smart Chain".into(),
+        quote: vec!["USDT".into(), "USDT".into()],
+        usdt: Asset {
+            ticker: "USDT".into(),
+            bsc_contract: None,
+        },
+        cex: vec![],
+        sigma: Decimal::ZERO,
+        transit_s: Decimal::ZERO,
+        k: Decimal::ONE,
+        h: Decimal::ZERO,
+        closure_share: None,
+        sigma_check: None,
+        return_per_trade: false,
+        pair_a: None,
+        pair_b: None,
+        usdt_b: None,
+        transfer_tax: None,
     }
 }
 
@@ -114,13 +168,25 @@ fn deposit_min_from_live_reply_bnb_smart_chain() {
     assert_eq!(on(&off, "USDT").deposit_min, Some(Decimal::new(1, 1)));
     assert_eq!(on(&off, "USDC").deposit_min, Some(Decimal::new(1, 2)));
     assert_eq!(on(&off, "USDT").deposit_confirmations, Some(15));
-    // WIN — «0»: смысл не описан, решает человек.
-    assert_eq!(on(&off, "WIN").deposit_min, None);
+    // WIN — «0»: решение 369 — минимум 0 и без настройки.
+    assert_eq!(on(&off, "WIN").deposit_min, Some(Decimal::ZERO));
     assert_eq!(on(&get(true), "WIN").deposit_min, Some(Decimal::ZERO));
-    // Сколько сетей BSC получили минимум из ответа (> 0) — 6 из 272 (остальные «0»).
+    // Минимум известен у всех 272 сетей BSC: 266 — ноль, 6 — больше нуля.
     let bsc_nets: Vec<_> = off.list.iter().filter(|i| i.network == bsc).collect();
-    let known = bsc_nets.iter().filter(|i| i.deposit_min.is_some()).count();
-    assert_eq!((known, bsc_nets.len()), (6, 272));
+    let zero = bsc_nets
+        .iter()
+        .filter(|i| i.deposit_min == Some(Decimal::ZERO))
+        .count();
+    let pos = bsc_nets
+        .iter()
+        .filter(|i| i.deposit_min.is_some_and(|m| m > Decimal::ZERO))
+        .count();
+    assert_eq!((zero, pos, bsc_nets.len()), (266, 6, 272));
+    // Проверка депозита расчёта направления «DEX → XT» (dirctx_venue.rs check_deposit) по монете с «0» — не отказ.
+    let win = on(&off, "WIN");
+    for qty in [Decimal::new(1, 8), Decimal::from(1000)] {
+        assert_eq!(cx_to_xt(win.clone()).check_deposit(qty), Ok(()), "{qty}");
+    }
     // Все сети разобраны: depositMinAmount — число у всех, ни одна сеть не выброшена из-за него.
     assert!(
         !off.skipped.iter().any(|s| s.contains("depositMinAmount")),
@@ -133,7 +199,10 @@ fn deposit_min_from_live_reply_bnb_smart_chain() {
         deposit_min_known("xt", "USDT", bsc, usdt.deposit_min),
         Ok(Decimal::new(1, 1))
     );
-    assert!(deposit_min_known("xt", "WIN", bsc, on(&off, "WIN").deposit_min).is_err());
+    assert_eq!(
+        deposit_min_known("xt", "WIN", bsc, on(&off, "WIN").deposit_min),
+        Ok(Decimal::ZERO)
+    );
 }
 
 #[test]
@@ -146,7 +215,12 @@ fn string_and_unreadable_deposit_min_keep_network() {
     };
     let p = parse(Value::from("0.1"), false);
     assert_eq!(p.list[0].deposit_min, Some(Decimal::new(1, 1)));
-    for v in [Value::from(""), Value::from("0"), Value::from("abc")] {
+    // Решение 369: «0» строкой — минимум 0, как числом.
+    assert_eq!(
+        parse(Value::from("0"), false).list[0].deposit_min,
+        Some(Decimal::ZERO)
+    );
+    for v in [Value::from(""), Value::from("abc"), Value::from("-1")] {
         for ok in [false, true] {
             let p = parse(v.clone(), ok);
             assert_eq!(p.list.len(), 1, "{v}: сеть не выброшена");

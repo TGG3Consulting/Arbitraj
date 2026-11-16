@@ -7,16 +7,27 @@
 
 - **Решение 312 (16.11.2026, задача t143, ветка t143/quote-stage-timing от t142/quote-legs-once b62bb52f) — замер этапов котировки DEX;
   ждёт сборки и тестов в GitHub, ревью.** Сделано: необязательные log.quote_timing и log.quote_timing_min_ms («Настройки» → «Система»);
-  запись журнала dex.quote_timing на котировку дольше порога (quote/quote_timing.rs, quote_timing_log.rs). **Как включать на живом боте:**
-  log.quote_timing_min_ms = 20 (или 0 — только на минуту-две: котировок сотни в секунду, каждая запись — строка SQLite), затем
+  запись журнала dex.quote_timing на котировку дольше порога (quote/quote_timing.rs, quote_timing_outer.rs, quote_timing_log.rs).
+  **Доработка после ревью:** замер — вся Quoting::priced (до работы, cpu::run, после работы; запись после хвоста), быстрый путь
+  fills.rs — своя запись (fast = да), отдельные этапы prep и snapshot, явный rest_ms. **Внимание — нагрузка:** порог 0 даёт запись
+  SQLite на КАЖДУЮ котировку (котировок DEX сотни в секунду): каждая запись идёт через общий пул блокирующих задач tokio
+  (storage/db.rs call → spawn_blocking — тот же пул, что у счёта котировок quote/cpu.rs) и общий замок единственного соединения
+  SQLite (его ждут и настройки, и журнал, и учёт). На живом боте включать только с порогом больше нуля; значение порога задаёт
+  Тигран (совет — docs/FIRST_RUN.md). **Как включать на живом боте:** сначала log.quote_timing_min_ms (порог), затем
   log.quote_timing = да; 10–15 минут в dex.router_mode = classic и столько же в graph; затем log.quote_timing = нет.
-  **Что смотреть** (экран «Журнал», вид dex.quote_timing; data числами): total_ms = wait_ms + work_ms — wait_ms большой при малом
-  work_ms — очередь места dex.quote_cpu_max / старт потока счёта (вместе, не по отдельности); work_ms — по этапам `<этап>_ms` и
-  `<этап>_n`: classic (классика), paths (в т.ч. paths_cached / graph_read / enumerate / hydrate), decimals, legs (допуск хопов;
-  paths_in, paths_ok, hops), gas_usdt, best (best_evals), split (split_steps, split_evals), exec, costs, fit (повтор графа решения 300),
-  merge; stages_ms — их сумма (остаток work_ms − stages_ms — вне замеренных этапов). Сравнить classic и graph на одних монетах.
+  **Что смотреть** (экран «Журнал», вид dex.quote_timing; data числами): total_ms = pre_ms + run_ms + post_ms — сопоставлять с
+  «котировка B bsc_dex N мс ×K» ядра (N/K — среднее на котировку; в K входят и вызовы quote_fills — записи fast = да);
+  pre_ms — pre_decimals_ms, pre_gas_ms, pre_rest_ms; run_ms = wait_ms + work_ms + back_ms — wait_ms большой при малом
+  work_ms — очередь места dex.quote_cpu_max / старт потока счёта (вместе, не по отдельности); post_ms — post_approve_ms,
+  post_native_ms, post_tip_ms, post_rest_ms; work_ms — по этапам `<этап>_ms` и `<этап>_n`: classic (классика), paths (в т.ч.
+  paths_cached / graph_read / enumerate / hydrate), decimals, legs (допуск хопов; paths_in, paths_ok, hops), gas_usdt, best
+  (best_evals), split (split_steps, split_evals), exec, costs, fit (повтор графа решения 300), merge, prep (подготовка глубины),
+  snapshot (снимок путей для повтора); stages_ms — их сумма, rest_ms = work_ms − stages_ms (вне замеренных этапов);
+  dropped = да — котировку бросил вызывающий (срок расчёта). Сравнить classic и graph на одних монетах.
   **Не установлено:** накладные расходы замера при «да» на живом боте (часы на каждом хопе допуска и запись журнала) — сравнить
   число котировок «котировка B bsc_dex … ×K» в отказах с замером и без. eval и шаги отбора/сплита включают повтор графа (fit).
+  **Не сделано (по задаче):** id кандидата ядра в записи (контракт ядро ↔ адаптер), деление wait_ms на ожидание места и старт
+  потока (сигнатура cpu::run), агрегаты котировок ниже порога.
 - **Решение 311 (16.11.2026, задача t142, ветка t142/quote-legs-once от rel/dex-all c9b0cc19) — котировка графа дешевле;
   ждёт сборки и тестов в GitHub, ревью.** Живой факт: на graph одна котировка DEX 24–72 мс × 140–400 на подбор объёма →
   отказы по profit.calc_timeout_ms. **Сделано (А):** одна подготовка глубины на котировку графа (без настройки, расчёт тот

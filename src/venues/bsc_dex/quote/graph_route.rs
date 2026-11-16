@@ -13,7 +13,8 @@
 //! среди исполнимых маршрутов — merge() (решение 84 вариант Б): graph-режим не исполняет хуже классики.
 //! Решение 300: quote_fit — при неисполнимом лучшем маршруте ещё лучший исполнимый (quote/graph_fit.rs); quote — без него.
 //! Решение 311 (А): подготовка глубины (pools/depth_key.rs Prep) — одна на котировку для допуска всех хопов всех путей.
-//! Решение 312: замер этапов (quote/quote_timing.rs stage) — только когда котировка меряется; иначе часов нет.
+//! Решение 312: замер этапов (quote/quote_timing.rs stage) — только когда котировка меряется; иначе часов нет. Отдельные
+//! этапы — и подготовка глубины (Prep), и снимок путей для повтора (Snapshot).
 //! Кто вызывает: quote/routing.rs за переключателем dex.router_mode (merge, quote; решение 271 — quote и при NoRoute
 //! классики); exec/trade.rs, exec/executor/mod.rs, exec/dry_build.rs (graph_form — реэкспорт из graph_exec.rs); тесты.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs, quote/route_calc.rs, quote/graph_legs.rs (и decimals), quote/graph_split.rs, quote/abandon.rs (решение 301: брошенный расчёт — до отбора и сплита выход, без записи журнала),
@@ -130,7 +131,7 @@ pub async fn quote_fit(
         // путей котировки — раньше заново на каждый хоп (select.rs → depth_book.rs Book::depth). Не готова (настройка
         // глубины не задана или неверна) — None: каждый хоп готовит сам и даёт ту же причину, что раньше.
         // Подготовка (RefCell внутри) живёт только в этом блоке без await: в состояние future не попадает.
-        let prep = Book::prep(ctx, &v.q.tokens).ok();
+        let prep = stage(Stage::Prep, on, || Book::prep(ctx, &v.q.tokens).ok());
         // Решение 311 (В): пути больше не нужны — отдаются во владение (запись пула в ногу без копии).
         for p in paths {
             let legs = stage(Stage::Legs, on, || {
@@ -162,7 +163,7 @@ pub async fn quote_fit(
     // Решение 301 (в): срок расчёта вышел — отбор и сплит не считаем.
     abandon::check(ctx, "отбор путей и сплит графа")?;
     // Решение 300: снимок путей до отбора — только когда повтор возможен (иначе без затрат).
-    let pool = fit.then(|| graph_fit::snapshot(&cands));
+    let pool = fit.then(|| stage(Stage::Snapshot, on, || graph_fit::snapshot(&cands)));
     if cap.is_some() {
         cands = stage(Stage::Best, on, || {
             route_best::best(ctx, cands, v.side, qty, v.taxes, max_paths)

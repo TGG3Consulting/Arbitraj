@@ -1,8 +1,10 @@
 //! Файл: venues/bsc_dex/quote/quote_timing_stages.rs
 //! Что делает: этапы и счётчики замера котировки DEX (решение 312) и их имена для записи dex.quote_timing (поле data
 //! `<этап>_ms` / `<этап>_n`, текст message). Порядок имён — порядок вариантов.
-//! Кто вызывает: quote/quote_timing.rs (накопление), quote/quote_timing_log.rs (запись); точки этапов — routing.rs,
-//! graph_route.rs, route_cache.rs, route_best.rs, graph_split.rs.
+//! Части вне работы потока счёта (Part) — до работы и после неё в Quoting::priced и быстрый путь quote/fills.rs.
+//! Кто вызывает: quote/quote_timing.rs (накопление), quote/quote_timing_outer.rs (части), quote/quote_timing_log.rs
+//! (запись); точки этапов — routing.rs, graph_route.rs, route_cache.rs, route_best.rs, graph_split.rs; частей —
+//! quote/mod.rs, quote/fills.rs.
 //! От чего зависит: нет.
 //! Настройки: нет.
 
@@ -32,6 +34,10 @@ pub enum Stage {
     Fit,
     /// Выбор котировки-на-сделку (routing.rs: graph_route / route_fit / graph_fit merge, graph_fit::finish).
     Merge,
+    /// Подготовка глубины на котировку графа (pools/depth_book.rs Book::prep, решение 311 А).
+    Prep,
+    /// Снимок путей до отбора для повтора графа (graph_fit::snapshot, решение 300; только когда повтор возможен).
+    Snapshot,
     /// В т.ч. Paths: пути из кэша (закреплённые или dex.route_paths_ttl_ms) со свежими записями пулов.
     PathsCached,
     /// В т.ч. Paths: граф — снимок фонового графа или построение/кэш (graph_read::graph_for).
@@ -43,8 +49,8 @@ pub enum Stage {
 }
 
 /// Этапов всего; первые TOP — верхнего уровня.
-pub const STAGES: usize = 15;
-pub const TOP: usize = 11;
+pub const STAGES: usize = 17;
+pub const TOP: usize = 13;
 
 /// Счётчик котировки.
 #[derive(Clone, Copy)]
@@ -79,6 +85,8 @@ pub const STAGE_NAMES: [(&str, &str); STAGES] = [
     ("costs", "затраты"),
     ("fit", "повтор графа"),
     ("merge", "выбор котировки"),
+    ("prep", "подготовка глубины"),
+    ("snapshot", "снимок путей"),
     ("paths_cached", "из кэша путей"),
     ("graph_read", "граф"),
     ("enumerate", "перебор"),
@@ -93,4 +101,35 @@ pub const COUNT_NAMES: [&str; COUNTS] = [
     "best_evals",
     "split_steps",
     "split_evals",
+];
+
+/// Часть котировки вне работы потока счёта (quote_timing_outer.rs): до работы и после неё в Quoting::priced, у быстрого
+/// пути quote/fills.rs — его части.
+#[derive(Clone, Copy)]
+pub enum Part {
+    /// До работы: decimals монеты, USDT и промежуточных (tokens::decimals; у быстрого пути — монеты и USDT).
+    Decimals,
+    /// До работы: цена газа (gas::wei — запрос к узлу или кэш; send::planned_floor).
+    Gas,
+    /// После работы: газ разрешений (approve_gas::units).
+    Approve,
+    /// После работы: газ обёртки BNB (native_gas::cost).
+    Native,
+    /// После работы: чаевые и газ их перевода (send::planned_tip, send::tip_gas::planned_bnb).
+    Tip,
+    /// Быстрый путь: лучший одиночный пул (direct::best).
+    OnePool,
+}
+
+/// Частей всего.
+pub const PARTS: usize = 6;
+
+/// Имена частей (поле data `<имя>_ms`, текст message) — в порядке Part.
+pub const PART_NAMES: [(&str, &str); PARTS] = [
+    ("pre_decimals", "decimals"),
+    ("pre_gas", "цена газа"),
+    ("post_approve", "газ разрешений"),
+    ("post_native", "газ обёртки"),
+    ("post_tip", "чаевые"),
+    ("fast_pool", "лучший пул"),
 ];

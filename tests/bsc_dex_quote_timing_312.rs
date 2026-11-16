@@ -1,12 +1,17 @@
 //! Файл: tests/bsc_dex_quote_timing_312.rs
 //! Что делает: решение 312 — замер этапов котировки DEX (quote/quote_timing.rs) на записи маршрута CAKE
 //! (tests/data/routes_2026-10-29, route_common: шесть настоящих пулов) в режиме dex.router_mode = graph, путь как в
-//! Quoting::priced: quote_timing::start → cpu::run(timed(routing::run)). (1) log.quote_timing не задана — замера нет,
-//! записей dex.quote_timing нет; (2) log.quote_timing = да и log.quote_timing_min_ms = 0 — на котировку запись есть, в
-//! data все поля этапов и счётчиков, этапы классики и графа вызывались, сумма этапов верхнего уровня не больше работы,
-//! части набора путей не больше самого набора, работа не больше всего. Конкретные миллисекунды не проверяются.
+//! Quoting::priced: Outer::begin → cpu::run(timed(Outer::run, routing::run)) → Outer::back → Outer::finish (без частей до
+//! и после работы — decimals и цена газа здесь не запрашиваются). (1) log.quote_timing не задана — замера нет, записей
+//! dex.quote_timing нет; (2) log.quote_timing = да и log.quote_timing_min_ms = 0 — на котировку запись есть, в data все
+//! поля этапов, частей и счётчиков, этапы классики и графа (и подготовка глубины) вызывались, сумма этапов верхнего
+//! уровня не больше работы, rest_ms = work_ms − stages_ms, total_ms = pre_ms + run_ms + post_ms, run_ms = wait_ms +
+//! work_ms + back_ms, части набора путей не больше самого набора. (3) Порог больше нуля (час, задан в тесте) отсекает
+//! запись; после котировки с замером котировка без замера записи не даёт и признак потока счёта снят (сброс
+//! состояния). Конкретные миллисекунды не проверяются.
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bsc_dex::quote::{cpu, routing, quote_timing, quote_timing_stages}, tests/route_common.
+//! От чего зависит: arb::venues::bsc_dex::quote::{cpu, routing, quote_timing, quote_timing_outer, quote_timing_stages},
+//! tests/route_common.
 
 mod route_common;
 
@@ -17,10 +22,12 @@ use rust_decimal::Decimal;
 use serde_json::{Value, json};
 
 use arb::core::types::{Asset, Quote, Side, TokenTaxes};
+use arb::gateway::errors::GatewayError;
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::parts::Parts;
-use arb::venues::bsc_dex::quote::quote_timing::{self, Meta};
-use arb::venues::bsc_dex::quote::quote_timing_stages::{COUNT_NAMES, STAGE_NAMES};
+use arb::venues::bsc_dex::quote::quote_timing;
+use arb::venues::bsc_dex::quote::quote_timing_outer::{Outcome, Outer};
+use arb::venues::bsc_dex::quote::quote_timing_stages::{COUNT_NAMES, PART_NAMES, STAGE_NAMES};
 use arb::venues::bsc_dex::quote::{Quoting, cpu, routing};
 
 use route_common::{CAKE, USDT};
@@ -77,18 +84,42 @@ fn input(q: &Quoting, qty: u32) -> routing::Input {
     }
 }
 
-/// Котировка тем же путём, что Quoting::priced: start (одно чтение настройки) → cpu::run(timed(routing::run)).
+/// Котировка тем же путём, что Quoting::priced: Outer::begin (одно чтение настройки) → cpu::run(timed(routing::run)) →
+/// back → finish (запись после хвоста).
 async fn quote(q: &Quoting, qty: u32) -> Quote {
-    let timing = quote_timing::start(&q.ctx).map(|s| {
-        let meta = Meta {
-            ticker: "CAKE".into(),
-            side: Side::Buy,
-            qty: Decimal::from(qty),
-        };
-        (q.ctx.clone(), s, meta)
-    });
-    let work = quote_timing::timed(timing, routing::run(q.clone(), input(q, qty)));
-    cpu::run(&q.ctx, Box::pin(work)).await.expect("котировка")
+    let mut tm = Outer::begin(&q.ctx, "CAKE", Side::Buy, Decimal::from(qty));
+    let work = quote_timing::timed(tm.run(), routing::run(q.clone(), input(q, qty)));
+    let out = cpu::run(&q.ctx, Box::pin(work)).await;
+    tm.back();
+    tm.finish(Outcome::of(&out));
+    out.expect("котировка")
+}
+
+/// Задаёт log.quote_timing и log.quote_timing_min_ms (вся система).
+async fn set(q: &Quoting, on: bool, min_ms: u64) {
+    for (n, val) in [
+        ("log.quote_timing", json!(on)),
+        ("log.quote_timing_min_ms", json!(min_ms)),
+    ] {
+        q.ctx
+            .settings
+            .set(n, Scope::Global, Some(val), "тест")
+            .await
+            .unwrap();
+    }
+}
+
+/// Ждёт (ограниченно), пока записей dex.quote_timing станет не меньше `n`; возвращает записи.
+async fn wait_n(q: &Quoting, n: usize) -> Vec<Value> {
+    let mut got = Vec::new();
+    for _ in 0..200 {
+        got = entries(q).await;
+        if got.len() >= n {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    got
 }
 
 /// Записи dex.quote_timing в журнале.
@@ -112,51 +143,39 @@ async fn off_no_records_on_records_with_stages() {
     let p = parts().await;
     let q = p.quoting();
     // (1) Не задана — замера нет.
-    assert!(quote_timing::start(&q.ctx).is_none());
+    assert!(!Outer::begin(&q.ctx, "CAKE", Side::Buy, Decimal::ONE).is_on());
     let off = quote(&q, 5_000).await;
     tokio::task::yield_now().await;
     assert!(entries(&q).await.is_empty(), "без настройки записей нет");
     // (2) Да и порог 0 — запись на каждую котировку.
-    for (n, val) in [
-        ("log.quote_timing", json!(true)),
-        ("log.quote_timing_min_ms", json!(0)),
-    ] {
-        q.ctx
-            .settings
-            .set(n, Scope::Global, Some(val), "тест")
-            .await
-            .unwrap();
-    }
-    assert!(quote_timing::start(&q.ctx).is_some());
+    set(&q, true, 0).await;
     let on = quote(&q, 5_000).await;
     // Замер не меняет котировку.
     assert_eq!(on.fillable_qty, off.fillable_qty);
     assert_eq!(on.avg_price, off.avg_price);
     assert_eq!(on.route, off.route);
     // Запись пишется отдельной задачей — ждём её появления (ограниченно).
-    let mut got = Vec::new();
-    for _ in 0..200 {
-        got = entries(&q).await;
-        if !got.is_empty() {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
+    let got = wait_n(&q, 1).await;
     assert_eq!(got.len(), 1, "одна запись на котировку");
     let d = &got[0];
     assert_eq!(d["mode"], json!("graph"));
     assert_eq!(d["coin"], json!("CAKE"));
     assert_eq!(d["side"], json!("buy"));
     assert_eq!(d["ok"], json!(true));
+    assert_eq!(d["fast"], json!(false));
+    assert_eq!(d["dropped"], json!(false));
     for (key, _) in STAGE_NAMES {
         num(d, &format!("{key}_ms"));
         num(d, &format!("{key}_n"));
+    }
+    for (key, _) in PART_NAMES {
+        num(d, &format!("{key}_ms"));
     }
     for key in COUNT_NAMES {
         num(d, key);
     }
     // Этапы классики и графа вызывались.
-    for key in ["classic", "paths", "legs", "merge"] {
+    for key in ["classic", "paths", "prep", "legs", "merge"] {
         assert!(
             num(d, &format!("{key}_n")) >= 1.0,
             "этап {key} не замерен: {d}"
@@ -185,6 +204,16 @@ async fn off_no_records_on_records_with_stages() {
     assert!(top <= num(d, "work_ms") + eps, "этапы больше работы: {d}");
     assert!(num(d, "work_ms") <= num(d, "total_ms") + eps, "{d}");
     assert!(num(d, "wait_ms") >= 0.0);
+    // Остаток вне этапов — явно; всё = до работы + cpu::run + после; cpu::run = ожидание + работа + возврат.
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-3;
+    assert!(
+        close(num(d, "rest_ms"), num(d, "work_ms") - num(d, "stages_ms")),
+        "rest_ms: {d}"
+    );
+    let parts_sum = num(d, "pre_ms") + num(d, "run_ms") + num(d, "post_ms");
+    assert!(close(parts_sum, num(d, "total_ms")), "total_ms: {d}");
+    let run_sum = num(d, "wait_ms") + num(d, "work_ms") + num(d, "back_ms");
+    assert!(close(run_sum, num(d, "run_ms")), "run_ms: {d}");
     let parts_of_paths: f64 = STAGE_NAMES[quote_timing::TOP..]
         .iter()
         .map(|(k, _)| num(d, &format!("{k}_ms")))
@@ -193,4 +222,33 @@ async fn off_no_records_on_records_with_stages() {
         parts_of_paths <= num(d, "paths_ms") + eps,
         "части путей больше путей: {d}"
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn threshold_cuts_and_state_resets() {
+    let p = parts().await;
+    let q = p.quoting();
+    // (а) Порог заведомо больше котировки (час, задан здесь) — записи нет.
+    set(&q, true, 3_600_000).await;
+    quote(&q, 5_000).await;
+    // (б) Котировка с замером (порог 0) — одна запись; затем замер выключен — котировка записи не даёт.
+    set(&q, true, 0).await;
+    quote(&q, 5_000).await;
+    assert_eq!(wait_n(&q, 1).await.len(), 1, "котировка с замером");
+    set(&q, false, 0).await;
+    quote(&q, 5_000).await;
+    // Признак замера потока счёта снят после работы (thread_local; блокирующий поток переиспользуется).
+    let flag = cpu::run(
+        &q.ctx,
+        Box::pin(async { Ok::<bool, GatewayError>(quote_timing::active()) }),
+    );
+    let flag = flag.await.unwrap();
+    assert!(!flag, "признак замера остался в потоке счёта");
+    // Контроль: снова с замером — записей ровно две (ни (а), ни котировка без замера записи не дали). Записи пишутся
+    // отдельными задачами — после появления второй ждём ещё, чтобы запоздавшая лишняя успела бы появиться.
+    set(&q, true, 0).await;
+    quote(&q, 5_000).await;
+    wait_n(&q, 2).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(entries(&q).await.len(), 2, "лишняя запись");
 }

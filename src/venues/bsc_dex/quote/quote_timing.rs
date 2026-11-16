@@ -1,20 +1,20 @@
 //! Файл: venues/bsc_dex/quote/quote_timing.rs
-//! Что делает: замер этапов одной котировки DEX (решение 312, задача t143) — куда уходит время котировки на пути
-//! quote/mod.rs → cpu.rs → routing.rs (классика, граф). Включаемый: log.quote_timing = да И задан
-//! log.quote_timing_min_ms — запись журнала dex.quote_timing (quote_timing_log.rs) на котировку, у которой ожидание до
-//! старта работы + работа не меньше порога (0 — каждая). Не задана любая из двух или log.quote_timing = нет — замера нет:
-//! одно чтение настройки log.quote_timing на котировку (start), обёртка timed с None — сразу работа; в точках этапов —
-//! чтение признака потока (bool) без часов, выделений памяти и блокировок.
+//! Что делает: замер этапов работы одной котировки DEX в потоке счёта (решение 312, задача t143) — куда уходит время
+//! на пути quote/mod.rs → cpu.rs → routing.rs (классика, граф). Включает замер quote/quote_timing_outer.rs (Outer::begin:
+//! log.quote_timing = да И задан log.quote_timing_min_ms); он же меряет начало и хвост Quoting::priced и пишет запись.
+//! Здесь — только работа: обёртка timed с None (замера нет) сразу ведёт работу; в точках этапов — чтение признака
+//! потока (bool) без часов, выделений памяти и блокировок.
 //! Как устроено: работа котировки идёт в одном потоке блокирующих задач (cpu.rs: spawn_blocking + block_on) — запись
-//! этапов копится в локальной для потока структуре (thread_local, без блокировок, без await) и пишется в журнал один раз
-//! в конце (timed → quote_timing_log.rs, отдельной задачей tokio — котировку не задерживает). Логика и порядок расчёта не
-//! меняются: только часы (Instant) вокруг этапов. Вне timed (тесты, поиск циклов, другие вызовы) признака нет — ничего
-//! не меряется.
-//! Кто вызывает: quote/mod.rs (start, timed); quote/routing.rs, quote/graph_route.rs, quote/route_cache.rs (now, add);
-//! quote/route_best.rs, quote/graph_split.rs (count).
-//! От чего зависит: ctx.rs (настройки), quote/quote_timing_stages.rs (этапы, счётчики), quote/quote_timing_log.rs
-//! (запись), core/types.rs (Quote, Side).
-//! Настройки: log.quote_timing, log.quote_timing_min_ms (вся система).
+//! этапов копится в локальной для потока структуре (thread_local, без блокировок, без await) и в конце работы один раз
+//! передаётся замеру priced (quote_timing_outer::hand — запись журнала после хвоста priced; priced уже брошен — запись
+//! сразу). Логика и порядок расчёта не меняются: только часы (Instant) вокруг этапов. Вне timed (тесты, поиск циклов,
+//! другие вызовы) признака нет — ничего не меряется.
+//! Кто вызывает: quote/mod.rs (timed — через Outer::run); quote/routing.rs (now, add); quote/graph_route.rs (active,
+//! now_if, add, stage, paths_in, count); quote/route_cache.rs (now, add); quote/route_best.rs, quote/graph_split.rs
+//! (count); quote/quote_timing_outer.rs, quote/quote_timing_log.rs (Rec, Meta, ms); тест tests/bsc_dex_quote_timing_312.rs.
+//! От чего зависит: quote/quote_timing_stages.rs (этапы, счётчики), quote/quote_timing_outer.rs (Run, hand),
+//! quote/abandon.rs (брошен ли счёт), quote/route_paths.rs (RoutePath), core/types.rs (Quote, Side).
+//! Настройки: нет (log.quote_timing, log.quote_timing_min_ms читает quote_timing_outer.rs).
 
 use std::cell::{Cell, RefCell};
 use std::future::Future;
@@ -25,18 +25,11 @@ use rust_decimal::Decimal;
 use crate::core::types::{Quote, Side};
 use crate::gateway::errors::GatewayResult;
 
-use super::super::ctx::Ctx;
-use super::quote_timing_log;
+use super::abandon;
+use super::quote_timing_outer::{self, Outcome, Run};
 use super::route_paths::RoutePath;
 
 pub use super::quote_timing_stages::{COUNTS, Count, STAGES, Stage, TOP};
-
-/// Начало замера одной котировки: момент перед cpu::run и порог записи.
-#[derive(Clone, Copy)]
-pub struct Start {
-    pub t0: Instant,
-    pub min_ms: u64,
-}
 
 /// Что котируется (для записи).
 pub struct Meta {
@@ -47,9 +40,14 @@ pub struct Meta {
 
 /// Накопленный замер котировки (в потоке счёта).
 pub struct Rec {
-    pub start: Start,
+    /// Вход в cpu::run (ожидание до старта работы — от него до `work`).
+    pub cpu_in: Instant,
     /// Начало работы в потоке счёта.
     pub work: Instant,
+    /// Конец работы в потоке счёта.
+    pub end: Instant,
+    /// Счёт брошен по сроку расчёта (quote/abandon.rs) — на конец работы.
+    pub abandoned: bool,
     pub ns: [u64; STAGES],
     pub calls: [u32; STAGES],
     pub counts: [u64; COUNTS],
@@ -59,19 +57,6 @@ thread_local! {
     /// Признак «котировка этого потока меряется» — быстрая проверка в точках этапов.
     static ON: Cell<bool> = const { Cell::new(false) };
     static REC: RefCell<Option<Rec>> = const { RefCell::new(None) };
-}
-
-/// Замер включён? log.quote_timing = да и задан log.quote_timing_min_ms — начало замера (часы — сейчас). Иначе None
-/// (одно чтение настройки). Ошибок нет.
-pub fn start(ctx: &Ctx) -> Option<Start> {
-    if !ctx.flag("log.quote_timing").unwrap_or(false) {
-        return None;
-    }
-    let min_ms = ctx.int("log.quote_timing_min_ms").ok()?;
-    Some(Start {
-        t0: Instant::now(),
-        min_ms,
-    })
 }
 
 /// Снимает признак потока при выходе из timed (и при панике работы).
@@ -85,30 +70,36 @@ impl Drop for Clear {
 }
 
 /// Работа котировки под замером. on = None — только работа (ничего не меряется). Some — запись этапов в потоке, где
-/// идёт работа (поток счёта cpu.rs), и запись журнала в конце (quote_timing_log::report). Принимает: (окружение, начало,
-/// что котируется), работу. Возвращает: итог работы как есть. Ошибок своих нет.
-pub async fn timed<F>(on: Option<(Ctx, Start, Meta)>, work: F) -> GatewayResult<Quote>
+/// идёт работа (поток счёта cpu.rs), и в конце — передача замера priced (quote_timing_outer::hand; запись журнала —
+/// там). Принимает: связь с замером priced (Outer::run), работу. Возвращает: итог работы как есть. Ошибок своих нет.
+pub async fn timed<F>(on: Option<Run>, work: F) -> GatewayResult<Quote>
 where
     F: Future<Output = GatewayResult<Quote>>,
 {
-    let held = on.map(|(ctx, start, meta)| {
+    let held = on.map(|run| {
+        let now = Instant::now();
         let rec = Rec {
-            start,
-            work: Instant::now(),
+            cpu_in: run.cpu_in,
+            work: now,
+            end: now,
+            abandoned: false,
             ns: [0; STAGES],
             calls: [0; STAGES],
             counts: [0; COUNTS],
         };
         REC.with(|r| *r.borrow_mut() = Some(rec));
         ON.with(|c| c.set(true));
-        (ctx, meta, Clear)
+        (run, Clear)
     });
     let out = work.await;
-    if let Some((ctx, meta, clear)) = held {
+    if let Some((run, clear)) = held {
+        let end = Instant::now();
         let rec = REC.with(|r| r.borrow_mut().take());
         drop(clear);
-        if let Some(rec) = rec {
-            quote_timing_log::report(&ctx, &meta, &rec, &out);
+        if let Some(mut rec) = rec {
+            rec.end = end;
+            rec.abandoned = abandon::is_set();
+            quote_timing_outer::hand(run, rec, Outcome::of(&out));
         }
     }
     out

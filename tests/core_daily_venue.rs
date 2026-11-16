@@ -289,15 +289,16 @@ async fn restart_keeps_split_and_old_record_is_split() {
     let db = Db::open(&d0.join("t.sqlite")).unwrap();
     let today = chrono::Utc::now().date_naive().to_string();
     let body = json!({"final_usd": "-16", "provisional": {}}).to_string();
-    db.call(move |c| {
-        c.execute(
-            "UPDATE daily_result SET body = ?2 WHERE day = ?1",
-            rusqlite::params![today, body],
-        )
-        .map(|_| ())
-    })
-    .await
-    .unwrap();
+    db.ledger()
+        .write(move |c| {
+            c.execute(
+                "UPDATE daily_result SET body = ?2 WHERE day = ?1",
+                rusqlite::params![today, body],
+            )
+            .map(|_| ())
+        })
+        .await
+        .unwrap();
     let (core, _) = start(&d0).await;
     // Решение 258: разнесение по парам зависит от видов площадок; у бота они есть до загрузки итога дня (Core::start), у
     // теста реестр пуст и виды задаются после старта — старая запись кладётся ещё раз и загружается тем же daily::load.
@@ -306,7 +307,8 @@ async fn restart_keeps_split_and_old_record_is_split() {
     core.inner
         .deps
         .db
-        .call(move |c| {
+        .ledger()
+        .write(move |c| {
             c.execute(
                 "UPDATE daily_result SET body = ?2 WHERE day = ?1",
                 rusqlite::params![today, body],

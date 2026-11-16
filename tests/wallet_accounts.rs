@@ -23,13 +23,11 @@ async fn store(d: &std::path::Path) -> Store {
     let db = Db::open(&d.join("t.sqlite")).unwrap();
     let (changes, _) = broadcast::channel(64);
     let (jtx, _) = broadcast::channel(64);
-    Store::load(
-        db,
-        changes,
-        Journal::new(Db::open(&d.join("t.sqlite")).unwrap(), jtx),
-    )
-    .await
-    .unwrap()
+    // Решение 341: журнал пишет своя очередь базы — та же база, что у настроек (два соединения к одному файлу писали
+    // бы одновременно).
+    Store::load(db.clone(), changes, Journal::new(db, jtx))
+        .await
+        .unwrap()
 }
 
 /// Чистая временная папка теста.

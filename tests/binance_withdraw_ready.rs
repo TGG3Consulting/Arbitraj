@@ -228,6 +228,7 @@ async fn refusal_closes_entries_from_that_exchange_only() {
     assert!(arb::core::withdraw_block::check(&core, &dir_of("binance")).is_ok());
     let e = OpError::from(&refusal(-4026, "[031033] User has insufficient balance"));
     arb::core::withdraw_block::close(&core, "20261110120000000CYBER", &cyber, &venue(), &e).await;
+    // Решение 355 (ревью t158 Б1): входы закрыты сразу после шага сделки — без ожидания (окна нет).
     let why = arb::core::withdraw_block::check(&core, &dir_of("binance")).unwrap_err();
     assert!(why.contains("входы с binance закрыты"), "{why}");
     assert!(

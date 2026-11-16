@@ -16,6 +16,7 @@ pub mod read_scope;
 pub mod schema;
 pub mod scope;
 pub mod store;
+pub mod store_mark;
 pub mod value;
 pub mod venue_dir;
 pub mod venue_for;

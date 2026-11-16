@@ -13,7 +13,8 @@
 //! пересчитает при загрузке (ledger_load.rs → deal_return_cost::apply: разница с уже учтённым return_cost_usd); итоги
 //! прошлых дней не пересчитываются (как решение 236).
 //! Кто вызывает: src/bin/usdt_sent_backfill.rs (программа; бот остановлен для записи); тесты.
-//! От чего зависит: storage/db.rs (core_state, journal), serde_json, rust_decimal.
+//! От чего зависит: storage/db.rs (journal; core_state — Db::ledger, файл учёта ledger.sqlite, решение 353),
+//! serde_json, rust_decimal.
 //! Настройки: нет.
 
 use std::str::FromStr;
@@ -231,8 +232,10 @@ pub fn apply(body: &mut Value, f: &Fix) -> bool {
 /// Что делает: сделки (id, JSON) и записи журнала core.transfer_sent из базы бота. Принимает: базу.
 /// Возвращает: (сделки, разобранные записи). Ошибки: база, JSON сделки.
 pub async fn load(db: &Db) -> Result<(Vec<(String, Value)>, Vec<Sent>), DbError> {
+    // Решение 353: сделки — в файле учёта ядра (ledger.sqlite; у старой папки без него — основная база, Db::open_existing).
     let rows: Vec<(String, String)> = db
-        .call(|c| {
+        .ledger()
+        .read(|c| {
             let mut st = c.prepare("SELECT id, body FROM core_state WHERE kind = 'deal'")?;
             let it = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
             it.collect()
@@ -244,6 +247,8 @@ pub async fn load(db: &Db) -> Result<(Vec<(String, Value)>, Vec<Sent>), DbError>
             serde_json::from_str(&body).map_err(|e| DbError::Json(format!("сделка {id}: {e}")))?;
         deals.push((id, v));
     }
+    // Решение 341: записи журнала, поставленные в очередь этой базы, — сначала дописать.
+    db.journal_flushed().await;
     let lines: Vec<(String, String)> = db
         .call(|c| {
             let mut st =
@@ -259,17 +264,18 @@ pub async fn load(db: &Db) -> Result<(Vec<(String, Value)>, Vec<Sent>), DbError>
 /// Что делает: записывает исправленные сделки одной транзакцией (body; updated_at не трогается — запись не новая по
 /// смыслу). Принимает: базу, (id, новый JSON). Возвращает: сколько записей обновлено. Ошибки: база.
 pub async fn write(db: &Db, rows: Vec<(String, String)>) -> Result<usize, DbError> {
-    db.call(move |c| {
-        let tx = c.transaction()?;
-        let mut n = 0;
-        for (id, body) in &rows {
-            n += tx.execute(
-                "UPDATE core_state SET body = ?1 WHERE kind = 'deal' AND id = ?2",
-                params![body, id],
-            )?;
-        }
-        tx.commit()?;
-        Ok(n)
-    })
-    .await
+    db.ledger()
+        .write(move |c| {
+            let tx = c.transaction()?;
+            let mut n = 0;
+            for (id, body) in &rows {
+                n += tx.execute(
+                    "UPDATE core_state SET body = ?1 WHERE kind = 'deal' AND id = ?2",
+                    params![body, id],
+                )?;
+            }
+            tx.commit()?;
+            Ok(n)
+        })
+        .await
 }

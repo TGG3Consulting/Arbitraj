@@ -11,6 +11,7 @@
 //! решение 125), gate.rs, okx.rs, htx.rs и др. (настройки одной биржи).
 //! cpu.rs — счёт процессора (решения 336–338, задача t157). bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
 //! lost_events.rs — сообщения ядру и кандидаты не теряются молча (решения 333/334).
+//! write_path.rs — очередь уведомлений, очередь и пачки журнала, synchronous учёта ядра (решения 340, 341, 353).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
@@ -43,6 +44,7 @@ mod signals;
 mod trade;
 mod uncapped;
 mod window;
+mod write_path;
 mod xt;
 
 use super::schema::{DexId, Kind as K, Limit as L, ScopeKind as S, SettingDef, VenueFor, VenueRole};
@@ -125,6 +127,7 @@ static PARTS: &[&[SettingDef]] = &[
     feed_watch::FEED_WATCH,
     book_events::BOOK_EVENTS,
     lost_events::LOST_EVENTS,
+    write_path::WRITE_PATH,
     bingx::BINGX,
     gate::GATE,
     bitget::BITGET,

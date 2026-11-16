@@ -188,7 +188,8 @@ async fn body_today(core: &Core) -> Value {
         .inner
         .deps
         .db
-        .call(move |c| {
+        .ledger()
+        .read(move |c| {
             c.query_row("SELECT body FROM daily_result WHERE day = ?1", [day], |r| {
                 r.get(0)
             })
@@ -204,7 +205,8 @@ async fn put(core: &Core, day: String, body: &Value) {
     core.inner
         .deps
         .db
-        .call(move |c| {
+        .ledger()
+        .write(move |c| {
             c.execute(
                 "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, 't')
                  ON CONFLICT(day) DO UPDATE SET body = excluded.body",
@@ -325,7 +327,8 @@ async fn old_record_restart(name: &str, with_book: bool, rule0: bool) {
         .inner
         .deps
         .db
-        .call(move |c| {
+        .ledger()
+        .read(move |c| {
             c.query_row(
                 "SELECT body FROM daily_result WHERE day = ?1",
                 [yesterday],

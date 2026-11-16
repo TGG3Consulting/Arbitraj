@@ -128,15 +128,16 @@ async fn earlier_day_correction_goes_to_settle_day() {
         let db = Db::open(&d.join("t.sqlite")).unwrap();
         let y = (chrono::Utc::now().date_naive() - chrono::Duration::days(1)).to_string();
         let body = json!({"final_usd": "-101", "provisional": {"d2": ["-101", y]}}).to_string();
-        db.call(move |c| {
-            c.execute(
-                "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)",
-                rusqlite::params![y, body, "t"],
-            )
-            .map(|_| ())
-        })
-        .await
-        .unwrap();
+        db.ledger()
+            .write(move |c| {
+                c.execute(
+                    "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![y, body, "t"],
+                )
+                .map(|_| ())
+            })
+            .await
+            .unwrap();
     }
     let (core, _) = start(&d).await;
     let day = core.control().day;

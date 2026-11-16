@@ -5,7 +5,7 @@
 //! daily_migrate.rs) и перенос доли оценки при «Вернуть боту».
 //! Кто вызывает: engine.rs (load), manual_return.rs (transfer) — через daily.rs.
 //! От чего зависит: daily.rs (Book, commit, today_book), daily_migrate.rs, day_pair.rs, daily_commit.rs (announce),
-//! deal.rs, storage/db.rs.
+//! deal.rs, storage/db.rs (решение 353: daily_result — в файле учёта ledger.sqlite, Db::ledger).
 //! Настройки: нет.
 
 use chrono::{NaiveDate, Utc};
@@ -66,7 +66,8 @@ pub async fn load(core: &Core) {
         .inner
         .deps
         .db
-        .call(|c| {
+        .ledger()
+        .read(|c| {
             c.query_row(
                 "SELECT day, body FROM daily_result ORDER BY day DESC LIMIT 1",
                 [],

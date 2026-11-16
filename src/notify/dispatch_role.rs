@@ -3,9 +3,12 @@
 //! (Notifier::send, фильтры notify.event.*), роли из таблицы — если их чат задан. Отправка в роль — отдельной задачей:
 //! ядро не ждёт Telegram (закрытие сделки не задерживается). Ответ 429 — одна повторная попытка ровно через
 //! parameters.retry_after (ResponseParameters, https://core.telegram.org/bots/api#responseparameters).
-//! Кто вызывает: core/deps.rs (notify_tagged) — закрытие сделки (core/ledger.rs).
-//! От чего зависит: notify/dispatch.rs (html — шаблон решения 251, log), routes.rs, roles.rs, client.rs, catalog.rs,
-//! tg_methods.rs, tg_html.rs.
+//! Решение 340: send_tagged не ждёт и «Общего» — задание в очередь уведомлений (notify/queue.rs); в задании
+//! (tagged_now) — роли своими задачами со снимком карточки (alert_card::current), «Общий» — по порядку очереди.
+//! Кто вызывает: core/deps.rs (notify_tagged) — закрытие сделки (core/ledger.rs); core/deal_closed.rs (tagged_now в
+//! задании Notifier::later).
+//! От чего зависит: notify/dispatch.rs (html — шаблон решения 251, log, deliver), routes.rs, roles.rs, client.rs,
+//! catalog.rs, tg_methods.rs, tg_html.rs, queue.rs, alert_card.rs, glue.rs.
 //! Настройки: ID чатов и токены ролей (notify/roles.rs), notify.telegram_api_url, http.timeout_ms.
 
 use std::time::Duration;
@@ -20,7 +23,22 @@ use super::{catalog, client, tg_methods};
 impl Notifier {
     /// Событие в «Общий» (как send) и в чаты ролей по таблице маршрутов.
     /// Принимает: код события, площадку, текст, признак (знак итога сделки). Ошибок нет: всё — в журнал.
+    /// Решение 340: не ждёт Telegram — задание в очередь (notify/queue.rs), возврат сразу.
     pub async fn send_tagged(&self, code: &str, venue: Option<&str>, text: &str, tag: Tag) {
+        let snap = super::queue::snap(code, text);
+        let (n, c, v, t) = (
+            self.clone(),
+            code.to_string(),
+            venue.map(str::to_string),
+            text.to_string(),
+        );
+        let job = async move { n.tagged_now(&c, v.as_deref(), &t, tag).await };
+        super::queue::push(self, code, venue, snap, Box::pin(job));
+    }
+
+    /// Отправка send_tagged внутри задания очереди: роли — своими задачами (со снимком карточки задания), «Общий» —
+    /// здесь (склеиваемые события — glue.rs, как в send). Принимает: как send_tagged. Ошибок нет: всё — в журнал.
+    pub async fn tagged_now(&self, code: &str, venue: Option<&str>, text: &str, tag: Tag) {
         for role in routes::extra(code, tag) {
             if roles::chat(&self.settings, *role).is_none() {
                 continue;
@@ -32,9 +50,13 @@ impl Notifier {
                 venue.map(str::to_string),
                 text.to_string(),
             );
-            tokio::spawn(async move { n.to_role(role, &code, venue.as_deref(), &text).await });
+            let job = async move { n.to_role(role, &code, venue.as_deref(), &text).await };
+            tokio::spawn(super::alert_card::scoped(super::alert_card::current(), job));
         }
-        self.send(code, venue, text).await;
+        if super::glue::glued(code) {
+            return super::glue::push(self, code, venue, text);
+        }
+        self.deliver(code, venue, text, None).await;
     }
 
     /// Одно сообщение в чат роли (без кнопок). Принимает: роль, код, площадку, текст. Ошибок нет: итог — в журнал.

@@ -50,6 +50,11 @@ pub async fn all(
             Err(why) => (None, Some(why)),
         };
         let q = checks.pool(&r).quoter;
+        // Решение 339: пул не прочитался — причина и когда следующее чтение (pool_fail.rs). Считается до переноса `r`.
+        let fail_note = reg
+            .fails()
+            .get(&r)
+            .map(|f| super::pool_fail::detail(&f, std::time::Instant::now()));
         out.push(PoolDepth {
             venue: ctx.venue(),
             pool: r,
@@ -74,12 +79,7 @@ pub async fn all(
                 .chain(q.buy_note.as_ref().map(|n| format!("покупка: {n}")))
                 .chain(q.sell_note.as_ref().map(|n| format!("продажа: {n}")))
                 .chain(q.memory.clone())
-                // Решение 339: пул не прочитался — причина и когда следующее чтение (pool_fail.rs).
-                .chain(
-                    reg.fails()
-                        .get(&r)
-                        .map(|f| super::pool_fail::detail(&f, std::time::Instant::now())),
-                )
+                .chain(fail_note)
                 .collect(),
         });
     }

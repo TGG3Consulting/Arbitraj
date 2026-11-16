@@ -5,8 +5,9 @@
 //! поэтому задачи не теряются и не запускаются дважды. Обновление ставок комиссии (fees.rs) перезапускается только при
 //! смене списка символов (решение 131). Потока аккаунта (решение 76) у Bitget пока нет: страница приватного канала
 //! баланса спота Classic в официальной документации не прочитана (README.md адаптера, вопрос Тиграну).
-//! Кто вызывает: mod.rs (subscribe_market из контракта), pairs_watch.rs (resubscribe при смене пар).
-//! От чего зависит: market.rs, pairs.rs, pairs_watch.rs, symbols.rs, book.rs, fees.rs, ctx.rs.
+//! Кто вызывает: mod.rs (subscribe_market из контракта; sender — снимки REST ядру), pairs_watch.rs (resubscribe при
+//! смене пар).
+//! От чего зависит: market.rs, pairs.rs, pairs_watch.rs, symbols.rs, book.rs, fees.rs, ctx.rs, gateway/core_out_book.rs.
 //! Настройки: нет своих (venue.symbols_refresh_s читает pairs_watch.rs).
 
 use std::sync::{Arc, Mutex};
@@ -15,6 +16,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::core::types::Asset;
+use crate::gateway::core_out_book::BookOut;
 use crate::gateway::errors::GatewayResult;
 use crate::gateway::events::MarketEvent;
 
@@ -49,13 +51,15 @@ struct Inner {
     watch: Mutex<Option<JoinHandle<()>>>,
     /// Обновление ставок комиссии и его список символов (решение 131): тот же список — задача не перезапускается.
     fees: Mutex<Option<(Vec<String>, JoinHandle<()>)>>,
-    /// Канал событий ядру текущей подписки (решение 201: снимок REST котировки исполнения уходит ядру как стакан).
-    out: Mutex<Option<mpsc::Sender<MarketEvent>>>,
+    /// Канал событий ядру текущей подписки (решение 201: снимок REST котировки исполнения уходит ядру как стакан) и
+    /// отдача стаканов через общий набор канала ядра (решение 324; ревью 324, Н1: одна на подписку, а не на снимок).
+    out: Mutex<Option<(mpsc::Sender<MarketEvent>, BookOut)>>,
 }
 
 impl Subs {
-    /// Канал событий ядру текущей подписки. None — подписки ещё не было. Ошибок нет.
-    pub fn sender(&self) -> Option<mpsc::Sender<MarketEvent>> {
+    /// Канал событий ядру текущей подписки и его отдача стаканов (gateway/core_out_book.rs). None — подписки ещё не
+    /// было. Ошибок нет.
+    pub fn sender(&self) -> Option<(mpsc::Sender<MarketEvent>, BookOut)> {
         self.inner
             .out
             .lock()
@@ -74,7 +78,8 @@ impl Subs {
     ) -> GatewayResult<()> {
         let _g = self.inner.gate.lock().await;
         let snap = self.start(p, assets.clone(), out.clone()).await?;
-        *self.inner.out.lock().unwrap_or_else(|e| e.into_inner()) = Some(out.clone());
+        let kept = BookOut::new(&out, p.ctx.venue(), &p.ctx.settings, &p.ctx.journal);
+        *self.inner.out.lock().unwrap_or_else(|e| e.into_inner()) = Some((out.clone(), kept));
         let mut watch = self.inner.watch.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(old) = watch.take() {
             old.abort();

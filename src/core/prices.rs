@@ -78,12 +78,13 @@ async fn side_quote(
     let dex = rd(&core.inner.kinds)
         .iter()
         .any(|(v, k)| v == venue && *k == VenueKind::Dex);
-    // Решение 352: signal.book_same_skip = да — котировка DEX из памяти по отпечатку входов (signal_dex.rs), без срока
-    // signal.dex_quote_cache_ms; не задана — как раньше.
+    // Решение 352: signal.book_same_skip = да — котировка DEX из памяти по отпечатку входов (signal_dex.rs); у площадки
+    // без эпохи (KyberSwap, голова не свежая) — прежний путь ниже с signal.dex_quote_cache_ms (ревью t160 Б5).
     if let (true, Some(token)) = (dex, dir.asset.bsc_contract)
         && super::signal_dex::on(core)
+        && let Some(q) = super::signal_dex::quote(core, dir, venue, token, side, qty).await
     {
-        return super::signal_dex::quote(core, dir, venue, token, side, qty).await;
+        return q;
     }
     let ttl = deps
         .settings

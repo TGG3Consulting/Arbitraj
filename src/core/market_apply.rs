@@ -1,8 +1,7 @@
 //! Файл: core/market_apply.rs
 //! Что делает: применение стакана биржи и состояния пула DEX к состоянию рынка ядра (market_state.rs apply). Стакан —
 //! замена по (площадка, тикер), отметки изменения содержимого (решение 317, book_marks_on.rs) при включённом признаке.
-//! Пул — замена по (площадка, ссылка); первый пул пары — в индекс пар (решение 129) и в соседей токенов (решение 349,
-//! peers: для пробуждения монет событием промежуточного пула, mid_wake.rs).
+//! Пул — замена по (площадка, ссылка); первый пул пары — в индекс пар (решение 129).
 //! Кто вызывает: core/market_state.rs (apply).
 //! От чего зависит: market_state.rs (поля, pair_key), book_marks_on.rs, core/types.
 //! Настройки: нет.
@@ -62,16 +61,6 @@ impl MarketState {
                 .entry(pair_key(&venue, tokens.0, tokens.1))
                 .or_default()
                 .insert(r.clone());
-            // Решение 349: соседи токенов — для пробуждения монет событием промежуточного пула (mid_wake.rs).
-            let peers = &mut self.peers;
-            peers
-                .entry((venue.clone(), tokens.0))
-                .or_default()
-                .insert(tokens.1);
-            peers
-                .entry((venue.clone(), tokens.1))
-                .or_default()
-                .insert(tokens.0);
         }
         Touched::Pool {
             venue,

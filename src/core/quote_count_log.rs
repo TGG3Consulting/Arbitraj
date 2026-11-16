@@ -46,7 +46,8 @@ pub async fn run(core: Core) {
             continue;
         };
         tokio::select! {
-            _ = tokio::time::sleep(every) => {
+            // Ревью t160 Н7: срок — от начала интервала (since), смена настройки его не сдвигает.
+            _ = tokio::time::sleep_until((since + every).into()) => {
                 let now = quote_purpose::snapshot();
                 let now_x = extra();
                 write(&core, &prev, &now, (prev_x, now_x), since.elapsed()).await;

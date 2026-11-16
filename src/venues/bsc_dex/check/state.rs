@@ -106,11 +106,11 @@ impl Checks {
         let Some(a) = c.asset.bsc_contract else {
             return;
         };
-        self.coins
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(a, c);
+        let mut m = self.coins.write().unwrap_or_else(|p| p.into_inner());
+        m.insert(a, c);
+        // Ревью t160 Н4: поколение — под замком записи, вместе с итогом.
         self.bump();
+        drop(m);
     }
 
     /// Решение 352: поколение итогов (налоги монет, факты пулов). Ошибок нет.
@@ -246,7 +246,8 @@ impl Checks {
     pub fn update_pool(&self, r: &PoolRef, f: impl FnOnce(&mut PoolFacts)) {
         let mut m = self.pools.write().unwrap_or_else(|p| p.into_inner());
         f(m.entry(r.clone()).or_default());
-        drop(m);
+        // Ревью t160 Н4: поколение — под замком записи, вместе с фактами.
         self.bump();
+        drop(m);
     }
 }

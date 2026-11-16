@@ -33,13 +33,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, Direction, Quote, Side, VenueId};
+use crate::core::types::{Direction, Quote, Side, VenueId};
 use crate::settings::read::At;
 
 use super::engine::{Core, lk};
 
-/// Ключ: площадка DEX, токен, покупка (true) / продажа.
-type Key = (VenueId, Address, bool);
+/// Ключ: площадка DEX, токен, покупка (true) / продажа, кошелёк строки маппинга направления (ревью t160 Б4).
+type Key = (VenueId, Address, bool, Option<String>);
 
 /// Отпечаток входов котировки: эпоха адаптера, поколение пулов монеты в ядре, поколение настроек.
 type Stamp = (String, u64, u64);
@@ -68,8 +68,11 @@ pub fn on(core: &Core) -> bool {
 }
 
 /// Что делает: котировка стороны DEX сигнала — из памяти при том же отпечатке и объёме, иначе заново (и в память).
+/// Ревью t160: сначала кошелёк строки маппинга направления (решение 132; нет строки — та же ошибка, что раньше, до
+/// чтения памяти — Б4); у площадки нет эпохи (агрегатор KyberSwap, голова не свежая) — None: вызывающий идёт прежним
+/// путём с signal.dex_quote_cache_ms (Б5).
 /// Принимает: ядро, направление, площадку DEX, адрес токена, сторону, объём.
-/// Возвращает: котировку. Ошибки: текст — как у prices.rs side_quote (нет кошелька в маппинге, ошибка котировки).
+/// Возвращает: Some(котировка или текст ошибки — как у prices.rs side_quote); None — эпохи нет. Ошибок нет.
 pub async fn quote(
     core: &Core,
     dir: &Direction,
@@ -77,47 +80,35 @@ pub async fn quote(
     token: Address,
     side: Side,
     qty: Decimal,
-) -> Result<Quote, String> {
-    let key = (venue.clone(), token, side == Side::Buy);
-    // Отпечаток — ДО котировки: состояние, сменившееся во время котировки, даст другой отпечаток следующему вызову
-    // (номер головы, версии и поколения только растут).
-    let now = stamp(core, venue, &dir.asset, token).await;
-    if let Some(st) = &now
-        && let Some(q) = get(core, &key, st, qty)
-    {
+) -> Option<Result<Quote, String>> {
+    let deps = &core.inner.deps;
+    let acc = match super::dex_account::of_direction(deps, dir).await {
+        Ok(acc) => acc,
+        Err(e) => return Some(Err(e)),
+    };
+    let a = match deps.gw.get_as(venue, acc.as_ref()).await {
+        Ok(a) => a,
+        Err(e) => return Some(Err(e.message)),
+    };
+    // Отпечаток — ДО котировки: состояние, сменившееся во время котировки, даст другой отпечаток следующему вызову.
+    let epoch = a.signal_epoch(&dir.asset)?;
+    let pools = lk(&core.inner.quote_cache).generation(venue, token);
+    let st: Stamp = (epoch, pools, deps.settings.generation());
+    let key = (venue.clone(), token, side == Side::Buy, acc.map(|x| x.0));
+    if let Some(q) = get(core, &key, &st, qty) {
         HITS.fetch_add(1, Ordering::Relaxed);
-        return Ok(q);
+        return Some(Ok(q));
     }
     MISSES.fetch_add(1, Ordering::Relaxed);
-    let deps = &core.inner.deps;
-    // Решение 132: DEX — кошелёк строки маппинга направления; нет строки — «нет кошелька DEX в маппинге».
-    let a = super::dex_account::venue_dir(deps, dir, venue).await?;
     // Решение 211: площадке — её тикер монеты; ответ — обратно в монету ядра.
     let on = super::venue_ticker::on_venue(core, &dir.asset, venue);
-    let q = a
-        .quote(&on, side, qty)
-        .await
-        .map_err(|e| format!("{}: {}", venue.0, e.message))?;
+    let q = match a.quote(&on, side, qty).await {
+        Ok(q) => q,
+        Err(e) => return Some(Err(format!("{}: {}", venue.0, e.message))),
+    };
     let q = super::venue_ticker::quote_back(core, &dir.asset, venue, q);
-    if let Some(st) = now {
-        put(core, key, st, qty, q.clone());
-    }
-    Ok(q)
-}
-
-/// Отпечаток сейчас. None — у площадки нет эпохи (биржа, голова не свежая и т. п.) или площадка не подключена.
-/// Ошибок нет.
-async fn stamp(core: &Core, venue: &VenueId, asset: &Asset, token: Address) -> Option<Stamp> {
-    let epoch = core
-        .inner
-        .deps
-        .gw
-        .get(venue)
-        .await
-        .ok()?
-        .signal_epoch(asset)?;
-    let pools = lk(&core.inner.quote_cache).generation(venue, token);
-    Some((epoch, pools, core.inner.deps.settings.generation()))
+    put(core, key, st, qty, q.clone());
+    Some(Ok(q))
 }
 
 /// Котировка из памяти: тот же отпечаток и объём. Ошибок нет.

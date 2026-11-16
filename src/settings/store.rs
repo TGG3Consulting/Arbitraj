@@ -272,10 +272,10 @@ impl Store {
                 Some(v) => cache.insert(key, v.clone()),
                 None => cache.remove(&key),
             };
+            // Решение 352 (ревью t160 Н4): поколение растёт под замком записи кэша — вместе со значением.
+            self.generation
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         }
-        // Решение 352: значение уже в кэше — поколение растёт (читающий новое поколение видит новое значение).
-        self.generation
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         let change = Change {
             name: name.to_string(),
             scope,

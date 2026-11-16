@@ -7,7 +7,6 @@
 //! Решение 317 (доработка): у стакана — отметки последнего изменения содержимого (book_still.rs), не время кадра.
 //! Отметки считаются только при включённом признаке marks_on (book_marks_on.rs: signal.dex_event_skip_hold или
 //! log.signal_hold); выключен — на кадр стакана одна проверка признака, отметок нет (нагрузка как до решения 317).
-//! Решение 349: соседи токенов по пулам (peers) — для пробуждения монет событием промежуточного пула (mid_wake.rs).
 //! Применение стакана и пула — market_apply.rs; чтение состояния (стаканы, пулы, пары, проверки) — market_read.rs.
 //! Кто вызывает: core/engine.rs (применяет события), registry.rs, signal.rs, prices.rs, позже executor.rs.
 //! От чего зависит: core/types, gateway/events.
@@ -43,9 +42,6 @@ pub struct MarketState {
     /// искал пулы пары проходом ВСЕХ пулов на каждую монету и промежуточную (O(монеты × пулы)) — у MEXC это тысячи ×
     /// тысячи на каждую пересборку.
     pub(super) pool_pairs: HashMap<(VenueId, Address, Address), HashSet<PoolRef>>,
-    /// Решение 349: соседи токена по пулам площадки — (площадка, токен) → токены, с которыми у него есть пул. Растёт при
-    /// первом пуле пары; снятые пулы (drop_pools_of) соседей не убирают — лишний сосед даёт лишний пересчёт, не потерю.
-    pub(super) peers: HashMap<(VenueId, Address), HashSet<Address>>,
     /// Проверка налогов: ключ — площадка DEX и адрес контракта монеты.
     pub(super) coin_checks: HashMap<(VenueId, Address), CoinCheck>,
     pub(super) pool_checks: HashMap<(VenueId, PoolRef), PoolCheck>,

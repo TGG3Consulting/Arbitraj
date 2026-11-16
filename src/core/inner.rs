@@ -83,6 +83,8 @@ pub struct Inner {
     pub quote_cache: Mutex<super::quote_cache::QuoteCache>,
     /// Решение 352: котировки стороны DEX сигнала по отпечатку входов (signal_dex.rs; signal.book_same_skip).
     pub signal_dex: super::signal_dex::Memo,
+    /// Решение 349: пробуждение монет событием промежуточного пула — ждущие пары, отметки (mid_wake.rs).
+    pub mid_wake: super::mid_wake::State,
     /// Последняя отправка строки «Живого экрана» по направлению: когда и с каким состоянием (решение 109).
     pub spread_sent: Mutex<HashMap<Direction, (std::time::Instant, super::signal::State)>>,
     /// Очередь тяжёлого расчёта (candidates.rs; с моментом постановки — замер очереди, решение 129) и направления,
@@ -226,6 +228,7 @@ impl Inner {
             ripen: Mutex::default(),
             quote_cache: Mutex::default(),
             signal_dex: Default::default(),
+            mid_wake: Default::default(),
             spread_sent: Mutex::default(),
             cand_tx,
             queued: Mutex::default(),

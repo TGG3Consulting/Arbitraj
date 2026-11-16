@@ -8,7 +8,9 @@
 //!     WBNB-USDT и BTCB-WBNB будит CAKE (маршруты CAKE → WBNB → USDT и CAKE → BTCB → WBNB → USDT) и сбрасывает её память
 //!     котировок (поколение quote_cache растёт); монета только с пулом к USDT (ONLY, пул записи с её адресом) не будится;
 //!     пул без промежуточной (CAKE-USDT) — никого; промежуточные выключены — никого; классика (0 шагов) — CAKE будится
-//!     событием пула её промежуточной.
+//!     событием пула её промежуточной. Ревью t160: пул «монета — промежуточная» (ONLY-WBNB, CAKE-WBNB) — никого (Б1);
+//!     глубина — DEEP (пул только к BTCB) будится событием WBNB-USDT в graph с 3 хопами и не будится в классике;
+//!     повтор пары в том же блоке не будит (Б2); signal.mid_pool_wake не задана — ничего.
 //! Сверка с перечнем путей адаптера на записанном графе — tests/bsc_dex_route_paths.rs (mid_wake_covers_every_path);
 //! слияние событий одной монеты в один пересчёт — план tick_plan.rs (tests/core_tick_plan_322.rs).
 //! Справочник и USDT ставятся перед каждым пробуждением: изменение dex.intermediate_* пересобирает справочник ядра
@@ -25,7 +27,6 @@ use arb::core::deps::Deps;
 use arb::core::engine::{lk, wr};
 use arb::core::mid_wake::{self, reach};
 use arb::core::registry::CoinEntry;
-use arb::core::tick_plan::PoolMark;
 use arb::core::types::{Asset, VenueId};
 use arb::gateway::events::MarketEvent;
 use arb::gateway::registry::Registry;
@@ -34,7 +35,6 @@ use arb::settings::scope::Scope;
 use arb::settings::store::Store;
 use arb::storage::db::Db;
 use arb::storage::journal::Journal;
-use chrono::Utc;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
@@ -157,73 +157,126 @@ async fn install(core: &Core, usdt: Address, coins: &[CoinEntry]) {
     }
 }
 
+/// Пул записи (состояние WBNB-USDT V2 записи) с подставленными токенами — пул монеты, которой в записи нет.
+fn pool_of(
+    got: &std::collections::HashMap<String, Vec<u8>>,
+    addr: Address,
+    t0: Address,
+    t1: Address,
+) -> arb::core::types::Pool {
+    let mut p = route_common::v2(got, "WBNB-USDT v2", addr, t0, t1).pool;
+    p.token0 = t0;
+    p.token1 = t1;
+    p
+}
+
+/// Событие пула (отметка потока тика) и проход рассылки — как tick.rs + задача mid_wake.rs. Возвращает: монет в проходе.
+fn event(core: &Core, dex: &VenueId, pool: (Address, Address), block: u64) -> usize {
+    mid_wake::note(core, dex, pool, block);
+    mid_wake::pass(core)
+}
+
 #[tokio::test]
 async fn wake_on_recorded_pools() {
     use route_common::{BTCB, CAKE, USDT, WBNB};
+    // DEEP — монета только с пулом к BTCB (маршрут DEEP → BTCB → WBNB → USDT, 3 хопа).
+    const DEEP: Address = address!("0x00000000000000000000000000000000000000dd");
     let (core, s) = start("recorded").await;
     let dex = VenueId("bsc_dex".into());
-    // Пулы записи — в состояние рынка ядра; монета ONLY — пул записи WBNB-USDT с её адресом вместо WBNB.
+    // Пулы записи — в состояние рынка ядра: CAKE-USDT ×2, CAKE-WBNB, WBNB-USDT, CAKE-BTCB, BTCB-WBNB.
     let p = route_common::parts().await;
+    let dex2 = dex.clone();
+    // Как tick.rs: пул в состояние рынка ядра, первый пул пары — в соседей токенов (mid_wake::peer).
+    let apply = |pool: arb::core::types::Pool| {
+        let t = (pool.token0, pool.token1);
+        let _ = wr(&core.inner.market).apply(MarketEvent::Pool(pool));
+        mid_wake::peer(&core, &dex2, t);
+    };
     for e in p.registry.all() {
-        let _ = wr(&core.inner.market).apply(MarketEvent::Pool(e.pool.clone()));
+        apply(e.pool.clone());
     }
     let got = route_common::load("tests/data/routes_2026-10-29");
-    let only = route_common::v2(
-        &got,
-        "WBNB-USDT v2",
-        address!("0x00000000000000000000000000000000000000aa"),
-        ONLY,
-        USDT,
-    );
-    let mut only_pool = only.pool.clone();
-    only_pool.token0 = ONLY;
-    only_pool.token1 = USDT;
-    let _ = wr(&core.inner.market).apply(MarketEvent::Pool(only_pool));
-    let mark = PoolMark {
-        at: Utc::now(),
-        block: 1,
-    };
+    let extra = [
+        (
+            address!("0x00000000000000000000000000000000000000aa"),
+            ONLY,
+            USDT,
+        ),
+        (
+            address!("0x00000000000000000000000000000000000000bb"),
+            DEEP,
+            BTCB,
+        ),
+    ];
+    for (a, t0, t1) in extra {
+        apply(pool_of(&got, a, t0, t1));
+    }
+    let coins = [coin("CAKE", CAKE), coin("ONLY", ONLY), coin("DEEP", DEEP)];
+    s.set(
+        "signal.mid_pool_wake",
+        arb::settings::scope::Scope::Global,
+        Some(json!(true)),
+        "тест",
+    )
+    .await
+    .unwrap();
     set(&s, "dex.intermediate_enabled", Some(json!(true))).await;
     set(&s, "dex.intermediate_tokens", Some(json!([WBNB, BTCB]))).await;
     set(&s, "dex.router_mode", Some(json!("graph"))).await;
     set(&s, "dex.route_max_hops", Some(json!(3))).await;
+    let g = |a: Address| gen_of(&core, a);
+    let (c0, o0, d0) = (g(CAKE), g(ONLY), g(DEEP));
 
-    // Пул промежуточной пары WBNB-USDT: CAKE (CAKE → WBNB → USDT) будится, ONLY — нет.
-    let (c0, o0) = (gen_of(&core, CAKE), gen_of(&core, ONLY));
-    install(&core, USDT, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
-    mid_wake::wake(&core, &dex, (WBNB, USDT), mark);
+    // graph, 3 хопа: WBNB-USDT будит CAKE (CAKE → WBNB → USDT) и DEEP (DEEP → BTCB → WBNB → USDT); ONLY — нет.
+    install(&core, USDT, &coins).await;
+    event(&core, &dex, (WBNB, USDT), 10);
+    assert_eq!(g(CAKE), c0 + 1, "CAKE разбужена, память сброшена");
     assert_eq!(
-        gen_of(&core, CAKE),
-        c0 + 1,
-        "CAKE разбужена, память сброшена"
+        g(DEEP),
+        d0 + 1,
+        "глубина: у DEEP нет пула с WBNB, маршрут через BTCB"
     );
-    assert_eq!(
-        gen_of(&core, ONLY),
-        o0,
-        "монета без связи с WBNB не будится"
-    );
+    assert_eq!(g(ONLY), o0, "монета без связи с WBNB не будится");
+    // Тот же пул в том же блоке — второй раз не будит.
+    install(&core, USDT, &coins).await;
+    event(&core, &dex, (WBNB, USDT), 10);
+    assert_eq!(g(CAKE), c0 + 1, "повтор пары в том же блоке не будит");
 
-    // Пул «промежуточная — промежуточная» BTCB-WBNB (CAKE → BTCB → WBNB → USDT).
-    install(&core, USDT, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
-    mid_wake::wake(&core, &dex, (BTCB, WBNB), mark);
-    assert_eq!(gen_of(&core, CAKE), c0 + 2);
-    assert_eq!(gen_of(&core, ONLY), o0);
+    // Пул «промежуточная — промежуточная» BTCB-WBNB.
+    install(&core, USDT, &coins).await;
+    event(&core, &dex, (BTCB, WBNB), 11);
+    assert_eq!((g(CAKE), g(DEEP), g(ONLY)), (c0 + 2, d0 + 2, o0));
 
-    // Пул без промежуточной (CAKE-USDT) — mid_wake никого не будит (монету пула будит tick.rs по токенам).
-    install(&core, USDT, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
-    mid_wake::wake(&core, &dex, (CAKE, USDT), mark);
-    assert_eq!(gen_of(&core, CAKE), c0 + 2);
+    // Ревью Б1: пул «монета — промежуточная» (ONLY-WBNB, CAKE-WBNB) — только маршрут своей монеты: mid_wake никого.
+    install(&core, USDT, &coins).await;
+    assert_eq!(event(&core, &dex, (ONLY, WBNB), 12), 0);
+    assert_eq!(event(&core, &dex, (CAKE, WBNB), 12), 0);
+    // Пул без промежуточной (CAKE-USDT) — тоже никого.
+    assert_eq!(event(&core, &dex, (CAKE, USDT), 12), 0);
+    assert_eq!((g(CAKE), g(DEEP), g(ONLY)), (c0 + 2, d0 + 2, o0));
 
-    // Классика (0 шагов): событие пула промежуточной монеты CAKE будит её.
+    // Классика (0 шагов): WBNB-USDT будит CAKE (пул к WBNB), DEEP (только к BTCB) — нет.
     set(&s, "dex.router_mode", None).await;
-    install(&core, USDT, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
-    mid_wake::wake(&core, &dex, (WBNB, USDT), mark);
-    assert_eq!(gen_of(&core, CAKE), c0 + 3);
+    install(&core, USDT, &coins).await;
+    event(&core, &dex, (WBNB, USDT), 13);
+    assert_eq!((g(CAKE), g(DEEP)), (c0 + 3, d0 + 2));
 
     // Промежуточные выключены — никого.
     set(&s, "dex.intermediate_enabled", Some(json!(false))).await;
-    install(&core, USDT, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
-    mid_wake::wake(&core, &dex, (WBNB, USDT), mark);
-    assert_eq!(gen_of(&core, CAKE), c0 + 3);
-    assert_eq!(gen_of(&core, ONLY), o0);
+    install(&core, USDT, &coins).await;
+    assert_eq!(event(&core, &dex, (WBNB, USDT), 14), 0);
+    assert_eq!((g(CAKE), g(DEEP), g(ONLY)), (c0 + 3, d0 + 2, o0));
+
+    // Настройка выключена — отметки нет, проход пуст.
+    s.set(
+        "signal.mid_pool_wake",
+        arb::settings::scope::Scope::Global,
+        None,
+        "тест",
+    )
+    .await
+    .unwrap();
+    set(&s, "dex.intermediate_enabled", Some(json!(true))).await;
+    install(&core, USDT, &coins).await;
+    assert_eq!(event(&core, &dex, (WBNB, USDT), 15), 0);
 }

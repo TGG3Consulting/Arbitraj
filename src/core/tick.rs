@@ -92,8 +92,11 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 for a in assets_by_tokens(&core, tokens) {
                     super::tick_sched::schedule_pool(&core, a, venue.clone(), mark);
                 }
-                // Решение 349: пул промежуточной пары — пересчёт монет, чьи маршруты идут через него (mid_wake.rs).
-                super::mid_wake::wake(&core, &venue, tokens, mark);
+                // Решение 349: соседи токенов (первый пул пары) и отметка пары — O(1); рассылка — задача mid_wake.rs.
+                if first {
+                    super::mid_wake::peer(&core, &venue, tokens);
+                }
+                super::mid_wake::note(&core, &venue, tokens, block);
             }
             Touched::Invalidated {
                 venue,

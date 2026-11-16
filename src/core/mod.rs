@@ -158,6 +158,7 @@ pub mod market_apply;
 pub mod market_read;
 pub mod market_state;
 pub mod mid_wake;
+pub mod mid_wake_route;
 pub mod maxwin_view;
 pub mod native;
 pub mod op_error;

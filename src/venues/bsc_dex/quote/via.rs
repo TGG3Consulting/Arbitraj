@@ -4,7 +4,7 @@
 //! отдаёт их общему расчёту маршрута (quote/route_calc.rs): каждый шаг по реальной ликвидности своего пула (та же
 //! математика, что у прямого режима), со своей комиссией, крючком и налогом монеты на её стороне. Двухшаговый путь —
 //! частный случай графа глубины 2 (решение 80): множитель-mid здесь один, расчёт пути — общий.
-//! Кто вызывает: quote/via_pools.rs (лучшая пара), quote/smart.rs (доля через промежуточную), exec/live.rs.
+//! Кто вызывает: quote/via_pools.rs (лучшая пара), quote/smart.rs (доля через промежуточную), exec/live.rs; quote/bound_set.rs — константа CLASSIC_MAX_HOPS (ревью t162, Н8).
 //! Пулы шагов, допуск промежуточной монеты и выбор лучшей пары — quote/via_pools.rs.
 //! От чего зависит: quote/route_calc.rs, quote/pool_tax.rs (налог пула шага монеты, решение 146), quote/path.rs, quote/select.rs, pools/registry.rs, pools/mids.rs.
 //! Решение 336: calc_from / first_leg — обмен пула монеты P2 один раз на пул, а не на каждую пару (via_pools.rs).
@@ -42,6 +42,11 @@ pub struct Via<'a> {
 
 /// Допущенный пул.
 pub type Ok2 = (Entry, Usable);
+
+/// Ревью t162, Н8: наибольшее число хопов классики (direct / smart): прямой пул — 1, путь через промежуточную — ровно
+/// столько хопов (legs собирает массив этой длины — классика длиннее не соберётся без смены константы). Её же берёт
+/// строгий верх курса DEX как предел хопов классики (quote/bound_set.rs hop_limit) — граница и маршрут из одного места.
+pub const CLASSIC_MAX_HOPS: usize = 2;
 
 impl Via<'_> {
     /// Путь через m в паре пулов. Принимает: промежуточную, её decimals, P1 («m — USDT»), P2 («монета — m»), количество.
@@ -90,8 +95,8 @@ impl Via<'_> {
     }
 
     /// Хопы пары пулов в порядке исполнения стороны; налог монеты — на её стороне (покупка — выход P2, продажа — вход
-    /// P2). Ошибок нет.
-    fn legs(&self, m: &Mid, mid_dec: u8, p1: &Ok2, p2: &Ok2) -> Vec<Leg> {
+    /// P2). Массив длины CLASSIC_MAX_HOPS (ревью t162, Н8). Ошибок нет.
+    fn legs(&self, m: &Mid, mid_dec: u8, p1: &Ok2, p2: &Ok2) -> [Leg; CLASSIC_MAX_HOPS] {
         let leg = |p: &Ok2, (token_in, token_out), (dec_in, dec_out)| Leg {
             entry: p.0.clone(),
             usable: p.1.clone(),
@@ -101,11 +106,11 @@ impl Via<'_> {
             dec_out,
         };
         match self.side {
-            Side::Buy => vec![
+            Side::Buy => [
                 leg(p1, (self.usdt, m.address), (self.usdt_dec, mid_dec)),
                 leg(p2, (m.address, self.coin), (mid_dec, self.coin_dec)),
             ],
-            Side::Sell => vec![
+            Side::Sell => [
                 leg(p2, (self.coin, m.address), (self.coin_dec, mid_dec)),
                 leg(p1, (m.address, self.usdt), (mid_dec, self.usdt_dec)),
             ],

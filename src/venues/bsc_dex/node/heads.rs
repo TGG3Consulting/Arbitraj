@@ -12,6 +12,9 @@
 //! Кто вызывает: pools/market.rs (запуск при подписке на рынок), quote/*, exec/*, check/tax_pass.rs, send/*,
 //! pools/http_wait.rs, pools/session.rs.
 //! Решение 282: каждый круг опроса — уведомление «блок не растёт» / «блоки снова идут» (node/head_stall.rs).
+//! Решение 368 (t163): ритм опроса — раз в bsc.blocks_poll_ms от НАЧАЛА круга (сон — остаток периода после работы
+//! круга); раньше сон шёл после работы, и при узле на другом сервере период рос на RTT eth_blockNumber и
+//! eth_getBlockByNumber новой головы — на столько же старели «получен … назад» и «создан … назад».
 //! От чего зависит: ctx.rs, node/rpc.rs, node/head_age.rs, node/head_stall.rs, errors.rs.
 //! Настройки: bsc.blocks_poll_ms (вся система), feed.stale_after_ms, feed.max_block_age_ms [bsc_dex]; узел —
 //! bsc.node_http_url; bsc.node_stall_alert_s (node/head_stall.rs).
@@ -196,6 +199,8 @@ impl Heads {
             else {
                 return;
             };
+            // Решение 368: период считается от начала круга (работа круга входит в него).
+            let started = std::time::Instant::now();
             match rpc::call_unpaced::<U64>(&ctx, "eth_blockNumber", json!([])).await {
                 Ok(n) => {
                     if self.observe(n.to()) {
@@ -234,9 +239,16 @@ impl Heads {
                     fresh.as_deref(),
                 )
                 .await;
-            tokio::time::sleep(every).await;
+            tokio::time::sleep(rest_of(every, started.elapsed())).await;
         }
     }
+}
+
+/// Решение 368 (t163): сколько спать до следующего круга опроса, чтобы круги шли раз в период от начала круга.
+/// Принимает: период (bsc.blocks_poll_ms), сколько занял круг. Возвращает: период минус работа; работа не короче
+/// периода — 0 (следующий круг сразу). Ошибок нет.
+pub fn rest_of(every: Duration, spent: Duration) -> Duration {
+    every.saturating_sub(spent)
 }
 
 /// Интервал опроса блоков: bsc.blocks_poll_ms (вся система), строго меньше feed.stale_after_ms — иначе голова

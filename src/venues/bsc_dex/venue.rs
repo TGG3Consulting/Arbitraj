@@ -45,6 +45,11 @@ impl Venue for BscDex {
         super::signal_epoch::of(&self.p, asset)
     }
 
+    /// Решение 372: строгий верх курса стороны DEX без котировок (quote/bound.rs). Ошибок нет.
+    fn rate_bound(&self, asset: &Asset, side: Side) -> crate::gateway::rate_bound::RateBound {
+        super::quote::bound::rate_bound(&self.p, asset, side)
+    }
+
     /// Решение 132: вид адаптера на кошелёк счёта — venue_account.rs. Ошибки: NotConfigured — нет кошелька.
     fn for_account(&self, account: &DexAccountId) -> GatewayResult<std::sync::Arc<dyn Venue>> {
         self.on_account(account)

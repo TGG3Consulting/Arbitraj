@@ -76,6 +76,16 @@ impl Books {
         }
     }
 
+    /// Решение 367 (повторное ревью t163, Б1): биржа сказала «книга новее последнего кадра» — подтверждение тихой пары
+    /// снимается сразу (срок 0): стакан снова свеж только по venue.book_stale_ms от кадра. Стакана нет — ничего.
+    /// Ошибок нет.
+    pub fn unconfirm(&self, ticker: &str) {
+        let m = self.map.read().unwrap_or_else(|p| p.into_inner());
+        if let Some((_, _, _, until)) = m.get(ticker) {
+            until.store(0, Ordering::Relaxed);
+        }
+    }
+
     /// Кадр стакана пары пришёл, но снимок тот же (решение 109): только время кадра пары. Ошибок нет.
     pub fn touch(&self, ticker: &str) {
         let m = self.map.read().unwrap_or_else(|p| p.into_inner());

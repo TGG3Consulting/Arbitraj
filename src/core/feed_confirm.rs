@@ -12,8 +12,12 @@
 //! venue.feed_watch_log_ms решает feed_watch_log.rs.
 //! t79 (Тигран 10.11: согласовано): у бирж по содержимому такой Unchanged несёт уровни ЭТОГО ответа REST (RestBook) —
 //! ядро ставит их стаканом пары (feed_rest_book.rs); Lost, Quiet, ошибка — без стакана.
+//! t163 (решение 367): когда и в каком порядке спрашивать — feed_confirm_queue.rs (ранняя проверка только для пар,
+//! нужных торговле); ответ отбрасывается, только если кадр пары пришёл ПОСЛЕ отправки запроса (раньше — «кадр моложе
+//! book_stale_ms × pair_dead_mult», из-за чего ранний ответ терялся); первое «книга новее» ранней проверки — без
+//! переподписки, повторная сверка следующим проходом (кадр мог быть в пути), второе подряд — кадры потеряны.
 //! Без ожиданий и ввода-вывода — проверяется тестами (feed_confirm_tests.rs, feed_print_tests.rs).
-//! Кто вызывает: core/feed_watch_logic.rs (want, note_quiet), core/feed_watch.rs (apply).
+//! Кто вызывает: core/feed_watch_logic.rs (note_quiet), feed_confirm_queue.rs (Bucket), core/feed_watch.rs (apply).
 //! От чего зависит: gateway/feed_health.rs, feed_watch_logic.rs (Action, Cfg, State, start_round), feed_print.rs,
 //! feed_rest_ref.rs.
 //! Настройки: значения приходят в Cfg.quiet (читает feed_watch.rs).
@@ -47,7 +51,17 @@ pub(super) enum Told {
 pub(super) struct CheckSt {
     /// Следующая проверка — не раньше (unix мс).
     pub(super) next_at: i64,
+    /// t163: когда биржу спросили в последний раз (unix мс): кадр позже — срок проверки сброшен (feed_watch_logic.rs).
+    pub(super) asked_ms: i64,
     pub(super) told: Option<Told>,
+    /// Решение 367 (ревью Н2): последняя проверка — ранняя (пара нужна торговле, feed_confirm_queue.rs).
+    pub(super) early: bool,
+    /// Решение 367 (ревью Н2): первая ранняя проверка сказала «книга новее» — время её запроса (unix мс); повторная
+    /// сверка следующим проходом, переподписка — только при втором «новее» без кадра между ними. Кадр — сброс.
+    pub(super) suspect: Option<i64>,
+    /// Повторное ревью t163, Н1: пара была нужна торговле, когда её тишина перешла порог ранней проверки, — остаётся
+    /// нужной, пока книгу не подтвердят (Quiet, Unchanged) или не придёт новый кадр (feed_watch_logic.rs).
+    pub(super) sticky: bool,
     /// Дополнение 10.11: ответ REST, давший «кадры потеряны» (feed_rest_ref.rs); тихая или свежая пара — None.
     pub(super) lost_ref: Option<LostRef>,
 }
@@ -61,7 +75,7 @@ pub(super) struct Bucket {
 
 impl Bucket {
     /// Взять один запрос. Возвращает: true — можно слать. Ошибок нет.
-    fn take(&mut self, now: i64, per_s: i64) -> bool {
+    pub(super) fn take(&mut self, now: i64, per_s: i64) -> bool {
         let cap = per_s * 1000;
         self.milli = match self.at {
             None => cap,
@@ -133,33 +147,6 @@ pub fn verdict(p: &PairHealth, v: &BookVersion, recv_ms: i64) -> Verdict {
     }
 }
 
-/// Тихая пара (решение 202: мёртвая по порогу) в режиме подтверждения: пора ли спросить биржу. Пара в паузе после
-/// круга переподписки — ждёт паузу; проверка не раньше next_at; ведро площадки пусто — в следующий проход.
-/// Принимает: состояние, (соединение, тикер), сейчас, настройки подтверждения. Добавляет Action::Check. Ошибок нет.
-pub(super) fn want(
-    st: &mut State,
-    key: &(String, String),
-    now: i64,
-    min_ms: i64,
-    per_s: i64,
-    out: &mut Vec<Action>,
-) {
-    if st.pairs.get(key).is_some_and(|s| now < s.next_at) {
-        return;
-    }
-    if st.checks.get(key).is_some_and(|c| now < c.next_at) {
-        return;
-    }
-    if !st.bucket.take(now, per_s) {
-        return;
-    }
-    st.checks.entry(key.clone()).or_default().next_at = now + min_ms;
-    out.push(Action::Check {
-        conn: key.0.clone(),
-        ticker: key.1.clone(),
-    });
-}
-
 /// Тихая пара без подтверждения (адаптер не умеет или настройка не задана) и без расписания кадров: только журнал.
 /// Возвращает: true — пара стала тихой впервые (сказать в журнал). Ошибок нет.
 pub(super) fn note_quiet(st: &mut State, key: &(String, String)) -> bool {
@@ -196,10 +183,9 @@ pub fn apply(
     else {
         return out;
     };
-    // Пока шёл запрос, пришёл свежий кадр — пара живая, ответ уже не нужен.
-    if p.last_ms
-        .is_some_and(|l| recv_ms - l <= c.book_stale_ms * c.dead_mult)
-    {
+    // Пока шёл запрос, пришёл кадр — стакан в памяти новее ответа, пара живая, ответ уже не нужен. t163 (решение 367):
+    // по времени отправки, а не по «кадр моложе book_stale_ms × pair_dead_mult» — иначе ранний ответ (due) терялся.
+    if p.last_ms.is_some_and(|l| l > sent_ms) {
         return out;
     }
     let rest = r.as_ref().ok().and_then(RestRef::of);
@@ -209,6 +195,8 @@ pub fn apply(
     };
     let key = (conn.to_string(), ticker.to_string());
     let cs = st.checks.entry(key.clone()).or_default();
+    // t163: запрос этого ответа отправлен в sent_ms — кадр раньше него к сбросу срока проверки не ведёт.
+    cs.asked_ms = cs.asked_ms.max(sent_ms);
     // Дополнение 10.11: тот же ответ REST, что дал «кадры потеряны», а пара с тех пор переподписана — книга не
     // менялась с переподписки (тихая, не мёртвая); иначе запомнить ответ для следующей проверки.
     // t79: уровни этого ответа (у бирж по содержимому) — стакан пары; только здесь, ни при каком другом исходе.
@@ -231,6 +219,37 @@ pub fn apply(
         }
         other => other,
     };
+    // Решение 367 (ревью Н2): ранняя проверка сказала «книга новее» впервые — книга могла измениться за миг до запроса,
+    // а кадр с изменением ещё в пути (пуш у бирж — раз в 100–1000 мс). Не переподписывать: повторная сверка следующим
+    // проходом (venue.pair_resub_interval_ms); кадр придёт — сверка снимается (feed_watch_logic.rs, сброс по кадру).
+    // Второе «новее» без кадра — кадры потеряны, как всегда. Обычная (не ранняя) проверка — как до правки.
+    // Повторное ревью t163, Б1: книга на бирже новее — старое подтверждение тихой пары снимается сразу (Unconfirm),
+    // иначе котировка до его срока шла бы по книге, про которую уже известно, что она изменилась.
+    if matches!(v, Verdict::Lost(_)) && cs.early && cs.suspect.is_none() {
+        cs.suspect = Some(sent_ms);
+        cs.next_at = 0;
+        st.stats.early_suspect += 1;
+        out.push(Action::Unconfirm {
+            conn: key.0.clone(),
+            ticker: key.1.clone(),
+        });
+        return out;
+    }
+    let early = cs.early;
+    // Повторное ревью t163, Н4: ошибка REST (Unknown) сверку не снимает — иначе чередование «новее» / ошибка
+    // откладывало бы переподписку бесконечно; снимают только ответы по существу.
+    if !matches!(v, Verdict::Unknown(_)) {
+        cs.suspect = None;
+    }
+    match &v {
+        Verdict::Quiet if early => st.stats.early_confirmed += 1,
+        Verdict::Lost(_) if early => st.stats.early_lost += 1,
+        _ => {}
+    }
+    // Повторное ревью t163, Н1: книга подтверждена или принята как есть — приоритет «нужной» больше не держится.
+    if matches!(v, Verdict::Quiet | Verdict::Unchanged) {
+        cs.sticky = false;
+    }
     let told = match &v {
         Verdict::Quiet => Told::Quiet,
         Verdict::Unchanged => Told::Unchanged,

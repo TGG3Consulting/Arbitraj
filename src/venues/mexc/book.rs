@@ -72,6 +72,16 @@ impl Books {
         }
     }
 
+    /// Решение 367 (повторное ревью t163, Б1): биржа сказала «книга новее последнего кадра» — подтверждение тихой пары
+    /// снимается сразу (срок 0): стакан снова свеж только по venue.book_stale_ms от кадра. Стакана нет — ничего.
+    /// Ошибок нет.
+    pub fn unconfirm(&self, ticker: &str) {
+        let m = self.map.read().unwrap_or_else(|p| p.into_inner());
+        if let Some((_, _, _, until, _)) = m.get(ticker) {
+            until.store(0, Ordering::Relaxed);
+        }
+    }
+
     /// Решение 213 (по содержимому): первые n уровней обеих сторон стакана пары в памяти — того, по которому считается
     /// котировка. Принимает: тикер, n. Возвращает: отпечаток; None — стакана нет. Ошибок нет.
     pub fn print(&self, ticker: &str, n: usize) -> Option<crate::gateway::feed_health::BookPrint> {

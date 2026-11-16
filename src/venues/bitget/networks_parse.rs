@@ -15,14 +15,16 @@
 //!
 //! Комиссия вывода (решение 199): ненулевой extraWithdrawFee — ДОЛЯ суммы («0.1 means 10%») — в
 //! CoinNetworkInfo.withdraw_fee_pct как есть; полная комиссия = withdrawFee + доля × сумма (ядро, fee_for). Из суммы она
-//! или сверху — не описано, допущение — из суммы (сверка зачисления ловит иное); такие сети BSC — в журнал. Минимум депозита: значение «0» или пусто — смысл не описан → None, а при
-//! venue.deposit_min_absent_ok = да — 0 (урок 21).
+//! или сверху — не описано, допущение — из суммы (сверка зачисления ловит иное); такие сети BSC — в журнал. Минимум депозита (решение 371, Тигран 17.11): «0» —
+//! минимум 0 (документация смысл «0» не определяет); нет поля / null — по venue.deposit_min_absent_ok; нечитаемое —
+//! неизвестен (gateway/deposit_min.rs).
 
 use chrono::Utc;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
 use crate::core::types::{Asset, CoinNetworkInfo, VenueId};
+use crate::gateway::deposit_min as dmin;
 use crate::gateway::errors::GatewayResult;
 
 use super::num;
@@ -62,6 +64,9 @@ pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayR
             let is_bsc = chain == bsc;
             match network(n, &ticker, &chain, is_bsc, venue, min_ok) {
                 Ok((info, extra)) => {
+                    if let Some(x) = dmin::note(MIN_FIELD, &min_raw(n)) {
+                        p.skipped.push(format!("{ticker}/{chain}: {x}"));
+                    }
                     if is_bsc && matches!(num::flag(n, "needTag"), Ok(true)) {
                         p.need_tag.push(ticker.clone());
                     }
@@ -96,9 +101,10 @@ fn network(
     };
     let extra = num::dec_opt(n, "extraWithdrawFee")?.filter(|r| !r.is_zero());
     let fee = num::dec_opt(n, "withdrawFee")?;
-    let deposit_min = num::dec_opt(n, "minDepositAmount")?
-        .filter(|m| !m.is_zero())
-        .or(min_ok.then_some(Decimal::ZERO));
+    // Решение 371 (Тигран 17.11; документация смысл «0» не определяет): «0» — минимум 0; нет поля — по
+    // venue.deposit_min_absent_ok; нечитаемое — неизвестен (gateway/deposit_min.rs).
+    // Get Coin Info (https://www.bitget.com/docs/catalog/classic-spot-market/classic-spot-market#get-coin-info): minDepositAmount «Minimum deposit amount», строка.
+    let deposit_min = dmin::resolve(&min_raw(n), min_ok);
     let info = CoinNetworkInfo {
         venue: venue.clone(),
         asset: Asset {
@@ -121,4 +127,12 @@ fn network(
         updated_at: Utc::now(),
     };
     Ok((info, extra))
+}
+
+/// Решение 371: имя поля минимума депозита сети (Get Coin Info, chains[]).
+const MIN_FIELD: &str = "minDepositAmount";
+
+/// Решение 371: вид значения минимума депозита сети (gateway/deposit_min.rs). Ошибок нет.
+fn min_raw(n: &Value) -> dmin::Raw {
+    dmin::classify(num::dec_opt(n, MIN_FIELD).map_err(|e| e.message))
 }

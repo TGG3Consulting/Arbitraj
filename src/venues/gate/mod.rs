@@ -336,6 +336,11 @@ impl Venue for Gate {
         self.books.confirm(ticker, until_ms);
     }
 
+    /// Решение 367 (повторное ревью t163, Б1): снять подтверждение тихой пары (book.rs unconfirm).
+    fn book_unconfirmed(&self, ticker: &str) {
+        self.books.unconfirm(ticker);
+    }
+
     async fn resubscribe_pair(&self, conn: &str, ticker: &str) -> GatewayResult<()> {
         use crate::gateway::feed_health::Cmd;
         self.books

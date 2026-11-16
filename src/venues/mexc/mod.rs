@@ -329,6 +329,11 @@ impl Venue for Mexc {
         self.books.confirm(ticker, until_ms);
     }
 
+    /// Решение 367 (повторное ревью t163, Б1): снять подтверждение тихой пары (book.rs unconfirm).
+    fn book_unconfirmed(&self, ticker: &str) {
+        self.books.unconfirm(ticker);
+    }
+
     /// t79 (Тигран 10.11: согласовано): тихая пара «книга не менялась с переподписки» — уровни того же ответа REST
     /// стаканом пары (book_rest.rs put_rest: время кадра — получение ответа, свежесть — book.rs freeze).
     fn book_from_rest(

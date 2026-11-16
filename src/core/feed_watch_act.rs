@@ -162,6 +162,9 @@ async fn act_quiet(
             book,
             log,
         } => {
+            // Повторное ревью t163, Б1: книга на бирже новее последнего кадра — прежнее подтверждение снимается до
+            // постановки стакана из ответа REST (его свежесть — своя, от получения ответа).
+            unconfirm(core, venue, v, &ticker);
             // t79 (Тигран 10.11: согласовано): ответ REST, по которому так решено, — стакан пары (только по
             // содержимому; свежесть — venue.book_stale_ms от получения ответа, feed_rest_book.rs).
             let put = match &book {
@@ -187,12 +190,18 @@ async fn act_quiet(
             };
             (Level::Info, m)
         }
+        Action::Unconfirm { ticker, .. } => {
+            unconfirm(core, venue, v, &ticker);
+            return;
+        }
         Action::Lost {
             conn,
             ticker,
             why,
             log,
         } => {
+            // Повторное ревью t163, Б1: книга новее — подтверждение снимается и до переподписки.
+            unconfirm(core, venue, v, &ticker);
             if !lg.pair(&conn, &ticker, "lost", log, now) {
                 return;
             }
@@ -223,4 +232,12 @@ async fn act_quiet(
         _ => return,
     };
     log(core, venue, level, m).await;
+}
+
+/// Повторное ревью t163, Б1 (решение 367): снять подтверждение тихой пары — у адаптера (котировка, book_unconfirmed) и
+/// в состоянии рынка ядра (худшая цена ордера, set_quiet 0). Принимает: ядро, площадку, адаптер, тикер площадки.
+/// Ошибок нет.
+fn unconfirm(core: &Core, venue: &VenueId, v: &dyn Venue, ticker: &str) {
+    v.book_unconfirmed(ticker);
+    super::engine::wr(&core.inner.market).set_quiet(venue, ticker, 0);
 }

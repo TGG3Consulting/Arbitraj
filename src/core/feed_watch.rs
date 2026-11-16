@@ -7,6 +7,8 @@
 //! (контракт book_version; запросы прохода — одновременно, их число ограничивает ведро venue.quiet_confirm_max_per_s),
 //! ответ сравнивает со СВЕЖИМ снимком feed_health (кадр мог прийти, пока шёл запрос) — feed_confirm.rs::apply;
 //! подтверждённая пара: book_confirmed адаптеру (стакан свежий в котировке до следующей проверки).
+//! Решение 367 (t163, ревью Н2): перед проходом — пары, нужные торговле (feed_need.rs): их подтверждают заранее и
+//! первыми в ведре (feed_confirm_queue.rs).
 //! Сторож работает у любой площадки, чей адаптер отдаёт feed_health (поле scheduled больше его не выключает).
 //! Не задана любая настройка решения 202 — сторож площадки выключен (одна запись в журнал), ждёт изменения настроек;
 //! не задана настройка подтверждения — подтверждения нет (причина — в журнале вместе с тихими парами).
@@ -14,7 +16,7 @@
 //! включении, сводка прохода не чаще venue.feed_watch_log_ms, строки решений по паре с той же частотой.
 //! Кто вызывает: core/engine.rs (задача на каждую биржу).
 //! От чего зависит: feed_watch_logic.rs, feed_confirm.rs, feed_watch_act.rs, feed_watch_log.rs, feed_hold.rs,
-//! venue_ticker.rs, engine.rs, gateway (feed_health, book_version), settings.
+//! venue_ticker.rs, feed_need.rs, engine.rs, gateway (feed_health, book_version), settings.
 //! Настройки: venue.book_stale_ms, venue.pair_dead_mult, feed.stale_after_ms, venue.feed_warmup_ms,
 //! venue.pair_resub_attempts, venue.pair_resub_interval_ms, venue.pair_resub_pause_ms, venue.conn_dead_pct,
 //! venue.conn_reconnect_min_ms, venue.conn_reconnect_max_per_hour; решение 213 — venue.quiet_confirm_min_ms,
@@ -125,6 +127,8 @@ pub async fn run(core: Core, venue: VenueId) {
                 m.entry(t).or_default().push(id);
                 m
             });
+        // Решение 367 (ревью Н2): пары, нужные торговле, — ранняя проверка и приоритет в ведре (feed_need.rs).
+        st.needed = super::feed_need::needed(&core, &venue);
         let mut checks = vec![];
         for a in logic::decide(&h, now_ms(), &c, &deals, &mut st) {
             match a {

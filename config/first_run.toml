@@ -1122,7 +1122,7 @@ prefill = { kind = "Venue", id = "bitget" }
 name = "venue.deposit_min_absent_ok"
 area = "площадка Bitget"
 unit = "да/нет"
-method = "решает Тигран после живого ответа: у монет с minDepositAmount «0» или пусто — считать минимум 0 (да) или не торговать с переводом на Bitget"
+method = "решает Тигран (решение 371): minDepositAmount «0» — минимум 0 (решение Тиграна 17.11, читается сам); настройка — только для сетей без поля / null: да — минимум 0, не задано — перевода на Bitget по таким монетам нет"
 source = "Get Coin Info: minDepositAmount; смысл «0» не описан"
 rationale = "Урок 21: «0» и пусто у биржи могут значить разное."
 prefill = { kind = "Venue", id = "bitget" }
@@ -1738,9 +1738,9 @@ prefill = { kind = "Venue", id = "xt" }
 name = "venue.deposit_min_absent_ok"
 area = "площадка XT"
 unit = "да/нет"
-method = "решение Тиграна: минимума депозита в API XT нет; до него не задавать"
-source = "Документация XT: supportedCurrenciesGet.md, depositAddressGet.md"
-rationale = "Урок 21"
+method = "не задавать (решения 366, 370): минимум депозита XT — depositMinAmount справочника сетей, читается сам; «0» — минимум 0 (решение Тиграна 17.11: депозит любой суммы); настройка нужна только для сетей без поля или null (на живом ответе 16.11 таких нет); нечитаемое значение — минимум неизвестен при любой настройке"
+source = "https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetSupportedCurrencies: depositMinAmount «Minimum deposit amount»; смысл «0» документация не определяет"
+rationale = "Решение 370: «0» — минимум 0 по решению владельца 17.11"
 prefill = { kind = "Venue", id = "xt" }
 # --- Биржа Poloniex (решение 169) ---
 [[section]]
@@ -2026,7 +2026,7 @@ prefill = { kind = "Venue", id = "phemex" }
 name = "venue.deposit_min_absent_ok"
 area = "площадка Phemex"
 unit = "да/нет"
-method = "решает Тигран после живого ответа: у монет с minAmountRv «0» или пусто — считать минимум 0 (да) или не торговать с переводом на Phemex"
+method = "решает Тигран (решение 371): minAmountRv «0» — минимум 0 (решение Тиграна 17.11, читается сам); настройка — только для сетей без поля / null: да — минимум 0, не задано — перевода на Phemex по таким монетам нет"
 source = "Query deposit chain settings: minAmountRv необязателен, в примере «0»"
 rationale = "Урок 21: «0» и пусто у биржи могут значить разное."
 prefill = { kind = "Venue", id = "phemex" }
@@ -2466,7 +2466,7 @@ prefill = { kind = "Venue", id = "coinex" }
 name = "venue.deposit_min_absent_ok"
 area = "площадка CoinEx"
 unit = "да/нет"
-method = "решает Тигран после живого ответа: у монет с min_deposit_amount «0» или пусто — считать минимум 0 (да) или не торговать с переводом на CoinEx"
+method = "решает Тигран (решение 371): min_deposit_amount «0» — минимум 0 (решение Тиграна 17.11, читается сам); настройка — только для сетей без поля / null: да — минимум 0, не задано — перевода на CoinEx по таким монетам нет"
 source = "Deposit and Withdrawal Configuration: min_deposit_amount; ниже минимума — too_small"
 rationale = "Урок 21: «0» и пусто могут значить разное."
 prefill = { kind = "Venue", id = "coinex" }
@@ -2606,7 +2606,7 @@ prefill = { kind = "Venue", id = "htx" }
 name = "venue.deposit_min_absent_ok"
 area = "площадка HTX"
 unit = "да/нет"
-method = "Решает Тигран после живого ответа: у монет с minDepositAmt «0» или пусто — считать минимум 0 (да) или не торговать с переводом на HTX"
+method = "решает Тигран (решение 371): minDepositAmt «0» — минимум 0 (решение Тиграна 17.11, читается сам); настройка — только для сетей без поля / null: да — минимум 0, не задано — перевода на HTX по таким монетам нет"
 source = "APIv2 Currency & Chains: minDepositAmt; Get Chains: dma — меньше минимума может не зачислиться никогда"
 rationale = "Урок 21."
 prefill = { kind = "Venue", id = "htx" }

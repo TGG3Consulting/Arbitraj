@@ -182,6 +182,7 @@ pub mod profit;
 pub mod quarantine;
 pub mod queue_notify;
 pub mod quote_cache;
+pub mod quote_count_log;
 pub mod rebuild;
 pub mod rebuild_blacklist;
 pub mod rebuild_build;

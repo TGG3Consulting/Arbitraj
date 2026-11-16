@@ -307,7 +307,14 @@ async fn one(core: &Core, d: &Direction) -> Outcome {
     let mode = super::dry::mode(s);
     // Бюджет — без вычета текущей сделки монеты (busy_budget.rs: признак задачи, действует только здесь).
     let calc = async {
-        match profit::decide(core, d, &mode).await {
+        // Решение 348: назначение «теневой» (замер «кто вызвал котировку»).
+        let work = profit::decide(core, d, &mode);
+        match crate::gateway::quote_purpose::scope(
+            crate::gateway::quote_purpose::Purpose::Shadow,
+            work,
+        )
+        .await
+        {
             Verdict::Accept(c) => Outcome::Accept(Box::new(best(core, &c, &mode))),
             Verdict::Reject { reason, .. } => Outcome::Reject(reason),
         }

@@ -14,6 +14,7 @@
 //! Решение 260: задан signal.probe_usd — котировки на объём проверки сигнала min(probe, потолок) / опорная цена, не ниже
 //! минимумов площадок из памяти (signal_probe.rs) вместо потолка; не задан — побайтно прежний расчёт.
 //! Решение 317 (страховка): в Prices — время котировки каждой стороны (Quote.at; у биржи — кадр стакана адаптера).
+//! Решение 348: котировки сигнала — с назначением «сигнал» (gateway/quote_purpose.rs, только замер).
 //! Кто вызывает: core/evaluate.rs на каждый тик монеты.
 //! От чего зависит: gateway (реестр, котировка), market_state.rs, quote_cache.rs, signal_probe.rs, settings.
 //! Настройки: money.max_per_trade_usd (по площадке A; решение 242 — площадка + тип направления, venue_dir.rs), venue.quote_asset (по площадке), signal.dex_quote_cache_ms,
@@ -28,6 +29,7 @@ use super::deps::Deps;
 use super::engine::{Core, lk, rd};
 use super::signal::Prices;
 use crate::gateway::contract::VenueKind;
+use crate::gateway::quote_purpose::Purpose::Signal;
 
 /// Котировки обеих сторон направления на объём qty.
 /// Принимает: зависимости, направление, объём. Возвращает: (покупка на A, продажа на B).
@@ -142,7 +144,9 @@ pub async fn for_direction(
     };
     // Решение 241: поколение пулов монеты — до котировки (событие пула во время котировки не потеряется).
     let generation = super::window_dex::generation(core, dir);
-    let (qa, qb) = tick_quotes(core, dir, want).await?;
+    // Решение 348: котировки сигнала помечены назначением (замер «кто вызвал»; на расчёт не влияет).
+    let (qa, qb) =
+        crate::gateway::quote_purpose::scope(Signal, tick_quotes(core, dir, want)).await?;
     // Грубый спред — на максимально вливаемом объёме, не выше потолка (решение 87; решение 260 — не выше объёма
     // проверки). fillable_qty ≤ запрошенного, поэтому меньшая из глубин обеих сторон уже в его пределах. Требовать
     // полного заполнения потолка нельзя: тонкие пулы тогда умирают здесь и не доходят до подбора объёма (66).
@@ -156,7 +160,7 @@ pub async fn for_direction(
     // Запрошенный объём не влез целиком — пересчитать обе стороны на реально доступный объём, чтобы цены и спред
     // были согласованы по одному объёму (у сторон разная глубина — берём меньшую).
     let (qa, qb) = if qty < want {
-        tick_quotes(core, dir, qty).await?
+        crate::gateway::quote_purpose::scope(Signal, tick_quotes(core, dir, qty)).await?
     } else {
         (qa, qb)
     };

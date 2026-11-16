@@ -156,9 +156,12 @@ async fn quote(
     let on = super::venue_ticker::on_venue(core, a, &e.venue);
     let kyber = quote_stage::final_external(&core.inner.deps.settings, &e.venue);
     let fin = use_final(kyber, no_limit);
-    let q = quote_stage::final_if(fin, v.quote(&on, e.side, qty))
-        .await
-        .map_err(|x| x.message)?;
+    // Решение 348: назначение «окно» (замер «кто вызвал котировку»).
+    let work = quote_stage::final_if(fin, v.quote(&on, e.side, qty));
+    let q =
+        crate::gateway::quote_purpose::scope(crate::gateway::quote_purpose::Purpose::Window, work)
+            .await
+            .map_err(|x| x.message)?;
     let path = path_of(kyber, fin, &q);
     Ok((super::venue_ticker::quote_back(core, a, &e.venue, q), path))
 }

@@ -49,7 +49,12 @@ pub fn submit(core: &Core, job: Job, wait: bool) {
     tokio::spawn(async move {
         let mut job = job;
         loop {
-            urgency::scope(Urgency::Quote, run(&core, job)).await;
+            // Решение 348: назначение «карточка» (замер «кто вызвал котировку»).
+            let work = crate::gateway::quote_purpose::scope(
+                crate::gateway::quote_purpose::Purpose::Card,
+                run(&core, job),
+            );
+            urgency::scope(Urgency::Quote, work).await;
             let mut jobs = lk(&core.inner.card_jobs);
             match jobs.get_mut(&d).and_then(Option::take) {
                 Some(next) => job = next,

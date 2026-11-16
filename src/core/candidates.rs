@@ -58,6 +58,7 @@ use super::reject_log::Note;
 use super::reject_shape;
 use super::view::CoreEvent;
 use crate::gateway::calc_meter;
+use crate::gateway::quote_purpose::{self, Purpose};
 use crate::gateway::urgency::{self, Urgency};
 
 /// Ставит направление в очередь расчёта (если его там ещё нет). Очередь полна — пропуск
@@ -145,7 +146,11 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
         Urgency::Trade,
         calc_meter::scope(
             t.meter.clone(),
-            calc_timing::scope(t.clone(), profit::decide(core, d, &mode)),
+            // Решение 348: назначение «подбор» — замер «кто вызвал котировку» (на расчёт не влияет).
+            calc_timing::scope(
+                t.clone(),
+                quote_purpose::scope(Purpose::Size, profit::decide(core, d, &mode)),
+            ),
         ),
     );
     // Ключ повтора причины в журнале: у отказа по сроку — без чисел замера (иначе каждый повтор — новая строка).

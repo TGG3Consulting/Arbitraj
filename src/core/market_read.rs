@@ -70,6 +70,21 @@ impl MarketState {
         self.books.get(&(venue.clone(), ticker.to_string()))
     }
 
+    /// Решение 317 (доработка): с какого момента не менялось содержимое уровней стакана, которыми котировка набирает
+    /// объём (book_still.rs). Принимает: площадку, тикер площадки, сторону сделки на бирже, объём в монетах.
+    /// Возвращает: время последнего изменения; None — стакана или уровней нет. Ошибок нет.
+    pub fn book_still_since(
+        &self,
+        venue: &VenueId,
+        ticker: &str,
+        side: Side,
+        qty: Decimal,
+    ) -> Option<DateTime<Utc>> {
+        let key = (venue.clone(), ticker.to_string());
+        let book = self.books.get(&key)?;
+        self.book_marks.get(&key)?.still_since(book, side, qty)
+    }
+
     /// Лучшая цена стакана: для покупки — лучший ask, для продажи — лучший bid. None — нет уровней.
     pub fn best(&self, venue: &VenueId, ticker: &str, side: Side) -> Option<Decimal> {
         let b = self.book(venue, ticker)?;

@@ -59,7 +59,7 @@
           <dd>
             {#if v.above_since}с {showTime(v.above_since)}, обновлений подряд: {v.updates}{:else}нет{/if}
           </dd>
-          <!-- Решения 317, 318: что запустило пересчёт и сколько стоит цена стороны биржи. -->
+          <!-- Решения 317, 318: что запустило пересчёт и сколько не менялись уровни стакана биржи на объёме сравнения. -->
           <dt>Пересчёт запустил</dt>
           <dd>
             {v.trigger === 'Pool' ? 'событие пула' : v.trigger === 'Timer' ? 'таймер дозревания (signal.hold_timer)' : 'тик биржи'}
@@ -70,8 +70,8 @@
             <dd>пересчёт в {showTime(v.ripen_at)} (signal.hold_timer)</dd>
           {/if}
           {#if v.cex_still_ms != null}
-            <dt>Цена биржи стоит</dt>
-            <dd><code>{v.cex_still_ms}</code> мс</dd>
+            <dt>Стакан биржи стоит</dt>
+            <dd><code>{v.cex_still_ms}</code> мс <span class="muted">(уровни на объёме сравнения не менялись)</span></dd>
           {/if}
           <dt>Обновлено</dt>
           <dd>{showTime(v.at)}</dd>

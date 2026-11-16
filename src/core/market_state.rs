@@ -4,6 +4,7 @@
 //! (для подписки DEX, core/subscribe.rs) и состояние их пар (статус, покупка и продажа через API — для справочника,
 //! core/presence.rs), монеты с найденными, но ещё не прочитанными пулами DEX — из событий адаптеров.
 //! Данные, которые площадка объявила недостоверными, удаляются: по ним сделок нет.
+//! Решение 317 (доработка): у стакана — отметки последнего изменения содержимого (book_still.rs), не время кадра.
 //! Чтение состояния (стаканы, пулы, пары, проверки) — market_read.rs.
 //! Кто вызывает: core/engine.rs (применяет события), registry.rs, signal.rs, prices.rs, позже executor.rs.
 //! От чего зависит: core/types, gateway/events.
@@ -26,6 +27,9 @@ pub use super::touched::Touched;
 #[derive(Default)]
 pub struct MarketState {
     pub(super) books: HashMap<(VenueId, String), OrderBook>,
+    /// Решение 317 (доработка): когда последний раз менялось СОДЕРЖИМОЕ стакана (по префиксам уровней, book_still.rs);
+    /// кадр с тем же содержимым отметки не двигает. Ключ — как у books.
+    pub(super) book_marks: HashMap<(VenueId, String), super::book_still::BookMarks>,
     pub(super) pools: HashMap<(VenueId, PoolRef), Pool>,
     /// Индекс пулов по паре токенов (решение 129): (площадка, меньший адрес, больший адрес) → пулы. Справочник монет
     /// искал пулы пары проходом ВСЕХ пулов на каждую монету и промежуточную (O(монеты × пулы)) — у MEXC это тысячи ×
@@ -69,6 +73,10 @@ impl MarketState {
             MarketEvent::Book(b) => {
                 let key = (b.venue.clone(), b.asset.ticker.clone());
                 let (venue, ticker) = key.clone();
+                self.book_marks
+                    .entry(key.clone())
+                    .or_default()
+                    .note(self.books.get(&key), &b);
                 let first = self.books.insert(key, b).is_none();
                 Touched::Book {
                     venue,
@@ -102,6 +110,7 @@ impl MarketState {
                 address,
             } => {
                 self.books.remove(&(venue.clone(), ticker.clone()));
+                self.book_marks.remove(&(venue.clone(), ticker.clone()));
                 Touched::Invalidated {
                     venue,
                     ticker,

@@ -6,8 +6,9 @@
 //! мигает (держится меньше signal.min_hold_ms или меньше signal.min_hold_updates обновлений подряд),
 //! аномально велик (выше signal.anomaly_spread_pct — нужна перепроверка статусов ввода/вывода)
 //! или по направлению идёт пауза после сделки или ошибки (signal.route_cooldown_s).
-//! Решение 317: при signal.dex_event_skip_hold = да кандидат от события пула DEX выдаётся без удержания, если цена
-//! стороны биржи не менялась не меньше signal.min_hold_ms (signal_fast.rs); не задана — побайтно прежний фильтр.
+//! Решение 317: при signal.dex_event_skip_hold = да кандидат от события пула DEX выдаётся без удержания, если уровни
+//! стакана биржи на объёме сравнения не менялись не меньше signal.min_hold_ms (signal_fast.rs; отметка — из состояния
+//! рынка ядра, book_still.rs); не задана — побайтно прежний фильтр.
 //! Решение 318: при signal.hold_timer = да у «держится» есть срок дозревания ripen_at = max(above_since +
 //! signal.min_hold_ms, сейчас) — по нему таймер (signal_ripen.rs) сам ставит пересчёт; не задана — срока нет.
 //! Кто вызывает: core/evaluate.rs на каждый пересчёт монеты (после prices.rs).
@@ -20,7 +21,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 
-use super::signal_fast::{Ctx, Sides};
+use super::signal_fast::Ctx;
 use crate::core::types::Direction;
 use crate::settings::read::At;
 use crate::settings::store::Store;
@@ -65,8 +66,6 @@ struct Track {
     above_since: Option<DateTime<Utc>>,
     updates: u64,
     cooldown_until: Option<DateTime<Utc>>,
-    /// Решение 317: цены сторон биржа ↔ DEX и с каких пор стоит цена биржи (signal_fast.rs).
-    sides: Sides,
 }
 
 /// Фильтр шума по всем направлениям.
@@ -90,7 +89,7 @@ impl Signals {
     }
 
     /// Обновляет направление пересчётом. Принимает: как update и обстоятельства пересчёта (решение 317: сторона DEX,
-    /// что запустило). Возвращает: строку «Живого экрана». Ошибок нет.
+    /// что запустило, сколько стоит стакан биржи). Возвращает: строку «Живого экрана». Ошибок нет.
     pub fn update_with(
         &mut self,
         dir: &Direction,
@@ -110,13 +109,13 @@ impl Signals {
             at: now,
             trigger: ctx.trigger,
             skipped_hold: false,
-            cex_still_ms: None,
+            cex_still_ms: ctx.cex_still_ms,
             ripen_at: None,
         };
         let p = match prices {
             Ok(p) => p,
             Err(e) => {
-                // Нет цены — счётчики и память сторон (решение 317) сбрасываются: «стоит» только то, что видели.
+                // Нет цены — счётчики сбрасываются.
                 *t = Track {
                     cooldown_until: t.cooldown_until,
                     ..Track::default()
@@ -132,9 +131,6 @@ impl Signals {
         };
         view.spread_pct = Some(spread);
         view.prices = Some(p.clone());
-        // Решение 317: стороны наблюдаются на каждом пересчёте, и ниже порога тоже — цена биржи «стоит» с тех пор.
-        let seen = t.sides.observe(ctx, p.buy, p.sell, now);
-        view.cex_still_ms = seen.map(|s| s.cex_still_ms);
         if spread <= p.fees_pct {
             t.above_since = None;
             t.updates = 0;
@@ -153,12 +149,7 @@ impl Signals {
                     .above_since
                     .map(|s| (now - s).num_milliseconds().max(0) as u64)
                     .unwrap_or(0);
-                let skip = super::signal_fast::skip_hold(
-                    par.skip_on_pool,
-                    par.hold_ms,
-                    ctx,
-                    seen.as_ref(),
-                );
+                let skip = super::signal_fast::skip_hold(par.skip_on_pool, par.hold_ms, ctx);
                 if held >= par.hold_ms && t.updates >= par.hold_updates {
                     State::Candidate
                 } else if skip {

@@ -81,8 +81,13 @@ pub async fn evaluate(core: &Core, asset: &Asset, run: &super::tick_plan::Run) {
             vol.sample(b, &dir.asset, Side::Sell, a, p.sell, now, w);
         }
         let timer = lk(&core.inner.ripen).take_fired(&dir);
-        let ctx = super::signal_ctx::of(core, &dir, venues, timer);
-        let mut view = lk(&core.inner.signals).update_with(&dir, prices, &params, Utc::now(), &ctx);
+        let now = Utc::now();
+        let mut ctx = super::signal_ctx::of(core, &dir, venues, timer);
+        // Решение 317 (доработка): сколько стоят уровни стакана биржи на объёме сравнения — из состояния рынка.
+        if let Ok(p) = &prices {
+            ctx.cex_still_ms = super::signal_ctx::cex_still_ms(core, &dir, &ctx, p.qty, now);
+        }
+        let mut view = lk(&core.inner.signals).update_with(&dir, prices, &params, now, &ctx);
         if let Some(w) = &waiting {
             view.state = State::TaxesNotChecked(w.clone());
         }

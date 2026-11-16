@@ -3,11 +3,17 @@
 //! (по виду площадки из реестра шлюза, VenueKind — без знания конкретных площадок) и что запустило пересчёт:
 //! событие пула DEX (площадка DEX направления прислала тик — у DEX тик бывает только от MarketEvent::Pool,
 //! core/tick.rs Touched::Pool), таймер дозревания (решение 318) или тик биржи.
+//! Решение 317 (доработка): сколько мс стоят уровни стакана биржи направления на объёме сравнения — из отметок
+//! изменения содержимого стакана в состоянии рынка ядра (market_read.rs book_still_since, book_still.rs).
 //! Кто вызывает: core/evaluate.rs на каждое направление пересчёта.
-//! От чего зависит: core/engine.rs (Inner.kinds), core/signal_fast.rs (Ctx, Trigger), gateway/contract (VenueKind).
+//! От чего зависит: core/engine.rs (Inner.kinds, Inner.market), core/venue_ticker.rs, core/signal_fast.rs (Ctx,
+//! Trigger), gateway/contract (VenueKind).
 //! Настройки: нет.
 
 use std::collections::HashSet;
+
+use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 
 use crate::core::types::{Direction, Side, VenueId};
 use crate::gateway::contract::VenueKind;
@@ -50,5 +56,29 @@ pub fn of(core: &Core, dir: &Direction, venues: &HashSet<VenueId>, timer: bool) 
     } else {
         Trigger::Book
     };
-    Ctx { dex_side, trigger }
+    Ctx {
+        dex_side,
+        trigger,
+        ..Ctx::default()
+    }
+}
+
+/// Что делает: сколько мс не менялись уровни стакана биржи направления биржа ↔ DEX, которыми котировка набирает объём.
+/// Принимает: ядро, направление, обстоятельства (сторона DEX), объём сравнения (Prices.qty), время пересчёта.
+/// Возвращает: мс; None — направление не биржа ↔ DEX или стакана биржи нет в состоянии рынка. Ошибок нет.
+pub fn cex_still_ms(
+    core: &Core,
+    dir: &Direction,
+    ctx: &Ctx,
+    qty: Decimal,
+    now: DateTime<Utc>,
+) -> Option<u64> {
+    // Сторона DEX — покупка: на бирже продаём (bids); сторона DEX — продажа: на бирже покупаем (asks).
+    let (venue, side) = match ctx.dex_side? {
+        Side::Buy => (&dir.sell_on, Side::Sell),
+        Side::Sell => (&dir.buy_on, Side::Buy),
+    };
+    let ticker = super::venue_ticker::ticker_on(core, &dir.asset, venue);
+    let since = rd(&core.inner.market).book_still_since(venue, &ticker, side, qty)?;
+    Some((now - since).num_milliseconds().max(0) as u64)
 }

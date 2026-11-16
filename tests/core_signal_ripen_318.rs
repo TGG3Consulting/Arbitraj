@@ -56,6 +56,7 @@ fn ctx(trigger: Trigger) -> Ctx {
     Ctx {
         dex_side: Some(Side::Buy),
         trigger,
+        ..Default::default()
     }
 }
 

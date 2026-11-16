@@ -41,6 +41,30 @@
   затем у адреса _MT_FEE_RATE_MODEL_: feeRateImpl(); у адреса feeRateImpl: version() и getFeeRate(pool, 0x000…000).
   Сохрани запросы и ответы как есть (JSON: метод, params, result/error) в tests/data/dodo_kjudge_<дата>/ с README:
   узел, номер блока, время.» По этой записи — тест на ответе KJUDGE_ERROR и факт «K = 0 и нулевой резерв» на BSC.
+  **(а) снято 16.11.2026** — tests/data/dodo_kjudge_2026-11-16 (тест tests/bsc_dex_dodo_kjudge_2026_11_16.rs, разбор —
+  docs/notes/t153-session-and-verify-2026-11-16.md, раздел 10): KJUDGE на блоке H не воспроизвёлся — сняты НЕ те пулы
+  (у всех 5 K ≠ 0); в журнале адресов пулов нет; один и тот же набор 19–21 пула DODO падает в каждом приёме пачки.
+  **Открыто (б) — промпт серверному ИИ:**
+  «Только чтение, ничего не менять, бот не трогать. Свой узел BSC по HTTP; все eth_call — на одном блоке H
+  (eth_blockNumber один раз). 1) Адреса пулов DODO, которые бот не читает: экран «Монеты» / GET /api/coins бота — у
+  монет USDC, CAKE, PORTO, BNB, ETH, DEXE, 1INCH пулы площадки bsc_dex видов dodo-dvm / dodo-dpp / dodo-dsp с
+  valid = false (адрес пула, обе монеты, details). Если API недоступен — фабрики из настроек dex.factory видов
+  dodo_dvm / dodo_dpp / dodo_dsp: getDODOPoolBidirection(монета, X) (0x794e5538) для X = USDT и каждого адреса из
+  dex.intermediate_tokens, все пулы. 2) У каждого пула — РОВНО вызовы бота по порядку (load_dodo.rs):
+  getPMMStateForCall() 0xfd1ed7e9, getUserFeeRate(0x0000000000000000000000000000000000000000) 0x44096609,
+  _BASE_TOKEN_() 0x4a248d2a, _QUOTE_TOKEN_() 0xd4b97046; и для разбора: version() 0x54fd4d50, _K_() 0xec2fd46d,
+  _BASE_RESERVE_() 0x7d721504, _QUOTE_RESERVE_() 0xbbf5ce78, querySellBase(0x0…0, 1) 0x79a04876,
+  querySellQuote(0x0…0, 1) 0x66410a21, у 0xe5e9b0cab984b58b7e7ae17707d633295d5a4c4d getFeeRate(пул, 0x0…0) 0x848cc303.
+  3) eth_getCode(0xe5e9b0cab984b58b7e7ae17707d633295d5a4c4d): есть ли в байткоде 4b4a554447455f4552524f52
+  («KJUDGE_ERROR») — да/нет. 4) Журнал бота за сутки: перед каждым всплеском записей dex.pool с KJUDGE_ERROR — все
+  записи ЛЮБОГО вида за 30 с до первой записи всплеска (почему пачка переподключилась), время и текст целиком.
+  Сохрани запросы и ответы как есть (JSON: метод, params, result/error) в tests/data/dodo_kjudge_<дата>_2/ с README:
+  узел, номер блока, время.» По записи — тест на самом ответе KJUDGE_ERROR, факт «K = 0 и нулевой резерв» у каждого
+  откатившегося пула и причина переподключений пачек.
+  **Предложение (код не трогали, идёт CI; решать Тиграну):** в журнале dex.pool нет адреса пула — нельзя сопоставить
+  запись с пулом (у dodo-dpp USDC 7 разных пулов под одной подписью). Добавить адрес `{found.reference:?}` в тексты:
+  pools/admit.rs:62 и :125 («… не прочитано … — повтор на новых блоках»), pools/reload.rs:116 и :136 («… не прочитано
+  за N попыток …»), pools/pool_fail_note.rs note (текст «… (решение 339)»; в уведомлении dex.pool_unread адрес уже есть).
 - **Ревью t153 (16.11.2026, та же ветка; DECISIONS «339 (ревью, t153)») — Б1 и Н1–Н9 исправлены, задача t160
   (dex.per_block_skip_same) сделана; ждёт сборки и тестов в GitHub.** Локально не собиралось. **Как включать (после
   339):** dex.pool_unread_alert_s = 300; dex.per_block_skip_same = да — только при dex.pool_events_keep = да (без неё не

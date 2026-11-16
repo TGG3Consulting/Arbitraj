@@ -979,3 +979,10 @@ load_batch_par::states (пределы 1, 2, 8) = load_batch::states на зап
 ошибка связи узла пауз не растит, «сейчас + пауза» без паники, чистка отметок, уведомление один раз на эпизод,
 requeue при изоляции, EventLanes finish / shutdown без узла; каталог настроек и события dex.pool_unread.
 tests/bsc_dex_pool_fail_339.rs — журнал на смену КОДА причины (ревью t153, Н4).
+
+DODO «KJUDGE_ERROR» на записях живого бота 16.11.2026 (t153 (а); tests/data/dodo_kjudge_2026-11-16) —
+tests/bsc_dex_dodo_kjudge_2026_11_16.rs: журнал (493 записи — один текст отката, адресов пулов нет, в приёме 20:26 —
+21 пул по одной записи Warn и Error), ответ узла с KJUDGE_ERROR = SwapReverted, не сбой связи (пауза 339 растёт),
+данные отката Error(string) «KJUDGE_ERROR»; пять пулов на блоке 133993452: состояние getPMMStateForCall нашим ABI,
+K и резервы = геттерам, версии из списка _kjudge, условия «K = 0 и нулевой резерв» нет, mtFeeRate =
+feeRateImpl.getFeeRate(пул, 0); пул DPP ETH с резервами 0/0 читается, но не котируется (swap_dodo → None).

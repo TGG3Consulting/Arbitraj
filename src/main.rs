@@ -56,18 +56,25 @@ async fn run() -> Result<(), String> {
     let settings = Store::load(db.clone(), changes.clone(), journal.clone())
         .await
         .map_err(|e| e.to_string())?;
-    // Решения 341, 342: режимы записи хранилища (очередь журнала, учёт сделок в своём файле) — до первых записей
+    // Решение 353: учёт ядра — свой файл ledger.sqlite (Db::open); перенесённое из основной базы — в журнал.
+    let moved = db.ledger().moved();
+    if moved > 0 {
+        let m = format!(
+            "Учёт ядра (сделки, переводы, итог дня, очередь кошелька DEX) перенесён в свой файл {}: {moved} строк",
+            arb::storage::ledger_db::LEDGER_FILE
+        );
+        let _ = journal
+            .write(Level::Info, "storage.ledger", None, m, None)
+            .await;
+    }
+    // Решения 341, 353: режимы записи хранилища (очередь и пачки журнала, synchronous учёта ядра) — до первых записей
     // адаптеров и до загрузки сделок ядром; дальше — на лету (storage/write_modes.rs).
     arb::storage::write_modes::apply(&journal, &db, &settings);
     tokio::spawn(arb::storage::write_modes::run(
         journal.clone(),
         db.clone(),
         settings.clone(),
-        Watch::new(changes.subscribe(), vec![
-            arb::storage::write_modes::JOURNAL_MAX.into(),
-            arb::storage::write_modes::LEDGER_OWN.into(),
-            arb::storage::write_modes::LEDGER_SYNC.into(),
-        ]),
+        Watch::new(changes.subscribe(), arb::storage::write_modes::names()),
     ));
     let vault = Vault::locked(arb::secrets::file::path_in(&args.data_dir));
     // Редиректы выключены (gateway/http_bind.rs builder — одно место для всех клиентов, решение 178).

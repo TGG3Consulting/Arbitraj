@@ -7,7 +7,8 @@
 //! накопленное одной транзакцией по порядку (storage/journal_queue.rs); не задана — как раньше (запись ждётся).
 //! Кто вызывает: settings/store.rs (изменения настроек), notify/, api/; позже шлюз (ошибки).
 //! От чего зависит: storage/db.rs, storage/journal_queue.rs, tokio::sync::broadcast.
-//! Настройки: journal.queue_max (включает очередь; читает storage/journal_mode.rs и передаёт set_queue_max).
+//! Настройки: journal.queue_max (включает очередь), journal.batch_max (размер пачки) — читает storage/write_modes.rs и
+//! передаёт set_queue_max, set_batch_max.
 
 use chrono::{DateTime, Utc};
 use rusqlite::params;
@@ -126,6 +127,12 @@ impl Journal {
     /// Решение 341: предел очереди записи (journal.queue_max); None или 0 — очередь выключена (как раньше). Ошибок нет.
     pub fn set_queue_max(&self, max: Option<u64>) {
         self.queue.set_max(max);
+    }
+
+    /// Решение 341: предел записей в одной транзакции пачки (journal.batch_max); None или 0 — всё накопленное.
+    /// Ошибок нет.
+    pub fn set_batch_max(&self, max: Option<u64>) {
+        self.queue.set_batch_max(max);
     }
 
     /// Решение 341: ждёт, пока очередь записи опустеет (всё записано в базу). Очереди нет — сразу. Ошибок нет.

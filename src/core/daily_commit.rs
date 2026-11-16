@@ -6,7 +6,7 @@
 //! Кто вызывает: daily.rs (record, settle), daily_load.rs (load, transfer), daily_limit.rs и daily_venue_limit.rs
 //! (сброс лимита); announce — ledger.rs, ledger_load.rs, daily_load.rs, сбросы лимита.
 //! От чего зависит: daily.rs (Book, prov_on), daily_venue.rs, day_pair.rs, daily_venue_limit.rs, daily_limit.rs,
-//! deal_text.rs, storage/db.rs.
+//! deal_text.rs, storage/db.rs (решение 353: таблица daily_result — в файле учёта ledger.sqlite, Db::ledger).
 //! Настройки: нет (лимиты читают daily_venue_limit.rs и daily_limit.rs).
 
 use chrono::{NaiveDate, Utc};
@@ -79,7 +79,8 @@ pub(super) async fn commit(core: &Core, date: NaiveDate, book: Book) -> Trip {
         .inner
         .deps
         .db
-        .call(move |c| {
+        .ledger()
+        .write(move |c| {
             c.execute(
                 "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)
                  ON CONFLICT(day) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",

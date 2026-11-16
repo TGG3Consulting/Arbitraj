@@ -1,173 +1,181 @@
 //! Файл: storage/ledger_db.rs
-//! Что делает: решение 342 (Тигран 16.11: «Сделка имеет своё отдельное соединение и ни с кем не конкурирует») — учёт
-//! сделок в ОТДЕЛЬНОМ файле SQLite рядом с основной базой (LEDGER_FILE, таблица core_state той же схемы) со своим
-//! соединением и своим потоком ОС. В SQLite писатель один на ФАЙЛ, поэтому только отдельный файл гарантирует, что ни
-//! одна запись журнала, окна, эпизода, настроек или отчёта не встанет перед записью сделки (у этого файла нет других
-//! писателей). Запросы идут по порядку постановки; сохранение отвечает после коммита — сделка ждёт только свою
-//! запись (долговечность — как PRAGMA synchronous этого соединения, настройка ledger.synchronous).
-//! Включается настройкой ledger.own_db (storage/write_modes.rs → Db::set_ledger). Соединение одно на весь запуск бота:
-//! выключение только перестаёт направлять сюда записи (соединение и поток живут дальше), повторное включение берёт то
-//! же соединение — у файла никогда нет двух писателей. Смена ledger.synchronous — PRAGMA тем же потоком по порядку;
-//! снятие настройки (не задана) PRAGMA не меняет — прежнее значение действует до перезапуска. Выключено — файл не
-//! пишется, но читается при загрузке (core/persist.rs load: сделки из обоих файлов, по каждой — запись с последним updated_at),
-//! поэтому включение и выключение на ходу не теряют ни одной сделки и не требуют переноса старой базы.
-//! Кто вызывает: storage/db.rs (set_ledger, ledger, ledger_rows), core/persist.rs (через Db).
-//! От чего зависит: rusqlite, std::sync::mpsc, tokio::sync::oneshot.
-//! Настройки: ledger.own_db, ledger.synchronous (читает storage/write_modes.rs).
+//! Что делает: решение 353 (Тигран 16.11: «Сделка имеет своё отдельное соединение и ни с кем не конкурирует») — учёт
+//! ядра в ОТДЕЛЬНОМ файле SQLite рядом с основной базой (LEDGER_FILE): таблицы core_state (сделки и их шаги, переводы,
+//! газ, ручное управление), daily_result (итог дня), wallet_queue (очередь транзакций кошелька DEX) — всё, что нужно
+//! для восстановления после сбоя. По документации SQLite (https://www.sqlite.org/wal.html, раздел «Concurrency»)
+//! писатель в режиме WAL один на ФАЙЛ: второе соединение к тому же файлу ждало бы конца чужой транзакции (журнала,
+//! окон, отчётов). Поэтому только свой файл гарантирует, что запись учёта не ждёт ни одной чужой записи: у этого файла
+//! нет других писателей.
+//!
+//! Устройство: писатель — своё соединение в своём потоке ОС (не пул блокирующих задач tokio); запросы по порядку
+//! постановки; вызывающий ждёт только коммита своей короткой транзакции (сделка — одна строка). Чтение — второе
+//! соединение (WAL: читатели и писатель не ждут друг друга, читатель видит последнее подтверждённое состояние).
+//! Долговечность — PRAGMA synchronous писателя (настройка ledger.synchronous; не задана — значение SQLite по умолчанию).
+//! Прямой режим (direct) — для внешних инструментов (src/bin, Db::open_existing): одно соединение, без потока.
+//! Перенос из основной базы — storage/ledger_move.rs (при каждом открытии, только недостающее или более новое).
+//! Кто вызывает: storage/db.rs (open, open_existing, ledger), core/persist.rs, core/daily_*.rs, storage/wallet_queue.rs,
+//! core/usdt_sent_backfill.rs, storage/write_modes.rs (set_synchronous).
+//! От чего зависит: rusqlite, std::sync::mpsc, tokio (oneshot, spawn_blocking), storage/ledger_move.rs.
+//! Настройки: ledger.synchronous (передаёт storage/write_modes.rs).
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Sender, channel};
+use std::sync::{Arc, Mutex};
 
-use chrono::Utc;
-use rusqlite::{Connection, OpenFlags, params};
+use rusqlite::Connection;
 use tokio::sync::oneshot;
 
 use super::db::DbError;
 
-/// Имя файла учёта сделок рядом с основной базой (как имя основной базы — main.rs DB_FILE).
+/// Имя файла учёта ядра рядом с основной базой (main.rs DB_FILE).
 pub const LEDGER_FILE: &str = "ledger.sqlite";
 
-/// Схема файла учёта: та же таблица core_state, что в основной базе (storage/db.rs SCHEMA).
-const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS core_state (
+/// Схема файла учёта: те же таблицы, что в основной базе (storage/db.rs SCHEMA), — код читает и пишет их как раньше.
+pub(super) const SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS daily_result (
+    day  TEXT PRIMARY KEY,
+    body TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS wallet_queue (
+    venue TEXT PRIMARY KEY,
+    body  TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS core_state (
     kind TEXT NOT NULL,
     id   TEXT NOT NULL,
     body TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (kind, id)
-);";
+);
+";
 
-/// Строка учёта: id, тело JSON, updated_at (RFC 3339).
-pub type Row = (String, String, String);
+/// Задание писателю: функция над его соединением (ответ — внутри, через oneshot).
+type Job = Box<dyn FnOnce(&mut Connection) + Send>;
 
-/// Запрос потоку учёта.
-enum Req {
-    Save {
-        kind: String,
-        id: String,
-        body: String,
-        reply: oneshot::Sender<Result<(), DbError>>,
-    },
-    Load {
-        kind: String,
-        reply: oneshot::Sender<Result<Vec<Row>, DbError>>,
-    },
-    /// Новое значение PRAGMA synchronous — по порядку с записями.
-    Sync(String),
-}
-
-/// Соединение учёта сделок (поток ОС). Дешёво клонируется; последний клон удалён — поток дописывает и завершается.
+/// Учёт ядра. Дешёво клонируется; последний клон удалён — поток писателя завершается.
 #[derive(Clone)]
 pub struct LedgerDb {
-    tx: Sender<Req>,
+    /// Поток писателя (бот); None — прямой режим: запись тем же соединением, что чтение.
+    writer: Option<Sender<Job>>,
+    /// Соединение чтения (в прямом режиме — единственное).
+    read: Arc<Mutex<Connection>>,
+    /// synchronous писателя при открытии (значение SQLite по умолчанию) — для снятия настройки ledger.synchronous.
+    sync0: Option<i64>,
+    /// Сколько строк перенесено из основной базы при открытии (ledger_move.rs).
+    moved: usize,
 }
 
 impl LedgerDb {
-    /// Открывает (создаёт) файл учёта: WAL, synchronous (если задан), таблица; запускает поток. Принимает: путь,
-    /// значение synchronous (OFF / NORMAL / FULL / EXTRA — https://www.sqlite.org/pragma.html#pragma_synchronous).
+    /// Что делает: открывает (создаёт) файл учёта: WAL, таблицы, перенос недостающего из основной базы, поток писателя
+    /// и соединение чтения. Принимает: путь файла учёта, соединение основной базы (только чтение для переноса).
     /// Ошибки: файл, SQLite, поток не запустился.
-    pub fn open(path: &Path, synchronous: Option<String>) -> Result<Self, DbError> {
-        let conn = Connection::open(path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL;")?;
-        if let Some(s) = &synchronous {
-            conn.pragma_update(None, "synchronous", s)?;
-        }
-        conn.execute_batch(SCHEMA)?;
-        let (tx, rx) = channel::<Req>();
+    pub fn open(path: &Path, main: &Connection) -> Result<Self, DbError> {
+        let mut w = Connection::open(path)?;
+        w.execute_batch("PRAGMA journal_mode=WAL;")?;
+        w.execute_batch(SCHEMA)?;
+        let sync0: i64 = w.pragma_query_value(None, "synchronous", |r| r.get(0))?;
+        let moved = super::ledger_move::from_main(main, &mut w)?;
+        let read = Connection::open(path)?;
+        read.execute_batch("PRAGMA query_only=ON;")?;
+        let (tx, rx) = channel::<Job>();
         std::thread::Builder::new()
             .name("ledger-db".into())
             .spawn(move || {
-                // Запросы по порядку постановки; выход — когда все клоны удалены.
-                while let Ok(r) = rx.recv() {
-                    serve(&conn, r);
+                let mut w = w;
+                // Задания по порядку постановки; выход — когда все клоны удалены.
+                while let Ok(job) = rx.recv() {
+                    job(&mut w);
                 }
             })
             .map_err(|e| DbError::Join(e.to_string()))?;
-        Ok(Self { tx })
+        Ok(Self {
+            writer: Some(tx),
+            read: Arc::new(Mutex::new(read)),
+            sync0: Some(sync0),
+            moved,
+        })
     }
 
-    /// Новое значение PRAGMA synchronous — выполняется потоком учёта после уже поставленных записей. Принимает:
-    /// значение. Ошибок нет (ошибка SQLite — в лог процесса; соединение остаётся со старым значением).
-    pub fn set_synchronous(&self, v: &str) {
-        let _ = self.tx.send(Req::Sync(v.to_string()));
+    /// Что делает: прямой режим — одно соединение для чтения и записи, без потока (внешние инструменты src/bin: файл
+    /// учёта, открытый как основная база, или сама основная база, если файла учёта ещё нет). Принимает: соединение.
+    /// Ошибок нет.
+    pub fn direct(conn: Arc<Mutex<Connection>>) -> Self {
+        Self {
+            writer: None,
+            read: conn,
+            sync0: None,
+            moved: 0,
+        }
     }
 
-    /// Сохраняет запись (новую или поверх) и ждёт коммита — только своей записи. Принимает: вид, id, тело JSON.
-    /// Ошибки: SQLite, поток учёта завершился.
-    pub async fn save(&self, kind: &str, id: &str, body: String) -> Result<(), DbError> {
-        let (reply, rx) = oneshot::channel();
-        let req = Req::Save {
-            kind: kind.to_string(),
-            id: id.to_string(),
-            body,
-            reply,
+    /// Сколько строк перенесено из основной базы при открытии. Ошибок нет.
+    pub fn moved(&self) -> usize {
+        self.moved
+    }
+
+    /// Что делает: запись учёта — функция над соединением писателя; ждётся только её коммит (задания писателя идут по
+    /// порядку постановки, у файла других писателей нет). Принимает: функцию. Возвращает: её результат.
+    /// Ошибки: SQLite, поток писателя завершился.
+    pub async fn write<T, F>(&self, f: F) -> Result<T, DbError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&mut Connection) -> Result<T, rusqlite::Error> + Send + 'static,
+    {
+        let Some(tx) = &self.writer else {
+            return self.read(f).await;
         };
-        self.tx.send(req).map_err(|_| gone())?;
+        let (reply, rx) = oneshot::channel();
+        let job: Job = Box::new(move |c| {
+            // Ответ никто не ждёт (вызывающий отменён) — не ошибка: запись уже сделана.
+            let _ = reply.send(f(c).map_err(DbError::from));
+        });
+        tx.send(job).map_err(|_| gone())?;
         rx.await.map_err(|_| gone())?
     }
 
-    /// Все строки вида (через поток учёта — после всех поставленных записей). Ошибки: SQLite, поток завершился.
-    pub async fn load(&self, kind: &str) -> Result<Vec<Row>, DbError> {
-        let (reply, rx) = oneshot::channel();
-        let req = Req::Load {
-            kind: kind.to_string(),
-            reply,
-        };
-        self.tx.send(req).map_err(|_| gone())?;
-        rx.await.map_err(|_| gone())?
+    /// Что делает: чтение учёта — функция над соединением чтения в отдельном потоке (spawn_blocking); писателя не
+    /// ждёт (WAL). Принимает: функцию. Возвращает: её результат. Ошибки: SQLite, сбой потока, замок отравлен.
+    pub async fn read<T, F>(&self, f: F) -> Result<T, DbError>
+    where
+        T: Send + 'static,
+        F: FnOnce(&mut Connection) -> Result<T, rusqlite::Error> + Send + 'static,
+    {
+        let conn = self.read.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut guard = conn.lock().map_err(|_| DbError::Poisoned)?;
+            f(&mut guard).map_err(DbError::from)
+        })
+        .await
+        .map_err(|e| DbError::Join(e.to_string()))?
     }
-}
 
-/// Ошибка «поток учёта завершился». Ошибок нет.
-fn gone() -> DbError {
-    DbError::Join("поток учёта сделок (ledger.sqlite) завершился".into())
-}
-
-/// Выполняет один запрос в потоке учёта. Принимает: соединение, запрос. Ошибок нет (ответ — в канал запроса).
-fn serve(c: &Connection, r: Req) {
-    match r {
-        Req::Save {
-            kind,
-            id,
-            body,
-            reply,
-        } => {
-            let res = c
-                .execute(
-                    "INSERT INTO core_state (kind, id, body, updated_at) VALUES (?1, ?2, ?3, ?4)
-                     ON CONFLICT(kind, id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
-                    params![kind, id, body, Utc::now().to_rfc3339()],
-                )
-                .map(|_| ())
-                .map_err(DbError::from);
-            let _ = reply.send(res);
-        }
-        Req::Load { kind, reply } => {
-            let _ = reply.send(rows(c, &kind).map_err(DbError::from));
-        }
-        Req::Sync(v) => {
-            if let Err(e) = c.pragma_update(None, "synchronous", &v) {
-                tracing::error!(%e, v, "ledger.sqlite: PRAGMA synchronous не применена");
+    /// Что делает: PRAGMA synchronous писателя (https://www.sqlite.org/pragma.html#pragma_synchronous) — заданием по
+    /// порядку с записями. None — значение при открытии (SQLite по умолчанию). Прямой режим — ничего.
+    /// Принимает: значение (NORMAL / FULL / EXTRA). Ошибок нет: ошибка SQLite — в лог процесса.
+    pub fn set_synchronous(&self, v: Option<String>) {
+        let (Some(tx), Some(sync0)) = (&self.writer, self.sync0) else {
+            return;
+        };
+        let job: Job = Box::new(move |c| {
+            let r = match &v {
+                Some(s) => c.pragma_update(None, "synchronous", s),
+                None => c.pragma_update(None, "synchronous", sync0),
+            };
+            if let Err(e) = r {
+                tracing::error!(%e, ?v, "ledger.sqlite: PRAGMA synchronous не применена");
             }
+        });
+        if tx.send(job).is_err() {
+            tracing::error!("ledger.sqlite: поток писателя завершился — synchronous не применена");
         }
     }
 }
 
-/// Строки вида из соединения. Принимает: соединение, вид. Ошибки: SQLite.
-pub fn rows(c: &Connection, kind: &str) -> rusqlite::Result<Vec<Row>> {
-    let mut st = c.prepare("SELECT id, body, updated_at FROM core_state WHERE kind = ?1")?;
-    let it = st.query_map(params![kind], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
-    it.collect()
-}
-
-/// Строки вида из файла учёта, когда соединения учёта нет (ledger.own_db выключена, или инструмент): только чтение;
-/// файла нет — пусто. Принимает: путь, вид. Ошибки: SQLite (файл есть, но не читается).
-pub fn read_file(path: &Path, kind: &str) -> Result<Vec<Row>, DbError> {
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
-    let c = Connection::open_with_flags(path, flags)?;
-    Ok(rows(&c, kind)?)
+/// Ошибка «поток писателя учёта завершился». Ошибок нет.
+fn gone() -> DbError {
+    DbError::Join("поток записи учёта ядра (ledger.sqlite) завершился".into())
 }
 
 /// Путь файла учёта рядом с основной базой. Принимает: путь основной базы. Ошибок нет.

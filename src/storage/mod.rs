@@ -8,7 +8,6 @@
 //! Настройки: нет.
 
 pub mod db;
-mod db_ledger;
 pub mod episode_files;
 pub mod episodes_db;
 pub mod journal;
@@ -16,6 +15,7 @@ pub mod journal_queue;
 pub mod journal_repeat;
 pub mod journal_stop;
 pub mod ledger_db;
+mod ledger_move;
 pub mod notify_mirror;
 pub mod raw_log;
 pub mod rules;

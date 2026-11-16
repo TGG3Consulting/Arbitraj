@@ -1,14 +1,17 @@
 //! Файл: storage/journal_queue.rs
 //! Что делает: решение 341 (задача t158) — очередь записи журнала: при заданной journal.queue_max Journal::write кладёт
 //! запись сюда и сразу возвращается; отдельный поток ОС (не пул блокирующих задач tokio, общий со счётом котировок DEX)
-//! пишет всё накопленное ОДНОЙ транзакцией по порядку постановки и затем отдаёт записи в живой поток интерфейса с
-//! настоящим id. Очередь полна — запись не ставится, счёт потерь; следующая пачка сама добавляет запись
+//! пишет накопленное ОДНОЙ транзакцией по порядку постановки и затем отдаёт записи в живой поток интерфейса с
+//! настоящим id. Размер пачки — не больше journal.batch_max записей (не задана — всё накопленное): транзакция пачки
+//! держит замок основной базы, короткая пачка — короткое ожидание у остальных её пользователей. Очередь полна —
+//! запись не ставится, счёт потерь; следующая пачка сама добавляет запись
 //! journal.queue_lost (Warn: сколько потеряно с прошлой записи и всего) — не молча. Пачка не записалась (ошибка
 //! SQLite) — её записи считаются потерянными (лог процесса и та же запись о потерях). Предел снят, а в очереди ещё
 //! есть записи — новые тоже идут в очередь, пока она не опустеет (порядок не ломается).
 //! Кто вызывает: storage/journal.rs (Journal::write, queued, set_queue_max, idle).
 //! От чего зависит: storage/db.rs (call_sync), storage/journal.rs (Entry, insert), std::sync::mpsc, tokio::sync::Notify.
-//! Настройки: journal.queue_max (передаёт storage/write_modes.rs через Journal::set_queue_max).
+//! Настройки: journal.queue_max, journal.batch_max (передаёт storage/write_modes.rs через Journal::set_queue_max,
+//! set_batch_max).
 
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -29,6 +32,8 @@ pub const LOST_KIND: &str = "journal.queue_lost";
 pub struct Queue {
     /// Предел очереди; 0 — очередь выключена.
     max: AtomicUsize,
+    /// Предел записей в одной транзакции пачки; 0 — всё накопленное.
+    batch: AtomicUsize,
     /// Записей в очереди (поставлены, ещё не записаны).
     pending: AtomicUsize,
     /// Потеряно с прошлой записи journal.queue_lost и всего с запуска.
@@ -45,6 +50,12 @@ impl Queue {
     pub fn set_max(&self, max: Option<u64>) {
         let m = max.map_or(0, |m| usize::try_from(m).unwrap_or(usize::MAX));
         self.max.store(m, Ordering::Release);
+    }
+
+    /// Предел записей в одной пачке (None или 0 — всё накопленное). Ошибок нет.
+    pub fn set_batch_max(&self, max: Option<u64>) {
+        let m = max.map_or(0, |m| usize::try_from(m).unwrap_or(usize::MAX));
+        self.batch.store(m, Ordering::Release);
     }
 
     /// Идёт ли запись через очередь: предел задан или в очереди ещё есть записи. Ошибок нет.
@@ -100,7 +111,11 @@ impl Queue {
     fn lose(&self, n: u64, kind: &str) {
         self.lost.fetch_add(n, Ordering::AcqRel);
         let total = self.lost_total.fetch_add(n, Ordering::AcqRel) + n;
-        tracing::warn!(kind, total, "запись журнала потеряна (очередь journal.queue_max)");
+        tracing::warn!(
+            kind,
+            total,
+            "запись журнала потеряна (очередь journal.queue_max)"
+        );
     }
 
     /// n записей ушли из очереди; пусто — сигнал ждущим. Ошибок нет.
@@ -146,12 +161,16 @@ impl Queue {
     }
 }
 
-/// Поток-писатель: ждёт первую запись, забирает всё накопленное и пишет одной транзакцией; затем — в живой поток.
-/// Завершается, когда очередь (все клоны Journal) удалена. Принимает: приёмник, базу, живой поток, очередь. Ошибок нет.
+/// Поток-писатель: ждёт первую запись, забирает накопленное (не больше journal.batch_max) и пишет одной транзакцией;
+/// затем — в живой поток. Завершается, когда очередь (все клоны Journal) удалена. Принимает: приёмник, базу, живой поток, очередь. Ошибок нет.
 fn run(rx: Receiver<Entry>, db: Db, live: broadcast::Sender<Entry>, q: Weak<Queue>) {
     while let Ok(first) = rx.recv() {
         let mut batch = vec![first];
-        while let Ok(e) = rx.try_recv() {
+        let cap = q.upgrade().map_or(0, |q| q.batch.load(Ordering::Acquire));
+        while cap == 0 || batch.len() < cap {
+            let Ok(e) = rx.try_recv() else {
+                break;
+            };
             batch.push(e);
         }
         let taken = batch.len();

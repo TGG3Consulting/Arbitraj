@@ -178,13 +178,14 @@ pub async fn yesterday(p: &std::path::Path) {
     let db = Db::open(&p.join("t.sqlite")).unwrap();
     let y = (Utc::now().date_naive() - chrono::Duration::days(1)).to_string();
     let body = json!({"final_usd": "-0.26", "provisional": {"old1": ["-0.26", y]}}).to_string();
-    db.call(move |c| {
-        c.execute(
-            "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)",
-            rusqlite::params![y, body, "t"],
-        )
-        .map(|_| ())
-    })
-    .await
-    .unwrap();
+    db.ledger()
+        .write(move |c| {
+            c.execute(
+                "INSERT INTO daily_result (day, body, updated_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![y, body, "t"],
+            )
+            .map(|_| ())
+        })
+        .await
+        .unwrap();
 }

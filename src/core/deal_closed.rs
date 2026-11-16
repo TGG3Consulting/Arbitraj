@@ -30,7 +30,13 @@ pub async fn send(core: &Core, deal: &Deal, why: &str) {
     let snap = crate::notify::alert_card::Snap::of(&deal.id, Some(super::deal_card::card(deal)));
     let n = core.inner.deps.notifier.clone();
     let v = deal.direction.buy_on.0.clone();
-    let (c, d, w, nn, vv) = (core.clone(), deal.clone(), why.to_string(), n.clone(), v.clone());
+    let (c, d, w, nn, vv) = (
+        core.clone(),
+        deal.clone(),
+        why.to_string(),
+        n.clone(),
+        v.clone(),
+    );
     let job = async move {
         // Решение 216: у закрытой — строки расчёта «без потолка» (одно чтение SQLite по id сделки).
         let ceil = super::deal_ceiling::of_closed(&c, &d).await;

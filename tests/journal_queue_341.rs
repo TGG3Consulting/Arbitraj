@@ -1,0 +1,123 @@
+//! Файл: tests/journal_queue_341.rs
+//! Что делает: решение 341 (задача t158) — очередь записи журнала (storage/journal_queue.rs): без journal.queue_max — как
+//! раньше (запись ждётся, у неё id); с пределом — write возвращается сразу (id = 0), поток-писатель пишет по порядку
+//! постановки (пачками, в том числе по одной записи — journal.batch_max = 1), живой поток получает записи с настоящим
+//! id; запись не ждёт основную базу, занятую долгой транзакцией; полная очередь — потеря со счётом и записью
+//! journal.queue_lost. Настоящая SQLite во временной папке, без моков.
+//! Кто вызывает: cargo test.
+//! От чего зависит: arb::storage (db, journal, journal_queue).
+
+use std::time::{Duration, Instant};
+
+use arb::storage::db::Db;
+use arb::storage::journal::{Entry, Journal, Level};
+use arb::storage::journal_queue::LOST_KIND;
+use tokio::sync::broadcast;
+
+/// Журнал на базе во временной папке и приёмник его живого потока.
+fn journal(name: &str) -> (Journal, broadcast::Receiver<Entry>) {
+    let d = std::env::temp_dir().join(format!("arb-j341-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let db = Db::open(&d.join("t.sqlite")).unwrap();
+    let (tx, rx) = broadcast::channel(1024);
+    (Journal::new(db, tx), rx)
+}
+
+/// Записи вида kind, старые первыми (после того, как очередь опустела).
+async fn of_kind(j: &Journal, kind: &str) -> Vec<Entry> {
+    j.idle().await;
+    let mut all = j.list(1000, None).await.unwrap();
+    all.retain(|e| e.kind == kind);
+    all.sort_by_key(|e| e.id);
+    all
+}
+
+/// Держит замок основной базы (долгая транзакция, как длинная пачка) заданное время; возвращается, когда замок взят.
+fn hold_main(j: &Journal, for_: Duration) -> tokio::task::JoinHandle<()> {
+    let (held_tx, held_rx) = std::sync::mpsc::channel();
+    let db = j.db().clone();
+    let h = tokio::task::spawn_blocking(move || {
+        db.call_sync(|c| {
+            let t = c.transaction()?;
+            held_tx.send(()).unwrap();
+            std::thread::sleep(for_);
+            t.commit()
+        })
+        .unwrap();
+    });
+    held_rx.recv().unwrap();
+    h
+}
+
+#[tokio::test]
+async fn without_setting_write_waits_as_before() {
+    let (j, _rx) = journal("off");
+    assert!(!j.queued());
+    let e = j
+        .write(Level::Info, "t.off", None, "раз", None)
+        .await
+        .unwrap();
+    assert!(e.id > 0, "запись ждётся и получает id");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn queued_write_keeps_order_and_does_not_wait() {
+    let (j, mut rx) = journal("order");
+    j.set_queue_max(Some(10_000));
+    j.set_batch_max(Some(1));
+    assert!(j.queued());
+    let hold = hold_main(&j, Duration::from_millis(800));
+    let t0 = Instant::now();
+    for i in 0..20 {
+        let e = j
+            .write(Level::Info, "t.order", None, format!("{i}"), None)
+            .await
+            .unwrap();
+        assert_eq!(e.id, 0, "в очереди id ещё нет");
+    }
+    let took = t0.elapsed();
+    assert!(
+        took < Duration::from_millis(300),
+        "write ждал базу: {took:?}"
+    );
+    hold.await.unwrap();
+    let got = of_kind(&j, "t.order").await;
+    let texts: Vec<String> = got.iter().map(|e| e.message.clone()).collect();
+    let want: Vec<String> = (0..20).map(|i| i.to_string()).collect();
+    assert_eq!(texts, want, "порядок постановки");
+    // Живой поток — те же записи, с настоящими id, по порядку.
+    let mut live = vec![];
+    while let Ok(e) = rx.try_recv() {
+        if e.kind == "t.order" {
+            live.push((e.id, e.message));
+        }
+    }
+    let ids: Vec<(i64, String)> = got.iter().map(|e| (e.id, e.message.clone())).collect();
+    assert_eq!(live, ids);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn full_queue_loses_with_record() {
+    let (j, _rx) = journal("full");
+    j.set_queue_max(Some(1));
+    let hold = hold_main(&j, Duration::from_millis(300));
+    for i in 0..3 {
+        let _ = j
+            .write(Level::Info, "t.full", None, format!("{i}"), None)
+            .await;
+    }
+    hold.await.unwrap();
+    j.idle().await;
+    // Следующая пачка дописывает запись о потерях.
+    let _ = j.write(Level::Info, "t.full", None, "после", None).await;
+    let lost = of_kind(&j, LOST_KIND).await;
+    assert_eq!(lost.len(), 1, "{lost:?}");
+    assert_eq!(lost[0].data.as_ref().unwrap()["total"], 2);
+    let kept: Vec<String> = of_kind(&j, "t.full")
+        .await
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+    assert_eq!(kept, vec!["0", "после"]);
+}

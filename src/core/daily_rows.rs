@@ -4,7 +4,7 @@
 //! (запись бота)» рядом с итогом дня, собранным из начислений сделок (Deal.day_book). Итог дня = факт дня (final_usd)
 //! плюс оценки позиций, учтённые в этот день (prov_on — как DayView.result_usd). Только чтение.
 //! Кто вызывает: report/results.rs (results_file).
-//! От чего зависит: daily.rs (Book, prov_on), storage/db.rs.
+//! От чего зависит: daily.rs (Book, prov_on), storage/db.rs (решение 353: daily_result — в файле учёта ledger.sqlite, Db::ledger).
 //! Настройки: нет.
 
 use chrono::NaiveDate;
@@ -31,7 +31,8 @@ impl Core {
             .inner
             .deps
             .db
-            .call(|c| {
+            .ledger()
+            .read(|c| {
                 let mut st = c.prepare("SELECT day, body FROM daily_result ORDER BY day")?;
                 let it =
                     st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;

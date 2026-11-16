@@ -103,7 +103,10 @@ async fn send_does_not_wait_slow_queue() {
     let t0 = Instant::now();
     n.send("deal.buy_filled", Some("bingx"), "Куплено").await;
     let step = t0.elapsed();
-    assert!(step < Duration::from_millis(200), "шаг сделки ждал {step:?}");
+    assert!(
+        step < Duration::from_millis(200),
+        "шаг сделки ждал {step:?}"
+    );
     // Уведомление ушло после медленного (порядок) — запись появляется только когда очередь освободилась.
     let got = of_kind(&n, "notify").await;
     assert_eq!(got.len(), 1);
@@ -155,7 +158,11 @@ async fn snapshot_card_wins_over_fresh() {
     let snap = Snap::of("D1", Some(at_event.clone()));
     let got = alert_card::scoped(snap, async { alert_card::at_event("D1") }).await;
     assert_eq!(got, Some(at_event), "в задании — снимок на момент события");
-    assert_eq!(alert_card::at_event("D1"), Some(fresh), "без снимка — свежая");
+    assert_eq!(
+        alert_card::at_event("D1"),
+        Some(fresh),
+        "без снимка — свежая"
+    );
     // Снимок другой сделки не подменяет карточку этой.
     let other = Snap::of("D2", None);
     let got = alert_card::scoped(other, async { alert_card::at_event("D1") }).await;

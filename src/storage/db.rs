@@ -1,9 +1,12 @@
 //! Файл: storage/db.rs
 //! Что делает: открывает базу SQLite, создаёт таблицы, даёт безопасный доступ из async-кода.
 //! Запросы выполняются в отдельном потоке (spawn_blocking), чтобы не тормозить рыночные задачи.
+//! Решение 353: учёт ядра (core_state, daily_result, wallet_queue) — в своём файле ledger.sqlite рядом со своим
+//! писателем (storage/ledger_db.rs, доступ — Db::ledger); таблицы в основной базе остаются (схема), код их больше не
+//! пишет — при открытии недостающее переносится (storage/ledger_move.rs).
 //! Кто вызывает: main.rs (открывает), settings/store.rs, storage/journal.rs, storage/rules.rs; call_sync —
-//! storage/journal_queue.rs (свой поток писателя журнала, решение 341); учёт сделок в своём файле —
-//! storage/db_ledger.rs (решение 342).
+//! storage/journal_queue.rs (свой поток писателя журнала, решение 341); ledger — core/persist.rs, core/daily_*.rs,
+//! storage/wallet_queue.rs.
 //! От чего зависит: rusqlite, tokio, storage/ledger_db.rs.
 //! Миграции: новые столбцы старых таблиц — ADDED_COLUMNS (добавляются при открытии, если их нет).
 //! Настройки: путь к папке данных — аргумент запуска --data-dir (до старта настроек его взять негде).
@@ -12,6 +15,8 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
+
+use super::ledger_db::{self, LedgerDb};
 
 /// Схема базы. Таблицы создаются, если их нет.
 const SCHEMA: &str = "
@@ -173,10 +178,8 @@ pub enum DbError {
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
-    /// Решение 342: файл учёта сделок рядом с основной базой (storage/ledger_db.rs) и его соединение, если включено
-    /// (ledger.own_db); None — записи сделок в основной базе, как раньше.
-    pub(super) ledger_path: std::path::PathBuf,
-    pub(super) ledger: Arc<Mutex<super::db_ledger::Own>>,
+    /// Решение 353: учёт ядра — свой файл и свой писатель (storage/ledger_db.rs).
+    ledger: LedgerDb,
 }
 
 impl Db {
@@ -187,7 +190,11 @@ impl Db {
         conn.execute_batch("PRAGMA journal_mode=WAL;")?;
         conn.execute_batch(SCHEMA)?;
         migrate(&conn)?;
-        Ok(Self::with(conn, path))
+        let ledger = LedgerDb::open(&ledger_db::path_near(path), &conn)?;
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+            ledger,
+        })
     }
 
     /// Что делает: решение 218 — открывает УЖЕ СУЩЕСТВУЮЩУЮ базу бота для внешнего инструмента (src/bin/
@@ -210,16 +217,26 @@ impl Db {
             conn.busy_timeout(std::time::Duration::ZERO)?;
             conn.execute_batch("PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;")?;
         }
-        Ok(Self::with(conn, path))
+        let conn = Arc::new(Mutex::new(conn));
+        // Решение 353: файл учёта — тем же режимом (исключительно — бот должен быть остановлен); файла ещё нет (бот
+        // новой версии не запускался) — учёт в основной базе, как раньше.
+        let lp = ledger_db::path_near(path);
+        let ledger = if lp.exists() {
+            let lc = Connection::open_with_flags(&lp, flags)?;
+            if exclusive {
+                lc.busy_timeout(std::time::Duration::ZERO)?;
+                lc.execute_batch("PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;")?;
+            }
+            LedgerDb::direct(Arc::new(Mutex::new(lc)))
+        } else {
+            LedgerDb::direct(conn.clone())
+        };
+        Ok(Self { conn, ledger })
     }
 
-    /// База из открытого соединения; файл учёта сделок — рядом (решение 342). Ошибок нет.
-    fn with(conn: Connection, path: &Path) -> Self {
-        Self {
-            conn: Arc::new(Mutex::new(conn)),
-            ledger_path: super::ledger_db::path_near(path),
-            ledger: Arc::default(),
-        }
+    /// Учёт ядра (решение 353): запись — своим писателем, чтение — своим соединением. Ошибок нет.
+    pub fn ledger(&self) -> &LedgerDb {
+        &self.ledger
     }
 
     /// Что делает: решение 341 — выполняет функцию с соединением В ТЕКУЩЕМ потоке (замок соединения — тот же, что у

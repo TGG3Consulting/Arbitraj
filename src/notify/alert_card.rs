@@ -122,7 +122,10 @@ pub fn snap(plain: &str) -> Snap {
 }
 
 /// Будущее со снимком карточки: шаблон внутри него берёт снимок (at_event). Принимает: снимок, будущее. Ошибок нет.
-pub fn scoped<F: std::future::Future>(s: Snap, f: F) -> impl std::future::Future<Output = F::Output> {
+pub fn scoped<F: std::future::Future>(
+    s: Snap,
+    f: F,
+) -> impl std::future::Future<Output = F::Output> {
     SNAP.scope(s, f)
 }
 

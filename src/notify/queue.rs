@@ -71,7 +71,11 @@ pub(super) fn push(n: &Notifier, code: &str, venue: Option<&str>, snap: Snap, jo
     let Ok(rt) = Handle::try_current() else {
         return lost(n, code, venue, "нет рантайма tokio");
     };
-    let max = n.settings.integer(MAX, At::default()).ok().filter(|m| *m > 0);
+    let max = n
+        .settings
+        .integer(MAX, At::default())
+        .ok()
+        .filter(|m| *m > 0);
     let job: Job = Box::pin(alert_card::scoped(snap, job));
     let mut all = QUEUES.lock().unwrap_or_else(|p| p.into_inner());
     let q = all.entry(rt.id()).or_insert_with(|| start(&rt));
@@ -140,7 +144,12 @@ pub async fn idle() {
 /// задачей; нет рантайма — только лог процесса). Принимает: отправителя, код, площадку, причину. Ошибок нет.
 fn lost(n: &Notifier, code: &str, venue: Option<&str>, why: &str) {
     let total = LOST.fetch_add(1, Ordering::Relaxed) + 1;
-    tracing::warn!(code, venue, total, "уведомление не поставлено в очередь: {why}");
+    tracing::warn!(
+        code,
+        venue,
+        total,
+        "уведомление не поставлено в очередь: {why}"
+    );
     if !total.is_power_of_two() {
         return;
     }

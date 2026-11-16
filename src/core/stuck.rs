@@ -18,7 +18,8 @@
 //! дополнение 10.11, t78 — Тигран: согласовано; прежде без пере-замера).
 //! Кто вызывает: sell.rs, sell_unsent.rs, relay.rs (executor.rs — через sell.rs; перевод не состоялся — relay_here.rs, решение 220).
 //! От чего зависит: sell.rs, trade_ops.rs, stuck_quote.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
-//! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
+//! Решение 334: ожидание тика монеты отстало от рассылки тиков — stuck_lag.rs (счёт, журнал, stuck.tick_lag_wake).
+//! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays; stuck.tick_lag_wake (stuck_lag.rs).
 
 use std::time::Duration;
 
@@ -115,7 +116,13 @@ pub async fn next_tick(core: &Core, deal: &Deal, until: Option<Instant>) -> bool
         };
         match got {
             Ok(a) if a == deal.direction.asset => return true,
-            Ok(_) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+            Ok(_) => continue,
+            // Решение 334: подписчик отстал — тик этой монеты мог пропасть (раньше — молча ждали следующего).
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                if super::stuck_lag::lagged(core, deal, n) {
+                    return true;
+                }
+            }
             Err(_) => return false,
         }
     }

@@ -24,6 +24,7 @@ pub mod menu_press;
 pub mod menu_venues;
 pub mod mirror;
 pub mod mirror_edit;
+mod mirror_lag;
 pub mod mirror_send;
 pub mod mirror_state;
 pub mod mirror_store;

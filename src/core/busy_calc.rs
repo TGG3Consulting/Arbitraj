@@ -22,8 +22,9 @@
 //! Кто вызывает: core/candidates.rs (enqueue — монета занята; run — Shadows), core/inner.rs (State).
 //! От чего зависит: profit.rs (decide), dry.rs, limits_parts.rs, busy_budget.rs, busy_sum.rs, busy_note.rs,
 //! gateway/urgency.rs, settings.
-//! Настройки: window.busy_calc, window.busy_calc_min_ms; profit.calc_concurrency, profit.calc_timeout_ms (те же, что у
-//! очереди кандидатов).
+//! Решение 334: теневой расчёт, не вошедший в свою очередь (полна), — счёт и запись журнала core.busy_calc (lost_log.rs).
+//! Настройки: window.busy_calc, window.busy_calc_min_ms; log.events_lost_interval_s (решение 334);
+//! profit.calc_concurrency, profit.calc_timeout_ms (те же, что у очереди кандидатов).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
@@ -80,6 +81,8 @@ pub struct State {
     pub(super) watching: Mutex<HashSet<CoinKey>>,
     /// Почему замер включён, но не работает (уже записано в журнал); None — работает или не проверялось.
     off: Mutex<Option<String>>,
+    /// Решение 334: теневые расчёты, не вошедшие в свою очередь (полна) — счёт и журнал (gateway/lost_log.rs).
+    lost: crate::gateway::lost_log::Lost,
 }
 
 impl State {
@@ -94,6 +97,7 @@ impl State {
             sums: Mutex::default(),
             watching: Mutex::default(),
             off: Mutex::default(),
+            lost: Default::default(),
         }
     }
 
@@ -181,9 +185,20 @@ pub fn enqueue(core: &Core, d: &Direction) {
         };
         marks.insert(d.clone(), m);
     }
-    if st.tx.try_send(d.clone()).is_err() {
+    if let Err(e) = st.tx.try_send(d.clone()) {
         // Очередь теневых полна — как у кандидата: следующий тик поставит снова.
         lk(&st.marks).remove(d);
+        // Решение 334: потеря не молчит — счёт и запись журнала (только наблюдение, торговля не затронута).
+        if matches!(e, mpsc::error::TrySendError::Full(_)) {
+            let note = crate::gateway::lost_log::Note {
+                kind: KIND,
+                venue: Some(&d.buy_on.0),
+                what: "теневой расчёт занятой монеты не поставлен: его очередь полна (только наблюдение)",
+                last: format!("{} {} → {}", d.asset.ticker, d.buy_on.0, d.sell_on.0),
+            };
+            let deps = &core.inner.deps;
+            st.lost.hit(&deps.settings, &deps.journal, note);
+        }
     }
 }
 

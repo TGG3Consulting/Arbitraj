@@ -111,7 +111,13 @@ impl Parts {
 
     /// Окружение слушателей пулов и проверок; канал событий ядра — и для счётчиков каналов. Ошибок нет.
     pub fn pools(&self, out: mpsc::Sender<MarketEvent>) -> Pools {
-        self.stats.set_out(out.clone());
+        // Решение 333: события ядру из исполнения и очереди кошелька — через очередь «ждут места» шлюза.
+        self.stats
+            .set_out(crate::gateway::core_out_must::MustOut::new(
+                out.clone(),
+                &self.ctx.settings,
+                &self.ctx.journal,
+            ));
         // Решение 282: уведомление «блок узла не растёт» шлёт ядру опрос блоков (node/head_stall.rs).
         self.heads.stall.set_out(out.clone());
         let signals = super::pools::progress::Signals::default();

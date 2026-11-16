@@ -14,6 +14,7 @@
 | `dex_graph.rs` | Решение 308: dex.graph_background, dex.graph_max_lag_ms, dex.graph_hang_ms, dex.graph_retry_pause_s, dex.graph_stage_b_max_ms, dex.graph_verify_s, dex.graph_alert_min_s — граф маршрутов без ожидания (фоновый владелец, предохранитель, сторож, самопроверка) |
 | `dex_event.rs` | Задача t144: решение 313 — log.pool_refresh_timing, log.pool_events_lost_interval_s (замер перечитывания пула по событию, потери событий пулов при полном канале ядра); решение 314 — dex.event_refresh_urgency (класс очереди узла для перечитываний по событию); решение 315 — dex.event_refresh_one_call (пул V3 по событию одним обращением к узлу) |
 | `book_events.rs` | Решение 324 (задача t151): venue.book_events_keep — кадр стакана биржи при полном канале ядра не теряется (последний кадр пары ждёт в общем наборе канала ядра) |
+| `lost_events.rs` | Решения 333/334 (задача t155): profit.calc_wait_ms, venue.money_events_keep, venue.info_events_keep, stuck.tick_lag_wake, log.events_lost_interval_s — сообщения ядру и кандидаты не теряются молча |
 | `index.rs` | Справочник пулов от индексатора: адрес API, сеть, ключ, темп, страницы, частота, порог, подпись (решение 58) |
 | `send.rs` | Отправка транзакций и каналы отправки (решения 33, 41–45) |
 | `signals.rs` | Сигналы и эпизоды: сухой режим, предел поиска максимального объёма, шаблоны ссылок на пару и пул, эпизоды (решение 74) |

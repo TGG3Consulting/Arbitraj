@@ -14,12 +14,13 @@
 //! напоминание не повторяет записи, которые человек сейчас обрабатывает (вопрос «Да/Отмена» или вопрос суммы открыт —
 //! mirror_state.rs::busy). Ответ (б) Тиграна 10.11: сообщения записей — в SQLite, после перезапуска правятся, а не
 //! отправляются заново (mirror_store.rs: restore при запуске, persist после каждой сверки).
+//! Решение 334: отставание от событий ядра (Lagged) — счёт и журнал notify.core_events_lost (gateway/lost_log.rs).
 //! Кто вызывает: main.rs (задача run). Напоминание, итог команды и ошибки — mirror_send.rs; правка сменившихся — mirror_edit.rs.
 //! От чего зависит: core (Core::manual_records, Core::subscribe), notify/mirror_state.rs, mirror_view.rs,
 //! tg_methods.rs, tg_html.rs, alert.rs, client.rs, dispatch.rs (allows), mirror_store.rs, settings, storage/journal,
 //! storage/db (база для mirror_store.rs).
 //! Настройки: notify.manual_repeat_s (нет — без повторов), notify.updates_retry_ms (пауза после ошибки Telegram),
-//! notify.event.* для manual.record, notify.telegram_*; секрет telegram.bot_token.
+//! notify.event.* для manual.record, notify.telegram_*; секрет telegram.bot_token; log.events_lost_interval_s (334).
 
 use std::time::{Duration, Instant};
 
@@ -74,7 +75,9 @@ pub async fn run(m: Mirror, mut watch: Watch) {
                     m.reconcile().await;
                     m.outcome(&v).await;
                 }
-                Ok(_) | Err(RecvError::Lagged(_)) => {}
+                Ok(_) => {}
+                // Решение 334: отстали от событий ядра — итог команды (CoreEvent::Command) мог пропасть: не молча.
+                Err(RecvError::Lagged(n)) => super::mirror_lag::lagged(&m.notifier, n),
                 Err(RecvError::Closed) => return,
             },
             _ = sleep_until(wake) => {}

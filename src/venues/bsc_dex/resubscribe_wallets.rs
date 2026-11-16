@@ -5,9 +5,11 @@
 //! изменили — задачи кошельков пересобираются, подписка на пулы не трогается.
 //! Кто вызывает: resubscribe.rs (subscribe, watch).
 //! От чего зависит: parts.rs, parts_wallet.rs, wallet/{nonce,events}.rs, settings/accounts/.
+//! Решение 333: событие WalletQueue — gateway/core_out_must.rs (venue.money_events_keep, log.events_lost_interval_s).
 //! Настройки: нет своих (события — venue.balance_events и др., wallet/events.rs).
 
 use crate::core::types::{DexAccountId, WalletQueue, WalletQueueState};
+use crate::gateway::core_out_must::MustOut;
 use crate::gateway::events::MarketEvent;
 
 use super::parts::Parts;
@@ -37,7 +39,10 @@ impl Subs {
                     state: st,
                     nonce_taken: None,
                 };
-                let _ = pools.out.try_send(MarketEvent::WalletQueue(q));
+                // Решение 333: «остановлена» не теряется молча при полном канале ядра (venue.money_events_keep = да —
+                // ждёт места по порядку; иначе потеря со счётом в журнале venue.core_events_lost).
+                MustOut::new(pools.out.clone(), &p.ctx.settings, &p.ctx.journal)
+                    .send(MarketEvent::WalletQueue(q));
             }
             let mut pw = pools.clone();
             pw.ctx = b.ctx.clone();

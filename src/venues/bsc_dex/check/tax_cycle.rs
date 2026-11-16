@@ -15,6 +15,7 @@
 //! Все запросы к узлу — в общем темпе node/pace.rs (bsc.node_http_rps): проход идёт ровно, а не залпом.
 //! Кто вызывает: pools/market.rs (запуск при подписке).
 //! От чего зависит: check/tax_pass.rs, check/taxes.rs, check/recheck.rs, check/tax_wallet.rs, pools/listen.rs (Pools), pools/progress.rs.
+//! Решение 333: «не проверена» в начале цикла — gateway/core_out_must.rs (venue.info_events_keep).
 //! Настройки: tax.recheck_interval_s, tax.retry_s (вся система), check.probe_usdt [bsc_dex].
 
 use std::collections::{HashMap, HashSet};
@@ -23,6 +24,7 @@ use std::time::Duration;
 use alloy_primitives::Address;
 
 use crate::core::types::{Asset, CheckState, CoinCheck};
+use crate::gateway::core_out_must::MustOut;
 use crate::gateway::events::MarketEvent;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
@@ -62,7 +64,9 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
             wait: Some("проверка ещё не начиналась: ждёт своих пулов".into()),
         };
         p.checks.set_coin(c.clone());
-        let _ = p.out.try_send(MarketEvent::CoinCheck(c));
+        // Решение 333: при полном канале ядра — ждёт места (venue.info_events_keep = да) или потеря со счётом в журнале.
+        MustOut::new(p.out.clone(), &p.ctx.settings, &p.ctx.journal)
+            .send(MarketEvent::CoinCheck(c));
     }
     let all: Vec<(Address, String)> = coins.into_iter().collect();
     let mut seen = HashSet::new();

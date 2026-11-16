@@ -3311,7 +3311,7 @@ rationale = "48 из 61 отказа «ниже порога» — с отриц
 name = "cpu.threads_max"
 area = "вся система"
 unit = "потоков"
-method = "80 (96 потоков минус ~16 под рабочие потоки tokio, приём WebSocket и узел); cpu.reserve_deal 8, cpu.reserve_calc 24. Проверить загрузку процессора и отказы по сроку."
+method = "80 (96 потоков минус ~16 под рабочие потоки tokio, приём WebSocket и узел); cpu.reserve_deal 8, cpu.reserve_calc 24. При заданной dex.quote_cpu_max не действует; без неё size.parallel_points не включается. Проверить загрузку процессора и отказы по сроку."
 rationale = "Фон и параллельные точки не вытесняют путь сделки."
 
 [[section.rec]]

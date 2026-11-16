@@ -133,6 +133,8 @@ pub fn params(rec: &Rec, dir: Dir, budget: Decimal) -> Params {
         par_points: 1,
         bisect_probes: 1,
         early_floor: None,
+        reuse: false,
+        par_blocked: false,
     }
 }
 

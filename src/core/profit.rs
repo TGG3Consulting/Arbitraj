@@ -147,6 +147,10 @@ pub async fn decide_capped(
     };
     let mut choice = found.choice;
     choice.why = why(&choice, &d.asset.ticker);
+    // Ревью t157 Н3: size.parallel_points задана без cpu.threads_max — точки по одной; причина — в пояснении.
+    if p.par_blocked {
+        choice.why.push_str(super::size_par::PAR_BLOCKED);
+    }
     // Решение 337: ранний выход — уже по границам и сетке ниже порога с запасом: без уточнения и финальной котировки.
     if found.early {
         let margin = super::size_early::margin(s);

@@ -16,17 +16,19 @@
 //! котировки (quote_stage) — признаки задачи tokio — переносятся в поток счёта.
 //! Предел одновременных счётов — dex.quote_cpu_max (необязательная; 0 или не задана — без предела): сверх него счёт
 //! ждёт места (ожидание — внутри срока расчёта и видно в замере этапов как время котировки без запросов к узлу).
-//! Решение 336 (задача t157): сверх dex.quote_cpu_max — место общего предела потоков счёта cpu.threads_max
-//! (gateway/cpu_budget.rs) ярусом задачи: финальная котировка или котировка исполнения — путь сделки, класс Trade —
-//! кандидат, прочее — фон (резервы cpu.reserve_deal, cpu.reserve_calc). Сначала место dex.quote_cpu_max, потом общее
-//! (ожидающий своего места не держит общее). В поток счёта переносятся ещё ярус и короб подбора объёма ядра
-//! (gateway/calc_share.rs) — в поле потока (quote/cpu_local.rs): по ним вспомогательные потоки (quote/par.rs) берут
-//! места, а граф берёт допуск путей из короба (quote/graph_reuse.rs). Не задана cpu.threads_max — как до 336.
+//! Решение 338 (задача t157): задана cpu.threads_max — вместо места dex.quote_cpu_max берётся место общего предела
+//! потоков счёта (gateway/cpu_budget.rs) ярусом задачи: финальная котировка, котировка исполнения или задача сделки —
+//! путь сделки; кандидат (класс Trade или ярус вызывающего) — кандидат; прочее — фон. dex.quote_cpu_max при этом не
+//! берётся: очередь по порядку прихода перед приоритетным местом давала инверсию — кандидаты, ждущие общего места,
+//! держали места dex.quote_cpu_max, и котировка сделки стояла за ними (ревью t157 Н1). Не задана cpu.threads_max —
+//! dex.quote_cpu_max, как до 336. Ярус и короб подбора объёма ядра (gateway/calc_share.rs) переносятся в поле потока
+//! (quote/cpu_local.rs) только когда есть что переносить (предел задан или короб есть) — иначе как до 336.
 //! Кто вызывает: quote/mod.rs (Quoting::quote — выбор маршрута), venue.rs (dex_cycles; dex_cycle_quote при
 //! параллельных точках подбора).
 //! От чего зависит: ctx.rs, quote/abandon.rs, quote/cpu_local.rs, gateway/{urgency, calc_meter, quote_stage, patience,
 //! cpu_budget, calc_share}.rs, tokio.
-//! Настройки: dex.quote_cpu_max [bsc_dex]; cpu.threads_max, cpu.reserve_deal, cpu.reserve_calc (вся система).
+//! Настройки: dex.quote_cpu_max [bsc_dex] (только без cpu.threads_max); cpu.threads_max, cpu.reserve_deal, cpu.reserve_calc
+//! (вся система).
 
 use std::future::Future;
 use std::pin::Pin;
@@ -36,6 +38,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::gateway::calc_meter::Meter;
+use crate::gateway::cpu_budget::Tier;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::urgency::Urgency;
 use crate::gateway::{calc_meter, calc_share, cpu_budget, patience, quote_stage, urgency};
@@ -82,22 +85,30 @@ where
 {
     // Решение 301 (в): страж живёт в этом future — бросили ожидание (срок расчёта), признак поднят, счёт выходит.
     let (_abandon, flag) = abandon::guard();
-    let held = permit(ctx).await;
     let class = urgency::is_set();
     let meter = calc_meter::current();
     let fin = quote_stage::is_final();
-    // Решение 336: ярус счёта и место общего предела (не задан — места нет, как раньше); короб подбора объёма.
-    let tier = cpu_budget::tier_of(class, fin || patience::is_exec());
-    let budget = match cpu_budget::limits(&ctx.settings) {
-        Some(lim) => Some(cpu_budget::acquire(lim, tier).await),
-        None => None,
+    // Решение 338: задан общий предел — место по ярусу (без dex.quote_cpu_max, ревью Н1); не задан — как до 336.
+    let (held, budget, tier) = match cpu_budget::limits(&ctx.settings) {
+        Some(lim) => {
+            let tier = cpu_budget::tier_of(class, fin || patience::is_exec());
+            // Ожидание места — из кучи: будущее run не растёт (сторож стека tests/bsc_dex_quote_cpu_stack.rs).
+            (
+                None,
+                Some(Box::pin(cpu_budget::acquire(lim, tier)).await),
+                Some(tier),
+            )
+        }
+        None => (permit(ctx).await, None, None),
     };
     let share = calc_share::current();
     let rt = tokio::runtime::Handle::current();
     let job = tokio::task::spawn_blocking(move || {
         let _held = held;
         let _budget = budget;
-        let _local = cpu_local::enter(tier, share);
+        // Поле потока — только когда есть что переносить (ревью Б1).
+        let _local = (tier.is_some() || share.is_some())
+            .then(|| cpu_local::enter(tier.unwrap_or(Tier::Background), share));
         rt.block_on(scoped(flag, class, meter, fin, work))
     });
     job.await.map_err(|e| {

@@ -219,6 +219,8 @@ fn params(rec: &Rec, a: &OrderBook, b: &OrderBook) -> Params {
         par_points: 1,
         bisect_probes: 1,
         early_floor: None,
+        reuse: false,
+        par_blocked: false,
     }
 }
 

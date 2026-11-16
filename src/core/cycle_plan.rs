@@ -18,6 +18,7 @@ use rust_decimal::Decimal;
 use serde::Serialize;
 
 use crate::core::types::{Asset, CycleQuote, DexCycle, Direction, VenueId};
+use crate::gateway::cpu_budget::{self, Tier};
 use crate::settings::read::At;
 
 use super::cycle_curve::CycleCurve;
@@ -87,7 +88,7 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         u32::try_from(x).map_err(|_| format!("{n} = {x}: вне пределов"))
     };
     // Решение 336: параллельные точки и пробы границ — те же необязательные size.*, что у кандидатов.
-    let (par_points, bisect_probes) = super::size_par::par_settings(s)?;
+    let (par_points, bisect_probes, par_blocked) = super::size_par::par_settings(s)?;
     let mut p = Params {
         step,
         budget: cap,
@@ -102,6 +103,10 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         par_points,
         bisect_probes,
         early_floor: None,
+        // Ревью t157 Б2: у цикла план строится прямо из точки подбора (финальной котировки нет) — без повторного
+        // использования допуска пулов: точка цикла всегда по полному допуску (gateway/calc_share.rs).
+        reuse: false,
+        par_blocked,
     };
     // Решение 337: пол раннего выхода — порог dex_dex.min_profit_usd минус size.early_exit_margin_usd.
     p.early_floor = super::size_early::floor(s, min_usd);
@@ -109,7 +114,10 @@ pub async fn plan(core: &Core, c: &DexCycle, budget: Option<Decimal>) -> Result<
         venue,
         cycle: c.clone(),
     };
-    let found = super::size_search::search(&mut curve, &p)
+    // Решение 338 (ревью t157 Н1): план цикла — ярус счёта «кандидат» (котировки цикла в потоке счёта при параллельных
+    // точках — venue.rs; без яруса они шли бы «фоном»).
+    let search = super::size_search::search(&mut curve, &p);
+    let found = cpu_budget::scope(Tier::Calc, search)
         .await
         .map_err(|f| format!("подбор входа цикла: {f}"))?;
     if found.early {

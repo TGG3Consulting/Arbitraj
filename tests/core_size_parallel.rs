@@ -7,13 +7,16 @@
 //!   полного подбора — ранний выход и тот же отказ по порогу (сделка не теряется), расчётов меньше.
 //!   Кривая теста считает пачку по одной (Curve::batch по умолчанию) — проверяется сам порядок и набор точек.
 //!
+//! Отдельно — кривая с настоящей одновременной пачкой (join_all, ревью Н6).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::size*, tests/size_common.
 
 mod size_common;
 
-use arb::core::size::{Found, Params};
+use arb::core::size::{Curve, Fail, Found, Params, Point};
 use arb::core::size_search::search;
+use async_trait::async_trait;
+use futures_util::future::join_all;
 use rust_decimal::Decimal;
 use size_common::curve::{Dir, RecCurve};
 use size_common::{Rec, d, params};
@@ -141,6 +144,73 @@ async fn early_exit_keeps_decision() {
                 "{dir:?} {b}: полный подбор {} расчётов, ранний выход {}",
                 full.choice.evals, h.choice.evals
             );
+        }
+    }
+}
+
+/// Кривая с настоящей одновременной пачкой (ревью t157 Н6): batch — join_all по точкам, каждая уступает поток перед
+/// счётом (как кривая ядра: точки пачки идут вперемешку, а не по одной).
+struct JoinCurve<'a> {
+    rec: &'a Rec,
+    dir: Dir,
+}
+
+#[async_trait]
+impl Curve for JoinCurve<'_> {
+    type Data = ();
+
+    async fn at(&mut self, q: Decimal) -> Result<Point<()>, Fail> {
+        RecCurve {
+            rec: self.rec,
+            dir: self.dir,
+            slip: Decimal::ONE,
+        }
+        .at(q)
+        .await
+    }
+
+    async fn batch(&mut self, qtys: Vec<Decimal>) -> Vec<Result<Point<()>, Fail>> {
+        let (rec, dir) = (self.rec, self.dir);
+        join_all(qtys.into_iter().map(|q| async move {
+            tokio::task::yield_now().await;
+            let mut c = RecCurve {
+                rec,
+                dir,
+                slip: Decimal::ONE,
+            };
+            c.at(q).await
+        }))
+        .await
+    }
+}
+
+/// Параллельные точки с одновременной пачкой: тот же итог, что подбор по одной (cpu.threads_max здесь не нужна —
+/// Params собираются тестом; ограничение Н3 действует при чтении настроек, size_par.rs par_settings).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn joined_batch_same_result() {
+    let rec = Rec::load("joined").await;
+    for dir in [Dir::DexToBingx, Dir::BingxToDex] {
+        for b in BUDGETS {
+            let p = params(&rec, dir, d(b));
+            let seq = run(&rec, dir, &p).await;
+            let mut q = p.clone();
+            q.par_points = 8;
+            let mut c = JoinCurve { rec: &rec, dir };
+            let got = search(&mut c, &q).await.map_err(|e| e.to_string());
+            match (&seq, &got) {
+                (Ok(a), Ok(_)) if a.choice.capped => {}
+                (Ok(a), Ok(g)) => {
+                    assert_eq!(a.choice.qty, g.choice.qty, "{dir:?} {b}");
+                    assert_eq!(a.choice.profit, g.choice.profit, "{dir:?} {b}");
+                    assert_eq!(a.choice.evals, g.choice.evals, "{dir:?} {b}");
+                }
+                (Err(a), Err(g)) => assert_eq!(a, g, "{dir:?} {b}"),
+                _ => panic!(
+                    "{dir:?} {b}: по одной {} против {}",
+                    seq.is_ok(),
+                    got.is_ok()
+                ),
+            }
         }
     }
 }

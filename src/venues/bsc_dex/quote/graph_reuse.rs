@@ -17,18 +17,19 @@
 //! смена настроек допуска и курса встречного токена для глубины.
 //! Ключ в коробе — всё, от чего зависит набор и допуск: концы, сторона, пределы перебора, промежуточные, подготовка
 //! глубины (dex.quote_prep_once), нативная монета, плановая цена газа (пулы Solidly), снимок рынка.
-//! dex.quote_reuse не задана или нет — как до 336 (всё на каждой точке).
+//! dex.quote_reuse не задана или нет — короба нет или в нём нет reuse (gateway/calc_share.rs): как до 336 (всё на каждой
+//! точке), без единого лишнего действия на горячем пути.
 //! Кто вызывает: quote/graph_route.rs.
 //! От чего зависит: quote/graph_legs.rs, quote/route_cache.rs, quote/cpu_local.rs, gateway/calc_share.rs,
 //! pools/depth_book.rs (Book::prep), pools/registry.rs, quote/quote_timing.rs.
-//! Настройки: dex.quote_reuse [bsc_dex] (необязательная).
+//! Настройки: dex.quote_reuse [bsc_dex] (необязательная; читает ядро один раз на подбор).
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
-use alloy_primitives::Address;
+use alloy_primitives::{Address, U256};
 
-use crate::gateway::calc_share::Share;
+use crate::core::types::Side;
 
 use super::super::pools::depth_book::Book;
 use super::super::pools::registry::Registry;
@@ -45,35 +46,76 @@ pub struct Admitted {
     dec: HashMap<Address, u8>,
 }
 
+/// Ключ допуска путей в коробе — всё, от чего набор и допуск зависят (см. шапку); без сборки строки (ревью t157 Б1).
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct Key {
+    usdt: Address,
+    coin: Address,
+    buy: bool,
+    max_hops: usize,
+    max_paths: usize,
+    cap: Option<usize>,
+    mids: Vec<Address>,
+    per_edge: Option<u64>,
+    prep_once: bool,
+    native: bool,
+    plan_gas: Option<U256>,
+    frozen_head: Option<u64>,
+    usdt_dec: u8,
+}
+
+/// Допуски путей одного подбора по ключам.
+#[derive(Default)]
+pub struct Store {
+    map: RwLock<HashMap<Key, Arc<Admitted>>>,
+}
+
+/// Имя места в коробе подбора.
+const SLOT: &str = "bsc_dex.graph_reuse";
+
 /// Место в коробе подбора для этой котировки. Принимает: расчёт путей, что перебирать, нативная ли монета.
-/// Возвращает: (короб, ключ); None — dex.quote_reuse не «да» или котировка вне подбора объёма. Ошибок нет.
-pub fn slot(v: &Via<'_>, s: &Search<'_>, native: bool) -> Option<(Arc<Share>, String)> {
+/// Возвращает: (место, ключ); None — короба нет или повторное использование не включено (dex.quote_reuse читает ядро
+/// один раз на подбор — gateway/calc_share.rs). Ошибок нет.
+pub fn slot(v: &Via<'_>, s: &Search<'_>, native: bool) -> Option<(Arc<Store>, Key)> {
+    let share = cpu_local::share().filter(|x| x.reuse())?;
     let ctx = &v.q.ctx;
-    if !ctx.flag("dex.quote_reuse").unwrap_or(false) {
-        return None;
+    let mut mids: Vec<Address> = s.allowed.iter().copied().collect();
+    mids.sort_unstable();
+    let key = Key {
+        usdt: s.usdt,
+        coin: s.coin,
+        buy: v.side == Side::Buy,
+        max_hops: s.max_hops,
+        max_paths: s.max_paths,
+        cap: s.cap,
+        mids,
+        per_edge: ctx.int("dex.route_max_pools_per_edge").ok(),
+        prep_once: graph_legs::prep_once(ctx),
+        native,
+        plan_gas: v.q.plan_gas,
+        frozen_head: v.q.frozen_head,
+        usdt_dec: v.usdt_dec,
+    };
+    Some((share.get_or_put(SLOT, Store::default), key))
+}
+
+impl Store {
+    /// Допуск путей по ключу. Ошибок нет.
+    pub fn get(&self, k: &Key) -> Option<Arc<Admitted>> {
+        self.map
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(k)
+            .cloned()
     }
-    let share = cpu_local::share()?;
-    let mut mids: Vec<String> = s.allowed.iter().map(|a| a.to_string()).collect();
-    mids.sort();
-    let per_edge = ctx
-        .int("dex.route_max_pools_per_edge")
-        .map(|v| v.to_string())
-        .unwrap_or_default();
-    let key = format!(
-        "bsc_dex.graph_reuse|{}|{}|{:?}|{}|{}|{:?}|{per_edge}|{}|{}|{native}|{:?}|{:?}|{}",
-        s.usdt,
-        s.coin,
-        v.side,
-        s.max_hops,
-        s.max_paths,
-        s.cap,
-        mids.join(","),
-        graph_legs::prep_once(ctx),
-        v.q.plan_gas,
-        v.q.frozen_head,
-        v.usdt_dec,
-    );
-    Some((share, key))
+
+    /// Запомнить допуск путей по ключу. Ошибок нет.
+    pub fn put(&self, k: Key, a: Admitted) {
+        self.map
+            .write()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(k, Arc::new(a));
+    }
 }
 
 /// Допуск путей с нуля (как было в quote/graph_route.rs): одна подготовка глубины на котировку (решение 311 А), путь

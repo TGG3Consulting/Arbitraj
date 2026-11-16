@@ -1,18 +1,19 @@
 //! Файл: core/size_par.rs
 //! Что делает: решение 336 (задача t157) — параллельные части подбора объёма (решение 66), общие для всех направлений
 //! (биржа → DEX, DEX → биржа, биржа ↔ биржа, цикл DEX ↔ DEX, расчёт «без потолка», «максимальный объём» карточки):
-//! - par_settings — необязательные size.parallel_points и size.bisect_probes (не заданы — 1: как до 336);
+//! - par_settings — необязательные size.parallel_points и size.bisect_probes (не заданы — 1: как до 336); без
+//!   cpu.threads_max параллельные точки не включаются (ревью t157 Н3, PAR_BLOCKED);
 //! - probes — k равномерных проб внутри отрезка границы (k-ичный поиск, size_bounds.rs);
 //! - refine_all — уточнение ВСЕХ локальных максимумов разом: тот же тернарный поиск у каждого пика (те же точки m1, m2
 //!   на каждом шаге, тот же конец), но шаги всех пиков идут в ногу и точки шага считаются одной пачкой
-//!   (size_memo.rs at_many). Пики не зависят друг от друга (отрезки соседних точек, общий у них — только конец), поэтому
+//!   (size_batch.rs at_many). Пики не зависят друг от друга (отрезки соседних точек, общий у них — только конец), поэтому
 //!   набор посчитанных точек и итог те же, что у уточнения по очереди, пока не исчерпан size.max_evals (исчерпан —
 //!   при очереди недосчитан последний пик, в ногу — последние шаги всех; итог — лучший из посчитанных в обоих случаях).
 //!
 //! Кто вызывает: core/size_search.rs (refine_all), core/size_bounds.rs (probes), core/size_curve.rs и
 //! core/cycle_plan.rs (par_settings).
 //! От чего зависит: core/size.rs, core/size_memo.rs, settings.
-//! Настройки: size.parallel_points, size.bisect_probes (вся система; необязательные).
+//! Настройки: size.parallel_points, size.bisect_probes (вся система; необязательные); cpu.threads_max (только наличие).
 
 use crate::settings::read::At;
 use crate::settings::store::Store;
@@ -20,9 +21,12 @@ use crate::settings::store::Store;
 use super::size::{Curve, Fail};
 use super::size_memo::Memo;
 
-/// Что делает: (size.parallel_points, size.bisect_probes). Принимает: настройки. Возвращает: значения, не заданные или
-/// меньше 1 — 1 (как до 336). Ошибки: текст — значение не помещается в u32.
-pub fn par_settings(s: &Store) -> Result<(u32, u32), String> {
+/// Что делает: (size.parallel_points, size.bisect_probes, параллельные точки отключены). Ревью t157 Н3: параллельные
+/// точки без общего предела потоков счёта (cpu.threads_max) не включаются — иначе одновременных котировок было бы до
+/// profit.calc_concurrency × size.parallel_points без всякого предела; тогда точки по одной, а признак «отключены»
+/// вызывающий пишет в пояснение выбора объёма (profit.rs why — журнал и «Кандидаты»). Принимает: настройки.
+/// Возвращает: значения, не заданные или меньше 1 — 1 (как до 336). Ошибки: текст — значение не помещается в u32.
+pub fn par_settings(s: &Store) -> Result<(u32, u32, bool), String> {
     let one = |name: &str| -> Result<u32, String> {
         match s.integer(name, At::default()) {
             Err(_) => Ok(1),
@@ -31,8 +35,16 @@ pub fn par_settings(s: &Store) -> Result<(u32, u32), String> {
                 .map_err(|_| format!("{name} = {v}: вне пределов")),
         }
     };
-    Ok((one("size.parallel_points")?, one("size.bisect_probes")?))
+    let (par, probes) = (one("size.parallel_points")?, one("size.bisect_probes")?);
+    if par > 1 && crate::gateway::cpu_budget::limits(s).is_none() {
+        return Ok((1, probes, true));
+    }
+    Ok((par, probes, false))
 }
+
+/// Пояснение для «почему этот объём» (ревью t157 Н3): параллельные точки заданы, а cpu.threads_max — нет. Ошибок нет.
+pub const PAR_BLOCKED: &str =
+    "; size.parallel_points не действует: не задана настройка cpu.threads_max (точки по одной)";
 
 /// Что делает: k проб внутри (lo, hi) — равномерно, по возрастанию, без повторов и без концов. Отрезок уже k + 1 —
 /// все точки внутри (поиск сходится за этот шаг). Принимает: концы, k ≥ 1. Возвращает: пробы. Ошибок нет.

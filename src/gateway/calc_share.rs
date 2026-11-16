@@ -1,37 +1,47 @@
 //! Файл: gateway/calc_share.rs
 //! Что делает: решение 336 (задача t157) — общий короб одного подбора объёма (все точки одного кандидата) для адаптеров.
-//! Ядро ставит короб на работу подбора (core/size_memo.rs: каждый расчёт точки и каждая пачка точек), адаптер по
-//! своей настройке может положить туда то, что от объёма не зависит, и взять это на следующих точках того же подбора
-//! (адаптер DEX: допуск путей графа — quote/graph_reuse.rs, допуск пулов классики — quote/usable_reuse.rs;
-//! dex.quote_reuse). Ядро о содержимом не знает: короб — это
-//! словарь «ключ адаптера → значение» плюс признак «точки считаются параллельно» (par, size.parallel_points > 1) — по
-//! нему адаптер уводит свой счёт с рабочего потока (иначе одновременные точки шли бы одним потоком).
-//! Финальная котировка и всё вне подбора идут без короба — всегда на свежих данных.
+//! Ядро ставит короб на работу подбора (core/size_memo.rs: каждый расчёт точки и каждая пачка точек) ТОЛЬКО когда он
+//! нужен: точки считаются параллельно (par — size.parallel_points > 1: адаптер уводит счёт с рабочего потока) или
+//! включено повторное использование (reuse — dex.quote_reuse = да на площадке направления, читает ядро один раз на
+//! подбор). Ни того, ни другого — короба нет вовсе, работа идёт как до 336 (ревью t157 Б1).
+//! При reuse адаптер кладёт в короб то, что от объёма не зависит, и берёт это на следующих точках того же подбора
+//! (адаптер DEX: допуск пулов классики — quote/usable_reuse.rs, пути графа — quote/graph_reuse.rs). Ядро о содержимом не
+//! знает: короб — словарь «имя адаптера → значение» (имя — постоянная строка адаптера, без сборки на горячем пути).
+//! Финальная котировка и всё вне подбора идут без короба — всегда на свежих данных. Цикл DEX ↔ DEX — без reuse всегда
+//! (core/cycle_plan.rs: план цикла строится прямо из точки подбора, финальной котировки у него нет).
 //! Короб задаётся на задачу tokio (task_local, как класс срочности urgency.rs); новая задача его не наследует.
-//! Кто вызывает: core/size_memo.rs (scope), venues/bsc_dex/quote/cpu.rs (current — перенос в поток счёта),
+//! Кто вызывает: core/size_memo.rs (Share::new, scope), venues/bsc_dex/quote/cpu.rs (current — перенос в поток счёта),
 //! venues/bsc_dex/venue.rs (current — цикл DEX ↔ DEX при параллельных точках).
 //! От чего зависит: tokio (task_local), std.
-//! Настройки: нет (значения кладут адаптеры по своим настройкам).
+//! Настройки: нет (решает вызывающий: size.parallel_points, dex.quote_reuse).
 
 use std::any::Any;
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 /// Короб одного подбора объёма.
 pub struct Share {
     /// Точки подбора считаются параллельно (size.parallel_points > 1).
     par: bool,
-    slots: Mutex<HashMap<String, Arc<dyn Any + Send + Sync>>>,
+    /// Повторное использование того, что не зависит от объёма (dex.quote_reuse = да на начало подбора).
+    reuse: bool,
+    slots: RwLock<HashMap<&'static str, Arc<dyn Any + Send + Sync>>>,
 }
 
 impl Share {
-    /// Новый пустой короб. Принимает: считаются ли точки параллельно. Ошибок нет.
-    pub fn new(par: bool) -> Share {
+    /// Новый пустой короб. Принимает: параллельны ли точки, включено ли повторное использование. Ошибок нет.
+    pub fn new(par: bool, reuse: bool) -> Share {
         Share {
             par,
-            slots: Mutex::new(HashMap::new()),
+            reuse,
+            slots: RwLock::new(HashMap::new()),
         }
+    }
+
+    /// Нужен ли короб: точки параллельны или повторное использование включено. Ошибок нет.
+    pub fn needed(par: bool, reuse: bool) -> bool {
+        par || reuse
     }
 
     /// Точки подбора считаются параллельно. Ошибок нет.
@@ -39,28 +49,32 @@ impl Share {
         self.par
     }
 
-    /// Значение по ключу. Принимает: ключ. Возвращает: значение нужного типа или None (нет или другой тип). Ошибок нет.
-    pub fn get<T: Any + Send + Sync>(&self, key: &str) -> Option<Arc<T>> {
-        let g = self.slots.lock().unwrap_or_else(|p| p.into_inner());
-        g.get(key).cloned().and_then(|a| a.downcast::<T>().ok())
+    /// Повторное использование включено. Ошибок нет.
+    pub fn reuse(&self) -> bool {
+        self.reuse
     }
 
-    /// Значение по ключу; нет (или другой тип) — кладёт новое из `make` под тем же замком (два потока одного подбора
-    /// получают одно значение). Принимает: ключ, конструктор. Возвращает: значение. Ошибок нет.
-    pub fn get_or_put<T: Any + Send + Sync>(&self, key: &str, make: impl FnOnce() -> T) -> Arc<T> {
-        let mut g = self.slots.lock().unwrap_or_else(|p| p.into_inner());
-        if let Some(v) = g.get(key).cloned().and_then(|a| a.downcast::<T>().ok()) {
+    /// Значение по имени; нет (или другой тип) — кладёт новое из `make` (два потока одного подбора получают одно
+    /// значение: вставка под записью с повторной проверкой). Принимает: имя, конструктор. Возвращает: значение.
+    /// Ошибок нет.
+    pub fn get_or_put<T: Any + Send + Sync>(
+        &self,
+        key: &'static str,
+        make: impl FnOnce() -> T,
+    ) -> Arc<T> {
+        let found = |g: &HashMap<&'static str, Arc<dyn Any + Send + Sync>>| {
+            g.get(key).cloned().and_then(|a| a.downcast::<T>().ok())
+        };
+        if let Some(v) = found(&self.slots.read().unwrap_or_else(|p| p.into_inner())) {
+            return v;
+        }
+        let mut g = self.slots.write().unwrap_or_else(|p| p.into_inner());
+        if let Some(v) = found(&g) {
             return v;
         }
         let v = Arc::new(make());
-        g.insert(key.to_string(), v.clone());
+        g.insert(key, v.clone());
         v
-    }
-
-    /// Кладёт значение по ключу (прежнее заменяется). Принимает: ключ, значение. Ошибок нет.
-    pub fn put<T: Any + Send + Sync>(&self, key: String, v: Arc<T>) {
-        let mut g = self.slots.lock().unwrap_or_else(|p| p.into_inner());
-        g.insert(key, v);
     }
 }
 
@@ -73,7 +87,7 @@ pub async fn scope<F: Future>(s: Arc<Share>, work: F) -> F::Output {
     SHARE.scope(s, work).await
 }
 
-/// Короб текущей задачи; None — работа вне подбора объёма. Ошибок нет.
+/// Короб текущей задачи; None — работа вне подбора объёма или короб не нужен. Ошибок нет.
 pub fn current() -> Option<Arc<Share>> {
     SHARE.try_with(Arc::clone).ok()
 }

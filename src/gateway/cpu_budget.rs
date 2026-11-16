@@ -7,14 +7,19 @@
 //! исполнение остаются ядра (рабочие потоки tokio вне предела), а фон не вытесняет кандидатов, кандидаты — сделку.
 //! Ярусы (Tier) по признакам задачи шлюза: финальная котировка (quote_stage) или котировка исполнения (patience) —
 //! путь сделки; класс срочности Trade (urgency) — кандидат; остальное (живой экран, проверки, фон) — фон.
+//! Ярус может задать вызывающий на задачу (scope): путь сделки — core/executor.rs (вся задача сделки, в т.ч. предпроверка),
+//! план цикла DEX ↔ DEX — core/cycle_plan.rs (кандидат). Освобождение будит одного ждущего самого важного яруса.
 //! Ожидание места — внутри срока расчёта (profit.calc_timeout_ms): брошенный расчёт бросает и ожидание (место не
 //! занимает). Смена настроек на лету: занятые места доживают, новые — по новым числам.
 //! Не задана cpu.threads_max или 0 — общего предела нет (как до 336).
-//! Кто вызывает: venues/bsc_dex/quote/cpu.rs (acquire), venues/bsc_dex/quote/par.rs (try_acquire), их тесты.
+//! Кто вызывает: venues/bsc_dex/quote/cpu.rs (acquire), venues/bsc_dex/quote/par.rs (try_acquire), core/executor.rs и
+//! core/cycle_plan.rs (scope).
 //! От чего зависит: settings (чтение), gateway/urgency.rs (класс), tokio (Notify).
 //! Настройки: cpu.threads_max, cpu.reserve_deal, cpu.reserve_calc (вся система; необязательные).
 
+use std::future::Future;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tokio::sync::Notify;
 
@@ -59,16 +64,37 @@ impl Limits {
     }
 }
 
-/// Занятые места и сигнал «место освободилось». Один на процесс.
+/// Занятые места, сколько ждёт каждый ярус и сигнал «место освободилось» на каждый ярус. Один на процесс.
 struct Budget {
     used: Mutex<usize>,
-    freed: Notify,
+    /// Ждущие по ярусам: Deal, Calc, Background.
+    waiting: [AtomicUsize; 3],
+    /// Сигнал яруса: освобождение будит ОДНОГО ждущего самого важного ждущего яруса (ревью t157 Н2: не всех).
+    freed: [Notify; 3],
 }
 
 static BUDGET: Budget = Budget {
     used: Mutex::new(0),
-    freed: Notify::const_new(),
+    waiting: [
+        AtomicUsize::new(0),
+        AtomicUsize::new(0),
+        AtomicUsize::new(0),
+    ],
+    freed: [
+        Notify::const_new(),
+        Notify::const_new(),
+        Notify::const_new(),
+    ],
 };
+
+/// Номер яруса в массивах Budget. Ошибок нет.
+fn ix(t: Tier) -> usize {
+    match t {
+        Tier::Deal => 0,
+        Tier::Calc => 1,
+        Tier::Background => 2,
+    }
+}
 
 /// Место под поток счёта. Освобождается при Drop (в том числе у брошенного расчёта — когда его поток закончил).
 pub struct Permit(());
@@ -79,8 +105,33 @@ impl Drop for Permit {
             let mut u = BUDGET.used.lock().unwrap_or_else(|p| p.into_inner());
             *u = u.saturating_sub(1);
         }
-        BUDGET.freed.notify_waiters();
+        // Будим одного ждущего самого важного яруса, у которого есть ждущие: предел яруса не меньше предела менее
+        // важного (Limits::cap), поэтому если место не может взять он — не может и менее важный.
+        if let Some(i) = (0..3).find(|&i| BUDGET.waiting[i].load(Ordering::Acquire) > 0) {
+            BUDGET.freed[i].notify_one();
+        }
     }
+}
+
+/// Счёт ждущих яруса на время ожидания (снимается и у брошенного ожидания).
+struct Waiting(usize);
+
+impl Drop for Waiting {
+    fn drop(&mut self) {
+        BUDGET.waiting[self.0].fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+tokio::task_local! {
+    /// Ярус счёта, заданный вызывающим на задачу (путь сделки — core/executor.rs; план цикла DEX ↔ DEX —
+    /// core/cycle_plan.rs). Сильнее класса срочности.
+    static TIER: Tier;
+}
+
+/// Что делает: работа с заданным ярусом счёта (котировки DEX внутри неё берут места этого яруса). Принимает: ярус,
+/// работу. Возвращает: её итог. Ошибок нет.
+pub async fn scope<F: Future>(t: Tier, work: F) -> F::Output {
+    TIER.scope(t, work).await
 }
 
 /// Пределы из настроек. Принимает: хранилище настроек. Возвращает: None — cpu.threads_max не задана или 0 (предела
@@ -100,11 +151,16 @@ pub fn limits(s: &Store) -> Option<Limits> {
 }
 
 /// Ярус по признакам задачи. Принимает: класс срочности (None — не задан), признак пути сделки (финальная котировка
-/// или котировка исполнения). Возвращает: ярус. Ошибок нет.
+/// или котировка исполнения). Возвращает: ярус: путь сделки — Deal; иначе ярус, заданный вызывающим (scope); иначе
+/// класс Trade — Calc, прочее — Background. Ошибок нет.
 pub fn tier_of(class: Option<Urgency>, deal: bool) -> Tier {
     if deal {
-        Tier::Deal
-    } else if class == Some(Urgency::Trade) {
+        return Tier::Deal;
+    }
+    if let Ok(t) = TIER.try_with(|t| *t) {
+        return t;
+    }
+    if class == Some(Urgency::Trade) {
         Tier::Calc
     } else {
         Tier::Background
@@ -123,10 +179,17 @@ pub fn try_acquire(lim: Limits, t: Tier) -> Option<Permit> {
 }
 
 /// Взять место, дождавшись его. Принимает: пределы, ярус. Возвращает: место. Ошибок нет. Брошенное ожидание места не
-/// занимает. Подписка на «освободилось» — до проверки: освобождение между проверкой и ожиданием не теряется.
+/// занимает и снимается из ждущих. Подписка на «освободилось» — до проверки: освобождение между проверкой и ожиданием
+/// не теряется (у Notify::notify_one без ждущего остаётся разрешение).
 pub async fn acquire(lim: Limits, t: Tier) -> Permit {
+    if let Some(p) = try_acquire(lim, t) {
+        return p;
+    }
+    let i = ix(t);
+    BUDGET.waiting[i].fetch_add(1, Ordering::AcqRel);
+    let _w = Waiting(i);
     loop {
-        let freed = BUDGET.freed.notified();
+        let freed = BUDGET.freed[i].notified();
         tokio::pin!(freed);
         let _ = freed.as_mut().enable();
         if let Some(p) = try_acquire(lim, t) {

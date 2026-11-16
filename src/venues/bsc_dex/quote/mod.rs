@@ -56,6 +56,7 @@ pub mod mixed_quoter;
 pub mod mixed_quoter_calls;
 pub mod native_gas;
 pub mod par;
+pub mod par_pool;
 pub mod path;
 pub mod pick;
 pub mod pmm_depth;

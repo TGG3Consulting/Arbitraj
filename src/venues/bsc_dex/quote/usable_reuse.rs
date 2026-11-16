@@ -13,15 +13,18 @@
 //! короба): смена фактов проверок пула без смены его состояния (квотер, налог, крючок, газ), смена настроек допуска,
 //! бан справочника. Так же, как у графа (quote/graph_reuse.rs).
 //! Вне подбора (финальная котировка, исполнение, экран, проверки) короба нет — допуск каждый раз, как до 336.
-//! dex.quote_reuse не задана или нет — как до 336.
+//! dex.quote_reuse не задана или нет — короба или reuse в нём нет (решает ядро один раз на подбор, gateway/calc_share.rs):
+//! допуск как до 336, на горячем пути — только чтение поля потока (ревью t157 Б1). Замер частей — только при reuse.
 //! Замер (решение 312, log.quote_timing): этап «в т.ч. классика: допуск пулов», счётчики допусков и попаданий.
 //! Кто вызывает: quote/select.rs (usable).
 //! От чего зависит: quote/select.rs (usable_with), quote/cpu_local.rs, gateway/calc_share.rs, gateway/exit_scope.rs,
 //! quote/quote_timing.rs.
-//! Настройки: dex.quote_reuse [bsc_dex] (необязательная; читается один раз на подбор).
+//! Настройки: dex.quote_reuse [bsc_dex] (необязательная; читает ядро один раз на подбор).
 
 use std::collections::HashMap;
 use std::sync::RwLock;
+
+use alloy_primitives::U256;
 
 use crate::core::types::{PoolRef, Side};
 
@@ -34,50 +37,71 @@ use super::select::{self, Usable};
 /// Допуск одного пула: на чём посчитан (поколение, достоверен, спит) и итог.
 type Slot = (u64, bool, bool, Result<Usable, String>);
 
-/// Допуски одного подбора при одном ключе; on — dex.quote_reuse на начало подбора.
-struct Admits {
-    on: bool,
-    map: RwLock<HashMap<PoolRef, Slot>>,
+/// Ключ допуска: пул и всё, от чего допуск зависит кроме пула (см. шапку) — без сборки строки (ревью t157 Б1).
+#[derive(PartialEq, Eq, Hash)]
+struct Key {
+    pool: PoolRef,
+    buy: bool,
+    usdt_dec: u8,
+    plan_gas: Option<U256>,
+    frozen_head: Option<u64>,
+    exit: bool,
 }
+
+/// Допуски одного подбора.
+#[derive(Default)]
+struct Admits {
+    map: RwLock<HashMap<Key, Slot>>,
+}
+
+/// Имя места в коробе подбора.
+const SLOT: &str = "bsc_dex.usable_reuse";
 
 /// Что делает: допуск пула (см. шапку). Принимает и возвращает: как select::usable. Ошибки: как select::usable.
 pub fn usable(q: &Quoting, e: &Entry, side: Side, usdt_dec: u8) -> Result<Usable, String> {
+    // Ревью t157 Б1: короба нет или в нём нет повторного использования — допуск как до 336; сверху только чтение поля
+    // потока (короб) и признака замера (часы — только при log.quote_timing, решение 312).
+    let share = cpu_local::share().filter(|s| s.reuse());
+    if share.is_none() && !quote_timing::active() {
+        return select::usable_with(q, e, side, usdt_dec, None);
+    }
     // Решение 336: замер — время и число допусков (часы только при замере котировки).
     let t = quote_timing::now();
-    let (out, hit) = admit(q, e, side, usdt_dec);
+    let (out, hit) = match share {
+        Some(sh) => admit(&sh.get_or_put(SLOT, Admits::default), q, e, side, usdt_dec),
+        None => (select::usable_with(q, e, side, usdt_dec, None), false),
+    };
     quote_timing::add(Stage::ClassicAdmit, t);
     quote_timing::count(Count::AdmitCalls, 1);
     quote_timing::count(Count::AdmitHits, u64::from(hit));
     out
 }
 
-/// Допуск пула и признак «взят из короба». Принимает: как usable. Ошибок сверх usable нет.
-fn admit(q: &Quoting, e: &Entry, side: Side, usdt_dec: u8) -> (Result<Usable, String>, bool) {
-    let fresh = || (select::usable_with(q, e, side, usdt_dec, None), false);
-    let Some(share) = cpu_local::share() else {
-        return fresh();
-    };
+/// Допуск пула из места короба или заново, и признак «взят из короба». Принимает: место, как usable.
+/// Ошибок сверх usable нет.
+fn admit(
+    a: &Admits,
+    q: &Quoting,
+    e: &Entry,
+    side: Side,
+    usdt_dec: u8,
+) -> (Result<Usable, String>, bool) {
     if e.state_gen == 0 {
-        return fresh();
+        return (select::usable_with(q, e, side, usdt_dec, None), false);
     }
-    let exit = crate::gateway::exit_scope::is_exit();
-    let key = format!(
-        "bsc_dex.usable_reuse|{side:?}|{usdt_dec}|{:?}|{:?}|{exit}",
-        q.plan_gas, q.frozen_head
-    );
-    let a = share.get_or_put(&key, || Admits {
-        on: q.ctx.flag("dex.quote_reuse").unwrap_or(false),
-        map: RwLock::new(HashMap::new()),
-    });
-    if !a.on {
-        return fresh();
-    }
-    let r = &e.pool.reference;
+    let key = Key {
+        pool: e.pool.reference.clone(),
+        buy: side == Side::Buy,
+        usdt_dec,
+        plan_gas: q.plan_gas,
+        frozen_head: q.frozen_head,
+        exit: crate::gateway::exit_scope::is_exit(),
+    };
     let hit = a
         .map
         .read()
         .unwrap_or_else(|p| p.into_inner())
-        .get(r)
+        .get(&key)
         .filter(|s| s.0 == e.state_gen && s.1 == e.valid && s.2 == e.asleep)
         .map(|s| s.3.clone());
     if let Some(h) = hit {
@@ -87,6 +111,6 @@ fn admit(q: &Quoting, e: &Entry, side: Side, usdt_dec: u8) -> (Result<Usable, St
     a.map
         .write()
         .unwrap_or_else(|p| p.into_inner())
-        .insert(r.clone(), (e.state_gen, e.valid, e.asleep, out.clone()));
+        .insert(key, (e.state_gen, e.valid, e.asleep, out.clone()));
     (out, false)
 }

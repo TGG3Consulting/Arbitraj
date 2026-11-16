@@ -4,13 +4,13 @@
 //! кривой, а Fail::TooLarge («вложение больше бюджета»), поэтому ни одна допустимая точка бюджет не превышает.
 //! Решение 246: текст отказа «вложение больше бюджета» — over_budget, общий с ранней проверкой costs.rs evaluate_capped.
 //! Решение 265: каждый расчёт объёма (at, beyond) — часть подробного замера «расчёт объёма» (calc_detail.rs, только при log.step_timing).
-//! Решение 336: at_many — набор независимых объёмов пачками по size.parallel_points (Curve::batch: кривая ядра считает
-//! пачку одновременно); у каждого подбора свой короб для адаптеров (gateway/calc_share.rs) — им обёрнут каждый расчёт.
+//! Решение 336: короб подбора для адаптеров (gateway/calc_share.rs) — только когда нужен (точки параллельно или
+//! dex.quote_reuse; ставит size_par.rs with_share), иначе расчёт точки как до 336; пачки точек — size_par.rs at_many.
 //! Кто вызывает: core/size_bounds.rs, core/size_search.rs, core/size_par.rs; over_budget — ещё core/costs.rs.
 //! От чего зависит: core/size.rs, core/calc_timing.rs, gateway/calc_share.rs.
-//! Настройки: нет (size.parallel_points — через Params, with_par).
+//! Настройки: нет (size.parallel_points и признак dex.quote_reuse — через Params, size_par.rs with_share).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use rust_decimal::Decimal;
@@ -36,17 +36,18 @@ pub fn over_budget(qty: Decimal, invested: Decimal, budget: Decimal) -> Fail {
 
 /// Расчёты кривой по номеру шага.
 pub struct Memo<'a, C: Curve> {
-    curve: &'a mut C,
+    pub(super) curve: &'a mut C,
     pub step: Decimal,
     pub budget: Decimal,
     pub map: BTreeMap<u64, Result<Point<C::Data>, Fail>>,
     /// Предел расчётов (size.max_evals) и сколько уже посчитано.
-    max: u32,
-    done: u32,
+    pub(super) max: u32,
+    pub(super) done: u32,
     /// Решение 336: сколько точек считать за раз (size.parallel_points; 1 — по одной).
-    par: usize,
-    /// Решение 336: короб этого подбора для адаптеров (gateway/calc_share.rs).
-    share: Arc<Share>,
+    pub(super) par: usize,
+    /// Решение 336: короб этого подбора для адаптеров (gateway/calc_share.rs); None — не нужен (ревью t157 Б1: точки по
+    /// одной и повторное использование не включено — расчёт точки как до 336).
+    pub(super) share: Option<Arc<Share>>,
 }
 
 impl<'a, C: Curve> Memo<'a, C> {
@@ -60,21 +61,8 @@ impl<'a, C: Curve> Memo<'a, C> {
             max,
             done: 0,
             par: 1,
-            share: Arc::new(Share::new(false)),
+            share: None,
         }
-    }
-
-    /// Решение 336: те же расчёты с пачками по `par` точек (size.parallel_points). Принимает: par (0 и 1 — по одной).
-    /// Возвращает: себя. Ошибок нет.
-    pub fn with_par(mut self, par: u32) -> Self {
-        self.par = usize::try_from(par.max(1)).unwrap_or(1);
-        self.share = Arc::new(Share::new(self.par > 1));
-        self
-    }
-
-    /// Решение 336: сколько точек считается за раз. Ошибок нет.
-    pub fn par(&self) -> usize {
-        self.par
     }
 
     /// Предел расчётов исчерпан. Ошибок нет.
@@ -128,9 +116,7 @@ impl<'a, C: Curve> Memo<'a, C> {
             // потоки рантайма — голодали бы веб-сервер, обработка событий пулов и опрос блока.
             tokio::task::yield_now().await;
             // Решение 265: каждый расчёт объёма — часть замера (сколько раз и сколько в среднем).
-            // Решение 336: расчёт — под коробом подбора (gateway/calc_share.rs).
-            let work = calc_share::scope(self.share.clone(), self.curve.at(q));
-            match stage_detail(|| EVAL.into(), work).await {
+            match self.eval(q).await {
                 Ok(p) if p.invested > self.budget => Err(over_budget(q, p.invested, self.budget)),
                 r => r,
             }
@@ -145,44 +131,15 @@ impl<'a, C: Curve> Memo<'a, C> {
         let q = self.qty(n);
         // Уступаем поток перед тяжёлым вычислением точки (решение 90) — см. at().
         tokio::task::yield_now().await;
-        let work = calc_share::scope(self.share.clone(), self.curve.at(q));
-        stage_detail(|| EVAL.into(), work).await
+        self.eval(q).await
     }
 
-    /// Решение 336: расчёт набора объёмов пачками по par (Curve::batch). Порядок — как дан; уже посчитанные, n = 0 и
-    /// повторы пропускаются; сверх предела size.max_evals — не считаются (как at: такие точки — «нет в памяти»).
-    /// Пачка с Fail::Stop — следующие пачки не считаются (вызывающий всё равно остановится на этой точке).
-    /// Итоги — в памяти (читать at / profit), инвариант бюджета — как у at. Принимает: номера шагов. Ошибок нет.
-    pub async fn at_many(&mut self, ns: &[u64]) {
-        let mut seen = BTreeSet::new();
-        let mut todo: Vec<u64> = ns
-            .iter()
-            .copied()
-            .filter(|n| *n > 0 && !self.map.contains_key(n) && seen.insert(*n))
-            .collect();
-        todo.truncate(usize::try_from(self.max.saturating_sub(self.done)).unwrap_or(0));
-        for chunk in todo.chunks(self.par.max(1)) {
-            let qs: Vec<Decimal> = chunk.iter().map(|&n| self.qty(n)).collect();
-            self.done += u32::try_from(chunk.len()).unwrap_or(u32::MAX);
-            // Уступаем рабочий поток перед пачкой (решение 90, как at).
-            tokio::task::yield_now().await;
-            let work = calc_share::scope(self.share.clone(), self.curve.batch(qs));
-            let rs = stage_detail(|| EVAL_BATCH.into(), work).await;
-            let mut stop = false;
-            for (&n, r) in chunk.iter().zip(rs) {
-                let q = self.qty(n);
-                let r = match r {
-                    Ok(p) if p.invested > self.budget => {
-                        Err(over_budget(q, p.invested, self.budget))
-                    }
-                    r => r,
-                };
-                stop |= matches!(r, Err(Fail::Stop(_)));
-                self.map.insert(n, r);
-            }
-            if stop {
-                break;
-            }
+    /// Один расчёт кривой под замером «расчёт объёма» (решение 265) и, если короб есть, под ним (решение 336; нет —
+    /// как до 336). Принимает: объём. Возвращает: итог кривой. Ошибок сверх кривой нет.
+    async fn eval(&mut self, q: Decimal) -> Result<Point<C::Data>, Fail> {
+        match self.share.clone() {
+            Some(s) => stage_detail(|| EVAL.into(), calc_share::scope(s, self.curve.at(q))).await,
+            None => stage_detail(|| EVAL.into(), self.curve.at(q)).await,
         }
     }
 

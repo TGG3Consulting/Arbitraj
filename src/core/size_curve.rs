@@ -13,7 +13,8 @@
 //! Решение 336: batch — пачка точек одновременно (join_all на одной задаче: котировки DEX каждой точки уходят в свои
 //! потоки счёта адаптера, ожидание — общее); size.parallel_points и size.bisect_probes — в Params (size_par.rs).
 //! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (общие; значений нет —
-//! не задана хоть одна — подбора нет, сделки нет); size.parallel_points, size.bisect_probes (необязательные, решение 336).
+//! не задана хоть одна — подбора нет, сделки нет); size.parallel_points, size.bisect_probes (необязательные, решение 336);
+//! dex.quote_reuse [площадка направления] — признак короба с повторным использованием (решение 336, один раз на подбор).
 
 use async_trait::async_trait;
 use futures_util::future::join_all;
@@ -149,7 +150,22 @@ pub fn params(
     let s = src
         .and_then(|f| f.decided.as_deref())
         .map_or(&core.inner.deps.settings, |x| &x.settings);
-    search_params(s, step, budget, price, buy_breaks, sell_breaks)
+    let mut p = search_params(s, step, budget, price, buy_breaks, sell_breaks)?;
+    p.reuse = reuse_on(s, d);
+    Ok(p)
+}
+
+/// Что делает: решение 336 — повторное использование в подборе: dex.quote_reuse = да на одной из площадок направления
+/// (настройка области «площадка», у DEX). Читается один раз на подбор, адаптер её на горячем пути не читает (ревью t157
+/// Б1). Принимает: настройки, направление. Возвращает: да/нет (не задана — нет). Ошибок нет.
+fn reuse_on(s: &Store, d: &crate::core::types::Direction) -> bool {
+    [&d.buy_on, &d.sell_on].iter().any(|v| {
+        let at = At {
+            venue: Some(&v.0),
+            coin: None,
+        };
+        s.flag("dex.quote_reuse", at).unwrap_or(false)
+    })
 }
 
 /// Что делает: параметры поиска при известных шаге количества и изломах (решение 218: общий кусок params и пересчёта
@@ -171,7 +187,7 @@ pub fn search_params(
         .decimal("size.tolerance_pct", At::default())
         .map_err(|e| e.message)?;
     // Решение 336: необязательные; не заданы — 1 (как до 336).
-    let (par_points, bisect_probes) = super::size_par::par_settings(s)?;
+    let (par_points, bisect_probes, par_blocked) = super::size_par::par_settings(s)?;
     Ok(Params {
         step,
         budget,
@@ -187,6 +203,8 @@ pub fn search_params(
         bisect_probes,
         // Решение 337: пол раннего выхода ставит вызывающий (profit.rs / ниже) — здесь без него.
         early_floor: None,
+        reuse: false,
+        par_blocked,
     })
 }
 

@@ -8,7 +8,8 @@
 //! Решение 294: путь не исполним целиком и dex.intermediate_partial_fill = да — помещающаяся часть
 //! (quote/route_fit.rs) идёт кандидатом пути с coins < qty (как неполная котировка одного пула).
 //! Решение 336: при dex.quote_reuse = да обмен пула монеты P2 считается один раз на P2 (via.rs first_leg), а не на
-//! каждую пару (P1, P2) — итог тот же (route_calc.rs eval_from: та же арифметика).
+//! каждую пару (P1, P2) — итог тот же (route_calc.rs eval_from: та же арифметика); признак — из короба подбора
+//! (quote/cpu_local.rs), не чтением настройки.
 //! Настройки: dex.intermediate_partial_fill [bsc_dex] (решение 294; читается только при ошибке пути); dex.quote_reuse;
 //! через вызываемые — см. их шапки.
 
@@ -120,8 +121,9 @@ impl Via<'_> {
     ) -> Result<Path, Vec<String>> {
         let mut best: Option<Path> = None;
         let mut why = Vec::new();
-        // Решение 336: при dex.quote_reuse = да обмен пула монеты P2 — один раз на P2 (route_first.rs), не на пару.
-        let reuse = self.q.ctx.flag("dex.quote_reuse").unwrap_or(false);
+        // Решение 336: при dex.quote_reuse = да (короб подбора с reuse, gateway/calc_share.rs) обмен пула монеты P2 — один
+        // раз на P2 (route_first.rs), не на пару. Иначе — как до 336 (настройка здесь не читается, ревью Б1).
+        let reuse = super::cpu_local::share().is_some_and(|s| s.reuse());
         for (m, dec) in mids {
             let (p1, p2) = match self.pools(m, keep) {
                 Ok(x) => x,

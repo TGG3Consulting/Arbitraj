@@ -104,9 +104,11 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
     let wbnb = ctx.addr("dex.native_wrapped").ok();
     let tickers = coin_tickers(&q.reg);
     let tip = tip_bnb(ctx);
-    // Решение 336: сначала — все пути циклов (decimals — из кэша или узла, по очереди), затем расчёт каждого цикла
-    // (ноги, оптимальный вход, форма, сигнал — чистый CPU, независимо) — на dex.graph_threads потоках (quote/par.rs);
-    // итоги — по порядку путей, как при проходе по очереди.
+    // Решение 336: при dex.graph_threads > 1 сначала — все пути циклов (decimals — из кэша или узла, по очереди), затем
+    // расчёт каждого цикла (ноги, оптимальный вход, форма, сигнал — чистый CPU, независимо) — на нескольких потоках
+    // (quote/par.rs), итоги по порядку путей. Не задана — как до 336: расчёт сразу за decimals своего цикла (ревью Б1).
+    let want = super::par::want(ctx, "dex.graph_threads");
+    let mut out: Vec<CycleSignal> = Vec::new();
     let mut jobs: Vec<Job> = Vec::new();
     for base in bases {
         let cycles = route_paths::enumerate_cycles(&g, base, max_len, max_cycles);
@@ -130,6 +132,11 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
                 Ok(d) => d,
                 Err(_) => continue,
             };
+            if want <= 1 {
+                let b = (base, base_ticker.as_str(), rate_to_base);
+                out.extend(signal(q, b, &path, &dec, usdt_dec, input, gas, tip));
+                continue;
+            }
             jobs.push(Job {
                 base,
                 base_ticker: base_ticker.clone(),
@@ -139,14 +146,18 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             });
         }
     }
-    let one = |j: &Job| signal(q, j, usdt_dec, input, gas, tip);
-    let want = super::par::want(ctx, "dex.graph_threads");
-    let alive = || !super::abandon::is_set();
-    let Some(found) = super::par::map(ctx, want, &jobs, one, &alive) else {
-        super::abandon::check(ctx, "поиск циклов DEX ↔ DEX")?;
-        return Ok(Vec::new());
-    };
-    let mut out: Vec<CycleSignal> = found.into_iter().flatten().collect();
+    if want > 1 {
+        let one = |j: &Job| {
+            let b = (j.base, j.base_ticker.as_str(), j.rate_to_base);
+            signal(q, b, &j.path, &j.dec, usdt_dec, input, gas, tip)
+        };
+        let alive = || !super::abandon::is_set();
+        let Some(found) = super::par::map(ctx, want, &jobs, one, &alive) else {
+            super::abandon::check(ctx, "поиск циклов DEX ↔ DEX")?;
+            return Ok(Vec::new());
+        };
+        out.extend(found.into_iter().flatten());
+    }
     // Прибыльные (порог) впереди, затем по убыванию чистой прибыли; без чистой прибыли — в конец.
     out.sort_by(|a, b| {
         b.profitable(min_profit)
@@ -166,19 +177,22 @@ struct Job {
 }
 
 /// Сигнал одного цикла (было телом цикла scan): ноги, оптимальный вход (решение 124), форма исполнения, сигнал.
-/// Только чтение — можно считать параллельно (решение 336). Принимает: окружение котировки, цикл, decimals USDT, верхнюю
-/// границу входа, цену газа, чаевые (BNB). Возвращает: сигнал; None — цикл не считается (как continue раньше).
-/// Ошибок нет.
+/// Только чтение — можно считать параллельно (решение 336). Принимает: окружение котировки, (базовая, её тикер, курс
+/// BNB в ней), путь, decimals его токенов, decimals USDT, верхнюю границу входа, цену газа, чаевые (BNB). Возвращает:
+/// сигнал; None — цикл не считается (как continue раньше). Ошибок нет.
+#[allow(clippy::too_many_arguments)]
 fn signal(
     q: &Quoting,
-    j: &Job,
+    (base, base_ticker, rate_to_base): (Address, &str, Option<Decimal>),
+    path: &route_paths::RoutePath,
+    dec: &HashMap<Address, u8>,
     usdt_dec: u8,
     input: Decimal,
     gas: U256,
     tip: Decimal,
 ) -> Option<CycleSignal> {
     let ctx = &q.ctx;
-    let legs = cycle::legs_for_cycle(q, &j.path, usdt_dec, &j.dec).ok()?;
+    let legs = cycle::legs_for_cycle(q, path, usdt_dec, dec).ok()?;
     // Решение 124: оптимальный вход на (0, dex_dex.probe_input_base] (quote/cycle_opt.rs), а не фиксированная проба.
     let p = cycle_opt::best(ctx, &legs, input).ok()?;
     // Тигран 09.11 (согласовано, план = факт): цикл, который пойдёт бандлом свопов (exec/cycle_gate.rs form — тот же
@@ -187,17 +201,7 @@ fn signal(
         Ok(Form::Bundle) => Decimal::ZERO,
         _ => tip,
     };
-    cycle::build_signal(
-        ctx,
-        j.base,
-        &j.base_ticker,
-        &p,
-        &legs,
-        gas,
-        tip,
-        j.rate_to_base,
-    )
-    .ok()
+    cycle::build_signal(ctx, base, base_ticker, &p, &legs, gas, tip, rate_to_base).ok()
 }
 
 /// Ключ сортировки по чистой прибыли (None — минимально). Ошибок нет.

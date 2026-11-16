@@ -28,7 +28,6 @@
 //! через вызываемые — глубина (решение 73), допуск пула, channel.*, dex.bundle_max_routers.
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
@@ -104,9 +103,7 @@ pub async fn quote_fit(
     // короба подбора (quote/graph_reuse.rs; состояние пулов сверяется на каждой точке). Иначе — как раньше.
     let native = native::is_native(ctx, asset);
     let reuse = graph_reuse::slot(v, &search, native);
-    let cached = reuse
-        .as_ref()
-        .and_then(|(s, k)| s.get::<graph_reuse::Admitted>(k));
+    let cached = reuse.as_ref().and_then(|(s, k)| s.get(k));
     let admitted = match cached {
         Some(a) => graph_reuse::refresh(v, &a, on),
         None => {
@@ -132,7 +129,7 @@ pub async fn quote_fit(
             // Решение 311 (А, В): одна подготовка глубины на котировку, путь во владение — quote/graph_reuse.rs admit.
             let (list, keep) = graph_reuse::admit(v, paths, dec, on, reuse.is_some());
             if let (Some((s, k)), Some(a)) = (reuse, keep) {
-                s.put(k, Arc::new(a));
+                s.put(k, a);
             }
             list
         }

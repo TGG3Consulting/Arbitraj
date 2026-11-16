@@ -18,6 +18,7 @@
 //! (побайтно). Общий пул вида без расчёта состояния после обмена (quote/pool_after.rs) — вторая доля через него не
 //! открывается. Итоговые доли с общими пулами — пересчёт по порядку на последовательных состояниях.
 //! Решение 295: «общий пул» двух долей — по физическому пулу (PoolRef::site).
+//! Решение 312: шаги и расчёты сплита — в замер котировки (quote/quote_timing.rs count), один раз за сплит.
 //! Кто вызывает: quote/graph_route.rs.
 //! От чего зависит: quote/route_calc.rs (Leg, eval), quote/pool_tax.rs (налог пула шага монеты, решение 146), quote/path.rs (Path),
 //! quote/graph_seq.rs (общие пулы, решение 223).
@@ -30,6 +31,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::path::Path;
+use super::quote_timing::{self, Count};
 use super::route_calc;
 use super::{graph_seq, pool_tax};
 
@@ -118,7 +120,10 @@ pub fn split(
     }
     let unit = qty * step_pct / Decimal::ONE_HUNDRED;
     let mut left = qty;
+    // Решение 312: шаги и расчёты — локально, в замер котировки один раз после цикла.
+    let (mut steps, mut evals) = (0u64, 0u64);
     while left > Decimal::ZERO {
+        steps += 1;
         let step = unit.min(left);
         let used = cands.iter().filter(|c| c.got.is_some()).count();
         // Лучшее увеличение уже открытой доли и лучшее открытие нового пути — отдельно (R1: газ — только у нового).
@@ -130,6 +135,7 @@ pub fn split(
             if opens && used >= max_splits {
                 continue;
             }
+            evals += 1;
             let (paths, delta) = if partners(cands, i) {
                 // Решение 223: общий пул с открытой долей — совместно, по порядку исполнения.
                 let Some(j) = joint(ctx, cands, i, step, side, t) else {
@@ -161,6 +167,8 @@ pub fn split(
         }
         left -= step;
     }
+    quote_timing::count(Count::SplitSteps, steps);
+    quote_timing::count(Count::SplitEvals, evals);
     // Решение 223: доли с общими пулами — итог по порядку на последовательных состояниях (тот же расчёт, что в шагах;
     // явно, чтобы итог был ровно моделью исполнения). Без общих пулов — как раньше.
     let open: Vec<(&[route_calc::Leg], Decimal)> = cands

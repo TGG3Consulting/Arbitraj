@@ -12,12 +12,15 @@
 //! (executable = нет, причина; exec/solidly_gate.rs reason). Ревью 273: такой пул исключается уже при выборе пулов
 //! (Quoting.plan_gas → quote/select.rs) — маршрут строится через другие пулы.
 //! Решение 300: Quoting.exec_quote — котировка решения/исполнения (финальная или для исполнения) — для quote/graph_fit.rs.
+//! Решение 312: замер этапов котировки (quote/quote_timing.rs) — при log.quote_timing = да работа cpu::run идёт под
+//! quote_timing::timed (запись dex.quote_timing); не задана / нет — та же работа, обёртка без замера.
 //! Кто вызывает: mod.rs (контракт quote).
 //! От чего зависит: quote/direct.rs, quote/smart_quote.rs, quote/costs.rs, quote/gas.rs, check/state.rs,
 //! pools/registry.rs, tokens.rs, node/heads.rs, wallet/approve.rs, send/mod.rs (минимум газа и чаевые каналов),
 //! exec/trade.rs (sends_tip — путь исполнения маршрута).
 //! Настройки: dex.swap_mode, venue.quote_asset [bsc_dex]; разрешения — dex.universal_router, dex.permit2 [вид пула]
-//! (прямой маршрут) или smart.universal_router, smart.permit2 [bsc_dex] (умный); feed.stale_after_ms [bsc_dex].
+//! (прямой маршрут) или smart.universal_router, smart.permit2 [bsc_dex] (умный); feed.stale_after_ms [bsc_dex];
+//! log.quote_timing, log.quote_timing_min_ms (вся система, решение 312).
 
 pub mod abandon;
 pub mod approve_bundle;
@@ -63,6 +66,9 @@ pub mod quoter_lb;
 pub mod quoter_dmm;
 pub mod quoter_maverick;
 pub mod quoter_revert;
+pub mod quote_timing;
+pub mod quote_timing_log;
+pub mod quote_timing_stages;
 pub mod rate;
 pub mod route_best;
 pub mod route_cache;
@@ -226,7 +232,17 @@ impl Quoting {
             crate::gateway::quote_stage::is_final() || crate::gateway::patience::is_exec();
         // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
         // (quote/cpu.rs run).
-        let mut q = cpu::run(ctx, Box::pin(routing::run(pick, input))).await?;
+        // Решение 312: замер этапов — одно чтение log.quote_timing; выключен — timed сразу ведёт работу без замера.
+        let timing = quote_timing::start(ctx).map(|s| {
+            let meta = quote_timing::Meta {
+                ticker: asset.ticker.clone(),
+                side,
+                qty,
+            };
+            (ctx.clone(), s, meta)
+        });
+        let work = quote_timing::timed(timing, routing::run(pick, input));
+        let mut q = cpu::run(ctx, Box::pin(work)).await?;
         // Решение 273: пул Solidly маршрута на паузе фабрики или цена газа выше его maxGasPrice — маршрут неисполним
         // (сигнал с причиной; exec/trade.rs не исполняет executable = нет). После отбора по plan_gas — страховка.
         if let Some(r) = q.route.as_mut() {

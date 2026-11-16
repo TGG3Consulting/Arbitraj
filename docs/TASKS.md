@@ -5,6 +5,18 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 312 (16.11.2026, задача t143, ветка t143/quote-stage-timing от t142/quote-legs-once b62bb52f) — замер этапов котировки DEX;
+  ждёт сборки и тестов в GitHub, ревью.** Сделано: необязательные log.quote_timing и log.quote_timing_min_ms («Настройки» → «Система»);
+  запись журнала dex.quote_timing на котировку дольше порога (quote/quote_timing.rs, quote_timing_log.rs). **Как включать на живом боте:**
+  log.quote_timing_min_ms = 20 (или 0 — только на минуту-две: котировок сотни в секунду, каждая запись — строка SQLite), затем
+  log.quote_timing = да; 10–15 минут в dex.router_mode = classic и столько же в graph; затем log.quote_timing = нет.
+  **Что смотреть** (экран «Журнал», вид dex.quote_timing; data числами): total_ms = wait_ms + work_ms — wait_ms большой при малом
+  work_ms — очередь места dex.quote_cpu_max / старт потока счёта (вместе, не по отдельности); work_ms — по этапам `<этап>_ms` и
+  `<этап>_n`: classic (классика), paths (в т.ч. paths_cached / graph_read / enumerate / hydrate), decimals, legs (допуск хопов;
+  paths_in, paths_ok, hops), gas_usdt, best (best_evals), split (split_steps, split_evals), exec, costs, fit (повтор графа решения 300),
+  merge; stages_ms — их сумма (остаток work_ms − stages_ms — вне замеренных этапов). Сравнить classic и graph на одних монетах.
+  **Не установлено:** накладные расходы замера при «да» на живом боте (часы на каждом хопе допуска и запись журнала) — сравнить
+  число котировок «котировка B bsc_dex … ×K» в отказах с замером и без. eval и шаги отбора/сплита включают повтор графа (fit).
 - **Решение 311 (16.11.2026, задача t142, ветка t142/quote-legs-once от rel/dex-all c9b0cc19) — котировка графа дешевле;
   ждёт сборки и тестов в GitHub, ревью.** Живой факт: на graph одна котировка DEX 24–72 мс × 140–400 на подбор объёма →
   отказы по profit.calc_timeout_ms. **Сделано (А):** одна подготовка глубины на котировку графа (без настройки, расчёт тот

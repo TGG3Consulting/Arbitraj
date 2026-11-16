@@ -17,12 +17,14 @@
 //! Дальше — прежний сплит (quote/graph_split.rs) и прежняя сборка котировки: деньги и исполнение не меняются.
 //! Не задана dex.route_search_max_paths — ТОЧНО как раньше (первые dex.route_max_paths путей обхода, без отбора).
 //! Решение 295: один многомонетный пул (PoolRef::site) — не больше одного шага пути (как route_paths.rs).
+//! Решение 312: число расчётов пути (eval) в отборе — в замер котировки (quote/quote_timing.rs count), один раз за отбор.
 //! Кто вызывает: quote/graph_route.rs.
 //! От чего зависит: pools/graph.rs, quote/route_paths.rs (RoutePath, Step), quote/graph_split.rs (Cand, score, better),
 //! quote/route_calc.rs (eval), quote/pool_tax.rs (coin_keep).
 //! Настройки: dex.route_search_max_paths [bsc_dex] (необязательная); через вызывающего — dex.route_max_hops,
 //! dex.route_max_paths, smart.split_step_pct, dex.route_gas_aware.
 
+use std::cell::Cell;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -36,6 +38,7 @@ use super::super::ctx::Ctx;
 use super::super::pools::graph::Graph;
 use super::graph_split::{Cand, better, score};
 use super::pool_tax;
+use super::quote_timing::{self, Count};
 use super::route_calc;
 use super::route_paths::{RoutePath, Step, multi_site};
 
@@ -180,7 +183,10 @@ pub fn best(
     }
     let unit = qty * step_pct / Decimal::ONE_HUNDRED;
     // Чистый результат пути на объём: USDT пути ± газ пути (газ = 0, если учёт газа выключен).
+    // Решение 312: счёт расчётов — локально, в замер один раз в конце.
+    let evals = Cell::new(0u64);
     let net = |c: &Cand, q: Decimal| -> Option<Decimal> {
+        evals.set(evals.get() + 1);
         let tax_keep = pool_tax::coin_keep(&c.legs, side, t);
         let p = route_calc::eval(ctx, &c.legs, side, q, tax_keep).ok()?;
         Some(score(side, p.usdt, true, c.gas_usdt))
@@ -197,6 +203,7 @@ pub fn best(
     // Устойчивая сортировка: при равенстве — порядок перебора (короткие первыми).
     top.sort_by(|a, b| order(side, a.1, b.1));
     deep.sort_by(|a, b| order(side, a.1, b.1));
+    quote_timing::count(Count::BestEvals, evals.get());
     let picked = interleave(&top, &deep, keep);
     let mut slots: Vec<Option<Cand>> = cands.into_iter().map(Some).collect();
     Ok(picked

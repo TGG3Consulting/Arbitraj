@@ -54,8 +54,9 @@ pub type Live = Arc<dyn Fn(&MarketEvent) -> bool + Send + Sync>;
 pub enum Item {
     /// Последнее событие ключа и проверка при доставке (None — без проверки).
     Event(MarketEvent, Option<Live>),
-    /// «Недостоверно» и кадр, пришедший после него (уйдёт следующим).
-    Invalid(MarketEvent, Option<(MarketEvent, Option<Live>)>),
+    /// «Недостоверно» и кадр, пришедший после него (уйдёт следующим). Кадр — в Box (clippy large_enum_variant: два
+    /// MarketEvent в одном варианте; Box выделяется только при слиянии кадра с ждущим «недостоверно» — редкий путь).
+    Invalid(MarketEvent, Option<Box<(MarketEvent, Option<Live>)>>),
 }
 
 impl Slot for Item {
@@ -74,7 +75,7 @@ impl Slot for Item {
                     *old_live = live;
                     true
                 }
-                Item::Invalid(_, after) => after.replace((ev, live)).is_some(),
+                Item::Invalid(_, after) => after.replace(Box::new((ev, live))).is_some(),
             },
         }
     }
@@ -94,7 +95,13 @@ impl Slot for Item {
                     Take::Skip
                 }
             }
-            Item::Invalid(inv, after) => Take::Send(inv, after.map(|(e, l)| Item::Event(e, l))),
+            Item::Invalid(inv, after) => Take::Send(
+                inv,
+                after.map(|b| {
+                    let (e, l) = *b;
+                    Item::Event(e, l)
+                }),
+            ),
         }
     }
 

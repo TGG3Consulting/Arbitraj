@@ -9,7 +9,8 @@
 //!   не открывает (settle::opens — только SwapFee 1.2.10 и CompositionFees LB).
 //! - Liquidity Book V2.1 BTC.b/WBNB 0x717d…073d, блок 133991544, одна tx: два Swap (бины 8399652 → 8399740, по
 //!   возрастанию), других логов пула в блоке нет. Первый лог держит пул (Need::Active), второй — снимает: ядру одна
-//!   отправка, чтений у узла два (второе — оба бина одной пачкой).
+//!   отправка, чтений у узла два, оба на блоке события N: бин лога + активный бин (бин первого лога уже прочитан на
+//!   конце N первым чтением — повторно не читается; копятся без чтения только бины логов, пришедших, пока пул ждёт).
 //! - PancakeSwap Infinity Bin PoolId 0xa3aa…040f, блок 133943958: два Swap из РАЗНЫХ tx (0x1d, 0x1e), activeId обоих —
 //!   8387666 (активный бин не сдвинулся): пул не держится, ядру после каждого лога.
 //!
@@ -218,7 +219,7 @@ async fn lb_two_bins_one_swap_held_then_once() {
         let res = match settle_bins::plan(&holds, &reg, &r, b, n) {
             Plan::Held => Settled::Held,
             Plan::Read(list) => {
-                reads.push(settle_read::calls(&r, &list).unwrap().len());
+                reads.push((list.clone(), settle_read::calls(&r, &list).unwrap().len()));
                 // Резервов на N в записи нет — пустой список (см. шапку); активный бин конца блока = end.
                 settle_bins::finish(&holds, &reg, &r, n, (Vec::new(), end))
             }
@@ -228,10 +229,16 @@ async fn lb_two_bins_one_swap_held_then_once() {
         }
         let held = reg.get(&r).map(|e| !e.valid).unwrap();
         assert_eq!(held, res == Settled::Held);
+        if res == Settled::Held {
+            // Прочитанные бины из отметки сняты (уже на конце N), отметка — на блоке N, ждёт end.
+            let h = holds.get(&r).unwrap();
+            assert!(h.bins.is_empty());
+            assert_eq!(h.block, n);
+        }
     }
-    // Лог 1: чтение (getBin 8399652 + getActiveId) → «в обновлении» (Need::Active(8399740)); лог 2: чтение обоих бинов
-    // одной пачкой (+ getActiveId) → снято. Ядру — одна отправка, после последнего лога обмена.
-    assert_eq!(reads, vec![2, 3]);
+    // Лог 1: getBin 8399652 + getActiveId на N → «в обновлении» (Need::Active(8399740)); лог 2: getBin 8399740 +
+    // getActiveId на N (бин 8399652 уже прочитан на конце N) → снято. Ядру — одна отправка, после последнего лога обмена.
+    assert_eq!(reads, vec![(vec![8_399_652], 2), (vec![8_399_740], 2)]);
     assert_eq!(sent, 1);
     assert!(holds.get(&r).is_none());
     assert!(reg.get(&r).unwrap().valid);

@@ -74,7 +74,7 @@ async fn one_prep_same_legs_and_sums() {
     for side in [Side::Buy, Side::Sell] {
         for path in &paths {
             let old = graph_legs::legs_for(&q, path, side, 18, &dec);
-            let new = graph_legs::legs_prep(&q, path, side, 18, &dec, Some(&prep));
+            let new = graph_legs::legs_prep(&q, path.clone(), side, 18, &dec, Some(&prep));
             match (&old, &new) {
                 (Ok(a), Ok(b)) => {
                     same_legs(a, b);

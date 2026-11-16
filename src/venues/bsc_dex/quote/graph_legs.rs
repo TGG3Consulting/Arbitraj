@@ -4,7 +4,8 @@
 //! (quote/select.rs) по стороне ПУЛА (направлению свопа на этом хопе, не всей сделки) и decimals токенов из кэша.
 //! Фаза 80, PR 80.4 — оценка пути и сплит (бэклог §7.3).
 //! decimals всех токенов путей (decimals — вынесено из quote/graph_route.rs).
-//! Решение 311 (А): legs_prep — допуск всех хопов с одной подготовкой глубины (Prep) на котировку.
+//! Решение 311 (А): legs_prep — допуск всех хопов с одной подготовкой глубины (Prep) на котировку; (В) — путь во
+//! владение, запись пула переходит в ногу без копии.
 //! Кто вызывает: quote/graph_route.rs.
 //! От чего зависит: quote/route_calc.rs (Leg), quote/route_paths.rs (RoutePath), quote/select.rs, pools/registry.rs,
 //! pools/depth_key.rs (Prep).
@@ -46,43 +47,44 @@ pub fn legs_for(
     usdt_dec: u8,
     dec: &HashMap<Address, u8>,
 ) -> Result<Vec<Leg>, String> {
-    legs_prep(q, path, side, usdt_dec, dec, None)
+    legs_prep(q, path.clone(), side, usdt_dec, dec, None)
 }
 
 /// Решение 311 (А): то же, что legs_for, с одной подготовкой глубины (`prep`, pools/depth_key.rs Prep) на все хопы —
 /// её создаёт котировка графа один раз на котировку (quote/graph_route.rs). None — подготовка на каждый хоп, как
-/// legs_for. Принимает, возвращает, ошибки: как legs_for.
+/// legs_for. Решение 311 (В): путь принимается во владение — запись пула переходит в ногу без копии (legs_for копирует
+/// путь целиком — одна копия записи на хоп, как раньше). Принимает, возвращает, ошибки: как legs_for.
 pub fn legs_prep(
     q: &Quoting,
-    path: &RoutePath,
+    path: RoutePath,
     side: Side,
     usdt_dec: u8,
     dec: &HashMap<Address, u8>,
     prep: Option<&Prep>,
 ) -> Result<Vec<Leg>, String> {
     // Хопы в порядке исполнения: покупка — как в пути, продажа — обратный с переворотом токенов хопа.
-    let order: Vec<(&Entry, Address, Address)> = match side {
+    let order: Vec<(Entry, Address, Address)> = match side {
         Side::Buy => path
             .steps
-            .iter()
-            .map(|s| (&s.edge.entry, s.token_in, s.token_out))
+            .into_iter()
+            .map(|s| (s.edge.entry, s.token_in, s.token_out))
             .collect(),
         Side::Sell => path
             .steps
-            .iter()
+            .into_iter()
             .rev()
-            .map(|s| (&s.edge.entry, s.token_out, s.token_in))
+            .map(|s| (s.edge.entry, s.token_out, s.token_in))
             .collect(),
     };
     let mut legs = Vec::with_capacity(order.len());
     for (entry, token_in, token_out) in order {
-        let hs = hop_side(entry, token_in).ok_or("ребро не соединяет токены хопа")?;
-        let usable = select::usable_with(q, entry, hs, usdt_dec, prep)
+        let hs = hop_side(&entry, token_in).ok_or("ребро не соединяет токены хопа")?;
+        let usable = select::usable_with(q, &entry, hs, usdt_dec, prep)
             .map_err(|w| format!("{} {}: {w}", entry.family.title, entry.ticker))?;
         let dec_in = *dec.get(&token_in).ok_or("нет decimals токена входа")?;
         let dec_out = *dec.get(&token_out).ok_or("нет decimals токена выхода")?;
         legs.push(Leg {
-            entry: entry.clone(),
+            entry,
             usable,
             token_in,
             token_out,

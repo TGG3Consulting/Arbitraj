@@ -119,7 +119,8 @@ pub async fn quote_fit(
         // глубины не задана или неверна) — None: каждый хоп готовит сам и даёт ту же причину, что раньше.
         // Подготовка (RefCell внутри) живёт только в этом блоке без await: в состояние future не попадает.
         let prep = Book::prep(ctx, &v.q.tokens).ok();
-        for p in &paths {
+        // Решение 311 (В): пути больше не нужны — отдаются во владение (запись пула в ногу без копии).
+        for p in paths {
             match graph_legs::legs_prep(v.q, p, v.side, v.usdt_dec, &dec, prep.as_ref()) {
                 Ok(legs) => {
                     let g = match &conv {

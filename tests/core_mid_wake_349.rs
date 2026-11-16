@@ -11,6 +11,8 @@
 //!     событием пула её промежуточной.
 //! Сверка с перечнем путей адаптера на записанном графе — tests/bsc_dex_route_paths.rs (mid_wake_covers_every_path);
 //! слияние событий одной монеты в один пересчёт — план tick_plan.rs (tests/core_tick_plan_322.rs).
+//! Справочник и USDT ставятся перед каждым пробуждением: изменение dex.intermediate_* пересобирает справочник ядра
+//! (без площадок — пустой), см. install.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core (mid_wake, market_state, ticker_index, quote_cache, engine), tests/route_common.
 //! Моков нет: площадок в реестре шлюза нет — проверяется решение ядра.
@@ -135,12 +137,31 @@ fn gen_of(core: &Core, a: Address) -> u64 {
     lk(&core.inner.quote_cache).generation(&VenueId("bsc_dex".into()), a)
 }
 
+/// Справочник монет и адрес USDT ядра — прямо перед пробуждением. Изменение настроек dex.intermediate_* толкает
+/// пересборку справочника ядра (rebuild.rs, REGISTRY): у ядра теста площадок нет, пересборка ставит пустой справочник и
+/// USDT «не загружен» (rebuild.rs:171-173) — поэтому ставим их заново после каждого изменения настроек и до wake (тест
+/// идёт в однопоточном рантайме: между этой расстановкой и синхронным wake задача пересборки не выполняется). Проверка
+/// справочника — чтобы пустой справочник давал ясную ошибку, а не «монета не разбужена». Ошибок нет.
+async fn install(core: &Core, usdt: Address, coins: &[CoinEntry]) {
+    *wr(&core.inner.usdt) = Ok(usdt);
+    arb::core::ticker_index::rebuild(core, coins).await;
+    for c in coins {
+        let a = c.asset.bsc_contract.unwrap();
+        assert!(
+            !arb::core::engine::rd(&core.inner.tickers)
+                .by_tokens((a, a))
+                .is_empty(),
+            "монеты {} нет в справочнике ядра перед пробуждением",
+            c.asset.ticker
+        );
+    }
+}
+
 #[tokio::test]
 async fn wake_on_recorded_pools() {
     use route_common::{BTCB, CAKE, USDT, WBNB};
     let (core, s) = start("recorded").await;
     let dex = VenueId("bsc_dex".into());
-    *wr(&core.inner.usdt) = Ok(USDT);
     // Пулы записи — в состояние рынка ядра; монета ONLY — пул записи WBNB-USDT с её адресом вместо WBNB.
     let p = route_common::parts().await;
     for e in p.registry.all() {
@@ -158,7 +179,6 @@ async fn wake_on_recorded_pools() {
     only_pool.token0 = ONLY;
     only_pool.token1 = USDT;
     let _ = wr(&core.inner.market).apply(MarketEvent::Pool(only_pool));
-    arb::core::ticker_index::rebuild(&core, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
     let mark = PoolMark {
         at: Utc::now(),
         block: 1,
@@ -170,6 +190,7 @@ async fn wake_on_recorded_pools() {
 
     // Пул промежуточной пары WBNB-USDT: CAKE (CAKE → WBNB → USDT) будится, ONLY — нет.
     let (c0, o0) = (gen_of(&core, CAKE), gen_of(&core, ONLY));
+    install(&core, USDT, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
     mid_wake::wake(&core, &dex, (WBNB, USDT), mark);
     assert_eq!(
         gen_of(&core, CAKE),
@@ -183,21 +204,25 @@ async fn wake_on_recorded_pools() {
     );
 
     // Пул «промежуточная — промежуточная» BTCB-WBNB (CAKE → BTCB → WBNB → USDT).
+    install(&core, USDT, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
     mid_wake::wake(&core, &dex, (BTCB, WBNB), mark);
     assert_eq!(gen_of(&core, CAKE), c0 + 2);
     assert_eq!(gen_of(&core, ONLY), o0);
 
     // Пул без промежуточной (CAKE-USDT) — mid_wake никого не будит (монету пула будит tick.rs по токенам).
+    install(&core, USDT, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
     mid_wake::wake(&core, &dex, (CAKE, USDT), mark);
     assert_eq!(gen_of(&core, CAKE), c0 + 2);
 
     // Классика (0 шагов): событие пула промежуточной монеты CAKE будит её.
     set(&s, "dex.router_mode", None).await;
+    install(&core, USDT, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
     mid_wake::wake(&core, &dex, (WBNB, USDT), mark);
     assert_eq!(gen_of(&core, CAKE), c0 + 3);
 
     // Промежуточные выключены — никого.
     set(&s, "dex.intermediate_enabled", Some(json!(false))).await;
+    install(&core, USDT, &[coin("CAKE", CAKE), coin("ONLY", ONLY)]).await;
     mid_wake::wake(&core, &dex, (WBNB, USDT), mark);
     assert_eq!(gen_of(&core, CAKE), c0 + 3);
     assert_eq!(gen_of(&core, ONLY), o0);

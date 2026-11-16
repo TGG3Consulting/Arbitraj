@@ -69,7 +69,7 @@ pub struct PoolFacts {
     /// задании именно её (решение 75).
     pub hook_wait: Option<String>,
     /// Решение 335 (ревью, Н2/Н3): последнее влияние крючка, измеренное НА БЛОКЕ (номер H и итог) — проба на одном
-    /// блоке (hooks.probe_same_block) и перемер перед паузой (hooks.reprobe_before_pause); check/hook_store.rs.
+    /// блоке (цикл крючков и проба перед сделкой, решение «335 (В1)») и перемер перед паузой (hooks.reprobe_before_pause); check/hook_store.rs.
     pub hook_head: Option<(u64, PoolCheck)>,
     /// Сверка с квотером по сторонам (решение 73, quoter_sides.rs): у каждой — None (ещё не было или сторона мелкая)
     /// или Some(Err) — расхождение больше допуска (причина).

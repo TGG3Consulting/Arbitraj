@@ -1,16 +1,17 @@
 //! Файл: venues/bsc_dex/check/hook_store.rs
 //! Что делает: решение 335 (ревью, Н2/Н3/Н1) — хранение и выбор влияния крючка пула B/C, измеренного НА БЛОКЕ:
-//! - put_head: проба на одном блоке (check/hooks_head.rs, hooks.probe_same_block) и перемер перед паузой
-//!   (check/quoter_reprobe.rs, hooks.reprobe_before_pause) пишут итог в PoolFacts.hook (котировки, как раньше) и в
+//! - put_head: проба на одном блоке (цикл крючков check/hooks_head.rs, проба перед сделкой exec/precheck.rs
+//!   hook_again — решение «335 (В1)») и перемер перед паузой (check/quoter_reprobe.rs, hooks.reprobe_before_pause)
+//!   пишут итог в PoolFacts.hook (котировки, как раньше) и в
 //!   PoolFacts.hook_head (номер H и итог). Итог на блоке СТАРШЕ уже записанного не пишется (задачи пишут без порядка —
 //!   более старое измерение не затирает более новое, Н3);
-//! - for_verify: влияние для сверки с квотером (check/quoter_verify.rs). При hooks.probe_same_block = да — последнее
-//!   измерение на блоке (hook_head), если оно есть и итог в PoolFacts.hook «измерено»: повторная проба перед сделкой
-//!   (exec/precheck.rs hook_again, память против «latest») пишет только PoolFacts.hook и измерение на блоке не
-//!   откатывает (Н2). Не задана или «нет» — PoolFacts.hook, как до решения 335;
+//! - for_verify: влияние для сверки с квотером (check/quoter_verify.rs) — последнее измерение на блоке (hook_head),
+//!   если оно есть и итог в PoolFacts.hook «измерено»; иначе PoolFacts.hook (после «335 (В1)» все измерения — на
+//!   блоке, настройки hooks.probe_same_block нет);
 //! - stale: возраст прежнего влияния больше hooks.keep_impact_max_age_s (Н1, check/hooks_head.rs keep).
 //!
-//! Кто вызывает: check/hooks_head.rs, check/cycle.rs, check/quoter_reprobe.rs, check/quoter_verify.rs.
+//! Кто вызывает: check/hooks_head.rs, check/cycle.rs, check/quoter_reprobe.rs, check/quoter_verify.rs,
+//! exec/precheck.rs.
 //! От чего зависит: check/state.rs (Checks, PoolFacts), check/hooks_probe.rs (SHORT), core/types.
 //! Настройки: hooks.keep_impact_max_age_s [bsc_dex] — необязательная (через check/hooks_head.rs).
 
@@ -54,13 +55,9 @@ pub fn put_head(
 }
 
 /// Что делает: влияние крючка для сверки с квотером (см. шапку; было quoter_verify.rs hook_pct). Принимает: проверки,
-/// запись, hooks.probe_same_block. Возвращает: Ok(None) — крючка B/C нет; Ok(Some(влияние)); Err(причина) — влияние
+/// запись. Возвращает: Ok(None) — крючка B/C нет; Ok(Some(влияние)); Err(причина) — влияние
 /// ещё не измерено или проверка крючка не прошла. Ошибок сверх этого нет.
-pub fn for_verify(
-    checks: &Checks,
-    e: &Entry,
-    same_block: bool,
-) -> Result<Option<HookImpact>, String> {
+pub fn for_verify(checks: &Checks, e: &Entry) -> Result<Option<HookImpact>, String> {
     if e.pool
         .hooks
         .as_ref()
@@ -72,7 +69,7 @@ pub fn for_verify(
     match f.hook.map(|c| c.impact) {
         Some(CheckState::Known(i)) => {
             let head = f.hook_head.and_then(|(_, pc)| match pc.impact {
-                CheckState::Known(h) if same_block => Some(h),
+                CheckState::Known(h) => Some(h),
                 _ => None,
             });
             Ok(Some(head.unwrap_or(i)))

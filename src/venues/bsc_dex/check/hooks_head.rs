@@ -1,24 +1,23 @@
 //! Файл: venues/bsc_dex/check/hooks_head.rs
-//! Что делает: решение 335 (задача t156) — проба влияния крючка пула V4 группы B/C в цикле крючков (check/cycle.rs).
-//! Настройка hooks.probe_same_block = да: наша математика и квотер — на ОДНОМ блоке. Голова H — один eth_blockNumber,
-//! пул читается заново на H тем же загрузчиком, что у сверки с квотером (check/quoter_block.rs at_head, в реестр не
-//! пишется), математика без крючка — по этому состоянию, квотер — eth_call на тот же H (check/hooks_probe.rs
-//! measure_on). Так влияние крючка не содержит разницы «память бота против сети на latest». Узел не отдал голову или
-//! состояние H, сбой связи — влияние не перемеряется, действует прежнее (если прежнего нет — «не измерено» с причиной;
-//! ревью Н1: прежнее старше hooks.keep_impact_max_age_s — «не измерено: устарело»; не задана — прежнее без срока).
+//! Что делает: проба влияния крючка пула V4 группы B/C в цикле крючков (check/cycle.rs) — решение 335, после
+//! «335 (В1)» это единственный путь (настройки hooks.probe_same_block нет): наша математика и квотер — на ОДНОМ
+//! блоке. Голова H — один eth_blockNumber, пул читается заново на H тем же загрузчиком, что у сверки с квотером
+//! (check/quoter_block.rs at_head, в реестр не пишется) — в том числе спящий пул (его обмены не слушаются и цена в
+//! памяти стоит, pools/depth.rs: память в пробе не участвует), математика без крючка — по этому состоянию, квотер —
+//! eth_call на тот же H (check/hooks_probe.rs measure_on). Узел не отдал голову или состояние H, сбой связи — влияние
+//! не перемеряется, действует прежнее (если прежнего нет — «не измерено» с причиной; ревью Н1: прежнее старше
+//! hooks.keep_impact_max_age_s — «не измерено: устарело»; не задана — прежнее без срока).
 //! Итог на блоке пишется через check/hook_store.rs put_head (более старый блок не затирает более новый, ревью Н3).
-//! Не задана или «нет» — проба как до решения 335 (hooks_probe::check_pool_named: память против «latest»).
-//! Настройка hooks.requote_after_probe = да (requote): после перемера влияния пул, у которого сторона на паузе сверки
-//! с квотером, сверяется сразу (pools/progress.rs requote → check/quoter_cycle.rs), а не через dex.quoter_check_s;
-//! только после удачной пробы (итог «измерено», ревью Н5).
+//! requote (решение 335 (в), с «335 (В1)» — всегда, без настройки): после удачного перемера влияния пул, у которого
+//! сторона на паузе сверки с квотером, сверяется сразу (pools/progress.rs requote → check/quoter_cycle.rs), а не через
+//! dex.quoter_check_s; только после удачной пробы (итог «измерено», ревью Н5).
 //! Действует на все виды пулов с крючком: крючок есть только у пулов менеджеров V4 — PancakeSwap Infinity CL,
 //! Infinity Bin и Uniswap V4 (pools/discover_v4.rs from_key); у остальных видов Pool.hooks = None (разбор —
 //! docs/notes/t156-hook-pools-quoter-pause-2026-11-16.md).
 //! Кто вызывает: check/cycle.rs (one).
 //! От чего зависит: check/hooks_probe.rs, check/hook_store.rs, check/quoter_block.rs, check/quoter_compare.rs (node_fault), check/state.rs,
 //! pools/listen.rs (Pools), pools/progress.rs (requote), node/call.rs (block_tag).
-//! Настройки: hooks.probe_same_block, hooks.requote_after_probe, hooks.keep_impact_max_age_s [bsc_dex] —
-//! необязательные (docs/SETTINGS.md).
+//! Настройки: hooks.keep_impact_max_age_s [bsc_dex] — необязательная (docs/SETTINGS.md).
 
 use chrono::Utc;
 
@@ -32,11 +31,6 @@ use super::hooks_probe;
 use super::quoter_block::{self, Head};
 use super::quoter_compare::node_fault;
 
-/// Настройка: проба влияния крючка на одном блоке H (решение 335, необязательна).
-pub const SAME_BLOCK: &str = "hooks.probe_same_block";
-/// Настройка: после перемера влияния пул со стороной на паузе сверяется сразу (решение 335, необязательна).
-pub const REQUOTE: &str = "hooks.requote_after_probe";
-
 /// Итог пробы для цикла крючков.
 #[derive(Debug, Clone)]
 pub enum Probe {
@@ -45,19 +39,14 @@ pub enum Probe {
     /// Влияние не перемерено (узел не отдал блок): прежний итог остаётся, причина — в журнал.
     Keep(String),
     /// Итог пробы, имя незаданной настройки, если проба не прошла из-за неё (решение 75), и блок измерения (None —
-    /// «latest» или блок не прочитан: пишется как до решения 335; Some(H) — через hook_store::put_head).
+    /// блок не прочитан, итог — отказ без влияния: пишется в PoolFacts.hook; Some(H) — через hook_store::put_head).
     Got(Box<PoolCheck>, Option<String>, Option<u64>),
 }
 
-/// Что делает: проба влияния крючка пула по настройке hooks.probe_same_block (см. шапку).
-/// Принимает: пулы, запись пула из памяти. Возвращает: Probe. Ошибок нет: сбой — причина в итоге.
+/// Что делает: проба влияния крючка пула на одном блоке (см. шапку).
+/// Принимает: пулы, запись пула из памяти (только ключ и группа — состояние читается на H). Возвращает: Probe.
+/// Ошибок нет: сбой — причина в итоге.
 pub async fn probe(p: &Pools, e: &Entry) -> Probe {
-    if !p.ctx.flag(SAME_BLOCK).unwrap_or(false) {
-        return match hooks_probe::check_pool_named(&p.ctx, &p.tokens, &p.reg, e).await {
-            None => Probe::NoHook,
-            Some((pc, wait)) => Probe::Got(Box::new(pc), wait, None),
-        };
-    }
     let Some(group) = e.pool.hooks.as_ref().map(|h| h.group) else {
         return Probe::NoHook;
     };
@@ -108,11 +97,11 @@ fn keep(p: &Pools, e: &Entry, group: HookGroup, why: String) -> Probe {
     Probe::Got(Box::new(pc), None, None)
 }
 
-/// Что делает: решение 335 (в) — при hooks.requote_after_probe = да, удачной пробе (итог «измерено», ревью Н5) и
-/// стороне пула на паузе сверки с квотером пул ставится на сверку сразу (pools/progress.rs requote). Принимает: пулы,
-/// пул, удалась ли проба. Возвращает: поставлен ли. Ошибок нет.
+/// Что делает: решение 335 (в) — при удачной пробе (итог «измерено», ревью Н5) и стороне пула на паузе сверки с
+/// квотером пул ставится на сверку сразу (pools/progress.rs requote). С «335 (В1)» — всегда (настройки
+/// hooks.requote_after_probe нет). Принимает: пулы, пул, удалась ли проба. Возвращает: поставлен ли. Ошибок нет.
 pub fn requote(p: &Pools, r: &PoolRef, known: bool) -> bool {
-    if !known || !p.ctx.flag(REQUOTE).unwrap_or(false) {
+    if !known {
         return false;
     }
     let q = p.checks.pool(r).quoter;

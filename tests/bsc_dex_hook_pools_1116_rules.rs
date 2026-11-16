@@ -3,8 +3,8 @@
 //! 1. Правило безопасной стороны (check/reprobe_rule.rs safe) и вычет влияния (quote/quoter.rs less_hook) на настоящих
 //!    числах: RIVER — на блоке записи наш выход = квотеру до wei; влияние 0,1306 % из журнала живого бота даёт ровно
 //!    живое расхождение «наш ниже квотера» (безопасная сторона); влияние, измеренное на одном блоке, — 0. CAKE
-//!    0xc6104625 без влияния — наш выше квотера (опасная сторона, перемер не применяется); влияние на одном блоке
-//!    закрывает расхождение до округления less_hook.
+//!    0xc6104625 без влияния — наш выше квотера (опасная сторона, перемер не применяется); после влияния на одном
+//!    блоке наш выход не выше квотера (less_hook округляет миллионные доли вверх).
 //! 2. BLESS 0x6e398c95: откат квотера UnexpectedRevertBytes(NotEnoughLiquidity(PoolId)) разбирается
 //!    quote/quoter_revert.rs (short_pool_id, from_data); ликвидность пула 0 на всех трёх блоках.
 //! 3. Группа крючка по ключу (pools/hooks.rs info) — B у всех 37 пулов; beforeSwap есть у всех, ReturnsDelta — ни у одного.
@@ -21,6 +21,7 @@ use alloy_primitives::{B256, Bytes, U256};
 use rust_decimal::Decimal;
 
 use arb::core::types::HookGroup;
+use arb::venues::bsc_dex::check::hooks_probe::impact;
 use arb::venues::bsc_dex::check::quoter_compare::{Cmp, Nums};
 use arb::venues::bsc_dex::check::reprobe_rule::safe;
 use arb::venues::bsc_dex::pools::hooks::info;
@@ -104,11 +105,11 @@ fn safe_side_on_real_numbers() {
     let (ours, remote) = buy20(&rec, "0xc6104625");
     assert!(ours > remote);
     assert!(!safe(&pause(ours, remote)));
-    // Влияние на одном блоке (наш − квотер) / наш · 100 закрывает расхождение до округления less_hook (ppm).
-    let o = Decimal::from_str(&ours.to_string()).expect("o");
-    let r = Decimal::from_str(&remote.to_string()).expect("r");
-    let hook = (o - r) / o * Decimal::ONE_HUNDRED;
+    // Влияние на одном блоке (check/hooks_probe.rs impact) закрывает расхождение: наш выход за вычетом (less_hook,
+    // миллионные доли вверх) не выше квотера и отстаёт меньше чем на 1 ppm.
+    let hook = impact(ours, remote).expect("влияние");
     let local = less_hook(ours, hook).expect("вычет");
+    assert!(local <= remote, "{local} > {remote}");
     assert!(diff_pct(local, remote).expect("%") < Decimal::from_str("0.0001").expect("ε"));
 }
 

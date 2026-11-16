@@ -40,5 +40,5 @@ eth_getCode крючков и вызовы их view-функций в выбо�
 protocolFee — две половины по 12 бит (infinity-core ProtocolFeeLibrary.sol): 131104 = 0x020020 → 32 / 32,
 200753 = 0x031031 → 49 / 49, 1229100 = 0x12C12C → 300 / 300.
 
-Используется: tests/bsc_dex_hook_pools_1116.rs, tests/bsc_dex_hook_pools_1116_rules.rs (общее чтение —
-tests/hook_pools_common). Решение «335 (записи узла)», разбор — docs/notes/t156-hook-pools-quoter-pause-2026-11-16.md.
+Используется: tests/bsc_dex_hook_pools_1116.rs, tests/bsc_dex_hook_pools_1116_rules.rs, tests/bsc_dex_hook_pools_1116_b1.rs (общее чтение —
+tests/hook_pools_common). Решения «335 (записи узла)», «335 (В1)», разбор — docs/notes/t156-hook-pools-quoter-pause-2026-11-16.md.

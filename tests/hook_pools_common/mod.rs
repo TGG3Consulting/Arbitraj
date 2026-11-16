@@ -4,8 +4,8 @@
 //! ответы CLQuoter.quoteExactInputSingle (три from, обе стороны, 20 и 1 USDT) и последние события Swap пула; расчёт
 //! «нашей» математикой одного шага (math/swap_step.rs step_v4 — тот же шаг, что зовёт math/swap_cl.rs) с комиссией
 //! quote/pool_quote.rs swap_fee.
-//! Кто вызывает: tests/bsc_dex_hook_pools_1116.rs, tests/bsc_dex_hook_pools_1116_rules.rs (каждому нужна своя часть —
-//! allow(dead_code)).
+//! Кто вызывает: tests/bsc_dex_hook_pools_1116.rs, tests/bsc_dex_hook_pools_1116_rules.rs,
+//! tests/bsc_dex_hook_pools_1116_b1.rs (каждому нужна своя часть — allow(dead_code)).
 //! От чего зависит: arb::venues::bsc_dex::math::{swap_step, tick_math}; serde_json, zstd.
 //!
 //! Раскладка ответов — ABI контрактов (infinity-core 3c5ef1be src/pool-cl/CLPoolManager.sol getSlot0 / getLiquidity /

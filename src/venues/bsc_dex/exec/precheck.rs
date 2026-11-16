@@ -8,7 +8,8 @@
 //! односторонняя — выход квотера меньше нашего больше допуска — отказ; больше (на любую величину) — сделка идёт,
 //! поправка с favour = true (только строка в хронологию; ожидаемое и минимум — по нашему расчёту).
 //! Кто вызывает: exec/trade.rs, exec/trade_smart.rs, exec/exit_quote.rs.
-//! От чего зависит: check/hooks_probe.rs, check/state.rs, quote/quoter.rs, quote/emptiness.rs, pools/registry.rs.
+//! От чего зависит: check/hooks_probe.rs, check/hook_store.rs, node/heads.rs,
+//! check/state.rs, quote/quoter.rs, quote/emptiness.rs, pools/registry.rs.
 //! Настройки: через вызываемые — check.probe_usdt, dex.quoter [вид пула], dex.router (V2), dex.quoter_max_diff_pct.
 //!
 //! Квотер исполняет настоящий обмен (с крючками) и откатывается — research/flow/bsc_v4.md, раздел 5; «Сверка:
@@ -21,7 +22,7 @@ use crate::core::types::{CheckState, HookGroup};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
-use super::super::check::hooks_probe;
+use super::super::check::{hook_store, hooks_probe};
 use super::super::ctx::Ctx;
 use super::super::math::swap_cl::Swapped;
 use super::super::pools::registry::Entry;
@@ -29,28 +30,53 @@ use super::super::quote::quoter::Judged;
 use super::super::quote::{Quoting, emptiness, quoter, quoter_revert};
 use super::exit_quote::ExitFix;
 
-/// Повторная пробная проверка крючка пула группы B/C (у пула без крючка B/C — ничего). Итог пишется в состояние
-/// проверок: допуск пула (quote/select.rs) считается уже по нему. Решение 335 (ревью Н2): пишется только
-/// PoolFacts.hook (память против «latest», как раньше — сделка считается по памяти); измерение на блоке
-/// (PoolFacts.hook_head, check/hook_store.rs) не трогается — сверка с квотером при hooks.probe_same_block = да берёт
-/// его, и проба перед сделкой его не откатывает. Ошибки: NoRoute — проба не прошла.
+/// Повторная пробная проверка крючка пула группы B/C (у пула без крючка B/C — ничего). Решение «335 (В1)»: влияние —
+/// на ОДНОМ блоке H = голова из node/heads.rs (без eth_blockNumber): чтение пула на H (Multicall3-ступени, как у
+/// предторговой верификации) и два вызова квотера на H идут одновременно (check/hooks_probe.rs measure_read); прежний
+/// путь «память против latest» убран (разница памяти и сети попадала во влияние). Обращений к узлу на пул: было 2
+/// вызова квотера друг за другом; стало 2 вызова квотера + чтение пула (у Infinity CL / Uniswap V4 — 3 ступени, у Bin —
+/// по одному) — все одновременно: по времени — самое долгое из них (чтение пула) вместо двух кругов квотера.
+/// Итог пишется через check/hook_store.rs put_head (PoolFacts.hook и hook_head; более старый блок не затирает
+/// более новый) — допуск пула (quote/select.rs) считается уже по нему. Откат квотера — итог «не прошла». Сбой узла
+/// (нет головы, нет состояния блока, связь, ответ не по виду), незаданная настройка — сделки нет, прежний итог
+/// проверки крючка не трогается (не выключает пул до следующего прохода цикла).
+/// Ошибки: NoRoute — проба не прошла; StaleData — нет головы; узел; NotConfigured.
 pub async fn hook_again(q: &Quoting, e: &Entry) -> GatewayResult<()> {
-    if e.pool
+    let Some(group) = e
+        .pool
         .hooks
         .as_ref()
-        .is_none_or(|h| h.group == HookGroup::A)
-    {
-        return Ok(());
-    }
-    let Some(pc) = hooks_probe::check_pool(&q.ctx, &q.tokens, &q.reg, e).await else {
+        .map(|h| h.group)
+        .filter(|g| *g != HookGroup::A)
+    else {
         return Ok(());
     };
-    let failed = match &pc.impact {
+    let block = q
+        .heads
+        .latest()
+        .ok_or_else(|| {
+            q.ctx.err(
+                ErrorCode::StaleData,
+                "нет головы сети для пробы крючка перед сделкой",
+            )
+        })?
+        .number;
+    let impact = match hooks_probe::measure_read(&q.ctx, &q.tokens, &q.reg, e, block).await {
+        Ok(Ok(i)) => CheckState::Known(i),
+        Ok(Err(reason)) => CheckState::Failed { reason },
+        // Откат квотера (крючок не дал обмен) — итог пула «не прошла»; прочее (узел, ответ не по виду — например
+        // блок головы ещё не у узла HTTP, незаданная настройка) — сделки нет, прежний итог не трогается.
+        Err(err) if err.code == ErrorCode::SwapReverted => CheckState::Failed {
+            reason: err.message,
+        },
+        Err(err) => return Err(err),
+    };
+    let failed = match &impact {
         CheckState::Failed { reason } => Some(reason.clone()),
         _ => None,
     };
-    q.checks
-        .update_pool(&e.pool.reference, |f| f.hook = Some(pc));
+    let pc = hooks_probe::pool_check(&q.ctx, e, group, impact);
+    hook_store::put_head(&q.checks, &e.pool.reference, block, &pc, None);
     match failed {
         None => Ok(()),
         Some(why) => {

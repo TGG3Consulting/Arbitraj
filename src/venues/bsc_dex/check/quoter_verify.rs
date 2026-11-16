@@ -14,7 +14,7 @@
 //! Кто вызывает: check/quoter_one.rs.
 //! От чего зависит: check/quoter_block.rs, check/quoter_compare.rs, check/quoter_amount.rs, check/hook_store.rs,
 //! check/quoter_reprobe.rs, quote/emptiness.rs, quote/rate.rs, quote/spot.rs, pools/registry.rs, tokens.rs, num.rs.
-//! Настройки: dex.quoter_max_diff_pct, money.max_per_trade_usd, check.probe_usdt, hooks.probe_same_block,
+//! Настройки: dex.quoter_max_diff_pct, money.max_per_trade_usd, check.probe_usdt,
 //! hooks.reprobe_before_pause [bsc_dex] (через вызываемые).
 
 use alloy_primitives::U256;
@@ -32,7 +32,7 @@ use super::quoter_amount;
 use super::quoter_block::{self, Head, NOT_CHECKED};
 use super::quoter_compare::{self, Cmp, Nums};
 use super::quoter_reprobe::{self, Try};
-use super::{hook_store, hooks_head, reprobe_rule};
+use super::{hook_store, reprobe_rule};
 
 /// Причина «влияние крючка ещё не измерено»: такой пул сверяется снова, как только крючок измерен (check/cycle.rs
 /// будит цикл сигналом «пул готов», check/quoter_cycle.rs hook_measured).
@@ -85,8 +85,7 @@ pub async fn verify(
     if emptiness::empty(e) {
         return Verdict::Fail(plain(emptiness::EMPTY));
     }
-    let same_block = p.ctx.flag(hooks_head::SAME_BLOCK).unwrap_or(false);
-    let old = match hook_store::for_verify(&p.checks, e, same_block) {
+    let old = match hook_store::for_verify(&p.checks, e) {
         Ok(v) => v,
         Err(why) => return Verdict::Fail(plain(why)),
     };

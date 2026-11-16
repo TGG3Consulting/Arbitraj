@@ -5,13 +5,15 @@
 //! прошла, сменилась причина без учёта цифр); первый проход — одна сводка, когда ни один пул не читается и все
 //! прочитанные проверены. Пул проверяется сразу, как только стал достоверным (check/fresh.rs, «пул готов», решение 65).
 //! Налоги — check/tax_cycle.rs, сверка с квотером — check/quoter_cycle.rs.
-//! Решение 335: проба — check/hooks_head.rs (hooks.probe_same_block — на одном блоке H; hooks.requote_after_probe —
-//! после удачного перемера пул со стороной на паузе сверки сверяется сразу); итог на блоке — check/hook_store.rs (более
-//! старый блок не затирает более новый).
+//! Решение 335 / «335 (В1)»: проба — check/hooks_head.rs, всегда на одном блоке H (пул, в том числе спящий, читается
+//! заново на H); после удачного перемера пул со стороной на паузе сверки сверяется сразу; итог на блоке —
+//! check/hook_store.rs (более старый блок не затирает более новый). При запуске (в том числе после обновления) все
+//! пулы новые для цикла: каждый пробуется, как только стал достоверным (check/fresh.rs), не дожидаясь
+//! hooks.recheck_interval_s; итоги проверок — только в памяти (check/state.rs), прежних процентов после запуска нет.
 //! Кто вызывает: pools/market.rs (запуск при подписке).
 //! От чего зависит: check/hooks_head.rs, check/hook_store.rs, check/hooks_probe.rs, check/state.rs, check/recheck.rs,
 //! pools/listen.rs (Pools), pools/progress.rs.
-//! Настройки: hooks.recheck_interval_s (вся система); hooks.probe_same_block, hooks.requote_after_probe [bsc_dex].
+//! Настройки: hooks.recheck_interval_s (вся система); через hooks_head — hooks.keep_impact_max_age_s [bsc_dex].
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -125,7 +127,7 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
     if !e.valid {
         return false;
     }
-    // Решение 335: проба на одном блоке H при hooks.probe_same_block = да, иначе как раньше (check/hooks_head.rs).
+    // Решение «335 (В1)»: проба на одном блоке H (check/hooks_head.rs).
     let (pc, wait, block) = match hooks_head::probe(p, &e).await {
         Probe::NoHook => return true,
         Probe::Keep(why) => {
@@ -174,7 +176,7 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
         }
     }
     // Не прошла из-за незаданной настройки — её имя (из ошибки), чтобы повторить при её задании (решение 75).
-    // Измерено на блоке (hooks.probe_same_block) — через hook_store::put_head (не затирает более новый блок).
+    // Измерено на блоке — через hook_store::put_head (не затирает более новый блок).
     match block {
         Some(b) => {
             if !hook_store::put_head(&p.checks, r, b, &pc, wait) {
@@ -192,8 +194,8 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
     if p.checks.pool(r).quoter.any_err(|why| why == HOOK_WAIT) {
         p.signals.pool_ready();
     }
-    // Решение 335 (в): при hooks.requote_after_probe = да пул со стороной на паузе сверяется сразу — только после
-    // удачной пробы (ревью Н5).
+    // Решение 335 (в), с «335 (В1)» всегда: пул со стороной на паузе сверяется сразу — только после удачной пробы
+    // (ревью Н5).
     hooks_head::requote(p, r, known);
     true
 }

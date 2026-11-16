@@ -19,6 +19,8 @@
 //! поколение) — всегда новое поколение, событие уходит. Действует только при dex.pool_events_keep = да: без неё событие
 //! пула при полном канале ядра теряется (решение 313), и повторная отправка каждым блоком — единственная доставка.
 //! Не задана (или dex.pool_events_keep не «да») — как раньше, событие на каждое чтение.
+//! Записи «не прочитано за N попыток» — с адресом пула (depth_book::label, как у dex.pool_refresh): под одной подписью
+//! «вид тикер» бывает несколько пулов.
 //! Настройки: dex.pool_load_retries, dex.per_block_skip_same [bsc_dex]; через pool_fail.rs — dex.pool_fail_pause_ms,
 //! dex.pool_fail_pause_max_ms.
 
@@ -26,6 +28,7 @@ use crate::storage::journal::Level;
 
 use crate::gateway::errors::GatewayError;
 
+use super::depth_book::label;
 use super::discover::Found;
 use super::listen::{End, Pools};
 use super::registry::Entry;
@@ -113,9 +116,10 @@ pub async fn retry(
                 p.loading.done(&found.reference);
                 if m.tries - 1 < limit {
                     let msg = format!(
-                        "{title} {ticker}: состояние пула не прочитано за {} попыток: {} — недостоверен (в котировки \
-                         и сделки не идёт); повтор продолжается с паузой dex.pool_fail_pause_ms, пока не прочитается \
-                         (решение 339, ревью t153)",
+                        "{title} {ticker} ({}): состояние пула не прочитано за {} попыток: {} — недостоверен (в \
+                         котировки и сделки не идёт); повтор продолжается с паузой dex.pool_fail_pause_ms, пока не \
+                         прочитается (решение 339, ревью t153)",
+                        label(&found.reference),
                         m.tries + 1,
                         why.message
                     );
@@ -133,7 +137,9 @@ pub async fn retry(
                     None => "до переподключения пачки (или перечитывания по событию пула / пересинхрона ленты)".to_string(),
                 };
                 let msg = format!(
-                    "{title} {ticker}: состояние пула так и не прочитано за {} попыток: {} — недостоверен {until}",
+                    "{title} {ticker} ({}): состояние пула так и не прочитано за {} попыток: {} — недостоверен \
+                     {until}",
+                    label(&found.reference),
                     m.tries + 1,
                     why.message
                 );

@@ -10,6 +10,8 @@
 //! • requeue (Б1): пул — в очередь повтора; при заданной dex.pool_fail_pause_ms пул, брошенный из-за НЕЗАДАННОЙ
 //!   настройки, остаётся брошенным (вернётся, когда настройку зададут, — revive.rs; иначе каждое событие гоняло бы его
 //!   по кругу «повтор → та же ошибка настройки → брошен»). Не задана — ровно stale_read::requeue, как раньше.
+//! • Адрес пула в текстах журнала и уведомления — depth_book::label (как у dex.pool_refresh): под одной подписью
+//!   «вид тикер» бывает несколько пулов.
 //! Кто вызывает: через pool_fail.rs — listen_log.rs, listen_site.rs, reload.rs (retry), per_block.rs, per_block_par.rs,
 //! per_block_lb.rs, per_block_balancer.rs, session.rs, session_lanes.rs.
 //! От чего зависит: pool_fail.rs (Fails, base, cap, alert_after, is_link), listen.rs (Pools), registry.rs, discover.rs
@@ -24,6 +26,7 @@ use crate::gateway::errors::{ErrorCode, GatewayError};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
+use super::depth_book::label;
 use super::discover::Found;
 use super::listen::Pools;
 use super::pool_fail::{Fail, alert_after, base, cap, is_link};
@@ -92,16 +95,18 @@ pub async fn note<R: Reason + ?Sized>(
             let msg = format!(
                 "узел BSC не отвечает или ограничил запросы ({c}): {} — пулы, которые не прочитались, недостоверны \
                  и читаются снова не раньше чем через {b} мс (пауза не растёт: это сбой узла, а не пула); сессии пачек \
-                 не рвутся (решение 339). Первый пул: {title} {ticker}",
-                why.text()
+                 не рвутся (решение 339). Первый пул: {title} {ticker} ({})",
+                why.text(),
+                label(r)
             );
             p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
         }
     } else if fresh {
         let msg = format!(
-            "{title} {ticker}: состояние пула не прочитано: {} — пул недостоверен (в котировки и сделки не идёт), \
-             следующее чтение не раньше чем через {} мс (пауза растёт с каждой неудачей); остальные пулы пачки \
+            "{title} {ticker} ({}): состояние пула не прочитано: {} — пул недостоверен (в котировки и сделки не \
+             идёт), следующее чтение не раньше чем через {} мс (пауза растёт с каждой неудачей); остальные пулы пачки \
              работают без переподключения (решение 339)",
+            label(r),
             why.text(),
             f.pause_ms
         );
@@ -122,10 +127,13 @@ async fn alert(p: &Pools, r: &PoolRef, title: &str, ticker: &str, f: &Fail, now:
         return;
     }
     let text = format!(
-        "{title} {ticker}: пул не читается {secs} с (порог dex.pool_unread_alert_s = {limit} с), неудач подряд {}. \
-         Последняя причина: {}. Пул недостоверен — в котировки и сделки не идёт; бот читает его снова сам (не раньше \
-         паузы {} мс). Пул: {r:?}",
-        f.tries, f.why, f.pause_ms
+        "{title} {ticker} ({}): пул не читается {secs} с (порог dex.pool_unread_alert_s = {limit} с), неудач подряд \
+         {}. Последняя причина: {}. Пул недостоверен — в котировки и сделки не идёт; бот читает его снова сам (не \
+         раньше паузы {} мс)",
+        label(r),
+        f.tries,
+        f.why,
+        f.pause_ms
     );
     p.ctx.log(Level::Warn, "dex.pool", text.clone(), None).await;
     let (out, ctx) = (p.out.clone(), p.ctx.clone());

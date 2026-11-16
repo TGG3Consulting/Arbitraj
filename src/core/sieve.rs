@@ -117,8 +117,8 @@ pub async fn check(core: &Core, d: &Direction) -> Sieve {
 /// Данные одной стороны: снимок стакана биржи (стакан + котировка для ставки) или верх DEX.
 enum Got {
     Book(
-        crate::core::types::OrderBook,
-        crate::core::types::Quote,
+        Box<crate::core::types::OrderBook>,
+        Box<crate::core::types::Quote>,
         String,
     ),
     Dex(crate::gateway::rate_bound::DexBound),
@@ -129,8 +129,8 @@ impl Got {
     fn as_in(&self) -> SideIn<'_> {
         match self {
             Got::Book(book, sample, ticker) => SideIn::Book {
-                book,
-                sample,
+                book: book.as_ref(),
+                sample: sample.as_ref(),
                 ticker,
             },
             Got::Dex(b) => SideIn::Dex(b),
@@ -195,7 +195,7 @@ async fn side(
         .quote(depth)
         .await
         .map_err(|e| ("no_data", format!("{}: {}", v.0, e.message)))?;
-    Ok(Got::Book(book, sample, on.ticker))
+    Ok(Got::Book(Box::new(book), Box::new(sample), on.ticker))
 }
 
 /// Факт прошлого перевода для поправки вывода (withdraw_seen.rs adjust_at: transfer.seen_cost = да по площадке A,

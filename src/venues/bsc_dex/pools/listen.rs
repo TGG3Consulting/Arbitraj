@@ -83,7 +83,7 @@ pub async fn run(p: Pools, name: String, pools: Vec<(Found, String)>, adds: Opti
         };
         // Пулы уже недостоверны, если загрузка была (session.rs — до закрытия «соединения»).
         // Журнал — одна запись на площадку при потере связи и одна при восстановлении (link.rs).
-        link::down(&p, &name, &why, loaded).await;
+        link::down(&p, &name, &why, loaded, pools.len()).await;
         // Не задана — пачка ждёт настройку и переподключается сама (settings_wait.rs), а не останавливается навсегда.
         let what = format!("Пулы {name}");
         let read = || p.ctx.int("venue.ws_reconnect_pause_ms");

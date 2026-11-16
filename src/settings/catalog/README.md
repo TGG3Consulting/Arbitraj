@@ -24,3 +24,5 @@
 | `window.rs` | Окна (решение 125): window.enabled, window.min_hold_ms, window.queue_max, window.max_mb, window.keep_days, window.zstd_level, window.cleanup_s, window.dex_price, window.dex_price_min_ms (решение 241), window.dex_pool_state (решение 255), window.busy_calc, window.busy_calc_min_ms (решение 267), venue.trades_interval, venue.window_depth_interval, venue.window_depth_limit [mexc] |
 | `bingx.rs` | Только BingX (решение 293): venue.ignore_deprecated_qty — не соблюдать устаревшие minQty / maxQty справочника пар |
 | `gate.rs` | Только Gate (решение 135): venue.book_interval, venue.window_diff_interval, venue.rate_limit_pause_ms, venue.order_history_limit |
+| `dex_fail.rs` | Задача t153, решение 339: dex.pool_fail_pause_ms, dex.pool_fail_pause_max_ms — ошибка чтения одного пула не рвёт сессию пачки, повтор пула с растущей паузой |
+| `dex_par.rs` | Задача t153: решение 331 — verify.read_parallel_max (пулы маршрута перед сделкой и ног цикла DEX ↔ DEX одновременно); решение 330 — dex.event_lanes_max, dex.block_read_parallel_max (сессия пачки) |

@@ -977,3 +977,28 @@ Liquidity Book V2.1 / LFJ (решение 290) — tests/bsc_dex_lb_v21_live.rs 
 Ревью 325 — tests/bsc_dex_prefetch_325_review.rs, та же запись: байты плана Integral (голова, ticks() обхода) = записанные запросы бота; fee() в плане — только при DYNAMIC_FEE по записанному globalState (thena-v3 — да, dexswap-bsc — нет); слияние частичных попаданий книги по порядку (multicall merge); книга только внутри scope (active); pick — частей не больше нужных вызовов; Elastic — план без ticks(), memo у Elastic/Integral не берётся; «не задано = как раньше» и смена dex.event_refresh_batch / dex.event_refresh_fee_only на лету (ячейка памяти); «только комиссия» — только достоверный пул с состоянием Algebra, не в очереди повтора; set_fee не у Algebra ничего не пишет.
 Решения 333/334 и ревью — tests/gateway_core_out_must_333.rs: логика очереди на явных значениях (это не запись площадки — данных площадок нет и они не имитируются), настоящий канал tokio ёмкости 1 и настройки/журнал во временной SQLite: Info при venue.info_events_keep = да — по порядку, не задана — потеряно с записью venue.core_events_lost на 1-й, 2-й, 4-й потере, предел venue.info_events_max; Money (WalletQueue) — не теряется без настройки и идёт раньше ждущих Info; CoinCheck send_in_task — «не проверена» раньше итога той же задачи; доставщик при закрытом канале — очереди очищены, запись venue.core_events_queue; venue.money_events_alert_ms — уведомление venue.money_event_delayed.
 Решения 340, 341, 353 (задача t158) — tests/notify_queue_340.rs: порядок уведомлений сделки, send не ждёт занятую очередь, потеря при notify.queue_max со записью notify.queue_lost, снимок карточки на момент события; tests/journal_queue_341.rs: без настройки — запись ждётся (id), с journal.queue_max — write сразу (id 0) при занятой основной базе, порядок, живой поток с настоящими id, journal.batch_max = 1, потеря и запись journal.queue_lost; tests/ledger_db_353.rs: запись учёта не ждёт основную базу, занятую долгой транзакцией; перенос из основной базы (нет — копия, новее — замена, старее или время не разобрать — остаётся; основная база не меняется); ledger.synchronous и возврат к значению при открытии. Настоящая SQLite во временной папке, без Telegram и моков.
+Ревью t153 (решения 339, 330, 331) — tests/bsc_dex_review_t153.rs: «не задано = 1 в 1» на настоящей SQLite без настроек;
+load_batch_par::states (пределы 1, 2, 8) = load_batch::states на записанных ответах узла BSC 2026-10-25 (те же пулы,
+что tests/bsc_dex_batch_load.rs, плюс DODO DVM на месте 1; локальный JSON-RPC отвечает записанным, незаписанное — ошибкой);
+ошибка связи узла пауз не растит, «сейчас + пауза» без паники, чистка отметок, уведомление один раз на эпизод,
+requeue при изоляции, EventLanes finish / shutdown без узла; каталог настроек и события dex.pool_unread.
+tests/bsc_dex_pool_fail_339.rs — журнал на смену КОДА причины (ревью t153, Н4).
+
+DODO «KJUDGE_ERROR» на записях живого бота 16.11.2026 (t153 (а); tests/data/dodo_kjudge_2026-11-16) —
+tests/bsc_dex_dodo_kjudge_2026_11_16.rs: журнал (493 записи — один текст отката, адресов пулов нет, в приёме 20:26 —
+21 пул по одной записи Warn и Error), ответ узла с KJUDGE_ERROR = SwapReverted, не сбой связи (пауза 339 растёт),
+данные отката Error(string) «KJUDGE_ERROR»; пять пулов на блоке 133993452: состояние getPMMStateForCall нашим ABI,
+K и резервы = геттерам, версии из списка _kjudge, условия «K = 0 и нулевой резерв» нет, mtFeeRate =
+feeRateImpl.getFeeRate(пул, 0); пул DPP ETH с резервами 0/0 читается, но не котируется (swap_dodo → None).
+
+Досъёмка 28 пулов DODO, которые бот не читает (tests/data/dodo_kjudge_2026-11-16_2, блок 133995628) —
+tests/bsc_dex_dodo_dead_pools_2026_11_16.rs: по 328 пулам фабрик KJUDGE_ERROR у getUserFeeRate(0x0) ⇔ K = 0 и
+нулевой резерв (21 из 21); у всех 28 не из /api/coins обе котировки querySell* откатываются (21 KJUDGE, 6 «DPP Oracle
+1.1.0» — ORACLE_NOT_FEASIBLE, резервы 0/0; 1 «DVM 1.0.0» — откат без данных); в байткоде feeRateImpl строки
+KJUDGE_ERROR нет; наш load_dodo.rs на записанных ответах (локальный узел): рабочий пул читается, мёртвые — SwapReverted
+(не сбой связи узла), пауза 339 растёт; журнал 539 записей KJUDGE_ERROR.
+
+Решение 339 (экран и журнал, t153) — tests/bsc_dex_unread_and_breaks_339.rs: отметка пула, ни разу не прочитанного
+(pools/pool_unread.rs: монета, второй токен, вид, последняя причина из записи KJUDGE_ERROR 16.11; снятие, чистка по
+найденным); запись обрыва пачки (pools/link.rs): вид причины без чисел и hex, ограничение частоты одинаковых записей со
+счётом пропущенных, независимость пачек и причин; настройка log.pool_break_interval_s в каталоге.

@@ -8,9 +8,17 @@
 //! Решение 298: перечитывание пула по событию опоздало (у узла нет состояния блока) — пул в очередь повтора на новых
 //! блоках (stale_read.rs), без обрыва сессии.
 //! Решение 295: лог контракта пар многомонетного пула (PoolRef::Multi) — listen_site.rs (одна перечитка на контракт).
+//! Решение 330: при dex.event_lanes_max события глубоких пулов (свои Contract / Singleton, все виды) — полосами
+//! (session_lanes.rs): перечитывание одного пула не держит события других пулов пачки, порядок событий пула прежний.
+//! Новый блок ждёт только полосы своих пулов (повтор, «каждым блоком»), приём пулов / пересинхрон / настройки — всё
+//! принятое. Не задана — события по очереди в сессии, как раньше.
+//! Ревью t153: Н1 — на обрыве полосы останавливаются и дожидаются остановки ДО invalidate (listen → events); Б1 —
+//! итог true события пула ставит его в очередь повтора через pool_fail::requeue (pool_fail_note.rs).
 //! Кто вызывает: pools/listen.rs.
-//! От чего зависит: group.rs, admit.rs, reload.rs, listen_log.rs, events.rs, node/heads.rs, link.rs, settings (рассылка).
-//! Настройки: через вызываемые (feed.stale_after_ms, dex.pool_load_retries, dex.min_pool_liquidity_usd).
+//! От чего зависит: group.rs, admit.rs, reload.rs, listen_log.rs, events.rs, node/heads.rs, link.rs, settings (рассылка),
+//! session_lanes.rs (решение 330), stale_read.rs.
+//! Настройки: через вызываемые (feed.stale_after_ms, dex.pool_load_retries, dex.min_pool_liquidity_usd,
+//! dex.event_lanes_max).
 //!
 //! Подписки привязаны к соединению — https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub .
 
@@ -19,6 +27,7 @@ use std::collections::{HashMap, HashSet};
 use alloy_primitives::Address;
 
 use alloy::rpc::types::Log;
+use serde_json::value::RawValue;
 use tokio::sync::mpsc;
 
 use crate::core::types::PoolRef;
@@ -29,6 +38,7 @@ use super::events;
 use super::group::{self, Group, Msg};
 use super::listen::{End, Pools};
 use super::revive;
+use super::session_lanes::EventLanes;
 use super::{link, listen_log, listen_site, per_block, reload};
 
 /// Канал пулов, найденных после старта пачки.
@@ -83,8 +93,26 @@ pub async fn run(
     end
 }
 
-/// События пачки до обрыва. Возвращает: (конец, true — состояние загружалось).
+/// События пачки до обрыва. Ревью t153 (Н1): полосы событий (решение 330) останавливаются и ДОЖИДАЮТСЯ остановки до
+/// возврата — run объявляет пачку недостоверной (invalidate) только после этого. Возвращает: (конец, true —
+/// состояние загружалось).
 async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Adds>) -> (End, bool) {
+    // Решение 330: полосы событий глубоких пулов (session_lanes.rs); без dex.event_lanes_max пусты — всё как раньше.
+    let mut lanes = EventLanes::new();
+    let out = Box::pin(events(p, g, m, adds, &mut lanes)).await;
+    lanes.shutdown().await;
+    out
+}
+
+/// События пачки до обрыва (тело listen). Принимает ещё полосы событий. Возвращает: (конец, true — состояние
+/// загружалось).
+async fn events(
+    p: &Pools,
+    g: &mut Group,
+    m: &mut Members,
+    adds: &mut Option<Adds>,
+    lanes: &mut EventLanes,
+) -> (End, bool) {
     // Источник могли сменить, пока шёл приём пулов (admit) — сразу переподключение через новый (решение 68).
     if g.conn.stale(&p.ctx) {
         return (
@@ -102,6 +130,15 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
     let mut sites = group::multi_sites(&m.pools);
     loop {
         tokio::select! {
+            done = lanes.next_done(), if lanes.running() => {
+                let Some(done) = done else { continue };
+                if let Err(end) = lanes.finish(m, done) {
+                    return (end, true);
+                }
+                if let Err(end) = lanes.dispatch(p, m) {
+                    return (end, true);
+                }
+            }
             msg = g.rx.recv() => {
                 let raw = match msg {
                     Some(Msg::Log(raw)) => raw,
@@ -111,11 +148,15 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                     Ok(l) => l,
                     Err(e) => return (End::Broken(format!("лог не разобран: {e}")), true),
                 };
-                if let Err(end) = on_log(p, g, m, (&idx, &sites), &log).await {
+                if let Err(end) = on_log(p, g, m, (&idx, &sites), &log, (&mut *lanes, raw)).await {
                     return (end, true);
                 }
             }
             more = next_add(adds) => {
+                // Решение 330: приём новых пулов — после всего принятого полосами (как раньше по очереди).
+                if let Err(end) = lanes.drain(p, m).await {
+                    return (end, true);
+                }
                 let start = m.pools.len();
                 extend(&mut m.pools, more);
                 let new: Vec<usize> = (start..m.pools.len()).collect();
@@ -131,6 +172,10 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                 }
                 let epoch = *resync.borrow_and_update();
                 if epoch > 0 {
+                    // Решение 330: пересинхрон пачки — после всего принятого полосами.
+                    if let Err(end) = lanes.drain(p, m).await {
+                        return (end, true);
+                    }
                     if let Err(end) = super::depth_sync::resync(p, m).await {
                         return (end, true);
                     }
@@ -143,6 +188,11 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                     return (End::Broken("поток новых блоков остановлен".into()), true);
                 }
                 let at = heads.borrow_and_update().as_ref().map(|h| h.number);
+                // Решение 330: повтор и чтения каждым блоком не идут одновременно с полосой СВОЕГО пула (одна запись
+                // реестра — один читатель); полосы остальных пулов идут дальше.
+                if let Err(end) = lanes.settle_block(m).await {
+                    return (end, true);
+                }
                 if let Some(at) = at
                     && !m.missing.is_empty()
                     && let Err(end) = reload::retry(p, &m.pools, &mut m.missing, &mut m.abandoned, at).await
@@ -155,11 +205,19 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
                 {
                     return (end, true);
                 }
+                // Решение 330: ждавшие, пока шло чтение блока, — в работу.
+                if let Err(end) = lanes.dispatch(p, m) {
+                    return (end, true);
+                }
             }
             changed = settings.recv(), if open => {
                 // Сменили источник событий пулов (ws ↔ receipts, решение 68) — переподключение через новый.
                 if g.conn.stale(&p.ctx) {
                     return (End::Broken("источник событий пулов сменён (bsc.pool_events_source)".into()), true);
+                }
+                // Решение 330: возврат брошенных и пересчёт глубины — после всего принятого полосами.
+                if let Err(end) = lanes.drain(p, m).await {
+                    return (end, true);
                 }
                 // Брошенные из-за настройки — revive.rs (рассылка закрыта — open = false); порог или полоса глубины —
                 // пересчёт вердикта пулов пачки сразу (depth_sync.rs, решение 73).
@@ -181,13 +239,15 @@ async fn listen(p: &Pools, g: &mut Group, m: &mut Members, adds: &mut Option<Add
     (End::Broken(why), true)
 }
 
-/// Один лог: глубокий пул — событие его состояния; мелкий — пробуждение. Ошибки: End — как у on_log и admit::wake.
+/// Один лог: глубокий пул — событие его состояния (решение 330: при полосах — в полосу пула, session_lanes.rs);
+/// мелкий — пробуждение. Принимает ещё полосы и сырой лог (для полосы). Ошибки: End — как у on_log и admit::wake.
 async fn on_log(
     p: &Pools,
     g: &mut Group,
     m: &mut Members,
     (index, sites): (&HashMap<PoolRef, usize>, &HashSet<Address>),
     log: &Log,
+    (lanes, raw): (&mut EventLanes, Box<RawValue>),
 ) -> Result<(), End> {
     let single = log.topics().get(1).map(|id| PoolRef::Singleton {
         manager: log.address(),
@@ -221,11 +281,18 @@ async fn on_log(
             .topic0()
             .is_some_and(|t| events::topics(family).contains(t))
         {
+            // Решение 330: полосы — событие в конец полосы пула (порядок пула прежний), запуск в пределах.
+            if lanes.wants(p) {
+                lanes.push(i, raw)?;
+                return lanes.dispatch(p, m);
+            }
             // Решение 298: чтение на блоке события опоздало (StaleData) — пул в очередь повтора, сессия идёт дальше;
             // пока ждёт — события без перечитывания.
             let waiting = super::stale_read::waiting(&m.missing, i);
             if listen_log::on_log(p, log, waiting, &g.rx).await? {
-                super::stale_read::requeue(&mut m.missing, &mut m.abandoned, i);
+                // Ревью t153 (Б1): при 339 брошенный из-за незаданной настройки остаётся брошенным (pool_fail_note.rs).
+                let isolate = super::pool_fail::base(&p.ctx).is_some();
+                super::pool_fail::requeue(isolate, &mut m.missing, &mut m.abandoned, i);
             }
         }
         return Ok(());

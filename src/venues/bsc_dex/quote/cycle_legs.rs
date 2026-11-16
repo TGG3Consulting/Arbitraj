@@ -5,12 +5,16 @@
 //! - по состоянию в памяти (now) — для расчёта цикла на каждую точку подбора размера (быстро, без узла);
 //! - СВЕЖЕЕ состояние (fresh) — перед сделкой и сухой сделкой: пулы цикла перечитываются ОДНИМ Multicall3 на голове
 //!   (pools/load_batch.rs, как предторговая верификация графа — решение 83, quote/verify.rs) с пределами verify.*;
+//!   решение 331: «одним Multicall3» — только V2/V3/CL/V4; виды «по одному» — по очереди или, при
+//!   verify.read_parallel_max, одновременно с пределом и со ступенями (pools/load_batch_par.rs), тот же блок и итог;
 //!   состояние кладётся на КЛОНЫ записей (реестр не трогаем). «Не торгуем вслепую»: не перечитался пул — сделки нет.
 //!
 //! Нативный BNB (адрес 0 у пулов V4/Infinity с нативной валютой) внутри цикла в v1 не исполняется — отказ.
 //! Кто вызывает: quote/cycle_cost.rs, exec/cycle_trade.rs, exec/cycle_dry.rs.
-//! От чего зависит: quote/{route_calc, select, graph_legs, verify}.rs, pools/{registry, load, load_batch}.rs, tokens.rs.
-//! Настройки: verify.max_staleness_blocks, verify.timeout_ms (через verify::limits) [bsc_dex].
+//! От чего зависит: quote/{route_calc, select, graph_legs, verify}.rs, pools/{registry, load, load_batch,
+//! load_batch_par}.rs, tokens.rs.
+//! Настройки: verify.max_staleness_blocks, verify.timeout_ms (через verify::limits), verify.read_parallel_max
+//! (решение 331, необязательная) [bsc_dex].
 
 use std::time::Duration;
 
@@ -20,7 +24,8 @@ use crate::core::types::DexCycle;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::pools::load;
-use super::super::pools::load_batch::{self, Want};
+use super::super::pools::load_batch::Want;
+use super::super::pools::load_batch_par;
 use super::super::pools::registry::Entry;
 use super::Quoting;
 use super::graph_legs::hop_side;
@@ -34,7 +39,8 @@ pub async fn now(q: &Quoting, c: &DexCycle) -> GatewayResult<Vec<Leg>> {
     legs(q, c, entries).await
 }
 
-/// Ноги цикла на СВЕЖЕМ состоянии пулов (одним Multicall3 на голове). Возвращает: ноги и блок перечтения.
+/// Ноги цикла на СВЕЖЕМ состоянии пулов (на голове: ступени Multicall3 и виды «по одному» — решение 331).
+/// Возвращает: ноги и блок перечтения.
 /// Ошибки: StaleData (нет головы, пул не перечитан, таймаут verify.timeout_ms, отставание больше
 /// verify.max_staleness_blocks), NoRoute, NotConfigured (verify.*), узел.
 pub async fn fresh(q: &Quoting, c: &DexCycle) -> GatewayResult<(Vec<Leg>, u64)> {
@@ -63,7 +69,8 @@ pub async fn fresh(q: &Quoting, c: &DexCycle) -> GatewayResult<(Vec<Leg>, u64)> 
             token1: e.pool.token1,
         })
         .collect();
-    let fetch = load_batch::states(ctx, &q.tokens, &q.reg, &wants, block);
+    let par = load_batch_par::limit(ctx, verify::PAR);
+    let fetch = load_batch_par::states_with(ctx, &q.tokens, &q.reg, &wants, block, par);
     let loaded = tokio::time::timeout(Duration::from_millis(timeout_ms), fetch)
         .await
         .map_err(|_| {

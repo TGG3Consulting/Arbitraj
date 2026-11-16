@@ -67,3 +67,21 @@
 | CurveNg | Contract; Multi | Contract — действует; Multi — listen_site | действует (Multi — `per_block.rs:128-134`) | действует |
 | WooPP | Member | неприменимо к listen_log: лог контракта → `per_block::on_member_log` (`per_block.rs:152-166`) — действует там | действует | действует |
 | BalancerV2 | Contract; Multi | Contract — действует; Multi — listen_site | действует (`per_block_balancer.rs:46-49, 71-76`) | действует |
+
+## 4. Решение 331: проверка маршрута перед сделкой (факт кода 8fe83aa1)
+
+- `quote/verify.rs:117` и `quote/cycle_legs.rs:66` читали пулы через `load_batch::states`: группы пар Multi по очереди
+  (`load_batch.rs:85-91`), виды «по одному» по очереди (`load_batch.rs:98-117`, список — `one_by_one`,
+  `load_batch.rs:232-249`), затем ступени Multicall3 V2/V3/CL/V4. Комментарий «один Multicall3-батч» был верен только
+  для V2/V3/CL/V4 — исправлен.
+- Стало (verify.read_parallel_max): `load_batch_par::states` — группы Multi и виды «по одному» потоком future с
+  `buffered(n)` (не больше n сразу, порядок ответов сохраняется) и одновременно (`tokio::join!`) — ступени Multicall3 на
+  подмножестве остальных пулов (`load_batch::states`). Те же функции на том же блоке → тот же итог; без dex.load_batch —
+  та же причина у всех пулов без запросов к узлу. Чтения идут в задаче вызывающего — класс Trade сделки
+  (task_local gateway/urgency.rs) действует на все запросы; темп — общая очередь node/pace.rs (bsc.node_http_rps).
+- Вид × «проверка перед сделкой»: V2, PancakeV3, UniswapV3, InfinityCl, UniswapV4 — неприменимо (уже ступени
+  Multicall3; теперь идут одновременно с остальными); все прочие виды (InfinityBin, LbV21, KyberElastic, Dodo*,
+  Algebra, AlgebraIntegral, Solidly, SolidlyV1, Slipstream, стейблсвапы, WooPP, Maverick, MetricOmm, IziSwap,
+  BiswapV3, KyberDmm, Smardex, BalancerV2) — действует (`load_batch.rs one_by_one`); пары Multi — одно чтение на
+  контракт, группы контрактов одновременно.
+

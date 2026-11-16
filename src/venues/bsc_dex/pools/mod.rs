@@ -124,6 +124,7 @@ pub mod load;
 pub mod load_algebra;
 pub mod load_algebra_integral;
 pub mod load_batch;
+pub mod load_batch_par;
 pub mod load_batch_cl;
 pub mod load_batch_ticks;
 pub mod load_batch_v2v3;

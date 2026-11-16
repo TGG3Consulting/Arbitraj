@@ -9,7 +9,8 @@
 //! (решение 81) тоже по одному (load_elastic.rs): обход связного списка тиков — не битмап, под ступени по словам
 //! не ложится.
 //! Решение 295: пары многомонетного пула (PoolRef::Multi) одного контракта — одно чтение на все (load_site.rs).
-//! Кто вызывает: pools/reload.rs (load_many); one_by_one — ещё reload_many.rs (решение 298).
+//! Кто вызывает: pools/reload.rs (load_many); one_by_one — ещё reload_many.rs (решение 298); решение 331 —
+//! load_batch_par.rs (states на подмножестве без видов «по одному», one_by_one, batch, miss).
 //! От чего зависит: load_batch_v2v3.rs, load_batch_cl.rs, load_batch_ticks.rs, load.rs (Loaded, state),
 //! load_v2v3.rs (word_range), ticks.rs, fee_fresh.rs (решение 281: свежая fee() V3 — в Loaded.fee_pips).
 //! Настройки: dex.load_batch, dex.multicall3 [bsc_dex] (без него — пачка JSON-RPC); через вызываемые — dex.tick_words,
@@ -37,7 +38,9 @@ use super::load_v2v3::word_range;
 use super::registry::Registry;
 use super::ticks::TickMap;
 
-/// Что читать: вид, ссылка, tickSpacing, binStep, USDT и token1 (Bin), как у load::state.
+/// Что читать: вид, ссылка, tickSpacing, binStep, USDT и token1 (Bin), как у load::state. Copy — решение 331
+/// (load_batch_par.rs: подмножество пулов для ступеней Multicall3).
+#[derive(Clone, Copy)]
 pub struct Want<'a> {
     pub family: &'static Family,
     pub reference: &'a PoolRef,

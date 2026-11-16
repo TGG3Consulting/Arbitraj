@@ -234,8 +234,8 @@ impl Proto {
     }
 }
 
-/// Вид пула одной DEX. Живёт всю работу процесса (одна запись на пару «id, протокол»).
-#[derive(Debug)]
+/// Вид пула одной DEX. Живёт всю работу процесса (одна запись на пару «id, протокол»). Debug — вручную (ниже): ячейки
+/// настроек `event` (ревью 325) в вывод не входят, вывод побайтно прежний (золотые снимки tests/golden_common).
 pub struct Family {
     /// id DEX у индексатора — id области «DEX» (dex.pool_enabled, адреса контрактов).
     pub id: &'static str,
@@ -259,8 +259,26 @@ pub struct Family {
     /// не вызывает. Исполнимость через исполнитель — exec_kind::via_executor (нужен ещё exec.executor_address).
     pub executor_kind: Option<ExecKind>,
     /// Ревью 325 (Н1): настройки решения 325 этого DEX в ячейках памяти (event_flags.rs) — путь события пула не
-    /// читает хранилище на каждое событие.
+    /// читает хранилище на каждое событие. Не часть значения вида: в Debug не входит; вид один на процесс (&'static,
+    /// без Clone) — все пользователи видят одну и ту же живую ячейку.
     pub event: super::event_flags::EventFlags,
+}
+
+impl std::fmt::Debug for Family {
+    /// Что делает: тот же вывод, что дал бы #[derive(Debug)] без поля `event` (те же имена и порядок полей).
+    /// Ошибок нет (кроме ошибки форматтера).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Family")
+            .field("id", &self.id)
+            .field("kind", &self.kind)
+            .field("proto", &self.proto)
+            .field("title", &self.title)
+            .field("graphable", &self.graphable)
+            .field("tradable", &self.tradable)
+            .field("fork", &self.fork)
+            .field("executor_kind", &self.executor_kind)
+            .finish()
+    }
 }
 
 /// Вариант dex.kind (список — settings::catalog::dex::DEX_KINDS, один на код и каталог) → математика, протокол,

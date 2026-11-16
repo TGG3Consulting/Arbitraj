@@ -110,7 +110,7 @@
   dex.event_refresh_fee_only на пути события — из ячейки памяти `pools/event_flags.rs` (`gateway/setting_cell.rs`
   `watch_in` — область «DEX», образец решения 324): ячейка — в виде DEX (`families.rs` Family::event, OnceLock),
   перечитывается задачей по рассылке изменений хранилища (смена на лету); с другим хранилищем (снимок 239, тесты) —
-  прямое чтение (`Store::same`). Читают: `prefetch_read.rs` size, `reread_bins.rs`, `integral_fee.rs` fits.
+  прямое чтение (`Store::same`). Читают: `prefetch_read.rs` size, `reread_bins.rs`, `integral_fee.rs` fits. Ячейка — не часть значения вида: Debug у Family ручной, без поля `event` (вывод побайтно прежний — золотые снимки tests/golden_common; CI c72ba11d упал на tests/bsc_dex_multi_pair_golden_stable.rs из-за derive). Других derive у Family нет (ни Clone, ни PartialEq/Hash/Serialize); вид — `&'static`, одна живая ячейка на всех.
 - **Н2 — исправлено.** «Только комиссия» — только у достоверного пула (`integral_fee::fits`: valid); недостоверный —
   прежний Refresh (renewed даёт valid = true и «пул готов», `listen_log.rs` ветка Refresh).
 - **Н3 — исправлено.** fits требует состояние Algebra (иначе прежний Refresh); `set_fee` не у Algebra ничего не пишет и

@@ -38,7 +38,7 @@ use super::core_out::{self, Feed};
 use super::core_out_item::{Class, Item, Key};
 use super::core_out_side::Side;
 use super::events::MarketEvent;
-use super::keep_last::Offer;
+use super::keep_last::{Ask, Fast, Offer};
 use super::setting_cell::{self, bool_of, u64_of};
 
 /// Имя настройки решения 324.
@@ -104,11 +104,22 @@ impl BookOut {
 
     /// Стакан ядру (см. шапку). Принимает: канал ядра, стакан. Возвращает: Fed. Ошибок нет.
     pub fn book(&self, out: &Sender<MarketEvent>, book: OrderBook) -> Fed {
-        let key = Key::Book(self.venue.clone(), book.asset.ticker.clone());
-        let keep = || self.side.keep.on();
-        let r = self
-            .feed
-            .offer(out, key, Item::Event(MarketEvent::Book(book), None), keep);
+        let r = match self.feed.fast(out) {
+            // Набор пуст (ревью 324, Б1): одна атомарная загрузка + try_reserve + send — без замка, ключа, настройки.
+            Fast::Free(p) => {
+                p.send(MarketEvent::Book(book));
+                return Fed::Sent;
+            }
+            Fast::Closed => return Fed::Closed,
+            Fast::Full if !self.side.keep.on() => Offer::Lost,
+            Fast::Full | Fast::Busy => {
+                // Медленный путь: ключ строится только здесь; настройка — из памяти, прочитана вне замка набора.
+                let key = Key::Book(self.venue.clone(), book.asset.ticker.clone());
+                let on = self.side.keep.on();
+                let item = Item::Event(MarketEvent::Book(book));
+                self.feed.slow(out, key, item, &mut Ask::new(move || on))
+            }
+        };
         match r {
             Offer::Sent => Fed::Sent,
             Offer::Closed => Fed::Closed,
@@ -133,12 +144,19 @@ impl BookOut {
 /// «Стакан пары недостоверен» ядру — не теряется (см. шапку). Принимает: канал ядра, площадку, тикер монеты площадки.
 /// Ошибок нет (канал закрыт — слать некому, как раньше).
 pub fn invalidated(out: &Sender<MarketEvent>, venue: VenueId, ticker: &str) {
-    let key = Key::Book(venue.clone(), ticker.to_string());
+    let feed = core_out::of(out);
     let ev = MarketEvent::Invalidated {
-        venue,
+        venue: venue.clone(),
         ticker: ticker.to_string(),
         address: None,
     };
-    // Срочное: настройка не читается, при полном канале — в начало очереди.
-    let _ = core_out::of(out).offer(out, key, Item::Invalid(ev, None), || true);
+    match feed.fast(out) {
+        Fast::Free(p) => p.send(ev),
+        Fast::Closed => {}
+        // Срочное: настройка не читается, при полном канале — в начало очереди.
+        Fast::Full | Fast::Busy => {
+            let key = Key::Book(venue, ticker.to_string());
+            let _ = feed.slow(out, key, Item::Invalid(ev, None), &mut Ask::new(|| true));
+        }
+    }
 }

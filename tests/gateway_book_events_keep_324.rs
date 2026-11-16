@@ -98,7 +98,7 @@ fn pool(n: u8) -> (Key, Item) {
         code: "pool".into(),
         text: format!("P{n}"),
     };
-    (key, Item::Event(ev, None))
+    (key, Item::Event(ev))
 }
 
 #[tokio::test]
@@ -129,7 +129,7 @@ async fn book_keeps_last_frame_per_pair() {
 async fn pools_and_books_one_fair_queue() {
     let (tx, mut rx) = mpsc::channel::<MarketEvent>(1);
     let feed = core_out::of(&tx);
-    let book_item = |t: &str, ms| Item::Event(MarketEvent::Book(book("mexc", t, ms)), None);
+    let book_item = |t: &str, ms| Item::Event(MarketEvent::Book(book("mexc", t, ms)));
     let bk = |t: &str| Key::Book(v("mexc"), t.into());
     let (k, i) = pool(1);
     assert_eq!(feed.offer(&tx, k, i, || true), Offer::Sent);
@@ -281,7 +281,7 @@ async fn deliverer_guard_resets_on_panic_and_abort() {
     assert_eq!(set.offer(&tx, G(1), Boom(1, false), || true), Offer::Sent);
     let r = set.offer(&tx, G(2), Boom(2, true), || true);
     assert_eq!(r, Offer::Deferred { start: true });
-    let worker = tokio::spawn(set.clone().deliver(tx.clone()));
+    let worker = tokio::spawn(set.clone().deliver(tx.clone(), ()));
     assert_eq!(rx.recv().await, Some(1));
     assert!(worker.await.expect_err("паника").is_panic());
     // Признак «работает» сброшен — следующий отложенный снова запускает доставщика.
@@ -289,13 +289,13 @@ async fn deliverer_guard_resets_on_panic_and_abort() {
     let r = set.offer(&tx, G(4), Boom(4, false), || true);
     assert_eq!(r, Offer::Deferred { start: true });
     // Снятие задачи, ждущей места в канале, — тоже сброс.
-    let worker = tokio::spawn(set.clone().deliver(tx.clone()));
+    let worker = tokio::spawn(set.clone().deliver(tx.clone(), ()));
     tokio::task::yield_now().await;
     worker.abort();
     assert!(worker.await.expect_err("снята").is_cancelled());
     let r = set.offer(&tx, G(5), Boom(5, false), || true);
     assert_eq!(r, Offer::Deferred { start: true });
-    let worker = tokio::spawn(set.clone().deliver(tx.clone()));
+    let worker = tokio::spawn(set.clone().deliver(tx.clone(), ()));
     assert_eq!(rx.recv().await, Some(3));
     assert_eq!(rx.recv().await, Some(4));
     assert_eq!(rx.recv().await, Some(5));

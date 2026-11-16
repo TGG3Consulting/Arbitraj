@@ -3,9 +3,8 @@
 //! доставки» (gateway/keep_last.rs). Ключ — перечисление: пул DEX (площадка, PoolRef) или стакан биржи (площадка,
 //! тикер монеты площадки); класс ключа — «пулы площадки» / «стаканы площадки» (счёт журнала и правило 321 — по классу).
 //! Слот — последнее событие ключа (MarketEvent::Pool / MarketEvent::Book: полное состояние — ядро кладёт его как есть,
-//! поэтому последнее заменяет прежние) с необязательной проверкой «ещё годно» при доставке (Live: пул DEX снят или
-//! недостоверен — не отправляется), либо «недостоверно» (MarketEvent::Invalidated стакана биржи) — срочное: в начало
-//! очереди, не теряется, снимает ждавший старый кадр того же ключа; кадр, пришедший после него, ждёт в том же слоте и
+//! поэтому последнее заменяет прежние; проверка «ещё годно» пула DEX — Live, одна на площадку в core_out.rs), либо
+//! «недостоверно» (MarketEvent::Invalidated стакана биржи) — срочное: в начало очереди, не теряется, снимает ждавший старый кадр того же ключа; кадр, пришедший после него, ждёт в том же слоте и
 //! уходит следующим — ядро не получит «старый кадр после Invalidated».
 //! Кто вызывает: gateway/core_out.rs, gateway/core_out_book.rs, venues/bsc_dex/pools/emit_pool.rs.
 //! От чего зависит: gateway/keep_last.rs (Keyed, Slot, Take), gateway/events.rs, core/types.
@@ -47,16 +46,17 @@ impl Keyed for Key {
     }
 }
 
-/// Проверка «событие ещё годно» при доставке (true — отправить). Ошибок нет.
+/// Проверка «событие ещё годно» при доставке (true — отправить). Ревью 324 (Б1): одна на площадку DEX в общем наборе
+/// (core_out.rs Feed::live), а не клон в каждом слоте. Ошибок нет.
 pub type Live = Arc<dyn Fn(&MarketEvent) -> bool + Send + Sync>;
 
 /// Слот ключа.
 pub enum Item {
-    /// Последнее событие ключа и проверка при доставке (None — без проверки).
-    Event(MarketEvent, Option<Live>),
+    /// Последнее событие ключа.
+    Event(MarketEvent),
     /// «Недостоверно» и кадр, пришедший после него (уйдёт следующим). Кадр — в Box (clippy large_enum_variant: два
     /// MarketEvent в одном варианте; Box выделяется только при слиянии кадра с ждущим «недостоверно» — редкий путь).
-    Invalid(MarketEvent, Option<Box<(MarketEvent, Option<Live>)>>),
+    Invalid(MarketEvent, Option<Box<MarketEvent>>),
 }
 
 impl Slot for Item {
@@ -69,39 +69,26 @@ impl Slot for Item {
                 *self = Item::Invalid(inv, None);
                 true
             }
-            Item::Event(ev, live) => match self {
-                Item::Event(old, old_live) => {
+            Item::Event(ev) => match self {
+                Item::Event(old) => {
                     *old = ev;
-                    *old_live = live;
                     true
                 }
-                Item::Invalid(_, after) => after.replace(Box::new((ev, live))).is_some(),
+                Item::Invalid(_, after) => after.replace(Box::new(ev)).is_some(),
             },
         }
     }
 
     fn now(self) -> MarketEvent {
         match self {
-            Item::Event(ev, _) | Item::Invalid(ev, _) => ev,
+            Item::Event(ev) | Item::Invalid(ev, _) => ev,
         }
     }
 
     fn take(self) -> Take<MarketEvent, Self> {
         match self {
-            Item::Event(ev, live) => {
-                if live.as_ref().is_none_or(|f| f(&ev)) {
-                    Take::Send(ev, None)
-                } else {
-                    Take::Skip
-                }
-            }
-            Item::Invalid(inv, after) => Take::Send(
-                inv,
-                after.map(|b| {
-                    let (e, l) = *b;
-                    Item::Event(e, l)
-                }),
-            ),
+            Item::Event(ev) => Take::Send(ev, None),
+            Item::Invalid(inv, after) => Take::Send(inv, after.map(|b| Item::Event(*b))),
         }
     }
 

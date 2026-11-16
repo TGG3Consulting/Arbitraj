@@ -4,92 +4,56 @@
 //! по ключу хранится только ПОСЛЕДНЕЕ (слот сливает новое с ждущим — Slot::merge), порядок — очередь ключей (FIFO,
 //! честно для всех классов: кто раньше отложен — раньше доставлен; повторное событие ждущего ключа место в очереди не
 //! теряет и не занимает новое); срочное (Slot::urgent — «недостоверно») — в начало очереди и не теряется никогда.
-//! - offer: ключ уже ждёт — слить (Offer::Replaced). Иначе: у класса ключа ждут отложенные (не срочные) — за ними без
-//!   чтения настройки (решение 321: выключение действует, когда класс опустел); очередь не пуста из-за других классов —
-//!   `keep()` (настройка): да — за ждущими, нет — как раньше: без ожидания в канал, полон — Offer::Lost; очередь пуста —
-//!   без ожидания (try_reserve), полон — `keep()`: да — в очередь (Offer::Deferred), нет — Offer::Lost. Срочное —
-//!   без ожидания, полон — в начало очереди без чтения настройки.
+//! - fast (ревью 324, Б1 — быстрый путь): счётчик busy («ключей в наборе») == 0 — без замка, без ключа, без
+//!   настройки: try_reserve (Free — вызывающий шлёт этим разрешением; Full; Closed); busy != 0 — Busy.
+//! - slow (под замком набора): ключ уже ждёт — слить (Offer::Replaced). Иначе: у класса ключа ждут отложенные
+//!   настройкой — за ними без чтения настройки (решение 321: выключение действует, когда класс опустел); очередь не
+//!   пуста из-за других классов — `keep` (настройка): да — за ждущими, нет — без ожидания в канал, полон — Offer::Lost;
+//!   очередь пуста — без ожидания, полон — `keep`: да — в очередь (Deferred), нет — Lost. Срочное — без ожидания,
+//!   полон — в начало очереди без чтения настройки.
+//! - offer — fast + slow с готовым ключом (тесты и вызывающие, у которых ключ дешёвый).
 //! - deliver: задача-доставщик (одна на набор; запускает вызывающий по Deferred { start: true }). Ждёт место в канале
 //!   (Sender::reserve — без опроса), под замком набора снимает первый ключ и отправляет его сообщение тем же
-//!   разрешением — между снятием и отправкой нет await, новое событие того же ключа не обгонит старое. Слот может
-//!   отдать сообщение и остаток (Take::Send(_, Some)) — остаток ждёт в начале очереди (отправится следующим). Набор
-//!   пуст — завершается; канал закрыт — набор очищается. Guard (решение 324, ревью 321): паника или снятие задачи —
-//!   признак «доставщик работает» сбрасывается, следующее откладывание запустит нового (набор не копится вечно).
+//!   разрешением — между снятием и отправкой нет await, новое событие того же ключа не обгонит старое. Остаток слота
+//!   (Take::Send(_, Some)) ждёт в начале очереди. Набор пуст — завершается; канал закрыт — набор очищается. Guard:
+//!   паника или снятие задачи — признак «доставщик работает» сбрасывается.
+//!
+//! Гарантия порядка быстрого пути (ревью 324, Б1). busy меняется только под замком набора и публикуется (Release) ПОСЛЕ
+//! каждого изменения: откладывание — +1 до снятия замка; доставка — −1 только ПОСЛЕ отправки сообщения в канал. Пусть
+//! предложение X ключа k началось после возврата предложения Y того же ключа (одна задача по очереди или иначе
+//! упорядочены happens-before). Y отправлено сразу — X в канале позже. Y отложено/слито — к возврату Y busy ≥ 1; X
+//! читает busy (Acquire): ≥ 1 — медленный путь под замком (порядок — как раньше); 0 — значит, прочитана запись после
+//! доставки ВСЕХ ждавших (в том числе слота k), а их отправка happens-before этой записи — X уйдёт в канал позже.
+//! Ждущее событие ключа не обгоняется событием, предложенным после его откладывания. Для ПЕРЕКРЫВАЮЩИХСЯ по времени
+//! предложений одного ключа из разных задач (так бывает: bitget — поток WS и снимок REST котировки исполнения той же
+//! пары; DEX — on_log слушателя и reload/reload_many из задач fee_watch.rs, created.rs, per_block) порядок не задан —
+//! как у прежнего try_send: X может прочитать busy = 0, затем Y отложится и будет доставлено, затем X отправится.
+//! Каждое событие — полное состояние, ядро держит последнее пришедшее; какое из двух одновременных свежее, не знал и
+//! прежний код.
 //!
 //! Кто вызывает: gateway/core_out.rs (общий набор канала ядра); тесты.
-//! От чего зависит: tokio::sync::mpsc, gateway/keep_last_state.rs (состояние под замком и его шаги).
+//! От чего зависит: tokio::sync::mpsc, gateway/keep_last_kinds.rs (типы), gateway/keep_last_state.rs (состояние под
+//! замком и его шаги).
 //! Настроек нет (откладывать ли — решает вызывающий через keep).
 
-use std::hash::Hash;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::TrySendError;
 
+pub use super::keep_last_kinds::{Ask, Check, Counts, Fast, Keyed, Offer, Slot, Take};
 use super::keep_last_state::State;
 
-/// Ключ набора и его класс (счёт и правило 321 — по классу).
-pub trait Keyed: Eq + Hash + Clone {
-    /// Класс ключа (например: пулы площадки, стаканы площадки).
-    type Class: Eq + Hash + Clone;
-    /// Класс этого ключа. Ошибок нет.
-    fn class(&self) -> Self::Class;
-}
-
-/// Что слот отдаёт доставщику.
-pub enum Take<M, S> {
-    /// Отправить сообщение; остаток слота (Some) ждёт в начале очереди.
-    Send(M, Option<S>),
-    /// Не отправлять (устарело — например, пул недостоверен).
-    Skip,
-}
-
-/// Что хранится по ключу, пока он ждёт.
-pub trait Slot: Sized {
-    /// Сообщение канала.
-    type Msg;
-    /// Новое событие того же ключа, пока он ждёт. Возвращает: заменено ли ждавшее (счёт replaced). Ошибок нет.
-    fn merge(&mut self, newer: Self) -> bool;
-    /// Сообщение для отправки сразу (свежий слот — одно событие). Ошибок нет.
-    fn now(self) -> Self::Msg;
-    /// Доставщик: что отправить. Ошибок нет.
-    fn take(self) -> Take<Self::Msg, Self>;
-    /// Срочное: в начало очереди, не теряется. Ошибок нет.
-    fn urgent(&self) -> bool;
-}
-
-/// Чем кончилось предложение события.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Offer {
-    /// Ушло в канал сразу.
-    Sent,
-    /// Отложено; start — доставщика нет, его надо запустить.
-    Deferred { start: bool },
-    /// Ключ уже ждал — событие слито с ждущим (более свежее заменило прежнее).
-    Replaced,
-    /// Канал полон, откладывать не велено — потеряно (как до решений 321/324).
-    Lost,
-    /// Канал закрыт.
-    Closed,
-}
-
-/// Счёт класса с прошлой записи журнала и сколько ждёт сейчас.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Counts {
-    /// Отложено (новых ключей в наборе).
-    pub deferred: u64,
-    /// Заменено более свежим событием того же ключа, пока он ждал.
-    pub replaced: u64,
-    /// Доставлено доставщиком (сообщений).
-    pub delivered: u64,
-    /// Снято при доставке (Take::Skip). Потерянные (Offer::Lost) считает вызывающий — без замка набора (ревью 324, Б2).
-    pub dropped: u64,
-    /// Ждут сейчас (ключей).
-    pub waiting: usize,
-}
-
 /// Набор «ждут доставки». Дешёво клонируется (общий).
-pub struct Pending<K: Keyed, S>(Arc<Mutex<State<K, S>>>);
+pub struct Pending<K: Keyed, S>(Arc<Inner<K, S>>);
+
+/// Состояние под замком и счётчик быстрого пути.
+struct Inner<K: Keyed, S> {
+    state: Mutex<State<K, S>>,
+    /// Ключей в наборе (в очереди и в доставке) — копия State::busy, пишется под замком (см. шапку).
+    busy: AtomicUsize,
+}
 
 impl<K: Keyed, S> Clone for Pending<K, S> {
     fn clone(&self) -> Self {
@@ -99,17 +63,52 @@ impl<K: Keyed, S> Clone for Pending<K, S> {
 
 impl<K: Keyed, S> Default for Pending<K, S> {
     fn default() -> Self {
-        Self(Arc::new(Mutex::new(State::default())))
+        Self(Arc::new(Inner {
+            state: Mutex::new(State::default()),
+            busy: AtomicUsize::new(0),
+        }))
     }
 }
 
 impl<K: Keyed, S: Slot> Pending<K, S> {
     fn lock(&self) -> MutexGuard<'_, State<K, S>> {
-        self.0.lock().unwrap_or_else(|p| p.into_inner())
+        self.0.state.lock().unwrap_or_else(|p| p.into_inner())
     }
 
-    /// Предлагает событие (см. шапку). Принимает: канал, ключ, слот с событием, «откладывать ли» (настройка; читается
-    /// не больше раза и только когда без неё не решить). Возвращает: Offer. Ошибок нет.
+    /// Публикует busy (вызывать под замком, после изменения состояния). Ошибок нет.
+    fn publish(&self, s: &State<K, S>) {
+        self.0.busy.store(s.busy(), Ordering::Release);
+    }
+
+    /// Быстрый путь (см. шапку): одна атомарная загрузка и try_reserve. Принимает: канал. Возвращает: Fast. Ошибок нет.
+    pub fn fast<'a>(&self, out: &'a Sender<S::Msg>) -> Fast<'a, S::Msg> {
+        if self.0.busy.load(Ordering::Acquire) != 0 {
+            return Fast::Busy;
+        }
+        match out.try_reserve() {
+            Ok(p) => Fast::Free(p),
+            Err(TrySendError::Full(())) => Fast::Full,
+            Err(TrySendError::Closed(())) => Fast::Closed,
+        }
+    }
+
+    /// Медленный путь под замком набора (см. шапку). Принимает: канал, ключ, слот, «откладывать ли». Возвращает:
+    /// Offer. Ошибок нет.
+    pub fn slow(
+        &self,
+        out: &Sender<S::Msg>,
+        key: K,
+        item: S,
+        keep: &mut Ask<impl FnOnce() -> bool>,
+    ) -> Offer {
+        let mut s = self.lock();
+        let r = s.decide(out, key, item, keep);
+        self.publish(&s);
+        r
+    }
+
+    /// Быстрый путь, иначе медленный — с готовым ключом (см. шапку). Принимает: канал, ключ, слот, «откладывать ли»
+    /// (читается не больше раза и только когда без неё не решить). Возвращает: Offer. Ошибок нет.
     pub fn offer(
         &self,
         out: &Sender<S::Msg>,
@@ -117,35 +116,21 @@ impl<K: Keyed, S: Slot> Pending<K, S> {
         item: S,
         keep: impl FnOnce() -> bool,
     ) -> Offer {
-        let mut s = self.lock();
-        if s.last.contains_key(&key) {
-            return s.merge(key, item);
-        }
-        let mut keep = Some(keep);
-        let mut want = || keep.take().is_some_and(|f| f());
-        let urgent = item.urgent();
-        let class = key.class();
-        if !urgent && (s.held(&class) || (!s.order.is_empty() && want())) {
-            return s.defer(key, item);
-        }
-        match out.try_reserve() {
-            Ok(permit) => {
-                permit.send(item.now());
+        let mut keep = Ask::new(keep);
+        match self.fast(out) {
+            Fast::Free(p) => {
+                p.send(item.now());
                 Offer::Sent
             }
-            Err(TrySendError::Closed(())) => Offer::Closed,
-            Err(TrySendError::Full(())) => {
-                if urgent || (s.order.is_empty() && want()) {
-                    return s.defer(key, item);
-                }
-                Offer::Lost
-            }
+            Fast::Closed => Offer::Closed,
+            Fast::Full if !item.urgent() && !keep.get() => Offer::Lost,
+            Fast::Full | Fast::Busy => self.slow(out, key, item, &mut keep),
         }
     }
 
-    /// Доставщик (см. шапку). Принимает: канал. Возвращает: true — всё доставлено (набор пуст), false — канал закрыт
-    /// (набор очищен). Ошибок нет.
-    pub async fn deliver(self, out: Sender<S::Msg>) -> bool {
+    /// Доставщик (см. шапку). Принимает: канал, проверку «ещё годно». Возвращает: true — всё доставлено (набор
+    /// пуст), false — канал закрыт (набор очищен). Ошибок нет.
+    pub async fn deliver(self, out: Sender<S::Msg>, check: impl Check<K, S::Msg>) -> bool {
         let mut guard = Running {
             set: self.clone(),
             armed: true,
@@ -156,7 +141,9 @@ impl<K: Keyed, S: Slot> Pending<K, S> {
                 return true;
             }
             let Ok(permit) = out.reserve().await else {
-                self.lock().clear();
+                let mut s = self.lock();
+                s.clear();
+                self.publish(&s);
                 guard.armed = false;
                 return false;
             };
@@ -164,13 +151,15 @@ impl<K: Keyed, S: Slot> Pending<K, S> {
             // Ключи снимает только доставщик — после проверки выше очередь не пуста.
             let Some(key) = s.order.pop_front() else {
                 s.running = false;
+                self.publish(&s);
                 guard.armed = false;
                 return true;
             };
-            let Some(slot) = s.last.remove(&key) else {
-                continue;
-            };
-            s.deliver_one(key, slot, permit);
+            if let Some(e) = s.last.remove(&key) {
+                s.deliver_one(key, e, permit, &check);
+            }
+            // busy −1 — только после отправки (см. шапку).
+            self.publish(&s);
         }
     }
 
@@ -201,15 +190,17 @@ impl<K: Keyed, S: Slot> Pending<K, S> {
 }
 
 /// Признак «доставщик работает» сбрасывается, если задача кончилась не штатно (паника, снятие). Ошибок нет.
-struct Running<K: Keyed, S> {
+struct Running<K: Keyed, S: Slot> {
     set: Pending<K, S>,
     armed: bool,
 }
 
-impl<K: Keyed, S> Drop for Running<K, S> {
+impl<K: Keyed, S: Slot> Drop for Running<K, S> {
     fn drop(&mut self) {
         if self.armed {
-            self.set.0.lock().unwrap_or_else(|p| p.into_inner()).running = false;
+            let mut s = self.set.lock();
+            s.running = false;
+            self.set.publish(&s);
         }
     }
 }

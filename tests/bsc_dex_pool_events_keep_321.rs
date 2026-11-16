@@ -89,7 +89,7 @@ async fn full_channel_defers_then_delivers_one_per_pool_in_order() {
     let r = set.offer(&tx, P(3), e(&d, (3, 1)), || false);
     assert_eq!(r, Offer::Deferred { start: false });
     assert_eq!(set.waiting(), 3);
-    let worker = tokio::spawn(set.clone().deliver(tx.clone()));
+    let worker = tokio::spawn(set.clone().deliver(tx.clone(), ()));
     let mut got = vec![];
     for _ in 0..4 {
         got.push(rx.recv().await.expect("событие"));
@@ -123,7 +123,7 @@ async fn waiting_first_then_fresh_and_dead_pool_dropped() {
     assert_eq!(r, Offer::Deferred { start: false });
     // Пул 2 стал недостоверным, пока ждал.
     d.lock().expect("замок").insert(2);
-    let worker = tokio::spawn(set.clone().deliver(tx.clone()));
+    let worker = tokio::spawn(set.clone().deliver(tx.clone(), ()));
     assert_eq!(rx.recv().await, Some((1, 1)));
     assert_eq!(rx.recv().await, Some((4, 1)));
     assert!(worker.await.expect("доставщик"));
@@ -156,7 +156,7 @@ async fn closed_channel_clears_set_and_stops_worker() {
     let r = set.offer(&tx, P(2), e(&d, (2, 1)), || true);
     assert_eq!(r, Offer::Deferred { start: true });
     drop(rx);
-    let done = set.clone().deliver(tx.clone()).await;
+    let done = set.clone().deliver(tx.clone(), ()).await;
     assert!(!done, "канал закрыт");
     assert_eq!(set.waiting(), 0, "мёртвое не держим");
     // Следующее отложенное снова запускает доставщика.

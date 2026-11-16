@@ -6,8 +6,8 @@
 //!   появится место (сначала ждущие, по очереди; новые события пулов, пока пулы этой площадки ждут, встают за ними).
 //!   Решение 324: набор — ОБЩИЙ на канал ядра для пулов DEX и стаканов всех бирж, с одним доставщиком и общей очередью
 //!   (gateway/core_out.rs; ключ — (площадка, пул)); находится по самому каналу (core_out::of) — Pools.kept.
-//!   Перед отправкой пул проверяется по реестру (Kept.live): снят или недостоверен (после события «пулы недостоверны»
-//!   ядро его уже убрало) — не отправляется, чтобы не вернуть ядру устаревшее. Уточнение 324: есть пути, где пул
+//!   Перед отправкой пул проверяется по реестру (Live площадки в наборе — Feed::live): снят или недостоверен (после
+//!   события «пулы недостоверны» ядро его уже убрало) — не отправляется, чтобы не вернуть ядру устаревшее. Уточнение 324: есть пути, где пул
 //!   становится недостоверным без Invalidated (например, per_block.rs ставит valid = false) — ждавшее событие такого
 //!   пула тоже не отправляется, и ядро остаётся с прежним состоянием пула — так же, как раньше при потере события.
 //!   Запись журнала dex.pool_events_lost при «да» — «отложено N, заменено R, доставлено M, снято S, ждут K»
@@ -27,12 +27,12 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc::Sender;
 
-use crate::core::types::Pool;
+use crate::core::types::{Pool, VenueId};
 use crate::gateway::core_out::{self, Feed};
 use crate::gateway::core_out_item::{Class, Item, Key, Live};
 use crate::gateway::core_out_side::Side;
 use crate::gateway::events::MarketEvent;
-use crate::gateway::keep_last::Offer;
+use crate::gateway::keep_last::{Ask, Fast, Offer};
 use crate::gateway::setting_cell::{self, Cell, bool_of};
 
 use super::super::ctx::Ctx;
@@ -43,18 +43,20 @@ use super::registry::Registry;
 /// Имя настройки решения 321.
 const KEEP: &str = "dex.pool_events_keep";
 
-/// Общий набор канала ядра и проверка «пул ещё годен» (одна на окружение — без выделения памяти на событие).
+/// Общий набор канала ядра, площадка и настройка в памяти (одно на окружение — без выделения памяти на событие).
+/// Проверка «пул ещё годен» — в наборе, одна на площадку (Feed::live, ревью 324 Б1).
 #[derive(Clone)]
 pub struct Kept {
     pub feed: Feed,
-    pub live: Live,
+    /// Площадка — готовый VenueId для ключа медленного пути (не строка на событие).
+    pub venue: VenueId,
     /// dex.pool_events_keep в памяти (ревью 324, Б2).
     pub keep: Arc<Cell>,
 }
 
 impl Kept {
-    /// Набор канала ядра, проверка по реестру, настройка в памяти (одна на класс «пулы площадки» набора). Принимает:
-    /// канал ядра, реестр, окружение. Ошибок нет.
+    /// Набор канала ядра, проверка по реестру (в набор, по площадке), настройка в памяти (одна на класс «пулы
+    /// площадки» набора). Принимает: канал ядра, реестр, окружение. Ошибок нет.
     pub fn new(out: &Sender<MarketEvent>, reg: &Registry, ctx: &Ctx) -> Self {
         let reg = reg.clone();
         let live: Live = Arc::new(move |ev: &MarketEvent| match ev {
@@ -62,16 +64,15 @@ impl Kept {
             _ => true,
         });
         let feed = core_out::of(out);
-        let venue = ctx.at().venue.map(str::to_string);
-        let (side, _) = feed.side(&Class::Pool(ctx.venue()), || {
-            Side::new(
-                setting_cell::watch(&ctx.settings, KEEP, venue, bool_of),
-                None,
-            )
+        let venue = ctx.venue();
+        feed.live(venue.clone(), live);
+        let at = ctx.at().venue.map(str::to_string);
+        let (side, _) = feed.side(&Class::Pool(venue.clone()), || {
+            Side::new(setting_cell::watch(&ctx.settings, KEEP, at, bool_of), None)
         });
         Self {
             feed,
-            live,
+            venue,
             keep: side.keep.clone(),
         }
     }
@@ -88,10 +89,24 @@ impl Kept {
 /// Пул — ядру без ожидания (см. шапку). Принимает: окружение пачки, пул. Ошибки: End::Closed — ядро закрыло канал.
 pub fn emit(p: &Pools, pool: Pool) -> Result<(), End> {
     super::depth::touch(p, &pool.reference);
-    let key = Key::Pool(p.ctx.venue(), pool.reference.clone());
-    let item = Item::Event(MarketEvent::Pool(pool), Some(p.kept.live.clone()));
-    let keep = || p.kept.keep.on();
-    match p.kept.feed.offer(&p.out, key, item, keep) {
+    let k = &p.kept;
+    let r = match k.feed.fast(&p.out) {
+        // Набор пуст (ревью 324, Б1): одна атомарная загрузка + try_reserve + send — без замка, ключа, настройки.
+        Fast::Free(permit) => {
+            permit.send(MarketEvent::Pool(pool));
+            return Ok(());
+        }
+        Fast::Closed => Offer::Closed,
+        Fast::Full if !k.keep.on() => Offer::Lost,
+        Fast::Full | Fast::Busy => {
+            // Медленный путь: ключ строится только здесь; настройка — из памяти, прочитана вне замка набора.
+            let key = Key::Pool(k.venue.clone(), pool.reference.clone());
+            let on = k.keep.on();
+            let item = Item::Event(MarketEvent::Pool(pool));
+            k.feed.slow(&p.out, key, item, &mut Ask::new(move || on))
+        }
+    };
+    match r {
         Offer::Sent | Offer::Replaced => Ok(()),
         Offer::Closed => Err(End::Closed),
         // Решение 313: канал ядра полон — событие не ушло; счёт и запись не чаще интервала (lost_events.rs).

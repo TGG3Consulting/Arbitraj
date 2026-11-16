@@ -4,15 +4,15 @@
 //! очистить при закрытом канале. Отдельный файл — чтобы keep_last.rs держал только порядок offer/deliver.
 //! Правило 321 (held) считает только слоты, отложенные НАСТРОЙКОЙ: срочные (Invalidated) и «вынужденные» (остаток
 //! срочного слота после его доставки — ревью 324, Б3) — не в счёт: без настройки класс не уходит в режим «откладывать».
-//! Кто вызывает: gateway/keep_last.rs.
-//! От чего зависит: gateway/keep_last.rs (Keyed, Slot, Take, Offer, Counts), tokio::sync::mpsc (Permit).
+//! Кто вызывает: gateway/keep_last.rs, gateway/keep_last_decide.rs (решение медленного пути).
+//! От чего зависит: gateway/keep_last.rs (Keyed, Slot, Take, Offer, Counts, Check), tokio::sync::mpsc (Permit).
 //! Настроек нет.
 
 use std::collections::{HashMap, VecDeque};
 
 use tokio::sync::mpsc::Permit;
 
-use super::keep_last::{Counts, Keyed, Offer, Slot, Take};
+use super::keep_last::{Check, Counts, Keyed, Offer, Slot, Take};
 
 /// Состояние набора под замком.
 pub(super) struct State<K: Keyed, S> {
@@ -113,18 +113,33 @@ impl<K: Keyed, S: Slot> State<K, S> {
         Offer::Deferred { start }
     }
 
+    /// Ключей в наборе (для быстрого пути keep_last.rs). Ошибок нет.
+    pub(super) fn busy(&self) -> usize {
+        self.order.len()
+    }
+
     /// Доставщик: отправляет сообщение слота разрешением канала (под замком — без await между снятием и отправкой);
-    /// остаток слота — в начало очереди «вынужденным» (Б3: без настройки, правило 321 его не считает). Принимает: ключ
-    /// (уже снят с очереди), слот, разрешение. Ошибок нет.
-    pub(super) fn deliver_one(&mut self, key: K, e: Entry<S>, permit: Permit<'_, S::Msg>) {
+    /// не годно по проверке — снимается (dropped); остаток слота — в начало очереди «вынужденным» (Б3: без настройки,
+    /// правило 321 его не считает). Принимает: ключ (уже снят с очереди), слот, разрешение, проверку. Ошибок нет.
+    pub(super) fn deliver_one(
+        &mut self,
+        key: K,
+        e: Entry<S>,
+        permit: Permit<'_, S::Msg>,
+        check: &impl Check<K, S::Msg>,
+    ) {
         let class = key.class();
         // Ключ уже снят: счёт «ждут» уменьшается ДО слота — паника в Slot::take не оставит ложного «класс ждёт».
         self.exempt_delta(&class, e.exempt(), false);
         self.gone(&class);
         match e.slot.take() {
             Take::Send(msg, rest) => {
-                permit.send(msg);
-                self.count(&class).delivered += 1;
+                if check.needs(&key) && !check.live(&key, &msg) {
+                    self.count(&class).dropped += 1;
+                } else {
+                    permit.send(msg);
+                    self.count(&class).delivered += 1;
+                }
                 if let Some(rest) = rest {
                     self.exempt_delta(&class, false, true);
                     self.count(&class).waiting += 1;

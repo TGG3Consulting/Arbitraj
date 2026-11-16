@@ -11,11 +11,14 @@
 //! quote/via.rs (Via: mid_ok, taxed), pools/registry.rs, pools/mids.rs, tokens.rs.
 //! Настройки: через вызываемые — см. их шапки.
 
+use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
 use crate::core::types::{RouteHop, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
+use super::super::check::quoter_amount;
+use super::super::pools::registry::Entry;
 use super::super::quote::path::Path;
 use super::super::quote::route_calc::{self, Leg};
 use super::super::quote::via::Via;
@@ -27,6 +30,34 @@ use super::precheck;
 /// внутренний токен не промежуточная / налог), CoinNotChecked, QuoteMismatch, BadResponse, узел (decimals).
 pub async fn path(v: &Via<'_>, hops: &[RouteHop], qty: Decimal) -> GatewayResult<Path> {
     let (q, ctx) = (v.q, &v.q.ctx);
+    let found = hops
+        .iter()
+        .map(|h| {
+            q.reg
+                .get(&h.pool)
+                .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))
+        })
+        .collect::<GatewayResult<Vec<_>>>()?;
+    // Решение «335 (лесенка влияния)»: путь по прежним проверкам → проба крючков на входах его шагов (сумма сделки)
+    // одним пакетом на одном блоке (exec/precheck.rs hooks_again, решение «335 (В1, пакет)») → путь заново по
+    // обновлённой лесенке. Пулов с крючком B/C нет — один расчёт, как раньше.
+    let first = eval(v, &found, qty).await?;
+    if !found.iter().any(quoter_amount::hooked) {
+        return Ok(first);
+    }
+    let steps: Vec<(Entry, Address, U256)> = first
+        .hops
+        .iter()
+        .map(|h| (h.entry.clone(), h.token_in, h.swapped.amount_in))
+        .collect();
+    precheck::hooks_again(q, &steps).await?;
+    eval(v, &found, qty).await
+}
+
+/// Путь доли из N пулов по текущим проверкам (допуск, лесенка влияния крючка). Принимает: расчёт путей, пулы доли в
+/// порядке исполнения (записи из памяти), количество монет. Ошибки: как path.
+async fn eval(v: &Via<'_>, found: &[Entry], qty: Decimal) -> GatewayResult<Path> {
+    let (q, ctx) = (v.q, &v.q.ctx);
     let no = |w: String| ctx.err(ErrorCode::NoRoute, w);
     let (start, end) = match v.side {
         Side::Buy => (v.usdt, v.coin),
@@ -34,18 +65,8 @@ pub async fn path(v: &Via<'_>, hops: &[RouteHop], qty: Decimal) -> GatewayResult
     };
     let mids = q.mids.active(ctx);
     let mut running = start;
-    let mut legs = Vec::with_capacity(hops.len());
-    let found = hops
-        .iter()
-        .map(|h| {
-            q.reg
-                .get(&h.pool)
-                .ok_or_else(|| no("Пул маршрута больше не в реестре".into()))
-        })
-        .collect::<GatewayResult<Vec<_>>>()?;
-    // Решение «335 (В1, пакет)»: крючки всех пулов доли — одним пакетом на одном блоке (exec/precheck.rs hooks_again).
-    precheck::hooks_again(q, &found).await?;
-    for (i, e) in found.into_iter().enumerate() {
+    let mut legs = Vec::with_capacity(found.len());
+    for (i, e) in found.iter().cloned().enumerate() {
         let token_in = running;
         let token_out = if e.usdt == token_in {
             e.coin
@@ -59,7 +80,7 @@ pub async fn path(v: &Via<'_>, hops: &[RouteHop], qty: Decimal) -> GatewayResult
             )));
         };
         // Внутренний токен (выход не последнего хопа) — включённая промежуточная монета без налогов (решение 52).
-        if i + 1 < hops.len() {
+        if i + 1 < found.len() {
             let m = mids
                 .iter()
                 .find(|m| m.address == token_out)

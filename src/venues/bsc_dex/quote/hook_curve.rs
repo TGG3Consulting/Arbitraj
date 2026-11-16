@@ -1,0 +1,169 @@
+//! Файл: venues/bsc_dex/quote/hook_curve.rs
+//! Что делает: решение «335 (лесенка влияния)» — влияние крючка пула B/C как функция суммы входа в пул и стороны.
+//! Лесенка стороны (HookImpact.buy / .sell — точки «вход в пул → влияние, %», по возрастанию входа) меряется циклом
+//! крючков на нескольких суммах на одном блоке (check/hooks_head.rs) и пробой перед сделкой на сумме сделки
+//! (exec/precheck.rs). Котировка берёт влияние на своём входе так, чтобы НЕ считать лучше факта:
+//! - at: влияние на входе x — значение ближайшей точки с входом ≥ x (лесенка неубывающая) или наибольшее по всем точкам
+//!   (лесенка с убыванием — зависимость не монотонна, верхняя оценка по всем точкам); x выше наибольшей измеренной
+//!   суммы — «не измерено на такой сумме» (пул на этой сумме не идёт, как при неизмеренном влиянии). Отрицательное
+//!   влияние — 0 (как quote/quoter.rs less_hook, решение 261). Лимит hooks.max_impact_b_pct / _c_pct — к влиянию на
+//!   этой сумме: больше — пул на этой сумме не идёт.
+//!   Почему не лучше факта: факт записей узла 16–17.11 — у крючка 0x32c59d… (GAIB, BTCMT) влияние покупки растёт с
+//!   суммой (формулой check/hooks_probe.rs impact: 0 на 1 USDT, 0,0990 % / 0,6735 % у GAIB и 0,7443 % / 3,3658 % у
+//!   BTCMT на 20 / 100 USDT; к выходу квотера — 0,0991 % / 0,6781 % и 0,7499 % / 3,4830 %), у остальных — постоянное. Для неубывающей зависимости влияние на x не больше влияния на ближайшей большей сумме; между точками
+//!   неубывание — допущение по измеренным точкам (запись не опровергает), при убывании точек берётся максимум.
+//! - settle: точный выход (покупка «с конца»): вход пула зависит от доли крючка, а доля — от входа; итерация «доля →
+//!   вход → влияние на входе» от наименьшего значения вверх; значения — из конечного набора точек, растут строго, поэтому
+//!   число шагов не больше числа точек + 1; итог: применённое влияние ≥ влияния на фактическом входе.
+//! - merge: точка пробы перед сделкой (на более новом блоке) — в лесенку стороны: заменяет точку того же входа или
+//!   вставляется; затем лесенка выравнивается накопленным максимумом (значения только растут — верхняя оценка).
+//!
+//! Кто вызывает: quote/select.rs (Usable.hook), quote/direct.rs, quote/route_calc.rs, quote/graph_seq.rs,
+//! exec/precheck.rs (merge); тесты на записях узла.
+//! От чего зависит: core/types (HookStep).
+//! Настройки: нет своих (лимит передаёт quote/select.rs).
+
+use std::sync::Arc;
+
+use alloy_primitives::U256;
+use rust_decimal::Decimal;
+
+use crate::core::types::{HookImpact, HookStep};
+
+/// Влияние крючка стороны пула для котировки.
+#[derive(Debug, Clone, Default)]
+pub struct HookCurve {
+    /// Лесенка стороны; None или пусто — влияние одно на все суммы (Usable.hook_pct).
+    pub steps: Option<Arc<Vec<HookStep>>>,
+    /// Лимит влияния на сумме сделки: (имя настройки, %); None — не применяется (крючка B/C нет, продажа выхода).
+    pub limit: Option<(&'static str, Decimal)>,
+}
+
+/// Неубывающая ли лесенка (по влиянию, отрицательное — 0). Ошибок нет.
+pub fn monotone(steps: &[HookStep]) -> bool {
+    steps
+        .windows(2)
+        .all(|w| w[0].pct.max(Decimal::ZERO) <= w[1].pct.max(Decimal::ZERO))
+}
+
+/// Что делает: влияние на входе `x` (см. шапку). Принимает: лесенку (по возрастанию входа), вход. Возвращает: влияние,
+/// % (не меньше 0); None — пусто или x больше наибольшего измеренного входа. Ошибок нет.
+pub fn at(steps: &[HookStep], x: U256) -> Option<Decimal> {
+    let top = steps.last()?;
+    if x > top.amount_in {
+        return None;
+    }
+    let v = if monotone(steps) {
+        steps.iter().find(|s| s.amount_in >= x)?.pct
+    } else {
+        steps.iter().map(|s| s.pct).max()?
+    };
+    Some(v.max(Decimal::ZERO))
+}
+
+/// Что делает: точка пробы перед сделкой в лесенку стороны (см. шапку). Принимает: лесенку, точку. Возвращает: новую
+/// лесенку (по возрастанию входа, накопленный максимум). Ошибок нет.
+pub fn merge(steps: &[HookStep], p: HookStep) -> Vec<HookStep> {
+    let mut out: Vec<HookStep> = steps
+        .iter()
+        .filter(|s| s.amount_in != p.amount_in)
+        .cloned()
+        .collect();
+    let at = out.partition_point(|s| s.amount_in < p.amount_in);
+    out.insert(at, p);
+    let mut run = Decimal::MIN;
+    for s in &mut out {
+        run = run.max(s.pct);
+        s.pct = run;
+    }
+    out
+}
+
+/// Что делает: влияние после пробы перед сделкой — точки новой пробы влиты в лесенки прежнего итога (merge) по
+/// сторонам; наибольшее влияние стороны пересчитано. Прежнего итога нет — новый как есть. Принимает: прежний итог
+/// (если есть), новый. Возвращает: итог. Ошибок нет.
+pub fn merge_impact(old: Option<&HookImpact>, new: &HookImpact) -> HookImpact {
+    let Some(old) = old else {
+        return new.clone();
+    };
+    let side = |was: &[HookStep], add: &[HookStep], was_pct: Decimal| -> (Vec<HookStep>, Decimal) {
+        if add.is_empty() {
+            return (was.to_vec(), was_pct);
+        }
+        let mut out = was.to_vec();
+        for p in add {
+            out = merge(&out, p.clone());
+        }
+        let top = out.iter().map(|s| s.pct).max().unwrap_or(was_pct);
+        (out, top)
+    };
+    let (buy, buy_pct) = side(&old.buy, &new.buy, old.buy_pct);
+    let (sell, sell_pct) = side(&old.sell, &new.sell, old.sell_pct);
+    HookImpact {
+        buy_pct,
+        sell_pct,
+        buy,
+        sell,
+    }
+}
+
+impl HookCurve {
+    /// Что делает: влияние на входе `x` с лимитом (см. шапку). Принимает: влияние одним числом (без лесенки), вход.
+    /// Возвращает: влияние, %. Ошибки (текст причины): не измерено на такой сумме; больше лимита.
+    pub fn pct_at(&self, flat: Decimal, x: U256) -> Result<Decimal, String> {
+        let v = match self.steps.as_deref().filter(|s| !s.is_empty()) {
+            None => flat,
+            Some(s) => at(s, x).ok_or_else(|| {
+                format!(
+                    "влияние крючка на такой сумме не измерено (вход {x} больше наибольшей точки лесенки)"
+                )
+            })?,
+        };
+        match self.limit {
+            Some((name, limit)) if v > limit => Err(format!(
+                "влияние крючка на этой сумме {v}% больше {name} ({limit}%)"
+            )),
+            _ => Ok(v),
+        }
+    }
+
+    /// Число точек лесенки (0 — без лесенки). Ошибок нет.
+    pub fn len(&self) -> usize {
+        self.steps.as_ref().map_or(0, |s| s.len())
+    }
+
+    /// Пуста ли лесенка. Ошибок нет.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Что делает: точный выход (см. шапку settle). Принимает: влияние одним числом, расчёт `f` (влияние → (вход пула,
+    /// итог)), перевод текста причины в ошибку вызывающего. Возвращает: применённое влияние и итог последнего расчёта.
+    /// Ошибки: как у `f`; причины pct_at и «итерация не сошлась» — через `err`.
+    pub fn settle<T, E>(
+        &self,
+        flat: Decimal,
+        mut f: impl FnMut(Decimal) -> Result<(U256, T), E>,
+        err: impl Fn(String) -> E,
+    ) -> Result<(Decimal, T), E> {
+        let mut pct = self.floor(flat);
+        for _ in 0..self.len() + 2 {
+            let (x, t) = f(pct)?;
+            let need = self.pct_at(flat, x).map_err(&err)?;
+            if need <= pct {
+                return Ok((pct, t));
+            }
+            pct = need;
+        }
+        Err(err("влияние крючка по сумме не сошлось".into()))
+    }
+
+    /// Наименьшее влияние лесенки (без лесенки — одно число), не меньше 0. Ошибок нет.
+    fn floor(&self, flat: Decimal) -> Decimal {
+        self.steps
+            .as_deref()
+            .and_then(|s| s.iter().map(|p| p.pct.max(Decimal::ZERO)).min())
+            .unwrap_or(flat)
+            .max(Decimal::ZERO)
+    }
+}

@@ -37,7 +37,7 @@ pub enum Read {
     Apart,
 }
 
-/// Запрос чтения пула (как у verify.rs и hooks_probe::measure_read). Ошибок нет.
+/// Запрос чтения пула (как у verify.rs). Ошибок нет.
 pub fn want(e: &Entry) -> Want<'_> {
     Want {
         family: e.family,

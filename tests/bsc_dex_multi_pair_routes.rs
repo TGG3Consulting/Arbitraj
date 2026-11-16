@@ -149,7 +149,7 @@ async fn one_pool_one_step_in_paths_and_cycles() {
 async fn shared_pool_across_shares_and_via() {
     let (p, pool, busd, usdc, usdt) = scene("routes-shared").await;
     let reg = |a: Address, b: Address| p.registry.by_pair(a, b).remove(0);
-    let usable = Usable { gas: 120_000, hook_pct: Decimal::ZERO, tax_pct: Decimal::ZERO };
+    let usable = Usable { gas: 120_000, hook_pct: Decimal::ZERO, tax_pct: Decimal::ZERO, hook: Default::default() };
     let leg = |e: Entry, i: Address, o: Address| Leg { entry: e, usable: usable.clone(), token_in: i, token_out: o, dec_in: 18, dec_out: 18 };
     let a = vec![leg(reg(busd, usdt), usdt, busd)];
     let b = vec![leg(reg(usdc, usdt), usdt, usdc), leg(reg(busd, usdc), usdc, busd)];

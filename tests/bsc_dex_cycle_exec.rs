@@ -50,6 +50,7 @@ fn leg_of(step: &route_paths::Step, gas: u64) -> Leg {
             gas,
             hook_pct: Decimal::ZERO,
             tax_pct: Decimal::ZERO,
+            hook: Default::default(),
         },
         token_in: step.token_in,
         token_out: step.token_out,

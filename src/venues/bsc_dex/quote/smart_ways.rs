@@ -85,8 +85,9 @@ pub fn calc(v: &Via<'_>, w: &Way, qty: Decimal) -> GatewayResult<Path> {
     match w {
         Way::One(x) => {
             let (e, u) = (&x.0, &x.1);
-            let (swapped, coins, usdt) =
-                direct::calc(&v.q.ctx, e, u, v.side, qty, (v.coin_dec, v.usdt_dec))?;
+            // Решение «335 (лесенка влияния)»: допуск с влиянием крючка, применённым на входе этого расчёта.
+            let (swapped, coins, usdt, u) =
+                direct::calc_u(&v.q.ctx, e, u, v.side, qty, (v.coin_dec, v.usdt_dec))?;
             if !swapped.complete {
                 return Err(v
                     .q
@@ -95,7 +96,7 @@ pub fn calc(v: &Via<'_>, w: &Way, qty: Decimal) -> GatewayResult<Path> {
             }
             let c = Candidate {
                 entry: e.clone(),
-                usable: u.clone(),
+                usable: u,
                 swapped,
                 coins,
                 usdt,

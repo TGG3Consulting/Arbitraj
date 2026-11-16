@@ -82,10 +82,27 @@ pub struct ExitGap {
 
 /// Влияние крючка на обмен, измеренное пробным обменом (решение 32), в процентах от суммы.
 /// Положительное — получаем меньше, чем по математике пула без крючка.
+/// Решение «335 (лесенка влияния)»: влияние — функция суммы и стороны. buy / sell — лесенка точек стороны (по
+/// возрастанию входа в пул), buy_pct / sell_pct — наибольшее влияние по точкам стороны (верхняя оценка для мест, где
+/// сумма неизвестна). Пустая лесенка — влияние одно на все суммы (buy_pct / sell_pct), как до решения.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HookImpact {
     pub buy_pct: Decimal,
     pub sell_pct: Decimal,
+    #[serde(default)]
+    pub buy: Vec<HookStep>,
+    #[serde(default)]
+    pub sell: Vec<HookStep>,
+}
+
+/// Точка лесенки влияния крючка (решение «335 (лесенка влияния)»): вход в пул стороны в минимальных единицах токена
+/// входа (покупка — встречный токен пула: USDT или промежуточная монета; продажа — монета), сумма в USDT (0 — не
+/// считалась: точка пробы перед сделкой) и влияние на этой сумме, %.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HookStep {
+    pub amount_in: alloy_primitives::U256,
+    pub usd: Decimal,
+    pub pct: Decimal,
 }
 
 /// Результат проверки пула с крючком группы B или C.

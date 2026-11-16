@@ -184,6 +184,12 @@ fn advance(
     for (i, leg) in legs.iter().enumerate() {
         // Решение 295: ключ состояния после обмена — физический пул (site; у парных — сама ссылка).
         let r = leg.entry.pool.reference.site();
+        // Решение «335 (лесенка влияния)»: доля крючка — по входу этого шага.
+        let pct = leg
+            .usable
+            .hook
+            .pct_at(leg.usable.hook_pct, amount)
+            .map_err(|why| ctx.err(ErrorCode::NoRoute, why))?;
         let s = if common.contains(&r) {
             let (s, st) = pool_after::apply(ctx, &leg.entry, leg.token_in, amount)?;
             after.insert(r, st);
@@ -195,8 +201,7 @@ fn advance(
             return Err(ctx.err(ErrorCode::NoRoute, "обмен доли не исполним целиком"));
         }
         if i + 1 < legs.len() {
-            let got = num::to_decimal(s.amount_out, leg.dec_out).ok_or_else(bad)?
-                * keep(leg.usable.hook_pct);
+            let got = num::to_decimal(s.amount_out, leg.dec_out).ok_or_else(bad)? * keep(pct);
             amount = num::to_units(got, leg.dec_out).ok_or_else(bad)?;
         }
     }

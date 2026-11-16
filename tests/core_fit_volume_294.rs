@@ -101,6 +101,7 @@ async fn v2_reserve_limit_keeps_no_route() {
         gas: 120_000,
         hook_pct: Decimal::ZERO,
         tax_pct: Decimal::ZERO,
+        hook: Default::default(),
     };
     let legs = vec![Leg {
         entry: pair,

@@ -4,7 +4,10 @@
 //! блоке. Голова H — один eth_blockNumber, пул читается заново на H тем же загрузчиком, что у сверки с квотером
 //! (check/quoter_block.rs at_head, в реестр не пишется) — в том числе спящий пул (его обмены не слушаются и цена в
 //! памяти стоит, pools/depth.rs: память в пробе не участвует), математика без крючка — по этому состоянию, квотер —
-//! eth_call на тот же H (check/hooks_probe.rs measure_on). Узел не отдал голову или состояние H, сбой связи — влияние
+//! eth_call на тот же H (check/hooks_probe.rs measure_plan). Решение «335 (лесенка влияния)»: на нескольких суммах по
+//! каждой стороне (check/hook_points.rs: от signal.probe_usd до min(money.max_per_trade_usd, ликвидность стороны),
+//! hooks.impact_points точек) — все вызовы квотера одним пакетом на H; итог — лесенка «вход → влияние».
+//! Узел не отдал голову или состояние H, сбой связи — влияние
 //! не перемеряется, действует прежнее (если прежнего нет — «не измерено» с причиной; ревью Н1: прежнее старше
 //! hooks.keep_impact_max_age_s — «не измерено: устарело»; не задана — прежнее без срока).
 //! Итог на блоке пишется через check/hook_store.rs put_head (более старый блок не затирает более новый, ревью Н3).
@@ -17,7 +20,8 @@
 //! Кто вызывает: check/cycle.rs (one).
 //! От чего зависит: check/hooks_probe.rs, check/hook_store.rs, check/quoter_block.rs, check/quoter_compare.rs (node_fault), check/state.rs,
 //! pools/listen.rs (Pools), pools/progress.rs (requote), node/call.rs (block_tag).
-//! Настройки: hooks.keep_impact_max_age_s [bsc_dex] — необязательная (docs/SETTINGS.md).
+//! Настройки: hooks.keep_impact_max_age_s [bsc_dex] — необязательная (docs/SETTINGS.md); через check/hook_points.rs —
+//! hooks.impact_points, signal.probe_usd, money.max_per_trade_usd, dex.depth_band_pct.
 
 use chrono::Utc;
 
@@ -26,10 +30,12 @@ use crate::core::types::{CheckState, HookGroup, PoolCheck, PoolRef, Side};
 use super::super::node::call;
 use super::super::pools::listen::Pools;
 use super::super::pools::registry::Entry;
+use super::hook_points;
 use super::hook_store;
 use super::hooks_probe;
 use super::quoter_block::{self, Head};
 use super::quoter_compare::node_fault;
+use super::quoter_verify;
 
 /// Итог пробы для цикла крючков.
 #[derive(Debug, Clone)]
@@ -63,7 +69,22 @@ pub async fn probe(p: &Pools, e: &Entry) -> Probe {
         Head::Fail((why, setting)) => return failed(why, setting, None),
     };
     let tag = call::block_tag(block);
-    match hooks_probe::measure_on(&p.ctx, &p.tokens, &p.reg, &fresh, &tag).await {
+    // Решение «335 (лесенка влияния)»: суммы пробы по сторонам — из данных (check/hook_points.rs), все вызовы квотера —
+    // одним пакетом на H (hooks_probe::measure_plan).
+    let dec = match quoter_verify::usdt_decimals(p).await {
+        Ok(d) => d,
+        Err(why) => return keep(p, e, group, why),
+    };
+    let (buy, sell) = match hook_points::sides(p, e, dec) {
+        Ok(v) => v,
+        Err((why, setting)) => return failed(why, setting, None),
+    };
+    let plan = match hooks_probe::ladder(&p.ctx, &p.tokens, &p.reg, &fresh, (&buy, &sell)).await {
+        Ok(Ok(plan)) => plan,
+        Ok(Err(why)) => return failed(why, None, Some(block)),
+        Err(err) => return failed(err.message, err.setting, None),
+    };
+    match hooks_probe::measure_plan(&p.ctx, &fresh, &plan, &tag).await {
         Ok(Ok(i)) => {
             let pc = hooks_probe::pool_check(&p.ctx, e, group, CheckState::Known(i));
             Probe::Got(Box::new(pc), None, Some(block))

@@ -98,7 +98,7 @@ fn safe_side_on_real_numbers() {
         signed(U256::from(310_341_697u64), live).abs() <= 1,
         "{live}"
     );
-    // Влияние, измеренное на одном блоке (как check/hooks_probe.rs measure_on), — 0: расхождения нет.
+    // Влияние, измеренное на одном блоке (как check/hooks_probe.rs measure_plan), — 0: расхождения нет.
     assert_eq!(
         diff_pct(less_hook(ours, Decimal::ZERO).expect("0"), remote),
         Some(Decimal::ZERO)

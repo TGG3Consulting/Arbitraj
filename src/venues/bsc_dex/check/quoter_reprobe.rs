@@ -8,7 +8,8 @@
 //! - лимит группы hooks.max_impact_b_pct / hooks.max_impact_c_pct обязателен: не задан — перемер не применяется,
 //!   пауза держится (в том числе для продажи выхода, где quote/select.rs лимит не применяет); влияние стороны после
 //!   перемера больше лимита — пауза с причиной, итог не пишется и ядру не уходит (алерта о снятии нет);
-//! - влияние перемеряется НА ТОМ ЖЕ блоке H по тому же свежему состоянию (hooks_probe::measure_on; один раз на пул и
+//! - влияние перемеряется НА ТОМ ЖЕ блоке H по тому же свежему состоянию (hooks_probe::measure_plan — одна точка
+//!   сверяемой стороны на сумме сверки, решение «335 (лесенка влияния)»; один раз на пул и
 //!   блок в сверке пула — ревью Н4), берётся только для сверяемой стороны (reprobe_rule::only_side), пишется через
 //!   check/hook_store.rs put_head (не затирает более новый блок) и уходит ядру (PoolCheck); сторона сверяется на H
 //!   ещё раз. Пауза — если расходится и после перемера; перемер не удался — пауза прежняя с пометкой.
@@ -35,8 +36,9 @@ use crate::storage::journal::Level;
 use super::super::node::call;
 use super::super::pools::listen::Pools;
 use super::super::pools::registry::Entry;
+use super::hooks_probe::{Plan, Point};
 use super::quoter_compare::{self, Cmp};
-use super::reprobe_rule::{DANGER, merge, note, only_side, safe, side_pct};
+use super::reprobe_rule::{DANGER, merge, note, only_side, safe, side_pct, side_steps};
 use super::{hook_store, hooks_probe};
 
 /// Настройка: перемер влияния крючка на блоке сверки перед паузой (решение 335, необязательна).
@@ -88,13 +90,30 @@ pub async fn again(
     let cached = t
         .cache
         .as_ref()
-        .filter(|(b, _)| *b == t.block)
+        // Перемер одной стороны (решение «335 (лесенка влияния)») — повтор только для той же стороны на том же блоке.
+        .filter(|(b, i)| *b == t.block && !side_steps(i, t.side).is_empty())
         .map(|(_, i)| i.clone());
     let i = match cached {
         Some(i) => i,
         None => {
             let tag = call::block_tag(t.block);
-            let i = match hooks_probe::measure_on(&p.ctx, &p.tokens, &p.reg, t.fresh, &tag).await {
+            // Решение «335 (лесенка влияния)»: перемер — одна точка сверяемой стороны на сумме сверки (её вход).
+            let point = Point {
+                usd: Decimal::ZERO,
+                amount_in: t.amount,
+            };
+            let plan = if t.side == Side::Buy {
+                Plan {
+                    buy: vec![point],
+                    sell: Vec::new(),
+                }
+            } else {
+                Plan {
+                    buy: Vec::new(),
+                    sell: vec![point],
+                }
+            };
+            let i = match hooks_probe::measure_plan(&p.ctx, t.fresh, &plan, &tag).await {
                 Ok(Ok(i)) => i,
                 Ok(Err(why)) => return Ok(note(first, &failed(t.block, &why))),
                 Err(err) => return Ok(note(first, &failed(t.block, &err.message))),

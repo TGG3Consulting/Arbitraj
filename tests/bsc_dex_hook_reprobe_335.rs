@@ -40,6 +40,8 @@ fn imp(buy: i64, sell: i64) -> HookImpact {
     HookImpact {
         buy_pct: Decimal::from(buy),
         sell_pct: Decimal::from(sell),
+        buy: Vec::new(),
+        sell: Vec::new(),
     }
 }
 

@@ -15,37 +15,53 @@
 //! Квотер исполняет настоящий обмен (с крючками) и откатывается — research/flow/bsc_v4.md, раздел 5; «Сверка:
 //! периодически и перед сделкой — квотер» — research/flow/bsc_dex.md, схема адаптера п. 6.
 
-use alloy_primitives::Address;
+use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
 use crate::core::types::{CheckState, HookGroup};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
+use super::super::check::hooks_probe::{Plan, Point};
 use super::super::check::{hook_batch, hook_store, hooks_probe};
 use super::super::ctx::Ctx;
 use super::super::math::swap_cl::Swapped;
 use super::super::pools::registry::Entry;
 use super::super::quote::quoter::Judged;
-use super::super::quote::{Quoting, emptiness, quoter, quoter_revert};
+use super::super::quote::{Quoting, emptiness, hook_curve, quoter, quoter_revert};
 use super::exit_quote::ExitFix;
 
-/// Повторная пробная проверка крючков B/C ВСЕХ пулов доли (пулы без крючка B/C пропускаются). Решение «335 (В1,
+/// Повторная пробная проверка крючков B/C пулов доли (пулы без крючка B/C пропускаются) — на СУММЕ СДЕЛКИ: точка
+/// пробы = вход пула в шаге доли (решение «335 (лесенка влияния)»: влияние растёт с суммой). Решение «335 (В1,
 /// пакет)» (check/hook_batch.rs): на ОДНОМ блоке и одним кругом до узла — графовый маршрут: свежие записи
-/// верификации (Quoting.route_fresh, блок верификации) и только вызовы квотера; иначе: голова node/heads.rs (без
-/// eth_blockNumber), slot0, слова и тики по памяти и квотер всех пулов одним пакетом (Multicall3 при dex.multicall3,
-/// иначе пачкой JSON-RPC). Итог по пулу — check/hook_store.rs put_head (PoolFacts.hook и hook_head; более старый блок
-/// не затирает более новый) — допуск пула (quote/select.rs) считается уже по нему. Откат квотера — итог «не прошла».
-/// Сбой узла (нет головы, нет состояния блока, связь, ответ не по виду), незаданная настройка — сделки нет, прежний
-/// итог проверки крючка не трогается (не выключает пул до следующего прохода цикла).
-/// Принимает: окружение котировки, записи пулов доли из памяти. Ошибки: NoRoute — проба не прошла; StaleData — нет
-/// головы; узел; NotConfigured.
-pub async fn hooks_again(q: &Quoting, entries: &[Entry]) -> GatewayResult<()> {
-    let hooked: Vec<(Entry, HookGroup)> = entries
+/// верификации (Quoting.route_fresh) и только вызовы квотера; иначе: голова node/heads.rs, slot0, слова и тики по
+/// памяти и квотер всех пулов одним пакетом. Итог по пулу вливается в лесенку стороны (quote/hook_curve.rs
+/// merge_impact) и пишется check/hook_store.rs put_head — расчёт доли после пробы берёт влияние на своём входе из
+/// обновлённой лесенки. Откат квотера — итог «не прошла». Сбой узла, ответ не по виду, незаданная настройка —
+/// сделки нет, прежний итог проверки крючка не трогается.
+/// Принимает: окружение котировки, шаги доли (пул из памяти, токен входа, вход пула в минимальных единицах).
+/// Ошибки: NoRoute — проба не прошла; StaleData — нет головы; узел; NotConfigured.
+pub async fn hooks_again(q: &Quoting, steps: &[(Entry, Address, U256)]) -> GatewayResult<()> {
+    let hooked: Vec<(Entry, HookGroup, Plan)> = steps
         .iter()
-        .filter_map(|e| {
+        .filter_map(|(e, token_in, amount_in)| {
             let g = e.pool.hooks.as_ref()?.group;
-            (g != HookGroup::A).then(|| (e.clone(), g))
+            let p = Point {
+                usd: Decimal::ZERO,
+                amount_in: *amount_in,
+            };
+            let plan = if *token_in == e.usdt {
+                Plan {
+                    buy: vec![p],
+                    sell: Vec::new(),
+                }
+            } else {
+                Plan {
+                    buy: Vec::new(),
+                    sell: vec![p],
+                }
+            };
+            (g != HookGroup::A).then(|| (e.clone(), g, plan))
         })
         .collect();
     if hooked.is_empty() {
@@ -61,13 +77,31 @@ pub async fn hooks_again(q: &Quoting, entries: &[Entry]) -> GatewayResult<()> {
             )
         })?
         .number;
-    let pools: Vec<Entry> = hooked.iter().map(|(e, _)| e.clone()).collect();
+    let pools: Vec<(Entry, Plan)> = hooked
+        .iter()
+        .map(|(e, _, p)| (e.clone(), p.clone()))
+        .collect();
     let fresh = q.route_fresh.as_deref();
     let (block, got) = hook_batch::measure(&q.ctx, &q.tokens, &q.reg, &pools, fresh, head).await?;
     let mut failed = None;
-    for ((e, group), m) in hooked.iter().zip(got) {
+    for ((e, group, _), m) in hooked.iter().zip(got) {
         let impact = match m {
-            Ok(Ok(i)) => CheckState::Known(i),
+            Ok(Ok(i)) => {
+                let old = q
+                    .checks
+                    .pool(&e.pool.reference)
+                    .hook
+                    .and_then(|c| match c.impact {
+                        CheckState::Known(i) => Some(i),
+                        _ => None,
+                    });
+                // Прежней лесенки нет — точку не к чему приложить (другая сторона осталась бы без влияния): итог не
+                // пишется, расчёт доли скажет «влияние крючка ещё не измерено».
+                let Some(old) = old else {
+                    continue;
+                };
+                CheckState::Known(hook_curve::merge_impact(Some(&old), &i))
+            }
             Ok(Err(reason)) => CheckState::Failed { reason },
             // Откат квотера (крючок не дал обмен) — итог пула «не прошла»; прочее (узел, ответ не по виду — например
             // блок головы ещё не у узла HTTP, незаданная настройка) — сделки нет, прежний итог не трогается.

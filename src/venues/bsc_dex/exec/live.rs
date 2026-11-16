@@ -10,11 +10,13 @@
 //! quote/direct_route.rs (один роутер), pools/registry.rs, pools/mids.rs, tokens.rs.
 //! Настройки: через вызываемые — см. их шапки.
 
+use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
 use crate::core::types::{RouteHop, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
+use super::super::check::quoter_amount;
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::super::quote::direct::{self, Candidate};
@@ -45,21 +47,45 @@ pub async fn path(
                 .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))
         })
         .collect::<GatewayResult<Vec<Entry>>>()?;
-    // Решение «335 (В1, пакет)»: крючки всех пулов доли — одним пакетом на одном блоке (exec/precheck.rs hooks_again).
-    precheck::hooks_again(q, &found).await?;
-    let mut entries = Vec::with_capacity(hops.len());
-    for e in found {
+    // Решение «335 (лесенка влияния)»: путь по прежним проверкам → проба крючков на входах его шагов (сумма сделки)
+    // одним пакетом на одном блоке (exec/precheck.rs hooks_again, решение «335 (В1, пакет)») → путь заново по
+    // обновлённой лесенке. Пулов с крючком B/C нет — один расчёт, как раньше.
+    let first = eval(v, &found, qty, direct_mode).await?;
+    if !found.iter().any(quoter_amount::hooked) {
+        return Ok(first);
+    }
+    let steps: Vec<(Entry, Address, U256)> = first
+        .hops
+        .iter()
+        .map(|h| (h.entry.clone(), h.token_in, h.swapped.amount_in))
+        .collect();
+    precheck::hooks_again(q, &steps).await?;
+    eval(v, &found, qty, direct_mode).await
+}
+
+/// Путь доли по текущим проверкам пулов (допуск, лесенка влияния крючка). Принимает: расчёт путей, пулы доли (записи
+/// из памяти), количество монет, прямой ли режим. Ошибки: как path.
+async fn eval(
+    v: &Via<'_>,
+    found: &[Entry],
+    qty: Decimal,
+    direct_mode: bool,
+) -> GatewayResult<Path> {
+    let (q, ctx) = (v.q, &v.q.ctx);
+    let mut entries = Vec::with_capacity(found.len());
+    for e in found.iter().cloned() {
         let u = select::usable(q, &e, v.side, v.usdt_dec)
             .map_err(|why| ctx.err(ErrorCode::NoRoute, format!("{}: {why}", e.family.title)))?;
         entries.push((e, u));
     }
     match entries.as_slice() {
         [(e, u)] => {
-            let (swapped, coins, usdt) =
-                direct::calc(ctx, e, u, v.side, qty, (v.coin_dec, v.usdt_dec))?;
+            // Решение «335 (лесенка влияния)»: допуск с влиянием крючка, применённым на входе этого расчёта.
+            let (swapped, coins, usdt, u) =
+                direct::calc_u(ctx, e, u, v.side, qty, (v.coin_dec, v.usdt_dec))?;
             let c = Candidate {
                 entry: e.clone(),
-                usable: u.clone(),
+                usable: u,
                 swapped,
                 coins,
                 usdt,

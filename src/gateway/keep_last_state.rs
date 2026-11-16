@@ -63,7 +63,7 @@ impl<K: Keyed, S: Slot> State<K, S> {
         let now = slot.urgent();
         self.urgent_delta(&class, was, now);
         if now && !was {
-            self.to_front(&key);
+            self.raise(&key);
         }
         if replaced {
             self.count(&class).replaced += 1;
@@ -150,7 +150,7 @@ impl<K: Keyed, S: Slot> State<K, S> {
     }
 
     /// Ждущий ключ — в начало очереди. Ошибок нет.
-    fn to_front(&mut self, key: &K) {
+    fn raise(&mut self, key: &K) {
         if let Some(i) = self.order.iter().position(|k| k == key)
             && let Some(k) = self.order.remove(i)
         {

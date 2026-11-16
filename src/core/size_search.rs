@@ -63,14 +63,18 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
         .units(p.guess.max(Decimal::ZERO))
         .ok_or_else(|| Fail::Stop(format!("объём {} слишком велик", p.guess)))?;
     // Решение 265: этапы подбора — части подробного замера (calc_detail.rs; иначе — просто работа).
-    let (hi, max_exact, lo) = stage_detail(|| BOUNDS.into(), async {
+    // Ревью CI t157 (переполнение стека, tests/core_dry_mode.rs precheck_replans_live): части поиска — будущие в куче
+    // (Box::pin), а не по значению в будущем search_in: иначе всё дерево поиска (границы, точки, уточнение, at_many,
+    // refine_all, ветки решений 336–337) лежит в будущем вызывающего (profit::decide, cycle_plan, card, uncapped) и на
+    // его стеке, если будущее строится или ведётся по значению. Логика и порядок расчётов не меняются.
+    let (hi, max_exact, lo) = Box::pin(stage_detail(|| BOUNDS.into(), async {
         let (hi, max_exact) = upper(m, guess, p.bisect_steps, p.bisect_probes).await?;
         let lo = lower(m, hi, p.bisect_steps, p.bisect_probes).await?;
         Ok::<_, Fail>((hi, max_exact, lo))
-    })
+    }))
     .await?;
     // Решение 337: при поле раннего выхода сначала границы и сетка, ниже пола — без изломов и уточнения.
-    let (ok, early) = stage_detail(|| POINTS.into(), points(m, p, lo, hi)).await?;
+    let (ok, early) = Box::pin(stage_detail(|| POINTS.into(), points(m, p, lo, hi))).await?;
     let early = early || below(m, p.early_floor);
     let tol = tolerance(hi, p.tolerance_pct);
     let mut peaks = 0u32;
@@ -94,17 +98,24 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
             spans.push((a, b));
             continue;
         }
-        stage_detail(|| REFINE.into(), refine(m, a, b, p.refine_steps, tol)).await?;
+        Box::pin(stage_detail(
+            || REFINE.into(),
+            refine(m, a, b, p.refine_steps, tol),
+        ))
+        .await?;
     }
     if !spans.is_empty() {
-        let all = refine_all(m, &spans, p.refine_steps, tol);
-        stage_detail(|| REFINE.into(), all).await?;
+        Box::pin(stage_detail(
+            || REFINE.into(),
+            refine_all(m, &spans, p.refine_steps, tol),
+        ))
+        .await?;
     }
     let best = m
         .best()
         .ok_or_else(|| Fail::Stop("ни один объём не посчитан".into()))?;
     // Точка hi посчитана при поиске границы (в памяти) — предел расчётов её не трогает.
-    let top = m.at(hi).await?;
+    let top = Box::pin(m.at(hi)).await?;
     let choice = SizeChoice {
         qty: best.qty,
         profit: best.profit,

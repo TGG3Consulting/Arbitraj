@@ -31,7 +31,7 @@ use super::abandon;
 use super::quote_timing_outer::{self, Outcome, Run};
 use super::route_paths::RoutePath;
 
-pub use super::quote_timing_stages::{COUNTS, Count, STAGES, Stage, TOP};
+pub use super::quote_timing_stages::{COUNTS, Count, PATHS_END, STAGES, Stage, TOP};
 
 /// Что котируется (для записи).
 pub struct Meta {

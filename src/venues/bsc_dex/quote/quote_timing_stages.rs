@@ -10,8 +10,7 @@
 //! Настройки: нет.
 
 /// Этап котировки. Первые TOP — верхний уровень (не пересекаются; их сумма не больше работы), остальные — части
-/// этапа Paths («в т.ч.»), с ClassicAdmit — части этапа Classic (решение 336; они могут вкладываться друг в друга:
-/// допуск пулов входит в «один пул» и «через промежуточную»).
+/// («в т.ч.»): TOP..PATHS_END — этапа Paths, PATHS_END..STAGES — этапа Classic (решение 336; см. PATHS_END).
 #[derive(Clone, Copy)]
 pub enum Stage {
     /// Классика (routing.rs: classic_direct / smart_quote).
@@ -65,6 +64,11 @@ pub enum Stage {
 /// Этапов всего; первые TOP — верхнего уровня.
 pub const STAGES: usize = 23;
 pub const TOP: usize = 13;
+/// Решение 336: части этапа Paths — TOP..PATHS_END; части этапа Classic — PATHS_END..STAGES (в stages_ms не входят ни
+/// те, ни другие: stages_ms — сумма первых TOP). Части классики: ClassicOne, ClassicVia, ClassicPick — по очереди, не
+/// пересекаются (сумма ≤ classic); ClassicAdmit и ClassicCosts — внутри них, друг с другом не пересекаются (сумма ≤
+/// classic); ClassicSignal — второй проход целиком (его один пул, промежуточная, выбор, допуск, затраты — в своих частях).
+pub const PATHS_END: usize = 17;
 
 /// Счётчик котировки.
 #[derive(Clone, Copy)]

@@ -12,8 +12,8 @@
 //! уже ждущие повтора, по логу не читаются (позиция лога отмечается).
 //! Кто вызывает: pools/session.rs (on_log: лог не нашёл пул по Singleton / Contract).
 //! От чего зависит: admit.rs (wake, Members), events.rs, listen_log.rs (latest), reload_many.rs (load_group),
-//! registry.rs, invalidated.rs, stale_read.rs (решение 298).
-//! Настройки: через вызываемые — dex.load_batch и настройки чтения вида.
+//! registry.rs, invalidated.rs, stale_read.rs (решение 298), refresh_urgency.rs (решение 314).
+//! Настройки: через вызываемые — dex.load_batch и настройки чтения вида; dex.event_refresh_urgency (класс очереди узла).
 
 use alloy::rpc::types::Log;
 
@@ -25,7 +25,7 @@ use super::events::{self, Applied};
 use super::group::Group;
 use super::listen::{End, Pools};
 use super::registry::Entry;
-use super::{listen_log, reload_many, stale_read};
+use super::{listen_log, refresh_urgency, reload_many, stale_read};
 
 /// Что делает: лог контракта пар Multi. Принимает: окружение, пачку, её пулы, лог. Возвращает: false — пар Multi с
 /// этим адресом в пачке нет (лог — не им); true — обработан. Ошибки: End — сбой чтения или ядро закрыло канал.
@@ -114,8 +114,11 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
         deep.len()
     );
     p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
+    // Решение 314: чтения по событию — классом dex.event_refresh_urgency (refresh_urgency.rs; не задана — как раньше).
     let at = if log.removed {
-        listen_log::latest(p).await.map_err(|e| End::Broken(e.message))?
+        refresh_urgency::urgent(&p.ctx, listen_log::latest(p))
+            .await
+            .map_err(|e| End::Broken(e.message))?
     } else {
         block
     };
@@ -123,7 +126,7 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
         .iter()
         .map(|&i| (&m.pools[i].0, m.pools[i].1.as_str()))
         .collect();
-    let res = reload_many::load_group(p, &items, at).await?;
+    let res = refresh_urgency::urgent(&p.ctx, reload_many::load_group(p, &items, at)).await?;
     // Прочая ошибка (не StaleData) хоть у одной пары — как раньше: все перечитываемые пары недостоверны, конец сессии.
     if let Some(e) = res
         .iter()

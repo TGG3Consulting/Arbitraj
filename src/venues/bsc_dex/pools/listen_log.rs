@@ -8,8 +8,13 @@
 //! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, load_lb_bins.rs (ревью 290), registry.rs,
-//! stale_read.rs (решение 298).
-//! Настройки: через вызываемые.
+//! stale_read.rs (решение 298), refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321).
+//! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs). Решение 321:
+//! emit вынесен в emit_pool.rs (здесь — реэкспорт для прежних вызывающих) — при dex.pool_events_keep = да событие не
+//! теряется, а ждёт места в канале (pending_events.rs).
+//! Решение 314: перечитывания по событию (off_map, Refresh, Bins) — классом dex.event_refresh_urgency (refresh_urgency.rs).
+//! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s, dex.event_refresh_urgency,
+//! dex.pool_events_keep).
 //!
 //! removed: true при реорге — execution-apis subscribe.yaml#L1-L60; порядок применения — (blockNumber, logIndex),
 //! как присылает узел (research/flow/bsc_dex.md, раздел 4).
@@ -19,11 +24,10 @@ use std::collections::BTreeSet;
 use alloy::rpc::types::Log;
 use alloy_primitives::U64;
 use serde_json::json;
-use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
-use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
 use super::super::node::call::block_tag;
@@ -31,17 +35,26 @@ use super::super::node::rpc;
 use super::super::quote::emptiness;
 use super::discover::Found;
 use super::events::{self, Applied};
+use super::group::Msg;
 use super::listen::{End, Pools};
+use super::refresh_event::{self, Event};
+use super::refresh_urgency;
 use super::registry::Entry;
-use super::{load, load_bin, load_lb_bins};
+use super::{load_bin, load_lb_bins};
 
 /// Один лог: найти пул, применить или перечитать, отправить ядру. `waiting` — пул в очереди повтора пачки (решение
 /// 298): событие применяется, но перечитывания нет (узел на старом блоке не спрашивается, журнал не пишется) — позиция
 /// события, требующего перечитывания, отмечается (stale_read::defer), повтор прочитает пул не раньше неё.
 /// Возвращает: true — чтение на блоке события опоздало (StaleData, решение 298): пул недостоверен, Invalidated ушло,
 /// вызывающий ставит пул в очередь повтора (stale_read::requeue); false — обработан как раньше.
+/// `queued` — канал сессии пачки: сколько сообщений ждёт, пока пул перечитывается (замер решения 313).
 /// Ошибки: End — прочая ошибка чтения (пул недостоверен), лог без позиции, ядро закрыло канал.
-pub async fn on_log(p: &Pools, log: &Log, waiting: bool) -> Result<bool, End> {
+pub async fn on_log(
+    p: &Pools,
+    log: &Log,
+    waiting: bool,
+    queued: &UnboundedReceiver<Msg>,
+) -> Result<bool, End> {
     let r = match log.topics().get(1) {
         Some(id)
             if p.reg.contains(&PoolRef::Singleton {
@@ -88,18 +101,23 @@ pub async fn on_log(p: &Pools, log: &Log, waiting: bool) -> Result<bool, End> {
         // а не при переподключении: иначе глубина считалась бы не целиком и вердикт мигал бы.
         Applied::Updated => match p.reg.get(&r) {
             Some(e) if super::depth::off_map(&p.ctx, &e) => {
-                let msg = format!(
-                    "{} {}: полоса цены dex.depth_band_pct вышла за прочитанные слова битмапа — карта тиков перечитывается вокруг нового тика",
-                    e.family.title, e.ticker
-                );
-                p.ctx.log(Level::Info, "dex.pool", msg, None).await;
-                load::refresh(&p.ctx, &p.tokens, &p.reg, &e, block)
+                refresh_event::off_map(p, &e, block, queued)
                     .await
                     .map(|x| p.reg.put(x))
             }
             _ => Ok(()),
         },
-        Applied::Bins(ids) => reread_bins(p, &r, &ids, block).await,
+        // Решение 314: бины на блоке события — классом dex.event_refresh_urgency (не задана — как раньше). Ревью 314:
+        // настройка читается, только если есть что читать у узла (бины есть, ссылка — свой контракт или Singleton;
+        // иначе reread_bins к узлу не идёт: пустой список — call::try_many без запроса).
+        Applied::Bins(ids)
+            if ids.is_empty() || !matches!(r, PoolRef::Contract(_) | PoolRef::Singleton { .. }) =>
+        {
+            Ok(())
+        }
+        Applied::Bins(ids) => {
+            refresh_urgency::urgent(&p.ctx, reread_bins(p, &r, &ids, block)).await
+        }
         Applied::Refresh(why) => {
             p.ctx
                 .log(
@@ -114,17 +132,19 @@ pub async fn on_log(p: &Pools, log: &Log, waiting: bool) -> Result<bool, End> {
                 .await;
             // Реорг: читаем текущий блок; иначе — конец блока события (поздние события блока уже учтены в нём).
             let at = if log.removed {
-                latest(p).await
+                refresh_urgency::urgent(&p.ctx, latest(p)).await
             } else {
                 Ok(block)
             };
             match at {
-                Ok(at) => load::refresh(&p.ctx, &p.tokens, &p.reg, &entry, at)
-                    .await
-                    .map(|e| {
-                        p.reg.put(e);
-                        p.signals.pool_ready();
-                    }),
+                Ok(at) => {
+                    refresh_event::refresh(p, &entry, at, &Event::new("refresh", block, queued))
+                        .await
+                        .map(|e| {
+                            p.reg.put(e);
+                            p.signals.pool_ready();
+                        })
+                }
                 Err(e) => Err(e),
             }
         }
@@ -198,14 +218,8 @@ pub async fn latest(p: &Pools) -> GatewayResult<u64> {
     Ok(b.to())
 }
 
-/// Пул — ядру без ожидания: медленное ядро не задерживает чтение событий (свежий пул уже в реестре).
-pub fn emit(p: &Pools, pool: crate::core::types::Pool) -> Result<(), End> {
-    super::depth::touch(p, &pool.reference);
-    match p.out.try_send(MarketEvent::Pool(pool)) {
-        Ok(()) | Err(TrySendError::Full(_)) => Ok(()),
-        Err(TrySendError::Closed(_)) => Err(End::Closed),
-    }
-}
+/// Пул — ядру без ожидания; решение 321 — при полном канале не теряется (dex.pool_events_keep): pools/emit_pool.rs.
+pub use super::emit_pool::emit;
 
 /// Пулы пачки недостоверны: отметка в реестре и событие Invalidated по каждой монете.
 pub fn invalidate(p: &Pools, pools: &[(Found, String)]) {

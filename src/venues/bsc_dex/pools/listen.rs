@@ -55,6 +55,8 @@ pub struct Pools {
     pub lag: super::super::node::events_lag::EventsLag,
     /// Цена газа (кэш на блок) — для фонового прогрева quote/warm.rs (решение 89).
     pub gas: super::super::quote::gas::GasPrice,
+    /// Решение 321: события пулов, ждущие места в канале ядра (emit_pool.rs; общий на адаптер — Parts.kept).
+    pub kept: super::pending_events::Pending<crate::core::types::PoolRef, crate::core::types::Pool>,
 }
 
 /// Чем кончилась сессия.

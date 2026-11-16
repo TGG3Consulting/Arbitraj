@@ -208,6 +208,9 @@ async fn on_log(
             return Ok(());
         }
         // Пары общего контракта (WooFi, PoolRef::Member): лог от адреса контракта — перечитать все его пары.
+        // Решение 314: пары общего контракта по логу — классом dex.event_refresh_urgency (не задана — как раньше);
+        // ревью 314: класс ставит per_block::on_member_log, только если пары у контракта есть (настройка не читается
+        // на каждом логе, не нашедшем пул).
         per_block::on_member_log(p, &m.pools, log).await?;
         return Ok(());
     };
@@ -221,7 +224,7 @@ async fn on_log(
             // Решение 298: чтение на блоке события опоздало (StaleData) — пул в очередь повтора, сессия идёт дальше;
             // пока ждёт — события без перечитывания.
             let waiting = super::stale_read::waiting(&m.missing, i);
-            if listen_log::on_log(p, log, waiting).await? {
+            if listen_log::on_log(p, log, waiting, &g.rx).await? {
                 super::stale_read::requeue(&mut m.missing, &mut m.abandoned, i);
             }
         }

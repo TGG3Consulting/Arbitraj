@@ -5,7 +5,9 @@
 //! пачка JSON-RPC одним HTTP-запросом), те же ответы и тот же разбор. Вынесено из pools/listen_log.rs (предел размера).
 //! Пачке бинов не нужны ни dex.multicall3, ни dex.load_batch (ревью 325, Н6): без Multicall3 view_many — пачка JSON-RPC
 //! одним HTTP-запросом, на части не делится.
-//! Кто вызывает: pools/listen_log.rs.
+//! Кто вызывает: на пути события — никто после слияния rel/dex-all (t152 + t154): ветку Applied::Bins ведёт
+//! settle_bins.rs решения 357 (бины события и активный бин одним запросом, у Infinity Bin всегда пачкой — не хуже
+//! dex.event_refresh_batch). Файл оставлен без изменения логики до решения Тиграна (убрать или вернуть в работу).
 //! От чего зависит: load_bin.rs, load_lb_bins.rs, registry.rs, listen.rs (Pools), node/call.rs (block_tag),
 //! event_flags.rs (настройка в памяти).
 //! Настройки: dex.event_refresh_batch [DEX] (ячейка памяти — event_flags.rs); через вызываемые — dex.multicall3.

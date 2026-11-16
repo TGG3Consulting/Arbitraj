@@ -7,19 +7,29 @@
 //! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs; пересчёт
 //! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
-//! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, reread_bins.rs (бины; ревью 290), integral_fee.rs, registry.rs,
-//! stale_read.rs (решение 298), refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321).
+//! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, settle.rs, settle_bins.rs (бины события; ревью 290,
+//! решение 357), integral_fee.rs (решение 325), registry.rs, stale_read.rs (решение 298), pool_fail.rs (решение 339),
+//! refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321).
 //! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs). Решение 321:
 //! emit вынесен в emit_pool.rs (здесь — реэкспорт для прежних вызывающих) — при dex.pool_events_keep = да событие не
 //! теряется, а ждёт места в канале (gateway/core_out.rs, решение 324).
 //! Решение 314: перечитывания по событию (off_map, Refresh, Bins) — классом dex.event_refresh_urgency (refresh_urgency.rs).
-//! Решение 325: Applied::Fee (Algebra Integral) — только комиссия (integral_fee.rs) при dex.event_refresh_fee_only;
-//! бины Infinity Bin — одной пачкой (reread_bins.rs, load_bin::many) при dex.event_refresh_batch. Не заданы — как раньше.
+//! Решение 325: Applied::Fee (Algebra Integral) — только комиссия (integral_fee.rs) при dex.event_refresh_fee_only.
+//! Не задана — как раньше. (Бины Infinity Bin пачкой reread_bins.rs решения 325 на пути события не вызываются: ветку
+//! Bins ведёт settle_bins.rs решения 357 — бины события и активный бин одним запросом, у Infinity Bin всегда пачкой.)
+//! Решение 332: после бинов события (Infinity Bin, LB V2.1) — проверка «цена ушла за прочитанную полосу бинов» и
+//! перечитывание пула целиком (off_map_bins.rs after, при dex.bin_reread_left_pct у DEX; не задана — как раньше).
+//! Решение 357 (деньги, не под настройкой): пул не уходит ядру и не котируется в промежуточном состоянии одного действия
+//! в сети — бины события и активный бин конца блока одним запросом (settle_bins.rs), логи одного обмена LB применяются
+//! вместе; лог, за которым в том же вызове всегда идёт ещё лог пула (SwapFee Integral, CompositionFees LB), — пул «в
+//! обновлении» до него (settle.rs step); полное перечитывание и ошибка чтения снимают отметку (forget). SwapFee с
+//! «только комиссией» (решение 325) — сначала комиссия на блоке события, затем отметка (ядру — после Swap).
 //! Решение 339 (pool_fail.rs): при dex.pool_fail_pause_ms прочая ошибка чтения тоже не рвёт сессию — пул недостоверен,
 //! в очередь повтора с растущей паузой; пул на паузе по событию не читается (как ждущий повтора). Ревью t153 (Б1):
-//! событие недостоверного пула не на паузе, которое его не перечитало, — итог true (пул в очередь повтора).
+//! событие недостоверного пула не на паузе, которое его не перечитало, — итог true (пул в очередь повтора); пул «в
+//! обновлении» (решение 357) этим не возрождается — его ведёт settle.rs.
 //! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s, dex.event_refresh_urgency,
-//! dex.pool_events_keep, dex.event_refresh_fee_only, dex.event_refresh_batch, dex.pool_fail_pause_ms).
+//! dex.pool_events_keep, dex.event_refresh_fee_only, dex.pool_fail_pause_ms, dex.bin_reread_left_pct, dex.bin_depth_usd).
 //!
 //! removed: true при реорге — execution-apis subscribe.yaml#L1-L60; порядок применения — (blockNumber, logIndex),
 //! как присылает узел (research/flow/bsc_dex.md, раздел 4).
@@ -38,11 +48,12 @@ use super::super::quote::emptiness;
 use super::discover::Found;
 use super::events::{self, Applied};
 use super::group::Msg;
+use super::integral_fee;
 use super::listen::{End, Pools};
 use super::refresh_event::{self, Event};
 use super::refresh_urgency;
 use super::registry::Entry;
-use super::{integral_fee, reread_bins};
+use super::settle_bins::Settled;
 
 /// Один лог: найти пул, применить или перечитать, отправить ядру. `waiting` — пул в очереди повтора пачки (решение
 /// 298): событие применяется, но перечитывания нет (узел на старом блоке не спрашивается, журнал не пишется) — позиция
@@ -81,7 +92,11 @@ pub async fn on_log(
     // Ревью t153 (Б1): при dex.pool_fail_pause_ms событие НЕДОСТОВЕРНОГО пула не на паузе и не в очереди повтора
     // ставит его на перечитку (итог true — вызывающий ставит в очередь повтора), если событие само его не перечитало:
     // иначе пул, чьи события только применяются (Applied::Updated), остался бы недостоверным навсегда.
-    let revive = !waiting && !entry.valid && super::pool_fail::base(&p.ctx).is_some();
+    // Решение 357: пул «в обновлении» недостоверен отметкой settle.rs — его снимает приход логов или голова, не повтор.
+    let revive = !waiting
+        && !entry.valid
+        && !p.holds.pending(&r)
+        && super::pool_fail::base(&p.ctx).is_some();
     let (Some(block), Some(index)) = (log.block_number, log.log_index) else {
         return Err(End::Broken(
             "лог подписки без blockNumber/logIndex — порядок событий неизвестен".into(),
@@ -103,6 +118,15 @@ pub async fn on_log(
         Applied::Fee(why) if !integral_fee::fits(&p.ctx, &entry, waiting) => Applied::Refresh(why),
         x => x,
     };
+    // Решение 357: за этим логом в том же вызове по коду контракта идёт ещё лог пула — пул «в обновлении», ядру не
+    // уходит; следующий лог пула (не из бинов) снимает отметку (settle.rs step). Applied::Fee (решение 325) — шаг после
+    // чтения комиссии (ветка Fee ниже): иначе комиссия SwapFee так и не была бы прочитана.
+    if !matches!(applied, Applied::Fee(_))
+        && p.holds
+            .step(&p.reg, (&r, entry.family), log, &applied, waiting)
+    {
+        return Ok(false);
+    }
     let res = match applied {
         Applied::Ignored => return Ok(revive),
         // Решение 298: пул ждёт повтора — не читаем (повтор на новых блоках прочитает его не раньше этого события).
@@ -124,9 +148,22 @@ pub async fn on_log(
             _ => Ok(()),
         },
         // Решение 325: только комиссия на блоке события, дальше — как Updated (цена из события могла уйти за карту).
-        Applied::Fee(_) => {
+        Applied::Fee(why) => {
             // Ревью 325 (Н4): класс очереди и замер (причина «fee») — refresh_event.rs fee.
             match refresh_event::fee(p, &entry, &r, (block, log.log_index), queued).await {
+                // Решение 357 при 325: комиссия прочитана; SwapFee — пул «в обновлении» до Swap того же вызова (settle.rs
+                // opens), прочий лог снимает ждавший Follow — как у остальных логов (step выше).
+                Ok(())
+                    if p.holds.step(
+                        &p.reg,
+                        (&r, entry.family),
+                        log,
+                        &Applied::Fee(why.clone()),
+                        waiting,
+                    ) =>
+                {
+                    return Ok(false);
+                }
                 Ok(()) => match p.reg.get(&r) {
                     Some(e) if super::depth::off_map(&p.ctx, &e) => {
                         refresh_event::off_map(p, &e, block, queued)
@@ -140,18 +177,24 @@ pub async fn on_log(
         }
         // Решение 314: бины на блоке события — классом dex.event_refresh_urgency (не задана — как раньше). Ревью 314:
         // настройка читается, только если есть что читать у узла (бины есть, ссылка — свой контракт или Singleton;
-        // иначе reread_bins к узлу не идёт: пустой список — call::try_many без запроса).
+        // иначе бины к узлу не читаются: пустой список — call::try_many без запроса).
         Applied::Bins(ids)
             if ids.is_empty() || !matches!(r, PoolRef::Contract(_) | PoolRef::Singleton { .. }) =>
         {
             Ok(())
         }
+        // Решение 332: после бинов события — прочитанного в сторону цены меньше dex.bin_reread_left_pct от
+        // dex.bin_depth_usd (или активный бин за полосой) — пул целиком на блоке события (off_map_bins.rs).
+        // Решение 357: бины события и активный бин конца блока — одним запросом; активный бин памяти ≠ конца блока —
+        // логи блока пула ещё идут: пул «в обновлении», ядру не уходит (settle_bins.rs).
         Applied::Bins(ids) => {
-            refresh_urgency::urgent(
-                &p.ctx,
-                reread_bins::reread(p, entry.family, &r, &ids, block),
-            )
-            .await
+            match refresh_urgency::urgent(&p.ctx, super::settle_bins::on_bins(p, &r, &ids, block))
+                .await
+            {
+                Ok(Settled::Done) => super::off_map_bins::after(p, &r, block, queued).await,
+                Ok(Settled::Held) => return Ok(false),
+                Err(e) => Err(e),
+            }
         }
         Applied::Refresh(why) => {
             p.ctx
@@ -176,6 +219,8 @@ pub async fn on_log(
                     refresh_event::refresh(p, &entry, at, &Event::new("refresh", block, queued))
                         .await
                         .map(|e| {
+                            // Решение 357: пул прочитан целиком — «в обновлении» снято.
+                            p.holds.forget(&r);
                             p.reg.put(e);
                             p.signals.pool_ready();
                         })
@@ -186,6 +231,8 @@ pub async fn on_log(
     };
     if let Err(e) = res {
         p.reg.update(&r, |x| x.valid = false);
+        // Решение 357: недостоверен по ошибке — отметку «в обновлении» ведёт не она (повтор / переподключение).
+        p.holds.forget(&r);
         super::invalidated::send(p, entry.coin, entry.ticker.clone());
         // Решение 298: состояния блока события у узла уже нет — сессию пачки не рвём, пул перечитается на новых блоках.
         if super::stale_read::is_stale(&e) {

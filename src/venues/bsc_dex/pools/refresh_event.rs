@@ -13,7 +13,8 @@
 //! (prefetch_read.rs: одно-два обращения к узлу вместо цепочки; тот же код чтения load::refresh, тот же итог).
 //! Ревью 325 (Н4): «только комиссия» Algebra Integral (fee → integral_fee.rs apply) — тем же классом очереди и тем же
 //! замером: запись dex.pool_refresh с причиной «fee» (слов карты — нет: карта не читается).
-//! Кто вызывает: pools/listen_log.rs (ветки off_map, Refresh и Fee).
+//! Кто вызывает: pools/listen_log.rs (ветки off_map, Refresh и Fee), pools/off_map_bins.rs (решение 332: причина
+//! off_map_bins — цена ушла за прочитанную полосу бинов Infinity Bin / LB V2.1).
 //! От чего зависит: load.rs (refresh), refresh_timing.rs, node/req_trail.rs, gateway/urgency.rs (класс для записи),
 //! group.rs (Msg — канал сессии), integral_fee.rs (apply).
 //! Настройки: log.pool_refresh_timing (через refresh_timing.rs), dex.event_refresh_urgency (через refresh_urgency.rs),
@@ -40,7 +41,7 @@ use super::{integral_fee, load, load_v3_once, prefetch_read};
 /// Что вызвало перечитывание.
 pub struct Event<'a> {
     /// «off_map» — полоса глубины вышла за карту; «refresh» — событие требует перечитать пул; «fee» — только комиссия
-    /// (ревью 325, fee).
+    /// (ревью 325, fee); «off_map_bins» — цена ушла за прочитанную полосу бинов (решение 332, off_map_bins.rs).
     pub cause: &'static str,
     /// Блок события.
     pub block: u64,

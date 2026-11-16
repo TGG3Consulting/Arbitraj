@@ -57,6 +57,9 @@ pub struct Pools {
     pub gas: super::super::quote::gas::GasPrice,
     /// Решения 321/324: общий набор канала ядра и проверка «пул годен» при доставке (emit_pool.rs Kept).
     pub kept: super::emit_pool::Kept,
+    /// Решение 357: пулы «в обновлении» (логи одного действия применены не все) и отметки неудачного чтения LB на
+    /// голове (settle.rs).
+    pub holds: super::settle::Holds,
 }
 
 /// Чем кончилась сессия.

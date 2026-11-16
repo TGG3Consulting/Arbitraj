@@ -22,13 +22,9 @@ use crate::gateway::errors::GatewayResult;
 use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_lb::ILBPair as P;
-use super::bins::BinMap;
+// Ревью 332 (Н6): концы поиска getNextNonEmptyBin — общие константы bins.rs (TreeMath.sol L147, L202).
+use super::bins::{BinMap, NONE_ABOVE, NONE_BELOW};
 use super::load_bin::{Depth, usdt_value};
-
-/// Конец поиска вниз (findFirstRight): type(uint24).max (TreeMath.sol L147).
-const NONE_BELOW: u32 = 0xff_ffff;
-/// Конец поиска вверх (findFirstLeft): 0 (TreeMath.sol L202).
-const NONE_ABOVE: u32 = 0;
 
 /// Полоса бинов вокруг активного. Принимает: окружение, пул, активный бин, шаг, оценку стоимости (None — у пары нет USDT:
 /// стороны читаются до конца), тег блока. Возвращает: BinMap (X, Y — токены пула X и Y). Ошибки: NotConfigured
@@ -63,7 +59,7 @@ pub async fn band(
             if (down && next == NONE_BELOW) || (!down && next == NONE_ABOVE) {
                 // Дальше бинов нет: вся сторона известна.
                 if down {
-                    range.0 = 0
+                    range.0 = NONE_ABOVE
                 } else {
                     range.1 = NONE_BELOW
                 }

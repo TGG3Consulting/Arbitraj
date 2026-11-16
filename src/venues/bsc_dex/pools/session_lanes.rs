@@ -25,7 +25,8 @@
 //! сколько сообщений ждёт в канале всей пачки: числа «до» и «после» включения полос не сравнимы — ревью t153 Н8).
 //! Кто вызывает: pools/session.rs.
 //! От чего зависит: lanes.rs, listen_log.rs (on_log), stale_read.rs, pool_fail.rs (requeue, base), admit.rs (Members),
-//! group.rs (Msg), listen.rs (Pools, End), load_batch_par.rs (limit), per_block.rs (needs).
+//! group.rs (Msg), listen.rs (Pools, End), load_batch_par.rs (limit), per_block.rs (needs), settle.rs (решение 357 —
+//! отметки пулов «в обновлении»: settle_block ждёт и их полосы, queued — для settle_close.rs).
 //! Настройки: dex.event_lanes_max [bsc_dex] (необязательная; не задана — события по очереди в сессии, как раньше).
 
 use std::collections::HashMap;
@@ -132,6 +133,12 @@ impl EventLanes {
         Ok(())
     }
 
+    /// Что делает: решение 357 (слияние с t154) — сколько событий пула `i` ещё в его полосе: ждут запуска плюс
+    /// выполняющееся (для settle_close.rs: логи пула «в пути»). Ошибок нет.
+    pub fn queued(&self, i: usize) -> usize {
+        self.plan.waiting(i) + usize::from(self.plan.running_any(|k| k == i))
+    }
+
     /// Что делает: идёт ли сейчас хоть одна полоса (для ветки select! сессии). Ошибок нет.
     pub fn running(&self) -> bool {
         !self.set.is_empty()
@@ -182,14 +189,20 @@ impl EventLanes {
     }
 
     /// Что делает: перед повтором и чтениями каждым блоком (session.rs, новый блок) ждёт полосы пулов, которые эти
-    /// чтения трогают: пулы очереди повтора (reload::retry) и виды «каждым блоком» (per_block::needs — с запасом, без
-    /// отбора по USDT). Полосы остальных пулов идут дальше. Принимает: пачку. Ошибки: End — как у finish.
-    pub async fn settle_block(&mut self, m: &mut Members) -> Result<(), End> {
+    /// чтения трогают: пулы очереди повтора (reload::retry), виды «каждым блоком» (per_block::needs — с запасом, без
+    /// отбора по USDT) и пулы с отметкой решения 357 (settle.rs: их может прочитать целиком settle_close.rs на этой же
+    /// голове — не одновременно с полосой того же пула). Полосы остальных пулов идут дальше. Принимает: окружение,
+    /// пачку. Ошибки: End — как у finish.
+    pub async fn settle_block(&mut self, p: &Pools, m: &mut Members) -> Result<(), End> {
         if !self.running() {
             return Ok(());
         }
         let hit: Vec<bool> = (0..m.pools.len())
-            .map(|i| stale_read::waiting(&m.missing, i) || per_block::needs(m.pools[i].0.family))
+            .map(|i| {
+                stale_read::waiting(&m.missing, i)
+                    || per_block::needs(m.pools[i].0.family)
+                    || p.holds.get(&m.pools[i].0.reference).is_some()
+            })
             .collect();
         self.settle(m, |i| hit.get(i).copied().unwrap_or(true))
             .await

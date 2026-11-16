@@ -1,7 +1,10 @@
 //! Файл: venues/bsc_dex/pools/bins.rs
 //! Что делает: локальные резервы бинов пула Infinity Bin — (reserveX, reserveY) по id непустых бинов
 //! в прочитанной полосе вокруг активного бина. Нужны математике обмена Bin (math/bin_*, шаг 1c).
-//! Кто вызывает: pools/load_bin.rs (заполняет), pools/events_bin.rs (перечитывает затронутые бины), math/*.
+//! Кто вызывает: pools/load_bin.rs (заполняет), pools/events_bin.rs (перечитывает затронутые бины), math/*;
+//! pools/load_lb_bins.rs (Liquidity Book V2.1 — та же карта), pools/off_map_bins.rs (края полосы, решение 332).
+//! Ревью 332 (Н6): ответы getNextNonEmptyBin «дальше бинов нет» (NONE_BELOW / NONE_ABOVE) — одни константы на оба вида
+//! пулов из бинов; края полосы «сторона прочитана до конца пула» — down_to_end / up_to_end.
 //! От чего зависит: ничего.
 //! Настройки: dex.bin_depth_usd (глубина полосы — решает загрузчик).
 //!
@@ -10,6 +13,14 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+
+/// Ответ getNextNonEmptyBin(swapForY = true) «ниже бинов нет»: type(uint24).max (TreeMath.findFirstRight —
+/// infinity-core 3c5ef1be TreeMath.sol, lfj-gg/joe-v2@v2.1.0 TreeMath.sol L147). Им же загрузчики отмечают верхний край
+/// полосы «вверх прочитано до конца пула» (range.1).
+pub const NONE_BELOW: u32 = 0xff_ffff;
+/// Ответ getNextNonEmptyBin(swapForY = false) «выше бинов нет»: 0 (TreeMath.findFirstLeft, TreeMath.sol L202). Им же
+/// загрузчики отмечают нижний край полосы «вниз прочитано до конца пула» (range.0).
+pub const NONE_ABOVE: u32 = 0;
 
 /// Резервы бинов пула.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +35,16 @@ pub struct BinMap {
 }
 
 impl BinMap {
+    /// Вниз прочитано до конца пула (загрузчик дошёл до «ниже бинов нет» и поставил край NONE_ABOVE). Ошибок нет.
+    pub fn down_to_end(&self) -> bool {
+        self.range.0 == NONE_ABOVE
+    }
+
+    /// Вверх прочитано до конца пула (загрузчик дошёл до «выше бинов нет» и поставил край NONE_BELOW). Ошибок нет.
+    pub fn up_to_end(&self) -> bool {
+        self.range.1 == NONE_BELOW
+    }
+
     /// Лежит ли бин в прочитанной полосе. Ошибок нет.
     pub fn covers(&self, id: u32) -> bool {
         id >= self.range.0 && id <= self.range.1

@@ -9,10 +9,13 @@
 //! Ревью 313 (горячий путь): настройка интервала читается без построения текста ошибки (Store::resolve, а не ctx.int)
 //! и, пока она задана, — только когда по прочитанному в прошлый раз интервалу запись уже могла бы быть пора (Clock::due);
 //! новое значение интервала действует с ближайшей такой проверки.
-//! Кто вызывает: pools/listen_log.rs (emit — note).
-//! От чего зависит: ctx.rs (настройка, журнал), tokio (запись отдельной задачей).
+//! Решение 321: при dex.pool_events_keep = да события не теряются (emit_pool.rs, pending_events.rs) — та же запись
+//! dex.pool_events_lost (тот же интервал) пишет счёт набора «отложено, заменено, доставлено, снято, ждут» (kept).
+//! Кто вызывает: pools/emit_pool.rs (emit — note, kept; доставщик — kept).
+//! От чего зависит: ctx.rs (настройка, журнал), pending_events.rs (счёт набора), tokio (запись отдельной задачей).
 //! Настройки: log.pool_events_lost_interval_s (вся система; необязательная).
 
+use std::hash::Hash;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -22,6 +25,7 @@ use serde_json::json;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
+use super::pending_events::Pending;
 
 /// Имя настройки интервала записи.
 const INTERVAL: &str = "log.pool_events_lost_interval_s";
@@ -99,6 +103,32 @@ impl Lost {
             window(since)
         );
         let data = json!({ "lost": n, "since_s": since.map(|d| d.as_secs()) });
+        write(ctx, msg, data);
+    }
+
+    /// Решение 321 (dex.pool_events_keep = да): событие отложено или набор опустел — если пора, запись того же вида
+    /// dex.pool_events_lost со счётом набора: отложено, заменено, доставлено, снято, ждут (и потеряно — если настройку
+    /// включили между потерями). Принимает: окружение, набор. Ошибок нет.
+    pub fn kept<K: Eq + Hash + Clone, T>(&self, ctx: &Ctx, set: &Pending<K, T>) {
+        let Some(since) = self.due(ctx) else {
+            return;
+        };
+        let lost = self.count.swap(0, Ordering::Relaxed);
+        let c = set.take();
+        let msg = format!(
+            "события пулов: канал событий ядра полон — не потеряны (dex.pool_events_keep): отложено {}, заменено \
+             более свежими {}, доставлено {}, снято {} (пул недостоверен или снят), ждут {}, потеряно {lost} {}",
+            c.deferred,
+            c.replaced,
+            c.delivered,
+            c.dropped,
+            c.waiting,
+            window(since)
+        );
+        let data = json!({
+            "lost": lost, "deferred": c.deferred, "replaced": c.replaced, "delivered": c.delivered,
+            "dropped": c.dropped, "waiting": c.waiting, "since_s": since.map(|d| d.as_secs()),
+        });
         write(ctx, msg, data);
     }
 

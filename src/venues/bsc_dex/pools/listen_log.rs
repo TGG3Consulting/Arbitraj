@@ -8,10 +8,13 @@
 //! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, load_bin.rs, load_lb_bins.rs (ревью 290), registry.rs,
-//! stale_read.rs (решение 298), refresh_event.rs (перечитывание по событию; решение 313 — замер), lost_events.rs.
-//! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs).
+//! stale_read.rs (решение 298), refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321).
+//! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs). Решение 321:
+//! emit вынесен в emit_pool.rs (здесь — реэкспорт для прежних вызывающих) — при dex.pool_events_keep = да событие не
+//! теряется, а ждёт места в канале (pending_events.rs).
 //! Решение 314: перечитывания по событию (off_map, Refresh, Bins) — классом dex.event_refresh_urgency (refresh_urgency.rs).
-//! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s, dex.event_refresh_urgency).
+//! Настройки: через вызываемые (log.pool_refresh_timing, log.pool_events_lost_interval_s, dex.event_refresh_urgency,
+//! dex.pool_events_keep).
 //!
 //! removed: true при реорге — execution-apis subscribe.yaml#L1-L60; порядок применения — (blockNumber, logIndex),
 //! как присылает узел (research/flow/bsc_dex.md, раздел 4).
@@ -22,11 +25,9 @@ use alloy::rpc::types::Log;
 use alloy_primitives::U64;
 use serde_json::json;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio::sync::mpsc::error::TrySendError;
 
 use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
-use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
 use super::super::node::call::block_tag;
@@ -217,19 +218,8 @@ pub async fn latest(p: &Pools) -> GatewayResult<u64> {
     Ok(b.to())
 }
 
-/// Пул — ядру без ожидания: медленное ядро не задерживает чтение событий (свежий пул уже в реестре).
-pub fn emit(p: &Pools, pool: crate::core::types::Pool) -> Result<(), End> {
-    super::depth::touch(p, &pool.reference);
-    match p.out.try_send(MarketEvent::Pool(pool)) {
-        Ok(()) => Ok(()),
-        // Решение 313: канал ядра полон — событие не ушло; счёт и запись не чаще интервала (lost_events.rs).
-        Err(TrySendError::Full(_)) => {
-            p.signals.lost.note(&p.ctx);
-            Ok(())
-        }
-        Err(TrySendError::Closed(_)) => Err(End::Closed),
-    }
-}
+/// Пул — ядру без ожидания; решение 321 — при полном канале не теряется (dex.pool_events_keep): pools/emit_pool.rs.
+pub use super::emit_pool::emit;
 
 /// Пулы пачки недостоверны: отметка в реестре и событие Invalidated по каждой монете.
 pub fn invalidate(p: &Pools, pools: &[(Found, String)]) {

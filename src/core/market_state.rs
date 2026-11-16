@@ -34,6 +34,9 @@ pub struct MarketState {
     pub(super) book_marks: HashMap<(VenueId, String), super::book_still::BookMarks>,
     /// Решение 317 (ревью 16.11): отметки нужны (book_marks_on.rs). Выключено — note не вызывается, book_marks пуст.
     pub(super) marks_on: bool,
+    /// Страховка решения 317: порог свежести стакана по площадке (venue.book_stale_ms; book_marks_on.rs) — кадр позже
+    /// прошлого больше чем на него начинает отсчёт заново. Только при включённом признаке.
+    pub(super) book_gap_ms: HashMap<VenueId, u64>,
     pub(super) pools: HashMap<(VenueId, PoolRef), Pool>,
     /// Индекс пулов по паре токенов (решение 129): (площадка, меньший адрес, больший адрес) → пулы. Справочник монет
     /// искал пулы пары проходом ВСЕХ пулов на каждую монету и промежуточную (O(монеты × пулы)) — у MEXC это тысячи ×
@@ -85,6 +88,7 @@ impl MarketState {
                                 &key,
                                 Some(&*slot),
                                 &b,
+                                self.book_gap_ms.get(&b.venue).copied(),
                             );
                         }
                         *slot = b;
@@ -97,7 +101,7 @@ impl MarketState {
                     }
                     None => {
                         if self.marks_on {
-                            super::book_marks_on::note(&mut self.book_marks, &key, None, &b);
+                            super::book_marks_on::note(&mut self.book_marks, &key, None, &b, None);
                         }
                         let (venue, ticker) = key.clone();
                         self.books.insert(key, b);

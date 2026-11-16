@@ -13,6 +13,7 @@
 //! Решение 241: котировка стороны DEX направления в открытом окне — точкой цены в окно (window_dex.rs, только память).
 //! Решение 260: задан signal.probe_usd — котировки на объём проверки сигнала min(probe, потолок) / опорная цена, не ниже
 //! минимумов площадок из памяти (signal_probe.rs) вместо потолка; не задан — побайтно прежний расчёт.
+//! Решение 317 (страховка): в Prices — время котировки каждой стороны (Quote.at; у биржи — кадр стакана адаптера).
 //! Кто вызывает: core/evaluate.rs на каждый тик монеты.
 //! От чего зависит: gateway (реестр, котировка), market_state.rs, quote_cache.rs, signal_probe.rs, settings.
 //! Настройки: money.max_per_trade_usd (по площадке A; решение 242 — площадка + тип направления, venue_dir.rs), venue.quote_asset (по площадке), signal.dex_quote_cache_ms,
@@ -171,6 +172,8 @@ pub async fn for_direction(
             fees / notional * Decimal::ONE_HUNDRED
         },
         qty,
+        buy_at: qa.at,
+        sell_at: qb.at,
     })
 }
 

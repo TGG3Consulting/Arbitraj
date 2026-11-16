@@ -17,6 +17,7 @@
 //! CAKE-USDT@depth20 (tests/data/bingx/ws_spot_2026-10-23.jsonl); изменённые кадры — тот же кадр с одним изменённым
 //! уровнем; цены сигнала — входные числа чистой функции.
 
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use arb::core::market_state::MarketState;
@@ -63,6 +64,8 @@ fn crash() -> Result<Prices, String> {
         sell: d("0.0055"),
         fees_pct: d("0.2"),
         qty: d("1000"),
+        buy_at: Utc::now(),
+        sell_at: Utc::now(),
     })
 }
 
@@ -182,13 +185,20 @@ fn cake(received: DateTime<Utc>) -> OrderBook {
 /// signal.dex_event_skip_hold или log.signal_hold).
 fn marked() -> MarketState {
     let mut m = MarketState::default();
-    m.set_book_marks(true);
+    m.set_book_marks(true, HashMap::new());
     m
 }
 
-/// С какого момента стоят покупатели (продажа на бирже) на объёме qty.
+/// С какого момента стоят покупатели (продажа на бирже) на объёме qty; котировка — по кадру не новее стакана ядра
+/// (страховка решения 317 не мешает — её проверяет quote_newer_than_core_book_keeps_hold).
 fn since(m: &MarketState, qty: &str) -> Option<DateTime<Utc>> {
-    m.book_still_since(&VenueId("bingx".into()), "CAKE", Side::Sell, d(qty))
+    m.book_still_since(
+        &VenueId("bingx".into()),
+        "CAKE",
+        Side::Sell,
+        d(qty),
+        DateTime::<Utc>::MIN_UTC,
+    )
 }
 
 #[test]
@@ -286,6 +296,8 @@ fn step_after_skip_keeps_candidate() {
         sell: d("0.0055"),
         fees_pct: d("0.2"),
         qty: d("1000"),
+        buy_at: Utc::now(),
+        sell_at: Utc::now(),
     });
     assert_eq!(
         s.update_with(&dir(), below, &p, at(t0, 200), &book).state,

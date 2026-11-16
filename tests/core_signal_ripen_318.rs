@@ -49,6 +49,8 @@ fn prices(buy: &str, sell: &str) -> Result<Prices, String> {
         sell: d(sell),
         fees_pct: d("0.2"),
         qty: d("1000"),
+        buy_at: Utc::now(),
+        sell_at: Utc::now(),
     })
 }
 

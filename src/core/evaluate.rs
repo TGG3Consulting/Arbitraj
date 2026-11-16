@@ -101,7 +101,7 @@ pub async fn evaluate(
         // Решение 317 (доработка): сколько стоят уровни стакана биржи на объёме сравнения — из состояния рынка; только
         // при включённых отметках (signal.dex_event_skip_hold или log.signal_hold).
         if let (Ok(p), true) = (&prices, marks_on) {
-            ctx.cex_still_ms = super::signal_ctx::cex_still_ms(core, &dir, &ctx, p.qty, now);
+            ctx.cex_still_ms = super::signal_ctx::cex_still_ms(core, &dir, &ctx, p, now);
         }
         let mut view = lk(&core.inner.signals).update_with(&dir, prices, &params, now, &ctx);
         if let Some(w) = &waiting {

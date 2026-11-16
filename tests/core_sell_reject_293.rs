@@ -182,6 +182,8 @@ fn state(core: &Core, dir: &Direction) -> State {
         sell: got / sold,
         fees_pct: Decimal::ZERO,
         qty: sold,
+        buy_at: Utc::now(),
+        sell_at: Utc::now(),
     };
     let par = Ok(Params {
         hold_ms: 0,

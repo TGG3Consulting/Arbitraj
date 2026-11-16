@@ -112,6 +112,11 @@ impl Registry {
         &self.fails
     }
 
+    /// Решение 339 (экран «Монеты»): пулы, ни разу не прочитанные (pool_unread.rs). Ошибок нет.
+    pub fn unread(&self) -> &super::pool_unread::Book {
+        &self.unread
+    }
+
     /// Кэш графа маршрутов (решение 129, graph.rs). Ошибок нет.
     pub fn graph_cache(&self) -> &super::graph::Cache {
         &self.graph

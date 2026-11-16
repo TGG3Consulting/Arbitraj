@@ -184,7 +184,7 @@ fn deposit_min(n: &Value) -> (Option<Decimal>, Option<String>) {
         // (https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetSupportedCurrencies: depositMinAmount «Minimum deposit
         // amount») смысл «0» не определяет — это решение владельца, а не факт документации.
         Ok(Some(m)) if m >= Decimal::ZERO => (Some(m), None),
-        Ok(Some(m)) if m < Decimal::ZERO => (
+        Ok(Some(m)) => (
             None,
             Some(format!(
                 "depositMinAmount = {m} меньше нуля — как нет поля (venue.deposit_min_absent_ok)"

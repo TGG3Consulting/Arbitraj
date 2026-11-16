@@ -30,7 +30,7 @@ pub fn on(ctx: &Ctx) -> bool {
 pub struct Rec<'a> {
     /// Запись пула до перечитывания (DEX, тикер, ссылка).
     pub entry: &'a Entry,
-    /// «off_map» или «refresh».
+    /// «off_map», «refresh» или «fee» (ревью 325: только комиссия Algebra Integral, refresh_event.rs fee).
     pub cause: &'static str,
     /// Блок события и блок чтения.
     pub block: u64,

@@ -13,6 +13,11 @@
 //! Кто вызывает: pools/session.rs (on_log: лог не нашёл пул по Singleton / Contract).
 //! От чего зависит: admit.rs (wake, Members), events.rs, listen_log.rs (latest), reload_many.rs (load_group),
 //! registry.rs, invalidated.rs, stale_read.rs (решение 298), refresh_urgency.rs (решение 314).
+//! Решение 325 (ревью, Н7): книга заранее прочитанных ответов (dex.event_refresh_batch) сюда не ставится — исключение
+//! с причиной: load_group → load_site.rs читает контракт ОДНИМ try_many (один eth_call aggregate3, на части не делится;
+//! N_COINS Curve NG и неизменяемое Balancer — в памяти процесса после первого чтения), меньше одного обращения книга
+//! не даст; а чтение заранее частями по dex.load_batch и без откатов в книге (coins(k) за последней монетой
+//! откатывается) дало бы второе обращение — больше, чем сейчас. Разбор — docs/notes/t152-event-reread-all-kinds-2026-11-16.md.
 //! Настройки: через вызываемые — dex.load_batch и настройки чтения вида; dex.event_refresh_urgency (класс очереди узла).
 
 use alloy::rpc::types::Log;
@@ -90,7 +95,8 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
     };
     let why = match applied {
         Applied::Ignored => return Ok(true),
-        Applied::Refresh(w) => w,
+        // Решение 325: у Fee (только Algebra Integral, не многомонетный вид) — та же перечитка.
+        Applied::Refresh(w) | Applied::Fee(w) => w,
         // У многомонетных видов точечного применения нет (только перечитка) — на всякий случай тоже перечитка.
         Applied::Updated | Applied::Bins(_) => "событие пула".into(),
     };

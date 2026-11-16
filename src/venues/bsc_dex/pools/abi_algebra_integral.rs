@@ -7,7 +7,13 @@
 //! От чего зависит: alloy::sol!.
 //! Настройки: нет.
 //!
-//! Сигнатуры — официальный код cryptoalgebra/Algebra, пакет @cryptoalgebra/integral-core 1.2.10 (коммит 1ff43e1):
+//! Сигнатуры — официальный код cryptoalgebra/Algebra, пакет @cryptoalgebra/integral-core 1.2.10 (коммит 1ff43e1;
+//! ревью 325 Н8 — полные ссылки, коммит 1ff43e11407872f7c09b001cdeee1a59d2c334ec):
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/interfaces/pool/IAlgebraPoolState.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/interfaces/pool/IAlgebraPoolEvents.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/libraries/TickTree.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/base/TickStructure.sol
+//! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/libraries/Plugins.sol
 //! - IAlgebraPoolState.sol: globalState() → (uint160 price, int24 tick, uint16 lastFee, uint8 pluginConfig,
 //!   uint16 communityFee, bool unlocked) (L44); ticks(int24) → (uint256 liquidityTotal, int128 liquidityDelta,
 //!   int24 prevTick, int24 nextTick, uint256 outerFeeGrowth0Token, uint256 outerFeeGrowth1Token) (L57-L69) — тики
@@ -20,6 +26,12 @@
 //!   fee = overrideFee + pluginFee, иначе lastFee + pluginFee).
 //! - Версия 1.2.0/1.2.1 (THENA V3): Swap с 9 полями и Burn с pluginFee — интерфейс IAlgebraIntegral12Pool ниже.
 //! - Plugins.sol L26: DYNAMIC_FEE = 1 << 7 (флаг в globalState.pluginConfig).
+//! - Решение 325: IAlgebraPoolState.sol L99 tickTable(int16 wordPosition) → uint256 (листья дерева тиков), L173
+//!   tickTreeSecondLayer(int16) → uint256 (второй слой: бит — «лист не пуст»); одинаковы в 1.2.10 (1ff43e1) и тегах
+//!   v1.2-integral / v1.2.1-integral (THENA V3). Индексы — TickTree.sol (тот же файл во всех трёх версиях):
+//!   лист = sar(8, tick), бит = tick & 0xFF (_toggleBitInNode); узел второго слоя = sar(8, лист + SECOND_LAYER_OFFSET),
+//!   бит = (лист + SECOND_LAYER_OFFSET) & 0xFF; SECOND_LAYER_OFFSET = 3466 (TickTree.sol L10, «ceil(-MIN_TICK / 256)»).
+//!   Лист переключается вместе с вставкой/удалением тика из списка (TickStructure.sol _addOrRemoveTick L36-L64).
 
 alloy::sol! {
     #[allow(missing_docs)]
@@ -32,6 +44,9 @@ alloy::sol! {
         function prevTickGlobal() external view returns (int24);
         function nextTickGlobal() external view returns (int24);
         function ticks(int24 tick) external view returns (uint256 liquidityTotal, int128 liquidityDelta, int24 prevTick, int24 nextTick, uint256 outerFeeGrowth0Token, uint256 outerFeeGrowth1Token);
+        // Решение 325: дерево поиска тиков (TickTree.sol) — для заранее читаемой цепочки списка (prefetch_integral.rs).
+        function tickTable(int16 wordPosition) external view returns (uint256);
+        function tickTreeSecondLayer(int16 node) external view returns (uint256);
     }
 }
 
@@ -58,3 +73,6 @@ alloy::sol! {
 
 /// Флаг динамической комиссии в globalState.pluginConfig (Plugins.sol L26).
 pub const DYNAMIC_FEE: u8 = 1 << 7;
+
+/// Сдвиг индекса листа во втором слое дерева тиков (TickTree.sol L10: SECOND_LAYER_OFFSET = 3466, константа протокола).
+pub const SECOND_LAYER_OFFSET: i32 = 3466;

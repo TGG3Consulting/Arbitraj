@@ -2,7 +2,8 @@
 //! Что делает: реестр пулов адаптера в памяти — пул в формате ядра плюс то, что нужно только адаптеру:
 //! монета и встречный токен пула (USDT или промежуточная монета), ключ V4, карта тиков, резервы бинов, блок синхронизации, достоверность.
 //! Кто вызывает: pools/market.rs, pools/listen.rs, pools/events_*.rs (пишут), quote/*, check/*, exec/* (читают).
-//! От чего зависит: core/types (Pool, PoolRef), pools/families.rs, key.rs, ticks.rs, bins.rs, registry_index.rs.
+//! От чего зависит: core/types (Pool, PoolRef), pools/families.rs, key.rs, ticks.rs, bins.rs, registry_index.rs, prefetch_memo.rs (ревью 325:
+//! retain забывает вызовы прошлого чтения снятых пулов).
 //! Решение 129: номер версии реестра (растёт при любой записи — put, update существующего пула, retain) — по нему граф маршрутов строится
 //! один раз на состояние реестра, а не на каждую котировку (pools/graph.rs cached); pair_marks — отметки синхронизации
 //! пулов пары без копирования записей (ключ кэша глубины, pools/depth_key.rs). Записи — за `Arc`, пары и тикеры —
@@ -211,5 +212,8 @@ impl Registry {
         // Решение 308: удалённые пулы — отметка для фонового графа под замком записи и до роста версии (И4).
         self.graph.bg().changes.mark_all(&gone);
         self.version.fetch_add(1, Ordering::AcqRel);
+        drop(m);
+        // Ревью 325 (Н8): вызовы прошлого чтения снятых пулов не держатся в памяти (prefetch_memo.rs).
+        super::prefetch_memo::forget(&gone);
     }
 }

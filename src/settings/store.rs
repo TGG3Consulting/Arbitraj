@@ -114,6 +114,12 @@ impl Store {
         &self.accounts
     }
 
+    /// Ревью 325: то же ли это хранилище (общая копия значений в памяти; снимок решения 239 — другое). Нужно ячейкам
+    /// настроек, привязанным к хранилищу (venues/bsc_dex/pools/event_flags.rs). Ошибок нет.
+    pub fn same(&self, other: &Store) -> bool {
+        Arc::ptr_eq(&self.cache, &other.cache)
+    }
+
     /// Значение ровно в этой области (без подстановки из общей).
     /// Возвращает: значение или None — не задано.
     pub fn get_exact(&self, name: &str, scope: &Scope) -> Option<Value> {

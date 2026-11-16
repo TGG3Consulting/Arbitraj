@@ -12,4 +12,4 @@
 Факты из записи: Swap пула — 9 полей (topic0 0x121cb44e… = Swap(…, uint24 overrideFee, uint24 pluginFee)), Burn — с
 pluginFee (0x932214d4…) — это integral-core 1.2.0/1.2.1 (теги v1.2-integral / v1.2.1-integral); poolByPair(token0,
 token1) фабрики `0x30055f87…` возвращает ДРУГОЙ пул — эти пулы кастомные (customPoolByPair с деплоером).
-Используется: tests/bsc_dex_algebra_integral_live.rs (решение 188), tests/bsc_dex_algebra_out_of_window.rs (решение 323), tests/bsc_dex_off_map_algebra.rs (решение 323 к 320: тик ровно hi у Integral); разбор — tests/algebra_integral_common/.
+Используется: tests/bsc_dex_algebra_integral_live.rs (решение 188), tests/bsc_dex_algebra_out_of_window.rs (решение 323), tests/bsc_dex_off_map_algebra.rs (решение 323 к 320: тик ровно hi у Integral), tests/bsc_dex_prefetch_325.rs (решение 325: порядок обхода по битам дерева); разбор — tests/algebra_integral_common/.

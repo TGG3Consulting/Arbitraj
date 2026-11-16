@@ -19,6 +19,8 @@
 //!   withdrawStatus («0 close 1 open»), maxPrecision}]. Живой ответ 05.11.2026 (решение 184): result — объект
 //!   {time, version, currencies[...]}, статусы — числа; разбор принимает и массив, и result.currencies.
 //!
+//! depositConfirmations читается в deposit_confirmations (ревью t163 Н3; ядро число подтверждений в расчёт не берёт —
+//! поле сведений, как у других бирж).
 //! Чего в документации НЕТ: смысла depositMinAmount = 0 («минимума нет» или «не указан» — урок 21: решает человек,
 //! venue.deposit_min_absent_ok), смысла withdrawPrecision (число знаков или шаг — не сказано; не читается) — не
 //! придумываем.
@@ -110,7 +112,8 @@ pub fn parse_networks(
     Ok(p)
 }
 
-/// Одна сеть монеты. Возвращает: сеть и пояснение ограничения (ввод закрыт из-за depositFeeRate).
+/// Одна сеть монеты. Возвращает: сеть и пояснение ограничения (ввод закрыт из-за depositFeeRate; depositMinAmount не
+/// прочитан).
 /// Ошибка — текст причины (сеть пропускается).
 fn one(
     n: &Value,
@@ -128,6 +131,9 @@ fn one(
     };
     let dep_fee = num::dec_opt(n, "depositFeeRate").map_err(e)?;
     let mut deposit = flag(n, "depositEnabled")?;
+    // Ревью t163 Н1: нечитаемый depositMinAmount (пустая строка, не число, меньше нуля) не выбрасывает сеть (с ней ушёл
+    // бы и вывод с XT, а до решения 365 поле не читалось) — считается «поля нет» (решает настройка), причина — в журнал.
+    let (dep_min, min_note) = deposit_min(n);
     let note = match dep_fee {
         Some(f) if !f.is_zero() && deposit => {
             deposit = false;
@@ -136,6 +142,10 @@ fn one(
             ))
         }
         _ => None,
+    };
+    let note = match (note, min_note) {
+        (Some(a), Some(b)) => Some(format!("{a}; {b}")),
+        (a, b) => a.or(b),
     };
     let info = CoinNetworkInfo {
         venue: venue.clone(),
@@ -152,16 +162,38 @@ fn one(
         withdraw_max: None,
         // t163 (решение 365): минимум депозита сети — depositMinAmount; «0» или нет поля — смысл не описан (урок 21):
         // по venue.deposit_min_absent_ok, иначе None и ядро сделку с переводом на XT не делает (решение 35).
-        deposit_min: num::dec_opt(n, "depositMinAmount")
-            .map_err(e)?
-            .filter(|m| !m.is_zero())
-            .or(absent_ok.then_some(Decimal::ZERO)),
-        deposit_confirmations: None,
+        deposit_min: dep_min.or(absent_ok.then_some(Decimal::ZERO)),
+        // Ревью t163 Н3: «Deposit confirmation block count» (doc.xt.com GetSupportedCurrencies); нечитаемое — None.
+        deposit_confirmations: num::text_opt(n, "depositConfirmations")
+            .and_then(|s| s.parse().ok()),
         withdraw_precision: None,
         withdraw_step: None,
         updated_at: Utc::now(),
     };
     Ok((info, note))
+}
+
+/// Минимум депозита сети из depositMinAmount (решение 365, ревью t163 Н1). Возвращает: минимум (> 0) или None (поля
+/// нет, «0» — смысл не описан, урок 21; нечитаемое значение — как «поля нет») и пояснение для журнала, если значение
+/// не прочитано. Ошибок нет.
+fn deposit_min(n: &Value) -> (Option<Decimal>, Option<String>) {
+    match num::dec_opt(n, "depositMinAmount") {
+        Ok(Some(m)) if m > Decimal::ZERO => (Some(m), None),
+        Ok(Some(m)) if m < Decimal::ZERO => (
+            None,
+            Some(format!(
+                "depositMinAmount = {m} меньше нуля — как нет поля (venue.deposit_min_absent_ok)"
+            )),
+        ),
+        Ok(_) => (None, None),
+        Err(e) => (
+            None,
+            Some(format!(
+                "{} — как нет поля (venue.deposit_min_absent_ok)",
+                e.message
+            )),
+        ),
+    }
 }
 
 /// Флаг сети — boolean. Ошибка — текст (сеть пропускается).

@@ -584,9 +584,10 @@ depth_update после переподписки — тот же ответ REST
 ### XT — команды записи (на сервере бота)
 
 Решение 365 (t163) — `tests/xt_deposit_min_t163.rs`: минимум депозита из depositMinAmount на примере ответа официальной
-документации (`data/xt_doc_2026-11-17`, всегда), «0» и нет поля — по venue.deposit_min_absent_ok; на живом ответе —
-`#[ignore]` до записи `cex_samples_2026_11_05/xt_support_currency.json` и `xt_currencies.json` (ARB_XT_BSC — название
-сети BSC из записи, живой ответ 17.11: «BNB Smart Chain»).
+документации (`data/xt_doc_2026-11-17`) и на живом ответе, записанном ботом 16.11 (`data/xt_live_2026-11-16`, zstd):
+USDT 0.1, USDC 0.01, WIN «0» (по venue.deposit_min_absent_ok), из 272 сетей «BNB Smart Chain» минимум > 0 у 6;
+«0», пустая строка и не число — как нет поля, сеть не выбрасывается (ревью Н1); depositConfirmations (ревью Н3);
+минимум депозита получателя ручного перевода USDT должен быть известен (ревью Н5).
 
 ## Kraken (решение 172) — tests/kraken_real_data.rs
 

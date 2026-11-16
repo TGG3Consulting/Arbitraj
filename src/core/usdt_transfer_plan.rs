@@ -9,6 +9,7 @@
 //! Кто вызывает: core/usdt_transfer.rs (команда), api/usdt_transfer.rs (сводка интерфейса), notify/ctl/transfer*.rs.
 //! От чего зависит: usdt_return.rs (USDT как актив), transfers.rs (сеть BSC), costs_withdraw.rs (точность вывода),
 //! limits.rs (free_now), precheck_withdraw.rs (held), engine.rs (справочник сетей, виды площадок), settings (accounts).
+//! Ревью t163 Н5: минимум депозита получателя неизвестен — перевода нет (как у расчёта сделки, решение 35).
 //! Настройки: venue.quote_asset, venue.bsc_network (читаются, своих нет).
 
 use rust_decimal::Decimal;
@@ -122,7 +123,10 @@ pub async fn quote(
                 to.venue.0
             ));
         }
-        ti.deposit_min.unwrap_or_default()
+        // Ревью t163 Н5: минимум депозита получателя неизвестен — как в расчёте сделки (решение 35, dirctx_venue.rs
+        // check_deposit): не переводим вслепую — перевод меньше минимума биржа может не зачислить. «Минимума нет» у
+        // биржи без поля задаёт человек (venue.deposit_min_absent_ok — тогда адаптер даёт 0, и перевод идёт).
+        super::usdt_transfer_check::deposit_min_known(&to.venue.0, &t, &net_to, ti.deposit_min)?
     } else {
         Decimal::ZERO
     };

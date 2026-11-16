@@ -97,15 +97,27 @@ pub async fn check(
     exit: bool,
     pick: impl Fn(&Hop) -> bool,
 ) -> GatewayResult<Vec<(usize, ExitFix)>> {
+    check_with(ctx, path, (exit, pick), |_| None).await
+}
+
+/// Как check; `known` — выход квотера на сумме хопа, уже снятый пробой крючка этой сделки (ревью Н7,
+/// exec/hook_trade.rs quoted): квотер на этом хопе не вызывается второй раз. Принимает: окружение, путь, (продажа ли
+/// выхода, какие хопы сверять), известный выход по хопу. Возвращает и ошибки: как check.
+pub async fn check_with(
+    ctx: &Ctx,
+    path: &Path,
+    (exit, pick): (bool, impl Fn(&Hop) -> bool),
+    known: impl Fn(&Hop) -> Option<U256>,
+) -> GatewayResult<Vec<(usize, ExitFix)>> {
     let mut out = Vec::new();
     for (i, h) in path.hops.iter().enumerate().filter(|(_, h)| pick(h)) {
-        let fix = precheck::quoter_hop(
+        let fix = precheck::quoter_hop_with(
             ctx,
             &h.entry,
             h.token_in,
             &h.swapped,
-            h.usable.hook_pct,
-            exit,
+            (h.usable.hook_pct, exit),
+            known(h),
         )
         .await?;
         if let Some(f) = fix {

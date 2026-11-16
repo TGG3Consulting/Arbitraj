@@ -9,7 +9,7 @@
 //! Решение 223: доли графа с общим пулом — суммы, цена и шаги по порядку исполнения на последовательных состояниях
 //! (quote/graph_seq.rs resequence); MixedQuoter сверяет каждую долю на текущем состоянии — с расчётом доли на нём же.
 //! Кто вызывает: exec/trade_smart.rs.
-//! От чего зависит: exec/live.rs, exec/chain.rs, exec/native.rs, exec/order.rs (check_price), exec/leg_min.rs,
+//! От чего зависит: exec/hook_trade.rs (пути долей, пробы крючков одним пакетом), exec/chain.rs, exec/native.rs, exec/order.rs (check_price), exec/leg_min.rs,
 //! exec/quoter_favour.rs,
 //! quote/mixed_quoter.rs, quote/graph_seq.rs, quote/via.rs, quote/path.rs.
 //! Настройки: через вызываемые — smart.mixed_quoter, dex.quoter_max_diff_pct, exec.dex_slippage_pct, dex.*.
@@ -26,7 +26,7 @@ use super::super::quote::via::Via;
 use super::chain::Step;
 use super::native::{self, Wrap};
 use super::order::check_price;
-use super::{chain, leg_min, live, quoter_favour};
+use super::{chain, hook_trade, leg_min, quoter_favour};
 
 /// Подготовленные доли: пути по живому состоянию (с количеством доли), шаги с минимумами, нативная обёртка.
 pub struct Prep {
@@ -65,18 +65,26 @@ pub async fn prepare(
     if route.legs.is_empty() || total <= Decimal::ZERO {
         return Err(ctx.err(ErrorCode::NoRoute, "Умный маршрут без долей"));
     }
-    let mut paths: Vec<(Path, Decimal)> = Vec::with_capacity(route.legs.len());
     let (mut coins, mut paid, mut left) = (Decimal::ZERO, Decimal::ZERO, req.qty);
-    for (i, (leg, w)) in route.legs.iter().zip(&weights).enumerate() {
+    let mut qtys = Vec::with_capacity(route.legs.len());
+    for (i, w) in weights.iter().enumerate() {
         let qty = if i + 1 == route.legs.len() {
             left
         } else {
             (req.qty * w / total).min(left)
         };
         left -= qty;
-        let p = live::path(v, &leg.hops, qty, false).await?;
-        paths.push((p, qty));
+        qtys.push(qty);
     }
+    // Решение «335 (лесенка влияния)», ревью Н7: пробы крючков всех долей — одним пакетом (exec/hook_trade.rs).
+    let shares: Vec<_> = route
+        .legs
+        .iter()
+        .zip(&qtys)
+        .map(|(l, q)| (l.hops.as_slice(), *q))
+        .collect();
+    let (found, _) = hook_trade::paths(v, &shares, false).await?;
+    let mut paths: Vec<(Path, Decimal)> = found.into_iter().zip(qtys).collect();
     // Решение 223: квотер сверяет каждую долю отдельно на текущем состоянии сети — с ним сравнивается расчёт доли на том
     // же (исходном) состоянии; суммы, цена и шаги — по порядку исполнения на последовательных состояниях общих пулов
     // (quote/graph_seq.rs; без общих пулов — те же пути).

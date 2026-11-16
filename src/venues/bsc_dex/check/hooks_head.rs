@@ -6,7 +6,11 @@
 //! памяти стоит, pools/depth.rs: память в пробе не участвует), математика без крючка — по этому состоянию, квотер —
 //! eth_call на тот же H (check/hooks_probe.rs measure_plan). Решение «335 (лесенка влияния)»: на нескольких суммах по
 //! каждой стороне (check/hook_points.rs: от signal.probe_usd до min(money.max_per_trade_usd, ликвидность стороны),
-//! hooks.impact_points точек) — все вызовы квотера одним пакетом на H; итог — лесенка «вход → влияние».
+//! hooks.impact_points точек) — все вызовы квотера одним пакетом на H; итог — лесенка «вход → влияние». Ревью
+//! второго прохода: суммы — по записи на H (Н12); после первого замера (⌈n/2⌉ точек) — второй пакет на том же H с
+//! точками в отрезках с наибольшим скачком влияния (Н3, check/hook_fold.rs refine; не удался — итог первого);
+//! hooks.impact_points не задана — одна точка на check.probe_usdt и одно число на все суммы, как до лесенки (Н6), с
+//! записью в журнал один раз (dex.check, Warn).
 //! Узел не отдал голову или состояние H, сбой связи — влияние
 //! не перемеряется, действует прежнее (если прежнего нет — «не измерено» с причиной; ревью Н1: прежнее старше
 //! hooks.keep_impact_max_age_s — «не измерено: устарело»; не задана — прежнее без срока).
@@ -18,19 +22,23 @@
 //! Infinity Bin и Uniswap V4 (pools/discover_v4.rs from_key); у остальных видов Pool.hooks = None (разбор —
 //! docs/notes/t156-hook-pools-quoter-pause-2026-11-16.md).
 //! Кто вызывает: check/cycle.rs (one).
-//! От чего зависит: check/hooks_probe.rs, check/hook_store.rs, check/quoter_block.rs, check/quoter_compare.rs (node_fault), check/state.rs,
+//! От чего зависит: check/hooks_probe.rs, check/hook_points.rs, check/hook_fold.rs, check/hook_store.rs, check/quoter_block.rs, check/quoter_compare.rs (node_fault), check/state.rs,
 //! pools/listen.rs (Pools), pools/progress.rs (requote), node/call.rs (block_tag).
 //! Настройки: hooks.keep_impact_max_age_s [bsc_dex] — необязательная (docs/SETTINGS.md); через check/hook_points.rs —
-//! hooks.impact_points, signal.probe_usd, money.max_per_trade_usd, dex.depth_band_pct.
+//! hooks.impact_points, check.probe_usdt, signal.probe_usd, money.max_per_trade_usd, dex.depth_band_pct.
+
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::Utc;
 
-use crate::core::types::{CheckState, HookGroup, PoolCheck, PoolRef, Side};
+use crate::core::types::{CheckState, HookGroup, HookImpact, PoolCheck, PoolRef, Side};
+use crate::storage::journal::Level;
 
 use super::super::node::call;
 use super::super::pools::listen::Pools;
 use super::super::pools::registry::Entry;
-use super::hook_points;
+use super::hook_fold;
+use super::hook_points::{self, Sides};
 use super::hook_store;
 use super::hooks_probe;
 use super::quoter_block::{self, Head};
@@ -75,17 +83,27 @@ pub async fn probe(p: &Pools, e: &Entry) -> Probe {
         Ok(d) => d,
         Err(why) => return keep(p, e, group, why),
     };
-    let (buy, sell) = match hook_points::sides(p, e, dec) {
+    let sides = match hook_points::sides(p, &fresh, dec) {
         Ok(v) => v,
         Err((why, setting)) => return failed(why, setting, None),
     };
-    let plan = match hooks_probe::ladder(&p.ctx, &p.tokens, &p.reg, &fresh, (&buy, &sell)).await {
+    if sides.flat && !FLAT_SAID.swap(true, Ordering::Relaxed) {
+        let msg = format!(
+            "{} не задана — влияние крючков B/C меряется одной точкой на check.probe_usdt и действует на все суммы, \
+             как до лесенки (решение «335 (лесенка влияния)», ревью Н6); проба перед сделкой — на сумме сделки",
+            hook_points::POINTS
+        );
+        p.ctx.log(Level::Warn, "dex.check", msg, None).await;
+    }
+    let (buy, sell) = (&sides.buy, &sides.sell);
+    let plan = match hooks_probe::ladder(&p.ctx, &p.tokens, &p.reg, &fresh, (buy, sell)).await {
         Ok(Ok(plan)) => plan,
         Ok(Err(why)) => return failed(why, None, Some(block)),
         Err(err) => return failed(err.message, err.setting, None),
     };
     match hooks_probe::measure_plan(&p.ctx, &fresh, &plan, &tag).await {
         Ok(Ok(i)) => {
+            let i = refined(p, &fresh, &sides, i, &tag).await;
             let pc = hooks_probe::pool_check(&p.ctx, e, group, CheckState::Known(i));
             Probe::Got(Box::new(pc), None, Some(block))
         }
@@ -93,6 +111,46 @@ pub async fn probe(p: &Pools, e: &Entry) -> Probe {
         Err(err) if node_fault(&err) => keep(p, e, group, format!("блок {block}: {}", err.message)),
         Err(err) => failed(err.message, err.setting, Some(block)),
     }
+}
+
+/// Запись «hooks.impact_points не задана» — уже в журнале (один раз за запуск).
+static FLAT_SAID: AtomicBool = AtomicBool::new(false);
+
+/// Что делает: итог первого замера → итог цикла (см. шапку): без лесенки (Н6) — точки убираются (одно число на все
+/// суммы); с точками доуточнения (Н3) — второй пакет на том же блоке, точки вставляются как есть (сырые факты),
+/// наибольшее влияние стороны пересчитывается; не удался — итог первого. Принимает: пулы, запись на блоке, суммы,
+/// итог первого, блок. Возвращает: итог. Ошибок нет.
+async fn refined(
+    p: &Pools,
+    fresh: &Entry,
+    sides: &Sides,
+    mut i: HookImpact,
+    tag: &str,
+) -> HookImpact {
+    if sides.flat {
+        (i.buy, i.sell) = (Vec::new(), Vec::new());
+        return i;
+    }
+    let (buy, sell) = (
+        hook_fold::refine(&i.buy, sides.extra),
+        hook_fold::refine(&i.sell, sides.extra),
+    );
+    if buy.is_empty() && sell.is_empty() {
+        return i;
+    }
+    let plan = match hooks_probe::ladder(&p.ctx, &p.tokens, &p.reg, fresh, (&buy, &sell)).await {
+        Ok(Ok(plan)) => plan,
+        _ => return i,
+    };
+    if let Ok(Ok(j)) = hooks_probe::measure_plan(&p.ctx, fresh, &plan, tag).await {
+        i.buy = hook_fold::insert(&i.buy, &j.buy);
+        i.sell = hook_fold::insert(&i.sell, &j.sell);
+        let top = |s: &[crate::core::types::HookStep], was: rust_decimal::Decimal| {
+            s.iter().map(|x| x.pct).max().unwrap_or(was)
+        };
+        (i.buy_pct, i.sell_pct) = (top(&i.buy, i.buy_pct), top(&i.sell, i.sell_pct));
+    }
+    i
 }
 
 /// Что делает: «не перемерено» — прежний итог остаётся (Keep); прежнего итога нет — «не измерено» с причиной

@@ -14,6 +14,7 @@ pub mod fresh;
 pub mod hook_batch;
 pub mod hook_batch_parse;
 pub mod hook_batch_read;
+pub mod hook_fold;
 pub mod hook_points;
 pub mod hook_store;
 pub mod hooks_head;

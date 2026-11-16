@@ -1,17 +1,18 @@
 //! Файл: venues/bsc_dex/check/hook_store.rs
 //! Что делает: решение 335 (ревью, Н2/Н3/Н1) — хранение и выбор влияния крючка пула B/C, измеренного НА БЛОКЕ:
-//! - put_head: проба на одном блоке (цикл крючков check/hooks_head.rs, проба перед сделкой exec/precheck.rs
-//!   hooks_again → check/hook_batch.rs — решения «335 (В1)», «335 (В1, пакет)») и перемер перед паузой
+//! - put_head: проба на одном блоке (цикл крючков check/hooks_head.rs — решение «335 (В1)») и перемер перед паузой
 //!   (check/quoter_reprobe.rs, hooks.reprobe_before_pause) пишут итог в PoolFacts.hook (котировки, как раньше) и в
 //!   PoolFacts.hook_head (номер H и итог). Итог на блоке СТАРШЕ уже записанного не пишется (задачи пишут без порядка —
 //!   более старое измерение не затирает более новое, Н3);
+//! - fold_head (ревью Н1): проба перед сделкой (exec/trade_probe.rs hooks_again) вливает точку на сумме сделки или
+//!   обрезает лесенку стороны (check/hook_fold.rs) под одним замком с чтением записанного;
 //! - for_verify: влияние для сверки с квотером (check/quoter_verify.rs) — последнее измерение на блоке (hook_head),
 //!   если оно есть и итог в PoolFacts.hook «измерено»; иначе PoolFacts.hook (после «335 (В1)» все измерения — на
 //!   блоке, настройки hooks.probe_same_block нет);
 //! - stale: возраст прежнего влияния больше hooks.keep_impact_max_age_s (Н1, check/hooks_head.rs keep).
 //!
 //! Кто вызывает: check/hooks_head.rs, check/cycle.rs, check/quoter_reprobe.rs, check/quoter_verify.rs,
-//! exec/precheck.rs.
+//! exec/trade_probe.rs (fold_head).
 //! От чего зависит: check/state.rs (Checks, PoolFacts), check/hooks_probe.rs (SHORT), core/types.
 //! Настройки: hooks.keep_impact_max_age_s [bsc_dex] — необязательная (через check/hooks_head.rs).
 
@@ -49,6 +50,33 @@ pub fn put_head(
         f.hook = Some(pc.clone());
         f.hook_wait = wait;
         f.hook_head = Some((block, pc.clone()));
+        done = true;
+    });
+    done
+}
+
+/// Что делает: ревью Н1 (лесенка влияния) — итог пробы перед сделкой вливается в записанный итог под ОДНИМ замком
+/// хранилища (чтение и запись вместе: две сделки через один пул не затирают точки друг друга); записанное на блоке
+/// новее `block` не трогается (расчёт сделки берёт свой факт напрямую — exec/hook_trade.rs). Принимает: проверки,
+/// пул, блок пробы, правило `f` (записанный итог → новый; None — не писать; check/hook_fold.rs). Возвращает: записан
+/// ли. Ошибок нет.
+pub fn fold_head(
+    checks: &Checks,
+    r: &PoolRef,
+    block: u64,
+    f: impl FnOnce(&PoolCheck) -> Option<PoolCheck>,
+) -> bool {
+    let mut done = false;
+    checks.update_pool(r, |facts| {
+        if newer(facts.hook_head.as_ref().map(|(b, _)| *b), block) {
+            return;
+        }
+        let Some(pc) = facts.hook.as_ref().and_then(f) else {
+            return;
+        };
+        facts.hook = Some(pc.clone());
+        facts.hook_wait = None;
+        facts.hook_head = Some((block, pc));
         done = true;
     });
     done

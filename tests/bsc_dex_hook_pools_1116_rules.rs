@@ -9,6 +9,7 @@
 //!    quote/quoter_revert.rs (short_pool_id, from_data) и по тексту узла — пакетной пробой перед сделкой
 //!    (check/hook_batch_parse.rs classify); ликвидность пула 0 на всех трёх блоках.
 //! 3. Группа крючка по ключу (pools/hooks.rs info) — B у всех 37 пулов; beforeSwap есть у всех, ReturnsDelta — ни у одного.
+//! 4. Ревью Н6 решения «335 (лесенка влияния)»: без hooks.impact_points — одно число на все суммы, как до лесенки.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/hook_pools_common, arb::venues::bsc_dex::{quote::{pool_quote, quoter, quoter_revert},
@@ -21,13 +22,15 @@ use std::str::FromStr;
 use alloy_primitives::{B256, Bytes, U256};
 use rust_decimal::Decimal;
 
-use arb::core::types::HookGroup;
+use arb::core::types::{HookGroup, HookStep};
 use arb::venues::bsc_dex::check::hook_batch_parse::{Fail, classify};
+use arb::venues::bsc_dex::check::hook_fold::local;
 use arb::venues::bsc_dex::check::hooks_probe::impact;
 use arb::venues::bsc_dex::check::quoter_compare::{Cmp, Nums};
 use arb::venues::bsc_dex::check::reprobe_rule::safe;
 use arb::venues::bsc_dex::pools::hooks::info;
 use arb::venues::bsc_dex::pools::key::{InfinityPoolKeyData, PoolKey};
+use arb::venues::bsc_dex::quote::hook_curve::HookCurve;
 use arb::venues::bsc_dex::quote::pool_quote::swap_fee;
 use arb::venues::bsc_dex::quote::quoter::{diff_pct, less_hook};
 use arb::venues::bsc_dex::quote::quoter_revert::{from_data, short_pool_id};
@@ -113,6 +116,30 @@ fn safe_side_on_real_numbers() {
     let local = less_hook(ours, hook).expect("вычет");
     assert!(local <= remote, "{local} > {remote}");
     assert!(diff_pct(local, remote).expect("%") < Decimal::from_str("0.0001").expect("ε"));
+}
+
+/// Ревью Н6 решения «335 (лесенка влияния)»: hooks.impact_points не задана — одна точка на check.probe_usdt (20 USDT)
+/// и одно число на все суммы, как до лесенки (quote/hook_curve.rs HookCurve без точек); точка пробы перед сделкой — не
+/// ниже этого числа (check/hook_fold.rs local). CAKE 0xc610: влияние на одном блоке закрывает расхождение.
+#[test]
+fn flat_impact_without_points_as_before() {
+    let rec = load();
+    let (ours, remote) = buy20(&rec, "0xc6104625");
+    let flat = impact(ours, remote).expect("влияние");
+    let c = HookCurve::default();
+    for x in [U256::from(1u64), U256::MAX] {
+        assert_eq!(c.pct_at(flat, x), Ok(flat));
+    }
+    assert!(
+        less_hook(ours, c.pct_at(flat, U256::from(1u64)).expect("%")).expect("вычет") <= remote
+    );
+    let point = HookStep {
+        amount_in: U256::from(1u64),
+        usd: Decimal::ZERO,
+        pct: Decimal::ZERO,
+        quoter_out: None,
+    };
+    assert_eq!(local(&[], flat, &[point])[0].pct, flat.max(Decimal::ZERO));
 }
 
 #[test]

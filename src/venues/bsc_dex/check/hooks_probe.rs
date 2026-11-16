@@ -28,7 +28,7 @@ use chrono::Utc;
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, CheckState, HookGroup, HookImpact, HookStep, PoolCheck};
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::call;
@@ -187,11 +187,15 @@ pub fn judge_plan(ctx: &Ctx, e: &Entry, plan: &Plan, remote: Vec<Quoted>) -> Mea
         for p in points {
             let r = match remote.next() {
                 Some(r) => r?,
-                None => Ok(U256::ZERO),
+                None => {
+                    let why = "ответов квотера меньше, чем точек пробы";
+                    return Err(ctx.err(ErrorCode::BadResponse, why));
+                }
             };
+            // Ревью Н10: квотер вернул 0 при ненулевой математике — крючок забрал всё: влияние 100 % (impact), а не
+            // пропуск точки.
             let r = match r {
-                Ok(r) if !r.is_zero() => r,
-                Ok(_) => continue,
+                Ok(r) => r,
                 Err(short) => {
                     why = Some(short);
                     continue;
@@ -203,6 +207,7 @@ pub fn judge_plan(ctx: &Ctx, e: &Entry, plan: &Plan, remote: Vec<Quoted>) -> Mea
                     amount_in: p.amount_in,
                     usd: p.usd,
                     pct,
+                    quoter_out: Some(r),
                 });
             }
         }

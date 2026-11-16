@@ -49,6 +49,7 @@ fn ladder(p: &Pool, qs: &[&Quote]) -> Vec<HookStep> {
                 amount_in: q.amount,
                 usd: Decimal::from(q.usd),
                 pct: impact(o.amount_out, q.remote).expect("влияние"),
+                quoter_out: Some(q.remote),
             }
         })
         .collect();
@@ -78,6 +79,7 @@ fn ladder_quote_not_above_quoter() {
             let curve = HookCurve {
                 steps: Some(Arc::new(steps.clone())),
                 limit: None,
+                open: false,
             };
             for q in &side {
                 let o = ours(p, &m, q.z, true, q.amount, p.lp).amount_out;
@@ -125,6 +127,7 @@ fn exact_out_not_better_than_fact() {
         let curve = HookCurve {
             steps: Some(Arc::new(ladder(p, &side))),
             limit: None,
+            open: false,
         };
         let q20 = side.iter().find(|q| q.usd == 20).expect("20");
         let want = dec(q20.remote);

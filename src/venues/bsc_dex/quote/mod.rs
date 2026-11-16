@@ -147,7 +147,7 @@ pub struct Quoting {
     /// графа (quote/graph_fit.rs). false — подбор объёма, экран, пробы.
     pub exec_quote: bool,
     /// Решение «335 (В1, пакет)»: свежие записи пулов маршрута, перечитанные предторговой верификацией (решение 83) —
-    /// ставит exec/trade.rs после неё; проба крючков перед сделкой (exec/precheck.rs hooks_again) берёт их на том же
+    /// ставит exec/trade.rs после неё; проба крючков перед сделкой (exec/trade_probe.rs hooks_again) берёт их на том же
     /// блоке вместо второго чтения. None — верификации не было (котировка, прямой и умный маршрут без графа).
     pub route_fresh: Option<std::sync::Arc<super::check::hook_batch::RouteFresh>>,
 }

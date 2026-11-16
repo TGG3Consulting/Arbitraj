@@ -103,6 +103,10 @@ pub struct HookStep {
     pub amount_in: alloy_primitives::U256,
     pub usd: Decimal,
     pub pct: Decimal,
+    /// Выход квотера на этой сумме, минимальные единицы (ревью Н7: проба перед сделкой отдаёт его сверке прямого
+    /// режима, второй вызов квотера на той же сумме не нужен); None — не сохранялся (точка лесенки после выравнивания).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quoter_out: Option<alloy_primitives::U256>,
 }
 
 /// Результат проверки пула с крючком группы B или C.

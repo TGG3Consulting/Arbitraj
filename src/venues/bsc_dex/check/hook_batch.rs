@@ -1,5 +1,5 @@
 //! Файл: venues/bsc_dex/check/hook_batch.rs
-//! Что делает: решение «335 (В1, пакет)» — проба крючков B/C всех пулов доли перед сделкой (exec/precheck.rs
+//! Что делает: решение «335 (В1, пакет)» — проба крючков B/C всех пулов доли перед сделкой (exec/trade_probe.rs
 //! hooks_again) на ОДНОМ блоке и одним кругом до узла, без лишнего чтения:
 //! - графовый маршрут: предторговая верификация (решение 83, quote/verify.rs run) уже перечитала пулы маршрута на
 //!   блоке Bv — её свежие записи (RouteFresh, Quoting.route_fresh) берутся как есть, в пакете только вызовы квотера
@@ -17,7 +17,7 @@
 //! возвращается обычно — infinity-periphery 56a7a4f5 src/pool-cl/lens/CLQuoter.sol#L27-L38, aggregate3 зовёт через
 //! call — Multicall3.sol#L98), иначе одной пачкой JSON-RPC. Оба — один круг до узла.
 //! Виртуальный квотер (решение 186) — прежний путь по одному (hooks_probe).
-//! Кто вызывает: exec/precheck.rs (hooks_again). Чтение CL в пакете и разбор ответов — check/hook_batch_read.rs.
+//! Кто вызывает: exec/trade_probe.rs (hooks_again). Чтение CL в пакете и разбор ответов — check/hook_batch_read.rs.
 //! От чего зависит: check/hooks_probe.rs, check/hook_batch_read.rs, pools/{load, load_batch}.rs,
 //! quote/{quoter_calls, virtual_quoter}.rs, node/call.rs.
 //! Настройки: dex.multicall3 [bsc_dex] (через try_many); check.probe_usdt, dex.quoter, dex.tick_words — через вызываемые.

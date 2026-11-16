@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/exec/cycle_trade.rs
 //! Что делает: сделка цикла DEX ↔ DEX (решение 124) — вход контракта Venue::dex_cycle_trade. Вход и граница minOut уже
 //! посчитаны ядром (core/cycle_plan.rs: бюджет, размер, порог прибыли). Здесь: гейт dex_dex.execute (решение 86) →
-//! пулы цикла перечитываются на голове одним Multicall3 (quote/cycle_legs.rs fresh, решение 83) → пересчёт на входе:
+//! пулы цикла перечитываются на голове одним Multicall3 (quote/cycle_legs.rs fresh, решение 83) → пересчёт на входе
+//! (влияние крючка вне измеренной лесенки — оценка, факт — проба eth_simulateV1 всего цикла; «335 (лесенка влияния)»):
 //! ожидаемый выход не ниже границы → курсы (USDT за базовую и за BNB) → форма (exec/cycle_gate.rs): исполнитель
 //! ArbExecutor (exec/cycle_exec.rs) или бандл свопов (exec/cycle_bundle_trade.rs) → итог подписывается исполнителем
 //! (решение 121 B7: «свой сборщик: цикл …»). Отправка — ОДИН раз, без повторов (стартовое правило Тиграна).
@@ -44,7 +45,15 @@ pub async fn trade(
         );
         return Err(ctx.err(ErrorCode::Internal, why));
     }
-    let (legs, _block) = cycle_legs::fresh(q, &req.cycle).await?;
+    let (mut legs, _block) = cycle_legs::fresh(q, &req.cycle).await?;
+    // Решение «335 (лесенка влияния)», ревью Н4/Б1: сумма цикла вне измеренной лесенки крючка — не отказ, а оценка
+    // (quote/hook_curve.rs open). Отдельной пробы квотером нет: перед отправкой весь цикл исполняется пробой
+    // eth_simulateV1 на голове (exec/cycle_exec.rs, exec/cycle_bundle_trade.rs) — крючки исполняются на точной сумме,
+    // итог не ниже minOut, иначе сделки нет (до отправки, без газа). Проба квотером дала бы тот же отказ (minOut —
+    // граница ядра) и лишний круг до узла.
+    for l in &mut legs {
+        l.usable.hook.open = true;
+    }
     let expected = cycle::eval(ctx, &legs, req.input)?.usdt;
     cycle_exec::below(ctx, expected, req.min_out)?;
     let rates = cycle_cost::rates(q, req.cycle.base).await?;

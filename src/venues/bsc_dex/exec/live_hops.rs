@@ -2,33 +2,36 @@
 //! Что делает: живой путь доли графового маршрута из ТРЁХ и более пулов (решение 122, часть R2) прямо перед сделкой —
 //! та же математика N хопов, что у котировки графа (quote/route_calc.rs). Токены хопов — цепочкой от старта стороны
 //! (покупка — USDT, продажа — монета): выход хопа — другой конец его пула; цепочка обязана закончиться токеном
-//! выхода сделки. Перед расчётом — повторная проба крючка B/C каждого пула (решение 32, exec/precheck.rs) и допуск
-//! пула по его стороне на этом хопе (quote/select.rs, как quote/graph_legs.rs). Те же правила, что у пары через
+//! выхода сделки. Допуск пула — по его стороне на этом хопе (quote/select.rs, как quote/graph_legs.rs); влияние крючка
+//! B/C — с фактами пробы этой сделки (exec/hook_trade.rs, решение «335 (лесенка влияния)»). Те же правила, что у пары через
 //! промежуточную (exec/live.rs, решения 39, 52): внутренние токены — включённые промежуточные монеты без налогов;
 //! у монеты с налогом — только пулы V2 на каждом шаге. Путь из 1–2 пулов считает exec/live.rs по-прежнему.
-//! Кто вызывает: exec/live.rs.
-//! От чего зависит: exec/precheck.rs, quote/route_calc.rs, quote/graph_legs.rs (hop_side), quote/select.rs,
+//! Кто вызывает: exec/live.rs (share).
+//! От чего зависит: exec/hook_trade.rs (TradeHooks), quote/route_calc.rs, quote/graph_legs.rs (hop_side), quote/select.rs,
 //! quote/via.rs (Via: mid_ok, taxed), pools/registry.rs, pools/mids.rs, tokens.rs.
 //! Настройки: через вызываемые — см. их шапки.
 
-use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
 use crate::core::types::{RouteHop, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::check::quoter_amount;
 use super::super::pools::registry::Entry;
 use super::super::quote::path::Path;
 use super::super::quote::route_calc::{self, Leg};
 use super::super::quote::via::Via;
 use super::super::quote::{graph_legs, pool_tax, select};
-use super::precheck;
+use super::hook_trade::TradeHooks;
 
 /// Живой путь доли из N пулов. Принимает: расчёт путей (монета, сторона, налоги, decimals), пулы доли в порядке
-/// исполнения, количество монет доли. Ошибки: NoRoute (пул пропал / не допущен / цепочка токенов не сходится /
-/// внутренний токен не промежуточная / налог), CoinNotChecked, QuoteMismatch, BadResponse, узел (decimals).
-pub async fn path(v: &Via<'_>, hops: &[RouteHop], qty: Decimal) -> GatewayResult<Path> {
+/// исполнения, количество монет доли, факты пробы сделки. Ошибки: NoRoute (пул пропал / не допущен / цепочка токенов
+/// не сходится / внутренний токен не промежуточная / налог), CoinNotChecked, QuoteMismatch, BadResponse, узел (decimals).
+pub async fn path(
+    v: &Via<'_>,
+    hops: &[RouteHop],
+    qty: Decimal,
+    th: &TradeHooks,
+) -> GatewayResult<Path> {
     let (q, ctx) = (v.q, &v.q.ctx);
     let found = hops
         .iter()
@@ -38,25 +41,12 @@ pub async fn path(v: &Via<'_>, hops: &[RouteHop], qty: Decimal) -> GatewayResult
                 .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))
         })
         .collect::<GatewayResult<Vec<_>>>()?;
-    // Решение «335 (лесенка влияния)»: путь по прежним проверкам → проба крючков на входах его шагов (сумма сделки)
-    // одним пакетом на одном блоке (exec/precheck.rs hooks_again, решение «335 (В1, пакет)») → путь заново по
-    // обновлённой лесенке. Пулов с крючком B/C нет — один расчёт, как раньше.
-    let first = eval(v, &found, qty).await?;
-    if !found.iter().any(quoter_amount::hooked) {
-        return Ok(first);
-    }
-    let steps: Vec<(Entry, Address, U256)> = first
-        .hops
-        .iter()
-        .map(|h| (h.entry.clone(), h.token_in, h.swapped.amount_in))
-        .collect();
-    precheck::hooks_again(q, &steps).await?;
-    eval(v, &found, qty).await
+    eval(v, &found, qty, th).await
 }
 
-/// Путь доли из N пулов по текущим проверкам (допуск, лесенка влияния крючка). Принимает: расчёт путей, пулы доли в
-/// порядке исполнения (записи из памяти), количество монет. Ошибки: как path.
-async fn eval(v: &Via<'_>, found: &[Entry], qty: Decimal) -> GatewayResult<Path> {
+/// Путь доли из N пулов по текущим проверкам (допуск, лесенка влияния крючка с фактами сделки). Принимает: расчёт
+/// путей, пулы доли в порядке исполнения (записи из памяти), количество монет, факты пробы. Ошибки: как path.
+async fn eval(v: &Via<'_>, found: &[Entry], qty: Decimal, th: &TradeHooks) -> GatewayResult<Path> {
     let (q, ctx) = (v.q, &v.q.ctx);
     let no = |w: String| ctx.err(ErrorCode::NoRoute, w);
     let (start, end) = match v.side {
@@ -93,8 +83,9 @@ async fn eval(v: &Via<'_>, found: &[Entry], qty: Decimal) -> GatewayResult<Path>
         }
         let hs = graph_legs::hop_side(&e, token_in)
             .ok_or_else(|| no("ребро не соединяет токены хопа".into()))?;
-        let usable = select::usable(q, &e, hs, v.usdt_dec)
+        let mut usable = select::usable(q, &e, hs, v.usdt_dec)
             .map_err(|why| no(format!("{}: {why}", e.family.title)))?;
+        th.apply(&e, hs, &mut usable);
         // Решение 39 по налогу пула (решение 146): пул с налогом стороны > 0 — только V2.
         pool_tax::v2_only(&e, &usable).map_err(|w| no(format!("{}: {w}", e.family.title)))?;
         let dec_in = q.tokens.decimals(ctx, token_in).await?;

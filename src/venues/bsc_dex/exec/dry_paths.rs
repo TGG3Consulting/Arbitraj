@@ -4,7 +4,7 @@
 //! exec/verify_gate.rs::gate — quote/verify::run + verify_gate::outcome, но без уведомления exec.verified /
 //! exec.verify_rejected: сухая сделка уведомлений сделки не шлёт).
 //! Кто вызывает: exec/dry_build.rs.
-//! От чего зависит: exec/{live, trade (sides), verify_gate}.rs, quote/{verify, via, steps, path, direct, graph_seq}.rs, send/mod.rs.
+//! От чего зависит: exec/{hook_trade, trade (sides), verify_gate}.rs, quote/{verify, via, steps, path, direct, graph_seq}.rs, send/mod.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, venue.quote_asset, verify.*.
 
 use rust_decimal::Decimal;
@@ -19,7 +19,7 @@ use super::super::quote::via::Via;
 use super::super::quote::{Quoting, direct, graph_seq};
 use super::super::send;
 use super::trade::sides;
-use super::{live, verify_gate};
+use super::{hook_trade, verify_gate};
 
 /// Доли по живому состоянию — как в exec/trade_smart.rs: продажа делится по доле входа, покупка — по ожидаемым
 /// монетам доли; последняя доля получает остаток; доли с общим пулом — по порядку на последовательных состояниях
@@ -47,17 +47,26 @@ pub async fn live_paths(
     if route.legs.is_empty() || total <= Decimal::ZERO {
         return Err(ctx.err(ErrorCode::NoRoute, "маршрут без долей"));
     }
-    let mut out = Vec::with_capacity(route.legs.len());
     let mut left = req.qty;
-    for (i, (leg, w)) in route.legs.iter().zip(&weights).enumerate() {
+    let mut qtys = Vec::with_capacity(route.legs.len());
+    for (i, w) in weights.iter().enumerate() {
         let qty = if i + 1 == route.legs.len() {
             left
         } else {
             (req.qty * w / total).min(left)
         };
         left -= qty;
-        out.push((live::path(v, &leg.hops, qty, direct_mode).await?, qty));
+        qtys.push(qty);
     }
+    // Решение «335 (лесенка влияния)», ревью Н7: пробы крючков всех долей — одним пакетом (exec/hook_trade.rs).
+    let shares: Vec<_> = route
+        .legs
+        .iter()
+        .zip(&qtys)
+        .map(|(l, q)| (l.hops.as_slice(), *q))
+        .collect();
+    let (found, _) = hook_trade::paths(v, &shares, direct_mode).await?;
+    let mut out: Vec<_> = found.into_iter().zip(qtys).collect();
     // Решение 223: доли с общим пулом — по порядку исполнения на состоянии пула после прошлых долей (исполнитель и бандл
     // проводят доли по порядку маршрута, каждая — своим обменом). Без общих пулов — без изменений.
     graph_seq::resequence(ctx, v.side, v.taxes, &mut out)?;

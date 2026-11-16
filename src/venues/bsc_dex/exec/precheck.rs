@@ -30,7 +30,10 @@ use super::super::quote::{Quoting, emptiness, quoter, quoter_revert};
 use super::exit_quote::ExitFix;
 
 /// Повторная пробная проверка крючка пула группы B/C (у пула без крючка B/C — ничего). Итог пишется в состояние
-/// проверок: допуск пула (quote/select.rs) считается уже по нему. Ошибки: NoRoute — проба не прошла.
+/// проверок: допуск пула (quote/select.rs) считается уже по нему. Решение 335 (ревью Н2): пишется только
+/// PoolFacts.hook (память против «latest», как раньше — сделка считается по памяти); измерение на блоке
+/// (PoolFacts.hook_head, check/hook_store.rs) не трогается — сверка с квотером при hooks.probe_same_block = да берёт
+/// его, и проба перед сделкой его не откатывает. Ошибки: NoRoute — проба не прошла.
 pub async fn hook_again(q: &Quoting, e: &Entry) -> GatewayResult<()> {
     if e.pool
         .hooks

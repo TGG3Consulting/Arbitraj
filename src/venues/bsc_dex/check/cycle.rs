@@ -6,10 +6,11 @@
 //! прочитанные проверены. Пул проверяется сразу, как только стал достоверным (check/fresh.rs, «пул готов», решение 65).
 //! Налоги — check/tax_cycle.rs, сверка с квотером — check/quoter_cycle.rs.
 //! Решение 335: проба — check/hooks_head.rs (hooks.probe_same_block — на одном блоке H; hooks.requote_after_probe —
-//! после перемера пул со стороной на паузе сверки сверяется сразу).
+//! после удачного перемера пул со стороной на паузе сверки сверяется сразу); итог на блоке — check/hook_store.rs (более
+//! старый блок не затирает более новый).
 //! Кто вызывает: pools/market.rs (запуск при подписке).
-//! От чего зависит: check/hooks_head.rs, check/hooks_probe.rs, check/state.rs, check/recheck.rs, pools/listen.rs (Pools),
-//! pools/progress.rs.
+//! От чего зависит: check/hooks_head.rs, check/hook_store.rs, check/hooks_probe.rs, check/state.rs, check/recheck.rs,
+//! pools/listen.rs (Pools), pools/progress.rs.
 //! Настройки: hooks.recheck_interval_s (вся система); hooks.probe_same_block, hooks.requote_after_probe [bsc_dex].
 
 use std::collections::HashMap;
@@ -24,6 +25,7 @@ use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
 use super::super::settings_wait;
 use super::fresh::Fresh;
+use super::hook_store;
 use super::hooks_head::{self, Probe};
 use super::quoter_verify::HOOK_WAIT;
 use super::recheck::Queue;
@@ -124,7 +126,7 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
         return false;
     }
     // Решение 335: проба на одном блоке H при hooks.probe_same_block = да, иначе как раньше (check/hooks_head.rs).
-    let (pc, wait) = match hooks_head::probe(p, &e).await {
+    let (pc, wait, block) = match hooks_head::probe(p, &e).await {
         Probe::NoHook => return true,
         Probe::Keep(why) => {
             let msg = format!(
@@ -134,8 +136,14 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
             p.signals.once(&p.ctx, Level::Info, "dex.check", msg).await;
             return true;
         }
-        Probe::Got(pc, wait) => (*pc, wait),
+        Probe::Got(pc, wait, block) => (*pc, wait, block),
     };
+    // Решение 335 (ревью Н3): измерено на блоке старше уже записанного — итог не пишется и ядру не уходит.
+    if let Some(b) = block
+        && hook_store::newer(p.checks.pool(r).hook_head.map(|(s, _)| s), b)
+    {
+        return true;
+    }
     let prev = p.checks.pool(r).hook.map(|c| c.impact);
     let passed = !matches!(pc.impact, CheckState::Failed { .. });
     if let Some(t) = first {
@@ -166,16 +174,26 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
         }
     }
     // Не прошла из-за незаданной настройки — её имя (из ошибки), чтобы повторить при её задании (решение 75).
-    p.checks.update_pool(r, |f| {
-        f.hook = Some(pc.clone());
-        f.hook_wait = wait;
-    });
+    // Измерено на блоке (hooks.probe_same_block) — через hook_store::put_head (не затирает более новый блок).
+    match block {
+        Some(b) => {
+            if !hook_store::put_head(&p.checks, r, b, &pc, wait) {
+                return true;
+            }
+        }
+        None => p.checks.update_pool(r, |f| {
+            f.hook = Some(pc.clone());
+            f.hook_wait = wait;
+        }),
+    }
+    let known = matches!(pc.impact, CheckState::Known(_));
     let _ = p.out.send(MarketEvent::PoolCheck(pc)).await;
     // Сверка с квотером ждала влияния этого крючка — разбудить её (check/quoter_cycle.rs hook_measured).
     if p.checks.pool(r).quoter.any_err(|why| why == HOOK_WAIT) {
         p.signals.pool_ready();
     }
-    // Решение 335 (в): при hooks.requote_after_probe = да пул со стороной на паузе сверяется сразу.
-    hooks_head::requote(p, r);
+    // Решение 335 (в): при hooks.requote_after_probe = да пул со стороной на паузе сверяется сразу — только после
+    // удачной пробы (ревью Н5).
+    hooks_head::requote(p, r, known);
     true
 }

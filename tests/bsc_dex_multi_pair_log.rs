@@ -67,6 +67,7 @@ async fn pair(p: &Value, a: Address, b: Address, synced: u64) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 

@@ -26,6 +26,11 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 301 (t132, после слияния с rel/dex-all; `wc -l` на итоговом коде): файлы сверх ориентира 200 строк
+  (до t132 → стало) — pools/depth_book.rs 240 → 286 (depth_prep_r, книга неудач depth_fail, счётчик calcs),
+  pools/graph_cache.rs 159 → 230 (очередь построений cached_as_of, замер), quote/graph_route.rs 216 → 261 (в релизе
+  254 после решения 300; t132 — проверки abandon), pools/registry.rs 174 → 203 (поколение состояния state_gen),
+  quote/depth_band.rs 457 → 472 (band_from_units).
 - Решение 303, дополнение (t134, ревью): src/venues/bsc_dex/send/mod.rs — 275 строк (было 269 до дополнения; сверх ориентира 200 и до правки: способ канала и предел блока в classify для журнала). Дробить — вынести classify (разбор итогов каналов) в send/classify.rs; reject_log.rs — 107 строк.
 - Решение 305 (t135, с ревью; `wc -l`): сверх ориентира 200 — src/venues/bsc_dex/pools/factory_calls.rs 287 строк (было
   247, +40: пары WooFi по quoteToken()), pools/factory_scan.rs 229 (было 216: чтение quoteToken() и счёт вызовов),

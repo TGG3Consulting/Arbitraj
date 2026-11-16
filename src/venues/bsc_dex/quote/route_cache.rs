@@ -59,14 +59,13 @@ pub struct Search<'a> {
 }
 
 /// Пути USDT → монета: из кэша (свежие записи пулов) или построением графа и перебором (как раньше), с записью в кэш.
-/// Принимает: окружение, реестр, токены, знаки USDT, блок головы, что перебирать. Возвращает: пути (может быть пусто).
+/// Принимает: окружение, реестр, токены, знаки USDT, что перебирать (решение 301 (е): блок головы не нужен). Возвращает: пути (может быть пусто).
 /// Ошибки: как у graph::cached и ttl.
 pub fn paths(
     ctx: &Ctx,
     reg: &Registry,
     tokens: &Tokens,
     usdt_dec: u8,
-    head: u64,
     s: &Search,
 ) -> GatewayResult<Vec<RoutePath>> {
     let key = key(ctx, s);
@@ -80,7 +79,7 @@ pub fn paths(
     {
         return Ok(sk.iter().filter_map(|p| fresh(reg, p)).collect());
     }
-    let g = graph::cached(ctx, reg, tokens, usdt_dec, head)?;
+    let g = graph::cached(ctx, reg, tokens, usdt_dec)?;
     let found = match s.cap {
         Some(c) => route_best::enumerate(&g, s.usdt, s.coin, s.allowed, s.max_hops, c),
         None => route_paths::enumerate(&g, s.usdt, s.coin, s.allowed, s.max_hops, s.max_paths),

@@ -19,6 +19,7 @@
 //! Настройки: dex.swap_mode, venue.quote_asset [bsc_dex]; разрешения — dex.universal_router, dex.permit2 [вид пула]
 //! (прямой маршрут) или smart.universal_router, smart.permit2 [bsc_dex] (умный); feed.stale_after_ms [bsc_dex].
 
+pub mod abandon;
 pub mod approve_bundle;
 pub mod approve_gas;
 pub mod classic_direct;
@@ -123,7 +124,8 @@ pub struct Quoting {
     pub allow: super::wallet::allow_cache::Allowances,
     /// «Данные пулов отстают» (решение 72): котировки нет, пока лента квитанций не догнала.
     pub lag: super::node::events_lag::EventsLag,
-    /// Решение 217: блок головы на момент снимка (замороженный реестр, frozen.rs) — ключ кэша графа; живая — None.
+    /// Решение 217: блок головы на момент снимка (замороженный реестр, frozen.rs); живая — None. Решение 301 (е): в ключ
+    /// кэша графа больше не входит (блок в ключе графа убран) — сейчас только отметка снимка.
     pub frozen_head: Option<u64>,
     /// Ревью 273: плановая цена газа выбора маршрута, wei — пул Solidly с пределом цены газа фабрики ниже неё не
     /// допускается (quote/select.rs), как пул на паузе. None — не проверяется (вне выбора маршрута и поиска циклов).
@@ -222,7 +224,9 @@ impl Quoting {
         // Решение 300: признаки задачи tokio — здесь (счёт маршрута уходит в другой поток, quote/cpu.rs их не переносит).
         pick.exec_quote =
             crate::gateway::quote_stage::is_final() || crate::gateway::patience::is_exec();
-        let mut q = cpu::run(ctx, routing::run(pick, input)).await?;
+        // Решение 301 (дополнение — стек): работа — в кучу здесь, состояние этого future держит указатель
+        // (quote/cpu.rs run).
+        let mut q = cpu::run(ctx, Box::pin(routing::run(pick, input))).await?;
         // Решение 273: пул Solidly маршрута на паузе фабрики или цена газа выше его maxGasPrice — маршрут неисполним
         // (сигнал с причиной; exec/trade.rs не исполняет executable = нет). После отбора по plan_gas — страховка.
         if let Some(r) = q.route.as_mut() {

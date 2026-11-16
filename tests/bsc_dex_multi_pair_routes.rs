@@ -66,6 +66,7 @@ fn entry(pool: Address, raw: &load_curve::Raw, coin: Address, usdt: Address) -> 
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 

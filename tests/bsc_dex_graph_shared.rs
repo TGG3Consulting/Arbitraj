@@ -342,5 +342,6 @@ fn algebra_entry() -> arb::venues::bsc_dex::pools::registry::Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }

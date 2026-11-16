@@ -135,6 +135,7 @@ pub fn pair(
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 

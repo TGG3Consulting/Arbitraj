@@ -3,12 +3,15 @@
 //! монета и встречный токен пула (USDT или промежуточная монета), ключ V4, карта тиков, резервы бинов, блок синхронизации, достоверность.
 //! Кто вызывает: pools/market.rs, pools/listen.rs, pools/events_*.rs (пишут), quote/*, check/*, exec/* (читают).
 //! От чего зависит: core/types (Pool, PoolRef), pools/families.rs, key.rs, ticks.rs, bins.rs, registry_index.rs.
-//! Решение 129: номер версии реестра (растёт при любой записи — put, update, retain) — по нему граф маршрутов строится
+//! Решение 129: номер версии реестра (растёт при любой записи — put, update существующего пула, retain) — по нему граф маршрутов строится
 //! один раз на состояние реестра, а не на каждую котировку (pools/graph.rs cached); pair_marks — отметки синхронизации
 //! пулов пары без копирования записей (ключ кэша глубины, pools/depth_key.rs). Записи — за `Arc`, пары и тикеры —
 //! по индексам (registry_index.rs): by_pair / by_coin / pair_marks не проходят весь реестр; карты тиков и бинов
 //! общие при копии записи (ticks.rs, bins.rs); snapshot — все записи без копирования (граф маршрутов). Блокировка
 //! держится только на чтение индекса и копию нужных записей — счёт котировки идёт без неё.
+//! Решение 301 (е2): поколение состояния записи (Entry.state_gen, pools/state_gen.rs) — присваивает put / update: новое,
+//! только если состояние, тики, бины, достоверность или комиссия пула фактически сменились; pair_marks — поколения пулов
+//! пары (ключ глубины). Решение 301 (е3): update пула, которого нет, версию не меняет (реестр не изменился).
 //! Решение 217: замороженный реестр из снимка записей (снимок и сборка — registry_frozen.rs).
 //! Настройки: нет.
 
@@ -54,6 +57,9 @@ pub struct Entry {
     /// Пул мельче dex.min_pool_liquidity_usd: слушается только добавление ликвидности (pools/depth.rs), обмены не
     /// приходят — состояние может отставать. Такой пул не котируется (quote/select.rs) до возврата в полную подписку.
     pub asleep: bool,
+    /// Решение 301 (е2): поколение состояния (pools/state_gen.rs) — присваивает реестр (put, update); 0 — запись вне
+    /// реестра (её глубина всегда считается заново).
+    pub state_gen: u64,
 }
 
 /// Реестр пулов. Дешёво клонируется.
@@ -67,6 +73,8 @@ pub struct Registry {
     pub(super) version: Arc<AtomicU64>,
     /// Граф маршрутов последней версии (решение 129, graph.rs cached).
     pub(super) graph: super::graph::Cache,
+    /// Решение 301 (е2): последнее выданное поколение состояния.
+    pub(super) gens: Arc<AtomicU64>,
 }
 
 impl Entry {
@@ -100,9 +108,14 @@ impl Registry {
         self.inner.read().unwrap_or_else(|p| p.into_inner())
     }
 
-    /// Добавляет или заменяет запись. Ошибок нет.
-    pub fn put(&self, e: Entry) {
+    /// Добавляет или заменяет запись. Поколение (решение 301 е2): прежнее, если состояние фактически то же, иначе новое.
+    /// Ошибок нет.
+    pub fn put(&self, mut e: Entry) {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
+        e.state_gen = match m.get(&e.pool.reference) {
+            Some(old) if old.state_gen != 0 && super::state_gen::same(old, &e) => old.state_gen,
+            _ => self.next_gen(),
+        };
         m.insert(e);
         self.version.fetch_add(1, Ordering::AcqRel);
     }
@@ -113,11 +126,29 @@ impl Registry {
     }
 
     /// Изменение записи на месте. Принимает: ссылку и функцию. Возвращает: её результат; None — пула нет.
+    /// Поколение (решение 301 е2): новое, только если функция фактически сменила состояние, тики, бины, достоверность
+    /// или комиссию. Решение 301 (е3): пула нет — версия не растёт.
     pub fn update<T>(&self, r: &PoolRef, f: impl FnOnce(&mut Entry) -> T) -> Option<T> {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
-        // Версия — до снятия блокировки: читатель, увидевший новое состояние, увидит и новую версию.
-        self.version.fetch_add(1, Ordering::AcqRel);
-        m.update(r, f)
+        let out = m.update(r, |e| {
+            let before = super::state_gen::Snap::of(e);
+            let out = f(e);
+            if e.state_gen == 0 || !before.same(e) {
+                e.state_gen = self.next_gen();
+            }
+            out
+        });
+        // Версия — до снятия блокировки: читатель, увидевший новое состояние, увидит и новую версию. Решение 301 (е3):
+        // пула нет — реестр не изменился, версия прежняя.
+        if out.is_some() {
+            self.version.fetch_add(1, Ordering::AcqRel);
+        }
+        out
+    }
+
+    /// Новое поколение состояния (решение 301 е2): не 0, растёт. Ошибок нет.
+    fn next_gen(&self) -> u64 {
+        self.gens.fetch_add(1, Ordering::AcqRel) + 1
     }
 
     /// Пулы пары «монета — встречный токен» (копии; карты тиков и бинов — общие, за `Arc`). По индексу пары, а не
@@ -129,13 +160,11 @@ impl Registry {
             .collect()
     }
 
-    /// Отметки синхронизации пулов пары «монета — встречный токен»: (блок, logIndex, достоверен) — без копирования
-    /// записей (решение 129: ключ кэша глубины считается для каждого пула при построении графа). Ошибок нет.
-    pub fn pair_marks(&self, coin: Address, quote: Address) -> Vec<(u64, Option<u64>, bool)> {
-        self.read()
-            .pair(coin, quote)
-            .map(|e| (e.synced_block, e.synced_log, e.valid))
-            .collect()
+    /// Поколения состояния пулов пары «монета — встречный токен» (решение 301 е2; раньше — блок, logIndex, достоверен)
+    /// — без копирования записей (решение 129: ключ кэша глубины считается для каждого пула при построении графа).
+    /// Достоверность входит в поколение. Ошибок нет.
+    pub fn pair_marks(&self, coin: Address, quote: Address) -> Vec<u64> {
+        self.read().pair(coin, quote).map(|e| e.state_gen).collect()
     }
 
     /// Все пулы монеты (копии) — по адресу контракта (решение 211; раньше по тикеру). Ошибок нет.

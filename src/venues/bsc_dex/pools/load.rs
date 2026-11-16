@@ -450,6 +450,7 @@ pub fn built(ctx: &Ctx, p: &Found, ticker: &str, usdt: Address, block: u64, l: L
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
@@ -495,5 +496,7 @@ pub fn renewed(e: &Entry, block: u64, l: Loaded) -> Entry {
     out.synced_block = block;
     out.synced_log = None;
     out.valid = true;
+    // Решение 301 (е2): запись вне реестра (свежее состояние) — поколение присвоит put; до него глубина считается заново.
+    out.state_gen = 0;
     out
 }

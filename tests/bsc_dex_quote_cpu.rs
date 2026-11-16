@@ -80,7 +80,7 @@ fn input(q: &Quoting, qty: u32) -> routing::Input {
 
 /// Выбор маршрута через cpu::run (как Quoting::quote).
 async fn quote(q: &Quoting, qty: u32) -> Quote {
-    cpu::run(&q.ctx, routing::run(q.clone(), input(q, qty)))
+    cpu::run(&q.ctx, Box::pin(routing::run(q.clone(), input(q, qty))))
         .await
         .expect("котировка")
 }

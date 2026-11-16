@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/pools/depth_book.rs
 //! Что делает: глубина пулов по направлениям (решение 73) — в памяти, на текущем состоянии пула, с гистерезисом:
 //! - глубина покупки и продажи в полосе dex.depth_band_pct (quote/depth_band.rs) пересчитывается, когда сменилось
-//!   состояние пула (блок и logIndex последнего учтённого события) или настройки глубины; иначе — из памяти;
+//!   состояние пула (решение 301 е2: поколение состояния записи, pools/state_gen.rs; раньше — блок и logIndex) или настройки глубины; иначе — из памяти;
 //! - направление «глубокое», если его глубина не ниже dex.min_pool_liquidity_usd; глубокое становится мелким, только
 //!   когда глубина упала ниже порога × (1 − dex.depth_hysteresis_pct / 100) — пул не мигает на границе;
 //! - смена «глубокий ↔ мелкий» по направлению — запись в журнал, по пулу не чаще dex.depth_log_min_s; смена внутри
@@ -12,14 +12,20 @@
 //! - курс промежуточной монеты (пул с BNB, решение 52) — часть ключа: сменился пул «промежуточная — USDT» —
 //!   глубина пересчитывается.
 //!
+//! Решение 301 (б): неудача расчёта глубины по состоянию пула (quote/depth_band.rs band_units) запоминается по тому же
+//! ключу (pools/depth_fail.rs) — пока ключ и состояние пула те же, она не пересчитывается при каждом построении графа;
+//! причина отдаётся та же, как раньше (экран «Монеты», причина отказа котировки). calcs — счётчик расчётов глубины
+//! (замер, без настроек).
+//!
 //! Решение 217: seeded — книга замороженного реестра (registry_frozen.rs); прошлый вердикт гистерезиса — копия на
 //! момент снимка (verdicts).
 //! Кто вызывает: quote/select.rs (deep_side), pools/listen_log.rs (emit — пересчёт на каждой смене состояния),
-//! pools/depth_facts.rs (экран «Монеты»).
-//! От чего зависит: quote/depth_band.rs, depth_key.rs, depth_log.rs, registry.rs, tokens.rs, ctx.rs.
+//! pools/depth_facts.rs (экран «Монеты»), pools/graph.rs (build_measured — depth_prep_r, решение 301 д).
+//! От чего зависит: quote/depth_band.rs, depth_key.rs, depth_fail.rs, depth_log.rs, registry.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.depth_band_pct, dex.depth_hysteresis_pct, dex.depth_log_min_s, dex.min_pool_liquidity_usd [bsc_dex].
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
 use rust_decimal::Decimal;
@@ -30,6 +36,7 @@ use crate::core::types::PoolRef;
 use super::super::ctx::Ctx;
 use super::super::quote::depth_band::{self, Band};
 use super::super::tokens::Tokens;
+use super::depth_fail::Fails;
 use super::depth_key::Prep;
 use super::depth_log::{self, Said};
 use super::registry::{Entry, Registry};
@@ -65,6 +72,10 @@ pub struct Book {
     /// Решение 217: книга замороженного реестра — прошлый вердикт гистерезиса, скопированный из живой книги в момент
     /// снимка (verdicts), без журнала и сигналов.
     seed: Option<Arc<Verdicts>>,
+    /// Решение 301 (б): неудачи расчёта глубины по ключу (depth_fail.rs).
+    fails: Fails,
+    /// Решение 301 (б): сколько раз считалась глубина по состоянию пула (band_units) — замер.
+    calcs: Arc<AtomicU64>,
 }
 
 /// Решение 217: прошлые вердикты гистерезиса пулов снимка (глубока ли покупка, продажа) на момент снимка.
@@ -120,6 +131,11 @@ impl Book {
         }
     }
 
+    /// Решение 301 (б): сколько раз книга считала глубину по состоянию пула. Ошибок нет.
+    pub fn calcs(&self) -> u64 {
+        self.calcs.load(Ordering::Relaxed)
+    }
+
     /// Последняя посчитанная глубина пула (без пересчёта). Ошибок нет.
     pub fn last(&self, r: &PoolRef) -> Option<Depth> {
         self.lock().get(r).map(|s| s.depth.clone())
@@ -167,6 +183,22 @@ impl Book {
         usdt_dec: u8,
         p: &Prep,
     ) -> Result<Depth, String> {
+        self.depth_prep_r(ctx, reg, tokens, e, usdt_dec, p, &mut false)
+    }
+
+    /// То же, что depth_prep, и признак `recomputed` (решение 301 д — замер построения графа): true — глубина считалась
+    /// заново (не взята из памяти — ни удачная, ни неудачная). Ошибки: как у depth_prep.
+    #[allow(clippy::too_many_arguments)]
+    pub fn depth_prep_r(
+        &self,
+        ctx: &Ctx,
+        reg: &Registry,
+        tokens: &Tokens,
+        e: &Entry,
+        usdt_dec: u8,
+        p: &Prep,
+        recomputed: &mut bool,
+    ) -> Result<Depth, String> {
         let (band_pct, min, hyst) = (p.band, p.min, p.hyst);
         let key = p.key(reg, e);
         let r = &e.pool.reference;
@@ -175,7 +207,21 @@ impl Book {
             Some(s) => Some((s.depth.deep_buy, s.depth.deep_sell)),
             None => self.seed.as_ref().and_then(|v| v.get(r).copied()),
         };
-        let band = depth_band::band_depth(ctx, reg, tokens, e, usdt_dec, band_pct)?;
+        // Решение 301 (б): неудача по состоянию пула на том же ключе — та же причина без пересчёта.
+        if let Some(why) = self.fails.get(r, &key) {
+            return Err(why);
+        }
+        self.calcs.fetch_add(1, Ordering::Relaxed);
+        *recomputed = true;
+        let units = match depth_band::band_units(e, band_pct) {
+            Ok(u) => u,
+            Err(why) => {
+                self.fails.put(r, key, why.clone());
+                return Err(why);
+            }
+        };
+        self.fails.clear(r);
+        let band = depth_band::band_from_units(ctx, reg, tokens, e, usdt_dec, units)?;
         let deep_buy = next_deep(prev.map(|p| p.0), band.buy, min, hyst);
         let deep_sell = next_deep(prev.map(|p| p.1), band.sell, min, hyst);
         let depth = Depth {

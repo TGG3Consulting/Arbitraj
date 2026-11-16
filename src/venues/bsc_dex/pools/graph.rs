@@ -10,12 +10,14 @@
 //! оставляет не больше dex.route_max_pools_per_edge самых глубоких рёбер, чтобы держать ширину перебора путей.
 //! Допуск ребра к КОТИРОВКЕ/СДЕЛКЕ (сверка с квотером, крючок, газ) проверяет quote/select.rs при оценке пути —
 //! граф даёт только достижимость и ликвидность.
-//! Решение 129: `cached` — граф строится один раз на состояние реестра (версия реестра), блок головы и настройки графа;
+//! Решение 129: `cached` — граф строится один раз на состояние реестра (версия реестра) и настройки графа (решение
+//! 301 (е): блок головы в ключ больше не входит — build его не читает);
 //! все котировки этого состояния (подбор объёма считает десятки объёмов на кандидата, кандидаты идут параллельно)
 //! берут готовый снимок. Раньше каждая котировка DEX копировала весь реестр с картами тиков и считала ключ глубины
 //! каждого пула — счёт в задаче tokio без отдачи управления. Результат тот же: граф зависит только от реестра,
-//! настроек, токенов и (через устаревание) блока — всё это в ключе кэша.
+//! настроек и токенов — всё это в ключе кэша.
 //! Кэш графа (cached, один на состояние реестра) — pools/graph_cache.rs.
+//! Решение 301 (в): брошенный расчёт (quote/abandon.rs) прерывает построение на ближайшем пуле — граф не кладётся в кэш.
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (cached), graph_cache.rs (build).
 //! От чего зависит: pools/registry.rs, pools/depth_book.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.route_max_pools_per_edge [bsc_dex]; через depth_book — dex.min_pool_liquidity_usd,
@@ -30,11 +32,12 @@ use rust_decimal::Decimal;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::quote::abandon;
 use super::super::tokens::Tokens;
 use super::depth_book;
 use super::registry::{Entry, Registry};
 
-pub use super::graph_cache::{Cache, PathsKey, Skeleton, cached};
+pub use super::graph_cache::{Cache, PathsKey, Skeleton, cached, cached_as_of};
 
 /// Ребро графа: пул между токенами `a` и `b`. `entry` — КОПИЯ записи реестра на момент build (снимок, не живая
 /// ссылка); перед сделкой состояние перечитывается точечным Multicall3 (решение 83).
@@ -89,8 +92,27 @@ impl Graph {
 /// Построение графа из реестра (решение 80). Берёт достоверные, не спящие пулы торгуемых DEX, глубокие хотя бы по
 /// одной стороне (решение 73), и оставляет на пару токенов не больше dex.route_max_pools_per_edge самых глубоких.
 /// Принимает: окружение, реестр, токены, знаки USDT. Возвращает: граф (может быть пустым — путей нет).
-/// Ошибки: NotConfigured (не задана настройка глубины или dex.route_max_pools_per_edge).
+/// Ошибки: NotConfigured (не задана настройка глубины или dex.route_max_pools_per_edge); Timeout — расчёт брошен
+/// (решение 301, quote/abandon.rs).
 pub fn build(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8) -> GatewayResult<Graph> {
+    build_measured(ctx, reg, tokens, usdt_dec).map(|(g, _)| g)
+}
+
+/// Что посчитало построение (решение 301 д — замер dex.graph_build): пулов в реестре, глубин пересчитано (не из памяти).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct BuildStats {
+    pub pools: usize,
+    pub recomputed: usize,
+}
+
+/// То же, что build, и счётчики построения (BuildStats). Ошибки: как у build.
+pub fn build_measured(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    usdt_dec: u8,
+) -> GatewayResult<(Graph, BuildStats)> {
+    let mut stats = BuildStats::default();
     if let Some(name) = depth_book::missing_setting(ctx) {
         return Err(ctx.not_set(&name, format!("граф маршрутов: не задана {name}")));
     }
@@ -107,19 +129,26 @@ pub fn build(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8) -> Gatewa
     let mut by_pair: HashMap<(Address, Address), Vec<Ranked>> = HashMap::new();
     // Решение 131: настройки глубины, USDT и отметки пулов «встречный — USDT» — один раз на построение, а не на пул.
     let Ok(prep) = depth_book::Book::prep(ctx, tokens) else {
-        return Ok(Graph::default());
+        return Ok((Graph::default(), stats));
     };
-    for e in reg.snapshot() {
+    let snap = reg.snapshot();
+    stats.pools = snap.len();
+    for e in snap {
+        // Решение 301 (в): срок расчёта вышел — дальше не строим (атомарное чтение признака на пул).
+        abandon::check(ctx, "построение графа")?;
         // graphable, не tradable (решение 82): V2-форк входит в граф для поиска/сигналов, хотя авто-сделкой не
         // исполняется (допуск к сделке — quote/graph_route::executable). Исключены недостоверные, спящие и не-graphable.
         if !e.valid || e.asleep || !e.family.graphable {
             continue;
         }
-        // Глубина на живом состоянии; не посчиталась (устаревший блок, нет курса промежуточной) — ребро пропускаем.
-        let Ok(d) = reg
+        // Глубина на живом состоянии; не посчиталась (расчёт по состоянию пула невозможен, нет курса встречного
+        // токена к USDT — depth_book.rs depth_prep_r, quote/depth_band.rs) — ребро пропускаем.
+        let mut fresh = false;
+        let d = reg
             .depth()
-            .depth_prep(ctx, reg, tokens, &e, usdt_dec, &prep)
-        else {
+            .depth_prep_r(ctx, reg, tokens, &e, usdt_dec, &prep, &mut fresh);
+        stats.recomputed += usize::from(fresh);
+        let Ok(d) = d else {
             continue;
         };
         if !(d.deep_buy || d.deep_sell) {
@@ -147,7 +176,7 @@ pub fn build(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8) -> Gatewa
             g.adj.entry(b).or_default().push(i);
         }
     }
-    Ok(g)
+    Ok((g, stats))
 }
 
 /// Пул-кандидат ребра: глубина для ранжирования и запись.

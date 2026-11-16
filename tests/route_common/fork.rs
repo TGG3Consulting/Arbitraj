@@ -155,6 +155,7 @@ pub fn fork_pool(p: &Parts, addr: Address, coin: Address, other: Address, r: (U2
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     });
     p.checks.update_pool(&PoolRef::Contract(addr), |f| {
         f.gas_buy = Some(120_000);

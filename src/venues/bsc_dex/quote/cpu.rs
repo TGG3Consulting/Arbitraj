@@ -5,24 +5,34 @@
 //! срок расчёта profit.calc_timeout_ms срабатывал, только когда счёт сам отдаст управление. Здесь работа идёт в потоке
 //! пула блокирующих задач (spawn_blocking) и ведётся там же (`Handle::block_on`) — редкие запросы к узлу внутри счёта
 //! (decimals нового токена, запись в журнал) ждут в этом потоке, а не в рабочем. Вызывающий ждёт итог как обычный
-//! await: срок расчёта (tokio::time::timeout ядра) срабатывает вовремя, брошенный счёт доживает один свой шаг в своём
-//! потоке и выбрасывается. Класс срочности (urgency), счётчик запросов расчёта (calc_meter) и признак финальной
+//! await: срок расчёта (tokio::time::timeout ядра) срабатывает вовремя. Сам поток счёта при этом НЕ останавливается
+//! (block_on ведёт работу до конца). Решение 301 (в): брошенному счёту поднимается признак (quote/abandon.rs — страж
+//! здесь, у ожидания вызывающего); перед тяжёлыми шагами — ожидание замка построения графа и построение
+//! (pools/graph_cache.rs), каждый пул построения (pools/graph.rs), отбор лучших путей и сплит (quote/graph_route.rs)
+//! — счёт проверяет признак и выходит сразу. Шаг, который уже идёт (глубина одного пула, ожидание замка, начатое до
+//! срока, классика котировки, запрос к узлу), доживает до своего конца; итог брошенного счёта выбрасывается.
+//! Класс срочности (urgency), счётчик запросов расчёта (calc_meter) и признак финальной
 //! котировки (quote_stage) — признаки задачи tokio — переносятся в поток счёта.
 //! Предел одновременных счётов — dex.quote_cpu_max (необязательная; 0 или не задана — без предела): сверх него счёт
 //! ждёт места (ожидание — внутри срока расчёта и видно в замере этапов как время котировки без запросов к узлу).
 //! Кто вызывает: quote/mod.rs (Quoting::quote — выбор маршрута).
-//! От чего зависит: ctx.rs, gateway/{urgency, calc_meter, quote_stage}.rs, tokio.
+//! От чего зависит: ctx.rs, quote/abandon.rs, gateway/{urgency, calc_meter, quote_stage}.rs, tokio.
 //! Настройки: dex.quote_cpu_max [bsc_dex].
 
 use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
+use crate::gateway::calc_meter::Meter;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::urgency::Urgency;
 use crate::gateway::{calc_meter, quote_stage, urgency};
 
 use super::super::ctx::Ctx;
+use super::abandon;
 
 /// Предел одновременных счётов: (значение настройки, семафор). Один на процесс (адаптер DEX один).
 static LIMIT: Mutex<Option<(u64, Arc<Semaphore>)>> = Mutex::new(None);
@@ -46,13 +56,23 @@ async fn permit(ctx: &Ctx) -> Option<OwnedSemaphorePermit> {
 }
 
 /// Выполняет работу котировки вне рабочих потоков tokio. Принимает: окружение (настройка предела, текст ошибки),
-/// работу (владеет своими данными). Возвращает: её итог.
+/// работу — из кучи (`Pin<Box<F>>`, владеет своими данными). Возвращает: её итог.
 /// Ошибки: её ошибки; Internal — поток счёта упал (паника) или рантайм остановлен.
-pub async fn run<F, T>(ctx: &Ctx, work: F) -> GatewayResult<T>
+/// Решение 301 (дополнение — стек): работа принимается только из кучи. Будущее работы (routing::run: классика, граф,
+/// повтор графа решения 300) иначе лежало бы по значению: в состоянии этого future (через permit().await) и выше — в
+/// состоянии вызывающего (Quoting::quote, venue quote) на стеке рабочего потока tokio; и в потоке блокирующих задач
+/// (2 МиБ по умолчанию) — в замыкании и в цепочке обёрток-признаков (scoped), которая собирается на стеке до block_on
+/// (сам block_on кладёт в кучу только готовое будущее больше порога tokio). Каждая обёртка — async fn, хранит и
+/// аргумент, и будущее, его содержащее (rust-lang/rust#62958). Замер (tests/bsc_dex_quote_cpu_depth.rs, run
+/// 43776945366): по значению цепочка занимала 2047728 из 2097152 байт стека потока счёта до начала работы, из кучи —
+/// 23488. Сторож — tests/bsc_dex_quote_cpu_stack.rs.
+pub async fn run<F, T>(ctx: &Ctx, work: Pin<Box<F>>) -> GatewayResult<T>
 where
     F: Future<Output = GatewayResult<T>> + Send + 'static,
     T: Send + 'static,
 {
+    // Решение 301 (в): страж живёт в этом future — бросили ожидание (срок расчёта), признак поднят, счёт выходит.
+    let (_abandon, flag) = abandon::guard();
     let held = permit(ctx).await;
     let class = urgency::is_set();
     let meter = calc_meter::current();
@@ -60,10 +80,7 @@ where
     let rt = tokio::runtime::Handle::current();
     let job = tokio::task::spawn_blocking(move || {
         let _held = held;
-        rt.block_on(urgency::scope_opt(
-            class,
-            calc_meter::scope_opt(meter, quote_stage::final_if(fin, work)),
-        ))
+        rt.block_on(scoped(flag, class, meter, fin, work))
     });
     job.await.map_err(|e| {
         ctx.err(
@@ -71,4 +88,26 @@ where
             format!("счёт котировки DEX прерван: {e}"),
         )
     })?
+}
+
+/// Будущее, которое run ведёт в потоке счёта (block_on): работа под четырьмя признаками задачи — брошенный расчёт
+/// (abandon), класс срочности (urgency), счётчик запросов (calc_meter), финальная котировка (quote_stage).
+/// Работа принимается только из кучи (`Pin<Box<F>>`): размер итога не зависит от размера работы — указатель и
+/// обёртки (сторож — tests/bsc_dex_quote_cpu_stack.rs). pub — точка входа для тестов-сторожей (боевой вызов — run).
+/// Принимает: признак, класс, счётчик, признак финальной, работу. Возвращает: будущее с итогом работы. Ошибок нет
+/// (ошибки — у работы).
+pub fn scoped<F: Future>(
+    flag: Arc<AtomicBool>,
+    class: Option<Urgency>,
+    meter: Option<Arc<Meter>>,
+    fin: bool,
+    work: Pin<Box<F>>,
+) -> impl Future<Output = F::Output> {
+    abandon::scope(
+        flag,
+        urgency::scope_opt(
+            class,
+            calc_meter::scope_opt(meter, quote_stage::final_if(fin, work)),
+        ),
+    )
 }

@@ -192,9 +192,9 @@ async fn frozen_graph_uses_pinned_paths() {
     set(&p, "dex.route_paths_ttl_ms", None).await;
     let one = Arc::new(vec![sk[0].clone()]);
     let fz = Registry::frozen_from(&snap, Some((key, one)));
-    let got = route_cache::paths(&q.ctx, &fz, &q.tokens, 18, BLOCK, &search).unwrap();
+    let got = route_cache::paths(&q.ctx, &fz, &q.tokens, 18, &search).unwrap();
     assert_eq!(got.len(), 1);
-    let all = route_cache::paths(&q.ctx, &q.reg, &q.tokens, 18, BLOCK, &search).unwrap();
+    let all = route_cache::paths(&q.ctx, &q.reg, &q.tokens, 18, &search).unwrap();
     assert_eq!(all.len(), sk.len(), "живой без кэша — граф и перебор");
 }
 

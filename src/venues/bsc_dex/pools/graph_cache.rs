@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/pools/graph_cache.rs
-//! Что делает: кэш графа маршрутов (решение 129): граф строится один раз на состояние реестра (версия реестра), блок
-//! головы и настройки графа; все котировки и поиск циклов этого состояния берут готовый снимок (Arc). Одно построение
+//! Что делает: кэш графа маршрутов (решение 129): граф строится один раз на состояние реестра (версия реестра) и
+//! настройки графа (до решения 301 (е) — и на блок головы); все котировки и поиск циклов этого состояния берут готовый снимок (Arc). Одно построение
 //! за раз (решение 131): параллельные котировки при новой версии реестра не строят один и тот же граф каждая сама.
 //! Решение 189: здесь же — кэш НАБОРА путей графа (скелеты: какие пулы и в какой стороне, без состояния) по монете на
 //! dex.route_paths_ttl_ms: граф по версии реестра пересобирается почти на каждой котировке (каждый своп любого пула
@@ -8,12 +8,28 @@
 //! реестра (quote/route_cache.rs).
 //! Решение 217 (исправление по проверке): у замороженного реестра набор путей закреплён (pinned) — пути, которые
 //! живой кэш нашёл для монеты на момент снимка, без срока.
+//! Решение 301 (задача t132, живой бот 15.11.2026): граф из кэша годится запросу, если он НЕ СТАРШЕ запроса — версия
+//! реестра у графа не меньше запрошенной, настройки графа и USDT те же (Stamp::serves). Раньше нужно было
+//! точное равенство: дождавшийся замка построения видел граф, построенный другим на более новой версии (пока ждал,
+//! версия ушла), и строил ещё раз — очередь повторных построений (ожидание ≈ число ждущих × время построения).
+//! Граф более новой версии — более свежие данные пулов (версия читается ДО чтения реестра), граф зависит только от
+//! реестра, настроек и токенов: «не торгуем вслепую» не нарушается. Версия запроса выше, чем у графа, или другие
+//! настройки — граф строится заново, как раньше. builds — счётчик построений (замер, без настроек).
+//! Решение 301 (е): блока головы в ключе больше нет — build блок не читает (граф зависит только от реестра, настроек
+//! графа и токенов; глубина пулов — pools/depth_book.rs — номера блока тоже не читает), поэтому граф не перестраивается
+//! на каждом новом блоке, если реестр не менялся. Свежесть головы проверяют котировка и исполнение (quote/mod.rs,
+//! verify.rs), а не граф.
+//! Решение 301 (в): брошенный расчёт (quote/abandon.rs — срок расчёта вышел) не ждёт замок и не строит: признак
+//! проверяется до ожидания замка и после его получения.
+//! Решение 301 (д): замер построения (ожидание замка, очередь, build, N/R/E) — запись dex.graph_build по
+//! log.graph_timing / log.graph_timing_min_ms (pools/graph_timing.rs).
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (через graph::cached); pools/registry.rs (хранит Cache).
-//! От чего зависит: graph.rs (build), registry.rs, tokens.rs, ctx.rs.
+//! От чего зависит: graph.rs (build_measured), graph_timing.rs, quote/abandon.rs, registry.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.route_max_pools_per_edge, dex.depth_band_pct, dex.min_pool_liquidity_usd, dex.depth_hysteresis_pct
-//! [bsc_dex] — часть ключа кэша.
+//! [bsc_dex] — часть ключа кэша; через graph_timing.rs — log.graph_timing, log.graph_timing_min_ms.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -24,19 +40,31 @@ use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::quote::abandon;
 use super::super::tokens::Tokens;
-use super::graph::{Graph, build};
+use super::graph::{Graph, build_measured};
+use super::graph_timing::{self, Measure};
 use super::registry::Registry;
 
-/// На чём построен граф (решение 129): версия реестра, блок головы, dex.route_max_pools_per_edge, настройки глубины
-/// (полоса, порог, гистерезис — текстом), USDT и его decimals.
+/// На чём построен граф (решение 129): версия реестра, dex.route_max_pools_per_edge, настройки глубины (полоса, порог,
+/// гистерезис — текстом), USDT и его decimals. Решение 301 (е): блока головы нет.
 #[derive(Clone, PartialEq, Eq)]
 struct Stamp {
     version: u64,
-    head: u64,
     settings: Vec<String>,
     usdt: Option<Address>,
     usdt_dec: u8,
+}
+
+impl Stamp {
+    /// Решение 301: годится ли граф, построенный на `self`, запросу `want` — те же настройки графа и USDT, версия
+    /// реестра не меньше запрошенной (граф не старше запроса). Ошибок нет.
+    fn serves(&self, want: &Stamp) -> bool {
+        self.settings == want.settings
+            && self.usdt == want.usdt
+            && self.usdt_dec == want.usdt_dec
+            && self.version >= want.version
+    }
 }
 
 /// Кэш последнего графа (решение 129). Один на реестр (pools/registry.rs). Дешёво клонируется. `building` — одно
@@ -50,6 +78,10 @@ pub struct Cache {
     /// Решение 217 (исправление по проверке): у замороженного реестра — набор путей монеты из живого кэша на момент
     /// снимка, без срока (снимок не стареет); граф по реестру снимка не строится, пока ключ совпадает.
     pinned: Option<Arc<(PathsKey, Arc<Vec<Skeleton>>)>>,
+    /// Решение 301: сколько раз граф строился (замер для проверки очереди построений; настроек нет).
+    builds: Arc<AtomicU64>,
+    /// Решение 301 (д): сколько построений сейчас ждут замок `building` (замер dex.graph_build).
+    waiting: Arc<AtomicUsize>,
 }
 
 /// Скелет пути (решение 189): по шагам — пул, токен входа, токен выхода. Без состояния пула.
@@ -78,6 +110,11 @@ impl Cache {
             .map(|p| p.1.clone())
     }
 
+    /// Решение 301: сколько раз этот кэш строил граф. Ошибок нет.
+    pub fn builds(&self) -> u64 {
+        self.builds.load(Ordering::Relaxed)
+    }
+
     /// Набор путей, если построен не раньше `ttl` назад. Ошибок нет.
     pub fn paths_get(&self, key: &PathsKey, ttl: Duration) -> Option<Arc<Vec<Skeleton>>> {
         let m = self.paths.lock().unwrap_or_else(|p| p.into_inner());
@@ -97,18 +134,30 @@ impl Cache {
 /// Построенный граф и на чём он построен.
 type Built = (Stamp, Arc<Graph>);
 
-/// Граф текущего состояния: из кэша, если с его построения не менялись реестр, блок головы и настройки графа, иначе
-/// строится заново (build) и кладётся в кэш. Принимает: окружение, реестр, токены, знаки USDT, номер блока головы.
-/// Возвращает: граф. Ошибки: как у build.
+/// Граф текущего состояния: из кэша, если граф там не старше текущего реестра и построен на тех же настройках графа
+/// (решение 301), иначе строится заново (build) и кладётся в кэш. Принимает: окружение, реестр, токены, знаки USDT.
+/// Возвращает: граф. Ошибки: как у build; Timeout — расчёт брошен (abandon).
 pub fn cached(
     ctx: &Ctx,
     reg: &Registry,
     tokens: &Tokens,
     usdt_dec: u8,
-    head: u64,
 ) -> GatewayResult<Arc<Graph>> {
     // Версия — ДО чтения реестра: запись во время построения даст новую версию, и следующий вызов перестроит граф.
-    let version = reg.version();
+    cached_as_of(ctx, reg, tokens, usdt_dec, reg.version())
+}
+
+/// То же, что cached, для версии реестра, прочитанной вызывающим раньше (решение 301: так граф видит тот, кто ждал
+/// замок построения, пока версия росла; этим же проверяется очередь построений — tests/bsc_dex_graph_queue.rs).
+/// Принимает: окружение, реестр, токены, знаки USDT, версию реестра запроса. Возвращает: граф не старше
+/// запроса. Ошибки: как у build; Timeout — расчёт брошен (quote/abandon.rs).
+pub fn cached_as_of(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    usdt_dec: u8,
+    version: u64,
+) -> GatewayResult<Arc<Graph>> {
     // Значения как прочитаны (не задана — пусто; build сам скажет, какой нет).
     let dec = |n: &str| {
         ctx.dec(n)
@@ -117,7 +166,6 @@ pub fn cached(
     };
     let stamp = Stamp {
         version,
-        head,
         settings: vec![
             ctx.int("dex.route_max_pools_per_edge")
                 .map(|v| v.to_string())
@@ -136,20 +184,43 @@ pub fn cached(
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .as_ref()
-            .filter(|(st, _)| *st == stamp)
+            .filter(|(st, _)| st.serves(&stamp))
             .map(|(_, g)| g.clone())
     };
     if let Some(g) = hit() {
         return Ok(g);
     }
-    // Одно построение за раз; дождавшийся берёт граф, построенный другим, если он на том же состоянии. Вызывается из
-    // счёта котировки вне рабочих потоков tokio (quote/cpu.rs) — ожидание замка рантайм не держит.
+    // Решение 301 (в): срок расчёта вышел — замок не ждём.
+    abandon::check(ctx, "ожидание построения графа")?;
+    // Одно построение за раз; дождавшийся берёт граф, построенный другим, если он не старше запроса (решение 301).
+    // Вызывается из счёта котировки вне рабочих потоков tokio (quote/cpu.rs) — ожидание замка рантайм не держит.
+    // Решение 301 (д): замер очереди — сколько ждали при входе, сколько ждут за ним, сколько ждал он.
+    let t0 = Instant::now();
+    let ahead = cache.waiting.fetch_add(1, Ordering::AcqRel);
     let _one = cache.building.lock().unwrap_or_else(|p| p.into_inner());
+    cache.waiting.fetch_sub(1, Ordering::AcqRel);
+    let wait = t0.elapsed();
+    let behind = cache.waiting.load(Ordering::Acquire);
     if let Some(g) = hit() {
         return Ok(g);
     }
+    abandon::check(ctx, "построение графа")?;
+    cache.builds.fetch_add(1, Ordering::Relaxed);
     let slot = &cache.slot;
-    let g = Arc::new(build(ctx, reg, tokens, usdt_dec)?);
+    let t1 = Instant::now();
+    let (g, stats) = build_measured(ctx, reg, tokens, usdt_dec)?;
+    let g = Arc::new(g);
+    graph_timing::report(
+        ctx,
+        &Measure {
+            wait,
+            ahead,
+            behind,
+            build: t1.elapsed(),
+            stats,
+            edges: g.len(),
+        },
+    );
     let mut m = slot.lock().unwrap_or_else(|p| p.into_inner());
     // Не затираем более новый граф, построенный параллельно.
     if m.as_ref().is_none_or(|(st, _)| st.version <= version) {

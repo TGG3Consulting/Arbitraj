@@ -105,6 +105,7 @@ fn pair(addr: Address, x: Address, y: Address, rx: u128, ry: u128) -> Entry {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     }
 }
 
@@ -187,30 +188,26 @@ async fn cap_keeps_deepest() {
 
 #[tokio::test]
 async fn cached_graph_rebuilds_only_on_change() {
-    // Решение 129: тот же реестр и блок — тот же снимок графа (без перестроения); запись в реестр или новый блок —
-    // новый граф, равный построенному заново.
+    // Решение 129: тот же реестр — тот же снимок графа (без перестроения); запись в реестр — новый граф, равный
+    // построенному заново. Решение 301 (е): новый блок без записи в реестр граф не перестраивает (блока в ключе нет).
     // Предел 3 на пару (своя временная папка — другие тесты берут 1 и 2).
     let p = parts_with(3).await;
-    let a = graph::cached(&p.ctx, &p.registry, &p.tokens, 18, 7).unwrap();
-    let b = graph::cached(&p.ctx, &p.registry, &p.tokens, 18, 7).unwrap();
+    let a = graph::cached(&p.ctx, &p.registry, &p.tokens, 18).unwrap();
+    let b = graph::cached(&p.ctx, &p.registry, &p.tokens, 18).unwrap();
     assert!(
         std::sync::Arc::ptr_eq(&a, &b),
         "реестр не менялся — граф из кэша"
     );
     assert_eq!(a.len(), 4);
-    let c = graph::cached(&p.ctx, &p.registry, &p.tokens, 18, 8).unwrap();
-    assert!(
-        !std::sync::Arc::ptr_eq(&a, &c),
-        "новый блок — граф строится заново"
-    );
+    assert_eq!(p.registry.graph_cache().builds(), 1);
     // Запись в реестр: пул SHALLOW заменён глубоким пулом COIN–WBNB — версия реестра выросла, у пары COIN–WBNB
     // теперь два ребра.
     let e18 = 10u128.pow(18);
     p.registry
         .put(pair(SHALLOW, COIN, WBNB, 50_000 * e18, 250 * e18));
-    let d = graph::cached(&p.ctx, &p.registry, &p.tokens, 18, 8).unwrap();
+    let d = graph::cached(&p.ctx, &p.registry, &p.tokens, 18).unwrap();
     assert!(
-        !std::sync::Arc::ptr_eq(&c, &d),
+        !std::sync::Arc::ptr_eq(&a, &d),
         "реестр изменился — граф строится заново"
     );
     let fresh = graph::build(&p.ctx, &p.registry, &p.tokens, 18).unwrap();

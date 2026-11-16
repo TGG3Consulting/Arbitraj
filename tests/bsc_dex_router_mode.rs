@@ -249,6 +249,7 @@ fn edge(kind: &str, x: Address, y: Address) -> Edge {
         synced_log: None,
         valid: true,
         asleep: false,
+        state_gen: 0,
     };
     Edge { entry, a: x, b: y }
 }

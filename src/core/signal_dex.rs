@@ -39,9 +39,12 @@ type Key = (VenueId, Address, bool);
 /// Отпечаток входов котировки: эпоха адаптера, поколение пулов монеты в ядре, поколение настроек.
 type Stamp = (String, u64, u64);
 
+/// Запись памяти одного ключа: отпечаток и котировки по объёмам.
+type Slot = (Stamp, HashMap<Decimal, Quote>);
+
 /// Память: ключ → (отпечаток, объём → котировка).
 #[derive(Default)]
-pub struct Memo(Mutex<HashMap<Key, (Stamp, HashMap<Decimal, Quote>)>>);
+pub struct Memo(Mutex<HashMap<Key, Slot>>);
 
 /// Котировок из памяти и заново (при включённой настройке).
 static HITS: AtomicU64 = AtomicU64::new(0);

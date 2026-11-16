@@ -179,7 +179,8 @@ impl Quoting {
         // вызывающим priced пишет запись сам (Drop Outer).
         let mut tm = Outer::begin(&self.ctx, &asset.ticker, side, qty);
         let out = self.priced_at(asset, side, qty, &mut tm).await;
-        tm.finish(Outcome::of(&out));
+        // Итог — замыкание: без замера Outcome не строится (решение 312).
+        tm.finish(|| Outcome::of(&out));
         out
     }
 

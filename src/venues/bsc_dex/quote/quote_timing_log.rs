@@ -5,7 +5,8 @@
 //! задерживает; ctx.log пишет в SQLite через spawn_blocking и замок соединения). Вне среды tokio — без записи.
 //! Поля data: mode (classic / graph — dex.router_mode), fast (быстрый путь fills.rs, решение 250), answered (быстрый путь
 //! ответил — полная котировка не нужна), coin, side, qty, ok, error (код ошибки; ok и error — null, если итог не
-//! известен), dropped (котировку бросил вызывающий — срок расчёта ядра), abandoned (счёт брошен по сроку —
+//! известен), dropped (котировку бросил вызывающий — срок расчёта ядра), unstarted (брошена в cpu::run до старта работы
+//! в потоке счёта — ожидание места dex.quote_cpu_max или очередь spawn_blocking; полей работы нет), abandoned (счёт брошен по сроку —
 //! quote/abandon.rs), cpu_max (dex.quote_cpu_max); total_ms — всё время; pre_ms (до входа в cpu::run; ошибка до работы —
 //! до конца), run_ms (cpu::run целиком) = wait_ms (место dex.quote_cpu_max и старт потока spawn_blocking — вместе) +
 //! work_ms (работа в потоке счёта) + back_ms (возврат итога из потока счёта); post_ms (после cpu::run); части
@@ -78,6 +79,7 @@ pub fn report(b: &Body, rec: Option<&Rec>, out: Option<&Outcome>, dropped: bool)
     d.insert("ok".into(), json!(out.map(|o| o.ok)));
     d.insert("error".into(), json!(out.and_then(|o| o.error.clone())));
     d.insert("dropped".into(), json!(dropped));
+    d.insert("unstarted".into(), json!(b.unstarted));
     d.insert("abandoned".into(), json!(rec.map(|r| r.abandoned)));
     d.insert("cpu_max".into(), json!(ctx.int("dex.quote_cpu_max").ok()));
     d.insert("total_ms".into(), json!(tm));
@@ -114,6 +116,9 @@ pub fn report(b: &Body, rec: Option<&Rec>, out: Option<&Outcome>, dropped: bool)
     let mut msg = format!("котировка DEX {tick} {dir} {qty} ({kind}): всего {tm:.1} мс");
     if dropped {
         msg.push_str(" (брошена вызывающим)");
+    }
+    if b.unstarted {
+        msg.push_str(" (до старта работы)");
     }
     if let Some(p) = pre {
         let _ = write!(msg, "; до работы {p:.1}");

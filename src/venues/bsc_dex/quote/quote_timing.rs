@@ -6,13 +6,13 @@
 //! потока (bool) без часов, выделений памяти и блокировок.
 //! Как устроено: работа котировки идёт в одном потоке блокирующих задач (cpu.rs: spawn_blocking + block_on) — запись
 //! этапов копится в локальной для потока структуре (thread_local, без блокировок, без await) и в конце работы один раз
-//! передаётся замеру priced (quote_timing_outer::hand — запись журнала после хвоста priced; priced уже брошен — запись
+//! передаётся замеру priced (старт — quote_timing_outer::start; конец — quote_timing_outer::hand — запись журнала после хвоста priced; priced уже брошен — запись
 //! сразу). Логика и порядок расчёта не меняются: только часы (Instant) вокруг этапов. Вне timed (тесты, поиск циклов,
 //! другие вызовы) признака нет — ничего не меряется.
 //! Кто вызывает: quote/mod.rs (timed — через Outer::run); quote/routing.rs (now, add); quote/graph_route.rs (active,
 //! now_if, add, stage, paths_in, count); quote/route_cache.rs (now, add); quote/route_best.rs, quote/graph_split.rs
 //! (count); quote/quote_timing_outer.rs, quote/quote_timing_log.rs (Rec, Meta, ms); тест tests/bsc_dex_quote_timing_312.rs.
-//! От чего зависит: quote/quote_timing_stages.rs (этапы, счётчики), quote/quote_timing_outer.rs (Run, hand),
+//! От чего зависит: quote/quote_timing_stages.rs (этапы, счётчики), quote/quote_timing_outer.rs (Run, start, hand),
 //! quote/abandon.rs (брошен ли счёт), quote/route_paths.rs (RoutePath), core/types.rs (Quote, Side).
 //! Настройки: нет (log.quote_timing, log.quote_timing_min_ms читает quote_timing_outer.rs).
 
@@ -76,7 +76,8 @@ pub async fn timed<F>(on: Option<Run>, work: F) -> GatewayResult<Quote>
 where
     F: Future<Output = GatewayResult<Quote>>,
 {
-    let held = on.map(|run| {
+    // Старт работы — под замком связи (quote_timing_outer::start): priced уже записан (брошен до старта) — без замера.
+    let held = on.filter(quote_timing_outer::start).map(|run| {
         let now = Instant::now();
         let rec = Rec {
             cpu_in: run.cpu_in,

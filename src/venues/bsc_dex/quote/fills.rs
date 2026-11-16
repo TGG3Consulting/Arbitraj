@@ -66,9 +66,12 @@ pub async fn fast(q: &Quoting, asset: &Asset, side: Side, qty: Decimal) -> Gatew
     // Решение 312: замер попытки — одно чтение log.quote_timing; выключен — пустой, часов нет.
     let mut tm = Outer::begin_fast(ctx, &asset.ticker, side, qty);
     let out = fast_at(q, asset, side, qty, &mut tm).await;
-    let mut o = Outcome::of(&out);
-    o.answered = out.as_ref().ok().copied();
-    tm.finish(o);
+    // Итог — замыкание: без замера Outcome не строится.
+    tm.finish(|| {
+        let mut o = Outcome::of(&out);
+        o.answered = out.as_ref().ok().copied();
+        o
+    });
     out
 }
 

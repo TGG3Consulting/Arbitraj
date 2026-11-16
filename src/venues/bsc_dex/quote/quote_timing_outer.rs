@@ -4,18 +4,22 @@
 //! обёртки BNB, чаевые) и быстрого пути quote/fills.rs (решение 250). Включаемый: log.quote_timing = да И задан
 //! log.quote_timing_min_ms — запись журнала dex.quote_timing (quote_timing_log.rs) на котировку, у которой всё время
 //! (от входа в priced / быстрый путь до конца) не меньше порога (0 — каждая). Иначе Outer пустой: одно чтение
-//! log.quote_timing на котировку, дальше — без часов (now = None, add/run/back — ничего).
+//! log.quote_timing на котировку, дальше — без часов (now = None, add/run/back — ничего; итог в finish — замыкание,
+//! без замера не вызывается: Outcome не строится).
 //! Как устроено: часы до и после работы — в future priced (Option<Instant> и Box; Send), этапы работы — в потоке счёта
 //! (quote_timing.rs). Работа в конце отдаёт свой замер в общую связь (Link, std Mutex — только у меряемой котировки,
 //! без await под замком). Запись — одна на котировку, пишет тот, кто закончил последним:
 //! - priced дошёл до конца — finish (после хвоста, с итогом priced);
 //! - priced брошен (срок расчёта ядра) после конца работы — Drop Outer (dropped = да, итог работы);
-//! - priced брошен до конца работы — работа пишет сама в конце (hand; dropped = да);
+//! - priced брошен после старта работы в потоке счёта, до её конца — работа пишет сама в конце (hand; dropped = да);
+//! - priced брошен в cpu::run до старта работы (ожидание места dex.quote_cpu_max или очередь spawn_blocking) — Drop
+//!   Outer пишет сам (dropped = да, unstarted = да, без полей работы) и закрывает связь: старт работы (start, первый
+//!   опрос timed — под тем же замком) видит закрытие и идёт без замера, hand не будет — ни потери, ни второй записи;
 //! - priced брошен до cpu::run или ошибка до работы — запись без полей работы.
 //!
 //! Логика и порядок расчёта не меняются: только часы вокруг шагов.
 //! Кто вызывает: quote/mod.rs (Quoting::priced: begin, now, add, run, back, finish), quote/fills.rs (быстрый путь:
-//! begin_fast, now, add, finish), quote/quote_timing.rs (hand — конец работы в потоке счёта); тест
+//! begin_fast, now, add, finish), quote/quote_timing.rs (start — старт работы, hand — конец работы в потоке счёта); тест
 //! tests/bsc_dex_quote_timing_312.rs.
 //! От чего зависит: ctx.rs (настройки), quote/quote_timing.rs (Rec, Meta), quote/quote_timing_stages.rs (Part),
 //! quote/quote_timing_log.rs (запись), gateway/errors.rs.
@@ -65,16 +69,21 @@ pub struct Body {
     /// Вход в cpu::run и возврат из него (None — не было).
     pub cpu_in: Option<Instant>,
     pub cpu_out: Option<Instant>,
+    /// Брошен в cpu::run до старта работы в потоке счёта (Drop; замера работы нет и не будет).
+    pub unstarted: bool,
     /// Части (Part), нс.
     pub parts: [u64; PARTS],
     link: Link,
 }
 
-/// Общее у замера priced и работы: замер работы (с её итогом) или брошенный замер priced.
+/// Общее у замера priced и работы: замер работы (с её итогом) или брошенный замер priced; started — работа начата в
+/// потоке счёта (start), closed — priced уже записан (Drop): работа, не начатая к этому, идёт без замера.
 #[derive(Default)]
 pub struct Shared {
     work: Option<(Rec, Outcome)>,
     left: Option<Box<Body>>,
+    started: bool,
+    closed: bool,
 }
 
 /// Связь замера priced с работой в потоке счёта.
@@ -123,6 +132,7 @@ impl Outer {
             t0: Instant::now(),
             cpu_in: None,
             cpu_out: None,
+            unstarted: false,
             parts: [0; PARTS],
             link: Link::default(),
         })))
@@ -165,18 +175,21 @@ impl Outer {
         }
     }
 
-    /// Конец котировки: запись (если не меньше порога) с итогом `out` и замером работы, если она была. Ошибок нет.
-    pub fn finish(mut self, out: Outcome) {
+    /// Конец котировки: запись (если не меньше порога) с итогом `out()` и замером работы, если она была. Итог —
+    /// замыкание: без замера не вызывается (Outcome не строится). Ошибок нет.
+    pub fn finish(mut self, out: impl FnOnce() -> Outcome) {
         if let Some(b) = self.0.take() {
             let work = lock(&b.link).work.take();
+            let out = out();
             quote_timing_log::report(&b, work.as_ref().map(|(r, _)| r), Some(&out), false);
         }
     }
 }
 
 impl Drop for Outer {
-    /// priced / быстрый путь брошен до finish: работа кончилась или не начиналась — запись сейчас (dropped = да);
-    /// работа идёт — замер priced отдаётся ей (hand пишет в конце работы).
+    /// priced / быстрый путь брошен до finish: работа кончилась, не начиналась или ещё не начата в потоке счёта —
+    /// запись сейчас (dropped = да; не начата — unstarted = да, связь закрыта); работа идёт — замер priced отдаётся ей
+    /// (hand пишет в конце работы).
     fn drop(&mut self) {
         let Some(mut b) = self.0.take() else {
             return;
@@ -184,8 +197,13 @@ impl Drop for Outer {
         // Решение «кто пишет» — под одним замком с hand (иначе запись может потеряться).
         let link = b.link.clone();
         let mut g = lock(&link);
-        // Работы не было, она уже отдана или уже не придёт (cpu::run вернулся) — пишем сейчас.
-        if b.cpu_in.is_none() || b.cpu_out.is_some() || g.work.is_some() {
+        // В cpu::run, но работа ещё не начата в потоке счёта (ожидание места или очередь spawn_blocking): hand не будет.
+        let unstarted = b.cpu_in.is_some() && b.cpu_out.is_none() && !g.started;
+        // Работы не было, она уже отдана, уже не придёт (cpu::run вернулся) или не начата — пишем сейчас; связь
+        // закрыта — работа, не начатая к этому, идёт без замера (start).
+        if b.cpu_in.is_none() || b.cpu_out.is_some() || g.work.is_some() || unstarted {
+            g.closed = true;
+            b.unstarted = unstarted;
             let work = g.work.take();
             drop(g);
             let (rec, out) = (work.as_ref().map(|(r, _)| r), work.as_ref().map(|(_, o)| o));
@@ -196,6 +214,18 @@ impl Drop for Outer {
         b.link = Link::default();
         g.left = Some(b);
     }
+}
+
+/// Старт работы в потоке счёта (первый опрос quote_timing::timed): под замком связи — priced ещё не записан (Drop) —
+/// работа начата (замер; Drop отдаст замер priced ей, hand запишет); записан — false (работа без замера, hand не
+/// будет). Принимает: связь. Возвращает: мерить ли работу. Ошибок нет.
+pub fn start(run: &Run) -> bool {
+    let mut g = lock(&run.link);
+    if g.closed {
+        return false;
+    }
+    g.started = true;
+    true
 }
 
 /// Конец работы в потоке счёта (quote_timing::timed): priced уже брошен — запись сразу (dropped = да); иначе замер

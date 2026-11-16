@@ -8,7 +8,9 @@
 //! уровня не больше работы, rest_ms = work_ms − stages_ms, total_ms = pre_ms + run_ms + post_ms, run_ms = wait_ms +
 //! work_ms + back_ms, части набора путей не больше самого набора. (3) Порог больше нуля (час, задан в тесте) отсекает
 //! запись; после котировки с замером котировка без замера записи не даёт и признак потока счёта снят (сброс
-//! состояния). Конкретные миллисекунды не проверяются.
+//! состояния). (4) Котировка брошена в cpu::run до старта работы (Outer::run отдан, работа не начата, Outer брошен) —
+//! запись Drop: dropped = да, unstarted = да, полей работы нет; связь закрыта — старт работы после этого без замера
+//! (quote_timing_outer::start = нет), работа той же связи второй записи не даёт. Конкретные миллисекунды не проверяются.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::quote::{cpu, routing, quote_timing, quote_timing_outer, quote_timing_stages},
 //! tests/route_common.
@@ -26,7 +28,7 @@ use arb::gateway::errors::GatewayError;
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::parts::Parts;
 use arb::venues::bsc_dex::quote::quote_timing;
-use arb::venues::bsc_dex::quote::quote_timing_outer::{Outcome, Outer};
+use arb::venues::bsc_dex::quote::quote_timing_outer::{self, Outcome, Outer};
 use arb::venues::bsc_dex::quote::quote_timing_stages::{COUNT_NAMES, PART_NAMES, STAGE_NAMES};
 use arb::venues::bsc_dex::quote::{Quoting, cpu, routing};
 
@@ -91,7 +93,7 @@ async fn quote(q: &Quoting, qty: u32) -> Quote {
     let work = quote_timing::timed(tm.run(), routing::run(q.clone(), input(q, qty)));
     let out = cpu::run(&q.ctx, Box::pin(work)).await;
     tm.back();
-    tm.finish(Outcome::of(&out));
+    tm.finish(|| Outcome::of(&out));
     out.expect("котировка")
 }
 
@@ -251,4 +253,28 @@ async fn threshold_cuts_and_state_resets() {
     wait_n(&q, 2).await;
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert_eq!(entries(&q).await.len(), 2, "лишняя запись");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dropped_before_work_start_writes_once() {
+    let p = parts().await;
+    let q = p.quoting();
+    set(&q, true, 0).await;
+    // Вход в cpu::run отмечен, работа в потоке счёта не начата — priced брошен (как в ожидании места dex.quote_cpu_max).
+    let mut tm = Outer::begin(&q.ctx, "CAKE", Side::Buy, Decimal::from(5_000u32));
+    let run = tm.run().expect("замер включён");
+    drop(tm);
+    let got = wait_n(&q, 1).await;
+    assert_eq!(got.len(), 1, "запись брошенной до старта работы");
+    let d = &got[0];
+    assert_eq!(d["dropped"], json!(true));
+    assert_eq!(d["unstarted"], json!(true));
+    assert_eq!(d["work_ms"], Value::Null);
+    assert_eq!(d["stages_ms"], Value::Null);
+    // Связь закрыта: старт работы — без замера; работа с этой связью записи не даёт.
+    assert!(!quote_timing_outer::start(&run));
+    let work = quote_timing::timed(Some(run), routing::run(q.clone(), input(&q, 5_000)));
+    cpu::run(&q.ctx, Box::pin(work)).await.expect("котировка");
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(entries(&q).await.len(), 1, "лишняя запись");
 }

@@ -5,9 +5,12 @@
 //! прошла, сменилась причина без учёта цифр); первый проход — одна сводка, когда ни один пул не читается и все
 //! прочитанные проверены. Пул проверяется сразу, как только стал достоверным (check/fresh.rs, «пул готов», решение 65).
 //! Налоги — check/tax_cycle.rs, сверка с квотером — check/quoter_cycle.rs.
+//! Решение 335: проба — check/hooks_head.rs (hooks.probe_same_block — на одном блоке H; hooks.requote_after_probe —
+//! после перемера пул со стороной на паузе сверки сверяется сразу).
 //! Кто вызывает: pools/market.rs (запуск при подписке).
-//! От чего зависит: check/hooks_probe.rs, check/state.rs, check/recheck.rs, pools/listen.rs (Pools), pools/progress.rs.
-//! Настройки: hooks.recheck_interval_s (вся система).
+//! От чего зависит: check/hooks_head.rs, check/hooks_probe.rs, check/state.rs, check/recheck.rs, pools/listen.rs (Pools),
+//! pools/progress.rs.
+//! Настройки: hooks.recheck_interval_s (вся система); hooks.probe_same_block, hooks.requote_after_probe [bsc_dex].
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -21,7 +24,7 @@ use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
 use super::super::settings_wait;
 use super::fresh::Fresh;
-use super::hooks_probe;
+use super::hooks_head::{self, Probe};
 use super::quoter_verify::HOOK_WAIT;
 use super::recheck::Queue;
 
@@ -120,9 +123,18 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
     if !e.valid {
         return false;
     }
-    let Some((pc, wait)) = hooks_probe::check_pool_named(&p.ctx, &p.tokens, &p.reg, &e).await
-    else {
-        return true;
+    // Решение 335: проба на одном блоке H при hooks.probe_same_block = да, иначе как раньше (check/hooks_head.rs).
+    let (pc, wait) = match hooks_head::probe(p, &e).await {
+        Probe::NoHook => return true,
+        Probe::Keep(why) => {
+            let msg = format!(
+                "{} {}: влияние крючка не перемерено ({why}) — действует прежнее",
+                e.family.title, e.ticker
+            );
+            p.signals.once(&p.ctx, Level::Info, "dex.check", msg).await;
+            return true;
+        }
+        Probe::Got(pc, wait) => (*pc, wait),
     };
     let prev = p.checks.pool(r).hook.map(|c| c.impact);
     let passed = !matches!(pc.impact, CheckState::Failed { .. });
@@ -163,5 +175,7 @@ async fn one(p: &Pools, r: &PoolRef, first: &mut Option<HashMap<PoolRef, bool>>)
     if p.checks.pool(r).quoter.any_err(|why| why == HOOK_WAIT) {
         p.signals.pool_ready();
     }
+    // Решение 335 (в): при hooks.requote_after_probe = да пул со стороной на паузе сверяется сразу.
+    hooks_head::requote(p, r);
     true
 }

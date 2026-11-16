@@ -5,7 +5,11 @@
 //! получаем меньше. Ошибка пробы (откат квотера, крючок требует hookData и т.п.) — Failed с причиной; откат квотера
 //! NotEnoughLiquidity(PoolId) — причина «в пуле не хватает ликвидности для пробы check.probe_usdt (… PoolId …)», не
 //! «проверка крючка не прошла».
-//! Кто вызывает: check/cycle.rs.
+//! Решение 335 (задача t156): та же проба на заданном блоке (measure_on: запись со свежим состоянием пула на блоке H и
+//! квотер eth_call на H) — для пробы на одном блоке (check/hooks_head.rs, hooks.probe_same_block) и перемера перед
+//! паузой сверки (check/quoter_reprobe.rs, hooks.reprobe_before_pause). Прежний путь (measure) — память против
+//! квотера на «latest», без изменений.
+//! Кто вызывает: check/cycle.rs, check/hooks_head.rs, check/quoter_reprobe.rs.
 //! От чего зависит: quote/quoter.rs, quote/pool_quote.rs, check/state.rs, pools/registry.rs, tokens.rs, num.rs.
 //! Настройки: check.probe_usdt [bsc_dex]; dex.quoter [вид пула V4].
 //!
@@ -60,7 +64,18 @@ pub async fn check_pool_named(
             }
         }
     };
-    let pc = PoolCheck {
+    Some((pool_check(ctx, e, hooks.group, impact), setting))
+}
+
+/// Итог проверки крючка пула для ядра и экрана (вынесено решением 335 — тот же текст полей для пробы на блоке H).
+/// Принимает: окружение, запись, группу крючка, итог влияния. Возвращает: PoolCheck со временем «сейчас». Ошибок нет.
+pub fn pool_check(
+    ctx: &Ctx,
+    e: &Entry,
+    group: HookGroup,
+    impact: CheckState<HookImpact>,
+) -> PoolCheck {
+    PoolCheck {
         venue: ctx.venue(),
         family: e.family.id.to_string(),
         pool: e.pool.reference.clone(),
@@ -68,11 +83,10 @@ pub async fn check_pool_named(
             ticker: e.ticker.clone(),
             bsc_contract: Some(e.coin),
         },
-        group: hooks.group,
+        group,
         impact,
         checked_at: Some(Utc::now()),
-    };
-    Some((pc, setting))
+    }
 }
 
 /// Начало причины «в пуле не хватает ликвидности для пробы» — не провал крючка, а свойство пула на сумму пробы:
@@ -85,15 +99,17 @@ fn short(id: alloy_primitives::B256) -> String {
     format!("{SHORT} (NotEnoughLiquidity, PoolId {id})")
 }
 
-/// Квотер на пробу; откат «не хватает ликвидности» (UnexpectedRevertBytes(NotEnoughLiquidity(PoolId)),
-/// quote/quoter_revert.rs) — Ok(Err(причина)). Ошибки: как у quoter::out.
+/// Квотер на пробу на блоке `tag` («latest» — как до решения 335); откат «не хватает ликвидности»
+/// (UnexpectedRevertBytes(NotEnoughLiquidity(PoolId)), quote/quoter_revert.rs) — Ok(Err(причина)).
+/// Ошибки: как у quoter::out_at.
 async fn ask(
     ctx: &Ctx,
     e: &Entry,
     token_in: alloy_primitives::Address,
     amount: U256,
+    tag: &str,
 ) -> GatewayResult<Result<U256, String>> {
-    match quoter::out(ctx, e, token_in, amount).await {
+    match quoter::out_at(ctx, e, token_in, amount, tag).await {
         Ok(v) => Ok(Ok(v)),
         Err(err) => match quoter_revert::short_pool(&err) {
             Some(id) => Ok(Err(short(id))),
@@ -102,12 +118,28 @@ async fn ask(
     }
 }
 
-/// Покупка и продажа: математика против квотера. Ok(Err) — посчитать нельзя (причина).
+/// Покупка и продажа: математика по памяти против квотера на «latest» (как до решения 335). Ok(Err) — посчитать
+/// нельзя (причина). Ошибки: как у measure_on.
 async fn measure(
     ctx: &Ctx,
     tokens: &Tokens,
     reg: &Registry,
     e: &Entry,
+) -> GatewayResult<Result<HookImpact, String>> {
+    measure_on(ctx, tokens, reg, e, "latest").await
+}
+
+/// Решение 335: покупка и продажа — математика по состоянию записи `e` против квотера на блоке `tag`. Для пробы на
+/// одном блоке `e` — пул, прочитанный заново на H (check/quoter_block.rs at_head), `tag` — номер H (node/call.rs
+/// block_tag). Принимает: окружение, токены, реестр (пересчёт суммы через промежуточную монету), запись, блок.
+/// Возвращает: Ok(Ok(влияние)) или Ok(Err(причина)). Ошибки: настройки, узел (в том числе StaleData — нет
+/// состояния блока), откат квотера (кроме «не хватает ликвидности»).
+pub async fn measure_on(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    reg: &Registry,
+    e: &Entry,
+    tag: &str,
 ) -> GatewayResult<Result<HookImpact, String>> {
     let usdt = tokens.usdt(ctx)?;
     let usdt_dec = tokens.decimals(ctx, usdt).await?;
@@ -120,13 +152,13 @@ async fn measure(
         Err(err) => return Ok(Err(err.message)),
     };
     let local_buy = pool_quote::swap(ctx, e, e.usdt, true, p)?;
-    let remote_buy = match ask(ctx, e, e.usdt, p).await? {
+    let remote_buy = match ask(ctx, e, e.usdt, p, tag).await? {
         Ok(v) => v,
         Err(why) => return Ok(Err(why)),
     };
     let coins = local_buy.amount_out;
     let local_sell = pool_quote::swap(ctx, e, e.coin, true, coins)?;
-    let remote_sell = match ask(ctx, e, e.coin, coins).await? {
+    let remote_sell = match ask(ctx, e, e.coin, coins, tag).await? {
         Ok(v) => v,
         Err(why) => return Ok(Err(why)),
     };

@@ -9,11 +9,13 @@
 //! (check/quoter_amount.rs; пул с крючком B/C — прежняя check.probe_usdt), для пула с промежуточной монетой — пересчёт
 //! во встречный токен по живому пулу (решение 52, quote/rate.rs). Итог: прошла / пауза (расхождение на одном блоке) /
 //! иная причина / «не сверено (блок)».
+//! Решение 335: сверка разошлась у пула с крючком B/C — перед паузой влияние крючка перемеряется на том же H и сторона
+//! сверяется ещё раз (check/quoter_reprobe.rs, hooks.reprobe_before_pause; не задана — как раньше).
 //! Кто вызывает: check/quoter_one.rs.
 //! От чего зависит: check/quoter_block.rs, check/quoter_compare.rs, check/quoter_amount.rs, quote/emptiness.rs, quote/rate.rs, quote/spot.rs,
 //! check/state.rs, pools/registry.rs, tokens.rs, num.rs.
 //! Настройки: dex.quoter_max_diff_pct (через quoter_compare.rs), money.max_per_trade_usd, check.probe_usdt [bsc_dex]
-//! (через quoter_amount.rs).
+//! (через quoter_amount.rs), hooks.reprobe_before_pause [bsc_dex] (через quoter_reprobe.rs).
 
 use alloy_primitives::U256;
 use rust_decimal::Decimal;
@@ -29,6 +31,7 @@ use super::super::quote::{emptiness, rate};
 use super::quoter_amount;
 use super::quoter_block::{self, Head, NOT_CHECKED};
 use super::quoter_compare::{self, Cmp, Nums};
+use super::quoter_reprobe::{self, Try};
 use super::state::Checks;
 
 /// Причина «влияние крючка ещё не измерено»: такой пул сверяется снова, как только крючок измерен (check/cycle.rs
@@ -126,6 +129,15 @@ pub async fn verify(
     };
     let sum = format!("сумма сверки {} USDT — {}", a.usd.round_dp(2), a.source);
     let got = quoter_compare::compare(&p.ctx, fresh, token_in, amount, pct, block).await;
+    // Решение 335 (а): пауза у пула с крючком B/C — перемер влияния на том же H и повтор (hooks.reprobe_before_pause).
+    let t = Try {
+        fresh,
+        block,
+        side,
+        token_in,
+        amount,
+    };
+    let got = quoter_reprobe::again(p, e, t, got).await;
     verdict(p, e, got, sum, a.usd).await
 }
 

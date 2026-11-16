@@ -196,10 +196,22 @@ pub fn pool_admission(pool: &Pool, check: Option<&PoolCheck>, s: &Store) -> Resu
     match check.map(|c| &c.impact) {
         None | Some(CheckState::NotChecked) => Err("влияние крючка ещё не проверено".into()),
         Some(CheckState::Failed { reason }) => Err(format!("проверка крючка не прошла: {reason}")),
-        Some(CheckState::Known(i)) if i.buy_pct > max || i.sell_pct > max => Err(format!(
-            "влияние крючка (покупка {}%, продажа {}%) выше допуска {max}%",
-            i.buy_pct, i.sell_pct
-        )),
+        // Решение «335 (лесенка влияния)»: влияние — функция суммы; допуск — к влиянию на сумме сделки (его применяет
+        // котировка DEX). Здесь пул закрыт, только если допуск превышен уже на наименьшей измеренной сумме стороны.
+        Some(CheckState::Known(i))
+            if least(&i.buy, i.buy_pct) > max || least(&i.sell, i.sell_pct) > max =>
+        {
+            Err(format!(
+                "влияние крючка на наименьшей сумме (покупка {}%, продажа {}%) выше допуска {max}%",
+                least(&i.buy, i.buy_pct),
+                least(&i.sell, i.sell_pct)
+            ))
+        }
         Some(CheckState::Known(_)) => Ok(()),
     }
+}
+
+/// Наименьшее влияние стороны по лесенке (решение «335 (лесенка влияния)»); лесенки нет — одно число. Ошибок нет.
+fn least(steps: &[crate::core::types::HookStep], flat: Decimal) -> Decimal {
+    steps.iter().map(|s| s.pct).min().unwrap_or(flat)
 }

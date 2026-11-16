@@ -14,7 +14,7 @@ use crate::core::types::{RouteLeg, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::quote::path::Path;
+use super::super::quote::path::{Hop, Path};
 use super::super::quote::via::Via;
 use super::chain::Step;
 use super::native::{self, Wrap};
@@ -50,10 +50,19 @@ pub async fn prepare(
 ) -> GatewayResult<Prep> {
     let ctx = &v.q.ctx;
     // Тот же расчёт, что у котировки, но только по пулам маршрута и по состоянию на сейчас (с допуском пулов).
-    let mut path = live::path(v, &leg.hops, req.qty, true).await?;
+    let (mut path, th) = live::path(v, &leg.hops, req.qty, true).await?;
     check_price(ctx, req, path.coins, path.usdt)?;
     let (mut steps, mut wrap) = legs(ctx, req, &path, mins, decs, is_native)?;
-    let all = exit_quote::check(ctx, &path, exit_quote::exit_of(req), |_| true).await?;
+    // Ревью Н7: у пула с крючком выход квотера на сумме хопа уже снят пробой этой сделки (exec/hook_trade.rs).
+    let known = |h: &Hop| {
+        th.quoted(
+            &h.entry.pool.reference,
+            h.token_in == h.entry.usdt,
+            h.swapped.amount_in,
+        )
+    };
+    let pick = (exit_quote::exit_of(req), |_: &Hop| true);
+    let all = exit_quote::check_with(ctx, &path, pick, known).await?;
     // Решение 261: расхождения «в нашу сторону» — только строка в хронологию (exec/quoter_favour.rs).
     let (fixes, favour) = quoter_favour::split(all);
     // Журнал — один раз перед отправкой (trade_direct.rs): после approve подготовка идёт второй раз.

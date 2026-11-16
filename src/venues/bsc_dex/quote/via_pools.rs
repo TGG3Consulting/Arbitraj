@@ -19,7 +19,6 @@ use crate::core::types::{Asset, CheckState, Side};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::exec::native;
-use super::super::math::swap_cl::Swapped;
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::path::Path;
@@ -132,7 +131,8 @@ impl Via<'_> {
                     continue;
                 }
             };
-            let mut firsts: Vec<Option<GatewayResult<Swapped>>> = vec![None; p2.len()];
+            let mut firsts: Vec<Option<GatewayResult<super::route_calc::First>>> =
+                vec![None; p2.len()];
             for a in &p1 {
                 for (j, b) in p2.iter().enumerate() {
                     // Решение 295: обе ноги — пары одного многомонетного пула (одна площадка) — не путь: один пул —

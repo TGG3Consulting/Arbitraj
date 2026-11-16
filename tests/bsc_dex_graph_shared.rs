@@ -261,6 +261,7 @@ async fn shared_pool_without_after_state_refused() {
             gas: 0,
             hook_pct: Decimal::ZERO,
             tax_pct: Decimal::ZERO,
+            hook: Default::default(),
         },
         dec_in: 18,
         dec_out: 18,

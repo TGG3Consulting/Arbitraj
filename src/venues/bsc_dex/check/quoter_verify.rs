@@ -89,18 +89,44 @@ pub async fn verify(
         Ok(v) => v,
         Err(why) => return Verdict::Fail(plain(why)),
     };
-    let pct = old
+    // Ревью 3 (Б4, Н-в): сторона пула с крючком «не прошла» — её сверять не на чем (в котировку она не идёт).
+    if let Some(why) = old
         .as_ref()
-        .map_or(Decimal::ZERO, |i| reprobe_rule::side_pct(i, side));
+        .and_then(|i| super::hook_fold::side_fail(i, side == Side::Buy))
+    {
+        return Verdict::Fail(plain(format!(
+            "проверка крючка на эту сторону не прошла: {why}"
+        )));
+    }
+    // Решение «335 (лесенка влияния)»: пул с крючком B/C сверяется на верхней точке лесенки стороны — её входе и
+    // влиянии на нём (как сумма сверки пулов без крючка: min(наш максимум, ликвидность стороны), решение 261).
+    let top = old
+        .as_ref()
+        .and_then(|i| reprobe_rule::side_steps(i, side).last().cloned());
+    let pct = match &top {
+        Some(t) => t.pct,
+        None => old
+            .as_ref()
+            .map_or(Decimal::ZERO, |i| reprobe_rule::side_pct(i, side)),
+    };
     // Сумма — по глубине стороны в памяти (её же фильтр глубины пропустил сторону; кэш глубины свежим чтением не
     // трогается).
-    let a = match quoter_amount::side_usd(p, e, usdt_dec, side) {
-        Ok(a) => a,
-        Err(f) => return Verdict::Fail(f),
+    let a = match &top {
+        Some(t) => quoter_amount::Amount {
+            usd: t.usd,
+            source: format!("верхняя точка лесенки влияния крючка ({} USDT)", t.usd),
+        },
+        None => match quoter_amount::side_usd(p, e, usdt_dec, side) {
+            Ok(a) => a,
+            Err(f) => return Verdict::Fail(f),
+        },
     };
-    let amount = match counter(p, e, usdt_dec, a.usd) {
-        Ok(v) => v,
-        Err(f) => return Verdict::Fail(f),
+    let amount = match &top {
+        Some(t) => t.amount_in,
+        None => match counter(p, e, usdt_dec, a.usd) {
+            Ok(v) => v,
+            Err(f) => return Verdict::Fail(f),
+        },
     };
     if let Err(err) = p.ctx.dec("dex.quoter_max_diff_pct") {
         return Verdict::Fail(from_err(err));
@@ -119,6 +145,8 @@ pub async fn verify(
     }
     let (token_in, amount) = match side {
         Side::Buy => (fresh.usdt, amount),
+        // Верхняя точка лесенки продажи — уже монеты (вход пула продажи).
+        Side::Sell if top.is_some() => (fresh.coin, amount),
         // Продажа — монеты на ту же сумму по цене пула на H, без обмена на стороне покупки (решение 73): у пула с
         // ликвидностью только с одной стороны цены покупка невозможна, а продажа глубокая — стороны независимы.
         Side::Sell => match super::super::quote::spot::coins_for(fresh, amount) {

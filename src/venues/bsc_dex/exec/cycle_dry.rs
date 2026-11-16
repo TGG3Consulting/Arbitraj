@@ -77,7 +77,9 @@ async fn fill(
         .and_then(|l| super::super::quote::cycle::eval(ctx, &l, req.input))
         .ok()
         .map(|p| p.usdt);
-    let (legs, _) = cycle_legs::fresh(q, &req.cycle).await?;
+    let (mut legs, _) = cycle_legs::fresh(q, &req.cycle).await?;
+    // Ревью 3 (Н-е): как живой цикл — сумма вне лесенки крючка не отказ (exec/cycle_trade.rs open).
+    super::cycle_trade::open(&mut legs);
     let rates = cycle_cost::rates(q, base).await?;
     r.usdt = req.input * rates.base_usdt;
     let dec = legs[0].dec_in;

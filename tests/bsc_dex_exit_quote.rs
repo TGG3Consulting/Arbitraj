@@ -145,6 +145,7 @@ fn sell_path(c: &Ctx) -> Path {
         gas: 0,
         hook_pct: Decimal::ZERO,
         tax_pct: Decimal::ZERO,
+        hook: Default::default(),
     };
     let swapped = Swapped {
         amount_in: u("2434660000000000000000"),

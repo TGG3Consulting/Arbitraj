@@ -54,6 +54,29 @@ pub fn max_of(
     cexes: &[String],
     dex_dex: bool,
 ) -> Result<Decimal, GatewayError> {
+    fold_of(s, MAX, (dex, cexes, dex_dex), Decimal::max)?.ok_or_else(|| {
+        GatewayError::not_set(
+            None,
+            MAX,
+            format!(
+                "Не задана настройка {MAX} ни у одного направления с DEX (биржи с кошельком DEX: {}; DEX ↔ DEX: {}) — \
+                 сумма сверки с квотером не считается",
+                if cexes.is_empty() { "нет".to_string() } else { cexes.join(", ") },
+                if dex_dex { "есть" } else { "нет" }
+            ),
+        )
+    })
+}
+
+/// Значение настройки `name` по областям направлений с DEX (как max_of), сведённое `pick` (наибольшее, наименьшее).
+/// Принимает: хранилище, имя, (id DEX, биржи, есть ли «DEX ↔ DEX»), правило. Возвращает: None — не задано ни у
+/// одного направления. Ошибки: Internal (значение в неверном виде).
+pub fn fold_of(
+    s: &Store,
+    name: &str,
+    (dex, cexes, dex_dex): (&str, &[String], bool),
+    pick: fn(Decimal, Decimal) -> Decimal,
+) -> Result<Option<Decimal>, GatewayError> {
     let mut asks: Vec<(VenueDir, &str)> = Vec::new();
     for c in cexes {
         asks.push((vd(c, DirKind::CexToDex), c));
@@ -68,24 +91,13 @@ pub fn max_of(
             venue: Some(venue),
             coin: None,
         };
-        match s.decimal_dir(MAX, Some(pair), at) {
-            Ok(v) => best = Some(best.map_or(v, |b| b.max(v))),
+        match s.decimal_dir(name, Some(pair), at) {
+            Ok(v) => best = Some(best.map_or(v, |b| pick(b, v))),
             Err(e) if e.code == ErrorCode::NotConfigured => {}
             Err(e) => return Err(e),
         }
     }
-    best.ok_or_else(|| {
-        GatewayError::not_set(
-            None,
-            MAX,
-            format!(
-                "Не задана настройка {MAX} ни у одного направления с DEX (биржи с кошельком DEX: {}; DEX ↔ DEX: {}) — \
-                 сумма сверки с квотером не считается",
-                if cexes.is_empty() { "нет".to_string() } else { cexes.join(", ") },
-                if dex_dex { "есть" } else { "нет" }
-            ),
-        )
-    })
+    Ok(best)
 }
 
 /// Пара «площадка · тип». Ошибок нет.
@@ -105,6 +117,24 @@ pub fn max_trade_usd(p: &Pools) -> Result<Decimal, Fail> {
     let acc = s.accounts();
     let mapped: Vec<String> = cexes.into_iter().filter(|c| acc.row(c).is_some()).collect();
     max_of(s, &p.ctx.venue().0, &mapped, acc.row(ROW_DEX_DEX).is_some())
+        .map_err(|e| (e.message, e.setting))
+}
+
+/// Ревью Н5 (лесенка влияния): наименьший signal.probe_usd среди направлений с переводом и DEX — тех же областей,
+/// что читает сигнал (решение 260, core/signal_probe.rs: «площадка · тип», площадка покупки, вся система; у «DEX ↔
+/// DEX» настройки нет). Возвращает: None — не задан ни у одного (сигнал тогда считает на потолке). Ошибки: как у
+/// max_trade_usd.
+pub fn probe_low(p: &Pools) -> Result<Option<Decimal>, Fail> {
+    let s = &p.ctx.settings;
+    let cexes = s.venue_kinds().cexes().ok_or((
+        "виды площадок шлюза ещё не сообщены ядром — объём проверки сигнала не считается"
+            .to_string(),
+        None,
+    ))?;
+    let acc = s.accounts();
+    let mapped: Vec<String> = cexes.into_iter().filter(|c| acc.row(c).is_some()).collect();
+    let dex = p.ctx.venue().0;
+    fold_of(s, "signal.probe_usd", (&dex, &mapped, false), Decimal::min)
         .map_err(|e| (e.message, e.setting))
 }
 

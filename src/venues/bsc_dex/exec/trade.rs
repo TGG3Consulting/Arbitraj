@@ -115,7 +115,7 @@ async fn run(
     // Предторговая верификация (решение 83) — для всех форм; её свежие amountOutMin по ногам идут в исполнение.
     let mut graph_mins: Option<Vec<Decimal>> = None;
     // Решение «335 (В1, пакет)»: окружение котировки со свежими записями пулов маршрута из верификации — проба крючков
-    // перед сделкой (exec/precheck.rs hooks_again) берёт их на блоке верификации, не читая пулы второй раз.
+    // перед сделкой (exec/trade_probe.rs hooks_again) берёт их на блоке верификации, не читая пулы второй раз.
     let mut graph_q: Option<Quoting> = None;
     if route.mode == RouteMode::Graph {
         if !route.executable {

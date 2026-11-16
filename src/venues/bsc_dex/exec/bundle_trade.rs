@@ -16,7 +16,7 @@
 //! Решение 223: доли с общим пулом пересчитываются по порядку исполнения (quote/graph_seq.rs resequence).
 //! Решение 228: минимум ноги — exec/leg_min.rs (E_k × max(1 − допуск, B / E), минимум верификации — нижней границей).
 //! Кто вызывает: exec/trade.rs (графовый мульти-роутер).
-//! От чего зависит: exec/{bundle,bundle_ref,swap_ctx,bundle_native,bundle_notify,bundle_send,chain,leg_min,live,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
+//! От чего зависит: exec/{bundle,bundle_ref,swap_ctx,bundle_native,bundle_notify,bundle_send,chain,leg_min,hook_trade,native,result,verify_gate,txs,trade}.rs, quote/{via,direct}.rs,
 //! wallet/nonce.rs, pools/registry.rs, core/types.
 //! Настройки: dex.bundle_max_routers (исполнимость — quote/graph_route.rs); через вызываемые — send.*, dex.*, channel.*.
 
@@ -39,7 +39,7 @@ use super::trade::{check_price, sides, worst_positive};
 use super::txs::{self, Env};
 use super::verify_gate::Verified;
 use super::{
-    bundle, bundle_native, bundle_notify, bundle_send, chain, leg_min, live, native, result,
+    bundle, bundle_native, bundle_notify, bundle_send, chain, hook_trade, leg_min, native, result,
 };
 
 /// Сделка мульти-роутерным бандлом. Принимает: котировку, окружение, очередь кошелька, запрос, маршрут из запроса,
@@ -86,16 +86,25 @@ pub async fn trade(
     // Доли по живому состоянию + свежий amountOutMin ноги (решение 83) в последний шаг; сверка средней цены с худшей.
     let mut legs: Vec<Vec<Step>> = Vec::with_capacity(route.legs.len());
     let (mut coins, mut paid, mut left) = (Decimal::ZERO, Decimal::ZERO, req.qty);
-    let mut paths = Vec::with_capacity(route.legs.len());
-    for (i, (leg, w)) in route.legs.iter().zip(&weights).enumerate() {
+    let mut qtys = Vec::with_capacity(route.legs.len());
+    for (i, w) in weights.iter().enumerate() {
         let qty = if i + 1 == route.legs.len() {
             left
         } else {
             (req.qty * w / total).min(left)
         };
         left -= qty;
-        paths.push((live::path(&v, &leg.hops, qty, false).await?, qty));
+        qtys.push(qty);
     }
+    // Решение «335 (лесенка влияния)», ревью Н7: пробы крючков всех долей — одним пакетом (exec/hook_trade.rs).
+    let shares: Vec<_> = route
+        .legs
+        .iter()
+        .zip(&qtys)
+        .map(|(l, q)| (l.hops.as_slice(), *q))
+        .collect();
+    let (found, _) = hook_trade::paths(&v, &shares, false).await?;
+    let mut paths: Vec<_> = found.into_iter().zip(qtys).collect();
     // Решение 223: доли с общим пулом — по порядку исполнения на состоянии пула после прошлых долей (бандл проводит их
     // по порядку внутри роутер-группы; доли с общим пулом — в одной группе). Без общих пулов — без изменений.
     graph_seq::resequence(ctx, req.side, &taxes, &mut paths)?;

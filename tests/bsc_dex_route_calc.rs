@@ -105,6 +105,7 @@ fn leg(e: &Entry, token_in: Address, token_out: Address) -> Leg {
             gas: 100_000,
             hook_pct: Decimal::ZERO,
             tax_pct: Decimal::ZERO,
+            hook: Default::default(),
         },
         token_in,
         token_out,

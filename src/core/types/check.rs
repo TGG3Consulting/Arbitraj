@@ -82,10 +82,41 @@ pub struct ExitGap {
 
 /// Влияние крючка на обмен, измеренное пробным обменом (решение 32), в процентах от суммы.
 /// Положительное — получаем меньше, чем по математике пула без крючка.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Решение «335 (лесенка влияния)»: влияние — функция суммы и стороны. buy / sell — лесенка точек стороны (по
+/// возрастанию входа в пул), buy_pct / sell_pct — наибольшее влияние по точкам стороны (верхняя оценка для мест, где
+/// сумма неизвестна). Пустая лесенка — влияние одно на все суммы (buy_pct / sell_pct), как до решения.
+/// Ревью 3 (Б4, Н-в): сторона может «не пройти» отдельно — buy_fail / sell_fail (причина): квотер отказал уже на
+/// наименьшей сумме стороны; другая сторона работает. refused — отказы квотера по точкам последнего замера (сторона —
+/// покупка ли, вход, причина): точка и большие суммы стороны не измерены; не хранится (только итог замера для пробы
+/// перед сделкой — exec/trade_probe.rs).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct HookImpact {
     pub buy_pct: Decimal,
     pub sell_pct: Decimal,
+    #[serde(default)]
+    pub buy: Vec<HookStep>,
+    #[serde(default)]
+    pub sell: Vec<HookStep>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub buy_fail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sell_fail: Option<String>,
+    #[serde(skip)]
+    pub refused: Vec<(bool, alloy_primitives::U256, String)>,
+}
+
+/// Точка лесенки влияния крючка (решение «335 (лесенка влияния)»): вход в пул стороны в минимальных единицах токена
+/// входа (покупка — встречный токен пула: USDT или промежуточная монета; продажа — монета), сумма в USDT (0 — не
+/// считалась: точка пробы перед сделкой) и влияние на этой сумме, %.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HookStep {
+    pub amount_in: alloy_primitives::U256,
+    pub usd: Decimal,
+    pub pct: Decimal,
+    /// Выход квотера на этой сумме, минимальные единицы (ревью Н7: проба перед сделкой отдаёт его сверке прямого
+    /// режима, второй вызов квотера на той же сумме не нужен); None — не сохранялся (точка лесенки после выравнивания).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quoter_out: Option<alloy_primitives::U256>,
 }
 
 /// Результат проверки пула с крючком группы B или C.

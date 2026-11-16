@@ -36,18 +36,24 @@ use super::super::pools::registry::{Entry, Registry};
 use super::super::pools::verify_inf_stable;
 use super::super::tokens::Tokens;
 use super::Quoting;
+use super::hook_curve::HookCurve;
 
 /// Что известно о допущенном пуле для котировки.
 #[derive(Debug, Clone)]
 pub struct Usable {
     /// Газ обмена этой стороны (единиц).
     pub gas: u64,
-    /// Влияние крючка на эту сторону, % (0 — крючка B/C нет).
+    /// Влияние крючка на эту сторону, % (0 — крючка B/C нет). Решение «335 (лесенка влияния)»: у Usable из select —
+    /// наибольшее по лесенке стороны (верхняя оценка там, где сумма неизвестна); у шага пути (quote/path.rs Hop) —
+    /// влияние, применённое на его входе (quote/direct.rs, quote/route_calc.rs: hook.pct_at / hook.settle).
     pub hook_pct: Decimal,
     /// Налог монеты пула (Entry.coin) на эту сторону ИМЕННО в этом пуле, % (решение 146, PoolFacts.taxes): покупка —
     /// налог покупки, продажа — налог продажи. Котировка берёт его на шаге монеты (quote/route_calc.rs coin_keep,
     /// quote/steps.rs, quote/direct.rs calc).
     pub tax_pct: Decimal,
+    /// Решение «335 (лесенка влияния)»: влияние крючка как функция входа в пул (quote/hook_curve.rs); пусто — одно
+    /// число hook_pct на все суммы.
+    pub hook: HookCurve,
 }
 
 /// Проверка пула. Возвращает: Ok(Usable) или Err(причина, почему пул не используется).
@@ -100,7 +106,7 @@ pub fn usable_with(
         return Err(why);
     }
     let facts: PoolFacts = checks.pool(&e.pool.reference);
-    let hook_pct = hook(ctx, e, &facts, side)?;
+    let (hook_pct, hook) = hook(ctx, e, &facts, side)?;
     // Сверка с квотером обязательна для всех пулов, с крючком тоже (check/quoter_cycle.rs), — своей стороны
     // (решение 73: стороны сверяются независимо).
     match facts.quoter.side(side) {
@@ -118,16 +124,23 @@ pub fn usable_with(
         gas,
         hook_pct,
         tax_pct,
+        hook,
     })
 }
 
-/// Допуск крючка и его влияние на сторону, %. Err — пул не допущен (причина).
-fn hook(ctx: &Ctx, e: &Entry, facts: &PoolFacts, side: Side) -> Result<Decimal, String> {
+/// Допуск крючка и его влияние на сторону: (наибольшее по лесенке, %, и лесенка с лимитом — решение «335 (лесенка
+/// влияния)»). Err — пул не допущен (причина).
+fn hook(
+    ctx: &Ctx,
+    e: &Entry,
+    facts: &PoolFacts,
+    side: Side,
+) -> Result<(Decimal, HookCurve), String> {
     let Some(h) = e.pool.hooks.as_ref() else {
-        return Ok(Decimal::ZERO);
+        return Ok((Decimal::ZERO, HookCurve::default()));
     };
     if h.group == HookGroup::A {
-        return Ok(Decimal::ZERO);
+        return Ok((Decimal::ZERO, HookCurve::default()));
     }
     let allowed = ctx
         .settings
@@ -160,14 +173,15 @@ fn hook(ctx: &Ctx, e: &Entry, facts: &PoolFacts, side: Side) -> Result<Decimal, 
                 .map_err(|e| e.message)?,
         )
     };
-    let impact = match facts.hook.as_ref().map(|c| &c.impact) {
-        Some(CheckState::Known(i)) => {
-            if side == Side::Buy {
-                i.buy_pct
-            } else {
-                i.sell_pct
+    let (impact, steps) = match facts.hook.as_ref().map(|c| &c.impact) {
+        // Ревью 3 (Б4, Н-в): сторона «не прошла» (квотер отказал на её наименьшей сумме) — только эта сторона.
+        Some(CheckState::Known(i)) => match (side, &i.buy_fail, &i.sell_fail) {
+            (Side::Buy, Some(why), _) | (Side::Sell, _, Some(why)) => {
+                return Err(format!("проверка крючка на эту сторону не прошла: {why}"));
             }
-        }
+            (Side::Buy, ..) => (i.buy_pct, &i.buy),
+            (Side::Sell, ..) => (i.sell_pct, &i.sell),
+        },
         // Не хватает ликвидности на пробу крючка — свойство пула, причина как есть (check/hooks_probe.rs SHORT).
         Some(CheckState::Failed { reason })
             if reason.starts_with(super::super::check::hooks_probe::SHORT) =>
@@ -179,12 +193,22 @@ fn hook(ctx: &Ctx, e: &Entry, facts: &PoolFacts, side: Side) -> Result<Decimal, 
         }
         _ => return Err("влияние крючка ещё не измерено".into()),
     };
-    if let Some(limit) = limit.filter(|l| impact > *l) {
+    // Решение «335 (лесенка влияния)»: лимит — к влиянию на сумме сделки (HookCurve::pct_at); здесь пул отсекается,
+    // только если лимит превышен уже на наименьшей сумме (без лесенки — на единственной).
+    let least = steps.iter().map(|s| s.pct).min().unwrap_or(impact);
+    if let Some(limit) = limit.filter(|l| least > *l) {
         return Err(format!(
-            "влияние крючка {impact}% больше {limit_name} ({limit}%)"
+            "влияние крючка {least}% больше {limit_name} ({limit}%)"
         ));
     }
-    Ok(impact.max(Decimal::ZERO))
+    // Ревью Б1 (в): продажа выхода — оценка вне измеренного (open); факт на её сумме — проба перед сделкой
+    // (exec/hook_trade.rs), пул для продажи держимых монет не выпадает до следующего цикла крючков.
+    let curve = HookCurve {
+        steps: (!steps.is_empty()).then(|| std::sync::Arc::new(steps.clone())),
+        limit: limit.map(|l| (limit_name, l)),
+        open: exit,
+    };
+    Ok((impact.max(Decimal::ZERO), curve))
 }
 
 /// Какое направление пула нужно (решение 73).

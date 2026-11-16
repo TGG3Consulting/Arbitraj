@@ -20,7 +20,6 @@ use rust_decimal::Decimal;
 use crate::core::types::{Side, TokenTaxes};
 use crate::gateway::errors::GatewayResult;
 
-use super::super::math::swap_cl::Swapped;
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::Quoting;
@@ -71,7 +70,7 @@ impl Via<'_> {
         p1: &Ok2,
         p2: &Ok2,
         qty: Decimal,
-        first: Option<&Swapped>,
+        first: Option<&route_calc::First>,
     ) -> GatewayResult<Path> {
         let legs = self.legs(m, mid_dec, p1, p2);
         // Решение 146: налог монеты — пула её шага (P2), не монеты целиком (quote/pool_tax.rs).
@@ -80,8 +79,8 @@ impl Via<'_> {
     }
 
     /// Решение 336: обмен пула монеты P2 пути через m (у покупки — последний хоп, у продажи — первый; route_calc.rs
-    /// считает его первым) — зависит только от P2 и объёма. Принимает: как calc. Возвращает: обмен. Ошибки: как у
-    /// первой итерации calc.
+    /// считает его первым) — зависит только от P2 и объёма. Принимает: как calc. Возвращает: (влияние крючка на его
+    /// входе, обмен). Ошибки: как у первой итерации calc.
     pub fn first_leg(
         &self,
         m: &Mid,
@@ -89,7 +88,7 @@ impl Via<'_> {
         p1: &Ok2,
         p2: &Ok2,
         qty: Decimal,
-    ) -> GatewayResult<Swapped> {
+    ) -> GatewayResult<route_calc::First> {
         let legs = self.legs(m, mid_dec, p1, p2);
         let tax_keep = pool_tax::coin_keep(&legs, self.side, self.taxes);
         route_first::first(&self.q.ctx, &legs, self.side, qty, tax_keep)

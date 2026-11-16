@@ -34,6 +34,7 @@ pub mod bound_rate;
 pub mod bound_set;
 pub mod breaks;
 pub mod breaks_bins;
+pub mod breaks_hook;
 pub mod breaks_pool;
 pub mod classic_direct;
 pub mod costs;
@@ -60,6 +61,7 @@ pub mod graph_reuse;
 pub mod graph_route;
 pub mod graph_seq;
 pub mod graph_split;
+pub mod hook_curve;
 pub mod mixed_quoter;
 pub mod mixed_quoter_calls;
 pub mod native_gas;
@@ -160,7 +162,7 @@ pub struct Quoting {
     /// графа (quote/graph_fit.rs). false — подбор объёма, экран, пробы.
     pub exec_quote: bool,
     /// Решение «335 (В1, пакет)»: свежие записи пулов маршрута, перечитанные предторговой верификацией (решение 83) —
-    /// ставит exec/trade.rs после неё; проба крючков перед сделкой (exec/precheck.rs hooks_again) берёт их на том же
+    /// ставит exec/trade.rs после неё; проба крючков перед сделкой (exec/trade_probe.rs hooks_again) берёт их на том же
     /// блоке вместо второго чтения. None — верификации не было (котировка, прямой и умный маршрут без графа).
     pub route_fresh: Option<std::sync::Arc<super::check::hook_batch::RouteFresh>>,
 }

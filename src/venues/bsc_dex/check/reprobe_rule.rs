@@ -16,9 +16,10 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{HookImpact, Side};
+use crate::core::types::{HookImpact, HookStep, Side};
 use crate::gateway::errors::GatewayResult;
 
+use super::super::quote::hook_curve::merge as merge_step;
 use super::quoter_compare::Cmp;
 
 /// Пометка причины: влияние на сторону отрицательное, вычитается 0 (вопрос t156 (г)).
@@ -34,6 +35,11 @@ pub fn safe(first: &Cmp) -> bool {
     matches!(first, Cmp::Pause { nums: Some(n), .. } if n.local < n.remote)
 }
 
+/// Лесенка влияния стороны (решение «335 (лесенка влияния)»), по возрастанию входа. Ошибок нет.
+pub fn side_steps(i: &HookImpact, side: Side) -> &[HookStep] {
+    if side == Side::Buy { &i.buy } else { &i.sell }
+}
+
 /// Влияние на сторону, %. Ошибок нет.
 pub fn side_pct(i: &HookImpact, side: Side) -> Decimal {
     if side == Side::Buy {
@@ -43,14 +49,33 @@ pub fn side_pct(i: &HookImpact, side: Side) -> Decimal {
     }
 }
 
-/// Прежнее влияние с заменой сверяемой стороны на перемеренную. Принимает: прежнее, перемер, сторону. Ошибок нет.
+/// Прежнее влияние с заменой сверяемой стороны на перемеренную. Решение «335 (лесенка влияния)»: у перемера с
+/// точками стороны — точки вливаются в прежнюю лесенку стороны (quote/hook_curve.rs merge, накопленный максимум), а
+/// влияние стороны — наибольшее по лесенке; без точек — как раньше, одно число. Другая сторона — прежняя.
+/// Принимает: прежнее, перемер, сторону. Ошибок нет.
 pub fn only_side(old: &HookImpact, new: &HookImpact, side: Side) -> HookImpact {
     let mut i = old.clone();
-    if side == Side::Buy {
-        i.buy_pct = new.buy_pct;
+    let (steps, pct) = if side == Side::Buy {
+        (&mut i.buy, &mut i.buy_pct)
     } else {
-        i.sell_pct = new.sell_pct;
+        (&mut i.sell, &mut i.sell_pct)
+    };
+    let add = side_steps(new, side);
+    if add.is_empty() {
+        *pct = side_pct(new, side);
+        return i;
     }
+    for p in add {
+        *steps = merge_step(steps, p.clone());
+    }
+    *pct = steps.iter().map(|s| s.pct).max().unwrap_or(*pct);
+    // Ревью 3: сторона снова измерена — «не прошла» снимается.
+    if side == Side::Buy {
+        i.buy_fail = None;
+    } else {
+        i.sell_fail = None;
+    }
+    i.refused.clear();
     i
 }
 

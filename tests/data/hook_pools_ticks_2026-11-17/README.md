@@ -25,5 +25,5 @@ dex.tick_read_band_pct = 70 (bsc_dex).
 - **П.3 (блок 134000293):** RIVER, CAKE 0xc6104625…, BLESS — getSlot0, getLiquidity, квотер на 20 USDT в обе стороны
   одним Multicall3.aggregate3 (allowFailure = true) и теми же 12 вызовами по отдельности (записаны сразу после пакета).
 
-Используется: tests/bsc_dex_hook_pools_ticks_1117.rs (п.1), tests/bsc_dex_hook_pools_batch_1117.rs (п.3).
+Используется: tests/bsc_dex_hook_pools_ticks_1117.rs (п.1), tests/bsc_dex_hook_ladder_1117.rs (п.1, решение «335 (лесенка влияния)»), tests/bsc_dex_hook_pools_batch_1117.rs (п.3); чтение — tests/hook_ticks_common.
 Решение «335 (досъёмка 17.11)», разбор — docs/notes/t156-hook-pools-quoter-pause-2026-11-16.md.

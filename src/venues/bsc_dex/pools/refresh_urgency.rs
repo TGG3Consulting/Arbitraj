@@ -9,10 +9,10 @@
 //! Не задана (или значение вне списка) — класс не ставится, всё как раньше.
 //! Покрыто: listen_log.rs — off_map и Refresh (через refresh_event.rs, вместе с eth_blockNumber реорга), Bins (бины
 //! на блоке события); listen_site.rs — одна перечитка пар многомонетного пула (и eth_blockNumber реорга);
-//! session.rs — пары общего контракта WooFi по логу (per_block::on_member_log). Не покрыто: пробуждение мелкого пула
+//! per_block.rs — пары общего контракта WooFi по логу (on_member_log; ревью 314: только если пары у контракта есть). Не покрыто: пробуждение мелкого пула
 //! по событию ликвидности (admit::wake — пул не глубокий, в котировки не идёт), повтор чтения на новых блоках
 //! (reload.rs), чтения каждого блока (per_block::on_head).
-//! Кто вызывает: pools/refresh_event.rs, pools/listen_log.rs, pools/listen_site.rs, pools/session.rs.
+//! Кто вызывает: pools/refresh_event.rs, pools/listen_log.rs, pools/listen_site.rs, pools/per_block.rs.
 //! От чего зависит: ctx.rs (настройка), gateway/urgency.rs.
 //! Настройки: dex.event_refresh_urgency [bsc_dex] (trade / check / quote / background; необязательная).
 

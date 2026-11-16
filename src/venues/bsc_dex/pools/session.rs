@@ -208,8 +208,10 @@ async fn on_log(
             return Ok(());
         }
         // Пары общего контракта (WooFi, PoolRef::Member): лог от адреса контракта — перечитать все его пары.
-        // Решение 314: пары общего контракта по логу — классом dex.event_refresh_urgency (не задана — как раньше).
-        super::refresh_urgency::urgent(&p.ctx, per_block::on_member_log(p, &m.pools, log)).await?;
+        // Решение 314: пары общего контракта по логу — классом dex.event_refresh_urgency (не задана — как раньше);
+        // ревью 314: класс ставит per_block::on_member_log, только если пары у контракта есть (настройка не читается
+        // на каждом логе, не нашедшем пул).
+        per_block::on_member_log(p, &m.pools, log).await?;
         return Ok(());
     };
     if m.deep.get(i).copied().unwrap_or(true) {

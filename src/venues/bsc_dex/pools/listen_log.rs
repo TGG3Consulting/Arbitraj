@@ -106,7 +106,14 @@ pub async fn on_log(
             }
             _ => Ok(()),
         },
-        // Решение 314: бины на блоке события — классом dex.event_refresh_urgency (не задана — как раньше).
+        // Решение 314: бины на блоке события — классом dex.event_refresh_urgency (не задана — как раньше). Ревью 314:
+        // настройка читается, только если есть что читать у узла (бины есть, ссылка — свой контракт или Singleton;
+        // иначе reread_bins к узлу не идёт: пустой список — call::try_many без запроса).
+        Applied::Bins(ids)
+            if ids.is_empty() || !matches!(r, PoolRef::Contract(_) | PoolRef::Singleton { .. }) =>
+        {
+            Ok(())
+        }
         Applied::Bins(ids) => {
             refresh_urgency::urgent(&p.ctx, reread_bins(p, &r, &ids, block)).await
         }

@@ -29,8 +29,10 @@
 //! Решение 295: пары многомонетного пула (PoolRef::Multi) видов «каждым блоком» (Curve NG) — одно чтение на контракт
 //! (reload_many::load_group → load_site.rs); Balancer — per_block_balancer.rs (тоже по контракту).
 //! Кто вызывает: pools/session.rs.
-//! От чего зависит: listen.rs (Pools, End), reload.rs (load_one), discover.rs (Found), families.rs, ladder_counter.rs.
-//! Настройки: dex.pmm_ladder_counter, dex.pmm_ladder_usd [DEX] (ladder_counter.rs each_block); через вызываемые — dex.*.
+//! От чего зависит: listen.rs (Pools, End), reload.rs (load_one), discover.rs (Found), families.rs, ladder_counter.rs,
+//! refresh_urgency.rs (решение 314: лог общего контракта — класс очереди узла, только при парах контракта).
+//! Настройки: dex.pmm_ladder_counter, dex.pmm_ladder_usd [DEX] (ladder_counter.rs each_block); dex.event_refresh_urgency
+//! (on_member_log); через вызываемые — dex.*.
 
 use alloy::rpc::types::Log;
 use alloy_primitives::Address;
@@ -144,10 +146,14 @@ pub async fn on_member_log(p: &Pools, pools: &[(Found, String)], log: &Log) -> R
     let Some(block) = log.block_number else {
         return Ok(true);
     };
-    for (f, t) in members {
-        if reload::load_one(p, f, t, block).await?.is_err() {
-            p.reg.update(&f.reference, |e| e.valid = false);
+    // Решение 314 (ревью): класс dex.event_refresh_urgency — только когда есть пары и блок (есть работа узлу).
+    let work = async {
+        for (f, t) in members {
+            if reload::load_one(p, f, t, block).await?.is_err() {
+                p.reg.update(&f.reference, |e| e.valid = false);
+            }
         }
-    }
-    Ok(true)
+        Ok::<bool, End>(true)
+    };
+    super::refresh_urgency::urgent(&p.ctx, work).await
 }

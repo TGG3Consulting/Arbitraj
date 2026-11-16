@@ -3,8 +3,9 @@
 //! узлу: голова (slot0, liquidity, [swapFee фабрики — решение 274], [fee() пула — решение 281]) и слова карты TickLens
 //! одним eth_call к Multicall3.aggregate3 на блоке чтения. Последовательное чтение (load_v2v3.rs v3 + load.rs) делает
 //! это не меньше чем тремя обращениями: слова зависят от текущего тика, а он — из ответа slot0. Здесь слова берутся
-//! вокруг тика ЗАПИСИ (после применения события — тик события, events_v3.rs), затем по slot0 того же ответа
-//! вычисляется настоящий диапазон (load_v2v3.rs word_range — та же функция, что у последовательного чтения): лежит
+//! вокруг тика ЗАПИСИ, переданной вызывающим: в ветке off_map — запись после применения события (тик события,
+//! events_v3.rs), в ветке Refresh (реорг, расхождение) — запись ДО события (событие не применено, listen_log.rs берёт
+//! её до apply); итог от этого не зависит — по slot0 того же ответа всегда вычисляется настоящий диапазон (load_v2v3.rs word_range — та же функция, что у последовательного чтения): лежит
 //! внутри прочитанного — берутся только его слова (ответ TickLens — по одному слову, лишние слова отбрасываются);
 //! не лежит — второе обращение: слова настоящего диапазона тем же Multicall3 на том же блоке. Итог (состояние, тики,
 //! диапазон слов, комиссия) — тот же, что у последовательного чтения на этом блоке: те же вызовы, тот же разбор
@@ -18,6 +19,11 @@
 //! Miss), load_v2v3.rs (word_range), fee_fresh.rs (Extras, split), load.rs (Loaded), ticks.rs, registry.rs (Entry).
 //! Настройки: dex.event_refresh_one_call [bsc_dex], dex.multicall3 [bsc_dex]; через вызываемые — dex.tick_lens,
 //! dex.tick_words, dex.depth_band_pct, dex.tick_read_band_pct, dex.v3_fee_source, dex.factory.
+//!
+//! Официальный ABI (как в load_batch_v2v3.rs и load_v2v3.rs): slot0 / liquidity / TickLens.getPopulatedTicksInWord —
+//! research/flow/bsc_dex.md, раздел 3 (IPancakeV3PoolState.sol#L21-L48, IUniswapV3PoolState.sol#L21-L32,
+//! ITickLens.sol#L6-L24); Multicall3.aggregate3, Call3 и Result —
+//! https://github.com/mds1/multicall3/blob/main/src/Multicall3.sol#L19-L35 (aggregate3 — #L98; node/multicall.rs).
 
 use alloy_primitives::Bytes;
 
@@ -47,6 +53,9 @@ pub enum Got {
 }
 
 /// Читает пул записи одним обращением (см. шапку). Принимает: окружение, запись, блок чтения.
+/// ABI: slot0, liquidity — IPancakeV3PoolState.sol#L21-L48 / IUniswapV3PoolState.sol#L21-L32; слова —
+/// ITickLens.sol#L6-L24 (research/flow/bsc_dex.md, раздел 3); одно обращение — Multicall3.aggregate3
+/// (https://github.com/mds1/multicall3/blob/main/src/Multicall3.sol#L98).
 /// Возвращает: Some — прочитано; None — путь не применяется (чтение прежнее). Ошибки: узел (как есть), BadResponse
 /// (откат нужного вызова, ответ не по ABI), NotConfigured (dex.tick_lens, dex.tick_words, dex.factory).
 pub async fn read(ctx: &Ctx, e: &Entry, at: u64) -> GatewayResult<Option<Loaded>> {
@@ -92,7 +101,9 @@ pub async fn read(ctx: &Ctx, e: &Entry, at: u64) -> GatewayResult<Option<Loaded>
     }
 }
 
-/// Разбор ответа (чистая логика): голова — первые `head_len` ответов (fee() 281 отделяется fee_fresh::split по тому же
+/// Разбор ответа (чистая логика) по официальному ABI: slot0 / liquidity — IPancakeV3PoolState.sol#L21-L48,
+/// IUniswapV3PoolState.sol#L21-L32 (load_batch_v2v3.rs parse_head); getPopulatedTicksInWord — ITickLens.sol#L6-L24
+/// (v3_ticks); Result aggregate3 — Multicall3.sol#L19-L35. Голова — первые `head_len` ответов (fee() 281 отделяется fee_fresh::split по тому же
 /// признаку `x`, что строил вызовы), дальше — слова `pred`. Настоящий диапазон — `actual(тик slot0)`; внутри `pred` —
 /// Done с тиками только его слов, иначе — Words (нужно второе обращение).
 /// Ошибки: откат или нехватка ответа головы или нужного слова, ответ не по ABI, нет tickSpacing, ошибка `actual`.

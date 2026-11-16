@@ -321,9 +321,11 @@ async fn one(core: &Core, d: &Direction) -> Outcome {
     let s = &core.inner.deps.settings;
     let mode = super::dry::mode(s);
     // Бюджет — без вычета текущей сделки монеты (busy_budget.rs: признак задачи, действует только здесь).
+    // Решение 345 (ревью t159 Б2): начало общего срока profit.calc_timeout_ms — от него мягкий срок подбора.
+    let from = std::time::Instant::now();
     let calc = async {
-        // Решение 348: назначение «теневой» (замер «кто вызвал котировку»).
-        let work = profit::decide(core, d, &mode);
+        // Решение 348: назначение «теневой» (замер «кто вызвал котировку»); решение 345 — мягкий срок подбора от `from`.
+        let work = profit::decide_within(core, d, &mode, from);
         match crate::gateway::quote_purpose::scope(
             crate::gateway::quote_purpose::Purpose::Shadow,
             work,

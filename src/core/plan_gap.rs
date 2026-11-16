@@ -63,6 +63,26 @@ impl<C: Curve> Curve for PlanGap<C> {
         }
         rs
     }
+
+    /// Решение 342: процент прибыли — у обёрнутой кривой. Ошибок нет.
+    fn pct(data: &C::Data) -> Option<Decimal> {
+        C::pct(data)
+    }
+
+    /// Ревью t159 Б1: база процента — у обёрнутой кривой. Ошибок нет.
+    fn pct_base(data: &C::Data) -> Option<Decimal> {
+        C::pct_base(data)
+    }
+
+    /// Решение 344: изломы пулов — у обёрнутой кривой. Ошибок нет.
+    async fn breaks(
+        &mut self,
+        data: &C::Data,
+        max_qty: Decimal,
+        limit: u32,
+    ) -> (Vec<Decimal>, Vec<Decimal>) {
+        self.inner.breaks(data, max_qty, limit).await
+    }
 }
 
 impl<C: Curve> PlanGap<C> {

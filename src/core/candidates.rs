@@ -202,15 +202,18 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
     let t = Timing::new(queued_at);
     // Решение 359: сигнал на начало расчёта — в запись отказа (только журнал).
     let sig = super::cand_signal_note::start(core, d);
+    // Решение 345 (ревью t159 Б2): начало общего срока profit.calc_timeout_ms — от него мягкий срок подбора.
+    let from = Instant::now();
     // Расчёт кандидата — путь сделки: котировки площадок идут классом Trade (gateway/urgency.rs, решение 61).
     let work = urgency::scope(
         Urgency::Trade,
         calc_meter::scope(
             t.meter.clone(),
-            // Решение 348: назначение «подбор» — замер «кто вызвал котировку» (на расчёт не влияет).
+            // Решение 348: назначение «подбор» — замер «кто вызвал котировку» (на расчёт не влияет); решение 345 —
+            // мягкий срок подбора от `from`.
             calc_timing::scope(
                 t.clone(),
-                quote_purpose::scope(Purpose::Size, profit::decide(core, d, &mode)),
+                quote_purpose::scope(Purpose::Size, profit::decide_within(core, d, &mode, from)),
             ),
         ),
     );

@@ -519,8 +519,8 @@ pub async fn replan_sized(
     cap: Option<Decimal>,
     want: Option<&mut Want>,
 ) -> Verdict {
-    // Решение 348: назначение «предпроверка» (замер «кто вызвал котировку»).
-    let work = profit::decide_capped(core, d, &super::dry::Mode::Live, cap, want);
+    // Решение 348: назначение «предпроверка» (замер «кто вызвал котировку»); решение 345 — без мягкого срока.
+    let work = profit::decide_capped(core, d, &super::dry::Mode::Live, cap, want, None);
     crate::gateway::quote_purpose::scope(crate::gateway::quote_purpose::Purpose::Precheck, work)
         .await
 }

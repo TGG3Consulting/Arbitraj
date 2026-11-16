@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, PoolDirectory, PoolKind, Quote,
-    SendChannelInfo, Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue,
+    AccountBalances, Asset, Balance, CoinNetworkInfo, Cost, DexRoute, PoolDirectory, PoolKind,
+    Quote, SendChannelInfo, Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue,
     WithdrawRequest,
 };
 
@@ -121,6 +121,24 @@ pub trait Venue: Send + Sync {
     /// Принимает: монету, сторону, количество. Возвращает: исполнимое количество. Ошибки: как у quote.
     async fn quote_fills(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Decimal> {
         self.quote(asset, side, qty).await.map(|q| q.fillable_qty)
+    }
+
+    /// Решение 344 (задача t159, ревью t159 Б4, Н4): изломы кривой площадки по объёму монеты — объёмы, на которых у
+    /// пулов МАРШРУТА котировки меняется кусок кривой (пересечение тика, конец бина, точка лесенки цен): точки подбора
+    /// объёма ядра (core/size_breaks.rs). Объём — монеты всей стороны: адаптер учитывает долю сплита, налог монеты и
+    /// крючок шага монеты, комиссию на вход у бинов при продаже. Только память адаптера, без запросов к площадке. По
+    /// умолчанию — пусто (у биржи изломы — уровни стакана, их ядро берёт само). Принимает: монету, сторону (покупка —
+    /// монета на выходе пула, продажа — на входе), маршрут котировки (Quote.route), наибольший объём (монет), сколько
+    /// изломов наибольшим числом. Возвращает: объёмы монеты по возрастанию. Ошибки: как у котировки до расчёта.
+    async fn quote_breaks(
+        &self,
+        _asset: &Asset,
+        _side: Side,
+        _route: &DexRoute,
+        _max_qty: Decimal,
+        _limit: u32,
+    ) -> GatewayResult<Vec<Decimal>> {
+        Ok(Vec::new())
     }
 
     /// Решение 217: снимок данных котировки стороны на этот момент (gateway/frozen.rs) — у биржи копия её стакана, у

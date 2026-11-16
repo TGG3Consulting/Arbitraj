@@ -9,6 +9,8 @@
 //!   (size_batch.rs at_many). Пики не зависят друг от друга (отрезки соседних точек, общий у них — только конец), поэтому
 //!   набор посчитанных точек и итог те же, что у уточнения по очереди, пока не исчерпан size.max_evals (исчерпан —
 //!   при очереди недосчитан последний пик, в ногу — последние шаги всех; итог — лучший из посчитанных в обоих случаях).
+//!   Ревью t159 Б1: тот же тернарный поиск по любому значению точки (tern_all, value) — у size_pct.rs это запас по
+//!   порогу % в USDT; refine_all — tern_all по прибыли, итог побайтно прежний.
 //!
 //! Кто вызывает: core/size_search.rs (refine_all), core/size_bounds.rs (probes), core/size_curve.rs и
 //! core/cycle_plan.rs (par_settings).
@@ -18,7 +20,9 @@
 use crate::settings::read::At;
 use crate::settings::store::Store;
 
-use super::size::{Curve, Fail};
+use rust_decimal::Decimal;
+
+use super::size::{Curve, Fail, Point};
 use super::size_memo::Memo;
 
 /// Что делает: (size.parallel_points, size.bisect_probes, параллельные точки отключены). Ревью t157 Н3: параллельные
@@ -84,6 +88,38 @@ pub async fn refine_all<C: Curve>(
     steps: u32,
     tol: u64,
 ) -> Result<(), Fail> {
+    tern_all(m, spans, steps, tol, &|p: &Point<C::Data>| Some(p.profit)).await
+}
+
+/// Что делает: значение точки n по `f` — как Memo::profit: не посчитана и предел (или мягкий срок) исчерпан — None;
+/// объём недопустим — None. Принимает: расчёты, n, значение точки. Возвращает: значение. Ошибки: Stop.
+pub async fn value<C: Curve, F>(m: &mut Memo<'_, C>, n: u64, f: &F) -> Result<Option<Decimal>, Fail>
+where
+    F: Fn(&Point<C::Data>) -> Option<Decimal> + Sync,
+{
+    if !m.map.contains_key(&n) && m.capped() {
+        return Ok(None);
+    }
+    match m.at(n).await {
+        Ok(p) => Ok(f(&p)),
+        Err(Fail::Stop(e)) => Err(Fail::Stop(e)),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Что делает: тернарный поиск максимума значения `f` у всех отрезков в ногу (как refine_all; недопустимый объём и
+/// None — хуже любого значения). Принимает: расчёты, отрезки, предел шагов, ширину остановки, значение точки.
+/// Возвращает: (). Ошибки: Stop.
+pub async fn tern_all<C: Curve, F>(
+    m: &mut Memo<'_, C>,
+    spans: &[(u64, u64)],
+    steps: u32,
+    tol: u64,
+    f: &F,
+) -> Result<(), Fail>
+where
+    F: Fn(&Point<C::Data>) -> Option<Decimal> + Sync,
+{
     let mut st: Vec<Tern> = spans
         .iter()
         .map(|&(lo, hi)| Tern {
@@ -109,7 +145,7 @@ pub async fn refine_all<C: Curve>(
         for &i in &active {
             st[i].left -= 1;
             let (m1, m2) = st[i].thirds();
-            let (f1, f2) = (m.profit(m1).await?, m.profit(m2).await?);
+            let (f1, f2) = (value(m, m1, f).await?, value(m, m2, f).await?);
             if f1 < f2 {
                 st[i].lo = m1;
             } else {
@@ -128,7 +164,7 @@ pub async fn refine_all<C: Curve>(
     }
     m.at_many(&fin).await;
     for n in fin {
-        m.profit(n).await?;
+        value(m, n, f).await?;
     }
     Ok(())
 }

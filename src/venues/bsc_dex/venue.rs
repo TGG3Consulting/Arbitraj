@@ -14,8 +14,9 @@ use rust_decimal::Decimal;
 use tokio::sync::mpsc;
 
 use crate::core::types::{
-    Asset, Balance, CoinNetworkInfo, Cost, DexAccountId, PoolDirectory, Quote, SendChannelInfo,
-    Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue, WithdrawRequest,
+    Asset, Balance, CoinNetworkInfo, Cost, DexAccountId, DexRoute, PoolDirectory, Quote,
+    SendChannelInfo, Side, TradeRequest, TradeResult, Transfer, VenueId, WalletQueue,
+    WithdrawRequest,
 };
 use crate::gateway::contract::{ConnectionCheck, DexFamily, Venue, VenueKind};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -121,6 +122,21 @@ impl Venue for BscDex {
         }
         let class = urgency::is_set().unwrap_or(Class::Quote);
         scope(class, self.p.quoting().fills(asset, side, qty)).await
+    }
+
+    /// Решение 344 (задача t159, ревью t159 Б4): изломы кривых пулов маршрута котировки по объёму монеты стороны —
+    /// quote/breaks.rs (только память реестра). Ошибки: NoRoute (нет адреса монеты), NotConfigured (тикер USDT), узел
+    /// (decimals).
+    async fn quote_breaks(
+        &self,
+        asset: &Asset,
+        side: Side,
+        route: &DexRoute,
+        max_qty: Decimal,
+        limit: u32,
+    ) -> GatewayResult<Vec<Decimal>> {
+        let q = self.p.quoting();
+        super::quote::breaks::breaks(&q, asset, side, route, max_qty, limit).await
     }
 
     /// Решение 217: снимок котировки на момент решения — `Arc` записей пулов, разрешения, блок (frozen.rs). Только

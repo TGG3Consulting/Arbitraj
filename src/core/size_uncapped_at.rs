@@ -73,7 +73,7 @@ where
     let fits = |r: &Result<Point<C::Data>, Fail>| r.as_ref().is_ok_and(|p| p.invested <= cap);
     let over = |r: &Result<Point<C::Data>, Fail>| match r {
         Ok(p) => p.invested > cap,
-        Err(f) => matches!(f, Fail::TooLarge(_)),
+        Err(f) => f.too_large(),
     };
     // Наибольший посчитанный объём в потолке и ближайший выше, который уже за потолком.
     let lo = m.map.iter().rev().find(|(_, r)| fits(r)).map(|(n, _)| *n);

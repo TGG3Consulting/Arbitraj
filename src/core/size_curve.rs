@@ -10,10 +10,14 @@
 //! От чего зависит: costs.rs, costs_source.rs, dirctx.rs, deps.rs, engine.rs (рынок), size.rs, settings.
 //! Бюджет каждой точки — по наибольшему списанию Calc.spend_max (количество × худшая цена покупки); решение 246 —
 //! у кривой боя (profit.rs) бюджет проверяется уже после стороны A (CoreCurve.budget), без котировок B.
+//! Решение 336: batch — пачка точек одновременно (join_all на одной задаче: котировки DEX каждой точки уходят в свои
+//! потоки счёта адаптера, ожидание — общее); size.parallel_points и size.bisect_probes — в Params (size_par.rs).
 //! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (общие; значений нет —
-//! не задана хоть одна — подбора нет, сделки нет).
+//! не задана хоть одна — подбора нет, сделки нет); size.parallel_points, size.bisect_probes (необязательные, решение 336);
+//! dex.quote_reuse [площадка направления] — признак короба с повторным использованием (решение 336, один раз на подбор).
 
 use async_trait::async_trait;
+use futures_util::future::join_all;
 use rust_decimal::Decimal;
 
 use crate::core::types::{OrderBook, PriceLevel};
@@ -45,6 +49,19 @@ impl Curve for CoreCurve<'_> {
     /// Полный расчёт на объём (решение 246: с бюджетом — до стороны B, если списание больше бюджета).
     /// Ошибки: Fail из costs::evaluate_capped.
     async fn at(&mut self, qty: Decimal) -> Result<Point<Calc>, Fail> {
+        self.eval(qty).await
+    }
+
+    /// Решение 336: пачка точек одновременно (точки независимы). Ошибки: у каждой — как at.
+    async fn batch(&mut self, qtys: Vec<Decimal>) -> Vec<Result<Point<Calc>, Fail>> {
+        let me = &*self;
+        join_all(qtys.into_iter().map(|q| me.eval(q))).await
+    }
+}
+
+impl CoreCurve<'_> {
+    /// Расчёт одной точки без изменения кривой (общий для at и batch). Ошибки: Fail из costs::evaluate_capped.
+    async fn eval(&self, qty: Decimal) -> Result<Point<Calc>, Fail> {
         let src = costs::Live {
             core: self.core,
             src: self.src,
@@ -66,6 +83,19 @@ impl<S: Source> Curve for SourceCurve<'_, S> {
 
     /// Полный расчёт на объём. Ошибки: Fail из costs::evaluate_with.
     async fn at(&mut self, qty: Decimal) -> Result<Point<Calc>, Fail> {
+        self.eval(qty).await
+    }
+
+    /// Решение 336: пачка точек одновременно (точки независимы). Ошибки: у каждой — как at.
+    async fn batch(&mut self, qtys: Vec<Decimal>) -> Vec<Result<Point<Calc>, Fail>> {
+        let me = &*self;
+        join_all(qtys.into_iter().map(|q| me.eval(q))).await
+    }
+}
+
+impl<S: Source> SourceCurve<'_, S> {
+    /// Расчёт одной точки (общий для at и batch). Ошибки: Fail из costs::evaluate_with.
+    async fn eval(&self, qty: Decimal) -> Result<Point<Calc>, Fail> {
         let c = costs::evaluate_with(self.cx, qty, self.src).await?;
         Ok(point(qty, c))
     }
@@ -120,7 +150,22 @@ pub fn params(
     let s = src
         .and_then(|f| f.decided.as_deref())
         .map_or(&core.inner.deps.settings, |x| &x.settings);
-    search_params(s, step, budget, price, buy_breaks, sell_breaks)
+    let mut p = search_params(s, step, budget, price, buy_breaks, sell_breaks)?;
+    p.reuse = reuse_on(s, d);
+    Ok(p)
+}
+
+/// Что делает: решение 336 — повторное использование в подборе: dex.quote_reuse = да на одной из площадок направления
+/// (настройка области «площадка», у DEX). Читается один раз на подбор, адаптер её на горячем пути не читает (ревью t157
+/// Б1). Принимает: настройки, направление. Возвращает: да/нет (не задана — нет). Ошибок нет.
+fn reuse_on(s: &Store, d: &crate::core::types::Direction) -> bool {
+    [&d.buy_on, &d.sell_on].iter().any(|v| {
+        let at = At {
+            venue: Some(&v.0),
+            coin: None,
+        };
+        s.flag("dex.quote_reuse", at).unwrap_or(false)
+    })
 }
 
 /// Что делает: параметры поиска при известных шаге количества и изломах (решение 218: общий кусок params и пересчёта
@@ -141,6 +186,8 @@ pub fn search_params(
     let tolerance_pct = s
         .decimal("size.tolerance_pct", At::default())
         .map_err(|e| e.message)?;
+    // Решение 336: необязательные; не заданы — 1 (как до 336).
+    let (par_points, bisect_probes, par_blocked) = super::size_par::par_settings(s)?;
     Ok(Params {
         step,
         budget,
@@ -152,6 +199,12 @@ pub fn search_params(
         refine_steps: int("size.refine_steps")?,
         max_evals: int("size.max_evals")?,
         tolerance_pct,
+        par_points,
+        bisect_probes,
+        // Решение 337: пол раннего выхода ставит вызывающий (profit.rs / ниже) — здесь без него.
+        early_floor: None,
+        reuse: false,
+        par_blocked,
     })
 }
 

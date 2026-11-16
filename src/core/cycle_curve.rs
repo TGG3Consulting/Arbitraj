@@ -6,6 +6,7 @@
 //! решения 85 — у адаптера). Приход на B не нужен (перевода нет) — arrive = вход.
 //! Отказ адаптера: NoRoute (шаг не исполним целиком — объём велик) → TooLarge (меньший объём может подойти);
 //! прочее → Stop (расчёт невозможен).
+//! Решение 336: batch — пачка входов одновременно (size.parallel_points).
 //! Кто вызывает: core/cycle_plan.rs.
 //! От чего зависит: core/size.rs (Curve, Point, Fail), gateway (Venue), core/types (DexCycle, CycleQuote).
 //! Настройки: нет.
@@ -13,6 +14,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures_util::future::join_all;
 use rust_decimal::Decimal;
 
 use crate::core::types::{CycleQuote, DexCycle};
@@ -33,6 +35,20 @@ impl Curve for CycleCurve {
 
     /// Расчёт на вход qty базовой. Ошибки: TooLarge (шаг не исполним целиком), Stop (прочее).
     async fn at(&mut self, qty: Decimal) -> Result<Point<CycleQuote>, Fail> {
+        self.eval(qty).await
+    }
+
+    /// Решение 336: пачка входов одновременно (точки независимы; при параллельных точках адаптер считает цикл в потоке
+    /// счёта — gateway/calc_share.rs par). Ошибки: у каждой — как at.
+    async fn batch(&mut self, qtys: Vec<Decimal>) -> Vec<Result<Point<CycleQuote>, Fail>> {
+        let me = &*self;
+        join_all(qtys.into_iter().map(|q| me.eval(q))).await
+    }
+}
+
+impl CycleCurve {
+    /// Расчёт одного входа (общий для at и batch). Ошибки: как at.
+    async fn eval(&self, qty: Decimal) -> Result<Point<CycleQuote>, Fail> {
         match self.venue.dex_cycle_quote(&self.cycle, qty, false).await {
             Ok(c) => Ok(Point {
                 qty,

@@ -38,9 +38,11 @@
 //! Кто вызывает: core/candidates.rs (прошедший кандидат).
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, relay_here.rs, sell.rs, deal.rs, remeasure.rs
 //! (частичная покупка: продажа на A — пере-замер по порогу «итог ≥ 0», решение 247, дополнение 10.11, t78).
+//! Решение 338 (ревью t157 Н1): задача сделки — ярус счёта «сделка» (gateway/cpu_budget.rs scope).
 //! Настройки: через вызываемые модули.
 
 use crate::core::types::{Direction, Side};
+use crate::gateway::cpu_budget::{self, Tier};
 use crate::gateway::urgency::{self, Urgency};
 use crate::storage::journal::Level;
 
@@ -103,10 +105,15 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
     let handed = on.then(Instant::now);
     // Решение 266: включатели быстрой предпроверки — один раз на сделку (здесь); объём кандидата — Calc.qty.
     let fast = super::precheck_fast::read(&core.inner.deps.settings, &calc);
-    tokio::spawn(urgency::scope(Urgency::Trade, async move {
+    // Решение 338 (ревью t157 Н1): вся задача сделки (предпроверка, пересчёт, котировки) — ярус счёта «сделка».
+    let work = async move {
         run(&core, d.clone(), decided, (on, handed), fast).await;
         lk(&core.inner.active).remove(&key);
-    }));
+    };
+    tokio::spawn(urgency::scope(
+        Urgency::Trade,
+        cpu_budget::scope(Tier::Deal, work),
+    ));
     Start::Started
 }
 

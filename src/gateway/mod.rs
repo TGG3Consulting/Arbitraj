@@ -8,12 +8,14 @@
 pub mod addr_claim;
 pub mod book_lost_log;
 pub mod calc_meter;
+pub mod calc_share;
 pub mod contract;
 pub mod core_out;
 pub mod core_out_book;
 pub mod core_out_item;
 mod core_out_reg;
 pub mod core_out_side;
+pub mod cpu_budget;
 pub mod delist_ann;
 pub mod delist_html;
 pub mod delist_page;

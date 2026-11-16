@@ -6,9 +6,10 @@
 //! max(глубина покупки, продажи). Ребро (копия записи на момент оценки) создаётся здесь же — при каждом изменении пула
 //! оценка повторяется, поэтому копия в снимке — на версии снимка (как у build). Цену расчёт берёт не из копии, а свежей из
 //! реестра (route_cache::fresh — гидратация).
+//! Решение 336 (задача t157): evaluate при dex.graph_threads > 1 — на нескольких потоках (quote/par.rs), порядок итогов тот же.
 //! Кто вызывает: graph_work.rs, graph_full.rs, graph_round.rs.
 //! От чего зависит: graph.rs (Edge, pair_key), depth_book.rs, depth_key.rs (Prep), registry.rs, tokens.rs, ctx.rs.
-//! Настройки: через книгу глубины — dex.min_pool_liquidity_usd, dex.depth_band_pct, dex.depth_hysteresis_pct [bsc_dex].
+//! Настройки: dex.graph_threads (решение 336); через книгу глубины — dex.min_pool_liquidity_usd, dex.depth_band_pct, dex.depth_hysteresis_pct [bsc_dex].
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -19,6 +20,7 @@ use rust_decimal::Decimal;
 use crate::core::types::PoolRef;
 
 use super::super::ctx::Ctx;
+use super::super::quote::par;
 use super::super::tokens::Tokens;
 use super::depth_book::Book;
 use super::depth_key::Prep;
@@ -82,6 +84,21 @@ pub fn evaluate(
     alive: &dyn Fn() -> bool,
 ) -> Result<Vec<(PoolRef, Option<Rec>)>, String> {
     let prep = Book::prep(ctx, tokens)?;
+    // Решение 336: при dex.graph_threads > 1 — на нескольких потоках (своя подготовка у потока), порядок итогов — порядок
+    // набора, как ниже.
+    let want = par::want(ctx, "dex.graph_threads");
+    if want > 1 && refs.len() > 1 {
+        let list: Vec<&PoolRef> = refs.iter().collect();
+        let init = || Prep::new(ctx, tokens, prep.band, prep.min, prep.hyst);
+        let one = |p: &mut Prep, r: &&PoolRef| {
+            let rec = reg
+                .entry(r)
+                .map(|e| eval(ctx, reg, tokens, usdt_dec, p, &e));
+            ((*r).clone(), rec)
+        };
+        return par::map_init(ctx, want, &list, init, one, alive)
+            .ok_or_else(|| CANCELLED.to_string());
+    }
     let mut out = Vec::with_capacity(refs.len());
     for r in refs {
         if !alive() {

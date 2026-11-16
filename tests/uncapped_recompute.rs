@@ -216,6 +216,11 @@ fn params(rec: &Rec, a: &OrderBook, b: &OrderBook) -> Params {
         refine_steps: 30,
         tolerance_pct: d("0.1"),
         max_evals: 400,
+        par_points: 1,
+        bisect_probes: 1,
+        early_floor: None,
+        reuse: false,
+        par_blocked: false,
     }
 }
 

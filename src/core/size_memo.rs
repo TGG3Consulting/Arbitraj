@@ -4,20 +4,27 @@
 //! кривой, а Fail::TooLarge («вложение больше бюджета»), поэтому ни одна допустимая точка бюджет не превышает.
 //! Решение 246: текст отказа «вложение больше бюджета» — over_budget, общий с ранней проверкой costs.rs evaluate_capped.
 //! Решение 265: каждый расчёт объёма (at, beyond) — часть подробного замера «расчёт объёма» (calc_detail.rs, только при log.step_timing).
-//! Кто вызывает: core/size_bounds.rs, core/size_search.rs; over_budget — ещё core/costs.rs.
-//! От чего зависит: core/size.rs, core/calc_timing.rs.
-//! Настройки: нет.
+//! Решение 336: короб подбора для адаптеров (gateway/calc_share.rs) — только когда нужен (точки параллельно или
+//! dex.quote_reuse; ставит size_par.rs with_share), иначе расчёт точки как до 336; пачки точек — size_par.rs at_many.
+//! Кто вызывает: core/size_bounds.rs, core/size_search.rs, core/size_par.rs; over_budget — ещё core/costs.rs.
+//! От чего зависит: core/size.rs, core/calc_timing.rs, gateway/calc_share.rs.
+//! Настройки: нет (size.parallel_points и признак dex.quote_reuse — через Params, size_par.rs with_share).
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+
+use crate::gateway::calc_share::{self, Share};
 
 use super::calc_detail::stage_detail;
 use super::size::{Curve, Fail, Point};
 
 /// Решение 265: имя части замера «один расчёт объёма» (calc_detail.rs) — его же ищет calc_steps.rs.
 pub const EVAL: &str = "расчёт объёма";
+/// Решение 336: имя части замера «пачка расчётов объёма» (size.parallel_points > 1) — время пачки по часам стены.
+pub const EVAL_BATCH: &str = "пачка расчётов объёма";
 
 /// Что делает: отказ «вложение больше бюджета» — один текст у проверки точки (Memo::at) и у ранней проверки расчёта
 /// (решение 246, costs.rs evaluate_capped). Принимает: объём, списание, бюджет. Возвращает: Fail::TooLarge. Ошибок нет.
@@ -29,13 +36,18 @@ pub fn over_budget(qty: Decimal, invested: Decimal, budget: Decimal) -> Fail {
 
 /// Расчёты кривой по номеру шага.
 pub struct Memo<'a, C: Curve> {
-    curve: &'a mut C,
+    pub(super) curve: &'a mut C,
     pub step: Decimal,
     pub budget: Decimal,
     pub map: BTreeMap<u64, Result<Point<C::Data>, Fail>>,
     /// Предел расчётов (size.max_evals) и сколько уже посчитано.
-    max: u32,
-    done: u32,
+    pub(super) max: u32,
+    pub(super) done: u32,
+    /// Решение 336: сколько точек считать за раз (size.parallel_points; 1 — по одной).
+    pub(super) par: usize,
+    /// Решение 336: короб этого подбора для адаптеров (gateway/calc_share.rs); None — не нужен (ревью t157 Б1: точки по
+    /// одной и повторное использование не включено — расчёт точки как до 336).
+    pub(super) share: Option<Arc<Share>>,
 }
 
 impl<'a, C: Curve> Memo<'a, C> {
@@ -48,6 +60,8 @@ impl<'a, C: Curve> Memo<'a, C> {
             map: BTreeMap::new(),
             max,
             done: 0,
+            par: 1,
+            share: None,
         }
     }
 
@@ -102,7 +116,7 @@ impl<'a, C: Curve> Memo<'a, C> {
             // потоки рантайма — голодали бы веб-сервер, обработка событий пулов и опрос блока.
             tokio::task::yield_now().await;
             // Решение 265: каждый расчёт объёма — часть замера (сколько раз и сколько в среднем).
-            match stage_detail(|| EVAL.into(), self.curve.at(q)).await {
+            match self.eval(q).await {
                 Ok(p) if p.invested > self.budget => Err(over_budget(q, p.invested, self.budget)),
                 r => r,
             }
@@ -117,7 +131,16 @@ impl<'a, C: Curve> Memo<'a, C> {
         let q = self.qty(n);
         // Уступаем поток перед тяжёлым вычислением точки (решение 90) — см. at().
         tokio::task::yield_now().await;
-        stage_detail(|| EVAL.into(), self.curve.at(q)).await
+        self.eval(q).await
+    }
+
+    /// Один расчёт кривой под замером «расчёт объёма» (решение 265) и, если короб есть, под ним (решение 336; нет —
+    /// как до 336). Принимает: объём. Возвращает: итог кривой. Ошибок сверх кривой нет.
+    async fn eval(&mut self, q: Decimal) -> Result<Point<C::Data>, Fail> {
+        match self.share.clone() {
+            Some(s) => stage_detail(|| EVAL.into(), calc_share::scope(s, self.curve.at(q))).await,
+            None => stage_detail(|| EVAL.into(), self.curve.at(q)).await,
+        }
     }
 
     /// Прибыль на n шагов; объём недопустим или предел расчётов исчерпан — None. Ошибки: Fail::Stop (расчёт

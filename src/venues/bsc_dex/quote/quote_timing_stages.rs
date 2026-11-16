@@ -2,6 +2,7 @@
 //! Что делает: этапы и счётчики замера котировки DEX (решение 312) и их имена для записи dex.quote_timing (поле data
 //! `<этап>_ms` / `<этап>_n`, текст message). Порядок имён — порядок вариантов.
 //! Части вне работы потока счёта (Part) — до работы и после неё в Quoting::priced и быстрый путь quote/fills.rs.
+//! Решение 336: части этапа «классика» (в т.ч.) и счётчики допуска пулов и пар через промежуточную.
 //! Кто вызывает: quote/quote_timing.rs (накопление), quote/quote_timing_outer.rs (части), quote/quote_timing_log.rs
 //! (запись); точки этапов — routing.rs, graph_route.rs, route_cache.rs, route_best.rs, graph_split.rs; частей —
 //! quote/mod.rs, quote/fills.rs.
@@ -9,7 +10,7 @@
 //! Настройки: нет.
 
 /// Этап котировки. Первые TOP — верхний уровень (не пересекаются; их сумма не больше работы), остальные — части
-/// этапа Paths («в т.ч.»).
+/// («в т.ч.»): TOP..PATHS_END — этапа Paths, PATHS_END..STAGES — этапа Classic (решение 336; см. PATHS_END).
 #[derive(Clone, Copy)]
 pub enum Stage {
     /// Классика (routing.rs: classic_direct / smart_quote).
@@ -46,11 +47,28 @@ pub enum Stage {
     Enumerate,
     /// В т.ч. Paths: гидратация путей свежими записями реестра (route_cache::hydrate).
     Hydrate,
+    /// Решение 336: в т.ч. Classic — допуск пулов классики (select::usable через usable_reuse.rs).
+    ClassicAdmit,
+    /// Решение 336: в т.ч. Classic — лучший одиночный пул с USDT (direct::best, с допуском).
+    ClassicOne,
+    /// Решение 336: в т.ч. Classic — путь через промежуточные монеты (Via::best: допуск P1, P2 и пары).
+    ClassicVia,
+    /// Решение 336: в т.ч. Classic — второй проход по видимым пулам для сигнала (classic_direct.rs, решение 121).
+    ClassicSignal,
+    /// Решение 336: в т.ч. Classic — выбор «один пул / через промежуточную» (pick::pick, газ в USDT).
+    ClassicPick,
+    /// Решение 336: в т.ч. Classic — сборка котировки (costs::quote в direct_route.rs).
+    ClassicCosts,
 }
 
 /// Этапов всего; первые TOP — верхнего уровня.
-pub const STAGES: usize = 17;
+pub const STAGES: usize = 23;
 pub const TOP: usize = 13;
+/// Решение 336: части этапа Paths — TOP..PATHS_END; части этапа Classic — PATHS_END..STAGES (в stages_ms не входят ни
+/// те, ни другие: stages_ms — сумма первых TOP). Части классики: ClassicOne, ClassicVia, ClassicPick — по очереди, не
+/// пересекаются (сумма ≤ classic); ClassicAdmit и ClassicCosts — внутри них, друг с другом не пересекаются (сумма ≤
+/// classic); ClassicSignal — второй проход целиком (его один пул, промежуточная, выбор, допуск, затраты — в своих частях).
+pub const PATHS_END: usize = 17;
 
 /// Счётчик котировки.
 #[derive(Clone, Copy)]
@@ -67,10 +85,16 @@ pub enum Count {
     SplitSteps,
     /// Расчётов в сплите (route_calc::eval и совместных graph_seq::eval; и в повторе графа).
     SplitEvals,
+    /// Решение 336: допусков пулов классики (вызовов select::usable).
+    AdmitCalls,
+    /// Решение 336: из них — из короба подбора (dex.quote_reuse, usable_reuse.rs).
+    AdmitHits,
+    /// Решение 336: пар пулов через промежуточную (расчётов пути в Via::best).
+    ViaPairs,
 }
 
 /// Счётчиков всего.
-pub const COUNTS: usize = 6;
+pub const COUNTS: usize = 9;
 
 /// Имена этапов (поле data, текст message) — в порядке quote_timing::Stage.
 pub const STAGE_NAMES: [(&str, &str); STAGES] = [
@@ -91,6 +115,12 @@ pub const STAGE_NAMES: [(&str, &str); STAGES] = [
     ("graph_read", "граф"),
     ("enumerate", "перебор"),
     ("hydrate", "гидратация"),
+    ("classic_admit", "классика: допуск пулов"),
+    ("classic_one", "классика: один пул"),
+    ("classic_via", "классика: через промежуточную"),
+    ("classic_signal", "классика: второй проход (сигнал)"),
+    ("classic_pick", "классика: выбор"),
+    ("classic_costs", "классика: затраты"),
 ];
 
 /// Имена счётчиков — в порядке quote_timing::Count.
@@ -101,6 +131,9 @@ pub const COUNT_NAMES: [&str; COUNTS] = [
     "best_evals",
     "split_steps",
     "split_evals",
+    "admit_calls",
+    "admit_hits",
+    "via_pairs",
 ];
 
 /// Часть котировки вне работы потока счёта (quote_timing_outer.rs): до работы и после неё в Quoting::priced, у быстрого

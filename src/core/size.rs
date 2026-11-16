@@ -4,6 +4,8 @@
 //! Сам поиск — size_search.rs (границы — size_bounds.rs), кривая по costs.rs — size_curve.rs.
 //! Кто вызывает: core/profit.rs, core/costs.rs (Fail), size_search.rs, size_bounds.rs, size_curve.rs, тесты.
 //! От чего зависит: rust_decimal, async_trait, serde.
+//! Решение 336: Curve::batch — пачка независимых точек (по умолчанию по одной); Params.par_points, bisect_probes.
+//! Решение 337: Params.early_floor и Found.early — ранний выход подбора (size_search.rs).
 //! Настройки: нет (параметры поиска читает size_curve.rs: size.*).
 
 use std::fmt;
@@ -66,6 +68,18 @@ pub trait Curve: Send {
     type Data: Clone + Send + Sync;
     /// Принимает: объём (уже кратный шагу). Возвращает: расчёт. Ошибки: Fail с видом причины.
     async fn at(&mut self, qty: Decimal) -> Result<Point<Self::Data>, Fail>;
+
+    /// Решение 336: расчёт пачки объёмов, независимых друг от друга (size_memo.rs at_many при size.parallel_points > 1).
+    /// По умолчанию — по одному, по порядку (как at). Кривая ядра считает пачку одновременно (size_curve.rs,
+    /// cycle_curve.rs): котировки DEX каждой точки идут своими потоками счёта адаптера.
+    /// Принимает: объёмы (кратные шагу). Возвращает: итоги в том же порядке. Ошибки: у каждого итога — как у at.
+    async fn batch(&mut self, qtys: Vec<Decimal>) -> Vec<Result<Point<Self::Data>, Fail>> {
+        let mut out = Vec::with_capacity(qtys.len());
+        for q in qtys {
+            out.push(self.at(q).await);
+        }
+        out
+    }
 }
 
 /// Параметры поиска. Все из настроек и данных площадок — значений по умолчанию нет.
@@ -92,6 +106,21 @@ pub struct Params {
     /// size.max_evals — общий предел расчётов на кандидата. Исчерпан на границах — отказ; дальше — лучший из
     /// посчитанных (каждый из них в бюджете).
     pub max_evals: u32,
+    /// Решение 336: size.parallel_points — сколько независимых точек считать одновременно (изломы и сетка; уточнение
+    /// всех пиков разом, по две точки тернарного шага на пик). 1 — по одной, как до 336.
+    pub par_points: u32,
+    /// Решение 336: size.bisect_probes — проб за шаг поиска границ (k-ичный поиск вместо двоичного). 1 — двоичный, как
+    /// до 336.
+    pub bisect_probes: u32,
+    /// Решение 337: пол раннего выхода — порог прибыли минус запас size.early_exit_margin_usd (в единицах прибыли
+    /// точки, USDT). Лучшая посчитанная точка после сетки (и после изломов) ниже пола — уточнения нет, Found.early.
+    /// None — без раннего выхода (как до 337).
+    pub early_floor: Option<Decimal>,
+    /// Решение 336: повторное использование того, что не зависит от объёма (dex.quote_reuse на площадке направления) —
+    /// короб подбора с reuse (gateway/calc_share.rs). false — нет (у цикла DEX ↔ DEX — всегда, cycle_plan.rs).
+    pub reuse: bool,
+    /// Ревью t157 Н3: size.parallel_points задана, а cpu.threads_max нет — точки по одной, пояснение в why (profit.rs).
+    pub par_blocked: bool,
 }
 
 /// Итог подбора — для журнала и «Кандидатов».
@@ -123,4 +152,6 @@ pub struct SizeChoice {
 pub struct Found<T> {
     pub best: Point<T>,
     pub choice: SizeChoice,
+    /// Решение 337: подбор остановлен ранним выходом (лучшая прибыль ниже Params.early_floor) — уточнения не было.
+    pub early: bool,
 }

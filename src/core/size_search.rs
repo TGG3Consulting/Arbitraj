@@ -16,17 +16,28 @@
 //!
 //! Решение 265: границы, точки и уточнение — части подробного замера этапа «подбор объёма» (calc_detail.rs, только при log.step_timing).
 //! Все объёмы кратны шагу количества (округление вниз). Вложение ≤ бюджета держит size_memo.rs.
-//! Кто вызывает: core/profit.rs, тесты (tests/core_size_optimum.rs — записанные стакан и пул).
-//! От чего зависит: core/size.rs, core/size_memo.rs, core/size_bounds.rs, core/calc_detail.rs.
-//! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals (через Params).
+//! Решение 336 (задача t157): при size.parallel_points > 1 точки п. 2 считаются пачками (size_memo.rs at_many) — набор
+//! точек тот же, итог тот же; уточнение п. 3 — у всех пиков в ногу (size_par.rs refine_all) — те же точки, итог тот же,
+//! пока не исчерпан size.max_evals; границы — k-ичным поиском при size.bisect_probes > 1 (size_bounds.rs).
+//! Не заданы — ровно как до 336 (по одной точке).
+//! Решение 337: Params.early_floor задан — сначала границы и сетка; лучшая прибыль ниже пола (size_early.rs) — изломы
+//! и уточнение не считаются, Found.early (вызывающий отклоняет без финальной котировки). Не задан — как до 337.
+//! Кто вызывает: core/profit.rs, core/cycle_plan.rs, core/size_uncapped.rs, core/size_max.rs, тесты
+//! (tests/core_size_optimum.rs, tests/core_size_parallel.rs — записанные стакан и пул).
+//! От чего зависит: core/size.rs, core/size_memo.rs, core/size_bounds.rs, core/size_par.rs, core/calc_detail.rs.
+//! Настройки: size.bisect_steps, size.grid_points, size.refine_steps, size.tolerance_pct, size.max_evals,
+//! size.parallel_points, size.bisect_probes (через Params).
 
 use rust_decimal::Decimal;
-use rust_decimal::prelude::ToPrimitive;
 
 use super::calc_detail::stage_detail;
 use super::size::{Curve, Fail, Found, Params, SizeChoice};
 use super::size_bounds::{lower, upper};
+use super::size_early::below;
 use super::size_memo::Memo;
+use super::size_par::refine_all;
+use super::size_points::points;
+use super::size_refine::{refine, tolerance};
 
 /// Решение 265: имена частей замера подбора (calc_detail.rs) — их же ищет текст «Время по шагам» (calc_steps.rs).
 pub const BOUNDS: &str = "границы (бисекция)";
@@ -42,7 +53,7 @@ pub async fn search<C: Curve>(curve: &mut C, p: &Params) -> Result<Found<C::Data
             p.step
         )));
     }
-    let mut m = Memo::new(curve, p.step, p.budget, p.max_evals);
+    let mut m = Memo::new(curve, p.step, p.budget, p.max_evals).with_share(p.par_points, p.reuse);
     search_in(&mut m, p).await
 }
 
@@ -53,19 +64,28 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
         .units(p.guess.max(Decimal::ZERO))
         .ok_or_else(|| Fail::Stop(format!("объём {} слишком велик", p.guess)))?;
     // Решение 265: этапы подбора — части подробного замера (calc_detail.rs; иначе — просто работа).
-    let (hi, max_exact, lo) = stage_detail(|| BOUNDS.into(), async {
-        let (hi, max_exact) = upper(m, guess, p.bisect_steps).await?;
-        let lo = lower(m, hi, p.bisect_steps).await?;
+    // Ревью CI t157 (переполнение стека, tests/core_dry_mode.rs precheck_replans_live): части поиска — будущие в куче
+    // (Box::pin), а не по значению в будущем search_in: иначе всё дерево поиска (границы, точки, уточнение, at_many,
+    // refine_all, ветки решений 336–337) лежит в будущем вызывающего (profit::decide, cycle_plan, card, uncapped) и на
+    // его стеке, если будущее строится или ведётся по значению. Логика и порядок расчётов не меняются.
+    let (hi, max_exact, lo) = Box::pin(stage_detail(|| BOUNDS.into(), async {
+        let (hi, max_exact) = upper(m, guess, p.bisect_steps, p.bisect_probes).await?;
+        let lo = lower(m, hi, p.bisect_steps, p.bisect_probes).await?;
         Ok::<_, Fail>((hi, max_exact, lo))
-    })
+    }))
     .await?;
-    let ok = stage_detail(|| POINTS.into(), points(m, p, lo, hi)).await?;
+    // Решение 337: при поле раннего выхода сначала границы и сетка, ниже пола — без изломов и уточнения.
+    let (ok, early) = Box::pin(stage_detail(|| POINTS.into(), points(m, p, lo, hi))).await?;
+    let early = early || below(m, p.early_floor);
     let tol = tolerance(hi, p.tolerance_pct);
     let mut peaks = 0u32;
+    // Решение 336: параллельные точки — все пики уточняются в ногу (те же точки, что по очереди).
+    let par = m.par() > 1;
+    let mut spans: Vec<(u64, u64)> = Vec::new();
     for i in 0..ok.len() {
         let left_ok = i == 0 || ok[i].1 >= ok[i - 1].1;
         let right_ok = i + 1 == ok.len() || ok[i].1 >= ok[i + 1].1;
-        if !(left_ok && right_ok) || m.capped() {
+        if !(left_ok && right_ok) || m.capped() || early {
             continue;
         }
         peaks += 1;
@@ -75,13 +95,28 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
         } else {
             ok[i + 1].0
         };
-        stage_detail(|| REFINE.into(), refine(m, a, b, p.refine_steps, tol)).await?;
+        if par {
+            spans.push((a, b));
+            continue;
+        }
+        Box::pin(stage_detail(
+            || REFINE.into(),
+            refine(m, a, b, p.refine_steps, tol),
+        ))
+        .await?;
+    }
+    if !spans.is_empty() {
+        Box::pin(stage_detail(
+            || REFINE.into(),
+            refine_all(m, &spans, p.refine_steps, tol),
+        ))
+        .await?;
     }
     let best = m
         .best()
         .ok_or_else(|| Fail::Stop("ни один объём не посчитан".into()))?;
     // Точка hi посчитана при поиске границы (в памяти) — предел расчётов её не трогает.
-    let top = m.at(hi).await?;
+    let top = Box::pin(m.at(hi)).await?;
     let choice = SizeChoice {
         qty: best.qty,
         profit: best.profit,
@@ -95,103 +130,9 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
         capped: m.capped(),
         why: String::new(),
     };
-    Ok(Found { best, choice })
-}
-
-/// Точки подбора: обе границы, шаг до и после каждого излома стакана A и B, size.grid_points равномерных точек.
-/// Принимает: расчёты, параметры, границы в шагах. Возвращает: допустимые точки с прибылью по возрастанию объёма.
-/// Ошибки: Stop.
-async fn points<C: Curve>(
-    m: &mut Memo<'_, C>,
-    p: &Params,
-    lo: u64,
-    hi: u64,
-) -> Result<Vec<(u64, Decimal)>, Fail> {
-    let mut pts = vec![lo, hi];
-    for b in &p.buy_breaks {
-        around(m, *b, lo, hi, &mut pts);
-    }
-    // Изломы B — по приходу; приход от объёма линейный (затраты в монете: постоянные и в долях), пересчёт — по
-    // двум границам. Неточность пересчёта закрывают равномерные точки и уточнение.
-    if let (Ok(a), Ok(b)) = (m.at(lo).await, m.at(hi).await)
-        && b.arrive > a.arrive
-    {
-        for s in &p.sell_breaks {
-            let q = a.qty + (*s - a.arrive) * (b.qty - a.qty) / (b.arrive - a.arrive);
-            around(m, q, lo, hi, &mut pts);
-        }
-    }
-    let span = hi - lo;
-    let g = u64::from(p.grid_points);
-    for i in 1..=g {
-        pts.push(lo + mul_div(span, i, g + 1));
-    }
-    pts.sort_unstable();
-    pts.dedup();
-    let mut ok: Vec<(u64, Decimal)> = Vec::new();
-    for n in pts {
-        if let Some(v) = m.profit(n).await? {
-            ok.push((n, v));
-        }
-    }
-    Ok(ok)
-}
-
-/// Тернарный поиск максимума на [a, b] (целые шаги). Принимает: расчёты, концы, предел шагов, ширину остановки.
-/// Ошибки: Stop. Недопустимый объём внутри считается хуже любого допустимого.
-async fn refine<C: Curve>(
-    m: &mut Memo<'_, C>,
-    a: u64,
-    b: u64,
-    steps: u32,
-    tol: u64,
-) -> Result<(), Fail> {
-    let (mut lo, mut hi, mut left) = (a, b, steps);
-    while hi - lo > tol.max(2) && left > 0 {
-        left -= 1;
-        let m1 = lo + (hi - lo) / 3;
-        let m2 = hi - (hi - lo) / 3;
-        let (f1, f2) = (m.profit(m1).await?, m.profit(m2).await?);
-        if f1 < f2 {
-            lo = m1;
-        } else {
-            hi = m2;
-        }
-    }
-    if hi - lo <= 2 {
-        for n in lo..=hi {
-            m.profit(n).await?;
-        }
-    } else {
-        m.profit(lo + (hi - lo) / 2).await?;
-    }
-    Ok(())
-}
-
-/// Добавляет шаг до и после излома q, если они на отрезке [lo, hi]. Ошибок нет.
-fn around<C: Curve>(m: &Memo<'_, C>, q: Decimal, lo: u64, hi: u64, pts: &mut Vec<u64>) {
-    if q <= Decimal::ZERO {
-        return;
-    }
-    if let Some(n) = m.units(q) {
-        for k in [n, n.saturating_add(1)] {
-            if (lo..=hi).contains(&k) {
-                pts.push(k);
-            }
-        }
-    }
-}
-
-/// span · i / d без переполнения. Ошибок нет.
-fn mul_div(span: u64, i: u64, d: u64) -> u64 {
-    (u128::from(span) * u128::from(i) / u128::from(d)) as u64
-}
-
-/// Ширина остановки уточнения в шагах: tolerance_pct % от наибольшего объёма, не меньше одного шага. Ошибок нет.
-fn tolerance(hi: u64, pct: Decimal) -> u64 {
-    (Decimal::from(hi) * pct / Decimal::ONE_HUNDRED)
-        .floor()
-        .to_u64()
-        .unwrap_or(0)
-        .max(1)
+    Ok(Found {
+        best,
+        choice,
+        early,
+    })
 }

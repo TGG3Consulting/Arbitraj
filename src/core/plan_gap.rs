@@ -50,13 +50,30 @@ impl<C: Curve> Curve for PlanGap<C> {
     /// Расчёт обёрнутой кривой; «валюты нет в плане» — запоминается. Ошибки: как у обёрнутой кривой.
     async fn at(&mut self, qty: Decimal) -> Result<Point<C::Data>, Fail> {
         let r = self.inner.at(qty).await;
-        if let Err(Fail::TooLarge(t)) = &r
+        self.note_fail(qty, &r);
+        r
+    }
+
+    /// Решение 336: пачка — пачкой обёрнутой кривой; «валюты нет в плане» запоминается по порядку пачки.
+    /// Ошибки: у каждой — как у обёрнутой кривой.
+    async fn batch(&mut self, qtys: Vec<Decimal>) -> Vec<Result<Point<C::Data>, Fail>> {
+        let rs = self.inner.batch(qtys.clone()).await;
+        for (q, r) in qtys.iter().zip(&rs) {
+            self.note_fail(*q, r);
+        }
+        rs
+    }
+}
+
+impl<C: Curve> PlanGap<C> {
+    /// Запоминает недопустимый объём «валюты нет в плане». Принимает: объём, итог. Ошибок нет.
+    fn note_fail(&mut self, qty: Decimal, r: &Result<Point<C::Data>, Fail>) {
+        if let Err(Fail::TooLarge(t)) = r
             && t.contains(NOT_IN_PLAN)
         {
             self.count += 1;
             self.first
                 .get_or_insert_with(|| format!("объём {qty}: {t}"));
         }
-        r
     }
 }

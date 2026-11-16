@@ -7,18 +7,23 @@
 //! От чего зависит: quote/via.rs, quote/select.rs, check/state.rs, pools/registry.rs, pools/mids.rs.
 //! Решение 294: путь не исполним целиком и dex.intermediate_partial_fill = да — помещающаяся часть
 //! (quote/route_fit.rs) идёт кандидатом пути с coins < qty (как неполная котировка одного пула).
-//! Настройки: dex.intermediate_partial_fill [bsc_dex] (решение 294; читается только при ошибке пути);
+//! Решение 336: при dex.quote_reuse = да обмен пула монеты P2 считается один раз на P2 (via.rs first_leg), а не на
+//! каждую пару (P1, P2) — итог тот же (route_calc.rs eval_from: та же арифметика); признак — из короба подбора
+//! (quote/cpu_local.rs), не чтением настройки.
+//! Настройки: dex.intermediate_partial_fill [bsc_dex] (решение 294; читается только при ошибке пути); dex.quote_reuse;
 //! через вызываемые — см. их шапки.
 
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, CheckState, Side};
-use crate::gateway::errors::{ErrorCode, GatewayError};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::exec::native;
+use super::super::math::swap_cl::Swapped;
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::path::Path;
+use super::quote_timing::{self, Count};
 use super::via::{Ok2, Via};
 use super::{pool_tax, select};
 
@@ -116,6 +121,9 @@ impl Via<'_> {
     ) -> Result<Path, Vec<String>> {
         let mut best: Option<Path> = None;
         let mut why = Vec::new();
+        // Решение 336: при dex.quote_reuse = да (короб подбора с reuse, gateway/calc_share.rs) обмен пула монеты P2 — один
+        // раз на P2 (route_first.rs), не на пару. Иначе — как до 336 (настройка здесь не читается, ревью Б1).
+        let reuse = super::cpu_local::share().is_some_and(|s| s.reuse());
         for (m, dec) in mids {
             let (p1, p2) = match self.pools(m, keep) {
                 Ok(x) => x,
@@ -124,8 +132,9 @@ impl Via<'_> {
                     continue;
                 }
             };
+            let mut firsts: Vec<Option<GatewayResult<Swapped>>> = vec![None; p2.len()];
             for a in &p1 {
-                for b in &p2 {
+                for (j, b) in p2.iter().enumerate() {
                     // Решение 295: обе ноги — пары одного многомонетного пула (одна площадка) — не путь: один пул —
                     // один шаг. У парных пулов P1 («mid–USDT») и P2 («монета–mid») — разные пулы всегда.
                     if a.0.pool.reference.site() == b.0.pool.reference.site() {
@@ -140,7 +149,17 @@ impl Via<'_> {
                         why.push(w);
                         continue;
                     }
-                    match self.calc(m, *dec, a, b, qty) {
+                    quote_timing::count(Count::ViaPairs, 1);
+                    let got = if reuse {
+                        let f = firsts[j].get_or_insert_with(|| self.first_leg(m, *dec, a, b, qty));
+                        match &*f {
+                            Ok(f) => self.calc_from(m, *dec, a, b, qty, Some(f)),
+                            Err(e) => Err(e.clone()),
+                        }
+                    } else {
+                        self.calc(m, *dec, a, b, qty)
+                    };
+                    match got {
                         Ok(p) if best.as_ref().is_none_or(|x| better(&p, x, self.side)) => {
                             best = Some(p)
                         }

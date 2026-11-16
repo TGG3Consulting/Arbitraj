@@ -8,24 +8,29 @@
 //!   стоят на одной версии реестра; затем сравнение множествами (graph_diff.rs). Действующей становится собранная с нуля
 //!   (самоисцеление) — при расхождении и без него; торговля по графу не останавливается.
 //!
+//! Решение 336 (задача t157): build при dex.graph_threads > 1 оценивает пулы на нескольких потоках (quote/par.rs; места —
+//! общего предела cpu.threads_max ярусом «фон»), применение — по порядку снимка: та же карта.
 //! Кто вызывает: graph_owner.rs.
 //! От чего зависит: graph_work.rs, graph_eval.rs, graph_diff.rs, graph_snap.rs (Basis), depth_book.rs (prep), registry.rs,
 //! tokens.rs, ctx.rs.
-//! Настройки: dex.route_max_pools_per_edge (даёт вызывающий); через книгу глубины — dex.depth_*, dex.min_pool_liquidity_usd.
+//! Настройки: dex.route_max_pools_per_edge (даёт вызывающий); dex.graph_threads (решение 336); через книгу глубины — dex.depth_*, dex.min_pool_liquidity_usd.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::core::types::PoolRef;
 
 use super::super::ctx::Ctx;
+use super::super::quote::par;
 use super::super::tokens::Tokens;
 use super::depth_book::Book;
+use super::depth_key::Prep;
 use super::graph::Graph;
 use super::graph_diff;
 use super::graph_eval;
 use super::graph_snap::Basis;
 use super::graph_work::Work;
-use super::registry::Registry;
+use super::registry::{Entry, Registry};
 
 /// Доводка не удалась: накопительная карта (остаётся действующей), пулы, которые не применены (вернуть в набор
 /// изменений — ревью №1 N), причина.
@@ -56,6 +61,20 @@ pub fn build(
     let mut w = Work::new(basis);
     let snap = reg.snapshot();
     let n = snap.len();
+    // Решение 336: при dex.graph_threads > 1 пулы оцениваются на нескольких потоках (своя подготовка глубины у потока),
+    // применение к карте — по порядку снимка, как ниже: та же карта.
+    let want = par::want(ctx, "dex.graph_threads");
+    if want > 1 {
+        let usdt_dec = w.basis.usdt_dec;
+        let init = || Prep::new(ctx, tokens, prep.band, prep.min, prep.hyst);
+        let one = |p: &mut Prep, e: &Arc<Entry>| graph_eval::eval(ctx, reg, tokens, usdt_dec, p, e);
+        let recs = par::map_init(ctx, want, &snap, init, one, alive)
+            .ok_or_else(|| graph_eval::CANCELLED.to_string())?;
+        for (e, rec) in snap.iter().zip(recs) {
+            w.apply(e.pool.reference.clone(), Some(rec));
+        }
+        return Ok((w, n));
+    }
     for e in snap {
         // Ревью №2 (B): брошенная или заменённая сборка останавливается на ближайшем пуле, а не досчитывает впустую.
         if !alive() {

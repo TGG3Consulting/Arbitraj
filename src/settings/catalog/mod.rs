@@ -9,7 +9,7 @@
 //! решение 125), gate.rs, okx.rs, kraken.rs и др. (настройки только одной биржи).
 //! решение 125), gate.rs, okx.rs, coinex.rs (настройки только Gate, только OKX, только CoinEx).
 //! решение 125), gate.rs, okx.rs, htx.rs и др. (настройки одной биржи).
-//! bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
+//! cpu.rs — счёт процессора (решения 336–338, задача t157). bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
 //! От чего зависит: settings/schema.rs.
 //! Настройки: это и есть их список.
@@ -23,6 +23,7 @@ mod bingx;
 mod book_events;
 mod bitget;
 mod coinex;
+mod cpu;
 pub mod dex;
 mod dex_event;
 mod dex_fit;
@@ -114,6 +115,7 @@ const DIR_ALL: &[DirKind] = &DirKind::ALL;
 /// Все части каталога. Порядок — как в docs/SETTINGS.md.
 static PARTS: &[&[SettingDef]] = &[
     base::BASE,
+    cpu::CPU,
     trade::TRADE,
     signals::SIGNALS,
     uncapped::UNCAPPED,

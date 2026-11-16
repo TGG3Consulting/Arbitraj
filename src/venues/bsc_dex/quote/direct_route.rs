@@ -3,6 +3,8 @@
 //! пары пулов через промежуточную монету (quote/via.rs) — берётся больший итог после газа (quote/pick.rs). Пара пулов
 //! исполняется одной транзакцией через Universal Router своей DEX, поэтому оба пула — одной DEX с одним и тем же
 //! Universal Router, Permit2 и форматом команд.
+//! Решение 336: замер частей «классика»: один пул, через промежуточную (с затратами путей), выбор, затраты
+//! (quote/quote_timing.rs; часы только при log.quote_timing).
 //! Кто вызывает: quote/mod.rs (режим direct), quote/smart_quote.rs (прямая сделка Uniswap).
 //! От чего зависит: quote/direct.rs, quote/via.rs, quote/path.rs, quote/costs.rs, quote/pick.rs, exec/ur.rs (формат).
 //! Настройки: dex.universal_router, dex.permit2, dex.universal_router_version [вид пула]; через вызываемые — dex.*.
@@ -18,6 +20,7 @@ use super::super::exec::ur;
 use super::super::pools::mids::Mid;
 use super::super::pools::registry::Entry;
 use super::path::Path;
+use super::quote_timing::{self, Clock, Stage};
 use super::steps::Names;
 use super::via::Via;
 use super::{costs, direct, pick};
@@ -39,6 +42,8 @@ pub async fn quote(
     let (q, side) = (v.q, v.side);
     let ctx = &q.ctx;
     let build = |p: Path| {
+        // Решение 336: замер части «классика: затраты» (часы только при замере котировки).
+        let _t = Clock::new(Stage::ClassicCosts);
         costs::quote(
             ctx,
             asset,
@@ -52,6 +57,7 @@ pub async fn quote(
         )
     };
     let mine: Vec<Entry> = entries.into_iter().filter(|e| keep(e)).collect();
+    let t = quote_timing::now();
     let one = if mine.is_empty() {
         Err(ctx.err(ErrorCode::NoRoute, "пулов с USDT нет"))
     } else {
@@ -59,6 +65,8 @@ pub async fn quote(
             .and_then(|(c, _)| Path::one(ctx, c, side, (v.coin_dec, v.usdt_dec)))
             .and_then(build)
     };
+    quote_timing::add(Stage::ClassicOne, t);
+    let t = quote_timing::now();
     let two = if mids.is_empty() {
         Err(ctx.err(ErrorCode::NoRoute, "промежуточные монеты не используются"))
     } else {
@@ -67,8 +75,14 @@ pub async fn quote(
             .map_err(|why| ctx.err(ErrorCode::NoRoute, why.join("; ")))
             .and_then(build)
     };
+    quote_timing::add(Stage::ClassicVia, t);
     match (one, two) {
-        (Ok(a), Ok(b)) => Ok(pick::pick(q, a, b, side, v.usdt_dec).await),
+        (Ok(a), Ok(b)) => {
+            let t = quote_timing::now();
+            let out = pick::pick(q, a, b, side, v.usdt_dec).await;
+            quote_timing::add(Stage::ClassicPick, t);
+            Ok(out)
+        }
         (Ok(a), Err(_)) | (Err(_), Ok(a)) => Ok(a),
         (Err(a), Err(_)) if a.code != ErrorCode::NoRoute => Err(a),
         (Err(a), Err(b)) => Err(ctx.err(

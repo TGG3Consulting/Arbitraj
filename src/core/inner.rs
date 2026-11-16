@@ -73,9 +73,12 @@ pub struct Inner {
     pub subs: Mutex<super::sub_state::SubState>,
     /// Решение 196: время последнего события рынка (стакан, пул) по площадке — живость потока (feed_live.rs).
     pub feed_seen: super::feed_live::Seen,
-    /// Монеты, по которым идёт пересчёт тика: значение — площадки, приславшие тик во время пересчёта (пусто — нового
-    /// тика не было). Решение 109: повтор пересчитывает направления всех этих площадок, а не только первой.
-    pub ticking: Mutex<HashMap<Asset, HashSet<VenueId>>>,
+    /// Монеты, по которым идёт пересчёт тика, и площадки, приславшие тик во время пересчёта или сна (tick_plan.rs).
+    /// Решение 109: повтор пересчитывает направления всех этих площадок, а не только первой; решение 322 — событие
+    /// пула будит сон задачи монеты (signal.pool_event_now).
+    pub ticking: Mutex<super::tick_plan::Plan>,
+    /// Решение 318: сроки дозревания «держится» и спящие задачи таймера (signal_ripen.rs; signal.hold_timer).
+    pub ripen: Mutex<super::signal_ripen::Plan>,
     /// Память котировок DEX для тика (решение 109, quote_cache.rs).
     pub quote_cache: Mutex<super::quote_cache::QuoteCache>,
     /// Последняя отправка строки «Живого экрана» по направлению: когда и с каким состоянием (решение 109).
@@ -218,6 +221,7 @@ impl Inner {
             subs: Mutex::default(),
             feed_seen: Default::default(),
             ticking: Mutex::default(),
+            ripen: Mutex::default(),
             quote_cache: Mutex::default(),
             spread_sent: Mutex::default(),
             cand_tx,

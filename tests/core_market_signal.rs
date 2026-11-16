@@ -108,6 +108,8 @@ fn signal_on_real_prices() {
         sell: b.bids[0].price,
         fees_pct: Decimal::ZERO,
         qty: b.asks[0].qty,
+        buy_at: Utc::now(),
+        sell_at: Utc::now(),
     };
     let params: Result<Params, String> = Err("пороги не нужны: спред ниже комиссий".into());
     let mut s = Signals::default();

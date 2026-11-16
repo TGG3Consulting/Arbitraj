@@ -59,6 +59,25 @@
           <dd>
             {#if v.above_since}с {showTime(v.above_since)}, обновлений подряд: {v.updates}{:else}нет{/if}
           </dd>
+          <!-- Решения 317, 318: что запустило пересчёт и сколько не менялись уровни стакана биржи на объёме сравнения. -->
+          <dt>Пересчёт запустил</dt>
+          <dd>
+            {v.trigger === 'Pool' ? 'событие пула' : v.trigger === 'Timer' ? 'таймер дозревания (signal.hold_timer)' : 'тик биржи'}
+            {#if v.skipped_hold}<span class="ok"> — кандидат без удержания (signal.dex_event_skip_hold)</span>{/if}
+          </dd>
+          {#if v.pool_at}
+            <!-- Решение 322: замер «событие пула пришло в ядро → пересчёт начат». -->
+            <dt>Событие пула</dt>
+            <dd>блок <code>{v.pool_block ?? '—'}</code>, пришло в {showTime(v.pool_at)}{#if v.eval_started}, пересчёт начат в {showTime(v.eval_started)}{/if}</dd>
+          {/if}
+          {#if v.ripen_at}
+            <dt>Таймер дозревания</dt>
+            <dd>пересчёт в {showTime(v.ripen_at)} (signal.hold_timer)</dd>
+          {/if}
+          {#if v.cex_still_ms != null}
+            <dt>Стакан биржи стоит</dt>
+            <dd><code>{v.cex_still_ms}</code> мс <span class="muted">(уровни на объёме сравнения не менялись)</span></dd>
+          {/if}
           <dt>Обновлено</dt>
           <dd>{showTime(v.at)}</dd>
         </dl>

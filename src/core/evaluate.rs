@@ -3,23 +3,39 @@
 //! замеры волатильности (vol.rs) → сигнал (signal.rs) → строка «Живого экрана»; кандидат — в очередь расчёта.
 //! Монета с непроверенными налогами (решения 30, 61) — строка «налоги не проверены: причина» без котировок.
 //! Сигнал вышел из «кандидата» при открытом эпизоде — эпизод закрывается с причиной (решение 74, episode_run.rs).
-//! Кто вызывает: core/tick.rs.
-//! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, vol.rs, candidates.rs, episode_run.rs, view.rs.
+//! Решение 317: сигналу передаются обстоятельства пересчёта (signal_ctx.rs — сторона DEX, событие пула); направление
+//! стало кандидатом — запись core.signal_hold (signal_hold_log.rs, при log.signal_hold = да). Решение 318: срок
+//! дозревания «держится» — в план таймера (signal_ripen.rs); пересчёт, поставленный таймером, помечается «таймер».
+//! Решение 322: направления площадки события пула считаются первыми (tick_plan.rs Run.first); отметка события пула и
+//! начало пересчёта — в строку экрана и запись core.signal_hold (замер «событие → пересчёт → кандидат»).
+//! Кто вызывает: core/tick_sched.rs.
+//! От чего зависит: engine.rs, registry.rs, market_state.rs, prices.rs, signal.rs, signal_ctx.rs, signal_hold_log.rs,
+//! vol.rs, candidates.rs, episode_run.rs, view.rs.
 //! Настройки: signal.* (через signal.rs), money.max_per_trade_usd (через prices.rs), profit.sigma_window_min,
-//! live.spread_min_interval_ms (решение 109).
+//! live.spread_min_interval_ms (решение 109), log.signal_hold (через signal_hold_log.rs).
+
+use std::collections::HashSet;
 
 use chrono::Utc;
 
-use crate::core::types::{Asset, Side, VenueId};
+use crate::core::types::{Asset, Direction, Side, VenueId};
 
 use super::engine::{Core, lk, rd, wr};
 use super::signal::{Params, State};
 use super::view::CoreEvent;
 
 /// Пересчёт направлений монеты, где участвует любая из площадок тика (решение 109: тики нескольких площадок сливаются
-/// в один пересчёт). Ошибок нет: причины — в строках экрана.
-pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::HashSet<VenueId>) {
-    let (dirs, ref_price, waiting) = {
+/// в один пересчёт). Принимает: ядро, монету, пересчёт плана (tick_plan.rs Run — площадки; решение 322 — площадки
+/// события пула первыми, отметка события пула), время начала пересчёта (замер core.signal_hold). Ошибок нет: причины —
+/// в строках экрана.
+pub async fn evaluate(
+    core: &Core,
+    asset: &Asset,
+    run: &super::tick_plan::Run,
+    started: chrono::DateTime<Utc>,
+) {
+    let venues = &run.venues;
+    let (dirs, ref_price, waiting, marks_on) = {
         // Решение 131: место монеты — из карты пересборки (ticker_index.rs), проход справочника — только если
         // карта ещё от прежнего справочника.
         let coins = rd(&core.inner.coins);
@@ -27,17 +43,21 @@ pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::Has
             return;
         };
         let market = rd(&core.inner.market);
+        // Решение 317 (ревью 16.11): отметки стакана включены (book_marks_on.rs) — иначе «сколько стоит» не считается.
+        let marks_on = market.book_marks_on();
         let ref_price = entry
             .presence
             .iter()
             .filter(|p| p.info.is_some())
             // Решение 211 (ревью В5): стакан биржи — по её тикеру монеты (Presence::ticker).
             .find_map(|p| market.best(&p.venue, &p.ticker, Side::Buy));
-        let dirs: Vec<_> = entry
+        let mut dirs: Vec<_> = entry
             .shown_directions()
             .into_iter()
             .filter(|d| venues.contains(&d.buy_on) || venues.contains(&d.sell_on))
             .collect();
+        // Решение 322: направления с площадкой события пула — первыми.
+        pool_first(&mut dirs, &run.first);
         // Налоги не проверены (решение 30): строка видна с причиной ожидания, торговли нет.
         let waiting = entry.waits_check().then(|| {
             let why = entry
@@ -46,7 +66,7 @@ pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::Has
                 .unwrap_or_else(|| "проверка ещё не выполнена".into());
             format!("налоги не проверены: {why}")
         });
-        (dirs, ref_price, waiting)
+        (dirs, ref_price, waiting, marks_on)
     };
     let params = Params::read(&core.inner.deps.settings);
     for dir in dirs {
@@ -66,18 +86,46 @@ pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::Has
             vol.sample(a, &dir.asset, Side::Buy, b, p.buy, now, w);
             vol.sample(b, &dir.asset, Side::Sell, a, p.sell, now, w);
         }
-        let mut view = lk(&core.inner.signals).update(&dir, prices, &params, Utc::now());
+        let timer = lk(&core.inner.ripen).take_fired(&dir);
+        let now = Utc::now();
+        let mut ctx = super::signal_ctx::of(core, &dir, venues, timer);
+        // Замер (решения 317, 322): событие пула (приход в ядро, блок) — только у пересчёта от события пула по DEX
+        // направления; начало пересчёта монеты.
+        if ctx.trigger == super::signal_fast::Trigger::Pool {
+            ctx.pool = run.pool;
+        }
+        ctx.started = Some(started);
+        // Решение 317 (доработка): сколько стоят уровни стакана биржи на объёме сравнения — из состояния рынка; только
+        // при включённых отметках (signal.dex_event_skip_hold или log.signal_hold).
+        if let (Ok(p), true) = (&prices, marks_on) {
+            ctx.cex_still_ms = super::signal_ctx::cex_still_ms(core, &dir, &ctx, p, now);
+        }
+        let mut view = lk(&core.inner.signals).update_with(&dir, prices, &params, now, &ctx);
         if let Some(w) = &waiting {
             view.state = State::TaxesNotChecked(w.clone());
         }
-        let was_anomaly = rd(&core.inner.spreads)
+        // Решение 318: срок дозревания (только «держится» при signal.hold_timer = да) или снятие срока. В пересчёт
+        // таймер ставит площадку биржи направления (DEX ↔ DEX — площадку A): её тик не путается с событием пула.
+        let venue = if ctx.dex_side == Some(crate::core::types::Side::Buy) {
+            &dir.sell_on
+        } else {
+            &dir.buy_on
+        };
+        lk(&core.inner.ripen).set(&dir, view.ripen_at, venue);
+        let (was_anomaly, was_candidate) = rd(&core.inner.spreads)
             .get(&dir)
-            .is_some_and(|v| v.state == State::Anomaly);
+            .map_or((false, false), |v| {
+                (v.state == State::Anomaly, v.state == State::Candidate)
+            });
         if view.state == State::Anomaly && !was_anomaly {
             // ТЗ, шаг 3: аномальный спред — перечитать статусы ввода и вывода напрямую из API.
             core.inner.kick_networks.notify_waiters();
         }
         if view.state == State::Candidate {
+            if !was_candidate {
+                // Решения 317, 318: как и почему направление стало кандидатом (только при log.signal_hold = да).
+                super::signal_hold_log::note(core, &view);
+            }
             super::candidates::enqueue(core, &dir);
         } else if lk(&core.inner.dry_told).contains(&dir)
             || super::episode_run::is_open(core, &dir)
@@ -91,6 +139,14 @@ pub async fn evaluate(core: &Core, asset: &Asset, venues: &std::collections::Has
         if live_due(core, &dir, &view.state) {
             core.inner.live.send(CoreEvent::Spread(view));
         }
+    }
+}
+
+/// Решение 322: направления с площадкой события пула — первыми; сортировка устойчивая (остальные в прежнем порядке);
+/// first пуст — порядок прежний. Принимает: направления, площадки события пула. Ошибок нет.
+pub fn pool_first(dirs: &mut [Direction], first: &HashSet<VenueId>) {
+    if !first.is_empty() {
+        dirs.sort_by_key(|d| !(first.contains(&d.buy_on) || first.contains(&d.sell_on)));
     }
 }
 

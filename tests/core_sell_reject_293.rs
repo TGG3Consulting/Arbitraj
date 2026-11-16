@@ -182,11 +182,14 @@ fn state(core: &Core, dir: &Direction) -> State {
         sell: got / sold,
         fees_pct: Decimal::ZERO,
         qty: sold,
+        buy_at: Utc::now(),
+        sell_at: Utc::now(),
     };
     let par = Ok(Params {
         hold_ms: 0,
         hold_updates: 1,
         anomaly_pct: d("100"),
+        ..Default::default()
     });
     let mut s = core.inner.signals.lock().unwrap();
     s.update(dir, Ok(p), &par, Utc::now()).state

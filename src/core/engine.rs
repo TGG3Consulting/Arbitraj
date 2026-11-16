@@ -4,7 +4,7 @@
 //! очередь расчёта, сверка.
 //! Кто вызывает: main.rs (Core::start), api и notify (чтение состояния, живой поток, команды — методы Core).
 //! От чего зависит: deps.rs, inner.rs, tick.rs, rebuild.rs, registry_sync.rs, candidates.rs, reconcile.rs,
-//! ledger.rs, gas_stats.rs, manual.rs, deposit_warm.rs (решение 316).
+//! ledger.rs, gas_stats.rs, manual.rs, deposit_warm.rs (решение 316), book_marks_on.rs.
 //! Настройки: у модулей свои (docs/SETTINGS.md).
 
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -88,6 +88,9 @@ impl Core {
         }
         // Решение 245: точки цены DEX на объём открытой сделки — своя задача (тик только ставит отметку).
         tokio::spawn(super::window_deal_run::run(core.clone()));
+        // Решение 317 (ревью 16.11): признак отметок изменения стакана — до приёма событий; дальше — по изменениям настроек.
+        super::book_marks_on::refresh(&core);
+        tokio::spawn(super::book_marks_on::watch(core.clone()));
         tokio::spawn(super::tick::run(core.clone(), market_rx));
         tokio::spawn(super::rebuild::run(core.clone()));
         tokio::spawn(super::candidates::run(core.clone(), cand_rx));

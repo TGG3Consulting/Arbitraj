@@ -49,6 +49,8 @@ fn dex_to_bingx(rec: &Rec, q: Decimal) -> Prices {
         sell: sum / q,
         fees_pct: Decimal::ZERO,
         qty: q,
+        buy_at: Utc::now(),
+        sell_at: Utc::now(),
     }
 }
 
@@ -70,6 +72,7 @@ fn state(p: Prices) -> (State, Decimal) {
         hold_ms: 0,
         hold_updates: 1,
         anomaly_pct: d("100"),
+        ..Default::default()
     });
     let v = Signals::default().update(&direction(), Ok(p), &par, Utc::now());
     (v.state, v.spread_pct.unwrap())

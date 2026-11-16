@@ -4,7 +4,7 @@
 //! очередь расчёта, сверка.
 //! Кто вызывает: main.rs (Core::start), api и notify (чтение состояния, живой поток, команды — методы Core).
 //! От чего зависит: deps.rs, inner.rs, tick.rs, rebuild.rs, registry_sync.rs, candidates.rs, reconcile.rs,
-//! ledger.rs, gas_stats.rs, manual.rs.
+//! ledger.rs, gas_stats.rs, manual.rs, deposit_warm.rs (решение 316).
 //! Настройки: у модулей свои (docs/SETTINGS.md).
 
 use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -98,6 +98,8 @@ impl Core {
         tokio::spawn(super::rebuild::watch_settings(core.clone()));
         // Решение 124: исполнение циклов DEX ↔ DEX — одна задача, толчки событий пулов сливаются.
         tokio::spawn(super::cycle_watch::run(core.clone()));
+        // Решение 316: прогрев адресов депозита бирж (venue.deposit_warm) — первая сделка после перезапуска без запроса.
+        tokio::spawn(super::deposit_warm::run(core.clone()));
         for (id, kind) in kinds {
             if kind == VenueKind::Cex {
                 tokio::spawn(super::registry_sync::run(core.clone(), id.clone()));
@@ -142,8 +144,10 @@ impl Core {
     /// запуске, так и оставалась без подписки. Теперь: справочники сетей всех бирж перечитываются сразу
     /// (registry_sync.rs), пересборка повторяет каждую неудавшуюся подписку (sub_state.rs, subscribe.rs). Удавшиеся
     /// подписки не трогаются. Ошибок нет.
+    /// Решение 316: и толчок прогрева адресов депозита с повтором отказавших монет (deposit_warm.rs).
     pub fn secrets_changed(&self) {
         self.inner.kick_networks.notify_waiters();
+        super::deposit_warm::kick(true);
         self.request_rebuild();
     }
 }

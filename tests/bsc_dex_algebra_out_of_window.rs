@@ -14,13 +14,24 @@
 //!    как после Swap вниз): вверх считается (lo − 1 ≤ tick < hi, как V3 next_tick: позиция tick + 1 = lo в окне) и
 //!    равен тому же обмену на ПОЛНОЙ карте записи (независимый путь: окно полной карты шире, край узкого не участвует) —
 //!    $1 и $100 до цены тика hi и глубина 2% вверх.
+//!    В узком окне (слово записанного тика) ни у одного из двух пулов записи инициализированных тиков нет (пул 0xd1d3b6…,
+//!    тик 46884: окно [46848; 47103], ближайшие тики 46560 и 47220; пул 0x26399a…, тик −115601: окно
+//!    [−115712; −115457], ближайшие −887220 и −114660), поэтому этот случай проверяет только, что проверка окна
+//!    пропускает tick = lo − 1 и итог равен расчёту на полной карте; вычитание liquidityDelta (сумма пуста) и
+//!    пересечение тиков на этих данных не задействованы — это делает случай 6.
 //! 5. Пустое окно (первое слово после последнего) — нули при записанном тике.
+//! 6. Окно — слово ближайшего записанного тика НИЖЕ записанного (пул 0xd1d3b6…: тик 46560, слово 181, окно
+//!    [46336; 46591], в нём записанные тики 46500 и 46560): тик lo − 1 = 46335, ликвидность — записанная минус
+//!    liquidityDelta тиков 46500 и 46560 (= 702598871493693393262 — ровно liquidityDelta записанного тика 45960, нижней
+//!    границы этого отрезка); вверх $1 и $100 до цены тика hi и глубина 2% вверх (≈198 тиков, до 46533 — пересекает
+//!    записанный тик 46500 внутри окна) равны расчёту на полной карте. У пула 0x26399a… ближайший тик ниже — −887220,
+//!    слово начинается ниже MIN_TICK (lo − 1 вне TickMath) — случай для него не строится.
 //!
 //! THENA Fusion (Algebra V1/V1.9) — та же функция math/swap_algebra.rs swap_to (PoolState::Algebra, quote/pool_quote.rs и
 //! quote/depth_band_algebra.rs), своей записи нет.
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/algebra_integral_common, arb::venues::bsc_dex::{math::{swap_algebra, tick_math},
-//! pools::ticks, quote::depth_band_algebra}.
+//! pools::ticks, quote::{depth_band, depth_band_algebra}}.
 
 mod algebra_integral_common;
 
@@ -28,8 +39,9 @@ use alloy_primitives::U256;
 use serde_json::Value;
 
 use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState, Swapped};
-use arb::venues::bsc_dex::math::tick_math::sqrt_ratio_at_tick;
+use arb::venues::bsc_dex::math::tick_math::{MIN_TICK, sqrt_ratio_at_tick};
 use arb::venues::bsc_dex::pools::ticks::TickMap;
+use arb::venues::bsc_dex::quote::depth_band::band_ticks;
 use arb::venues::bsc_dex::quote::depth_band_algebra;
 
 use algebra_integral_common::{pool_state, probe, word};
@@ -313,4 +325,76 @@ fn tick_below_lower_edge_up_as_full_map() {
         assert!(up.2, "{}: глубина вверх от lo − 1 не дошла", p["pool"]);
         assert_eq!(up, up_full, "{}: глубина вверх ≠ полная карта", p["pool"]);
     }
+}
+
+#[test]
+fn tick_below_lower_edge_crosses_recorded_ticks() {
+    let d = probe();
+    let mut checked = 0;
+    for Pool {
+        p,
+        tick,
+        liq,
+        fee,
+        full,
+        ..
+    } in pools(&d)
+    {
+        // Окно — слово ближайшего записанного тика ниже записанного тика пула.
+        let below_tick = *full.ticks.range(..tick).next_back().expect("тик ниже").0;
+        let w = (below_tick >> 8) as i16;
+        let (lo, hi) = (i32::from(w) * 256, i32::from(w) * 256 + 255);
+        if lo - 1 < MIN_TICK {
+            continue;
+        }
+        let m = narrowed(&full, (w, w));
+        // Swap вниз от записанного тика до цены тика lo − 1 пересёк тики [lo; tick] — каждый вычитает свою liquidityDelta.
+        let crossed: Vec<i128> = full.ticks.range(lo..=tick).map(|(_, x)| x.net).collect();
+        assert!(
+            !crossed.is_empty(),
+            "{}: между lo и тиком нет тиков",
+            p["pool"]
+        );
+        let below = u128::try_from(i128::try_from(liq).unwrap() - crossed.iter().sum::<i128>())
+            .expect("ликвидность ниже lo");
+        let sqrt = sqrt_ratio_at_tick(lo - 1).unwrap();
+        let (narrow, wide) = (
+            at(&m, sqrt, lo - 1, below, fee),
+            at(&full, sqrt, lo - 1, below, fee),
+        );
+        let limit = sqrt_ratio_at_tick(hi).unwrap();
+        for (zfo, amount, _) in small_quotes(p) {
+            if zfo {
+                continue;
+            }
+            let (r, _) =
+                swap_algebra::swap_to(&narrow, false, true, amount, limit).expect("расчёт узкой");
+            let (f, _) =
+                swap_algebra::swap_to(&wide, false, true, amount, limit).expect("расчёт полной");
+            assert!(
+                !r.amount_in.is_zero(),
+                "{}: вверх от lo − 1 нули",
+                p["pool"]
+            );
+            assert_eq!(r, f, "{}: вверх от lo − 1 ≠ полная карта", p["pool"]);
+        }
+        // Глубина 2% вверх (band_ticks — те же тики полосы, что у depth.rs off_map) пересекает записанный тик внутри
+        // окна и кончается в окне — предусловие из записи.
+        let band = band_ticks(0.02, true).unwrap();
+        assert!(lo - 1 + band < hi, "{}: полоса шире окна", p["pool"]);
+        assert!(
+            full.ticks.range(lo..=lo - 1 + band).next().is_some(),
+            "{}: полоса не пересекает тиков",
+            p["pool"]
+        );
+        let up = depth_band_algebra::algebra(&AlgebraState { fee: 0, ..narrow }, false, 0.02, true)
+            .expect("глубина узкой");
+        let up_full =
+            depth_band_algebra::algebra(&AlgebraState { fee: 0, ..wide }, false, 0.02, true)
+                .expect("глубина полной");
+        assert!(up.2, "{}: глубина вверх от lo − 1 не дошла", p["pool"]);
+        assert_eq!(up, up_full, "{}: глубина вверх ≠ полная карта", p["pool"]);
+        checked += 1;
+    }
+    assert!(checked > 0, "в записи нет пула для случая");
 }

@@ -16,7 +16,11 @@
   при tick = lo − 1 сторона покупки ложно «мелкая»); перечитывание Algebra Integral (dex.algebra_off_map_reread) —
   по тому же правилу окна (math/swap_algebra.rs blocked_by_window), в т. ч. тик ровно hi, без петли (DECISIONS 323).
   Тесты tests/bsc_dex_algebra_out_of_window.rs (lo − 1 вверх = полная карта), tests/bsc_dex_off_map_algebra.rs
-  integral_reread_on_upper_edge_without_loop — локально не собирались и не запускались. Открыто:
+  integral_reread_on_upper_edge_without_loop — локально не собирались и не запускались. **Прогон CI 43883699804:** упал
+  integral_reread_on_upper_edge_without_loop — в карте aave_ts1 (depth_2026-10-25) инициализированных тиков нет вовсе,
+  предусловие ложно; тест переведён на запись Integral probe.json (пул 0x26399a…, выше окна — 1 записанный тик −94980),
+  в out_of_window добавлен случай с пересечением записанных тиков у нижнего края (tick_below_lower_edge_crosses_recorded_ticks),
+  DECISIONS 323 — арифметика остаточного случая (а) и случай (в); код src/ не менялся; локально не собиралось. Открыто:
   1. **Вопрос Тиграну:** core/precheck_dex_sell.rs (шапка, «NotApplicable») — если адаптер не может симулировать
      продажу DEX до покупки, проверка идёт по котировке, как раньше. Хопы Algebra перед сделкой квотером не сверяются
      (только Maverick — exec/precheck_quoter.rs), защищают верификация quote/verify.rs, minOut и проба eth_simulateV1

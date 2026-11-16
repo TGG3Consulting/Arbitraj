@@ -26,6 +26,8 @@
 //! Минимум выхода и проверка цены — exec/order.rs (худшая цена ≤ 0 или минимум 0 — ошибка до отправки).
 //! Нативная монета BNB (решение 62) — exec/native.rs: WRAP_ETH / UNWRAP_WETH в той же транзакции, резерв на газ не трогается.
 
+use std::sync::Arc;
+
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
@@ -112,6 +114,9 @@ async fn run(
     // Router PancakeSwap — умным путём (как RouteMode::Smart); мульти-роутер — атомарным бандлом свопов (exec/bundle_trade).
     // Предторговая верификация (решение 83) — для всех форм; её свежие amountOutMin по ногам идут в исполнение.
     let mut graph_mins: Option<Vec<Decimal>> = None;
+    // Решение «335 (В1, пакет)»: окружение котировки со свежими записями пулов маршрута из верификации — проба крючков
+    // перед сделкой (exec/precheck.rs hooks_again) берёт их на блоке верификации, не читая пулы второй раз.
+    let mut graph_q: Option<Quoting> = None;
     if route.mode == RouteMode::Graph {
         if !route.executable {
             let why = route
@@ -123,6 +128,10 @@ async fn run(
         // Предторговая верификация за правилом шлюза (решение 83): Reject → ошибка, ордер не формируем;
         // Ok → свежие amountOutMin по ногам.
         let verified = verify_gate::gate(q, env, &req, &route).await?;
+        let q: &Quoting = graph_q.insert(Quoting {
+            route_fresh: Some(Arc::new(verified.fresh.clone())),
+            ..q.clone()
+        });
         match graph_route::graph_form(ctx, &route) {
             GraphForm::Direct => graph_mins = Some(verified.amount_out_min),
             GraphForm::OneUr => {
@@ -146,6 +155,7 @@ async fn run(
             }
         }
     }
+    let q = graph_q.as_ref().unwrap_or(q);
     let leg = match (route.mode, route.legs.as_slice()) {
         (RouteMode::Smart, _) => {
             return trade_smart::trade(q, env, nonces, req, &route, None).await;

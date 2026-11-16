@@ -6,7 +6,8 @@
 //!    0xc6104625 без влияния — наш выше квотера (опасная сторона, перемер не применяется); после влияния на одном
 //!    блоке наш выход не выше квотера (less_hook округляет миллионные доли вверх).
 //! 2. BLESS 0x6e398c95: откат квотера UnexpectedRevertBytes(NotEnoughLiquidity(PoolId)) разбирается
-//!    quote/quoter_revert.rs (short_pool_id, from_data); ликвидность пула 0 на всех трёх блоках.
+//!    quote/quoter_revert.rs (short_pool_id, from_data) и по тексту узла — пакетной пробой перед сделкой
+//!    (check/hook_batch_parse.rs classify); ликвидность пула 0 на всех трёх блоках.
 //! 3. Группа крючка по ключу (pools/hooks.rs info) — B у всех 37 пулов; beforeSwap есть у всех, ReturnsDelta — ни у одного.
 //!
 //! Кто вызывает: cargo test.
@@ -21,6 +22,7 @@ use alloy_primitives::{B256, Bytes, U256};
 use rust_decimal::Decimal;
 
 use arb::core::types::HookGroup;
+use arb::venues::bsc_dex::check::hook_batch_parse::{Fail, classify};
 use arb::venues::bsc_dex::check::hooks_probe::impact;
 use arb::venues::bsc_dex::check::quoter_compare::{Cmp, Nums};
 use arb::venues::bsc_dex::check::reprobe_rule::safe;
@@ -130,6 +132,13 @@ fn bless_quoter_revert_is_not_enough_liquidity() {
             Some(B256::from_str(id).expect("PoolId"))
         );
         assert_eq!(from_data(&data), Some("квотер: NotEnoughLiquidity"));
+        // Пакетная проба перед сделкой (check/hook_batch_parse.rs classify) разбирает тот же откат по тексту узла
+        // (пачка JSON-RPC: «execution reverted: 0x…»).
+        let text = q.message.clone().expect("текст отказа");
+        assert_eq!(
+            classify(&text),
+            Fail::Short(B256::from_str(id).expect("PoolId"))
+        );
         n += 1;
     }
     assert_eq!(n, 4 * 9);

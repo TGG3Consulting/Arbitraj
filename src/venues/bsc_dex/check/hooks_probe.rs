@@ -11,11 +11,12 @@
 //! - measure_on: состояние уже прочитано на H (цикл крючков check/hooks_head.rs, перемер перед паузой
 //!   check/quoter_reprobe.rs). Два вызова квотера (покупка и продажа) — параллельно: сумма продажи считается по
 //!   прочитанному состоянию без узла.
-//! - measure_read: перед сделкой (exec/precheck.rs hook_again) — суммы по памяти (только суммы, не расчёт), блок H —
+//! - measure_read: перед сделкой у пула с виртуальным квотером (check/hook_batch.rs; остальные — пакетом) — суммы
+//!   по памяти (только суммы, не расчёт), блок H —
 //!   голова из node/heads.rs (без eth_blockNumber); чтение пула на H (pools/load_batch.rs, Multicall3-ступени, как у
 //!   предторговой верификации, решение 83) и оба вызова квотера на H — ОДНОВРЕМЕННО; математика — по прочитанному.
 //!
-//! Кто вызывает: check/hooks_head.rs, check/quoter_reprobe.rs, exec/precheck.rs.
+//! Кто вызывает: check/hooks_head.rs, check/quoter_reprobe.rs, check/hook_batch.rs (и его части — amounts, judge, short).
 //! От чего зависит: quote/quoter.rs, quote/pool_quote.rs, quote/rate.rs, pools/load_batch.rs, pools/load.rs,
 //! pools/registry.rs, tokens.rs, num.rs, node/call.rs.
 //! Настройки: check.probe_usdt [bsc_dex]; dex.quoter [вид пула]; через load_batch — настройки чтения пула.
@@ -43,7 +44,7 @@ use super::super::tokens::Tokens;
 pub type Measured = GatewayResult<Result<HookImpact, String>>;
 
 /// Пара сумм или выходов пробы: (покупка, продажа).
-type Pair = (U256, U256);
+pub type Pair = (U256, U256);
 
 /// Итог проверки крючка пула для ядра и экрана (вынесено решением 335 — тот же текст полей для пробы на блоке H).
 /// Принимает: окружение, запись, группу крючка, итог влияния. Возвращает: PoolCheck со временем «сейчас». Ошибок нет.
@@ -73,7 +74,7 @@ pub fn pool_check(
 pub const SHORT: &str = "в пуле не хватает ликвидности для пробы check.probe_usdt";
 
 /// Причина по откату квотера NotEnoughLiquidity(PoolId). Ошибок нет.
-fn short(id: alloy_primitives::B256) -> String {
+pub fn short(id: alloy_primitives::B256) -> String {
     format!("{SHORT} (NotEnoughLiquidity, PoolId {id})")
 }
 
@@ -98,7 +99,7 @@ async fn ask(
 /// Суммы пробы по записи `e`: (вход покупки во встречном токене — check.probe_usdt, через промежуточную монету по
 /// решению 52; монеты продажи — выход нашей покупки на эту сумму). Ok(Err) — посчитать нельзя (причина).
 /// Ошибки: настройки, узел (decimals), математика пула.
-async fn amounts(
+pub async fn amounts(
     ctx: &Ctx,
     tokens: &Tokens,
     reg: &Registry,
@@ -132,7 +133,7 @@ async fn asks(
 }
 
 /// Влияние по состоянию `fresh` (на блоке квотера) на тех же суммах. Ошибки: математика пула.
-fn judge(ctx: &Ctx, fresh: &Entry, (p, coins): Pair, (rb, rs): Pair) -> Measured {
+pub fn judge(ctx: &Ctx, fresh: &Entry, (p, coins): Pair, (rb, rs): Pair) -> Measured {
     let lb = pool_quote::swap(ctx, fresh, fresh.usdt, true, p)?;
     let ls = pool_quote::swap(ctx, fresh, fresh.coin, true, coins)?;
     match (impact(lb.amount_out, rb), impact(ls.amount_out, rs)) {

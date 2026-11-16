@@ -129,6 +129,7 @@ async fn decide_ok_when_state_unchanged() {
         Verdict::Ok {
             amount_out_min,
             block,
+            pools,
             ..
         } => {
             assert_eq!(block, BLOCK);
@@ -138,6 +139,9 @@ async fn decide_ok_when_state_unchanged() {
                 "amountOutMin по каждой ноге"
             );
             assert!(amount_out_min.iter().all(|m| *m > Decimal::ZERO));
+            // Решение «335 (В1, пакет)»: свежие записи пулов маршрута — наружу (проба крючков перед сделкой берёт их).
+            assert_eq!(pools.len(), fresh.len());
+            assert!(fresh.keys().all(|r| pools.contains_key(r)));
         }
         Verdict::Reject { reason, drift } => {
             panic!(

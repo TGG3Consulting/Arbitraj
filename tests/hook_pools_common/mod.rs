@@ -65,6 +65,8 @@ pub struct Quote {
     pub amount: U256,
     /// Ok(amountOut) или Err(данные отката, hex).
     pub out: Result<U256, String>,
+    /// Текст отказа узла (error.message) как есть; None — ответ без ошибки.
+    pub message: Option<String>,
 }
 
 pub struct Rec {
@@ -174,6 +176,7 @@ pub fn load() -> Rec {
                 zero_for_one: !word(body, 7).is_zero(),
                 amount: word(body, 8),
                 out,
+                message: v["error"]["message"].as_str().map(str::to_string),
             }
         })
         .collect();

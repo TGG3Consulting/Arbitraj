@@ -1,8 +1,8 @@
 //! Файл: venues/bsc_dex/check/hook_store.rs
 //! Что делает: решение 335 (ревью, Н2/Н3/Н1) — хранение и выбор влияния крючка пула B/C, измеренного НА БЛОКЕ:
 //! - put_head: проба на одном блоке (цикл крючков check/hooks_head.rs, проба перед сделкой exec/precheck.rs
-//!   hook_again — решение «335 (В1)») и перемер перед паузой (check/quoter_reprobe.rs, hooks.reprobe_before_pause)
-//!   пишут итог в PoolFacts.hook (котировки, как раньше) и в
+//!   hooks_again → check/hook_batch.rs — решения «335 (В1)», «335 (В1, пакет)») и перемер перед паузой
+//!   (check/quoter_reprobe.rs, hooks.reprobe_before_pause) пишут итог в PoolFacts.hook (котировки, как раньше) и в
 //!   PoolFacts.hook_head (номер H и итог). Итог на блоке СТАРШЕ уже записанного не пишется (задачи пишут без порядка —
 //!   более старое измерение не затирает более новое, Н3);
 //! - for_verify: влияние для сверки с квотером (check/quoter_verify.rs) — последнее измерение на блоке (hook_head),

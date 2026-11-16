@@ -130,6 +130,9 @@ async fn events(
     let mut resync = p.feed.resync_watch();
     let mut idx = group::index(&m.pools);
     let mut sites = group::multi_sites(&m.pools);
+    // Решение 357 (ревью слияния, Н3): самый поздний блок принятых из канала логов глубоких пулов — приняв лог блока
+    // > B, сессия приняла все логи блока B подписки «все события» (settle_close.rs шапка).
+    let mut seen: u64 = 0;
     loop {
         tokio::select! {
             done = lanes.next_done(), if lanes.running() => {
@@ -150,6 +153,11 @@ async fn events(
                     Ok(l) => l,
                     Err(e) => return (End::Broken(format!("лог не разобран: {e}")), true),
                 };
+                if let Some(b) = log.block_number
+                    && deep_log(m, &idx, &log)
+                {
+                    seen = seen.max(b);
+                }
                 if let Err(end) = on_log(p, g, m, (&idx, &sites), &log, (&mut *lanes, raw)).await {
                     return (end, true);
                 }
@@ -196,13 +204,15 @@ async fn events(
                 if let Err(end) = lanes.settle_block(p, m).await {
                     return (end, true);
                 }
-                // Решение 357: логи блока пула «в обновлении» не пришли к голове при пустом канале — полное чтение
-                // пула на голове (до повтора: не прочитавшийся встаёт в очередь повтора). «В пути»: канал пачки и
-                // события полосы этого пула (решение 330).
+                // Решение 357: логи блока пула «в обновлении» не пришли к голове — полное чтение пула на голове (до
+                // повтора: не прочитавшийся встаёт в очередь повтора). Ревью слияния (Н3): «в пути» — события полосы
+                // ЭТОГО пула, а канал пачки — только пока сессия не приняла лог более позднего блока (settle_close.rs).
                 let in_chan = g.rx.len();
+                let transit = |i: usize, block: u64| {
+                    super::settle_close::in_transit(lanes.queued(i), in_chan, seen, block)
+                };
                 if let Some(at) = at
-                    && let Err(end) =
-                        super::settle_close::on_head(p, m, at, |i| in_chan + lanes.queued(i)).await
+                    && let Err(end) = super::settle_close::on_head(p, m, at, transit).await
                 {
                     return (end, true);
                 }
@@ -319,6 +329,21 @@ async fn on_log(
             "лог подписки без blockNumber — блок пробуждения пула неизвестен".into(),
         )),
     }
+}
+
+/// Решение 357 (ревью слияния, Н3): лог глубокого пула пачки (подписка «все события»), не отменённый реоргом. Ошибок нет.
+fn deep_log(m: &Members, index: &HashMap<PoolRef, usize>, log: &Log) -> bool {
+    if log.removed {
+        return false;
+    }
+    let single = log.topics().get(1).map(|id| PoolRef::Singleton {
+        manager: log.address(),
+        id: *id,
+    });
+    single
+        .and_then(|r| index.get(&r))
+        .or_else(|| index.get(&PoolRef::Contract(log.address())))
+        .is_some_and(|&i| m.deep.get(i).copied().unwrap_or(true))
 }
 
 /// Добавляет пулы, которых в пачке ещё нет. Ошибок нет.

@@ -11,16 +11,21 @@
 //! • Follow — лог, за которым по коду контракта в ТОМ ЖЕ вызове всегда идёт ещё лог пула: Algebra Integral SwapFee →
 //!   Swap (AlgebraPool.sol _emitSwapEvent, integral-core 1ff43e1: emit SwapFee, затем emit Swap); LB CompositionFees →
 //!   DepositedToBins (LBPair.sol v2.1.0 mint: CompositionFees в _updateBin цикла, DepositedToBins в конце mint).
-//! Отметка head (решение 290 / ревью 332, п. 2 «найдено»): чтение LB на голове не прочиталось (per_block_lb.rs) — пул
-//! недостоверен до удачного чтения головы (lb_head.rs put). Раньше удачное чтение головы ставило valid = true ЛЮБОМУ
-//! пулу (load::renewed), в т. ч. ждущему полного перечитывания после StaleData (решение 298) с неперечитанными бинами
-//! события (вывод из бина, не входящего в активный, — память с лишней ликвидностью, завышение). Теперь голова
-//! возвращает достоверность только тому, что сняла сама (was_valid отметки head).
-//! Пределы: Active/Follow закрывает приход недостающих логов, иначе — голова сети выше блока отметки при пустом канале
-//! событий пачки (settle_close.rs: полное чтение пула на голове).
-//! Отметка head — settle_head.rs (head_failed, head_ok).
-//! Кто вызывает: pools/listen_log.rs (step, forget), settle_bins.rs, settle_close.rs, settle_head.rs, per_block_lb.rs
-//! (pending).
+//! Отметка head (ревью слияния «357 × 339»): чтение LB на голове не прочиталось (per_block_lb.rs) — пул недостоверен и
+//! «нужно полное чтение»: следующая голова читает его ЦЕЛИКОМ (бины тоже), голова LB достоверность не поднимает
+//! никогда (lb_head.rs) — settle_head.rs.
+//! Правило достоверности (ревью слияния, Б1/Б2): valid = true пулу возвращают ТОЛЬКО (1) полное чтение пула (любое —
+//! повтор, приём пачки, depth_sync, Refresh, полное чтение на голове: registry.rs put достоверной записи снимает и все
+//! отметки этого пула); (2) снятие Active / Follow логами ТОГО ЖЕ действия (Active — тот же блок, Follow — та же
+//! транзакция того же блока), когда ни один лог пула не пропущен; (3) thaw depth_sync — только замороженным им самим.
+//! Лог пула «в обновлении» из другого действия (Active — более поздний блок, Follow — другая tx или блок) значит, что
+//! ожидаемые логи потеряны: отметка снимается БЕЗ возврата достоверности, пул — на полное чтение (listen_log.rs).
+//! Отметки пачки снимает и invalidate (обрыв сессии).
+//! Пределы: Active/Follow закрывает приход недостающих логов, иначе — голова сети выше блока отметки, когда логам этого
+//! пула негде ждать (settle_close.rs: полное чтение пула на голове).
+//! Снятие отметок, которые своих логов уже не дождутся (lost, forget_all, keep_only), — settle_lost.rs.
+//! Кто вызывает: pools/listen_log.rs (step, forget), settle_bins.rs, settle_close.rs, settle_head.rs, settle_lost.rs,
+//! per_block_lb.rs (pending), registry.rs (forget при put достоверной записи).
 //! От чего зависит: registry.rs, events.rs (Applied), families.rs, abi_lb.rs, abi_algebra_integral.rs.
 //! Настройки: нет (базовое поведение; предел — блоки сети, не время).
 //!
@@ -62,14 +67,16 @@ pub struct Hold {
     pub bins: BTreeSet<u32>,
     /// Чего ждёт пул; None — только отметка head.
     pub need: Option<Need>,
-    /// Чтение LB на голове не прочиталось (per_block_lb.rs) — достоверность возвращает только удачная голова.
+    /// Чтение LB на голове не прочиталось (per_block_lb.rs) — нужно полное чтение (settle_head.rs).
     pub head: bool,
+    /// Follow: транзакция (transactionIndex) открывшего лога — снимает только лог той же транзакции того же блока.
+    pub tx: Option<u64>,
 }
 
 /// Карта отметок по пулам.
 pub type Map = HashMap<PoolRef, Hold>;
 
-/// Отметки пулов (одни на подписку на рынок — Pools). Дешёво клонируется.
+/// Отметки пулов (одни на реестр — registry.rs; Pools.holds — та же отметка). Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Holds {
     map: Arc<Mutex<Map>>,
@@ -115,7 +122,7 @@ impl Holds {
         self.map.lock().unwrap_or_else(|p| p.into_inner())
     }
 
-    /// Изменение карты с пересчётом числа отметок (ещё settle_head.rs). Ошибок нет.
+    /// Изменение карты с пересчётом числа отметок (ещё settle_head.rs, settle_lost.rs). Ошибок нет.
     pub(super) fn with<T>(&self, f: impl FnOnce(&mut Map) -> T) -> T {
         let mut m = self.lock();
         let out = f(&mut m);
@@ -155,9 +162,11 @@ impl Holds {
                 bins: BTreeSet::new(),
                 need: None,
                 head: false,
+                tx: None,
             });
             h.block = at.0;
             h.need = Some(at.1);
+            h.tx = None;
             if reset {
                 h.bins.clear();
             }
@@ -212,12 +221,23 @@ impl Holds {
         if waiting {
             return false;
         }
+        let block = log.block_number.unwrap_or_default();
         if let Some(bins) = opens(f, log, a) {
-            let block = log.block_number.unwrap_or_default();
             self.hold(reg, r, (block, Need::Follow), bins, false);
+            let tx = log.transaction_index;
+            self.with(|m| {
+                if let Some(h) = m.get_mut(r) {
+                    h.tx = tx;
+                }
+            });
             return true;
         }
-        if !bin_kind(f) && self.get(r).is_some_and(|h| h.need == Some(Need::Follow)) {
+        // Б2: снимает Follow только лог той же транзакции того же блока (чужой лог отсеян раньше — listen_log.rs lost).
+        if !bin_kind(f)
+            && self.get(r).is_some_and(|h| {
+                h.need == Some(Need::Follow) && h.block == block && h.tx == log.transaction_index
+            })
+        {
             self.release(reg, r);
         }
         false

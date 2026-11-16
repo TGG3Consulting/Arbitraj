@@ -7,9 +7,9 @@
 //! - пул с ОДНИМ логом в блоке уходит сразу: лог не открывает «в обновлении» (settle.rs step), план — один запрос
 //!   (settle_read.rs calls: getBin бина события + getActiveId — 2 вызова, один try_many у узла), активный бин узла на
 //!   конце блока = активному бину памяти → Settled::Done, отметки нет, достоверность прежняя, бин перечитан;
-//! - п. 2 «найдено» ревью 332 (settle_head.rs, lb_head.rs): удачное чтение на голове НЕ поднимает достоверность пулу,
-//!   недостоверному не по вине головы (ждущему повтора после StaleData, решение 298), и возвращает её пулу, у которого
-//!   её сняла неудачная голова (head_failed → head_ok).
+//! - п. 2 «найдено» ревью 332 и ревью слияния «357 × 339» (settle_head.rs, lb_head.rs): удачное чтение на голове НЕ
+//!   поднимает достоверность никогда — ни пулу, недостоверному не по её вине (ждущему повтора после StaleData, решение
+//!   298), ни пулу, у которого её сняла неудачная голова (отметка «нужно полное чтение», снимает её полное чтение).
 //!
 //! Последовательности логов ОДНОГО обмена через несколько бинов (и SwapFee → Swap Integral, и нескольких Swap Infinity
 //! Bin в блоке) в записях нет — тест «промежуточное состояние не уходит» ждёт записи (промпт — заметка
@@ -172,9 +172,11 @@ async fn head(c: &Ctx, e: &Entry, at: &Rec) -> (LbBinData, (u128, u128)) {
     lb_head::decode(&answers, data(e), at.ts).unwrap()
 }
 
-/// П. 2 «найдено» ревью 332: голова не поднимает достоверность чужой недостоверности, но возвращает свою.
+/// П. 2 «найдено» ревью 332 и ревью слияния «357 × 339» (Б1): голова LB достоверность не поднимает никогда — ни чужую
+/// недостоверность, ни снятую ею самой; пул с неудачной головой «нужно полное чтение», вернёт его только полное чтение
+/// (registry.rs put достоверной записи снимает отметку).
 #[tokio::test]
-async fn head_restores_only_its_own_validity() {
+async fn head_never_restores_validity_full_read_does() {
     let (c, probe, time, t) = scene("settle-357-head").await;
     // USDC/USDT: на голове всё то же, что в памяти (README записи) — «равны».
     let quiet = loaded(&c, &t, &probe, "0xaec97c3465d83b1952c3a251036df88a635c060c").await;
@@ -187,16 +189,17 @@ async fn head_restores_only_its_own_validity() {
     assert!(!lb_head::renewed(&waiting, time.block, d.clone()).valid);
     // Достоверный — остаётся достоверным.
     assert!(lb_head::renewed(&quiet, time.block, d.clone()).valid);
-    // Отметка head: неудачная голова сняла достоверность — удачная возвращает её (lb_head::put по head_ok).
-    let (reg, holds) = (Registry::default(), Holds::default());
+    // Неудачная голова: недостоверен, «нужно полное чтение»; удачная голова «равны» достоверность НЕ возвращает.
+    let reg = Registry::default();
     reg.put(quiet.clone());
-    holds.head_failed(&reg, &r);
+    reg.holds().head_failed(&reg, &r);
     assert!(!reg.get(&r).unwrap().valid);
-    assert_eq!(holds.head_ok(&r), Some(true));
-    assert!(holds.get(&r).is_none());
-    // Уже недостоверный (ждёт повтора) и неудачная голова: отметки нет — удачная голова вернуть нечего.
-    reg.update(&r, |e| e.valid = false);
-    holds.head_failed(&reg, &r);
-    assert_eq!(holds.head_ok(&r), None);
-    assert!(!reg.get(&r).unwrap().valid);
+    assert!(reg.holds().needs_full(&r));
+    let after = lb_head::renewed(&reg.get(&r).unwrap(), time.block, d.clone());
+    assert!(!after.valid, "голова «равны» не поднимает достоверность");
+    reg.put(after);
+    assert!(
+        reg.holds().needs_full(&r),
+        "недостоверная запись головы отметку не снимает"
+    );
 }

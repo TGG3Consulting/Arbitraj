@@ -26,12 +26,12 @@
 //! Решение 357 (п. 2 «найдено» ревью 332): чтение на голове НЕ поднимает достоверность (renewed — valid записи как
 //! был): раньше load::renewed ставил valid = true и пулу, ждущему полного перечитывания после StaleData (решение 298) с
 //! неперечитанными бинами события (вывод из неактивного бина — лишняя ликвидность в памяти, «равны» на голове её не
-//! видит). Достоверность возвращается только той, что сняла сама голова (settle_head.rs head_failed → head_ok в put);
-//! недостоверная запись ядру не отправляется.
+//! видит). Ревью слияния «357 × 339» (Б1): голова не возвращает достоверность и тому, у кого сняла её сама, — такой
+//! пул per_block_lb.rs читает целиком (settle_head.rs needs_full); недостоверная запись ядру не отправляется.
 //! Кто вызывает: pools/per_block_lb.rs (calls, decode, same, renewed, at_synced, put).
 //! От чего зависит: load_lb.rs (calls, decode, time_call, decode_time), load.rs (renewed, Loaded), abi_lb.rs (getBin),
 //! node/call.rs, node/multicall.rs, load_batch.rs, load_smardex.rs (block_secs), listen_log.rs, registry.rs,
-//! settle_head.rs (head_ok, решение 357), reload.rs (put_new — задача t160, dex.per_block_skip_same).
+//! reload.rs (put_new — задача t160, dex.per_block_skip_same).
 //! Настройки: через вызываемые (dex.load_batch, dex.multicall3 [bsc_dex]).
 //!
 //! Источник: lfj-gg/joe-v2@v2.1.0 — src/LBPair.sol L181-L183 getBin, L171-L173 getActiveId, L499-L550 swap, L603-L613
@@ -117,15 +117,13 @@ pub fn renewed(e: &Entry, block: u64, d: LbBinData) -> Entry {
     out
 }
 
-/// Запись в реестр и ядру — как у per_block_lb.rs. Решение 357: отметку head (чтение головы не прочиталось, settle_head.rs)
-/// снимает удачная голова — достоверность возвращается той, что была до неё; недостоверная запись ядру не уходит.
+/// Запись в реестр и ядру — как у per_block_lb.rs. Решение 357 (ревью слияния, Б1): голова достоверность не поднимает
+/// никогда (renewed — как была; пул с отметкой «нужно полное чтение» per_block_lb.rs читает целиком); недостоверная
+/// запись ядру не уходит.
 /// Задача t160 (слияние с t153): `skip` (reload::skip_same, dex.per_block_skip_same) — запись через reload::put_new:
 /// поколение состояния не сменилось — ядру не шлётся (как reload::put_emit у прочих видов); false — как раньше.
 /// Ошибки: End — ядро закрыло канал.
-pub async fn put(p: &Pools, f: &Found, mut e: Entry, skip: bool) -> Result<(), End> {
-    if p.holds.head_ok(&f.reference) == Some(true) {
-        e.valid = true;
-    }
+pub async fn put(p: &Pools, f: &Found, e: Entry, skip: bool) -> Result<(), End> {
     listen_log::note_refill(p, &e);
     let (pool, valid) = (e.pool.clone(), e.valid);
     let fresh = reload::put_new(p, e, skip);

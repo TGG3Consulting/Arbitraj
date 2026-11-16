@@ -147,7 +147,7 @@ impl Parts {
             lag: self.lag.clone(),
             gas: self.gas.clone(),
             kept,
-            holds: super::pools::settle::Holds::default(),
+            holds: self.registry.holds().clone(),
         }
     }
 }

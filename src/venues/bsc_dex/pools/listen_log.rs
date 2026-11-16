@@ -15,8 +15,8 @@
 //! теряется, а ждёт места в канале (gateway/core_out.rs, решение 324).
 //! Решение 314: перечитывания по событию (off_map, Refresh, Bins) — классом dex.event_refresh_urgency (refresh_urgency.rs).
 //! Решение 325: Applied::Fee (Algebra Integral) — только комиссия (integral_fee.rs) при dex.event_refresh_fee_only.
-//! Не задана — как раньше. (Бины Infinity Bin пачкой reread_bins.rs решения 325 на пути события не вызываются: ветку
-//! Bins ведёт settle_bins.rs решения 357 — бины события и активный бин одним запросом, у Infinity Bin всегда пачкой.)
+//! Не задана — как раньше. Бины событий (Infinity Bin, LB) — всегда одним запросом с активным бином (settle_bins.rs,
+//! решение 357; прежний reread_bins.rs удалён — ревью слияния, Н5).
 //! Решение 332: после бинов события (Infinity Bin, LB V2.1) — проверка «цена ушла за прочитанную полосу бинов» и
 //! перечитывание пула целиком (off_map_bins.rs after, при dex.bin_reread_left_pct у DEX; не задана — как раньше).
 //! Решение 357 (деньги, не под настройкой): пул не уходит ядру и не котируется в промежуточном состоянии одного действия
@@ -105,6 +105,15 @@ pub async fn on_log(
     if !log.removed && entry.has_applied(block, index) {
         return Ok(revive);
     }
+    // Решение 357 (ревью слияния, Б2): пул «в обновлении» получил лог ДРУГОГО действия (Active — более поздний блок,
+    // Follow — другая tx или блок): ожидаемые логи потеряны (обрыв, пропуск). Отметка — долой без возврата
+    // достоверности, событие учтено позицией, пул — на полное чтение (итог true — очередь повтора), не «голова равна».
+    if !waiting && p.holds.lost(&r, block, log.transaction_index) {
+        p.holds.forget(&r);
+        p.reg.update(&r, |e| e.valid = false);
+        super::stale_read::defer(&p.reg, &r, block, index);
+        return Ok(true);
+    }
     let applied = if log.removed {
         Applied::Refresh("реорг: событие отменено (removed)".into())
     } else {
@@ -119,12 +128,13 @@ pub async fn on_log(
         x => x,
     };
     // Решение 357: за этим логом в том же вызове по коду контракта идёт ещё лог пула — пул «в обновлении», ядру не
-    // уходит; следующий лог пула (не из бинов) снимает отметку (settle.rs step). Applied::Fee (решение 325) — шаг после
-    // чтения комиссии (ветка Fee ниже): иначе комиссия SwapFee так и не была бы прочитана.
-    if !matches!(applied, Applied::Fee(_))
-        && p.holds
-            .step(&p.reg, (&r, entry.family), log, &applied, waiting)
-    {
+    // уходит; следующий лог пула той же tx снимает отметку (settle.rs step). Ревью слияния (Н1): у Applied::Fee
+    // (решение 325) отметка ставится ДО чтения комиссии (ветка Fee ниже читает её и выходит): котировка не видит «комиссия
+    // конца блока + цена до Swap» ни на мгновение.
+    let held = p
+        .holds
+        .step(&p.reg, (&r, entry.family), log, &applied, waiting);
+    if held && !matches!(applied, Applied::Fee(_)) {
         return Ok(false);
     }
     let res = match applied {
@@ -148,22 +158,11 @@ pub async fn on_log(
             _ => Ok(()),
         },
         // Решение 325: только комиссия на блоке события, дальше — как Updated (цена из события могла уйти за карту).
-        Applied::Fee(why) => {
+        Applied::Fee(_) => {
             // Ревью 325 (Н4): класс очереди и замер (причина «fee») — refresh_event.rs fee.
             match refresh_event::fee(p, &entry, &r, (block, log.log_index), queued).await {
-                // Решение 357 при 325: комиссия прочитана; SwapFee — пул «в обновлении» до Swap того же вызова (settle.rs
-                // opens), прочий лог снимает ждавший Follow — как у остальных логов (step выше).
-                Ok(())
-                    if p.holds.step(
-                        &p.reg,
-                        (&r, entry.family),
-                        log,
-                        &Applied::Fee(why.clone()),
-                        waiting,
-                    ) =>
-                {
-                    return Ok(false);
-                }
+                // Решение 357 при 325: SwapFee — пул уже «в обновлении» (step выше, до чтения) до Swap той же tx.
+                Ok(()) if held => return Ok(false),
                 Ok(()) => match p.reg.get(&r) {
                     Some(e) if super::depth::off_map(&p.ctx, &e) => {
                         refresh_event::off_map(p, &e, block, queued)
@@ -283,6 +282,9 @@ pub use super::emit_pool::emit;
 pub fn invalidate(p: &Pools, pools: &[(Found, String)]) {
     // Решение 211: одна монета — один адрес (раньше — набор тикеров).
     let mut coins = std::collections::BTreeMap::new();
+    // Решение 357 (ревью слияния, Б2): отметки «в обновлении» пачки — долой (события окна обрыва потеряны; пулы вернёт
+    // только полное чтение приёма пачки).
+    p.holds.forget_all(pools.iter().map(|(f, _)| &f.reference));
     for (f, t) in pools {
         p.reg.update(&f.reference, |e| e.valid = false);
         coins.entry(f.coin).or_insert_with(|| t.clone());

@@ -85,6 +85,9 @@ pub struct Registry {
     pub(super) fails: super::pool_fail::Fails,
     /// Решение 339 (экран «Монеты»): пулы, ни разу не прочитанные (pool_unread.rs); снимаются при любом put.
     pub(super) unread: super::pool_unread::Book,
+    /// Решение 357 (ревью слияния): отметки «в обновлении» и «нужно полное чтение» (settle.rs); put достоверной записи
+    /// (полное чтение) снимает отметки пула, retain — отметки удалённых.
+    pub(super) holds: super::settle::Holds,
 }
 
 impl Entry {
@@ -106,6 +109,11 @@ impl Registry {
     /// Версия реестра (решение 129): растёт при любой записи. Ошибок нет.
     pub fn version(&self) -> u64 {
         self.version.load(Ordering::Acquire)
+    }
+
+    /// Решение 357: отметки «в обновлении» и «нужно полное чтение» (settle.rs). Ошибок нет.
+    pub fn holds(&self) -> &super::settle::Holds {
+        &self.holds
     }
 
     /// Решение 339: отметки неудач чтения пулов (pool_fail.rs). Ошибок нет.
@@ -135,6 +143,9 @@ impl Registry {
         // отметок нет (339 выключено) — без замка карты отметок (атомарный счётчик в Fails::clear).
         if e.valid {
             self.fails.clear(&e.pool.reference);
+            // Решение 357 (ревью слияния, Б1): достоверная запись кладётся только полным чтением (lb_head.rs и
+            // settle.rs достоверность так не поднимают) — отметки «в обновлении» / «нужно полное чтение» долой.
+            self.holds.forget(&e.pool.reference);
         }
         // Пул записан в реестр — экран видит его записью; отметка «ни разу не прочитан» (pool_unread.rs) долой.
         self.unread.clear(&e.pool.reference);
@@ -241,5 +252,7 @@ impl Registry {
         super::prefetch_memo::forget(&gone);
         // Ревью t153 (Н6): отметки неудач чтения удалённых пулов (pool_fail.rs) — тоже долой.
         self.fails.forget(&gone);
+        // Решение 357 (ревью слияния, Н4): и отметки «в обновлении» удалённых пулов.
+        self.holds.forget_all(&gone);
     }
 }

@@ -11,6 +11,7 @@
 //! 3. Книга заранее прочитанных ответов (node/prefetch.rs): ответ globalState из записи отдаётся только на своём
 //!    блоке и только внутри scope, откат в книгу не кладётся, повторно заранее не спрашивается; разбор ответа из книги
 //!    равен разбору записанного ответа.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/algebra_integral_common (запись), arb::venues::bsc_dex::pools::{prefetch_integral,
 //! abi_algebra_integral}, arb::venues::bsc_dex::node::{prefetch, call}.

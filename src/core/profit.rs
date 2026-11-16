@@ -157,7 +157,9 @@ pub async fn decide_capped(
     };
     let found = match stage(
         || "подбор объёма".into(),
-        super::size_search::search(&mut curve, &p),
+        // Предел стека (tests/core_dry_mode.rs precheck_replans_live): будущее подбора — в куче, не в кадре
+        // decide_capped (в нём части t159: участки, изломы, порог %, мягкий срок).
+        Box::pin(super::size_search::search(&mut curve, &p)),
     )
     .await
     {
@@ -232,19 +234,15 @@ pub async fn decide_capped(
     }
     if c.profit_pct < min_pct {
         // Ревью t159 Н2: объём у границы порога % — один пересчёт на ближайшем меньшем проходящем (size_retry.rs).
-        if let Some(fb) = found.fallback.as_ref() {
-            let fb = (fb.qty, fb.profit);
-            let retry = super::size_retry::retry(
-                core,
-                &cx,
-                fb,
-                budget,
-                p.step,
-                (min_usd, min_pct),
-                &choice,
-            );
-            if let Some(c2) = Box::pin(retry).await {
-                return Verdict::Accept(c2);
+        // Предел стека (tests/core_dry_mode.rs): расчёт c — в куче через ожидание, будущее пересчёта собирается в своём
+        // кадре (size_retry.rs retry_boxed), не в кадре decide_capped.
+        let c = Box::new(c);
+        if let Some(fb) = found.fallback.as_ref().map(|f| (f.qty, f.profit)) {
+            let min = (min_usd, min_pct);
+            let retry =
+                super::size_retry::retry_boxed(core, &cx, fb, (budget, p.step), min, &choice);
+            if let Some(c2) = retry.await {
+                return Verdict::Accept(*c2);
             }
         }
         return reject(
@@ -253,7 +251,7 @@ pub async fn decide_capped(
                 c.profit_pct.round_dp(4),
                 choice.why
             ),
-            Some(c),
+            Some(*c),
         );
     }
     Verdict::Accept(c)

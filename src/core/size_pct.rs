@@ -39,8 +39,8 @@ use super::size::{Curve, Fail, Params, Point};
 use super::size_memo::Memo;
 use super::size_par::{probes, tern_all};
 
-/// Итог ограниченной задачи: (выбранная точка, запасная меньшая проходящая).
-pub type Pick<T> = (Point<T>, Option<Point<T>>);
+/// Итог ограниченной задачи: (выбранная точка, запасная меньшая проходящая — в куче, см. size.rs Found.fallback).
+pub type Pick<T> = (Point<T>, Option<Box<Point<T>>>);
 
 /// Что делает: шаги 0–4 (см. шапку). Принимает: расчёты (пороги — Memo::gate), параметры, ширину остановки (шагов).
 /// Возвращает: Some — итог сдвинут порогом %; None — итог прежний (лучший по USDT проходит %, или проходящих нет, или
@@ -100,7 +100,7 @@ pub async fn best<C: Curve>(
     };
     // Шаг 4: запасной — ближайший меньший посчитанный, проходящий оба порога.
     let fallback = m.map.range(..nb).rev().find_map(|(_, r)| match r {
-        Ok(q) if gate.passes::<C>(q) => Some(q.clone()),
+        Ok(q) if gate.passes::<C>(q) => Some(Box::new(q.clone())),
         _ => None,
     });
     Ok(Some((b, fallback)))

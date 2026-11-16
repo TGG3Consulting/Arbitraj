@@ -8,6 +8,9 @@
 //! От чего зависит: core/profit.rs (final_calc), core/calc_timing.rs, core/size.rs (SizeChoice).
 //! Настройки: нет (пороги — money.min_profit_usd / money.min_profit_pct направления, через profit.rs).
 
+use std::future::Future;
+use std::pin::Pin;
+
 use rust_decimal::Decimal;
 
 use super::calc_timing::stage;
@@ -15,6 +18,26 @@ use super::costs::Calc;
 use super::dirctx::DirCtx;
 use super::engine::Core;
 use super::size::SizeChoice;
+
+/// Что делает: retry с будущим в куче, собранным в своём кадре (как precheck_fast.rs recalc_boxed): будущее
+/// финальной котировки большое, собранное прямо в profit.rs decide_capped, оно раздуло бы кадр пути предпроверки
+/// (tests/core_dry_mode.rs precheck_replans_live — предел стека). Итог — тоже в куче. Принимает: как retry, бюджет и шаг
+/// — парой. Возвращает: будущее итога retry. Ошибок нет.
+#[inline(never)]
+pub fn retry_boxed<'a>(
+    core: &'a Core,
+    cx: &'a DirCtx,
+    fb: (Decimal, Decimal),
+    (budget, step): (Decimal, Decimal),
+    min: (Decimal, Decimal),
+    choice: &'a SizeChoice,
+) -> Pin<Box<dyn Future<Output = Option<Box<Calc>>> + Send + 'a>> {
+    Box::pin(async move {
+        retry(core, cx, fb, budget, step, min, choice)
+            .await
+            .map(Box::new)
+    })
+}
 
 /// Что делает: пересчёт финальной котировкой на запасном объёме. Принимает: ядро, контекст направления, (объём,
 /// прибыль подбора) запасного, бюджет, шаг количества, пороги (USDT, %), выбор подбора. Возвращает: расчёт, прошедший

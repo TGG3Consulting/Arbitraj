@@ -3,13 +3,16 @@
 //! (tests/data/live_2026-10-24/heads.json, канал heads сырого журнала узла): новые номера блоков идут слушателям, тот
 //! же или меньший номер — нет (свежесть не продлевается, пока узел стоит); цена до и после по таблице NodeReal
 //! (https://docs.nodereal.io/docs/compute-units-cus: WS — 0,04 CU/байт, eth_blockNumber — 5 CU).
+//! Решение 367 (t163): сон между кругами опроса — остаток периода после работы круга (ритм от начала круга).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::node::heads. Моков нет.
 
 use serde_json::Value;
 
-use arb::venues::bsc_dex::node::heads::Heads;
+use std::time::Duration;
+
+use arb::venues::bsc_dex::node::heads::{Heads, rest_of};
 
 fn fixture() -> Value {
     let raw = std::fs::read_to_string("tests/data/live_2026-10-24/heads.json").unwrap();
@@ -55,4 +58,15 @@ fn polling_costs_far_less_than_new_heads() {
     let poll_cu_per_s = blocks / secs * 5.0;
     assert!(ws_cu_per_s > 200.0, "newHeads: {ws_cu_per_s} CU/с");
     assert!(poll_cu_per_s < 12.0, "опрос: {poll_cu_per_s} CU/с");
+}
+
+#[test]
+fn poll_period_counts_from_round_start() {
+    let ms = Duration::from_millis;
+    // Период 300 мс, круг (eth_blockNumber + eth_getBlockByNumber до узла по сети) занял 70 мс — спать 230 мс,
+    // а не 300 (иначе период 370 мс и голова «стареет» на время работы круга).
+    assert_eq!(rest_of(ms(300), ms(70)), ms(230));
+    // Круг дольше периода — следующий сразу.
+    assert_eq!(rest_of(ms(300), ms(450)), ms(0));
+    assert_eq!(rest_of(ms(300), ms(0)), ms(300));
 }

@@ -5,6 +5,21 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 319 (16.11.2026, задача t147, ветка t147/algebra-read-band от rel/dex-all a510c7a1) — сделано, ждёт прогона в
+  GitHub, ревью и приёмки.** Необязательная `dex.tick_read_band_algebra_pct` [bsc_dex]: задана — сырой битмап Algebra
+  V1/V1.9 (THENA Fusion) читается по ней, dex.tick_read_band_pct на Algebra не действует; не задана — 1 в 1 как раньше
+  (pools/load_algebra.rs raw_band_words). Тест tests/bsc_dex_tick_read_band_algebra.rs (локально не собирался и не
+  запускался — по правилу задачи). Открыто:
+  1. **Порядок включения:** сначала задать `dex.tick_read_band_algebra_pct` = текущее значение dex.tick_read_band_pct,
+     затем поднимать dex.tick_read_band_pct (цель ~70% — случай SHOPINX 16.11: при tickSpacing 1 это ±49 слов, 99
+     вызовов TickLens на пул; один Multicall3 такого размера на своём узле не проверялся — DECISIONS 296).
+  2. Не затронуты (dex.tick_read_band_pct не читают, своя дальность): Algebra Integral (dex.integral_tick_steps),
+     KyberSwap Elastic (весь список тиков), Maverick V2 (dex.tick_radius), iZiSwap / Biswap V3 (лесенка квотера). Все
+     они на своих событиях тоже перечитываются целиком (Applied::Refresh в events_*.rs); полоса в % для них — открытый
+     вопрос TASKS 296 п. 3 (если появится — отдельной настройкой или этой, вопрос Тиграну).
+  3. Область — площадка DEX (не id DEX): вид Algebra V1.9 в каталоге один (thena_fusion), load_algebra::load не получает
+     Family. Нужна ли полоса по отдельной DEX — вопрос Тиграну (как TASKS 296 п. 5).
+
 - **Решение 310 (16.11.2026, задача t141, ветка t141/due-read-only от rel/dex-all c9b0cc19) — сделано, ждёт прогона в
   GitHub, ревью и включения.** Сделано: check/fresh.rs due() при dex.check_due_read_only = да читает достоверность пула
   без записи (Registry::entry), без отметки «пул изменён» для фонового графа и без роста версии реестра; не задана / нет —

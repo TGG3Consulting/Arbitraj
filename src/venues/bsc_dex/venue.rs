@@ -397,11 +397,14 @@ impl Venue for BscDex {
         let mut qc = q.clone();
         qc.plan_gas = Some(gas);
         // Решение 301 (дополнение — стек): работа — в кучу (quote/cpu.rs run принимает только Pin<Box<F>>).
-        let signals = quote::cpu::run(
+        let found = quote::cpu::run(
             &q.ctx,
             Box::pin(async move { quote::cycle_scan::scan(&qc, gas).await }),
         )
-        .await?;
+        .await;
+        // Решение 385: нарушения контроля отсева циклов — в журнал и Telegram (quote/cycle_audit.rs), и при сбое поиска.
+        quote::cycle_audit::flush(&q.ctx, &self.p.stats).await;
+        let signals = found?;
         let venue = self.id();
         Ok(signals
             .iter()

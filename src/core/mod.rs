@@ -245,7 +245,6 @@ pub mod sieve;
 pub mod sieve_audit;
 pub mod sieve_gate;
 pub mod sieve_log;
-pub mod sieve_rate;
 pub mod sieve_side;
 pub mod signal;
 pub mod signal_ctx;

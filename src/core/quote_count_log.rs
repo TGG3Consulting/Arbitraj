@@ -7,7 +7,8 @@
 //! Решения 349, 352: в той же записи — сколько событий промежуточных пулов будили монеты и сколько монет (mid_wake.rs),
 //! сколько котировок DEX сигнала взято из памяти по отпечатку и сколько заново (signal_dex.rs).
 //! Решения 372–374: в той же записи (поле sieve) — сколько кандидатов отсечено границей (по USDT / по %), пропущено в
-//! расчёт, «метод не действует» по классам причин, и сколько циклов DEX ↔ DEX отсечено (sieve_log.rs, gateway/rate_bound.rs).
+//! расчёт, «метод не действует» по классам причин, и сколько циклов DEX ↔ DEX отсечено (sieve_log.rs, gateway/rate_bound.rs);
+//! решение 385 — контроль отсева циклов: cycle_audit, cycle_audit_violation, cycle_exempt.
 //! Кто вызывает: core/engine.rs (задача при запуске ядра).
 //! От чего зависит: gateway/quote_purpose.rs (snapshot), mid_wake.rs, signal_dex.rs (counts), deps.rs (журнал),
 //! settings (подписка на изменения).
@@ -158,11 +159,20 @@ async fn write(
 type Counts = std::collections::BTreeMap<String, u64>;
 
 /// Решения 372–374: счётчики отсева кандидатов (cut_usd, cut_pct, pass, na_<класс>) и циклов (cycle_pass, cycle_cut,
-/// cycle_na) с запуска. Ошибок нет.
+/// cycle_na) с запуска; решение 385 — контроль отсева циклов (cycle_audit — взято в полный счёт из cycle_cut,
+/// cycle_audit_violation — записанных нарушений, cycle_exempt — циклов на путях, исключённых контролем). Ошибок нет.
 fn sieve() -> Counts {
     let mut m = super::sieve_log::snapshot();
     let c = crate::gateway::rate_bound::cycle_counts();
-    for (k, v) in ["cycle_pass", "cycle_cut", "cycle_na"].iter().zip(c) {
+    let names = [
+        "cycle_pass",
+        "cycle_cut",
+        "cycle_na",
+        "cycle_audit",
+        "cycle_audit_violation",
+        "cycle_exempt",
+    ];
+    for (k, v) in names.iter().zip(c) {
         m.insert((*k).to_string(), v);
     }
     m

@@ -41,6 +41,7 @@ pub mod costs;
 pub mod cpu;
 pub mod cpu_local;
 pub mod cycle;
+pub mod cycle_audit;
 pub mod cycle_cost;
 pub mod cycle_legs;
 pub mod cycle_opt;

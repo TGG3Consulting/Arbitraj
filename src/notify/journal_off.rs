@@ -32,7 +32,7 @@ pub const MARK: &str = "в Telegram не отправлено: событие в
 #[rustfmt::skip]
 pub static OWN_RECORD: &[&str] = &[
     "deal.candidate",            // core.candidate (episode_notify.rs, card_job.rs)
-    "core.sieve_violation",      // core.sieve_violation (sieve_audit.rs)
+    "core.sieve_violation",      // core.sieve_violation (sieve_audit.rs; циклы — venues/bsc_dex/venue.rs dex_cycles, решение 385)
     "window.opened",             // core.window (window_worker.rs)
     "window.closed",             // core.window (window_close.rs)
     "window.stopped",            // core.window (window_tap.rs → window_cfg::warn)

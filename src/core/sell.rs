@@ -35,9 +35,12 @@
 //! (выгодно / порог убытка режима застрявшей монеты; у кнопки — без проверки): выполнено — рыночный ордер, не больше
 //! одного на площадку в сделке; обычная продажа невыгодна — режим застрявшей монеты; иначе алерт, как раньше
 //! (sell_range.rs, sell_range_run.rs; sell.market_on_price_range). Настройка не задана — как раньше.
+//! Решение 389 (t175, авария f9634504 17.11): все продолжения после итога продажи (режим застрявшей монеты, повтор
+//! неушедшей продажи, продажа здесь по порогу, повтор / остаток / газ кнопки) и вход в режим из sell_or_stuck — через
+//! цикл sell_loop.rs (sell_next.rs собирает их): тот же порядок шагов, но стек не растёт с числом повторов.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
-//! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_range_run.rs.
+//! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_range_run.rs, sell_loop.rs, sell_next.rs.
 //! Настройки: через sell_unsent.rs — stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154);
 //! через sell_range.rs — sell.market_on_price_range (решение 268).
 
@@ -90,10 +93,14 @@ async fn sell_or_stuck_guarded(core: &Core, deal: Deal, g: Guard) {
             sell(core, deal, q, b, "выгодно", f, Rule::Entry).await
         }
         // Решение 220: в режим застрявшей монеты — с настоящей причиной.
-        Ok(_) => Box::pin(super::stuck::handle(core, deal, StuckReason::Unprofitable)).await,
+        // Решение 389: вход в режим застрявшей монеты — продолжением цикла sell_loop.rs (стек не растёт).
+        Ok(_) => {
+            let job = super::sell_next::stuck(core, deal, StuckReason::Unprofitable, false);
+            super::sell_loop::hop(job).await
+        }
         Err(e) => {
             let why = StuckReason::NoQuote(e.message);
-            Box::pin(super::stuck::handle(core, deal, why)).await
+            super::sell_loop::hop(super::sell_next::stuck(core, deal, why, false)).await
         }
     }
 }
@@ -242,7 +249,7 @@ async fn sell(
             super::dust::settle(core, &mut deal, r.avg_price).await;
             // Решение 235: остаток продажи кнопкой — снова по рынку кнопкой (manual_sell.rs), итог кнопки — в конце.
             if deal.qty > Decimal::ZERO && why == BUTTON {
-                return Box::pin(super::manual_sell::remainder(core, deal)).await;
+                return super::sell_loop::hop(super::sell_next::button_remainder(core, deal)).await;
             }
             if deal.qty > Decimal::ZERO {
                 super::manual_outcome::sold(core, &deal, why, &r, deal.qty).await;
@@ -250,10 +257,8 @@ async fn sell(
                 super::ledger::save(core, &deal).await;
                 // Решение 177: остаток продаёт автоматика (режим застрявшей монеты), не ручная команда.
                 let left = StuckReason::Partial(deal.qty);
-                return Box::pin(super::risk_count::auto(super::stuck::handle(
-                    core, deal, left,
-                )))
-                .await;
+                let job = super::sell_next::stuck(core, deal, left, true);
+                return super::sell_loop::hop(job).await;
             }
             // Возврат USDT на площадку покупки — общий шаг закрытия (ledger::finish, решение 138).
             super::ledger::finish(core, &mut deal, Step::Closed, &format!("продано ({why})")).await;
@@ -270,7 +275,7 @@ async fn sell(
         {
             // Решение 235: у кнопки — алерт с точной причиной, не режим застрявшей монеты (там пороги убытка).
             if why == BUTTON {
-                return Box::pin(super::manual_sell::gas(core, deal, &e)).await;
+                return super::sell_loop::hop(super::sell_next::button_gas(core, deal, &e)).await;
             }
             deal.note(format!("продажа не прошла: {e} — застрявшая монета"));
             super::ledger::save(core, &deal).await;
@@ -278,10 +283,7 @@ async fn sell(
                 format!("{e} — газ продажи не помещается сверх резерва, режим застрявшей монеты");
             super::manual_outcome::failed(core, &deal, why, &why_not).await;
             let gas = StuckReason::GasReserve(e.message.clone());
-            Box::pin(super::risk_count::auto(super::stuck::handle(
-                core, deal, gas,
-            )))
-            .await
+            super::sell_loop::hop(super::sell_next::stuck(core, deal, gas, true)).await
         }
         // Исход продажи неизвестен (транзакция могла исполниться) — ни продавать, ни перегонять: ручная проверка.
         Err(e) if e.outcome_unknown() => {
@@ -303,7 +305,8 @@ async fn sell(
             // Решение 235: повтор кнопки — снова продажа по рынку кнопкой (manual_sell.rs), не режим застрявшей
             // монеты с его порогами; признак задачи остаётся ручным, итог кнопки — один, в конце.
             super::sell_unsent::Retry::Go { pause_ms } if why == BUTTON => {
-                Box::pin(super::manual_sell::retry(core, deal, &e, pause_ms)).await
+                let job = super::sell_next::button_retry(core, deal, &e, pause_ms);
+                super::sell_loop::hop(job).await
             }
             super::sell_unsent::Retry::Go { pause_ms } => {
                 super::manual_outcome::failed(
@@ -313,16 +316,13 @@ async fn sell(
                     &format!("{e} — бот повторит продажу сам"),
                 )
                 .await;
-                let job = super::sell_unsent::retry(core, deal, &e, why, pause_ms);
-                Box::pin(super::risk_count::auto(job)).await
+                let job = super::sell_next::unsent_retry(core, deal, &e, why, pause_ms);
+                super::sell_loop::hop(job).await
             }
             super::sell_unsent::Retry::Here { max } => {
                 let text = format!("{e} — повторы исчерпаны, бот продаёт здесь по порогу");
                 super::manual_outcome::failed(core, &deal, why, &text).await;
-                Box::pin(super::risk_count::auto(super::sell_unsent::here(
-                    core, deal, &e, max,
-                )))
-                .await
+                super::sell_loop::hop(super::sell_next::unsent_here(core, deal, &e, max)).await
             }
             r => {
                 // Решение 177: итог кнопки — после алерта (запись уже обновлена или поставлена).

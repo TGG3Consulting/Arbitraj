@@ -20,7 +20,7 @@
 //! Живой случай 05.11 (сделка 20261105131254836GAIB): нажатия «Продать и перегнать» при отказе по квотеру растили
 //! счётчик ошибок bsc_dex (3 → 6 → 9) и ставили на паузу ВСЮ площадку DEX.
 //! Кто вызывает: core/rules_apply.rs (counts, is_manual), core/commands.rs, manual.rs, manual_halted.rs, manual_usdt.rs,
-//! sell.rs (manual, auto).
+//! sell.rs (manual, auto), sell_next.rs (auto), sell_loop.rs (snapshot, restore — решение 389).
 //! От чего зависит: gateway/errors.rs.
 //! Настройки: нет.
 
@@ -78,6 +78,20 @@ pub async fn manual<F: Future>(f: F) -> F::Output {
 /// Принимает: работу. Возвращает: её итог. Ошибок нет.
 pub async fn auto<F: Future>(f: F) -> F::Output {
     MANUAL.scope(false, f).await
+}
+
+/// Решение 389 (core/sell_loop.rs): признак «ручное», видимый сейчас в задаче. None — не поставлен. Ошибок нет.
+pub fn snapshot() -> Option<bool> {
+    MANUAL.try_with(|m| *m).ok()
+}
+
+/// Решение 389: выполняет работу с признаком снимка (поставлен — то же значение; нет — не трогается). Принимает:
+/// снимок, работу. Возвращает: её итог. Ошибок нет.
+pub async fn restore<F: Future>(s: Option<bool>, f: F) -> F::Output {
+    match s {
+        Some(m) => MANUAL.scope(m, f).await,
+        None => f.await,
+    }
 }
 
 /// Идёт ли сейчас ручная команда человека. Вне признака (автоматика, другая задача) — false. Ошибок нет.

@@ -10,7 +10,8 @@
 //! Адаптер может по нему взять свежий снимок стакана по REST, если стакан потока пары тихий или ещё не пришёл (Bitget:
 //! неликвидная пара не шлёт кадров без изменений — venues/bitget/rest_book.rs). Поток расчётов снимком не пользуется.
 //! Кто вызывает: core (scope — ручные команды, продажа сделки; exec_scope — trade_ops::sell_value у DEX и exec_book.rs —
-//! стакан биржи для ордера, решение 238), адаптеры (wait — перед запросом REST; is_exec — котировка и снимок Bitget).
+//! стакан биржи для ордера, решение 238; snapshot / restore — core/sell_loop.rs, решение 389), адаптеры (wait — перед
+//! запросом REST; is_exec — котировка и снимок Bitget).
 //! От чего зависит: tokio (task_local, time).
 //! Настройки: нет своих (срок — exec.rate_limit_wait_max_ms читает ядро, core/patience_scope.rs).
 
@@ -39,6 +40,33 @@ pub fn is_exec() -> bool {
 /// Выполняет работу с терпением `max` (от текущего момента). Принимает: срок, работу. Возвращает: её итог. Ошибок нет.
 pub async fn scope<F: Future>(max: Duration, work: F) -> F::Output {
     DEADLINE.scope(Instant::now() + max, work).await
+}
+
+/// Признаки терпения, видимые сейчас в задаче (решение 389, core/sell_loop.rs: продолжение продажи, исполняемое
+/// циклом, видит те же признаки, что видело бы вложенным). None — признак не поставлен.
+#[derive(Debug, Clone, Copy)]
+pub struct Snapshot {
+    deadline: Option<Instant>,
+    exec: Option<bool>,
+}
+
+/// Снимок признаков терпения задачи (DEADLINE, EXEC) в этом месте. Ошибок нет.
+pub fn snapshot() -> Snapshot {
+    Snapshot {
+        deadline: DEADLINE.try_with(|d| *d).ok(),
+        exec: EXEC.try_with(|e| *e).ok(),
+    }
+}
+
+/// Выполняет работу с признаками снимка (поставленные — те же значения, тот же крайний момент; не поставленные — не
+/// трогаются). Принимает: снимок, работу. Возвращает: её итог. Ошибок нет.
+pub async fn restore<F: Future>(s: Snapshot, work: F) -> F::Output {
+    match (s.deadline, s.exec) {
+        (Some(d), Some(e)) => DEADLINE.scope(d, EXEC.scope(e, work)).await,
+        (Some(d), None) => DEADLINE.scope(d, work).await,
+        (None, Some(e)) => EXEC.scope(e, work).await,
+        (None, None) => work.await,
+    }
 }
 
 /// Сколько ещё можно ждать в этой задаче. None — терпения нет (автоматика) или срок вышел. Ошибок нет.

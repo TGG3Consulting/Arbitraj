@@ -55,8 +55,8 @@ use arb::core::types::{
 use arb::core::usdt_return_state::UsdtReturn;
 use arb::core::{
     coin_group, coin_ride, credit_event, credit_watch, deal_return_cost, group_notice,
-    limits_parts, manual_usdt, ride_quote, ride_trail, route_pause, start_reason, transfer_credit,
-    usdt_return_parts, usdt_return_pieces,
+    limits_parts, manual_usdt, relay_owner, ride_quote, ride_trail, route_pause, start_reason,
+    transfer_credit, usdt_return_deal, usdt_return_parts, usdt_return_pieces,
 };
 use arb::gateway::contract::VenueKind;
 use arb::gateway::frozen::{BookFee, FrozenBook};

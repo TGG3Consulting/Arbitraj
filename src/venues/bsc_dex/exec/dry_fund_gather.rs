@@ -45,7 +45,7 @@ pub fn gather(groups: &[&[(Address, U256)]], need: U256) -> Result<Vec<(Address,
             all.push((a, b));
         }
     }
-    all.sort_by(|x, y| y.1.cmp(&x.1));
+    all.sort_by_key(|x| std::cmp::Reverse(x.1));
     let mut left = need;
     let mut out = Vec::new();
     for (a, b) in &all {

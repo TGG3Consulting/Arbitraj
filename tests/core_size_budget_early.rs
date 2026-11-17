@@ -8,7 +8,8 @@
 //! (PIT, BULLA, CHEEMS …) в tests/data нет — направление то же (биржа → bsc_dex), монета CAKE.
 //! Ставки taker аккаунта в записях нет — 0,1 % (как tests/uncapped_recompute.rs); h = 0,7 — значение с сервера 09.11
 //! (docs/notes/price-move-vs-reserve-2026-11-09.md), поэтому на объём две котировки B (глубина sell_qty / h и sell_qty).
-//! Решение 380 (t166): sell_max_caps_size_search — предел объёма продажи DirCtx.sell_max на тех же записях.
+//! Решение 380 (t166): sell_max_caps_size_search — предел объёма продажи DirCtx.sell_max на тех же записях;
+//! sell_max_below_min_rejects — предел ниже минимума ордера BingX: отказ подбора, без паники.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{costs, size_search, size_curve, frozen}, arb::venues::bsc_dex::quote::pool_quote,
 //! tests/size_common.
@@ -349,8 +350,17 @@ async fn sell_max_caps_size_search() {
         budget: Some(budget),
     };
     let old = search(&mut curve, &p).await.unwrap();
-    let limit = (old.best.data.sell_qty / d("2")).round_dp(6);
-    assert!(limit > Decimal::ZERO);
+    // Предел — посередине между наименьшим допустимым объёмом (минимумы биржи; продажа на нём не больше его самого —
+    // комиссии в монете только уменьшают приход) и продажей выбора без предела: предел режет объём, а в минимум
+    // объём укладывается. CI f0587cfa: предел «половина продажи» (≈ 2.67) оказался ниже minQty BingX 2.672 — подбор
+    // честно отказал «меньше минимума»; этот случай — отдельный тест sell_max_below_min_rejects.
+    let min = old.choice.min_qty;
+    assert!(
+        old.best.data.sell_qty > min,
+        "запись не годится: продажа выбора {} не больше минимума {min}",
+        old.best.data.sell_qty
+    );
+    let limit = ((old.best.data.sell_qty + min) / d("2")).round_dp(6);
     let mut capped = cx(&rec);
     capped.sell_max = Some(limit);
     // Объём выбора без предела — сверх предела: «слишком большой» с причиной решения 380.
@@ -373,6 +383,10 @@ async fn sell_max_caps_size_search() {
     );
     assert!(new.best.data.sell_qty <= limit);
     assert!(new.choice.qty < old.choice.qty);
+    assert!(new.choice.qty >= min);
+    // Прибыль — расчёта на новом объёме (не перенесена с прежнего).
+    assert_eq!(new.best.qty, new.choice.qty);
+    assert_eq!(new.best.profit, new.best.data.profit_usd);
     // Без предела — тот же выбор, что и до решения 380 (поле None ничего не меняет).
     let mut curve = C {
         cx: &free,
@@ -381,5 +395,59 @@ async fn sell_max_caps_size_search() {
     };
     let again = search(&mut curve, &p).await.unwrap();
     assert_eq!(again.choice.qty, old.choice.qty);
+    let _ = std::fs::remove_dir_all(&dirp);
+}
+
+/// Решение 380, случай из CI f0587cfa: предел продажи ниже минимума ордера биржи (наименьший допустимый объём уже
+/// продаёт больше предела) — подбор отказывает понятной причиной (Fail, без паники и без зацикливания; ядро
+/// превращает её в отказ «пересчёт на проверяемый объём …», core/precheck_dex_cut.rs).
+#[tokio::test]
+async fn sell_max_below_min_rejects() {
+    let dirp = std::env::temp_dir().join(format!("arb_sell_max_min_380_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dirp);
+    std::fs::create_dir_all(&dirp).unwrap();
+    let core = core(&dirp).await;
+    let rec = Rec::load("sell-max-min-380").await;
+    let fz = Frozen {
+        a: Arc::new(frozen_buy(&rec)),
+        b: Arc::new(frozen_buy(&rec)),
+        at: Utc::now(),
+        decided: None,
+    };
+    let src = Src {
+        live: Live {
+            core: &core,
+            src: Some(&fz),
+        },
+        rec: &rec,
+        dex: AtomicU32::new(0),
+    };
+    let budget = d("1000");
+    let p = size_common::params(&rec, Dir::BingxToDex, budget);
+    let free = cx(&rec);
+    let mut curve = C {
+        cx: &free,
+        src: &src,
+        budget: Some(budget),
+    };
+    let old = search(&mut curve, &p).await.unwrap();
+    let mut capped = cx(&rec);
+    capped.sell_max = Some((old.choice.min_qty / d("2")).round_dp(6));
+    let mut curve = C {
+        cx: &capped,
+        src: &src,
+        budget: Some(budget),
+    };
+    match search(&mut curve, &p).await {
+        Err(Fail::TooSmall(t)) | Err(Fail::TooLarge(t)) => {
+            println!("предел ниже минимума: {t}");
+            assert!(!t.is_empty());
+        }
+        Err(e) => panic!("неожиданный вид отказа: {e}"),
+        Ok(f) => panic!(
+            "ожидался отказ, выбран объём {} (продажа {})",
+            f.choice.qty, f.best.data.sell_qty
+        ),
+    }
     let _ = std::fs::remove_dir_all(&dirp);
 }

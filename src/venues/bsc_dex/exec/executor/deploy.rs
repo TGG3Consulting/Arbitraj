@@ -8,8 +8,11 @@
 //! создания БЕЗ аргумента, поэтому без этой сверки смена dex.native_wrapped между оценкой и подтверждением ушла бы в
 //! конструктор молча (навсегда — сеттера нет). Не совпал с текущей dex.native_wrapped — не отправляем. После блока: код по адресу
 //! (eth_getCode) сверяется с ArbExecutor.bin-runtime. Адрес в exec.executor_address Тигран вписывает сам.
+//! Решение 399: пока текущая сборка (v3) не принята на живых пулах (deploy_gate.rs — SHA-256 bin-runtime ≠ LIVE_PROOF),
+//! развёртывание запрещено: deploy отказывает (NotApplicable, 400) до ключа, nonce и сети; оценка отдаёт причину в поле
+//! warning — интерфейс показывает её и не даёт отправить. Обходной настройки нет.
 //! Кто вызывает: venue.rs (контракт dex_executor_quote / dex_executor_deploy), exec/executor/dry.rs (next_nonce).
-//! От чего зависит: exec/executor/code.rs, exec/txs.rs, send/{mod, tx}.rs, quote/{gas, rate}.rs, wallet/{signer, nonce}.rs,
+//! От чего зависит: exec/executor/{code, deploy_gate}.rs, exec/txs.rs, send/{mod, tx}.rs, quote/{gas, rate}.rs, wallet/{signer, nonce}.rs,
 //! node/rpc.rs, num.rs.
 //! Настройки: dex.native_wrapped — адрес обёртки, аргумент конструктора v2 (ревью 272, А1: пишется в исполнитель один раз,
 //! сеттера нет; не задана — развёртывания нет, NotConfigured), он же — цена в USDT; через вызываемые — send.*, channel.*,
@@ -35,7 +38,7 @@ use super::super::super::send::{self, tx};
 use super::super::super::wallet::nonce::Nonces;
 use super::super::super::wallet::signer;
 use super::super::txs::{self, Env};
-use super::code;
+use super::{code, deploy_gate};
 
 /// Nonce кошелька по последнему блоку. Ошибки: узел.
 pub async fn next_nonce(ctx: &Ctx, wallet: Address) -> GatewayResult<u64> {
@@ -98,7 +101,8 @@ pub async fn quote(q: &Quoting, env: &Env) -> GatewayResult<ExecutorDeployQuote>
         bytecode_len: bin.len(),
         wnative,
         note,
-        warning: code::live_warning(),
+        // Решение 399: причина запрета развёртывания (None — разрешено); интерфейс не даёт отправить при Some.
+        warning: deploy_gate::refusal(),
     })
 }
 
@@ -131,7 +135,8 @@ pub fn confirm(confirmed: (&str, Address), wnative: Address) -> Result<(), Strin
 }
 
 /// Развёртывание. Принимает: котировку, окружение отправки, очередь кошелька, подтверждённые человеком SHA-256 байткода
-/// и адрес обёртки (задача t114, 3в). Возвращает: итог (адрес, транзакция, совпал ли код). Ошибки: QuoteMismatch
+/// и адрес обёртки (задача t114, 3в). Возвращает: итог (адрес, транзакция, совпал ли код). Ошибки: NotApplicable
+/// (решение 399: текущая сборка v3 не принята на живых пулах — отказ первым, до любой работы с сетью), QuoteMismatch
 /// (байткод или обёртка не те, что подтверждены), Internal (артефакт), ключ, каналы, узел, OutcomeUnknown.
 pub async fn deploy(
     q: &Quoting,
@@ -140,6 +145,7 @@ pub async fn deploy(
     confirmed: (&str, Address),
 ) -> GatewayResult<ExecutorDeployed> {
     let ctx = &q.ctx;
+    gate(deploy_gate::refusal()).map_err(|why| ctx.err(ErrorCode::NotApplicable, why))?;
     let (bin, wnative) = bytecode(ctx)?;
     confirm(confirmed, wnative).map_err(|why| ctx.err(ErrorCode::QuoteMismatch, why))?;
     let slot = nonces.acquire(ctx).await?;
@@ -181,6 +187,15 @@ pub async fn deploy(
     })
 }
 
+/// Решение 399: пропуск развёртывания. Принимает: причину запрета (deploy_gate::refusal). Возвращает: Ok — запрета нет;
+/// Err(причина) — отказ. Ошибок иных нет.
+pub fn gate(refusal: Option<String>) -> Result<(), String> {
+    match refusal {
+        Some(why) => Err(why),
+        None => Ok(()),
+    }
+}
+
 /// Код по адресу совпал с ArbExecutor.bin-runtime. Ошибки: Internal (артефакт), узел.
 async fn on_chain_ok(ctx: &Ctx, address: Address) -> GatewayResult<bool> {
     let want = code::runtime().map_err(|w| ctx.err(ErrorCode::Internal, w))?;
@@ -202,5 +217,26 @@ mod tests {
         assert!(confirm((&sha.to_uppercase(), a), a).is_ok());
         assert!(confirm((&sha, a), b).is_err_and(|w| w.contains("обёртка")));
         assert!(confirm(("00", a), a).is_err_and(|w| w.contains("SHA-256")));
+    }
+
+    /// Решение 399: развёртывание сборки, не принятой на живых пулах, отклоняется с причиной «v3 не принят на живых
+    /// пулах: нужна запись симуляции»; SHA записи = SHA текущего bin-runtime — пропуск. Хеш — настоящий SHA-256 текущего
+    /// contracts/out/ArbExecutor.bin-runtime (ArbExecutor.sha256).
+    #[test]
+    fn deploy_refused_until_live_proof() {
+        let cur = code::runtime_sha256().expect("SHA-256 bin-runtime записан");
+        let no_record = gate(deploy_gate::refusal_for(None, Some(cur)));
+        assert!(
+            no_record
+                .is_err_and(|w| w.contains(deploy_gate::NOT_ACCEPTED) && w.contains("нет записи"))
+        );
+        let other = gate(deploy_gate::refusal_for(Some("00"), Some(cur)));
+        assert!(other.is_err_and(|w| w.contains(deploy_gate::NOT_ACCEPTED) && w.contains(cur)));
+        assert!(gate(deploy_gate::refusal_for(Some(cur), Some(cur))).is_ok());
+        // Текущая сборка: запрет ровно тогда, когда LIVE_PROOF не равен SHA текущего кода (без обходной настройки).
+        let accepted = code::LIVE_PROOF == Some(cur);
+        assert_eq!(gate(deploy_gate::refusal()).is_ok(), accepted);
+        assert_eq!(deploy_gate::need_v3(), deploy_gate::need_v3_for(!accepted));
+        assert!(!deploy_gate::need_v3_for(true).contains("переразверн"));
     }
 }

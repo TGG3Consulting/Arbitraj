@@ -8,7 +8,7 @@
 //! (contracts/out/ — текущая сборка: v2 + шаги UNI_V4 / INF_CL / INF_BIN пулов внутри менеджеров Uniswap V4 и
 //! PancakeSwap Infinity). Развёртывается и подставляется в симуляцию только текущая сборка (v3); код в сети сверяется со
 //! всеми тремя.
-//! Кто вызывает: exec/executor/{deploy, dry}.rs, тесты.
+//! Кто вызывает: exec/executor/{deploy, deploy_gate, dry}.rs, тесты.
 //! От чего зависит: sha2, serde_json, contracts/out/*.
 //! Настройки: нет.
 
@@ -122,15 +122,21 @@ pub const LIVE_PROOF: Option<&str> = None;
 /// Ревью t181 (Н8): текст предупреждения окна «Развернуть исполнитель», пока запись симуляции на живых пулах не относится
 /// к текущему коду (LIVE_PROOF ≠ SHA-256 текущего bin-runtime или не задан). Ошибок нет.
 pub fn live_warning() -> Option<String> {
-    live_warning_for(LIVE_PROOF, recorded("ArbExecutor.bin-runtime"))
+    live_warning_for(LIVE_PROOF, runtime_sha256())
+}
+
+/// Решение 399: записанный SHA-256 текущего bin-runtime (ArbExecutor.sha256) — с ним сравнивается LIVE_PROOF. Ошибок нет
+/// (None — строки нет).
+pub fn runtime_sha256() -> Option<&'static str> {
+    recorded("ArbExecutor.bin-runtime")
 }
 
 /// То же для данных значений (проверяемо тестом). Принимает: SHA-256 из записи симуляции, SHA-256 текущего bin-runtime.
 /// Возвращает: None — совпали; иначе текст. Ошибок нет.
 pub fn live_warning_for(proof: Option<&str>, current: Option<&str>) -> Option<String> {
     let head = "Исполнитель v3 (шаги Uniswap V4 / Infinity) не принят на живых пулах сети";
-    let tail = "До этого разворачивать v3 и пускать через него деньги не рекомендуется (решение 395; кошелёк с v2 \
-                работает как раньше).";
+    let tail = "До этого развёртывание запрещено, обходной настройки нет (решения 395, 399; кошелёк с v2 работает \
+                как раньше).";
     match (proof, current) {
         (Some(p), Some(c)) if p == c => None,
         (Some(p), c) => Some(format!(

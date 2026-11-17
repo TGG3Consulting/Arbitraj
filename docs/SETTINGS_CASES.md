@@ -144,7 +144,7 @@
 ## Сводка: описанные настройки (по группам)
 
 Охват: (1) новые ключи задач t165–t181 — `exec.dex_buy_replan_max`, `hooks.trade_probe_rounds_max`, `dex.shallow_pools_per_pair`
-(в релизе 141619bc), `exec.top_up` (ветка t179/coin-reentry, 245048ed; у t181 f7571c3d новых ключей нет); (2) 15 ключей, чей смысл
+(в релизе 141619bc), `exec.top_up` (в релизной ветке rel/dex-all — слита t179, e500a53f; у t181 f7571c3d новых ключей нет); (2) 15 ключей, чей смысл
 изменили t165–t181 (в таблице — «*»), и profit.sigma_floor_per_s (смысл расширен решением 391); (3) все ключи, впервые
 появившиеся в src/settings/catalog с 01.11.2026 (первый коммит с ключом — git log -p по каталогу, дата автора); (4) целиком
 группы cpu.\*, size.\*, sieve.\*, profit.\*, dex.graph_\*, dex_dex.\*, exec.\*, dry.\*, hooks.\*, venue.quiet_confirm_\*,

@@ -1,7 +1,8 @@
 //! Файл: api/wallets_view.rs
 //! Что делает: данные экрана «Маппинг кошельков» (решение 132): кошельки (id, имя, имя секрета ключа, адрес — от
-//! адаптера, исполнитель, строки маппинга, незавершённые сделки), строки маппинга (каждая биржа реестра шлюза — без
-//! перечисления в коде, «DEX ↔ DEX», «Пробы и сигналы») и предупреждения «деньги смешиваются». Ключей нет никогда.
+//! адаптера, исполнитель, запрет развёртывания исполнителя — решение 399, строки маппинга, незавершённые сделки),
+//! строки маппинга (каждая биржа реестра шлюза — без перечисления в коде, «DEX ↔ DEX», «Пробы и сигналы») и
+//! предупреждения «деньги смешиваются». Ключей нет никогда.
 //! Кто вызывает: api/wallets.rs (list, map).
 //! От чего зависит: api/{state,wallets_dex}.rs, gateway (реестр), settings/accounts/, core/dex_account.rs.
 //! Настройки: нет.
@@ -44,6 +45,17 @@ pub async fn view(st: &AppState) -> Value {
         };
         st.settings.text("dex.native_wrapped", at).ok()
     });
+    // Решение 399: причина запрета развёртывания исполнителя (шлюз dex_executor_refusal, без сети) — кнопка
+    // «Развернуть исполнитель» недоступна с этой причиной, подсказки «переразверните» не показываются. null — разрешено.
+    let deploy_refused = match dex_id(st).await {
+        Ok(id) => st
+            .registry
+            .get(&id)
+            .await
+            .ok()
+            .and_then(|v| v.dex_executor_refusal()),
+        Err(_) => None,
+    };
     let mut wallets = Vec::new();
     for w in a.wallets() {
         let (address, why) = if !unlocked {
@@ -71,6 +83,7 @@ pub async fn view(st: &AppState) -> Value {
             // Ревью 272 (А1): обёртка из хранилища исполнителя v2 (null — не v2 / не сверен) и dex.native_wrapped.
             "executor_wrapped": w.executor_wrapped,
             "native_wrapped": native_wrapped,
+            "executor_deploy_refused": deploy_refused,
             "address": address,
             "address_error": why,
             "rows": a.rows_of(&w.id),

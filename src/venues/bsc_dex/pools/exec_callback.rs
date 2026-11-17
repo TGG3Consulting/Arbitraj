@@ -16,7 +16,7 @@
 //! squadV3SwapCallback в contracts/ArbExecutor.sol). Не задана настройка — проверки нет (как раньше).
 //! Кто вызывает: pools/exec_kind.rs (via_executor, describe), check/probe_exec.rs (no_path).
 //! От чего зависит: ctx.rs, ctx_wallet.rs (кошелёк окружения), families.rs, registry_key.rs (selector),
-//! exec/executor/code.rs (runtime, runtime_v1, Version).
+//! exec/executor/code.rs (runtime, runtime_v1, Version), exec/executor/deploy_gate.rs (need_v3 — решение 399).
 //! Решение 284: то же правило для вида шага, которого нет в исполнителе v1 (NOMI_STABLE = 12 — только v2): у кошелька
 //! v1 — пулы DEX без пути исполнения с причиной «переразверните исполнитель»; версия не сверена — «не сверен».
 //! Решение 395 (t181): шаги пулов внутри менеджеров — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только у исполнителя v3
@@ -29,6 +29,7 @@ use std::sync::Mutex;
 
 use super::super::ctx::Ctx;
 use super::super::exec::executor::code::{self, Version};
+use super::super::exec::executor::deploy_gate;
 use super::exec_kind::ExecKind;
 use super::families::Family;
 use super::registry_key;
@@ -136,13 +137,19 @@ pub fn v2_only(k: ExecKind) -> bool {
     since(k) == Version::V2
 }
 
-/// Причина «у исполнителя версии v нет вида шага k» (решения 284, 395): None — есть. Принимает: вид, версию. Ошибок нет.
+/// Причина «у исполнителя версии v нет вида шага k» (решения 284, 395): None — есть. Решение 399 (Н2): вид с v3 —
+/// «что делать» по deploy_gate::need_v3 (пока v3 не принят на живых пулах — без призыва переразвернуть). Принимает:
+/// вид, версию. Ошибок нет.
 pub fn step_absent(k: ExecKind, v: Version) -> Option<String> {
     let need = since(k);
     (v < need).then(|| {
+        let todo = if need >= Version::V3 {
+            deploy_gate::need_v3()
+        } else {
+            "переразверните исполнитель кошелька (экран «Маппинг кошельков»)"
+        };
         format!(
-            "исполнитель {} не знает шаг исполнителя {} (вид шага есть с {}) — переразверните исполнитель кошелька \
-             (экран «Маппинг кошельков»)",
+            "исполнитель {} не знает шаг исполнителя {} (вид шага есть с {}) — {todo}",
             v.label(),
             k.name(),
             need.label()

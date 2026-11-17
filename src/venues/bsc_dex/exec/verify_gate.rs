@@ -9,6 +9,8 @@
 //! ставятся последнему шагу каждой доли нижней границей (exec/leg_min.rs set_leg_mins, решение 228: минимум доли =
 //! E_k × max(1 − допуск, B / E); минимум верификации выше ожидаемого доли — отказ). Итог — в уведомления
 //! (exec.verified / exec.verify_rejected): видно из интерфейса и в Telegram, если событие включено.
+//! Решение 381 (ревью t167, Н2): отказ по границе сделки (не грубый предохранитель) помечается «цена ушла»
+//! (GatewayError::price_moved, price_moved ниже) — ядро может посчитать план покупки заново (core/buy_replan.rs).
 //! Классику (прямой/умный путь без графа) не трогает — вызывается только из exec/trade.rs для RouteMode::Graph.
 //! Кто вызывает: exec/trade.rs (графовый маршрут); повтор после approve — exec/{trade_direct, trade_smart}.rs,
 //! exec/executor/trade.rs; plan_quote / outcome — exec/dry_paths.rs.
@@ -79,7 +81,19 @@ pub async fn gate(
     // Граница сделки ядра (req.worst_price) — прямо в вердикт (решение 121 B4): отказ, только если свежая цена хуже её.
     let verdict = verify::run(&v, &names, &plan, gas, req.worst_price).await?;
     announce(env, ctx, req, &verdict);
-    outcome(ctx, verdict)
+    // Решение 381 (ревью t167, Н2): отказ «свежая цена хуже границы сделки» — пометка «цена ушла» для ядра; грубый
+    // предохранитель дрейфа и отказы свежести/чтения — без пометки. Предел дрейфа уже прочитан run (не задан — run
+    // вернул NotConfigured раньше).
+    let moved = verify::limits(ctx).is_ok_and(|(_, max_drift, _)| price_moved(&verdict, max_drift));
+    outcome(ctx, verdict).map_err(|e| if moved { e.price_moved() } else { e })
+}
+
+/// Решение 381 (ревью t167, Н2): отказ верификации — «цена ушла» (свежая средняя цена хуже границы сделки), а не грубый
+/// предохранитель. По коду quote/verify_decide.rs decide: дрейф есть у двух отказов — предохранителя (только при дрейфе
+/// больше verify.max_price_drift_pct) и границы сделки (дрейф не больше него); у отказов свежести, чтения и таймаута
+/// дрейфа нет. Чистая, тестируется. Принимает: вердикт, verify.max_price_drift_pct. Возвращает: да/нет. Ошибок нет.
+pub fn price_moved(verdict: &Verdict, max_drift: Decimal) -> bool {
+    matches!(verdict, Verdict::Reject { drift: Some(d), .. } if *d <= max_drift)
 }
 
 /// План-котировка из запроса: средняя цена восстановлена из худшей допустимой и exec.dex_slippage_pct — обратная

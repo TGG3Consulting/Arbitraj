@@ -111,6 +111,7 @@ fn rejected(sent: bool) -> OpError {
         message: ASTER.into(),
         sent,
         cancelled: false,
+        price_moved: false,
     }
 }
 
@@ -153,6 +154,7 @@ async fn decide_retries_only_unsent_channel_reject() {
         message: "цена сборки хуже".into(),
         sent: false,
         cancelled: false,
+        price_moved: false,
     };
     assert_eq!(
         sell_unsent::decide(&core, &deal, &quote, "выгодно"),
@@ -379,6 +381,7 @@ async fn usdt_return_not_retried_after_withdraw_rejected() {
         message: BITGET_40938.into(),
         sent: false,
         cancelled: false,
+        price_moved: false,
     };
     let amount = Decimal::from(83);
     let again = arb::core::usdt_return_retry::fail(&core, &x.id, amount, (&from, &to), 0, &e).await;
@@ -399,6 +402,7 @@ async fn usdt_return_not_retried_after_withdraw_rejected() {
         message: "locked".into(),
         sent: false,
         cancelled: false,
+        price_moved: false,
     };
     assert!(
         arb::core::usdt_return_retry::fail(&core, &x.id, amount, (&from, &to), 0, &locked).await

@@ -202,6 +202,7 @@ fn rejected(why: &str) -> OpError {
         message: why.into(),
         sent: false,
         cancelled: false,
+        price_moved: false,
     }
 }
 

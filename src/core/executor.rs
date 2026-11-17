@@ -41,6 +41,10 @@
 //! От чего зависит: precheck.rs, trade_ops.rs, transfers.rs, fills.rs, ledger.rs, relay_here.rs, sell.rs, deal.rs, remeasure.rs
 //! (частичная покупка: продажа на A — пере-замер по порогу «итог ≥ 0», решение 247, дополнение 10.11, t78).
 //! Решение 338 (ревью t157 Н1): задача сделки — ярус счёта «сделка» (gateway/cpu_budget.rs scope).
+//! Решение 381: покупка DEX сорвалась до отправки («цена ушла», пометка адаптера price_moved) — план заново на свежих
+//! данных под тот же предел списания (buy_replan.rs), не больше exec.dex_buy_replan_max раз; перед повторной покупкой —
+//! risk::can_open и buy_gate, снимок рынка — к новому плану; каждая попытка и пересчёт — в хронологию, принятый
+//! пересчёт — в уведомление deal.replanned.
 //! Настройки: через вызываемые модули.
 
 use crate::core::types::{Direction, Side};
@@ -334,7 +338,7 @@ async fn run(
     }
     // Решение 103: свободного меньше списания плана — объём подбирается заново под свободный остаток (все затраты,
     // финальная котировка, пороги). Не выгодно — отказ до ордера. Часть 4 решения 266: подбор уже сделан предпроверкой.
-    let plan = if bal.is_none() && super::refit::needed(&plan, cap) {
+    let mut plan = if bal.is_none() && super::refit::needed(&plan, cap) {
         // Решение 265: подбор под остаток — шаг и свои этапы пересчёта.
         let at = ts.at();
         let refit = Box::pin(super::refit::plan(core, &d, cap, &plan));
@@ -371,7 +375,7 @@ async fn run(
     };
     // Решение 217: рынок на момент решения — до ордера покупки (копии из памяти адаптеров; расчёт выключен — пропуск).
     let at = ts.at();
-    let frozen = super::uncapped_entry::freeze(core, &plan).await;
+    let mut frozen = super::uncapped_entry::freeze(core, &plan).await;
     ts.mark(at, || "снимок рынка момента решения".into());
     // Покупка на A. Решение 262 (ТЗ «Покупка на A»): у биржи лимит IOC — худший уровень стакана плана (после refit —
     // нового плана), не текущий стакан; у DEX — как раньше (trade_ops.rs).
@@ -382,27 +386,75 @@ async fn run(
         ));
     }
     let mut gas = Vec::new();
-    let at = ts.at();
-    // Будущее ордера — в куче (как в precheck.rs: обёртки замера не копируют его на стек).
-    let (bought, order) = super::step_timing::measure_if(
-        on,
-        Box::pin(super::trade_ops::trade(
-            core,
-            &deal.id,
-            &d.buy_on,
-            &d.asset,
-            Side::Buy,
-            plan.qty,
-            plan.buy_quote.route.clone(),
-            plan.buy_quote.avg_price,
-            Some(plan.buy_worst),
-            // Решение 219: предел «количество × худшая цена» — за вычетом доли комиссии в котируемой монете.
-            Some(plan.order_cap(cap)),
-            Some(&mut gas),
-        )),
-    )
-    .await;
-    ts.mark(at, || format!("ордер покупки {}", d.buy_on.0));
+    // Решение 381: покупка DEX сорвалась до отправки («цена ушла», пометка адаптера) — план заново на свежих данных под
+    // тот же предел (buy_replan.rs), не больше exec.dex_buy_replan_max раз; у биржи A — 0. Перед повторной покупкой —
+    // те же замки, что перед первой (risk::can_open, buy_gate); не прошли — закрытие с причиной (stop).
+    let replans = super::buy_replan::max(core, &d);
+    let mut tries = 0u64;
+    let mut stop: Option<String> = None;
+    let (bought, order) = loop {
+        let at = ts.at();
+        // Будущее ордера — в куче (как в precheck.rs: обёртки замера не копируют его на стек).
+        let (bought, order) = super::step_timing::measure_if(
+            on,
+            Box::pin(super::trade_ops::trade(
+                core,
+                &deal.id,
+                &d.buy_on,
+                &d.asset,
+                Side::Buy,
+                plan.qty,
+                plan.buy_quote.route.clone(),
+                plan.buy_quote.avg_price,
+                Some(plan.buy_worst),
+                // Решение 219: предел «количество × худшая цена» — за вычетом доли комиссии в котируемой монете.
+                Some(plan.order_cap(cap)),
+                Some(&mut gas),
+            )),
+        )
+        .await;
+        ts.mark(at, || format!("ордер покупки {}", d.buy_on.0));
+        let e = match bought {
+            Err(e) if tries < replans && super::buy_replan::replannable(&e) => e,
+            other => break (other, order),
+        };
+        tries += 1;
+        note(
+            &mut deal,
+            order.map(|o| o.reqs_text(&format!("ордер покупки {} ({tries})", d.buy_on.0))),
+        );
+        let at = ts.at();
+        let r = Box::pin(super::buy_replan::plan(core, &d, cap, plan.qty)).await;
+        ts.mark(at, || {
+            format!("пересчёт плана после срыва покупки ({tries})")
+        });
+        match r {
+            Ok(p) => {
+                deal.note(super::buy_replan::accepted_note(tries, &e, &plan, &p));
+                // Будущие уведомления и снимка — в куче (стек будущего сделки, tests/core_dry_mode.rs).
+                Box::pin(super::buy_replan::notify(core, &d, &deal.id, &e, &plan, &p)).await;
+                deal.plan = serde_json::to_value(&*p).unwrap_or_default();
+                deal.plan_profit_usd = p.profit_usd;
+                plan = *p;
+                super::ledger::save(core, &deal).await;
+            }
+            Err(why) => {
+                deal.note(super::buy_replan::refused_note(tries, &why));
+                break (Err(e), None);
+            }
+        }
+        // Ревью t167, Б1: пересчёт шёл время — пауза площадки, «Стоп»/«Пауза» человека, сухой режим проверяются заново.
+        if let Err(why) = super::buy_replan::ready(super::risk::can_open(core, &d), buy_gate(core))
+        {
+            stop = Some(why);
+            break (Err(e), None);
+        }
+        // Ревью t167, Н5: снимок рынка (решение 217) — к новому плану, иначе «без потолка» сравнит план и рынок разных
+        // моментов.
+        let at = ts.at();
+        frozen = Box::pin(super::uncapped_entry::freeze(core, &plan)).await;
+        ts.mark(at, || "снимок рынка момента решения (новый план)".into());
+    };
     // Решение 236, дополнение: approve, чаевые, газ неудачных попыток — в затраты сделки (и при отказе покупки).
     let at = ts.at();
     super::deal_gas::charge(core, &mut deal, &d.buy_on, &mut gas).await;
@@ -413,6 +465,10 @@ async fn run(
         &mut deal,
         order.map(|o| o.reqs_text(&format!("ордер покупки {}", d.buy_on.0))),
     );
+    // Ревью t167, Б1: замки перед повторной покупкой не прошли — закрытие с их причиной, как у buy_gate перед первой.
+    if let Some(why) = stop {
+        return super::ledger::finish(core, &mut deal, Step::Closed, &why).await;
+    }
     let r = match bought {
         Ok(r) => r,
         Err(e) if e.outcome_unknown() => return unknown(core, &mut deal, "покупка", &e).await,

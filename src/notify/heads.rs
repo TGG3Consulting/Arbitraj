@@ -27,6 +27,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "window.opened" => (INFO, "Запись окна началась"),
         "window.closed" => (INFO, "Запись окна закончена"),
         "window.stopped" => (WARN, "Запись окна остановлена: кончилось место"),
+        "deal.replanned" => (INFO, "План покупки пересчитан: цена ушла"),
         "deal.buy_filled" => (OK, "Куплено"),
         "deal.transfer_sent" => (INFO, "Перевод отправлен"),
         "deal.transfer_credited" => (OK, "Перевод зачислен"),

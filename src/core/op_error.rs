@@ -26,6 +26,8 @@ pub struct OpError {
     /// NotIncluded и хеш отмены — адаптер ставит их только по квитанции отмены, venues/bsc_dex/send/track_util.rs
     /// landed). Исходная транзакция с этим nonce уже не исполнится.
     pub cancelled: bool,
+    /// Решение 381 (ревью t167, Н2): ошибка шлюза помечена «цена ушла» до отправки (GatewayError::price_moved).
+    pub price_moved: bool,
 }
 
 impl OpError {
@@ -149,6 +151,7 @@ impl From<String> for OpError {
             message,
             sent: false,
             cancelled: false,
+            price_moved: false,
         }
     }
 }
@@ -163,6 +166,7 @@ impl From<&GatewayError> for OpError {
                 .tx
                 .as_ref()
                 .is_some_and(|t| t.outcome == TxOutcome::NotIncluded && t.cancel_hash.is_some()),
+            price_moved: e.price_moved,
         }
     }
 }

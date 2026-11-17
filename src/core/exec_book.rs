@@ -190,6 +190,7 @@ fn stale_ms(core: &Core, v: &VenueId) -> Result<i64, OpError> {
             message: format!("{}: {} — стакан для ордера не проверить", v.0, e.message),
             sent: false,
             cancelled: false,
+            price_moved: false,
         }),
     }
 }

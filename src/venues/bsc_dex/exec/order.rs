@@ -35,7 +35,8 @@ pub fn worst_positive(ctx: &Ctx, req: &TradeRequest) -> GatewayResult<()> {
 }
 
 /// Цена по живому состоянию не хуже допустимой. Принимает: запрос, монет и USDT по расчёту.
-/// Ошибки: NoRoute (ни одной монеты), QuoteMismatch (цена хуже TradeRequest.worst_price).
+/// Ошибки: NoRoute (ни одной монеты), QuoteMismatch с пометкой price_moved (цена хуже TradeRequest.worst_price,
+/// решение 381).
 pub fn check_price(
     ctx: &Ctx,
     req: &TradeRequest,
@@ -51,13 +52,16 @@ pub fn check_price(
         Side::Sell => price < req.worst_price,
     };
     if worse {
-        return Err(ctx.err(
-            ErrorCode::QuoteMismatch,
-            format!(
-                "Цена в пуле сейчас {price} хуже допустимой {}",
-                req.worst_price
-            ),
-        ));
+        // Решение 381 (ревью t167, Н2): «цена ушла» до отправки — ядро может посчитать план покупки заново.
+        return Err(ctx
+            .err(
+                ErrorCode::QuoteMismatch,
+                format!(
+                    "Цена в пуле сейчас {price} хуже допустимой {}",
+                    req.worst_price
+                ),
+            )
+            .price_moved());
     }
     Ok(())
 }

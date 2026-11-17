@@ -1086,3 +1086,15 @@ KJUDGE_ERROR нет; наш load_dodo.rs на записанных ответа�
 - `bingx_poll_263.rs` (no_order_without_wait_setting) — BingX: без venue.order_poll_ms trade отказывает NotConfigured, запроса постановки нет.
 - `bsc_dex_send.rs` — без send.gas_limit_margin_pct SendCfg не читается (запас газа отмены — до отправки исходной).
 - `core_status_poll_398.rs` — transfers::poll_missing на настоящем ядре: venue.status_poll_ms нужна и отправителю, и получателю (в том числе DEX); страж — исполнитель проверяет её после предпроверки и до покупки, перевод — до вывода.
+
+Решение 404 (t189) — tests/bsc_dex_cycle_rank_t189.rs на записи CAKE 2026-10-29 (routes_2026-10-29): отбор dex_dex.max_cycles
+ЛУЧШИХ циклов по курсу круга (quote/cycle_rank.rs) — каждый отобранный не хуже любого неотобранного, просмотрены все
+циклы; детерминированность (другой порядок пулов в реестре — тот же отбор, отбор N — начало полного порядка); предел
+dex_dex.rank_max_cycles; причина отказа пула (legs_for_cycle) — в итоге прохода (quote/cycle_tally.rs), неисполнимый
+сигнал — в строке отбора ядра (core/cycle_scan_log.rs).
+
+Решение 404 (ревью t189) — tests/bsc_dex_cycle_rate_quote_t189.rs: курс ребра отбора циклов (quote/cycle_rate.rs)
+≈ котировка малой суммы в обе стороны — V2 (size_common), V3 (squadswap_v3_2026-11-15), Algebra (algebra_integral_2026-11-06;
+заодно комиссия Algebra в steps::fee_pct), Solidly stable/volatile (getAmountOut контракта, solidly_fee_2026-11-14),
+StableSwap Nomiswap (getAmountOut контракта, nomiswap_stable_2026-11-15). DODO и Infinity Bin не покрыты — нет записи
+состояния без узла.

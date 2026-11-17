@@ -66,6 +66,7 @@ pub mod quoter_favour;
 pub mod quoter_refetch;
 pub mod quoter_refetch_check;
 pub mod quoter_refetch_note;
+pub mod quoter_refetch_proof;
 pub mod result;
 pub mod single_rebuild;
 pub mod smart_legs;

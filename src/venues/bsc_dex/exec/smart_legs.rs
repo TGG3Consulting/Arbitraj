@@ -121,6 +121,10 @@ async fn once(
         paid += p.usdt;
     }
     check_price(ctx, req, coins, paid)?;
+    // Решение 382, ревью Н1: по перечитанным пулам цена не хуже плана больше допуска сверки.
+    if quoter_refetch::block(v.q).is_some() {
+        quoter_refetch_check::plan_gap(ctx, req, coins, paid)?;
+    }
     let legs: Vec<Leg<'_>> = alone.iter().map(|(p, _)| Leg { path: p }).collect();
     // Решение 261: сверка односторонняя — против нас — отказ; в нашу сторону — строка в хронологию.
     // Журнал — один раз перед отправкой (trade_smart.rs): после approve подготовка идёт второй раз.

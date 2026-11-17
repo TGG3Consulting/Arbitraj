@@ -123,12 +123,12 @@ async fn memory(p: &Pools, e: &Entry, h: &Head, now: &mut QuoterSides) {
         return;
     }
     let note = quoter_block::memory_note(&p.ctx, e, h);
-    // Решение 382: «память отстаёт» — пул на полное чтение (без зацикливания — check/quoter_memory_fix.rs).
-    match (&note, h) {
-        (Some(_), Head::Ready { block, .. }) => {
-            super::quoter_memory_fix::on_lag(p, e, *block, now).await
-        }
-        _ => now.memory_reread = None,
+    // Решение 382: «память отстаёт» — пул на полное чтение, только если ошибка доказана на блоке памяти
+    // (check/quoter_memory_fix.rs, ревью Б1).
+    if note.is_some()
+        && let Head::Ready { block, .. } = h
+    {
+        super::quoter_memory_fix::on_lag(p, e, *block).await;
     }
     let changed = match (&now.memory, &note) {
         (None, None) => false,

@@ -46,12 +46,12 @@ use super::super::dry_paths::live_paths;
 use super::super::leg_min;
 use super::super::native;
 use super::super::order::{check_price, worst_positive};
-use super::super::quoter_refetch;
 use super::super::swap_ctx::SwapCtx;
 use super::super::swap_send::{rebuilt_notice, send_approvals, with_approve_gas};
 use super::super::trade::sides;
 use super::super::txs::{self, Env};
 use super::super::verify_gate::{self, Verified};
+use super::super::{quoter_refetch, quoter_refetch_check};
 use super::call::{self, ExecCall};
 use super::prep_refetch::{self, Prepared};
 use super::{fact, onchain, remeasure, sim};
@@ -211,6 +211,10 @@ pub(super) async fn prepare_once(
             (c + p.coins, u + p.usdt)
         });
     check_price(ctx, req, coins, paid)?;
+    // Решение 382, ревью Н1: по перечитанным пулам цена не хуже плана больше допуска сверки.
+    if quoter_refetch::block(v.q).is_some() {
+        quoter_refetch_check::plan_gap(ctx, req, coins, paid)?;
+    }
     if mins.len() != paths.len() {
         let why = "верификация вернула число долей, не равное маршруту";
         return Err(ctx.err(ErrorCode::QuoteMismatch, why));

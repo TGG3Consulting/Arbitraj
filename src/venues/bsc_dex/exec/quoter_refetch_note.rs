@@ -5,8 +5,9 @@
 //! (охват карты зависит от момента чтения — сравнивать можно только слова, прочитанные и там, и там). Строка уходит в
 //! журнал dex.memory_refetch: по ней видно, что именно было неверно в памяти — верх (пропущенное или ещё не применённое
 //! событие Swap / Sync) или карта тиков (пропущенный Mint / Burn) — без чтения узла задним числом.
-//! differs — доказано ли расхождение (тогда пул ставится на полное чтение, pools/settle_reread.rs).
-//! Кто вызывает: exec/quoter_refetch.rs, check/quoter_one.rs; тесты (tests/bsc_dex_quoter_refetch_382.rs).
+//! differs / ticks_differ — различаются ли записи (ошибку доказывает только сравнение на блоке самой памяти —
+//! check/memory_proof.rs, ревью Б1).
+//! Кто вызывает: exec/quoter_refetch.rs, check/memory_proof.rs; тесты (tests/bsc_dex_quoter_refetch_382.rs).
 //! От чего зависит: pools/registry.rs (Entry), pools/ticks.rs (TickMap).
 //! Настройки: нет.
 
@@ -54,12 +55,15 @@ pub fn tick_diff(mem: &TickMap, fresh: &TickMap) -> TickDiff {
     }
 }
 
-/// Доказано ли, что память не равна узлу: верх состояния различается или карта тиков в общих словах не совпадает.
+/// Различаются ли записи: верх состояния или карта тиков в общих словах. Ошибку памяти это доказывает, только если
+/// узел прочитан на блоке самой памяти (check/memory_proof.rs).
 /// Принимает: запись памяти, запись, перечитанную на блоке. Ошибок нет.
 pub fn differs(mem: &Entry, fresh: &Entry) -> bool {
-    if mem.pool.state != fresh.pool.state {
-        return true;
-    }
+    mem.pool.state != fresh.pool.state || ticks_differ(mem, fresh)
+}
+
+/// Не совпадает ли карта тиков в общих словах (у пулов без карты — нет). Ошибок нет.
+pub fn ticks_differ(mem: &Entry, fresh: &Entry) -> bool {
     match (&mem.ticks, &fresh.ticks) {
         (Some(m), Some(f)) => !tick_diff(m, f).ticks.is_empty(),
         _ => false,

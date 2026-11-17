@@ -34,9 +34,6 @@ pub struct QuoterSides {
     /// Решение 261: «память отстаёт от сети» — свежее состояние пула на голове H не равно памяти дольше
     /// dex.quoter_memory_lag_blocks (check/quoter_block.rs); без паузы, только журнал и экран. None — нет/не сравнивали.
     pub memory: Option<String>,
-    /// Решение 382: блок, на котором пул поставлен на полное чтение из-за «память отстаёт» (check/quoter_memory_fix.rs);
-    /// None — отметки нет (или память снова равна сети).
-    pub memory_reread: Option<u64>,
 }
 
 impl QuoterSides {

@@ -21,7 +21,9 @@ use super::super::quote::via::Via;
 use super::chain::Step;
 use super::native::{self, Wrap};
 use super::trade::check_price;
-use super::{chain, exit_quote, leg_min, live, quoter_favour, quoter_refetch};
+use super::{
+    chain, exit_quote, leg_min, live, quoter_favour, quoter_refetch, quoter_refetch_check,
+};
 
 /// Подготовленная доля: путь по живому состоянию, шаги с минимумами, нативная обёртка и пометка «продажа по квотеру»
 /// (решение 177; None — по расчёту) и «в нашу сторону» (решение 261).
@@ -78,6 +80,10 @@ async fn once(
     // Тот же расчёт, что у котировки, но только по пулам маршрута и по состоянию на сейчас (с допуском пулов).
     let (mut path, th) = live::path(v, &leg.hops, req.qty, true).await?;
     check_price(ctx, req, path.coins, path.usdt)?;
+    // Решение 382, ревью Н1: по перечитанным пулам цена не хуже плана больше допуска сверки.
+    if quoter_refetch::block(v.q).is_some() {
+        quoter_refetch_check::plan_gap(ctx, req, path.coins, path.usdt)?;
+    }
     let (mut steps, mut wrap) = legs(ctx, req, &path, mins, decs, is_native)?;
     // Ревью Н7: у пула с крючком выход квотера на сумме хопа уже снят пробой этой сделки (exec/hook_trade.rs).
     let known = |h: &Hop| {

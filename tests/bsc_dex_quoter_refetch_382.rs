@@ -11,8 +11,10 @@
 //!    одинаковые карты — «совпадает»; окна без общих слов — «не сравнимы».
 //!
 //! 3. отметка «нужно полное чтение» (pools/settle_reread.rs, Need::Reread) на записанном пуле: недостоверен, ожидание
-//!    логов её не заменяет и не снимает, любой лог — на чтение, снимает только достоверная запись; «память отстаёт»
-//!    сверки (check/quoter_memory_fix.rs act) — чтение, ожидание, без зацикливания.
+//!    логов её не заменяет и не снимает, любой лог — на чтение, снимает только достоверная запись;
+//! 4. ревью Б1 — отставание не ошибка (чистая логика): память посреди блока с более поздним логом пула — «не доказано»
+//!    (check/memory_proof.rs later); отметка по доказанной ошибке — карта тиков всегда, верх — только если память не
+//!    обновлялась событием (exec/quoter_refetch_proof.rs mark). Само чтение узла на блоке памяти (prove) — без записи.
 //!
 //! Перечитывание на узле и повтор подготовки сделки (pinned, prepare, dry_build) тестом на записи не покрыты — записей
 //! узла по этим пулам нет (список для серверного ИИ — docs/notes/t168-quoter-mismatch-2026-11-17.md).
@@ -28,12 +30,14 @@ use alloy_primitives::U256;
 use rust_decimal::Decimal;
 use serde_json::json;
 
+use alloy::rpc::types::Log;
 use arb::gateway::errors::ErrorCode;
 use arb::settings::scope::Scope;
-use arb::venues::bsc_dex::check::quoter_memory_fix::{Act, act};
+use arb::venues::bsc_dex::check::memory_proof::later;
 use arb::venues::bsc_dex::exec::precheck;
 use arb::venues::bsc_dex::exec::quoter_refetch::is_quoter_diff;
 use arb::venues::bsc_dex::exec::quoter_refetch_note::{differs, note, tick_diff};
+use arb::venues::bsc_dex::exec::quoter_refetch_proof::mark;
 use arb::venues::bsc_dex::pools::registry::Registry;
 use arb::venues::bsc_dex::pools::settle::Need;
 use arb::venues::bsc_dex::quote::quoter::{self, Judged};
@@ -166,15 +170,25 @@ fn reread_mark_waits_for_full_read() {
 }
 
 #[test]
-fn memory_lag_reread_without_loop() {
-    // Отметки не было — на чтение.
-    assert_eq!(act(None, (5, Some(1))), Act::Reread);
-    // Отметка на блоке 10, память ещё старше — полного чтения не было, ждать.
-    assert_eq!(act(Some(10), (9, Some(3))), Act::Wait);
-    // Прочитан целиком на 11, событий после нет, а память снова не равна узлу — недостоверен, без новой отметки.
-    assert_eq!(act(Some(10), (11, None)), Act::Stuck);
-    // После чтения события шли, но память снова отстала — новое отставание, снова на чтение.
-    assert_eq!(act(Some(10), (12, Some(4))), Act::Reread);
+fn lag_is_not_error() {
+    // Ревью Б1 (чистая логика): память посреди блока S (logIndex 7) — у пула есть лог блока S с logIndex 9: память
+    // посреди действия, узел на конце S сравнивать с ней нельзя (отставание, «не доказано»); логов позже 7 нет (или
+    // поздний отменён реоргом) — память учла весь блок и обязана совпасть с узлом на конце S.
+    let log = |i: u64, removed: bool| Log {
+        block_number: Some(100),
+        log_index: Some(i),
+        removed,
+        ..Default::default()
+    };
+    assert!(later(&[log(3, false), log(9, false)], 7));
+    assert!(!later(&[log(3, false), log(7, false)], 7));
+    assert!(!later(&[log(9, true)], 7));
+    assert!(!later(&[], 7));
+    // Доказанная ошибка: карта тиков — отметка всегда; только верх — если память не обновлялась событием с тех пор.
+    assert!(mark(true, (100, Some(7)), Some((101, Some(2)))));
+    assert!(mark(false, (100, Some(7)), Some((100, Some(7)))));
+    assert!(!mark(false, (100, Some(7)), Some((101, Some(2)))));
+    assert!(!mark(true, (100, Some(7)), None));
 }
 
 #[test]

@@ -5,10 +5,13 @@
 //! пропущено, карта тиков разошлась) выглядит как «квотер меньше расчёта» — сделка срывалась (живой бот 17.11: ESIM
 //! 7,2 %, BANANAS31 ×8, VELO ×7). Теперь при таком расхождении (только Judged::Diff против нас — is_quoter_diff):
 //! 1. голова H — свежий номер блока из опроса (node/heads.rs fresh, без запроса к узлу);
-//! 2. ВСЕ пулы доли перечитываются на H тем же загрузчиком, что у периодической сверки (pools/load.rs refresh; в реестр
-//!    НЕ пишется — запись реестра ведёт только сессия пачки);
-//! 3. чем память отличалась от узла — строка в журнал dex.memory_refetch (Warn; exec/quoter_refetch_note.rs); память не
-//!    равна узлу — пул ставится на ПОЛНОЕ чтение своей сессией (pools/settle_reread.rs: до него недостоверен);
+//! 2. ВСЕ пулы доли перечитываются на H одновременно тем же загрузчиком, что у периодической сверки (pools/load.rs
+//!    refresh; в реестр НЕ пишется — запись реестра ведёт только сессия пачки); графовый маршрут — пулы предторговой
+//!    верификации на её блоке (Quoting.route_fresh), без нового чтения;
+//! 3. чем память отличалась от узла на H — строка в журнал dex.memory_refetch (Warn; exec/quoter_refetch_note.rs). Это
+//!    ещё не ошибка (память может отставать на блок, ревью Б1): фоном память сравнивается с узлом на её ЖЕ блоке
+//!    (check/memory_proof.rs, exec/quoter_refetch_proof.rs), и только доказанная ошибка ставит пул на ПОЛНОЕ чтение
+//!    сессией (pools/settle_reread.rs: до него недостоверен);
 //! 4. вызывающий пересчитывает долю по этим записям (Quoting.pinned → exec/live.rs, exec/live_hops.rs) и сверяет с
 //!    квотером на ТОМ ЖЕ блоке H (exec/quoter_refetch_check.rs) — дальше обычные проверки сделки (худшая цена ядра,
 //!    минимумы, проба). Расходится и на одном блоке — это уже не память, а математика: отказ QuoteMismatch с
@@ -36,7 +39,7 @@ use super::super::pools::load;
 use super::super::pools::registry::Entry;
 use super::super::quote::Quoting;
 use super::super::quote::via::Via;
-use super::quoter_refetch_note;
+use super::{quoter_refetch_note, quoter_refetch_proof};
 
 /// Вид записи журнала.
 pub const KIND: &str = "dex.memory_refetch";
@@ -97,9 +100,13 @@ pub fn block(q: &Quoting) -> Option<u64> {
     q.pinned.as_ref().map(|f| f.block)
 }
 
-/// Пулы доли на голове H (см. шапку, п. 1–3). Принимает: окружение котировки, пулы доли, исходный отказ сверки.
-/// Возвращает: окружение с перечитанными пулами (Quoting.pinned). Ошибки: исходный отказ с припиской причины — нет
-/// свежей головы, пула нет в реестре, чтение пула на H не удалось (узел, настройка).
+/// Пулы доли на голове H (см. шапку, п. 1–3). Ревью Н2: пулы читаются одновременно (один блок); у графового маршрута
+/// пулы, уже перечитанные предторговой верификацией (Quoting.route_fresh), берутся как есть — квотер на её блоке.
+/// Ревью Б1: расхождение памяти с узлом на H ошибку не доказывает (память может отставать на блок) — доказательство на
+/// блоке самой памяти идёт фоном (exec/quoter_refetch_proof.rs), отметку «нужно полное чтение» ставит только оно.
+/// Принимает: окружение котировки, пулы доли, исходный отказ сверки. Возвращает: окружение с перечитанными пулами
+/// (Quoting.pinned). Ошибки: исходный отказ с припиской причины — нет свежей головы, пула нет в реестре, чтение не
+/// удалось (узел, настройка).
 pub async fn pinned(q: &Quoting, pools: &[PoolRef], first: GatewayError) -> GatewayResult<Quoting> {
     let ctx = &q.ctx;
     let fail = |why: String| GatewayError {
@@ -109,37 +116,45 @@ pub async fn pinned(q: &Quoting, pools: &[PoolRef], first: GatewayError) -> Gate
         ),
         ..first.clone()
     };
-    let block = q.heads.fresh(ctx).map_err(|e| fail(e.message))?.number;
-    let mut fresh = HashMap::with_capacity(pools.len());
-    let mut notes = Vec::with_capacity(pools.len());
+    let mut uniq: Vec<PoolRef> = Vec::with_capacity(pools.len());
     for r in pools {
-        if fresh.contains_key(r) {
-            continue;
+        if !uniq.contains(r) {
+            uniq.push(r.clone());
         }
-        let mem = q
-            .reg
-            .get(r)
-            .ok_or_else(|| fail("пул маршрута больше не в реестре".into()))?;
-        let got = load::refresh(ctx, &q.tokens, &q.reg, &mem, block)
-            .await
-            .map_err(|e| {
-                fail(format!(
-                    "{} {}: {}",
-                    mem.family.title, mem.ticker, e.message
-                ))
-            })?;
-        let mut line = quoter_refetch_note::note(&mem, &got, block);
-        // Память доказанно не равна узлу — пул на полное чтение своей сессией (pools/settle_reread.rs): до него не
-        // котируется, следующая попытка и другие монеты через этот пул пойдут по верной памяти.
-        if quoter_refetch_note::differs(&mem, &got) && q.reg.holds().reread(&q.reg, r, block) {
-            line.push_str(" — пул поставлен на полное перечитывание сессией пачки");
+    }
+    let mems = uniq
+        .iter()
+        .map(|r| {
+            q.reg
+                .get(r)
+                .ok_or_else(|| fail("пул маршрута больше не в реестре".into()))
+        })
+        .collect::<GatewayResult<Vec<Entry>>>()?;
+    let (block, got) = match verified(q, &uniq) {
+        Some(v) => v,
+        None => {
+            let block = q.heads.fresh(ctx).map_err(|e| fail(e.message))?.number;
+            let reads = mems
+                .iter()
+                .map(|m| load::refresh(ctx, &q.tokens, &q.reg, m, block));
+            let got = futures_util::future::try_join_all(reads)
+                .await
+                .map_err(|e| fail(e.message))?;
+            (block, got)
         }
-        notes.push(line);
-        fresh.insert(r.clone(), got);
+    };
+    let notes: Vec<String> = mems
+        .iter()
+        .zip(&got)
+        .map(|(m, g)| quoter_refetch_note::note(m, g, block))
+        .collect();
+    // Ревью Б1: ошибка памяти — только доказанная на её же блоке, фоном, не задерживая сделку.
+    for m in &mems {
+        quoter_refetch_proof::spawn(ctx, &q.tokens, &q.reg, m, block);
     }
     let msg = format!(
         "{}; пулы доли перечитаны на блоке {block}, пересчёт по ним и сверка с квотером на том же блоке \
-         (решение 382): {}",
+         (решение 382); память против блока {block} (отставание ещё не ошибка — доказательство фоном): {}",
         first.message,
         notes.join(" | ")
     );
@@ -147,10 +162,21 @@ pub async fn pinned(q: &Quoting, pools: &[PoolRef], first: GatewayError) -> Gate
     Ok(Quoting {
         pinned: Some(Arc::new(RouteFresh {
             block,
-            pools: Arc::new(fresh),
+            pools: Arc::new(uniq.into_iter().zip(got).collect::<HashMap<_, _>>()),
         })),
         ..q.clone()
     })
+}
+
+/// Ревью Н2: пулы доли, уже перечитанные предторговой верификацией графа (Quoting.route_fresh), — блок и записи; None
+/// — верификации не было или в ней нет хоть одного пула. Ошибок нет.
+fn verified(q: &Quoting, pools: &[PoolRef]) -> Option<(u64, Vec<Entry>)> {
+    let f = q.route_fresh.as_ref()?;
+    let got = pools
+        .iter()
+        .map(|r| f.pools.get(r).cloned())
+        .collect::<Option<Vec<_>>>()?;
+    Some((f.block, got))
 }
 
 /// Отказ сверки уже на перечитанных пулах — математика, не память: к тексту дописывается блок. Прочие ошибки — как

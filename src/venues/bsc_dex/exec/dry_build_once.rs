@@ -24,7 +24,10 @@ use super::dry_paths::{live_paths, verified};
 use super::executor::dry::DryMode;
 use super::native::{self, Wrap};
 use super::trade::{check_price, sides, worst_positive};
-use super::{bundle, chain, dry_checks, executor, leg_min, plan, universal};
+use super::{
+    bundle, chain, dry_checks, executor, leg_min, plan, quoter_refetch, quoter_refetch_check,
+    universal,
+};
 
 /// Одна сборка (тело build до решения 382; по перечитанным пулам — Quoting.pinned — квотер на их блоке).
 /// Принимает и ошибки: как build.
@@ -86,6 +89,10 @@ pub(super) async fn once(
             (c + p.coins, u + p.usdt)
         });
     check_price(ctx, req, coins, paid)?;
+    // Решение 382, ревью Н1: по перечитанным пулам цена не хуже плана больше допуска сверки.
+    if quoter_refetch::block(q).is_some() {
+        quoter_refetch_check::plan_gap(ctx, req, coins, paid)?;
+    }
     if shape == RouteMode::Smart {
         // Решение 261: односторонняя сверка; строки «в нашу сторону» сухой сделке не нужны (сделки нет).
         dry_checks::smart(q, &paths).await?;

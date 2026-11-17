@@ -11,12 +11,15 @@
 //! - живой: сделка (cycle_deal.rs). Не больше одного цикла за проход: очередь nonce кошелька общая (решение 45),
 //!   циклы идут по одному.
 //!
+//! Решение 404: итог каждого прохода — журнал core.cycle_scan свёрнуто (cycle_scan_log.rs): сколько циклов просмотрено и
+//! с курсом круга > 1, где отобранные отпали (адаптер), сколько сигналов неисполнимы / без прибыли (ядро).
 //! Причины отказа — в журнал core.cycle один раз на смену причины по циклу (cycle_state.rs), а не на каждом блоке;
 //! причины на всю площадку (поиск циклов не удался, нет кошелька «DEX ↔ DEX» в маппинге) — один раз на площадку (решение 139).
 //! dex_dex.scan_min_interval_ms (необязательная) — наименьший промежуток между проходами (как
 //! signal.eval_min_interval_ms, решение 109); не задана — без предела (проход сразу за толчком).
 //! Кто вызывает: core/engine.rs (задача run).
-//! От чего зависит: core/{cycle_plan, cycle_deal, cycle_state, risk, dry, deps, dex_account}.rs, gateway (Venue, VenueKind).
+//! От чего зависит: core/{cycle_plan, cycle_deal, cycle_state, cycle_scan_log, risk, dry, deps, dex_account}.rs, gateway (Venue,
+//! VenueKind).
 //! Настройки: dex_dex.execute, dex_dex.min_profit_usd, dex_dex.scan_min_interval_ms [площадка DEX]; через вызываемые —
 //! money.*, risk.*, size.*, dex_dex.size_step_base, dry.*.
 
@@ -72,9 +75,9 @@ pub async fn run(core: Core) {
 /// Один проход по площадке: сигналы → кандидаты → первый годный в сделку (или сухую сделку). Ошибок нет.
 async fn pass(core: &Core, v: &VenueId) {
     let deps = &core.inner.deps;
-    let list = match deps.gw.get(v).await {
-        Ok(x) => x.dex_cycles().await,
-        Err(e) => Err(e),
+    let (list, tally) = match deps.gw.get(v).await {
+        Ok(x) => (x.dex_cycles().await, x.dex_cycle_tally()),
+        Err(e) => (Err(e), Vec::new()),
     };
     let list = match list {
         Ok(l) => l,
@@ -84,6 +87,8 @@ async fn pass(core: &Core, v: &VenueId) {
         }
     };
     core.inner.cycles.fresh(&venue_key(v, "scan"), "");
+    // Решение 404: итог прохода (адаптер — по базовым, ядро — отбор кандидатов) в журнал core.cycle_scan, свёрнуто.
+    super::cycle_scan_log::note(core, v, tally, &list).await;
     let cands: Vec<DexCycle> = list
         .into_iter()
         .filter(|c| c.executable && c.net_profit.is_some_and(|p| p > Decimal::ZERO))
@@ -119,7 +124,12 @@ async fn pass(core: &Core, v: &VenueId) {
         }
         match cycle_deal::run(core, plan).await {
             Outcome::Done => return,
-            Outcome::Busy => continue,
+            Outcome::Busy => {
+                // Решение 404: раньше молча. Причина — один раз на смену (как прочие отказы цикла).
+                let why = "по базовой монете уже идёт сделка (замок «одна сделка на монету»)";
+                say(core, v, &k, why).await;
+                continue;
+            }
             Outcome::Refused(why) => say(core, v, &k, &why).await,
         }
     }

@@ -89,6 +89,18 @@ impl Graph {
             .map(move |&i| self.edges[i].as_ref())
     }
 
+    /// Решение 404: индексы рёбер, выходящих из токена (в любую сторону), — для перебора циклов без копии рёбер
+    /// (quote/cycle_rank.rs). Нет токена — пусто. Ошибок нет.
+    pub fn edge_ids(&self, token: Address) -> &[usize] {
+        self.adj.get(&token).map(Vec::as_slice).unwrap_or_default()
+    }
+
+    /// Решение 404: ребро по индексу (индекс — из edge_ids этого же графа). Ошибок нет: чужой индекс — паника
+    /// выхода за границу, как у среза.
+    pub fn edge(&self, i: usize) -> &Edge {
+        self.edges[i].as_ref()
+    }
+
     /// Рёбра между парой токенов (концы в любом порядке). Ошибок нет.
     pub fn between(&self, x: Address, y: Address) -> Vec<&Edge> {
         self.edges_from(x).filter(|e| e.other(x) == y).collect()

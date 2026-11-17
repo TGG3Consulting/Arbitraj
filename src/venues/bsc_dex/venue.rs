@@ -412,6 +412,11 @@ impl Venue for BscDex {
             .collect())
     }
 
+    /// Решение 404: итог последнего прохода поиска циклов по базовым монетам (quote/cycle_tally.rs). Ошибок нет.
+    fn dex_cycle_tally(&self) -> Vec<(String, serde_json::Value)> {
+        quote::cycle_tally::last(&self.id().0)
+    }
+
     /// «Сухая сделка DEX» (решение 121, C4): сборка своим сборщиком как для сделки и eth_simulateV1 от кошелька —
     /// exec/dry_swap.rs. Ничего не отправляет, nonce не занимает. Ошибок нет: отказ — причиной в итоге.
     async fn dex_dry_swap(

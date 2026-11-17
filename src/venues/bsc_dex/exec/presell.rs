@@ -16,6 +16,10 @@
 //! Решение 303 (t134): план продажи прямого и умного пути собран с разрешениями, которых не хватает СЕЙЧАС
 //! (wallet/approve.rs lacking: сумма или истёкший срок Permit2) — строка журнала dex.presell_approve: перед продажей
 //! уйдёт approve и обмен подождёт его блока. Заранее разрешения не отправляются (вопрос Тиграну, docs/TASKS.md 303).
+//! Решение 380 (t166): пополнить на весь объём нечем (у кошелька до покупки монет нет, источников мало — живой бот
+//! 17.11: 350 отказов AVA, FLOKI, NXT, YCT, MIRA) — не отказ, а PresellOutcome::Short с объёмом, который можно проверить
+//! (доля объёма запроса: можно / нужно единиц входа); ядро пересчитывает сделку на него и зовёт симуляцию снова
+//! (core/precheck_dex_cut.rs) — сделка идёт только на объёме, проверенном симуляцией целиком.
 //! Кто вызывает: venue.rs (контракт dex_presell).
 //! От чего зависит: exec/{dry_build, dry_sim, dry_swap (io), trade (sides), native}.rs, quote/{direct, pool_tax}.rs,
 //! wallet/{signer, balances}.rs, num.rs.
@@ -24,7 +28,7 @@
 use alloy_primitives::U256;
 use rust_decimal::Decimal;
 
-use crate::core::types::{DexPresell, Side, TradeRequest};
+use crate::core::types::{DexPresell, PresellOutcome, PresellShort, Side, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
@@ -34,13 +38,14 @@ use super::super::wallet::{balances, signer};
 use super::dry_build::{self, Built};
 use super::dry_sim::{self, Io};
 use super::executor::dry::DryMode;
-use super::{dry_surplus_cut, dry_swap, native, trade};
+use super::{dry_fund_gather, dry_surplus_cut, dry_swap, native, trade};
 
 /// Симуляция продажи. Принимает: котировку (вид на счёт сделки), запрос продажи как у исполнения (маршрут из плана).
-/// Возвращает: DexPresell. Ошибки: NotConfigured (кошелёк не выбран, настройки), NoRoute (нет маршрута, сборка,
+/// Возвращает: PresellOutcome::Done(DexPresell); решение 380 — Short: пополнить кошелёк на весь объём нечем, с
+/// объёмом, который можно проверить (exec/dry_fund_gather.rs qty_share). Ошибки: NotConfigured (кошелёк не выбран, настройки), NoRoute (нет маршрута, сборка,
 /// откат симуляции — с минимумами и ожидаемым), QuoteMismatch (цена хуже худшей), StaleData, BadResponse (выход не
 /// прочитан), NotApplicable (нативная BNB без суммы на кошельке), узел.
-pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<DexPresell> {
+pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<PresellOutcome> {
     let ctx = &q.ctx;
     // Решение 132: только кошельком счёта сделки — кошелёк «пробы» здесь не годится.
     ctx.bound()?;
@@ -124,6 +129,18 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<DexPresell> {
     };
     if let Some(why) = sim.reason {
         let why = format!("симуляция продажи до покупки не прошла: {why}; {}", tail());
+        // Решение 380: причина — только нехватка источников пополнения: ядро пересчитает сделку на объём, который можно
+        // проверить. Доля не считается (числа не переводятся) — как до решения: отказ.
+        if let Some(fundable) = sim
+            .fundable
+            .and_then(|f| dry_fund_gather::qty_share(req.qty, f, io.need, decs.0))
+        {
+            return Ok(PresellOutcome::Short(PresellShort {
+                need: req.qty,
+                fundable,
+                why,
+            }));
+        }
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
     let got = sim
@@ -138,7 +155,7 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<DexPresell> {
         );
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
-    Ok(DexPresell {
+    Ok(PresellOutcome::Done(Box::new(DexPresell {
         wallet: format!("{wallet:#x}"),
         form: ready.form.clone(),
         block: ready.at.number,
@@ -151,7 +168,7 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<DexPresell> {
             (f, l) => f.or(l),
         },
         gas_swap: sim.gas_swap,
-    })
+    })))
 }
 
 /// «1.23; 4.56» — минимумы долей для текста. Ошибок нет.

@@ -64,7 +64,7 @@ pub use pool::{
     TickReserves, VaultCurve, VaultPoolData,
 };
 pub use pool_depth::{CrossCheck, PoolDepth, SideCheck, UnreadPool};
-pub use presell::DexPresell;
+pub use presell::{DexPresell, PresellOutcome, PresellShort};
 pub use send::{
     ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome, WalletQueue,
     WalletQueueState,

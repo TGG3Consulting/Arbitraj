@@ -184,6 +184,7 @@ pub mod plan_gap;
 pub mod precheck;
 pub mod precheck_balance;
 pub mod precheck_deposit;
+pub mod precheck_dex_cut;
 pub mod precheck_dex_sell;
 pub mod precheck_fast;
 pub mod precheck_nets;

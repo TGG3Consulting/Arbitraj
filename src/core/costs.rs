@@ -28,7 +28,7 @@
 //! Решение 358 (только журнал): при сравнении σ в контексте (DirCtx::sigma_check) — запас и прибыль по σ на горизонте T
 //! рядом с прежними (reserve_check.rs priced); прибыль и решение — по прежнему запасу.
 //! Кто вызывает: core/size_curve.rs (подбор объёма: CoreCurve — evaluate_capped, SourceCurve), core/partial.rs.
-//! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_source.rs, costs_withdraw.rs, dirctx.rs, reserve.rs,
+//! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_source.rs, costs_withdraw.rs, dirctx.rs, precheck_dex_cut.rs (решение 380: предел продажи), reserve.rs,
 //! reserve_check.rs, size.rs, engine.rs (шлюз).
 //! Настройки: через dirctx.rs (profit.*, usdt_return.mode).
 
@@ -126,6 +126,8 @@ pub async fn evaluate_capped<S: Source>(
             "приход {arrive} меньше шага количества B"
         )));
     }
+    // Решение 380: объём продажи не больше проверяемого симуляцией продажи до покупки (только у пересчёта предпроверки).
+    super::precheck_dex_cut::sell_max_ok(cx, sell_qty)?;
     // Изменение ликвидности к моменту продажи: используем только долю h глубины B.
     // Решение 250: на доле глубины нужна только исполнимость (fillable) — без цены; адаптер может ответить дешевле
     // полной котировки, если точно знает, что объём исполнится целиком (bsc_dex: quote/fills.rs).

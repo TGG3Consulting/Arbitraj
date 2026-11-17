@@ -31,6 +31,7 @@ pub mod cycle_steps;
 pub mod cycle_trade;
 pub mod dry_build;
 pub mod dry_fund;
+pub mod dry_fund_gather;
 pub mod dry_fund_holder;
 pub mod dry_judge;
 pub mod dry_paths;

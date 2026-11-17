@@ -102,16 +102,17 @@ pub fn push(calls: &mut Vec<Call>, wallet: Address, token: Address, ws: &mut [Wa
     }
 }
 
-/// Пополнение с замером вокруг него: пулы под замер, вызовы «до», перевод пополнения, вызовы «после».
-/// Принимает: список вызовов, (сделка, кошелёк, токен), вызов перевода. Возвращает: пулы замера. Ошибок нет.
+/// Пополнение с замером вокруг него: пулы под замер, вызовы «до», переводы пополнения (решение 380: источников может
+/// быть несколько — прирост меряется вокруг всех), вызовы «после».
+/// Принимает: список вызовов, (сделка, кошелёк, токен), вызовы переводов. Возвращает: пулы замера. Ошибок нет.
 pub fn around(
     calls: &mut Vec<Call>,
     (r, wallet, token): (&Ready, Address, Address),
-    transfer: Call,
+    transfers: Vec<Call>,
 ) -> Vec<Watch> {
     let mut ws = watches(r, token);
     push(calls, wallet, token, &mut ws, Stage::Before);
-    calls.push(transfer);
+    calls.extend(transfers);
     push(calls, wallet, token, &mut ws, Stage::Funded);
     ws
 }

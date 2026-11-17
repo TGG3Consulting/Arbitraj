@@ -144,6 +144,7 @@ fn cx(rec: &Rec, b: &str) -> DirCtx {
         pair_b: Some(rec.pair.clone()),
         usdt_b: None,
         transfer_tax: Some(Decimal::ZERO),
+        sell_max: None,
     }
 }
 

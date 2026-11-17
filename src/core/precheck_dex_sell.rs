@@ -10,29 +10,90 @@
 //! (profit.rs). Откат, отказ сборки или прибыль ниже порога — сделки нет, причина (с выходом, ожиданием, минимумами и
 //! модельным налогом продажи) — в журнал отказов. Адаптер симуляцию не умеет или нативную BNB без суммы на кошельке не
 //! симулировать (NotApplicable) — запись в журнал и проверка как раньше (по котировке).
+//! Решение 380 (задача t166; живой бот 17.11, 06:20–09:52 UTC: 350 отказов «симуляция продажи до покупки не прошла: у
+//! кошелька 0 единиц входа … пула-источника … нет» — AVA, FLOKI, NXT, YCT, MIRA): адаптер не нашёл, чем пополнить
+//! кошелёк на весь объём, — сделка не теряется и не идёт вслепую: план пересчитывается на объём продажи не больше
+//! проверяемого (precheck_dex_cut.rs) и симулируется заново на точном новом объёме.
 //! Кто вызывает: core/precheck_sell.rs (сторона продажи — DEX).
-//! От чего зависит: precheck_sell.rs (запрос продажи), dex_account.rs (вид на кошелёк направления), costs_types.rs
+//! От чего зависит: precheck_dex_cut.rs (пересчёт на проверяемый объём), precheck_sell.rs (запрос продажи), dex_account.rs (вид на кошелёк направления), costs_types.rs
 //! (Calc, CostLine), deps.rs (журнал, шлюз).
 //! Настройки: money.min_profit_usd, money.min_profit_pct (решение 242: площадка + тип направления — venue_dir.rs) (+ через адаптер — exec.dex_slippage_pct и др.).
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{CostKind, DexPresell, Direction};
+use crate::core::types::{CostKind, DexPresell, Direction, PresellOutcome, PresellShort};
 use crate::gateway::errors::ErrorCode;
 
 use super::costs::Calc;
 use super::engine::Core;
 
-/// Что делает: симуляция продажи DEX и пересчёт плана по её выходу. Принимает: ядро, направление, свежий расчёт.
-/// Возвращает: расчёт с выручкой и прибылью по симуляции (или прежний — симуляция неприменима). Ошибки: текст «продажа
-/// на B не пройдёт / невыгодна по симуляции: …».
+/// Что делает: симуляция продажи DEX и пересчёт плана по её выходу. Решение 380: пополнить кошелёк в симуляции на весь
+/// объём нечем (PresellOutcome::Short) — план пересчитывается на объём продажи не больше проверяемого
+/// (precheck_dex_cut.rs) и симулируется снова на ТОЧНОМ новом объёме; второй раз мало — отказ (повторного пересчёта нет).
+/// Принимает: ядро, направление, свежий расчёт. Возвращает: расчёт с выручкой и прибылью по симуляции (или прежний —
+/// симуляция неприменима). Ошибки: текст «продажа на B не пройдёт / невыгодна по симуляции: …».
 pub async fn check(core: &Core, d: &Direction, plan: Calc) -> Result<Calc, String> {
+    // Будущие в куче: Calc большой, а будущее предпроверки чувствительно к стеку (tests/core_dry_mode.rs).
+    let (plan, short) = match Box::pin(once(core, d, plan)).await? {
+        Once::Done(c) => return Ok(c),
+        Once::Short(plan, short) => (plan, short),
+    };
+    let b = &d.sell_on;
+    // Текст — как до решения 380 (код NoRoute и модельный налог продажи).
+    let tax = model_tax_pct(&plan).round_dp(4).normalize();
+    let fail = |why: &str| {
+        format!(
+            "продажа на {} не пройдёт: {why} (NoRoute); модельный налог продажи {tax}%",
+            b.0
+        )
+    };
+    if short.fundable <= Decimal::ZERO {
+        return Err(fail(&short.why));
+    }
+    // Будущее подбора большое — в куче (стек будущего предпроверки, tests/core_dry_mode.rs).
+    let cut = Box::pin(super::precheck_dex_cut::replan(core, d, &plan, &short))
+        .await
+        .map_err(|e| fail(&format!("{}; {e}", short.why)))?;
+    let cut_qty = cut.sell_qty;
+    let again = Box::pin(once(core, d, cut)).await.map_err(|e| {
+        format!(
+            "{e}; объём урезан до проверяемого симуляцией (решение 380): продажа {} монет вместо {}",
+            cut_qty.normalize(),
+            plan.sell_qty.normalize()
+        )
+    })?;
+    match again {
+        Once::Done(c) => {
+            let text = super::precheck_dex_cut::note(&plan, &short, cut_qty);
+            log(core, d, text).await;
+            Ok(c)
+        }
+        Once::Short(_, again) => Err(fail(&format!(
+            "{}; после пересчёта на {} монет (проверяемо {}) пополнить снова нечем: {}",
+            short.why,
+            cut_qty.normalize(),
+            short.fundable.normalize(),
+            again.why
+        ))),
+    }
+}
+
+/// Итог одной симуляции: пересчитанный расчёт или «пополнить нечем» (план как был и что сказал адаптер).
+enum Once {
+    Done(Calc),
+    Short(Calc, PresellShort),
+}
+
+/// Одна симуляция продажи на объёме плана и пересчёт по её выходу (как до решения 380). Принимает: ядро,
+/// направление, расчёт. Возвращает: Once. Ошибки: текст «продажа на B не пройдёт / невыгодна по симуляции: …».
+async fn once(core: &Core, d: &Direction, plan: Calc) -> Result<Once, String> {
     let b = &d.sell_on;
     let req = super::precheck_sell::request(core, d, &plan)?;
     let tax = model_tax_pct(&plan);
     let gw = super::dex_account::venue_dir(&core.inner.deps, d, b).await?;
     let sim = match gw.dex_presell(&req).await {
-        Ok(s) => s,
+        Ok(PresellOutcome::Done(s)) => s,
+        Ok(PresellOutcome::Short(s)) => return Ok(Once::Short(plan, s)),
         Err(e) if e.code == ErrorCode::NotApplicable => {
             log(
                 core,
@@ -40,7 +101,7 @@ pub async fn check(core: &Core, d: &Direction, plan: Calc) -> Result<Calc, Strin
                 format!("симуляция продажи до покупки не выполнена: {}", e.message),
             )
             .await;
-            return Ok(plan);
+            return Ok(Once::Done(plan));
         }
         Err(e) => {
             return Err(format!(
@@ -66,7 +127,7 @@ pub async fn check(core: &Core, d: &Direction, plan: Calc) -> Result<Calc, Strin
         ),
     )
     .await;
-    Ok(c)
+    Ok(Once::Done(c))
 }
 
 /// Что делает: пересчёт плана по выходу симуляции. Выручка = выход симуляции (после реального налога), средняя продажи =

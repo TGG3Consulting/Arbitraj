@@ -68,7 +68,7 @@ pub fn plan_gap(ctx: &Ctx, req: &TradeRequest, coins: Decimal, usdt: Decimal) ->
             ErrorCode::QuoteMismatch,
             format!(
                 "план по неверной памяти: по пулам, перечитанным с узла, средняя цена {} хуже плана {} на {}% > {limit}% \
-                 (допуск dex.quoter_max_diff_pct) — сделки нет, план пересчитывается (решение 382)",
+                 (допуск dex.quoter_max_diff_pct) — сделки нет (решение 382)",
                 now.round_dp(10),
                 plan.round_dp(10),
                 worse.round_dp(4)

@@ -25,7 +25,7 @@ mod size_common;
 use arb::core::Core;
 use arb::core::reserve;
 use arb::core::types::Side;
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, MathematicalOps};
 use sieve_common::{Books, Way, covers, cx, frozen};
 use size_common::{Rec, d};
 

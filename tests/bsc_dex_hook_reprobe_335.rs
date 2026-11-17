@@ -63,8 +63,8 @@ fn reprobe_only_on_safe_side() {
 #[test]
 fn reprobe_changes_only_checked_side() {
     let (old, new) = (imp(2, 3), imp(1, 9));
-    assert_eq!(only_side(&old, &new, Side::Buy), imp(1, 3));
-    assert_eq!(only_side(&old, &new, Side::Sell), imp(2, 9));
+    assert_eq!(only_side(&old, &new, Side::Buy, false), imp(1, 3));
+    assert_eq!(only_side(&old, &new, Side::Sell, false), imp(2, 9));
 }
 
 #[test]

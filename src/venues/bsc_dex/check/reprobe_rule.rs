@@ -37,7 +37,11 @@ pub fn safe(first: &Cmp) -> bool {
 
 /// Лесенка влияния стороны (решение «335 (лесенка влияния)»), по возрастанию входа. Ошибок нет.
 pub fn side_steps(i: &HookImpact, side: Side) -> &[HookStep] {
-    if side == Side::Buy { &i.buy } else { &i.sell }
+    if side == Side::Buy {
+        i.buy.as_slice()
+    } else {
+        i.sell.as_slice()
+    }
 }
 
 /// Влияние на сторону, %. Ошибок нет.
@@ -49,32 +53,37 @@ pub fn side_pct(i: &HookImpact, side: Side) -> Decimal {
     }
 }
 
-/// Прежнее влияние с заменой сверяемой стороны на перемеренную. Решение «335 (лесенка влияния)»: у перемера с
-/// точками стороны — точки вливаются в прежнюю лесенку стороны (quote/hook_curve.rs merge, накопленный максимум), а
-/// влияние стороны — наибольшее по лесенке; без точек — как раньше, одно число. Другая сторона — прежняя.
-/// Принимает: прежнее, перемер, сторону. Ошибок нет.
-pub fn only_side(old: &HookImpact, new: &HookImpact, side: Side) -> HookImpact {
+/// Прежнее влияние с заменой сверяемой стороны на перемеренную. Решение «335 (лесенка влияния)»: с лесенкой
+/// (`ladder` — hooks.impact_points задана) точки перемера вливаются в прежнюю лесенку стороны (quote/hook_curve.rs
+/// merge), влияние стороны — наибольшее по лесенке; без лесенки (одно число на все суммы) — влияние стороны = итог
+/// перемера, точки в хранилище не попадают (иначе одно число стало бы лесенкой из одной точки и суммы выше неё
+/// перестали бы котироваться). Ревью 4 (Н9): сторона перемерена (итог стороны без «не прошла») — «не прошла»
+/// снимается в обоих режимах; сторона перемером не измерена — прежняя. Другая сторона — прежняя.
+/// Принимает: прежнее, перемер, сторону, режим лесенки. Ошибок нет.
+pub fn only_side(old: &HookImpact, new: &HookImpact, side: Side, ladder: bool) -> HookImpact {
+    let buy = side == Side::Buy;
+    let new_fail = if buy { &new.buy_fail } else { &new.sell_fail };
+    if new_fail.is_some() {
+        return old.clone();
+    }
     let mut i = old.clone();
-    let (steps, pct) = if side == Side::Buy {
-        (&mut i.buy, &mut i.buy_pct)
-    } else {
-        (&mut i.sell, &mut i.sell_pct)
-    };
     let add = side_steps(new, side);
-    if add.is_empty() {
-        *pct = side_pct(new, side);
-        return i;
-    }
-    for p in add {
-        *steps = merge_step(steps, p.clone());
-    }
-    *pct = steps.iter().map(|s| s.pct).max().unwrap_or(*pct);
-    // Ревью 3: сторона снова измерена — «не прошла» снимается.
-    if side == Side::Buy {
-        i.buy_fail = None;
+    let (steps, pct, fail) = if buy {
+        (&mut i.buy, &mut i.buy_pct, &mut i.buy_fail)
     } else {
-        i.sell_fail = None;
+        (&mut i.sell, &mut i.sell_pct, &mut i.sell_fail)
+    };
+    if add.is_empty() || !ladder {
+        *pct = side_pct(new, side);
+    } else {
+        let mut out = steps.to_vec();
+        for p in add {
+            out = merge_step(&out, p.clone());
+        }
+        *pct = out.iter().map(|s| s.pct).max().unwrap_or(*pct);
+        *steps = std::sync::Arc::new(out);
     }
+    *fail = None;
     i.refused.clear();
     i
 }

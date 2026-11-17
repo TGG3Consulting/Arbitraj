@@ -13,47 +13,57 @@
 //! - Ревью 3 Н-б: точка без итога, но без отказа квотера (не сошлась НАША математика на блоке пробы) — отказ этой
 //!   сделке, хранилище не трогается.
 //! - Сбой узла, ответ не по виду, незаданная настройка — сделки нет, записанное не трогается.
+//! - Ревью 4: точек сделки в хранилище — не больше hooks.impact_points на сторону (Н1, check/hook_trim.rs); вход
+//!   точки — и в токене входа для экрана (Н3); повторная проба сделки — на блоке первой (Н7, pin).
 //!
 //! Кто вызывает: exec/hook_trade.rs.
 //! От чего зависит: check/{hook_batch, hook_fold, hook_store, hooks_probe}.rs, exec/hook_drive.rs (Fresh), node/heads.rs.
-//! Настройки: через вызываемые — dex.quoter [вид пула], dex.multicall3, dex.tick_words.
+//! Настройки: hooks.impact_points (предел точек сделки в хранилище, ревью 4 Н1); через вызываемые — dex.quoter [вид
+//! пула], dex.multicall3, dex.tick_words.
 //!
 //! Квотер исполняет настоящий обмен (с крючками) и откатывается — research/flow/bsc_v4.md, раздел 5.
 
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
-use crate::core::types::{CheckState, HookGroup};
+use crate::core::types::CheckState;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 
-use super::super::check::hooks_probe::{Plan, Point};
-use super::super::check::{hook_batch, hook_fold, hook_store, hooks_probe};
+use super::super::check::hooks_probe::Plan;
+use super::super::check::{hook_batch, hook_fold, hook_points, hook_store, hooks_probe};
 use super::super::pools::registry::Entry;
 use super::super::quote::Quoting;
 use super::hook_drive::Fresh;
+use super::trade_probe_plan;
 
 /// Шаг пробы: пул из памяти, токен входа, вход пула в минимальных единицах, влияние, применённое на нём до пробы.
 pub type Ask = (Entry, Address, U256, Decimal);
 
-/// Пул пробы: запись, группа, план (точки обеих сторон), влияние до пробы по точкам (покупка ли, вход, влияние).
-type Pool = (Entry, HookGroup, Plan, Vec<(bool, U256, Decimal)>);
-
 /// Что делает: проба (см. шапку). Принимает: окружение котировки, шаги (пулы без крючка B/C пропускаются, повторы
-/// точек — одним вызовом). Возвращает: точки этой сделки и блок пробы. Ошибки: NoRoute — проба на сумме сделки не
-/// прошла; StaleData — нет головы; узел; NotConfigured.
-pub async fn hooks_again(q: &Quoting, steps: &[Ask]) -> GatewayResult<(Vec<Fresh>, u64)> {
-    let asks = plans(steps);
-    let head = q
-        .heads
-        .latest()
-        .ok_or_else(|| {
-            q.ctx.err(
-                ErrorCode::StaleData,
-                "нет головы сети для пробы крючка перед сделкой",
-            )
-        })?
-        .number;
+/// точек — одним вызовом), блок первой пробы этой сделки (ревью 4 Н7: повторная проба — на нём же; None — первая
+/// проба: голова или блок верификации маршрута). Возвращает: точки этой сделки и блок пробы. Ошибки: NoRoute — проба на
+/// сумме сделки не прошла; StaleData — нет головы; узел; NotConfigured.
+pub async fn hooks_again(
+    q: &Quoting,
+    steps: &[Ask],
+    pin: Option<u64>,
+) -> GatewayResult<(Vec<Fresh>, u64)> {
+    let asks = trade_probe_plan::plans(steps);
+    let head = match pin {
+        Some(b) => b,
+        None => {
+            q.heads
+                .latest()
+                .ok_or_else(|| {
+                    q.ctx.err(
+                        ErrorCode::StaleData,
+                        "нет головы сети для пробы крючка перед сделкой",
+                    )
+                })?
+                .number
+        }
+    };
     if asks.is_empty() {
         return Ok((Vec::new(), head));
     }
@@ -61,14 +71,25 @@ pub async fn hooks_again(q: &Quoting, steps: &[Ask]) -> GatewayResult<(Vec<Fresh
         .iter()
         .map(|(e, _, p, _)| (e.clone(), p.clone()))
         .collect();
-    let fresh = q.route_fresh.as_deref();
+    // Ревью 4 (Н7): повторная проба — на блоке первой: записи верификации — только того же блока, иначе пулы читаются
+    // на нём в том же пакете (check/hook_batch.rs: блок = записи верификации или переданный).
+    let fresh = q
+        .route_fresh
+        .as_deref()
+        .filter(|f| pin.is_none_or(|b| f.block == b));
     let (block, got) = hook_batch::measure(&q.ctx, &q.tokens, &q.reg, &pools, fresh, head).await?;
+    // Ревью 4 (Н1): точек сделки в хранилище — не больше hooks.impact_points на сторону (не задана — по точкам цикла).
+    let cap = q
+        .ctx
+        .int(hook_points::POINTS)
+        .ok()
+        .and_then(|n| usize::try_from(n).ok());
     let mut out = Vec::new();
     let mut failed: Option<String> = None;
     for ((e, group, plan, est), m) in asks.iter().zip(got) {
         let r = &e.pool.reference;
         let mk = |st: CheckState<_>| hooks_probe::pool_check(&q.ctx, e, *group, st);
-        let i = match m {
+        let mut i = match m {
             Ok(Ok(i)) => i,
             // Ответ не по виду или иной отказ разбора — отказ сделке, записанное не трогается.
             Ok(Err(why)) => {
@@ -80,6 +101,8 @@ pub async fn hooks_again(q: &Quoting, steps: &[Ask]) -> GatewayResult<(Vec<Fresh
             }
             Err(err) => return Err(err),
         };
+        // Ревью 4 (Н3): вход точки — и в токене входа стороны (decimals из памяти, без узла) — для экрана.
+        trade_probe_plan::human(&q.tokens, e, &mut i);
         // Отказы квотера по сторонам — наименьший вход стороны с отказом.
         let mut cuts: Vec<(bool, U256, String)> = Vec::new();
         for (buy, x, why) in &i.refused {
@@ -118,7 +141,7 @@ pub async fn hooks_again(q: &Quoting, steps: &[Ask]) -> GatewayResult<(Vec<Fresh
         }
         hook_store::fold_head(&q.checks, r, block, |pc| match &pc.impact {
             CheckState::Known(old) => {
-                hook_fold::on_success(old, &i).map(|n| mk(CheckState::Known(n)))
+                hook_fold::on_success(old, &i, cap).map(|n| mk(CheckState::Known(n)))
             }
             _ => None,
         });
@@ -143,40 +166,6 @@ pub async fn hooks_again(q: &Quoting, steps: &[Ask]) -> GatewayResult<(Vec<Fresh
             Err(q.ctx.err(ErrorCode::NoRoute, msg))
         }
     }
-}
-
-/// Планы пробы по пулам (чистая): точки пула с крючком B/C по сторонам, без повторов, по возрастанию входа; пулы — в
-/// порядке первого появления. Ошибок нет.
-fn plans(steps: &[Ask]) -> Vec<Pool> {
-    let mut out: Vec<Pool> = Vec::new();
-    for (e, token_in, amount_in, est) in steps {
-        let group = e.pool.hooks.as_ref().map(|h| h.group);
-        let Some(g) = group.filter(|g| *g != HookGroup::A) else {
-            continue;
-        };
-        let at = match out
-            .iter()
-            .position(|(x, ..)| x.pool.reference == e.pool.reference)
-        {
-            Some(i) => i,
-            None => {
-                out.push((e.clone(), g, Plan::default(), Vec::new()));
-                out.len() - 1
-            }
-        };
-        let buy = *token_in == e.usdt;
-        let (_, _, plan, ests) = &mut out[at];
-        let pts = if buy { &mut plan.buy } else { &mut plan.sell };
-        if pts.iter().all(|p| p.amount_in != *amount_in) {
-            pts.push(Point {
-                usd: Decimal::ZERO,
-                amount_in: *amount_in,
-            });
-            pts.sort_by_key(|p| p.amount_in);
-            ests.push((buy, *amount_in, *est));
-        }
-    }
-    out
 }
 
 /// Первая причина отказа (остальные — та же сделка). Ошибок нет.

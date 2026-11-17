@@ -89,20 +89,40 @@ pub struct ExitGap {
 /// наименьшей сумме стороны; другая сторона работает. refused — отказы квотера по точкам последнего замера (сторона —
 /// покупка ли, вход, причина): точка и большие суммы стороны не измерены; не хранится (только итог замера для пробы
 /// перед сделкой — exec/trade_probe.rs).
+/// Ревью 4 лесенки (Н1): лесенки сторон — общие (HookLadder = Arc): копия итогов пула (check/state.rs pool) и допуск
+/// котировки (quote/select.rs) берут ссылку на ту же лесенку, а не копию точек.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct HookImpact {
     pub buy_pct: Decimal,
     pub sell_pct: Decimal,
-    #[serde(default)]
-    pub buy: Vec<HookStep>,
-    #[serde(default)]
-    pub sell: Vec<HookStep>,
+    #[serde(default, with = "ladder_serde")]
+    pub buy: HookLadder,
+    #[serde(default, with = "ladder_serde")]
+    pub sell: HookLadder,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub buy_fail: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sell_fail: Option<String>,
     #[serde(skip)]
     pub refused: Vec<(bool, alloy_primitives::U256, String)>,
+}
+
+/// Лесенка стороны (точки по возрастанию входа), общая для копий итога (ревью 4 лесенки, Н1).
+pub type HookLadder = std::sync::Arc<Vec<HookStep>>;
+
+/// Сериализация HookLadder как обычного списка точек (формат JSON для экрана тот же, что у Vec). Ошибок сверх serde нет.
+mod ladder_serde {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use super::{HookLadder, HookStep};
+
+    pub fn serialize<S: Serializer>(v: &HookLadder, s: S) -> Result<S::Ok, S::Error> {
+        v.as_slice().serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<HookLadder, D::Error> {
+        Vec::<HookStep>::deserialize(d).map(std::sync::Arc::new)
+    }
 }
 
 /// Точка лесенки влияния крючка (решение «335 (лесенка влияния)»): вход в пул стороны в минимальных единицах токена
@@ -113,6 +133,11 @@ pub struct HookStep {
     pub amount_in: alloy_primitives::U256,
     pub usd: Decimal,
     pub pct: Decimal,
+    /// Ревью 4 лесенки (Н3): вход точки пробы перед сделкой в токене входа стороны (decimals токена; экран «Монеты»
+    /// показывает сумму, а не hex минимальных единиц); None — точка цикла (у неё есть usd) или decimals токена не было
+    /// в памяти.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coins: Option<Decimal>,
     /// Выход квотера на этой сумме, минимальные единицы (ревью Н7: проба перед сделкой отдаёт его сверке прямого
     /// режима, второй вызов квотера на той же сумме не нужен); None — не сохранялся (точка лесенки после выравнивания).
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -1,32 +1,25 @@
 //! Файл: tests/bsc_dex_hook_ladder_review3_1117.rs
 //! Что проверяет: ревью 3 решения «335 (лесенка влияния)» на досъёмке узла 17.11 (tests/data/hook_pools_ticks_2026-11-17,
 //! блок 134000292; GAIB 0x5c1b: влияние покупки 0 / 0,099 / 0,674 % на 1 / 20 / 100 USDT):
-//! 1. Б3 — цикл пробы на пути сделки (exec/hook_drive.rs Drive, TradeHooks — та же логика, что у exec/hook_trade.rs)
-//!    без hooks.impact_points: покупка «с конца» (точный выход) через пул GAIB на ~60 USDT при влиянии «как до
-//!    лесенки» (одно число — влияние на 20 USDT, check.probe_usdt) не отклоняется: проба на оценке → вход вырос →
-//!    проба с подъёмом → вход покрыт фактом сделки за две пробы; итог влияния — факт записи. Расчёт пути — наш обмен
-//!    по карте тиков записи (math/swap_cl.rs) с HookCurve::settle; ответ квотера на сумме пробы — факт записи на
-//!    ближайшей записанной сумме не меньше (допущение «влияние не убывает с суммой» — то же, на котором стоит лесенка;
-//!    квотера на промежуточных суммах в записи нет).
-//! 2. Н-а — точка пробы перед сделкой (check/hook_store.rs fold_head) не продвигает блок записанного замера: полный
+//! 1. Н-а — точка пробы перед сделкой (check/hook_store.rs fold_head) не продвигает блок записанного замера: полный
 //!    замер цикла на блоке между ними принимается (put_head); fold_head, который ничего не пишет, не сбрасывает
 //!    эпоху котировки (решение 352, Checks::generation).
-//! 4. Ревью 4 Б5 — Drive конечен: сценарий ревью (лесенка хранилища, сдвиг пула) завершается за две пробы.
-//! 3. Б4 — отказ квотера на точке (check/hook_fold.rs judge_side): эта точка и большие суммы стороны не измерены,
+//! 2. Б4 — отказ квотера на точке (check/hook_fold.rs judge_side): эта точка и большие суммы стороны не измерены,
 //!    меньшие работают; не осталось точек — «не прошла» только сторона; пул целиком — обе (check/hooks_probe.rs
 //!    settled). Текст отказа — квотер записи 16.11 (BLESS 0x6e398c95, NotEnoughLiquidity) — в tests/
 //!    bsc_dex_hook_pools_1116_rules.rs; здесь — правило на лесенке GAIB.
 //!
+//! Ревью 4 (Н8): тесты Drive (Б3, Б5) перенесены в tests/bsc_dex_hook_drive_logic_1117.rs — это чистая логика
+//! переходов на условных числах (ответа квотера на промежуточных суммах в записи нет), а не тест «на записи».
+//!
 //! Кто вызывает: cargo test.
-//! От чего зависит: tests/hook_ticks_common, arb::venues::bsc_dex::{exec::hook_drive, check::{hook_fold, hook_store,
-//! hooks_probe, state}, quote::hook_curve}.
+//! От чего зависит: tests/hook_ticks_common, arb::venues::bsc_dex::check::{hook_fold, hook_store, hooks_probe, state}.
 
 mod hook_ticks_common;
 
 use std::str::FromStr;
-use std::sync::Arc;
 
-use alloy_primitives::{Address, B256, U256};
+use alloy_primitives::{Address, B256};
 use rust_decimal::Decimal;
 
 use arb::core::types::{
@@ -36,13 +29,7 @@ use arb::venues::bsc_dex::check::hook_fold::judge_side;
 use arb::venues::bsc_dex::check::hook_store::{fold_head, put_head};
 use arb::venues::bsc_dex::check::hooks_probe::{Plan, Point, impact, settled};
 use arb::venues::bsc_dex::check::state::Checks;
-use arb::venues::bsc_dex::exec::hook_drive::{Drive, Fresh, Next, TradeHooks, Want};
-use arb::venues::bsc_dex::quote::hook_curve::HookCurve;
 use hook_ticks_common::{Pool, load, map, ours, pools, quotes};
-
-fn keep(pct: Decimal) -> Decimal {
-    Decimal::ONE - pct / Decimal::ONE_HUNDRED
-}
 
 /// GAIB: запись пула, лесенка покупки (1 / 20 / 100 USDT), направление покупки, ключ.
 fn gaib() -> (Pool, Vec<HookStep>, bool, PoolRef) {
@@ -62,6 +49,7 @@ fn gaib() -> (Pool, Vec<HookStep>, bool, PoolRef) {
             usd: Decimal::from(q.usd),
             pct: impact(ours(&p, &m, q.z, true, q.amount, p.lp).amount_out, q.remote)
                 .expect("влияние"),
+            coins: None,
             quoter_out: Some(q.remote),
         })
         .collect();
@@ -72,80 +60,6 @@ fn gaib() -> (Pool, Vec<HookStep>, bool, PoolRef) {
         id: B256::from_str(&id).expect("PoolId"),
     };
     (p, buy, z, r)
-}
-
-#[test]
-fn b3_exact_out_without_points_not_lost() {
-    let (p, buy, z, r) = gaib();
-    let m = map(&p);
-    let flat = buy[1].pct;
-    // Монеты, которые наш обмен без крючка даёт за ~60 USDT (середина между точками записи 20 и 100).
-    let sixty = (buy[1].amount_in + buy[2].amount_in) / U256::from(2u64);
-    let qty = Decimal::from_str(&ours(&p, &m, z, true, sixty, p.lp).amount_out.to_string())
-        .expect("монеты");
-    let want = |th: &TradeHooks| -> Want {
-        let (steps, flat2, _) = th.curve(&r, true, &[], flat);
-        let c = HookCurve {
-            steps: (!steps.is_empty()).then(|| Arc::new(steps.clone())),
-            limit: None,
-            open: true,
-        };
-        let (pct, x) = c
-            .settle(
-                flat2,
-                |pct| {
-                    let out = U256::from_str(&(qty / keep(pct)).ceil().normalize().to_string())
-                        .map_err(|e| e.to_string())?;
-                    let s = ours(&p, &m, z, false, out, p.lp);
-                    Ok::<_, String>((s.amount_in, s.amount_in))
-                },
-                |w| w,
-            )
-            .expect("расчёт");
-        Want {
-            pool: r.clone(),
-            buy: true,
-            x,
-            applied: pct,
-            steps,
-        }
-    };
-    let (mut drive, mut th) = (Drive::new(None), TradeHooks::default());
-    let mut w = want(&th);
-    let fin = loop {
-        match drive.next(&mut th, std::slice::from_ref(&w)) {
-            Next::Done => break w,
-            Next::Eval => {}
-            Next::Probe(need) => {
-                for n in need {
-                    let rec = buy
-                        .iter()
-                        .find(|s| s.amount_in >= n.x)
-                        .expect("запись покрывает сумму пробы");
-                    th.fresh.push(Fresh {
-                        pool: r.clone(),
-                        buy: true,
-                        step: HookStep {
-                            amount_in: n.x,
-                            usd: Decimal::ZERO,
-                            pct: rec.pct,
-                            quoter_out: None,
-                        },
-                        est: n.applied,
-                    });
-                }
-            }
-            Next::Fail(why) => panic!("сделка потеряна: {why}"),
-        }
-        w = want(&th);
-    };
-    assert_eq!(drive.probes(), 2, "проба на оценке и проба с подъёмом");
-    assert!(fin.x <= buy[2].amount_in);
-    assert_eq!(
-        fin.applied, buy[2].pct,
-        "итог — факт записи на 100 USDT, не одно число на 20 USDT"
-    );
-    assert!(fin.applied > flat);
 }
 
 fn check(i: HookImpact) -> PoolCheck {
@@ -169,7 +83,7 @@ fn na_trade_point_keeps_cycle_block() {
     let c = Checks::default();
     let cycle = check(HookImpact {
         buy_pct: buy[1].pct,
-        buy: buy[..2].to_vec(),
+        buy: buy[..2].to_vec().into(),
         ..Default::default()
     });
     assert!(put_head(&c, &r, 10, &cycle, None));
@@ -180,7 +94,7 @@ fn na_trade_point_keeps_cycle_block() {
     // Точка сделки на блоке 12 — итог с ней, блок замера остаётся 10.
     let with = check(HookImpact {
         buy_pct: buy[2].pct,
-        buy: buy.clone(),
+        buy: buy.clone().into(),
         ..Default::default()
     });
     assert!(fold_head(&c, &r, 12, |_| Some(with.clone())));
@@ -207,7 +121,7 @@ fn b4_refusal_cuts_point_and_above_only() {
         sell: vec![point(&buy[0])],
     };
     let one = HookImpact {
-        sell: vec![buy[0].clone()],
+        sell: vec![buy[0].clone()].into(),
         buy_fail: Some(why.clone()),
         ..Default::default()
     };
@@ -221,66 +135,4 @@ fn b4_refusal_cuts_point_and_above_only() {
         ..Default::default()
     };
     assert!(matches!(settled(Ok(Ok(both)), &plan), Ok(Err(_))));
-}
-
-/// Ревью 4 (Б5): сценарий ревью на суммах записи GAIB (единица — вход точки 1 USDT записи): лесенка хранилища
-/// 45 USDT → 0,30 %, 100 USDT → 0,70 % (значения сценария ревью); проба на 45,23 USDT даёт 0,40 %; пул сдвинулся —
-/// расчёт без подъёма даёт вход 44,98 (ближайшая точка ≥ — 45 хранилища, не покрыто), с подъёмом — 45,02 (покрыто
-/// точкой сделки 45,23). Старый Drive чередовал «подъём → покрыто → пересчёт → не покрыто → подъём» без счёта кругов;
-/// новый — после подъёма на том же числе проб пробует непокрытый вход сразу. Число шагов теста ограничено.
-#[test]
-fn b5_drive_is_finite() {
-    let (_, buy, _, r) = gaib();
-    let unit = buy[0].amount_in;
-    let at = |c: u64| unit * U256::from(c) / U256::from(100u64);
-    let pct = |s: &str| Decimal::from_str(s).expect("%");
-    let step = |c: u64, p: &str| HookStep {
-        amount_in: at(c),
-        usd: Decimal::ZERO,
-        pct: pct(p),
-        quoter_out: None,
-    };
-    let stored = vec![step(4500, "0.30"), step(10000, "0.70")];
-    let flat = pct("0.70");
-    let (mut drive, mut th) = (Drive::new(None), TradeHooks::default());
-    let mut done = false;
-    for _ in 0..20 {
-        let (steps, applied, fact) = th.curve(&r, true, &stored, flat);
-        let lifted = !th.fresh.is_empty() && !fact;
-        let x = match (th.fresh.len(), lifted) {
-            (0, _) => at(4523),
-            (_, true) => at(4502),
-            (_, false) => at(4498),
-        };
-        let w = Want {
-            pool: r.clone(),
-            buy: true,
-            x,
-            applied,
-            steps,
-        };
-        match drive.next(&mut th, std::slice::from_ref(&w)) {
-            Next::Done => {
-                done = true;
-                break;
-            }
-            Next::Eval => {}
-            Next::Probe(need) => {
-                for n in need {
-                    th.fresh.push(Fresh {
-                        pool: r.clone(),
-                        buy: true,
-                        step: HookStep {
-                            amount_in: n.x,
-                            ..step(0, "0.40")
-                        },
-                        est: n.applied,
-                    });
-                }
-            }
-            Next::Fail(why) => panic!("сделка потеряна: {why}"),
-        }
-    }
-    assert!(done, "Drive не завершился за 20 шагов");
-    assert_eq!(drive.probes(), 2);
 }

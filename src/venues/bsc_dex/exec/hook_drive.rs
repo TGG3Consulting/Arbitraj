@@ -1,146 +1,28 @@
 //! Файл: venues/bsc_dex/exec/hook_drive.rs
-//! Что делает: решение «335 (лесенка влияния)», ревью 2–3 — чистая логика пробы крючков B/C на пути сделки (без узла;
-//! цикл с узлом — exec/hook_trade.rs, тесты на записях — tests/bsc_dex_hook_ladder_review_1117.rs):
-//! - TradeHooks: факты пробы этой сделки (Fresh: точка и влияние, которое расчёт применял на этой сумме до пробы);
-//!   curve — лесенка пула для расчёта сделки (check/hook_fold.rs local); лимит hooks.max_impact_* — только по факту
-//!   пробы (ревью 3, Н-г: оценка до пробы сделку не режет); uncovered — входы, не покрытые фактом этой сделки;
+//! Что делает: решение «335 (лесенка влияния)», ревью 2–4 — чистая логика кругов пробы крючков B/C на пути сделки
+//! (без узла; цикл с узлом — exec/hook_trade.rs; факты сделки — exec/trade_hooks.rs, здесь реэкспорт; тесты —
+//! tests/bsc_dex_hook_drive_logic_1117.rs):
 //! - Drive: шаг цикла. Круг 0 — проба на входах оценки. Вход вырос за точки сделки (точный выход «с конца»: влияние
 //!   больше оценки → нужно больше входа) — ревью 3, Б3: следующая проба не на новом входе (он снова вырос бы), а на
 //!   входе с поднятым влиянием lift = p + (p − e), где p — факт последней пробы, e — влияние, с которым считался её
 //!   вход (рост влияния между пробами берётся вдвое); тогда расчёт по факту даёт вход не больше точки пробы — покрыт.
 //!   Подъём — только для выбора суммы пробы: итог сделки — по лесенке сделки без подъёма (факт на ближайшей большей
-//!   точке, снятой этой сделкой). Кругов пробы — не больше hooks.impact_points, но не меньше двух (проба на оценке и
-//!   проба с подъёмом — сам способ, а не настройка); не задана — два. Не покрыто — отказ этой сделке с причиной.
+//!   точке, снятой этой сделкой). Не покрыто — отказ этой сделке с причиной.
+//! - Ревью 4 (Н4): предел кругов пробы — НЕ число точек лесенки. Два круга (проба на оценке и проба с подъёмом) —
+//!   сам способ, константа алгоритма, а не порог; сверх двух — только hooks.trade_probe_rounds_max (число кругов до
+//!   узла на пути сделки; меньше двух — два); не задана — ровно два.
 //!
-//! Кто вызывает: exec/hook_trade.rs, exec/live.rs, exec/live_hops.rs (TradeHooks::apply), exec/trade_probe.rs (Fresh).
-//! От чего зависит: check/hook_fold.rs (local, covered), quote/select.rs (Usable), core/types (HookStep, PoolRef).
-//! Настройки: нет своих (предел кругов передаёт exec/hook_trade.rs).
+//! Кто вызывает: exec/hook_trade.rs; тесты чистой логики.
+//! От чего зависит: exec/trade_hooks.rs (TradeHooks, Want).
+//! Настройки: нет своих (предел кругов передаёт exec/hook_trade.rs — hooks.trade_probe_rounds_max).
 
-use std::sync::Arc;
+pub use super::trade_hooks::{Fresh, TradeHooks, Want};
 
-use alloy_primitives::U256;
-use rust_decimal::Decimal;
+/// Кругов пробы в самом способе (проба на оценке и проба с подъёмом) — константа алгоритма (ревью 4 Н4), не порог.
+const METHOD_ROUNDS: u64 = 2;
 
-use crate::core::types::{HookStep, PoolRef, Side};
-
-use super::super::check::hook_fold;
-use super::super::quote::select::Usable;
-
-/// Точка пробы этой сделки: пул, сторона (покупка — вход встречный токен), точка лесенки с выходом квотера и влияние,
-/// с которым расчёт считал этот вход до пробы.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Fresh {
-    pub pool: PoolRef,
-    pub buy: bool,
-    pub step: HookStep,
-    pub est: Decimal,
-}
-
-/// Вход шага с крючком B/C в пути сделки, влияние, применённое расчётом на нём, и лесенка, по которой он считался
-/// (входы точек — для «покрыт ли фактом сделки»).
-#[derive(Debug, Clone, PartialEq)]
-pub struct Want {
-    pub pool: PoolRef,
-    pub buy: bool,
-    pub x: U256,
-    pub applied: Decimal,
-    pub steps: Vec<HookStep>,
-}
-
-/// Факты пробы этой сделки и подъём влияния для выбора суммы следующей пробы.
-#[derive(Debug, Clone, Default)]
-pub struct TradeHooks {
-    pub fresh: Vec<Fresh>,
-    lift: Vec<(PoolRef, bool, Decimal)>,
-}
-
-impl TradeHooks {
-    /// Точки этой сделки по пулу и стороне (по возрастанию входа). Ошибок нет.
-    pub fn pts(&self, r: &PoolRef, buy: bool) -> Vec<HookStep> {
-        let mut v: Vec<HookStep> = self
-            .fresh
-            .iter()
-            .filter(|f| &f.pool == r && f.buy == buy)
-            .map(|f| f.step.clone())
-            .collect();
-        v.sort_by_key(|s| s.amount_in);
-        v
-    }
-
-    /// Что делает: лесенка пула для расчёта сделки (см. шапку). Принимает: пул, сторону, лесенку хранилища, прежнее
-    /// одно число. Возвращает: (лесенка, одно число с подъёмом, применять ли лимит). Ошибок нет.
-    pub fn curve(
-        &self,
-        r: &PoolRef,
-        buy: bool,
-        stored: &[HookStep],
-        flat: Decimal,
-    ) -> (Vec<HookStep>, Decimal, bool) {
-        let fresh = self.pts(r, buy);
-        let lift = self
-            .lift
-            .iter()
-            .find(|l| &l.0 == r && l.1 == buy)
-            .map(|l| l.2);
-        let local = hook_fold::local(stored, flat, &fresh, lift);
-        let flat = lift.map_or(flat, |l| flat.max(l));
-        (local, flat, !fresh.is_empty() && lift.is_none())
-    }
-
-    /// Что делает: допуск пула для пути сделки — лесенка сделки, оценка вне измеренного (open), лимит — только по
-    /// факту пробы. Пул без крючка B/C (`hooked` = false) — без изменений. Принимает: пул, сторону пула, крючок ли,
-    /// допуск из quote/select.rs. Ошибок нет.
-    pub fn apply(&self, r: &PoolRef, side: Side, hooked: bool, u: &mut Usable) {
-        if !hooked {
-            return;
-        }
-        let stored = u.hook.steps.clone().unwrap_or_default();
-        let (local, flat, limit) = self.curve(r, side == Side::Buy, &stored, u.hook_pct);
-        u.hook.steps = (!local.is_empty()).then(|| Arc::new(local));
-        u.hook_pct = flat;
-        u.hook.open = true;
-        if !limit {
-            u.hook.limit = None;
-        }
-    }
-
-    /// Входы, не покрытые фактом этой сделки (без повторов). Ошибок нет.
-    pub fn uncovered(&self, wants: &[Want]) -> Vec<Want> {
-        let mut out: Vec<Want> = Vec::new();
-        for w in wants {
-            let fresh = self.pts(&w.pool, w.buy);
-            let dup = out
-                .iter()
-                .any(|o| o.pool == w.pool && o.buy == w.buy && o.x == w.x);
-            if !dup && !hook_fold::covered(&w.steps, &fresh, w.x) {
-                out.push(w.clone());
-            }
-        }
-        out
-    }
-
-    /// Выход квотера этой сделки на входе x пула и стороны (ревью 2 Н7). Ошибок нет.
-    pub fn quoted(&self, r: &PoolRef, buy: bool, x: U256) -> Option<U256> {
-        self.fresh
-            .iter()
-            .find(|f| &f.pool == r && f.buy == buy && f.step.amount_in == x)
-            .and_then(|f| f.step.quoter_out)
-    }
-
-    /// Подъём для входа (см. шапку): p + max(0, p − e) по последней (наибольшей) точке сделки пула и стороны, не
-    /// меньше применённого. Ошибок нет.
-    fn lift_of(&self, w: &Want) -> Decimal {
-        let last = self
-            .fresh
-            .iter()
-            .filter(|f| f.pool == w.pool && f.buy == w.buy)
-            .max_by_key(|f| f.step.amount_in);
-        let up = last.map_or(w.applied, |f| {
-            f.step.pct + (f.step.pct - f.est).max(Decimal::ZERO)
-        });
-        up.max(w.applied)
-    }
-}
+/// Настройка: предел кругов пробы перед сделкой сверх двух (ревью 4 Н4).
+pub const ROUNDS_MAX: &str = "hooks.trade_probe_rounds_max";
 
 /// Что делать дальше.
 #[derive(Debug, Clone, PartialEq)]
@@ -166,14 +48,25 @@ pub struct Drive {
 }
 
 impl Drive {
-    /// Предел кругов пробы: hooks.impact_points (None — не задана), не меньше двух (см. шапку). Ошибок нет.
-    pub fn new(points: Option<u64>) -> Self {
+    /// Предел кругов пробы: hooks.trade_probe_rounds_max (None — не задана: ровно два), не меньше двух (см. шапку).
+    /// Ошибок нет.
+    pub fn new(rounds_max: Option<u64>) -> Self {
         Drive {
             probes: 0,
-            limit: points.unwrap_or(2).max(2),
+            limit: rounds_max.unwrap_or(METHOD_ROUNDS).max(METHOD_ROUNDS),
             lifted: false,
             lift_used: None,
         }
+    }
+
+    /// Независимое ревью t173 (Н-3): поставит ли следующий шаг пробу при непокрытых входах (после расчёта с подъёмом,
+    /// первая проба, проба без второго подъёма на том же числе проб) — тогда нужны все входы, в том числе по порядку
+    /// исполнения долей (exec/hook_trade.rs). Иначе шаг — пересчёт с подъёмом или отказ, полные входы не нужны.
+    /// Ошибок нет.
+    pub fn would_probe(&self) -> bool {
+        self.lifted
+            || self.probes == 0
+            || (self.probes < self.limit && self.lift_used == Some(self.probes))
     }
 
     /// Сколько проб сделано. Ошибок нет.
@@ -210,8 +103,8 @@ impl Drive {
         }
         if self.probes >= self.limit {
             return Next::Fail(format!(
-                "влияние крючка на сумме сделки не покрыто фактом пробы за {} кругов (hooks.impact_points, не меньше \
-                 двух) — вход пула растёт с влиянием",
+                "влияние крючка на сумме сделки не покрыто фактом пробы за {} кругов ({ROUNDS_MAX}, не меньше двух) — \
+                 вход пула растёт с влиянием",
                 self.limit
             ));
         }

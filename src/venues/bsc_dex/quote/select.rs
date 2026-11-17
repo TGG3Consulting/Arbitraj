@@ -203,8 +203,9 @@ fn hook(
     }
     // Ревью Б1 (в): продажа выхода — оценка вне измеренного (open); факт на её сумме — проба перед сделкой
     // (exec/hook_trade.rs), пул для продажи держимых монет не выпадает до следующего цикла крючков.
+    // Ревью 4 лесенки (Н1): лесенка — общая (Arc): допуск берёт ссылку, точки не копируются.
     let curve = HookCurve {
-        steps: (!steps.is_empty()).then(|| std::sync::Arc::new(steps.clone())),
+        steps: (!steps.is_empty()).then(|| std::sync::Arc::clone(steps)),
         limit: limit.map(|l| (limit_name, l)),
         open: exit,
     };

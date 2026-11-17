@@ -8,17 +8,24 @@
 //!    (exec/trade_probe.rs hooks_again; ревью 2 Н7);
 //! 3. пути заново с лесенкой сделки (лесенка хранилища + точки этой сделки — напрямую, ревью 2 Н1);
 //! 4. все входы покрыты — итог; вход вырос за точки сделки (точный выход) — проба на входе с поднятым влиянием
-//!    (ревью 3 Б3, hook_drive.rs) и снова 3. Кругов — не больше предела Drive; ревью 3 Н-з: перед каждой пробой после
-//!    первой голова сети не дальше verify.max_staleness_blocks от блока первой пробы (не задана — без проверки).
+//!    (ревью 3 Б3, hook_drive.rs) и снова 3.
+//!
+//! Ревью 4 лесенки:
+//! - Н4: кругов пробы — два (сам способ), сверх — только hooks.trade_probe_rounds_max (не число точек лесенки);
+//! - Н7: все пробы одной сделки — на блоке первой пробы (trade_probe.rs pin): факты сделки — одна картина пула, без
+//!   настройки и без «расстояния между пробами» (прежняя проверка головы по verify.max_staleness_blocks убрана); возраст
+//!   этой картины ограничен числом кругов;
+//! - Н-ж: доли с общим пулом (решение 223) исполняются по порядку, и вход пула с крючком у доли после общего пула
+//!   меняется (quote/graph_seq.rs resequence): входы шагов с крючком берутся и из путей по порядку исполнения — проба
+//!   покрывает и их фактом квотера (на состоянии блока пробы; зависимость крючка от состояния после прошлых долей
+//!   квотер не видит — её страхует симуляция бандла eth_simulateV1 и amountOutMin ноги, docs/notes).
 //!
 //! Пулов с крючком B/C нет — один расчёт, как раньше. Проба не прошла на сумме сделки — отказ только этой сделке
 //! (ревью 2 Б2, exec/trade_probe.rs).
 //!
 //! Кто вызывает: exec/live.rs (path), exec/bundle_trade.rs, exec/smart_legs.rs, exec/dry_paths.rs.
-//! От чего зависит: exec/{live, trade_probe, hook_drive}.rs, check/{hook_points, quoter_amount}.rs, quote/{path,
-//! via}.rs, node/heads.rs.
-//! Настройки: hooks.impact_points (необязательна; предел кругов пробы — не меньше двух), verify.max_staleness_blocks
-//! (необязательна здесь).
+//! От чего зависит: exec/{live, trade_probe, hook_drive}.rs, check/quoter_amount.rs, quote/{path, via, graph_seq}.rs.
+//! Настройки: hooks.trade_probe_rounds_max (необязательна; не задана — два круга).
 
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
@@ -26,62 +33,100 @@ use rust_decimal::Decimal;
 use crate::core::types::RouteHop;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::check::{hook_points, quoter_amount};
+use super::super::check::quoter_amount;
 use super::super::pools::registry::Entry;
+use super::super::quote::graph_seq;
 use super::super::quote::path::Path;
 use super::super::quote::via::Via;
-use super::hook_drive::{Drive, Next, Want};
+use super::hook_drive::{Drive, Next, ROUNDS_MAX, Want};
 use super::live;
 use super::trade_probe::{self, Ask};
 
 pub use super::hook_drive::TradeHooks;
 
 /// Что делает: пути долей сделки (см. шапку). Принимает: расчёт путей, доли (пулы, количество монет), прямой ли режим.
-/// Возвращает: пути по порядку долей и факты пробы. Ошибки: как exec/live.rs share; NoRoute — проба не прошла или
-/// вход не покрыт фактом за предел кругов; StaleData — голова ушла дальше verify.max_staleness_blocks; узел.
+/// Возвращает: пути по порядку долей (как посчитаны, без пересчёта по порядку исполнения — его делает вызывающий) и
+/// факты пробы. Ошибки: как exec/live.rs share и quote/graph_seq.rs resequence; NoRoute — проба не прошла или вход не
+/// покрыт фактом за предел кругов; узел; настройка в неверном виде.
 pub async fn paths(
     v: &Via<'_>,
     shares: &[(&[RouteHop], Decimal)],
     direct_mode: bool,
 ) -> GatewayResult<(Vec<Path>, TradeHooks)> {
     let ctx = &v.q.ctx;
-    let points = match ctx.int(hook_points::POINTS) {
+    let rounds = match ctx.int(ROUNDS_MAX) {
         Ok(n) => Some(n),
         Err(e) if e.code == ErrorCode::NotConfigured => None,
         Err(e) => return Err(e),
     };
-    let mut drive = Drive::new(points);
+    let mut drive = Drive::new(rounds);
     let mut th = TradeHooks::default();
-    let mut first_block: Option<u64> = None;
+    let mut pin: Option<u64> = None;
     let mut out = all(v, shares, direct_mode, &th).await?;
     loop {
-        let seen = views(&out);
-        let wants: Vec<Want> = seen.iter().map(|(w, _, _)| w.clone()).collect();
+        // Независимое ревью t173 (Н-3): пересчёт долей по порядку исполнения (resequence) — только когда шаг может
+        // завершиться (все входы путей покрыты) или поставить пробу; на пересчёте с подъёмом и отказе он не нужен.
+        let mut ins = views(&out);
+        let mut wants: Vec<Want> = ins.iter().map(|(w, _, _)| w.clone()).collect();
+        if th.uncovered(&wants).is_empty() || drive.would_probe() {
+            ins = seen(v, shares, &out, ins)?;
+            wants = ins.iter().map(|(w, _, _)| w.clone()).collect();
+        }
         match drive.next(&mut th, &wants) {
             Next::Done => return Ok((out, th)),
             Next::Fail(why) => return Err(ctx.err(ErrorCode::NoRoute, why)),
             Next::Eval => {}
             Next::Probe(need) => {
-                if let Some(b) = first_block {
-                    fresh_enough(v, b)?;
-                }
                 let asks: Vec<Ask> = need
                     .iter()
                     .filter_map(|n| {
-                        seen.iter()
+                        ins.iter()
                             .find(|(w, ..)| w == n)
                             .map(|(w, e, t)| (e.clone(), *t, w.x, w.applied))
                     })
                     .collect();
-                let (fresh, block) = trade_probe::hooks_again(v.q, &asks).await?;
-                if first_block.is_none() {
-                    first_block = Some(block);
+                // Ревью 4 (Н7): повторная проба — на блоке первой.
+                let (fresh, block) = trade_probe::hooks_again(v.q, &asks, pin).await?;
+                if pin.is_none() {
+                    pin = Some(block);
                 }
                 th.fresh.extend(fresh);
             }
         }
         out = all(v, shares, direct_mode, &th).await?;
     }
+}
+
+/// Входы шагов с крючком B/C путей (`got` — views путей) плюс (ревью 4 Н-ж) входы тех же путей по порядку исполнения
+/// долей с общим пулом (quote/graph_seq.rs resequence; без общих пулов — те же входы). Ошибки: как resequence.
+fn seen(
+    v: &Via<'_>,
+    shares: &[(&[RouteHop], Decimal)],
+    out: &[Path],
+    mut got: Vec<(Want, Entry, Address)>,
+) -> GatewayResult<Vec<(Want, Entry, Address)>> {
+    if shares.len() < 2 || got.is_empty() {
+        return Ok(got);
+    }
+    let mut seq: Vec<(Path, Decimal)> = out
+        .iter()
+        .cloned()
+        .zip(shares.iter().map(|s| s.1))
+        .collect();
+    graph_seq::resequence(&v.q.ctx, v.side, v.taxes, &mut seq)?;
+    let paths: Vec<Path> = seq.into_iter().map(|(p, _)| p).collect();
+    for (w, e, t) in views(&paths) {
+        // Запись пула — из путей как посчитаны (у общего пула в пути по порядку — состояние после прошлых долей, а
+        // проба читает пул сама).
+        let e = got
+            .iter()
+            .find(|a| a.0.pool == w.pool)
+            .map_or(e, |a| a.1.clone());
+        if !got.iter().any(|a| a.0 == w) {
+            got.push((w, e, t));
+        }
+    }
+    Ok(got)
 }
 
 /// Входы шагов с крючком B/C путей: вход, пул из памяти, токен входа. Ошибок нет.
@@ -101,26 +146,6 @@ fn views(paths: &[Path]) -> Vec<(Want, Entry, Address)> {
             (w, h.entry.clone(), h.token_in)
         })
         .collect()
-}
-
-/// Ревью 3 Н-з: голова сети не дальше verify.max_staleness_blocks от блока первой пробы. Не задана — без проверки.
-/// Ошибки: StaleData — ушла дальше; настройка в неверном виде.
-fn fresh_enough(v: &Via<'_>, first: u64) -> GatewayResult<()> {
-    let ctx = &v.q.ctx;
-    let max = match ctx.int("verify.max_staleness_blocks") {
-        Ok(m) => m,
-        Err(e) if e.code == ErrorCode::NotConfigured => return Ok(()),
-        Err(e) => return Err(e),
-    };
-    let head = v.q.heads.latest().map_or(first, |h| h.number);
-    if head.saturating_sub(first) > max {
-        let why = format!(
-            "проба крючка перед сделкой: голова {head} ушла от первой пробы ({first}) больше чем на \
-             verify.max_staleness_blocks = {max}"
-        );
-        return Err(ctx.err(ErrorCode::StaleData, why));
-    }
-    Ok(())
 }
 
 /// Пути всех долей по текущим фактам. Ошибки: как exec/live.rs share.

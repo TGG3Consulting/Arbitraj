@@ -12,7 +12,8 @@
 //! подбора, не данные решения. Налог и крючок — из допуска пула (select.rs usable, pool_tax.rs step_pct) и налогов
 //! монеты из проверки (direct.rs taxes); не известны — keep = 1.
 //! Только память реестра: ни одного запроса к узлу, кроме decimals монеты и USDT (кэш tokens.rs).
-//! Решение «335 (лесенка влияния)», ревью 3: у пула с крючком B/C — ещё ступени лесенки влияния (quote/breaks_hook.rs).
+//! Решение «335 (лесенка влияния)», ревью 3: у пула с крючком B/C — ещё ступени лесенки влияния (quote/breaks_hook.rs);
+//! ревью 4 (Н1): вместе с изломами пула — не больше size.pool_breaks_max на пул.
 //! Кто вызывает: venue.rs (контракт quote_breaks).
 //! От чего зависит: quote/breaks_pool.rs, quote/select.rs, quote/pool_tax.rs, quote/route_calc.rs (keep),
 //! quote/direct.rs (taxes), pools/registry.rs, tokens.rs, num.rs.
@@ -81,15 +82,22 @@ pub async fn breaks(
             max_qty * share / k
         };
         let max = num::to_units(pool_max, dec).unwrap_or(U256::MAX);
+        let mut mine: Vec<Decimal> = Vec::new();
         for u in super::breaks_pool::pool(&e, coin, sell, max, limit) {
             let Some(x) = num::to_decimal(u, dec) else {
                 continue;
             };
-            out.push(if sell { x / (share * k) } else { x * k / share });
+            mine.push(if sell { x / (share * k) } else { x * k / share });
         }
         // Решение «335 (лесенка влияния)», ревью 3: ступени лесенки влияния крючка — тоже изломы (quote/breaks_hook.rs).
         let hook = super::breaks_hook::steps(q, &e, side, usdt_dec, (share, k), dec);
-        out.extend(hook.into_iter().filter(|x| *x <= max_qty));
+        mine.extend(hook.into_iter().filter(|x| *x <= max_qty));
+        // Ревью 4 лесенки (Н1): изломы пула вместе со ступенями крючка — не больше size.pool_breaks_max на пул, ближайшие
+        // от текущего состояния (наименьшие объёмы — как у изломов пула, quote/breaks_pool.rs).
+        mine.sort_unstable();
+        mine.dedup();
+        mine.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
+        out.extend(mine);
     }
     out.sort_unstable();
     out.dedup();

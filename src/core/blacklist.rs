@@ -2,6 +2,7 @@
 //! Что делает: чёрный список монет с причиной (решения 30, 36) и допуск пулов с крючками V4 (решение 32).
 //! Монета в списке, если: отмечена вручную (coin.blocked); проверка налогов на DEX не закончена или
 //! не прошла; налог выше порога tax.max_*_pct. Прошла перепроверку — выходит из списка сама.
+//! Допуск пулов с крючками — core/pool_hook.rs (вынесен ревью 4 лесенки, файл был больше 200 строк; здесь реэкспорт).
 //! Кто вызывает: core/engine.rs (после событий проверки и изменений настроек), registry.rs (допуск пулов).
 //! От чего зависит: core/types, settings.
 //! Настройки: coin.blocked, coin.blocked_note (по монете — по адресу, решение 211), tax.max_buy_pct, tax.max_sell_pct,
@@ -12,12 +13,12 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
-use crate::core::types::{
-    Asset, BlockReason, CheckState, CoinBlock, CoinCheck, HookGroup, Pool, PoolCheck, TaxKind,
-};
+use crate::core::types::{Asset, BlockReason, CheckState, CoinBlock, CoinCheck, TaxKind};
 use crate::settings::read::At;
 use crate::settings::scope::Scope;
 use crate::settings::store::Store;
+
+pub use super::pool_hook::{pool_admission, pool_sides_off};
 
 /// Пороги налогов (решение 30). Все три обязательны.
 pub struct TaxLimits {
@@ -167,51 +168,4 @@ impl Blacklist {
     pub fn get(&self, asset: &Asset) -> Option<&CoinBlock> {
         self.map.get(asset)
     }
-}
-
-/// Допуск пула по крючку V4 (решение 32). Принимает: пул, его проверку влияния, хранилище.
-/// Возвращает: Ok — пул можно использовать; Err(причина) — пул исключён (видно в интерфейсе).
-pub fn pool_admission(pool: &Pool, check: Option<&PoolCheck>, s: &Store) -> Result<(), String> {
-    let group = match &pool.hooks {
-        None => return Ok(()),
-        Some(h) if h.group == HookGroup::A => return Ok(()),
-        Some(h) => h.group,
-    };
-    let allowed = s
-        .text("hooks.allowed_groups", At::default())
-        .map_err(|e| e.message)?;
-    // Варианты настройки — «A», «A+B», «A+B+C» (settings/catalog/trade.rs).
-    let letter = if group == HookGroup::B { "B" } else { "C" };
-    if !allowed.split('+').any(|g| g == letter) {
-        return Err(format!(
-            "крючок группы {letter} не допущен (hooks.allowed_groups = {allowed})"
-        ));
-    }
-    let name = if group == HookGroup::B {
-        "hooks.max_impact_b_pct"
-    } else {
-        "hooks.max_impact_c_pct"
-    };
-    let max = s.decimal(name, At::default()).map_err(|e| e.message)?;
-    match check.map(|c| &c.impact) {
-        None | Some(CheckState::NotChecked) => Err("влияние крючка ещё не проверено".into()),
-        Some(CheckState::Failed { reason }) => Err(format!("проверка крючка не прошла: {reason}")),
-        // Решение «335 (лесенка влияния)»: влияние — функция суммы; допуск — к влиянию на сумме сделки (его применяет
-        // котировка DEX). Здесь пул закрыт, только если допуск превышен уже на наименьшей измеренной сумме стороны.
-        Some(CheckState::Known(i))
-            if least(&i.buy, i.buy_pct) > max || least(&i.sell, i.sell_pct) > max =>
-        {
-            Err(format!(
-                "влияние крючка на наименьшей сумме (покупка {}%, продажа {}%) выше допуска {max}%",
-                least(&i.buy, i.buy_pct),
-                least(&i.sell, i.sell_pct)
-            ))
-        }
-        Some(CheckState::Known(_)) => Ok(()),
-    }
-}
-
-/// Наименьшее влияние стороны по лесенке (решение «335 (лесенка влияния)»); лесенки нет — одно число. Ошибок нет.
-fn least(steps: &[crate::core::types::HookStep], flat: Decimal) -> Decimal {
-    steps.iter().map(|s| s.pct).min().unwrap_or(flat)
 }

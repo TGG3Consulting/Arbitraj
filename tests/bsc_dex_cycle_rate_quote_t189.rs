@@ -5,17 +5,21 @@
 //! - V2 — пул CAKE/USDT PancakeSwap V2 (tests/size_common, getReserves, dex.v2_fee_pct = 0,25): математика бота
 //!   (quote/pool_quote.rs swap) на входе 10^-6 резерва входа;
 //! - V3 — пулы SquadSwap V3 (tests/data/squadswap_v3_2026-11-15/probe.json: slot0, liquidity, fee, слова TickLens):
-//!   математика бота на входе 1/1000 самой малой суммы квотера записи;
+//!   QuoterV2 КОНТРАКТА на самой малой записанной сумме (1 $), если на следующей (100 $) средняя цена та же в пределах
+//!   допуска (эталон в линейной области); в записи есть пул Cake/WBNB, где цена slot0 стоит на границе тика и в сторону
+//!   token0 → token1 за ней пустой участок: квотер 0,0021799 против спота 0,0027119 — курс ребра обязан совпасть с
+//!   квотером (прогон 70f97160 показал расхождение 24 % у курса по споту);
 //! - Algebra — пулы THENA V3 / DexSwap Integral (tests/data/algebra_integral_2026-11-06, tests/algebra_integral_common):
-//!   математика бота на 1/1000 суммы квотера записи; заодно — исправление Н4: steps::fee_pct у Algebra больше не ошибка;
+//!   ответы квотера записи (used, out) по тому же правилу линейной области; заодно — исправление Н4: steps::fee_pct у
+//!   Algebra больше не ошибка;
 //! - Solidly стабильный и волатильный — пары usdfi, veplus, magicfox (tests/data/solidly_fee_2026-11-14, комиссия по
-//!   правилу DEX — tests/solidly273_common): getAmountOut КОНТРАКТА на входе 10^-3 резерва;
+//!   правилу DEX — tests/solidly273_common): getAmountOut КОНТРАКТА на входе 10^-3 резерва; эталоны с входом или выходом
+//!   меньше 1000 единиц не берутся — их собственное округление (≥ 0,1 %) не проверяет курс с допуском 0,2 %;
 //! - StableSwap — пары Nomiswap Stable (tests/data/nomiswap_stable_2026-11-15/probe.json): getAmountOut КОНТРАКТА на
 //!   входе 1 токен (только где это ≤ 10^-3 баланса входа).
 //!
-//! Допуск — относительный, больше влияния входа на цену (вход ≤ 10^-3 резерва): 0,2 % у контрактных ответов Solidly
-//! (волатильный пул на 10^-3 резерва сдвигает цену на ~0,1 %), 0,1 % у математики бота V3/Algebra и у StableSwap
-//! (перекошенная пара — кривая круче), 0,01 % у V2.
+//! Допуск — относительный, больше влияния входа эталона на цену: 0,2 % у Solidly (волатильный пул на 10^-3 резерва
+//! сдвигает цену на ~0,1 %), 0,1 % у V3 / Algebra / StableSwap, 0,01 % у V2.
 //! Не покрыты (нет готовой записи состояния без узла): DODO (чтение пула — только с узла, tests/bsc_dex_dodo_dead_pools —
 //! поддельный узел на записи), Infinity Bin (бины — из логов, tests/bsc_dex_settle_records_357).
 //! Кто вызывает: cargo test.
@@ -145,11 +149,23 @@ fn json(path: &str) -> Value {
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
 
+/// Эталон «малой суммы» из ответов квотера контракта по стороне: (вход, выход) самой малой суммы, если средняя цена на
+/// следующей сумме отличается не больше чем на tol (эталон в линейной области: курс не зависит от суммы); иначе None —
+/// записанная малая сумма уже сдвигает цену, сравнивать курс ребра с ней нельзя. Ошибок нет.
+fn linear_ref(mut pts: Vec<(U256, U256)>, tol: Decimal) -> Option<Decimal> {
+    pts.retain(|(x, o)| !x.is_zero() && !o.is_zero());
+    pts.sort();
+    let a = ratio(pts.first()?.1, pts.first()?.0);
+    let b = ratio(pts.get(1)?.1, pts.get(1)?.0);
+    ((a - b).abs() / a <= tol).then_some(a)
+}
+
 #[tokio::test]
-async fn v3_rate_matches_small_quote() {
+async fn v3_rate_matches_contract_quoter() {
     let rec = Rec::load("rate-t189-v3").await;
     let d = json("tests/data/squadswap_v3_2026-11-15/probe.json");
-    let mut n = 0;
+    let tol = Decimal::new(1, 3);
+    let (mut n, mut gap) = (0, false);
     for p in d["pools"].as_array().unwrap() {
         let c = &p["calls"];
         let slot0 = c["slot0"].as_str().unwrap();
@@ -183,27 +199,50 @@ async fn v3_rate_matches_small_quote() {
             ticks: v3_ticks(&ans).expect("тики").into(),
             words: (first, last),
         });
-        // Малая сумма — 1/1000 самой малой суммы квотера записи по стороне.
-        let mut small = [U256::MAX; 2];
-        for q in p["quoter"].as_array().unwrap() {
-            let zfo = q["zeroForOne"].as_bool().unwrap();
-            let a = U256::from_str_radix(q["amountIn"].as_str().unwrap(), 10).unwrap();
-            let i = usize::from(!zfo);
-            small[i] = small[i].min(a / U256::from(1000u32));
+        let ed = edge(e);
+        for zfo in [true, false] {
+            let pts: Vec<(U256, U256)> = p["quoter"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|q| q["zeroForOne"].as_bool() == Some(zfo))
+                .map(|q| {
+                    let a = U256::from_str_radix(q["amountIn"].as_str().unwrap(), 10).unwrap();
+                    (a, word(q["quoterV2_defaultFee"].as_str().unwrap(), 0))
+                })
+                .collect();
+            let Some(want) = linear_ref(pts, tol) else {
+                continue;
+            };
+            let tin = if zfo { T0 } else { T1 };
+            let r = edge_rate(&rec.ctx, &ed, tin).expect("у пула записи есть курс");
+            near(r, want, tol, "V3 (квотер контракта)");
+            // Пул Cake/WBNB записи: цена slot0 на границе тика, в сторону token0 → token1 — пустой участок; спот × (1 −
+            // комиссия) отличается от квотера больше чем на 10 % — курс ребра обязан идти не по споту.
+            let spot = Decimal::from_i128_with_scale((sqrt * sqrt >> 128).to::<i128>(), 0)
+                / Decimal::from_i128_with_scale(1i128 << 64, 0);
+            if zfo && (spot - want).abs() / want > Decimal::new(1, 1) {
+                gap = true;
+            }
+            n += 1;
         }
-        let xs = [(T0, small[0]), (T1, small[1])];
-        n += both_by_bot(&rec.ctx, &edge(e), xs, Decimal::new(1, 3), "V3");
     }
-    assert!(n >= 6, "сравнений V3: {n}");
+    assert!(n >= 4, "сравнений V3 с квотером контракта: {n}");
+    assert!(
+        gap,
+        "в записи есть пул с пустым участком за границей тика (Cake/WBNB)"
+    );
 }
 
 #[tokio::test]
-async fn algebra_rate_matches_small_quote() {
+async fn algebra_rate_matches_contract_quoter() {
     let rec = Rec::load("rate-t189-alg").await;
     let d = algebra_integral_common::probe();
+    let tol = Decimal::new(1, 3);
     let mut n = 0;
     for p in d["pools"].as_array().unwrap() {
         let (sqrt, tick, liq, fee, map) = algebra_integral_common::pool_state(p);
+        // Ликвидность текущего диапазона 0 — курса ребра нет по правилу (виртуальный резерв 0, cycle_rate.rs).
         if liq == 0 {
             continue;
         }
@@ -215,20 +254,29 @@ async fn algebra_rate_matches_small_quote() {
         };
         let mut e = entry(&rec.pool, "thena_fusion", state, None, (T0, T1));
         e.ticks = Some(map);
-        let mut small = [U256::MAX; 2];
-        for q in p["quoter"].as_array().unwrap() {
-            let zfo = q["zeroForOne"].as_bool().unwrap();
-            // Суммы записи — числа JSON; больше u64 (крупные суммы) не нужны — берётся самая малая.
-            let Some(a) = q["amountIn"].as_u64().map(U256::from) else {
+        let ed = edge(e);
+        for zfo in [true, false] {
+            // Ответ виртуального квотера записи — (used, out); откат («__err») — пропуск.
+            let pts: Vec<(U256, U256)> = p["quoter"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|q| q["zeroForOne"].as_bool() == Some(zfo))
+                .filter_map(|q| {
+                    let raw = q["raw"].as_str()?;
+                    raw.starts_with("0x").then(|| (word(raw, 0), word(raw, 1)))
+                })
+                .collect();
+            let Some(want) = linear_ref(pts, tol) else {
                 continue;
             };
-            let i = usize::from(!zfo);
-            small[i] = small[i].min(a / U256::from(1000u32));
+            let tin = if zfo { T0 } else { T1 };
+            let r = edge_rate(&rec.ctx, &ed, tin).expect("у пула записи есть курс");
+            near(r, want, tol, "Algebra (квотер записи)");
+            n += 1;
         }
-        let xs = [(T0, small[0]), (T1, small[1])];
-        n += both_by_bot(&rec.ctx, &edge(e), xs, Decimal::new(1, 3), "Algebra");
     }
-    assert!(n >= 2, "сравнений Algebra: {n}");
+    assert!(n >= 2, "сравнений Algebra с квотером: {n}");
 }
 
 #[tokio::test]
@@ -243,8 +291,12 @@ async fn solidly_rate_matches_contract() {
         let t1: Address = m["t1"].as_str().unwrap().parse().unwrap();
         let tin: Address = tin.parse().unwrap();
         let r_in = if tin == t0 { u(&m["r0"]) } else { u(&m["r1"]) };
-        // Только малый вход (≤ 1/500 резерва входа; в записи — 10^-3 и 3,3·10^-2).
-        if x.is_zero() || x * U256::from(500u32) > r_in {
+        // Только малый вход (≤ 1/500 резерва входа; в записи — 10^-3 и 3,3·10^-2). И эталон, чьё округление до целых
+        // единиц само не хуже половины допуска: вход и выход контракта ≥ 2/допуск единиц (пары 18/6 с резервом 0,68 USDT:
+        // вход 680 или выход 558 единиц — точность эталона 0,15–0,18 %, им курс на 0,2 % не проверить).
+        let tol = Decimal::new(2, 3);
+        let min_units = U256::from(1000u32);
+        if x.is_zero() || x * U256::from(500u32) > r_in || x < min_units || out < min_units {
             continue;
         }
         let st = m["st"].as_bool().unwrap();
@@ -260,7 +312,7 @@ async fn solidly_rate_matches_contract() {
         let e = entry(&rec.pool, "solidly_v1", state, None, (t0, t1));
         let r = edge_rate(&rec.ctx, &edge(e), tin).expect("у пары записи есть курс");
         let what = format!("Solidly {dex} {}", if st { "stable" } else { "volatile" });
-        near(r, ratio(out, x), Decimal::new(2, 3), &what);
+        near(r, ratio(out, x), tol, &what);
         if st {
             stable += 1;
         } else {

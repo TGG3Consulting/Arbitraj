@@ -329,7 +329,7 @@ async fn graph_and_parts(reverse: bool) -> (graph::Graph, Parts) {
 }
 
 /// Ключ цикла: пул и токен входа каждого шага.
-fn key(path: &RoutePath) -> Vec<(PoolRef, Address)> {
+fn key(path: &RoutePath) -> Key {
     path.steps
         .iter()
         .map(|s| (s.edge.entry.pool.reference.clone(), s.token_in))
@@ -342,6 +342,12 @@ fn rate_of(p: &Parts, path: &RoutePath) -> Decimal {
         acc * cycle_rate::edge_rate(&p.ctx, &s.edge, s.token_in).expect("у ребра записи есть курс")
     })
 }
+
+/// Ключ цикла: пул и токен входа каждого шага.
+type Key = Vec<(PoolRef, Address)>;
+
+/// Цикл в ожидаемом порядке отбора: все стороны глубокие, курс круга, ключ.
+type Scored = (bool, Decimal, Key);
 
 /// Все стороны пулов цикла глубокие по книге глубины (тот же признак, что у отбора: вход — встречный токен пула →
 /// покупка, вход — монета → продажа). Ошибок нет.
@@ -373,7 +379,7 @@ async fn picks_best_by_cycle_rate_not_first() {
     let m = all.len();
     assert!(m >= 4, "на записи есть несколько циклов базовой USDT: {m}");
     // Порядок отбора: все стороны глубокие — впереди, затем курс круга.
-    let mut scored: Vec<(bool, Decimal, Vec<(PoolRef, Address)>)> = all
+    let mut scored: Vec<Scored> = all
         .iter()
         .map(|c| (deep_of(&p, c), rate_of(&p, c), key(c)))
         .collect();

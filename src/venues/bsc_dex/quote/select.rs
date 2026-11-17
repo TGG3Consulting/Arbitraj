@@ -109,8 +109,9 @@ pub fn usable_with(
     )?;
     // Ревью t178 (Б2): dex.shallow_pools_per_pair не задана или 0 — мелкая сторона не котируется, как до решения 393.
     // Задана — допуск мелкой стороны даёт её сверка с квотером (ниже): сверяются только пулы в пределе пары.
+    // Решение 403: предел — из опубликованного снимка отбора (quote/shallow_memo.rs), настройка здесь не читается.
     if let Some(why) = shallow
-        && super::shallow_pick::limit(ctx) == 0
+        && !super::shallow_pick::on_snap(&q.reg)
     {
         return Err(why);
     }

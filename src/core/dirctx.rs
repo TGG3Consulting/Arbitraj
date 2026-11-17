@@ -186,7 +186,7 @@ impl DirCtx {
             Moment::Decided { sigma, .. } => *sigma,
             // Решение 391 (t177): неподвижная цена при заданной границе — σ = граница, а не отказ (sigma_plan.rs).
             Moment::Entry => {
-                super::sigma_plan::entry(&mut lk(&core.inner.vol), s, dir, chrono::Utc::now())?
+                super::sigma_plan::entry_shared(&core.inner.vol, s, dir, chrono::Utc::now())?
             }
             Moment::Held => {
                 let window = s

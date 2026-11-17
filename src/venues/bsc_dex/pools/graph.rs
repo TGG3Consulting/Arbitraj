@@ -167,8 +167,8 @@ pub fn build_measured(
         };
         // Решение 393 (t178): мелкий по обеим сторонам пул — в граф, если хотя бы одну сторону пропускает сумма пробы
         // (quote/side_fit.rs): котировка берёт и мелкую сторону (quote/select.rs). Ранг — глубина: мелкие — после
-        // глубоких на той же паре.
-        if !(d.deep_buy || d.deep_sell) && !shallow_pick::admitted(ctx, reg, tokens, usdt_dec, &e) {
+        // глубоких на той же паре. Решение 403: допуск — из опубликованного снимка отбора (без замка и настроек).
+        if !(d.deep_buy || d.deep_sell) && !shallow_pick::admitted_snap(reg, &e) {
             continue;
         }
         let rank = d.band.buy.max(d.band.sell);

@@ -132,6 +132,9 @@ pub struct Inner {
     /// Решение 394 (ревью 2 t179): сколько идущих сделок групп докупки и следов их продаж — 0: котировки и затраты на
     /// горячем пути не берут замков `rides` / `trail` (ride_quote::idle).
     pub group_live: std::sync::atomic::AtomicUsize,
+    /// Решение 403 (ревью t188): сколько записей в `rides` (идущие сделки после учёта покупки, с группой и без) — 0:
+    /// очередь расчёта (coin_ride.rs blocks_new) замок `rides` не берёт. Меняется только под замком `rides`.
+    pub rides_live: std::sync::atomic::AtomicUsize,
     /// Решение 174: монеты, которые сейчас продаются кнопкой «Продать» панели «Балансы» (повторное нажатие — отказ
     /// «уже продаётся»; метка Я-2 в active ставится вместе с этой, balance_sell.rs).
     pub balance_sells: Mutex<HashSet<super::coin_key::CoinKey>>,
@@ -263,6 +266,7 @@ impl Inner {
             groups: Mutex::default(),
             trail: Mutex::default(),
             group_live: Default::default(),
+            rides_live: Default::default(),
             balance_sells: Mutex::default(),
             bal_cache: Default::default(),
             usdt_moves: Mutex::default(),

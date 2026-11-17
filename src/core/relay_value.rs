@@ -6,7 +6,7 @@
 //! стоимость перевода через шлюз (газ и налог считает кошелёк, к бирже запроса нет).
 //! Решение 222: приход на биржу-цель — пыль по правилам пары (dust.rs) — выручка 0.
 //! Кто вызывает: core/relay.rs.
-//! От чего зависит: dirctx_venue.rs (справочник сетей, свежесть), transfers.rs (сеть BSC), transfer_tax.rs,
+//! От чего зависит: deposit_min_ask.rs (решение 387), dirctx_venue.rs (справочник сетей, свежесть), transfers.rs (сеть BSC), transfer_tax.rs,
 //! costs_withdraw.rs (точность вывода), trade_ops.rs (выручка продажи), convert.rs.
 //! Решение 253 (д), дополнение: затраты вывода с биржи — с поправкой по факту прошлого перевода (withdraw_seen.rs,
 //! transfer.seen_cost), как в расчёте сделки.
@@ -84,7 +84,11 @@ fn deposit_ok(core: &Core, to: &VenueId, a: &Asset, arrive: Decimal) -> Result<(
         )
     })?;
     match info.deposit_min {
-        None => Err(format!("{}: минимальный депозит неизвестен", to.0)),
+        None => {
+            // Решение 387: сведения монеты у биржи-получателя — запросом сразу (deposit_min_ask.rs).
+            super::deposit_min_ask::ask(core, to, &info.asset.ticker);
+            Err(format!("{}: минимальный депозит неизвестен", to.0))
+        }
         Some(min) if arrive < min => Err(format!(
             "приход {arrive} меньше минимального депозита {min} на {}",
             to.0

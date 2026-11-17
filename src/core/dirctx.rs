@@ -11,7 +11,7 @@
 //! решения 240: σ ряда без проверки и границы, без доли.
 //! Кто вызывает: core/profit.rs, card_max.rs, uncapped.rs (кандидаты) — build; partial.rs — build_held; frozen.rs —
 //! build_decided.
-//! От чего зависит: engine.rs, registry.rs, vol.rs, reserve.rs, settings.
+//! От чего зависит: engine.rs, registry.rs, vol.rs, reserve.rs, settings, deposit_min_ask.rs (решение 387: минимум депозита B неизвестен — запрос сразу).
 //! Правила пар и свежесть справочника сетей — dirctx_venue.rs (venue.networks_stale_s).
 //! Решения 358, 364 (только журнал): план входа всегда несёт сравнение σ (reserve_check.rs), решение не меняется.
 //! Решение 242: profit.price_move_k и profit.closure_share — сначала площадка + тип направления (core/venue_dir.rs);
@@ -136,6 +136,11 @@ impl DirCtx {
             .ok_or("монеты нет в справочнике")?;
         let a = entry.at(&dir.buy_on).ok_or("A нет у монеты")?.clone();
         let b = entry.at(&dir.sell_on).ok_or("B нет у монеты")?.clone();
+        // Решение 387: минимум депозита B неизвестен — расчёт откажет (check_deposit); сведения монеты у B
+        // запрашиваются сразу (deposit_min_ask.rs, очередь биржи), следующий тик — уже с минимумом.
+        if b.info.as_ref().is_some_and(|i| i.deposit_min.is_none()) {
+            super::deposit_min_ask::ask(core, &dir.sell_on, &b.ticker);
+        }
         // Решение 108: у каждой площадки своё название сети BSC; у DEX (нет сети в справочнике) — своя
         // venue.bsc_network, и только потом название другой стороны.
         let own = |v: &VenueId| super::transfers::own_bsc_name(core, v);

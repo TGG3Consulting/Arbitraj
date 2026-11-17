@@ -21,6 +21,8 @@ pub mod delist;
 pub mod deposit_addr;
 pub mod deposit_hold;
 pub mod deposit_info;
+pub mod deposit_min;
+pub mod deposit_plan;
 pub mod deposits;
 pub mod depth;
 pub mod errors;
@@ -136,6 +138,13 @@ impl Venue for Gate {
     async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
         self.symbols.ensure_fresh(&self.ctx).await?;
         wallet::coin_networks_of(&self.ctx, &self.nets, &self.symbols, ticker).await
+    }
+
+    /// Решение 387: сети монеты для приёма депозита по запросу ядра (минимум неизвестен) — вместе с адресом депозита,
+    /// который даёт минимум (deposit_min.rs for_deposit). Сбой адреса справочник монеты не роняет.
+    async fn deposit_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        deposit_min::for_deposit(&self.ctx, &self.nets, &self.addrs, &self.symbols, ticker).await
     }
 
     async fn subscribe_market(

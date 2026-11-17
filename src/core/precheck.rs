@@ -19,7 +19,7 @@
 //! precheck.balance_first = да — свободный баланс A читается здесь, прямо перед расчётом (precheck_balance.rs), расчёт
 //! идёт с пределом min(бюджет, свободно); исполнитель баланс повторно не читает.
 //! Кто вызывает: executor.rs.
-//! От чего зависит: step_timing.rs, risk.rs, profit.rs, convert.rs, trade_ops.rs (вид площадки), deps.rs (шлюз),
+//! От чего зависит: networks_merge.rs (решение 387), step_timing.rs, risk.rs, profit.rs, convert.rs, trade_ops.rs (вид площадки), deps.rs (шлюз),
 //! precheck_fast.rs, precheck_par.rs, precheck_nets.rs, precheck_balance.rs.
 //! Настройки: risk.min_bnb_balance, venue.symbols_stale_s (+ всё, что читают risk.rs и profit.rs); включатели решения
 //! 266 (precheck.fast_recalc, precheck.parallel, precheck.networks_memory, precheck.balance_first) читает executor.rs
@@ -32,7 +32,7 @@ use crate::gateway::contract::VenueKind;
 use crate::settings::read::At;
 
 use super::costs::{Calc, CostLine};
-use super::engine::{Core, wr};
+use super::engine::Core;
 use super::precheck_balance::{Bal, Cand, Read};
 use super::precheck_fast::{Opts, Want};
 use super::precheck_nets::Src;
@@ -88,20 +88,9 @@ pub(super) async fn transfer_open(
     // после решения 113 здесь приходит справочник ОДНОЙ монеты, а он целиком заменял справочник биржи — остальные
     // монеты теряли сеть BSC до следующего опроса). Справочника биржи ещё нет — не пишем (его соберёт registry_sync).
     // Решение 266, часть 3: записи взяты из памяти — писать нечего, справочник не менялся.
+    // Решение 387: запись — networks_merge.rs (тот же код, вынесен для запроса минимума депозита deposit_min_ask.rs).
     if !stored {
-        {
-            let mut nets = wr(&core.inner.networks);
-            if let Some(all) = nets.get_mut(v).map(std::sync::Arc::make_mut) {
-                // Решение 211: записи этой монеты площадки — по её тикеру (и именам из свежего ответа после
-                // native::map); показное имя ядра у этой биржи может быть другой монетой — по нему не чистим.
-                let mut gone: std::collections::HashSet<String> =
-                    list.iter().map(|i| i.asset.ticker.clone()).collect();
-                gone.insert(on.clone());
-                all.retain(|i| !gone.contains(&i.asset.ticker));
-                all.extend(list);
-            }
-        }
-        core.request_rebuild();
+        super::networks_merge::merge_coin(core, v, &on, list);
     }
     match open {
         Some(true) => Ok(()),

@@ -2,7 +2,8 @@
 //! Что делает: справочник монет и сетей Gate с кэшем не старше venue.networks_fresh_ms (решения 118, 131: справочник
 //! за `Arc`, ответы и разбор — вне рабочих потоков tokio), сети одной монеты свежими запросами по монете (решение 113),
 //! (стоимость вывода — wallet_cost.rs). Помнит сведения монет, которых нет в общих справочниках (точность вывода, минимум депозита,
-//! подтверждения — networks_parse::Extra).
+//! подтверждения — networks_parse::Extra). Решение 387: новый минимум депозита сразу попадает и в собранный справочник
+//! (кэш); удачное получение справочника — толчок фоновому кругу сведений депозита (deposit_min.rs, deposit_info.rs).
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs (сведения адреса депозита).
 //! От чего зависит: rest.rs, networks_parse.rs, ctx.rs, symbols.rs (запасная точность), core/types.
 //! Настройки: venue.bsc_network [gate] — название сети BSC у Gate (поле name сети / chain; ядро сравнивает с ним сеть
@@ -36,8 +37,17 @@ type Cached = (Instant, Arc<Vec<CoinNetworkInfo>>);
 /// Справочник сетей в памяти. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Networks {
-    cache: Arc<RwLock<Option<Cached>>>,
-    extra: Arc<RwLock<HashMap<String, Extra>>>,
+    pub(super) cache: Arc<RwLock<Option<Cached>>>,
+    pub(super) extra: Arc<RwLock<HashMap<String, Extra>>>,
+    /// Решение 387: сколько раз справочник получен удачно и толчок об этом — фоновый круг сведений депозита
+    /// (deposit_info.rs) после сбоя (секреты, связь) повторяет запросы сразу, как справочник снова получен.
+    pub(super) fetched: Arc<std::sync::atomic::AtomicU64>,
+    pub(super) fetched_note: Arc<tokio::sync::Notify>,
+    /// Решение 387 (ревью Б1): монета → метка справочника (fetched), при которой Gate отказал в адресе депозита не по
+    /// временной причине («deposit disabled»): до нового справочника адрес по запросу ядра не спрашивается.
+    pub(super) refused: Arc<RwLock<HashMap<String, u64>>>,
+    /// Решение 387 (ревью Н3): время последнего запроса адреса по запросу ядра — темп venue.deposit_info_requests_per_sec.
+    pub(super) pace: Arc<tokio::sync::Mutex<Option<tokio::time::Instant>>>,
     /// Последний записанный в журнал список «неясной» комиссии — пишем только при изменении.
     told: Arc<RwLock<String>>,
 }
@@ -66,6 +76,17 @@ impl Networks {
         }
         if let Some(c) = confirms {
             e.confirms.insert(chain.to_string(), c);
+        }
+        let e = e.clone();
+        drop(m);
+        // Решение 387: и в уже собранный справочник (кэш) — иначе ядро до конца окна venue.networks_fresh_ms получало
+        // бы прежний справочник без минимума и затирало им минимум, полученный запросом по монете.
+        let mut c = self.cache.write().unwrap_or_else(|p| p.into_inner());
+        let stale = |x: &&mut Cached| super::deposit_min::stale(x.1.as_slice(), ticker, &e);
+        if let Some((_, list)) = c.as_mut().filter(stale) {
+            // make_mut — по Vec (с ожидаемым срезом вывод типа взял бы Arc<[…]>).
+            let all: &mut Vec<CoinNetworkInfo> = Arc::make_mut(list);
+            super::deposit_min::apply(all, ticker, &e);
         }
     }
 }
@@ -114,17 +135,12 @@ pub async fn coin_networks_of(
     .await?;
     match rest::public(ctx, "/wallet/currency_chains", p).await {
         Ok(ch) => {
-            let old = nets
-                .extra
-                .read()
-                .unwrap_or_else(|e| e.into_inner())
-                .get(ticker)
-                .cloned();
-            let (ex, _) = chains_extra(&ch, old.unwrap_or_default())?;
-            nets.extra
-                .write()
-                .unwrap_or_else(|e| e.into_inner())
-                .insert(ticker.to_string(), ex);
+            // Решение 387: прочитать и записать под одной блокировкой — минимум депозита, записанный одновременным
+            // запросом адреса депозита (deposit_min.rs for_deposit), не затирается прежними сведениями.
+            let mut m = nets.extra.write().unwrap_or_else(|e| e.into_inner());
+            let old = m.get(ticker).cloned().unwrap_or_default();
+            let (ex, _) = chains_extra(&ch, old)?;
+            m.insert(ticker.to_string(), ex);
         }
         Err(e) => {
             log(
@@ -181,6 +197,7 @@ pub(super) async fn shared(
     }
     let list = Arc::new(p.list);
     *nets.cache.write().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), list.clone()));
+    nets.mark_fetched();
     Ok(list)
 }
 

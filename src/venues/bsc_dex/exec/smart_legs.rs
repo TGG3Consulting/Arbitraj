@@ -8,6 +8,8 @@
 //! Зовётся дважды, если отправлялись разрешения (решение 121 B1: после approve всё заново).
 //! Решение 223: доли графа с общим пулом — суммы, цена и шаги по порядку исполнения на последовательных состояниях
 //! (quote/graph_seq.rs resequence); MixedQuoter сверяет каждую долю на текущем состоянии — с расчётом доли на нём же.
+//! Решение 382: расхождение с MixedQuoter против нас — пулы перечитываются на голове, доли и MixedQuoter — на том же
+//! блоке (exec/quoter_refetch.rs).
 //! Кто вызывает: exec/trade_smart.rs.
 //! От чего зависит: exec/hook_trade.rs (пути долей, пробы крючков одним пакетом), exec/chain.rs, exec/native.rs, exec/order.rs (check_price), exec/leg_min.rs,
 //! exec/quoter_favour.rs,
@@ -20,13 +22,13 @@ use crate::core::types::{DexRoute, Side, TradeRequest};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::quote::graph_seq;
-use super::super::quote::mixed_quoter::{self, Leg};
+use super::super::quote::mixed_quoter::Leg;
 use super::super::quote::path::Path;
 use super::super::quote::via::Via;
 use super::chain::Step;
 use super::native::{self, Wrap};
 use super::order::check_price;
-use super::{chain, hook_trade, leg_min, quoter_favour};
+use super::{chain, hook_trade, leg_min, quoter_favour, quoter_refetch, quoter_refetch_check};
 
 /// Подготовленные доли: пути по живому состоянию (с количеством доли), шаги с минимумами, нативная обёртка.
 pub struct Prep {
@@ -41,7 +43,31 @@ pub struct Prep {
 /// с MixedQuoter, шаги и минимумы (exec/chain.rs), свежие минимумы верификации, нативная обёртка.
 /// Принимает: расчёт путей, запрос, маршрут, минимумы верификации, decimals, нативная ли монета.
 /// Ошибки: NoRoute (нет долей, доля не годится), QuoteMismatch (цена, MixedQuoter, число ног), узел.
+/// Решение 382: расхождение с MixedQuoter против нас — пулы маршрута перечитываются на голове H
+/// (exec/quoter_refetch.rs), доли считаются заново по ним, MixedQuoter — на том же H.
 pub async fn prepare(
+    v: &Via<'_>,
+    req: &TradeRequest,
+    route: &DexRoute,
+    mins: Option<&[Decimal]>,
+    decs: (u8, u8),
+    is_native: bool,
+) -> GatewayResult<Prep> {
+    let first = match Box::pin(once(v, req, route, mins, decs, is_native)).await {
+        Err(e) if quoter_refetch::wants(v.q, &e) => e,
+        done => return done,
+    };
+    let pools = quoter_refetch::route_pools(route);
+    let q = Box::pin(quoter_refetch::pinned(v.q, &pools, first)).await?;
+    let v2 = quoter_refetch::via_on(v, &q);
+    Box::pin(once(&v2, req, route, mins, decs, is_native))
+        .await
+        .map_err(|e| quoter_refetch::on_block(&q, e))
+}
+
+/// Одна подготовка долей (тело prepare до решения 382; по перечитанным пулам — MixedQuoter на их блоке).
+/// Принимает и ошибки: как prepare.
+async fn once(
     v: &Via<'_>,
     req: &TradeRequest,
     route: &DexRoute,
@@ -98,7 +124,8 @@ pub async fn prepare(
     let legs: Vec<Leg<'_>> = alone.iter().map(|(p, _)| Leg { path: p }).collect();
     // Решение 261: сверка односторонняя — против нас — отказ; в нашу сторону — строка в хронологию.
     // Журнал — один раз перед отправкой (trade_smart.rs): после approve подготовка идёт второй раз.
-    let favour = quoter_favour::line(&mixed_quoter::check(ctx, &legs).await?);
+    let at = quoter_refetch::block(v.q);
+    let favour = quoter_favour::line(&quoter_refetch_check::mixed(ctx, &legs, at).await?);
     let mut steps = Vec::with_capacity(paths.len());
     for (p, qty) in &paths {
         steps.push(chain::steps(ctx, req, p, *qty, decs)?);

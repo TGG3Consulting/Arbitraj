@@ -58,15 +58,7 @@ pub async fn prepare(
     };
     let pools: Vec<_> = leg.hops.iter().map(|h| h.pool.clone()).collect();
     let q = Box::pin(quoter_refetch::pinned(v.q, &pools, first)).await?;
-    let v2 = Via {
-        q: &q,
-        coin: v.coin,
-        usdt: v.usdt,
-        side: v.side,
-        taxes: v.taxes,
-        coin_dec: v.coin_dec,
-        usdt_dec: v.usdt_dec,
-    };
+    let v2 = quoter_refetch::via_on(v, &q);
     Box::pin(once(&v2, req, leg, mins, decs, is_native))
         .await
         .map_err(|e| quoter_refetch::on_block(&q, e))
@@ -98,7 +90,7 @@ async fn once(
     let pick = (exit_quote::exit_of(req), |_: &Hop| true);
     // Решение 382: пулы перечитаны на блоке H — квотер на том же H (выход пробы крючка — с другого блока, не берётся).
     let all = match quoter_refetch::block(v.q) {
-        Some(b) => quoter_refetch::check_on(ctx, &path, pick, b).await?,
+        Some(b) => super::quoter_refetch_check::check_on(ctx, &path, pick, b).await?,
         None => exit_quote::check_with(ctx, &path, pick, known).await?,
     };
     // Решение 261: расхождения «в нашу сторону» — только строка в хронологию (exec/quoter_favour.rs).

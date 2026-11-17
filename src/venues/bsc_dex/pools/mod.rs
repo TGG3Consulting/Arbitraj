@@ -204,6 +204,7 @@ pub mod settle_close;
 pub mod settle_head;
 pub mod settle_lost;
 pub mod settle_read;
+pub mod settle_reread;
 pub mod solidly_fee_read;
 pub mod solidly_gate_read;
 pub mod solidly_refresh;

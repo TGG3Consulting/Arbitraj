@@ -21,6 +21,7 @@
 //! Лог пула «в обновлении» из другого действия (Active — более поздний блок, Follow — другая tx или блок) значит, что
 //! ожидаемые логи потеряны: отметка снимается БЕЗ возврата достоверности, пул — на полное чтение (listen_log.rs).
 //! Отметки пачки снимает и invalidate (обрыв сессии).
+//! Решение 382: Need::Reread — память пула доказанно разошлась с узлом, нужно полное чтение (settle_reread.rs).
 //! Пределы: Active/Follow закрывает приход недостающих логов, иначе — голова сети выше блока отметки, когда логам этого
 //! пула негде ждать (settle_close.rs: полное чтение пула на голове).
 //! Снятие отметок, которые своих логов уже не дождутся (lost, forget_all, keep_only), — settle_lost.rs.
@@ -54,6 +55,11 @@ pub enum Need {
     Active(u32),
     /// Следующего лога пула того же вызова (по коду контракта он всегда есть).
     Follow,
+    /// Решение 382: память пула доказанно разошлась с узлом (перечитывание перед сделкой, exec/quoter_refetch.rs, или
+    /// «память отстаёт от сети» сверки, check/quoter_one.rs) — пул ждёт ПОЛНОГО чтения: голова выше блока отметки
+    /// (settle_close.rs) или первый же лог пула (settle_lost.rs lost → очередь повтора). Достоверность возвращает только
+    /// полное чтение (registry.rs put). Своими логами не снимается, Active/Follow её не заменяют.
+    Reread,
 }
 
 /// Отметка пула.
@@ -165,7 +171,11 @@ impl Holds {
                 tx: None,
             });
             h.block = at.0;
-            h.need = Some(at.1);
+            // Решение 382: «нужно полное чтение» не заменяется ожиданием логов (снятие Active/Follow вернуло бы
+            // достоверность пулу с доказанно неверной памятью).
+            if h.need != Some(Need::Reread) {
+                h.need = Some(at.1);
+            }
             h.tx = None;
             if reset {
                 h.bins.clear();
@@ -181,15 +191,17 @@ impl Holds {
         if !self.any() {
             return;
         }
-        let back = self.with(|m| match m.get(r).map(|h| h.head) {
-            Some(true) => {
+        let back = self.with(|m| match m.get(r).map(|h| (h.head, h.need)) {
+            // Решение 382: ждёт полного чтения — снимает только оно (registry.rs put).
+            Some((_, Some(Need::Reread))) => None,
+            Some((true, _)) => {
                 if let Some(h) = m.get_mut(r) {
                     h.need = None;
                     h.bins.clear();
                 }
                 None
             }
-            Some(false) => m.remove(r).map(|h| h.was_valid),
+            Some((false, _)) => m.remove(r).map(|h| h.was_valid),
             None => None,
         });
         if back == Some(true) {

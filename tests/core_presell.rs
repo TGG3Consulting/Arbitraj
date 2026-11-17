@@ -28,6 +28,7 @@ fn sim(out: Decimal, coins: Decimal) -> DexPresell {
         min_legs: vec![],
         funding: None,
         gas_swap: 0,
+        by_quoter: None,
     }
 }
 
@@ -71,6 +72,12 @@ async fn below_threshold_rejects() {
     let e =
         apply(plan.clone(), &s, d("-1000"), plan.profit_pct + d("1")).expect_err("ниже порога %");
     assert!(e.contains('%'), "{e}");
+    // Решение 382: продажа собрана по квотеру (решение 177) — отказ называет это прямо.
+    let mut q = sim(plan.proceeds - plan.profit_usd - d("0.01"), plan.sell_qty);
+    q.by_quoter =
+        Some("pancakeswap-v3-bsc X: расчёт 2 против квотера 1 (50%) — продажа по квотеру".into());
+    let e = apply(plan.clone(), &q, Decimal::ZERO, d("-100")).expect_err("ниже порога по квотеру");
+    assert!(e.contains("невыгодна по квотеру"), "{e}");
 }
 
 #[tokio::test]

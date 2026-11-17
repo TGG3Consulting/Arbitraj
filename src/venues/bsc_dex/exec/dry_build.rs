@@ -7,35 +7,31 @@
 //! (exec/chain.rs), сверка с квотером (exec/precheck.rs), план Universal Router своей DEX (exec/plan.rs, недостающие
 //! разрешения — с узла). Умный / граф «один UR»: доли по живому состоянию, сверка с MixedQuoter, exec/universal.rs.
 //! Бандл: доли, свежие минимумы ног из верификации, exec/bundle.rs (первый nonce 0 — в симуляции nonce не нужен).
-//! Доли по живому состоянию и верификация графа — exec/dry_paths.rs.
+//! Доли по живому состоянию и верификация графа — exec/dry_paths.rs. Тело одной сборки — exec/dry_build_once.rs, сверки с
+//! квотером — exec/dry_checks.rs.
 //! Через исполнитель ArbExecutor (решение 122, часть X) — exec/executor/dry.rs: режим «через исполнитель» (любой маршрут,
 //! код подставлен в симуляцию) или графовый «бандл» при заданном exec.executor_address (как сделка).
-//! Решение 382: прямая форма — расхождение расчёта по памяти с квотером против нас: пулы маршрута перечитываются на
-//! голове, сборка заново по ним, квотер — на том же блоке (exec/quoter_refetch.rs).
+//! Решение 382: расхождение расчёта по памяти с квотером против нас (любая форма со сверкой): пулы маршрута
+//! перечитываются на голове, сборка заново по ним, квотер — на том же блоке (exec/quoter_refetch.rs).
 //! Кто вызывает: exec/dry_swap.rs, exec/presell.rs.
 //! Решение 122 F: в графовой форме хопы через пулы Maverick V2 сверяются с квотером (exec/precheck_quoter.rs).
-//! От чего зависит: exec/{trade (общие шаги), live, chain, leg_min, precheck, plan, universal, bundle, native}.rs,
-//! quote/{verify, graph_route, mixed_quoter, direct, via, steps}.rs.
+//! От чего зависит: exec/dry_build_once.rs, exec/quoter_refetch.rs (через once — exec/{trade, live, chain, leg_min,
+//! dry_checks, plan, universal, bundle, native}.rs, quote/{verify, graph_route, direct, via, steps}.rs).
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.*, smart.*, verify.*.
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{DexRoute, RouteMode, Side, TradeRequest};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::core::types::{DexRoute, TradeRequest};
+use crate::gateway::errors::GatewayResult;
 
-use super::super::quote::graph_route::{self, GraphForm};
-use super::super::quote::mixed_quoter::{self, Leg};
-use super::super::quote::via::Via;
-use super::super::quote::{Quoting, direct};
+use super::super::quote::Quoting;
 use super::super::{check::simulate::Base, pools::registry::Entry};
 use super::bundle::Bundle;
 use super::chain::Step;
-use super::dry_paths::{live_paths, verified};
+use super::dry_build_once::once;
 use super::executor::dry::{DryMode, ExecTx};
-use super::native::{self, Wrap};
 use super::plan::Plan;
-use super::trade::{check_price, sides, worst_positive};
-use super::{bundle, chain, executor, leg_min, plan, precheck, quoter_refetch, universal};
+use super::quoter_refetch;
 
 /// Что собрано: одна транзакция Universal Router (прямой / умный), бандл или вызов исполнителя ArbExecutor (решение 122).
 pub enum Built {
@@ -53,14 +49,16 @@ pub struct Ready {
     pub coins: Decimal,
     pub usdt: Decimal,
     pub form: String,
+    /// Решения 177, 382: продажа выхода прямой формы — по квотеру: строка расхождений (None — по расчёту).
+    pub by_quoter: Option<String>,
     /// Блок, по времени которого считан срок; поверх него — симуляция (через исполнитель — со временем головы + 1 с).
     pub at: Base,
 }
 
 /// Собирает сделку. Принимает: котировку, запрос (как для сделки), маршрут, кошелёк. Возвращает: Ready.
 /// Ошибки: как у сделки до отправки — NoRoute, QuoteMismatch, StaleData, CoinNotChecked, NotConfigured, узел.
-/// Решение 382: прямая форма — расчёт по памяти разошёлся с квотером против нас: пулы маршрута перечитываются на
-/// голове H (exec/quoter_refetch.rs) и сборка идёт заново по ним, квотер — на том же H (как сделка, trade_direct_prep.rs).
+/// Решение 382: расчёт по памяти разошёлся с квотером против нас: пулы маршрута перечитываются на голове H
+/// (exec/quoter_refetch.rs) и сборка идёт заново по ним, квотер — на том же H (как сделка).
 pub async fn build(
     q: &Quoting,
     req: &TradeRequest,
@@ -69,177 +67,14 @@ pub async fn build(
     mode: DryMode,
 ) -> GatewayResult<Ready> {
     let first = match Box::pin(once(q, req, route, wallet, mode)).await {
-        Err(e) if quoter_refetch::wants(q, &e) && direct_form(&q.ctx, route) => e,
+        Err(e) if quoter_refetch::wants(q, &e) => e,
         done => return done,
     };
-    let pools: Vec<_> = route
-        .legs
-        .iter()
-        .flat_map(|l| l.hops.iter().map(|h| h.pool.clone()))
-        .collect();
+    let pools = quoter_refetch::route_pools(route);
     let q2 = Box::pin(quoter_refetch::pinned(q, &pools, first)).await?;
     Box::pin(once(&q2, req, route, wallet, mode))
         .await
         .map_err(|e| quoter_refetch::on_block(&q2, e))
-}
-
-/// Одна сборка (тело build до решения 382; по перечитанным пулам — Quoting.pinned — квотер на их блоке).
-/// Принимает и ошибки: как build.
-async fn once(
-    q: &Quoting,
-    req: &TradeRequest,
-    route: &DexRoute,
-    wallet: alloy_primitives::Address,
-    mode: DryMode,
-) -> GatewayResult<Ready> {
-    let ctx = &q.ctx;
-    worst_positive(ctx, req)?;
-    let (mut shape, mut mins) = (route.mode, None);
-    let mut form = match route.mode {
-        RouteMode::Direct => "прямой".to_string(),
-        RouteMode::Smart => "умный".to_string(),
-        RouteMode::Graph => String::new(),
-    };
-    if route.mode == RouteMode::Graph {
-        if !route.executable {
-            let why = route
-                .exec_note
-                .clone()
-                .unwrap_or_else(|| "граф-маршрут не исполним как есть (решение 84)".to_string());
-            return Err(ctx.err(ErrorCode::NoRoute, why));
-        }
-        mins = Some(verified(q, req, route).await?);
-        (shape, form) = match graph_route::graph_form(ctx, route) {
-            GraphForm::Direct => (RouteMode::Direct, "граф: прямой".into()),
-            GraphForm::OneUr => (RouteMode::Smart, "граф: один Universal Router".into()),
-            GraphForm::Bundle => (RouteMode::Graph, "граф: бандл".into()),
-        };
-    }
-    if shape == RouteMode::Direct && route.legs.len() != 1 {
-        return Err(ctx.err(ErrorCode::NoRoute, "Прямой маршрут должен быть одной долей"));
-    }
-    let (coin, usdt, decs) = sides(q, req).await?;
-    let taxes = direct::taxes(q, &req.asset)?;
-    let v = Via {
-        q,
-        coin,
-        usdt,
-        side: req.side,
-        taxes: &taxes,
-        coin_dec: decs.0,
-        usdt_dec: decs.1,
-    };
-    let paths = live_paths(&v, req, route, shape == RouteMode::Direct).await?;
-    let (coins, paid) = paths
-        .iter()
-        .fold((Decimal::ZERO, Decimal::ZERO), |(c, u), (p, _)| {
-            (c + p.coins, u + p.usdt)
-        });
-    check_price(ctx, req, coins, paid)?;
-    if shape == RouteMode::Smart {
-        let legs: Vec<Leg<'_>> = paths.iter().map(|(p, _)| Leg { path: p }).collect();
-        // Решение 261: односторонняя сверка; строки «в нашу сторону» сухой сделке не нужны (сделки нет).
-        mixed_quoter::check(ctx, &legs).await?;
-    }
-    let mut legs = Vec::with_capacity(paths.len());
-    for (p, qty) in &paths {
-        legs.push(chain::steps(ctx, req, p, *qty, decs)?);
-    }
-    // Решение 228: минимум доли = E_k × max(1 − допуск, B / E), свежий минимум верификации — нижней границей (как сделка).
-    let shares = paths.iter().map(|(p, q)| (p, *q));
-    leg_min::set_leg_mins(ctx, req, shares, &mut legs, mins.as_deref(), decs)?;
-    let is_native = native::is_native(ctx, &req.asset);
-    // Решение 122 (часть X): через исполнитель — режим «через исполнитель» (любой маршрут, код подставлен) или
-    // графовый «бандл» при заданном exec.executor_address (как пойдёт сделка, exec/trade.rs).
-    let deployed = executor::address(ctx)?;
-    let takes = shape == RouteMode::Graph && executor::takes(ctx, route, is_native)?.is_some();
-    let via_exec = mode == DryMode::Executor || takes;
-    if via_exec {
-        // Решение 272: нативный BNB — executeNative: в режиме «через исполнитель» (код v2 подставлен) или у
-        // развёрнутого исполнителя v2; иначе отказ. Задача t122 (п. 4): причина — native_block, как в сделке
-        // (exec/executor/trade.rs, задача t114): не сверен / v1 — «переразверните исполнитель» / обёртка не та.
-        if is_native
-            && mode != DryMode::Executor
-            && let Some(why) = executor::native_block(ctx)
-        {
-            // Ревью t122: тот же текст, что в боевой сделке (executor::native_refusal).
-            return Err(ctx.err(ErrorCode::NoRoute, executor::native_refusal(&why)));
-        }
-        let nat = match native::wrapped(ctx) {
-            Some((_, w)) if is_native => Some((w, req.side == Side::Sell)),
-            _ => None,
-        };
-        let (at, now) = q.heads.at(ctx).await?;
-        let x = executor::dry::build(ctx, &legs, wallet, now, (mode, deployed), nat).await?;
-        let form = format!("{form} → {}", x.form);
-        let built = Built::Exec(x);
-        return Ok(Ready {
-            built,
-            legs,
-            coins,
-            usdt: paid,
-            form,
-            at: Base::timed(at, now),
-        });
-    }
-    if is_native && shape == RouteMode::Graph {
-        let why = "нативная монета в мульти-роутерном бандле (решение 84) в v1 не исполняется";
-        return Err(ctx.err(ErrorCode::NoRoute, why));
-    }
-    let wrap = if is_native {
-        native::adapt(ctx, req.side, &mut legs)?
-    } else {
-        Wrap::None
-    };
-    if shape != RouteMode::Direct {
-        // Решение 122 F: хопы через пулы с портом чужой математики (Maverick V2) — сверка квотером, как в сделке.
-        super::precheck_quoter::hops(ctx, &paths).await?;
-    }
-    if shape == RouteMode::Direct {
-        for h in paths.iter().flat_map(|(p, _)| p.hops.iter()) {
-            let (e, hook) = (&h.entry, h.usable.hook_pct);
-            // Решение 382: пулы перечитаны на блоке H — квотер на том же H.
-            match quoter_refetch::block(q) {
-                Some(b) => precheck::quoter_now_at(ctx, e, h.token_in, &h.swapped, hook, b).await?,
-                None => precheck::quoter_now(ctx, e, h.token_in, &h.swapped, hook).await?,
-            }
-        }
-    }
-    let (at, now) = q.heads.at(ctx).await?;
-    let built = match shape {
-        RouteMode::Direct => Built::One(
-            plan::build(ctx, &legs[0], wallet, now, false)
-                .await?
-                .with_native(wrap),
-        ),
-        RouteMode::Smart => Built::One(
-            universal::build(ctx, &legs, wallet, now)
-                .await?
-                .with_native(wrap),
-        ),
-        RouteMode::Graph => {
-            let out = if req.side == Side::Buy { coin } else { usdt };
-            Built::Many(bundle::build(ctx, &legs, out, wallet, 0, now, false).await?)
-        }
-    };
-    Ok(Ready {
-        built,
-        legs,
-        coins,
-        usdt: paid,
-        form,
-        // Решение 127: прямой, умный и графовый (бандл) — голова + 1 с, как исполнитель (раньше +12 с узла BSC).
-        at: Base::timed(at, now),
-    })
-}
-
-/// Прямая ли форма сборки: прямой режим или граф в прямой форме (там сверка — exec/precheck.rs quoter_now). Ошибок нет.
-fn direct_form(ctx: &super::super::ctx::Ctx, route: &DexRoute) -> bool {
-    match route.mode {
-        RouteMode::Direct => true,
-        RouteMode::Graph => graph_route::graph_form(ctx, route) == GraphForm::Direct,
-        RouteMode::Smart => false,
-    }
 }
 
 /// Пулы шагов всех долей по порядку. Ошибок нет.

@@ -8,6 +8,7 @@
 //! (PIT, BULLA, CHEEMS …) в tests/data нет — направление то же (биржа → bsc_dex), монета CAKE.
 //! Ставки taker аккаунта в записях нет — 0,1 % (как tests/uncapped_recompute.rs); h = 0,7 — значение с сервера 09.11
 //! (docs/notes/price-move-vs-reserve-2026-11-09.md), поэтому на объём две котировки B (глубина sell_qty / h и sell_qty).
+//! Решение 380 (t166): sell_max_caps_size_search — предел объёма продажи DirCtx.sell_max на тех же записях.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{costs, size_search, size_curve, frozen}, arb::venues::bsc_dex::quote::pool_quote,
 //! tests/size_common.
@@ -95,6 +96,7 @@ fn cx(rec: &Rec) -> DirCtx {
         pair_b: None,
         usdt_b: None,
         transfer_tax: Some(Decimal::ZERO),
+        sell_max: None,
     }
 }
 
@@ -309,5 +311,75 @@ async fn budget_on_curve_same_choice_fewer_dex_quotes() {
         tried > 0,
         "ни на одном бюджете ранняя проверка не сработала"
     );
+    let _ = std::fs::remove_dir_all(&dirp);
+}
+
+/// Решение 380 (задача t166): предел «объём продажи ≤ проверяемого симуляцией» (DirCtx.sell_max →
+/// core/precheck_dex_cut.rs sell_max_ok в costs.rs). На тех же записанных данных (стакан BingX CAKE, пул CAKE/USDT
+/// PancakeSwap V2): объём сверх предела — Fail::TooLarge с причиной; подбор с пределом выбирает объём, у которого
+/// продажа не больше предела и объём меньше выбранного без предела; без предела выбор прежний. Предел — половина
+/// продажи выбора без предела (записанного объёма живого случая NXT 17.11 с этими пулами нет — монета другая).
+#[tokio::test]
+async fn sell_max_caps_size_search() {
+    let dirp = std::env::temp_dir().join(format!("arb_sell_max_380_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dirp);
+    std::fs::create_dir_all(&dirp).unwrap();
+    let core = core(&dirp).await;
+    let rec = Rec::load("sell-max-380").await;
+    let fz = Frozen {
+        a: Arc::new(frozen_buy(&rec)),
+        b: Arc::new(frozen_buy(&rec)),
+        at: Utc::now(),
+        decided: None,
+    };
+    let src = Src {
+        live: Live {
+            core: &core,
+            src: Some(&fz),
+        },
+        rec: &rec,
+        dex: AtomicU32::new(0),
+    };
+    let budget = d("1000");
+    let p = size_common::params(&rec, Dir::BingxToDex, budget);
+    let free = cx(&rec);
+    let mut curve = C {
+        cx: &free,
+        src: &src,
+        budget: Some(budget),
+    };
+    let old = search(&mut curve, &p).await.unwrap();
+    let limit = (old.best.data.sell_qty / d("2")).round_dp(6);
+    assert!(limit > Decimal::ZERO);
+    let mut capped = cx(&rec);
+    capped.sell_max = Some(limit);
+    // Объём выбора без предела — сверх предела: «слишком большой» с причиной решения 380.
+    match costs::evaluate_capped(&capped, old.choice.qty, &src, Some(budget)).await {
+        Err(Fail::TooLarge(t)) => assert!(t.contains("решение 380"), "{t}"),
+        other => panic!(
+            "ожидался TooLarge, получено {:?}",
+            other.map(|c| c.sell_qty)
+        ),
+    }
+    let mut curve = C {
+        cx: &capped,
+        src: &src,
+        budget: Some(budget),
+    };
+    let new = search(&mut curve, &p).await.unwrap();
+    println!(
+        "без предела: объём {} продажа {}; предел {limit}: объём {} продажа {}",
+        old.choice.qty, old.best.data.sell_qty, new.choice.qty, new.best.data.sell_qty
+    );
+    assert!(new.best.data.sell_qty <= limit);
+    assert!(new.choice.qty < old.choice.qty);
+    // Без предела — тот же выбор, что и до решения 380 (поле None ничего не меняет).
+    let mut curve = C {
+        cx: &free,
+        src: &src,
+        budget: Some(budget),
+    };
+    let again = search(&mut curve, &p).await.unwrap();
+    assert_eq!(again.choice.qty, old.choice.qty);
     let _ = std::fs::remove_dir_all(&dirp);
 }

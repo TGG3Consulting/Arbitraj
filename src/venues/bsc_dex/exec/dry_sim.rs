@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/exec/dry_sim.rs
 //! Что делает: симуляция сухой сделки DEX (решение 121, C4) — одна последовательность eth_simulateV1 поверх блока
 //! сборки от имени кошелька бота: [перевод входа от пула-источника (решение 302: или держателя-синглтона при
-//! presell.fund_fallback), если у кошелька не хватает — exec/dry_fund.rs] →
+//! presell.fund_fallback; решение 380 — от нескольких источников вместе), если у кошелька не хватает — exec/dry_fund.rs] →
 //! balanceOf входа (сколько у кошелька) → баланс выхода до → разрешения (approve / Permit2, если нужны) → обмен
 //! (execute Universal Router; у бандла — все его транзакции по порядку, разметка exec/bundle_sim.rs) → баланс выхода
 //! после. При пополнении (решение 252, вариант «б», Тигран 10.11) — ещё замер излишка пар первого шага (balanceOf −
@@ -66,6 +66,9 @@ pub struct Sim {
     pub surplus: Option<Surplus>,
     /// Причина отказа; None — все вызовы прошли и обмен сделали пулы маршрута.
     pub reason: Option<String>,
+    /// Решение 380: пополнить на полную сумму нечем — сколько единиц входа МОЖНО дать кошельку (вместе с его балансом);
+    /// None — пополнение не было причиной отказа.
+    pub fundable: Option<U256>,
 }
 
 /// Симуляция. Принимает: котировку, собранную сделку, кошелёк, вход и выход. Возвращает: Sim (отказ — reason).
@@ -81,24 +84,32 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
         if have >= io.need {
             sim.funding = Some(format!("баланс кошелька ({have} ≥ {} единиц)", io.need));
         } else {
-            let f = match dry_fund::plan(q, r, t, (have, io.need), io.taxes_in).await? {
+            let fs = match dry_fund::plan(q, r, t, (have, io.need), io.taxes_in).await? {
                 Ok(v) => v,
-                Err(why) => {
-                    sim.reason = Some(why);
+                Err(short) => {
+                    sim.reason = Some(short.why);
+                    sim.fundable = Some(short.fundable);
                     return Ok(sim);
                 }
             };
-            // Решение 252, вариант «б»: излишек пар первого шага до и после пополнения (exec/dry_surplus.rs).
+            // Решение 252, вариант «б»: излишек пар первого шага до и после пополнения (exec/dry_surplus.rs); решение
+            // 380 — вокруг всех переводов пополнения (источников может быть несколько).
             watch = dry_surplus::around(
                 &mut calls,
                 (r, wallet, t),
-                pc::transfer(f.src, t, wallet, f.amount),
+                fs.iter()
+                    .map(|f| pc::transfer(f.src, t, wallet, f.amount))
+                    .collect(),
             );
-            funded = f.amount;
-            // Источник виден в журнале (решение 302): «из пула …» или «из держателя-синглтона (…) …».
+            funded = fs
+                .iter()
+                .fold(U256::ZERO, |s, f| s.saturating_add(f.amount));
+            // Источник виден в журнале (решение 302): «из пула …» или «из держателя-синглтона (…) …»; решение 380 —
+            // «из K источников (…)».
             sim.funding = Some(format!(
-                "перевод {} единиц из {} {:#x} внутри симуляции (у кошелька {have}, нужно {})",
-                f.amount, f.what, f.src, io.need
+                "перевод {} внутри симуляции (у кошелька {have}, нужно {})",
+                dry_fund::text(&fs),
+                io.need
             ));
         }
         calls.push(pc::balance(wallet, t, wallet));

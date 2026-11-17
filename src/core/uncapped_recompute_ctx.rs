@@ -200,6 +200,7 @@ pub fn prepare(
         pair_b: None,
         usdt_b: None,
         transfer_tax: None,
+        sell_max: None,
     };
     let (basis, group) = if dex {
         (BASIS_RECOMPUTED_DEX_PLAN, G_DEX)

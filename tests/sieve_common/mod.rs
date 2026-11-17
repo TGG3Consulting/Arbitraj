@@ -118,6 +118,7 @@ pub fn cx_with(
         pair_b: b_cex.then(|| rec.pair.clone()),
         usdt_b: None,
         transfer_tax: a_cex.then_some(tax),
+        sell_max: None,
     }
 }
 

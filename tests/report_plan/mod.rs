@@ -75,6 +75,7 @@ fn cx(rec: &Rec) -> DirCtx {
         pair_b: None,
         usdt_b: None,
         transfer_tax: Some(rust_decimal::Decimal::ZERO),
+        sell_max: None,
     }
 }
 

@@ -189,6 +189,7 @@ fn cx(rec: &Rec, d_: Direction, sigma: Decimal, share: Option<Decimal>) -> DirCt
         pair_b: (!dex_b).then(|| rec.pair.clone()),
         usdt_b: None,
         transfer_tax: (!dex_a).then_some(Decimal::ZERO),
+        sell_max: None,
     }
 }
 

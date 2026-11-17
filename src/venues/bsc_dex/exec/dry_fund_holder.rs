@@ -24,6 +24,8 @@
 //! крючками (hooks = None), (3) держатель пула маршрута не известен (Infinity / Balancer без dex.vault). Налог перевода и
 //! излишек пары reflection-токена учитываются как у пула-источника (dry_fund::gross, exec/dry_surplus*.rs — замер
 //! пар первого шага вокруг перевода от любого источника).
+//! Решение 380 (t166): usable отдаёт ВСЕ годные при маршруте держатели с балансами (а не один с полной суммой) — набор
+//! из нескольких источников и объём, который можно проверить, считает exec/dry_fund_gather.rs.
 //! Кто вызывает: exec/dry_fund.rs (plan).
 //! От чего зависит: ctx.rs, quote/mod.rs (Quoting), pools/{registry, families, depth_book}.rs, node/call.rs (view_many),
 //! node/abi.rs (IERC20).
@@ -46,6 +48,9 @@ use super::super::quote::Quoting;
 pub const SETTING: &str = "presell.fund_fallback";
 /// Вариант «держатель-синглтон» (единственный вариант настройки).
 pub const SINGLETON: &str = "singleton";
+/// Причина: у монеты нет пула ни в одном держателе-синглтоне.
+pub const NO_HOLDER: &str =
+    "держателя-синглтона (Uniswap V4 PoolManager / Infinity Vault) с пулом этой монеты нет";
 
 /// Что выбор знает о пуле: кто физически держит его токены, считает ли вид обмен по своему состоянию (V4 / Infinity
 /// CL / Bin), есть ли крючок обмена (None — крючки не прочитаны), подпись для журнала.
@@ -154,22 +159,30 @@ pub fn route_ok(src: Address, route: &[Site]) -> Result<(), String> {
     Ok(())
 }
 
+/// Годные при маршруте держатели (решение 380: для набора из нескольких источников). Принимает: (держатель, баланс),
+/// пулы маршрута. Возвращает: (годные с балансом, причины негодности). Ошибок нет.
+pub fn eligible(cands: &[(Address, U256)], route: &[Site]) -> (Vec<(Address, U256)>, Vec<String>) {
+    let (mut ok, mut why) = (Vec::new(), Vec::new());
+    for &(a, b) in cands {
+        match route_ok(a, route) {
+            Ok(()) => ok.push((a, b)),
+            Err(w) => why.push(w),
+        }
+    }
+    (ok, why)
+}
+
 /// Выбор: среди держателей, годных при маршруте, — с наибольшим балансом ≥ суммы. Принимает: (держатель, баланс),
 /// пулы маршрута, сумму. Возвращает: Ok(держатель) или Err(причина: кандидатов нет / не годятся / мало баланса).
 /// Ошибок нет.
 pub fn choose(cands: &[(Address, U256)], route: &[Site], need: U256) -> Result<Address, String> {
     if cands.is_empty() {
-        return Err(
-            "держателя-синглтона (Uniswap V4 PoolManager / Infinity Vault) с пулом этой монеты нет"
-                .into(),
-        );
+        return Err(NO_HOLDER.into());
     }
-    let mut why = Vec::new();
+    let (ok, mut why) = eligible(cands, route);
     let mut best: Option<(Address, U256)> = None;
-    for &(a, b) in cands {
-        if let Err(w) = route_ok(a, route) {
-            why.push(w);
-        } else if b < need {
+    for (a, b) in ok {
+        if b < need {
             why.push(format!("у держателя {a:#x} {b} единиц, нужно {need}"));
         } else if best.is_none_or(|(_, x)| b > x) {
             best = Some((a, b));
@@ -178,14 +191,18 @@ pub fn choose(cands: &[(Address, U256)], route: &[Site], need: U256) -> Result<A
     best.map(|(a, _)| a).ok_or_else(|| why.join("; "))
 }
 
-/// Держатель-источник для монеты. Принимает: котировку (реестр, узел), токен, пулы маршрута, сумму перевода.
-/// Возвращает: Ok(Ok((держатель, подпись для журнала))) или Ok(Err(причина)). Ошибки: узел (balanceOf), Internal.
-pub async fn pick(
-    q: &Quoting,
-    token: Address,
-    route: &[&Entry],
-    need: U256,
-) -> GatewayResult<Result<(Address, String), String>> {
+/// Держатели, годные при маршруте, и почему не взят каждый: итог usable.
+pub struct Usable {
+    /// (держатель, баланс токена, подпись для журнала).
+    pub ok: Vec<(Address, U256, String)>,
+    /// Причины негодности (пусто — все годны); нет ни одного держателя — одна причина NO_HOLDER.
+    pub refused: Vec<String>,
+}
+
+/// Держатели-источники для монеты (решение 380: все годные, а не один с полной суммой — набор делает
+/// exec/dry_fund_gather.rs). Принимает: котировку (реестр, узел), токен, пулы маршрута. Возвращает: Usable.
+/// Ошибки: узел (balanceOf), Internal.
+pub async fn usable(q: &Quoting, token: Address, route: &[&Entry]) -> GatewayResult<Usable> {
     let ctx = &q.ctx;
     let mut holders: Vec<(Address, &'static str)> = Vec::new();
     // Снимок без копирования записей; только достоверные пулы (как source в exec/dry_fund.rs).
@@ -200,6 +217,12 @@ pub async fn pick(
             holders.push((h, e.family.title));
         }
     }
+    if holders.is_empty() {
+        return Ok(Usable {
+            ok: Vec::new(),
+            refused: vec![NO_HOLDER.into()],
+        });
+    }
     let sites = route
         .iter()
         .map(|e| site(ctx, e))
@@ -210,14 +233,16 @@ pub async fn pick(
         .collect();
     let balances = call::view_many(ctx, token, &calls, "latest").await?;
     let cands: Vec<(Address, U256)> = holders.iter().map(|(a, _)| *a).zip(balances).collect();
-    Ok(choose(&cands, &sites, need).map(|a| {
+    let (ok, refused) = eligible(&cands, &sites);
+    let label = |a: Address| {
         let dex = holders
             .iter()
             .find(|(h, _)| *h == a)
             .map_or("", |(_, t)| *t);
-        (
-            a,
-            format!("держателя-синглтона ({dex}; {SETTING} = {SINGLETON})"),
-        )
-    }))
+        format!("держателя-синглтона ({dex}; {SETTING} = {SINGLETON})")
+    };
+    Ok(Usable {
+        ok: ok.into_iter().map(|(a, b)| (a, b, label(a))).collect(),
+        refused,
+    })
 }

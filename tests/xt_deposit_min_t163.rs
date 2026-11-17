@@ -139,6 +139,7 @@ fn cx_to_xt(info: CoinNetworkInfo) -> DirCtx {
         pair_b: None,
         usdt_b: None,
         transfer_tax: None,
+        sell_max: None,
     }
 }
 

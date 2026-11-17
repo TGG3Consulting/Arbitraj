@@ -433,7 +433,7 @@ impl Venue for BscDex {
     async fn dex_presell(
         &self,
         req: &TradeRequest,
-    ) -> GatewayResult<crate::core::types::DexPresell> {
+    ) -> GatewayResult<crate::core::types::PresellOutcome> {
         let q = self.p.quoting();
         let class = urgency::is_set().unwrap_or(Class::Check);
         scope(class, exec::presell::run(&q, req.clone())).await

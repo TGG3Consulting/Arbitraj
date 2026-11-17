@@ -2279,15 +2279,6 @@ rationale = "Бот выводит и вводит единицы в день �
 prefill = { kind = "Venue", id = "kraken" }
 
 [[section.rec]]
-name = "venue.deposit_address_claim"
-area = "площадка Kraken"
-unit = "да/нет"
-method = "Не задавать: адреса депозита CAKE/USDT на BSC создать в кабинете Kraken (Deposit); «да» — бот создаст сам (предел неиспользованных обычно 5)."
-source = "guides/rest/funding: address_generation limited, TooManyDepositAddresses"
-rationale = "Не плодить адреса."
-prefill = { kind = "Venue", id = "kraken" }
-
-[[section.rec]]
 name = "venue.api_ip_bound"
 area = "площадка Kraken"
 unit = "да/нет"

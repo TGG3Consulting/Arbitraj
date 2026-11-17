@@ -32,6 +32,9 @@ pub enum Op {
     Trade,
     /// Вывод.
     Withdraw,
+    /// Создание адреса депозита (claim, решение 379): повтор не безопасен — как у ордера и вывода (на резервный REST —
+    /// только если запрос точно не отправлен; таймаут и сбой сервера — «итог неизвестен»); отказ — BadResponse.
+    Create,
     /// Всё остальное (справочники, балансы, проверки, запрос и отмена ордера).
     Other,
 }
@@ -92,7 +95,7 @@ pub fn rejected(op: Op) -> ErrorCode {
     match op {
         Op::Trade => ErrorCode::OrderRejected,
         Op::Withdraw => ErrorCode::WithdrawRejected,
-        Op::Other => ErrorCode::BadResponse,
+        Op::Create | Op::Other => ErrorCode::BadResponse,
     }
 }
 
@@ -141,15 +144,20 @@ pub fn unsure(e: GatewayError, op: Op) -> GatewayError {
     if op == Op::Other || !matches!(e.code, ErrorCode::Timeout | ErrorCode::BadResponse) {
         return e;
     }
+    // Решение 379: у claim отказ Kraken (BadResponse) — отказ, а не «итог неизвестен»; неизвестен итог только при
+    // таймауте и сбое сервера (Timeout).
+    if op == Op::Create && e.code == ErrorCode::BadResponse {
+        return e;
+    }
     unknown(e, op)
 }
 
 /// Деньги могли двинуться → «результат неизвестен» с пояснением. Ошибок нет.
 fn unknown(e: GatewayError, op: Op) -> GatewayError {
-    let what = if op == Op::Trade {
-        "ордер"
-    } else {
-        "вывод"
+    let what = match op {
+        Op::Trade => "ордер",
+        Op::Create => "запрос создания адреса депозита",
+        Op::Withdraw | Op::Other => "вывод",
     };
     GatewayError {
         code: ErrorCode::OutcomeUnknown,

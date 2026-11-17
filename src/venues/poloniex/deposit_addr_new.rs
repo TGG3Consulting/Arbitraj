@@ -26,7 +26,7 @@
 use reqwest::Method;
 use serde_json::{Value, json};
 
-use crate::gateway::addr_create::{Confirm, confirm};
+use crate::gateway::addr_create::{Confirm, Failed, Failure, confirm, post_failure};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::storage::journal::Level;
 
@@ -56,9 +56,10 @@ pub async fn list(ctx: &Ctx, coin: &str) -> GatewayResult<Value> {
 /// Принимает: окружение, тикер монеты, сеть (blockchain), имя монеты сети (coin из /v2/currencies).
 /// Возвращает: адрес из GET. После подтверждения — журнал venue.deposit_address (Info, без адреса — как KuCoin,
 /// решение 208); расхождение POST и GET — журнал venue.deposit_address (Warn, без адресов).
-/// Ошибки: отказ POST (код и сообщение Poloniex дословно, с пояснением) или итог неизвестен — если и GET адреса не дал;
-/// InvalidAddress — POST принят, а GET адреса не дал, или адреса POST и GET разные; ошибка повторного GET.
-pub async fn create(ctx: &Ctx, ticker: &str, chain: &str, coin: &str) -> GatewayResult<String> {
+/// Ошибки (Failed — ошибка и вид, ревью 2 Н-А): отказ POST (код и сообщение Poloniex дословно) — Refused; итог POST
+/// неизвестен и GET адреса не дал, POST принят, а GET адреса не дал, адреса POST и GET разные — Sent (биржа, возможно,
+/// уже создала адрес); ошибка повторного GET — по виду ошибки POST (принятый POST — Sent).
+pub async fn create(ctx: &Ctx, ticker: &str, chain: &str, coin: &str) -> Result<String, Failed> {
     let path = "/wallets/address";
     let body = json!({ "currency": coin });
     let posted = rest::signed(ctx, Method::POST, path, vec![], Some(body), Op::Create)
@@ -72,10 +73,22 @@ pub async fn create(ctx: &Ctx, ticker: &str, chain: &str, coin: &str) -> Gateway
             );
             e
         });
-    let got = list(ctx, coin).await?;
+    // Вид неудачи, если адреса не будет: POST принят — Sent; ошибка POST — по её коду.
+    let kind = match &posted {
+        Ok(_) => Failure::Sent,
+        Err(e) => post_failure(&e.code),
+    };
+    let got = list(ctx, coin).await.map_err(|err| Failed {
+        err: Box::new(err),
+        kind,
+    })?;
     let listed = pick(&got, coin);
     let from_post = posted.as_ref().ok().and_then(|a| a.as_deref());
     let what = format!("Poloniex {ticker} в сети {chain} (монета сети {coin})");
+    let sent = |m: String| Failed {
+        err: Box::new(invalid(ctx, m)),
+        kind: Failure::Sent,
+    };
     match confirm(from_post, listed.as_deref()) {
         Confirm::Use(a) => {
             let m = format!(
@@ -85,14 +98,14 @@ pub async fn create(ctx: &Ctx, ticker: &str, chain: &str, coin: &str) -> Gateway
             Ok(a)
         }
         Confirm::NotListed => match posted {
-            Err(e) => Err(e),
-            Ok(_) => Err(invalid(
-                ctx,
-                format!(
-                    "Адрес депозита {what}: POST {path} принят, но повторный GET /wallets/addresses адреса этой \
-                     монеты сети не дал — адрес не принят, сделки нет"
-                ),
-            )),
+            Err(err) => Err(Failed {
+                err: Box::new(err),
+                kind,
+            }),
+            Ok(_) => Err(sent(format!(
+                "Адрес депозита {what}: POST {path} принят, но повторный GET /wallets/addresses адреса этой монеты \
+                 сети не дал — адрес не принят, сделки нет"
+            ))),
         },
         Confirm::Mismatch => {
             let m = format!(
@@ -101,7 +114,7 @@ pub async fn create(ctx: &Ctx, ticker: &str, chain: &str, coin: &str) -> Gateway
             );
             ctx.log(Level::Warn, "venue.deposit_address", m.clone())
                 .await;
-            Err(invalid(ctx, m))
+            Err(sent(m))
         }
     }
 }

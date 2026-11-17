@@ -56,7 +56,8 @@
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление, подписка по соединениям |
 | `fees.rs` | Ставки `TradeVolume` пачками пар (fee в процентах) фоном |
 | `methods.rs`, `networks_parse.rs`, `wallet.rs` | Методы Funding (все страницы / одна монета) + `Assets`: сети монет, адрес контракта, комиссия, минимумы, method_id |
-| `deposit_addr.rs` | Адрес депозита: выданные (v2), новый — только при `venue.deposit_address_claim`; кэш с expire_time; memo — отказ |
+| `deposit_addr.rs` | Адрес депозита: выданные (v2), нет годного — claim автоматически (решение 379; настройки venue.deposit_address_claim больше нет); кэш с expire_time; memo — отказ; одно создание за раз, память неудачи (gateway/addr_create.rs) |
+| `deposit_addr_claim.rs` | Решение 379: claim PUT /funding/v1/deposit/address (Op::Create) и подтверждение повторным списком v2; TooManyDepositAddresses — текст Kraken с пояснением по гиду |
 | `deposits.rs` | Статус депозита по хешу (список депозитов), удержания вывода — `DepositStatus` EarlyConfirmed (решение 150) |
 | `withdraw_addr.rs`, `transfers.rs` | address_id по адресу, котировка комиссии, вывод, статус и поиск вывода при неизвестном итоге |
 | `account.rs` | Балансы `BalanceEx` (свободно = balance − hold_trade), «Проверить подключение» (`GetApiKeyInfo`, Funding, сеть BSC) |

@@ -26,6 +26,9 @@ pub mod live_proof;
 pub mod live_row;
 pub mod live_rule;
 pub mod onchain;
+pub mod pass_view;
+pub mod pool_gate;
+pub mod pool_pass;
 pub mod prep_refetch;
 pub mod remeasure;
 pub mod sim;
@@ -146,7 +149,7 @@ pub fn takes(
     let fits = |f: &families::Family, h: &crate::core::types::RouteHop| {
         let singleton = f.executor_kind.is_some_and(|k| k.singleton());
         if singleton {
-            reg.entry(&h.pool).is_some_and(|e| entry::fits(&e).is_ok())
+            reg.entry(&h.pool).is_some_and(|e| entry::fits(ctx, &e).is_ok())
         } else {
             entry::supported(f, &h.pool).is_ok()
         }

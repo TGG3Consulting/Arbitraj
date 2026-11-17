@@ -11,7 +11,9 @@
 //!   исполнителя (onchain.rs), строки окна кошельков (venue.rs → api/wallets_view.rs → интерфейс).
 //!
 //! Новая запись (пересборка контракта, новые классы) — новый каталог tests/data и путь здесь, в том же коммите.
-//! Кто вызывает: exec/executor/{entry, deploy_gate, deploy, onchain}.rs, pools/exec_kind.rs (describe), venue.rs, тесты.
+//! Решение 401: admits зовёт exec/executor/pool_gate.rs — к классу добавлен факт пробы пула через исполнитель кошелька.
+//! Кто вызывает: exec/executor/{pool_gate, pass_view, deploy_gate, deploy, onchain}.rs, check/pass_cycle.rs,
+//! pools/exec_kind.rs (describe), venue.rs, тесты.
 //! От чего зависит: exec/executor/{code, live_rule}.rs, pools/exec_kind.rs, core/types/executor.rs.
 //! Настройки: нет (факт о собранном коде, решение 400).
 
@@ -135,6 +137,7 @@ pub fn proofs() -> Vec<ExecutorClassProof> {
                 proven: x.proven,
                 accepted: x.accepted,
                 why: x.why.clone(),
+                live: String::new(),
             })
             .collect(),
     }

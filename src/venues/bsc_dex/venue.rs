@@ -554,9 +554,10 @@ impl Venue for BscDex {
     }
 
     /// Решение 400: классы шага исполнителя v3 и их приёмка по записи симуляции на живых пулах
-    /// (exec/executor/live_proof.rs). Ошибок нет.
+    /// (exec/executor/live_proof.rs); решение 401 — сводка пробы пулов через исполнитель кошелька окружения
+    /// (exec/executor/pass_view.rs). Ошибок нет.
     fn dex_executor_classes(&self) -> Vec<crate::core::types::ExecutorClassProof> {
-        exec::executor::live_proof::proofs()
+        exec::executor::pass_view::proofs(&self.p.ctx, &self.p.registry)
     }
 
     /// Развёртывание исполнителя ArbExecutor с кошелька бота (решение 122, часть X) — только по подтверждению человека:

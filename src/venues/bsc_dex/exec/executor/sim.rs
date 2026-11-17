@@ -4,11 +4,13 @@
 //! узла; «deadline» — StaleData с подсказкой про dex.deadline_s); получено (возврат execute = прирост выхода у
 //! кошелька, меряет сам контракт) сверяется с req.worst_price (exec/order.rs::check_price). Проверка «кто меняет»
 //! (решение 59) здесь не нужна: исполнитель вызывает пул ровно по адресу шага, а не ищет его по фабрике.
+//! Решение 401 (t186): откат пробы (не срок, не minOut) помечает пулы шагов менеджера вызова «исполнитель отвергнут» до
+//! следующей перепроверки цикла крючков (exec/executor/pool_pass.rs on_sim) — бот не натыкается на них снова.
 //! Решение 234 (п. 4; живой случай ASS 08.11 — откат «minOut» без чисел): к ошибке пробы (откат, срок, цена) —
 //! minOut и ожидаемый выход каждой доли, модельный налог монеты на её шаге (legs_text, explain); текст ошибки продажи
 //! уходит в хронологию сделки (core/sell.rs → manual_outcome / алерт).
 //! Кто вызывает: exec/executor/trade.rs.
-//! От чего зависит: check/simulate.rs, exec/executor/{abi, call}.rs, exec/order.rs, num.rs.
+//! От чего зависит: check/simulate.rs, exec/executor/{abi, call, pool_pass}.rs, exec/order.rs, num.rs.
 //! Настройки: нет (узел — bsc.node_http_url).
 //!
 //! eth_simulateV1 — execution-apis 16caee27 src/eth/execute.yaml#L137-L260 (CallResult.returnData).
@@ -61,9 +63,14 @@ pub async fn run(
     let value = c.value();
     let values: &[(usize, U256)] = if value.is_zero() { &[] } else { &[(0, value)] };
     let res = simulate::run_valued(ctx, &[call], values, simulate::Base::timed(at, now)).await?;
-    res.into_iter()
+    let r = res
+        .into_iter()
         .next()
-        .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "eth_simulateV1: нет итога вызова"))
+        .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "eth_simulateV1: нет итога вызова"))?;
+    // Решение 401: откат (не срок, не minOut) — пулы шагов менеджера помечаются «отвергнут» до перепроверки
+    // (синхронно, без await на пути сделки).
+    super::pool_pass::on_sim(c, &r);
+    Ok(r)
 }
 
 /// Разбор итога пробы: получено (откат — ошибка received) и сверка с req.worst_price. Возвращает: получено и газ.

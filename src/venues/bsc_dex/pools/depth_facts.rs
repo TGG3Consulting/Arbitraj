@@ -6,6 +6,8 @@
 //! Решение 339: отметка неудачи чтения пула (pool_fail.rs) — строкой «не прочитан: причина …» в details; пулы, ни
 //! разу не прочитанные (pool_unread.rs, записи в реестре нет), — отдельными строками с полем unread (монета, пара,
 //! вид), valid = false, причиной и следующей попыткой; ядро их не знает, api/coins.rs кладёт их в строку монеты.
+//! Решение 401: у пула менеджера (V4 / Infinity) — строки пробы через исполнитель v3 кошельков
+//! (exec/executor/pass_view.rs details).
 //! Кто вызывает: venue.rs (pool_depths; pool_depths_of — только пулы маршрута, карточка сигнала решения 74).
 //! От чего зависит: registry.rs, depth_book.rs, pool_fail.rs, pool_unread.rs, check/state.rs, tokens.rs, ctx.rs.
 //! Настройки: через depth_book.rs.
@@ -57,6 +59,8 @@ pub async fn all(
             .fails()
             .get(&r)
             .map(|f| super::pool_fail::detail(&f, std::time::Instant::now()));
+        // Решение 401: пул менеджера — проба через исполнитель v3 кошельков (прошёл / отвергнут / не проверено).
+        let pass = super::super::exec::executor::pass_view::details(ctx, &e);
         out.push(PoolDepth {
             venue: ctx.venue(),
             pool: r,
@@ -82,6 +86,7 @@ pub async fn all(
                 .chain(q.sell_note.as_ref().map(|n| format!("продажа: {n}")))
                 .chain(q.memory.clone())
                 .chain(fail_note)
+                .chain(pass)
                 .collect(),
             unread: None,
         });

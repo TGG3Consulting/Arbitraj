@@ -6,9 +6,10 @@
 //! следующий шаг доли — весь промежуточный токен (10000: предыдущая доля его уже израсходовала). Вход сделки — сумма
 //! входов долей; минимум сделки — сумма минимумов долей (контракт проверяет то, что реально получил кошелёк).
 //! Кто вызывает: exec/executor/{trade, dry}.rs.
-//! От чего зависит: exec/executor/{abi, kind, entry}.rs, exec/chain.rs (Step), ctx.rs.
+//! От чего зависит: exec/executor/{abi, kind, entry, pool_gate, pool_pass}.rs, exec/chain.rs (Step), ctx.rs.
 //! Решение 272: нативный BNB монетой сделки (исполнитель v2) — тот же вызов в режиме executeNative (with_native):
 //! продажа — wrapIn (value = вход), покупка — разворачивание выхода; шаги и минимум — те же.
+//! Решение 401: вызов помнит пулы шагов менеджера (gated, pool_gate.rs) — откат пробы помечает их (pool_pass.rs).
 //! Настройки: dex.deadline_s [bsc_dex] (срок транзакции, как у Universal Router).
 
 use alloy::sol_types::SolCall;
@@ -19,8 +20,8 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::super::ctx::Ctx;
 use super::super::chain::Step;
 use super::abi::ArbExecutor;
-use super::entry;
 use super::kind::{self, ALL_BPS, StepSpec};
+use super::{entry, pool_gate, pool_pass};
 
 /// Вызов execute: всё, что уходит в транзакцию.
 #[derive(Debug, Clone)]
@@ -37,6 +38,9 @@ pub struct ExecCall {
     /// None — execute, как раньше. Обёртка (dex.native_wrapped) в данные не идёт (ревью 272 А1: у контракта она из
     /// конструктора) — по ней with_native сверяет край маршрута.
     pub native: Option<(Address, bool)>,
+    /// Решение 401: пулы шагов менеджера (V4 / Infinity) вызова — откат пробы перед отправкой помечает их «отвергнут»
+    /// до перепроверки (pool_pass.rs on_sim).
+    pub gated: Vec<pool_pass::Gated>,
 }
 
 impl ExecCall {
@@ -153,6 +157,7 @@ pub fn build(
         ));
     }
     let mut steps = Vec::new();
+    let mut gated = Vec::new();
     let mut left = amount_in;
     for (n, leg) in legs.iter().enumerate() {
         let first_in = leg[0].order.amount_in;
@@ -172,6 +177,7 @@ pub fn build(
                 share_bps: if i == 0 { share } else { ALL_BPS },
             };
             steps.push(kind::encode(&spec).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?);
+            gated.extend(pool_gate::gated(ctx, &s.entry));
         }
     }
     Ok(ExecCall {
@@ -183,6 +189,7 @@ pub fn build(
         deadline: U256::from(now + ctx.int("dex.deadline_s")?),
         steps,
         native: None,
+        gated,
     })
 }
 

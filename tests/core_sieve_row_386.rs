@@ -4,7 +4,8 @@
 //! запись журнала core.candidate_sieved механизмом повторов (core/reject_log.rs): первый отсев направления и смена ВИДА
 //! причины (числа → «#») — новая строка и показ; повтор того же вида — счётчик на старой строке, показ — только когда
 //! строка повторов обновляется сейчас (journal.repeat_flush_ms); journal.repeat_flush_ms не задана — показ только при
-//! смене вида. Проверяется на настоящем хранилище (SQLite во временной папке) с текстами причины в формате core/sieve.rs.
+//! смене вида. RejectLog::due (по нему готовятся данные показа, ревью t171 Н9) совпадает с итогом note. Проверяется
+//! на настоящем хранилище (SQLite во временной папке) с текстами причины в формате core/sieve.rs.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{reject_log, reject_shape, sieve_log}, arb::storage (db, journal). Моков нет.
 
@@ -149,4 +150,31 @@ async fn full_calc_closes_row_next_sieve_shown() {
         Noted::New,
         "после расчёта отсев того же вида снова показывается сразу"
     );
+}
+
+#[tokio::test]
+async fn due_predicts_note() {
+    // Ревью t171, Н9: данные показа готовятся по due — он должен совпадать с итогом note.
+    for (name, k) in [
+        ("due-rare", Some(Duration::from_secs(3600))),
+        ("due-zero", Some(Duration::ZERO)),
+        ("due-plain", None),
+    ] {
+        let j = journal(name);
+        let log = RejectLog::default();
+        let seq = [
+            by_usd("-0.51"),
+            by_usd("-0.52"),
+            by_usd("-0.50"),
+            by_pct("-0.03"),
+            by_pct("-0.04"),
+            by_usd("-0.49"),
+        ];
+        for r in seq {
+            let s = shape(&r);
+            let want = log.due("d", &s, &s, k);
+            let got = log.note(&j, "d", note(&r), k).await;
+            assert_eq!(want, show(got), "{name}: due = показ для «{r}» ({got:?})");
+        }
+    }
 }

@@ -11,8 +11,10 @@
 //!   нуля — граница обязана говорить «может быть прибылен» (cycle_may_profit = true). Прибыль до газа > 0 — шире условия
 //!   ядра (чистая > 0, core/cycle_watch.rs): чистая = валовая − газ, газ ≥ 0.
 //!
-//! Тест падает на первом контрпримере с его распечаткой (маршрут, ρ, вход, выход). Итог перебора (сколько циклов,
-//! сколько с верхом, сколько прибыльных до газа) — в выводе теста (eprintln, виден с --nocapture).
+//! Тест падает на первом контрпримере с его распечаткой (маршрут, ρ, вход, выход). Ревью t171 (Н6) — тест не должен
+//! проходить вхолостую: у каждого цикла с верхом посчитана хотя бы одна точка сетки (иначе падение с маршрутом);
+//! реально отсечённых циклов (ρ < 1) больше нуля (иначе слишком слабая граница прошла бы тест); не все циклы взяли ноги
+//! с явным допуском. Итог перебора — в сообщениях утверждений и в eprintln (виден с --nocapture).
 //! Кто вызывает: cargo test --test bsc_dex_bound_cycles_t171.
 //! От чего зависит: tests/route_common, arb::venues::bsc_dex::{pools::graph, quote::{bound_cycle, bound_rate, cycle,
 //! cycle_opt, route_paths}}, arb::settings.
@@ -42,7 +44,9 @@ struct Tally {
     no_legs: usize,
     bounded: usize,
     no_bound: usize,
+    cut: usize,
     points: usize,
+    eval_err: usize,
     profitable: usize,
 }
 
@@ -50,8 +54,16 @@ impl Tally {
     /// Итог одной строкой. Ошибок нет.
     fn line(&self) -> String {
         format!(
-            "циклов {}, ноги с явным допуском (пул не допущен проверками записи) {}, с верхом ρ {}, без строгого верха {}, точек сетки {}, прибыльных до газа (оптимум) {}",
-            self.cycles, self.no_legs, self.bounded, self.no_bound, self.points, self.profitable
+            "циклов {}, ноги с явным допуском (пул не допущен проверками записи) {}, с верхом ρ {}, без строгого верха {}, \
+             отсечено (ρ < 1) {}, точек сетки {}, точек без счёта {}, прибыльных до газа (оптимум) {}",
+            self.cycles,
+            self.no_legs,
+            self.bounded,
+            self.no_bound,
+            self.cut,
+            self.points,
+            self.eval_err,
+            self.profitable
         )
     }
 }
@@ -133,11 +145,18 @@ async fn sweep(dir: &str) -> Tally {
                 continue;
             };
             t.bounded += 1;
+            if rho < Decimal::ONE {
+                t.cut += 1;
+            }
+            let mut mine = 0usize;
             for x in grid() {
                 let Ok(r) = cycle::eval(&p.ctx, &legs, x) else {
+                    // Вход больше, чем пулы исполнят целиком, — точки нет; считаем, у цикла должна быть хоть одна.
+                    t.eval_err += 1;
                     continue;
                 };
                 t.points += 1;
+                mine += 1;
                 let cap = mul_up(rho, r.coins).expect("ρ·вход помещается в число");
                 assert!(
                     r.usdt <= cap,
@@ -147,6 +166,11 @@ async fn sweep(dir: &str) -> Tally {
                     route(&legs)
                 );
             }
+            assert!(
+                mine > 0,
+                "{dir}: у цикла с верхом ρ = {rho} не посчитана ни одна точка сетки — граница на нём не проверена; маршрут {}",
+                route(&legs)
+            );
             for c in caps {
                 let Ok(b) = cycle_opt::best(&p.ctx, &legs, c) else {
                     continue;
@@ -177,10 +201,24 @@ async fn every_recorded_cycle_respects_bound() {
     ] {
         let t = sweep(dir).await;
         eprintln!("t171 {dir}: {}", t.line());
-        assert!(t.cycles > 0, "{dir}: в графе записи есть циклы");
+        assert!(
+            t.cycles > 0,
+            "{dir}: в графе записи есть циклы: {}",
+            t.line()
+        );
         assert!(
             t.bounded > 0 && t.points > 0,
             "{dir}: перебор не пустой — есть циклы с верхом и посчитанные точки: {}",
+            t.line()
+        );
+        assert!(
+            t.cut > 0,
+            "{dir}: граница отсекает хотя бы один цикл (ρ < 1) — иначе слишком слабая граница прошла бы тест: {}",
+            t.line()
+        );
+        assert!(
+            t.no_legs < t.cycles,
+            "{dir}: не все циклы взяли ноги с явным допуском — путь поиска (select::usable) проверен: {}",
             t.line()
         );
     }

@@ -7,10 +7,11 @@
 //! - отсечён — доля sieve.audit_share ВСЕХ отсечённых идёт в контрольный ОБЫЧНЫЙ полный расчёт (sieve_audit.rs; ревью
 //!   t162, Н3; решение 378: выбор не зависит от показа);
 //! - отсечён, не контроль — журнал отсева, а строка и эпизод — только при записи журнала (sieve_log.rs cut, решение 386:
-//!   смена вида причины или обновление строки повторов; без таймера — sieve.row_interval_ms удалена); в данные отсева
-//!   кладутся то, что у отсечённого
-//!   есть без полного расчёта (ревью t162, Н11): сравнение σ (DirCtx.sigma_check, решение 358 — σ-часть, без прибыли
-//!   по σ_T: её даёт только полный расчёт) и signal_note (cand_signal_note.rs, решение 359).
+//!   смена вида причины или обновление строки повторов; без таймера — sieve.row_interval_ms удалена); в данные
+//!   показываемого отсева (sieve_log.rs due — только тогда, ревью t171 Н9) кладутся то, что у отсечённого есть без
+//!   полного расчёта (ревью t162, Н11): сравнение σ (DirCtx.sigma_check, решение 358 — σ-часть, без прибыли по σ_T: её
+//!   даёт только полный расчёт) и signal_note (cand_signal_note.rs, решение 359). В повторе, который строка журнала
+//!   получает отложенно (без показа), этих двух полей нет — только данные границы.
 //!
 //! Сухой режим без бюджета — отсева нет (причину даст decide, как было).
 //! Кто вызывает: core/candidates.rs (calc_one).
@@ -54,17 +55,21 @@ pub async fn run(core: &Core, d: &Direction, mode: &Mode) -> Gate {
         super::sieve_log::bump("audit");
         return Gate::Calc { cx, audit: true };
     }
-    if let Some(sc) = cx.as_ref().and_then(|c| c.sigma_check.as_ref())
-        && let Ok(v) = serde_json::to_value(sc)
-    {
-        data["sigma_check"] = v;
+    // Решение 386 (ревью t171, Н9): данные показа — только если отсев сейчас покажется (запись журнала пишется).
+    let shown = super::sieve_log::due(core, d, &reason);
+    if shown {
+        if let Some(sc) = cx.as_ref().and_then(|c| c.sigma_check.as_ref())
+            && let Ok(v) = serde_json::to_value(sc)
+        {
+            data["sigma_check"] = v;
+        }
+        let st = super::cand_signal_note::start(core, d);
+        if let Some(note) =
+            super::cand_signal_note::data(None, &st).and_then(|v| v.get("signal_note").cloned())
+        {
+            data["signal_note"] = note;
+        }
     }
-    let st = super::cand_signal_note::start(core, d);
-    if let Some(note) =
-        super::cand_signal_note::data(None, &st).and_then(|v| v.get("signal_note").cloned())
-    {
-        data["signal_note"] = note;
-    }
-    Box::pin(super::sieve_log::cut(core, d, reason, data)).await;
+    Box::pin(super::sieve_log::cut(core, d, reason, data, shown)).await;
     Gate::Done
 }

@@ -132,6 +132,24 @@ impl RejectLog {
         }
     }
 
+    /// Что делает: решение 386 — запишет ли note строку сейчас (то же правило, что note): новая строка (строки по ключу
+    /// нет, другой вид причины или, в прежнем режиме, другой exact) или повтор с истёкшей частотой. Только чтение (по
+    /// нему вызывающий решает, готовить ли данные показа). Принимает: ключ, exact, вид, частоту. Возвращает: true —
+    /// запишет. Ошибок нет.
+    pub fn due(&self, key: &str, exact: &str, shape: &str, flush_every: Option<Duration>) -> bool {
+        let m = self.lock();
+        let Some(r) = m.get(key) else {
+            return true;
+        };
+        match flush_every {
+            Some(every) => {
+                !(r.id > 0 && r.shape == shape)
+                    || every.saturating_sub(r.flushed.elapsed()).is_zero()
+            }
+            None => !(r.id == 0 && r.exact == exact),
+        }
+    }
+
     /// Прежний режим: обычная строка, если exact другой, чем в прошлый раз. Возвращает: New или Held. Ошибок нет.
     async fn note_plain(&self, journal: &Journal, key: &str, n: Note<'_>) -> Noted {
         {

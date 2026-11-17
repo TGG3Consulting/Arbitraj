@@ -356,7 +356,7 @@ async fn picks_best_by_cycle_rate_not_first() {
     assert!(m >= 4, "на записи есть несколько циклов базовой USDT: {m}");
     let mut scored: Vec<(Decimal, Vec<(PoolRef, Address)>)> =
         all.iter().map(|c| (rate_of(&p, c), key(c))).collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|x| std::cmp::Reverse(x.0));
     let n = 2;
     let r = top(&g, &p, n, None);
     assert_eq!(r.seen as usize, m, "просмотрены все циклы");

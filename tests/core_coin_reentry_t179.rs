@@ -21,7 +21,10 @@
 //!   config/getall 24.10, разбор адаптера) — 2 и 3 куска дошли, средний отказал (точный остаток), перезапуск посреди
 //!   кусков (ledger::load); падение после сохранения носителя до вложенной (Н2); вложенная в группе с admit (Н1);
 //!   после общего возврата новая сделка — новая группа, ушедшая с пути — «была частью группы» (Н3, п. 13); «Итог
-//!   группы» один раз у уже известившего носителя и текст вышедшей с чужой выручкой (Н4).
+//!   группы» один раз у уже известившего носителя и текст вышедшей с чужой выручкой (Н4);
+//! - ревью 4: застрявшая и проданная на B копией задачи без пометки — свой возврат (Н7, настоящий
+//!   usdt_return_deal::prepare); «Перегнать» остатка кусками — учёт продолжается от дошедших (Н8); ни один кусок не
+//!   больше максимума (Н10); газ неудачных перегонов USDT — сделка по ID перегона «u» / «up<n>» / «m…» (п. 14).
 //!
 //! Ставка комиссии тейкера в проверке разности — параметр проверки (в записях BingX ставки аккаунта нет,
 //! tests/size_common/mod.rs), не данные биржи. Не покрыто здесь (нужны живые площадки): путь executor::accepted → board
@@ -917,7 +920,7 @@ fn group_return_pieces_all_arrive_one_part() {
         let mut done = Decimal::ZERO;
         for (i, (_, piece)) in split.iter().enumerate() {
             assert!(
-                ids.insert(usdt_return_pieces::piece_id(&x.id, i + 1)),
+                ids.insert(usdt_return_pieces::piece_id(&x.id, "", i + 1)),
                 "ID кусков разные"
             );
             let rest = usdt_return_pieces::ok(
@@ -1153,4 +1156,151 @@ fn group_total_once_for_notified_bearer() {
             .any(|(_, v)| v.contains("в нём и выручка сделок D2")),
         "{lines:?}"
     );
+}
+
+#[tokio::test]
+async fn stuck_then_sold_on_plan_venue_returns_own() {
+    let (core, s, _j) = start("left-own").await;
+    top_up(&s).await;
+    set(&s, "usdt_return.mode", json!("per_trade")).await;
+    let dx = dir_of("mexc", "bingx");
+    riding(&core, &dx, "G", &["G", "D2"]).await;
+    // D2 застряла — в учёте «была частью группы».
+    let stuck = bought("D2", &dx, Step::Stuck, ("40", "10"), Some("G"));
+    arb::core::ledger::save(&core, &stuck).await;
+    // Ревью 4, Н7: режим застрявшей монеты продал на B без перегона — закрывает копия задачи без пометки.
+    let mut x = sold("D2", &dx, "G");
+    x.proceeds = d("95");
+    x.sells[0].request.venue = dx.sell_on.clone();
+    x.sells[0].request.side = Side::Sell;
+    assert!(!x.group.as_ref().unwrap().left);
+    usdt_return_deal::prepare(&core, &mut x).await;
+    let g = x.group.as_ref().unwrap();
+    assert!(g.left, "пометка из учёта");
+    assert!(
+        g.wait.is_none(),
+        "в общий возврат группы не ушла — свой возврат"
+    );
+    assert!(x.usdt_return.is_some(), "своя часть возврата");
+    let lines = g.lines("D2", x.result_usd);
+    assert!(
+        lines.iter().any(|(_, v)| v.contains("свой возврат USDT")),
+        "{lines:?}"
+    );
+}
+
+#[test]
+fn manual_retry_pieces_continue_from_done() {
+    // Ревью 4, Н8: кусок 1 из 3 дошёл, 2 отказал; «Перегнать» остатка — кусками, сумма общего возврата = дошедшее +
+    // остаток (usdt_return_pieces::run), учёт продолжается.
+    let (fee, max) = bingx_usdt_bep20();
+    let (from, to) = (VenueId("bingx".into()), VenueId("mexc".into()));
+    let total = max * d("2") + max / d("2");
+    let split = coin_group::pieces(&from, total, Some(max));
+    let mut x = bearer(total);
+    let p1 = split[0].1;
+    usdt_return_pieces::ok(&mut x, (&from, &to), total, p1, &piece_relayed(p1, fee));
+    let rest = usdt_return_pieces::failed(&mut x, &from, total, "кусок 2 из 3 не дошёл");
+    let again = coin_group::pieces(&from, rest, Some(max));
+    assert_eq!(again.len(), 2, "остаток выше максимума — кусками");
+    let base = x.group.as_ref().unwrap().pieces.as_ref().unwrap().amount;
+    for (_, p) in &again {
+        usdt_return_pieces::ok(
+            &mut x,
+            (&from, &to),
+            base + rest,
+            *p,
+            &piece_relayed(*p, fee),
+        );
+    }
+    let Some(UsdtReturn::Done {
+        amount, credited, ..
+    }) = x.usdt_return.clone()
+    else {
+        panic!("вернулись")
+    };
+    assert_eq!(amount, total);
+    assert_eq!(credited, total - fee * d("3"));
+    assert_eq!(deal_return_cost::known(&x), fee * d("3"));
+    assert!(x.group.as_ref().unwrap().pieces.is_none());
+    // ID кусков «Перегнать» — со своей меткой попытки.
+    assert_ne!(
+        usdt_return_pieces::piece_id("G", "m123", 2),
+        usdt_return_pieces::piece_id("G", "", 2)
+    );
+}
+
+#[test]
+fn pieces_never_exceed_max() {
+    // Ревью 4, Н10: максимум из записи BingX, максимум с 9 знаками (точнее округления куска) и круглый — ни один кусок
+    // не больше максимума, сумма — ровно total, каждый > 0.
+    let (_, rec) = bingx_usdt_bep20();
+    let v = VenueId("bingx".into());
+    for max in [rec, d("999.999999999"), d("100")] {
+        let eps = d("0.00000001");
+        for total in [
+            max + eps,
+            max * d("2.5"),
+            max * d("3"),
+            max * d("3") - eps,
+            max * d("3") + eps,
+            max * d("7") + d("0.123456789"),
+        ] {
+            let p = coin_group::pieces(&v, total, Some(max));
+            assert!(p.len() >= 2, "{total} / {max}");
+            assert!(
+                p.iter().all(|(_, a)| *a <= max && *a > Decimal::ZERO),
+                "{p:?} max {max}"
+            );
+            assert_eq!(p.iter().map(|(_, a)| *a).sum::<Decimal>(), total);
+        }
+    }
+}
+
+#[test]
+fn relay_id_owner_finds_deal() {
+    let id = "20261117120000000CAKE".to_string();
+    let next = "20261117120000000CAKE1".to_string();
+    let deals = [id.clone(), next.clone()];
+    for (relay, want) in [
+        (format!("{id}u"), Some(&id)),
+        (format!("{id}u3"), Some(&id)),
+        (format!("{id}m123456"), Some(&id)),
+        (format!("{id}up2"), Some(&id)),
+        (format!("{id}m123456up2"), Some(&id)),
+        (format!("{next}u"), Some(&next)),
+        (format!("{next}up1"), Some(&next)),
+        (id.clone(), Some(&id)),
+        ("tu20261117120000000".to_string(), None),
+        (format!("{id}x"), None),
+        (format!("{id}m"), None),
+        (format!("{id}up"), None),
+    ] {
+        assert_eq!(
+            relay_owner::owner(deals.iter(), &relay).as_ref(),
+            want,
+            "{relay}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn failed_relay_gas_goes_to_deal() {
+    let (core, _s, _j) = start("relay-gas").await;
+    let x = bearer(d("195"));
+    arb::core::ledger::save(&core, &x).await;
+    // Газ неудачного перегона USDT куска общего возврата: сделка находится по ID перегона (п. 14).
+    let mut gas = vec![arb::core::deal_gas::Wasted {
+        what: "откат перевода".into(),
+        kind: CostKind::TransferGas,
+        bnb: d("0.0001"),
+    }];
+    arb::core::deal_gas::charge_closed(
+        &core,
+        &format!("{}up2", x.id),
+        &x.direction.sell_on,
+        &mut gas,
+    )
+    .await;
+    assert!(has_note(&core, "G", "откат перевода"));
 }

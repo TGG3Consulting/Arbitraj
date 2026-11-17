@@ -15,7 +15,8 @@
 //! допуска usdt.return_tolerance_usd — тогда свободный остаток, usdt_return_attempt.rs).
 //! Кто вызывает: core/manual_feed.rs (записи), core/commands.rs (команды UsdtRetry, UsdtReturnedManually),
 //! core/manual_return.rs (Core::manual — таблица экрана; список сделок — Core::usdt_not_returned в manual_feed.rs).
-//! От чего зависит: usdt_return_attempt.rs, usdt_return_state.rs, manual_rows.rs (btn), deal.rs, ledger.rs,
+//! От чего зависит: usdt_return_attempt.rs, usdt_return_pieces.rs (решение 394: остаток общего возврата группы выше
+//! максимума вывода — кусками), usdt_return_state.rs, manual_rows.rs (btn), deal.rs, ledger.rs,
 //! deal_return_cost.rs (затраты «перегнано вручную»), manual_usdt_credit.rs (кнопка с вводом и разбор ответа).
 //! Настройки: нет (повторы — usdt.return_retry_s, usdt.return_retries_max в usdt_return_retry.rs).
 
@@ -210,7 +211,15 @@ async fn take(
     super::ledger::save(core, &d).await;
     super::deal_return_cost::after(core, &d, delta).await;
     let text = if retry {
-        start(core, deal, amount, at.clone(), to.clone(), who);
+        // Решение 394 (ревью 4 t179, Н8): остаток общего возврата группы выше максимума вывода — кусками по очереди
+        // (usdt_return_pieces.rs); иначе (и без группы — как раньше) — одна попытка.
+        let tag = format!(
+            "m{}",
+            chrono::Utc::now().timestamp_millis().rem_euclid(1_000_000)
+        );
+        if !super::usdt_return_pieces::start_manual(core, deal, amount, (&at, &to), &tag) {
+            start(core, deal, amount, at.clone(), to.clone(), who);
+        }
         format!(
             "Сделка {deal}: перегон USDT {} → {} запущен (сумма части {})",
             at.0,

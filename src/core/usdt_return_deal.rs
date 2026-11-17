@@ -65,6 +65,8 @@ pub async fn prepare(core: &Core, deal: &mut Deal) -> Vec<Job> {
     // возврат. Без группы (докупка выключена) — как раньше. Перегоны — в куче (путь «застрявшая монета → продажа →
     // закрытие» чувствителен к стеку, решение 389, tests/core_exec_book_238.rs).
     let parts = if deal.group.is_some() {
+        // Ревью 4, Н7: пометка «была частью группы» — из записи учёта (копия задачи её может не нести).
+        super::coin_group_left::sync(core, deal);
         super::coin_group::hold_parts(deal, parts)
     } else {
         parts
@@ -130,6 +132,7 @@ pub(super) async fn start_parts(
             to: to.clone(),
             acc: acc.clone(),
             pieces: vec![],
+            tag: String::new(),
         });
     }
     jobs

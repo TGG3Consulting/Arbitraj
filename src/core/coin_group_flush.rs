@@ -4,7 +4,7 @@
 //! - носитель — первая сделка группы, если её часть в пуле, иначе первая отложенная; под замком учёта у всех частей
 //!   снимается wait, у остальных — «общий возврат в сделке …» (shared_in), у носителя — итог группы (GroupSum);
 //! - перегон готовится у носителя ОДНОЙ частью учёта на всю сумму (состояние «идёт»); сумма выше максимума вывода
-//!   площадки (справочник сетей ядра) — куски поровну, каждый ≤ максимума, уходят ПО ОЧЕРЕДИ в той же задаче
+//!   площадки (справочник сетей ядра) — куски не больше максимума (pieces), уходят ПО ОЧЕРЕДИ в той же задаче
 //!   перегона, каждый со своим ID вывода (usdt_return_pieces.rs); ниже минимума — одним выводом, как у одиночной;
 //! - носитель уже известил о своём закрытии — «Итог группы» уйдёт отдельным сообщением по концу возврата
 //!   (group_notice.rs, Н4);
@@ -18,49 +18,56 @@
 //! остальных возврата нет («Перегнать» по сделке с общим возвратом — отказ, manual_usdt.rs retry_block).
 //! Кто вызывает: coin_group.rs (after_close, spawn_if_last).
 //! От чего зависит: coin_group.rs (Part), deal_group.rs, usdt_return_deal.rs (start_parts), group_notice.rs,
-//! deal_closed.rs, ledger.rs (save), dirctx_venue.rs (сеть USDT площадки), engine.rs, settings.
-//! Настройки: venue.quote_asset, venue.bsc_network (сеть возврата — максимум вывода).
+//! deal_closed.rs, ledger.rs (save), usdt_return.rs (USDT площадки), transfers.rs (сеть вывода), dirctx_venue.rs
+//! (запись справочника сетей), engine.rs.
+//! Настройки: через usdt_return.rs и transfers.rs (venue.quote_asset, venue.bsc_network).
 
 use rust_decimal::Decimal;
 
 use crate::core::types::VenueId;
-use crate::settings::read::At;
 
 use super::coin_group::Part;
 use super::deal_group::GroupSum;
 use super::engine::{Core, lk};
 
-/// Максимум вывода USDT площадки возврата `v` (сеть venue.bsc_network, монета venue.quote_asset; справочник сетей
-/// ядра). Возвращает: максимум; нет данных (DEX, справочника нет) или 0 — None. Ошибок нет.
-fn max_withdraw(core: &Core, v: &VenueId) -> Option<Decimal> {
-    let s = &core.inner.deps.settings;
-    let at = At {
-        venue: Some(&v.0),
-        coin: None,
-    };
-    let (Ok(q), Ok(net)) = (
-        s.text("venue.quote_asset", at),
-        s.text("venue.bsc_network", at),
-    ) else {
-        return None;
-    };
-    super::dirctx_venue::quote_network(core, v, &q, &net)
+/// Что делает: максимум вывода USDT площадки возврата `v` — в той же сети, которой идёт сам вывод (ревью 4 t179, Н11):
+/// USDT площадки — как у перегона (usdt_return::usdt: тикер venue.quote_asset, адрес USDT ядра), сеть — как у вывода
+/// (transfers::network: своя запись справочника сетей площадки, иначе venue.bsc_network), запись справочника — по
+/// тикеру и этой сети (dirctx_venue::quote_network). Было: сеть прямо из venue.bsc_network — у площадки, чья запись
+/// справочника названа иначе, максимум брался из другой записи или не находился. Принимает: ядро, площадку.
+/// Возвращает: максимум; нет данных (DEX, справочника нет, сеть не найдена) или 0 — None. Ошибок нет.
+pub(super) fn max_withdraw(core: &Core, v: &VenueId) -> Option<Decimal> {
+    let usdt = super::usdt_return::usdt(core, v).ok()?;
+    let net = super::transfers::network(core, &usdt, v).ok()?;
+    super::dirctx_venue::quote_network(core, v, &usdt.ticker, &net)
         .and_then(|i| i.withdraw_max)
         .filter(|m| !m.is_zero())
 }
 
-/// Сумма общего возврата частями не больше максимума вывода (поровну; последняя — остаток). Ошибок нет.
+/// Что делает: сумма общего возврата кусками, каждый НЕ БОЛЬШЕ максимума вывода (ревью 4, Н10): кусок —
+/// total / ⌈total / max⌉, округлённый вверх до 8 знаков, но не больше максимума (вниз до 8 знаков); куски такого
+/// размера, пока остаток больше максимума, последний — остаток (он не больше максимума и больше нуля). Сумма кусков =
+/// total. Сумма не выше максимума или максимума нет — один кусок. Принимает: площадку, сумму, максимум.
+/// Возвращает: [(площадка, кусок)]. Ошибок нет.
 pub fn pieces(from: &VenueId, total: Decimal, max: Option<Decimal>) -> Vec<(VenueId, Decimal)> {
+    use rust_decimal::RoundingStrategy as R;
     let Some(max) = max.filter(|m| total > *m && *m > Decimal::ZERO) else {
         return vec![(from.clone(), total)];
     };
     let n = (total / max).ceil();
-    let each = (total / n).round_dp_with_strategy(8, rust_decimal::RoundingStrategy::ToZero);
-    let k = rust_decimal::prelude::ToPrimitive::to_usize(&n)
-        .unwrap_or(1)
-        .max(1);
-    let mut out = vec![(from.clone(), each); k - 1];
-    out.push((from.clone(), total - each * Decimal::from(k - 1)));
+    let each = (total / n)
+        .round_dp_with_strategy(8, R::AwayFromZero)
+        .min(max.round_dp_with_strategy(8, R::ToZero));
+    if each <= Decimal::ZERO {
+        return vec![(from.clone(), total)];
+    }
+    let mut out = vec![];
+    let mut left = total;
+    while left > max {
+        out.push((from.clone(), each));
+        left -= each;
+    }
+    out.push((from.clone(), left));
     out
 }
 

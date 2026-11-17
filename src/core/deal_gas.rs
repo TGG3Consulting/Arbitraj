@@ -14,7 +14,8 @@
 //! Открытая сделка (у вызывающего своя копия) — charge; закрытая (возврат USDT после закрытия) — charge_closed: итог
 //! сделки, итог дня (daily::settle с −затратой), итог монеты (gas_stats), журнал — как deal_return_cost::after.
 //! Кто вызывает: trade_ops.rs (собирает), transfers.rs (собирает), executor.rs, sell.rs, relay.rs, manual_relay.rs
-//! (charge), usdt_relay_retry.rs (charge_closed), cycle_deal.rs (лист approve и чаевых цикла).
+//! (charge), usdt_relay_retry.rs (charge_closed; сделка по ID перегона — relay_owner.rs), cycle_deal.rs (лист approve и
+//! чаевых цикла).
 //! От чего зависит: deal.rs, fills.rs (usdt), convert.rs (GAS_TICKER), ledger.rs, daily.rs, daily_commit.rs,
 //! gas_stats.rs, core/types (ChainTx, TradeResult, Cost), deal_book.rs (статьи затрат и начисления дня, решение 257).
 //! Настройки: нет (venue.quote_asset — через fills::usdt).
@@ -138,7 +139,9 @@ pub async fn charge(core: &Core, deal: &mut Deal, venue: &VenueId, list: &mut Ve
 
 /// Что делает: как charge, но у сделки в памяти ядра (закрытой — возврат USDT идёт после закрытия): затраты, итог
 /// (result_usd − USDT), сохранение; итог дня (daily::settle с −USDT), итог монеты (gas_stats), журнал core.ledger.
-/// Сделки нет (перегон вне сделки) — только журнал. Принимает: ядро, id, площадку, статьи. Ошибок нет.
+/// Сделки нет (перегон вне сделки) — только журнал. Решение 394 (ревью 4 t179): сделка — по ID перегона
+/// (relay_owner.rs: «<сделка>u», повторы, «Перегнать», куски общего возврата). Принимает: ядро, id перегона, площадку,
+/// статьи. Ошибок нет.
 pub async fn charge_closed(core: &Core, id: &str, venue: &VenueId, list: &mut Vec<Wasted>) {
     let list = std::mem::take(list);
     if list.is_empty() {
@@ -148,7 +151,9 @@ pub async fn charge_closed(core: &Core, id: &str, venue: &VenueId, list: &mut Ve
     let text = line(&list, bnb, &u);
     let found = {
         let mut deals = lk(&core.inner.deals);
-        deals.get_mut(id).map(|d| {
+        // Решение 394 (ревью 4 t179): ID перегона — ID сделки с суффиксом перегона (relay_owner.rs).
+        let key = super::relay_owner::owner(deals.keys(), id);
+        key.and_then(|k| deals.get_mut(&k)).map(|d| {
             d.note(text.clone());
             if let Ok(u) = &u {
                 super::deal_book::spend_wasted(d, &list, *u);

@@ -30,6 +30,8 @@ pub struct Job {
     pub(super) acc: Option<DexAccountId>,
     /// Решение 394 (ревью 3, Б1): куски общего возврата группы по очереди (сумма = amount); пусто — один вывод.
     pub(super) pieces: Vec<Decimal>,
+    /// Решение 394 (ревью 4, Н8): метка попытки в ID вывода кусков («» — шаг закрытия, «m<мс>» — «Перегнать»).
+    pub(super) tag: String,
 }
 
 impl Job {

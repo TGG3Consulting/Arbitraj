@@ -186,8 +186,16 @@ pub fn executor_set(ctx: &Ctx) -> bool {
 /// Без адреса — false: семейство остаётся сигналом (если у него нет своего пути —
 /// family.tradable). Принимает: окружение, вид пула. Ошибок нет.
 pub fn via_executor(ctx: &Ctx, f: &Family) -> bool {
+    if f.executor_kind.is_none() {
+        return false;
+    }
+    // Решение 401 (ревью t186, Н1): адрес и версия исполнителя — одно чтение снимка кошельков без замка (Ctx::exec_info;
+    // раньше — два чтения записи кошелька под замком с её копией: executor_set и exec_callback::step_missing).
+    let Some((_, ver)) = ctx.exec_info() else {
+        return false;
+    };
     // Ревью 281 (В4): у DEX с dex.v3_swap_callback обратный вызов должен быть в коде исполнителя (exec_callback.rs).
-    f.executor_kind.is_some() && executor_set(ctx) && exec_callback::missing(ctx, f).is_none()
+    exec_callback::usable(ctx, f, ver)
 }
 
 /// Строка для интерфейса (список DEX, решение 122 F): как исполняются пулы этого вида. Решение 395: у вида со своим

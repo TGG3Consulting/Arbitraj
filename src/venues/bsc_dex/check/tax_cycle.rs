@@ -14,6 +14,7 @@
 //!
 //! Все запросы к узлу — в общем темпе node/pace.rs (bsc.node_http_rps): проход идёт ровно, а не залпом.
 //! Кто вызывает: pools/market.rs (запуск при подписке).
+//! Решение 401 (ревью t186, Н5): после каждой проверки монеты — в очередь pass (проба её пулов через исполнитель).
 //! От чего зависит: check/tax_pass.rs, check/taxes.rs, check/recheck.rs, check/tax_wallet.rs, pools/listen.rs (Pools), pools/progress.rs.
 //! Решение 333 (ревью Б2): «не проверена» в начале цикла — gateway/core_out_must.rs send_in_task (ждёт места, решение 362):
 //! тем же путём этой же задачи, что и итоги проверки монеты, — итог не приходит ядру раньше «не проверена».
@@ -40,7 +41,12 @@ use super::tax_wallet;
 use super::taxes;
 
 /// Цикл налогов. Принимает: окружение, монеты (адрес → тикер), USDT, очередь «Перепроверить». Работает постоянно.
-pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, queue: Queue) {
+pub async fn taxes(
+    p: Pools,
+    coins: HashMap<Address, String>,
+    usdt: Address,
+    (queue, pass_queue): (Queue, Queue),
+) {
     for (addr, ticker) in &coins {
         // Решение 159 (Тигран 05.11): цикл перезапускается при каждой пересподписке (смена списка монет — например,
         // площадку выключили и включили). Прежде он сбрасывал ВСЕ монеты в «не проверено» — у монеты в середине сделки
@@ -84,6 +90,9 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
     loop {
         let was_sent = sum.sent;
         let pass = tax_pass::check(&p, &all, usdt, &mut seen, &sum.left, &acc).await;
+        // Решение 401 (ревью t186, Н5): налоги проверены — проба пулов этих монет через исполнитель (только неустоявшиеся
+        // итоги, check/pass_cycle.rs woken).
+        pass_queue.add(&all.iter().map(|(a, _)| *a).collect::<Vec<_>>());
         tax_wallet::settle(&mut acc, &pass.deal_done);
         settle(&p, &pass, &mut sum).await;
         cfg.extend(pass.config_names.iter().cloned());
@@ -158,6 +167,7 @@ pub async fn taxes(p: Pools, coins: HashMap<Address, String>, usdt: Address, que
                 continue;
             }
             let again = tax_pass::check(&p, &list, usdt, &mut seen, &sum.left, &acc).await;
+            pass_queue.add(&list.iter().map(|(a, _)| *a).collect::<Vec<_>>());
             tax_wallet::settle(&mut acc, &again.deal_done);
             settle(&p, &again, &mut sum).await;
             cfg.extend(again.config_names.iter().cloned());

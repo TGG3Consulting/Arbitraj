@@ -177,7 +177,7 @@ pub fn build(
                 share_bps: if i == 0 { share } else { ALL_BPS },
             };
             steps.push(kind::encode(&spec).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?);
-            gated.extend(pool_gate::gated(ctx, &s.entry));
+            gated.extend(pool_gate::gated(&s.entry));
         }
     }
     Ok(ExecCall {

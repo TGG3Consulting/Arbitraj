@@ -20,7 +20,7 @@ use super::path::Path;
 pub fn all_via(ctx: &Ctx, legs: &[Path]) -> bool {
     legs.iter()
         .flat_map(|p| p.hops.iter())
-        .all(|h| exec_kind::via_executor(ctx, h.entry.family) && entry::fits(ctx, &h.entry).is_ok())
+        .all(|h| exec_kind::via_executor(ctx, h.entry.family) && entry::fits_ok(ctx, &h.entry))
 }
 
 /// Форма Universal Router (как graph_form: прямая или умный путь) — тогда исполнитель не используется. Ошибок нет.

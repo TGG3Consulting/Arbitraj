@@ -73,9 +73,11 @@ impl Accounts {
                 })
             })
             .await?;
+        let snap = Arc::new(arc_swap::ArcSwap::from_pointee(st.clone()));
         Ok(Self {
             db,
             journal,
+            snap,
             st: Arc::new(RwLock::new(st)),
             writer: Arc::new(tokio::sync::Mutex::new(())),
             changed: Arc::new(tokio::sync::watch::Sender::new(0)),

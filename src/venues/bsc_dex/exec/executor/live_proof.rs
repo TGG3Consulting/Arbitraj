@@ -81,6 +81,18 @@ pub fn admits(k: ExecKind, stable: bool, hooks: Address) -> Result<(), String> {
     admits_in(verdicts(), c)
 }
 
+/// Решение 401, ревью t186 (Н1): то же, что `admits(..).is_ok()`, без строк — для горячего пути котировки
+/// (pool_gate.rs decide). Вердикты — OnceLock (после первого разбора чтение без замка). Ошибок нет.
+pub fn accepted(k: ExecKind, stable: bool, hooks: Address) -> bool {
+    let Some(c) = class_of(k, stable, hooks) else {
+        return true;
+    };
+    match verdicts() {
+        Ok(list) => list.iter().any(|x| x.class == c && x.accepted),
+        Err(_) => false,
+    }
+}
+
 /// То же по данным вердиктам (проверяемо тестом). Ошибок иных нет.
 pub fn admits_in(v: &Result<Vec<Verdict>, String>, c: Class) -> Result<(), String> {
     let head = format!("{} у исполнителя v3 не принят на живых пулах", c.label());

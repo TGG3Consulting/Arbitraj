@@ -179,6 +179,7 @@ impl Accounts {
             .unwrap_or_else(|p| p.into_inner())
             .wallets
             .remove(id);
+        self.publish();
         let text = format!(
             "Кошелёк DEX «{}» удалён ({by}); ключ {} остался в секретах",
             w.name, w.secret

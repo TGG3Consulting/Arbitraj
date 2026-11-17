@@ -8,16 +8,21 @@
 //! Хранится только в памяти (как итоги проверок, check/state.rs): после запуска фактов нет — до первой пробы действует
 //! приёмка класса по записи (решение 400). Ключ — адрес исполнителя: крючок с белым списком смотрит msg.sender, и факт
 //! одного исполнителя к другому не переносится; переразвёрнутый исполнитель (новый адрес) начинает без фактов.
+//! Ревью t186 (Н1): горячий путь котировки читает только вид итога (kind) из снимка за ArcSwap — без замка и без копии
+//! строк; полные факты (причина, время, блок) — в отдельной памяти под Mutex, её берут только писатели (проба, откат
+//! сделки) и текст причины / экран. Снимок видов пересобирается, только когда вид итога пула сменился.
+//! Ревью t186 (Н3): откат пробы сделки помечает только пул, крючок которого назван в WrappedError отката.
 //! Кто вызывает: check/pass_cycle.rs, exec/executor/{pool_gate, sim, call, pass_view}.rs, exec/cycle_exec.rs,
 //! pools/depth_facts.rs, тесты.
 //! От чего зависит: check/{simulate, pass_judge}.rs, exec/executor/{call, code, remeasure}.rs, core/types
-//! (PoolRef), settings/accounts (Wallet).
+//! (PoolRef), settings/accounts (Wallet), arc-swap.
 //! Настройки: нет.
 
 use std::collections::HashMap;
-use std::sync::{LazyLock, RwLock};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use alloy_primitives::Address;
+use arc_swap::ArcSwap;
 use chrono::{DateTime, Utc};
 
 use crate::core::types::PoolRef;
@@ -50,57 +55,93 @@ pub struct Fact {
     pub block: Option<u64>,
 }
 
-/// Пул шага менеджера в вызове исполнителя (exec/executor/call.rs build): ссылка, крючок ключа и признак «исполним
-/// только по факту пробы этого пула» (класс не принят записью — решение 400).
+/// Вид итога (без причины) — для горячего пути котировки (pool_gate.rs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    Passed,
+    Rejected,
+    Unchecked,
+}
+
+impl State {
+    /// Вид итога. Ошибок нет.
+    pub fn to_kind(&self) -> Kind {
+        match self {
+            State::Passed => Kind::Passed,
+            State::Rejected { .. } => Kind::Rejected,
+            State::Unchecked(_) => Kind::Unchecked,
+        }
+    }
+}
+
+/// Пул шага менеджера в вызове исполнителя (exec/executor/call.rs build): ссылка и крючок ключа (ревью t186, Н3: по
+/// нему откат пробы сделки находит пул).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Gated {
     pub pool: PoolRef,
     pub hooks: Address,
-    pub by_pass: bool,
 }
 
-/// Факты: исполнитель → пул → факт (вложенно: чтение на пути котировки без копии ссылки пула).
-type Store = HashMap<Address, HashMap<PoolRef, Fact>>;
+/// Полные факты: исполнитель → пул → факт. Только писатели и текст / экран.
+type Facts = HashMap<Address, HashMap<PoolRef, Fact>>;
+/// Виды итогов: исполнитель → пул → вид. Снимок для горячего пути.
+type Kinds = HashMap<Address, HashMap<PoolRef, Kind>>;
 
-static FACTS: LazyLock<RwLock<Store>> = LazyLock::new(|| RwLock::new(HashMap::new()));
+static FACTS: LazyLock<Mutex<Facts>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static KINDS: LazyLock<ArcSwap<Kinds>> = LazyLock::new(|| ArcSwap::from_pointee(HashMap::new()));
 
-/// Факт пула по исполнителю. Принимает: адрес исполнителя, пул. None — проверок не было. Ошибок нет.
+/// Горячий путь (ревью t186, Н1): вид итога пула по исполнителю — из снимка без замка и без копий. None — проверок не
+/// было. Ошибок нет.
+pub fn kind(executor: Address, pool: &PoolRef) -> Option<Kind> {
+    KINDS.load().get(&executor)?.get(pool).copied()
+}
+
+/// Полный факт (причина, время, блок) — для текста причины, экрана и цикла проб (не горячий путь: Mutex). None —
+/// проверок не было. Ошибок нет.
 pub fn get(executor: Address, pool: &PoolRef) -> Option<Fact> {
-    let m = FACTS.read().unwrap_or_else(|p| p.into_inner());
+    let m = FACTS.lock().unwrap_or_else(|p| p.into_inner());
     m.get(&executor)?.get(pool).cloned()
 }
 
-/// Записывает факт. Принимает: исполнитель, пул, факт. Возвращает: сменился ли итог (вид или текст причины) — для журнала
-/// «только при смене» и роста поколения итогов проверок. Ошибок нет.
+/// Записывает факт; вид итога сменился — новый снимок видов. Принимает: исполнитель, пул, факт. Возвращает: сменился ли
+/// итог (вид или текст причины) — для журнала «только при смене». Ошибок нет.
 pub fn put(executor: Address, pool: &PoolRef, fact: Fact) -> bool {
-    let mut m = FACTS.write().unwrap_or_else(|p| p.into_inner());
+    let mut m = FACTS.lock().unwrap_or_else(|p| p.into_inner());
+    let kind_now = fact.state.to_kind();
     let prev = m
         .entry(executor)
         .or_default()
         .insert(pool.clone(), fact.clone());
+    let kind_was = prev.as_ref().map(|p| p.state.to_kind());
+    if kind_was != Some(kind_now) {
+        // Под замком писателей: снимки не теряют друг друга.
+        let mut next: Kinds = (**KINDS.load()).clone();
+        next.entry(executor)
+            .or_default()
+            .insert(pool.clone(), kind_now);
+        KINDS.store(Arc::new(next));
+    }
+    drop(m);
     prev.is_none_or(|p| p.state != fact.state)
 }
 
-/// Решение 401: откат пробы execute перед отправкой сделки помечает пул «отвергнут» до следующей перепроверки, чтобы бот не
-/// натыкался на него снова. Не помечает: успех, срок транзакции вышел, откат по minOut (решение 247 — свойство суммы, не
-/// пула). Какой пул: откат крючка (WrappedError с адресом крючка, check/pass_judge.rs hook_revert) — пулы шага с этим
-/// крючком; иначе — пулы, исполнимые только по факту пробы (by_pass: их класс записью не принят). Пулы принятых записью
-/// классов при откате без крючка не помечаются (причина отката им не приписывается). Принимает: вызов, итог пробы.
-/// Возвращает: помеченные пулы (для журнала вызывающего). Ошибок нет; синхронно — без await на пути сделки.
+/// Решение 401, ревью t186 (Н3): откат пробы execute перед отправкой сделки помечает «отвергнут» до следующей
+/// перепроверки ТОЛЬКО пул, на котором откат произошёл: WrappedError отката называет крючок (check/pass_judge.rs
+/// hook_revert), и помечается пул шага с этим крючком. Откат без WrappedError крючка пула вызова (другой шаг маршрута,
+/// цена, состояние) — не помечается никто. Не помечает и успех, срок, minOut (решение 247). Принимает: вызов, итог пробы.
+/// Возвращает: помеченные пулы. Ошибок нет; синхронно — без await на пути сделки.
 pub fn on_sim(c: &ExecCall, r: &CallResult) -> Vec<PoolRef> {
     if r.ok() || pass_judge::late(r) || super::remeasure::is_min_out(r) {
         return Vec::new();
     }
-    let by_hook: Vec<&Gated> = c
+    let marked: Vec<&Gated> = c
         .gated
         .iter()
         .filter(|g| pass_judge::hook_revert(r, g.hooks).is_some())
         .collect();
-    let marked: Vec<&Gated> = if by_hook.is_empty() {
-        c.gated.iter().filter(|g| g.by_pass).collect()
-    } else {
-        by_hook
-    };
+    if marked.is_empty() {
+        return Vec::new();
+    }
     let why = format!(
         "откат пробы сделки перед отправкой: {}",
         pass_judge::revert_text(r)
@@ -116,13 +157,11 @@ pub fn on_sim(c: &ExecCall, r: &CallResult) -> Vec<PoolRef> {
         };
         put(c.executor, &g.pool, fact);
     }
-    if !marked.is_empty() {
-        tracing::warn!(
-            executor = %c.executor,
-            pools = marked.len(),
-            "решение 401: пулы помечены «исполнитель отвергнут» до перепроверки — {why}"
-        );
-    }
+    tracing::warn!(
+        executor = %c.executor,
+        pools = marked.len(),
+        "решение 401: пулы помечены «исполнитель отвергнут» до перепроверки — {why}"
+    );
     marked.into_iter().map(|g| g.pool.clone()).collect()
 }
 

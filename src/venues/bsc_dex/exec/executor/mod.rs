@@ -149,7 +149,7 @@ pub fn takes(
     let fits = |f: &families::Family, h: &crate::core::types::RouteHop| {
         let singleton = f.executor_kind.is_some_and(|k| k.singleton());
         if singleton {
-            reg.entry(&h.pool).is_some_and(|e| entry::fits(ctx, &e).is_ok())
+            reg.entry(&h.pool).is_some_and(|e| entry::fits_ok(ctx, &e))
         } else {
             entry::supported(f, &h.pool).is_ok()
         }

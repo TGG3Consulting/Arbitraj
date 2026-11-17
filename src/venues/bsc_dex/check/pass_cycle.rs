@@ -1,25 +1,36 @@
 //! Файл: venues/bsc_dex/check/pass_cycle.rs
-//! Что делает: решение 401 (t186) — проба пула менеджера через исполнитель в цикле крючков (check/cycle.rs one): тот же
-//! проход и та же перепроверка (hooks.recheck_interval_s, «Перепроверить», «новые пулы», «пул готов»), без своего опроса.
-//! Пробуется пул шага менеджера (вид 19 / 20 / 21, Infinity Stable), форма шага которого строится (entry.rs shape: ключ,
-//! валюты ERC-20 = пара записи), — для КАЖДОГО кошелька с исполнителем v3 (сверен: версия «v3» у записи кошелька,
-//! exec/executor/onchain.rs), если:
-//! - класс шага записью не принят (решение 400: с крючком, Infinity Stable, Bin) — проба решает, исполним ли пул; или
-//! - пул помечен «отвергнут» откатом пробы сделки (pool_pass.rs on_sim) — перепроверка снимает или подтверждает метку.
+//! Что делает: решение 401 (t186) — проба пулов менеджера через исполнитель кошельков. Ревью t186 (Н2): ОТДЕЛЬНАЯ задача
+//! (pools/market.rs, класс Background очереди узла node/pace.rs — после сделок, проверок монет и крючков и котировок),
+//! не внутри цикла крючков: обычные проверки крючков B/C пробы не ждут. Своего опроса нет:
+//! - полный проход — раз в hooks.recheck_interval_s (та же настройка, что у цикла крючков);
+//! - между проходами — очередь check/recheck.rs (pass): «Перепроверить» монеты, «новые пулы» и (ревью Н5) «налоги монеты
+//!   проверены» (check/tax_cycle.rs) — пробуются её пулы, у которых итога ещё нет, он «не проверено» или метка отката.
 //!
-//! Пулы принятых записью классов без метки не пробуются (нагрузка). Итог — факт pool_pass.rs (журнал dex.check — при
-//! смене итога; первый итог — «проходит» и «отвергнут», «не проверено» — молча); поколение итогов проверок растёт
-//! (эпоха котировки, решение 352).
+//! Порядок прохода (ревью Н2): сначала пулы с меткой отката сделки, затем пулы, которые котируются (не спят — pools/depth.rs:
+//! спящий пул в котировку и сигналы не идёт, quote/select.rs), спящие — последними.
+//! Пробуется пул шага менеджера (вид 19 / 20 / 21, Infinity Stable) с формой шага (entry.rs shape: ключ, валюты ERC-20 =
+//! пара записи) — для КАЖДОГО кошелька с исполнителем v3 (версия «v3» у записи кошелька), если класс шага записью не
+//! принят (решение 400: с крючком, Infinity Stable, Bin) или пул помечен откатом пробы сделки (pool_pass.rs on_sim).
+//! Итог — факт pool_pass.rs; журнал dex.check — при смене итога (первый итог — «проходит» и «отвергнут», «не проверено» —
+//! молча). Котировка читает факт напрямую (снимок pool_pass::kind) при каждом расчёте — отдельного сигнала не нужно.
 //! Сбой узла, настройки или ключа — прежний факт остаётся; прежнего нет — «не проверено» с причиной.
-//! Нагрузка: пулов-кандидатов × кошельков с v3 × 2 eth_simulateV1 за проход (через общую очередь узла node/pace.rs);
-//! пока ни у одного кошелька нет v3 — ни одной пробы.
-//! Кто вызывает: check/cycle.rs (one).
-//! От чего зависит: check/{pass_probe, taxes_util}.rs, exec/executor/{entry, live_proof, pool_pass}.rs,
-//! pools/{listen, exec_kind, families}.rs, settings/accounts.
-//! Настройки: нет своих (через pass_probe — check.probe_usdt, dex.quoter_max_diff_pct, dex.deadline_s).
+//! Нагрузка: за полный проход — пулов-кандидатов × кошельков с v3 × 2 eth_simulateV1 подряд, по одной (оценка — заметка
+//! t186 и docs/TASKS.md); пока ни у одного кошелька нет v3 — ни одной пробы.
+//! Кто вызывает: pools/market.rs (запуск при подписке).
+//! От чего зависит: check/{pass_probe, taxes_util, recheck}.rs, exec/executor/{entry, live_proof, pool_pass}.rs,
+//! pools/{listen, exec_kind, families}.rs, settings_wait.rs, settings/accounts.
+//! Настройки: hooks.recheck_interval_s (вся система); через pass_probe — check.probe_usdt, dex.quoter_max_diff_pct,
+//! dex.deadline_s.
 
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::Duration;
+
+use alloy_primitives::Address;
 use chrono::Utc;
 
+use crate::core::types::PoolRef;
+use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::super::exec::executor::pool_pass::{self, Fact, State};
@@ -28,13 +39,118 @@ use super::super::pools::exec_kind;
 use super::super::pools::families::Proto;
 use super::super::pools::listen::Pools;
 use super::super::pools::registry::Entry;
+use super::super::settings_wait;
 use super::pass_judge::Outcome;
 use super::pass_probe;
+use super::recheck::Queue;
 use super::taxes_util::Sources;
 
-/// Проба пула через исполнители всех кошельков с v3 (см. шапку). Принимает: состояние пулов, источники встречного
-/// токена прохода, пул. Ошибок нет.
-pub async fn pool(p: &Pools, sources: &Sources, e: &Entry) {
+/// Задача проб (см. шапку). Работает постоянно; не задан интервал — ждёт настройку (settings_wait.rs). Ошибок нет.
+pub async fn run(p: Pools, queue: Queue) {
+    loop {
+        full(&p).await;
+        if p.out.is_closed() {
+            return;
+        }
+        let read = || {
+            let s = p
+                .ctx
+                .settings
+                .integer("hooks.recheck_interval_s", At::default());
+            s.map(Duration::from_secs)
+        };
+        let Some(d) =
+            settings_wait::until_ok(&p.ctx, "Проба пулов через исполнитель", "dex.check", read)
+                .await
+        else {
+            return;
+        };
+        let until = tokio::time::Instant::now() + d;
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep_until(until) => break,
+                _ = queue.notified() => {
+                    let (coins, new_pools) = queue.take();
+                    woken(&p, &coins, new_pools).await;
+                    if p.out.is_closed() {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Полный проход: все пулы-кандидаты в порядке шапки. Ошибок нет.
+async fn full(p: &Pools) {
+    let Some(xs) = executors(p) else { return };
+    let all = p.reg.refs().into_iter().filter_map(|r| p.reg.entry(&r));
+    each(p, ordered(&xs, all), false).await;
+}
+
+/// Внеочередной проход по очереди (ревью Н5): пулы переданных монет и при «новых пулах» — все, но только у кошельков,
+/// где итога нет, он «не проверено» или метка отката сделки. Ошибок нет.
+async fn woken(p: &Pools, coins: &HashSet<Address>, new_pools: bool) {
+    let Some(xs) = executors(p) else { return };
+    let all = p.reg.refs().into_iter().filter_map(|r| p.reg.entry(&r));
+    let list = ordered(&xs, all.filter(|e| new_pools || coins.contains(&e.coin)));
+    each(p, list, true).await;
+}
+
+/// Пробы по списку (запись реестра — свежая, на момент пробы). Принимает: состояние пулов, пулы, только неустоявшиеся.
+/// Ошибок нет.
+async fn each(p: &Pools, list: Vec<PoolRef>, unsettled: bool) {
+    let sources = Sources::default();
+    for r in list {
+        let Some(e) = p.reg.get(&r).filter(|e| e.valid) else {
+            continue;
+        };
+        pool(p, &sources, &e, unsettled).await;
+        if p.out.is_closed() {
+            return;
+        }
+    }
+}
+
+/// Исполнители v3 кошельков. None — ни у одного кошелька нет v3 (проб нет, реестр не обходится) или данные пулов
+/// отстают (решение 72: вердикта нет). Ошибок нет.
+fn executors(p: &Pools) -> Option<Vec<Address>> {
+    let acc = p.ctx.settings.accounts();
+    let xs: Vec<Address> = acc.wallets().iter().filter_map(pool_pass::v3).collect();
+    (!xs.is_empty() && !p.lag.busy()).then_some(xs)
+}
+
+/// Пулы-кандидаты (шаг менеджера, достоверные) по порядку: метка отката, не спят, спят. Принимает: исполнители v3,
+/// записи реестра (без копий). Ошибок нет.
+fn ordered(xs: &[Address], pools: impl Iterator<Item = Arc<Entry>>) -> Vec<PoolRef> {
+    let mut list: Vec<(u8, PoolRef)> = pools
+        .filter(|e| e.valid)
+        .filter(|e| entry::shape(e).is_ok_and(|(k, _, _)| k.singleton()))
+        .map(|e| {
+            let rank = if marked(xs, &e.pool.reference) {
+                0
+            } else if e.asleep {
+                2
+            } else {
+                1
+            };
+            (rank, e.pool.reference.clone())
+        })
+        .collect();
+    list.sort_by_key(|(rank, _)| *rank);
+    list.into_iter().map(|(_, r)| r).collect()
+}
+
+/// Есть ли у пула метка отката пробы сделки у какого-либо из исполнителей. Ошибок нет.
+fn marked(xs: &[Address], r: &PoolRef) -> bool {
+    xs.iter().any(|x| {
+        pool_pass::get(*x, r).is_some_and(|f| matches!(f.state, State::Rejected { deal: true, .. }))
+    })
+}
+
+/// Проба пула через исполнители всех кошельков с v3. Принимает: состояние пулов, источники встречного токена прохода,
+/// пул, только ли неустоявшиеся итоги (нет итога, «не проверено», метка отката). Ошибок нет.
+async fn pool(p: &Pools, sources: &Sources, e: &Entry, unsettled: bool) {
     let Ok((k, _, hooks)) = entry::shape(e) else {
         return;
     };
@@ -42,7 +158,7 @@ pub async fn pool(p: &Pools, sources: &Sources, e: &Entry) {
         return;
     }
     let stable = e.family.proto == Proto::InfinityStable;
-    let accepted = live_proof::admits(k, stable, hooks).is_ok();
+    let accepted = live_proof::accepted(k, stable, hooks);
     let r = &e.pool.reference;
     for w in p.ctx.settings.accounts().wallets() {
         let Some(x) = pool_pass::v3(&w) else { continue };
@@ -51,7 +167,11 @@ pub async fn pool(p: &Pools, sources: &Sources, e: &Entry) {
             prev.as_ref().map(|f| &f.state),
             Some(State::Rejected { deal: true, .. })
         );
-        if accepted && !deal {
+        let settled = matches!(
+            prev.as_ref().map(|f| &f.state),
+            Some(State::Passed | State::Rejected { deal: false, .. })
+        );
+        if (accepted && !deal) || (unsettled && settled) {
             continue;
         }
         let ctx = p.ctx.with_account(&w.id);
@@ -72,8 +192,6 @@ pub async fn pool(p: &Pools, sources: &Sources, e: &Entry) {
         if !pool_pass::put(x, r, fact.clone()) {
             continue;
         }
-        // Итог сменился — эпоха котировки (решение 352) и журнал.
-        p.checks.update_pool_if(r, |_| true);
         let level = match (&prev, &fact.state) {
             (_, State::Rejected { .. }) => Some(Level::Warn),
             (None, State::Passed) | (Some(_), _) => Some(Level::Info),

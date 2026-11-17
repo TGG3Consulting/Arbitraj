@@ -91,6 +91,37 @@ pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     Ok((k, a))
 }
 
+/// Ревью t186 (Н1): горячий путь котировки (quote/graph_executor.rs all_via, quote/graph_fit.rs S2, mod.rs takes) — то же,
+/// что `fits(ctx, e).is_ok()`, без строк и без замков общих структур: форма шага (как supported и shape) и допуск
+/// pool_gate::admitted (снимки кошельков и итогов пробы). Равенство с fits — тест tests/bsc_dex_pool_pass_401.rs.
+/// Принимает: окружение (кошелёк), запись реестра. Ошибок нет.
+pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
+    let Some(k) = e.family.executor_kind else {
+        return false;
+    };
+    if !k.singleton() {
+        return !matches!(e.pool.reference, PoolRef::Singleton { .. });
+    }
+    let reference = match &e.pool.reference {
+        PoolRef::Singleton { .. } => true,
+        PoolRef::Contract(_) => k == ExecKind::InfCl && e.family.proto == Proto::InfinityStable,
+        _ => false,
+    };
+    let Some(key) = e.key.as_ref().filter(|_| reference) else {
+        return false;
+    };
+    let (c0, c1) = match key {
+        PoolKey::Uniswap(d) => (d.currency0, d.currency1),
+        PoolKey::Infinity(d) => (d.currency0, d.currency1),
+    };
+    let (t0, t1) = (e.pool.token0, e.pool.token1);
+    let pair = (t0 == c0 && t1 == c1) || (t0 == c1 && t1 == c0);
+    if c0.is_zero() || c1.is_zero() || !pair {
+        return false;
+    }
+    super::pool_gate::admitted(ctx, e, k, key.hooks())
+}
+
 /// Форма шага без правила допуска (решение 401: ею пользуется сама проба пула через исполнитель): supported и у шага
 /// пула менеджера — ключ есть, валюты ключа ERC-20 = пара записи. Принимает: запись реестра. Возвращает: вид шага, адрес
 /// пула, крючок ключа (у шагов не менеджера — нулевой). Ошибок иных нет.

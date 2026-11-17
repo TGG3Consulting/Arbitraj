@@ -11,8 +11,10 @@
 //!    отката крючка в записи; details — HookCallFailed() (0xa9e35b2f).
 //! 3. Строгость: получено ≠ квотеру вне допуска — «отвергнут»; остаток на исполнителе не 0 — «отвергнут»; квотер 0 —
 //!    «не проверено» (изменённые копии записанных итогов).
-//! 4. Откат пробы сделки (pool_pass::on_sim): откат крючка — помечен только пул этого крючка; откат без крючка — только
-//!    пулы, допущенные пробой (by_pass); успех — ничего.
+//! 4. Откат пробы сделки (pool_pass::on_sim, ревью t186 Н3): откат крючка — помечен только пул этого крючка; откат без
+//!    WrappedError крючка — никто; успех — ничего. Вид итога (pool_pass::kind, снимок горячего пути) — тот же, что у
+//!    полного факта.
+//! 6. Ревью t186 (Н1): entry::fits_ok (горячий путь) = entry::fits(..).is_ok() на тех же пулах и фактах.
 //! 5. Правило допуска (pool_gate.rs через entry::fits): пул Infinity CL с крючком — не исполним, пока у исполнителя
 //!    кошелька нет факта; «прошёл» — исполним (и сборка шага entry::params); «отвергнут» — не исполним и в принятом
 //!    классе (без крючка); «не проверено» — как решение 400. Карточка пула (pass_view::details) — строки факта.
@@ -35,10 +37,11 @@ use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::check::pass_judge::{self, Outcome, Side};
 use arb::venues::bsc_dex::check::simulate::CallResult;
 use arb::venues::bsc_dex::exec::executor::call::ExecCall;
-use arb::venues::bsc_dex::exec::executor::pool_pass::{self, Fact, Gated, State};
+use arb::venues::bsc_dex::exec::executor::pool_pass::{self, Fact, Gated, Kind, State};
 use arb::venues::bsc_dex::exec::executor::{entry, pass_view};
 use arb::venues::bsc_dex::pools::families;
 use arb::venues::bsc_dex::pools::key::{InfinityPoolKeyData, PoolKey};
+use arb::venues::bsc_dex::pools::registry::Entry;
 
 const DIR: &str = "tests/data/executor_v3_live_2026-11-17";
 
@@ -334,37 +337,35 @@ fn deal_revert_marks_pools() {
         Gated {
             pool: pool(1),
             hooks: ddc5,
-            by_pass: true,
         },
         Gated {
             pool: pool(2),
             hooks: other,
-            by_pass: true,
         },
         Gated {
             pool: pool(3),
             hooks: Address::ZERO,
-            by_pass: false,
         },
     ];
     // Откат крючка 0xddc5… (продажа 0x25c3 записи) — помечен только пул этого крючка.
     let x1 = Address::repeat_byte(0xa1);
-    let marked = pool_pass::on_sim(&exec_call(x1, gated.clone()), &recorded("0x25c3a0dd", "b"));
-    assert_eq!(marked, vec![pool(1)]);
+    let by_hook = pool_pass::on_sim(&exec_call(x1, gated.clone()), &recorded("0x25c3a0dd", "b"));
+    assert_eq!(by_hook, vec![pool(1)]);
+    assert_eq!(pool_pass::kind(x1, &pool(1)), Some(Kind::Rejected));
     let f = pool_pass::get(x1, &pool(1)).expect("факт");
     assert!(
         matches!(&f.state, State::Rejected { deal: true, why } if why.contains("UA")),
         "{f:?}"
     );
     assert!(pool_pass::get(x1, &pool(3)).is_none());
-    // Откат без крючка (Bin 0x96aa65ad) — только пулы, допущенные пробой.
+    // Откат без WrappedError крючка (Bin 0x96aa65ad) — откат не приписывается ни одному пулу.
     let x2 = Address::repeat_byte(0xa2);
-    let marked = pool_pass::on_sim(&exec_call(x2, gated.clone()), &recorded("0x9994aa29", "a"));
-    assert_eq!(marked, vec![pool(1), pool(2)]);
+    let plain = pool_pass::on_sim(&exec_call(x2, gated.clone()), &recorded("0x9994aa29", "a"));
+    assert!(plain.is_empty() && pool_pass::kind(x2, &pool(1)).is_none());
     // Успех — ничего.
     let x3 = Address::repeat_byte(0xa3);
-    let marked = pool_pass::on_sim(&exec_call(x3, gated), &recorded("0x92e5d26c", "a"));
-    assert!(marked.is_empty() && pool_pass::get(x3, &pool(1)).is_none());
+    let none = pool_pass::on_sim(&exec_call(x3, gated), &recorded("0x92e5d26c", "a"));
+    assert!(none.is_empty() && pool_pass::get(x3, &pool(1)).is_none());
 }
 
 #[tokio::test]
@@ -412,9 +413,30 @@ async fn gate_follows_pool_fact() {
         )
         .await
         .unwrap();
+    // Ревью t186 (Н1): горячий путь fits_ok = fits(..).is_ok() — на каждом шаге ниже.
+    let check = |e: &Entry| {
+        let ok = entry::fits(&q.ctx, e).is_ok();
+        assert_eq!(
+            entry::fits_ok(&q.ctx, e),
+            ok,
+            "fits_ok ≠ fits: {}",
+            e.family.id
+        );
+        ok
+    };
+    let native = entry_of(PoolKey::Infinity(InfinityPoolKeyData {
+        currency0: Address::ZERO,
+        currency1: wbnb,
+        hooks: Address::ZERO,
+        manager,
+        fee: 2500,
+        parameters: B256::from(U256::from(10u32 << 16)),
+    }));
+    assert!(!check(&native), "нативная валюта в ключе");
+    assert!(check(&base), "пул V2 записи");
     // Без исполнителя у кошелька: класс с крючком записью не принят (решение 400), класс без крючка — принят.
-    assert!(entry::fits(&q.ctx, &hooked).is_err());
-    assert!(entry::fits(&q.ctx, &plain).is_ok());
+    assert!(!check(&hooked));
+    assert!(check(&plain));
     // Кошелёк строки «Пробы» с исполнителем v3.
     let x = "0x00000000000000000000000000000000000401a1";
     route_common::executor(&p, x).await;
@@ -438,7 +460,11 @@ async fn gate_follows_pool_fact() {
         block: Some(134171808),
     };
     pool_pass::put(xa, &hooked.pool.reference, fact(State::Passed));
-    assert!(entry::fits(&q.ctx, &hooked).is_ok());
+    assert_eq!(
+        pool_pass::kind(xa, &hooked.pool.reference),
+        Some(Kind::Passed)
+    );
+    assert!(check(&hooked));
     assert!(entry::params(&q.ctx, &hooked, usdt).is_ok());
     assert!(
         pass_view::details(&q.ctx, &hooked)
@@ -454,12 +480,13 @@ async fn gate_follows_pool_fact() {
     let rejected = entry::fits(&q.ctx, &hooked).expect_err("отвергнут");
     assert!(rejected.contains("отвергнут"), "{rejected}");
     assert!(entry::params(&q.ctx, &hooked, usdt).is_err());
+    assert!(!check(&hooked));
     pool_pass::put(xa, &plain.pool.reference, fact(no));
-    assert!(entry::fits(&q.ctx, &plain).is_err());
+    assert!(!check(&plain));
     // Не проверено — как решение 400.
     let unchecked = State::Unchecked("квотер не ответил".into());
     pool_pass::put(xa, &plain.pool.reference, fact(unchecked.clone()));
-    assert!(entry::fits(&q.ctx, &plain).is_ok());
+    assert!(check(&plain));
     pool_pass::put(xa, &hooked.pool.reference, fact(unchecked));
-    assert!(entry::fits(&q.ctx, &hooked).is_err());
+    assert!(!check(&hooked));
 }

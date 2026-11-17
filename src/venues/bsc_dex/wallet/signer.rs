@@ -2,6 +2,9 @@
 //! Что делает: ключ кошелька бота из зашифрованных секретов → подписант alloy; адрес кошелька;
 //! подпись транзакции и её хеш (считается локально до отправки — research/flow/bsc_send.md, раздел 5).
 //! Ключ живёт только в памяти на время подписи и затирается (zeroize); в журнал, ошибки и логи не попадает.
+//! Исключение (решение 398): подписант транзакции DEX (exec/txs.rs) держится в задаче слежения (send/track_util.rs
+//! Watch::key) до итога её nonce (не дольше send.queue_max_wait_s) — им подписываются отмены; затирается при удалении
+//! (ecdsa SigningKey: Drop → zeroize), Debug печатает только адрес (alloy LocalSigner), Watch без Debug/Serialize/Clone.
 //! Кто вызывает: wallet/balances.rs, wallet/nonce.rs, wallet/approve.rs, wallet/transfer.rs, exec/*, connection.rs.
 //! От чего зависит: ctx.rs, ctx_wallet.rs (кошелёк счёта, секреты), alloy (signer-local, consensus, network, eips).
 //! Настройки: нет. Секрет: ключ кошелька счёта (имя — у записи кошелька, решение 132; docs/SECURITY.md).

@@ -5,7 +5,8 @@
 //! cl_ord_id среди открытых и закрытых. Итог: vol_exec, price (средняя), fee (в котируемой — oflags fciq).
 //! Кто вызывает: trade.rs, order_rules.rs (times — проверка до постановки).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
-//! Настройки: venue.order_poll_ms, venue.order_final_wait_ms, venue.quote_asset [kraken].
+//! Настройки: venue.order_poll_ms, venue.order_final_wait_ms [kraken]; venue.quote_asset — значением от trade.rs
+//! (решение 398: читается до постановки ордера).
 //!
 //! Официально (OpenAPI spot-rest.yaml): POST /0/private/QueryOrders — txid (через запятую), result «txid → order»; схема
 //! open/order: status pending, open, closed, canceled, expired; vol, vol_exec «Volume executed (base currency)», cost,
@@ -124,9 +125,15 @@ async fn poll_final(
 }
 
 /// Что делает: результат ядра по окончательному состоянию (vol, vol_exec, price, fee).
-/// Принимает: окружение, запрос ядра, состояние, txid. Ошибки: BadResponse — нет полей; OutcomeUnknown — исполнено, а
-/// средней цены нет; NotConfigured — venue.quote_asset.
-pub fn result(ctx: &Ctx, req: TradeRequest, s: &Value, txid: String) -> GatewayResult<TradeResult> {
+/// Принимает: окружение, запрос ядра, состояние, txid, котируемую монету (venue.quote_asset — решение 398: читает
+/// вызывающий до постановки ордера). Ошибки: BadResponse — нет полей; OutcomeUnknown — исполнено, а средней цены нет.
+pub fn result(
+    ctx: &Ctx,
+    req: TradeRequest,
+    s: &Value,
+    txid: String,
+    quote: String,
+) -> GatewayResult<TradeResult> {
     let size = num::dec(s, "vol")?;
     let filled = num::dec_opt(s, "vol_exec")?.unwrap_or(Decimal::ZERO);
     let avg = num::dec_opt(s, "price")?.unwrap_or(Decimal::ZERO);
@@ -151,7 +158,7 @@ pub fn result(ctx: &Ctx, req: TradeRequest, s: &Value, txid: String) -> GatewayR
         filled_qty: filled,
         avg_price: if filled.is_zero() { Decimal::ZERO } else { avg },
         // «Total fee (quote currency)» и oflags fciq — монета комиссии котируемая.
-        fees: Fee::single(fee, ctx.text("venue.quote_asset")?),
+        fees: Fee::single(fee, quote),
         venue_ref: txid,
         chain: None,
         finished_at: Utc::now(),

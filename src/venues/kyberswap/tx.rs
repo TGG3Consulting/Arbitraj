@@ -7,6 +7,9 @@
 //! балансировщиком (публичный) отвечает с разных серверов, отстающий ещё не видит прошлую транзакцию в блоке и даёт
 //! уже занятый номер — «nonce too low» (сделка FLOKI 02.11). Квитанция есть (в блоке или откат — номер занят) —
 //! запоминаем nonce + 1. Квитанции нет — не запоминаем: следующий номер снова решает узел (транзакция могла выпасть).
+//! Решение 398: сроки ожидания квитанции (kyber.receipt_poll_ms, kyber.receipt_timeout_ms) читаются ДО отправки и
+//! передаются значением: не задана — транзакция не подписана и не отправлена (раньше — уже ушла, а итог из квитанции
+//! не получен). После eth_sendRawTransaction настройки не читаются (сторож tests/settings_before_send_guard.rs).
 //! Кто вызывает: trade.rs, transfer.rs.
 //! От чего зависит: ctx.rs, node.rs (вызовы узла, Receipt), signer.rs.
 //! Настройки: kyber.gas_*_pct, kyber.receipt_poll_ms, kyber.receipt_timeout_ms; узел — kyber.node_http_url.
@@ -32,7 +35,8 @@ pub struct Done {
 /// Подписывает и отправляет вызов, ждёт квитанции до kyber.receipt_timeout_ms. Принимает: окружение, отправителя,
 /// адрес, данные, сумму BNB (wei), запомненный «следующий» nonce (state::Parts::nonce_next).
 /// Возвращает: Done (исход — в блоке / откат / не попала).
-/// Ошибки (транзакция не ушла): узел (nonce, газ, откат estimate), NotConfigured.
+/// Ошибки (транзакция не ушла): узел (nonce, газ, откат estimate), NotConfigured (в том числе сроки квитанции — решение
+/// 398: читаются первыми, до любого запроса к узлу).
 pub async fn send(
     ctx: &Ctx,
     next: &StdMutex<Option<u64>>,
@@ -41,6 +45,8 @@ pub async fn send(
     data: Bytes,
     value: U256,
 ) -> GatewayResult<Done> {
+    // Решение 398: сроки ожидания итога — до отправки (после неё настройки не читаются).
+    let wait = Wait::read(ctx)?;
     let price = node::gas_price(ctx).await?;
     let gas = node::estimate_gas(ctx, from, to, &data, value).await?;
     let nonce = pick_nonce(ctx, next, node::tx_count(ctx, from).await?).await;
@@ -49,7 +55,7 @@ pub async fn send(
         signer::legacy(ctx, nonce, price, gas, to, value, data)?,
     )?;
     let hash = node::send_raw(ctx, &signed.raw).await?;
-    let d = track(ctx, hash, nonce).await?;
+    let d = track(ctx, hash, nonce, wait).await;
     if d.receipt.is_some() {
         let mut n = next.lock().unwrap_or_else(|p| p.into_inner());
         *n = Some(n.map_or(nonce + 1, |k| k.max(nonce + 1)));
@@ -77,15 +83,33 @@ async fn pick_nonce(ctx: &Ctx, next: &StdMutex<Option<u64>>, node_says: u64) -> 
     }
 }
 
-/// Ждёт квитанцию по хешу до срока. Принимает: окружение, хеш, nonce. Возвращает: Done.
-/// Ошибки: только настройки (сроки); сбой узла при опросе квитанции повторяется в пределах срока.
-async fn track(ctx: &Ctx, hash: B256, nonce: u64) -> GatewayResult<Done> {
-    let poll = Duration::from_millis(ctx.int("kyber.receipt_poll_ms")?);
-    let deadline = Duration::from_millis(ctx.int("kyber.receipt_timeout_ms")?);
+/// Сроки ожидания квитанции (решение 398: читаются до отправки, передаются значением).
+#[derive(Debug, Clone, Copy)]
+pub struct Wait {
+    /// kyber.receipt_poll_ms — пауза между запросами квитанции.
+    pub poll: Duration,
+    /// kyber.receipt_timeout_ms — срок ожидания квитанции.
+    pub deadline: Duration,
+}
+
+impl Wait {
+    /// Читает kyber.receipt_poll_ms и kyber.receipt_timeout_ms. Ошибки: NotConfigured — не задана (транзакции нет).
+    pub fn read(ctx: &Ctx) -> GatewayResult<Self> {
+        Ok(Self {
+            poll: Duration::from_millis(ctx.int("kyber.receipt_poll_ms")?),
+            deadline: Duration::from_millis(ctx.int("kyber.receipt_timeout_ms")?),
+        })
+    }
+}
+
+/// Ждёт квитанцию по хешу до срока. Принимает: окружение, хеш, nonce, сроки (прочитаны до отправки). Возвращает: Done.
+/// Ошибок нет: сбой узла при опросе квитанции повторяется в пределах срока; срок вышел — «не попала».
+async fn track(ctx: &Ctx, hash: B256, nonce: u64, wait: Wait) -> Done {
+    let Wait { poll, deadline } = wait;
     let started = Instant::now();
     loop {
         match node::receipt(ctx, hash).await {
-            Ok(Some(r)) => return Ok(done(hash, nonce, Some(r))),
+            Ok(Some(r)) => return done(hash, nonce, Some(r)),
             Ok(None) => {}
             // Сбой узла при опросе — не итог: повторяем в пределах срока.
             Err(e) if started.elapsed() >= deadline => {
@@ -95,12 +119,12 @@ async fn track(ctx: &Ctx, hash: B256, nonce: u64) -> GatewayResult<Done> {
                     format!("Квитанция {hash} не прочитана к сроку: {}", e.message),
                 )
                 .await;
-                return Ok(done(hash, nonce, None));
+                return done(hash, nonce, None);
             }
             Err(_) => {}
         }
         if started.elapsed() >= deadline {
-            return Ok(done(hash, nonce, None));
+            return done(hash, nonce, None);
         }
         tokio::time::sleep(poll).await;
     }

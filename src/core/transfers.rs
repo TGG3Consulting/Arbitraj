@@ -24,6 +24,7 @@
 //! Решение 253: перед выводом — ожидание доступности монеты (withdraw_wait.rs, venue.withdraw_ready_wait_ms отправителя;
 //! дополнение t89 — и у возврата USDT, и у перегона: пауза от своей сделки площадки по активу, withdraw_after.rs;
 //! не задана — сразу); начало перевода (время в пути) — до ожидания.
+//! Решение 398: venue.status_poll_ms отправителя и получателя проверяется ДО вывода (poll_set): не задана — вывода нет.
 //! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network,
 //! transfer.locked_retry_ms, transfer.locked_retries_max (через transfer_locked.rs), venue.withdraw_ready_wait_ms (через
 //! withdraw_wait.rs), risk.outcome_poll_s,
@@ -165,6 +166,59 @@ pub(super) fn floored(core: &Core, from: &VenueId, asset: &Asset, qty: Decimal) 
     }
 }
 
+/// Решение 398: какая площадка перевода без venue.status_poll_ms. После вывода ключ читается на каждом круге (Pacer,
+/// wait.rs: не задан — опрос стоит до задания): у отправителя — статус вывода (здесь, go) и фоновая сверка хеша
+/// (transfer_chain.rs:225); у получателя — зачисление (transfer_credit.rs:55) и подтверждение статусом
+/// (credit_mismatch.rs:111). Получателю-DEX с зачислением по блокчейну (решение 151) ключ тоже нужен: хеш вывода может
+/// прийти раньше события — тогда зачисление ждёт опросом (go → transfer_credit::wait), а зачисление по блокчейну
+/// подтверждается статусом депозита фоном (transfer_chain.rs → credit_mismatch::confirm). Вызывают: предпроверка сделки
+/// до покупки (executor.rs) и go до вывода (poll_set — вторая линия: «Перегнать», возврат USDT, ручной перевод).
+/// Принимает: ядро, (откуда, куда). Возвращает: None — у обеих задан; Some(причина «не задана venue.status_poll_ms у
+/// <площадка>»). Ошибок нет.
+pub fn poll_missing(core: &Core, from: &VenueId, to: &VenueId) -> Option<String> {
+    [from, to].into_iter().find_map(|v| {
+        let at = crate::settings::read::At {
+            venue: Some(&v.0),
+            coin: None,
+        };
+        let e = core.inner.deps.settings.integer("venue.status_poll_ms", at).err()?;
+        Some(format!(
+            "не задана venue.status_poll_ms у {} — статус вывода и зачисление после вывода не опрашивались бы              (решение 398; {})",
+            v.0, e.message
+        ))
+    })
+}
+
+/// Решение 398, вторая линия (перегон, возврат USDT, ручной перевод — без предпроверки сделки): poll_missing до вывода.
+/// Принимает: ядро, сделку, (откуда, куда), монету. Ошибки: текст причины «вывод не отправлен — не задана …» (уже в
+/// журнале, core.not_configured).
+async fn poll_set(
+    core: &Core,
+    deal: &str,
+    from: &VenueId,
+    to: &VenueId,
+    asset: &Asset,
+) -> Result<(), OpError> {
+    let Some(miss) = poll_missing(core, from, to) else {
+        return Ok(());
+    };
+    let why = format!(
+        "{deal}: вывод {} {} → {} не отправлен — {miss}",
+        asset.ticker, from.0, to.0
+    );
+    core.inner
+        .deps
+        .log(
+            Level::Warn,
+            "core.not_configured",
+            Some(&from.0),
+            &why,
+            None,
+        )
+        .await;
+    Err(OpError::from(why))
+}
+
 /// Перевод. Принимает: как send_as, плюс можно ли зачислить по блокчейну (решение 151 — только перевод сделки).
 /// Возвращает: (вывод, зачисление, строка хронологии — если зачислено по блокчейну). Ошибки: как у send_trade.
 /// Решение 236, дополнение: в `gas` — газ каждой неудачной попытки вывода с фактом транзакции (и повторённой правилом
@@ -196,6 +250,10 @@ async fn go(
         .deposit_address(&on_to, &net_to)
         .await
         .map_err(|e| format!("{}: адрес депозита: {}", to.0, e.message))?;
+    // Решение 398: интервал опроса статуса вывода (у отправителя) и зачисления (у получателя) — venue.status_poll_ms —
+    // читается после вывода (Pacer, wait.rs: не задан — опрос стоит до задания). Проверяется до денег: не задан —
+    // вывода нет, причина в журнале.
+    poll_set(core, deal, from, to, asset).await?;
     // Ожидаемое зачисление — до вывода, чтобы событие не пришло раньше (решение 76; события у получателя выключены или
     // приход не посчитан — только опрос).
     // Решение 104: сумма вывода — вниз до точности вывода биржи (withdrawPrecision из справочника сетей; так же считает

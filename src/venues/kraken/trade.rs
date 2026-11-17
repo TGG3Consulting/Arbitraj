@@ -5,7 +5,8 @@
 //! Кто вызывает: mod.rs (trade).
 //! Решение 268: тот же путь постановки и итога — у рыночной продажи (market_sell.rs передаёт готовый ордер, prepared).
 //! От чего зависит: order_rules.rs, order_state.rs, rest.rs, symbols.rs, num.rs, ctx.rs.
-//! Настройки: через order_rules.rs и order_state.rs.
+//! Настройки: через order_rules.rs и order_state.rs; venue.quote_asset (монета комиссии итога) — здесь, до постановки
+//! (решение 398).
 //!
 //! Официально — POST /0/private/AddOrder (OpenAPI spot-rest.yaml, схема add): result {descr {order}, txid [..]}.
 //! Ответ без txid при пустом error — итог неизвестен (повтор дал бы второй ордер).
@@ -34,6 +35,9 @@ pub async fn trade(
         Some(p) => p,
         None => order_rules::ready(ctx, symbols, &req).await?,
     };
+    // Решение 398: монета комиссии итога (venue.quote_asset) — до постановки: не задана — ордера нет (раньше читалась
+    // после исполнения, и итог ордера терялся ошибкой «не задана»).
+    let quote = ctx.text("venue.quote_asset")?;
     let placed = rest::private(ctx, "AddOrder", p.form.clone(), Op::Trade).await;
     let placed = placed.and_then(|res| {
         res.get("txid")
@@ -64,5 +68,5 @@ pub async fn trade(
         Err(e) => return Err(e),
     };
     let state = order_state::settle(ctx, &txid).await?;
-    order_state::result(ctx, req, &state, txid)
+    order_state::result(ctx, req, &state, txid, quote)
 }

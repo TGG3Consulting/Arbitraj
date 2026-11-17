@@ -6,19 +6,27 @@
 //! busy»); состояние ордера — пример ответа из официальной документации docs-v3 (Spot → Trade → Create an Order,
 //! «Response», status PENDING — тот же, что в tests/bingx_rate_pause.rs). Окончательного ответа Query Order BingX в
 //! документации-примерах и в tests/data нет (tests/README.md) — проверяется повтор и итог по сроку, без выдуманных данных.
+//! Решение 398: сроки ожидания итога (venue.order_poll_ms, venue.order_final_wait_ms) читаются ДО постановки ордера —
+//! не задан срок: trade отказывает NotConfigured, а запроса постановки POST /openApi/spot/v1/trade/order к серверу нет
+//! (ордер — по примеру запроса Create an Order из той же документации: NEMS-USDT, SELL, LIMIT, 115 по 0.1557).
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bingx (ctx, order_state), arb::settings, arb::storage, arb::secrets, arb::gateway.
+//! От чего зависит: arb::venues::bingx (ctx, order_state, trade, order_rules, symbols), arb::core::types, arb::settings,
+//! arb::storage, arb::secrets, arb::gateway.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use arb::core::types::{Asset, Side, TradeRequest, VenueId};
 use arb::gateway::errors::ErrorCode;
 use arb::secrets::crypto::KdfParams;
 use arb::settings::value::Scope;
 use arb::storage::db::Db;
 use arb::storage::journal::Journal;
 use arb::storage::raw_log::RawLog;
-use arb::venues::bingx::{ctx::Ctx, order_state};
+use arb::venues::bingx::order_rules::Prepared;
+use arb::venues::bingx::symbols::Symbols;
+use arb::venues::bingx::{ctx::Ctx, order_state, trade};
+use rust_decimal::Decimal;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -26,6 +34,7 @@ use tokio::sync::broadcast;
 use zeroize::Zeroizing;
 
 const QUERY: &str = "/openApi/spot/v1/trade/query";
+const ORDER: &str = "/openApi/spot/v1/trade/order";
 const CANCEL: &str = "/openApi/spot/v1/trade/cancel";
 /// Пример ответа Create an Order (docs-v3, «Response»): status PENDING — не окончательный.
 const ORDER_DOC: &str = r#"{"code":0,"msg":"","debugMsg":"","data":{"symbol":"NEMS-USDT","orderId":1735963671248581120,"transactTime":1702720966528,"price":"0.1557","origQty":"115","executedQty":"0","cummulativeQuoteQty":"0","status":"PENDING","type":"LIMIT","side":"SELL"}}"#;
@@ -78,7 +87,12 @@ async fn serve() -> (String, Plan, Hits) {
 
 /// Окружение адаптера BingX на SQLite во временной папке (ключи — в хранилище секретов), сроки ордера заданы.
 async fn start() -> (Ctx, Plan, Hits) {
-    let d = std::env::temp_dir().join(format!("arb-bingx-263-{}", std::process::id()));
+    start_in("263", true).await
+}
+
+/// Как start; папка — своя у теста (имя), times = false — venue.order_poll_ms не задана (решение 398).
+async fn start_in(name: &str, times: bool) -> (Ctx, Plan, Hits) {
+    let d = std::env::temp_dir().join(format!("arb-bingx-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     let db = Db::open(&d.join("t.sqlite")).unwrap();
@@ -101,6 +115,9 @@ async fn start() -> (Ctx, Plan, Hits) {
         b("venue.order_poll_ms", json!(50)),
         b("venue.order_final_wait_ms", json!(300)),
     ] {
+        if !times && k == "venue.order_poll_ms" {
+            continue;
+        }
         settings.set(&k, sc, Some(v), "тест").await.unwrap();
     }
     let vault = arb::secrets::Vault::locked(d.join("secrets.enc"));
@@ -127,7 +144,8 @@ async fn failed_poll_is_retried_until_deadline() {
     // Первый опрос — сбой, дальше ордер в PENDING (не окончательный); отмена — тоже сбой.
     plan.lock().unwrap().insert(QUERY, vec![BUSY, ORDER_DOC]);
     plan.lock().unwrap().insert(CANCEL, vec![BUSY]);
-    let e = order_state::settle(&ctx, "NEMS-USDT", "1735963671248581120")
+    let times = order_state::times(&ctx).unwrap();
+    let e = order_state::settle(&ctx, "NEMS-USDT", "1735963671248581120", times)
         .await
         .unwrap_err();
     let of = |p: &str| hits.lock().unwrap().iter().filter(|x| *x == p).count();
@@ -137,4 +155,52 @@ async fn failed_poll_is_retried_until_deadline() {
     assert_eq!(e.code, ErrorCode::OutcomeUnknown, "{}", e.message);
     assert!(e.message.contains("статус PENDING"), "{}", e.message);
     assert!(e.message.contains("отмена: "), "{}", e.message);
+}
+
+/// Решение 398: срок ожидания итога не задан — отказ до постановки: NotConfigured с именем настройки, запроса
+/// постановки (и вообще ни одного запроса) к серверу нет. Ордер — пример запроса Create an Order документации docs-v3.
+#[tokio::test]
+async fn no_order_without_wait_setting() {
+    let (ctx, plan, hits) = start_in("398", false).await;
+    // Если бы ордер ушёл — сервер ответил бы примером постановки из документации.
+    plan.lock().unwrap().insert(ORDER, vec![ORDER_DOC]);
+    let p = Prepared {
+        symbol: "NEMS-USDT".into(),
+        qty: Decimal::from(115),
+        price: Decimal::new(1557, 4),
+        params: vec![
+            ("symbol", "NEMS-USDT".into()),
+            ("side", "SELL".into()),
+            ("type", "LIMIT".into()),
+            ("quantity", "115".into()),
+            ("price", "0.1557".into()),
+            ("newClientOrderId", "t398".into()),
+        ],
+        client_id: "t398".into(),
+    };
+    let req = TradeRequest {
+        venue: VenueId("bingx".into()),
+        asset: Asset {
+            ticker: "NEMS".into(),
+            bsc_contract: None,
+        },
+        side: Side::Sell,
+        qty: Decimal::from(115),
+        worst_price: Decimal::new(1557, 4),
+        deal_id: "t398".into(),
+        route: None,
+        exit_position: true,
+        remeasure: None,
+    };
+    let e = trade::trade(&ctx, &Symbols::default(), req, Some(p))
+        .await
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::NotConfigured, "{}", e.message);
+    assert!(e.message.contains("venue.order_poll_ms"), "{}", e.message);
+    let all = hits.lock().unwrap().clone();
+    assert!(
+        !all.iter().any(|x| x == ORDER),
+        "ордер не должен уйти без срока ожидания: {all:?}"
+    );
+    assert!(all.is_empty(), "до отказа запросов нет: {all:?}");
 }

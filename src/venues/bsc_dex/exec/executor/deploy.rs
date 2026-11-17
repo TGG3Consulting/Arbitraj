@@ -148,12 +148,16 @@ pub async fn deploy(
     gate(deploy_gate::refusal()).map_err(|why| ctx.err(ErrorCode::NotApplicable, why))?;
     let (bin, wnative) = bytecode(ctx)?;
     confirm(confirmed, wnative).map_err(|why| ctx.err(ErrorCode::QuoteMismatch, why))?;
+    // Решение 398: эталон кода в сети (ArbExecutor.bin-runtime, сверка по хешу) — до отправки: после неё сверка не
+    // должна отказать на чтении артефакта, когда контракт уже развёрнут.
+    let want = code::runtime().map_err(|w| ctx.err(ErrorCode::Internal, w))?;
     let slot = nonces.acquire(ctx).await?;
     let nonce = slot.nonce(ctx).await?;
     let address = slot.from.create(nonce);
     let d = txs::send(env, &slot, TxKind::Create, bin, U256::ZERO, false, None).await?;
     drop(slot);
-    let code_ok = d.chain.outcome == TxOutcome::Included && on_chain_ok(ctx, address).await?;
+    let code_ok =
+        d.chain.outcome == TxOutcome::Included && on_chain_ok(ctx, address, &want).await?;
     let text = match (d.chain.outcome, code_ok) {
         (TxOutcome::Included, true) => format!(
             "Исполнитель развёрнут: {address:#x} (tx {}). Код в сети совпал с репозиторием, обёртка в конструкторе \
@@ -196,11 +200,11 @@ pub fn gate(refusal: Option<String>) -> Result<(), String> {
     }
 }
 
-/// Код по адресу совпал с ArbExecutor.bin-runtime. Ошибки: Internal (артефакт), узел.
-async fn on_chain_ok(ctx: &Ctx, address: Address) -> GatewayResult<bool> {
-    let want = code::runtime().map_err(|w| ctx.err(ErrorCode::Internal, w))?;
+/// Код по адресу совпал с ArbExecutor.bin-runtime. Принимает: окружение, адрес, эталон (прочитан до отправки,
+/// решение 398). Ошибки: узел.
+async fn on_chain_ok(ctx: &Ctx, address: Address, want: &Bytes) -> GatewayResult<bool> {
     let have: Bytes = rpc::call(ctx, "eth_getCode", json!([address, "latest"])).await?;
-    Ok(have == want)
+    Ok(have == *want)
 }
 
 #[cfg(test)]

@@ -219,6 +219,11 @@ async fn run(
         let at = ts.at();
         let plan = super::precheck::run(core, &d, on, fast, acc.as_ref()).await?;
         ts.mark(at, || "предпроверка".into());
+        // Решение 398: интервал опроса статуса вывода (A) и зачисления (B) — до покупки: не задан — ни одного ордера
+        // (раньше вывод вставал после покупки, позже — отказ вывода и продажа на A).
+        if let Some(why) = super::transfers::poll_missing(core, &d.buy_on, &d.sell_on) {
+            return Err(why);
+        }
         // Маппинг поменяли во время предпроверки — предпроверка шла другим кошельком: сделки нет.
         let at = ts.at();
         let same = super::dex_account::of_direction(deps, &d).await? == acc;

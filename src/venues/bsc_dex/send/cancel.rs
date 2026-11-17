@@ -2,9 +2,11 @@
 //! Что делает: отмена транзакции, не попавшей в блок за send.max_wait_blocks: перевод 0 BNB себе с тем же nonce
 //! и ценой газа выше прошлой на send.cancel_gas_bump_pct (и не ниже минимума выбранных каналов) — в те же каналы,
 //! что и исходная (там она и ждёт). Попадёт в блок отмена или исходная — nonce занят, очередь кошелька свободна.
+//! Решение 398: отмена уходит после исходной транзакции — настройки (надбавка, предел блока, запас газа) берутся из
+//! SendCfg и подписант — из Watch, всё прочитано до отправки исходной; здесь настройки и ключ не читаются.
 //! Кто вызывает: send/track.rs.
-//! От чего зависит: send/mod.rs (dispatch, gas_floor), send/tx.rs, wallet/signer.rs, num.rs.
-//! Настройки: send.cancel_gas_bump_pct, send.bundle_max_blocks (через SendCfg), send.gas_limit_margin_pct.
+//! От чего зависит: send/mod.rs (dispatch, gas_floor), send/tx.rs, send/track_util.rs (Watch), wallet/signer.rs, num.rs.
+//! Настройки: send.cancel_gas_bump_pct, send.bundle_max_blocks, send.gas_limit_margin_pct (все — через SendCfg).
 //!
 //! Замена транзакции с тем же nonce: у legacy-транзакции gasPrice должна быть ≥ старая × (100 + PriceBump) / 100,
 //! иначе «replacement transaction underpriced» — узел BSC core/txpool/legacypool/list.go#L329-L351, legacypool.go#L150
@@ -12,7 +14,7 @@
 //! настройка, а при отказе следующая попытка (через send.max_wait_blocks) ещё дороже. В приватных каналах замена
 //! не документирована (там же) — отмена уходит во все каналы исходной транзакции.
 
-use alloy_primitives::{Address, B256, Bytes, U256};
+use alloy_primitives::{B256, Bytes, U256};
 use rust_decimal::Decimal;
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -21,7 +23,7 @@ use super::super::ctx::Ctx;
 use super::super::num;
 use super::super::wallet::signer;
 use super::ready::Ready;
-use super::stats::Stats;
+use super::track_util::Watch;
 use super::tx::{self, SendCfg};
 
 /// Цена газа отмены: прошлая × (1 + надбавка/100), вверх до wei, не ниже минимума каналов.
@@ -39,23 +41,18 @@ pub fn price(ctx: &Ctx, prev: U256, cfg: &SendCfg, ready: &[Ready]) -> GatewayRe
     Ok(p.max(super::gas_floor(ready)))
 }
 
-/// Отправляет отмену. Принимает: каналы, счётчики, кошелёк, nonce, цену газа, текущий блок, настройки.
+/// Отправляет отмену. Принимает: что отслеживается (каналы, счётчики, кошелёк, nonce, настройки, подписант — всё из
+/// Watch, прочитано до отправки исходной), цену газа, текущий блок.
 /// Возвращает: хеш отмены (принята хотя бы одним каналом или ответ канала не дошёл — она может быть в пуле).
-/// Ошибки: оценка газа, подпись (ключ), все каналы ответили отказом.
-#[allow(clippy::too_many_arguments)]
-pub async fn send(
-    ctx: &Ctx,
-    stats: &Stats,
-    ready: &[Ready],
-    from: Address,
-    nonce: u64,
-    price: U256,
-    head: u64,
-    cfg: &SendCfg,
-) -> GatewayResult<B256> {
-    let gas = tx::limit(ctx, from, from, &Bytes::new(), U256::ZERO).await?;
-    let t = tx::legacy(ctx, nonce, price, gas, from, U256::ZERO, Bytes::new())?;
-    let signed = signer::sign(ctx, t)?;
-    super::dispatch(ctx, stats, ready, &signed.raw, None, head + cfg.bundle_max).await?;
+/// Ошибки: оценка газа, подпись, все каналы ответили отказом.
+pub async fn send(w: &Watch, price: U256, head: u64) -> GatewayResult<B256> {
+    let ctx = &w.ctx;
+    let margin = w.cfg.gas_margin_pct;
+    let gas = tx::limit_by(ctx, margin, w.from, w.from, &Bytes::new(), U256::ZERO).await?;
+    let t = tx::legacy(ctx, w.nonce, price, gas, w.from, U256::ZERO, Bytes::new())?;
+    let signed = signer::sign_with(&w.key, t)
+        .map_err(|e| ctx.err(ErrorCode::Internal, format!("Подпись отмены: {e}")))?;
+    let max_block = head + w.cfg.bundle_max;
+    super::dispatch(ctx, &w.stats, &w.ready, &signed.raw, None, max_block).await?;
     Ok(signed.hash)
 }

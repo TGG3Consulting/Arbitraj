@@ -10,8 +10,9 @@
 //!   permissions in each set» — пересказ правила; проверить на живом ответе), filters.
 //! - Фильтры https://developers.binance.com/legacy-docs/binance-spot-api-docs/filters — PRICE_FILTER (minPrice,
 //!   maxPrice, tickSize; «0» — правило выключено), LOT_SIZE (minQty, maxQty, stepSize), NOTIONAL (minNotional,
-//!   maxNotional), MIN_NOTIONAL (minNotional). PERCENT_PRICE / PERCENT_PRICE_BY_SIDE не разбираются: им нужна средняя
-//!   или референсная цена — их ловит пробный ордер (order_rules.rs).
+//!   maxNotional), MIN_NOTIONAL (minNotional). Решение 392 (t180): PERCENT_PRICE / PERCENT_PRICE_BY_SIDE разбираются
+//!   в правила коридора (price_band.rs filters); опорную цену (референсная или средняя) читает price_band.rs перед
+//!   покупкой; пробный ордер (order_rules.rs) остаётся страховкой.
 //! - GET /api/v3/account — permissions (права аккаунта, например ["SPOT"]).
 
 use std::collections::{HashMap, HashSet};
@@ -86,6 +87,7 @@ fn parse(s: &Value, perms: &HashSet<String>) -> GatewayResult<SymbolRules> {
                 .filter_map(|v| v.as_str().map(str::to_string))
                 .collect()
         }),
+        price_bands: super::price_band::filters(f)?,
         symbol,
     })
 }

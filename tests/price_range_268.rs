@@ -10,8 +10,8 @@
 //! - решение ядра (core/sell_range.rs decide): код, биржа / DEX, настройка, условие продажи (обычная / порог режима /
 //!   без порога / кнопка), отметки по площадке, свежая котировка → рынок / застрявшая монета / как раньше (алерт),
 //!   включая «сначала невыгодно → режим → снова отказ → в пороге → рыночный» и «… → выше порога → алерт»;
-//! - MEXC 30087 при HTTP 5XX — не отказ по цене, а «итог неизвестен»; правило шлюза для PriceOutOfRange — своё или,
-//!   если его нет, правило OrderRejected;
+//! - MEXC 30087 при HTTP 5XX — не отказ по цене, а «итог неизвестен»; правило шлюза для PriceOutOfRange — только своё
+//!   (решение 392; правило OrderRejected на него не действует);
 //! - правило шлюза «Повторить» для нового кода запрещено; ошибкой площадки подряд не считается; код есть в справочнике
 //!   формы правил; человеческая причина в словаре уведомлений.
 //!
@@ -545,9 +545,10 @@ fn rule_retry_forbidden_not_counted_listed() {
     for kind in ["StopVenue", "StopAll", "CancelNoRetry", "NotifyOnly"] {
         assert_eq!(inactive_reason(C::PriceOutOfRange, kind), None, "{kind}");
     }
-    // Ревью A2: своего правила нет — действует правило OrderRejected (площадки, затем общее); своё — сильнее.
+    // Решение 392 (t180; было — ревью A2 решения 268): у PriceOutOfRange — только своё правило (площадки, затем общее);
+    // правило OrderRejected на него не действует.
     use arb::core::types::VenueId;
-    use arb::gateway::rules::{Rule as GwRule, RuleAction, RuleScope, pick_rule_or_fallback};
+    use arb::gateway::rules::{Rule as GwRule, RuleAction, RuleScope, pick_rule};
     let rule = |id, event, scope| GwRule {
         id,
         event,
@@ -561,21 +562,21 @@ fn rule_retry_forbidden_not_counted_listed() {
         rule(1, C::OrderRejected, RuleScope::All),
         rule(2, C::OrderRejected, RuleScope::Venue(v.clone())),
     ];
-    let got = pick_rule_or_fallback(&rules, C::PriceOutOfRange, Some(&v)).unwrap();
-    assert_eq!((got.0.id, got.1), (2, true));
-    let other = VenueId("gate".into());
-    let got = pick_rule_or_fallback(&rules, C::PriceOutOfRange, Some(&other)).unwrap();
-    assert_eq!((got.0.id, got.1), (1, true));
+    assert!(pick_rule(&rules, C::PriceOutOfRange, Some(&v)).is_none());
     rules.push(rule(3, C::PriceOutOfRange, RuleScope::All));
-    let got = pick_rule_or_fallback(&rules, C::PriceOutOfRange, Some(&v)).unwrap();
-    assert_eq!((got.0.id, got.1), (3, false), "своё правило сильнее");
-    // Запасного кода у других ошибок нет.
-    assert!(pick_rule_or_fallback(&rules, C::OrderNotFilled, Some(&v)).is_none());
-    assert!(
-        !pick_rule_or_fallback(&rules, C::OrderRejected, Some(&v))
-            .unwrap()
-            .1
+    rules.push(rule(4, C::PriceOutOfRange, RuleScope::Venue(v.clone())));
+    assert_eq!(
+        pick_rule(&rules, C::PriceOutOfRange, Some(&v)).unwrap().id,
+        4
     );
+    let other = VenueId("gate".into());
+    assert_eq!(
+        pick_rule(&rules, C::PriceOutOfRange, Some(&other))
+            .unwrap()
+            .id,
+        3
+    );
+    assert_eq!(pick_rule(&rules, C::OrderRejected, Some(&v)).unwrap().id, 2);
     // Не «исход неизвестен» и не отказ вывода: пауз «только человек» и запрета пауз нет.
     assert!(retry_allowed(C::PriceOutOfRange));
     assert!(!withdraw_refusal(C::PriceOutOfRange));

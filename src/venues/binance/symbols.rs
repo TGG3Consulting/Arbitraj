@@ -76,6 +76,9 @@ pub struct SymbolRules {
     pub api_sell: bool,
     /// Типы ордера пары (orderTypes); None — поля нет (тогда тип проверяет только пробный ордер).
     pub order_types: Option<Vec<String>>,
+    /// Решение 392 (t180): ценовые коридоры лимитного ордера — фильтры PERCENT_PRICE_BY_SIDE и PERCENT_PRICE
+    /// (symbols_parse.rs price_bands; у каждого свой avgPriceMins). Пусто — фильтров нет.
+    pub price_bands: Vec<super::price_band::Filter>,
 }
 
 impl SymbolRules {
@@ -173,6 +176,7 @@ impl Symbols {
             min_qty: r.min_qty,
             max_qty: r.max_qty,
             order_block: super::order_rules::order_block(r),
+            price_band: super::price_band::summary(&r.price_bands).map(Box::new),
         })
     }
 

@@ -51,6 +51,7 @@
 | `market_sell.rs` | Решение 268: рыночная продажа (контракт `trade_market_sell`) — ордер типа «market» на количество базовой монеты после отказа лимитного ордера «цена вне диапазона»; правила пары и разбор итога — те же, что у лимитного (`order_rules.rs`, `trade.rs`); код PriceOutOfRange рыночный ордер не отдаёт |
 | `user_stream.rs`, `user_stream_conn.rs`, `private_cache.rs` | Приватный поток order.spot, execution.spot, wallet (venue.private_stream) |
 | `tap.rs`, `feed.rs` | Окна (решение 125): кадры стакана, publicTrade, стакан окна `orderbook.{venue.window_depth_limit}` |
+| `price_band.rs` | Решение 392 (t180): границы цены лимитного ордера спота считает Bybit — GET /v5/market/price-limit?category=spot (buyLmt, sellLmt; контракт price_band); признак коридора — у каждой пары (symbols.rs) |
 
 ## Что важно знать
 

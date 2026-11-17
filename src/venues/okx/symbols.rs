@@ -150,6 +150,9 @@ impl Symbols {
             min_qty: r.min_qty,
             max_qty: r.max_qty,
             order_block: None,
+            // Решение 392 (ревью t180, Н5): коридор ядру НЕ отдаётся — price-limit для SPOT подтверждён только ссылкой
+            // из «Get instruments»; до живой записи (docs/TASKS.md) не гадаем, поведение как до решения 392.
+            price_band: None,
         })
     }
 }

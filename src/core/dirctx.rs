@@ -77,6 +77,11 @@ pub struct DirCtx {
     /// монет у кошелька и без источника на весь объём) — больший объём расчёт отвергает (precheck_dex_cut.rs
     /// sell_max_ok). None — предела нет (всегда, кроме пересчёта предпроверки precheck_dex_cut.rs replan).
     pub sell_max: Option<Decimal>,
+    /// Решение 392 (t180): ценовой коридор лимитного ордера биржи A (покупка) и B (продажа), прочитанный перед покупкой
+    /// (core/price_band.rs read) — худшая цена плана не выходит за него (costs.rs → price_band::check). None — коридора
+    /// нет или он не прочитан (всегда, кроме пересчёта предпроверки). Box — не растит DirCtx (стек).
+    pub band_a: Option<Box<crate::gateway::price_band::PriceBand>>,
+    pub band_b: Option<Box<crate::gateway::price_band::PriceBand>>,
 }
 
 /// Решение 240: момент сборки контекста — от него зависят σ, доля закрытия и хранилище настроек.
@@ -296,6 +301,8 @@ impl DirCtx {
             usdt_b,
             transfer_tax,
             sell_max: None,
+            band_a: None,
+            band_b: None,
         })
     }
 

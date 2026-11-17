@@ -18,8 +18,8 @@
 //! заблокирован паузу не ставят вовсе. Постановка пауз — rules_stop.rs.
 //! Решение 253, дополнение t85: исчерпан лимит вывода аккаунта (WithdrawLimit) — пауза площадки до ручного снятия и
 //! алерт venue.withdraw_limit (withdraw_limit_pause.rs; у ручной команды тоже), правила шлюза — как у отказа вывода.
-//! Решение 268: «цена ордера вне диапазона биржи» (PriceOutOfRange) правилом Retry не повторяется; своего правила для
-//! кода нет — действует правило OrderRejected (gateway/rules.rs pick_rule_or_fallback), запись core.rules об этом.
+//! Решение 268: «цена ордера вне диапазона биржи» (PriceOutOfRange) правилом Retry не повторяется. Решение 392 (t180):
+//! правило для кода — только своё (общее и площадки), правило OrderRejected на него не действует.
 //! Кто вызывает: executor.rs, transfers.rs, stuck.rs, usdt_return.rs.
 //! От чего зависит: gateway (errors, rules), storage/rules.rs, risk.rs, risk_count.rs, rules_stop.rs,
 //! withdraw_limit_pause.rs, deps.rs.
@@ -144,22 +144,11 @@ pub async fn on_error(
             return Next::Stop;
         }
     };
-    // Решение 268 (дополнение): своего правила для PriceOutOfRange нет — действует правило OrderRejected (как до 268).
-    let picked = crate::gateway::rules::pick_rule_or_fallback(&rules, err.code, Some(venue));
-    if let Some((r, true)) = picked {
-        deps.log(
-            Level::Info,
-            "core.rules",
-            Some(&venue.0),
-            format!(
-                "Правила для {:?} нет — применено правило шлюза №{} для OrderRejected (повтор по этому коду не действует, решение 268)",
-                err.code, r.id
-            ),
-            None,
-        )
-        .await;
-    }
-    let Some(rule) = picked.map(|(r, _)| r) else {
+    // Решение 392 (t180; меняет дополнение A2 решения 268): у PriceOutOfRange — только своё правило (площадки, затем
+    // общее), как у остальных кодов; правило OrderRejected на него больше не действует (иначе «стоп площадка» по
+    // OrderRejected останавливал биржу из-за отказа по коридору цены). Правила нет — операция остановлена, как у всех.
+    let picked = crate::gateway::rules::pick_rule(&rules, err.code, Some(venue));
+    let Some(rule) = picked else {
         deps.log(
             Level::Warn,
             "core.rules",

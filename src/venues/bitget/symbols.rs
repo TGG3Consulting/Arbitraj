@@ -175,6 +175,7 @@ impl Symbols {
             min_qty: None,
             max_qty: None,
             order_block: None,
+            price_band: None,
         })
     }
 }

@@ -126,9 +126,11 @@ async fn budget(s: &Store, v: Option<u64>) {
 async fn background_waits_trade_path_does_not() {
     let (ctx, s, n) = start().await;
     let q = || n.load(Ordering::SeqCst);
-    // Вес пути без документации — отказ без запроса.
-    assert_eq!(ip_weight::weight("/api/v3/ticker/price"), None);
-    let e = rest::public(&ctx, "/api/v3/ticker/price", vec![])
+    // Вес пути без документации — отказ без запроса. Решение 392 (t180): /api/v3/ticker/price теперь со своим весом
+    // из документации («Weight(IP): 10») — пример пути «без веса» — /api/v3/trades (адаптер его не вызывает).
+    assert_eq!(ip_weight::weight("/api/v3/ticker/price"), Some(10));
+    assert_eq!(ip_weight::weight("/api/v3/trades"), None);
+    let e = rest::public(&ctx, "/api/v3/trades", vec![])
         .await
         .unwrap_err();
     assert_eq!(e.code, ErrorCode::Internal, "{}", e.message);

@@ -34,6 +34,7 @@ pub mod order_rules;
 pub mod order_state;
 pub mod pairs;
 pub mod pairs_watch;
+pub mod price_band;
 pub mod reply;
 pub mod resolve;
 pub mod rest;

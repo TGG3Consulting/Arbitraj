@@ -72,6 +72,9 @@ pub struct SymbolRules {
     /// orderTypes и timeInForces пары; None — поля нет.
     pub order_types: Option<Vec<String>>,
     pub time_in_forces: Option<Vec<String>>,
+    /// Решение 392 (t180): ценовой коридор лимитного ордера — фильтр PROTECTION_LIMIT (symbols_parse.rs price_band);
+    /// None — фильтра нет или все его поля null.
+    pub price_band: Option<crate::gateway::price_band::PriceBandRule>,
 }
 
 impl SymbolRules {
@@ -214,6 +217,10 @@ impl Symbols {
             min_qty: r.qty.min,
             max_qty: r.qty.max,
             order_block: super::order_rules::order_block(r, tif),
+            // Решение 392 (ревью t180, Б3): коридор ядру НЕ отдаётся — PROTECTION_LIMIT разобран (SymbolRules.price_band
+            // — данные), но опорная цена («latest transaction price») ответом ticker/price документацией не
+            // подтверждена; до живой записи (docs/TASKS.md) не гадаем, поведение как до решения 392.
+            price_band: None,
         })
     }
 

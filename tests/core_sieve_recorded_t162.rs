@@ -216,6 +216,8 @@ fn one(c: &Value) -> (String, bool) {
         usdt_b: (!dex_b).then(|| net(sell_on, "USDT", ret)),
         transfer_tax: (!dex_a).then_some(tax),
         sell_max: None,
+        band_a: None,
+        band_b: None,
     };
     let (book_a, book_b) = (
         book(buy_on, &asset, buy, qmax),

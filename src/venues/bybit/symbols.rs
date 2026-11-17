@@ -137,6 +137,8 @@ impl Symbols {
             min_qty: None,
             max_qty: r.max_qty,
             order_block: None,
+            // Решение 392 (t180): у спота Bybit границы цены лимитного ордера отдаёт API (price_band.rs).
+            price_band: Some(Box::new(super::price_band::rule())),
         })
     }
 

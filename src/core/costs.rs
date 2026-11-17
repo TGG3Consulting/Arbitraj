@@ -26,17 +26,19 @@
 //! (котировки B, вывод, возврат и курсы не считаются); итог в бюджете — тот же Calc, что у evaluate_with.
 //! Решение 250: проверка доли глубины h — Source::fillable (исполнимость без цены; у bsc_dex — без полной котировки,
 //! если лучший одиночный пул исполняет объём целиком: quote/fills.rs).
+//! Решение 392 (t180): худшие цены ордеров A и B — внутри ценового коридора биржи (DirCtx.band_a / band_b, прочитан
+//! перед покупкой — price_band.rs): за коридором «дальше» — Fail::TooLarge, подбор берёт меньший объём.
 //! Решение 358 (только журнал): при сравнении σ в контексте (DirCtx::sigma_check) — запас и прибыль по σ на горизонте T
 //! рядом с прежними (reserve_check.rs priced); прибыль и решение — по прежнему запасу.
 //! Кто вызывает: core/size_curve.rs (подбор объёма: CoreCurve — evaluate_capped, SourceCurve), core/partial.rs.
 //! От чего зависит: core/types, convert.rs, costs_quote.rs, costs_source.rs, costs_withdraw.rs, dirctx.rs, precheck_dex_cut.rs (решение 380: предел продажи), reserve.rs,
-//! reserve_check.rs, size.rs, engine.rs (шлюз).
+//! reserve_check.rs, size.rs, engine.rs (шлюз), price_band.rs (решение 392).
 //! Настройки: через dirctx.rs (profit.*, usdt_return.mode).
 
 use chrono::Utc;
 use rust_decimal::Decimal;
 
-use crate::core::types::{Cost, CostKind};
+use crate::core::types::{Cost, CostKind, Side};
 
 use super::calc_timing::stage;
 use super::convert;
@@ -95,6 +97,8 @@ pub async fn evaluate_capped<S: Source>(
     // Списание по бюджету — по худшей цене покупки (лимит биржи, допуск DEX): столько может уйти или замёрзнуть.
     let worst_a = src.worst(d, false, qty, qa.avg_price)?;
     order_limits(&d.buy_on.0, cx.pair_a.as_ref(), qty, worst_a)?;
+    // Решение 392 (t180): лимит покупки внутри ценового коридора биржи A (прочитан перед покупкой; иначе — None).
+    super::price_band::check(&d.buy_on.0, cx.band_a.as_deref(), Side::Buy, worst_a)?;
     // Решение 246: та же формула списания, что в итоге ниже (spend_max), — до стороны B.
     if let Some(b) = budget {
         let spend =
@@ -152,6 +156,7 @@ pub async fn evaluate_capped<S: Source>(
         .and_then(|q| enough(&d.sell_on.0, q, sell_qty))?;
     let worst_b = src.worst(d, true, sell_qty, qb.avg_price)?;
     order_limits(&d.sell_on.0, cx.pair_b.as_ref(), sell_qty, worst_b)?;
+    super::price_band::check(&d.sell_on.0, cx.band_b.as_deref(), Side::Sell, worst_b)?;
     lines.extend(qb.costs.iter().map(|c| (c.clone(), "B")));
     if sell_qty < arrive {
         // Остаток меньше шага остаётся на B непроданным (пыль) — в выручку не входит (показ, решение 66).
@@ -266,6 +271,7 @@ pub async fn evaluate_capped<S: Source>(
         spend_max: qty * worst_a + spend_fee,
         // Решение 262: худший уровень покупки плана — лимит ордера покупки на бирже (executor.rs).
         buy_worst: worst_a,
+        buy_band: cx.band_a.is_some(),
         spend_fee,
         size: None,
     })

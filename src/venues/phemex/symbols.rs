@@ -189,6 +189,7 @@ impl Symbols {
             min_qty: None,
             max_qty: r.max_qty,
             order_block: None,
+            price_band: None,
         })
     }
 }

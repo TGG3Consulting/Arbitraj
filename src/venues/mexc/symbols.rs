@@ -59,6 +59,9 @@ pub struct SymbolRules {
     pub quote_asset_precision: u32,
     /// Допустимые типы ордера пары (orderTypes); None — поля нет в ответе (тогда проверяет только пробный ордер).
     pub order_types: Option<Vec<String>>,
+    /// Решение 392 (t180): ценовой коридор лимитного ордера — фильтр PERCENT_PRICE_BY_SIDE (symbols_parse.rs
+    /// price_band); None — фильтра нет.
+    pub price_band: Option<crate::gateway::price_band::PriceBandRule>,
 }
 
 impl SymbolRules {
@@ -159,6 +162,7 @@ impl Symbols {
             min_qty: r.min_qty,
             max_qty: None,
             order_block: super::order_rules::order_block(r, order_type),
+            price_band: r.price_band.clone().map(Box::new),
         })
     }
 

@@ -198,6 +198,7 @@ pub mod precheck_par;
 pub mod precheck_sell;
 pub mod precheck_withdraw;
 pub mod presence;
+pub mod price_band;
 pub mod prices;
 pub mod profit;
 pub mod quarantine;

@@ -192,6 +192,8 @@ fn cx(rec: &Rec, d_: Direction, sigma: Decimal, share: Option<Decimal>) -> DirCt
         usdt_b: None,
         transfer_tax: (!dex_a).then_some(Decimal::ZERO),
         sell_max: None,
+        band_a: None,
+        band_b: None,
     }
 }
 

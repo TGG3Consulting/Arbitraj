@@ -18,6 +18,9 @@
 //! интервала фонового опроса (precheck_nets.rs), иначе — запрос, как раньше; источник — в «Время по шагам»;
 //! precheck.balance_first = да — свободный баланс A читается здесь, прямо перед расчётом (precheck_balance.rs), расчёт
 //! идёт с пределом min(бюджет, свободно); исполнитель баланс повторно не читает.
+//! Решение 392 (t180): ценовые коридоры бирж A и B (price_band.rs context: только у пар с правилом коридора, обе
+//! стороны одновременно; ревью Н3 — одновременно и с шагами сторон, своя строка «коридор цены» во времени шагов); пересчёт держит худшие цены плана внутри коридора; строки коридора — в журнал
+//! core.precheck и хронологию сделки всегда.
 //! Кто вызывает: executor.rs.
 //! От чего зависит: networks_merge.rs (решение 387), step_timing.rs, risk.rs, profit.rs, convert.rs, trade_ops.rs (вид площадки), deps.rs (шлюз),
 //! precheck_fast.rs, precheck_par.rs, precheck_nets.rs, precheck_balance.rs.
@@ -195,6 +198,7 @@ pub async fn run(
         .clone()
         .into_iter()
         .chain(t.cut.clone())
+        .chain(t.band.clone())
         .chain(t.lines())
         .collect();
     if res.is_ok() {
@@ -220,9 +224,15 @@ pub async fn run(
     }
     // Решение 265 (при on): у отказа — и строка этапов пересчёта, если до него дошли.
     // Решение 266: и строка «План: …» (precheck.fast_recalc = да и пересчёт дошёл до быстрого пути).
-    let calc: String = (t.missed.iter().chain(t.plan.iter()).chain(t.calc.iter()))
-        .map(|l| format!(". {l}"))
-        .collect();
+    // Решение 392: и строки коридора цены (если читались).
+    let calc: String = (t
+        .missed
+        .iter()
+        .chain(t.band.iter())
+        .chain(t.plan.iter())
+        .chain(t.calc.iter()))
+    .map(|l| format!(". {l}"))
+    .collect();
     res.map(|(c, bal)| (c, lines, bal))
         .map_err(|e| format!("{e} ({}){calc}", t.text()))
 }
@@ -246,6 +256,9 @@ struct Timing {
     missed: Option<String>,
     /// Решение 380 (ревью t166, Н6): объём урезан до проверенного симуляцией продажи — строка хронологии сделки.
     cut: Option<String>,
+    /// Решение 392 (t180): коридоры цены бирж, прочитанные перед пересчётом (или почему не прочитаны) — в хронологию
+    /// сделки и журнал всегда (не зависит от log.step_timing).
+    band: Vec<String>,
 }
 
 /// Решение 266: пометка строк времени при precheck.parallel = да.
@@ -322,71 +335,94 @@ async fn steps(
     // Часть 4: свободный баланс A, прочитанный перед расчётом (None — режим выключен).
     let mut read: Option<Read> = None;
     let free_step = || format!("свободный баланс {}", d.buy_on.0);
-    if fast.parallel {
-        let par = super::precheck_par::Par {
-            nets: fast.networks_memory,
-            balance: fast.balance.is_some(),
-            acc,
-        };
-        let (marks, src, r) = super::precheck_par::sides(core, d, par).await;
-        // Пометка «шли одновременно» — только если запросы были (вид площадки A не найден — шагов нет).
-        let note = if fast.balance.is_some() {
-            PAR_NOTE_BAL
+    // Решение 392 (ревью t180, Н3): ценовые коридоры бирж A и B читаются одновременно с шагами сторон (сети, адрес
+    // депозита, BNB, удержания, баланс) — не отдельным шагом после них; своя строка в «Время по шагам».
+    let band = async {
+        let at = Instant::now();
+        let r = Box::pin(super::price_band::read(core, d)).await;
+        Ok::<_, String>((r, at.elapsed().as_millis()))
+    };
+    let sides = async {
+        if fast.parallel {
+            let par = super::precheck_par::Par {
+                nets: fast.networks_memory,
+                balance: fast.balance.is_some(),
+                acc,
+            };
+            let (marks, src, r) = super::precheck_par::sides(core, d, par).await;
+            // Пометка «шли одновременно» — только если запросы были (вид площадки A не найден — шагов нет).
+            let note = if fast.balance.is_some() {
+                PAR_NOTE_BAL
+            } else {
+                PAR_NOTE
+            };
+            t.par = (!marks.is_empty()).then_some(note);
+            t.steps.extend(marks);
+            t.src.extend(src);
+            let (h, bal) = r?;
+            held = h;
+            // Часть 4: итог чтения баланса — на своём месте, перед расчётом (после шагов сторон).
+            if let Some((r, ms)) = bal {
+                t.steps.push((free_step(), ms));
+                read = Some(r?);
+            }
         } else {
-            PAR_NOTE
-        };
-        t.par = (!marks.is_empty()).then_some(note);
-        t.steps.extend(marks);
-        t.src.extend(src);
-        let (h, bal) = r?;
-        held = h;
-        // Часть 4: итог чтения баланса — на своём месте, перед расчётом (после шагов сторон).
-        if let Some((r, ms)) = bal {
-            t.steps.push((free_step(), ms));
-            read = Some(r?);
-        }
-    } else {
-        for (v, withdraw) in [(&d.buy_on, true), (&d.sell_on, false)] {
-            match super::trade_ops::kind(core, v)? {
-                VenueKind::Cex => {
-                    let at = Instant::now();
-                    let mut src = Src::Http;
-                    let nets = fast.networks_memory.then_some(&mut src);
-                    let r = transfer_open(core, v, d, withdraw, nets).await;
-                    let step = format!("справочник сетей {}", v.0);
-                    if fast.networks_memory {
-                        t.src.push((step.clone(), src.text()));
-                    }
-                    t.mark(step, at);
-                    r?;
-                    pair_side(core, v, d, withdraw)?;
-                    // Решение 118 (Я-5): у биржи-получателя адрес депозита — до покупки, а не после.
-                    if !withdraw {
+            for (v, withdraw) in [(&d.buy_on, true), (&d.sell_on, false)] {
+                match super::trade_ops::kind(core, v)? {
+                    VenueKind::Cex => {
                         let at = Instant::now();
-                        let r = super::precheck_deposit::ready(core, d).await;
-                        t.mark(format!("адрес депозита {}", v.0), at);
+                        let mut src = Src::Http;
+                        let nets = fast.networks_memory.then_some(&mut src);
+                        let r = transfer_open(core, v, d, withdraw, nets).await;
+                        let step = format!("справочник сетей {}", v.0);
+                        if fast.networks_memory {
+                            t.src.push((step.clone(), src.text()));
+                        }
+                        t.mark(step, at);
                         r?;
+                        pair_side(core, v, d, withdraw)?;
+                        // Решение 118 (Я-5): у биржи-получателя адрес депозита — до покупки, а не после.
+                        if !withdraw {
+                            let at = Instant::now();
+                            let r = super::precheck_deposit::ready(core, d).await;
+                            t.mark(format!("адрес депозита {}", v.0), at);
+                            r?;
+                        }
                     }
-                }
-                VenueKind::Dex => {
-                    let at = Instant::now();
-                    let r = bnb_ok(core, d, v, Decimal::ZERO).await;
-                    t.mark(format!("баланс BNB {}", v.0), at);
-                    if let Err(e) = r {
-                        core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
-                        return Err(e);
+                    VenueKind::Dex => {
+                        let at = Instant::now();
+                        let r = bnb_ok(core, d, v, Decimal::ZERO).await;
+                        t.mark(format!("баланс BNB {}", v.0), at);
+                        if let Err(e) = r {
+                            core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
+                            return Err(e);
+                        }
                     }
                 }
             }
+            // Часть 4 (precheck.balance_first = да): свободный баланс A — последним шагом перед расчётом.
+            if fast.balance.is_some() {
+                let at = Instant::now();
+                let r = super::precheck_balance::read(core, d, acc).await;
+                t.mark(free_step(), at);
+                read = Some(r?);
+            }
         }
-        // Часть 4 (precheck.balance_first = да): свободный баланс A — последним шагом перед расчётом.
-        if fast.balance.is_some() {
-            let at = Instant::now();
-            let r = super::precheck_balance::read(core, d, acc).await;
-            t.mark(free_step(), at);
-            read = Some(r?);
-        }
+        Ok::<(), String>(())
+    };
+    // Ревью 2 t180, Н-C2: отказ стороны возвращается сразу — чтение коридора при этом отменяется (try_join).
+    let ((mut bands, band_ms), ()) = tokio::try_join!(band, sides)?;
+    // Строка времени — только если коридор читался (есть строки коридора).
+    if !bands.lines.is_empty() {
+        t.steps.push((
+            "коридор цены (одновременно с шагами сторон)".into(),
+            band_ms,
+        ));
     }
+    // Ревью 2 t180, Б1: контекст расчёта с коридорами — только теперь, после шагов сторон: справочник сетей уже
+    // обновлён ими (transfer_open → networks_merge), комиссии и минимумы вывода / депозита — свежие.
+    let pre = super::price_band::context(core, d, &mut bands);
+    t.band = bands.lines;
     if let Some(Read::Missed(why)) = &read {
         t.missed = Some(super::precheck_balance::missed_note(d, why));
     }
@@ -404,7 +440,9 @@ async fn steps(
         spend: cand.map(|c| c.spend_max),
         ..Want::new(q)
     });
-    let plan = Box::pin(replan_sized(core, d, free, want.as_mut()));
+    // Решение 392 (t180): план считается внутри коридора, прочитанного выше одновременно с шагами сторон (контекст —
+    // на справочнике сетей после шагов сторон).
+    let plan = Box::pin(replan_pre(core, d, free, want.as_mut(), pre));
     let (verdict, m) = super::step_timing::measure_if(t.on, plan).await;
     t.mark("пересчёт с финальной котировкой".into(), at);
     t.calc = m.map(|m| m.calc_text("пересчёт с финальной котировкой"));
@@ -525,8 +563,21 @@ pub async fn replan_sized(
     cap: Option<Decimal>,
     want: Option<&mut Want>,
 ) -> Verdict {
+    replan_pre(core, d, cap, want, None).await
+}
+
+/// Что делает: replan_sized с готовым контекстом направления (решение 392: с прочитанными коридорами цены бирж —
+/// core/price_band.rs context). Принимает: как replan_sized и контекст (None — собрать как раньше).
+/// Возвращает: Verdict. Ошибок нет.
+pub async fn replan_pre(
+    core: &Core,
+    d: &Direction,
+    cap: Option<Decimal>,
+    want: Option<&mut Want>,
+    pre: Option<Box<super::dirctx::DirCtx>>,
+) -> Verdict {
     // Решение 348: назначение «предпроверка» (замер «кто вызвал котировку»); решение 345 — без мягкого срока.
-    let work = profit::decide_capped(core, d, &super::dry::Mode::Live, cap, want, None, None);
+    let work = profit::decide_capped(core, d, &super::dry::Mode::Live, cap, want, pre, None);
     crate::gateway::quote_purpose::scope(crate::gateway::quote_purpose::Purpose::Precheck, work)
         .await
 }

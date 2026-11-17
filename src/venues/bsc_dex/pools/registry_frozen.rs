@@ -12,6 +12,8 @@
 //!
 //! Глубина пулов (решение 73) у замороженного реестра — своя книга, которая не пишет журнал и никого не будит, а
 //! прошлый вердикт гистерезиса — копия из живой книги на момент снимка (depth_book.rs verdicts, seeded).
+//! Решение 403: в снимок входит и опубликованный отбор мелких пулов живого реестра (quote/shallow_memo.rs) — замороженный
+//! реестр допускает те же мелкие пулы, что живой на момент снимка.
 //! Кто вызывает: venues/bsc_dex/frozen.rs.
 //! От чего зависит: registry.rs, registry_index.rs, depth_book.rs, graph_cache.rs (Cache, Skeleton).
 //! Настройки: нет.
@@ -46,6 +48,8 @@ pub struct Want<'a> {
 pub struct Snap {
     pub entries: Vec<Arc<Entry>>,
     pub verdicts: Verdicts,
+    /// Решение 403: опубликованный снимок отбора мелких пулов живого реестра на момент снимка (quote/shallow_memo.rs).
+    pub shallow: Arc<super::super::quote::shallow_memo::Snap>,
 }
 
 impl Registry {
@@ -73,7 +77,11 @@ impl Registry {
         }
         // Блокировка реестра уже снята: вердикты — под своей короткой блокировкой книги глубины.
         let verdicts = self.depth.verdicts(seen.iter());
-        Snap { entries, verdicts }
+        Snap {
+            entries,
+            verdicts,
+            shallow: self.shallow.load(),
+        }
     }
 
     /// Что делает: замороженный реестр из снимка: свои индексы, книга глубины с вердиктами момента снимка (без журнала
@@ -98,8 +106,9 @@ impl Registry {
             holds: Default::default(),
             // Решение 382: у снимка доказательств нет.
             proofs: Default::default(),
-            // Решение 393: у снимка — своя пустая память отбора мелких пулов.
-            shallow: Default::default(),
+            // Решение 403: у снимка — отбор мелких пулов живого реестра на момент снимка, без построителя
+            // (решение 393: раньше — своя пустая память).
+            shallow: super::super::quote::shallow_memo::Memo::fixed(snap.shallow.clone()),
         }
     }
 }

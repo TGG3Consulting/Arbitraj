@@ -19,6 +19,9 @@
 //! Решение 339: отметки неудач чтения пулов (pool_fail.rs Fails) — здесь же; put достоверной записи их снимает (без
 //! отметок — без замка, ревью t153 Н5), retain снимает отметки удалённых пулов (Н6). Пулы, ни разу не прочитанные
 //! (pool_unread.rs, экран «Монеты»), — здесь же; любой put снимает отметку.
+//! Решение 403 (t188): запись (put, update существующего, retain) будит построитель снимка отбора мелких пулов
+//! (shallow — quote/shallow_memo.rs poke, после снятия замка); touch — смена допуска мелких пулов как запись (версия,
+//! отметка фоновому графу); pair_stamp / pair_arcs — входы отбора пары без копирования записей.
 //! Настройки: нет.
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -172,6 +175,9 @@ impl Registry {
         self.graph.bg().changes.mark(&e.pool.reference);
         m.insert(e);
         self.version.fetch_add(1, Ordering::AcqRel);
+        drop(m);
+        // Решение 403: построитель отбора мелких пулов (quote/shallow_build.rs); предел не задан — атомарное чтение.
+        self.shallow.poke();
     }
 
     /// Копия записи. None — пула нет.
@@ -205,6 +211,11 @@ impl Registry {
             self.graph.bg().changes.mark(r);
             self.version.fetch_add(1, Ordering::AcqRel);
         }
+        drop(m);
+        if out.is_some() {
+            // Решение 403: построитель отбора мелких пулов (quote/shallow_build.rs).
+            self.shallow.poke();
+        }
         out
     }
 
@@ -220,6 +231,24 @@ impl Registry {
             .pair(coin, quote)
             .map(|e| (**e).clone())
             .collect()
+    }
+
+    /// Решение 403: пулы пары «монета — встречный токен» без копирования записей (`Arc`) — отбор мелких пулов
+    /// (quote/shallow_pick.rs). Ошибок нет.
+    pub fn pair_arcs(&self, coin: Address, quote: Address) -> Vec<Arc<Entry>> {
+        self.read().pair(coin, quote).cloned().collect()
+    }
+
+    /// Решение 403: (поколение состояния, спит) пулов пары по возрастанию — отпечаток входов отбора мелких пулов
+    /// (quote/shallow_memo.rs Stamp), без копирования записей. Ошибок нет.
+    pub fn pair_stamp(&self, coin: Address, quote: Address) -> Vec<(u64, bool)> {
+        let mut v: Vec<(u64, bool)> = self
+            .read()
+            .pair(coin, quote)
+            .map(|e| (e.state_gen, e.asleep))
+            .collect();
+        v.sort_unstable();
+        v
     }
 
     /// Поколения состояния пулов пары «монета — встречный токен» (решение 301 е2; раньше — блок, logIndex, достоверен)
@@ -268,5 +297,17 @@ impl Registry {
         self.fails.forget(&gone);
         // Решение 357 (ревью слияния, Н4): и отметки «в обновлении» удалённых пулов.
         self.holds.forget_all(&gone);
+        // Решение 403: построитель отбора мелких пулов (quote/shallow_build.rs).
+        self.shallow.poke();
+    }
+
+    /// Решение 403: допуск мелких пулов `refs` сменился (новый снимок отбора, quote/shallow_build.rs) — как запись:
+    /// отметка фоновому графу под замком записи и до роста версии (решение 308, И4), версия растёт — граф и кэши
+    /// котировки по версии пересобираются с новым допуском. Записи не меняются. Ошибок нет.
+    pub fn touch(&self, refs: &[PoolRef]) {
+        let m = self.inner.write().unwrap_or_else(|p| p.into_inner());
+        self.graph.bg().changes.mark_all(refs);
+        self.version.fetch_add(1, Ordering::AcqRel);
+        drop(m);
     }
 }

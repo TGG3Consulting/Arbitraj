@@ -63,11 +63,14 @@ impl Tokens {
     }
 
     /// Тикер токена по адресу. None — такой монеты в подписке нет.
+    /// Решение 403: поиск под замком чтения, копируется только найденное (без копии всего списка).
     pub fn ticker_of(&self, address: Address) -> Option<String> {
-        self.all()
-            .into_iter()
+        self.list
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
             .find(|t| t.address == address)
-            .map(|t| t.ticker)
+            .map(|t| t.ticker.clone())
     }
 
     /// Адрес USDT — монеты с тикером venue.quote_asset [bsc_dex] из подписки ядра (адрес — из API биржи).
@@ -83,8 +86,15 @@ impl Tokens {
     }
 
     /// Токен по тикеру. None — такой монеты в подписке нет.
+    /// Решение 403: поиск под замком чтения, копируется только найденный токен (раньше — весь список на каждый вызов,
+    /// а usdt() зовётся на каждой котировке).
     pub fn by_ticker(&self, ticker: &str) -> Option<Token> {
-        self.all().into_iter().find(|t| t.ticker == ticker)
+        self.list
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .find(|t| t.ticker == ticker)
+            .cloned()
     }
 
     /// Запоминает decimals токена, уже прочитанные из контракта другим путём (ответ decimals() из записи узла —

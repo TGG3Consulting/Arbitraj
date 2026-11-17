@@ -60,7 +60,8 @@ pub fn eval(
         return rec;
     };
     // Решение 393: мелкий пул — кандидат, если хотя бы одну сторону пропускает сумма пробы (как pools/graph.rs build).
-    if !(d.deep_buy || d.deep_sell) && !shallow_pick::admitted(ctx, reg, tokens, usdt_dec, e) {
+    // Решение 403: допуск — из опубликованного снимка отбора (quote/shallow_memo.rs), без замка и чтения настроек.
+    if !(d.deep_buy || d.deep_sell) && !shallow_pick::admitted_snap(reg, e) {
         return rec;
     }
     let edge = Edge {

@@ -9,14 +9,21 @@
 //!   (у V2 — всегда полная сумма), глубина в полосе в ранг НЕ входит (она меняется каждым обменом);
 //! - при равном уровне — уже отобранный пул остаётся (гистерезис на состоянии, quote/shallow_memo.rs), затем адрес пула.
 //!
-//! Пул без проходящей стороны — не кандидат. Отбор пары считается один раз на версию реестра и настройки
-//! (quote/shallow_memo.rs, Н-B2). Не задана или 0 — мелкие пулы не допускаются (как до решения 393).
-//! Кто вызывает: check/taxes_util.rs (probe_pools), check/quoter_one.rs, check/quoter_side.rs, pools/depth.rs,
-//! pools/graph.rs, pools/graph_eval.rs, quote/select.rs (limit).
+//! Пул без проходящей стороны — не кандидат. Не задана или 0 — мелкие пулы не допускаются (как до решения 393).
+//! Решение 403 (t188): отбор пар считает построитель вне пути котировки (quote/shallow_build.rs) и публикует снимком
+//! (quote/shallow_memo.rs):
+//! - путь котировки (pools/graph.rs, pools/graph_eval.rs, quote/select.rs) — admitted_snap / on_snap: только чтение
+//!   снимка, без общего замка, без настроек, без копий;
+//! - пути вне котировки (подписка, сверка с квотером, проба налогов, тесты) — admitted / pick: входы пары те же, что у
+//!   слота снимка, — готовый отбор, иначе расчёт сейчас (calc) по живому реестру.
+//!
+//! Кто вызывает: check/taxes_util.rs (probe_pools), check/quoter_one.rs, check/quoter_side.rs, pools/depth.rs (admitted,
+//! pick); pools/graph.rs, pools/graph_eval.rs (admitted_snap); quote/select.rs (on_snap); quote/shallow_build.rs (calc).
 //! От чего зависит: quote/side_fit.rs, quote/select.rs (deep_side), quote/shallow_memo.rs, pools/depth_book.rs (label),
 //! registry.rs, tokens.rs.
-//! Настройки: dex.shallow_pools_per_pair [bsc_dex]; через side_fit — check.probe_usdt, dex.quoter_max_diff_pct; ключ
-//! памяти — ещё venue.quote_asset, dex.depth_band_pct, dex.min_pool_liquidity_usd, dex.depth_hysteresis_pct.
+//! Настройки: dex.shallow_pools_per_pair [bsc_dex]; через side_fit — check.probe_usdt, dex.quoter_max_diff_pct; через
+//! глубину — dex.depth_band_pct, dex.min_pool_liquidity_usd, dex.depth_hysteresis_pct; venue.quote_asset (USDT). Все
+//! они — в отпечатке входов через поколение настроек (settings/store.rs generation).
 
 use std::sync::Arc;
 
@@ -28,6 +35,7 @@ use super::super::ctx::Ctx;
 use super::super::pools::depth_book;
 use super::super::pools::registry::{Entry, Registry};
 use super::super::tokens::Tokens;
+use super::shallow_memo::Stamp;
 use super::{select, side_fit};
 
 /// Имя настройки предела.
@@ -77,29 +85,61 @@ fn deep_both(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8, e: &Entry
     )
 }
 
-/// Ключ памяти отбора: версия реестра и настройки, от которых зависит отбор. Ошибок нет.
-fn key(ctx: &Ctx, reg: &Registry) -> (u64, Vec<String>) {
-    let t = |n: &str| ctx.text(n).unwrap_or_default();
-    let d = |n: &str| {
-        ctx.dec(n)
-            .map(|v| v.normalize().to_string())
-            .unwrap_or_default()
-    };
-    (
-        reg.version(),
-        vec![
-            limit(ctx).to_string(),
-            d("check.probe_usdt"),
-            d("dex.quoter_max_diff_pct"),
-            d("dex.depth_band_pct"),
-            d("dex.min_pool_liquidity_usd"),
-            d("dex.depth_hysteresis_pct"),
-            t("venue.quote_asset"),
-        ],
-    )
+/// Отпечаток входов отбора пары сейчас (shallow_memo.rs Stamp). Принимает: окружение, реестр, адрес и знаки USDT,
+/// пару. Ошибок нет.
+pub fn stamp_now(
+    ctx: &Ctx,
+    reg: &Registry,
+    usdt: Address,
+    usdt_dec: u8,
+    pair: (Address, Address),
+) -> Stamp {
+    Stamp {
+        settings: ctx.settings.generation(),
+        usdt,
+        dec: usdt_dec,
+        pools: reg.pair_stamp(pair.0, pair.1),
+        rate: if pair.1 == usdt {
+            Vec::new()
+        } else {
+            reg.pair_stamp(pair.1, usdt)
+        },
+    }
 }
 
-/// Отбор пары «монета — встречный токен» (см. шапку): один раз на ключ памяти. Ошибок нет.
+/// Отбор пары по её пулам `list` (см. шапку) — чистый расчёт без памяти: допуск (достоверен, встречный — пары, не
+/// глубок в оба направления, есть проходящая сторона), ранг, гистерезис по прошлому отбору `prev`, первые `n`.
+/// Принимает: окружение, реестр, токены, знаки USDT, пару, предел, прошлый отбор, пулы пары. Ошибок нет.
+#[allow(clippy::too_many_arguments)]
+pub fn calc(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    usdt_dec: u8,
+    pair: (Address, Address),
+    n: usize,
+    prev: &[PoolRef],
+    list: &[Arc<Entry>],
+) -> Vec<PoolRef> {
+    let mut cands: Vec<Cand> = Vec::new();
+    for x in list {
+        let e: &Entry = x;
+        if !e.valid || e.usdt != pair.1 || deep_both(ctx, reg, tokens, usdt_dec, e) {
+            continue;
+        }
+        let Some(lv) = level(ctx, reg, tokens, usdt_dec, e) else {
+            continue;
+        };
+        let r = e.pool.reference.clone();
+        cands.push((lv, prev.contains(&r), depth_book::label(&r), r));
+    }
+    order(cands, n)
+}
+
+/// Отбор пары «монета — встречный токен» сейчас (см. шапку) — для путей вне котировки (подписка pools/depth.rs, сверка
+/// с квотером, проба налогов): входы те же, что у слота опубликованного снимка (shallow_memo.rs Stamp), — готовый
+/// отбор; иначе расчёт по живому реестру (calc) с прошлым отбором из снимка. Снимок не меняет (его пишет только
+/// построитель, quote/shallow_build.rs). Общих замков с копиями нет. Ошибок нет.
 pub fn pick(
     ctx: &Ctx,
     reg: &Registry,
@@ -111,23 +151,40 @@ pub fn pick(
     if n == 0 {
         return Arc::default();
     }
-    reg.shallow_memo().get(key(ctx, reg), pair, |prev| {
-        let cands = reg
-            .by_coin(&pair.0)
-            .into_iter()
-            .filter(|x| x.valid && x.usdt == pair.1)
-            .filter(|x| !deep_both(ctx, reg, tokens, usdt_dec, x))
-            .filter_map(|x| {
-                let lv = level(ctx, reg, tokens, usdt_dec, &x)?;
-                let r = x.pool.reference.clone();
-                Some((lv, prev.contains(&r), depth_book::label(&r), r))
-            })
-            .collect();
-        order(cands, n)
-    })
+    let memo = reg.shallow_memo();
+    if let Ok(usdt) = tokens.usdt(ctx) {
+        let now = stamp_now(ctx, reg, usdt, usdt_dec, pair);
+        let ready = memo.with(|s| {
+            s.slots
+                .get(&pair)
+                .filter(|x| s.limit == n && x.stamp == now)
+                .map(|x| Arc::clone(&x.sel))
+        });
+        if let Some(v) = ready {
+            return v;
+        }
+    }
+    let prev = memo
+        .with(|s| s.slots.get(&pair).map(|x| Arc::clone(&x.sel)))
+        .unwrap_or_default();
+    let list = reg.pair_arcs(pair.0, pair.1);
+    Arc::new(calc(ctx, reg, tokens, usdt_dec, pair, n, &prev, &list))
 }
 
-/// Допущен ли мелкий пул `e`: он в отборе своей пары (pick). Ошибок нет.
+/// Допущен ли мелкий пул `e`: он в отборе своей пары (pick — расчёт сейчас; пути вне котировки). Ошибок нет.
 pub fn admitted(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8, e: &Entry) -> bool {
     limit(ctx) > 0 && pick(ctx, reg, tokens, usdt_dec, (e.coin, e.usdt)).contains(&e.pool.reference)
+}
+
+/// Решение 403: допущен ли мелкий пул `e` по опубликованному снимку (shallow_memo.rs) — путь котировки (сборка графа,
+/// оценка пула фоновым графом). Без общего замка, без чтения настроек и без копий. Ошибок нет.
+pub fn admitted_snap(reg: &Registry, e: &Entry) -> bool {
+    reg.shallow_memo()
+        .with(|s| s.admits(&(e.coin, e.usdt), &e.pool.reference))
+}
+
+/// Решение 403: задан ли предел мелких пулов (> 0) в опубликованном снимке — допуск мелкой стороны к котировке
+/// (quote/select.rs) без чтения настройки. Ошибок нет.
+pub fn on_snap(reg: &Registry) -> bool {
+    reg.shallow_memo().with(|s| s.limit > 0)
 }

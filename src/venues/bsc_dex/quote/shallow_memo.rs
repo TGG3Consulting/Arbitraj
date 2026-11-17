@@ -1,68 +1,181 @@
 //! Файл: venues/bsc_dex/quote/shallow_memo.rs
-//! Что делает: решение 393 (повторное ревью t178, Н-B2, Н-B1) — память отбора мелких пулов пары (quote/shallow_pick.rs):
-//! - отбор пары считается один раз на версию реестра и набор настроек (сборка графа, проход пробы и сверки берут
-//!   готовый; раньше admitted считал ранги всей пары на каждый пул — k² расчётов на пару);
-//! - прошлый отбор пары помнится через смену версий: при равном ранге уже отобранный пул остаётся (гистерезис на
-//!   состоянии, без числа-порога), его вытесняет только претендент со строго лучшим рангом.
+//! Что делает: решение 393 (повторное ревью t178, Н-B2, Н-B1), решение 403 (задача t188) — опубликованный снимок отбора
+//! мелких пулов пары (quote/shallow_pick.rs):
+//! - отбор каждой пары считает построитель (quote/shallow_build.rs) вне пути котировки — при записи в реестр и при
+//!   смене настроек; снимок публикуется целиком за `Arc` и дальше не меняется;
+//! - путь котировки (сборка графа, оценка пула фоновым графом, допуск мелкой стороны — pools/graph.rs, graph_eval.rs,
+//!   quote/select.rs) только читает снимок: копия `Arc` снимка держится в поле потока и перечитывается, лишь когда
+//!   построитель опубликовал новый (атомарный номер публикации); без общего замка, без чтения настроек и без копий;
+//! - у слота пары — отпечаток входов (поколение настроек, USDT и его знаки, поколения и «спит» пулов пары и пулов
+//!   «встречный — USDT»): по нему расчёт «сейчас» (shallow_pick.rs pick) берёт готовый отбор, если входы те же.
 //!
-//! Хранится в реестре (pools/registry.rs поле shallow, Arc — общий у клонов реестра); у замороженного снимка — свой
-//! пустой.
-//! Кто вызывает: quote/shallow_pick.rs.
-//! От чего зависит: pools/registry.rs (версия), core/types (PoolRef).
-//! Настройки: нет (набор настроек — ключ, его даёт вызывающий).
+//! Решение 403: раньше память была одна на весь реестр под общим замком с ключом «версия реестра» — версия растёт на
+//! каждом обмене любого пула, память сбрасывалась почти на каждом вызове, и 48 потоков расчёта стояли в futex
+//! (17.11.2026, сборка 4656c113, dex.shallow_pools_per_pair = 5: system CPU 35–40 %).
+//!
+//! Хранится в реестре (pools/registry.rs поле shallow, `Arc` — общий у клонов реестра); у замороженного снимка —
+//! снимок живого на момент заморозки (pools/registry_frozen.rs, построителя нет).
+//! Кто вызывает: quote/shallow_pick.rs (with), quote/shallow_build.rs (publish, wake), pools/registry.rs (poke),
+//! pools/registry_frozen.rs (fixed, load).
+//! От чего зависит: core/types (PoolRef), tokio (Notify).
+//! Настройки: нет.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, RwLock};
 
 use alloy_primitives::Address;
+use tokio::sync::Notify;
 
 use crate::core::types::PoolRef;
 
 /// Пара «монета — встречный токен».
 pub type Pair = (Address, Address);
 
-/// Состояние памяти.
-#[derive(Default)]
-struct Inner {
-    /// Ключ действующих отборов: (версия реестра, настройки текстом).
-    key: Option<(u64, Vec<String>)>,
-    /// Отбор пары для ключа.
-    now: HashMap<Pair, Arc<Vec<PoolRef>>>,
-    /// Последний отбор пары (любой ключ) — для гистерезиса.
-    last: HashMap<Pair, Arc<Vec<PoolRef>>>,
+/// Отпечаток входов отбора пары: всё, от чего он зависит (shallow_pick.rs calc). Одинаковый — отбор тот же.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Stamp {
+    /// Поколение значений настроек (settings/store.rs generation).
+    pub settings: u64,
+    /// Адрес USDT (venue.quote_asset) и его знаки.
+    pub usdt: Address,
+    pub dec: u8,
+    /// (поколение состояния, спит) пулов пары, по возрастанию (registry.rs pair_stamp).
+    pub pools: Vec<(u64, bool)>,
+    /// То же у пулов «встречный — USDT» (курс суммы пробы, quote/rate.rs); у пары с USDT — пусто.
+    pub rate: Vec<(u64, bool)>,
+}
+
+/// Отбор пары и отпечаток входов, на которых он посчитан.
+#[derive(Debug, Clone, Default)]
+pub struct Slot {
+    pub stamp: Stamp,
+    pub sel: Arc<Vec<PoolRef>>,
+}
+
+/// Опубликованный снимок: предел dex.shallow_pools_per_pair на момент сборки (0 — мелкие не допускаются) и отборы пар.
+#[derive(Debug, Clone, Default)]
+pub struct Snap {
+    pub limit: usize,
+    pub slots: HashMap<Pair, Slot>,
+}
+
+impl Snap {
+    /// Допущен ли пул `r` пары `pair` (предел > 0 и пул в отборе). Ошибок нет.
+    pub fn admits(&self, pair: &Pair, r: &PoolRef) -> bool {
+        self.limit > 0 && self.slots.get(pair).is_some_and(|s| s.sel.contains(r))
+    }
+}
+
+/// Общая часть памяти.
+struct Shared {
+    /// Номер памяти (отличает память живого реестра от памяти замороженного снимка в поле потока).
+    id: u64,
+    /// Номер публикации: растёт после каждой замены снимка.
+    seq: AtomicU64,
+    snap: RwLock<Arc<Snap>>,
+    /// Будить ли построителя записями реестра (предел задан).
+    on: AtomicBool,
+    /// Построитель запущен (или его не будет — замороженный снимок).
+    started: AtomicBool,
+    wake: Notify,
 }
 
 /// Память отбора. Дешёво клонируется (общая у клонов реестра).
-#[derive(Clone, Default)]
-pub struct Memo(Arc<Mutex<Inner>>);
+#[derive(Clone)]
+pub struct Memo(Arc<Shared>);
+
+/// Номера памятей.
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+thread_local! {
+    /// Последний прочитанный этим потоком снимок: (номер памяти, номер публикации, снимок).
+    static SEEN: RefCell<Option<(u64, u64, Arc<Snap>)>> = const { RefCell::new(None) };
+}
+
+impl Default for Memo {
+    fn default() -> Self {
+        Memo::make(Arc::default(), false)
+    }
+}
 
 impl Memo {
-    /// Отбор пары для ключа (версия, настройки): готовый или посчитанный `calc` (ему передаётся прошлый отбор пары).
-    /// Ошибок нет.
-    pub fn get(
-        &self,
-        key: (u64, Vec<String>),
-        pair: Pair,
-        calc: impl FnOnce(&[PoolRef]) -> Vec<PoolRef>,
-    ) -> Arc<Vec<PoolRef>> {
-        let prev = {
-            let mut g = self.0.lock().unwrap_or_else(|p| p.into_inner());
-            if g.key.as_ref() != Some(&key) {
-                g.key = Some(key.clone());
-                g.now.clear();
+    /// Память с данным снимком; `fixed` — построителя не будет. Ошибок нет.
+    fn make(snap: Arc<Snap>, fixed: bool) -> Memo {
+        Memo(Arc::new(Shared {
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+            seq: AtomicU64::new(0),
+            snap: RwLock::new(snap),
+            on: AtomicBool::new(false),
+            started: AtomicBool::new(fixed),
+            wake: Notify::new(),
+        }))
+    }
+
+    /// Память замороженного снимка реестра: снимок живого на момент заморозки, без построителя. Ошибок нет.
+    pub fn fixed(snap: Arc<Snap>) -> Memo {
+        Memo::make(snap, true)
+    }
+
+    /// Текущий снимок (копия `Arc`; для построителя и заморозки). Ошибок нет.
+    pub fn load(&self) -> Arc<Snap> {
+        self.0
+            .snap
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
+    }
+
+    /// Чтение снимка на горячем пути: снимок из поля потока, замок публикации берётся, только когда номер публикации
+    /// сменился (раз на публикацию на поток); счётчик ссылок общего `Arc` на попадании не трогается. `f` не должна
+    /// снова звать `with`. Принимает: функцию над снимком. Возвращает: её итог. Ошибок нет.
+    pub fn with<R>(&self, f: impl FnOnce(&Snap) -> R) -> R {
+        let seq = self.0.seq.load(Ordering::Acquire);
+        SEEN.with(|c| {
+            {
+                let mut m = c.borrow_mut();
+                let hit = matches!(m.as_ref(), Some((id, s, _)) if *id == self.0.id && *s == seq);
+                if !hit {
+                    *m = Some((self.0.id, seq, self.load()));
+                }
             }
-            if let Some(v) = g.now.get(&pair) {
-                return Arc::clone(v);
-            }
-            g.last.get(&pair).cloned().unwrap_or_default()
-        };
-        // Расчёт — без замка (он читает реестр и настройки).
-        let v = Arc::new(calc(&prev));
-        let mut g = self.0.lock().unwrap_or_else(|p| p.into_inner());
-        if g.key.as_ref() == Some(&key) {
-            g.now.insert(pair, Arc::clone(&v));
+            let m = c.borrow();
+            let (_, _, snap) = m.as_ref().expect("снимок положен строкой выше");
+            f(snap.as_ref())
+        })
+    }
+
+    /// Публикация нового снимка (только построитель). Ошибок нет.
+    pub fn publish(&self, s: Snap) {
+        *self.0.snap.write().unwrap_or_else(|p| p.into_inner()) = Arc::new(s);
+        self.0.seq.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// Запись в реестр: разбудить построителя, если предел задан (иначе — одно атомарное чтение). Ошибок нет.
+    pub fn poke(&self) {
+        if self.0.on.load(Ordering::Acquire) {
+            self.0.wake.notify_one();
         }
-        g.last.insert(pair, Arc::clone(&v));
-        v
+    }
+
+    /// Разбудить построителя независимо от предела (пересборка подписки). Ошибок нет.
+    pub fn wake_now(&self) {
+        self.0.wake.notify_one();
+    }
+
+    /// Будить ли построителя записями реестра (построитель — по пределу). Ошибок нет.
+    pub fn set_on(&self, on: bool) {
+        self.0.on.store(on, Ordering::Release);
+    }
+
+    /// Ожидание пробуждения построителя. Ошибок нет.
+    pub fn notified(&self) -> tokio::sync::futures::Notified<'_> {
+        self.0.wake.notified()
+    }
+
+    /// true — построитель ещё не запущен и запускается вызывающим (один раз). Ошибок нет.
+    pub fn start_once(&self) -> bool {
+        !self.0.started.swap(true, Ordering::AcqRel)
     }
 }

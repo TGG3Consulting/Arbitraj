@@ -130,6 +130,8 @@ impl Parts {
         // Решение 308: фоновый владелец графа маршрутов — запуск при первой подписке, при пересборке подписки (ленты пулов
         // переподключены) — полная пересборка графа (pools/graph_owner.rs). Работает только при dex.graph_background = да.
         super::pools::graph_owner::ensure(&self.ctx, &self.registry, &self.tokens, out.clone());
+        // Решение 403: построитель снимка отбора мелких пулов пар (вне пути котировки, quote/shallow_build.rs).
+        super::quote::shallow_build::ensure(&self.ctx, &self.registry, &self.tokens);
         // Решения 321/324: общий набор канала ядра (один на канал — все подписки и пачки и биржи) и запись журнала,
         // когда он опустел.
         let kept = super::pools::emit_pool::Kept::new(&out, &self.registry, &self.ctx);

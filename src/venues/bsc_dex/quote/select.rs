@@ -98,7 +98,7 @@ pub fn usable_with(
     if e.asleep {
         return Err(ASLEEP.into());
     }
-    deep_side_with(
+    let shallow = deep_side_with(
         ctx,
         &q.reg,
         &q.tokens,
@@ -107,6 +107,13 @@ pub fn usable_with(
         Need::Side(side),
         prep,
     )?;
+    // Ревью t178 (Б2): dex.shallow_pools_per_pair не задана или 0 — мелкая сторона не котируется, как до решения 390.
+    // Задана — допуск мелкой стороны даёт её сверка с квотером (ниже): сверяются только пулы в пределе пары.
+    if let Some(why) = shallow
+        && super::shallow_pick::limit(ctx) == 0
+    {
+        return Err(why);
+    }
     // DEX подключена и её вид не менялся на лету (pools/families.rs); пул не исключён проверкой «кто меняет».
     families::still(ctx, e.family)?;
     // Решение «122 (Infinity Stable, ответы)»: пул Infinity CL с крючком из dex.stable_hooks — это пул Infinity Stable

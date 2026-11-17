@@ -20,7 +20,7 @@ use rust_decimal::Decimal;
 use crate::core::types::PoolRef;
 
 use super::super::ctx::Ctx;
-use super::super::quote::{par, side_fit};
+use super::super::quote::{par, shallow_pick};
 use super::super::tokens::Tokens;
 use super::depth_book::Book;
 use super::depth_key::Prep;
@@ -60,7 +60,7 @@ pub fn eval(
         return rec;
     };
     // Решение 390: мелкий пул — кандидат, если хотя бы одну сторону пропускает сумма пробы (как pools/graph.rs build).
-    if !(d.deep_buy || d.deep_sell) && !side_fit::any_side(ctx, reg, tokens, usdt_dec, e) {
+    if !(d.deep_buy || d.deep_sell) && !shallow_pick::admitted(ctx, reg, tokens, usdt_dec, e) {
         return rec;
     }
     let edge = Edge {

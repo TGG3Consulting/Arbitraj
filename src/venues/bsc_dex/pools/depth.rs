@@ -25,7 +25,7 @@
 use crate::core::types::PoolRef;
 use crate::storage::journal::Level;
 
-use super::super::quote::{emptiness, select, side_fit};
+use super::super::quote::{emptiness, select, shallow_pick};
 use super::listen::Pools;
 
 /// Глубокий ли пул (см. шапку). Принимает: окружение, ссылку на прочитанный пул. Возвращает: true — слушать всё;
@@ -57,7 +57,10 @@ pub async fn deep(p: &Pools, r: &PoolRef) -> bool {
         // Решение 390 (t178): мелкий пул, у которого хоть одну сторону пропускает сумма пробы, — в котировке и сверке
         // (quote/select.rs), его обмены слушаются: иначе состояние старело бы, и пул, ставший глубоким после обмена
         // (кит купил монету — резерв USDT вырос), не был бы замечен до переподключения пачки.
-        Ok(Some(_)) => dec.is_ok_and(|d| side_fit::any_side(&p.ctx, &p.reg, &p.tokens, d, &probe)),
+        // Ревью t178 (Б2): только в пределе dex.shallow_pools_per_pair пары (quote/shallow_pick.rs).
+        Ok(Some(_)) => {
+            dec.is_ok_and(|d| shallow_pick::admitted(&p.ctx, &p.reg, &p.tokens, d, &probe))
+        }
         Err(why) => {
             let msg = format!(
                 "Глубина пула не считается ({why}) — такие пулы слушаются полностью (все события)"

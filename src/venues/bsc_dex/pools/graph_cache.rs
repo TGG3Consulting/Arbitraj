@@ -195,7 +195,8 @@ pub fn cached(
 }
 
 /// Настройки графа текстом (как прочитаны; не задана — пусто): dex.route_max_pools_per_edge, dex.depth_band_pct,
-/// dex.min_pool_liquidity_usd, dex.depth_hysteresis_pct — часть ключа кэша (решение 129) и basis снимка фонового графа
+/// dex.min_pool_liquidity_usd, dex.depth_hysteresis_pct, dex.shallow_pools_per_pair, check.probe_usdt,
+/// dex.quoter_max_diff_pct (решение 390: допуск мелкого пула) — часть ключа кэша (решение 129) и basis снимка фонового графа
 /// (решение 308, graph_snap.rs). Ошибок нет.
 pub fn graph_settings(ctx: &Ctx) -> Vec<String> {
     let dec = |n: &str| {
@@ -210,6 +211,12 @@ pub fn graph_settings(ctx: &Ctx) -> Vec<String> {
         dec("dex.depth_band_pct"),
         dec("dex.min_pool_liquidity_usd"),
         dec("dex.depth_hysteresis_pct"),
+        // Решение 390 (ревью t178, Н2): от них — допуск мелкого пула в граф (quote/shallow_pick.rs).
+        ctx.int("dex.shallow_pools_per_pair")
+            .map(|v| v.to_string())
+            .unwrap_or_default(),
+        dec("check.probe_usdt"),
+        dec("dex.quoter_max_diff_pct"),
     ]
 }
 

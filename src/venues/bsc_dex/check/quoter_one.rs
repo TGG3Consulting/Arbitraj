@@ -18,7 +18,7 @@ use crate::storage::journal::Level;
 use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
 use super::super::pools::registry::Entry;
-use super::super::quote::{select, side_fit};
+use super::super::quote::{select, shallow_pick, side_fit};
 use super::quoter_block::{self, Head};
 use super::quoter_pause;
 use super::quoter_sides::QuoterSides;
@@ -67,7 +67,9 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
         // Решение 390 (t178): мелкая сторона сверяется, если её пропускает сумма пробы (quote/side_fit.rs) и пул не
         // спит — она идёт в котировку (quote/select.rs), сверка с квотером ей обязательна.
         let fits = |dec: u8| {
-            !e.asleep && side_fit::side_usd(&p.ctx, &p.reg, &p.tokens, dec, &e, side).is_some()
+            !e.asleep
+                && shallow_pick::admitted(&p.ctx, &p.reg, &p.tokens, dec, &e)
+                && side_fit::side_usd(&p.ctx, &p.reg, &p.tokens, dec, &e, side).is_some()
         };
         let v = match deep {
             Ok((None, dec)) => verify(p, &e, (&mut head, &mut reprobed), dec, side).await,

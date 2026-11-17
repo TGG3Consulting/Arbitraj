@@ -36,7 +36,7 @@ use rust_decimal::Decimal;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
-use super::super::quote::side_fit;
+use super::super::quote::shallow_pick;
 use super::super::tokens::Tokens;
 use super::depth_book;
 use super::registry::{Entry, Registry};
@@ -168,7 +168,7 @@ pub fn build_measured(
         // Решение 390 (t178): мелкий по обеим сторонам пул — в граф, если хотя бы одну сторону пропускает сумма пробы
         // (quote/side_fit.rs): котировка берёт и мелкую сторону (quote/select.rs). Ранг — глубина: мелкие — после
         // глубоких на той же паре.
-        if !(d.deep_buy || d.deep_sell) && !side_fit::any_side(ctx, reg, tokens, usdt_dec, &e) {
+        if !(d.deep_buy || d.deep_sell) && !shallow_pick::admitted(ctx, reg, tokens, usdt_dec, &e) {
             continue;
         }
         let rank = d.band.buy.max(d.band.sell);

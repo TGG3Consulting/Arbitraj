@@ -89,7 +89,7 @@ async fn unmeasured_pool_is_not_interference() {
         Outcome::Wait(w) => assert!(w.contains("налоги пула не измерены"), "{w}"),
         o => panic!("ожидалось «не проверено», а {o:?}"),
     }
-    // Помеха окружения у другого пула — по-прежнему Wait.
+    // Помеха окружения у другого пула — вердикта по монете нет; покупка в пуле откатилась — Doubt (ревью t178, Б1).
     assert!(matches!(
         outcome(
             &[],
@@ -98,7 +98,7 @@ async fn unmeasured_pool_is_not_interference() {
             (vec![failed.clone()], vec!["узел".into()], vec![]),
             &[un]
         ),
-        Outcome::Wait(_)
+        Outcome::Doubt(_)
     ));
     // Без пулов «не измерены» — как раньше.
     assert_eq!(
@@ -119,7 +119,7 @@ async fn unmeasured_pool_is_not_interference() {
             (vec![], vec!["узел".into()], vec![]),
             &none
         ),
-        Outcome::Wait(_)
+        Outcome::Doubt(_)
     ));
 }
 

@@ -50,8 +50,9 @@ const PAIRS: [&str; 4] = [
     "0xa135061c34abdeb1cd6ec492d8355318b5c8afe2",
 ];
 
-/// Настройки зоны bsc_dex для теста: полоса 2 %, гистерезис 10 %, порог `min_usd`, проба 20, допуск 0,11 %.
-async fn settings(ctx: &Ctx, min_usd: u32) {
+/// Настройки зоны bsc_dex для теста: полоса 2 %, гистерезис 10 %, порог `min_usd`, проба 20, допуск 0,11 %, предел
+/// мелких пулов на пару `per_pair`.
+async fn settings(ctx: &Ctx, min_usd: u32, per_pair: u32) {
     let v = Scope::Venue("bsc_dex".into());
     for (n, x) in [
         ("venue.quote_asset", json!("USDT")),
@@ -60,6 +61,7 @@ async fn settings(ctx: &Ctx, min_usd: u32) {
         ("dex.min_pool_liquidity_usd", json!(min_usd)),
         ("check.probe_usdt", json!(20)),
         ("dex.quoter_max_diff_pct", json!(0.11)),
+        ("dex.shallow_pools_per_pair", json!(per_pair)),
     ] {
         ctx.settings
             .set(n, v.clone(), Some(x), "тест")
@@ -80,7 +82,7 @@ fn usdt_is(p: &Parts, usdt: Address) {
 #[tokio::test]
 async fn shallow_v2_pairs_go_to_probe_with_full_sum() {
     let ctx = native_common::ctx("t178-v2").await;
-    settings(&ctx, 10).await;
+    settings(&ctx, 10, 4).await;
     let p = Parts::new(ctx.clone());
     let r = rec();
     let pairs: Vec<_> = PAIRS.iter().map(|a| v2(&r, a, true)).collect();
@@ -147,17 +149,119 @@ async fn without_probe_settings_shallow_stays_as_before() {
     let e = v2(&rec(), PAIRS[2], true);
     usdt_is(&p, e.usdt);
     p.registry.put(e.clone());
-    // check.probe_usdt не задана — круг не считается, пул — мелкий с причиной (как до решения 390).
+    // dex.shallow_pools_per_pair не задана — мелкие пулы не допускаются, пул — мелкий с причиной (как до решения 390).
     let (pools, env, shallow) = probe_pools(&ctx, &p.registry, &p.tokens, &e.coin, 18).unwrap();
     assert!(pools.is_empty() && env.is_empty());
     assert_eq!(shallow.len(), 1);
-    assert!(shallow[0].contains("check.probe_usdt"), "{}", shallow[0]);
+    assert!(
+        shallow[0].contains("dex.shallow_pools_per_pair"),
+        "{}",
+        shallow[0]
+    );
+}
+
+/// Ревью t178 (Б2): предел 1 на пару — из четырёх мелких пар записи (все пропускают полную сумму пробы) допускается
+/// одна, самая глубокая в полосе (0x594ecc0d…: 131 встречного); остальные в пробу не идут и при ws спят.
+#[tokio::test]
+async fn shallow_limit_picks_by_rank() {
+    let ctx = native_common::ctx("t178-limit").await;
+    settings(&ctx, 10, 1).await;
+    let p = Parts::new(ctx.clone());
+    let r = rec();
+    let pairs: Vec<_> = PAIRS.iter().map(|a| v2(&r, a, true)).collect();
+    usdt_is(&p, pairs[0].usdt);
+    for e in &pairs {
+        p.registry.put(e.clone());
+    }
+    let (pools, _, shallow) =
+        probe_pools(&ctx, &p.registry, &p.tokens, &pairs[0].coin, 18).unwrap();
+    assert_eq!(pools.len(), 1);
+    assert_eq!(pools[0].0.pool.reference, pairs[0].pool.reference);
+    assert_eq!(shallow.len(), 3);
+    let (tx, _rx) = tokio::sync::mpsc::channel(16);
+    let pp = p.pools(tx);
+    assert!(depth::deep(&pp, &pairs[0].pool.reference).await);
+    for e in &pairs[1..] {
+        assert!(
+            !depth::deep(&pp, &e.pool.reference).await,
+            "{:?} спит",
+            e.pool.reference
+        );
+    }
+    // Предел 0 — как до решения 390.
+    ctx.settings
+        .set(
+            "dex.shallow_pools_per_pair",
+            Scope::Venue("bsc_dex".into()),
+            Some(json!(0)),
+            "тест",
+        )
+        .await
+        .unwrap();
+    assert!(!depth::deep(&pp, &pairs[0].pool.reference).await);
+}
+
+/// ЧИСТАЯ ЛОГИКА (ревью t178, Б1): прежний итог при «не проверено». Ловушка, включённая у известной монеты (продажа
+/// откатилась в глубоком пуле — вердикт по пулу), не прячется за помехой на мелком: Doubt снимает «прошла».
+#[test]
+fn doubt_drops_known_pure_logic() {
+    use arb::core::types::{CheckState, TokenTaxes};
+    use arb::venues::bsc_dex::check::pool_taxes::outcome;
+    use arb::venues::bsc_dex::check::state::PoolTaxes;
+    use arb::venues::bsc_dex::check::taxes::Outcome;
+    use arb::venues::bsc_dex::check::taxes_util::keeps;
+    let known = Some(CheckState::Known(TokenTaxes {
+        buy_pct: Decimal::ZERO,
+        sell_pct: Decimal::ZERO,
+        transfer_pct: Decimal::ZERO,
+    }));
+    let failed = Some(CheckState::Failed {
+        reason: "ловушка".into(),
+    });
+    // Проба: покупка в глубоком пуле прошла, продажа откатилась (вердикт по пулу); у мелкого — помеха узла.
+    let bought = [PoolTaxes {
+        buy_pct: Decimal::ZERO,
+        sell_pct: None,
+        transfer_pct: Decimal::ZERO,
+    }];
+    let reverted = [(true, "V2: пробная продажа откатилась".to_string())];
+    let env = (
+        Vec::new(),
+        vec!["V4 мелкий: узел 429".to_string()],
+        Vec::new(),
+    );
+    let out = outcome(&bought, false, &reverted, env, &[]);
+    assert!(matches!(out, Outcome::Doubt(_)), "{out:?}");
+    assert!(!keeps(&known, true), "«прошла» снимается");
+    assert!(keeps(&failed, true), "«не прошла» остаётся");
+    // Только помеха (вердиктов нет) — прежний итог держится, как раньше.
+    let no_quote = [(false, "V2: квотер продажи не ответил".to_string())];
+    let env = (
+        Vec::new(),
+        vec!["V4 мелкий: узел 429".to_string()],
+        Vec::new(),
+    );
+    assert!(matches!(
+        outcome(&bought, false, &no_quote, env, &[]),
+        Outcome::Wait(_)
+    ));
+    assert!(keeps(&known, false));
+    // Покупка откатилась в одном пуле, помеха в другом — тоже Doubt.
+    let env = (
+        vec!["V2: покупка откатилась".to_string()],
+        vec!["узел".to_string()],
+        Vec::new(),
+    );
+    assert!(matches!(
+        outcome(&[], false, &[], env, &[]),
+        Outcome::Doubt(_)
+    ));
 }
 
 #[tokio::test]
 async fn aave_v3_below_threshold_still_probed() {
     let ctx = native_common::ctx("t178-aave").await;
-    settings(&ctx, 2000).await;
+    settings(&ctx, 2000, 1).await;
     let p = Parts::new(ctx.clone());
     let (e, _, _) = aave_v3(&rec());
     usdt_is(&p, e.usdt);

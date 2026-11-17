@@ -53,7 +53,7 @@ pub async fn deal_check(
     let res = match out {
         Outcome::Known(_) => Res::Ok,
         Outcome::Failed(_) => Res::Failed,
-        Outcome::Wait(_) => Res::Wait,
+        Outcome::Wait(_) | Outcome::Doubt(_) => Res::Wait,
         Outcome::Config(..) => Res::Config,
     };
     if matches!(res, Res::Ok | Res::Failed) {
@@ -106,7 +106,9 @@ pub async fn log(ctx: &Ctx, deal: &str, ticker: &str, out: &Outcome) {
             t.transfer_pct.round_dp(4).normalize()
         ),
         Outcome::Failed(why) => format!("проверка не прошла: {why}"),
-        Outcome::Wait(why) => format!("не проверено (повтор тем же кошельком): {why}"),
+        Outcome::Wait(why) | Outcome::Doubt(why) => {
+            format!("не проверено (повтор тем же кошельком): {why}")
+        }
         Outcome::Config(why, _) => format!("не задана настройка: {why}"),
     };
     let msg = format!(

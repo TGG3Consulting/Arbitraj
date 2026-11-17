@@ -12,7 +12,7 @@ use crate::storage::journal::Level;
 use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
 use super::super::pools::registry::Entry;
-use super::super::quote::{select, side_fit};
+use super::super::quote::{select, shallow_pick, side_fit};
 
 /// Начало причины «не задана настройка» — такие причины пишутся одной строкой на причину (Signals::once).
 const NOT_SET: &str = "Не задана настройка";
@@ -39,7 +39,9 @@ pub fn side_ready(p: &Pools, r: &PoolRef) -> bool {
             && match select::deep_side(&p.ctx, &p.reg, &p.tokens, &e, dec, select::Need::Side(s)) {
                 Ok(None) => true,
                 Ok(Some(_)) => {
-                    !e.asleep && side_fit::side_usd(&p.ctx, &p.reg, &p.tokens, dec, &e, s).is_some()
+                    !e.asleep
+                        && shallow_pick::admitted(&p.ctx, &p.reg, &p.tokens, dec, &e)
+                        && side_fit::side_usd(&p.ctx, &p.reg, &p.tokens, dec, &e, s).is_some()
                 }
                 Err(_) => false,
             }

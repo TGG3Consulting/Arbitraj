@@ -25,7 +25,7 @@ use super::super::node::abi::IERC20;
 use super::super::node::call;
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
-use super::super::quote::{select, side_fit};
+use super::super::quote::{select, shallow_pick, side_fit};
 use super::super::tokens::Tokens;
 
 /// Налог, %: (отправлено − дошло) / отправлено · 100 (дошло больше — 0). Принимает: суммы в минимальных единицах,
@@ -117,6 +117,8 @@ pub type ProbePool = (Entry, Option<U256>);
 /// глубина не считается, причины по мелким и спящим пулам, где и круг не проходит — с цифрами глубины; они — в текст
 /// ожидания, только когда пробовать нечем). Сумму мелкого пула не посчитать (не задана check.probe_usdt или
 /// dex.quoter_max_diff_pct, нет USDT или курса) — пул как мелкий (прежнее поведение).
+/// Ревью t178 (Б2): мелкий пул — только если он в пределе dex.shallow_pools_per_pair пары (quote/shallow_pick.rs); не
+/// задана или 0 — мелкие пулы в пробу не идут (как до решения 390).
 /// Ошибки: NotConfigured (не задана настройка глубины).
 pub fn probe_pools(
     ctx: &Ctx,
@@ -131,6 +133,16 @@ pub fn probe_pools(
         let label = super::super::pools::depth_book::label(&e.pool.reference);
         match select::deep_side(ctx, reg, tokens, &e, usdt_dec, select::Need::Both) {
             Ok(None) => pools.push((e, None)),
+            // Ревью t178 (Б2): мелкий пул — только в пределе dex.shallow_pools_per_pair на пару (quote/shallow_pick.rs).
+            Ok(Some(why)) if !shallow_pick::admitted(ctx, reg, tokens, usdt_dec, &e) => {
+                shallow.push(format!(
+                    "{} {} {label}: {why}; мелкий пул вне предела {} = {} (или ни одна его сторона не пропускает сумму пробы)",
+                    e.family.title,
+                    e.ticker,
+                    shallow_pick::NAME,
+                    shallow_pick::limit(ctx)
+                ))
+            }
             Ok(Some(why)) => match trip(ctx, reg, tokens, &e, usdt_dec) {
                 Ok(t) => pools.push((e, Some(t.amount))),
                 Err(no) => shallow.push(format!(
@@ -201,12 +213,37 @@ pub async fn note_wait(
     prev: &Option<crate::core::types::CheckState<crate::core::types::TokenTaxes>>,
     c: crate::core::types::CoinCheck,
 ) {
+    note_wait_doubt(p, prev, c, false).await
+}
+
+/// Держится ли прежний итог при «не проверено» (чистая логика): «не прошла» — всегда; «прошла» — только без вердикта по
+/// пулу (ревью t178, Б1: `doubt` — Outcome::Doubt). Ошибок нет.
+pub fn keeps(
+    prev: &Option<crate::core::types::CheckState<crate::core::types::TokenTaxes>>,
+    doubt: bool,
+) -> bool {
     use crate::core::types::CheckState;
-    if matches!(prev, Some(CheckState::Known(_) | CheckState::Failed { .. })) {
+    match prev {
+        Some(CheckState::Failed { .. }) => true,
+        Some(CheckState::Known(_)) => !doubt,
+        _ => false,
+    }
+}
+
+/// Как note_wait, а при `doubt` (Outcome::Doubt) прежний итог «прошла» заменяется на «не проверено» (keeps). Ошибок нет.
+pub async fn note_wait_doubt(
+    p: &super::super::pools::listen::Pools,
+    prev: &Option<crate::core::types::CheckState<crate::core::types::TokenTaxes>>,
+    c: crate::core::types::CoinCheck,
+    doubt: bool,
+) {
+    if keeps(prev, doubt) {
         return;
     }
+    // Был итог «прошла», снимается — причина могла совпасть с прошлой «не проверено» (её не было: был итог).
+    let replacing = matches!(prev, Some(crate::core::types::CheckState::Known(_)));
     let old = p.checks.coin_of(&c.asset).and_then(|x| x.wait);
-    if old == c.wait {
+    if old == c.wait && !replacing {
         return;
     }
     p.checks.set_coin(c.clone());

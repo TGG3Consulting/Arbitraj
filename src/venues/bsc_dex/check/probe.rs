@@ -23,8 +23,8 @@
 //! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe_calls.rs, check/probe_buy.rs, check/probe_exec.rs, exec/plan.rs, exec/fork_swap.rs,
 //! quote/v2_pair_probe.rs (квотер DEX или, у V2-форка без роутера, резервы пары — решение 280), quote/probe_quote.rs
 //! (у DEX с dex.quoter_virtual — виртуальный квотер с подменой кода в тех же симуляциях, решение 388), wallet/approve.rs, pools/registry.rs.
-//! Настройки: через вызываемые (адреса квотера, роутеров, исполнителя; dex.deadline_s; dex.quoter_virtual [DEX];
-//! dex.quoter_max_diff_pct [bsc_dex] — наименьший выход, решение 390).
+//! Настройки: через вызываемые (адреса квотера, роутеров, исполнителя; dex.deadline_s; dex.quoter_virtual [DEX]);
+//! наименьший выход мелкого пула (решение 390) считает вызывающий (check/taxes.rs, dex.quoter_max_diff_pct).
 //!
 //! Официального рецепта измерения налога нет (research/flow/bsc_dex.md, раздел 6). Квотер DEX выдаёт выход БЕЗ налога
 //! токена (решение 146, проверено по коду): V2 Router.getAmountsOut — математика резервов, без переводов; QuoterV2
@@ -36,8 +36,8 @@
 //! Пустой адрес — последние 20 байт keccak256(адрес кошелька) — вычисляется, не зашит.
 //! Ограничение (подтверждено техлидом, Issue #7): налог перевода меряется на пустой адрес, а не на депозит биржи —
 //! налог может зависеть от получателя (белые/чёрные списки); факт перевода — по событиям Transfer (exec/fill.rs).
-//! Решение 390: ответ квотера (покупки или продажи) меньше наименьшего выхода quote/side_fit.rs min_units — налог не
-//! измерен и откат не вердикт (check/probe_tiny.rs): пробу теперь делают и мелкие пулы.
+//! Решение 390: у МЕЛКОГО пула ответ квотера (покупки или продажи) меньше наименьшего выхода quote/side_fit.rs min_units —
+//! налог не измерен и откат не вердикт (check/probe_tiny.rs); у глубокого пула — как до решения 390 (ревью t178, Н3).
 //! Минимум выхода пробы — 1 минимальная единица токена: проба меряет налог и не должна откатываться из-за минимума,
 //! а минимум 0 запрещён (exec/plan.rs). Проба только симулируется (eth_simulateV1), в сеть не уходит.
 
@@ -50,7 +50,7 @@ use super::super::exec::fork_swap;
 use super::super::exec::plan::{self, Order};
 use super::super::node::heads::Heads;
 use super::super::pools::registry::Entry;
-use super::super::quote::{probe_quote, side_fit, v2_pair_probe};
+use super::super::quote::{probe_quote, v2_pair_probe};
 use super::super::wallet::approve::Approval;
 use super::super::wallet::balances;
 use super::probe_buy;
@@ -89,7 +89,8 @@ pub struct Measured {
 }
 
 /// Пробный обмен. Принимает: пул, источник USDT (другой пул), кошелёк, сумму USDT, головы сети (блок, поверх которого
-/// идут обе симуляции, и его время — для срока транзакции).
+/// идут обе симуляции, и его время — для срока транзакции), наименьший выход для замера (решение 390: Some — мелкий
+/// пул, check/probe_tiny.rs; None — глубокий пул, как до решения 390, без dex.quoter_max_diff_pct).
 /// Возвращает: Ok(Measured) или Ok(Err(причина)); Err — настройки, узел (метод не поддерживается и т.п.),
 /// NotConfigured — обмен сделал не этот пул (пул исключён, check/emitter.rs); NoRoute — через исполнитель пул не выпустил
 /// события или пробу через этот пул собрать нечем (check/probe_exec.rs).
@@ -100,14 +101,13 @@ pub async fn run(
     wallet: Address,
     usdt_amount: U256,
     heads: &Heads,
+    min: Option<U256>,
 ) -> GatewayResult<Result<Measured, String>> {
     let (usdt, coin) = (e.usdt, e.coin);
     let empty = Address::from_slice(&keccak256(wallet.as_slice())[12..]);
     // Обе симуляции — поверх одного блока `at` (номер, не «latest»), срок транзакции — от его времени (решение 61);
     // симулированный блок — время головы + 1 с (решение 127, check/sim_base.rs): у пробы есть срок (deadline роутера),
     // с +12 с узла BSC проба падала бы при dex.deadline_s ≤ 12.
-    // Решение 390: наименьший выход для замера (крошечный выход — помеха, не налог и не вердикт; check/probe_tiny.rs).
-    let min = side_fit::min_units(ctx)?;
     let (at, now) = sim_base::head(ctx, heads).await?;
     let (buy_aps, buy_router, buy_data) = part(
         ctx,
@@ -154,8 +154,9 @@ pub async fn run(
             return Err(err);
         }
         // Решение 390: откат покупки при крошечном ответе квотера — свойство суммы, не монеты.
-        if let Some(err) =
-            probe_tiny::buy_revert(ctx, e, way, (i, q), &first, (usdt, usdt_amount), min)
+        if let Some(min) = min
+            && let Some(err) =
+                probe_tiny::buy_revert(ctx, e, way, (i, q), &first, (usdt, usdt_amount), min)
         {
             return Err(err);
         }
@@ -170,7 +171,9 @@ pub async fn run(
     ) else {
         return Ok(Err("ответ квотера или баланса не по ABI".into()));
     };
-    if let Some(err) = probe_tiny::buy(ctx, e, buy_expected, min) {
+    if let Some(min) = min
+        && let Some(err) = probe_tiny::buy(ctx, e, buy_expected, min)
+    {
         return Err(err);
     }
     // Доли купленного: четверть — пробный перевод, остаток (четверть) — продажа; половина остаётся на кошельке
@@ -238,15 +241,13 @@ pub async fn run(
     Ok(Ok(Measured {
         buy_expected,
         buy_got: bought,
-        sell: probe_tiny::sell(
-            ctx,
-            e,
-            way,
-            &all[t.quote],
-            rest,
-            min,
-            pc::sell_result(ctx, e, way, &all[t.quote..t.quote + 4], (sold, rest)),
-        ),
+        sell: {
+            let got = pc::sell_result(ctx, e, way, &all[t.quote..t.quote + 4], (sold, rest));
+            match min {
+                Some(min) => probe_tiny::sell(ctx, e, way, &all[t.quote], rest, min, got),
+                None => got,
+            }
+        },
         transfer_sent: quarter,
         transfer_got: xb,
         gas_buy: all[x].gas_used.to(),

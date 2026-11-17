@@ -14,7 +14,8 @@
 //!
 //! Кто вызывает: pools/session.rs (ветка изменения настроек).
 //! От чего зависит: depth.rs (deep, mark, off_map, touch), reload_many.rs, reload.rs (Missing), group.rs, registry.rs.
-//! Настройки: dex.min_pool_liquidity_usd, dex.depth_band_pct, dex.depth_hysteresis_pct [bsc_dex].
+//! Настройки: dex.min_pool_liquidity_usd, dex.depth_band_pct, dex.depth_hysteresis_pct; решение 390 —
+//! dex.shallow_pools_per_pair, check.probe_usdt, dex.quoter_max_diff_pct [bsc_dex].
 
 use crate::core::types::PoolRef;
 use crate::settings::live::Change;
@@ -27,10 +28,14 @@ use super::reload::{self, Missing};
 use super::{depth, http_wait};
 
 /// Настройки, от которых зависит вердикт глубины.
-const DEPTH: [&str; 3] = [
+const DEPTH: [&str; 6] = [
     "dex.min_pool_liquidity_usd",
     "dex.depth_band_pct",
     "dex.depth_hysteresis_pct",
+    // Решение 390 (ревью t178, Н2): от них — спит ли мелкий пул (pools/depth.rs, quote/shallow_pick.rs).
+    "dex.shallow_pools_per_pair",
+    "check.probe_usdt",
+    "dex.quoter_max_diff_pct",
 ];
 
 /// Касается ли изменение глубины (рассылка отстала — неизвестно, считаем, что да). Ошибок нет.

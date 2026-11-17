@@ -3,7 +3,7 @@
 //! котировки, quote/pool_quote.rs), без порога глубины в полосе цены:
 //! - round_trip — пробный круг пробы налогов (check/probe.rs): купить монету на сумму встречного токена и продать назад
 //!   остаток (купленное − ½ − ¼, как в пробе), оба обмена исполнимы целиком и выход каждого не меньше min_units;
-//! - side — одна сторона пула (покупка: встречный → монета; продажа: монеты на ту же сумму по цене пула → встречный):
+//! - side / side_usd — одна сторона пула (покупка: встречный → монета; продажа: монеты на ту же сумму по цене пула → встречный):
 //!   для сверки с квотером мелкой стороны (check/quoter_one.rs, quoter_amount.rs), графа (pools/graph.rs,
 //!   graph_eval.rs) и «слушать ли пул целиком» (pools/depth.rs).
 //!
@@ -189,11 +189,4 @@ pub fn side_usd(
         return None;
     }
     Some((a, probe * (an / cn)))
-}
-
-/// Проходит ли хотя бы одна сторона пула (side_usd). Ошибок нет.
-pub fn any_side(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8, e: &Entry) -> bool {
-    [Side::Buy, Side::Sell]
-        .into_iter()
-        .any(|s| side_usd(ctx, reg, tokens, usdt_dec, e, s).is_some())
 }

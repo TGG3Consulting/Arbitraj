@@ -168,12 +168,21 @@ pub async fn check(
                     p.ctx.log(Level::Warn, "dex.check", msg, None).await;
                 }
             }
-            Outcome::Wait(_) => {
+            Outcome::Wait(_) | Outcome::Doubt(_) => {
                 pass.no_pool += 1;
                 pass.done.push((*addr, Res::Wait));
                 // Причину ожидания видно на «Монетах» и «Живом экране»: монета без итога получает NotChecked с причиной;
-                // уже известный итог (прошла / не прошла) из-за помехи не меняется.
-                super::taxes_util::note_wait(p, &prev, c).await;
+                // уже известный итог (прошла / не прошла) из-за помехи не меняется — кроме Doubt (ревью t178, Б1): был
+                // вердикт по пулу — прежний «прошла» снимается (taxes_util.rs keeps).
+                let doubt = matches!(out, Outcome::Doubt(_));
+                if doubt && !first && matches!(prev, Some(CheckState::Known(_))) {
+                    let msg = format!(
+                        "{ticker}: проба дала вердикт по пулу, итога нет из-за помех — прежний итог «прошла» снят, монета «не проверено» до чистого прохода: {}",
+                        c.wait.clone().unwrap_or_default()
+                    );
+                    p.ctx.log(Level::Warn, "dex.check", msg, None).await;
+                }
+                super::taxes_util::note_wait_doubt(p, &prev, c, doubt).await;
                 // Нет глубокого пула — своя причина (не сбой узла): повтор по «пул готов», не каждые tax.retry_s.
                 let why = if !has_valid(p, addr) {
                     Why::NoPool

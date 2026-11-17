@@ -1,9 +1,12 @@
 //! Файл: tests/bsc_dex_cycle_audit_t171.rs
 //! Что проверяет: решение 385 — контроль отсева циклов DEX ↔ DEX (venues/bsc_dex/quote/cycle_audit.rs):
-//! - отбор доли sieve.audit_share без случайности (hit): 0,1 — ровно каждый десятый, 0,3 — 30 из 100, ≤ 0 — никогда,
-//!   > 1 — как 1; со сдвигом на проход (номер прохода — начальный сдвиг) при неизменном порядке циклов выбранные позиции
-//!   смещаются: при доле 1/k и k отсечённых за проход за k проходов проверена каждая позиция, всего k проверок (ревью
-//!   t171, Н3);
+//! - отбор доли sieve.audit_share без случайности (hit): 0,1 — ровно каждый десятый, 0,3 — 30 из 100, доля не больше
+//!   нуля — никогда, больше 1 — как 1; счёт точный, в целых (номер порядка 10^18 и доля с длинной мантиссой — без
+//!   округления Decimal);
+//! - сдвиг на проход (ревью t171, Н3): при неизменном порядке циклов выбранные позиции смещаются; доля 1/k, точно
+//!   представимая десятичной дробью (k = 2, 4, 5, 10, 20), и k отсечённых за проход — за k проходов проверена каждая
+//!   позиция, всего k проверок; доля 1/3 в Decimal (0,333…3, чуть меньше трети) — каждая позиция проверена за k + 1
+//!   проходов, за 300 проходов по 3 отсечённых — 299 проверок (точно по формуле: первая точка отбора — номер 3, не 2);
 //! - нарушение только при ρ < 1 И прибыли > 0 (violated): на РЕАЛЬНОМ цикле записи routes_2026-10-29 (USDT → CAKE → USDT
 //!   двумя пулами V3; tests/route_common) отсев с контролем (Audit::gate) отдаёт ρ тех же ног, что cycle_rho (Leg несёт
 //!   копию записи пула — тот же снимок); настоящий сигнал (выход < вход) — не нарушение; тот же сигнал с прибылью > 0
@@ -58,25 +61,64 @@ fn share_without_randomness() {
 }
 
 #[test]
-fn shift_rotates_positions_between_passes() {
-    for k in [2u64, 3, 4, 10] {
-        let share = Decimal::ONE / Decimal::from(k);
-        let mut seen = vec![0u32; k as usize];
-        let mut total = 0;
-        for p in 0..k {
-            for (i, h) in pass(p, share, k).into_iter().enumerate() {
-                if h {
-                    seen[i] += 1;
-                    total += 1;
-                }
+fn exact_on_large_numbers() {
+    // Доля 0,333…3 (28 знаков): 3·10^18 · доля = 10^18 − 3·10^−10 — пол 10^18 − 1, а Decimal округлил бы до 10^18.
+    let third = Decimal::ONE / Decimal::from(3);
+    let n = 3_000_000_000_000_000_000u64;
+    assert!(!hit(n - 1, third), "⌊3·10^18·доля⌋ = ⌊(3·10^18 − 1)·доля⌋");
+    assert!(hit(n, third), "⌊(3·10^18 + 1)·доля⌋ больше ⌊3·10^18·доля⌋");
+    let tenth = Decimal::new(1, 1);
+    assert!(hit(9_999_999_999_999_999_999, tenth));
+    assert!(!hit(9_999_999_999_999_999_998, tenth));
+}
+
+/// Сколько раз проверена каждая позиция за `passes` проходов по `cuts` отсечённых (сдвиг — номер прохода) и всего.
+fn rotation(share: Decimal, cuts: u64, passes: u64) -> (Vec<u64>, u64) {
+    let mut seen = vec![0u64; cuts as usize];
+    for p in 0..passes {
+        for (i, h) in pass(p, share, cuts).into_iter().enumerate() {
+            if h {
+                seen[i] += 1;
             }
         }
+    }
+    let total = seen.iter().sum();
+    (seen, total)
+}
+
+#[test]
+fn shift_rotates_positions_between_passes() {
+    // Доли 1/k, точно представимые десятичной дробью.
+    for k in [2u64, 4, 5, 10, 20] {
+        let share = Decimal::ONE / Decimal::from(k);
+        assert_eq!(share * Decimal::from(k), Decimal::ONE, "1/{k} точна");
+        let (seen, total) = rotation(share, k, k);
         assert!(
-            seen.iter().all(|c| *c > 0),
-            "доля 1/{k}: за {k} проходов проверена каждая позиция: {seen:?}"
+            seen.iter().all(|c| *c == 1),
+            "доля 1/{k}: за {k} проходов каждая позиция проверена ровно раз: {seen:?}"
         );
         assert_eq!(total, k, "доля 1/{k}: всего проверок — {k} из {}", k * k);
     }
+    // 1/3 в Decimal — 0,333…3 (меньше трети): 3·доля < 1, первая точка отбора — номер 3.
+    let third = Decimal::ONE / Decimal::from(3);
+    assert!(third * Decimal::from(3) < Decimal::ONE);
+    let (seen, total) = rotation(third, 3, 3);
+    assert_eq!(
+        seen,
+        [0, 1, 1],
+        "за 3 прохода точка номер 3 — в позициях 2 и 1"
+    );
+    assert_eq!(total, 2);
+    let (seen, _) = rotation(third, 3, 4);
+    assert!(
+        seen.iter().all(|c| *c > 0),
+        "за 4 прохода — каждая позиция: {seen:?}"
+    );
+    let (_, total) = rotation(third, 3, 300);
+    assert_eq!(
+        total, 299,
+        "300 проходов по 3: Σ (⌊(p+3)·доля⌋ − ⌊p·доля⌋) = 299"
+    );
 }
 
 /// Нога по шагу цикла с явным допуском (без крючка и налога), decimals 18 — если проверки записи пул не допустили.

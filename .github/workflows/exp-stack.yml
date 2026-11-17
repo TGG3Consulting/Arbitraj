@@ -1,0 +1,81 @@
+# ЭКСПЕРИМЕНТ t175 (только ветки exp/stack-* → пуш в test/exp-stack-*; в основную не идёт). Тигран разрешил 17.11.2026:
+# измерить, хватает ли рабочему потоку tokio стека на цепочку аварии f9634504 (продажа ↔ застрявшая монета, решение
+# 389) — на старом коде (test/exp-stack-old, f9634504) и на новом (test/exp-stack-new, решение 389).
+# Тест: tests/exp_stack_t175.rs chain_on_worker (#[ignore]; STACK_KIB — стек рабочих потоков, КиБ; RETRIES —
+# stuck.unsent_retries_max). Каждый запуск — отдельный процесс: переполнение стека роняет процесс, job не падает.
+# Таблица: «R=… S=… → OK / OVERFLOW / FAIL (последние строки)». Порог — наименьший STACK_KIB, на котором OK (перебор
+# делением пополам с шагом 8 КиБ между 64 и 8192).
+name: Exp stack (t175)
+on:
+  push:
+    branches: ["test/exp-stack-*"]
+  workflow_dispatch:
+env:
+  CARGO_INCREMENTAL: "0"
+  TEST: exp_stack_t175
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: exp-stack-release
+      - name: Сборка теста (release)
+        run: |
+          cargo test --release --locked --test "$TEST" --no-run 2>&1 | tee build.log
+          bin=$(grep -oE "target/release/deps/${TEST}-[0-9a-f]+" build.log | tail -1)
+          test -x "$bin"
+          echo "BIN=$bin" >> "$GITHUB_ENV"
+      - name: Сетка RETRIES × STACK_KIB (release)
+        run: bash .github/workflows/exp-stack.sh grid "0 1 2 3 10" "256 512 768 1024 1536 2048 4096"
+      - name: Порог стека (release, деление пополам)
+        run: bash .github/workflows/exp-stack.sh threshold "0 1 2 3 10"
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: exp-stack-debug
+      - name: Сборка теста (debug)
+        run: |
+          cargo test --locked --test "$TEST" --no-run 2>&1 | tee build.log
+          bin=$(grep -oE "target/debug/deps/${TEST}-[0-9a-f]+" build.log | tail -1)
+          test -x "$bin"
+          echo "BIN=$bin" >> "$GITHUB_ENV"
+      - name: Сетка RETRIES=3 (debug)
+        run: bash .github/workflows/exp-stack.sh grid "3" "256 512 768 1024 1536 2048 4096 8192 16384"
+      - name: Порог стека RETRIES=3 (debug)
+        run: bash .github/workflows/exp-stack.sh threshold "3"
+  musl:
+    # Как прод (linux.yml): статический musl, stable. Сборка тестов под musl на этом проекте не проверялась —
+    # сбой этого job ничего не говорит о стеке.
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    continue-on-error: true
+    env:
+      TARGET: x86_64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: exp-stack-musl
+      - name: Сборка теста (release, musl)
+        run: |
+          cargo test --release --locked --target "$TARGET" --test "$TEST" --no-run 2>&1 | tee build.log
+          bin=$(grep -oE "target/${TARGET}/release/deps/${TEST}-[0-9a-f]+" build.log | tail -1)
+          test -x "$bin"
+          echo "BIN=$bin" >> "$GITHUB_ENV"
+      - name: Сетка (release, musl)
+        run: bash .github/workflows/exp-stack.sh grid "0 3 10" "512 1024 1536 2048 4096"
+      - name: Порог стека (release, musl)
+        run: bash .github/workflows/exp-stack.sh threshold "0 3 10"

@@ -196,17 +196,17 @@ async fn shallow_limit_picks_by_rank() {
     let pair = (pairs[0].coin, pairs[0].usdt);
     let big = U256::from(300u64) * U256::from(10u64).pow(U256::from(18u8));
     for _round in 0..3 {
-        for k in 0..pairs.len() {
-            let e = pairs[k].clone();
+        for (k, pr) in pairs.iter_mut().enumerate() {
+            let e = pr.clone();
             let (bought, after) = pool_after::apply(&ctx, &e, e.usdt, big).unwrap();
-            pairs[k].pool.state = after;
-            p.registry.put(pairs[k].clone());
+            pr.pool.state = after;
+            p.registry.put(pr.clone());
             let got = shallow_pick::pick(&ctx, &p.registry, &p.tokens, 18, pair);
             assert_eq!(*got, vec![chosen.clone()], "после покупки в паре {k}");
-            let e = pairs[k].clone();
+            let e = pr.clone();
             let (_, back) = pool_after::apply(&ctx, &e, e.coin, bought.amount_out).unwrap();
-            pairs[k].pool.state = back;
-            p.registry.put(pairs[k].clone());
+            pr.pool.state = back;
+            p.registry.put(pr.clone());
             let got = shallow_pick::pick(&ctx, &p.registry, &p.tokens, 18, pair);
             assert_eq!(*got, vec![chosen.clone()], "после продажи в паре {k}");
         }

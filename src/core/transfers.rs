@@ -183,7 +183,8 @@ pub fn poll_missing(core: &Core, from: &VenueId, to: &VenueId) -> Option<String>
         };
         let e = core.inner.deps.settings.integer("venue.status_poll_ms", at).err()?;
         Some(format!(
-            "не задана venue.status_poll_ms у {} — статус вывода и зачисление после вывода не опрашивались бы              (решение 398; {})",
+            "не задана venue.status_poll_ms у {} — статус вывода и зачисление после вывода не опрашивались бы \
+             (решение 398; {})",
             v.0, e.message
         ))
     })

@@ -40,7 +40,7 @@
 | `reply.rs` | 2xx — тело как есть; иначе code и message (как SDK); 429 — пауза на Retry-After или venue.rate_limit_pause_ms |
 | `errors.rs` | Коды Poloniex и HTTP-статусы → единые коды. Отказы вывода (решение 253, дополнение t82): 21601 → AccountRestricted; кодов адреса в таблице нет |
 | `num.rs` | Числа (строки или числа JSON) и флаги без потери точности |
-| `symbols.rs`, `symbols_parse.rs` | Справочник пар /markets: state, шаги из priceScale / quantityScale, мин./макс. количества и суммы, highestBid / lowestAsk |
+| `symbols.rs`, `symbols_parse.rs` | Справочник пар /markets: state, шаги из priceScale / quantityScale, мин./макс. количества и суммы, highestBid / lowestAsk (решение 390: они же — ценовой коридор для ядра, SymbolRules::price_band и контракт price_band без запроса к бирже) |
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление справочника, подписка (решение 131), поток аккаунта |
 | `fees.rs` | Ставки /feeinfo одним запросом (special по паре, иначе общая); скидка TRX — расчёт по обычной ставке |
 | `wallet.rs`, `networks_parse.rs` | Монеты и сети /v2/currencies (весь — вне рабочих потоков, за Arc; одна — /v2/currencies/{c}), адрес контракта, комиссия и минимум вывода |

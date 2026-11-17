@@ -61,6 +61,21 @@ pub struct SymbolRules {
 }
 
 impl SymbolRules {
+    /// Решение 390 (t180): границы highestBid / lowestAsk как правило ценового коридора для ядра (постоянные границы:
+    /// покупка не дороже highestBid, продажа не дешевле lowestAsk — «maximum allowed bid price (market bound)» /
+    /// «minimum allowed ask price (market bound)», https://api-docs.poloniex.com/spot/api/public/reference-data).
+    /// None — обеих границ нет (поля нет или «0»: смысл нуля в документации не описан). Ошибок нет.
+    pub fn price_band(&self) -> Option<crate::gateway::price_band::PriceBandRule> {
+        let rule = crate::gateway::price_band::PriceBandRule {
+            buy_max: self.highest_bid,
+            sell_min: self.lowest_ask,
+            reference: "постоянные границы справочника пар: highestBid / lowestAsk (GET /markets)"
+                .into(),
+            ..Default::default()
+        };
+        (!rule.is_empty()).then_some(rule)
+    }
+
     /// Пара торгуется через API (в обе стороны одинаково — запрета стороны у Poloniex нет). Ошибок нет.
     pub fn tradable(&self) -> bool {
         self.status == STATUS_NORMAL
@@ -163,6 +178,7 @@ impl Symbols {
             min_qty: r.min_qty,
             max_qty: r.max_qty,
             order_block: None,
+            price_band: r.price_band().map(Box::new),
         })
     }
 }

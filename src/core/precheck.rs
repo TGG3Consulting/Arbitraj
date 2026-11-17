@@ -18,6 +18,9 @@
 //! интервала фонового опроса (precheck_nets.rs), иначе — запрос, как раньше; источник — в «Время по шагам»;
 //! precheck.balance_first = да — свободный баланс A читается здесь, прямо перед расчётом (precheck_balance.rs), расчёт
 //! идёт с пределом min(бюджет, свободно); исполнитель баланс повторно не читает.
+//! Решение 390 (t180): перед пересчётом — ценовые коридоры бирж A и B (price_band.rs context: только у пар с правилом
+//! коридора, обе стороны одновременно); пересчёт держит худшие цены плана внутри коридора; строки коридора — в журнал
+//! core.precheck и хронологию сделки всегда.
 //! Кто вызывает: executor.rs.
 //! От чего зависит: networks_merge.rs (решение 387), step_timing.rs, risk.rs, profit.rs, convert.rs, trade_ops.rs (вид площадки), deps.rs (шлюз),
 //! precheck_fast.rs, precheck_par.rs, precheck_nets.rs, precheck_balance.rs.
@@ -195,6 +198,7 @@ pub async fn run(
         .clone()
         .into_iter()
         .chain(t.cut.clone())
+        .chain(t.band.clone())
         .chain(t.lines())
         .collect();
     if res.is_ok() {
@@ -220,9 +224,15 @@ pub async fn run(
     }
     // Решение 265 (при on): у отказа — и строка этапов пересчёта, если до него дошли.
     // Решение 266: и строка «План: …» (precheck.fast_recalc = да и пересчёт дошёл до быстрого пути).
-    let calc: String = (t.missed.iter().chain(t.plan.iter()).chain(t.calc.iter()))
-        .map(|l| format!(". {l}"))
-        .collect();
+    // Решение 390: и строки коридора цены (если читались).
+    let calc: String = (t
+        .missed
+        .iter()
+        .chain(t.band.iter())
+        .chain(t.plan.iter())
+        .chain(t.calc.iter()))
+    .map(|l| format!(". {l}"))
+    .collect();
     res.map(|(c, bal)| (c, lines, bal))
         .map_err(|e| format!("{e} ({}){calc}", t.text()))
 }
@@ -246,6 +256,9 @@ struct Timing {
     missed: Option<String>,
     /// Решение 380 (ревью t166, Н6): объём урезан до проверенного симуляцией продажи — строка хронологии сделки.
     cut: Option<String>,
+    /// Решение 390 (t180): коридоры цены бирж, прочитанные перед пересчётом (или почему не прочитаны) — в хронологию
+    /// сделки и журнал всегда (не зависит от log.step_timing).
+    band: Vec<String>,
 }
 
 /// Решение 266: пометка строк времени при precheck.parallel = да.
@@ -404,7 +417,11 @@ async fn steps(
         spend: cand.map(|c| c.spend_max),
         ..Want::new(q)
     });
-    let plan = Box::pin(replan_sized(core, d, free, want.as_mut()));
+    // Решение 390 (t180): ценовой коридор бирж A и B — перед пересчётом (обе стороны одновременно, только у пар с
+    // правилом коридора); план считается внутри коридора. Время чтения входит в шаг пересчёта.
+    let (pre, bands) = Box::pin(super::price_band::context(core, d)).await;
+    t.band = bands.lines;
+    let plan = Box::pin(replan_pre(core, d, free, want.as_mut(), pre));
     let (verdict, m) = super::step_timing::measure_if(t.on, plan).await;
     t.mark("пересчёт с финальной котировкой".into(), at);
     t.calc = m.map(|m| m.calc_text("пересчёт с финальной котировкой"));
@@ -525,8 +542,21 @@ pub async fn replan_sized(
     cap: Option<Decimal>,
     want: Option<&mut Want>,
 ) -> Verdict {
+    replan_pre(core, d, cap, want, None).await
+}
+
+/// Что делает: replan_sized с готовым контекстом направления (решение 390: с прочитанными коридорами цены бирж —
+/// core/price_band.rs context). Принимает: как replan_sized и контекст (None — собрать как раньше).
+/// Возвращает: Verdict. Ошибок нет.
+pub async fn replan_pre(
+    core: &Core,
+    d: &Direction,
+    cap: Option<Decimal>,
+    want: Option<&mut Want>,
+    pre: Option<Box<super::dirctx::DirCtx>>,
+) -> Verdict {
     // Решение 348: назначение «предпроверка» (замер «кто вызвал котировку»); решение 345 — без мягкого срока.
-    let work = profit::decide_capped(core, d, &super::dry::Mode::Live, cap, want, None, None);
+    let work = profit::decide_capped(core, d, &super::dry::Mode::Live, cap, want, pre, None);
     crate::gateway::quote_purpose::scope(crate::gateway::quote_purpose::Purpose::Precheck, work)
         .await
 }

@@ -64,6 +64,20 @@ fn no_direction_pause_only_for_exchange_no_funds_on_buy() {
     assert!(NO_PAUSE.contains("нехватки средств"));
 }
 
+/// Решение 390 (t180), чистая логика без записи: биржа A не приняла ордер покупки — цена вне её ценового коридора
+/// (PriceOutOfRange) — паузы направления нет (как у нехватки средств); у DEX (такого кода там нет) — как раньше.
+#[test]
+fn no_direction_pause_on_price_out_of_range_buy_390() {
+    let e = OpError::from(&GatewayError::new(
+        ErrorCode::PriceOutOfRange,
+        Some(v("mexc")),
+        "MEXC, код 30087: Order price exceeds allowed range",
+    ));
+    assert!(!buy_refusal_pauses(VenueKind::Cex, &e));
+    assert!(buy_refusal_pauses(VenueKind::Dex, &e));
+    assert!(arb::core::executor::NO_PAUSE_RANGE.contains("ценового коридора"));
+}
+
 #[test]
 fn precheck_rejects_are_kept_in_window_with_counter() {
     let mut w = Windows::default();

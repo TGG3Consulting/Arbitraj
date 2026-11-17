@@ -113,6 +113,8 @@ fn cx(rec: &Rec, sigma: Decimal) -> DirCtx {
         usdt_b: None,
         transfer_tax: Some(Decimal::ZERO),
         sell_max: None,
+        band_a: None,
+        band_b: None,
     }
 }
 

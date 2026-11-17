@@ -105,6 +105,7 @@ impl Rec {
             min_qty: num(&s["minQty"]),
             max_qty: num(&s["maxQty"]),
             order_block: None,
+            price_band: None,
         };
         let cfg = json_file("tests/data/bingx_2026-10-24/config_getall.json");
         let coin = cfg["data"]

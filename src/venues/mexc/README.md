@@ -49,6 +49,7 @@
 | `book_rest.rs` | t79 (дополнение 10.11 к 202/213, Тигран 10.11: согласовано): ответ REST сторожа (GET /api/v3/depth, первые `venue.depth_levels` уровней) стаканом тихой пары «книга не менялась с переподписки» (контракт `book_from_rest`): время кадра пары — получение ответа, подтверждения нет (свежий `venue.book_stale_ms`), кадр пары после отправки запроса — не ставится, стакана нет — только у пары, подписанной в живой сессии (`bind` из ws_conn.rs); следующий кадр заменяет |
 | `user_key.rs`, `user_stream.rs`, `user_stream_conn.rs`, `account_update.rs` | Поток баланса по listenKey (`spot@private.account.v3.api.pb`); после обрыва — тот же ключ, пока продление проходит |
 | `tap.rs`, `feed.rs`, `tap_snap.rs` | Запись окна (решение 125): двоичные кадры стакана монеты из ws_conn.rs как есть; свои соединения на монету — лента `spot@public.aggre.deals.v3.api.pb@(10ms\|100ms)@<SYMBOL>` (venue.trades_interval) и изменения всей глубины `spot@public.aggre.depth.v3.api.pb@(10ms\|100ms)@<SYMBOL>` (venue.window_depth_interval) со снимком REST /api/v3/depth (venue.window_depth_limit) после первого кадра и при разрыве версий; отписка UNSUBSCRIPTION; разбор кадров (тела 303, 313, 314, снимок) |
+| `price_band.rs` | Решение 390 (t180): коридор лимитного ордера (контракт price_band) — PERCENT_PRICE_BY_SIDE exchangeInfo (symbols_parse.rs price_band: покупка ≤ lastPrice × (1 + bidMultiplierUp), продажа ≥ lastPrice × (1 − askMultiplierDown)) × последняя цена GET /api/v3/ticker/price («Weight(IP): 10», ip_weight.rs) |
 
 ## Что важно знать
 

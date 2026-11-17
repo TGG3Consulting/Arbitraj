@@ -23,7 +23,8 @@
 //! (https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/order-book; от limit вес не зависит — в документации
 //! не сказано иного); Exchange Information «GET /api/v3/exchangeInfo», «Weight(IP): 25»
 //! (https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/exchange-information; один вес для запроса без
-//! параметров, с symbol и с symbols). Других публичных путей адаптер не вызывает; новый путь без веса из документации —
+//! параметров, с symbol и с symbols); решение 390 — Symbol Price Ticker «GET /api/v3/ticker/price», «Weight(IP): 10»
+//! (коридор цены перед покупкой, price_band.rs). Других публичных путей адаптер не вызывает; новый путь без веса из документации —
 //! отказ Internal (вес не угадывается).
 
 use std::collections::VecDeque;
@@ -52,6 +53,10 @@ pub fn weight(path: &str) -> Option<u64> {
     match path {
         "/api/v3/depth" => Some(3),
         "/api/v3/exchangeInfo" => Some(25),
+        // Решение 390 (t180): Symbol Price Ticker «GET /api/v3/ticker/price», «Weight(IP): 10» (одно значение, без
+        // разделения по symbol; https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/symbol-price-ticker,
+        // сверено 17.11.2026).
+        "/api/v3/ticker/price" => Some(10),
         _ => None,
     }
 }

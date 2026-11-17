@@ -126,18 +126,28 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
 /// Пометка записи закрытия сделки: пауза направления не поставлена (решение 266, ответ Тиграна 13.11).
 pub const NO_PAUSE: &str =
     " — пауза направления не поставлена: отказ биржи из-за нехватки средств (решение 266)";
+/// То же при отказе «цена вне ценового коридора биржи» (решение 390, t180).
+pub const NO_PAUSE_RANGE: &str = " — пауза направления не поставлена: биржа не приняла ордер — цена вне её ценового \
+                                  коридора (решение 390)";
 
 /// Что делает: ставить ли паузу направления (signal.route_cooldown_s) после отказа ордера покупки. Решение 266 (ответ
 /// Тиграна 13.11: «паузить направление из-за денег не нужно»): биржа A отклонила ордер покупки с кодом шлюза «не
 /// хватает средств» (InsufficientBalance) — паузы нет; любой другой отказ покупки и покупка на DEX (там этот код —
 /// нехватка BNB на газ и средств кошелька) — пауза как раньше. Действует всегда (не под включателем precheck.*).
+/// Решение 390 (t180): так же без паузы — биржа A отклонила ордер покупки кодом «цена вне ценового коридора биржи»
+/// (PriceOutOfRange): ордер биржей не принят (это не «отправлен и не исполнился»), деньги не тронуты, это свойство
+/// цены в момент ордера, а не монеты; следующий сигнал считается с коридором заново (core/price_band.rs).
 /// Принимает: вид площадки A, ошибку покупки. Ошибок нет.
 pub fn buy_refusal_pauses(
     a: crate::gateway::contract::VenueKind,
     e: &super::op_error::OpError,
 ) -> bool {
-    let no_funds = e.code == Some(crate::gateway::errors::ErrorCode::InsufficientBalance);
-    !(a == crate::gateway::contract::VenueKind::Cex && no_funds)
+    use crate::gateway::errors::ErrorCode;
+    let no_pause = matches!(
+        e.code,
+        Some(ErrorCode::InsufficientBalance | ErrorCode::PriceOutOfRange)
+    );
+    !(a == crate::gateway::contract::VenueKind::Cex && no_pause)
 }
 
 /// Замок перед покупкой (решение 74): сухой режим включён — покупки нет. Ошибки: текст причины.
@@ -474,12 +484,15 @@ async fn run(
         Err(e) if e.outcome_unknown() => return unknown(core, &mut deal, "покупка", &e).await,
         Err(e) => {
             // Решение 266 (ответ Тиграна 13.11): биржа отклонила ордер покупки из-за нехватки средств — паузы
-            // направления нет (пометка — в записи закрытия); остальные отказы покупки — пауза как раньше.
+            // направления нет (пометка — в записи закрытия); решение 390 — и при отказе «цена вне коридора биржи»;
+            // остальные отказы покупки — пауза как раньше.
             let pause =
                 super::trade_ops::kind(core, &d.buy_on).map_or(true, |k| buy_refusal_pauses(k, &e));
             let mut why = format!("покупка не исполнилась: {e}");
             if !pause {
-                why.push_str(NO_PAUSE);
+                // Решение 390: у отказа по коридору — своя пометка.
+                let range = e.code == Some(crate::gateway::errors::ErrorCode::PriceOutOfRange);
+                why.push_str(if range { NO_PAUSE_RANGE } else { NO_PAUSE });
             }
             return super::ledger::finish_paused(core, &mut deal, Step::Closed, &why, pause).await;
         }

@@ -182,6 +182,21 @@ impl Venue for Poloniex {
             .map(|_| ())
     }
 
+    /// Решение 390 (t180): ценовой коридор — постоянные границы highestBid / lowestAsk справочника пар
+    /// (symbols.rs SymbolRules::price_band; запроса к бирже нет). None — границ нет.
+    async fn price_band(
+        &self,
+        asset: &Asset,
+    ) -> GatewayResult<Option<crate::gateway::price_band::PriceBand>> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        let r = self.symbols.get(&self.ctx, &asset.ticker)?;
+        let note = format!(
+            "Poloniex {}: highestBid / lowestAsk справочника пар",
+            r.symbol
+        );
+        Ok(r.price_band().map(|rule| rule.at(None, note)))
+    }
+
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
         transfers::withdraw(&self.ctx, req).await
     }

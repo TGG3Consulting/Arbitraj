@@ -34,6 +34,7 @@
 | `transfers.rs` | Вывод `POST /v4/withdraw` (сумма включает комиссию, свой clientOrderId), статус `GET /v4/withdraw?recordId=`, поиск по clientOrderId; 1 запрос/с |
 | `deposits.rs` | Депозит по хешу: история монеты в сети BSC за `venue.history_window_s` (фильтра по хешу у XT нет) |
 | `account.rs`, `all_balances.rs`, `key_check.rs` | Баланс спота (все и одна монета); панель «Балансы» (Спот, Фьючерсы USDT-M и Coin-M, Маржа — примечание); «Проверить подключение» (GET /v4/balances, запись ключа в user-center) |
+| `price_band.rs` | Решение 390 (t180): коридор лимитного ордера (контракт price_band) — PROTECTION_LIMIT (symbols_parse.rs price_band) × последняя цена GET /v4/public/ticker/price; нет последней цены — коридора нет (по документации) |
 
 ## Что важно знать
 

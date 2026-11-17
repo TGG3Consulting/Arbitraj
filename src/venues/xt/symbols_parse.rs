@@ -11,8 +11,9 @@
 //! orderTypes, timeInForces, filters[{filter: PRICE|QUANTITY (min, max, tickSize) | QUOTE_QTY (min) |
 //! PROTECTION_LIMIT | PROTECTION_MARKET | PROTECTION_ONLINE}]. «Each of the above items can be null, when it is null,
 //! it means that this item is no longer restricted». Шаг — от минимума: «price must be equal to minPrice+(integer
-//! multiple of tickSize)», то же у количества. PROTECTION_LIMIT считается от последней цены сделки — её у адаптера нет
-//! (лента сделок не слушается): не проверяется, ловится отказом ORDER_F05xx (отчёт решения 167).
+//! multiple of tickSize)», то же у количества. PROTECTION_LIMIT считается от последней цены сделки — её в справочнике нет:
+//! правилами ордера не проверяется; решение 390 (t180) — правило коридора пары (price_band), границы ядро читает
+//! перед покупкой (price_band.rs) и считает план внутри коридора; остаток — отказ ORDER_F05xx (отчёт решения 167).
 //! Решение 190: верхний предел (max) больше, чем помещается в Decimal (~7.9·10^28), — «без ограничения», как null по
 //! документации. Живой ответ 06.11.2026: pepe_usdt QUANTITY max = "1000000000000000000000000000000" (10^30) ронял
 //! разбор ВСЕГО справочника — подписка XT не поднималась (tests/data/xt_live_2026-11-06).
@@ -23,6 +24,7 @@ use rust_decimal::Decimal;
 use serde_json::Value;
 
 use crate::gateway::errors::GatewayResult;
+use crate::gateway::price_band::PriceBandRule;
 
 use super::ctx::ticker;
 use super::num;
@@ -90,8 +92,35 @@ fn parse(s: &Value) -> GatewayResult<SymbolRules> {
         api_sell: api,
         order_types: list("orderTypes"),
         time_in_forces: list("timeInForces"),
+        price_band: price_band(filter(s, "PROTECTION_LIMIT"))?,
         symbol,
     })
+}
+
+/// Что делает: решение 390 (t180) — ценовой коридор лимитного ордера из фильтра PROTECTION_LIMIT. Официально
+/// (https://doc.xt.com/docs/spot/Market/GetSymbolInformation, `_market/2symbol.md`): «There are price protection
+/// restrictions for orders whose order type (orderType) is LIMIT»; «buy order: price >= latestPrice-latestPrice*
+/// buyMaxDeviation && price <= latestPrice+latestPrice*buyPriceLimitCoefficient»; «sell order: price <= latestPrice+
+/// latestPrice*sellMaxDeviation && price >= latestPrice-latestPrice*sellPriceLimitCoefficient»; «If there is no latest
+/// transaction price, there will be no restrictions, or if the above parameters are null, the corresponding direction
+/// type orders will not be restricted». Живая запись 06.11.2026 (tests/data/xt_live_2026-11-06/symbol_pepe.json):
+/// pepe_usdt и btc_usdt — sellPriceLimitCoefficient "0.8", buyMaxDeviation "0.8", buyPriceLimitCoefficient "4",
+/// sellMaxDeviation "4". Принимает: фильтр (None — нет). Возвращает: правило; None — фильтра нет или все поля null.
+/// Ошибка BadResponse — поле не число.
+pub fn price_band(f: Option<&Value>) -> GatewayResult<Option<PriceBandRule>> {
+    let Some(f) = f else { return Ok(None) };
+    let up = |n: &str| num::dec_opt(f, n).map(|v| v.map(|m| Decimal::ONE + m));
+    let down = |n: &str| num::dec_opt(f, n).map(|v| v.map(|m| Decimal::ONE - m));
+    let rule = PriceBandRule {
+        buy_up: up("buyPriceLimitCoefficient")?,
+        buy_down: down("buyMaxDeviation")?,
+        sell_up: up("sellMaxDeviation")?,
+        sell_down: down("sellPriceLimitCoefficient")?,
+        reference: "последняя цена сделки (latestPrice; GET /v4/public/ticker/price, поле p)"
+            .into(),
+        ..PriceBandRule::default()
+    };
+    Ok((!rule.is_empty()).then_some(rule))
 }
 
 /// Фильтр PRICE или QUANTITY в пределы и шаг; null — без ограничения. Ошибка BadResponse — поле не число.

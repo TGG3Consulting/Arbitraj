@@ -150,6 +150,8 @@ impl Symbols {
             min_qty: r.min_qty,
             max_qty: r.max_qty,
             order_block: None,
+            // Решение 390 (t180): границы цены лимитного ордера отдаёт API OKX (price_band.rs).
+            price_band: Some(Box::new(super::price_band::rule())),
         })
     }
 }

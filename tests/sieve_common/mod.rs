@@ -119,6 +119,8 @@ pub fn cx_with(
         usdt_b: None,
         transfer_tax: a_cex.then_some(tax),
         sell_max: None,
+        band_a: None,
+        band_b: None,
     }
 }
 

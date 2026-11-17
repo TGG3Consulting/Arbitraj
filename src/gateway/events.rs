@@ -117,6 +117,11 @@ pub struct SpotPairState {
     /// Ядро такую пару не берёт в расчёт ни для покупки, ни для продажи (core/presence.rs, core/pairs_fresh.rs).
     #[serde(default)]
     pub order_block: Option<String>,
+    /// Решение 390 (t180): ценовой коридор лимитного ордера пары (gateway/price_band.rs) — только если биржа его
+    /// документирует и отдаёт через API (иначе None, поведение прежнее). Границы сейчас ядро спрашивает у адаптера
+    /// контрактом price_band перед покупкой (core/price_band.rs). Box — не растит SpotPairState (стек расчёта).
+    #[serde(default)]
+    pub price_band: Option<Box<super::price_band::PriceBandRule>>,
 }
 
 /// Состояние подключения площадки.

@@ -8,6 +8,7 @@
 //! (status, isSpotTradingAllowed, tradeSideType, baseSizePrecision, quoteAmountPrecision, maxQuoteAmount,
 //! baseAssetPrecision, quotePrecision, quoteAssetPrecision, orderTypes); GET /api/v3/selfSymbols
 //! https://www.mexc.com/api-docs/spot-v3/spot-account-trade/user-api-default-symbol. Шаги — решение 107 (symbols.rs).
+//! Решение 390 (t180): фильтр PERCENT_PRICE_BY_SIDE — правило ценового коридора пары (price_band).
 
 use std::collections::{HashMap, HashSet};
 
@@ -15,6 +16,7 @@ use rust_decimal::Decimal;
 use serde_json::Value;
 
 use crate::gateway::errors::GatewayResult;
+use crate::gateway::price_band::PriceBandRule;
 
 use super::num;
 use super::symbols::{STATUS_ONLINE, SymbolRules};
@@ -83,8 +85,34 @@ fn parse(s: &Value, allowed: &HashSet<String>) -> GatewayResult<SymbolRules> {
         api_buy: spot_ok && own && buy_side,
         api_sell: spot_ok && own && sell_side,
         order_types: order_types(s),
+        price_band: price_band(s)?,
         symbol,
     })
+}
+
+/// Что делает: решение 390 (t180) — ценовой коридор пары из фильтра PERCENT_PRICE_BY_SIDE exchangeInfo. Официально
+/// (https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/exchange-information): «lastPrice means using the latest
+/// trade price»; «For buy orders (only for LIMIT, IMMEDIATE_OR_CANCEL, FILL_OR_KILL): orderPrice <= lastPrice * (1 +
+/// bidMultiplierUp)»; «For sell orders: orderPrice >= lastPrice * (1 - askMultiplierDown)». Других границ в
+/// документации нет. Живая запись 2026-11-02 (tests/data/mexc_2026-11-02/exchange_info.json): CAKEUSDT —
+/// bidMultiplierUp "0.2", askMultiplierDown "0.2". Принимает: пару exchangeInfo. Возвращает: правило; None — фильтра
+/// нет или в нём нет ни одного множителя. Ошибка BadResponse — множитель не число.
+pub fn price_band(s: &Value) -> GatewayResult<Option<PriceBandRule>> {
+    let Some(f) = s.get("filters").and_then(Value::as_array).and_then(|a| {
+        a.iter()
+            .find(|f| f.get("filterType").and_then(Value::as_str) == Some("PERCENT_PRICE_BY_SIDE"))
+    }) else {
+        return Ok(None);
+    };
+    let rule = PriceBandRule {
+        buy_up: num::dec_opt(f, "bidMultiplierUp")?.map(|m| Decimal::ONE + m),
+        sell_down: num::dec_opt(f, "askMultiplierDown")?.map(|m| Decimal::ONE - m),
+        reference:
+            "последняя цена сделки (lastPrice; GET /api/v3/ticker/price, поле price «Last price»)"
+                .into(),
+        ..PriceBandRule::default()
+    };
+    Ok((!rule.is_empty()).then_some(rule))
 }
 
 /// 10^−n (n знаков после запятой): 2 → 0.01, 0 → 1. Отрицательное n — 1. Ошибок нет.

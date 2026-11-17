@@ -72,6 +72,9 @@ pub struct SymbolRules {
     /// orderTypes и timeInForces пары; None — поля нет.
     pub order_types: Option<Vec<String>>,
     pub time_in_forces: Option<Vec<String>>,
+    /// Решение 390 (t180): ценовой коридор лимитного ордера — фильтр PROTECTION_LIMIT (symbols_parse.rs price_band);
+    /// None — фильтра нет или все его поля null.
+    pub price_band: Option<crate::gateway::price_band::PriceBandRule>,
 }
 
 impl SymbolRules {
@@ -214,6 +217,7 @@ impl Symbols {
             min_qty: r.qty.min,
             max_qty: r.qty.max,
             order_block: super::order_rules::order_block(r, tif),
+            price_band: r.price_band.clone().map(Box::new),
         })
     }
 

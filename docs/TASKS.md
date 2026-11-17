@@ -5,6 +5,34 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 390 (17.11.2026, задача t180, ветка t180/price-bands от 982e0503) — ценовой коридор бирж учитывается
+  заранее; ждёт сборки и тестов в GitHub (локально не собиралось).** Разбор и таблица по биржам —
+  docs/notes/t180-price-bands-2026-11-17.md.
+  **Вопросы владельцу (по документации не решить — поведение для этих бирж не менялось):**
+  1) Gate: что такое up_rate / down_rate пары («Maximum Quote Rise / Decline Percentage») — от какой цены и для каких
+     ордеров? Защита Gate снимает уже принятый ордер (finish_as = price_protect_cancelled) — у покупки это сейчас
+     «не исполнился» с паузой направления, как раньше. Нужен ответ поддержки Gate или живая запись отказа.
+  2) Bitget: buyLimitPriceRatio («Percentage spread between bid and ask») / sellLimitPriceRatio («… between sell and
+     current price») — описание противоречиво, опорная цена не названа.
+  3) KuCoin: priceLimitRate («Threshold for price protection») — формула и опорная цена не описаны.
+  4) HTX: blmlt / slmgt («Buy limit must less than» / «Sell limit must greater than») — опорная цена не описана.
+  5) BingX (100440 «price protection»), CoinEx (3606 и др.: от последней / индексной цены) — коридор есть, в API нет
+     ни границ, ни процентов. Kraken, Phemex — в документации спота коридора нет.
+  6) MEXC: действует ли PERCENT_PRICE_BY_SIDE на РЫНОЧНУЮ продажу (для покупки сказано «only for LIMIT, IOC, FOK», для
+     продажи тип не назван) — от этого зависит, спасает ли рыночная продажа решения 268.
+  7) XT: p ответа GET /v4/public/ticker/price («Get latest prices ticker») — та же «latest transaction price», от
+     которой считается PROTECTION_LIMIT? По названию — да, прямо не сказано. PROTECTION_ONLINE (первые
+     durationSeconds после открытия пары: цена ≤ openPrice × maxPriceMultiple) не учитывается — цены открытия в API нет.
+  **Нужна запись (тесты сейчас — на примерах документации, помечены):** ответы MEXC GET /api/v3/ticker/price, XT GET
+  /v4/public/ticker/price, Binance exchangeInfo с PERCENT_PRICE_BY_SIDE и GET /api/v3/referencePrice /
+  /api/v3/avgPrice, Bybit GET /v5/market/price-limit?category=spot, OKX GET /api/v5/public/price-limit для SPOT,
+  Poloniex GET /markets с ненулевыми highestBid / lowestAsk (смысл «0» в документации не описан).
+  **Проверить на живом после выкладки (только чтение):** в журнале core.precheck и хронологии сделок с mexc / xt /
+  binance / poloniex строки «коридор цены …»; у сделок, где раньше покупка отклонялась 30087 / ORDER_F05xx / −1013
+  PERCENT_PRICE, — меньший объём и ордер принят; отказ покупки PriceOutOfRange — с пометкой «пауза направления не
+  поставлена … решение 390»; правило шлюза PriceOutOfRange задано (совет FIRST_RUN — «Отменить, не повторять»),
+  иначе Warn core.rules «Правила для PriceOutOfRange нет».
+
 - **Решение 389 (17.11.2026, задача t175, ветка t175/sell-stuck-no-recursion от f9634504) — продолжения продажи
   сделки циклом, без async-рекурсии; ждёт сборки и тестов в GitHub (локально не собиралось).** Авария f9634504:
   переполнение стека сразу после core.sell_unsent_here сделки 20261117143812842GENIUS (4 ордера binance EXPIRED →

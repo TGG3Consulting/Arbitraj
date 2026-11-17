@@ -35,6 +35,7 @@ pub mod order_rules;
 pub mod order_state;
 pub mod pairs;
 pub mod pairs_watch;
+pub mod price_band;
 pub mod reply;
 pub mod rest;
 pub mod sign;
@@ -208,6 +209,15 @@ impl Venue for Binance {
         order_rules::ready(&self.ctx, &self.symbols, req)
             .await
             .map(|_| ())
+    }
+
+    /// Решение 390 (t180): ценовой коридор лимитного ордера — price_band.rs (PERCENT_PRICE_BY_SIDE / PERCENT_PRICE × опорная цена фильтра).
+    async fn price_band(
+        &self,
+        asset: &Asset,
+    ) -> GatewayResult<Option<crate::gateway::price_band::PriceBand>> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        price_band::read(&self.ctx, &self.symbols, &asset.ticker).await
     }
 
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {

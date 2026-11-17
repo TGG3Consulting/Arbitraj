@@ -26,12 +26,13 @@ use std::time::Duration;
 
 use crate::core::types::Asset;
 use crate::gateway::addr_claim::{self, Missing};
-use crate::gateway::addr_create::Creating;
+use crate::gateway::addr_create::{Creating, Failure, retry_text};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::storage::journal::Level;
 
 use super::ctx::Ctx;
 use super::deposit_addr_new;
-use super::networks_parse::{PAYMENT_ID, chain_coin};
+use super::networks_parse::{PAYMENT_ID, chain_coin, coin_clash};
 use super::wallet;
 
 /// Полученные адреса: (монета, blockchain) → адрес; память создания (ревью t165 Н2, Н4). Дешёво клонируется.
@@ -76,6 +77,16 @@ impl DepositAddrs {
             );
             return Err(invalid(ctx, m).with_raw(data.to_string()));
         }
+        // Ревью 2 t165: имя монеты сети BSC совпадает с именем другой сети этой монеты — по ответу GET (сети в нём нет)
+        // не понять, к какой сети привязан адрес: ни принимать адрес, ни создавать (POST) нельзя.
+        if let Some(other) = coin_clash(&data, &asset.ticker, chain) {
+            let m = format!(
+                "Poloniex {}: имя монеты сети {chain} «{coin}» неоднозначно (совпадает с сетью {other}) — адрес не \
+                 принимаю",
+                asset.ticker
+            );
+            return Err(invalid(ctx, m));
+        }
         let got = deposit_addr_new::list(ctx, &coin).await?;
         // Решение 379: адреса в ответе нет — создать (предпроверка, перевод) или NotApplicable (прогрев без «да»).
         if let Some(a) = deposit_addr_new::pick(&got, &coin) {
@@ -91,18 +102,13 @@ impl DepositAddrs {
         if let Some(a) = self.map.read().unwrap_or_else(|p| p.into_inner()).get(&key) {
             return Ok(a.clone());
         }
-        // Ревью t165 Н2: неудачное создание не повторяется до срока venue.networks_fresh_ms (не задана — до
-        // перезапуска); причина биржи видна в отказе.
+        // Ревью t165 Н2 и ревью 2 Н-А: отказ биржи не повторяется до срока venue.networks_fresh_ms (не задана — до
+        // перезапуска), отправленное без подтверждения создание — до перезапуска; причина видна в отказе.
         let keep = ctx
             .int("venue.networks_fresh_ms")
             .ok()
             .map(Duration::from_millis);
-        if let Some(mut e) = self.creating.failed(&key, keep) {
-            e.message = format!(
-                "{} (создание не повторяется: {})",
-                e.message,
-                retry_text(keep)
-            );
+        if let Some(e) = self.creating.failed(&key, keep) {
             return Err(e);
         }
         match deposit_addr_new::create(ctx, &asset.ticker, chain, &coin).await {
@@ -111,9 +117,18 @@ impl DepositAddrs {
                 self.keep(key, &a);
                 Ok(a)
             }
-            Err(e) => {
-                self.creating.fail(&key, &e);
-                Err(e)
+            Err(f) => {
+                // Ревью 2 Н-А: одна запись Warn на ключ — создание отправлено, адреса в списке нет.
+                if self.creating.fail(&key, &f) && f.kind == Failure::Sent {
+                    let m = format!(
+                        "Poloniex {} в сети {chain}: {} — {}",
+                        asset.ticker,
+                        f.err.message,
+                        retry_text(Failure::Sent, keep)
+                    );
+                    ctx.log(Level::Warn, "venue.deposit_address", m).await;
+                }
+                Err(*f.err)
             }
         }
     }
@@ -124,17 +139,6 @@ impl DepositAddrs {
             .write()
             .unwrap_or_else(|p| p.into_inner())
             .insert(key, a.to_string());
-    }
-}
-
-/// Когда создание будет повторено (ревью t165 Н2). Принимает: срок. Возвращает: текст. Ошибок нет.
-fn retry_text(keep: Option<Duration>) -> String {
-    match keep {
-        Some(d) => format!(
-            "повтор не раньше чем через {} мс (venue.networks_fresh_ms)",
-            d.as_millis()
-        ),
-        None => "до перезапуска — venue.networks_fresh_ms не задана".into(),
     }
 }
 

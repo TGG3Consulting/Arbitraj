@@ -19,6 +19,7 @@ pub mod book_print;
 pub mod checksum;
 pub mod ctx;
 pub mod deposit_addr;
+pub mod deposit_addr_claim;
 pub mod deposits;
 pub mod depth;
 pub mod errors;

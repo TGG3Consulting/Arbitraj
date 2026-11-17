@@ -137,3 +137,20 @@ pub fn chain_coin(data: &Value, ticker: &str, chain: &str) -> Option<(String, St
             )
         })
 }
+
+/// Что делает: ревью 2 t165 — однозначно ли имя монеты в сети chain: ищет ДРУГУЮ сеть той же монеты (networkList), у
+/// которой поле coin совпадает с coin сети chain (без учёта регистра). GET /wallets/addresses сети не принимает — при
+/// совпадении по ответу нельзя понять, к какой сети привязан адрес (https://api-docs.poloniex.com/spot/api/private/wallet).
+/// Принимает: ответ /v2/currencies/{currency}, тикер, сеть (blockchain). Возвращает: blockchain другой сети с тем же
+/// именем или None (имя однозначно или сети chain нет). Ошибок нет.
+pub fn coin_clash(data: &Value, ticker: &str, chain: &str) -> Option<String> {
+    let (coin, _) = chain_coin(data, ticker, chain)?;
+    coins(data)
+        .into_iter()
+        .filter(|c| num::text_opt(c, "coin").is_some_and(|t| t.eq_ignore_ascii_case(ticker)))
+        .filter_map(|c| c.get("networkList").and_then(Value::as_array))
+        .flatten()
+        .filter(|n| num::text_opt(n, "blockchain").as_deref() != Some(chain))
+        .find(|n| num::text_opt(n, "coin").is_some_and(|c| c.eq_ignore_ascii_case(&coin)))
+        .map(|n| num::text_opt(n, "blockchain").unwrap_or_default())
+}

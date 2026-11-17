@@ -596,7 +596,6 @@ Funding: есть ли сеть BSC и contract_address. Перед торгов
 | venue.fee_requests_per_sec | площадка Kraken | `1` | Пачки ставок не чаще одной в секунду. | guides/rest/ratelimits: +1 за вызов |
 | venue.rate_limit_pause_ms | площадка Kraken | `10000` | После «Rate limit exceeded» — не слать: ограничение «a few seconds», дольше при продолжении. | guides/rest/ratelimits |
 | venue.funding_list_limit | площадка Kraken | `100` | Бот выводит и вводит единицы в день — 100 последних хватает для поиска статуса. | OpenAPI Funding: limit ≤ 500 |
-| venue.deposit_address_claim | площадка Kraken | *метод:* Не задавать: адреса депозита CAKE/USDT на BSC создать в кабинете Kraken (Deposit); «да» — бот создаст сам (предел неиспользованных обычно 5). | Не плодить адреса. | guides/rest/funding: address_generation limited, TooManyDepositAddresses |
 | venue.api_ip_bound | площадка Kraken | `да` | Ключ с правом вывода — только с IP сервера бота. | GetApiKeyInfo: ip_allowlist |
 ## Биржа CoinEx (решение 170)
 
@@ -859,7 +858,7 @@ Funding: есть ли сеть BSC и contract_address. Перед торгов
 | --- | --- | --- | --- | --- |
 | venue.deposit_warm | биржи-получатели (bingx, mexc и др.) | `да` | Первая сделка по монете после перезапуска берёт адрес депозита из памяти, а не запросом (минус ~200 мс на горячем пути). Прогрев уступает идущей сделке (запросов к занятой бирже нет) и сам адреса не создаёт (KuCoin, Kraken — см. venue.deposit_warm_create) | DECISIONS 316 |
 | venue.deposit_warm_gap_ms | те же биржи | задаёт Тигран по лимиту эндпоинта адреса депозита в документации биржи (MEXC — вес 10 у GET /api/v3/capital/deposit/address; Bybit — «300 req/min»; CoinEx — 10r/1s; у BingX лимит эндпоинта в коде проекта не записан) | Прогрев не должен упираться в лимит: пауза после HTTP 429 задержала бы и запросы сделок. Без значения прогрев биржи не идёт | DECISIONS 316; шапки venues/*/deposit_addr.rs |
-| venue.deposit_warm_create | — | не задавать (= нет) | Да — прогрев создаст адрес депозита по каждой монете биржи (KuCoin — всегда при пустом ответе, решение 208; Poloniex и MEXC — решение 379; Kraken — при venue.deposit_address_claim = да), а не только по сделкам; включать только осознанно, по решению Тиграна | DECISIONS 316 (доработка) |
+| venue.deposit_warm_create | — | не задавать (= нет) | Да — прогрев создаст адрес депозита по каждой монете биржи (KuCoin — всегда при пустом ответе, решение 208; Poloniex — решение 379; Kraken — claim, решение 379), а не только по сделкам; включать только осознанно, по решению Тиграна | DECISIONS 316 (доработка) |
 
 ## Запасной источник пополнения в симуляции (решение 302)
 

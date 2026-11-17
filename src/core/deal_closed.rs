@@ -9,6 +9,7 @@
 //! (Notifier::later, notify/queue.rs, по порядку с прочими уведомлениями сделки): текст итога — из копии сделки на
 //! момент закрытия, карточка — оттуда же (deal_card.rs), строки «без потолка» — читаются в задании (расчёт к этому
 //! моменту только полнее).
+//! Решение 394: hold — и у первой сделки группы докупки, ждущей общего возврата группы (coin_group.rs).
 //! Кто вызывает: ledger.rs (finish), usdt_return_state.rs (set), ledger_load.rs (после перезапуска).
 //! От чего зависит: deal.rs, deal_text.rs, deal_ceiling.rs, deal_card.rs, deal_return_cost.rs, deps.rs (уведомления),
 //! notify/dispatch_queue.rs (later), notify/dispatch_role.rs (tagged_now), notify/alert_card.rs (Snap).
@@ -50,7 +51,13 @@ pub async fn send(core: &Core, deal: &Deal, why: &str) {
 /// Deal.closed_notice, строка в хронологию). Принимает: сделку (после подготовки возврата в ledger::finish), шаг, причину.
 /// Возвращает: true — отложено (сейчас не слать). Ошибок нет.
 pub fn hold(deal: &mut Deal, step: Step, why: &str) -> bool {
-    if step != Step::Closed || !super::deal_return_cost::in_progress(deal) {
+    // Решение 394 (докупка): первая сделка группы, чья выручка ждёт общего возврата группы, — уведомление после него
+    // (факт с затратами общего возврата и итог группы, coin_group.rs); без группы — как раньше.
+    let lead = deal
+        .group
+        .as_ref()
+        .is_some_and(|g| g.id == deal.id && g.wait.is_some());
+    if step != Step::Closed || !(super::deal_return_cost::in_progress(deal) || lead) {
         return false;
     }
     deal.closed_notice = Some(why.to_string());

@@ -80,6 +80,39 @@ pub async fn withdraw_a(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec
         .map_err(|e| Fail::Stop(format!("{}: стоимость вывода: {}", d.buy_on.0, e.message)))
 }
 
+/// Что делает: решение 394 (t179; записка 269, п. 5) — стоимость возврата USDT у ДОКУПКИ: фиксированная часть одна на
+/// группу (учтена в плане первой сделки группы), в докупку закладывается только процентная часть комиссии вывода
+/// USDT у биржи B (CoinNetworkInfo.withdraw_fee_pct из API биржи; нет — 0). У DEX на B (газ перевода — фиксированная
+/// часть) — затрат нет. Минимум и максимум вывода проверяются на общем возврате группы, не здесь. Принимает: контекст,
+/// сумму. Возвращает: затраты. Ошибки: Stop — у биржи B нет сети котируемой монеты в справочнике или площадка не
+/// сообщила фиксированную часть комиссии вывода (как у return_b).
+pub fn return_b_top_up(cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
+    if cx.b.info.is_none() {
+        return Ok(vec![]);
+    }
+    let info = cx.usdt_b.as_ref().ok_or_else(|| {
+        Fail::Stop(format!(
+            "{}: сети {} у {} нет в справочнике — стоимость возврата неизвестна",
+            cx.dir.sell_on.0, cx.net_b, cx.usdt.ticker
+        ))
+    })?;
+    // Ревью 3 t179: фиксированная часть не сообщена площадкой — стоимость возврата группы неизвестна, сделки нет (не
+    // торгуем вслепую; как return_b — fee_for без фиксированной части).
+    if info.withdraw_fee.is_none() {
+        return Err(Fail::Stop(format!(
+            "{}: комиссия вывода {} в сети {} неизвестна",
+            info.venue.0, info.asset.ticker, info.network
+        )));
+    }
+    let pct = info.withdraw_fee_pct.unwrap_or_default() * amount.max(Decimal::ZERO);
+    Ok(vec![Cost::new(
+        CostKind::WithdrawFee,
+        pct,
+        info.asset.ticker.clone(),
+        false,
+    )])
+}
+
 /// Стоимость возврата USDT с B. Принимает: шлюз, контекст, сумму (выручка минус комиссия продажи в котируемой монете —
 /// столько уйдёт, решение 118). Возвращает: затраты (как их отдаёт площадка).
 /// Ошибки: Stop — у биржи B нет сети котируемой монеты в справочнике, комиссия неизвестна, сбой шлюза DEX;

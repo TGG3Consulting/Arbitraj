@@ -49,7 +49,7 @@ pub enum Outcome {
 pub async fn run(core: &Core, plan: CyclePlan) -> Outcome {
     let d = cycle_plan::direction(&plan.cycle);
     let key = super::coin_key::CoinKey::of(&d.asset);
-    if !lk(&core.inner.active).insert(key.clone()) {
+    if !super::coin_ride::take(core, &key) {
         return Outcome::Busy;
     }
     let out = deal(core, plan).await;

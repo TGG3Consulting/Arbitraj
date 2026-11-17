@@ -7,7 +7,8 @@
 //! учёта ядра, последняя по началу — та же, что в сводке замера): её «вложено − получено», как считает учёт
 //! (ledger.rs recompute_exposure). Признака нет (кандидат, предпроверка, «без потолка», всё остальное) — ничего не
 //! меняется. Свободный баланс площадки не читается (как у кандидата, решение 94).
-//! Кто вызывает: core/busy_calc.rs (scope, freed), core/limits_parts.rs (add_back).
+//! Кто вызывает: core/busy_calc.rs (scope, freed), core/limits_parts.rs (add_back), core/costs_source.rs (in_shadow —
+//! решение 394).
 //! От чего зависит: deal.rs, coin_key.rs, limits_parts.rs (Parts), engine.rs, tokio (task_local).
 //! Настройки: нет.
 
@@ -29,6 +30,12 @@ tokio::task_local! {
 /// Выполняет работу как теневой расчёт монеты `key`. Принимает: ключ монеты, работу. Возвращает: её результат.
 pub async fn scope<F: Future>(key: CoinKey, work: F) -> F::Output {
     SHADOW.scope(key, work).await
+}
+
+/// Что делает: решение 394 (ревью t179, Н1) — идёт ли сейчас теневой расчёт решения 267 (признак задачи): в нём
+/// котировки докупки (ride_quote.rs) не применяются — замер «если бы мы не были заняты» прежний. Ошибок нет.
+pub fn in_shadow() -> bool {
+    SHADOW.try_with(|_| ()).is_ok()
 }
 
 /// Что вычла из лимитов текущая сделка монеты теневого расчёта.

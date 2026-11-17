@@ -12,7 +12,9 @@
 //! Методы возвращают `impl Future + Send` (статическая отправка, без упаковки на пути боя).
 //! Решение 250: fillable — исполнимое количество без цены (проверка доли глубины h); по умолчанию — из quote.
 //! Кто вызывает: core/costs.rs (evaluate_on → Live), core/uncapped_replay.rs (свой источник), size_curve.rs.
-//! От чего зависит: costs_quote.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
+//! Решение 394 (t179, докупка): Live при идущих сделках группы — ride_quote.rs, ride_trail.rs (продажа после их монет,
+//! свежесть данных), возврат USDT докупки без фиксированной части (costs_withdraw.rs return_b_top_up).
+//! От чего зависит: costs_quote.rs, ride_quote.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
 //! Настройки: нет (у источника Live — через costs_quote.rs и convert.rs).
 
 use std::future::Future;
@@ -92,6 +94,11 @@ pub struct Live<'a> {
 }
 
 impl Live<'_> {
+    /// Решение 394: применять ли котировки докупки — живой расчёт (без снимка) и не теневой замер 267. Ошибок нет.
+    fn rides(&self) -> bool {
+        self.src.is_none() && !super::busy_budget::in_shadow()
+    }
+
     /// Решение 237: затраты плана снимка (входы момента решения); None — живой расчёт или входы не сняты.
     /// Ошибок нет.
     fn plan(&self) -> Option<&super::plan_costs::PlanCosts> {
@@ -100,21 +107,37 @@ impl Live<'_> {
 }
 
 impl Source for Live<'_> {
-    /// Котировка шлюза или снимка (costs_quote.rs fetch). Ошибки: как у fetch.
+    /// Котировка шлюза или снимка (costs_quote.rs fetch). Решение 394 (t179, докупка), только живой расчёт сделки (не
+    /// снимок, не теневой замер 267 — busy_budget::in_shadow): продажа на B — после монет идущих сделок группы на той же
+    /// B (ride_quote.rs) и по данным новее продаж сделок групп (ride_trail.rs); покупка на A — по данным новее покупок
+    /// идущих сделок группы. Групп нет — как раньше. Ошибки: как у fetch; Stop — данные не доказуемо свежее.
     async fn quote(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
-        super::costs_quote::fetch(self.core, d, sell, qty, self.src).await
+        if !self.rides() || super::ride_quote::idle(self.core, d) {
+            return super::costs_quote::fetch(self.core, d, sell, qty, self.src).await;
+        }
+        // Решение 394: ветка докупки — в куче (размер будущего котировки как раньше; путь сделки чувствителен к стеку).
+        Box::pin(super::ride_quote::live(self.core, d, sell, qty)).await
     }
 
     /// Решение 250: исполнимое количество — живое через контракт quote_fills (costs_quote.rs fillable); со снимком
-    /// рынка — fillable_qty котировки снимка (как раньше). Ошибки: как у quote.
+    /// рынка — fillable_qty котировки снимка (как раньше). Решение 394: продажа на B при идущих сделках группы на той
+    /// же B — исполнимое на (их монеты + объём) минус их монеты. Ошибки: как у quote.
     async fn fillable(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Decimal, Fail> {
         if self.src.is_some() {
             return self.quote(d, sell, qty).await.map(|q| q.fillable_qty);
         }
-        super::costs_quote::fillable(self.core, d, sell, qty).await
+        let off = if sell && self.rides() && !super::ride_quote::idle(self.core, d) {
+            super::ride_quote::sell_ahead(self.core, d)
+        } else {
+            Decimal::ZERO
+        };
+        // Решение 394: сдвиг 0 (докупка выключена или групп нет) — тот же вызов, что раньше.
+        let f = super::costs_quote::fillable(self.core, d, sell, qty + off).await?;
+        Ok((f - off).max(Decimal::ZERO))
     }
 
-    /// Худшая цена (costs_quote.rs worst). Ошибки: как у worst.
+    /// Худшая цена (costs_quote.rs worst). Решение 394: живая продажа на B при идущих сделках группы на той же B —
+    /// уровень стакана на (их монеты + объём): наш ордер дойдёт до него, если они продадут раньше. Ошибки: как у worst.
     fn worst(
         &self,
         d: &Direction,
@@ -127,7 +150,12 @@ impl Source for Live<'_> {
         } else {
             (&d.buy_on, Side::Buy)
         };
-        super::costs_quote::worst(self.core, v, &d.asset, side, qty, avg, self.src)
+        let off = if sell && self.rides() && !super::ride_quote::idle(self.core, d) {
+            super::ride_quote::sell_ahead(self.core, d)
+        } else {
+            Decimal::ZERO
+        };
+        super::costs_quote::worst(self.core, v, &d.asset, side, qty + off, avg, self.src)
     }
 
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs withdraw_a); решение 237 — DEX на A со
@@ -146,6 +174,14 @@ impl Source for Live<'_> {
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs return_b); решение 237 — DEX на B со
     /// входами момента решения: затраты «возврат USDT» плана. Ошибки: как у return_b.
     async fn ret(&self, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
+        // Решение 394 (записка 269, п. 5): докупка (идёт группа того же направления) — фиксированная часть возврата USDT
+        // одна на группу (в плане первой сделки), здесь — только процентная часть по данным площадки.
+        if self.rides()
+            && !super::ride_quote::idle(self.core, &cx.dir)
+            && super::coin_ride::group_running(self.core, &cx.dir).is_some()
+        {
+            return super::costs_withdraw::return_b_top_up(cx, amount);
+        }
         if let (Some(p), None) = (self.plan(), &cx.b.info) {
             return Ok(p.ret());
         }

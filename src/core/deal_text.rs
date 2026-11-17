@@ -95,6 +95,12 @@ fn closed_result(d: &Deal, why: &str, ceil: Option<&Ceiling>) -> String {
     if let Some(r) = return_line(d) {
         m = m.kv("Возврат USDT", r);
     }
+    // Решение 394 (t179): докупка — группа, общий возврат USDT, итог группы (п. 12 записки 269); без группы — строк нет.
+    if let Some(g) = &d.group {
+        for (k, v) in g.lines(&d.id, d.result_usd) {
+            m = m.kv(k, v);
+        }
+    }
     if let Some(how) = how_closed(d, why) {
         m = m.kv("Закрыта", how);
     }

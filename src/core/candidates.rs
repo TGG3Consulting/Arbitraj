@@ -76,8 +76,9 @@ use crate::gateway::urgency::{self, Urgency};
 /// profit.calc_wait_ms задана — ждёт места в памяти ядра; не задана — пропуск (следующий тик поставит снова) со счётом и
 /// записью журнала core.candidate_lost. Ошибок нет.
 pub fn enqueue(core: &Core, d: &Direction) {
-    // По монете уже идёт сделка — новый расчёт не нужен (решение 118, Я-2: одна сделка на монету).
-    if lk(&core.inner.active).contains(&super::coin_key::CoinKey::of(&d.asset)) {
+    // По монете уже идёт сделка — новый расчёт не нужен (решение 118, Я-2: одна сделка на монету). Решение 394 (t179):
+    // докупка (exec.top_up = да) — расчёт нужен направлению идущей группы (coin_ride.rs blocks_new).
+    if super::coin_ride::blocks_new(core, d) {
         // Решение 267: включён замер window.busy_calc — теневой расчёт (только наблюдение, своя очередь); выключен
         // или не задан — одно чтение настройки и тот же молчаливый выход.
         super::busy_calc::enqueue(core, d);

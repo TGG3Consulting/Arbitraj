@@ -1,7 +1,7 @@
 //! Файл: core/transfer_watch.rs
 //! Что делает: наблюдение за переводом (шаг 6 ТЗ): перевод дольше transfer.max_time_s — уведомление
 //! exec.transfer_slow и карантин монеты (route.quarantine_in); дошёл — карантин снят (route.quarantine_out);
-//! фактическое время в пути пишет transit.rs.
+//! фактическое время в пути пишет transit.rs. Решение 394: карантин снимает перевод той сделки, что его поставила.
 //! Кто вызывает: core/transfers.rs.
 //! От чего зависит: engine.rs, risk.rs, settings.
 //! Настройки: transfer.max_time_s (по площадке получателя и монете).
@@ -68,8 +68,16 @@ pub async fn slow(
     .await;
 }
 
-/// Перевод дошёл: если монета была в карантине из-за медленного перевода — снять и уведомить.
-pub async fn release(core: &Core, asset: &Asset, to: &VenueId) {
+/// Перевод дошёл: если монета была в карантине из-за медленного перевода — снять и уведомить. Решение 394 (ревью t179,
+/// Н4): при exec.top_up = да карантин медленного перевода ДРУГОЙ сделки (два перевода одной монеты) не снимается — его снимет её
+/// собственный перевод. Принимает: ядро, монету, получателя, ID сделки этого перевода. Ошибок нет.
+pub async fn release(core: &Core, asset: &Asset, to: &VenueId, deal: &str) {
+    if super::coin_ride::top_up_on(core)
+        && let Some(r) = super::quarantine::reason(core, asset)
+        && slow_of_other(&r, deal)
+    {
+        return;
+    }
     if super::quarantine::set(core, asset, None).is_none() {
         return;
     }
@@ -95,4 +103,13 @@ pub async fn release(core: &Core, asset: &Asset, to: &VenueId) {
                 .render(),
         )
         .await;
+}
+
+/// Решение 394: причина карантина — медленный перевод другой сделки (текст slow: «<сделка>: перевод …»). Принимает:
+/// причину, ID этой сделки. Ошибок нет.
+fn slow_of_other(reason: &str, deal: &str) -> bool {
+    match reason.split_once(": перевод ") {
+        Some((id, _)) => id != deal,
+        None => false,
+    }
 }

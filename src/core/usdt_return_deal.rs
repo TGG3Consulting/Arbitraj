@@ -12,7 +12,8 @@
 //! Решение 227: продажи на нескольких площадках (живой случай JCT: часть на Bitget, остаток на DEX) — возврат по
 //! частям: с каждой площадки выручки ровно её выручка минус комиссия, каждая часть — своим перегоном (Job), состояние —
 //! по частям (usdt_return_parts.rs; части считает usdt_return_split.rs). Одна площадка продаж — как раньше.
-//! Кто вызывает: core/ledger.rs (finish).
+//! Решение 394 (t179): у сделки группы докупки части — через coin_group::hold_parts (общий возврат группы).
+//! Кто вызывает: core/ledger.rs (finish); start_parts — ещё coin_group.rs.
 //! От чего зависит: usdt_return_job.rs (запуск перегона), usdt_return_state.rs, usdt_return_parts.rs,
 //! usdt_return_split.rs, dex_account.rs, deal.rs, settings.
 //! Решение 249: часть биржа → биржа, запрещённая venue.cex_cex (cex_link.rs), не перегоняется — страховка «USDT не вернулись».
@@ -59,6 +60,31 @@ pub async fn prepare(core: &Core, deal: &mut Deal) -> Vec<Job> {
     if parts.is_empty() {
         return vec![];
     }
+    // Решение 394 (t179, докупка): сделка группы — её выручка ждёт общего возврата группы (coin_group.rs hold_parts,
+    // без будущих; общий возврат — после сохранения закрытия, ledger::finish → after_close); вышла из группы — свой
+    // возврат. Без группы (докупка выключена) — как раньше. Перегоны — в куче (путь «застрявшая монета → продажа →
+    // закрытие» чувствителен к стеку, решение 389, tests/core_exec_book_238.rs).
+    let parts = if deal.group.is_some() {
+        // Ревью 4, Н7: пометка «была частью группы» — из записи учёта (копия задачи её может не нести).
+        super::coin_group_left::sync(core, deal);
+        super::coin_group::hold_parts(deal, parts)
+    } else {
+        parts
+    };
+    if parts.is_empty() {
+        return vec![];
+    }
+    Box::pin(start_parts(core, deal, parts)).await
+}
+
+/// Что делает: перегоны частей сделки (тело prepare после решения о частях; решение 394 — и общий возврат группы,
+/// coin_group.rs flush). Принимает: ядро, сделку, части (откуда, сумма). Возвращает: перегоны — запустить после
+/// сохранения сделки. Ошибок нет: сбой — страховка.
+pub(super) async fn start_parts(
+    core: &Core,
+    deal: &mut Deal,
+    parts: Vec<(VenueId, Decimal)>,
+) -> Vec<Job> {
     // Решение 132: перегон выручки — кошельком сделки.
     let acc = match super::dex_account::of(core, deal) {
         Ok(a) => a,
@@ -105,6 +131,8 @@ pub async fn prepare(core: &Core, deal: &mut Deal) -> Vec<Job> {
             from,
             to: to.clone(),
             acc: acc.clone(),
+            pieces: vec![],
+            tag: String::new(),
         });
     }
     jobs
@@ -227,7 +255,13 @@ pub fn amount_of(core: &Core, deal: &Deal, v: &VenueId) -> Decimal {
 /// отправили бы и выручку другой части, и чужие USDT. Продаж бота на площадке нет — сумма как есть. Принимает: ядро,
 /// сделку, площадку части, сумму. Возвращает: сумму с потолком. Ошибок нет.
 pub fn own_cap(core: &Core, deal: &Deal, v: &VenueId, amount: Decimal) -> Decimal {
-    let own = amount_of(core, deal, v);
+    // Решение 394: у сделки с общим возвратом группы — и выручка отложенных сделок группы.
+    let shared = deal
+        .group
+        .as_ref()
+        .and_then(|g| g.sum.as_ref())
+        .map_or(Decimal::ZERO, |s| s.usdt);
+    let own = amount_of(core, deal, v) + shared;
     if own > Decimal::ZERO {
         amount.min(own)
     } else {

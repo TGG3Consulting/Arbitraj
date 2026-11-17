@@ -58,7 +58,7 @@ pub fn busy(core: &Core, v: &VenueId, a: &Asset) -> Option<&'static str> {
     if lk(&core.inner.balance_sells).contains(&key) {
         return Some(SELLING);
     }
-    if lk(&core.inner.active).contains(&key) {
+    if super::coin_ride::held(core, &key) {
         return Some(IN_DEAL);
     }
     // Незавершённая сделка этой монеты на этой бирже: идёт, застряла, ждёт решения или остановлена с монетами.

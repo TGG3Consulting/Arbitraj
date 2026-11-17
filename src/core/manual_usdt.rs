@@ -15,7 +15,8 @@
 //! допуска usdt.return_tolerance_usd — тогда свободный остаток, usdt_return_attempt.rs).
 //! Кто вызывает: core/manual_feed.rs (записи), core/commands.rs (команды UsdtRetry, UsdtReturnedManually),
 //! core/manual_return.rs (Core::manual — таблица экрана; список сделок — Core::usdt_not_returned в manual_feed.rs).
-//! От чего зависит: usdt_return_attempt.rs, usdt_return_state.rs, manual_rows.rs (btn), deal.rs, ledger.rs,
+//! От чего зависит: usdt_return_attempt.rs, usdt_return_pieces.rs (решение 394: остаток общего возврата группы выше
+//! максимума вывода — кусками), usdt_return_state.rs, manual_rows.rs (btn), deal.rs, ledger.rs,
 //! deal_return_cost.rs (затраты «перегнано вручную»), manual_usdt_credit.rs (кнопка с вводом и разбор ответа).
 //! Настройки: нет (повторы — usdt.return_retry_s, usdt.return_retries_max в usdt_return_retry.rs).
 
@@ -92,11 +93,17 @@ fn usdt_record(d: &Deal, part: &UsdtReturn) -> Option<ManualRecord> {
     })
 }
 
-/// Почему «Перегнать» недоступна. «Продано вручную» (решение 100) без продаж бота на площадке этой части — бот
+/// Почему «Перегнать» недоступна. Решение 394: USDT сделки ушли общим возвратом группы докупки — недоступна. «Продано вручную» (решение 100) без продаж бота на площадке этой части — бот
 /// выручку не перегоняет; с продажами бота — доступна (решение 224, перегон не больше их выручки на этой площадке,
 /// решение 227). USDT уже на площадке покупки — тоже недоступна. Принимает: сделку, где лежат USDT, площадку покупки.
 /// Возвращает: причину или None. Ошибок нет.
 pub fn retry_block(d: &Deal, at: &VenueId, to: &VenueId) -> Option<String> {
+    // Решение 394 (ревью 2 t179, Н1): USDT этой сделки ушли общим возвратом группы докупки — второго вывода нет.
+    if let Some(x) = d.group.as_ref().and_then(|g| g.shared_in.as_ref()) {
+        return Some(format!(
+            "USDT этой сделки возвращены в составе общего возврата группы докупки в сделке {x} — «Перегнать» по ней не нужен"
+        ));
+    }
     if let Some(w) = &d.usdt_return_skip
         && super::usdt_return_parts::sold_at(d, at) <= Decimal::ZERO
     {
@@ -204,7 +211,15 @@ async fn take(
     super::ledger::save(core, &d).await;
     super::deal_return_cost::after(core, &d, delta).await;
     let text = if retry {
-        start(core, deal, amount, at.clone(), to.clone(), who);
+        // Решение 394 (ревью 4 t179, Н8): остаток общего возврата группы выше максимума вывода — кусками по очереди
+        // (usdt_return_pieces.rs); иначе (и без группы — как раньше) — одна попытка.
+        let tag = format!(
+            "m{}",
+            chrono::Utc::now().timestamp_millis().rem_euclid(1_000_000)
+        );
+        if !super::usdt_return_pieces::start_manual(core, deal, amount, (&at, &to), &tag) {
+            start(core, deal, amount, at.clone(), to.clone(), who);
+        }
         format!(
             "Сделка {deal}: перегон USDT {} → {} запущен (сумма части {})",
             at.0,

@@ -1,7 +1,8 @@
 //! Файл: tests/core_close_guard.rs
 //! Что делает: страж решения 138 по исходникам: возврат USDT после закрытия решается только в ledger::finish
 //! (usdt_return_deal::prepare — только в ledger.rs), сам перегон выручки — только из usdt_return_job.rs (решение 163:
-//! и повтор — usdt_return_attempt.rs), и никто не
+//! и повтор — usdt_return_attempt.rs; решение 394 — и куски общего возврата группы usdt_return_pieces.rs, запускаемые
+//! только из usdt_return_job.rs), и никто не
 //! ставит Step::Closed в обход ledger::finish. Новый путь закрытия, написанный мимо общего шага, этот тест не пройдёт.
 //! Кто вызывает: cargo test.
 //! От чего зависит: только исходники src/ (чтение файлов). Моков нет.
@@ -48,10 +49,21 @@ fn return_step_only_in_ledger_finish() {
             );
         }
         // Решение 163: перегон без извещения о сбое — только шаг закрытия и попытка повтора (повторы, «Перегнать»).
+        // Решение 394 (ревью 3 t179, Б1): и куски общего возврата группы докупки (usdt_return_pieces.rs) — тот же шаг
+        // закрытия: их запускает только перегон закрытой сделки (usdt_return_job.rs, проверка ниже).
         if s.contains("usdt_return::relay_try(") {
             assert!(
-                f == "usdt_return_job.rs" || f == "usdt_return_attempt.rs",
+                f == "usdt_return_job.rs"
+                    || f == "usdt_return_attempt.rs"
+                    || f == "usdt_return_pieces.rs",
                 "{p:?}"
+            );
+        }
+        // Решение 394: куски общего возврата — только из перегона шага закрытия.
+        if s.contains("usdt_return_pieces::run(") {
+            assert_eq!(
+                f, "usdt_return_job.rs",
+                "{p:?}: куски общего возврата — только из usdt_return_job.rs"
             );
         }
         // Закрыть сделку в обход ledger::finish нельзя: шаг Closed ставит только он.

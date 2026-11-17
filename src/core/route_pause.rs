@@ -12,7 +12,8 @@
 //! начинаются только из Candidate (core/evaluate.rs → candidates::enqueue). Ручные действия по сделке («Продать
 //! сейчас», «Продать и перегнать», «Беру на себя» — manual*.rs) паузу не читают. Продажа кнопкой человека, отклонённая
 //! биржей, тоже ставит паузу (sell_unsent::decide: кнопка и отказ не «до отправки» → Retry::No → sell.rs → alert).
-//! Кто вызывает: ledger.rs (finish_paused), sell_unsent.rs (alert), тесты (tests/core_sell_reject_293.rs).
+//! Решение 394 (t179): после удачной сделки группы докупки (won, только при exec.top_up = да) пауза не ставится — ledger.rs.
+//! Кто вызывает: ledger.rs (finish_paused, won), sell_unsent.rs (alert), тесты (tests/core_sell_reject_293.rs).
 //! От чего зависит: signal.rs (Signals::cooldown), trade_ops.rs (вид площадки), engine.rs, settings, deps.rs (журнал).
 //! Настройки: signal.route_cooldown_s, stuck.reject_route_pause.
 
@@ -27,6 +28,23 @@ use crate::storage::journal::Level;
 use super::deal::Deal;
 use super::engine::{Core, lk};
 use super::op_error::OpError;
+
+/// Задача t179 (решение 394): строка хронологии удачной сделки — паузы направления нет.
+pub const WON_NOTE: &str = "Пауза направления не поставлена: сделка удачная (продана на площадке плана, итог ≥ 0) — решение 394";
+
+/// Что делает: задача t179 (решение 394) — сделка удачная, пауза направления после неё не нужна: закрыта (Closed),
+/// была продажа, монеты проданы на площадке продажи направления без перегонов, итог ≥ 0. Срыв покупки, перевод не
+/// состоялся, перегон, продажа вручную без продаж бота, убыток — не удачная (пауза как раньше).
+/// Принимает: сделку (шаг и итог уже записаны finish). Ошибок нет.
+pub fn won(deal: &Deal) -> bool {
+    deal.step == super::deal::Step::Closed
+        && !deal.sells.is_empty()
+        && deal.relays == 0
+        && deal.at == deal.direction.sell_on
+        && deal
+            .result_usd
+            .is_some_and(|r| r >= rust_decimal::Decimal::ZERO)
+}
 
 /// Имя настройки «пауза направления после отказа биржи на продаже» (каталог — settings/catalog/trade.rs).
 pub const REJECT_PAUSE: &str = "stuck.reject_route_pause";

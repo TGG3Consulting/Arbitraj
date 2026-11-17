@@ -67,7 +67,8 @@ pub fn snapshot(core: &Core) -> Busy {
             }
         }
     }
-    let active: HashSet<CoinKey> = lk(&core.inner.active).clone();
+    // Задача t179: и монеты с идущими сделками (coin_ride.rs).
+    let active: HashSet<CoinKey> = super::coin_ride::keys(core);
     if !active.is_empty() {
         let book = core.coins();
         for c in book

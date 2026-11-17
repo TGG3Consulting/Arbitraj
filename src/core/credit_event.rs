@@ -9,12 +9,14 @@
 //! - иначе — «внешнее изменение баланса» без привязки к сделке (ручной ввод и вывод): журнал core.balance_external;
 //!   уведомление balance.external — если изменение не меньше transfer.external_notify_min_usd (пыль — только журнал);
 //! - решение 151: у перевода сделки на DEX подошедшее поступление может сразу засчитаться зачислением по блокчейну
-//!   (credit_chain.rs; transfer.credit_by_chain).
+//!   (credit_chain.rs; transfer.credit_by_chain);
+//! - решение 394 (докупка, exec.top_up = да): поступление без хеша при двух и более ожиданиях этой монеты у получателя
+//!   ничего не закрывает — будит опрос по хешу.
 //!
 //! Кто вызывает: tick.rs (Touched::Balance), transfers.rs (событие с чужим хешем — external).
 //! От чего зависит: credit_watch.rs (ожидания), credit_match.rs, convert.rs (цена), settings, deps.rs (журнал).
 //! Настройки: transfer.credit_amount_tolerance_pct, transfer.credit_by_event, transfer.credit_by_chain (по площадке
-//! события и монете), transfer.external_notify_min_usd (вся система), venue.quote_asset.
+//! события и монете), transfer.external_notify_min_usd (вся система), venue.quote_asset, exec.top_up (coin_ride.rs).
 
 use rust_decimal::Decimal;
 
@@ -43,6 +45,9 @@ pub async fn on_change(core: &Core, mut b: BalanceChange) {
     let close = s.flag("transfer.credit_by_event", at).unwrap_or(false);
     // Решение 151: зачисление перевода сделки на DEX по приходу в блокчейне (credit_chain.rs).
     let chain = s.flag("transfer.credit_by_chain", at).unwrap_or(false);
+    // Решение 394 (ревью t179, Б2; записка 269, п. 8): при докупке две сделки одной монеты могут ждать зачисления на
+    // одном получателе — событие без хеша тогда ожидание не закрывает (решает опрос по хешу). Выключено — как раньше.
+    let strict = super::coin_ride::top_up_on(core);
     let note = {
         let mut st = lock(core);
         st.seen.insert(b.venue.clone());
@@ -51,7 +56,7 @@ pub async fn on_change(core: &Core, mut b: BalanceChange) {
         }
         match b.kind {
             BalanceKind::Deposit if b.delta > Decimal::ZERO => match &tol {
-                Ok(tol) => deposit(&mut st, &b, *tol, close, chain),
+                Ok(tol) => deposit(&mut st, &b, *tol, (close, chain), strict),
                 Err(e) => Some(format!("не сверено с переводами: {}", e.message)),
             },
             BalanceKind::Withdraw if b.delta < Decimal::ZERO => {
@@ -95,17 +100,39 @@ fn what(b: &BalanceChange) -> String {
 }
 
 /// Поступление: ищет ожидание (credit_match.rs). Ровно одно — прикрепляет событие и будит перевод; у перевода сделки
-/// на DEX — ещё и проверка зачисления по блокчейну (решение 151, credit_chain.rs). Принимает: состояние, событие,
-/// допуск, закрывает ли событие, включено ли зачисление по блокчейну. Возвращает: запись в журнал; None — не наше.
-/// Ошибок нет.
+/// на DEX — ещё и проверка зачисления по блокчейну (решение 151, credit_chain.rs). Решение 394 (`strict`, докупка
+/// включена): событие без хеша при двух и более ожиданиях этой монеты у получателя ни к одному не прикрепляется — только
+/// будит их опрос по хешу (сделка продаёт ровно своё зачисление, п. 8 записки 269). Принимает: состояние, событие,
+/// допуск, (закрывает ли событие, включено ли зачисление по блокчейну), strict. Возвращает: запись в журнал; None — не
+/// наше. Ошибок нет.
 fn deposit(
     st: &mut State,
     b: &BalanceChange,
     tol: Decimal,
-    close: bool,
-    chain: bool,
+    (close, chain): (bool, bool),
+    strict: bool,
 ) -> Option<String> {
     let hash = b.tx_hash.as_deref().map(norm);
+    if strict && hash.is_none() {
+        let same: Vec<u64> = st
+            .list
+            .iter()
+            .filter(|(_, e)| e.to == b.venue && same_asset(&e.asset, &b.asset))
+            .filter(|(_, e)| e.same_wallet(b))
+            .map(|(id, _)| *id)
+            .collect();
+        if same.len() > 1 {
+            for id in &same {
+                if let Some(e) = st.list.get(id) {
+                    e.wake.notify_one();
+                }
+            }
+            return Some(format!(
+                "без хеша, ожиданий этой монеты у получателя {} — по событию не закрываем, решает опрос по хешу (решение 394)",
+                same.len()
+            ));
+        }
+    }
     let mut open: Vec<(u64, Decimal, bool)> = st
         .list
         .iter()

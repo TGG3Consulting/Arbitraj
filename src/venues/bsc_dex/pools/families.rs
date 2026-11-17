@@ -12,7 +12,8 @@
 //! Кто вызывает: mod.rs (dex_families), pools/* (виды и разбор), directory (сопоставление), quote/*, exec/*.
 //! От чего зависит: core/types (PoolKind), gateway/contract (DexFamily), ctx.rs.
 //! Вид шага исполнителя (решение 122, часть F) — поле executor_kind (pools/exec_kind.rs): с ним вид исполним через
-//! ArbExecutor, когда задан exec.executor_address (exec_kind::via_executor); без адреса — сигнал, как раньше.
+//! ArbExecutor, когда задан exec.executor_address (exec_kind::via_executor); без адреса — сигнал, как раньше. Решение
+//! 390: у Uniswap V4 и PancakeSwap Infinity (tradable — свой UR) тоже есть вид шага (UNI_V4 / INF_*, исполнитель v3).
 //! Настройки: dex.kind, dex.pool_enabled и адреса dex.* [DEX индексатора]; smart.universal_router, smart.permit2 [bsc_dex].
 
 use std::collections::HashMap;
@@ -389,7 +390,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // контракта-исполнителя (exec_kind::via_executor), своего пути через Universal Router нет.
         "maverick_v2" => (PoolKind::TickBin, Proto::Maverick, true, false, false),
         // PancakeSwap Infinity Stable (решение «122 (Infinity Stable)»): в графе и исполним Universal Router своей DEX
-        // (tradable, не форк) — пул живёт в синглтоне CLPoolManager, шага исполнителя ArbExecutor нет.
+        // (tradable, не форк) — пул живёт в синглтоне CLPoolManager; решение 390 — ещё шаг INF_CL исполнителя v3.
         "pancake_infinity_stable" => (
             PoolKind::StableSwap,
             Proto::InfinityStable,

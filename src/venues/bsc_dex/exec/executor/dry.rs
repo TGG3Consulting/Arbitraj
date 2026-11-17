@@ -67,7 +67,7 @@ pub async fn build(
     match (mode, deployed) {
         (DryMode::AsTrade, Some(x)) => {
             let version = onchain::ensure(ctx, x, wallet).await?;
-            if nat.is_some() && version != super::code::Version::V2 {
+            if nat.is_some() && !version.native() {
                 let why = format!(
                     "исполнитель {x:#x}: код в сети — версия {}, executeNative нет — нативный BNB не исполняется",
                     version.label()

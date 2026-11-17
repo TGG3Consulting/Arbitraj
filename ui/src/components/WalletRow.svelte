@@ -7,7 +7,9 @@
     (components/ExecutorDeploy.svelte), записать адрес уже развёрнутого (PUT /api/wallets/{id}/executor — только после
     проверки «код совпал, владелец — этот кошелёк»), версия исполнителя (решение 272: «v2» / «v1 — нативный BNB через
     форки не торгуется, переразверните» / «не сверена» — по коду в сети, поле executor_version; ревью 272 А1: у v2 —
-    обёртка из конструктора executor_wrapped против dex.native_wrapped, не совпала — «BNB не идёт»); «Переименовать» (PATCH), «Удалить» (DELETE — бэкенд запрещает,
+    обёртка из конструктора executor_wrapped против dex.native_wrapped, не совпала — «BNB не идёт»; решение 390 (t181):
+    «v3» — ещё шаги Uniswap V4 / PancakeSwap Infinity, у «v2» — подсказка «переразверните, чтобы смешанные с V4 /
+    Infinity маршруты шли через исполнитель»); «Переименовать» (PATCH), «Удалить» (DELETE — бэкенд запрещает,
     пока кошелёк в маппинге или в незавершённой сделке; ключ из секретов не удаляется).
   Кто вызывает: components/WalletList.svelte.
   От чего зависит: lib/api.js, components/{CheckConnection,ExecutorDeploy,CopyAddr,ErrorText}.svelte.
@@ -23,9 +25,14 @@
 
   /** w — кошелёк из GET /api/wallets; dex — id площадки DEX; unlocked — секреты разблокированы; onchange. */
   let { w, dex, unlocked, onchange } = $props();
-  // Ревью 272 (А1): нативный BNB через исполнитель — v2 и обёртка в нём = dex.native_wrapped (как бот, native_block).
-  let nativeOk = $derived(w.executor_version === 'v2' && !!w.executor_wrapped && !!w.native_wrapped
+  // Ревью 272 (А1): нативный BNB через исполнитель — v2 / v3 и обёртка в нём = dex.native_wrapped (как бот, native_block).
+  let modern = $derived(w.executor_version === 'v2' || w.executor_version === 'v3');
+  let nativeOk = $derived(modern && !!w.executor_wrapped && !!w.native_wrapped
     && w.executor_wrapped.toLowerCase() === w.native_wrapped.toLowerCase());
+  // Решение 390 (t181): шаги Uniswap V4 / PancakeSwap Infinity через исполнитель — только у v3.
+  let singletonNote = $derived(w.executor_version === 'v3'
+    ? '; шаги Uniswap V4 и PancakeSwap Infinity через исполнитель есть'
+    : '; шагов Uniswap V4 и PancakeSwap Infinity нет — маршрут, где они смешаны с другими DEX, этим кошельком не исполняется (переразверните исполнитель)');
 
   let bal = $state(null);
   let error = $state('');
@@ -96,7 +103,7 @@
   {#if w.executor}
     <!-- Решение 272: версия по коду в сети (сверка — «Проверить подключение» исполнителя, сделка, развёртывание). -->
     <!-- Ревью 272 (А1): у v2 — обёртка из конструктора; ≠ dex.native_wrapped — BNB через исполнитель не идёт. -->
-    <p class={nativeOk ? 'ok' : 'warn-text'}>Версия: {#if nativeOk}v2 — нативный BNB монетой сделки идёт через исполнитель (обёртка <code>{w.executor_wrapped}</code>){:else if w.executor_version === 'v2'}v2, но обёртка в исполнителе <code>{w.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{w.native_wrapped ?? 'не задана'}</code> — нативный BNB через исполнитель не идёт (ERC-20 — как обычно), переразверните при верной настройке{:else if w.executor_version === 'v1'}v1 — нативный BNB через форки не торгуется, переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
+    <p class={nativeOk ? 'ok' : 'warn-text'}>Версия: {#if nativeOk}{w.executor_version} — нативный BNB монетой сделки идёт через исполнитель (обёртка <code>{w.executor_wrapped}</code>){singletonNote}{:else if modern}{w.executor_version}, но обёртка в исполнителе <code>{w.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{w.native_wrapped ?? 'не задана'}</code> — нативный BNB через исполнитель не идёт (ERC-20 — как обычно), переразверните при верной настройке{singletonNote}{:else if w.executor_version === 'v1'}v1 — нативный BNB через форки не торгуется, переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
   {/if}
   {#if dex}<ExecutorDeploy venue={dex} wallet={w.id} ondone={onchange} />{/if}
   <form class="inline" onsubmit={(e) => { e.preventDefault(); setExec(exec); exec = ''; }}>

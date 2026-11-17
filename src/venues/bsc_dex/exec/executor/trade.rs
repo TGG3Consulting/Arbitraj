@@ -111,7 +111,7 @@ pub async fn trade(
     {
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
-    if nat.is_some() && version != super::code::Version::V2 {
+    if nat.is_some() && !version.native() {
         let why = format!(
             "исполнитель {executor:#x}: код в сети — версия {}, executeNative нет — нативный BNB не исполняется",
             version.label()

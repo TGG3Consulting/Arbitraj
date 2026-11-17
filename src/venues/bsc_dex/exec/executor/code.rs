@@ -4,7 +4,10 @@
 //! хранилище (из раскладки solc) и проверка хеша: SHA-256 каждого файла должен совпасть с записанным в
 //! ArbExecutor.sha256 — иначе байткод не используется (кто-то поменял артефакт без пересборки).
 //! Решение 272: версии исполнителя — v1 (contracts/out/v1/, только execute; развёрнутые до решения 272) и v2
-//! (contracts/out/, + executeNative). Развёртывается и подставляется в симуляцию только v2; код в сети сверяется с обеими.
+//! (contracts/out/v2/, + executeNative; решение 390 — артефакты заморожены, не пересобираются). Решение 390 (t181): v3
+//! (contracts/out/ — текущая сборка: v2 + шаги UNI_V4 / INF_CL / INF_BIN пулов внутри менеджеров Uniswap V4 и
+//! PancakeSwap Infinity). Развёртывается и подставляется в симуляцию только текущая сборка (v3); код в сети сверяется со
+//! всеми тремя.
 //! Кто вызывает: exec/executor/{deploy, dry}.rs, тесты.
 //! От чего зависит: sha2, serde_json, contracts/out/*.
 //! Настройки: нет.
@@ -33,6 +36,17 @@ const SHA: &str = include_str!(concat!(
     "/contracts/out/ArbExecutor.sha256"
 ));
 
+/// Решение 390 (t181): код в сети версии v2 (до шагов UNI_V4 / INF_CL / INF_BIN) и его хеши — копия contracts/out/ на
+/// HEAD 982e0503, не пересобираются.
+const RUNTIME_V2: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/contracts/out/v2/ArbExecutor.bin-runtime"
+));
+const SHA_V2: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/contracts/out/v2/ArbExecutor.sha256"
+));
+
 /// Решение 272: код в сети версии v1 (до executeNative) и его хеши — не пересобираются.
 const RUNTIME_V1: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -44,12 +58,16 @@ const SHA_V1: &str = include_str!(concat!(
 ));
 
 /// Версия исполнителя по коду в сети (решение 272). Hash — ключ памяти pools/exec_callback.rs (версия, сигнатура).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Порядок (Ord) — порядок выпуска: V1 < V2 < V3; каждая следующая — надмножество предыдущей (решение 390).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Version {
     /// Только execute (contracts/out/v1/): нативный BNB монетой сделки не идёт.
     V1,
-    /// execute + executeNative (contracts/out/): нативный BNB монетой сделки идёт.
+    /// execute + executeNative (contracts/out/v2/): нативный BNB монетой сделки идёт.
     V2,
+    /// Решение 390 (t181): v2 + шаги UNI_V4 / INF_CL / INF_BIN (contracts/out/ — текущая сборка, её разворачивает кнопка
+    /// «Развернуть исполнитель»).
+    V3,
 }
 
 impl Version {
@@ -58,7 +76,13 @@ impl Version {
         match self {
             Version::V1 => "v1",
             Version::V2 => "v2",
+            Version::V3 => "v3",
         }
+    }
+
+    /// Есть ли executeNative (решение 272): у v2 и v3. Ошибок нет.
+    pub fn native(self) -> bool {
+        self >= Version::V2
     }
 
     /// Версия по метке записи кошелька. None — метки нет (не сверена) или незнакомая. Ошибок нет.
@@ -66,21 +90,35 @@ impl Version {
         match s {
             "v1" => Some(Version::V1),
             "v2" => Some(Version::V2),
+            "v3" => Some(Version::V3),
             _ => None,
         }
     }
 }
 
-/// Версия исполнителя по коду в сети: побайтно равен коду v2 или v1 из репозитория. Принимает: код по адресу.
-/// Возвращает: Some(версия) или None — код не наш. Ошибки (текст): артефакт не сверен по хешу.
+/// Версия исполнителя по коду в сети: побайтно равен коду v3 (текущая сборка), v2 или v1 из репозитория. Принимает: код
+/// по адресу. Возвращает: Some(версия) или None — код не наш. Ошибки (текст): артефакт не сверен по хешу.
 pub fn version_of(have: &Bytes) -> Result<Option<Version>, String> {
     if *have == runtime()? {
+        return Ok(Some(Version::V3));
+    }
+    if *have == runtime_v2()? {
         return Ok(Some(Version::V2));
     }
     if *have == runtime_v1()? {
         return Ok(Some(Version::V1));
     }
     Ok(None)
+}
+
+/// Код в сети версии v2 (решение 390: замороженная копия). Ошибки: как checked (хеш — из contracts/out/v2/ArbExecutor.sha256).
+pub fn runtime_v2() -> Result<Bytes, String> {
+    checked_in(
+        SHA_V2,
+        "v2/ArbExecutor.bin-runtime",
+        "ArbExecutor.bin-runtime",
+        RUNTIME_V2,
+    )
 }
 
 /// Код в сети версии v1 (решение 272). Ошибки: как checked (хеш — из contracts/out/v1/ArbExecutor.sha256).
@@ -163,7 +201,7 @@ pub fn creation_with(wnative: alloy_primitives::Address) -> Result<Bytes, String
     Ok(Bytes::from(v))
 }
 
-/// Код исполнителя в сети. Ошибки: как checked.
+/// Код исполнителя в сети — текущая сборка (с решения 390 — v3). Ошибки: как checked.
 pub fn runtime() -> Result<Bytes, String> {
     checked("ArbExecutor.bin-runtime", RUNTIME)
 }

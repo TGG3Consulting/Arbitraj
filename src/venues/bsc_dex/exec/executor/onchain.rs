@@ -1,12 +1,12 @@
 //! Файл: venues/bsc_dex/exec/executor/onchain.rs
 //! Что делает: проверка развёрнутого исполнителя по адресу exec.executor_address (ревью 122, пункт 1) — адрес вводится
 //! руками, поэтому до любого approve и до сделки сверяется: код по адресу (eth_getCode) побайтно равен
-//! contracts/out/ArbExecutor.bin-runtime (как после развёртывания, deploy.rs) — версия v2 — или
-//! contracts/out/v1/ArbExecutor.bin-runtime — версия v1 (решение 272: развёрнутые до него исполнители работают как
-//! раньше), и слот владельца (раскладка solc, code.rs::owner_slot; у v1 и v2 — слот 0) хранит кошелёк бота. Не
+//! contracts/out/ArbExecutor.bin-runtime (как после развёртывания, deploy.rs) — версия v3 (решение 390, t181), или
+//! contracts/out/v2/ArbExecutor.bin-runtime — версия v2, или contracts/out/v1/ArbExecutor.bin-runtime — версия v1
+//! (решения 272 и 390: развёрнутые раньше исполнители работают как раньше), и слот владельца (раскладка solc, code.rs::owner_slot; у v1 и v2 — слот 0) хранит кошелёк бота. Не
 //! совпало — ни разрешения, ни сделки, ошибка с точной причиной. Сверенная версия записывается у кошелька
 //! (settings/accounts/edit_version.rs) — по ней котировка решает, идёт ли нативный BNB через исполнитель (mod.rs).
-//! Ревью 272 (А1): у v2 читается и слот wnative (обёртка из конструктора) — пишется у кошелька рядом с версией и
+//! Ревью 272 (А1): у v2 и v3 читается и слот wnative (обёртка из конструктора) — пишется у кошелька рядом с версией и
 //! сверяется с dex.native_wrapped (mod.rs::native_block); несовпадение — нативный BNB через исполнитель не идёт, причина
 //! в тексте проверки; ERC-20 путь не затронут.
 //! Успешная проверка помнится по паре (адрес, кошелёк) — до смены настройки или кошелька (другая пара — проверка
@@ -113,14 +113,17 @@ async fn inspect(
         return Ok(Err(format!("по адресу {executor:#x} нет кода контракта")));
     }
     let Some(version) = code::version_of(&have).map_err(internal)? else {
-        let (v2, v1) = (
+        let (v3, v2, v1) = (
             code::runtime().map_err(internal)?,
+            code::runtime_v2().map_err(internal)?,
             code::runtime_v1().map_err(internal)?,
         );
         return Ok(Err(format!(
-            "код по адресу {executor:#x} ({} байт) не совпал ни с v2 contracts/out/ArbExecutor.bin-runtime ({} байт), ни \
-             с v1 contracts/out/v1/ArbExecutor.bin-runtime ({} байт)",
+            "код по адресу {executor:#x} ({} байт) не совпал ни с v3 contracts/out/ArbExecutor.bin-runtime ({} байт), ни \
+             с v2 contracts/out/v2/ArbExecutor.bin-runtime ({} байт), ни с v1 contracts/out/v1/ArbExecutor.bin-runtime \
+             ({} байт)",
             have.len(),
+            v3.len(),
             v2.len(),
             v1.len()
         )));
@@ -131,8 +134,9 @@ async fn inspect(
             "владелец исполнителя {owner:#x} — не кошелёк бота {wallet:#x}"
         )));
     }
+    // Слот wnative у v2 и v3 один и тот же (слот 1: хранилище v3 не менялось — решение 390).
     let wrapped = match version {
-        Version::V2 => Some(Address::from_word(
+        Version::V2 | Version::V3 => Some(Address::from_word(
             word(ctx, executor, code::wnative_slot()).await?,
         )),
         Version::V1 => None,
@@ -163,19 +167,33 @@ fn describe(
             "версия v1 (нативный BNB через форки и виды «только исполнитель» не торгуется — переразверните исполнитель)"
                 .to_string()
         }
-        (Version::V2, Some(have), Some(want)) if have == want => {
-            format!("версия v2, обёртка {have:#x} = dex.native_wrapped (нативный BNB монетой сделки идёт)")
-        }
-        (Version::V2, have, want) => format!(
-            "версия v2, но обёртка в исполнителе {} ≠ dex.native_wrapped {} — нативный BNB через этот исполнитель НЕ идёт \
-             (ERC-20 — как обычно; переразверните исполнитель при верной dex.native_wrapped)",
+        (_, Some(have), Some(want)) if have == want => format!(
+            "версия {}, обёртка {have:#x} = dex.native_wrapped (нативный BNB монетой сделки идёт){}",
+            v.label(),
+            v3_note(v)
+        ),
+        (_, have, want) => format!(
+            "версия {}, но обёртка в исполнителе {} ≠ dex.native_wrapped {} — нативный BNB через этот исполнитель НЕ \
+             идёт (ERC-20 — как обычно; переразверните исполнитель при верной dex.native_wrapped){}",
+            v.label(),
             have.map_or("не прочитана".into(), |a| format!("{a:#x}")),
-            want.map_or("(не задана)".into(), |a| format!("{a:#x}"))
+            want.map_or("(не задана)".into(), |a| format!("{a:#x}")),
+            v3_note(v)
         ),
     };
     format!(
         "исполнитель {executor:#x}: код совпал с репозиторием, {what}, владелец — кошелёк бота {wallet:#x}"
     )
+}
+
+/// Решение 390 (t181): хвост текста сверки про шаги пулов внутри менеджеров (Uniswap V4, PancakeSwap Infinity). Ошибок нет.
+fn v3_note(v: Version) -> &'static str {
+    if v >= Version::V3 {
+        "; шаги Uniswap V4 и PancakeSwap Infinity (CL, Bin, Stable) через исполнитель есть"
+    } else {
+        "; шагов Uniswap V4 и PancakeSwap Infinity нет (маршрут, где они смешаны с другими DEX, этим кошельком не \
+         исполняется — переразверните исполнитель)"
+    }
 }
 
 /// Кнопка «Проверить подключение» исполнителя: «Подключено …» или точная причина (адрес не задан, ключ кошелька,

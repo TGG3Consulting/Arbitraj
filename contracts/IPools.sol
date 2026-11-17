@@ -203,3 +203,89 @@ interface ILBPair {
     function getTokenX() external view returns (address);
     function swap(bool swapForY, address to) external returns (bytes32 amountsOut);
 }
+
+// Решение 390 (t181, исполнитель v3): пулы внутри общего менеджера — Uniswap V4 и PancakeSwap Infinity (CL, Bin;
+// Infinity Stable — пул в крючке пула CL). Обмен идёт только внутри «открытого» менеджера: исполнитель зовёт unlock
+// (Uniswap) / lock (Infinity), менеджер вызывает у него unlockCallback / lockAcquired, внутри — swap, затем долг входа
+// гасится sync → перевод токена менеджеру → settle, выход забирается take; к концу обратного вызова у вызывающего не
+// должно остаться ненулевых дельт (иначе менеджер откатывает всё).
+// Uniswap/v4-core@bea7f6d1c11cd5dc4f0d5151ffa37a1c239feee6: src/interfaces/IPoolManager.sol L114 (unlock), L145-L147
+// (swap → BalanceDelta = int256), L171 (sync), L179 (take), L183 (settle); src/PoolManager.sol L104-L114 (unlock: зовёт
+// IUnlockCallback(msg.sender).unlockCallback, затем NonzeroDeltaCount должен быть 0), L187-L227 (swap: дельта вызывающего
+// — _accountPoolBalanceDelta(key, swapDelta, msg.sender), дельты крючка — на адрес крючка), L279-L288, L291-L302,
+// L349-L365 (sync / take / settle: оплачено = баланс менеджера − резерв после sync); src/interfaces/callback/
+// IUnlockCallback.sol L9; src/types/PoolKey.sol (currency0, currency1, fee uint24, tickSpacing int24, hooks);
+// src/types/PoolOperation.sol L19-L26 (SwapParams: amountSpecified < 0 — точный вход); src/interfaces/IExttload.sol L9 и
+// src/libraries/TransientStateLibrary.sol L35-L43 (дельта вызывающего = exttload(keccak256(target, currency))).
+// Порядок «sync → перевод → settle» и «take» — как в официальной периферии: Uniswap/v4-periphery@0c4e5bd3
+// src/base/DeltaResolver.sol L38-L48, L60-L76.
+struct V4PoolKey {
+    address currency0;
+    address currency1;
+    uint24 fee;
+    int24 tickSpacing;
+    address hooks;
+}
+
+struct V4SwapParams {
+    bool zeroForOne;
+    int256 amountSpecified;
+    uint160 sqrtPriceLimitX96;
+}
+
+interface IV4PoolManager {
+    function unlock(bytes calldata data) external returns (bytes memory);
+    function swap(V4PoolKey memory key, V4SwapParams memory params, bytes calldata hookData)
+        external
+        returns (int256 swapDelta);
+    function exttload(bytes32 slot) external view returns (bytes32 value);
+}
+
+// PancakeSwap Infinity: pancakeswap/infinity-core@3c5ef1be1f71442d8bc60cc6fd11f9c677b714df — src/Vault.sol L74-L86 (lock:
+// зовёт ILockCallback(msg.sender).lockAcquired, затем непогашенных дельт быть не должно), L143-L148 (take), L158-L175
+// (sync, settle), L238-L253 (_settle: оплачено = баланс − резерв после sync); src/interfaces/IVault.sol L56
+// (currencyDelta(settler, currency)); src/interfaces/ILockCallback.sol L9; src/types/PoolKey.sol (currency0, currency1,
+// hooks, poolManager, fee uint24, parameters bytes32); src/pool-cl/CLPoolManager.sol L162-L212 (swap: дельта
+// вызывающего пишется в Vault на msg.sender — libraries/VaultAppDeltaSettlement.sol L12-L21);
+// src/pool-cl/interfaces/ICLPoolManager.sol L150-L154 (SwapParams); src/pool-bin/interfaces/IBinPoolManager.sol L187-L193
+// (swap(key, swapForY, int128 amountSpecified < 0 — точный вход, hookData)); src/pool-bin/BinPoolManager.sol L133-L177.
+// Порядок «sync → перевод → settle» — pancakeswap/infinity-periphery@56a7a4f5 src/base/DeltaResolver.sol L35-L45.
+struct InfPoolKey {
+    address currency0;
+    address currency1;
+    address hooks;
+    address poolManager;
+    uint24 fee;
+    bytes32 parameters;
+}
+
+struct InfClSwapParams {
+    bool zeroForOne;
+    int256 amountSpecified;
+    uint160 sqrtPriceLimitX96;
+}
+
+interface IInfVault {
+    function lock(bytes calldata data) external returns (bytes memory);
+    function currencyDelta(address settler, address currency) external view returns (int256);
+}
+
+interface IInfClPoolManager {
+    function swap(InfPoolKey memory key, InfClSwapParams memory params, bytes calldata hookData)
+        external
+        returns (int256 delta);
+}
+
+interface IInfBinPoolManager {
+    function swap(InfPoolKey memory key, bool swapForY, int128 amountSpecified, bytes calldata hookData)
+        external
+        returns (int256 delta);
+}
+
+// Общие для менеджера Uniswap V4 и Vault Infinity (одинаковые подписи и селекторы): sync(Currency) — Currency = address
+// в ABI; take(Currency, address, uint256); settle() payable. Ссылки на строки — выше.
+interface ISingletonSettle {
+    function sync(address currency) external;
+    function take(address currency, address to, uint256 amount) external;
+    function settle() external payable returns (uint256 paid);
+}

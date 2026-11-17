@@ -3,11 +3,12 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; сверяет тест tests/bsc_dex_executor_abi.rs с
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 390 (t181); сверяет тест tests/bsc_dex_executor_abi.rs с
 //! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
 //! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), METRIC — (bool zeroForOne),
-//! BALANCER — (bytes32 poolId), остальные — пусто.
+//! BALANCER — (bytes32 poolId), UNI_V4 — abi.encode(PoolKey Uniswap V4), INF_CL / INF_BIN — abi.encode(PoolKey
+//! Infinity) (кодирование ключа — pools/key.rs, то же, что даёт PoolId), остальные — пусто.
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
 //! От чего зависит: exec/executor/abi.rs, alloy sol-types.
 //! Настройки: нет.
@@ -18,6 +19,7 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 
 use super::super::super::pools::stable_native;
 use super::abi::ArbExecutor;
+pub use super::kind_key::{InfKey, V4Key};
 
 /// Нативная монета в пулах StableSwap — BNB_ADDRESS PancakeSwap Stable (pancake-smart-contracts@cb079908
 /// PancakeStableSwapTwoPool.sol L39) и Lista (moolah@eb7d73a StableSwapPool.sol L54); константа протокола, не настройка
@@ -78,6 +80,13 @@ pub enum Params {
     /// Пул Liquidity Book V2.1 (решение 290; только исполнитель v2): вход переводом в пул, swap(swapForY, to);
     /// направление контракт берёт по getTokenX() пула (порядок X/Y — создателя пула, не адреса). Данных нет.
     Lb,
+    /// Решение 390 (t181; только исполнитель v3): пул Uniswap V4 внутри PoolManager — ключ пула; пул шага — PoolManager.
+    UniV4 { key: V4Key },
+    /// Решение 390 (только v3): пул PancakeSwap Infinity CL (и Infinity Stable — пул в крючке CL) — ключ пула (менеджер —
+    /// в ключе); пул шага — Vault Infinity (dex.vault).
+    InfCl { key: InfKey },
+    /// Решение 390 (только v3): пул PancakeSwap Infinity Bin — ключ пула; пул шага — Vault Infinity (dex.vault).
+    InfBin { key: InfKey },
 }
 
 impl Params {
@@ -103,6 +112,9 @@ impl Params {
             Params::Smardex => 16,
             Params::Balancer { .. } => 17,
             Params::Lb => 18,
+            Params::UniV4 { .. } => 19,
+            Params::InfCl { .. } => 20,
+            Params::InfBin { .. } => 21,
         }
     }
 
@@ -122,6 +134,9 @@ impl Params {
             }
             Params::Metric { zero_for_one } => Bytes::from(zero_for_one.abi_encode()),
             Params::Balancer { pool_id } => Bytes::from(pool_id.abi_encode()),
+            // Решение 390: abi.encode(ключ) — статическая структура, слова подряд (как PoolId — keccak тех же байт).
+            Params::UniV4 { key } => Bytes::from(key.pool_key().abi()),
+            Params::InfCl { key } | Params::InfBin { key } => Bytes::from(key.pool_key().abi()),
             _ => Bytes::new(),
         }
     }
@@ -141,13 +156,26 @@ pub struct StepSpec {
 
 /// Кодирует шаг в тип ABI контракта. Принимает: шаг. Возвращает: Step. Ошибки (текст): доля вне 1…10000, токены входа и
 /// выхода совпадают, токен шага StableSwap — метка нативной монеты 0xEeee… (не ERC-20: шаг с BNB пула — STABLE_U256_BNB с
-/// токеном WBNB), нулевой адрес — контракт отверг бы такой шаг откатом, здесь — до отправки.
+/// токеном WBNB), нулевой адрес, у шага пула внутри менеджера (решение 390) токены не валюты ключа или нативная валюта в
+/// ключе — контракт отверг бы такой шаг откатом, здесь — до отправки.
 pub fn encode(s: &StepSpec) -> Result<ArbExecutor::Step, String> {
     if s.share_bps == 0 || s.share_bps > ALL_BPS {
         return Err(format!("доля шага {} bps вне 1…{ALL_BPS}", s.share_bps));
     }
     if s.token_in == s.token_out {
         return Err("у шага одинаковые токены входа и выхода".into());
+    }
+    // Решение 390: шаг пула внутри менеджера — токены шага ровно валюты ключа, обе ERC-20 (иначе контракт:
+    // «key» / «native»);
+    // до проверки нулевого адреса — у пула с нативной валютой причина точнее.
+    match s.params {
+        Params::UniV4 { key } => {
+            super::kind_key::check_tokens((key.currency0, key.currency1), s.token_in, s.token_out)?
+        }
+        Params::InfCl { key } | Params::InfBin { key } => {
+            super::kind_key::check_tokens((key.currency0, key.currency1), s.token_in, s.token_out)?
+        }
+        _ => {}
     }
     if s.pool.is_zero() || s.token_in.is_zero() || s.token_out.is_zero() {
         return Err("у шага нулевой адрес пула или токена".into());

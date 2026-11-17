@@ -16,9 +16,13 @@ use super::super::pools::exec_kind;
 use super::super::pools::families::Family;
 use super::{executor, native};
 
-/// Идёт ли BNB через пул этого вида шагом исполнителя v2. Принимает: окружение, вид пула. Ошибок нет.
+/// Идёт ли BNB через пул этого вида шагом исполнителя v2. Решение 390: шаги пулов внутри менеджеров (UNI_V4 / INF_*,
+/// ExecKind::singleton) нативную монету сделки не несут — как до решения 390 (газ обёртки через них не мерится).
+/// Принимает: окружение, вид пула. Ошибок нет.
 pub fn exec_ok(ctx: &Ctx, f: &Family) -> bool {
-    exec_kind::via_executor(ctx, f) && executor::native_capable(ctx)
+    exec_kind::via_executor(ctx, f)
+        && !f.executor_kind.is_some_and(|k| k.singleton())
+        && executor::native_capable(ctx)
 }
 
 /// Годится ли пул на стороне BNB: V2/V3 со своим путём (как до решения 272, native::pool_ok) или шаг исполнителя v2.

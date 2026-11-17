@@ -14,7 +14,9 @@
 //   Сценарии ревью 272 (А4: замок locked, обратные вызовы, злой пул V3, поддельная обёртка, подкинутый BNB, правило
 //   «native step», многошаговые маршруты и доли, V3, deadline) — review.mjs, запускаются отсюда. Шаг NOMI_STABLE
 //   (решение 284: пара-фикстура Nomiswap Stable, v1 — «kind») — nomi.mjs; шаг METRIC (решение 285) — metric.mjs; шаг IZI (решение 286) — izi.mjs; шаг KYBER_DMM (решение 287) — dmm.mjs; шаг SMARDEX (решение 288) — smardex.mjs; шаг BALANCER (решение 289) — balancer.mjs; шаг LB (решение 290) — lb.mjs;
-//   тоже отсюда.
+//   шаги UNI_V4 / INF_CL / INF_BIN исполнителя v3 (решение 390, t181: официальные PoolManager Uniswap V4 и Vault / CL / Bin
+//   PancakeSwap Infinity, v2 и v1 — «kind») — singleton.mjs; тоже отсюда. С решения 390 `v2` в проверках — текущая сборка
+//   contracts/out/ (исполнитель v3, надмножество v2); замороженная v2 — contracts/out/v2/ (сверка с ней — singleton.mjs).
 // Кто вызывает: человек или агент: `cd contracts/evmtest && npm ci && node run.mjs` (README.md папки).
 // От чего зависит: lib.mjs, world.mjs, review.mjs, contracts/*, vendor/*, fixtures/*.
 // Настройки: нет.
@@ -31,6 +33,7 @@ import { dmm } from './dmm.mjs';
 import { smardex } from './smardex.mjs';
 import { balancer } from './balancer.mjs';
 import { lb } from './lb.mjs';
+import { singleton } from './singleton.mjs';
 
 const { check, must, view } = L;
 const { E18, OWNER, LP, OTHER, ERC20, FACT, PAIR, WETH, RE, v2, v1, world, v2Step, stStep, nat, exe, settled, bal, v2Out } = W;
@@ -40,7 +43,7 @@ const record = { note: 'EVM ethereumjs Cancun, contracts/out/ArbExecutor.bin-run
 // 1) Сборка и сверка с out/.
 const built = L.compile(L.solc08, join(L.here, '..'), 'ArbExecutor.sol', 'ArbExecutor', W.opt);
 check(built.runtime === v2.runtime && built.bin === v2.bin, 'contracts/out/ArbExecutor.* = компиляция ArbExecutor.sol');
-console.log(`размер кода в сети v2: ${v2.runtime.length / 2} байт (EIP-170: 24576, запас ${24576 - v2.runtime.length / 2})`);
+console.log(`размер кода в сети текущей сборки (v3): ${v2.runtime.length / 2} байт (EIP-170: 24576, запас ${24576 - v2.runtime.length / 2})`);
 
 // 2) Продажа BNB.
 {
@@ -162,6 +165,10 @@ await dmm();
 await smardex();
 await balancer();
 await lb();
+const steps = await singleton();
+const out3 = join(L.here, '..', '..', 'tests', 'data', 'executor_v3_evm_2026-11-17');
+mkdirSync(out3, { recursive: true });
+writeFileSync(join(out3, 'singleton_steps.json'), JSON.stringify(steps, null, 2) + '\n');
 const out = join(L.here, '..', '..', 'tests', 'data', 'executor_v2_evm_2026-11-14');
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'native_settled.json'), JSON.stringify(record, null, 2) + '\n');

@@ -18,6 +18,7 @@ pub mod dry;
 pub mod entry;
 pub mod fact;
 pub mod kind;
+pub mod kind_key;
 pub mod onchain;
 pub mod prep_refetch;
 pub mod remeasure;
@@ -47,7 +48,7 @@ pub fn native_capable(ctx: &Ctx) -> bool {
 }
 
 /// Решение 272 (+ ревью А1): почему нативный BNB монетой сделки НЕ идёт через исполнитель кошелька окружения. None —
-/// идёт: исполнитель задан, сверен как v2 (onchain.rs → запись кошелька) и обёртка, записанная в его конструкторе
+/// идёт: исполнитель задан, сверен как v2 или v3 (onchain.rs → запись кошелька) и обёртка, записанная в его конструкторе
 /// (слот wnative, прочитан при сверке), равна dex.native_wrapped. Иначе — точная причина (v1 / не сверен / обёртка не
 /// та / настройка не задана); поведение — как до решения 272 (ERC-20 путь не затронут). Ошибок нет.
 pub fn native_block(ctx: &Ctx) -> Option<String> {
@@ -59,7 +60,8 @@ pub fn native_block(ctx: &Ctx) -> Option<String> {
         return Some(format!("у кошелька «{}» не развёрнут исполнитель", w.name));
     };
     match w.executor_version.as_deref().and_then(code::Version::parse) {
-        Some(code::Version::V2) => {}
+        // Решение 390: v3 — надмножество v2 (executeNative тот же).
+        Some(code::Version::V2 | code::Version::V3) => {}
         Some(code::Version::V1) => {
             return Some(format!(
                 "у кошелька «{}» исполнитель {x} версии v1 (executeNative нет) — переразверните исполнитель",

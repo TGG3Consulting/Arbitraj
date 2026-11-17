@@ -19,6 +19,9 @@
 //! exec/executor/code.rs (runtime, runtime_v1, Version).
 //! Решение 284: то же правило для вида шага, которого нет в исполнителе v1 (NOMI_STABLE = 12 — только v2): у кошелька
 //! v1 — пулы DEX без пути исполнения с причиной «переразверните исполнитель»; версия не сверена — «не сверен».
+//! Решение 390 (t181): шаги пулов внутри менеджеров — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только у исполнителя v3
+//! (since): у кошелька v1 / v2 — пулы Uniswap V4 / PancakeSwap Infinity без пути ЧЕРЕЗ ИСПОЛНИТЕЛЬ (свой Universal Router у
+//! них остаётся — family.tradable); артефакт версии для поиска селектора: v1 — out/v1/, v2 — out/v2/, v3 — out/.
 //! Настройки: dex.v3_swap_callback [DEX] (необязательная).
 
 use std::collections::HashMap;
@@ -53,7 +56,8 @@ pub fn check(v: Version, sig: &str) -> Option<String> {
     let sel = registry_key::selector(sig);
     let rt = match v {
         Version::V1 => code::runtime_v1(),
-        Version::V2 => code::runtime(),
+        Version::V2 => code::runtime_v2(),
+        Version::V3 => code::runtime(),
     };
     let ver = v.label();
     match rt {
@@ -109,33 +113,52 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
         .clone()
 }
 
-/// Решение 284: вид шага есть только в исполнителе v2 (номер вида добавлен в contracts/ArbExecutor.sol после v1:
-/// NOMI_STABLE = 12, METRIC = 13, IZI = 14 — решение 286, KYBER_DMM = 15 — решение 287, SMARDEX = 16 — решение 288, BALANCER = 17 — решение 289, LB = 18 — решение 290; у v1 диспетчер _step откатывает «kind»). Принимает: вид шага. Ошибок нет.
-pub fn v2_only(k: ExecKind) -> bool {
-    matches!(
-        k,
+/// С какой версии исполнителя есть вид шага (у более ранней диспетчер _step откатывает «kind»). Решение 284: v2 —
+/// NOMI_STABLE = 12, METRIC = 13, IZI = 14 — решение 286, KYBER_DMM = 15 — решение 287, SMARDEX = 16 — решение 288,
+/// BALANCER = 17 — решение 289, LB = 18 — решение 290. Решение 390 (t181): v3 — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21.
+/// Остальные — с v1. Принимает: вид шага. Ошибок нет.
+pub fn since(k: ExecKind) -> Version {
+    match k {
         ExecKind::NomiStable
-            | ExecKind::Metric
-            | ExecKind::Izi
-            | ExecKind::KyberDmm
-            | ExecKind::Smardex
-            | ExecKind::Balancer
-            | ExecKind::Lb
-    )
+        | ExecKind::Metric
+        | ExecKind::Izi
+        | ExecKind::KyberDmm
+        | ExecKind::Smardex
+        | ExecKind::Balancer
+        | ExecKind::Lb => Version::V2,
+        ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => Version::V3,
+        _ => Version::V1,
+    }
 }
 
-/// Нет ли у исполнителя кошелька окружения вида шага этой DEX (решение 284). Принимает: окружение, вид. Возвращает:
-/// None — вид шага есть у обеих версий, кошелёк без исполнителя (решает executor_set) или исполнитель v2; Some —
-/// причина (исполнитель v1 / версия не сверена). Ошибок нет.
+/// Вид шага появился в v2 (решения 284–290: есть у v2 и v3, нет у v1) — прежнее имя, им пользуются тесты видов. Ошибок нет.
+pub fn v2_only(k: ExecKind) -> bool {
+    since(k) == Version::V2
+}
+
+/// Причина «у исполнителя версии v нет вида шага k» (решения 284, 390): None — есть. Принимает: вид, версию. Ошибок нет.
+pub fn step_absent(k: ExecKind, v: Version) -> Option<String> {
+    let need = since(k);
+    (v < need).then(|| {
+        format!(
+            "исполнитель {} не знает шаг исполнителя {} (вид шага есть с {}) — переразверните исполнитель кошелька \
+             (экран «Маппинг кошельков»)",
+            v.label(),
+            k.name(),
+            need.label()
+        )
+    })
+}
+
+/// Нет ли у исполнителя кошелька окружения вида шага этой DEX (решения 284, 390). Принимает: окружение, вид.
+/// Возвращает: None — вид шага есть с v1, кошелёк без исполнителя (решает executor_set) или сверенная версия не ниже
+/// since(вид); Some — причина (версия ниже / версия не сверена). Ошибок нет.
 pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
-    let k = f.executor_kind.filter(|k| v2_only(*k))?;
+    let k = f.executor_kind.filter(|k| since(*k) > Version::V1)?;
     let what = format!("шаг исполнителя {}", k.name());
     match wallet_version(ctx, &what) {
-        Ok(Some(Version::V1)) => Some(format!(
-            "исполнитель v1 не знает {what} (вид шага есть только в v2) — переразверните исполнитель кошелька \
-             (экран «Маппинг кошельков»)"
-        )),
-        Ok(_) => None,
+        Ok(Some(v)) => step_absent(k, v),
+        Ok(None) => None,
         Err(why) => Some(why),
     }
 }

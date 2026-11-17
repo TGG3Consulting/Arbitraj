@@ -16,7 +16,10 @@
 // после транзакции BNB на контракте нет.
 // Версии: v1 — только execute (артефакты contracts/out/v1/, развёрнутые до решения 272); v2 — + executeNative
 // (нативный BNB монетой сделки, решение 272). Селектор и ABI execute у v1 и v2 одинаковы. У v2 конструктор принимает
-// адрес обёртки нативной монеты (wnative, слот 1 — один раз, сеттера нет; ревью 272, А1).
+// адрес обёртки нативной монеты (wnative, слот 1 — один раз, сеттера нет; ревью 272, А1). v3 (решение 390, t181) —
+// + шаги пулов внутри общего менеджера: UNI_V4 (Uniswap V4 PoolManager: unlock → unlockCallback), INF_CL и INF_BIN
+// (PancakeSwap Infinity Vault: lock → lockAcquired; Infinity Stable — пул в крючке пула CL, тот же INF_CL). execute,
+// executeNative, хранилище (owner — слот 0, wnative — слот 1) и прежние виды — без изменений.
 pragma solidity 0.8.37;
 
 import "./IPools.sol";
@@ -61,6 +64,14 @@ contract ArbExecutor {
     // вход = баланс − резерв и платит выход `to` по бинам (без обратного вызова); swapForY = (getTokenX() пула == tokenIn)
     // — порядок X/Y задаёт создатель пула, не адреса. data пусто.
     uint8 internal constant LB = 18;
+    // Решение 390 (t181, только v3): пулы внутри общего менеджера. s.pool — контракт, который открывают для обмена:
+    // UNI_V4 — PoolManager Uniswap V4 (unlock / unlockCallback), INF_CL / INF_BIN — Vault PancakeSwap Infinity (lock /
+    // lockAcquired; обмен — у key.poolManager: CLPoolManager / BinPoolManager). data = abi.encode(ключ пула): UNI_V4 —
+    // V4PoolKey, INF_* — InfPoolKey (IPools.sol). Направление — по токенам шага (tokenIn == currency0 → zeroForOne /
+    // swapForY); токены шага должны быть ровно валютами ключа; нативная валюта (address 0) — не шаг исполнителя.
+    uint8 internal constant UNI_V4 = 19;
+    uint8 internal constant INF_CL = 20;
+    uint8 internal constant INF_BIN = 21;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -79,7 +90,8 @@ contract ArbExecutor {
     // data: V2 — abi.encode(uint32 feePips); CURVE — abi.encode(int128 i, int128 j); STABLE_U256 — abi.encode(uint256 i,
     // uint256 j); SADDLE — abi.encode(uint8 i, uint8 j); STABLE_U256_BNB — abi.encode(uint256 i, uint256 j, bool bnbIn)
     // (bnbIn: true — монета i пула нативная, tokenIn = WBNB; false — монета j нативная, tokenOut = WBNB); METRIC — abi.encode(bool
-    // zeroForOne); BALANCER — abi.encode(bytes32 poolId); остальные — пусто.
+    // zeroForOne); BALANCER — abi.encode(bytes32 poolId); UNI_V4 — abi.encode(V4PoolKey); INF_CL / INF_BIN —
+    // abi.encode(InfPoolKey); остальные — пусто.
     struct Step {
         uint8 kind;
         address pool;
@@ -106,6 +118,9 @@ contract ArbExecutor {
     // exchange; в остальное время 0 — любой приход BNB откатывается. Отдельно от expPool: пул с выходом в BNB не
     // должен получить право на _pay (expToken/expMax прошлого шага).
     address transient bnbFrom;
+    // Решение 390 (v3): хеш данных обратного вызова менеджера текущего шага (UNI_V4 / INF_*). unlockCallback /
+    // lockAcquired исполняет обмен только от expPool (менеджер / Vault шага) и только с этими данными — один раз.
+    bytes32 transient expHash;
 
     // Решение 272: итог нативной стороны executeNative — пришло BNB (value) и ушло владельцу BNB (остаток / покупка).
     event NativeSettled(uint256 nativeIn, uint256 nativeOut);
@@ -332,6 +347,8 @@ contract ArbExecutor {
             // L544; выход — transfer `to` (L552-L556). getTokenX — аргумент клона (L132-L134).
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             ILBPair(s.pool).swap(ILBPair(s.pool).getTokenX() == s.tokenIn, to);
+        } else if (k == UNI_V4 || k == INF_CL || k == INF_BIN) {
+            _singleton(s, amount, to);
         } else if (k == WOO) {
             uint256 had = IERC20(s.tokenIn).balanceOf(s.pool);
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
@@ -485,6 +502,97 @@ contract ArbExecutor {
     function maverickV2SwapCallback(address tokenIn, uint256 amountIn, uint256, bytes calldata) external {
         require(tokenIn == expToken, "token");
         _pay(_int(amountIn));
+    }
+
+    // Решение 390 (v3): шаг пула внутри общего менеджера (UNI_V4 / INF_CL / INF_BIN). Открывает менеджер (s.pool):
+    // Uniswap V4 — PoolManager.unlock (v4-core PoolManager.sol L104-L114), Infinity — Vault.lock (infinity-core Vault.sol
+    // L74-L86); менеджер вызывает у исполнителя unlockCallback / lockAcquired с теми же данными — там обмен и расчёт
+    // (_singletonCb). Обратный вызов пускается только от s.pool и только с данными этого шага (хеш в transient) — после
+    // него expPool и expHash стёрты; не было вызова — откат «cb». Сумма ≤ int128 (дельты менеджеров — int128).
+    function _singleton(Step calldata s, uint256 amount, address to) internal {
+        require(amount <= uint256(uint128(type(int128).max)), "int");
+        bytes memory cb = abi.encode(s.kind, s.tokenIn, s.tokenOut, amount, to, s.data);
+        expPool = s.pool;
+        expHash = keccak256(cb);
+        if (s.kind == UNI_V4) IV4PoolManager(s.pool).unlock(cb);
+        else IInfVault(s.pool).lock(cb);
+        require(expHash == bytes32(0), "cb");
+    }
+
+    // Обратные вызовы менеджеров (v4-core IUnlockCallback.sol L9; infinity-core ILockCallback.sol L9). Ответ пуст.
+    function unlockCallback(bytes calldata data) external returns (bytes memory) {
+        _singletonCb(data, true);
+        return "";
+    }
+
+    function lockAcquired(bytes calldata data) external returns (bytes memory) {
+        _singletonCb(data, false);
+        return "";
+    }
+
+    // Обмен внутри открытого менеджера: только менеджер текущего шага (expPool) и только данные шага (expHash), один раз
+    // (оба стираются до обмена — повторный вход из крючка откатится «pool»). Обмен с точным входом amount (amountSpecified
+    // = −amount; предел цены CL — MIN+1 / MAX−1, у Bin предела нет). Затем — дельты ИСПОЛНИТЕЛЯ у менеджера (как
+    // DeltaResolver периферии: _getFullDebt / _getFullCredit): по токену входа долг 0 < долг ≤ amount (крючок не может
+    // взять больше суммы шага), по токену выхода — кредит > 0; долг гасится sync → перевод ровно долга менеджеру →
+    // settle (оплачено = прирост баланса менеджера — токен с налогом на перевод недоплатит, менеджер откатит), кредит
+    // забирается take прямо получателю шага `to` (владелец — если это выход маршрута). После этого дельт у исполнителя
+    // нет, иначе менеджер откатит всё (CurrencyNotSettled). Ошибки: «pool», «kind», «key», «native», «owed», «out».
+    function _singletonCb(bytes calldata data, bool uni) internal {
+        address m = expPool;
+        require(m != address(0) && msg.sender == m && keccak256(data) == expHash, "pool");
+        expPool = address(0);
+        expHash = bytes32(0);
+        (uint8 k, address tIn, address tOut, uint256 amount, address to, bytes memory kd) =
+            abi.decode(data, (uint8, address, address, uint256, address, bytes));
+        require(uni == (k == UNI_V4), "kind");
+        if (uni) _swapV4(m, kd, tIn, tOut, amount);
+        else _swapInf(k, kd, tIn, tOut, amount);
+        int256 debt = _delta(m, tIn, uni);
+        int256 credit = _delta(m, tOut, uni);
+        require(debt < 0 && uint256(-debt) <= amount, "owed");
+        require(credit > 0, "out");
+        ISingletonSettle(m).sync(tIn);
+        _transfer(tIn, m, uint256(-debt));
+        ISingletonSettle(m).settle();
+        ISingletonSettle(m).take(tOut, to, uint256(credit));
+    }
+
+    // Uniswap V4: PoolManager.swap(ключ, (zeroForOne, −amount, предел), «») (v4-core PoolManager.sol L187-L227).
+    function _swapV4(address m, bytes memory kd, address tIn, address tOut, uint256 amount) internal {
+        V4PoolKey memory key = abi.decode(kd, (V4PoolKey));
+        bool zf = _dir(key.currency0, key.currency1, tIn, tOut);
+        IV4PoolManager(m).swap(key, V4SwapParams(zf, -int256(amount), zf ? MIN_PRICE : MAX_PRICE), "");
+    }
+
+    // Infinity: обмен у менеджера пула из ключа (CLPoolManager.sol L162-L212 / BinPoolManager.sol L133-L177); дельта
+    // пишется в Vault на вызывающего — исполнитель (VaultAppDeltaSettlement.sol L12-L21). Менеджер чужого Vault или
+    // незарегистрированный в нём — Vault откатит (onlyRegisteredApp / NoLocker).
+    function _swapInf(uint8 k, bytes memory kd, address tIn, address tOut, uint256 amount) internal {
+        InfPoolKey memory key = abi.decode(kd, (InfPoolKey));
+        bool zf = _dir(key.currency0, key.currency1, tIn, tOut);
+        if (k == INF_CL) {
+            InfClSwapParams memory p = InfClSwapParams(zf, -int256(amount), zf ? MIN_PRICE : MAX_PRICE);
+            IInfClPoolManager(key.poolManager).swap(key, p, "");
+        } else {
+            require(k == INF_BIN, "kind");
+            IInfBinPoolManager(key.poolManager).swap(key, zf, -int128(int256(amount)), "");
+        }
+    }
+
+    // Направление по валютам ключа: токены шага — ровно currency0 / currency1 (иначе «key»), ERC-20 (нативная валюта
+    // address 0 — «native»). Возвращает: tIn == currency0 (zeroForOne / swapForY).
+    function _dir(address c0, address c1, address tIn, address tOut) internal pure returns (bool) {
+        require(c0 != address(0), "native");
+        require((tIn == c0 && tOut == c1) || (tIn == c1 && tOut == c0), "key");
+        return tIn == c0;
+    }
+
+    // Дельта исполнителя у менеджера по валюте: Uniswap V4 — exttload(keccak256(исполнитель, валюта))
+    // (TransientStateLibrary.sol L35-L43), Infinity — Vault.currencyDelta(исполнитель, валюта) (IVault.sol L56).
+    function _delta(address m, address currency, bool uni) internal view returns (int256) {
+        if (!uni) return IInfVault(m).currencyDelta(address(this), currency);
+        return int256(uint256(IV4PoolManager(m).exttload(keccak256(abi.encode(address(this), currency)))));
     }
 
     // Оплата пулу текущего шага: только он, только токеном шага, не больше суммы шага, один раз.

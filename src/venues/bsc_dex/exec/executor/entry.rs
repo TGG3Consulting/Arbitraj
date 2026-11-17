@@ -10,9 +10,14 @@
 //! Монета пары — нативный BNB пула (StableData.native, в паре — обёртка WBNB; решение «122 X (нативный BNB в
 //! стейблсвапах)»): вид STABLE_U256_BNB (bnb_in — по тому, вход это или выход); у CURVE / SADDLE — отказ.
 //! Решение 273: пул Solidly с фабрикой на паузе — шаг не строится (NoRoute с причиной).
+//! Решение 390 (t181): пул внутри менеджера (Uniswap V4 — PoolRef::Singleton PoolManager; Infinity CL / Bin — Singleton
+//! своего менеджера; Infinity Stable — Contract(крючок)) — шаги UNI_V4 / INF_CL / INF_BIN исполнителя v3: ключ пула из
+//! реестра (Entry.key) сверяется с ссылкой (PoolId ключа = id ссылки и менеджер ключа = менеджер ссылки; у Infinity
+//! Stable — крючок ключа = адрес пула), пул шага — PoolManager (V4) или Vault Infinity (dex.vault).
 //! Кто вызывает: exec/executor/{call, mod}.rs, quote/graph_exec.rs.
 //! От чего зависит: exec/executor/kind.rs, pools/{registry, families, exec_kind}.rs, quote/pool_quote.rs (v2_fee_pct).
-//! Настройки: через pool_quote — dex.v2_fee_pct [DEX] (если у пары нет своей комиссии).
+//! Настройки: через pool_quote — dex.v2_fee_pct [DEX] (если у пары нет своей комиссии); dex.vault [DEX вида
+//! pancakeswap_infinity_* / pancake_infinity_stable] — для шагов INF_CL / INF_BIN.
 
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
@@ -24,10 +29,11 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::super::ctx::Ctx;
 use super::super::super::pools::exec_kind::ExecKind;
 use super::super::super::pools::families::Family;
+use super::super::super::pools::key::PoolKey;
 use super::super::super::pools::registry::Entry;
 use super::super::super::pools::stable_native;
 use super::super::super::quote::pool_quote;
-use super::kind::{Params, STABLE_NATIVE};
+use super::kind::{InfKey, Params, STABLE_NATIVE, V4Key};
 
 /// Может ли шаг через этот пул идти исполнителем: у семейства есть вид шага (Family.executor_kind) и у пула свой
 /// контракт. Принимает: семейство и ссылку на пул (хватает хопа маршрута). Возвращает: вид шага и адрес пула или
@@ -42,6 +48,9 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
         PoolRef::Member { contract, .. } => Ok((k, *contract)),
         // Решение 295: пара многомонетного пула — шаг по контракту пула (индексы/токены — из записи пары).
         PoolRef::Multi { contract, .. } => Ok((k, *contract)),
+        // Решение 390: пул внутри менеджера — только шаги UNI_V4 / INF_* (исполнитель v3); адрес — менеджер ссылки (у
+        // Infinity шаг вызывает Vault — его даёт params по dex.vault).
+        PoolRef::Singleton { manager, .. } if k.singleton() => Ok((k, *manager)),
         PoolRef::Singleton { .. } => Err(format!(
             "{}: пул внутри менеджера исполнитель не вызывает",
             f.id
@@ -141,12 +150,62 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
+        ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => {
+            return singleton(ctx, e, k);
+        }
         ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
             stable(e, k, token_in, stable_native::wrapped(ctx))
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
         }
     };
     Ok((p, pool))
+}
+
+/// Решение 390: шаг пула внутри менеджера. Ключ — из реестра (Entry.key, его же берёт Universal Router — exec/swap_v4.rs),
+/// сверка с ссылкой: Singleton — PoolId ключа = id и менеджер ключа (у Infinity) = менеджер ссылки; Contract (Infinity
+/// Stable) — крючок ключа = адрес пула. Пул шага: UNI_V4 — PoolManager (адрес ссылки), INF_* — Vault (dex.vault DEX).
+/// Принимает: окружение, пул, вид. Возвращает: параметры и адрес пула шага. Ошибки: NoRoute — нет ключа, ключ не того
+/// вида или не сходится со ссылкой; NotConfigured — dex.vault не задана.
+fn singleton(ctx: &Ctx, e: &Entry, k: ExecKind) -> GatewayResult<(Params, Address)> {
+    let no = |w: String| ctx.err(ErrorCode::NoRoute, format!("{}: {w}", e.family.id));
+    let key = e
+        .key
+        .as_ref()
+        .ok_or_else(|| no("у пула нет ключа PoolKey".into()))?;
+    match &e.pool.reference {
+        PoolRef::Singleton { manager, id } => {
+            if key.id() != *id {
+                return Err(no(format!("PoolId ключа {} ≠ id пула {id}", key.id())));
+            }
+            if let PoolKey::Infinity(d) = key
+                && d.manager != *manager
+            {
+                return Err(no(format!(
+                    "менеджер ключа {:#x} ≠ менеджер пула {manager:#x}",
+                    d.manager
+                )));
+            }
+        }
+        PoolRef::Contract(hook) if key.hooks() == *hook => {}
+        other => return Err(no(format!("ключ пула не сходится со ссылкой {other:?}"))),
+    }
+    match (k, key) {
+        (ExecKind::UniV4, PoolKey::Uniswap(d)) => Ok((
+            Params::UniV4 { key: V4Key::of(d) },
+            e.pool.reference.address(),
+        )),
+        (ExecKind::InfCl | ExecKind::InfBin, PoolKey::Infinity(d)) => {
+            let vault = ctx.dex_addr("dex.vault", e.family.id)?;
+            let key = InfKey::of(d);
+            let p = if k == ExecKind::InfCl {
+                Params::InfCl { key }
+            } else {
+                Params::InfBin { key }
+            };
+            Ok((p, vault))
+        }
+        _ => Err(no(format!("ключ пула не того вида для шага {}", k.name()))),
+    }
 }
 
 /// Индексы шага StableSwap (CURVE, STABLE_U256, SADDLE): i — монета входа, j — выхода. Принимает: пул реестра, вид,

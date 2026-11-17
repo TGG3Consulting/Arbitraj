@@ -15,7 +15,7 @@
 //! - путь котировки (pools/graph.rs, pools/graph_eval.rs, quote/select.rs) — admitted_snap / on_snap: только чтение
 //!   снимка, без общего замка, без настроек, без копий;
 //! - пути вне котировки (подписка, сверка с квотером, проба налогов, тесты) — admitted / pick: входы пары те же, что у
-//!   слота снимка, — готовый отбор, иначе расчёт сейчас (calc) по живому реестру.
+//!   слота отпечатков (quote/shallow_stamps.rs), — готовый отбор, иначе расчёт сейчас (calc) по живому реестру.
 //!
 //! Кто вызывает: check/taxes_util.rs (probe_pools), check/quoter_one.rs, check/quoter_side.rs, pools/depth.rs (admitted,
 //! pick); pools/graph.rs, pools/graph_eval.rs (admitted_snap); quote/select.rs (on_snap); quote/shallow_build.rs (calc).
@@ -35,7 +35,7 @@ use super::super::ctx::Ctx;
 use super::super::pools::depth_book;
 use super::super::pools::registry::{Entry, Registry};
 use super::super::tokens::Tokens;
-use super::shallow_memo::Stamp;
+use super::shallow_stamps::Stamp;
 use super::{select, side_fit};
 
 /// Имя настройки предела.
@@ -85,7 +85,7 @@ fn deep_both(ctx: &Ctx, reg: &Registry, tokens: &Tokens, usdt_dec: u8, e: &Entry
     )
 }
 
-/// Отпечаток входов отбора пары сейчас (shallow_memo.rs Stamp). Принимает: окружение, реестр, адрес и знаки USDT,
+/// Отпечаток входов отбора пары сейчас (shallow_stamps.rs Stamp). Принимает: окружение, реестр, адрес и знаки USDT,
 /// пару. Ошибок нет.
 pub fn stamp_now(
     ctx: &Ctx,
@@ -137,9 +137,9 @@ pub fn calc(
 }
 
 /// Отбор пары «монета — встречный токен» сейчас (см. шапку) — для путей вне котировки (подписка pools/depth.rs, сверка
-/// с квотером, проба налогов): входы те же, что у слота опубликованного снимка (shallow_memo.rs Stamp), — готовый
-/// отбор; иначе расчёт по живому реестру (calc) с прошлым отбором из снимка. Снимок не меняет (его пишет только
-/// построитель, quote/shallow_build.rs). Общих замков с копиями нет. Ошибок нет.
+/// с квотером, проба налогов): входы те же, что у слота отпечатков (shallow_stamps.rs Stamp), — готовый
+/// отбор (quote/shallow_stamps.rs); иначе расчёт по живому реестру (calc) с прошлым отбором пары. Ничего не пишет
+/// (пишет только построитель, quote/shallow_build.rs). Общих замков с копиями нет. Ошибок нет.
 pub fn pick(
     ctx: &Ctx,
     reg: &Registry,
@@ -152,21 +152,16 @@ pub fn pick(
         return Arc::default();
     }
     let memo = reg.shallow_memo();
-    if let Ok(usdt) = tokens.usdt(ctx) {
-        let now = stamp_now(ctx, reg, usdt, usdt_dec, pair);
-        let ready = memo.with(|s| {
-            s.slots
-                .get(&pair)
-                .filter(|x| s.limit == n && x.stamp == now)
-                .map(|x| Arc::clone(&x.sel))
-        });
-        if let Some(v) = ready {
-            return v;
-        }
+    let slot = memo.stamps().get(&pair);
+    if let (Some(x), Ok(usdt)) = (&slot, tokens.usdt(ctx))
+        && x.stamp == stamp_now(ctx, reg, usdt, usdt_dec, pair)
+    {
+        return Arc::clone(&x.sel);
     }
-    let prev = memo
-        .with(|s| s.slots.get(&pair).map(|x| Arc::clone(&x.sel)))
-        .unwrap_or_default();
+    let prev = match slot {
+        Some(x) => Arc::clone(&x.sel),
+        None => memo.with(|s| s.sel.get(&pair).cloned()).unwrap_or_default(),
+    };
     let list = reg.pair_arcs(pair.0, pair.1);
     Arc::new(calc(ctx, reg, tokens, usdt_dec, pair, n, &prev, &list))
 }

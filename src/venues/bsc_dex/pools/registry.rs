@@ -20,7 +20,7 @@
 //! отметок — без замка, ревью t153 Н5), retain снимает отметки удалённых пулов (Н6). Пулы, ни разу не прочитанные
 //! (pool_unread.rs, экран «Монеты»), — здесь же; любой put снимает отметку.
 //! Решение 403 (t188): запись (put, update существующего, retain) будит построитель снимка отбора мелких пулов
-//! (shallow — quote/shallow_memo.rs poke, после снятия замка); touch — смена допуска мелких пулов как запись (версия,
+//! (shallow — quote/shallow_memo.rs wrote / wrote_all: отметка пар, после снятия замка); touch — смена допуска мелких пулов как запись (версия,
 //! отметка фоновому графу); pair_stamp / pair_arcs — входы отбора пары без копирования записей.
 //! Настройки: нет.
 
@@ -173,11 +173,13 @@ impl Registry {
         };
         // Решение 308: отметка для фонового графа — под замком записи и до роста версии (graph_changes.rs, И4).
         self.graph.bg().changes.mark(&e.pool.reference);
+        let pair = (e.coin, e.usdt);
         m.insert(e);
         self.version.fetch_add(1, Ordering::AcqRel);
         drop(m);
-        // Решение 403: построитель отбора мелких пулов (quote/shallow_build.rs); предел не задан — атомарное чтение.
-        self.shallow.poke();
+        // Решение 403: отметка пары построителю отбора мелких пулов (quote/shallow_build.rs) — после записи; предел не
+        // задан — одно атомарное чтение.
+        self.shallow.wrote(&[pair]);
     }
 
     /// Копия записи. None — пула нет.
@@ -196,9 +198,13 @@ impl Registry {
     /// или комиссию. Решение 301 (е3): пула нет — версия не растёт.
     pub fn update<T>(&self, r: &PoolRef, f: impl FnOnce(&mut Entry) -> T) -> Option<T> {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
+        // Решение 403: пара записи до и после изменения (функция может сменить монету или встречный токен).
+        let mut seen: (Option<(Address, Address)>, Option<(Address, Address)>) = (None, None);
         let out = m.update(r, |e| {
+            seen.0 = Some((e.coin, e.usdt));
             let before = super::state_gen::Snap::of(e);
             let out = f(e);
+            seen.1 = Some((e.coin, e.usdt));
             if e.state_gen == 0 || !before.same(e) {
                 e.state_gen = self.next_gen();
             }
@@ -212,9 +218,11 @@ impl Registry {
             self.version.fetch_add(1, Ordering::AcqRel);
         }
         drop(m);
-        if out.is_some() {
-            // Решение 403: построитель отбора мелких пулов (quote/shallow_build.rs).
-            self.shallow.poke();
+        // Решение 403: отметка пар построителю отбора мелких пулов (quote/shallow_build.rs).
+        match seen {
+            (Some(a), Some(b)) if a != b => self.shallow.wrote(&[a, b]),
+            (Some(a), _) => self.shallow.wrote(&[a]),
+            _ => {}
         }
         out
     }
@@ -297,8 +305,8 @@ impl Registry {
         self.fails.forget(&gone);
         // Решение 357 (ревью слияния, Н4): и отметки «в обновлении» удалённых пулов.
         self.holds.forget_all(&gone);
-        // Решение 403: построитель отбора мелких пулов (quote/shallow_build.rs).
-        self.shallow.poke();
+        // Решение 403: пулы удалены — построителю отбора мелких пулов полный проход (quote/shallow_build.rs).
+        self.shallow.wrote_all();
     }
 
     /// Решение 403: допуск мелких пулов `refs` сменился (новый снимок отбора, quote/shallow_build.rs) — как запись:

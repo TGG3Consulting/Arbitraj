@@ -8,6 +8,8 @@
 //! Решение 240: measure — σ вместе с числом ненулевых изменений цены в окне (profit.sigma_min_changes, core/reserve.rs).
 //! Решение 358 (только журнал): шаг хранит лог-доходность со знаком (квадрат — при сложении, σ та же); horizon — σ на
 //! горизонте T и автокорреляция шагов по тому же окну (core/vol_horizon.rs) для сравнения со σ рядом.
+//! Решение 403 (ревью t188): key / measure_key / Miss — ключ ряда и текст причины собираются вне замка рядов ядра
+//! (core/sigma_plan.rs entry_shared); measure — то же с текстом, как раньше.
 //! Кто вызывает: core/evaluate.rs (замеры цен сигнала), core/dirctx.rs (σ на B), core/reserve.rs (measure),
 //! core/reserve_check.rs (horizon, copy_of).
 //! От чего зависит: rust_decimal (ln, sqrt), chrono, core/vol_horizon.rs.
@@ -41,7 +43,35 @@ impl Series {
 
 /// Ключ ряда: площадка, монета, продажа (true) или покупка (false) — у Side нет Hash в стыке, площадка-напарник
 /// направления (решение 118).
-type Key = (VenueId, Asset, bool, VenueId);
+pub type Key = (VenueId, Asset, bool, VenueId);
+
+/// Решение 403 (ревью t188): почему σ не измерена — без текста, текст собирает вызывающий вне замка рядов (text).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Miss {
+    /// Ряда нет или в окне нет шагов.
+    NotMeasured,
+    /// Корень не вычисляется.
+    NotComputable,
+}
+
+impl Miss {
+    /// Текст причины — тот же, что у measure. Принимает: площадку, монету, напарника, окно. Ошибок нет.
+    pub fn text(
+        self,
+        venue: &VenueId,
+        asset: &Asset,
+        partner: &VenueId,
+        window_min: u64,
+    ) -> String {
+        match self {
+            Miss::NotMeasured => format!(
+                "волатильность {} на {} (направление с {}) за последние {window_min} мин ещё не измерена",
+                asset.ticker, venue.0, partner.0
+            ),
+            Miss::NotComputable => "волатильность не вычисляется".to_string(),
+        }
+    }
+}
 
 /// Волатильность по площадке, монете, стороне и напарнику (цена покупки и продажи — разные ряды).
 #[derive(Default)]
@@ -116,21 +146,32 @@ impl Volatility {
         window_min: u64,
         now: DateTime<Utc>,
     ) -> Result<(Decimal, usize), String> {
-        let none = || {
-            format!(
-                "волатильность {} на {} (направление с {}) за последние {window_min} мин ещё не измерена",
-                asset.ticker, venue.0, partner.0
-            )
-        };
-        let s = self
-            .map
-            .get_mut(&(
-                venue.clone(),
-                asset.clone(),
-                side == Side::Sell,
-                partner.clone(),
-            ))
-            .ok_or_else(none)?;
+        let key = Volatility::key(venue, asset, side, partner);
+        self.measure_key(&key, window_min, now)
+            .map_err(|m| m.text(venue, asset, partner, window_min))
+    }
+
+    /// Решение 403 (ревью t188): ключ ряда — собирается вызывающим ДО замка рядов (копии строк — вне замка).
+    /// Принимает: площадку, монету, сторону, напарника. Ошибок нет.
+    pub fn key(venue: &VenueId, asset: &Asset, side: Side, partner: &VenueId) -> Key {
+        (
+            venue.clone(),
+            asset.clone(),
+            side == Side::Sell,
+            partner.clone(),
+        )
+    }
+
+    /// Решение 403 (ревью t188): то же, что measure, по готовому ключу и без текста ошибки — под замком рядов только
+    /// поиск, обрезка окна и свёртка. Принимает: ключ, окно, сейчас. Возвращает: (σ за секунду, число ненулевых
+    /// изменений). Ошибки: Miss.
+    pub fn measure_key(
+        &mut self,
+        key: &Key,
+        window_min: u64,
+        now: DateTime<Utc>,
+    ) -> Result<(Decimal, usize), Miss> {
+        let s = self.map.get_mut(key).ok_or(Miss::NotMeasured)?;
         s.prune(now - Duration::minutes(window_min as i64));
         let (sq, dt) = s
             .steps
@@ -139,13 +180,13 @@ impl Volatility {
                 (a + r * r, b + d)
             });
         if dt <= Decimal::ZERO {
-            return Err(none());
+            return Err(Miss::NotMeasured);
         }
         let changes = s.steps.iter().filter(|(_, r, _)| !r.is_zero()).count();
         (sq / dt)
             .sqrt()
             .map(|sigma| (sigma, changes))
-            .ok_or_else(|| "волатильность не вычисляется".to_string())
+            .ok_or(Miss::NotComputable)
     }
 
     /// Решение 364: копия ОДНОГО ряда (площадка, монета, сторона, напарник) — для счёта сравнения σ вне замка рядов ядра

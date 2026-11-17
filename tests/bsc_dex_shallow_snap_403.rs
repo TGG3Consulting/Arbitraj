@@ -8,6 +8,15 @@
 //!   не читают настройки, реестр и токены; сборка графа, фоновый граф и допуск стороны к котировке (pools/graph.rs,
 //!   pools/graph_eval.rs, quote/select.rs) не зовут расчёт отбора (admitted, pick, limit).
 //!
+//! - Ревью t188 (Н1): снимок допуска пути котировки публикуется только при смене допуска или предела — обмены без
+//!   смены допуска номер публикации не меняют; смена допуска (выбранный пул стал недостоверным) — публикуется;
+//!   гистерезис: вернувшийся пул с тем же рангом и меньшим адресом не вытесняет нового выбранного (прямой расчёт без
+//!   прошлого отбора выбрал бы его), допуск не мигает; пара со встречным не USDT — смена пула «встречный — USDT»
+//!   пересчитывает её проходом по отметкам (отпечаток курса обновлён).
+//! - Сторож по исходникам (ревью t188): σ плана на сите (sigma_plan.rs entry_shared) — под замком рядов только
+//!   measure_key, без настроек и format!; measure_key — без копий ключа и текста; coin_ride.rs blocks_new — атомарный
+//!   быстрый путь до замка `rides`.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/native_common, tests/depth_common, arb::venues::bsc_dex::{parts, quote::{shallow_build,
 //! shallow_pick}, pools::registry}; исходники src/ (чтение файлов). Моков нет.
@@ -22,6 +31,7 @@ use arb::core::types::{Asset, PoolRef};
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::parts::Parts;
+use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::quote::{pool_after, shallow_build, shallow_pick};
 
 use depth_common::{rec, v2};
@@ -64,7 +74,7 @@ fn direct(ctx: &Ctx, p: &Parts, pair: (Address, Address), n: usize) -> Vec<PoolR
 }
 
 /// Допущенные по снимку пулы пары (путь котировки). Ошибок нет.
-fn by_snap(p: &Parts, pairs: &[arb::venues::bsc_dex::pools::registry::Entry]) -> Vec<PoolRef> {
+fn by_snap(p: &Parts, pairs: &[Entry]) -> Vec<PoolRef> {
     let mut v: Vec<PoolRef> = pairs
         .iter()
         .filter(|e| shallow_pick::admitted_snap(&p.registry, e))
@@ -197,6 +207,7 @@ fn quote_path_reads_snapshot_only() {
             "tokens",
             "calc(",
             "pick(",
+            "format!",
         ] {
             assert!(!b.contains(bad), "путь котировки: «{bad}» в\n{b}");
         }
@@ -219,6 +230,181 @@ fn quote_path_reads_snapshot_only() {
                 !s.contains(bad),
                 "{f}: «{bad}» — на пути котировки только снимок"
             );
+        }
+    }
+}
+
+/// Пулы записи t178 в реестр, USDT = встречный токен пар; снимок после первого прохода. Ошибок нет (тест падает).
+async fn setup(tag: &str, per_pair: u32) -> (Ctx, Parts, Vec<Entry>, shallow_build::State) {
+    let ctx = native_common::ctx(tag).await;
+    settings(&ctx, per_pair).await;
+    let p = Parts::new(ctx.clone());
+    let r = rec();
+    let pairs: Vec<Entry> = PAIRS.iter().map(|a| v2(&r, a, true)).collect();
+    p.tokens.set(&[Asset {
+        ticker: "USDT".into(),
+        bsc_contract: Some(pairs[0].usdt),
+    }]);
+    p.tokens.remember_decimals(pairs[0].usdt, 18);
+    for e in &pairs {
+        p.registry.put(e.clone());
+    }
+    let mut st = shallow_build::State::default();
+    shallow_build::pass(&ctx, &p.registry, &p.tokens, &mut st);
+    (ctx, p, pairs, st)
+}
+
+#[tokio::test]
+async fn admit_published_only_on_change_and_hysteresis_holds() {
+    let (ctx, p, mut pairs, mut st) = setup("t188-seq", 1).await;
+    let pair = (pairs[0].coin, pairs[0].usdt);
+    let memo = p.registry.shallow_memo().clone();
+    let chosen = pairs[1].pool.reference.clone();
+    assert_eq!(by_snap(&p, &pairs), vec![chosen.clone()]);
+    let s1 = memo.seq();
+    // (а) Обмены в невыбранном пуле: отпечатки пересчитаны, допуск тот же — снимок допуска не публикуется.
+    let big = U256::from(300u64) * U256::from(10u64).pow(U256::from(18u8));
+    let e = pairs[0].clone();
+    let (bought, after) = pool_after::apply(&ctx, &e, e.usdt, big).unwrap();
+    pairs[0].pool.state = after;
+    p.registry.put(pairs[0].clone());
+    shallow_build::pass(&ctx, &p.registry, &p.tokens, &mut st);
+    let e = pairs[0].clone();
+    let (_, back) = pool_after::apply(&ctx, &e, e.coin, bought.amount_out).unwrap();
+    pairs[0].pool.state = back;
+    p.registry.put(pairs[0].clone());
+    shallow_build::pass(&ctx, &p.registry, &p.tokens, &mut st);
+    shallow_build::pass(&ctx, &p.registry, &p.tokens, &mut st);
+    assert_eq!(memo.seq(), s1, "допуск не сменился — публикации нет");
+    let slot = memo.stamps().get(&pair).expect("отпечаток пары");
+    assert_eq!(slot.stamp.pools, p.registry.pair_stamp(pair.0, pair.1));
+    assert_eq!(
+        *shallow_pick::pick(&ctx, &p.registry, &p.tokens, 18, pair),
+        vec![chosen.clone()]
+    );
+    // (б) Выбранный пул стал недостоверным — допуск сменился, снимок опубликован.
+    let mut off = pairs[1].clone();
+    off.valid = false;
+    p.registry.put(off);
+    shallow_build::pass(&ctx, &p.registry, &p.tokens, &mut st);
+    let s2 = memo.seq();
+    assert!(s2 > s1, "смена допуска — публикация");
+    let next = by_snap(&p, &pairs);
+    assert_eq!(next, direct(&ctx, &p, pair, 1));
+    assert_eq!(next.len(), 1);
+    assert_ne!(next[0], chosen);
+    // (г) Пул вернулся (тот же уровень, меньший адрес): без гистерезиса прямой расчёт выбрал бы его, отбор снимка — нет.
+    p.registry.put(pairs[1].clone());
+    shallow_build::pass(&ctx, &p.registry, &p.tokens, &mut st);
+    assert_eq!(direct(&ctx, &p, pair, 1), vec![chosen.clone()]);
+    assert_eq!(by_snap(&p, &pairs), next, "выбранный остаётся");
+    assert_eq!(memo.seq(), s2, "допуск не мигает — публикации нет");
+    for _ in 0..2 {
+        let e = pairs[1].clone();
+        let (bought, after) = pool_after::apply(&ctx, &e, e.usdt, big).unwrap();
+        pairs[1].pool.state = after;
+        p.registry.put(pairs[1].clone());
+        shallow_build::pass(&ctx, &p.registry, &p.tokens, &mut st);
+        let e = pairs[1].clone();
+        let (_, back) = pool_after::apply(&ctx, &e, e.coin, bought.amount_out).unwrap();
+        pairs[1].pool.state = back;
+        p.registry.put(pairs[1].clone());
+        shallow_build::pass(&ctx, &p.registry, &p.tokens, &mut st);
+        assert_eq!(by_snap(&p, &pairs), next);
+        assert_eq!(memo.seq(), s2);
+    }
+    assert_eq!(
+        *shallow_pick::pick(&ctx, &p.registry, &p.tokens, 18, pair),
+        next
+    );
+}
+
+/// (в) Пара со встречным не USDT. Те же четыре пула записи t178: пулы 0 и 1 — пара «C — T» (монета — токен0), пулы 2 и
+/// 3 — пара «T — C» (монета — токен1); «USDT» теста — токен C (его знаки 18 — условие теста: на равенство снимка и
+/// прямого расчёта и на отпечаток не влияют). У пары «C — T» встречный T не USDT, курс — по пулам «T — C».
+#[tokio::test]
+async fn non_usdt_counter_recomputed_by_rate_marks() {
+    let ctx = native_common::ctx("t188-rate").await;
+    settings(&ctx, 4).await;
+    let p = Parts::new(ctx.clone());
+    let r = rec();
+    let ents: Vec<Entry> = PAIRS
+        .iter()
+        .enumerate()
+        .map(|(i, a)| v2(&r, a, i < 2))
+        .collect();
+    let (c, t) = (ents[0].coin, ents[0].usdt);
+    assert_eq!((ents[2].coin, ents[2].usdt), (t, c));
+    p.tokens.set(&[Asset {
+        ticker: "USDT".into(),
+        bsc_contract: Some(c),
+    }]);
+    p.tokens.remember_decimals(c, 18);
+    for e in &ents {
+        p.registry.put(e.clone());
+    }
+    let mut st = shallow_build::State::default();
+    shallow_build::pass(&ctx, &p.registry, &p.tokens, &mut st);
+    let pair = (c, t);
+    let memo = p.registry.shallow_memo().clone();
+    let slot = memo.stamps().get(&pair).expect("отпечаток пары «C — T»");
+    assert!(
+        !slot.stamp.rate.is_empty(),
+        "встречный не USDT — курс в отпечатке"
+    );
+    assert_eq!(slot.stamp.rate, p.registry.pair_stamp(t, c));
+    assert_eq!(by_snap(&p, &ents[..2]), sorted(direct(&ctx, &p, pair, 4)));
+    // Пул «T — C» (курс пары «C — T») стал недостоверным: проход по отметкам пересчитывает и пару «C — T».
+    let mut off = ents[2].clone();
+    off.valid = false;
+    p.registry.put(off);
+    shallow_build::pass(&ctx, &p.registry, &p.tokens, &mut st);
+    let slot2 = memo.stamps().get(&pair).expect("отпечаток пары «C — T»");
+    assert_ne!(slot2.stamp.rate, slot.stamp.rate);
+    assert_eq!(slot2.stamp.rate, p.registry.pair_stamp(t, c));
+    assert_eq!(by_snap(&p, &ents[..2]), sorted(direct(&ctx, &p, pair, 4)));
+    assert_eq!(
+        sorted(shallow_pick::pick(&ctx, &p.registry, &p.tokens, 18, pair).to_vec()),
+        sorted(direct(&ctx, &p, pair, 4))
+    );
+}
+
+#[test]
+fn hot_core_paths_lock_only_the_minimum() {
+    // σ плана на сите: под общим замком рядов — только measure_key.
+    let plan = src("src/core/sigma_plan.rs");
+    let shared = body(&plan, "pub fn entry_shared(");
+    let locked: Vec<&str> = shared.lines().filter(|l| l.contains("lk(")).collect();
+    assert_eq!(locked.len(), 1, "{shared}");
+    assert!(locked[0].contains("measure_key("), "{}", locked[0]);
+    for bad in ["format!", ".integer(", ".decimal(", "read(", "key("] {
+        let rest = locked[0].replace("measure_key(", "");
+        assert!(
+            !rest.contains(bad),
+            "под замком рядов: «{bad}» в {}",
+            locked[0]
+        );
+    }
+    let decide = body(&plan, "fn decide(");
+    assert!(!decide.contains("lk("), "решение — вне замка");
+    let vol = src("src/core/vol.rs");
+    let mk = body(&vol, "pub fn measure_key(");
+    for bad in ["format!", ".clone()", "to_string"] {
+        assert!(!mk.contains(bad), "measure_key: «{bad}»");
+    }
+    assert!(
+        src("src/core/dirctx.rs").contains("sigma_plan::entry_shared(&core.inner.vol"),
+        "сито — через entry_shared"
+    );
+    // Очередь расчёта: атомарный быстрый путь до замка `rides`.
+    let ride = src("src/core/coin_ride.rs");
+    let bn = body(&ride, "pub fn blocks_new(");
+    let fast = bn.find("rides_live").expect("быстрый путь blocks_new");
+    let slow = bn.find("lk(&core.inner.rides)").expect("замок rides");
+    assert!(fast < slow, "rides_live — до замка rides");
+    for bad in ["format!", "top_up_on("] {
+        if let Some(i) = bn.find(bad) {
+            assert!(i > slow, "blocks_new: «{bad}» до замка rides");
         }
     }
 }

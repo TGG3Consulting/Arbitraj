@@ -184,6 +184,8 @@ pub fn board(core: &Core, d: &Direction, deal_id: &str, group: Option<String>) {
     if group.is_some() {
         core.inner.group_live.fetch_add(1, Ordering::Relaxed);
     }
+    // Решение 403 (ревью t188): счётчик записей — под замками `active` и `rides` (blocks_new читает его после `active`).
+    core.inner.rides_live.fetch_add(1, Ordering::AcqRel);
     r.entry(key).or_default().push(Ride {
         deal_id: deal_id.to_string(),
         buy_on: d.buy_on.clone(),
@@ -209,7 +211,11 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
         if grouped > 0 {
             core.inner.group_live.fetch_sub(grouped, Ordering::Relaxed);
         }
+        let before = v.len();
         v.retain(|x| x.deal_id != id);
+        core.inner
+            .rides_live
+            .fetch_sub(before - v.len(), Ordering::AcqRel);
         if v.is_empty() {
             r.remove(key);
         }
@@ -217,12 +223,17 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
 }
 
 /// Что делает: очередь расчёта (candidates::enqueue) — новый расчёт направления не нужен: монета занята целиком или
-/// по ней идут сделки, к которым это направление присоединиться не может. Быстрый путь: идущие начаты без докупки —
+/// по ней идут сделки, к которым это направление присоединиться не может. Решение 403 (ревью t188): идущих сделок нет
+/// (inner.rides_live = 0) — без замка `rides`. Быстрый путь: идущие начаты без докупки —
 /// ответ без чтения настройки, копий и текста (как раньше одно `contains`). Принимает: ядро, направление. Ошибок нет.
 pub fn blocks_new(core: &Core, d: &Direction) -> bool {
     let key = CoinKey::of(&d.asset);
     if lk(&core.inner.active).contains(&key) {
         return true;
+    }
+    // Решение 403 (ревью t188): идущих сделок нет ни по одной монете — замок `rides` не берётся (атомарное чтение).
+    if core.inner.rides_live.load(Ordering::Acquire) == 0 {
+        return false;
     }
     let rides = {
         let r = lk(&core.inner.rides);

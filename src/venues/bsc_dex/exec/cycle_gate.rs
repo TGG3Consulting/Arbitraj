@@ -8,6 +8,8 @@
 //!   форк, задан dex.universal_router) и ВСЕ включённые каналы отправки бандловые (решение 121 B3,
 //!   send::planned_bundle_ok; решение 299: при send.bundle_skip_single = да — хотя бы один бандловый, одиночные
 //!   исключаются из отправки бандла); иначе — NoRoute с причинами обеих форм (цикл остаётся сигналом).
+//! - Ревью t181 (Н3): цикл с шагом пула менеджера (V4 / Infinity — шаги исполнителя v3), собираемый бандлом (a), — бандлом,
+//!   как у кошелька v2; исполнитель v3 — только когда бандла нет.
 //!
 //! Кто вызывает: exec/{cycle_trade, cycle_dry, cycle_bundle}.rs, quote/cycle_cost.rs.
 //! От чего зависит: exec/executor/{mod, entry}.rs, pools/{exec_kind, families}.rs, quote/route_calc.rs (Leg), send/mod.rs.
@@ -85,6 +87,18 @@ pub fn guard_ur(ctx: &Ctx, leg: &Leg) -> GatewayResult<()> {
 /// Выбор формы: исполнитель, иначе бандл, иначе отказ с причинами. Принимает: ноги цикла. Ошибки: NoRoute (обе формы
 /// не годятся — причины обеих), Internal (адрес исполнителя кошелька не читается).
 pub fn form(ctx: &Ctx, legs: &[Leg]) -> GatewayResult<Form> {
+    let bundle = || match legs.iter().find_map(|l| guard_ur(ctx, l).err()) {
+        Some(e) => Err(e.message),
+        None => send::planned_bundle_ok(ctx),
+    };
+    // Ревью t181 (Н3, как quote/graph_exec.rs bundle_first): цикл с шагом пула менеджера (V4 / Infinity), который
+    // собирается прежним бандлом, идёт бандлом — как у кошелька v2; исполнитель v3 — там, где бандла нет.
+    let singleton = legs
+        .iter()
+        .any(|l| l.entry.family.executor_kind.is_some_and(|k| k.singleton()));
+    if singleton && bundle().is_ok() {
+        return Ok(Form::Bundle);
+    }
     let exec_why = match executor::address(ctx)? {
         None => format!(
             "у кошелька «{}» не развёрнут исполнитель ArbExecutor (экран «Маппинг кошельков»)",
@@ -95,12 +109,9 @@ pub fn form(ctx: &Ctx, legs: &[Leg]) -> GatewayResult<Form> {
             Some(w) => w,
         },
     };
-    let bundle_why = match legs.iter().find_map(|l| guard_ur(ctx, l).err()) {
-        Some(e) => e.message,
-        None => match send::planned_bundle_ok(ctx) {
-            Ok(()) => return Ok(Form::Bundle),
-            Err(w) => w,
-        },
+    let bundle_why = match bundle() {
+        Ok(()) => return Ok(Form::Bundle),
+        Err(w) => w,
     };
     let why = format!("цикл не исполним: исполнитель — {exec_why}; бандл — {bundle_why}");
     Err(ctx.err(ErrorCode::NoRoute, why))
@@ -112,5 +123,5 @@ fn step_why(ctx: &Ctx, l: &Leg) -> Option<String> {
     if !exec_kind::via_executor(ctx, f) {
         return Some(format!("{}: у вида пула нет шага исполнителя", f.id));
     }
-    entry::supported(f, &l.entry.pool.reference).err()
+    entry::fits(&l.entry).err()
 }

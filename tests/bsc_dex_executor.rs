@@ -147,9 +147,18 @@ fn elastic_and_singleton_pools_do_not_go_via_executor() {
     assert!(entry::supported(elastic, &pool).is_err());
     let v3 = families::make("pancakeswap-v3-bsc", "pancakeswap_v3").unwrap();
     assert!(entry::supported(v3, &pool).is_ok());
-    // PancakeSwap Infinity CL — только Universal Router.
+    // Решение 395 (t181): PancakeSwap Infinity CL — пул внутри менеджера, шаг INF_CL исполнителя v3; у вида без шага
+    // менеджера (V3) пул менеджера исполнителем не вызывается.
     let cl = families::make("pancakeswap-infinity-cl-bsc", "pancakeswap_infinity_cl").unwrap();
-    assert!(entry::supported(cl, &pool).is_err());
+    let inside = PoolRef::Singleton {
+        manager: CAKE_USDT_PCS,
+        id: alloy_primitives::B256::repeat_byte(1),
+    };
+    assert_eq!(
+        entry::supported(cl, &inside).map(|(k, a)| (k.name(), a)),
+        Ok(("INF_CL", CAKE_USDT_PCS))
+    );
+    assert!(entry::supported(v3, &inside).is_err());
 }
 
 // Ревью 122, пункт 2 (свежий минимум верификации не опускает минимум по худшей цене, строже — ставится) — теперь в

@@ -12,6 +12,7 @@
     "ethers": "6.13.4",
     "solc": "0.8.37",
     "solc-0.5.16": "npm:solc@0.5.16",
-    "solc-0.6.6": "npm:solc@0.6.6"
+    "solc-0.6.6": "npm:solc@0.6.6",
+    "solc-0.8.26": "npm:solc@0.8.26"
   }
 }

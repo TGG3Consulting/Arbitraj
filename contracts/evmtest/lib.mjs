@@ -1,10 +1,11 @@
 // Файл: contracts/evmtest/lib.mjs
 // Что делает: окружение EVM-теста ArbExecutor (решение 272): компиляция исходников (ArbExecutor — тем же solc-js 0.8.37 и
 //   теми же настройками, что contracts/build.mjs, и сверка с contracts/out/; PancakePair/Factory/ERC20 — solc 0.5.16 из
-//   pancake-swap-core@3b214306; WETH9 — solc 0.6.6 из v2-periphery@ed249913), EVM ethereumjs (хардфорк Cancun — EIP-1153
+//   pancake-swap-core@3b214306; WETH9 — solc 0.6.6 из v2-periphery@ed249913; решение 395 — PoolManager Uniswap V4 и
+//   Vault / CLPoolManager / BinPoolManager PancakeSwap Infinity — solc 0.8.26 из vendor/v4-core, vendor/infinity-core), EVM ethereumjs (хардфорк Cancun — EIP-1153
 //   transient), развёртывание и вызовы, разбор отката и событий.
 // Кто вызывает: contracts/evmtest/run.mjs.
-// От чего зависит: npm @ethereumjs/{evm, common, statemanager, util}, ethers (ABI), solc 0.8.37 / 0.5.16 / 0.6.6 —
+// От чего зависит: npm @ethereumjs/{evm, common, statemanager, util}, ethers (ABI), solc 0.8.37 / 0.5.16 / 0.6.6 / 0.8.26 —
 //   версии в package.json / package-lock.json; contracts/*.sol, contracts/out/*, vendor/*, fixtures/*.
 // Настройки: нет.
 
@@ -23,9 +24,10 @@ export const here = dirname(fileURLToPath(import.meta.url));
 export const coder = AbiCoder.defaultAbiCoder();
 
 /// Компиляция одного файла с импортами от корня исходников (solc нормализует «../x.sol» от имени файла).
-/// Принимает: модуль solc, корень, путь файла от корня, имя контракта, настройки.
+/// Принимает: модуль solc, корень, путь файла от корня, имя контракта, настройки, замены префиксов импорта (remappings
+/// foundry официальных репозиториев, решение 395: [['solmate/', 'lib/solmate/'], …]; по умолчанию нет).
 /// Возвращает: { abi, bin, runtime }. Ошибки: исключение с текстом компилятора.
-export function compile(solc, base, src, name, settings = {}) {
+export function compile(solc, base, src, name, settings = {}, remap = []) {
   const file = join(base, src);
   const input = {
     language: 'Solidity',
@@ -35,7 +37,10 @@ export function compile(solc, base, src, name, settings = {}) {
       outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object'] } },
     },
   };
-  const find = (p) => ({ contents: readFileSync(join(base, p), 'utf8') });
+  const find = (p) => {
+    const r = remap.find(([a]) => p.startsWith(a));
+    return { contents: readFileSync(join(base, r ? r[1] + p.slice(r[0].length) : p), 'utf8') };
+  };
   const out = JSON.parse(solc.compile(JSON.stringify(input), { import: find }));
   const errs = (out.errors ?? []).filter((e) => e.severity === 'error');
   if (errs.length) throw new Error(errs.map((e) => e.formattedMessage).join('\n'));
@@ -46,6 +51,8 @@ export function compile(solc, base, src, name, settings = {}) {
 export const solc08 = require('solc');
 export const solc05 = require('solc-0.5.16');
 export const solc06 = require('solc-0.6.6');
+// Решение 395 (t181): официальные Uniswap v4-core и PancakeSwap infinity-core — pragma 0.8.26 (foundry.toml: via_ir, cancun).
+export const solc0826 = require('solc-0.8.26');
 
 /// Артефакт из contracts/out/ (или out/v1/): код создания, код в сети, ABI.
 export function artifact(dir) {

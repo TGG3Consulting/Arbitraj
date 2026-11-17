@@ -35,6 +35,7 @@ use crate::core::types::{DexRoute, RouteMode, TradeRequest, TradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::pools::registry::Registry;
 use super::super::quote::Quoting;
 use super::super::quote::graph_route::{self, GraphForm};
 use super::super::wallet::nonce::Nonces;
@@ -55,7 +56,12 @@ pub async fn trade(
     req: TradeRequest,
 ) -> GatewayResult<TradeResult> {
     let who = req.route.as_ref().map_or(result::BY_DIRECT, |r| {
-        by_whom(&q.ctx, r, super::native::is_native(&q.ctx, &req.asset))
+        by_whom(
+            &q.ctx,
+            &q.reg,
+            r,
+            super::native::is_native(&q.ctx, &req.asset),
+        )
     });
     // Решение 231 (дополнение): подпись — и в «чем найти» ошибки «исход неизвестен» (позднее выяснение подпишет так же).
     result::by(run(q, env, nonces, req).await, who).map_err(|e| super::swap_ctx::who(e, who))
@@ -64,13 +70,15 @@ pub async fn trade(
 /// Кто исполнит маршрут — по тем же правилам, что выбор пути в run: умный режим — умный; граф — по форме
 /// (quote/graph_route::graph_form), форма «бандл», которую берёт исполнитель (executor::takes), — исполнитель (решение 122);
 /// иначе прямой. Ошибок нет (адрес не читается — подпись бандла, сама сделка вернёт ошибку настройки).
-fn by_whom(ctx: &Ctx, route: &DexRoute, native: bool) -> &'static str {
+fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'static str {
     match route.mode {
         RouteMode::Smart => result::BY_SMART,
         RouteMode::Graph => match graph_route::graph_form(ctx, route) {
             GraphForm::Direct => result::BY_DIRECT,
             GraphForm::OneUr => result::BY_SMART,
-            GraphForm::Bundle if matches!(executor::takes(ctx, route, native), Ok(Some(_))) => {
+            GraphForm::Bundle
+                if matches!(executor::takes(ctx, reg, route, native), Ok(Some(_))) =>
+            {
                 result::BY_EXECUTOR
             }
             GraphForm::Bundle => result::BY_BUNDLE,
@@ -84,10 +92,10 @@ fn by_whom(ctx: &Ctx, route: &DexRoute, native: bool) -> &'static str {
 /// send с чаевыми) — да; бандл свопов графа (exec/bundle_send.rs → send::dispatch_slice, чаевых не принимает) — нет.
 /// Маршрута нет или графовый маршрут неисполним (сделки нет, путь не выбирается) — да, как было.
 /// Принимает: окружение, маршрут котировки, нативная ли монета (exec/native.rs). Ошибок нет.
-pub fn sends_tip(ctx: &Ctx, route: Option<&DexRoute>, native: bool) -> bool {
+pub fn sends_tip(ctx: &Ctx, reg: &Registry, route: Option<&DexRoute>, native: bool) -> bool {
     match route {
         Some(r) if r.mode == RouteMode::Graph && r.executable => {
-            by_whom(ctx, r, native) != result::BY_BUNDLE
+            by_whom(ctx, reg, r, native) != result::BY_BUNDLE
         }
         _ => true,
     }
@@ -148,7 +156,7 @@ async fn run(
             // Решение 122 (часть X): задан exec.executor_address — одной транзакцией через свой исполнитель.
             GraphForm::Bundle => {
                 let is_native = super::native::is_native(ctx, &req.asset);
-                if let Some(x) = executor::takes(ctx, &route, is_native)? {
+                if let Some(x) = executor::takes(ctx, &q.reg, &route, is_native)? {
                     return executor::trade::trade(q, env, nonces, req, &route, verified, x).await;
                 }
                 return bundle_trade::trade(q, env, nonces, req, &route, verified).await;

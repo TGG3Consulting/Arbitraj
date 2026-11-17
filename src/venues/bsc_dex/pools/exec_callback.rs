@@ -19,6 +19,9 @@
 //! exec/executor/code.rs (runtime, runtime_v1, Version).
 //! Решение 284: то же правило для вида шага, которого нет в исполнителе v1 (NOMI_STABLE = 12 — только v2): у кошелька
 //! v1 — пулы DEX без пути исполнения с причиной «переразверните исполнитель»; версия не сверена — «не сверен».
+//! Решение 395 (t181): шаги пулов внутри менеджеров — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только у исполнителя v3
+//! (since): у кошелька v1 / v2 — пулы Uniswap V4 / PancakeSwap Infinity без пути ЧЕРЕЗ ИСПОЛНИТЕЛЬ (свой Universal Router у
+//! них остаётся — family.tradable); артефакт версии для поиска селектора: v1 — out/v1/, v2 — out/v2/, v3 — out/.
 //! Настройки: dex.v3_swap_callback [DEX] (необязательная).
 
 use std::collections::HashMap;
@@ -53,7 +56,8 @@ pub fn check(v: Version, sig: &str) -> Option<String> {
     let sel = registry_key::selector(sig);
     let rt = match v {
         Version::V1 => code::runtime_v1(),
-        Version::V2 => code::runtime(),
+        Version::V2 => code::runtime_v2(),
+        Version::V3 => code::runtime(),
     };
     let ver = v.label();
     match rt {
@@ -109,33 +113,52 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
         .clone()
 }
 
-/// Решение 284: вид шага есть только в исполнителе v2 (номер вида добавлен в contracts/ArbExecutor.sol после v1:
-/// NOMI_STABLE = 12, METRIC = 13, IZI = 14 — решение 286, KYBER_DMM = 15 — решение 287, SMARDEX = 16 — решение 288, BALANCER = 17 — решение 289, LB = 18 — решение 290; у v1 диспетчер _step откатывает «kind»). Принимает: вид шага. Ошибок нет.
-pub fn v2_only(k: ExecKind) -> bool {
-    matches!(
-        k,
+/// С какой версии исполнителя есть вид шага (у более ранней диспетчер _step откатывает «kind»). Решение 284: v2 —
+/// NOMI_STABLE = 12, METRIC = 13, IZI = 14 — решение 286, KYBER_DMM = 15 — решение 287, SMARDEX = 16 — решение 288,
+/// BALANCER = 17 — решение 289, LB = 18 — решение 290. Решение 395 (t181): v3 — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21.
+/// Остальные — с v1. Принимает: вид шага. Ошибок нет.
+pub fn since(k: ExecKind) -> Version {
+    match k {
         ExecKind::NomiStable
-            | ExecKind::Metric
-            | ExecKind::Izi
-            | ExecKind::KyberDmm
-            | ExecKind::Smardex
-            | ExecKind::Balancer
-            | ExecKind::Lb
-    )
+        | ExecKind::Metric
+        | ExecKind::Izi
+        | ExecKind::KyberDmm
+        | ExecKind::Smardex
+        | ExecKind::Balancer
+        | ExecKind::Lb => Version::V2,
+        ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => Version::V3,
+        _ => Version::V1,
+    }
 }
 
-/// Нет ли у исполнителя кошелька окружения вида шага этой DEX (решение 284). Принимает: окружение, вид. Возвращает:
-/// None — вид шага есть у обеих версий, кошелёк без исполнителя (решает executor_set) или исполнитель v2; Some —
-/// причина (исполнитель v1 / версия не сверена). Ошибок нет.
+/// Вид шага появился в v2 (решения 284–290: есть у v2 и v3, нет у v1) — прежнее имя, им пользуются тесты видов. Ошибок нет.
+pub fn v2_only(k: ExecKind) -> bool {
+    since(k) == Version::V2
+}
+
+/// Причина «у исполнителя версии v нет вида шага k» (решения 284, 395): None — есть. Принимает: вид, версию. Ошибок нет.
+pub fn step_absent(k: ExecKind, v: Version) -> Option<String> {
+    let need = since(k);
+    (v < need).then(|| {
+        format!(
+            "исполнитель {} не знает шаг исполнителя {} (вид шага есть с {}) — переразверните исполнитель кошелька \
+             (экран «Маппинг кошельков»)",
+            v.label(),
+            k.name(),
+            need.label()
+        )
+    })
+}
+
+/// Нет ли у исполнителя кошелька окружения вида шага этой DEX (решения 284, 395). Принимает: окружение, вид.
+/// Возвращает: None — вид шага есть с v1, кошелёк без исполнителя (решает executor_set) или сверенная версия не ниже
+/// since(вид); Some — причина (версия ниже / версия не сверена). Ошибок нет.
 pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
-    let k = f.executor_kind.filter(|k| v2_only(*k))?;
+    let k = f.executor_kind.filter(|k| since(*k) > Version::V1)?;
     let what = format!("шаг исполнителя {}", k.name());
     match wallet_version(ctx, &what) {
-        Ok(Some(Version::V1)) => Some(format!(
-            "исполнитель v1 не знает {what} (вид шага есть только в v2) — переразверните исполнитель кошелька \
-             (экран «Маппинг кошельков»)"
-        )),
-        Ok(_) => None,
+        Ok(Some(v)) => step_absent(k, v),
+        Ok(None) => None,
         Err(why) => Some(why),
     }
 }
@@ -144,27 +167,35 @@ pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
 mod tests {
     use super::*;
 
-    /// Селектор squadV3SwapCallback = 0xc4e21d86 (SquadV3Pool.sol L794): в артефакте v1 его нет, в v2 (t114) есть;
-    /// pancakeV3SwapCallback / uniswapV3SwapCallback — в обоих (тот же поиск PUSH4, реальные артефакты contracts/out/).
+    /// Селектор squadV3SwapCallback = 0xc4e21d86 (SquadV3Pool.sol L794): в артефакте v1 его нет, в v2 (t114) и v3
+    /// (решение 395, текущая сборка contracts/out/) есть; pancakeV3SwapCallback / uniswapV3SwapCallback — во всех (тот же
+    /// поиск PUSH4, реальные артефакты contracts/out/v1/, out/v2/, out/). Ревью t181 (Н7): v2 — out/v2/, v3 — out/.
     #[test]
     fn squad_callback_by_executor_version() {
         let squad = registry_key::selector("squadV3SwapCallback(int256,int256,bytes)");
         assert_eq!(squad.to_vec(), vec![0xc4, 0xe2, 0x1d, 0x86]);
-        let (v1, v2) = (code::runtime_v1().unwrap(), code::runtime().unwrap());
+        let v1 = code::runtime_v1().unwrap();
+        let v2 = code::runtime_v2().unwrap();
+        let v3 = code::runtime().unwrap();
         assert!(!has_selector(&v1, &squad));
-        assert!(has_selector(&v2, &squad));
+        assert!(has_selector(&v2, &squad) && has_selector(&v3, &squad));
         for sig in [
             "pancakeV3SwapCallback(int256,int256,bytes)",
             "uniswapV3SwapCallback(int256,int256,bytes)",
         ] {
             let sel = registry_key::selector(sig);
-            assert!(has_selector(&v1, &sel) && has_selector(&v2, &sel), "{sig}");
-            assert!(check(Version::V1, sig).is_none() && check(Version::V2, sig).is_none());
+            assert!(
+                has_selector(&v1, &sel) && has_selector(&v2, &sel) && has_selector(&v3, &sel),
+                "{sig}"
+            );
+            for v in [Version::V1, Version::V2, Version::V3] {
+                assert!(check(v, sig).is_none(), "{sig} {v:?}");
+            }
         }
         let s = "squadV3SwapCallback(int256,int256,bytes)";
         assert!(
             check(Version::V1, s).is_some_and(|w| w.contains("v1") && w.contains("0xc4e21d86"))
         );
-        assert!(check(Version::V2, s).is_none());
+        assert!(check(Version::V2, s).is_none() && check(Version::V3, s).is_none());
     }
 }

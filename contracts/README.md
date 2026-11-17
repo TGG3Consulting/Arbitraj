@@ -7,9 +7,9 @@
 | Файл | Что делает |
 | --- | --- |
 | `ArbExecutor.sol` | Исполнитель: владелец, execute, шаги двенадцати видов, обратные вызовы пулов, приём BNB только от ожидаемого адреса (receive), возврат остатков |
-| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — восемнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286; KYBER_DMM, решение 287; SMARDEX, решение 288; BALANCER, решение 289; LB, решение 290), обратные вызовы пулов (v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286; smardexSwapCallback, решение 288), приём BNB только от ожидаемого адреса (receive), возврат остатков |
+| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — восемнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286; KYBER_DMM, решение 287; SMARDEX, решение 288; BALANCER, решение 289; LB, решение 290; v3 — двадцати одного: UNI_V4, INF_CL, INF_BIN, решение 395), обратные вызовы пулов (v3 — ещё unlockCallback / lockAcquired менеджеров Uniswap V4 и PancakeSwap Infinity; v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286; smardexSwapCallback, решение 288), приём BNB только от ожидаемого адреса (receive), возврат остатков |
 | `VirtualQuoter.sol` | Решение 186 (решение 288: + quoteSmardex и smardexSwapCallback — пара SmarDex): виртуальный квотер — НЕ разворачивается; бот подставляет его код в eth_call (state override) и спрашивает выход у самого пула (swap + откат в обратном вызове). Собирается отдельным заданием solc в `out/VirtualQuoter.bin-runtime`, `.abi`, `.sha256`. Решение 274: ещё обратный вызов swapCallback (SheepDex SpePool); решение 281: squadV3SwapCallback (SquadSwap V3, 0xc4e21d86); решение 285: quoteMetric + metricOmmSwapCallback (Metric OMM, 0xc3251075); решение 286: quoteIzi + swapX2YCallback / swapY2XCallback (iZiSwap / Biswap V3, 0x18780684 / 0xd3e1c284; откат 64 байтами — оплата с флагом края пула и выход) |
-| `IPools.sol` | Интерфейсы токена, WBNB и пулов — только вызываемые функции, подписи из официальных исходников (ссылки в файле) |
+| `IPools.sol` | Интерфейсы токена, WBNB и пулов — только вызываемые функции, подписи из официальных исходников (ссылки в файле); решение 395 — PoolManager Uniswap V4, Vault / CLPoolManager / BinPoolManager PancakeSwap Infinity |
 | `build.mjs` | Сборка solc-js стандартным JSON-входом: оптимизатор (200 прогонов), EVM `cancun`; пишет `out/` и хеши |
 | `build.sh` | `npm ci` (solc ровно из `package-lock.json`) + `node build.mjs` |
 | `package.json`, `package-lock.json` | Компилятор solc-js `0.8.37` — фиксированная версия |
@@ -18,13 +18,20 @@
 | `out/ArbExecutor.abi` | ABI JSON — из него Rust-типы (`alloy::sol!`, `src/venues/bsc_dex/exec/executor/abi.rs`) |
 | `out/ArbExecutor.layout.json` | Раскладка хранилища solc: `owner` — слот 0 |
 | `out/ArbExecutor.sha256` | Версия компилятора и SHA-256 каждого артефакта; бот не берёт байткод, если хеш не совпал |
+| `out/v2/` | Решение 395 (t181): артефакты версии v2 (до шагов UNI_V4 / INF_CL / INF_BIN; копия `out/` на 982e0503) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v2 (onchain.rs) |
 | `out/v1/` | Решение 272: артефакты версии v1 (до executeNative; коммит 2180cf9) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v1 (onchain.rs) |
-| `evmtest/` | Решение 272: EVM-тест исполнителя (ethereumjs, официальные PancakePair/WETH9) — `evmtest/README.md`; сценарии ревью 272 — `evmtest/review.mjs` |
+| `evmtest/` | Решение 272: EVM-тест исполнителя (ethereumjs, официальные PancakePair/WETH9) — `evmtest/README.md`; сценарии ревью 272 — `evmtest/review.mjs`; решение 395 — шаги UNI_V4 / INF_CL / INF_BIN с официальным кодом менеджеров (`evmtest/singleton.mjs`) |
 
 Пересборка: `contracts/build.sh` → `git diff contracts/out` (пусто — артефакты в репозитории собраны из этих исходников)
 → `cargo test --test bsc_dex_executor_abi` (ABI, номера видов, хеши) → `cd evmtest && npm ci && node run.mjs`.
 
-## Версии (решение 272)
+## Версии (решения 272, 395)
+- **v3** (решение 395, t181) — v2 + шаги UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 (пулы внутри менеджеров Uniswap V4 и
+  PancakeSwap Infinity) и обратные вызовы `unlockCallback` / `lockAcquired`. Текущая сборка `out/` — v3; «Развернуть
+  исполнитель» разворачивает её. Хранилище то же (owner — слот 0, wnative — слот 1), execute / executeNative — те же.
+  Бот определяет версию по коду в сети: `out/` → v3, `out/v2/` → v2, `out/v1/` → v1. Шаги 19–21 у кошелька v1 / v2 не
+  строятся (причина «переразверните исполнитель»); пулы V4 / Infinity у такого кошелька идут своим Universal Router,
+  как раньше. **Размер кода в сети v3: 20 102 байт** (v2 — 16 212; предел EIP-170 — 24 576, запас 4 474).
 - **v1** — только `execute` (артефакты `out/v1/`). Развёрнутые до решения 272 исполнители — v1; бот работает с ними как
   раньше, нативный BNB монетой сделки через них не идёт.
 - **v2** — `execute` (селектор и ABI те же, поведение то же) + `executeNative` и событие `NativeSettled`; конструктор
@@ -95,6 +102,9 @@ tokenOut, shareBps, data}`: сумма шага = баланс исполнит�
 | `KYBER_DMM` | 15 | KyberSwap Classic DMM (решение 287; **только v2**) | перевод входа в пул (прямой вход владелец → пул у первого шага, как V2); вход = баланс − реальный резерв; выход = DMMLibrary.getAmountOut по `getTradeInfo()` пула в той же транзакции: `вход·(1e18 − fee)/1e18`, затем x·y=k по виртуальным резервам; `pool.swap(out0, out1, to, «»)` (подпись V2); выход ≥ реального резерва — пул откатит | KyberNetwork/dmm-smart-contracts@e557b57 `DMMPool.sol` L162-L210, L240-L265, L285-L309; `libraries/DMMLibrary.sol` L75-L91; фабрика BSC 0x878d…934c — Sourcify match |
 | `SMARDEX` | 16 | SmarDex (решение 288; **только v2**) | `_expect(pool, tokenIn, сумма)` + `pair.swap(to, tokenIn < tokenOut, +сумма, «»)` + `smardexSwapCallback(d0, d1, data)` → `_pay` (та же проверка, что у V3: только пара текущего шага, долг ≤ суммы шага, токен входа шага); пара переводит выход до обратного вызова и проверяет вход после | SmarDex-Ecosystem/dex-smart-contracts@74d0444 (deployments/bsc, = Sourcify match фабрики 0xA8EF…Af33) `contracts/core/SmardexPair.sol` L155-L319, `interfaces/ISmardexSwapCallback.sol` L21 |
 | `BALANCER` | 17 | Balancer V2 — ACSI Finance BSC (решение 289; **только v2**) | пул шага — хранилище Vault, `data = abi.encode(bytes32 poolId)`; `approve(Vault, сумма)` ровно на шаг → `Vault.swap(SingleSwap(poolId, GIVEN_IN, tokenIn, tokenOut, сумма, «»), FundManagement(исполнитель, false, to, false), limit 1, block.timestamp)` (хранилище само списывает вход transferFrom у исполнителя после расчёта и переводит выход `to`; обратных вызовов нет) → разрешение после шага 0, как у CURVE. Налог монеты на входе — сигнал (хранилище считает вход по сумме transferFrom). Проба на цепи — tests/data/balancer_acsi_2026-11-15/exec_sim.json (10 из 10 = queryBatchSwap) | balancer/balancer-deployments@b55dc2b8 20210418-vault: `IVault.sol` L498, L513-L537, L623-L628; `Swaps.sol` L56-L104; `AssetTransfersHandler.sol` L44-L79 (Sourcify exact_match хранилища ACSI 0xa82f…ceced) |
+| `UNI_V4` | 19 | Uniswap V4 (решение 395; **только v3**) | пул шага — PoolManager, data = abi.encode(PoolKey: currency0, currency1, fee, tickSpacing, hooks). `_singleton`: expPool = менеджер, expHash = keccak(данные шага) → `unlock(данные)` → менеджер зовёт `unlockCallback` → `_singletonCb`: только от expPool и с теми данными (оба стираются до обмена) → `swap(ключ, (tokenIn == currency0, −сумма, MIN+1 / MAX−1), «»)` → дельты исполнителя у менеджера (`exttload(keccak256(исполнитель, валюта))`): долг входа 0 < долг ≤ сумма шага («owed»), кредит выхода > 0 («out») → `sync(вход)`, перевод ровно долга менеджеру, `settle()` → `take(выход, получатель шага, кредит)`; после unlock обязательно был вызов («cb»). Токены шага — ровно валюты ключа («key»), валюта address 0 — «native» | Uniswap/v4-core@bea7f6d1 `src/PoolManager.sol` L104-L114, L187-L227, L279-L302, L349-L365; `IPoolManager.sol` L114, L145, L171, L179, L183; `IUnlockCallback.sol` L9; `TransientStateLibrary.sol` L35-L43; порядок sync → перевод → settle — v4-periphery@0c4e5bd3 `DeltaResolver.sol` L38-L48 |
+| `INF_CL` | 20 | PancakeSwap Infinity CL и Infinity Stable — пул в крючке пула CL (решение 395; **только v3**) | пул шага — Vault Infinity (`dex.vault`), data = abi.encode(PoolKey Infinity: currency0, currency1, hooks, poolManager, fee, parameters). Как UNI_V4, но `lock` → `lockAcquired`, обмен — `key.poolManager.swap(ключ, (zeroForOne, −сумма, предел), «»)` (CLPoolManager), дельты — `Vault.currencyDelta(исполнитель, валюта)` | pancakeswap/infinity-core@3c5ef1be `src/Vault.sol` L74-L86, L143-L175, L238-L253; `IVault.sol` L56; `ILockCallback.sol` L9; `pool-cl/CLPoolManager.sol` L162-L212; `ICLPoolManager.sol` L150-L154; `libraries/VaultAppDeltaSettlement.sol` L12-L21; infinity-periphery@56a7a4f5 `DeltaResolver.sol` L35-L45 |
+| `INF_BIN` | 21 | PancakeSwap Infinity Bin (решение 395; **только v3**) | как INF_CL, обмен — `BinPoolManager.swap(ключ, swapForY = tokenIn == currency0, −сумма (int128), «»)` (предела цены у Bin нет) | infinity-core@3c5ef1be `pool-bin/BinPoolManager.sol` L133-L177; `IBinPoolManager.sol` L187-L193 |
 | `ELASTIC` | 8 | KyberSwap Elastic | `pool.swap(to, +сумма, isToken0, MIN+1 / MAX−1, "")` + `swapCallback` | KyberNetwork/ks-elastic-sc@4ab08c0a `IPoolActions.sol` L88-L94, `ISwapCallback.sol` L16, `Pool.sol` L328-L366 |
 
 Пределы цены — `TickMath.MIN_SQRT_RATIO + 1` / `MAX_SQRT_RATIO − 1` (те же числа у Uniswap/Pancake V3, Slipstream,
@@ -110,7 +120,8 @@ PancakeSwap Stable Swap и Lista (индексы uint256) — вид `STABLE_U25
 а не флаг в data STABLE_U256: старый вид и его разбор не меняются, путь BNB — отдельная функция. Прямой вход в пул у
 этих видов не используется: пул сам списывает вход по разрешению (или получает value). Срок Saddle = `block.timestamp`: срок всей транзакции
 уже проверен в начале `execute`.
-PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) исполнитель не вызывает — только свой Universal Router.
+PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) — шаги UNI_V4 / INF_CL / INF_BIN исполнителя v3 (решение 395,
+таблица выше и ниже); у v1 / v2 их нет — такие пулы идут только своим Universal Router.
 
 ## Безопасность — что может пойти не так и как закрыто
 
@@ -137,6 +148,12 @@ PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) ис
 | Неверный флаг `bnbIn` или токен-обёртка | Только владелец задаёт шаг. Флаг не тот: вход BNB при монете i — ERC-20 → пул делает `transferFrom` без разрешения → откат; выход BNB при монете j — ERC-20 → BNB не пришло, выход не вырос → «out»; шаг STABLE_U256 через пул с BNB → у пула `dx == msg.value` / BNB не принят receive → откат. `tokenIn`/`tokenOut` — не WBNB: withdraw чужого контракта не даст BNB → `exchange{value}` откатится (у исполнителя BNB нет); deposit в чужой контракт → WBNB не вырос → «out». Всё — откат, деньги не теряются (проверено на EVM игрушечным пулом с логикой BNB Lista/Pancake и WETH9: оба направления, цикл, неверные флаги, `bnb_gas` 2300 и 4029) |
 | Сэндвич / MEV | Внутри шагов минимумов нет (как у роутеров с одним итоговым минимумом); итог защищён minOut, отправка — приватными каналами (решение 41) |
 
+| UNI_V4 / INF_*: чужой зовёт unlockCallback / lockAcquired | Решение 395: обмен только при `msg.sender == expPool` (менеджер / Vault текущего шага) и `keccak256(data) == expHash` (данные этого шага), оба стираются до обмена — повторный вход крючка (с теми же данными) и любой вызов вне шага — «pool». EVM: singleton.mjs (G6, крючок ReenterHook — 3 попытки, все отказаны) |
+| UNI_V4 / INF_*: крючок берёт больше суммы шага / урезает выход | Платится ровно долг исполнителя у менеджера и только если 0 < долг ≤ сумма шага («owed»); выход — ровно кредит исполнителя (не выход пула); итог — minOut у кошелька. EVM: официальный FeeTakingHook — получено = выход − 1,23 % |
+| UNI_V4 / INF_*: недоплата, налог на перевод, незакрытые дельты | settle засчитывает прирост баланса менеджера — недоплата (налог) оставляет долг → менеджер откатывает весь unlock / lock (CurrencyNotSettled); бот не строит такой маршрут (quote/graph_executor.rs tax) |
+| UNI_V4 / INF_*: менеджер шага зовёт `_pay` (V3-обратный вызов) устаревшими expToken / expMax прошлого шага | Ревью t181 (Н5): `_singleton` ставит `(expPool, expToken, expMax) = (s.pool, 0, 0)` до unlock / lock — `_pay` откатит «owed». EVM: singleton.mjs G7 (FakeManager, режим 2) |
+| UNI_V4 / INF_*: поддельный «менеджер» врёт дельтами | Переводится только долг ≤ сумма шага, выхода нет — итог «minOut»; долг больше — «owed». EVM: singleton.mjs G7 (FakeManager) |
+| UNI_V4 / INF_*: не тот менеджер, не тот ключ | Вызываются только фиксированные функции по адресам шага владельца; менеджер не из Vault — Vault откатит (onlyRegisteredApp / NoLocker); не было обратного вызова — «cb»; токены не валюты ключа — «key»; бот сверяет PoolId ключа с id пула (entry.rs) |
 | executeNative: чужой адрес обёртки | Ревью А1: обёртка — аргумент конструктора (один раз, сеттера нет; без кода — развёртывание откатывается «wnative»); бот передаёт `dex.native_wrapped` и при каждой сверке читает слот и сравнивает с настройкой — не совпало, нативный BNB через исполнитель не идёт. Край маршрута не обёртка — «wrap» / «unwrap». Обёртка, не отдавшая BNB при withdraw, — «получено» 0 → «minOut» (покупка), событие — 0 вернулось (продажа). EVM-тест: evmtest/run.mjs (6), review.mjs (R5) |
 | executeNative: BNB застрял или ушёл не владельцу | Вход: `value == amountIn` («wrap»), обёрнут целиком до шагов; остаток обёртки разворачивается и с прочим BNB уходит владельцу (`_sweepBnb`); покупка: `value == 0` («unwrap»), весь выход обёртки развёрнут → владельцу. BNB шлётся только владельцу (EOA), в конце, под `locked`; на время withdraw `bnbFrom = wnative` |
 | executeNative: шаг тратит уже полученный выход / возвращает вход (ревью А2) | `require(«native step»)` по всем шагам до исполнения. EVM-тест review.mjs (R7) |
@@ -158,6 +175,6 @@ PancakeSwap Infinity и Uniswap V4 (пул внутри менеджера) ис
 не делегировать; если понадобится — сначала новая версия исполнителя.
 
 ## Техдолг
-`ArbExecutor.sol` — 482 строки (решение 286: + IZI; решение 285 — 470, + METRIC; решение 284 — 458, + NOMI_STABLE; задача t114 — 452, + squadV3SwapCallback; было 448) при ориентире 200 (решение 272 добавило executeNative, ревью 272 — обёртку в конструкторе,
+`ArbExecutor.sol` — 654 строки (решение 395: + UNI_V4 / INF_CL / INF_BIN); было 482 строки (решение 286: + IZI; решение 285 — 470, + METRIC; решение 284 — 458, + NOMI_STABLE; задача t114 — 452, + squadV3SwapCallback; было 448) при ориентире 200 (решение 272 добавило executeNative, ревью 272 — обёртку в конструкторе,
 «native step», учёт по разности балансов): контракт не дробится, пока развёртывание — один файл; запись в
 docs/ROADMAP.md (Техдолг).

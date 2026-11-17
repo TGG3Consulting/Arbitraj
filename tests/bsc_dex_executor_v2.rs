@@ -51,9 +51,13 @@ fn abi(path: &str) -> JsonAbi {
 
 #[test]
 fn version_by_code_in_chain() {
-    let v2 = code::runtime().expect("код v2 сверен");
+    // Решение 395 (t181): текущая сборка contracts/out/ — v3; v2 — замороженная копия contracts/out/v2/.
+    let v3 = code::runtime().expect("код v3 сверен");
+    let v2 = code::runtime_v2().expect("код v2 сверен по out/v2/ArbExecutor.sha256");
     let v1 = code::runtime_v1().expect("код v1 сверен по out/v1/ArbExecutor.sha256");
     assert_ne!(v1, v2);
+    assert_ne!(v2, v3);
+    assert_eq!(code::version_of(&v3).unwrap(), Some(Version::V3));
     assert_eq!(code::version_of(&v2).unwrap(), Some(Version::V2));
     assert_eq!(code::version_of(&v1).unwrap(), Some(Version::V1));
     assert_eq!(
@@ -307,7 +311,7 @@ async fn quote_gates_follow_executor_version() {
     assert!(native_exec::edge_ok(&q.ctx, PoolKind::Solidly, solidly));
     assert!(
         !native_exec::edge_ok(&q.ctx, PoolKind::Cl, infinity),
-        "Infinity — шага исполнителя нет"
+        "Infinity на стороне BNB — шаг пула менеджера не берётся (решение 395: ExecKind::singleton)"
     );
     // Смена адреса — версия сброшена (не сверена = v1).
     a.set_executor(

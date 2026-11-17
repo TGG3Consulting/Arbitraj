@@ -11,7 +11,11 @@
 //! dex.v3_swap_callback [DEX] (ревью 281: обратного вызова пула нет в коде исполнителя — пулы DEX без пути исполнения).
 //!
 //! PancakeSwap Infinity (CL, Bin и Infinity Stable — пул в крючке CL, решение «122 (Infinity Stable)») и Uniswap V4
-//! (общий PoolManager) исполняются своим Universal Router (часть R2) — вида шага исполнителя у них нет. KyberSwap Elastic вида шага пока не получает: его `swap(recipient, swapQty, isToken0,
+//! (общий PoolManager) исполняются своим Universal Router (часть R2); решение 395 (t181): у них есть и шаг исполнителя
+//! v3 — UNI_V4 / INF_CL / INF_BIN (пул внутри менеджера: unlock / lock + обратный вызов, contracts/ArbExecutor.sol), чтобы
+//! маршрут, где они смешаны с пулами других DEX (сплит, хопы), шёл одной транзакцией; одиночный путь своего Universal
+//! Router не меняется (graph_executor.rs ur_form). Шаг на хопе стороны BNB, когда BNB — монета сделки, не
+//! берётся (singleton; хоп, не касающийся BNB, — берётся: executeNative с шагом менеджера). KyberSwap Elastic вида шага пока не получает: его `swap(recipient, swapQty, isToken0,
 //! limitSqrtP, data)` (ks-elastic-sc IPoolActions.sol) не совпадает с V3 `swap(recipient, zeroForOne,
 //! amountSpecified, sqrtPriceLimitX96, data)` — вопрос Тиграну (отчёт части F).
 
@@ -69,6 +73,15 @@ pub enum ExecKind {
     /// Liquidity Book V2.1 (решение 290): перевод входа в пул + `pair.swap(swapForY = (getTokenX() пула == вход), to)`;
     /// без обратного вызова, data пусто. Только исполнитель v2.
     Lb,
+    /// Решение 395 (t181): пул Uniswap V4 внутри PoolManager — `unlock` → `unlockCallback` → `swap(ключ, …)` → `sync` /
+    /// перевод / `settle` долга, `take` выхода; data = abi.encode(PoolKey). Только исполнитель v3.
+    UniV4,
+    /// Решение 395: пул PancakeSwap Infinity CL (и Infinity Stable — пул в крючке пула CL) — `Vault.lock` → `lockAcquired`
+    /// → `CLPoolManager.swap(ключ, …)` → `sync` / перевод / `settle`, `take`; data = abi.encode(PoolKey Infinity). Только v3.
+    InfCl,
+    /// Решение 395: пул PancakeSwap Infinity Bin — как InfCl, обмен `BinPoolManager.swap(ключ, swapForY, −вход, «»)`.
+    /// Только исполнитель v3.
+    InfBin,
 }
 
 impl ExecKind {
@@ -92,7 +105,17 @@ impl ExecKind {
             ExecKind::Smardex => "SMARDEX",
             ExecKind::Balancer => "BALANCER",
             ExecKind::Lb => "LB",
+            ExecKind::UniV4 => "UNI_V4",
+            ExecKind::InfCl => "INF_CL",
+            ExecKind::InfBin => "INF_BIN",
         }
+    }
+
+    /// Решение 395: шаг пула внутри общего менеджера (Uniswap V4 / PancakeSwap Infinity). На хопе стороны BNB (BNB —
+    /// монета сделки) такой шаг не берётся (exec/native_exec.rs, check/native_probe.rs — как до решения 395); хоп, не
+    /// касающийся BNB, — берётся (executeNative с шагом менеджера). Ошибок нет.
+    pub fn singleton(self) -> bool {
+        matches!(self, ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin)
     }
 }
 
@@ -139,6 +162,15 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
         // шаг 18, v2.
         "lb_v21" => ExecKind::Lb,
+        // Решение 395 (t181): пулы внутри менеджеров — шаги v3. Uniswap V4: PoolManager.unlock / swap / sync / settle /
+        // take (Uniswap/v4-core@bea7f6d1 src/PoolManager.sol L104-L114, L187-L227, L279-L302); Infinity CL и Bin:
+        // Vault.lock / sync / settle / take + CLPoolManager.swap / BinPoolManager.swap (pancakeswap/infinity-core@3c5ef1be
+        // src/Vault.sol L74-L86, L143-L175, src/pool-cl/CLPoolManager.sol L162-L212, src/pool-bin/BinPoolManager.sol
+        // L133-L177). Infinity Stable — пул в крючке пула CL, обмен — тот же CL_SWAP с ключом пула (как у Universal
+        // Router, решение «122 (Infinity Stable)»). EVM-тест с официальным кодом менеджеров — contracts/evmtest/singleton.mjs.
+        "uniswap_v4" => ExecKind::UniV4,
+        "pancakeswap_infinity_cl" | "pancake_infinity_stable" => ExecKind::InfCl,
+        "pancakeswap_infinity_bin" => ExecKind::InfBin,
         _ => return None,
     })
 }
@@ -158,8 +190,20 @@ pub fn via_executor(ctx: &Ctx, f: &Family) -> bool {
     f.executor_kind.is_some() && executor_set(ctx) && exec_callback::missing(ctx, f).is_none()
 }
 
-/// Строка для интерфейса (список DEX, решение 122 F): как исполняются пулы этого вида. Ошибок нет.
+/// Строка для интерфейса (список DEX, решение 122 F): как исполняются пулы этого вида. Решение 395: у вида со своим
+/// Universal Router и шагом исполнителя (V4 / Infinity) — приставка «Universal Router своей DEX — как раньше»: причина
+/// «без пути исполнения» относится только к исполнителю. Ошибок нет.
 pub fn describe(ctx: &Ctx, f: &Family) -> String {
+    let base = describe_exec(ctx, f);
+    if f.tradable && !f.fork && f.executor_kind.is_some() {
+        format!("Universal Router своей DEX — как раньше; {base}")
+    } else {
+        base
+    }
+}
+
+/// Часть describe про исполнитель. Ошибок нет.
+fn describe_exec(ctx: &Ctx, f: &Family) -> String {
     if let (Some(k), Some(why)) = (f.executor_kind, exec_callback::missing(ctx, f)) {
         return format!("исполнитель: шаг {} — без пути исполнения: {why}", k.name());
     }
@@ -183,18 +227,11 @@ mod tests {
     use super::of;
     use crate::settings::catalog::dex::DEX_KINDS;
 
-    /// Каждый вариант каталога либо получает вид шага, либо явно его не имеет (V4/Infinity/Elastic/«не поддерживается»).
+    /// Каждый вариант каталога либо получает вид шага, либо явно его не имеет (Elastic / WooFi / «не поддерживается»;
+    /// решение 395: V4 и Infinity — шаги v3).
     #[test]
     fn every_kind_is_decided() {
-        let none = [
-            "pancakeswap_infinity_cl",
-            "pancakeswap_infinity_bin",
-            "uniswap_v4",
-            "kyber_elastic",
-            "woofi_v2",
-            "pancake_infinity_stable",
-            "unsupported",
-        ];
+        let none = ["kyber_elastic", "woofi_v2", "unsupported"];
         for k in DEX_KINDS {
             assert_eq!(of(k).is_none(), none.contains(k), "{k}");
         }

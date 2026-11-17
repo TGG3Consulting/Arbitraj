@@ -101,8 +101,7 @@ fn subsets(ctx: &Ctx, native: bool) -> Vec<(&'static str, Rule<'_>)> {
             "S2 — через исполнитель кошелька (одна транзакция)",
             Box::new(move |l: &[Leg]| {
                 l.iter().all(|h| {
-                    exec_kind::via_executor(ctx, h.entry.family)
-                        && entry::supported(h.entry.family, &h.entry.pool.reference).is_ok()
+                    exec_kind::via_executor(ctx, h.entry.family) && entry::fits(&h.entry).is_ok()
                 })
             }),
         ));

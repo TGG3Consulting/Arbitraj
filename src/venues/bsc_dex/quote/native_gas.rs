@@ -36,7 +36,7 @@ pub fn cost(q: &Quoting, quote: &Quote, gas_wei: U256) -> GatewayResult<Option<(
         .ok_or_else(|| ctx.err(ErrorCode::Internal, "у котировки нет маршрута"))?;
     // Наибольший замер по каждому роутеру (графовый маршрут) или один на всю транзакцию (прямой/умный, исполнитель).
     let via_exec = matches!(
-        super::super::exec::executor::takes(ctx, route, true),
+        super::super::exec::executor::takes(ctx, &q.reg, route, true),
         Ok(Some(_))
     );
     let mut per: Vec<(Option<Address>, u64)> = Vec::new();

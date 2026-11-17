@@ -108,7 +108,8 @@ pub(super) async fn once(
     // Решение 122 (часть X): через исполнитель — режим «через исполнитель» (любой маршрут, код подставлен) или
     // графовый «бандл» при заданном exec.executor_address (как пойдёт сделка, exec/trade.rs).
     let deployed = executor::address(ctx)?;
-    let takes = shape == RouteMode::Graph && executor::takes(ctx, route, is_native)?.is_some();
+    let takes =
+        shape == RouteMode::Graph && executor::takes(ctx, &q.reg, route, is_native)?.is_some();
     let via_exec = mode == DryMode::Executor || takes;
     if via_exec {
         // Решение 272: нативный BNB — executeNative: в режиме «через исполнитель» (код v2 подставлен) или у

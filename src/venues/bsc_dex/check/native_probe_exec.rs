@@ -8,7 +8,7 @@
 //! (WBNB → USDT) → продажа executeNative (value BNB → USDT) → нативный перевод на пустой адрес. Газ обёртки покупки =
 //! газ executeNative − газ execute той же стороны (не меньше 0, check/native_probe.rs::extra), продажи — так же.
 //! В каждом обмене — «кто меняет» через исполнитель (check/probe_exec.rs::emitter: событие самого пула).
-//! Исполнитель не v2 — причина (котировка BNB через такой пул без замера — «не проверено», CoinNotChecked).
+//! Исполнитель не v2 / v3 — причина (котировка BNB через такой пул без замера — «не проверено», CoinNotChecked).
 //! Кто вызывает: check/native_probe.rs (after).
 //! От чего зависит: exec/executor/{mod, call, onchain, code}.rs, exec/chain.rs (Step), exec/plan.rs (Order),
 //! wallet/approve_executor.rs, check/{simulate, sim_base, probe, probe_calls, probe_exec, native_probe}.rs.
@@ -23,7 +23,7 @@ use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::exec::chain::Step;
-use super::super::exec::executor::{self, call, code::Version, onchain};
+use super::super::exec::executor::{self, call, onchain};
 use super::super::exec::native;
 use super::super::exec::plan::Order;
 use super::super::node::heads::Heads;
@@ -37,7 +37,7 @@ use super::{probe_exec, sim_base};
 
 /// Симуляция. Принимает: пул (монета — обёртка BNB), источник USDT, кошелёк проб, сумму USDT, головы, обычную пробу.
 /// Возвращает: Ok(Ok((газ обёртки покупки, газ обёртки продажи, газ нативного перевода))) или Ok(Err(причина)) —
-/// исполнитель не v2 / вызов откатился / мерить не на чем. Ошибки: настройки, узел, сверка исполнителя (onchain.rs).
+/// исполнитель не v2 / v3 / вызов откатился / мерить не на чем. Ошибки: настройки, узел, сверка исполнителя (onchain.rs).
 pub async fn run(
     ctx: &Ctx,
     e: &Entry,
@@ -50,7 +50,7 @@ pub async fn run(
         return Ok(Err("у кошелька проб не развёрнут исполнитель".into()));
     };
     let v = onchain::ensure(ctx, x, wallet).await?;
-    if v != Version::V2 {
+    if !v.native() {
         return Ok(Err(format!(
             "исполнитель {x:#x} — версия {}: executeNative нет, BNB через этот пул не идёт (переразверните исполнитель)",
             v.label()

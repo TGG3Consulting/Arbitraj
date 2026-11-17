@@ -11,6 +11,8 @@
     совпал — адрес записан у кошелька (решение 132). Рядом — «Проверить
     подключение» исполнителя (POST /api/check/executor/{venue}, ревью 122): код по адресу совпал с репозиторием и
     владелец — кошелёк бота; иначе — точная причина (без этой проверки ни approve, ни сделки через исполнитель нет).
+    Ревью t181 (Н8): в окне — предупреждение quote.warning (сборка исполнителя ещё не принята на живых пулах — нет записи
+    симуляции в tests/data; бэкенд: exec/executor/code.rs live_warning).
   Кто вызывает: pages/Wallets.svelte (у каждого кошелька).
   От чего зависит: lib/api.js, components/Modal.svelte, components/ErrorText.svelte, components/CheckConnection.svelte.
   Настройки: нет (адрес исполнителя — у кошелька).
@@ -83,6 +85,7 @@
         <tr><th>Обёртка BNB (навсегда)</th><td><code>{quote.wnative}</code> — dex.native_wrapped, аргумент конструктора; сменить потом нельзя, только переразвернуть</td></tr>
       </tbody>
     </table>
+    {#if quote.warning}<p class="warn-text">{quote.warning}</p>{/if}
     {#if quote.note}<p class="muted">{quote.note}</p>{/if}
     <p class="muted">Если до отправки уйдёт другая транзакция кошелька, адрес будет другим — точный адрес покажется после блока.</p>
     <button disabled={busy} onclick={deploy}>{busy ? 'Отправляю…' : 'Подтвердить и отправить'}</button>

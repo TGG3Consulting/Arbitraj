@@ -114,9 +114,35 @@ fn kinds_match_contract_constants() {
         ("BALANCER", Params::Balancer { pool_id: B256::ZERO }),
         // Решение 290: пул Liquidity Book V2.1 — только v2.
         ("LB", Params::Lb),
+        // Решение 395 (t181): пулы внутри менеджеров — только v3.
+        ("UNI_V4", Params::UniV4 { key: v4_key() }),
+        ("INF_CL", Params::InfCl { key: inf_key() }),
+        ("INF_BIN", Params::InfBin { key: inf_key() }),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
+    }
+}
+
+/// Ключи для сверки номеров видов (решение 395): содержимое не важно — только номер вида.
+fn v4_key() -> kind::V4Key {
+    kind::V4Key {
+        currency0: USDT,
+        currency1: WBNB,
+        fee: 3000,
+        tick_spacing: alloy_primitives::aliases::I24::try_from(60i32).unwrap(),
+        hooks: Address::ZERO,
+    }
+}
+
+fn inf_key() -> kind::InfKey {
+    kind::InfKey {
+        currency0: USDT,
+        currency1: WBNB,
+        hooks: Address::ZERO,
+        manager: POOL,
+        fee: 3000,
+        parameters: B256::ZERO,
     }
 }
 

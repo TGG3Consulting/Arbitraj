@@ -23,6 +23,9 @@ export const opt = { optimizer: { enabled: true, runs: 200 }, evmVersion: 'cancu
 const big = { optimizer: { enabled: true, runs: 999999 } };
 export const v2 = L.artifact('out');
 export const v1 = L.artifact('out/v1');
+// Решение 395 (t181): `v2` выше — текущая сборка contracts/out/ (с решения 395 это исполнитель v3); `v2f` — замороженные
+// артефакты v2 (contracts/out/v2/, до шагов UNI_V4 / INF_CL / INF_BIN) — с ними бот сверяет уже развёрнутые v2.
+export const v2f = L.artifact('out/v2');
 const pc = join(L.here, 'vendor', 'pancake-swap-core');
 const fx = join(L.here, 'fixtures');
 export const ERC20 = L.compile(L.solc05, pc, 'test/ERC20.sol', 'ERC20', big);

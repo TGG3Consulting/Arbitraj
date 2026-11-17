@@ -288,6 +288,15 @@ fn rule_is_strict_on_altered_record() {
     assert!(live_rule::judge(&text("README.md"), &summary, &reject, None).is_err());
 }
 
+/// Данные вызова (нижний регистр): поле `input` (так пишет запись eth_simulateV1) или `data` (так пишет запись
+/// eth_call). None — нет ни того, ни другого.
+fn call_input(c: &Value) -> Option<String> {
+    c["input"]
+        .as_str()
+        .or_else(|| c["data"].as_str())
+        .map(str::to_ascii_lowercase)
+}
+
 /// Адреса квотеров DEX из README записи (Uniswap V4, Infinity CL, Infinity Bin).
 const QUOTERS: [&str; 3] = [
     "0x95c086d7fe28add842ee220fef225a777474d781",
@@ -314,16 +323,19 @@ fn x_left_and_quoter_a_from_raw_rpc() {
             executes += 1;
             // Сразу за execute — balanceOf(X) по обоим токенам шага, оба 0.
             for j in [i + 1, i + 2] {
-                let data = req[j]["data"].as_str().unwrap().to_ascii_lowercase();
+                // Вызовы eth_simulateV1 записи несут данные в поле `input` (execution-apis GenericTransaction).
+                let data = call_input(&req[j]).unwrap_or_else(|| {
+                    panic!("вызов {j} симуляции: нет input / data после execute {i}")
+                });
                 assert!(
                     data.starts_with("0x70a08231") && data.ends_with(x_word),
                     "balanceOf(X)"
                 );
                 assert_eq!(res[j]["status"], "0x1");
-                assert_eq!(
-                    word(res[j]["returnData"].as_str().unwrap()),
-                    Some(U256::ZERO)
-                );
+                let ret = res[j]["returnData"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("итог вызова {j}: нет returnData"));
+                assert_eq!(word(ret), Some(U256::ZERO));
             }
         }
     }
@@ -345,10 +357,7 @@ fn x_left_and_quoter_a_from_raw_rpc() {
                 .as_str()
                 .unwrap_or_default()
                 .to_ascii_lowercase();
-            let data = x["params"][0]["data"]
-                .as_str()
-                .unwrap_or_default()
-                .to_ascii_lowercase();
+            let data = call_input(&x["params"][0]).unwrap_or_default();
             x["method"] == "eth_call"
                 && x["params"][1] == TAG
                 && QUOTERS.contains(&to.as_str())

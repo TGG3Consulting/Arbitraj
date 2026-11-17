@@ -553,6 +553,12 @@ impl Venue for BscDex {
         exec::executor::deploy_gate::refusal()
     }
 
+    /// Решение 400: классы шага исполнителя v3 и их приёмка по записи симуляции на живых пулах
+    /// (exec/executor/live_proof.rs). Ошибок нет.
+    fn dex_executor_classes(&self) -> Vec<crate::core::types::ExecutorClassProof> {
+        exec::executor::live_proof::proofs()
+    }
+
     /// Развёртывание исполнителя ArbExecutor с кошелька бота (решение 122, часть X) — только по подтверждению человека:
     /// SHA-256 байткода и адрес обёртки (задача t114, 3в), которые он видел в оценке. Ошибки: QuoteMismatch (байткод или
     /// обёртка не те), ключ, каналы, узел.

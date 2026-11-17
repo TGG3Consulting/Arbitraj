@@ -12,10 +12,13 @@
     подключение» исполнителя (POST /api/check/executor/{venue}, ревью 122): код по адресу совпал с репозиторием и
     владелец — кошелёк бота; иначе — точная причина (без этой проверки ни approve, ни сделки через исполнитель нет).
     Ревью t181 (Н8): в окне — предупреждение quote.warning (сборка исполнителя ещё не принята на живых пулах — нет записи
-    симуляции в tests/data; бэкенд: exec/executor/code.rs live_warning).
+    симуляции в tests/data; бэкенд: exec/executor/deploy_gate.rs refusal).
     Решение 399: пока сборка не принята на живых пулах, развёртывание запрещено (сервер отказывает, обходной настройки
     нет): refused — причина из GET /api/wallets (executor_deploy_refused) — кнопка «Развернуть исполнитель» недоступна,
     причина видна рядом; quote.warning (та же причина, пришла с оценкой) — «Подтвердить и отправить» недоступна.
+    Решение 400: classes — классы шага исполнителя v3 (вид × крючок) из GET /api/wallets (executor_v3_classes) и
+    quote.classes: таблица «Классы шага v3» — принят / не принят, пулов доказано из скольких, почему. Развёртывание
+    разрешено, если принят хотя бы один класс; шаги непринятых классов исполнитель не берёт.
   Кто вызывает: pages/Wallets.svelte (у каждого кошелька).
   От чего зависит: lib/api.js, components/Modal.svelte, components/ErrorText.svelte, components/CheckConnection.svelte.
   Настройки: нет (адрес исполнителя — у кошелька).
@@ -27,8 +30,8 @@
   import CheckConnection from './CheckConnection.svelte';
 
   /** venue — id площадки DEX; wallet — id кошелька (решение 132); refused — причина запрета развёртывания (решение 399,
-   *  null — разрешено); ondone — после записи адреса. */
-  let { venue, wallet, refused = null, ondone } = $props();
+   *  null — разрешено); classes — классы шага v3 и их приёмка (решение 400); ondone — после записи адреса. */
+  let { venue, wallet, refused = null, classes = [], ondone } = $props();
   const q = $derived(`?wallet=${seg(wallet)}`);
 
   let quote = $state(null);
@@ -70,6 +73,18 @@
 <button disabled={busy || !!refused} title={refused ?? ''} onclick={ask}>{busy && !quote ? 'Считаю…' : 'Развернуть исполнитель'}</button>
 <CheckConnection url={`/api/check/executor/${encodeURIComponent(venue)}${q}`} />
 {#if refused}<p class="warn-text">«Развернуть исполнитель» недоступна: {refused}</p>{/if}
+{#snippet classTable(list)}
+  <table>
+    <caption>Классы шага v3 (запись симуляции на живых пулах, решение 400)</caption>
+    <thead><tr><th>Класс</th><th>Пулов доказано</th><th>Принят</th><th>Почему</th></tr></thead>
+    <tbody>
+      {#each list as c (c.class)}
+        <tr><td>{c.class}</td><td>{c.proven} из {c.pools}</td><td class={c.accepted ? 'ok' : 'warn-text'}>{c.accepted ? 'да' : 'нет'}</td><td>{c.why}</td></tr>
+      {/each}
+    </tbody>
+  </table>
+{/snippet}
+{#if classes.length}{@render classTable(classes)}{/if}
 <ErrorText text={error} />
 {#if done}
   <p class={done.code_ok ? 'ok' : 'err'} role="status">{done.text}</p>
@@ -91,6 +106,7 @@
       </tbody>
     </table>
     {#if quote.warning}<p class="warn-text">{quote.warning}</p>{/if}
+    {#if quote.classes?.length}{@render classTable(quote.classes)}{/if}
     {#if quote.note}<p class="muted">{quote.note}</p>{/if}
     <p class="muted">Если до отправки уйдёт другая транзакция кошелька, адрес будет другим — точный адрес покажется после блока.</p>
     <button disabled={busy || !!quote.warning} title={quote.warning ?? ''} onclick={deploy}>{busy ? 'Отправляю…' : 'Подтвердить и отправить'}</button>

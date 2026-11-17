@@ -444,14 +444,19 @@ async fn bundle_first_only_for_manager_routes_with_old_path() {
     );
 }
 
-/// Ревью 2 t181: предупреждение окна развёртывания снимается только если SHA-256 записи симуляции = SHA-256 текущего
-/// bin-runtime; пересборка без новой записи возвращает предупреждение.
+/// Ревью 2 t181, решение 400: запрет развёртывания снимается только записью, где принят хотя бы один класс шага; запись
+/// о другом коде (в README нет SHA-256 текущего bin-runtime) не принимает ничего. Приёмка на настоящей записи —
+/// tests/bsc_dex_executor_v3_live.rs.
 #[test]
 fn live_warning_tied_to_runtime_hash() {
-    let cur = "текущий-sha";
-    assert!(code::live_warning_for(Some(cur), Some(cur)).is_none());
-    let w = code::live_warning_for(Some("00"), Some(cur)).expect("другой код");
-    assert!(w.contains("проверяла код") && w.contains(cur), "{w}");
-    let w = code::live_warning_for(None, Some(cur)).expect("записи нет");
-    assert!(w.contains("нет записи"), "{w}");
+    use arb::venues::bsc_dex::exec::executor::{deploy_gate, live_rule};
+    let w = deploy_gate::refusal_for(&Ok(Vec::new())).expect("ничего не принято");
+    assert!(w.contains(deploy_gate::NOT_ACCEPTED), "{w}");
+    let other =
+        live_rule::judge("README другой сборки", "[]", "[]", code::runtime_sha256()).unwrap();
+    assert!(
+        other
+            .iter()
+            .all(|x| !x.accepted && x.why.contains("запись о другом коде"))
+    );
 }

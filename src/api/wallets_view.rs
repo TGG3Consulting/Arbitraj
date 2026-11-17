@@ -1,6 +1,7 @@
 //! Файл: api/wallets_view.rs
 //! Что делает: данные экрана «Маппинг кошельков» (решение 132): кошельки (id, имя, имя секрета ключа, адрес — от
-//! адаптера, исполнитель, запрет развёртывания исполнителя — решение 399, строки маппинга, незавершённые сделки),
+//! адаптера, исполнитель, запрет развёртывания исполнителя — решение 399, классы шага v3 и их приёмка — решение 400,
+//! строки маппинга, незавершённые сделки),
 //! строки маппинга (каждая биржа реестра шлюза — без перечисления в коде, «DEX ↔ DEX», «Пробы и сигналы») и
 //! предупреждения «деньги смешиваются». Ключей нет никогда.
 //! Кто вызывает: api/wallets.rs (list, map).
@@ -47,14 +48,13 @@ pub async fn view(st: &AppState) -> Value {
     });
     // Решение 399: причина запрета развёртывания исполнителя (шлюз dex_executor_refusal, без сети) — кнопка
     // «Развернуть исполнитель» недоступна с этой причиной, подсказки «переразверните» не показываются. null — разрешено.
-    let deploy_refused = match dex_id(st).await {
-        Ok(id) => st
-            .registry
-            .get(&id)
-            .await
-            .ok()
-            .and_then(|v| v.dex_executor_refusal()),
-        Err(_) => None,
+    // Решение 400: классы шага исполнителя v3 и их приёмка по записи симуляции (одни на все кошельки).
+    let (deploy_refused, v3_classes) = match dex_id(st).await {
+        Ok(id) => match st.registry.get(&id).await {
+            Ok(v) => (v.dex_executor_refusal(), v.dex_executor_classes()),
+            Err(_) => (None, Vec::new()),
+        },
+        Err(_) => (None, Vec::new()),
     };
     let mut wallets = Vec::new();
     for w in a.wallets() {
@@ -84,6 +84,7 @@ pub async fn view(st: &AppState) -> Value {
             "executor_wrapped": w.executor_wrapped,
             "native_wrapped": native_wrapped,
             "executor_deploy_refused": deploy_refused,
+            "executor_v3_classes": v3_classes,
             "address": address,
             "address_error": why,
             "rows": a.rows_of(&w.id),

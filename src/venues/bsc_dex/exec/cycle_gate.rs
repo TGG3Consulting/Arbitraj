@@ -123,5 +123,5 @@ fn step_why(ctx: &Ctx, l: &Leg) -> Option<String> {
     if !exec_kind::via_executor(ctx, f) {
         return Some(format!("{}: у вида пула нет шага исполнителя", f.id));
     }
-    entry::fits(&l.entry).err()
+    entry::fits(ctx, &l.entry).err()
 }

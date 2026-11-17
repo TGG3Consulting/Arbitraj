@@ -1,6 +1,7 @@
 //! Файл: api/wallets_view.rs
 //! Что делает: данные экрана «Маппинг кошельков» (решение 132): кошельки (id, имя, имя секрета ключа, адрес — от
 //! адаптера, исполнитель, запрет развёртывания исполнителя — решение 399, классы шага v3 и их приёмка — решение 400,
+//! со сводкой пробы пулов через исполнитель этого кошелька — решение 401,
 //! строки маппинга, незавершённые сделки),
 //! строки маппинга (каждая биржа реестра шлюза — без перечисления в коде, «DEX ↔ DEX», «Пробы и сигналы») и
 //! предупреждения «деньги смешиваются». Ключей нет никогда.
@@ -73,6 +74,12 @@ pub async fn view(st: &AppState) -> Value {
             }
         };
         let busy = crate::core::dex_account::open_deals_of(&st.core, &w.id);
+        // Решение 401: классы шага v3 со сводкой пробы пулов через исполнитель ЭТОГО кошелька (DEX на кошелёк); нет —
+        // общие (решение 400).
+        let classes = match dex_for(st, &w.id).await {
+            Ok(v) => v.dex_executor_classes(),
+            Err(_) => v3_classes.clone(),
+        };
         wallets.push(json!({
             "id": w.id,
             "name": w.name,
@@ -84,7 +91,7 @@ pub async fn view(st: &AppState) -> Value {
             "executor_wrapped": w.executor_wrapped,
             "native_wrapped": native_wrapped,
             "executor_deploy_refused": deploy_refused,
-            "executor_v3_classes": v3_classes,
+            "executor_v3_classes": classes,
             "address": address,
             "address_error": why,
             "rows": a.rows_of(&w.id),

@@ -16,8 +16,12 @@
 //! Stable — крючок ключа = адрес пула), пул шага — PoolManager (V4) или Vault Infinity (dex.vault).
 //! Решение 400 (t185): шаг пула менеджера строится и признаётся исполнимым (fits, singleton), только если его класс (вид
 //! шага × с крючком / без; Infinity Stable) принят записью симуляции на живых пулах — exec/executor/live_proof.rs.
-//! Кто вызывает: exec/executor/{call, mod}.rs, quote/graph_exec.rs.
-//! От чего зависит: exec/executor/{kind, live_proof}.rs, pools/{registry, families, exec_kind}.rs, quote/pool_quote.rs (v2_fee_pct).
+//! Решение 401 (t186): правило — exec/executor/pool_gate.rs: к приёмке класса добавлен факт пробы ЭТОГО пула через
+//! исполнитель кошелька окружения (прошёл — исполним и в непринятом классе; отвергнут — не исполним и в принятом).
+//! Форма шага без правила (shape, singleton_step) — для самой пробы (check/pass_probe.rs, check/pass_cycle.rs).
+//! Кто вызывает: exec/executor/{call, mod}.rs, quote/graph_exec.rs, check/{pass_probe, pass_cycle}.rs.
+//! От чего зависит: exec/executor/{kind, live_proof, pool_gate}.rs, pools/{registry, families, exec_kind}.rs,
+//! quote/pool_quote.rs (v2_fee_pct).
 //! Настройки: через pool_quote — dex.v2_fee_pct [DEX] (если у пары нет своей комиссии); dex.vault [DEX вида
 //! pancakeswap_infinity_* / pancake_infinity_stable] — для шагов INF_CL / INF_BIN.
 
@@ -74,14 +78,57 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 
 /// Ревью t181 (Н1): supported + у шага пула менеджера (UNI_V4 / INF_*) — ключ в записи реестра есть, обе валюты ключа —
 /// ERC-20 (нативная валюта address 0 — не шаг исполнителя, контракт: «native») и это ровно токены пары записи. Так
-/// маршрут через такой пул не признаётся исполнимым исполнителем (а не срывается при сборке шага). Решение 400: и класс
-/// шага (вид × крючок ключа; Infinity Stable отдельно) принят записью симуляции на живых пулах (live_proof::admits);
-/// не принят — причина «… у исполнителя v3 не принят на живых пулах: …», маршрут идёт прежним путём (бандл / Universal
-/// Router), если он собирается, иначе сигнал. Принимает: запись реестра. Возвращает: как supported. Ошибок иных нет.
-pub fn fits(e: &Entry) -> Result<(ExecKind, Address), String> {
+/// маршрут через такой пул не признаётся исполнимым исполнителем (а не срывается при сборке шага). Решение 400 / 401:
+/// и правило pool_gate.rs (класс принят записью симуляции на живых пулах или пул прошёл пробу через исполнитель кошелька
+/// окружения; пул, отвергнутый пробой, — нет); не допущен — причина, маршрут идёт прежним путём (бандл / Universal
+/// Router), если он собирается, иначе сигнал. Принимает: окружение (кошелёк), запись реестра. Возвращает: как
+/// supported. Ошибок иных нет.
+pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
+    let (k, a, hooks) = shape(e)?;
+    if k.singleton() {
+        super::pool_gate::admits(ctx, e, k, hooks).map_err(|w| format!("{}: {w}", e.family.id))?;
+    }
+    Ok((k, a))
+}
+
+/// Ревью t186 (Н1): горячий путь котировки (quote/graph_executor.rs all_via, quote/graph_fit.rs S2, mod.rs takes) — то же,
+/// что `fits(ctx, e).is_ok()`, без строк и без замков общих структур: форма шага (как supported и shape) и допуск
+/// pool_gate::admitted (снимки кошельков и итогов пробы). Равенство с fits — тест tests/bsc_dex_pool_pass_401.rs.
+/// Принимает: окружение (кошелёк), запись реестра. Ошибок нет.
+pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
+    let Some(k) = e.family.executor_kind else {
+        return false;
+    };
+    if !k.singleton() {
+        return !matches!(e.pool.reference, PoolRef::Singleton { .. });
+    }
+    let reference = match &e.pool.reference {
+        PoolRef::Singleton { .. } => true,
+        PoolRef::Contract(_) => k == ExecKind::InfCl && e.family.proto == Proto::InfinityStable,
+        _ => false,
+    };
+    let Some(key) = e.key.as_ref().filter(|_| reference) else {
+        return false;
+    };
+    let (c0, c1) = match key {
+        PoolKey::Uniswap(d) => (d.currency0, d.currency1),
+        PoolKey::Infinity(d) => (d.currency0, d.currency1),
+    };
+    let (t0, t1) = (e.pool.token0, e.pool.token1);
+    let pair = (t0 == c0 && t1 == c1) || (t0 == c1 && t1 == c0);
+    if c0.is_zero() || c1.is_zero() || !pair {
+        return false;
+    }
+    super::pool_gate::admitted(ctx, e, k, key.hooks())
+}
+
+/// Форма шага без правила допуска (решение 401: ею пользуется сама проба пула через исполнитель): supported и у шага
+/// пула менеджера — ключ есть, валюты ключа ERC-20 = пара записи. Принимает: запись реестра. Возвращает: вид шага, адрес
+/// пула, крючок ключа (у шагов не менеджера — нулевой). Ошибок иных нет.
+pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
     let (k, a) = supported(e.family, &e.pool.reference)?;
     if !k.singleton() {
-        return Ok((k, a));
+        return Ok((k, a, Address::ZERO));
     }
     let key = e
         .key
@@ -93,11 +140,7 @@ pub fn fits(e: &Entry) -> Result<(ExecKind, Address), String> {
     };
     super::kind_key::check_tokens((c0, c1), e.pool.token0, e.pool.token1)
         .map_err(|w| format!("{}: {w}", e.family.id))?;
-    // Решение 400: класс шага (вид × крючок, Infinity Stable) должен быть принят записью симуляции на живых пулах.
-    let stable = e.family.proto == Proto::InfinityStable;
-    super::live_proof::admits(k, stable, key.hooks())
-        .map_err(|w| format!("{}: {w}", e.family.id))?;
-    Ok((k, a))
+    Ok((k, a, key.hooks()))
 }
 
 /// Вид шага и адрес пула. Принимает: пул реестра. Ошибки: NoRoute — у семейства нет шага исполнителя, пул
@@ -214,9 +257,20 @@ fn singleton(ctx: &Ctx, e: &Entry, k: ExecKind) -> GatewayResult<(Params, Addres
         .key
         .as_ref()
         .ok_or_else(|| no("у пула нет ключа PoolKey".into()))?;
-    // Решение 400: та же проверка класса, что fits (котировка и сделка — одно правило).
-    let stable = e.family.proto == Proto::InfinityStable;
-    super::live_proof::admits(k, stable, key.hooks()).map_err(no)?;
+    // Решения 400 / 401: то же правило, что fits (котировка и сделка — одно правило, pool_gate.rs).
+    super::pool_gate::admits(ctx, e, k, key.hooks()).map_err(no)?;
+    singleton_step(ctx, e, k)
+}
+
+/// Шаг пула менеджера без правила допуска (решение 401: проба пула через исполнитель — check/pass_probe.rs; сделка и
+/// котировка идут через singleton). Принимает: окружение, пул, вид. Возвращает: параметры и адрес пула шага. Ошибки: как
+/// у singleton, кроме допуска.
+pub fn singleton_step(ctx: &Ctx, e: &Entry, k: ExecKind) -> GatewayResult<(Params, Address)> {
+    let no = |w: String| ctx.err(ErrorCode::NoRoute, format!("{}: {w}", e.family.id));
+    let key = e
+        .key
+        .as_ref()
+        .ok_or_else(|| no("у пула нет ключа PoolKey".into()))?;
     match &e.pool.reference {
         PoolRef::Singleton { manager, id } => {
             if key.id() != *id {

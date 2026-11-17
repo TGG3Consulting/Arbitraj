@@ -76,18 +76,55 @@ pub fn check(v: Version, sig: &str) -> Option<String> {
 /// Версия исполнителя кошелька окружения. Принимает: окружение, что проверяем (текст причины). Возвращает: Ok(None) — кошелька или исполнителя нет (проверку решает
 /// executor_set); Ok(Some(версия)) — сверена; Err(причина) — исполнитель есть, версия не сверена. Ошибок иных нет.
 fn wallet_version(ctx: &Ctx, what: &str) -> Result<Option<Version>, String> {
-    let Ok(w) = ctx.wallet() else { return Ok(None) };
-    let Some(x) = w.executor.as_deref() else {
-        return Ok(None);
-    };
-    match w.executor_version.as_deref().and_then(Version::parse) {
-        Some(v) => Ok(Some(v)),
-        None => Err(format!(
-            "исполнитель {x} кошелька «{}» не сверен — {what} не проверить (сверка — при первой сделке или \
-             пробе через исполнитель, или кнопкой «Проверить подключение» исполнителя)",
-            w.name
-        )),
+    // Решение 401 (ревью t186, Н1): снимок кошельков без замка и без копии записи.
+    let acc = ctx.settings.accounts();
+    acc.with_wallet(ctx.account.as_deref(), |found| {
+        let Some(w) = found else { return Ok(None) };
+        let Some(x) = w.executor.as_deref() else {
+            return Ok(None);
+        };
+        match w.executor_version.as_deref().and_then(Version::parse) {
+            Some(v) => Ok(Some(v)),
+            None => Err(format!(
+                "исполнитель {x} кошелька «{}» не сверен — {what} не проверить (сверка — при первой сделке или \
+                 пробе через исполнитель, или кнопкой «Проверить подключение» исполнителя)",
+                w.name
+            )),
+        }
+    })
+}
+
+/// Решение 401 (ревью t186, Н1): то же, что `missing(ctx, f).is_none()` при заданном исполнителе, — для горячего пути
+/// котировки (exec_kind.rs via_executor): без чтения записи кошелька и без строк; версия — из снимка (Ctx::exec_info).
+/// Вид шага с v2 / v3 — нужна сверенная версия не ниже since(вид); задана dex.v3_swap_callback — её селектор в коде
+/// сверенной версии (память SEEN). Принимает: окружение, вид, сверенную версию (None — не сверена). Ошибок нет.
+pub fn usable(ctx: &Ctx, f: &Family, ver: Option<Version>) -> bool {
+    if let Some(k) = f.executor_kind.filter(|k| since(*k) > Version::V1)
+        && !ver.is_some_and(|v| v >= since(k))
+    {
+        return false;
     }
+    let Ok(text) = ctx.dex_text(SETTING, f.id) else {
+        return true;
+    };
+    let sig = text.trim();
+    if sig.is_empty() {
+        return true;
+    }
+    match ver {
+        Some(v) => seen(v, sig).is_none(),
+        None => false,
+    }
+}
+
+/// Итог поиска селектора по памяти SEEN (артефакты неизменны до перезапуска). Принимает: версию, сигнатуру. Возвращает:
+/// None — вызов есть; Some — причина. Ошибок нет.
+fn seen(v: Version, sig: &str) -> Option<String> {
+    let mut g = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    g.get_or_insert_with(HashMap::new)
+        .entry((v, sig.to_string()))
+        .or_insert_with(|| check(v, sig))
+        .clone()
 }
 
 /// Нет ли у исполнителя кошелька окружения обратного вызова, который зовёт пул этой DEX. Принимает: окружение, вид.
@@ -107,11 +144,7 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
         Ok(None) => return None,
         Err(why) => return Some(why),
     };
-    let mut g = SEEN.lock().unwrap_or_else(|e| e.into_inner());
-    g.get_or_insert_with(HashMap::new)
-        .entry((v, sig.clone()))
-        .or_insert_with(|| check(v, &sig))
-        .clone()
+    seen(v, &sig)
 }
 
 /// С какой версии исполнителя есть вид шага (у более ранней диспетчер _step откатывает «kind»). Решение 284: v2 —

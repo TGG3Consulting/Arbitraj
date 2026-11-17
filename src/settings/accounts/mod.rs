@@ -5,9 +5,11 @@
 //! ключ очереди транзакций (storage/wallet_queue.rs). Строки маппинга: id биржи (CEX из реестра шлюза), ROW_DEX_DEX
 //! (циклы DEX ↔ DEX) и ROW_PROBE (пробы налогов, оценки разрешений и сигналы — только симуляции, без денег).
 //! Изменения — edit.rs (история «было/стало» и журнал), загрузка — db.rs, перенос старого кошелька — migrate.rs.
+//! Решение 401 (ревью t186, Н1): снимок кошельков и маппинга за ArcSwap (snap) — чтение без замка и без копии записи для
+//! горячего пути котировки (with_wallet); снимок обновляется после каждой записи в память (publish).
 //! Кто вызывает: settings/store.rs (создаёт при загрузке, Store::accounts), ядро (core/dex_account.rs), адаптер DEX
 //! (venues/bsc_dex/ctx.rs), api/wallets*.rs.
-//! От чего зависит: storage/db.rs, storage/journal.rs.
+//! От чего зависит: storage/db.rs, storage/journal.rs, arc-swap (снимок).
 //! Настройки: нет (это не настройки каталога: свои таблицы и своя история).
 
 pub mod db;
@@ -77,12 +79,33 @@ pub struct Accounts {
     pub(crate) changed: Arc<tokio::sync::watch::Sender<u64>>,
     /// Что переносить (migrate.rs, задаёт main.rs).
     pub(crate) legacy: Arc<RwLock<Option<migrate::LegacyCfg>>>,
+    /// Решение 401 (ревью t186, Н1): снимок состояния для чтения без замка (with_wallet); обновляет publish.
+    pub(crate) snap: Arc<arc_swap::ArcSwap<State>>,
 }
 
 impl Accounts {
     /// Копия состояния под замком чтения. Ошибок нет.
     pub(crate) fn read(&self) -> std::sync::RwLockReadGuard<'_, State> {
         self.st.read().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Решение 401 (ревью t186, Н1): снимок — заново после записи в память (вызывают места записи: edit.rs, edit_map.rs,
+    /// migrate.rs). Ошибок нет.
+    pub(crate) fn publish(&self) {
+        let st = self.read().clone();
+        self.snap.store(Arc::new(st));
+    }
+
+    /// Решение 401 (ревью t186, Н1): кошелёк счёта (или строки «Пробы» при None) — из снимка без замка и без копии записи;
+    /// для горячего пути котировки (адрес и версия исполнителя). Принимает: id счёта, что сделать с кошельком (None —
+    /// кошелька нет). Возвращает: итог `f`. Ошибок нет.
+    pub fn with_wallet<R>(&self, account: Option<&str>, f: impl FnOnce(Option<&Wallet>) -> R) -> R {
+        let s = self.snap.load();
+        let id = match account {
+            Some(id) => Some(id),
+            None => s.map.get(ROW_PROBE).map(String::as_str),
+        };
+        f(id.and_then(|i| s.wallets.get(i)))
     }
 
     /// Подписка на «кошельки или маппинг изменились». Ошибок нет.

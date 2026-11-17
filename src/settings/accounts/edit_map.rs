@@ -42,6 +42,7 @@ impl Accounts {
             })
             .await?;
         self.st.write().unwrap_or_else(|p| p.into_inner()).next = n + 1;
+        self.publish();
         Ok(format!("w{n}"))
     }
 
@@ -135,6 +136,7 @@ impl Accounts {
                 None => st.map.remove(row),
             };
         }
+        self.publish();
         self.say(text).await;
         Ok(true)
     }
@@ -197,6 +199,7 @@ impl Accounts {
             .unwrap_or_else(|p| p.into_inner())
             .wallets
             .insert(w.id.clone(), w);
+        self.publish();
     }
 
     /// Запись в журнал (вид wallets.changed; сбой журнала уже выведен в лог процесса). Ошибок нет.

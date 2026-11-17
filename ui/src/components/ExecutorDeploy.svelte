@@ -19,6 +19,9 @@
     Решение 400: classes — классы шага исполнителя v3 (вид × крючок) из GET /api/wallets (executor_v3_classes) и
     quote.classes: таблица «Классы шага v3» — принят / не принят, пулов доказано из скольких, почему. Развёртывание
     разрешено, если принят хотя бы один класс; шаги непринятых классов исполнитель не берёт.
+    Решение 401: колонка «Пулы кошелька» (поле live) — проба пулов класса через исполнитель v3 ЭТОГО кошелька: у
+    непринятого класса пул исполнителем идёт, только если прошёл пробу обе стороны (прошли / отвергнуты / не проверено);
+    у принятого — сколько пулов отвергнуто пробой или откатом сделки. Подробно по пулу — карточка пула на «Монетах».
   Кто вызывает: pages/Wallets.svelte (у каждого кошелька).
   От чего зависит: lib/api.js, components/Modal.svelte, components/ErrorText.svelte, components/CheckConnection.svelte.
   Настройки: нет (адрес исполнителя — у кошелька).
@@ -75,11 +78,11 @@
 {#if refused}<p class="warn-text">«Развернуть исполнитель» недоступна: {refused}</p>{/if}
 {#snippet classTable(list)}
   <table>
-    <caption>Классы шага v3 (запись симуляции на живых пулах, решение 400)</caption>
-    <thead><tr><th>Класс</th><th>Пулов доказано</th><th>Принят</th><th>Почему</th></tr></thead>
+    <caption>Классы шага v3 (запись симуляции на живых пулах, решение 400; проба пулов через исполнитель кошелька, решение 401)</caption>
+    <thead><tr><th>Класс</th><th>Пулов доказано</th><th>Принят</th><th>Почему</th><th>Пулы кошелька</th></tr></thead>
     <tbody>
       {#each list as c (c.class)}
-        <tr><td>{c.class}</td><td>{c.proven} из {c.pools}</td><td class={c.accepted ? 'ok' : 'warn-text'}>{c.accepted ? 'да' : 'нет'}</td><td>{c.why}</td></tr>
+        <tr><td>{c.class}</td><td>{c.proven} из {c.pools}</td><td class={c.accepted ? 'ok' : 'warn-text'}>{c.accepted ? 'да' : 'нет'}</td><td>{c.why}</td><td>{c.live || '—'}</td></tr>
       {/each}
     </tbody>
   </table>

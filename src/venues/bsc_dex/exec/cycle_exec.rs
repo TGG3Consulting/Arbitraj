@@ -14,7 +14,7 @@
 //! Решение 273: перед отправкой — пауза и предел цены газа фабрик пар Solidly заново (exec/solidly_gate.rs fresh_cap),
 //! предел — по цене самой транзакции (exec/txs.rs send_capped).
 //! Кто вызывает: exec/cycle_trade.rs.
-//! От чего зависит: exec/executor/{call, callback_at, onchain, sim}.rs, exec/{cycle_steps, cycle_ref, swap_send, txs, result}.rs,
+//! От чего зависит: exec/executor/{call, callback_at, onchain, pool_pass, sim}.rs, exec/{cycle_steps, cycle_ref, swap_send, txs, result}.rs,
 //! quote/{cycle_legs, cycle_cost}.rs, wallet/{approve_executor, nonce}.rs, check/simulate.rs.
 //! Настройки: exec.executor_address; через вызываемые — dex.deadline_s, dex.approve_unlimited, verify.*, send.*,
 //! channel.*, dex_dex.min_profit_usd.
@@ -35,7 +35,7 @@ use super::super::wallet::nonce::Nonces;
 use super::cycle_ref;
 use super::cycle_steps::{self, exec_steps, net_check};
 use super::executor::call::{self, ExecCall};
-use super::executor::{onchain, sim};
+use super::executor::{onchain, pool_pass, sim};
 use super::result;
 use super::swap_send::{rebuilt_notice, send_approvals, with_approve_gas};
 use super::txs::{self, Env};
@@ -156,6 +156,8 @@ async fn probe(
     let r = res
         .first()
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "eth_simulateV1: нет итога вызова"))?;
+    // Решение 401: откат (не срок, не minOut) помечает пулы шагов менеджера «отвергнут» до перепроверки.
+    pool_pass::on_sim(c, r);
     let got = sim::received(ctx, r)?;
     if got < c.min_out {
         let why = format!("проба исполнителя: получено {got} < minOut {}", c.min_out);

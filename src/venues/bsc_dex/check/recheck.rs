@@ -1,5 +1,6 @@
 //! Файл: venues/bsc_dex/check/recheck.rs
-//! Что делает: очереди внеочередных проверок для трёх циклов (налоги, крючки, сверка с квотером). Кнопка
+//! Что делает: очереди внеочередных проверок для трёх циклов (налоги, крючки, сверка с квотером) и (решение 401) задачи
+//! проб пулов через исполнитель (pass: «Перепроверить», «новые пулы», «налоги монеты проверены» — Queue::add). Кнопка
 //! «Перепроверить» (recheck_coins) кладёт в каждую очередь ТОЛЬКО переданные монеты — цикл проверяет их, а не все
 //! монеты подписки (иначе одна кнопка запускала проверку сотен монет залпом). Загрузка истории V4 сообщает «новые
 //! пулы» — циклы крючков и квотера проверяют пулы без итога. Полный проход — только по расписанию
@@ -69,6 +70,14 @@ impl Queue {
         )
     }
 
+    /// Решение 401 (ревью t186, Н5): монеты, у которых проверены налоги, — пробе пулов через исполнитель
+    /// (check/tax_cycle.rs → check/pass_cycle.rs). Ошибок нет.
+    pub fn add(&self, coins: &[Address]) {
+        if !coins.is_empty() {
+            self.push(coins, false, None);
+        }
+    }
+
     /// Ставит монеты в очередь; `by` — кошелёк сделки (перепроверка и им, итог — для продажи сделки), None — только
     /// кошельком строки «Пробы». Ошибок нет.
     fn push(&self, coins: &[Address], new_pools: bool, by: Option<&By>) {
@@ -90,6 +99,8 @@ pub struct Recheck {
     pub taxes: Queue,
     pub hooks: Queue,
     pub quoter: Queue,
+    /// Решение 401 (ревью t186, Н2 / Н5): проба пулов менеджера через исполнитель (check/pass_cycle.rs).
+    pub pass: Queue,
 }
 
 impl Recheck {
@@ -105,11 +116,13 @@ impl Recheck {
         self.taxes.push(coins, false, by.as_ref());
         self.hooks.push(coins, false, None);
         self.quoter.push(coins, false, None);
+        self.pass.push(coins, false, None);
     }
 
     /// Подключены новые пулы: проверить пулы без итога (крючки, сверка). Налоги — по сигналу «пул готов». Ошибок нет.
     pub fn new_pools(&self) {
         self.hooks.push(&[], true, None);
         self.quoter.push(&[], true, None);
+        self.pass.push(&[], true, None);
     }
 }

@@ -186,8 +186,16 @@ pub fn executor_set(ctx: &Ctx) -> bool {
 /// Без адреса — false: семейство остаётся сигналом (если у него нет своего пути —
 /// family.tradable). Принимает: окружение, вид пула. Ошибок нет.
 pub fn via_executor(ctx: &Ctx, f: &Family) -> bool {
+    if f.executor_kind.is_none() {
+        return false;
+    }
+    // Решение 401 (ревью t186, Н1): адрес и версия исполнителя — одно чтение снимка кошельков без замка (Ctx::exec_info;
+    // раньше — два чтения записи кошелька под замком с её копией: executor_set и exec_callback::step_missing).
+    let Some((_, ver)) = ctx.exec_info() else {
+        return false;
+    };
     // Ревью 281 (В4): у DEX с dex.v3_swap_callback обратный вызов должен быть в коде исполнителя (exec_callback.rs).
-    f.executor_kind.is_some() && executor_set(ctx) && exec_callback::missing(ctx, f).is_none()
+    exec_callback::usable(ctx, f, ver)
 }
 
 /// Строка для интерфейса (список DEX, решение 122 F): как исполняются пулы этого вида. Решение 395: у вида со своим
@@ -208,9 +216,11 @@ fn describe_exec(ctx: &Ctx, f: &Family) -> String {
         return format!("исполнитель: шаг {} — без пути исполнения: {why}", k.name());
     }
     match (f.executor_kind, executor_set(ctx)) {
-        // Решение 400: у шага пула менеджера — только классы, принятые записью симуляции на живых пулах.
+        // Решение 400: у шага пула менеджера — классы, принятые записью симуляции на живых пулах; решение 401 — и пул
+        // непринятого класса, прошедший пробу через исполнитель кошелька (отвергнутый пробой — нет).
         (Some(k), true) if k.singleton() => format!(
-            "исполнитель: шаг {} — исполнимо через ArbExecutor v3 только в принятых классах ({})",
+            "исполнитель: шаг {} — исполнимо через ArbExecutor v3 в принятых классах или после пробы пула через \
+             исполнитель кошелька (решение 401; {})",
             k.name(),
             super::super::exec::executor::live_proof::listing()
         ),

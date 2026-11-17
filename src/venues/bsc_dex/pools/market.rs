@@ -5,7 +5,7 @@
 //! наблюдатель новых пулов (события создания), головы сети; необязательная история V4 (history_v4.rs). Возвращает задачи — при новой
 //! подписке старые останавливаются (без дублей соединений).
 //! Кто вызывает: mod.rs (subscribe_market).
-//! От чего зависит: ctx.rs, tokens.rs, node/heads.rs, node/subs.rs, check/cycle.rs, node/rpc.rs, discover.rs, listen.rs, created.rs,
+//! От чего зависит: ctx.rs, tokens.rs, node/heads.rs, node/subs.rs, check/cycle.rs, check/pass_cycle.rs (решение 401), node/rpc.rs, discover.rs, listen.rs, created.rs,
 //! events.rs, registry.rs, mids.rs, market_mids.rs, history_v4.rs, fee_watch.rs (решение 281), directory/refresh.rs (справочник пулов, решение 58).
 //! Настройки: venue.quote_asset [bsc_dex] (тикер USDT в списке ядра), dex.pools_per_sub; через вызываемые — dex.*,
 //! dex.intermediate_enabled, dex.intermediate_tokens.
@@ -25,7 +25,7 @@ use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
 use super::super::check::recheck::Recheck;
-use super::super::check::{cycle, quoter_cycle, service_tax, tax_cycle};
+use super::super::check::{cycle, pass_cycle, quoter_cycle, service_tax, tax_cycle};
 use super::super::node::{rpc, subs};
 use super::batches::chunks;
 use super::created::{self, Watch};
@@ -124,7 +124,12 @@ pub async fn subscribe(
     }
     // Проверки (решения 30, 32): налоги (и промежуточных монет — у их шага тоже налог), крючки, сверка с квотером.
     // Проверки монет и крючков — класс Check в очереди узла (решение 61): выше загрузки пулов и цикла квотера.
-    let taxes = tax_cycle::taxes(p.clone(), all.clone(), usdt, wake.taxes.clone());
+    let taxes = tax_cycle::taxes(
+        p.clone(),
+        all.clone(),
+        usdt,
+        (wake.taxes.clone(), wake.pass.clone()),
+    );
     tasks.push(tokio::spawn(scope(Class::Check, taxes)));
     // Налоги служебной монеты USDT — для стоимости его возврата на биржу (решение 67, check/service_tax.rs).
     tasks.push(tokio::spawn(scope(
@@ -133,6 +138,10 @@ pub async fn subscribe(
     )));
     let hooks = cycle::hooks(p.clone(), wake.hooks.clone());
     tasks.push(tokio::spawn(scope(Class::Check, hooks)));
+    // Решение 401 (ревью t186, Н2): проба пулов менеджера через исполнитель — отдельной задачей, фоном очереди узла (после
+    // сделок, проверок и котировок), не задерживая цикл крючков.
+    let pass = pass_cycle::run(p.clone(), wake.pass.clone());
+    tasks.push(tokio::spawn(scope(Class::Background, pass)));
     tasks.push(tokio::spawn(quoter_cycle::run(
         p.clone(),
         wake.quoter.clone(),

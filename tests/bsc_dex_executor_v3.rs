@@ -378,14 +378,17 @@ async fn registry_entry_becomes_singleton_step() {
         id: nk.id(),
     };
     n.key = Some(nk);
-    let why = entry::fits(&n).expect_err("нативная валюта");
+    let why = entry::fits(&p.ctx, &n).expect_err("нативная валюта");
     assert!(why.contains("нативная валюта"), "{why}");
     let mut ok = e.clone();
     ok.pool.reference = PoolRef::Singleton {
         manager,
         id: uk.id(),
     };
-    assert!(entry::fits(&ok).is_ok(), "ключ USDT/WBNB = пара записи");
+    assert!(
+        entry::fits(&p.ctx, &ok).is_ok(),
+        "ключ USDT/WBNB = пара записи"
+    );
     // Ревью t181 (Н2): у шага менеджера ссылка Contract — только Infinity Stable; V4 по адресу контракта — не шаг.
     assert!(entry::supported(ok.family, &PoolRef::Contract(manager)).is_err());
     let cl = families::make("x-395-cl", "pancakeswap_infinity_cl").unwrap();

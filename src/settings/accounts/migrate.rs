@@ -164,11 +164,14 @@ impl Accounts {
                 tx.commit()
             })
             .await?;
-        let mut st = self.st.write().unwrap_or_else(|p| p.into_inner());
-        st.migrated = true;
-        if legacy.is_some() {
-            st.legacy = legacy.map(str::to_string);
+        {
+            let mut st = self.st.write().unwrap_or_else(|p| p.into_inner());
+            st.migrated = true;
+            if legacy.is_some() {
+                st.legacy = legacy.map(str::to_string);
+            }
         }
+        self.publish();
         Ok(())
     }
 }

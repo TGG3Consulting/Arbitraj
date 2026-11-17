@@ -79,9 +79,12 @@ pub struct Memo(Arc<Shared>);
 /// Номера памятей.
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
+/// Последний прочитанный потоком снимок допуска: (номер памяти, номер публикации, снимок).
+type Seen = (u64, u64, Arc<Snap>);
+
 thread_local! {
-    /// Последний прочитанный этим потоком снимок допуска: (номер памяти, номер публикации, снимок).
-    static SEEN: RefCell<Option<(u64, u64, Arc<Snap>)>> = const { RefCell::new(None) };
+    /// Последний прочитанный этим потоком снимок допуска.
+    static SEEN: RefCell<Option<Seen>> = const { RefCell::new(None) };
 }
 
 impl Default for Memo {

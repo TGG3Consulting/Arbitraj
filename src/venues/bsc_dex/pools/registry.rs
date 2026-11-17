@@ -31,6 +31,7 @@ use alloy_primitives::Address;
 
 use crate::core::types::{Pool, PoolRef};
 
+use super::super::quote::shallow_stamps::Pair as ShallowPair;
 use super::bins::BinMap;
 use super::families::Family;
 use super::key::PoolKey;
@@ -199,7 +200,7 @@ impl Registry {
     pub fn update<T>(&self, r: &PoolRef, f: impl FnOnce(&mut Entry) -> T) -> Option<T> {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
         // Решение 403: пара записи до и после изменения (функция может сменить монету или встречный токен).
-        let mut seen: (Option<(Address, Address)>, Option<(Address, Address)>) = (None, None);
+        let mut seen: (Option<ShallowPair>, Option<ShallowPair>) = (None, None);
         let out = m.update(r, |e| {
             seen.0 = Some((e.coin, e.usdt));
             let before = super::state_gen::Snap::of(e);

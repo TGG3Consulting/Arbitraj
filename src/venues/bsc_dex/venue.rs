@@ -547,6 +547,12 @@ impl Venue for BscDex {
         scope(Class::Check, exec::executor::deploy::quote(&q, &env)).await
     }
 
+    /// Решение 399: причина запрета развёртывания исполнителя (текущая сборка v3 не принята на живых пулах —
+    /// exec/executor/deploy_gate.rs). None — разрешено. Ошибок нет.
+    fn dex_executor_refusal(&self) -> Option<String> {
+        exec::executor::deploy_gate::refusal()
+    }
+
     /// Развёртывание исполнителя ArbExecutor с кошелька бота (решение 122, часть X) — только по подтверждению человека:
     /// SHA-256 байткода и адрес обёртки (задача t114, 3в), которые он видел в оценке. Ошибки: QuoteMismatch (байткод или
     /// обёртка не те), ключ, каналы, узел.

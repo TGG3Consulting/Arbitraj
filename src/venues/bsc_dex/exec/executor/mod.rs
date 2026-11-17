@@ -15,6 +15,7 @@ pub mod call;
 pub mod callback_at;
 pub mod code;
 pub mod deploy;
+pub mod deploy_gate;
 pub mod dry;
 pub mod entry;
 pub mod fact;

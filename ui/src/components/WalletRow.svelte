@@ -9,7 +9,9 @@
     форки не торгуется, переразверните» / «не сверена» — по коду в сети, поле executor_version; ревью 272 А1: у v2 —
     обёртка из конструктора executor_wrapped против dex.native_wrapped, не совпала — «BNB не идёт»; решение 395 (t181):
     «v3» — ещё шаги Uniswap V4 / PancakeSwap Infinity, у «v2» — подсказка «переразверните, чтобы смешанные с V4 /
-    Infinity маршруты шли через исполнитель»); «Переименовать» (PATCH), «Удалить» (DELETE — бэкенд запрещает,
+    Infinity маршруты шли через исполнитель»; решение 399 (Н2): пока развёртывание запрещено — поле
+    executor_deploy_refused, v3 не принят на живых пулах — вместо призыва «нужен исполнитель v3; v3 ещё не принят на
+    живых пулах», а кнопка «Развернуть исполнитель» недоступна с этой причиной); «Переименовать» (PATCH), «Удалить» (DELETE — бэкенд запрещает,
     пока кошелёк в маппинге или в незавершённой сделке; ключ из секретов не удаляется).
   Кто вызывает: components/WalletList.svelte.
   От чего зависит: lib/api.js, components/{CheckConnection,ExecutorDeploy,CopyAddr,ErrorText}.svelte.
@@ -29,10 +31,11 @@
   let modern = $derived(w.executor_version === 'v2' || w.executor_version === 'v3');
   let nativeOk = $derived(modern && !!w.executor_wrapped && !!w.native_wrapped
     && w.executor_wrapped.toLowerCase() === w.native_wrapped.toLowerCase());
-  // Решение 395 (t181): шаги Uniswap V4 / PancakeSwap Infinity через исполнитель — только у v3.
+  // Решение 395 (t181): шаги Uniswap V4 / PancakeSwap Infinity через исполнитель — только у v3. Решение 399 (Н2): пока
+  // развёртывание запрещено (executor_deploy_refused), без призыва переразвернуть — как бэкенд (deploy_gate.rs need_v3).
   let singletonNote = $derived(w.executor_version === 'v3'
     ? '; шаги Uniswap V4 и PancakeSwap Infinity через исполнитель есть'
-    : '; шагов Uniswap V4 и PancakeSwap Infinity нет — маршрут, где они смешаны с другими DEX, этим кошельком не исполняется (переразверните исполнитель)');
+    : `; шагов Uniswap V4 и PancakeSwap Infinity нет — маршрут, где они смешаны с другими DEX, этим кошельком не исполняется (${w.executor_deploy_refused ? 'нужен исполнитель v3; v3 ещё не принят на живых пулах' : 'переразверните исполнитель'})`);
 
   let bal = $state(null);
   let error = $state('');
@@ -105,7 +108,7 @@
     <!-- Ревью 272 (А1): у v2 — обёртка из конструктора; ≠ dex.native_wrapped — BNB через исполнитель не идёт. -->
     <p class={nativeOk ? 'ok' : 'warn-text'}>Версия: {#if nativeOk}{w.executor_version} — нативный BNB монетой сделки идёт через исполнитель (обёртка <code>{w.executor_wrapped}</code>){singletonNote}{:else if modern}{w.executor_version}, но обёртка в исполнителе <code>{w.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{w.native_wrapped ?? 'не задана'}</code> — нативный BNB через исполнитель не идёт (ERC-20 — как обычно), переразверните при верной настройке{singletonNote}{:else if w.executor_version === 'v1'}v1 — нативный BNB через форки не торгуется, переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
   {/if}
-  {#if dex}<ExecutorDeploy venue={dex} wallet={w.id} ondone={onchange} />{/if}
+  {#if dex}<ExecutorDeploy venue={dex} wallet={w.id} refused={w.executor_deploy_refused} ondone={onchange} />{/if}
   <form class="inline" onsubmit={(e) => { e.preventDefault(); setExec(exec); exec = ''; }}>
     <input bind:value={exec} placeholder="адрес уже развёрнутого исполнителя (0x…)" />
     <button disabled={!exec}>Записать после проверки</button>

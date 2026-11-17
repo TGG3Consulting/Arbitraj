@@ -1,44 +1,66 @@
 //! Файл: core/coin_group.rs
-//! Что делает: решение 390 (t179) — общий возврат USDT группы докупки (записка 269, пп. 10, 11, 13). Вызывается из
-//! общего шага возврата (prepare в usdt_return_deal.rs) у закрытой сделки с группой (Deal.group; без группы — как раньше):
-//! - сделка закрыта не обычной продажей на площадке плана (перегон, продажа здесь, вручную, части на нескольких
-//!   площадках) — она вышла из группы (п. 13): свой возврат, пометка «была частью группы …»;
-//! - идут другие сделки группы (шаг Transfer / Selling) — её выручка ждёт (п. 10): часть возврата откладывается в
-//!   группу, у сделки возврат 0 с пометкой (deal_group.rs);
-//! - она последняя — ОДИН возврат на общую сумму: своя часть + отложенные (п. 10); затраты возврата — один раз (п. 11,
-//!   14) у первой сделки группы, если она среди отложенных (её уведомление deal.closed ждёт конца возврата, deal_closed
-//!   hold), иначе у этой; у остальных — «общий возврат в сделке …»; итог группы — в уведомлении носителя (п. 12).
+//! Что делает: решение 390 (t179) — общий возврат USDT группы докупки (записка 269, пп. 10, 11, 13; ревью 2 t179 —
+//! Б1, Б2, Н1, Н2). Только у сделок с группой (Deal.group; без группы — как раньше, сюда не попадают).
+//! - Закрытие обычной продажей на площадке плана одной частью — часть не перегоняется сразу: Deal.group.wait, запись
+//!   сделки сохраняется (hold_parts, вызывает prepare в usdt_return_deal.rs). Иначе (перегон, части на нескольких
+//!   площадках, продажа вручную) — сделка вышла из группы (п. 13): свой возврат.
+//! - После сохранения закрытия (ledger::finish → after_close; любой шаг: Closed, Halted, TakenOver) — под замком
+//!   `groups`: часть — в пул группы с итогом сделки из её записи; сделка — среди закрывшихся. Последняя (нет идущих
+//!   сделок группы на шаге Transfer / Selling, кроме закрывшихся, и нет вложенных до учёта покупки — `pending`, Б2) —
+//!   пул уходит ОДНИМ общим возвратом (flush). Ушедшая с пути последняя идущая (Stuck и др., on_saved) — тоже flush.
+//! - flush (Н1 — один порядок): носитель — первая сделка группы, если её часть в пуле, иначе первая отложенная; под
+//!   замком учёта у всех частей снимается wait, у остальных — «общий возврат в сделке …», у носителя — итог группы
+//!   (сумма итогов из пула); перегоны готовятся у носителя (состояние «идёт»); ВСЕ записи сохраняются; только потом
+//!   перегон стартует. Падение до сохранения — у сделок wait → при запуске «не вернулись» по своим суммам (ledger_load);
+//!   после сохранения — «не вернулись» у носителя на общую сумму, у остальных возврата нет (двойного вывода нет;
+//!   «Перегнать» по сделке с общим возвратом — отказ, manual_usdt.rs retry_block).
+//! - Минимум и максимум вывода USDT у площадки возврата (Н2): сумма выше максимума — несколько выводов не больше
+//!   максимума (поровну); ниже минимума — одним выводом, как у одиночной сделки.
+//! - Пул после flush остаётся с признаком `flushed`, пока у группы есть идущие записи: позже закрывшаяся (застрявшая)
+//!   сделка группы — «была частью группы», свой возврат (п. 13).
 //!
-//! Последняя идущая сделка группы ушла с пути (застряла, остановлена, ждёт человека) — её не ждём (п. 13): отложенные
-//! части уходят одним возвратом сразу (on_saved), носитель — первая сделка группы или первая отложенная.
-//! Решение «последняя ли» — под одним замком `groups` (две сделки, закрывающиеся одновременно, не отложат обе).
-//! Сделки группы до учёта покупки (предпроверка) в «идут» не входят: последняя закрывшаяся из идущих возвращает сразу.
-//! Отложенные части живут в памяти: перезапуск — ledger_load.rs ставит страховку «USDT не вернулись».
-//! Кто вызывает: usdt_return_deal.rs (route), ledger.rs (save → on_saved).
-//! От чего зависит: coin_key.rs, coin_ride.rs (идущие), deal.rs, deal_group.rs, ledger.rs, usdt_return_deal.rs, engine.rs.
-//! Настройки: нет (включатель exec.top_up — coin_ride.rs).
+//! Отложенные части живут в записях сделок (Deal.group.wait, база): перезапуск — «не вернулись» с точной суммой,
+//! решает человек (ledger_load.rs).
+//! Кто вызывает: usdt_return_deal.rs (hold_parts), ledger.rs (finish → after_close; save → on_saved), executor.rs (join,
+//! joined, dropped).
+//! От чего зависит: coin_key.rs, coin_ride.rs (идущие), deal.rs, deal_group.rs, ledger.rs, usdt_return_deal.rs,
+//! dirctx_venue.rs (сеть USDT площадки), engine.rs, settings.
+//! Настройки: venue.quote_asset, venue.bsc_network (сеть возврата — пределы вывода); включатель — coin_ride.rs.
 
 use std::collections::HashSet;
 
 use rust_decimal::Decimal;
 
 use crate::core::types::VenueId;
-use crate::storage::journal::Level;
+use crate::settings::read::At;
 
 use super::coin_key::CoinKey;
 use super::deal::{Deal, Step};
 use super::deal_group::GroupSum;
 use super::engine::{Core, lk};
 
-/// Состояние группы: кто уже решал свой возврат и отложенные части (сделка, откуда, сумма).
+/// Отложенная часть общего возврата: сделка, откуда, сумма, итог сделки.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Part {
+    pub deal: String,
+    pub from: VenueId,
+    pub amount: Decimal,
+    pub result: Option<Decimal>,
+}
+
+/// Состояние группы.
 #[derive(Debug, Default)]
 pub struct Pool {
     closing: HashSet<String>,
-    parts: Vec<(String, VenueId, Decimal)>,
+    parts: Vec<Part>,
+    /// Вложенные сделки до учёта покупки (admit → board), Б2.
+    pending: usize,
+    /// Общий возврат группы уже ушёл.
+    flushed: bool,
 }
 
-/// Обычное закрытие сделки группы: продано ботом на площадке плана, без перегонов, одна площадка выручки, без
-/// исключённого пути и «Продать и перегнать». Ошибок нет.
+/// Обычное закрытие сделки группы: продано ботом на площадке плана, без перегонов, без исключённого пути и «Продать и
+/// перегнать». Ошибок нет.
 fn normal(deal: &Deal) -> bool {
     deal.at == deal.direction.sell_on
         && deal.relays == 0
@@ -47,192 +69,110 @@ fn normal(deal: &Deal) -> bool {
         && !deal.return_usdt
 }
 
-/// Сколько других сделок группы `g` монеты ещё идут (Transfer / Selling) и не решали возврат. Вызывается под замком
-/// `groups`. Ошибок нет.
-fn running(core: &Core, key: &CoinKey, g: &str, me: &str, closing: &HashSet<String>) -> usize {
+/// Что делает: части возврата закрытой сделки группы — у обычного закрытия одной частью часть ждёт общего возврата
+/// (Deal.group.wait, перегона сейчас нет); иначе сделка вышла из группы (left) — свой возврат. Принимает: сделку, её
+/// части (откуда, сумма). Возвращает: части, которые перегнать сейчас. Ошибок нет.
+pub fn hold_parts(deal: &mut Deal, parts: Vec<(VenueId, Decimal)>) -> Vec<(VenueId, Decimal)> {
+    let Some(g) = deal.group.as_ref().map(|x| x.id.clone()) else {
+        return parts;
+    };
+    if normal(deal) && parts.len() == 1 {
+        let (from, amount) = parts[0].clone();
+        if let Some(x) = deal.group.as_mut() {
+            x.wait = Some((from.clone(), amount));
+        }
+        deal.note(format!(
+            "Возврат USDT {amount} с {}: 0 сейчас — общий возврат группы {g} после последней её сделки (решение 390)",
+            from.0
+        ));
+        return vec![];
+    }
+    if let Some(x) = deal.group.as_mut() {
+        x.left = true;
+    }
+    deal.note(format!(
+        "Была частью группы докупки {g}: закрыта не обычной продажей на площадке плана — свой возврат USDT (решение 390)"
+    ));
+    parts
+}
+
+/// Сколько записей группы `g` монеты ещё в идущих (`path` — только Transfer / Selling) и не закрылись. Вызывается под
+/// замком `groups` (порядок groups → rides → deals). Ошибок нет.
+fn running(core: &Core, key: &CoinKey, g: &str, closing: &HashSet<String>, path: bool) -> usize {
     let rides = lk(&core.inner.rides);
     let deals = lk(&core.inner.deals);
     rides.get(key).map_or(0, |v| {
         v.iter()
-            .filter(|r| r.group.as_deref() == Some(g) && r.deal_id != me)
-            .filter(|r| !closing.contains(&r.deal_id))
+            .filter(|r| r.group.as_deref() == Some(g) && !closing.contains(&r.deal_id))
             .filter(|r| {
-                matches!(
-                    deals.get(&r.deal_id).map(|x| x.step),
-                    Some(Step::Transfer | Step::Selling)
-                )
+                !path
+                    || matches!(
+                        deals.get(&r.deal_id).map(|x| x.step),
+                        Some(Step::Transfer | Step::Selling)
+                    )
             })
             .count()
     })
 }
 
-/// Решение о возврате закрытой сделки группы под замком `groups`.
-enum Choice {
-    /// Идут другие сделки группы — часть отложена; true — первая сделка группы уже среди отложенных (носитель — она).
-    Defer(bool),
-    /// Последняя, носитель — она сама: отложенные части других.
-    Last(Vec<(String, VenueId, Decimal)>),
-    /// Последняя, а первая сделка группы среди отложенных — носитель она (п. 11: возврат записывается на группу —
-    /// сделку 1): все части, включая свою.
-    ToLead(Vec<(String, VenueId, Decimal)>),
+/// Под замком: последняя ли — нет идущих на пути и вложенных до покупки; да — части пула забираются (пул остаётся с
+/// признаком flushed, пока у группы есть записи в идущих). Возвращает: части для общего возврата и был ли flush раньше.
+fn take_if_last(core: &Core, key: &CoinKey, g: &str, pool: &mut Pool) -> Option<(Vec<Part>, bool)> {
+    if pool.pending > 0 || running(core, key, g, &pool.closing, true) > 0 || pool.parts.is_empty() {
+        return None;
+    }
+    let was = pool.flushed;
+    pool.flushed = true;
+    Some((std::mem::take(&mut pool.parts), was))
 }
 
-/// Что делает: решает возврат закрытой сделки группы (см. шапку). Принимает: ядро, сделку (запишутся пометки и
-/// Deal.group), её части возврата (откуда, сумма). Возвращает: части, которые перегнать сейчас этой сделкой (пусто —
-/// отложено или перегоняет первая сделка группы). Ошибок нет.
-pub async fn route(
-    core: &Core,
-    deal: &mut Deal,
-    parts: Vec<(VenueId, Decimal)>,
-) -> Vec<(VenueId, Decimal)> {
-    let Some(g) = deal.group.as_ref().map(|x| x.id.clone()) else {
-        return parts;
-    };
-    if !normal(deal) || parts.len() != 1 {
-        if let Some(x) = deal.group.as_mut() {
-            x.left = true;
-        }
-        deal.note(format!(
-            "Была частью группы докупки {g}: закрыта не обычной продажей на площадке плана — свой возврат USDT (решение 390)"
-        ));
-        return parts;
+/// Убрать пул, если у группы не осталось записей в идущих и вложенных до покупки (вызывается под замком). Ошибок нет.
+fn tidy(core: &Core, key: &CoinKey, g: &str, groups: &mut std::collections::HashMap<String, Pool>) {
+    if let Some(p) = groups.get(g)
+        && p.parts.is_empty()
+        && p.pending == 0
+        && running(core, key, g, &p.closing, false) == 0
+    {
+        groups.remove(g);
     }
+}
+
+/// Что делает: сделка группы закрыта и сохранена (ledger::finish, любой конечный шаг) — её отложенная часть в пул,
+/// она среди закрывшихся; последняя — общий возврат (flush). Запись сделки после общего возврата перечитывается.
+/// Принимает: ядро, сделку. Ошибок нет.
+pub async fn after_close(core: &Core, deal: &mut Deal) {
+    let Some(g) = deal.group.as_ref().map(|x| x.id.clone()) else {
+        return;
+    };
     let key = CoinKey::of(&deal.direction.asset);
-    let (from, amount) = parts[0].clone();
-    let me = (deal.id.clone(), from.clone(), amount);
-    let choice = {
+    let wait = deal.group.as_ref().and_then(|x| x.wait.clone());
+    let taken = {
         let mut groups = lk(&core.inner.groups);
         let pool = groups.entry(g.clone()).or_default();
         pool.closing.insert(deal.id.clone());
-        if running(core, &key, &g, &deal.id, &pool.closing) > 0 {
-            pool.parts.push(me);
-            Choice::Defer(pool.parts.iter().any(|(id, _, _)| *id == g))
-        } else {
-            let mut all = groups.remove(&g).map(|p| p.parts).unwrap_or_default();
-            if deal.id != g && all.iter().any(|(id, _, _)| *id == g) {
-                all.push(me);
-                Choice::ToLead(all)
-            } else {
-                Choice::Last(all)
-            }
+        if let Some((from, amount)) = wait {
+            pool.parts.push(Part {
+                deal: deal.id.clone(),
+                from,
+                amount,
+                result: deal.result_usd,
+            });
         }
+        let t = take_if_last(core, &key, &g, pool);
+        tidy(core, &key, &g, &mut groups);
+        t
     };
-    match choice {
-        Choice::Defer(lead) => {
-            if let Some(x) = deal.group.as_mut() {
-                x.wait = Some((from.clone(), amount));
-                if lead && deal.id != g {
-                    x.shared_in = Some(g.clone());
-                }
-            }
-            let tail = if lead && deal.id != g {
-                format!("общий возврат группы в сделке {g}")
-            } else {
-                format!("общий возврат группы {g} после последней её сделки")
-            };
-            deal.note(format!(
-                "Возврат USDT {amount} с {}: 0 сейчас — {tail} (решение 390)",
-                from.0
-            ));
-            vec![]
+    if let Some((parts, was)) = taken {
+        Box::pin(flush(core, &g, parts, was)).await;
+        if let Some(x) = lk(&core.inner.deals).get(&deal.id).cloned() {
+            *deal = x;
         }
-        Choice::ToLead(all) => {
-            if let Some(x) = deal.group.as_mut() {
-                x.wait = None;
-                x.shared_in = Some(g.clone());
-            }
-            deal.note(format!(
-                "Возврат USDT {amount}: 0 — общий возврат группы в сделке {g} (решение 390)"
-            ));
-            let mine = (deal.id.clone(), deal.result_usd);
-            let c = core.clone();
-            tokio::spawn(async move { flush(&c, &g, all, Some(mine)).await });
-            vec![]
-        }
-        Choice::Last(others) => {
-            let total = amount + others.iter().map(|(_, _, a)| *a).sum::<Decimal>();
-            set_sum(core, deal, &others, None);
-            if !others.is_empty() {
-                deal.note(format!(
-                    "Общий возврат USDT группы {g}: {total} (своя часть {amount} + отложенные сделок {}) — затраты возврата один раз, в этой сделке (решение 390)",
-                    ids(&others).join(", ")
-                ));
-                mark_shared(core, &others, &deal.id, None).await;
-            }
-            vec![(from, total)]
-        }
-    }
-}
-
-/// ID сделок отложенных частей. Ошибок нет.
-fn ids(parts: &[(String, VenueId, Decimal)]) -> Vec<String> {
-    parts.iter().map(|(id, _, _)| id.clone()).collect()
-}
-
-/// Итог группы у сделки с общим возвратом: другие сделки и сумма их итогов (из учёта; `known` — итог сделки, ещё не
-/// сохранённой в учёт). Ошибок нет.
-fn set_sum(
-    core: &Core,
-    deal: &mut Deal,
-    others: &[(String, VenueId, Decimal)],
-    known: Option<&(String, Option<Decimal>)>,
-) {
-    if others.is_empty() {
-        return;
-    }
-    let sum: Decimal = {
-        let deals = lk(&core.inner.deals);
-        others
-            .iter()
-            .filter_map(|(id, _, _)| match known {
-                Some((k, r)) if k == id => *r,
-                _ => deals.get(id).and_then(|x| x.result_usd),
-            })
-            .sum()
-    };
-    let usdt = others.iter().map(|(_, _, a)| *a).sum();
-    if let Some(x) = deal.group.as_mut() {
-        x.wait = None;
-        x.sum = Some(GroupSum {
-            deals: ids(others),
-            others: sum,
-            usdt,
-        });
-    }
-}
-
-/// Отложенные сделки: общий возврат — в сделке `bearer` (возврат 0, пометка). `skip` — сделка, которую сохранит её
-/// собственное закрытие (не перезаписывать её запись старой копией). Принимает: ядро, части, носителя, skip.
-/// Ошибок нет.
-async fn mark_shared(
-    core: &Core,
-    parts: &[(String, VenueId, Decimal)],
-    bearer: &str,
-    skip: Option<&str>,
-) {
-    for (id, _, _) in parts {
-        if Some(id.as_str()) == skip {
-            continue;
-        }
-        let d = lk(&core.inner.deals).get(id).cloned();
-        let Some(mut d) = d else { continue };
-        if let Some(x) = d.group.as_mut() {
-            if x.shared_in.as_deref() == Some(bearer) && x.wait.is_none() {
-                continue;
-            }
-            x.wait = None;
-            x.shared_in = Some(bearer.to_string());
-        }
-        d.note(format!(
-            "Возврат USDT: 0 — общий возврат группы в сделке {bearer} (решение 390)"
-        ));
-        super::ledger::save(core, &d).await;
     }
 }
 
 /// Что делает: сделка группы сохранена на шаге вне пути (застряла, ждёт человека, остановлена, передана человеку) —
-/// если других идущих сделок группы нет, а отложенные части есть, они уходят одним возвратом сразу (п. 13), носитель —
-/// первая отложенная сделка. Принимает: ядро, сделку. Ошибок нет (задача возврата — отдельной задачей).
+/// если она была последней идущей, отложенные части уходят общим возвратом сразу (п. 13). Принимает: ядро, сделку.
+/// Ошибок нет (общий возврат — отдельной задачей).
 pub fn on_saved(core: &Core, deal: &Deal) {
     let Some(g) = deal.group.as_ref().map(|x| x.id.clone()) else {
         return;
@@ -243,83 +183,164 @@ pub fn on_saved(core: &Core, deal: &Deal) {
     ) {
         return;
     }
-    let key = CoinKey::of(&deal.direction.asset);
-    let parts = {
-        let mut groups = lk(&core.inner.groups);
-        let Some(pool) = groups.get(&g) else { return };
-        if pool.parts.is_empty() || running(core, &key, &g, &deal.id, &pool.closing) > 0 {
-            return;
-        }
-        groups.remove(&g).map(|p| p.parts).unwrap_or_default()
-    };
-    let c = core.clone();
-    tokio::spawn(async move { flush(&c, &g, parts, None).await });
+    spawn_if_last(core, &CoinKey::of(&deal.direction.asset), &g, |_| {});
 }
 
-/// Общий возврат отложенных частей одним перегоном. Носитель — первая сделка группы, если она среди частей (п. 11),
-/// иначе первая отложенная; её отложенное уведомление deal.closed (deal_closed::hold) уйдёт по концу перегона с итогом
-/// группы. Принимает: ядро, группу, части, итог сделки, ещё не сохранённой в учёт (None — все в учёте). Ошибок нет.
-async fn flush(
-    core: &Core,
-    g: &str,
-    parts: Vec<(String, VenueId, Decimal)>,
-    known: Option<(String, Option<Decimal>)>,
-) {
+/// Под замком `groups` правка пула (`f`), затем «последняя ли» — да: общий возврат отдельной задачей. Ошибок нет.
+fn spawn_if_last(core: &Core, key: &CoinKey, g: &str, f: impl FnOnce(&mut Pool)) {
+    let taken = {
+        let mut groups = lk(&core.inner.groups);
+        let Some(pool) = groups.get_mut(g) else {
+            return;
+        };
+        f(pool);
+        let t = take_if_last(core, key, g, pool);
+        tidy(core, key, g, &mut groups);
+        t
+    };
+    if let Some((parts, was)) = taken {
+        let (c, g) = (core.clone(), g.to_string());
+        tokio::spawn(async move { Box::pin(flush(&c, &g, parts, was)).await });
+    }
+}
+
+/// Что делает: Б2 — вложенная сделка группы вошла (admit, до покупки): общий возврат группы ждёт её. Принимает: ядро,
+/// группу. Ошибок нет.
+pub fn join(core: &Core, g: &str) {
+    lk(&core.inner.groups)
+        .entry(g.to_string())
+        .or_default()
+        .pending += 1;
+}
+
+/// Что делает: вложенная сделка учла покупку и в идущих (board) — дальше её считают идущие. Принимает: ядро, группу.
+/// Ошибок нет.
+pub fn joined(core: &Core, g: &str) {
+    if let Some(p) = lk(&core.inner.groups).get_mut(g) {
+        p.pending = p.pending.saturating_sub(1);
+    }
+}
+
+/// Что делает: вложенная сделка не состоялась (задача кончилась до board: отказ предпроверки, покупки) — выходит из
+/// группы; если других нет — общий возврат сразу. Принимает: ядро, ключ монеты, группу. Ошибок нет.
+pub fn dropped(core: &Core, key: &CoinKey, g: &str) {
+    spawn_if_last(core, key, g, |p| p.pending = p.pending.saturating_sub(1));
+}
+
+/// Пределы вывода USDT площадки возврата `v` (сеть venue.bsc_network, монета venue.quote_asset; справочник сетей
+/// ядра). Возвращает: (минимум, максимум); нет данных (DEX, справочника нет) — (None, None). Ошибок нет.
+fn limits(core: &Core, v: &VenueId) -> (Option<Decimal>, Option<Decimal>) {
+    let s = &core.inner.deps.settings;
+    let at = At {
+        venue: Some(&v.0),
+        coin: None,
+    };
+    let (Ok(q), Ok(net)) = (
+        s.text("venue.quote_asset", at),
+        s.text("venue.bsc_network", at),
+    ) else {
+        return (None, None);
+    };
+    match super::dirctx_venue::quote_network(core, v, &q, &net) {
+        Some(i) => (i.withdraw_min, i.withdraw_max.filter(|m| !m.is_zero())),
+        None => (None, None),
+    }
+}
+
+/// Сумма общего возврата частями не больше максимума вывода (поровну; последняя — остаток). Ошибок нет.
+pub fn pieces(from: &VenueId, total: Decimal, max: Option<Decimal>) -> Vec<(VenueId, Decimal)> {
+    let Some(max) = max.filter(|m| total > *m && *m > Decimal::ZERO) else {
+        return vec![(from.clone(), total)];
+    };
+    let n = (total / max).ceil();
+    let each = (total / n).round_dp_with_strategy(8, rust_decimal::RoundingStrategy::ToZero);
+    let k = rust_decimal::prelude::ToPrimitive::to_usize(&n)
+        .unwrap_or(1)
+        .max(1);
+    let mut out = vec![(from.clone(), each); k - 1];
+    out.push((from.clone(), total - each * Decimal::from(k - 1)));
+    out
+}
+
+/// Общий возврат частей одним перегоном (Н1 — порядок в шапке). Принимает: ядро, группу, части, был ли flush раньше
+/// (тогда это сделка, закрывшаяся после общего возврата, — «была частью группы», свой возврат). Ошибок нет.
+async fn flush(core: &Core, g: &str, parts: Vec<Part>, was: bool) {
     let Some(first) = parts.first().cloned() else {
         return;
     };
-    let (bearer, from, _) = parts
-        .iter()
-        .find(|(id, _, _)| id == g)
-        .cloned()
-        .unwrap_or(first);
-    let d = lk(&core.inner.deals).get(&bearer).cloned();
-    let Some(mut d) = d else {
-        core.inner
-            .deps
-            .log(
-                Level::Error,
-                "core.usdt_return",
-                Some(&from.0),
-                format!("Группа {g}: сделки {bearer} нет в учёте — общий возврат USDT не начат"),
-                None,
-            )
-            .await;
+    let bearer = parts.iter().find(|p| p.deal == g).cloned().unwrap_or(first);
+    let others: Vec<&Part> = parts.iter().filter(|p| p.deal != bearer.deal).collect();
+    let total: Decimal = parts.iter().map(|p| p.amount).sum();
+    let (copies, lead) = {
+        let mut deals = lk(&core.inner.deals);
+        let mut copies = vec![];
+        for p in &others {
+            if let Some(d) = deals.get_mut(&p.deal) {
+                if let Some(x) = d.group.as_mut() {
+                    x.wait = None;
+                    x.shared_in = Some(bearer.deal.clone());
+                }
+                d.note(format!(
+                    "Возврат USDT: 0 — общий возврат группы в сделке {} (решение 390)",
+                    bearer.deal
+                ));
+                copies.push(d.clone());
+            }
+        }
+        let lead = deals.get_mut(&bearer.deal).map(|d| {
+            if let Some(x) = d.group.as_mut() {
+                x.wait = None;
+                x.shared_in = None;
+                x.left = was;
+                if !others.is_empty() {
+                    x.sum = Some(GroupSum {
+                        deals: others.iter().map(|p| p.deal.clone()).collect(),
+                        others: others.iter().filter_map(|p| p.result).sum(),
+                        usdt: others.iter().map(|p| p.amount).sum(),
+                    });
+                }
+            }
+            d.clone()
+        });
+        (copies, lead)
+    };
+    let Some(mut lead) = lead else {
         return;
     };
-    let total: Decimal = parts.iter().map(|(_, _, a)| *a).sum();
-    let others: Vec<_> = parts
-        .iter()
-        .filter(|(id, _, _)| *id != bearer)
-        .cloned()
-        .collect();
-    set_sum(core, &mut d, &others, known.as_ref());
-    if let Some(x) = d.group.as_mut() {
-        x.wait = None;
-        x.shared_in = None;
-    }
-    let why = if known.is_some() {
-        "последняя сделка группы продана"
+    let why = if was {
+        format!("была частью группы {g}, общий возврат группы ушёл раньше — свой возврат")
     } else {
-        "последняя идущая сделка группы ушла с пути, её не ждём"
+        format!(
+            "общий возврат USDT группы {g}: {total} (сделки {}) — затраты возврата один раз, в этой сделке",
+            parts
+                .iter()
+                .map(|p| p.deal.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     };
-    d.note(format!(
-        "Общий возврат USDT группы {g}: {total} — {why}; затраты возврата один раз, в этой сделке (решение 390)"
-    ));
-    let jobs = super::usdt_return_deal::start_parts(core, &mut d, vec![(from, total)]).await;
+    lead.note(format!("{why} (решение 390)"));
+    let (_, max) = limits(core, &bearer.from);
+    let jobs = Box::pin(super::usdt_return_deal::start_parts(
+        core,
+        &mut lead,
+        pieces(&bearer.from, total, max),
+    ))
+    .await;
     // Перегон не начат (страховка «не вернулись») — отложенное уведомление носителя уходит сразу.
     let notice = if jobs.is_empty() {
-        super::deal_closed::take_ready(&mut d)
+        super::deal_closed::take_ready(&mut lead)
     } else {
         None
     };
-    super::ledger::save(core, &d).await;
+    for d in &copies {
+        Box::pin(super::ledger::save(core, d)).await;
+    }
+    Box::pin(super::ledger::save(core, &lead)).await;
     if let Some(w) = notice {
-        super::deal_closed::send(core, &d, &w).await;
+        Box::pin(super::deal_closed::send(core, &lead, &w)).await;
     }
     for j in jobs {
         j.start(core);
     }
-    let skip = known.as_ref().map(|(id, _)| id.as_str());
-    mark_shared(core, &others, &bearer, skip).await;
 }

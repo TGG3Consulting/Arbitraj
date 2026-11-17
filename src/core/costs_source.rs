@@ -126,7 +126,7 @@ impl Source for Live<'_> {
         if self.src.is_some() {
             return self.quote(d, sell, qty).await.map(|q| q.fillable_qty);
         }
-        let off = if sell && self.rides() {
+        let off = if sell && self.rides() && !super::ride_quote::idle(self.core, d) {
             super::ride_quote::sell_ahead(self.core, d)
         } else {
             Decimal::ZERO
@@ -150,7 +150,7 @@ impl Source for Live<'_> {
         } else {
             (&d.buy_on, Side::Buy)
         };
-        let off = if sell && self.rides() {
+        let off = if sell && self.rides() && !super::ride_quote::idle(self.core, d) {
             super::ride_quote::sell_ahead(self.core, d)
         } else {
             Decimal::ZERO
@@ -176,7 +176,10 @@ impl Source for Live<'_> {
     async fn ret(&self, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
         // Решение 390 (записка 269, п. 5): докупка (идёт группа того же направления) — фиксированная часть возврата USDT
         // одна на группу (в плане первой сделки), здесь — только процентная часть по данным площадки.
-        if self.rides() && super::coin_ride::group_running(self.core, &cx.dir).is_some() {
+        if self.rides()
+            && !super::ride_quote::idle(self.core, &cx.dir)
+            && super::coin_ride::group_running(self.core, &cx.dir).is_some()
+        {
             return super::costs_withdraw::return_b_top_up(cx, amount);
         }
         if let (Some(p), None) = (self.plan(), &cx.b.info) {

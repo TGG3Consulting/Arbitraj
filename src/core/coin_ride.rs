@@ -21,6 +21,8 @@
 //! От чего зависит: engine.rs, coin_key.rs, deal.rs, start_reason.rs, settings.
 //! Настройки: exec.top_up.
 
+use std::sync::atomic::Ordering;
+
 use crate::core::types::{Direction, VenueId};
 use crate::settings::read::At;
 
@@ -157,6 +159,9 @@ pub fn board(core: &Core, d: &Direction, deal_id: &str, group: Option<String>) {
     let mut a = lk(&core.inner.active);
     let mut r = lk(&core.inner.rides);
     a.remove(&key);
+    if group.is_some() {
+        core.inner.group_live.fetch_add(1, Ordering::Relaxed);
+    }
     r.entry(key).or_default().push(Ride {
         deal_id: deal_id.to_string(),
         buy_on: d.buy_on.clone(),
@@ -175,6 +180,13 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
     };
     let mut r = lk(&core.inner.rides);
     if let Some(v) = r.get_mut(key) {
+        let grouped = v
+            .iter()
+            .filter(|x| x.deal_id == id && x.group.is_some())
+            .count();
+        if grouped > 0 {
+            core.inner.group_live.fetch_sub(grouped, Ordering::Relaxed);
+        }
         v.retain(|x| x.deal_id != id);
         if v.is_empty() {
             r.remove(key);

@@ -56,16 +56,20 @@
     };
   });
 
-  /** Решение 390: группы докупки — {id группы: {n, total, open}} по сделкам в памяти экрана (вышедшие не входят). */
+  /** Решение 390: группы докупки — {id группы: {n, total, open, members}} по сделкам в памяти экрана; в итог группы
+   *  вышедшие не входят, в списке сделок группы — с пометкой. */
   const groups = $derived.by(() => {
     const g = {};
     for (const d of Object.values(deals)) {
-      if (!d.group || d.group.left) continue;
-      const x = (g[d.group.id] ??= { n: 0, total: 0, open: 0 });
+      if (!d.group) continue;
+      const x = (g[d.group.id] ??= { n: 0, total: 0, open: 0, members: [] });
+      if (d.id !== d.group.id) x.members.push(d);
+      if (d.group.left) continue;
       x.n += 1;
       if (d.result_usd != null) x.total += Number(d.result_usd);
       else x.open += 1;
     }
+    for (const x of Object.values(g)) x.members.sort((a, b) => (a.started_at > b.started_at ? 1 : -1));
     return g;
   });
 
@@ -92,6 +96,14 @@
     </header>
     {#if d.group && !d.group.left && d.group.id === d.id && groups[d.id]?.n > 1}
       <p><strong>Группа:</strong> сделок {groups[d.id].n}, итог группы {groups[d.id].total.toFixed(4)} USDT{#if groups[d.id].open} <span class="muted">(ещё идут: {groups[d.id].open})</span>{/if}</p>
+    {/if}
+    {#if d.group && d.group.id === d.id && groups[d.id]?.members.length}
+      <!-- Решение 390, п. 12 записки 269: вложенные сделки группы — у каждой свои покупка, перевод, продажа и итог. -->
+      <ul class="muted">
+        {#each groups[d.id].members as m (m.id)}
+          <li><code>{m.id}</code> · {stepLabel(m.step)} · вложено {m.invested} · выручка {m.proceeds} · итог {m.result_usd ?? '—'} USDT{#if m.group.left} · вышла из группы (свой возврат USDT){/if}</li>
+        {/each}
+      </ul>
     {/if}
     {#if d.group?.shared_in}<p class="muted">Возврат USDT: 0 — общий возврат группы в сделке <code>{d.group.shared_in}</code></p>
     {:else if d.group?.wait}<p class="muted">Возврат USDT: 0 сейчас — {d.group.wait[1]} USDT ждут общего возврата группы после последней её сделки</p>{/if}

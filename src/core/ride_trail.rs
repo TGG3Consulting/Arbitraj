@@ -11,6 +11,8 @@
 //! От чего зависит: coin_key.rs, deal.rs, trade_ops.rs (вид площадки), engine.rs, core/types.
 //! Настройки: нет.
 
+use std::sync::atomic::Ordering;
+
 use chrono::{DateTime, Utc};
 
 use crate::core::types::{PoolRef, Quote, VenueId};
@@ -64,7 +66,9 @@ pub fn note(core: &Core, deal: &Deal) {
     match m.get(&key) {
         Some(old) if old.at >= t.at => {}
         _ => {
-            m.insert(key, t);
+            if m.insert(key, t).is_none() {
+                core.inner.group_live.fetch_add(1, Ordering::Relaxed);
+            }
         }
     }
 }
@@ -100,8 +104,8 @@ pub fn check(core: &Core, coin: &CoinKey, v: &VenueId, q: &Quote) -> Result<(), 
         ));
     }
     let mut m = lk(&core.inner.trail);
-    if m.get(&key).is_some_and(|x| x.at == t.at) {
-        m.remove(&key);
+    if m.get(&key).is_some_and(|x| x.at == t.at) && m.remove(&key).is_some() {
+        core.inner.group_live.fetch_sub(1, Ordering::Relaxed);
     }
     Ok(())
 }

@@ -123,7 +123,10 @@ async fn once(core: &Core, d: &Direction, plan: Calc) -> Result<Once, String> {
     // Задача t179 (решение 390): идут сделки монеты, чьи монеты будут проданы в тот же пул раньше нас, — симуляция
     // (на пуле до них) может план только понизить: выход выше выручки плана (план уже посчитан ПОСЛЕ их монет,
     // ride_quote.rs) не поднимает прибыль.
-    if super::ride_quote::sell_ahead(core, d) > Decimal::ZERO && sim.out > plan.proceeds {
+    if !super::ride_quote::idle(core, d)
+        && super::ride_quote::sell_ahead(core, d) > Decimal::ZERO
+        && sim.out > plan.proceeds
+    {
         sim.out = plan.proceeds;
     }
     let text = summary(&plan, &sim, tax);

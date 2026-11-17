@@ -107,6 +107,10 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
         Ok(s) => s,
         Err(why) => return Start::Busy(why),
     };
+    // Решение 390 (ревью 2 t179, Б2): вложенная сделка — член группы с входа: общий возврат группы ждёт её покупки.
+    if let super::coin_ride::Seat::Join(g) = &seat {
+        super::coin_group::join(core, g);
+    }
     let core = core.clone();
     // Решение 245, дополнение п. 2: момент решения — время расчёта кандидата, прошедшего пороги (Calc.at).
     let decided = calc.at;
@@ -126,6 +130,10 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
         };
         run(&core, d.clone(), decided, (on, handed), fast, &mut slot).await;
         super::coin_ride::release(&core, &key, slot.boarded.as_deref());
+        // Решение 390 (Б2): вложенная не дошла до учёта покупки — выходит из группы (общий возврат без неё).
+        if let (super::coin_ride::Seat::Join(g), None) = (&slot.seat, &slot.boarded) {
+            super::coin_group::dropped(&core, &key, g);
+        }
     };
     tokio::spawn(urgency::scope(
         Urgency::Trade,
@@ -600,6 +608,9 @@ async fn run(
         deal.group.as_ref().map(|g| g.id.clone()),
     );
     ride.boarded = Some(deal.id.clone());
+    if let super::coin_ride::Seat::Join(g) = &ride.seat {
+        super::coin_group::joined(core, g);
+    }
     // Решение 151: на кошелёк DEX — зачисление и по приходу в блокчейне (transfers::send_trade).
     let mut gas = Vec::new();
     let sent = super::transfers::send_trade(

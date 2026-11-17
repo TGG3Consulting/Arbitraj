@@ -44,8 +44,8 @@ use arb::core::types::{
     TradeRequest, TradeResult, TradeStatus, TxOutcome, VenueId,
 };
 use arb::core::{
-    coin_group, coin_ride, credit_event, credit_watch, limits_parts, ride_quote, ride_trail,
-    route_pause, start_reason, transfer_credit,
+    coin_group, coin_ride, credit_event, credit_watch, limits_parts, manual_usdt, ride_quote,
+    ride_trail, route_pause, start_reason, transfer_credit,
 };
 use arb::gateway::contract::VenueKind;
 use arb::gateway::frozen::{BookFee, FrozenBook};
@@ -669,23 +669,39 @@ async fn wait_note(core: &Core, id: &str, part: &str) -> Deal {
     panic!("нет строки «{part}» у {id}");
 }
 
+/// Закрыть сделку группы так, как это делает ledger::finish: части возврата (hold_parts), сохранение, после
+/// сохранения — общий возврат группы (after_close). Возвращает: части, перегоняемые этой сделкой сразу (своё).
+async fn close(core: &Core, x: &mut Deal, amount: &str) -> Vec<(VenueId, Decimal)> {
+    let own = coin_group::hold_parts(x, vec![(x.direction.sell_on.clone(), d(amount))]);
+    arb::core::ledger::save(core, x).await;
+    coin_group::after_close(core, x).await;
+    own
+}
+
+/// Есть ли строка в хронологии сделки из учёта. Ошибок нет.
+fn has_note(core: &Core, id: &str, part: &str) -> bool {
+    core.inner
+        .deals
+        .lock()
+        .unwrap()
+        .get(id)
+        .is_some_and(|d| d.timeline.iter().any(|(_, t)| t.contains(part)))
+}
+
 #[tokio::test]
 async fn group_return_once_lead_last() {
     let (core, s, _j) = start("group-last").await;
     top_up(&s).await;
     let dx = dir_of("mexc", "bingx");
-    let b = dx.sell_on.clone();
     riding(&core, &dx, "G", &["G", "D2"]).await;
-    // Вложенная закрылась первой — её возврат отложен (0 сейчас), носитель ещё неизвестен.
+    // Вложенная закрылась первой — её возврат ждёт (0 сейчас), общего возврата ещё нет.
     let mut x = sold("D2", &dx, "G");
-    let now = coin_group::route(&core, &mut x, vec![(b.clone(), d("95"))]).await;
-    assert!(now.is_empty());
-    assert_eq!(x.group.as_ref().unwrap().wait, Some((b.clone(), d("95"))));
-    arb::core::ledger::save(&core, &x).await;
-    // Первая — последняя: один возврат на общую сумму, отложенная помечена «общий возврат в сделке G».
+    assert!(close(&core, &mut x, "95").await.is_empty());
+    assert!(x.group.as_ref().unwrap().wait.is_some());
+    // Первая — последняя: один общий возврат 195, носитель — первая, у вложенной — «в сделке G», wait снят.
     let mut g = sold("G", &dx, "G");
-    let now = coin_group::route(&core, &mut g, vec![(b.clone(), d("100"))]).await;
-    assert_eq!(now, vec![(b.clone(), d("195"))]);
+    assert!(close(&core, &mut g, "100").await.is_empty());
+    assert!(has_note(&core, "G", "общий возврат USDT группы G: 195"));
     let sum = g.group.as_ref().unwrap().sum.clone().unwrap();
     assert_eq!(
         (sum.deals, sum.others, sum.usdt),
@@ -694,48 +710,94 @@ async fn group_return_once_lead_last() {
     let x = core.inner.deals.lock().unwrap().get("D2").cloned().unwrap();
     assert_eq!(x.group.as_ref().unwrap().shared_in.as_deref(), Some("G"));
     assert!(x.group.as_ref().unwrap().wait.is_none());
-    // Закрытие не продажей на площадке плана — вышла из группы, свой возврат.
-    let mut y = sold("D3", &dx, "G");
-    y.relays = 1;
-    let now = coin_group::route(&core, &mut y, vec![(b.clone(), d("7"))]).await;
-    assert_eq!(now, vec![(b, d("7"))]);
-    assert!(y.group.as_ref().unwrap().left);
+    // Н1: «Перегнать» по сделке, чьи USDT ушли общим возвратом, — отказ (второго вывода нет).
+    let why = manual_usdt::retry_block(&x, &dx.sell_on, &dx.buy_on).unwrap();
+    assert!(
+        why.contains("общего возврата группы докупки в сделке G"),
+        "{why}"
+    );
 }
 
 #[tokio::test]
-async fn group_return_once_lead_first() {
-    let (core, s, _j) = start("group-first").await;
+async fn last_deal_leaving_group_still_flushes_parts() {
+    let (core, s, _j) = start("group-left").await;
     top_up(&s).await;
     let dx = dir_of("mexc", "bingx");
-    let b = dx.sell_on.clone();
-    riding(&core, &dx, "K", &["K", "K2"]).await;
-    // Первая закрылась раньше — отложена, её уведомление ждёт общего возврата.
-    let mut k = sold("K", &dx, "K");
-    assert!(
-        coin_group::route(&core, &mut k, vec![(b.clone(), d("100"))])
-            .await
-            .is_empty()
-    );
-    assert!(arb::core::deal_closed::hold(
-        &mut k,
-        Step::Closed,
-        "продано"
-    ));
-    arb::core::ledger::save(&core, &k).await;
-    // Последняя вложенная: возврат 0 «в сделке K», общий возврат — у K (п. 11).
-    let mut x = sold("K2", &dx, "K");
-    assert!(
-        coin_group::route(&core, &mut x, vec![(b, d("95"))])
-            .await
-            .is_empty()
-    );
-    assert_eq!(x.group.as_ref().unwrap().shared_in.as_deref(), Some("K"));
-    let k = wait_note(&core, "K", "последняя сделка группы продана").await;
-    let sum = k.group.as_ref().unwrap().sum.clone().unwrap();
+    riding(&core, &dx, "G", &["G", "D2"]).await;
+    let mut g = sold("G", &dx, "G");
+    assert!(close(&core, &mut g, "100").await.is_empty());
+    assert!(!has_note(&core, "G", "общий возврат USDT группы"));
+    // Ревью 2, Б1: последняя закрылась перегоном — свой возврат, а отложенные 100 USDT первой уходят сразу.
+    let mut x = sold("D2", &dx, "G");
+    x.relays = 1;
+    assert_eq!(close(&core, &mut x, "95").await.len(), 1);
+    assert!(x.group.as_ref().unwrap().left);
+    assert!(has_note(&core, "G", "общий возврат USDT группы G: 100"));
+}
+
+#[tokio::test]
+async fn top_up_before_buy_holds_group_return() {
+    let (core, s, _j) = start("group-pending").await;
+    top_up(&s).await;
+    let dx = dir_of("mexc", "bingx");
+    let key = CoinKey::of(&dx.asset);
+    riding(&core, &dx, "G", &["G"]).await;
+    // Ревью 2, Б2: вложенная вошла (admit), ещё не купила — общий возврат ждёт её.
+    coin_group::join(&core, "G");
+    let mut g = sold("G", &dx, "G");
+    close(&core, &mut g, "100").await;
+    assert!(!has_note(&core, "G", "общий возврат USDT группы"));
+    // Не состоялась (отказ предпроверки) — выходит, общий возврат уходит без неё.
+    coin_group::dropped(&core, &key, "G");
+    wait_note(&core, "G", "общий возврат USDT группы G: 100").await;
+}
+
+#[tokio::test]
+async fn top_up_after_buy_joins_group_return() {
+    let (core, s, _j) = start("group-joined").await;
+    top_up(&s).await;
+    let dx = dir_of("mexc", "bingx");
+    riding(&core, &dx, "G", &["G"]).await;
+    coin_group::join(&core, "G");
+    let mut g = sold("G", &dx, "G");
+    close(&core, &mut g, "100").await;
+    // Купила и в идущих — общий возврат ждёт её продажи.
+    riding(&core, &dx, "G", &["D2"]).await;
+    coin_group::joined(&core, "G");
+    assert!(!has_note(&core, "G", "общий возврат USDT группы"));
+    let mut x = sold("D2", &dx, "G");
+    close(&core, &mut x, "95").await;
+    assert!(has_note(&core, "G", "общий возврат USDT группы G: 195"));
+}
+
+#[tokio::test]
+async fn two_group_deals_closing_at_once_return_once() {
+    let (core, s, _j) = start("group-race").await;
+    top_up(&s).await;
+    let dx = dir_of("mexc", "bingx");
+    riding(&core, &dx, "G", &["G", "D2"]).await;
+    let (mut g, mut x) = (sold("G", &dx, "G"), sold("D2", &dx, "G"));
+    let (b, _) = tokio::join!(close(&core, &mut g, "100"), close(&core, &mut x, "95"));
+    assert!(b.is_empty());
+    let n = ["G", "D2"]
+        .iter()
+        .filter(|id| has_note(&core, id, "общий возврат USDT группы G: 195"))
+        .count();
+    assert_eq!(n, 1, "ровно один общий возврат");
+}
+
+#[test]
+fn group_return_split_by_withdraw_max() {
+    let v = VenueId("bingx".into());
+    let p = coin_group::pieces(&v, d("250"), Some(d("100")));
+    assert_eq!(p.len(), 3);
+    assert!(p.iter().all(|(_, a)| *a <= d("100")));
+    assert_eq!(p.iter().map(|(_, a)| *a).sum::<Decimal>(), d("250"));
     assert_eq!(
-        (sum.deals, sum.others, sum.usdt),
-        (vec!["K2".to_string()], d("1"), d("95"))
+        coin_group::pieces(&v, d("80"), Some(d("100"))),
+        vec![(v.clone(), d("80"))]
     );
+    assert_eq!(coin_group::pieces(&v, d("80"), None), vec![(v, d("80"))]);
 }
 
 #[tokio::test]
@@ -743,19 +805,13 @@ async fn stuck_last_deal_does_not_hold_group_return() {
     let (core, s, _j) = start("group-stuck").await;
     top_up(&s).await;
     let dx = dir_of("mexc", "bingx");
-    let b = dx.sell_on.clone();
     riding(&core, &dx, "G", &["G", "D2"]).await;
     let mut g = sold("G", &dx, "G");
-    assert!(
-        coin_group::route(&core, &mut g, vec![(b, d("100"))])
-            .await
-            .is_empty()
-    );
-    arb::core::ledger::save(&core, &g).await;
-    // Последняя идущая застряла — её не ждём: отложенная выручка уходит одним возвратом сразу (носитель — G).
+    close(&core, &mut g, "100").await;
+    // Последняя идущая застряла — её не ждём: отложенная выручка уходит общим возвратом сразу (носитель — G).
     let stuck = bought("D2", &dx, Step::Stuck, ("40", "10"), Some("G"));
     arb::core::ledger::save(&core, &stuck).await;
-    wait_note(&core, "G", "ушла с пути, её не ждём").await;
+    wait_note(&core, "G", "общий возврат USDT группы G: 100").await;
 }
 
 #[test]

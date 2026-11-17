@@ -128,6 +128,11 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
     for job in ret {
         job.start(core);
     }
+    // Решение 390 (докупка): сделка группы закрыта и сохранена — её отложенная часть в пул группы; последняя — общий
+    // возврат USDT (coin_group.rs). Без группы — вызова нет; будущее — в куче (путь продажи чувствителен к стеку).
+    if deal.group.is_some() {
+        Box::pin(super::coin_group::after_close(core, deal)).await;
+    }
     let deps = &core.inner.deps;
     let d = &deal.direction;
     let text = format!(

@@ -397,12 +397,31 @@ impl Venue for BscDex {
         let mut qc = q.clone();
         qc.plan_gas = Some(gas);
         // Решение 301 (дополнение — стек): работа — в кучу (quote/cpu.rs run принимает только Pin<Box<F>>).
-        let signals = quote::cpu::run(
+        let (signals, bad) = quote::cpu::run(
             &q.ctx,
             Box::pin(async move { quote::cycle_scan::scan(&qc, gas).await }),
         )
         .await?;
         let venue = self.id();
+        // Решение 385: нарушение доказательства отсева циклов (quote/cycle_audit.rs) — запись Error и Telegram тем же
+        // кодом, что у кандидатов (core.sieve_violation; Notice → ядро → notify). Одна на путь до перезапуска.
+        for v in bad {
+            q.ctx
+                .log(
+                    crate::storage::journal::Level::Error,
+                    quote::cycle_audit::CODE,
+                    v.text.clone(),
+                    Some(v.data),
+                )
+                .await;
+            self.p
+                .stats
+                .emit(crate::gateway::events::MarketEvent::Notice {
+                    venue: venue.clone(),
+                    code: quote::cycle_audit::CODE.to_string(),
+                    text: v.text,
+                });
+        }
         Ok(signals
             .iter()
             .map(|s| quote::cycle_view::to_dex_cycle(&venue, s))

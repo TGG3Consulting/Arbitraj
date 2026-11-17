@@ -16,19 +16,20 @@ use chrono::Utc;
 
 use crate::storage::journal::Journal;
 
-use super::reject_log::{Note, RejectLog, Run, trace};
+use super::reject_log::{Note, Noted, RejectLog, Run, trace};
 
 impl RejectLog {
     /// Что делает: отметить причину по ключу без ожидания базы (решение 354). Принимает: журнал, ключ, что записать,
-    /// частоту обновления строки. Ошибок нет (очередь полна — строка не записана, потеря посчитана журналом;
-    /// следующий отказ попробует снова).
+    /// частоту обновления строки. Возвращает: New — новая строка, Flushed — повтор записан сейчас, Held — повтор
+    /// отложен (решение 386). Ошибок нет (очередь полна — строка не записана, потеря посчитана журналом; следующий
+    /// отказ попробует снова; итог — New).
     pub(super) fn note_queued(
         &self,
         journal: &Journal,
         key: &str,
         mut n: Note<'_>,
         every: Duration,
-    ) {
+    ) -> Noted {
         let now = Utc::now();
         let mut m = self.lock();
         if let Some(r) = m.get_mut(key)
@@ -44,13 +45,15 @@ impl RejectLog {
             let left = every.saturating_sub(r.flushed.elapsed());
             if left.is_zero() {
                 r.flush(journal);
-            } else if !r.scheduled {
+                return Noted::Flushed;
+            }
+            if !r.scheduled {
                 r.scheduled = true;
                 let id = r.id;
                 drop(m);
                 self.schedule(journal, key, id, left);
             }
-            return;
+            return Noted::Held;
         }
         // Новый вид причины (или первый отказ): прежняя строка закрывается итоговым счётчиком, пишется новая.
         if let Some(mut r) = m.remove(key) {
@@ -60,7 +63,7 @@ impl RejectLog {
         let Some(token) =
             journal.counted_queued(n.level, n.kind, n.venue, n.message.clone(), n.data.clone())
         else {
-            return;
+            return Noted::New;
         };
         let run = Run {
             exact: n.exact,
@@ -75,5 +78,6 @@ impl RejectLog {
             scheduled: false,
         };
         m.insert(key.to_string(), run);
+        Noted::New
     }
 }

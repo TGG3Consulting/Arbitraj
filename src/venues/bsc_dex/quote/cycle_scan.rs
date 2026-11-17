@@ -24,6 +24,9 @@
 //! От чего зависит: quote/cycle.rs, quote/route_paths.rs, quote/rate.rs, pools/graph.rs, pools/registry.rs, tokens.rs,
 //! send/mod.rs (чаевые канала), exec/cycle_gate.rs (форма исполнения), num.rs.
 //! Решение 373: цикл со строгим верхом отдачи ρ < 1 (quote/bound_cycle.rs) не считается — сигнала нет, счётчик в сводке.
+//! Решение 385: доля sieve.audit_share отсечённых циклов (quote/cycle_audit.rs) всё же считается полностью тем же путём
+//! (сигнал — как у любого цикла); прибыль > 0 при ρ < 1 на тех же ногах — нарушение (отдаётся вызывающему для журнала и
+//! Telegram); путь с нарушением дальше не отсекается.
 //! Настройки: dex_dex.enabled, dex_dex.base_tokens, dex_dex.max_cycle_len, dex_dex.max_cycles, dex_dex.probe_input_base,
 //! dex_dex.min_profit_base, dex.graph_threads (решение 336) [bsc_dex]; size.refine_steps (шаги поиска входа); через граф — dex.route_max_pools_per_edge и глубина (решение 73).
 
@@ -41,8 +44,16 @@ use super::super::num;
 use super::super::pools::graph_read;
 use super::super::pools::registry::Registry;
 use super::Quoting;
+use super::bound_cycle::CycleSieve;
 use super::cycle::{self, CycleSignal};
+use super::cycle_audit::{self, Violation};
 use super::{cycle_opt, rate, route_cache, route_paths};
+
+/// Итог поиска циклов: сигналы и нарушения доказательства отсева, найденные контролем (решение 385).
+pub type Scan = (Vec<CycleSignal>, Vec<Violation>);
+
+/// Итог счёта одного цикла: сигнал (None — цикл не считается) и нарушение контроля отсева (решение 385).
+type One = (Option<CycleSignal>, Option<Violation>);
 
 /// Включено ли направление DEX ↔ DEX (решение 85). Не задано — выключено (как dry.enabled). Ошибок нет.
 pub fn enabled(ctx: &Ctx) -> bool {
@@ -70,12 +81,12 @@ pub fn limits(ctx: &Ctx) -> GatewayResult<(usize, usize)> {
 
 /// Поиск циклов по всем базовым монетам и сбор сигналов. Принимает: окружение котировки и цену газа (wei, как при
 /// отправке — см. quote/mod.rs). Возвращает: сигналы циклов, прибыльные (dex_dex.min_profit_base) впереди, затем по
-/// убыванию чистой прибыли. Выключено (dex_dex.enabled) — пусто. Ошибки: NotConfigured (пределы, базовые монеты,
-/// пробный вход), узел (decimals), BadResponse (числа).
-pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
+/// убыванию чистой прибыли; и нарушения контроля отсева (решение 385). Выключено (dex_dex.enabled) — пусто. Ошибки:
+/// NotConfigured (пределы, базовые монеты, пробный вход), узел (decimals), BadResponse (числа).
+pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Scan> {
     let ctx = &q.ctx;
     if !enabled(ctx) {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
     let (max_len, max_cycles) = limits(ctx)?;
     let input = ctx.dec("dex_dex.probe_input_base")?;
@@ -110,6 +121,7 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
     // (quote/par.rs), итоги по порядку путей. Не задана — как до 336: расчёт сразу за decimals своего цикла (ревью Б1).
     let want = super::par::want(ctx, "dex.graph_threads");
     let mut out: Vec<CycleSignal> = Vec::new();
+    let mut bad: Vec<Violation> = Vec::new();
     let mut jobs: Vec<Job> = Vec::new();
     for base in bases {
         let cycles = route_paths::enumerate_cycles(&g, base, max_len, max_cycles);
@@ -135,7 +147,9 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             };
             if want <= 1 {
                 let b = (base, base_ticker.as_str(), rate_to_base);
-                out.extend(signal(q, b, &path, &dec, usdt_dec, input, gas, tip));
+                let (sig, v) = signal(q, b, &path, &dec, usdt_dec, input, gas, tip);
+                out.extend(sig);
+                bad.extend(v);
                 continue;
             }
             jobs.push(Job {
@@ -155,9 +169,12 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
         let alive = || !super::abandon::is_set();
         let Some(found) = super::par::map(ctx, want, &jobs, one, &alive) else {
             super::abandon::check(ctx, "поиск циклов DEX ↔ DEX")?;
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         };
-        out.extend(found.into_iter().flatten());
+        for (sig, v) in found {
+            out.extend(sig);
+            bad.extend(v);
+        }
     }
     // Прибыльные (порог) впереди, затем по убыванию чистой прибыли; без чистой прибыли — в конец.
     out.sort_by(|a, b| {
@@ -165,7 +182,7 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             .cmp(&a.profitable(min_profit))
             .then(net_key(b).cmp(&net_key(a)))
     });
-    Ok(out)
+    Ok((out, bad))
 }
 
 /// Цикл к расчёту: базовая монета, её тикер и курс BNB в ней, путь, decimals его токенов.
@@ -180,7 +197,7 @@ struct Job {
 /// Сигнал одного цикла (было телом цикла scan): ноги, оптимальный вход (решение 124), форма исполнения, сигнал.
 /// Только чтение — можно считать параллельно (решение 336). Принимает: окружение котировки, (базовая, её тикер, курс
 /// BNB в ней), путь, decimals его токенов, decimals USDT, верхнюю границу входа, цену газа, чаевые (BNB). Возвращает:
-/// сигнал; None — цикл не считается (как continue раньше). Ошибок нет.
+/// сигнал (None — цикл не считается, как continue раньше) и нарушение контроля отсева (решение 385). Ошибок нет.
 #[allow(clippy::too_many_arguments)]
 fn signal(
     q: &Quoting,
@@ -191,24 +208,43 @@ fn signal(
     input: Decimal,
     gas: U256,
     tip: Decimal,
-) -> Option<CycleSignal> {
+) -> One {
     let ctx = &q.ctx;
-    let legs = cycle::legs_for_cycle(q, path, usdt_dec, dec).ok()?;
+    let Ok(legs) = cycle::legs_for_cycle(q, path, usdt_dec, dec) else {
+        return (None, None);
+    };
     // Решение 373: строгий верх отдачи цикла ρ < 1 (quote/bound_cycle.rs) ⇒ выход < вход на любом входе ⇒ валовая
     // и чистая прибыль < 0 ≤ dex_dex.min_profit_base — оптимальный вход не ищется (сигнала нет, счётчик в сводке
     // dex.quote_count). Порог < 0 или верх не строгий (вид пула, крючок) — расчёт как раньше.
-    if !super::bound_cycle::cycle_may_profit(ctx, &legs) {
-        return None;
+    // Решение 385: доля sieve.audit_share отсечённых — полный счёт тем же путём с ρ для сверки; путь, на котором контроль
+    // уже находил нарушение, не отсекается (cycle_audit::exempt — счётчик «метод не действует»).
+    let key = cycle_audit::key(&legs);
+    let mut audit = None;
+    if cycle_audit::exempt(&key) {
+        crate::gateway::rate_bound::cycle_count(2);
+    } else if let CycleSieve::Cut(rho) = super::bound_cycle::cycle_sieve(ctx, &legs) {
+        if !cycle_audit::pick(ctx) {
+            return (None, None);
+        }
+        audit = Some(rho);
     }
     // Решение 124: оптимальный вход на (0, dex_dex.probe_input_base] (quote/cycle_opt.rs), а не фиксированная проба.
-    let p = cycle_opt::best(ctx, &legs, input).ok()?;
+    let Ok(p) = cycle_opt::best(ctx, &legs, input) else {
+        return (None, None);
+    };
     // Тигран 09.11 (согласовано, план = факт): цикл, который пойдёт бандлом свопов (exec/cycle_gate.rs form — тот же
     // выбор, что у сделки), чаевых не шлёт — в сигнале их нет. Исполнитель или форма не выбрана — как было.
     let tip = match cycle_gate::form(ctx, &legs) {
         Ok(Form::Bundle) => Decimal::ZERO,
         _ => tip,
     };
-    cycle::build_signal(ctx, base, base_ticker, &p, &legs, gas, tip, rate_to_base).ok()
+    let Ok(sig) = cycle::build_signal(ctx, base, base_ticker, &p, &legs, gas, tip, rate_to_base)
+    else {
+        return (None, None);
+    };
+    // Решение 385: сверка контрольного счёта с ρ тех же ног (тот же снимок пулов).
+    let bad = audit.and_then(|rho| cycle_audit::check(rho, &sig, key));
+    (Some(sig), bad)
 }
 
 /// Ключ сортировки по чистой прибыли (None — минимально). Ошибок нет.

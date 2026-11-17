@@ -34,7 +34,7 @@
 //! задана — ждёт места не дольше неё (cand_wait.rs; ждущие стартуют первыми, по порядку, раньше теневых); не задана —
 //! как раньше снимается, но со счётом и записью журнала core.candidate_lost.
 //! Решение 372: в начале расчёта — отсев по доказанной границе прибыли (sieve_gate.rs, только память): отсечён — строка с
-//! причиной и числами (sieve_log.rs, не чаще sieve.row_interval_ms), расчёта нет; иначе расчёт как раньше. Решение 377:
+//! причиной и числами (sieve_log.rs, при записи журнала — решение 386), расчёта нет; иначе расчёт как раньше. Решение 377:
 //! доля sieve.audit_share отсечённых — контрольный обычный расчёт на том же месте (Background, метка audit).
 //! Кто вызывает: core/tick.rs (enqueue), core/engine.rs (задача run), тесты (accepted).
 //! От чего зависит: engine.rs, profit.rs, dry.rs, executor.rs, card_job.rs, episode_run.rs, view.rs, calc_timing.rs,
@@ -205,7 +205,7 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
     // Режим — один раз на расчёт: бюджет считается в нём же, решение по исполнителю — тоже (решение 74).
     let mode = super::dry::mode(&core.inner.deps.settings);
     // Решения 372, 377: отсев по доказанной границе прибыли (sieve_gate.rs) — до тяжёлого расчёта, только память.
-    // Отсечён — строка, журнал, эпизод (не чаще sieve.row_interval_ms), расчёта нет; доля sieve.audit_share отсечённых —
+    // Отсечён — журнал; строка и эпизод — при записи журнала (решение 386), расчёта нет; доля sieve.audit_share отсечённых —
     // контрольный обычный расчёт ниже (класс Background, метка audit); иначе расчёт как раньше, с готовым контекстом.
     let (pre, audit) = match Box::pin(super::sieve_gate::run(core, d, &mode)).await {
         super::sieve_gate::Gate::Done => return,

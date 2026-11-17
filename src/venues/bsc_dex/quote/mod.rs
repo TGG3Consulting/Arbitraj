@@ -44,6 +44,7 @@ pub mod cycle;
 pub mod cycle_cost;
 pub mod cycle_legs;
 pub mod cycle_opt;
+pub mod cycle_audit;
 pub mod cycle_scan;
 pub mod cycle_view;
 pub mod depth_band;

@@ -37,6 +37,18 @@ pub struct Note<'a> {
     pub data: Option<serde_json::Value>,
 }
 
+/// Что стало со строкой журнала после note (решение 386: по нему строка отсева решает, показывать ли числа).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Noted {
+    /// Новая строка (первый раз или сменился вид причины / текст в прежнем режиме).
+    New,
+    /// Повтор того же вида, строка в журнале обновлена сейчас (частота journal.repeat_flush_ms).
+    Flushed,
+    /// Повтор того же вида, в журнал сейчас не записан (обновит отложенная задача или следующий повтор; в прежнем
+    /// режиме — тот же текст, строки нет).
+    Held,
+}
+
 /// Открытая строка по ключу. id = 0 — строка прежнего режима (обычная запись, без счётчика); иначе — метка очереди
 /// журнала (решение 354).
 pub(super) struct Run {
@@ -105,26 +117,27 @@ impl RejectLog {
 
     /// Отметить причину по ключу. flush: None — journal.repeat_flush_ms не задана (прежний режим: новая обычная строка
     /// при другом exact); Some(k) — одна строка на вид причины, обновление не чаще раза в k. Принимает: журнал, ключ,
-    /// что записать, частоту. Ошибок нет; ничего не ждёт (решение 354).
+    /// что записать, частоту. Возвращает: что стало со строкой (Noted, решение 386). Ошибок нет; ничего не ждёт
+    /// (решение 354).
     pub async fn note(
         &self,
         journal: &Journal,
         key: &str,
         n: Note<'_>,
         flush_every: Option<Duration>,
-    ) {
+    ) -> Noted {
         match flush_every {
             Some(every) => self.note_queued(journal, key, n, every),
             None => self.note_plain(journal, key, n).await,
         }
     }
 
-    /// Прежний режим: обычная строка, если exact другой, чем в прошлый раз. Ошибок нет.
-    async fn note_plain(&self, journal: &Journal, key: &str, n: Note<'_>) {
+    /// Прежний режим: обычная строка, если exact другой, чем в прошлый раз. Возвращает: New или Held. Ошибок нет.
+    async fn note_plain(&self, journal: &Journal, key: &str, n: Note<'_>) -> Noted {
         {
             let mut m = self.lock();
             if m.get(key).is_some_and(|r| r.id == 0 && r.exact == n.exact) {
-                return;
+                return Noted::Held;
             }
             // Частоту только что сняли: открытая строка со счётчиком закрывается итогом.
             if let Some(mut r) = m.remove(key) {
@@ -148,6 +161,7 @@ impl RejectLog {
         let _ = journal
             .write(n.level, n.kind, n.venue, n.message, n.data)
             .await;
+        Noted::New
     }
 
     /// Отложенное обновление строки id через left: дописывает повторы, пришедшие после последней записи (в очередь —

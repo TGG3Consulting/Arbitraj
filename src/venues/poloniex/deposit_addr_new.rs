@@ -56,9 +56,10 @@ pub async fn list(ctx: &Ctx, coin: &str) -> GatewayResult<Value> {
 /// Принимает: окружение, тикер монеты, сеть (blockchain), имя монеты сети (coin из /v2/currencies).
 /// Возвращает: адрес из GET. После подтверждения — журнал venue.deposit_address (Info, без адреса — как KuCoin,
 /// решение 208); расхождение POST и GET — журнал venue.deposit_address (Warn, без адресов).
-/// Ошибки (Failed — ошибка и вид, ревью 2 Н-А): отказ POST (код и сообщение Poloniex дословно) — Refused; итог POST
-/// неизвестен и GET адреса не дал, POST принят, а GET адреса не дал, адреса POST и GET разные — Sent (биржа, возможно,
-/// уже создала адрес); ошибка повторного GET — по виду ошибки POST (принятый POST — Sent).
+/// Ошибки (Failed — ошибка и вид, ревью 2 Н-А, заход 3 Н-3.1): явный отказ POST (код или 4xx, сообщение Poloniex
+/// дословно), 429, запрос не отправлен — Refused; ответ 2xx без разбираемого тела (errors::ok_unparsed — «итог
+/// неизвестен») или без поля address, итог POST неизвестен и GET адреса не дал, POST принят, а GET адреса не дал,
+/// адреса POST и GET разные — Sent (биржа, возможно, уже создала адрес); ошибка повторного GET — по виду итога POST.
 pub async fn create(ctx: &Ctx, ticker: &str, chain: &str, coin: &str) -> Result<String, Failed> {
     let path = "/wallets/address";
     let body = json!({ "currency": coin });

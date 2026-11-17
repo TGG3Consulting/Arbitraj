@@ -193,6 +193,17 @@ pub fn fail_for(
     unknown(e, op)
 }
 
+/// Что делает: ревью t165 (заход 3, Н-3.1) — ответ HTTP 2xx, который не разобрался (тело не JSON), у создания адреса
+/// (Op::Create): биржа запрос приняла и могла создать адрес — это не отказ, а «итог неизвестен» (Timeout → unsure →
+/// OutcomeUnknown → addr_create::post_failure = Sent). У прочих операций — как есть. Принимает: ошибку разбора,
+/// операцию. Возвращает: ошибку. Ошибок нет.
+pub fn ok_unparsed(mut e: GatewayError, op: Op) -> GatewayError {
+    if op == Op::Create {
+        e.code = ErrorCode::Timeout;
+    }
+    e
+}
+
 /// Ответ не удалось разобрать.
 pub fn bad(what: &str, raw: &str) -> GatewayError {
     GatewayError::new(

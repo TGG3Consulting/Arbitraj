@@ -160,6 +160,8 @@ pub fn parse_funding(ctx: &Ctx, path: &str, r: &Reply, op: Op) -> GatewayResult<
     if r.text.trim().is_empty() {
         return Ok(Value::Null);
     }
-    serde_json::from_str(&r.text)
-        .map_err(|_| errors::bad(&format!("{path}: тело не JSON"), &r.text))
+    // Ревью t165 Н-3.1: 2xx без разбираемого тела у claim — «итог неизвестен», не отказ.
+    serde_json::from_str(&r.text).map_err(|_| {
+        errors::ok_unparsed(errors::bad(&format!("{path}: тело не JSON"), &r.text), op)
+    })
 }

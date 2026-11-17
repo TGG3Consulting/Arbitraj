@@ -178,7 +178,7 @@ async fn run(
     decided: chrono::DateTime<chrono::Utc>,
     (on, handed): (bool, Option<Instant>),
     fast: super::precheck_fast::Opts,
-    slot: &mut Slot,
+    ride: &mut Slot,
 ) {
     let deps = &core.inner.deps;
     // Решение 265: «Время по шагам» от положительного расчёта до исполненной покупки (step_timing.rs).
@@ -264,7 +264,7 @@ async fn run(
     // Решение 245, дополнение п. 2: момент решения о сделке — в учёт (длительность сделки для «успели бы»).
     deal.decided_at = Some(decided);
     // Решение 390 (докупка): первая сделка группы — группа = её ID; вложенная — ID первой; выключено — группы нет.
-    deal.group = match &slot.seat {
+    deal.group = match &ride.seat {
         super::coin_ride::Seat::Alone => None,
         super::coin_ride::Seat::Lead => Some(Box::new(super::deal_group::DealGroup::new(&deal.id))),
         super::coin_ride::Seat::Join(g) => {
@@ -599,7 +599,7 @@ async fn run(
         &deal.id,
         deal.group.as_ref().map(|g| g.id.clone()),
     );
-    slot.boarded = Some(deal.id.clone());
+    ride.boarded = Some(deal.id.clone());
     // Решение 151: на кошелёк DEX — зачисление и по приходу в блокчейне (transfers::send_trade).
     let mut gas = Vec::new();
     let sent = super::transfers::send_trade(

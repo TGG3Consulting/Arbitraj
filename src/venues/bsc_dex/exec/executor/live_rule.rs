@@ -5,98 +5,35 @@
 //! классу (вид шага 19 / 20 / 21 × без крючка / с крючком, + Infinity Stable). Список принятых классов в коде не пишется —
 //! он выводится из записи этим правилом.
 //! Правило (строго, без допусков; решение 400):
-//! - запись относится к коду, только если в её README есть SHA-256 текущего bin-runtime;
+//! - запись относится к коду, только если строка README «sha256 симулированного bin-runtime: <sha>» несёт SHA-256
+//!   текущего bin-runtime (не подстрока где угодно);
 //! - пул класса доказан, если ОБА одиночных вызова — (а) покупка «USDT → монета» и (б) продажа того же пула — прошли
 //!   (status 1), получено = кредит события Swap менеджера (got_eq_swap_credit), получено = квотер DEX В ТОМ ЖЕ
 //!   состоянии ((а) — quoter_out на H: (а) — первый вызов поверх H; (б) — quoter_out_after_a: квотер в той же
 //!   симуляции сразу после (а); quoter_out (б) «на H» считает до покупки (а) — другое состояние, не сравнивается) и
-//!   x_left = 0;
-//! - откат без записи в hooks_reject.json (тот же пул и case), остаток на исполнителе, получено ≠ кредит Swap или ≠
+//!   x_left записан нулём по каждому токену шага (usdt и coin), получено и квотер > 0;
+//! - откат без записи в hooks_reject.json (тот же пул, case и адрес крючка; пул без крючка откат не объясняет), остаток на исполнителе, получено ≠ кредит Swap или ≠
 //!   квотер в том же состоянии — «необъяснённое»: класс не принимается;
 //! - класс принят: необъяснённого нет и доказано не меньше MIN_POOLS пулов; класс «с крючком» (и Infinity Stable) не
 //!   принимается: бот не отсекает пул, чей крючок отвергает исполнитель (пробы шага через исполнитель у пулов V4 /
 //!   Infinity нет — их проба идёт Universal Router, check/probe.rs part; docs/TASKS.md t185).
 //!
 //! Кто вызывает: exec/executor/live_proof.rs, тесты.
-//! От чего зависит: serde_json, exec/executor/live_row.rs (разбор строки summary.json).
+//! От чего зависит: serde_json, alloy-primitives, exec/executor/live_row.rs (разбор строки summary.json),
+//! exec/executor/live_class.rs (классы шага).
 //! Настройки: нет (правило приёмки собранного кода, решение 400; не настройка торговли).
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use alloy_primitives::Address;
 use serde_json::Value;
 
+pub use super::live_class::{CLASSES, Class, Hook};
 use super::live_row::{Row, row, text};
 
 /// Решение 400: наименьшее число доказанных пулов класса — нижняя граница процедуры симуляции («по 2–3 пула каждого
 /// вида», заметка t181, п. 5). Правило приёмки, не настройка бота.
 pub const MIN_POOLS: usize = 2;
-
-/// Крючок пула класса.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Hook {
-    /// hooks ключа = 0.
-    Without,
-    /// Любой ненулевой крючок (кроме пула Infinity Stable).
-    With,
-    /// Infinity Stable — пул в крючке пула CL (шаг INF_CL); в summary.json — строка с полем `"stable": true`.
-    Stable,
-}
-
-/// Класс шага: номер вида шага контракта (kind.rs: UNI_V4 = 19, INF_CL = 20, INF_BIN = 21) и крючок.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Class {
-    pub kind: u8,
-    pub hook: Hook,
-}
-
-/// Все классы шагов пулов менеджеров исполнителя v3 (виды шага контракта 19–21; Infinity Stable — только вид 20).
-pub const CLASSES: [Class; 7] = [
-    Class {
-        kind: 19,
-        hook: Hook::Without,
-    },
-    Class {
-        kind: 19,
-        hook: Hook::With,
-    },
-    Class {
-        kind: 20,
-        hook: Hook::Without,
-    },
-    Class {
-        kind: 20,
-        hook: Hook::With,
-    },
-    Class {
-        kind: 20,
-        hook: Hook::Stable,
-    },
-    Class {
-        kind: 21,
-        hook: Hook::Without,
-    },
-    Class {
-        kind: 21,
-        hook: Hook::With,
-    },
-];
-
-impl Class {
-    /// Имя класса для интерфейса и причин. Ошибок нет.
-    pub fn label(self) -> String {
-        let name = match self.kind {
-            19 => "Uniswap V4",
-            20 => "Infinity CL",
-            21 => "Infinity Bin",
-            _ => "вид ?",
-        };
-        match self.hook {
-            Hook::Without => format!("{name} (вид {}) без крючка", self.kind),
-            Hook::With => format!("{name} (вид {}) с крючком", self.kind),
-            Hook::Stable => format!("Infinity Stable (вид {})", self.kind),
-        }
-    }
-}
 
 /// Вердикт по классу.
 #[derive(Debug, Clone, PartialEq)]
@@ -131,16 +68,21 @@ pub fn judge(
     current: Option<&str>,
 ) -> Result<Vec<Verdict>, String> {
     let cur = current.ok_or("SHA-256 текущего bin-runtime не записан (ArbExecutor.sha256)")?;
-    let bound = readme
-        .to_ascii_lowercase()
-        .contains(&cur.to_ascii_lowercase());
+    let tied = bound(readme, cur);
     let rows: Vec<Value> =
         serde_json::from_str(summary).map_err(|e| format!("summary.json: {e}"))?;
     let rej: Vec<Value> =
         serde_json::from_str(reject).map_err(|e| format!("hooks_reject.json: {e}"))?;
     let mut explained = BTreeSet::new();
     for r in &rej {
-        explained.insert((text(r, "pool_id")?.to_ascii_lowercase(), text(r, "case")?));
+        let hooks: Address = text(r, "hooks")?
+            .parse()
+            .map_err(|e| format!("hooks_reject.json: hooks: {e}"))?;
+        explained.insert((
+            text(r, "pool_id")?.to_ascii_lowercase(),
+            text(r, "case")?,
+            hooks,
+        ));
     }
     let mut t: BTreeMap<Class, Tally> = BTreeMap::new();
     for v in &rows {
@@ -158,22 +100,42 @@ pub fn judge(
     }
     Ok(CLASSES
         .iter()
-        .map(|c| verdict(*c, t.get(c), bound, cur))
+        .map(|c| verdict(*c, t.get(c), tied, cur))
         .collect())
 }
 
+/// Решение 400 (ревью t185): строка README записи с SHA-256 симулированного кода — `sha256 симулированного
+/// bin-runtime: <sha> …` (формат записи 17.11). Привязана, если такие строки есть и в каждой первое слово после
+/// двоеточия равно SHA-256 текущего bin-runtime (фраза с SHA в другом месте README не привязывает). Ошибок нет.
+pub fn bound(readme: &str, cur: &str) -> bool {
+    const MARK: &str = "sha256 симулированного bin-runtime:";
+    let found: Vec<&str> = readme
+        .lines()
+        .filter_map(|l| l.split_once(MARK).map(|(_, rest)| rest))
+        .map(|rest| rest.split_whitespace().next().unwrap_or_default())
+        .collect();
+    !found.is_empty() && found.iter().all(|s| s.eq_ignore_ascii_case(cur))
+}
+
 /// Учёт строки в классе. Ошибок нет.
-fn tally(t: &mut Tally, r: &Row, explained: &BTreeSet<(String, String)>) {
+fn tally(t: &mut Tally, r: &Row, explained: &BTreeSet<(String, String, Address)>) {
     let at = format!("({}) пул {}", r.case, r.pool);
     let single = r.case == "a" || r.case == "b";
     if single {
         t.pools.insert(r.pool.clone());
     }
-    if !r.x_zero {
-        t.bad.push(format!("{at}: на исполнителе остались токены"));
+    match r.x_left {
+        Some(false) => t.bad.push(format!("{at}: на исполнителе остались токены")),
+        None if !single => t
+            .bad
+            .push(format!("{at}: остаток на исполнителе не записан")),
+        _ => {}
     }
+    // Ревью t185: откат «объяснён» только у пула с крючком и только тем же крючком (пул, case и адрес крючка в
+    // hooks_reject.json); откат пула без крючка — всегда необъяснённое.
+    let hooked = r.hooks != Address::ZERO;
     let proof = if !r.ok {
-        if !explained.contains(&(r.pool.clone(), r.case.clone())) {
+        if !(hooked && explained.contains(&(r.pool.clone(), r.case.clone(), r.hooks))) {
             t.bad
                 .push(format!("{at}: откат вне hooks_reject.json — {}", r.revert));
         }
@@ -181,12 +143,20 @@ fn tally(t: &mut Tally, r: &Row, explained: &BTreeSet<(String, String)>) {
     } else if !single {
         // (в) сплит и (г) цикл — дополнительные вызовы: от них нужны только успех и пустой исполнитель.
         true
+    } else if r.x_left != Some(true) {
+        // Остаток не записан явно нулём по каждому токену шага — пул не доказан.
+        false
     } else if !r.credit {
         t.bad.push(format!("{at}: получено ≠ кредит события Swap"));
         false
     } else {
         match (r.got, r.quoter) {
-            (Some(g), Some(q)) if g == q => true,
+            // Ревью t185: равенство нулей — не доказательство.
+            (Some(g), Some(q)) if g == q && !g.is_zero() => true,
+            (Some(g), Some(q)) if g == q => {
+                t.bad.push(format!("{at}: получено = квотер = 0"));
+                false
+            }
             (Some(_), Some(_)) => {
                 t.bad
                     .push(format!("{at}: получено ≠ квотер в том же состоянии"));
@@ -216,7 +186,8 @@ fn verdict(c: Class, t: Option<&Tally>, bound: bool, cur: &str) -> Verdict {
     let mut why = Vec::new();
     if !bound {
         why.push(format!(
-            "в README записи нет SHA-256 текущего bin-runtime {cur} — запись о другом коде"
+            "строка README «sha256 симулированного bin-runtime: …» не несёт SHA-256 текущего bin-runtime {cur} — запись \
+             о другом коде"
         ));
     }
     if c.hook != Hook::Without {

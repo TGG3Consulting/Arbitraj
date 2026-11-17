@@ -10,6 +10,9 @@
 //!    классам; развёртывание разрешено; шаги непринятых классов (с крючком, Bin, Stable) — отказ admits.
 //! 4. Правило строгое на изменённой записи: без SHA в README — ничего не принято; без hooks_reject.json — у CL с
 //!    крючком необъяснённые откаты.
+//! 5. Ревью t185: остаток на исполнителе = 0 и квотер (а) на H — по raw_rpc (не по сводке); строгость на изменённой
+//!    копии (класс Uniswap V4 без крючка перестаёт приниматься): откат пула без крючка, «объяснённый» в hooks_reject;
+//!    x_left пустой / без ключа токена; получено = квотер = 0; SHA не в строке «sha256 симулированного bin-runtime:».
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::exec::executor::{code, deploy_gate, live_proof, live_rule}, pools::exec_kind,
@@ -283,4 +286,176 @@ fn rule_is_strict_on_altered_record() {
         cl_hook.why
     );
     assert!(live_rule::judge(&text("README.md"), &summary, &reject, None).is_err());
+}
+
+/// Адреса квотеров DEX из README записи (Uniswap V4, Infinity CL, Infinity Bin).
+const QUOTERS: [&str; 3] = [
+    "0x95c086d7fe28add842ee220fef225a777474d781",
+    "0xd0737c9762912dd34c3271197e362aa736df0926",
+    "0xc631f4b0fc2dd68ad45f74b2942628db117dd359",
+];
+
+/// Ревью t185: остаток на исполнителе и квотер (а) — по сырым ответам узла, а не по полям summary.json.
+#[test]
+fn x_left_and_quoter_a_from_raw_rpc() {
+    let raw = raw_rpc();
+    let raw = raw.as_array().unwrap();
+    let x_word = &X[2..];
+    let mut executes = 0;
+    for s in raw.iter().filter(|x| x["method"] == "eth_simulateV1") {
+        let req = s["params"][0]["blockStateCalls"][0]["calls"]
+            .as_array()
+            .unwrap();
+        let res = s["result"][0]["calls"].as_array().unwrap();
+        for (i, c) in req.iter().enumerate() {
+            if !c["to"].as_str().is_some_and(|t| t.eq_ignore_ascii_case(X)) {
+                continue;
+            }
+            executes += 1;
+            // Сразу за execute — balanceOf(X) по обоим токенам шага, оба 0.
+            for j in [i + 1, i + 2] {
+                let data = req[j]["data"].as_str().unwrap().to_ascii_lowercase();
+                assert!(
+                    data.starts_with("0x70a08231") && data.ends_with(x_word),
+                    "balanceOf(X)"
+                );
+                assert_eq!(res[j]["status"], "0x1");
+                assert_eq!(
+                    word(res[j]["returnData"].as_str().unwrap()),
+                    Some(U256::ZERO)
+                );
+            }
+        }
+    }
+    assert_eq!(executes, 43, "все вызовы execute записи");
+    // (а): ответ квотера на H (eth_call) с той же суммой и тем же токеном выхода = quoter_out = получено.
+    for r in json("summary.json").as_array().unwrap() {
+        if r["case"] != "a" {
+            continue;
+        }
+        let Some(q) = dec(&r["quoter_out"]) else {
+            continue;
+        };
+        assert_eq!(dec(&r["got"]), Some(q));
+        let amount =
+            alloy_primitives::hex::encode(dec(&r["amount_in"]).unwrap().to_be_bytes::<32>());
+        let out = r["token_out"].as_str().unwrap()[2..].to_ascii_lowercase();
+        let hit = raw.iter().any(|x| {
+            let to = x["params"][0]["to"]
+                .as_str()
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            let data = x["params"][0]["data"]
+                .as_str()
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            x["method"] == "eth_call"
+                && x["params"][1] == TAG
+                && QUOTERS.contains(&to.as_str())
+                && data.contains(&amount)
+                && data.contains(&out)
+                && x["result"].as_str().and_then(word) == Some(q)
+        });
+        assert!(hit, "квотер (а) на H: {}", r["pool_id"]);
+    }
+}
+
+/// Вердикты по изменённой копии записи. Ошибок нет (паника — не разобралось).
+fn judge_with(readme: &str, summary: &Value, reject: &Value) -> Vec<live_rule::Verdict> {
+    live_rule::judge(
+        readme,
+        &summary.to_string(),
+        &reject.to_string(),
+        code::runtime_sha256(),
+    )
+    .unwrap()
+}
+
+/// Принят ли класс в вердиктах. Ошибок нет.
+fn accepted(v: &[live_rule::Verdict], c: Class) -> bool {
+    v.iter().any(|x| x.class == c && x.accepted)
+}
+
+/// Изменяет строки summary.json класса Uniswap V4 без крючка (вид 19, hooks = 0) данной case. Ошибок нет.
+fn alter_v4(summary: &mut Value, case: &str, f: impl Fn(&mut Value)) {
+    for r in summary.as_array_mut().unwrap() {
+        let zero =
+            r["hooks"].as_str().and_then(|h| h.parse::<Address>().ok()) == Some(Address::ZERO);
+        if r["kind"] == 19 && zero && r["case"] == case {
+            f(r);
+        }
+    }
+}
+
+/// Ревью t185, пп. 1–4: каждое изменение копии записи — класс Uniswap V4 без крючка не принят (Infinity CL без крючка
+/// при этом остаётся принятым — изменение точечное).
+#[test]
+fn rule_strict_review_t185() {
+    let readme = text("README.md");
+    let (summary, reject) = (json("summary.json"), json("hooks_reject.json"));
+    let (v4, cl) = (class(19, Hook::Without), class(20, Hook::Without));
+    let base = judge_with(&readme, &summary, &reject);
+    assert!(accepted(&base, v4) && accepted(&base, cl));
+    // 1. Откат пула без крючка «объяснён» записью hooks_reject с hooks = 0 — всё равно необъяснённое.
+    let mut s1 = summary.clone();
+    let mut r1 = reject.clone();
+    let mut pool = String::new();
+    for r in s1.as_array_mut().unwrap() {
+        if pool.is_empty() && r["kind"] == 19 && r["case"] == "a" {
+            pool = r["pool_id"].as_str().unwrap().to_string();
+            r["status"] = 0.into();
+            r["got"] = Value::Null;
+            r["revert"] = "тест".into();
+            r1.as_array_mut().unwrap().push(serde_json::json!({
+                "pool_id": pool, "hooks": r["hooks"], "revert": "тест", "case": "a"
+            }));
+        }
+    }
+    let v = judge_with(&readme, &s1, &r1);
+    assert!(
+        !accepted(&v, v4) && accepted(&v, cl),
+        "откат пула без крючка: {pool}"
+    );
+    // 1б. Крючок в hooks_reject не тот, что у пула, — откат крючкового пула необъяснённый.
+    let mut r1b = reject.clone();
+    r1b[0]["hooks"] = format!("{:#x}", Address::repeat_byte(0x11)).into();
+    let v = judge_with(&readme, &summary, &r1b);
+    let why = &v
+        .iter()
+        .find(|x| x.class == class(20, Hook::With))
+        .unwrap()
+        .why;
+    assert!(why.contains("откат вне hooks_reject.json"), "{why}");
+    // 2. x_left пустой или без ключа токена — пул не доказан.
+    for strip in [None, Some("coin"), Some("usdt")] {
+        let mut s2 = summary.clone();
+        for case in ["a", "b"] {
+            alter_v4(&mut s2, case, |r| match strip {
+                None => r["x_left"] = serde_json::json!({}),
+                Some(k) => {
+                    r["x_left"].as_object_mut().unwrap().remove(k);
+                }
+            });
+        }
+        let v = judge_with(&readme, &s2, &reject);
+        assert!(!accepted(&v, v4) && accepted(&v, cl), "x_left {strip:?}");
+    }
+    // 3. Получено = квотер = 0 — не доказательство.
+    let mut s3 = summary.clone();
+    alter_v4(&mut s3, "a", |r| {
+        r["got"] = "0".into();
+        r["quoter_out"] = "0".into();
+    });
+    let v = judge_with(&readme, &s3, &reject);
+    assert!(!accepted(&v, v4) && accepted(&v, cl), "нули");
+    // 4. SHA текущего кода — в README, но не в строке «sha256 симулированного bin-runtime:» — ничего не принято.
+    let cur = code::runtime_sha256().unwrap();
+    let other = format!(
+        "- sha256 симулированного bin-runtime: {} (другая сборка)\nКод НЕ совпал с {cur}\n",
+        "0".repeat(64)
+    );
+    let v = judge_with(&other, &summary, &reject);
+    assert!(v.iter().all(|x| !x.accepted), "SHA не в своей строке");
+    assert!(live_rule::bound(&readme, cur));
+    assert!(!live_rule::bound(&format!("код НЕ совпал с {cur}"), cur));
 }

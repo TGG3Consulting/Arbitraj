@@ -12,6 +12,7 @@
 //! - apply / stale: перенос сведений монеты (Extra) в записи справочника — для кэша справочника (wallet.rs note_deposit).
 //! - Networks: последний справочник без учёта возраста (флаги ввода для круга), известен ли минимум, счётчик и толчок
 //!   удачного получения справочника (повтор круга после сбоя).
+//!
 //! Кто вызывает: mod.rs (deposit_networks_of), wallet.rs (note_deposit, shared), deposit_info.rs.
 //! От чего зависит: deposit_addr.rs, deposit_plan.rs, wallet.rs (Networks), networks_parse.rs (Extra), ctx.rs.
 //! Настройки: venue.bsc_network [gate], venue.deposit_info_requests_per_sec [gate] (темп запросов адреса).

@@ -9,6 +9,13 @@
 //! подтверждённая пара: book_confirmed адаптеру (стакан свежий в котировке до следующей проверки).
 //! Решение 367 (t163, ревью Н2): перед проходом — пары, нужные торговле (feed_need.rs): их подтверждают заранее и
 //! первыми в ведре (feed_confirm_queue.rs).
+//! Решение 383 (t169): при подтверждении тихих пар (адаптер умеет, venue.quiet_confirm_* заданы) проход — раз в секунду
+//! (единица venue.quiet_confirm_max_per_s; не реже venue.pair_resub_interval_ms), иначе — раз в
+//! venue.pair_resub_interval_ms; период — от начала до начала прохода. Раньше проход шёл раз в
+//! venue.pair_resub_interval_ms ПОСЛЕ работы прохода, а ведро держит запас на 1 с — за проход уходило не больше
+//! venue.quiet_confirm_max_per_s запросов, т. е. в секунду в ~3 раза меньше настройки. Сроки переподписки, мёртвой пары,
+//! переподключения считаются по времени (feed_watch_logic.rs) — от частоты прохода не зависят. После проверок —
+//! замер запаса хода (State::note_answers): от начала прошлого прохода до применения ответов.
 //! Сторож работает у любой площадки, чей адаптер отдаёт feed_health (поле scheduled больше его не выключает).
 //! Не задана любая настройка решения 202 — сторож площадки выключен (одна запись в журнал), ждёт изменения настроек;
 //! не задана настройка подтверждения — подтверждения нет (причина — в журнале вместе с тихими парами).
@@ -82,6 +89,22 @@ fn log_every(core: &Core, venue: &VenueId) -> Option<i64> {
         .map(|v| v as i64)
 }
 
+/// Секунда, мс — единица из имени настройки venue.quiet_confirm_max_per_s (не порог): проход подтверждений тихих пар —
+/// раз в эту единицу, чтобы ведро (запас — 1 с, feed_confirm.rs Bucket) отдавало всю настройку (решение 383).
+const SECOND_MS: i64 = 1_000;
+
+/// Решение 383: период прохода (мс, от начала до начала): подтверждение тихих пар включено — секунда, но не реже
+/// venue.pair_resub_interval_ms; иначе — venue.pair_resub_interval_ms. Не меньше 1. Ошибок нет.
+fn tick_ms(h: &crate::gateway::feed_health::FeedHealth, c: &Cfg) -> i64 {
+    let confirm = h.confirm && matches!(c.quiet, QuietCfg::Confirm { .. });
+    let t = if confirm {
+        c.interval_ms.min(SECOND_MS)
+    } else {
+        c.interval_ms
+    };
+    t.max(1)
+}
+
 /// Сейчас, unix мс.
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -93,6 +116,8 @@ pub async fn run(core: Core, venue: VenueId) {
     let mut lg = LogGate::default();
     let mut told: Option<String> = None;
     let mut watch = core.inner.deps.watch(&["venue.", "feed."]);
+    // Решение 383: начало прошлого прохода (замер запаса хода).
+    let mut prev_start: Option<i64> = None;
     loop {
         let c = match cfg(&core, &venue) {
             Ok(c) => c,
@@ -115,6 +140,7 @@ pub async fn run(core: Core, venue: VenueId) {
             continue;
         };
         let Some(h) = v.feed_health() else { return };
+        let start = now_ms();
         lg.every = log_every(&core, &venue);
         if let Some(m) = lg.announce(&h, &c) {
             log(&core, &venue, Level::Info, m).await;
@@ -136,11 +162,19 @@ pub async fn run(core: Core, venue: VenueId) {
                 a => act(&core, &venue, v.as_ref(), a, &c, &mut lg).await,
             }
         }
+        let asked = !checks.is_empty();
         confirm(&core, &venue, v.as_ref(), checks, &c, &mut st, &mut lg).await;
+        // Решение 383: запас хода — от начала прошлого прохода до применения ответов этого (первый проход замера не
+        // даёт — до него venue.pair_resub_interval_ms).
+        if let (true, Some(p)) = (asked, prev_start) {
+            st.note_answers(p, now_ms());
+        }
+        prev_start = Some(start);
         if let Some(m) = lg.summary(&h, now_ms(), &c, &st) {
             log(&core, &venue, Level::Info, m).await;
         }
-        tokio::time::sleep(Duration::from_millis(c.interval_ms.max(1) as u64)).await;
+        let rest = tick_ms(&h, &c) - (now_ms() - start);
+        tokio::time::sleep(Duration::from_millis(rest.max(0) as u64)).await;
     }
 }
 

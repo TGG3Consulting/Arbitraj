@@ -119,6 +119,8 @@ pub mod executor;
 pub mod feed_confirm;
 pub mod feed_confirm_queue;
 #[cfg(test)]
+mod feed_confirm_capacity_tests;
+#[cfg(test)]
 mod feed_confirm_early_tests;
 #[cfg(test)]
 mod feed_confirm_tests;

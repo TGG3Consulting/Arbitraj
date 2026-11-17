@@ -18,8 +18,12 @@
 //! - update — «The timestamp of when the orderbook last changed (in milliseconds)».
 //!
 //! Глубина (limit) не передаётся — по документации по умолчанию 10 уровней; уровни не читаются.
-//! Лимит частоты: API v4 → «Frequency limit rule» — публичные конечные точки 200 запросов за 10 с на IP (см. reply.rs);
-//! темп подтверждений задаёт ядро (venue.quiet_confirm_max_per_s ≤ 20 с запасом на другие публичные запросы Gate).
+//! Лимит частоты: API v4 → «Frequency limit rule» (https://www.gate.com/docs/developers/apiv4/en/): «All public
+//! endpoints | Public endpoints | 200r/10s per endpoint | IP | Orderbook, Candlestick, Ticker, etc.» — 200 запросов за
+//! 10 с на каждую публичную конечную точку с IP (см. reply.rs); темп подтверждений задаёт ядро
+//! (venue.quiet_confirm_max_per_s < 20 с запасом на snapshot ниже — тот же GET /spot/order_book). Пакетного метода с
+//! номером книги по многим парам у Gate нет: GET /spot/tickers (модель Ticker, SDK docs/Ticker.md) номера книги не даёт
+//! (решение 383, проверено 17.11).
 //!
 //! Сравнение с кадром (core/feed_confirm.rs): номер id ответа — на той же шкале, что lastUpdateId кадра
 //! spot.order_book (ws_conn.rs передаёт его в ConnHandle::frame_ver). Основание: документация Spot WebSocket v4

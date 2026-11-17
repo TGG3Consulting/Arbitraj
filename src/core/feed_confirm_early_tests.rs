@@ -5,8 +5,8 @@
 //! book_stale_ms и book_stale_ms × pair_dead_mult стояла в отказе «кадра стакана пары нет»), подтверждение покрывает
 //! момент, когда кадр стал бы старше book_stale_ms; повторный запрос — не раньше venue.quiet_confirm_min_ms, после нового
 //! кадра — сразу; кадр после отправки — ответ не нужен; без подтверждения (журнал, переподписка 202) — как раньше.
-//! Доработка по ревью Н2: ранняя проверка — только у пар, нужных торговле (State.needed / идущая сделка), остальные —
-//! как до правки; ведро — по сроку ожидания, нужные первыми, старые ждущие не голодают; первое «книга новее» ранней
+//! Доработка по ревью Н2: ранняя проверка в приоритете — у пар, нужных торговле (State.needed / идущая сделка);
+//! решение 383: у остальных — из остатка ведра (после обычных, не «отложены»); ведро — по сроку ожидания, нужные первыми, старые ждущие не голодают; первое «книга новее» ранней
 //! проверки — без переподписки (повторная сверка), второе подряд — переподписка; кадр между ними — сверка снята;
 //! сводка журнала показывает «отложено ведром» и исходы проверок нужных пар.
 //! Повторное ревью t163: Б1 — первое «книга новее» снимает подтверждение сразу (Action::Unconfirm); Н4 — ошибка REST
@@ -190,22 +190,52 @@ fn without_confirm_nothing_changes() {
 }
 
 #[test]
-fn not_needed_pair_waits_as_before_and_deal_counts_as_needed() {
-    let c = cfg();
-    // Пара не нужна торговле: тишина 6 с — ранней проверки нет (как до 367), после 15 с — обычная проверка.
+fn not_needed_pair_early_from_spare_bucket_and_deal_counts_as_needed() {
+    // Решение 383: пара не нужна торговле, тишина 6 с (ранний порог 2 с пройден, порог мёртвой — 15 с): ранняя
+    // проверка из ОСТАТКА ведра — после обычных, «отложены ведром» не считается. До 383 — ждала 15 с.
+    let mut c = cfg();
+    c.quiet = QuietCfg::Confirm {
+        min_ms: 30_000,
+        max_per_s: 1,
+    };
     let (mut st, none) = (State::default(), HashMap::new());
-    assert!(decide(&health(46_000, 40_000, 100), 46_000, &c, &none, &mut st).is_empty());
+    let n = |a: &[Action]| -> Vec<String> {
+        a.iter()
+            .filter_map(|x| match x {
+                Action::Check { ticker, .. } => Some(ticker.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let h = |now| many(now, &[("GMT", 40_000), ("OLD", 10_000)]);
     assert_eq!(
-        decide(&health(55_100, 40_000, 100), 55_100, &c, &none, &mut st),
-        vec![check()]
+        n(&decide(&h(46_000), 46_000, &c, &none, &mut st)),
+        vec!["OLD"]
+    );
+    assert_eq!(st.stats.deferred, 0, "ранняя из остатка не «отложена»");
+    assert_eq!(
+        n(&decide(&h(47_000), 47_000, &c, &none, &mut st)),
+        vec!["GMT"]
+    );
+    assert_eq!(st.stats.spare_checks, 1);
+    assert_eq!(
+        st.stats.early_checks, 0,
+        "не нужная торговле — не в счётчике нужных"
     );
     // Идущая сделка по монете — пара нужна торговле без State.needed.
     let mut st = State::default();
     let deals = HashMap::from([("GMT".to_string(), vec!["d1".to_string()])]);
     assert_eq!(
-        decide(&health(46_000, 40_000, 100), 46_000, &c, &deals, &mut st),
+        decide(
+            &health(46_000, 40_000, 100),
+            46_000,
+            &cfg(),
+            &deals,
+            &mut st
+        ),
         vec![check()]
     );
+    assert_eq!(st.stats.early_checks, 1);
 }
 
 #[test]

@@ -14,6 +14,10 @@
 //! Решение 367 (t163, ревью Н2): в сводке — сколько проверок отложено пустым ведром и что дали проверки пар, нужных
 //! торговле (подтверждены, первое «книга новее» с повторной сверкой, кадры потеряны) — с прошлой сводки.
 //!
+//! Решение 383 (t169): «тихие подтверждены» — только пары с ДЕЙСТВУЮЩИМ подтверждением (срок не истёк); последний
+//! ответ «книга та же» с истёкшим сроком — отдельно, «подтверждение истекло» (раньше они считались подтверждёнными,
+//! и число не показывало нехватку ведра); ранние проверки из остатка ведра (пары, не нужные торговле) — отдельный счётчик.
+//!
 //! Чистая логика без ввода-вывода; пишет core/feed_watch_act.rs (строки пар) и core/feed_watch.rs (сводка).
 //! Кто вызывает: core/feed_watch.rs, core/feed_watch_act.rs.
 //! От чего зависит: gateway/feed_health.rs, feed_watch_logic.rs (Cfg, State), feed_confirm.rs (QuietCfg, Told),
@@ -108,7 +112,7 @@ impl LogGate {
         }
         self.summary_at = Some(now);
         let dead_after = c.book_stale_ms * c.dead_mult;
-        let mut n = [0usize; 9];
+        let mut n = [0usize; 10];
         for k in &h.conns {
             n[0] += 1;
             n[1] += usize::from(k.alive_ms.is_some_and(|a| now - a <= c.live_ms));
@@ -119,8 +123,10 @@ impl LogGate {
                     continue;
                 }
                 n[3] += 1;
-                n[4 + match st.checks.get(&key).and_then(|s| s.told.as_ref()) {
-                    Some(Told::Quiet) => 0,
+                let cs = st.checks.get(&key);
+                n[4 + match cs.and_then(|s| s.told.as_ref()) {
+                    Some(Told::Quiet) if cs.is_some_and(|s| s.until_ms > now) => 0,
+                    Some(Told::Quiet) => 5,
                     Some(Told::Unchanged) => 1,
                     Some(Told::Lost) => 2,
                     Some(Told::Failed(_) | Told::NoConfirm) => 3,
@@ -130,14 +136,16 @@ impl LogGate {
         }
         let busy = st.pairs.values().filter(|s| s.busy()).count();
         let line = format!(
-            "Сторож пар: соединений {} (живых {}), свежих пар {}, молчат {} — тихие подтверждены {}, книга не менялась с \
-             переподписки {}, кадры потеряны {}, без подтверждения или проверка не удалась {}, ещё не решено {}; в кругах \
+            "Сторож пар: соединений {} (живых {}), свежих пар {}, молчат {} — тихие подтверждены {}, подтверждение \
+             истекло (ждут проверки) {}, книга не менялась с переподписки {}, кадры потеряны {}, без подтверждения \
+             или проверка не удалась {}, ещё не решено {}; в кругах \
              переподписки (попытки или пауза) {busy}. С прошлой сводки: переподписок {}, ожили {}, переподключений {}",
             n[0],
             n[1],
             n[2],
             n[3],
             n[4],
+            n[9],
             n[5],
             n[6],
             n[7],
@@ -152,12 +160,13 @@ impl LogGate {
         self.prev = s;
         Some(format!(
             "{line}; отложено ведром {}; проверок нужных торговле пар {} — подтверждены {}, «книга новее» впервые (повторная \
-             сверка без переподписки) {}, кадры потеряны {}",
+             сверка без переподписки) {}, кадры потеряны {}; ранних проверок из остатка ведра {}",
             s.deferred - p.deferred,
             s.early_checks - p.early_checks,
             s.early_confirmed - p.early_confirmed,
             s.early_suspect - p.early_suspect,
-            s.early_lost - p.early_lost
+            s.early_lost - p.early_lost,
+            s.spare_checks - p.spare_checks
         ))
     }
 }

@@ -127,6 +127,41 @@ fn n1_trade_points_bounded() {
     assert!(stored.buy_pct >= cycle[2].pct);
 }
 
+/// Независимое ревью t173 (Н-1): значение вытесненной точки сделки получает БОЛЬШАЯ соседка — малые суммы не
+/// завышаются. GAIB, цикл 1 / 20 / 100 USDT (запись), предел 2, сделки 21, 60, 90 USDT (условные значения — запись на
+/// 100 USDT): вытесняется 21 (зазор 1/21 до цикловой 20); влияние на 20 USDT и наименьшее — как в записи.
+#[test]
+fn n1_evicted_value_goes_up_not_down() {
+    let cycle = buy("0x5c1b4d20");
+    let mut stored = only_buy(cycle.clone());
+    let at_usd = |u: u64| cycle[1].amount_in * U256::from(u) / U256::from(20u64);
+    for u in [21u64, 60, 90] {
+        let p = trade(&cycle, at_usd(u));
+        if let Some(n) = on_success(&stored, &only_buy(vec![p]), Some(2)) {
+            stored = n;
+        }
+    }
+    assert!(
+        !stored.buy.iter().any(|s| s.amount_in == at_usd(21)),
+        "вытеснена 21"
+    );
+    assert_eq!(
+        at(&stored.buy, cycle[1].amount_in),
+        at(&cycle, cycle[1].amount_in),
+        "влияние на 20 USDT не завышено"
+    );
+    let least = |v: &[HookStep]| v.iter().map(|s| s.pct).min();
+    assert_eq!(
+        least(&stored.buy),
+        least(&cycle),
+        "наименьшая точка не поднята"
+    );
+    assert!(
+        at(&stored.buy, at_usd(21)).expect("измерено") >= cycle[2].pct,
+        "не лучше факта на 21"
+    );
+}
+
 #[test]
 fn n2_decreasing_ladder_stays_unmeasured_below() {
     // Условная лесенка с убыванием (в записях её нет): 10 → 0,5 %, 100 → 0,3 %.

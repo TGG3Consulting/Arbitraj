@@ -119,7 +119,8 @@ pub fn on_success(old: &HookImpact, new: &HookImpact, cap: Option<usize>) -> Opt
     }
     let cap = |was: &[HookStep]| hook_trim::side_cap(was, cap);
     let mut m = merge_impact(old, new);
-    if let Some(last) = new.buy.last() {
+    // Предел — только когда проба добавила точку сделки (у точек цикла usd > 0 — их вливание не обрезается).
+    if let Some(last) = new.buy.last().filter(|p| hook_trim::is_trade(p)) {
         m.buy = Arc::new(hook_trim::trim(
             m.buy.to_vec(),
             last.amount_in,
@@ -127,7 +128,8 @@ pub fn on_success(old: &HookImpact, new: &HookImpact, cap: Option<usize>) -> Opt
         ));
         m.buy_pct = m.buy.iter().map(|s| s.pct).max().unwrap_or(m.buy_pct);
     }
-    if let Some(last) = new.sell.last() {
+    // Предел — только когда проба добавила точку сделки (у точек цикла usd > 0 — их вливание не обрезается).
+    if let Some(last) = new.sell.last().filter(|p| hook_trim::is_trade(p)) {
         m.sell = Arc::new(hook_trim::trim(
             m.sell.to_vec(),
             last.amount_in,

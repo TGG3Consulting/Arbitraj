@@ -64,8 +64,14 @@ pub async fn paths(
     let mut pin: Option<u64> = None;
     let mut out = all(v, shares, direct_mode, &th).await?;
     loop {
-        let ins = seen(v, shares, &out)?;
-        let wants: Vec<Want> = ins.iter().map(|(w, _, _)| w.clone()).collect();
+        // Независимое ревью t173 (Н-3): пересчёт долей по порядку исполнения (resequence) — только когда шаг может
+        // завершиться (все входы путей покрыты) или поставить пробу; на пересчёте с подъёмом и отказе он не нужен.
+        let mut ins = views(&out);
+        let mut wants: Vec<Want> = ins.iter().map(|(w, _, _)| w.clone()).collect();
+        if th.uncovered(&wants).is_empty() || drive.would_probe() {
+            ins = seen(v, shares, &out, ins)?;
+            wants = ins.iter().map(|(w, _, _)| w.clone()).collect();
+        }
         match drive.next(&mut th, &wants) {
             Next::Done => return Ok((out, th)),
             Next::Fail(why) => return Err(ctx.err(ErrorCode::NoRoute, why)),
@@ -91,14 +97,14 @@ pub async fn paths(
     }
 }
 
-/// Входы шагов с крючком B/C путей и (ревью 4 Н-ж) тех же путей по порядку исполнения долей с общим пулом
-/// (quote/graph_seq.rs resequence; без общих пулов — те же входы). Ошибки: как resequence.
+/// Входы шагов с крючком B/C путей (`got` — views путей) плюс (ревью 4 Н-ж) входы тех же путей по порядку исполнения
+/// долей с общим пулом (quote/graph_seq.rs resequence; без общих пулов — те же входы). Ошибки: как resequence.
 fn seen(
     v: &Via<'_>,
     shares: &[(&[RouteHop], Decimal)],
     out: &[Path],
+    mut got: Vec<(Want, Entry, Address)>,
 ) -> GatewayResult<Vec<(Want, Entry, Address)>> {
-    let mut got = views(out);
     if shares.len() < 2 || got.is_empty() {
         return Ok(got);
     }

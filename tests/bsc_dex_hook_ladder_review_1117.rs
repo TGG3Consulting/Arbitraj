@@ -118,6 +118,17 @@ fn b1_trade_above_top_gets_fact() {
 #[test]
 fn b2_failure_cuts_side_only() {
     let (_, buy, sell, _) = pool("0x62166b8a");
+    // Точки цикла продажи — с суммой в USDT, как у цикла крючков (check/hooks_probe.rs ladder: usd > 0). Запись хранит
+    // вход продажи в монетах; суммы 1 / 20 / 100 USDT обеих сторон — README записи (п.1). Без суммы (usd = 0) точки
+    // выглядели бы точками пробы сделки, и предел точек сделки (check/hook_trim.rs) их обрезал бы.
+    let sell: Vec<HookStep> = sell
+        .into_iter()
+        .zip([1u64, 20, 100])
+        .map(|(s, u)| HookStep {
+            usd: Decimal::from(u),
+            ..s
+        })
+        .collect();
     let old = HookImpact {
         buy_pct: buy[2].pct,
         sell_pct: sell[2].pct,

@@ -786,6 +786,33 @@ async fn two_group_deals_closing_at_once_return_once() {
     assert_eq!(n, 1, "ровно один общий возврат");
 }
 
+#[tokio::test]
+async fn three_group_deals_closing_at_once_return_once() {
+    let (core, s, _j) = start("group-race3").await;
+    top_up(&s).await;
+    let dx = dir_of("mexc", "bingx");
+    riding(&core, &dx, "G", &["G", "D2", "D3"]).await;
+    let (mut g, mut x, mut y) = (
+        sold("G", &dx, "G"),
+        sold("D2", &dx, "G"),
+        sold("D3", &dx, "G"),
+    );
+    tokio::join!(
+        close(&core, &mut g, "100"),
+        close(&core, &mut x, "95"),
+        close(&core, &mut y, "90")
+    );
+    let n = ["G", "D2", "D3"]
+        .iter()
+        .filter(|id| has_note(&core, id, "общий возврат USDT группы G: 285"))
+        .count();
+    assert_eq!(n, 1, "ровно один общий возврат на полную сумму");
+    for id in ["D2", "D3"] {
+        let x = core.inner.deals.lock().unwrap().get(id).cloned().unwrap();
+        assert_eq!(x.group.as_ref().unwrap().shared_in.as_deref(), Some("G"));
+    }
+}
+
 #[test]
 fn group_return_split_by_withdraw_max() {
     let v = VenueId("bingx".into());

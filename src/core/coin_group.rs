@@ -22,7 +22,7 @@
 //! Отложенные части живут в записях сделок (Deal.group.wait, база): перезапуск — «не вернулись» с точной суммой,
 //! решает человек (ledger_load.rs).
 //! Кто вызывает: usdt_return_deal.rs (hold_parts), ledger.rs (finish → after_close; save → on_saved), executor.rs (join,
-//! joined, dropped).
+//! joined, dropped, released).
 //! От чего зависит: coin_key.rs, coin_ride.rs (идущие), deal.rs, deal_group.rs, ledger.rs, usdt_return_deal.rs,
 //! dirctx_venue.rs (сеть USDT площадки), engine.rs, settings.
 //! Настройки: venue.quote_asset, venue.bsc_network (сеть возврата — пределы вывода); включатель — coin_ride.rs.
@@ -96,8 +96,10 @@ pub fn hold_parts(deal: &mut Deal, parts: Vec<(VenueId, Decimal)>) -> Vec<(Venue
     parts
 }
 
-/// Сколько записей группы `g` монеты ещё в идущих (`path` — только Transfer / Selling) и не закрылись. Вызывается под
-/// замком `groups` (порядок groups → rides → deals). Ошибок нет.
+/// Сколько записей группы `g` монеты ещё в идущих и не закрылись (не в `closing`). `path` — только идущие на пути
+/// (Transfer / Selling) и уже закрытые, но ещё не прошедшие after_close (Closed не из `closing`: их часть ещё придёт в
+/// пул — без этого при одновременном закрытии первая отдавала бы свою часть одна, а вторая — свою, общий возврат
+/// делился). Вызывается под замком `groups` (порядок groups → rides → deals). Ошибок нет.
 fn running(core: &Core, key: &CoinKey, g: &str, closing: &HashSet<String>, path: bool) -> usize {
     let rides = lk(&core.inner.rides);
     let deals = lk(&core.inner.deals);
@@ -108,7 +110,7 @@ fn running(core: &Core, key: &CoinKey, g: &str, closing: &HashSet<String>, path:
                 !path
                     || matches!(
                         deals.get(&r.deal_id).map(|x| x.step),
-                        Some(Step::Transfer | Step::Selling)
+                        Some(Step::Transfer | Step::Selling | Step::Closed)
                     )
             })
             .count()
@@ -126,12 +128,13 @@ fn take_if_last(core: &Core, key: &CoinKey, g: &str, pool: &mut Pool) -> Option<
     Some((std::mem::take(&mut pool.parts), was))
 }
 
-/// Убрать пул, если у группы не осталось записей в идущих и вложенных до покупки (вызывается под замком). Ошибок нет.
+/// Убрать пул, если у группы не осталось ни одной записи в идущих (и закрывшихся тоже — их список `closing` нужен, пока
+/// их записи не сняты, released) и вложенных до покупки (вызывается под замком). Ошибок нет.
 fn tidy(core: &Core, key: &CoinKey, g: &str, groups: &mut std::collections::HashMap<String, Pool>) {
     if let Some(p) = groups.get(g)
         && p.parts.is_empty()
         && p.pending == 0
-        && running(core, key, g, &p.closing, false) == 0
+        && running(core, key, g, &HashSet::new(), false) == 0
     {
         groups.remove(g);
     }
@@ -225,6 +228,12 @@ pub fn joined(core: &Core, g: &str) {
 /// группы; если других нет — общий возврат сразу. Принимает: ядро, ключ монеты, группу. Ошибок нет.
 pub fn dropped(core: &Core, key: &CoinKey, g: &str) {
     spawn_if_last(core, key, g, |p| p.pending = p.pending.saturating_sub(1));
+}
+
+/// Что делает: запись сделки группы снята из идущих (задача сделки кончилась) — проверка «последняя ли» и уборка пула.
+/// Принимает: ядро, ключ монеты, группу. Ошибок нет.
+pub fn released(core: &Core, key: &CoinKey, g: &str) {
+    spawn_if_last(core, key, g, |_| {});
 }
 
 /// Пределы вывода USDT площадки возврата `v` (сеть venue.bsc_network, монета venue.quote_asset; справочник сетей

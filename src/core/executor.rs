@@ -130,9 +130,17 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
         };
         run(&core, d.clone(), decided, (on, handed), fast, &mut slot).await;
         super::coin_ride::release(&core, &key, slot.boarded.as_deref());
-        // Решение 390 (Б2): вложенная не дошла до учёта покупки — выходит из группы (общий возврат без неё).
-        if let (super::coin_ride::Seat::Join(g), None) = (&slot.seat, &slot.boarded) {
-            super::coin_group::dropped(&core, &key, g);
+        // Решение 390 (Б2): вложенная не дошла до учёта покупки — выходит из группы (общий возврат без неё); сделка
+        // группы снята из идущих — проверка «последняя ли» и уборка пула группы.
+        match (&slot.seat, &slot.boarded) {
+            (super::coin_ride::Seat::Join(g), None) => super::coin_group::dropped(&core, &key, g),
+            (super::coin_ride::Seat::Join(g), Some(_)) => {
+                super::coin_group::released(&core, &key, g)
+            }
+            (super::coin_ride::Seat::Lead, Some(id)) => {
+                super::coin_group::released(&core, &key, id)
+            }
+            _ => {}
         }
     };
     tokio::spawn(urgency::scope(

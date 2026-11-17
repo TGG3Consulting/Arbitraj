@@ -54,8 +54,9 @@ pub fn find(v: &Value, addr: &str) -> Option<Entry> {
 /// Что делает: claim и подтверждение повторным списком (см. шапку).
 /// Принимает: окружение, тикер, сеть ядра, method_id. Возвращает: адрес и срок из списка. После подтверждения — журнал
 /// venue.deposit_address (Info, без адреса — как KuCoin, решение 208).
-/// Ошибки (Failed — ошибка и вид, ревью 2 Н-А): отказ claim (текст Kraken; у TooManyDepositAddresses — пояснение),
-/// адрес claim требует memo — Refused; итог claim неизвестен и список адреса не дал, claim принят, а адреса нет в
+/// Ошибки (Failed — ошибка и вид, ревью 2 Н-А, заход 3 Н-3.1): явный отказ claim (код или 4xx, текст Kraken; у
+/// TooManyDepositAddresses — пояснение), 429, запрос не отправлен — Refused; ответ 2xx, а адрес не разобран (тело не
+/// JSON, пусто, нет поля, tag/memo), итог claim неизвестен и список адреса не дал, claim принят, а адреса нет в
 /// списке — Sent (Kraken, возможно, уже выдал адрес); ошибка повторного списка — по виду итога claim.
 pub async fn claim(
     ctx: &Ctx,
@@ -84,11 +85,18 @@ pub async fn claim(
     let posted = match posted {
         Ok(v) => match crypto(v.get("address_details")) {
             Ok(a) => Ok(a),
+            // Ревью t165 Н-3.1: claim ответил 2xx, а адрес не разобрался (пустое тело, нет поля, tag/memo) — Kraken мог
+            // выдать адрес: Sent (повторного claim нет до перезапуска), адрес не принимается.
             Err(m) => {
-                let err = invalid(ctx, format!("Kraken {ticker} {network}: claim: {m}"));
+                let err = invalid(
+                    ctx,
+                    format!(
+                        "Kraken {ticker} {network}: claim принят (2xx), адрес не разобран: {m}"
+                    ),
+                );
                 return Err(Failed {
                     err: Box::new(err),
-                    kind: Failure::Refused,
+                    kind: Failure::Sent,
                 });
             }
         },

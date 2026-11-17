@@ -74,3 +74,42 @@ fn coin_name_of_network_must_be_unique() {
     // Сети нет — None (отказ даёт chain_coin раньше).
     assert_eq!(coin_clash(&ok, "TRX", "BSC"), None);
 }
+
+/// Ревью t165 (заход 3, Н-3.1): классификация неудачи создания — чистая логика на функциях ошибок адаптеров.
+/// Явный отказ (4xx с кодом биржи) и 429 — Refused (повтор после срока); 2xx без разбираемого тела и сбой сервера
+/// (5xx) — «итог неизвестен» → Sent (повторного создания нет до перезапуска).
+#[test]
+fn create_failure_kind_poloniex_and_kraken() {
+    use arb::gateway::addr_create::{Failure, post_failure};
+    use arb::venues::{kraken, poloniex};
+
+    let pe = poloniex::errors::Op::Create;
+    let kind = |e: arb::gateway::errors::GatewayError| post_failure(&e.code);
+    // Poloniex.
+    let rejected = poloniex::errors::from_code(400, "21000", "отказ", pe, "");
+    assert_eq!(
+        kind(poloniex::errors::unsure(rejected, pe)),
+        Failure::Refused
+    );
+    let limit = poloniex::errors::from_code(429, "429", "часто", pe, "");
+    assert_eq!(kind(poloniex::errors::unsure(limit, pe)), Failure::Refused);
+    let unparsed = poloniex::errors::ok_unparsed(poloniex::errors::bad("тело не JSON", ""), pe);
+    assert_eq!(kind(poloniex::errors::unsure(unparsed, pe)), Failure::Sent);
+    let server = poloniex::errors::from_code(500, "500", "сбой", pe, "");
+    assert_eq!(kind(poloniex::errors::unsure(server, pe)), Failure::Sent);
+    // Прочие операции разбор 2xx не меняет.
+    let other = poloniex::errors::Op::Other;
+    let plain = poloniex::errors::ok_unparsed(poloniex::errors::bad("x", ""), other);
+    assert_eq!(plain.code, arb::gateway::errors::ErrorCode::BadResponse);
+
+    // Kraken (claim).
+    let ke = kraken::errors::Op::Create;
+    let rejected = kraken::errors::from_funding(400, "{}", ke);
+    assert_eq!(kind(kraken::errors::unsure(rejected, ke)), Failure::Refused);
+    let limit = kraken::errors::from_funding(429, "{}", ke);
+    assert_eq!(kind(kraken::errors::unsure(limit, ke)), Failure::Refused);
+    let unparsed = kraken::errors::ok_unparsed(kraken::errors::bad("тело не JSON", ""), ke);
+    assert_eq!(kind(kraken::errors::unsure(unparsed, ke)), Failure::Sent);
+    let server = kraken::errors::from_funding(503, "{}", ke);
+    assert_eq!(kind(kraken::errors::unsure(server, ke)), Failure::Sent);
+}

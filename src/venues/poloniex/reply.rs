@@ -78,7 +78,10 @@ pub fn parse(ctx: &Ctx, path: &str, r: &Reply, op: Op) -> GatewayResult<Value> {
     let status = r.status.as_u16();
     let v = serde_json::from_str::<Value>(&r.text).ok();
     if (200..300).contains(&status) {
-        return v.ok_or_else(|| errors::bad(&format!("{path}: тело не JSON"), &r.text));
+        // Ревью t165 Н-3.1: 2xx без разбираемого тела у создания адреса — «итог неизвестен», не отказ.
+        return v.ok_or_else(|| {
+            errors::ok_unparsed(errors::bad(&format!("{path}: тело не JSON"), &r.text), op)
+        });
     }
     let note = (status == 429).then(|| on_limit(ctx, r.retry_after_s));
     let code = v.as_ref().and_then(|v| v.get("code")).and_then(code_text);

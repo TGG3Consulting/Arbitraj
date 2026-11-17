@@ -104,6 +104,7 @@ async fn handle(core: &Core, st: &mut HashMap<String, Open>, cfg: Option<&Cfg>, 
             calc,
             snap,
             card,
+            note,
         } => {
             if !st.contains_key(&info.id) {
                 return; // эпизод уже закрыт — карточка опоздала
@@ -130,8 +131,10 @@ async fn handle(core: &Core, st: &mut HashMap<String, Open>, cfg: Option<&Cfg>, 
                 files.line(&o.info.id, line.to_string());
             }
             o.calc = calc;
+            // Задача t165: итог старта идёт вместе с карточкой открытия; пока карточки нет — последний итог.
             if o.card.is_none() {
                 o.card = card;
+                o.note = note;
             }
             save(core, &o.info).await;
         }

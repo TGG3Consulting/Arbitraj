@@ -270,6 +270,7 @@ pub mod size_scan;
 pub mod size_search;
 pub mod size_uncapped;
 pub mod size_uncapped_at;
+pub mod start_note;
 pub mod start_reason;
 pub mod status_debounce;
 pub mod step_timing;

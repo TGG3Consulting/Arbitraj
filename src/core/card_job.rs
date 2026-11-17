@@ -119,6 +119,7 @@ async fn run(core: &Core, job: Job) {
                 calc: Box::new(job.calc),
                 snap,
                 card: Some(Box::new(card)),
+                note: job.note,
             },
         );
     }

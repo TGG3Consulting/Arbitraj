@@ -96,9 +96,7 @@ pub struct Inner {
     /// Решение 155: открытая строка журнала отказа по направлению (core.candidate_rejected — одна строка на смену вида
     /// причины со счётчиком повторов; reject_log.rs).
     pub last_reject: super::reject_log::RejectLog,
-    /// Решение 147: последняя записанная в журнал причина отказа исполнителя по направлению (core.start_refused —
-    /// одна запись на смену причины); сделка запущена — запись стирается.
-    pub start_refused: Mutex<HashMap<Direction, String>>,
+    // Задача t165: память причины core.start_refused — в last_reject под ключом start_note::key (поля start_refused нет).
     /// Решение 148: защита по факту продажи выключена — причина, уже записанная в журнал (одна запись на смену).
     pub slip_off: Mutex<Option<String>>,
     /// История времени в пути: (монета, A, B) → длительности переводов по порядку, секунды (transit.rs).
@@ -237,7 +235,6 @@ impl Inner {
             queued: Mutex::default(),
             candidates: Mutex::default(),
             last_reject: Default::default(),
-            start_refused: Mutex::default(),
             slip_off: Mutex::default(),
             transits: Mutex::default(),
             credits: Default::default(),

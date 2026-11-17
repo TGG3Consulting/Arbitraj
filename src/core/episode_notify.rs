@@ -4,7 +4,7 @@
 //! закрытие (episode.closed с итогом) — только если открытие было сообщено или эпизод продержался не меньше этого
 //! (тогда сначала открытие — с карточкой или кратким текстом расчёта). Эпизод короче — в Telegram ничего, в файл,
 //! базу и журнал — всё. episode.min_notify_ms не задана — сообщения сразу. Журнал карточки (core.candidate) — вместе с
-//! открытием.
+//! открытием; задача t165 — с итогом старта прошедшего (Open::note, start_note.rs).
 //! Кто вызывает: core/episode_worker.rs.
 //! От чего зависит: card.rs, card_text.rs, costs.rs, episode.rs, episode_cfg.rs.
 //! Настройки: episode.min_notify_ms (через Cfg).
@@ -31,6 +31,8 @@ pub struct Open {
     pub card: Option<Box<Card>>,
     /// Открытие уже сообщено в Telegram.
     pub notified: bool,
+    /// Задача t165: итог старта прошедшего (start_note::note) — строка в записи core.candidate открытия.
+    pub note: Option<String>,
 }
 
 impl Open {
@@ -41,6 +43,7 @@ impl Open {
             calc,
             card: None,
             notified: false,
+            note: None,
         }
     }
 
@@ -91,6 +94,10 @@ pub async fn opened(core: &Core, o: &mut Open, cfg: Option<&Cfg>, force: bool) {
     };
     if let Some(s) = o.calc.size.as_ref() {
         text.push_str(&format!("\nОбъём: {}", s.why));
+    }
+    // Задача t165: итог старта (запущена / сухой режим / отказ) — у сигнала, а не только в отдельных строках журнала.
+    if let Some(n) = &o.note {
+        text.push_str(&format!("\n{n}"));
     }
     let deps = &core.inner.deps;
     let venue = o.info.direction.buy_on.0.clone();

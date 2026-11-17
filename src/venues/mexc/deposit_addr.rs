@@ -3,12 +3,16 @@
 //! (решение 118, Я-5: адрес нужен в предпроверке каждой сделки — повторно запросов нет). Адрес с непустым memo —
 //! ошибка «требует memo — не поддерживается» (Я-15: вывод на такой адрес без memo не зачислится); такой не кэшируется.
 //! Кто вызывает: mod.rs (deposit_address из контракта).
-//! От чего зависит: rest.rs, num.rs, ctx.rs, wallet.rs (имя сети, справочник), symbols.rs.
+//! От чего зависит: rest.rs, num.rs, ctx.rs, wallet.rs (имя сети, справочник), symbols.rs, deposit_addr_new.rs
+//! (создание, выбор записи сети), gateway/addr_claim.rs.
 //! Настройки: нет своих (через wallet.rs — venue.bsc_network, venue.networks_fresh_ms).
 //!
 //! Официальная документация: GET /api/v3/capital/deposit/address?coin=&network= (SPOT_WITHDRAW_READ, вес 10)
 //! https://www.mexc.com/api-docs/spot-v3/wallet-endpoints/deposit-address-supporting-network — ответ — массив: coin,
 //! network (в примере «BEP20(BSC)» — отображаемое имя), address, memo.
+//! Решение 379 (задача t165, Тигран 17.11): адреса сети в ответе нет — бот создаёт его сам, «Generate deposit address
+//! (supporting network)» POST того же пути (deposit_addr_new.rs); прогрев адресов без venue.deposit_warm_create = да не
+//! создаёт — NotApplicable (gateway/addr_claim.rs, как KuCoin). Раньше — отказ «создайте его в кабинете MEXC».
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -16,9 +20,11 @@ use std::sync::{Arc, RwLock};
 use reqwest::Method;
 
 use crate::core::types::Asset;
+use crate::gateway::addr_claim::{self, Missing};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
+use super::deposit_addr_new;
 use super::errors::Op;
 use super::symbols::Symbols;
 use super::wallet::{self, Networks};
@@ -34,7 +40,12 @@ pub struct DepositAddrs {
 /// (ответ — запись с этим именем или кодом).
 /// Принимает: окружение, кэш адресов, справочник сетей, справочник пар, монету, код сети.
 /// Возвращает: адрес.
-/// Ошибки: InvalidAddress — адреса в сети нет (создать в кабинете) или адрес требует memo; связь, коды MEXC.
+/// Официально: Deposit Address GET и Generate deposit address POST /api/v3/capital/deposit/address
+/// (https://www.mexc.com/api-docs/spot-v3/wallet-endpoints/deposit-address-supporting-network и
+/// …/generate-deposit-address-supporting-network).
+/// Ошибки: InvalidAddress — адрес требует memo или ответ создания без адреса; NotApplicable — адреса нет, а создание
+/// запрещено признаком задачи (прогрев, gateway/addr_claim.rs); отказ MEXC в создании — его код и сообщение
+/// (deposit_addr_new.rs); связь, коды MEXC.
 pub async fn deposit_address(
     ctx: &Ctx,
     addrs: &DepositAddrs,
@@ -66,21 +77,21 @@ pub async fn deposit_address(
         Op::Other,
     )
     .await?;
-    let found = data.as_array().and_then(|a| {
-        a.iter().find(|r| {
-            let n = num::text_opt(r, "network");
-            n.as_deref() == Some(display.as_str()) || n.as_deref() == Some(network)
-        })
-    });
-    let found = found.ok_or_else(|| {
-        invalid(
-            ctx,
-            format!(
-                "У {} нет адреса депозита MEXC в сети {display} — создайте его в кабинете MEXC (Депозит)",
-                asset.ticker
-            ),
-        )
-    })?;
+    // Решение 379: записи сети нет — создать (предпроверка, перевод) или NotApplicable (прогрев без «да»).
+    let created;
+    let found = match deposit_addr_new::pick(&data, &display, network) {
+        Some(r) => r,
+        None => match addr_claim::on_missing() {
+            Missing::Forbidden => {
+                let m = addr_claim::forbidden_text("MEXC", &asset.ticker, &display);
+                return Err(ctx.tag(GatewayError::new(ErrorCode::NotApplicable, None, m)));
+            }
+            Missing::Create => {
+                created = deposit_addr_new::create(ctx, asset, &display, network).await?;
+                &created
+            }
+        },
+    };
     if let Some(memo) = num::text_opt(found, "memo").filter(|m| !m.trim().is_empty()) {
         return Err(invalid(
             ctx,

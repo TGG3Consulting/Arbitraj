@@ -17,6 +17,10 @@
 //!   TooManyDepositAddresses; неиспользованный старый адрес «begins expiring and is removed after 7 days»; «If tag or
 //!   memo is present, include it with the address» — у бота memo не поддерживается.
 //!   Счёт зачисления у Kraken один (спот) — перевода после депозита нет.
+//!
+//! Решение 379 (задача t165, 17.11.2026): метод создания у Kraken есть (claim), но включается существующей настройкой
+//! venue.deposit_address_claim — её не трогаем (правило: существующие настройки не меняются); сделать claim
+//! автоматическим (по решению Тиграна 17.11) — вопрос владельцу (docs/TASKS.md, t165).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

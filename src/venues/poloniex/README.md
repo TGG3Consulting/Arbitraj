@@ -44,7 +44,8 @@
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление справочника, подписка (решение 131), поток аккаунта |
 | `fees.rs` | Ставки /feeinfo одним запросом (special по паре, иначе общая); скидка TRX — расчёт по обычной ставке |
 | `wallet.rs`, `networks_parse.rs` | Монеты и сети /v2/currencies (весь — вне рабочих потоков, за Arc; одна — /v2/currencies/{c}), адрес контракта, комиссия и минимум вывода |
-| `deposit_addr.rs` | Адрес депозита: имя монеты в сети из /v2/currencies → /wallets/addresses?currency= (кэш; memo — не поддерживается) |
+| `deposit_addr.rs` | Адрес депозита: имя монеты в сети из /v2/currencies → /wallets/addresses?currency= (кэш; memo — не поддерживается); адреса нет — создаёт (решение 379) |
+| `deposit_addr_new.rs` | Решение 379: создание адреса депозита New Currency Address POST /wallets/address, общая проверка адреса ответа (`pick`); прогрев без venue.deposit_warm_create — не создаёт |
 | `activity.rs`, `deposits.rs`, `transfers.rs` | Окно /wallets/activity (venue.history_window_s); статус депозита по txid; вывод v2 со своим withdrawOrderId, статус и поиск |
 | `account.rs` | Балансы спота, «Проверить подключение» (подпись, accountState, ставки и скидка TRX; права — не проверяемы) |
 | `all_balances.rs` | Панель «Балансы»: Спот, Маржа (оценка и займы), Фьючерсы (не читается — отдельные ключи) |

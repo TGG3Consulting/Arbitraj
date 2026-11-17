@@ -11,6 +11,9 @@
 //! of MASTER account»; chainType — «Please use the value of >> chain from coin-info»; ответ: coin, chains[]: chain,
 //! chainType, addressDeposit, tagDeposit. Лимит «300 req/min». Депозит зачисляется на FUND («Your funds will be
 //! deposited into FUND wallet by default», Set Deposit Account) — перевод на торговый счёт: fund_move.rs.
+//! Решение 379 (задача t165, 17.11.2026): метода создания адреса депозита основного аккаунта в документации нет (папка
+//! v5/asset/deposit репозитория документации: master-deposit-addr, sub-deposit-addr, set-deposit-acct, записи); создаёт
+//! ли GET адрес, документация не говорит. Поведение прежнее: нет адреса — отказ (вопрос Тиграну — docs/TASKS.md, t165).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

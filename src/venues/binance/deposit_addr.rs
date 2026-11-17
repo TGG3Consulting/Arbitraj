@@ -9,6 +9,11 @@
 //! Официально: GET /sapi/v1/capital/deposit/address (Wallet «Deposit Address (supporting network)», вес IP 10) —
 //! coin (обязателен), network («If network is not send, return with default network of the coin»; значения — из
 //! networkList config/getall); ответ: address, coin, tag, url.
+//! Решение 379 (задача t165, 17.11.2026): метода создания адреса депозита в документации нет (страница «Deposit
+//! Address (supporting network)», https://developers.binance.com/docs/wallet/capital/deposite-address: «Fetch deposit
+//! address with network»; рядом — только «Fetch deposit address list» и «One click arrival deposit apply»); создаёт ли
+//! этот запрос адрес, если его нет, — документация не говорит. Поведение прежнее: нет адреса — отказ (вопрос
+//! Тиграну — docs/TASKS.md, t165).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

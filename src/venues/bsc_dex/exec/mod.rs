@@ -73,6 +73,7 @@ pub mod swap_v4;
 pub mod trade;
 pub mod trade_direct;
 pub mod trade_direct_prep;
+pub mod trade_hooks;
 pub mod trade_probe;
 pub mod trade_smart;
 pub mod txs;

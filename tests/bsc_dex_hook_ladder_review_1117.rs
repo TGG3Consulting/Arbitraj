@@ -57,6 +57,7 @@ fn side(p: &Pool, qs: &[Quote], id: &str, buy: bool) -> Vec<HookStep> {
                 amount_in: q.amount,
                 usd: Decimal::from(q.usd),
                 pct: impact(o.amount_out, q.remote).expect("влияние"),
+                coins: None,
                 quoter_out: Some(q.remote),
             }
         })
@@ -120,15 +121,15 @@ fn b2_failure_cuts_side_only() {
     let old = HookImpact {
         buy_pct: buy[2].pct,
         sell_pct: sell[2].pct,
-        buy: buy.clone(),
-        sell: sell.clone(),
+        buy: buy.clone().into(),
+        sell: sell.clone().into(),
         ..Default::default()
     };
     match on_failure(&old, true, buy[2].amount_in, "нет ликвидности".into()) {
         Some(CheckState::Known(i)) => {
-            assert_eq!(i.buy, buy[..2].to_vec());
+            assert_eq!(*i.buy, buy[..2].to_vec());
             assert_eq!(i.buy_pct, buy[1].pct);
-            assert_eq!((i.sell, i.sell_pct), (sell.clone(), old.sell_pct));
+            assert_eq!((i.sell.to_vec(), i.sell_pct), (sell.clone(), old.sell_pct));
         }
         x => panic!("ожидалась обрезанная лесенка: {x:?}"),
     }
@@ -139,7 +140,7 @@ fn b2_failure_cuts_side_only() {
     };
     assert!(one.buy.is_empty() && one.buy_fail.is_some());
     assert_eq!(
-        (one.sell.clone(), one.sell_fail.clone()),
+        (one.sell.to_vec(), one.sell_fail.clone()),
         (sell.clone(), None)
     );
     // Пул целиком «не прошла» — только когда не прошли обе стороны.
@@ -151,28 +152,31 @@ fn b2_failure_cuts_side_only() {
     let back = merge_impact(
         &one,
         &HookImpact {
-            buy: vec![buy[0].clone()],
+            buy: vec![buy[0].clone()].into(),
             ..Default::default()
         },
     );
-    assert_eq!((back.buy, back.buy_fail), (vec![buy[0].clone()], None));
+    assert_eq!(
+        (back.buy.to_vec(), back.buy_fail),
+        (vec![buy[0].clone()], None)
+    );
     let flat = HookImpact {
         buy_pct: buy[1].pct,
         ..Default::default()
     };
     assert!(on_failure(&flat, true, buy[2].amount_in, "откат".into()).is_none());
-    assert!(on_success(&flat, &old).is_none());
+    assert!(on_success(&flat, &old, None).is_none());
     // Ревью 4 Н5: проба без новой точки итог не меняет — не пишется; новая точка (100 USDT в лесенку 1/20) — пишется.
-    assert!(on_success(&old, &old).is_none());
+    assert!(on_success(&old, &old, None).is_none());
     let short = HookImpact {
-        buy: buy[..2].to_vec(),
+        buy: buy[..2].to_vec().into(),
         ..old.clone()
     };
     let top = HookImpact {
-        buy: vec![buy[2].clone()],
+        buy: vec![buy[2].clone()].into(),
         ..Default::default()
     };
-    assert_eq!(on_success(&short, &top).expect("лесенка").buy, buy);
+    assert_eq!(*on_success(&short, &top, None).expect("лесенка").buy, buy);
 }
 
 #[test]

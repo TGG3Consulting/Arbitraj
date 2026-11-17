@@ -181,6 +181,7 @@ pub mod patience_scope;
 pub mod persist;
 pub mod plan_costs;
 pub mod plan_gap;
+pub mod pool_hook;
 pub mod precheck;
 pub mod precheck_balance;
 pub mod precheck_deposit;

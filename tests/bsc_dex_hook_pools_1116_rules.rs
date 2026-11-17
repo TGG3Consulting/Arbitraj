@@ -138,6 +138,7 @@ fn flat_impact_without_points_as_before() {
         amount_in: U256::from(1u64),
         usd: Decimal::ZERO,
         pct: Decimal::ZERO,
+        coins: None,
         quoter_out: None,
     };
     assert_eq!(

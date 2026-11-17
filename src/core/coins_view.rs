@@ -102,6 +102,8 @@ fn row(c: &CoinEntry, x: &Ctx) -> Value {
                         "hooks": pl.hooks,
                         "check": check,
                         "admission": blacklist::pool_admission(pl, check, s).err(),
+                        // Ревью 4 лесенки (Н3): сторона «не прошла» — пул работает другой стороной.
+                        "side_off": blacklist::pool_sides_off(check),
                         "block": pl.block,
                         "received_at": pl.received_at,
                     }));

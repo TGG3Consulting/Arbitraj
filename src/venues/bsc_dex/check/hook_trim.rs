@@ -1,0 +1,99 @@
+//! Файл: venues/bsc_dex/check/hook_trim.rs
+//! Что делает: ревью 4 лесенки влияния (Н1) — предел роста лесенки хранилища точками проб перед сделкой (чистая
+//! логика, без узла и хранилища). Каждая удачная проба перед сделкой (живая и сухая) вливает точку на сумме сделки
+//! (check/hook_fold.rs on_success); до следующего цикла крючков (hooks.recheck_interval_s) лесенка росла без предела —
+//! и вместе с ней копии, изломы и строка экрана. Правило:
+//! - точки пробы сделки (usd = 0; у точек цикла usd > 0 — check/hook_points.rs, сумма 0 точкой не бывает) — не больше
+//!   `cap` на сторону; точки цикла не трогаются;
+//! - сверх предела вытесняется точка сделки, ближайшая по сумме к соседней точке лесенки (наименьший относительный
+//!   зазор |a − b| / max(a, b)): она добавляет меньше всего нового знания о форме зависимости; самая новая точка
+//!   (только что измеренная) не вытесняется;
+//! - значение вытесненной точки не теряется: соседняя меньшая точка (нет её — большая) поднимается до него
+//!   (максимум) — наибольшее влияние стороны не падает, расчёт не становится лучше факта: у неубывающей лесенки
+//!   значение на сумме — ближайшая большая точка (она не меньше вытесненной), у лесенки с убыванием — наибольшее по
+//!   всем точкам (не изменилось).
+//!
+//! Предел `cap` — hooks.impact_points (число точек лесенки стороны); не задана (лесенка осталась от прошлого цикла до
+//! перехода на одно число) — число точек цикла этой стороны, не меньше одной (из данных, без чисел в коде).
+//!
+//! Кто вызывает: check/hook_fold.rs (on_success).
+//! От чего зависит: core/types (HookStep).
+//! Настройки: нет своих (предел передаёт exec/trade_probe.rs — hooks.impact_points).
+
+use alloy_primitives::U256;
+use rust_decimal::Decimal;
+
+use crate::core::types::HookStep;
+
+/// Точка пробы перед сделкой (сумма в USDT не считалась). Ошибок нет.
+pub fn is_trade(s: &HookStep) -> bool {
+    s.usd <= Decimal::ZERO
+}
+
+/// Предел точек сделки стороны: `cap` (hooks.impact_points), не задан — число точек цикла стороны, не меньше одной.
+/// Ошибок нет.
+pub fn side_cap(steps: &[HookStep], cap: Option<usize>) -> usize {
+    cap.unwrap_or_else(|| steps.iter().filter(|s| !is_trade(s)).count())
+        .max(1)
+}
+
+/// Что делает: ограничение точек сделки стороны (см. шапку). Принимает: лесенку (по возрастанию входа), вход самой
+/// новой точки (не вытесняется), предел. Возвращает: лесенку не больше чем с `cap` точками сделки. Ошибок нет.
+pub fn trim(mut steps: Vec<HookStep>, newest: U256, cap: usize) -> Vec<HookStep> {
+    while steps.iter().filter(|s| is_trade(s)).count() > cap {
+        let Some(i) = victim(&steps, newest) else {
+            break;
+        };
+        let gone = steps.remove(i);
+        // Значение вытесненной — соседней меньшей (нет её — большей, она теперь на месте i).
+        let to = if i > 0 {
+            Some(i - 1)
+        } else if i < steps.len() {
+            Some(i)
+        } else {
+            None
+        };
+        if let Some(t) = to {
+            steps[t].pct = steps[t].pct.max(gone.pct);
+            steps[t].quoter_out = None;
+        }
+    }
+    steps
+}
+
+/// Точка сделки с наименьшим относительным зазором до соседней (кроме самой новой); None — вытеснять нечего.
+/// Ошибок нет.
+fn victim(steps: &[HookStep], newest: U256) -> Option<usize> {
+    let mut best: Option<(usize, (U256, U256))> = None;
+    for (i, s) in steps.iter().enumerate() {
+        if !is_trade(s) || s.amount_in == newest {
+            continue;
+        }
+        let near = [i.checked_sub(1), Some(i + 1)]
+            .into_iter()
+            .flatten()
+            .filter_map(|j| steps.get(j))
+            .map(|n| gap(s.amount_in, n.amount_in))
+            .reduce(|a, b| if less(b, a) { b } else { a });
+        let Some(g) = near else {
+            continue;
+        };
+        if best.is_none_or(|(_, b)| less(g, b)) {
+            best = Some((i, g));
+        }
+    }
+    best.map(|(i, _)| i)
+}
+
+/// Относительный зазор как дробь (|a − b|, max(a, b)). Ошибок нет.
+fn gap(a: U256, b: U256) -> (U256, U256) {
+    (if a > b { a - b } else { b - a }, a.max(b))
+}
+
+/// Дробь `x` меньше дроби `y` (перекрёстное умножение, с насыщением; знаменатель 0 — зазор 0). Ошибок нет.
+fn less(x: (U256, U256), y: (U256, U256)) -> bool {
+    if x.1.is_zero() || y.1.is_zero() {
+        return x.1.is_zero() && !y.1.is_zero();
+    }
+    x.0.saturating_mul(y.1) < y.0.saturating_mul(x.1)
+}

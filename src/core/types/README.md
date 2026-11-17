@@ -17,7 +17,7 @@
 | `transfer.rs` | CoinNetworkInfo, TransferStatus, WithdrawRequest, Transfer, Balance |
 | `hold.rs` | HoldItem, WithdrawHold — что биржа сейчас держит от вывода (решение 150: у MEXC — предварительно зачисленные депозиты, статус 9 PRE_SUCCESS); пусто — ничего не держится. Решение 166: unknown — у площадки нет официального источника («неизвестно», не «удержаний нет»). Решение 253: WithdrawReady — готов ли вывод монеты после покупки (контракт withdraw_ready): свободно ≥ суммы, источник ответа |
 | `delist.rs` | DelistItem, Delistings — пары биржи в делистинге (решение 175): тикер, символ, когда прекращаются торги и закрывается вывод, источник в API; unknown — у площадки нет официального источника («неизвестно», не «делистингов нет») |
-| `check.rs` | CheckState, TokenTaxes, CoinCheck, HookImpact, PoolCheck, TaxKind, BlockReason, CoinBlock |
+| `check.rs` | CheckState, TokenTaxes, CoinCheck, HookImpact (лесенки HookLadder — общие, Arc), HookStep, PoolCheck, TaxKind, BlockReason, CoinBlock |
 | `send.rs` | SendMethod, SendChannelInfo, ChannelState, SendChannelStats, TxOutcome, ChainTx |
 | `directory.rs` | IndexerDex, DirectoryStatus, DirectoryPool, DirectoryToken (note — «индексатор не знает пулов», решение 121), PoolDirectory, FactoryScan (поиск по фабрикам на своём узле, решение 121) — справочник пулов (решение 58) |
 | `dry_swap.rs` | DexDrySwap, DrySwapPool — итог «сухой сделки DEX» (решение 121, C4): форма маршрута, пулы, выходы, минимум, газ, причина |

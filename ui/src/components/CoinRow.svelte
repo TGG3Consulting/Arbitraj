@@ -89,10 +89,11 @@
       <thead><tr><th>Площадка</th><th>Пара</th><th>Вид пула</th><th>Пул</th><th>Комиссия</th><th>Крючок</th><th>Проверка</th><th>Глубина</th><th>Получено</th></tr></thead>
       <tbody>
         {#each coin.pools as p, i (i)}
-          {@const chk = p.check ? checkState(p.check.impact, impactText) : null}
+          {@const coinTicker = (coin.presence ?? []).find((x) => x.venue === p.venue)?.ticker ?? coin.asset.ticker}
+          {@const chk = p.check ? checkState(p.check.impact, (i) => impactText(i, { buy: p.pair ?? 'USDT', sell: coinTicker })) : null}
           <tr class:off={p.admission}>
             <td>{p.venue}</td>
-            <td>{(coin.presence ?? []).find((x) => x.venue === p.venue)?.ticker ?? coin.asset.ticker} / {p.pair ?? 'USDT'}</td>
+            <td>{coinTicker} / {p.pair ?? 'USDT'}</td>
             <td><code>{p.family}</code> {poolKindLabel(p.kind)}</td>
             <td><code>{poolRefText(p.pool)}</code></td>
             <td>{p.fee_pips == null ? 'не из пула (V2 — настройка, V4 — динамическая)' : `${p.fee_pips / 10000}%`}</td>
@@ -100,6 +101,8 @@
             <td>
               {#if chk}<span class={chk.cls}>{chk.text}</span>{:else}<span class="muted">не требуется / нет данных</span>{/if}
               {#if p.admission}<div class="err">пул исключён: {p.admission}</div>{/if}
+              <!-- Ревью 4 лесенки (Н3): сторона «не прошла» — пул работает другой стороной (core/pool_hook.rs pool_sides_off). -->
+              {#each p.side_off ?? [] as off, k (k)}<div class="warn-text">сторона закрыта: {off}</div>{/each}
             </td>
             <td><PoolDepthCell {p} /></td>
             <td>{p.received_at ? showTime(p.received_at) : '—'}{#if p.block != null} <span class="muted">· блок {p.block}</span>{/if}</td>

@@ -22,7 +22,7 @@
 //! От чего зависит: check/reprobe_rule.rs, check/hooks_probe.rs, check/hook_store.rs, check/quoter_compare.rs,
 //! pools/listen.rs (Pools), node/call.rs (block_tag), gateway/events.rs (PoolCheck).
 //! Настройки: hooks.reprobe_before_pause [bsc_dex] — необязательная; hooks.max_impact_b_pct, hooks.max_impact_c_pct
-//! (docs/SETTINGS.md).
+//! (docs/SETTINGS.md); hooks.impact_points — только «задана ли» (режим лесенки, ревью 4 Н9).
 
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
@@ -132,7 +132,9 @@ pub async fn again(
         log(p, e, &t, &add).await;
         return Ok(note(first, &add));
     }
-    let merged = only_side(&old, &i, t.side);
+    // Ревью 4 (Н9): без лесенки (hooks.impact_points не задана) — одно число, точки перемера в хранилище не идут.
+    let ladder = p.ctx.int(super::hook_points::POINTS).is_ok();
+    let merged = only_side(&old, &i, t.side, ladder);
     let pc = hooks_probe::pool_check(&p.ctx, e, group, CheckState::Known(merged.clone()));
     if !hook_store::put_head(&p.checks, &e.pool.reference, t.block, &pc, None) {
         let add = "влияние крючка уже измерено на более новом блоке — перемер не применяется";

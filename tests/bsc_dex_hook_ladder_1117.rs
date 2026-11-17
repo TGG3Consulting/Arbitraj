@@ -49,6 +49,7 @@ fn ladder(p: &Pool, qs: &[&Quote]) -> Vec<HookStep> {
                 amount_in: q.amount,
                 usd: Decimal::from(q.usd),
                 pct: impact(o.amount_out, q.remote).expect("влияние"),
+                coins: None,
                 quoter_out: Some(q.remote),
             }
         })

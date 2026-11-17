@@ -32,27 +32,37 @@ export function checkState(s, show) {
 export const taxesText = (t) => `покупка ${t.buy_pct}% · продажа ${t.sell_pct}% · перевод ${t.transfer_pct}%`;
 
 /**
- * Лесенка стороны (решение «335 (лесенка влияния)»): «1 → 0%, 20 → 0,099%, 100 → 0,67% USDT»; точка пробы перед сделкой
- * (сумма в USDT не считалась, usd = 0) — «вход N → X%». Принимает: точки HookStep. Возвращает: строку или ''.
+ * Лесенка стороны (решение «335 (лесенка влияния)»): «1 → 0%, 20 → 0,099%, 100 → 0,67% USDT». Ревью 4 (Н3): точка пробы
+ * перед сделкой (сумма в USDT не считалась, usd = 0) — «сделка 45,23 USDT → X%»: вход в токене входа стороны (coins —
+ * адаптер переводит минимальные единицы по decimals токена; токен — `token`), без hex; decimals не было в памяти —
+ * «сделка (сумма не переведена) → X%». Принимает: точки HookStep, имя токена входа. Возвращает: строку или ''.
  */
-const stepsText = (steps) =>
+const stepsText = (steps, token) =>
   (steps ?? [])
-    .map((s) => (Number(s.usd) > 0 ? `${s.usd} USDT → ${s.pct}%` : `вход ${s.amount_in} → ${s.pct}%`))
+    .map((s) => {
+      if (Number(s.usd) > 0) return `${s.usd} USDT → ${s.pct}%`;
+      return s.coins != null ? `сделка ${s.coins} ${token} → ${s.pct}%` : `сделка (сумма не переведена) → ${s.pct}%`;
+    })
     .join(', ');
 
 /**
  * Влияние крючка: без лесенки — «покупка 0,1% · продажа 0,2%» (одно число на все суммы); с лесенкой — наибольшее по
- * стороне и точки «сумма → влияние» (котировка берёт значение ближайшей большей точки). Принимает: HookImpact.
+ * стороне и точки «сумма → влияние» (котировка берёт значение ближайшей большей точки). Ревью 4 (Н3): сторона «не
+ * прошла» (buy_fail / sell_fail: квотер отказал на наименьшей сумме стороны, пул работает другой стороной) —
+ * «покупка: не прошла — причина». Принимает: HookImpact, имена токенов входа {buy: встречный токен пула, sell: монета}.
  * Возвращает: строку.
  */
-export function impactText(i) {
-  const side = (name, pct, steps) => {
-    const t = stepsText(steps);
+export function impactText(i, names = { buy: 'встречного токена', sell: 'монеты' }) {
+  const side = (name, pct, steps, fail, token) => {
+    if (fail) return `${name}: не прошла — ${fail}`;
+    const t = stepsText(steps, token);
     return t ? `${name}: до ${pct}% (${t})` : `${name} ${pct}%`;
   };
   const ladder = (i.buy?.length ?? 0) + (i.sell?.length ?? 0) > 0;
   const head = ladder ? 'влияние по суммам' : 'влияние (одно на все суммы)';
-  return `${head}: ${side('покупка', i.buy_pct, i.buy)} · ${side('продажа', i.sell_pct, i.sell)}`;
+  const buy = side('покупка', i.buy_pct, i.buy, i.buy_fail, names.buy);
+  const sell = side('продажа', i.sell_pct, i.sell, i.sell_fail, names.sell);
+  return `${head}: ${buy} · ${sell}`;
 }
 
 const TAX = { Buy: 'покупку', Sell: 'продажу', Transfer: 'перевод' };

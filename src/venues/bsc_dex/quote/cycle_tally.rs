@@ -187,19 +187,27 @@ impl Tally {
     }
 }
 
-/// Итоги последнего прохода по площадке (строка и данные на каждую базовую).
-static LAST: LazyLock<Mutex<HashMap<String, Vec<(String, Value)>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Строки итога прохода: (текст, данные) на каждую базовую монету.
+pub type Lines = Vec<(String, Value)>;
+
+/// Хранилище итогов по площадке.
+type Store = Mutex<HashMap<String, Lines>>;
+
+/// Итоги последнего прохода по площадке. Замок НЕ на горячем пути (ревью t189): запись — один раз в конце прохода
+/// поиска циклов (cycle_scan.rs scan, в потоке счёта после всех расчётов — помощники quote/par.rs его не берут), чтение —
+/// один раз за проход ядра (core/cycle_watch.rs → venue.rs dex_cycle_tally). Ни на цикл, ни на сигнал, ни на ребро он не
+/// берётся; держится только на вставку / копию нескольких строк.
+static LAST: LazyLock<Store> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Запомнить итоги прохода площадки (раз в проход). Ошибок нет.
-pub fn remember(venue: &str, lines: Vec<(String, Value)>) {
+pub fn remember(venue: &str, lines: Lines) {
     LAST.lock()
         .unwrap_or_else(|p| p.into_inner())
         .insert(venue.to_string(), lines);
 }
 
 /// Итоги последнего прохода площадки (пусто — проходов не было). Ошибок нет.
-pub fn last(venue: &str) -> Vec<(String, Value)> {
+pub fn last(venue: &str) -> Lines {
     LAST.lock()
         .unwrap_or_else(|p| p.into_inner())
         .get(venue)

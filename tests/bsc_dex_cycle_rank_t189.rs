@@ -469,7 +469,13 @@ async fn lost_reason_is_written() {
     assert_eq!(data["lost"]["legs"], json!(1));
 
     // Неисполнимый сигнал (исполнителя у кошелька нет, бандл не собирается без каналов) — в строке отбора ядра.
-    let legs: Vec<Leg> = path
+    // Сигнал строится на двухшаговом цикле USDT → CAKE → USDT (оба пула CAKE-USDT с картой тиков слов −3…3) — как в
+    // tests/bsc_dex_cycle.rs evaluates_cycle_profit_model_85: на нём вход 100 USDT исполняется целиком. Лучший по курсу
+    // цикл (r.paths[0]) идёт через пул с узким окном записанных тиков — route_calc.rs complete: «шаг маршрута не
+    // исполним целиком» (100 USDT не помещаются в записанную ликвидность), это граница записи, а не формы исполнения.
+    let two = route_paths::enumerate_cycles(&g, USDT, 2, 100);
+    let pair = two.first().expect("есть двухшаговый цикл");
+    let legs: Vec<Leg> = pair
         .steps
         .iter()
         .map(|s| Leg {

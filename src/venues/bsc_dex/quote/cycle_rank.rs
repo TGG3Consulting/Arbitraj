@@ -14,8 +14,9 @@
 //! стороны пула по книге глубины pools/depth_book.rs Book::last, USD) по убыванию; затем — ключ цикла (пулы и токен входа
 //! каждого шага, байты) по возрастанию. Итог не зависит от порядка рёбер графа, пока предел dex_dex.rank_max_cycles не
 //! достигнут. Отбор без копий: держится не больше 2·N кандидатов (сжатие до N по порогу N-го курса); цикл с курсом ниже
-//! порога отбрасывается до выделения памяти. Курсы рёбер — память одного прохода (Rates), без замков; книга глубины
-//! читается только у кандидатов в отборе. Рёбра копируются только у N отобранных (как раньше у N первых).
+//! порога отбрасывается до выделения памяти. Память одного прохода (Rates, своя у прохода, без замков): курсы рёбер,
+//! комиссия V2 по виду DEX (хранилище настроек — раз на вид за проход) и глубина стороны пула (книга глубины — раз на
+//! ребро-сторону за проход, только у кандидатов при сжатии). Рёбра копируются только у N отобранных (как раньше у N первых).
 //! Кто вызывает: quote/cycle_scan.rs (scan).
 //! От чего зависит: pools/graph.rs (edge_ids, edge), pools/depth_book.rs (Book::last), quote/spot.rs, quote/steps.rs,
 //! quote/route_paths.rs (RoutePath, Step), num.rs, ctx.rs.
@@ -27,7 +28,7 @@ use std::collections::HashMap;
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
-use crate::core::types::PoolRef;
+use crate::core::types::{PoolKind, PoolRef};
 
 use super::super::ctx::Ctx;
 use super::super::num;
@@ -58,27 +59,83 @@ pub struct Ranked {
     pub capped: bool,
 }
 
-/// Курсы рёбер одного прохода: индекс ребра·2 + (вход — монета пула). Создаётся на граф, общий для всех базовых.
-pub struct Rates(Vec<Option<Option<Decimal>>>);
+/// Память одного прохода (своя у прохода, без замков; общая для всех базовых): курс ребра — по индексу ребра·2 +
+/// (вход — монета пула); глубина стороны пула по книге — по тому же индексу (книга читается раз на ребро-сторону за
+/// проход); комиссия V2 без fee_pips — по виду DEX (настройка dex.v2_fee_pct читается раз на вид за проход, а не на
+/// ребро: ревью t189 — никаких чтений хранилища на каждом ребре горячего прохода).
+pub struct Rates {
+    rate: Vec<Option<Option<Decimal>>>,
+    depth: HashMap<usize, Option<Decimal>>,
+    v2_fee: HashMap<&'static str, Option<Decimal>>,
+}
 
 impl Rates {
-    /// Пустая память курсов на граф. Принимает: граф. Ошибок нет.
+    /// Пустая память на граф. Принимает: граф. Ошибок нет.
     pub fn new(g: &Graph) -> Rates {
-        Rates(vec![None; g.len().saturating_mul(2)])
+        Rates {
+            rate: vec![None; g.len().saturating_mul(2)],
+            depth: HashMap::new(),
+            v2_fee: HashMap::new(),
+        }
     }
 
     /// Курс ребра i при входе token_in (из памяти или посчитан один раз). None — курса нет. Ошибок нет.
     fn get(&mut self, ctx: &Ctx, g: &Graph, i: usize, token_in: Address) -> Option<Decimal> {
         let e = g.edge(i);
         let slot = i * 2 + usize::from(token_in == e.a);
-        *self.0[slot].get_or_insert_with(|| edge_rate(ctx, e, token_in))
+        if let Some(r) = self.rate[slot] {
+            return r;
+        }
+        let r = self
+            .fee(ctx, e, token_in)
+            .and_then(|f| rate_with_fee(e, token_in, f));
+        self.rate[slot] = Some(r);
+        r
+    }
+
+    /// Комиссия пула, % — как quote/steps.rs fee_pct; у V2 без fee_pips — dex.v2_fee_pct вида DEX из памяти прохода
+    /// (как quote/pool_quote.rs v2_fee_pct). None — комиссии нет. Ошибок нет.
+    fn fee(&mut self, ctx: &Ctx, e: &Edge, token_in: Address) -> Option<Decimal> {
+        if e.entry.pool.kind != PoolKind::V2 {
+            return steps::fee_pct(ctx, &e.entry, token_in).ok();
+        }
+        if let Some(p) = e.entry.pool.fee_pips {
+            return Some(Decimal::from(p) / Decimal::from(10_000u32));
+        }
+        let id = e.entry.family.id;
+        *self
+            .v2_fee
+            .entry(id)
+            .or_insert_with(|| ctx.dex_dec("dex.v2_fee_pct", id).ok())
+    }
+
+    /// Глубина стороны пула ребра i при входе token_in (USD, книга глубины; из памяти прохода). Ошибок нет.
+    fn depth(&mut self, book: &Book, g: &Graph, i: usize, token_in: Address) -> Option<Decimal> {
+        let e = g.edge(i);
+        let slot = i * 2 + usize::from(token_in == e.a);
+        *self.depth.entry(slot).or_insert_with(|| {
+            book.last(&e.entry.pool.reference).map(|d| {
+                // Вход — встречный токен: покупка монеты пула (buy); вход — монета: продажа (sell).
+                if token_in == e.entry.usdt {
+                    d.band.buy
+                } else {
+                    d.band.sell
+                }
+            })
+        })
     }
 }
 
 /// Курс ребра: минимальных единиц выхода за единицу входа по спот-цене пула × (1 − комиссия %/100). Принимает: окружение
 /// (комиссия V2), ребро, токен входа. Возвращает: курс; None — нет цены (пустой пул, нет binStep), нет комиссии,
-/// переполнение. Ошибок нет.
+/// переполнение. Ошибок нет. (Тот же расчёт, что у отбора; отбор берёт комиссию V2 из памяти прохода.)
 pub fn edge_rate(ctx: &Ctx, e: &Edge, token_in: Address) -> Option<Decimal> {
+    let fee = steps::fee_pct(ctx, &e.entry, token_in).ok()?;
+    rate_with_fee(e, token_in, fee)
+}
+
+/// Курс ребра при известной комиссии пула (%). Ошибок нет: None — нет цены, переполнение, комиссия ≥ 100 %.
+fn rate_with_fee(e: &Edge, token_in: Address, fee: Decimal) -> Option<Decimal> {
     let one = U256::from(10u8).pow(U256::from(SCALE_DIGITS));
     let coins = spot::coins_for(&e.entry, one)?;
     let per = num::to_decimal(coins, SCALE_DIGITS)?;
@@ -90,7 +147,6 @@ pub fn edge_rate(ctx: &Ctx, e: &Edge, token_in: Address) -> Option<Decimal> {
     } else {
         per
     };
-    let fee = steps::fee_pct(ctx, &e.entry, token_in).ok()?;
     let keep = Decimal::ONE - fee / Decimal::ONE_HUNDRED;
     if keep <= Decimal::ZERO {
         return None;
@@ -121,7 +177,6 @@ struct Walk<'a> {
     hops: Vec<(usize, Address)>,
     kept: Vec<Cand>,
     floor: Option<Decimal>,
-    depths: HashMap<usize, Option<Decimal>>,
     out: Ranked,
 }
 
@@ -165,7 +220,6 @@ pub fn top(
         hops: Vec::new(),
         kept: Vec::new(),
         floor: None,
-        depths: HashMap::new(),
         out,
     };
     w.dfs(base);
@@ -285,20 +339,7 @@ impl Walk<'_> {
         let mut min: Option<Decimal> = None;
         let g = self.g;
         for &(i, token_in) in hops {
-            let e = g.edge(i);
-            let slot = i * 2 + usize::from(token_in == e.a);
-            let book = self.book;
-            let d = *self.depths.entry(slot).or_insert_with(|| {
-                book.last(&e.entry.pool.reference).map(|d| {
-                    // Вход — встречный токен: покупка монеты пула (buy); вход — монета: продажа (sell).
-                    if token_in == e.entry.usdt {
-                        d.band.buy
-                    } else {
-                        d.band.sell
-                    }
-                })
-            });
-            let d = d?;
+            let d = self.rates.depth(self.book, g, i, token_in)?;
             min = Some(min.map_or(d, |m| m.min(d)));
         }
         min

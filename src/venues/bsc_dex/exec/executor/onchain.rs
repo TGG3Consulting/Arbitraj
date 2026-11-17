@@ -12,7 +12,7 @@
 //! Успешная проверка помнится по паре (адрес, кошелёк) — до смены настройки или кошелька (другая пара — проверка
 //! заново); отказ не запоминается. Кнопка «Проверить подключение» исполнителя (экран площадки DEX) — probe.
 //! Кто вызывает: exec/executor/{trade, dry}.rs (ensure), venue.rs (check_executor → probe).
-//! От чего зависит: exec/executor/{code, deploy_gate, mod}.rs, node/rpc.rs, wallet/signer.rs, settings/accounts (версия у кошелька).
+//! От чего зависит: exec/executor/{code, deploy_gate, live_proof, mod}.rs, node/rpc.rs, wallet/signer.rs, settings/accounts (версия у кошелька).
 //! Настройки: exec.executor_address [bsc_dex].
 //!
 //! eth_getCode / eth_getStorageAt — execution-apis 16caee27 src/eth/state.yaml.
@@ -29,7 +29,7 @@ use super::super::super::ctx::Ctx;
 use super::super::super::node::rpc;
 use super::super::super::wallet::signer;
 use super::code::{self, Version};
-use super::deploy_gate;
+use super::{deploy_gate, live_proof};
 
 /// Последняя успешно проверенная пара (адрес исполнителя, кошелёк), версия кода по адресу и (ревью 272 А1) обёртка из
 /// хранилища v2 (None у v1).
@@ -192,8 +192,11 @@ fn describe(
 /// Ошибок нет.
 fn v3_note(v: Version) -> String {
     if v >= Version::V3 {
-        "; шаги Uniswap V4 и PancakeSwap Infinity (CL, Bin, Stable) через исполнитель есть"
-            .to_string()
+        // Решение 400: шаги есть в коде, исполняются только классы, принятые записью симуляции на живых пулах.
+        format!(
+            "; шаги Uniswap V4 и PancakeSwap Infinity (CL, Bin, Stable) в коде есть — {}",
+            live_proof::listing()
+        )
     } else {
         format!(
             "; шагов Uniswap V4 и PancakeSwap Infinity нет (маршрут, где они смешаны с другими DEX, этим кошельком не \

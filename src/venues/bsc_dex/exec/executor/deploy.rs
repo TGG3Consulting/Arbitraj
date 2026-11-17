@@ -8,11 +8,12 @@
 //! создания БЕЗ аргумента, поэтому без этой сверки смена dex.native_wrapped между оценкой и подтверждением ушла бы в
 //! конструктор молча (навсегда — сеттера нет). Не совпал с текущей dex.native_wrapped — не отправляем. После блока: код по адресу
 //! (eth_getCode) сверяется с ArbExecutor.bin-runtime. Адрес в exec.executor_address Тигран вписывает сам.
-//! Решение 399: пока текущая сборка (v3) не принята на живых пулах (deploy_gate.rs — SHA-256 bin-runtime ≠ LIVE_PROOF),
-//! развёртывание запрещено: deploy отказывает (NotApplicable, 400) до ключа, nonce и сети; оценка отдаёт причину в поле
-//! warning — интерфейс показывает её и не даёт отправить. Обходной настройки нет.
+//! Решение 399 / 400: пока в записи симуляции на живых пулах у текущей сборки (v3) не принят ни один класс шага
+//! (deploy_gate.rs, live_proof.rs), развёртывание запрещено: deploy отказывает (NotApplicable, 400) до ключа, nonce и
+//! сети; оценка отдаёт причину в поле warning — интерфейс показывает её и не даёт отправить; поле classes — принятые и
+//! непринятые классы. Обходной настройки нет.
 //! Кто вызывает: venue.rs (контракт dex_executor_quote / dex_executor_deploy), exec/executor/dry.rs (next_nonce).
-//! От чего зависит: exec/executor/{code, deploy_gate}.rs, exec/txs.rs, send/{mod, tx}.rs, quote/{gas, rate}.rs, wallet/{signer, nonce}.rs,
+//! От чего зависит: exec/executor/{code, deploy_gate, live_proof}.rs, exec/txs.rs, send/{mod, tx}.rs, quote/{gas, rate}.rs, wallet/{signer, nonce}.rs,
 //! node/rpc.rs, num.rs.
 //! Настройки: dex.native_wrapped — адрес обёртки, аргумент конструктора v2 (ревью 272, А1: пишется в исполнитель один раз,
 //! сеттера нет; не задана — развёртывания нет, NotConfigured), он же — цена в USDT; через вызываемые — send.*, channel.*,
@@ -38,7 +39,7 @@ use super::super::super::send::{self, tx};
 use super::super::super::wallet::nonce::Nonces;
 use super::super::super::wallet::signer;
 use super::super::txs::{self, Env};
-use super::{code, deploy_gate};
+use super::{code, deploy_gate, live_proof};
 
 /// Nonce кошелька по последнему блоку. Ошибки: узел.
 pub async fn next_nonce(ctx: &Ctx, wallet: Address) -> GatewayResult<u64> {
@@ -103,6 +104,8 @@ pub async fn quote(q: &Quoting, env: &Env) -> GatewayResult<ExecutorDeployQuote>
         note,
         // Решение 399: причина запрета развёртывания (None — разрешено); интерфейс не даёт отправить при Some.
         warning: deploy_gate::refusal(),
+        // Решение 400: принятые и непринятые классы шага v3 — окно развёртывания показывает их таблицей.
+        classes: live_proof::proofs(),
     })
 }
 
@@ -223,22 +226,29 @@ mod tests {
         assert!(confirm(("00", a), a).is_err_and(|w| w.contains("SHA-256")));
     }
 
-    /// Решение 399: развёртывание сборки, не принятой на живых пулах, отклоняется с причиной «v3 не принят на живых
-    /// пулах: нужна запись симуляции»; SHA записи = SHA текущего bin-runtime — пропуск. Хеш — настоящий SHA-256 текущего
-    /// contracts/out/ArbExecutor.bin-runtime (ArbExecutor.sha256).
+    /// Решения 399 / 400: развёртывание запрещено, пока в записи не принят ни один класс шага; принят хотя бы один —
+    /// пропуск. Вердикты — правило live_rule.rs на данных (без записи) и на вшитой записи текущей сборки.
     #[test]
-    fn deploy_refused_until_live_proof() {
-        let cur = code::runtime_sha256().expect("SHA-256 bin-runtime записан");
-        let no_record = gate(deploy_gate::refusal_for(None, Some(cur)));
+    fn deploy_refused_until_a_class_is_accepted() {
+        use super::super::live_rule::{CLASSES, Verdict};
+        let v = |accepted: bool| Verdict {
+            class: CLASSES[0],
+            pools: 3,
+            proven: 3,
+            accepted,
+            why: "тест".into(),
+        };
+        let none = gate(deploy_gate::refusal_for(&Ok(vec![v(false)])));
         assert!(
-            no_record
-                .is_err_and(|w| w.contains(deploy_gate::NOT_ACCEPTED) && w.contains("нет записи"))
+            none.is_err_and(|w| w.contains(deploy_gate::NOT_ACCEPTED) && w.contains("не приняты"))
         );
-        let other = gate(deploy_gate::refusal_for(Some("00"), Some(cur)));
-        assert!(other.is_err_and(|w| w.contains(deploy_gate::NOT_ACCEPTED) && w.contains(cur)));
-        assert!(gate(deploy_gate::refusal_for(Some(cur), Some(cur))).is_ok());
-        // Текущая сборка: запрет ровно тогда, когда LIVE_PROOF не равен SHA текущего кода (без обходной настройки).
-        let accepted = code::LIVE_PROOF == Some(cur);
+        let bad = gate(deploy_gate::refusal_for(&Err("нет записи".into())));
+        assert!(bad.is_err_and(|w| w.contains("нет записи")));
+        assert!(gate(deploy_gate::refusal_for(&Ok(vec![v(false), v(true)]))).is_ok());
+        // Текущая сборка: запрет ровно тогда, когда запись не приняла ни одного класса (без обходной настройки).
+        let accepted = live_proof::verdicts()
+            .as_ref()
+            .is_ok_and(|l| l.iter().any(|x| x.accepted));
         assert_eq!(gate(deploy_gate::refusal()).is_ok(), accepted);
         assert_eq!(deploy_gate::need_v3(), deploy_gate::need_v3_for(!accepted));
         assert!(!deploy_gate::need_v3_for(true).contains("переразверн"));

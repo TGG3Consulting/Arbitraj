@@ -2,6 +2,7 @@
 //! Что делает: развёртывание своего контракта-исполнителя ArbExecutor (решение 122, часть X) глазами интерфейса —
 //! оценка перед подтверждением человеком (газ, цена газа, стоимость в BNB и USDT, кошелёк, nonce, будущий адрес, хеш
 //! байткода, версия компилятора) и итог отправки (хеш транзакции, адрес, статус, совпал ли код в сети с репозиторием).
+//! Решение 400: приёмка классов шага исполнителя v3 по записи симуляции на живых пулах (ExecutorClassProof).
 //! Кто вызывает: адаптер DEX (Venue::dex_executor_quote / dex_executor_deploy), api/dex_executor.rs, интерфейс.
 //! От чего зависит: core/types/market.rs (VenueId), core/types/send.rs (ChainTx), alloy-primitives, rust_decimal.
 //! Настройки: нет.
@@ -38,10 +39,27 @@ pub struct ExecutorDeployQuote {
     /// навсегда запишется в исполнитель (сеттера нет) — показывается в окне подтверждения.
     pub wnative: Address,
     pub note: Option<String>,
-    /// Ревью t181 (Н8): предупреждение перед развёртыванием — текущая сборка исполнителя ещё не проверена симуляцией на
-    /// живых пулах сети (нет записи в tests/data; exec/executor/code.rs LIVE_PROOF). None — проверена.
+    /// Ревью t181 (Н8), решения 399 / 400: причина запрета развёртывания — в записи симуляции на живых пулах сети
+    /// (tests/data) у текущей сборки не принят ни один класс шага (exec/executor/deploy_gate.rs). None — разрешено.
     #[serde(default)]
     pub warning: Option<String>,
+    /// Решение 400: классы шага исполнителя v3 и их приёмка по записи симуляции (exec/executor/live_proof.rs).
+    #[serde(default)]
+    pub classes: Vec<ExecutorClassProof>,
+}
+
+/// Решение 400: приёмка одного класса шага исполнителя v3 (вид шага × крючок) по записи симуляции на живых пулах.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExecutorClassProof {
+    /// Имя класса, например «Uniswap V4 (вид 19) без крючка».
+    pub class: String,
+    /// Пулов класса в одиночных вызовах записи и сколько из них доказано правилом.
+    pub pools: usize,
+    pub proven: usize,
+    /// Принят: шаг этого класса исполним исполнителем v3.
+    pub accepted: bool,
+    /// Почему принят / не принят.
+    pub why: String,
 }
 
 /// Итог развёртывания.

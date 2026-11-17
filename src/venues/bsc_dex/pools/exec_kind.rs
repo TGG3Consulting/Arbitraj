@@ -6,7 +6,7 @@
 //! задан адрес исполнителя exec.executor_address [bsc_dex]. Пока адрес не задан — семейство остаётся сигналом (как
 //! раньше, по family.tradable). Списка DEX в коде нет: соответствие — по перечню модулей адаптера (dex.kind).
 //! Кто вызывает: pools/families.rs (make — поле Family.executor_kind), quote/* и exec/* (via_executor — части R и X).
-//! От чего зависит: ctx.rs, pools/families.rs (Family).
+//! От чего зависит: ctx.rs, pools/families.rs (Family), exec/executor/live_proof.rs (describe — решение 400).
 //! Настройки: exec.executor_address [bsc_dex] (заводит часть X; не задана — исполнителя нет); через exec_callback.rs —
 //! dex.v3_swap_callback [DEX] (ревью 281: обратного вызова пула нет в коде исполнителя — пулы DEX без пути исполнения).
 //!
@@ -208,6 +208,12 @@ fn describe_exec(ctx: &Ctx, f: &Family) -> String {
         return format!("исполнитель: шаг {} — без пути исполнения: {why}", k.name());
     }
     match (f.executor_kind, executor_set(ctx)) {
+        // Решение 400: у шага пула менеджера — только классы, принятые записью симуляции на живых пулах.
+        (Some(k), true) if k.singleton() => format!(
+            "исполнитель: шаг {} — исполнимо через ArbExecutor v3 только в принятых классах ({})",
+            k.name(),
+            super::super::exec::executor::live_proof::listing()
+        ),
         (Some(k), true) => format!(
             "исполнитель: шаг {} — исполнимо через ArbExecutor",
             k.name()

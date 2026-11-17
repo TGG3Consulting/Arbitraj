@@ -1,0 +1,74 @@
+{
+ "slots": {
+  "USDT": {
+   "balance_slot": 1,
+   "balance_holder_used": "0x238a358808379702088667322f80ac48bad5e6c4",
+   "allowance_slot": 2,
+   "allowance_method": "simulate allowance(W,Xi)==2^256-1 for 21 spenders",
+   "allowance_note": "hits=[2]",
+   "W_usdt_balance_H": 1167036431137515051640
+  }
+ },
+ "coins": {
+  "0x9bafc8d4b487cebff201721702507a3e2c67ad79": {
+   "allowance_slot": 6,
+   "note": "hits=[6]"
+  },
+  "0xa67c48f86fc6d0176dca38883ca8153c76a532c7": {
+   "allowance_slot": 2,
+   "note": "hits=[2]"
+  },
+  "0x36c51c465f5f8f25dc201f0152357cca394d2510": {
+   "allowance_slot": 2,
+   "note": "hits=[2]"
+  },
+  "0xa177bdd433aea3702beb46652adcfc64248d4ab3": {
+   "allowance_slot": 1,
+   "note": "hits=[1]"
+  },
+  "0x74ac77d7ca54c38eb5ea2e638a80a5182558d3a2": {
+   "allowance_slot": 1,
+   "note": "hits=[1]"
+  },
+  "0xaa5f521daddf77dbb58dbd7831fba6261aaf8888": {
+   "allowance_slot": 52,
+   "note": "hits=[52]"
+  },
+  "0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d": {
+   "allowance_slot": 52,
+   "note": "hits=[52]"
+  },
+  "0x1d2f0da169ceb9fc7b3144628db156f3f6c60dbe": {
+   "allowance_slot": 2,
+   "note": "hits=[2]"
+  },
+  "0x1fa4a73a3f0133f0025378af00236f3abdee5d63": {
+   "allowance_slot": 2,
+   "note": "hits=[2]"
+  },
+  "0x4338665cbb7b2485a8855a139b75d5e34ab0db94": {
+   "allowance_slot": 2,
+   "note": "hits=[2]"
+  },
+  "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82": {
+   "allowance_slot": 2,
+   "note": "hits=[2]"
+  },
+  "0x2170ed0880ac9a755fd29b2688956bd959f933f8": {
+   "allowance_slot": 2,
+   "note": "hits=[2]"
+  },
+  "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c": {
+   "allowance_slot": 4,
+   "note": "hits=[4]"
+  },
+  "0x888888f6b7570637a0c89c3290d82afdbdca6666": {
+   "allowance_slot": 1,
+   "note": "hits=[1]"
+  },
+  "0xbe9d156892e55e7154bcd3cb0fea677f9d3103e1": {
+   "allowance_slot": 37439836327923360225337895871394760624280537466773280374265222508165906222593,
+   "note": "hits=[37439836327923360225337895871394760624280537466773280374265222508165906222593]"
+  }
+ }
+}

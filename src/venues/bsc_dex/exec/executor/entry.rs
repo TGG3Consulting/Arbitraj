@@ -14,8 +14,10 @@
 //! своего менеджера; Infinity Stable — Contract(крючок)) — шаги UNI_V4 / INF_CL / INF_BIN исполнителя v3: ключ пула из
 //! реестра (Entry.key) сверяется с ссылкой (PoolId ключа = id ссылки и менеджер ключа = менеджер ссылки; у Infinity
 //! Stable — крючок ключа = адрес пула), пул шага — PoolManager (V4) или Vault Infinity (dex.vault).
+//! Решение 400 (t185): шаг пула менеджера строится и признаётся исполнимым (fits, singleton), только если его класс (вид
+//! шага × с крючком / без; Infinity Stable) принят записью симуляции на живых пулах — exec/executor/live_proof.rs.
 //! Кто вызывает: exec/executor/{call, mod}.rs, quote/graph_exec.rs.
-//! От чего зависит: exec/executor/kind.rs, pools/{registry, families, exec_kind}.rs, quote/pool_quote.rs (v2_fee_pct).
+//! От чего зависит: exec/executor/{kind, live_proof}.rs, pools/{registry, families, exec_kind}.rs, quote/pool_quote.rs (v2_fee_pct).
 //! Настройки: через pool_quote — dex.v2_fee_pct [DEX] (если у пары нет своей комиссии); dex.vault [DEX вида
 //! pancakeswap_infinity_* / pancake_infinity_stable] — для шагов INF_CL / INF_BIN.
 
@@ -72,8 +74,10 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 
 /// Ревью t181 (Н1): supported + у шага пула менеджера (UNI_V4 / INF_*) — ключ в записи реестра есть, обе валюты ключа —
 /// ERC-20 (нативная валюта address 0 — не шаг исполнителя, контракт: «native») и это ровно токены пары записи. Так
-/// маршрут через такой пул не признаётся исполнимым исполнителем (а не срывается при сборке шага). Принимает: запись
-/// реестра. Возвращает: как supported. Ошибок иных нет.
+/// маршрут через такой пул не признаётся исполнимым исполнителем (а не срывается при сборке шага). Решение 400: и класс
+/// шага (вид × крючок ключа; Infinity Stable отдельно) принят записью симуляции на живых пулах (live_proof::admits);
+/// не принят — причина «… у исполнителя v3 не принят на живых пулах: …», маршрут идёт прежним путём (бандл / Universal
+/// Router), если он собирается, иначе сигнал. Принимает: запись реестра. Возвращает: как supported. Ошибок иных нет.
 pub fn fits(e: &Entry) -> Result<(ExecKind, Address), String> {
     let (k, a) = supported(e.family, &e.pool.reference)?;
     if !k.singleton() {
@@ -88,6 +92,10 @@ pub fn fits(e: &Entry) -> Result<(ExecKind, Address), String> {
         PoolKey::Infinity(d) => (d.currency0, d.currency1),
     };
     super::kind_key::check_tokens((c0, c1), e.pool.token0, e.pool.token1)
+        .map_err(|w| format!("{}: {w}", e.family.id))?;
+    // Решение 400: класс шага (вид × крючок, Infinity Stable) должен быть принят записью симуляции на живых пулах.
+    let stable = e.family.proto == Proto::InfinityStable;
+    super::live_proof::admits(k, stable, key.hooks())
         .map_err(|w| format!("{}: {w}", e.family.id))?;
     Ok((k, a))
 }
@@ -206,6 +214,9 @@ fn singleton(ctx: &Ctx, e: &Entry, k: ExecKind) -> GatewayResult<(Params, Addres
         .key
         .as_ref()
         .ok_or_else(|| no("у пула нет ключа PoolKey".into()))?;
+    // Решение 400: та же проверка класса, что fits (котировка и сделка — одно правило).
+    let stable = e.family.proto == Proto::InfinityStable;
+    super::live_proof::admits(k, stable, key.hooks()).map_err(no)?;
     match &e.pool.reference {
         PoolRef::Singleton { manager, id } => {
             if key.id() != *id {

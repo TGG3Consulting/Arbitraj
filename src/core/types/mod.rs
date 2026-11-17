@@ -54,7 +54,7 @@ pub use directory::{
     DirectoryPool, DirectoryStatus, DirectoryToken, FactoryScan, IndexerDex, PoolDirectory,
 };
 pub use dry_swap::{DexDrySwap, DrySwapPool};
-pub use executor::{ExecutorDeployQuote, ExecutorDeployed};
+pub use executor::{ExecutorClassProof, ExecutorDeployQuote, ExecutorDeployed};
 pub use hold::{HoldItem, WithdrawHold, WithdrawReady};
 pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};

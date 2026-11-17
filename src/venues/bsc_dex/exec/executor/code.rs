@@ -8,7 +8,9 @@
 //! (contracts/out/ — текущая сборка: v2 + шаги UNI_V4 / INF_CL / INF_BIN пулов внутри менеджеров Uniswap V4 и
 //! PancakeSwap Infinity). Развёртывается и подставляется в симуляцию только текущая сборка (v3); код в сети сверяется со
 //! всеми тремя.
-//! Кто вызывает: exec/executor/{deploy, deploy_gate, dry}.rs, тесты.
+//! Решение 400 (t185): приёмка сборки на живых пулах — по классам шага из записи симуляции (live_proof.rs, live_rule.rs);
+//! здесь — только SHA-256 текущего bin-runtime (runtime_sha256), к которому привязана запись.
+//! Кто вызывает: exec/executor/{deploy, deploy_gate, dry, live_proof}.rs, тесты.
 //! От чего зависит: sha2, serde_json, contracts/out/*.
 //! Настройки: нет.
 
@@ -111,42 +113,11 @@ pub fn version_of(have: &Bytes) -> Result<Option<Version>, String> {
     Ok(None)
 }
 
-/// Ревью t181 (Н8; ревью 2 — привязка к коду): SHA-256 текста contracts/out/ArbExecutor.bin-runtime, который проверила
-/// запись симуляции шагов UNI_V4 / INF_CL / INF_BIN на живых пулах сети (каталог tests/data/executor_v3_live_<дата>/, в его
-/// README — тот же SHA; процедура — docs/notes/t181-executor-all-kinds-2026-11-17.md, п. 5). None — записи нет.
-/// Предупреждение окна развёртывания снимается, только если этот SHA равен SHA текущего bin-runtime (ArbExecutor.sha256):
-/// пересборка без новой записи предупреждение возвращает. Задаётся в том же коммите, что запись и тест (факт о собранном
-/// коде, не настройка торговли).
-pub const LIVE_PROOF: Option<&str> = None;
-
-/// Ревью t181 (Н8): текст предупреждения окна «Развернуть исполнитель», пока запись симуляции на живых пулах не относится
-/// к текущему коду (LIVE_PROOF ≠ SHA-256 текущего bin-runtime или не задан). Ошибок нет.
-pub fn live_warning() -> Option<String> {
-    live_warning_for(LIVE_PROOF, runtime_sha256())
-}
-
-/// Решение 399: записанный SHA-256 текущего bin-runtime (ArbExecutor.sha256) — с ним сравнивается LIVE_PROOF. Ошибок нет
-/// (None — строки нет).
+/// Решение 399 / 400: записанный SHA-256 текущего bin-runtime (ArbExecutor.sha256) — запись симуляции на живых пулах
+/// относится к сборке, только если её README содержит этот SHA (exec/executor/live_rule.rs). Ошибок нет (None — строки
+/// нет).
 pub fn runtime_sha256() -> Option<&'static str> {
     recorded("ArbExecutor.bin-runtime")
-}
-
-/// То же для данных значений (проверяемо тестом). Принимает: SHA-256 из записи симуляции, SHA-256 текущего bin-runtime.
-/// Возвращает: None — совпали; иначе текст. Ошибок нет.
-pub fn live_warning_for(proof: Option<&str>, current: Option<&str>) -> Option<String> {
-    let head = "Исполнитель v3 (шаги Uniswap V4 / Infinity) не принят на живых пулах сети";
-    let tail = "До этого развёртывание запрещено, обходной настройки нет (решения 395, 399; кошелёк с v2 работает \
-                как раньше).";
-    match (proof, current) {
-        (Some(p), Some(c)) if p == c => None,
-        (Some(p), c) => Some(format!(
-            "{head}: запись симуляции в tests/data проверяла код SHA-256 {p}, а текущая сборка — {}. {tail}",
-            c.unwrap_or("(хеш не записан)")
-        )),
-        (None, _) => Some(format!(
-            "{head}: в tests/data нет записи симуляции этих шагов на настоящих пулах. {tail}"
-        )),
-    }
 }
 
 /// Код в сети версии v2 (решение 395: замороженная копия). Ошибки: как checked (хеш — из contracts/out/v2/ArbExecutor.sha256).

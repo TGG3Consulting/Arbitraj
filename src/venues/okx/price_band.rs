@@ -1,8 +1,12 @@
 //! Файл: venues/okx/price_band.rs
-//! Что делает: решение 390 (t180) — ценовой коридор лимитного ордера спота OKX сейчас (контракт price_band): границы
-//! считает сама OKX, адаптер их читает — Get limit price GET /api/v5/public/price-limit?instId=.
-//! Кто вызывает: mod.rs (контракт price_band; ядро — перед покупкой, core/price_band.rs), symbols.rs (rule — признак
-//! коридора в SpotPairState).
+//! Что делает: решение 390 (t180) — ценовой коридор лимитного ордера спота OKX: границы считает сама OKX, адаптер их
+//! читает — Get limit price GET /api/v5/public/price-limit?instId=.
+//! НЕ ПОДКЛЮЧЕНО (ревью t180, Н5): что эндпоинт отдаёт SPOT, подтверждено только ссылкой из раздела «Get instruments»
+//! (пример самого раздела — SWAP). Контракт price_band у адаптера не реализован (по умолчанию NotApplicable), в
+//! справочник ядра правило не отдаётся (symbols.rs: price_band None). Разбор оставлен для живой записи и теста;
+//! подключить — после записи ответа и решения владельца (docs/TASKS.md).
+//! Кто вызывает: пока только tests/price_band_390.rs; после подключения — mod.rs (контракт price_band), symbols.rs
+//! (rule — признак коридора в SpotPairState).
 //! От чего зависит: symbols.rs (instId пары), rest.rs (публичный GET), num.rs, ctx.rs, gateway/price_band.rs.
 //! Настройки: нет.
 //!

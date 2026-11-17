@@ -217,7 +217,10 @@ impl Symbols {
             min_qty: r.qty.min,
             max_qty: r.qty.max,
             order_block: super::order_rules::order_block(r, tif),
-            price_band: r.price_band.clone().map(Box::new),
+            // Решение 390 (ревью t180, Б3): коридор ядру НЕ отдаётся — PROTECTION_LIMIT разобран (SymbolRules.price_band
+            // — данные), но опорная цена («latest transaction price») ответом ticker/price документацией не
+            // подтверждена; до живой записи (docs/TASKS.md) не гадаем, поведение как до решения 390.
+            price_band: None,
         })
     }
 

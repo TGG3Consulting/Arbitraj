@@ -150,8 +150,9 @@ impl Symbols {
             min_qty: r.min_qty,
             max_qty: r.max_qty,
             order_block: None,
-            // Решение 390 (t180): границы цены лимитного ордера отдаёт API OKX (price_band.rs).
-            price_band: Some(Box::new(super::price_band::rule())),
+            // Решение 390 (ревью t180, Н5): коридор ядру НЕ отдаётся — price-limit для SPOT подтверждён только ссылкой
+            // из «Get instruments»; до живой записи (docs/TASKS.md) не гадаем, поведение как до решения 390.
+            price_band: None,
         })
     }
 }

@@ -1,7 +1,11 @@
 //! Файл: venues/xt/price_band.rs
-//! Что делает: решение 390 (t180) — ценовой коридор лимитного ордера XT сейчас (контракт price_band): правило пары из
-//! фильтра PROTECTION_LIMIT (symbols_parse.rs price_band) × последняя цена пары.
-//! Кто вызывает: mod.rs (контракт price_band; ядро — перед покупкой, core/price_band.rs).
+//! Что делает: решение 390 (t180) — ценовой коридор лимитного ордера XT: правило пары из фильтра PROTECTION_LIMIT
+//! (symbols_parse.rs price_band) × последняя цена пары.
+//! НЕ ПОДКЛЮЧЕНО (ревью t180, Б3): что p ответа ticker/price — та самая «latest transaction price» фильтра,
+//! документация прямо не говорит. Контракт price_band у адаптера не реализован (по умолчанию NotApplicable), в
+//! справочник ядра правило не отдаётся (symbols.rs: price_band None). Разбор оставлен для живой записи и теста;
+//! подключить — после записи ответа и решения владельца (docs/TASKS.md).
+//! Кто вызывает: пока только tests/price_band_390.rs; после подключения — mod.rs (контракт price_band).
 //! От чего зависит: symbols.rs (правила пары), rest.rs (публичный GET), num.rs, errors.rs, ctx.rs, gateway/price_band.rs.
 //! Настройки: нет.
 //!

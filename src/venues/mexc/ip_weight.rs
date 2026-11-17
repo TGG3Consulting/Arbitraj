@@ -102,6 +102,36 @@ pub async fn slot(ctx: &Ctx, path: &str) -> GatewayResult<()> {
     }
 }
 
+/// Решение 390 (ревью t180, Н2): место для НЕобязательного публичного запроса пути сделки (последняя цена для
+/// ценового коридора, price_band.rs): вес учитывается в окне, как у всех публичных запросов, но срочность его не
+/// пропускает сверх бюджета и он не ждёт — места нет, запрос не отправляется (ядро считает без коридора, как раньше).
+/// Принимает: окружение, путь. Возвращает: Ok — можно слать (вес учтён). Ошибки: Internal — веса пути нет в
+/// документации; RateLimited — в окне venue.public_ip_weight_10s нет места (запрос не отправлен). Не задана настройка —
+/// ограничителя нет (как у slot).
+pub async fn slot_optional(ctx: &Ctx, path: &str) -> GatewayResult<()> {
+    let w = weight(path).ok_or_else(|| {
+        ctx.tag(GatewayError::new(
+            ErrorCode::Internal,
+            None,
+            format!("MEXC {path}: вес публичного запроса не сверен с документацией — запрос не отправлен"),
+        ))
+    })?;
+    let Ok(budget) = ctx.int(SETTING) else {
+        return Ok(());
+    };
+    match take(Instant::now(), w, budget, false) {
+        None => Ok(()),
+        Some(_) => Err(ctx.tag(GatewayError::new(
+            ErrorCode::RateLimited,
+            None,
+            format!(
+                "MEXC {path}: в окне веса нет места ({} из {SETTING} = {budget}, нужно {w}) — запрос не отправлен",
+                used()
+            ),
+        ))),
+    }
+}
+
 /// Занять место в окне. Принимает: момент, вес, бюджет окна, срочность. Возвращает: None — место занято (запрос
 /// можно слать); Some — сколько ждать, пока освободится нужный вес (только фон). Ошибок нет.
 pub fn take(now: Instant, w: u64, budget: u64, urgent: bool) -> Option<Duration> {

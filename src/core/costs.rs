@@ -276,6 +276,7 @@ pub async fn evaluate_capped<S: Source>(
         spend_max: qty * worst_a + spend_fee,
         // Решение 262: худший уровень покупки плана — лимит ордера покупки на бирже (executor.rs).
         buy_worst: worst_a,
+        buy_band: cx.band_a.is_some(),
         spend_fee,
         size: None,
     })

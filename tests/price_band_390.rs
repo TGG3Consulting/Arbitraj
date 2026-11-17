@@ -6,10 +6,12 @@
 //!   PROTECTION_LIMIT 0.8 / 0.8 / 4 / 4).
 //! - Опорные цены и границы, которых в записях НЕТ, — на ПРИМЕРАХ ОФИЦИАЛЬНОЙ ДОКУМЕНТАЦИИ (помечено у каждого теста
 //!   «из документации, не запись»; в docs/TASKS.md — «нужна запись»): MEXC ticker/price, XT ticker/price, Binance
-//!   PERCENT_PRICE_BY_SIDE / referencePrice / avgPrice, Bybit price-limit, OKX price-limit, Poloniex highestBid.
+//!   PERCENT_PRICE_BY_SIDE / referencePrice / avgPrice, Bybit price-limit, Poloniex highestBid; OKX price-limit — поля
+//!   документации SWAP с instType SPOT (не пример спота). XT и OKX ядру коридор не отдают (ревью t180 Б3, Н5).
 //! - Учёт в расчёте (core/price_band.rs check): худшая цена за коридором «дальше» — TooLarge (подбор берёт меньший
 //!   объём), «не с той стороны» — Stop; на ЗАПИСАННОМ стакане Gate CAKE_USDT (cex_samples_2026_11_04) с правилом MEXC
 //!   CAKE из записи и опорной ценой — параметром теста (пример «на пальцах»: стакан и правило — записи разных бирж).
+//!
 //! Кто вызывает: cargo test. От чего зависит: arb::gateway::price_band, arb::core::price_band, адаптеры mexc, xt,
 //! binance, bybit, okx, poloniex. Моков нет — чистые функции.
 
@@ -60,7 +62,8 @@ fn mexc_rule_from_recorded_exchange_info() {
     assert!(arb::venues::mexc::price_band::last_price(&json!({"symbol": "X"})).is_err());
 }
 
-/// XT: правило PROTECTION_LIMIT из живого ответа; последняя цена — пример документации (не запись).
+/// XT: правило PROTECTION_LIMIT из живого ответа разбирается (данные); последняя цена — пример документации (не запись);
+/// ядру коридор не отдаётся (ревью Б3).
 #[test]
 fn xt_rule_from_recorded_symbols() {
     let v = file("tests/data/xt_live_2026-11-06/symbol_pepe.json");
@@ -87,6 +90,11 @@ fn xt_rule_from_recorded_symbols() {
         arb::venues::xt::price_band::latest(&r, "eth_usdt").unwrap(),
         None
     );
+    // Ревью t180, Б3: опорная цена XT документацией не подтверждена — правило ядру не отдаётся (как до решения 390).
+    let syms = arb::venues::xt::symbols::Symbols::default();
+    syms.load(map, chrono::Utc::now());
+    let state = syms.state("BTC", None).expect("пара BTC");
+    assert!(state.price_band.is_none());
 }
 
 /// Binance: фильтры из примеров filters.md (из документации, не запись); опорная цена — примеры rest-api.md.
@@ -130,14 +138,16 @@ fn binance_filters_and_reference_from_docs() {
     assert!(avg_price(&avg, 1).is_err());
 }
 
-/// Bybit и OKX: границы считает биржа; примеры ответов из документации (из документации, не запись).
+/// Bybit и OKX: границы считает биржа. Bybit — пример ответа документации (не запись); OKX — см. пометку ниже.
 #[test]
 fn bybit_okx_limits_from_docs() {
     let r = json!({"symbol": "BTCUSDT", "buyLmt": "105878.10", "sellLmt": "103781.60", "ts": "1750302284491"});
     let b = arb::venues::bybit::price_band::parse(&r, "BTCUSDT").unwrap();
     assert_eq!(b.buy_max, Some(d("105878.10")));
     assert_eq!(b.sell_min, Some(d("103781.60")));
-    // OKX — по таблице полей «Get limit price» (примера ответа в разделе нет — строка собрана по полям, не запись).
+    // OKX — НЕ запись и не пример документации для спота: поля — из таблицы раздела «Get limit price» (пример раздела —
+    // SWAP, instId BTC-USDT-SWAP), instType заменён на SPOT; что эндпоинт отдаёт SPOT, подтверждено только ссылкой из
+    // раздела «Get instruments». Поэтому у OKX коридор ядру не отдаётся (ревью Н5); нужна запись — docs/TASKS.md.
     let on = json!({"instType": "SPOT", "instId": "BTC-USDT", "buyLmt": "200", "sellLmt": "100", "ts": "1", "enabled": true});
     let b = arb::venues::okx::price_band::parse(&on, "BTC-USDT")
         .unwrap()

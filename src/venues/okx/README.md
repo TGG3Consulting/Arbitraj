@@ -63,7 +63,7 @@ Spot (`acctLv = 1`). Всё — только по официальной док�
 | `ws.rs`, `ws_conn.rs`, `ws_req.rs`, `book.rs` | Соединения стаканов: подписка запросами ≤ 64 КБ, «ping», разрыв → пересподписка пары, стаканы в памяти и котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsubscribe + subscribe, `ws_req.rs resub`) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
 | `book_print.rs` | Решение 213 по содержимому: `GET /api/v5/market/books` (sz = `venue.depth_levels`) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `user_stream.rs`, `user_stream_conn.rs`, `deposit_event.rs` | Поток аккаунта на business: вход, deposit-info → MarketEvent::Balance (депозит с txId) |
-| `price_band.rs` | Решение 390 (t180): границы цены считает OKX — GET /api/v5/public/price-limit (buyLmt, sellLmt, enabled; контракт price_band); SPOT — по разделу «Get instruments» (живого ответа нет) |
+| `price_band.rs` | Решение 390 (t180): границы цены считает OKX — GET /api/v5/public/price-limit (buyLmt, sellLmt, enabled; контракт price_band); SPOT — только по ссылке из раздела «Get instruments». НЕ ПОДКЛЮЧЕНО (ревью Н5): контракт price_band не реализован, ядру коридор не отдаётся до живой записи ответа для SPOT |
 
 ## Что важно знать
 

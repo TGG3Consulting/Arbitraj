@@ -42,6 +42,14 @@ pub async fn public(ctx: &Ctx, path: &str, params: Params) -> GatewayResult<Valu
     send(ctx, Method::GET, path, &query, None, Op::Other).await
 }
 
+/// Решение 390 (ревью t180, Н2): публичный GET, необязательный для сделки (ценовой коридор): место в окне веса IP —
+/// без ожидания и без пропуска сверх бюджета (ip_weight::slot_optional). Ошибки: как public; RateLimited — места нет.
+pub async fn public_optional(ctx: &Ctx, path: &str, params: Params) -> GatewayResult<Value> {
+    let query = query(&params)?;
+    super::ip_weight::slot_optional(ctx, path).await?;
+    send(ctx, Method::GET, path, &query, None, Op::Other).await
+}
+
 /// Подписанный запрос. Принимает: метод, путь, параметры (без timestamp/recvWindow), вид операции.
 /// Возвращает: ответ. Ошибки: SecretsLocked/NotConfigured (ключи), единые коды ошибок MEXC.
 pub async fn signed(

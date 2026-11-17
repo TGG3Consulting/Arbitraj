@@ -179,15 +179,6 @@ impl Venue for Xt {
             .map(|_| ())
     }
 
-    /// Решение 390 (t180): ценовой коридор лимитного ордера — price_band.rs (PROTECTION_LIMIT × последняя цена).
-    async fn price_band(
-        &self,
-        asset: &Asset,
-    ) -> GatewayResult<Option<crate::gateway::price_band::PriceBand>> {
-        self.symbols.ensure_fresh(&self.ctx).await?;
-        price_band::read(&self.ctx, &self.symbols, &asset.ticker).await
-    }
-
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {
         transfers::withdraw(&self.ctx, req).await
     }

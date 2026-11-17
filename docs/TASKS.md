@@ -21,14 +21,24 @@
   6) MEXC: действует ли PERCENT_PRICE_BY_SIDE на РЫНОЧНУЮ продажу (для покупки сказано «only for LIMIT, IOC, FOK», для
      продажи тип не назван) — от этого зависит, спасает ли рыночная продажа решения 268.
   7) XT: p ответа GET /v4/public/ticker/price («Get latest prices ticker») — та же «latest transaction price», от
-     которой считается PROTECTION_LIMIT? По названию — да, прямо не сказано. PROTECTION_ONLINE (первые
-     durationSeconds после открытия пары: цена ≤ openPrice × maxPriceMultiple) не учитывается — цены открытия в API нет.
+     которой считается PROTECTION_LIMIT? Прямо не сказано — поэтому коридор XT НЕ подключён (ревью Б3; правило
+     разбирается, ядру не отдаётся). Подключить после ответа владельца или записи: ticker/price рядом с
+     /v4/public/trade/recent той же пары. PROTECTION_ONLINE (первые durationSeconds после открытия: цена ≤ openPrice ×
+     maxPriceMultiple) не учитывается — цены открытия в API нет.
+  8) OKX: коридор не подключён (ревью Н5) до записи GET /api/v5/public/price-limit для SPOT-пары (в документации
+     раздела пример только SWAP; спот — по ссылке из «Get instruments»).
+  9) Н4 ревью t180 (подтверждено по коду, не исправлено): финальный расчёт (profit.rs final_calc) на TooLarge идёт в
+     ветку «исполнитель не на весь объём» (final_fillable): у биржи исполнимо всё → `q >= qty` → сделка отвергается
+     целиком, если финальная котировка сдвинула худшую цену за коридор (подбор урезал по прежнему стакану). Это
+     недобор, не убыток. Урезать по коридору там — нужен поиск объёма по стакану финальной котировки (новый путь
+     final_calc) — отдельной задачей.
   **Нужна запись (тесты сейчас — на примерах документации, помечены):** ответы MEXC GET /api/v3/ticker/price, XT GET
-  /v4/public/ticker/price, Binance exchangeInfo с PERCENT_PRICE_BY_SIDE и GET /api/v3/referencePrice /
+  /v4/public/ticker/price (вместе с /v4/public/trade/recent), Binance exchangeInfo с PERCENT_PRICE_BY_SIDE и GET /api/v3/referencePrice /
   /api/v3/avgPrice, Bybit GET /v5/market/price-limit?category=spot, OKX GET /api/v5/public/price-limit для SPOT,
   Poloniex GET /markets с ненулевыми highestBid / lowestAsk (смысл «0» в документации не описан).
-  **Проверить на живом после выкладки (только чтение):** в журнале core.precheck и хронологии сделок с mexc / xt /
-  binance / poloniex строки «коридор цены …»; у сделок, где раньше покупка отклонялась 30087 / ORDER_F05xx / −1013
+  **Проверить на живом после выкладки (только чтение):** в журнале core.precheck и хронологии сделок с mexc /
+  binance / poloniex строки «коридор цены …» и шаг «коридор цены (одновременно с шагами сторон)»; у BingX / Bitget /
+  KuCoin / Gate отказ покупки по коридору — по-прежнему с паузой направления (ревью Б2); у сделок, где раньше покупка отклонялась 30087 / ORDER_F05xx / −1013
   PERCENT_PRICE, — меньший объём и ордер принят; отказ покупки PriceOutOfRange — с пометкой «пауза направления не
   поставлена … решение 390»; правило шлюза PriceOutOfRange задано (совет FIRST_RUN — «Отменить, не повторять»),
   иначе Warn core.rules «Правила для PriceOutOfRange нет».

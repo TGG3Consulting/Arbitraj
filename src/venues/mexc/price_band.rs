@@ -3,7 +3,8 @@
 //! из фильтра PERCENT_PRICE_BY_SIDE (symbols_parse.rs price_band) × последняя цена сделки пары.
 //! Кто вызывает: mod.rs (контракт price_band; ядро — перед покупкой, core/price_band.rs).
 //! От чего зависит: symbols.rs (правила пары), rest.rs (публичный GET), num.rs, ctx.rs, gateway/price_band.rs.
-//! Настройки: нет своих (вес запроса — venue.public_ip_weight_10s через rest.rs / ip_weight.rs).
+//! Настройки: нет своих (вес запроса — venue.public_ip_weight_10s: rest.rs public_optional → ip_weight.rs slot_optional;
+//! места в окне нет — запрос не уходит, ядро считает без коридора).
 //!
 //! Официально:
 //! - коридор — exchangeInfo, PERCENT_PRICE_BY_SIDE: «lastPrice means using the latest trade price»; покупка «orderPrice
@@ -36,7 +37,8 @@ pub async fn read(ctx: &Ctx, symbols: &Symbols, ticker: &str) -> GatewayResult<O
     let Some(rule) = rules.price_band else {
         return Ok(None);
     };
-    let v = rest::public(ctx, PATH, vec![("symbol", rules.symbol.clone())]).await?;
+    // Ревью t180, Н2: вес 10 — в окне веса IP, без пропуска сверх бюджета (места нет — коридор не читается).
+    let v = rest::public_optional(ctx, PATH, vec![("symbol", rules.symbol.clone())]).await?;
     let last = last_price(&v)?;
     let note = format!(
         "MEXC {}: lastPrice {} ({PATH})",

@@ -20,7 +20,7 @@
 //! - фильтры https://doc.xt.com/docs/spot/Market/GetSymbolInformation: PRICE, QUANTITY (min, max, tickSize; null — без ограничения; шаг от min),
 //!   QUOTE_QTY («For orders of the LIMIT type … price*quantity>=min»). PROTECTION_LIMIT / PROTECTION_ONLINE зависят от
 //!   последней цены сделки и цены открытия — правилами ордера не проверяются (отказ ORDER_F04xx/F05xx — до движения
-//!   денег); решение 390 (t180) — PROTECTION_LIMIT ядро учитывает заранее (price_band.rs, core/price_band.rs).
+//!   денег); решение 390 (t180): PROTECTION_LIMIT разобран, но ядру не отдаётся (ревью Б3, price_band.rs).
 //! - Пробного ордера (test order) в документации и SDK pyxt нет.
 
 use std::str::FromStr;

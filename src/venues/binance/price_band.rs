@@ -1,6 +1,7 @@
 //! Файл: venues/binance/price_band.rs
 //! Что делает: решение 390 (t180) — ценовые коридоры лимитного ордера Binance: разбор фильтров PERCENT_PRICE_BY_SIDE
 //! и PERCENT_PRICE из exchangeInfo (filters) и границы сейчас (контракт price_band): множители × опорная цена фильтра.
+//! Запросы опорной цены идут одновременно (ревью t180, Н3).
 //! Кто вызывает: symbols_parse.rs (filters), symbols.rs (summary — правило в SpotPairState), mod.rs (read — контракт
 //! price_band; ядро — перед покупкой, core/price_band.rs).
 //! От чего зависит: rest.rs (публичный GET), num.rs, errors.rs, symbols.rs, ctx.rs, gateway/price_band.rs.
@@ -109,8 +110,23 @@ pub async fn read(ctx: &Ctx, symbols: &Symbols, ticker: &str) -> GatewayResult<O
         return Ok(None);
     }
     let q = || vec![("symbol", rules.symbol.clone())];
-    // Референсная цена — общая для обоих фильтров (один запрос).
-    let reference = match rest::public(ctx, "/api/v3/referencePrice", q()).await {
+    // Ревью t180, Н3: запросы — одновременно, а не цепочкой: референсная цена (общая для обоих фильтров) и, если
+    // фильтру она понадобится, средняя (один запрос — у пары одна средняя) и последняя цена. Запасные ответы
+    // разбираются только если референсной нет.
+    let need = |avg: bool| rules.price_bands.iter().any(|f| (f.avg_mins != 0) == avg);
+    let get = |path: &'static str, on: bool| async move {
+        if on {
+            Some(rest::public(ctx, path, q()).await)
+        } else {
+            None
+        }
+    };
+    let (r, avg, last) = tokio::join!(
+        rest::public(ctx, "/api/v3/referencePrice", q()),
+        get("/api/v3/avgPrice", need(true)),
+        get("/api/v3/ticker/price", need(false)),
+    );
+    let reference = match r {
         Ok(v) => reference_price(&v)?,
         Err(e) if super::errors::code_of(&e) == Some(NO_REFERENCE) => None,
         Err(e) => return Err(e),
@@ -118,16 +134,10 @@ pub async fn read(ctx: &Ctx, symbols: &Symbols, ticker: &str) -> GatewayResult<O
     let mut band = PriceBand::default();
     let mut notes = Vec::new();
     for f in &rules.price_bands {
-        let (price, how) = match reference {
-            Some(r) => (r, "referencePrice"),
-            None if f.avg_mins == 0 => {
-                let v = rest::public(ctx, "/api/v3/ticker/price", q()).await?;
-                (num::dec(&v, "price")?, "последняя цена")
-            }
-            None => {
-                let v = rest::public(ctx, "/api/v3/avgPrice", q()).await?;
-                (avg_price(&v, f.avg_mins)?, "средняя цена")
-            }
+        let (price, how) = match (reference, f.avg_mins) {
+            (Some(r), _) => (r, "referencePrice"),
+            (None, 0) => (num::dec(fallback(&last)?, "price")?, "последняя цена"),
+            (None, m) => (avg_price(fallback(&avg)?, m)?, "средняя цена"),
         };
         let b = f.rule.at(Some(price), String::new());
         band.buy_max = tighter_max(band.buy_max, b.buy_max);
@@ -138,6 +148,21 @@ pub async fn read(ctx: &Ctx, symbols: &Symbols, ticker: &str) -> GatewayResult<O
     }
     band.note = format!("Binance {}: {}", rules.symbol, notes.join(", "));
     Ok(Some(band))
+}
+
+/// Ответ запасного запроса (средняя или последняя цена). Принимает: итог запроса (None — не запрашивался). Возвращает:
+/// тело ответа. Ошибки: ошибка запроса как есть; Internal — ответа нет, хотя он нужен (не должно случаться: запрос
+/// делается для каждого вида фильтра пары).
+fn fallback(r: &Option<GatewayResult<Value>>) -> GatewayResult<&Value> {
+    match r {
+        Some(Ok(v)) => Ok(v),
+        Some(Err(e)) => Err(e.clone()),
+        None => Err(crate::gateway::errors::GatewayError::new(
+            crate::gateway::errors::ErrorCode::Internal,
+            None,
+            "Binance: запасная цена коридора не запрошена",
+        )),
+    }
 }
 
 /// Код Binance «у пары никогда не было референсной цены» (rest-api.md#referenceprice).

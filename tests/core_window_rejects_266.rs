@@ -45,27 +45,33 @@ fn dir(buy: &str, sell: &str) -> Direction {
 fn no_direction_pause_only_for_exchange_no_funds_on_buy() {
     let err = |code| OpError::from(&GatewayError::new(code, Some(v("bingx")), "отказ"));
     let no_funds = err(ErrorCode::InsufficientBalance);
-    assert!(!buy_refusal_pauses(VenueKind::Cex, &no_funds));
+    assert!(!buy_refusal_pauses(VenueKind::Cex, &no_funds, false));
     // Покупка на DEX с тем же кодом, другие коды, ошибка ядра без кода — пауза как раньше.
-    assert!(buy_refusal_pauses(VenueKind::Dex, &no_funds));
+    assert!(buy_refusal_pauses(VenueKind::Dex, &no_funds, false));
     for code in [
         ErrorCode::OrderRejected,
         ErrorCode::OrderNotFilled,
         ErrorCode::RateLimited,
         ErrorCode::Timeout,
     ] {
-        assert!(buy_refusal_pauses(VenueKind::Cex, &err(code)), "{code:?}");
+        assert!(
+            buy_refusal_pauses(VenueKind::Cex, &err(code), false),
+            "{code:?}"
+        );
     }
     assert!(buy_refusal_pauses(
         VenueKind::Cex,
-        &OpError::from("нет худшего уровня плана".to_string())
+        &OpError::from("нет худшего уровня плана".to_string()),
+        false
     ));
     assert!(NO_PAUSE.contains("пауза направления не поставлена"));
     assert!(NO_PAUSE.contains("нехватки средств"));
 }
 
-/// Решение 390 (t180), чистая логика без записи: биржа A не приняла ордер покупки — цена вне её ценового коридора
-/// (PriceOutOfRange) — паузы направления нет (как у нехватки средств); у DEX (такого кода там нет) — как раньше.
+/// Решение 390 (t180, ревью Б2), чистая логика без записи: биржа A не приняла ордер покупки — цена вне её ценового
+/// коридора (PriceOutOfRange). Коридор A был прочитан и учтён в плане — паузы направления нет (цена сдвинулась после
+/// чтения, следующий расчёт прочитает коридор заново). Коридор не читался (BingX, Bitget, …) или не прочитан — пауза,
+/// как до решения 390 (иначе поток одинаковых отклонённых ордеров). У DEX — как раньше.
 #[test]
 fn no_direction_pause_on_price_out_of_range_buy_390() {
     let e = OpError::from(&GatewayError::new(
@@ -73,8 +79,22 @@ fn no_direction_pause_on_price_out_of_range_buy_390() {
         Some(v("mexc")),
         "MEXC, код 30087: Order price exceeds allowed range",
     ));
-    assert!(!buy_refusal_pauses(VenueKind::Cex, &e));
-    assert!(buy_refusal_pauses(VenueKind::Dex, &e));
+    assert!(
+        !buy_refusal_pauses(VenueKind::Cex, &e, true),
+        "коридор учтён"
+    );
+    assert!(
+        buy_refusal_pauses(VenueKind::Cex, &e, false),
+        "коридор не учтён"
+    );
+    assert!(buy_refusal_pauses(VenueKind::Dex, &e, true));
+    // Нехватка средств — без паузы независимо от коридора (решение 266).
+    let funds = OpError::from(&GatewayError::new(
+        ErrorCode::InsufficientBalance,
+        Some(v("mexc")),
+        "мало",
+    ));
+    assert!(!buy_refusal_pauses(VenueKind::Cex, &funds, false));
     assert!(arb::core::executor::NO_PAUSE_RANGE.contains("ценового коридора"));
 }
 

@@ -339,8 +339,8 @@ async fn steps(
     // депозита, BNB, удержания, баланс) — не отдельным шагом после них; своя строка в «Время по шагам».
     let band = async {
         let at = Instant::now();
-        let r = Box::pin(super::price_band::context(core, d)).await;
-        (r, at.elapsed().as_millis())
+        let r = Box::pin(super::price_band::read(core, d)).await;
+        Ok::<_, String>((r, at.elapsed().as_millis()))
     };
     let sides = async {
         if fast.parallel {
@@ -410,7 +410,8 @@ async fn steps(
         }
         Ok::<(), String>(())
     };
-    let (((pre, bands), band_ms), sides) = tokio::join!(band, sides);
+    // Ревью 2 t180, Н-C2: отказ стороны возвращается сразу — чтение коридора при этом отменяется (try_join).
+    let ((mut bands, band_ms), ()) = tokio::try_join!(band, sides)?;
     // Строка времени — только если коридор читался (есть строки коридора).
     if !bands.lines.is_empty() {
         t.steps.push((
@@ -418,8 +419,10 @@ async fn steps(
             band_ms,
         ));
     }
+    // Ревью 2 t180, Б1: контекст расчёта с коридорами — только теперь, после шагов сторон: справочник сетей уже
+    // обновлён ими (transfer_open → networks_merge), комиссии и минимумы вывода / депозита — свежие.
+    let pre = super::price_band::context(core, d, &mut bands);
     t.band = bands.lines;
-    sides?;
     if let Some(Read::Missed(why)) = &read {
         t.missed = Some(super::precheck_balance::missed_note(d, why));
     }
@@ -437,7 +440,8 @@ async fn steps(
         spend: cand.map(|c| c.spend_max),
         ..Want::new(q)
     });
-    // Решение 390 (t180): план считается внутри коридора, прочитанного выше одновременно с шагами сторон.
+    // Решение 390 (t180): план считается внутри коридора, прочитанного выше одновременно с шагами сторон (контекст —
+    // на справочнике сетей после шагов сторон).
     let plan = Box::pin(replan_pre(core, d, free, want.as_mut(), pre));
     let (verdict, m) = super::step_timing::measure_if(t.on, plan).await;
     t.mark("пересчёт с финальной котировкой".into(), at);

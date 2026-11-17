@@ -136,3 +136,5 @@ cf72ad0c3e5e91662029e862acd841fabce8753040b0d4e802dee64ef1157232  ./v4-core/src/
 378b45486644dc7e49726358e83d0e2fffdaee088d18cac1a3df00d02c3635b4  ./v4-core/src/types/Slot0.sol
 cd5241d8e1afe7098fa0f21059f7153348fdd25dbae5a8383a5f1dd2eb590321  ./v4-core/licenses/BUSL_LICENSE
 b7b0c4379346af0701f5e4df9c861295d4a3af91dc3b15eb4356ebc571303df9  ./v4-core/licenses/MIT_LICENSE
+5360edad1d60b16fa290a3dbe16f4f3008b0102ded70ea3f52d258ab57933b9f  ./v4-core/src/test/DeltaReturningHook.sol
+afe4d7de04f55f35f25bae046a96baa4137709b9df13d90b76c643a1317df6b8  ./v4-core/test/utils/CurrencySettler.sol

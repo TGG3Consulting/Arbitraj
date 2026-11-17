@@ -27,7 +27,7 @@ import * as L from './lib.mjs';
 import * as W from './world.mjs';
 
 const { check, must, view, coder } = L;
-const { E18, OWNER, LP, OTHER, ERC20, v1, v2, v2f, world, v2Step, exe, bal } = W;
+const { E18, OWNER, LP, OTHER, ERC20, EVIL, WETH, v1, v2, v2f, world, v2Step, v3Step, exe, nat, settled, bal } = W;
 const remap = [['solmate/', 'lib/solmate/'], ['@openzeppelin/', 'lib/openzeppelin-contracts/']];
 const ir = (runs) => ({ optimizer: { enabled: true, runs }, viaIR: true, evmVersion: 'cancun', metadata: { bytecodeHash: 'none' } });
 const v4dir = join(L.here, 'vendor', 'v4-core');
@@ -39,6 +39,10 @@ const CLPM = L.compile(L.solc0826, infdir, 'src/pool-cl/CLPoolManager.sol', 'CLP
 const BINPM = L.compile(L.solc0826, infdir, 'src/pool-bin/BinPoolManager.sol', 'BinPoolManager', ir(25666), remap);
 const LPC = L.compile(L.solc08, join(L.here, 'fixtures'), 'SingletonLp.sol', 'SingletonLp', W.opt);
 const RH = L.compile(L.solc08, join(L.here, 'fixtures'), 'ReenterHook.sol', 'ReenterHook', W.opt);
+// Ревью t181 (Н5): официальный крючок с настраиваемыми дельтами, поддельный менеджер, токен с налогом.
+const DRHOOK = L.compile(L.solc0826, v4dir, 'src/test/DeltaReturningHook.sol', 'DeltaReturningHook', ir(44444444), remap);
+const FAKEM = L.compile(L.solc08, join(L.here, 'fixtures'), 'FakeManager.sol', 'FakeManager', W.opt);
+const TAX = L.compile(L.solc08, join(L.here, 'fixtures'), 'TaxToken.sol', 'TaxToken', W.opt);
 
 const V4KEY = 'tuple(address,address,uint24,int24,address)';
 const INFKEY = 'tuple(address,address,address,address,uint24,bytes32)';
@@ -257,6 +261,7 @@ export async function singleton() {
     const clByPm = await L.call(c, OWNER, ex, exe(usdt, amt, coin, 0n, [infStep(INF_CL, pm, kc, usdt, coin)]));
     check(!clByPm.ok, `вид INF_CL по адресу PoolManager V4 — откат (${clByPm.reason})`);
   }
+  await review7();
   for (const [name, art] of [['v2', v2f], ['v1', v1]]) {
     const e = await env(art);
     const r = await L.call(e.c, OWNER, e.ex, exe(e.usdt, E18, e.coin, 0n, [uniStep(e.pm, e.k4, e.usdt, e.coin)]));
@@ -265,4 +270,110 @@ export async function singleton() {
     check(!r2.ok && r2.reason === 'kind', `исполнитель ${name}: шаг INF_CL (20) — откат «kind»`);
   }
   return record;
+}
+
+/// Код контракта tmp — на адрес с флагами крючка (биты адреса — флаги, v4-core Hooks.sol L29-L47).
+async function hookAt(c, tmp, hook) {
+  await c.sm.putContractCode(L.addr(hook), await c.sm.getContractCode(L.addr(tmp)));
+  return hook;
+}
+
+/// Ревью t181 (Н5) — G7: поддельный менеджер (врёт дельтами; «owed»; попытка оплаты устаревшими expToken / expMax),
+/// официальный DeltaReturningHook (крючок забирает выход больше обмена — «out»; крючок берёт вход своей дельтой — долг
+/// исполнителя всё равно ровно сумма шага), токен с налогом на входе (откат всего, не потеря), частичное исполнение
+/// (узкий диапазон ликвидности — остаток входа вернулся владельцу), executeNative с шагом через менеджер.
+async function review7() {
+  // Поддельный менеджер: режимы 0 / 1 / 2 (fixtures/FakeManager.sol).
+  {
+    const e = await env();
+    const { c, ex, usdt, coin, k4, w } = e;
+    const fake = await L.deploy(c, LP, FAKEM);
+    const amt = 10n * E18;
+    const ub = await bal(c, usdt, OWNER);
+    await must(c, LP, fake, FAKEM.abi, 'set', [0, usdt, coin]);
+    const r0 = await L.call(c, OWNER, ex, exe(usdt, amt, coin, 1n, [uniStep(fake, k4, usdt, coin)]));
+    check(!r0.ok && r0.reason === 'minOut' && (await bal(c, usdt, OWNER)) === ub && (await bal(c, usdt, fake)) === 0n,
+      'поддельный менеджер (дельты врут, выхода нет): откат «minOut», деньги владельца на месте');
+    await must(c, LP, fake, FAKEM.abi, 'set', [1, usdt, coin]);
+    const r1 = await L.call(c, OWNER, ex, exe(usdt, amt, coin, 0n, [uniStep(fake, k4, usdt, coin)]));
+    check(!r1.ok && r1.reason === 'owed', 'поддельный менеджер просит долг больше суммы шага — откат «owed»');
+    // Шаг V3 (фикстура EvilV3Pool, честный режим) ставит expToken / expMax; следующий шаг — поддельный менеджер.
+    const pool = await L.deploy(c, LP, EVIL, ['address', 'address', 'uint8'], [w, usdt, 0]);
+    await must(c, LP, w, WETH.abi, 'deposit', [], 100n * E18);
+    await must(c, LP, w, WETH.abi, 'transfer', [pool, 100n * E18]);
+    await must(c, LP, fake, FAKEM.abi, 'set', [2, w, coin]);
+    const r2 = await L.call(c, OWNER, ex, exe(usdt, amt, coin, 1n, [v3Step(pool, usdt, w), uniStep(fake, v4Key(...sort(w, coin)), w, coin)]));
+    check(!r2.ok && r2.reason === 'minOut',
+      `менеджер шага пробует получить оплату устаревшими expToken / expMax прошлого шага V3 — отказано (итог «${r2.reason}», не «stale paid»)`);
+  }
+  // Официальный DeltaReturningHook (флаги beforeSwap 0x80 | afterSwap 0x40 | beforeSwapReturnsDelta 0x08 |
+  // afterSwapReturnsDelta 0x04 = 0xCC).
+  {
+    const e = await env();
+    const { c, ex, usdt, coin, pm, lp, c0, c1 } = e;
+    const hook = await hookAt(c, await L.deploy(c, LP, DRHOOK, ['address'], [pm]), '0x' + '33'.repeat(18) + '00cc');
+    const kh = v4Key(c0, c1, hook);
+    await must(c, LP, pm, PM.abi, 'initialize', [kh, Q96]);
+    await must(c, LP, lp, LPC.abi, 'addV4', [pm, kh, [MIN_TICK, MAX_TICK, LIQ, '0x' + '00'.repeat(32)]]);
+    const amt = 10n * E18;
+    await must(c, LP, hook, DRHOOK.abi, 'setDeltaUnspecifiedAfterSwap', [50n * E18]);
+    const out = await L.call(c, OWNER, ex, exe(usdt, amt, coin, 0n, [uniStep(pm, kh, usdt, coin)]));
+    check(!out.ok && out.reason === 'out', 'крючок забирает выход больше обмена (кредит исполнителя ≤ 0) — откат «out»');
+    await must(c, LP, hook, DRHOOK.abi, 'setDeltaUnspecifiedAfterSwap', [0n]);
+    await must(c, LP, hook, DRHOOK.abi, 'setDeltaSpecified', [5n * E18]);
+    const ub = await bal(c, usdt, OWNER);
+    const r = await L.call(c, OWNER, ex, exe(usdt, amt, coin, 1n, [uniStep(pm, kh, usdt, coin)]));
+    check(r.ok && ub - (await bal(c, usdt, OWNER)) === amt && (await bal(c, usdt, ex)) === 0n,
+      'крючок берёт часть входа своей дельтой (5 из 10) — долг исполнителя ровно сумма шага (Hooks.sol L270-L276), не больше');
+  }
+  // Токен с налогом 1 % на входе шага-менеджера: менеджер недосчитается при settle — откат всего, владелец при своих.
+  {
+    const e = await env();
+    const { c, ex, coin, pm, lp } = e;
+    const tax = await L.deploy(c, LP, TAX, ['uint256'], [10n ** 30n]);
+    await must(c, LP, tax, TAX.abi, 'setExempt', [lp, true]);
+    await must(c, LP, tax, TAX.abi, 'transfer', [lp, 100_000n * E18]);
+    await must(c, LP, tax, TAX.abi, 'transfer', [OWNER, 1_000n * E18]);
+    const [t0, t1] = sort(tax, coin);
+    const kt = v4Key(t0, t1);
+    await must(c, LP, pm, PM.abi, 'initialize', [kt, Q96]);
+    await must(c, LP, lp, LPC.abi, 'addV4', [pm, kt, [MIN_TICK, MAX_TICK, LIQ, '0x' + '00'.repeat(32)]]);
+    await must(c, OWNER, tax, TAX.abi, 'approve', [ex, 10n ** 30n]);
+    const tb = BigInt(await view(c, tax, TAX.abi, 'balanceOf', [OWNER]));
+    const r = await L.call(c, OWNER, ex, exe(tax, 10n * E18, coin, 0n, [uniStep(pm, kt, tax, coin)]));
+    check(!r.ok && BigInt(await view(c, tax, TAX.abi, 'balanceOf', [OWNER])) === tb,
+      `токен с налогом на входе шага UNI_V4 — откат всего (${r.reason}), владелец при своих`);
+  }
+  // Частичное исполнение: ликвидность только в узком диапазоне, вход больше, чем пул может взять до предела цены.
+  {
+    const e = await env();
+    const { c, ex, usdt, coin, pm, lp, c0, c1 } = e;
+    const kn = [c0, c1, 500, 10, '0x' + '00'.repeat(20)];
+    await must(c, LP, pm, PM.abi, 'initialize', [kn, Q96]);
+    await must(c, LP, lp, LPC.abi, 'addV4', [pm, kn, [-100n, 100n, 10n ** 21n, '0x' + '00'.repeat(32)]]);
+    const amt = 1_000n * E18;
+    const ub = await bal(c, usdt, OWNER);
+    const r = await L.call(c, OWNER, ex, exe(usdt, amt, coin, 1n, [uniStep(pm, kn, usdt, coin)]));
+    const ev = swapAmounts(r, pm, PM.abi)[0];
+    const took = BigInt(usdt) === BigInt(c0) ? -ev[0] : -ev[1];
+    check(r.ok && took < amt && ub - (await bal(c, usdt, OWNER)) === took && (await bal(c, usdt, ex)) === 0n,
+      `частичное исполнение: пул взял ${took} из ${amt}, остаток вернулся владельцу, на исполнителе пусто`);
+  }
+  // executeNative (продажа BNB) с шагом UNI_V4 по пулу WBNB/USDT: контракт исполняет (бот такой маршрут не строит —
+  // ExecKind::singleton исключён из нативной стороны).
+  {
+    const e = await env();
+    const { c, ex, usdt, w, pm, lp } = e;
+    await must(c, LP, w, WETH.abi, 'deposit', [], 20_000n * E18);
+    await must(c, LP, w, WETH.abi, 'transfer', [lp, 20_000n * E18]);
+    const [a0, a1] = sort(w, usdt);
+    const kw = v4Key(a0, a1);
+    await must(c, LP, pm, PM.abi, 'initialize', [kw, Q96]);
+    await must(c, LP, lp, LPC.abi, 'addV4', [pm, kw, [MIN_TICK, MAX_TICK, LIQ, '0x' + '00'.repeat(32)]]);
+    const ub = await bal(c, usdt, OWNER);
+    const r = await L.call(c, OWNER, ex, nat(true, w, E18, usdt, 1n, [uniStep(pm, kw, w, usdt)]), E18);
+    const st = settled(r, ex);
+    check(r.ok && st && st[0] === E18 && st[1] === 0n && (await bal(c, usdt, OWNER)) > ub && (await bal(c, w, ex)) === 0n,
+      'executeNative: продажа BNB через шаг UNI_V4 исполняется контрактом (NativeSettled(1, 0)); бот такой маршрут не строит');
+  }
 }

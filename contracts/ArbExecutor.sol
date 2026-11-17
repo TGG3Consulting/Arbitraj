@@ -508,11 +508,13 @@ contract ArbExecutor {
     // Uniswap V4 — PoolManager.unlock (v4-core PoolManager.sol L104-L114), Infinity — Vault.lock (infinity-core Vault.sol
     // L74-L86); менеджер вызывает у исполнителя unlockCallback / lockAcquired с теми же данными — там обмен и расчёт
     // (_singletonCb). Обратный вызов пускается только от s.pool и только с данными этого шага (хеш в transient) — после
-    // него expPool и expHash стёрты; не было вызова — откат «cb». Сумма ≤ int128 (дельты менеджеров — int128).
+    // него expPool и expHash стёрты; не было вызова — откат «cb». expToken / expMax прошлых шагов стираются до открытия. Сумма ≤ int128 (дельты менеджеров — int128).
     function _singleton(Step calldata s, uint256 amount, address to) internal {
         require(amount <= uint256(uint128(type(int128).max)), "int");
         bytes memory cb = abi.encode(s.kind, s.tokenIn, s.tokenOut, amount, to, s.data);
-        expPool = s.pool;
+        // Ревью t181 (Н5): метки оплаты _pay прошлых шагов (expToken / expMax) стираются — менеджер этого шага
+        // (expPool) не может получить через V3-обратный вызов токен и сумму прошлого шага (_pay откатит «owed»).
+        (expPool, expToken, expMax) = (s.pool, address(0), 0);
         expHash = keccak256(cb);
         if (s.kind == UNI_V4) IV4PoolManager(s.pool).unlock(cb);
         else IInfVault(s.pool).lock(cb);

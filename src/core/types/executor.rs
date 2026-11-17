@@ -38,6 +38,10 @@ pub struct ExecutorDeployQuote {
     /// навсегда запишется в исполнитель (сеттера нет) — показывается в окне подтверждения.
     pub wnative: Address,
     pub note: Option<String>,
+    /// Ревью t181 (Н8): предупреждение перед развёртыванием — текущая сборка исполнителя ещё не проверена симуляцией на
+    /// живых пулах сети (нет записи в tests/data; exec/executor/code.rs LIVE_PROOF). None — проверена.
+    #[serde(default)]
+    pub warning: Option<String>,
 }
 
 /// Итог развёртывания.

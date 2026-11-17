@@ -98,6 +98,7 @@ pub async fn quote(q: &Quoting, env: &Env) -> GatewayResult<ExecutorDeployQuote>
         bytecode_len: bin.len(),
         wnative,
         note,
+        warning: code::live_warning(),
     })
 }
 

@@ -111,6 +111,25 @@ pub fn version_of(have: &Bytes) -> Result<Option<Version>, String> {
     Ok(None)
 }
 
+/// Ревью t181 (Н8): запись симуляции текущей сборки (v3) на живых пулах сети — каталог tests/data, по которому есть тест
+/// «шаги UNI_V4 / INF_CL / INF_BIN проходят на настоящих пулах» (процедура — docs/notes/t181-executor-all-kinds-2026-11-17.md,
+/// п. 5). None — записи ещё нет: окно развёртывания предупреждает. Задаётся в том же коммите, что запись и тест (это
+/// факт о собранном коде, не настройка торговли).
+pub const LIVE_PROOF: Option<&str> = None;
+
+/// Ревью t181 (Н8): текст предупреждения окна «Развернуть исполнитель», пока LIVE_PROOF не задан. Ошибок нет.
+pub fn live_warning() -> Option<String> {
+    match LIVE_PROOF {
+        Some(_) => None,
+        None => Some(
+            "Исполнитель v3 (шаги Uniswap V4 и PancakeSwap Infinity) ещё не принят на живых пулах сети: в tests/data нет \
+             записи симуляции этих шагов на настоящих пулах. До её появления разворачивать v3 и пускать через него \
+             деньги не рекомендуется (решение 390; кошелёк с v2 работает как раньше)."
+                .to_string(),
+        ),
+    }
+}
+
 /// Код в сети версии v2 (решение 390: замороженная копия). Ошибки: как checked (хеш — из contracts/out/v2/ArbExecutor.sha256).
 pub fn runtime_v2() -> Result<Bytes, String> {
     checked_in(

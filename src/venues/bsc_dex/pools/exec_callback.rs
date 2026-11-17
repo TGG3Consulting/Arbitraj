@@ -167,27 +167,35 @@ pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
 mod tests {
     use super::*;
 
-    /// Селектор squadV3SwapCallback = 0xc4e21d86 (SquadV3Pool.sol L794): в артефакте v1 его нет, в v2 (t114) есть;
-    /// pancakeV3SwapCallback / uniswapV3SwapCallback — в обоих (тот же поиск PUSH4, реальные артефакты contracts/out/).
+    /// Селектор squadV3SwapCallback = 0xc4e21d86 (SquadV3Pool.sol L794): в артефакте v1 его нет, в v2 (t114) и v3
+    /// (решение 390, текущая сборка contracts/out/) есть; pancakeV3SwapCallback / uniswapV3SwapCallback — во всех (тот же
+    /// поиск PUSH4, реальные артефакты contracts/out/v1/, out/v2/, out/). Ревью t181 (Н7): v2 — out/v2/, v3 — out/.
     #[test]
     fn squad_callback_by_executor_version() {
         let squad = registry_key::selector("squadV3SwapCallback(int256,int256,bytes)");
         assert_eq!(squad.to_vec(), vec![0xc4, 0xe2, 0x1d, 0x86]);
-        let (v1, v2) = (code::runtime_v1().unwrap(), code::runtime().unwrap());
+        let v1 = code::runtime_v1().unwrap();
+        let v2 = code::runtime_v2().unwrap();
+        let v3 = code::runtime().unwrap();
         assert!(!has_selector(&v1, &squad));
-        assert!(has_selector(&v2, &squad));
+        assert!(has_selector(&v2, &squad) && has_selector(&v3, &squad));
         for sig in [
             "pancakeV3SwapCallback(int256,int256,bytes)",
             "uniswapV3SwapCallback(int256,int256,bytes)",
         ] {
             let sel = registry_key::selector(sig);
-            assert!(has_selector(&v1, &sel) && has_selector(&v2, &sel), "{sig}");
-            assert!(check(Version::V1, sig).is_none() && check(Version::V2, sig).is_none());
+            assert!(
+                has_selector(&v1, &sel) && has_selector(&v2, &sel) && has_selector(&v3, &sel),
+                "{sig}"
+            );
+            for v in [Version::V1, Version::V2, Version::V3] {
+                assert!(check(v, sig).is_none(), "{sig} {v:?}");
+            }
         }
         let s = "squadV3SwapCallback(int256,int256,bytes)";
         assert!(
             check(Version::V1, s).is_some_and(|w| w.contains("v1") && w.contains("0xc4e21d86"))
         );
-        assert!(check(Version::V2, s).is_none());
+        assert!(check(Version::V2, s).is_none() && check(Version::V3, s).is_none());
     }
 }

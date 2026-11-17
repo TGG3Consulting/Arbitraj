@@ -14,7 +14,7 @@
 //! Решение 273: перед отправкой — пауза и предел цены газа фабрик пар Solidly заново (exec/solidly_gate.rs fresh_cap),
 //! предел — по цене самой транзакции (exec/txs.rs send_capped).
 //! Кто вызывает: exec/cycle_trade.rs.
-//! От чего зависит: exec/executor/{call, onchain, sim}.rs, exec/{cycle_steps, cycle_ref, swap_send, txs, result}.rs,
+//! От чего зависит: exec/executor/{call, callback_at, onchain, sim}.rs, exec/{cycle_steps, cycle_ref, swap_send, txs, result}.rs,
 //! quote/{cycle_legs, cycle_cost}.rs, wallet/{approve_executor, nonce}.rs, check/simulate.rs.
 //! Настройки: exec.executor_address; через вызываемые — dex.deadline_s, dex.approve_unlimited, verify.*, send.*,
 //! channel.*, dex_dex.min_profit_usd.
@@ -58,7 +58,15 @@ pub async fn trade(
     let tr = cycle_steps::trade_request(req);
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
-    onchain::ensure(ctx, executor, wallet).await?;
+    let version = onchain::ensure(ctx, executor, wallet).await?;
+    // Ревью t181 (Н4): вид шага / обратный вызов пулов цикла — по версии, которую вернула сверка кода в сети (как на
+    // пути сделки, exec/executor/trade.rs; задача t122): запись кошелька могла отстать — без пробы с откатом «kind».
+    if let Some(why) = legs
+        .iter()
+        .find_map(|l| super::executor::callback_at::missing_at(ctx, l.entry.family, version))
+    {
+        return Err(ctx.err(ErrorCode::NoRoute, why));
+    }
     let (mut c, mut at) = build(q, &legs, req, executor).await?;
     let need = approve_executor::missing(ctx, base, wallet, executor, c.amount_in).await?;
     let approved = send_approvals(env, &slot, &need).await?;

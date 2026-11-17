@@ -14,13 +14,13 @@ use super::super::pools::families::smart_ok;
 use super::path::Path;
 
 /// Пойдёт ли маршрут через исполнитель: у каждого шага вид шага исполнителя при заданном адресе
-/// (pools/exec_kind.rs::via_executor — пометка части F) и у пула свой контракт (exec/executor/entry.rs::supported).
+/// (pools/exec_kind.rs::via_executor — пометка части F) и у пула свой контракт (exec/executor/entry.rs::fits — ревью t181
+/// Н1: у пула менеджера ещё ключ без нативной валюты).
 /// Ошибок нет.
 pub fn all_via(ctx: &Ctx, legs: &[Path]) -> bool {
-    legs.iter().flat_map(|p| p.hops.iter()).all(|h| {
-        exec_kind::via_executor(ctx, h.entry.family)
-            && entry::supported(h.entry.family, &h.entry.pool.reference).is_ok()
-    })
+    legs.iter()
+        .flat_map(|p| p.hops.iter())
+        .all(|h| exec_kind::via_executor(ctx, h.entry.family) && entry::fits(&h.entry).is_ok())
 }
 
 /// Форма Universal Router (как graph_form: прямая или умный путь) — тогда исполнитель не используется. Ошибок нет.

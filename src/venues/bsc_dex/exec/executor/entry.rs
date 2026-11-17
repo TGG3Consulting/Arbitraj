@@ -28,7 +28,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::super::ctx::Ctx;
 use super::super::super::pools::exec_kind::ExecKind;
-use super::super::super::pools::families::Family;
+use super::super::super::pools::families::{Family, Proto};
 use super::super::super::pools::key::PoolKey;
 use super::super::super::pools::registry::Entry;
 use super::super::super::pools::stable_native;
@@ -37,25 +37,59 @@ use super::kind::{InfKey, Params, STABLE_NATIVE, V4Key};
 
 /// Может ли шаг через этот пул идти исполнителем: у семейства есть вид шага (Family.executor_kind) и у пула свой
 /// контракт. Принимает: семейство и ссылку на пул (хватает хопа маршрута). Возвращает: вид шага и адрес пула или
-/// причину. Ошибок иных нет.
+/// причину. Ошибок иных нет. Ревью t181 (Н2): у шагов пулов менеджеров (UNI_V4 / INF_*) ссылка — только Singleton;
+/// Contract — только у Infinity Stable (пул в крючке пула CL, шаг INF_CL): исполнитель никогда не вызовет крючок или
+/// другой контракт как менеджер. Ключ пула (нативная валюта, валюты пары) — fits (нужна запись реестра).
 pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), String> {
     let k = f
         .executor_kind
         .ok_or_else(|| format!("{}: у вида пула нет шага исполнителя", f.id))?;
+    if k.singleton() {
+        return match pool {
+            PoolRef::Singleton { manager, .. } => Ok((k, *manager)),
+            PoolRef::Contract(hook) if k == ExecKind::InfCl && f.proto == Proto::InfinityStable => {
+                Ok((k, *hook))
+            }
+            other => Err(format!(
+                "{}: ссылка {other:?} — не пул менеджера, шаг {} не строится",
+                f.id,
+                k.name()
+            )),
+        };
+    }
     match pool {
         PoolRef::Contract(a) => Ok((k, *a)),
         // Пара общего контракта (WooPPV2, решение 122 F, 3): исполнитель вызывает сам общий контракт (шаг WOO).
         PoolRef::Member { contract, .. } => Ok((k, *contract)),
         // Решение 295: пара многомонетного пула — шаг по контракту пула (индексы/токены — из записи пары).
         PoolRef::Multi { contract, .. } => Ok((k, *contract)),
-        // Решение 390: пул внутри менеджера — только шаги UNI_V4 / INF_* (исполнитель v3); адрес — менеджер ссылки (у
-        // Infinity шаг вызывает Vault — его даёт params по dex.vault).
-        PoolRef::Singleton { manager, .. } if k.singleton() => Ok((k, *manager)),
         PoolRef::Singleton { .. } => Err(format!(
             "{}: пул внутри менеджера исполнитель не вызывает",
             f.id
         )),
     }
+}
+
+/// Ревью t181 (Н1): supported + у шага пула менеджера (UNI_V4 / INF_*) — ключ в записи реестра есть, обе валюты ключа —
+/// ERC-20 (нативная валюта address 0 — не шаг исполнителя, контракт: «native») и это ровно токены пары записи. Так
+/// маршрут через такой пул не признаётся исполнимым исполнителем (а не срывается при сборке шага). Принимает: запись
+/// реестра. Возвращает: как supported. Ошибок иных нет.
+pub fn fits(e: &Entry) -> Result<(ExecKind, Address), String> {
+    let (k, a) = supported(e.family, &e.pool.reference)?;
+    if !k.singleton() {
+        return Ok((k, a));
+    }
+    let key = e
+        .key
+        .as_ref()
+        .ok_or_else(|| format!("{}: у пула нет ключа PoolKey", e.family.id))?;
+    let (c0, c1) = match key {
+        PoolKey::Uniswap(d) => (d.currency0, d.currency1),
+        PoolKey::Infinity(d) => (d.currency0, d.currency1),
+    };
+    super::kind_key::check_tokens((c0, c1), e.pool.token0, e.pool.token1)
+        .map_err(|w| format!("{}: {w}", e.family.id))?;
+    Ok((k, a))
 }
 
 /// Вид шага и адрес пула. Принимает: пул реестра. Ошибки: NoRoute — у семейства нет шага исполнителя, пул
@@ -186,7 +220,28 @@ fn singleton(ctx: &Ctx, e: &Entry, k: ExecKind) -> GatewayResult<(Params, Addres
                 )));
             }
         }
-        PoolRef::Contract(hook) if key.hooks() == *hook => {}
+        // Ревью t181 (Н2): Contract — только Infinity Stable (шаг INF_CL): крючок ключа = адрес пула, менеджер ключа =
+        // dex.pool_manager этой DEX (CLPoolManager); иначе шаг не строится.
+        PoolRef::Contract(hook)
+            if k == ExecKind::InfCl && e.family.proto == Proto::InfinityStable =>
+        {
+            let PoolKey::Infinity(d) = key else {
+                return Err(no("ключ пула Infinity Stable не того вида".into()));
+            };
+            if d.hooks != *hook {
+                return Err(no(format!(
+                    "крючок ключа {:#x} ≠ адрес пула {hook:#x}",
+                    d.hooks
+                )));
+            }
+            let pm = ctx.dex_addr("dex.pool_manager", e.family.id)?;
+            if d.manager != pm {
+                return Err(no(format!(
+                    "менеджер ключа {:#x} ≠ dex.pool_manager {pm:#x}",
+                    d.manager
+                )));
+            }
+        }
         other => return Err(no(format!("ключ пула не сходится со ссылкой {other:?}"))),
     }
     match (k, key) {

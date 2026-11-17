@@ -13,7 +13,8 @@
 //! промежуточную (нога из 2+ хопов) шаг, у пула которого налог монеты на стороне шага > 0, — только пул V2
 //! (quote/pool_tax.rs v2_only, как exec/live.rs, exec/live_hops.rs); иначе маршрут неисполним (сигнал).
 //! Решение 122, часть X: маршрут через свой исполнитель — правила в quote/graph_executor.rs (без адреса — как раньше).
-//! Кто вызывает: quote/graph_route.rs (executable), quote/graph_fit.rs (executable, exec_router — решение 300), exec/trade.rs (graph_form).
+//! Кто вызывает: quote/graph_route.rs (executable), quote/graph_fit.rs (executable, exec_router — решение 300), exec/trade.rs (graph_form),
+//! exec/executor/mod.rs (bundle_first — ревью t181 Н3).
 //! От чего зависит: quote/graph_executor.rs, quote/pool_tax.rs (v2_only), pools/families.rs (Family, smart_ok, classify), send/mod.rs (planned_bundle_ok), quote/path.rs.
 //! Настройки: exec.executor_address, dex.route_max_hops, dex.bundle_max_routers [bsc_dex], dex.router, dex.universal_router [DEX], channel.*.
 
@@ -60,7 +61,13 @@ pub fn executable(ctx: &Ctx, legs: &[Path], native: bool) -> Result<(), String> 
     // нужны, нога может пересекать роутеры и семейства. Нативная монета через исполнитель не идёт — как раньше.
     // Решение 272: исполнитель v2 (executeNative) — и нативная монета; v1 или не сверен — как раньше.
     let native_via = !native || super::super::exec::executor::native_capable(ctx);
-    if native_via && graph_executor::all_via(ctx, legs) && !graph_executor::ur_form(ctx, legs) {
+    // Ревью t181 (Н3): маршрут с шагом пула менеджера (V4 / Infinity), который собирается прежним путём (бандл свопов),
+    // идёт прежним путём — как у кошелька v2; исполнитель v3 — только там, где прежнего пути нет (bundle_first).
+    if native_via
+        && graph_executor::all_via(ctx, legs)
+        && !graph_executor::ur_form(ctx, legs)
+        && !bundle_first(ctx, &families_of(legs), native)
+    {
         return graph_executor::tax(legs);
     }
     // Защитно: хоп без своего пути исполнения (tradable=false) — сигнал, авто-сделкой не исполняется.
@@ -113,19 +120,50 @@ pub(super) fn exec_router(ctx: &Ctx, f: &Family) -> GatewayResult<Address> {
     }
 }
 
+/// Виды пулов маршрута по долям (для правил, общих с боевым путём, exec/executor/mod.rs takes). Ошибок нет.
+fn families_of(legs: &[Path]) -> Vec<Vec<&'static Family>> {
+    legs.iter()
+        .map(|p| p.hops.iter().map(|h| h.entry.family).collect())
+        .collect()
+}
+
+/// Ревью t181 (Н3), решение 390 — правило выбора пути у кошелька с исполнителем v3. Маршрут, где есть шаг пула внутри
+/// менеджера (Uniswap V4 / PancakeSwap Infinity — ExecKind::singleton), который собирается ПРЕЖНИМ путём — бандлом свопов
+/// (все пулы со своим путём исполнения, нет нативной монеты через ногу форка, каждая доля внутри одного роутера, роутеров
+/// не больше dex.bundle_max_routers, каналы умеют бандл), идёт прежним путём, как у кошелька v2: монета с налогом на
+/// входе (через исполнитель с первым шагом V4/Infinity её менеджер откатит) и крючки, не пускающие исполнитель, не
+/// превращают прежнюю сделку в сигнал. Исполнитель v3 берёт такой маршрут только там, где прежнего пути нет (например
+/// DODO + Uniswap V4). Без шага менеджера — false: прежнее правило (исполнитель раньше бандла, решение 122). Принимает:
+/// окружение, виды пулов по долям, нативная ли монета. Ошибок нет. Одно правило — котировка (executable) и сделка (takes).
+pub fn bundle_first(ctx: &Ctx, legs: &[Vec<&'static Family>], native: bool) -> bool {
+    let all = || legs.iter().flatten();
+    if !all().any(|f| f.executor_kind.is_some_and(|k| k.singleton())) {
+        return false;
+    }
+    if !all().all(|f| f.tradable) || (native && all().any(|f| f.fork)) {
+        return false;
+    }
+    collectable_families(ctx, legs).is_ok()
+}
+
 /// Собирается ли маршрут в бандл (решение 84): все включённые каналы отправки умеют бандл (решение 121 B3; решение 299:
 /// при send.bundle_skip_single = да — хотя бы один, send::planned_bundle_ok), ни одна
 /// нога не пересекает роутеры (как exec/bundle::single_router/fork_router) и всего роутеров ≤ dex.bundle_max_routers.
 /// Ошибка — причина несобираемости.
 fn collectable(ctx: &Ctx, legs: &[Path]) -> Result<(), String> {
+    collectable_families(ctx, &families_of(legs))
+}
+
+/// То же по видам пулов долей (ревью t181: общее с bundle_first). Ошибка — причина несобираемости.
+fn collectable_families(ctx: &Ctx, legs: &[Vec<&'static Family>]) -> Result<(), String> {
     super::super::send::planned_bundle_ok(ctx)?;
     // Не задано → ctx.int вернёт ошибку (настройка L::Positive, значение всегда ≥ 1, если задано).
     let max = ctx.int("dex.bundle_max_routers").map_err(|e| e.message)?;
     let mut routers: Vec<Address> = Vec::new();
     for p in legs {
         let mut leg_router: Option<Address> = None;
-        for h in &p.hops {
-            let r = exec_router(ctx, h.entry.family).map_err(|e| e.message)?;
+        for f in p {
+            let r = exec_router(ctx, f).map_err(|e| e.message)?;
             match leg_router {
                 None => leg_router = Some(r),
                 Some(x) if x != r => {

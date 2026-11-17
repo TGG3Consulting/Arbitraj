@@ -6,7 +6,7 @@
 //! Публичный интерфейс для новых семейств (часть F): kind.rs (Params, StepSpec, encode), call.rs (ExecCall, build).
 //! Кто вызывает: exec/trade.rs (выбор пути), exec/dry_build.rs (сухая сделка), quote/approve_gas.rs (разрешение),
 //! venue.rs (развёртывание).
-//! От чего зависит: exec/executor/*, quote/graph_route.rs (graph_form), ctx.rs.
+//! От чего зависит: exec/executor/*, quote/graph_route.rs (graph_form), quote/graph_exec.rs (bundle_first — ревью t181 Н3), ctx.rs.
 //! Настройки: нет (адрес исполнителя — у кошелька, экран «Маппинг кошельков»).
 
 pub mod abi;
@@ -134,6 +134,21 @@ pub fn takes(ctx: &Ctx, route: &DexRoute, native: bool) -> GatewayResult<Option<
             .is_ok_and(|f| exec_kind::via_executor(ctx, f) && entry::supported(f, &h.pool).is_ok())
     });
     if !all {
+        return Ok(None);
+    }
+    // Ревью t181 (Н3): то же правило выбора, что котировка (quote/graph_exec.rs bundle_first) — маршрут с шагом пула
+    // менеджера, собираемый бандлом, идёт бандлом (как у кошелька v2).
+    let fams: Vec<Vec<&'static families::Family>> = route
+        .legs
+        .iter()
+        .map(|l| {
+            l.hops
+                .iter()
+                .filter_map(|h| families::classify(ctx, &h.family).ok())
+                .collect()
+        })
+        .collect();
+    if super::super::quote::graph_exec::bundle_first(ctx, &fams, native) {
         return Ok(None);
     }
     address(ctx)

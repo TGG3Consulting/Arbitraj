@@ -364,4 +364,53 @@ async fn registry_entry_becomes_singleton_step() {
         entry::params(&q.ctx, &c, wbnb).is_err(),
         "менеджер ключа ≠ менеджер ссылки"
     );
+    // Ревью t181 (Н1): ключ с нативной валютой (address 0) или не от пары записи — пул не исполним исполнителем.
+    let mut n = e.clone();
+    let nk = PoolKey::Uniswap(UniswapPoolKeyData {
+        currency0: Address::ZERO,
+        currency1: wbnb,
+        fee: 3000,
+        tick_spacing: I24::try_from(60i32).unwrap(),
+        hooks: Address::ZERO,
+    });
+    n.pool.reference = PoolRef::Singleton {
+        manager,
+        id: nk.id(),
+    };
+    n.key = Some(nk);
+    let why = entry::fits(&n).expect_err("нативная валюта");
+    assert!(why.contains("нативная валюта"), "{why}");
+    let mut ok = e.clone();
+    ok.pool.reference = PoolRef::Singleton {
+        manager,
+        id: uk.id(),
+    };
+    assert!(entry::fits(&ok).is_ok(), "ключ USDT/WBNB = пара записи");
+    // Ревью t181 (Н2): у шага менеджера ссылка Contract — только Infinity Stable; V4 по адресу контракта — не шаг.
+    assert!(entry::supported(ok.family, &PoolRef::Contract(manager)).is_err());
+    let cl = families::make("x-390-cl", "pancakeswap_infinity_cl").unwrap();
+    assert!(entry::supported(cl, &PoolRef::Contract(manager)).is_err());
+    let st = families::make("x-390-st", "pancake_infinity_stable").unwrap();
+    assert!(entry::supported(st, &PoolRef::Contract(manager)).is_ok());
+}
+
+/// Ревью t181 (Н3): правило «маршрут с шагом менеджера, собираемый бандлом, — бандлом» не трогает маршруты без шага
+/// менеджера и маршруты с пулом без своего пути (DODO + V4 — только исполнитель). Случай «да» требует настроек каналов
+/// бандла — этим тестом не покрыт (проверка собираемости — прежний код quote/graph_exec.rs).
+#[tokio::test]
+async fn bundle_first_only_for_manager_routes_with_old_path() {
+    use arb::venues::bsc_dex::quote::graph_exec::bundle_first;
+    let p = route_common::parts().await;
+    let q = p.quoting();
+    let v4 = families::make("x-390-b4", "uniswap_v4").unwrap();
+    let dodo = families::make("x-390-dd", "dodo_dvm").unwrap();
+    let v3 = families::make("x-390-b3", "pancakeswap_v3").unwrap();
+    assert!(
+        !bundle_first(&q.ctx, &[vec![v3], vec![v3]], false),
+        "без шага менеджера — прежнее правило"
+    );
+    assert!(
+        !bundle_first(&q.ctx, &[vec![dodo], vec![v4]], false),
+        "DODO + V4 — прежнего пути нет"
+    );
 }

@@ -75,6 +75,7 @@ pub mod pmm_ladder;
 pub mod pool_after;
 pub mod pool_quote;
 pub mod pool_tax;
+pub mod probe_quote;
 pub mod quoter;
 pub mod quoter_calls;
 pub mod quoter_extra;

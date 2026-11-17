@@ -9,7 +9,8 @@
 //! Пул взял меньше входа — ликвидности до предела цены не хватило: это «не хватает ликвидности» (как SPL у QuoterV2).
 //! Включается настройкой dex.quoter_virtual [DEX] = да; не задана или «нет» — как раньше (квотер DEX из dex.quoter).
 //! Кто вызывает: quote/quoter.rs (out, out_at — решение 261), pools/families.rs (required — dex.quoter не нужен), exec/dry_surplus_tail.rs
-//! (data, address, runtime — квотер в eth_simulateV1, решение 252 вариант «б»).
+//! (data, address, runtime — квотер в eth_simulateV1, решение 252 вариант «б»), quote/probe_quote.rs (request, address,
+//! runtime, decode — «ожидалось без налога» в пробе налогов, решение 388), quote/quoter_calls.rs (on — текст ошибки).
 //! От чего зависит: node/rpc.rs, pools/registry.rs, pools/families.rs (Proto), sha2, contracts/out/VirtualQuoter.*.
 //! Настройки: dex.quoter_virtual [DEX] (необязательная).
 

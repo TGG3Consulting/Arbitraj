@@ -5,9 +5,10 @@
 //! Uniswap V4 — V4Quoter (ключ пула, направление, сумма, hookData пустые); KyberSwap Elastic — свой QuoterV2
 //! (tokenIn, tokenOut, amountIn, feeUnits, limitSqrtP; решение 81); Maverick V2 — MaverickV2Quoter.calculateSwap
 //! (quote/quoter_maverick.rs, решение 122 F). V3 с dex.v3_registry_fee_method (решение 281) — fee квотера = ключ реестра.
-//! Кто вызывает: quote/quoter.rs, check/probe.rs.
-//! От чего зависит: node/abi_dex.rs, pools/key.rs, pools/registry.rs, pools/registry_key.rs, ctx.rs.
-//! Настройки: dex.router (V2), dex.quoter (V3, V4), dex.v3_registry_fee_method (V3) [вид пула].
+//! Кто вызывает: quote/quoter.rs, quote/v2_pair_probe.rs (проба check/probe.rs через quote/probe_quote.rs), check/hooks_probe.rs.
+//! От чего зависит: node/abi_dex.rs, pools/key.rs, pools/registry.rs, pools/registry_key.rs, ctx.rs, quote/virtual_quoter.rs (on —
+//! текст ошибки видов «только виртуальный квотер», решение 388).
+//! Настройки: dex.router (V2), dex.quoter (V3, V4), dex.v3_registry_fee_method (V3) [вид пула], dex.quoter_virtual [DEX].
 //!
 //! Сигнатуры — шапка node/abi_dex.rs (официальные интерфейсы Uniswap v2/v3, pancake-v3, infinity-periphery, v4-periphery).
 
@@ -16,7 +17,7 @@ use alloy_primitives::aliases::{I24, U24, U160};
 use alloy_primitives::{Address, Bytes, U256};
 
 use crate::core::types::{PoolKind, PoolRef, PoolState};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::abi_dex::{
@@ -53,34 +54,12 @@ pub fn request(
     if e.family.proto == Proto::Maverick {
         return super::quoter_maverick::request(ctx, e, token_in, amount);
     }
-    // Algebra Integral (решение 188): официальный квотер Integral в код не подключён — только виртуальный квотер
-    // (dex.quoter_virtual = да, quote/virtual_quoter.rs; сюда тогда не доходит).
-    if e.family.proto == Proto::AlgebraIntegral {
-        return Err(ctx.not_set(
-            "dex.quoter_virtual",
-            format!("{}: Algebra Integral сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
-        ));
-    }
-    // Metric OMM (решение 285): квотера в официальном SDK для BSC нет — только виртуальный квотер (quoteMetric).
-    if e.family.proto == Proto::MetricOmm {
-        return Err(ctx.not_set(
-            "dex.quoter_virtual",
-            format!("{}: Metric сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
-        ));
-    }
-    // iZiSwap / Biswap V3 (решение 286): официальный квотер в код не подключён — только виртуальный (quoteIzi).
-    if e.family.proto.is_izi() {
-        return Err(ctx.not_set(
-            "dex.quoter_virtual",
-            format!("{}: iZiSwap / Biswap V3 сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
-        ));
-    }
-    // SmarDex (решение 288): официального квотера пары нет — только виртуальный (quoteSmardex).
-    if e.family.proto == Proto::Smardex {
-        return Err(ctx.not_set(
-            "dex.quoter_virtual",
-            format!("{}: SmarDex сверяется только виртуальным квотером — задайте dex.quoter_virtual = да", e.family.title),
-        ));
+    // Только виртуальный квотер (решения 188, 285, 286, 288): Algebra Integral (официальный квотер Integral в код не
+    // подключён), Metric OMM (квотера в SDK для BSC нет — quoteMetric), iZiSwap / Biswap V3 (официальный квотер не
+    // подключён — quoteIzi), SmarDex (квотера пары нет — quoteSmardex). Вызывающие при dex.quoter_virtual = да идут в
+    // quote/virtual_quoter.rs (quoter.rs out_at) или quote/probe_quote.rs (проба налогов, решение 388) — сюда не доходят.
+    if let Some(what) = virtual_only(e.family.proto) {
+        return Err(virtual_missing(ctx, e, what));
     }
     // KyberSwap Classic DMM (решение 287): квотер — DMMRouter02.getAmountsOut по пути из одного пула (quoter_dmm.rs).
     if e.family.proto == Proto::KyberDmm {
@@ -440,4 +419,39 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
         }
         _ => None,
     }
+}
+
+/// Вид «только виртуальный квотер» (своего квотера в коде нет): название для текста ошибки. None — у вида свой
+/// квотер. Ошибок нет.
+fn virtual_only(p: Proto) -> Option<&'static str> {
+    match p {
+        Proto::AlgebraIntegral => Some("Algebra Integral"),
+        Proto::MetricOmm => Some("Metric"),
+        // Proto::is_izi (pools/families.rs) — ровно IziSwap и BiswapV3.
+        p if p.is_izi() => Some("iZiSwap / Biswap V3"),
+        Proto::Smardex => Some("SmarDex"),
+        _ => None,
+    }
+}
+
+/// Ошибка «квотера вида нет»: dex.quoter_virtual у DEX не «да» — «не задана настройка» с её именем (как раньше);
+/// уже «да» — Internal без совета задать заданное (решение 388: вызывающий прошёл мимо виртуального квотера — ошибка
+/// кода, её место — в тексте). Принимает: окружение, пул, название вида. Возвращает: ошибку. Ошибок иных нет.
+fn virtual_missing(ctx: &Ctx, e: &Entry, what: &str) -> GatewayError {
+    let t = e.family.title;
+    if super::virtual_quoter::on(ctx, e.family.id, e.family.proto) {
+        return ctx.err(
+            ErrorCode::Internal,
+            format!(
+                "{t}: {what} сверяется только виртуальным квотером; dex.quoter_virtual = да уже задан, но этот вызов \
+                 прошёл мимо него (ошибка кода: нужен quote/virtual_quoter.rs или quote/probe_quote.rs)"
+            ),
+        );
+    }
+    ctx.not_set(
+        "dex.quoter_virtual",
+        format!(
+            "{t}: {what} сверяется только виртуальным квотером — задайте dex.quoter_virtual = да"
+        ),
+    )
 }

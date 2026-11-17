@@ -46,12 +46,16 @@ pub const ORPHAN: &str = "поколение владельца сменилос
 /// Настройка, влияющая на курс встречного токена (ревью №1 P).
 const FEE: &str = "dex.v2_fee_pct";
 
-const WATCH: [&str; 7] = [
+const WATCH: [&str; 10] = [
     "dex.graph_",
     "dex.route_max_pools_per_edge",
     "dex.depth_band_pct",
     "dex.min_pool_liquidity_usd",
     "dex.depth_hysteresis_pct",
+    // Решение 393 (ревью t178, Н2): допуск мелкого пула в граф (quote/shallow_pick.rs).
+    "dex.shallow_pools_per_pair",
+    "check.probe_usdt",
+    "dex.quoter_max_diff_pct",
     "venue.quote_asset",
     FEE,
 ];

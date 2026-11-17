@@ -43,7 +43,7 @@ impl Tally {
             }
         }
         let mut msg = format!(
-            "Сверка с квотером (первый проход): прошли {ok}, исключены {failed}, мельче dex.min_pool_liquidity_usd (не сверялись) {dust}"
+            "Сверка с квотером (первый проход): прошли {ok}, исключены {failed}, мелкие стороны вне предела dex.shallow_pools_per_pair или не пропускают сумму пробы (не сверялись, решение 393) {dust}"
         );
         if !reasons.is_empty() {
             let top = match p

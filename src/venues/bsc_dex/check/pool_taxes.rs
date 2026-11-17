@@ -92,7 +92,8 @@ pub type Others = (Vec<String>, Vec<String>, Vec<(String, Option<String>)>);
 /// причины неизмеренной продажи, причины остальных пулов, причины пулов «налоги пула не измерены» (решение 280: пара
 /// вида без роутера отклонила пробную покупку — свойство пула, НЕ помеха). Возвращает: Known — налоги по пулам (coin);
 /// покупка где-то измерена, продажа нигде — sell_verdict (Failed / Wait); иначе как до решения 146: выход 0 — Failed;
-/// настройка — Config; помеха на любом пуле — Wait (вердикт — только если каждый пул дал вердикт); вердиктов нет, а
+/// настройка — Config; помеха на любом пуле — Wait (вердикт — только если каждый пул дал вердикт), а если при этом хоть
+/// один пул дал вердикт (откат покупки или продажи) — Doubt (ревью t178, Б1: прежний «прошла» не держится); вердиктов нет, а
 /// пулы «не измерены» — Wait с их причинами (монету пробовать больше негде); иначе Failed. Пустой список «не
 /// измерены» — итог буква в букву как раньше. Ошибок нет.
 pub fn outcome(
@@ -109,6 +110,8 @@ pub fn outcome(
         let interfered = !env.is_empty() || !config.is_empty();
         return match sell_verdict(misses, interfered) {
             Ok(why) => Outcome::Failed(why),
+            // Ревью t178 (Б1): продажа где-то откатилась (вердикт по пулу) или покупка где-то откатилась — Doubt.
+            Err(why) if misses.iter().any(|m| m.0) || !failed.is_empty() => Outcome::Doubt(why),
             Err(why) => Outcome::Wait(why),
         };
     }
@@ -123,6 +126,10 @@ pub fn outcome(
         );
     }
     if !env.is_empty() {
+        // Ревью t178 (Б1): покупка откатилась хоть в одном пуле (вердикт), итога нет из-за помех на других — Doubt.
+        if !failed.is_empty() {
+            return Outcome::Doubt(format!("{}; помехи: {}", failed.join("; "), env.join("; ")));
+        }
         return Outcome::Wait(env.join("; "));
     }
     if failed.is_empty() && !unmeasured.is_empty() {

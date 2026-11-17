@@ -114,11 +114,12 @@ fn outcome_when_no_pool_measured_sell() {
         pool_taxes::outcome(&only_buy, false, &reverted, none(), &[]),
         Outcome::Failed(w) if w.contains("налог продажи не измерен")
     ));
-    // Помеха на другом пуле — вердикта нет.
+    // Помеха на другом пуле — вердикта по монете нет, но продажа откатилась в пуле: Doubt (ревью t178, Б1 — прежний
+    // «прошла» не держится).
     let env = (Vec::new(), vec!["V3: узел 429".to_string()], Vec::new());
     assert!(matches!(
         pool_taxes::outcome(&only_buy, false, &reverted, env, &[]),
-        Outcome::Wait(_)
+        Outcome::Doubt(_)
     ));
     // Квотер продажи не ответил — помеха, не вердикт.
     let no_quote = [(false, "V2: квотер продажи не ответил".to_string())];

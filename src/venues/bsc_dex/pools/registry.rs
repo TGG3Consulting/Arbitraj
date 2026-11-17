@@ -90,6 +90,8 @@ pub struct Registry {
     pub(super) holds: super::settle::Holds,
     /// Решение 382 (ревью 2, Н2): учёт доказательств «память неверна» — одно на (пул, позиция) (proof_memo.rs).
     pub(super) proofs: super::proof_memo::Memo,
+    /// Решение 393 (повторное ревью t178, Н-B1/Н-B2): память отбора мелких пулов пары (quote/shallow_memo.rs).
+    pub(super) shallow: super::super::quote::shallow_memo::Memo,
 }
 
 impl Entry {
@@ -106,6 +108,11 @@ impl Registry {
     /// Глубина пулов по направлениям (решение 73). Ошибок нет.
     pub fn depth(&self) -> &super::depth_book::Book {
         &self.depth
+    }
+
+    /// Память отбора мелких пулов пары (решение 393, quote/shallow_memo.rs). Ошибок нет.
+    pub fn shallow_memo(&self) -> &super::super::quote::shallow_memo::Memo {
+        &self.shallow
     }
 
     /// Версия реестра (решение 129): растёт при любой записи. Ошибок нет.

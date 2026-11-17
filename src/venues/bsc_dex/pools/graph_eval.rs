@@ -8,7 +8,7 @@
 //! реестра (route_cache::fresh — гидратация).
 //! Решение 336 (задача t157): evaluate при dex.graph_threads > 1 — на нескольких потоках (quote/par.rs), порядок итогов тот же.
 //! Кто вызывает: graph_work.rs, graph_full.rs, graph_round.rs.
-//! От чего зависит: graph.rs (Edge, pair_key), depth_book.rs, depth_key.rs (Prep), registry.rs, tokens.rs, ctx.rs.
+//! От чего зависит: graph.rs (Edge, pair_key), quote/side_fit.rs (мелкий пул, решение 393), depth_book.rs, depth_key.rs (Prep), registry.rs, tokens.rs, ctx.rs.
 //! Настройки: dex.graph_threads (решение 336); через книгу глубины — dex.min_pool_liquidity_usd, dex.depth_band_pct, dex.depth_hysteresis_pct [bsc_dex].
 
 use std::collections::HashSet;
@@ -20,7 +20,7 @@ use rust_decimal::Decimal;
 use crate::core::types::PoolRef;
 
 use super::super::ctx::Ctx;
-use super::super::quote::par;
+use super::super::quote::{par, shallow_pick};
 use super::super::tokens::Tokens;
 use super::depth_book::Book;
 use super::depth_key::Prep;
@@ -59,7 +59,8 @@ pub fn eval(
     let Ok(d) = reg.depth().depth_prep(ctx, reg, tokens, e, usdt_dec, prep) else {
         return rec;
     };
-    if !(d.deep_buy || d.deep_sell) {
+    // Решение 393: мелкий пул — кандидат, если хотя бы одну сторону пропускает сумма пробы (как pools/graph.rs build).
+    if !(d.deep_buy || d.deep_sell) && !shallow_pick::admitted(ctx, reg, tokens, usdt_dec, e) {
         return rec;
     }
     let edge = Edge {

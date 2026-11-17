@@ -6,7 +6,7 @@
 //! пулов точечным Multicall3 (решение 83, exec/precheck.rs): граф даёт достижимость и ликвидность на момент снимка,
 //! а не гарантию актуальности к исполнению. Отсекает заведомо непригодные рёбра: недостоверные, спящие, не входящие
 //! в граф (family.graphable=false — например V3-форк) и мелкие по обеим сторонам (не глубокие ни по одной — решение
-//! 73, стороны независимы). V2-форк (graphable, но не tradable, решение 82) в граф входит. На пару токенов
+//! 73, стороны независимы), если ни одну сторону не пропускает сумма пробы (решение 393, quote/side_fit.rs). V2-форк (graphable, но не tradable, решение 82) в граф входит. На пару токенов
 //! оставляет не больше dex.route_max_pools_per_edge самых глубоких рёбер, чтобы держать ширину перебора путей.
 //! Допуск ребра к КОТИРОВКЕ/СДЕЛКЕ (сверка с квотером, крючок, газ) проверяет quote/select.rs при оценке пути —
 //! граф даёт только достижимость и ликвидность.
@@ -23,7 +23,7 @@
 //! Решение 308: при dex.graph_background = да граф строит фоновый владелец (graph_owner.rs, накопительно — graph_work.rs,
 //! с нуля — graph_full.rs); build остаётся путём при выключенной настройке и для реестра без владельца.
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (cached), graph_cache.rs (build), graph_work.rs (from_edges).
-//! От чего зависит: pools/registry.rs, pools/depth_book.rs, tokens.rs, ctx.rs.
+//! От чего зависит: pools/registry.rs, pools/depth_book.rs, quote/side_fit.rs (решение 393), tokens.rs, ctx.rs.
 //! Настройки: dex.route_max_pools_per_edge [bsc_dex]; через depth_book — dex.min_pool_liquidity_usd,
 //! dex.depth_band_pct, dex.depth_hysteresis_pct [bsc_dex].
 
@@ -36,6 +36,7 @@ use rust_decimal::Decimal;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::quote::shallow_pick;
 use super::super::tokens::Tokens;
 use super::depth_book;
 use super::registry::{Entry, Registry};
@@ -164,7 +165,10 @@ pub fn build_measured(
         let Ok(d) = d else {
             continue;
         };
-        if !(d.deep_buy || d.deep_sell) {
+        // Решение 393 (t178): мелкий по обеим сторонам пул — в граф, если хотя бы одну сторону пропускает сумма пробы
+        // (quote/side_fit.rs): котировка берёт и мелкую сторону (quote/select.rs). Ранг — глубина: мелкие — после
+        // глубоких на той же паре.
+        if !(d.deep_buy || d.deep_sell) && !shallow_pick::admitted(ctx, reg, tokens, usdt_dec, &e) {
             continue;
         }
         let rank = d.band.buy.max(d.band.sell);

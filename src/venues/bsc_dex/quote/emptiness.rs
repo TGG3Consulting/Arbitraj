@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/quote/emptiness.rs
 //! Что делает: пустой ли пул — по его локальному состоянию: V2 — нулевой резерв, V3 и CL — ликвидность на текущем
-//! тике 0 (liquidity() / getLiquidity), Bin — в прочитанной полосе нет непустых бинов. Пустой пул — не «сбой
+//! тике 0 (liquidity() / getLiquidity) И в прочитанной карте нет ни одного установленного тика (решение 393), Bin — в прочитанной полосе нет непустых бинов. Пустой пул — не «сбой
 //! квотера»: квотер на нём откатывается (QuoterV2 — Error("Unexpected")) или считает по брошенной ликвидности далеко
 //! от рынка. Такой пул не котируется и не сверяется с квотером, пока событие (Mint / ModifyLiquidity / Sync) не вернёт
 //! ему ликвидность. Там же — причины исключения для сверки с квотером (check/quoter_cycle.rs, exec/precheck.rs).
@@ -30,14 +30,25 @@ pub fn short(detail: &str) -> String {
     format!("{SHORT} ({detail})")
 }
 
+/// Есть ли в прочитанной карте тиков пула установленный тик (ликвидность рядом с ценой). Нет карты — false. Ошибок нет.
+pub fn has_ticks(e: &Entry) -> bool {
+    e.ticks
+        .as_ref()
+        .is_some_and(|m| m.ticks.values().any(|t| t.gross > 0))
+}
+
 /// Пуст ли пул (см. шапку). Bin без прочитанных бинов — не пуст (не прочитан — это решает достоверность). Ошибок нет.
 pub fn empty(e: &Entry) -> bool {
     match &e.pool.state {
         PoolState::V2 { reserve0, reserve1 } => reserve0.is_zero() || reserve1.is_zero(),
+        // Решение 393 (t178): ликвидность 0 на ТЕКУЩЕМ тике — ещё не пустой пул, если в прочитанной карте есть
+        // установленный тик: цена в «дыре» между позициями, обмен в сторону позиции проходит дыру даром (шаг обмена
+        // при L = 0 — вход 0, цена до следующего тика: math/swap_step.rs, как SwapMath.computeSwapStep). Какая сторона
+        // реально проходит — решает расчёт стороны (quote/side_fit.rs) и сверка с квотером по стороне.
         PoolState::V3 { liquidity, .. }
         | PoolState::Cl { liquidity, .. }
         // Algebra (THENA Fusion, решения 80, 81): одна ликвидность (reinvestL нет) — пуст при liquidity == 0.
-        | PoolState::Algebra { liquidity, .. } => *liquidity == 0,
+        | PoolState::Algebra { liquidity, .. } => *liquidity == 0 && !has_ticks(e),
         // Elastic: ликвидность обмена L = base_l + reinvest_l — пуст, когда оба нуля (решение 81).
         PoolState::Elastic {
             base_l, reinvest_l, ..

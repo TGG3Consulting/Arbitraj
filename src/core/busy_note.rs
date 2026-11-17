@@ -106,7 +106,7 @@ fn deal_of(x: &Deal) -> BusyDeal {
 async fn watch(core: Core, key: CoinKey) {
     while let Ok(ms) = min_ms(&core) {
         tokio::time::sleep(Duration::from_millis(ms)).await;
-        if !super::coin_ride::held(core, &key) {
+        if !super::coin_ride::held(&core, &key) {
             break;
         }
     }

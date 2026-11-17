@@ -95,7 +95,7 @@ async fn once(core: &Core, d: &Direction, plan: Calc) -> Result<Once, String> {
     let req = super::precheck_sell::request(core, d, &plan)?;
     let tax = model_tax_pct(&plan);
     let gw = super::dex_account::venue_dir(&core.inner.deps, d, b).await?;
-    let sim = match gw.dex_presell(&req).await {
+    let mut sim = match gw.dex_presell(&req).await {
         Ok(PresellOutcome::Done(s)) => s,
         Ok(PresellOutcome::Short(s)) => return Ok(Once::Short(plan, s)),
         Err(e) if e.code == ErrorCode::NotApplicable => {
@@ -123,14 +123,9 @@ async fn once(core: &Core, d: &Direction, plan: Calc) -> Result<Once, String> {
     // Задача t179 (решение 390): идут сделки монеты, чьи монеты будут проданы в тот же пул раньше нас, — симуляция
     // (на пуле до них) может план только понизить: выход выше выручки плана (план уже посчитан ПОСЛЕ их монет,
     // ride_quote.rs) не поднимает прибыль.
-    let sim = if super::ride_quote::sell_ahead(core, d) > Decimal::ZERO && sim.out > plan.proceeds {
-        DexPresell {
-            out: plan.proceeds,
-            ..sim
-        }
-    } else {
-        sim
-    };
+    if super::ride_quote::sell_ahead(core, d) > Decimal::ZERO && sim.out > plan.proceeds {
+        sim.out = plan.proceeds;
+    }
     let text = summary(&plan, &sim, tax);
     let c = apply(plan, &sim, min_usd, min_pct).map_err(|e| format!("{e}; {text}"))?;
     log(

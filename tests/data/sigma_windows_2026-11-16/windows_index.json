@@ -1,0 +1,2294 @@
+[
+{
+"window": "20261114221311257-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-14T22:13:11.257756142Z",
+"frames_total": 77,
+"frames_decoded": 62,
+"src": "old",
+"max_profit": "0.0468547233579122215656256663"
+},
+{
+"window": "20261114221621492-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-14T22:16:21.492774063Z",
+"frames_total": 961,
+"frames_decoded": 91,
+"src": "old",
+"max_profit": "0.2129855304796559756013077201"
+},
+{
+"window": "20261115003157603-CELL",
+"ticker": "CELL",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T00:31:57.603256283Z",
+"frames_total": 205,
+"frames_decoded": 70,
+"src": "old",
+"max_profit": "0.0069061715612960146871603925"
+},
+{
+"window": "20261115011040452-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T01:10:40.452831822Z",
+"frames_total": 114,
+"frames_decoded": 84,
+"src": "old",
+"max_profit": "1.2741979084360543018224157397"
+},
+{
+"window": "20261115011100326-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T01:11:00.326781004Z",
+"frames_total": 54,
+"frames_decoded": 41,
+"src": "old",
+"max_profit": "0.3382173430077821593561277396"
+},
+{
+"window": "20261115011114542-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T01:11:14.542721439Z",
+"frames_total": 37,
+"frames_decoded": 24,
+"src": "old",
+"max_profit": "0.0188785688107852537006103889"
+},
+{
+"window": "20261115013700012-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T01:37:00.012524333Z",
+"frames_total": 160,
+"frames_decoded": 98,
+"src": "old",
+"max_profit": "0.0792864854160733847207374655"
+},
+{
+"window": "20261115014144928-HOLD",
+"ticker": "HOLD",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T01:41:44.928888965Z",
+"frames_total": 135,
+"frames_decoded": 74,
+"src": "old",
+"max_profit": "0.1016576226920975710132975372"
+},
+{
+"window": "20261115014303581-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T01:43:03.581729913Z",
+"frames_total": 135,
+"frames_decoded": 88,
+"src": "old",
+"max_profit": "0.0591871507754287888844020797"
+},
+{
+"window": "20261115014706266-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T01:47:06.266869776Z",
+"frames_total": 274,
+"frames_decoded": 79,
+"src": "old",
+"max_profit": "0.040730268976822790000000695"
+},
+{
+"window": "20261115021640940-RLS",
+"ticker": "RLS",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T02:16:40.940902334Z",
+"frames_total": 284,
+"frames_decoded": 73,
+"src": "old",
+"max_profit": "0.0128550588534809547380446606"
+},
+{
+"window": "20261115021850294-XLM",
+"ticker": "XLM",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T02:18:50.294872611Z",
+"frames_total": 12,
+"frames_decoded": 7,
+"src": "old",
+"max_profit": "0.2503545356352669691925533778"
+},
+{
+"window": "20261115025141703-UAI",
+"ticker": "UAI",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T02:51:41.703897318Z",
+"frames_total": 1428,
+"frames_decoded": 86,
+"src": "old",
+"max_profit": "0.0258207022273300481454506634"
+},
+{
+"window": "20261115030646564-RLS",
+"ticker": "RLS",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T03:06:46.564132256Z",
+"frames_total": 218,
+"frames_decoded": 91,
+"src": "old",
+"max_profit": "0.0154116054511528724631152662"
+},
+{
+"window": "20261115031513354-RLS",
+"ticker": "RLS",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T03:15:13.354672340Z",
+"frames_total": 395,
+"frames_decoded": 102,
+"src": "old",
+"max_profit": "0.0236082022477628199290841134"
+},
+{
+"window": "20261115045337049-FOREST",
+"ticker": "FOREST",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T04:53:37.049343589Z",
+"frames_total": 615,
+"frames_decoded": 181,
+"src": "old",
+"max_profit": "0.3579218235317076756589902677"
+},
+{
+"window": "20261115045357316-KDX",
+"ticker": "KDX",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T04:53:57.316893615Z",
+"frames_total": 111,
+"frames_decoded": 75,
+"src": "old",
+"max_profit": "0.0152263051215978508703746042"
+},
+{
+"window": "20261115050815711-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T05:08:15.711701524Z",
+"frames_total": 80,
+"frames_decoded": 73,
+"src": "old",
+"max_profit": "0.047525985097994209999997658"
+},
+{
+"window": "20261115050916090-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T05:09:16.090520391Z",
+"frames_total": 99,
+"frames_decoded": 96,
+"src": "old",
+"max_profit": "0.08433585455010077199999975"
+},
+{
+"window": "20261115051052255-FAR",
+"ticker": "FAR",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T05:10:52.255291495Z",
+"frames_total": 189,
+"frames_decoded": 169,
+"src": "old",
+"max_profit": "0.0060865755066647598747045061"
+},
+{
+"window": "20261115052205546-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T05:22:05.546783349Z",
+"frames_total": 84,
+"frames_decoded": 79,
+"src": "old",
+"max_profit": "0.064379984947544022000002266"
+},
+{
+"window": "20261115055910889-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T05:59:10.889913405Z",
+"frames_total": 116,
+"frames_decoded": 24,
+"src": "old",
+"max_profit": "0.0510767271408335833804313003"
+},
+{
+"window": "20261115063900060-CMC20",
+"ticker": "CMC20",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T06:39:00.060253260Z",
+"frames_total": 9,
+"frames_decoded": 5,
+"src": "old",
+"max_profit": "0.0147712704001378860297224423"
+},
+{
+"window": "20261115074601835-ALE",
+"ticker": "ALE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T07:46:01.835240182Z",
+"frames_total": 121,
+"frames_decoded": 84,
+"src": "old",
+"max_profit": "0.0065077312154597010849684667"
+},
+{
+"window": "20261115082718386-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T08:27:18.386150005Z",
+"frames_total": 281,
+"frames_decoded": 26,
+"src": "old",
+"max_profit": "0.0517974749010209544583739202"
+},
+{
+"window": "20261115082739012-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T08:27:39.012055975Z",
+"frames_total": 692,
+"frames_decoded": 75,
+"src": "old",
+"max_profit": "0.4409416767745943156121260887"
+},
+{
+"window": "20261115084918898-BTCMT",
+"ticker": "BTCMT",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T08:49:18.898391739Z",
+"frames_total": 182,
+"frames_decoded": 116,
+"src": "old",
+"max_profit": "0.0500332197192023649520208163"
+},
+{
+"window": "20261115093700763-CREO",
+"ticker": "CREO",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T09:37:00.763278277Z",
+"frames_total": 25,
+"frames_decoded": 20,
+"src": "old",
+"max_profit": "0.6829102324513083799218856105"
+},
+{
+"window": "20261115101451566-GTAI",
+"ticker": "GTAI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T10:14:51.566736211Z",
+"frames_total": 73,
+"frames_decoded": 39,
+"src": "old",
+"max_profit": "0.7288112930978559265536771303"
+},
+{
+"window": "20261115102832235-BTCMT",
+"ticker": "BTCMT",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T10:28:32.235071580Z",
+"frames_total": 214,
+"frames_decoded": 121,
+"src": "old",
+"max_profit": "0.0909267425582673069885817078"
+},
+{
+"window": "20261115121317836-CREO",
+"ticker": "CREO",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T12:13:17.836474397Z",
+"frames_total": 61,
+"frames_decoded": 50,
+"src": "old",
+"max_profit": "0.1729344953216437141617020196"
+},
+{
+"window": "20261115122724186-WFI",
+"ticker": "WFI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T12:27:24.186724322Z",
+"frames_total": 82,
+"frames_decoded": 76,
+"src": "old",
+"max_profit": "1.5888436845139871321830690663"
+},
+{
+"window": "20261115123748020-CREO",
+"ticker": "CREO",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T12:37:48.020227365Z",
+"frames_total": 194,
+"frames_decoded": 70,
+"src": "old",
+"max_profit": "0.0335740643236697002662135173"
+},
+{
+"window": "20261115124245467-WFI",
+"ticker": "WFI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T12:42:45.467997195Z",
+"frames_total": 314,
+"frames_decoded": 136,
+"src": "old",
+"max_profit": "1.4709661772430371098077507719"
+},
+{
+"window": "20261115124857200-WFI",
+"ticker": "WFI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T12:48:57.200195363Z",
+"frames_total": 288,
+"frames_decoded": 133,
+"src": "old",
+"max_profit": "1.2142539808351247157969879631"
+},
+{
+"window": "20261115125040191-WFI",
+"ticker": "WFI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T12:50:40.191580657Z",
+"frames_total": 456,
+"frames_decoded": 229,
+"src": "old",
+"max_profit": "1.8394537535540863876029866358"
+},
+{
+"window": "20261115131815353-WFI",
+"ticker": "WFI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T13:18:15.353044105Z",
+"frames_total": 370,
+"frames_decoded": 230,
+"src": "old",
+"max_profit": "3.0699531161788068604699223281"
+},
+{
+"window": "20261115133347240-FAR",
+"ticker": "FAR",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T13:33:47.240592761Z",
+"frames_total": 469,
+"frames_decoded": 458,
+"src": "old",
+"max_profit": "0.0599837298748687502617406704"
+},
+{
+"window": "20261115134308066-JCT",
+"ticker": "JCT",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T13:43:08.066865943Z",
+"frames_total": 31,
+"frames_decoded": 24,
+"src": "old",
+"max_profit": "4.385969019114313927405847100"
+},
+{
+"window": "20261115134331294-JCT",
+"ticker": "JCT",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T13:43:31.294893114Z",
+"frames_total": 5,
+"frames_decoded": 3,
+"src": "old",
+"max_profit": "0.311411552067731700695095943"
+},
+{
+"window": "20261115140431006-LAB",
+"ticker": "LAB",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T14:04:31.006304479Z",
+"frames_total": 8,
+"frames_decoded": 6,
+"src": "old",
+"max_profit": "0.0125333376685328695617439265"
+},
+{
+"window": "20261115140439965-ALE",
+"ticker": "ALE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:04:39.965813548Z",
+"frames_total": 134,
+"frames_decoded": 91,
+"src": "old",
+"max_profit": "0.0052772019638635963635840064"
+},
+{
+"window": "20261115140452177-LAB",
+"ticker": "LAB",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T14:04:52.177995761Z",
+"frames_total": 35,
+"frames_decoded": 24,
+"src": "old",
+"max_profit": "0.0484556244349230809038531970"
+},
+{
+"window": "20261115140526837-VELO",
+"ticker": "VELO",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T14:05:26.837212106Z",
+"frames_total": 6,
+"frames_decoded": 5,
+"src": "old",
+"max_profit": "0.013979116385454731999999290"
+},
+{
+"window": "20261115142629251-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:26:29.251111287Z",
+"frames_total": 79,
+"frames_decoded": 69,
+"src": "old",
+"max_profit": "0.032073899444264906000001488"
+},
+{
+"window": "20261115142710217-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:27:10.217385696Z",
+"frames_total": 148,
+"frames_decoded": 126,
+"src": "old",
+"max_profit": "0.0158748736528373685398783519"
+},
+{
+"window": "20261115142927903-ALE",
+"ticker": "ALE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:29:27.903831484Z",
+"frames_total": 114,
+"frames_decoded": 92,
+"src": "old",
+"max_profit": "0.0161582316788442374356373631"
+},
+{
+"window": "20261115143114255-WOTAMALAILE",
+"ticker": "WOTAMALAILE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:31:14.255459658Z",
+"frames_total": 298,
+"frames_decoded": 78,
+"src": "old",
+"max_profit": "0.0183678133469614391529436991"
+},
+{
+"window": "20261115143832207-WOTAMALAILE",
+"ticker": "WOTAMALAILE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:38:32.207416872Z",
+"frames_total": 315,
+"frames_decoded": 82,
+"src": "old",
+"max_profit": "0.0121102419592765180845048594"
+},
+{
+"window": "20261115144011005-WOTAMALAILE",
+"ticker": "WOTAMALAILE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:40:11.005789417Z",
+"frames_total": 224,
+"frames_decoded": 65,
+"src": "old",
+"max_profit": "0.0304086206807003073583345003"
+},
+{
+"window": "20261115144111501-ALE",
+"ticker": "ALE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:41:11.501517002Z",
+"frames_total": 80,
+"frames_decoded": 65,
+"src": "old",
+"max_profit": "0.0155744044914106276440710727"
+},
+{
+"window": "20261115144202813-",
+"ticker": "龙虾",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:42:02.813171313Z",
+"frames_total": 525,
+"frames_decoded": 108,
+"src": "old",
+"max_profit": "0.0064554957798155233281846595"
+},
+{
+"window": "20261115175831537-RLS",
+"ticker": "RLS",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T17:58:31.537695092Z",
+"frames_total": 167,
+"frames_decoded": 89,
+"src": "old",
+"max_profit": "0.1250265840609818323962644367"
+},
+{
+"window": "20261115190816349-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:08:16.349658712Z",
+"frames_total": 76,
+"frames_decoded": 11,
+"src": "old",
+"max_profit": "0.007593959768727404999999992"
+},
+{
+"window": "20261115190824003-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:08:24.003651576Z",
+"frames_total": 36,
+"frames_decoded": 8,
+"src": "old",
+"max_profit": "0.023496091063279059000000001"
+},
+{
+"window": "20261115191343540-",
+"ticker": "龙虾",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:13:43.540147949Z",
+"frames_total": 93,
+"frames_decoded": 46,
+"src": "old",
+"max_profit": "0.0153872711737924370000000016"
+},
+{
+"window": "20261115191431827-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:14:31.827358719Z",
+"frames_total": 95,
+"frames_decoded": 93,
+"src": "old",
+"max_profit": "0.070186805897337893999997430"
+},
+{
+"window": "20261115191703949-",
+"ticker": "龙虾",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:17:03.949227313Z",
+"frames_total": 24,
+"frames_decoded": 15,
+"src": "old",
+"max_profit": "0.0074314865901326198321798193"
+},
+{
+"window": "20261115191748402-",
+"ticker": "龙虾",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:17:48.402088775Z",
+"frames_total": 50,
+"frames_decoded": 16,
+"src": "old",
+"max_profit": "0.0062484539759159965767957473"
+},
+{
+"window": "20261115191757635-",
+"ticker": "龙虾",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:17:57.635396900Z",
+"frames_total": 261,
+"frames_decoded": 117,
+"src": "old",
+"max_profit": "0.0082460096463294862388788466"
+},
+{
+"window": "20261115194259264-FAR",
+"ticker": "FAR",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:42:59.264703912Z",
+"frames_total": 403,
+"frames_decoded": 388,
+"src": "old",
+"max_profit": "0.086244206783962237000002723"
+},
+{
+"window": "20261115201607246-USDC",
+"ticker": "USDC",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T20:16:07.246510209Z",
+"frames_total": 38,
+"frames_decoded": 12,
+"src": "old",
+"max_profit": "0.0211742271901627378625362414"
+},
+{
+"window": "20261115203139452-FOREST",
+"ticker": "FOREST",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T20:31:39.452052774Z",
+"frames_total": 269,
+"frames_decoded": 68,
+"src": "old",
+"max_profit": "0.0623417640203685806517824669"
+},
+{
+"window": "20261115212042974-DOGE",
+"ticker": "DOGE",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T21:20:42.974811596Z",
+"frames_total": 235,
+"frames_decoded": 170,
+"src": "old",
+"max_profit": "0.0917822662722217374316165722"
+},
+{
+"window": "20261115221618634-ZIG",
+"ticker": "ZIG",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T22:16:18.634259655Z",
+"frames_total": 1104,
+"frames_decoded": 75,
+"src": "old",
+"max_profit": "0.1347199986203142238731759571"
+},
+{
+"window": "20261115234106922-SHOPINX",
+"ticker": "SHOPINX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T23:41:06.922558638Z",
+"frames_total": 179,
+"frames_decoded": 142,
+"src": "old",
+"max_profit": "5.4686241772227206669725452094"
+},
+{
+"window": "20261116014522682-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T01:45:22.682844770Z",
+"frames_total": 109,
+"frames_decoded": 6,
+"src": "old",
+"max_profit": "0.0165686450634802729346343681"
+},
+{
+"window": "20261116014529294-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T01:45:29.294026013Z",
+"frames_total": 587,
+"frames_decoded": 21,
+"src": "old",
+"max_profit": "0.0424382766420900158755744019"
+},
+{
+"window": "20261116015725421-NODE",
+"ticker": "NODE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T01:57:25.421698036Z",
+"frames_total": 20,
+"frames_decoded": 10,
+"src": "old",
+"max_profit": "0.4580932870105664589809722525"
+},
+{
+"window": "20261116015758629-NODE",
+"ticker": "NODE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T01:57:58.629177359Z",
+"frames_total": 195,
+"frames_decoded": 70,
+"src": "old",
+"max_profit": "0.4009230282103746649248840831"
+},
+{
+"window": "20261116031023976-FOREST",
+"ticker": "FOREST",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T03:10:23.976479054Z",
+"frames_total": 288,
+"frames_decoded": 82,
+"src": "old",
+"max_profit": "0.0333105363382984168268390031"
+},
+{
+"window": "20261116053248707-ZIG",
+"ticker": "ZIG",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T05:32:48.707628927Z",
+"frames_total": 91,
+"frames_decoded": 12,
+"src": "old",
+"max_profit": "0.1912789114381158266279095532"
+},
+{
+"window": "20261116071913116-STBL",
+"ticker": "STBL",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T07:19:13.116734832Z",
+"frames_total": 22,
+"frames_decoded": 14,
+"src": "old",
+"max_profit": "0.0187042902285639389902347504"
+},
+{
+"window": "20261116094756093-FOREST",
+"ticker": "FOREST",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T09:47:56.093738322Z",
+"frames_total": 192,
+"frames_decoded": 76,
+"src": "old",
+"max_profit": "0.0204730255547018025092319524"
+},
+{
+"window": "20261116101631832-ERA",
+"ticker": "ERA",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T10:16:31.832679592Z",
+"frames_total": 9,
+"frames_decoded": 7,
+"src": "old",
+"max_profit": "0.2266975372354167879999999916"
+},
+{
+"window": "20261116102303003-SHOPINX",
+"ticker": "SHOPINX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T10:23:03.003967167Z",
+"frames_total": 263,
+"frames_decoded": 234,
+"src": "old",
+"max_profit": "77.768105280919407347862904400"
+},
+{
+"window": "20261116123655759-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T12:36:55.759663983Z",
+"frames_total": 21,
+"frames_decoded": 6,
+"src": "old",
+"max_profit": "0.1433353608580791865156670882"
+},
+{
+"window": "20261116125524084-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T12:55:24.084723622Z",
+"frames_total": 211,
+"frames_decoded": 79,
+"src": "old",
+"max_profit": "0.0399334469331622297517253438"
+},
+{
+"window": "20261116131536092-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T13:15:36.092076949Z",
+"frames_total": 192,
+"frames_decoded": 80,
+"src": "old",
+"max_profit": "0.0133490685846683614975376593"
+},
+{
+"window": "20261116131817240-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T13:18:17.240766323Z",
+"frames_total": 206,
+"frames_decoded": 98,
+"src": "old",
+"max_profit": "0.0342426493263518149892898984"
+},
+{
+"window": "20261116132148164-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T13:21:48.164229424Z",
+"frames_total": 256,
+"frames_decoded": 94,
+"src": "old",
+"max_profit": "0.0210218250571445711045249558"
+},
+{
+"window": "20261116144402757-BTCMT",
+"ticker": "BTCMT",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:44:02.757159075Z",
+"frames_total": 294,
+"frames_decoded": 86,
+"src": "old",
+"max_profit": "0.1438749083804566080656610862"
+},
+{
+"window": "20261116144815805-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:48:15.805272522Z",
+"frames_total": 873,
+"frames_decoded": 81,
+"src": "old",
+"max_profit": "0.21737871807685597300000009"
+},
+{
+"window": "20261116144856325-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:48:56.325134054Z",
+"frames_total": 815,
+"frames_decoded": 80,
+"src": "old",
+"max_profit": "0.040257794017106491000000001"
+},
+{
+"window": "20261116144936024-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:49:36.024059082Z",
+"frames_total": 849,
+"frames_decoded": 79,
+"src": "old",
+"max_profit": "0.079988647103116820000000013"
+},
+{
+"window": "20261116145036329-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:50:36.329862429Z",
+"frames_total": 744,
+"frames_decoded": 80,
+"src": "old",
+"max_profit": "0.014046377906701089999999995"
+},
+{
+"window": "20261116145116611-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:51:16.611398363Z",
+"frames_total": 1015,
+"frames_decoded": 73,
+"src": "old",
+"max_profit": "0.016276547672039378000000022"
+},
+{
+"window": "20261116145958162-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:59:58.162857246Z",
+"frames_total": 474,
+"frames_decoded": 113,
+"src": "old",
+"max_profit": "0.0861467727891206215344812238"
+},
+{
+"window": "20261116151945090-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T15:19:45.090426663Z",
+"frames_total": 32,
+"frames_decoded": 9,
+"src": "old",
+"max_profit": "0.034422259695105221000000256"
+},
+{
+"window": "20261116154014454-BTCMT",
+"ticker": "BTCMT",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T15:40:14.454980221Z",
+"frames_total": 9,
+"frames_decoded": 9,
+"src": "old",
+"max_profit": "0.0876189659662036120899126357"
+},
+{
+"window": "20261116160841767-ZIG",
+"ticker": "ZIG",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T16:08:41.767679878Z",
+"frames_total": 680,
+"frames_decoded": 25,
+"src": "old",
+"max_profit": "0.2118831597777607474614198258"
+},
+{
+"window": "20261114221311257-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-14T22:13:11.257756142Z",
+"frames_total": 77,
+"frames_decoded": 62,
+"src": "new",
+"max_profit": "0.0468547233579122215656256663"
+},
+{
+"window": "20261114221621492-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-14T22:16:21.492774063Z",
+"frames_total": 961,
+"frames_decoded": 91,
+"src": "new",
+"max_profit": "0.2129855304796559756013077201"
+},
+{
+"window": "20261115003157603-CELL",
+"ticker": "CELL",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T00:31:57.603256283Z",
+"frames_total": 205,
+"frames_decoded": 70,
+"src": "new",
+"max_profit": "0.0069061715612960146871603925"
+},
+{
+"window": "20261115011040452-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T01:10:40.452831822Z",
+"frames_total": 114,
+"frames_decoded": 84,
+"src": "new",
+"max_profit": "1.2741979084360543018224157397"
+},
+{
+"window": "20261115011100326-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T01:11:00.326781004Z",
+"frames_total": 54,
+"frames_decoded": 41,
+"src": "new",
+"max_profit": "0.3382173430077821593561277396"
+},
+{
+"window": "20261115011114542-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T01:11:14.542721439Z",
+"frames_total": 37,
+"frames_decoded": 24,
+"src": "new",
+"max_profit": "0.0188785688107852537006103889"
+},
+{
+"window": "20261115013700012-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T01:37:00.012524333Z",
+"frames_total": 160,
+"frames_decoded": 98,
+"src": "new",
+"max_profit": "0.0792864854160733847207374655"
+},
+{
+"window": "20261115014144928-HOLD",
+"ticker": "HOLD",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T01:41:44.928888965Z",
+"frames_total": 135,
+"frames_decoded": 74,
+"src": "new",
+"max_profit": "0.1016576226920975710132975372"
+},
+{
+"window": "20261115014303581-AVAX",
+"ticker": "AVAX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T01:43:03.581729913Z",
+"frames_total": 135,
+"frames_decoded": 88,
+"src": "new",
+"max_profit": "0.0591871507754287888844020797"
+},
+{
+"window": "20261115014706266-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T01:47:06.266869776Z",
+"frames_total": 274,
+"frames_decoded": 79,
+"src": "new",
+"max_profit": "0.040730268976822790000000695"
+},
+{
+"window": "20261115021640940-RLS",
+"ticker": "RLS",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T02:16:40.940902334Z",
+"frames_total": 284,
+"frames_decoded": 73,
+"src": "new",
+"max_profit": "0.0128550588534809547380446606"
+},
+{
+"window": "20261115021850294-XLM",
+"ticker": "XLM",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T02:18:50.294872611Z",
+"frames_total": 12,
+"frames_decoded": 7,
+"src": "new",
+"max_profit": "0.2503545356352669691925533778"
+},
+{
+"window": "20261115025141703-UAI",
+"ticker": "UAI",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T02:51:41.703897318Z",
+"frames_total": 1428,
+"frames_decoded": 86,
+"src": "new",
+"max_profit": "0.0258207022273300481454506634"
+},
+{
+"window": "20261115030646564-RLS",
+"ticker": "RLS",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T03:06:46.564132256Z",
+"frames_total": 218,
+"frames_decoded": 91,
+"src": "new",
+"max_profit": "0.0154116054511528724631152662"
+},
+{
+"window": "20261115031513354-RLS",
+"ticker": "RLS",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T03:15:13.354672340Z",
+"frames_total": 395,
+"frames_decoded": 102,
+"src": "new",
+"max_profit": "0.0236082022477628199290841134"
+},
+{
+"window": "20261115045337049-FOREST",
+"ticker": "FOREST",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T04:53:37.049343589Z",
+"frames_total": 615,
+"frames_decoded": 181,
+"src": "new",
+"max_profit": "0.3579218235317076756589902677"
+},
+{
+"window": "20261115045357316-KDX",
+"ticker": "KDX",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T04:53:57.316893615Z",
+"frames_total": 111,
+"frames_decoded": 75,
+"src": "new",
+"max_profit": "0.0152263051215978508703746042"
+},
+{
+"window": "20261115050815711-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T05:08:15.711701524Z",
+"frames_total": 80,
+"frames_decoded": 73,
+"src": "new",
+"max_profit": "0.047525985097994209999997658"
+},
+{
+"window": "20261115050916090-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T05:09:16.090520391Z",
+"frames_total": 99,
+"frames_decoded": 96,
+"src": "new",
+"max_profit": "0.08433585455010077199999975"
+},
+{
+"window": "20261115051052255-FAR",
+"ticker": "FAR",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T05:10:52.255291495Z",
+"frames_total": 189,
+"frames_decoded": 169,
+"src": "new",
+"max_profit": "0.0060865755066647598747045061"
+},
+{
+"window": "20261115052205546-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T05:22:05.546783349Z",
+"frames_total": 84,
+"frames_decoded": 79,
+"src": "new",
+"max_profit": "0.064379984947544022000002266"
+},
+{
+"window": "20261115055910889-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T05:59:10.889913405Z",
+"frames_total": 116,
+"frames_decoded": 24,
+"src": "new",
+"max_profit": "0.0510767271408335833804313003"
+},
+{
+"window": "20261115063900060-CMC20",
+"ticker": "CMC20",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T06:39:00.060253260Z",
+"frames_total": 9,
+"frames_decoded": 5,
+"src": "new",
+"max_profit": "0.0147712704001378860297224423"
+},
+{
+"window": "20261115074601835-ALE",
+"ticker": "ALE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T07:46:01.835240182Z",
+"frames_total": 121,
+"frames_decoded": 84,
+"src": "new",
+"max_profit": "0.0065077312154597010849684667"
+},
+{
+"window": "20261115082718386-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T08:27:18.386150005Z",
+"frames_total": 281,
+"frames_decoded": 26,
+"src": "new",
+"max_profit": "0.0517974749010209544583739202"
+},
+{
+"window": "20261115082739012-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T08:27:39.012055975Z",
+"frames_total": 692,
+"frames_decoded": 75,
+"src": "new",
+"max_profit": "0.4409416767745943156121260887"
+},
+{
+"window": "20261115084918898-BTCMT",
+"ticker": "BTCMT",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T08:49:18.898391739Z",
+"frames_total": 182,
+"frames_decoded": 116,
+"src": "new",
+"max_profit": "0.0500332197192023649520208163"
+},
+{
+"window": "20261115093700763-CREO",
+"ticker": "CREO",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T09:37:00.763278277Z",
+"frames_total": 25,
+"frames_decoded": 20,
+"src": "new",
+"max_profit": "0.6829102324513083799218856105"
+},
+{
+"window": "20261115101451566-GTAI",
+"ticker": "GTAI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T10:14:51.566736211Z",
+"frames_total": 73,
+"frames_decoded": 39,
+"src": "new",
+"max_profit": "0.7288112930978559265536771303"
+},
+{
+"window": "20261115102832235-BTCMT",
+"ticker": "BTCMT",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T10:28:32.235071580Z",
+"frames_total": 214,
+"frames_decoded": 121,
+"src": "new",
+"max_profit": "0.0909267425582673069885817078"
+},
+{
+"window": "20261115121317836-CREO",
+"ticker": "CREO",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T12:13:17.836474397Z",
+"frames_total": 61,
+"frames_decoded": 50,
+"src": "new",
+"max_profit": "0.1729344953216437141617020196"
+},
+{
+"window": "20261115122724186-WFI",
+"ticker": "WFI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T12:27:24.186724322Z",
+"frames_total": 82,
+"frames_decoded": 76,
+"src": "new",
+"max_profit": "1.5888436845139871321830690663"
+},
+{
+"window": "20261115123748020-CREO",
+"ticker": "CREO",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T12:37:48.020227365Z",
+"frames_total": 194,
+"frames_decoded": 70,
+"src": "new",
+"max_profit": "0.0335740643236697002662135173"
+},
+{
+"window": "20261115124245467-WFI",
+"ticker": "WFI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T12:42:45.467997195Z",
+"frames_total": 314,
+"frames_decoded": 136,
+"src": "new",
+"max_profit": "1.4709661772430371098077507719"
+},
+{
+"window": "20261115124857200-WFI",
+"ticker": "WFI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T12:48:57.200195363Z",
+"frames_total": 288,
+"frames_decoded": 133,
+"src": "new",
+"max_profit": "1.2142539808351247157969879631"
+},
+{
+"window": "20261115125040191-WFI",
+"ticker": "WFI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T12:50:40.191580657Z",
+"frames_total": 456,
+"frames_decoded": 229,
+"src": "new",
+"max_profit": "1.8394537535540863876029866358"
+},
+{
+"window": "20261115131815353-WFI",
+"ticker": "WFI",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T13:18:15.353044105Z",
+"frames_total": 370,
+"frames_decoded": 230,
+"src": "new",
+"max_profit": "3.0699531161788068604699223281"
+},
+{
+"window": "20261115133347240-FAR",
+"ticker": "FAR",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T13:33:47.240592761Z",
+"frames_total": 469,
+"frames_decoded": 458,
+"src": "new",
+"max_profit": "0.0599837298748687502617406704"
+},
+{
+"window": "20261115134308066-JCT",
+"ticker": "JCT",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T13:43:08.066865943Z",
+"frames_total": 31,
+"frames_decoded": 24,
+"src": "new",
+"max_profit": "4.385969019114313927405847100"
+},
+{
+"window": "20261115134331294-JCT",
+"ticker": "JCT",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T13:43:31.294893114Z",
+"frames_total": 5,
+"frames_decoded": 3,
+"src": "new",
+"max_profit": "0.311411552067731700695095943"
+},
+{
+"window": "20261115140431006-LAB",
+"ticker": "LAB",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T14:04:31.006304479Z",
+"frames_total": 8,
+"frames_decoded": 6,
+"src": "new",
+"max_profit": "0.0125333376685328695617439265"
+},
+{
+"window": "20261115140439965-ALE",
+"ticker": "ALE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:04:39.965813548Z",
+"frames_total": 134,
+"frames_decoded": 91,
+"src": "new",
+"max_profit": "0.0052772019638635963635840064"
+},
+{
+"window": "20261115140452177-LAB",
+"ticker": "LAB",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T14:04:52.177995761Z",
+"frames_total": 35,
+"frames_decoded": 24,
+"src": "new",
+"max_profit": "0.0484556244349230809038531970"
+},
+{
+"window": "20261115140526837-VELO",
+"ticker": "VELO",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T14:05:26.837212106Z",
+"frames_total": 6,
+"frames_decoded": 5,
+"src": "new",
+"max_profit": "0.013979116385454731999999290"
+},
+{
+"window": "20261115142629251-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:26:29.251111287Z",
+"frames_total": 79,
+"frames_decoded": 69,
+"src": "new",
+"max_profit": "0.032073899444264906000001488"
+},
+{
+"window": "20261115142710217-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:27:10.217385696Z",
+"frames_total": 148,
+"frames_decoded": 126,
+"src": "new",
+"max_profit": "0.0158748736528373685398783519"
+},
+{
+"window": "20261115142927903-ALE",
+"ticker": "ALE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:29:27.903831484Z",
+"frames_total": 114,
+"frames_decoded": 92,
+"src": "new",
+"max_profit": "0.0161582316788442374356373631"
+},
+{
+"window": "20261115143114255-WOTAMALAILE",
+"ticker": "WOTAMALAILE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:31:14.255459658Z",
+"frames_total": 298,
+"frames_decoded": 78,
+"src": "new",
+"max_profit": "0.0183678133469614391529436991"
+},
+{
+"window": "20261115143832207-WOTAMALAILE",
+"ticker": "WOTAMALAILE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:38:32.207416872Z",
+"frames_total": 315,
+"frames_decoded": 82,
+"src": "new",
+"max_profit": "0.0121102419592765180845048594"
+},
+{
+"window": "20261115144011005-WOTAMALAILE",
+"ticker": "WOTAMALAILE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:40:11.005789417Z",
+"frames_total": 224,
+"frames_decoded": 65,
+"src": "new",
+"max_profit": "0.0304086206807003073583345003"
+},
+{
+"window": "20261115144111501-ALE",
+"ticker": "ALE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:41:11.501517002Z",
+"frames_total": 80,
+"frames_decoded": 65,
+"src": "new",
+"max_profit": "0.0155744044914106276440710727"
+},
+{
+"window": "20261115144202813-",
+"ticker": "龙虾",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T14:42:02.813171313Z",
+"frames_total": 525,
+"frames_decoded": 108,
+"src": "new",
+"max_profit": "0.0064554957798155233281846595"
+},
+{
+"window": "20261115175831537-RLS",
+"ticker": "RLS",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T17:58:31.537695092Z",
+"frames_total": 167,
+"frames_decoded": 89,
+"src": "new",
+"max_profit": "0.1250265840609818323962644367"
+},
+{
+"window": "20261115190816349-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:08:16.349658712Z",
+"frames_total": 76,
+"frames_decoded": 11,
+"src": "new",
+"max_profit": "0.007593959768727404999999992"
+},
+{
+"window": "20261115190824003-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:08:24.003651576Z",
+"frames_total": 36,
+"frames_decoded": 8,
+"src": "new",
+"max_profit": "0.023496091063279059000000001"
+},
+{
+"window": "20261115191343540-",
+"ticker": "龙虾",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:13:43.540147949Z",
+"frames_total": 93,
+"frames_decoded": 46,
+"src": "new",
+"max_profit": "0.0153872711737924370000000016"
+},
+{
+"window": "20261115191431827-LUCKY",
+"ticker": "LUCKY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:14:31.827358719Z",
+"frames_total": 95,
+"frames_decoded": 93,
+"src": "new",
+"max_profit": "0.070186805897337893999997430"
+},
+{
+"window": "20261115191703949-",
+"ticker": "龙虾",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:17:03.949227313Z",
+"frames_total": 24,
+"frames_decoded": 15,
+"src": "new",
+"max_profit": "0.0074314865901326198321798193"
+},
+{
+"window": "20261115191748402-",
+"ticker": "龙虾",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:17:48.402088775Z",
+"frames_total": 50,
+"frames_decoded": 16,
+"src": "new",
+"max_profit": "0.0062484539759159965767957473"
+},
+{
+"window": "20261115191757635-",
+"ticker": "龙虾",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:17:57.635396900Z",
+"frames_total": 261,
+"frames_decoded": 117,
+"src": "new",
+"max_profit": "0.0082460096463294862388788466"
+},
+{
+"window": "20261115194259264-FAR",
+"ticker": "FAR",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T19:42:59.264703912Z",
+"frames_total": 403,
+"frames_decoded": 388,
+"src": "new",
+"max_profit": "0.086244206783962237000002723"
+},
+{
+"window": "20261115201607246-USDC",
+"ticker": "USDC",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T20:16:07.246510209Z",
+"frames_total": 38,
+"frames_decoded": 12,
+"src": "new",
+"max_profit": "0.0211742271901627378625362414"
+},
+{
+"window": "20261115203139452-FOREST",
+"ticker": "FOREST",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T20:31:39.452052774Z",
+"frames_total": 269,
+"frames_decoded": 68,
+"src": "new",
+"max_profit": "0.0623417640203685806517824669"
+},
+{
+"window": "20261115212042974-DOGE",
+"ticker": "DOGE",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T21:20:42.974811596Z",
+"frames_total": 235,
+"frames_decoded": 170,
+"src": "new",
+"max_profit": "0.0917822662722217374316165722"
+},
+{
+"window": "20261115221618634-ZIG",
+"ticker": "ZIG",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-15T22:16:18.634259655Z",
+"frames_total": 1104,
+"frames_decoded": 75,
+"src": "new",
+"max_profit": "0.1347199986203142238731759571"
+},
+{
+"window": "20261115234106922-SHOPINX",
+"ticker": "SHOPINX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-15T23:41:06.922558638Z",
+"frames_total": 179,
+"frames_decoded": 142,
+"src": "new",
+"max_profit": "5.4686241772227206669725452094"
+},
+{
+"window": "20261116014522682-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T01:45:22.682844770Z",
+"frames_total": 109,
+"frames_decoded": 6,
+"src": "new",
+"max_profit": "0.0165686450634802729346343681"
+},
+{
+"window": "20261116014529294-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T01:45:29.294026013Z",
+"frames_total": 587,
+"frames_decoded": 21,
+"src": "new",
+"max_profit": "0.0424382766420900158755744019"
+},
+{
+"window": "20261116015725421-NODE",
+"ticker": "NODE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T01:57:25.421698036Z",
+"frames_total": 20,
+"frames_decoded": 10,
+"src": "new",
+"max_profit": "0.4580932870105664589809722525"
+},
+{
+"window": "20261116015758629-NODE",
+"ticker": "NODE",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T01:57:58.629177359Z",
+"frames_total": 195,
+"frames_decoded": 70,
+"src": "new",
+"max_profit": "0.4009230282103746649248840831"
+},
+{
+"window": "20261116031023976-FOREST",
+"ticker": "FOREST",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T03:10:23.976479054Z",
+"frames_total": 288,
+"frames_decoded": 82,
+"src": "new",
+"max_profit": "0.0333105363382984168268390031"
+},
+{
+"window": "20261116053248707-ZIG",
+"ticker": "ZIG",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T05:32:48.707628927Z",
+"frames_total": 91,
+"frames_decoded": 12,
+"src": "new",
+"max_profit": "0.1912789114381158266279095532"
+},
+{
+"window": "20261116071913116-STBL",
+"ticker": "STBL",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T07:19:13.116734832Z",
+"frames_total": 22,
+"frames_decoded": 14,
+"src": "new",
+"max_profit": "0.0187042902285639389902347504"
+},
+{
+"window": "20261116094756093-FOREST",
+"ticker": "FOREST",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T09:47:56.093738322Z",
+"frames_total": 192,
+"frames_decoded": 76,
+"src": "new",
+"max_profit": "0.0204730255547018025092319524"
+},
+{
+"window": "20261116101631832-ERA",
+"ticker": "ERA",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T10:16:31.832679592Z",
+"frames_total": 9,
+"frames_decoded": 7,
+"src": "new",
+"max_profit": "0.2266975372354167879999999916"
+},
+{
+"window": "20261116102303003-SHOPINX",
+"ticker": "SHOPINX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T10:23:03.003967167Z",
+"frames_total": 263,
+"frames_decoded": 234,
+"src": "new",
+"max_profit": "77.768105280919407347862904400"
+},
+{
+"window": "20261116123655759-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T12:36:55.759663983Z",
+"frames_total": 21,
+"frames_decoded": 6,
+"src": "new",
+"max_profit": "0.1433353608580791865156670882"
+},
+{
+"window": "20261116125524084-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T12:55:24.084723622Z",
+"frames_total": 211,
+"frames_decoded": 79,
+"src": "new",
+"max_profit": "0.0399334469331622297517253438"
+},
+{
+"window": "20261116131536092-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T13:15:36.092076949Z",
+"frames_total": 192,
+"frames_decoded": 80,
+"src": "new",
+"max_profit": "0.0133490685846683614975376593"
+},
+{
+"window": "20261116131817240-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T13:18:17.240766323Z",
+"frames_total": 206,
+"frames_decoded": 98,
+"src": "new",
+"max_profit": "0.0342426493263518149892898984"
+},
+{
+"window": "20261116132148164-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T13:21:48.164229424Z",
+"frames_total": 256,
+"frames_decoded": 94,
+"src": "new",
+"max_profit": "0.0210218250571445711045249558"
+},
+{
+"window": "20261116144402757-BTCMT",
+"ticker": "BTCMT",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:44:02.757159075Z",
+"frames_total": 294,
+"frames_decoded": 86,
+"src": "new",
+"max_profit": "0.1438749083804566080656610862"
+},
+{
+"window": "20261116144815805-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:48:15.805272522Z",
+"frames_total": 873,
+"frames_decoded": 81,
+"src": "new",
+"max_profit": "0.21737871807685597300000009"
+},
+{
+"window": "20261116144856325-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:48:56.325134054Z",
+"frames_total": 815,
+"frames_decoded": 80,
+"src": "new",
+"max_profit": "0.040257794017106491000000001"
+},
+{
+"window": "20261116144936024-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:49:36.024059082Z",
+"frames_total": 849,
+"frames_decoded": 79,
+"src": "new",
+"max_profit": "0.079988647103116820000000013"
+},
+{
+"window": "20261116145036329-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:50:36.329862429Z",
+"frames_total": 744,
+"frames_decoded": 80,
+"src": "new",
+"max_profit": "0.014046377906701089999999995"
+},
+{
+"window": "20261116145116611-BULLA",
+"ticker": "BULLA",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:51:16.611398363Z",
+"frames_total": 1015,
+"frames_decoded": 73,
+"src": "new",
+"max_profit": "0.016276547672039378000000022"
+},
+{
+"window": "20261116145958162-CNPY",
+"ticker": "CNPY",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T14:59:58.162857246Z",
+"frames_total": 474,
+"frames_decoded": 113,
+"src": "new",
+"max_profit": "0.0861467727891206215344812238"
+},
+{
+"window": "20261116151945090-4STOCK",
+"ticker": "4STOCK",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T15:19:45.090426663Z",
+"frames_total": 32,
+"frames_decoded": 9,
+"src": "new",
+"max_profit": "0.034422259695105221000000256"
+},
+{
+"window": "20261116154014454-BTCMT",
+"ticker": "BTCMT",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T15:40:14.454980221Z",
+"frames_total": 9,
+"frames_decoded": 9,
+"src": "new",
+"max_profit": "0.0876189659662036120899126357"
+},
+{
+"window": "20261116160841767-ZIG",
+"ticker": "ZIG",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T16:08:41.767679878Z",
+"frames_total": 680,
+"frames_decoded": 25,
+"src": "new",
+"max_profit": "0.2118831597777607474614198258"
+},
+{
+"window": "20261116170003245-CREO",
+"ticker": "CREO",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T17:00:03.245103442Z",
+"frames_total": 5,
+"frames_decoded": 5,
+"src": "new",
+"max_profit": "0.0089497636592232641860715165"
+},
+{
+"window": "20261116180141020-LQR",
+"ticker": "LQR",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T18:01:41.020681002Z",
+"frames_total": 64,
+"frames_decoded": 62,
+"src": "new",
+"max_profit": "2.9833064277595996727642427630"
+},
+{
+"window": "20261116180950110-GTAI",
+"ticker": "GTAI",
+"directions": [
+"bsc_dex→poloniex"
+],
+"started": "2026-11-16T18:09:50.110156741Z",
+"frames_total": 0,
+"frames_decoded": 0,
+"src": "new",
+"max_profit": "5.6845174027854691799219722914"
+},
+{
+"window": "20261116182123619-BTCMT",
+"ticker": "BTCMT",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T18:21:23.619283214Z",
+"frames_total": 165,
+"frames_decoded": 104,
+"src": "new",
+"max_profit": "0.0450972952331450002561226266"
+},
+{
+"window": "20261116183137906-SHOPINX",
+"ticker": "SHOPINX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T18:31:37.906394287Z",
+"frames_total": 83,
+"frames_decoded": 71,
+"src": "new",
+"max_profit": "0.0062907074150521828386207175"
+},
+{
+"window": "20261116183313250-SHOPINX",
+"ticker": "SHOPINX",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T18:33:13.250747257Z",
+"frames_total": 52,
+"frames_decoded": 46,
+"src": "new",
+"max_profit": "0.2462935346273906115017868602"
+},
+{
+"window": "20261116195026067-LQR",
+"ticker": "LQR",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T19:50:26.067701423Z",
+"frames_total": 115,
+"frames_decoded": 110,
+"src": "new",
+"max_profit": "1.3125004675612614208892660318"
+},
+{
+"window": "20261116195629347-LQR",
+"ticker": "LQR",
+"directions": [
+"bsc_dex→bingx"
+],
+"started": "2026-11-16T19:56:29.347929914Z",
+"frames_total": 57,
+"frames_decoded": 53,
+"src": "new",
+"max_profit": "5.4481201095987285415133678826"
+},
+{
+"window": "20261116202624704-USDC",
+"ticker": "USDC",
+"directions": [
+"bsc_dex→mexc"
+],
+"started": "2026-11-16T20:26:24.704551042Z",
+"frames_total": 41,
+"frames_decoded": 25,
+"src": "new",
+"max_profit": "0.0168945201041271655418399686"
+}
+]

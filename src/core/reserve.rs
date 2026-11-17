@@ -21,7 +21,8 @@
 //! σ с границей и проверкой — только на момент расчёта плана (dirctx.rs build: план, пересчёт перед покупкой, кандидаты
 //! «без потолка», карточка); у сделки σ — из плана (решение 237), доля — из копии настроек на момент входа
 //! (решение 239, Decided.settings).
-//! Кто вызывает: core/dirctx.rs (sigma_now, closure_share), core/costs.rs и core/reserve_check.rs (amount),
+//! Кто вызывает: core/sigma_plan.rs (sigma_now, opt, at_b — σ плана входа, решение 391), core/dirctx.rs
+//! (closure_share), core/costs.rs и core/reserve_check.rs (amount),
 //! core/dirctx.rs и core/uncapped_recompute_ctx.rs (keep_of, closure_share), core/reserve_check.rs (keep_of).
 //! От чего зависит: core/vol.rs (measure), settings, rust_decimal (exp).
 //! Настройки: profit.closure_share, profit.sigma_floor_per_s, profit.sigma_min_changes, profit.sigma_window_min.

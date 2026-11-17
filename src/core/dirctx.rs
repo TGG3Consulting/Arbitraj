@@ -13,6 +13,8 @@
 //! build_decided.
 //! От чего зависит: engine.rs, registry.rs, vol.rs, reserve.rs, settings, deposit_min_ask.rs (решение 387: минимум депозита B неизвестен — запрос сразу).
 //! Правила пар и свежесть справочника сетей — dirctx_venue.rs (venue.networks_stale_s).
+//! Решение 391 (t177): σ плана входа — sigma_plan.rs (reserve.rs sigma_now; при profit.sigma_min_changes и заданной
+//! границе profit.sigma_floor_per_s [B] — σ = max(σ ряда, граница) вместо отказа).
 //! Решения 358, 364 (только журнал): план входа всегда несёт сравнение σ (reserve_check.rs), решение не меняется.
 //! Решение 242: profit.price_move_k и profit.closure_share — сначала площадка + тип направления (core/venue_dir.rs);
 //! дополнение п. 2 (Тигран 09.11): у profit.price_move_k монета сильнее пары (монета → пара → вся система).
@@ -177,8 +179,9 @@ impl DirCtx {
         // решение 240 — у плана входа с проверкой и границей (reserve.rs).
         let sigma = match &at_m {
             Moment::Decided { sigma, .. } => *sigma,
+            // Решение 391 (t177): неподвижная цена при заданной границе — σ = граница, а не отказ (sigma_plan.rs).
             Moment::Entry => {
-                super::reserve::sigma_now(&mut lk(&core.inner.vol), s, dir, chrono::Utc::now())?
+                super::sigma_plan::entry(&mut lk(&core.inner.vol), s, dir, chrono::Utc::now())?
             }
             Moment::Held => {
                 let window = s

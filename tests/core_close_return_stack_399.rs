@@ -3,12 +3,11 @@
 //! возврат USDT» по образцу сторожей решения 389 (tests/core_sell_loop_t175.rs — поток с малым стеком и однопоточный
 //! рантайм): всё тело теста, включая ядро и задачи перегона (tokio::spawn на однопоточном рантайме исполняются в том же
 //! потоке), идёт в потоке со стеком WORKER — размер стека рабочего потока tokio по умолчанию (в src
-//! thread_stack_size не задан). Путь — настоящий ledger::finish (как у продажи), без вызовов в обход:
-//! 1) сделка без группы (exec.top_up не задана — как на сервере): закрытие → usdt_return_deal::prepare → сохранение →
-//!    Job::start → перегон (площадок в реестре нет — не состоялся) → «USDT не вернулись»;
-//! 2) сделка группы докупки (exec.top_up = да): первая закрытая ждёт (hold_parts), последняя — coin_group::after_close →
-//!    coin_group_flush::flush → start_parts → куски выше максимума вывода (usdt_return_pieces::run) → кусок 1 не
-//!    дошёл → «не вернулись» на всю сумму.
+//! thread_stack_size не задан). Путь — настоящий ledger::finish (как у продажи), без вызовов в обход. Сценарий без
+//! группы (exec.top_up не задана — как на сервере): закрытие → usdt_return_deal::prepare → сохранение → Job::start →
+//! перегон (площадок в реестре нет — не состоялся) → «USDT не вернулись». Сценарий группы докупки (exec.top_up = да):
+//! первая закрытая ждёт (hold_parts), последняя — coin_group::after_close → coin_group_flush::flush → start_parts →
+//! куски выше максимума вывода (usdt_return_pieces::run) → кусок 1 не дошёл → «не вернулись» на всю сумму.
 //! Переполнение стека роняет процесс теста («has overflowed its stack») — это и есть отказ сторожа.
 //! Данные: сделка как живая 20261104225504576DOGE (tests/usdt_return_common); максимум вывода USDT BEP20 BingX —
 //! запись config/getall 24.10 (tests/data/bingx_2026-10-24/config_getall.json), разбор адаптера BingX. Сеть не
@@ -79,13 +78,19 @@ fn close_then_return_fits_worker_stack_without_group() {
     });
 }
 
+/// Запись USDT в сети BSC BingX (BEP20). Первая запись USDT в ответе — ERC20, а адрес контракта адаптер ставит только
+/// сети BSC (bingx/wallet.rs parse_networks) — поэтому искать по сети, не по одному тикеру. Ошибок нет.
+fn is_usdt_bsc(i: &arb::core::types::CoinNetworkInfo) -> bool {
+    i.asset.ticker == "USDT" && i.network == "BEP20"
+}
+
 /// Максимум вывода USDT BEP20 BingX и справочник сетей BingX из записи config/getall 24.10 (разбор адаптера).
 fn bingx_networks() -> (Decimal, Vec<arb::core::types::CoinNetworkInfo>) {
     let raw = std::fs::read_to_string("tests/data/bingx_2026-10-24/config_getall.json").unwrap();
     let b: serde_json::Value = serde_json::from_str(&raw).unwrap();
     let bingx = VenueId("bingx".into());
     let list = arb::venues::bingx::wallet::parse_networks(&b["data"], "BEP20", &bingx).unwrap();
-    let usdt = list.iter().find(|x| x.asset.ticker == "USDT").unwrap();
+    let usdt = list.iter().find(|x| is_usdt_bsc(x)).unwrap();
     (usdt.withdraw_max.unwrap(), list)
 }
 
@@ -110,7 +115,7 @@ async fn group_core() -> (Core, Decimal) {
     ];
     let (core, _j) = usdt_return_common::start_with(&d, None, extra).await;
     let (max, list) = bingx_networks();
-    let usdt = list.iter().find(|x| x.asset.ticker == "USDT").unwrap();
+    let usdt = list.iter().find(|x| is_usdt_bsc(x)).unwrap();
     *core.inner.usdt.write().unwrap() = Ok(usdt.asset.bsc_contract.unwrap());
     core.inner
         .networks

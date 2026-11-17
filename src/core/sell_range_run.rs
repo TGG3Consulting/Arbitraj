@@ -10,7 +10,7 @@
 //! без этой ветки не растёт (замер — docs/ROADMAP.md, «Техдолг»).
 //! Кто вызывает: core/sell.rs (run — после wanted).
 //! От чего зависит: sell_range.rs (decide, Act, Outcome), trade_ops.rs (deal_quote, trade_seen), sell.rs (profitable,
-//! BUTTON), stuck.rs (handle), deal_gas.rs, ledger.rs, exec_book.rs, stuck_reason.rs, op_error.rs, deps.rs.
+//! BUTTON), stuck.rs (handle — через sell_loop.rs / sell_next.rs, решение 389), deal_gas.rs, ledger.rs, exec_book.rs, stuck_reason.rs, op_error.rs, deps.rs.
 //! Настройки: нет (включатель sell.market_on_price_range читает sell_range.rs).
 
 use std::future::Future;
@@ -263,14 +263,18 @@ async fn announce(
 }
 
 /// Режим застрявшей монеты после ветки (stuck::handle, как sell::sell_or_stuck) — будущее в коробке, собранное вне
-/// кадра ветки (глубина стека). Принимает: ядро, сделку, причину. Ошибок нет.
+/// кадра ветки (глубина стека). Решение 389: продолжением цикла sell_loop.rs (sell_next::stuck, без risk_count::auto —
+/// как было): после него run возвращает true и sell.rs сразу выходит — хвостовой вызов. Принимает: ядро, сделку,
+/// причину. Ошибок нет.
 #[inline(never)]
 fn stuck<'a>(
     core: &'a Core,
     deal: Deal,
     why: StuckReason,
 ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-    Box::pin(super::stuck::handle(core, deal, why))
+    Box::pin(super::sell_loop::hop(super::sell_next::stuck(
+        core, deal, why, false,
+    )))
 }
 
 /// Свежая котировка продажи сделки (trade_ops::deal_quote) — будущее в коробке, собранное вне кадра ветки (глубина

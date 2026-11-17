@@ -283,10 +283,15 @@ fn first_early_newer_book_rechecks_without_resub() {
         vec![unconfirm()],
         "первое «новее» — подтверждение снимается сразу (Б1), без переподписки"
     );
+    // Ревью t169, Н1: проход раз в секунду, но повторная сверка — не раньше venue.pair_resub_interval_ms (3 с) после
+    // первого запроса (кадр «в пути» успевает прийти), как до решения 383.
+    for n in [44_200, 45_200] {
+        assert!(decide(&health(n, 41_000, 101), n, &c, &none, &mut st).is_empty());
+    }
     assert_eq!(
         decide(&health(46_200, 41_000, 101), 46_200, &c, &none, &mut st),
         vec![check()],
-        "повторная сверка — следующим проходом, не через venue.quiet_confirm_min_ms"
+        "повторная сверка — через venue.pair_resub_interval_ms, не через venue.quiet_confirm_min_ms"
     );
     let a = apply(
         &health(46_300, 41_000, 101),
@@ -475,14 +480,15 @@ fn needed_pair_keeps_priority_until_confirmed_or_frame() {
         &mut st,
     );
     assert_eq!(a, vec![unconfirm()]);
-    // Через секунду ведро снова даёт запрос: повторная сверка GMT — раньше OLD, хотя GMT нет в State.needed (sticky).
+    // Ревью t169, Н1: повторная сверка — не раньше venue.pair_resub_interval_ms (3 с) после первого запроса, не
+    // «следующим проходом» (отдельно — first_early_newer_book_rechecks_without_resub). Через 3 с ведро даёт запрос: повторная сверка GMT — раньше OLD, хотя GMT нет в State.needed (sticky).
     assert_eq!(
-        n(&decide(&h(41_600, 38_500), 41_600, &c, &none, &mut st)),
+        n(&decide(&h(43_600, 38_500), 43_600, &c, &none, &mut st)),
         vec!["GMT"]
     );
-    // Пришёл кадр GMT (42 000) — приоритет и сверка сняты, GMT свежа; ведро — OLD.
+    // Пришёл кадр GMT (44 000) — приоритет и сверка сняты, GMT свежа; ведро — OLD.
     assert_eq!(
-        n(&decide(&h(42_600, 42_000), 42_600, &c, &none, &mut st)),
+        n(&decide(&h(44_600, 44_000), 44_600, &c, &none, &mut st)),
         vec!["OLD"]
     );
 

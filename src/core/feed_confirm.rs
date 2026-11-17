@@ -25,6 +25,8 @@
 //! feed_rest_ref.rs.
 //! Настройки: значения приходят в Cfg.quiet (читает feed_watch.rs).
 
+use std::collections::VecDeque;
+
 use crate::gateway::feed_health::{BookVersion, FeedHealth, PairHealth};
 
 use super::feed_rest_ref::{LostRef, RestBook, RestRef, unchanged_since_resub};
@@ -57,10 +59,9 @@ pub(super) struct CheckSt {
     /// t163: когда биржу спросили в последний раз (unix мс): кадр позже — срок проверки сброшен (feed_watch_logic.rs).
     pub(super) asked_ms: i64,
     pub(super) told: Option<Told>,
-    /// Решение 367 (ревью Н2): последняя проверка — ранняя (до порога мёртвой пары или пара нужна торговле,
-    /// feed_confirm_queue.rs): первое «книга новее» — повторная сверка без переподписки.
-    pub(super) early: bool,
-    /// Решение 383: последняя проверка — пары, нужной торговле (счётчики сводки «проверок нужных торговле пар»).
+    /// Решение 367 (ревью Н2) / 383: последняя проверка — пары, нужной торговле (feed_confirm_queue.rs Kind::Need):
+    /// первое «книга новее» — повторная сверка без переподписки; счётчики сводки «проверок нужных торговле пар».
+    /// Ранние проверки из остатка ведра (Kind::Spare) — как обычные (ревью t169, Н1).
     pub(super) need: bool,
     /// Решение 383: до какого момента (unix мс) действует подтверждение «книга та же» (0 — не действует).
     pub(super) until_ms: i64,
@@ -74,24 +75,27 @@ pub(super) struct CheckSt {
     pub(super) lost_ref: Option<LostRef>,
 }
 
-/// Ведро запросов площадки: 1 запрос = 1000 долей, пополнение max_per_s долей за мс, запас — на 1 с.
+/// Решение 383: секунда, мс — единица из имени настройки venue.quiet_confirm_max_per_s («запросов в секунду»), не
+/// порог и не настраиваемое число: окно ведра (Bucket) и период прохода подтверждений (feed_watch.rs).
+pub(super) const SECOND_MS: i64 = 1_000;
+
+/// Ведро запросов площадки (решение 383, ревью t169 Н2 — строгое окно): в ЛЮБОМ окне длиной SECOND_MS (по часам
+/// прохода сторожа) — не больше venue.quiet_confirm_max_per_s запросов, значит за 10 с — не больше 10 × max_per_s.
+/// Хранит моменты выданных запросов последней секунды (их не больше max_per_s).
 #[derive(Debug, Default)]
 pub(super) struct Bucket {
-    milli: i64,
-    at: Option<i64>,
+    sent: VecDeque<i64>,
 }
 
 impl Bucket {
-    /// Взять один запрос. Возвращает: true — можно слать. Ошибок нет.
+    /// Взять один запрос в момент now (unix мс, часы прохода; моменты не убывают). Возвращает: true — можно слать
+    /// (за последние SECOND_MS выдано меньше per_s). Ошибок нет.
     pub(super) fn take(&mut self, now: i64, per_s: i64) -> bool {
-        let cap = per_s * 1000;
-        self.milli = match self.at {
-            None => cap,
-            Some(a) => (self.milli + per_s * (now - a).max(0)).min(cap),
-        };
-        self.at = Some(now);
-        if self.milli >= 1000 {
-            self.milli -= 1000;
+        while self.sent.front().is_some_and(|&t| t <= now - SECOND_MS) {
+            self.sent.pop_front();
+        }
+        if (self.sent.len() as i64) < per_s {
+            self.sent.push_back(now);
             true
         } else {
             false
@@ -229,18 +233,19 @@ pub fn apply(
         other => other,
     };
     // Решение 367 (ревью Н2): ранняя проверка сказала «книга новее» впервые — книга могла измениться за миг до запроса,
-    // а кадр с изменением ещё в пути (пуш у бирж — раз в 100–1000 мс). Не переподписывать: повторная сверка следующим
-    // проходом сторожа (решение 383: раз в секунду при подтверждении); кадр придёт — сверка снимается (feed_watch_logic.rs, сброс по кадру).
-    // Второе «новее» без кадра — кадры потеряны, как всегда. Обычная (не ранняя) проверка — как до правки.
+    // а кадр с изменением ещё в пути (пуш у бирж — раз в 100–1000 мс). Не переподписывать: повторная сверка (срок — ниже);
+    // кадр придёт — сверка снимается (feed_watch_logic.rs, сброс по кадру). Второе «новее» без кадра — кадры потеряны,
+    // как всегда. Обычная (не нужная торговле) проверка — как до правки.
     // Повторное ревью t163, Б1: книга на бирже новее — старое подтверждение тихой пары снимается сразу (Unconfirm),
     // иначе котировка до его срока шла бы по книге, про которую уже известно, что она изменилась.
-    if matches!(v, Verdict::Lost(_)) && cs.early && cs.suspect.is_none() {
+    // Ревью t169, Н1: повторная сверка — не раньше venue.pair_resub_interval_ms после первого запроса (по времени, как
+    // до решения 383, когда проход шёл раз в этот интервал), а не «следующим проходом» (теперь раз в секунду); только
+    // у нужных торговле (решение 367), ранние из остатка ведра — как обычные.
+    if matches!(v, Verdict::Lost(_)) && cs.need && cs.suspect.is_none() {
         cs.suspect = Some(sent_ms);
-        cs.next_at = 0;
+        cs.next_at = sent_ms + c.interval_ms;
         cs.until_ms = 0;
-        if cs.need {
-            st.stats.early_suspect += 1;
-        }
+        st.stats.early_suspect += 1;
         out.push(Action::Unconfirm {
             conn: key.0.clone(),
             ticker: key.1.clone(),

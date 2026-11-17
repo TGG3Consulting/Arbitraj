@@ -7,7 +7,9 @@
 //! book.rs freeze): кадр не старше venue.book_stale_ms или момент не позже срока подтверждения.
 //! Проверяется: 175 молчащих пар при 10 запросах/с после первого круга все остаются подтверждёнными и «отложено
 //! ведром» не растёт; при 5/с (ёмкость 5 × 30000 / 1000 = 150 < 175) — нет; нужная торговле пара не теряет свежесть при
-//! любой фазе последнего кадра относительно прохода, даже когда ведро занято 175 тихими парами.
+//! любой фазе последнего кадра относительно прохода, даже когда ведро занято 175 тихими парами. Ревью t169: запас хода
+//! не растягивает срок подтверждения (Б1), ведро строгое — не больше max_per_s в любом окне 1 с (Н2), «книга новее» у
+//! ранней проверки из остатка — как у обычной (Н1).
 //! Чистая логика без сети и моков: снимок свежести формата стыка (gateway/feed_health.rs), ответ «книга того же номера».
 //! Кто вызывает: cargo test.
 
@@ -184,4 +186,93 @@ fn needed_pair_never_loses_freshness_under_full_bucket() {
             &r.stale[..r.stale.len().min(5)]
         );
     }
+}
+
+#[test]
+fn pause_or_slow_pass_never_stretches_confirmation() {
+    // Ревью t169, Б1: замер запаса хода после паузы сторожа (час) или долгого прохода — срок подтверждения не длиннее
+    // правила до решения 383: отправка + venue.quiet_confirm_min_ms + venue.pair_resub_interval_ms.
+    let c = gate(10);
+    let h = snap(40_100, &[("A".to_string(), 10_000)]);
+    for measured in [0, 500, 1_150, 3_000, 3_001, 60_000, 3_600_000] {
+        let mut st = State::default();
+        st.note_answers(0, measured);
+        let r = Ok(BookVersion {
+            id: Some(1),
+            ..Default::default()
+        });
+        let a = apply(&h, "m1", "A", r, 40_000, 40_100, &c, &mut st);
+        let [Action::Confirmed { until_ms, .. }] = &a[..] else {
+            panic!("{a:?}");
+        };
+        assert_eq!(*until_ms, 40_000 + 30_000 + measured.min(c.interval_ms));
+        assert!(*until_ms <= 40_000 + 30_000 + c.interval_ms);
+    }
+    // Замера нет (первый проход) — худший случай, venue.pair_resub_interval_ms.
+    let mut st = State::default();
+    let r = Ok(BookVersion {
+        id: Some(1),
+        ..Default::default()
+    });
+    let a = apply(&h, "m1", "A", r, 40_000, 40_100, &c, &mut st);
+    assert!(
+        matches!(
+            &a[..],
+            [Action::Confirmed {
+                until_ms: 73_000,
+                ..
+            }]
+        ),
+        "{a:?}"
+    );
+}
+
+#[test]
+fn bucket_window_is_strict() {
+    // Ревью t169, Н2: в любом окне 1 с — не больше max_per_s запросов, в любом окне 10 с — не больше 10 × max_per_s;
+    // при этом ведро отдаёт всю настройку (не меньше max_per_s за каждую секунду при постоянном спросе).
+    let mut b = super::feed_confirm::Bucket::default();
+    let mut got = vec![];
+    let mut t = 0;
+    while t < 20_000 {
+        for _ in 0..4 {
+            if b.take(t, 10) {
+                got.push(t);
+            }
+        }
+        t += 70;
+    }
+    for &g in &got {
+        let in_1s = got.iter().filter(|&&x| x >= g && x < g + 1_000).count();
+        let in_10s = got.iter().filter(|&&x| x >= g && x < g + 10_000).count();
+        assert!(in_1s <= 10, "окно 1 с от {g}: {in_1s}");
+        assert!(in_10s <= 100, "окно 10 с от {g}: {in_10s}");
+    }
+    assert!(got.len() >= 180, "ведро отдаёт настройку: {}", got.len());
+}
+
+#[test]
+fn spare_newer_book_resubscribes_like_plain() {
+    // Ревью t169, Н1: ранняя проверка из остатка ведра (пара не нужна торговле) на «книга новее» — как обычная:
+    // кадры потеряны, переподписка; повторная сверка без переподписки — только у нужных торговле (решение 367).
+    let c = gate(10);
+    let (mut st, none) = (State::default(), HashMap::new());
+    let h = |n| snap(n, &[("X".to_string(), 40_000)]);
+    // Тишина 3 с: больше раннего порога (5000 − 3000), меньше порога мёртвой (5000) — проверка из остатка.
+    let a = decide(&h(43_000), 43_000, &c, &none, &mut st);
+    assert!(matches!(&a[..], [Action::Check { .. }]), "{a:?}");
+    assert_eq!(st.stats.spare_checks, 1);
+    let r = Ok(BookVersion {
+        id: Some(2),
+        ..Default::default()
+    });
+    let a = apply(&h(43_100), "m1", "X", r, 43_000, 43_100, &c, &mut st);
+    assert!(
+        matches!(
+            &a[..],
+            [Action::Lost { .. }, Action::Resub { attempt: 1, .. }]
+        ),
+        "{a:?}"
+    );
+    assert_eq!(st.stats.early_suspect, 0);
 }

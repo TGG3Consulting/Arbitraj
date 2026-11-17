@@ -81,7 +81,7 @@ pub fn halve<T>(cap: U256, mut f: impl FnMut(U256) -> Result<T, Option<U256>>) -
         match f(a) {
             Ok(t) => return Some(t),
             Err(None) => return None,
-            Err(Some(took)) => a = (a >> 1).min(took),
+            Err(Some(took)) => a = (a >> 1usize).min(took),
         }
     }
     None

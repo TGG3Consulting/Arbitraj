@@ -127,6 +127,8 @@ async fn fill(
         coins: req.input,
         usdt: expected,
         form: form_text,
+        // Циклы DEX ↔ DEX квотером не сверяются (решение 261) — продажи по квотеру нет.
+        by_quoter: None,
         at: base_at,
     };
     let need = units(ctx, req.input, dec)?;

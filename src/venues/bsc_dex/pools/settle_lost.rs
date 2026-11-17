@@ -46,6 +46,8 @@ impl Holds {
         self.get(r).is_some_and(|h| match h.need {
             Some(Need::Active(_)) => block != h.block,
             Some(Need::Follow) => block != h.block || tx != h.tx,
+            // Решение 382: память неверна — любой лог пула ставит его на полное чтение сразу (не ждать головы).
+            Some(Need::Reread) => true,
             None => false,
         })
     }

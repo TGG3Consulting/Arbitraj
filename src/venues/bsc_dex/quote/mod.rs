@@ -166,6 +166,10 @@ pub struct Quoting {
     /// ставит exec/trade.rs после неё; проба крючков перед сделкой (exec/trade_probe.rs hooks_again) берёт их на том же
     /// блоке вместо второго чтения. None — верификации не было (котировка, прямой и умный маршрут без графа).
     pub route_fresh: Option<std::sync::Arc<super::check::hook_batch::RouteFresh>>,
+    /// Решение 382: пулы маршрута, перечитанные на голове после расхождения расчёта по памяти с квотером перед сделкой
+    /// (exec/quoter_refetch.rs). Some — путь доли считается по этим записям (exec/live.rs, exec/live_hops.rs), квотер —
+    /// на их блоке; None — по памяти, квотер на «latest», как раньше.
+    pub pinned: Option<std::sync::Arc<super::check::hook_batch::RouteFresh>>,
 }
 
 impl Quoting {

@@ -3,7 +3,8 @@
 //! был больше 200 строк; логика та же): стороны независимо (решение 73), мелкая — без итога; решение 261 — голова H и
 //! пул, прочитанный на ней, один раз на пул (check/quoter_block.rs), пауза и снятие стороны с алертами
 //! (check/quoter_pause.rs), «не сверено (блок)» — итог прежний; сравнение памяти с сетью на H (memory) — причина в
-//! журнал (dex.quoter_memory) и на экран «Глубина», без паузы.
+//! журнал (dex.quoter_memory) и на экран «Глубина», без паузы; решение 382 — и полное перечитывание пула
+//! (check/quoter_memory_fix.rs).
 //! Кто вызывает: check/quoter_cycle.rs.
 //! От чего зависит: check/quoter_verify.rs, check/quoter_block.rs, check/quoter_pause.rs, check/quoter_side.rs,
 //! check/quoter_tally.rs, quote/select.rs (deep_side), pools/depth_book.rs (missing_setting), check/state.rs.
@@ -122,6 +123,13 @@ async fn memory(p: &Pools, e: &Entry, h: &Head, now: &mut QuoterSides) {
         return;
     }
     let note = quoter_block::memory_note(&p.ctx, e, h);
+    // Решение 382: «память отстаёт» — пул на полное чтение, только если ошибка доказана на блоке памяти
+    // (check/quoter_memory_fix.rs, ревью Б1).
+    if note.is_some()
+        && let Head::Ready { block, entry } = h
+    {
+        super::quoter_memory_fix::on_lag(p, e, *block, entry);
+    }
     let changed = match (&now.memory, &note) {
         (None, None) => false,
         (Some(a), Some(b)) => reason_key(a) != reason_key(b),

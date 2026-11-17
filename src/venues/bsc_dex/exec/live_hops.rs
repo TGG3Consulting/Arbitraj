@@ -8,7 +8,7 @@
 //! у монеты с налогом — только пулы V2 на каждом шаге. Путь из 1–2 пулов считает exec/live.rs по-прежнему.
 //! Кто вызывает: exec/live.rs (share).
 //! От чего зависит: exec/hook_trade.rs (TradeHooks), quote/route_calc.rs, quote/graph_legs.rs (hop_side), quote/select.rs,
-//! quote/via.rs (Via: mid_ok, taxed), pools/registry.rs, pools/mids.rs, tokens.rs.
+//! quote/via.rs (Via: mid_ok, taxed), pools/registry.rs, pools/mids.rs, tokens.rs, exec/quoter_refetch.rs (решение 382).
 //! Настройки: через вызываемые — см. их шапки.
 
 use rust_decimal::Decimal;
@@ -37,8 +37,8 @@ pub async fn path(
     let found = hops
         .iter()
         .map(|h| {
-            q.reg
-                .get(&h.pool)
+            // Решение 382: перечитанная после расхождения с квотером запись (Quoting.pinned), иначе из памяти.
+            super::quoter_refetch::entry(q, &h.pool)
                 .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))
         })
         .collect::<GatewayResult<Vec<_>>>()?;

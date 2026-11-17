@@ -51,7 +51,9 @@ use super::super::swap_send::{rebuilt_notice, send_approvals, with_approve_gas};
 use super::super::trade::sides;
 use super::super::txs::{self, Env};
 use super::super::verify_gate::{self, Verified};
+use super::super::{quoter_refetch, quoter_refetch_check};
 use super::call::{self, ExecCall};
+use super::prep_refetch::{self, Prepared};
 use super::{fact, onchain, remeasure, sim};
 
 /// Сделка через исполнитель. Принимает: котировку, окружение отправки, очередь кошелька, запрос, маршрут, итог
@@ -91,7 +93,7 @@ pub async fn trade(
         usdt_dec: decs.1,
     };
     let (legs, mut note, exp, mut favour) =
-        prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
+        prep_refetch::prepare(&v, &req, route, &verified.amount_out_min, decs).await?;
     // Решение 234 (п. 4): minOut, ожидаемое и модельный налог каждой доли — в текст отката пробы (хронология сделки).
     let mut diag = sim::legs_text(&legs, &exp, &req, decs);
     let mut model = exp;
@@ -128,7 +130,7 @@ pub async fn trade(
     if approved.is_some() {
         // Решение 121 B1: разрешение ждало блока — доли, минимумы и вызов устарели: свежая верификация и сборка.
         let mins = verify_gate::gate(q, env, &req, route).await?.amount_out_min;
-        let (legs, fresh, exp, fav) = prepare(&v, &req, route, &mins, decs).await?;
+        let (legs, fresh, exp, fav) = prep_refetch::prepare(&v, &req, route, &mins, decs).await?;
         note = fresh;
         favour = fav;
         diag = sim::legs_text(&legs, &exp, &req, decs);
@@ -189,29 +191,30 @@ pub async fn trade(
 /// модельный налог монеты на её шаге, %) — для текста отката пробы (решение 234, п. 4), строку «в нашу сторону»
 /// (решение 261; журнал — вызывающий, один раз).
 /// Ошибки: NoRoute, QuoteMismatch (цена, число долей), CoinNotChecked, BadResponse, узел.
-pub async fn prepare(
+/// Решение 382: обёртка с перечитыванием пулов при расхождении — exec/executor/prep_refetch.rs prepare.
+pub(super) async fn prepare_once(
     v: &Via<'_>,
     req: &TradeRequest,
     route: &DexRoute,
     mins: &[Decimal],
     decs: (u8, u8),
-) -> GatewayResult<(
-    Vec<Vec<Step>>,
-    Option<String>,
-    Vec<(Decimal, Decimal)>,
-    Option<String>,
-)> {
+) -> GatewayResult<Prepared> {
     let ctx = &v.q.ctx;
     let mut paths = live_paths(v, req, route, false).await?;
     // Решение 122 F: хопы через пулы с портом чужой математики (Maverick V2) — сверка квотером на своём узле.
     let (ratios, note, favour) =
-        super::super::precheck_quoter::hops_exit(ctx, req, &mut paths).await?;
+        super::super::precheck_quoter::hops_exit(ctx, req, &mut paths, quoter_refetch::block(v.q))
+            .await?;
     let (coins, paid) = paths
         .iter()
         .fold((Decimal::ZERO, Decimal::ZERO), |(c, u), (p, _)| {
             (c + p.coins, u + p.usdt)
         });
     check_price(ctx, req, coins, paid)?;
+    // Решение 382, ревью Н1: по перечитанным пулам цена не хуже плана больше допуска сверки.
+    if quoter_refetch::block(v.q).is_some() {
+        quoter_refetch_check::plan_gap(ctx, req, coins, paid)?;
+    }
     if mins.len() != paths.len() {
         let why = "верификация вернула число долей, не равное маршруту";
         return Err(ctx.err(ErrorCode::QuoteMismatch, why));

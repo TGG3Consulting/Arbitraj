@@ -8,7 +8,8 @@
 //! Доля графа из трёх и более пулов (решение 122 R2) — exec/live_hops.rs.
 //! Кто вызывает: exec/trade_direct_prep.rs (path), exec/hook_trade.rs (share).
 //! От чего зависит: exec/hook_trade.rs, exec/live_hops.rs, quote/direct.rs, quote/via.rs, quote/path.rs, quote/select.rs,
-//! quote/direct_route.rs (один роутер), pools/registry.rs, pools/mids.rs, tokens.rs.
+//! quote/direct_route.rs (один роутер), pools/registry.rs, pools/mids.rs, tokens.rs, exec/quoter_refetch.rs (решение 382:
+//! перечитанные после расхождения с квотером пулы доли — Quoting.pinned — вместо памяти).
 //! Настройки: через вызываемые — см. их шапки.
 
 use rust_decimal::Decimal;
@@ -58,8 +59,8 @@ pub async fn share(
     let found = hops
         .iter()
         .map(|h| {
-            q.reg
-                .get(&h.pool)
+            // Решение 382: перечитанная после расхождения с квотером запись (Quoting.pinned), иначе из памяти.
+            super::quoter_refetch::entry(q, &h.pool)
                 .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))
         })
         .collect::<GatewayResult<Vec<Entry>>>()?;

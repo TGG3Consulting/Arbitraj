@@ -8,8 +8,9 @@
 //! Повторная проба крючков B/C на сумме сделки (решение 32, «335 (лесенка влияния)») — exec/trade_probe.rs и
 //! exec/hook_trade.rs. Ревью Н7: у пула с крючком выход квотера на сумме шага уже снят пробой — quoter_hop_with берёт
 //! его без второго вызова квотера.
-//! Кто вызывает: exec/exit_quote.rs.
-//! От чего зависит: quote/quoter.rs, quote/emptiness.rs, quote/quoter_revert.rs, pools/registry.rs.
+//! Решение 382: quoter_hop_at / quoter_now_at — квотер на блоке перечитанных пулов (exec/quoter_refetch.rs).
+//! Кто вызывает: exec/exit_quote.rs, exec/dry_build.rs, exec/precheck_quoter.rs.
+//! От чего зависит: node/call.rs (block_tag), quote/quoter.rs, quote/emptiness.rs, quote/quoter_revert.rs, pools/registry.rs.
 //! Настройки: через вызываемые — dex.quoter [вид пула], dex.router (V2), dex.quoter_max_diff_pct.
 //!
 //! Квотер исполняет настоящий обмен (с крючками) и откатывается — research/flow/bsc_v4.md, раздел 5; «Сверка:
@@ -22,6 +23,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::math::swap_cl::Swapped;
+use super::super::node::call;
 use super::super::pools::registry::Entry;
 use super::super::quote::quoter::Judged;
 use super::super::quote::{emptiness, quoter, quoter_revert};
@@ -69,6 +71,49 @@ pub async fn quoter_hop_with(
     (hook_pct, exit): (Decimal, bool),
     known: Option<U256>,
 ) -> GatewayResult<Option<ExitFix>> {
+    hop(ctx, e, token_in, local, (hook_pct, exit), known, "latest").await
+}
+
+/// Решение 382: как quoter_hop, но квотер — на блоке `block` (пул перечитан на нём, exec/quoter_refetch.rs): расчёт
+/// и квотер на одном блоке. Принимает: как quoter_hop ((влияние, продажа выхода)), блок. Ошибки: как quoter_hop;
+/// StaleData — состояния блока у узла нет.
+pub async fn quoter_hop_at(
+    ctx: &Ctx,
+    e: &Entry,
+    token_in: Address,
+    local: &Swapped,
+    (hook_pct, exit): (Decimal, bool),
+    block: u64,
+) -> GatewayResult<Option<ExitFix>> {
+    let tag = call::block_tag(block);
+    hop(ctx, e, token_in, local, (hook_pct, exit), None, &tag).await
+}
+
+/// Решение 382: quoter_now на блоке `block` (сухая сделка по перечитанным пулам). Ошибки: как quoter_hop_at.
+pub async fn quoter_now_at(
+    ctx: &Ctx,
+    e: &Entry,
+    token_in: Address,
+    local: &Swapped,
+    hook_pct: Decimal,
+    block: u64,
+) -> GatewayResult<()> {
+    quoter_hop_at(ctx, e, token_in, local, (hook_pct, false), block)
+        .await
+        .map(|_| ())
+}
+
+/// Сверка хопа: известный выход квотера (`known`) или вызов квотера на блоке `tag` («latest» или номер hex).
+/// Принимает и ошибки: как quoter_hop_with.
+async fn hop(
+    ctx: &Ctx,
+    e: &Entry,
+    token_in: Address,
+    local: &Swapped,
+    (hook_pct, exit): (Decimal, bool),
+    known: Option<U256>,
+    tag: &str,
+) -> GatewayResult<Option<ExitFix>> {
     let short = if emptiness::empty(e) {
         Some(emptiness::EMPTY.to_string())
     } else if !local.complete {
@@ -87,7 +132,7 @@ pub async fn quoter_hop_with(
     ctx.dec("dex.quoter_max_diff_pct")?;
     let asked = match known {
         Some(r) => Ok(r),
-        None => quoter::out(ctx, e, token_in, local.amount_in).await,
+        None => quoter::out_at(ctx, e, token_in, local.amount_in, tag).await,
     };
     let remote = match asked {
         Ok(r) => r,

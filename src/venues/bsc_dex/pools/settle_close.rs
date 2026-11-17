@@ -13,6 +13,8 @@
 //! подписки — недостающим негде быть, кроме полосы пула. Оговорка: на стыке смены состава подписки (group.rs set: новая
 //! подписка, затем отписка старой) два потока «все события» идут одновременно — закрытие может случиться раньше; это
 //! полное чтение пула на голове (не возврат достоверности), лишняя работа, не деньги. Числа и настройки нет.
+//! Решение 382: так же закрывается отметка Need::Reread (память пула разошлась с узлом) — полное чтение на голове выше
+//! блока отметки.
 //! Кто вызывает: pools/session.rs (ветка новой головы, до reload::retry).
 //! От чего зависит: settle.rs (Holds, Hold), reload.rs (load_one), stale_read.rs (waiting), pool_fail.rs (note, requeue,
 //! base), invalidated.rs, admit.rs (Members), refresh_urgency.rs (класс dex.event_refresh_urgency), listen.rs.
@@ -22,7 +24,7 @@ use crate::storage::journal::Level;
 
 use super::admit::Members;
 use super::listen::{End, Pools};
-use super::settle::Hold;
+use super::settle::{Hold, Need};
 use super::{pool_fail, refresh_urgency, reload, stale_read};
 
 /// Пора ли закрыть отметку на голове `at`; `transit` — могут ли логи пула блока отметки ещё быть в пути (см. шапку).
@@ -66,11 +68,19 @@ pub async fn on_head(
         if stale_read::waiting(missing, i) {
             continue;
         }
-        let msg = format!(
-            "{} {t}: логи блока {} пула не пришли целиком к голове {at} — пул перечитывается целиком на голове \
-             (решение 357; до этого пул не котировался и ядру не отправлялся)",
-            f.family.title, h.block
-        );
+        let msg = if h.need == Some(Need::Reread) {
+            format!(
+                "{} {t}: память пула разошлась с узлом на блоке {} — пул перечитывается целиком на голове {at} \
+                 (решение 382; до этого пул не котировался и ядру не отправлялся)",
+                f.family.title, h.block
+            )
+        } else {
+            format!(
+                "{} {t}: логи блока {} пула не пришли целиком к голове {at} — пул перечитывается целиком на голове \
+                 (решение 357; до этого пул не котировался и ядру не отправлялся)",
+                f.family.title, h.block
+            )
+        };
         p.ctx.log(Level::Info, "dex.pool", msg, None).await;
         let res = refresh_urgency::urgent(&p.ctx, reload::load_one(p, f, t, at)).await?;
         if let Err(why) = res {

@@ -14,6 +14,8 @@
 //! кошелька 0 единиц входа … пула-источника … нет» — AVA, FLOKI, NXT, YCT, MIRA): адаптер не нашёл, чем пополнить
 //! кошелёк на весь объём, — сделка не теряется и не идёт вслепую: план пересчитывается на объём продажи не больше
 //! проверяемого (precheck_dex_cut.rs) и симулируется заново на точном новом объёме.
+//! Решение 382: продажа собрана по квотеру (DexPresell.by_quoter, решение 177) — отказ «невыгодна по квотеру: прибыль …
+//! ниже порога», строка расхождений — в текст.
 //! Кто вызывает: core/precheck_sell.rs (сторона продажи — DEX).
 //! От чего зависит: precheck_dex_cut.rs (пересчёт на проверяемый объём), precheck_sell.rs (запрос продажи), dex_account.rs (вид на кошелёк направления), costs_types.rs
 //! (Calc, CostLine), deps.rs (журнал, шлюз).
@@ -141,6 +143,12 @@ pub fn apply(
     min_pct: Decimal,
 ) -> Result<Calc, String> {
     let profit = plan.profit_usd + (sim.out - plan.proceeds);
+    // Решение 382: продажа собрана по квотеру (решение 177) — отказ называет это прямо.
+    let what = if sim.by_quoter.is_some() {
+        "по квотеру"
+    } else {
+        "по симуляции продажи"
+    };
     let pct = if plan.invested.is_zero() {
         Decimal::ZERO
     } else {
@@ -148,13 +156,13 @@ pub fn apply(
     };
     if profit < min_usd {
         return Err(format!(
-            "невыгодна по симуляции продажи: прибыль {} USDT ниже порога {min_usd}",
+            "невыгодна {what}: прибыль {} USDT ниже порога {min_usd}",
             profit.round_dp(4)
         ));
     }
     if pct < min_pct {
         return Err(format!(
-            "невыгодна по симуляции продажи: прибыль {}% ниже порога {min_pct}%",
+            "невыгодна {what}: прибыль {}% ниже порога {min_pct}%",
             pct.round_dp(4)
         ));
     }
@@ -192,7 +200,7 @@ fn summary(plan: &Calc, s: &DexPresell, tax: Decimal) -> String {
         .collect();
     format!(
         "кошелёк {}, {}, продано {} монет, выход {} USDT против выручки плана {} (разница {}), ожидалось {} USDT, \
-         минимум по долям {}, модельный налог продажи {}%, блок {}, газ обмена {}, монеты в симуляции: {}",
+         минимум по долям {}, модельный налог продажи {}%, блок {}, газ обмена {}, монеты в симуляции: {}{}",
         s.wallet,
         s.form,
         s.coins.normalize(),
@@ -204,7 +212,10 @@ fn summary(plan: &Calc, s: &DexPresell, tax: Decimal) -> String {
         tax.round_dp(4).normalize(),
         s.block,
         s.gas_swap,
-        s.funding.as_deref().unwrap_or("—")
+        s.funding.as_deref().unwrap_or("—"),
+        s.by_quoter
+            .as_ref()
+            .map_or(String::new(), |q| format!("; продажа по квотеру: {q}"))
     )
 }
 

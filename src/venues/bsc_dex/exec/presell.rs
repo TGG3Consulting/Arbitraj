@@ -20,6 +20,8 @@
 //! 17.11: 350 отказов AVA, FLOKI, NXT, YCT, MIRA) — не отказ, а PresellOutcome::Short с объёмом, который можно проверить
 //! (доля объёма запроса: можно / нужно единиц входа); ядро пересчитывает сделку на него и зовёт симуляцию снова
 //! (core/precheck_dex_cut.rs) — сделка идёт только на объёме, проверенном симуляцией целиком.
+//! Решение 382 (выравнивание с 177): расхождение с квотером у продажи выхода — продажа собрана по квотеру, как настоящая
+//! (exec/dry_checks.rs), строка — в DexPresell.by_quoter и в текст отказа.
 //! Кто вызывает: venue.rs (контракт dex_presell).
 //! От чего зависит: exec/{dry_build, dry_sim, dry_swap (io), trade (sides), native}.rs, quote/{direct, pool_tax}.rs,
 //! wallet/{signer, balances}.rs, num.rs.
@@ -118,13 +120,17 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<PresellOutcome
     let tail = || {
         format!(
             "кошелёк {wallet:#x}, форма {}, ожидалось {} USDT (живой пересчёт, модельный налог), минимум {} USDT \
-             (по долям: {}), блок {}{}",
+             (по долям: {}), блок {}{}{}",
             ready.form,
             ready.usdt.round_dp(6),
             min_sum.round_dp(6),
             list(&min_legs),
             ready.at.number,
-            surplus.as_ref().map_or(String::new(), |l| format!("; {l}"))
+            surplus.as_ref().map_or(String::new(), |l| format!("; {l}")),
+            ready
+                .by_quoter
+                .as_ref()
+                .map_or(String::new(), |l| format!("; продажа по квотеру: {l}"))
         )
     };
     if let Some(why) = sim.reason {
@@ -168,6 +174,8 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<PresellOutcome
             (f, l) => f.or(l),
         },
         gas_swap: sim.gas_swap,
+        // Решение 382: продажа собрана по квотеру, как настоящая продажа выхода (решение 177).
+        by_quoter: ready.by_quoter.clone(),
     })))
 }
 

@@ -34,6 +34,12 @@ pub struct Leg<'a> {
 /// узел (откат квотера — его текст), QuoteMismatch (квотер меньше нашего больше допуска — с цифрами), Internal (у пула
 /// V4 нет ключа, пустой путь).
 pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<Vec<String>> {
+    check_at(ctx, legs, "latest").await
+}
+
+/// Решение 382: как check, но MixedQuoter и get_dy — на блоке `block` (номер hex — пулы перечитаны на нём,
+/// exec/quoter_refetch.rs — или «latest»). Возвращает и ошибки: как check; StaleData — состояния блока у узла нет.
+pub async fn check_at(ctx: &Ctx, legs: &[Leg<'_>], block: &str) -> GatewayResult<Vec<String>> {
     let to = ctx.addr("smart.mixed_quoter")?;
     let limit = ctx.dec("dex.quoter_max_diff_pct")?;
     let calls = legs
@@ -49,11 +55,11 @@ pub async fn check(ctx: &Ctx, legs: &[Leg<'_>]) -> GatewayResult<Vec<String>> {
             h.token_in,
             h.swapped.amount_in,
             h.swapped.amount_out,
-            ("latest", true),
+            (block, true),
         )
     });
     let (outs, extras) = tokio::join!(
-        call::view_many(ctx, to, &calls, "latest"),
+        call::view_many(ctx, to, &calls, block),
         futures_util::future::join_all(extras)
     );
     let mut favour = Vec::new();

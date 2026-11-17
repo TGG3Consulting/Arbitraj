@@ -96,6 +96,8 @@ impl Registry {
             unread: Default::default(),
             // Решение 357: у снимка отметок «в обновлении» нет.
             holds: Default::default(),
+            // Решение 382: у снимка доказательств нет.
+            proofs: Default::default(),
         }
     }
 }

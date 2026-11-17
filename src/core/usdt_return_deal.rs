@@ -61,12 +61,18 @@ pub async fn prepare(core: &Core, deal: &mut Deal) -> Vec<Job> {
         return vec![];
     }
     // Решение 390 (t179, докупка): сделка группы — её выручка ждёт общего возврата группы или перегоняется вместе с
-    // отложенными частями одним возвратом (coin_group.rs); без группы — как раньше.
-    let parts = super::coin_group::route(core, deal, parts).await;
+    // отложенными частями одним возвратом (coin_group.rs); без группы (докупка выключена) — вызова нет. Будущие — в
+    // куче: этот шаг — на пути «застрявшая монета → продажа → закрытие», чувствительном к стеку (решение 389,
+    // tests/core_exec_book_238.rs).
+    let parts = if deal.group.is_some() {
+        Box::pin(super::coin_group::route(core, deal, parts)).await
+    } else {
+        parts
+    };
     if parts.is_empty() {
         return vec![];
     }
-    start_parts(core, deal, parts).await
+    Box::pin(start_parts(core, deal, parts)).await
 }
 
 /// Что делает: перегоны частей сделки (тело prepare после решения о частях; решение 390 — и общий возврат группы,

@@ -13,7 +13,7 @@
 //!
 //! Только живой расчёт сделки (снимок рынка решения 217 и теневой замер решения 267 — без изменений, costs_source.rs)
 //! и только сделки с группой докупки (exec.top_up = да): выключено — ничего не меняется.
-//! Кто вызывает: costs_source.rs (Live: quote, fillable, worst), precheck_dex_sell.rs (sell_ahead).
+//! Кто вызывает: costs_source.rs (Live: quote — idle / live, fillable, worst), precheck_dex_sell.rs (sell_ahead).
 //! От чего зависит: coin_ride.rs, costs_quote.rs, ride_trail.rs (sites), trade_ops.rs, engine.rs, core/types.
 //! Настройки: нет (включатель — coin_ride.rs).
 
@@ -37,6 +37,41 @@ fn group_rides(core: &Core, d: &Direction) -> Vec<Ride> {
         }
         _ => vec![],
     }
+}
+
+/// Что делает: решение 390 — по монете направления нет ни идущих сделок групп докупки, ни следа их продаж: котировка
+/// живого расчёта — как раньше (costs_source.rs, быстрый выход без новых будущих). Принимает: ядро, направление.
+/// Ошибок нет.
+pub fn idle(core: &Core, d: &Direction) -> bool {
+    let key = CoinKey::of(&d.asset);
+    let none = lk(&core.inner.rides)
+        .get(&key)
+        .is_none_or(|v| v.iter().all(|x| x.group.is_none()));
+    none && lk(&core.inner.trail).is_empty()
+}
+
+/// Что делает: живая котировка стороны при докупке (вызывает costs_source.rs Live, в куче): продажа — после монет
+/// идущих сделок группы и по данным новее продаж сделок групп (ride_trail.rs); покупка — по данным новее их покупки.
+/// Принимает: ядро, направление, сторону (true — продажа на B), количество. Ошибки: как у costs_quote::fetch; Stop —
+/// данные не доказуемо свежее.
+pub async fn live(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
+    let off = if sell {
+        sell_ahead(core, d)
+    } else {
+        Decimal::ZERO
+    };
+    let q = if off > Decimal::ZERO {
+        sell_after(core, d, qty, off).await?
+    } else {
+        Box::pin(super::costs_quote::fetch(core, d, sell, qty, None)).await?
+    };
+    if sell {
+        super::ride_trail::check(core, &CoinKey::of(&d.asset), &d.sell_on, &q)
+            .map_err(Fail::Stop)?;
+    } else {
+        buy_fresh(core, d, &q).map_err(Fail::Stop)?;
+    }
+    Ok(q)
 }
 
 /// Что делает: сколько монет идущих сделок группы будет продано на площадке продажи направления (остаток Deal.qty —

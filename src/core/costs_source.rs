@@ -112,26 +112,11 @@ impl Source for Live<'_> {
     /// B (ride_quote.rs) и по данным новее продаж сделок групп (ride_trail.rs); покупка на A — по данным новее покупок
     /// идущих сделок группы. Групп нет — как раньше. Ошибки: как у fetch; Stop — данные не доказуемо свежее.
     async fn quote(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
-        if !self.rides() {
+        if !self.rides() || super::ride_quote::idle(self.core, d) {
             return super::costs_quote::fetch(self.core, d, sell, qty, self.src).await;
         }
-        let q = if sell {
-            let off = super::ride_quote::sell_ahead(self.core, d);
-            if off > Decimal::ZERO {
-                super::ride_quote::sell_after(self.core, d, qty, off).await?
-            } else {
-                super::costs_quote::fetch(self.core, d, sell, qty, self.src).await?
-            }
-        } else {
-            super::costs_quote::fetch(self.core, d, sell, qty, self.src).await?
-        };
-        let key = super::coin_key::CoinKey::of(&d.asset);
-        if sell {
-            super::ride_trail::check(self.core, &key, &d.sell_on, &q).map_err(Fail::Stop)?;
-        } else {
-            super::ride_quote::buy_fresh(self.core, d, &q).map_err(Fail::Stop)?;
-        }
-        Ok(q)
+        // Решение 390: ветка докупки — в куче (размер будущего котировки как раньше; путь сделки чувствителен к стеку).
+        Box::pin(super::ride_quote::live(self.core, d, sell, qty)).await
     }
 
     /// Решение 250: исполнимое количество — живое через контракт quote_fills (costs_quote.rs fillable); со снимком
@@ -146,9 +131,7 @@ impl Source for Live<'_> {
         } else {
             Decimal::ZERO
         };
-        if off.is_zero() {
-            return super::costs_quote::fillable(self.core, d, sell, qty).await;
-        }
+        // Решение 390: сдвиг 0 (докупка выключена или групп нет) — тот же вызов, что раньше.
         let f = super::costs_quote::fillable(self.core, d, sell, qty + off).await?;
         Ok((f - off).max(Decimal::ZERO))
     }

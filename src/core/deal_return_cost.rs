@@ -14,7 +14,7 @@
 //! Итог меняется, когда часть становится «вернулись» (usdt_return_state::set): итог дня (daily::settle с −разницей),
 //! статистика монеты (gas_stats), журнал core.usdt_return; старые записи — при загрузке, в памяти (ledger_load.rs).
 //! Кто вызывает: usdt_return_state.rs (set), ledger.rs (finish), ledger_load.rs, usdt_return.rs (relay_try — Relayed),
-//! deal_text.rs, manual_outcome.rs.
+//! deal_text.rs, manual_outcome.rs, usdt_return_pieces.rs (куски общего возврата группы, решение 394).
 //! От чего зависит: deal.rs, usdt_return_state.rs, usdt_return_parts.rs, daily.rs, daily_commit.rs, gas_stats.rs,
 //! fills.rs (перевод затраты в USDT), deps.rs (журнал), deal_book.rs (начисление поправки в учёт сделки, решение 257).
 //! Настройки: нет (котируемая монета площадки venue.quote_asset — у вызывающего).
@@ -92,12 +92,18 @@ pub fn part_cost(p: &UsdtReturn) -> Option<Decimal> {
     }
 }
 
-/// Что делает: известные затраты возврата сделки — сумма по частям «вернулись». Принимает: сделку. Ошибок нет.
+/// Что делает: известные затраты возврата сделки — сумма по частям «вернулись»; решение 394 (ревью 3, Б1) — плюс
+/// затраты уже дошедших кусков общего возврата группы (DealGroup.pieces: остаток ещё идёт или не вернулся; без группы —
+/// как раньше). Принимает: сделку. Ошибок нет.
 pub fn known(d: &Deal) -> Decimal {
-    super::usdt_return_parts::all(d)
+    let parts: Decimal = super::usdt_return_parts::all(d)
         .into_iter()
         .filter_map(part_cost)
-        .sum()
+        .sum();
+    match d.group.as_ref().and_then(|g| g.pieces.as_ref()) {
+        Some(p) => parts + p.cost(),
+        None => parts,
+    }
 }
 
 /// Что делает: возврат ещё идёт — есть часть «идёт» или «ждёт повтора». Принимает: сделку. Ошибок нет.

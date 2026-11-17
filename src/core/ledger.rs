@@ -12,7 +12,7 @@
 //! От чего зависит: window_deal.rs (решение 245), deal.rs, deal_closed.rs (текст и отправка deal.closed, решения 216, 236, 237), deal_return_cost.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
 //! Решение 266 (ответ Тиграна 13.11): пауза направления не ставится, когда сделка закрыта отказом биржи по ордеру
 //! покупки из-за нехватки средств (finish_paused, решает executor.rs buy_refusal_pauses); прочие закрытия — как раньше.
-//! Решение 390 (t179, докупка): удачная сделка группы докупки (Closed, продана на площадке плана без перегонов, итог ≥ 0)
+//! Решение 394 (t179, докупка): удачная сделка группы докупки (Closed, продана на площадке плана без перегонов, итог ≥ 0)
 //! паузу направления не ставит (route_pause::won), в хронологии — строка об этом; без группы — как раньше. save у сделки
 //! группы — след продажи (ride_trail.rs) и общий возврат при уходе с пути (coin_group.rs).
 //! Настройки: signal.route_cooldown_s.
@@ -45,33 +45,41 @@ pub(super) fn recompute_exposure(core: &Core) {
 }
 
 /// Сохраняет сделку (память, SQLite, интерфейс). Ошибка базы — в журнал, сделка продолжается.
+/// Решение 394 (ревью 3, п. 13): у сделки группы докупки, ушедшей с пути, — пометка «была частью группы»
+/// (coin_group_left.rs; сохраняется помеченная копия); без группы — как раньше.
 pub async fn save(core: &Core, deal: &Deal) {
+    let marked = if deal.group.is_some() {
+        super::coin_group_left::mark(core, deal)
+    } else {
+        None
+    };
+    let rec: &Deal = marked.as_deref().unwrap_or(deal);
     // Решение 125: сделка изменилась — задача окон проверяет, не пора ли закрыть окно монеты.
     core.inner.window_kick.notify_one();
-    super::window_deal::saved(core, deal); // Решение 245: цена DEX на объём сделки в окне — кто под наблюдением.
-    lk(&core.inner.deals).insert(deal.id.clone(), deal.clone());
+    super::window_deal::saved(core, rec); // Решение 245: цена DEX на объём сделки в окне — кто под наблюдением.
+    lk(&core.inner.deals).insert(rec.id.clone(), rec.clone());
     recompute_exposure(core);
-    if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &deal.id, deal).await {
+    if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &rec.id, rec).await {
         core.inner
             .deps
             .log(
                 Level::Error,
                 "core.ledger",
                 None,
-                format!("Сделка {} не сохранена: {e}", deal.id),
+                format!("Сделка {} не сохранена: {e}", rec.id),
                 None,
             )
             .await;
     }
-    if let Ok(v) = serde_json::to_value(deal) {
+    if let Ok(v) = serde_json::to_value(rec) {
         core.inner.live.send(CoreEvent::Deal(v));
     }
-    super::feed_hold::on_saved(core, deal); // Решение 196: сделка закрылась — снять поток выключенной площадки.
-    // Решение 390: сделка группы докупки — след её продажи (ride_trail.rs) и общий возврат, если она ушла с пути
+    super::feed_hold::on_saved(core, rec); // Решение 196: сделка закрылась — снять поток выключенной площадки.
+    // Решение 394: сделка группы докупки — след её продажи (ride_trail.rs) и общий возврат, если она ушла с пути
     // последней из идущих (coin_group.rs); без группы — ничего.
-    if deal.group.is_some() {
-        super::ride_trail::note(core, deal);
-        super::coin_group::on_saved(core, deal);
+    if rec.group.is_some() {
+        super::ride_trail::note(core, rec);
+        super::coin_group::on_saved(core, rec);
     }
 }
 
@@ -97,7 +105,7 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
         super::deal_return_cost::apply(deal);
         result = deal.result_usd.unwrap_or(result);
     }
-    // Решение 390 (t179): удачная сделка ГРУППЫ ДОКУПКИ (exec.top_up = да; продана на площадке плана, итог ≥ 0) паузу
+    // Решение 394 (t179): удачная сделка ГРУППЫ ДОКУПКИ (exec.top_up = да; продана на площадке плана, итог ≥ 0) паузу
     // направления не ставит — спред держится, следующая докупка не ждёт signal.route_cooldown_s (свежесть данных после
     // нашей продажи — ride_trail.rs); без группы (докупка выключена), срыв и убыток — пауза как раньше.
     let won = pause && deal.group.is_some() && super::route_pause::won(deal);
@@ -128,7 +136,7 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
     for job in ret {
         job.start(core);
     }
-    // Решение 390 (докупка): сделка группы закрыта и сохранена — её отложенная часть в пул группы; последняя — общий
+    // Решение 394 (докупка): сделка группы закрыта и сохранена — её отложенная часть в пул группы; последняя — общий
     // возврат USDT (coin_group.rs). Без группы — вызова нет; будущее — в куче (путь продажи чувствителен к стеку).
     if deal.group.is_some() {
         Box::pin(super::coin_group::after_close(core, deal)).await;

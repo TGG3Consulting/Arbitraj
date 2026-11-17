@@ -7,7 +7,7 @@
 //! Решение 227: состояние — у каждой ЧАСТИ возврата (часть = площадка, где лежат USDT; usdt_return_parts.rs): set,
 //! mark_not_returned и on_restart меняют часть по её площадке, остальные части не трогают.
 //! Решение 236: set вносит затраты части «вернулись» в итог сделки (deal_return_cost.rs) и отправляет отложенное
-//! deal.closed, когда возврат закончен (deal_closed.rs).
+//! deal.closed, когда возврат закончен (deal_closed.rs); решение 394 (ревью 3, Н4) — и «Итог группы» (group_notice.rs).
 //! Кто вызывает: core/usdt_return_deal.rs (шаг после закрытия), core/ledger.rs (load — возврат, прерванный
 //! перезапуском), core/manual_halted.rs («Продано вручную» — возврата нет по решению 100), core/usdt_return_retry.rs
 //! (повторы, решение 163), core/manual_usdt.rs («Перегнать», «Перегнано вручную»).
@@ -124,7 +124,7 @@ pub async fn alarm(core: &Core, deal: &str, amount: Decimal, at: &VenueId, why: 
 /// Решение 236: часть стала «вернулись» — её затраты вычитаются из итога сделки (deal_return_cost.rs: итог дня,
 /// статистика монеты, журнал); возврат закончен — уходит отложенное уведомление deal.closed (deal_closed.rs).
 pub async fn set(core: &Core, deal: &str, state: UsdtReturn, note: &str) {
-    let (d, delta, notice) = {
+    let (d, delta, notice, total) = {
         let mut deals = lk(&core.inner.deals);
         let Some(d) = deals.get_mut(deal) else {
             return;
@@ -136,12 +136,22 @@ pub async fn set(core: &Core, deal: &str, state: UsdtReturn, note: &str) {
         }
         let delta = super::deal_return_cost::apply(d);
         let notice = super::deal_closed::take_ready(d);
-        (d.clone(), delta, notice)
+        // Решение 394 (ревью 3, Н4): «Итог группы» носителя общего возврата, уже известившего о закрытии; без группы —
+        // ничего.
+        let total = if d.group.is_some() {
+            super::group_notice::take(d)
+        } else {
+            None
+        };
+        (d.clone(), delta, notice, total)
     };
     super::ledger::save(core, &d).await;
     super::deal_return_cost::after(core, &d, delta).await;
     if let Some(why) = notice {
         super::deal_closed::send(core, &d, &why).await;
+    }
+    if let Some(t) = total {
+        Box::pin(super::group_notice::send(core, &d, &t)).await;
     }
 }
 

@@ -1,9 +1,12 @@
 //! Файл: core/deal_group.rs
-//! Что делает: решение 390 (t179) — запись группы докупки в сделке (записка договорённостей 269, пп. 1, 10–13): к какой
+//! Что делает: решение 394 (t179) — запись группы докупки в сделке (записка договорённостей 269, пп. 1, 10–13): к какой
 //! группе относится сделка, ждёт ли её выручка общего возврата USDT, в какой сделке общий возврат, вышла ли сделка из
-//! группы, итог группы у сделки с общим возвратом. Только данные и тексты; решения — coin_group.rs.
+//! группы, итог группы у сделки с общим возвратом; ревью 3 t179: итог дошедших кусков общего возврата (Б1) и признак
+//! «Итог группы ещё не отправлен» (Н4). Только данные и тексты; решения — coin_group.rs, usdt_return_pieces.rs,
+//! group_notice.rs.
 //! Группа — ID первой сделки (п. 1: «сделка 1 — главная»); вложенные сделки ссылаются на него.
-//! Кто вызывает: deal.rs (поле Deal.group), executor.rs (создание), coin_group.rs (возврат), deal_text.rs (строки
+//! Кто вызывает: deal.rs (поле Deal.group), executor.rs (создание), coin_group.rs и coin_group_flush.rs (возврат),
+//! usdt_return_pieces.rs (куски), deal_return_cost.rs (затраты кусков), deal_text.rs и group_notice.rs (строки
 //! Telegram), ledger_load.rs (перезапуск), интерфейс (поле group в /api/deals).
 //! От чего зависит: core/types.
 //! Настройки: нет (включатель exec.top_up — coin_ride.rs).
@@ -32,6 +35,38 @@ pub struct DealGroup {
     /// группы = эта сумма + итог этой сделки (в нём один общий возврат, п. 12).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sum: Option<GroupSum>,
+    /// Ревью 3, Б1: общий возврат несколькими выводами по очереди (сумма выше максимума вывода) — итог дошедших кусков,
+    /// пока возврат не закончен или если остаток не вернулся (их затраты — в итоге сделки, deal_return_cost::known).
+    /// Дошли все — снимается, часть учёта «вернулись» на всю сумму с суммами по кускам.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pieces: Option<PiecesDone>,
+    /// Ревью 3, Н4: у носителя общего возврата, уже известившего о своём закрытии, — «Итог группы» ещё не отправлен:
+    /// уйдёт отдельным сообщением, когда возврат закончен (group_notice.rs).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub total_due: bool,
+}
+
+/// Итог дошедших кусков общего возврата (ревью 3, Б1).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PiecesDone {
+    /// Сколько кусков дошло.
+    pub n: u32,
+    /// Запрошено к выводу по дошедшим кускам, USDT.
+    pub amount: Decimal,
+    /// Ушло с площадки (после округления вывода), USDT.
+    pub sent: Decimal,
+    /// Зачислено на площадке покупки, USDT.
+    pub credited: Decimal,
+    /// Затраты вывода не в USDT (газ кошелька DEX) в USDT; None — не было или не пересчитаны.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fee_usd: Option<Decimal>,
+}
+
+impl PiecesDone {
+    /// Затраты дошедших кусков: ушло − зачислено + газ (как у части «вернулись», deal_return_cost::part_cost). Ошибок нет.
+    pub fn cost(&self) -> Decimal {
+        self.sent - self.credited + self.fee_usd.unwrap_or_default()
+    }
 }
 
 /// Итог группы у сделки с общим возвратом.
@@ -59,10 +94,31 @@ impl DealGroup {
     pub fn lines(&self, deal_id: &str, result: Option<Decimal>) -> Vec<(&'static str, String)> {
         let mut out = vec![];
         if self.left {
-            out.push((
-                "Группа",
-                format!("была частью группы {} — свой возврат USDT", self.id),
-            ));
+            // Ревью 3, Н4: вышедшая из группы, которая вернула и выручку поздних сделок группы, — так и пишем.
+            match &self.sum {
+                Some(s) => {
+                    out.push((
+                        "Группа",
+                        format!(
+                            "была частью группы {} — свой возврат USDT, в нём и выручка сделок {}",
+                            self.id,
+                            s.deals.join(", ")
+                        ),
+                    ));
+                    out.push((
+                        "Итог этих сделок",
+                        format!(
+                            "{} сделок, {} USDT (один возврат USDT — в этой сделке)",
+                            s.deals.len() + 1,
+                            (s.others + result.unwrap_or_default()).round_dp(4)
+                        ),
+                    ));
+                }
+                None => out.push((
+                    "Группа",
+                    format!("была частью группы {} — свой возврат USDT", self.id),
+                )),
+            }
             return out;
         }
         if self.id != deal_id || self.sum.is_some() || self.wait.is_some() {

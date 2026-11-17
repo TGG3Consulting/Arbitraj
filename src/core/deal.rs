@@ -145,7 +145,7 @@ pub struct Deal {
     /// DEX ↔ DEX, ручные действия): берётся started_at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub decided_at: Option<DateTime<Utc>>,
-    /// Решение 390 (t179, докупка — записка 269): группа докупки (deal_group.rs). None — сделка без докупки
+    /// Решение 394 (t179, докупка — записка 269): группа докупки (deal_group.rs). None — сделка без докупки
     /// (exec.top_up выключена): запись и API — как раньше.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Box<super::deal_group::DealGroup>>,

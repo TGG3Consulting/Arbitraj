@@ -1,6 +1,6 @@
 //! Файл: core/coin_ride.rs
 //! Что делает: замок монеты (решение 118, Я-2) и «докупка» (решение 269 — записка договорённостей с Тиграном 14.11;
-//! реализация — задача t179, решение 390). Замок в двух частях:
+//! реализация — задача t179, решение 394). Замок в двух частях:
 //! - `inner.active` — монета занята ЦЕЛИКОМ: сделка от входа исполнителя до учёта покупки (предпроверка, ордер покупки,
 //!   частичная покупка, продажа здесь), цикл DEX ↔ DEX, ручное действие, продажа кнопкой «Балансов»;
 //! - `inner.rides` — сделки монеты, которые уже купили, учли покупку во «вложено по монете» и везут или продают монету.
@@ -11,7 +11,8 @@
 //! же площадка продажи — п. 1, 3), следующая сделка того же направления может начаться и становится сделкой группы;
 //! число сделок не ограничено (п. 7) — их ограничивают деньги (money.max_per_coin_usd, «в пути», остаток, дневной
 //! лимит) и порог прибыли каждой. Другие направления монеты при идущей группе — прежний отказ (монета занята).
-//! Сделка, ушедшая с пути (шаг не Transfer / Selling), новых докупок не пускает.
+//! Сделка, ушедшая с пути (шаг не Transfer / Selling), новых докупок не пускает. Общий возврат группы уже ушёл
+//! (ревью 3, Н3) — новая сделка того же направления начинает новую группу.
 //! Значение включателя для идущей сделки запоминается при board (Ride.top_up): очередь кандидатов на каждом тике
 //! настройку не читает, пока идущая сделка начата без докупки.
 //! Блокировки: сначала `active`, потом `rides`, потом `deals`; через await не держатся.
@@ -98,31 +99,49 @@ pub fn take(core: &Core, key: &CoinKey) -> bool {
     a.insert(key.clone())
 }
 
-/// Что делает: группа, к которой может присоединиться новая сделка направления `d` при идущих `rides` (замок целиком
-/// свободен, докупка включена): все идущие — сделки группы этого же направления на шаге Transfer / Selling.
-/// Принимает: ядро, направление, идущие сделки (не пусто). Возвращает: ID группы; None — нельзя. Ошибок нет.
-fn joinable(core: &Core, d: &Direction, rides: &[Ride]) -> Option<String> {
-    let group = rides.first()?.group.clone()?;
-    let same = rides.iter().all(|r| {
-        r.group.as_deref() == Some(group.as_str()) && r.buy_on == d.buy_on && r.sell_on == d.sell_on
-    });
+/// Что делает: место новой сделки направления `d` при идущих `rides` (замок целиком свободен, докупка включена): все
+/// идущие — сделки групп этого же направления на шаге Transfer / Selling. Есть группа, чей общий возврат ещё не ушёл, —
+/// вложенная в неё (Join); у всех групп общий возврат уже ушёл (ревью 3, Н3: coin_group::flushed) — первая сделка новой
+/// группы (Lead: фиксированная часть возврата — в её плане, сделки старой группы возвращают USDT сами). Две открытые
+/// группы — нельзя. Принимает: ядро, направление, идущие сделки (не пусто). Возвращает: место; None — нельзя.
+/// Ошибок нет. Замки: deals, затем groups — по очереди, не вложенно.
+fn joinable(core: &Core, d: &Direction, rides: &[Ride]) -> Option<Seat> {
+    let same = rides
+        .iter()
+        .all(|r| r.group.is_some() && r.buy_on == d.buy_on && r.sell_on == d.sell_on);
     if !same {
         return None;
     }
-    let deals = lk(&core.inner.deals);
-    rides
-        .iter()
-        .all(|r| {
+    let on_path = {
+        let deals = lk(&core.inner.deals);
+        rides.iter().all(|r| {
             matches!(
                 deals.get(&r.deal_id).map(|x| x.step),
                 Some(Step::Transfer | Step::Selling)
             )
         })
-        .then_some(group)
+    };
+    if !on_path {
+        return None;
+    }
+    let mut open: Vec<&str> = rides
+        .iter()
+        .filter_map(|r| r.group.as_deref())
+        .filter(|g| !super::coin_group::flushed(core, g))
+        .collect();
+    open.sort_unstable();
+    open.dedup();
+    match open.as_slice() {
+        [] => Some(Seat::Lead),
+        [g] => Some(Seat::Join(g.to_string())),
+        _ => None,
+    }
 }
 
 /// Что делает: вход исполнителя (executor::accepted) — занять монету целиком под предпроверку и покупку новой сделки.
 /// Монета занята целиком или по ней идут сделки, к которым нельзя присоединиться, — прежний отказ start_reason::busy.
+/// Вложенная (Join) сразу входит в ожидание общего возврата группы (coin_group::join — под замком `active`, ревью 3,
+/// Н1: порядок active → groups; закрытие последней идущей не уведёт общий возврат без неё).
 /// Принимает: ядро, направление. Возвращает: место сделки (монета занята этим вызовом; снимает release или board).
 /// Ошибки: текст причины отказа (прежний).
 pub fn admit(core: &Core, d: &Direction) -> Result<Seat, String> {
@@ -144,10 +163,13 @@ pub fn admit(core: &Core, d: &Direction) -> Result<Seat, String> {
         return Err(busy());
     } else {
         match joinable(core, d, &rides) {
-            Some(g) => Seat::Join(g),
+            Some(s) => s,
             None => return Err(busy()),
         }
     };
+    if let Seat::Join(g) = &seat {
+        super::coin_group::join(core, g);
+    }
     a.insert(key);
     Ok(seat)
 }
@@ -214,16 +236,24 @@ pub fn blocks_new(core: &Core, d: &Direction) -> bool {
     !top_up_on(core) || joinable(core, d, &rides).is_none()
 }
 
-/// Что делает: идёт ли группа докупки этого направления (есть идущие сделки группы того же направления) — для
-/// расчёта докупки (возврат USDT без фиксированной части, п. 5). Принимает: ядро, направление. Ошибок нет.
+/// Что делает: идёт ли группа докупки этого направления, в которую войдёт новая сделка (есть идущие сделки группы того
+/// же направления, и её общий возврат ещё не ушёл — ревью 3, Н3) — для расчёта докупки (возврат USDT без
+/// фиксированной части, п. 5). Принимает: ядро, направление. Возвращает: ID группы; None — новая сделка будет первой
+/// своей группы (фиксированная часть — в её плане). Ошибок нет.
 pub fn group_running(core: &Core, d: &Direction) -> Option<String> {
     let key = CoinKey::of(&d.asset);
-    let r = lk(&core.inner.rides);
-    let v = r.get(&key)?;
-    let first = v.first()?;
-    (first.buy_on == d.buy_on && first.sell_on == d.sell_on)
-        .then(|| first.group.clone())
-        .flatten()
+    let groups: Vec<String> = {
+        let r = lk(&core.inner.rides);
+        let v = r.get(&key)?;
+        let first = v.first()?;
+        if first.buy_on != d.buy_on || first.sell_on != d.sell_on {
+            return None;
+        }
+        v.iter().filter_map(|x| x.group.clone()).collect()
+    };
+    groups
+        .into_iter()
+        .find(|g| !super::coin_group::flushed(core, g))
 }
 
 /// Что делает: ключи всех занятых монет (замок целиком и идущие) — для прогрева адресов депозита. Принимает: ядро.

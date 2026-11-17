@@ -9,7 +9,7 @@
 //! (итог не ниже нуля, решение 47) — продаём; иначе — режим застрявшей монеты (решение 37).
 //! Решение 118 (Я-2): по одной монете — одна сделка (замок по адресу контракта, coin_key.rs): направления одной монеты
 //! через разные площадки не покупают её параллельно сверх money.max_per_coin_usd.
-//! Решение 390 (t179, докупка — записка 269): замок целиком — от входа до учёта покупки; потом сделка — «идущая»
+//! Решение 394 (t179, докупка — записка 269): замок целиком — от входа до учёта покупки; потом сделка — «идущая»
 //! (coin_ride.rs). exec.top_up = да — следующая сделка того же направления становится сделкой группы (Deal.group) и
 //! может начаться, пока эта везёт и продаёт: бюджет — за вычетом вложенного идущих, продажа считается после их монет
 //! (ride_quote.rs). Выключено — одна сделка на монету, как раньше.
@@ -59,6 +59,7 @@ use crate::storage::journal::Level;
 use super::costs::Calc;
 use super::deal::{Deal, Step};
 use super::engine::{Core, rd};
+use super::ride_guard::{RideGuard, Slot};
 use super::step_timing::{Steps, note};
 
 /// Решение 265: этап «Время по шагам» до покупки (строка хронологии).
@@ -75,7 +76,7 @@ pub enum Start {
     /// Направление больше не торгуемо (чёрный список, налоги не проверены, монеты нет в справочнике, площадка
     /// исключена) — точная причина (решение 147, start_reason::not_tradable).
     NotTradable(String),
-    /// По монете уже идёт сделка или действие (решение 118; решение 390 — к идущим нельзя присоединиться) — какое
+    /// По монете уже идёт сделка или действие (решение 118; решение 394 — к идущим нельзя присоединиться) — какое
     /// (решение 147).
     Busy(String),
 }
@@ -101,16 +102,14 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
         return Start::NotTradable(why);
     }
     let key = super::coin_key::CoinKey::of(&d.asset);
-    // Решение 390 (t179): монета занята целиком или идут сделки, к которым нельзя присоединиться, — прежний отказ;
+    // Решение 394 (t179): монета занята целиком или идут сделки, к которым нельзя присоединиться, — прежний отказ;
     // докупка (exec.top_up = да) — сделка группы того же направления (coin_ride.rs admit).
     let seat = match super::coin_ride::admit(core, &d) {
         Ok(s) => s,
         Err(why) => return Start::Busy(why),
     };
-    // Решение 390 (ревью 2 t179, Б2): вложенная сделка — член группы с входа: общий возврат группы ждёт её покупки.
-    if let super::coin_ride::Seat::Join(g) = &seat {
-        super::coin_group::join(core, g);
-    }
+    // Решение 394 (ревью 2 t179, Б2; ревью 3, Н1): вложенная — член группы с входа (coin_group::join в самом admit, под
+    // замком монеты): общий возврат группы ждёт её покупки.
     let core = core.clone();
     // Решение 245, дополнение п. 2: момент решения — время расчёта кандидата, прошедшего пороги (Calc.at).
     let decided = calc.at;
@@ -122,38 +121,23 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
     let fast = super::precheck_fast::read(&core.inner.deps.settings, &calc);
     // Решение 338 (ревью t157 Н1): вся задача сделки (предпроверка, пересчёт, котировки) — ярус счёта «сделка».
     let work = async move {
-        // Решение 390: место сделки (группа докупки) и ID сделки, перешедшей в «идущие» (coin_ride::board) — снимается
-        // её запись, а не замок целиком.
-        let mut slot = Slot {
-            seat,
-            boarded: None,
+        // Решение 394: место сделки (группа докупки) и ID сделки, перешедшей в «идущие» (coin_ride::board) — снимается
+        // её запись, а не замок целиком. Ревью 3, Н5: снятие — в Drop (ride_guard.rs), в том числе при панике в run.
+        let mut g = RideGuard {
+            core,
+            key,
+            slot: Slot {
+                seat,
+                boarded: None,
+            },
         };
-        run(&core, d.clone(), decided, (on, handed), fast, &mut slot).await;
-        super::coin_ride::release(&core, &key, slot.boarded.as_deref());
-        // Решение 390 (Б2): вложенная не дошла до учёта покупки — выходит из группы (общий возврат без неё); сделка
-        // группы снята из идущих — проверка «последняя ли» и уборка пула группы.
-        match (&slot.seat, &slot.boarded) {
-            (super::coin_ride::Seat::Join(g), None) => super::coin_group::dropped(&core, &key, g),
-            (super::coin_ride::Seat::Join(g), Some(_)) => {
-                super::coin_group::released(&core, &key, g)
-            }
-            (super::coin_ride::Seat::Lead, Some(id)) => {
-                super::coin_group::released(&core, &key, id)
-            }
-            _ => {}
-        }
+        run(&g.core, d.clone(), decided, (on, handed), fast, &mut g.slot).await;
     };
     tokio::spawn(urgency::scope(
         Urgency::Trade,
         cpu_budget::scope(Tier::Deal, work),
     ));
     Start::Started
-}
-
-/// Решение 390: место новой сделки по монете (coin_ride::Seat) и ID сделки после board.
-struct Slot {
-    seat: super::coin_ride::Seat,
-    boarded: Option<String>,
 }
 
 /// Пометка записи закрытия сделки: пауза направления не поставлена (решение 266, ответ Тиграна 13.11).
@@ -187,7 +171,7 @@ pub fn buy_gate(core: &Core) -> Result<(), String> {
 /// (Calc.at прошедшего кандидата — в учёт сделки, решение 245, дополнение п. 2), момент передачи исполнителю
 /// (решение 265: включён ли замер по шагам и момент передачи — None, если выключен), режим быстрой предпроверки
 /// (решение 266: объём кандидата и «одновременно» — precheck_fast.rs; всё выключено — как раньше), место сделки
-/// (решение 390: группа докупки; сюда же пишется ID сделки, когда она учла покупку и ушла в «идущие», coin_ride::board).
+/// (решение 394: группа докупки; сюда же пишется ID сделки, когда она учла покупку и ушла в «идущие», coin_ride::board).
 async fn run(
     core: &Core,
     d: Direction,
@@ -279,12 +263,12 @@ async fn run(
     );
     // Решение 245, дополнение п. 2: момент решения о сделке — в учёт (длительность сделки для «успели бы»).
     deal.decided_at = Some(decided);
-    // Решение 390 (докупка): первая сделка группы — группа = её ID; вложенная — ID первой; выключено — группы нет.
+    // Решение 394 (докупка): первая сделка группы — группа = её ID; вложенная — ID первой; выключено — группы нет.
     deal.group = match &ride.seat {
         super::coin_ride::Seat::Alone => None,
         super::coin_ride::Seat::Lead => Some(Box::new(super::deal_group::DealGroup::new(&deal.id))),
         super::coin_ride::Seat::Join(g) => {
-            deal.note(format!("Докупка: сделка группы {g} (решение 390)"));
+            deal.note(format!("Докупка: сделка группы {g} (решение 394)"));
             Some(Box::new(super::deal_group::DealGroup::new(g)))
         }
     };
@@ -605,7 +589,7 @@ async fn run(
     // Перевод на B.
     deal.step = Step::Transfer;
     super::ledger::save(core, &deal).await;
-    // Задача t179 (решение 390): покупка учтена во «вложено по монете» и «в пути» (save → recompute_exposure) — монета
+    // Задача t179 (решение 394): покупка учтена во «вложено по монете» и «в пути» (save → recompute_exposure) — монета
     // из замка целиком в «идущие»: следующая сделка монеты может начаться (coin_ride.rs admit), её бюджет — за вычетом
     // этой, продажа — после монет этой (ride_quote.rs). Частичная покупка с продажей на A и «продажа здесь» (cex_link)
     // остаются под замком целиком — они выше.

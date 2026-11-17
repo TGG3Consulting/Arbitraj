@@ -6,6 +6,8 @@
 //! (usdt_return_retry.rs); тогда сбой первой попытки не извещается usdt.relay_failed — итог известит повтор.
 //! Решение 227: Job — одна ЧАСТЬ возврата (площадка выручки); у сделки с продажами на нескольких площадках — по Job на
 //! часть, итог каждой — в её состояние.
+//! Решение 394 (ревью 3 t179, Б1): Job общего возврата группы докупки выше максимума вывода несёт куски (pieces) —
+//! они уходят по очереди в этой же задаче и одной части учёта (usdt_return_pieces.rs); без кусков — как раньше.
 //! Кто вызывает: core/usdt_return_deal.rs (prepare создаёт Job), core/ledger.rs (finish запускает после сохранения).
 //! От чего зависит: usdt_return.rs (relay, relay_try), usdt_return_retry.rs, usdt_return_state.rs, gateway/urgency.rs.
 //! Настройки: через usdt_return.rs (usdt_return.*), через usdt_return_retry.rs (usdt.return_retry_s, usdt.return_retries_max).
@@ -26,6 +28,8 @@ pub struct Job {
     pub(super) from: VenueId,
     pub(super) to: VenueId,
     pub(super) acc: Option<DexAccountId>,
+    /// Решение 394 (ревью 3, Б1): куски общего возврата группы по очереди (сумма = amount); пусто — один вывод.
+    pub(super) pieces: Vec<Decimal>,
 }
 
 impl Job {
@@ -41,6 +45,10 @@ impl Job {
                 from: self.from.clone(),
                 done: false,
             };
+            // Решение 394 (ревью 3, Б1): куски — по очереди, одна часть учёта (usdt_return_pieces.rs).
+            if self.pieces.len() > 1 {
+                return Box::pin(super::usdt_return_pieces::run(&c, &self, &mut guard)).await;
+            }
             let id = format!("{}u", self.deal);
             let acc = self.acc.as_ref();
             // Решение 163: повторы заданы — сбой первой попытки известит итог повторов, а не usdt.relay_failed.
@@ -77,13 +85,14 @@ impl Job {
     }
 }
 
-/// Страховка на случай, если задача перегона оборвалась (паника) до итога. Ошибок нет.
-struct Guard {
+/// Страховка на случай, если задача перегона оборвалась (паника) до итога: «не вернулись» на amount (у кусков —
+/// остаток, usdt_return_pieces.rs). Ошибок нет.
+pub(super) struct Guard {
     core: Core,
     deal: String,
-    amount: Decimal,
+    pub(super) amount: Decimal,
     from: VenueId,
-    done: bool,
+    pub(super) done: bool,
 }
 
 impl Drop for Guard {

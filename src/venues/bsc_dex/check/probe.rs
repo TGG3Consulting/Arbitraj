@@ -21,14 +21,17 @@
 //! (check/probe_buy.rs), а не весь баланс: на кошельке сделки могут лежать её монеты.
 //! Кто вызывает: check/taxes.rs.
 //! От чего зависит: check/simulate.rs, check/sim_base.rs (время блока), check/probe_calls.rs, check/probe_buy.rs, check/probe_exec.rs, exec/plan.rs, exec/fork_swap.rs,
-//! quote/v2_pair_probe.rs (квотер DEX или, у V2-форка без роутера, резервы пары — решение 280), wallet/approve.rs, pools/registry.rs.
-//! Настройки: через вызываемые (адреса квотера, роутеров, исполнителя; dex.deadline_s).
+//! quote/v2_pair_probe.rs (квотер DEX или, у V2-форка без роутера, резервы пары — решение 280), quote/probe_quote.rs
+//! (у DEX с dex.quoter_virtual — виртуальный квотер с подменой кода в тех же симуляциях, решение 388), wallet/approve.rs, pools/registry.rs.
+//! Настройки: через вызываемые (адреса квотера, роутеров, исполнителя; dex.deadline_s; dex.quoter_virtual [DEX]).
 //!
 //! Официального рецепта измерения налога нет (research/flow/bsc_dex.md, раздел 6). Квотер DEX выдаёт выход БЕЗ налога
 //! токена (решение 146, проверено по коду): V2 Router.getAmountsOut — математика резервов, без переводов; QuoterV2
 //! (Uniswap/PancakeSwap V3, Algebra, Slipstream, KyberSwap Elastic) и MaverickV2Quoter — откат в колбэке обмена ДО
 //! перевода входного токена в пул; CLQuoter/BinQuoter Infinity и V4Quoter — откат с дельтами без переводов; DODO
 //! querySell*, Solidly getAmountOut, StableSwap get_dy/calculateSwap, WooFi query — view-расчёт без переводов.
+//! Виртуальный квотер (решения 186, 388: DEX с dex.quoter_virtual — Metric, Algebra Integral, iZiSwap / Biswap V3,
+//! SmarDex и др.) — swap самого пула с откатом в обратном вызове ДО перевода входа, тоже без налога (quote/probe_quote.rs).
 //! Пустой адрес — последние 20 байт keccak256(адрес кошелька) — вычисляется, не зашит.
 //! Ограничение (подтверждено техлидом, Issue #7): налог перевода меряется на пустой адрес, а не на депозит биржи —
 //! налог может зависеть от получателя (белые/чёрные списки); факт перевода — по событиям Transfer (exec/fill.rs).
@@ -44,7 +47,7 @@ use super::super::exec::fork_swap;
 use super::super::exec::plan::{self, Order};
 use super::super::node::heads::Heads;
 use super::super::pools::registry::Entry;
-use super::super::quote::v2_pair_probe;
+use super::super::quote::{probe_quote, v2_pair_probe};
 use super::super::wallet::approve::Approval;
 use super::super::wallet::balances;
 use super::probe_buy;
@@ -113,7 +116,11 @@ pub async fn run(
         now,
     )
     .await?;
-    let (qto, qdata) = v2_pair_probe::request_any(ctx, e, usdt, usdt_amount)?;
+    // Решение 388 (t174): «ожидалось без налога» — у DEX с виртуальным квотером его вызов с подменой кода в этих же
+    // симуляциях (quote/probe_quote.rs); способ выбран один раз — вызов и разбор одного квотера.
+    let way = probe_quote::Way::of(ctx, e);
+    let over = way.overrides(ctx)?;
+    let (qto, qdata) = way.request(ctx, e, usdt, usdt_amount)?;
     let mut list = vec![pc::transfer(source, usdt, wallet, usdt_amount)];
     list.extend(buy_aps.iter().map(|(to, d)| Call {
         from: wallet,
@@ -129,7 +136,7 @@ pub async fn run(
         (qto, qdata),
         (buy_router, buy_data),
     );
-    let first = simulate::run(ctx, &list, at).await?;
+    let first = simulate::run_with(ctx, &list, &[], &over, at).await?;
     let (q, x) = (h.quote, h.buy);
     if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
         // Решение 280: V2-форк без роутера — откат покупки через исполнитель — свойство пула, не монеты.
@@ -142,7 +149,7 @@ pub async fn run(
     // Через исполнитель (tradable = false) — событие самого пула по адресу шага (check/probe_exec.rs::emitter).
     probe_exec::emitter(ctx, e, &first[x].logs).await?;
     let (Some(buy_expected), Some(bought)) = (
-        v2_pair_probe::decode_any(ctx, e, &first[q].return_data, usdt, usdt_amount),
+        way.expected(ctx, e, &first[q].return_data, usdt, usdt_amount)?,
         probe_buy::bought(&first[h.before], &first[h.after]),
     ) else {
         return Ok(Err("ответ квотера или баланса не по ABI".into()));
@@ -169,7 +176,7 @@ pub async fn run(
     // Настоящая продажа (Universal Router, исполнитель, роутер форка) идёт без перевода монеты перед ней в том же блоке;
     // у монеты с отражением (reflection, форк SafeMoon) перевод перед продажей поднял бы balanceOf пары выше резерва, и
     // пара V2 (вход = balanceOf − резерв) засчитала бы продаже лишний вход — налог продажи пробы занижен.
-    let (sq_to, sq_data) = v2_pair_probe::request_any(ctx, e, coin, rest)?;
+    let (sq_to, sq_data) = way.request(ctx, e, coin, rest)?;
     let base = list.len();
     let t = pc::sell_tail(
         &mut list,
@@ -179,7 +186,7 @@ pub async fn run(
         (sq_to, sq_data),
         (sell_router, sell_data),
     );
-    let all = simulate::run(ctx, &list, at).await?;
+    let all = simulate::run_with(ctx, &list, &[], &over, at).await?;
     if let Some(r) = all.iter().find(|r| pc::late(r)) {
         let m = format!(
             "TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время головы + 1 с, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла: {}",
@@ -212,7 +219,7 @@ pub async fn run(
     Ok(Ok(Measured {
         buy_expected,
         buy_got: bought,
-        sell: pc::sell_result(ctx, e, &all[t.quote..t.quote + 4], (sold, rest)),
+        sell: pc::sell_result(ctx, e, way, &all[t.quote..t.quote + 4], (sold, rest)),
         transfer_sent: quarter,
         transfer_got: xb,
         gas_buy: all[x].gas_used.to(),

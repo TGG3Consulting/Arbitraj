@@ -6,7 +6,8 @@
 //! Комиссию здесь проверяет сам обмен через исполнитель в той же симуляции: пара откатила покупку — налоги ПУЛА не
 //! измерены (пул в маршрут не идёт, решение 146), монета не голосует «не прошла» (buy_unmeasured → SwapReverted,
 //! check/taxes.rs); откат перевода монеты из пары («…: TRANSFER_FAILED») — механика монеты, голосует как у всех. Остальные виды — как раньше (quote/quoter_calls.rs, буква в букву).
-//! Кто вызывает: check/probe.rs, check/probe_calls.rs, exec/dry_surplus_tail.rs.
+//! Кто вызывает: quote/probe_quote.rs (request_any, decode_any — проба check/probe.rs, решение 388), check/probe.rs
+//! (buy_unmeasured), exec/dry_surplus_tail.rs.
 //! От чего зависит: quote/{quoter_calls, v2_pair_quote, v2_pair_sim}.rs, math/v2.rs, pools/abi_v2v3.rs, check/{simulate, probe_calls}.rs.
 //! Настройки: через v2_pair_quote::fee — dex.v2_fee_pct [DEX].
 

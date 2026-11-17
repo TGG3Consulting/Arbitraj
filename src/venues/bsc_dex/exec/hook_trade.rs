@@ -15,6 +15,8 @@
 //! - Н7: все пробы одной сделки — на блоке первой пробы (trade_probe.rs pin): факты сделки — одна картина пула, без
 //!   настройки и без «расстояния между пробами» (прежняя проверка головы по verify.max_staleness_blocks убрана); возраст
 //!   этой картины ограничен числом кругов;
+//!   слияние с решением 382 (t168): есть перечитанные пулы (Quoting.pinned, блок H) — все пробы сделки сразу на H
+//!   (pin = quoter_refetch::block), чтобы влияние крючка было снято на том же блоке, что пути и сверка с квотером;
 //! - Н-ж: доли с общим пулом (решение 223) исполняются по порядку, и вход пула с крючком у доли после общего пула
 //!   меняется (quote/graph_seq.rs resequence): входы шагов с крючком берутся и из путей по порядку исполнения — проба
 //!   покрывает и их фактом квотера (на состоянии блока пробы; зависимость крючка от состояния после прошлых долей
@@ -24,7 +26,7 @@
 //! (ревью 2 Б2, exec/trade_probe.rs).
 //!
 //! Кто вызывает: exec/live.rs (path), exec/bundle_trade.rs, exec/smart_legs.rs, exec/dry_paths.rs.
-//! От чего зависит: exec/{live, trade_probe, hook_drive}.rs, check/quoter_amount.rs, quote/{path, via, graph_seq}.rs.
+//! От чего зависит: exec/{live, trade_probe, hook_drive, quoter_refetch}.rs, check/quoter_amount.rs, quote/{path, via, graph_seq}.rs.
 //! Настройки: hooks.trade_probe_rounds_max (необязательна; не задана — два круга).
 
 use alloy_primitives::Address;
@@ -61,7 +63,9 @@ pub async fn paths(
     };
     let mut drive = Drive::new(rounds);
     let mut th = TradeHooks::default();
-    let mut pin: Option<u64> = None;
+    // Слияние t173 × t168 (решение 382): на втором проходе по пулам, перечитанным на голове H (Quoting.pinned), проба —
+    // на H, как сверка и расчёт пути; иначе (None) — блок первой пробы.
+    let mut pin: Option<u64> = super::quoter_refetch::block(v.q);
     let mut out = all(v, shares, direct_mode, &th).await?;
     loop {
         // Независимое ревью t173 (Н-3): пересчёт долей по порядку исполнения (resequence) — только когда шаг может

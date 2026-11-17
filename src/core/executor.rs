@@ -320,12 +320,15 @@ async fn run(
         }
     };
     // Часть 4: план уже посчитан под свободный остаток (свободного меньше списания кандидата) — та же заметка.
+    // Решение 380 (ревью t166, Н6): урезание по симуляции продажи — своя строка (precheck_dex_cut::chrono); здесь —
+    // план до урезания.
     if let Some(c) = bal.as_ref().and_then(|b| b.refit) {
+        let was = bal.as_ref().and_then(|b| b.cut);
         deal.note(refit_note(
             cap,
-            plan.qty,
+            was.map_or(plan.qty, |p| p.qty),
             c.qty,
-            plan.profit_usd,
+            was.map_or(plan.profit_usd, |p| p.profit_usd),
             c.profit_usd,
         ));
     }
@@ -334,7 +337,7 @@ async fn run(
     let plan = if bal.is_none() && super::refit::needed(&plan, cap) {
         // Решение 265: подбор под остаток — шаг и свои этапы пересчёта.
         let at = ts.at();
-        let refit = Box::pin(super::refit::plan(core, &d, cap));
+        let refit = Box::pin(super::refit::plan(core, &d, cap, &plan));
         let (r, m) = super::step_timing::measure_if(on, refit).await;
         ts.mark(at, || "подбор объёма под свободный остаток".into());
         note(

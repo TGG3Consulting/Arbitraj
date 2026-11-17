@@ -200,9 +200,15 @@ pub struct Usable {
 }
 
 /// Держатели-источники для монеты (решение 380: все годные, а не один с полной суммой — набор делает
-/// exec/dry_fund_gather.rs). Принимает: котировку (реестр, узел), токен, пулы маршрута. Возвращает: Usable.
+/// exec/dry_fund_gather.rs). Принимает: котировку (реестр, узел), токен, пулы маршрута, блок чтения балансов (тег:
+/// блок симуляции — ревью t166 Н1). Возвращает: Usable.
 /// Ошибки: узел (balanceOf), Internal.
-pub async fn usable(q: &Quoting, token: Address, route: &[&Entry]) -> GatewayResult<Usable> {
+pub async fn usable(
+    q: &Quoting,
+    token: Address,
+    route: &[&Entry],
+    block: &str,
+) -> GatewayResult<Usable> {
     let ctx = &q.ctx;
     let mut holders: Vec<(Address, &'static str)> = Vec::new();
     // Снимок без копирования записей; только достоверные пулы (как source в exec/dry_fund.rs).
@@ -231,7 +237,7 @@ pub async fn usable(q: &Quoting, token: Address, route: &[&Entry]) -> GatewayRes
         .iter()
         .map(|(a, _)| IERC20::balanceOfCall { owner: *a })
         .collect();
-    let balances = call::view_many(ctx, token, &calls, "latest").await?;
+    let balances = call::view_many(ctx, token, &calls, block).await?;
     let cands: Vec<(Address, U256)> = holders.iter().map(|(a, _)| *a).zip(balances).collect();
     let (ok, refused) = eligible(&cands, &sites);
     let label = |a: Address| {

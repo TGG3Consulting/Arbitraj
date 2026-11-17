@@ -15,7 +15,7 @@
 //! токен продаётся этим путём этим кошельком и налог на ЭТОЙ сумме; не доказывает лимит размера перевода/продажи у
 //! токена (max tx, anti-whale), налог, зависящий от суммы, и прочую логику transfer токена — котировка пула и квотер
 //! transfer токена не исполняют. Это была бы торговля вслепую; урезание объёма — нет.
-//! Кто вызывает: core/precheck_dex_sell.rs (check), core/costs.rs (sell_max_ok).
+//! Кто вызывает: core/precheck_dex_sell.rs (check), core/costs.rs (sell_max_ok), core/precheck.rs (chrono).
 //! От чего зависит: profit.rs (decide_capped), dirctx.rs (DirCtx.sell_max), dry.rs (Mode::Live), size.rs (Fail),
 //! gateway/quote_purpose.rs (Purpose::Precheck), core::types::PresellShort.
 //! Настройки: нет своих (всё, что читает profit.rs).
@@ -91,5 +91,21 @@ pub fn note(plan: &Calc, short: &PresellShort, sell_qty: Decimal) -> String {
         short.fundable.normalize(),
         plan.profit_usd.round_dp(4),
         short.why
+    )
+}
+
+/// Строка хронологии сделки (ревью t166, Н6): объём урезан до проверенного симуляцией продажи — не путать с «Объём под
+/// свободный остаток» (решение 103). Принимает: план до урезания (числа кандидата части 4), его продажу, итоговый
+/// план. Ошибок нет.
+pub fn chrono(was: &super::precheck_balance::Cand, was_sell: Decimal, c: &Calc) -> String {
+    format!(
+        "Объём урезан до проверенного симуляцией продажи (решение 380): объём {} вместо {}, продажа {} вместо {}, \
+         прибыль {} USDT (было {})",
+        c.qty.normalize(),
+        was.qty.normalize(),
+        c.sell_qty.normalize(),
+        was_sell.normalize(),
+        c.profit_usd.round_dp(4),
+        was.profit_usd.round_dp(4)
     )
 }

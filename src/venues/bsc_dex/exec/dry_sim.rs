@@ -98,11 +98,13 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
                 &mut calls,
                 (r, wallet, t),
                 fs.iter()
-                    .map(|f| pc::transfer(f.src, t, wallet, f.amount))
+                    .map(|f| pc::transfer(f.src, t, f.to.unwrap_or(wallet), f.amount))
                     .collect(),
             );
+            // На кошелёк уходит только перевод без «куда» (один источник или узел набора — решение 380, Н4).
             funded = fs
                 .iter()
+                .filter(|f| f.to.is_none())
                 .fold(U256::ZERO, |s, f| s.saturating_add(f.amount));
             // Источник виден в журнале (решение 302): «из пула …» или «из держателя-синглтона (…) …»; решение 380 —
             // «из K источников (…)».

@@ -33,7 +33,7 @@ use crate::settings::read::At;
 
 use super::costs::{Calc, CostLine};
 use super::engine::{Core, wr};
-use super::precheck_balance::{Bal, Read};
+use super::precheck_balance::{Bal, Cand, Read};
 use super::precheck_fast::{Opts, Want};
 use super::precheck_nets::Src;
 use super::profit::{self, Verdict};
@@ -200,7 +200,14 @@ pub async fn run(
         ..Timing::default()
     };
     let res = steps(core, d, &mut t, &fast, acc).await;
-    let lines: Vec<String> = t.plan.clone().into_iter().chain(t.lines()).collect();
+    // Решение 380: строка урезания — в хронологию всегда (не зависит от log.step_timing).
+    let lines: Vec<String> = t
+        .plan
+        .clone()
+        .into_iter()
+        .chain(t.cut.clone())
+        .chain(t.lines())
+        .collect();
     if res.is_ok() {
         let extra: String = (t.missed.iter().chain(lines.iter()))
             .map(|l| format!(". {l}"))
@@ -248,6 +255,8 @@ struct Timing {
     src: Vec<(String, String)>,
     /// Решение 266, часть 4: биржа A не отдала свободный баланс — строка для журнала core.precheck.
     missed: Option<String>,
+    /// Решение 380 (ревью t166, Н6): объём урезан до проверенного симуляцией продажи — строка хронологии сделки.
+    cut: Option<String>,
 }
 
 /// Решение 266: пометка строк времени при precheck.parallel = да.
@@ -432,9 +441,13 @@ async fn steps(
     // Решение 134: биржа B примет ордер продажи на объём плана — до покупки (precheck_sell.rs). Решение 234: у DEX B —
     // симуляция настоящей продажи кошельком сделки, расчёт — по её выходу (precheck_dex_sell.rs).
     let at = Instant::now();
+    // Решение 380 (ревью t166, Н6): план до проверки продажи — чтобы урезание по симуляции было видно своей строкой.
+    let (pre, pre_sell) = (Cand::of(&c), c.sell_qty);
     let r = super::precheck_sell::check(core, d, c).await;
     t.mark(format!("проверка продажи {}", d.sell_on.0), at);
     let c = r?;
+    let cut = (c.sell_qty < pre_sell).then_some(pre);
+    t.cut = cut.map(|p| super::precheck_dex_cut::chrono(&p, pre_sell, &c));
     // Часть 4: инвариант пары buy_cap + refit — списание плана по худшей цене не больше предела списания
     // (min(бюджет плана, свободно)); расчёт его держит сам (final_calc), здесь — сверка после проверки продажи.
     if let Some(free) = free {
@@ -496,7 +509,11 @@ async fn steps(
             return Err(e);
         }
     }
-    let bal = read.map(|read| Bal { read, refit: short });
+    let bal = read.map(|read| Bal {
+        read,
+        refit: short,
+        cut,
+    });
     Ok((c, bal))
 }
 

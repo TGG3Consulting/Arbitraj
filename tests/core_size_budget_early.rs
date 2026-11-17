@@ -9,7 +9,7 @@
 //! Ставки taker аккаунта в записях нет — 0,1 % (как tests/uncapped_recompute.rs); h = 0,7 — значение с сервера 09.11
 //! (docs/notes/price-move-vs-reserve-2026-11-09.md), поэтому на объём две котировки B (глубина sell_qty / h и sell_qty).
 //! Решение 380 (t166): sell_max_caps_size_search — предел объёма продажи DirCtx.sell_max на тех же записях;
-//! sell_max_below_min_rejects — предел ниже минимума ордера BingX: отказ подбора, без паники.
+//! sell_max_below_min_rejects — предел ниже минимума ордера BingX: отказ подбора, без паники; ревью Н2 — refit::limit.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{costs, size_search, size_curve, frozen}, arb::venues::bsc_dex::quote::pool_quote,
 //! tests/size_common.
@@ -315,6 +315,11 @@ async fn budget_on_curve_same_choice_fewer_dex_quotes() {
     let _ = std::fs::remove_dir_all(&dirp);
 }
 
+/// Расчёт одного объёма с бюджетом у кривой (как C::at). Ошибки: Fail расчёта.
+async fn at(cx: &DirCtx, qty: Decimal, src: &Src<'_>, budget: Decimal) -> Result<Calc, Fail> {
+    costs::evaluate_capped(cx, qty, src, Some(budget)).await
+}
+
 /// Решение 380 (задача t166): предел «объём продажи ≤ проверяемого симуляцией» (DirCtx.sell_max →
 /// core/precheck_dex_cut.rs sell_max_ok в costs.rs). На тех же записанных данных (стакан BingX CAKE, пул CAKE/USDT
 /// PancakeSwap V2): объём сверх предела — Fail::TooLarge с причиной; подбор с пределом выбирает объём, у которого
@@ -350,21 +355,27 @@ async fn sell_max_caps_size_search() {
         budget: Some(budget),
     };
     let old = search(&mut curve, &p).await.unwrap();
-    // Предел — посередине между наименьшим допустимым объёмом (минимумы биржи; продажа на нём не больше его самого —
-    // комиссии в монете только уменьшают приход) и продажей выбора без предела: предел режет объём, а в минимум
-    // объём укладывается. CI f0587cfa: предел «половина продажи» (≈ 2.67) оказался ниже minQty BingX 2.672 — подбор
-    // честно отказал «меньше минимума»; этот случай — отдельный тест sell_max_below_min_rejects.
-    let min = old.choice.min_qty;
+    // Предел — из самой записи: посередине между продажей на наименьшем допустимом объёме подбора (минимумы биржи) и
+    // продажей на наибольшем (choice.max_qty). Продажа — в монетах ПРИХОДА (покупка − комиссии в монете), её нельзя
+    // сравнивать с minQty покупки. CI e0462130: выбор без предела на этой записи — продажа 2.469328, а minQty BingX
+    // 2.672 (покупка): прежнее предусловие «продажа выбора > minQty» смешивало единицы.
+    let s_min = at(&free, old.choice.min_qty, &src, budget)
+        .await
+        .unwrap()
+        .sell_qty;
+    let s_max = at(&free, old.choice.max_qty, &src, budget)
+        .await
+        .unwrap()
+        .sell_qty;
     assert!(
-        old.best.data.sell_qty > min,
-        "запись не годится: продажа выбора {} не больше минимума {min}",
-        old.best.data.sell_qty
+        s_max > s_min,
+        "запись не годится: продажа на наибольшем объёме {s_max} не больше, чем на наименьшем {s_min}"
     );
-    let limit = ((old.best.data.sell_qty + min) / d("2")).round_dp(6);
+    let limit = ((s_min + s_max) / d("2")).round_dp(6);
     let mut capped = cx(&rec);
     capped.sell_max = Some(limit);
-    // Объём выбора без предела — сверх предела: «слишком большой» с причиной решения 380.
-    match costs::evaluate_capped(&capped, old.choice.qty, &src, Some(budget)).await {
+    // Наибольший объём без предела — сверх предела: «слишком большой» с причиной решения 380.
+    match at(&capped, old.choice.max_qty, &src, budget).await {
         Err(Fail::TooLarge(t)) => assert!(t.contains("решение 380"), "{t}"),
         other => panic!(
             "ожидался TooLarge, получено {:?}",
@@ -378,13 +389,22 @@ async fn sell_max_caps_size_search() {
     };
     let new = search(&mut curve, &p).await.unwrap();
     println!(
-        "без предела: объём {} продажа {}; предел {limit}: объём {} продажа {}",
-        old.choice.qty, old.best.data.sell_qty, new.choice.qty, new.best.data.sell_qty
+        "без предела: объём {} (границы {}..{}) продажа {}; предел {limit} (продажа {s_min}..{s_max}): объём {} \
+         (границы {}..{}) продажа {}",
+        old.choice.qty,
+        old.choice.min_qty,
+        old.choice.max_qty,
+        old.best.data.sell_qty,
+        new.choice.qty,
+        new.choice.min_qty,
+        new.choice.max_qty,
+        new.best.data.sell_qty
     );
+    // Предел режет верхнюю границу подбора, выбор — не больше предела и не меньше минимума.
     assert!(new.best.data.sell_qty <= limit);
-    assert!(new.choice.qty < old.choice.qty);
-    assert!(new.choice.qty >= min);
-    // Прибыль — расчёта на новом объёме (не перенесена с прежнего).
+    assert!(new.choice.max_qty < old.choice.max_qty);
+    assert!(new.choice.qty >= old.choice.min_qty);
+    // Прибыль — расчёта на выбранном объёме (не перенесена с прежнего).
     assert_eq!(new.best.qty, new.choice.qty);
     assert_eq!(new.best.profit, new.best.data.profit_usd);
     // Без предела — тот же выбор, что и до решения 380 (поле None ничего не меняет).
@@ -395,6 +415,29 @@ async fn sell_max_caps_size_search() {
     };
     let again = search(&mut curve, &p).await.unwrap();
     assert_eq!(again.choice.qty, old.choice.qty);
+    // Ревью t166 Н2: подбор под свободный остаток (core/refit.rs) с пределом refit::limit = продажа проверенного плана:
+    // объём, который без предела был допустим (наибольший), с ним — «слишком большой», и выбор не продаёт больше
+    // проверенного (как при упавшей цене: тот же предел списания купил бы больше монет).
+    let checked = new.best.data.clone();
+    let mut refit_cx = cx(&rec);
+    arb::core::refit::limit(&mut refit_cx, &checked);
+    assert_eq!(refit_cx.sell_max, Some(checked.sell_qty));
+    assert!(matches!(
+        at(&refit_cx, old.choice.max_qty, &src, budget).await,
+        Err(Fail::TooLarge(_))
+    ));
+    let mut curve = C {
+        cx: &refit_cx,
+        src: &src,
+        budget: Some(budget),
+    };
+    let refit = search(&mut curve, &p).await.unwrap();
+    assert!(refit.best.data.sell_qty <= checked.sell_qty);
+    // Предел уже задан (урезание 380) — берётся меньший.
+    let mut both = cx(&rec);
+    both.sell_max = Some(checked.sell_qty / d("2"));
+    arb::core::refit::limit(&mut both, &checked);
+    assert_eq!(both.sell_max, Some(checked.sell_qty / d("2")));
     let _ = std::fs::remove_dir_all(&dirp);
 }
 

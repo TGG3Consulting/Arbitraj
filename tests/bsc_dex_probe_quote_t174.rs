@@ -10,6 +10,8 @@
 //! 3. ЧИСТАЯ ЛОГИКА (не запись): «взял меньше входа» (сумма больше записанного used) — покупка: NoRoute (помеха, как
 //!    откат QuoterV2 «не хватает ликвидности»), продажа: налог продажи не измерен (помеха); балансы продажи — числа теста.
 //!    Живой записи eth_simulateV1 пробы налогов с виртуальным квотером нет — docs/TASKS.md (t174, «нужна запись»).
+//! 4. Ревью 388 (Н1), ЧИСТАЯ ЛОГИКА: виртуальный квотер пробной покупки откатился (селектор отката — записанный
+//!    PriceProviderFailed пула Metric QQQB), покупка прошла — помеха NoRoute, не вердикт; иначе — как раньше.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{quote::{probe_quote, quoter_calls, virtual_quoter}, check::probe_calls,
@@ -288,4 +290,53 @@ async fn only_virtual_kinds_with_and_without_flag() {
         assert_eq!(err.code, ErrorCode::Internal, "{kind}: {}", err.message);
         assert!(!err.message.contains("задайте"), "{kind}: {}", err.message);
     }
+}
+
+/// Итог отката симуляции с данными отката.
+fn reverted_call(data: &[u8]) -> CallResult {
+    serde_json::from_value(json!({
+        "status": "0x0",
+        "returnData": Bytes::copy_from_slice(data),
+        "gasUsed": "0x0",
+        "error": { "code": 3, "message": "execution reverted" },
+    }))
+    .unwrap()
+}
+
+/// Ревью 388 (Н1), ЧИСТАЯ ЛОГИКА: селектор отката — записанный откат пула Metric QQQB PriceProviderFailed
+/// (probe.json, prices_revert; оракул пула), сочетание «квотер откатился, покупка прошла» — условное (симуляции пробы с
+/// таким откатом не записано). Виртуальный квотер откатился на своём шаге, покупка прошла — помеха (NoRoute), не
+/// вердикт; покупка тоже откатилась, откат не на шаге квотера или квотер не виртуальный — решать как раньше (None).
+#[tokio::test]
+async fn virtual_quote_revert_with_buy_ok_is_interference() {
+    let c = ctx("n1").await;
+    let (e, _, _) = nvdab("metric-bsc", "metric_omm");
+    let probe = json_file("probe.json");
+    let rec = probe["pools"][3]["prices_revert"].as_str().unwrap();
+    let sel = alloy_primitives::hex::decode(&rec[2..10]).unwrap();
+    let r = reverted_call(&sel);
+    let buy_ok = ok_call(&[]);
+    let buy_bad = reverted_call(&[]);
+    let (virt, plain) = (Way { virt: true }, Way { virt: false });
+    let (q, x) = (3usize, 6usize);
+    let err = virt
+        .quote_reverted(&c, &e, (q, q), &r, Some(&buy_ok))
+        .expect("помеха");
+    assert_eq!(err.code, ErrorCode::NoRoute);
+    assert!(err.message.contains("покупка прошла"), "{}", err.message);
+    assert!(err.message.contains(&r.why()), "{}", err.message);
+    assert!(
+        virt.quote_reverted(&c, &e, (q, q), &r, Some(&buy_bad))
+            .is_none()
+    );
+    assert!(virt.quote_reverted(&c, &e, (q, q), &r, None).is_none());
+    assert!(
+        virt.quote_reverted(&c, &e, (x, q), &r, Some(&buy_ok))
+            .is_none()
+    );
+    assert!(
+        plain
+            .quote_reverted(&c, &e, (q, q), &r, Some(&buy_ok))
+            .is_none()
+    );
 }

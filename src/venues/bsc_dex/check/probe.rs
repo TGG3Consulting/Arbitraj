@@ -143,6 +143,10 @@ pub async fn run(
         if let Some(why) = v2_pair_probe::buy_unmeasured(e, i, q, r) {
             return Err(ctx.err(ErrorCode::SwapReverted, why));
         }
+        // Ревью 388 (Н1): виртуальный квотер откатился, покупка прошла — помеха измерения, не вердикт по монете.
+        if let Some(err) = way.quote_reverted(ctx, e, (i, q), r, first.get(x)) {
+            return Err(err);
+        }
         return pc::buy_revert(ctx, i, r, q).map(Err);
     }
     // Кто меняет (решение 59): обмен должен сделать сам этот пул — иначе пул исключён, проверка «не проверено».

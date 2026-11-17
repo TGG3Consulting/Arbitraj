@@ -8,6 +8,8 @@
 //! Integral, iZiSwap / Biswap V3, SmarDex) налоги пробой не мерились никогда (ошибка «не задана настройка» при заданной).
 //! Способ выбирается ОДИН раз на пробу (Way::of) — вызов и разбор ответа одного и того же квотера, даже если настройку
 //! поменяют между симуляциями.
+//! Ревью 388 (Н1): виртуальный квотер пробной покупки откатился, а сама покупка прошла — помеха измерения (NoRoute), не
+//! вердикт по монете (quote_reverted).
 //! Кто вызывает: check/probe.rs (run), check/probe_calls.rs (sell_result).
 //! От чего зависит: quote/{virtual_quoter, v2_pair_probe}.rs, check/simulate.rs (Override), pools/registry.rs.
 //! Настройки: dex.quoter_virtual [DEX]; через v2_pair_probe — dex.router / dex.quoter [вид пула], dex.v2_fee_pct [DEX].
@@ -18,9 +20,9 @@
 
 use alloy_primitives::{Address, Bytes, U256};
 
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
-use super::super::check::simulate::Override;
+use super::super::check::simulate::{CallResult, Override};
 use super::super::ctx::Ctx;
 use super::super::pools::registry::Entry;
 use super::{v2_pair_probe, virtual_quoter};
@@ -109,5 +111,34 @@ impl Way {
             )),
             None => Ok(None),
         }
+    }
+
+    /// Ревью 388 (Н1): откат вызова виртуального квотера пробной покупки при прошедшей покупке. Квотер откатывается по
+    /// причине самого пула на этом блоке (цена оракула Metric устарела, пул на паузе, «VQ: no callback» — обратного
+    /// вызова нет в коде квотера), а обмен тем же пулом в той же симуляции прошёл — монета ни при чём: налоги пула не
+    /// измерены, это помеха (NoRoute — check/taxes.rs «не проверено», повтор), а не вердикт «не прошла»
+    /// (check/probe_calls.rs buy_revert). Квотер DEX (не виртуальный) — как раньше (None). Принимает: окружение, пул,
+    /// (номер первого отката, номер вызова квотера), итог отката, итог покупки (None — его нет в ответе: решать как раньше). Возвращает: ошибку или None — решать
+    /// как раньше. Ошибок иных нет.
+    pub fn quote_reverted(
+        self,
+        ctx: &Ctx,
+        e: &Entry,
+        (i, quote): (usize, usize),
+        r: &CallResult,
+        buy: Option<&CallResult>,
+    ) -> Option<GatewayError> {
+        if !self.virt || i != quote || !buy.is_some_and(|b| b.ok()) {
+            return None;
+        }
+        Some(ctx.err(
+            ErrorCode::NoRoute,
+            format!(
+                "{}: виртуальный квотер пробной покупки откатился (шаг {i}), а сама покупка прошла — помеха \
+                 измерения, налоги пула не измерены (решение 388): {}",
+                e.family.title,
+                r.why()
+            ),
+        ))
     }
 }

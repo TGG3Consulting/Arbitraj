@@ -427,7 +427,8 @@ fn virtual_only(p: Proto) -> Option<&'static str> {
     match p {
         Proto::AlgebraIntegral => Some("Algebra Integral"),
         Proto::MetricOmm => Some("Metric"),
-        Proto::IziSwap | Proto::BiswapV3 => Some("iZiSwap / Biswap V3"),
+        // Proto::is_izi (pools/families.rs) — ровно IziSwap и BiswapV3.
+        p if p.is_izi() => Some("iZiSwap / Biswap V3"),
         Proto::Smardex => Some("SmarDex"),
         _ => None,
     }

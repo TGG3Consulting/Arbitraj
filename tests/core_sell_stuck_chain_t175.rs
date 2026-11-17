@@ -27,13 +27,16 @@ use arb::core::deal::Step;
 use serde_json::json;
 use t175_common::{ID, big, deal, dir, kinds, lines, orders, saved, set, start};
 
-/// Цепочка аварии с пределом повторов `max`: вход — первая продажа сделки (sell_or_stuck, невыгодно), режим relay,
-/// перегонов 0 (сразу продажа здесь), порог продажи здесь 5 % (убыток ≈ 0,4 %). Проверяет (а). Ошибок нет: паника теста.
+/// Цепочка аварии с пределом повторов `max`: вход — первая продажа сделки (sell_or_stuck, невыгодно), режим relay
+/// (stuck.max_relays = 1 — каталог требует больше нуля; на стенде одна площадка, целей перегона нет → relay.rs «перегон
+/// не выгоднее продажи здесь» → relay_here::sell_here, как при исчерпанных перегонах), порог продажи здесь 5 % (убыток
+/// ≈ 0,4 %). Пауза повтора 0 — по коду (sell_unsent.rs decide, not_filled_cex), не настройкой. Проверяет (а). Ошибок
+/// нет: паника теста.
 async fn chain(name: &str, max: u32) {
     let d = dir(name);
     let (core, s, journal, srv) = start(&d).await;
     set(&s, "stuck.mode", json!("relay")).await;
-    set(&s, "stuck.max_relays", json!(0)).await;
+    set(&s, "stuck.max_relays", json!(1)).await;
     set(&s, "stuck.relay_max_loss_pct", json!("5")).await;
     set(&s, "stuck.unsent_retries_max", json!(max)).await;
     arb::core::sell::sell_or_stuck(&core, deal(ID, "200")).await;
@@ -44,6 +47,9 @@ async fn chain(name: &str, max: u32) {
     let t = lines(&x);
     assert_eq!(x.step, Step::WaitingHuman, "{name}: {t:#?}");
     assert_eq!(x.unsent_retries, max + 1, "{name}");
+    // Перегона не было: монета всё время на xt, каждый уровень — продажа здесь.
+    assert!(!t.iter().any(|l| l.starts_with("Перегон на")), "{name}");
+    assert_eq!((x.relays, x.at.0.as_str()), (0, "xt"), "{name}");
     // Хронология по порядку: вход в режим, затем на каждый повтор k — строка повтора и снова вход в режим, затем
     // исчерпание (продажа здесь) и алерт.
     let mut want: Vec<String> = vec!["Застрявшая монета (".into()];

@@ -98,6 +98,8 @@ impl Registry {
             holds: Default::default(),
             // Решение 382: у снимка доказательств нет.
             proofs: Default::default(),
+            // Решение 390: у снимка — своя пустая память отбора мелких пулов.
+            shallow: Default::default(),
         }
     }
 }

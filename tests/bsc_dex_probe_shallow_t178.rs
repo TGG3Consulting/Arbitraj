@@ -38,7 +38,7 @@ use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::parts::Parts;
 use arb::venues::bsc_dex::pools::depth;
 use arb::venues::bsc_dex::quote::probe_quote::Way;
-use arb::venues::bsc_dex::quote::{emptiness, select, side_fit};
+use arb::venues::bsc_dex::quote::{emptiness, pool_after, select, shallow_pick, side_fit};
 
 use depth_common::{aave_v3, cl_entry, rec, v2};
 
@@ -160,33 +160,56 @@ async fn without_probe_settings_shallow_stays_as_before() {
     );
 }
 
-/// Ревью t178 (Б2): предел 1 на пару — из четырёх мелких пар записи (все пропускают полную сумму пробы) допускается
-/// одна, самая глубокая в полосе (0x594ecc0d…: 131 встречного); остальные в пробу не идут и при ws спят.
+/// Ревью t178 (Б2, повторное — Н-B1): предел 1 на пару. Все четыре мелкие пары записи пропускают полную сумму пробы
+/// (уровень 0) — при равном уровне решает адрес: 0x28316d69… (глубина в ранг не входит). Остальные в пробу не идут и при
+/// ws спят. Серия обменов туда-обратно (глубины пар меняются, у 0xc31881aa… после покупки она больше всех) состав
+/// отбора не меняет (отбор устойчив к обменам).
 #[tokio::test]
 async fn shallow_limit_picks_by_rank() {
     let ctx = native_common::ctx("t178-limit").await;
     settings(&ctx, 10, 1).await;
     let p = Parts::new(ctx.clone());
     let r = rec();
-    let pairs: Vec<_> = PAIRS.iter().map(|a| v2(&r, a, true)).collect();
+    let mut pairs: Vec<_> = PAIRS.iter().map(|a| v2(&r, a, true)).collect();
     usdt_is(&p, pairs[0].usdt);
     for e in &pairs {
         p.registry.put(e.clone());
     }
+    let chosen = pairs[1].pool.reference.clone();
     let (pools, _, shallow) =
         probe_pools(&ctx, &p.registry, &p.tokens, &pairs[0].coin, 18).unwrap();
     assert_eq!(pools.len(), 1);
-    assert_eq!(pools[0].0.pool.reference, pairs[0].pool.reference);
+    assert_eq!(pools[0].0.pool.reference, chosen);
     assert_eq!(shallow.len(), 3);
     let (tx, _rx) = tokio::sync::mpsc::channel(16);
     let pp = p.pools(tx);
-    assert!(depth::deep(&pp, &pairs[0].pool.reference).await);
-    for e in &pairs[1..] {
+    assert!(depth::deep(&pp, &chosen).await);
+    for e in pairs.iter().filter(|e| e.pool.reference != chosen) {
         assert!(
             !depth::deep(&pp, &e.pool.reference).await,
             "{:?} спит",
             e.pool.reference
         );
+    }
+    // Обмены туда-обратно в каждой паре: купить на 300 встречного, продать купленное назад (расчёт пары V2 и состояние
+    // после обмена — quote/pool_after.rs, как исполнит пара). После каждого шага — запись в реестр и тот же отбор.
+    let pair = (pairs[0].coin, pairs[0].usdt);
+    let big = U256::from(300u64) * U256::from(10u64).pow(U256::from(18u8));
+    for _round in 0..3 {
+        for k in 0..pairs.len() {
+            let e = pairs[k].clone();
+            let (bought, after) = pool_after::apply(&ctx, &e, e.usdt, big).unwrap();
+            pairs[k].pool.state = after;
+            p.registry.put(pairs[k].clone());
+            let got = shallow_pick::pick(&ctx, &p.registry, &p.tokens, 18, pair);
+            assert_eq!(*got, vec![chosen.clone()], "после покупки в паре {k}");
+            let e = pairs[k].clone();
+            let (_, back) = pool_after::apply(&ctx, &e, e.coin, bought.amount_out).unwrap();
+            pairs[k].pool.state = back;
+            p.registry.put(pairs[k].clone());
+            let got = shallow_pick::pick(&ctx, &p.registry, &p.tokens, 18, pair);
+            assert_eq!(*got, vec![chosen.clone()], "после продажи в паре {k}");
+        }
     }
     // Предел 0 — как до решения 390.
     ctx.settings
@@ -198,7 +221,35 @@ async fn shallow_limit_picks_by_rank() {
         )
         .await
         .unwrap();
-    assert!(!depth::deep(&pp, &pairs[0].pool.reference).await);
+    assert!(!depth::deep(&pp, &chosen).await);
+}
+
+/// ЧИСТАЯ ЛОГИКА (повторное ревью t178, Н-B1): порядок отбора — уровень, при равном уровне уже отобранный остаётся,
+/// затем адрес; претендент со строго лучшим уровнем вытесняет.
+#[test]
+fn pick_order_keeps_incumbent_pure_logic() {
+    use arb::core::types::PoolRef;
+    let a = PoolRef::Contract(Address::from([0xaa; 20]));
+    let b = PoolRef::Contract(Address::from([0xbb; 20]));
+    let cand = |lv: u32, was: bool, r: &PoolRef| (lv, was, format!("{r:?}"), r.clone());
+    // Равный уровень: без прошлого отбора — меньший адрес; с прошлым — прежний (b), хотя адрес больше.
+    assert_eq!(
+        shallow_pick::order(vec![cand(0, false, &b), cand(0, false, &a)], 1),
+        vec![a.clone()]
+    );
+    assert_eq!(
+        shallow_pick::order(vec![cand(0, true, &b), cand(0, false, &a)], 1),
+        vec![b.clone()]
+    );
+    // Претендент лучше уровнем (больше проходящая доля пробы) — вытесняет прежнего.
+    assert_eq!(
+        shallow_pick::order(vec![cand(1, true, &b), cand(0, false, &a)], 1),
+        vec![a.clone()]
+    );
+    assert_eq!(
+        shallow_pick::order(vec![cand(0, true, &b), cand(0, false, &a)], 2),
+        vec![b, a]
+    );
 }
 
 /// ЧИСТАЯ ЛОГИКА (ревью t178, Б1): прежний итог при «не проверено». Ловушка, включённая у известной монеты (продажа

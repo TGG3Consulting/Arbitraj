@@ -128,7 +128,7 @@ async fn memory(p: &Pools, e: &Entry, h: &Head, now: &mut QuoterSides) {
     if note.is_some()
         && let Head::Ready { block, entry } = h
     {
-        super::quoter_memory_fix::on_lag(p, e, *block, entry).await;
+        super::quoter_memory_fix::on_lag(p, e, *block, entry);
     }
     let changed = match (&now.memory, &note) {
         (None, None) => false,

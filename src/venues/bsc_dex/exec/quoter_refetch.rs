@@ -153,7 +153,7 @@ pub async fn pinned(q: &Quoting, pools: &[PoolRef], first: GatewayError) -> Gate
         .collect();
     // Ревью Б1: ошибка памяти — только доказанная (логи узла, сравнение на H), фоном, не задерживая сделку.
     for (m, g) in mems.iter().zip(&got) {
-        quoter_refetch_proof::spawn(ctx, (&q.tokens, &q.reg), m, block, g);
+        quoter_refetch_proof::spawn(ctx, (&q.tokens, &q.reg), m, (block, g), (KIND, true));
     }
     let msg = format!(
         "{}; пулы доли перечитаны на блоке {block}, пересчёт по ним и сверка с квотером на том же блоке \

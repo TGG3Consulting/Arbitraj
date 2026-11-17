@@ -103,6 +103,8 @@ pub async fn subscribe(
     p.reg.unread().keep_only(&known);
     // Решение 357 (ревью слияния, Н4): отметки «в обновлении» пулов, которых больше нет среди найденных.
     p.reg.holds().keep_only(|r| known.contains(r));
+    // Решение 382 (ревью 3, Н3): учёт доказательств «память неверна» пулов, которых больше нет.
+    p.reg.proofs().keep_only(|r| known.contains(r));
     let msg = format!(
         "DEX: пулов из справочника (проверены на узле) с {quote} и промежуточными монетами ({}): {} по {} монетам",
         mid_list.len(),

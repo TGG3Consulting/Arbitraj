@@ -20,6 +20,7 @@ pub mod hook_store;
 pub mod hooks_head;
 pub mod hooks_probe;
 pub mod memory_proof;
+pub mod memory_proof_rules;
 pub mod native_probe;
 pub mod native_probe_exec;
 pub mod pool_taxes;

@@ -16,6 +16,10 @@
 //!    у затихшего пула — ошибка; тихий пул — сравнение на H; свежие логи — отставание; фильтр V4 / Infinity — менеджер и
 //!    topic1 = PoolId (check/memory_proof.rs unapplied, positions, filter); отметка (Н1) и учёт доказательств (Н2).
 //!    Сам eth_getLogs и чтение узла (prove) — без записи.
+//! 5. ревью 3 (чистая логика): вид «каждым блоком» — сравнение только на блоке памяти (per_block_gate); узкое окно свежих
+//!    логов при отказе узла по диапазону (narrow_from, by_logs: свежие — отставание, нет — сравнение на H); пары Multi
+//!    доказывают пропуск (own); пропуск, уже применённый текущей памятью, не метится (still_missing); охранник учёта
+//!    закрывает запись при Drop, keep_only чистит.
 //!
 //! Перечитывание на узле и повтор подготовки сделки (pinned, prepare, dry_build) тестом на записи не покрыты — записей
 //! узла по этим пулам нет (список для серверного ИИ — docs/notes/t168-quoter-mismatch-2026-11-17.md).
@@ -35,11 +39,14 @@ use alloy::rpc::types::Log;
 use arb::core::types::PoolRef;
 use arb::gateway::errors::ErrorCode;
 use arb::settings::scope::Scope;
-use arb::venues::bsc_dex::check::memory_proof::{Unapplied, filter, positions, unapplied};
+use arb::venues::bsc_dex::check::memory_proof::{Proof, by_logs};
+use arb::venues::bsc_dex::check::memory_proof_rules::{
+    Unapplied, filter, narrow_from, own, per_block_gate, positions, unapplied,
+};
 use arb::venues::bsc_dex::exec::precheck;
 use arb::venues::bsc_dex::exec::quoter_refetch::is_quoter_diff;
 use arb::venues::bsc_dex::exec::quoter_refetch_note::{differs, note, tick_diff};
-use arb::venues::bsc_dex::exec::quoter_refetch_proof::mark;
+use arb::venues::bsc_dex::exec::quoter_refetch_proof::{mark, still_missing};
 use arb::venues::bsc_dex::pools::registry::Registry;
 use arb::venues::bsc_dex::pools::settle::Need;
 use arb::venues::bsc_dex::quote::quoter::{self, Judged};
@@ -234,22 +241,90 @@ fn lag_is_not_error() {
 
 #[test]
 fn one_proof_per_position() {
-    // Ревью 2, Н2: одно доказательство на (пул, позиция); доказанная ошибка той же позиции не повторяется; иной итог —
-    // можно снова; новая позиция — можно.
+    // Ревью 2 Н2, ревью 3 Н3: одно доказательство на (пул, позиция); охранник закрывает запись и без явного итога
+    // (паника / отмена задачи — Drop); доказанная ошибка той же позиции не повторяется; новая позиция — можно;
+    // записи пулов, которых больше нет, чистятся.
     let reg = Registry::default();
     let (e, _, _) = aave_v3(&rec());
     let r = e.pool.reference.clone();
     let m = reg.proofs();
-    assert!(m.begin(&r, (100, Some(7))));
-    assert!(!m.begin(&r, (100, Some(7))), "уже идёт");
-    m.finish(&r, (100, Some(7)), false);
-    assert!(m.begin(&r, (100, Some(7))), "итог не ошибка — можно снова");
-    m.finish(&r, (100, Some(7)), true);
+    let g = m.begin(&r, (100, Some(7))).expect("первое");
+    assert!(m.begin(&r, (100, Some(7))).is_none(), "уже идёт");
+    drop(g);
+    let mut g = m
+        .begin(&r, (100, Some(7)))
+        .expect("Drop закрыл — можно снова");
+    g.proven(true);
+    drop(g);
     assert!(
-        !m.begin(&r, (100, Some(7))),
+        m.begin(&r, (100, Some(7))).is_none(),
         "ошибка доказана — не повторять"
     );
-    assert!(m.begin(&r, (130, None)), "новая позиция");
+    let g = m.begin(&r, (130, None)).expect("новая позиция");
+    drop(g);
+    let mut g = m.begin(&r, (140, None)).expect("ещё позиция");
+    g.proven(true);
+    drop(g);
+    m.keep_only(|_| false);
+    assert!(
+        m.begin(&r, (140, None)).is_some(),
+        "пула больше нет — запись вычищена"
+    );
+}
+
+#[test]
+fn review3_rules() {
+    // Ревью 3 (чистая логика, позиции логов — числа).
+    let (mut mem, _, _) = aave_v3(&rec());
+    mem.synced_block = 100;
+    mem.synced_log = Some(7);
+    // Б1: вид «каждым блоком» (LB V2.1): память на H − 1 — сравнивать нельзя (отставание); прочитан целиком на H — можно.
+    let mut lb = native_common::entry("lb_v21", None);
+    lb.synced_block = 119;
+    lb.synced_log = None;
+    assert!(per_block_gate(&lb, 120).is_some());
+    lb.synced_block = 120;
+    assert!(per_block_gate(&lb, 120).is_none());
+    // Событийный вид — гейта нет.
+    assert!(per_block_gate(&mem, 120).is_none());
+    // Б2: узкое окно свежих логов — последние dex.quoter_memory_lag_blocks блоков, не раньше блока памяти.
+    assert_eq!(narrow_from(100, 120, 3), 117);
+    assert_eq!(narrow_from(119, 120, 3), 119);
+    assert_eq!(narrow_from(0, 2, 3), 0);
+    // Свежий неприменённый лог окна — отставание, не ошибка.
+    assert!(matches!(
+        by_logs(&mem, Unapplied::Fresh(1, (118, 1)), 120, 3),
+        Some(Proof::Lag(_))
+    ));
+    // Неприменённых нет — решения по логам нет (дальше сравнение с узлом на H).
+    assert_eq!(by_logs(&mem, Unapplied::None, 120, 3), None);
+    // Пропуск у своего контракта — ошибка с позицией пропуска (для Н1).
+    assert!(matches!(
+        by_logs(&mem, Unapplied::Missed((105, 2)), 120, 3),
+        Some(Proof::Wrong {
+            strong: true,
+            missed: Some((105, 2)),
+            ..
+        })
+    ));
+    // Н2: пары многомонетного пула (Multi) — логи контракта доказывают пропуск; вид «каждым блоком» — нет.
+    let mut multi = mem.clone();
+    multi.pool.reference = PoolRef::Multi {
+        contract: alloy_primitives::Address::repeat_byte(0x33),
+        token0: alloy_primitives::Address::repeat_byte(0x01),
+        token1: alloy_primitives::Address::repeat_byte(0x02),
+    };
+    assert!(own(&multi));
+    assert!(own(&mem));
+    assert!(!own(&lb));
+    // Н1: пропуск, который текущая память уже применила (лог опоздал больше допуска), — не метить.
+    let mut now = mem.clone();
+    now.synced_block = 106;
+    now.synced_log = Some(0);
+    assert!(!still_missing(Some(&now), Some((105, 2))));
+    assert!(still_missing(Some(&mem), Some((105, 2))));
+    assert!(still_missing(Some(&mem), None));
+    assert!(!still_missing(None, Some((105, 2))));
 }
 
 #[test]

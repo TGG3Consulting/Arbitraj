@@ -12,9 +12,10 @@
 //!
 //! 3. отметка «нужно полное чтение» (pools/settle_reread.rs, Need::Reread) на записанном пуле: недостоверен, ожидание
 //!    логов её не заменяет и не снимает, любой лог — на чтение, снимает только достоверная запись;
-//! 4. ревью Б1 — отставание не ошибка (чистая логика): память посреди блока с более поздним логом пула — «не доказано»
-//!    (check/memory_proof.rs later); отметка по доказанной ошибке — карта тиков всегда, верх — только если память не
-//!    обновлялась событием (exec/quoter_refetch_proof.rs mark). Само чтение узла на блоке памяти (prove) — без записи.
+//! 4. ревью 2, Б1 — отставание не ошибка (чистая логика, позиции логов — числа): пропущенное событие после блока памяти
+//!    у затихшего пула — ошибка; тихий пул — сравнение на H; свежие логи — отставание; фильтр V4 / Infinity — менеджер и
+//!    topic1 = PoolId (check/memory_proof.rs unapplied, positions, filter); отметка (Н1) и учёт доказательств (Н2).
+//!    Сам eth_getLogs и чтение узла (prove) — без записи.
 //!
 //! Перечитывание на узле и повтор подготовки сделки (pinned, prepare, dry_build) тестом на записи не покрыты — записей
 //! узла по этим пулам нет (список для серверного ИИ — docs/notes/t168-quoter-mismatch-2026-11-17.md).
@@ -31,9 +32,10 @@ use rust_decimal::Decimal;
 use serde_json::json;
 
 use alloy::rpc::types::Log;
+use arb::core::types::PoolRef;
 use arb::gateway::errors::ErrorCode;
 use arb::settings::scope::Scope;
-use arb::venues::bsc_dex::check::memory_proof::later;
+use arb::venues::bsc_dex::check::memory_proof::{Unapplied, filter, positions, unapplied};
 use arb::venues::bsc_dex::exec::precheck;
 use arb::venues::bsc_dex::exec::quoter_refetch::is_quoter_diff;
 use arb::venues::bsc_dex::exec::quoter_refetch_note::{differs, note, tick_diff};
@@ -171,24 +173,83 @@ fn reread_mark_waits_for_full_read() {
 
 #[test]
 fn lag_is_not_error() {
-    // Ревью Б1 (чистая логика): память посреди блока S (logIndex 7) — у пула есть лог блока S с logIndex 9: память
-    // посреди действия, узел на конце S сравнивать с ней нельзя (отставание, «не доказано»); логов позже 7 нет (или
-    // поздний отменён реоргом) — память учла весь блок и обязана совпасть с узлом на конце S.
-    let log = |i: u64, removed: bool| Log {
-        block_number: Some(100),
+    // Ревью 2, Б1 (чистая логика; позиции логов — числа, не записанный ответ узла): память пула — блок 100, logIndex 7;
+    // голова H = 120, допуск отставания dex.quoter_memory_lag_blocks = 3.
+    let (mut mem, _, _) = aave_v3(&rec());
+    mem.synced_block = 100;
+    mem.synced_log = Some(7);
+    let applied = |b: u64, i: u64| mem.has_applied(b, i);
+    // 1. Событие пропущено ПОСЛЕ блока памяти, пул затих: лог блока 105 у узла есть, память его не применила — ошибка.
+    assert_eq!(
+        unapplied(&[(100, 5), (105, 2)], applied, 120, 3),
+        Unapplied::Missed((105, 2))
+    );
+    // 2. Пул тихий: у узла нет логов после применённых — неприменённых нет, сравнение с узлом на H (п. 4, differs).
+    assert_eq!(
+        unapplied(&[(100, 5), (100, 7)], applied, 120, 3),
+        Unapplied::None
+    );
+    // Отставание: неприменённый лог только свежий (блок 118 > 120 − 3) — не ошибка.
+    assert_eq!(
+        unapplied(&[(118, 1)], applied, 120, 3),
+        Unapplied::Fresh(1, (118, 1))
+    );
+    // Лог того же блока после logIndex памяти и старше допуска — тоже пропуск.
+    assert_eq!(
+        unapplied(&[(100, 9)], applied, 120, 3),
+        Unapplied::Missed((100, 9))
+    );
+    // Отменённые реоргом логи и логи без позиции не учитываются.
+    let log = |b: u64, i: u64, removed: bool| Log {
+        block_number: Some(b),
         log_index: Some(i),
         removed,
         ..Default::default()
     };
-    assert!(later(&[log(3, false), log(9, false)], 7));
-    assert!(!later(&[log(3, false), log(7, false)], 7));
-    assert!(!later(&[log(9, true)], 7));
-    assert!(!later(&[], 7));
-    // Доказанная ошибка: карта тиков — отметка всегда; только верх — если память не обновлялась событием с тех пор.
+    assert_eq!(
+        positions(&[log(105, 2, true), log(106, 1, false), Log::default()]),
+        vec![(106, 1)]
+    );
+    // 3. Пул V4 / Infinity (Singleton): фильтр — менеджер и topic1 = PoolId, диапазон [S, H] — как у подписки пачки.
+    let id = alloy_primitives::B256::repeat_byte(0x11);
+    let manager = alloy_primitives::Address::repeat_byte(0x22);
+    let mut v4 = mem.clone();
+    v4.pool.reference = PoolRef::Singleton { manager, id };
+    let f = filter(&v4, 100, 120);
+    assert_eq!(f["address"], json!(manager));
+    assert_eq!(f["topics"][1], json!([id]));
+    assert_eq!(f["fromBlock"], json!("0x64"));
+    assert_eq!(f["toBlock"], json!("0x78"));
+    // Свой контракт — по адресу пула.
+    let f = filter(&mem, 100, 120);
+    assert_eq!(f["address"], json!([mem.pool.reference.address()]));
+    // Отметка по доказанной ошибке (Н1): память с тех пор перечитана целиком — нет; сильная (пропуск, карта тиков) —
+    // да, даже если позиция ушла событием; только верх — если позиция та же.
+    assert!(!mark(true, (100, Some(7)), Some((130, None))));
     assert!(mark(true, (100, Some(7)), Some((101, Some(2)))));
     assert!(mark(false, (100, Some(7)), Some((100, Some(7)))));
     assert!(!mark(false, (100, Some(7)), Some((101, Some(2)))));
     assert!(!mark(true, (100, Some(7)), None));
+}
+
+#[test]
+fn one_proof_per_position() {
+    // Ревью 2, Н2: одно доказательство на (пул, позиция); доказанная ошибка той же позиции не повторяется; иной итог —
+    // можно снова; новая позиция — можно.
+    let reg = Registry::default();
+    let (e, _, _) = aave_v3(&rec());
+    let r = e.pool.reference.clone();
+    let m = reg.proofs();
+    assert!(m.begin(&r, (100, Some(7))));
+    assert!(!m.begin(&r, (100, Some(7))), "уже идёт");
+    m.finish(&r, (100, Some(7)), false);
+    assert!(m.begin(&r, (100, Some(7))), "итог не ошибка — можно снова");
+    m.finish(&r, (100, Some(7)), true);
+    assert!(
+        !m.begin(&r, (100, Some(7))),
+        "ошибка доказана — не повторять"
+    );
+    assert!(m.begin(&r, (130, None)), "новая позиция");
 }
 
 #[test]

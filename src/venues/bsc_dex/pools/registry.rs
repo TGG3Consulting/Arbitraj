@@ -88,6 +88,8 @@ pub struct Registry {
     /// Решение 357 (ревью слияния): отметки «в обновлении» и «нужно полное чтение» (settle.rs); put достоверной записи
     /// (полное чтение) снимает отметки пула, retain — отметки удалённых.
     pub(super) holds: super::settle::Holds,
+    /// Решение 382 (ревью 2, Н2): учёт доказательств «память неверна» — одно на (пул, позиция) (proof_memo.rs).
+    pub(super) proofs: super::proof_memo::Memo,
 }
 
 impl Entry {
@@ -114,6 +116,11 @@ impl Registry {
     /// Решение 357: отметки «в обновлении» и «нужно полное чтение» (settle.rs). Ошибок нет.
     pub fn holds(&self) -> &super::settle::Holds {
         &self.holds
+    }
+
+    /// Решение 382: учёт доказательств «память неверна» (proof_memo.rs). Ошибок нет.
+    pub fn proofs(&self) -> &super::proof_memo::Memo {
+        &self.proofs
     }
 
     /// Решение 339: отметки неудач чтения пулов (pool_fail.rs). Ошибок нет.

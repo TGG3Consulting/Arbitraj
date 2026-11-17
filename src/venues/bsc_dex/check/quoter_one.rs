@@ -126,9 +126,9 @@ async fn memory(p: &Pools, e: &Entry, h: &Head, now: &mut QuoterSides) {
     // Решение 382: «память отстаёт» — пул на полное чтение, только если ошибка доказана на блоке памяти
     // (check/quoter_memory_fix.rs, ревью Б1).
     if note.is_some()
-        && let Head::Ready { block, .. } = h
+        && let Head::Ready { block, entry } = h
     {
-        super::quoter_memory_fix::on_lag(p, e, *block).await;
+        super::quoter_memory_fix::on_lag(p, e, *block, entry).await;
     }
     let changed = match (&now.memory, &note) {
         (None, None) => false,

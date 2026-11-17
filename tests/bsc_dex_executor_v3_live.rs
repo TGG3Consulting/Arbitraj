@@ -10,6 +10,7 @@
 //!    классам; развёртывание разрешено; шаги непринятых классов (с крючком, Bin, Stable) — отказ admits.
 //! 4. Правило строгое на изменённой записи: без SHA в README — ничего не принято; без hooks_reject.json — у CL с
 //!    крючком необъяснённые откаты.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::exec::executor::{code, deploy_gate, live_proof, live_rule}, pools::exec_kind,
 //! zstd, serde_json.

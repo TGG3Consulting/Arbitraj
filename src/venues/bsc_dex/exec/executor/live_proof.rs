@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/exec/executor/live_proof.rs
 //! Что делает: решение 400 (t185) — приёмка исполнителя v3 по классам шага (вид 19 / 20 / 21 × без крючка / с крючком,
-//! + Infinity Stable) из записи симуляции на живых пулах сети, вшитой в сборку (include_str): каталог
+//! и Infinity Stable) из записи симуляции на живых пулах сети, вшитой в сборку (include_str): каталог
 //! tests/data/executor_v3_live_2026-11-17/ — README.md (SHA-256 симулированного bin-runtime), summary.json (по вызову),
 //! hooks_reject.json (откаты крючков). Правило — exec/executor/live_rule.rs. Здесь:
 //! - verdicts: вердикты по классам для текущей сборки (SHA-256 bin-runtime из ArbExecutor.sha256), один раз за запуск;
@@ -9,6 +9,7 @@
 //!   exec/executor/mod.rs takes, exec/cycle_gate.rs, check/probe_exec.rs, call::build);
 //! - listing / proofs: что принято и что нет — текст причины запрета развёртывания (deploy_gate.rs), строка сверки
 //!   исполнителя (onchain.rs), строки окна кошельков (venue.rs → api/wallets_view.rs → интерфейс).
+//!
 //! Новая запись (пересборка контракта, новые классы) — новый каталог tests/data и путь здесь, в том же коммите.
 //! Кто вызывает: exec/executor/{entry, deploy_gate, deploy, onchain}.rs, pools/exec_kind.rs (describe), venue.rs, тесты.
 //! От чего зависит: exec/executor/{code, live_rule}.rs, pools/exec_kind.rs, core/types/executor.rs.

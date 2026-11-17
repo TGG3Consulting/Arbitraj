@@ -41,6 +41,8 @@ pub async fn trade(
             &format!("{p:?}"),
         ));
     };
+    // Решение 398: сроки — до запросов (отмена остатка в settle — действие с ордером).
+    let times = order_state::times(ctx)?;
     let order_id = match &p.venue_ref {
         Some(id) => id.clone(),
         None => {
@@ -62,7 +64,7 @@ pub async fn trade(
             }
         }
     };
-    let state = order_state::settle(ctx, symbol, &order_id).await?;
+    let state = order_state::settle(ctx, symbol, &order_id, times).await?;
     order_state::result(ctx, req, &state, order_id).map(Some)
 }
 

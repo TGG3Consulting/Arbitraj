@@ -24,6 +24,7 @@
 //! Решение 253: перед выводом — ожидание доступности монеты (withdraw_wait.rs, venue.withdraw_ready_wait_ms отправителя;
 //! дополнение t89 — и у возврата USDT, и у перегона: пауза от своей сделки площадки по активу, withdraw_after.rs;
 //! не задана — сразу); начало перевода (время в пути) — до ожидания.
+//! Решение 398: venue.status_poll_ms отправителя и получателя проверяется ДО вывода (poll_set): не задана — вывода нет.
 //! Настройки: venue.status_poll_ms (по площадке), transfer.max_time_s (по площадке получателя и монете), venue.bsc_network,
 //! transfer.locked_retry_ms, transfer.locked_retries_max (через transfer_locked.rs), venue.withdraw_ready_wait_ms (через
 //! withdraw_wait.rs), risk.outcome_poll_s,
@@ -165,6 +166,36 @@ pub(super) fn floored(core: &Core, from: &VenueId, asset: &Asset, qty: Decimal) 
     }
 }
 
+/// Решение 398: venue.status_poll_ms задана и у отправителя, и у получателя — до вывода (после него опрос статуса и
+/// зачисления читает её на каждом круге, Pacer). Принимает: ядро, сделку, (откуда, куда), монету. Ошибки: текст
+/// причины «вывод не отправлен — не задана …» (уже в журнале, core.not_configured).
+async fn poll_set(
+    core: &Core,
+    deal: &str,
+    from: &VenueId,
+    to: &VenueId,
+    asset: &Asset,
+) -> Result<(), OpError> {
+    for v in [from, to] {
+        let at = crate::settings::read::At {
+            venue: Some(&v.0),
+            coin: None,
+        };
+        if let Err(e) = core.inner.deps.settings.integer("venue.status_poll_ms", at) {
+            let why = format!(
+                "{deal}: вывод {} {} → {} не отправлен — {} (решение 398)",
+                asset.ticker, from.0, to.0, e.message
+            );
+            core.inner
+                .deps
+                .log(Level::Warn, "core.not_configured", Some(&v.0), &why, None)
+                .await;
+            return Err(OpError::from(why));
+        }
+    }
+    Ok(())
+}
+
 /// Перевод. Принимает: как send_as, плюс можно ли зачислить по блокчейну (решение 151 — только перевод сделки).
 /// Возвращает: (вывод, зачисление, строка хронологии — если зачислено по блокчейну). Ошибки: как у send_trade.
 /// Решение 236, дополнение: в `gas` — газ каждой неудачной попытки вывода с фактом транзакции (и повторённой правилом
@@ -196,6 +227,10 @@ async fn go(
         .deposit_address(&on_to, &net_to)
         .await
         .map_err(|e| format!("{}: адрес депозита: {}", to.0, e.message))?;
+    // Решение 398: интервал опроса статуса вывода (у отправителя) и зачисления (у получателя) — venue.status_poll_ms —
+    // читается после вывода (Pacer, wait.rs: не задан — опрос стоит до задания). Проверяется до денег: не задан —
+    // вывода нет, причина в журнале.
+    poll_set(core, deal, from, to, asset).await?;
     // Ожидаемое зачисление — до вывода, чтобы событие не пришло раньше (решение 76; события у получателя выключены или
     // приход не посчитан — только опрос).
     // Решение 104: сумма вывода — вниз до точности вывода биржи (withdrawPrecision из справочника сетей; так же считает

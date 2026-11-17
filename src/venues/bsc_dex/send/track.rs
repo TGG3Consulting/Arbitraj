@@ -120,11 +120,7 @@ pub async fn resolve(w: Watch) -> Tracked {
             Err(e) => return Tracked::bare(TxOutcome::Pending, Some(e.message)),
         };
         cancels += 1;
-        match cancel::send(
-            ctx, &w.stats, &w.ready, w.from, w.nonce, price, head, &w.cfg,
-        )
-        .await
-        {
+        match cancel::send(&w, price, head).await {
             Ok(h) => {
                 ours.push(h);
                 // «Чем найти» (exec/txs.rs): отмена могла занять nonce — её хеш нужен позднему выяснению.

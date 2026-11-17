@@ -6,7 +6,8 @@
 //! От чего зависит: order_rules.rs (правила пары — общие с проверкой ордера без исполнения, решение 134), rest.rs,
 //! symbols.rs, num.rs, ctx.rs.
 //! Настройки: venue.order_time_in_force (например IOC — что не исполнилось сразу, отменяется биржей);
-//! ожидание итога и отмена остатка — order_state.rs.
+//! ожидание итога и отмена остатка — order_state.rs; их сроки (venue.order_poll_ms, venue.order_final_wait_ms) —
+//! решение 398: читаются здесь ДО постановки ордера, не задана — ордера нет.
 //!
 //! Официальная документация:
 //! - POST /openApi/spot/v1/trade/order — symbol, side (BUY/SELL), type (LIMIT), quantity, price,
@@ -34,7 +35,8 @@ pub use super::order_rules::round;
 /// проверки ордера без исполнения перед покупкой, решение 134).
 /// Ждёт окончательного состояния ордера; не дождался — отменяет остаток (правило Тиграна:
 /// не исполнился — отменяем, больше не пробуем) и возвращает то, что реально исполнилось.
-/// Ошибки: OrderRejected (пара не торгуется, количество или сумма вне пределов, отказ BingX),
+/// Ошибки: NotConfigured — не задан срок ожидания итога (решение 398: до постановки, ордера нет);
+/// OrderRejected (пара не торгуется, количество или сумма вне пределов, отказ BingX),
 /// OutcomeUnknown — ордер мог быть принят, итог не получен или ответ без orderId (ядро не повторяет, решение 64;
 /// «чем найти» — решение 231).
 /// Решение 268: `prepared` — уже подготовленный ордер (рыночная продажа, market_sell.rs): постановка и итог — тем же
@@ -45,6 +47,8 @@ pub async fn trade(
     req: TradeRequest,
     prepared: Option<order_rules::Prepared>,
 ) -> GatewayResult<TradeResult> {
+    // Решение 398: сроки ожидания итога — до постановки (и у рыночной продажи с готовым ордером): не задана — ордера нет.
+    let times = order_state::times(ctx)?;
     let p = match prepared {
         Some(p) => p,
         None => order_rules::ready(ctx, symbols, &req)?,
@@ -78,7 +82,7 @@ pub async fn trade(
         .pending(pending.clone())
     })?;
     let by_id = pending.with_ref(&order_id);
-    let state = order_state::settle(ctx, &p.symbol, &order_id)
+    let state = order_state::settle(ctx, &p.symbol, &order_id, times)
         .await
         .map_err(|e| e.pending(by_id.clone()))?;
     order_state::result(ctx, req, &state, order_id).map_err(|e| e.pending(by_id))

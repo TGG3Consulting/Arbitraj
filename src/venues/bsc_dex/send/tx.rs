@@ -1,6 +1,8 @@
 //! Файл: venues/bsc_dex/send/tx.rs
 //! Что делает: сборка транзакции кошелька — лимит газа (eth_estimateGas + запас) и legacy-транзакция с chainId BSC;
-//! общие настройки отправки, без которых транзакция не уходит (сроки ожидания, надбавка отмены).
+//! общие настройки отправки, без которых транзакция не уходит (сроки ожидания, надбавка отмены, запас газа отмены).
+//! Решение 398: всё, что трекер и отмена используют ПОСЛЕ отправки, читается в SendCfg до неё и передаётся значением —
+//! после отправки настройки не читаются (сторож tests/settings_before_send_guard.rs).
 //! Кто вызывает: exec/txs.rs, send/cancel.rs, send/track.rs.
 //! От чего зависит: node/rpc.rs, node/mod.rs (chainId), ctx.rs.
 //! Настройки: send.gas_limit_margin_pct, send.max_wait_blocks, send.bundle_max_blocks, send.cancel_gas_bump_pct,
@@ -44,6 +46,8 @@ pub struct SendCfg {
     pub cancel_max_attempts: u64,
     /// send.queue_max_wait_s — сколько ждать итога одной транзакции до остановки очереди.
     pub queue_max_wait: Duration,
+    /// send.gas_limit_margin_pct — запас лимита газа отмены (решение 398: отмена уходит после исходной, значение — до неё).
+    pub gas_margin_pct: Decimal,
 }
 
 impl SendCfg {
@@ -68,6 +72,7 @@ impl SendCfg {
             })?,
             cancel_max_attempts: ctx.int("send.cancel_max_attempts")?,
             queue_max_wait: Duration::from_secs(ctx.int("send.queue_max_wait_s")?),
+            gas_margin_pct: ctx.dec("send.gas_limit_margin_pct")?,
         };
         if cfg.max_wait < cfg.bundle_max {
             return Err(ctx.not_set(
@@ -92,12 +97,41 @@ pub async fn limit(
     data: &Bytes,
     value: U256,
 ) -> GatewayResult<u64> {
+    let est = estimate(ctx, from, to, data, value).await?;
+    with_margin(ctx, est, ctx.dec("send.gas_limit_margin_pct")?)
+}
+
+/// Лимит газа с запасом, прочитанным заранее (решение 398: отмена после отправки исходной — SendCfg::gas_margin_pct).
+/// Принимает: окружение, запас (%), отправителя, адрес, данные, сумму BNB (wei). Ошибки: откат (текст узла), BadResponse.
+pub async fn limit_by(
+    ctx: &Ctx,
+    margin: Decimal,
+    from: Address,
+    to: impl Into<TxKind>,
+    data: &Bytes,
+    value: U256,
+) -> GatewayResult<u64> {
+    let est = estimate(ctx, from, to, data, value).await?;
+    with_margin(ctx, est, margin)
+}
+
+/// eth_estimateGas вызова. Принимает: отправителя, адрес (или TxKind::Create), данные, сумму. Ошибки: откат, узел.
+async fn estimate(
+    ctx: &Ctx,
+    from: Address,
+    to: impl Into<TxKind>,
+    data: &Bytes,
+    value: U256,
+) -> GatewayResult<U64> {
     let body = match to.into() {
         TxKind::Call(to) => json!({ "from": from, "to": to, "input": data, "value": value }),
         TxKind::Create => json!({ "from": from, "input": data, "value": value }),
     };
-    let est: U64 = rpc::call(ctx, "eth_estimateGas", json!([body])).await?;
-    let margin = ctx.dec("send.gas_limit_margin_pct")?;
+    rpc::call(ctx, "eth_estimateGas", json!([body])).await
+}
+
+/// Оценка газа × (1 + запас/100), вверх до целого. Ошибки: BadResponse — не помещается в u64.
+fn with_margin(ctx: &Ctx, est: U64, margin: Decimal) -> GatewayResult<u64> {
     let g = Decimal::from(est.to::<u64>()) * (Decimal::ONE + margin / Decimal::ONE_HUNDRED);
     u64::try_from(g.ceil()).map_err(|_| {
         ctx.err(

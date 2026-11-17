@@ -114,14 +114,22 @@ pub async fn send_capped(
     let to: TxKind = to.into();
     let nonce = slot.nonce(ctx).await?;
     let gas = tx::limit(ctx, from, to, &data, value).await?;
-    let signed = signer::sign(ctx, tx::legacy(ctx, nonce, price, gas, to, value, data)?)?;
+    // Решение 398: подписант — до отправки (кошелёк счёта и ключ); им же трекер подписывает отмены (Watch::key) — после
+    // отправки ключ и маппинг кошельков не читаются.
+    ctx.bound()?;
+    let key = signer::signer(ctx)?;
+    let sign = |t: alloy::consensus::TxLegacy| {
+        signer::sign_with(&key, t)
+            .map_err(|e| ctx.err(ErrorCode::Internal, format!("Подпись транзакции: {e}")))
+    };
+    let signed = sign(tx::legacy(ctx, nonce, price, gas, to, value, data)?)?;
     let mut tip_cost = None;
     let tip = match send::tip(&ready).filter(|_| with_tip) {
         Some((tip_to, amount)) => {
             let g = tx::limit(ctx, from, tip_to, &Bytes::new(), amount).await?;
             tip_cost = Some((amount, g));
             let t = tx::legacy(ctx, nonce + 1, price, g, tip_to, amount, Bytes::new())?;
-            Some((signer::sign(ctx, t)?, amount))
+            Some((sign(t)?, amount))
         }
         None => None,
     };
@@ -158,6 +166,7 @@ pub async fn send_capped(
         sent_block: head.number,
         channels: channels.clone(),
         cancels: cancel_log.clone(),
+        key,
     };
     let hold = slot.hold();
     let after = After {

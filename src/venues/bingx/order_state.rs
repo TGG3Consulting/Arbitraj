@@ -6,7 +6,8 @@
 //! Затем переводит ответ BingX в результат ядра (исполнено, средняя цена, комиссия).
 //! Кто вызывает: trade.rs.
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
-//! Настройки: venue.order_poll_ms, venue.order_final_wait_ms.
+//! Настройки: venue.order_poll_ms, venue.order_final_wait_ms — решение 398: читает вызывающий ДО постановки ордера
+//! (times) и передаёт значением; после постановки настройки не читаются (сторож tests/settings_before_send_guard.rs).
 //!
 //! Официальная документация (https://github.com/BingX-API/api-ai-skills/blob/main/skills/spot-trade/api-reference.md,
 //! «Query Single Order», «Cancel Order»):
@@ -33,12 +34,24 @@ use super::{num, rest};
 /// Окончательные состояния ордера по документации.
 const FINAL: [&str; 3] = ["FILLED", "CANCELED", "FAILED"];
 
-/// Что делает: окончательное состояние ордера (ответ «Query Order details»). Принимает: окружение, символ, orderId.
-/// Возвращает: ответ BingX с окончательным status. Ошибки: NotConfigured — сроки не заданы; OutcomeUnknown — состояние
-/// не получено и после отмены (нужна проверка).
-pub async fn settle(ctx: &Ctx, symbol: &str, order_id: &str) -> GatewayResult<Value> {
-    let poll = Duration::from_millis(ctx.int("venue.order_poll_ms")?);
-    let wait = Duration::from_millis(ctx.int("venue.order_final_wait_ms")?);
+/// Что делает: сроки ожидания итога ордера — venue.order_poll_ms и venue.order_final_wait_ms (решение 398: читаются до
+/// постановки ордера). Возвращает: (пауза опроса, срок). Ошибка NotConfigured — не задана (ордера нет).
+pub fn times(ctx: &Ctx) -> GatewayResult<(Duration, Duration)> {
+    Ok((
+        Duration::from_millis(ctx.int("venue.order_poll_ms")?),
+        Duration::from_millis(ctx.int("venue.order_final_wait_ms")?),
+    ))
+}
+
+/// Что делает: окончательное состояние ордера (ответ «Query Order details»). Принимает: окружение, символ, orderId,
+/// сроки (times — прочитаны до постановки). Возвращает: ответ BingX с окончательным status. Ошибки: OutcomeUnknown —
+/// состояние не получено и после отмены (нужна проверка).
+pub async fn settle(
+    ctx: &Ctx,
+    symbol: &str,
+    order_id: &str,
+    (poll, wait): (Duration, Duration),
+) -> GatewayResult<Value> {
     if let Ok(state) = poll_final(ctx, symbol, order_id, poll, wait).await {
         return Ok(state);
     }

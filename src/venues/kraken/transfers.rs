@@ -6,7 +6,7 @@
 //! (её учло ядро) — вывод не отправляется.
 //! Кто вызывает: mod.rs (функции контракта).
 //! От чего зависит: rest.rs, num.rs, wallet.rs, withdraw_addr.rs, methods.rs, ctx.rs, errors.rs.
-//! Настройки: venue.funding_list_limit [kraken].
+//! Настройки: venue.funding_list_limit [kraken] — у вывода читается до отправки и передаётся значением (решение 398).
 //!
 //! Официально (OpenAPI spot-rest.yaml, https://docs.kraken.com/api-reference/funding-beta/create-funding-withdrawal.md):
 //! POST /funding/v1/withdrawals — scope {method_id}, address_id, amount {asset_amount {asset {class, name}, amount}},
@@ -72,6 +72,9 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         "fee": fee,
         "expected_address": stored,
     });
+    // Решение 398: поиск вывода с неизвестным итогом (find) — по venue.funding_list_limit, прочитанному до денег: не
+    // задана — вывода нет (раньше: вывод ушёл, а поиск молча не работал — «итог неизвестен»).
+    let limit = ctx.int("venue.funding_list_limit")?;
     let started = Utc::now();
     let sent = rest::funding(ctx, Method::POST, PATH, vec![], Some(body), Op::Withdraw).await;
     let venue_ref = match sent {
@@ -91,13 +94,15 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
                     None,
                     "Вывод Kraken: ответ без withdrawal_id — итог неизвестен",
                 ));
-                find(ctx, &method_id, &address_id, started)
+                find(ctx, limit, (&method_id, &address_id), started)
                     .await
                     .ok_or(e.with_raw(v.to_string()))?
             }
         },
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
-            find(ctx, &method_id, &address_id, started).await.ok_or(e)?
+            find(ctx, limit, (&method_id, &address_id), started)
+                .await
+                .ok_or(e)?
         }
         Err(e) => return Err(e),
     };
@@ -119,12 +124,9 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
     })
 }
 
-/// Последние выводы (venue.funding_list_limit). Ошибки: связь, Kraken.
-async fn recent(ctx: &Ctx) -> GatewayResult<Vec<Value>> {
-    let q = vec![rest::p(
-        "limit",
-        ctx.int("venue.funding_list_limit")?.to_string(),
-    )];
+/// Последние выводы. Принимает: окружение, сколько (venue.funding_list_limit — читает вызывающий). Ошибки: связь, Kraken.
+async fn recent(ctx: &Ctx, limit: u64) -> GatewayResult<Vec<Value>> {
+    let q = vec![rest::p("limit", limit.to_string())];
     let v = rest::funding(ctx, Method::GET, PATH, q, None, Op::Other).await?;
     Ok(v.get("withdrawals")
         .and_then(Value::as_array)
@@ -132,15 +134,16 @@ async fn recent(ctx: &Ctx) -> GatewayResult<Vec<Value>> {
         .unwrap_or_default())
 }
 
-/// Вывод с неизвестным итогом: ровно один вывод того же метода и адреса, созданный не раньше started. None — нет
+/// Вывод с неизвестным итогом: ровно один вывод того же метода и адреса, созданный не раньше started. Принимает:
+/// окружение, venue.funding_list_limit (прочитан до вывода, решение 398), (метод, адрес), время отправки. None — нет
 /// или неоднозначно (тогда «итог неизвестен» — ручная проверка). Ошибок нет.
 async fn find(
     ctx: &Ctx,
-    method_id: &str,
-    address_id: &str,
+    limit: u64,
+    (method_id, address_id): (&str, &str),
     started: DateTime<Utc>,
 ) -> Option<String> {
-    let rows = recent(ctx).await.ok()?;
+    let rows = recent(ctx, limit).await.ok()?;
     let hits: Vec<String> = rows
         .iter()
         .filter(|r| num::text_opt(r, "method_id").as_deref() == Some(method_id))
@@ -157,7 +160,7 @@ async fn find(
 
 /// Статус вывода по withdrawal_id. Ошибки: не найден в последних, failed (WithdrawRejected), связь.
 pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
-    let rows = recent(ctx).await?;
+    let rows = recent(ctx, ctx.int("venue.funding_list_limit")?).await?;
     let rec = rows
         .iter()
         .find(|r| num::text_opt(r, "withdrawal_id").as_deref() == Some(id))

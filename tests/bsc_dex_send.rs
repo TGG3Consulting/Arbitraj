@@ -1,6 +1,7 @@
 //! Файл: tests/bsc_dex_send.rs
 //! Что делает: проверяет правила отправки DEX без сети: send.max_wait_blocks < send.bundle_max_blocks — отправка
-//! не работает с понятной причиной; цена газа отмены выше прошлой на надбавку; обмен без минимума (худшая цена ≤ 0,
+//! не работает с понятной причиной; без send.gas_limit_margin_pct SendCfg не читается (решение 398: запас газа отмены —
+//! до отправки исходной); цена газа отмены выше прошлой на надбавку; обмен без минимума (худшая цена ≤ 0,
 //! допуск 100%) не собирается; ожидаемое поступление токена и обмен с этим токеном на выходе не идут одновременно.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{send, exec, wallet, ctx}, arb::settings (настоящая SQLite во временной
@@ -76,6 +77,15 @@ async fn max_wait_must_cover_bundle_blocks() {
     set(&c, "send.cancel_max_gas_gwei", json!("5")).await;
     set(&c, "send.cancel_max_attempts", json!(3)).await;
     set(&c, "send.queue_max_wait_s", json!(600)).await;
+    // Решение 398: запас газа отмены — в SendCfg (отмена уходит после исходной): не задан — отправки нет.
+    let e = SendCfg::read(&c).unwrap_err();
+    assert_eq!(e.code, ErrorCode::NotConfigured);
+    assert!(
+        e.message.contains("send.gas_limit_margin_pct"),
+        "{}",
+        e.message
+    );
+    set(&c, "send.gas_limit_margin_pct", json!("20")).await;
     let e = SendCfg::read(&c).unwrap_err();
     assert_eq!(e.code, ErrorCode::NotConfigured);
     assert!(e.message.contains("send.max_wait_blocks"));

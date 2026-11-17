@@ -1,5 +1,5 @@
 //! Файл: tests/core_reserve_cap_t176.rs
-//! Что проверяет: решение 390 (задача t176) — форма запаса на движение цены (core/reserve.rs keep, amount). Тест ЧИСТОЙ
+//! Что проверяет: решение 390 (задача t176) — форма запаса на движение цены (core/reserve.rs keep, keep_of, amount). Тест ЧИСТОЙ
 //! ЛОГИКИ (перебор по сетке входов, без записей): запас — функция чисел k·σ·√T, выручки, доли и двух средних цен; на
 //! записанных данных та же функция проверяется через полный расчёт в tests/core_price_reserve.rs, согласованность с
 //! отсевом — tests/core_sieve_t162.rs (bound_covers_full_calc_large_reserve_t176) и tests/core_sieve_recorded_t162.rs.
@@ -19,7 +19,7 @@
 
 use std::str::FromStr;
 
-use arb::core::reserve::{amount, keep};
+use arb::core::reserve::{amount, keep, keep_of};
 use rust_decimal::Decimal;
 
 fn d(s: &str) -> Decimal {
@@ -60,6 +60,8 @@ fn reserve_cap_grid() {
     let mut prev_keep = Decimal::ONE;
     for m in ms.map(d) {
         let kp = keep(m);
+        // keep_of (DirCtx.keep) — то же k·σ·√T: k = m, σ = 0,5, T = 4 (√4 = 2 точно).
+        assert_eq!(keep_of(m, d("0.5"), d("4")), Some(kp));
         assert!(
             (Decimal::ZERO..=Decimal::ONE).contains(&kp),
             "keep({m}) = {kp}"
@@ -76,8 +78,7 @@ fn reserve_cap_grid() {
             for share in shares.map(|s| s.map(d)) {
                 for s in spreads.map(d) {
                     let sell = buy * (Decimal::ONE + s);
-                    // k·σ·√T передаётся как k = m, σ = 1, √T = 1 — то же произведение.
-                    let r = amount(m, Decimal::ONE, Decimal::ONE, p, share, buy, sell);
+                    let r = amount(kp, p, share, buy, sell);
                     assert!(
                         (Decimal::ZERO..=p).contains(&r),
                         "m {m} p {p} доля {share:?} спред {s}: {r}"
@@ -111,22 +112,14 @@ fn reserve_cap_table() {
     let (p, buy, share) = (Decimal::ONE, Decimal::ONE, d("0.8"));
     println!("Базовая часть, доля выручки: m → было | стало");
     for m in ["0.001", "0.01", "0.1", "1", "5"].map(d) {
-        let new = amount(m, Decimal::ONE, Decimal::ONE, p, None, buy, buy);
+        let new = amount(keep(m), p, None, buy, buy);
         println!("{m} → {} | {}", old(m, p, None, buy, buy), new.round_dp(6));
         assert!(new <= m && new < p);
     }
     println!("Доля 0,8 при m = 0,001, доля выручки: спред → было | стало");
     for s in ["0.01", "0.25", "1.6", "10000"].map(d) {
         let sell = buy * (Decimal::ONE + s);
-        let new = amount(
-            d("0.001"),
-            Decimal::ONE,
-            Decimal::ONE,
-            p,
-            Some(share),
-            buy,
-            sell,
-        );
+        let new = amount(keep(d("0.001")), p, Some(share), buy, sell);
         println!(
             "{s} → {} | {}",
             old(d("0.001"), p, Some(share), buy, sell),

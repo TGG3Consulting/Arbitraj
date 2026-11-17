@@ -194,6 +194,7 @@ pub fn prepare(
         k,
         h,
         closure_share,
+        keep: super::reserve::keep_of(k, plan.sigma, plan.transit_s),
         sigma_check: None,
         return_per_trade: plan.returns(),
         pair_a: None,

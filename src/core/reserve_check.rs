@@ -53,6 +53,10 @@ pub struct SigmaCheck {
     pub profit_t_usd: Option<Decimal>,
     /// Почему части нет (окно не задано, σ не измерена, граница в неверном виде).
     pub note: Option<String>,
+    /// Решение 390 (ревью t176, Н3): e^(−k·σ_T плана·√T) — один раз на план входа (entry, reserve.rs keep_of), не на
+    /// точку объёма; None — нет σ_T или √T. В JSON не пишется.
+    #[serde(skip)]
+    pub keep_t: Option<Decimal>,
 }
 
 /// Что делает: сравнение σ для плана входа (см. шапку). Принимает: ряды σ, хранилище, направление, σ плана, T плана,
@@ -75,6 +79,7 @@ pub fn of(
         reserve_t_usdt: None,
         profit_t_usd: None,
         note: None,
+        keep_t: None,
     };
     let window = match s.integer("profit.sigma_window_min", At::default()) {
         Ok(w) => w,
@@ -107,14 +112,14 @@ pub fn of(
     c
 }
 
-/// Что делает: запас по σ_T плана и прибыль с ним (только поля сравнения). Принимает: сравнение, контекст направления
-/// (k, доля закрытия, котируемая монета A), √T, выручку, средние цены покупки и продажи, прежний запас в USDT, прибыль
-/// расчёта, курсы затрат. Возвращает: копию с reserve_t_usdt и profit_t_usd (None — нет σ_T или курса). Ошибок нет.
+/// Что делает: запас по σ_T плана и прибыль с ним (только поля сравнения). Принимает: сравнение (keep_t — доля по σ_T),
+/// контекст направления (доля закрытия, котируемая монета A), выручку, средние цены покупки и продажи, прежний запас в
+/// USDT, прибыль расчёта, курсы затрат. Возвращает: копию с reserve_t_usdt и profit_t_usd (None — нет σ_T, √T или
+/// курса). Ошибок нет.
 #[allow(clippy::too_many_arguments)]
 pub fn priced(
     c: &SigmaCheck,
     cx: &DirCtx,
-    sqrt_t: Decimal,
     proceeds: Decimal,
     buy_avg: Decimal,
     sell_avg: Decimal,
@@ -123,18 +128,10 @@ pub fn priced(
     rates: &Rates,
 ) -> SigmaCheck {
     let mut out = c.clone();
-    let Some(st) = c.sigma_t_plan else {
+    let Some(keep_t) = c.keep_t else {
         return out;
     };
-    let amount = super::reserve::amount(
-        cx.k,
-        st,
-        sqrt_t,
-        proceeds,
-        cx.closure_share,
-        buy_avg,
-        sell_avg,
-    );
+    let amount = super::reserve::amount(keep_t, proceeds, cx.closure_share, buy_avg, sell_avg);
     let cost = Cost::new(
         CostKind::PriceMoveReserve,
         amount,
@@ -150,26 +147,30 @@ pub fn priced(
 
 /// Что делает: сравнение σ плана входа для DirCtx (of по копии ряда продажи, сейчас) — в куче. Под замком рядов ядра —
 /// только копия одного ряда (решение 364: счёт вне замка — замок нужен потоку тика, evaluate.rs sample). Принимает:
-/// ядро, хранилище, направление, σ и T плана. Возвращает: сравнение. Ошибок нет.
+/// ядро, хранилище, направление, σ и T плана, k плана. Возвращает: сравнение с keep_t = e^(−k·σ_T·√T) (решение 390 —
+/// один раз на план, не на точку объёма). Ошибок нет.
 pub fn entry(
     core: &Core,
     s: &Store,
     d: &Direction,
     sigma_plan: Decimal,
     horizon_s: Decimal,
+    k: Decimal,
 ) -> Box<SigmaCheck> {
     let mut one = lk(&core.inner.vol).copy_of(&d.sell_on, &d.asset, Side::Sell, &d.buy_on);
-    Box::new(of(&mut one, s, d, sigma_plan, horizon_s, Utc::now()))
+    let mut c = of(&mut one, s, d, sigma_plan, horizon_s, Utc::now());
+    c.keep_t = c
+        .sigma_t_plan
+        .and_then(|st| super::reserve::keep_of(k, st, horizon_s));
+    Box::new(c)
 }
 
 /// Что делает: запас и прибыль по σ_T для Calc (priced) — в куче. Принимает: контекст (без сравнения — None), строки
-/// затрат расчёта (прежний запас в USDT — строка PriceMoveReserve), √T, выручку, котировки покупки и продажи, прибыль,
+/// затрат расчёта (прежний запас в USDT — строка PriceMoveReserve), выручку, котировки покупки и продажи, прибыль,
 /// курсы. Возвращает: Option<Box<SigmaCheck>>. Ошибок нет.
-#[allow(clippy::too_many_arguments)]
 pub fn priced_box(
     cx: &DirCtx,
     costs: &[CostLine],
-    sqrt_t: Decimal,
     proceeds: Decimal,
     qa: &Quote,
     qb: &Quote,
@@ -184,6 +185,6 @@ pub fn priced_box(
         .unwrap_or_default();
     let (buy, sell) = (qa.avg_price, qb.avg_price);
     Some(Box::new(priced(
-        c, cx, sqrt_t, proceeds, buy, sell, r, profit, rates,
+        c, cx, proceeds, buy, sell, r, profit, rates,
     )))
 }

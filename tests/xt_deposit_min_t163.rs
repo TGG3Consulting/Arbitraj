@@ -133,6 +133,7 @@ fn cx_to_xt(info: CoinNetworkInfo) -> DirCtx {
         k: Decimal::ONE,
         h: Decimal::ZERO,
         closure_share: None,
+        keep: arb::core::reserve::keep_of(Decimal::ONE, Decimal::ZERO, Decimal::ZERO),
         sigma_check: None,
         return_per_trade: false,
         pair_a: None,

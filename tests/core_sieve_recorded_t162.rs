@@ -208,6 +208,7 @@ fn one(c: &Value) -> (String, bool) {
         k,
         h: Decimal::ONE,
         closure_share: None,
+        keep: arb::core::reserve::keep_of(k, sigma, transit),
         sigma_check: None,
         return_per_trade: !dex_b,
         pair_a: None,

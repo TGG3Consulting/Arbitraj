@@ -112,6 +112,7 @@ pub fn cx_with(
         k,
         h: d("0.7"),
         closure_share: None,
+        keep: arb::core::reserve::keep_of(k, sigma, d("20")),
         sigma_check: None,
         return_per_trade: false,
         pair_a: a_cex.then(|| rec.pair.clone()),

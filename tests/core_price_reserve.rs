@@ -184,6 +184,7 @@ fn cx(rec: &Rec, d_: Direction, sigma: Decimal, share: Option<Decimal>) -> DirCt
         k: d("1"),
         h: d("1"),
         closure_share: share,
+        keep: arb::core::reserve::keep_of(d("1"), sigma, d("120")),
         sigma_check: None,
         return_per_trade: false,
         pair_a: (!dex_a).then(|| rec.pair.clone()),

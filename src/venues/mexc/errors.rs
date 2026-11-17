@@ -25,6 +25,9 @@ pub enum Op {
     Withdraw,
     /// Перевод между своими счетами MEXC (POST /api/v3/capital/transfer): деньги двигаются — как вывод.
     Move,
+    /// Создание адреса депозита (решение 379, ревью t165 Н1): повтор не безопасен — как у ордера и вывода, на резервный
+    /// адрес только если запрос точно не отправлен; таймаут и сбой сервера — «итог неизвестен», отказ — BadResponse.
+    Create,
     /// Всё остальное (справочники, балансы, проверки, отмена и запрос ордера).
     Other,
 }
@@ -120,7 +123,7 @@ fn rejected(op: Op) -> ErrorCode {
     match op {
         Op::Trade => ErrorCode::OrderRejected,
         Op::Withdraw => ErrorCode::WithdrawRejected,
-        Op::Move | Op::Other => ErrorCode::BadResponse,
+        Op::Move | Op::Create | Op::Other => ErrorCode::BadResponse,
     }
 }
 
@@ -139,6 +142,11 @@ pub fn unsure(e: GatewayError, op: Op) -> GatewayError {
     if op == Op::Other || !matches!(e.code, ErrorCode::Timeout | ErrorCode::BadResponse) {
         return e;
     }
+    // Ревью t165 Н1: у создания адреса отказ биржи (код не из списка → BadResponse) — отказ, а не «итог неизвестен»;
+    // неизвестен итог только при таймауте и сбое сервера (Timeout).
+    if op == Op::Create && e.code == ErrorCode::BadResponse {
+        return e;
+    }
     unknown(e, op)
 }
 
@@ -147,6 +155,7 @@ pub(super) fn unknown(e: GatewayError, op: Op) -> GatewayError {
     let what = match op {
         Op::Trade => "ордер",
         Op::Move => "перевод между счетами",
+        Op::Create => "запрос создания адреса депозита",
         _ => "вывод",
     };
     GatewayError {

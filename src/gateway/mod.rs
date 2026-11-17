@@ -6,6 +6,7 @@
 //! Настройки: правила шлюза (хранятся в SQLite, меняются из интерфейса).
 
 pub mod addr_claim;
+pub mod addr_create;
 pub mod book_lost_log;
 pub mod calc_meter;
 pub mod calc_share;

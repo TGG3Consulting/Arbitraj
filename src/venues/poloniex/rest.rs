@@ -129,7 +129,8 @@ pub async fn send(ctx: &Ctx, r: Req<'_>) -> GatewayResult<Value> {
                 };
                 return parsed.map_err(|e| errors::unsure(e, r.op));
             }
-            // Резерв — только если запрос точно не дошёл; иначе ордер или вывод мог исполниться — не повторяем.
+            // Резерв — только если запрос точно не дошёл; иначе ордер, вывод или создание адреса (Op::Create, ревью t165
+            // Н1) могли исполниться — не повторяем.
             Err(f) if f.not_sent() || (r.op == Op::Other && f.is_timeout()) => {
                 last = Some(errors::from_fail(&f, &lim))
             }

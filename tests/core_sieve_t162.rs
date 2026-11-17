@@ -6,6 +6,10 @@
 //!    же стакана); верх DEX — функция адаптера (quote/bound.rs rho_raw) на том же пуле;
 //! 2) тест-сторож: при любом пороге (USDT и %), при котором граница отсекает, НИ ОДНА точка сетки не проходит пороги;
 //!    при котором хоть одна точка проходит — граница НЕ отсекает.
+//! 3) решение 390 (t176): то же (1 и 2) при большом запасе k·σ·√T = 0,22 … 8,9 (запас выручка·(1 − e^(−k·σ·√T)) — до
+//!    почти всей выручки), в том числе с долей закрытия 0,39 и 1 и с возвратом USDT в каждой сделке: κ границы — та же
+//!    доля e^(−k·σ·√T), что у расчёта (одно поле DirCtx.keep), поэтому граница не отсекает то, что расчёт примет. Для
+//!    сравнения печатается, сколько точек сетки нарушила бы прежняя κ = max(0, 1 − k·σ·√T − r_B) (только печать).
 //!
 //! Входы вывода и возврата (поправка по фактам, доля, налог перевода, возврат USDT, комиссии в котируемой и в монете,
 //! отрицательные входы) — tests/core_sieve_inputs_t162.rs; 18 записанных отказов — tests/core_sieve_recorded_t162.rs.
@@ -19,19 +23,31 @@ mod sieve_common;
 mod size_common;
 
 use arb::core::Core;
+use arb::core::bound::Bound;
+use arb::core::dirctx::DirCtx;
 use arb::core::types::Side;
-use rust_decimal::Decimal;
-use sieve_common::{Books, Way, covers, cx, frozen};
+use rust_decimal::{Decimal, MathematicalOps};
+use sieve_common::{Books, Way, covers, cx, frozen, usdt_net};
 use size_common::{Rec, d};
+
+/// Точки сетки: (объём, прибыль, %).
+type Pts = Vec<(Decimal, Decimal, Decimal)>;
 
 /// Один сценарий: эталон на сетке против границы; сторож по набору порогов. Возвращает: (точек, отсечений).
 async fn scenario(core: &Core, rec: &Rec, w: Way, sigma: Decimal, k: Decimal) -> (usize, usize) {
     let c = cx(rec, w, sigma, k);
+    let (_, pts, cuts) = Box::pin(scenario_cx(core, rec, w, &c)).await;
+    (pts.len(), cuts)
+}
+
+/// Сценарий на готовом контексте (один вызов covers): эталон против границы и сторож. Возвращает: (граница, точки
+/// сетки, отсечений по порогам).
+async fn scenario_cx(core: &Core, rec: &Rec, w: Way, c: &DirCtx) -> (Bound, Pts, usize) {
     let books = Books {
         a: frozen(rec, Side::Buy),
         b: frozen(rec, Side::Sell),
     };
-    let (bound, pts) = Box::pin(covers(core, rec, w, &c, &books, None)).await;
+    let (bound, pts) = Box::pin(covers(core, rec, w, c, &books, None)).await;
     assert!(
         pts.len() > 20,
         "{w:?}: допустимых точек сетки мало: {}",
@@ -60,7 +76,7 @@ async fn scenario(core: &Core, rec: &Rec, w: Way, sigma: Decimal, k: Decimal) ->
             cuts += usize::from(cut);
         }
     }
-    (pts.len(), cuts)
+    (bound, pts, cuts)
 }
 
 /// Граница ≥ эталона на плотной сетке и сторож — по трём направлениям и двум запасам (σ = 0 и σ записи сценария).
@@ -87,5 +103,57 @@ async fn bound_covers_full_calc_on_dense_grid() {
         total_cuts > 0,
         "граница ни разу не отсекла — проверка пуста"
     );
+    let _ = std::fs::remove_dir_all(&dirp);
+}
+
+/// Решение 390 (t176): граница ≥ эталона и сторож при большом запасе (k·σ·√T от 0,22 до 8,9; T = 20 с, k = 1) по трём
+/// направлениям; с долей закрытия (0,39 и 1 — ветки max и потолка «не больше выручки») и с возвратом USDT в каждой
+/// сделке (у биржи B; сеть USDT BingX из записи). Печать: точки, где прежняя κ = max(0, 1 − k·σ·√T − r_B) была бы ниже
+/// прибыли нового расчёта (без доли — только печать).
+#[tokio::test]
+async fn bound_covers_full_calc_large_reserve_t176() {
+    let dirp = std::env::temp_dir().join(format!("arb_sieve_t176_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dirp);
+    std::fs::create_dir_all(&dirp).unwrap();
+    let core = sieve_common::core(&dirp).await;
+    let rec = Rec::load("sieve-t162").await;
+    for w in [Way::CexDex, Way::DexCex, Way::CexCex] {
+        let b_cex = w != Way::CexDex;
+        for sigma in [d("0.05"), d("0.25"), d("1"), d("2")] {
+            for (share, per_trade) in [
+                (None, false),
+                (Some(d("0.39")), false),
+                (Some(d("1")), b_cex),
+            ] {
+                let mut c = cx(&rec, w, sigma, d("1"));
+                c.closure_share = share;
+                if per_trade {
+                    c.return_per_trade = true;
+                    c.usdt_b = Some(usdt_net());
+                }
+                let (bound, pts, cuts) = Box::pin(scenario_cx(&core, &rec, w, &c)).await;
+                let m = c.k * c.sigma * c.transit_s.sqrt().unwrap();
+                let keep = c.keep.unwrap();
+                assert!(keep > Decimal::ZERO && keep < Decimal::ONE, "{m}: {keep}");
+                let mut broken = 0;
+                // κ = max(0, keep − r_B): при κ > 0 r_B = keep − κ; при κ = 0 прежняя κ тоже 0.
+                if share.is_none() && bound.kappa > Decimal::ZERO {
+                    let r_b = keep - bound.kappa;
+                    let mut old = bound.clone();
+                    old.kappa = (Decimal::ONE - m - r_b).max(Decimal::ZERO);
+                    broken = pts
+                        .iter()
+                        .filter(|(q, p, _)| old.u_at(*q).is_some_and(|(u, _)| u < *p))
+                        .count();
+                }
+                println!(
+                    "{w:?} k·σ·√T {m} доля {share:?} возврат {per_trade}: κ {}, точек {}, отсечений {cuts}, \
+                     прежняя граница ниже расчёта в {broken}",
+                    bound.kappa,
+                    pts.len()
+                );
+            }
+        }
+    }
     let _ = std::fs::remove_dir_all(&dirp);
 }

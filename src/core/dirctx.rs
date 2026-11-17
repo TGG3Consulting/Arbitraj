@@ -53,6 +53,9 @@ pub struct DirCtx {
     pub k: Decimal,
     /// Решение 240: доля закрытия разницы profit.closure_share [B]; None — не задана (запас как раньше).
     pub closure_share: Option<Decimal>,
+    /// Решение 390 (t176): доля выручки после базовой части запаса e^(−k·σ·√T) — reserve.rs keep_of(k, σ, transit_s),
+    /// один раз при сборке; её берут расчёт (costs.rs) и отсев (bound_in.rs). None — √T не вычисляется.
+    pub keep: Option<Decimal>,
     /// Решения 358, 364: сравнение σ только для журнала (у плана входа — всегда); None — не план входа. На решение не
     /// влияет.
     /// Box — значение не растит DirCtx, который держат будущие пути расчёта и предпроверки (стек).
@@ -218,7 +221,9 @@ impl DirCtx {
         };
         // Решение 358 (только журнал): σ на горизонте T рядом со σ плана — только у плана входа.
         let sigma_check = match &at_m {
-            Moment::Entry => Some(super::reserve_check::entry(core, s, dir, sigma, transit_s)),
+            Moment::Entry => Some(super::reserve_check::entry(
+                core, s, dir, sigma, transit_s, k,
+            )),
             _ => None,
         };
         // Решение 240: доля закрытия разницы — не у сделки, которая уже идёт.
@@ -280,6 +285,7 @@ impl DirCtx {
             k,
             h,
             closure_share,
+            keep: super::reserve::keep_of(k, sigma, transit_s),
             sigma_check,
             return_per_trade: cx_return(&mode),
             pair_a,

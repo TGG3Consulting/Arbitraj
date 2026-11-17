@@ -12,17 +12,19 @@
 //!   уменьшает приход) ⇒ приход ≤ min(A, A(1 − pct) − W_eff)·(1 − t/100); фикс < 0 без поправки по фактам — граница не
 //!   строится (ревью t162, Н1: fee_for без поправки не обрезает комиссию нулём — приход больше A); у DEX на A налог
 //!   перевода монеты ≥ 0 (проверено адаптером) ⇒ приход ≤ q;
-//! - запас: reserve.rs amount ≥ k·σ·√T·выручка (доля закрытия только увеличивает) ⇒ κ_B = max(0, 1 − k·σ·√T − r_B);
+//! - запас: reserve.rs amount ≥ выручка·(1 − keep(k·σ·√T)) (доля закрытия только увеличивает, потолок «не больше
+//!   выручки» базовую часть не режет — она меньше выручки) ⇒ κ_B = max(0, keep − r_B), keep = e^(−k·σ·√T) — то же поле
+//!   DirCtx.keep, что у расчёта (решение 390, t176; прежде κ_B = max(0, 1 − k·σ·√T − r_B) под линейный запас);
 //! - возврат USDT с биржи B (usdt_return.mode = per_trade): fee_for(сумма) ≥ фикс при доле ≥ 0 ⇒ F = фикс; с DEX — газ ≥ 0.
 //!
 //! Газ, разрешения, чаевые, остаток шага, доля глубины h и минимумы — не вычитаются (≥ 0 или только сужают допустимые
 //! объёмы). Разбор отдельных входов (ставки, стакан, приход, постоянные) — bound_in_parts.rs.
 //! Кто вызывает: core/sieve.rs, тесты.
-//! От чего зависит: bound.rs, bound_in_parts.rs, dirctx.rs, uncapped_replay_plan.rs (fee_of), core/types,
+//! От чего зависит: bound.rs, bound_in_parts.rs, dirctx.rs (keep — reserve.rs keep_of), uncapped_replay_plan.rs (fee_of), core/types,
 //! gateway/rate_bound.rs.
 //! Настройки: нет своих (transfer.seen_cost читает вызывающий — признак see в Withdraw).
 
-use rust_decimal::{Decimal, MathematicalOps};
+use rust_decimal::Decimal;
 
 use crate::core::types::{OrderBook, Quote};
 use crate::gateway::rate_bound::DexBound;
@@ -99,9 +101,9 @@ pub fn assemble(cx: &DirCtx, a: &SideIn, b: &SideIn, seen: Option<&Seen>) -> Res
     if matches!((&buy, &sell), (Buy::Dex { .. }, Sell::Dex { .. })) {
         return Err("обе стороны DEX — направления с переводом нет".into());
     }
-    let sqrt_t = cx.transit_s.sqrt().ok_or("время в пути не вычисляется")?;
-    let c = cx.k * cx.sigma * sqrt_t;
-    let kappa = (Decimal::ONE - c - r_b).max(Decimal::ZERO);
+    // Та же доля, что у расчёта (costs.rs → reserve.rs amount): одно поле контекста DirCtx.keep.
+    let keep = cx.keep.ok_or("время в пути не вычисляется")?;
+    let kappa = (keep - r_b).max(Decimal::ZERO);
     Ok(Bound {
         buy,
         sell,

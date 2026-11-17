@@ -69,6 +69,7 @@ fn cx(rec: &Rec) -> DirCtx {
         k: d("1"),
         h: d("1"),
         closure_share: None,
+        keep: arb::core::reserve::keep_of(d("1"), d("0.00002"), d("120")),
         sigma_check: None,
         return_per_trade: true,
         pair_a: Some(rec.pair.clone()),

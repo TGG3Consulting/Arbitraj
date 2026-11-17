@@ -3,7 +3,8 @@
 //! сторон по реальной ликвидности, стоимость вывода с A (биржа — комиссия вывода; DEX — газ перевода
 //! и налог на перевод), минимумы вывода и минимальный депозит B (неизвестен — сделки нет), доля
 //! глубины B (коэффициент h), возврат USDT в каждой сделке (решение 34), запас на движение цены
-//! r = k·σ·√T (решение 240: не меньше доли закрытия разницы profit.closure_share — reserve.rs). Всё переводится в USDT
+//! r = выручка·(1 − e^(−k·σ·√T)) (решение 390: не больше выручки; решение 240: не меньше доли закрытия разницы
+//! profit.closure_share — reserve.rs). Всё переводится в USDT
 //! (convert.rs). Затраты в монете уменьшают количество, а не сумму.
 //! Каждая строка несёт шаг маршрута обмена (решение 52) — экран группирует расчёт по шагам.
 //! Решение 66: отказ несёт вид (size.rs Fail: меньше минимума / больше возможного / невозможно) — по нему подбор
@@ -33,7 +34,7 @@
 //! Настройки: через dirctx.rs (profit.*, usdt_return.mode).
 
 use chrono::Utc;
-use rust_decimal::{Decimal, MathematicalOps};
+use rust_decimal::Decimal;
 
 use crate::core::types::{Cost, CostKind};
 
@@ -178,20 +179,14 @@ pub async fn evaluate_capped<S: Source>(
                 .map(|c| (convert::usdt_return(c), super::costs_types::RETURN_STAGE)),
         );
     }
-    // Запас r = k·σ·√T от выручки (ТЗ, шаг 4); решение 240 — не меньше доли закрытия разницы (reserve.rs).
-    let sqrt_t = cx
-        .transit_s
-        .sqrt()
+    // Запас r = выручка·(1 − e^(−k·σ·√T)) (ТЗ, шаг 4; решение 390 — не больше выручки); решение 240 — не меньше доли
+    // закрытия разницы (reserve.rs).
+    // Доля keep = e^(−k·σ·√T) — одна на контекст (DirCtx.keep, reserve.rs keep_of), не на точку объёма.
+    let keep = cx
+        .keep
         .ok_or_else(|| Fail::Stop("время в пути не вычисляется".into()))?;
-    let reserve = super::reserve::amount(
-        cx.k,
-        cx.sigma,
-        sqrt_t,
-        proceeds,
-        cx.closure_share,
-        qa.avg_price,
-        qb.avg_price,
-    );
+    let reserve =
+        super::reserve::amount(keep, proceeds, cx.closure_share, qa.avg_price, qb.avg_price);
     lines.push((
         Cost::new(
             CostKind::PriceMoveReserve,
@@ -244,7 +239,7 @@ pub async fn evaluate_capped<S: Source>(
     // Решение 358 (только журнал): запас и прибыль по σ на горизонте T рядом с прежними; решение — по прежним.
     // Не-async функция (reserve_check.rs priced_box): значения сравнения не живут в кадре этого будущего.
     let sigma_check =
-        super::reserve_check::priced_box(cx, &costs, sqrt_t, proceeds, &qa, &qb, profit, &rates);
+        super::reserve_check::priced_box(cx, &costs, proceeds, &qa, &qb, profit, &rates);
     Ok(Calc {
         direction: d.clone(),
         qty,

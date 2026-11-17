@@ -9,6 +9,10 @@
 //! Официально: GET /v4/deposit/address (https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetDepositAddress,
 //! `_deposit_withdrawal/depositAddressGet.md`) — chain и currency обязательны (значения — из support/currency); ответ
 //! result {address, memo}. Коды — errorCode.md (DEPOSIT_001…008).
+//! Решение 379 (задача t165, 17.11.2026): метода создания адреса в документации нет; коды errorCode.md DEPOSIT_006 «No
+//! deposit address, please try it later» и DEPOSIT_007 «Address is being generated, please try it later» — адрес
+//! создаёт сама XT (повтор позже), прямо «GET создаёт адрес» документация не пишет. Поведение прежнее (вопрос Тиграну —
+//! docs/TASKS.md, t165).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

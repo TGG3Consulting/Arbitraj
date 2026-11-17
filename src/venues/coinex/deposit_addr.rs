@@ -12,6 +12,10 @@
 //! Deposit Address): бот адрес не меняет; сменили в кабинете — кэш устарел до перезапуска (урок 25 — вопрос Тиграну, нужен
 //! ли срок кэша). Зачисление — на спот-счёт: другого счёта для депозита у CoinEx нет (Transfer: счета SPOT, MARGIN,
 //! FUTURES; funding-счёта нет) — проверить первым депозитом.
+//! Решение 379 (задача t165, 17.11.2026): метода создания адреса нет; есть «Update Deposit Address» POST
+//! /assets/renewal-deposit-address (https://docs.coinex.com/api/v2/assets/deposit-withdrawal/http/update-deposit-address,
+//! ответ {address, memo}) — создаёт ли он адрес, если его не было, документация не говорит; создаёт ли GET — тоже.
+//! Поведение прежнее: нет адреса — отказ (вопрос Тиграну — docs/TASKS.md, t165).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

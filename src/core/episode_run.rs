@@ -34,6 +34,8 @@ pub enum EpMsg {
         calc: Box<Calc>,
         snap: Box<Snap>,
         card: Option<Box<Card>>,
+        /// Задача t165: итог старта этого прошедшего (start_note::note) — в запись core.candidate при открытии.
+        note: Option<String>,
     },
     /// Эпизод закрыт.
     Close { info: EpisodeInfo },

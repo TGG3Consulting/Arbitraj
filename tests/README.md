@@ -595,6 +595,14 @@ depth_update после переподписки — тот же ответ REST
 ниже); по содержимому — кадры `depth@cake_usdt,20` и в ту же секунду `GET /v4/public/depth?symbol=cake_usdt&limit=20`
 (совпадают ли первые 20 уровней при той же книге).
 
+### Poloniex и MEXC — адрес депозита (решение 379, t165)
+
+`tests/poloniex_deposit_addr_t165.rs`, `tests/mexc_deposit_addr_t165.rs`: разбор ответа создания адреса депозита — на
+примерах из официальной документации (`data/poloniex_doc_2026-11-17`, `data/mexc_doc_2026-11-17`), живой записи нет.
+Записать при первом создании: живой ответ лежит в сыром журнале сервера `<data-dir>/raw/poloniex/*.jsonl.zst`
+(строка с соединением «rest /wallets/address») и `<data-dir>/raw/mexc/*.jsonl.zst` («rest /api/v3/capital/deposit/address»
+с телом записи сети); адрес в файл не копировать — заменить на пример документации (адрес — данные владельца).
+
 ### XT — команды записи (на сервере бота)
 
 Решение 366 (t163) — `tests/xt_deposit_min_t163.rs`: минимум депозита из depositMinAmount на примере ответа официальной

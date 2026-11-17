@@ -22,7 +22,9 @@
 //! не задана — прежний режим, строка на каждый отказ с другим текстом); прошёл — строка закрывается итоговым счётчиком.
 //! Решение 147: исполнитель отказал на входе (направление не торгуемо, по монете занято) — точная причина в поле
 //! `start` строки «Кандидатов», в тексте карточки (журнал/Telegram deal.candidate) и в журнале core.start_refused
-//! (Warn, одна запись на смену причины по направлению; сделка запущена — память причины стирается).
+//! (Warn; задача t165 — тем же механизмом повторов, что core.precheck: счётчик и время последнего повтора в той же
+//! строке, сделка запущена — строка закрывается; start_note.rs). Итог старта (запущена / сухой / отказ) — всегда в
+//! записи core.candidate под карточкой (start_note::note; при эпизодах — через EpMsg::Record).
 //! Решение 267: монета занята сделкой — при window.busy_calc = да вместо молчаливого выхода enqueue ставит теневой
 //! расчёт (busy_calc.rs: только наблюдение — ни исполнителя, ни окна, ни эпизода, ни строки «Кандидатов», ни журнала
 //! отказов); его очередь разбирает run после очереди кандидатов. Выключено / не задано — как раньше.
@@ -325,12 +327,8 @@ async fn accepted_timed(
         Mode::Live => super::executor::accepted(core, calc.clone()).await,
     };
     let dry = matches!(start, Start::Dry(_));
-    // Решение 147: отказ исполнителя на входе — причина в строку, журнал (на смену причины) и текст карточки.
-    let refused = match &start {
-        Start::NotTradable(why) => Some(format!("сделки нет — направление не торгуемо: {why}")),
-        Start::Busy(why) => Some(format!("сделки нет — по монете занято: {why}")),
-        _ => None,
-    };
+    // Решение 147: отказ исполнителя на входе — причина в строку, журнал (повторы — счётчиком, t165) и текст карточки.
+    let refused = super::start_note::refused(&start);
     refused_log(core, d, &start, refused.as_deref()).await;
     // Решение 141: сделка не запущена — расчёт «без потолка» кандидата; запущена — его ставит исполнитель после покупки.
     if start != Start::Started {
@@ -357,10 +355,8 @@ async fn accepted_timed(
         Accepted::Skip => (false, false),
         Accepted::Ep { .. } => (false, true),
     };
-    let note = match start {
-        Start::Dry(why) => Some(why),
-        _ => refused,
-    };
+    // Задача t165: итог старта (запущена / сухой режим / отказ) — всегда в запись core.candidate (и эпизода).
+    let note = Some(super::start_note::note(&start));
     submit(
         core,
         Job {
@@ -374,36 +370,35 @@ async fn accepted_timed(
     );
 }
 
-/// Решение 147: журнал core.start_refused (Warn) — одна запись на смену причины по направлению; сделка запущена —
-/// память причины стирается (следующий отказ снова пишется). Принимает: ядро, направление, итог входа, текст отказа
-/// (None — не отказ). Ошибок нет.
+/// Решение 147, задача t165: журнал core.start_refused (Warn) тем же механизмом повторов, что core.precheck
+/// (reject_log.rs, ключ start_note::key): новый вид причины — новая строка, повтор — счётчик и время последнего в той же
+/// строке (journal.repeat_flush_ms; не задана — как раньше, строка на другой текст); сделка запущена — строка
+/// закрывается итоговым счётчиком. Принимает: ядро, направление, итог входа, текст отказа (None — не отказ).
+/// Ошибок нет.
 async fn refused_log(core: &Core, d: &Direction, start: &Start, refused: Option<&str>) {
+    let deps = &core.inner.deps;
+    let key = super::start_note::key(d);
     let Some(why) = refused else {
         if *start == Start::Started {
-            lk(&core.inner.start_refused).remove(d);
+            core.inner.last_reject.close(&deps.journal, &key).await;
         }
         return;
     };
-    let same = lk(&core.inner.start_refused)
-        .insert(d.clone(), why.to_string())
-        .as_deref()
-        == Some(why);
-    if same {
-        return;
-    }
-    let text = format!(
-        "{} {} → {}: расчёт прошёл, {why}",
-        d.asset.ticker, d.buy_on.0, d.sell_on.0
-    );
+    let note = Note {
+        level: Level::Warn,
+        kind: "core.start_refused",
+        venue: Some(&d.buy_on.0),
+        shape: reject_shape::shape(why),
+        exact: why.to_string(),
+        message: format!(
+            "{} {} → {}: расчёт прошёл, {why}",
+            d.asset.ticker, d.buy_on.0, d.sell_on.0
+        ),
+        data: None,
+    };
     core.inner
-        .deps
-        .log(
-            Level::Warn,
-            "core.start_refused",
-            Some(&d.buy_on.0),
-            text,
-            None,
-        )
+        .last_reject
+        .note(&deps.journal, &key, note, flush_every(core))
         .await;
 }
 

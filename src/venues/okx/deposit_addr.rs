@@ -13,6 +13,10 @@
 //! chain, to («The beneficiary account 6: Funding account 18: Trading account»; «The users under some entity (e.g.
 //! Brazil) only support deposit to trading account»), selected («the address is selected on the website»), ctAddr («Last
 //! 6 digits of contract address» — для сопоставления не годится).
+//! Решение 379 (задача t165, 17.11.2026): страницу docs-v5 в этой задаче прочитать не удалось (доступ к сайту не дан) —
+//! есть ли метод создания адреса, по документации НЕ установлено (в копии SDK python-okx 0.4.4, okx/consts.py, из
+//! адресов депозита только GET /api/v5/asset/deposit-address — это не документация). Поведение прежнее: нет адреса —
+//! отказ (проверить docs-v5 — docs/TASKS.md, t165).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

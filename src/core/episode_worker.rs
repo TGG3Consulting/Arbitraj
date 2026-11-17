@@ -104,6 +104,7 @@ async fn handle(core: &Core, st: &mut HashMap<String, Open>, cfg: Option<&Cfg>, 
             calc,
             snap,
             card,
+            note,
         } => {
             if !st.contains_key(&info.id) {
                 return; // эпизод уже закрыт — карточка опоздала
@@ -130,8 +131,12 @@ async fn handle(core: &Core, st: &mut HashMap<String, Open>, cfg: Option<&Cfg>, 
                 files.line(&o.info.id, line.to_string());
             }
             o.calc = calc;
+            // Задача t165 (ревью Н7): итог старта берётся вместе с первой карточкой эпизода (card_job всегда шлёт карточку),
+            // то есть это итог первой записи; итоги следующих кандидатов эпизода в core.candidate не попадают — их отказы
+            // видны в core.start_refused (и core.precheck).
             if o.card.is_none() {
                 o.card = card;
+                o.note = note;
             }
             save(core, &o.info).await;
         }

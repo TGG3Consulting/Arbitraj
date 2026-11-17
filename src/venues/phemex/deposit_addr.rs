@@ -9,6 +9,9 @@
 //! Официально — Query deposit address information GET /phemex-deposit/wallets/api/depositAddress?currency=&chainName=
 //! (https://phemex-docs.github.io/#query-deposit-address-information): data {address, tag «chain address tag»}. На какой
 //! счёт (SPOT / Contract) зачисляется депозит, параметра у адреса нет — см. fund_move.rs и deposits.rs.
+//! Решение 379 (задача t165, 17.11.2026): метода создания адреса в документации нет (есть только «Query deposit address
+//! by currency» и «Query deposit address information»); создаёт ли запрос адрес, документация не говорит. Поведение
+//! прежнее: нет адреса — отказ (вопрос Тиграну — docs/TASKS.md, t165).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

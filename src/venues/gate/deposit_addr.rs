@@ -12,6 +12,9 @@
 //! MultiChainAddressItem) — currency, address, min_deposit_amount, multichain_addresses[]: chain, address, payment_id
 //! («A memo required when depositing certain currencies, such as a Tag or Memo»), payment_name («Tag» или «Memo»),
 //! obtain_failed («0 means success; 1 means failure and retrieval may need to be retried»), min_confirms.
+//! Решение 379 (задача t165, 17.11): создание адреса — сам этот запрос (SDK WalletApi.md: «Generate currency deposit
+//! address», ответ 200 «Address successfully generated»); отдельный метод создания не нужен. Текст «создайте в
+//! кабинете» убран: сети нет в ответе — отказ с фактом ответа.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -89,7 +92,13 @@ pub async fn fetch(
         .and_then(|s| s.parse().ok());
     nets.note_deposit(&asset.ticker, min, network, confirms);
     let found = found.ok_or_else(|| {
-        let m = format!("У {} нет адреса депозита Gate в сети {network} — создайте его в кабинете Gate (Депозит)", asset.ticker);
+        // Решение 379 (t165): по документации этот запрос сам создаёт адрес («Generate currency deposit address», ответ
+        // 200 «Address successfully generated») — отправлять в кабинет незачем; сети нет в ответе — так и пишем.
+        let m = format!(
+            "Gate не вернул адрес депозита {} в сети {network}: в multichain_addresses ответа «Generate currency \
+             deposit address» этой сети нет",
+            asset.ticker
+        );
         invalid(ctx, m).with_raw(data.to_string())
     })?;
     if num::text_opt(found, "obtain_failed").as_deref() == Some("1") {

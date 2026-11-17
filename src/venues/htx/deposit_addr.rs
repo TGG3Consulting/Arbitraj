@@ -10,6 +10,9 @@
 //! https://huobiapi.github.io/docs/spot/v1/en/#query-deposit-address: data[] {currency, address, addressTag, chain} —
 //! по адресу на каждую сеть монеты. На какой счёт зачисляется депозит, ответ не говорит; отдельного счёта фонда у спот-API
 //! HTX нет — зачисление на спот (подтвердить первым депозитом, README.md папки).
+//! Решение 379 (задача t165, 17.11.2026): метода создания адреса депозита в документации нет (вся страница
+//! https://huobiapi.github.io/docs/spot/v1/en/ — только Query Deposit Address и Query Deposit Address of Sub User);
+//! создаёт ли GET адрес, документация не говорит. Поведение прежнее: нет адреса — отказ (вопрос Тиграну — docs/TASKS.md).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

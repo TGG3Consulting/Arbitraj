@@ -8,6 +8,10 @@
 //!
 //! Официальная документация (docs-v3 и api-ai-skills/spot-wallet): GET /openApi/wallets/v1/capital/deposit/address —
 //! data.data[]: coin, network, address, tag, status (0 — адрес активирован, 1 — запрошен, 2 — не запрошен).
+//! Решение 379 (задача t165, 17.11.2026): метода создания адреса депозита основного аккаунта в документации нет —
+//! «Create Deposit Address for Sub-account» POST /openApi/wallets/v1/capital/deposit/createSubAddress только для
+//! субаккаунта (api-ai-skills, sub-account/api-reference.md, 5.2); создаёт ли GET адрес, документация не говорит.
+//! Поведение прежнее: нет адреса — отказ (вопрос Тиграну — docs/TASKS.md, t165).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

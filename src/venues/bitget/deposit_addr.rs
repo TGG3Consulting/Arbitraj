@@ -10,6 +10,9 @@
 //! https://www.bitget.com/docs/catalog/classic-spot-account/classic-spot-account#get-deposit-address — coin*, chain
 //! («All coin names can be returned from Get Coin Info interface»); ответ — объект {address, chain, coin, tag, url}.
 //! На какой счёт зачисляется депозит, ответ не говорит (см. fund_move.rs: Modify Deposit Account / перевод p2p → spot).
+//! Решение 379 (задача t165, 17.11.2026): метода создания адреса депозита в документации нет (на странице — Get Deposit
+//! Address, Get SubAccount Deposit Address, Modify Deposit Account, записи депозитов); создаёт ли GET адрес, документация
+//! не говорит. Поведение прежнее: нет адреса — отказ (вопрос Тиграну — docs/TASKS.md, t165).
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

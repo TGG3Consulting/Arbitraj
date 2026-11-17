@@ -17,6 +17,7 @@ pub mod book_rest;
 pub mod ctx;
 pub mod delist;
 pub mod deposit_addr;
+pub mod deposit_addr_new;
 pub mod deposit_hold;
 pub mod deposits;
 pub mod depth;

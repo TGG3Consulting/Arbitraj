@@ -1,4 +1,4 @@
-# Исполнитель ArbExecutor v3 на EVM — шаги UNI_V4 / INF_CL / INF_BIN (решение 390, t181), 17.11.2026
+# Исполнитель ArbExecutor v3 на EVM — шаги UNI_V4 / INF_CL / INF_BIN (решение 395, t181), 17.11.2026
 
 `singleton_steps.json` пишет `contracts/evmtest/run.mjs` (сценарий G1 `contracts/evmtest/singleton.mjs`): EVM ethereumjs
 (Cancun), байткод v3 из `contracts/out/ArbExecutor.bin-runtime` и ОФИЦИАЛЬНЫЙ код менеджеров, собранный в тесте solc 0.8.26

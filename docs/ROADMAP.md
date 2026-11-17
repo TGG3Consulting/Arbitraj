@@ -27,7 +27,7 @@
 
 ## Техдолг
 
-- Решение 390 (t181): contracts/ArbExecutor.sol 654 строки (было 546; + UNI_V4 / INF_CL / INF_BIN) — сверх ориентира 200, контракт не
+- Решение 395 (t181): contracts/ArbExecutor.sol 654 строки (было 546; + UNI_V4 / INF_CL / INF_BIN) — сверх ориентира 200, контракт не
   дробится, пока развёртывание — один файл; contracts/evmtest/vendor/ — копии официальных v4-core / infinity-core для
   EVM-теста (≈ 580 КБ исходников; обновлять только вместе с коммитом источника и SHA256SUMS).
 - Решения 372–377 (t162 и ревью; `wc -l`): core/bound.rs, bound_in.rs, sieve.rs и venues/bsc_dex/quote/bound.rs разделены (все ≤ 200: 159/134, 112/135, 148/132, 129/104/75). Остались больше 200: core/candidates.rs 429 (было 407 до t162; вызов отсева и контроль в calc_one), core/profit.rs 383 (было 367; decide_pre и готовый контекст) — делить при следующей правке; тесты t162 (tests/core_sieve_inputs_t162.rs 270, core_sieve_recorded_t162.rs 293, bsc_dex_bound_quote_t162.rs 257, sieve_common/mod.rs 400) — как остальные тесты на записях; виды пулов без r_e — метод не действует до записей (docs/TASKS.md).

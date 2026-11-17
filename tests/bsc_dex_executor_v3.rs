@@ -1,5 +1,5 @@
 //! Файл: tests/bsc_dex_executor_v3.rs
-//! Что делает: решение 390 (t181) — исполнитель ArbExecutor v3: шаги UNI_V4 (19), INF_CL (20), INF_BIN (21) пулов внутри
+//! Что делает: решение 395 (t181) — исполнитель ArbExecutor v3: шаги UNI_V4 (19), INF_CL (20), INF_BIN (21) пулов внутри
 //! менеджеров Uniswap V4 и PancakeSwap Infinity. Без сети:
 //! 1. Запись EVM-теста (tests/data/executor_v3_evm_2026-11-17/singleton_steps.json — contracts/evmtest/singleton.mjs:
 //!    байткод v3 из contracts/out/ и ОФИЦИАЛЬНЫЙ код PoolManager / Vault / CLPoolManager / BinPoolManager): данные шага,
@@ -218,7 +218,7 @@ fn versions_and_steps() {
         "pancakeswap_infinity_bin",
         "pancake_infinity_stable",
     ] {
-        let f = families::make("x-390", k).unwrap();
+        let f = families::make("x-395", k).unwrap();
         assert!(f.tradable && !f.fork && f.executor_kind.is_some(), "{k}");
     }
 }
@@ -307,7 +307,7 @@ async fn registry_entry_becomes_singleton_step() {
         hooks: Address::ZERO,
     });
     let mut e = base.clone();
-    e.family = families::make("x-390-v4", "uniswap_v4").unwrap();
+    e.family = families::make("x-395-v4", "uniswap_v4").unwrap();
     e.pool.reference = PoolRef::Singleton {
         manager,
         id: uk.id(),
@@ -332,7 +332,7 @@ async fn registry_entry_becomes_singleton_step() {
         parameters: B256::from(U256::from(10u32 << 16)),
     });
     let mut c = base.clone();
-    c.family = families::make("x-390-cl", "pancakeswap_infinity_cl").unwrap();
+    c.family = families::make("x-395-cl", "pancakeswap_infinity_cl").unwrap();
     c.pool.reference = PoolRef::Singleton {
         manager,
         id: ik.id(),
@@ -347,7 +347,7 @@ async fn registry_entry_becomes_singleton_step() {
         .settings
         .set(
             "dex.vault",
-            Scope::Dex("x-390-cl".into()),
+            Scope::Dex("x-395-cl".into()),
             Some(json!(format!("{vault:#x}"))),
             "тест",
         )
@@ -388,9 +388,9 @@ async fn registry_entry_becomes_singleton_step() {
     assert!(entry::fits(&ok).is_ok(), "ключ USDT/WBNB = пара записи");
     // Ревью t181 (Н2): у шага менеджера ссылка Contract — только Infinity Stable; V4 по адресу контракта — не шаг.
     assert!(entry::supported(ok.family, &PoolRef::Contract(manager)).is_err());
-    let cl = families::make("x-390-cl", "pancakeswap_infinity_cl").unwrap();
+    let cl = families::make("x-395-cl", "pancakeswap_infinity_cl").unwrap();
     assert!(entry::supported(cl, &PoolRef::Contract(manager)).is_err());
-    let st = families::make("x-390-st", "pancake_infinity_stable").unwrap();
+    let st = families::make("x-395-st", "pancake_infinity_stable").unwrap();
     assert!(entry::supported(st, &PoolRef::Contract(manager)).is_ok());
 }
 
@@ -402,9 +402,9 @@ async fn bundle_first_only_for_manager_routes_with_old_path() {
     use arb::venues::bsc_dex::quote::graph_exec::bundle_first;
     let p = route_common::parts().await;
     let q = p.quoting();
-    let v4 = families::make("x-390-b4", "uniswap_v4").unwrap();
-    let dodo = families::make("x-390-dd", "dodo_dvm").unwrap();
-    let v3 = families::make("x-390-b3", "pancakeswap_v3").unwrap();
+    let v4 = families::make("x-395-b4", "uniswap_v4").unwrap();
+    let dodo = families::make("x-395-dd", "dodo_dvm").unwrap();
+    let v3 = families::make("x-395-b3", "pancakeswap_v3").unwrap();
     assert!(
         !bundle_first(&q.ctx, &[vec![v3], vec![v3]], false),
         "без шага менеджера — прежнее правило"
@@ -413,4 +413,45 @@ async fn bundle_first_only_for_manager_routes_with_old_path() {
         !bundle_first(&q.ctx, &[vec![dodo], vec![v4]], false),
         "DODO + V4 — прежнего пути нет"
     );
+    // Ревью 2 t181: случай «да» — каналы бандла и dex.bundle_max_routers заданы (как tests/bsc_dex_bundle_tip_plan.rs),
+    // пулы со своим Universal Router (строки DEX записи route_common: dex.universal_router задан у uniswap_v3 и
+    // pancakeswap_v3). Маршрут «V4 (DEX uniswap_v3 видом uniswap_v4) + PancakeSwap V3» собирается бандлом — бандл раньше
+    // исполнителя; без каналов бандла — нет (исполнитель).
+    let v4ur = families::make("uniswap_v3", "uniswap_v4").unwrap();
+    let pcs = families::make("pancakeswap_v3", "pancakeswap_v3").unwrap();
+    assert!(
+        !bundle_first(&q.ctx, &[vec![v4ur], vec![pcs]], false),
+        "каналов бандла нет — бандл не собирается"
+    );
+    route_common::channel(&p, "club48", "bundle").await;
+    p.ctx
+        .settings
+        .set(
+            "dex.bundle_max_routers",
+            Scope::Venue("bsc_dex".into()),
+            Some(json!(5)),
+            "тест",
+        )
+        .await
+        .unwrap();
+    assert!(
+        bundle_first(&q.ctx, &[vec![v4ur], vec![pcs]], false),
+        "V4 + PancakeSwap V3, бандл собирается — бандл (как у кошелька v2)"
+    );
+    assert!(
+        !bundle_first(&q.ctx, &[vec![v4ur], vec![dodo]], false),
+        "V4 + DODO (нет своего пути) — исполнитель"
+    );
+}
+
+/// Ревью 2 t181: предупреждение окна развёртывания снимается только если SHA-256 записи симуляции = SHA-256 текущего
+/// bin-runtime; пересборка без новой записи возвращает предупреждение.
+#[test]
+fn live_warning_tied_to_runtime_hash() {
+    let cur = "текущий-sha";
+    assert!(code::live_warning_for(Some(cur), Some(cur)).is_none());
+    let w = code::live_warning_for(Some("00"), Some(cur)).expect("другой код");
+    assert!(w.contains("проверяла код") && w.contains(cur), "{w}");
+    let w = code::live_warning_for(None, Some(cur)).expect("записи нет");
+    assert!(w.contains("нет записи"), "{w}");
 }

@@ -139,7 +139,8 @@ pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()>
             .await
             .map_err(|why| ctx.err(ErrorCode::NotConfigured, why));
     }
-    let pool = entry::supported(e.family, &e.pool.reference)
+    // Ревью 2 t181: та же проверка шага, что маршрут (entry::fits).
+    let pool = entry::fits(e)
         .map_err(|why| ctx.err(ErrorCode::NoRoute, why))?
         .1;
     if logs.iter().any(|l| l.address == pool) {

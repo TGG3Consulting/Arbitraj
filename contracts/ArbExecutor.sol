@@ -16,7 +16,7 @@
 // после транзакции BNB на контракте нет.
 // Версии: v1 — только execute (артефакты contracts/out/v1/, развёрнутые до решения 272); v2 — + executeNative
 // (нативный BNB монетой сделки, решение 272). Селектор и ABI execute у v1 и v2 одинаковы. У v2 конструктор принимает
-// адрес обёртки нативной монеты (wnative, слот 1 — один раз, сеттера нет; ревью 272, А1). v3 (решение 390, t181) —
+// адрес обёртки нативной монеты (wnative, слот 1 — один раз, сеттера нет; ревью 272, А1). v3 (решение 395, t181) —
 // + шаги пулов внутри общего менеджера: UNI_V4 (Uniswap V4 PoolManager: unlock → unlockCallback), INF_CL и INF_BIN
 // (PancakeSwap Infinity Vault: lock → lockAcquired; Infinity Stable — пул в крючке пула CL, тот же INF_CL). execute,
 // executeNative, хранилище (owner — слот 0, wnative — слот 1) и прежние виды — без изменений.
@@ -64,7 +64,7 @@ contract ArbExecutor {
     // вход = баланс − резерв и платит выход `to` по бинам (без обратного вызова); swapForY = (getTokenX() пула == tokenIn)
     // — порядок X/Y задаёт создатель пула, не адреса. data пусто.
     uint8 internal constant LB = 18;
-    // Решение 390 (t181, только v3): пулы внутри общего менеджера. s.pool — контракт, который открывают для обмена:
+    // Решение 395 (t181, только v3): пулы внутри общего менеджера. s.pool — контракт, который открывают для обмена:
     // UNI_V4 — PoolManager Uniswap V4 (unlock / unlockCallback), INF_CL / INF_BIN — Vault PancakeSwap Infinity (lock /
     // lockAcquired; обмен — у key.poolManager: CLPoolManager / BinPoolManager). data = abi.encode(ключ пула): UNI_V4 —
     // V4PoolKey, INF_* — InfPoolKey (IPools.sol). Направление — по токенам шага (tokenIn == currency0 → zeroForOne /
@@ -118,7 +118,7 @@ contract ArbExecutor {
     // exchange; в остальное время 0 — любой приход BNB откатывается. Отдельно от expPool: пул с выходом в BNB не
     // должен получить право на _pay (expToken/expMax прошлого шага).
     address transient bnbFrom;
-    // Решение 390 (v3): хеш данных обратного вызова менеджера текущего шага (UNI_V4 / INF_*). unlockCallback /
+    // Решение 395 (v3): хеш данных обратного вызова менеджера текущего шага (UNI_V4 / INF_*). unlockCallback /
     // lockAcquired исполняет обмен только от expPool (менеджер / Vault шага) и только с этими данными — один раз.
     bytes32 transient expHash;
 
@@ -504,7 +504,7 @@ contract ArbExecutor {
         _pay(_int(amountIn));
     }
 
-    // Решение 390 (v3): шаг пула внутри общего менеджера (UNI_V4 / INF_CL / INF_BIN). Открывает менеджер (s.pool):
+    // Решение 395 (v3): шаг пула внутри общего менеджера (UNI_V4 / INF_CL / INF_BIN). Открывает менеджер (s.pool):
     // Uniswap V4 — PoolManager.unlock (v4-core PoolManager.sol L104-L114), Infinity — Vault.lock (infinity-core Vault.sol
     // L74-L86); менеджер вызывает у исполнителя unlockCallback / lockAcquired с теми же данными — там обмен и расчёт
     // (_singletonCb). Обратный вызов пускается только от s.pool и только с данными этого шага (хеш в transient) — после

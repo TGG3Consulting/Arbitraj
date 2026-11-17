@@ -23,7 +23,7 @@ export const opt = { optimizer: { enabled: true, runs: 200 }, evmVersion: 'cancu
 const big = { optimizer: { enabled: true, runs: 999999 } };
 export const v2 = L.artifact('out');
 export const v1 = L.artifact('out/v1');
-// Решение 390 (t181): `v2` выше — текущая сборка contracts/out/ (с решения 390 это исполнитель v3); `v2f` — замороженные
+// Решение 395 (t181): `v2` выше — текущая сборка contracts/out/ (с решения 395 это исполнитель v3); `v2f` — замороженные
 // артефакты v2 (contracts/out/v2/, до шагов UNI_V4 / INF_CL / INF_BIN) — с ними бот сверяет уже развёрнутые v2.
 export const v2f = L.artifact('out/v2');
 const pc = join(L.here, 'vendor', 'pancake-swap-core');

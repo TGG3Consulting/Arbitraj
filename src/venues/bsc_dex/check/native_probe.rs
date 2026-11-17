@@ -59,7 +59,7 @@ pub async fn after(
     };
     // Только V2/V3 (exec/native.rs::pool_ok): через V4 / Infinity BNB не торгуется — и мерить нечего.
     // Решение 272: и любой вид с шагом исполнителя (pools/exec_kind.rs::via_executor) — мерить через executeNative.
-    // Решение 390: шаги пулов внутри менеджеров (V4 / Infinity) BNB монетой сделки не несут — как раньше, без пробы.
+    // Решение 395: пул менеджера (V4 / Infinity) на стороне BNB шагом исполнителя не берётся — как раньше, без пробы.
     let kind_exec = exec_kind::via_executor(ctx, e.family)
         && !e.family.executor_kind.is_some_and(|k| k.singleton());
     if !native::is_native(ctx, &asset) || !(native::pool_ok(e.pool.kind) || kind_exec) {

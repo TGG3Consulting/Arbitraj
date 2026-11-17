@@ -4,7 +4,7 @@
 //! хранилище (из раскладки solc) и проверка хеша: SHA-256 каждого файла должен совпасть с записанным в
 //! ArbExecutor.sha256 — иначе байткод не используется (кто-то поменял артефакт без пересборки).
 //! Решение 272: версии исполнителя — v1 (contracts/out/v1/, только execute; развёрнутые до решения 272) и v2
-//! (contracts/out/v2/, + executeNative; решение 390 — артефакты заморожены, не пересобираются). Решение 390 (t181): v3
+//! (contracts/out/v2/, + executeNative; решение 395 — артефакты заморожены, не пересобираются). Решение 395 (t181): v3
 //! (contracts/out/ — текущая сборка: v2 + шаги UNI_V4 / INF_CL / INF_BIN пулов внутри менеджеров Uniswap V4 и
 //! PancakeSwap Infinity). Развёртывается и подставляется в симуляцию только текущая сборка (v3); код в сети сверяется со
 //! всеми тремя.
@@ -36,7 +36,7 @@ const SHA: &str = include_str!(concat!(
     "/contracts/out/ArbExecutor.sha256"
 ));
 
-/// Решение 390 (t181): код в сети версии v2 (до шагов UNI_V4 / INF_CL / INF_BIN) и его хеши — копия contracts/out/ на
+/// Решение 395 (t181): код в сети версии v2 (до шагов UNI_V4 / INF_CL / INF_BIN) и его хеши — копия contracts/out/ на
 /// HEAD 982e0503, не пересобираются.
 const RUNTIME_V2: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -58,14 +58,14 @@ const SHA_V1: &str = include_str!(concat!(
 ));
 
 /// Версия исполнителя по коду в сети (решение 272). Hash — ключ памяти pools/exec_callback.rs (версия, сигнатура).
-/// Порядок (Ord) — порядок выпуска: V1 < V2 < V3; каждая следующая — надмножество предыдущей (решение 390).
+/// Порядок (Ord) — порядок выпуска: V1 < V2 < V3; каждая следующая — надмножество предыдущей (решение 395).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Version {
     /// Только execute (contracts/out/v1/): нативный BNB монетой сделки не идёт.
     V1,
     /// execute + executeNative (contracts/out/v2/): нативный BNB монетой сделки идёт.
     V2,
-    /// Решение 390 (t181): v2 + шаги UNI_V4 / INF_CL / INF_BIN (contracts/out/ — текущая сборка, её разворачивает кнопка
+    /// Решение 395 (t181): v2 + шаги UNI_V4 / INF_CL / INF_BIN (contracts/out/ — текущая сборка, её разворачивает кнопка
     /// «Развернуть исполнитель»).
     V3,
 }
@@ -111,26 +111,39 @@ pub fn version_of(have: &Bytes) -> Result<Option<Version>, String> {
     Ok(None)
 }
 
-/// Ревью t181 (Н8): запись симуляции текущей сборки (v3) на живых пулах сети — каталог tests/data, по которому есть тест
-/// «шаги UNI_V4 / INF_CL / INF_BIN проходят на настоящих пулах» (процедура — docs/notes/t181-executor-all-kinds-2026-11-17.md,
-/// п. 5). None — записи ещё нет: окно развёртывания предупреждает. Задаётся в том же коммите, что запись и тест (это
-/// факт о собранном коде, не настройка торговли).
+/// Ревью t181 (Н8; ревью 2 — привязка к коду): SHA-256 текста contracts/out/ArbExecutor.bin-runtime, который проверила
+/// запись симуляции шагов UNI_V4 / INF_CL / INF_BIN на живых пулах сети (каталог tests/data/executor_v3_live_<дата>/, в его
+/// README — тот же SHA; процедура — docs/notes/t181-executor-all-kinds-2026-11-17.md, п. 5). None — записи нет.
+/// Предупреждение окна развёртывания снимается, только если этот SHA равен SHA текущего bin-runtime (ArbExecutor.sha256):
+/// пересборка без новой записи предупреждение возвращает. Задаётся в том же коммите, что запись и тест (факт о собранном
+/// коде, не настройка торговли).
 pub const LIVE_PROOF: Option<&str> = None;
 
-/// Ревью t181 (Н8): текст предупреждения окна «Развернуть исполнитель», пока LIVE_PROOF не задан. Ошибок нет.
+/// Ревью t181 (Н8): текст предупреждения окна «Развернуть исполнитель», пока запись симуляции на живых пулах не относится
+/// к текущему коду (LIVE_PROOF ≠ SHA-256 текущего bin-runtime или не задан). Ошибок нет.
 pub fn live_warning() -> Option<String> {
-    match LIVE_PROOF {
-        Some(_) => None,
-        None => Some(
-            "Исполнитель v3 (шаги Uniswap V4 и PancakeSwap Infinity) ещё не принят на живых пулах сети: в tests/data нет \
-             записи симуляции этих шагов на настоящих пулах. До её появления разворачивать v3 и пускать через него \
-             деньги не рекомендуется (решение 390; кошелёк с v2 работает как раньше)."
-                .to_string(),
-        ),
+    live_warning_for(LIVE_PROOF, recorded("ArbExecutor.bin-runtime"))
+}
+
+/// То же для данных значений (проверяемо тестом). Принимает: SHA-256 из записи симуляции, SHA-256 текущего bin-runtime.
+/// Возвращает: None — совпали; иначе текст. Ошибок нет.
+pub fn live_warning_for(proof: Option<&str>, current: Option<&str>) -> Option<String> {
+    let head = "Исполнитель v3 (шаги Uniswap V4 / Infinity) не принят на живых пулах сети";
+    let tail = "До этого разворачивать v3 и пускать через него деньги не рекомендуется (решение 395; кошелёк с v2 \
+                работает как раньше).";
+    match (proof, current) {
+        (Some(p), Some(c)) if p == c => None,
+        (Some(p), c) => Some(format!(
+            "{head}: запись симуляции в tests/data проверяла код SHA-256 {p}, а текущая сборка — {}. {tail}",
+            c.unwrap_or("(хеш не записан)")
+        )),
+        (None, _) => Some(format!(
+            "{head}: в tests/data нет записи симуляции этих шагов на настоящих пулах. {tail}"
+        )),
     }
 }
 
-/// Код в сети версии v2 (решение 390: замороженная копия). Ошибки: как checked (хеш — из contracts/out/v2/ArbExecutor.sha256).
+/// Код в сети версии v2 (решение 395: замороженная копия). Ошибки: как checked (хеш — из contracts/out/v2/ArbExecutor.sha256).
 pub fn runtime_v2() -> Result<Bytes, String> {
     checked_in(
         SHA_V2,
@@ -220,7 +233,7 @@ pub fn creation_with(wnative: alloy_primitives::Address) -> Result<Bytes, String
     Ok(Bytes::from(v))
 }
 
-/// Код исполнителя в сети — текущая сборка (с решения 390 — v3). Ошибки: как checked.
+/// Код исполнителя в сети — текущая сборка (с решения 395 — v3). Ошибки: как checked.
 pub fn runtime() -> Result<Bytes, String> {
     checked("ArbExecutor.bin-runtime", RUNTIME)
 }

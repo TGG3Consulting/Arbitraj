@@ -7,7 +7,7 @@
     (components/ExecutorDeploy.svelte), записать адрес уже развёрнутого (PUT /api/wallets/{id}/executor — только после
     проверки «код совпал, владелец — этот кошелёк»), версия исполнителя (решение 272: «v2» / «v1 — нативный BNB через
     форки не торгуется, переразверните» / «не сверена» — по коду в сети, поле executor_version; ревью 272 А1: у v2 —
-    обёртка из конструктора executor_wrapped против dex.native_wrapped, не совпала — «BNB не идёт»; решение 390 (t181):
+    обёртка из конструктора executor_wrapped против dex.native_wrapped, не совпала — «BNB не идёт»; решение 395 (t181):
     «v3» — ещё шаги Uniswap V4 / PancakeSwap Infinity, у «v2» — подсказка «переразверните, чтобы смешанные с V4 /
     Infinity маршруты шли через исполнитель»); «Переименовать» (PATCH), «Удалить» (DELETE — бэкенд запрещает,
     пока кошелёк в маппинге или в незавершённой сделке; ключ из секретов не удаляется).
@@ -29,7 +29,7 @@
   let modern = $derived(w.executor_version === 'v2' || w.executor_version === 'v3');
   let nativeOk = $derived(modern && !!w.executor_wrapped && !!w.native_wrapped
     && w.executor_wrapped.toLowerCase() === w.native_wrapped.toLowerCase());
-  // Решение 390 (t181): шаги Uniswap V4 / PancakeSwap Infinity через исполнитель — только у v3.
+  // Решение 395 (t181): шаги Uniswap V4 / PancakeSwap Infinity через исполнитель — только у v3.
   let singletonNote = $derived(w.executor_version === 'v3'
     ? '; шаги Uniswap V4 и PancakeSwap Infinity через исполнитель есть'
     : '; шагов Uniswap V4 и PancakeSwap Infinity нет — маршрут, где они смешаны с другими DEX, этим кошельком не исполняется (переразверните исполнитель)');

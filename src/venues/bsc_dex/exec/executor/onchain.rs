@@ -1,9 +1,9 @@
 //! Файл: venues/bsc_dex/exec/executor/onchain.rs
 //! Что делает: проверка развёрнутого исполнителя по адресу exec.executor_address (ревью 122, пункт 1) — адрес вводится
 //! руками, поэтому до любого approve и до сделки сверяется: код по адресу (eth_getCode) побайтно равен
-//! contracts/out/ArbExecutor.bin-runtime (как после развёртывания, deploy.rs) — версия v3 (решение 390, t181), или
+//! contracts/out/ArbExecutor.bin-runtime (как после развёртывания, deploy.rs) — версия v3 (решение 395, t181), или
 //! contracts/out/v2/ArbExecutor.bin-runtime — версия v2, или contracts/out/v1/ArbExecutor.bin-runtime — версия v1
-//! (решения 272 и 390: развёрнутые раньше исполнители работают как раньше), и слот владельца (раскладка solc, code.rs::owner_slot; у v1 и v2 — слот 0) хранит кошелёк бота. Не
+//! (решения 272 и 395: развёрнутые раньше исполнители работают как раньше), и слот владельца (раскладка solc, code.rs::owner_slot; у v1 и v2 — слот 0) хранит кошелёк бота. Не
 //! совпало — ни разрешения, ни сделки, ошибка с точной причиной. Сверенная версия записывается у кошелька
 //! (settings/accounts/edit_version.rs) — по ней котировка решает, идёт ли нативный BNB через исполнитель (mod.rs).
 //! Ревью 272 (А1): у v2 и v3 читается и слот wnative (обёртка из конструктора) — пишется у кошелька рядом с версией и
@@ -134,7 +134,7 @@ async fn inspect(
             "владелец исполнителя {owner:#x} — не кошелёк бота {wallet:#x}"
         )));
     }
-    // Слот wnative у v2 и v3 один и тот же (слот 1: хранилище v3 не менялось — решение 390).
+    // Слот wnative у v2 и v3 один и тот же (слот 1: хранилище v3 не менялось — решение 395).
     let wrapped = match version {
         Version::V2 | Version::V3 => Some(Address::from_word(
             word(ctx, executor, code::wnative_slot()).await?,
@@ -186,7 +186,7 @@ fn describe(
     )
 }
 
-/// Решение 390 (t181): хвост текста сверки про шаги пулов внутри менеджеров (Uniswap V4, PancakeSwap Infinity). Ошибок нет.
+/// Решение 395 (t181): хвост текста сверки про шаги пулов внутри менеджеров (Uniswap V4, PancakeSwap Infinity). Ошибок нет.
 fn v3_note(v: Version) -> &'static str {
     if v >= Version::V3 {
         "; шаги Uniswap V4 и PancakeSwap Infinity (CL, Bin, Stable) через исполнитель есть"

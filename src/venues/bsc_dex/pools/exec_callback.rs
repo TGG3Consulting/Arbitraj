@@ -19,7 +19,7 @@
 //! exec/executor/code.rs (runtime, runtime_v1, Version).
 //! Решение 284: то же правило для вида шага, которого нет в исполнителе v1 (NOMI_STABLE = 12 — только v2): у кошелька
 //! v1 — пулы DEX без пути исполнения с причиной «переразверните исполнитель»; версия не сверена — «не сверен».
-//! Решение 390 (t181): шаги пулов внутри менеджеров — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только у исполнителя v3
+//! Решение 395 (t181): шаги пулов внутри менеджеров — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только у исполнителя v3
 //! (since): у кошелька v1 / v2 — пулы Uniswap V4 / PancakeSwap Infinity без пути ЧЕРЕЗ ИСПОЛНИТЕЛЬ (свой Universal Router у
 //! них остаётся — family.tradable); артефакт версии для поиска селектора: v1 — out/v1/, v2 — out/v2/, v3 — out/.
 //! Настройки: dex.v3_swap_callback [DEX] (необязательная).
@@ -115,7 +115,7 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
 
 /// С какой версии исполнителя есть вид шага (у более ранней диспетчер _step откатывает «kind»). Решение 284: v2 —
 /// NOMI_STABLE = 12, METRIC = 13, IZI = 14 — решение 286, KYBER_DMM = 15 — решение 287, SMARDEX = 16 — решение 288,
-/// BALANCER = 17 — решение 289, LB = 18 — решение 290. Решение 390 (t181): v3 — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21.
+/// BALANCER = 17 — решение 289, LB = 18 — решение 290. Решение 395 (t181): v3 — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21.
 /// Остальные — с v1. Принимает: вид шага. Ошибок нет.
 pub fn since(k: ExecKind) -> Version {
     match k {
@@ -136,7 +136,7 @@ pub fn v2_only(k: ExecKind) -> bool {
     since(k) == Version::V2
 }
 
-/// Причина «у исполнителя версии v нет вида шага k» (решения 284, 390): None — есть. Принимает: вид, версию. Ошибок нет.
+/// Причина «у исполнителя версии v нет вида шага k» (решения 284, 395): None — есть. Принимает: вид, версию. Ошибок нет.
 pub fn step_absent(k: ExecKind, v: Version) -> Option<String> {
     let need = since(k);
     (v < need).then(|| {
@@ -150,7 +150,7 @@ pub fn step_absent(k: ExecKind, v: Version) -> Option<String> {
     })
 }
 
-/// Нет ли у исполнителя кошелька окружения вида шага этой DEX (решения 284, 390). Принимает: окружение, вид.
+/// Нет ли у исполнителя кошелька окружения вида шага этой DEX (решения 284, 395). Принимает: окружение, вид.
 /// Возвращает: None — вид шага есть с v1, кошелёк без исполнителя (решает executor_set) или сверенная версия не ниже
 /// since(вид); Some — причина (версия ниже / версия не сверена). Ошибок нет.
 pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
@@ -168,7 +168,7 @@ mod tests {
     use super::*;
 
     /// Селектор squadV3SwapCallback = 0xc4e21d86 (SquadV3Pool.sol L794): в артефакте v1 его нет, в v2 (t114) и v3
-    /// (решение 390, текущая сборка contracts/out/) есть; pancakeV3SwapCallback / uniswapV3SwapCallback — во всех (тот же
+    /// (решение 395, текущая сборка contracts/out/) есть; pancakeV3SwapCallback / uniswapV3SwapCallback — во всех (тот же
     /// поиск PUSH4, реальные артефакты contracts/out/v1/, out/v2/, out/). Ревью t181 (Н7): v2 — out/v2/, v3 — out/.
     #[test]
     fn squad_callback_by_executor_version() {

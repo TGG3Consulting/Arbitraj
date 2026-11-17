@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Файл: contracts/evmtest/fixtures/SingletonLp.sol
-// Что делает: ФИКСТУРА-поставщик ликвидности для EVM-теста шагов UNI_V4 / INF_CL / INF_BIN (решение 390, t181). Сами
+// Что делает: ФИКСТУРА-поставщик ликвидности для EVM-теста шагов UNI_V4 / INF_CL / INF_BIN (решение 395, t181). Сами
 //   менеджеры — официальный код (vendor/v4-core PoolManager, vendor/infinity-core Vault / CLPoolManager / BinPoolManager);
 //   здесь только «положить ликвидность»: открыть менеджер (unlock / lock), внутри — modifyLiquidity / mint, затем погасить
 //   дельты этого контракта (sync → перевод → settle; кредит — take себе), как DeltaResolver официальной периферии.

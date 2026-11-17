@@ -334,7 +334,7 @@ impl Quoting {
         let t = tm.now();
         // Тигран 09.11 (согласовано, план = факт): чаевые и газ их перевода — только если путь исполнения маршрута их
         // отправляет (одна транзакция); бандл свопов графа их не шлёт (exec/trade.rs sends_tip — тот же выбор пути).
-        let tip_sent = super::exec::trade::sends_tip(ctx, q.route.as_ref(), native);
+        let tip_sent = super::exec::trade::sends_tip(ctx, &self.reg, q.route.as_ref(), native);
         if let Some(tip) = super::send::planned_tip(ctx)
             .filter(|_| tip_sent)
             .and_then(|w| num::to_decimal(w, num::BNB_DECIMALS))

@@ -147,7 +147,7 @@ fn elastic_and_singleton_pools_do_not_go_via_executor() {
     assert!(entry::supported(elastic, &pool).is_err());
     let v3 = families::make("pancakeswap-v3-bsc", "pancakeswap_v3").unwrap();
     assert!(entry::supported(v3, &pool).is_ok());
-    // Решение 390 (t181): PancakeSwap Infinity CL — пул внутри менеджера, шаг INF_CL исполнителя v3; у вида без шага
+    // Решение 395 (t181): PancakeSwap Infinity CL — пул внутри менеджера, шаг INF_CL исполнителя v3; у вида без шага
     // менеджера (V3) пул менеджера исполнителем не вызывается.
     let cl = families::make("pancakeswap-infinity-cl-bsc", "pancakeswap_infinity_cl").unwrap();
     let inside = PoolRef::Singleton {

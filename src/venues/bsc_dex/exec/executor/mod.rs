@@ -6,7 +6,8 @@
 //! Публичный интерфейс для новых семейств (часть F): kind.rs (Params, StepSpec, encode), call.rs (ExecCall, build).
 //! Кто вызывает: exec/trade.rs (выбор пути), exec/dry_build.rs (сухая сделка), quote/approve_gas.rs (разрешение),
 //! venue.rs (развёртывание).
-//! От чего зависит: exec/executor/*, quote/graph_route.rs (graph_form), quote/graph_exec.rs (bundle_first — ревью t181 Н3), ctx.rs.
+//! От чего зависит: exec/executor/*, quote/graph_route.rs (graph_form), quote/graph_exec.rs (bundle_first — ревью t181 Н3),
+//! pools/registry.rs (ключ пула менеджера для entry::fits — ревью 2 t181), ctx.rs.
 //! Настройки: нет (адрес исполнителя — у кошелька, экран «Маппинг кошельков»).
 
 pub mod abi;
@@ -32,6 +33,7 @@ use crate::core::types::{DexRoute, RouteMode};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::pools::registry::Registry;
 use super::super::pools::{exec_kind, families};
 use super::super::quote::graph_route::{self, GraphForm};
 
@@ -60,7 +62,7 @@ pub fn native_block(ctx: &Ctx) -> Option<String> {
         return Some(format!("у кошелька «{}» не развёрнут исполнитель", w.name));
     };
     match w.executor_version.as_deref().and_then(code::Version::parse) {
-        // Решение 390: v3 — надмножество v2 (executeNative тот же).
+        // Решение 395: v3 — надмножество v2 (executeNative тот же).
         Some(code::Version::V2 | code::Version::V3) => {}
         Some(code::Version::V1) => {
             return Some(format!(
@@ -120,18 +122,33 @@ pub async fn approvals(
 /// заданном exec.executor_address, монета не нативная (решение 272: или нативная при исполнителе v2 — native_capable)
 /// и каждый шаг — вид исполнителя (pools/exec_kind.rs::via_executor
 /// и entry.rs::supported, та же
-/// проверка, что исполнимость графа quote/graph_exec.rs); иначе — бандл, как раньше. Принимает: маршрут, нативная ли
-/// монета. Возвращает: адрес исполнителя или None. Ошибки: как у address.
-pub fn takes(ctx: &Ctx, route: &DexRoute, native: bool) -> GatewayResult<Option<Address>> {
+/// проверка, что исполнимость графа quote/graph_exec.rs); иначе — бандл, как раньше. Принимает: реестр пулов (ключ пула
+/// менеджера — entry::fits, ревью 2 t181), маршрут, нативная ли монета. Возвращает: адрес исполнителя или None. Ошибки: как у address.
+pub fn takes(
+    ctx: &Ctx,
+    reg: &Registry,
+    route: &DexRoute,
+    native: bool,
+) -> GatewayResult<Option<Address>> {
     if (native && !native_capable(ctx))
         || route.mode != RouteMode::Graph
         || graph_route::graph_form(ctx, route) != GraphForm::Bundle
     {
         return Ok(None);
     }
+    // Ревью 2 t181: та же проверка шага, что котировка (graph_executor.rs all_via — entry::fits): у пула менеджера
+    // (V4 / Infinity) — ещё ключ записи реестра (нативная валюта, пара записи); у прочих видов fits = supported.
+    let fits = |f: &families::Family, h: &crate::core::types::RouteHop| {
+        let singleton = f.executor_kind.is_some_and(|k| k.singleton());
+        if singleton {
+            reg.entry(&h.pool).is_some_and(|e| entry::fits(&e).is_ok())
+        } else {
+            entry::supported(f, &h.pool).is_ok()
+        }
+    };
     let all = route.legs.iter().flat_map(|l| l.hops.iter()).all(|h| {
         families::classify(ctx, &h.family)
-            .is_ok_and(|f| exec_kind::via_executor(ctx, f) && entry::supported(f, &h.pool).is_ok())
+            .is_ok_and(|f| exec_kind::via_executor(ctx, f) && fits(f, h))
     });
     if !all {
         return Ok(None);

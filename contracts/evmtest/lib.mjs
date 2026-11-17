@@ -1,7 +1,7 @@
 // Файл: contracts/evmtest/lib.mjs
 // Что делает: окружение EVM-теста ArbExecutor (решение 272): компиляция исходников (ArbExecutor — тем же solc-js 0.8.37 и
 //   теми же настройками, что contracts/build.mjs, и сверка с contracts/out/; PancakePair/Factory/ERC20 — solc 0.5.16 из
-//   pancake-swap-core@3b214306; WETH9 — solc 0.6.6 из v2-periphery@ed249913; решение 390 — PoolManager Uniswap V4 и
+//   pancake-swap-core@3b214306; WETH9 — solc 0.6.6 из v2-periphery@ed249913; решение 395 — PoolManager Uniswap V4 и
 //   Vault / CLPoolManager / BinPoolManager PancakeSwap Infinity — solc 0.8.26 из vendor/v4-core, vendor/infinity-core), EVM ethereumjs (хардфорк Cancun — EIP-1153
 //   transient), развёртывание и вызовы, разбор отката и событий.
 // Кто вызывает: contracts/evmtest/run.mjs.
@@ -25,7 +25,7 @@ export const coder = AbiCoder.defaultAbiCoder();
 
 /// Компиляция одного файла с импортами от корня исходников (solc нормализует «../x.sol» от имени файла).
 /// Принимает: модуль solc, корень, путь файла от корня, имя контракта, настройки, замены префиксов импорта (remappings
-/// foundry официальных репозиториев, решение 390: [['solmate/', 'lib/solmate/'], …]; по умолчанию нет).
+/// foundry официальных репозиториев, решение 395: [['solmate/', 'lib/solmate/'], …]; по умолчанию нет).
 /// Возвращает: { abi, bin, runtime }. Ошибки: исключение с текстом компилятора.
 export function compile(solc, base, src, name, settings = {}, remap = []) {
   const file = join(base, src);
@@ -51,7 +51,7 @@ export function compile(solc, base, src, name, settings = {}, remap = []) {
 export const solc08 = require('solc');
 export const solc05 = require('solc-0.5.16');
 export const solc06 = require('solc-0.6.6');
-// Решение 390 (t181): официальные Uniswap v4-core и PancakeSwap infinity-core — pragma 0.8.26 (foundry.toml: via_ir, cancun).
+// Решение 395 (t181): официальные Uniswap v4-core и PancakeSwap infinity-core — pragma 0.8.26 (foundry.toml: via_ir, cancun).
 export const solc0826 = require('solc-0.8.26');
 
 /// Артефакт из contracts/out/ (или out/v1/): код создания, код в сети, ABI.

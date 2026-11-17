@@ -92,7 +92,7 @@ async fn solidly_v1_family_requirements() {
     assert_eq!(kind("thena_fusion"), Some(ExecKind::Algebra));
     assert_eq!(kind("v3_fork"), Some(ExecKind::V3));
     assert_eq!(kind("dodo_dsp"), Some(ExecKind::Dodo));
-    // Решение 390 (t181): пул внутри менеджера Infinity CL — шаг INF_CL исполнителя v3.
+    // Решение 395 (t181): пул внутри менеджера Infinity CL — шаг INF_CL исполнителя v3.
     assert_eq!(kind("pancakeswap_infinity_cl"), Some(ExecKind::InfCl));
     assert_eq!(kind("kyber_elastic"), None);
 }

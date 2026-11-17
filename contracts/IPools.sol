@@ -204,7 +204,7 @@ interface ILBPair {
     function swap(bool swapForY, address to) external returns (bytes32 amountsOut);
 }
 
-// Решение 390 (t181, исполнитель v3): пулы внутри общего менеджера — Uniswap V4 и PancakeSwap Infinity (CL, Bin;
+// Решение 395 (t181, исполнитель v3): пулы внутри общего менеджера — Uniswap V4 и PancakeSwap Infinity (CL, Bin;
 // Infinity Stable — пул в крючке пула CL). Обмен идёт только внутри «открытого» менеджера: исполнитель зовёт unlock
 // (Uniswap) / lock (Infinity), менеджер вызывает у него unlockCallback / lockAcquired, внутри — swap, затем долг входа
 // гасится sync → перевод токена менеджеру → settle, выход забирается take; к концу обратного вызова у вызывающего не

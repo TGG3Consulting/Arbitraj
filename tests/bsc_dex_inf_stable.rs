@@ -27,7 +27,7 @@ fn e10() -> U256 {
     U256::from(10u64.pow(10))
 }
 
-/// Вид: StableSwap, в графе, tradable (Universal Router своей DEX), не форк; решение 390 (t181) — шаг INF_CL исполнителя v3
+/// Вид: StableSwap, в графе, tradable (Universal Router своей DEX), не форк; решение 395 (t181) — шаг INF_CL исполнителя v3
 /// (пул в крючке пула CL, обмен — тот же CL-обмен по ключу пула).
 #[test]
 fn family_flags() {
@@ -40,7 +40,7 @@ fn family_flags() {
     assert_eq!(
         f.executor_kind.map(|k| k.name()),
         Some("INF_CL"),
-        "решение 390: шаг INF_CL"
+        "решение 395: шаг INF_CL"
     );
     assert!(f.proto.is_stable());
 }

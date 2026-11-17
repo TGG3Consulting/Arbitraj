@@ -1,5 +1,5 @@
 // Файл: contracts/evmtest/singleton.mjs
-// Что делает: решение 390 (t181) — шаги UNI_V4 (19), INF_CL (20), INF_BIN (21) исполнителя ArbExecutor v3 на EVM
+// Что делает: решение 395 (t181) — шаги UNI_V4 (19), INF_CL (20), INF_BIN (21) исполнителя ArbExecutor v3 на EVM
 //   ethereumjs (Cancun) с ОФИЦИАЛЬНЫМ кодом менеджеров, собранным здесь же solc 0.8.26 (настройки foundry.toml
 //   репозиториев: via_ir, cancun, optimizer_runs 44444444 / 25666, bytecode_hash none):
 //   Uniswap/v4-core@bea7f6d1 src/PoolManager.sol (+ src/test/FeeTakingHook.sol — официальный крючок с дельтой) и
@@ -281,7 +281,8 @@ async function hookAt(c, tmp, hook) {
 /// Ревью t181 (Н5) — G7: поддельный менеджер (врёт дельтами; «owed»; попытка оплаты устаревшими expToken / expMax),
 /// официальный DeltaReturningHook (крючок забирает выход больше обмена — «out»; крючок берёт вход своей дельтой — долг
 /// исполнителя всё равно ровно сумма шага), токен с налогом на входе (откат всего, не потеря), частичное исполнение
-/// (узкий диапазон ликвидности — остаток входа вернулся владельцу), executeNative с шагом через менеджер.
+/// (узкий диапазон ликвидности — остаток входа вернулся владельцу), executeNative с шагом через менеджер на хопе, не
+/// касающемся BNB (продажа и покупка BNB; остатков на исполнителе нет, получатель — владелец).
 async function review7() {
   // Поддельный менеджер: режимы 0 / 1 / 2 (fixtures/FakeManager.sol).
   {
@@ -359,21 +360,32 @@ async function review7() {
     check(r.ok && took < amt && ub - (await bal(c, usdt, OWNER)) === took && (await bal(c, usdt, ex)) === 0n,
       `частичное исполнение: пул взял ${took} из ${amt}, остаток вернулся владельцу, на исполнителе пусто`);
   }
-  // executeNative (продажа BNB) с шагом UNI_V4 по пулу WBNB/USDT: контракт исполняет (бот такой маршрут не строит —
-  // ExecKind::singleton исключён из нативной стороны).
+  // executeNative с шагом через менеджер на хопе, НЕ касающемся BNB (ревью 2 t181: такой маршрут бот строит у кошелька
+  // v3 — quote/graph_route.rs native_ok_at закрывает шаг менеджера только на стороне BNB). Продажа BNB:
+  // WBNB →(пара V2 COIN/WBNB)→ COIN →(UNI_V4 COIN/USDT)→ USDT; покупка BNB: USDT →(UNI_V4)→ COIN →(пара V2)→ WBNB → BNB.
   {
     const e = await env();
-    const { c, ex, usdt, w, pm, lp } = e;
-    await must(c, LP, w, WETH.abi, 'deposit', [], 20_000n * E18);
-    await must(c, LP, w, WETH.abi, 'transfer', [lp, 20_000n * E18]);
-    const [a0, a1] = sort(w, usdt);
-    const kw = v4Key(a0, a1);
-    await must(c, LP, pm, PM.abi, 'initialize', [kw, Q96]);
-    await must(c, LP, lp, LPC.abi, 'addV4', [pm, kw, [MIN_TICK, MAX_TICK, LIQ, '0x' + '00'.repeat(32)]]);
+    const { c, ex, usdt, coin, w, pm, k4, pairCW } = e;
+    const tx = (to) => {
+      const t = new Interface(ERC20.abi).getEvent('Transfer').topicHash;
+      return (r, token) => r.logs.filter((l) => l.address.toLowerCase() === token.toLowerCase() && l.topics[0] === t
+        && BigInt(l.topics[2]) === BigInt(to));
+    };
+    const toOwner = tx(OWNER);
     const ub = await bal(c, usdt, OWNER);
-    const r = await L.call(c, OWNER, ex, nat(true, w, E18, usdt, 1n, [uniStep(pm, kw, w, usdt)]), E18);
-    const st = settled(r, ex);
-    check(r.ok && st && st[0] === E18 && st[1] === 0n && (await bal(c, usdt, OWNER)) > ub && (await bal(c, w, ex)) === 0n,
-      'executeNative: продажа BNB через шаг UNI_V4 исполняется контрактом (NativeSettled(1, 0)); бот такой маршрут не строит');
+    const sell = await L.call(c, OWNER, ex, nat(true, w, E18, usdt, 1n, [v2Step(pairCW, w, coin), uniStep(pm, k4, coin, usdt)]), E18);
+    const st = settled(sell, ex);
+    const got = (await bal(c, usdt, OWNER)) - ub;
+    check(sell.ok && st && st[0] === E18 && st[1] === 0n && got > 0n && toOwner(sell, usdt).length === 1,
+      `executeNative, продажа BNB: шаг UNI_V4 вторым хопом (не касается BNB) — USDT ${got} получил владелец (Transfer менеджер → владелец), NativeSettled(1, 0)`);
+    check((await bal(c, w, ex)) === 0n && (await L.balance(c, ex)) === 0n && (await bal(c, usdt, ex)) === 0n && (await bal(c, coin, ex)) === 0n,
+      'executeNative, продажа: на исполнителе 0 WBNB, 0 BNB, 0 USDT, 0 COIN');
+    const nb = await L.balance(c, OWNER);
+    const buy = await L.call(c, OWNER, ex, nat(false, usdt, 100n * E18, w, 1n, [uniStep(pm, k4, usdt, coin), v2Step(pairCW, coin, w)]));
+    const sb = settled(buy, ex);
+    check(buy.ok && sb && sb[0] === 0n && sb[1] > 0n && (await L.balance(c, OWNER)) - nb === sb[1],
+      `executeNative, покупка BNB: шаг UNI_V4 первым хопом — владелец получил ровно ${sb && sb[1]} wei BNB (NativeSettled)`);
+    check((await bal(c, w, ex)) === 0n && (await L.balance(c, ex)) === 0n && (await bal(c, usdt, ex)) === 0n && (await bal(c, coin, ex)) === 0n,
+      'executeNative, покупка: на исполнителе 0 WBNB, 0 BNB, 0 USDT, 0 COIN');
   }
 }

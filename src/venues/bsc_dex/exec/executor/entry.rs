@@ -10,7 +10,7 @@
 //! Монета пары — нативный BNB пула (StableData.native, в паре — обёртка WBNB; решение «122 X (нативный BNB в
 //! стейблсвапах)»): вид STABLE_U256_BNB (bnb_in — по тому, вход это или выход); у CURVE / SADDLE — отказ.
 //! Решение 273: пул Solidly с фабрикой на паузе — шаг не строится (NoRoute с причиной).
-//! Решение 390 (t181): пул внутри менеджера (Uniswap V4 — PoolRef::Singleton PoolManager; Infinity CL / Bin — Singleton
+//! Решение 395 (t181): пул внутри менеджера (Uniswap V4 — PoolRef::Singleton PoolManager; Infinity CL / Bin — Singleton
 //! своего менеджера; Infinity Stable — Contract(крючок)) — шаги UNI_V4 / INF_CL / INF_BIN исполнителя v3: ключ пула из
 //! реестра (Entry.key) сверяется с ссылкой (PoolId ключа = id ссылки и менеджер ключа = менеджер ссылки; у Infinity
 //! Stable — крючок ключа = адрес пула), пул шага — PoolManager (V4) или Vault Infinity (dex.vault).
@@ -195,7 +195,7 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
     Ok((p, pool))
 }
 
-/// Решение 390: шаг пула внутри менеджера. Ключ — из реестра (Entry.key, его же берёт Universal Router — exec/swap_v4.rs),
+/// Решение 395: шаг пула внутри менеджера. Ключ — из реестра (Entry.key, его же берёт Universal Router — exec/swap_v4.rs),
 /// сверка с ссылкой: Singleton — PoolId ключа = id и менеджер ключа (у Infinity) = менеджер ссылки; Contract (Infinity
 /// Stable) — крючок ключа = адрес пула. Пул шага: UNI_V4 — PoolManager (адрес ссылки), INF_* — Vault (dex.vault DEX).
 /// Принимает: окружение, пул, вид. Возвращает: параметры и адрес пула шага. Ошибки: NoRoute — нет ключа, ключ не того

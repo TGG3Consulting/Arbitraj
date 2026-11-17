@@ -93,19 +93,19 @@ async fn bundle_route_plans_no_tip_single_tx_does() {
     let route = r.route.as_ref().unwrap();
     assert!(route.executable, "{:?}", route.exec_note);
     assert_eq!(graph_route::graph_form(&q.ctx, route), GraphForm::Bundle);
-    assert!(!trade::sends_tip(&q.ctx, Some(route), false));
+    assert!(!trade::sends_tip(&q.ctx, &q.reg, Some(route), false));
 
     // Неисполнимый маршрут (сделки нет, путь не выбирается) — как было.
     let mut off = route.clone();
     off.executable = false;
-    assert!(trade::sends_tip(&q.ctx, Some(&off), false));
+    assert!(trade::sends_tip(&q.ctx, &q.reg, Some(&off), false));
 
     // Исполнитель кошелька — тот же маршрут одной транзакцией с чаевыми.
     route_common::executor(&p, EXECUTOR).await;
     let q = p.quoting();
-    assert!(trade::sends_tip(&q.ctx, Some(route), false));
+    assert!(trade::sends_tip(&q.ctx, &q.reg, Some(route), false));
     // Нативная монета через исполнитель не идёт (executor::takes) — бандл, чаевых нет.
-    assert!(!trade::sends_tip(&q.ctx, Some(route), true));
+    assert!(!trade::sends_tip(&q.ctx, &q.reg, Some(route), true));
 }
 
 #[tokio::test]
@@ -131,8 +131,8 @@ async fn direct_and_no_route_keep_tip() {
         exec_note: None,
     };
     assert_eq!(graph_route::graph_form(&q.ctx, &route), GraphForm::Direct);
-    assert!(trade::sends_tip(&q.ctx, Some(&route), false));
+    assert!(trade::sends_tip(&q.ctx, &q.reg, Some(&route), false));
     route.mode = RouteMode::Direct;
-    assert!(trade::sends_tip(&q.ctx, Some(&route), false));
-    assert!(trade::sends_tip(&q.ctx, None, false));
+    assert!(trade::sends_tip(&q.ctx, &q.reg, Some(&route), false));
+    assert!(trade::sends_tip(&q.ctx, &q.reg, None, false));
 }

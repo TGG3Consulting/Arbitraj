@@ -5,7 +5,7 @@
 //! via_executor = нет, и до ensure дело не доходит: check/probe_exec.rs part, quote/graph_executor.rs all_via,
 //! exec/executor/mod.rs takes). Исход здесь меняется, только когда запись говорит «можно», а сверка — «нельзя»
 //! (запись отстала), или запись не обновилась при сбое onchain.rs remember. Правила — те же, что exec_callback missing:
-//! вид шага с версии выше сверенной (exec_callback::since / step_absent: решение 284 — с v2, решение 390 — с v3) —
+//! вид шага с версии выше сверенной (exec_callback::since / step_absent: решение 284 — с v2, решение 395 — с v3) —
 //! «переразверните исполнитель»;
 //! обратный вызов пула dex.v3_swap_callback (ревью 281, задача t114) — по артефакту этой версии (exec_callback::check).
 //! Кто вызывает: exec/executor/trade.rs (сделка через исполнитель), check/probe_exec.rs (проба налога через исполнитель).

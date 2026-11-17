@@ -114,7 +114,7 @@ fn kinds_match_contract_constants() {
         ("BALANCER", Params::Balancer { pool_id: B256::ZERO }),
         // Решение 290: пул Liquidity Book V2.1 — только v2.
         ("LB", Params::Lb),
-        // Решение 390 (t181): пулы внутри менеджеров — только v3.
+        // Решение 395 (t181): пулы внутри менеджеров — только v3.
         ("UNI_V4", Params::UniV4 { key: v4_key() }),
         ("INF_CL", Params::InfCl { key: inf_key() }),
         ("INF_BIN", Params::InfBin { key: inf_key() }),
@@ -124,7 +124,7 @@ fn kinds_match_contract_constants() {
     }
 }
 
-/// Ключи для сверки номеров видов (решение 390): содержимое не важно — только номер вида.
+/// Ключи для сверки номеров видов (решение 395): содержимое не важно — только номер вида.
 fn v4_key() -> kind::V4Key {
     kind::V4Key {
         currency0: USDT,

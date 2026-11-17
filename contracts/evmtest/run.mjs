@@ -14,8 +14,8 @@
 //   Сценарии ревью 272 (А4: замок locked, обратные вызовы, злой пул V3, поддельная обёртка, подкинутый BNB, правило
 //   «native step», многошаговые маршруты и доли, V3, deadline) — review.mjs, запускаются отсюда. Шаг NOMI_STABLE
 //   (решение 284: пара-фикстура Nomiswap Stable, v1 — «kind») — nomi.mjs; шаг METRIC (решение 285) — metric.mjs; шаг IZI (решение 286) — izi.mjs; шаг KYBER_DMM (решение 287) — dmm.mjs; шаг SMARDEX (решение 288) — smardex.mjs; шаг BALANCER (решение 289) — balancer.mjs; шаг LB (решение 290) — lb.mjs;
-//   шаги UNI_V4 / INF_CL / INF_BIN исполнителя v3 (решение 390, t181: официальные PoolManager Uniswap V4 и Vault / CL / Bin
-//   PancakeSwap Infinity, v2 и v1 — «kind») — singleton.mjs; тоже отсюда. С решения 390 `v2` в проверках — текущая сборка
+//   шаги UNI_V4 / INF_CL / INF_BIN исполнителя v3 (решение 395, t181: официальные PoolManager Uniswap V4 и Vault / CL / Bin
+//   PancakeSwap Infinity, v2 и v1 — «kind») — singleton.mjs; тоже отсюда. С решения 395 `v2` в проверках — текущая сборка
 //   contracts/out/ (исполнитель v3, надмножество v2); замороженная v2 — contracts/out/v2/ (сверка с ней — singleton.mjs).
 // Кто вызывает: человек или агент: `cd contracts/evmtest && npm ci && node run.mjs` (README.md папки).
 // От чего зависит: lib.mjs, world.mjs, review.mjs, contracts/*, vendor/*, fixtures/*.

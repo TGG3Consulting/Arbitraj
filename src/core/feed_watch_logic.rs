@@ -27,6 +27,11 @@
 //! сроку ожидания (feed_confirm_queue.rs: приоритет нужных, без бесконечного голодания). Срок проверки пары
 //! сбрасывается, только когда ПОСЛЕ неё пришёл новый кадр.
 //!
+//! Решение 383 (t169): порог ранней проверки и срок подтверждения — по замеренному запасу хода (от начала прошлого
+//! прохода до применения ответов, State::note_answers), а не по venue.pair_resub_interval_ms; ранняя проверка пар, не
+//! нужных торговле, — из остатка ведра (feed_confirm_queue.rs Kind::Spare); кадр после проверки снимает и запомненный
+//! срок подтверждения.
+//!
 //! Кто вызывает: core/feed_watch.rs. Шаг по пачке — feed_watch_conn.rs; подтверждение — feed_confirm.rs.
 //! От чего зависит: gateway/feed_health.rs, feed_confirm.rs, feed_watch_action.rs (действия).
 //! Настройки: значения приходят в Cfg (читает feed_watch.rs).
@@ -111,6 +116,10 @@ pub struct State {
     pub needed: HashSet<String>,
     /// Решение 367 (ревью Н2): счётчики для сводки журнала (отложено ведром, ранние проверки и их исходы).
     pub(super) stats: super::feed_confirm_queue::Stats,
+    /// Решение 383: запас хода (мс) — от начала прошлого прохода до применения ответов последнего прохода с
+    /// проверками (замер feed_watch.rs, State::note_answers в feed_confirm_queue.rs); None — замера ещё нет (берётся
+    /// venue.pair_resub_interval_ms).
+    pub(super) lead_ms: Option<i64>,
 }
 
 /// Один проход. Принимает: снимок свежести, сейчас (unix мс), настройки, монеты идущих сделок площадки
@@ -133,6 +142,7 @@ pub fn decide(
     st.pairs.retain(|k, _| present.contains(k));
     st.checks.retain(|k, _| present.contains(k));
     let mode = mode(h, c);
+    let lead = queue::lead(st, c);
     st.conns.retain(|k, _| h.conns.iter().any(|x| &x.conn == k));
     for conn in &h.conns {
         let live = conn.alive_ms.is_some_and(|a| now - a <= c.live_ms);
@@ -155,13 +165,14 @@ pub fn decide(
                 cs.lost_ref = None;
                 cs.suspect = None;
                 cs.sticky = false;
+                cs.until_ms = 0;
             }
             // Решение 367 (ревью Н2): пара нужна торговле — ранняя проверка и приоритет в ведре. Повторное ревью t163,
             // Н1: устаревший стакан выбивает направление из «держится» / «кандидат» (сигнал без цены), поэтому пара,
             // ставшая нужной при тишине выше порога ранней проверки, остаётся нужной (sticky), пока биржа не
             // подтвердит книгу или не придёт новый кадр (сброс выше).
             let want_now = st.needed.contains(&p.ticker) || deals.contains_key(&p.ticker);
-            if want_now && queue::due(p, now, c) {
+            if want_now && queue::due(p, now, c, lead) {
                 let cs = st.checks.entry(key.clone()).or_default();
                 if !cs.sticky {
                     cs.sticky = true;
@@ -183,11 +194,16 @@ pub fn decide(
                 }
                 // t163 (решение 367): пара нужна торговле и скоро устареет для котировки — спросить биржу заранее (не
                 // ждать book_stale_ms × pair_dead_mult). Вне круга переподписки (свежая пара его уже закрыла выше).
+                // Решение 383: не нужная торговле — тоже заранее, но из остатка ведра (Kind::Spare).
+                let kind = if need {
+                    queue::Kind::Need
+                } else {
+                    queue::Kind::Spare
+                };
                 if let Mode::Confirm(min_ms, _) = &mode
                     && h.per_pair
-                    && need
-                    && queue::due(p, now, c)
-                    && let Some(w) = queue::wanted(st, &key, p, now, c, *min_ms, true)
+                    && queue::due(p, now, c, lead)
+                    && let Some(w) = queue::wanted(st, &key, p, now, c, *min_ms, kind)
                 {
                     wants.push(w);
                 }
@@ -207,7 +223,12 @@ pub fn decide(
                 _ if in_round => round_step(st, &key, now, c, &mut out),
                 Mode::Resub if silent => round_step(st, &key, now, c, &mut out),
                 Mode::Confirm(min_ms, _) if silent => {
-                    wants.extend(queue::wanted(st, &key, p, now, c, *min_ms, need))
+                    let kind = if need {
+                        queue::Kind::Need
+                    } else {
+                        queue::Kind::Plain
+                    };
+                    wants.extend(queue::wanted(st, &key, p, now, c, *min_ms, kind))
                 }
                 Mode::Journal(_) if silent && confirm::note_quiet(st, &key) => {
                     quiet_new.push(p.ticker.clone())

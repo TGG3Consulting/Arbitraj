@@ -5,8 +5,8 @@
 //! book_stale_ms и book_stale_ms × pair_dead_mult стояла в отказе «кадра стакана пары нет»), подтверждение покрывает
 //! момент, когда кадр стал бы старше book_stale_ms; повторный запрос — не раньше venue.quiet_confirm_min_ms, после нового
 //! кадра — сразу; кадр после отправки — ответ не нужен; без подтверждения (журнал, переподписка 202) — как раньше.
-//! Доработка по ревью Н2: ранняя проверка — только у пар, нужных торговле (State.needed / идущая сделка), остальные —
-//! как до правки; ведро — по сроку ожидания, нужные первыми, старые ждущие не голодают; первое «книга новее» ранней
+//! Доработка по ревью Н2: ранняя проверка в приоритете — у пар, нужных торговле (State.needed / идущая сделка);
+//! решение 383: у остальных — из остатка ведра (после обычных, не «отложены»); ведро — по сроку ожидания, нужные первыми, старые ждущие не голодают; первое «книга новее» ранней
 //! проверки — без переподписки (повторная сверка), второе подряд — переподписка; кадр между ними — сверка снята;
 //! сводка журнала показывает «отложено ведром» и исходы проверок нужных пар.
 //! Повторное ревью t163: Б1 — первое «книга новее» снимает подтверждение сразу (Action::Unconfirm); Н4 — ошибка REST
@@ -190,22 +190,52 @@ fn without_confirm_nothing_changes() {
 }
 
 #[test]
-fn not_needed_pair_waits_as_before_and_deal_counts_as_needed() {
-    let c = cfg();
-    // Пара не нужна торговле: тишина 6 с — ранней проверки нет (как до 367), после 15 с — обычная проверка.
+fn not_needed_pair_early_from_spare_bucket_and_deal_counts_as_needed() {
+    // Решение 383: пара не нужна торговле, тишина 6 с (ранний порог 2 с пройден, порог мёртвой — 15 с): ранняя
+    // проверка из ОСТАТКА ведра — после обычных, «отложены ведром» не считается. До 383 — ждала 15 с.
+    let mut c = cfg();
+    c.quiet = QuietCfg::Confirm {
+        min_ms: 30_000,
+        max_per_s: 1,
+    };
     let (mut st, none) = (State::default(), HashMap::new());
-    assert!(decide(&health(46_000, 40_000, 100), 46_000, &c, &none, &mut st).is_empty());
+    let n = |a: &[Action]| -> Vec<String> {
+        a.iter()
+            .filter_map(|x| match x {
+                Action::Check { ticker, .. } => Some(ticker.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    let h = |now| many(now, &[("GMT", 40_000), ("OLD", 10_000)]);
     assert_eq!(
-        decide(&health(55_100, 40_000, 100), 55_100, &c, &none, &mut st),
-        vec![check()]
+        n(&decide(&h(46_000), 46_000, &c, &none, &mut st)),
+        vec!["OLD"]
+    );
+    assert_eq!(st.stats.deferred, 0, "ранняя из остатка не «отложена»");
+    assert_eq!(
+        n(&decide(&h(47_000), 47_000, &c, &none, &mut st)),
+        vec!["GMT"]
+    );
+    assert_eq!(st.stats.spare_checks, 1);
+    assert_eq!(
+        st.stats.early_checks, 0,
+        "не нужная торговле — не в счётчике нужных"
     );
     // Идущая сделка по монете — пара нужна торговле без State.needed.
     let mut st = State::default();
     let deals = HashMap::from([("GMT".to_string(), vec!["d1".to_string()])]);
     assert_eq!(
-        decide(&health(46_000, 40_000, 100), 46_000, &c, &deals, &mut st),
+        decide(
+            &health(46_000, 40_000, 100),
+            46_000,
+            &cfg(),
+            &deals,
+            &mut st
+        ),
         vec![check()]
     );
+    assert_eq!(st.stats.early_checks, 1);
 }
 
 #[test]
@@ -253,10 +283,15 @@ fn first_early_newer_book_rechecks_without_resub() {
         vec![unconfirm()],
         "первое «новее» — подтверждение снимается сразу (Б1), без переподписки"
     );
+    // Ревью t169, Н1: проход раз в секунду, но повторная сверка — не раньше venue.pair_resub_interval_ms (3 с) после
+    // первого запроса (кадр «в пути» успевает прийти), как до решения 383.
+    for n in [44_200, 45_200] {
+        assert!(decide(&health(n, 41_000, 101), n, &c, &none, &mut st).is_empty());
+    }
     assert_eq!(
         decide(&health(46_200, 41_000, 101), 46_200, &c, &none, &mut st),
         vec![check()],
-        "повторная сверка — следующим проходом, не через venue.quiet_confirm_min_ms"
+        "повторная сверка — через venue.pair_resub_interval_ms, не через venue.quiet_confirm_min_ms"
     );
     let a = apply(
         &health(46_300, 41_000, 101),
@@ -445,14 +480,15 @@ fn needed_pair_keeps_priority_until_confirmed_or_frame() {
         &mut st,
     );
     assert_eq!(a, vec![unconfirm()]);
-    // Через секунду ведро снова даёт запрос: повторная сверка GMT — раньше OLD, хотя GMT нет в State.needed (sticky).
+    // Ревью t169, Н1: повторная сверка — не раньше venue.pair_resub_interval_ms (3 с) после первого запроса, не
+    // «следующим проходом» (отдельно — first_early_newer_book_rechecks_without_resub). Через 3 с ведро даёт запрос: повторная сверка GMT — раньше OLD, хотя GMT нет в State.needed (sticky).
     assert_eq!(
-        n(&decide(&h(41_600, 38_500), 41_600, &c, &none, &mut st)),
+        n(&decide(&h(43_600, 38_500), 43_600, &c, &none, &mut st)),
         vec!["GMT"]
     );
-    // Пришёл кадр GMT (42 000) — приоритет и сверка сняты, GMT свежа; ведро — OLD.
+    // Пришёл кадр GMT (44 000) — приоритет и сверка сняты, GMT свежа; ведро — OLD.
     assert_eq!(
-        n(&decide(&h(42_600, 42_000), 42_600, &c, &none, &mut st)),
+        n(&decide(&h(44_600, 44_000), 44_600, &c, &none, &mut st)),
         vec!["OLD"]
     );
 

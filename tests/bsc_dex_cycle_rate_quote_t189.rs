@@ -219,7 +219,7 @@ async fn v3_rate_matches_contract_quoter() {
             near(r, want, tol, "V3 (квотер контракта)");
             // Пул Cake/WBNB записи: цена slot0 на границе тика, в сторону token0 → token1 — пустой участок; спот × (1 −
             // комиссия) отличается от квотера больше чем на 10 % — курс ребра обязан идти не по споту.
-            let spot = Decimal::from_i128_with_scale((sqrt * sqrt >> 128).to::<i128>(), 0)
+            let spot = Decimal::from_i128_with_scale(((sqrt * sqrt) >> 128usize).to::<i128>(), 0)
                 / Decimal::from_i128_with_scale(1i128 << 64, 0);
             if zfo && (spot - want).abs() / want > Decimal::new(1, 1) {
                 gap = true;

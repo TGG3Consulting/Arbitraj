@@ -166,9 +166,32 @@ pub(super) fn floored(core: &Core, from: &VenueId, asset: &Asset, qty: Decimal) 
     }
 }
 
-/// Решение 398: venue.status_poll_ms задана и у отправителя, и у получателя — до вывода (после него опрос статуса и
-/// зачисления читает её на каждом круге, Pacer). Принимает: ядро, сделку, (откуда, куда), монету. Ошибки: текст
-/// причины «вывод не отправлен — не задана …» (уже в журнале, core.not_configured).
+/// Решение 398: какая площадка перевода без venue.status_poll_ms. После вывода ключ читается на каждом круге (Pacer,
+/// wait.rs: не задан — опрос стоит до задания): у отправителя — статус вывода (здесь, go) и фоновая сверка хеша
+/// (transfer_chain.rs:225); у получателя — зачисление (transfer_credit.rs:55) и подтверждение статусом
+/// (credit_mismatch.rs:111). Получателю-DEX с зачислением по блокчейну (решение 151) ключ тоже нужен: хеш вывода может
+/// прийти раньше события — тогда зачисление ждёт опросом (go → transfer_credit::wait), а зачисление по блокчейну
+/// подтверждается статусом депозита фоном (transfer_chain.rs → credit_mismatch::confirm). Вызывают: предпроверка сделки
+/// до покупки (executor.rs) и go до вывода (poll_set — вторая линия: «Перегнать», возврат USDT, ручной перевод).
+/// Принимает: ядро, (откуда, куда). Возвращает: None — у обеих задан; Some(причина «не задана venue.status_poll_ms у
+/// <площадка>»). Ошибок нет.
+pub fn poll_missing(core: &Core, from: &VenueId, to: &VenueId) -> Option<String> {
+    [from, to].into_iter().find_map(|v| {
+        let at = crate::settings::read::At {
+            venue: Some(&v.0),
+            coin: None,
+        };
+        let e = core.inner.deps.settings.integer("venue.status_poll_ms", at).err()?;
+        Some(format!(
+            "не задана venue.status_poll_ms у {} — статус вывода и зачисление после вывода не опрашивались бы              (решение 398; {})",
+            v.0, e.message
+        ))
+    })
+}
+
+/// Решение 398, вторая линия (перегон, возврат USDT, ручной перевод — без предпроверки сделки): poll_missing до вывода.
+/// Принимает: ядро, сделку, (откуда, куда), монету. Ошибки: текст причины «вывод не отправлен — не задана …» (уже в
+/// журнале, core.not_configured).
 async fn poll_set(
     core: &Core,
     deal: &str,
@@ -176,24 +199,24 @@ async fn poll_set(
     to: &VenueId,
     asset: &Asset,
 ) -> Result<(), OpError> {
-    for v in [from, to] {
-        let at = crate::settings::read::At {
-            venue: Some(&v.0),
-            coin: None,
-        };
-        if let Err(e) = core.inner.deps.settings.integer("venue.status_poll_ms", at) {
-            let why = format!(
-                "{deal}: вывод {} {} → {} не отправлен — {} (решение 398)",
-                asset.ticker, from.0, to.0, e.message
-            );
-            core.inner
-                .deps
-                .log(Level::Warn, "core.not_configured", Some(&v.0), &why, None)
-                .await;
-            return Err(OpError::from(why));
-        }
-    }
-    Ok(())
+    let Some(miss) = poll_missing(core, from, to) else {
+        return Ok(());
+    };
+    let why = format!(
+        "{deal}: вывод {} {} → {} не отправлен — {miss}",
+        asset.ticker, from.0, to.0
+    );
+    core.inner
+        .deps
+        .log(
+            Level::Warn,
+            "core.not_configured",
+            Some(&from.0),
+            &why,
+            None,
+        )
+        .await;
+    Err(OpError::from(why))
 }
 
 /// Перевод. Принимает: как send_as, плюс можно ли зачислить по блокчейну (решение 151 — только перевод сделки).

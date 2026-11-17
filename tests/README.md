@@ -1080,3 +1080,4 @@ KJUDGE_ERROR нет; наш load_dodo.rs на записанных ответа�
 - `kyber_receipt_before_send_398.rs` — KyberSwap: без kyber.receipt_poll_ms / kyber.receipt_timeout_ms tx::send отказывает NotConfigured, к узлу (локальный сервер) ни одного подключения.
 - `bingx_poll_263.rs` (no_order_without_wait_setting) — BingX: без venue.order_poll_ms trade отказывает NotConfigured, запроса постановки нет.
 - `bsc_dex_send.rs` — без send.gas_limit_margin_pct SendCfg не читается (запас газа отмены — до отправки исходной).
+- `core_status_poll_398.rs` — transfers::poll_missing на настоящем ядре: venue.status_poll_ms нужна и отправителю, и получателю (в том числе DEX); страж — исполнитель проверяет её после предпроверки и до покупки, перевод — до вывода.

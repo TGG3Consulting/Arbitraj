@@ -41,8 +41,6 @@ pub async fn trade(
             &format!("{p:?}"),
         ));
     };
-    // Решение 398: сроки — до запросов (отмена остатка в settle — действие с ордером).
-    let times = order_state::times(ctx)?;
     let order_id = match &p.venue_ref {
         Some(id) => id.clone(),
         None => {
@@ -64,6 +62,9 @@ pub async fn trade(
             }
         }
     };
+    // Решение 398 (ревью t183, п. 2): сроки нужны только доведению найденного ордера — читаются здесь, до settle (там
+    // отмена остатка); «ордера нет» (Ok(None) выше) выясняется и без них, как до решения 398.
+    let times = order_state::times(ctx)?;
     let state = order_state::settle(ctx, symbol, &order_id, times).await?;
     order_state::result(ctx, req, &state, order_id).map(Some)
 }

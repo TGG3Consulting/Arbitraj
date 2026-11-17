@@ -77,9 +77,11 @@ impl Networks {
         // Решение 387: и в уже собранный справочник (кэш) — иначе ядро до конца окна venue.networks_fresh_ms получало
         // бы прежний справочник без минимума и затирало им минимум, полученный запросом по монете.
         let mut c = self.cache.write().unwrap_or_else(|p| p.into_inner());
-        let stale = |x: &&mut Cached| super::deposit_min::stale(&x.1, ticker, &e);
+        let stale = |x: &&mut Cached| super::deposit_min::stale(x.1.as_slice(), ticker, &e);
         if let Some((_, list)) = c.as_mut().filter(stale) {
-            super::deposit_min::apply(Arc::make_mut(list), ticker, &e);
+            // make_mut — по Vec (с ожидаемым срезом вывод типа взял бы Arc<[…]>).
+            let all: &mut Vec<CoinNetworkInfo> = Arc::make_mut(list);
+            super::deposit_min::apply(all, ticker, &e);
         }
     }
 }

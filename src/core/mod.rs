@@ -25,6 +25,7 @@ pub mod busy_budget;
 pub mod busy_calc;
 pub mod busy_note;
 pub mod busy_sum;
+pub mod buy_replan;
 pub mod calc_detail;
 pub mod calc_report;
 pub mod calc_steps;

@@ -21,6 +21,8 @@ pub mod delist;
 pub mod deposit_addr;
 pub mod deposit_hold;
 pub mod deposit_info;
+pub mod deposit_min;
+pub mod deposit_plan;
 pub mod deposits;
 pub mod depth;
 pub mod errors;
@@ -133,9 +135,21 @@ impl Venue for Gate {
     }
 
     /// Решение 113: у Gate есть запросы одной монеты (/spot/currencies/{c}, withdraw_status?currency=, currency_chains).
+    /// Решение 387: минимум депозита монеты ещё не получен — одновременно с запросами сетей запрашивается адрес
+    /// депозита (он же даёт минимум, deposit_min.rs ensure; без лишнего времени на пути предпроверки), сведения
+    /// монеты переносятся в её записи.
     async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
         self.symbols.ensure_fresh(&self.ctx).await?;
-        wallet::coin_networks_of(&self.ctx, &self.nets, &self.symbols, ticker).await
+        let (dep, list) = tokio::join!(
+            deposit_min::ensure(&self.ctx, &self.nets, &self.addrs, ticker),
+            wallet::coin_networks_of(&self.ctx, &self.nets, &self.symbols, ticker)
+        );
+        dep?;
+        let mut list = list?;
+        if let Some(e) = self.nets.extra_of(ticker) {
+            deposit_min::apply(&mut list, ticker, &e);
+        }
+        Ok(list)
     }
 
     async fn subscribe_market(

@@ -3,7 +3,7 @@
 //! задач: приём событий адаптеров, пересборка справочника, обновление сетей бирж, делистинги бирж (решение 175),
 //! очередь расчёта, сверка.
 //! Кто вызывает: main.rs (Core::start), api и notify (чтение состояния, живой поток, команды — методы Core).
-//! От чего зависит: deps.rs, inner.rs, tick.rs, rebuild.rs, registry_sync.rs, candidates.rs, reconcile.rs,
+//! От чего зависит: deposit_min_ask.rs (решение 387, forget), deps.rs, inner.rs, tick.rs, rebuild.rs, registry_sync.rs, candidates.rs, reconcile.rs,
 //! ledger.rs, gas_stats.rs, manual.rs, deposit_warm.rs (решение 316), book_marks_on.rs.
 //! Настройки: у модулей свои (docs/SETTINGS.md).
 
@@ -155,6 +155,8 @@ impl Core {
     pub fn secrets_changed(&self) {
         self.inner.kick_networks.notify_waiters();
         super::deposit_warm::kick(true);
+        // Решение 387: запросы минимума депозита по требованию расчёта — заново (deposit_min_ask.rs).
+        super::deposit_min_ask::forget();
         self.request_rebuild();
     }
 }

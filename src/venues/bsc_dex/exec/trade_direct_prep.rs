@@ -3,9 +3,11 @@
 //! 200 строк; логика та же): путь (exec/live.rs), проверка худшей цены, шаги с минимумами (exec/chain.rs, решение 228 —
 //! exec/leg_min.rs), нативная обёртка, сверка каждого хопа с квотером (решение 32): продажа выхода (решение 177) — по
 //! квотеру (exec/exit_quote.rs); остальные — решение 261, односторонне (в нашу сторону — строка, exec/quoter_favour.rs).
+//! Решение 382: расхождение расчёта по памяти с квотером против нас — пулы доли перечитываются на голове, доля
+//! считается и сверяется заново на том же блоке (exec/quoter_refetch.rs).
 //! Кто вызывает: exec/trade_direct.rs.
 //! От чего зависит: exec/live.rs, exec/chain.rs, exec/leg_min.rs, exec/native.rs, exec/exit_quote.rs,
-//! exec/quoter_favour.rs, exec/trade.rs (check_price), quote/path.rs, quote/via.rs.
+//! exec/quoter_favour.rs, exec/quoter_refetch.rs (решение 382), exec/trade.rs (check_price), quote/path.rs, quote/via.rs.
 //! Настройки: через вызываемые — exec.dex_slippage_pct, dex.quoter_max_diff_pct, dex.*.
 
 use rust_decimal::Decimal;
@@ -19,7 +21,7 @@ use super::super::quote::via::Via;
 use super::chain::Step;
 use super::native::{self, Wrap};
 use super::trade::check_price;
-use super::{chain, exit_quote, leg_min, live, quoter_favour};
+use super::{chain, exit_quote, leg_min, live, quoter_favour, quoter_refetch};
 
 /// Подготовленная доля: путь по живому состоянию, шаги с минимумами, нативная обёртка и пометка «продажа по квотеру»
 /// (решение 177; None — по расчёту) и «в нашу сторону» (решение 261).
@@ -40,7 +42,39 @@ pub struct Prep {
 /// раньше (тот же порядок, сверка — отказ).
 /// Принимает: расчёт путей, запрос, долю, минимумы верификации, decimals, нативная ли монета. Ошибки: NoRoute,
 /// QuoteMismatch, BadResponse, узел.
+/// Решение 382: расчёт по памяти разошёлся с квотером (против нас) — пулы доли перечитываются на голове H
+/// (exec/quoter_refetch.rs), доля считается заново по ним и сверяется с квотером на H; дальше — те же проверки.
 pub async fn prepare(
+    v: &Via<'_>,
+    req: &TradeRequest,
+    leg: &RouteLeg,
+    mins: Option<&[Decimal]>,
+    decs: (u8, u8),
+    is_native: bool,
+) -> GatewayResult<Prep> {
+    let first = match Box::pin(once(v, req, leg, mins, decs, is_native)).await {
+        Err(e) if quoter_refetch::wants(v.q, &e) => e,
+        done => return done,
+    };
+    let pools: Vec<_> = leg.hops.iter().map(|h| h.pool.clone()).collect();
+    let q = Box::pin(quoter_refetch::pinned(v.q, &pools, first)).await?;
+    let v2 = Via {
+        q: &q,
+        coin: v.coin,
+        usdt: v.usdt,
+        side: v.side,
+        taxes: v.taxes,
+        coin_dec: v.coin_dec,
+        usdt_dec: v.usdt_dec,
+    };
+    Box::pin(once(&v2, req, leg, mins, decs, is_native))
+        .await
+        .map_err(|e| quoter_refetch::on_block(&q, e))
+}
+
+/// Одна подготовка доли (тело prepare до решения 382; по перечитанным пулам — Quoting.pinned — квотер на их блоке).
+/// Принимает и ошибки: как prepare.
+async fn once(
     v: &Via<'_>,
     req: &TradeRequest,
     leg: &RouteLeg,
@@ -62,7 +96,11 @@ pub async fn prepare(
         )
     };
     let pick = (exit_quote::exit_of(req), |_: &Hop| true);
-    let all = exit_quote::check_with(ctx, &path, pick, known).await?;
+    // Решение 382: пулы перечитаны на блоке H — квотер на том же H (выход пробы крючка — с другого блока, не берётся).
+    let all = match quoter_refetch::block(v.q) {
+        Some(b) => quoter_refetch::check_on(ctx, &path, pick, b).await?,
+        None => exit_quote::check_with(ctx, &path, pick, known).await?,
+    };
     // Решение 261: расхождения «в нашу сторону» — только строка в хронологию (exec/quoter_favour.rs).
     let (fixes, favour) = quoter_favour::split(all);
     // Журнал — один раз перед отправкой (trade_direct.rs): после approve подготовка идёт второй раз.

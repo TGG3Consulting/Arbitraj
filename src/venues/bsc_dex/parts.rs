@@ -94,6 +94,7 @@ impl Parts {
             plan_gas: None,
             exec_quote: false,
             route_fresh: None,
+            pinned: None,
         }
     }
 

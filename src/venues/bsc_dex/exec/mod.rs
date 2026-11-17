@@ -61,6 +61,8 @@ pub mod precheck_quoter;
 pub mod precheck_sim;
 pub mod presell;
 pub mod quoter_favour;
+pub mod quoter_refetch;
+pub mod quoter_refetch_note;
 pub mod result;
 pub mod single_rebuild;
 pub mod smart_legs;

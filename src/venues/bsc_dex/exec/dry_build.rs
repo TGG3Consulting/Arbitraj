@@ -10,7 +10,9 @@
 //! Доли по живому состоянию и верификация графа — exec/dry_paths.rs.
 //! Через исполнитель ArbExecutor (решение 122, часть X) — exec/executor/dry.rs: режим «через исполнитель» (любой маршрут,
 //! код подставлен в симуляцию) или графовый «бандл» при заданном exec.executor_address (как сделка).
-//! Кто вызывает: exec/dry_swap.rs.
+//! Решение 382: прямая форма — расхождение расчёта по памяти с квотером против нас: пулы маршрута перечитываются на
+//! голове, сборка заново по ним, квотер — на том же блоке (exec/quoter_refetch.rs).
+//! Кто вызывает: exec/dry_swap.rs, exec/presell.rs.
 //! Решение 122 F: в графовой форме хопы через пулы Maverick V2 сверяются с квотером (exec/precheck_quoter.rs).
 //! От чего зависит: exec/{trade (общие шаги), live, chain, leg_min, precheck, plan, universal, bundle, native}.rs,
 //! quote/{verify, graph_route, mixed_quoter, direct, via, steps}.rs.
@@ -33,7 +35,7 @@ use super::executor::dry::{DryMode, ExecTx};
 use super::native::{self, Wrap};
 use super::plan::Plan;
 use super::trade::{check_price, sides, worst_positive};
-use super::{bundle, chain, executor, leg_min, plan, precheck, universal};
+use super::{bundle, chain, executor, leg_min, plan, precheck, quoter_refetch, universal};
 
 /// Что собрано: одна транзакция Universal Router (прямой / умный), бандл или вызов исполнителя ArbExecutor (решение 122).
 pub enum Built {
@@ -57,7 +59,33 @@ pub struct Ready {
 
 /// Собирает сделку. Принимает: котировку, запрос (как для сделки), маршрут, кошелёк. Возвращает: Ready.
 /// Ошибки: как у сделки до отправки — NoRoute, QuoteMismatch, StaleData, CoinNotChecked, NotConfigured, узел.
+/// Решение 382: прямая форма — расчёт по памяти разошёлся с квотером против нас: пулы маршрута перечитываются на
+/// голове H (exec/quoter_refetch.rs) и сборка идёт заново по ним, квотер — на том же H (как сделка, trade_direct_prep.rs).
 pub async fn build(
+    q: &Quoting,
+    req: &TradeRequest,
+    route: &DexRoute,
+    wallet: alloy_primitives::Address,
+    mode: DryMode,
+) -> GatewayResult<Ready> {
+    let first = match Box::pin(once(q, req, route, wallet, mode)).await {
+        Err(e) if quoter_refetch::wants(q, &e) && direct_form(&q.ctx, route) => e,
+        done => return done,
+    };
+    let pools: Vec<_> = route
+        .legs
+        .iter()
+        .flat_map(|l| l.hops.iter().map(|h| h.pool.clone()))
+        .collect();
+    let q2 = Box::pin(quoter_refetch::pinned(q, &pools, first)).await?;
+    Box::pin(once(&q2, req, route, wallet, mode))
+        .await
+        .map_err(|e| quoter_refetch::on_block(&q2, e))
+}
+
+/// Одна сборка (тело build до решения 382; по перечитанным пулам — Quoting.pinned — квотер на их блоке).
+/// Принимает и ошибки: как build.
+async fn once(
     q: &Quoting,
     req: &TradeRequest,
     route: &DexRoute,
@@ -169,7 +197,12 @@ pub async fn build(
     }
     if shape == RouteMode::Direct {
         for h in paths.iter().flat_map(|(p, _)| p.hops.iter()) {
-            precheck::quoter_now(ctx, &h.entry, h.token_in, &h.swapped, h.usable.hook_pct).await?;
+            let (e, hook) = (&h.entry, h.usable.hook_pct);
+            // Решение 382: пулы перечитаны на блоке H — квотер на том же H.
+            match quoter_refetch::block(q) {
+                Some(b) => precheck::quoter_now_at(ctx, e, h.token_in, &h.swapped, hook, b).await?,
+                None => precheck::quoter_now(ctx, e, h.token_in, &h.swapped, hook).await?,
+            }
         }
     }
     let (at, now) = q.heads.at(ctx).await?;
@@ -198,6 +231,15 @@ pub async fn build(
         // Решение 127: прямой, умный и графовый (бандл) — голова + 1 с, как исполнитель (раньше +12 с узла BSC).
         at: Base::timed(at, now),
     })
+}
+
+/// Прямая ли форма сборки: прямой режим или граф в прямой форме (там сверка — exec/precheck.rs quoter_now). Ошибок нет.
+fn direct_form(ctx: &super::super::ctx::Ctx, route: &DexRoute) -> bool {
+    match route.mode {
+        RouteMode::Direct => true,
+        RouteMode::Graph => graph_route::graph_form(ctx, route) == GraphForm::Direct,
+        RouteMode::Smart => false,
+    }
 }
 
 /// Пулы шагов всех долей по порядку. Ошибок нет.

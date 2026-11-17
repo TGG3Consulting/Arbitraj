@@ -134,6 +134,13 @@ pub struct GatewayError {
     /// ошибка остаётся маленькой (как tx). Читать — approve_gas().
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approve_gas_bnb: Option<Box<rust_decimal::Decimal>>,
+    /// Решение 381 (ревью t167, Н2): QuoteMismatch вида «цена ушла» — цена по свежему состоянию пула хуже границы
+    /// сделки (exec/order.rs check_price; предторговая верификация «свежая средняя цена хуже границы», не грубый
+    /// предохранитель дрейфа) — до отправки обмена. Остальные QuoteMismatch (сверка с квотером, минимум 0, новый
+    /// approve, «обе хуже» лучшего из двух) — нет. Ставит адаптер DEX (price_moved()); ядро по нему решает, считать ли
+    /// план покупки заново (core/buy_replan.rs). В JSON — только если да.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub price_moved: bool,
 }
 
 impl GatewayError {
@@ -160,7 +167,15 @@ impl GatewayError {
             setting: None,
             pending: None,
             approve_gas_bnb: None,
+            price_moved: false,
         }
+    }
+
+    /// Решение 381 (ревью t167, Н2): помечает ошибку как «цена ушла» до отправки (см. поле price_moved). Принимает:
+    /// ошибку. Возвращает: ту же ошибку с пометкой. Ошибок нет.
+    pub fn price_moved(mut self) -> Self {
+        self.price_moved = true;
+        self
     }
 
     /// Ошибка «не задана настройка» с её именем. Принимает: имя настройки, текст. Возвращает: NotConfigured.

@@ -246,4 +246,6 @@ async fn exit_worse_than_worst_price_is_refused() {
     let e = trade::check_price(&c, &r, p.coins, p.usdt).unwrap_err();
     assert_eq!(e.code, ErrorCode::QuoteMismatch);
     assert!(e.message.contains("хуже допустимой 0.01746"));
+    // Решение 381 (ревью t167, Н2): «цена ушла» — пометка для пересчёта плана покупки в ядре.
+    assert!(e.price_moved);
 }

@@ -9,6 +9,8 @@
 //! Ok → свежие минимумы, Reject → ошибка, ордер не формируется) и восстановление цены плана из худшей допустимой.
 //! Без синтетики — оба состояния из записанных ответов RPC.
 //! Кто вызывает: cargo test.
+//! Решение 381 (ревью t167, Н2): verify_gate::price_moved — отказ по границе сделки помечается «цена ушла», грубый
+//! предохранитель — нет.
 //! От чего зависит: arb::venues::bsc_dex::quote::{verify, graph_route, via, steps}, exec::verify_gate, tests/route_common.
 
 mod route_common;
@@ -396,7 +398,10 @@ async fn better_price_passes_worse_price_rejects() {
         }
         Verdict::Reject { reason, .. } => panic!("покупка дешевле плана должна пройти: {reason}"),
     }
-    match moved_verdict(Side::Sell, Decimal::from(20u32)).await {
+    let sell = moved_verdict(Side::Sell, Decimal::from(20u32)).await;
+    // Решение 381 (ревью t167, Н2): отказ по границе сделки — «цена ушла» (пометка для пересчёта плана покупки в ядре).
+    assert!(verify_gate::price_moved(&sell, Decimal::from(20u32)));
+    match sell {
         Verdict::Reject { reason, drift } => {
             assert!(drift.is_some(), "отказ по цене несёт дрейф");
             assert!(reason.contains("дешевле границы сделки"), "{reason}");
@@ -409,7 +414,10 @@ async fn better_price_passes_worse_price_rejects() {
 async fn rough_guard_rejects_any_direction() {
     // Грубый предохранитель (verify.max_price_drift_pct) — в обе стороны: скачок 5.9% при допуске 5% — отказ даже
     // для покупки, которой цена стала лучше (данные под сомнением).
-    match moved_verdict(Side::Buy, Decimal::from(5u32)).await {
+    let buy = moved_verdict(Side::Buy, Decimal::from(5u32)).await;
+    // Решение 381 (ревью t167, Н2): грубый предохранитель — не «цена ушла», пересчёта плана нет.
+    assert!(!verify_gate::price_moved(&buy, Decimal::from(5u32)));
+    match buy {
         Verdict::Reject { reason, drift } => {
             assert!(drift.is_some_and(|d| d > Decimal::from(5u32)));
             assert!(reason.contains("грубого предохранителя"), "{reason}");

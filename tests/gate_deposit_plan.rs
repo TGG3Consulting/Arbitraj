@@ -13,11 +13,11 @@ use std::time::{Duration, Instant};
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use arb::core::deposit_min_ask::{State, due};
+use arb::core::deposit_min_ask::{Outcome, State, due, outcome};
 use arb::core::types::{Asset, CoinNetworkInfo, VenueId};
-use arb::gateway::errors::ErrorCode;
+use arb::gateway::errors::{ErrorCode, GatewayError};
 use arb::venues::gate::deposit_min::{apply, stale};
-use arb::venues::gate::deposit_plan::{plan, stops_round, transient};
+use arb::venues::gate::deposit_plan::{combine, need_fetch, plan, stops_round, transient};
 use arb::venues::gate::errors::{Op, from_label};
 use arb::venues::gate::networks_parse::{self, Extra};
 
@@ -208,4 +208,56 @@ fn core_ask_retry_rule() {
     assert!(due(Some(State::Failed(now)), later, every));
     // Интервал опроса не задан — повтор только после смены секретов (forget).
     assert!(!due(Some(State::Failed(now)), later, None));
+}
+
+#[test]
+fn address_only_when_minimum_needed() {
+    // Минимум не известен, сеть задана, ввод по справочнику открыт или справочника нет — запрашивать.
+    assert!(need_fetch(false, "BSC", Some(true), false));
+    assert!(need_fetch(false, "BSC", None, false));
+    // Минимум уже есть — нет.
+    assert!(!need_fetch(true, "BSC", Some(true), false));
+    // Ввод в BSC закрыт по справочнику (монеты, которые с Gate только выводят; 724 из 1075 на записи 04.11) — нет.
+    assert!(!need_fetch(false, "BSC", Some(false), false));
+    // «deposit disabled» уже получен при этом справочнике — не повторяем.
+    assert!(!need_fetch(false, "BSC", Some(true), true));
+    // Подсказка имён сети: venue.bsc_network не задана (пусто) — нет (ревью Н1).
+    assert!(!need_fetch(false, "", None, false));
+    assert!(!need_fetch(false, "  ", Some(true), false));
+}
+
+#[test]
+fn address_failure_keeps_networks() {
+    let list = networks()
+        .into_iter()
+        .filter(|n| n.asset.ticker == "CAKE")
+        .collect::<Vec<_>>();
+    let n = list.len();
+    let fail = GatewayError::new(ErrorCode::Timeout, None, "срок");
+    let (got, err) = combine(Err(fail), Ok(list.clone()));
+    assert_eq!(got.expect("сети монеты есть").len(), n);
+    assert_eq!(err.map(|e| e.code), Some(ErrorCode::Timeout));
+    let disabled = from_label(
+        400,
+        "INVALID_PARAM_VALUE",
+        "deposit disabled",
+        Op::Other,
+        "{}",
+    );
+    let (got, err) = combine(Err(disabled), Ok(list.clone()));
+    assert!(got.is_ok());
+    assert!(err.is_some());
+    let (got, err) = combine(Ok(()), Ok(list));
+    assert!(got.is_ok() && err.is_none());
+}
+
+#[test]
+fn core_ask_outcomes() {
+    assert_eq!(outcome(Ok(true)), Outcome::Answered);
+    // Ответ без минимума («временно пусто», obtain_failed, ввод отклонён) — повтор по интервалу, а не «никогда».
+    assert_eq!(outcome(Ok(false)), Outcome::Retry);
+    assert_eq!(outcome(Err(ErrorCode::Timeout)), Outcome::Retry);
+    assert_eq!(outcome(Err(ErrorCode::SecretsLocked)), Outcome::Retry);
+    // Минимума отдельным запросом площадка не даёт (метод контракта по умолчанию) — больше не спрашивать.
+    assert_eq!(outcome(Err(ErrorCode::NotApplicable)), Outcome::Unsupported);
 }

@@ -135,21 +135,16 @@ impl Venue for Gate {
     }
 
     /// Решение 113: у Gate есть запросы одной монеты (/spot/currencies/{c}, withdraw_status?currency=, currency_chains).
-    /// Решение 387: минимум депозита монеты ещё не получен — одновременно с запросами сетей запрашивается адрес
-    /// депозита (он же даёт минимум, deposit_min.rs ensure; без лишнего времени на пути предпроверки), сведения
-    /// монеты переносятся в её записи.
     async fn coin_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
         self.symbols.ensure_fresh(&self.ctx).await?;
-        let (dep, list) = tokio::join!(
-            deposit_min::ensure(&self.ctx, &self.nets, &self.addrs, ticker),
-            wallet::coin_networks_of(&self.ctx, &self.nets, &self.symbols, ticker)
-        );
-        dep?;
-        let mut list = list?;
-        if let Some(e) = self.nets.extra_of(ticker) {
-            deposit_min::apply(&mut list, ticker, &e);
-        }
-        Ok(list)
+        wallet::coin_networks_of(&self.ctx, &self.nets, &self.symbols, ticker).await
+    }
+
+    /// Решение 387: сети монеты для приёма депозита по запросу ядра (минимум неизвестен) — вместе с адресом депозита,
+    /// который даёт минимум (deposit_min.rs for_deposit). Сбой адреса справочник монеты не роняет.
+    async fn deposit_networks_of(&self, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
+        self.symbols.ensure_fresh(&self.ctx).await?;
+        deposit_min::for_deposit(&self.ctx, &self.nets, &self.addrs, &self.symbols, ticker).await
     }
 
     async fn subscribe_market(

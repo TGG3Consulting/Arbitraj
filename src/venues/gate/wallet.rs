@@ -43,6 +43,11 @@ pub struct Networks {
     /// (deposit_info.rs) после сбоя (секреты, связь) повторяет запросы сразу, как справочник снова получен.
     pub(super) fetched: Arc<std::sync::atomic::AtomicU64>,
     pub(super) fetched_note: Arc<tokio::sync::Notify>,
+    /// Решение 387 (ревью Б1): монета → метка справочника (fetched), при которой Gate отказал в адресе депозита не по
+    /// временной причине («deposit disabled»): до нового справочника адрес по запросу ядра не спрашивается.
+    pub(super) refused: Arc<RwLock<HashMap<String, u64>>>,
+    /// Решение 387 (ревью Н3): время последнего запроса адреса по запросу ядра — темп venue.deposit_info_requests_per_sec.
+    pub(super) pace: Arc<tokio::sync::Mutex<Option<tokio::time::Instant>>>,
     /// Последний записанный в журнал список «неясной» комиссии — пишем только при изменении.
     told: Arc<RwLock<String>>,
 }
@@ -131,7 +136,7 @@ pub async fn coin_networks_of(
     match rest::public(ctx, "/wallet/currency_chains", p).await {
         Ok(ch) => {
             // Решение 387: прочитать и записать под одной блокировкой — минимум депозита, записанный одновременным
-            // запросом адреса депозита (deposit_min.rs ensure), не затирается прежними сведениями.
+            // запросом адреса депозита (deposit_min.rs for_deposit), не затирается прежними сведениями.
             let mut m = nets.extra.write().unwrap_or_else(|e| e.into_inner());
             let old = m.get(ticker).cloned().unwrap_or_default();
             let (ex, _) = chains_extra(&ch, old)?;

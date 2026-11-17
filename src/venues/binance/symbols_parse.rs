@@ -87,7 +87,7 @@ fn parse(s: &Value, perms: &HashSet<String>) -> GatewayResult<SymbolRules> {
                 .filter_map(|v| v.as_str().map(str::to_string))
                 .collect()
         }),
-        price_bands: super::price_band::filters(&f)?,
+        price_bands: super::price_band::filters(f)?,
         symbol,
     })
 }

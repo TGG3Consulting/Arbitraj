@@ -7,8 +7,8 @@
 //! Настройки: нет.
 //!
 //! Официально (https://github.com/binance/binance-spot-api-docs/blob/master/filters.md#percent_price_by_side):
-//! - PERCENT_PRICE_BY_SIDE: «A BUY order will pass … price <= average of previous trade prices * bidMultiplierUp, price
-//!   >= … * bidMultiplierDown»; «A SELL order … price <= … * askMultiplierUp, price >= … * askMultiplierDown».
+//! - PERCENT_PRICE_BY_SIDE: «A BUY order will pass … price <= average of previous trade prices * bidMultiplierUp,
+//!   price >= … * bidMultiplierDown»; «A SELL order … price <= … * askMultiplierUp, price >= … * askMultiplierDown».
 //!   PERCENT_PRICE: «price <= average of previous trade prices * multiplierUp», «price >= … * multiplierDown».
 //! - Опорная цена обоих фильтров: «When a non-null reference price for the symbol exists, it is used in the filter
 //!   evaluation. When a non-null reference price for the symbol does not exist, then the volume weighted average price

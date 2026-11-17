@@ -11,13 +11,14 @@
 //!   обмен адаптера DEX в записанном пуле (pool_quote::swap, точный выход), продажа — снимок стакана BingX (gateway/frozen.rs
 //!   FrozenBook: котировка и худшая цена), вывод с DEX и курсы — затраты плана (core/plan_costs.rs; газа и ставок в
 //!   записях нет — затрат сверх цены нет, комиссия стакана 0).
-//! 1) Без настроек — как раньше: σ та же, что vol.rs sigma; доли нет; запас = k·σ·√T·выручка тем же выражением, расчёт
-//!    побайтно тот же, что у контекста без доли.
-//! 2) profit.sigma_floor_per_s [B]: σ = max(σ ряда, граница); запас растёт ровно до k·граница·√T·выручка.
+//! 1) Без настроек: σ та же, что vol.rs sigma; доли нет; запас = выручка·(1 − e^(−k·σ·√T)) (решение 390, reserve.rs keep)
+//!    тем же выражением, расчёт побайтно тот же, что у контекста без доли.
+//! 2) profit.sigma_floor_per_s [B]: σ = max(σ ряда, граница); запас растёт ровно до выручка·(1 − e^(−k·граница·√T)).
 //! 3) profit.sigma_min_changes: меньше ненулевых изменений цены в окне — σ не измерена (причина); σ = 0 при минимуме 1 —
 //!    сделки нет.
-//! 4) profit.closure_share [B]: запас = max(k·σ·√T·выручка, доля · спред · выручка), прибыль меньше ровно на разницу
-//!    запасов; спред ≤ 0 (биржа ↔ биржа на одном стакане) — запас прежний; доля другой площадки не действует.
+//! 4) profit.closure_share [B]: запас = max(базовая часть, доля · (продажа − покупка) · проданное количество) (решение 390),
+//!    прибыль меньше ровно на разницу запасов; спред ≤ 0 (биржа ↔ биржа на одном стакане) — запас прежний; доля другой
+//!    площадки не действует.
 //! 5) Копия настроек на момент входа (решение 239): изменение после входа доли, границы и минимума ничего не меняет.
 //!
 //! Кто вызывает: cargo test.
@@ -307,9 +308,9 @@ fn reserve_of(c: &Calc) -> Decimal {
         .amount
 }
 
-/// Запас до решения 240: k·σ·√T·выручка.
+/// Базовая часть запаса (без доли): выручка·(1 − e^(−k·σ·√T)) — то же выражение, что reserve.rs amount (решение 390).
 fn base(cx: &DirCtx, c: &Calc) -> Decimal {
-    cx.k * cx.sigma * cx.transit_s.sqrt().unwrap() * c.proceeds
+    c.proceeds * (Decimal::ONE - reserve::keep(cx.k * cx.sigma * cx.transit_s.sqrt().unwrap()))
 }
 
 /// JSON расчёта без моментов времени (at — Utc::now при расчёте и у котировок).
@@ -430,7 +431,7 @@ async fn reserve_without_settings_and_floor() {
     let dd = dir("bingx", "bsc_dex");
     let src = replay(&rec, &dd, false);
     let sigma = d("0.00002");
-    // Без настроек: доли нет, запас k·σ·√T·выручка, расчёт побайтно как у контекста без доли.
+    // Без настроек: доли нет, запас выручка·(1 − e^(−k·σ·√T)), расчёт побайтно как у контекста без доли.
     let share = reserve::closure_share(&s, &dd, None).unwrap();
     assert_eq!(share, None);
     let c0 = cx(&rec, dd.clone(), sigma, share);
@@ -442,13 +443,13 @@ async fn reserve_without_settings_and_floor() {
     assert_eq!(body(&r0), body(&again));
     assert_eq!(r0.profit_usd, r0.proceeds - r0.invested - r0.costs_usdt);
     // Граница σ (sigma_now — тест sigma_settings; в расчёт приходит σ контекста = max(σ ряда, граница)): запас растёт
-    // ровно до k·граница·√T·выручка.
+    // ровно до выручка·(1 − e^(−k·граница·√T)).
     let floor = sigma * d("5");
     let c1 = cx(&rec, dd.clone(), sigma.max(floor), None);
     let r1 = costs::evaluate_with(&c1, d("10"), &src).await.unwrap();
     assert_eq!(
         reserve_of(&r1),
-        c1.k * floor * c1.transit_s.sqrt().unwrap() * r1.proceeds
+        r1.proceeds * (Decimal::ONE - reserve::keep(c1.k * floor * c1.transit_s.sqrt().unwrap()))
     );
     assert_eq!(
         r1.profit_usd,
@@ -485,7 +486,8 @@ async fn closure_share_reserve() {
     )
     .await;
     assert_eq!(reserve::closure_share(&s, &dd, None).unwrap(), None);
-    // Доля у BingX (получатель): запас = доля · спред · выручка (больше k·σ·√T), прибыль меньше ровно на разницу запасов.
+    // Доля у BingX (получатель): запас = доля · (продажа − покупка) · проданное количество (решение 390; больше базовой
+    // части), прибыль меньше ровно на разницу запасов.
     set(
         &s,
         "profit.closure_share",
@@ -497,9 +499,21 @@ async fn closure_share_reserve() {
     assert_eq!(share, Some(d("0.5")));
     let c1 = cx(&rec, dd.clone(), sigma, share);
     let r1 = costs::evaluate_with(&c1, d("10"), &src).await.unwrap();
-    let want = d("0.5") * spread * r1.proceeds;
+    // То же выражение, что reserve.rs amount (проданное количество = выручка / средняя продажи).
+    let want = d("0.5") * (r1.sell_avg - r1.buy_avg) / r1.sell_avg * r1.proceeds;
     assert!(want > base(&c1, &r1));
     assert_eq!(reserve_of(&r1), want);
+    // Смысл (решение 390): доля · (продажа − покупка) · проданное количество; прежняя доля · спред · выручка больше в
+    // 1 + спред раз.
+    let meaning = d("0.5") * (r1.sell_avg - r1.buy_avg) * r1.sell_qty;
+    assert!(
+        (want - meaning).abs() <= r1.proceeds * d("0.000000000000000000001"),
+        "{want} vs {meaning}"
+    );
+    let old = d("0.5") * spread * r1.proceeds;
+    assert!(
+        (old - want * (Decimal::ONE + spread)).abs() <= r1.proceeds * d("0.000000000000000000001")
+    );
     assert_eq!(r1.profit_usd, r0.profit_usd - (want - reserve_of(&r0)));
     assert_eq!((r1.proceeds, r1.invested), (r0.proceeds, r0.invested));
     // Маленькая доля — k·σ·√T больше, запас и весь расчёт прежние.

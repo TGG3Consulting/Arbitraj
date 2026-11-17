@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/quote/cycle_tally.rs
 //! Что делает: решение 404 — итог одного прохода поиска циклов DEX ↔ DEX по базовой монете: сколько циклов просмотрено
-//! перебором, сколько с курсом круга > 1 и лучший курс (quote/cycle_rank.rs), сколько отобрано к полному расчёту, и где
+//! перебором и за сколько мс, сколько с курсом круга > 1 и лучший курс, сколько с глубокими сторонами всех пулов
+//! (quote/cycle_rank.rs), сколько отобрано к полному расчёту, и где
 //! отобранные отпали — раньше эти места молчали (docs/notes/t189-dexdex-top-cycles-2026-11-18.md, раздел «б»):
 //! налоговый или непроверенный токен (cycle_scan tax_free), нет decimals, пул не допущен к котировке (quote/select.rs
 //! usable — причина пула), строгий верх ρ < 1 (quote/bound_cycle.rs), вход не подобран (quote/cycle_opt.rs), сигнал не
@@ -44,8 +45,12 @@ pub enum Lost {
 pub struct Tally {
     base: String,
     seen: u64,
+    rank_ms: u64,
     above_one: u64,
     best_rate: Option<Decimal>,
+    deep: u64,
+    deep_above_one: u64,
+    best_deep: Option<Decimal>,
     unrated: u64,
     capped: bool,
     picked: u64,
@@ -62,13 +67,17 @@ pub struct Tally {
 }
 
 impl Tally {
-    /// Итог отбора по базовой. Принимает: тикер базовой, итог отбора. Ошибок нет.
-    pub fn new(base: &str, r: &Ranked) -> Tally {
+    /// Итог отбора по базовой. Принимает: тикер базовой, итог отбора, время перебора и отбора (мс). Ошибок нет.
+    pub fn new(base: &str, r: &Ranked, rank_ms: u64) -> Tally {
         Tally {
             base: base.to_string(),
             seen: r.seen,
+            rank_ms,
             above_one: r.above_one,
             best_rate: r.best,
+            deep: r.deep,
+            deep_above_one: r.deep_above_one,
+            best_deep: r.best_deep,
             unrated: r.unrated,
             capped: r.capped,
             picked: r.paths.len() as u64,
@@ -133,14 +142,18 @@ impl Tally {
             ""
         };
         let text = format!(
-            "Поиск циклов DEX ↔ DEX, база {}: просмотрено циклов {}{cap}, курс круга > 1 у {}, лучший курс круга {}, \
-             без курса {}; к полному расчёту {} лучших (курс худшего отобранного {}). Отпало: пул пропал из реестра {}, налоговый или \
+            "Поиск циклов DEX ↔ DEX, база {}: просмотрено циклов {}{cap} за {} мс, курс круга > 1 у {}, лучший курс круга {}, \
+             все стороны глубокие у {} (из них курс > 1 у {}, лучший {}), без курса {}; к полному расчёту {} лучших (курс худшего отобранного {}). Отпало: пул пропал из реестра {}, налоговый или \
              непроверенный токен {}, нет decimals {}, пул не допущен {}, строгий верх ρ < 1 {}, вход не подобран {}, \
              сигнал не собран {}. Сигналов {}: исполнимых {}, валовая > 0 у {} (лучшая {}), чистая > 0 у {} (лучшая {}).",
             self.base,
             self.seen,
+            self.rank_ms,
             self.above_one,
             d(self.best_rate),
+            self.deep,
+            self.deep_above_one,
+            d(self.best_deep),
             self.unrated,
             self.picked,
             d(self.worst_picked),
@@ -161,6 +174,10 @@ impl Tally {
         let data = json!({
             "base": self.base,
             "seen": self.seen,
+            "rank_ms": self.rank_ms,
+            "deep": self.deep,
+            "deep_above_one": self.deep_above_one,
+            "best_deep_rate": self.best_deep,
             "above_one": self.above_one,
             "best_rate": self.best_rate,
             "unrated": self.unrated,

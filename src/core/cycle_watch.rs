@@ -75,10 +75,12 @@ pub async fn run(core: Core) {
 /// Один проход по площадке: сигналы → кандидаты → первый годный в сделку (или сухую сделку). Ошибок нет.
 async fn pass(core: &Core, v: &VenueId) {
     let deps = &core.inner.deps;
+    let scan_at = Instant::now();
     let (list, tally) = match deps.gw.get(v).await {
         Ok(x) => (x.dex_cycles().await, x.dex_cycle_tally()),
         Err(e) => (Err(e), Vec::new()),
     };
+    let scan_ms = scan_at.elapsed().as_millis() as u64;
     let list = match list {
         Ok(l) => l,
         Err(e) => {
@@ -88,7 +90,7 @@ async fn pass(core: &Core, v: &VenueId) {
     };
     core.inner.cycles.fresh(&venue_key(v, "scan"), "");
     // Решение 404: итог прохода (адаптер — по базовым, ядро — отбор кандидатов) в журнал core.cycle_scan, свёрнуто.
-    super::cycle_scan_log::note(core, v, tally, &list).await;
+    super::cycle_scan_log::note(core, v, tally, &list, scan_ms).await;
     let cands: Vec<DexCycle> = list
         .into_iter()
         .filter(|c| c.executable && c.net_profit.is_some_and(|p| p > Decimal::ZERO))

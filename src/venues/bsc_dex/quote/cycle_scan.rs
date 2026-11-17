@@ -53,7 +53,7 @@ use super::Quoting;
 use super::cycle::{self, CycleSignal};
 use super::cycle_audit::{Audit, Gate};
 use super::cycle_tally::{Lost, Tally};
-use super::{cycle_opt, cycle_rank, rate, route_cache, route_paths};
+use super::{cycle_opt, cycle_rank, cycle_rate, rate, route_cache, route_paths};
 
 /// Включено ли направление DEX ↔ DEX (решение 85). Не задано — выключено (как dry.enabled). Ошибок нет.
 pub fn enabled(ctx: &Ctx) -> bool {
@@ -132,25 +132,19 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
     let mut out: Vec<CycleSignal> = Vec::new();
     let mut jobs: Vec<Job> = Vec::new();
     // Решение 404: курсы рёбер — одна память на проход (на снимок графа), общая для всех базовых; без замков.
-    let mut rates = cycle_rank::Rates::new(&g);
+    // Ревью t189: стороны пулов по книге глубины — одним чтением на проход (quote/cycle_rate.rs).
+    let mut rates = cycle_rate::Rates::new(&g, q.reg.depth());
     let mut tallies: Vec<Tally> = Vec::new();
     for base in bases {
-        let ranked = cycle_rank::top(
-            ctx,
-            &g,
-            q.reg.depth(),
-            &mut rates,
-            base,
-            max_len,
-            max_cycles,
-            cap,
-        );
+        let started = std::time::Instant::now();
+        let ranked = cycle_rank::top(ctx, &g, &mut rates, base, max_len, max_cycles, cap);
+        let rank_ms = started.elapsed().as_millis() as u64;
         let base_ticker = tickers
             .get(&base)
             .cloned()
             .unwrap_or_else(|| base.to_string());
         let ti = tallies.len();
-        tallies.push(Tally::new(&base_ticker, &ranked));
+        tallies.push(Tally::new(&base_ticker, &ranked, rank_ms));
         let cycles = ranked.paths;
         // Решение 308: в режиме «граф без ожидания» состояние пулов цикла — свежее из реестра (снимок — топология).
         let cycles = if hydrated {

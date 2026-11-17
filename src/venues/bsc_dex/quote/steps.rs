@@ -228,6 +228,14 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
         (PoolState::LbBin(d), _) => super::super::math::lb_fee::active_fee(d)
             .and_then(|f| num::to_decimal(U256::from(f), 16))
             .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "комиссия Liquidity Book не считается")),
+        // Ревью t189 (Н4, дефект до решения 404): Algebra (THENA Fusion, Algebra Integral; вид ядра Cl, состояние Algebra)
+        // раньше падала в «состояние пула не того вида» — затраты маршрута и сигнал цикла с таким шагом не собирались.
+        // Комиссия — та же, что берёт котировка (pool_quote.rs → math/swap_algebra.rs): globalState.fee в пипсах (1e-6).
+        (PoolState::Algebra { fee, .. }, _) => Ok(pips(*fee)),
+        // PMM от оракула (WooFi, Metric, iZiSwap, Biswap V3): котировка — лесенка ответов квотера пула (pool_quote.rs,
+        // quote/pmm_ladder.rs), квотер возвращает выход обмена — комиссия пула уже в нём; отдельной строки нет — 0
+        // (строка затрат «в цене», in_price, — для прозрачности, в прибыль не вычитается).
+        (PoolState::OraclePmm(_), _) => Ok(Decimal::ZERO),
         _ => Err(ctx.err(ErrorCode::BadResponse, "состояние пула не того вида")),
     }
 }

@@ -24,18 +24,29 @@ use super::reject_log::Note;
 pub const KIND: &str = "core.cycle_scan";
 
 /// Записать итог прохода: строки адаптера и отбор кандидатов ядра. Принимает: ядро, площадку, строки адаптера (текст,
-/// данные), сигналы прохода. Ошибок нет.
-pub async fn note(core: &Core, v: &VenueId, lines: Vec<(String, Value)>, list: &[DexCycle]) {
+/// данные), сигналы прохода, время поиска циклов (мс, Venue::dex_cycles). Ошибок нет.
+pub async fn note(
+    core: &Core,
+    v: &VenueId,
+    lines: Vec<(String, Value)>,
+    list: &[DexCycle],
+    scan_ms: u64,
+) {
     for (i, (text, data)) in lines.into_iter().enumerate() {
-        put(core, v, &format!("cycle_scan|{}|{i}", v.0), text, data).await;
+        // Ревью t189: ключ строки — тикер базовой (смена порядка dex_dex.base_tokens не путает строки); нет — номер.
+        let base = data["base"]
+            .as_str()
+            .map_or_else(|| i.to_string(), str::to_string);
+        put(core, v, &format!("cycle_scan|{}|{base}", v.0), text, data).await;
     }
-    let (text, data) = cands_line(list);
+    let (text, data) = cands_line(list, scan_ms);
     put(core, v, &format!("cycle_scan|{}|cands", v.0), text, data).await;
 }
 
-/// Строка отбора кандидатов ядра (тот же фильтр, что cycle_watch.rs pass: исполним и чистая > 0). Принимает: сигналы.
+/// Строка отбора кандидатов ядра (тот же фильтр, что cycle_watch.rs pass: исполним и чистая > 0). Принимает: сигналы,
+/// время поиска (мс).
 /// Возвращает: текст и данные (пример причины неисполнимости). Ошибок нет.
-pub fn cands_line(list: &[DexCycle]) -> (String, Value) {
+pub fn cands_line(list: &[DexCycle], scan_ms: u64) -> (String, Value) {
     let not_exec: Vec<&DexCycle> = list.iter().filter(|c| !c.executable).collect();
     let exec = || list.iter().filter(|c| c.executable);
     let no_net = exec().filter(|c| c.net_profit.is_none()).count();
@@ -51,13 +62,14 @@ pub fn cands_line(list: &[DexCycle]) -> (String, Value) {
         |b| b.round_dp(8).normalize().to_string(),
     );
     let text = format!(
-        "Циклы DEX ↔ DEX, отбор ядра: сигналов {}, неисполнимых {}, исполнимых без чистой прибыли (газ не переведён в \
+        "Циклы DEX ↔ DEX, отбор ядра: проход поиска {scan_ms} мс, сигналов {}, неисполнимых {}, исполнимых без чистой прибыли (газ не переведён в \
          базовую) {no_net}, исполнимых с чистой ≤ 0 {non_pos} (лучшая чистая исполнимого {best_text}); кандидатов в \
          план {cands}.",
         list.len(),
         not_exec.len(),
     );
     let data = json!({
+        "scan_ms": scan_ms,
         "signals": list.len(),
         "not_executable": not_exec.len(),
         "not_executable_example": not_exec.first().and_then(|c| c.exec_note.clone()),

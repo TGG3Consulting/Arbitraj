@@ -1091,3 +1091,9 @@ KJUDGE_ERROR нет; наш load_dodo.rs на записанных ответа�
 циклы; детерминированность (другой порядок пулов в реестре — тот же отбор, отбор N — начало полного порядка); предел
 dex_dex.rank_max_cycles; причина отказа пула (legs_for_cycle) — в итоге прохода (quote/cycle_tally.rs), неисполнимый
 сигнал — в строке отбора ядра (core/cycle_scan_log.rs).
+
+Решение 404 (ревью t189) — tests/bsc_dex_cycle_rate_quote_t189.rs: курс ребра отбора циклов (quote/cycle_rate.rs)
+≈ котировка малой суммы в обе стороны — V2 (size_common), V3 (squadswap_v3_2026-11-15), Algebra (algebra_integral_2026-11-06;
+заодно комиссия Algebra в steps::fee_pct), Solidly stable/volatile (getAmountOut контракта, solidly_fee_2026-11-14),
+StableSwap Nomiswap (getAmountOut контракта, nomiswap_stable_2026-11-15). DODO и Infinity Bin не покрыты — нет записи
+состояния без узла.

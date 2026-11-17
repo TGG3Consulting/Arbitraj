@@ -46,6 +46,7 @@ pub mod cycle_cost;
 pub mod cycle_legs;
 pub mod cycle_opt;
 pub mod cycle_rank;
+pub mod cycle_rate;
 pub mod cycle_scan;
 pub mod cycle_tally;
 pub mod cycle_view;

@@ -3,7 +3,7 @@
 //! найденных, на РЕАЛЬНОЙ записи маршрута CAKE 2026-10-29 (tests/data/routes_2026-10-29, та же, что у
 //! tests/bsc_dex_cycle.rs: шесть пулов на блоке 130521896 — CAKE-USDT ×2, CAKE-WBNB, WBNB-USDT V2, CAKE-BTCB, BTCB-WBNB).
 //! Проверяется без моков: (1) из M циклов базовой USDT длиной до 4 (route_paths::enumerate_cycles — все) отбор N берёт
-//! ровно N с наибольшим курсом круга (произведение курсов рёбер cycle_rank::edge_rate), а не первые по перебору; курсы
+//! ровно N с наибольшим курсом круга (произведение курсов рёбер cycle_rate::edge_rate; стороны всех пулов глубокие — впереди), а не первые по перебору; курсы
 //! отобранных — по убыванию; просмотрено ровно M; (2) детерминированность: два графа из одних пулов, положенных в реестр
 //! в разном порядке, и повторный вызов дают один и тот же отбор; отбор N — начало отбора M; (3) предел просмотра
 //! dex_dex.rank_max_cycles останавливает перебор с отметкой; (4) причина отказа пишется: пул, не допущенный к котировке
@@ -39,7 +39,8 @@ use arb::venues::bsc_dex::pools::graph;
 use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::pools::ticks::{TickData, TickMap};
 use arb::venues::bsc_dex::quote::cycle;
-use arb::venues::bsc_dex::quote::cycle_rank::{self, Rates};
+use arb::venues::bsc_dex::quote::cycle_rank;
+use arb::venues::bsc_dex::quote::cycle_rate::{self, Rates};
 use arb::venues::bsc_dex::quote::cycle_tally::{Lost, Tally};
 use arb::venues::bsc_dex::quote::route_calc::Leg;
 use arb::venues::bsc_dex::quote::route_paths::{self, RoutePath};
@@ -338,14 +339,31 @@ fn key(path: &RoutePath) -> Vec<(PoolRef, Address)> {
 /// Курс круга цикла — произведение курсов рёбер (тот же показатель, что у отбора). Ошибок нет: нет курса — паника.
 fn rate_of(p: &Parts, path: &RoutePath) -> Decimal {
     path.steps.iter().fold(Decimal::ONE, |acc, s| {
-        acc * cycle_rank::edge_rate(&p.ctx, &s.edge, s.token_in).expect("у ребра записи есть курс")
+        acc * cycle_rate::edge_rate(&p.ctx, &s.edge, s.token_in).expect("у ребра записи есть курс")
+    })
+}
+
+/// Все стороны пулов цикла глубокие по книге глубины (тот же признак, что у отбора: вход — встречный токен пула →
+/// покупка, вход — монета → продажа). Ошибок нет.
+fn deep_of(p: &Parts, path: &RoutePath) -> bool {
+    path.steps.iter().all(|s| {
+        p.registry
+            .depth()
+            .last(&s.edge.entry.pool.reference)
+            .is_some_and(|d| {
+                if s.token_in == s.edge.entry.coin {
+                    d.deep_sell
+                } else {
+                    d.deep_buy
+                }
+            })
     })
 }
 
 /// Отбор N лучших по базовой USDT, длина до 4. Ошибок нет.
 fn top(g: &graph::Graph, p: &Parts, n: usize, cap: Option<u64>) -> cycle_rank::Ranked {
-    let mut rates = Rates::new(g);
-    cycle_rank::top(&p.ctx, g, p.registry.depth(), &mut rates, USDT, 4, n, cap)
+    let mut rates = Rates::new(g, p.registry.depth());
+    cycle_rank::top(&p.ctx, g, &mut rates, USDT, 4, n, cap)
 }
 
 #[tokio::test]
@@ -354,37 +372,44 @@ async fn picks_best_by_cycle_rate_not_first() {
     let all = route_paths::enumerate_cycles(&g, USDT, 4, 10_000);
     let m = all.len();
     assert!(m >= 4, "на записи есть несколько циклов базовой USDT: {m}");
-    let mut scored: Vec<(Decimal, Vec<(PoolRef, Address)>)> =
-        all.iter().map(|c| (rate_of(&p, c), key(c))).collect();
-    scored.sort_by_key(|x| std::cmp::Reverse(x.0));
+    // Порядок отбора: все стороны глубокие — впереди, затем курс круга.
+    let mut scored: Vec<(bool, Decimal, Vec<(PoolRef, Address)>)> = all
+        .iter()
+        .map(|c| (deep_of(&p, c), rate_of(&p, c), key(c)))
+        .collect();
+    scored.sort_by_key(|x| std::cmp::Reverse((x.0, x.1)));
     let n = 2;
     let r = top(&g, &p, n, None);
     assert_eq!(r.seen as usize, m, "просмотрены все циклы");
     assert_eq!(r.unrated, 0, "у всех рёбер записи (V2, V3) есть курс");
     assert!(!r.capped);
     assert_eq!(r.paths.len(), n);
-    assert_eq!(
-        r.best,
-        Some(scored[0].0),
-        "лучший курс круга — наибольший из всех"
-    );
+    let best = scored.iter().map(|x| x.1).max();
+    assert_eq!(r.best, best, "лучший курс круга — наибольший из всех");
+    let deep = scored.iter().filter(|x| x.0).count() as u64;
+    assert_eq!(r.deep, deep, "счёт циклов с глубокими сторонами");
     // Курсы отобранных — по убыванию и равны курсу их пути.
     for (path, rate) in r.paths.iter().zip(&r.rates) {
         assert_eq!(*rate, rate_of(&p, path));
     }
-    assert!(r.rates.windows(2).all(|w| w[0] >= w[1]), "лучшие первыми");
+    let ranks: Vec<(bool, Decimal)> = r
+        .paths
+        .iter()
+        .map(|c| (deep_of(&p, c), rate_of(&p, c)))
+        .collect();
+    assert!(ranks.windows(2).all(|w| w[0] >= w[1]), "лучшие первыми");
     // Каждый отобранный не хуже любого неотобранного (то есть отобраны лучшие, а не первые по перебору).
     let picked: Vec<_> = r.paths.iter().map(key).collect();
-    let worst_picked = *r.rates.last().unwrap();
-    for (rate, k) in &scored {
+    let worst = *ranks.last().unwrap();
+    for (d, rate, k) in &scored {
         if !picked.contains(k) {
             assert!(
-                *rate <= worst_picked,
-                "неотобранный цикл с курсом {rate} лучше отобранного {worst_picked}"
+                (*d, *rate) <= worst,
+                "неотобранный цикл ({d}, {rate}) лучше отобранного {worst:?}"
             );
         }
     }
-    let above = scored.iter().filter(|(x, _)| *x > Decimal::ONE).count() as u64;
+    let above = scored.iter().filter(|x| x.1 > Decimal::ONE).count() as u64;
     assert_eq!(r.above_one, above, "счёт циклов с курсом круга > 1");
     // Первые n по перебору (как до решения 404) — для сравнения в выводе теста.
     let first: Vec<_> = all.iter().take(n).map(|c| rate_of(&p, c)).collect();
@@ -437,7 +462,7 @@ async fn rank_cap_stops_and_marks() {
 async fn lost_reason_is_written() {
     let (g, p) = graph_and_parts(false).await;
     let r = top(&g, &p, 3, None);
-    let mut t = Tally::new("USDT", &r);
+    let mut t = Tally::new("USDT", &r, 3);
     // Пул не допущен: проверок (сверка с квотером, газ пробы) на этом окружении нет — та же причина, что на боте у
     // непроверенного пула; раньше она выбрасывалась (cycle_scan.rs signal: .ok()?).
     let q = p.quoting();
@@ -507,8 +532,11 @@ async fn lost_reason_is_written() {
     assert!(!sig.executable);
     let dc =
         arb::venues::bsc_dex::quote::cycle_view::to_dex_cycle(&VenueId("bsc_dex".into()), &sig);
-    let (text, data) = arb::core::cycle_scan_log::cands_line(&[dc]);
-    assert!(text.contains("сигналов 1, неисполнимых 1"), "{text}");
+    let (text, data) = arb::core::cycle_scan_log::cands_line(&[dc], 7);
+    assert!(
+        text.contains("проход поиска 7 мс, сигналов 1, неисполнимых 1"),
+        "{text}"
+    );
     assert!(text.contains("кандидатов в план 0"), "{text}");
     assert_eq!(data["not_executable_example"], json!(sig.exec_note));
 }

@@ -12,8 +12,9 @@
 //! От чего зависит: window_deal.rs (решение 245), deal.rs, deal_closed.rs (текст и отправка deal.closed, решения 216, 236, 237), deal_return_cost.rs, persist.rs, risk.rs, gas_stats.rs, signal.rs, view.rs, usdt_return_deal.rs.
 //! Решение 266 (ответ Тиграна 13.11): пауза направления не ставится, когда сделка закрыта отказом биржи по ордеру
 //! покупки из-за нехватки средств (finish_paused, решает executor.rs buy_refusal_pauses); прочие закрытия — как раньше.
-//! Задача t179 (решение 390): удачная сделка (Closed, продана на площадке плана без перегонов, итог ≥ 0) паузу
-//! направления не ставит (route_pause::won), в хронологии — строка об этом.
+//! Решение 390 (t179, докупка): удачная сделка группы докупки (Closed, продана на площадке плана без перегонов, итог ≥ 0)
+//! паузу направления не ставит (route_pause::won), в хронологии — строка об этом; без группы — как раньше. save у сделки
+//! группы — след продажи (ride_trail.rs) и общий возврат при уходе с пути (coin_group.rs).
 //! Настройки: signal.route_cooldown_s.
 
 use chrono::Utc;
@@ -66,6 +67,12 @@ pub async fn save(core: &Core, deal: &Deal) {
         core.inner.live.send(CoreEvent::Deal(v));
     }
     super::feed_hold::on_saved(core, deal); // Решение 196: сделка закрылась — снять поток выключенной площадки.
+    // Решение 390: сделка группы докупки — след её продажи (ride_trail.rs) и общий возврат, если она ушла с пути
+    // последней из идущих (coin_group.rs); без группы — ничего.
+    if deal.group.is_some() {
+        super::ride_trail::note(core, deal);
+        super::coin_group::on_saved(core, deal);
+    }
 }
 
 /// Закрывает сделку: итог, план против факта, итог дня, статистика монеты, уведомление, пауза направления.
@@ -90,9 +97,10 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
         super::deal_return_cost::apply(deal);
         result = deal.result_usd.unwrap_or(result);
     }
-    // Задача t179 (решение 390): удачная сделка (продана на площадке плана, итог ≥ 0) паузу направления не ставит —
-    // спред держится, следующая сделка того же направления не ждёт signal.route_cooldown_s; срыв и убыток — как раньше.
-    let won = pause && super::route_pause::won(deal);
+    // Решение 390 (t179): удачная сделка ГРУППЫ ДОКУПКИ (exec.top_up = да; продана на площадке плана, итог ≥ 0) паузу
+    // направления не ставит — спред держится, следующая докупка не ждёт signal.route_cooldown_s (свежесть данных после
+    // нашей продажи — ride_trail.rs); без группы (докупка выключена), срыв и убыток — пауза как раньше.
+    let won = pause && deal.group.is_some() && super::route_pause::won(deal);
     if won {
         deal.note(super::route_pause::WON_NOTE.to_string());
     }

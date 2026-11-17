@@ -12,7 +12,7 @@
 //! начинаются только из Candidate (core/evaluate.rs → candidates::enqueue). Ручные действия по сделке («Продать
 //! сейчас», «Продать и перегнать», «Беру на себя» — manual*.rs) паузу не читают. Продажа кнопкой человека, отклонённая
 //! биржей, тоже ставит паузу (sell_unsent::decide: кнопка и отказ не «до отправки» → Retry::No → sell.rs → alert).
-//! Задача t179 (решение 390): после удачной сделки (won) пауза не ставится — ledger.rs.
+//! Решение 390 (t179): после удачной сделки группы докупки (won, только при exec.top_up = да) пауза не ставится — ledger.rs.
 //! Кто вызывает: ledger.rs (finish_paused, won), sell_unsent.rs (alert), тесты (tests/core_sell_reject_293.rs).
 //! От чего зависит: signal.rs (Signals::cooldown), trade_ops.rs (вид площадки), engine.rs, settings, deps.rs (журнал).
 //! Настройки: signal.route_cooldown_s, stuck.reject_route_pause.

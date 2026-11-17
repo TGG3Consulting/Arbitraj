@@ -1,22 +1,25 @@
 //! Файл: core/coin_ride.rs
-//! Что делает: замок монеты (решение 118, Я-2) в двух частях (задача t179, решение 390):
+//! Что делает: замок монеты (решение 118, Я-2) и «докупка» (решение 269 — записка договорённостей с Тиграном 14.11;
+//! реализация — задача t179, решение 390). Замок в двух частях:
 //! - `inner.active` — монета занята ЦЕЛИКОМ: сделка от входа исполнителя до учёта покупки (предпроверка, ордер покупки,
 //!   частичная покупка, продажа здесь), цикл DEX ↔ DEX, ручное действие, продажа кнопкой «Балансов»;
-//! - `inner.rides` — сделки монеты, которые уже купили, учли покупку во «вложено по монете» и везут или продают монету
-//!   (шаги Transfer / Selling). Пока по монете только такие сделки, следующая сделка может начаться, если:
-//!   (1) идущих меньше money.max_deals_per_coin (не задана или неверна — 1: как до t179, одна сделка на монету);
-//!   (2) она не встречная ни одной идущей: не покупает там, где идущая продаёт, и не продаёт там, где идущая покупала;
-//!   (3) каждая идущая — на шаге Transfer или Selling (застрявшая, остановленная, ждущая человека — новых нет).
+//! - `inner.rides` — сделки монеты, которые уже купили, учли покупку во «вложено по монете» и везут или продают монету.
 //!
-//! Деньги и ликвидность новой сделки проверяет обычный расчёт: вложенное идущих уже в учёте (limits_parts.rs вычитает
-//! его из money.max_per_coin_usd и «в пути»), продажа считается по стакану / пулу ПОСЛЕ монет идущих сделок той же
-//! площадки продажи, покупка — только по данным новее покупки идущих (ride_quote.rs).
+//! exec.top_up не задана или «нет» (п. 15 записки: «1 в 1 как сейчас») — по монете одна сделка до самого конца:
+//! пока есть запись в `rides`, новая сделка получает прежний отказ start_reason::busy, ручные действия — прежний.
+//! exec.top_up = да — докупка: пока идут сделки группы (одна монета, ТО ЖЕ направление: та же площадка покупки и та
+//! же площадка продажи — п. 1, 3), следующая сделка того же направления может начаться и становится сделкой группы;
+//! число сделок не ограничено (п. 7) — их ограничивают деньги (money.max_per_coin_usd, «в пути», остаток, дневной
+//! лимит) и порог прибыли каждой. Другие направления монеты при идущей группе — прежний отказ (монета занята).
+//! Сделка, ушедшая с пути (шаг не Transfer / Selling), новых докупок не пускает.
+//! Значение включателя для идущей сделки запоминается при board (Ride.top_up): очередь кандидатов на каждом тике
+//! настройку не читает, пока идущая сделка начата без докупки.
 //! Блокировки: сначала `active`, потом `rides`, потом `deals`; через await не держатся.
 //! Кто вызывает: executor.rs (admit, board, release), candidates.rs (blocks_new), manual_halted.rs, manual_return.rs,
 //! balance_sell.rs, cycle_deal.rs (take), balance_sell_check.rs, busy_note.rs, uncapped_watch.rs,
-//! deposit_warm_busy.rs (held, keys), ride_quote.rs (of_coin).
+//! deposit_warm_busy.rs (held, keys), ride_quote.rs и coin_group.rs (of_coin, group_of).
 //! От чего зависит: engine.rs, coin_key.rs, deal.rs, start_reason.rs, settings.
-//! Настройки: money.max_deals_per_coin.
+//! Настройки: exec.top_up.
 
 use crate::core::types::{Direction, VenueId};
 use crate::settings::read::At;
@@ -25,8 +28,8 @@ use super::coin_key::CoinKey;
 use super::deal::Step;
 use super::engine::{Core, lk};
 
-/// Имя настройки «сколько сделок одной монеты одновременно» (каталог — settings/catalog/base.rs).
-pub const MAX_DEALS: &str = "money.max_deals_per_coin";
+/// Имя включателя докупки (каталог — settings/catalog/trade.rs).
+pub const TOP_UP: &str = "exec.top_up";
 
 /// Идущая сделка монеты после учёта покупки.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,15 +40,29 @@ pub struct Ride {
     pub buy_on: VenueId,
     /// Площадка продажи.
     pub sell_on: VenueId,
+    /// Группа докупки (ID первой сделки группы); None — сделка начата без докупки (exec.top_up выключена).
+    pub group: Option<String>,
 }
 
-/// Что делает: предел одновременных сделок монеты. Принимает: ядро. Возвращает: money.max_deals_per_coin; не задана,
-/// неверна или 0 — 1 (как до t179). Ошибок нет.
-pub fn max_deals(core: &Core) -> usize {
-    match core.inner.deps.settings.integer(MAX_DEALS, At::default()) {
-        Ok(n) if n >= 1 => usize::try_from(n).unwrap_or(usize::MAX),
-        _ => 1,
-    }
+/// Место новой сделки по монете (admit).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Seat {
+    /// Докупка выключена — одна сделка на монету, как раньше (группы нет).
+    Alone,
+    /// Докупка включена, сделок монеты нет — первая сделка группы (группа = её ID).
+    Lead,
+    /// Докупка: вложенная сделка группы (ID первой сделки группы).
+    Join(String),
+}
+
+/// Что делает: включена ли докупка (п. 15). Принимает: ядро. Возвращает: exec.top_up = да; не задана, «нет» или
+/// неверна — false. Ошибок нет.
+pub fn top_up_on(core: &Core) -> bool {
+    core.inner
+        .deps
+        .settings
+        .flag(TOP_UP, At::default())
+        .unwrap_or(false)
 }
 
 /// Что делает: копия идущих сделок монеты. Принимает: ядро, ключ монеты. Возвращает: список (пусто — нет). Ошибок нет.
@@ -79,69 +96,63 @@ pub fn take(core: &Core, key: &CoinKey) -> bool {
     a.insert(key.clone())
 }
 
-/// Что делает: почему новая сделка направления `d` не может начаться при идущих сделках `rides` (замок `active` уже
-/// свободен). Принимает: ядро, направление, идущие сделки монеты. Возвращает: None — может; Some(причина). Ошибок нет.
-/// При пределе 1 (money.max_deals_per_coin не задана) причина — прежний текст start_reason::busy.
-pub fn refuse(core: &Core, d: &Direction, rides: &[Ride]) -> Option<String> {
-    if rides.is_empty() {
+/// Что делает: группа, к которой может присоединиться новая сделка направления `d` при идущих `rides` (замок целиком
+/// свободен, докупка включена): все идущие — сделки группы этого же направления на шаге Transfer / Selling.
+/// Принимает: ядро, направление, идущие сделки (не пусто). Возвращает: ID группы; None — нельзя. Ошибок нет.
+fn joinable(core: &Core, d: &Direction, rides: &[Ride]) -> Option<String> {
+    let group = rides.first()?.group.clone()?;
+    let same = rides.iter().all(|r| {
+        r.group.as_deref() == Some(group.as_str()) && r.buy_on == d.buy_on && r.sell_on == d.sell_on
+    });
+    if !same {
         return None;
     }
-    let max = max_deals(core);
-    if rides.len() >= max {
-        if max == 1 {
-            return Some(super::start_reason::busy(lk(&core.inner.deals).values(), d));
-        }
-        return Some(format!(
-            "по монете идут {} сделки — предел {MAX_DEALS} = {max}",
-            rides.len()
-        ));
-    }
-    if let Some(r) = rides
-        .iter()
-        .find(|r| r.buy_on == d.sell_on || r.sell_on == d.buy_on)
-    {
-        return Some(format!(
-            "встречная сделка: идёт {} ({} → {}) — новая {} → {} купила бы или продала на её площадке",
-            r.deal_id, r.buy_on.0, r.sell_on.0, d.buy_on.0, d.sell_on.0
-        ));
-    }
     let deals = lk(&core.inner.deals);
-    for r in rides {
-        match deals.get(&r.deal_id).map(|x| x.step) {
-            Some(Step::Transfer | Step::Selling) => {}
-            step => {
-                return Some(format!(
-                    "по монете идёт сделка {} не на пути «перевод / продажа» (шаг {step:?}) — новой нет",
-                    r.deal_id
-                ));
-            }
-        }
-    }
-    None
+    rides
+        .iter()
+        .all(|r| {
+            matches!(
+                deals.get(&r.deal_id).map(|x| x.step),
+                Some(Step::Transfer | Step::Selling)
+            )
+        })
+        .then_some(group)
 }
 
 /// Что делает: вход исполнителя (executor::accepted) — занять монету целиком под предпроверку и покупку новой сделки.
-/// Монета занята целиком (другая сделка до учёта покупки, цикл, ручное действие) — прежний отказ; по монете только
-/// идущие сделки — refuse. Принимает: ядро, направление. Возвращает: Ok — монета занята этим вызовом (снимает release
-/// или board). Ошибки: текст причины отказа.
-pub fn admit(core: &Core, d: &Direction) -> Result<(), String> {
+/// Монета занята целиком или по ней идут сделки, к которым нельзя присоединиться, — прежний отказ start_reason::busy.
+/// Принимает: ядро, направление. Возвращает: место сделки (монета занята этим вызовом; снимает release или board).
+/// Ошибки: текст причины отказа (прежний).
+pub fn admit(core: &Core, d: &Direction) -> Result<Seat, String> {
     let key = CoinKey::of(&d.asset);
     let mut a = lk(&core.inner.active);
+    let busy = || super::start_reason::busy(lk(&core.inner.deals).values(), d);
     if a.contains(&key) {
         drop(a);
-        return Err(super::start_reason::busy(lk(&core.inner.deals).values(), d));
+        return Err(busy());
     }
     let rides = of_coin(core, &key);
-    if let Some(why) = refuse(core, d, &rides) {
-        return Err(why);
-    }
+    let seat = if rides.is_empty() {
+        if top_up_on(core) {
+            Seat::Lead
+        } else {
+            Seat::Alone
+        }
+    } else if rides.iter().any(|r| r.group.is_none()) || !top_up_on(core) {
+        return Err(busy());
+    } else {
+        match joinable(core, d, &rides) {
+            Some(g) => Seat::Join(g),
+            None => return Err(busy()),
+        }
+    };
     a.insert(key);
-    Ok(())
+    Ok(seat)
 }
 
-/// Что делает: сделка учла покупку и переходит к переводу — монета из замка целиком в идущие (следующая сделка
-/// монеты может начаться по admit). Принимает: ядро, направление, ID сделки. Ошибок нет.
-pub fn board(core: &Core, d: &Direction, deal_id: &str) {
+/// Что делает: сделка учла покупку и переходит к переводу — монета из замка целиком в идущие. Принимает: ядро,
+/// направление, ID сделки, группу сделки (Deal.group; None — без докупки). Ошибок нет.
+pub fn board(core: &Core, d: &Direction, deal_id: &str, group: Option<String>) {
     let key = CoinKey::of(&d.asset);
     let mut a = lk(&core.inner.active);
     let mut r = lk(&core.inner.rides);
@@ -150,6 +161,7 @@ pub fn board(core: &Core, d: &Direction, deal_id: &str) {
         deal_id: deal_id.to_string(),
         buy_on: d.buy_on.clone(),
         sell_on: d.sell_on.clone(),
+        group,
     });
 }
 
@@ -171,14 +183,35 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
 }
 
 /// Что делает: очередь расчёта (candidates::enqueue) — новый расчёт направления не нужен: монета занята целиком или
-/// новая сделка не может начаться при идущих (refuse). Принимает: ядро, направление. Ошибок нет.
+/// по ней идут сделки, к которым это направление присоединиться не может. Быстрый путь: идущие начаты без докупки —
+/// ответ без чтения настройки, копий и текста (как раньше одно `contains`). Принимает: ядро, направление. Ошибок нет.
 pub fn blocks_new(core: &Core, d: &Direction) -> bool {
     let key = CoinKey::of(&d.asset);
     if lk(&core.inner.active).contains(&key) {
         return true;
     }
-    let rides = of_coin(core, &key);
-    refuse(core, d, &rides).is_some()
+    let rides = {
+        let r = lk(&core.inner.rides);
+        match r.get(&key) {
+            None => return false,
+            Some(v) if v.is_empty() => return false,
+            Some(v) if v.iter().any(|x| x.group.is_none()) => return true,
+            Some(v) => v.clone(),
+        }
+    };
+    !top_up_on(core) || joinable(core, d, &rides).is_none()
+}
+
+/// Что делает: идёт ли группа докупки этого направления (есть идущие сделки группы того же направления) — для
+/// расчёта докупки (возврат USDT без фиксированной части, п. 5). Принимает: ядро, направление. Ошибок нет.
+pub fn group_running(core: &Core, d: &Direction) -> Option<String> {
+    let key = CoinKey::of(&d.asset);
+    let r = lk(&core.inner.rides);
+    let v = r.get(&key)?;
+    let first = v.first()?;
+    (first.buy_on == d.buy_on && first.sell_on == d.sell_on)
+        .then(|| first.group.clone())
+        .flatten()
 }
 
 /// Что делает: ключи всех занятых монет (замок целиком и идущие) — для прогрева адресов депозита. Принимает: ядро.

@@ -1,25 +1,26 @@
 //! Файл: tests/core_coin_reentry_t179.rs
-//! Что делает: задача t179 (решение 390) на настоящем ядре и SQLite во временной папке (площадок в реестре нет, моков
-//! нет): несколько сделок одной монеты, пока прошлая везёт монету.
-//! - Замок (core/coin_ride.rs): money.max_deals_per_coin не задана — одна сделка на монету, отказ тем же текстом, что до
-//!   t179 (start_reason::busy); задана 2 — вторая сделка того же направления начинается, когда первая учла покупку
-//!   (шаг Transfer), третья — нет (предел); встречная (bsc_dex → bingx при идущей bingx → bsc_dex) — нет; идущая ушла в
-//!   застрявшую — новых нет; ручное действие при идущей — отказ; конец сделки снимает только свою запись.
-//! - Деньги (core/limits_parts.rs): вложенное идущей сделки вычитается из money.max_per_coin_usd и money.max_in_transit_usd
-//!   у второй — двойного бюджета нет.
-//! - Ликвидность продажи (core/ride_quote.rs marginal): вторая сделка считается по стакану / пулу ПОСЛЕ монет первой:
-//!   биржа — записанные bids BingX CAKE-USDT (tests/data/bingx/ws_spot_2026-10-23.jsonl) и настоящая котировка по стакану
-//!   (gateway::frozen::FrozenBook::price): разность котировок = продажа по стакану, из которого сняты монеты первой;
-//!   DEX — записанный пул CAKE/USDT PancakeSwap V2 (резервы getReserves, tests/size_common) и математика адаптера
-//!   (quote/pool_quote.rs swap): разность = продажа в пул после продажи первой (до округления формулы V2).
-//! - Свежесть покупки (ride_quote.rs buy_fresh): стакан A не новее конца покупки идущей сделки — отказ; DEX: маршрут
-//!   через пул покупки идущей по блоку раньше её блока — отказ, по её блоку — можно, через другой пул — можно.
-//! - Пауза после удачной сделки (route_pause.rs won).
+//! Что делает: решение 390 (t179) — докупка (записка договорённостей 269) на настоящем ядре и SQLite во временной папке
+//! (площадок в реестре нет, моков нет):
+//! - п. 15: exec.top_up не задана — одна сделка на монету, отказ прежним текстом (start_reason::busy), у сделки нет
+//!   группы (JSON сделки без поля group), после удачной сделки пауза направления ставится как раньше (попытка паузы —
+//!   Warn core.ledger о signal.route_cooldown_s), строки «Пауза не поставлена» нет; событие баланса без хеша при двух
+//!   ожиданиях закрывает подходящее по сумме, как раньше;
+//! - п. 1, 3: включена — вторая сделка ТОГО ЖЕ направления присоединяется к группе первой, когда первая учла покупку;
+//!   другие направления монеты, застрявшая сделка группы, замок целиком — прежний отказ; ручное действие — отказ;
+//! - деньги: бюджет докупки = лимит монеты − вложенное идущих (limits_parts.rs);
+//! - п. 4: продажа докупки — разность котировок на записанных bids BingX CAKE-USDT (gateway::frozen::FrozenBook::price)
+//!   и пуле CAKE/USDT V2 (математика адаптера) против последовательной продажи; покупка — данные новее покупки идущей
+//!   (стакан / блок; агрегатор без маршрута — отказ);
+//! - след продажи (ride_trail.rs): стакан не новее продажи сделки группы — отказ, новее — след снят;
+//! - пп. 8, Б2: включена — событие без хеша при двух ожиданиях ничего не закрывает (сделка 1 ждёт 100, сделка 2 — 95, у
+//!   первой дошло 95), только будит опрос;
+//! - пп. 10, 11, 13: общий возврат USDT группы — первая закрытая ждёт (возврат 0), последняя перегоняет общую сумму,
+//!   у отложенной — «общий возврат в сделке …»; последняя идущая застряла — отложенные уходят одним возвратом сразу;
+//! - пауза после удачной сделки группы (route_pause.rs won).
 //!
 //! Ставка комиссии тейкера в проверке разности — параметр проверки (в записях BingX ставки аккаунта нет,
-//! tests/size_common/mod.rs), не данные биржи: разность должна совпасть при любой ставке.
-//! Не покрыто здесь (нужны живые площадки): путь executor::accepted → board → release целиком, Live-источник расчёта
-//! (costs_source.rs) с котировками шлюза, симуляция продажи DEX (precheck_dex_sell.rs) — см. docs/notes/t179-*.md.
+//! tests/size_common/mod.rs), не данные биржи. Не покрыто здесь (нужны живые площадки): путь executor::accepted → board
+//! → release целиком, Live-источник расчёта с котировками шлюза, симуляция продажи DEX, сам перегон USDT.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::gateway, arb::settings, arb::storage, arb::notify, arb::venues::bsc_dex (математика
 //! пула), tests/size_common.
@@ -27,26 +28,33 @@
 mod size_common;
 
 use std::path::PathBuf;
+use std::time::Duration as StdDuration;
 
 use alloy_primitives::{Address, B256};
 use arb::core::Core;
 use arb::core::coin_key::CoinKey;
+use arb::core::coin_ride::Seat;
 use arb::core::deal::{Deal, Step};
+use arb::core::deal_group::DealGroup;
 use arb::core::deps::Deps;
 use arb::core::dry::Mode;
 use arb::core::types::{
-    ChainTx, Cost, CostKind, DexRoute, OrderBook, PoolKind, PoolRef, PoolState, PriceLevel, Quote,
-    RouteHop, RouteLeg, RouteMode, SendMethod, Side, TradeRequest, TradeResult, TradeStatus,
-    TxOutcome, VenueId,
+    Asset, BalanceChange, BalanceKind, ChainTx, Cost, CostKind, DexRoute, OrderBook, PoolKind,
+    PoolRef, PoolState, PriceLevel, Quote, RouteHop, RouteLeg, RouteMode, SendMethod, Side,
+    TradeRequest, TradeResult, TradeStatus, TxOutcome, VenueId,
 };
-use arb::core::{coin_ride, limits_parts, ride_quote, route_pause, start_reason};
+use arb::core::{
+    coin_group, coin_ride, credit_event, credit_watch, limits_parts, ride_quote, ride_trail,
+    route_pause, start_reason, transfer_credit,
+};
+use arb::gateway::contract::VenueKind;
 use arb::gateway::frozen::{BookFee, FrozenBook};
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
 use arb::settings::store::Store;
 use arb::settings::value::Scope;
 use arb::storage::db::Db;
-use arb::storage::journal::Journal;
+use arb::storage::journal::{Journal, Level};
 use arb::venues::bsc_dex::num::{to_decimal, to_units};
 use arb::venues::bsc_dex::quote::pool_quote::swap;
 use chrono::{Duration, Utc};
@@ -63,8 +71,9 @@ fn dir(name: &str) -> PathBuf {
     d
 }
 
-/// Ядро на базе во временной папке. Возвращает ядро и настройки.
-async fn start(name: &str) -> (Core, Store) {
+/// Ядро на базе во временной папке; площадки bingx, mexc — биржи, bsc_dex — DEX (вид площадки для проверок свежести).
+/// Возвращает ядро, настройки, журнал.
+async fn start(name: &str) -> (Core, Store, Journal) {
     let d = dir(name);
     let db = Db::open(&d.join("t.sqlite")).unwrap();
     let (changes, _) = broadcast::channel(64);
@@ -82,7 +91,7 @@ async fn start(name: &str) -> (Core, Store) {
     let core = Core::start(Deps {
         gw: Registry::new(),
         settings: settings.clone(),
-        journal,
+        journal: journal.clone(),
         notifier,
         db,
         changes,
@@ -90,7 +99,12 @@ async fn start(name: &str) -> (Core, Store) {
         data_dir: d.clone(),
     })
     .await;
-    (core, settings)
+    *core.inner.kinds.write().unwrap() = vec![
+        (VenueId("bingx".into()), VenueKind::Cex),
+        (VenueId("mexc".into()), VenueKind::Cex),
+        (VenueId("bsc_dex".into()), VenueKind::Dex),
+    ];
+    (core, settings, journal)
 }
 
 /// Задать настройку всей системы. Ошибок нет (тест падает).
@@ -106,15 +120,17 @@ fn dir_of(a: &str, b: &str) -> arb::core::types::Direction {
     x
 }
 
-/// Сделка, учётшая покупку: шаг, вложено, монет; покупка — запрос с маршрутом и транзакцией (у биржи — None).
+/// Сделка, учётшая покупку: шаг, вложено, монет; покупка — запрос с маршрутом и транзакцией (у биржи — None); группа
+/// докупки (None — без докупки).
 fn bought(
     id: &str,
     dir: &arb::core::types::Direction,
     step: Step,
-    invested: &str,
-    qty: &str,
+    (invested, qty): (&str, &str),
+    group: Option<&str>,
 ) -> Deal {
     let mut x = Deal::new(id.into(), dir.clone(), json!({}), d("1"));
+    x.group = group.map(|g| Box::new(DealGroup::new(g)));
     x.step = step;
     x.invested = d(invested);
     x.qty = d(qty);
@@ -168,114 +184,132 @@ fn trade(
     }
 }
 
-/// Сохранить сделку в учёт и занять монету так, как это делает исполнитель (admit → board). Ошибок нет.
-async fn ride(core: &Core, deal: &Deal) {
-    coin_ride::admit(core, &deal.direction).unwrap();
+/// Сохранить сделку в учёт и занять монету так, как это делает исполнитель (admit → board). Возвращает место.
+async fn ride(core: &Core, deal: &Deal) -> Seat {
+    let seat = coin_ride::admit(core, &deal.direction).unwrap();
     arb::core::ledger::save(core, deal).await;
-    coin_ride::board(core, &deal.direction, &deal.id);
+    let g = deal.group.as_ref().map(|g| g.id.clone());
+    coin_ride::board(core, &deal.direction, &deal.id, g);
+    seat
+}
+
+/// Включить докупку (exec.top_up = да). Ошибок нет (тест падает).
+async fn top_up(s: &Store) {
+    set(s, coin_ride::TOP_UP, json!(true)).await;
 }
 
 #[tokio::test]
-async fn unset_keeps_one_deal_per_coin_with_old_text() {
-    let (core, _s) = start("unset").await;
+async fn off_keeps_one_deal_per_coin_with_old_text() {
+    let (core, _s, _j) = start("off").await;
     let dx = dir_of("bingx", "bsc_dex");
     let key = CoinKey::of(&dx.asset);
     // До покупки — замок целиком: второй вход отказан, ручное действие тоже.
-    coin_ride::admit(&core, &dx).unwrap();
+    assert_eq!(coin_ride::admit(&core, &dx), Ok(Seat::Alone));
     assert!(coin_ride::admit(&core, &dx).is_err());
     assert!(!coin_ride::take(&core, &key));
     coin_ride::release(&core, &key, None);
     assert!(!coin_ride::held(&core, &key));
-    // Покупка учтена, сделка везёт монету: без настройки — одна сделка на монету, отказ прежним текстом.
-    let first = bought("D1", &dx, Step::Transfer, "40", "10");
-    ride(&core, &first).await;
+    // Покупка учтена, сделка везёт монету: одна сделка на монету, отказ прежним текстом.
+    let first = bought("D1", &dx, Step::Transfer, ("40", "10"), None);
+    assert_eq!(ride(&core, &first).await, Seat::Alone);
     let why = coin_ride::admit(&core, &dx).unwrap_err();
     let old = start_reason::busy(core.inner.deals.lock().unwrap().values(), &dx);
     assert_eq!(why, old);
     assert!(why.starts_with("по монете идёт другая сделка D1"), "{why}");
     assert!(coin_ride::blocks_new(&core, &dx));
-    assert!(coin_ride::held(&core, &key));
     assert!(
         !coin_ride::take(&core, &key),
         "ручное действие при идущей — отказ"
     );
-    // Конец сделки снимает её запись — монета свободна.
+    // Сделка без группы — в JSON поля group нет (запись и API как раньше).
+    let v = serde_json::to_value(&first).unwrap();
+    assert!(v.get("group").is_none());
     coin_ride::release(&core, &key, Some("D1"));
     assert!(!coin_ride::held(&core, &key));
     assert!(coin_ride::admit(&core, &dx).is_ok());
 }
 
 #[tokio::test]
-async fn limit_two_second_deal_starts_third_waits() {
-    let (core, s) = start("two").await;
-    set(&s, coin_ride::MAX_DEALS, json!(2)).await;
+async fn off_successful_close_still_pauses_direction() {
+    let (core, _s, j) = start("off-pause").await;
+    let dx = dir_of("bingx", "bsc_dex");
+    for (id, group) in [("P1", None), ("P2", Some("P2"))] {
+        let mut x = bought(id, &dx, Step::Selling, ("40", "0"), group);
+        x.at = dx.sell_on.clone();
+        x.proceeds = d("41");
+        x.sells.push(trade(id, &dx, None, None, Utc::now()));
+        arb::core::ledger::finish(&core, &mut x, Step::Closed, "продано").await;
+        let won_line = x.timeline.iter().any(|(_, t)| t == route_pause::WON_NOTE);
+        let warned = j.list(500, None).await.unwrap().iter().any(|e| {
+            e.kind == "core.ledger"
+                && e.level == Level::Warn
+                && e.message.contains("signal.route_cooldown_s")
+        });
+        if group.is_none() {
+            // Без группы (докупка выключена): попытка паузы, как раньше (signal.route_cooldown_s не задана — Warn).
+            assert!(!won_line);
+            assert!(warned, "пауза после удачной сделки — как раньше");
+        } else {
+            assert!(won_line, "у удачной сделки группы паузы нет");
+        }
+    }
+}
+
+#[tokio::test]
+async fn on_same_direction_joins_other_directions_wait() {
+    let (core, s, _j) = start("join").await;
+    top_up(&s).await;
     let dx = dir_of("bingx", "bsc_dex");
     let key = CoinKey::of(&dx.asset);
-    let first = bought("D1", &dx, Step::Transfer, "40", "10");
-    ride(&core, &first).await;
-    assert!(!coin_ride::blocks_new(&core, &dx), "расчёт второй нужен");
-    // Вторая: до своей покупки держит монету целиком — третья ждёт, ручных действий нет.
-    coin_ride::admit(&core, &dx).unwrap();
+    let mut first = bought("D1", &dx, Step::Transfer, ("40", "10"), Some("D1"));
+    assert_eq!(ride(&core, &first).await, Seat::Lead);
+    // Тот же направление — докупка в группу D1; до её покупки монета занята целиком.
+    assert!(!coin_ride::blocks_new(&core, &dx));
+    assert_eq!(coin_ride::admit(&core, &dx), Ok(Seat::Join("D1".into())));
     assert!(coin_ride::admit(&core, &dx).is_err());
-    assert!(coin_ride::blocks_new(&core, &dx));
-    // Вторая учла покупку — идущих 2 = предел: третьей нет.
-    let second = bought("D2", &dx, Step::Transfer, "30", "8");
-    arb::core::ledger::save(&core, &second).await;
-    coin_ride::board(&core, &dx, "D2");
-    let why = coin_ride::admit(&core, &dx).unwrap_err();
-    assert!(why.contains("предел money.max_deals_per_coin = 2"), "{why}");
-    // Первая кончилась — снимается только её запись; вторая идёт, третья может начаться.
-    coin_ride::release(&core, &key, Some("D1"));
-    assert_eq!(coin_ride::of_coin(&core, &key).len(), 1);
-    assert!(coin_ride::admit(&core, &dx).is_ok());
-    // Замок целиком у третьей; конец второй его не снимает.
-    coin_ride::release(&core, &key, Some("D2"));
+    coin_ride::release(&core, &key, None);
+    // Другие направления монеты — монета занята (прежний текст).
+    for other in [
+        dir_of("bsc_dex", "bingx"),
+        dir_of("mexc", "bsc_dex"),
+        dir_of("bingx", "mexc"),
+    ] {
+        let why = coin_ride::admit(&core, &other).unwrap_err();
+        assert!(why.starts_with("по монете идёт другая сделка D1"), "{why}");
+        assert!(coin_ride::blocks_new(&core, &other));
+    }
     assert!(
-        coin_ride::admit(&core, &dx).is_err(),
-        "замок третьей на месте"
+        !coin_ride::take(&core, &key),
+        "ручное действие при идущей — отказ"
     );
-}
-
-#[tokio::test]
-async fn counter_and_off_path_rides_block_new_deals() {
-    let (core, s) = start("counter").await;
-    set(&s, coin_ride::MAX_DEALS, json!(3)).await;
-    let dx = dir_of("bingx", "bsc_dex");
-    let mut first = bought("D1", &dx, Step::Transfer, "40", "10");
-    ride(&core, &first).await;
-    // Встречная: купить на DEX, где идущая продаёт.
-    let back = dir_of("bsc_dex", "bingx");
-    let why = coin_ride::admit(&core, &back).unwrap_err();
-    assert!(why.starts_with("встречная сделка: идёт D1"), "{why}");
-    assert!(coin_ride::blocks_new(&core, &back));
-    // Продать на бирже, где идущая покупала, — тоже встречная.
-    assert!(coin_ride::admit(&core, &dir_of("bsc_dex", "bingx")).is_err());
-    assert!(
-        coin_ride::admit(&core, &dir_of("mexc", "bingx"))
-            .unwrap_err()
-            .starts_with("встречная")
-    );
-    // Другая биржа → та же DEX — не встречная.
-    assert!(coin_ride::admit(&core, &dir_of("mexc", "bsc_dex")).is_ok());
-    coin_ride::release(&core, &CoinKey::of(&dx.asset), None);
-    // Идущая застряла — новых нет.
+    // Сделка группы застряла — докупок нет.
     first.step = Step::Stuck;
     arb::core::ledger::save(&core, &first).await;
-    let why = coin_ride::admit(&core, &dx).unwrap_err();
-    assert!(why.contains("не на пути «перевод / продажа»"), "{why}");
+    assert!(coin_ride::admit(&core, &dx).is_err());
+    assert!(coin_ride::blocks_new(&core, &dx));
+    // Сделка без группы (начата до включения) — докупок нет.
+    coin_ride::release(&core, &key, Some("D1"));
+    let old = bought("D0", &dx, Step::Transfer, ("40", "10"), None);
+    arb::core::ledger::save(&core, &old).await;
+    coin_ride::board(&core, &dx, "D0", None);
+    assert!(coin_ride::admit(&core, &dx).is_err());
 }
 
 #[tokio::test]
-async fn second_budget_excludes_first_invested() {
-    let (core, s) = start("budget").await;
-    set(&s, coin_ride::MAX_DEALS, json!(2)).await;
+async fn top_up_budget_excludes_first_invested() {
+    let (core, s, _j) = start("budget").await;
+    top_up(&s).await;
     set(&s, "money.max_per_trade_usd", json!("50")).await;
     set(&s, "money.max_per_coin_usd", json!("70")).await;
     set(&s, "money.max_in_transit_usd", json!("100")).await;
     let dx = dir_of("bingx", "bsc_dex");
     let before = limits_parts::parts(&core, &dx, &Mode::Live).unwrap();
     assert_eq!(before.cap(), d("50"));
-    ride(&core, &bought("D1", &dx, Step::Transfer, "40", "10")).await;
+    ride(
+        &core,
+        &bought("D1", &dx, Step::Transfer, ("40", "10"), Some("D1")),
+    )
+    .await;
     let p = limits_parts::parts(&core, &dx, &Mode::Live).unwrap();
     assert_eq!(p.coin_left, d("30"), "70 − вложено первой 40");
     assert_eq!(p.transit_left, d("60"), "100 − в пути 40");
@@ -447,12 +481,12 @@ fn route(pool: Address, block: u64) -> DexRoute {
 }
 
 #[tokio::test]
-async fn buy_needs_data_newer_than_running_buy() {
-    let (core, s) = start("fresh").await;
-    set(&s, coin_ride::MAX_DEALS, json!(3)).await;
+async fn top_up_buy_needs_data_newer_than_group_buy() {
+    let (core, s, _j) = start("fresh").await;
+    top_up(&s).await;
     let dx = dir_of("bingx", "bsc_dex");
     let t = Utc::now();
-    let mut first = bought("D1", &dx, Step::Transfer, "40", "10");
+    let mut first = bought("D1", &dx, Step::Transfer, ("40", "10"), Some("D1"));
     first.buy = Some(trade("D1", &dx, None, None, t));
     ride(&core, &first).await;
     let mut q = size_common::calc::calc(&Rec::load("t179-fresh").await, d("5")).buy_quote;
@@ -464,17 +498,17 @@ async fn buy_needs_data_newer_than_running_buy() {
     );
     q.at = t + Duration::milliseconds(1);
     assert!(ride_quote::buy_fresh(&core, &dx, &q).is_ok());
-    // Покупка на DEX: идущая купила через пул PAIR в блоке 100.
+    // Покупка на DEX: сделка группы купила через пул PAIR в блоке 100.
     let dd = dir_of("bsc_dex", "mexc");
-    let mut dex = bought("D2", &dd, Step::Transfer, "20", "5");
+    let mut dex = bought("D2", &dd, Step::Transfer, ("20", "5"), Some("D2"));
     dex.buy = Some(trade("D2", &dd, Some(route(PAIR, 100)), Some(100), t));
     arb::core::ledger::save(&core, &dex).await;
-    coin_ride::board(&core, &dd, "D2");
+    coin_ride::board(&core, &dd, "D2", Some("D2".into()));
     q.route = Some(route(PAIR, 99));
     assert!(
         ride_quote::buy_fresh(&core, &dd, &q)
             .unwrap_err()
-            .contains("раньше блока 100")
+            .contains("её покупка в блоке 100")
     );
     q.route = Some(route(PAIR, 100));
     assert!(ride_quote::buy_fresh(&core, &dd, &q).is_ok());
@@ -483,17 +517,251 @@ async fn buy_needs_data_newer_than_running_buy() {
         ride_quote::buy_fresh(&core, &dd, &q).is_ok(),
         "другой пул — проверки нет"
     );
-    // Монеты идущих сделок, которые будут проданы на bsc_dex: только D1 (D2 продаёт на mexc).
+    q.route = None;
+    assert!(
+        ride_quote::buy_fresh(&core, &dd, &q)
+            .unwrap_err()
+            .contains("агрегатор")
+    );
+    // Монеты идущих сделок группы, которые будут проданы на bsc_dex: только D1 (D2 продаёт на mexc).
     assert_eq!(
         ride_quote::sell_ahead(&core, &dir_of("mexc", "bsc_dex")),
         d("10")
     );
 }
 
+#[tokio::test]
+async fn off_no_group_rides_change_nothing() {
+    let (core, _s, _j) = start("off-quotes").await;
+    let dx = dir_of("bingx", "bsc_dex");
+    let mut first = bought("D1", &dx, Step::Transfer, ("40", "10"), None);
+    first.buy = Some(trade("D1", &dx, None, None, Utc::now()));
+    ride(&core, &first).await;
+    let mut q = size_common::calc::calc(&Rec::load("t179-off").await, d("5")).buy_quote;
+    q.at = Utc::now() - Duration::hours(1);
+    // Идущая сделка без группы (теневой замер 267 и т. п.) — котировки как раньше.
+    assert!(ride_quote::buy_fresh(&core, &dx, &q).is_ok());
+    assert_eq!(ride_quote::sell_ahead(&core, &dx), Decimal::ZERO);
+}
+
+#[tokio::test]
+async fn trail_waits_for_book_after_group_sale() {
+    let (core, s, _j) = start("trail").await;
+    top_up(&s).await;
+    let dx = dir_of("bsc_dex", "bingx");
+    let t = Utc::now();
+    let mut x = bought("D1", &dx, Step::Closed, ("40", "0"), Some("D1"));
+    let mut sale = trade("D1", &dx, None, None, t);
+    sale.request.venue = dx.sell_on.clone();
+    sale.request.side = Side::Sell;
+    x.sells.push(sale);
+    arb::core::ledger::save(&core, &x).await;
+    let key = CoinKey::of(&dx.asset);
+    let mut q = size_common::calc::calc(&Rec::load("t179-trail").await, d("5")).sell_quote;
+    q.at = t;
+    assert!(
+        ride_trail::check(&core, &key, &dx.sell_on, &q)
+            .unwrap_err()
+            .contains("продажи сделки D1")
+    );
+    q.at = t + Duration::milliseconds(1);
+    assert!(ride_trail::check(&core, &key, &dx.sell_on, &q).is_ok());
+    q.at = t - Duration::seconds(1);
+    assert!(
+        ride_trail::check(&core, &key, &dx.sell_on, &q).is_ok(),
+        "след снят"
+    );
+}
+
+/// USDT кошелька bsc_dex (адрес — записи tests/size_common).
+fn usdt() -> Asset {
+    Asset {
+        ticker: "USDT".into(),
+        bsc_contract: Some(size_common::USDT),
+    }
+}
+
+/// Поступление без хеша (как поток BingX): сумма.
+fn no_hash(amount: &str) -> BalanceChange {
+    BalanceChange {
+        venue: VenueId("bsc_dex".into()),
+        asset: usdt(),
+        delta: d(amount),
+        kind: BalanceKind::Deposit,
+        own: false,
+        tx_hash: None,
+        at: Utc::now(),
+        source: "проверка t179".into(),
+        account: None,
+    }
+}
+
+/// Сценарий ревью Б2: сделка 1 ждёт 100, сделка 2 — 95, у первой дошло 95 (без хеша). Возвращает: закрыто ли у
+/// сделки 2 и было ли событие у какой-либо.
+async fn two_expectations(on: bool) -> (bool, bool) {
+    let (core, s, _j) = start(if on { "credit-on" } else { "credit-off" }).await;
+    if on {
+        top_up(&s).await;
+    }
+    let v = Scope::Venue("bsc_dex".into());
+    s.set(
+        "transfer.credit_amount_tolerance_pct",
+        v.clone(),
+        Some(json!("0")),
+        "тест",
+    )
+    .await
+    .unwrap();
+    s.set("transfer.credit_by_event", v, Some(json!(true)), "тест")
+        .await
+        .unwrap();
+    let from = VenueId("bingx".into());
+    let to = VenueId("bsc_dex".into());
+    let t1 = credit_watch::register(&core, "D1", &from, &to, &usdt(), d("100"));
+    let t2 = credit_watch::register(&core, "D2", &from, &to, &usdt(), d("95"));
+    credit_event::on_change(&core, no_hash("95")).await;
+    if on {
+        tokio::time::timeout(StdDuration::from_millis(10), t1.wake.notified())
+            .await
+            .expect("опрос сделки 1 разбужен");
+    }
+    (
+        transfer_credit::by_event(Some(&t2)).is_some(),
+        t1.has_event() || t2.has_event(),
+    )
+}
+
+#[tokio::test]
+async fn credit_without_hash_two_expectations() {
+    // Выключено — как раньше: подходящее по сумме ожидание (сделка 2) закрывается событием.
+    assert_eq!(two_expectations(false).await, (true, true));
+    // Включено — событие без хеша ни к одному не прикреплено, решает опрос по хешу.
+    assert_eq!(two_expectations(true).await, (false, false));
+}
+
+/// Закрытая обычной продажей на площадке плана сделка группы `g` (выручка на sell_on). Ошибок нет.
+fn sold(id: &str, dir: &arb::core::types::Direction, g: &str) -> Deal {
+    let mut x = bought(id, dir, Step::Closed, ("40", "0"), Some(g));
+    x.at = dir.sell_on.clone();
+    x.result_usd = Some(d("1"));
+    x.sells.push(trade(id, dir, None, None, Utc::now()));
+    x
+}
+
+/// Сделки группы `g` на шаге продажи, учтённые в идущих (как после board). Ошибок нет.
+async fn riding(core: &Core, dx: &arb::core::types::Direction, g: &str, ids: &[&str]) {
+    for id in ids {
+        let x = bought(id, dx, Step::Selling, ("40", "10"), Some(g));
+        arb::core::ledger::save(core, &x).await;
+        coin_ride::board(core, dx, id, Some(g.into()));
+    }
+}
+
+/// Ждёт строку в хронологии сделки (общий возврат — отдельной задачей). Возвращает: сделку. Тест падает по сроку.
+async fn wait_note(core: &Core, id: &str, part: &str) -> Deal {
+    for _ in 0..200 {
+        let d = core.inner.deals.lock().unwrap().get(id).cloned().unwrap();
+        if d.timeline.iter().any(|(_, t)| t.contains(part)) {
+            return d;
+        }
+        tokio::time::sleep(StdDuration::from_millis(5)).await;
+    }
+    panic!("нет строки «{part}» у {id}");
+}
+
+#[tokio::test]
+async fn group_return_once_lead_last() {
+    let (core, s, _j) = start("group-last").await;
+    top_up(&s).await;
+    let dx = dir_of("mexc", "bingx");
+    let b = dx.sell_on.clone();
+    riding(&core, &dx, "G", &["G", "D2"]).await;
+    // Вложенная закрылась первой — её возврат отложен (0 сейчас), носитель ещё неизвестен.
+    let mut x = sold("D2", &dx, "G");
+    let now = coin_group::route(&core, &mut x, vec![(b.clone(), d("95"))]).await;
+    assert!(now.is_empty());
+    assert_eq!(x.group.as_ref().unwrap().wait, Some((b.clone(), d("95"))));
+    arb::core::ledger::save(&core, &x).await;
+    // Первая — последняя: один возврат на общую сумму, отложенная помечена «общий возврат в сделке G».
+    let mut g = sold("G", &dx, "G");
+    let now = coin_group::route(&core, &mut g, vec![(b.clone(), d("100"))]).await;
+    assert_eq!(now, vec![(b.clone(), d("195"))]);
+    let sum = g.group.as_ref().unwrap().sum.clone().unwrap();
+    assert_eq!(
+        (sum.deals, sum.others, sum.usdt),
+        (vec!["D2".to_string()], d("1"), d("95"))
+    );
+    let x = core.inner.deals.lock().unwrap().get("D2").cloned().unwrap();
+    assert_eq!(x.group.as_ref().unwrap().shared_in.as_deref(), Some("G"));
+    assert!(x.group.as_ref().unwrap().wait.is_none());
+    // Закрытие не продажей на площадке плана — вышла из группы, свой возврат.
+    let mut y = sold("D3", &dx, "G");
+    y.relays = 1;
+    let now = coin_group::route(&core, &mut y, vec![(b.clone(), d("7"))]).await;
+    assert_eq!(now, vec![(b, d("7"))]);
+    assert!(y.group.as_ref().unwrap().left);
+}
+
+#[tokio::test]
+async fn group_return_once_lead_first() {
+    let (core, s, _j) = start("group-first").await;
+    top_up(&s).await;
+    let dx = dir_of("mexc", "bingx");
+    let b = dx.sell_on.clone();
+    riding(&core, &dx, "K", &["K", "K2"]).await;
+    // Первая закрылась раньше — отложена, её уведомление ждёт общего возврата.
+    let mut k = sold("K", &dx, "K");
+    assert!(
+        coin_group::route(&core, &mut k, vec![(b.clone(), d("100"))])
+            .await
+            .is_empty()
+    );
+    assert!(arb::core::deal_closed::hold(
+        &mut k,
+        Step::Closed,
+        "продано"
+    ));
+    arb::core::ledger::save(&core, &k).await;
+    // Последняя вложенная: возврат 0 «в сделке K», общий возврат — у K (п. 11).
+    let mut x = sold("K2", &dx, "K");
+    assert!(
+        coin_group::route(&core, &mut x, vec![(b, d("95"))])
+            .await
+            .is_empty()
+    );
+    assert_eq!(x.group.as_ref().unwrap().shared_in.as_deref(), Some("K"));
+    let k = wait_note(&core, "K", "последняя сделка группы продана").await;
+    let sum = k.group.as_ref().unwrap().sum.clone().unwrap();
+    assert_eq!(
+        (sum.deals, sum.others, sum.usdt),
+        (vec!["K2".to_string()], d("1"), d("95"))
+    );
+}
+
+#[tokio::test]
+async fn stuck_last_deal_does_not_hold_group_return() {
+    let (core, s, _j) = start("group-stuck").await;
+    top_up(&s).await;
+    let dx = dir_of("mexc", "bingx");
+    let b = dx.sell_on.clone();
+    riding(&core, &dx, "G", &["G", "D2"]).await;
+    let mut g = sold("G", &dx, "G");
+    assert!(
+        coin_group::route(&core, &mut g, vec![(b, d("100"))])
+            .await
+            .is_empty()
+    );
+    arb::core::ledger::save(&core, &g).await;
+    // Последняя идущая застряла — её не ждём: отложенная выручка уходит одним возвратом сразу (носитель — G).
+    let stuck = bought("D2", &dx, Step::Stuck, ("40", "10"), Some("G"));
+    arb::core::ledger::save(&core, &stuck).await;
+    wait_note(&core, "G", "ушла с пути, её не ждём").await;
+}
+
 #[test]
 fn won_deal_skips_direction_pause() {
     let dx = dir_of("bingx", "bsc_dex");
-    let mut x = bought("D1", &dx, Step::Closed, "40", "0");
+    let mut x = bought("D1", &dx, Step::Closed, ("40", "0"), Some("D1"));
     x.at = dx.sell_on.clone();
     x.sells.push(trade("D1", &dx, None, None, Utc::now()));
     x.result_usd = Some(d("0.5"));

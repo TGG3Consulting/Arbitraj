@@ -114,7 +114,7 @@ pub(super) async fn done(core: &Core, leg: &Leg<'_>, t: &Transfer, at: DateTime<
     let ms = (at - leg.started).num_milliseconds().max(0);
     let secs = Decimal::from(ms) / Decimal::ONE_THOUSAND;
     super::transit::record(core, leg.asset, leg.from, leg.to, secs).await;
-    super::transfer_watch::release(core, leg.asset, leg.to).await;
+    super::transfer_watch::release(core, leg.asset, leg.to, leg.deal).await;
     let text = format!(
         "{} {} {}: зачислено на {} за {secs} с ({by})",
         leg.deal, t.amount, leg.asset.ticker, leg.to.0

@@ -7,6 +7,8 @@
     котировку DEX в плане (Quote.pick); кто исполнил своп и почему — в хронологии («исполнил: свой сборщик: … /
     KyberSwap; лучший из двух: …»). Решение 141: «зашли на X → потенциал без потолка Y и прибыль Z, упущено» (DealUncapped).
     Решения 138, 163: строка возврата выручки USDT — идёт / ждёт повтора / вернулись / перегнаны вручную / не вернулись.
+    Решение 390 (t179, докупка — записка 269, п. 12): сделка группы — метка группы; у первой сделки группы — итог группы
+    (сумма итогов её сделок, кроме вышедших: возврат USDT один — у сделки с общим возвратом, у остальных 0 с пометкой).
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/live.svelte.js, lib/coreLabels.js, lib/labels.js, components/CostLines.svelte, ErrorText.svelte,
     components/DealUncapped.svelte.
@@ -54,6 +56,19 @@
     };
   });
 
+  /** Решение 390: группы докупки — {id группы: {n, total, open}} по сделкам в памяти экрана (вышедшие не входят). */
+  const groups = $derived.by(() => {
+    const g = {};
+    for (const d of Object.values(deals)) {
+      if (!d.group || d.group.left) continue;
+      const x = (g[d.group.id] ??= { n: 0, total: 0, open: 0 });
+      x.n += 1;
+      if (d.result_usd != null) x.total += Number(d.result_usd);
+      else x.open += 1;
+    }
+    return g;
+  });
+
   const rows = $derived(
     Object.values(deals)
       .filter((d) => !onlyOpen || OPEN.includes(d.step))
@@ -73,7 +88,14 @@
       <span class="tag">{stepLabel(d.step)}</span>
       <code>{d.id}</code>
       <span class="muted">с {showTime(d.started_at)}</span>
+      {#if d.group}<span class="tag">{d.group.left ? `была в группе ${d.group.id}` : d.group.id === d.id ? 'группа докупки' : `докупка группы ${d.group.id}`}</span>{/if}
     </header>
+    {#if d.group && !d.group.left && d.group.id === d.id && groups[d.id]?.n > 1}
+      <p><strong>Группа:</strong> сделок {groups[d.id].n}, итог группы {groups[d.id].total.toFixed(4)} USDT{#if groups[d.id].open} <span class="muted">(ещё идут: {groups[d.id].open})</span>{/if}</p>
+    {/if}
+    {#if d.group?.shared_in}<p class="muted">Возврат USDT: 0 — общий возврат группы в сделке <code>{d.group.shared_in}</code></p>
+    {:else if d.group?.wait}<p class="muted">Возврат USDT: 0 сейчас — {d.group.wait[1]} USDT ждут общего возврата группы после последней её сделки</p>{/if}
+    {#if d.group?.sum}<p class="muted">Общий возврат USDT группы — в этой сделке: и выручка сделок {d.group.sum.deals.join(', ')} ({d.group.sum.usdt} USDT)</p>{/if}
     <p>
       Монеты: {d.qty} на <code>{d.at}</code> · вложено {d.invested} · выручка {d.proceeds} · затраты {d.spent} USDT ·
       план {d.plan_profit_usd} USDT ·

@@ -1,35 +1,49 @@
 //! Файл: core/ride_quote.rs
-//! Что делает: котировки новой сделки монеты, пока идут её прошлые сделки (задача t179, решение 390; coin_ride.rs) —
-//! чтобы две сделки не считали одну и ту же ликвидность:
-//! - ПРОДАЖА на B: монеты идущих сделок, которые будут проданы на той же площадке B (перевод ещё идёт или продажа
-//!   идёт), заберут лучшую часть стакана / пула. Новая сделка считается так, будто они уже проданы: котировка на
-//!   (их монеты + наш объём) минус котировка на их монеты — наша выручка — это то, что останется ПОСЛЕ них (как
-//!   случай Я-2 / XPL 02.11: вторая сделка считала стакан / пул до первой). Затраты: пропорциональные (комиссия
-//!   биржи, комиссия пула, налоги, влияние крючка) — тоже разностью; газ, approve, обёртка, чаевые — одного нашего
-//!   обмена (как в котировке на полный объём).
-//! - ПОКУПКА на A: идущая сделка купила на той же площадке A — данные должны быть новее её покупки: у биржи стакан
-//!   получен позже конца её ордера, у DEX маршрут через её пулы посчитан по блоку не раньше блока её покупки. Иначе
-//!   отказ «данные старше покупки сделки …» (расчёт повторит следующий тик).
+//! Что делает: котировки докупки (решение 390, t179; записка 269, п. 4: ликвидность, которую заберут идущие сделки
+//! группы, вычитается с ОБЕИХ сторон) — пока идут сделки группы докупки той же монеты (coin_ride.rs):
+//! - ПРОДАЖА на B: монеты идущих сделок группы будут проданы на той же B и заберут лучшую часть стакана / пула. Докупка
+//!   считается так, будто они уже проданы: котировка на (их монеты + наш объём) минус котировка на их монеты — наша
+//!   выручка после них (случай Я-2 / XPL 02.11: вторая сделка считала стакан / пул до первой). Затраты:
+//!   пропорциональные (комиссия биржи, комиссия пула, налоги, влияние крючка) — разностью; газ, approve, обёртка,
+//!   чаевые — одного нашего обмена.
+//! - ПОКУПКА на A: идущие сделки группы уже купили — их ликвидность снята с A самой площадкой; докупка считается только
+//!   по данным ПОСЛЕ их покупки (объём сверх купленного): у биржи — стакан получен позже конца её ордера; у DEX — маршрут
+//!   через её пулы (пулы одного контракта — один пул, PoolRef::site) по блоку не раньше её блока. Котировка без маршрута
+//!   (агрегатор) или покупка без маршрута / блока у DEX — «не доказуемо свежее» — отказ. Расчёт повторит следующий тик.
 //!
-//! Только живой расчёт (снимок рынка решения 217 — без изменений). Идущих сделок нет — котировки как раньше.
-//! Кто вызывает: costs_source.rs (Live: quote, fillable, worst).
-//! От чего зависит: coin_ride.rs, costs_quote.rs, engine.rs, core/types.
-//! Настройки: нет (предел сделок монеты — coin_ride.rs).
-
-use std::collections::HashSet;
+//! Только живой расчёт сделки (снимок рынка решения 217 и теневой замер решения 267 — без изменений, costs_source.rs)
+//! и только сделки с группой докупки (exec.top_up = да): выключено — ничего не меняется.
+//! Кто вызывает: costs_source.rs (Live: quote, fillable, worst), precheck_dex_sell.rs (sell_ahead).
+//! От чего зависит: coin_ride.rs, costs_quote.rs, ride_trail.rs (sites), trade_ops.rs, engine.rs, core/types.
+//! Настройки: нет (включатель — coin_ride.rs).
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Cost, CostKind, DexRoute, Direction, PoolRef, Quote};
+use crate::core::types::{Cost, CostKind, Direction, Quote};
+use crate::gateway::contract::VenueKind;
 
 use super::coin_key::CoinKey;
+use super::coin_ride::Ride;
 use super::engine::{Core, lk};
 use super::size::Fail;
 
-/// Что делает: сколько монет идущих сделок монеты будет продано на площадке продажи направления. Принимает: ядро,
-/// направление. Возвращает: количество (0 — нет). Ошибок нет.
+/// Идущие сделки ГРУПП докупки монеты (у сделок без группы — пусто: выключенная докупка ничего не меняет). Ошибок нет.
+fn group_rides(core: &Core, d: &Direction) -> Vec<Ride> {
+    let key = CoinKey::of(&d.asset);
+    let r = lk(&core.inner.rides);
+    match r.get(&key) {
+        Some(v) if v.iter().any(|x| x.group.is_some()) => {
+            v.iter().filter(|x| x.group.is_some()).cloned().collect()
+        }
+        _ => vec![],
+    }
+}
+
+/// Что делает: сколько монет идущих сделок группы будет продано на площадке продажи направления (остаток Deal.qty —
+/// уже проданное отражает след продажи, ride_trail.rs). Принимает: ядро, направление. Возвращает: количество (0 —
+/// нет). Ошибок нет.
 pub fn sell_ahead(core: &Core, d: &Direction) -> Decimal {
-    let rides = super::coin_ride::of_coin(core, &CoinKey::of(&d.asset));
+    let rides = group_rides(core, d);
     if rides.is_empty() {
         return Decimal::ZERO;
     }
@@ -115,58 +129,63 @@ pub async fn sell_after(
     Ok(marginal(&total, &ahead, qty, off))
 }
 
-/// Пулы маршрута. Ошибок нет.
-fn pools(r: &DexRoute) -> HashSet<&PoolRef> {
-    r.legs
-        .iter()
-        .flat_map(|l| l.hops.iter().map(|h| &h.pool))
-        .collect()
-}
-
-/// Что делает: данные покупки новее покупок идущих сделок на той же площадке A (см. шапку). Принимает: ядро,
-/// направление, живую котировку покупки. Ошибки: текст причины (данные старше покупки идущей сделки; блок её покупки
-/// неизвестен).
+/// Что делает: данные покупки новее покупок идущих сделок группы на той же площадке A (см. шапку). Принимает: ядро,
+/// направление, живую котировку покупки. Ошибки: текст причины (данные не доказуемо свежее покупки идущей сделки).
 pub fn buy_fresh(core: &Core, d: &Direction, q: &Quote) -> Result<(), String> {
-    let rides = super::coin_ride::of_coin(core, &CoinKey::of(&d.asset));
+    let rides = group_rides(core, d);
     if rides.is_empty() {
         return Ok(());
     }
+    let kind = super::trade_ops::kind(core, &d.buy_on)?;
     let deals = lk(&core.inner.deals);
     for r in rides.iter().filter(|r| r.buy_on == d.buy_on) {
         let Some(b) = deals.get(&r.deal_id).and_then(|x| x.buy.as_ref()) else {
             continue;
         };
-        match (&q.route, &b.request.route) {
-            (None, _) => {
+        let stale = |why: String| {
+            Err(format!(
+                "{}: данные покупки не доказуемо свежее покупки сделки {} — {why}",
+                d.buy_on.0, r.deal_id
+            ))
+        };
+        match (kind, &q.route, &b.request.route) {
+            (VenueKind::Cex, ..) => {
                 if q.at <= b.finished_at {
-                    return Err(format!(
-                        "{}: стакан получен {} — не позже конца покупки сделки {} ({}), ждём кадр после неё",
-                        d.buy_on.0, q.at, r.deal_id, b.finished_at
+                    return stale(format!(
+                        "стакан получен {}, её ордер кончился {}; ждём кадр после неё",
+                        q.at, b.finished_at
                     ));
                 }
             }
-            (Some(mine), Some(theirs)) => {
-                let theirs = pools(theirs);
-                if !pools(mine).iter().any(|p| theirs.contains(p)) {
+            (VenueKind::Dex, Some(mine), Some(theirs)) => {
+                let theirs = super::ride_trail::sites(theirs);
+                if !super::ride_trail::sites(mine)
+                    .iter()
+                    .any(|p| theirs.contains(p))
+                {
                     continue;
                 }
                 match b.chain.as_ref().and_then(|c| c.block) {
                     Some(bl) if mine.block >= bl => {}
                     Some(bl) => {
-                        return Err(format!(
-                            "{}: маршрут по блоку {} — раньше блока {bl} покупки сделки {} в тех же пулах",
-                            d.buy_on.0, mine.block, r.deal_id
+                        return stale(format!(
+                            "маршрут по блоку {}, её покупка в блоке {bl} в тех же пулах",
+                            mine.block
                         ));
                     }
-                    None => {
-                        return Err(format!(
-                            "{}: блок покупки сделки {} в тех же пулах неизвестен — нечем проверить свежесть пулов",
-                            d.buy_on.0, r.deal_id
-                        ));
-                    }
+                    None => return stale("блок её покупки неизвестен".into()),
                 }
             }
-            (Some(_), None) => {}
+            (VenueKind::Dex, None, _) => {
+                return stale("у котировки нет маршрута и блока (агрегатор)".into());
+            }
+            (VenueKind::Dex, Some(mine), None) => {
+                // Её покупка шла без маршрута (агрегатор) — её пулов не знаем: маршрут не раньше её блока.
+                match b.chain.as_ref().and_then(|c| c.block) {
+                    Some(bl) if mine.block >= bl => {}
+                    _ => return stale("её покупка без маршрута, блок не доказуемо позже".into()),
+                }
+            }
         }
     }
     Ok(())

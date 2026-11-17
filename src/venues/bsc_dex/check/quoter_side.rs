@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/check/quoter_side.rs
 //! Что делает: сверка с квотером по сторонам (решение 73) — части цикла check/quoter_cycle.rs: когда сторону без итога
-//! пора сверить по сигналу «пул готов» (side_ready: она стала глубокой — не ждать полного прохода dex.quoter_check_s),
+//! пора сверить по сигналу «пул готов» (side_ready: она стала глубокой или её пропускает сумма пробы — решение 390 — не ждать полного прохода dex.quoter_check_s),
 //! сменился ли итог стороны так, что стоит записать (changed), запись о смене (log_change).
 //! Кто вызывает: check/quoter_cycle.rs.
 //! От чего зависит: quote/select.rs (deep_side), check/state.rs, pools/listen.rs (Pools), pools/progress.rs (reason_key).
@@ -12,7 +12,7 @@ use crate::storage::journal::Level;
 use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
 use super::super::pools::registry::Entry;
-use super::super::quote::select;
+use super::super::quote::{select, side_fit};
 
 /// Начало причины «не задана настройка» — такие причины пишутся одной строкой на причину (Signals::once).
 const NOT_SET: &str = "Не задана настройка";
@@ -32,12 +32,17 @@ pub fn side_ready(p: &Pools, r: &PoolRef) -> bool {
         return false;
     };
     let q = p.checks.pool(r).quoter;
+    // Решение 390: и мелкая сторона, которую пропускает сумма пробы (не спящий пул) — она тоже сверяется
+    // (check/quoter_one.rs).
     [Side::Buy, Side::Sell].into_iter().any(|s| {
         q.side(s).is_none()
-            && matches!(
-                select::deep_side(&p.ctx, &p.reg, &p.tokens, &e, dec, select::Need::Side(s)),
-                Ok(None)
-            )
+            && match select::deep_side(&p.ctx, &p.reg, &p.tokens, &e, dec, select::Need::Side(s)) {
+                Ok(None) => true,
+                Ok(Some(_)) => {
+                    !e.asleep && side_fit::side_usd(&p.ctx, &p.reg, &p.tokens, dec, &e, s).is_some()
+                }
+                Err(_) => false,
+            }
     })
 }
 

@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/check/quoter_one.rs
 //! Что делает: сверка ОДНОГО пула с квотером и запись итога (вынесено из check/quoter_cycle.rs, решение 261 — файл
-//! был больше 200 строк; логика та же): стороны независимо (решение 73), мелкая — без итога; решение 261 — голова H и
+//! был больше 200 строк; логика та же): стороны независимо (решение 73), мелкая — без итога, кроме мелкой, которую
+//! пропускает сумма пробы (решение 390, quote/side_fit.rs); решение 261 — голова H и
 //! пул, прочитанный на ней, один раз на пул (check/quoter_block.rs), пауза и снятие стороны с алертами
 //! (check/quoter_pause.rs), «не сверено (блок)» — итог прежний; сравнение памяти с сетью на H (memory) — причина в
 //! журнал (dex.quoter_memory) и на экран «Глубина», без паузы; решение 382 — и полное перечитывание пула
@@ -17,7 +18,7 @@ use crate::storage::journal::Level;
 use super::super::pools::listen::Pools;
 use super::super::pools::progress::reason_key;
 use super::super::pools::registry::Entry;
-use super::super::quote::select;
+use super::super::quote::{select, side_fit};
 use super::quoter_block::{self, Head};
 use super::quoter_pause;
 use super::quoter_sides::QuoterSides;
@@ -63,8 +64,16 @@ pub async fn one(p: &Pools, r: &PoolRef, first: &mut Option<Tally>) -> bool {
         let prev = now.side(side).clone();
         // Итог и имя незаданной настройки — из ошибки там, где она возникла (решение 75): по нему сторона
         // перепроверяется при задании именно этой настройки. Глубина — её настройки (pools/depth_book.rs).
+        // Решение 390 (t178): мелкая сторона сверяется, если её пропускает сумма пробы (quote/side_fit.rs) и пул не
+        // спит — она идёт в котировку (quote/select.rs), сверка с квотером ей обязательна.
+        let fits = |dec: u8| {
+            !e.asleep && side_fit::side_usd(&p.ctx, &p.reg, &p.tokens, dec, &e, side).is_some()
+        };
         let v = match deep {
             Ok((None, dec)) => verify(p, &e, (&mut head, &mut reprobed), dec, side).await,
+            Ok((Some(_), dec)) if fits(dec) => {
+                verify(p, &e, (&mut head, &mut reprobed), dec, side).await
+            }
             Ok((Some(_), _)) => {
                 now.set(side, None);
                 now.set_wait(side, None);

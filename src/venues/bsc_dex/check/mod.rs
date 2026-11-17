@@ -31,6 +31,7 @@ pub mod probe;
 pub mod probe_buy;
 pub mod probe_calls;
 pub mod probe_exec;
+pub mod probe_tiny;
 pub mod quoter_amount;
 pub mod quoter_block;
 pub mod quoter_compare;

@@ -98,6 +98,7 @@ pub mod route_gas;
 pub mod route_paths;
 pub mod routing;
 pub mod select;
+pub mod side_fit;
 pub mod smart;
 pub mod smart_quote;
 pub mod smart_ways;

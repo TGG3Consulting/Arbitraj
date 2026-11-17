@@ -11,12 +11,14 @@
 //!   настройка» (сторона ждёт её, settings_wait.rs).
 //! - Ликвидность стороны — глубина пула в полосе dex.depth_band_pct (решение 73, pools/depth_book.rs, quote/depth_band.rs)
 //!   в USDT, без комиссии пула: покупка — сколько USDT пул примет, продажа — сколько USDT отдаст до границы полосы.
+//! - Решение 390: мелкая сторона (сверяется, если её пропускает сумма пробы) — сумма, которую она пропускает целиком
+//!   (check.probe_usdt или её доля, quote/side_fit.rs), не больше нашего максимума.
 //! - Пул с крючком B/C — прежняя сумма check.probe_usdt: влияние крючка (check/hooks_probe.rs) измерено пробой именно
 //!   этой суммы, и вычесть его на другой сумме по факту кода нельзя (вопрос Тиграну — docs/TASKS.md).
 //!
 //! Сумма в USDT переводится во встречный токен пула (решение 52 — промежуточная монета, quote/rate.rs) вызывающим.
 //! Кто вызывает: check/quoter_verify.rs.
-//! От чего зависит: settings (Store: decimal_dir, venue_kinds, accounts), pools/depth_book.rs, pools/listen.rs (Pools).
+//! От чего зависит: settings (Store: decimal_dir, venue_kinds, accounts), pools/depth_book.rs, pools/listen.rs (Pools), quote/side_fit.rs (мелкая сторона, решение 390).
 //! Настройки: money.max_per_trade_usd (области «площадка · тип», площадка, вся система), dex.depth_band_pct,
 //! dex.min_pool_liquidity_usd, dex.depth_hysteresis_pct (глубина), check.probe_usdt (пулы с крючком B/C).
 
@@ -185,9 +187,23 @@ pub fn side_usd(p: &Pools, e: &Entry, usdt_dec: u8, side: Side) -> Result<Amount
                 super::super::pools::depth_book::missing_setting(&p.ctx),
             )
         })?;
-    let depth = match side {
-        Side::Buy => d.band.buy,
-        Side::Sell => d.band.sell,
+    let (depth, deep) = match side {
+        Side::Buy => (d.band.buy, d.deep_buy),
+        Side::Sell => (d.band.sell, d.deep_sell),
     };
+    // Решение 390 (t178): мелкая сторона, которую пропускает сумма пробы, — сверка на той сумме, что сторона пропускает
+    // целиком (check.probe_usdt или её доля, quote/side_fit.rs), не больше нашего максимума: глубина в полосе у неё
+    // бывает почти 0 (цена в «дыре» между позициями), а котировка берёт её по всей кривой.
+    if !deep
+        && let Some((_, usd)) =
+            super::super::quote::side_fit::side_usd(&p.ctx, &p.reg, &p.tokens, usdt_dec, e, side)
+    {
+        return Ok(Amount {
+            usd: usd.min(max),
+            source: format!(
+                "мелкая сторона (в полосе {depth} USDT): сумма пробы, которую сторона пропускает целиком, {usd} USDT (решение 390)"
+            ),
+        });
+    }
     Ok(pick(max, depth))
 }

@@ -1,10 +1,12 @@
 //! Файл: venues/bsc_dex/check/taxes_util.rs
-//! Что делает: части проверки налогов: пулы монеты для пробы (фильтр ликвидности, порядок V2 → V3 → V4), налог в
+//! Что делает: части проверки налогов: пулы монеты для пробы (глубокие в оба направления или мелкие, где пробный
+//! круг проходит, — решение 390; порядок V2 → V3 → V4), налог в
 //! процентах по паре «отправлено / дошло» и выбор источника встречного токена для пробы. Налоги пула по замеру пробы и
 //! налоги монеты по пулам — check/pool_taxes.rs (решение 146).
 //! Кто вызывает: check/taxes.rs, check/pool_taxes.rs, check/service_tax_calls.rs.
-//! От чего зависит: pools/registry.rs, node/call.rs, num.rs.
-//! Настройки: через quote/select.rs — dex.min_pool_liquidity_usd.
+//! От чего зависит: pools/registry.rs, node/call.rs, num.rs, quote/select.rs, quote/side_fit.rs.
+//! Настройки: через quote/select.rs — dex.min_pool_liquidity_usd; через quote/side_fit.rs — check.probe_usdt,
+//! dex.quoter_max_diff_pct.
 //!
 //! Налог, % = (ожидалось − пришло) / ожидалось · 100 — research/flow/bsc_dex.md, раздел 6.
 //! balanceOf — EIP-20: https://eips.ethereum.org/EIPS/eip-20#balanceof
@@ -23,7 +25,7 @@ use super::super::node::abi::IERC20;
 use super::super::node::call;
 use super::super::num;
 use super::super::pools::registry::{Entry, Registry};
-use super::super::quote::select;
+use super::super::quote::{select, side_fit};
 use super::super::tokens::Tokens;
 
 /// Налог, %: (отправлено − дошло) / отправлено · 100 (дошло больше — 0). Принимает: суммы в минимальных единицах,
@@ -102,10 +104,19 @@ pub async fn quote_source(
         .map(|(a, _)| a))
 }
 
-/// Пулы монеты для пробы: достоверные и глубокие в ОБА направления (проба покупает и продаёт тем же пулом; фильтр —
-/// первым, quote/select.rs deep_side), V2 впереди (решение 39), затем V3, затем V4. Возвращает: (пулы, причины
-/// ожидания по пулам, где глубина не считается, причины по мелким и спящим пулам — с цифрами глубины: «V4 ZKP 0x…:
-/// глубина покупки 812 USDT …»; они — в текст ожидания, только когда пробовать нечем).
+/// Пул для пробы и сумма пробы в нём: None — пул глубокий в оба направления, сумма — полная check.probe_usdt (как до
+/// решения 390); Some(x) — мелкий пул, где пробный круг проходит на сумме x встречного токена (quote/side_fit.rs).
+pub type ProbePool = (Entry, Option<U256>);
+
+/// Пулы монеты для пробы (решение 390, t178): достоверные и либо глубокие в ОБА направления (решение 73, quote/select.rs
+/// deep_side — сумма пробы полная), либо мелкие, но пробный круг — покупка на сумму пробы и продажа остатка назад —
+/// проходит по расчёту пула целиком с выходом не меньше наименьшего (quote/side_fit.rs round_trip; не проходит полная
+/// сумма — наибольшая из ряда сумма/2, сумма/4, …). Налог — свойство токена в этом пуле, меряется отношением «квотер /
+/// пришло» на одной сумме (кривая пула сокращается), поэтому порог глубины для торговли к пробе не относится.
+/// Порядок: V2 впереди (решение 39), затем V3, затем V4. Возвращает: (пулы с суммой, причины ожидания по пулам, где
+/// глубина не считается, причины по мелким и спящим пулам, где и круг не проходит — с цифрами глубины; они — в текст
+/// ожидания, только когда пробовать нечем). Сумму мелкого пула не посчитать (не задана check.probe_usdt или
+/// dex.quoter_max_diff_pct, нет USDT или курса) — пул как мелкий (прежнее поведение).
 /// Ошибки: NotConfigured (не задана настройка глубины).
 pub fn probe_pools(
     ctx: &Ctx,
@@ -113,16 +124,20 @@ pub fn probe_pools(
     tokens: &Tokens,
     coin: &Address,
     usdt_dec: u8,
-) -> GatewayResult<(Vec<Entry>, Vec<String>, Vec<String>)> {
+) -> GatewayResult<(Vec<ProbePool>, Vec<String>, Vec<String>)> {
     let (mut pools, mut env, mut shallow) = (Vec::new(), Vec::new(), Vec::new());
     // Решение 211: пулы монеты — по адресу контракта.
     for e in reg.by_coin(coin).into_iter().filter(|e| e.valid) {
         let label = super::super::pools::depth_book::label(&e.pool.reference);
         match select::deep_side(ctx, reg, tokens, &e, usdt_dec, select::Need::Both) {
-            Ok(None) => pools.push(e),
-            Ok(Some(why)) => {
-                shallow.push(format!("{} {} {label}: {why}", e.family.title, e.ticker))
-            }
+            Ok(None) => pools.push((e, None)),
+            Ok(Some(why)) => match trip(ctx, reg, tokens, &e, usdt_dec) {
+                Ok(t) => pools.push((e, Some(t.amount))),
+                Err(no) => shallow.push(format!(
+                    "{} {} {label}: {why}; {no}",
+                    e.family.title, e.ticker
+                )),
+            },
             // Не задана настройка глубины — ошибка с её именем (по нему ждущие перепроверяются при её задании).
             Err(why) => match super::super::pools::depth_book::missing_setting(ctx) {
                 Some(name) => return Err(ctx.not_set(&name, why)),
@@ -131,12 +146,32 @@ pub fn probe_pools(
         }
     }
     // V2 впереди: только они поддерживают монеты с налогом (решение 39), затем V3, затем V4.
-    pools.sort_by_key(|e| match e.pool.kind {
+    pools.sort_by_key(|(e, _)| match e.pool.kind {
         PoolKind::V2 => 0,
         PoolKind::V3 => 1,
         _ => 2,
     });
     Ok((pools, env, shallow))
+}
+
+/// Пробный круг мелкого пула (quote/side_fit.rs round_trip) на сумме check.probe_usdt во встречном токене. Спящий пул
+/// (при ws слушается только добавление ликвидности) — по его последнему состоянию: проба идёт на узле, а откат на
+/// крошечном выходе не вердикт (check/probe_tiny.rs). Возвращает: круг; Err — почему не проходит (текст). Ошибок иных нет.
+fn trip(
+    ctx: &Ctx,
+    reg: &Registry,
+    tokens: &Tokens,
+    e: &Entry,
+    usdt_dec: u8,
+) -> Result<side_fit::Trip, String> {
+    let usdt = tokens.usdt(ctx).map_err(|x| x.message)?;
+    let cap = side_fit::cap(ctx, reg, usdt, usdt_dec, e).map_err(|x| x.message)?;
+    let min = side_fit::min_units(ctx).map_err(|x| x.message)?;
+    side_fit::round_trip(ctx, e, cap, min).ok_or_else(|| {
+        format!(
+            "пробный круг на check.probe_usdt и меньших суммах (до выхода {min} единиц) по расчёту пула не проходит"
+        )
+    })
 }
 
 /// «Не проверено: пулы монеты ещё загружаются» для экранов. Принимает: окружение, тикер, адрес, причину. Ошибок нет.

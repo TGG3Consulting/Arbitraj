@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/check/taxes.rs
-//! Что делает: проверка налогов одной монеты (решение 30): пробный обмен в каждом её пуле (V2 впереди: только они
-//! поддерживают монеты с налогом); газ обмена, разрешений и налоги монеты В ЭТОМ пуле (решение 146: налог зависит от
+//! Что делает: проверка налогов одной монеты (решение 30): пробный обмен в каждом её пуле, где проба проходит — глубоком
+//! в оба направления или мелком, где пробный круг проходит по расчёту пула (решение 390, check/taxes_util.rs probe_pools;
+//! V2 впереди: только они поддерживают монеты с налогом); газ обмена, разрешений и налоги монеты В ЭТОМ пуле (решение 146: налог зависит от
 //! пула) — по каждому пулу в PoolFacts; налоги монеты для ядра — наименьшие по пулам (check/pool_taxes.rs).
 //! Источник встречного токена для пробы — другой пул V2/V3 реестра с наибольшим его балансом (проверяемый пул не
 //! трогается). Пул с промежуточной монетой (решение 52): сумма пробы check.probe_usdt пересчитывается в неё
@@ -142,7 +143,7 @@ async fn run(
     // Решение 280 (ревью): пулы вида без роутера, где пара отклонила пробную покупку, — «налоги пула не измерены»: это
     // свойство пула, не помеха окружения (pool_taxes::outcome их помехой не считает).
     let mut unmeasured = Vec::new();
-    for e in &pools {
+    for (e, fit) in &pools {
         let exclude = match e.pool.reference {
             PoolRef::Contract(a) => Some(a),
             PoolRef::Member { contract, .. } => Some(contract),
@@ -151,12 +152,16 @@ async fn run(
             PoolRef::Singleton { .. } => None,
         };
         // Пул с промежуточной монетой (решение 52): сумма пробы — в ней, по живому пулу «промежуточная — USDT».
-        let amount = match rate::from_usdt(ctx, reg, usdt, e.usdt, probe) {
-            Ok(a) => a,
-            Err(err) => {
-                env.push(format!("{}: {}", e.family.title, err.message));
-                continue;
-            }
+        // Решение 390: мелкий пул — сумма, на которой пробный круг проходит (taxes_util.rs probe_pools).
+        let amount = match fit {
+            Some(a) => *a,
+            None => match rate::from_usdt(ctx, reg, usdt, e.usdt, probe) {
+                Ok(a) => a,
+                Err(err) => {
+                    env.push(format!("{}: {}", e.family.title, err.message));
+                    continue;
+                }
+            },
         };
         let deep = |x: &Entry| {
             let any = select::Need::Any;

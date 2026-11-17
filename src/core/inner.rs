@@ -119,6 +119,10 @@ pub struct Inner {
     pub deals: Mutex<HashMap<String, Deal>>,
     /// Монеты, по которым сейчас идёт сделка (решение 118, Я-2: одна сделка на монету — ключ по адресу контракта).
     pub active: Mutex<HashSet<super::coin_key::CoinKey>>,
+    /// Задача t179: сделки монеты, которые уже купили и везут или продают монету («в пути», coin_ride.rs) — монета
+    /// для них больше не в `active`; следующая сделка по монете — в пределах money.max_deals_per_coin (не задана — 1,
+    /// как раньше). Блокировки: сначала `active`, потом `rides` (coin_ride.rs).
+    pub rides: Mutex<HashMap<super::coin_key::CoinKey, Vec<super::coin_ride::Ride>>>,
     /// Решение 174: монеты, которые сейчас продаются кнопкой «Продать» панели «Балансы» (повторное нажатие — отказ
     /// «уже продаётся»; метка Я-2 в active ставится вместе с этой, balance_sell.rs).
     pub balance_sells: Mutex<HashSet<super::coin_key::CoinKey>>,
@@ -246,6 +250,7 @@ impl Inner {
             risk: Mutex::default(),
             deals: Mutex::default(),
             active: Mutex::default(),
+            rides: Mutex::default(),
             balance_sells: Mutex::default(),
             bal_cache: Default::default(),
             usdt_moves: Mutex::default(),

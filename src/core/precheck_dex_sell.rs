@@ -16,6 +16,8 @@
 //! проверяемого (precheck_dex_cut.rs) и симулируется заново на точном новом объёме.
 //! Решение 382: продажа собрана по квотеру (DexPresell.by_quoter, решение 177) — отказ «невыгодна по квотеру: прибыль …
 //! ниже порога», строка расхождений — в текст.
+//! Задача t179 (решение 390): при идущих сделках монеты с продажей в тот же DEX выход симуляции план не поднимает
+//! (план посчитан после их монет — ride_quote.rs), только понижает.
 //! Кто вызывает: core/precheck_sell.rs (сторона продажи — DEX).
 //! От чего зависит: precheck_dex_cut.rs (пересчёт на проверяемый объём), precheck_sell.rs (запрос продажи), dex_account.rs (вид на кошелёк направления), costs_types.rs
 //! (Calc, CostLine), deps.rs (журнал, шлюз).
@@ -118,6 +120,17 @@ async fn once(core: &Core, d: &Direction, plan: Calc) -> Result<Once, String> {
     let s = &core.inner.deps.settings;
     // Решение 242: пороги — как у расчёта (площадка + тип направления, иначе вся система).
     let (min_usd, min_pct) = super::venue_dir::thresholds(s, super::venue_dir::of(core, d))?;
+    // Задача t179 (решение 390): идут сделки монеты, чьи монеты будут проданы в тот же пул раньше нас, — симуляция
+    // (на пуле до них) может план только понизить: выход выше выручки плана (план уже посчитан ПОСЛЕ их монет,
+    // ride_quote.rs) не поднимает прибыль.
+    let sim = if super::ride_quote::sell_ahead(core, d) > Decimal::ZERO && sim.out > plan.proceeds {
+        DexPresell {
+            out: plan.proceeds,
+            ..sim
+        }
+    } else {
+        sim
+    };
     let text = summary(&plan, &sim, tax);
     let c = apply(plan, &sim, min_usd, min_pct).map_err(|e| format!("{e}; {text}"))?;
     log(

@@ -47,7 +47,7 @@ fn mark(core: &Core, v: &VenueId, a: &Asset) -> Result<Mark, String> {
     if !lk(&core.inner.balance_sells).insert(key.clone()) {
         return Err(chk::SELLING.into());
     }
-    if !lk(&core.inner.active).insert(key.clone()) {
+    if !super::coin_ride::take(core, &key) {
         lk(&core.inner.balance_sells).remove(&key);
         return Err(chk::IN_DEAL.into());
     }

@@ -57,7 +57,7 @@ pub fn next(core: &Core, d: &Direction, battle: Battle) {
         return;
     }
     // Решение 118: по монете идёт наша сделка — расчётов нет, как у кандидата.
-    if lk(&core.inner.active).contains(&super::coin_key::CoinKey::of(&d.asset)) {
+    if super::coin_ride::held(core, &super::coin_key::CoinKey::of(&d.asset)) {
         return;
     }
     super::uncapped_queue::submit_watch(core, d, battle);

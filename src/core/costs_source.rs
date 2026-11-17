@@ -12,7 +12,8 @@
 //! Методы возвращают `impl Future + Send` (статическая отправка, без упаковки на пути боя).
 //! Решение 250: fillable — исполнимое количество без цены (проверка доли глубины h); по умолчанию — из quote.
 //! Кто вызывает: core/costs.rs (evaluate_on → Live), core/uncapped_replay.rs (свой источник), size_curve.rs.
-//! От чего зависит: costs_quote.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
+//! Задача t179 (решение 390): Live при идущих сделках монеты — ride_quote.rs (продажа после их монет, свежесть A).
+//! От чего зависит: costs_quote.rs, ride_quote.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
 //! Настройки: нет (у источника Live — через costs_quote.rs и convert.rs).
 
 use std::future::Future;
@@ -100,21 +101,41 @@ impl Live<'_> {
 }
 
 impl Source for Live<'_> {
-    /// Котировка шлюза или снимка (costs_quote.rs fetch). Ошибки: как у fetch.
+    /// Котировка шлюза или снимка (costs_quote.rs fetch). Задача t179 (решение 390, ride_quote.rs), только живая:
+    /// продажа на B — после монет идущих сделок монеты на той же B; покупка на A — данные новее покупок идущих сделок
+    /// на той же A. Идущих нет — как раньше. Ошибки: как у fetch; Stop — данные A старше покупки идущей сделки.
     async fn quote(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
-        super::costs_quote::fetch(self.core, d, sell, qty, self.src).await
+        if self.src.is_none() && sell {
+            let off = super::ride_quote::sell_ahead(self.core, d);
+            if off > Decimal::ZERO {
+                return super::ride_quote::sell_after(self.core, d, qty, off).await;
+            }
+        }
+        let q = super::costs_quote::fetch(self.core, d, sell, qty, self.src).await?;
+        if self.src.is_none() && !sell {
+            super::ride_quote::buy_fresh(self.core, d, &q).map_err(Fail::Stop)?;
+        }
+        Ok(q)
     }
 
     /// Решение 250: исполнимое количество — живое через контракт quote_fills (costs_quote.rs fillable); со снимком
-    /// рынка — fillable_qty котировки снимка (как раньше). Ошибки: как у quote.
+    /// рынка — fillable_qty котировки снимка (как раньше). Задача t179: продажа на B при идущих сделках монеты на той
+    /// же B — исполнимое на (их монеты + объём) минус их монеты. Ошибки: как у quote.
     async fn fillable(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Decimal, Fail> {
         if self.src.is_some() {
             return self.quote(d, sell, qty).await.map(|q| q.fillable_qty);
         }
-        super::costs_quote::fillable(self.core, d, sell, qty).await
+        let off = if sell {
+            super::ride_quote::sell_ahead(self.core, d)
+        } else {
+            Decimal::ZERO
+        };
+        let f = super::costs_quote::fillable(self.core, d, sell, qty + off).await?;
+        Ok((f - off).max(Decimal::ZERO))
     }
 
-    /// Худшая цена (costs_quote.rs worst). Ошибки: как у worst.
+    /// Худшая цена (costs_quote.rs worst). Задача t179: живая продажа на B при идущих сделках монеты на той же B —
+    /// уровень стакана на (их монеты + объём): наш ордер дойдёт до него, если они продадут раньше. Ошибки: как у worst.
     fn worst(
         &self,
         d: &Direction,
@@ -127,7 +148,12 @@ impl Source for Live<'_> {
         } else {
             (&d.buy_on, Side::Buy)
         };
-        super::costs_quote::worst(self.core, v, &d.asset, side, qty, avg, self.src)
+        let off = if sell && self.src.is_none() {
+            super::ride_quote::sell_ahead(self.core, d)
+        } else {
+            Decimal::ZERO
+        };
+        super::costs_quote::worst(self.core, v, &d.asset, side, qty + off, avg, self.src)
     }
 
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs withdraw_a); решение 237 — DEX на A со

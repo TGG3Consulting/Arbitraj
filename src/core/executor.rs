@@ -9,6 +9,10 @@
 //! (итог не ниже нуля, решение 47) — продаём; иначе — режим застрявшей монеты (решение 37).
 //! Решение 118 (Я-2): по одной монете — одна сделка (замок по адресу контракта, coin_key.rs): направления одной монеты
 //! через разные площадки не покупают её параллельно сверх money.max_per_coin_usd.
+//! Задача t179 (решение 390, изменяет 118): замок целиком — от входа до учёта покупки; потом сделка — «идущая»
+//! (coin_ride.rs), и следующая сделка монеты может начаться, пока эта везёт и продаёт: до money.max_deals_per_coin
+//! сделок (не задана — 1, как раньше), не встречная, бюджет — за вычетом вложенного идущих, продажа считается после их
+//! монет (ride_quote.rs).
 //! Исход покупки или перевода неизвестен (OutcomeUnknown) — сделка остановлена до ручной проверки (Step::Halted), без
 //! застрявшей монеты, продажи и повторного перевода.
 //! Решение 103: свободный баланс A перед ордером меньше списания плана — объём подбирается заново под остаток (refit.rs).
@@ -54,7 +58,7 @@ use crate::storage::journal::Level;
 
 use super::costs::Calc;
 use super::deal::{Deal, Step};
-use super::engine::{Core, lk, rd};
+use super::engine::{Core, rd};
 use super::step_timing::{Steps, note};
 
 /// Решение 265: этап «Время по шагам» до покупки (строка хронологии).
@@ -71,7 +75,8 @@ pub enum Start {
     /// Направление больше не торгуемо (чёрный список, налоги не проверены, монеты нет в справочнике, площадка
     /// исключена) — точная причина (решение 147, start_reason::not_tradable).
     NotTradable(String),
-    /// По монете уже идёт сделка или действие (решение 118: одна сделка на монету) — какое (решение 147).
+    /// По монете уже идёт сделка или действие (решение 118; t179 — предел money.max_deals_per_coin, встречная) — какое
+    /// (решение 147).
     Busy(String),
 }
 
@@ -96,11 +101,10 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
         return Start::NotTradable(why);
     }
     let key = super::coin_key::CoinKey::of(&d.asset);
-    if !lk(&core.inner.active).insert(key.clone()) {
-        return Start::Busy(super::start_reason::busy(
-            lk(&core.inner.deals).values(),
-            &d,
-        ));
+    // Задача t179 (решение 390): монета занята целиком — прежний отказ; по монете идут только сделки после учёта
+    // покупки — новая в пределах money.max_deals_per_coin, не встречная (coin_ride.rs admit).
+    if let Err(why) = super::coin_ride::admit(core, &d) {
+        return Start::Busy(why);
     }
     let core = core.clone();
     // Решение 245, дополнение п. 2: момент решения — время расчёта кандидата, прошедшего пороги (Calc.at).
@@ -113,8 +117,10 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
     let fast = super::precheck_fast::read(&core.inner.deps.settings, &calc);
     // Решение 338 (ревью t157 Н1): вся задача сделки (предпроверка, пересчёт, котировки) — ярус счёта «сделка».
     let work = async move {
-        run(&core, d.clone(), decided, (on, handed), fast).await;
-        lk(&core.inner.active).remove(&key);
+        // Задача t179: ID сделки, перешедшей в «идущие» (coin_ride::board) — снимается её запись, а не замок целиком.
+        let mut boarded = None;
+        run(&core, d.clone(), decided, (on, handed), fast, &mut boarded).await;
+        super::coin_ride::release(&core, &key, boarded.as_deref());
     };
     tokio::spawn(urgency::scope(
         Urgency::Trade,
@@ -153,13 +159,15 @@ pub fn buy_gate(core: &Core) -> Result<(), String> {
 /// Ведёт сделку до конца или до передачи в режим застрявшей монеты. Принимает: ядро, направление, момент решения
 /// (Calc.at прошедшего кандидата — в учёт сделки, решение 245, дополнение п. 2), момент передачи исполнителю
 /// (решение 265: включён ли замер по шагам и момент передачи — None, если выключен), режим быстрой предпроверки
-/// (решение 266: объём кандидата и «одновременно» — precheck_fast.rs; всё выключено — как раньше).
+/// (решение 266: объём кандидата и «одновременно» — precheck_fast.rs; всё выключено — как раньше), `boarded` — задача
+/// t179: сюда пишется ID сделки, когда она учла покупку и ушла в «идущие» монеты (coin_ride::board).
 async fn run(
     core: &Core,
     d: Direction,
     decided: chrono::DateTime<chrono::Utc>,
     (on, handed): (bool, Option<Instant>),
     fast: super::precheck_fast::Opts,
+    boarded: &mut Option<String>,
 ) {
     let deps = &core.inner.deps;
     // Решение 265: «Время по шагам» от положительного расчёта до исполненной покупки (step_timing.rs).
@@ -561,6 +569,12 @@ async fn run(
     // Перевод на B.
     deal.step = Step::Transfer;
     super::ledger::save(core, &deal).await;
+    // Задача t179 (решение 390): покупка учтена во «вложено по монете» и «в пути» (save → recompute_exposure) — монета
+    // из замка целиком в «идущие»: следующая сделка монеты может начаться (coin_ride.rs admit), её бюджет — за вычетом
+    // этой, продажа — после монет этой (ride_quote.rs). Частичная покупка с продажей на A и «продажа здесь» (cex_link)
+    // остаются под замком целиком — они выше.
+    super::coin_ride::board(core, &d, &deal.id);
+    *boarded = Some(deal.id.clone());
     // Решение 151: на кошелёк DEX — зачисление и по приходу в блокчейне (transfers::send_trade).
     let mut gas = Vec::new();
     let sent = super::transfers::send_trade(

@@ -134,7 +134,7 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
     };
     // Решение 118 (Я-2): одна сделка на монету — пока по монете идёт другая, продажа не запускается.
     let key = super::coin_key::CoinKey::of(&deal.direction.asset);
-    if !lk(&core.inner.active).insert(key.clone()) {
+    if !super::coin_ride::take(core, &key) {
         if let Some(d) = lk(&core.inner.deals).get_mut(deal_id) {
             d.step = Step::Halted;
         }
@@ -234,7 +234,7 @@ pub async fn sold_manually(
     };
     // Решение 118 (Я-2): одна сделка на монету — пока по монете идёт другая, продажа не запускается.
     let key = super::coin_key::CoinKey::of(&deal.direction.asset);
-    if !lk(&core.inner.active).insert(key.clone()) {
+    if !super::coin_ride::take(core, &key) {
         if let Some(d) = lk(&core.inner.deals).get_mut(deal_id) {
             d.step = Step::Halted;
         }

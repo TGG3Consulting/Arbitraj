@@ -22,7 +22,7 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
         .ok_or(format!("записи {holding_id} нет"))?;
     // Решение 118 (Я-2): по монете одна сделка — идёт другая, возврат подождёт (монеты остаются у человека).
     let key = super::coin_key::CoinKey::of(&h.asset);
-    if !lk(&core.inner.active).insert(key.clone()) {
+    if !super::coin_ride::take(core, &key) {
         return Err(format!(
             "по {} сейчас идёт другая сделка — «Вернуть боту» после её окончания",
             h.asset.ticker

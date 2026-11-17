@@ -34,7 +34,7 @@ use super::engine::{Core, lk};
 pub fn record(core: &Core, d: &Direction, o: Outcome) {
     let st = &core.inner.busy_calc;
     let key = CoinKey::of(&d.asset);
-    let busy = lk(&core.inner.active).contains(&key);
+    let busy = super::coin_ride::held(core, &key);
     let deal = open_deal(core, &key);
     let now = Utc::now();
     let (sum, old) = {
@@ -106,7 +106,7 @@ fn deal_of(x: &Deal) -> BusyDeal {
 async fn watch(core: Core, key: CoinKey) {
     while let Ok(ms) = min_ms(&core) {
         tokio::time::sleep(Duration::from_millis(ms)).await;
-        if !lk(&core.inner.active).contains(&key) {
+        if !super::coin_ride::held(core, &key) {
             break;
         }
     }

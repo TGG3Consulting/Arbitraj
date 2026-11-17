@@ -24,9 +24,10 @@ use arb::core::Core;
 use arb::core::coin_ride;
 use arb::core::deal::{Deal, Step};
 use arb::core::deal_group::DealGroup;
-use arb::core::types::{Asset, Direction, VenueId};
+use arb::core::types::{Asset, Direction, Side, TradeRequest, TradeResult, TradeStatus, VenueId};
 use arb::core::usdt_return_state::UsdtReturn;
 use arb::settings::value::Scope;
+use chrono::Utc;
 use rust_decimal::Decimal;
 use serde_json::json;
 
@@ -94,14 +95,45 @@ fn bingx_networks() -> (Decimal, Vec<arb::core::types::CoinNetworkInfo>) {
     (usdt.withdraw_max.unwrap(), list)
 }
 
-/// Сделка группы `g` на шаге продажи, проданная на bingx (выручка `proceeds` там), куплено на mexc.
+/// Продажа бота на площадке плана sell_on (статус Filled) — как `trade` в tests/core_coin_reentry_t179.rs, но со
+/// стороной продажи и площадкой продажи: настоящий usdt_return_deal::prepare делит возврат по площадкам продаж
+/// (usdt_return_parts::multi — продажа не на deal.at = несколько частей), а coin_group::hold_parts оставляет часть
+/// ждать общего возврата только у обычного закрытия (normal: продажа бота есть, deal.at = sell_on, перегонов нет).
+fn sale(id: &str, dir: &Direction, proceeds: Decimal) -> TradeResult {
+    TradeResult {
+        request: TradeRequest {
+            venue: dir.sell_on.clone(),
+            asset: dir.asset.clone(),
+            side: Side::Sell,
+            qty: Decimal::from(10),
+            worst_price: Decimal::ONE,
+            deal_id: id.into(),
+            route: None,
+            exit_position: false,
+            remeasure: None,
+        },
+        status: TradeStatus::Filled,
+        filled_qty: Decimal::from(10),
+        avg_price: proceeds / Decimal::from(10),
+        fees: vec![],
+        venue_ref: id.into(),
+        chain: None,
+        finished_at: Utc::now(),
+        executor: None,
+    }
+}
+
+/// Сделка группы `g` на шаге продажи, проданная ботом на bingx (выручка `proceeds` там), куплено на mexc — как
+/// `bought` + `sold` в tests/core_coin_reentry_t179.rs (группа с входа, продажа бота на площадке плана).
 fn member(id: &str, dir: &Direction, g: &str, proceeds: Decimal) -> Deal {
     let mut x = Deal::new(id.into(), dir.clone(), json!(null), Decimal::ONE);
     x.group = Some(Box::new(DealGroup::new(g)));
     x.step = Step::Selling;
     x.at = dir.sell_on.clone();
     x.invested = proceeds - Decimal::ONE;
+    x.qty = Decimal::from(10);
     x.proceeds = proceeds;
+    x.sells.push(sale(id, dir, proceeds));
     x
 }
 

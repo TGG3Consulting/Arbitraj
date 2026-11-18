@@ -17,8 +17,9 @@
 //!
 //! Шага цены и количества (tickSize/stepSize) в документации НЕТ (docs/notes/mexc-analysis.md). Решение 107: шаг
 //! количества = 10^−baseAssetPrecision, шаг цены = 10^−quotePrecision — толкование целых precision как числа знаков
-//! после запятой. Ошибка толкования ловится до денег: перед каждым ордером — пробный ордер POST /api/v3/order/test
-//! (trade.rs, настройка venue.order_test_first [mexc]); отказ — ордер не ставится.
+//! после запятой. Ошибка толкования у продажи ловится до покупки — пробным ордером POST /api/v3/order/test в проверке
+//! без исполнения (order_rules::check, venue.order_test_first [mexc]); у настоящего ордера (решение 412: пробного перед
+//! ним нет) — отказом MEXC, ордер не поставлен, деньги не тронуты.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -57,7 +58,8 @@ pub struct SymbolRules {
     /// Знаков после запятой у количества монеты (baseAssetPrecision) и у суммы котируемой монеты (quoteAssetPrecision).
     pub base_precision: u32,
     pub quote_asset_precision: u32,
-    /// Допустимые типы ордера пары (orderTypes); None — поля нет в ответе (тогда проверяет только пробный ордер).
+    /// Допустимые типы ордера пары (orderTypes); None — поля нет в ответе (тогда тип проверяет пробный ордер в проверке
+    /// продажи без исполнения, у настоящего ордера — сам ордер: решение 412).
     pub order_types: Option<Vec<String>>,
     /// Решение 392 (t180): ценовой коридор лимитного ордера — фильтр PERCENT_PRICE_BY_SIDE (symbols_parse.rs
     /// price_band); None — фильтра нет.
@@ -75,8 +77,10 @@ impl SymbolRules {
     /// orderTypes пар exchangeInfo MEXC их не пишет ни у одной пары (живой ответ 03.11: даже BTCUSDT — LIMIT, MARKET,
     /// LIMIT_MAKER). Живой факт: 02.11 21:31 сделка 20261102213158008XPL — покупка ордером IMMEDIATE_OR_CANCEL принята и
     /// исполнена. IOC и FOK — лимитный ордер с правилом снятия остатка, поэтому допустимы, когда у пары есть LIMIT;
-    /// окончательно тип подтверждает пробный ордер /api/v3/order/test (venue.order_test_first). Остальные типы — только
-    /// из orderTypes. Поля orderTypes нет — проверяет только пробный ордер (true). Ошибок нет.
+    /// окончательно тип подтверждает пробный ордер /api/v3/order/test (venue.order_test_first) — только в проверке
+    /// продажи без исполнения (order_rules::check); у настоящего ордера пробного нет (решение 412) — тип подтверждает
+    /// сам ордер (отказ MEXC — ордер не поставлен). Остальные типы — только из orderTypes. Поля orderTypes нет — true
+    /// (проверяют пробный ордер в проверке без исполнения и сам ордер). Ошибок нет.
     pub fn order_type_allowed(&self, t: &str) -> bool {
         let Some(types) = &self.order_types else {
             return true;

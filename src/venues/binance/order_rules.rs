@@ -3,10 +3,11 @@
 //! (mod.rs → check_order, решение 134): пара торгуется через API (статус TRADING, isSpotTradingAllowed, права
 //! аккаунта), тип LIMIT есть в orderTypes, timeInForce IOC или FOK (venue.order_time_in_force), количество вниз до
 //! stepSize, цена до tickSize в безопасную сторону, пределы цены, количества и суммы; настройки ожидания итога и
-//! myTrades; при venue.order_test_first — пробный ордер POST /api/v3/order/test с теми же параметрами.
+//! myTrades (ready). Пробный ордер POST /api/v3/order/test с теми же параметрами (venue.order_test_first, probe) —
+//! ТОЛЬКО в проверке без исполнения (check); перед настоящей покупкой и продажей его нет (решение 412).
 //! Признак «биржа не примет наш ордер на паре» (order_block, решение 254) — та же проверка типа, ею symbols.rs
 //! помечает пару в справочнике для ядра (отсев до расчёта).
-//! Кто вызывает: trade.rs, mod.rs (check_order), symbols.rs (order_block).
+//! Кто вызывает: trade.rs (ready), mod.rs (check_order → check), symbols.rs (order_block).
 //! От чего зависит: symbols.rs, rest.rs, order_state.rs, fills.rs, ctx.rs.
 //! Настройки: venue.order_time_in_force [binance], venue.order_test_first [binance]; через order_state.rs и fills.rs —
 //! venue.order_poll_ms, venue.order_final_wait_ms, venue.my_trades_limit.
@@ -17,7 +18,8 @@
 //! - Time in force (enums.md): GTC, IOC, FOK. IOC — неисполненный остаток снимает биржа (статус EXPIRED).
 //! - POST /api/v3/order/test — «tests the request without submitting it to the matching engine», вес 1, ответ {}.
 //! - Фильтры (filters.md): PRICE_FILTER, LOT_SIZE, NOTIONAL/MIN_NOTIONAL. PERCENT_PRICE_BY_SIDE и правило PRICE_RANGE
-//!   (faqs/price_range_execution_rules) зависят от средней/референсной цены — их ловит пробный ордер или отказ биржи.
+//!   (faqs/price_range_execution_rules) зависят от средней/референсной цены — их ловит пробный ордер в проверке без
+//!   исполнения или отказ биржи у настоящего ордера.
 //! - Длина и алфавит newClientOrderId в документации не указаны (только −1100 «legal range is '%s'»): берём буквы,
 //!   цифры и «_» до 32 знаков — проверить на живом ответе −1100 (отчёт решения 160).
 
@@ -46,13 +48,14 @@ pub struct Prepared {
     pub price: Decimal,
     /// Свой ID ордера (newClientOrderId) — новый на каждую попытку (решение 114).
     pub client_id: String,
-    /// Параметры POST /api/v3/order (те же ушли в пробный ордер).
+    /// Параметры POST /api/v3/order (те же уходят в пробный ордер проверки без исполнения — probe).
     pub params: Vec<(&'static str, String)>,
 }
 
 /// Что делает: примет ли Binance на паре наш ордер — тип LIMIT есть в orderTypes пары (решение 254: тот же признак
 /// отсеивает пару ДО расчёта — symbols.rs → pairs.rs, и страхует ордер — check_rules). timeInForce в exchangeInfo не
-/// перечисляется (orderTypes — только типы; enums.md) — его подтверждает пробный ордер (venue.order_test_first).
+/// перечисляется (orderTypes — только типы; enums.md) — его подтверждает пробный ордер (venue.order_test_first) только в
+/// проверке продажи без исполнения (check); у настоящего ордера пробного нет (решение 412) — подтверждает сам ордер.
 /// Поля orderTypes нет — не ограничивает. Принимает: правила пары. Возвращает: None — примет; Some — причина.
 /// Ошибок нет. Официально: exchangeInfo https://developers.binance.com/docs/binance-spot-api-docs/rest-api/general-endpoints
 /// (orderTypes), enums.md (Order types).
@@ -129,10 +132,10 @@ pub fn check_rules(
     Ok((qty, price))
 }
 
-/// Что делает: всё, что проходит ордер до постановки (правила, настройки итога, пробный ордер). Вызывают И ордер,
-/// И проверка без исполнения. Принимает: окружение, справочник пар (свежесть — у вызывающего), запрос.
-/// Возвращает: Prepared. Ошибки: OrderRejected (правила, отказ пробного), NotConfigured, BadResponse (пары нет),
-/// RateLimited / Unreachable — сбой пробного ордера с его кодом.
+/// Что делает: всё, что проходит ордер до постановки (правила, настройки итога). Вызывают И ордер (trade.rs), И
+/// проверка без исполнения (check). Пробного ордера здесь нет (решение 412). Принимает: окружение, справочник пар
+/// (свежесть — у вызывающего), запрос. Возвращает: Prepared. Ошибки: OrderRejected (правила), NotConfigured,
+/// BadResponse (пары нет).
 pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<Prepared> {
     let rules = symbols.get(ctx, &req.asset.ticker)?;
     let tif = ctx.text("venue.order_time_in_force")?;
@@ -152,9 +155,6 @@ pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayR
         ("newClientOrderId", client_id.clone()),
         ("newOrderRespType", "FULL".to_string()),
     ];
-    if ctx.flag("venue.order_test_first").unwrap_or(false) {
-        test(ctx, &rules.symbol, params.clone()).await?;
-    }
     Ok(Prepared {
         symbol: rules.symbol,
         qty,
@@ -162,6 +162,24 @@ pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayR
         client_id,
         params,
     })
+}
+
+/// Что делает: проверка ордера без исполнения (контракт check_order, решение 134 — предпроверка продажи на бирже B до
+/// покупки): правила (ready) и пробный ордер (probe), если включён. Ошибки: как у ready и probe.
+pub async fn check(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<()> {
+    let p = ready(ctx, symbols, req).await?;
+    probe(ctx, &p).await
+}
+
+/// Что делает: пробный ордер с параметрами готового ордера, если venue.order_test_first = да (не задана — нет).
+/// Решение 412 (Тигран 19.11): только в проверке без исполнения (check), не перед настоящим ордером.
+/// Ошибки: OrderRejected / PriceOutOfRange (отказ пробного), RateLimited / Unreachable — сбой с его кодом.
+/// Официально: rest-api «Trading endpoints», Test new order (POST /api/v3/order/test) — ссылка в шапке файла.
+pub async fn probe(ctx: &Ctx, p: &Prepared) -> GatewayResult<()> {
+    if ctx.flag("venue.order_test_first").unwrap_or(false) {
+        test(ctx, &p.symbol, p.params.clone()).await?;
+    }
+    Ok(())
 }
 
 /// Пробный ордер POST /api/v3/order/test. Код ошибки сохраняется; непонятный ответ — OrderRejected.

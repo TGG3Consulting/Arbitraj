@@ -7,7 +7,8 @@
 //!   продажи — количество вниз до шага, цена вверх;
 //! - BingX, живой common/symbols 2026-10-24 (tests/data/bingx_2026-10-24/symbols.json): CAKE — успех и отказ по minQty;
 //!   TAG (API закрыт), SEA (status 10) — отказ стороны; BLUAI — сумма больше maxNotional 500; шаг XEC — 1 монета;
-//! - настоящий ордер и проверка зовут ОДНУ функцию правил (order_rules::ready) — по исходникам адаптеров.
+//! - настоящий ордер и проверка зовут ОДНУ функцию правил (order_rules::ready; у MEXC проверка — строго
+//!   order_rules::check, это ready и пробный ордер, решение 412) — по исходникам адаптеров.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::mexc (symbols, order_rules), arb::venues::bingx (symbols, order_rules). Моков нет.
@@ -109,20 +110,24 @@ fn bingx_sell_ok_and_rejects() {
 /// order_rules::ready; своих проверок пределов в trade.rs нет — правила не разойдутся.
 #[test]
 fn trade_and_check_share_rules() {
+    // Решение 412: у MEXC check_order — order_rules::check (ready + пробный ордер; что check зовёт ready —
+    // tests/order_probe_412.rs), у BingX пробного нет — check_order зовёт ready.
     let src = [
         (
             include_str!("../src/venues/mexc/trade.rs"),
             include_str!("../src/venues/mexc/mod.rs"),
+            "order_rules::check(&self.ctx, &self.symbols, req)",
         ),
         (
             include_str!("../src/venues/bingx/trade.rs"),
             include_str!("../src/venues/bingx/mod.rs"),
+            "order_rules::ready(&self.ctx, &self.symbols, req)",
         ),
     ];
-    for (trade, module) in src {
+    for (trade, module, check) in src {
         assert!(trade.contains("order_rules::ready(ctx, symbols, &req)"));
         assert!(module.contains("async fn check_order"));
-        assert!(module.contains("order_rules::ready(&self.ctx, &self.symbols, req)"));
+        assert!(module.contains(check));
         for own in [
             "min_notional",
             "max_notional",

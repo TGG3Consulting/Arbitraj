@@ -1,12 +1,13 @@
 //! Файл: venues/mexc/trade.rs
 //! Что делает: покупка или продажа на MEXC ордером IMMEDIATE_OR_CANCEL с худшей допустимой ценой (что не исполнилось
 //! сразу — снимает биржа) и проверкой факта (количество, средняя цена, комиссия — order_state.rs).
-//! Правила пары, округление, пределы и пробный ордер (POST /api/v3/order/test, venue.order_test_first [mexc]) —
-//! order_rules.rs: та же функция у проверки ордера без исполнения перед покупкой (решение 134).
+//! Правила пары, округление, пределы — order_rules::ready: та же функция у проверки ордера без исполнения перед
+//! покупкой (решение 134). Пробного ордера перед настоящим (покупка и продажа) нет — решение 412 (Тигран 19.11): он
+//! только в проверке без исполнения (order_rules::check, venue.order_test_first).
 //! Кто вызывает: mod.rs (trade из контракта).
 //! Решение 268: тот же путь постановки и итога — у рыночной продажи (market_sell.rs передаёт готовый ордер, prepared).
-//! От чего зависит: order_rules.rs (правила и пробный ордер), rest.rs, symbols.rs, num.rs, ctx.rs, order_state.rs.
-//! Настройки: venue.order_type [mexc] (в orderTypes пары; IOC/FOK — при LIMIT, решение 133), venue.order_test_first [mexc];
+//! От чего зависит: order_rules.rs (правила), rest.rs, symbols.rs, num.rs, ctx.rs, order_state.rs.
+//! Настройки: venue.order_type [mexc] (в orderTypes пары; IOC/FOK — при LIMIT, решение 133);
 //! ожидание итога — order_state.rs, venue.my_trades_limit — fills.rs (проверяются до отправки).
 //!
 //! Официальная документация:
@@ -15,7 +16,6 @@
 //!   ответ — orderId без статуса и исполнения (итог — запросом ордера).
 //! - Типы ордера https://www.mexc.com/api-docs/spot-v3/public-api-definitions — LIMIT, MARKET, LIMIT_MAKER,
 //!   IMMEDIATE_OR_CANCEL, FILL_OR_KILL (параметра timeInForce нет: IOC — это type).
-//! - POST /api/v3/order/test — «Test order requests without submitting them to the matching engine», ответ {}.
 //!
 //! Фильтр PERCENT_PRICE_BY_SIDE (exchangeInfo): лимитная цена не дальше заданного процента от последней сделки —
 //! последней цены у нас нет; нарушение — отказ MEXC (OrderRejected), деньги не двигаются.
@@ -31,9 +31,9 @@ use super::errors::Op;
 use super::symbols::Symbols;
 use super::{num, order_rules, order_state, rest};
 
-/// Ставит ордер и возвращает фактический результат. Правила, настройки и пробный ордер — order_rules::ready (та же
-/// функция, что у проверки ордера без исполнения перед покупкой, решение 134). Ошибки: OrderRejected (пара не
-/// торгуется, сумма вне пределов, отказ пробного ордера, отказ MEXC), OutcomeUnknown — ордер мог быть принят, итог не
+/// Ставит ордер и возвращает фактический результат. Правила и настройки — order_rules::ready (та же функция, что у
+/// проверки ордера без исполнения перед покупкой, решение 134); пробного ордера нет (решение 412). Ошибки:
+/// OrderRejected (пара не торгуется, сумма вне пределов, отказ MEXC), OutcomeUnknown — ордер мог быть принят, итог не
 /// получен (решение 64) — с «чем найти» (свой ID, ID ордера, если был; решение 231).
 /// Решение 268: `prepared` — уже подготовленный ордер (рыночная продажа, market_sell.rs): постановка и итог — тем же
 /// кодом; None — обычный лимитный ордер по правилам order_rules::ready.

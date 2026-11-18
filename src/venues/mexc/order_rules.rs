@@ -2,12 +2,13 @@
 //! Что делает: правила ордера MEXC — ОДНА функция для настоящего ордера (trade.rs) и для проверки ордера без исполнения
 //! (mod.rs → check_order, решение 134): пара торгуется через API в эту сторону, тип ордера допустим на паре (решение
 //! 133), количество и цена после округления до шагов (решение 107), минимальное количество, минимальная и максимальная
-//! сумма, настройки ожидания итога и myTrades; если включено venue.order_test_first — пробный ордер
-//! POST /api/v3/order/test с теми же параметрами. Правила в одном месте — проверка до покупки и ордер не расходятся.
+//! сумма, настройки ожидания итога и myTrades (ready). Правила в одном месте — проверка до покупки и ордер не
+//! расходятся. Пробный ордер POST /api/v3/order/test (venue.order_test_first, probe) — ТОЛЬКО в проверке без исполнения
+//! (check); перед настоящим ордером — ни перед покупкой, ни перед продажей — его нет (решение 412).
 //! Признак «биржа не примет наш ордер на паре» (order_block, решение 254) — та же проверка типа, ею symbols.rs
 //! помечает пару в справочнике для ядра (отсев до расчёта).
-//! Кто вызывает: trade.rs (перед постановкой), mod.rs (check_order — предпроверка ядра перед покупкой), symbols.rs
-//! (order_block).
+//! Кто вызывает: trade.rs (ready — перед постановкой), mod.rs (check_order → check — предпроверка ядра перед
+//! покупкой), symbols.rs (order_block), тесты.
 //! От чего зависит: symbols.rs (правила пары), rest.rs (пробный ордер), order_state.rs, fills.rs, ctx.rs.
 //! Настройки: venue.order_type [mexc], venue.order_test_first [mexc]; через order_state.rs и fills.rs — сроки ожидания
 //! итога и venue.my_trades_limit (без них ордер не ставится: после постановки — поздно).
@@ -23,7 +24,7 @@
 //! Фильтр PERCENT_PRICE_BY_SIDE (лимитная цена не дальше процента от последней сделки) правилами ордера не
 //! проверяется: последней цены в справочнике нет. Решение 392 (t180): ядро учитывает коридор заранее — перед покупкой
 //! читает его (price_band.rs: правило × GET /api/v3/ticker/price) и считает план только на уровнях стакана внутри
-//! коридора; цена могла сдвинуться после чтения — тогда ловит пробный ордер (если включён) или отказ биржи.
+//! коридора; цена могла сдвинуться после чтения — тогда ловит отказ биржи (пробного перед ордером нет, решение 412).
 
 use reqwest::Method;
 use rust_decimal::{Decimal, RoundingStrategy};
@@ -49,7 +50,7 @@ pub struct Prepared {
     pub price: Decimal,
     /// Свой ID ордера (newClientOrderId) — для поиска при неизвестном итоге.
     pub client_id: String,
-    /// Параметры запроса POST /api/v3/order (те же ушли в пробный ордер).
+    /// Параметры запроса POST /api/v3/order (те же уходят в пробный ордер проверки без исполнения — probe).
     pub params: Vec<(&'static str, String)>,
 }
 
@@ -125,10 +126,10 @@ pub fn check_rules(
 }
 
 /// Что делает: всё, что проходит ордер до постановки — правила пары (check_rules), настройки ожидания итога и
-/// myTrades, пробный ордер (venue.order_test_first). Вызывают И настоящий ордер (trade.rs), И проверка без исполнения.
+/// myTrades. Вызывают И настоящий ордер (trade.rs), И проверка без исполнения (check). Пробного ордера здесь нет
+/// (решение 412: перед настоящей покупкой и продажей он не делается; в проверке без исполнения — check → probe).
 /// Принимает: окружение, справочник пар (свежесть — у вызывающего), запрос. Возвращает: Prepared.
-/// Ошибки: OrderRejected (правила, отказ пробного ордера), NotConfigured (настройки), BadResponse (пары нет),
-/// RateLimited / Unreachable и др. — сбой пробного ордера с его кодом (решение 118, А-🟡8).
+/// Ошибки: OrderRejected (правила), NotConfigured (настройки), BadResponse (пары нет).
 pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<Prepared> {
     let rules = symbols.get(ctx, &req.asset.ticker)?;
     let order_type = ctx.text("venue.order_type")?;
@@ -147,9 +148,6 @@ pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayR
         ("price", price.normalize().to_string()),
         ("newClientOrderId", client_id.clone()),
     ];
-    if ctx.flag("venue.order_test_first")? {
-        test(ctx, &rules.symbol, params.clone()).await?;
-    }
     Ok(Prepared {
         symbol: rules.symbol,
         qty,
@@ -157,6 +155,25 @@ pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayR
         client_id,
         params,
     })
+}
+
+/// Что делает: проверка ордера без исполнения (контракт check_order, решение 134 — предпроверка продажи на бирже B до
+/// покупки): те же правила, что у настоящего ордера (ready), и пробный ордер (probe), если включён.
+/// Принимает: окружение, справочник пар, запрос. Ошибки: как у ready и probe.
+pub async fn check(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<()> {
+    let p = ready(ctx, symbols, req).await?;
+    probe(ctx, &p).await
+}
+
+/// Что делает: пробный ордер POST /api/v3/order/test с параметрами готового ордера, если venue.order_test_first = да.
+/// Решение 412 (Тигран 19.11): только в проверке без исполнения (check), не перед настоящим ордером.
+/// Принимает: окружение, готовый ордер. Ошибки: NotConfigured (venue.order_test_first не задана), отказ и сбой
+/// пробного ордера с его кодом (test). Официально: https://www.mexc.com/api-docs/spot-v3/spot-account-trade/test-new-order.
+pub async fn probe(ctx: &Ctx, p: &Prepared) -> GatewayResult<()> {
+    if ctx.flag("venue.order_test_first")? {
+        test(ctx, &p.symbol, p.params.clone()).await?;
+    }
+    Ok(())
 }
 
 /// Пробный ордер POST /api/v3/order/test: проверка параметров без исполнения. Код ошибки сохраняется (RateLimited,

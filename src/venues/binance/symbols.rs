@@ -74,7 +74,8 @@ pub struct SymbolRules {
     /// Можно купить / продать через API: isSpotTradingAllowed и права аккаунта покрывают permissionSets.
     pub api_buy: bool,
     pub api_sell: bool,
-    /// Типы ордера пары (orderTypes); None — поля нет (тогда тип проверяет только пробный ордер).
+    /// Типы ордера пары (orderTypes); None — поля нет (тогда тип проверяет пробный ордер в проверке без исполнения,
+    /// у настоящего ордера — сам ордер; решение 412).
     pub order_types: Option<Vec<String>>,
     /// Решение 392 (t180): ценовые коридоры лимитного ордера — фильтры PERCENT_PRICE_BY_SIDE и PERCENT_PRICE
     /// (symbols_parse.rs price_bands; у каждого свой avgPriceMins). Пусто — фильтров нет.

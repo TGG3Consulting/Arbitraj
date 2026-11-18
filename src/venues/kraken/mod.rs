@@ -181,7 +181,7 @@ impl Venue for Kraken {
     }
 
     /// Решение 134: те же правила, что у настоящего ордера (order_rules::ready), и пробный ордер validate=true при
-    /// venue.order_test_first = да.
+    /// venue.order_test_first = да. Решение 412: пробный — только здесь; настоящий ордер (trade.rs) его не делает.
     async fn check_order(&self, req: &TradeRequest) -> GatewayResult<()> {
         self.symbols.ensure_fresh(&self.ctx).await?;
         let p = order_rules::ready(&self.ctx, &self.symbols, req).await?;

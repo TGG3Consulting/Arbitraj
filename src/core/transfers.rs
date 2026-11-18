@@ -384,9 +384,22 @@ async fn go(
                 let e = crate::gateway::errors::GatewayError::new(
                     ErrorCode::WithdrawRejected,
                     Some(from.clone()),
+                    // Требование Тиграна 18.11: что произошло, что хотели, где деньги, что дальше.
                     format!(
-                        "{}: вывод {} — статус {:?} после принятия (денег не ушло)",
-                        from.0, created.venue_ref, t.status
+                        "вывод {} {} с {} на {} (перевод {deal}) {} площадкой уже после того, как она его приняла \
+                         (ответ о выводе {}): деньги не ушли и остались на {}; перевод не состоялся — дальше как при \
+                         отказе вывода",
+                        crate::notify::human::qty(qty),
+                        asset.ticker,
+                        crate::notify::human::venue(&from.0),
+                        crate::notify::human::venue(&to.0),
+                        if t.status == TransferStatus::Cancelled {
+                            "отменён"
+                        } else {
+                            "отклонён"
+                        },
+                        created.venue_ref,
+                        crate::notify::human::venue(&from.0)
                     ),
                 );
                 Box::pin(super::usdt_accepted::unmark(core, deal)).await;

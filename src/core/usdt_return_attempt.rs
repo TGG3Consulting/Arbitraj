@@ -57,10 +57,12 @@ pub async fn attempt(
     let free = super::usdt_hold::spendable(free, &others);
     // Решение 227: никогда не больше части — остальное на площадке чужое (другие части, оборотные деньги кошелька).
     let amount = amount_for(core, from, free, cap).map_err(|e| {
+        // Требование Тиграна 18.11: какая сделка, сколько хотели перегнать и откуда куда, что в резерве у других.
         OpError::from(format!(
-            "{} ({}): {e}{}",
-            from.0,
+            "перегон выручки сделки {deal} {cap} {} с {} на {}: {e}{}",
             usdt.ticker,
+            crate::notify::human::venue(&from.0),
+            crate::notify::human::venue(&to.0),
             super::usdt_hold::suffix(&others, &usdt.ticker)
         ))
     })?;

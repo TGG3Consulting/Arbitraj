@@ -19,37 +19,46 @@
 //! transfers::send_trade). Сделки одного направления и сделки с общей только площадкой продажи (или только покупки) —
 //! не встречные (их учитывает ride_quote.rs).
 //! Кто вызывает: coin_ride.rs (admit).
-//! От чего зависит: coin_ride.rs (Ride), dex_account.rs, trade_ops.rs (вид площадки), deal.rs, engine.rs, core/types.
+//! От чего зависит: coin_ride.rs (Ride), dex_account.rs, trade_ops.rs (вид площадки), deal_words.rs, notify/human.rs,
+//! deal.rs, engine.rs, core/types.
 //! Настройки: нет (базовое поведение; маппинг кошельков — экран «Маппинг кошельков»).
 
 use crate::core::types::{DexAccountId, Direction, VenueId};
 use crate::gateway::contract::VenueKind;
+use crate::notify::human as hu;
 
 use super::coin_ride::Ride;
 use super::engine::{Core, lk};
 
 /// Что делает: общий ли счёт монеты на площадке `v` у новой сделки (счёт `mine`) и идущей (счёт `theirs`). Принимает:
-/// ядро, площадку, счета DEX. Возвращает: текст «где» (для причины) — общий; None — разные кошельки DEX. Ошибок нет.
+/// ядро, площадку, счета DEX. Возвращает: словами, какой счёт общий (для причины); None — разные кошельки DEX.
+/// Ошибок нет.
 fn shared(
     core: &Core,
     v: &VenueId,
     mine: Option<&DexAccountId>,
     theirs: Option<&DexAccountId>,
 ) -> Option<String> {
+    let name = hu::venue(&v.0);
     match super::trade_ops::kind(core, v) {
-        Ok(VenueKind::Cex) => Some(format!("на бирже {} (один счёт площадки)", v.0)),
+        Ok(VenueKind::Cex) => Some(format!("у них один счёт на бирже {name}")),
         Ok(VenueKind::Dex) => match (mine, theirs) {
             (Some(a), Some(b)) if a != b => None,
-            (Some(a), Some(_)) => Some(format!("на {} с того же кошелька DEX {a}", v.0)),
-            _ => Some(format!("на {} (кошелёк DEX сделки неизвестен)", v.0)),
+            (Some(a), Some(_)) => Some(format!("у них один кошелёк {a} на {name}")),
+            _ => Some(format!(
+                "кошелёк одной из них на {name} неизвестен — считаем, что он общий"
+            )),
         },
-        Err(_) => Some(format!("на {} (вид площадки неизвестен)", v.0)),
+        Err(_) => Some(format!(
+            "вид площадки {name} неизвестен — считаем счёт общим"
+        )),
     }
 }
 
 /// Что делает: встречная идущая сделка на общем счёте для новой сделки направления `d`. Принимает: ядро,
-/// направление, идущие сделки монеты. Возвращает: причину отказа (журнал core.start_refused через Start::Busy);
-/// None — встречных нет. Ошибок нет. Замок: deals (коротко; вызывать без замка deals).
+/// направление, идущие сделки монеты. Возвращает: причину отказа (журнал core.start_refused через Start::Busy) —
+/// требование Тиграна 18.11: что за новая сделка, какая встречная (ID, откуда → куда, шаг, сколько монет и где), какой
+/// счёт общий, что будет дальше; None — встречных нет. Ошибок нет. Замок: deals (коротко; вызывать без замка deals).
 pub fn check(core: &Core, d: &Direction, rides: &[Ride]) -> Option<String> {
     let counter: Vec<&Ride> = rides
         .iter()
@@ -63,28 +72,46 @@ pub fn check(core: &Core, d: &Direction, rides: &[Ride]) -> Option<String> {
         let deals = lk(&core.inner.deals);
         counter
             .iter()
-            .map(|r| {
-                let x = deals.get(&r.deal_id);
-                let step = x.map(|x| format!("{:?}", x.step)).unwrap_or_default();
-                (x.and_then(|x| x.dex_account.clone()), step)
+            .map(|r| match deals.get(&r.deal_id) {
+                Some(x) => (x.dex_account.clone(), super::deal_words::deal(core, x)),
+                None => (None, format!("сделка {}", r.deal_id)),
             })
             .collect()
     };
-    for (r, (acc, step)) in counter.iter().zip(theirs) {
+    let t = &d.asset.ticker;
+    for (r, (acc, words)) in counter.iter().zip(theirs) {
         // Обе общие площадки (точно обратное направление — обе): общий счёт хоть на одной — встречная.
         let venues = [
-            (r.sell_on == d.buy_on).then_some(&d.buy_on),
-            (r.buy_on == d.sell_on).then_some(&d.sell_on),
+            (r.sell_on == d.buy_on).then(|| {
+                (
+                    &d.buy_on,
+                    format!(
+                        "купила бы {t} на {}, где встречная его продаёт",
+                        hu::venue(&d.buy_on.0)
+                    ),
+                )
+            }),
+            (r.buy_on == d.sell_on).then(|| {
+                (
+                    &d.sell_on,
+                    format!(
+                        "продала бы {t} на {}, где встречная его купила",
+                        hu::venue(&d.sell_on.0)
+                    ),
+                )
+            }),
         ];
-        let at = venues
+        let hit = venues
             .into_iter()
             .flatten()
-            .find_map(|v| shared(core, v, mine.as_ref(), acc.as_ref()));
-        if let Some(at) = at {
+            .find_map(|(v, how)| shared(core, v, mine.as_ref(), acc.as_ref()).map(|at| (how, at)));
+        if let Some((how, at)) = hit {
             return Some(format!(
-                "встречная сделка {} ({} → {}, шаг {step}) {at}: одна покупает монету там, где другая её продаёт, — \
-                 не входим, пока она идёт (решение 405, ответ Тиграна на Н1)",
-                r.deal_id, r.buy_on.0, r.sell_on.0
+                "новая сделка {} не начата: идёт встречная {words}. Новая {how}, и {at} — монеты двух сделок легли бы \
+                 вместе, и при сверке остатка одна могла бы продать монеты другой. Бот подождёт: когда сделка {} \
+                 закончится, это направление снова торгуется. Делать ничего не нужно (решение 405)",
+                super::deal_words::route(d),
+                r.deal_id
             ));
         }
     }

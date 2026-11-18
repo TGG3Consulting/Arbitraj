@@ -298,7 +298,13 @@ async fn same_direction_joins_other_directions_own_group_stuck_holds_all() {
     let back = dir_of("bsc_dex", "bingx");
     assert!(!coin_ride::blocks_new(&core, &back), "причина — у admit");
     let why = coin_ride::admit(&core, &back).unwrap_err();
-    assert!(why.starts_with("встречная сделка D1"), "{why}");
+    assert!(
+        why.starts_with(
+            "новая сделка CAKE DEX → BingX не начата: идёт встречная сделка D1 (CAKE BingX → DEX, шаг «перевод», \
+             10 CAKE на BingX)"
+        ),
+        "{why}"
+    );
     assert!(
         !coin_ride::take(&core, &key),
         "ручное действие при идущей — отказ"
@@ -415,14 +421,23 @@ async fn counter_direction_on_same_wallet_waits() {
     assert_eq!(ride(&core, &d1).await, Seat::Lead);
     // DEX → BingX — покупка на том же кошельке W BingX, где D1 продаёт: отказ с причиной (журнал core.start_refused).
     let why = coin_ride::admit(&core, &dir_of("bsc_dex", "bingx")).unwrap_err();
+    // Требование Тиграна 18.11: какая новая, какая встречная (ID, откуда → куда, шаг, монеты и где), какой счёт общий.
+    let want = format!(
+        "новая сделка CAKE DEX → BingX не начата: идёт встречная сделка D1 (CAKE BingX → DEX, шаг «продажа», 10 CAKE \
+         на BingX). Новая купила бы CAKE на DEX, где встречная его продаёт, и у них один кошелёк {wb} на DEX — монеты \
+         двух сделок легли бы вместе"
+    );
+    assert!(why.starts_with(&want), "{why}");
     assert!(
-        why.starts_with("встречная сделка D1 (bingx → bsc_dex"),
+        why.contains("когда сделка D1 закончится, это направление снова торгуется"),
         "{why}"
     );
-    assert!(why.contains(&format!("кошелька DEX {wb}")), "{why}");
     // MEXC → BingX — продажа на BingX, где D1 купила (один счёт биржи): отказ.
     let why = coin_ride::admit(&core, &dir_of("mexc", "bingx")).unwrap_err();
-    assert!(why.contains("на бирже bingx"), "{why}");
+    assert!(
+        why.contains("Новая продала бы CAKE на BingX, где встречная его купила, и у них один счёт на бирже BingX"),
+        "{why}"
+    );
     // Другой кошелёк (DEX → MEXC — кошелёк MEXC) и не встречные (MEXC → DEX, BingX → MEXC) — можно.
     assert_ne!(wb, wm);
     for ok in [
@@ -491,7 +506,10 @@ async fn waiting_group_usdt_reserved_from_buys() {
     assert_eq!(h.amount, d("95"));
     assert_eq!(
         h.deals,
-        vec![("D2".to_string(), "общий возврат группы G".to_string())]
+        vec![(
+            "D2".to_string(),
+            "CAKE MEXC → BingX: выручка ждёт общего возврата группы G на MEXC".to_string()
+        )]
     );
     // М1: докупку выключили (да → нет) — отложенная часть идущей группы остаётся в резерве до общего возврата.
     set(&s, coin_ride::TOP_UP, json!(false)).await;
@@ -506,17 +524,28 @@ async fn waiting_group_usdt_reserved_from_buys() {
         &h,
     );
     assert_eq!(cap, Ok((d("25"), d("25"), quote.clone())));
+    // Как его собирает buy_free: прочитанное свободно и площадка (требование Тиграна 18.11 — что хотели, сколько на
+    // счёте, сколько и чьё в резерве, что делать).
+    let mut hr = h.clone();
+    hr.free = Some(d("60"));
+    hr.place = Some("BingX".into());
     let text = arb::core::limits::cap_of(
         &bingx,
         d("50"),
-        (usdt_hold::spendable(d("60"), &h), quote.clone()),
-        &h,
+        (usdt_hold::spendable(d("60"), &hr), quote.clone()),
+        &hr,
     )
     .unwrap_err();
-    assert_eq!(text, arb::core::limits::zero_text(&bingx, "USDT", &h));
-    assert!(
-        text.contains("ещё 95 USDT в резерве возвратов USDT: D2 (общий возврат группы G)"),
-        "{text}"
+    assert_eq!(
+        text,
+        arb::core::limits::zero_text(&bingx, "USDT", &hr, Some(d("50")))
+    );
+    assert_eq!(
+        text,
+        "на bingx свободно 0 USDT для покупки, хотели купить на 50.00 USDT; на BingX сейчас 60.00 USDT — ещё 95.00 \
+         USDT в резерве возвратов USDT: сделка D2 (CAKE MEXC → BingX: выручка ждёт общего возврата группы G на MEXC) — 95.00 USDT; эти USDT ждут возврата, бот их не трогает \
+         (решение 405). Покупку не делаем. Что сделать: дождитесь этих возвратов или разберите «не вернулись» на \
+         экране «Ручное управление» → «Резерв USDT возвратов»"
     );
     let back = dir_of("bingx", "mexc");
     assert!(arb::core::precheck_balance::is_balance(&back, &text));
@@ -546,7 +575,7 @@ async fn waiting_group_usdt_reserved_from_buys() {
         after
             .deals
             .iter()
-            .all(|(_, w)| !w.starts_with("общий возврат группы")),
+            .all(|(_, w)| !w.contains("ждёт общего возврата группы")),
         "{after:?}"
     );
 }
@@ -593,9 +622,20 @@ async fn started_returns_reserved_until_done() {
     assert_eq!(
         h.deals,
         vec![
-            ("S1".to_string(), "возврат идёт".to_string()),
-            ("S2".to_string(), "возврат ждёт повтора".to_string()),
-            ("S4".to_string(), "не вернулись — ждут человека".to_string()),
+            (
+                "S1".to_string(),
+                "CAKE MEXC → BingX: перегон выручки на MEXC идёт".to_string()
+            ),
+            (
+                "S2".to_string(),
+                "CAKE MEXC → BingX: перегон выручки на MEXC ждёт повтора (тест)".to_string()
+            ),
+            (
+                "S4".to_string(),
+                "CAKE MEXC → BingX: выручка не вернулась на MEXC (тест) — ждёт кнопки «Перегнать» или \
+                 «Перегнано вручную»"
+                    .to_string()
+            ),
         ]
     );
     assert_eq!(usdt_hold::held(&core, &mexc, None).amount, Decimal::ZERO);
@@ -682,17 +722,29 @@ async fn remain_fact_keeps_only_own_coins_on_shared_account() {
     assert_eq!(o.deals, vec![("A".to_string(), d("10"))]);
     assert!(apply_fact(&core, &mut b, d("12")).await);
     assert_eq!(b.qty, d("2"));
-    let logged = j.list(500, None).await.unwrap().iter().any(|e| {
-        e.kind == "core.remain_fact"
-            && e.message
-                .contains("из них за другими сделками 10 (A: 10); дальше 2")
-    });
-    assert!(logged, "журнал core.remain_fact");
+    // Требование Тиграна 18.11: текст — какая сделка, сколько по учёту / на счёте / у других (кто), сколько продаём и
+    // сколько не хватает, что проверить.
+    let rows = j.list(500, None).await.unwrap();
+    let msg = rows
+        .iter()
+        .find(|e| e.kind == "core.remain_fact" && e.message.contains("из них 10 CAKE"))
+        .map(|e| e.message.clone())
+        .unwrap_or_default();
+    assert!(
+        msg.starts_with(
+            "сделка B (CAKE BingX → DEX, шаг «монета застряла», 5 CAKE на BingX): по учёту у сделки 5 CAKE, а на \
+             счёте BingX сейчас 12 CAKE, из них 10 CAKE принадлежат другим сделкам: сделка A (CAKE BingX → DEX, \
+             шаг «монета застряла», 10 CAKE на BingX). Бот продаёт только монеты этой сделки: 2 CAKE; не хватает \
+             3 CAKE — проверьте баланс CAKE на BingX и хронологию сделки B"
+        ),
+        "{msg}"
+    );
     // Пример записки: учёт 1000, кошелёк 900, другие 500 → 400; факт 0 → закрыть; других нет — как settle_qty.
     let others = |q: &str| arb::core::remain_others::Others {
         qty: d(q),
         deals: vec![],
         unclear: vec![],
+        words: vec![],
     };
     assert_eq!(
         own_qty(d("1000"), d("900"), &others("500")),

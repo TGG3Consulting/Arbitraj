@@ -67,7 +67,7 @@ async fn attempts_loop(
         Box::pin(wait_balance(
             core,
             (from, acc),
-            &asset.ticker,
+            (id, &asset.ticker),
             amount,
             own.as_deref(),
         ))
@@ -102,12 +102,13 @@ async fn attempts_loop(
 /// Ждёт, пока на свободном балансе площадки появится сумма (не дольше usdt_return.balance_wait_ms, опрос раз в
 /// usdt_return.balance_poll_ms). Решение 405 (ревью 3, Н3): свободное — за вычетом резерва возвратов ДРУГИХ сделок
 /// (usdt_hold.rs held_except; своя — `own`); не задано ожидание — одна проверка, только если резерв других есть (иначе
-/// сразу дальше, без запроса баланса — как раньше). Принимает: ядро, (площадка, счёт DEX), тикер, сумму, свою сделку.
+/// сразу дальше, без запроса баланса — как раньше). Принимает: ядро, (площадка, счёт DEX), (ID перегона, тикер), сумму,
+/// свою сделку.
 /// Ошибка: сумма так и не появилась (текст с балансом и резервом) — вывод не уходил (повтор по текущей логике).
 async fn wait_balance(
     core: &Core,
     (venue, acc): (&VenueId, Option<&DexAccountId>),
-    ticker: &str,
+    (id, ticker): (&str, &str),
     amount: Decimal,
     own: Option<&str>,
 ) -> Result<(), OpError> {
@@ -129,16 +130,21 @@ async fn wait_balance(
         let h = reserved(core);
         let last = match super::limits::free_now(core, venue, acc, ticker).await {
             Ok(free) if super::usdt_hold::spendable(free, &h) >= amount => return Ok(()),
+            // Требование Тиграна 18.11: сколько хотели перегнать, сколько на счёте, сколько и чьё в резерве, чего
+            // не хватает.
             Ok(free) => format!(
-                "свободно {free} {ticker}{}",
-                super::usdt_hold::suffix(&h, ticker)
+                "на счёте свободно {free} {ticker}{}; для этого перегона остаётся {} — не хватает {}",
+                super::usdt_hold::suffix(&h, ticker),
+                super::usdt_hold::spendable(free, &h),
+                amount - super::usdt_hold::spendable(free, &h)
             ),
             Err(e) => e,
         };
         if started.elapsed() >= Duration::from_millis(wait) {
             return Err(OpError::from(format!(
-                "{}: за {wait} мс на балансе не появилось {amount} {ticker} ({last}) — вывод не отправлялся",
-                venue.0
+                "перегон {id} {amount} {ticker} с {}: {last}. Вывод не отправлялся (ждали {wait} мс) — дальше повтор \
+                 или «не вернулись» с кнопкой на экране «Ручное управление»",
+                crate::notify::human::venue(&venue.0)
             )));
         }
         tokio::time::sleep(Duration::from_millis(poll)).await;

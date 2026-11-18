@@ -70,24 +70,35 @@ pub async fn apply_fact(core: &Core, deal: &mut Deal, fact: Decimal) -> bool {
     if qty == deal.qty {
         return true;
     }
-    let mut theirs = String::new();
-    if others.qty > Decimal::ZERO {
-        theirs.push_str(&format!(
-            ", из них за другими сделками {} ({})",
-            others.qty,
-            list(&others)
-        ));
-    }
-    if !others.unclear.is_empty() {
-        theirs.push_str(&format!(
-            "; в пути через счёт {} — где их монеты, не доказано: не вычитаются",
-            others.unclear.join(", ")
-        ));
-    }
-    let text = format!(
-        "{}: по учёту {} {}, на {} — {fact}{theirs}; дальше {qty} (решение 222, 405)",
-        deal.id, deal.qty, deal.direction.asset.ticker, deal.at.0
+    // Требование Тиграна 18.11: что произошло, какая сделка, сколько по учёту / на счёте / у других, что делать.
+    let t = &deal.direction.asset.ticker;
+    let mut text = format!(
+        "{}: по учёту у сделки {}, а на счёте {} сейчас {}",
+        super::deal_words::deal(core, deal),
+        super::deal_words::coins(deal.qty, t),
+        super::deal_words::place(core, &deal.at, deal.dex_account.as_ref()),
+        super::deal_words::coins(fact, t)
     );
+    if others.qty > Decimal::ZERO {
+        text.push_str(&format!(
+            ", из них {} принадлежат другим сделкам: {}",
+            super::deal_words::coins(others.qty, t),
+            others.words.join("; ")
+        ));
+    } else if !others.words.is_empty() {
+        text.push_str(&format!(
+            " (через этот счёт идёт: {})",
+            others.words.join("; ")
+        ));
+    }
+    text.push_str(&format!(
+        ". Бот продаёт только монеты этой сделки: {}; не хватает {} — проверьте баланс {t} на {} и хронологию \
+         сделки {} (решение 222, 405)",
+        super::deal_words::coins(qty, t),
+        super::deal_words::coins(deal.qty - qty, t),
+        super::deal_words::place(core, &deal.at, deal.dex_account.as_ref()),
+        deal.id
+    ));
     log(core, deal, &text).await;
     super::manual_halted::set_qty(deal, qty, None);
     if qty > Decimal::ZERO {
@@ -97,15 +108,6 @@ pub async fn apply_fact(core: &Core, deal: &mut Deal, fact: Decimal) -> bool {
     let why = "остатка на площадке нет — фантом учёта (решение 222)";
     super::ledger::finish(core, deal, Step::Closed, why).await;
     false
-}
-
-/// Сделки и их монеты для текста. Ошибок нет.
-fn list(o: &super::remain_others::Others) -> String {
-    o.deals
-        .iter()
-        .map(|(d, q)| format!("{d}: {q}"))
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
 /// Решение 405: на счёте что-то есть, но по учёту всё — монеты других сделок: сделка не закрывается как фантом (чей
@@ -118,16 +120,27 @@ async fn all_foreign(
     fact: Decimal,
     others: &super::remain_others::Others,
 ) -> bool {
-    let text = format!(
-        "{}: по учёту {} {}, на {} — {fact}, а за другими сделками там {} ({}) — своих монет на счёте не видно, \
-         чужие не трогаем; решает человек (решение 405)",
-        deal.id,
-        deal.qty,
-        deal.direction.asset.ticker,
-        deal.at.0,
-        others.qty,
-        list(others)
+    // Требование Тиграна 18.11: что произошло, какая сделка, что хотели, сколько по учёту / на счёте / у других, что
+    // делать человеку.
+    let t = &deal.direction.asset.ticker;
+    let at = super::deal_words::place(core, &deal.at, deal.dex_account.as_ref());
+    let mut text = format!(
+        "Своих монет на счёте не видно: {} должна продать {}, на {at} сейчас {}, но по учёту {} из них \
+         принадлежат другим сделкам: {}",
+        super::deal_words::deal(core, deal),
+        super::deal_words::coins(deal.qty, t),
+        super::deal_words::coins(fact, t),
+        super::deal_words::coins(others.qty, t),
+        others.words.join("; ")
     );
+    text.push_str(&format!(
+        ". Для этой сделки на счёте не остаётся ничего (не хватает {}). Бот ничего не продаёт и сделку не закрывает, \
+         чтобы не продать чужие монеты. Что сделать: проверьте баланс {t} на {at}; если монеты этой сделки есть — \
+         «Продать сейчас» по сделке {} на экране «Ручное управление», если их нет — «Продано вручную» (или закройте \
+         сделку с завышенным учётом из списка выше) (решение 405)",
+        super::deal_words::coins(deal.qty, t),
+        deal.id
+    ));
     log(core, deal, &text).await;
     // В куче: путь застрявшей сделки чувствителен к стеку (решение 389).
     Box::pin(super::manual::raise_alert(

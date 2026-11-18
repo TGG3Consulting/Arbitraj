@@ -88,16 +88,19 @@ pub(super) fn current_retry() -> Option<String> {
     RETRY.try_with(Clone::clone).ok().flatten()
 }
 
-/// Сделки монеты, которые держат её сейчас: (ID, шаг) идущих и занят ли замок целиком. Ошибок нет.
-pub(super) fn holders(core: &Core, key: &CoinKey) -> (Vec<(String, Option<Step>)>, bool) {
+/// Сделка, держащая монету: ID, шаг, словами (deal_words.rs).
+pub(super) type Holder = (String, Option<Step>, String);
+
+/// Сделки монеты, которые держат её сейчас: (ID, шаг, словами) идущих и занят ли замок целиком. Ошибок нет.
+pub(super) fn holders(core: &Core, key: &CoinKey) -> (Vec<Holder>, bool) {
     let rides = super::coin_ride::of_coin(core, key);
     let active = lk(&core.inner.active).contains(key);
     let deals = lk(&core.inner.deals);
     let v = rides
         .into_iter()
-        .map(|r| {
-            let step = deals.get(&r.deal_id).map(|d| d.step);
-            (r.deal_id, step)
+        .map(|r| match deals.get(&r.deal_id) {
+            Some(d) => (r.deal_id, Some(d.step), super::deal_words::deal(core, d)),
+            None => (r.deal_id.clone(), None, format!("сделка {}", r.deal_id)),
         })
         .collect();
     (v, active)
@@ -110,22 +113,20 @@ pub(super) fn holders(core: &Core, key: &CoinKey) -> (Vec<(String, Option<Step>)
 /// задачи (stuck.rs, sell_unsent.rs, manual_sell.rs, relay_here.rs, remain_fact.rs all_foreign → вызывающий
 /// возвращается) — запись снимется, ждём. Застревание — только «застряла» (режим застрявшей монеты ведёт её в этой же
 /// задаче сколько угодно). Ошибок нет.
-pub(super) fn stuck_of(list: &[(String, Option<Step>)]) -> Option<String> {
+pub(super) fn stuck_of(list: &[Holder]) -> Option<String> {
     list.iter()
-        .find(|(_, s)| matches!(s, Some(Step::Stuck)))
-        .map(|(id, s)| {
-            let step = s.map_or("нет в учёте", super::deal_text::step_name);
-            format!(
-                "монету держит сделка {id} (шаг: {step}) — окончания не будет, сначала решите её"
-            )
-        })
+        .find(|(_, s, _)| matches!(s, Some(Step::Stuck)))
+        .map(|(_, _, words)| super::manual_wait_text::stuck(words))
 }
 
 /// Список «чьих окончаний ждём» для экрана. Ошибок нет.
-pub(super) fn waits_for(list: &[(String, Option<Step>)], active: bool) -> Vec<String> {
-    let mut v: Vec<String> = list.iter().map(|(id, _)| id.clone()).collect();
+pub(super) fn waits_for(list: &[Holder], active: bool) -> Vec<String> {
+    let mut v: Vec<String> = list.iter().map(|(_, _, words)| words.clone()).collect();
     if active {
-        v.push("вход сделки или другое действие с монетой".into());
+        v.push(
+            "вход новой сделки (предпроверка, покупка) или другое ручное действие с этой монетой"
+                .into(),
+        );
     }
     v
 }
@@ -138,10 +139,10 @@ pub fn defer(core: &Core, key: &CoinKey, ticker: &str, old: String) -> Result<St
         return Err(old);
     };
     let (list, active) = holders(core, key);
-    if let Some(why) = stuck_of(&list) {
-        return Err(format!("{old}: {why} (решение 405)"));
-    }
     let what = cmd.action.title().to_string();
+    if let Some(why) = stuck_of(&list) {
+        return Err(super::manual_wait_text::refused(&what, ticker, &why));
+    }
     let who = super::commands::who(&cmd);
     let w = ManualWait {
         id: super::ids::uuid_v4()
@@ -158,20 +159,12 @@ pub fn defer(core: &Core, key: &CoinKey, ticker: &str, old: String) -> Result<St
     {
         let mut m = lk(&core.inner.manual_waits);
         if let Some(x) = m.get(key) {
-            return Err(format!(
-                "по {ticker} уже ждёт ручное действие «{}» (с {}) — отмените его («Отменить ожидание» на «Ручное \
-                 управление») или дождитесь",
-                x.what, x.since
-            ));
+            return Err(super::manual_wait_text::already(&what, ticker, x));
         }
         m.insert(key.clone(), w.clone());
         core.inner.manual_waits_live.fetch_add(1, Ordering::AcqRel);
     }
-    let text = format!(
-        "«{what}»: ждёт окончания сделок по {ticker}: {} — новые сделки {ticker} на паузе; выполню после их окончания \
-         (отменить — «Отменить ожидание» на «Ручное управление»)",
-        w.waits_for.join(", ")
-    );
+    let text = super::manual_wait_text::started(&w);
     super::manual_wait_run::start(core, key.clone(), w.id.clone(), cmd, text.clone());
     Ok(text)
 }
@@ -186,14 +179,12 @@ pub fn command(core: &Core, a: &ManualAction) -> Option<Result<String, String>> 
         let mut m = lk(&core.inner.manual_waits);
         m.values_mut().find(|w| &w.id == id).map(|w| {
             w.cancel = true;
-            format!("«{}» по {}", w.what, w.coin)
+            super::manual_wait_text::cancelled(w)
         })
     };
     core.inner.coin_wake.notify_waiters();
     Some(match found {
-        Some(t) => Ok(format!(
-            "ожидание {t} отменено — действие не выполняется, пауза снимается"
-        )),
+        Some(t) => Ok(t),
         None => Err(format!("ожидания {id} нет (уже выполнено или отменено)")),
     })
 }

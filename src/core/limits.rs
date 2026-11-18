@@ -79,19 +79,21 @@ pub fn cap_of(
     h: &super::usdt_hold::Held,
 ) -> Result<(Decimal, Decimal, String), String> {
     if free <= Decimal::ZERO {
-        return Err(zero_text(a, &quote, h));
+        return Err(zero_text(a, &quote, h, Some(budget)));
     }
     Ok((budget.min(free), free, quote))
 }
 
 /// Текст отказа «свободно 0»: none_free (начало прежнее — окно ставит метку «баланс») и, если есть, резерв возвратов
-/// (решение 405). Принимает: площадку, тикер, резерв. Ошибок нет.
-pub fn zero_text(a: &VenueId, quote: &str, h: &super::usdt_hold::Held) -> String {
-    format!(
-        "{}{}",
-        none_free(a, quote),
-        super::usdt_hold::suffix(h, quote)
-    )
+/// (решение 405; требование Тиграна 18.11: что хотели купить, сколько на счёте, сколько и чьё в резерве, что делать —
+/// usdt_hold_text.rs). Принимает: площадку, тикер, резерв, бюджет покупки (None — предпроверка). Ошибок нет.
+pub fn zero_text(
+    a: &VenueId,
+    quote: &str,
+    h: &super::usdt_hold::Held,
+    budget: Option<Decimal>,
+) -> String {
+    super::usdt_hold_text::zero(&none_free(a, quote), h, budget)
 }
 
 /// Чтение для buy_cap: котируемая монета A (venue.quote_asset) и её свободный баланс — один запрос; решение 405 — за
@@ -115,7 +117,10 @@ pub async fn buy_free(
         .text("venue.quote_asset", at)
         .map_err(|e| e.message)?;
     let free = free_now(core, &d.buy_on, acc, &quote).await?;
-    let h = super::usdt_hold::held(core, &d.buy_on, acc);
+    let mut h = super::usdt_hold::held(core, &d.buy_on, acc);
+    // Для текста отказа (требование Тиграна 18.11): сколько на счёте до резерва и где.
+    h.free = Some(free);
+    h.place = Some(super::deal_words::place(core, &d.buy_on, acc));
     Ok((super::usdt_hold::spendable(free, &h), quote, h))
 }
 

@@ -96,7 +96,7 @@ pub async fn read(core: &Core, d: &Direction, acc: Option<&DexAccountId>) -> Res
     match super::limits::buy_free(core, d, acc).await {
         // Решение 405: свободное съел резерв возвратов USDT — в тексте та же сумма, что вычтена (usdt_hold.rs).
         Ok((free, quote, h)) if free <= Decimal::ZERO => {
-            Err(super::limits::zero_text(&d.buy_on, &quote, &h))
+            Err(super::limits::zero_text(&d.buy_on, &quote, &h, None))
         }
         Ok((free, quote, _)) => Ok(Read::Got { free, quote }),
         Err(why) if super::trade_ops::kind(core, &d.buy_on) == Ok(VenueKind::Cex) => {

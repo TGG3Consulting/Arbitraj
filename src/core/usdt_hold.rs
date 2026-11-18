@@ -45,6 +45,10 @@ pub struct Held {
     pub deals: Vec<(String, String)>,
     /// То же с суммой каждой строки (экран резервов, usdt_hold_view.rs; ревью 4, Н2).
     pub lines: Vec<(String, String, Decimal)>,
+    /// Для текста отказа (требование Тиграна 18.11; ставит limits.rs buy_free): прочитанное свободно до резерва и
+    /// площадка словами (у DEX — с кошельком). None — не читалось.
+    pub free: Option<Decimal>,
+    pub place: Option<String>,
 }
 
 /// Строка резерва одной сделки: сумма (уже за вычетом принятых площадкой выводов — usdt_accepted.rs), что ждёт,
@@ -74,30 +78,48 @@ fn of_deal(d: &Deal, venue: &VenueId) -> Vec<Line> {
         l.accepted = ids;
         l
     };
+    // Требование Тиграна 18.11: что ждёт — словами (монета, откуда → куда, куда возврат и почему).
+    let r = super::deal_words::route(&d.direction);
+    let to = |v: &VenueId| crate::notify::human::venue(&v.0);
     let mut out = vec![];
     if let Some(g) = d.group.as_ref()
         && let Some((from, amount)) = g.wait.as_ref()
         && from == venue
     {
-        out.push(line(
-            *amount,
-            &format!("общий возврат группы {}", g.id),
-            false,
-        ));
+        let w = format!(
+            "{r}: выручка ждёт общего возврата группы {} на {}",
+            g.id,
+            to(&d.direction.buy_on)
+        );
+        out.push(line(*amount, &w, false));
     }
     for p in super::usdt_return_parts::all(d) {
         match p {
-            UsdtReturn::Pending { amount, from, .. } if from == venue => {
-                out.push(minus_accepted(line(*amount, "возврат идёт", true), from));
+            UsdtReturn::Pending {
+                amount,
+                from,
+                to: t,
+                ..
+            } if from == venue => {
+                let w = format!("{r}: перегон выручки на {} идёт", to(t));
+                out.push(minus_accepted(line(*amount, &w, true), from));
             }
-            UsdtReturn::Retrying { amount, from, .. } if from == venue => {
-                out.push(line(*amount, "возврат ждёт повтора", false));
+            UsdtReturn::Retrying {
+                amount,
+                from,
+                to: t,
+                why,
+                ..
+            } if from == venue => {
+                let w = format!("{r}: перегон выручки на {} ждёт повтора ({why})", to(t));
+                out.push(line(*amount, &w, false));
             }
-            UsdtReturn::NotReturned { amount, at, .. } if at == venue => {
-                out.push(minus_accepted(
-                    line(*amount, "не вернулись — ждут человека", false),
-                    at,
-                ));
+            UsdtReturn::NotReturned { amount, at, why } if at == venue => {
+                let w = format!(
+                    "{r}: выручка не вернулась на {} ({why}) — ждёт кнопки «Перегнать» или «Перегнано вручную»",
+                    to(&d.direction.buy_on)
+                );
+                out.push(minus_accepted(line(*amount, &w, false), at));
             }
             _ => {}
         }
@@ -189,17 +211,4 @@ pub fn spendable(free: Decimal, h: &Held) -> Decimal {
     (free - h.amount).max(Decimal::ZERO)
 }
 
-/// Что делает: хвост текста причины (отказ «свободно 0», заметка ручного перевода, отказ перегона): сколько в резерве и
-/// за кем — та же сумма, что вычтена (М7: текст из того же Held). Принимает: резерв, тикер котируемой монеты.
-/// Возвращает: пустую строку — резерва нет. Ошибок нет.
-pub fn suffix(h: &Held, quote: &str) -> String {
-    if h.amount <= Decimal::ZERO {
-        return String::new();
-    }
-    let who: Vec<String> = h.deals.iter().map(|(d, w)| format!("{d} ({w})")).collect();
-    format!(
-        " — ещё {} {quote} в резерве возвратов USDT: {}; их не трогаем (решение 405)",
-        h.amount,
-        who.join(", ")
-    )
-}
+pub use super::usdt_hold_text::suffix;

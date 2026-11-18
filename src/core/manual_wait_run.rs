@@ -77,20 +77,25 @@ async fn run(core: &Core, key: &CoinKey, id: &str, cmd: ManualCommand) {
                     key,
                     id,
                     &cmd,
-                    "ожидание отменено — действие не выполнено",
+                    "ожидание отменено — действие не выполнено, новые сделки этой монеты снова начинаются",
                 )
                 .await;
             }
             Next::Stuck(why) => {
-                let t = format!("ожидание прервано: {why} — действие не выполнено (решение 405)");
+                let t = format!(
+                    "ожидание прервано: {why}. Действие не выполнено, новые сделки этой монеты снова начинаются. Что \
+                     сделать: дождитесь, пока бот разберёт эту сделку, или решите её на экране «Ручное управление», \
+                     потом нажмите кнопку снова (решение 405)"
+                );
                 return end(core, key, id, &cmd, &t).await;
             }
             Next::Free => {
                 // Ревью 4, Н3: пауза держится, пока повтор не возьмёт монету (manual_wait::claim в take).
                 let coin = mw::start_retry(core, key).unwrap_or_default();
-                let t = format!(
-                    "сделки по {coin} закончились — выполняю «{}»",
-                    cmd.action.title()
+                let t = super::manual_wait_text::running(
+                    &coin,
+                    cmd.action.title(),
+                    &super::commands::who(&cmd),
                 );
                 mw::log(core, Level::Info, &t).await;
                 // Та же команда человека — через Core::command (журнал core.command, итог — событие Command).
@@ -127,7 +132,11 @@ async fn end(core: &Core, key: &CoinKey, id: &str, cmd: &ManualCommand, why: &st
         .map(|w| w.coin)
         .unwrap_or_default();
     super::manual::publish(core);
-    let text = format!("«{}» по {coin}: {why}", cmd.action.title());
+    let text = format!(
+        "«{}» по {coin} (нажал: {}): {why}",
+        cmd.action.title(),
+        super::commands::who(cmd)
+    );
     mw::log(core, Level::Warn, &text).await;
     core.inner.live.send(CoreEvent::Command(json!({
         "final": true, "action": cmd.action, "who": super::commands::who(cmd), "ok": false, "text": text,

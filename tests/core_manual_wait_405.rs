@@ -135,7 +135,10 @@ async fn button_waits_for_running_deal_then_runs() {
         deal_id: "H".into(),
     };
     let text = core.command(cmd(sell.clone())).await.unwrap();
-    assert!(text.contains("ждёт окончания сделок по CAKE: D1"), "{text}");
+    assert!(
+        text.contains("ждёт окончания сделок по CAKE: сделка D1 (CAKE BingX → MEXC, шаг «"),
+        "{text}"
+    );
     let waits = manual_wait::list(&core);
     assert_eq!(waits.len(), 1);
     assert_eq!(waits[0].what, "Продать сейчас");
@@ -144,14 +147,14 @@ async fn button_waits_for_running_deal_then_runs() {
     let other = dir_of("mexc", "bsc_dex");
     let why = coin_ride::admit(&core, &other).unwrap_err();
     assert!(
-        why.contains("на паузе: ручное действие «Продать сейчас»"),
+        why.contains("не начата: человек (интерфейс) нажал «Продать сейчас»"),
         "{why}"
     );
     assert!(coin_ride::blocks_new(&core, &other));
     assert!(!coin_ride::take(&core, &key));
     let again = core.command(cmd(sell)).await.unwrap_err();
     assert!(
-        again.contains("уже ждёт ручное действие «Продать сейчас»"),
+        again.contains("по этой монете уже ждёт «Продать сейчас» (нажал: интерфейс"),
         "{again}"
     );
     let h = core.inner.deals.lock().unwrap().get("H").cloned().unwrap();
@@ -184,7 +187,10 @@ async fn stuck_holder_refuses_at_once_and_while_waiting() {
         deal_id: "H".into(),
     };
     let why = core.command(cmd(back.clone())).await.unwrap_err();
-    assert!(why.contains("монету держит сделка D1 (шаг: "), "{why}");
+    assert!(
+        why.contains("монету держит сделка D1 (CAKE BingX → MEXC, шаг «монета застряла»"),
+        "{why}"
+    );
     assert!(why.contains("окончания не будет"), "{why}");
     assert!(manual_wait::list(&core).is_empty(), "паузы нет");
     // Во время ожидания держащая ушла с пути — ожидание кончается с причиной, пауза снята.
@@ -287,7 +293,7 @@ async fn pause_holds_until_retry_takes_coin() {
     assert!(
         coin_ride::admit(&core, &other)
             .unwrap_err()
-            .contains("на паузе")
+            .contains("не начата: человек (интерфейс) нажал")
     );
     assert!(!coin_ride::take(&core, &key), "посторонний take — пауза");
     let id = manual_wait::list(&core)[0].id.clone();
@@ -329,7 +335,10 @@ async fn waiting_human_holder_is_waited_for() {
         }))
         .await
         .unwrap();
-    assert!(t.contains("ждёт окончания сделок по CAKE: D1"), "{t}");
+    assert!(
+        t.contains("ждёт окончания сделок по CAKE: сделка D1 (CAKE BingX → MEXC, шаг «"),
+        "{t}"
+    );
     // Во время ожидания держащая ушла в «ждёт решения человека» (алерт) — ждём дальше.
     riding_step(&core, "D1", Step::WaitingHuman).await;
     tokio::time::sleep(StdDuration::from_millis(50)).await;

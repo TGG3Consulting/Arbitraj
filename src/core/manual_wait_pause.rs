@@ -69,10 +69,7 @@ pub fn paused_why(core: &Core, key: &CoinKey) -> Option<String> {
     if core.inner.manual_waits_live.load(Ordering::Acquire) == 0 {
         return None;
     }
-    lk(&core.inner.manual_waits).get(key).map(|w| {
-        format!(
-            "новые сделки {} на паузе: ручное действие «{}» ждёт окончания сделок (решение 405)",
-            w.coin, w.what
-        )
-    })
+    lk(&core.inner.manual_waits)
+        .get(key)
+        .map(super::manual_wait_text::paused)
 }

@@ -43,6 +43,8 @@ pub struct Others {
     pub deals: Vec<(String, Decimal)>,
     /// Сделки на шаге «перевод» с площадкой покупки или получателем = эта площадка (где их монеты — не доказано).
     pub unclear: Vec<String>,
+    /// Те же сделки словами для тревоги (deal_words.rs): доказуемые, затем в пути (требование Тиграна 18.11).
+    pub words: Vec<String>,
 }
 
 /// Что делает: монеты других сделок той же монеты на счёте сделки `deal` на площадке `v` (см. шапку). Принимает: ядро,
@@ -71,10 +73,15 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
         if d.step == Step::Transfer {
             if d.direction.buy_on == *v || d.direction.sell_on == *v || d.at == *v {
                 out.unclear.push(d.id.clone());
+                out.words.push(format!(
+                    "{} — в пути, где монеты сейчас, не доказано",
+                    super::deal_words::deal(core, d)
+                ));
             }
         } else if d.at == *v {
             out.qty += d.qty;
             out.deals.push((d.id.clone(), d.qty));
+            out.words.push(super::deal_words::deal(core, d));
         }
     }
     out.deals.sort();

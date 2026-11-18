@@ -287,6 +287,12 @@
   {final, ok: false} без deal Telegram не правит, пометка «выполнена» остаётся, пока текст записи не изменится:
   кнопка этой записи в Telegram — «уже выполнено» (на экране интерфейса — доступна). Нужна правка mirror (снять
   пометку по итогу ожидания) — отдельной задачей, если подтвердите.
+  **CI 425e98bd (прогон 44300152268) — переполнение стека** в tests/core_usdt_return_manual.rs
+  (retry_button_makes_one_attempt) и tests/core_cex_rules_usdt.rs (manual_retry_rechecks_rule): будущее ручной
+  команды выросло (command_with / command_retry, признаки manual_wait::scope, запись «вывод принят» с await в
+  transfers.rs, ожидание баланса с резервом). Исправлено как t157 (size_search.rs): Box::pin — run_command и
+  command_inner в commands.rs, повтор и задача ожидания в manual_wait_run.rs, mark / unmark / on_error в transfers.rs,
+  wait_balance в usdt_relay_retry.rs. Стек теста не увеличивался; проверка — прогон в GitHub.
   **Ревью 6 (сделано):** запись «вывод принят» заменяется, новая попытка части её снимает; Phemex «Cancelled» и DEX
   «откатилась» в опросе вывода — отказ (раньше — опрос без конца / «отправлен»).
   **Окно записи учёта (ревью 6, М1; техдолг):** правки сделки «под замком учёта → копия → ledger::save»

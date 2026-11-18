@@ -338,7 +338,9 @@ async fn go(
     // Решение 405 (ревью 4, Б2): площадка приняла вывод перегона USDT — деньги списаны, резерв части «идёт» снимается
     // сразу (usdt_accepted.rs; перевод монеты сделки — send_trade, chain — не сюда).
     if !chain {
-        super::usdt_accepted::mark(core, deal, from, qty).await;
+        // Ревью CI t191 (переполнение стека, как t157 в size_search.rs): запись учёта — будущее в куче, не по значению в
+        // будущем перевода.
+        Box::pin(super::usdt_accepted::mark(core, deal, from, qty)).await;
     }
     let quiet = Notify::new();
     // 1. Ждём хеш транзакции вывода.
@@ -387,8 +389,16 @@ async fn go(
                         from.0, created.venue_ref, t.status
                     ),
                 );
-                super::usdt_accepted::unmark(core, deal).await;
-                rules_apply::on_error(core, "Вывод", from, Some(deal), &e, 1).await;
+                Box::pin(super::usdt_accepted::unmark(core, deal)).await;
+                Box::pin(rules_apply::on_error(
+                    core,
+                    "Вывод",
+                    from,
+                    Some(deal),
+                    &e,
+                    1,
+                ))
+                .await;
                 let _ = gw_to.deposit_abandoned(&on_to).await;
                 return Err(OpError::from(&e));
             }
@@ -396,7 +406,7 @@ async fn go(
             Ok(_) => {}
             Err(e) if e.code == ErrorCode::WithdrawRejected => {
                 // Решение 405 (ревью 4, Б2): отклонён после принятия — деньги снова на площадке, резерв части целиком.
-                super::usdt_accepted::unmark(core, deal).await;
+                Box::pin(super::usdt_accepted::unmark(core, deal)).await;
                 failed_gas(&e, gas);
                 rules_apply::on_error(core, "Вывод", from, Some(deal), &e, 1).await;
                 let _ = gw_to.deposit_abandoned(&on_to).await;

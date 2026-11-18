@@ -59,7 +59,7 @@ pub(super) fn start(core: &Core, key: CoinKey, id: String, cmd: ManualCommand, t
     super::manual::publish(core);
     tokio::spawn(async move {
         mw::log(&c, Level::Info, &text).await;
-        run(&c, &key, &id, cmd).await;
+        Box::pin(run(&c, &key, &id, cmd)).await;
     });
 }
 
@@ -94,7 +94,8 @@ async fn run(core: &Core, key: &CoinKey, id: &str, cmd: ManualCommand) {
                 );
                 mw::log(core, Level::Info, &t).await;
                 // Та же команда человека — через Core::command (журнал core.command, итог — событие Command).
-                let _ = core.command_retry(cmd, id.to_string()).await;
+                // Ревью CI t191 (переполнение стека): будущее команды — в куче.
+                let _ = Box::pin(core.command_retry(cmd, id.to_string())).await;
                 // Повтор не взял монету (отказ до take) — пауза снимается здесь.
                 mw::remove(core, key, id);
                 super::manual::publish(core);

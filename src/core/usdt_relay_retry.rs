@@ -63,7 +63,15 @@ async fn attempts_loop(
     let mut n = 0;
     loop {
         n += 1;
-        wait_balance(core, (from, acc), &asset.ticker, amount, own.as_deref()).await?;
+        // Ревью CI t191 (переполнение стека): ожидание баланса — будущее в куче.
+        Box::pin(wait_balance(
+            core,
+            (from, acc),
+            &asset.ticker,
+            amount,
+            own.as_deref(),
+        ))
+        .await?;
         match super::transfers::send_as(core, id, from, to, asset, amount, acc, gas).await {
             Ok(r) => return Ok(r),
             Err(e) if e.code == Some(ErrorCode::SwapReverted) && n < attempts => {

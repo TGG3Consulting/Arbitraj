@@ -29,7 +29,9 @@ impl Core {
         // Живой случай 02.11: «Продать и перегнать» у остановленной сделки ATOM — сделка уже помечена «идёт продажа»,
         // ответа баланса нет, связь с интерфейсом рвётся, веб-сервер бросает запрос — и сделка навсегда остаётся
         // в шаге Selling: пропадает с экрана, а предварительный убыток и сверка балансов её держат.
-        self.command_with(cmd, None).await
+        // Ревью CI t191 (переполнение стека — tests/core_usdt_return_manual.rs, core_cex_rules_usdt.rs; как t157 в
+        // size_search.rs): будущее команды целиком — в куче, не по значению в будущем вызывающего.
+        Box::pin(self.command_with(cmd, None)).await
     }
 
     /// Решение 405 (ревью 5, М3): повтор команды, ждавшей окончания сделок монеты (manual_wait_run.rs), — с ID ожидания:
@@ -40,7 +42,7 @@ impl Core {
         cmd: ManualCommand,
         wait: String,
     ) -> Result<String, String> {
-        self.command_with(cmd, Some(wait)).await
+        Box::pin(self.command_with(cmd, Some(wait))).await
     }
 
     /// Команда отдельной задачей (решение 110) с признаком повтора ожидания (None — обычная). Возвращает: как command.
@@ -51,7 +53,7 @@ impl Core {
     ) -> Result<String, String> {
         let core = self.clone();
         let c = cmd.clone();
-        tokio::spawn(async move { core.command_inner(c, retry).await })
+        tokio::spawn(async move { Box::pin(core.command_inner(c, retry)).await })
             .await
             .unwrap_or_else(|e| Err(format!("команда прервана: {e}")))
     }
@@ -68,11 +70,14 @@ impl Core {
         // Решение 201: команда ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
         // Решение 405 (ответ Тиграна на ревью Н3): признак команды на задачу — монета занята идущими сделками, команда
         // ждёт их окончания и выполняется заново (manual_wait.rs defer).
-        let res = super::manual_wait::scope(
+        let res = Box::pin(super::manual_wait::scope(
             cmd.clone(),
             retry,
-            super::risk_count::manual(super::patience_scope::with(self, self.run_command(&cmd))),
-        )
+            super::risk_count::manual(super::patience_scope::with(
+                self,
+                Box::pin(self.run_command(&cmd)),
+            )),
+        ))
         .await;
         // Решение 156: итог команды — Telegram правит сообщения записи «выполнено: кто, что, итог» (notify/mirror.rs).
         self.inner.live.send(super::view::CoreEvent::Command(json!({

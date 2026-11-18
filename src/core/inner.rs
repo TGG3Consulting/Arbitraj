@@ -142,6 +142,9 @@ pub struct Inner {
     /// Решение 414: пары «площадка × тип направления», у которых сейчас идёт снятие слепка баланса для лимита просадки
     /// (core/drawdown_snap.rs) — вторая задача на ту же пару не запускается. Блокировка: берётся отдельно.
     pub draw_busy: Mutex<HashSet<String>>,
+    /// Решение 414 (повторное ревью t199): плановые затраты возврата закрываемых сейчас сделок (ID → Cur) — от итога
+    /// дня до сохранения сделки в ledger::finish (core/drawdown_pending.rs). Блокировка: берётся отдельно.
+    pub draw_closing: Mutex<std::collections::BTreeMap<String, super::drawdown_pending::Cur>>,
     /// Решение 405 (ответ Тиграна на ревью Н3): ручные действия, ждущие окончания идущих сделок монеты, — пауза новых
     /// сделок этой монеты (manual_wait.rs). Блокировка: берётся отдельно (не вместе с `deals` / `rides`).
     pub manual_waits: Mutex<HashMap<super::coin_key::CoinKey, super::manual_wait::ManualWait>>,
@@ -284,6 +287,7 @@ impl Inner {
             rides_live: Default::default(),
             unsettled: Mutex::default(),
             draw_busy: Mutex::default(),
+            draw_closing: Mutex::default(),
             manual_waits: Mutex::default(),
             manual_waits_live: Default::default(),
             coin_wake: Notify::new(),

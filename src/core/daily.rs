@@ -140,7 +140,7 @@ pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Trip {
     let (today, mut book) = today_book(core);
     let pair = super::daily_venue::of_deal(core, &book, deal);
     // Ревью t199, С1: плановые затраты возврата этой сделки — из неё самой (в учёте ядра она ещё прежняя).
-    book.cur = Some(super::drawdown_pending::cur(core, deal));
+    book.cur = Some(super::drawdown_pending::cur(core, deal, false));
     // Решение 257: каждое изменение итога дня из-за сделки — начислением в её учёт (deal_book.rs).
     match book.provisional.remove(&deal.id) {
         Some((old, day)) if day != today => {
@@ -179,10 +179,27 @@ pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Trip {
 /// разбора. Решение 258: та же сумма — паре сделки (daily_venue::of_deal). Принимает: сделку, факт.
 /// Возвращает: что сработало (лимиты, Trip).
 pub async fn settle(core: &Core, deal: &mut Deal, fact: Decimal) -> Trip {
+    settle_as(core, deal, fact, false).await
+}
+
+/// Что делает: settle самого закрытия сделки (ledger::finish): решение 414 (повторное ревью t199) — плановые затраты
+/// возврата «как решит prepare» (drawdown_pending.rs cur с closing) и держатся в Inner.draw_closing до сохранения
+/// сделки (снимает ledger::finish). Принимает: сделку, факт. Возвращает: что сработало (лимиты, Trip).
+pub async fn settle_close(core: &Core, deal: &mut Deal, fact: Decimal) -> Trip {
+    settle_as(core, deal, fact, true).await
+}
+
+/// settle с признаком «само закрытие» (см. settle_close). Принимает: сделку, факт, признак. Возвращает: Trip.
+async fn settle_as(core: &Core, deal: &mut Deal, fact: Decimal, closing: bool) -> Trip {
     let (today, mut book) = today_book(core);
     let pair = super::daily_venue::of_deal(core, &book, deal);
-    // Ревью t199, С1: закрываемая сделка ещё без частей возврата в учёте ядра — её плановые затраты возврата сама.
-    book.cur = Some(super::drawdown_pending::cur(core, deal));
+    // Ревью t199, С1: закрываемая сделка ещё без частей возврата в учёте ядра — её плановые затраты возврата сама;
+    // само закрытие — ещё и для пересчётов других сделок до сохранения (Inner.draw_closing).
+    let cur = super::drawdown_pending::cur(core, deal, closing);
+    if closing {
+        super::drawdown_pending::closing(core, &deal.id, Some(cur.clone()));
+    }
+    book.cur = Some(cur);
     // Решение 257: начисления в учёт сделки — те же суммы, что идут в книгу дня (deal_book.rs).
     let delta = match book.provisional.remove(&deal.id) {
         Some((old, day)) if day == today => {

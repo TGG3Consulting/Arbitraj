@@ -63,7 +63,7 @@ pub async fn announce(core: &Core, trip: &Trip) {
             None,
         )
         .await;
-        let tg = super::drawdown_limit::stop_text(p, why);
+        let tg = super::drawdown_note::stop_text(p, why);
         let acts = vec![
             crate::notify::acts::resume_venue(p),
             crate::notify::acts::reset_venue_limit(p),

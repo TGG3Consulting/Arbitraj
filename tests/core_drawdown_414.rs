@@ -13,10 +13,17 @@
 //! 4) перезапуск в тот же день — слепок, пик и баланс продолжаются, новый слепок не запрашивается;
 //! 5) новый день — баланс переносится (итог нового дня с нуля), пауза по просадке полночью не снимается;
 //! 6) предел — меньшее из % × пик и USDT; задано одно — оно;
-//! ревью t199: 7) С1 — плановые затраты возврата закрываемой сделки (usdt_return.mode = per_trade, план 1.5) — уже на
-//!    закрытии: −29 при пределе 30 → просадка 30.5 — пауза; −60 → баланс 938.5; 8) С3 — пауза старого лимита дня у
-//!    направления, перешедшего на просадку, снимается «Сбросить лимит» и слепком; 9) утренний слепок снимает паузу по
-//!    просадке; 10) мелкое 6 — пауза по просадке и «Снять паузу» переживают перезапуск.
+//!
+//! Ревью t199 и повторное ревью:
+//! 7) С1 — плановые затраты возврата закрываемой сделки (usdt_return.mode = per_trade, план 1.5) — уже на закрытии:
+//!    −29 при пределе 30 → просадка 30.5 — пауза; −60 → баланс 938.5;
+//! 8) С3 — пауза старого лимита дня у направления, перешедшего на просадку, снимается «Сбросить лимит» и слепком;
+//! 9) утренний слепок снимает паузу по просадке;
+//! 10) пауза по просадке и «Снять паузу» переживают перезапуск;
+//! 11) С1′ — затраты «как при подготовке возврата» только в самом закрытии и не у сделки в чужом общем возврате группы;
+//!     закрываемая сделка (Inner.draw_closing) видна любому пересчёту до сохранения;
+//! 12) пауза старого лимита при превышенной просадке получает отметку «по просадке»;
+//! 13) снизили предел ниже просадки — пауза сразу.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, tests/report_common.
@@ -308,8 +315,8 @@ async fn restart_keeps_draw_pause_and_resume() {
         "пауза по просадке пережила перезапуск"
     );
     assert!(arb::core::risk::resume_pair(&core, P));
-    // Запись снятой паузы — отдельной задачей (drawdown_limit::persist).
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // Запись снятой паузы в учёт — тем же пересчётом, что делает задача drawdown_limit::persist (здесь — дождаться его).
+    arb::core::drawdown_limit::save(&core).await;
     drop(core);
     let (core, st) = start(&path).await;
     kinds(&core, &st);
@@ -425,4 +432,77 @@ fn limit_is_min_of_pct_and_usd() {
     );
     let c = drawdown::view(&st, Decimal::ZERO, l(None, Some("40")));
     assert!(!c.exceeded, "просадка 40 не больше предела 40");
+}
+
+#[tokio::test]
+async fn fresh_cost_only_at_close_and_not_for_shared_group_return() {
+    // Повторное ревью, С1′: поправка закрытой сделки (settle_closed) и сделка в общем возврате ведущей — без плана.
+    let (core, st) = core_at(&dir("dd-fresh"), "5", "30").await;
+    set(&st, "usdt_return.mode", Scope::Global, "per_trade").await;
+    let mut x = deal(359, "fr");
+    x.invested = d("500");
+    x.proceeds = d("471");
+    x.at = v("bsc_dex");
+    x.step = Step::Closed;
+    x.plan = json!({"costs": [{"kind": "UsdtReturn", "stage": "возврат USDT", "amount": "1.5", "asset": "USDT", "usdt": "1.5"}]});
+    use arb::core::drawdown_pending::{closing, cur, pending};
+    assert_eq!(cur(&core, &x, true).cost, d("1.5"));
+    assert_eq!(cur(&core, &x, false).cost, Decimal::ZERO);
+    let mut g = x.clone();
+    g.group = Some(Box::new(arb::core::deal_group::DealGroup {
+        id: "lead".into(),
+        shared_in: Some("lead".into()),
+        ..Default::default()
+    }));
+    assert_eq!(cur(&core, &g, true).cost, Decimal::ZERO);
+    // Остаток С1: от итога дня до сохранения закрываемая сделка видна пересчётам других сделок.
+    closing(&core, &x.id, Some(cur(&core, &x, true)));
+    assert_eq!(pending(&core, None).get(P).copied(), Some(d("1.5")));
+    closing(&core, &x.id, None);
+    assert_eq!(pending(&core, None).get(P), None);
+}
+
+#[tokio::test]
+async fn legacy_pause_with_exceeded_drawdown_gets_draw_mark() {
+    // Повторное ревью: слепок 1000 → направление вернули на старый лимит (5) → −35: пауза старого лимита; снова заданы
+    // пределы просадки (30) — просадка 35 > 30: отметка «по просадке» поверх, «Сбросить лимит» её не снимает сразу.
+    let (core, st) = base(&dir("dd-legacy-over")).await;
+    set(&st, "risk.max_daily_loss_usd", Scope::Global, "5").await;
+    set(&st, "risk.drawdown_max_usd", Scope::Global, "30").await;
+    arb::core::drawdown_snap::apply(&core, P, &mexc(), "USDT", d("1000")).await;
+    st.set("risk.drawdown_max_usd", Scope::Global, None, "тест")
+        .await
+        .unwrap();
+    close_aleo(&core, "lo", "-35").await;
+    let r = core.control();
+    assert!(r.pair_paused.contains_key(P) && !r.draw_paused.contains(P));
+    set(&st, "risk.drawdown_max_usd", Scope::Global, "30").await;
+    arb::core::drawdown_limit::save(&core).await;
+    let r = core.control();
+    assert!(r.draw_paused.contains(P), "пауза по просадке поверх старой");
+    assert!(r.pair_paused[P].contains("просадка от пика 35.00 USDT больше предела 30.00 USDT"));
+    core.reset_venue_daily_limit(P, "тест").await;
+    assert!(
+        core.control().pair_paused.contains_key(P),
+        "сброс ждёт слепка"
+    );
+}
+
+#[tokio::test]
+async fn lowered_limit_pauses_at_once() {
+    // Повторное ревью: просадка 20 при пределе 30 — торгует; предел снизили до 10 — пауза сразу (наблюдатель настроек
+    // забывает замеченную просадку и пересчитывает).
+    let (core, st) = core_at(&dir("dd-lower"), "5", "30").await;
+    arb::core::drawdown_snap::apply(&core, P, &mexc(), "USDT", d("1000")).await;
+    close_aleo(&core, "lw", "-20").await;
+    assert!(!core.control().pair_paused.contains_key(P));
+    set(&st, "risk.drawdown_max_usd", Scope::Global, "10").await;
+    // Ждём по признаку: наблюдатель настроек — своя задача.
+    for _ in 0..200 {
+        if core.control().draw_paused.contains(P) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert!(core.control().draw_paused.contains(P));
 }

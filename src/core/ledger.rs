@@ -121,7 +121,8 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
     // оценка позиции: стоимость монет по рынку площадки, где они лежат, − вложено (цены нет — худший случай).
     // Решение 173: итог идёт и площадкам сделки — лимит площадки ставит паузу только ей.
     let trip = match step {
-        Step::Closed => super::daily::settle(core, deal, result).await,
+        // Решение 414 (повторное ревью t199): само закрытие — плановые затраты возврата до сохранения (settle_close).
+        Step::Closed => super::daily::settle_close(core, deal, result).await,
         Step::Halted | Step::TakenOver => super::daily::provisional(core, deal).await,
         _ => Default::default(),
     };
@@ -137,6 +138,8 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
     // Решение 236: возврат USDT идёт — deal.closed ждёт его конца (факт с затратами возврата; usdt_return_state::set).
     let held = wants && super::deal_closed::hold(deal, step, why);
     save(core, deal).await;
+    // Решение 414: сделка сохранена с частями возврата — её затраты дальше по учёту ядра.
+    super::drawdown_pending::closing(core, &deal.id, None);
     for job in ret {
         job.start(core);
     }

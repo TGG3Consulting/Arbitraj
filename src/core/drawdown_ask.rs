@@ -4,7 +4,8 @@
 //! - «Сбросить лимит дня» по направлению / площадке / общий (daily_venue_limit.rs, daily_limit.rs), новый день UTC
 //!   (day_roll.rs) — request;
 //! - запуск (после загрузки учёта): пересчёт итога дня, недоснятые запросы — задача заново, нет слепка этого дня —
-//!   новый запрос; наблюдатель настроек risk.drawdown_* — то же (направление перешло на просадку) — run.
+//!   новый запрос; наблюдатель настроек risk.drawdown_* — то же (направление перешло на просадку) — run; смена
+//!   пределов забывает замеченную просадку (Risk.draw_seen) — снизили предел ниже просадки — пауза сразу.
 //!
 //! Запрос (Want) пишется в книгу дня (переживает перезапуск). Задача пары одна (Inner.draw_busy); ревью t199, С2:
 //! задача, закончив, снимает отметку и проверяет, не пришёл ли за это время новый запрос, — тогда снимает ещё раз
@@ -94,17 +95,16 @@ pub async fn run(core: Core) {
         .iter()
         .any(|p| super::drawdown_cfg::active(&core, p));
     if any {
-        let (today, book) = super::daily::today_book(&core);
-        let trip = super::daily::commit(&core, today, book).await;
-        super::daily_commit::announce(&core, &trip).await;
+        super::drawdown_limit::save(&core).await;
     }
     need(&core, "запуск").await;
     let mut w = core.inner.deps.watch(&[super::drawdown_cfg::PREFIX]);
     while w.next().await.is_some() {
+        // Повторное ревью: пределы сменили (например, снизили ниже текущей просадки) — замеченная просадка забывается,
+        // чтобы пауза встала сразу (иначе «рост просадки» после прежнего «Снять паузу» её бы не поставил).
+        lk(&core.inner.risk).draw_seen.clear();
         // Пересчёт: новые пределы действуют сразу (пауза или её снятие, если пределы убрали — drawdown_limit.rs).
-        let (today, book) = super::daily::today_book(&core);
-        let trip = super::daily::commit(&core, today, book).await;
-        super::daily_commit::announce(&core, &trip).await;
+        super::drawdown_limit::save(&core).await;
         need(&core, "заданы пределы просадки risk.drawdown_*").await;
     }
 }

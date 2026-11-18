@@ -1,5 +1,5 @@
 //! Файл: tests/bsc_dex_hook_interp_t190.rs
-//! Что проверяет: решение 405 (задача t190, Тигран 18.11.2026) — влияние крючка между точками лесенки — линейная
+//! Что проверяет: решение 406 (задача t190, Тигран 18.11.2026) — влияние крючка между точками лесенки — линейная
 //! интерполяция по входу, а не значение ближайшей большей точки. Точки — запись узла 17.11
 //! (tests/data/hook_pools_ticks_2026-11-17, блок 134000292; крючок 0x32c59d…, GAIB 0x5c1b, BTCMT 0x6216; покупка
 //! 1 / 20 / 100 USDT — наш полный обмен по карте тиков против CLQuoter, формула check/hooks_probe.rs impact). Квотера
@@ -116,6 +116,7 @@ fn settle_with_interp_not_better_than_ladder() {
             steps: Some(Arc::new(s.clone())),
             limit: None,
             open: false,
+            margin: Some(Decimal::ZERO),
         };
         let x50 = s[0].amount_in * U256::from(50u64);
         let pct50 = at(&s, x50).expect("измерено");

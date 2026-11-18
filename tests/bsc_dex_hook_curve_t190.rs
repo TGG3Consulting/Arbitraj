@@ -1,6 +1,8 @@
 //! Файл: tests/bsc_dex_hook_curve_t190.rs
-//! Что проверяет: задача t190 — какое правило лесенки влияния крючка ближе к факту: «ближайшая большая точка» (upper,
-//! правило до решения 405) или линейная интерполяция (at, решение 405). Только запись узла 18.11
+//! Что проверяет: задача t190 — какое правило лесенки влияния крючка ближе к факту: «ближайшая большая точка» (upper),
+//! линейная интерполяция (at) и правило решения 406 (with_margin: интерполяция × (1 + 5/100), не выше upper; 5 —
+//! совет координатора для hooks.impact_interp_margin_pct). Значение точки — накопленный максимум (решение 406).
+//! Только запись узла 18.11
 //! (tests/data/hook_curve_2026-11-18, блок 134300230): 7 пулов Infinity CL с крючками, квотер на 14 суммах в обе
 //! стороны. Влияние крючка на сумме = (наш − квотер) / наш · 100 (check/hooks_probe.rs impact; наш — полный обмен
 //! math/swap_cl.rs по тикам записи без крючка). Откат квотера или наш расчёт вне прочитанных слов — «нет котировки».
@@ -13,9 +15,12 @@
 //!    Лесенка обрывается на первой сумме без котировки (как check/hook_fold.rs judge_side). Сравнение — на суммах
 //!    записи вне лесенки (1, 5, 45, 80, 100, 300).
 //! B. «Без одной точки»: лесенка — все измеренные суммы стороны, кроме проверяемой внутренней.
-//! Δ = правило − факт (факт и правило — не меньше 0, как в коде); Δ < 0 — правило ЗАНИЖАЕТ влияние (опасно).
+//! Δ = правило − факт (факт и правило — не меньше 0, как в коде); Δ < 0 — правило ЗАНИЖАЕТ влияние (опасно); занижение
+//! меньше разрешения точек (resolution, 100 / выход квотера) — шум, не считается. ИТОГ — по блокам и правилам.
 //! Ассерты — только факты записи: 7 пулов, 196 вызовов квотера (14 сумм × 2 стороны), суммы покупки = USDT·10^18,
-//! откаты — ровно те, что в README записи, лесенка А — суммы выше.
+//! откаты — ровно те, что в README записи, лесенка А — суммы выше; новое правило лежит между at и upper (свойство
+//! кода). Ассерта «новое правило не занижает» нет: по прикидке вне бота BTCMT 80 / 100 / 300 USDT занижается при
+//! запасе 5 (docs/notes/t190-impact-interp-2026-11-18.md) — итог смотреть в строках ИТОГ.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/hook_curve_common (points — точки записи), arb::venues::bsc_dex::{check::hook_points,
@@ -30,29 +35,66 @@ use rust_decimal::prelude::ToPrimitive;
 
 use arb::core::types::HookStep;
 use arb::venues::bsc_dex::check::hook_points::{first_round, ladder_usd};
-use arb::venues::bsc_dex::quote::hook_curve::{at, monotone, upper};
-use hook_curve_common::points::{Pt, REVERTS, sides, step};
+use arb::venues::bsc_dex::quote::hook_curve::{at, monotone, resolution, upper, with_margin};
+use hook_curve_common::points::{Pt, REVERTS, side, sides, step};
 
-/// Итог правила: (число занижений, наибольшее занижение п.п.). Строка сравнения печатается. Ошибок нет.
-fn compare(tag: &str, steps: &[HookStep], p: &Pt, worst: &mut [(u32, Decimal); 2]) {
+/// Итог правила по блоку, п.п.: сравнений, занижений (больше разрешения точек — resolution), наибольшее занижение,
+/// сумма и наибольшее завышение.
+#[derive(Clone, Copy, Default)]
+struct Stat {
+    n: u32,
+    under: u32,
+    under_max: Decimal,
+    over_sum: Decimal,
+    over_max: Decimal,
+}
+
+impl Stat {
+    /// Учесть Δ = правило − факт с допуском шума `tol`. Ошибок нет.
+    fn add(&mut self, d: Decimal, tol: Decimal) {
+        self.n += 1;
+        if d < -tol {
+            self.under += 1;
+            self.under_max = self.under_max.max(-d);
+        }
+        if d > Decimal::ZERO {
+            self.over_sum += d;
+            self.over_max = self.over_max.max(d);
+        }
+    }
+}
+
+/// Сравнение правил на точке p (upper, at, with_margin с запасом-советом 5 %): строка печатается, итог — в `st`.
+/// Ошибок нет; паника — новое правило вне [at, upper] (свойство кода).
+fn compare(tag: &str, steps: &[HookStep], p: &Pt, st: &mut [Stat; 3]) {
     let fact = p.pct.unwrap_or_default().max(Decimal::ZERO);
+    let tol = step(p).map(|s| resolution(&s)).unwrap_or_default()
+        + steps.iter().map(resolution).max().unwrap_or_default();
     let show = |v: Option<Decimal>| {
         v.map_or("не измерено".into(), |v| {
             format!("{v:.4} (Δ {:+.4})", v - fact)
         })
     };
-    let (u, i) = (upper(steps, p.amount), at(steps, p.amount));
-    for (k, v) in [u, i].into_iter().enumerate() {
-        if let Some(v) = v.filter(|v| *v < fact) {
-            worst[k].0 += 1;
-            worst[k].1 = worst[k].1.max(fact - v);
+    let x = p.amount;
+    let (u, i, w) = (
+        upper(steps, x),
+        at(steps, x),
+        with_margin(steps, x, Decimal::from(5u8)),
+    );
+    if let (Some(u), Some(i), Some(w)) = (u, i, w) {
+        assert!(i <= w && w <= u, "{tag} {}: {i} ≤ {w} ≤ {u}", p.usd);
+    }
+    for (k, v) in [u, i, w].into_iter().enumerate() {
+        if let Some(v) = v {
+            st[k].add(v - fact, tol);
         }
     }
     println!(
-        "{tag} {:>4} | факт {fact:.4} | ближ. большая {} | интерп. {}",
+        "{tag} {:>4} | факт {fact:.4} | ближ. большая {} | интерп. {} | новое (интерп.×1,05 ≤ ближ.) {}",
         p.usd,
         show(u),
-        show(i)
+        show(i),
+        show(w)
     );
 }
 
@@ -104,7 +146,7 @@ fn hook_curve_rules_against_record() {
             );
         }
     }
-    let mut worst = [[(0u32, Decimal::ZERO); 2]; 2];
+    let mut worst = [[Stat::default(); 3]; 2];
     println!("=== A: лесенка {lad:?} (impact_points = 16, первый замер) ===");
     for (n, b, pts) in &all {
         let steps: Vec<HookStep> = lad
@@ -138,19 +180,18 @@ fn hook_curve_rules_against_record() {
             compare(&format!("B {n} {}", side(*b)), &steps, p, &mut worst[1]);
         }
     }
+    let names = [
+        "ближайшая большая",
+        "интерполяция",
+        "новое правило (накопл. максимум + интерп. × (1+5/100), не выше ближайшей большей)",
+    ];
     for (t, w) in ["A", "B"].iter().zip(worst) {
-        println!(
-            "ИТОГ {t}: ближайшая большая занижает {} раз, наибольшее занижение {:.4} п.п.; интерполяция занижает {} раз, наибольшее {:.4} п.п.",
-            w[0].0, w[0].1, w[1].0, w[1].1
-        );
-    }
-}
-
-/// Подпись стороны. Ошибок нет.
-fn side(buy: bool) -> &'static str {
-    if buy {
-        "USDT→монета"
-    } else {
-        "монета→USDT"
+        for (name, r) in names.iter().zip(w) {
+            let mean = r.over_sum / Decimal::from(r.n.max(1));
+            println!(
+                "ИТОГ {t} | {name}: сравнений {}, занижает {} раз (макс {:.4} п.п.), завышает ср. {mean:.4} / макс {:.4} п.п.",
+                r.n, r.under, r.under_max, r.over_max
+            );
+        }
     }
 }

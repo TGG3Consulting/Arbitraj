@@ -70,6 +70,7 @@ fn b3_exact_out_two_probes_model() {
             steps: (!steps.is_empty()).then(|| Arc::new(steps.clone())),
             limit: None,
             open: true,
+            margin: None,
         };
         let (pct, x) = c
             .settle(

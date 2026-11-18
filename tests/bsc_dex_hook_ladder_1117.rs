@@ -6,7 +6,7 @@
 //! 2. Котировка с лесенкой (HookCurve::pct_at на входе) на 1, 20, 100 USDT — не выше квотера (до 1 wei округления
 //!    Decimal); прежнее правило «влияние, измеренное на 20 USDT, — на все суммы» на 100 USDT было выше квотера
 //!    (GAIB на 0,58 %, BTCMT на 2,71 %) — теперь нет.
-//! 3. Между точками — с решения 405 (t190) линейная интерполяция между соседними точками (10 USDT — между 1 и 20, 50 USDT
+//! 3. Между точками — с решения 406 (t190) линейная интерполяция между соседними точками (10 USDT — между 1 и 20, 50 USDT
 //!    — между 20 и 100): не ниже меньшей точки и ниже прежнего значения ближайшей большей; выше наибольшей точки — «не
 //!    измерено на такой сумме» (пул на ней не идёт). Точная формула — tests/bsc_dex_hook_interp_t190.rs.
 //! 4. Точный выход (покупка «с конца», HookCurve::settle): на количество монет, которое квотер даёт за 20 USDT, наш
@@ -82,6 +82,7 @@ fn ladder_quote_not_above_quoter() {
                 steps: Some(Arc::new(steps.clone())),
                 limit: None,
                 open: false,
+                margin: Some(Decimal::ZERO),
             };
             for q in &side {
                 let o = ours(p, &m, q.z, true, q.amount, p.lp).amount_out;
@@ -105,7 +106,7 @@ fn ladder_quote_not_above_quoter() {
                 over > Decimal::from_str(old_over).expect("%"),
                 "{pre}: {over}"
             );
-            // Между точками — интерполяция (решение 405): не ниже меньшей, ниже большей; выше наибольшей — не измерено.
+            // Между точками — интерполяция (решение 406): не ниже меньшей, ниже большей; выше наибольшей — не измерено.
             let at = |usd: u64| curve.pct_at(Decimal::ZERO, steps[0].amount_in * U256::from(usd));
             for (usd, i) in [(10u64, 0usize), (50, 1)] {
                 let v = at(usd).expect("измерено");
@@ -133,6 +134,7 @@ fn exact_out_not_better_than_fact() {
             steps: Some(Arc::new(ladder(p, &side))),
             limit: None,
             open: false,
+            margin: Some(Decimal::ZERO),
         };
         let q20 = side.iter().find(|q| q.usd == 20).expect("20");
         let want = dec(q20.remote);

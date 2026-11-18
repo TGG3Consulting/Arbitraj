@@ -12,7 +12,7 @@
 //! Решения 336, 363: usable внутри подбора объёма — один раз на пул (quote/usable_reuse.rs).
 //! Кто вызывает: quote/direct.rs и все сборщики ног маршрута (graph_legs, via_pools, smart_ways, cycle*, verify_decide, exec/live*).
 //! От чего зависит: math/solidly_fee.rs, check/state.rs, quote/pool_tax.rs (налог пула, решение 146), pools/registry.rs, pools/depth_book.rs, tokens.rs.
-//! Настройки: dex.kind, dex.pool_enabled и адреса [DEX] (families::still), dex.stable_hooks [DEX Infinity Stable], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct,
+//! Настройки: dex.kind, dex.pool_enabled и адреса [DEX] (families::still), dex.stable_hooks [DEX Infinity Stable], hooks.allowed_groups, hooks.max_impact_b_pct, hooks.max_impact_c_pct, hooks.impact_interp_margin_pct (решение 406, необязательна),
 //! tax.max_buy_pct, tax.max_sell_pct (не задан порог — пул не используется с причиной «не задана настройка», как у
 //! порогов ядра core/blacklist.rs: монета на DEX не торгуется),
 //! dex.min_pool_liquidity_usd, через depth_book.rs — dex.depth_band_pct, dex.depth_hysteresis_pct, dex.depth_log_min_s [bsc_dex].
@@ -37,7 +37,7 @@ use super::super::pools::registry::{Entry, Registry};
 use super::super::pools::verify_inf_stable;
 use super::super::tokens::Tokens;
 use super::Quoting;
-use super::hook_curve::HookCurve;
+use super::hook_curve::{self, HookCurve};
 
 /// Что известно о допущенном пуле для котировки.
 #[derive(Debug, Clone)]
@@ -227,10 +227,17 @@ fn hook(
     // Ревью Б1 (в): продажа выхода — оценка вне измеренного (open); факт на её сумме — проба перед сделкой
     // (exec/hook_trade.rs), пул для продажи держимых монет не выпадает до следующего цикла крючков.
     // Ревью 4 лесенки (Н1): лесенка — общая (Arc): допуск берёт ссылку, точки не копируются.
+    // Решение 406: запас интерполяции (необязательна); не задана — правило «ближайшая большая точка».
+    let margin = match ctx.dec(hook_curve::MARGIN) {
+        Ok(m) => Some(m),
+        Err(e) if e.code == crate::gateway::errors::ErrorCode::NotConfigured => None,
+        Err(e) => return Err(e.message),
+    };
     let curve = HookCurve {
         steps: (!steps.is_empty()).then(|| std::sync::Arc::clone(steps)),
         limit: limit.map(|l| (limit_name, l)),
         open: exit,
+        margin,
     };
     Ok((impact.max(Decimal::ZERO), curve))
 }

@@ -103,3 +103,12 @@ pub fn step(p: &Pt) -> Option<HookStep> {
         quoter_out: p.remote,
     })
 }
+
+/// Подпись стороны. Ошибок нет.
+pub fn side(buy: bool) -> &'static str {
+    if buy {
+        "USDT→монета"
+    } else {
+        "монета→USDT"
+    }
+}

@@ -3,105 +3,22 @@
 //! временной папке (площадок в реестре нет, моков нет; факт счёта передаётся тем же путём, что после чтения баланса —
 //! remain_fact::apply_fact) на записанных числах живого случая WKC → MEXC 18.11 (tests/data/wkc_mexc_2026-11-18):
 //! вторая сделка WKC больше не видит «своих монет нет», учёт площадки после долей не больше факта (паузы нет), ждущая
-//! — в сверке нижней оценкой; своя доля 0 — алерт, сделка не закрыта; баланс биржи не прочитан — не продаём: режим
-//! застрявшей монеты один раз, потом алерт (повторное ревью, Б-3); «мало средств» — повтор с фактом один раз; любое
-//! зачисление на биржу ждёт доли (С1); вывод с биржи — после факта: executor (первый вывод), «Перегон», «Продать и
-//! перегнать» (по исходникам без комментариев). Чистое распределение — tests/core_credit_split_t198.rs.
+//! — в сверке нижней оценкой; своя доля 0 — алерт, сделка не закрыта; «мало средств» — повтор с фактом один раз;
+//! любое зачисление на биржу ждёт доли (С1). Баланс не прочитан, вывод после факта и правки третьего ревью —
+//! tests/core_credit_review3_t198.rs. Чистое распределение — tests/core_credit_split_t198.rs,
+//! tests/core_credit_split2_t198.rs.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::notify, arb::gateway; tests/t198_common.
 
 mod t198_common;
 
-use std::path::PathBuf;
-
-use arb::core::Core;
-use arb::core::credit_fact::{Basis, CreditFact};
-use arb::core::deal::{Deal, Step};
-use arb::core::deps::Deps;
-use arb::core::types::{Asset, Direction, VenueId};
-use arb::gateway::contract::VenueKind;
+use arb::core::credit_fact::Basis;
+use arb::core::deal::Step;
+use arb::core::types::VenueId;
 use arb::gateway::errors::ErrorCode;
-use arb::gateway::registry::Registry;
-use arb::notify::dispatch::Notifier;
-use arb::settings::store::Store;
-use arb::storage::db::Db;
-use arb::storage::journal::Journal;
 use rust_decimal::Decimal;
-use serde_json::json;
-use t198_common::{d, j, journal};
-use tokio::sync::broadcast;
-
-/// Папка теста (новая).
-fn dir(name: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("arb-t198-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
-}
-
-/// Ядро на базе во временной папке; mexc, bingx — биржи, bsc_dex — DEX.
-async fn start(name: &str) -> Core {
-    let d = dir(name);
-    let db = Db::open(&d.join("t.sqlite")).unwrap();
-    let (changes, _) = broadcast::channel(64);
-    let (jtx, _) = broadcast::channel(64);
-    let journal = Journal::new(db.clone(), jtx);
-    let settings = Store::load(db.clone(), changes.clone(), journal.clone())
-        .await
-        .unwrap();
-    let notifier = Notifier {
-        http: reqwest::Client::new(),
-        settings: settings.clone(),
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        journal: journal.clone(),
-    };
-    let core = Core::start(Deps {
-        gw: Registry::new(),
-        settings,
-        journal,
-        notifier,
-        db,
-        changes,
-        buffer: 64,
-        data_dir: d.clone(),
-    })
-    .await;
-    *core.inner.kinds.write().unwrap() = vec![
-        (VenueId("bingx".into()), VenueKind::Cex),
-        (VenueId("mexc".into()), VenueKind::Cex),
-        (VenueId("bsc_dex".into()), VenueKind::Dex),
-    ];
-    core
-}
-
-/// Сделка WKC DEX → `to`, зачисленная на `to` записью `record`, ждёт доли (шаг «продажа»).
-fn credited(id: &str, to: &str, record: Decimal) -> Deal {
-    let dir = Direction {
-        asset: Asset {
-            ticker: "WKC".into(),
-            bsc_contract: None,
-        },
-        buy_on: VenueId("bsc_dex".into()),
-        sell_on: VenueId(to.into()),
-    };
-    let mut x = Deal::new(id.into(), dir, json!({}), d("18.22"));
-    x.step = Step::Selling;
-    x.at = VenueId(to.into());
-    x.qty = record;
-    x.invested = d("262.99");
-    x.credit = Some(Box::new(CreditFact {
-        venue: VenueId(to.into()),
-        record,
-        outsider: None,
-        outsider_at: None,
-        share: None,
-        basis: None,
-        at: chrono::Utc::now(),
-        reread: None,
-    }));
-    x
-}
+use t198_common::{credited, d, j, journal, start};
 
 /// Живой случай на ядре: первая подтверждается фактом (98 % записи), вторая видит свои монеты (было — алерт «своих
 /// монет не видно»), учёт площадки после долей не больше факта сверки (паузы площадки нет), ждущая — в сверке нижней оценкой.
@@ -233,67 +150,4 @@ async fn reconcile_counts_pending_by_lower_estimate() {
     let m = arb::core::reconcile_confirm::expected(&core, &VenueId("mexc".into()), None);
     let low: Decimal = m.values().map(|e| e.0).sum();
     assert_eq!(low, d("980"));
-}
-
-/// Повторное ревью (Б-3): баланс биржи не прочитан — не продаём вслепую: первый раз режим застрявшей монеты (здесь
-/// stuck.mode не задан — сделка остановлена с причиной), второй раз подряд — алерт человеку.
-#[tokio::test]
-async fn unread_balance_never_sells_blind() {
-    let core = start("unread").await;
-    let mut a = credited("U1", "mexc", d("100"));
-    arb::core::ledger::save(&core, &a).await;
-    assert!(!arb::core::credit_alert::unread(&core, &mut a, "лимит запросов").await);
-    assert!(a.fact_unread);
-    let rec = core.inner.deals.lock().unwrap().get("U1").cloned().unwrap();
-    assert_eq!(
-        rec.step,
-        Step::Halted,
-        "режим застрявшей монеты без stuck.mode — остановка с причиной"
-    );
-    assert_eq!(rec.qty, d("100"), "не продано");
-    let mut b = credited("U2", "mexc", d("100"));
-    b.fact_unread = true;
-    arb::core::ledger::save(&core, &b).await;
-    assert!(!arb::core::credit_alert::unread(&core, &mut b, "лимит запросов").await);
-    let rec = core.inner.deals.lock().unwrap().get("U2").cloned().unwrap();
-    assert_eq!(rec.step, Step::WaitingHuman, "повторно — человеку");
-}
-
-/// Код без строк-комментариев (`//`). Ошибок нет.
-fn code_of(f: &str) -> String {
-    let p = format!("{}/{f}", env!("CARGO_MANIFEST_DIR"));
-    std::fs::read_to_string(p)
-        .unwrap()
-        .lines()
-        .filter(|l| !l.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// Б2 и повторное ревью Б-2: в коде (без комментариев) каждый вывод монеты сделки (transfers::send_trade) и оценка
-/// перегона (relay_value::value_at) идут после доли по факту (sell_fact::before) — executor (первый вывод),
-/// «Перегон» (relay.rs), «Продать и перегнать» (manual_relay.rs: run → relay_to).
-#[test]
-fn withdraw_paths_read_fact_first() {
-    for f in [
-        "src/core/executor.rs",
-        "src/core/relay.rs",
-        "src/core/manual_relay.rs",
-    ] {
-        let src = code_of(f);
-        let fact = src
-            .find("sell_fact::before(")
-            .unwrap_or_else(|| panic!("{f}: нет факта"));
-        for what in ["transfers::send_trade(", "relay_value::value_at("] {
-            for (at, _) in src.match_indices(what) {
-                assert!(fact < at, "{f}: {what} раньше факта");
-            }
-        }
-    }
-    // «Продать и перегнать»: relay_to зовётся только из run после факта.
-    let m = code_of("src/core/manual_relay.rs");
-    let fact = m.find("sell_fact::before(").unwrap();
-    for (at, _) in m.match_indices("relay_to(core") {
-        assert!(fact < at);
-    }
 }

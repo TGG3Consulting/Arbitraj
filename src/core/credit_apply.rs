@@ -30,7 +30,8 @@ use super::remain_others::Others;
 /// учёт других и свой. Принимает: ядро, сделку, факт, других. Возвращает: Input. Ошибок нет.
 pub fn input(core: &Core, deal: &Deal, fact: Decimal, o: &Others) -> Input {
     let mut pending = o.pending.clone();
-    let mut confirmed = o.qty;
+    // Третье ревью (С-Е): монеты сделок, уходящих с этого счёта (вывод ещё может не быть списан), — не в пуле ждущих.
+    let mut confirmed = o.qty + o.leaving_qty;
     match super::credit_fact::here(deal).filter(|_| super::credit_fact::pending(deal)) {
         Some(c) => pending.push(Pending {
             id: deal.id.clone(),
@@ -57,7 +58,7 @@ pub fn input(core: &Core, deal: &Deal, fact: Decimal, o: &Others) -> Input {
         confirmed,
         pending,
         // Сделка в пути сюда, замок не взят или сделка уходит отсюда (повторное ревью, С-1) — замер неоднозначен.
-        unclear: !o.unclear.is_empty() || o.busy || !o.leaving.is_empty(),
+        unclear: !o.unclear.is_empty() || !o.leaving.is_empty(),
         hold_pct: super::deposit_hold::expected_pct(core, &deal.at, a),
         tol_pct: tol,
     }
@@ -80,7 +81,14 @@ pub fn with_shares(o: &Others, sp: &Split) -> Others {
 /// Что делает: подтверждает долю своей ждущей сделки по распределению (шапка). Принимает: ядро, сделку, факт, других,
 /// распределение. Возвращает: true — вести дальше с долей; false — доля 0, алерт человеку. Ошибок нет.
 pub async fn own(core: &Core, deal: &mut Deal, fact: Decimal, o: &Others, sp: &Split) -> bool {
-    let share = sp.share_of(&deal.id).unwrap_or_default();
+    let measured = measurable(core, deal, sp, sp.raw_of(&deal.id).unwrap_or_default());
+    // Третье ревью (С-В): однозначный замер — удержание измерено на этой сделке: она берёт долю по факту без ограничения
+    // ожидаемым (реальные 0 % — продаёт всё своё, а не 98 %).
+    let share = if measured {
+        sp.raw_of(&deal.id).unwrap_or_default()
+    } else {
+        sp.share_of(&deal.id).unwrap_or_default()
+    };
     let record = super::credit_fact::here(deal).map_or(deal.qty, |c| c.record);
     let text = super::credit_text::describe(core, deal, fact, o, sp, (record, share));
     if share <= Decimal::ZERO {
@@ -91,7 +99,7 @@ pub async fn own(core: &Core, deal: &mut Deal, fact: Decimal, o: &Others, sp: &S
     super::credit_lock::sync(core, deal);
     // Замер — сразу в памяти (расчёт следующих сделок видит его); база, журнал и Telegram — фоном: продажа их не ждёт
     // (Тигран 16.11: сделка не ждёт ни уведомления, ни записи в базу).
-    let hold = measurable(core, deal, sp, share).then(|| super::deposit_hold::Sample {
+    let hold = measured.then(|| super::deposit_hold::Sample {
         records: sp.records,
         credited: sp.records - sp.held,
         pct: sp.held_pct(),

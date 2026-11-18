@@ -8,7 +8,8 @@
 //! Ревью t198 (С1): снимок снимается ОДНОВРЕМЕННО с выводом (вывод его не ждёт). Повторное ревью (С-2): снимок
 //! принимается, только если ответ баланса получен ДО того, как отправитель вернул хеш вывода (seal в transfers.rs до
 //! ожидания зачисления): депозит возможен только после транзакции в сети, значит в таком снимке монет этого перевода
-//! нет. Не успело, упало, учёт сделок за чтение сдвинулся или замок счёта не взят сразу (credit_lock.rs) — снимка нет
+//! нет. Третье ревью (С-Ж): seal — сразу после ответа на запрос вывода (вывод принят), не после хеша. Не успело,
+//! упало, учёт сделок за чтение сдвинулся или замок счёта не взят сразу (credit_lock.rs fact_try) — снимка нет
 //! (правило Б3: доля не выше запись × (1 − ожидаемое удержание)).
 //! Ревью t198 (Б1): через счёт идёт сделка в пути (шаг «перевод») — её монеты могли уже прийти, а записи депозита ещё
 //! нет: такой снимок неоднозначен — не пишется (None), «посторонними» её монеты не становятся никогда.
@@ -105,9 +106,9 @@ pub fn start(core: &Core, deal: &str, to: &VenueId, a: &Asset) -> Option<Snap> {
     Some(Snap { key })
 }
 
-/// Что делает: отправитель вернул хеш вывода (transfers.rs, до ожидания зачисления) — чтение, не ответившее к этому
-/// моменту, недействительно (повторное ревью, С-2: депозит возможен только после транзакции в сети, а снимок — только
-/// без её монет). Принимает: снимок перевода. Ошибок нет.
+/// Что делает: площадка приняла вывод (ответ на запрос вывода, transfers.rs; третье ревью С-Ж) — чтение, не ответившее
+/// к этому моменту, недействительно (депозит возможен только после транзакции в сети, а снимок — только без её монет).
+/// Принимает: снимок перевода. Ошибок нет.
 pub fn seal(snap: Option<&Snap>) {
     let Some(s) = snap else { return };
     let mut m = READS.lock().unwrap_or_else(|p| p.into_inner());
@@ -156,7 +157,7 @@ pub fn outsider_of(
     o: &super::remain_others::Others,
     hold_pct: Decimal,
 ) -> Option<Decimal> {
-    if !o.unclear.is_empty() || o.busy || !o.leaving.is_empty() {
+    if !o.unclear.is_empty() || !o.leaving.is_empty() {
         return None;
     }
     let keep = Decimal::ONE - hold_pct / Decimal::ONE_HUNDRED;
@@ -168,13 +169,13 @@ pub fn outsider_of(
 /// Принимает: ядро, ID сделки, получателя, монету. Возвращает: посторонние или None. Ошибок нет.
 async fn read(core: &Core, deal: &str, to: &VenueId, a: &Asset) -> Option<Decimal> {
     let own = lk(&core.inner.deals).get(deal).cloned()?;
-    let g = super::credit_lock::fact(core, to, a).await;
+    // Третье ревью (С-Ж): замок не ждём — занято продажей, снимка нет (баланс не читаем).
+    let _g = super::credit_lock::fact_try(to, a)?;
     let before = super::remain_others::on_account(core, &own, to);
     let fact = Box::pin(super::remain_read::fact_at(core, &own, to))
         .await
         .ok()?;
-    let mut after = super::remain_others::on_account(core, &own, to);
-    after.busy = g.is_none();
+    let after = super::remain_others::on_account(core, &own, to);
     if before.qty != after.qty || before.pending != after.pending || before.unclear != after.unclear
     {
         return None;

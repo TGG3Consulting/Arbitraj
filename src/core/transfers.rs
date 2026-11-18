@@ -10,7 +10,7 @@
 //! так же перегон застрявшей монеты (relay.rs → send_trade). Возврат USDT (send_as), биржа ↔ биржа и переводы на
 //! биржу — как раньше (решение 76).
 //! Решение 413 (t198, ревью С1): перевод монеты сделки на биржу — снимок посторонних монет на получателе одновременно
-//! с выводом (credit_base.rs; вывод его не ждёт); принимается, только если ответил до хеша вывода (seal), после
+//! с выводом (credit_base.rs; вывод его не ждёт); принимается, только если ответил до ответа на запрос вывода (seal), после
 //! зачисления привязывается к хешу вывода.
 //! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон — send_trade, решение 227), usdt_relay_retry.rs (USDT).
 //! От чего зависит: engine.rs, usdt_accepted.rs (решение 405: вывод перегона USDT принят), wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
@@ -403,6 +403,9 @@ async fn go(
             },
         }
     };
+    // Решение 413 (третье ревью, С-Ж): площадка приняла вывод — снимок посторонних, не ответивший до этого,
+    // недействителен (credit_base::seal).
+    super::credit_base::seal(base.as_ref());
     // Решение 176: ход ручного перевода USDT для экрана (usdt_transfer.rs; не ручной — ничего).
     super::usdt_transfer::stage(core, deal, super::usdt_transfer::Stage::Sent);
     // Решение 405 (ревью 4, Б2): площадка приняла вывод перегона USDT — деньги списаны, резерв части «идёт» снимается
@@ -512,9 +515,6 @@ async fn go(
         let kick = ticket.as_ref().map(|t| t.wake.as_ref()).unwrap_or(&quiet);
         pacer.pause(deps, kick).await;
     };
-    // Решение 413 (повторное ревью, С-2): отправитель вернул хеш — снимок посторонних, не ответивший до этого,
-    // недействителен (credit_base::seal).
-    super::credit_base::seal(base.as_ref());
     let tx = sent.tx_hash.clone().unwrap_or_default();
     super::usdt_transfer::stage(
         core,

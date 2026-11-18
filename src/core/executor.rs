@@ -611,7 +611,13 @@ async fn run(
     // Решение 413 (повторное ревью t198, Б-2): первый вывод монеты сделки с биржи (биржа → DEX / биржа) — только доля
     // по факту счёта, как перед любой продажей и выводом (sell_fact::before; на DEX — без чтения). None — закрыта
     // или алерт / режим застрявшей монеты.
-    let Some(mut deal) = Box::pin(super::sell_fact::before(core, deal, "вывод")).await else {
+    let Some(mut deal) = Box::pin(super::sell_fact::before(
+        core,
+        deal,
+        super::sell_fact::WITHDRAW,
+    ))
+    .await
+    else {
         return;
     };
     // Перевод на B.
@@ -646,6 +652,10 @@ async fn run(
     .await;
     // Решение 236, дополнение: газ неудачных переводов из кошелька DEX (откат, отмена) — в затраты сделки.
     super::deal_gas::charge(core, &mut deal, &d.buy_on, &mut gas).await;
+    // Решение 413 (третье ревью, М-2): вывода не было (исход известен) — сделка не в пути.
+    if matches!(&sent, Err(e) if !e.outcome_unknown()) {
+        deal.transit_to = None;
+    }
     match sent {
         Ok((sent, credited, chain)) => {
             if let Some(line) = chain {

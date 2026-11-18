@@ -57,7 +57,11 @@ pub async fn save(core: &Core, deal: &Deal) {
     // Решение 125: сделка изменилась — задача окон проверяет, не пора ли закрыть окно монеты.
     core.inner.window_kick.notify_one();
     super::window_deal::saved(core, rec); // Решение 245: цена DEX на объём сделки в окне — кто под наблюдением.
-    lk(&core.inner.deals).insert(rec.id.clone(), rec.clone());
+    // Решение 413 (третье ревью, Б-1): в учёт памяти — без отметки «факт свежий» (её видит только задача сделки; кнопки
+    // и другие входы берут сделку из учёта — читают факт заново).
+    let mut stored = rec.clone();
+    stored.fact_fresh = None;
+    lk(&core.inner.deals).insert(rec.id.clone(), stored);
     // Решение 405 (М2): набор сделок, которые ещё что-то держат (unsettled.rs) — после записи учёта.
     super::unsettled::track(core, rec);
     // Решение 405 (ревью Н3): сделка сохранена (могла уйти с пути) — ожидания ручных действий проверяют монету.

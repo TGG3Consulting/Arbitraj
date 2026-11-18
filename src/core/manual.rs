@@ -122,6 +122,8 @@ pub async fn raise_alert_with(
     error: Option<String>,
     holders: Vec<String>,
 ) {
+    // Решение 413 (третье ревью, Б-1): дальше решает человек (часы) — свежесть факта не переносится.
+    deal.fact_fresh = None;
     let prev = super::manual_repeat::prior(&mut deal, error.as_deref());
     let id = match (&prev, super::ids::uuid_v4()) {
         (Some(p), _) => p.id.clone(),

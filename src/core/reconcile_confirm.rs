@@ -66,7 +66,13 @@ pub fn expected(
         // раньше. Подтверждённые — долями.
         e.0 += if super::credit_fact::pending(&d) {
             let pct = super::deposit_hold::expected_pct(core, venue, &d.direction.asset);
-            d.qty * (Decimal::ONE - pct / Decimal::ONE_HUNDRED)
+            let low = d.qty * (Decimal::ONE - pct / Decimal::ONE_HUNDRED);
+            // Третье ревью (С-Б): на круге сверки удержано больше ожидаемого — доля по факту, не нижняя оценка (иначе
+            // пауза биржи из-за удержания — повтор WKC).
+            match super::credit_halted::observed(&d.id) {
+                Some(seen) => low.min(seen),
+                None => low,
+            }
         } else {
             d.qty
         };

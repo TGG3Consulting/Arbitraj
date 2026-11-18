@@ -65,6 +65,9 @@ pub struct Input {
 pub struct Split {
     /// Доля каждой ждущей (в порядке входа).
     pub shares: Vec<(String, Decimal)>,
+    /// Доля по факту без ограничения ожидаемым удержанием (третье ревью t198, С-В: при однозначном замере сделка берёт
+    /// её — удержание только что измерено на ней самой).
+    pub raws: Vec<(String, Decimal)>,
     /// Посторонние, вычтенные из факта.
     pub outsider: Decimal,
     /// Пул ждущих: fact − confirmed − outsider (может быть ≤ 0).
@@ -92,6 +95,11 @@ impl Split {
         self.shares.iter().find(|(x, _)| x == id).map(|(_, q)| *q)
     }
 
+    /// Доля ждущей по факту без ограничения (raws). None — её нет среди ждущих. Ошибок нет.
+    pub fn raw_of(&self, id: &str) -> Option<Decimal> {
+        self.raws.iter().find(|(x, _)| x == id).map(|(_, q)| *q)
+    }
+
     /// Удержание в процентах от записей (0 — записей нет). Ошибок нет.
     pub fn held_pct(&self) -> Decimal {
         if self.records <= Decimal::ZERO {
@@ -117,6 +125,7 @@ pub fn split(i: &Input) -> Split {
     let keep = (Decimal::ONE - i.hold_pct / Decimal::ONE_HUNDRED).max(Decimal::ZERO);
     let scale = scale_of(i);
     let mut raw_sum = Decimal::ZERO;
+    let mut raws: Vec<(String, Decimal)> = Vec::new();
     let shares: Vec<(String, Decimal)> = i
         .pending
         .iter()
@@ -130,6 +139,7 @@ pub fn split(i: &Input) -> Split {
                 part(r, pool, records, scale)
             };
             raw_sum += raw;
+            raws.push((p.id.clone(), raw));
             // Ревью t198 (Б3) и повторное ревью (Б-1): доля никогда не выше записи × (1 − ожидаемое удержание) — и со
             // снимком: ручные монеты / airdrop, пришедшие после снимка, при удержании биржи сделке не уходят (WKC:
             // 0.02 × запись ≈ 120 млн монет). Удержание 0 (замер 0 % или налога нет) — ограничение = запись.
@@ -155,6 +165,7 @@ pub fn split(i: &Input) -> Split {
             && excess <= records * i.tol_pct / Decimal::ONE_HUNDRED
             && i.pending.iter().all(|p| p.outsider.is_some()),
         shares,
+        raws,
         pool,
         records,
     }

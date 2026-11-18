@@ -140,6 +140,7 @@ pub mod exec_book;
 pub mod exec_book_fail;
 pub mod executor;
 pub mod executor_deploy;
+pub mod fact_pause;
 pub mod feed_confirm;
 pub mod feed_confirm_queue;
 #[cfg(test)]

@@ -53,12 +53,21 @@ pub struct CreditFact {
     /// Подтверждённое количество; None — ждёт доли.
     #[serde(default)]
     pub share: Option<Decimal>,
-    #[serde(default)]
+    /// Третье ревью (М-5): основание, которого нет в этой сборке (например, Estimate ранних сборок t198), при чтении —
+    /// None (подтверждено учётом, если share есть; иначе ждёт доли), запись не падает.
+    #[serde(default, deserialize_with = "basis_lenient")]
     pub basis: Option<Basis>,
     pub at: DateTime<Utc>,
     /// Только в памяти: количество, на котором продажа получила отказ «мало средств» (sell_fact.rs).
     #[serde(skip)]
     pub reread: Option<Decimal>,
+}
+
+/// Что делает: чтение основания без отказа на незнакомом значении (М-5). Принимает: разборщик. Возвращает: основание
+/// или None. Ошибки: только формата JSON.
+fn basis_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Basis>, D::Error> {
+    let v = Option::<serde_json::Value>::deserialize(d)?;
+    Ok(v.and_then(|v| serde_json::from_value(v).ok()))
 }
 
 /// Что делает: после зачисления перевода сделки (fills.rs transfer): запись зачисления. Ревью t198 (С1): любая

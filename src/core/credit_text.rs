@@ -75,12 +75,14 @@ pub fn describe(
     if sp.over {
         s.push_str(" — удержано больше ожидаемого");
     }
-    if sp.unassigned > Decimal::ZERO {
+    // Третье ревью (С-В): не присвоено этой сделке — доля по факту минус отданное.
+    let unassigned = (sp.raw_of(&deal.id).unwrap_or(share) - share).max(Decimal::ZERO);
+    if unassigned > Decimal::ZERO {
         s.push_str(&format!(
             "; не присвоено {} — эти монеты на счёте по факту были бы долей сделки, но снимка посторонних монет до \
              вывода нет или через счёт идёт сделка в пути: доля не выше записи × (1 − ожидаемое удержание), они \
              остаются на счёте",
-            w::coins(sp.unassigned, t)
+            w::coins(unassigned, t)
         ));
     }
     if sp.excess > Decimal::ZERO {

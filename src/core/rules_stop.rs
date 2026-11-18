@@ -228,6 +228,8 @@ pub(super) fn resume_note(core: &Core, venue: &VenueId, kind: Kind) -> Option<St
         Kind::Rule => Some(format!(
             "Снимется сама: бот проверяет подключение площадки каждые {every} с, «Подключено» — пауза снята"
         )),
+        // Решение 413 (третье ревью t198, С-Д): снимает первое успешное чтение баланса биржи (fact_pause.rs).
+        Kind::NoFact => Some("Снимется сама при первом успешном чтении баланса биржи".to_string()),
         Kind::WithdrawLimit | Kind::Outcome => None,
     }
 }

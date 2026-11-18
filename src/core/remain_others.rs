@@ -50,13 +50,12 @@ pub struct Others {
     pub unclear: Vec<String>,
     /// Решение 413: другие сделки на этом счёте, ждущие доли (запись депозита и посторонние до вывода) — не в qty.
     pub pending: Vec<super::credit_split::Pending>,
-    /// Ревью t198: замок счёта не взят за exec.rate_limit_wait_max_ms — продажа другой сделки, возможно, в полёте
-    /// (credit_lock.rs fact): доля не выше ожидаемой, замера нет.
-    pub busy: bool,
     /// Решение 413 (повторное ревью, С-1): сделки на шаге «перевод», уходящие с этого счёта (вывод отсюда, получатель —
     /// другой): не «в пути сюда», не вычитаются (решение 405, ревью 3 Б1 — их монеты здесь или уже нет, не доказано),
     /// но замер удержания и снимок посторонних при них неоднозначны.
     pub leaving: Vec<String>,
+    /// Третье ревью (С-Е): их количество — пул ждущих долю его не включает (монеты могут ещё лежать здесь).
+    pub leaving_qty: Decimal,
     /// Те же сделки словами для тревоги (deal_words.rs): доказуемые, затем в пути (требование Тиграна 18.11).
     pub words: Vec<String>,
 }
@@ -100,6 +99,7 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
                 ));
             } else if d.at == *v {
                 out.leaving.push(d.id.clone());
+                out.leaving_qty += d.qty;
             }
         } else if d.at == *v
             && super::credit_fact::pending(d)

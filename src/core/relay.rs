@@ -237,6 +237,10 @@ pub async fn run(core: &Core, mut deal: Deal) {
         super::transfers::send_trade(core, &deal.id, (&from, &to), &a, deal.qty, &mut gas).await;
     // Решение 236, дополнение: газ неудачных переводов из кошелька DEX (откат, отмена) — в затраты сделки.
     super::deal_gas::charge(core, &mut deal, &from, &mut gas).await;
+    // Решение 413 (третье ревью, М-2): вывода не было (исход известен) — сделка не в пути.
+    if matches!(&res, Err(e) if !e.outcome_unknown()) {
+        deal.transit_to = None;
+    }
     match res {
         Ok((sent, credited, chain)) => {
             if let Some(line) = chain {

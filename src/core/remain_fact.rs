@@ -46,18 +46,41 @@ pub fn settle_qty(account: Decimal, fact: Decimal) -> Decimal {
 /// true — вести дальше; false — на площадке ничего нет, сделка закрыта, или (решение 405) по учёту всё на счёте —
 /// монеты других сделок: алерт человеку. Ошибок нет: факта нет — учёт как раньше.
 pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
+    let mode = if super::risk_count::is_manual() {
+        super::credit_alert::Unread::Button
+    } else {
+        super::credit_alert::Unread::Stuck
+    };
+    Box::pin(reconcile_as(core, deal, mode)).await
+}
+
+/// Что делает: как reconcile, с заданным поведением при непрочитанном балансе биржи (третье ревью t198: кнопка — итог
+/// кнопки с причиной, С-Г; первый вывод — ждать и перечитывать, С-Д; прочее — режим застрявшей монеты один раз, потом
+/// алерт, Б-3). Принимает: ядро, сделку, поведение. Возвращает: как reconcile. Ошибок нет.
+pub async fn reconcile_as(core: &Core, deal: &mut Deal, mode: super::credit_alert::Unread) -> bool {
     if deal.qty <= Decimal::ZERO || super::native::is_native(core, &deal.direction.asset) {
         return true;
     }
+    let cex = super::trade_ops::kind(core, &deal.at) == Ok(VenueKind::Cex);
     // Решение 413: факт и учёт других — одним снимком под замком счёта (продажи в полёте нет); на бирже — повторы по
-    // правилам шлюза (remain_read.rs).
-    let (read, others) = Box::pin(super::remain_read::read(core, deal)).await;
+    // правилу шлюза «повторить» (remain_read.rs).
+    let (mut read, mut others) = Box::pin(super::remain_read::read(core, deal)).await;
+    // Третье ревью (С-Д): первый вывод — не уходим в режим застрявшей монеты и не продаём: ждём и перечитываем (пауза
+    // новых входов на биржу и сообщение человеку — fact_pause.rs, один раз), пока не прочитается.
+    if cex && mode == super::credit_alert::Unread::Wait {
+        while read.is_err() {
+            let Some(ms) = super::credit_alert::wait_ms(core, &deal.at) else {
+                break;
+            };
+            tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+            (read, others) = Box::pin(super::remain_read::read(core, deal)).await;
+        }
+    }
     let fact = match read {
         Ok(f) => f,
-        // Повторное ревью (Б-3): на бирже факт не прочитан — не продаём и не выводим (не вслепую): режим застрявшей
-        // монеты один раз, повторно — алерт человеку (credit_alert::unread).
-        Err(e) if super::trade_ops::kind(core, &deal.at) == Ok(VenueKind::Cex) => {
-            return Box::pin(super::credit_alert::unread(core, deal, &e)).await;
+        // Повторное ревью (Б-3): на бирже факт не прочитан — не продаём и не выводим (не вслепую).
+        Err(e) if cex => {
+            return Box::pin(super::credit_alert::unread(core, deal, &e, mode)).await;
         }
         Err(e) => {
             let text =
@@ -99,11 +122,6 @@ pub async fn apply_with(
     let sp = super::credit_split::split(&super::credit_apply::input(core, deal, fact, &others));
     if super::credit_fact::pending(deal) {
         return Box::pin(super::credit_apply::own(core, deal, fact, &others, &sp)).await;
-    }
-    // Повторное ревью (мелкое): замок счёта не взят — продажа другой сделки, возможно, в полёте: факт может быть меньше
-    // на её ордер — учёт подтверждённой сделки по такому факту не уменьшается.
-    if others.busy {
-        return true;
     }
     let others = super::credit_apply::with_shares(&others, &sp);
     let qty = match super::remain_others::own_qty(deal.qty, fact, &others) {

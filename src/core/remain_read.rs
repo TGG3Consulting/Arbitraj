@@ -1,57 +1,94 @@
 //! Файл: core/remain_read.rs
 //! Что делает: решение 413 (вынесено из remain_fact.rs; повторное ревью t198, Б-3) — чтение факта счёта сделки для
 //! сверки остатка и доли: баланс монеты (биржа — торговый и перекладываемые на торговый счета, free + locked; DEX —
-//! кошелёк сделки) и учёт других сделок — одним снимком под замком счёта (credit_lock.rs). На бирже сбой чтения с кодом
-//! шлюза повторяется по правилам шлюза для этого кода (rules_apply::on_error: «повторить» — пауза и снова; «стоп» —
-//! ошибка наверх, remain_fact.rs решает дальше); сбой без кода (счёт не прочитан, нет шлюза) — сразу ошибка.
+//! кошелёк сделки) и учёт других сделок — одним снимком под замком счёта (credit_lock.rs, ждёт конца продаж). Сбой
+//! чтения с кодом шлюза повторяется только по правилу «повторить» для этого кода, без побочных действий правил шлюза
+//! (третье ревью t198, С-З: чтение баланса — не денежная операция); сбой без кода — сразу ошибка. Итог на бирже — одна
+//! строка Warn core.credit_fact; пока не читается — пауза новых входов на биржу, первое успешное чтение её снимает
+//! (fact_pause.rs, третье ревью С-Д).
 //! Кто вызывает: core/remain_fact.rs (reconcile), core/credit_base.rs и core/credit_apply.rs (fact_at).
-//! От чего зависит: credit_lock.rs, remain_others.rs, rules_apply.rs, dex_account.rs, manual_halted.rs (free_of),
-//! venue_ticker.rs, engine.rs.
-//! Настройки: правила шлюза (через rules_apply.rs).
+//! От чего зависит: credit_lock.rs, remain_others.rs, deposit_proof_plan.rs (addr_retry), gateway/rules.rs,
+//! storage/rules.rs, fact_pause.rs, dex_account.rs, manual_halted.rs (free_of), venue_ticker.rs, engine.rs.
+//! Настройки: правила шлюза (только «повторить»).
 
 use rust_decimal::Decimal;
 
 use crate::core::types::VenueId;
 use crate::gateway::contract::{AccountRole, VenueKind};
 use crate::gateway::errors::GatewayError;
+use crate::storage::journal::Level;
 
 use super::deal::Deal;
 use super::engine::Core;
 use super::remain_others::Others;
 
-/// Что делает: факт счёта сделки и учёт других под замком, с повторами по правилам шлюза (шапка). Принимает: ядро,
-/// сделку. Возвращает: (факт или текст ошибки, другие). Ошибок нет.
+/// Что делает: факт счёта сделки и учёт других под замком (ждёт конца продаж на счёте — третье ревью, С-А), с
+/// повторами по правилу шлюза «повторить» для кода ошибки (шапка). Итог на бирже: прочитано — снять паузу «баланс биржи
+/// не читается» (fact_pause.rs), не прочитано — одна строка Warn core.credit_fact и пауза новых входов на биржу.
+/// Принимает: ядро, сделку. Возвращает: (факт или текст ошибки, другие). Ошибок нет.
 pub async fn read(core: &Core, deal: &Deal) -> (Result<Decimal, String>, Others) {
+    let cex = super::trade_ops::kind(core, &deal.at) == Ok(VenueKind::Cex);
     let mut attempt = 0;
     loop {
         attempt += 1;
-        let g = super::credit_lock::fact(core, &deal.at, &deal.direction.asset).await;
-        let r = Box::pin(fact_try(core, deal, &deal.at)).await;
-        let mut o = super::remain_others::on_account(core, deal, &deal.at);
-        o.busy = g.is_none();
+        let g = super::credit_lock::fact(&deal.at, &deal.direction.asset).await;
+        // Чтение — своей задачей tokio (CI 3f1905ce, переполнение стека): HTTP-будущие адаптера (у части бирж — несколько
+        // счетов параллельно) опрашиваются на стеке своей задачи, а не в глубине пути продажи (решение 389).
+        let (c, d) = (core.clone(), deal.clone());
+        let r = match tokio::spawn(async move { fact_try(&c, &d, &d.at).await }).await {
+            Ok(r) => r,
+            Err(e) => Err((format!("{}: чтение баланса прервано: {e}", deal.at.0), None)),
+        };
+        let o = super::remain_others::on_account(core, deal, &deal.at);
         drop(g);
         match r {
-            Ok(f) => return (Ok(f), o),
-            Err((text, Some(ge))) => {
-                let next = Box::pin(super::rules_apply::on_error(
-                    core,
-                    "Чтение баланса для доли сделки",
-                    &deal.at,
-                    Some(&deal.id),
-                    &ge,
-                    attempt,
-                ))
-                .await;
-                match next {
-                    super::rules_apply::Next::Retry { pause_ms } => {
-                        tokio::time::sleep(std::time::Duration::from_millis(pause_ms)).await
-                    }
-                    super::rules_apply::Next::Stop => return (Err(text), o),
+            Ok(f) => {
+                if cex {
+                    Box::pin(super::fact_pause::lift(core, &deal.at)).await;
                 }
+                return (Ok(f), o);
             }
-            Err((text, None)) => return (Err(text), o),
+            Err((text, ge)) => {
+                // Третье ревью (С-З): чтение баланса — не денежная операция: только правило «повторить» для кода
+                // (deposit_proof_plan::addr_retry — тот же чистый выбор, что у адреса депозита, решение 411), без
+                // побочных действий правил шлюза (журнал Error на попытку, Telegram, ошибки подряд, «стоп», «исход
+                // неизвестен»).
+                let pause = match &ge {
+                    Some(e) => Box::pin(retry_pause(core, &deal.at, e, attempt)).await,
+                    None => None,
+                };
+                if let Some(ms) = pause {
+                    tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+                    continue;
+                }
+                if cex {
+                    let t = format!(
+                        "{}: баланс не прочитан после {attempt} попыток: {text}",
+                        deal.id
+                    );
+                    Box::pin(core.inner.deps.log(
+                        Level::Warn,
+                        "core.credit_fact",
+                        Some(&deal.at.0),
+                        &t,
+                        None,
+                    ))
+                    .await;
+                    Box::pin(super::fact_pause::set(core, &deal.at, &text)).await;
+                }
+                return (Err(text), o);
+            }
         }
     }
+}
+
+/// Пауза повтора по правилу шлюза «повторить» для кода ошибки (без побочных действий). None — не повторять.
+async fn retry_pause(core: &Core, v: &VenueId, e: &GatewayError, attempt: u32) -> Option<u64> {
+    let rules = crate::storage::rules::list(&core.inner.deps.db)
+        .await
+        .unwrap_or_default();
+    let rule = crate::gateway::rules::pick_rule(&rules, e.code, Some(v)).map(|r| &r.action);
+    super::deposit_proof_plan::addr_retry(rule, e.code, attempt)
 }
 
 /// Фактическое количество монеты сделки на площадке `v` (и до вывода туда — credit_base.rs). Ошибки — текст.

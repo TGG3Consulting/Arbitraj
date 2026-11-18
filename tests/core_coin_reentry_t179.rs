@@ -750,8 +750,8 @@ async fn remain_fact_keeps_only_own_coins_on_shared_account() {
         unclear: vec![],
         // Решение 413: ждущие доли других — в отдельном поле (здесь нет).
         pending: vec![],
-        busy: false,
         leaving: vec![],
+        leaving_qty: Decimal::ZERO,
         words: vec![],
     };
     assert_eq!(

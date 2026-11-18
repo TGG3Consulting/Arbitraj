@@ -33,6 +33,10 @@ use super::op_error::OpError;
 use super::remeasure::Guard;
 use super::sell_range::Rule;
 
+/// Причина первого вывода монеты сделки с биржи после покупки (executor.rs): баланс не прочитан — ждать и
+/// перечитывать, без продажи (третье ревью t198, С-Д).
+pub const WITHDRAW: &str = "вывод";
+
 /// Что делает: нужен ли свежий факт перед продажей / выводом (ревью t198, С1: на бирже — всегда). Принимает: ядро,
 /// сделку. Ошибок нет.
 pub fn need(core: &Core, deal: &Deal) -> bool {
@@ -50,13 +54,22 @@ pub async fn before(core: &Core, mut deal: Deal, why: &str) -> Option<Deal> {
     }
     // Повторное ревью (мелкое): факт уже прочитан при этом шаге, количестве и площадке (предыдущий вход подряд —
     // stuck / «Продать и перегнать» / продажа здесь) — не читаем второй раз.
-    if deal.fact_fresh.as_deref() == Some(&(deal.step, deal.qty, deal.at.clone())) {
+    if fresh_take(&mut deal) {
         return Some(deal);
     }
     let tried = super::credit_fact::here(&deal).and_then(|c| c.reread);
-    if !Box::pin(super::remain_fact::reconcile(core, &mut deal)).await {
-        // Ревью t198: путь кнопки — итог кнопки (алерт или закрытие — уже в хронологии и «Ручном управлении»).
-        if why == super::sell::BUTTON {
+    use super::credit_alert::Unread;
+    let mode = if why == super::sell::BUTTON || super::risk_count::is_manual() {
+        Unread::Button
+    } else if why == WITHDRAW {
+        Unread::Wait
+    } else {
+        Unread::Stuck
+    };
+    if !Box::pin(super::remain_fact::reconcile_as(core, &mut deal, mode)).await {
+        // Ревью t198: путь кнопки — итог кнопки (алерт или закрытие — уже в хронологии и «Ручном управлении»); баланс не
+        // прочитан — итог кнопки уже отправлен с настоящей причиной (третье ревью, С-Г).
+        if why == super::sell::BUTTON && !deal.fact_unread {
             let text = "по факту счёта у сделки монет нет (алерт или закрытие — см. хронологию сделки, решение 413)";
             Box::pin(super::manual_outcome::failed(core, &deal, why, text)).await;
         }
@@ -81,6 +94,15 @@ pub async fn before(core: &Core, mut deal: Deal, why: &str) -> Option<Deal> {
         }
         _ => Some(deal),
     }
+}
+
+/// Что делает: третье ревью t198 (Б-1) — одноразовая отметка «факт свежий»: забирает её (take) и отвечает, совпадает ли
+/// она с шагом, количеством и площадкой сделки. Допустимый пропуск чтения — только «второй вход подряд» без ожидания
+/// (relay → sell_here, manual_relay → market, sell_or_stuck → stuck::handle); режим застрявшей монеты, алерт человеку и
+/// учёт памяти (кнопки) отметку сбрасывают. Принимает: сделку. Возвращает: да — факт свежий. Ошибок нет.
+pub fn fresh_take(deal: &mut Deal) -> bool {
+    let fresh = deal.fact_fresh.take();
+    fresh.as_deref() == Some(&(deal.step, deal.qty, deal.at.clone()))
 }
 
 /// Что делает: отказ продажи «мало средств» на бирже — повторить с долей по свежему факту (шапка)? Повтор — только

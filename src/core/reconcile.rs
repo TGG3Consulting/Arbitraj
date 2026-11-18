@@ -138,6 +138,7 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
         // Учёт площадки до и после запроса балансов (решение 112): сверяются только монеты, по которым сделки за это
         // время не сдвинулись.
         let before = expected(core, &v, acc.as_ref());
+        let hp_before = super::credit_halted::prints(core, &v);
         let g = deps.gw.get_as(&v, acc.as_ref()).await;
         let b = match &g {
             Ok(x) => x.balances().await,
@@ -184,10 +185,11 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
             }
         }
         let Ok(gw) = &g else { continue };
-        // Решение 413 (повторное ревью, С-5): остановленные сделки, чьё зачисление на эту биржу ждёт доли, —
-        // подтверждение долей по балансу этого же круга (без отдельного чтения), сохранение со сверкой шага.
+        // Решение 413 (третье ревью, С-Б): ждущие доли без задачи (остановлены, ждут человека) — подтверждение по
+        // балансу этого же круга, только по монетам, где они не менялись за запрос баланса.
         if kind == VenueKind::Cex {
-            for key in super::credit_halted::keys(core, &v) {
+            let hp_after = super::credit_halted::prints(core, &v);
+            for key in super::credit_halted::stable(&hp_before, &hp_after) {
                 if let Ok(t) = super::reconcile_key::total(kind, gw.as_ref(), &b, &key).await {
                     Box::pin(super::credit_halted::confirm(core, &v, &key, t)).await;
                 }

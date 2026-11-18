@@ -41,16 +41,21 @@ use super::stuck_reason::StuckReason;
 /// в журнал, хронологию и Telegram). Решение 222: сначала остаток сверяется с балансом площадки (remain_fact.rs) —
 /// дальше min(учёт, факт); на площадке ничего нет — сделка закрыта. Ошибок нет: не задан режим — сделка остановлена.
 pub async fn handle(core: &Core, mut deal: Deal, why: StuckReason) {
-    // Ревью CI t198 (переполнение стека): сверка остатка (решение 413 — с распределением долей) — в куче.
-    if !Box::pin(super::remain_fact::reconcile(core, &mut deal)).await {
+    // Третье ревью t198 (М-6): факт только что прочитан на входе в продажу (sell_fact::before, «второй вход подряд» без
+    // ожидания) — не читаем снова; отметка одноразовая. Иначе — сверка остатка (решение 413 — с долями), в куче.
+    if !super::sell_fact::fresh_take(&mut deal)
+        && !Box::pin(super::remain_fact::reconcile(core, &mut deal)).await
+    {
         return;
     }
-    handle_as_is(core, deal, why).await
+    Box::pin(handle_as_is(core, deal, why)).await
 }
 
 /// Режим застрявшей монеты без сверки с балансом — только после несостоявшегося перевода (executor.rs): монеты могут
 /// быть в возврате вывода, баланс площадки ещё не факт (решение 222). Ошибок нет: не задан режим — сделка остановлена.
 pub async fn handle_as_is(core: &Core, mut deal: Deal, why: StuckReason) {
+    // Решение 413 (третье ревью, Б-1): дальше режим ждёт (время, котировку) — свежесть факта не переносится.
+    deal.fact_fresh = None;
     let s = &core.inner.deps.settings;
     let mode = match s.text("stuck.mode", At::default()) {
         Ok(m) => m,

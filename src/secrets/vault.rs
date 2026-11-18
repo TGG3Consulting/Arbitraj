@@ -29,6 +29,16 @@ pub struct Status {
     pub names: Vec<String>,
 }
 
+/// Решение 411 (повторное ревью): номер изменения секретов в памяти процесса — растёт при каждой замене набора ключей
+/// (разблокировка, изменение, блокировка). Читает ядро через gateway/addr_book.rs key_epoch: сверка адреса депозита
+/// с памятью — только если секреты между чтением памяти и ответом биржи не менялись.
+static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Что делает: номер изменения секретов (см. GENERATION). Ошибок нет.
+pub fn generation() -> u64 {
+    GENERATION.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 /// Решение 411: зерно отпечатков секретов (Vault::mark) — случайное на процесс.
 static SEED: std::sync::LazyLock<std::collections::hash_map::RandomState> =
     std::sync::LazyLock::new(std::collections::hash_map::RandomState::new);
@@ -113,12 +123,14 @@ impl Vault {
         let path = self.path.clone();
         let plain = blocking(move || file::load(&path, password.as_bytes())).await?;
         *self.keys.write().unwrap_or_else(|p| p.into_inner()) = Some(plain);
+        GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 
     /// Блокирует: секреты удаляются из памяти (с затиранием). Ошибок нет.
     pub fn lock(&self) {
         *self.keys.write().unwrap_or_else(|p| p.into_inner()) = None;
+        GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Добавляет или заменяет секрет (value = Some) либо удаляет (None).
@@ -203,6 +215,7 @@ impl Vault {
             blocking(move || file::save(&path, password.as_bytes(), &plain, p).map(|_| plain))
                 .await?;
         *self.keys.write().unwrap_or_else(|p| p.into_inner()) = Some(plain);
+        GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 }

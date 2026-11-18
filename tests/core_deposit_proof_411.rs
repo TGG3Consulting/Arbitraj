@@ -6,16 +6,24 @@
 //!    ключом API, после смены ключа в хранилище не находится сразу (до Core::secrets_changed) — тем же поиском, что у
 //!    предпроверки и вывода; ответ запроса, во время которого ключ сменили, в память не кладётся; возврат прежнего
 //!    ключа снова находит адрес; заблокированное хранилище — ничего;
-//! 3) Memo::forget_all прогрева после смены секретов.
+//! 3) Memo::forget_all прогрева после смены секретов;
+//! 4) повторное ревью: пометка снимается только ответом запроса, начатого после неё (clears); повтор запроса адреса в
+//!    выводе — только правилом «повторить», не для отказов вывода и «исход неизвестен» (addr_retry); номер изменения
+//!    секретов растёт со сменой ключа (key_epoch); отказ «нет в памяти» отличим от прочих ошибок (is_miss).
+//!
 //! Адреса — настоящие адреса BSC из записи tests/data/native_2026-10-25 (вывод BNB с BingX 24.10: отправитель и
 //! получатель транзакции); к биржам тест не обращается.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::deposit_proof_plan, arb::core::deposit_warm_plan, arb::gateway::addr_book,
 //! arb::secrets, serde_json. Моков нет.
 
-use arb::core::deposit_proof_plan::{Seen, changed_text, compare, doubt_text, use_memory};
+use arb::core::deposit_proof_plan::{
+    Seen, addr_retry, changed_text, clears, compare, doubt_text, use_memory,
+};
 use arb::core::deposit_warm_plan::Memo;
-use arb::gateway::addr_book::{AddrBook, Mark};
+use arb::gateway::addr_book::{self, AddrBook, Mark};
+use arb::gateway::errors::{ErrorCode, GatewayError};
+use arb::gateway::rules::RuleAction;
 use arb::secrets::Vault;
 use arb::secrets::crypto::KdfParams;
 use serde_json::Value;
@@ -162,4 +170,54 @@ fn warm_memo_forget_all() {
     m.forget_all();
     assert!(m.todo(&k), "после смены секретов — проверить заново");
     assert_eq!(m.counts(), (0, 0));
+}
+
+#[test]
+fn doubt_cleared_only_by_later_request() {
+    assert!(clears(3, 3), "пометка до начала запроса — снимается");
+    assert!(clears(2, 5));
+    assert!(
+        !clears(6, 5),
+        "пометку поставили, пока шёл запрос, — остаётся"
+    );
+}
+
+#[test]
+fn address_retry_only_by_retry_rule() {
+    let retry = RuleAction::Retry {
+        attempts: 2,
+        pause_ms: 1500,
+    };
+    assert_eq!(addr_retry(Some(&retry), ErrorCode::Timeout, 1), Some(1500));
+    assert_eq!(
+        addr_retry(Some(&retry), ErrorCode::RateLimited, 2),
+        Some(1500)
+    );
+    assert_eq!(
+        addr_retry(Some(&retry), ErrorCode::Timeout, 3),
+        None,
+        "попытки кончились"
+    );
+    assert_eq!(addr_retry(Some(&retry), ErrorCode::InvalidAddress, 1), None);
+    assert_eq!(addr_retry(Some(&retry), ErrorCode::OutcomeUnknown, 1), None);
+    assert_eq!(
+        addr_retry(Some(&RuleAction::StopVenue), ErrorCode::Timeout, 1),
+        None,
+        "без паузы площадки"
+    );
+    assert_eq!(addr_retry(None, ErrorCode::Timeout, 1), None);
+}
+
+#[tokio::test]
+async fn key_epoch_and_miss() {
+    let v = vault_with("epoch", "ключ-аккаунта-1").await;
+    let e0 = addr_book::key_epoch();
+    set_key(&v, "ключ-аккаунта-2").await;
+    assert!(addr_book::key_epoch() > e0, "смена ключа — новый номер");
+    let book: AddrBook<String> = AddrBook::default();
+    let m = Mark::read(&v, KEY);
+    let miss = addr_book::memory_only(async { book.lookup(&m, "ESIM", "BEP20") }).await;
+    assert!(addr_book::is_miss(&miss.unwrap_err()));
+    let other = GatewayError::new(ErrorCode::InvalidAddress, None, "зачисляет на MAIN");
+    assert!(!addr_book::is_miss(&other));
 }

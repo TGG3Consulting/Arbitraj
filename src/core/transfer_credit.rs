@@ -10,7 +10,6 @@
 //! Решение 151: зачисление по приходу в блокчейне (перевод сделки на DEX) — transfer_chain.rs, он же берёт отсюда
 //! done и to_trading.
 //!
-//! Решение 411 (триггер г): статус депозита DepositNotCredited — адрес получателя будет запрошен заново (deposit_proof.rs).
 //! Кто вызывает: core/transfers.rs, core/transfer_chain.rs.
 //! От чего зависит: credit_watch.rs, credit_mismatch.rs, transit.rs, transfer_watch.rs, wait.rs, deps.rs (шлюз).
 //! После зачисления — перевод на торговый счёт площадки (решение 102, Venue::deposit_to_trading; у BingX — фондовый → спот).
@@ -95,14 +94,6 @@ pub async fn wait(
             }
             Ok(_) => {}
             Err(e) if e.message != last => {
-                // Решение 411 (триггер г): биржа ответила «депозит не зачислен» — адрес запросить заново.
-                if e.code == crate::gateway::errors::ErrorCode::DepositNotCredited {
-                    let why = format!(
-                        "{}: депозит {} не зачислен ({})",
-                        leg.deal, leg.tx, e.message
-                    );
-                    super::deposit_proof::doubt(core, leg.to, leg.asset, &why).await;
-                }
                 let text = format!("Депозит {}: {}", leg.tx, e.message);
                 deps.log(Level::Info, "core.transfer", Some(&leg.to.0), text, None)
                     .await;

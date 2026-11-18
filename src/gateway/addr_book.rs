@@ -18,7 +18,9 @@
 //!
 //! Кто вызывает: venues/*/deposit_addr.rs (14 адаптеров бирж), core/deposit_proof.rs и core/deposit_warm_pass.rs
 //! (memory_only, fresh).
-//! От чего зависит: tokio (task_local), gateway/errors.rs, secrets/vault.rs (mark).
+//! Повторное ревью 411: is_miss — отказ «нет в памяти» отличим от прочих ошибок адаптера; key_epoch — номер изменения
+//! секретов (сверка с памятью — только если секреты за время запроса не менялись).
+//! От чего зависит: tokio (task_local), gateway/errors.rs, secrets/vault.rs (mark, generation).
 //! Настройки: нет.
 
 use std::collections::HashMap;
@@ -65,6 +67,21 @@ pub async fn memory_only<F: Future>(work: F) -> F::Output {
 /// Ошибок нет.
 pub async fn fresh<F: Future>(work: F) -> F::Output {
     MODE.scope(Mode::Fresh, work).await
+}
+
+/// Хвост текста отказа «нет в памяти» (режим Memory) — по нему ядро отличает промах памяти от прочих ошибок адаптера.
+const MISS: &str = "нет в памяти (запрос только из памяти)";
+
+/// Что делает: это отказ «адреса нет в памяти» режима Memory (а не другая ошибка адаптера: например адрес в памяти,
+/// но зачисляет не на торговый счёт — KuCoin/OKX). Принимает: ошибку. Ошибок нет.
+pub fn is_miss(e: &GatewayError) -> bool {
+    e.code == ErrorCode::NotApplicable && e.message.ends_with(MISS)
+}
+
+/// Что делает: номер изменения секретов процесса (secrets/vault.rs generation): одинаковый до и после запроса —
+/// ключи API за это время не менялись. Ошибок нет.
+pub fn key_epoch() -> u64 {
+    crate::secrets::vault::generation()
 }
 
 /// Что делает: режим текущей задачи (вне признака — Normal). Ошибок нет.
@@ -164,9 +181,7 @@ impl<V: Clone> AddrBook<V> {
             Look::Miss => Err(GatewayError::new(
                 ErrorCode::NotApplicable,
                 None,
-                format!(
-                    "Адреса депозита {coin} в сети {net} нет в памяти (запрос только из памяти)"
-                ),
+                format!("Адреса депозита {coin} в сети {net} {MISS}"),
             )),
         }
     }

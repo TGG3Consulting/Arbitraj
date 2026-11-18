@@ -223,33 +223,44 @@ async fn poll_set(
     Err(OpError::from(why))
 }
 
-/// Решение 411: адрес депозита биржи-получателя для вывода — deposit_proof.rs address (память, по триггеру — запрос);
-/// ошибка запроса — через правила шлюза (rules_apply.rs on_error, «Адрес депозита»): повтор по правилу или стоп с
-/// кодом ошибки. Принимает: ядро, сделку, получателя, его адаптер, монету тикером получателя, сеть.
-/// Возвращает: адрес. Ошибки: OpError с кодом шлюза и текстом «<биржа>: адрес депозита: …».
+/// Решение 411: адрес депозита биржи-получателя для вывода — deposit_proof.rs address (память, по триггеру — запрос).
+/// Повторное ревью Б1: ошибка запроса — это ещё не вывод: повтор только по правилу шлюза «повторить» для её кода
+/// (deposit_proof_plan::addr_retry — без уведомлений, ошибок подряд и пауз площадки), иначе — ошибка БЕЗ кода шлюза,
+/// как до решения 411 («<биржа>: адрес депозита: …»), чтобы её не приняли за отказ вывода с биржи A
+/// (withdraw_refused, withdraw_block, withdraw_unsent). Принимает: ядро, получателя, его адаптер, монету тикером
+/// получателя, сеть. Возвращает: адрес. Ошибки: текст причины.
 async fn to_address(
     core: &Core,
-    deal: &str,
     to: &VenueId,
     gw: &std::sync::Arc<dyn crate::gateway::contract::Venue>,
     on: &Asset,
     net: &str,
 ) -> Result<String, OpError> {
     let key: super::deposit_proof::Key = (to.clone(), on.ticker.clone(), net.to_string());
+    let deps = &core.inner.deps;
     let mut attempt = 0;
     loop {
         attempt += 1;
-        let mut e = match super::deposit_proof::address(core, gw, &key, on).await {
+        let e = match super::deposit_proof::address(core, gw, &key, on).await {
             Ok(a) => return Ok(a),
             Err(e) => e,
         };
-        let op = "Адрес депозита";
-        match rules_apply::on_error(core, op, to, Some(deal), &e, attempt).await {
-            Next::Retry { pause_ms } => tokio::time::sleep(Duration::from_millis(pause_ms)).await,
-            Next::Stop => {
-                e.message = format!("{}: адрес депозита: {}", to.0, e.message);
-                return Err(OpError::from(&e));
+        let rules = crate::storage::rules::list(&deps.db)
+            .await
+            .unwrap_or_default();
+        let rule = crate::gateway::rules::pick_rule(&rules, e.code, Some(to)).map(|r| &r.action);
+        let text = format!("{}: адрес депозита: {}", to.0, e.message);
+        match super::deposit_proof_plan::addr_retry(rule, e.code, attempt) {
+            Some(pause_ms) => {
+                let m = format!(
+                    "{text} ({:?}) — повтор по правилу шлюза через {pause_ms} мс",
+                    e.code
+                );
+                deps.log(Level::Warn, "core.deposit_address", Some(&to.0), m, None)
+                    .await;
+                tokio::time::sleep(Duration::from_millis(pause_ms)).await;
             }
+            None => return Err(OpError::from(text)),
         }
     }
 }
@@ -283,9 +294,9 @@ async fn go(
     let on_from = super::venue_ticker::on_venue(core, asset, from);
     // Решение 411 (переделка «по триггеру»): адрес биржи-получателя — из памяти адаптера под текущим ключом API; запрос
     // к бирже — только по триггеру (нет в памяти, пометка «спросить заново»; deposit_proof.rs address). Ошибка запроса
-    // идёт через правила шлюза с кодом (временные — повтор по правилу). DEX-получатель — как раньше (кошелёк счёта).
+    // — повтор только по правилу «повторить», на выходе — без кода (to_address). DEX-получатель — как раньше.
     let address = if gw_to.kind() == VenueKind::Cex {
-        to_address(core, deal, to, &gw_to, &on_to, &net_to).await?
+        to_address(core, to, &gw_to, &on_to, &net_to).await?
     } else {
         gw_to
             .deposit_address(&on_to, &net_to)

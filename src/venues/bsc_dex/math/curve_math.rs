@@ -26,12 +26,12 @@ pub fn a_precision() -> U256 {
 
 /// Единица перевода цены/точности (контракт: PRECISION = 10^18). Ошибок нет.
 pub fn precision() -> U256 {
-    U256::from(10u8).pow(U256::from(18u8))
+    super::ten::E18
 }
 
 /// Знаменатель комиссии пула (контракт: FEE_DENOMINATOR = 10^10). Ошибок нет.
 pub fn fee_denominator() -> U256 {
-    U256::from(10u8).pow(U256::from(10u8))
+    super::ten::E10
 }
 
 /// SwapTemplateBase._get_D: инвариант D по балансам `xp` (в единицах PRECISION) и `amp` (= A·A_PRECISION).

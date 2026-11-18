@@ -104,7 +104,7 @@ pub fn hit(n: u64, share: Decimal) -> bool {
         return true;
     }
     let m = U256::from(share.mantissa().unsigned_abs());
-    let den = U256::from(10u8).pow(U256::from(share.scale()));
+    let den = super::super::math::ten::pow(u64::from(share.scale()));
     let at = |k: u64| U256::from(k) * m / den;
     n.checked_add(1).is_some_and(|next| at(next) > at(n))
 }

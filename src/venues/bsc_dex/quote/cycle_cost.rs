@@ -51,7 +51,7 @@ pub async fn rates(q: &Quoting, base: Address) -> GatewayResult<Rates> {
     let wbnb = ctx.addr("dex.native_wrapped")?;
     let usdt_dec = q.tokens.decimals(ctx, usdt).await?;
     let bad = || ctx.err(ErrorCode::BadResponse, "курс цикла не переводится в число");
-    let one = |d: u8| U256::from(10u64).pow(U256::from(d));
+    let one = |d: u8| super::super::math::ten::pow(u64::from(d));
     let bnb_units = rate::to_usdt(ctx, &q.reg, usdt, wbnb, one(num::BNB_DECIMALS))?;
     let bnb_usdt = num::to_decimal(bnb_units, usdt_dec).ok_or_else(bad)?;
     let base_usdt = if base == usdt {

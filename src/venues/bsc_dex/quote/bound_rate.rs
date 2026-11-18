@@ -134,7 +134,8 @@ pub fn ceil_dec(r: Ratio) -> Option<Decimal> {
     }
     let mut scale = Decimal::MAX_SCALE.saturating_sub(digits);
     loop {
-        let m = mul_div_up(r.num, U256::from(10u8).pow(U256::from(scale)), r.den)?;
+        // Решение 410 (t195): 10^scale — из таблицы math/ten.rs (тот же pow).
+        let m = mul_div_up(r.num, super::super::math::ten::pow(u64::from(scale)), r.den)?;
         if m <= max {
             return Decimal::try_from_i128_with_scale(i128::try_from(m).ok()?, scale).ok();
         }

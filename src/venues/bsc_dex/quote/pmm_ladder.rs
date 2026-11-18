@@ -18,7 +18,7 @@ use super::super::math::full_math::mul_div;
 
 /// Масштаб средней цены (выход за единицу входа) — 10^36: хватает точности при любых decimals. Ошибок нет.
 fn scale() -> U256 {
-    U256::from(10u8).pow(U256::from(36u8))
+    super::super::math::ten::E36
 }
 
 /// Средняя цена точки (выход·10^36/вход). None — пустой вход. Ошибок нет.
@@ -67,11 +67,7 @@ pub fn out(points: &[LadderPoint], x: U256) -> Option<U256> {
 /// None — лесенки нет или расчёт невозможен. Ошибок нет.
 pub fn depth(points: &[LadderPoint], factor_e18: U256) -> Option<(U256, U256, bool)> {
     let first = points.first()?;
-    let lim = mul_div(
-        rate(first)?,
-        factor_e18,
-        U256::from(10u8).pow(U256::from(18u8)),
-    )?;
+    let lim = mul_div(rate(first)?, factor_e18, super::super::math::ten::E18)?;
     let mut last = first;
     for w in points.windows(2) {
         let rb = rate(&w[1])?;

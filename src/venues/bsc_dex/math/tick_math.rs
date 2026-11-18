@@ -21,10 +21,16 @@ pub fn min_sqrt_ratio() -> U256 {
     U256::from(4_295_128_739u64)
 }
 
-/// MAX_SQRT_RATIO = getSqrtRatioAtTick(MAX_TICK).
+/// MAX_SQRT_RATIO = getSqrtRatioAtTick(MAX_TICK) = 1461446703485210103287273052203988822378723970342 (TickMath.sol).
+/// Решение 410 (t195): число — константой по 64-битным словам (младшее первым), а не разбором десятичной строки на каждый
+/// вызов (49 умножений U256 на каждый обмен swap_cl / swap_elastic / swap_algebra); равенство строке и
+/// getSqrtRatioAtTick(MAX_TICK) — тесты ниже.
+const MAX_SQRT_RATIO: U256 =
+    U256::from_limbs([0x5d95_1d52_6398_8d26, 0xefd1_fc6a_5064_8849, 0xfffd_8963, 0]);
+
+/// MAX_SQRT_RATIO (см. константу). Ошибок нет.
 pub fn max_sqrt_ratio() -> U256 {
-    U256::from_str_radix("1461446703485210103287273052203988822378723970342", 10)
-        .unwrap_or(U256::MAX)
+    MAX_SQRT_RATIO
 }
 
 /// Множители по битам |tick| (128.128), начиная с бита 0x2 (TickMath.sol, строки 26–45).
@@ -121,6 +127,11 @@ mod tests {
             "1461373636630004318706518188784493106690254656249"
         );
         assert_eq!(sqrt_ratio_at_tick(MAX_TICK).unwrap(), max_sqrt_ratio());
+        // Решение 410 (t195): константа по словам — то же число, что строка исходника TickMath.sol.
+        assert_eq!(
+            max_sqrt_ratio(),
+            U256::from_str_radix("1461446703485210103287273052203988822378723970342", 10).unwrap()
+        );
         assert!(sqrt_ratio_at_tick(MIN_TICK - 1).is_none());
         assert!(sqrt_ratio_at_tick(MAX_TICK + 1).is_none());
         // tick 0 → 2^96 (Constants.SQRT_PRICE_1_1 в v4-core test/utils/Constants.sol).

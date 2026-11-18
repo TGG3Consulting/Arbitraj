@@ -5,9 +5,10 @@
 
 | Файл | Что делает | Источник |
 | --- | --- | --- |
-| `full_math.rs` | mulDiv (вниз/вверх), divRoundingUp, сдвиги 128.128 | FullMath, UnsafeMath, Uint256x256Math |
-| `tick_math.rs` | getSqrtRatioAtTick; getTickAtSqrtRatio (решение 223 — тик пула после обмена доли) | TickMath (тест — v3-core TickMath.spec.ts) |
-| `sqrt_price_math.rs` | Следующая цена, суммы между ценами | SqrtPriceMath |
+| `full_math.rs` | mulDiv (вниз/вверх), divRoundingUp, сдвиги 128.128 | FullMath, UnsafeMath, Uint256x256Math Решение 410 (t195): частное и остаток одним делением (div_rem); проверка «помещается в 256 бит» — по старшим словам. |
+| `tick_math.rs` | getSqrtRatioAtTick; getTickAtSqrtRatio (решение 223 — тик пула после обмена доли) | TickMath (тест — v3-core TickMath.spec.ts) Решение 410 (t195): MAX_SQRT_RATIO — константа по словам (раньше разбор десятичной строки на каждый обмен). |
+| `ten.rs` | Решение 410 (t195): степени десяти U256, посчитанные при сборке (E10, E17, E18, E20, E36; checked — как checked_pow) — вместо pow на каждый вызов в единицах фикс-точки математики пулов |
+| `sqrt_price_math.rs` | Следующая цена, суммы между ценами | SqrtPriceMath Решение 410 (t195): getAmount1Delta — деление на 2^96 сдвигом (mul_shift), итог тот же. |
 | `swap_step.rs` | Шаг обмена V3 и V4 (разный знак и формула комиссии) | SwapMath V3 / V4 (тесты — v3-core, v4-core) |
 | `swap_cl.rs` | Цикл обмена V3/CL по карте тиков, точный вход и выход; swap_to — до предела цены (sqrtPriceLimitX96; глубина в полосе — решение 73); swap_final — с состоянием пула после обмена (решение 223) | PancakeV3Pool.swap, v4 Pool.swap |
 | `swap_elastic_step.rs` | Шаг-математика KyberSwap Elastic (решение 81): computeSwapStep + calcReachAmount / estimate+calcIncrementalLiquidity / calcFinalPrice / calcReturnedAmount + QuadMath (меньший корень). Reinvestment liquidity: L=baseL+reinvestL, комиссия шага → ΔL; свои формулы (BPS/TWO_FEE_UNITS) | ks-elastic-sc SwapMath.sol, QuadMath.sol (тесты — логи SwapMath.spec.ts) |

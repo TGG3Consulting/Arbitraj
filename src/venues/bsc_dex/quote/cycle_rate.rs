@@ -248,7 +248,8 @@ fn solidly_stable(
 
 /// Курс ребра по спот-цене при известной комиссии пула (%). Ошибок нет: None — нет цены, переполнение, комиссия ≥ 100 %.
 fn rate_with_fee(e: &Edge, token_in: Address, fee: Decimal) -> Option<Decimal> {
-    let one = U256::from(10u8).pow(U256::from(SCALE_DIGITS));
+    // Решение 410 (t195): 10^SCALE_DIGITS — из таблицы math/ten.rs (тот же pow), а не pow на каждое ребро.
+    let one = super::super::math::ten::pow(u64::from(SCALE_DIGITS));
     let coins = spot::coins_for(&e.entry, one)?;
     let per = num::to_decimal(coins, SCALE_DIGITS)?;
     if per <= Decimal::ZERO {

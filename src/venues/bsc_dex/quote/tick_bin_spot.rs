@@ -30,7 +30,7 @@ fn active_sqrt_price(d: &TickBinData) -> Option<U256> {
 /// None — цены нет, переполнение. Ошибок нет.
 pub fn coins_for(d: &TickBinData, coin0: bool, amount: U256) -> Option<U256> {
     let sp = active_sqrt_price(d)?;
-    let e18 = U256::from(10u8).pow(U256::from(18u8));
+    let e18 = super::super::math::ten::E18;
     if coin0 {
         // Монета A, встречный B: A = B·p, p = sp²/1e36 (обе стороны в D18 пула).
         let b = amount.checked_mul(d.scale1)?;

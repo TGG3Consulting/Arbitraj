@@ -50,12 +50,12 @@ pub fn curve2020() -> Template {
 
 /// PRECISION = LENDING_PRECISION = 10^18 (StableSwap.vy L81-L82). Ошибок нет.
 pub fn precision() -> U256 {
-    U256::from(10u8).pow(U256::from(18u8))
+    super::ten::E18
 }
 
 /// FEE_DENOMINATOR = 10^10 (StableSwap.vy L80). Ошибок нет.
 pub fn fee_denominator() -> U256 {
-    U256::from(10u8).pow(U256::from(10u8))
+    super::ten::E10
 }
 
 /// `_xp_mem`: балансы в 18 знаках — `rates[k]·balances[k]/1e18`. None — длины не совпадают или переполнение.
@@ -187,5 +187,5 @@ pub fn get_y_t(i: usize, j: usize, x: U256, xp: &[U256], amp: U256, t: &Template
 /// монеты 18 знаков → 1e18, StableSwap.vy L84). None — decimals > 36. Ошибок нет.
 pub fn rate_for_decimals(decimals: u8) -> Option<U256> {
     let e = 36u8.checked_sub(decimals)?;
-    Some(U256::from(10u8).pow(U256::from(e)))
+    Some(super::ten::pow(u64::from(e)))
 }

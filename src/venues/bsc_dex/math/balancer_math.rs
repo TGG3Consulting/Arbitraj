@@ -29,7 +29,7 @@ use super::{balancer_log_exp, balancer_stable};
 
 /// FixedPoint.ONE = 1e18 (FixedPoint.sol L23).
 pub fn one() -> U256 {
-    U256::from(10u8).pow(U256::from(18u8))
+    super::ten::E18
 }
 
 /// mulDown (L45-L50). None — переполнение.
@@ -83,7 +83,7 @@ fn complement(x: U256) -> U256 {
 
 /// _MAX_IN_RATIO = _MAX_OUT_RATIO = 0.3e18 (WeightedMath.sol L36-L37).
 fn max_ratio() -> U256 {
-    U256::from(3u8) * U256::from(10u8).pow(U256::from(17u8))
+    U256::from(3u8) * super::ten::E17
 }
 
 /// WeightedMath._calcOutGivenIn (L69-L100). Принимает: баланс и вес входа, баланс и вес выхода, вход (всё — 18 знаков,

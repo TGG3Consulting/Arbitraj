@@ -61,10 +61,9 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     };
     // Верхняя граница поиска: весовой — 30 % баланса входа (больше пул откатит), стейблсвап — STABLE_CAP_BALANCES балансов.
     let cap = match &d.curve {
-        crate::core::types::VaultCurve::Weighted { .. } => balancer_math::mul_down(
-            bal_in,
-            U256::from(3u8) * U256::from(10u8).pow(U256::from(17u8)),
-        )?,
+        crate::core::types::VaultCurve::Weighted { .. } => {
+            balancer_math::mul_down(bal_in, U256::from(3u8) * super::super::math::ten::E17)?
+        }
         crate::core::types::VaultCurve::Stable { .. } => {
             bal_in.checked_mul(U256::from(STABLE_CAP_BALANCES))?
         }

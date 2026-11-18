@@ -473,13 +473,21 @@ fn wkc_edges() {
     // Пусто.
     let sp = split(&input(Decimal::ZERO, Decimal::ZERO, vec![pend("A", r1, z)]));
     assert_eq!((sp.share_of("A"), sp.held), (Some(Decimal::ZERO), r1));
-    // В пути: доля ≤ 98 % записи, хотя на счёте всё.
+    // В пути: на счёте факт сверки (98 % обеих записей — меньше записи первой, вся пул её по пропорции), но через счёт
+    // идёт сделка в пути — доля не выше 98 % записи. «Не присвоено» — монеты, которые ПО ФАКТУ на счёте и по
+    // распределению были бы её (не больше записи), но не отданы из-за ограничения: факт − доля = 27 390 513.5940;
+    // «удержано» — записи нет на счёте: запись − факт. Запись = доля + не присвоено + удержано — ничего не спрятано,
+    // больше записи не отдано.
     let mut i = input(fact, Decimal::ZERO, vec![pend("A", r1, z)]);
     i.unclear = true;
     i.hold_pct = d("2");
     let sp = split(&i);
-    assert_eq!(sp.share_of("A"), Some(d("5887892665.5528")));
-    assert_eq!(sp.unassigned, r1 - d("5887892665.5528"));
+    let share = d("5887892665.5528");
+    assert_eq!(sp.share_of("A"), Some(share));
+    assert_eq!(sp.unassigned, fact - share);
+    assert_eq!(sp.unassigned, d("27390513.5940"));
+    assert_eq!(sp.held, r1 - fact);
+    assert_eq!(share + sp.unassigned + sp.held, r1);
     // Посторонние = хвост: вторая после подтверждённой первой — ровно 98 % записи, однозначный замер 2 %.
     let s1 = r1 * d("0.98");
     let sp = split(&input(fact, s1, vec![pend("B", r2, Some(tail))]));

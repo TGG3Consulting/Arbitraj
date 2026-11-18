@@ -10,16 +10,25 @@
 //! exec.top_up = да — докупка: пока идут сделки группы (одна монета, ТО ЖЕ направление: та же площадка покупки и та
 //! же площадка продажи — п. 1, 3), следующая сделка того же направления может начаться и становится сделкой группы;
 //! число сделок не ограничено (п. 7) — их ограничивают деньги (money.max_per_coin_usd, «в пути», остаток, дневной
-//! лимит) и порог прибыли каждой. Другие направления монеты при идущей группе — прежний отказ (монета занята).
-//! Сделка, ушедшая с пути (шаг не Transfer / Selling), новых докупок не пускает. Общий возврат группы уже ушёл
-//! (ревью 3, Н3) — новая сделка того же направления начинает новую группу.
-//! Значение включателя для идущей сделки запоминается при board (Ride.top_up): очередь кандидатов на каждом тике
-//! настройку не читает, пока идущая сделка начата без докупки.
+//! лимит) и порог прибыли каждой. Решение 405 (t191, ответ Тиграна 18.11 на вопрос 1 решения 394): ДРУГИЕ
+//! направления монеты при идущей группе тоже торгуются — сделка другого направления начинает свою группу (Lead) или
+//! входит в идущую группу своего направления (Join); у каждого направления — своя группа и свой общий возврат
+//! (coin_group.rs — по ID группы). Деньги монеты общие (money.max_per_coin_usd — по монете, всех направлений), котировки
+//! — после идущих сделок всех групп монеты на той же площадке (ride_quote.rs: продажа — sell_on, покупка — buy_on).
+//! Встречная сделка на общем счёте (площадка покупки одной = площадка продажи другой, тот же кошелёк DEX или та же
+//! биржа; ответ Тиграна на Н1) — не входит, пока идёт (coin_counter.rs).
+//! Сделка, ушедшая с пути (шаг не Transfer / Selling), новых сделок монеты не пускает — ни в одном направлении. Общий
+//! возврат группы уже ушёл (ревью 3, Н3) — новая сделка того же направления начинает новую группу.
+//! Начата ли идущая сделка с докупкой, видно по её записи (Ride.group: None — без докупки, ставится при board из
+//! Deal.group): пока по монете идёт такая сделка, очередь кандидатов (blocks_new) настройку не читает — сразу «занята».
+//! Решение 405 (ответ Тиграна на ревью Н3): пока ручное действие ждёт окончания сделок монеты (manual_wait.rs) — новых
+//! сделок, расчётов и действий с ней нет (admit, blocks_new, take); free_active и release будят ожидание.
 //! Блокировки: сначала `active`, потом `rides`, потом `deals`; через await не держатся.
 //! Кто вызывает: executor.rs (admit, board, release), candidates.rs (blocks_new), manual_halted.rs, manual_return.rs,
 //! balance_sell.rs, cycle_deal.rs (take), balance_sell_check.rs, busy_note.rs, uncapped_watch.rs,
-//! deposit_warm_busy.rs (held, keys), ride_quote.rs и coin_group.rs (of_coin, group_of).
-//! От чего зависит: engine.rs, coin_key.rs, deal.rs, start_reason.rs, settings.
+//! deposit_warm_busy.rs (held, keys), ride_quote.rs (Ride, top_up_on), costs_source.rs (group_running), coin_group.rs
+//! (inner.rides — по ID группы).
+//! От чего зависит: engine.rs, coin_key.rs, deal.rs, start_reason.rs, coin_counter.rs (встречные, решение 405), settings.
 //! Настройки: exec.top_up.
 
 use std::sync::atomic::Ordering;
@@ -86,7 +95,9 @@ pub fn held(core: &Core, key: &CoinKey) -> bool {
 
 /// Что делает: занять монету целиком (ручное действие, цикл DEX ↔ DEX, продажа «Балансов») — только если по ней нет
 /// ни замка, ни идущих сделок (как раньше `active.insert`). Принимает: ядро, ключ. Возвращает: true — занята этим
-/// вызовом; снимает её вызывающий (`active.remove`). Ошибок нет.
+/// вызовом; снимает её вызывающий (`active.remove`). Решение 405 (ответ Тиграна на ревью Н3): монету ждёт ручное
+/// действие — новых действий с ней нет, кроме повтора самой ждавшей команды: он берёт монету и этим снимает паузу
+/// (manual_wait::claim, ревью 4 Н3 — пауза держится до take). Ошибок нет. Замки: active, затем manual_waits.
 pub fn take(core: &Core, key: &CoinKey) -> bool {
     let mut a = lk(&core.inner.active);
     if a.contains(key)
@@ -96,20 +107,32 @@ pub fn take(core: &Core, key: &CoinKey) -> bool {
     {
         return false;
     }
+    if super::manual_wait::paused(core, key) && !super::manual_wait::claim(core, key) {
+        return false;
+    }
     a.insert(key.clone())
 }
 
+/// Что делает: снять замок монеты целиком, взятый take (ручное действие, цикл, продажа «Балансов»), и разбудить
+/// ожидания ручных действий (решение 405, manual_wait_run.rs). Принимает: ядро, ключ. Ошибок нет.
+pub fn free_active(core: &Core, key: &CoinKey) {
+    lk(&core.inner.active).remove(key);
+    core.inner.coin_wake.notify_waiters();
+}
+
+/// Идущая сделка того же направления (та же площадка покупки и та же площадка продажи). Ошибок нет.
+fn same_dir(r: &Ride, d: &Direction) -> bool {
+    r.buy_on == d.buy_on && r.sell_on == d.sell_on
+}
+
 /// Что делает: место новой сделки направления `d` при идущих `rides` (замок целиком свободен, докупка включена): все
-/// идущие — сделки групп этого же направления на шаге Transfer / Selling. Есть группа, чей общий возврат ещё не ушёл, —
-/// вложенная в неё (Join); у всех групп общий возврат уже ушёл (ревью 3, Н3: coin_group::flushed) — первая сделка новой
-/// группы (Lead: фиксированная часть возврата — в её плане, сделки старой группы возвращают USDT сами). Две открытые
-/// группы — нельзя. Принимает: ядро, направление, идущие сделки (не пусто). Возвращает: место; None — нельзя.
-/// Ошибок нет. Замки: deals, затем groups — по очереди, не вложенно.
+/// идущие — сделки групп (любых направлений, решение 405) на шаге Transfer / Selling. Есть группа ЭТОГО направления,
+/// чей общий возврат ещё не ушёл, — вложенная в неё (Join); групп этого направления нет или у всех общий возврат уже
+/// ушёл (ревью 3, Н3: coin_group::flushed) — первая сделка новой группы (Lead: фиксированная часть возврата — в её
+/// плане). Две открытые группы одного направления — нельзя. Принимает: ядро, направление, идущие сделки (не пусто).
+/// Возвращает: место; None — нельзя. Ошибок нет. Замки: deals, затем groups — по очереди, не вложенно.
 fn joinable(core: &Core, d: &Direction, rides: &[Ride]) -> Option<Seat> {
-    let same = rides
-        .iter()
-        .all(|r| r.group.is_some() && r.buy_on == d.buy_on && r.sell_on == d.sell_on);
-    if !same {
+    if rides.iter().any(|r| r.group.is_none()) {
         return None;
     }
     let on_path = {
@@ -126,6 +149,7 @@ fn joinable(core: &Core, d: &Direction, rides: &[Ride]) -> Option<Seat> {
     }
     let mut open: Vec<&str> = rides
         .iter()
+        .filter(|r| same_dir(r, d))
         .filter_map(|r| r.group.as_deref())
         .filter(|g| !super::coin_group::flushed(core, g))
         .collect();
@@ -140,6 +164,7 @@ fn joinable(core: &Core, d: &Direction, rides: &[Ride]) -> Option<Seat> {
 
 /// Что делает: вход исполнителя (executor::accepted) — занять монету целиком под предпроверку и покупку новой сделки.
 /// Монета занята целиком или по ней идут сделки, к которым нельзя присоединиться, — прежний отказ start_reason::busy.
+/// Решение 405: встречная идущая сделка на общем счёте (coin_counter.rs) — отказ её причиной (журнал core.start_refused).
 /// Вложенная (Join) сразу входит в ожидание общего возврата группы (coin_group::join — под замком `active`, ревью 3,
 /// Н1: порядок active → groups; закрытие последней идущей не уведёт общий возврат без неё).
 /// Принимает: ядро, направление. Возвращает: место сделки (монета занята этим вызовом; снимает release или board).
@@ -152,6 +177,10 @@ pub fn admit(core: &Core, d: &Direction) -> Result<Seat, String> {
         drop(a);
         return Err(busy());
     }
+    // Решение 405 (ответ Тиграна на ревью Н3): ручное действие ждёт окончания сделок монеты — новых сделок нет.
+    if let Some(why) = super::manual_wait::paused_why(core, &key) {
+        return Err(why);
+    }
     let rides = of_coin(core, &key);
     let seat = if rides.is_empty() {
         if top_up_on(core) {
@@ -163,7 +192,11 @@ pub fn admit(core: &Core, d: &Direction) -> Result<Seat, String> {
         return Err(busy());
     } else {
         match joinable(core, d, &rides) {
-            Some(s) => s,
+            // Решение 405 (ответ Тиграна на Н1): встречная идущая сделка на общем счёте — отказ своей причиной.
+            Some(s) => match super::coin_counter::check(core, d, &rides) {
+                Some(why) => return Err(why),
+                None => s,
+            },
             None => return Err(busy()),
         }
     };
@@ -199,7 +232,7 @@ pub fn board(core: &Core, d: &Direction, deal_id: &str, group: Option<String>) {
 /// board был (None — не был). Ошибок нет.
 pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
     let Some(id) = boarded else {
-        lk(&core.inner.active).remove(key);
+        free_active(core, key);
         return;
     };
     let mut r = lk(&core.inner.rides);
@@ -220,15 +253,24 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
             r.remove(key);
         }
     }
+    drop(r);
+    // Решение 405: запись снята — ожидания ручных действий проверяют монету (manual_wait_run.rs).
+    core.inner.coin_wake.notify_waiters();
 }
 
 /// Что делает: очередь расчёта (candidates::enqueue) — новый расчёт направления не нужен: монета занята целиком или
 /// по ней идут сделки, к которым это направление присоединиться не может. Решение 403 (ревью t188): идущих сделок нет
 /// (inner.rides_live = 0) — без замка `rides`. Быстрый путь: идущие начаты без докупки —
-/// ответ без чтения настройки, копий и текста (как раньше одно `contains`). Принимает: ядро, направление. Ошибок нет.
+/// ответ без чтения настройки, копий и текста (как раньше одно `contains`). Решение 405: встречная сделка на общем
+/// счёте (coin_counter.rs) расчёт НЕ блокирует — отказ даёт admit с причиной в журнал core.start_refused (повторы —
+/// счётчиком, reject_log.rs). Принимает: ядро, направление. Ошибок нет.
 pub fn blocks_new(core: &Core, d: &Direction) -> bool {
     let key = CoinKey::of(&d.asset);
     if lk(&core.inner.active).contains(&key) {
+        return true;
+    }
+    // Решение 405: ручное действие ждёт окончания сделок монеты — новых расчётов нет (атомарный быстрый путь).
+    if super::manual_wait::paused(core, &key) {
         return true;
     }
     // Решение 403 (ревью t188): идущих сделок нет ни по одной монете — замок `rides` не берётся (атомарное чтение).
@@ -249,18 +291,18 @@ pub fn blocks_new(core: &Core, d: &Direction) -> bool {
 
 /// Что делает: идёт ли группа докупки этого направления, в которую войдёт новая сделка (есть идущие сделки группы того
 /// же направления, и её общий возврат ещё не ушёл — ревью 3, Н3) — для расчёта докупки (возврат USDT без
-/// фиксированной части, п. 5). Принимает: ядро, направление. Возвращает: ID группы; None — новая сделка будет первой
+/// фиксированной части, п. 5). Решение 405: сделки других направлений монеты (их группы) не в счёт — прежде смотрелась
+/// только первая запись монеты. Принимает: ядро, направление. Возвращает: ID группы; None — новая сделка будет первой
 /// своей группы (фиксированная часть — в её плане). Ошибок нет.
 pub fn group_running(core: &Core, d: &Direction) -> Option<String> {
     let key = CoinKey::of(&d.asset);
     let groups: Vec<String> = {
         let r = lk(&core.inner.rides);
-        let v = r.get(&key)?;
-        let first = v.first()?;
-        if first.buy_on != d.buy_on || first.sell_on != d.sell_on {
-            return None;
-        }
-        v.iter().filter_map(|x| x.group.clone()).collect()
+        r.get(&key)?
+            .iter()
+            .filter(|x| same_dir(x, d))
+            .filter_map(|x| x.group.clone())
+            .collect()
     };
     groups
         .into_iter()

@@ -141,7 +141,9 @@ pub async fn pause(core: &Core, found: &[Found]) {
             .map(|f| f.2.as_str())
             .collect();
         let short = super::reconcile_wallet::paused_text(&v, &v, &texts);
-        deps.notify_tagged(PAUSED, Some(&v), &short, Tag::Plain)
+        // Решение 408: «Снять паузу» площадки на тревоге (и в «Неудачных»).
+        let acts = vec![crate::notify::acts::resume_venue(&v)];
+        deps.notify_tagged_acts(PAUSED, Some(&v), &short, Tag::Plain, acts)
             .await;
     }
 }

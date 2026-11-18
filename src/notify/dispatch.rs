@@ -15,6 +15,7 @@
 //! Решение 340 (Тигран 16.11): send / send_with_buttons / send_tagged / later не ждут Telegram — задание уходит в
 //! очередь (notify/queue.rs, порядок постановки сохраняется), вызывающий сразу идёт дальше; отправка, журнал итога и
 //! повторы — как раньше, в фоновой задаче очереди. Карточка сделки — на момент постановки.
+//! Решение 408 (t193): кнопки самого события (тревоги) — из задания Notifier::send_acts (notify/acts.rs).
 //! От чего зависит: notify/client.rs, notify/catalog.rs, notify/callback.rs, notify/alert.rs, notify/tg_html.rs,
 //! notify/routes.rs, notify/glue.rs, notify/journal_off.rs, notify/queue.rs, notify/alert_card.rs (Snap),
 //! settings, secrets, storage/journal.
@@ -161,7 +162,15 @@ impl Notifier {
         };
         let mut plain = body(code, def, text);
         let kb = match object.map(|id| callback::keyboard(def, id)) {
-            None | Some(Ok(None)) => None,
+            // Решение 408: кнопки самого события (notify/acts.rs, задание Notifier::send_acts).
+            None => {
+                let (kb, notes) = super::acts::keyboard(&super::acts::current());
+                if !notes.is_empty() {
+                    plain.push_str(&format!("\n\n{}", notes.join("\n")));
+                }
+                kb
+            }
+            Some(Ok(None)) => None,
             Some(Ok(Some(kb))) => Some(kb),
             Some(Err(e)) => {
                 let why = format!("кнопки не добавлены: {e}");

@@ -113,7 +113,9 @@ pub async fn load(core: &Core) {
             // Решение 236: затраты возврата USDT — в итоге сделки; у записи до решения итог исправляется в памяти
             // (запись в базе — как была, до следующего сохранения сделки).
             super::deal_return_cost::apply(&mut d);
-            lk(&core.inner.deals).insert(d.id.clone(), d);
+            lk(&core.inner.deals).insert(d.id.clone(), d.clone());
+            // Решение 405 (М2): набор сделок, которые ещё что-то держат (unsettled.rs).
+            super::unsettled::track(core, &d);
         }
     }
     recompute_exposure(core);

@@ -435,6 +435,7 @@ async fn halted_wallet_queue_blocks_cex_to_dex_only() {
             account: Some(DexAccountId("w1".into())),
             state,
             nonce_taken: None,
+            note: None,
         })
     };
     let halted = WalletQueueState::Halted {

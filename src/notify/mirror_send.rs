@@ -4,6 +4,7 @@
 //! editMessageReplyMarkup — https://core.telegram.org/bots/api#editmessagereplymarkup), итог команды
 //! «Выполнено: кто, что, итог» в сообщениях ушедших записей, ошибки Telegram (429 — пауза retry_after) и журнал.
 //! Решение 177: итог продажи кнопкой (sale_final); правка сообщения сменившейся записи — mirror_edit.rs.
+//! Решение 408: итоги ожиданий ручных кнопок — mirror_wait.rs (wait_outcome).
 //! Решение 251: тексты — шаблон алерта в HTML (alert.rs::telegram, tg_html.rs); напоминание без записей «в обработке»
 //! (mirror_state.rs::busy); полный текст причины — в журнал при первой отправке записи (log_full).
 //! Кто вызывает: notify/mirror.rs.
@@ -87,6 +88,10 @@ impl Mirror {
     /// Решение 177: итог продажи кнопкой ({final: true, deal, ok, text}, core/manual_outcome.rs) — ещё одна правка тех же
     /// сообщений («Выполнено: продано …» / «Не продано: …»); запись вернулась на экран — её уже правит update_changed.
     pub(super) async fn outcome(&self, v: &serde_json::Value) {
+        // Решение 408: ожидание ручной кнопки (решение 405) — «Ждёт…», конец без выполнения, итог повтора (mirror_wait.rs).
+        if self.wait_outcome(v).await {
+            return;
+        }
         if v["final"].as_bool() == Some(true) {
             return self.sale_final(v).await;
         }

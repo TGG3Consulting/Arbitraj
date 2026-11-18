@@ -129,6 +129,11 @@ pub async fn set(core: &Core, deal: &str, state: UsdtReturn, note: &str) {
         let Some(d) = deals.get_mut(deal) else {
             return;
         };
+        // Решение 405 (ревью 5, Н1): часть закончена — записи «вывод принят» этой площадки не нужны (usdt_accepted.rs);
+        // «не вернулись» и повторы — остаются (деньги принятого вывода ушли, резерв их не держит).
+        if state.finished() {
+            super::usdt_accepted::forget_finished(d, state.venue());
+        }
         // Решение 227: часть — по площадке состояния (первая или остальная).
         super::usdt_return_parts::put(d, state);
         if !note.is_empty() {

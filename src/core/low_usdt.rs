@@ -122,7 +122,11 @@ pub async fn check(
                 ))
                 .todo("пополнить площадку")
                 .render();
-        deps.notify("risk.low_usdt", Some(&venue.0), &tg).await;
+        // Решение 408: «Перевести USDT на …» — выбор «Откуда» при выбранном «Куда» (e:tt, notify/press_event_money.rs).
+        let to = crate::notify::acts::end_key(&venue.0, acc.map(|a| a.0.as_str()));
+        let acts = vec![crate::notify::acts::e::transfer_to(&to, &label)];
+        deps.notify_acts("risk.low_usdt", Some(&venue.0), &tg, acts)
+            .await;
     } else if was.is_some() {
         let t = format!("{label}: свободно {free} {quote} — снова выше порога алерта {min}");
         deps.log(Level::Info, "core.low_usdt", Some(&venue.0), t, None)

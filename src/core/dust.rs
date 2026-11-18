@@ -111,6 +111,8 @@ pub async fn settle(core: &Core, deal: &mut Deal, price: Decimal) {
         .line("Меньше минимального ордера — продать нельзя, остаётся на балансе")
         .id(&deal.id)
         .render();
-        deps.notify("deal.dust", Some(&v.0), &tg).await;
+        // Решение 408: «Продать» (SellBalance с торгового счёта — как «Балансы»; доступность — по нажатию).
+        let acts = vec![crate::notify::acts::e::sell(&v.0, &on)];
+        deps.notify_acts("deal.dust", Some(&v.0), &tg, acts).await;
     }
 }

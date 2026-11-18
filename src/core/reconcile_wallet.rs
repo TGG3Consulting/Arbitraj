@@ -112,7 +112,9 @@ pub async fn pause(core: &Core, found: &[Found]) {
         let label = format!("{venue} «{}»", p.name);
         let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
         let short = paused_text(&p.who(), &label, &refs);
-        deps.notify_tagged(PAUSED, Some(&venue), &short, Tag::Plain)
+        // Решение 408: «Снять паузу кошелька» на тревоге (c:wr — то же, что меню /menu).
+        let acts = vec![crate::notify::acts::resume_wallet(&id, &p.name)];
+        deps.notify_tagged_acts(PAUSED, Some(&venue), &short, Tag::Plain, acts)
             .await;
     }
 }

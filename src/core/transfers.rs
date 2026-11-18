@@ -10,7 +10,7 @@
 //! так же перегон застрявшей монеты (relay.rs → send_trade). Возврат USDT (send_as), биржа ↔ биржа и переводы на
 //! биржу — как раньше (решение 76).
 //! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон — send_trade, решение 227), usdt_relay_retry.rs (USDT).
-//! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
+//! От чего зависит: engine.rs, usdt_accepted.rs (решение 405: вывод перегона USDT принят), wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! precheck_deposit.rs (target_on — монета и сеть адреса получателя, решение 316), credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
 //! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
 //! Решение 166: вывод отклонён «средства временно заблокированы для вывода» (WithdrawLocked) — повтор того же вывода
@@ -335,6 +335,13 @@ async fn go(
     };
     // Решение 176: ход ручного перевода USDT для экрана (usdt_transfer.rs; не ручной — ничего).
     super::usdt_transfer::stage(core, deal, super::usdt_transfer::Stage::Sent);
+    // Решение 405 (ревью 4, Б2): площадка приняла вывод перегона USDT — деньги списаны, резерв части «идёт» снимается
+    // сразу (usdt_accepted.rs; перевод монеты сделки — send_trade, chain — не сюда).
+    if !chain {
+        // Ревью CI t191 (переполнение стека, как t157 в size_search.rs): запись учёта — будущее в куче, не по значению в
+        // будущем перевода.
+        Box::pin(super::usdt_accepted::mark(core, deal, from, qty)).await;
+    }
     let quiet = Notify::new();
     // 1. Ждём хеш транзакции вывода.
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(from.0.clone()));
@@ -363,9 +370,56 @@ async fn go(
         }
         // Событие зачисления только будит опрос: хеш вывода — только от отправителя (решение 76).
         match gw_from.withdrawal_status(&created.venue_ref).await {
+            // Решение 405 (ревью 6, Н1; факт кода адаптеров): отмена / отказ после принятия приходят не только ошибкой
+            // WithdrawRejected — Phemex «Cancelled» (phemex/transfers.rs), kyberswap (transfer.rs rejected) и DEX
+            // «транзакция откатилась» (bsc_dex/wallet/transfer_status.rs: receipt status ≠ 1 → Rejected, с хешем)
+            // приходят статусом. Раньше:
+            // без хеша — опрос без конца, с хешем — «отправлен». Теперь — как отказ: денег не ушло.
+            Ok(t)
+                if matches!(
+                    t.status,
+                    TransferStatus::Rejected | TransferStatus::Cancelled
+                ) =>
+            {
+                let e = crate::gateway::errors::GatewayError::new(
+                    ErrorCode::WithdrawRejected,
+                    Some(from.clone()),
+                    // Требование Тиграна 18.11: что произошло, что хотели, где деньги, что дальше.
+                    format!(
+                        "вывод {} {} с {} на {} (перевод {deal}) {} площадкой уже после того, как она его приняла \
+                         (ответ о выводе {}): деньги не ушли и остались на {}; перевод не состоялся — дальше как при \
+                         отказе вывода",
+                        crate::notify::human::qty(qty),
+                        asset.ticker,
+                        crate::notify::human::venue(&from.0),
+                        crate::notify::human::venue(&to.0),
+                        if t.status == TransferStatus::Cancelled {
+                            "отменён"
+                        } else {
+                            "отклонён"
+                        },
+                        created.venue_ref,
+                        crate::notify::human::venue(&from.0)
+                    ),
+                );
+                Box::pin(super::usdt_accepted::unmark(core, deal)).await;
+                Box::pin(rules_apply::on_error(
+                    core,
+                    "Вывод",
+                    from,
+                    Some(deal),
+                    &e,
+                    1,
+                ))
+                .await;
+                let _ = gw_to.deposit_abandoned(&on_to).await;
+                return Err(OpError::from(&e));
+            }
             Ok(t) if t.tx_hash.is_some() && t.status != TransferStatus::Pending => break t,
             Ok(_) => {}
             Err(e) if e.code == ErrorCode::WithdrawRejected => {
+                // Решение 405 (ревью 4, Б2): отклонён после принятия — деньги снова на площадке, резерв части целиком.
+                Box::pin(super::usdt_accepted::unmark(core, deal)).await;
                 failed_gas(&e, gas);
                 rules_apply::on_error(core, "Вывод", from, Some(deal), &e, 1).await;
                 let _ = gw_to.deposit_abandoned(&on_to).await;

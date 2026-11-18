@@ -47,6 +47,7 @@ fn alert() -> StuckAlert {
         at: Utc::now(),
         error: None,
         attempts: 1,
+        holders: Vec::new(),
     }
 }
 

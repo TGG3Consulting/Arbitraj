@@ -11,7 +11,7 @@
 //! Итог — текст для панели, журнал core.balance_sell с тем, кто нажал, событие Telegram balance.sell. В учёт сделок и
 //! итог дня выручка НЕ идёт: это не сделка бота.
 //! Кто вызывает: core/commands.rs (ManualAction::SellBalance — POST /api/manual/command из панели «Балансы»).
-//! От чего зависит: balance_sell_check.rs (проверки), to_trading.rs (перевод), trade_ops.rs (ордер), engine.rs (метки), gateway (контракт Venue),
+//! От чего зависит: balance_sell_check.rs (проверки), manual_wait.rs (решение 405: ожидание окончания сделок монеты), to_trading.rs (перевод), trade_ops.rs (ордер), engine.rs (метки), gateway (контракт Venue),
 //! balance_sell_report.rs (итог: текст, журнал, Telegram).
 //! Настройки: свои — нет; читаются venue.quote_asset (balance_sell_check.rs) и настройки ордера
 //! адаптера (venue.order_time_in_force и др.).
@@ -33,7 +33,7 @@ struct Mark {
 
 impl Drop for Mark {
     fn drop(&mut self) {
-        lk(&self.core.inner.active).remove(&self.key);
+        super::coin_ride::free_active(&self.core, &self.key);
         lk(&self.core.inner.balance_sells).remove(&self.key);
     }
 }
@@ -88,6 +88,15 @@ async fn sell(core: &Core, v: &VenueId, account: &str, ticker: &str) -> Result<S
         ));
     }
     let a = chk::asset_of(core, v, ticker);
+    // Решение 405 (ответ Тиграна на ревью Н3): монету держат идущие сделки — не отказ, ждём их окончания
+    // (manual_wait.rs); остальные причины «в сделке» (сделка с монетами на бирже) — прежний отказ ниже.
+    let key = CoinKey::of(&a);
+    // Повтор самой ждавшей команды (ревью 4, Н3) паузой не останавливается — монету он возьмёт в mark (take).
+    let paused =
+        super::manual_wait::paused(core, &key) && !super::manual_wait::is_retry(core, &key);
+    if super::coin_ride::held(core, &key) || paused {
+        return super::manual_wait::defer(core, &key, &a.ticker, chk::IN_DEAL.into());
+    }
     let _mark = mark(core, v, &a)?;
     let free = row_free(gw.as_ref(), account, ticker).await?;
     let moved = if chk::needs_move(gw.as_ref(), account)? {

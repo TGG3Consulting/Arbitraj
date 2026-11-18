@@ -33,7 +33,7 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use super::cycle_outcome;
 use super::cycle_plan::{self, CyclePlan};
 use super::deal::{Deal, Step};
-use super::engine::{Core, lk};
+use super::engine::Core;
 
 /// Что вышло.
 pub enum Outcome {
@@ -53,7 +53,7 @@ pub async fn run(core: &Core, plan: CyclePlan) -> Outcome {
         return Outcome::Busy;
     }
     let out = deal(core, plan).await;
-    lk(&core.inner.active).remove(&key);
+    super::coin_ride::free_active(core, &key);
     out
 }
 

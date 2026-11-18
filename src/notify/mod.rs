@@ -4,6 +4,9 @@
 //! От чего зависит: settings, secrets, storage/journal. Никогда — venues.
 //! Настройки: notify.* (docs/SETTINGS.md).
 
+pub mod acts;
+pub mod acts_e;
+pub mod acts_send;
 pub mod alert;
 pub mod alert_card;
 pub mod callback;
@@ -23,6 +26,7 @@ pub mod menu;
 pub mod menu_day;
 pub mod menu_press;
 pub mod menu_venues;
+pub mod menu_waits;
 pub mod mirror;
 pub mod mirror_edit;
 mod mirror_lag;
@@ -31,9 +35,16 @@ pub mod mirror_state;
 pub mod mirror_store;
 pub mod mirror_track;
 pub mod mirror_view;
+pub mod mirror_wait;
 pub mod press;
 pub mod press_confirm;
+pub mod press_event;
+pub mod press_event_coin;
+pub mod press_event_exec;
+pub mod press_event_money;
+pub mod press_event_ttl;
 pub mod press_record;
+pub mod press_run;
 pub mod queue;
 pub mod reason;
 pub mod reason_codes;

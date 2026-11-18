@@ -217,7 +217,14 @@ where
         ))
         .id(deal)
         .render();
-    deps.notify("outcome.unresolved", Some(&v.0), &tg).await;
+    // Решение 408: «Снять паузу» площадки на тревоге.
+    deps.notify_acts(
+        "outcome.unresolved",
+        Some(&v.0),
+        &tg,
+        vec![crate::notify::acts::resume_venue(&v.0)],
+    )
+    .await;
     None
 }
 

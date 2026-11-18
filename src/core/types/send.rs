@@ -178,4 +178,8 @@ pub struct WalletQueue {
     /// None — не остановлена, nonce неизвестен или узел не ответил.
     #[serde(default)]
     pub nonce_taken: Option<bool>,
+    /// Решение 408 (ответ Тиграна 9б): пометка смены состояния для уведомления — «снята автоматически: транзакция 0x…
+    /// вошла в блок N» (venues/bsc_dex/wallet/auto_release.rs). None — без пометки (ручное снятие, обычные события).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }

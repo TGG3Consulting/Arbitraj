@@ -60,6 +60,7 @@ pub async fn queue(p: &Parts) -> WalletQueue {
         account: p.ctx.account.clone().map(crate::core::types::DexAccountId),
         state,
         nonce_taken,
+        note: None,
     }
 }
 
@@ -110,6 +111,7 @@ pub async fn release(p: &Parts, by: &str, pending_ok: bool) -> GatewayResult<Wal
         account: ctx.account.clone().map(crate::core::types::DexAccountId),
         state,
         nonce_taken: None,
+        note: None,
     };
     p.stats.emit(MarketEvent::WalletQueue(q.clone()));
     Ok(q)

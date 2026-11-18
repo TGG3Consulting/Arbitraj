@@ -40,11 +40,26 @@ pub async fn wallet_queue(
             "send.queue_halted",
             format!("{who}: отправки остановлены до ручной проверки — {reason}"),
         ),
+        // Решение 408 (9б): снята адаптером по квитанции — его пометка («снята автоматически: транзакция … вошла в блок»).
         S::Free if was_halted => (
             "send.queue_released",
-            format!("{who}: очередь кошелька снята после ручной проверки"),
+            match &q.note {
+                Some(n) => format!("{who}: {n}"),
+                None => format!("{who}: очередь кошелька снята после ручной проверки"),
+            },
         ),
         _ => return,
     };
-    core.inner.deps.notify(code, Some(&venue), &text).await;
+    // Решение 408: «Снять очередь кошелька» на тревоге остановки (e:qh — notify/press_event.rs: состояние очереди и
+    // nonce — по нажатию, второе подтверждение при незанятом nonce; команда ядра ReleaseWalletQueue).
+    let acts = if code == "send.queue_halted" {
+        let w = q.account.as_ref().map(|a| a.0.as_str());
+        vec![crate::notify::acts::e::release_queue(&venue, w, "кошелька")]
+    } else {
+        Vec::new()
+    };
+    core.inner
+        .deps
+        .notify_acts(code, Some(&venue), &text, acts)
+        .await;
 }

@@ -8,7 +8,7 @@
 //! Повтор — только при откате: при «исход неизвестен» и прочих ошибках вывод мог уйти, повторять нельзя.
 //! Решение 236, дополнение: газ неудачных переводов из кошелька DEX — в затраты сделки возврата (deal_gas.rs).
 //! Кто вызывает: core/usdt_return.rs (relay).
-//! От чего зависит: transfers.rs, deal_gas.rs, limits.rs (free_now), settings.
+//! От чего зависит: transfers.rs, deal_gas.rs, limits.rs (free_now), usdt_hold.rs (резерв других, решение 405), settings.
 //! Настройки: usdt_return.balance_wait_ms, usdt_return.balance_poll_ms, usdt_return.retry_attempts,
 //! usdt_return.retry_pause_ms (все необязательные: не задано — без ожидания и без повтора, как раньше).
 
@@ -58,10 +58,20 @@ async fn attempts_loop(
     let int = |n: &str| s.integer(n, At::default()).ok();
     let attempts = int("usdt_return.retry_attempts").unwrap_or(0) + 1;
     let pause = Duration::from_millis(int("usdt_return.retry_pause_ms").unwrap_or(0));
+    // Решение 405 (ревью 3, Н3): своя сделка перегона — её резерв наш; резерв других не трогаем.
+    let own = super::usdt_hold::owner_of(core, id);
     let mut n = 0;
     loop {
         n += 1;
-        wait_balance(core, from, acc, &asset.ticker, amount).await?;
+        // Ревью CI t191 (переполнение стека): ожидание баланса — будущее в куче.
+        Box::pin(wait_balance(
+            core,
+            (from, acc),
+            (id, &asset.ticker),
+            amount,
+            own.as_deref(),
+        ))
+        .await?;
         match super::transfers::send_as(core, id, from, to, asset, amount, acc, gas).await {
             Ok(r) => return Ok(r),
             Err(e) if e.code == Some(ErrorCode::SwapReverted) && n < attempts => {
@@ -90,32 +100,51 @@ async fn attempts_loop(
 }
 
 /// Ждёт, пока на свободном балансе площадки появится сумма (не дольше usdt_return.balance_wait_ms, опрос раз в
-/// usdt_return.balance_poll_ms). Не задано — сразу дальше. Ошибка: сумма так и не появилась (текст с балансом).
+/// usdt_return.balance_poll_ms). Решение 405 (ревью 3, Н3): свободное — за вычетом резерва возвратов ДРУГИХ сделок
+/// (usdt_hold.rs held_except; своя — `own`); не задано ожидание — одна проверка, только если резерв других есть (иначе
+/// сразу дальше, без запроса баланса — как раньше). Принимает: ядро, (площадка, счёт DEX), (ID перегона, тикер), сумму,
+/// свою сделку.
+/// Ошибка: сумма так и не появилась (текст с балансом и резервом) — вывод не уходил (повтор по текущей логике).
 async fn wait_balance(
     core: &Core,
-    venue: &VenueId,
-    acc: Option<&DexAccountId>,
-    ticker: &str,
+    (venue, acc): (&VenueId, Option<&DexAccountId>),
+    (id, ticker): (&str, &str),
     amount: Decimal,
+    own: Option<&str>,
 ) -> Result<(), OpError> {
     let s = &core.inner.deps.settings;
-    let (Ok(wait), Ok(poll)) = (
+    let wait = match (
         s.integer("usdt_return.balance_wait_ms", At::default()),
         s.integer("usdt_return.balance_poll_ms", At::default()),
-    ) else {
-        return Ok(());
+    ) {
+        (Ok(w), Ok(p)) => Some((w, p)),
+        _ => None,
     };
+    let reserved = |c: &Core| super::usdt_hold::held_except(c, venue, acc, own);
+    if wait.is_none() && reserved(core).amount.is_zero() {
+        return Ok(());
+    }
+    let (wait, poll) = wait.unwrap_or((0, 0));
     let started = Instant::now();
     loop {
+        let h = reserved(core);
         let last = match super::limits::free_now(core, venue, acc, ticker).await {
-            Ok(free) if free >= amount => return Ok(()),
-            Ok(free) => format!("свободно {free} {ticker}"),
+            Ok(free) if super::usdt_hold::spendable(free, &h) >= amount => return Ok(()),
+            // Требование Тиграна 18.11: сколько хотели перегнать, сколько на счёте, сколько и чьё в резерве, чего
+            // не хватает.
+            Ok(free) => format!(
+                "на счёте свободно {free} {ticker}{}; для этого перегона остаётся {} — не хватает {}",
+                super::usdt_hold::suffix(&h, ticker),
+                super::usdt_hold::spendable(free, &h),
+                amount - super::usdt_hold::spendable(free, &h)
+            ),
             Err(e) => e,
         };
         if started.elapsed() >= Duration::from_millis(wait) {
             return Err(OpError::from(format!(
-                "{}: за {wait} мс на балансе не появилось {amount} {ticker} ({last})",
-                venue.0
+                "перегон {id} {amount} {ticker} с {}: {last}. Вывод не отправлялся (ждали {wait} мс) — дальше повтор \
+                 или «не вернулись» с кнопкой на экране «Ручное управление»",
+                crate::notify::human::venue(&venue.0)
             )));
         }
         tokio::time::sleep(Duration::from_millis(poll)).await;

@@ -109,10 +109,12 @@ pub async fn on_error(
         && let Some(paused) = risk::on_error(core, venue)
     {
         let note = stop::resume_note(core, venue, Kind::Errors);
-        deps.notify(
+        // Решение 408: «Снять паузу» площадки на тревоге.
+        deps.notify_acts(
             "risk.stop",
             Some(&venue.0),
             &paused_text(venue, &paused, note),
+            vec![crate::notify::acts::resume_venue(&venue.0)],
         )
         .await;
     }

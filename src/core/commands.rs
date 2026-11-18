@@ -7,6 +7,8 @@
 //! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты (решение 157: те же команды
 //! из Telegram — ManualAction::SetMode и др., commands_control.rs). Итог каждой команды — событие CoreEvent::Command.
 //! Решение 177: команда выполняется с признаком «ручная» (risk_count.rs) — не считается ошибкой площадки подряд.
+//! Решение 405: и с признаком команды на задачу (manual_wait::scope) — монета занята идущими сделками: команда ждёт их
+//! окончания; «Отменить ожидание» — manual_wait::command.
 //! Кто вызывает: api (POST /api/manual/command, экран «Управление») и notify (кнопки Telegram) — через методы Core.
 //! От чего зависит: manual.rs, commands_control.rs, risk.rs, risk_count.rs, settings, deps.rs, view.rs.
 //! Настройки: ID чатов ролей Telegram (notify.telegram_chat, notify.control_chat, notify.failures_chat …, решение 176).
@@ -27,28 +29,80 @@ impl Core {
         // Живой случай 02.11: «Продать и перегнать» у остановленной сделки ATOM — сделка уже помечена «идёт продажа»,
         // ответа баланса нет, связь с интерфейсом рвётся, веб-сервер бросает запрос — и сделка навсегда остаётся
         // в шаге Selling: пропадает с экрана, а предварительный убыток и сверка балансов её держат.
+        // Ревью CI t191 (переполнение стека — tests/core_usdt_return_manual.rs, core_cex_rules_usdt.rs; как t157 в
+        // size_search.rs): будущее команды целиком — в куче, не по значению в будущем вызывающего.
+        Box::pin(self.command_with(cmd, None)).await
+    }
+
+    /// Решение 405 (ревью 5, М3): повтор команды, ждавшей окончания сделок монеты (manual_wait_run.rs), — с ID ожидания:
+    /// паузу монеты проходит только этот повтор (manual_wait_pause.rs is_retry), не посторонняя такая же команда.
+    /// Принимает: команду, ID ожидания. Возвращает: как command.
+    pub(crate) async fn command_retry(
+        &self,
+        cmd: ManualCommand,
+        wait: String,
+    ) -> Result<String, String> {
+        Box::pin(self.command_with(cmd, Some(wait))).await
+    }
+
+    /// Команда отдельной задачей (решение 110) с признаком повтора ожидания (None — обычная). Возвращает: как command.
+    async fn command_with(
+        &self,
+        cmd: ManualCommand,
+        retry: Option<String>,
+    ) -> Result<String, String> {
         let core = self.clone();
         let c = cmd.clone();
-        tokio::spawn(async move { core.command_inner(c).await })
+        tokio::spawn(async move { Box::pin(core.command_inner(c, retry)).await })
             .await
             .unwrap_or_else(|e| Err(format!("команда прервана: {e}")))
     }
 
-    /// Выполнение команды и запись в журнал (см. command).
-    async fn command_inner(&self, cmd: ManualCommand) -> Result<String, String> {
+    /// Выполнение команды и запись в журнал (см. command). retry — ID ожидания, если это его повтор (решение 405).
+    async fn command_inner(
+        &self,
+        cmd: ManualCommand,
+        retry: Option<String>,
+    ) -> Result<String, String> {
         // Решение 177: команда человека — ручная: её сбои не «ошибки площадки подряд», паузу ставит только автоматика
         // (risk_count.rs). Продажи и перегон отдельной задачей ставят тот же признак сами (manual.rs, manual_halted.rs,
         // manual_usdt.rs).
         // Решение 201: команда ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
-        let res =
-            super::risk_count::manual(super::patience_scope::with(self, self.run_command(&cmd)))
-                .await;
-        // Решение 156: итог команды — Telegram правит сообщения записи «выполнено: кто, что, итог» (notify/mirror.rs).
+        // Решение 405 (ответ Тиграна на ревью Н3): признак команды на задачу — монета занята идущими сделками, команда
+        // ждёт их окончания и выполняется заново (manual_wait.rs defer).
+        let retry_id = retry.clone();
+        let res = Box::pin(super::manual_wait::scope(
+            cmd.clone(),
+            retry,
+            super::risk_count::manual(super::patience_scope::with(
+                self,
+                Box::pin(self.run_command(&cmd)),
+            )),
+        ))
+        .await;
+        self.record_command(&cmd, &res, retry_id).await;
+        res
+    }
+
+    /// Итог команды: событие Command (Telegram правит сообщения записи, решение 156) и журнал core.command (источник,
+    /// кто нажал). Решение 408: команда ушла в ожидание (manual_wait.rs) — «wait»: ID ожидания (Telegram пишет «Ждёт…»,
+    /// а не «Выполнено»); повтор ожидания — «retry»: его ID. Вызывают command_inner и интерфейс, которому нужен код
+    /// ошибки шлюза (api/wallet_queue.rs — «Снять очередь кошелька»). Принимает: команду, итог, ID повтора. Ошибок нет.
+    pub async fn record_command(
+        &self,
+        cmd: &ManualCommand,
+        res: &Result<String, String>,
+        retry_id: Option<String>,
+    ) {
+        let wait = match (&retry_id, res) {
+            (None, Ok(_)) => super::manual_wait::deferred(self, &cmd.action),
+            _ => None,
+        };
         self.inner.live.send(super::view::CoreEvent::Command(json!({
-            "action": cmd.action, "who": who(&cmd), "ok": res.is_ok(),
-            "text": res.clone().unwrap_or_else(|e| e),
+            "action": cmd.action, "who": who(cmd), "ok": res.is_ok(),
+            "text": res.clone().unwrap_or_else(|e| e), "wait": wait, "retry": retry_id,
         })));
-        let (level, text) = match &res {
+        let (level, text) = match res {
             Ok(t) => (
                 Level::Info,
                 format!("Команда {:?} ({:?}): {t}", cmd.action, cmd.source),
@@ -62,7 +116,6 @@ impl Core {
             .deps
             .log(level, "core.command", None, text, Some(json!(cmd)))
             .await;
-        res
     }
 
     /// Проверка источника и выполнение.
@@ -83,8 +136,17 @@ impl Core {
         if let Some(r) = super::balance_sell::command(self, &cmd.action, &who(cmd)).await {
             return r;
         }
+        // Решение 405: «Отменить ожидание» ручного действия, ждущего окончания сделок монеты — manual_wait.rs.
+        if let Some(r) = super::manual_wait::command(self, &cmd.action) {
+            return r;
+        }
         // Решение 163: «Перегнать» / «Перегнано вручную» записи «USDT не вернулись» — manual_usdt.rs.
         if let Some(r) = super::manual_usdt::command(self, &cmd.action, &who(cmd)).await {
+            return r;
+        }
+        // Решение 408 (t193): «Снять очередь кошелька», «Открыть вход монеты», «Убрать из чёрного списка», «Развернуть
+        // исполнитель» — commands_ext.rs.
+        if let Some(r) = super::commands_ext::command(self, &cmd.action, &who(cmd)).await {
             return r;
         }
         // Команда по уже закрытому алерту (или вернувшимся монетам) — спокойно игнорируется (Issue #10).

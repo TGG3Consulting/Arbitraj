@@ -61,6 +61,7 @@ pub fn halted_record(d: &Deal) -> ManualRecord {
             .render(),
         reason: crate::notify::reason::short(&full),
         reason_full: full.clone(),
+        holders: Vec::new(),
         buttons: vec![
             btn(
                 "sell_now",

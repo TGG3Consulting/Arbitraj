@@ -5,21 +5,22 @@
 //! кнопки убираются. Второе нажатие того же «Да» или по уже выполненной записи — «Уже выполнено», действие не
 //! повторяется. Журнал: ядро пишет команду с источником и пользователем; здесь — кто нажал и итог.
 //! Решение 176: «Да» перевода USDT — отдельной задачей с ходом перевода в том же сообщении (notify/ctl/progress.rs).
+//! Решение 408 (t193): команда ушла ждать окончания сделок монеты (решение 405) — «Ждёт: …», не «Выполнено»; сообщение
+//! запоминается (mirror_wait.rs: конец ожидания без выполнения — «Не выполнено: причина», кнопки снова доступны).
 //! Кто вызывает: notify/press.rs, press_record.rs, menu_press.rs, tg_commands.rs, notify/ctl/*.
 //! От чего зависит: core (Core::command), core/types/control.rs, mirror_state.rs, tg_methods.rs, storage/journal.
 //! Настройки: нет.
 
-use chrono::Utc;
 use serde_json::json;
 
-use crate::core::Core;
-use crate::core::types::{CommandSource, ManualAction, ManualCommand};
-use crate::storage::journal::{Journal, Level};
+use crate::core::types::ManualAction;
+use crate::storage::journal::Level;
 
-use super::mirror_state::{Pending, Shared, lock};
+use super::mirror_state::{Pending, lock};
 use super::press::Ctx;
 use super::press_record::ALREADY;
-use super::tg_buttons::{CallbackQuery, CbMessage, User};
+pub use super::press_run::{run_pending, run_pending_full};
+use super::tg_buttons::{CallbackQuery, CbMessage};
 
 /// Надпись «Да, …»: «Да, продать сейчас». Принимает: надпись кнопки.
 pub fn yes_title(title: &str) -> String {
@@ -35,7 +36,14 @@ impl Ctx<'_> {
     /// ожидание. Ошибок нет: сбой — в журнал и нажавшему.
     pub async fn ask(&self, query: &str, reply_to: Option<i64>, p: Pending) {
         let (q, title) = (p.question.clone(), p.title.clone());
-        let n = lock(self.state).add_pending(p);
+        let n = {
+            let mut st = lock(self.state);
+            // Ревью t193 (Н1): вопросы без ответа старше notify.dialog_ttl_s — убираются (не задана — как раньше).
+            if let Ok(ttl) = self.ttl() {
+                st.purge_pending(ttl);
+            }
+            st.add_pending(p)
+        };
         let kb = json!({ "inline_keyboard": [[
             { "text": yes_title(&title), "callback_data": format!("y:{n}") },
             { "text": "Отмена", "callback_data": format!("n:{n}") },
@@ -45,13 +53,25 @@ impl Ctx<'_> {
             Ok(_) => "Подтвердите кнопкой «Да» ниже".to_string(),
             Err(e) => format!("Вопрос подтверждения не отправлен: {e}"),
         };
-        if let Err(e) = sent {
-            lock(self.state).pending.remove(&n);
-            self.log(
-                Level::Error,
-                format!("«{title}»: вопрос подтверждения не отправлен: {e}"),
-            )
-            .await;
+        match sent {
+            // Ревью t193 (Н5): «Да» — только с этого сообщения этого чата.
+            Ok(id) => {
+                lock(self.state)
+                    .pending_at
+                    .insert(n, (self.chat.to_string(), id));
+            }
+            Err(e) => {
+                {
+                    let mut st = lock(self.state);
+                    st.pending.remove(&n);
+                    st.pending_born.remove(&n);
+                }
+                self.log(
+                    Level::Error,
+                    format!("«{title}»: вопрос подтверждения не отправлен: {e}"),
+                )
+                .await;
+            }
         }
         if !query.is_empty() {
             self.answer(query, Some(&reply)).await;
@@ -61,11 +81,43 @@ impl Ctx<'_> {
     /// «Да» (yes) или «Отмена» по номеру ожидания. Принимает: нажатие, сообщение вопроса, номер. Ошибок нет.
     pub async fn confirm(&self, q: &CallbackQuery, msg: &CbMessage, n: u64, yes: bool) {
         let who = q.from.describe();
-        let Some(p) = lock(self.state).pending.remove(&n) else {
+        // Ревью t193 (Н5): номер «Да» привязан к сообщению вопроса и чату — нажатие с другого сообщения не выполняет.
+        let own = {
+            let mut st = lock(self.state);
+            let ok = st.pending_at.get(&n).is_some_and(|(c, m)| {
+                *m == msg.message_id && super::roles::chat_matches(c, &msg.chat)
+            });
+            if ok {
+                st.pending_at.remove(&n);
+                st.pending_born.remove(&n);
+                st.pending.remove(&n)
+            } else {
+                None
+            }
+        };
+        let Some(p) = own else {
             return self.answer(&q.id, Some("Уже выполнено или отменено")).await;
         };
         let base = msg.text.clone().unwrap_or_else(|| p.question.clone());
         let chat = msg.chat.id.to_string();
+        // Ревью t193 (Н1): «Да» денежной команды — не старше notify.dialog_ttl_s от вопроса (не продать через часы всё
+        // свободное на тот момент).
+        if yes
+            && super::press_event_ttl::money_action(&p.action)
+            && let Err(why) = self.fresh_at(msg.date)
+        {
+            self.answer(&q.id, Some(&why)).await;
+            let _ = self
+                .tg
+                .edit_text_markup(
+                    &chat,
+                    msg.message_id,
+                    &format!("{base}\n\nНе выполнено: {why}."),
+                    None,
+                )
+                .await;
+            return;
+        }
         if !yes {
             self.answer(&q.id, Some("Отменено")).await;
             let _ = self
@@ -121,10 +173,50 @@ impl Ctx<'_> {
             )
             .await;
         }
-        let text = self.execute(&p, &q.from, msg.chat.id).await;
+        let (text, wait) = run_pending_full(
+            self.core,
+            self.journal,
+            self.state,
+            &p,
+            &q.from,
+            msg.chat.id,
+        )
+        .await;
+        // Решение 408: команда ждёт окончания сделок — сообщение запоминается: конец ожидания без выполнения правит его
+        // «Не выполнено: причина», кнопки записи снова доступны (notify/mirror_wait.rs).
+        // Ревью t193 (М7): конец ожидания мог прийти раньше — тогда он уже в wait_ended и применяется здесь (под одним
+        // замком с записью WaitMark — окна нет).
+        let mut shown = format!("{base}\n\n{text}");
+        if let Some(id) = wait {
+            let ended = {
+                let mut st = lock(self.state);
+                match st.wait_ended.remove(&id) {
+                    Some(x) => Some(x),
+                    None => {
+                        st.waits.insert(
+                            id,
+                            super::mirror_wait::WaitMark {
+                                key: p.key.clone(),
+                                role: self.role,
+                                chat: chat.clone(),
+                                msg: msg.message_id,
+                                text: shown.clone(),
+                            },
+                        );
+                        None
+                    }
+                }
+            };
+            if let Some((free, line, _)) = ended {
+                if free && let Some(k) = &p.key {
+                    lock(self.state).done.remove(k);
+                }
+                shown = format!("{shown}\n\n{line}");
+            }
+        }
         if let Err(e) = self
             .tg
-            .edit_text_markup(&chat, msg.message_id, &format!("{base}\n\n{text}"), None)
+            .edit_text_markup(&chat, msg.message_id, &shown, None)
             .await
         {
             self.log(
@@ -133,66 +225,28 @@ impl Ctx<'_> {
             )
             .await;
         }
+        // Ревью t193 (М8): «Снять очередь» отклонено, а nonce к этому моменту не занят — сразу второе подтверждение
+        // кнопкой (как «Подтверждаю: снять при незанятом nonce» окна интерфейса).
+        if let ManualAction::ReleaseWalletQueue {
+            venue,
+            wallet,
+            pending_ok: false,
+            ..
+        } = &p.action
+            && text.starts_with("Отклонено")
+        {
+            let arg = format!("{venue}.{}", wallet.as_deref().unwrap_or("-"));
+            if let Ok(again) = self.ev_queue(&arg).await
+                && matches!(
+                    again.action,
+                    ManualAction::ReleaseWalletQueue {
+                        pending_ok: true,
+                        ..
+                    }
+                )
+            {
+                self.ask("", Some(msg.message_id), again).await;
+            }
+        }
     }
-
-    /// Передаёт команду ядру и отмечает запись выполненной (run_pending). Принимает: ожидание, кто, чат.
-    /// Возвращает: строку итога «Выполнено: …» или «Отклонено: …». Ошибок нет.
-    pub async fn execute(&self, p: &Pending, from: &User, chat: i64) -> String {
-        run_pending(self.core, self.journal, self.state, p, from, chat).await
-    }
-}
-
-/// Команда ожидания ядру тем же путём, что у экрана (Core::command, источник — Telegram, кто нажал), отметка записи
-/// выполненной, итог в журнал. Принимает: ядро, журнал, память дубля, ожидание, кто, чат.
-/// Возвращает: строку итога «Выполнено: …» или «Отклонено: …». Ошибок нет.
-pub async fn run_pending(
-    core: &Core,
-    journal: &Journal,
-    state: &Shared,
-    p: &Pending,
-    from: &User,
-    chat: i64,
-) -> String {
-    let who = from.describe();
-    let cmd = ManualCommand {
-        action: p.action.clone(),
-        source: CommandSource::Telegram {
-            chat: chat.to_string(),
-        },
-        by: Some(who.clone()),
-        at: Utc::now(),
-    };
-    // Запись отмечается выполненной ДО команды: второе нажатие во время выполнения — «уже выполнено».
-    // Ушла с экрана — отметку снимает mirror_state (запись с тем же ключом может вернуться); отказ — снимаем здесь.
-    if let Some(k) = &p.key {
-        lock(state).done.insert(k.clone());
-    }
-    let res = core.command(cmd).await;
-    if res.is_err()
-        && let Some(k) = &p.key
-    {
-        lock(state).done.remove(k);
-    }
-    let at = Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
-    let (level, text) = match res {
-        Ok(t) => (
-            Level::Info,
-            format!("Выполнено: {who}, «{}» — {t}, {at}.", p.title),
-        ),
-        Err(e) => (
-            Level::Warn,
-            format!("Отклонено: {who}, «{}» — {e}, {at}.", p.title),
-        ),
-    };
-    let data = json!({ "action": p.action, "from": who, "chat": chat });
-    let _ = journal
-        .write(
-            level,
-            "notify",
-            None,
-            format!("Telegram: {text}"),
-            Some(data),
-        )
-        .await;
-    text
 }

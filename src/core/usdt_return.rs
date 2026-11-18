@@ -88,7 +88,21 @@ pub(super) async fn relay(
                 ))
                 .id(id)
                 .render();
-        deps.notify("usdt.relay_failed", Some(&from.0), &tg).await;
+        // Решение 408: готовый перегон с теми же откуда / куда / сколько (e:tu — сводка ядра и «Да/Отмена» по нажатию).
+        // Кошелёк перегона (решение 132) — у той стороны, что DEX.
+        let dex = |v: &VenueId| {
+            super::trade_ops::kind(core, v) == Ok(crate::gateway::contract::VenueKind::Dex)
+        };
+        let w = acc.map(|a| a.0.as_str());
+        let key = |v: &VenueId| crate::notify::acts::end_key(&v.0, w.filter(|_| dex(v)));
+        let act = crate::notify::acts::e::transfer(
+            &key(from),
+            &key(to),
+            &amount.normalize().to_string(),
+            &format!("Перегнать {} USDT снова", amount.normalize()),
+        );
+        deps.notify_acts("usdt.relay_failed", Some(&from.0), &tg, vec![act])
+            .await;
     }
     res
 }

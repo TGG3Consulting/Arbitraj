@@ -6,7 +6,16 @@
 //!   Warn core.ledger о signal.route_cooldown_s), строки «Пауза не поставлена» нет; событие баланса без хеша при двух
 //!   ожиданиях закрывает подходящее по сумме, как раньше;
 //! - п. 1, 3: включена — вторая сделка ТОГО ЖЕ направления присоединяется к группе первой, когда первая учла покупку;
-//!   другие направления монеты, застрявшая сделка группы, замок целиком — прежний отказ; ручное действие — отказ;
+//!   застрявшая сделка группы (во всех направлениях), замок целиком — прежний отказ; ручное действие — отказ;
+//! - решение 405 (t191): другие направления монеты при идущей группе — своя группа (Lead / Join своего направления),
+//!   лимит монеты общий, продажа после монет всех групп на той же площадке, общий возврат группы не ждёт чужую группу;
+//!   выключено — другие направления прежний отказ; встречная сделка на общем счёте (тот же кошелёк DEX по маппингу
+//!   или та же биржа) — отказ своей причиной; да → нет при идущих группах — прежний отказ, котировки как без докупки;
+//!   резерв возвратов USDT (usdt_hold.rs: отложенные части группы, «идёт», «ждёт повтора»; по площадке, у DEX — по
+//!   кошельку; цепочка limits::cap_of — та же сумма в вычете и в тексте); сверка остатка без чужих монет на общем
+//!   счёте (remain_others.rs: общая площадка покупки, кошелёк DEX, перевод в площадку; «неясные» не отключают вычет
+//!   доказуемых — ревью 4); принятый площадкой вывод снимает резерв части сразу и после перезапуска (usdt_accepted.rs,
+//!   ревью 4 Б2, ревью 5 Н1);
 //! - деньги: бюджет докупки = лимит монеты − вложенное идущих (limits_parts.rs);
 //! - п. 4: продажа докупки — разность котировок на записанных bids BingX CAKE-USDT (gateway::frozen::FrozenBook::price)
 //!   и пуле CAKE/USDT V2 (математика адаптера) против последовательной продажи; покупка — данные новее покупки идущей
@@ -56,7 +65,7 @@ use arb::core::usdt_return_state::UsdtReturn;
 use arb::core::{
     coin_group, coin_ride, credit_event, credit_watch, deal_return_cost, group_notice,
     limits_parts, manual_usdt, relay_owner, ride_quote, ride_trail, route_pause, start_reason,
-    transfer_credit, usdt_return_deal, usdt_return_parts, usdt_return_pieces,
+    transfer_credit, usdt_hold, usdt_return_deal, usdt_return_parts, usdt_return_pieces,
 };
 use arb::gateway::contract::VenueKind;
 use arb::gateway::frozen::{BookFee, FrozenBook};
@@ -267,7 +276,7 @@ async fn off_successful_close_still_pauses_direction() {
 }
 
 #[tokio::test]
-async fn on_same_direction_joins_other_directions_wait() {
+async fn same_direction_joins_other_directions_own_group_stuck_holds_all() {
     let (core, s, _j) = start("join").await;
     top_up(&s).await;
     let dx = dir_of("bingx", "bsc_dex");
@@ -279,31 +288,709 @@ async fn on_same_direction_joins_other_directions_wait() {
     assert_eq!(coin_ride::admit(&core, &dx), Ok(Seat::Join("D1".into())));
     assert!(coin_ride::admit(&core, &dx).is_err());
     coin_ride::release(&core, &key, None);
-    // Другие направления монеты — монета занята (прежний текст).
-    for other in [
-        dir_of("bsc_dex", "bingx"),
-        dir_of("mexc", "bsc_dex"),
-        dir_of("bingx", "mexc"),
-    ] {
-        let why = coin_ride::admit(&core, &other).unwrap_err();
-        assert!(why.starts_with("по монете идёт другая сделка D1"), "{why}");
-        assert!(coin_ride::blocks_new(&core, &other));
+    // Решение 405 (t191, ответ Тиграна 18.11): другие направления монеты при идущей группе — своя новая группа (Lead).
+    for other in [dir_of("mexc", "bsc_dex"), dir_of("bingx", "mexc")] {
+        assert!(!coin_ride::blocks_new(&core, &other));
+        assert_eq!(coin_ride::admit(&core, &other), Ok(Seat::Lead));
+        coin_ride::release(&core, &key, None);
     }
+    // Встречное (покупает на DEX, где D1 продаёт; кошелёк не задан — считается тем же) — отказ своей причиной (Н1).
+    let back = dir_of("bsc_dex", "bingx");
+    assert!(!coin_ride::blocks_new(&core, &back), "причина — у admit");
+    let why = coin_ride::admit(&core, &back).unwrap_err();
+    assert!(
+        why.starts_with(
+            "новая сделка CAKE DEX → BingX не начата: идёт встречная сделка D1 (CAKE BingX → DEX, шаг «перевод», \
+             10 CAKE на BingX)"
+        ),
+        "{why}"
+    );
     assert!(
         !coin_ride::take(&core, &key),
         "ручное действие при идущей — отказ"
     );
-    // Сделка группы застряла — докупок нет.
+    // Сделка группы застряла — новых сделок монеты нет ни в одном направлении (решение 405 — как у докупки).
     first.step = Step::Stuck;
     arb::core::ledger::save(&core, &first).await;
     assert!(coin_ride::admit(&core, &dx).is_err());
     assert!(coin_ride::blocks_new(&core, &dx));
+    let why = coin_ride::admit(&core, &dir_of("mexc", "bsc_dex")).unwrap_err();
+    assert!(why.starts_with("по монете идёт другая сделка D1"), "{why}");
+    assert!(coin_ride::blocks_new(&core, &dir_of("mexc", "bsc_dex")));
     // Сделка без группы (начата до включения) — докупок нет.
     coin_ride::release(&core, &key, Some("D1"));
     let old = bought("D0", &dx, Step::Transfer, ("40", "10"), None);
     arb::core::ledger::save(&core, &old).await;
     coin_ride::board(&core, &dx, "D0", None);
     assert!(coin_ride::admit(&core, &dx).is_err());
+}
+
+/// Решение 405 (t191): при идущей группе монеты сделка ДРУГОГО направления — своя группа; докупки каждого направления —
+/// в свою группу; лимит монеты — общий на все направления; продажа — после монет всех групп на той же площадке;
+/// общий возврат одной группы не ждёт сделок другой. Выключено — другие направления отказ прежним текстом.
+#[tokio::test]
+async fn other_directions_trade_in_own_groups() {
+    let (core, s, _j) = start("other-dirs").await;
+    set(&s, "money.max_per_trade_usd", json!("50")).await;
+    set(&s, "money.max_per_coin_usd", json!("70")).await;
+    set(&s, "money.max_in_transit_usd", json!("100")).await;
+    let (dx, ox) = (dir_of("bingx", "bsc_dex"), dir_of("mexc", "bsc_dex"));
+    let key = CoinKey::of(&dx.asset);
+    // Выключено (п. 15): идёт сделка без группы — другое направление прежний отказ.
+    ride(&core, &bought("D0", &dx, Step::Transfer, ("10", "1"), None)).await;
+    let why = coin_ride::admit(&core, &ox).unwrap_err();
+    assert!(why.starts_with("по монете идёт другая сделка D0"), "{why}");
+    coin_ride::release(&core, &key, Some("D0"));
+    let mut d0 = bought("D0", &dx, Step::Closed, ("10", "0"), None);
+    d0.result_usd = Some(d("0"));
+    arb::core::ledger::save(&core, &d0).await;
+    top_up(&s).await;
+    assert_eq!(
+        ride(
+            &core,
+            &bought("D1", &dx, Step::Selling, ("40", "10"), Some("D1"))
+        )
+        .await,
+        Seat::Lead
+    );
+    // Другое направление — первая своей группы; план возврата — с фиксированной частью (группы направления нет).
+    assert_eq!(coin_ride::group_running(&core, &ox), None);
+    assert_eq!(
+        ride(
+            &core,
+            &bought("O1", &ox, Step::Transfer, ("20", "5"), Some("O1"))
+        )
+        .await,
+        Seat::Lead
+    );
+    // Докупки — каждая в группу своего направления (раньше group_running смотрел только первую запись монеты).
+    assert_eq!(coin_ride::group_running(&core, &dx).as_deref(), Some("D1"));
+    assert_eq!(coin_ride::group_running(&core, &ox).as_deref(), Some("O1"));
+    assert_eq!(coin_ride::admit(&core, &ox), Ok(Seat::Join("O1".into())));
+    coin_ride::release(&core, &key, None);
+    coin_group::dropped(&core, &key, "O1");
+    assert_eq!(coin_ride::admit(&core, &dx), Ok(Seat::Join("D1".into())));
+    coin_ride::release(&core, &key, None);
+    coin_group::dropped(&core, &key, "D1");
+    // Лимит монеты — общий: 70 − 40 (D1) − 20 (O1).
+    let p = limits_parts::parts(&core, &dir_of("bsc_dex", "bingx"), &Mode::Live).unwrap();
+    assert_eq!(p.coin_left, d("10"));
+    // Продажа на bsc_dex — после монет обеих групп (10 + 5); на bingx никто не продаёт.
+    assert_eq!(ride_quote::sell_ahead(&core, &dx), d("15"));
+    assert_eq!(
+        ride_quote::sell_ahead(&core, &dir_of("bsc_dex", "bingx")),
+        d("0")
+    );
+    // Общий возврат D1 уходит, когда закрылась последняя сделка ЕЁ группы, — O1 (другая группа) не ждётся.
+    let mut x = sold("D1", &dx, "D1");
+    assert!(close(&core, &mut x, "41").await.is_empty());
+    wait_note(&core, "D1", "общий возврат USDT группы D1: 41").await;
+    assert!(!coin_group::flushed(&core, "O1"));
+    assert!(!has_note(&core, "O1", "общий возврат"));
+}
+
+/// Кошелёк DEX в маппинге (решение 132): добавить и привязать к строке биржи. Возвращает id кошелька.
+async fn wallet(s: &Store, row: &str, name: &str) -> String {
+    let a = s.accounts();
+    let id = a.reserve_id().await.unwrap();
+    a.add(
+        &id,
+        name,
+        &format!("wallet.{id}.key"),
+        &format!("wallet:{id}"),
+        "тест",
+    )
+    .await
+    .unwrap();
+    a.map_set(row, Some(&id), "тест").await.unwrap();
+    id
+}
+
+/// Решение 405, ответ Тиграна на Н1: встречная сделка на общем счёте не входит, пока идёт другая. Общий счёт — тот же
+/// кошелёк DEX (маппинг) или та же биржа; другой кошелёк — можно.
+#[tokio::test]
+async fn counter_direction_on_same_wallet_waits() {
+    let (core, s, _j) = start("counter").await;
+    top_up(&s).await;
+    let wb = wallet(&s, "bingx", "BingX").await;
+    let wm = wallet(&s, "mexc", "MEXC").await;
+    let dx = dir_of("bingx", "bsc_dex");
+    let key = CoinKey::of(&dx.asset);
+    let mut d1 = bought("D1", &dx, Step::Selling, ("40", "10"), Some("D1"));
+    d1.dex_account = Some(arb::core::types::DexAccountId(wb.clone()));
+    assert_eq!(ride(&core, &d1).await, Seat::Lead);
+    // DEX → BingX — покупка на том же кошельке W BingX, где D1 продаёт: отказ с причиной (журнал core.start_refused).
+    let why = coin_ride::admit(&core, &dir_of("bsc_dex", "bingx")).unwrap_err();
+    // Требование Тиграна 18.11: какая новая, какая встречная (ID, откуда → куда, шаг, монеты и где), какой счёт общий.
+    let want = format!(
+        "новая сделка CAKE DEX → BingX не начата: идёт встречная сделка D1 (CAKE BingX → DEX, шаг «продажа», 10 CAKE \
+         на BingX). Новая купила бы CAKE на DEX, где встречная его продаёт, и у них один кошелёк {wb} на DEX — монеты \
+         двух сделок легли бы вместе"
+    );
+    assert!(why.starts_with(&want), "{why}");
+    assert!(
+        why.contains("когда сделка D1 закончится, это направление снова торгуется"),
+        "{why}"
+    );
+    // MEXC → BingX — продажа на BingX, где D1 купила (один счёт биржи): отказ.
+    let why = coin_ride::admit(&core, &dir_of("mexc", "bingx")).unwrap_err();
+    assert!(
+        why.contains("Новая продала бы CAKE на BingX, где встречная его купила, и у них один счёт на бирже BingX"),
+        "{why}"
+    );
+    // Другой кошелёк (DEX → MEXC — кошелёк MEXC) и не встречные (MEXC → DEX, BingX → MEXC) — можно.
+    assert_ne!(wb, wm);
+    for ok in [
+        dir_of("bsc_dex", "mexc"),
+        dir_of("mexc", "bsc_dex"),
+        dir_of("bingx", "mexc"),
+    ] {
+        assert_eq!(coin_ride::admit(&core, &ok), Ok(Seat::Lead), "{ok:?}");
+        coin_ride::release(&core, &key, None);
+    }
+    // D1 кончилась — встречное входит.
+    coin_ride::release(&core, &key, Some("D1"));
+    assert_eq!(
+        coin_ride::admit(&core, &dir_of("bsc_dex", "bingx")),
+        Ok(Seat::Lead)
+    );
+}
+
+/// М3: докупку выключили (да → нет) при идущих группах — другие направления снова «занято» прежним текстом, котировки
+/// и зачисление — как без докупки; идущие группы доводятся.
+#[tokio::test]
+async fn switch_off_with_other_direction_groups_running() {
+    let (core, s, _j) = start("switch-off").await;
+    top_up(&s).await;
+    let (dx, ox) = (dir_of("bingx", "bsc_dex"), dir_of("mexc", "bsc_dex"));
+    ride(
+        &core,
+        &bought("D1", &dx, Step::Selling, ("40", "10"), Some("D1")),
+    )
+    .await;
+    ride(
+        &core,
+        &bought("O1", &ox, Step::Transfer, ("20", "5"), Some("O1")),
+    )
+    .await;
+    set(&s, coin_ride::TOP_UP, json!(false)).await;
+    for dd in [&dx, &ox, &dir_of("bingx", "mexc")] {
+        let why = coin_ride::admit(&core, dd).unwrap_err();
+        assert!(why.starts_with("по монете идёт другая сделка"), "{why}");
+        assert!(coin_ride::blocks_new(&core, dd));
+        assert!(ride_quote::idle(&core, dd), "котировки — как без докупки");
+    }
+    // Группы остаются: общий возврат D1 по её закрытию, O1 не ждётся.
+    let mut x = sold("D1", &dx, "D1");
+    assert!(close(&core, &mut x, "41").await.is_empty());
+    wait_note(&core, "D1", "общий возврат USDT группы D1: 41").await;
+}
+
+/// Решение 405 (ответ Тиграна «резервировать»): USDT, ждущие общего возврата группы, покупка не тратит — резерв по
+/// площадке (у DEX — по кошельку сделки); общий возврат ушёл — резерва нет.
+#[tokio::test]
+async fn waiting_group_usdt_reserved_from_buys() {
+    let (core, s, _j) = start("hold").await;
+    top_up(&s).await;
+    let bingx = VenueId("bingx".into());
+    assert_eq!(
+        usdt_hold::held(&core, &bingx, None),
+        usdt_hold::Held::default()
+    );
+    // Группа G MEXC → BingX: D2 закрылась первой — 95 USDT ждут на BingX общего возврата.
+    let dx = dir_of("mexc", "bingx");
+    riding(&core, &dx, "G", &["G", "D2"]).await;
+    let mut x = sold("D2", &dx, "G");
+    assert!(close(&core, &mut x, "95").await.is_empty());
+    let h = usdt_hold::held(&core, &bingx, None);
+    assert_eq!(h.amount, d("95"));
+    assert_eq!(
+        h.deals,
+        vec![(
+            "D2".to_string(),
+            "CAKE MEXC → BingX: выручка ждёт общего возврата группы G на MEXC".to_string()
+        )]
+    );
+    // М1: докупку выключили (да → нет) — отложенная часть идущей группы остаётся в резерве до общего возврата.
+    set(&s, coin_ride::TOP_UP, json!(false)).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None), h);
+    // М6 / М7: цепочка buy_free → buy_cap (limits::cap_of): свободно 120 — после резерва 25, бюджет 50 — предел 25;
+    // свободно 60 — 0 и отказ с ТОЙ ЖЕ суммой резерва, что вычтена (начало — none_free: метка «баланс»).
+    let quote = "USDT".to_string();
+    let cap = arb::core::limits::cap_of(
+        &bingx,
+        d("50"),
+        (usdt_hold::spendable(d("120"), &h), quote.clone()),
+        &h,
+    );
+    assert_eq!(cap, Ok((d("25"), d("25"), quote.clone())));
+    // Как его собирает buy_free: прочитанное свободно и площадка (требование Тиграна 18.11 — что хотели, сколько на
+    // счёте, сколько и чьё в резерве, что делать).
+    let mut hr = h.clone();
+    hr.free = Some(d("60"));
+    hr.place = Some("BingX".into());
+    let text = arb::core::limits::cap_of(
+        &bingx,
+        d("50"),
+        (usdt_hold::spendable(d("60"), &hr), quote.clone()),
+        &hr,
+    )
+    .unwrap_err();
+    assert_eq!(
+        text,
+        arb::core::limits::zero_text(&bingx, "USDT", &hr, Some(d("50")))
+    );
+    assert_eq!(
+        text,
+        "на bingx свободно 0 USDT для покупки, хотели купить на 50.00 USDT; на BingX сейчас 60.00 USDT — ещё 95.00 \
+         USDT в резерве возвратов USDT: сделка D2 (CAKE MEXC → BingX: выручка ждёт общего возврата группы G на MEXC) — 95.00 USDT; эти USDT ждут возврата, бот их не трогает \
+         (решение 405). Покупку не делаем. Что сделать: дождитесь этих возвратов или разберите «не вернулись» на \
+         экране «Ручное управление» → «Резерв USDT возвратов»"
+    );
+    let back = dir_of("bingx", "mexc");
+    assert!(arb::core::precheck_balance::is_balance(&back, &text));
+    // На DEX — только тот же кошелёк.
+    let dd = dir_of("bingx", "bsc_dex");
+    let mut y = bought("E1", &dd, Step::Closed, ("40", "0"), Some("E"));
+    y.group.as_mut().unwrap().wait = Some((dd.sell_on.clone(), d("30")));
+    y.dex_account = Some(arb::core::types::DexAccountId("w1".into()));
+    arb::core::ledger::save(&core, &y).await;
+    let w1 = arb::core::types::DexAccountId("w1".into());
+    let w2 = arb::core::types::DexAccountId("w2".into());
+    assert_eq!(
+        usdt_hold::held(&core, &dd.sell_on, Some(&w1)).amount,
+        d("30")
+    );
+    assert_eq!(
+        usdt_hold::held(&core, &dd.sell_on, Some(&w2)).amount,
+        Decimal::ZERO
+    );
+    // Общий возврат G начат (последняя G закрылась) — отложенных частей нет; в резерве — только сам перегон, пока он
+    // «идёт» / «ждёт повтора» (без площадок он кончается «не вернулись» — не в резерве).
+    let mut g = sold("G", &dx, "G");
+    assert!(close(&core, &mut g, "100").await.is_empty());
+    wait_note(&core, "G", "общий возврат USDT группы G: 195").await;
+    let after = usdt_hold::held(&core, &bingx, None);
+    assert!(
+        after
+            .deals
+            .iter()
+            .all(|(_, w)| !w.contains("ждёт общего возврата группы")),
+        "{after:?}"
+    );
+}
+
+/// Решение 405 (Тигран 18.11: резервировать и начатые возвраты, и «не вернулись»): части «идёт», «ждёт повтора» и
+/// «не вернулись» (общего и одиночного возврата) — в резерве площадки; «вернулись» — нет. Ревью 3: Н2 — у «идёт»
+/// ушедший вывод (хеш вывода в ожидании зачисления перегона) из резерва вычитается; Н3 — перегон своей сделки видит
+/// резерв только других; М2 — резерв считается по набору unsettled (закрытые без возврата в нём не держатся).
+#[tokio::test]
+async fn started_returns_reserved_until_done() {
+    let (core, _s, _j) = start("hold-parts").await;
+    let (bingx, mexc) = (VenueId("bingx".into()), VenueId("mexc".into()));
+    let dx = dir_of("mexc", "bingx");
+    let mut x = bought("S1", &dx, Step::Closed, ("40", "0"), None);
+    x.usdt_return = Some(UsdtReturn::Pending {
+        amount: d("41"),
+        from: bingx.clone(),
+        to: mexc.clone(),
+    });
+    arb::core::ledger::save(&core, &x).await;
+    // Решение 227: у сделки одна часть на площадку — «не вернулись» на BingX у другой сделки.
+    let mut n = bought("S4", &dx, Step::Closed, ("40", "0"), None);
+    n.usdt_return = Some(UsdtReturn::NotReturned {
+        amount: d("7"),
+        at: bingx.clone(),
+        why: "тест".into(),
+    });
+    arb::core::ledger::save(&core, &n).await;
+    let mut y = bought("S2", &dx, Step::Closed, ("40", "0"), None);
+    y.usdt_return = Some(UsdtReturn::Retrying {
+        amount: d("30"),
+        from: bingx.clone(),
+        to: mexc.clone(),
+        tries: 1,
+        why: "тест".into(),
+    });
+    arb::core::ledger::save(&core, &y).await;
+    // Закрытая без возврата — не в наборе unsettled (М2).
+    let z = bought("S3", &dx, Step::Closed, ("40", "0"), None);
+    arb::core::ledger::save(&core, &z).await;
+    assert!(!core.inner.unsettled.lock().unwrap().contains("S3"));
+    let h = usdt_hold::held(&core, &bingx, None);
+    assert_eq!(h.amount, d("78"));
+    assert_eq!(
+        h.deals,
+        vec![
+            (
+                "S1".to_string(),
+                "CAKE MEXC → BingX: перегон выручки на MEXC идёт".to_string()
+            ),
+            (
+                "S2".to_string(),
+                "CAKE MEXC → BingX: перегон выручки на MEXC ждёт повтора (тест)".to_string()
+            ),
+            (
+                "S4".to_string(),
+                "CAKE MEXC → BingX: выручка не вернулась на MEXC (тест) — ждёт кнопки «Перегнать» или \
+                 «Перегнано вручную»"
+                    .to_string()
+            ),
+        ]
+    );
+    assert_eq!(usdt_hold::held(&core, &mexc, None).amount, Decimal::ZERO);
+    // Н3: перегон S1 («S1u2» — повтор 2) видит резерв только других (S2: 30, S4: 7), свой — тратит.
+    assert_eq!(usdt_hold::owner_of(&core, "S1u2").as_deref(), Some("S1"));
+    assert_eq!(usdt_hold::owner_of(&core, "tu20261118"), None);
+    let others = usdt_hold::held_except(&core, &bingx, None, Some("S1"));
+    assert_eq!(others.amount, d("37"));
+    // Н2: вывод перегона S1 ушёл (хеш от отправителя в ожидании зачисления 40.9) — из «идёт» 41 вычитается приход.
+    let t = credit_watch::register(&core, "S1u", &bingx, &mexc, &usdt(), d("40.9"));
+    assert_eq!(
+        usdt_hold::held(&core, &bingx, None).amount,
+        d("78"),
+        "хеша ещё нет"
+    );
+    t.set_tx("0xabc");
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, d("37.1"));
+    // Перевод монеты самой сделки (ID без суффикса перегона) — не перегон USDT.
+    let c = credit_watch::register(&core, "S2", &bingx, &mexc, &usdt(), d("30"));
+    c.set_tx("0xdef");
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, d("37.1"));
+    drop((t, c));
+    // Вернулись — резерва S1 нет, S1 больше ничего не держит — из набора уходит; «не вернулись» S4 — в резерве.
+    x.usdt_return = Some(UsdtReturn::Done {
+        amount: d("41"),
+        credited: d("40"),
+        from: bingx.clone(),
+        to: mexc.clone(),
+        sent: None,
+        fee_usd: None,
+    });
+    arb::core::ledger::save(&core, &x).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, d("37"));
+    // «Перегнано вручную» по «не вернулись» (кнопка человека) — резерва S4 нет.
+    n.usdt_return = Some(UsdtReturn::Manual {
+        amount: d("7"),
+        at: bingx.clone(),
+        to: mexc,
+        by: "тест".into(),
+        credited: None,
+    });
+    arb::core::ledger::save(&core, &n).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, d("30"));
+    assert!(!core.inner.unsettled.lock().unwrap().contains("S1"));
+}
+
+/// Решение 405 (Тигран 18.11: «каждая сделка знает своё количество»; ревью Н1′ / Н7, ревью 3 Б1, Н1, М3, М5): сверка
+/// остатка (remain_fact::apply_fact — после чтения факта) не отдаёт сделке монеты других сделок, доказуемо лежащих на
+/// общем счёте; сделка в пути — «неясно» (других не вычитаем, алерта нет); «Беру на себя» — не другие; остановленная
+/// с монетами (в том числе фантом PIT) — другие.
+#[tokio::test]
+async fn remain_fact_keeps_only_own_coins_on_shared_account() {
+    use arb::core::remain_fact::apply_fact;
+    use arb::core::remain_others::{Own, on_account, own_qty};
+    let (core, _s, j) = start("own-coins").await;
+    let bingx = VenueId("bingx".into());
+    let dx = dir_of("bingx", "bsc_dex");
+    let w = |id: &str| Some(arb::core::types::DexAccountId(id.into()));
+    // Б1 (а): A перевела 10 с BingX (шаг «перевод» — где её монеты, не доказано), B застряла на BingX: учёт 5, факт 5.
+    let a = bought("A", &dx, Step::Transfer, ("40", "10"), Some("A"));
+    arb::core::ledger::save(&core, &a).await;
+    let mut b = bought("B", &dx, Step::Stuck, ("20", "5"), Some("A"));
+    arb::core::ledger::save(&core, &b).await;
+    let o = on_account(&core, &b, &bingx);
+    assert_eq!(o.unclear, vec!["A".to_string()]);
+    assert_eq!(o.qty, Decimal::ZERO);
+    assert_eq!(own_qty(d("5"), d("5"), &o), Own::Qty(d("5")));
+    assert!(
+        apply_fact(&core, &mut b, d("5")).await,
+        "ни урезания, ни алерта"
+    );
+    assert_eq!(b.qty, d("5"));
+    // «Неясно» и факт меньше учёта — решение 222 как раньше: min(учёт, факт).
+    assert!(apply_fact(&core, &mut b, d("4")).await);
+    assert_eq!(b.qty, d("4"));
+    let saved = core.inner.deals.lock().unwrap().get("B").cloned().unwrap();
+    assert_eq!(saved.qty, d("4"));
+    // Общая площадка покупки, монеты доказуемо там: A застряла на BingX (не перевод) с 10 → B на 12 ведёт 2.
+    let mut a = a;
+    a.step = Step::Stuck;
+    arb::core::ledger::save(&core, &a).await;
+    b.qty = d("5");
+    let o = on_account(&core, &b, &bingx);
+    assert_eq!(o.deals, vec![("A".to_string(), d("10"))]);
+    assert!(apply_fact(&core, &mut b, d("12")).await);
+    assert_eq!(b.qty, d("2"));
+    // Требование Тиграна 18.11: текст — какая сделка, сколько по учёту / на счёте / у других (кто), сколько продаём и
+    // сколько не хватает, что проверить.
+    let rows = j.list(500, None).await.unwrap();
+    let msg = rows
+        .iter()
+        .find(|e| e.kind == "core.remain_fact" && e.message.contains("из них 10 CAKE"))
+        .map(|e| e.message.clone())
+        .unwrap_or_default();
+    assert!(
+        msg.starts_with(
+            "сделка B (CAKE BingX → DEX, шаг «монета застряла», 5 CAKE на BingX): по учёту у сделки 5 CAKE, а на \
+             счёте BingX сейчас 12 CAKE, из них 10 CAKE принадлежат другим сделкам: сделка A (CAKE BingX → DEX, \
+             шаг «монета застряла», 10 CAKE на BingX). Бот продаёт только монеты этой сделки: 2 CAKE; не хватает \
+             3 CAKE — проверьте баланс CAKE на BingX и хронологию сделки B"
+        ),
+        "{msg}"
+    );
+    // Пример записки: учёт 1000, кошелёк 900, другие 500 → 400; факт 0 → закрыть; других нет — как settle_qty.
+    let others = |q: &str| arb::core::remain_others::Others {
+        qty: d(q),
+        deals: vec![],
+        unclear: vec![],
+        words: vec![],
+    };
+    assert_eq!(
+        own_qty(d("1000"), d("900"), &others("500")),
+        Own::Qty(d("400"))
+    );
+    assert_eq!(
+        own_qty(d("500"), Decimal::ZERO, &others("1000")),
+        Own::Qty(Decimal::ZERO)
+    );
+    assert_eq!(
+        own_qty(d("100"), d("150"), &others("0")),
+        Own::Qty(arb::core::remain_fact::settle_qty(d("100"), d("150")))
+    );
+    // Н1: «Беру на себя» с 100 на BingX — не другие (монеты у человека); остановленная с фантомом PIT — другие: факт
+    // 19259.884524163 (запись живого случая 08.11), её учёт 12162067866.1632 → B не закрывается, алерт человеку.
+    let mut t = bought("T", &dx, Step::TakenOver, ("40", "100"), None);
+    t.at = bingx.clone();
+    arb::core::ledger::save(&core, &t).await;
+    let mut h = bought("H", &dx, Step::Halted, ("40", "12162067866.1632"), None);
+    h.at = bingx.clone();
+    arb::core::ledger::save(&core, &h).await;
+    a.step = Step::Closed;
+    arb::core::ledger::save(&core, &a).await;
+    let o = on_account(&core, &b, &bingx);
+    assert_eq!(o.deals, vec![("H".to_string(), d("12162067866.1632"))]);
+    assert!(!apply_fact(&core, &mut b, d("19259.884524163")).await);
+    let rec = core.inner.deals.lock().unwrap().get("B").cloned().unwrap();
+    assert_eq!(rec.step, Step::WaitingHuman, "алерт — решает человек");
+    assert_eq!(rec.qty, d("2"), "учёт не тронут");
+    // Б1 (б), кошелёк DEX: W1 застряла на DEX (учёт 5, факт 5), W5 идёт на тот же кошелёк (2 ещё не дошли) — «неясно»,
+    // 5 остаётся; продающая там W2 того же кошелька — другие; другой кошелёк и закрытые — нет.
+    let mut ours = bought("W1", &dx, Step::Stuck, ("20", "5"), Some("W1"));
+    ours.at = dx.sell_on.clone();
+    ours.dex_account = w("w1");
+    let mut coming = bought("W5", &dx, Step::Transfer, ("20", "2"), Some("W5"));
+    coming.dex_account = w("w1");
+    arb::core::ledger::save(&core, &coming).await;
+    assert!(apply_fact(&core, &mut ours, d("5")).await);
+    assert_eq!(ours.qty, d("5"));
+    coming.step = Step::Closed;
+    arb::core::ledger::save(&core, &coming).await;
+    let mut same = bought("W2", &dx, Step::Selling, ("20", "3"), Some("W1"));
+    same.at = dx.sell_on.clone();
+    same.dex_account = w("w1");
+    let mut other = bought("W3", &dx, Step::Selling, ("20", "4"), Some("W3"));
+    other.at = dx.sell_on.clone();
+    other.dex_account = w("w2");
+    for x in [&same, &other] {
+        arb::core::ledger::save(&core, x).await;
+    }
+    let o = on_account(&core, &ours, &dx.sell_on);
+    assert_eq!(o.deals, vec![("W2".to_string(), d("3"))]);
+    assert!(o.unclear.is_empty());
+    // Ревью 4, Н1: сделка в пути («неясная») не отключает вычет доказуемых. Кошелёк w7: Z продаёт 5000 (доказуемо на
+    // нём), K в пути на него (100), Y застряла с учётом 1000 (фантом).
+    let mut z = bought("Z", &dx, Step::Selling, ("20", "5000"), Some("Z"));
+    z.at = dx.sell_on.clone();
+    z.dex_account = w("w7");
+    let mut k = bought("K", &dx, Step::Transfer, ("20", "100"), Some("K"));
+    k.dex_account = w("w7");
+    for x in [&z, &k] {
+        arb::core::ledger::save(&core, x).await;
+    }
+    let mut y = bought("Y", &dx, Step::Stuck, ("20", "1000"), Some("Y"));
+    y.at = dx.sell_on.clone();
+    y.dex_account = w("w7");
+    let o = on_account(&core, &y, &dx.sell_on);
+    assert_eq!(o.deals, vec![("Z".to_string(), d("5000"))]);
+    assert_eq!(o.unclear, vec!["K".to_string()]);
+    // На кошельке 5600 — Y ведёт 600 (было бы 1000: 400 монет Z).
+    assert!(apply_fact(&core, &mut y, d("5600")).await);
+    assert_eq!(y.qty, d("600"));
+    // На кошельке 5000 (всё — Z) — своих у Y нет: не продаёт и не закрывается, алерт человеку.
+    assert!(!apply_fact(&core, &mut y, d("5000")).await);
+    let rec = core.inner.deals.lock().unwrap().get("Y").cloned().unwrap();
+    assert_eq!(rec.step, Step::WaitingHuman);
+    assert_eq!(rec.qty, d("600"));
+}
+
+/// Ревью 4, Б2: площадка приняла вывод части «идёт» (ответ на запрос вывода — usdt_accepted.rs) — деньги списаны,
+/// резерв части снимается сразу, без хеша; перегон другой сделки (другая монета, без докупки) уходит. Кусок закончился
+/// (часть «идёт» стала остатком) — запись устарела; вывод отклонён после принятия — резерв снова целиком.
+#[tokio::test]
+async fn accepted_withdrawal_frees_reserve_without_hash() {
+    let (core, _s, _j) = start("accepted").await;
+    let (bingx, mexc) = (VenueId("bingx".into()), VenueId("mexc".into()));
+    let dx = dir_of("mexc", "bingx");
+    let pending = |id: &str, amount: &str| {
+        let mut x = bought(id, &dx, Step::Closed, ("40", "0"), None);
+        x.usdt_return = Some(UsdtReturn::Pending {
+            amount: d(amount),
+            from: bingx.clone(),
+            to: mexc.clone(),
+        });
+        x
+    };
+    arb::core::ledger::save(&core, &pending("X1", "500")).await;
+    arb::core::ledger::save(&core, &pending("Y1", "300")).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, d("800"));
+    // X1: BingX принял вывод 500 (хеша ещё нет): на BingX было 1000, стало 500.
+    arb::core::usdt_accepted::mark(&core, "X1u", &bingx, d("500")).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, d("300"));
+    let others = usdt_hold::held_except(&core, &bingx, None, Some("Y1"));
+    assert_eq!(
+        others.amount,
+        Decimal::ZERO,
+        "резерв X1 уже списан площадкой"
+    );
+    assert!(
+        usdt_hold::spendable(d("500"), &others) >= d("300"),
+        "перегон Y1 300 уходит"
+    );
+    // Кусок X1 закончился: часть «идёт» — остаток 200 (запись принятия устарела).
+    arb::core::ledger::save(&core, &pending("X1", "200")).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, d("500"));
+    // Новый кусок 200 принят, затем отклонён площадкой — деньги снова на площадке.
+    arb::core::usdt_accepted::mark(&core, "X1up2", &bingx, d("200")).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, d("300"));
+    arb::core::usdt_accepted::unmark(&core, "X1up2").await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, d("500"));
+    // Ручной перевод USDT (не перегон сделки) — записи нет.
+    arb::core::usdt_accepted::mark(&core, "tu20261118", &bingx, d("100")).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, d("500"));
+}
+
+/// Ревью 5, Н1: признак «вывод принят площадкой» — в учёте сделки (Deal.usdt_accepted): перезапуск («идёт» → «не
+/// вернулись», usdt_return_state::on_restart) не возвращает в резерв уже списанные деньги; «не вернулись» без
+/// принятого вывода — в резерве целиком (Тигран 18.11); часть закончена — записи сняты.
+#[tokio::test]
+async fn accepted_withdrawal_survives_restart() {
+    let (core, _s, _j) = start("accepted-restart").await;
+    let (bingx, mexc) = (VenueId("bingx".into()), VenueId("mexc".into()));
+    let dx = dir_of("mexc", "bingx");
+    let mut x = bought("X1", &dx, Step::Closed, ("40", "0"), None);
+    x.usdt_return = Some(UsdtReturn::Pending {
+        amount: d("500"),
+        from: bingx.clone(),
+        to: mexc.clone(),
+    });
+    arb::core::ledger::save(&core, &x).await;
+    arb::core::usdt_accepted::mark(&core, "X1u", &bingx, d("500")).await;
+    let rec = core.inner.deals.lock().unwrap().get("X1").cloned().unwrap();
+    assert_eq!(rec.usdt_accepted.len(), 1);
+    // Запись учёта (база) — с признаком; разбор обратно — тот же.
+    let back: Deal = serde_json::from_value(serde_json::to_value(&rec).unwrap()).unwrap();
+    assert_eq!(back.usdt_accepted, rec.usdt_accepted);
+    // Перезапуск: «идёт» → «не вернулись» на 500, признак остаётся — резерва нет (деньги ушли с BingX).
+    let mut after = back;
+    assert!(arb::core::usdt_return_state::on_restart(&core, &mut after).await);
+    assert!(matches!(
+        after.usdt_return,
+        Some(UsdtReturn::NotReturned { .. })
+    ));
+    arb::core::ledger::save(&core, &after).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, Decimal::ZERO);
+    // Перегон другой сделки Y1 (400) при свободных 500 уходит: резерв других — 0.
+    let mut y = bought("Y1", &dx, Step::Closed, ("40", "0"), None);
+    y.usdt_return = Some(UsdtReturn::Pending {
+        amount: d("400"),
+        from: bingx.clone(),
+        to: mexc.clone(),
+    });
+    arb::core::ledger::save(&core, &y).await;
+    let others = usdt_hold::held_except(&core, &bingx, None, Some("Y1"));
+    assert!(usdt_hold::spendable(d("500"), &others) >= d("400"));
+    // «Не вернулись» без принятого вывода — в резерве целиком.
+    let mut n = bought("N1", &dx, Step::Closed, ("40", "0"), None);
+    n.usdt_return = Some(UsdtReturn::NotReturned {
+        amount: d("70"),
+        at: bingx.clone(),
+        why: "тест".into(),
+    });
+    arb::core::ledger::save(&core, &n).await;
+    assert_eq!(
+        usdt_hold::held_except(&core, &bingx, None, Some("Y1")).amount,
+        d("70")
+    );
+    // «Перегнано вручную» по X1 — часть закончена, записи «вывод принят» сняты.
+    arb::core::usdt_return_state::set(
+        &core,
+        "X1",
+        UsdtReturn::Manual {
+            amount: d("500"),
+            at: bingx.clone(),
+            to: mexc,
+            by: "тест".into(),
+            credited: None,
+        },
+        "",
+    )
+    .await;
+    let rec = core.inner.deals.lock().unwrap().get("X1").cloned().unwrap();
+    assert!(rec.usdt_accepted.is_empty());
+}
+
+/// Ревью 6, Н1 / М3: запись «вывод принят» части заменяется, а не копится; после перезапуска площадка отменила вывод
+/// без живого цикла (unmark некому звать) — «Перегнать» (новая попытка части) снимает старую запись, резерв снова
+/// целиком; старая запись учёта без поля usdt_accepted читается (пусто).
+#[tokio::test]
+async fn retry_clears_stale_accepted_and_old_record_reads() {
+    let (core, _s, _j) = start("accepted-retry").await;
+    let (bingx, mexc) = (VenueId("bingx".into()), VenueId("mexc".into()));
+    let dx = dir_of("mexc", "bingx");
+    let mut x = bought("X1", &dx, Step::Closed, ("40", "0"), None);
+    x.usdt_return = Some(UsdtReturn::Pending {
+        amount: d("500"),
+        from: bingx.clone(),
+        to: mexc.clone(),
+    });
+    // Старая запись (без поля) читается: поля нет в JSON — пусто.
+    let v = serde_json::to_value(&x).unwrap();
+    assert!(v.get("usdt_accepted").is_none());
+    let old: Deal = serde_json::from_value(v).unwrap();
+    assert!(old.usdt_accepted.is_empty());
+    arb::core::ledger::save(&core, &x).await;
+    // Два ответа площадки по одной части — одна запись (последняя).
+    arb::core::usdt_accepted::mark(&core, "X1u", &bingx, d("500")).await;
+    arb::core::usdt_accepted::mark(&core, "X1u1", &bingx, d("500")).await;
+    let rec = core.inner.deals.lock().unwrap().get("X1").cloned().unwrap();
+    assert_eq!(rec.usdt_accepted.len(), 1);
+    assert_eq!(rec.usdt_accepted[0].relay, "X1u1");
+    // Перезапуск: «не вернулись» 500, резерв 0 (вывод был принят).
+    let mut after = rec;
+    assert!(arb::core::usdt_return_state::on_restart(&core, &mut after).await);
+    arb::core::ledger::save(&core, &after).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, Decimal::ZERO);
+    // Площадка вывод отменила (живого цикла нет) — человек жмёт «Перегнать»: старая запись снята, резерв части — снова
+    // её сумма (Перегнать — «идёт» 500).
+    let r = core
+        .command(arb::core::types::ManualCommand {
+            action: arb::core::types::ManualAction::UsdtRetry {
+                deal_id: "X1".into(),
+            },
+            source: arb::core::types::CommandSource::Ui,
+            by: None,
+            at: Utc::now(),
+        })
+        .await;
+    assert!(r.is_ok(), "{r:?}");
+    let rec = core.inner.deals.lock().unwrap().get("X1").cloned().unwrap();
+    assert!(
+        rec.usdt_accepted.is_empty(),
+        "новая попытка — без старой записи"
+    );
+    assert!(usdt_hold::held(&core, &bingx, None).amount > Decimal::ZERO);
+    let _ = mexc;
 }
 
 #[tokio::test]

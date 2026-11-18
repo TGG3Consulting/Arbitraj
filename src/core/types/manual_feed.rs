@@ -116,6 +116,10 @@ pub struct ManualRecord {
     #[serde(default)]
     pub reason_full: String,
     pub buttons: Vec<ManualButton>,
+    /// Решение 408 (t193): сделки-держатели монет («своих монет не видно», StuckAlert.holders) — кнопки «Открыть
+    /// сделку <ID>» в Telegram (notify/mirror_view.rs). Пусто — у прочих записей.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub holders: Vec<String>,
 }
 
 impl ManualRecord {

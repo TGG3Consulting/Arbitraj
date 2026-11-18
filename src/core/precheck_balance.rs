@@ -20,7 +20,7 @@
 //! min(бюджет плана, свободно) по прочитанному здесь.
 //! Кто вызывает: core/precheck.rs (steps), core/precheck_par.rs (чтение одновременно с запросами сторон),
 //! core/executor.rs (Bal — заметки хронологии и предел списания).
-//! От чего зависит: core/limits.rs (buy_free, none_free), trade_ops.rs (вид площадки).
+//! От чего зависит: core/limits.rs (buy_free, none_free), trade_ops.rs (вид площадки), usdt_hold.rs (резерв общего возврата в тексте отказа, решение 405).
 //! Настройки: precheck.balance_first (читает executor.rs через precheck_fast.rs read); venue.quote_asset (limits.rs).
 
 use rust_decimal::Decimal;
@@ -94,10 +94,11 @@ pub struct Bal {
 /// получен (причина чтения).
 pub async fn read(core: &Core, d: &Direction, acc: Option<&DexAccountId>) -> Result<Read, String> {
     match super::limits::buy_free(core, d, acc).await {
-        Ok((free, quote)) if free <= Decimal::ZERO => {
-            Err(super::limits::none_free(&d.buy_on, &quote))
+        // Решение 405: свободное съел резерв возвратов USDT — в тексте та же сумма, что вычтена (usdt_hold.rs).
+        Ok((free, quote, h)) if free <= Decimal::ZERO => {
+            Err(super::limits::zero_text(&d.buy_on, &quote, &h, None))
         }
-        Ok((free, quote)) => Ok(Read::Got { free, quote }),
+        Ok((free, quote, _)) => Ok(Read::Got { free, quote }),
         Err(why) if super::trade_ops::kind(core, &d.buy_on) == Ok(VenueKind::Cex) => {
             Ok(Read::Missed(why))
         }

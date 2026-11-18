@@ -87,7 +87,12 @@ fn manual(core: &Core, settings: &Store, mirror: &Shared) -> Screen {
     let link = chat
         .zip(last)
         .and_then(|(c, m)| screens::message_link(c, m));
-    screens::manual(&waiting, role.title(), link)
+    screens::manual(
+        &waiting,
+        role.title(),
+        link,
+        &crate::core::manual_wait::list(core),
+    )
 }
 
 /// Вид по коду «k:<экран>». Принимает: код. Возвращает: вид или None — нет такого. Ошибок нет.

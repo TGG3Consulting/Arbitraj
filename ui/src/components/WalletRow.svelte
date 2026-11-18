@@ -111,7 +111,7 @@
     <!-- Ревью 272 (А1): у v2 — обёртка из конструктора; ≠ dex.native_wrapped — BNB через исполнитель не идёт. -->
     <p class={nativeOk ? 'ok' : 'warn-text'}>Версия: {#if nativeOk}{w.executor_version} — нативный BNB монетой сделки идёт через исполнитель (обёртка <code>{w.executor_wrapped}</code>){singletonNote}{:else if modern}{w.executor_version}, но обёртка в исполнителе <code>{w.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{w.native_wrapped ?? 'не задана'}</code> — нативный BNB через исполнитель не идёт (ERC-20 — как обычно), переразверните при верной настройке{singletonNote}{:else if w.executor_version === 'v1'}v1 — нативный BNB через форки не торгуется, переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>
   {/if}
-  {#if dex}<ExecutorDeploy venue={dex} wallet={w.id} refused={w.executor_deploy_refused} classes={w.executor_v3_classes ?? []} ondone={onchange} />{/if}
+  {#if dex}<ExecutorDeploy venue={dex} wallet={w.id} executor={w.executor ?? null} refused={w.executor_deploy_refused} classes={w.executor_v3_classes ?? []} ondone={onchange} />{/if}
   <form class="inline" onsubmit={(e) => { e.preventDefault(); setExec(exec); exec = ''; }}>
     <input bind:value={exec} placeholder="адрес уже развёрнутого исполнителя (0x…)" />
     <button disabled={!exec}>Записать после проверки</button>

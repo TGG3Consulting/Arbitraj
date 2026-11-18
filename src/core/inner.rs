@@ -135,6 +135,18 @@ pub struct Inner {
     /// Решение 403 (ревью t188): сколько записей в `rides` (идущие сделки после учёта покупки, с группой и без) — 0:
     /// очередь расчёта (coin_ride.rs blocks_new) замок `rides` не берёт. Меняется только под замком `rides`.
     pub rides_live: std::sync::atomic::AtomicUsize,
+    /// Решение 405 (t191, ревью 3 М2): ID сделок, которые ещё что-то держат — не закрыты (кроме «Беру на себя») или ждут
+    /// / ведут возврат USDT (core/unsettled.rs). По нему резерв возвратов (usdt_hold.rs) и монеты других сделок на
+    /// счёте (remain_others.rs) — без прохода по всей истории учёта. Блокировка: берётся отдельно, не вместе с `deals`.
+    pub unsettled: Mutex<HashSet<String>>,
+    /// Решение 405 (ответ Тиграна на ревью Н3): ручные действия, ждущие окончания идущих сделок монеты, — пауза новых
+    /// сделок этой монеты (manual_wait.rs). Блокировка: берётся отдельно (не вместе с `deals` / `rides`).
+    pub manual_waits: Mutex<HashMap<super::coin_key::CoinKey, super::manual_wait::ManualWait>>,
+    /// Сколько записей в `manual_waits` — 0: входы и очередь расчёта замок не берут (горячий путь).
+    pub manual_waits_live: std::sync::atomic::AtomicUsize,
+    /// Монета могла освободиться (снята запись идущей сделки, замок монеты, сохранена сделка, отмена ожидания) — будит
+    /// задачи ожидания ручных действий (manual_wait_run.rs).
+    pub coin_wake: Notify,
     /// Решение 174: монеты, которые сейчас продаются кнопкой «Продать» панели «Балансы» (повторное нажатие — отказ
     /// «уже продаётся»; метка Я-2 в active ставится вместе с этой, balance_sell.rs).
     pub balance_sells: Mutex<HashSet<super::coin_key::CoinKey>>,
@@ -267,6 +279,10 @@ impl Inner {
             trail: Mutex::default(),
             group_live: Default::default(),
             rides_live: Default::default(),
+            unsettled: Mutex::default(),
+            manual_waits: Mutex::default(),
+            manual_waits_live: Default::default(),
+            coin_wake: Notify::new(),
             balance_sells: Mutex::default(),
             bal_cache: Default::default(),
             usdt_moves: Mutex::default(),

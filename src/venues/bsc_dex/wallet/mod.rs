@@ -8,6 +8,7 @@
 pub mod allow_cache;
 pub mod approve;
 pub mod approve_executor;
+pub mod auto_release;
 pub mod balances;
 pub mod balances_mc;
 pub mod deposit;
@@ -18,6 +19,7 @@ pub mod events_tx;
 pub mod inflows;
 pub mod native_status;
 pub mod nonce;
+pub mod queue_ref;
 pub mod queue_store;
 pub mod signer;
 pub mod transfer;

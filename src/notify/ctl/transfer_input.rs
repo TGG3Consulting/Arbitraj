@@ -90,45 +90,56 @@ impl Ctx<'_> {
         let (Some(f), Some(t), Some(a)) = (&d.from, &d.to, d.amount) else {
             return self.answer(&q.id, Some(STALE)).await;
         };
-        let qt = match plan::quote(self.core, f, t, Some(a)).await {
-            Ok(x) => x,
-            Err(e) => {
-                return self
-                    .answer(&q.id, Some(&format!("Перевести нельзя: {e}")))
-                    .await;
-            }
+        let p = match transfer_pending(self.core, f, t, Some(a)).await {
+            Ok(p) => p,
+            Err(e) => return self.answer(&q.id, Some(&e)).await,
         };
         lock(self.ctl).sess.remove(&sid);
-        let all = src::all(self.core, self.core.balances_age()).await;
-        let (lf, lt) = (src::label_of(&all, f), src::label_of(&all, t));
-        let fee = qt
-            .fee
-            .map(|x| format!("комиссия вывода {} {}", n(x), qt.ticker))
-            .unwrap_or_else(|| "газ BNB с кошелька".into());
-        let question = format!(
-            "Перевести {} {} с {lf} на {lt}? {fee}, дойдёт {} {}, сеть BSC ({}).",
-            n(qt.amount),
-            qt.ticker,
-            n(qt.arrives),
-            qt.ticker,
-            qt.network
-        );
-        let wallet = |e: &End| e.wallet.as_ref().map(|w| w.0.clone());
-        let action = ManualAction::TransferUsdt {
-            from: f.venue.0.clone(),
-            from_wallet: wallet(f),
-            to: t.venue.0.clone(),
-            to_wallet: wallet(t),
-            amount: qt.amount.to_string(),
-        };
         let done = Screen::new(format!("{}\n\nПодтвердите кнопкой «Да» ниже.", s.shown));
         let _ = self.put_screen(s.chat, Some(s.msg), &done).await;
-        let p = Pending {
-            key: None,
-            title: action.title().into(),
-            action,
-            question,
-        };
         self.ask(&q.id, Some(s.msg), p).await;
     }
+}
+
+/// Вопрос «Да, перевести USDT» с суммой, комиссией и направлением по свежей сводке ядра (usdt_transfer_plan::quote —
+/// та же проверка, что у интерфейса и команды). Решение 408: и кнопки тревог (notify/press_event_money.rs).
+/// Принимает: ядро, откуда, куда, сумму (None — всё, что можно вывести). Возвращает: ожидание с TransferUsdt.
+/// Ошибки: «Перевести нельзя: причина».
+pub async fn transfer_pending(
+    core: &crate::core::Core,
+    f: &End,
+    t: &End,
+    a: Option<Decimal>,
+) -> Result<Pending, String> {
+    let qt = plan::quote(core, f, t, a)
+        .await
+        .map_err(|e| format!("Перевести нельзя: {e}"))?;
+    let all = src::all(core, core.balances_age()).await;
+    let (lf, lt) = (src::label_of(&all, f), src::label_of(&all, t));
+    let fee = qt
+        .fee
+        .map(|x| format!("комиссия вывода {} {}", n(x), qt.ticker))
+        .unwrap_or_else(|| "газ BNB с кошелька".into());
+    let question = format!(
+        "Перевести {} {} с {lf} на {lt}? {fee}, дойдёт {} {}, сеть BSC ({}).",
+        n(qt.amount),
+        qt.ticker,
+        n(qt.arrives),
+        qt.ticker,
+        qt.network
+    );
+    let wallet = |e: &End| e.wallet.as_ref().map(|w| w.0.clone());
+    let action = ManualAction::TransferUsdt {
+        from: f.venue.0.clone(),
+        from_wallet: wallet(f),
+        to: t.venue.0.clone(),
+        to_wallet: wallet(t),
+        amount: qt.amount.to_string(),
+    };
+    Ok(Pending {
+        key: None,
+        title: action.title().into(),
+        action,
+        question,
+    })
 }

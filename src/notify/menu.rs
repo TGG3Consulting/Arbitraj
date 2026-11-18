@@ -17,6 +17,7 @@
 use serde_json::{Value, json};
 
 use crate::core::commands_control::label;
+use crate::core::manual_wait::ManualWait;
 use crate::core::risk::{Mode, Risk};
 use crate::core::types::ManualRecord;
 
@@ -24,8 +25,14 @@ use crate::core::types::ManualRecord;
 pub use super::menu_venues::{venue_buttons, venues};
 use super::mirror_view::batch_message;
 
-/// Кнопка. Принимает: надпись, callback_data.
+/// Кнопка. Принимает: надпись, callback_data. Решение 408: callback_data — 1–64 байта (InlineKeyboardButton,
+/// https://core.telegram.org/bots/api#inlinekeyboardbutton); длиннее (длинный id площадки, монеты, кошелька) — кнопка
+/// без действия: надпись «… — только в интерфейсе», callback_data «c:x» (ответ «только в интерфейсе», menu_press.rs
+/// control_action); Telegram не отказывает всему сообщению. Ошибок нет.
 pub(super) fn b(text: &str, data: &str) -> Value {
+    if data.is_empty() || data.len() > super::callback::CALLBACK_DATA_MAX_BYTES {
+        return json!({ "text": format!("{text} — только в интерфейсе"), "callback_data": "c:x" });
+    }
     json!({ "text": text, "callback_data": data })
 }
 
@@ -159,21 +166,25 @@ pub fn day(r: &Risk) -> (String, Value) {
     (t, with_back(rows))
 }
 
-/// «Ручное управление»: ждущие записи с их кнопками (как напоминание) и «Назад». Принимает: записи.
-pub fn manual(recs: &[&ManualRecord]) -> (String, Value) {
-    if recs.is_empty() {
-        return (
-            "Ручное управление: записей, ждущих действия, нет.".into(),
-            with_back(vec![b("Обновить", "m:man")]),
+/// «Ручное управление»: ждущие записи с их кнопками (как напоминание), решение 408 — ожидания ручных действий
+/// (решение 405) с «Отменить ожидание», и «Назад». Принимает: записи, ожидания.
+pub fn manual(recs: &[&ManualRecord], waits: &[ManualWait]) -> (String, Value) {
+    let (wt, wb) = super::menu_waits::block(waits);
+    let mut rows: Vec<Value> = Vec::new();
+    let mut t = if recs.is_empty() {
+        "Ручное управление: записей, ждущих действия, нет.".to_string()
+    } else {
+        let (t, kb) = batch_message(
+            recs,
+            &format!("Ручное управление: ждут действия записей — {}", recs.len()),
         );
-    }
-    let (t, kb) = batch_message(
-        recs,
-        &format!("Ручное управление: ждут действия записей — {}", recs.len()),
-    );
-    let mut rows = kb
-        .and_then(|k| k["inline_keyboard"].as_array().cloned())
-        .unwrap_or_default();
+        rows = kb
+            .and_then(|k| k["inline_keyboard"].as_array().cloned())
+            .unwrap_or_default();
+        t
+    };
+    t.push_str(&wt);
+    rows.extend(wb);
     rows.push(json!([b("Обновить", "m:man")]));
     rows.push(json!([b("« Назад", "m:root")]));
     (t, json!({ "inline_keyboard": rows }))

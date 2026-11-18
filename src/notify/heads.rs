@@ -93,6 +93,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "stuck.relayed" => (INFO, "Монета перегнана на другую площадку"),
         "stuck.market_sold" => (WARN, "Застрявшая монета продаётся по рынку"),
         "manual.record" => (WARN, "Ручное управление: нужно действие"),
+        "manual.wait_lost" => (WARN, "Ожидание ручной кнопки потеряно при перезапуске"),
         "manual.taken" => (INFO, "Монеты взяты на себя"),
         "manual.returned" => (OK, "Монеты возвращены боту"),
         "balance.sell" => (INFO, "Продажа из панели «Балансы»"),

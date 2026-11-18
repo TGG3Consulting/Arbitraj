@@ -33,6 +33,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::rpc;
+use super::queue_ref::QueueRef;
 use super::{queue_store, signer};
 
 /// Очередь кошелька: одна на кошелёк (решение 132 — parts_wallet.rs). Дешёво клонируется.
@@ -61,6 +62,8 @@ impl Default for Nonces {
 /// Место в очереди: пока живо оно или хотя бы одно удержание (`hold`), другие транзакции кошелька ждут.
 pub struct Slot {
     guard: Arc<OwnedMutexGuard<()>>,
+    /// Замок очереди (ревью t193 М6: самоснятие по квитанции берёт его на время записи «свободна»).
+    lock: Arc<Mutex<()>>,
     next: Arc<StdMutex<Option<u64>>>,
     state: Arc<StdMutex<WalletQueueState>>,
     /// Адрес кошелька.
@@ -71,11 +74,17 @@ pub struct Slot {
 #[derive(Clone)]
 pub struct Hold {
     _guard: Arc<OwnedMutexGuard<()>>,
+    lock: Arc<Mutex<()>>,
     next: Arc<StdMutex<Option<u64>>>,
     state: Arc<StdMutex<WalletQueueState>>,
 }
 
 impl Nonces {
+    /// Решение 408 (9б): ссылка на состояние без замка. Ошибок нет.
+    pub fn queue_ref(&self) -> QueueRef {
+        QueueRef::new(self.lock.clone(), self.next.clone(), self.state.clone())
+    }
+
     /// Встаёт в очередь (ждёт, пока прошлая транзакция кошелька займёт свой nonce в блоке).
     /// Возвращает: Slot. Ошибки: QueueHalted — очередь остановлена до ручной проверки (причина в тексте; транзакция не
     /// подписана и не отправлена — решение 231, дополнение: не «исход неизвестен», а окончательно «не отправлено»);
@@ -95,6 +104,7 @@ impl Nonces {
         let from = signer::address(ctx)?;
         Ok(Slot {
             guard: Arc::new(guard),
+            lock: self.lock.clone(),
             next: self.next.clone(),
             state: self.state.clone(),
             from,
@@ -165,6 +175,7 @@ impl Slot {
     pub fn hold(&self) -> Hold {
         Hold {
             _guard: self.guard.clone(),
+            lock: self.lock.clone(),
             next: self.next.clone(),
             state: self.state.clone(),
         }
@@ -172,6 +183,11 @@ impl Slot {
 }
 
 impl Hold {
+    /// Решение 408 (9б): ссылка на состояние без замка (удержание очереди не продлевает). Ошибок нет.
+    pub fn queue_ref(&self) -> QueueRef {
+        QueueRef::new(self.lock.clone(), self.next.clone(), self.state.clone())
+    }
+
     /// Очередь ждёт итога транзакции. Возвращает: новое состояние. Ошибок нет.
     pub fn busy(&self, nonce: u64, hash: B256) -> WalletQueueState {
         self.set(WalletQueueState::Busy {

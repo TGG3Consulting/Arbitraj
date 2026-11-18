@@ -8,7 +8,7 @@
 //! Типы и чистая проверка суммы — usdt_transfer_check.rs.
 //! Кто вызывает: core/usdt_transfer.rs (команда), api/usdt_transfer.rs (сводка интерфейса), notify/ctl/transfer*.rs.
 //! От чего зависит: usdt_return.rs (USDT как актив), transfers.rs (сеть BSC), costs_withdraw.rs (точность вывода),
-//! limits.rs (free_now), precheck_withdraw.rs (held), engine.rs (справочник сетей, виды площадок), settings (accounts).
+//! limits.rs (free_now), usdt_hold.rs (резерв возвратов, решение 405), precheck_withdraw.rs (held), engine.rs (справочник сетей, виды площадок), settings (accounts).
 //! Ревью t163 Н5: минимум депозита получателя неизвестен — перевода нет (как у расчёта сделки, решение 35).
 //! Настройки: venue.quote_asset, venue.bsc_network (читаются, своих нет).
 
@@ -142,6 +142,15 @@ pub async fn quote(
         }
     } else {
         (available, None)
+    };
+    // Решение 405 (t191, ревью М5): резерв возвратов USDT на отправителе (у DEX — кошельке; usdt_hold.rs) человек
+    // ручным переводом не забирает — «можно вывести» без него, в заметке — сумма и сделки резерва.
+    let h = super::usdt_hold::held(core, &from.venue, acc.as_ref());
+    let withdrawable = super::usdt_hold::spendable(withdrawable, &h);
+    let note = match (note, super::usdt_hold::suffix(&h, &t)) {
+        (n, r) if r.is_empty() => n,
+        (Some(n), r) => Some(format!("{n}{r}")),
+        (None, r) => Some(r.trim_start_matches(" — ").to_string()),
     };
     let amount =
         super::costs_withdraw::floor_precision(amount.unwrap_or(withdrawable), fi.as_ref());

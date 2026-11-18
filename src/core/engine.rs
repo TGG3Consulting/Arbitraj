@@ -75,6 +75,8 @@ impl Core {
         super::usdt_return_retry::resume(&core);
         super::gas_stats::load(&core).await;
         super::manual::load(&core).await;
+        // Решение 408 (ответ Тиграна 9а): ожидания ручных кнопок прошлого запуска — «потеряно при перезапуске».
+        super::manual_wait_mark::lost(&core).await;
         super::transit::load(&core).await;
         super::withdraw_seen::load(&core).await;
         super::low_usdt::load(&core).await;

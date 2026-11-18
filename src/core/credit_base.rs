@@ -72,7 +72,9 @@ async fn read(core: &Core, deal: &str, to: &VenueId, a: &Asset) -> Option<Decima
     let own = lk(&core.inner.deals).get(deal).cloned()?;
     let _g = super::credit_lock::fact(to, a).await;
     let before = super::remain_others::on_account(core, &own, to);
-    let fact = super::remain_fact::fact_at(core, &own, to).await.ok()?;
+    let fact = Box::pin(super::remain_fact::fact_at(core, &own, to))
+        .await
+        .ok()?;
     let after = super::remain_others::on_account(core, &own, to);
     if before != after {
         return None;

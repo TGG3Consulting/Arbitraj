@@ -173,7 +173,8 @@ pub(super) async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, 
                 // есть на счёте, с которого перекладывается на торговый (не больше записи; to_trading_fact.rs).
                 if e.code == ErrorCode::InsufficientBalance
                     && amount == t.amount
-                    && let Some(a) = super::to_trading_fact::fund(core, leg, gw, amount).await
+                    && let Some(a) =
+                        Box::pin(super::to_trading_fact::fund(core, leg, gw, amount)).await
                 {
                     amount = a;
                     continue;

@@ -189,7 +189,7 @@ pub async fn here(core: &Core, mut deal: Deal, e: &OpError, max: u32) {
             None,
         )
         .await;
-    if !super::remain_fact::reconcile(core, &mut deal).await {
+    if !Box::pin(super::remain_fact::reconcile(core, &mut deal)).await {
         return;
     }
     let why = format!("повторы продажи исчерпаны ({max}): {e}");

@@ -41,7 +41,8 @@ use super::stuck_reason::StuckReason;
 /// в журнал, хронологию и Telegram). Решение 222: сначала остаток сверяется с балансом площадки (remain_fact.rs) —
 /// дальше min(учёт, факт); на площадке ничего нет — сделка закрыта. Ошибок нет: не задан режим — сделка остановлена.
 pub async fn handle(core: &Core, mut deal: Deal, why: StuckReason) {
-    if !super::remain_fact::reconcile(core, &mut deal).await {
+    // Ревью CI t198 (переполнение стека): сверка остатка (решение 413 — с распределением долей) — в куче.
+    if !Box::pin(super::remain_fact::reconcile(core, &mut deal)).await {
         return;
     }
     handle_as_is(core, deal, why).await

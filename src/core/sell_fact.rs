@@ -53,7 +53,7 @@ pub async fn before(core: &Core, mut deal: Deal, why: &str) -> Option<Deal> {
         return Some(deal);
     }
     let tried = super::credit_fact::here(&deal).and_then(|c| c.reread);
-    if !super::remain_fact::reconcile(core, &mut deal).await {
+    if !Box::pin(super::remain_fact::reconcile(core, &mut deal)).await {
         return None;
     }
     match tried {
@@ -69,8 +69,8 @@ pub async fn before(core: &Core, mut deal: Deal, why: &str) -> Option<Deal> {
             super::credit_fact::clear_reread(&mut deal);
             let d = deal.clone();
             let r = super::sell_unsent::Retry::No;
-            super::sell_unsent::alert(core, deal, &e, &r).await;
-            super::manual_outcome::failed(core, &d, why, &e.message).await;
+            Box::pin(super::sell_unsent::alert(core, deal, &e, &r)).await;
+            Box::pin(super::manual_outcome::failed(core, &d, why, &e.message)).await;
             None
         }
         _ => Some(deal),

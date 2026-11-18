@@ -220,7 +220,8 @@ async fn sell(
         floor,
         false,
     );
-    let mut res = super::credit_lock::selling(core, &deal, trade).await;
+    // Ревью CI t198 (переполнение стека): продажа под замком — в куче.
+    let mut res = Box::pin(super::credit_lock::selling(core, &deal, trade)).await;
     // Решение 236, дополнение: approve, чаевые, газ неудачных попыток — в затраты сделки.
     super::deal_gas::charge(core, &mut deal, &v, &mut gas).await;
     // Решение 227: котировка продажи и стакан худшей цены — в хронологию сделки (разбор живых случаев вроде JCT).

@@ -52,13 +52,14 @@ pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
     // Решение 413: факт и учёт других — одним снимком под замком счёта (продажи в полёте нет).
     let (read, others) = {
         let _g = super::credit_lock::fact(&deal.at, &deal.direction.asset).await;
-        let read = fact_at(core, deal, &deal.at).await;
+        // Ревью CI t198 (переполнение стека, как t157 / решение 389): будущие пути продажи — в куче.
+        let read = Box::pin(fact_at(core, deal, &deal.at)).await;
         (read, super::remain_others::on_account(core, deal, &deal.at))
     };
     let fact = match read {
         Ok(f) => f,
         Err(e) if super::credit_fact::pending(deal) => {
-            super::credit_apply::estimate(core, deal, &e).await;
+            Box::pin(super::credit_apply::estimate(core, deal, &e)).await;
             return true;
         }
         Err(e) => {
@@ -69,7 +70,7 @@ pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
             return true;
         }
     };
-    apply_with(core, deal, fact, others).await
+    Box::pin(apply_with(core, deal, fact, others)).await
 }
 
 /// Что делает: решение по прочитанному факту счёта (вынесено из reconcile — проверяется тестами на записях учёта без
@@ -79,7 +80,7 @@ pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
 pub async fn apply_fact(core: &Core, deal: &mut Deal, fact: Decimal) -> bool {
     // Решение 405 (t191): монеты других сделок той же монеты на этом счёте — не наши (remain_others.rs).
     let others = super::remain_others::on_account(core, deal, &deal.at);
-    apply_with(core, deal, fact, others).await
+    Box::pin(apply_with(core, deal, fact, others)).await
 }
 
 /// Что делает: как apply_fact, с учётом других, снятым вместе с фактом (reconcile). Решение 413: распределение факта
@@ -94,7 +95,7 @@ pub async fn apply_with(
 ) -> bool {
     let sp = super::credit_split::split(&super::credit_apply::input(core, deal, fact, &others));
     if super::credit_fact::pending(deal) {
-        return super::credit_apply::own(core, deal, fact, &others, &sp).await;
+        return Box::pin(super::credit_apply::own(core, deal, fact, &others, &sp)).await;
     }
     let others = super::credit_apply::with_shares(&others, &sp);
     let qty = match super::remain_others::own_qty(deal.qty, fact, &others) {

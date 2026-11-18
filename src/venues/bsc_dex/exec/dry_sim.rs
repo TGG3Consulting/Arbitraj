@@ -57,7 +57,8 @@ pub struct Io<'a> {
     pub token_out: Option<Address>,
     /// Решение 407: подмена баланса входа кошелька (stateDiff токена: слот = need); None — пополнение как раньше.
     pub credit: Option<Override>,
-    /// Ревью t192 Н2: баланс входа кошелька, уже прочитанный на блоке симуляции (exec/presell_credit.rs); None — читать.
+    /// Ревью t192 Н2: баланс входа кошелька, уже прочитанный на блоке симуляции (exec/presell_credit.rs);
+    /// None — читать.
     pub have: Option<U256>,
 }
 

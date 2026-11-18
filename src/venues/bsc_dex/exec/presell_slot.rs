@@ -8,7 +8,8 @@
 //! Как найти слот без догадок: перебор слотов маппинга balances 0..N−1 (N — настройка presell.balance_slot_scan) в
 //! двух раскладках: Solidity — keccak256(pad(holder) . pad(slot)) (docs.soliditylang.org, internals/layout_in_storage,
 //! «Mappings and Dynamic Arrays»: keccak256(h(k) . p)); Vyper — keccak256(pad(slot) . pad(holder)) (vyperlang/vyper
-//! v0.4.0 vyper/codegen/core.py#L605-L613 _get_element_ptr_mapping → sha3_64(parent, key); vyper/ir/compile_ir.py#L581-L597:
+//! v0.4.0 vyper/codegen/core.py#L605-L613 _get_element_ptr_mapping → sha3_64(parent, key);
+//! vyper/ir/compile_ir.py#L581-L597:
 //! slot в память 0, key в 32, SHA3 по 64 байтам). Один вызов: у каждого кандидата j своя метка (need + 1 + j), затем
 //! balanceOf(holder); слот верный, только если balanceOf вернул РОВНО метку одного кандидата. Не вернул (рефлексия,
 //! ребейз, хранение вне 0..N−1, ERC-7201) — подмена недостоверна, путь как раньше (dry_fund: источники, урезание 380).

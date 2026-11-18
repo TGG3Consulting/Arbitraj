@@ -26,6 +26,7 @@ use arb::core::uncapped_types::budget_bound;
 use arb::report::missed_labels::limited_label;
 use arb::venues::bsc_dex::check::simulate::{self, Base};
 use arb::venues::bsc_dex::exec::presell_slot::{self, Layout, Slot};
+use arb::venues::bsc_dex::exec::presell_slot_find;
 
 const DIR: &str = "tests/data/executor_v3_live_2026-11-17";
 /// Блок записи H (README записи).
@@ -95,6 +96,9 @@ fn solidity_key_matches_recorded_storage_and_balance() {
         slot1, bal,
         "значение слота 1 = balanceOf — слот баланса USDT"
     );
+    // Ревью М5: слово слота = balanceOf — слово только баланс (подмена разрешена); иначе — упаковано, подмены нет.
+    assert!(presell_slot_find::unpacked(slot1, bal).is_ok());
+    assert!(presell_slot_find::unpacked(slot1, bal - U256::from(1u8)).is_err());
     let vy = Slot {
         index: 1,
         layout: Layout::Vyper,

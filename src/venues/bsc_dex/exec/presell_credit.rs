@@ -5,14 +5,15 @@
 //! нет, баланс передаётся в dry_sim через Io.have, второго чтения нет) → слот найден и проверен → слово слота = балансу
 //! (ревью М5: не упакован) → exec/dry_sim.rs с Io.credit (слот баланса кошелька = нужному количеству).
 //! balanceOf входа после подмены ≠ нужному ровно (Sim.credit_bad) — токен помечен недостоверным (ревью Н1: не искать
-//! снова на каждой предпроверке), симуляция повторяется без подмены. Слот не найден / поиск не выполнен / подмена недостоверна — путь как раньше
-//! (пополнение exec/dry_fund.rs, при нехватке — Short решения 380), а причина дописывается к «монеты в симуляции»
+//! снова на каждой предпроверке), симуляция повторяется без подмены. Слот в кэше — баланс и слово слота читаются
+//! параллельно (ревью М-a). Слот не найден / поиск не выполнен / подмена недостоверна — путь как раньше (пополнение
+//! exec/dry_fund.rs, при нехватке — Short решения 380), а причина дописывается к «монеты в симуляции»
 //! (Sim.funding) и к причине отказа (она же — текст Short и строка урезания 380). Не задана — 1 в 1 как до решения.
 //! Налог токена при продаже симуляция видит как раньше: подменяется только слот баланса кошелька, код токена и прочие
 //! его слоты — как в сети (продажа идёт обычным transfer кошелька в пул).
 //! Кто вызывает: exec/presell.rs.
-//! От чего зависит: exec/{dry_sim, dry_build (Ready), presell_slot, presell_slot_find}.rs, check/simulate.rs (Override),
-//! node/{call, abi}.rs (balanceOf на блоке).
+//! От чего зависит: exec/{dry_sim, dry_build (Ready), presell_slot, presell_slot_find}.rs,
+//! check/simulate.rs (Override), node/{call, abi}.rs (balanceOf на блоке).
 //! Настройки: presell.balance_slot_scan [bsc_dex] (через presell_slot).
 
 use alloy_primitives::{Address, U256};
@@ -97,17 +98,34 @@ async fn prepare(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
     };
     let tag = call::block_tag(r.at.number);
     let owner = IERC20::balanceOfCall { owner: wallet };
-    let have = call::view(&q.ctx, token, &owner, &tag).await?;
+    let block = r.at.number;
+    // Ревью М-a: слот уже в кэше — баланс и слово слота читаются параллельно (круга до узла не добавляется).
+    let known = find::cached(token);
+    let (have, raw) = match known {
+        Some(s) => {
+            let (h, w) = tokio::join!(
+                call::view(&q.ctx, token, &owner, &tag),
+                find::word(&q.ctx, (token, wallet, s), block)
+            );
+            (h?, Some(w))
+        }
+        None => (call::view(&q.ctx, token, &owner, &tag).await?, None),
+    };
     p.have = Some(have);
     if have >= io.need {
         return Ok(p);
     }
-    let found = find::find(&q.ctx, token, wallet, io.need, r.at, p.n).await;
-    let checked = match found {
-        Ok(s) => find::unpacked(&q.ctx, (token, wallet, s), have, r.at.number, p.n)
+    let checked = match known {
+        Some(s) => Ok(s),
+        None => find::find(&q.ctx, token, wallet, io.need, r.at, p.n).await,
+    };
+    let checked = match (checked, raw) {
+        (Ok(s), Some(w)) => w.and_then(|w| find::unpacked(w, have)).map(|()| s),
+        (Ok(s), None) => find::word(&q.ctx, (token, wallet, s), block)
             .await
+            .and_then(|w| find::unpacked(w, have))
             .map(|()| s),
-        Err(why) => Err(why),
+        (Err(why), _) => Err(why),
     };
     match checked {
         Ok(s) => p.credit = Some(presell_slot::credit(token, wallet, s, io.need)),

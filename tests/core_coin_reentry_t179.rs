@@ -6,7 +6,10 @@
 //!   Warn core.ledger о signal.route_cooldown_s), строки «Пауза не поставлена» нет; событие баланса без хеша при двух
 //!   ожиданиях закрывает подходящее по сумме, как раньше;
 //! - п. 1, 3: включена — вторая сделка ТОГО ЖЕ направления присоединяется к группе первой, когда первая учла покупку;
-//!   другие направления монеты, застрявшая сделка группы, замок целиком — прежний отказ; ручное действие — отказ;
+//!   застрявшая сделка группы (во всех направлениях), замок целиком — прежний отказ; ручное действие — отказ;
+//! - решение 405 (t191): другие направления монеты при идущей группе — своя группа (Lead / Join своего направления),
+//!   лимит монеты общий, продажа после монет всех групп на той же площадке, общий возврат группы не ждёт чужую группу;
+//!   выключено — другие направления прежний отказ;
 //! - деньги: бюджет докупки = лимит монеты − вложенное идущих (limits_parts.rs);
 //! - п. 4: продажа докупки — разность котировок на записанных bids BingX CAKE-USDT (gateway::frozen::FrozenBook::price)
 //!   и пуле CAKE/USDT V2 (математика адаптера) против последовательной продажи; покупка — данные новее покупки идущей
@@ -279,31 +282,87 @@ async fn on_same_direction_joins_other_directions_wait() {
     assert_eq!(coin_ride::admit(&core, &dx), Ok(Seat::Join("D1".into())));
     assert!(coin_ride::admit(&core, &dx).is_err());
     coin_ride::release(&core, &key, None);
-    // Другие направления монеты — монета занята (прежний текст).
+    // Решение 405 (t191, ответ Тиграна 18.11): другие направления монеты при идущей группе — своя новая группа (Lead).
     for other in [
         dir_of("bsc_dex", "bingx"),
         dir_of("mexc", "bsc_dex"),
         dir_of("bingx", "mexc"),
     ] {
-        let why = coin_ride::admit(&core, &other).unwrap_err();
-        assert!(why.starts_with("по монете идёт другая сделка D1"), "{why}");
-        assert!(coin_ride::blocks_new(&core, &other));
+        assert!(!coin_ride::blocks_new(&core, &other));
+        assert_eq!(coin_ride::admit(&core, &other), Ok(Seat::Lead));
+        coin_ride::release(&core, &key, None);
     }
     assert!(
         !coin_ride::take(&core, &key),
         "ручное действие при идущей — отказ"
     );
-    // Сделка группы застряла — докупок нет.
+    // Сделка группы застряла — новых сделок монеты нет ни в одном направлении (решение 405 — как у докупки).
     first.step = Step::Stuck;
     arb::core::ledger::save(&core, &first).await;
     assert!(coin_ride::admit(&core, &dx).is_err());
     assert!(coin_ride::blocks_new(&core, &dx));
+    let why = coin_ride::admit(&core, &dir_of("mexc", "bsc_dex")).unwrap_err();
+    assert!(why.starts_with("по монете идёт другая сделка D1"), "{why}");
+    assert!(coin_ride::blocks_new(&core, &dir_of("mexc", "bsc_dex")));
     // Сделка без группы (начата до включения) — докупок нет.
     coin_ride::release(&core, &key, Some("D1"));
     let old = bought("D0", &dx, Step::Transfer, ("40", "10"), None);
     arb::core::ledger::save(&core, &old).await;
     coin_ride::board(&core, &dx, "D0", None);
     assert!(coin_ride::admit(&core, &dx).is_err());
+}
+
+/// Решение 405 (t191): при идущей группе монеты сделка ДРУГОГО направления — своя группа; докупки каждого направления —
+/// в свою группу; лимит монеты — общий на все направления; продажа — после монет всех групп на той же площадке;
+/// общий возврат одной группы не ждёт сделок другой. Выключено — другие направления отказ прежним текстом.
+#[tokio::test]
+async fn other_directions_trade_in_own_groups() {
+    let (core, s, _j) = start("other-dirs").await;
+    set(&s, "money.max_per_trade_usd", json!("50")).await;
+    set(&s, "money.max_per_coin_usd", json!("70")).await;
+    set(&s, "money.max_in_transit_usd", json!("100")).await;
+    let (dx, ox) = (dir_of("bingx", "bsc_dex"), dir_of("mexc", "bsc_dex"));
+    let key = CoinKey::of(&dx.asset);
+    // Выключено (п. 15): идёт сделка без группы — другое направление прежний отказ.
+    ride(&core, &bought("D0", &dx, Step::Transfer, ("10", "1"), None)).await;
+    let why = coin_ride::admit(&core, &ox).unwrap_err();
+    assert!(why.starts_with("по монете идёт другая сделка D0"), "{why}");
+    coin_ride::release(&core, &key, Some("D0"));
+    let mut d0 = bought("D0", &dx, Step::Closed, ("10", "0"), None);
+    d0.result_usd = Some(d("0"));
+    arb::core::ledger::save(&core, &d0).await;
+    top_up(&s).await;
+    assert_eq!(
+        ride(&core, &bought("D1", &dx, Step::Selling, ("40", "10"), Some("D1"))).await,
+        Seat::Lead
+    );
+    // Другое направление — первая своей группы; план возврата — с фиксированной частью (группы направления нет).
+    assert_eq!(coin_ride::group_running(&core, &ox), None);
+    assert_eq!(
+        ride(&core, &bought("O1", &ox, Step::Transfer, ("20", "5"), Some("O1"))).await,
+        Seat::Lead
+    );
+    // Докупки — каждая в группу своего направления (раньше group_running смотрел только первую запись монеты).
+    assert_eq!(coin_ride::group_running(&core, &dx).as_deref(), Some("D1"));
+    assert_eq!(coin_ride::group_running(&core, &ox).as_deref(), Some("O1"));
+    assert_eq!(coin_ride::admit(&core, &ox), Ok(Seat::Join("O1".into())));
+    coin_ride::release(&core, &key, None);
+    coin_group::dropped(&core, &key, "O1");
+    assert_eq!(coin_ride::admit(&core, &dx), Ok(Seat::Join("D1".into())));
+    coin_ride::release(&core, &key, None);
+    coin_group::dropped(&core, &key, "D1");
+    // Лимит монеты — общий: 70 − 40 (D1) − 20 (O1).
+    let p = limits_parts::parts(&core, &dir_of("bsc_dex", "bingx"), &Mode::Live).unwrap();
+    assert_eq!(p.coin_left, d("10"));
+    // Продажа на bsc_dex — после монет обеих групп (10 + 5); на bingx никто не продаёт.
+    assert_eq!(ride_quote::sell_ahead(&core, &dx), d("15"));
+    assert_eq!(ride_quote::sell_ahead(&core, &dir_of("bsc_dex", "bingx")), d("0"));
+    // Общий возврат D1 уходит, когда закрылась последняя сделка ЕЁ группы, — O1 (другая группа) не ждётся.
+    let mut x = sold("D1", &dx, "D1");
+    assert!(close(&core, &mut x, "41").await.is_empty());
+    wait_note(&core, "D1", "общий возврат USDT группы D1: 41").await;
+    assert!(!coin_group::flushed(&core, "O1"));
+    assert!(!has_note(&core, "O1", "общий возврат"));
 }
 
 #[tokio::test]

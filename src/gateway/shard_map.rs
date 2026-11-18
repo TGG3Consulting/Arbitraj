@@ -4,7 +4,7 @@
 //! потоки бьются за один счётчик читателей (perf 18.11), а снимок за ArcSwap — полная копия карты на каждую новую
 //! запись (квадратичная копия при наполнении). Здесь вставка — O(1) в своей части, чтение — замок своей части.
 //! Число частей — число потоков процессора машины (std::thread::available_parallelism; факт машины, не настройка);
-//! не удалось узнать — одна часть (поведение как у обычной карты под замком).
+//! узнаётся один раз за процесс (OnceLock); не удалось узнать — одна часть (поведение как у обычной карты под замком).
 //! Кто вызывает: venues/bsc_dex/check/pool_facts_store.rs, venues/bsc_dex/quote/usable_reuse.rs,
 //! venues/bsc_dex/pools/registry_key.rs.
 //! От чего зависит: std.
@@ -13,7 +13,7 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash, RandomState};
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Карта по частям.
 pub struct ShardMap<K, V> {
@@ -21,10 +21,18 @@ pub struct ShardMap<K, V> {
     hash: RandomState,
 }
 
+/// Что делает: число частей — потоки процессора, узнаётся один раз за процесс (ревью t194, М2: available_parallelism
+/// — системный вызов и чтение cgroup, а карта создаётся на каждый подбор объёма). Не удалось узнать — одна часть.
+/// Ошибок нет.
+fn parts() -> usize {
+    static N: OnceLock<usize> = OnceLock::new();
+    *N.get_or_init(|| std::thread::available_parallelism().map_or(1, |n| n.get()))
+}
+
 impl<K: Hash + Eq, V> Default for ShardMap<K, V> {
     /// Что делает: пустая карта, частей — по числу потоков процессора. Ошибок нет.
     fn default() -> Self {
-        let n = std::thread::available_parallelism().map_or(1, |n| n.get());
+        let n = parts();
         Self {
             shards: (0..n).map(|_| RwLock::new(HashMap::new())).collect(),
             hash: RandomState::new(),

@@ -62,12 +62,21 @@ impl PoolFactsStore {
         after: impl FnOnce(),
     ) -> bool {
         let _turn = self.write.lock().unwrap_or_else(|p| p.into_inner());
-        let cell = self.map.get_or_insert_with(r.clone(), || {
-            Arc::new(ArcSwap::from_pointee(PoolFacts::default()))
-        });
-        let mut facts = PoolFacts::clone(&cell.load());
+        // Ревью t194 (М1): новый пул — ячейка сразу с итогом правки (без окна с пустыми фактами); писатель один (замок
+        // выше), поэтому между поиском и вставкой ячейку никто не создаст.
+        let cell = self.map.get(r);
+        let mut facts = cell
+            .as_ref()
+            .map(|c| PoolFacts::clone(&c.load()))
+            .unwrap_or_default();
         let wrote = f(&mut facts);
-        cell.store(Arc::new(facts));
+        match cell {
+            Some(c) => c.store(Arc::new(facts)),
+            None => {
+                self.map
+                    .insert(r.clone(), Arc::new(ArcSwap::from_pointee(facts)));
+            }
+        }
         if wrote {
             after();
         }

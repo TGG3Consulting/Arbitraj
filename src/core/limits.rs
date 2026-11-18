@@ -10,8 +10,9 @@
 //! Решение 266 (precheck.balance_first = да, изменяет решение 94 по указанию Тиграна 13.11): тот же один запрос
 //! делает предпроверка — прямо перед последним расчётом объёма (buy_free, precheck_balance.rs); перед ордером он не
 //! повторяется.
-//! Решение 405 (t191): предел покупки (buy_free → buy_cap, предпроверка) — свободно минус USDT, ждущие общего возврата
-//! групп докупки на площадке A (usdt_hold.rs); free_now (перегоны, «можно вывести») — как раньше.
+//! Решение 405 (t191): предел покупки (buy_free → buy_cap, предпроверка) — свободно минус резерв возвратов USDT на
+//! площадке A (usdt_hold.rs: отложенные части общего возврата, «идёт», «ждёт повтора»); free_now — без резерва (им
+//! читают перегоны, тратящие свой резерв; ручной перевод вычитает резерв сам — usdt_transfer_plan.rs).
 //! Кто вызывает: core/profit.rs (budget), core/executor.rs (buy_cap), core/precheck_balance.rs (buy_free),
 //! core/precheck_withdraw.rs (free_now); executor.rs ведёт учёт Exposure.
 //! От чего зависит: engine.rs, deps.rs (шлюз), dry.rs, usdt_hold.rs, settings.
@@ -55,38 +56,54 @@ pub async fn budget(core: &Core, cx: &DirCtx, mode: &super::dry::Mode) -> Result
 }
 
 /// Предел списания покупки прямо перед ордером (решение 94): меньшее из бюджета плана и свободного баланса котируемой
-/// монеты на A, прочитанного сейчас одним запросом. Принимает: ядро, направление, бюджет плана, счёт DEX сделки.
-/// Возвращает: (предел, свободно, тикер котируемой монеты). Ошибки: не задан venue.quote_asset у A, сбой балансов,
-/// свободно 0.
+/// монеты на A, прочитанного сейчас одним запросом (решение 405 — за вычетом резерва возвратов USDT, usdt_hold.rs).
+/// Принимает: ядро, направление, бюджет плана, счёт DEX сделки. Возвращает: (предел, свободно, тикер котируемой
+/// монеты). Ошибки: не задан venue.quote_asset у A, сбой балансов, свободно 0 (с резервом — сумма и сделки резерва).
 pub async fn buy_cap(
     core: &Core,
     d: &crate::core::types::Direction,
     budget: Decimal,
     acc: Option<&crate::core::types::DexAccountId>,
 ) -> Result<(Decimal, Decimal, String), String> {
-    let (free, quote) = buy_free(core, d, acc).await?;
+    let (free, quote, h) = buy_free(core, d, acc).await?;
+    cap_of(&d.buy_on, budget, (free, quote), &h)
+}
+
+/// Что делает: предел списания по уже прочитанному (М6/М7 ревью t191: та же сумма резерва и в вычете, и в тексте).
+/// Принимает: площадку A, бюджет плана, (свободно ПОСЛЕ резерва, тикер), резерв, из которого оно посчитано.
+/// Возвращает: (min(бюджет, свободно), свободно, тикер). Ошибки: свободно 0 — none_free + сумма и сделки резерва.
+pub fn cap_of(
+    a: &VenueId,
+    budget: Decimal,
+    (free, quote): (Decimal, String),
+    h: &super::usdt_hold::Held,
+) -> Result<(Decimal, Decimal, String), String> {
     if free <= Decimal::ZERO {
-        // Решение 405: всё свободное — резерв общего возврата групп докупки: причина с суммой и сделками.
-        let h = super::usdt_hold::held(core, &d.buy_on, acc);
-        return Err(format!(
-            "{}{}",
-            none_free(&d.buy_on, &quote),
-            super::usdt_hold::suffix(&h, &quote)
-        ));
+        return Err(zero_text(a, &quote, h));
     }
     Ok((budget.min(free), free, quote))
 }
 
-/// Чтение для buy_cap: котируемая монета A (venue.quote_asset) и её свободный баланс — один запрос; решение 405 —
-/// за вычетом USDT, ждущих общего возврата групп докупки на A (usdt_hold.rs). Решение 266
-/// (precheck.balance_first = да): тем же кодом баланс читает предпроверка (precheck_balance.rs) — до расчёта, один раз
-/// на сделку. Принимает: ядро, направление, счёт DEX сделки. Возвращает: (свободно, тикер котируемой монеты).
-/// Ошибки: не задан venue.quote_asset у A, сбой балансов.
+/// Текст отказа «свободно 0»: none_free (начало прежнее — окно ставит метку «баланс») и, если есть, резерв возвратов
+/// (решение 405). Принимает: площадку, тикер, резерв. Ошибок нет.
+pub fn zero_text(a: &VenueId, quote: &str, h: &super::usdt_hold::Held) -> String {
+    format!(
+        "{}{}",
+        none_free(a, quote),
+        super::usdt_hold::suffix(h, quote)
+    )
+}
+
+/// Чтение для buy_cap: котируемая монета A (venue.quote_asset) и её свободный баланс — один запрос; решение 405 — за
+/// вычетом резерва возвратов USDT на A (у DEX — кошелька; usdt_hold.rs; резерва нет — то же число, что раньше).
+/// Решение 266 (precheck.balance_first = да): тем же кодом баланс читает предпроверка (precheck_balance.rs) — до
+/// расчёта, один раз на сделку. Принимает: ядро, направление, счёт DEX сделки. Возвращает: (свободно после резерва,
+/// тикер котируемой монеты, резерв — для текста отказа). Ошибки: не задан venue.quote_asset у A, сбой балансов.
 pub async fn buy_free(
     core: &Core,
     d: &crate::core::types::Direction,
     acc: Option<&crate::core::types::DexAccountId>,
-) -> Result<(Decimal, String), String> {
+) -> Result<(Decimal, String, super::usdt_hold::Held), String> {
     let at = At {
         venue: Some(&d.buy_on.0),
         coin: None,
@@ -98,10 +115,8 @@ pub async fn buy_free(
         .text("venue.quote_asset", at)
         .map_err(|e| e.message)?;
     let free = free_now(core, &d.buy_on, acc, &quote).await?;
-    // Решение 405 (t191): USDT, ждущие общего возврата групп докупки на этой площадке (у DEX — кошельке), покупка не
-    // тратит (usdt_hold.rs; резерва нет — то же число, что раньше).
-    let free = super::usdt_hold::spendable(free, &super::usdt_hold::held(core, &d.buy_on, acc));
-    Ok((free, quote))
+    let h = super::usdt_hold::held(core, &d.buy_on, acc);
+    Ok((super::usdt_hold::spendable(free, &h), quote, h))
 }
 
 /// Текст «свободно 0» (buy_cap; решение 266 — и предпроверка). Принимает: площадку A, котируемую монету. Ошибок нет.

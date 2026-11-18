@@ -94,16 +94,11 @@ pub struct Bal {
 /// получен (причина чтения).
 pub async fn read(core: &Core, d: &Direction, acc: Option<&DexAccountId>) -> Result<Read, String> {
     match super::limits::buy_free(core, d, acc).await {
-        Ok((free, quote)) if free <= Decimal::ZERO => {
-            // Решение 405: свободное съел резерв общего возврата групп докупки — с суммой и сделками (usdt_hold.rs).
-            let h = super::usdt_hold::held(core, &d.buy_on, acc);
-            Err(format!(
-                "{}{}",
-                super::limits::none_free(&d.buy_on, &quote),
-                super::usdt_hold::suffix(&h, &quote)
-            ))
+        // Решение 405: свободное съел резерв возвратов USDT — в тексте та же сумма, что вычтена (usdt_hold.rs).
+        Ok((free, quote, h)) if free <= Decimal::ZERO => {
+            Err(super::limits::zero_text(&d.buy_on, &quote, &h))
         }
-        Ok((free, quote)) => Ok(Read::Got { free, quote }),
+        Ok((free, quote, _)) => Ok(Read::Got { free, quote }),
         Err(why) if super::trade_ops::kind(core, &d.buy_on) == Ok(VenueKind::Cex) => {
             Ok(Read::Missed(why))
         }

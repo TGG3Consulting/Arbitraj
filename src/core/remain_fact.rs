@@ -9,13 +9,17 @@
 //! Факт: DEX — баланс кошелька сделки (deal.dex_account, решение 132; manual_halted::free_of); биржа — монета на
 //! торговом счёте и на счетах, с которых она перекладывается на торговый (роль ToTrading: фонд и т.п., решение 174),
 //! free + locked — только чтение, без переводов: монета, не переложенная на торговый, — не фантом.
-//! Больше учёта не берётся никогда: монета той же площадки может принадлежать другой сделке (остановленной или «Беру
-//! на себя») — её монеты могут скрыть фантом этой сделки, но в эту сделку не попадут.
+//! Больше учёта не берётся никогда. Решение 405 (t191, Тигран 18.11: «каждая сделка знает своё количество и работает
+//! только с ним»): из факта вычитаются монеты ДРУГИХ сделок той же монеты на этом счёте (идущие, остановленные, «Беру на
+//! себя»; remain_others.rs) — остаток = min(учёт, факт − других). Пример: учёт 1000, на кошельке 900, другая сделка
+//! того же кошелька везёт 500 — дальше 400 (было 900, из них 500 чужие). Факт есть, а за вычетом других ≤ 0 — сделка
+//! не закрывается и ничего не продаёт: алерт человеку (all_foreign).
 //! Факта нет (баланс не прочитан, счёт с ошибкой) — учёт как раньше, строка в хронологии и журнал core.remain_fact.
 //! На площадке ничего нет — сделка закрывается (остатка нет; возврат USDT — общий шаг закрытия ledger::finish).
 //! Нативная BNB на DEX (решение 62) не сверяется: её баланс — общий с резервом на газ (native.rs, отдельные правила).
-//! Кто вызывает: core/stuck.rs (handle).
-//! От чего зависит: manual_halted.rs (free_of, set_qty), dex_account.rs, venue_ticker.rs, native.rs, ledger.rs, deal.rs.
+//! Кто вызывает: core/stuck.rs (handle), core/sell_unsent.rs.
+//! От чего зависит: manual_halted.rs (free_of, set_qty), remain_others.rs, manual.rs (raise_alert), dex_account.rs,
+//! venue_ticker.rs, native.rs, ledger.rs, deal.rs.
 //! Настройки: нет.
 
 use rust_decimal::Decimal;
@@ -32,7 +36,8 @@ pub fn settle_qty(account: Decimal, fact: Decimal) -> Decimal {
 }
 
 /// Сверка остатка сделки с фактом площадки (решение 222). Принимает: ядро, сделку (количество меняется). Возвращает:
-/// true — вести дальше; false — на площадке ничего нет, сделка закрыта. Ошибок нет: факта нет — учёт как раньше.
+/// true — вести дальше; false — на площадке ничего нет, сделка закрыта, или (решение 405) по учёту всё на счёте —
+/// монеты других сделок: алерт человеку. Ошибок нет: факта нет — учёт как раньше.
 pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
     if deal.qty <= Decimal::ZERO || super::native::is_native(core, &deal.direction.asset) {
         return true;
@@ -47,12 +52,25 @@ pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
             return true;
         }
     };
-    let qty = settle_qty(deal.qty, fact);
+    // Решение 405 (t191): монеты других сделок той же монеты на этом счёте — не наши (remain_others.rs).
+    let others = super::remain_others::on_account(core, deal, &deal.at);
+    let Some(qty) = super::remain_others::own_qty(deal.qty, fact, others.qty) else {
+        return all_foreign(core, deal, fact, &others).await;
+    };
     if qty == deal.qty {
         return true;
     }
+    let theirs = if others.qty > Decimal::ZERO {
+        format!(
+            ", из них за другими сделками {} ({})",
+            others.qty,
+            list(&others)
+        )
+    } else {
+        String::new()
+    };
     let text = format!(
-        "{}: по учёту {} {}, на {} — {fact}; дальше {qty} (решение 222)",
+        "{}: по учёту {} {}, на {} — {fact}{theirs}; дальше {qty} (решение 222, 405)",
         deal.id, deal.qty, deal.direction.asset.ticker, deal.at.0
     );
     log(core, deal, &text).await;
@@ -63,6 +81,48 @@ pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
     }
     let why = "остатка на площадке нет — фантом учёта (решение 222)";
     super::ledger::finish(core, deal, Step::Closed, why).await;
+    false
+}
+
+/// Сделки и их монеты для текста. Ошибок нет.
+fn list(o: &super::remain_others::Others) -> String {
+    o.deals
+        .iter()
+        .map(|(d, q)| format!("{d}: {q}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Решение 405: на счёте что-то есть, но по учёту всё — монеты других сделок: сделка не закрывается как фантом (чей
+/// фантом — по факту не видно) и ничего не продаёт — алерт человеку (manual.rs raise_alert, кнопки «Ручного
+/// управления»). Принимает: ядро, сделку, факт счёта, другие сделки. Возвращает: false (дальше автоматика не ведёт).
+/// Ошибок нет.
+async fn all_foreign(
+    core: &Core,
+    deal: &Deal,
+    fact: Decimal,
+    others: &super::remain_others::Others,
+) -> bool {
+    let text = format!(
+        "{}: по учёту {} {}, на {} — {fact}, а за другими сделками там {} ({}) — своих монет на счёте не видно, \
+         чужие не трогаем; решает человек (решение 405)",
+        deal.id,
+        deal.qty,
+        deal.direction.asset.ticker,
+        deal.at.0,
+        others.qty,
+        list(others)
+    );
+    log(core, deal, &text).await;
+    // В куче: путь застрявшей сделки чувствителен к стеку (решение 389).
+    Box::pin(super::manual::raise_alert(
+        core,
+        deal.clone(),
+        None,
+        text,
+        None,
+    ))
+    .await;
     false
 }
 

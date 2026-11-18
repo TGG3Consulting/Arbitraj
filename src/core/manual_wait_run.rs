@@ -59,7 +59,11 @@ pub(super) fn start(core: &Core, key: CoinKey, id: String, cmd: ManualCommand, t
     super::manual::publish(core);
     tokio::spawn(async move {
         mw::log(&c, Level::Info, &text).await;
+        // Решение 408 (ответ Тиграна 9а): отметка «ожидание было» (без команды) — на случай перезапуска; снимается
+        // при любом конце ожидания (manual_wait_mark.rs).
+        super::manual_wait_mark::save(&c, &key, &id, &cmd).await;
         Box::pin(run(&c, &key, &id, cmd)).await;
+        super::manual_wait_mark::forget(&c, &id).await;
     });
 }
 

@@ -17,7 +17,7 @@ use arb::core::deps::Deps;
 use arb::core::types::{Asset, CommandSource, Direction, ManualAction, ManualCommand, VenueId};
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
-use arb::notify::press::accepts;
+use arb::notify::press::{accepts, accepts_data};
 use arb::notify::roles::{self, Role};
 use arb::notify::routes::{Tag, extra};
 use arb::notify::tg_buttons::{Chat, User};
@@ -92,13 +92,25 @@ fn buttons_only_from_own_chat() {
     }
     assert!(!accepts(Role::Deals, "y"));
     assert!(!accepts(Role::Deals, "e"));
-    // Решение 408: «Аккаунты» — кнопки тревог и «Да/Отмена», без записей и меню.
-    for c in ["y", "n", "c", "e"] {
+    // Решение 408, ревью t193 Н4: «Аккаунты» — только «Снять паузу» биржи (c:vr) и «Да/Отмена».
+    for c in ["y", "n", "c"] {
         assert!(accepts(Role::Accounts, c), "{c}");
     }
-    for c in ["sell_now", "m", "k", "s", "t", "r"] {
+    for c in ["e", "sell_now", "m", "k", "s", "t", "r"] {
         assert!(!accepts(Role::Accounts, c), "{c}");
     }
+    assert!(accepts_data(Role::Accounts, "c", "vr.binance"));
+    for o in ["mode.Running", "dr.x", "qr.0xabc", "wr.w1"] {
+        assert!(!accepts_data(Role::Accounts, "c", o), "{o}");
+    }
+    // Ревью t193 Н4: «Неудачные» — c:vr / c:wr и e:od; «Управление» — e:wc / e:od; «Общий» — все.
+    assert!(accepts_data(Role::Failures, "c", "wr.w1"));
+    assert!(!accepts_data(Role::Failures, "c", "mode.Running"));
+    assert!(accepts_data(Role::Failures, "e", "od.D1"));
+    assert!(!accepts_data(Role::Failures, "e", "tu.bingx.mexc.10"));
+    assert!(accepts_data(Role::Control, "e", "wc.abc"));
+    assert!(!accepts_data(Role::Control, "e", "xd.bsc_dex.w1"));
+    assert!(accepts_data(Role::General, "e", "xd.bsc_dex.w1"));
     for r in [Role::General, Role::Control] {
         assert!(accepts(r, "e"), "{r:?}");
     }

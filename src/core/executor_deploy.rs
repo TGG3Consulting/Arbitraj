@@ -5,6 +5,7 @@
 //! из api/dex_executor.rs без изменений: отправка — у адаптера (контракт dex_executor_deploy, sha256 и обёртка из
 //! оценки, которую человек видел); код в сети совпал — адрес записывается у кошелька (решение 132), сверка кода пишет
 //! версию (решение 272), уведомление wallet.executor_deployed. Бот сам не разворачивает: вызывают только кнопки человека.
+//! Ревью t193 (Н1): перед отправкой — исполнитель кошелька тот же, что человек видел (и для кнопки тревоги — всё ещё v1).
 //! Кто вызывает: api/dex_executor.rs (deploy), core/commands_ext.rs (DeployExecutor).
 //! От чего зависит: gateway (Registry::get_as, контракт Venue), settings/accounts (set_executor), notify (Notifier).
 //! Настройки: нет.
@@ -34,30 +35,76 @@ impl std::fmt::Display for DeployError {
     }
 }
 
-/// Развернуть исполнитель кошелька. Принимает: реестр шлюза, настройки, уведомления, площадку DEX, id кошелька,
-/// SHA-256 байткода из оценки, адрес обёртки из оценки (строка). Возвращает: итог развёртывания (текст — со сверкой).
-/// Ошибки: Bad — пустой sha256, обёртка не адрес, адрес не записан у кошелька; Gateway — ошибки шлюза (площадка не
-/// подключена, NonceConflict, QuoteMismatch и др.).
+/// Запрос развёртывания — то, что человек видел и подтвердил.
+pub struct Req<'a> {
+    /// Площадка DEX.
+    pub venue: &'a str,
+    /// id кошелька (решение 132); None — отказ шлюза «кошелёк не выбран».
+    pub wallet: Option<&'a str>,
+    /// SHA-256 байткода из оценки.
+    pub sha256: &'a str,
+    /// Адрес обёртки из оценки (строка 0x…).
+    pub wnative: Option<&'a str>,
+    /// Ревью t193 (Н1): адрес исполнителя кошелька, который человек видел (None — исполнителя не было).
+    pub executor: Option<&'a str>,
+    /// Ревью t193 (Н1): только переразвёртывание v1 (кнопка тревоги wallet.executor_v1).
+    pub v1_only: bool,
+}
+
+/// Ревью t193 (Н1): исполнитель кошелька не сменился с вопроса (и, для кнопки тревоги, всё ещё v1) — иначе повторное
+/// или устаревшее «Да» развернуло бы ещё раз. Принимает: настройки, запрос. Ошибки: Bad — текст отказа.
+fn same(settings: &Store, r: &Req<'_>) -> Result<(), DeployError> {
+    let Some(wid) = r.wallet else {
+        return Ok(());
+    };
+    let w = settings
+        .accounts()
+        .wallet(wid)
+        .ok_or_else(|| DeployError::Bad(format!("кошелька {wid} нет")))?;
+    let low = |x: Option<&str>| x.map(|a| a.trim().to_ascii_lowercase());
+    let (now, seen) = (low(w.executor.as_deref()), low(r.executor));
+    if now != seen {
+        return Err(DeployError::Bad(format!(
+            "исполнитель кошелька «{}» уже сменился: в вопросе {}, сейчас {} — откройте оценку заново",
+            w.name,
+            seen.as_deref().unwrap_or("не было"),
+            now.as_deref().unwrap_or("нет")
+        )));
+    }
+    if r.v1_only && w.executor_version.as_deref() != Some("v1") {
+        return Err(DeployError::Bad(format!(
+            "исполнитель кошелька «{}» уже не v1 (версия {}) — переразвёртывание не нужно",
+            w.name,
+            w.executor_version.as_deref().unwrap_or("не сверена")
+        )));
+    }
+    Ok(())
+}
+
+/// Развернуть исполнитель кошелька. Принимает: реестр шлюза, настройки, уведомления, запрос. Возвращает: итог
+/// развёртывания (текст — со сверкой). Ошибки: Bad — пустой sha256, обёртка не адрес, исполнитель сменился с вопроса
+/// (ревью t193 Н1), адрес не записан у кошелька; Gateway — ошибки шлюза (площадка не подключена, NonceConflict,
+/// QuoteMismatch и др.).
 pub async fn deploy(
     gw: &Registry,
     settings: &Store,
     notifier: &Notifier,
-    venue: &str,
-    wallet: Option<&str>,
-    sha256: &str,
-    wnative: Option<&str>,
+    r: &Req<'_>,
 ) -> Result<ExecutorDeployed, DeployError> {
+    let (venue, wallet, sha256) = (r.venue, r.wallet, r.sha256);
     if sha256.trim().is_empty() {
         return Err(DeployError::Bad(
             "нет sha256 подтверждённого байткода".into(),
         ));
     }
-    let wnative: Address = wnative
+    let wnative: Address = r
+        .wnative
         .map(str::trim)
         .and_then(|s| s.parse().ok())
         .ok_or_else(|| {
             DeployError::Bad("нет адреса обёртки (wnative) из подтверждённой оценки".into())
         })?;
+    same(settings, r)?;
     let acc = wallet.map(|w| DexAccountId(w.to_string()));
     let v = gw
         .get_as(&VenueId(venue.to_string()), acc.as_ref())

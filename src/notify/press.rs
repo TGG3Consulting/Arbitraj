@@ -50,14 +50,32 @@ pub struct Ctx<'a> {
 pub fn accepts(role: Role, code: &str) -> bool {
     match role {
         Role::Deals => false,
-        // Решение 408 (Тигран 18.11 «да»): в «Аккаунтах» — кнопки тревог («c:» плашки, «e:» действия) и «Да/Отмена».
-        Role::Accounts => matches!(code, "y" | "n" | "c" | "e"),
+        // Решение 408 (Тигран 18.11 «да»): в «Аккаунтах» — «Снять паузу» биржи на его тревогах («c:vr», accepts_data)
+        // и «Да/Отмена».
+        Role::Accounts => matches!(code, "y" | "n" | "c"),
         // Решение 192: и кнопки записей «Ручного управления» — с карточки проблемной сделки (ctl/card.rs).
         Role::Control => code != "m",
         // Решение 215: «r» — отчёты, только чат «Управление».
         Role::General => !matches!(code, "k" | "s" | "t" | "r"),
         // Решение 408 (Тигран 18.11 «да»): кнопки плашки «c:» и тревог «e:» — и в «Неудачных».
         Role::Failures => !matches!(code, "m" | "k" | "s" | "t" | "r"),
+    }
+}
+
+/// Ревью t193 (Н4): принимает ли роль кнопку с этими данными — только если такая кнопка могла быть в этом чате:
+/// «Аккаунты» — «c:vr.…» (venue.withdraw_limit); «Неудачные» — «c:vr.…» / «c:wr.…» (risk.reconcile_paused) и «e:od.…»
+/// (кнопка записи «своих монет не видно»); «Управление» — «e:wc.…» (ожидания на «Ручном управлении»), «e:od.…»
+/// (карточка); «Общий» — все кнопки тревог и меню. Принимает: роль, код, объект callback_data. Ошибок нет.
+pub fn accepts_data(role: Role, code: &str, object: &str) -> bool {
+    if !accepts(role, code) {
+        return false;
+    }
+    match (role, code) {
+        (Role::Accounts, "c") => object.starts_with("vr."),
+        (Role::Failures, "c") => object.starts_with("vr.") || object.starts_with("wr."),
+        (Role::Failures, "e") => object.starts_with("od."),
+        (Role::Control, "e") => object.starts_with("wc.") || object.starts_with("od."),
+        _ => true,
     }
 }
 
@@ -99,7 +117,7 @@ impl Ctx<'_> {
                 )
                 .await;
         };
-        if !accepts(self.role, code) {
+        if !accepts_data(self.role, code, object) {
             self.answer(&q.id, Some("Эта кнопка не для этого чата"))
                 .await;
             return self

@@ -36,10 +36,26 @@ impl Ctx<'_> {
             .cost_usdt
             .map(|u| format!(" ≈ {} USDT", n(u)))
             .unwrap_or_default();
+        // Ревью t193 (Н1, М5): кошелёк по имени; исполнитель сейчас — должен быть v1 (кнопка тревоги wallet.executor_v1),
+        // его адрес уходит в команду — ядро сверит его перед отправкой (уже переразвернули — отказ).
+        let w = self
+            .settings
+            .accounts()
+            .wallet(wallet)
+            .ok_or_else(|| format!("Кошелька {wallet} нет"))?;
+        if w.executor_version.as_deref() != Some("v1") {
+            return Err(format!(
+                "Исполнитель кошелька «{}» уже не v1 (версия {}) — переразвёртывание не нужно",
+                w.name,
+                w.executor_version.as_deref().unwrap_or("не сверена")
+            ));
+        }
+        let old = w.executor.clone().unwrap_or_else(|| "нет".into());
         let q = format!(
-            "Развернуть исполнитель кошелька {wallet}?\nВладелец: {:#x}\nАдрес (при nonce {}): {:#x}\nГаз (лимит): {}, \
+            "Развернуть исполнитель кошелька «{}» ({wallet}) вместо v1 {old}?\nВладелец: {:#x}\nАдрес (при nonce {}): {:#x}\nГаз (лимит): {}, \
              цена газа {} wei\nСтоимость: {} BNB{usdt}\nБайткод: {} байт, SHA-256 {}, solc {}\nОбёртка BNB (навсегда): \
              {:#x}{}",
+            w.name,
             qt.wallet,
             qt.nonce,
             qt.address,
@@ -60,6 +76,7 @@ impl Ctx<'_> {
             wallet: wallet.into(),
             sha256: qt.bytecode_sha256.clone(),
             wnative: format!("{:#x}", qt.wnative),
+            executor: w.executor.clone(),
         };
         Ok(pending(action, None, q))
     }

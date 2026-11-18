@@ -38,6 +38,10 @@ pub struct DeployReq {
     /// Задача t114 (3в): адрес обёртки из той же оценки (ExecutorDeployQuote.wnative). Option — чтобы отсутствие дало
     /// понятный 400, а не отказ разбора тела.
     pub wnative: Option<String>,
+    /// Ревью t193 (Н1): адрес исполнителя кошелька, который был у кошелька, когда человек открыл оценку (null — не было):
+    /// сменился с тех пор — отказ 400, повторного развёртывания нет (core/executor_deploy.rs).
+    #[serde(default)]
+    pub executor: Option<String>,
 }
 
 /// Оценка развёртывания (шлюз `dex_executor_quote`). Ошибки: 400 — не DEX; 404 — площадка не подключена; 502 — сбой.
@@ -70,19 +74,20 @@ pub async fn deploy(
     // Решение 408: один путь с кнопкой Telegram (core/executor_deploy.rs) — логика прежняя.
     use crate::core::executor_deploy::{DeployError, deploy as run};
     let reg = &st.registry;
-    run(
-        reg,
-        &st.settings,
-        &st.notifier,
-        &id,
-        w.wallet.as_deref(),
-        &b.sha256,
-        b.wnative.as_deref(),
-    )
-    .await
-    .map(Json)
-    .map_err(|e| match e {
-        DeployError::Gateway(g) => ApiError::gateway(g),
-        DeployError::Bad(t) => ApiError::bad(t),
-    })
+    use crate::core::executor_deploy::Req;
+    let r = Req {
+        venue: &id,
+        wallet: w.wallet.as_deref(),
+        sha256: &b.sha256,
+        wnative: b.wnative.as_deref(),
+        executor: b.executor.as_deref(),
+        v1_only: false,
+    };
+    run(reg, &st.settings, &st.notifier, &r)
+        .await
+        .map(Json)
+        .map_err(|e| match e {
+            DeployError::Gateway(g) => ApiError::gateway(g),
+            DeployError::Bad(t) => ApiError::bad(t),
+        })
 }

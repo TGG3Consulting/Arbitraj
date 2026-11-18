@@ -68,6 +68,7 @@ fn queue_free() -> MarketEvent {
         account: None,
         state: WalletQueueState::Free,
         nonce_taken: None,
+        note: None,
     })
 }
 

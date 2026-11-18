@@ -33,6 +33,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::rpc;
+use super::auto_release::QueueRef;
 use super::{queue_store, signer};
 
 /// Очередь кошелька: одна на кошелёк (решение 132 — parts_wallet.rs). Дешёво клонируется.
@@ -76,6 +77,11 @@ pub struct Hold {
 }
 
 impl Nonces {
+    /// Решение 408 (9б): ссылка на состояние без замка. Ошибок нет.
+    pub fn queue_ref(&self) -> QueueRef {
+        QueueRef::new(self.next.clone(), self.state.clone())
+    }
+
     /// Встаёт в очередь (ждёт, пока прошлая транзакция кошелька займёт свой nonce в блоке).
     /// Возвращает: Slot. Ошибки: QueueHalted — очередь остановлена до ручной проверки (причина в тексте; транзакция не
     /// подписана и не отправлена — решение 231, дополнение: не «исход неизвестен», а окончательно «не отправлено»);
@@ -172,6 +178,11 @@ impl Slot {
 }
 
 impl Hold {
+    /// Решение 408 (9б): ссылка на состояние без замка (удержание очереди не продлевает). Ошибок нет.
+    pub fn queue_ref(&self) -> QueueRef {
+        QueueRef::new(self.next.clone(), self.state.clone())
+    }
+
     /// Очередь ждёт итога транзакции. Возвращает: новое состояние. Ошибок нет.
     pub fn busy(&self, nonce: u64, hash: B256) -> WalletQueueState {
         self.set(WalletQueueState::Busy {

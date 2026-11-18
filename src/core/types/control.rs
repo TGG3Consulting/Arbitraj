@@ -145,12 +145,19 @@ pub enum ManualAction {
     /// Решение 408 (t193): «Снять очередь кошелька» DEX после ручной проверки (как кнопка экрана «Каналы отправки»,
     /// контракт release_wallet_queue); wallet — id кошелька (решение 132); pending_ok — второе подтверждение: nonce
     /// удержанной транзакции ещё не занят. Интерфейс (POST /api/wallet-queue/…/release) — та же команда.
+    ///
+    /// Ревью t193 (Н2): nonce и hash — удержанная транзакция, которую человек видел в вопросе; заданы — перед снятием
+    /// сверяются с текущей остановкой (другая остановка — отказ). Интерфейс снимает текущую — не задаёт.
     ReleaseWalletQueue {
         venue: String,
         #[serde(default)]
         wallet: Option<String>,
         #[serde(default)]
         pending_ok: bool,
+        #[serde(default)]
+        nonce: Option<u64>,
+        #[serde(default)]
+        hash: Option<String>,
     },
     /// Решение 408 (исключение из решения 157, Тигран 18.11): «Открыть вход монеты» с биржи — биржа убирается из
     /// coin.entry_blocked_venues (последняя — очищаются и список, и coin.entry_blocked_note), как «Открыть» экрана
@@ -161,11 +168,16 @@ pub enum ManualAction {
     Unblacklist { coin: String },
     /// Решение 408: «Развернуть исполнитель» кошелька — после оценки газа, которую человек видел (sha256 и wnative —
     /// из неё, как POST /api/venues/{id}/executor/deploy). Только по нажатию человека; бот сам не разворачивает.
+    ///
+    /// Ревью t193 (Н1): executor — адрес исполнителя кошелька v1, который человек видел в вопросе (0x…); перед
+    /// отправкой сверяется с текущим (адрес сменился или версия уже не v1 — отказ, повторного развёртывания нет).
     DeployExecutor {
         venue: String,
         wallet: String,
         sha256: String,
         wnative: String,
+        #[serde(default)]
+        executor: Option<String>,
     },
 }
 

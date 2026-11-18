@@ -13,6 +13,7 @@
 //!   (Unblacklist) — исключение из решения 157 (Тигран 18.11), правка настроек — командой ядра с автором «кто нажал»;
 //! - oe, ub — notify/press_event_coin.rs; sb, tu, tt, tf — деньги: notify/press_event_money.rs; xd — исполнитель:
 //!   notify/press_event_exec.rs.
+//!
 //! Кто вызывает: notify/press.rs («e»).
 //! От чего зависит: press_confirm.rs (ask), press_event_money.rs, core (manual_wait::list, manual_records, шлюз —
 //! wallet_queue), mirror_view.rs, ctl/card.rs, alert_card.rs (карточка сделки), settings (coin.*).
@@ -43,6 +44,13 @@ impl Ctx<'_> {
     /// «e:<что>.<данные>». Принимает: нажатие, сообщение тревоги, объект callback_data. Ошибок нет.
     pub async fn event_button(&self, q: &CallbackQuery, msg: &CbMessage, object: &str) {
         let (op, arg) = object.split_once('.').unwrap_or((object, ""));
+        // Ответ Тиграна 18.11: кнопки тревог, которые двигают деньги, продают, разворачивают или снимают очередь, —
+        // не старше notify.dialog_ttl_s по времени сообщения тревоги.
+        if super::press_event_ttl::MONEY.contains(&op)
+            && let Err(why) = self.fresh(msg)
+        {
+            return self.answer(&q.id, Some(&why)).await;
+        }
         let res = match op {
             "qh" => self.ev_queue(arg).await,
             "wc" => ev_wait(self, arg),
@@ -66,7 +74,7 @@ impl Ctx<'_> {
     }
 
     /// «Снять очередь кошелька»: состояние очереди сейчас (контракт wallet_queue). Ошибки: текст для нажавшего.
-    async fn ev_queue(&self, arg: &str) -> Result<Pending, String> {
+    pub(super) async fn ev_queue(&self, arg: &str) -> Result<Pending, String> {
         let (venue, w) = arg.split_once('.').ok_or(BAD)?;
         let wallet = (w != "-").then(|| w.to_string());
         let acc = wallet.clone().map(DexAccountId);
@@ -105,6 +113,9 @@ impl Ctx<'_> {
             venue: venue.to_string(),
             wallet,
             pending_ok: free,
+            // Ревью t193 (Н2): «Да» снимает только ЭТУ остановку (ядро сверяет nonce и hash перед снятием).
+            nonce: *nonce,
+            hash: (*hash).map(|h| format!("{h:#x}")),
         };
         let (title, question) = if free {
             (

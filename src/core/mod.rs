@@ -181,6 +181,7 @@ pub mod manual_sold_check;
 pub mod manual_usdt;
 pub mod manual_usdt_credit;
 pub mod manual_wait;
+pub mod manual_wait_mark;
 pub mod manual_wait_pause;
 pub mod manual_wait_run;
 pub mod manual_wait_text;

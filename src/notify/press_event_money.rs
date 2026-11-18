@@ -11,6 +11,7 @@
 //! - tf.<откуда>.<куда> — «Сколько?»: можно вывести, комиссия, минимум; «Всё» и доли notify.transfer_pct — кнопками tu
 //!   (другая сумма — диалог «Перевести USDT» чата «Управление»);
 //! - xd.<площадка>.<кошелёк> — «Развернуть исполнитель» — notify/press_event_exec.rs.
+//!
 //! Концы перевода — ключи End::key («биржа» или «dex/кошелёк»).
 //! Кто вызывает: notify/press_event.rs (event_button).
 //! От чего зависит: press_confirm.rs (ask), press_event.rs (pending), ctl/transfer_input.rs (transfer_pending),
@@ -136,7 +137,16 @@ impl Ctx<'_> {
             }
             let usdt = x.usdt.map(n).unwrap_or_default();
             let data = format!("e:tf.{}.{to}", x.end.key());
-            s = s.one(btn(&format!("{} — {usdt} USDT", x.label), &data));
+            let title = format!("{} — {usdt} USDT", x.label);
+            // Ревью t193 (М3): длинный callback_data — строкой, не молча.
+            match btn(&title, &data) {
+                Some(b) => s.rows.push(vec![b]),
+                None => {
+                    s = s.line(format!(
+                        "«{title}» — только в интерфейсе: данные кнопки длиннее 64 байт"
+                    ))
+                }
+            }
             any = true;
         }
         if !any {

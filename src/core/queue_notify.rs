@@ -40,9 +40,13 @@ pub async fn wallet_queue(
             "send.queue_halted",
             format!("{who}: отправки остановлены до ручной проверки — {reason}"),
         ),
+        // Решение 408 (9б): снята адаптером по квитанции — его пометка («снята автоматически: транзакция … вошла в блок»).
         S::Free if was_halted => (
             "send.queue_released",
-            format!("{who}: очередь кошелька снята после ручной проверки"),
+            match &q.note {
+                Some(n) => format!("{who}: {n}"),
+                None => format!("{who}: очередь кошелька снята после ручной проверки"),
+            },
         ),
         _ => return,
     };

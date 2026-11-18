@@ -80,18 +80,29 @@ impl Core {
             )),
         ))
         .await;
-        // Решение 156: итог команды — Telegram правит сообщения записи «выполнено: кто, что, итог» (notify/mirror.rs).
-        // Решение 408: команда ушла в ожидание (manual_wait.rs) — «wait»: ID ожидания (Telegram пишет «Ждёт…», а не
-        // «Выполнено»); повтор ожидания — «retry»: его ID.
-        let wait = match (&retry_id, &res) {
+        self.record_command(&cmd, &res, retry_id).await;
+        res
+    }
+
+    /// Итог команды: событие Command (Telegram правит сообщения записи, решение 156) и журнал core.command (источник,
+    /// кто нажал). Решение 408: команда ушла в ожидание (manual_wait.rs) — «wait»: ID ожидания (Telegram пишет «Ждёт…»,
+    /// а не «Выполнено»); повтор ожидания — «retry»: его ID. Вызывают command_inner и интерфейс, которому нужен код
+    /// ошибки шлюза (api/wallet_queue.rs — «Снять очередь кошелька»). Принимает: команду, итог, ID повтора. Ошибок нет.
+    pub async fn record_command(
+        &self,
+        cmd: &ManualCommand,
+        res: &Result<String, String>,
+        retry_id: Option<String>,
+    ) {
+        let wait = match (&retry_id, res) {
             (None, Ok(_)) => super::manual_wait::deferred(self, &cmd.action),
             _ => None,
         };
         self.inner.live.send(super::view::CoreEvent::Command(json!({
-            "action": cmd.action, "who": who(&cmd), "ok": res.is_ok(),
+            "action": cmd.action, "who": who(cmd), "ok": res.is_ok(),
             "text": res.clone().unwrap_or_else(|e| e), "wait": wait, "retry": retry_id,
         })));
-        let (level, text) = match &res {
+        let (level, text) = match res {
             Ok(t) => (
                 Level::Info,
                 format!("Команда {:?} ({:?}): {t}", cmd.action, cmd.source),
@@ -105,7 +116,6 @@ impl Core {
             .deps
             .log(level, "core.command", None, text, Some(json!(cmd)))
             .await;
-        res
     }
 
     /// Проверка источника и выполнение.

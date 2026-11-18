@@ -117,7 +117,9 @@ fn new_commands_titles_and_json() {
         ManualAction::ReleaseWalletQueue {
             venue: "bsc_dex".into(),
             wallet: None,
-            pending_ok: false
+            pending_ok: false,
+            nonce: None,
+            hash: None,
         }
     );
     assert_eq!(a.title(), "Снять очередь кошелька");
@@ -137,6 +139,7 @@ fn new_commands_titles_and_json() {
         wallet: "w1".into(),
         sha256: "ab".into(),
         wnative: "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c".into(),
+        executor: None,
     };
     assert_eq!(d.title(), "Развернуть исполнитель");
 }
@@ -185,4 +188,20 @@ fn foreign_record_opens_holder_deals() {
     let (_, kb) = record_message_for(&alert_record(&foreign(vec![]), Decimal::ZERO), true);
     let s = kb.map(|k| k.to_string()).unwrap_or_default();
     assert!(!s.contains("e:od."), "{s}");
+}
+
+/// Ответ Тиграна 18.11: денежные кнопки тревог — не старше notify.dialog_ttl_s по времени сообщения тревоги.
+#[test]
+fn money_alert_buttons_expire() {
+    use arb::notify::press_event_ttl::{MONEY, within};
+    use std::time::Duration;
+    let ttl = Duration::from_secs(600);
+    assert!(within(1_000, ttl, 1_600));
+    assert!(!within(1_000, ttl, 1_601));
+    for op in ["qh", "sb", "tu", "tt", "tf", "xd"] {
+        assert!(MONEY.contains(&op), "{op}");
+    }
+    for op in ["wc", "od", "oe", "ub"] {
+        assert!(!MONEY.contains(&op), "{op}");
+    }
 }

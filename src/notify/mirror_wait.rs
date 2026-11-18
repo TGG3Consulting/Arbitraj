@@ -8,6 +8,7 @@
 //! - {ok: true, wait: ID} — сама команда ответила «ждёт»: записи не «выполнены» (сообщения не правятся «Выполнено»);
 //! - {retry: ID} — итог повтора команды после окончания сделок: ok — «Выполнено: …» в сообщении вопроса (запись ушла с
 //!   экрана — её сообщения правит обычный итог, mirror_send.rs); отказ — как конец без выполнения.
+//!
 //! Ожидание начато не из Telegram (экран, «Балансы») — сообщения нет, ничего не правится.
 //! Кто вызывает: notify/mirror_send.rs (outcome), notify/press_confirm.rs (WaitMark).
 //! От чего зависит: mirror.rs (Mirror), mirror_state.rs, client.rs (бот чата роли), tg_methods.rs, roles.rs.
@@ -39,29 +40,41 @@ impl Mirror {
     pub(super) async fn wait_outcome(&self, v: &serde_json::Value) -> bool {
         let text = v["text"].as_str().unwrap_or_default();
         let ok = v["ok"].as_bool() == Some(true);
+        // Ревью t193 (М7): ожидание начато из Telegram — его «Да» может ещё не записать WaitMark.
+        let tg = v["who"].as_str().is_some_and(|w| w.starts_with("Telegram"));
         if let Some(id) = v["retry"].as_str() {
             let line = if ok {
                 format!("Выполнено после окончания сделок: {text}")
             } else {
                 format!("Не выполнено: {text}")
             };
-            self.wait_end(id, !ok, &line).await;
+            self.wait_end(id, !ok, &line, tg).await;
             return false;
         }
         let Some(id) = v["wait"].as_str() else {
             return false;
         };
         if v["final"].as_bool() == Some(true) && !ok {
-            self.wait_end(id, true, &format!("Не выполнено: {text}"))
+            self.wait_end(id, true, &format!("Не выполнено: {text}"), tg)
                 .await;
         }
         true
     }
 
     /// Конец ожидания: отметка записи снимается (free — кнопки снова доступны), сообщение вопроса — «… \n\n<итог>».
-    /// Принимает: ID ожидания, снять ли отметку, строку итога. Ошибок нет.
-    async fn wait_end(&self, id: &str, free: bool, line: &str) {
-        let Some(m) = lock(&self.state).waits.remove(id) else {
+    /// Принимает: ID ожидания, снять ли отметку, строку итога, из Telegram ли. Ошибок нет.
+    /// Ревью t193 (М7): WaitMark ещё нет, а ожидание из Telegram (tg) — итог в wait_ended, «Да» применит его сам.
+    async fn wait_end(&self, id: &str, free: bool, line: &str, tg: bool) {
+        let m = {
+            let mut st = lock(&self.state);
+            let m = st.waits.remove(id);
+            if m.is_none() && tg {
+                st.wait_ended
+                    .insert(id.to_string(), (free, line.to_string()));
+            }
+            m
+        };
+        let Some(m) = m else {
             return;
         };
         if free && let Some(k) = &m.key {

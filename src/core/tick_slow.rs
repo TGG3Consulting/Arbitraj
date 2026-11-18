@@ -29,7 +29,8 @@ pub async fn slow(core: &Core, t: Touched) {
         }
         Touched::Balance(b) => super::credit_event::on_change(core, b).await,
         Touched::Notice { venue, code, text } => {
-            // Решение 408: wallet.executor_v1 — «Развернуть исполнитель» у кошельков с исполнителем версии v1 (версия
+            // Решение 408: wallet.executor_v1 — «Развернуть исполнитель» у кошелька ЭТОЙ тревоги (ревью t193 М2: адрес его
+            // исполнителя — в тексте тревоги, v1_notice.rs) с исполнителем версии v1 (версия
             // по сверке кода, settings/accounts executor_version; сначала оценка газа, потом «Да/Нет» — нажимает
             // только человек).
             let acts: Vec<crate::notify::acts::Act> = if code == "wallet.executor_v1" {
@@ -39,7 +40,10 @@ pub async fn slow(core: &Core, t: Touched) {
                     .accounts()
                     .wallets()
                     .into_iter()
-                    .filter(|w| w.executor.is_some() && w.executor_version.as_deref() == Some("v1"))
+                    .filter(|w| {
+                        w.executor_version.as_deref() == Some("v1")
+                            && w.executor.as_deref().is_some_and(|x| text.contains(x))
+                    })
                     .map(|w| crate::notify::acts::e::deploy_executor(&venue.0, &w.id, &w.name))
                     .collect()
             } else {

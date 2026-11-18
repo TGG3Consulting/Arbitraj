@@ -36,13 +36,35 @@ impl Subs {
                 let q = WalletQueue {
                     venue: b.ctx.venue(),
                     account: Some(DexAccountId(w.id.clone())),
-                    state: st,
+                    state: st.clone(),
                     nonce_taken: None,
+                    note: None,
                 };
                 // Решение 333 (ревью Б1): «остановлена» не теряется при полном канале ядра — ждёт места в очереди
                 // денежных событий (впереди уведомлений), без настройки.
                 MustOut::new(pools.out.clone(), &p.ctx.settings, &p.ctx.journal)
                     .send(MarketEvent::WalletQueue(q));
+                // Решение 408 (ответ Тиграна 9б): остановленная до перезапуска — тоже проверка по блокам (одна задача
+                // на транзакцию, wallet/auto_release.rs); nonce и хеш неизвестны — только человек.
+                if let (
+                    WalletQueueState::Halted {
+                        nonce: Some(n),
+                        hash: Some(h),
+                        ..
+                    },
+                    Ok(from),
+                ) = (&st, super::wallet::signer::address(&b.ctx))
+                {
+                    super::wallet::auto_release::spawn(super::wallet::auto_release::Watch {
+                        ctx: b.ctx.clone(),
+                        heads: b.heads.clone(),
+                        stats: b.stats.clone(),
+                        queue: b.nonces.queue_ref(),
+                        from,
+                        nonce: *n,
+                        hash: *h,
+                    });
+                }
             }
             let mut pw = pools.clone();
             pw.ctx = b.ctx.clone();

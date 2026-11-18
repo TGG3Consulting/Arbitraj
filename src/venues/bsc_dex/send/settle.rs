@@ -190,6 +190,17 @@ async fn halt(a: &After<'_>, hold: &Hold, why: String) {
         )
         .await;
     emit(a, hold.halt(why, a.nonce, a.hash)).await;
+    // Решение 408 (ответ Тиграна 9б): пока очередь стоит — на каждом блоке проверка «nonce занят и квитанция наша»,
+    // да — снять самой (wallet/auto_release.rs).
+    super::super::wallet::auto_release::spawn(super::super::wallet::auto_release::Watch {
+        ctx: a.ctx.clone(),
+        heads: a.heads.clone(),
+        stats: a.stats.clone(),
+        queue: hold.queue_ref(),
+        from: a.from,
+        nonce: a.nonce,
+        hash: a.hash,
+    });
 }
 
 /// Сохраняет состояние в SQLite (переживает перезапуск) и шлёт событие WalletQueue ядру. Ошибок нет.
@@ -200,5 +211,6 @@ async fn emit(a: &After<'_>, state: WalletQueueState) {
         account: a.ctx.account.clone().map(crate::core::types::DexAccountId),
         state,
         nonce_taken: None,
+        note: None,
     }));
 }

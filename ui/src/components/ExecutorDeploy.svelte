@@ -33,8 +33,9 @@
   import CheckConnection from './CheckConnection.svelte';
 
   /** venue — id площадки DEX; wallet — id кошелька (решение 132); refused — причина запрета развёртывания (решение 399,
-   *  null — разрешено); classes — классы шага v3 и их приёмка (решение 400); ondone — после записи адреса. */
-  let { venue, wallet, refused = null, classes = [], ondone } = $props();
+   *  null — разрешено); classes — классы шага v3 и их приёмка (решение 400); ondone — после записи адреса;
+   *  executor — адрес исполнителя кошелька сейчас (ревью t193 Н1: бэкенд сверяет — сменился, второго развёртывания нет). */
+  let { venue, wallet, executor = null, refused = null, classes = [], ondone } = $props();
   const q = $derived(`?wallet=${seg(wallet)}`);
 
   let quote = $state(null);
@@ -63,6 +64,7 @@
       done = await post(`/api/venues/${seg(venue)}/executor/deploy${q}`, {
         sha256: quote.bytecode_sha256,
         wnative: quote.wnative,
+        executor,
       });
       quote = null;
       ondone?.();

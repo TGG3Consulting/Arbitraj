@@ -146,6 +146,7 @@ async fn all_foreign(
     // Решение 408: сделки-держатели — кнопки «Открыть сделку <ID>» у записи в Telegram (notify/mirror_view.rs).
     let mut holders: Vec<String> = others.deals.iter().map(|(id, _)| id.clone()).collect();
     holders.extend(others.unclear.iter().cloned());
+    holders.sort();
     holders.dedup();
     Box::pin(super::manual::raise_alert_with(
         core,

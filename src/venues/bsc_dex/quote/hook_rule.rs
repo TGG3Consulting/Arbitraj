@@ -72,10 +72,10 @@ fn slope(a0: U256, v0: Decimal, (a1, v1): (U256, Decimal), x: U256) -> Decimal {
     grow(v1 - v0, x - a1, a1 - a0).map_or(v1, |g| v1 + g)
 }
 
-/// Прирост rise · run / base в Decimal; None — число не переводится в Decimal, переполнение или base = 0. Ошибок нет.
+/// Прирост rise · (run / base): доля считается первой (как в lerp), без произведения больших входов. None — число не
+/// переводится в Decimal, переполнение или base = 0. Ошибок нет.
 fn grow(rise: Decimal, run: U256, base: U256) -> Option<Decimal> {
-    let dec = |u: U256| super::super::num::to_decimal(u, 0);
-    rise.checked_mul(dec(run)?)?.checked_div(dec(base)?)
+    rise.checked_mul(share(run, base)?)
 }
 
 /// Линейная интерполяция по входу между точками (a0, v0) и (a1, v1), a0 < x < a1, v0 ≤ v1 (решение 406). Отрицательные

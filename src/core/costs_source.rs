@@ -160,7 +160,8 @@ impl Source for Live<'_> {
 
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs withdraw_a); решение 237 — DEX на A со
     /// входами момента решения: затраты «перевод» плана; решение 253 (д) — у биржи A поправка по фактам прошлых
-    /// переводов (withdraw_seen.rs adjust, transfer.seen_cost). Ошибки: как у withdraw_a.
+    /// переводов (withdraw_seen.rs adjust, transfer.seen_cost); решение 413 — удержание биржи B при зачислении
+    /// (deposit_hold.rs; у плана DEX на A строка уже в плане). Ошибки: как у withdraw_a.
     async fn withdraw(&self, cx: &DirCtx, amount: Decimal) -> Result<Vec<Cost>, Fail> {
         if let (Some(p), None) = (self.plan(), &cx.a.info) {
             return Ok(p.withdraw(cx, amount));
@@ -168,7 +169,11 @@ impl Source for Live<'_> {
         let c = super::costs_withdraw::withdraw_a(&self.core.inner.deps, cx, amount).await?;
         // Решение 253 (д), дополнение: у биржи A — затраты вывода с разложением факта прошлого перевода (комиссия по
         // факту, налог, прочее — withdraw_seen.rs; transfer.seen_cost не «да» — как есть).
-        Ok(super::withdraw_seen::adjust(self.core, cx, amount, c))
+        let c = super::withdraw_seen::adjust(self.core, cx, amount, c);
+        // Решение 413 (t198): удержание биржи-получателя при зачислении (deposit_hold.rs: замер или, пока не измерено,
+        // налог перевода токена) — строка «перевод» в монете: приход на B меньше. Получатель DEX, монета без налога — 0.
+        let (to, a) = (&cx.dir.sell_on, &cx.dir.asset);
+        Ok(super::deposit_hold::add(self.core, to, a, amount, c))
     }
 
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs return_b); решение 237 — DEX на B со

@@ -79,6 +79,8 @@ impl Core {
         super::manual_wait_mark::lost(&core).await;
         super::transit::load(&core).await;
         super::withdraw_seen::load(&core).await;
+        // Решение 413: замеры удержания бирж при зачислении (deposit_hold.rs).
+        super::deposit_hold::load(&core).await;
         super::low_usdt::load(&core).await;
         // Задача эпизодов (решение 74): при запуске закрывает прерванные перезапуском, дальше — запись и уборка.
         if let Some(rx) = lk(&core.inner.episode_rx).take() {

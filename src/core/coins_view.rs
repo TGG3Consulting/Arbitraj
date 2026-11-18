@@ -4,8 +4,9 @@
 //! причины отсева по площадкам (presence), проблема оценки (problem) и рабочие направления;
 //! пулы с USDT и с промежуточными монетами (pair), через какую промежуточную монету допущена (via, решение 52).
 //! Строка одной монеты (t84) — та же функция `row`, что у полного списка: строка ровно как в полном списке.
+//! Решение 413: deposit_holds — замеры удержания бирж при зачислении монеты (deposit_hold.rs).
 //! Кто вызывает: api/coins.rs — GET /api/coins (Core::coins_json) и GET /api/coins/{address} (Core::coin_json).
-//! От чего зависит: engine.rs, registry.rs, market_state.rs, blacklist.rs, intermediate.rs.
+//! От чего зависит: engine.rs, registry.rs, market_state.rs, blacklist.rs, intermediate.rs, deposit_hold.rs.
 //! Настройки: нет.
 
 use alloy_primitives::Address;
@@ -126,6 +127,8 @@ fn row(c: &CoinEntry, x: &Ctx) -> Value {
         "tax_source": first.map(|k| k.source.clone()),
         "checked_at": first.and_then(|k| k.checked_at),
         "tax_wait": c.wait,
+        // Решение 413: замеры удержания бирж при зачислении (deposit_hold.rs) — экран «Монеты», карточка монеты.
+        "deposit_holds": super::deposit_hold::of_coin(&c.asset),
         "checks": checks,
         "block": c.block,
         "problem": c.problem,

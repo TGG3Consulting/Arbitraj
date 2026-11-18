@@ -18,13 +18,19 @@
 //! Факта нет (баланс не прочитан, счёт с ошибкой) — учёт как раньше, строка в хронологии и журнал core.remain_fact.
 //! На площадке ничего нет — сделка закрывается (остатка нет; возврат USDT — общий шаг закрытия ledger::finish).
 //! Нативная BNB на DEX (решение 62) не сверяется: её баланс — общий с резервом на газ (native.rs, отдельные правила).
-//! Кто вызывает: core/stuck.rs (handle), core/sell_unsent.rs.
+//! Решение 413 (t198): чтение факта и учёта других — под исключительным замком счёта (credit_lock.rs: продажи в полёте
+//! нет); сделки, чьё зачисление ждёт доли (credit_fact.rs), получают долю распределением факта (credit_split.rs,
+//! credit_apply.rs) — своя ждущая подтверждается долей, подтверждённая вычитает доли ждущих других. Факт не прочитан, а
+//! своя ждёт доли — оценка «запись × (1 − ожидаемое удержание)» (credit_apply::estimate), не запись.
+//! Кто вызывает: core/stuck.rs (handle), core/sell_unsent.rs, core/sell_fact.rs (перед продажей на бирже),
+//! core/credit_base.rs (fact_at).
 //! От чего зависит: manual_halted.rs (free_of, set_qty), remain_others.rs, manual.rs (raise_alert), dex_account.rs,
-//! venue_ticker.rs, native.rs, ledger.rs, deal.rs.
+//! venue_ticker.rs, native.rs, ledger.rs, deal.rs, credit_lock.rs, credit_split.rs, credit_apply.rs, credit_fact.rs.
 //! Настройки: нет.
 
 use rust_decimal::Decimal;
 
+use crate::core::types::VenueId;
 use crate::gateway::contract::{AccountRole, VenueKind};
 use crate::storage::journal::Level;
 
@@ -43,8 +49,18 @@ pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
     if deal.qty <= Decimal::ZERO || super::native::is_native(core, &deal.direction.asset) {
         return true;
     }
-    let fact = match fact(core, deal).await {
+    // Решение 413: факт и учёт других — одним снимком под замком счёта (продажи в полёте нет).
+    let (read, others) = {
+        let _g = super::credit_lock::fact(&deal.at, &deal.direction.asset).await;
+        let read = fact_at(core, deal, &deal.at).await;
+        (read, super::remain_others::on_account(core, deal, &deal.at))
+    };
+    let fact = match read {
         Ok(f) => f,
+        Err(e) if super::credit_fact::pending(deal) => {
+            super::credit_apply::estimate(core, deal, &e).await;
+            return true;
+        }
         Err(e) => {
             let text =
                 format!("Сверка остатка с балансом площадки не вышла: {e} — по учёту сделки");
@@ -53,7 +69,7 @@ pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
             return true;
         }
     };
-    apply_fact(core, deal, fact).await
+    apply_with(core, deal, fact, others).await
 }
 
 /// Что делает: решение по прочитанному факту счёта (вынесено из reconcile — проверяется тестами на записях учёта без
@@ -63,6 +79,24 @@ pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
 pub async fn apply_fact(core: &Core, deal: &mut Deal, fact: Decimal) -> bool {
     // Решение 405 (t191): монеты других сделок той же монеты на этом счёте — не наши (remain_others.rs).
     let others = super::remain_others::on_account(core, deal, &deal.at);
+    apply_with(core, deal, fact, others).await
+}
+
+/// Что делает: как apply_fact, с учётом других, снятым вместе с фактом (reconcile). Решение 413: распределение факта
+/// между ждущими долю (credit_split.rs): своя ждёт — подтверждается долей (credit_apply::own); иначе ждущие другие
+/// вычитаются своими долями, не записями. Принимает: ядро, сделку, факт, других. Возвращает: как reconcile.
+/// Ошибок нет.
+pub async fn apply_with(
+    core: &Core,
+    deal: &mut Deal,
+    fact: Decimal,
+    others: super::remain_others::Others,
+) -> bool {
+    let sp = super::credit_split::split(&super::credit_apply::input(core, deal, fact, &others));
+    if super::credit_fact::pending(deal) {
+        return super::credit_apply::own(core, deal, fact, &others, &sp).await;
+    }
+    let others = super::credit_apply::with_shares(&others, &sp);
     let qty = match super::remain_others::own_qty(deal.qty, fact, &others) {
         super::remain_others::Own::Qty(q) => q,
         super::remain_others::Own::Human => return all_foreign(core, deal, fact, &others).await,
@@ -160,9 +194,10 @@ async fn all_foreign(
     false
 }
 
-/// Фактическое количество монеты сделки на площадке. Ошибки — текст (шлюз, счёт не прочитан).
-async fn fact(core: &Core, deal: &Deal) -> Result<Decimal, String> {
-    let (v, a) = (&deal.at, &deal.direction.asset);
+/// Фактическое количество монеты сделки на площадке `v` (решение 413: и до вывода туда — credit_base.rs). Ошибки —
+/// текст (шлюз, счёт не прочитан).
+pub async fn fact_at(core: &Core, deal: &Deal, v: &VenueId) -> Result<Decimal, String> {
+    let a = &deal.direction.asset;
     let gw = super::dex_account::venue_of(core, deal, v).await?;
     if gw.kind() != VenueKind::Cex {
         return super::manual_halted::free_of(core, gw.as_ref(), v, a).await;

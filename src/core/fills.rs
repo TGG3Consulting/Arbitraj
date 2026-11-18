@@ -6,8 +6,9 @@
 //! DEX (TradeResult.executor, решение 121 B7).
 //! Решение 236, дополнение п. 8: газ обмена DEX (TradeResult.chain есть) — вид Gas, всегда в затраты, и у сделки с BNB
 //! (решение 62, как в плане costs.rs); комиссия биржи в монете сделки — в количество, как раньше.
-//! Кто вызывает: executor.rs, stuck.rs, manual.rs.
-//! От чего зависит: deal.rs, convert.rs, settings, deal_book.rs (статьи затрат, решение 257).
+//! Решение 413 (t198): зачисление перевода на биржу — запись зачисления сделки (credit_fact.rs on_credit).
+//! Кто вызывает: executor.rs, stuck.rs, manual.rs, relay.rs, manual_relay.rs.
+//! От чего зависит: deal.rs, convert.rs, settings, deal_book.rs (статьи затрат, решение 257), credit_fact.rs.
 //! Настройки: venue.quote_asset.
 
 use rust_decimal::Decimal;
@@ -119,6 +120,8 @@ pub async fn trade(core: &Core, deal: &mut Deal, r: &TradeResult) {
         Side::Sell => {
             deal.qty -= r.filled_qty;
             deal.proceeds += r.filled_qty * r.avg_price;
+            // Решение 413: продажа прошла — отметка отказа «мало средств» снята (sell_fact.rs).
+            super::credit_fact::clear_reread(deal);
         }
     }
     // Решение 219: комиссия — по каждой монете отдельно (монета сделки уменьшает количество, остальное — в spent).
@@ -161,6 +164,9 @@ pub async fn transfer(
 ) {
     deal.qty = t.amount;
     deal.at = to.clone();
+    // Решение 413 (t198): на биржу — запись зачисления: запись депозита — верхняя граница, доля по факту баланса —
+    // перед продажей (credit_fact.rs, sell_fact.rs). На DEX — по событию Transfer, как раньше.
+    super::credit_fact::on_credit(core, deal, to);
     if let Some(c) = sent.fee.clone()
         && !convert::in_coin(&c, &deal.direction.asset.ticker)
     {

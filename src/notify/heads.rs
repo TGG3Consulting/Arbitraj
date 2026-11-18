@@ -31,6 +31,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "deal.buy_filled" => (OK, "Куплено"),
         "deal.transfer_sent" => (INFO, "Перевод отправлен"),
         "deal.transfer_credited" => (OK, "Перевод зачислен"),
+        "deal.credit_hold" => (WARN, "Биржа зачислила меньше записи депозита"),
         "transfer.to_trading_failed" => (WARN, "Зачислено, но не переведено на торговый счёт"),
         "deal.sell_filled" => (OK, "Продано"),
         "deal.dust" => (INFO, "После продажи остался остаток монеты"),

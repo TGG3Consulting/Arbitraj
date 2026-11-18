@@ -9,6 +9,8 @@
 //! хеша от биржи-отправителя (credit_chain.rs, transfer_chain.rs; transfer.credit_by_chain получателя). Решение 227:
 //! так же перегон застрявшей монеты (relay.rs → send_trade). Возврат USDT (send_as), биржа ↔ биржа и переводы на
 //! биржу — как раньше (решение 76).
+//! Решение 413 (t198): перевод монеты сделки на биржу «подозрительной» монеты — снимок посторонних монет на получателе до
+//! вывода (credit_base.rs; вывод ждёт конца чтения).
 //! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон — send_trade, решение 227), usdt_relay_retry.rs (USDT).
 //! От чего зависит: engine.rs, usdt_accepted.rs (решение 405: вывод перегона USDT принят), wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! precheck_deposit.rs (target_on — монета и сеть адреса получателя, решение 316), credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
@@ -281,6 +283,13 @@ async fn go(
     gas: &mut Vec<Wasted>,
 ) -> Result<(Transfer, Transfer, Option<String>), OpError> {
     let deps = &core.inner.deps;
+    // Решение 413 (t198): посторонние монеты на бирже-получателе до вывода (credit_base.rs) — чтение параллельно
+    // подготовке; вывод ждёт его конца (ready). Только перевод монеты сделки на биржу и «подозрительная» монета.
+    let base = if chain {
+        super::credit_base::start(core, deal, to, asset)
+    } else {
+        None
+    };
     let gw_from = deps.gw.get_as(from, acc).await.map_err(|e| e.message)?;
     let gw_to = deps.gw.get_as(to, acc).await.map_err(|e| e.message)?;
     let net_from = network(core, asset, from)?;
@@ -338,6 +347,8 @@ async fn go(
     if chain {
         super::credit_chain::arm(core, ticket.as_ref(), to, acc.is_some(), started);
     }
+    // Решение 413: снимок посторонних — до вывода (монет этого перевода в нём нет).
+    super::credit_base::ready(deal, base).await;
     let mut attempt = 0;
     // Решение 166: повторы после «средства временно заблокированы для вывода» (transfer_locked.rs).
     let mut locked = 0;

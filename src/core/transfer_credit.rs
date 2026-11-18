@@ -10,6 +10,7 @@
 //! Решение 151: зачисление по приходу в блокчейне (перевод сделки на DEX) — transfer_chain.rs, он же берёт отсюда
 //! done и to_trading.
 //!
+//! Решение 413: перевод зачисленного на торговый получил «мало средств» — один повтор с фактом счёта (to_trading_fact.rs).
 //! Кто вызывает: core/transfers.rs, core/transfer_chain.rs.
 //! От чего зависит: credit_watch.rs, credit_mismatch.rs, transit.rs, transfer_watch.rs, wait.rs, deps.rs (шлюз).
 //! После зачисления — перевод на торговый счёт площадки (решение 102, Venue::deposit_to_trading; у BingX — фондовый → спот).
@@ -148,10 +149,12 @@ pub(super) async fn done(core: &Core, leg: &Leg<'_>, t: &Transfer, at: DateTime<
 pub(super) async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, t: &Transfer) {
     let deps = &core.inner.deps;
     let mut attempt = 0;
+    // Решение 413: сумма перевода на торговый — запись депозита; «мало средств» — один раз по факту счёта.
+    let mut amount = t.amount;
     loop {
         attempt += 1;
         let on = super::venue_ticker::on_venue(core, leg.asset, leg.to);
-        match gw.deposit_to_trading(&on, t.amount).await {
+        match gw.deposit_to_trading(&on, amount).await {
             Ok(None) => return,
             Ok(Some(text)) => {
                 let text = format!("{}: {text}", leg.deal);
@@ -166,6 +169,15 @@ pub(super) async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, 
                 return;
             }
             Err(e) => {
+                // Решение 413 (t198): биржа зачислила меньше записи (удержание при зачислении) — перевести то, что
+                // есть на счёте, с которого перекладывается на торговый (не больше записи; to_trading_fact.rs).
+                if e.code == ErrorCode::InsufficientBalance
+                    && amount == t.amount
+                    && let Some(a) = super::to_trading_fact::fund(core, leg, gw, amount).await
+                {
+                    amount = a;
+                    continue;
+                }
                 let next = super::rules_apply::on_error(
                     core,
                     "Перевод зачисленного на торговый счёт",

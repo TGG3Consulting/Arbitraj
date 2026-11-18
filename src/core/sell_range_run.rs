@@ -304,22 +304,27 @@ fn market_order<'a>(
     seen: &'a mut Option<super::trade_ops::Worst>,
     gas: &'a mut Vec<super::deal_gas::Wasted>,
 ) -> Pin<Box<dyn Future<Output = Result<TradeResult, OpError>> + Send + 'a>> {
-    Box::pin(super::trade_ops::trade_seen(
+    // Решение 413: продажа — под общим доступом к счёту (credit_lock.rs), проданное сразу в учёте памяти.
+    Box::pin(super::credit_lock::selling(
         core,
-        &deal.id,
-        &deal.at,
-        &deal.direction.asset,
-        Side::Sell,
-        deal.qty,
-        q.route.clone(),
-        q.avg_price,
-        given,
-        None,
-        book,
-        seen,
-        Some(gas),
-        None,
-        true,
+        deal,
+        super::trade_ops::trade_seen(
+            core,
+            &deal.id,
+            &deal.at,
+            &deal.direction.asset,
+            Side::Sell,
+            deal.qty,
+            q.route.clone(),
+            q.avg_price,
+            given,
+            None,
+            book,
+            seen,
+            Some(gas),
+            None,
+            true,
+        ),
     ))
 }
 

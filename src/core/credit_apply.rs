@@ -1,0 +1,221 @@
+//! Файл: core/credit_apply.rs
+//! Что делает: решение 413 (t198) — применение факта счёта биржи к сделке, чьё зачисление ждёт доли (credit_fact.rs):
+//! распределение (credit_split.rs) по всем ждущим на этом счёте, подтверждение своей доли (количество сделки = доля),
+//! замер удержания биржи (deposit_hold.rs), хронология / журнал core.credit_fact / уведомление deal.credit_hold с
+//! цифрами: запись депозита, факт, удержание (шт и %), доля, другие сделки на счёте.
+//! Своя доля 0 (на счёте нет монет ждущих) — алерт человеку («Ручное управление»), сделка не закрывается: запись
+//! депозита есть, а монет нет — не «фантом», а необъяснённое (решает человек).
+//! Баланс не прочитан (estimate) — оценка «запись × (1 − ожидаемое удержание)»: не больше доли сделки при удержании не
+//! меньше ожидаемого (чужие монеты не продаются); остаток сверх оценки, если удержания не было, остаётся на счёте и
+//! виден в хронологии.
+//! Кто вызывает: core/remain_fact.rs (apply_with, reconcile).
+//! От чего зависит: credit_split.rs, credit_fact.rs, credit_text.rs, credit_lock.rs (sync), deposit_hold.rs,
+//! remain_others.rs, deal_words.rs, manual.rs (raise_alert_with), settings, deps.rs.
+//! Настройки: transfer.credit_amount_tolerance_pct (допуск на округление, по площадке и монете; не задан — 0).
+
+use rust_decimal::Decimal;
+
+use crate::settings::read::At;
+use crate::storage::journal::Level;
+
+use super::credit_fact::Basis;
+use super::credit_split::{Input, Pending, Split};
+use super::deal::Deal;
+use super::deal_words as w;
+use super::engine::Core;
+use super::remain_others::Others;
+
+/// Что делает: входы распределения для счёта сделки: ждущие — другие ждущие и сама сделка, если ждёт; подтверждённые —
+/// учёт других и свой. Принимает: ядро, сделку, факт, других. Возвращает: Input. Ошибок нет.
+pub fn input(core: &Core, deal: &Deal, fact: Decimal, o: &Others) -> Input {
+    let mut pending = o.pending.clone();
+    let mut confirmed = o.qty;
+    match super::credit_fact::here(deal).filter(|_| super::credit_fact::pending(deal)) {
+        Some(c) => pending.push(Pending {
+            id: deal.id.clone(),
+            record: c.record,
+            outsider: c.outsider,
+        }),
+        None => confirmed += deal.qty,
+    }
+    let a = &deal.direction.asset;
+    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
+    let at = At {
+        venue: Some(&deal.at.0),
+        coin: Some(&coin),
+    };
+    let tol = core
+        .inner
+        .deps
+        .settings
+        .decimal("transfer.credit_amount_tolerance_pct", at)
+        .unwrap_or_default();
+    Input {
+        fact,
+        confirmed,
+        pending,
+        unclear: !o.unclear.is_empty(),
+        hold_pct: super::deposit_hold::expected_pct(core, &deal.at, a),
+        tol_pct: tol,
+    }
+}
+
+/// Что делает: монеты других сделок на счёте с долями ждущих (для сверки остатка подтверждённой сделки): qty других +
+/// доли других ждущих. Принимает: других, распределение. Возвращает: Others (pending перенесены в qty). Ошибок нет.
+pub fn with_shares(o: &Others, sp: &Split) -> Others {
+    let mut out = o.clone();
+    for p in &o.pending {
+        let q = sp.share_of(&p.id).unwrap_or_default();
+        out.qty += q;
+        out.deals.push((p.id.clone(), q));
+    }
+    out.pending.clear();
+    out.deals.sort();
+    out
+}
+
+/// Что делает: подтверждает долю своей ждущей сделки по распределению (шапка). Принимает: ядро, сделку, факт, других,
+/// распределение. Возвращает: true — вести дальше с долей; false — доля 0, алерт человеку. Ошибок нет.
+pub async fn own(core: &Core, deal: &mut Deal, fact: Decimal, o: &Others, sp: &Split) -> bool {
+    let share = sp.share_of(&deal.id).unwrap_or_default();
+    let record = super::credit_fact::here(deal).map_or(deal.qty, |c| c.record);
+    let text = super::credit_text::describe(core, deal, fact, o, sp, (record, share));
+    if share <= Decimal::ZERO {
+        return zero(core, deal, o, text).await;
+    }
+    super::credit_fact::confirm(deal, share, Basis::Balance);
+    deal.note(text.clone());
+    super::credit_lock::sync(core, deal);
+    // Замер — сразу в памяти (расчёт следующих сделок видит его); база, журнал и Telegram — фоном: продажа их не ждёт
+    // (Тигран 16.11: сделка не ждёт ни уведомления, ни записи в базу).
+    let hold = sp.measurable.then(|| super::deposit_hold::Hold {
+        venue: deal.at.clone(),
+        asset: deal.direction.asset.clone(),
+        records: sp.records,
+        credited: sp.records - sp.held,
+        pct: sp.held_pct(),
+        at: chrono::Utc::now(),
+        deals: sp.shares.iter().map(|(id, _)| id.clone()).collect(),
+    });
+    if let Some(h) = &hold {
+        super::deposit_hold::put(h.clone());
+    }
+    let tg = notice(deal, record, share);
+    let (c, v) = (core.clone(), deal.at.0.clone());
+    tokio::spawn(async move {
+        let deps = &c.inner.deps;
+        let lvl = if tg.is_some() {
+            Level::Warn
+        } else {
+            Level::Info
+        };
+        deps.log(lvl, "core.credit_fact", Some(&v), &text, None)
+            .await;
+        if let Some(h) = hold {
+            super::deposit_hold::record(&c, h).await;
+        }
+        if let Some(tg) = tg {
+            deps.notify("deal.credit_hold", Some(&v), &tg).await;
+        }
+    });
+    true
+}
+
+/// Уведомление deal.credit_hold, если биржа удержала (доля меньше записи). Принимает: сделку, запись, долю.
+/// Возвращает: текст или None — удержания нет. Ошибок нет.
+fn notice(deal: &Deal, record: Decimal, share: Decimal) -> Option<String> {
+    let held = record - share;
+    if held <= Decimal::ZERO || record <= Decimal::ZERO {
+        return None;
+    }
+    let t = &deal.direction.asset.ticker;
+    let msg = crate::notify::human::Msg::new(
+        crate::notify::human::WARN,
+        "Биржа зачислила меньше записи депозита",
+    )
+    .line(format!(
+        "{t} на {}: запись {}, на счёте {}",
+        crate::notify::human::venue(&deal.at.0),
+        w::coins(record, t),
+        w::coins(share, t)
+    ))
+    .kv(
+        "Удержано",
+        format!(
+            "{} ({})",
+            w::coins(held, t),
+            crate::notify::human::pct(held / record * Decimal::ONE_HUNDRED)
+        ),
+    )
+    .kv("Продаём", w::coins(share, t))
+    .id(&deal.id)
+    .render();
+    Some(msg)
+}
+
+/// Доля 0: алерт человеку, сделка не закрывается и ничего не продаёт. Ошибок нет. Возвращает: false.
+async fn zero(core: &Core, deal: &Deal, o: &Others, text: String) -> bool {
+    let t = format!(
+        "Монет сделки на счёте не видно: {text}. Бот ничего не продаёт и сделку не закрывает: запись депозита есть, \
+         а на счёте для неё ничего не осталось. Что сделать: проверьте баланс {} на {} и историю депозитов биржи; \
+         монеты есть — «Продать сейчас» по сделке {} на экране «Ручное управление», нет — «Продано вручную»",
+        deal.direction.asset.ticker,
+        w::place(core, &deal.at, deal.dex_account.as_ref()),
+        deal.id
+    );
+    core.inner
+        .deps
+        .log(Level::Warn, "core.credit_fact", Some(&deal.at.0), &t, None)
+        .await;
+    let mut holders: Vec<String> = o.deals.iter().map(|(id, _)| id.clone()).collect();
+    holders.extend(o.pending.iter().map(|p| p.id.clone()));
+    holders.extend(o.unclear.iter().cloned());
+    holders.sort();
+    holders.dedup();
+    Box::pin(super::manual::raise_alert_with(
+        core,
+        deal.clone(),
+        None,
+        t,
+        None,
+        holders,
+    ))
+    .await;
+    false
+}
+
+/// Что делает: баланс не прочитан, сделка ждёт доли — оценка «запись × (1 − ожидаемое удержание)» (шапка), основание
+/// Estimate. Принимает: ядро, сделку, причину. Ошибок нет.
+pub async fn estimate(core: &Core, deal: &mut Deal, why: &str) {
+    let Some(c) = super::credit_fact::here(deal) else {
+        return;
+    };
+    let record = c.record;
+    let pct = super::deposit_hold::expected_pct(core, &deal.at, &deal.direction.asset);
+    let q = (record * (Decimal::ONE - pct / Decimal::ONE_HUNDRED)).max(Decimal::ZERO);
+    let t = &deal.direction.asset.ticker;
+    let text = format!(
+        "{}: баланс {} не прочитан ({why}) — зачисление не подтверждено фактом; продаётся оценка: запись депозита {} × \
+         (1 − ожидаемое удержание {}) = {}; если биржа не удержала, остаток до {} останется на счёте — проверьте \
+         «Балансы» (решение 413)",
+        w::deal(core, deal),
+        w::place(core, &deal.at, deal.dex_account.as_ref()),
+        w::coins(record, t),
+        crate::notify::human::pct(pct),
+        w::coins(q, t),
+        w::coins(record - q, t)
+    );
+    super::credit_fact::confirm(deal, q, Basis::Estimate);
+    deal.note(text.clone());
+    super::credit_lock::sync(core, deal);
+    core.inner
+        .deps
+        .log(
+            Level::Warn,
+            "core.credit_fact",
+            Some(&deal.at.0),
+            text,
+            None,
+        )
+        .await;
+}

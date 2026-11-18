@@ -135,6 +135,7 @@ pub fn cost_label(k: CostKind) -> &'static str {
         CostKind::SellTax => "Налог токена (продажа), USDT",
         CostKind::TransferTax => "Налог токена (перевод), USDT",
         CostKind::TransferShortfall => "Недостача перевода, USDT",
+        CostKind::DepositHold => "Удержание биржи при зачислении, USDT",
         CostKind::HookImpact => "Влияние крючка пула, USDT",
         CostKind::ChannelTip => "Чаевые канала и газ их перевода, USDT",
         CostKind::WithdrawFee => "Комиссия вывода, USDT",

@@ -23,8 +23,13 @@
 //! Y ведёт 600. В журнал — и доказуемые, и сделки в пути.
 //! Факт меньше учёта доказуемых других — монеты на счёте по учёту чужие: сделке не достаётся ничего, но она НЕ
 //! закрывается как фантом (у кого фантом — по факту не видно), решает человек (remain_fact.rs all_foreign).
-//! Кто вызывает: remain_fact.rs (reconcile).
-//! От чего зависит: unsettled.rs, coin_key.rs, deal.rs, trade_ops.rs (вид площадки), engine.rs.
+//! Решение 413 (t198, живой WKC 18.11): другая сделка, чьё зачисление на эту биржу ещё не подтверждено фактом («ждёт
+//! доли», credit_fact.rs), — не в qty (её учёт = запись депозита, а на счёте может быть меньше: удержание биржи), а в
+//! pending: её долю считает распределение факта (credit_split.rs) вместе со своей — сделки не видят друг у друга «своих
+//! монет нет» из-за удержания биржи (было: вторая сделка WKC вычитала запись первой 6 008 053 740.36 из факта
+//! 5 915 283 179 — «всё чужое»).
+//! Кто вызывает: remain_fact.rs (reconcile), credit_base.rs, credit_apply.rs.
+//! От чего зависит: unsettled.rs, coin_key.rs, deal.rs, trade_ops.rs (вид площадки), engine.rs, credit_fact.rs.
 //! Настройки: нет (базовое поведение).
 
 use rust_decimal::Decimal;
@@ -43,6 +48,8 @@ pub struct Others {
     pub deals: Vec<(String, Decimal)>,
     /// Сделки на шаге «перевод» с площадкой покупки или получателем = эта площадка (где их монеты — не доказано).
     pub unclear: Vec<String>,
+    /// Решение 413: другие сделки на этом счёте, ждущие доли (запись депозита и посторонние до вывода) — не в qty.
+    pub pending: Vec<super::credit_split::Pending>,
     /// Те же сделки словами для тревоги (deal_words.rs): доказуемые, затем в пути (требование Тиграна 18.11).
     pub words: Vec<String>,
 }
@@ -78,6 +85,20 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
                     super::deal_words::deal(core, d)
                 ));
             }
+        } else if d.at == *v
+            && super::credit_fact::pending(d)
+            && let Some(c) = super::credit_fact::here(d)
+        {
+            out.pending.push(super::credit_split::Pending {
+                id: d.id.clone(),
+                record: c.record,
+                outsider: c.outsider,
+            });
+            out.words.push(format!(
+                "{} — зачисление ещё не подтверждено фактом (запись депозита {})",
+                super::deal_words::deal(core, d),
+                super::deal_words::coins(c.record, &d.direction.asset.ticker)
+            ));
         } else if d.at == *v {
             out.qty += d.qty;
             out.deals.push((d.id.clone(), d.qty));
@@ -86,6 +107,7 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
     }
     out.deals.sort();
     out.unclear.sort();
+    out.pending.sort_by(|x, y| x.id.cmp(&y.id));
     out
 }
 

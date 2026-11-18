@@ -154,6 +154,11 @@ pub struct Deal {
     /// (exec.top_up выключена): запись и API — как раньше.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Box<super::deal_group::DealGroup>>,
+    /// Решение 413 (t198): зачисление перевода сделки на биржу — запись депозита (верхняя граница) и подтверждённое
+    /// фактом баланса количество (credit_fact.rs). None — получатель DEX, сделка без перевода или до решения 413.
+    /// В коробке: сделка лежит по значению во всех задачах её пути (глубина стека, решение 389).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credit: Option<Box<super::credit_fact::CreditFact>>,
     pub started_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -198,6 +203,7 @@ impl Deal {
             timeline: vec![],
             decided_at: None,
             group: None,
+            credit: None,
             started_at: now,
             updated_at: now,
         }

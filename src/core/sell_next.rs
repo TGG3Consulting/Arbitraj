@@ -7,7 +7,8 @@
 //! Функции не-async: будущее собирается сразу в куче, вне кадра вызывающего (как sell_range_run.rs stuck), и проверка
 //! Send идёт вне тела рекурсивных async-функций.
 //! Кто вызывает: core/sell.rs, core/sell_range_run.rs (через sell_loop::hop).
-//! От чего зависит: sell_loop.rs (Job), stuck.rs (handle), sell_unsent.rs (retry, here), manual_sell.rs (retry,
+//! Решение 413: short_retry — «мало средств» на бирже (sell_fact.rs).
+//! От чего зависит: sell_loop.rs (Job), sell_fact.rs, stuck.rs (handle), sell_unsent.rs (retry, here), manual_sell.rs (retry,
 //! remainder, gas), risk_count.rs (auto), stuck_reason.rs, op_error.rs, deal.rs, engine.rs (Core).
 //! Настройки: нет.
 
@@ -73,4 +74,18 @@ pub fn button_remainder(core: &Core, deal: Deal) -> Job {
 pub fn button_gas(core: &Core, deal: Deal, e: &OpError) -> Job {
     let (c, e) = (core.clone(), e.clone());
     Box::pin(async move { super::manual_sell::gas(&c, deal, &e).await })
+}
+
+/// Решение 413: «мало средств» на бирже — свежий факт, доля и снова продажа тем же правилом (sell_fact::retry).
+/// Принимает: ядро, сделку, ошибку, причину продажи, правило. Возвращает: продолжение. Ошибок нет.
+#[inline(never)]
+pub fn short_retry(
+    core: &Core,
+    deal: Deal,
+    e: &OpError,
+    why: &str,
+    rule: super::sell_range::Rule,
+) -> Job {
+    let (c, e, why) = (core.clone(), e.clone(), why.to_string());
+    Box::pin(async move { super::sell_fact::retry(&c, deal, &e, &why, rule).await })
 }

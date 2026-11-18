@@ -11,10 +11,11 @@
     Показывается во всплывающем окне монеты (CoinModal.svelte, Issue #33).
     Решение 175: отметка «делистинг на X: дата» по каждой площадке монеты (lib/delist.svelte.js); решение 211 — по
     тикеру монеты НА ЭТОЙ площадке (presence[].ticker).
+    Решение 413: удержание бирж при зачислении — DepositHolds.svelte.
     Кнопка «Перепроверить» — по каждой площадке, где у монеты есть пулы (POST /api/coins/recheck).
   Кто вызывает: components/CoinModal.svelte.
   От чего зависит: lib/api.js, lib/coinLabels.js, lib/labels.js, lib/delist.svelte.js, components/ErrorText.svelte,
-    components/PoolDepthCell.svelte.
+    components/PoolDepthCell.svelte, components/DepositHolds.svelte.
   Настройки: нет (пороги tax.*, hooks.* — экран «Настройки»).
 -->
 <script>
@@ -23,6 +24,7 @@
   import { assetLabel, checkState, taxesText, impactText, blockReason, hookGroupLabel, poolRefText, exclusionText, limitsText } from '../lib/coinLabels.js';
   import { poolKindLabel, showTime } from '../lib/labels.js';
   import PoolDepthCell from './PoolDepthCell.svelte';
+  import DepositHolds from './DepositHolds.svelte';
   import { startDelist, delistItem, delistLabel } from '../lib/delist.svelte.js';
 
   startDelist();
@@ -84,6 +86,7 @@
     <!-- Решение 61: почему проверка ещё не выполнена (ждёт пула, узла, настройки) — от адаптера. -->
     {#if coin.taxes === 'NotChecked' && coin.tax_wait}<br /><span class="warn-text">Ждёт: {coin.tax_wait}</span>{/if}
   </p>
+  <DepositHolds {coin} />
   {#if coin.pools.length}
     <table>
       <thead><tr><th>Площадка</th><th>Пара</th><th>Вид пула</th><th>Пул</th><th>Комиссия</th><th>Крючок</th><th>Проверка</th><th>Глубина</th><th>Получено</th></tr></thead>

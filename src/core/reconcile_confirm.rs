@@ -9,8 +9,9 @@
 //!     ledger.reconcile_confirm_rounds кругов подряд (не задано или 0 — с первого круга, как раньше).
 //! Решение 118 (Я-11): «балансы площадки не получены» — пауза этой площадки, а не системы; с решения 221 пауза площадки
 //! от сверки (и по расхождению монет) ставится и снимается в reconcile_pause.rs.
+//! Решение 413 (t198): сделки, чьё зачисление ждёт доли (credit_fact.rs), в учёт площадки не входят (как перевод).
 //! Кто вызывает: core/reconcile.rs.
-//! От чего зависит: engine.rs (сделки), deal.rs.
+//! От чего зависит: engine.rs (сделки), deal.rs, credit_fact.rs.
 //! Настройки: ledger.reconcile_confirm_rounds.
 
 use std::collections::{HashMap, HashSet};
@@ -43,6 +44,10 @@ pub fn expected(
         .values()
         .filter(|d| d.is_open() && d.step != Step::Transfer && d.step != Step::Buying)
         .filter(|d| &d.at == venue)
+        // Решение 413 (t198): зачисление ждёт доли — учёт (запись депозита) фактом не доказан, сверять не с чем (как
+        // перевод); доля подтверждается перед продажей (sell_fact.rs). Подтверждённые — долями: удержание биржи,
+        // учтённое в долях, расхождением не считается.
+        .filter(|d| !super::credit_fact::pending(d))
         .cloned()
         .collect();
     for d in deals {

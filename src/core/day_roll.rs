@@ -99,7 +99,7 @@ async fn roll(core: &Core) {
     super::daily_commit::announce(core, &trip).await;
     // Решение 414: новый день — новый слепок баланса направлений с лимитом просадки.
     let pairs = super::day_pair::all(core);
-    super::drawdown_snap::request(core, &pairs, "новый день (UTC)", false).await;
+    super::drawdown_ask::request(core, &pairs, "новый день (UTC)", false).await;
 }
 
 /// Журнал core.control (строка на каждое снятие) и одно уведомление risk.auto_resumed. Ничего не снято — тихо.

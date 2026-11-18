@@ -133,10 +133,16 @@ pub async fn reset(core: &Core, id: &str, who: &str) -> String {
         parts.push(format!("{} {} USDT", label(p), x.result_usd.round_dp(4)));
         if !snaps.contains(p) && lift(core, p) {
             lifted.push(label(p));
+        } else if snaps.contains(p) && super::drawdown_limit::lift_legacy(core, p) {
+            // Ревью t199, С3: пауза старого лимита дня у направления, перешедшего на просадку, — снимается сразу.
+            lifted.push(format!(
+                "{} (пауза старого лимита дня risk.max_daily_loss_usd)",
+                label(p)
+            ));
         }
     }
     let trip = super::daily::commit(core, today, book).await;
-    let snaps_text = super::drawdown_snap::request(core, &snaps, who, true).await;
+    let snaps_text = super::drawdown_ask::request(core, &snaps, who, true).await;
     let what = if is_pair(id) {
         format!("направления {}", label(id))
     } else {

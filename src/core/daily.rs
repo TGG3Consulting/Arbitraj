@@ -67,6 +67,17 @@ pub(super) struct Book {
     /// Решение 414: запрошенные и ещё не снятые слепки пар (переживают перезапуск — задача снятия поднимается снова).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(super) draw_want: BTreeMap<String, super::drawdown::Want>,
+    /// Решение 414 (ревью t199, мелкое 6): паузы направлений по просадке (id пары → причина) и просадка при прошлом
+    /// пересчёте — переживают перезапуск (без ложной паузы и без повторной после «Снять паузу»). Пишет commit из
+    /// Risk.draw_paused / Risk.draw_seen; при запуске восстанавливает drawdown_limit::restore.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) draw_paused: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) draw_seen: BTreeMap<String, Decimal>,
+    /// Ревью t199, С1: сделка, ради которой пересчитывается итог дня, и её плановые затраты возврата (в базу не пишется;
+    /// ставят settle и record — drawdown_pending.rs cur).
+    #[serde(skip)]
+    pub(super) cur: Option<super::drawdown_pending::Cur>,
 }
 
 /// Сумма оценок, учтённых в день `date`. Ошибок нет.
@@ -125,6 +136,8 @@ pub async fn provisional(core: &Core, deal: &mut Deal) -> Trip {
 pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Trip {
     let (today, mut book) = today_book(core);
     let pair = super::daily_venue::of_deal(core, &book, deal);
+    // Ревью t199, С1: плановые затраты возврата этой сделки — из неё самой (в учёте ядра она ещё прежняя).
+    book.cur = Some(super::drawdown_pending::cur(core, deal));
     // Решение 257: каждое изменение итога дня из-за сделки — начислением в её учёт (deal_book.rs).
     match book.provisional.remove(&deal.id) {
         Some((old, day)) if day != today => {
@@ -165,6 +178,8 @@ pub async fn record(core: &Core, deal: &mut Deal, est: Estimate) -> Trip {
 pub async fn settle(core: &Core, deal: &mut Deal, fact: Decimal) -> Trip {
     let (today, mut book) = today_book(core);
     let pair = super::daily_venue::of_deal(core, &book, deal);
+    // Ревью t199, С1: закрываемая сделка ещё без частей возврата в учёте ядра — её плановые затраты возврата сама.
+    book.cur = Some(super::drawdown_pending::cur(core, deal));
     // Решение 257: начисления в учёт сделки — те же суммы, что идут в книгу дня (deal_book.rs).
     let delta = match book.provisional.remove(&deal.id) {
         Some((old, day)) if day == today => {

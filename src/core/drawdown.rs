@@ -136,6 +136,11 @@ pub fn fresh(snap: Snap, seen: Decimal, day: NaiveDate, pending: Decimal) -> Dra
 /// весь итог нового дня: прошлый день учтён целиком при прошлых пересчётах); итог изменился — пик = max(пик,
 /// теоретический баланс). Принимает: состояние, итог дня пары, день, плановые затраты возврата. Ошибок нет.
 pub fn advance(st: &mut DrawState, result: Decimal, day: NaiveDate, pending: Decimal) {
+    // Ревью t199 (мелкое 1): пересчёт за прошедший день, пришедший после полуночи, — не учитывается (итог того дня уже
+    // учтён, а разница с итогом нового дня была бы неверной).
+    if day < st.seen_day {
+        return;
+    }
     let delta = if st.seen_day == day {
         result - st.seen_usd
     } else {

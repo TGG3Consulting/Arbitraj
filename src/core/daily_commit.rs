@@ -90,8 +90,8 @@ pub(super) async fn commit(core: &Core, date: NaiveDate, mut book: Book) -> Trip
     let prov = prov_on(&book, date);
     let pairs = super::daily_venue::days(core, &book, date);
     // Решение 414: изменения итога пар — в теоретический баланс просадки (пик поднимается); плановые затраты возврата
-    // USDT — по сделкам учёта (drawdown_ledger.rs).
-    let pending = super::drawdown_ledger::pending(core);
+    // USDT — по сделкам учёта, у сделки этого пересчёта — её собственные (ревью t199, С1: drawdown_pending.rs).
+    let pending = super::drawdown_pending::pending(core, book.cur.as_ref());
     super::drawdown_limit::advance(&mut book, &pairs, date, &pending);
     {
         let mut r = lk(&core.inner.risk);
@@ -117,6 +117,18 @@ pub(super) async fn commit(core: &Core, date: NaiveDate, mut book: Book) -> Trip
             x.draw_want = want.get(p).cloned();
         }
     }
+    // Решение 414 (ревью t199, С4 и мелкое 6): просадка проверяется раньше старого лимита дня и до записи — паузы по
+    // просадке и замеченная просадка пишутся в ту же строку учёта (переживают перезапуск).
+    let (draw, draw_cleared) = super::drawdown_limit::check(core);
+    {
+        let r = lk(&core.inner.risk);
+        book.draw_paused = r
+            .draw_paused
+            .iter()
+            .map(|p| (p.clone(), r.pair_paused.get(p).cloned().unwrap_or_default()))
+            .collect();
+        book.draw_seen = r.draw_seen.clone();
+    }
     let body = serde_json::to_string(&book).unwrap_or_default();
     let day = date.to_string();
     // Будущее записи — в куче (Box::pin): будущее закрытия сделки не растёт на его размер.
@@ -135,7 +147,6 @@ pub(super) async fn commit(core: &Core, date: NaiveDate, mut book: Book) -> Trip
         deps.log(Level::Error, "core.daily", None, m, None).await;
     }
     let (paused, pair_cleared) = super::daily_venue_limit::check(core);
-    let (draw, draw_cleared) = super::drawdown_limit::check(core);
     let (stop, cleared) = super::daily_limit::check(core);
     // Решение 152: факт пришёл, лимит больше не превышен — остановку снимает человек, но он должен это видеть.
     for t in pair_cleared.into_iter().chain(draw_cleared).chain(cleared) {

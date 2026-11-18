@@ -34,6 +34,8 @@
 
   /** Решение 414: как снят слепок. */
   const way = (w) => (w === 'clean' ? 'чистый — идущих сделок направления не было' : 'по учёту — за 2 минуты сделки направления не кончились');
+  /** Решение 414 (ревью t199, С3): чья пауза — просадки или старого лимита дня. */
+  const why = (x) => (x.draw_paused ? 'по просадке от пика' : x.draw_on ? 'по старому лимиту дня (risk.max_daily_loss_usd, до перехода на просадку)' : 'по убытку дня');
   /** Решение 414: сделки слепка строкой. */
   const deals = (v) => (v ?? []).map(([id, a]) => `${id} ${a}`).join(', ');
 
@@ -55,7 +57,7 @@
   <p class="muted">Итог дня площадки неизвестен — нет данных ядра.</p>
 {/if}
 {#each rows as [p, x], pi (`${p}|${pi}`)}
-  <div class={x.limit?.exceeded || x.paused ? 'err' : 'muted'}>
+  <div class={x.limit?.exceeded || x.draw?.exceeded || x.paused ? 'err' : 'muted'}>
     <code title={p}>{x.label}</code>: итог дня {x.result_usd} USDT (факт {x.final_usd}, оценка позиций {x.provisional_usd})
     {#if x.draw_on}
       {#if x.draw}
@@ -76,8 +78,8 @@
       · лимит не задан (risk.max_daily_loss_usd) — торговля этим направлением не включается
     {/if}
     {#if x.paused}
-      <strong> · {x.kind === 'dex_dex' ? `циклы DEX ↔ DEX на паузе по ${x.draw_on ? 'просадке от пика' : 'убытку дня'} (биржи ↔ DEX торгуют)` : `направление на паузе по ${x.draw_on ? 'просадке от пика' : 'убытку дня'} (другие направления торгуют)`}</strong>
-      <span class="muted">({x.draw_on ? 'снимется с новым слепком: новый день, UTC, или «Сбросить лимит»' : 'снимется сама с новым днём, UTC'})</span>
+      <strong> · {x.kind === 'dex_dex' ? `циклы DEX ↔ DEX на паузе ${why(x)} (биржи ↔ DEX торгуют)` : `направление на паузе ${why(x)} (другие направления торгуют)`}</strong>
+      <span class="muted">({x.draw_paused ? 'снимется с новым слепком: новый день, UTC, или «Сбросить лимит»' : x.draw_on ? 'снимется «Сбросить лимит» — направление уже по просадке' : 'снимется сама с новым днём, UTC'})</span>
       <button class="quiet" disabled={control.busy} onclick={() => resumeVenue(p)}>Снять паузу {x.label}</button>
     {/if}
     <button class="quiet" disabled={control.busy} onclick={() => askReset(p, x)}>Сбросить лимит дня {x.label}</button>

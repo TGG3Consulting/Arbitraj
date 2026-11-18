@@ -140,6 +140,13 @@ pub async fn reset(core: &Core, who: &str) -> String {
         book.pair_resets.insert(p.clone(), mark(x.result_usd));
         // Решение 414: направление по просадке от пика — новый слепок (пауза снимется, когда он снят).
         if super::drawdown_cfg::active(core, &p) {
+            // Ревью t199, С3: пауза старого лимита дня у направления, перешедшего на просадку, — снимается сразу.
+            if super::drawdown_limit::lift_legacy(core, &p) {
+                lifted.push(format!(
+                    "{} (пауза старого лимита дня risk.max_daily_loss_usd)",
+                    super::day_pair::label(&p)
+                ));
+            }
             snaps.push(p.clone());
             continue;
         }
@@ -148,7 +155,7 @@ pub async fn reset(core: &Core, who: &str) -> String {
         }
     }
     let trip = super::daily::commit(core, today, book).await;
-    let snaps_text = super::drawdown_snap::request(core, &snaps, who, true).await;
+    let snaps_text = super::drawdown_ask::request(core, &snaps, who, true).await;
     let stopped = lk(&core.inner.risk).daily_stop;
     let lifted = lifted.join(", ");
     let text = format!(

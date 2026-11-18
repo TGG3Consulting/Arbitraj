@@ -131,7 +131,9 @@ pub(super) fn check(core: &Core) -> (Vec<(String, String)>, Vec<String>) {
             }
         }
         let now = r.pair_paused.contains_key(&p);
+        let by_draw = r.draw_paused.contains(&p);
         if let Some(e) = r.day.pairs.get_mut(&p) {
+            e.draw_paused = by_draw;
             e.draw_on = true;
             e.limit = None;
             e.draw = v;
@@ -139,6 +141,43 @@ pub(super) fn check(core: &Core) -> (Vec<(String, String)>, Vec<String>) {
         }
     }
     (paused, cleared)
+}
+
+/// Что делает: при запуске — паузы направлений по просадке и замеченная просадка из книги дня (ревью t199, мелкое 6:
+/// перезапуск не даёт ложной паузы и повторной паузы после «Снять паузу»). Принимает: ядро, книгу. Ошибок нет.
+pub(super) fn restore(core: &Core, book: &Book) {
+    let mut r = lk(&core.inner.risk);
+    for (p, why) in &book.draw_paused {
+        r.draw_paused.insert(p.clone());
+        r.pair_paused
+            .entry(p.clone())
+            .or_insert_with(|| why.clone());
+    }
+    for (p, v) in &book.draw_seen {
+        r.draw_seen.entry(p.clone()).or_insert(*v);
+    }
+}
+
+/// Что делает: ревью t199, С3 — направление перешло на просадку, а стоит пауза старого лимита дня (без отметки
+/// draw_paused): «Сбросить лимит» снимает её сразу. Принимает: ядро, id пары. Возвращает: была ли снята. Ошибок нет.
+pub(super) fn lift_legacy(core: &Core, p: &str) -> bool {
+    let mut r = lk(&core.inner.risk);
+    if r.draw_paused.contains(p) {
+        return false;
+    }
+    r.loss_seen.remove(p);
+    r.pair_paused.remove(p).is_some()
+}
+
+/// Что делает: записать паузы по просадке в учёт (после «Снять паузу» — risk.rs): пересчёт итога дня отдельной задачей.
+/// Принимает: ядро. Ошибок нет.
+pub fn persist(core: &Core) {
+    let core = core.clone();
+    tokio::spawn(async move {
+        let (today, book) = super::daily::today_book(&core);
+        let trip = super::daily::commit(&core, today, book).await;
+        super::daily_commit::announce(&core, &trip).await;
+    });
 }
 
 /// Что делает: текст Telegram о паузе направления по просадке (решение 164: коротко, с цифрами). Принимает: id пары,

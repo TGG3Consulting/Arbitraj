@@ -125,6 +125,9 @@ pub struct PairDay {
     pub draw: Option<super::drawdown::DrawView>,
     /// Решение 414: новый слепок запрошен и ещё не снят (кто, когда, почему не снят).
     pub draw_want: Option<super::drawdown::Want>,
+    /// Решение 414 (ревью t199, С3): пауза пары поставлена просадкой (Risk.draw_paused); false при paused — пауза
+    /// старого лимита дня risk.max_daily_loss_usd (до перехода направления на просадку).
+    pub draw_paused: bool,
 }
 
 impl Default for DayView {

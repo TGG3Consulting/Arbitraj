@@ -107,6 +107,8 @@ pub async fn load(core: &Core) {
                     .await;
                 return;
             };
+            // Решение 414 (ревью t199, мелкое 6): паузы по просадке и замеченная просадка — из учёта.
+            super::drawdown_limit::restore(core, &book);
             // Другой день — факт и сбросы того дня в сегодняшний итог не входят; неразобранные оценки переносятся.
             let today = Utc::now().date_naive();
             if old {

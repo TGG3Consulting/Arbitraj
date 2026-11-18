@@ -9,11 +9,14 @@
 //!    снята; без слепка торговля направлением не включается;
 //! 2) слепок по учёту: на MEXC 500 и 500 в идущей сделке MEXC → DEX → 1000; выручка DEX → MEXC, ждущая возврата в
 //!    кошелёк (другое направление на том же счёте), — чужое, в слепок не входит;
-//! 3) сделка закрылась в −60 до возврата USDT — сразу пауза (итог известен — в балансе); плановые затраты возврата —
-//!    из плана, пока возврат не закончен;
+//! 3) сделка закрылась в −60 до возврата USDT — сразу пауза (итог известен — в балансе);
 //! 4) перезапуск в тот же день — слепок, пик и баланс продолжаются, новый слепок не запрашивается;
 //! 5) новый день — баланс переносится (итог нового дня с нуля), пауза по просадке полночью не снимается;
-//! 6) предел — меньшее из % × пик и USDT; задано одно — оно.
+//! 6) предел — меньшее из % × пик и USDT; задано одно — оно;
+//! ревью t199: 7) С1 — плановые затраты возврата закрываемой сделки (usdt_return.mode = per_trade, план 1.5) — уже на
+//!    закрытии: −29 при пределе 30 → просадка 30.5 — пауза; −60 → баланс 938.5; 8) С3 — пауза старого лимита дня у
+//!    направления, перешедшего на просадку, снимается «Сбросить лимит» и слепком; 9) утренний слепок снимает паузу по
+//!    просадке; 10) мелкое 6 — пауза по просадке и «Снять паузу» переживают перезапуск.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, tests/report_common.
@@ -69,6 +72,14 @@ fn kinds(core: &Core, st: &Store) {
 
 /// Ядро: обязательные money.* и risk.*, пределы просадки «вся система» (pct, usd), «В работе».
 async fn core_at(path: &std::path::Path, pct: &str, usd: &str) -> (Core, Store) {
+    let (core, st) = base(path).await;
+    set(&st, "risk.drawdown_pct", Scope::Global, pct).await;
+    set(&st, "risk.drawdown_max_usd", Scope::Global, usd).await;
+    (core, st)
+}
+
+/// Ядро без пределов просадки: обязательные money.* и risk.*, «В работе» (лимит дня — задаёт тест).
+async fn base(path: &std::path::Path) -> (Core, Store) {
     let (core, st) = start(path).await;
     kinds(&core, &st);
     for (n, x) in [
@@ -78,8 +89,6 @@ async fn core_at(path: &std::path::Path, pct: &str, usd: &str) -> (Core, Store) 
         ("money.max_per_coin_usd", "100"),
         ("money.max_in_transit_usd", "200"),
         ("risk.min_bnb_balance", "0.01"),
-        ("risk.drawdown_pct", pct),
-        ("risk.drawdown_max_usd", usd),
     ] {
         set(&st, n, Scope::Global, x).await;
     }
@@ -195,34 +204,119 @@ async fn ledger_snapshot_own_in_flight_minus_foreign_on_same_account() {
     assert_eq!(draw(&core, P).peak_usd, d("1000"));
 }
 
+/// Сделка ALEO MEXC → DEX (записанная строка 359) на 500 USDT (сумма примера Тиграна; у записанной вложено 39.94 —
+/// минус 60 дал бы отрицательную выручку), продана на DEX с итогом `result`; в плане — затраты стадии «возврат USDT»
+/// 1.5 USDT. Возврат включён (usdt_return.mode = per_trade): закрытие ядром ставит часть возврата (кошелька в
+/// маппинге нет — «не вернулись», возврат не закончен).
+async fn close_with_return(core: &Core, id: &str, result: &str) -> Deal {
+    let mut x = deal(359, id);
+    x.invested = d("500");
+    x.proceeds = d("500") + d(result);
+    x.at = v("bsc_dex");
+    x.plan = json!({"costs": [{"kind": "UsdtReturn", "stage": "возврат USDT", "amount": "1.5", "asset": "USDT", "usdt": "1.5"}]});
+    arb::core::ledger::finish(core, &mut x, Step::Closed, "пример Тиграна").await;
+    x
+}
+
 #[tokio::test]
 async fn closed_minus_60_before_usdt_return_pauses() {
-    let (core, _st) = core_at(&dir("dd-minus60"), "5", "30").await;
+    let (core, st) = core_at(&dir("dd-minus60"), "5", "30").await;
+    set(&st, "usdt_return.mode", Scope::Global, "per_trade").await;
     arb::core::drawdown_snap::apply(&core, P, &mexc(), "USDT", d("1000")).await;
-    // Сделка ALEO MEXC → DEX на 500 USDT (сумма примера Тиграна; у записанной вложено 39.94 — минус 60 дал бы
-    // отрицательную выручку, возвращать было бы нечего), итог −60: выручка 440 ждёт возврата USDT.
-    let mut x = deal(359, "m60");
-    x.invested = d("500");
-    x.proceeds = d("440");
-    arb::core::ledger::finish(&core, &mut x, Step::Closed, "пример Тиграна").await;
+    let x = close_with_return(&core, "m60", "-60").await;
+    // Итог известен — сразу в балансе; плановые затраты возврата 1.5 — уже на закрытии (ревью С1).
     let v60 = draw(&core, P);
-    assert_eq!((v60.balance_usd, v60.drawdown_usd), (d("940"), d("60")));
+    assert_eq!(
+        (v60.balance_usd, v60.drawdown_usd, v60.pending_cost_usd),
+        (d("938.5"), d("61.5"), d("1.5"))
+    );
     assert!(core.control().pair_paused.contains_key(P));
-    // Плановые затраты возврата (план: стадия «возврат USDT» 1.5 USDT) — пока возврат не закончен.
-    let mut y = x.clone();
-    y.plan = json!({"costs": [{"kind": "UsdtReturn", "stage": "возврат USDT", "amount": "1.5", "asset": "USDT", "usdt": "1.5"}]});
-    y.usdt_return = Some(UsdtReturn::Pending {
-        amount: y.proceeds,
-        from: v("bsc_dex"),
-        to: v("mexc"),
-    });
-    assert_eq!(arb::core::drawdown_ledger::pending_cost(&y), d("1.5"));
-    let st = core.control().day.draw[P].clone();
-    let lim = Limit {
-        pct: Some(d("5")),
-        usd: Some(d("30")),
-    };
-    assert_eq!(drawdown::view(&st, d("1.5"), lim).balance_usd, d("938.5"));
+    // Возврат не закончен — часть в учёте сделки, затраты по её доле те же.
+    let saved = core.inner.deals.lock().unwrap()[&x.id].clone();
+    assert!(!arb::core::usdt_return_parts::all(&saved).is_empty());
+    assert_eq!(arb::core::drawdown_pending::pending_cost(&saved), d("1.5"));
+}
+
+#[tokio::test]
+async fn planned_return_cost_at_close_trips_limit() {
+    // Ревью С1: −29 при пределе 30 — без плановых затрат возврата паузы нет, с ними (1.5) просадка 30.5 > 30.
+    let (core, st) = core_at(&dir("dd-minus29"), "5", "30").await;
+    set(&st, "usdt_return.mode", Scope::Global, "per_trade").await;
+    arb::core::drawdown_snap::apply(&core, P, &mexc(), "USDT", d("1000")).await;
+    close_with_return(&core, "m29", "-29").await;
+    let x = draw(&core, P);
+    assert_eq!((x.peak_usd, x.drawdown_usd), (d("1000"), d("30.5")));
+    assert!(core.control().draw_paused.contains(P));
+}
+
+#[tokio::test]
+async fn legacy_pause_lifted_by_reset_and_by_snapshot() {
+    // Ревью С3: пауза старого лимита дня (risk.max_daily_loss_usd 5, ALEO −35), затем заданы пределы просадки.
+    for (name, by_reset) in [("dd-legacy-reset", true), ("dd-legacy-snap", false)] {
+        let (core, st) = base(&dir(name)).await;
+        set(&st, "risk.max_daily_loss_usd", Scope::Global, "5").await;
+        close_aleo(&core, name, "-35").await;
+        assert!(core.control().pair_paused.contains_key(P));
+        set(&st, "risk.drawdown_pct", Scope::Global, "5").await;
+        set(&st, "risk.drawdown_max_usd", Scope::Global, "30").await;
+        let r = core.control();
+        assert!(r.day.pairs[P].draw_on && r.day.pairs[P].paused && !r.day.pairs[P].draw_paused);
+        if by_reset {
+            core.reset_venue_daily_limit(P, "тест").await;
+            assert!(
+                !core.control().pair_paused.contains_key(P),
+                "сброс снял старую паузу"
+            );
+        } else {
+            arb::core::drawdown_snap::apply(&core, P, &mexc(), "USDT", d("965")).await;
+            assert!(
+                !core.control().pair_paused.contains_key(P),
+                "слепок снял старую паузу"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn morning_snapshot_lifts_draw_pause() {
+    let (core, _st) = core_at(&dir("dd-morning"), "5", "30").await;
+    arb::core::drawdown_snap::apply(&core, P, &mexc(), "USDT", d("1000")).await;
+    close_aleo(&core, "mo", "-35").await;
+    // Полночь паузу по просадке не снимает; утренний слепок (965) — снимает, пик = 965.
+    arb::core::day_roll::new_day(&mut core.inner.risk.lock().unwrap());
+    assert!(core.control().pair_paused.contains_key(P));
+    arb::core::drawdown_snap::apply(&core, P, &mexc(), "USDT", d("965")).await;
+    let r = core.control();
+    assert!(!r.pair_paused.contains_key(P) && !r.draw_paused.contains(P));
+    assert_eq!(draw(&core, P).peak_usd, d("965"));
+}
+
+#[tokio::test]
+async fn restart_keeps_draw_pause_and_resume() {
+    // Ревью, мелкое 6: пауза по просадке переживает перезапуск; «Снять паузу» тоже (повторной паузы нет).
+    let path = dir("dd-restart-pause");
+    {
+        let (core, _st) = core_at(&path, "5", "30").await;
+        arb::core::drawdown_snap::apply(&core, P, &mexc(), "USDT", d("1000")).await;
+        close_aleo(&core, "rp", "-35").await;
+        assert!(core.control().draw_paused.contains(P));
+    }
+    let (core, st) = start(&path).await;
+    kinds(&core, &st);
+    assert!(
+        core.control().pair_paused.contains_key(P),
+        "пауза по просадке пережила перезапуск"
+    );
+    assert!(arb::core::risk::resume_pair(&core, P));
+    // Запись снятой паузы — отдельной задачей (drawdown_limit::persist).
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    drop(core);
+    let (core, st) = start(&path).await;
+    kinds(&core, &st);
+    assert!(
+        !core.control().pair_paused.contains_key(P),
+        "снятая пауза не вернулась"
+    );
 }
 
 #[tokio::test]

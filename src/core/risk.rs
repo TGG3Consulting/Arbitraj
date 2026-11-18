@@ -250,10 +250,11 @@ pub fn resume_venue(core: &Core, venue: &VenueId) {
     forget_reconcile(&mut r, venue);
     r.errors_in_row.remove(venue);
     // Решения 173, 258: паузы её пар по убытку дня тоже сняты; новая — только если убыток пары вырастет.
+    let mut draw = false;
     for p in &pairs {
         r.pair_paused.remove(p);
         // Решение 414: пауза по просадке — тоже; новая — только если просадка вырастет.
-        r.draw_paused.remove(p);
+        draw |= r.draw_paused.remove(p);
     }
     // Решение 225: паузу снял человек — софтовая отметка снята.
     r.venue_auto.remove(venue);
@@ -261,19 +262,27 @@ pub fn resume_venue(core: &Core, venue: &VenueId) {
     r.outcome_open.remove(venue);
     drop(r);
     publish(core);
+    // Решение 414 (ревью t199, мелкое 6): снятая пауза по просадке — в учёт (перезапуск её не вернёт).
+    if draw {
+        super::drawdown_limit::persist(core);
+    }
 }
 
 /// Решение 258: снять паузу одной пары «площадка × тип направления» по убытку дня (интерфейс, Telegram); паузы
 /// площадки и других пар не трогает; новая — только если убыток пары вырастет. Принимает: ядро, id пары.
 /// Возвращает: true — пауза была. Ошибок нет.
 pub fn resume_pair(core: &Core, pair: &str) -> bool {
-    let was = {
+    let (was, draw) = {
         let mut r = lk(&core.inner.risk);
         // Решение 414: пауза по просадке — тоже; новая — только если просадка вырастет.
-        r.draw_paused.remove(pair);
-        r.pair_paused.remove(pair).is_some()
+        let draw = r.draw_paused.remove(pair);
+        (r.pair_paused.remove(pair).is_some(), draw)
     };
     publish(core);
+    // Решение 414 (ревью t199, мелкое 6): снятая пауза по просадке — в учёт (перезапуск её не вернёт).
+    if draw {
+        super::drawdown_limit::persist(core);
+    }
     was
 }
 
@@ -313,6 +322,7 @@ pub fn snapshot(core: &Core) -> Risk {
         }
         x.draw_want = r.day.draw_want.get(p).cloned();
         x.paused = r.pair_paused.contains_key(p);
+        x.draw_paused = r.draw_paused.contains(p);
     }
     r
 }

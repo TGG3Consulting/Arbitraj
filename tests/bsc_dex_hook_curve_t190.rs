@@ -62,12 +62,12 @@ fn ladder_a(sums: &[u64]) -> Vec<u64> {
     let raw = ladder_usd(Decimal::from(10), Decimal::from(850), first_round(16));
     let mut out = BTreeSet::new();
     for t in raw {
-        let near = sums.iter().min_by(|a, b| {
-            let da = (f(t) / *a as f64).ln().abs();
-            let db = (f(t) / *b as f64).ln().abs();
-            da.total_cmp(&db)
-        });
-        out.extend(near.copied());
+        let dist = |s: u64| (f(t) / s as f64).ln().abs();
+        let near = sums
+            .iter()
+            .copied()
+            .min_by(|a, b| dist(*a).total_cmp(&dist(*b)));
+        out.extend(near);
     }
     out.into_iter().collect()
 }
@@ -84,11 +84,8 @@ fn hook_curve_rules_against_record() {
                 .map(move |p| (*n, *b, p.usd))
         })
         .collect();
-    assert_eq!(
-        reverts,
-        REVERTS.into_iter().collect(),
-        "откаты квотера — как в README"
-    );
+    let want: BTreeSet<(&str, bool, u64)> = REVERTS.into_iter().collect();
+    assert_eq!(reverts, want, "откаты квотера — как в README");
     let lad = ladder_a(&sums);
     assert_eq!(lad, vec![10, 20, 30, 60, 150, 200, 500, 850], "лесенка А");
     println!(

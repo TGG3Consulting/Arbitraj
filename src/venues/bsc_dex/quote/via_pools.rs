@@ -13,6 +13,8 @@
 //! Настройки: dex.intermediate_partial_fill [bsc_dex] (решение 294; читается только при ошибке пути);
 //! через вызываемые — см. их шапки.
 
+use std::sync::Arc;
+
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, CheckState, Side};
@@ -36,27 +38,29 @@ impl Via<'_> {
     ) -> Result<(Vec<Ok2>, Vec<Ok2>), String> {
         self.mid_ok(m)?;
         let mut why = Vec::new();
-        let mut pick = |list: Vec<Entry>| -> Vec<Ok2> {
+        // Решение 410 (t195): пулы пары — `Arc` записей реестра (pair_arcs); копия записи — только у допущенного пула
+        // (он уходит в путь), а не у каждого пула пары.
+        let mut pick = |list: Vec<Arc<Entry>>| -> Vec<Ok2> {
             let mut ok = Vec::new();
             for e in list.into_iter().filter(|e| keep(e)) {
                 // Решение 39 по налогу пула (решение 146): пул с налогом стороны > 0 — только V2.
                 match select::usable(self.q, &e, self.side, self.usdt_dec)
                     .and_then(|u| pool_tax::v2_only(&e, &u).map(|_| u))
                 {
-                    Ok(u) => ok.push((e, u)),
+                    Ok(u) => ok.push((Entry::clone(&e), u)),
                     Err(w) => why.push(format!("{} {}: {w}", e.family.title, e.ticker)),
                 }
             }
             ok
         };
-        let p1 = pick(self.q.reg.by_pair(m.address, self.usdt));
+        let p1 = pick(self.q.reg.pair_arcs(m.address, self.usdt));
         // BNB (решение 62): шаг со стороны BNB — только V2/V3 (exec/native.rs::pool_ok); V4 / Infinity — мимо с причиной,
         // и путь через m не собирается — котировка берёт прямой маршрут (quote/direct_route.rs, smart_ways.rs).
         let native = self.native();
-        let (p2, off): (Vec<Entry>, Vec<Entry>) = self
+        let (p2, off): (Vec<Arc<Entry>>, Vec<Arc<Entry>>) = self
             .q
             .reg
-            .by_pair(self.coin, m.address)
+            .pair_arcs(self.coin, m.address)
             .into_iter()
             .partition(|e| !native || native::pool_ok(e.pool.kind));
         let p2 = pick(p2);

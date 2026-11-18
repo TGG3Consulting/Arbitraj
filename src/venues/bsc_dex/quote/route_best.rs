@@ -21,7 +21,7 @@
 //! Решение 336: расчёт путей в отборе — на dex.quote_threads потоках (quote/par.rs), итоги по порядку путей — отбор тот
 //! же; брошенный расчёт останавливает и помощников.
 //! Кто вызывает: quote/graph_route.rs.
-//! От чего зависит: quote/par.rs, quote/abandon.rs, pools/graph.rs, quote/route_paths.rs (RoutePath, Step), quote/graph_split.rs (Cand, score, better),
+//! От чего зависит: quote/par.rs, quote/abandon.rs, pools/graph.rs, quote/route_paths.rs (RoutePath), quote/route_hops.rs (решение 410: стек перебора по ссылкам), quote/graph_split.rs (Cand, score, better),
 //! quote/route_calc.rs (eval), quote/pool_tax.rs (coin_keep).
 //! Настройки: dex.route_search_max_paths, dex.quote_threads (решение 336) [bsc_dex] (необязательные); через вызывающего — dex.route_max_hops,
 //! dex.route_max_paths, smart.split_step_pct, dex.route_gas_aware.
@@ -41,7 +41,8 @@ use super::graph_split::{Cand, better, score};
 use super::pool_tax;
 use super::quote_timing::{self, Count};
 use super::route_calc;
-use super::route_paths::{RoutePath, Step, multi_site};
+use super::route_hops::{self, Hop};
+use super::route_paths::{RoutePath, multi_site};
 
 /// Предел перебора путей (dex.route_search_max_paths). None — не задана: поведение как раньше.
 /// Ошибки: NotConfigured — задана, но не больше нуля.
@@ -79,7 +80,8 @@ pub fn enumerate(
         }
         let mut visited = HashSet::from([from]);
         let mut sites = HashSet::new();
-        let mut steps = Vec::new();
+        // Решение 410 (t195): стек — ссылки на рёбра (route_hops.rs).
+        let mut steps: Vec<Hop<'_>> = Vec::new();
         let w = Walk {
             graph,
             to,
@@ -101,7 +103,7 @@ struct Walk<'a> {
     cap: usize,
 }
 
-impl Walk<'_> {
+impl<'a> Walk<'a> {
     /// Из `node` (пройдено steps.len() рёбер): последнее ребро — только в цель, внутренние — в разрешённую
     /// промежуточную, где ещё не были. Решение 295: другая пара уже пройденного многомонетного пула (`sites`) в путь не
     /// идёт — как в route_paths::enumerate. Ошибок нет.
@@ -110,7 +112,7 @@ impl Walk<'_> {
         node: Address,
         visited: &mut HashSet<Address>,
         sites: &mut HashSet<PoolRef>,
-        steps: &mut Vec<Step>,
+        steps: &mut Vec<Hop<'a>>,
         out: &mut Vec<RoutePath>,
     ) {
         for edge in self.graph.edges_from(node) {
@@ -122,19 +124,13 @@ impl Walk<'_> {
                 continue;
             }
             let next = edge.other(node);
-            let step = Step {
-                edge: edge.clone(),
-                token_in: node,
-                token_out: next,
-            };
+            // Решение 410 (t195): шаг — ссылка на ребро; раньше копия ребра (с записью пула) делалась на КАЖДОЕ ребро
+            // узла, хотя на последнем шаге в путь идут только рёбра в цель. Копия — только в выданный путь.
+            let step: Hop<'a> = (edge, node, next);
             let last = steps.len() + 1 == self.len;
             if last {
                 if next == self.to {
-                    steps.push(step);
-                    out.push(RoutePath {
-                        steps: steps.clone(),
-                    });
-                    steps.pop();
+                    out.push(route_hops::path(steps, step));
                 }
             } else if next != self.to && self.allowed.contains(&next) && !visited.contains(&next) {
                 visited.insert(next);

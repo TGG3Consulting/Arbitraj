@@ -8,6 +8,8 @@
 //! От чего зависит: pools/registry.rs, quote/pool_quote.rs, ctx.rs.
 //! Настройки: через pool_quote — dex.v2_fee_pct [вид пула V2].
 
+use std::borrow::Borrow;
+
 use alloy_primitives::{Address, U256};
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -52,20 +54,24 @@ fn best(
     if quote == usdt {
         return Ok(amount);
     }
-    best_in(ctx, &reg.by_pair(quote, usdt), quote, token_in, amount)
+    // Решение 410 (t195): пулы пары без копии записей (Arc) — раньше by_pair копировал каждую запись (Pool, строки,
+    // состояние) на каждый пересчёт суммы; читается только состояние.
+    best_in(ctx, &reg.pair_arcs(quote, usdt), quote, token_in, amount)
 }
 
 /// То же по уже взятым пулам «quote — USDT» (решение 129: учёт газа в графе берёт их один раз на котировку, а не на
-/// каждый путь). Принимает: пулы пары, встречный токен (для текста), токен входа, сумму. Ошибки: NoRoute.
-pub fn best_in(
+/// каждый путь). Принимает: пулы пары (копии записей или `Arc` записей реестра — решение 410, t195), встречный токен (для
+/// текста), токен входа, сумму. Ошибки: NoRoute.
+pub fn best_in<E: Borrow<Entry>>(
     ctx: &Ctx,
-    pools: &[Entry],
+    pools: &[E],
     quote: Address,
     token_in: Address,
     amount: U256,
 ) -> GatewayResult<U256> {
     pools
         .iter()
+        .map(<E as Borrow<Entry>>::borrow)
         .filter(|e| e.valid)
         .filter_map(|e| pool_quote::swap(ctx, e, token_in, true, amount).ok())
         .filter(|s| s.complete)

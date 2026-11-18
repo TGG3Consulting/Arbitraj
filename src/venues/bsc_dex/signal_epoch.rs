@@ -73,7 +73,12 @@ pub fn state(p: &Parts, coin: Address) -> Option<String> {
     let mut pools = Vec::new();
     for (i, a) in tokens.iter().enumerate() {
         for b in &tokens[i + 1..] {
-            for e in reg.by_pair(*a, *b).into_iter().chain(reg.by_pair(*b, *a)) {
+            // Решение 410 (t195): записи без копии (Arc) — читаются только поля для отпечатка.
+            for e in reg
+                .pair_arcs(*a, *b)
+                .into_iter()
+                .chain(reg.pair_arcs(*b, *a))
+            {
                 if e.state_gen == 0 {
                     return None;
                 }

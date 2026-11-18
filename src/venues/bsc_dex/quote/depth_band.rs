@@ -20,6 +20,8 @@
 //!
 //! Цена тика: sqrtPriceX96 = sqrt(1,0001^tick)·2^96 — Uniswap v3-core contracts/libraries/TickMath.sol (getSqrtRatioAtTick).
 
+use std::sync::Arc;
+
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
@@ -107,7 +109,7 @@ pub fn band_from_units(
 /// раз на подготовку, вместе с их поколениями в ключе глубины), а не by_pair на каждый to_usdt. Перевод — тот же своп
 /// всей суммы через лучший достоверный пул (rate::best_in; смысл решения 73 не меняется). Принимает: как
 /// band_from_units, и пулы встречного токена (None — как band_from_units: встречный USDT или USDT не известен
-/// подготовке). Ошибки: как у band_from_units.
+/// подготовке; решение 410 (t195) — `Arc` записей реестра, без копий). Ошибки: как у band_from_units.
 pub fn band_from_rate(
     ctx: &Ctx,
     reg: &Registry,
@@ -115,7 +117,7 @@ pub fn band_from_rate(
     e: &Entry,
     usdt_dec: u8,
     units: (U256, U256, bool),
-    rate: Option<&[Entry]>,
+    rate: Option<&[Arc<Entry>]>,
 ) -> Result<Band, String> {
     let Some(pools) = rate else {
         return band_from_units(ctx, reg, tokens, e, usdt_dec, units);

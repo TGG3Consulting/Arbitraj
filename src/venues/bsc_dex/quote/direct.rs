@@ -51,18 +51,18 @@ pub fn best(
     let mut reasons = Vec::new();
     for e in entries {
         let r = select::usable(q, &e, side, usdt_dec).and_then(|u| {
-            calc_u(ctx, &e, &u, side, qty, (coin_dec, usdt_dec))
-                .map(|(swapped, coins, usdt, u)| Candidate {
-                    entry: e.clone(),
+            calc_u(ctx, &e, &u, side, qty, (coin_dec, usdt_dec)).map_err(|err| err.message)
+        });
+        match r {
+            Ok((swapped, coins, usdt, u)) => {
+                // Решение 410 (t195): запись пула переходит в кандидата (цикл владеет `entries`) — раньше копия.
+                let c = Candidate {
+                    entry: e,
                     usable: u,
                     swapped,
                     coins,
                     usdt,
-                })
-                .map_err(|err| err.message)
-        });
-        match r {
-            Ok(c) => {
+                };
                 if best.as_ref().is_none_or(|b| better(&c, b, side)) {
                     best = Some(c);
                 }

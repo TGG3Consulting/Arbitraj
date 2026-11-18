@@ -11,6 +11,8 @@
 //! Настройки: dex.route_gas_aware [bsc_dex] (да/нет, необязательная: не задана или «нет» — сплит без учёта газа, как
 //! до решения 122); dex.native_wrapped [bsc_dex] — адрес WBNB для перевода газа в USDT.
 
+use std::sync::Arc;
+
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
 
@@ -36,8 +38,9 @@ pub struct GasUsdt<'a> {
     pub usdt_dec: u8,
     pub wbnb: Address,
     pub gas_wei: U256,
-    /// Пулы «WBNB — USDT» на момент котировки (решение 129); у USDT = WBNB — пусто.
-    pub pools: Vec<Entry>,
+    /// Пулы «WBNB — USDT» на момент котировки (решение 129); у USDT = WBNB — пусто. Решение 410 (t195): `Arc` записей
+    /// реестра (pair_arcs), не копии — перевод живёт одну котировку.
+    pub pools: Vec<Arc<Entry>>,
 }
 
 impl<'a> GasUsdt<'a> {
@@ -58,7 +61,7 @@ impl<'a> GasUsdt<'a> {
         let pools = if wbnb == usdt {
             Vec::new()
         } else {
-            reg.by_pair(wbnb, usdt)
+            reg.pair_arcs(wbnb, usdt)
         };
         Ok(Self {
             ctx,

@@ -102,6 +102,9 @@ pub fn round_trip(ctx: &Ctx, e: &Entry, cap: U256, min: U256) -> Option<Trip> {
     if emptiness::empty(e) {
         return None;
     }
+    // Решение 410 (t195): копия записи для состояния после покупки — одна на круг (создаётся при первой продаже по
+    // состоянию после покупки, дальше меняется только её состояние), а не на каждую сумму ряда.
+    let mut after_copy: Option<Entry> = None;
     halve(cap, |a| {
         let buy = pool_quote::swap(ctx, e, e.usdt, true, a).map_err(|_| None)?;
         if !buy.complete {
@@ -115,9 +118,9 @@ pub fn round_trip(ctx: &Ctx, e: &Entry, cap: U256, min: U256) -> Option<Trip> {
         let rest = b - b / U256::from(2u8) - b / U256::from(4u8);
         let sell = if pool_after::appliable(e) {
             let (_, after) = pool_after::apply(ctx, e, e.usdt, a).map_err(|_| None)?;
-            let mut x = e.clone();
+            let x = after_copy.get_or_insert_with(|| e.clone());
             x.pool.state = after;
-            pool_quote::swap(ctx, &x, e.coin, true, rest)
+            pool_quote::swap(ctx, x, e.coin, true, rest)
         } else {
             pool_quote::swap(ctx, e, e.coin, true, rest)
         };

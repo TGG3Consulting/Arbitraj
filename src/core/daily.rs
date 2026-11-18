@@ -119,6 +119,9 @@ pub(super) fn today_book(core: &Core) -> (NaiveDate, Book) {
             // Решение 414: просадка не дневная — переносится всегда.
             draw: r.day.draw.clone(),
             draw_want: r.day.draw_want.clone(),
+            // Паузы по просадке и замеченную просадку пишет commit из Risk; сделку пересчёта (cur) ставят settle и
+            // record.
+            ..Book::default()
         },
     )
 }

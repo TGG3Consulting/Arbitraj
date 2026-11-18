@@ -148,13 +148,17 @@ async fn wait_transit(core: &Core, deal: &Deal) {
     let a = &deal.direction.asset;
     let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
     let s = &core.inner.deps.settings;
-    let at = |c: Option<&str>| At {
+    let with_coin = At {
         venue: Some(&deal.at.0),
-        coin: c,
+        coin: Some(&coin),
+    };
+    let venue_only = At {
+        venue: Some(&deal.at.0),
+        coin: None,
     };
     let (Ok(max_s), Ok(poll)) = (
-        s.integer("transfer.max_time_s", at(Some(&coin))),
-        s.integer("venue.status_poll_ms", at(None)),
+        s.integer("transfer.max_time_s", with_coin),
+        s.integer("venue.status_poll_ms", venue_only),
     ) else {
         return;
     };

@@ -9,13 +9,16 @@
 //!
 //! Оба условия — очередь свободна (запомненный nonce забыт — берётся у узла, как при ручном снятии), SQLite, журнал
 //! send.queue_released и событие ядру WalletQueue с пометкой «снята автоматически: транзакция 0x… вошла в блок N»
-//! (Telegram send.queue_released — core/queue_notify.rs). nonce занят, а квитанции нашей транзакции нет (nonce занят
-//! другой транзакцией) — проверка прекращается, очередь стоит, снимает человек (журнал один раз). Очередь сняли или
-//! остановка уже другая — задача кончается без запросов. Ошибка узла — следующий блок.
+//! (Telegram send.queue_released — core/queue_notify.rs); снятие и запись — под замком очереди с повторной проверкой
+//! «стоит эта транзакция» (ревью t193 М6). Квитанция есть, но не наша (hash / from) — проверка прекращается, снимает
+//! человек; nonce занят, а квитанции нет — проверка идёт дальше, пока очередь стоит (ревью t193 М4, журнал один раз).
+//! Очередь сняли, остановка другая или кошелёк удалён — задача кончается без запросов; ключ закрыт (секреты не
+//! разблокированы) — ждёт без запросов к узлу, после разблокировки проверяет (ревью t193 М5). Ошибка узла — следующий
+//! блок.
 //! Одна задача на транзакцию (по хешу): остановка в трекере и восстановление после запуска не запускают две.
 //! Кто вызывает: send/settle.rs (halt), resubscribe_wallets.rs (остановленная очередь после запуска).
-//! От чего зависит: wallet/nonce.rs (Nonces::queue_ref, Hold::queue_ref; QueueRef — здесь), wallet/queue_store.rs,
-//! node/heads.rs, node/rpc.rs, send/stats.rs, ctx.rs.
+//! От чего зависит: wallet/queue_ref.rs (QueueRef), wallet/queue_store.rs, wallet/signer.rs, node/heads.rs, node/rpc.rs,
+//! send/stats.rs, ctx.rs, settings/accounts (кошелёк есть).
 //! Настройки: нет (ритм — голова сети, bsc.blocks_poll_ms).
 //!
 //! eth_getTransactionCount — execution-apis 16caee27 src/eth/state.yaml; eth_getTransactionReceipt (transactionHash,
@@ -24,7 +27,7 @@
 //! https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/transaction.yaml
 
 use std::collections::HashSet;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex};
 
 use alloy_primitives::{Address, B256, U64};
 use serde::Deserialize;
@@ -38,39 +41,9 @@ use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
 use super::super::node::rpc;
 use super::super::send::stats::Stats;
+use super::queue_ref::QueueRef;
 use super::queue_store;
-
-/// Решение 408 (9б): состояние очереди без замка (не держит очередь) — для самоснятия по квитанции
-/// (release_if). Дешёво клонируется.
-#[derive(Clone)]
-pub struct QueueRef {
-    next: Arc<Mutex<Option<u64>>>,
-    state: Arc<Mutex<WalletQueueState>>,
-}
-
-impl QueueRef {
-    /// Ссылка на состояние очереди (wallet/nonce.rs Nonces::queue_ref, Hold::queue_ref). Ошибок нет.
-    pub(super) fn new(next: Arc<Mutex<Option<u64>>>, state: Arc<Mutex<WalletQueueState>>) -> Self {
-        Self { next, state }
-    }
-
-    /// Состояние очереди. Ошибок нет.
-    pub fn state(&self) -> WalletQueueState {
-        self.state.lock().unwrap_or_else(|p| p.into_inner()).clone()
-    }
-
-    /// Снять остановку, только если стоит именно эта транзакция; запомненный nonce забыт (как Nonces::release).
-    /// Принимает: хеш. Возвращает: новое состояние или None — остановка другая или очереди уже не остановлена.
-    pub fn release_if(&self, hash: B256) -> Option<WalletQueueState> {
-        let mut st = self.state.lock().unwrap_or_else(|p| p.into_inner());
-        if !matches!(&*st, WalletQueueState::Halted { hash: Some(h), .. } if *h == hash) {
-            return None;
-        }
-        *st = WalletQueueState::Free;
-        *self.next.lock().unwrap_or_else(|p| p.into_inner()) = None;
-        Some(st.clone())
-    }
-}
+use super::signer;
 
 /// Хеши транзакций, по которым уже идёт задача.
 static RUNNING: LazyLock<Mutex<HashSet<B256>>> = LazyLock::new(Default::default);
@@ -90,7 +63,9 @@ pub struct Watch {
     pub heads: Heads,
     pub stats: Stats,
     pub queue: QueueRef,
-    pub from: Address,
+    /// Адрес кошелька; None — ключ ещё не открыт (секреты закрыты): адрес берётся на каждом блоке, пока не откроются
+    /// (ревью t193 М5), без запросов к узлу.
+    pub from: Option<Address>,
     pub nonce: u64,
     pub hash: B256,
 }
@@ -122,12 +97,25 @@ fn same(w: &Watch) -> bool {
 /// Цикл по блокам (см. шапку). Ошибок нет.
 async fn run(w: Watch) {
     let mut rx = w.heads.watch();
+    let mut said = false;
     while rx.changed().await.is_ok() {
         if !same(&w) {
             return;
         }
+        // Ревью t193 (М5): кошелёк удалён — задача кончается; ключ закрыт — ждём разблокировки секретов.
+        let gone = w
+            .ctx
+            .account
+            .as_deref()
+            .is_some_and(|id| w.ctx.settings.accounts().wallet(id).is_none());
+        if gone {
+            return;
+        }
+        let Some(from) = w.from.or_else(|| signer::address(&w.ctx).ok()) else {
+            continue;
+        };
         let Ok(n) =
-            rpc::call::<U64>(&w.ctx, "eth_getTransactionCount", json!([w.from, "latest"])).await
+            rpc::call::<U64>(&w.ctx, "eth_getTransactionCount", json!([from, "latest"])).await
         else {
             continue;
         };
@@ -140,34 +128,50 @@ async fn run(w: Watch) {
             continue;
         };
         match r {
-            Some(m) if m.transaction_hash == w.hash && m.from == w.from => {
+            Some(m) if m.transaction_hash == w.hash && m.from == from => {
                 return release(&w, m.block_number.to()).await;
             }
-            _ => {
+            // Ревью t193 (М4): квитанция чужая — окончательно: снимает человек.
+            Some(m) => {
                 let t = format!(
-                    "Очередь кошелька: nonce {} занят, но квитанции транзакции {:#x} нет — nonce занят другой \
-                     транзакцией; очередь стоит, снимает человек",
-                    w.nonce, w.hash
+                    "Очередь кошелька: квитанция по хешу {:#x} не наша (transactionHash {:#x}, from {:#x}) — очередь \
+                     стоит, снимает человек",
+                    w.hash, m.transaction_hash, m.from
                 );
                 return w.ctx.log(Level::Warn, "send.queue_halted", t, None).await;
+            }
+            // Ревью t193 (М4): квитанции нет при занятом nonce — проверка идёт дальше, пока очередь стоит с этой
+            // транзакцией (журнал — один раз).
+            None => {
+                if !said {
+                    said = true;
+                    let t = format!(
+                        "Очередь кошелька: nonce {} занят, квитанции транзакции {:#x} пока нет — проверка на каждом \
+                         блоке, пока очередь стоит; снять может и человек",
+                        w.nonce, w.hash
+                    );
+                    w.ctx.log(Level::Warn, "send.queue_halted", t, None).await;
+                }
             }
         }
     }
 }
 
-/// Снять очередь: свободна, SQLite, журнал, событие ядру с пометкой. Ошибок нет.
+/// Снять очередь: под замком очереди (ревью t193 М6) — снова проверка «стоит эта транзакция», свободна, SQLite,
+/// журнал, событие ядру с пометкой. Ошибок нет.
 async fn release(w: &Watch, block: u64) {
     let note = format!(
         "очередь кошелька снята автоматически: транзакция {:#x} вошла в блок {block}",
         w.hash
     );
+    let _g = w.queue.locked().await;
     let Some(state) = w.queue.release_if(w.hash) else {
         return;
     };
+    queue_store::save(&w.ctx, &state).await;
     w.ctx
         .log(Level::Warn, "send.queue_released", note.clone(), None)
         .await;
-    queue_store::save(&w.ctx, &state).await;
     w.stats.emit(MarketEvent::WalletQueue(WalletQueue {
         venue: w.ctx.venue(),
         account: w.ctx.account.clone().map(DexAccountId),

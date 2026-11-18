@@ -7,9 +7,10 @@
 //! - tu.<откуда>.<куда>.<сумма> — перевод USDT с заполненными откуда / куда / сколько (TransferUsdt): сводка ядра
 //!   usdt_transfer_plan::quote (ctl/transfer_input.rs transfer_pending) — та же проверка, что у интерфейса;
 //! - tt.<куда> — «Перевести USDT на …» (risk.low_usdt): новым сообщением — «Откуда?» (площадки со свободными USDT,
-//!   куда из них можно перевести — usdt_sources::to_list) кнопками tf;
-//! - tf.<откуда>.<куда> — «Сколько?»: можно вывести, комиссия, минимум; «Всё» и доли notify.transfer_pct — кнопками tu
-//!   (другая сумма — диалог «Перевести USDT» чата «Управление»);
+//!   куда из них можно перевести — usdt_sources::to_list) кнопками tf.<время тревоги>.<откуда>.<куда>;
+//! - tf.<время тревоги>.<откуда>.<куда> — «Сколько?»: можно вывести, комиссия, минимум; «Всё» и доли
+//!   notify.transfer_pct — кнопками tx.<время тревоги>.<откуда>.<куда>.<сумма> (как tu; срок — от тревоги, ревью
+//!   t193 М1; другая сумма — диалог «Перевести USDT» чата «Управление»);
 //! - xd.<площадка>.<кошелёк> — «Развернуть исполнитель» — notify/press_event_exec.rs.
 //!
 //! Концы перевода — ключи End::key («биржа» или «dex/кошелёк»).
@@ -35,16 +36,24 @@ use super::tg_buttons::{CallbackQuery, CbMessage};
 
 impl Ctx<'_> {
     /// Кнопки тревог с деньгами (sb, tu, tt, tf, xd). Принимает: нажатие, сообщение, что, данные. Ошибок нет.
-    pub async fn money_button(&self, q: &CallbackQuery, msg: &CbMessage, op: &str, arg: &str) {
+    /// Ревью t193 (М1): sent — время исходной тревоги; шаги tt → tf → tx несут его дальше (срок — от тревоги).
+    pub async fn money_button(
+        &self,
+        q: &CallbackQuery,
+        msg: &CbMessage,
+        op: &str,
+        arg: &str,
+        sent: i64,
+    ) {
         let res = match op {
             "sb" => self.ev_sell(arg).await,
-            "tu" => self.ev_transfer(arg).await,
+            "tu" | "tx" => self.ev_transfer(arg).await,
             "xd" => self.ev_deploy(arg).await,
             "tt" | "tf" => {
                 let s = if op == "tt" {
-                    self.ev_from(arg).await
+                    self.ev_from(arg, sent).await
                 } else {
-                    self.ev_amount(arg).await
+                    self.ev_amount(arg, sent).await
                 };
                 return match s {
                     Ok(s) => {
@@ -126,7 +135,7 @@ impl Ctx<'_> {
     }
 
     /// «Откуда?» при выбранном «Куда». Ошибки: текст для нажавшего.
-    async fn ev_from(&self, to: &str) -> Result<Screen, String> {
+    async fn ev_from(&self, to: &str, sent: i64) -> Result<Screen, String> {
         let all = src::all(self.core, self.core.balances_age()).await;
         let dst = src::by_key(&all, to).ok_or_else(|| format!("Площадки {to} нет"))?;
         let mut s = Screen::new(format!("Перевести USDT на {} — откуда?", dst.label));
@@ -136,7 +145,7 @@ impl Ctx<'_> {
                 continue;
             }
             let usdt = x.usdt.map(n).unwrap_or_default();
-            let data = format!("e:tf.{}.{to}", x.end.key());
+            let data = format!("e:tf.{sent}.{}.{to}", x.end.key());
             let title = format!("{} — {usdt} USDT", x.label);
             // Ревью t193 (М3): длинный callback_data — строкой, не молча.
             match btn(&title, &data) {
@@ -156,7 +165,7 @@ impl Ctx<'_> {
     }
 
     /// «Сколько?»: сводка «Всё» и доли. Ошибки: текст для нажавшего.
-    async fn ev_amount(&self, arg: &str) -> Result<Screen, String> {
+    async fn ev_amount(&self, arg: &str, sent: i64) -> Result<Screen, String> {
         let (fk, tk) = arg.split_once('.').ok_or(BAD)?;
         let (f, t) = (self.end(fk).await?, self.end(tk).await?);
         let qt = plan::quote(self.core, &f, &t, None)
@@ -177,7 +186,7 @@ impl Ctx<'_> {
                 .map(|x| format!("\nУдержания: {x}"))
                 .unwrap_or_default()
         ));
-        let go = |a: Decimal| format!("e:tu.{fk}.{tk}.{}", n(a));
+        let go = |a: Decimal| format!("e:tx.{sent}.{fk}.{tk}.{}", n(a));
         let mut opts = vec![(format!("Всё ({})", n(qt.amount)), go(qt.amount))];
         for p in self.pcts().await {
             let a = qt.withdrawable * p / Decimal::ONE_HUNDRED;

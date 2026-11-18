@@ -69,8 +69,19 @@ impl Mirror {
             let mut st = lock(&self.state);
             let m = st.waits.remove(id);
             if m.is_none() && tg {
-                st.wait_ended
-                    .insert(id.to_string(), (free, line.to_string()));
+                // Ревью t193 (М9): записи, которые «Да» так и не забрало, — не старше notify.dialog_ttl_s.
+                if let Ok(s) = self
+                    .notifier
+                    .settings
+                    .integer("notify.dialog_ttl_s", crate::settings::read::At::default())
+                {
+                    let ttl = std::time::Duration::from_secs(s);
+                    st.wait_ended.retain(|_, (_, _, t)| t.elapsed() <= ttl);
+                }
+                st.wait_ended.insert(
+                    id.to_string(),
+                    (free, line.to_string(), std::time::Instant::now()),
+                );
             }
             m
         };

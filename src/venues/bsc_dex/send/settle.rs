@@ -197,7 +197,7 @@ async fn halt(a: &After<'_>, hold: &Hold, why: String) {
         heads: a.heads.clone(),
         stats: a.stats.clone(),
         queue: hold.queue_ref(),
-        from: a.from,
+        from: Some(a.from),
         nonce: a.nonce,
         hash: a.hash,
     });

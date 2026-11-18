@@ -91,10 +91,14 @@ pub struct MirrorState {
     pub waits: HashMap<String, super::mirror_wait::WaitMark>,
     /// Ревью t193 (М7): конец ожидания пришёл раньше, чем «Да» запомнило сообщение (WaitMark): ID → (снять ли отметку,
     /// строка итога) — confirm применяет его сразу. Только ожидания, начатые из Telegram (who «Telegram …»).
-    pub wait_ended: HashMap<String, (bool, String)>,
+    /// Ревью t193 (М9): с моментом записи — старше notify.dialog_ttl_s убираются (mirror_wait.rs), не копятся.
+    pub wait_ended: HashMap<String, (bool, String, Instant)>,
     /// Ревью t193 (Н5): номер «Да/Отмена» → (чат вопроса — настройка роли, id сообщения вопроса): «Да» принимается только
     /// с этого сообщения этого чата (нажавшего уже проверил press.rs — разрешён в этом чате).
     pub pending_at: HashMap<u64, (String, i64)>,
+    /// Ревью t193 (Н1): когда задан вопрос «Да» — вопросы без ответа старше notify.dialog_ttl_s убираются
+    /// (purge_pending), в памяти не копятся.
+    pub pending_born: HashMap<u64, std::time::Instant>,
 }
 
 /// Начало номеров ожиданий и экранов — время запуска в мс: номер кнопки прошлого запуска не совпадёт с новым. Ошибок нет.
@@ -205,12 +209,28 @@ impl MirrorState {
         self.last_reminder.get_or_insert(now);
     }
 
+    /// Ревью t193 (Н1): убрать вопросы «Да» без ответа старше срока. Принимает: срок (notify.dialog_ttl_s). Ошибок нет.
+    pub fn purge_pending(&mut self, ttl: Duration) {
+        let old: Vec<u64> = self
+            .pending_born
+            .iter()
+            .filter(|(_, t)| t.elapsed() > ttl)
+            .map(|(n, _)| *n)
+            .collect();
+        for n in old {
+            self.pending_born.remove(&n);
+            self.pending_at.remove(&n);
+            self.pending.remove(&n);
+        }
+    }
+
     /// Кладёт ожидание подтверждения. Возвращает: номер для callback_data «y:<номер>».
     pub fn add_pending(&mut self, p: Pending) -> u64 {
         // Решение 176: номера — с времени запуска (start_seed): «Да» старого сообщения после перезапуска не совпадёт
         // с новым ожиданием и не выполнит чужое действие.
         self.next = self.next.max(start_seed()) + 1;
         self.pending.insert(self.next, p);
+        self.pending_born.insert(self.next, Instant::now());
         self.next
     }
 

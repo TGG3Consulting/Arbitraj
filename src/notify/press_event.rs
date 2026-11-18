@@ -44,10 +44,14 @@ impl Ctx<'_> {
     /// «e:<что>.<данные>». Принимает: нажатие, сообщение тревоги, объект callback_data. Ошибок нет.
     pub async fn event_button(&self, q: &CallbackQuery, msg: &CbMessage, object: &str) {
         let (op, arg) = object.split_once('.').unwrap_or((object, ""));
+        // Ревью t193 (М1): шаги перевода (tf, tx) несут время исходной тревоги — срок считается от неё, а не от шага.
+        let Some((sent, arg)) = super::press_event_ttl::alert_time(op, arg, msg.date) else {
+            return self.answer(&q.id, Some(BAD)).await;
+        };
         // Ответ Тиграна 18.11: кнопки тревог, которые двигают деньги, продают, разворачивают или снимают очередь, —
-        // не старше notify.dialog_ttl_s по времени сообщения тревоги.
+        // не старше notify.dialog_ttl_s по времени тревоги.
         if super::press_event_ttl::MONEY.contains(&op)
-            && let Err(why) = self.fresh(msg)
+            && let Err(why) = self.fresh_at(sent)
         {
             return self.answer(&q.id, Some(&why)).await;
         }
@@ -57,7 +61,7 @@ impl Ctx<'_> {
             "od" => return self.ev_deal(q, msg, arg).await,
             "oe" => super::press_event_coin::ev_entry(self, arg),
             "ub" => super::press_event_coin::ev_unblock(self, arg),
-            _ => return self.money_button(q, msg, op, arg).await,
+            _ => return self.money_button(q, msg, op, arg, sent).await,
         };
         self.log(
             Level::Info,

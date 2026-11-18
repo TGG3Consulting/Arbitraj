@@ -5,10 +5,14 @@
 //! из api/dex_executor.rs без изменений: отправка — у адаптера (контракт dex_executor_deploy, sha256 и обёртка из
 //! оценки, которую человек видел); код в сети совпал — адрес записывается у кошелька (решение 132), сверка кода пишет
 //! версию (решение 272), уведомление wallet.executor_deployed. Бот сам не разворачивает: вызывают только кнопки человека.
-//! Ревью t193 (Н1): перед отправкой — исполнитель кошелька тот же, что человек видел (и для кнопки тревоги — всё ещё v1).
+//! Ревью t193 (Н1): перед отправкой — исполнитель кошелька тот же, что человек видел (и для кнопки тревоги — всё ещё v1);
+//! (М3) от этой сверки до записи нового адреса — одно развёртывание на кошелёк (второе одновременное — отказ).
 //! Кто вызывает: api/dex_executor.rs (deploy), core/commands_ext.rs (DeployExecutor).
 //! От чего зависит: gateway (Registry::get_as, контракт Venue), settings/accounts (set_executor), notify (Notifier).
 //! Настройки: нет.
+
+use std::collections::HashSet;
+use std::sync::{LazyLock, Mutex};
 
 use alloy_primitives::Address;
 
@@ -32,6 +36,38 @@ impl std::fmt::Display for DeployError {
             Self::Gateway(e) => write!(f, "{}", e.message),
             Self::Bad(t) => write!(f, "{t}"),
         }
+    }
+}
+
+/// Ревью t193 (М3): кошельки, у которых сейчас идёт развёртывание (интерфейс и Telegram одновременно — второе отказ).
+static DEPLOYING: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(Default::default);
+
+/// Отметка «развёртывание кошелька идёт»: снимается при выходе из deploy любым путём.
+struct Busy(String);
+
+impl Busy {
+    /// Поставить отметку. Принимает: id кошелька. Ошибки: Bad — развёртывание этого кошелька уже идёт.
+    fn take(wallet: &str) -> Result<Self, DeployError> {
+        let fresh = DEPLOYING
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(wallet.to_string());
+        if !fresh {
+            return Err(DeployError::Bad(format!(
+                "развёртывание исполнителя кошелька {wallet} уже идёт — дождитесь его итога"
+            )));
+        }
+        Ok(Self(wallet.to_string()))
+    }
+}
+
+impl Drop for Busy {
+    /// Снять отметку. Ошибок нет.
+    fn drop(&mut self) {
+        DEPLOYING
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(&self.0);
     }
 }
 
@@ -104,6 +140,8 @@ pub async fn deploy(
         .ok_or_else(|| {
             DeployError::Bad("нет адреса обёртки (wnative) из подтверждённой оценки".into())
         })?;
+    // Ревью t193 (М3): от сверки «исполнитель не сменился» до записи нового адреса — одно развёртывание на кошелёк.
+    let _busy = wallet.map(Busy::take).transpose()?;
     same(settings, r)?;
     let acc = wallet.map(|w| DexAccountId(w.to_string()));
     let v = gw

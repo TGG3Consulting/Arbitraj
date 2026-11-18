@@ -193,15 +193,36 @@ fn foreign_record_opens_holder_deals() {
 /// Ответ Тиграна 18.11: денежные кнопки тревог — не старше notify.dialog_ttl_s по времени сообщения тревоги.
 #[test]
 fn money_alert_buttons_expire() {
-    use arb::notify::press_event_ttl::{MONEY, within};
+    use arb::notify::press_event_ttl::{MONEY, alert_time, money_action, within};
     use std::time::Duration;
     let ttl = Duration::from_secs(600);
     assert!(within(1_000, ttl, 1_600));
     assert!(!within(1_000, ttl, 1_601));
-    for op in ["qh", "sb", "tu", "tt", "tf", "xd"] {
+    for op in ["qh", "sb", "tu", "tt", "tf", "tx", "xd"] {
         assert!(MONEY.contains(&op), "{op}");
     }
     for op in ["wc", "od", "oe", "ub"] {
         assert!(!MONEY.contains(&op), "{op}");
     }
+    // Ревью t193 М1: шаги перевода несут время тревоги — срок от неё, а не от шага.
+    assert_eq!(
+        alert_time("tx", "1000.bingx.mexc.12.5", 9_999),
+        Some((1_000, "bingx.mexc.12.5"))
+    );
+    assert_eq!(
+        alert_time("tf", "1000.bingx.mexc", 9_999),
+        Some((1_000, "bingx.mexc"))
+    );
+    assert_eq!(
+        alert_time("tu", "bingx.mexc.12.5", 9_999),
+        Some((9_999, "bingx.mexc.12.5"))
+    );
+    assert_eq!(alert_time("tf", "x.bingx.mexc", 9_999), None);
+    // Ревью t193 Н1: «Да» денежных команд — тоже со сроком.
+    assert!(money_action(&ManualAction::SellBalance {
+        venue: "bingx".into(),
+        account: "Спот".into(),
+        asset: "CAKE".into(),
+    }));
+    assert!(!money_action(&ManualAction::ResetDailyLimit));
 }

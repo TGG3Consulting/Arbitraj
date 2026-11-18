@@ -34,7 +34,9 @@ pub async fn command(core: &Core, a: &ManualAction, who: &str) -> Option<Result<
             nonce,
             hash,
         } => {
-            let held = (nonce.is_some() || hash.is_some()).then_some((*nonce, hash.as_deref()));
+            // Ревью t193 (М2): из команды — всегда сверка с остановкой из вопроса, и когда у неё не было nonce и hash
+            // (тогда снимается только остановка тоже без них).
+            let held = Some((*nonce, hash.as_deref()));
             release_queue(core, venue, wallet.as_deref(), *pending_ok, held, who)
                 .await
                 .map(|_| {

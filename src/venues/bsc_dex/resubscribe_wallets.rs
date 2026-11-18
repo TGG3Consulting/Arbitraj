@@ -46,21 +46,19 @@ impl Subs {
                     .send(MarketEvent::WalletQueue(q));
                 // Решение 408 (ответ Тиграна 9б): остановленная до перезапуска — тоже проверка по блокам (одна задача
                 // на транзакцию, wallet/auto_release.rs); nonce и хеш неизвестны — только человек.
-                if let (
-                    WalletQueueState::Halted {
-                        nonce: Some(n),
-                        hash: Some(h),
-                        ..
-                    },
-                    Ok(from),
-                ) = (&st, super::wallet::signer::address(&b.ctx))
+                // Ключ закрыт (секреты не разблокированы) — адрес возьмёт сама задача после разблокировки (ревью t193 М5).
+                if let WalletQueueState::Halted {
+                    nonce: Some(n),
+                    hash: Some(h),
+                    ..
+                } = &st
                 {
                     super::wallet::auto_release::spawn(super::wallet::auto_release::Watch {
                         ctx: b.ctx.clone(),
                         heads: b.heads.clone(),
                         stats: b.stats.clone(),
                         queue: b.nonces.queue_ref(),
-                        from,
+                        from: super::wallet::signer::address(&b.ctx).ok(),
                         nonce: *n,
                         hash: *h,
                     });

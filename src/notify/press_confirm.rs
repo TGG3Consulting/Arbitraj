@@ -36,7 +36,14 @@ impl Ctx<'_> {
     /// ожидание. Ошибок нет: сбой — в журнал и нажавшему.
     pub async fn ask(&self, query: &str, reply_to: Option<i64>, p: Pending) {
         let (q, title) = (p.question.clone(), p.title.clone());
-        let n = lock(self.state).add_pending(p);
+        let n = {
+            let mut st = lock(self.state);
+            // Ревью t193 (Н1): вопросы без ответа старше notify.dialog_ttl_s — убираются (не задана — как раньше).
+            if let Ok(ttl) = self.ttl() {
+                st.purge_pending(ttl);
+            }
+            st.add_pending(p)
+        };
         let kb = json!({ "inline_keyboard": [[
             { "text": yes_title(&title), "callback_data": format!("y:{n}") },
             { "text": "Отмена", "callback_data": format!("n:{n}") },
@@ -54,7 +61,11 @@ impl Ctx<'_> {
                     .insert(n, (self.chat.to_string(), id));
             }
             Err(e) => {
-                lock(self.state).pending.remove(&n);
+                {
+                    let mut st = lock(self.state);
+                    st.pending.remove(&n);
+                    st.pending_born.remove(&n);
+                }
                 self.log(
                     Level::Error,
                     format!("«{title}»: вопрос подтверждения не отправлен: {e}"),
@@ -78,6 +89,7 @@ impl Ctx<'_> {
             });
             if ok {
                 st.pending_at.remove(&n);
+                st.pending_born.remove(&n);
                 st.pending.remove(&n)
             } else {
                 None
@@ -88,6 +100,24 @@ impl Ctx<'_> {
         };
         let base = msg.text.clone().unwrap_or_else(|| p.question.clone());
         let chat = msg.chat.id.to_string();
+        // Ревью t193 (Н1): «Да» денежной команды — не старше notify.dialog_ttl_s от вопроса (не продать через часы всё
+        // свободное на тот момент).
+        if yes
+            && super::press_event_ttl::money_action(&p.action)
+            && let Err(why) = self.fresh_at(msg.date)
+        {
+            self.answer(&q.id, Some(&why)).await;
+            let _ = self
+                .tg
+                .edit_text_markup(
+                    &chat,
+                    msg.message_id,
+                    &format!("{base}\n\nНе выполнено: {why}."),
+                    None,
+                )
+                .await;
+            return;
+        }
         if !yes {
             self.answer(&q.id, Some("Отменено")).await;
             let _ = self
@@ -177,7 +207,7 @@ impl Ctx<'_> {
                     }
                 }
             };
-            if let Some((free, line)) = ended {
+            if let Some((free, line, _)) = ended {
                 if free && let Some(k) = &p.key {
                     lock(self.state).done.remove(k);
                 }

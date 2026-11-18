@@ -67,7 +67,8 @@ impl DepositAddrs {
         // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
         // Срок адреса (expire_time) отбирается до решения по режиму.
         let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
-        if let Some(a) = self.book.apply(self.cached(mark, &key), &key.0, &key.1)? {
+        let before = self.cached(mark, &key);
+        if let Some(a) = self.book.apply(before.clone(), &key.0, &key.1)? {
             return Ok(a);
         }
         let (method_id, _) = wallet::method(ctx, &asset.ticker, network, Dir::Deposit).await?;
@@ -83,8 +84,12 @@ impl DepositAddrs {
         }
         // Решение 379: одно создание за раз на (монета, сеть); дождавшийся берёт итог первого (кэш или неудача).
         let _pass = self.creating.enter(&key).await;
-        // Создал ли адрес тот, кого ждали (память без учёта режима: это ответ биржи, полученный сейчас).
-        if let Some(a) = self.cached(mark, &key) {
+        // Создал ли адрес тот, кого ждали: память изменилась за время ожидания (решение 411: прежнее значение памяти
+        // в режиме «только биржа» не берётся; в обычном режиме до сюда доходят только с пустой памятью).
+        if let Some(a) = self
+            .cached(mark, &key)
+            .filter(|a| Some(a) != before.as_ref())
+        {
             return Ok(a);
         }
         // Ревью 2 Н-А: отказ Kraken не повторяется до срока venue.networks_fresh_ms (не задана — до перезапуска),

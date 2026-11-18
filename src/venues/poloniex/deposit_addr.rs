@@ -54,7 +54,8 @@ impl DepositAddrs {
         let key = (asset.ticker.clone(), chain.to_string());
         // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
         let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
-        if let Some(a) = self.book.lookup(mark, &asset.ticker, chain)? {
+        let before = self.book.peek(mark, &asset.ticker, chain);
+        if let Some(a) = self.book.apply(before.clone(), &asset.ticker, chain)? {
             return Ok(a);
         }
         let data = wallet::one_raw(ctx, &asset.ticker).await?;
@@ -101,8 +102,10 @@ impl DepositAddrs {
         }
         // Ревью t165 Н4: одно создание за раз на (монета, сеть); дождавшийся берёт итог первого (кэш или неудача).
         let _pass = self.creating.enter(&key).await;
-        // Создал ли адрес тот, кого ждали (память без учёта режима: это ответ биржи, полученный сейчас).
-        if let Some(a) = self.book.peek(mark, &asset.ticker, chain) {
+        // Создал ли адрес тот, кого ждали: память изменилась за время ожидания (решение 411: прежнее значение памяти
+        // в режиме «только биржа» не берётся; в обычном режиме до сюда доходят только с пустой памятью).
+        let now = self.book.peek(mark, &asset.ticker, chain);
+        if let Some(a) = now.filter(|a| Some(a) != before.as_ref()) {
             return Ok(a);
         }
         // Ревью t165 Н2 и ревью 2 Н-А: отказ биржи не повторяется до срока venue.networks_fresh_ms (не задана — до

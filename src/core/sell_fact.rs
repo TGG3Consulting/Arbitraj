@@ -63,7 +63,9 @@ pub async fn before(core: &Core, mut deal: Deal, why: &str) -> Option<Deal> {
     // «Вернуть боту» и прочие ручные входы — автоматика (режим застрявшей монеты).
     let mode = if why == super::sell::BUTTON {
         Unread::Button
-    } else if why == WITHDRAW {
+    } else if why == WITHDRAW || deal.step == super::deal::Step::Stuck {
+        // Пятое ревью (С-3): и внутри режима застрявшей монеты — ждать и перечитывать с пределом (fact_wait.rs), алерт
+        // человеку — по пределу (credit_alert::unread, шаг Stuck), без повторного входа в режим.
         Unread::Wait
     } else {
         Unread::Stuck

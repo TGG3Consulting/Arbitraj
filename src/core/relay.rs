@@ -139,20 +139,33 @@ pub async fn run(core: &Core, mut deal: Deal) {
     // venue.book_stale_ms площадки), — сделка остановлена с причиной (stuck_quote::halt_not_configured), а не перегон
     // вслепую. CI 85ebf10c (t198): проверка — до чтения факта: остановка не продаёт и не выводит, баланс ей не нужен,
     // а нечитаемый баланс иначе уводил бы сделку мимо остановки решения 238.
-    if let Err(e) = super::trade_ops::deal_quote(core, &deal).await
-        && super::stuck_quote::not_configured(&e)
+    let pre = Box::pin(super::trade_ops::deal_quote(core, &deal)).await;
+    if let Err(e) = &pre
+        && super::stuck_quote::not_configured(e)
     {
-        return super::stuck_quote::halt_not_configured(core, deal, &e).await;
+        return super::stuck_quote::halt_not_configured(core, deal, e).await;
     }
+    let qty0 = deal.qty;
     // Решение 413 (ревью t198, Б2): оценка перегона и вывод с биржи — только доли сделки по факту счёта (как перед
     // продажей, sell_fact.rs): чужие монеты на общем счёте не выводятся; None — закрыта или алерт человеку.
     let Some(mut deal) = Box::pin(super::sell_fact::before(core, deal, "перегон")).await
     else {
         return;
     };
+    // Решение 413 (пятое ревью t198): остаток зачисления «не присвоено» не решён — с этой биржи не перегоняем (он
+    // уехал бы без решения): продажа здесь по тем же правилам, остаток решит тихий момент счёта (credit_rest.rs).
+    if super::credit_fact::rest(&deal).is_some() {
+        let why = "остаток зачисления на этой бирже не решён — перегон с неё не делаем";
+        return super::relay_here::sell_here(core, deal, why).await;
+    }
     let a = deal.direction.asset.clone();
-    // Решение 220: котировка — кошельком сделки (количество — по факту).
-    let here = match super::trade_ops::deal_quote(core, &deal).await {
+    // Решение 220: котировка — кошельком сделки; количество по факту то же — котировка до факта (пятое ревью, С-5).
+    let quote = if deal.qty == qty0 {
+        pre
+    } else {
+        Box::pin(super::trade_ops::deal_quote(core, &deal)).await
+    };
+    let here = match quote {
         Ok((v, _, _)) => Some(v),
         Err(e) if super::stuck_quote::not_configured(&e) => {
             return super::stuck_quote::halt_not_configured(core, deal, &e).await;

@@ -93,7 +93,7 @@ pub async fn reconcile_as(core: &Core, deal: &mut Deal, mode: super::credit_aler
     };
     deal.fact_unread = false;
     // Четвёртое ревью (С-7): факт этой сделки прочитан — её учёт сверен с балансом, отметка «исход неизвестен» снята.
-    super::credit_lock::settle(&deal.id);
+    deal.sale_unsure = false;
     let ok = Box::pin(apply_with(core, deal, fact, others)).await;
     // Повторное ревью (мелкое): факт свежий при этом шаге, количестве и площадке — второй вход подряд не читает.
     if ok {
@@ -122,8 +122,13 @@ pub async fn apply_with(
     fact: Decimal,
     others: super::remain_others::Others,
 ) -> bool {
-    // Четвёртое ревью (С-3, С-5): у сделки остаток «не присвоено, перечитать» — снова ждёт доли по той же записи.
-    super::credit_fact::reopen(deal);
+    // Пятое ревью t198: остаток «не присвоено» решается только в тихий момент счёта (credit_rest.rs): количество =
+    // min(количество + остаток, факт − подтверждённые других). Не тихий — сделка ведётся подтверждённой долей.
+    if super::credit_fact::rest(deal).is_some() && super::credit_rest::quiet(core, deal, &others) {
+        super::credit_rest::resolve(deal, fact, &others);
+        super::credit_lock::sync(core, deal);
+        return true;
+    }
     let sp = super::credit_split::split(&super::credit_apply::input(core, deal, fact, &others));
     if super::credit_fact::pending(deal) {
         return Box::pin(super::credit_apply::own(core, deal, fact, &others, &sp)).await;

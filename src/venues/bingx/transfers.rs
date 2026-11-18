@@ -1,5 +1,5 @@
 //! Файл: venues/bingx/transfers.rs
-//! Что делает: вывод с BingX, статус вывода, статус депозита и хеши депозитов монеты (решение 413, С-3).
+//! Что делает: вывод с BingX, статус вывода и статус депозита.
 //! Кто вызывает: mod.rs (функции контракта).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, core/types, gateway/tx_hash.rs.
 //! Настройки: venue.withdraw_wallet_type.
@@ -165,24 +165,6 @@ pub async fn deposit_status(ctx: &Ctx, asset: &Asset, tx_hash: &str) -> GatewayR
         }
     };
     transfer(ctx, rec, tx_hash, status)
-}
-
-/// Решение 413 (четвёртое ревью t198, С-3): хеши депозитов монеты (txId — как в deposit_status) из того же GET
-/// /openApi/api/v3/capital/deposit/hisrec (окно — умолчание API). None — запись без txId.
-/// Ошибки: связь, ключ, ответ не массив.
-pub async fn deposit_hashes(ctx: &Ctx, asset: &Asset) -> GatewayResult<Vec<Option<String>>> {
-    let data = rest::signed(
-        ctx,
-        Method::GET,
-        "/openApi/api/v3/capital/deposit/hisrec",
-        vec![("coin", asset.ticker.clone())],
-        Op::Other,
-    )
-    .await?;
-    let list = data
-        .as_array()
-        .ok_or_else(|| errors::bad("история депозитов — не массив", &data.to_string()))?;
-    Ok(list.iter().map(|r| num::text_opt(r, "txId")).collect())
 }
 
 /// Перевод формата ядра из записи истории.

@@ -5,10 +5,12 @@
 //! успешное чтение баланса этой биржи (remain_read.rs), только если отметка всё ещё NoFact (паузу человека или другого
 //! модуля не трогает). Журнал core.control, Telegram risk.stop (постановка) — как у других софтовых пауз. Не торгуем
 //! вслепую.
-//! Четвёртое ревью t198: снимает и успешное чтение балансов круга сверки (reconcile.rs, С-1), и круг автоснятия
-//! (auto_resume.rs → recheck: балансы счетов площадки прочитаны); поверх чужой паузы (сверка, человек, другой модуль)
+//! Четвёртое и пятое ревью t198: снимают и круг сверки (reconcile.rs), и круг автоснятия (auto_resume.rs) — по тем же
+//! счетам, по которым пауза ставится (recheck_venue: account_balances, торговый и перекладываемые; пустой список — не
+//! снимает); если ни ledger.reconcile_interval_s, ни risk.auto_resume_check_s не заданы — снимет только чтение факта
+//! сделки (docs/SETTINGS_CASES.md, risk.auto_resume_check_s); поверх чужой паузы (сверка, человек, другой модуль)
 //! не ставится — только журнал (С-6).
-//! Кто вызывает: core/remain_read.rs (set, lift), core/reconcile.rs (lift), core/auto_resume.rs (recheck).
+//! Кто вызывает: core/remain_read.rs (set, lift), core/reconcile.rs (recheck_venue), core/auto_resume.rs (recheck).
 //! От чего зависит: auto_pause.rs (pause_venue, lift_venue), risk.rs (publish), engine.rs, deps.rs.
 //! Настройки: нет.
 
@@ -88,8 +90,7 @@ pub async fn lift(core: &Core, v: &VenueId) {
 }
 
 /// Что делает: четвёртое ревью (С-1) — проверка снятия паузы «баланс не читается» без сделки (круг auto_resume.rs):
-/// по каждой бирже с отметкой NoFact — балансы счетов (account_balances); торговый и перекладываемые на торговый счета
-/// прочитаны — пауза снимается (lift). Принимает: ядро. Ошибок нет: не прочитано — пауза остаётся.
+/// по каждой бирже с отметкой NoFact — recheck_venue. Принимает: ядро. Ошибок нет.
 pub async fn recheck(core: &Core) {
     let marked: Vec<VenueId> = lk(&core.inner.risk)
         .venue_auto
@@ -98,18 +99,37 @@ pub async fn recheck(core: &Core) {
         .map(|(v, _)| v.clone())
         .collect();
     for v in marked {
-        let Ok(gw) = core.inner.deps.gw.get(&v).await else {
-            continue;
-        };
-        let ok = match gw.account_balances().await {
-            Ok(accs) => accs.iter().all(|a| {
-                a.error.is_none()
-                    || gw.account_role(&a.account) == crate::gateway::contract::AccountRole::Other
-            }),
-            Err(_) => false,
-        };
-        if ok {
-            Box::pin(lift(core, &v)).await;
+        Box::pin(recheck_venue(core, &v)).await;
+    }
+}
+
+/// Что делает: пятое ревью — снятие паузы NoFact биржи по тем же счетам, по которым её ставит чтение факта
+/// (account_balances: торговый и перекладываемые на торговый прочитаны, хотя бы один такой счёт есть); отметки NoFact
+/// нет — ничего не читает. Принимает: ядро, биржу. Ошибок нет: не прочитано — пауза остаётся.
+pub async fn recheck_venue(core: &Core, v: &VenueId) {
+    let marked = lk(&core.inner.risk)
+        .venue_auto
+        .get(v)
+        .is_some_and(|m| m.kind == Kind::NoFact);
+    if !marked {
+        return;
+    }
+    let Ok(gw) = core.inner.deps.gw.get(v).await else {
+        return;
+    };
+    let ok = match gw.account_balances().await {
+        Ok(accs) => {
+            let used: Vec<_> = accs
+                .iter()
+                .filter(|a| {
+                    gw.account_role(&a.account) != crate::gateway::contract::AccountRole::Other
+                })
+                .collect();
+            !used.is_empty() && used.iter().all(|a| a.error.is_none())
         }
+        Err(_) => false,
+    };
+    if ok {
+        Box::pin(lift(core, v)).await;
     }
 }

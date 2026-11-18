@@ -352,19 +352,6 @@ pub trait Venue: Send + Sync {
     /// Возвращает: перевод с актуальным статусом. Ошибки: не найден, связь.
     async fn deposit_status(&self, asset: &Asset, tx_hash: &str) -> GatewayResult<Transfer>;
 
-    /// Решение 413 (четвёртое ревью t198, С-3): хеши транзакций депозитов монеты на счёт из истории депозитов площадки
-    /// — тот же официальный эндпоинт, по которому deposit_status ищет запись по хешу (окно — умолчание площадки).
-    /// Элемент None — запись без хеша. Ошибки: связь, ключ; по умолчанию NotApplicable — площадка этого не отдаёт
-    /// (ядро тогда держит долю сделки не выше записи × (1 − ожидаемое удержание)).
-    async fn deposit_hashes(&self, asset: &Asset) -> GatewayResult<Vec<Option<String>>> {
-        let _ = asset;
-        Err(GatewayError::new(
-            ErrorCode::NotApplicable,
-            Some(self.id()),
-            "площадка не отдаёт историю депозитов списком",
-        ))
-    }
-
     /// Балансы всех активов на площадке (или в кошельке для DEX).
     /// Ошибки: ключ, связь.
     async fn balances(&self) -> GatewayResult<Vec<Balance>>;

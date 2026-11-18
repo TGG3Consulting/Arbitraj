@@ -9,16 +9,18 @@
 //! посторонних не ждёт (fact_try: занято — снимка нет).
 //! Четвёртое ревью t198 (С-7): охрана продажи держится только на время ордера (trade_seen) и снимается с его итогом,
 //! в том числе «исход неизвестен» — выяснение исхода (минуты) идёт без замка. Но учёт такой сделки уже не согласован с
-//! балансом: счёт помечается «неясно» (unsure) — распределение долей и снимок посторонних на нём неоднозначны (доля не
-//! выше записи × (1 − ожидаемое удержание), замера нет), пока продажа этой сделки не пройдёт, её факт не будет прочитан
-//! (remain_fact.rs settle) или она не закроется / не уйдёт к человеку «Беру на себя» (ledger.rs).
+//! балансом: отметка сделки Deal.sale_unsure (пятое ревью: в учёте SQLite — переживает перезапуск) делает счёт «неясным»
+//! (unsure): распределение долей и снимок посторонних на нём неоднозначны (доля не окончательна, замера нет), её монеты
+//! — не «подтверждённые» других (remain_others.rs: в пути / неясно), пока продажа этой сделки не пройдёт или её факт не
+//! будет прочитан (remain_fact.rs); закрытая / взятая человеком сделка счёт не путает. Человеку — остановка сделки
+//! «исход продажи неизвестен» (sell.rs).
 //! Замки — только в памяти (после перезапуска продаж в полёте нет). Пар (биржа, монета) — столько, сколько торговалось.
 //! Кто вызывает: core/sell.rs и core/sell_range_run.rs (selling), core/remain_fact.rs и core/credit_base.rs (fact),
 //! core/credit_apply.rs (sync).
 //! От чего зависит: coin_key.rs, engine.rs (учёт сделок), op_error.rs, tokio::sync::RwLock.
 //! Настройки: нет (базовое поведение).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, LazyLock, Mutex};
 
@@ -27,7 +29,7 @@ use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 use crate::core::types::{Asset, TradeResult, VenueId};
 
 use super::coin_key::CoinKey;
-use super::deal::Deal;
+use super::deal::{Deal, Step};
 use super::engine::{Core, lk};
 use super::op_error::OpError;
 
@@ -36,28 +38,16 @@ type Locks = HashMap<(VenueId, CoinKey), Arc<RwLock<()>>>;
 
 static LOCKS: LazyLock<Mutex<Locks>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Счета «неясно» (С-7): (площадка, ключ монеты) → сделки с исходом продажи «неизвестен».
-type Unsure = HashMap<(VenueId, CoinKey), HashSet<String>>;
-
-static UNSURE: LazyLock<Mutex<Unsure>> = LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// Что делает: счёт «неясно» — есть сделка с неизвестным исходом продажи (С-7). Ошибок нет.
-pub fn unsure(v: &VenueId, a: &Asset) -> bool {
-    UNSURE
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .get(&(v.clone(), CoinKey::of(a)))
-        .is_some_and(|s| !s.is_empty())
-}
-
-/// Что делает: исход сделки больше не неизвестен (продажа прошла, факт прочитан, закрыта, взята человеком) — снять её
-/// отметку со всех счетов. Принимает: ID сделки. Ошибок нет.
-pub fn settle(id: &str) {
-    let mut m = UNSURE.lock().unwrap_or_else(|p| p.into_inner());
-    for s in m.values_mut() {
-        s.remove(id);
-    }
-    m.retain(|_, s| !s.is_empty());
+/// Что делает: счёт «неясно» — на нём открытая сделка той же монеты с неизвестным исходом продажи (Deal.sale_unsure,
+/// С-7). Принимает: ядро, площадку, монету. Ошибок нет.
+pub fn unsure(core: &Core, v: &VenueId, a: &Asset) -> bool {
+    let key = CoinKey::of(a);
+    lk(&core.inner.deals).values().any(|d| {
+        d.sale_unsure
+            && &d.at == v
+            && !matches!(d.step, Step::Closed | Step::TakenOver)
+            && CoinKey::of(&d.direction.asset) == key
+    })
 }
 
 /// Замок счёта. Ошибок нет.
@@ -108,23 +98,17 @@ where
 {
     let g = sale(&deal.at, &deal.direction.asset).await;
     let r = f.await;
-    if let Ok(x) = &r
-        && let Some(d) = lk(&core.inner.deals).get_mut(&deal.id)
-    {
-        d.qty = deal.qty - x.filled_qty;
-    }
-    match &r {
-        Ok(_) => settle(&deal.id),
-        // С-7: исход неизвестен — счёт «неясно», охрана снимается сейчас же (выяснение исхода — без замка).
-        Err(e) if e.outcome_unknown() => {
-            UNSURE
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .entry((deal.at.clone(), CoinKey::of(&deal.direction.asset)))
-                .or_default()
-                .insert(deal.id.clone());
+    if let Some(d) = lk(&core.inner.deals).get_mut(&deal.id) {
+        match &r {
+            Ok(x) => {
+                d.qty = deal.qty - x.filled_qty;
+                d.sale_unsure = false;
+            }
+            // С-7: исход неизвестен — счёт «неясно» сразу (учёт памяти; запись в базу — вызывающий, sell.rs), охрана
+            // снимается сейчас же (выяснение исхода — без замка).
+            Err(e) if e.outcome_unknown() => d.sale_unsure = true,
+            Err(_) => {}
         }
-        Err(_) => {}
     }
     drop(g);
     r

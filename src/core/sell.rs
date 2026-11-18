@@ -238,6 +238,7 @@ async fn sell(
     }
     match res {
         Ok(r) => {
+            deal.sale_unsure = false;
             super::fills::trade(core, &mut deal, &r).await;
             deal.sells.push(r.clone());
             // Решение 177: продано — запись, с которой продавали, больше не нужна.
@@ -275,6 +276,12 @@ async fn sell(
                 let job = super::sell_next::stuck(core, deal, left, true);
                 return super::sell_loop::hop(job).await;
             }
+            // Решение 413 (пятое ревью t198): у сделки остаток зачисления «не присвоено» — не закрываем: тихий момент
+            // счёта и добор (credit_rest.rs), продолжением цикла.
+            if super::credit_fact::rest(&deal).is_some() {
+                super::manual_outcome::sold(core, &deal, why, &r, Decimal::ZERO).await;
+                return super::sell_loop::hop(super::sell_next::rest_close(core, deal, why)).await;
+            }
             // Возврат USDT на площадку покупки — общий шаг закрытия (ledger::finish, решение 138).
             super::ledger::finish(core, &mut deal, Step::Closed, &format!("продано ({why})")).await;
             // Решение 235: итог кнопки — после закрытия: в нём и возврат USDT (начат / не нужен / не вернётся).
@@ -309,6 +316,8 @@ async fn sell(
         }
         // Исход продажи неизвестен (транзакция могла исполниться) — ни продавать, ни перегонять: ручная проверка.
         Err(e) if e.outcome_unknown() => {
+            // Решение 413 (С-7): счёт «неясно», пока исход не выяснен (в учёте — переживает перезапуск).
+            deal.sale_unsure = true;
             let text = format!("исход продажи неизвестен: {e} — проверьте вручную");
             super::ledger::finish(core, &mut deal, Step::Halted, &text).await;
             super::manual_outcome::failed(core, &deal, why, &text).await;

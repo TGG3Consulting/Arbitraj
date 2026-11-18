@@ -7,7 +7,7 @@
 //! Функции не-async: будущее собирается сразу в куче, вне кадра вызывающего (как sell_range_run.rs stuck), и проверка
 //! Send идёт вне тела рекурсивных async-функций.
 //! Кто вызывает: core/sell.rs, core/sell_range_run.rs (через sell_loop::hop).
-//! Решение 413: short_retry — «мало средств» на бирже (sell_fact.rs).
+//! Решение 413: short_retry — «мало средств» на бирже (sell_fact.rs); rest_close — остаток зачисления (credit_rest.rs).
 //! От чего зависит: sell_loop.rs (Job), sell_fact.rs, stuck.rs (handle), sell_unsent.rs (retry, here), manual_sell.rs (retry,
 //! remainder, gas), risk_count.rs (auto), stuck_reason.rs, op_error.rs, deal.rs, engine.rs (Core).
 //! Настройки: нет.
@@ -98,4 +98,13 @@ pub fn stuck_as_is(core: &Core, deal: Deal, why: StuckReason) -> Job {
     Box::pin(
         async move { super::risk_count::auto(super::stuck::handle_as_is(&c, deal, why)).await },
     )
+}
+
+/// Решение 413 (пятое ревью t198): продажа сделки с остатком «не присвоено» кончилась — ожидание тихого момента счёта
+/// и добор вместо закрытия (credit_rest::at_close). Принимает: ядро, сделку, причину продажи. Возвращает: продолжение.
+/// Ошибок нет.
+#[inline(never)]
+pub fn rest_close(core: &Core, deal: Deal, why: &str) -> Job {
+    let (c, why) = (core.clone(), why.to_string());
+    Box::pin(async move { super::credit_rest::at_close(&c, deal, why).await })
 }

@@ -233,11 +233,6 @@ impl Venue for Mexc {
         deposits::deposit_status(&self.ctx, asset, tx_hash).await
     }
 
-    /// Решение 413 (четвёртое ревью t198, С-3): хеши депозитов монеты — GET /api/v3/capital/deposit/hisrec (deposits.rs).
-    async fn deposit_hashes(&self, asset: &Asset) -> GatewayResult<Vec<Option<String>>> {
-        deposits::deposit_hashes(&self.ctx, asset).await
-    }
-
     /// Решение 226: делистинги — признаки риска делистинга пар GET /api/v3/exchangeInfo (st, status, tradeSideType;
     /// delist.rs), без времени — монета на MEXC не торгуется.
     async fn delistings(&self) -> GatewayResult<crate::core::types::Delistings> {

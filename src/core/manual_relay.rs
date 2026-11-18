@@ -68,6 +68,12 @@ pub async fn run(core: &Core, deal: Deal) {
     let Some(mut deal) = Box::pin(super::sell_fact::before(core, deal, BUTTON)).await else {
         return;
     };
+    // Решение 413 (пятое ревью t198): остаток зачисления «не присвоено» не решён — с этой биржи не перегоняем: продажа
+    // здесь кнопкой, остаток решит тихий момент счёта (credit_rest.rs).
+    if super::credit_fact::rest(&deal).is_some() {
+        deal.note("Продать и перегнать: остаток зачисления на этой бирже не решён — перегона нет, продажа здесь");
+        return Box::pin(super::sell::market(core, deal, BUTTON)).await;
+    }
     let a = deal.direction.asset.clone();
     let here = super::trade_ops::deal_value(core, &deal).await.map(|x| x.0);
     let (list, skipped) = super::manual_relay_targets::targets(core, &deal);

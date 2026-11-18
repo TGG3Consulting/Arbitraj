@@ -65,10 +65,6 @@ pub async fn save(core: &Core, deal: &Deal) {
     stored.fact_fresh = None;
     stored.fact_unread = false;
     lk(&core.inner.deals).insert(rec.id.clone(), stored);
-    // Четвёртое ревью (С-7): закрыта или взята человеком — её «исход неизвестен» счёт больше не путает.
-    if matches!(rec.step, Step::Closed | Step::TakenOver) {
-        super::credit_lock::settle(&rec.id);
-    }
     // Решение 405 (М2): набор сделок, которые ещё что-то держат (unsettled.rs) — после записи учёта.
     super::unsettled::track(core, rec);
     // Решение 405 (ревью Н3): сделка сохранена (могла уйти с пути) — ожидания ручных действий проверяют монету.
@@ -109,6 +105,12 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
 /// нехватки средств, — паузы нет (executor.rs buy_refusal_pauses); всё остальное в закрытии — как у finish.
 /// Принимает: как finish и `pause` (true — как finish). Ошибок нет.
 pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, pause: bool) {
+    // Решение 413 (пятое ревью t198): закрытие с остатком зачисления «не присвоено» — остаток не теряется: сделка
+    // остаётся отдельной позицией (остановлена, количество = остаток, алерт) — credit_rest::park.
+    if step == Step::Closed && super::credit_fact::rest(deal).is_some() {
+        let why = format!("закрытие ({why}) при нерешённом остатке зачисления");
+        return Box::pin(super::credit_rest::park(core, deal, &why)).await;
+    }
     // Решение 180: место в окне выводов, не дошедшее до вывода, освобождается.
     super::withdraw_limit::release(core, &deal.id);
     deal.step = step;

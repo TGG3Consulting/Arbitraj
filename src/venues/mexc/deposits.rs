@@ -1,8 +1,7 @@
 //! Файл: venues/mexc/deposits.rs
-//! Что делает: статус депозита MEXC по хешу транзакции и хеши всех депозитов монеты (решение 413, четвёртое ревью
-//! t198, С-3 — тот же запрос); хеши сравниваются через gateway::tx_hash::same (нижний
+//! Что делает: статус депозита MEXC по хешу транзакции; хеши сравниваются через gateway::tx_hash::same (нижний
 //! регистр, без 0x, до «:» — решение 118, А-🟠6 / Я-16).
-//! Кто вызывает: mod.rs (deposit_status, deposit_hashes из контракта).
+//! Кто вызывает: mod.rs (deposit_status из контракта).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, transfers.rs (hash, transfer), gateway/tx_hash.rs.
 //! Настройки: нет своих.
 //!
@@ -66,22 +65,4 @@ pub async fn deposit_status(ctx: &Ctx, asset: &Asset, tx_hash: &str) -> GatewayR
         }
     };
     transfer(ctx, rec, tx_hash, status)
-}
-
-/// Хеши депозитов монеты (txId / transHash — как в поиске по хешу, transfers::hash) из того же GET
-/// /api/v3/capital/deposit/hisrec (окно — умолчание API: последние 7 дней, limit 1000). None — запись без хеша.
-/// Ошибки: связь, ключ, ответ не массив.
-pub async fn deposit_hashes(ctx: &Ctx, asset: &Asset) -> GatewayResult<Vec<Option<String>>> {
-    let data = rest::signed(
-        ctx,
-        Method::GET,
-        "/api/v3/capital/deposit/hisrec",
-        vec![("coin", asset.ticker.clone())],
-        Op::Other,
-    )
-    .await?;
-    let list = data
-        .as_array()
-        .ok_or_else(|| errors::bad("история депозитов — не массив", &data.to_string()))?;
-    Ok(list.iter().map(hash).collect())
 }

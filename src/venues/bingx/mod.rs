@@ -226,11 +226,6 @@ impl Venue for Bingx {
         transfers::deposit_status(&self.ctx, asset, tx_hash).await
     }
 
-    /// Решение 413 (четвёртое ревью t198, С-3): хеши депозитов монеты — GET /openApi/api/v3/capital/deposit/hisrec.
-    async fn deposit_hashes(&self, asset: &Asset) -> GatewayResult<Vec<Option<String>>> {
-        transfers::deposit_hashes(&self.ctx, asset).await
-    }
-
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         account::balances(&self.ctx).await
     }

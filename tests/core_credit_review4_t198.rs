@@ -2,9 +2,9 @@
 //! Что делает: решение 413 (четвёртое ревью t198) на настоящем ядре с SQLite во временной папке (площадок в реестре
 //! нет, моков нет; сделка WKC живого случая 18.11): свежий факт одноразовый и сбрасывается алертом (Б-1); первый вывод
 //! ждёт баланс не дольше transfer.max_time_s, Warn только при первом сбое, сделку взял человек — выход (С-4); пауза
-//! «баланс не читается» поверх чужой паузы не ставится (С-6); другие депозиты после снимка (С-3); при уходящей со
-//! счёта сделке остаток «не присвоено, перечитать» и добор после её ухода (С-5); «исход неизвестен» — счёт «неясно»
-//! (С-7); учёт памяти без отметки «не прочитан» (М-5).
+//! «баланс не читается» поверх чужой паузы не ставится (С-6); при уходящей со счёта сделке остаток «не присвоено» и
+//! добор в тихий момент после её ухода (С-5); «исход неизвестен» — отметка в учёте сделки, счёт «неясно» (С-7); учёт
+//! памяти без отметки «не прочитан» (М-5). Остаток после частичной продажи и при закрытии — tests/core_credit_rest_t198.rs.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, arb::gateway; tests/t198_common.
@@ -71,7 +71,7 @@ async fn first_withdraw_waits_with_limit() {
     assert!(
         a.timeline
             .iter()
-            .any(|(_, t)| t.contains("перед первым выводом"))
+            .any(|(_, t)| t.contains("перед выводом / продажей"))
     );
     assert_eq!(
         count(&core, "core.credit_fact").await,
@@ -110,25 +110,11 @@ async fn no_fact_over_human_pause_changes_nothing() {
         r.venue_paused.get(&mexc).map(String::as_str),
         Some("человек")
     );
-    assert!(r.venue_auto.get(&mexc).is_none());
+    assert!(!r.venue_auto.contains_key(&mexc));
 }
 
-/// С-3: новые депозиты после снимка — хеши не из снимка и не депозит сделки; запись без хеша — неизвестно (новая).
-#[test]
-fn other_deposits_after_snapshot() {
-    use arb::core::credit_deposits::new_count;
-    let before = vec![Some("0xaa".to_string())];
-    let own = "0xBB";
-    assert_eq!(
-        new_count(&before, &[Some("AA".into()), Some("bb".into())], own),
-        0
-    );
-    assert_eq!(new_count(&before, &[Some("0xcc".into())], own), 1);
-    assert_eq!(new_count(&before, &[None], own), 1);
-}
-
-/// С-5: сделка уходит со счёта — доля не выше пула, остаток «не присвоено, перечитать»; после её ухода следующее
-/// чтение добирает остаток.
+/// С-5, пятое ревью: сделка уходит со счёта — доля не выше пула, остаток «не присвоено»; после её ухода (тихий момент
+/// счёта) следующее чтение добирает остаток.
 #[tokio::test]
 async fn rest_is_taken_after_leaving_deal_goes() {
     let core = start("rest").await;
@@ -149,12 +135,16 @@ async fn rest_is_taken_after_leaving_deal_goes() {
     assert_eq!(a.credit.as_deref().unwrap().rest, None);
 }
 
-/// С-7: продажа с неизвестным исходом — счёт «неясно» (замок снят); исход выяснен — отметка снята.
+/// С-7, пятое ревью (5): продажа с неизвестным исходом — отметка в учёте сделки, счёт «неясно» (замок снят), её
+/// монеты — не «подтверждённые» у других. Своя монета теста (замок счёта общий для тестов процесса).
 #[tokio::test]
 async fn outcome_unknown_marks_account_unsure() {
     use arb::core::op_error::OpError;
     let core = start("unsure").await;
-    let a = credited("U7", "mexc", d("100"));
+    let mut a = credited("U7", "mexc", d("100"));
+    a.direction.asset.ticker = "UNSURE198".into();
+    arb::core::credit_fact::confirm(&mut a, d("100"), arb::core::credit_fact::Basis::Balance);
+    arb::core::ledger::save(&core, &a).await;
     let e = OpError {
         code: Some(arb::gateway::errors::ErrorCode::OutcomeUnknown),
         message: "исход неизвестен".into(),
@@ -164,13 +154,18 @@ async fn outcome_unknown_marks_account_unsure() {
     };
     let r = arb::core::credit_lock::selling(&core, &a, async move { Err(e) }).await;
     assert!(r.is_err());
-    assert!(arb::core::credit_lock::unsure(&a.at, &a.direction.asset));
+    let (v, coin) = (a.at.clone(), a.direction.asset.clone());
+    assert!(arb::core::credit_lock::unsure(&core, &v, &coin));
     assert!(
-        arb::core::credit_lock::fact_try(&a.at, &a.direction.asset).is_some(),
+        arb::core::credit_lock::fact_try(&v, &coin).is_some(),
         "замок снят"
     );
-    arb::core::credit_lock::settle("U7");
-    assert!(!arb::core::credit_lock::unsure(&a.at, &a.direction.asset));
+    let mut b = credited("U8", "mexc", d("10"));
+    b.direction.asset.ticker = "UNSURE198".into();
+    let o = arb::core::remain_others::on_account(&core, &b, &v);
+    assert_eq!((o.unclear.clone(), o.qty), (vec!["U7".to_string()], d("0")));
+    let x = core.inner.deals.lock().unwrap().get("U7").cloned().unwrap();
+    assert!(x.sale_unsure, "в учёте сделки (переживает перезапуск)");
 }
 
 /// М-5: в учёт памяти отметка «баланс не прочитан» не попадает — следующий вход получит попытку режима.

@@ -158,9 +158,10 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
                 continue;
             }
         };
-        // Решение 413 (четвёртое ревью t198, С-1): баланс биржи прочитан — пауза «баланс не читается» снимается.
+        // Решение 413 (четвёртое ревью С-1, пятое): пауза «баланс не читается» — проверка по тем же счетам, по которым
+        // она ставится (account_balances; отметки нет — без запроса).
         if kind == VenueKind::Cex {
-            Box::pin(super::fact_pause::lift(core, &v)).await;
+            Box::pin(super::fact_pause::recheck_venue(core, &v)).await;
         }
         all.insert(label.clone(), json!(b));
         // Решение 140: у кошелька DEX нет строки USDT — «нет данных», не 0: ни алерта, ни перегона «отдельно».

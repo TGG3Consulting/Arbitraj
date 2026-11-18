@@ -10,13 +10,13 @@
 //! - share = Some — подтверждено: Basis::Balance — по факту баланса; Record — только у записей до ревью t198 (с ревью
 //!   С1 любое зачисление на биржу ждёт доли). Оценки без факта нет (повторное ревью, Б-3: баланс не прочитан — не
 //!   продаём);
-//! - rest = Some — четвёртое ревью t198 (С-3, С-5): доля подтверждена не вся — «не присвоено, перечитать» (на счёте
-//!   были другие депозиты монеты после снимка или сделка в пути / уходящая): сделка ведётся долей, а следующее чтение
-//!   факта (перед продажей / выводом) снова распределяет по той же записи (reopen) и добирает остаток.
+//! - rest = Some — пятое ревью t198: доля подтверждена, но не окончательна — «не присвоено» (на счёте было больше
+//!   ожидаемого или через счёт шли другие сделки): сделка ведётся долей, остаток решается в тихий момент счёта (нет
+//!   других ждущих, сделок в пути сюда / отсюда, продаж с неизвестным исходом) — доля = min(количество + остаток,
+//!   факт − подтверждённые других) (credit_rest.rs); остаток не теряется: сделка с ним не закрывается и не уходит
+//!   перегоном, пока он не решён; не решён к пределу — остаётся отдельной видимой позицией (остановлена).
 //!
 //! Поле reread — только в памяти: количество, на котором продажа получила отказ «мало средств» (sell_fact.rs).
-//! Поля tx и deposits — хеш вывода этой сделки и хеши депозитов монеты на счёт до вывода (credit_base.rs) — для
-//! проверки «других депозитов после снимка нет» (С-3).
 //! Кто вызывает: core/fills.rs (on_credit — после зачисления перевода сделки), credit_apply.rs, sell_fact.rs,
 //! remain_others.rs, reconcile_confirm.rs, tests.
 //! От чего зависит: credit_base.rs (посторонние до вывода, по хешу), trade_ops.rs (вид площадки),
@@ -63,15 +63,10 @@ pub struct CreditFact {
     #[serde(default, deserialize_with = "basis_lenient")]
     pub basis: Option<Basis>,
     pub at: DateTime<Utc>,
-    /// Четвёртое ревью (С-3, С-5): остаток записи «не присвоено, перечитать»; None — доля окончательна.
+    /// Пятое ревью: остаток «не присвоено» — сколько ещё может быть монетами сделки сверх подтверждённой доли (верхняя
+    /// граница доли = количество + остаток); решается в тихий момент счёта (credit_rest.rs). None — доля окончательна.
     #[serde(default)]
     pub rest: Option<Decimal>,
-    /// Хеш вывода этой сделки (депозит этой сделки в истории биржи).
-    #[serde(default)]
-    pub tx: Option<String>,
-    /// Хеши депозитов монеты на счёт до вывода (снимок credit_base.rs); None — не сняты (элемент None — без хеша).
-    #[serde(default)]
-    pub deposits: Option<Vec<Option<String>>>,
     /// Только в памяти: количество, на котором продажа получила отказ «мало средств» (sell_fact.rs).
     #[serde(skip)]
     pub reread: Option<Decimal>,
@@ -90,7 +85,6 @@ fn basis_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Basis>
 /// Transfer, решения 151, 222). Принимает: ядро, сделку (qty уже = запись), получателя, хеш вывода. Ошибок нет.
 pub fn on_credit(core: &Core, deal: &mut Deal, to: &VenueId, tx: Option<&str>) {
     let snap = super::credit_base::take(tx);
-    let deposits = super::credit_base::take_deposits(tx);
     if super::trade_ops::kind(core, to) != Ok(VenueKind::Cex) {
         deal.credit = None;
         return;
@@ -104,8 +98,6 @@ pub fn on_credit(core: &Core, deal: &mut Deal, to: &VenueId, tx: Option<&str>) {
         basis: None,
         at: chrono::Utc::now(),
         rest: None,
-        tx: tx.map(str::to_string),
-        deposits,
         reread: None,
     }));
 }
@@ -141,23 +133,9 @@ pub fn set_rest(deal: &mut Deal, rest: Decimal) {
     }
 }
 
-/// Что делает: следующее чтение факта сделки с остатком (С-3, С-5) — снова «ждёт доли» по той же записи депозита
-/// (ограничение запись × (1 − ожидаемое удержание) — от исходной записи, не от количества с остатком); замер удержания
-/// по ней не пишется (снимка посторонних нет — замер был при первой доле). Принимает: сделку. Возвращает: да — сделка
-/// снова ждёт доли. Ошибок нет.
-pub fn reopen(deal: &mut Deal) -> bool {
-    let at = deal.at.clone();
-    let Some(c) = deal.credit.as_deref_mut().filter(|c| c.venue == at) else {
-        return false;
-    };
-    if c.rest.take().is_none() {
-        return false;
-    }
-    c.share = None;
-    c.basis = None;
-    c.outsider = None;
-    c.outsider_at = None;
-    true
+/// Остаток «не присвоено» сделки на площадке, где её монеты (пятое ревью). None — нет. Ошибок нет.
+pub fn rest(d: &Deal) -> Option<Decimal> {
+    here(d).and_then(|c| c.rest).filter(|r| *r > Decimal::ZERO)
 }
 
 /// Что делает: отказ «мало средств» на продаже количества `tried` (sell_fact.rs): запомнить и, если количество было
@@ -175,8 +153,6 @@ pub fn mark_reread(deal: &mut Deal, tried: Decimal) {
             basis: None,
             at: chrono::Utc::now(),
             rest: None,
-            tx: None,
-            deposits: None,
             reread: None,
         }));
     }

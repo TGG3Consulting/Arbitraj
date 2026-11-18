@@ -173,6 +173,12 @@ pub struct Deal {
     /// Только в памяти.
     #[serde(skip)]
     pub fact_fresh: Option<Box<(Step, Decimal, VenueId)>>,
+    /// Решение 413 (четвёртое ревью С-7, пятое ревью): продажа сделки на бирже кончилась «исход неизвестен» — её учёт не
+    /// согласован с балансом: счёт (биржа, монета) «неясно» (credit_lock::unsure), её монеты — не «подтверждённые» в
+    /// распределении других. Снимается успешной продажей или прочитанным фактом этой сделки. В учёте (переживает
+    /// перезапуск).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sale_unsure: bool,
     pub started_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -221,6 +227,7 @@ impl Deal {
             transit_to: None,
             fact_unread: false,
             fact_fresh: None,
+            sale_unsure: false,
             started_at: now,
             updated_at: now,
         }

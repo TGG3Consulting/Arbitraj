@@ -16,7 +16,6 @@
 //! Ревью t198: снимок привязан к переводу — к хешу транзакции вывода (bind при зачислении), а не к сделке и бирже;
 //! сорванный перевод снимает свою ячейку (Drop у Snap). Сохранение — в учёте сделки (Deal.credit.outsider, SQLite):
 //! перезапуск его не теряет.
-//! Четвёртое ревью (С-3): вместе со снимком — список депозитов монеты (credit_deposits.rs), привязка к тому же хешу.
 //! Кто вызывает: core/transfers.rs (start — перевод монеты сделки на биржу, seal — хеш вывода получен, bind — после
 //! зачисления),
 //! core/credit_fact.rs (take).
@@ -70,7 +69,6 @@ impl Drop for Snap {
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .remove(&self.key);
-        super::credit_deposits::forget(self.key);
     }
 }
 
@@ -92,8 +90,6 @@ pub fn start(core: &Core, deal: &str, to: &VenueId, a: &Asset) -> Option<Snap> {
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .insert(key, Slot::Reading);
-    // Четвёртое ревью (С-3): список депозитов монеты при снимке — для проверки «других депозитов после снимка нет».
-    super::credit_deposits::spawn(core, key, to, a);
     let (c, id, to, a) = (core.clone(), deal.to_string(), to.clone(), a.clone());
     tokio::spawn(async move {
         let v = Box::pin(read(&c, &id, &to, &a))
@@ -134,7 +130,6 @@ pub fn bind(snap: Option<Snap>, tx: Option<&str>) {
         .unwrap_or_else(|p| p.into_inner())
         .get(&s.key)
         .copied();
-    super::credit_deposits::bind(s.key, norm(tx));
     if let Some(Slot::Done(Some(v))) = slot {
         BOUND
             .lock()
@@ -144,13 +139,8 @@ pub fn bind(snap: Option<Snap>, tx: Option<&str>) {
 }
 
 /// Что делает: забирает снимок по хешу вывода (credit_fact::on_credit — сразу после зачисления в той же задаче
-/// перевода: bind и take идут подряд, запись без take не остаётся). Возвращает: (посторонние, момент) или None.
-/// Ошибок нет.
-/// Что делает: забирает список депозитов при снимке по хешу вывода (credit_deposits.rs). Ошибок нет.
-pub fn take_deposits(tx: Option<&str>) -> Option<super::credit_deposits::Hashes> {
-    super::credit_deposits::take(&norm(tx?))
-}
-
+/// перевода: bind и take идут подряд, запись без take не остаётся). Принимает: хеш вывода (None — снимка нет).
+/// Возвращает: (посторонние, момент снимка) или None — снимка нет. Ошибок нет.
 pub fn take(tx: Option<&str>) -> Option<(Decimal, DateTime<Utc>)> {
     let tx = tx?;
     BOUND
@@ -182,7 +172,7 @@ async fn read(core: &Core, deal: &str, to: &VenueId, a: &Asset) -> Option<Decima
     // Третье ревью (С-Ж): замок не ждём — занято продажей, снимка нет (баланс не читаем).
     let _g = super::credit_lock::fact_try(to, a)?;
     // Четвёртое ревью (С-7): продажа с неизвестным исходом на счёте — снимок неоднозначен.
-    if super::credit_lock::unsure(to, a) {
+    if super::credit_lock::unsure(core, to, a) {
         return None;
     }
     let before = super::remain_others::on_account(core, &own, to);

@@ -15,15 +15,18 @@
 //! входит в идущую группу своего направления (Join); у каждого направления — своя группа и свой общий возврат
 //! (coin_group.rs — по ID группы). Деньги монеты общие (money.max_per_coin_usd — по монете, всех направлений), котировки
 //! — после идущих сделок всех групп монеты на той же площадке (ride_quote.rs: продажа — sell_on, покупка — buy_on).
+//! Встречная сделка на общем счёте (площадка покупки одной = площадка продажи другой, тот же кошелёк DEX или та же
+//! биржа; ответ Тиграна на Н1) — не входит, пока идёт (coin_counter.rs).
 //! Сделка, ушедшая с пути (шаг не Transfer / Selling), новых сделок монеты не пускает — ни в одном направлении. Общий
 //! возврат группы уже ушёл (ревью 3, Н3) — новая сделка того же направления начинает новую группу.
-//! Значение включателя для идущей сделки запоминается при board (Ride.top_up): очередь кандидатов на каждом тике
-//! настройку не читает, пока идущая сделка начата без докупки.
+//! Начата ли идущая сделка с докупкой, видно по её записи (Ride.group: None — без докупки, ставится при board из
+//! Deal.group): пока по монете идёт такая сделка, очередь кандидатов (blocks_new) настройку не читает — сразу «занята».
 //! Блокировки: сначала `active`, потом `rides`, потом `deals`; через await не держатся.
 //! Кто вызывает: executor.rs (admit, board, release), candidates.rs (blocks_new), manual_halted.rs, manual_return.rs,
 //! balance_sell.rs, cycle_deal.rs (take), balance_sell_check.rs, busy_note.rs, uncapped_watch.rs,
-//! deposit_warm_busy.rs (held, keys), ride_quote.rs и coin_group.rs (of_coin, group_of).
-//! От чего зависит: engine.rs, coin_key.rs, deal.rs, start_reason.rs, settings.
+//! deposit_warm_busy.rs (held, keys), ride_quote.rs (Ride, top_up_on), costs_source.rs (group_running), coin_group.rs
+//! (inner.rides — по ID группы).
+//! От чего зависит: engine.rs, coin_key.rs, deal.rs, start_reason.rs, coin_counter.rs (встречные, решение 405), settings.
 //! Настройки: exec.top_up.
 
 use std::sync::atomic::Ordering;
@@ -147,6 +150,7 @@ fn joinable(core: &Core, d: &Direction, rides: &[Ride]) -> Option<Seat> {
 
 /// Что делает: вход исполнителя (executor::accepted) — занять монету целиком под предпроверку и покупку новой сделки.
 /// Монета занята целиком или по ней идут сделки, к которым нельзя присоединиться, — прежний отказ start_reason::busy.
+/// Решение 405: встречная идущая сделка на общем счёте (coin_counter.rs) — отказ её причиной (журнал core.start_refused).
 /// Вложенная (Join) сразу входит в ожидание общего возврата группы (coin_group::join — под замком `active`, ревью 3,
 /// Н1: порядок active → groups; закрытие последней идущей не уведёт общий возврат без неё).
 /// Принимает: ядро, направление. Возвращает: место сделки (монета занята этим вызовом; снимает release или board).
@@ -170,7 +174,11 @@ pub fn admit(core: &Core, d: &Direction) -> Result<Seat, String> {
         return Err(busy());
     } else {
         match joinable(core, d, &rides) {
-            Some(s) => s,
+            // Решение 405 (ответ Тиграна на Н1): встречная идущая сделка на общем счёте — отказ своей причиной.
+            Some(s) => match super::coin_counter::check(core, d, &rides) {
+                Some(why) => return Err(why),
+                None => s,
+            },
             None => return Err(busy()),
         }
     };
@@ -232,7 +240,9 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
 /// Что делает: очередь расчёта (candidates::enqueue) — новый расчёт направления не нужен: монета занята целиком или
 /// по ней идут сделки, к которым это направление присоединиться не может. Решение 403 (ревью t188): идущих сделок нет
 /// (inner.rides_live = 0) — без замка `rides`. Быстрый путь: идущие начаты без докупки —
-/// ответ без чтения настройки, копий и текста (как раньше одно `contains`). Принимает: ядро, направление. Ошибок нет.
+/// ответ без чтения настройки, копий и текста (как раньше одно `contains`). Решение 405: встречная сделка на общем
+/// счёте (coin_counter.rs) расчёт НЕ блокирует — отказ даёт admit с причиной в журнал core.start_refused (повторы —
+/// счётчиком, reject_log.rs). Принимает: ядро, направление. Ошибок нет.
 pub fn blocks_new(core: &Core, d: &Direction) -> bool {
     let key = CoinKey::of(&d.asset);
     if lk(&core.inner.active).contains(&key) {

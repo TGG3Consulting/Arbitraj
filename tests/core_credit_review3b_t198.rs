@@ -127,7 +127,8 @@ fn sources_keep_review3_rules() {
     }
     // С-Д: первый вывод — режим «ждать», ожидание с перечитыванием.
     assert!(code_of("src/core/executor.rs").contains("sell_fact::WITHDRAW"));
-    assert!(code_of("src/core/remain_fact.rs").contains("while read.is_err()"));
+    // Поведение ожидания (предел, выход при человеке) — tests/core_credit_review4_t198.rs.
+    assert!(code_of("src/core/remain_fact.rs").contains("fact_wait::first("));
     // С-З: чтение баланса — без rules_apply (журнал Error, Telegram, ошибки подряд, «стоп»).
     assert!(!code_of("src/core/remain_read.rs").contains("rules_apply"));
     // С-Ж: снимок запечатан до стадии «отправлено».

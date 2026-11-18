@@ -27,6 +27,13 @@ use super::remain_others::Others;
 /// не читается» (fact_pause.rs), не прочитано — одна строка Warn core.credit_fact и пауза новых входов на биржу.
 /// Принимает: ядро, сделку. Возвращает: (факт или текст ошибки, другие). Ошибок нет.
 pub async fn read(core: &Core, deal: &Deal) -> (Result<Decimal, String>, Others) {
+    Box::pin(read_with(core, deal, true)).await
+}
+
+/// Что делает: как read; `warn` = false — без строки Warn на итог (четвёртое ревью t198, С-4: повторные чтения
+/// ожидания первого вывода — Warn только при первом сбое). Принимает: ядро, сделку, писать ли Warn. Возвращает: как
+/// read. Ошибок нет.
+pub async fn read_with(core: &Core, deal: &Deal, warn: bool) -> (Result<Decimal, String>, Others) {
     let cex = super::trade_ops::kind(core, &deal.at) == Ok(VenueKind::Cex);
     let mut attempt = 0;
     loop {
@@ -61,7 +68,7 @@ pub async fn read(core: &Core, deal: &Deal) -> (Result<Decimal, String>, Others)
                     tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
                     continue;
                 }
-                if cex {
+                if cex && warn {
                     let t = format!(
                         "{}: баланс не прочитан после {attempt} попыток: {text}",
                         deal.id
@@ -74,6 +81,8 @@ pub async fn read(core: &Core, deal: &Deal) -> (Result<Decimal, String>, Others)
                         None,
                     ))
                     .await;
+                }
+                if cex {
                     Box::pin(super::fact_pause::set(core, &deal.at, &text)).await;
                 }
                 return (Err(text), o);

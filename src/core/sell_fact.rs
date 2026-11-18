@@ -59,7 +59,9 @@ pub async fn before(core: &Core, mut deal: Deal, why: &str) -> Option<Deal> {
     }
     let tried = super::credit_fact::here(&deal).and_then(|c| c.reread);
     use super::credit_alert::Unread;
-    let mode = if why == super::sell::BUTTON || super::risk_count::is_manual() {
+    // Четвёртое ревью (М-5): итог кнопки — только у кнопок («Продать сейчас», «Продать и перегнать»); перегон после
+    // «Вернуть боту» и прочие ручные входы — автоматика (режим застрявшей монеты).
+    let mode = if why == super::sell::BUTTON {
         Unread::Button
     } else if why == WITHDRAW {
         Unread::Wait

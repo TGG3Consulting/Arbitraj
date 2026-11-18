@@ -11,7 +11,12 @@
 //!   С1 любое зачисление на биржу ждёт доли). Оценки без факта нет (повторное ревью, Б-3: баланс не прочитан — не
 //!   продаём).
 //!
+//! - rest = Some — четвёртое ревью t198 (С-3, С-5): доля подтверждена не вся — «не присвоено, перечитать» (на счёте
+//!   были другие депозиты монеты после снимка или сделка в пути / уходящая): сделка ведётся долей, а следующее чтение
+//!   факта (перед продажей / выводом) перераспределяет количество + остаток (reopen) и добирает его.
 //! Поле reread — только в памяти: количество, на котором продажа получила отказ «мало средств» (sell_fact.rs).
+//! Поля tx и deposits — хеш вывода этой сделки и хеши депозитов монеты на счёт до вывода (credit_base.rs) — для
+//! проверки «других депозитов после снимка нет» (С-3).
 //! Кто вызывает: core/fills.rs (on_credit — после зачисления перевода сделки), credit_apply.rs, sell_fact.rs,
 //! remain_others.rs, reconcile_confirm.rs, tests.
 //! От чего зависит: credit_base.rs (посторонние до вывода, по хешу), trade_ops.rs (вид площадки),
@@ -58,6 +63,15 @@ pub struct CreditFact {
     #[serde(default, deserialize_with = "basis_lenient")]
     pub basis: Option<Basis>,
     pub at: DateTime<Utc>,
+    /// Четвёртое ревью (С-3, С-5): остаток записи «не присвоено, перечитать»; None — доля окончательна.
+    #[serde(default)]
+    pub rest: Option<Decimal>,
+    /// Хеш вывода этой сделки (депозит этой сделки в истории биржи).
+    #[serde(default)]
+    pub tx: Option<String>,
+    /// Хеши депозитов монеты на счёт до вывода (снимок credit_base.rs); None — не сняты (элемент None — без хеша).
+    #[serde(default)]
+    pub deposits: Option<Vec<Option<String>>>,
     /// Только в памяти: количество, на котором продажа получила отказ «мало средств» (sell_fact.rs).
     #[serde(skip)]
     pub reread: Option<Decimal>,
@@ -76,6 +90,7 @@ fn basis_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Basis>
 /// Transfer, решения 151, 222). Принимает: ядро, сделку (qty уже = запись), получателя, хеш вывода. Ошибок нет.
 pub fn on_credit(core: &Core, deal: &mut Deal, to: &VenueId, tx: Option<&str>) {
     let snap = super::credit_base::take(tx);
+    let deposits = super::credit_base::take_deposits(tx);
     if super::trade_ops::kind(core, to) != Ok(VenueKind::Cex) {
         deal.credit = None;
         return;
@@ -88,6 +103,9 @@ pub fn on_credit(core: &Core, deal: &mut Deal, to: &VenueId, tx: Option<&str>) {
         share: None,
         basis: None,
         at: chrono::Utc::now(),
+        rest: None,
+        tx: tx.map(str::to_string),
+        deposits,
         reread: None,
     }));
 }
@@ -111,7 +129,36 @@ pub fn confirm(deal: &mut Deal, qty: Decimal, basis: Basis) {
     if let Some(c) = deal.credit.as_deref_mut() {
         c.share = Some(deal.qty);
         c.basis = Some(basis);
+        c.rest = None;
     }
+}
+
+/// Что делает: четвёртое ревью (С-3, С-5) — доля подтверждена не вся: остаток записи «не присвоено, перечитать».
+/// Принимает: сделку, остаток (≤ 0 — доля окончательна). Ошибок нет.
+pub fn set_rest(deal: &mut Deal, rest: Decimal) {
+    if let Some(c) = deal.credit.as_deref_mut() {
+        c.rest = (rest > Decimal::ZERO).then_some(rest);
+    }
+}
+
+/// Что делает: следующее чтение факта сделки с остатком (С-3, С-5) — снова «ждёт доли» с записью = количество +
+/// остаток; замер удержания по ней не пишется (снимка посторонних нет — замер был при первой доле). Принимает: сделку.
+/// Возвращает: да — сделка снова ждёт доли. Ошибок нет.
+pub fn reopen(deal: &mut Deal) -> bool {
+    let at = deal.at.clone();
+    let qty = deal.qty;
+    let Some(c) = deal.credit.as_deref_mut().filter(|c| c.venue == at) else {
+        return false;
+    };
+    let Some(rest) = c.rest.take() else {
+        return false;
+    };
+    c.record = qty + rest;
+    c.share = None;
+    c.basis = None;
+    c.outsider = None;
+    c.outsider_at = None;
+    true
 }
 
 /// Что делает: отказ «мало средств» на продаже количества `tried` (sell_fact.rs): запомнить и, если количество было
@@ -128,6 +175,9 @@ pub fn mark_reread(deal: &mut Deal, tried: Decimal) {
             share: Some(qty),
             basis: None,
             at: chrono::Utc::now(),
+            rest: None,
+            tx: None,
+            deposits: None,
             reread: None,
         }));
     }

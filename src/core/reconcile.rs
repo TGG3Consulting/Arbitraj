@@ -158,6 +158,10 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
                 continue;
             }
         };
+        // Решение 413 (четвёртое ревью t198, С-1): баланс биржи прочитан — пауза «баланс не читается» снимается.
+        if kind == VenueKind::Cex {
+            Box::pin(super::fact_pause::lift(core, &v)).await;
+        }
         all.insert(label.clone(), json!(b));
         // Решение 140: у кошелька DEX нет строки USDT — «нет данных», не 0: ни алерта, ни перегона «отдельно».
         if let Ok(q) = deps.settings.text("venue.quote_asset", at)
@@ -185,13 +189,14 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
             }
         }
         let Ok(gw) = &g else { continue };
-        // Решение 413 (третье ревью, С-Б): ждущие доли без задачи (остановлены, ждут человека) — подтверждение по
-        // балансу этого же круга, только по монетам, где они не менялись за запрос баланса.
+        // Решение 413 (третье ревью С-Б, четвёртое С-2): ждущие доли без задачи (остановлены, ждут человека) — доля по
+        // балансу этого же круга только запоминается для сверки (подтверждает её факт под замком перед продажей), только
+        // по монетам, где они не менялись за запрос баланса.
         if kind == VenueKind::Cex {
             let hp_after = super::credit_halted::prints(core, &v);
             for key in super::credit_halted::stable(&hp_before, &hp_after) {
                 if let Ok(t) = super::reconcile_key::total(kind, gw.as_ref(), &b, &key).await {
-                    Box::pin(super::credit_halted::confirm(core, &v, &key, t)).await;
+                    Box::pin(super::credit_halted::observe(core, &v, &key, t)).await;
                 }
             }
         }

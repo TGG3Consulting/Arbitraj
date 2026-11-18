@@ -39,6 +39,7 @@ pub static OWN_RECORD: &[&str] = &[
     "deal.transfer_sent",        // core.transfer_sent (transfers.rs)
     "deal.transfer_credited",    // core.transfer_credited (transfer_credit.rs)
     "deal.credit_hold",          // core.credit_fact (credit_apply.rs own, решение 413)
+    "deal.no_fact",              // core.credit_fact (remain_fact.rs wait_first, решение 413)
     "transfer.to_trading_failed",// core.transfer_to_trading (transfer_credit.rs)
     "deal.dust",                 // deal.dust (dust.rs)
     "deal.closed",               // core.deal_closed (ledger.rs finish — при каждом закрытии)

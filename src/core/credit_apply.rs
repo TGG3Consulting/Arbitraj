@@ -8,7 +8,8 @@
 //! Баланс не прочитан (estimate) — оценка «запись × (1 − ожидаемое удержание)»: не больше доли сделки при удержании не
 //! меньше ожидаемого (чужие монеты не продаются); остаток сверх оценки, если удержания не было, остаётся на счёте и
 //! виден в хронологии.
-//! Ревью t198 (С2): замер — только однозначный (measurable). Выход из «ждёт доли» на круге сверки — credit_halted.rs.
+//! Ревью t198 (С2): замер — только однозначный (measurable); четвёртое ревью (С-3) — и без других депозитов монеты
+//! после снимка (credit_deposits.rs); остаток «не присвоено, перечитать» — credit_fact::rest (С-3, С-5). Выход из «ждёт доли» на круге сверки — credit_halted.rs.
 //! Уведомление, доля 0 и оценка — credit_alert.rs.
 //! Кто вызывает: core/remain_fact.rs (apply_with, reconcile), core/credit_halted.rs (input).
 //! От чего зависит: credit_split.rs, credit_fact.rs, credit_text.rs, credit_lock.rs (sync), deposit_hold.rs,
@@ -58,7 +59,10 @@ pub fn input(core: &Core, deal: &Deal, fact: Decimal, o: &Others) -> Input {
         confirmed,
         pending,
         // Сделка в пути сюда, замок не взят или сделка уходит отсюда (повторное ревью, С-1) — замер неоднозначен.
-        unclear: !o.unclear.is_empty() || !o.leaving.is_empty(),
+        // Четвёртое ревью (С-7): на счёте продажа с неизвестным исходом — тоже неоднозначно.
+        unclear: !o.unclear.is_empty()
+            || !o.leaving.is_empty()
+            || super::credit_lock::unsure(&deal.at, &deal.direction.asset),
         hold_pct: super::deposit_hold::expected_pct(core, &deal.at, a),
         tol_pct: tol,
     }
@@ -81,20 +85,40 @@ pub fn with_shares(o: &Others, sp: &Split) -> Others {
 /// Что делает: подтверждает долю своей ждущей сделки по распределению (шапка). Принимает: ядро, сделку, факт, других,
 /// распределение. Возвращает: true — вести дальше с долей; false — доля 0, алерт человеку. Ошибок нет.
 pub async fn own(core: &Core, deal: &mut Deal, fact: Decimal, o: &Others, sp: &Split) -> bool {
-    let measured = measurable(core, deal, sp, sp.raw_of(&deal.id).unwrap_or_default());
-    // Третье ревью (С-В): однозначный замер — удержание измерено на этой сделке: она берёт долю по факту без ограничения
-    // ожидаемым (реальные 0 % — продаёт всё своё, а не 98 %).
-    let share = if measured {
-        sp.raw_of(&deal.id).unwrap_or_default()
-    } else {
-        sp.share_of(&deal.id).unwrap_or_default()
-    };
+    let raw = sp.raw_of(&deal.id).unwrap_or_default();
+    let capped = sp.share_of(&deal.id).unwrap_or_default();
+    // Третье ревью (С-В) и четвёртое (С-3): однозначный замер — удержание измерено на этой сделке, и она берёт долю по
+    // факту без ограничения ожидаемым (реальные 0 % — продаёт всё своё), только если в истории депозитов биржи после
+    // снимка нет других депозитов монеты (credit_deposits.rs): иначе лишнее может быть ручным депозитом — ограничение
+    // остаётся, и замер не пишется.
+    let measured = measurable(core, deal, sp, raw)
+        && Box::pin(super::credit_deposits::clean(core, deal)).await;
+    let share = if measured { raw } else { capped };
     let record = super::credit_fact::here(deal).map_or(deal.qty, |c| c.record);
+    // Четвёртое ревью (С-3, С-5): остаток — «не присвоено, перечитать» (добирается следующим чтением факта): лишнее сверх
+    // ограничения; при сделке в пути сюда или уходящей отсюда — и недостающее до записи × (1 − ожидаемое удержание).
+    let hold = super::deposit_hold::expected_pct(core, &deal.at, &deal.direction.asset);
+    let cap = record * (Decimal::ONE - hold / Decimal::ONE_HUNDRED);
+    let unclear = !o.unclear.is_empty()
+        || !o.leaving.is_empty()
+        || super::credit_lock::unsure(&deal.at, &deal.direction.asset);
+    let rest = raw.max(if unclear { cap } else { Decimal::ZERO }) - share;
     let text = super::credit_text::describe(core, deal, fact, o, sp, (record, share));
     if share <= Decimal::ZERO {
         return Box::pin(super::credit_alert::zero(core, deal, o, text)).await;
     }
     super::credit_fact::confirm(deal, share, Basis::Balance);
+    super::credit_fact::set_rest(
+        deal,
+        rest.trunc_with_scale(share.scale().max(record.scale())),
+    );
+    let text = match super::credit_fact::here(deal).and_then(|c| c.rest) {
+        Some(r) => format!(
+            "{text}; не присвоено {} — перечитать: добирается следующим чтением факта (решение 413, С-3/С-5)",
+            super::deal_words::coins(r, &deal.direction.asset.ticker)
+        ),
+        None => text,
+    };
     deal.note(text.clone());
     super::credit_lock::sync(core, deal);
     // Замер — сразу в памяти (расчёт следующих сделок видит его); база, журнал и Telegram — фоном: продажа их не ждёт

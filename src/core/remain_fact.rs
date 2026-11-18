@@ -65,15 +65,16 @@ pub async fn reconcile_as(core: &Core, deal: &mut Deal, mode: super::credit_aler
     // Решение 413: факт и учёт других — одним снимком под замком счёта (продажи в полёте нет); на бирже — повторы по
     // правилу шлюза «повторить» (remain_read.rs).
     let (mut read, mut others) = Box::pin(super::remain_read::read(core, deal)).await;
-    // Третье ревью (С-Д): первый вывод — не уходим в режим застрявшей монеты и не продаём: ждём и перечитываем (пауза
-    // новых входов на биржу и сообщение человеку — fact_pause.rs, один раз), пока не прочитается.
-    if cex && mode == super::credit_alert::Unread::Wait {
-        while read.is_err() {
-            let Some(ms) = super::credit_alert::wait_ms(core, &deal.at) else {
-                break;
-            };
-            tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
-            (read, others) = Box::pin(super::remain_read::read(core, deal)).await;
+    // Третье ревью (С-Д), четвёртое (С-4): первый вывод — ждём и перечитываем не дольше transfer.max_time_s
+    // (fact_wait.rs); сделку взял человек — дальше не ведём; предел вышел — режим застрявшей монеты с причиной.
+    if cex
+        && mode == super::credit_alert::Unread::Wait
+        && let Err(e) = &read
+    {
+        let waited = Box::pin(super::fact_wait::first(core, deal, e.clone(), others)).await;
+        match waited {
+            super::fact_wait::Waited::Read(r, o) => (read, others) = (r, o),
+            super::fact_wait::Waited::Gone => return false,
         }
     }
     let fact = match read {
@@ -91,6 +92,8 @@ pub async fn reconcile_as(core: &Core, deal: &mut Deal, mode: super::credit_aler
         }
     };
     deal.fact_unread = false;
+    // Четвёртое ревью (С-7): факт этой сделки прочитан — её учёт сверен с балансом, отметка «исход неизвестен» снята.
+    super::credit_lock::settle(&deal.id);
     let ok = Box::pin(apply_with(core, deal, fact, others)).await;
     // Повторное ревью (мелкое): факт свежий при этом шаге, количестве и площадке — второй вход подряд не читает.
     if ok {
@@ -119,6 +122,8 @@ pub async fn apply_with(
     fact: Decimal,
     others: super::remain_others::Others,
 ) -> bool {
+    // Четвёртое ревью (С-3, С-5): у сделки остаток «не присвоено, перечитать» — снова ждёт доли (количество + остаток).
+    super::credit_fact::reopen(deal);
     let sp = super::credit_split::split(&super::credit_apply::input(core, deal, fact, &others));
     if super::credit_fact::pending(deal) {
         return Box::pin(super::credit_apply::own(core, deal, fact, &others, &sp)).await;

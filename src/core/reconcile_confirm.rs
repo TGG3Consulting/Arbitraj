@@ -69,7 +69,7 @@ pub fn expected(
             let low = d.qty * (Decimal::ONE - pct / Decimal::ONE_HUNDRED);
             // Третье ревью (С-Б): на круге сверки удержано больше ожидаемого — доля по факту, не нижняя оценка (иначе
             // пауза биржи из-за удержания — повтор WKC).
-            match super::credit_halted::observed(&d.id) {
+            match super::credit_halted::observed(&d) {
                 Some(seen) => low.min(seen),
                 None => low,
             }

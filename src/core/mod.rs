@@ -64,6 +64,7 @@ pub mod costs_withdraw;
 pub mod credit_alert;
 pub mod credit_apply;
 pub mod credit_base;
+pub mod credit_deposits;
 pub mod credit_chain;
 pub mod credit_event;
 pub mod credit_expect;
@@ -141,6 +142,7 @@ pub mod exec_book_fail;
 pub mod executor;
 pub mod executor_deploy;
 pub mod fact_pause;
+pub mod fact_wait;
 pub mod feed_confirm;
 pub mod feed_confirm_queue;
 #[cfg(test)]

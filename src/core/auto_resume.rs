@@ -13,7 +13,8 @@
 //!   их пауза остаётся, остальные направления площадки торгуют (прежнее превращение паузы площадки в паузу по убытку
 //!   убрано). Общий лимит превышен — «Стоп» становится «Стоп» по лимиту дня.
 //!   Журнал core.control (снято) и core.auto_resume (проверка не прошла — один раз на смену причины), уведомление
-//!   risk.auto_resumed. Не задана risk.auto_resume_check_s — автоснятия нет (одна запись core.not_configured).
+//!   risk.auto_resumed. Решение 413 (С-1): пауза NoFact — по прочитанным балансам счетов (fact_pause::recheck).
+//!   Не задана risk.auto_resume_check_s — автоснятия нет (одна запись core.not_configured).
 //!
 //! Кто вызывает: engine.rs (фоновая задача run).
 //! От чего зависит: auto_pause.rs, risk.rs, wait.rs (Pacer), gateway (registry, check_connection), daily_limit.rs,
@@ -48,6 +49,8 @@ pub async fn run(core: Core) {
 /// Один круг: какие софтовые паузы пора проверять, проверка подключения (каждая площадка — один раз), снятие.
 /// Принимает: ядро, последние причины неудачных проверок. Ошибок нет.
 async fn round(core: &Core, last: &mut HashMap<VenueId, String>) {
+    // Решение 413 (четвёртое ревью t198, С-1): пауза «баланс биржи не читается» — снимает прочитанный баланс счетов.
+    Box::pin(super::fact_pause::recheck(core)).await;
     let now = Utc::now();
     let (marks, mode) = {
         let r = lk(&core.inner.risk);

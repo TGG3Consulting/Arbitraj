@@ -166,6 +166,8 @@ async fn take(
             }
             // Ревью 08.11: у старых сделок (до 227) — не больше своей выручки на площадке части.
             amount = super::usdt_return_deal::own_cap(core, d, &at, amount);
+            // Решение 405 (ревью 6, Н1): новая попытка — записи «вывод принят» прошлых попыток этой площадки снять.
+            super::usdt_accepted::new_attempt(d, &at);
             super::usdt_return_parts::put(
                 d,
                 UsdtReturn::Pending {

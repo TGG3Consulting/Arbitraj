@@ -151,6 +151,8 @@ pub(super) async fn claim(core: &Core, deal: &str, at: &VenueId, tries: u64) -> 
         if t != tries {
             return false;
         }
+        // Решение 405 (ревью 6, Н1): новая попытка — записи «вывод принят» прошлых попыток этой площадки снять.
+        super::usdt_accepted::new_attempt(d, &from);
         super::usdt_return_parts::put(d, UsdtReturn::Pending { amount, from, to });
         d.clone()
     };

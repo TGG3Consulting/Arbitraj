@@ -888,6 +888,59 @@ async fn accepted_withdrawal_survives_restart() {
     assert!(rec.usdt_accepted.is_empty());
 }
 
+/// Ревью 6, Н1 / М3: запись «вывод принят» части заменяется, а не копится; после перезапуска площадка отменила вывод
+/// без живого цикла (unmark некому звать) — «Перегнать» (новая попытка части) снимает старую запись, резерв снова
+/// целиком; старая запись учёта без поля usdt_accepted читается (пусто).
+#[tokio::test]
+async fn retry_clears_stale_accepted_and_old_record_reads() {
+    let (core, _s, _j) = start("accepted-retry").await;
+    let (bingx, mexc) = (VenueId("bingx".into()), VenueId("mexc".into()));
+    let dx = dir_of("mexc", "bingx");
+    let mut x = bought("X1", &dx, Step::Closed, ("40", "0"), None);
+    x.usdt_return = Some(UsdtReturn::Pending {
+        amount: d("500"),
+        from: bingx.clone(),
+        to: mexc.clone(),
+    });
+    // Старая запись (без поля) читается: поля нет в JSON — пусто.
+    let v = serde_json::to_value(&x).unwrap();
+    assert!(v.get("usdt_accepted").is_none());
+    let old: Deal = serde_json::from_value(v).unwrap();
+    assert!(old.usdt_accepted.is_empty());
+    arb::core::ledger::save(&core, &x).await;
+    // Два ответа площадки по одной части — одна запись (последняя).
+    arb::core::usdt_accepted::mark(&core, "X1u", &bingx, d("500")).await;
+    arb::core::usdt_accepted::mark(&core, "X1u1", &bingx, d("500")).await;
+    let rec = core.inner.deals.lock().unwrap().get("X1").cloned().unwrap();
+    assert_eq!(rec.usdt_accepted.len(), 1);
+    assert_eq!(rec.usdt_accepted[0].relay, "X1u1");
+    // Перезапуск: «не вернулись» 500, резерв 0 (вывод был принят).
+    let mut after = rec;
+    assert!(arb::core::usdt_return_state::on_restart(&core, &mut after).await);
+    arb::core::ledger::save(&core, &after).await;
+    assert_eq!(usdt_hold::held(&core, &bingx, None).amount, Decimal::ZERO);
+    // Площадка вывод отменила (живого цикла нет) — человек жмёт «Перегнать»: старая запись снята, резерв части — снова
+    // её сумма (Перегнать — «идёт» 500).
+    let r = core
+        .command(arb::core::types::ManualCommand {
+            action: arb::core::types::ManualAction::UsdtRetry {
+                deal_id: "X1".into(),
+            },
+            source: arb::core::types::CommandSource::Ui,
+            by: None,
+            at: Utc::now(),
+        })
+        .await;
+    assert!(r.is_ok(), "{r:?}");
+    let rec = core.inner.deals.lock().unwrap().get("X1").cloned().unwrap();
+    assert!(
+        rec.usdt_accepted.is_empty(),
+        "новая попытка — без старой записи"
+    );
+    assert!(usdt_hold::held(&core, &bingx, None).amount > Decimal::ZERO);
+    let _ = mexc;
+}
+
 #[tokio::test]
 async fn top_up_budget_excludes_first_invested() {
     let (core, s, _j) = start("budget").await;

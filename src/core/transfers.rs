@@ -368,6 +368,30 @@ async fn go(
         }
         // Событие зачисления только будит опрос: хеш вывода — только от отправителя (решение 76).
         match gw_from.withdrawal_status(&created.venue_ref).await {
+            // Решение 405 (ревью 6, Н1; факт кода адаптеров): отмена / отказ после принятия приходят не только ошибкой
+            // WithdrawRejected — Phemex «Cancelled» (phemex/transfers.rs), kyberswap (transfer.rs rejected) и DEX
+            // «транзакция откатилась» (bsc_dex/wallet/transfer_status.rs: receipt status ≠ 1 → Rejected, с хешем)
+            // приходят статусом. Раньше:
+            // без хеша — опрос без конца, с хешем — «отправлен». Теперь — как отказ: денег не ушло.
+            Ok(t)
+                if matches!(
+                    t.status,
+                    TransferStatus::Rejected | TransferStatus::Cancelled
+                ) =>
+            {
+                let e = crate::gateway::errors::GatewayError::new(
+                    ErrorCode::WithdrawRejected,
+                    Some(from.clone()),
+                    format!(
+                        "{}: вывод {} — статус {:?} после принятия (денег не ушло)",
+                        from.0, created.venue_ref, t.status
+                    ),
+                );
+                super::usdt_accepted::unmark(core, deal).await;
+                rules_apply::on_error(core, "Вывод", from, Some(deal), &e, 1).await;
+                let _ = gw_to.deposit_abandoned(&on_to).await;
+                return Err(OpError::from(&e));
+            }
             Ok(t) if t.tx_hash.is_some() && t.status != TransferStatus::Pending => break t,
             Ok(_) => {}
             Err(e) if e.code == ErrorCode::WithdrawRejected => {

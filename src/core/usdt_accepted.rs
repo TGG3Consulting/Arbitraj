@@ -13,8 +13,11 @@
 //! Снимается: вывод отклонён после принятия (WithdrawRejected в статусе — деньги вернулись) — unmark; часть закончена
 //! («вернулись», «перегнано вручную» — usdt_return_state::set → forget_finished); кусок закончился (сумма части стала
 //! другой) — при следующей записи (mark) устаревшие снимаются, при чтении не считаются.
-//! Кто вызывает: transfers.rs (mark, unmark), usdt_hold.rs (sent_of), usdt_return_state.rs (forget_finished).
-//! От чего зависит: usdt_hold.rs (owner_of), usdt_return_parts.rs, relay_owner.rs, ledger.rs (save), engine.rs.
+//! Ревью 6: запись части заменяется (mark), новая попытка части её снимает (new_attempt); в базу — текущая запись
+//! учёта (persist, без затирания параллельной правки в памяти).
+//! Кто вызывает: transfers.rs (mark, unmark), usdt_hold.rs (sent_of), usdt_return_state.rs (forget_finished),
+//! manual_usdt.rs, usdt_return_attempt.rs, usdt_return_pieces.rs (new_attempt).
+//! От чего зависит: usdt_hold.rs (owner_of), usdt_return_parts.rs, persist.rs, ledger.rs (KIND), view.rs, engine.rs.
 //! Настройки: нет.
 
 use rust_decimal::Decimal;
@@ -45,7 +48,7 @@ pub async fn mark(core: &Core, relay: &str, from: &VenueId, qty: Decimal) {
     let Some(deal) = super::usdt_hold::owner_of(core, relay) else {
         return;
     };
-    let rec = {
+    {
         let mut deals = lk(&core.inner.deals);
         let Some(d) = deals.get_mut(&deal) else {
             return;
@@ -55,19 +58,26 @@ pub async fn mark(core: &Core, relay: &str, from: &VenueId, qty: Decimal) {
         else {
             return;
         };
-        // Устаревшие записи этой площадки (кусок закончился — часть стала другой) — снять.
-        d.usdt_accepted
-            .retain(|a| a.from != *from || a.part == amount);
-        d.usdt_accepted.retain(|a| a.relay != relay);
+        // Ревью 6, Н1: запись части ЗАМЕНЯЕТСЯ (у части на площадке — одна текущая попытка): прежние записи этой
+        // площадки — от прошлых попыток или законченных кусков — снимаются.
+        d.usdt_accepted.retain(|a| a.from != *from);
         d.usdt_accepted.push(Accepted {
             relay: relay.to_string(),
             from: from.clone(),
             qty,
             part: amount,
         });
-        d.clone()
-    };
-    super::ledger::save(core, &rec).await;
+    }
+    persist(core, &deal).await;
+}
+
+/// Что делает: ревью 6, Н1 — новая попытка части на площадке («не вернулись» / «ждёт повтора» → «идёт»: «Перегнать»,
+/// повтор; manual_usdt.rs, usdt_return_attempt.rs claim, usdt_return_pieces.rs start_manual) — записи «вывод принят»
+/// прошлых попыток этой площадки снимаются: прошлый вывод мог быть отменён площадкой без живого цикла перевода
+/// (после перезапуска unmark некому звать), и запись держала бы резерв 0 при деньгах на площадке. Вызывается под
+/// замком учёта, до put «идёт». Принимает: сделку, площадку части. Ошибок нет.
+pub fn new_attempt(d: &mut Deal, from: &VenueId) {
+    d.usdt_accepted.retain(|a| a.from != *from);
 }
 
 /// Что делает: вывод отклонён после принятия — деньги снова на площадке: запись снимается. Принимает: ядро, ID
@@ -76,7 +86,7 @@ pub async fn unmark(core: &Core, relay: &str) {
     let Some(deal) = super::usdt_hold::owner_of(core, relay) else {
         return;
     };
-    let rec = {
+    {
         let mut deals = lk(&core.inner.deals);
         let Some(d) = deals.get_mut(&deal) else {
             return;
@@ -86,9 +96,34 @@ pub async fn unmark(core: &Core, relay: &str) {
         if d.usdt_accepted.len() == before {
             return;
         }
-        d.clone()
+    }
+    persist(core, &deal).await;
+}
+
+/// Что делает: ревью 6, М1 — правка сделана в учёте в памяти под замком; в базу и интерфейс уходит ТЕКУЩАЯ запись
+/// учёта (читается в момент записи), а не копия, снятая до параллельной правки: ledger::save вставляет переданную
+/// копию и в память — им здесь не пользуемся, чтобы не затереть параллельную правку. Окно остаётся только в порядке
+/// записей в базу (две записи одной сделки почти одновременно — в базе может оказаться предпоследняя; память верна;
+/// docs/TASKS.md, решение 405). Принимает: ядро, ID сделки. Ошибок нет: сбой базы — в журнал.
+async fn persist(core: &Core, id: &str) {
+    let Some(rec) = lk(&core.inner.deals).get(id).cloned() else {
+        return;
     };
-    super::ledger::save(core, &rec).await;
+    if let Err(e) = super::persist::save(&core.inner.deps.db, super::ledger::KIND, id, &rec).await {
+        core.inner
+            .deps
+            .log(
+                crate::storage::journal::Level::Error,
+                "core.ledger",
+                None,
+                format!("Сделка {id} не сохранена (вывод принят): {e}"),
+                None,
+            )
+            .await;
+    }
+    if let Ok(v) = serde_json::to_value(&rec) {
+        core.inner.live.send(super::view::CoreEvent::Deal(v));
+    }
 }
 
 /// Что делает: часть закончена («вернулись», «перегнано вручную») — записи этой площадки не нужны (вызывается под

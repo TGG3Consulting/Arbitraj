@@ -177,6 +177,19 @@ CAKE — «новые сделки CAKE на паузе: ручное дейст
 - **М4** — Telegram: TASKS (решение 405).
 - CI: clippy sort_by_key; tests/core_balance_sell.rs — под ожидание (balance_sell_check::busy: метка Я-2 больше не отказ).
 
+## Пятое ревью
+
+- **Н1** — `usdt_accepted.rs` переписан: запись «вывод принят» в учёте сделки (Deal.usdt_accepted, `deal.rs`),
+  `mark` / `unmark` сохраняют сделку (ledger::save), `forget_finished` — в usdt_return_state::set при «вернулись» /
+  «перегнано вручную». `usdt_hold.rs` of_deal вычитает принятое и у «идёт», и у «не вернулись». Тест
+  accepted_withdrawal_survives_restart (on_restart → «не вернулись» 500 без резерва, Y 400 уходит, «не вернулись» без
+  принятия 70 — в резерве).
+- **М2** — `manual_wait.rs` stuck_of: только «застряла» (WaitingHuman — конец задачи по коду raise_alert). Тест
+  waiting_human_holder_is_waited_for.
+- **М3** — `commands.rs` Core::command_retry, `manual_wait.rs` RETRY, `manual_wait_pause.rs` is_retry — по ID ожидания.
+- **М1, М6** — окна: TASKS (решение 405, «Известные окна»).
+- **М5** — цепочка от transfers.rs без площадки не собирается; запись проверена на настоящей части «идёт».
+
 ## Риски и вопросы
 
 - Вопросы владельцу — docs/TASKS.md (решение 405): «не вернулись» в резерв; ручные действия при идущих (Н3).

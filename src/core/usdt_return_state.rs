@@ -124,13 +124,16 @@ pub async fn alarm(core: &Core, deal: &str, amount: Decimal, at: &VenueId, why: 
 /// Решение 236: часть стала «вернулись» — её затраты вычитаются из итога сделки (deal_return_cost.rs: итог дня,
 /// статистика монеты, журнал); возврат закончен — уходит отложенное уведомление deal.closed (deal_closed.rs).
 pub async fn set(core: &Core, deal: &str, state: UsdtReturn, note: &str) {
-    // Решение 405 (ревью 4, Б2): часть сменила состояние — записи «вывод принят» её перегонов не нужны.
-    super::usdt_accepted::forget_deal(core, deal);
     let (d, delta, notice, total) = {
         let mut deals = lk(&core.inner.deals);
         let Some(d) = deals.get_mut(deal) else {
             return;
         };
+        // Решение 405 (ревью 5, Н1): часть закончена — записи «вывод принят» этой площадки не нужны (usdt_accepted.rs);
+        // «не вернулись» и повторы — остаются (деньги принятого вывода ушли, резерв их не держит).
+        if state.finished() {
+            super::usdt_accepted::forget_finished(d, state.venue());
+        }
         // Решение 227: часть — по площадке состояния (первая или остальная).
         super::usdt_return_parts::put(d, state);
         if !note.is_empty() {

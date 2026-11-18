@@ -119,6 +119,11 @@ pub struct Deal {
     /// Пусто — одна часть (и у сделок до решения 227).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub usdt_return_parts: Vec<super::usdt_return_state::UsdtReturn>,
+    /// Решение 405 (ревью 4 Б2, ревью 5 Н1): выводы перегонов USDT этой сделки, принятые площадкой (ответ на запрос
+    /// вывода; usdt_accepted.rs) — в учёте, чтобы и после перезапуска («идёт» → «не вернулись») резерв части не стоял
+    /// поверх уже списанных денег.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub usdt_accepted: Vec<super::usdt_accepted::Accepted>,
     /// Решение 138: путь закрытия, на котором возврата по решению нет (например «Продано вручную», решение 100), —
     /// причина; при закрытии вместо перегона — страховка «USDT не вернулись». None — обычный путь.
     #[serde(default)]
@@ -184,6 +189,7 @@ impl Deal {
             dex_account: None,
             usdt_return: None,
             usdt_return_parts: vec![],
+            usdt_accepted: vec![],
             usdt_return_skip: None,
             withdraw_refused: vec![],
             alert_was: None,

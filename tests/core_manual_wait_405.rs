@@ -290,19 +290,57 @@ async fn pause_holds_until_retry_takes_coin() {
             .contains("на паузе")
     );
     assert!(!coin_ride::take(&core, &key), "посторонний take — пауза");
-    // Другая команда (другое действие) — не повтор.
+    let id = manual_wait::list(&core)[0].id.clone();
+    // Ревью 5, М3: та же команда без ID ожидания (посторонняя) и другое действие с ID — не повтор.
+    let same_no_id = manual_wait::scope(cmd(sell.clone()), None, async {
+        coin_ride::take(&core, &key)
+    })
+    .await;
+    assert!(!same_no_id);
     let wrong = manual_wait::scope(
         cmd(ManualAction::ReturnToBot {
             holding_id: "x".into(),
         }),
+        Some(id.clone()),
         async { coin_ride::take(&core, &key) },
     )
     .await;
     assert!(!wrong);
-    // Повтор той же команды берёт монету — ожидание снято вместе с take.
-    let took = manual_wait::scope(cmd(sell), async { coin_ride::take(&core, &key) }).await;
+    // Повтор той же команды с ID ожидания берёт монету — ожидание снято вместе с take.
+    let took =
+        manual_wait::scope(cmd(sell), Some(id), async { coin_ride::take(&core, &key) }).await;
     assert!(took);
     assert!(manual_wait::list(&core).is_empty());
     assert!(!manual_wait::paused(&core, &key));
     coin_ride::free_active(&core, &key);
+}
+
+/// Ревью 5, М2: держащая сделка «ждёт решения человека» — это конец её задачи (raise_alert — последний шаг), запись
+/// снимется: и нажатие, и ожидание не дают отказа «окончания не будет», а ждут снятия записи.
+#[tokio::test]
+async fn waiting_human_holder_is_waited_for() {
+    let (core, j) = start("human").await;
+    let key = CoinKey::of(&dir_of("bingx", "mexc").asset);
+    arb::core::ledger::save(&core, &deal("H", Step::Halted, "5")).await;
+    riding(&core, "D1", Step::WaitingHuman).await;
+    let t = core
+        .command(cmd(ManualAction::SellHalted {
+            deal_id: "H".into(),
+        }))
+        .await
+        .unwrap();
+    assert!(t.contains("ждёт окончания сделок по CAKE: D1"), "{t}");
+    // Во время ожидания держащая ушла в «ждёт решения человека» (алерт) — ждём дальше.
+    riding_step(&core, "D1", Step::WaitingHuman).await;
+    tokio::time::sleep(StdDuration::from_millis(50)).await;
+    assert_eq!(manual_wait::list(&core).len(), 1);
+    coin_ride::release(&core, &key, Some("D1"));
+    logged(&j, "сделки по CAKE закончились — выполняю «Продать сейчас»").await;
+}
+
+/// Сохранить сделку на шаге (будит ожидание, как сохранение задачи сделки). Ошибок нет.
+async fn riding_step(core: &Core, id: &str, step: Step) {
+    let mut x = core.inner.deals.lock().unwrap().get(id).cloned().unwrap();
+    x.step = step;
+    arb::core::ledger::save(core, &x).await;
 }

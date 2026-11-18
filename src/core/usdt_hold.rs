@@ -12,7 +12,8 @@
 //!
 //! Не в резерве: «вернулись» (Done), «перегнано вручную» (Manual) — денег на площадке нет.
 //! Ушедший вывод: у «идёт» из самой части не видно, ушёл ли вывод. Признаки по коду: (1) ревью 4, Б2 — площадка
-//! приняла вывод (ответ на запрос вывода, transfers.rs → usdt_accepted.rs) — сумма вывода вычитается сразу; (2) ревью
+//! приняла вывод (ответ на запрос вывода, transfers.rs → usdt_accepted.rs; в учёте сделки — ревью 5, Н1: и у «не
+//! вернулись», ставшей такой после перезапуска) — сумма вывода вычитается сразу; (2) ревью
 //! 3, Н2 — ожидание зачисления этого перегона (credit_watch.rs) с хешем вывода от отправителя — его ожидаемый приход
 //! (если принятие не записано). До ответа площадки на запрос вывода — резерв целиком (деньги ещё на площадке).
 //! Свой резерв (ревью 3, Н3): перегон части видит свободное минус резерв ДРУГИХ сделок (held_except: своя сделка — по
@@ -46,12 +47,14 @@ pub struct Held {
     pub lines: Vec<(String, String, Decimal)>,
 }
 
-/// Строка резерва одной сделки: сумма, что ждёт, «идёт» ли (вычесть ушедший вывод).
+/// Строка резерва одной сделки: сумма (уже за вычетом принятых площадкой выводов — usdt_accepted.rs), что ждёт,
+/// «идёт» ли (ещё и хеш-признак), перегоны с принятым выводом (у них хеш не считается второй раз).
 struct Line {
     deal: String,
     amount: Decimal,
     what: String,
     pending: bool,
+    accepted: Vec<String>,
 }
 
 /// Резерв одной сделки на площадке `venue`. Ошибок нет.
@@ -61,6 +64,15 @@ fn of_deal(d: &Deal, venue: &VenueId) -> Vec<Line> {
         amount,
         what: what.to_string(),
         pending,
+        accepted: vec![],
+    };
+    // Ревью 4 Б2, ревью 5 Н1: принятый площадкой вывод части (в учёте сделки) — деньги уже списаны: и у «идёт», и у
+    // ставшей после перезапуска «не вернулись».
+    let minus_accepted = |mut l: Line, from: &VenueId| {
+        let (sent, ids) = super::usdt_accepted::sent_of(d, from, l.amount);
+        l.amount = (l.amount - sent).max(Decimal::ZERO);
+        l.accepted = ids;
+        l
     };
     let mut out = vec![];
     if let Some(g) = d.group.as_ref()
@@ -76,13 +88,16 @@ fn of_deal(d: &Deal, venue: &VenueId) -> Vec<Line> {
     for p in super::usdt_return_parts::all(d) {
         match p {
             UsdtReturn::Pending { amount, from, .. } if from == venue => {
-                out.push(line(*amount, "возврат идёт", true));
+                out.push(minus_accepted(line(*amount, "возврат идёт", true), from));
             }
             UsdtReturn::Retrying { amount, from, .. } if from == venue => {
                 out.push(line(*amount, "возврат ждёт повтора", false));
             }
             UsdtReturn::NotReturned { amount, at, .. } if at == venue => {
-                out.push(line(*amount, "не вернулись — ждут человека", false));
+                out.push(minus_accepted(
+                    line(*amount, "не вернулись — ждут человека", false),
+                    at,
+                ));
             }
             _ => {}
         }
@@ -136,31 +151,17 @@ pub fn held_except(
     }
     super::unsettled::drop_ids(core, &gone);
     if lines.iter().any(|l| l.pending) {
-        // Ревью 4, Б2: вывод принят площадкой (ответ на запрос вывода — usdt_accepted.rs) — деньги уже списаны.
-        let accepted: Vec<(Decimal, Vec<String>)> = lines
-            .iter()
-            .map(|l| {
-                if l.pending {
-                    super::usdt_accepted::sent(core, &l.deal, venue, l.amount)
-                } else {
-                    (Decimal::ZERO, vec![])
-                }
-            })
-            .collect();
         let st = super::credit_watch::lock(core);
-        for (l, (acc, ids)) in lines.iter_mut().zip(accepted) {
-            if !l.pending {
-                continue;
-            }
-            // Хеш вывода от отправителя (ревью 3, Н2) — у перегонов, чей принятый вывод не записан выше.
+        for l in lines.iter_mut().filter(|l| l.pending) {
+            // Хеш вывода от отправителя (ревью 3, Н2) — у перегонов, чей принятый вывод не записан (of_deal).
             let hashed: Decimal = st
                 .list
                 .values()
-                .filter(|e| e.from == *venue && e.tx.is_some() && !ids.contains(&e.deal))
+                .filter(|e| e.from == *venue && e.tx.is_some() && !l.accepted.contains(&e.deal))
                 .filter(|e| super::relay_owner::is_relay(&l.deal, &e.deal))
                 .map(|e| e.amount)
                 .sum();
-            l.amount = (l.amount - acc - hashed).max(Decimal::ZERO);
+            l.amount = (l.amount - hashed).max(Decimal::ZERO);
         }
     }
     let mut out = Held::default();

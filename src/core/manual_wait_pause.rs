@@ -46,15 +46,21 @@ pub fn start_retry(core: &Core, key: &CoinKey) -> Option<String> {
     })
 }
 
-/// Что делает: текущая команда задачи — повтор ждавшей команды монеты (ожидание в состоянии running, то же действие).
+/// Что делает: текущая команда задачи — повтор ждавшей команды монеты (ожидание в состоянии running, тот же ID ожидания
+/// — Core::command_retry, то же действие).
 /// Принимает: ядро, ключ. Ошибок нет.
 pub fn is_retry(core: &Core, key: &CoinKey) -> bool {
-    let Some(action) = super::manual_wait::current_action() else {
+    // Ревью 5, М3: повтор узнаётся по ID ожидания (Core::command_retry), а не только по действию — посторонняя такая
+    // же команда паузу не проходит.
+    let (Some(action), Some(id)) = (
+        super::manual_wait::current_action(),
+        super::manual_wait::current_retry(),
+    ) else {
         return false;
     };
     lk(&core.inner.manual_waits)
         .get(key)
-        .is_some_and(|w| w.running && w.action == action)
+        .is_some_and(|w| w.running && w.id == id && w.action == action)
 }
 
 /// Что делает: причина отказа входа сделки при паузе. Принимает: ядро, ключ. Возвращает: текст; None — паузы нет.

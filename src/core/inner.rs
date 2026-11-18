@@ -147,8 +147,6 @@ pub struct Inner {
     /// Монета могла освободиться (снята запись идущей сделки, замок монеты, сохранена сделка, отмена ожидания) — будит
     /// задачи ожидания ручных действий (manual_wait_run.rs).
     pub coin_wake: Notify,
-    /// Решение 405 (ревью 4, Б2): выводы перегонов USDT, принятые площадкой (usdt_accepted.rs): ID перевода → запись.
-    pub usdt_accepted: Mutex<HashMap<String, super::usdt_accepted::Accepted>>,
     /// Решение 174: монеты, которые сейчас продаются кнопкой «Продать» панели «Балансы» (повторное нажатие — отказ
     /// «уже продаётся»; метка Я-2 в active ставится вместе с этой, balance_sell.rs).
     pub balance_sells: Mutex<HashSet<super::coin_key::CoinKey>>,
@@ -285,7 +283,6 @@ impl Inner {
             manual_waits: Mutex::default(),
             manual_waits_live: Default::default(),
             coin_wake: Notify::new(),
-            usdt_accepted: Mutex::default(),
             balance_sells: Mutex::default(),
             bal_cache: Default::default(),
             usdt_moves: Mutex::default(),

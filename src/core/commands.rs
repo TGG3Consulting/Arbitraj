@@ -29,15 +29,39 @@ impl Core {
         // Живой случай 02.11: «Продать и перегнать» у остановленной сделки ATOM — сделка уже помечена «идёт продажа»,
         // ответа баланса нет, связь с интерфейсом рвётся, веб-сервер бросает запрос — и сделка навсегда остаётся
         // в шаге Selling: пропадает с экрана, а предварительный убыток и сверка балансов её держат.
+        self.command_with(cmd, None).await
+    }
+
+    /// Решение 405 (ревью 5, М3): повтор команды, ждавшей окончания сделок монеты (manual_wait_run.rs), — с ID ожидания:
+    /// паузу монеты проходит только этот повтор (manual_wait_pause.rs is_retry), не посторонняя такая же команда.
+    /// Принимает: команду, ID ожидания. Возвращает: как command.
+    pub(crate) async fn command_retry(
+        &self,
+        cmd: ManualCommand,
+        wait: String,
+    ) -> Result<String, String> {
+        self.command_with(cmd, Some(wait)).await
+    }
+
+    /// Команда отдельной задачей (решение 110) с признаком повтора ожидания (None — обычная). Возвращает: как command.
+    async fn command_with(
+        &self,
+        cmd: ManualCommand,
+        retry: Option<String>,
+    ) -> Result<String, String> {
         let core = self.clone();
         let c = cmd.clone();
-        tokio::spawn(async move { core.command_inner(c).await })
+        tokio::spawn(async move { core.command_inner(c, retry).await })
             .await
             .unwrap_or_else(|e| Err(format!("команда прервана: {e}")))
     }
 
-    /// Выполнение команды и запись в журнал (см. command).
-    async fn command_inner(&self, cmd: ManualCommand) -> Result<String, String> {
+    /// Выполнение команды и запись в журнал (см. command). retry — ID ожидания, если это его повтор (решение 405).
+    async fn command_inner(
+        &self,
+        cmd: ManualCommand,
+        retry: Option<String>,
+    ) -> Result<String, String> {
         // Решение 177: команда человека — ручная: её сбои не «ошибки площадки подряд», паузу ставит только автоматика
         // (risk_count.rs). Продажи и перегон отдельной задачей ставят тот же признак сами (manual.rs, manual_halted.rs,
         // manual_usdt.rs).
@@ -46,6 +70,7 @@ impl Core {
         // ждёт их окончания и выполняется заново (manual_wait.rs defer).
         let res = super::manual_wait::scope(
             cmd.clone(),
+            retry,
             super::risk_count::manual(super::patience_scope::with(self, self.run_command(&cmd))),
         )
         .await;

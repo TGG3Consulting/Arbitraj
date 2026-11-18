@@ -26,6 +26,15 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 410 (t195, 18.11.2026): горячий путь DEX — не сделано (крупнее точечной правки или рискованно): копии Entry в
+  `by_pair` с владением дальше — quote/mod.rs:247 (routing::Input.entries: Vec<Entry> → classic_direct, smart_quote),
+  quote/fills.rs:107, quote/bound_set.rs pool_set; quote/route_cache.rs fresh — Registry::get (копия) на каждый шаг
+  каждого пути при попадании в кэш путей (Step.edge.entry: Entry); копии Entry в ногах пути (Leg / Hop .entry, quote/
+  route_calc.rs build, graph_seq.rs, cycle.rs). Правка — шаг пути с Arc записи на время одной котировки (не в графе:
+  урок t194 (б)). Кэш sqrt_ratio_at_tick (чистая функция тика) — нужен предел размера: числом в коде нельзя (хардкод),
+  настройкой — не цель задачи; getTickAtSqrtRatio — бинарный поиск ~21 вызов sqrt_ratio_at_tick (только swap_final).
+  quote/route_cache.rs key — строка ключа с to_string адресов на каждую котировку. Реестр пулов (registry_index.rs) —
+  SipHash: обход задаёт порядок снимка и рёбер графа.
 - Решение 405 (t191, 18.11.2026; `wc -l`): сверх ориентира 200 — core/coin_ride.rs 318 (было 281), core/manual_wait.rs 225
   (дробить: тексты и list — в manual_wait_view.rs); ручные кнопки при идущих сделках — ожидание не переживает перезапуск
   (команды человека в памяти; если нужно — сохранять ManualCommand ожидания в учёте и поднимать при запуске), core/ride_quote.rs 240

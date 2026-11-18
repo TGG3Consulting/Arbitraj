@@ -13,6 +13,17 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 410 (18.11.2026, задача t195, ветка t195/hot-math от 3b342bcd) — горячий путь расчёта DEX без лишних копий
+  и повторной 256-битной математики; ждёт сборки и тестов в GitHub (cargo build/test/clippy локально не запускались;
+  `cargo metadata --locked` — Cargo.lock согласован).** Три части: (1) копии записей пулов — перебор путей и циклов по
+  ссылкам на рёбра (quote/route_hops.rs), пулы пары — Arc (pair_arcs) в depth_key Prep::rate, rate, route_gas,
+  via_pools, signal_epoch; перенос вместо копии в direct::best, Path::one; одна копия на круг в side_fit round_trip;
+  (2) math/ten.rs — степени десяти при сборке вместо U256::pow на каждый вызов; MAX_SQRT_RATIO константой; full_math —
+  одно div_rem; amount1_delta — сдвиг на 96; (3) foldhash для карт без зависимости от порядка (graph adj, depth_book,
+  посещённые перебора, gateway/shard_map.rs). После выкладки — perf тем же способом (60 с, те же настройки): доли
+  memcpy, Entry::clone, String::clone, wrapping_pow, div_rem, overflowing_mul, SipHash. Не сделано — docs/ROADMAP.md
+  «Техдолг» (решение 410).
+
 - **Решение 409 (18.11.2026, задача t194, ветка t194/hot-locks от d672411b) — горячий путь без конкурентных замков;
   ждёт сборки и тестов в GitHub (cargo локально не запускался).** Разбор — docs/notes/t194-hot-locks-2026-11-18.md.
   Сделано: настройки в памяти и таблица видов DEX — снимки за ArcSwap (чтение без замка), так же exec_callback SEEN и

@@ -124,7 +124,7 @@ fn shift_rotates_positions_between_passes() {
 /// Нога по шагу цикла с явным допуском (без крючка и налога), decimals 18 — если проверки записи пул не допустили.
 fn leg_of(step: &route_paths::Step) -> Leg {
     Leg {
-        entry: (*step.edge.entry).clone(),
+        entry: step.edge.entry.clone(),
         usable: Usable {
             gas: 120_000,
             hook_pct: Decimal::ZERO,

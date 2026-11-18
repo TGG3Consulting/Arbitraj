@@ -18,17 +18,24 @@
   Сделано: настройки в памяти и таблица видов DEX — снимки за ArcSwap (чтение без замка), так же exec_callback SEEN и
   registry_key KEYS; копии Entry ради чтения → Registry::entry (listen_site, depth, routing, breaks, classic_direct).
   После выкладки — perf тем же способом (60 с, dex.depth_band_pct = 10, dex.shallow_pools_per_pair = 3): доля
-  native_queued_spin_lock_slowpath, потоки в futex_wait. **Второй коммит t194 (по просьбе координатора) — сделаны
-  (а)–(д):** (а) факты пулов проверок — check/pool_facts_store.rs, Checks::pool_arc без копии (select, approve_gas,
-  cycle_cost, pool_tax max_buy); (б) Edge.entry: Arc<Entry> (graph build, graph_eval, route_cache fresh через
-  Registry::entry); (в) короб допусков usable_reuse — снимок за ArcSwap; (г) Directory::banned — directory/banned_now.rs,
-  Arc<str>; (д) настройки — карта имя → область → значение, get_exact без выделения ключа. Правки по прогону
-  44357387694: типы в tests/settings_snapshot_409.rs (integer — u64), clippy explicit_auto_deref в family_intern.rs.
-  **Осталось (не сделано, крупнее точечной правки):** копии Entry в `by_pair` (quote/mod.rs:247, via_pools.rs:52/59,
-  rate.rs:55, bound_set.rs:83, fills.rs:107, route_gas.rs:61) и `pools/depth_key.rs Rate.pools: Arc<Vec<Entry>>` — тип
-  Vec<Entry> идёт дальше в отбор и в depth_book (to_usdt по срезу &[Entry]); копия Entry в ноги пути (path Hop / Leg
-  .entry: Entry — graph_legs unwrap_or_clone, cycle.rs) — тип расходится по exec/*; остальные Checks::pool (check/*,
-  native_gas) — вне пути на каждый пул, копия как раньше.
+  native_queued_spin_lock_slowpath, потоки в futex_wait. **Второй и третий коммиты t194 (просьба координатора, ревью
+  a9c3a17d):** (а) факты пулов проверок — check/pool_facts_store.rs (карта по частям gateway/shard_map.rs, факты за
+  Arc), Checks::pool_arc без копии (select, approve_gas, cycle_cost, pool_tax max_buy); (в) короб допусков usable_reuse
+  — карта по частям (без копии карты на промах, ревью Н1), места короба gateway/calc_share.rs — за ArcSwap; (г)
+  Directory::banned — directory/banned_now.rs, Arc<str>; (д) настройки — имя → (Arc) область → значение, get_exact без
+  выделения ключа, запись копирует только значения своего имени (ревью М1); registry_key — карта по частям (ревью М3).
+  **(б) Edge.entry: Arc<Entry> — отменено** (прогон 44358787664, tests/bsc_dex_router_snapshot.rs:146): граф держал
+  Arc записей всех своих пулов, и каждое Registry::update (Arc::make_mut) копировало запись на каждое событие пула под
+  замком записи реестра; Edge.entry снова Entry (копия при построении графа, как до t194). Правки прогонов
+  44357387694 и 44358787664 — типы и clippy в tests/settings_snapshot_409.rs, family_intern.rs.
+  **Осталось (не сделано, крупнее точечной правки):** граф без копии записей (ребро — ссылка на пул и поколение
+  состояния, запись из реестра при расчёте — переделка графа, путей и снимка; не держать Arc записей реестра долго —
+  иначе копия на каждое событие); копии Entry в `by_pair` (quote/mod.rs:247, via_pools.rs:52/59, rate.rs:55,
+  bound_set.rs:83, fills.rs:107, route_gas.rs:61) и `pools/depth_key.rs Rate.pools: Arc<Vec<Entry>>`; копия Entry в
+  ногах пути (Hop / Leg .entry: Entry); остальные Checks::pool (check/*, native_gas) — копия как раньше; ревью М2 —
+  копия Entry в Registry::update (Arc::make_mut) под замком записи реестра, пока жив снимок или Arc записи у
+  читателя — так было и до t194 (снимки решения 239, граф строит по snapshot()); ревью М4 — тесты конкурентности
+  t194 на данных, построенных в тесте (не записи площадок): проверяют только порядок и целостность памяти.
 
 - **Решение 408 (18.11.2026, задача t193, ветка t193/tg-buttons от 5f7a0e2a) — тревоги из Telegram; ждёт сборки и
   тестов в GitHub (cargo локально не запускался).** Разбор — docs/notes/t193-tg-buttons-2026-11-18.md. Сделано: кнопки

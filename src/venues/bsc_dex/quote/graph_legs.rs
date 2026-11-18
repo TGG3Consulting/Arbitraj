@@ -12,7 +12,6 @@
 //! Настройки: dex.quote_prep_once [bsc_dex] (решение 311 А, prep_once); через select.rs — см. его шапку.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 
 use alloy_primitives::Address;
 
@@ -76,13 +75,13 @@ pub fn legs_prep(
         Side::Buy => path
             .steps
             .into_iter()
-            .map(|s| (Arc::unwrap_or_clone(s.edge.entry), s.token_in, s.token_out))
+            .map(|s| (s.edge.entry, s.token_in, s.token_out))
             .collect(),
         Side::Sell => path
             .steps
             .into_iter()
             .rev()
-            .map(|s| (Arc::unwrap_or_clone(s.edge.entry), s.token_out, s.token_in))
+            .map(|s| (s.edge.entry, s.token_out, s.token_in))
             .collect(),
     };
     let mut legs = Vec::with_capacity(order.len());

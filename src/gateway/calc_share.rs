@@ -11,13 +11,15 @@
 //! Короб задаётся на задачу tokio (task_local, как класс срочности urgency.rs); новая задача его не наследует.
 //! Кто вызывает: core/size_memo.rs (Share::new, scope), venues/bsc_dex/quote/cpu.rs (current — перенос в поток счёта),
 //! venues/bsc_dex/venue.rs (current — цикл DEX ↔ DEX при параллельных точках).
-//! От чего зависит: tokio (task_local), std.
+//! От чего зависит: tokio (task_local), std, arc-swap (решение 409: места короба без замка на чтение).
 //! Настройки: нет (решает вызывающий: size.parallel_points; reuse — по направлению, решение 363).
 
 use std::any::Any;
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
+
+use arc_swap::ArcSwap;
 
 /// Короб одного подбора объёма.
 pub struct Share {
@@ -25,8 +27,14 @@ pub struct Share {
     par: bool,
     /// Повторное использование того, что не зависит от объёма (у направления с DEX — решение 363).
     reuse: bool,
-    slots: RwLock<HashMap<&'static str, Arc<dyn Any + Send + Sync>>>,
+    /// Решение 409 (ревью t194, Н1): места короба — снимок за ArcSwap (get_or_put на каждый пул — чтение без замка);
+    /// мест — единицы на подбор (по одному на имя адаптера), новое место — копия этой маленькой карты под slots_write.
+    slots: ArcSwap<Slots>,
+    slots_write: Mutex<()>,
 }
+
+/// Места короба: имя адаптера → значение.
+type Slots = HashMap<&'static str, Arc<dyn Any + Send + Sync>>;
 
 impl Share {
     /// Новый пустой короб. Принимает: параллельны ли точки, включено ли повторное использование. Ошибок нет.
@@ -34,7 +42,8 @@ impl Share {
         Share {
             par,
             reuse,
-            slots: RwLock::new(HashMap::new()),
+            slots: ArcSwap::from_pointee(HashMap::new()),
+            slots_write: Mutex::new(()),
         }
     }
 
@@ -61,18 +70,19 @@ impl Share {
         key: &'static str,
         make: impl FnOnce() -> T,
     ) -> Arc<T> {
-        let found = |g: &HashMap<&'static str, Arc<dyn Any + Send + Sync>>| {
-            g.get(key).cloned().and_then(|a| a.downcast::<T>().ok())
-        };
-        if let Some(v) = found(&self.slots.read().unwrap_or_else(|p| p.into_inner())) {
+        let found = |g: &Slots| g.get(key).cloned().and_then(|a| a.downcast::<T>().ok());
+        if let Some(v) = found(&self.slots.load()) {
             return v;
         }
-        let mut g = self.slots.write().unwrap_or_else(|p| p.into_inner());
-        if let Some(v) = found(&g) {
+        let _turn = self.slots_write.lock().unwrap_or_else(|p| p.into_inner());
+        let cur = self.slots.load_full();
+        if let Some(v) = found(&cur) {
             return v;
         }
         let v = Arc::new(make());
-        g.insert(key, v.clone());
+        let mut next = (*cur).clone();
+        next.insert(key, v.clone());
+        self.slots.store(Arc::new(next));
         v
     }
 }

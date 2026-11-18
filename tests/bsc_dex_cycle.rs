@@ -333,7 +333,7 @@ fn seq(path: &RoutePath) -> Vec<Address> {
 /// (расчёт строим из записанных пулов, допуск задаём явно, не дёргая проверки квотера).
 fn leg_of(step: &route_paths::Step, gas: u64) -> Leg {
     Leg {
-        entry: (*step.edge.entry).clone(),
+        entry: step.edge.entry.clone(),
         usable: Usable {
             gas,
             hook_pct: Decimal::ZERO,

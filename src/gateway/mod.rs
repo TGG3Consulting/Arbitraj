@@ -53,6 +53,7 @@ pub mod registry;
 pub mod rest_book;
 pub mod rules;
 pub mod setting_cell;
+pub mod shard_map;
 pub mod step_meter;
 pub mod tap;
 pub mod tx_hash;

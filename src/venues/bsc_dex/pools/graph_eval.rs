@@ -45,7 +45,7 @@ pub fn eval(
     tokens: &Tokens,
     usdt_dec: u8,
     prep: &Prep,
-    e: &Arc<Entry>,
+    e: &Entry,
 ) -> Rec {
     let mut rec = Rec {
         pair: pair_key(e.coin, e.usdt),
@@ -64,9 +64,8 @@ pub fn eval(
     if !(d.deep_buy || d.deep_sell) && !shallow_pick::admitted_snap(reg, e) {
         return rec;
     }
-    // Решение 409: ребро держит тот же Arc записи (без копии).
     let edge = Edge {
-        entry: Arc::clone(e),
+        entry: e.clone(),
         a: e.coin,
         b: e.usdt,
     };

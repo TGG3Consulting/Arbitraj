@@ -171,8 +171,7 @@ fn skeleton(p: &RoutePath) -> Skeleton {
 fn fresh(reg: &Registry, sk: &Skeleton) -> Option<RoutePath> {
     let mut steps = Vec::with_capacity(sk.len());
     for (r, token_in, token_out) in sk {
-        // Решение 409 (t194, п. б): запись без копии (Arc) — ребро держит её же.
-        let e = reg.entry(r)?;
+        let e = reg.get(r)?;
         if !e.valid || e.asleep || !e.family.graphable {
             return None;
         }

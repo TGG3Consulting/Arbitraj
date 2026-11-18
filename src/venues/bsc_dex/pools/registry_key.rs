@@ -12,7 +12,7 @@
 //! Не задана — поведение прежнее: те же вызовы, getPool и квотер по fee().
 //! Кто вызывает: pools/verify_calls.rs (field_calls), pools/verify.rs (from_answers, remember), quote/quoter_calls.rs
 //! (QuoterV2).
-//! От чего зависит: ctx.rs, families.rs, arc-swap (решение 409: память ключей без замка на чтение).
+//! От чего зависит: ctx.rs, families.rs, gateway/shard_map.rs (решение 409: память ключей по частям).
 //! Настройки: dex.v3_registry_fee_method [DEX] (необязательная).
 //!
 //! Источник (verified, Sourcify partial_match, chain 56): пул SquadV3Pool 0x9fb9815ca1417b06466aaa86521a28ba83d0bd33,
@@ -20,12 +20,11 @@
 //! SquadV3Factory.sol (sha256 064bd44a…fc06). Адреса фабрики и QuoterV2 —
 //! https://docs.squadswap.com/platform/developers/smart-contracts/bsc-contracts.md
 
-use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex};
-
-use arc_swap::ArcSwap;
+use std::sync::LazyLock;
 
 use alloy_primitives::{Address, Bytes, keccak256};
+
+use crate::gateway::shard_map::ShardMap;
 
 use super::super::ctx::Ctx;
 use super::families::{Family, Proto};
@@ -33,12 +32,10 @@ use super::families::{Family, Proto};
 /// Имя настройки.
 pub const SETTING: &str = "dex.v3_registry_fee_method";
 
-/// Ключ реестра по адресу пула (значение метода, прочитанное при проверке). Решение 409 (t194): снимок за ArcSwap —
-/// get (каждый запрос QuoterV2 к пулу V3) читает без замка; remember — новый снимок под KEYS_WRITE.
-static KEYS: LazyLock<ArcSwap<HashMap<Address, u32>>> =
-    LazyLock::new(|| ArcSwap::from_pointee(HashMap::new()));
-/// Писатели KEYS — по одному.
-static KEYS_WRITE: Mutex<()> = Mutex::new(());
+/// Ключ реестра по адресу пула (значение метода, прочитанное при проверке). Решение 409 (t194, ревью М3): карта по
+/// частям (gateway/shard_map.rs) — get (каждый запрос QuoterV2 к пулу V3) берёт замок только своей части, remember —
+/// вставка без копии карты.
+static KEYS: LazyLock<ShardMap<Address, u32>> = LazyLock::new(ShardMap::default);
 
 /// Сигнатура метода ключа: Some только у вида V3 (ABI Uniswap или PancakeSwap) с заданной непустой настройкой.
 /// Ошибок нет: не задана — None (поведение прежнее).
@@ -81,20 +78,12 @@ pub fn from_answers(got: &[Result<Bytes, String>]) -> Result<Option<u32>, String
 
 /// Запомнить ключ пула (проверка прошла: реестр фабрики по этому ключу вернул сам пул). Ошибок нет.
 pub fn remember(pool: Address, key: u32) {
-    let _turn = KEYS_WRITE.lock().unwrap_or_else(|e| e.into_inner());
-    let cur = KEYS.load_full();
-    // Тот же ключ уже записан — снимок не меняется (итог тот же, что у прежней вставки).
-    if cur.get(&pool) == Some(&key) {
-        return;
-    }
-    let mut next = (*cur).clone();
-    next.insert(pool, key);
-    KEYS.store(Arc::new(next));
+    KEYS.insert(pool, key);
 }
 
 /// Ключ пула из памяти. None — пул с настройкой ещё не проверялся. Ошибок нет.
 pub fn get(pool: Address) -> Option<u32> {
-    KEYS.load().get(&pool).copied()
+    KEYS.get(&pool)
 }
 
 /// Комиссия для QuoterV2 (параметр fee): без настройки — fee_pips пула (как раньше), с настройкой — ключ реестра.

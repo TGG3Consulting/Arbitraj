@@ -19,9 +19,12 @@ use super::value::Scope;
 
 /// Все заданные значения: имя настройки → область → значение. Решение 409 (п. д): поиск по (&str, &Scope) без
 /// выделения строки ключа (раньше get_exact собирал ключ (name.to_string(), scope.clone()) на каждое чтение).
-/// Пустых внутренних карт нет (put убирает их) — обход и «есть ли область» те же, что у плоской карты.
+/// Ревью t194 (М1): значения одного имени — за Arc: изменение копирует карту имён (указатели) и значения только этого
+/// имени (Arc::make_mut), а не все значения — импорт настроек (api/settings_io.rs, set по одной) больше не копирует
+/// всё на каждую запись. Пустых внутренних карт нет (put убирает их) — обход и «есть ли область» те же, что у плоской
+/// карты.
 #[derive(Clone, Default)]
-pub struct Values(HashMap<String, HashMap<Scope, Value>>);
+pub struct Values(HashMap<String, Arc<HashMap<Scope, Value>>>);
 
 impl Values {
     /// Что делает: значение ровно в этой области. Принимает: имя, область. Возвращает: ссылку или None. Ошибок нет.
@@ -33,18 +36,24 @@ impl Values {
     pub fn put(&mut self, name: &str, scope: &Scope, value: Option<Value>) {
         match value {
             Some(v) => {
-                let inner = match self.0.get_mut(name) {
-                    Some(m) => m,
-                    None => self.0.entry(name.to_string()).or_default(),
-                };
-                inner.insert(scope.clone(), v);
+                if !self.0.contains_key(name) {
+                    self.0.insert(name.to_string(), Arc::default());
+                }
+                if let Some(m) = self.0.get_mut(name) {
+                    Arc::make_mut(m).insert(scope.clone(), v);
+                }
             }
             None => {
-                if let Some(m) = self.0.get_mut(name) {
-                    m.remove(scope);
-                    if m.is_empty() {
-                        self.0.remove(name);
+                let empty = match self.0.get_mut(name) {
+                    Some(m) if m.contains_key(scope) => {
+                        let inner = Arc::make_mut(m);
+                        inner.remove(scope);
+                        inner.is_empty()
                     }
+                    _ => false,
+                };
+                if empty {
+                    self.0.remove(name);
                 }
             }
         }

@@ -83,7 +83,7 @@ async fn readers_see_whole_snapshots_while_writer_writes() {
     assert_eq!(pinned.integer(NAME, At::default()).unwrap(), 1);
     assert_eq!(s.integer(NAME, At::default()).unwrap(), WRITES);
     // Поколение (решение 352) выросло на каждую запись.
-    assert!(s.generation() >= WRITES + 1);
+    assert!(s.generation() > WRITES);
 }
 
 #[tokio::test]

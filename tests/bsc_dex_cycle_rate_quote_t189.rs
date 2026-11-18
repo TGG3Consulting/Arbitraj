@@ -69,12 +69,7 @@ fn near(rate: Decimal, quote: Decimal, tol: Decimal, what: &str) {
 /// Ребро графа с записью пула (монета — token0, встречный — token1). Ошибок нет.
 fn edge(e: Entry) -> Edge {
     let (a, b) = (e.coin, e.usdt);
-    // Решение 409: запись ребра — за Arc.
-    Edge {
-        entry: std::sync::Arc::new(e),
-        a,
-        b,
-    }
+    Edge { entry: e, a, b }
 }
 
 /// Запись пула вида kind (семейство id) на основе записи CAKE, с токенами t0/t1 (монета — t0). Ошибок нет.

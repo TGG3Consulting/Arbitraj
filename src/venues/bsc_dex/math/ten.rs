@@ -2,7 +2,8 @@
 //! Что делает: степени десяти в U256, посчитанные при сборке (решение 410, задача t195). Раньше единицы фикс-точки
 //! (1e18, 1e36, 1e10 …) считались `U256::from(10).pow(…)` при КАЖДОМ вызове — в том числе внутри циклов математики
 //! пулов (Ньютон Curve/Solidly, бисекции глубины): perf 18.11 — ruint wrapping_pow 6,2 % времени процесса. Теперь —
-//! готовые константы: значение то же самое (та же функция `pow` ruint, только вычислена компилятором).
+//! готовые значения (константы E10…E36 и таблица TENS): значение то же самое (та же функция `pow` ruint, только
+//! вычислена компилятором).
 //! Кто вызывает: math/{curve_math, solidly_math, dodo_math, maverick_math, dmm, balancer_math, balancer_log_exp,
 //! stableswap_v1}.rs, quote/{pmm_ladder, solidly_depth, tick_bin_spot, vault_depth, bound_rate, cycle_audit, cycle_cost,
 //! cycle_rate}.rs, num.rs.
@@ -20,8 +21,9 @@ pub const fn pow10(n: u64) -> U256 {
     U256::from_limbs([10, 0, 0, 0]).pow(U256::from_limbs([n, 0, 0, 0]))
 }
 
-/// 10^0 … 10^77 — все степени десяти, которые помещаются в U256 без переполнения.
-const TENS: [U256; COUNT] = {
+/// 10^0 … 10^77 — все степени десяти, которые помещаются в U256 без переполнения. static (одна копия в памяти,
+/// ревью 410), значения посчитаны при сборке.
+static TENS: [U256; COUNT] = {
     let mut t = [U256::ZERO; COUNT];
     let mut i = 0;
     while i < COUNT {
@@ -32,15 +34,13 @@ const TENS: [U256; COUNT] = {
 };
 
 /// 10^10.
-pub const E10: U256 = TENS[10];
+pub const E10: U256 = pow10(10);
 /// 10^17.
-pub const E17: U256 = TENS[17];
+pub const E17: U256 = pow10(17);
 /// 10^18.
-pub const E18: U256 = TENS[18];
-/// 10^20.
-pub const E20: U256 = TENS[20];
+pub const E18: U256 = pow10(18);
 /// 10^36.
-pub const E36: U256 = TENS[36];
+pub const E36: U256 = pow10(36);
 
 /// Что делает: 10^n без переполнения — как `U256::from(10).checked_pow(U256::from(n))`: 10^78 и больше не помещаются
 /// в U256 — None. Принимает: n. Возвращает: 10^n или None. Ошибок нет.
@@ -74,6 +74,5 @@ mod tests {
         assert_eq!(E36, E18 * E18);
         assert_eq!(E10, U256::from(10_000_000_000u64));
         assert_eq!(E17 * ten, E18);
-        assert_eq!(E20, E18 * U256::from(100u8));
     }
 }

@@ -15,12 +15,12 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
+use std::sync::{OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use foldhash::fast::RandomState;
 
 /// Часть карты: обычная карта с хешем foldhash (решение 410).
 type Part<K, V> = HashMap<K, V, RandomState>;
-use std::sync::{OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Карта по частям.
 pub struct ShardMap<K, V> {

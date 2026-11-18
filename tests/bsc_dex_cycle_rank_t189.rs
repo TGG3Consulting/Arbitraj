@@ -510,7 +510,7 @@ async fn lost_reason_is_written() {
         .steps
         .iter()
         .map(|s| Leg {
-            entry: s.edge.entry.clone(),
+            entry: (*s.edge.entry).clone(),
             usable: Usable {
                 gas: 150_000,
                 hook_pct: Decimal::ZERO,

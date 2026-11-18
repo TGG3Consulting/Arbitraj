@@ -14,7 +14,6 @@
 //! (settings/venue_kinds.rs).
 //! История — settings/history.rs. Кошельки DEX и маппинг (решение 132) — settings/accounts/, доступ — accounts(). Решение 128: новый id области «DEX» не длиннее dex.id_max_len (если задана).
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -28,7 +27,7 @@ use crate::storage::journal::{Journal, Level};
 use super::catalog;
 use super::live::Change;
 use super::scope::check_new_dex_id_len;
-use super::snapshot::{Key, Snapshot};
+use super::snapshot::{Snapshot, Values};
 use super::value::{Scope, validate};
 
 /// Ошибка записи настройки.
@@ -90,15 +89,13 @@ impl Store {
             })
             .await?;
         let accounts = super::accounts::Accounts::load(db.clone(), journal.clone()).await?;
-        let mut map = HashMap::new();
+        let mut map = Values::default();
         for (name, scope, value) in rows {
             match (
                 Scope::from_key(&scope),
                 serde_json::from_str::<Value>(&value),
             ) {
-                (Some(s), Ok(v)) => {
-                    map.insert((name, s), v);
-                }
+                (Some(s), Ok(v)) => map.put(&name, &s, Some(v)),
                 _ => tracing::error!(%name, %scope, "пропущена повреждённая строка настроек"),
             }
         }
@@ -135,8 +132,7 @@ impl Store {
     /// Значение ровно в этой области (без подстановки из общей).
     /// Возвращает: значение или None — не задано. Решение 409: снимок без замка (settings/snapshot.rs).
     pub fn get_exact(&self, name: &str, scope: &Scope) -> Option<Value> {
-        let cache = self.cache.load();
-        cache.get(&(name.to_string(), scope.clone())).cloned()
+        self.cache.load().get(name, scope).cloned()
     }
 
     /// Тикеры монет по адресу для запасного чтения области «монета» (решение 211, ревью В9; coin_alias.rs).
@@ -187,7 +183,7 @@ impl Store {
         let cache = self.cache.load();
         cache
             .iter()
-            .map(|((n, s), v)| (n.clone(), s.clone(), v.clone()))
+            .map(|(n, s, v)| (n.to_string(), s.clone(), v.clone()))
             .collect()
     }
 
@@ -231,7 +227,7 @@ impl Store {
             let max = self
                 .get_exact("dex.id_max_len", &Scope::Global)
                 .and_then(|v| v.as_u64());
-            let known = self.cache.load().keys().any(|(_, s)| s == &scope);
+            let known = self.cache.load().has_scope(&scope);
             check_new_dex_id_len(id, max, known).map_err(SetError::Invalid)?;
         }
         let old = self.get_exact(name, &scope);
@@ -268,25 +264,21 @@ impl Store {
                 tx.commit()
             })
             .await?;
-        let key = (name.to_string(), scope.clone());
         // Решение 409: новый снимок значений под замком писателя кэша (settings/snapshot.rs); читатели видят старый
         // или новый снимок целиком.
         let applied = self.cache.update(
             |cur| {
                 // Решение 355: пока шла запись в базу, отметка ядра (store_mark.rs) могла поменять значение в памяти —
                 // она сильнее: значение в памяти не трогаем, отметка сама запишется в базу поверх этого изменения.
-                if cur.get(&key) != old.as_ref() {
+                if cur.get(name, &scope) != old.as_ref() {
                     tracing::warn!(
                         name,
                         "настройка изменена в базе, но в памяти осталась отметка ядра (решение 355)"
                     );
                     return (false, None);
                 }
-                let mut next: HashMap<Key, Value> = (**cur).clone();
-                match &new {
-                    Some(v) => next.insert(key, v.clone()),
-                    None => next.remove(&key),
-                };
+                let mut next = cur.clone();
+                next.put(name, &scope, new.clone());
                 (true, Some(next))
             },
             // Решение 352 (ревью t160 Н4): поколение растёт под замком записи кэша — вместе со значением.

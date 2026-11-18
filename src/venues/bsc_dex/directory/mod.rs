@@ -7,6 +7,7 @@
 //! От чего зависит: core/types (directory.rs), node/pace.rs (очередь), gt_parse.rs.
 //! Настройки: index.* [bsc_dex] — docs/SETTINGS.md, раздел «Справочник пулов».
 
+pub mod banned_now;
 pub mod check;
 pub mod due;
 pub mod fetch;
@@ -90,6 +91,9 @@ pub struct Directory {
     /// Очередь запросов к индексатору (не чаще index.requests_per_min) — отдельная от очереди узла.
     pub pace: Pace,
     pub snap: Arc<RwLock<Snap>>,
+    /// Решение 409 (t194, п. г): копия Snap.banned для горячего пути котировки (banned — на каждый пул) — снимок за
+    /// ArcSwap без замка, причина Arc<str> (без копии строки). Пишется только в ban, под замком snap, вслед за banned.
+    banned_now: Arc<banned_now::BannedNow>,
 }
 
 impl Directory {
@@ -98,14 +102,10 @@ impl Directory {
         f(&mut self.snap.write().unwrap_or_else(|p| p.into_inner()))
     }
 
-    /// Причина исключения пула проверкой «кто меняет». None — не исключён. Ошибок нет.
-    pub fn banned(&self, r: &PoolRef) -> Option<String> {
-        self.snap
-            .read()
-            .unwrap_or_else(|p| p.into_inner())
-            .banned
-            .get(&r.site())
-            .cloned()
+    /// Причина исключения пула проверкой «кто меняет». None — не исключён. Решение 409: из снимка banned_now — без
+    /// замка справочника и без копии строки. Ошибок нет.
+    pub fn banned(&self, r: &PoolRef) -> Option<Arc<str>> {
+        self.banned_now.get(&r.site())
     }
 
     /// Исключить пул: Universal Router его DEX меняет в другом пуле (check/emitter.rs). Пул снимается со «взятых»,
@@ -142,7 +142,10 @@ impl Directory {
                     s.status.insert(k, DirectoryStatus::Rejected(why.to_string()));
                 }
             }
-            s.banned.insert(r.site(), why.to_string()).is_none()
+            let first = s.banned.insert(r.site(), why.to_string()).is_none();
+            // Решение 409: снимок для banned — под тем же замком snap, вслед за Snap.banned (порядок записей тот же).
+            self.banned_now.put(r.site(), why);
+            first
         })
     }
 

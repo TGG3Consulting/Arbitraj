@@ -34,13 +34,13 @@ pub fn intern(
     build: impl FnOnce(&'static str) -> Family,
 ) -> &'static Family {
     let find = |t: &Table| t.get(id).and_then(|v| v.iter().copied().find(|&f| same(f)));
-    if let Some(f) = find(&**TABLE.load()) {
+    if let Some(f) = find(&TABLE.load()) {
         return f;
     }
     let _turn = WRITE.lock().unwrap_or_else(|p| p.into_inner());
     let cur = TABLE.load_full();
     // Пока ждали замок, ту же запись мог создать другой поток — берём её (одна запись на сочетание).
-    if let Some(f) = find(&*cur) {
+    if let Some(f) = find(&cur) {
         return f;
     }
     let leaked: &'static str = Box::leak(id.to_string().into_boxed_str());

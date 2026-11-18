@@ -22,10 +22,13 @@
 //! Кто вызывает: quote/select.rs (usable).
 //! От чего зависит: quote/select.rs (usable_with), quote/cpu_local.rs, gateway/calc_share.rs, gateway/exit_scope.rs,
 //! quote/quote_timing.rs.
+//! Решение 409 (t194): короб допусков — снимок за ArcSwap, чтение без замка (Admits).
 //! Настройки: нет своих (поколение настроек — settings/store.rs generation).
 
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{Arc, Mutex};
+
+use arc_swap::ArcSwap;
 
 use alloy_primitives::U256;
 
@@ -55,7 +58,7 @@ struct Slot {
 type Mark = (Option<u64>, Option<chrono::DateTime<chrono::Utc>>);
 
 /// Ключ допуска: пул и всё, от чего допуск зависит кроме пула (см. шапку) — без сборки строки (ревью t157 Б1).
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 struct Key {
     pool: PoolRef,
     buy: bool,
@@ -65,10 +68,22 @@ struct Key {
     exit: bool,
 }
 
-/// Допуски одного подбора.
-#[derive(Default)]
+/// Допуски одного подбора. Решение 409 (t194, п. в): точки подбора считаются параллельно (size.parallel_points) и
+/// читают короб на каждый пул — снимок за ArcSwap (чтение без замка), допуск за Arc (без копии записи); новый допуск —
+/// новая карта под замком писателя (только при промахе: первая точка, смена состояния пула или настроек).
 struct Admits {
-    map: RwLock<HashMap<Key, Slot>>,
+    map: ArcSwap<HashMap<Key, Arc<Slot>>>,
+    write: Mutex<()>,
+}
+
+impl Default for Admits {
+    /// Что делает: пустой короб допусков. Ошибок нет.
+    fn default() -> Self {
+        Self {
+            map: ArcSwap::from_pointee(HashMap::new()),
+            write: Mutex::new(()),
+        }
+    }
 }
 
 /// Имя места в коробе подбора.
@@ -124,8 +139,7 @@ fn admit(
     };
     let hit = a
         .map
-        .read()
-        .unwrap_or_else(|p| p.into_inner())
+        .load()
         .get(&key)
         .filter(|s| {
             s.state_gen == e.state_gen
@@ -147,9 +161,11 @@ fn admit(
         hook,
         out: out.clone(),
     };
-    a.map
-        .write()
-        .unwrap_or_else(|p| p.into_inner())
-        .insert(key, slot);
+    {
+        let _turn = a.write.lock().unwrap_or_else(|p| p.into_inner());
+        let mut next = (*a.map.load_full()).clone();
+        next.insert(key, Arc::new(slot));
+        a.map.store(Arc::new(next));
+    }
     (out, false)
 }

@@ -124,7 +124,8 @@ pub(super) fn measured(
     pool: &crate::core::types::PoolRef,
     side: Side,
 ) -> GatewayResult<Option<u64>> {
-    let f = q.checks.pool(pool);
+    // Решение 409: факты пула без копии.
+    let f = q.checks.pool_arc(pool);
     let g = if side == Side::Buy {
         f.gas_approve_buy
     } else {

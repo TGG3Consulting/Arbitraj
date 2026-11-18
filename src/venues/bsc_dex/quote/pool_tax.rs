@@ -102,7 +102,14 @@ pub fn max_buy(q: &super::Quoting, coin: &alloy_primitives::Address) -> Decimal 
     q.reg
         .by_coin(coin)
         .iter()
-        .filter_map(|e| q.checks.pool(&e.pool.reference).taxes.map(|t| t.buy_pct))
+        .filter_map(|e| {
+            // Решение 409: факты пула без копии.
+            q.checks
+                .pool_arc(&e.pool.reference)
+                .taxes
+                .as_ref()
+                .map(|t| t.buy_pct)
+        })
         .max()
         .unwrap_or(Decimal::ZERO)
 }

@@ -55,12 +55,11 @@ impl Store {
                 "«{name}»: отметка ядра — только области «вся система», «площадка», «монета»"
             )));
         }
-        let key = (name.to_string(), scope.clone());
         // Решение 409 (t194): текущее значение и новый снимок — под замком писателя кэша (settings/snapshot.rs), как у
         // set; читатели снимка замок не берут.
         let res = self.cache.update(
             |cur| {
-                let old = cur.get(&key).cloned();
+                let old = cur.get(name, &scope).cloned();
                 let new = match f(old.as_ref()) {
                     Some(v) => match validate(def, &scope, &v) {
                         Ok(v) => Some(v),
@@ -71,11 +70,8 @@ impl Store {
                 if old == new {
                     return (Ok(None), None);
                 }
-                let mut next = (**cur).clone();
-                match &new {
-                    Some(v) => next.insert(key, v.clone()),
-                    None => next.remove(&key),
-                };
+                let mut next = cur.clone();
+                next.put(name, &scope, new.clone());
                 (Ok(Some((old, new))), Some(next))
             },
             // Решение 352 (слияние t158 + t160): отметка меняет значение настройки — поколение растёт под тем же

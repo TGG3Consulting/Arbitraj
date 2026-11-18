@@ -251,7 +251,12 @@ fn edge(kind: &str, x: Address, y: Address) -> Edge {
         asleep: false,
         state_gen: 0,
     };
-    Edge { entry, a: x, b: y }
+    // Решение 409: запись ребра — за Arc.
+    Edge {
+        entry: std::sync::Arc::new(entry),
+        a: x,
+        b: y,
+    }
 }
 
 #[tokio::test]

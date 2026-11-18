@@ -17,10 +17,51 @@ use serde_json::Value;
 
 use super::value::Scope;
 
-/// Ключ значения: имя настройки и область.
-pub type Key = (String, Scope);
-/// Все заданные значения.
-pub type Values = HashMap<Key, Value>;
+/// Все заданные значения: имя настройки → область → значение. Решение 409 (п. д): поиск по (&str, &Scope) без
+/// выделения строки ключа (раньше get_exact собирал ключ (name.to_string(), scope.clone()) на каждое чтение).
+/// Пустых внутренних карт нет (put убирает их) — обход и «есть ли область» те же, что у плоской карты.
+#[derive(Clone, Default)]
+pub struct Values(HashMap<String, HashMap<Scope, Value>>);
+
+impl Values {
+    /// Что делает: значение ровно в этой области. Принимает: имя, область. Возвращает: ссылку или None. Ошибок нет.
+    pub fn get(&self, name: &str, scope: &Scope) -> Option<&Value> {
+        self.0.get(name).and_then(|m| m.get(scope))
+    }
+
+    /// Что делает: задаёт (Some) или убирает (None) значение. Принимает: имя, область, значение. Ошибок нет.
+    pub fn put(&mut self, name: &str, scope: &Scope, value: Option<Value>) {
+        match value {
+            Some(v) => {
+                let inner = match self.0.get_mut(name) {
+                    Some(m) => m,
+                    None => self.0.entry(name.to_string()).or_default(),
+                };
+                inner.insert(scope.clone(), v);
+            }
+            None => {
+                if let Some(m) = self.0.get_mut(name) {
+                    m.remove(scope);
+                    if m.is_empty() {
+                        self.0.remove(name);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Что делает: все значения (имя, область, значение). Ошибок нет.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &Scope, &Value)> {
+        self.0
+            .iter()
+            .flat_map(|(n, m)| m.iter().map(move |(s, v)| (n.as_str(), s, v)))
+    }
+
+    /// Что делает: есть ли хоть одно значение в этой области. Ошибок нет.
+    pub fn has_scope(&self, scope: &Scope) -> bool {
+        self.0.values().any(|m| m.contains_key(scope))
+    }
+}
 
 /// Значения настроек в памяти: снимок для читателей и замок для писателей.
 pub struct Snapshot {
@@ -56,7 +97,7 @@ impl Snapshot {
     /// Ошибок нет (отравленный замок — продолжаем: под ним нет данных, только очередь писателей).
     pub fn update<R>(
         &self,
-        f: impl FnOnce(&Arc<Values>) -> (R, Option<Values>),
+        f: impl FnOnce(&Values) -> (R, Option<Values>),
         after: impl FnOnce(),
     ) -> R {
         let _turn = self.write.lock().unwrap_or_else(|p| p.into_inner());

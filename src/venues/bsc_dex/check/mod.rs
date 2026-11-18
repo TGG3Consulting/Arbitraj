@@ -30,6 +30,7 @@ pub mod pass_calls;
 pub mod pass_cycle;
 pub mod pass_judge;
 pub mod pass_probe;
+pub mod pool_facts_store;
 pub mod pool_taxes;
 pub mod probe;
 pub mod probe_buy;

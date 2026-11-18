@@ -126,9 +126,10 @@ pub fn usable_with(
         return Err(verify_inf_stable::claimed_reason(k.hooks()));
     }
     if let Some(why) = ctx.index.banned(&e.pool.reference) {
-        return Err(why);
+        return Err(why.to_string());
     }
-    let facts: PoolFacts = checks.pool(&e.pool.reference);
+    // Решение 409 (t194, п. а): факты пула без замка и без копии (check/pool_facts_store.rs).
+    let facts: std::sync::Arc<PoolFacts> = checks.pool_arc(&e.pool.reference);
     let (hook_pct, hook) = hook(ctx, e, &facts, side)?;
     // Сверка с квотером обязательна для всех пулов, с крючком тоже (check/quoter_cycle.rs), — своей стороны
     // (решение 73: стороны сверяются независимо).

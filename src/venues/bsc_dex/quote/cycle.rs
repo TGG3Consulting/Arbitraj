@@ -119,7 +119,8 @@ pub fn legs_for_cycle(
         let dec_in = *dec.get(&s.token_in).ok_or("нет decimals токена входа")?;
         let dec_out = *dec.get(&s.token_out).ok_or("нет decimals токена выхода")?;
         legs.push(Leg {
-            entry: entry.clone(),
+            // Решение 409: ребро держит запись за Arc — шаг цикла берёт её копию, как раньше.
+            entry: (**entry).clone(),
             usable,
             token_in: s.token_in,
             token_out: s.token_out,

@@ -43,11 +43,14 @@ use super::registry::{Entry, Registry};
 
 pub use super::graph_cache::{Cache, PathsKey, Skeleton, cached, cached_as_of};
 
-/// Ребро графа: пул между токенами `a` и `b`. `entry` — КОПИЯ записи реестра на момент build (снимок, не живая
-/// ссылка); перед сделкой состояние перечитывается точечным Multicall3 (решение 83).
+/// Ребро графа: пул между токенами `a` и `b`. `entry` — запись реестра на момент build (снимок, не живая ссылка);
+/// перед сделкой состояние перечитывается точечным Multicall3 (решение 83). Решение 409 (t194, п. б): запись за Arc —
+/// тот же неизменяемый Arc, что в реестре на момент снимка (реестр меняет запись через Arc::make_mut — копия при
+/// изменении, снимок остаётся прежним); раньше каждое ребро копировало запись при построении, а каждый шаг пути
+/// (клон Edge) — ещё раз.
 #[derive(Clone)]
 pub struct Edge {
-    pub entry: Entry,
+    pub entry: Arc<Entry>,
     pub a: Address,
     pub b: Address,
 }
@@ -197,7 +200,7 @@ pub fn build_measured(
             let (a, b) = (e.coin, e.usdt);
             let i = g.edges.len();
             g.edges.push(Arc::new(Edge {
-                entry: (*e).clone(),
+                entry: Arc::clone(&e),
                 a,
                 b,
             }));

@@ -85,7 +85,7 @@ fn route(legs: &[Leg]) -> String {
 /// decimals 18 — как в tests/bsc_dex_cycle.rs.
 fn leg_of(step: &route_paths::Step) -> Leg {
     Leg {
-        entry: step.edge.entry.clone(),
+        entry: (*step.edge.entry).clone(),
         usable: Usable {
             gas: 0,
             hook_pct: Decimal::ZERO,

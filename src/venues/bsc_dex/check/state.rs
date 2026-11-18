@@ -12,6 +12,7 @@
 //! Решение 211 (фаза 2b): монета — адрес контракта BSC. Налоги монеты и газ перевода хранятся по АДРЕСУ, а не по
 //! тикеру: показное имя монеты ядра может меняться (тикер большинства площадок), а у одного адреса под разными
 //! тикерами — одна проверка. Нативная монета (решение 62) — по адресу своей обёртки (dex.native_wrapped).
+//! Решение 409 (t194): факты пулов — check/pool_facts_store.rs (без замка на чтение, за Arc; pool_arc — без копии).
 //! Решение 239: pinned — копия итогов проверок нужных токенов и пулов на момент снимка котировки
 //! (venues/bsc_dex/frozen.rs): налоги монет и пулов, газ обменов и разрешений, крючки, сверка с квотером — котировка
 //! по снимку читает их такими, какими они были в момент решения, а не после нового замера.
@@ -84,11 +85,16 @@ pub struct PoolFacts {
     pub taxes: Option<PoolTaxes>,
 }
 
+/// Пустые факты пула (проверок не было) — общий Arc для pool_arc.
+static EMPTY: std::sync::LazyLock<Arc<PoolFacts>> =
+    std::sync::LazyLock::new(|| Arc::new(PoolFacts::default()));
+
 /// Хранилище итогов проверок. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Checks {
     coins: Arc<RwLock<HashMap<Address, CoinCheck>>>,
-    pools: Arc<RwLock<HashMap<PoolRef, PoolFacts>>>,
+    /// Решение 409 (t194, п. а): факты пулов без замка на чтение, за Arc (check/pool_facts_store.rs).
+    pools: Arc<super::pool_facts_store::PoolFactsStore>,
     /// Газ перевода монеты из кошелька (gasUsed пробного перевода) — для стоимости вывода.
     transfer_gas: Arc<RwLock<HashMap<Address, u64>>>,
     /// Газ нативного перевода BNB из кошелька (решение 62) — пробный перевод с value, check/native_probe.rs.
@@ -202,16 +208,14 @@ impl Checks {
                 .filter_map(|t| m.get(t).map(|c| (*t, c.clone())))
                 .collect()
         };
-        let pools = {
-            let m = self.pools.read().unwrap_or_else(|p| p.into_inner());
-            pools
-                .into_iter()
-                .filter_map(|r| m.get(r).map(|f| (r.clone(), f.clone())))
-                .collect()
-        };
+        // Решение 409: факты пулов — тот же Arc (без копии), ячейки свои.
+        let pools = pools
+            .into_iter()
+            .filter_map(|r| self.pools.get(r).map(|f| (r.clone(), f)))
+            .collect();
         Checks {
             coins: Arc::new(RwLock::new(coins)),
-            pools: Arc::new(RwLock::new(pools)),
+            pools: Arc::new(super::pool_facts_store::PoolFactsStore::from_map(pools)),
             transfer_gas: Arc::new(RwLock::new(pick(&self.transfer_gas))),
             native_transfer_gas: Arc::new(RwLock::new(pick(&self.native_transfer_gas))),
             deals: Default::default(),
@@ -224,8 +228,8 @@ impl Checks {
     /// (меняется при каждой записи влияния: цикл, проба перед сделкой, перемер) — без копии всех фактов пула. Для
     /// свежести допуска в коробе подбора (quote/usable_reuse.rs). Ошибок нет.
     pub fn hook_mark(&self, r: &PoolRef) -> (Option<u64>, Option<chrono::DateTime<chrono::Utc>>) {
-        let m = self.pools.read().unwrap_or_else(|p| p.into_inner());
-        let f = m.get(r);
+        let f = self.pools.get(r);
+        let f = f.as_deref();
         (
             f.and_then(|f| f.hook_head.as_ref().map(|h| h.0)),
             f.and_then(|f| f.hook.as_ref().and_then(|c| c.checked_at)),
@@ -235,26 +239,32 @@ impl Checks {
     /// Факты о пуле (пустые, если проверок не было); t78: у копии продажи сделки налоги пула — из перепроверки кошельком
     /// сделки, если пул в ней пробовался. Ошибок нет.
     pub fn pool(&self, r: &PoolRef) -> PoolFacts {
-        let mut f = self
-            .pools
-            .read()
-            .unwrap_or_else(|p| p.into_inner())
-            .get(r)
-            .cloned()
-            .unwrap_or_default();
-        if let Some(t) = self.over.as_ref().and_then(|o| o.pools.get(r)) {
-            f.taxes = t.clone();
+        PoolFacts::clone(&self.pool_arc(r))
+    }
+
+    /// Решение 409 (t194, п. а): то же, что pool, без копии фактов и без замка — для горячего пути котировки
+    /// (quote/select.rs, на каждый пул). Копия только у копии продажи сделки с налогами пула поверх общих (t78).
+    /// Ошибок нет.
+    pub fn pool_arc(&self, r: &PoolRef) -> Arc<PoolFacts> {
+        let f = self.pools.get(r).unwrap_or_else(|| EMPTY.clone());
+        match self.over.as_ref().and_then(|o| o.pools.get(r)) {
+            Some(t) => {
+                let mut f = PoolFacts::clone(&f);
+                f.taxes = t.clone();
+                Arc::new(f)
+            }
+            None => f,
         }
-        f
     }
 
     /// Налоги всех пулов этого хранилища (t78: пустое хранилище перепроверки кошельком сделки — что она измерила;
     /// check/deal_taxes.rs). Ошибок нет.
     pub fn pool_taxes(&self) -> HashMap<PoolRef, Option<PoolTaxes>> {
-        let m = self.pools.read().unwrap_or_else(|p| p.into_inner());
-        m.iter()
-            .map(|(r, f)| (r.clone(), f.taxes.clone()))
-            .collect()
+        let mut out = HashMap::new();
+        self.pools.for_each(|r, f| {
+            out.insert(r.clone(), f.taxes.clone());
+        });
+        out
     }
 
     /// Изменяет факты о пуле. Принимает: ссылку и функцию. Ошибок нет.
@@ -269,13 +279,7 @@ impl Checks {
     /// только если `f` что-то записал (вернул true) — проба, которая ничего не пишет, эпоху не сбрасывает.
     /// Принимает: пул, правку. Возвращает: записано ли. Ошибок нет.
     pub fn update_pool_if(&self, r: &PoolRef, f: impl FnOnce(&mut PoolFacts) -> bool) -> bool {
-        let mut m = self.pools.write().unwrap_or_else(|p| p.into_inner());
-        let wrote = f(m.entry(r.clone()).or_default());
-        // Ревью t160 Н4: поколение — под замком записи, вместе с фактами.
-        if wrote {
-            self.bump();
-        }
-        drop(m);
-        wrote
+        // Ревью t160 Н4: поколение — под замком записи, вместе с фактами (решение 409: замок писателя фактов пулов).
+        self.pools.update(r, f, || self.bump())
     }
 }

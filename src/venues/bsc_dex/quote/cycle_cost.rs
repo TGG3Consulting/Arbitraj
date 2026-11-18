@@ -149,7 +149,7 @@ async fn approve_units(
     if q.allow.erc20(ctx, base, wallet, x).await? >= need {
         return Ok(0);
     }
-    let f = q.checks.pool(&first.entry.pool.reference);
+    let f = q.checks.pool_arc(&first.entry.pool.reference);
     let g = match hop_side(&first.entry, base) {
         Some(Side::Buy) => f.gas_approve_buy,
         _ => f.gas_approve_sell,

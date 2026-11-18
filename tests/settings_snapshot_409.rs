@@ -48,14 +48,14 @@ async fn readers_see_whole_snapshots_while_writer_writes() {
     for _ in 0..4 {
         let (s, stop) = (s.clone(), stop.clone());
         readers.push(std::thread::spawn(move || {
-            let mut last = 0i64;
+            let mut last = 0u64;
             let mut reads = 0u64;
             while !stop.load(Ordering::Acquire) {
                 let v = s
                     .integer(NAME, At::default())
                     .expect("значение есть всегда");
                 assert!(v >= last, "значение пошло назад: {v} после {last}");
-                assert!((1..=WRITES as i64).contains(&v));
+                assert!((1..=WRITES).contains(&v));
                 last = v;
                 let at = At {
                     venue: Some("bingx"),
@@ -73,7 +73,7 @@ async fn readers_see_whole_snapshots_while_writer_writes() {
             .await
             .unwrap();
         // Запись видна сразу после возврата set.
-        assert_eq!(s.integer(NAME, At::default()).unwrap(), i as i64);
+        assert_eq!(s.integer(NAME, At::default()).unwrap(), i);
     }
     stop.store(true, Ordering::Release);
     for r in readers {
@@ -81,7 +81,7 @@ async fn readers_see_whole_snapshots_while_writer_writes() {
     }
     // Копия на момент входа (решение 239) — прежнее значение, хотя живое хранилище изменилось.
     assert_eq!(pinned.integer(NAME, At::default()).unwrap(), 1);
-    assert_eq!(s.integer(NAME, At::default()).unwrap(), WRITES as i64);
+    assert_eq!(s.integer(NAME, At::default()).unwrap(), WRITES);
     // Поколение (решение 352) выросло на каждую запись.
     assert!(s.generation() >= WRITES + 1);
 }
@@ -105,4 +105,28 @@ async fn mark_now_visible_at_once_and_pinned_unchanged() {
     assert!(again.is_none());
     assert_eq!(s.generation(), gen0 + 1);
     assert_eq!(pinned.get_exact("coin.blocked", &coin), None);
+}
+
+#[tokio::test]
+async fn clear_removes_from_all_and_lookup() {
+    // Решение 409 (п. д): значения по имени и области — поиск без выделения; очистка убирает значение из all().
+    let s = fresh("snap409clear").await;
+    let bingx = Scope::Venue("bingx".into());
+    let mexc = Scope::Venue("mexc".into());
+    s.set(OTHER, bingx.clone(), Some(json!(1500)), "т")
+        .await
+        .unwrap();
+    s.set(OTHER, mexc.clone(), Some(json!(900)), "т")
+        .await
+        .unwrap();
+    assert_eq!(s.get_exact(OTHER, &bingx), Some(json!(1500)));
+    assert_eq!(s.get_exact(OTHER, &mexc), Some(json!(900)));
+    assert_eq!(s.get_exact(OTHER, &Scope::Global), None);
+    let n = s.all().len();
+    s.set(OTHER, bingx.clone(), None, "т").await.unwrap();
+    assert_eq!(s.get_exact(OTHER, &bingx), None);
+    assert_eq!(s.get_exact(OTHER, &mexc), Some(json!(900)));
+    assert_eq!(s.all().len(), n - 1);
+    s.set(OTHER, mexc.clone(), None, "т").await.unwrap();
+    assert!(s.all().iter().all(|(name, _, _)| name != OTHER));
 }

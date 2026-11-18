@@ -133,9 +133,6 @@ pub async fn accepted(core: &Core, calc: Calc) -> Start {
         };
         run(&g.core, d.clone(), decided, (on, handed), fast, &mut g.slot).await;
     };
-    // Решение 411 (t196): место подтверждения адреса депозита B — на задачу сделки (предпроверка кладёт, перевод
-    // берёт; deposit_proof.rs).
-    let work = super::deposit_proof::scope(work);
     tokio::spawn(urgency::scope(
         Urgency::Trade,
         cpu_budget::scope(Tier::Deal, work),

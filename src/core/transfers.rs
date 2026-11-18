@@ -12,7 +12,8 @@
 //! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон — send_trade, решение 227), usdt_relay_retry.rs (USDT).
 //! От чего зависит: engine.rs, usdt_accepted.rs (решение 405: вывод перегона USDT принят), wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! precheck_deposit.rs (target_on — монета и сеть адреса получателя, решение 316), credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
-//! Решение 411: адрес биржи-получателя — только подтверждённый свежим ответом биржи (deposit_proof.rs for_transfer).
+//! Решение 411: адрес биржи-получателя — из памяти под ключом API, запрос — по триггеру (deposit_proof.rs); отказ вывода
+//! InvalidAddress — пометка «спросить адрес заново».
 //! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
 //! Решение 166: вывод отклонён «средства временно заблокированы для вывода» (WithdrawLocked) — повтор того же вывода
 //! по transfer.locked_retry_ms / transfer.locked_retries_max площадки-отправителя (transfer_locked.rs), затем — как раньше.
@@ -222,6 +223,37 @@ async fn poll_set(
     Err(OpError::from(why))
 }
 
+/// Решение 411: адрес депозита биржи-получателя для вывода — deposit_proof.rs address (память, по триггеру — запрос);
+/// ошибка запроса — через правила шлюза (rules_apply.rs on_error, «Адрес депозита»): повтор по правилу или стоп с
+/// кодом ошибки. Принимает: ядро, сделку, получателя, его адаптер, монету тикером получателя, сеть.
+/// Возвращает: адрес. Ошибки: OpError с кодом шлюза и текстом «<биржа>: адрес депозита: …».
+async fn to_address(
+    core: &Core,
+    deal: &str,
+    to: &VenueId,
+    gw: &std::sync::Arc<dyn crate::gateway::contract::Venue>,
+    on: &Asset,
+    net: &str,
+) -> Result<String, OpError> {
+    let key: super::deposit_proof::Key = (to.clone(), on.ticker.clone(), net.to_string());
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        let mut e = match super::deposit_proof::address(core, gw, &key, on).await {
+            Ok(a) => return Ok(a),
+            Err(e) => e,
+        };
+        let op = "Адрес депозита";
+        match rules_apply::on_error(core, op, to, Some(deal), &e, attempt).await {
+            Next::Retry { pause_ms } => tokio::time::sleep(Duration::from_millis(pause_ms)).await,
+            Next::Stop => {
+                e.message = format!("{}: адрес депозита: {}", to.0, e.message);
+                return Err(OpError::from(&e));
+            }
+        }
+    }
+}
+
 /// Перевод. Принимает: как send_as, плюс можно ли зачислить по блокчейну (решение 151 — только перевод сделки).
 /// Возвращает: (вывод, зачисление, строка хронологии — если зачислено по блокчейну). Ошибки: как у send_trade.
 /// Решение 236, дополнение: в `gas` — газ каждой неудачной попытки вывода с фактом транзакции (и повторённой правилом
@@ -249,13 +281,11 @@ async fn go(
     } = super::precheck_deposit::target_on(core, asset, to)?;
     // Решение 211: каждой площадке — её тикер монеты (адрес тот же).
     let on_from = super::venue_ticker::on_venue(core, asset, from);
-    // Решение 411 (t196): на биржу — только адрес, подтверждённый свежим ответом биржи: из подтверждения предпроверки
-    // этой сделки (дождавшись его) или своим свежим запросом (deposit_proof.rs for_transfer); память адаптера без
-    // свежего ответа в вывод не идёт. DEX-получатель — как раньше (адрес кошелька счёта, решение 132).
+    // Решение 411 (переделка «по триггеру»): адрес биржи-получателя — из памяти адаптера под текущим ключом API; запрос
+    // к бирже — только по триггеру (нет в памяти, пометка «спросить заново»; deposit_proof.rs address). Ошибка запроса
+    // идёт через правила шлюза с кодом (временные — повтор по правилу). DEX-получатель — как раньше (кошелёк счёта).
     let address = if gw_to.kind() == VenueKind::Cex {
-        super::deposit_proof::for_transfer(core, &gw_to, to, &on_to, &net_to)
-            .await
-            .map_err(|e| format!("{}: адрес депозита: {e}", to.0))?
+        to_address(core, deal, to, &gw_to, &on_to, &net_to).await?
     } else {
         gw_to
             .deposit_address(&on_to, &net_to)
@@ -332,6 +362,14 @@ async fn go(
                         }
                         _ => e,
                     };
+                    // Решение 411 (триггер в): биржа отклонила адрес — следующий раз адрес получателя запрашивается.
+                    if e.code == ErrorCode::InvalidAddress {
+                        let why = format!(
+                            "вывод с {} отклонён: адрес не принят ({})",
+                            from.0, e.message
+                        );
+                        super::deposit_proof::doubt(core, to, asset, &why).await;
+                    }
                     // Решение 236, дополнение: вывода нет (или исход не найден) — газ факта транзакции потрачен.
                     failed_gas(&e, gas);
                     // Вывода не будет — получатель снимает ожидание поступления (DEX: wallet/inflows.rs). Исход

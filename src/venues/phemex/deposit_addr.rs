@@ -16,7 +16,7 @@
 use reqwest::Method;
 
 use crate::core::types::Asset;
-use crate::gateway::addr_book::AddrBook;
+use crate::gateway::addr_book::{AddrBook, Mark};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -36,8 +36,8 @@ impl DepositAddrs {
     /// Ошибки: InvalidAddress — адреса нет или адрес требует tag; связь, коды Phemex.
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, chain: &str) -> GatewayResult<String> {
         // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
-        let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
-        if let Some(a) = self.book.lookup(mark, &asset.ticker, chain)? {
+        let mark = Mark::read(&ctx.vault, super::ctx::SECRET_API_KEY);
+        if let Some(a) = self.book.lookup(&mark, &asset.ticker, chain)? {
             return Ok(a);
         }
         let q = vec![
@@ -62,7 +62,7 @@ impl DepositAddrs {
             invalid(ctx, m).with_raw(raw.clone())
         })?;
         self.book.keep(
-            mark,
+            &mark,
             asset.ticker.clone(),
             chain.to_string(),
             address.clone(),

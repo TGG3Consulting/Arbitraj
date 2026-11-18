@@ -26,11 +26,13 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
-- Решение 411 (t196, 19.11.2026; `wc -l`): сверх ориентира 200 — core/deposit_proof.rs 221 (тексты и after — в
-  deposit_proof_plan.rs / отдельный файл), core/precheck.rs 616 (было 583; дробить: Timing и строки времени — в
-  precheck_timing.rs, пересчёт и проверка продажи — в precheck_calc.rs), core/transfers.rs 508 (было 497),
-  core/precheck_par.rs 214. Свежие сверки адреса без паузы между ними (вопрос Тиграну, TASKS t196). Gate: баланс в
-  предпроверке — один REST-запрос; снимок баланса по spot.balances — после проверки поля `change` на живой записи.
+- Решение 411 (t196, 19.11.2026, переделка «по триггеру»; `wc -l`): сверх ориентира 200 — core/precheck.rs 635 (было
+  583; дробить: Timing и строки времени — в precheck_timing.rs, пересчёт и проверка продажи — в precheck_calc.rs),
+  core/transfers.rs 546 (было 497; to_address — в transfers_addr.rs), gateway/addr_book.rs 253 (тесты — в tests/),
+  core/precheck_par.rs 214. Пометки «спросить адрес заново» (core/deposit_proof.rs DOUBT) — без отпечатка ключа
+  (снимаются при смене секретов). Триггер «биржа сообщила о новом адресе» (приватный поток) — не найден, у части бирж
+  документация не прочитана (TASKS t196). Gate: баланс в предпроверке — один REST-запрос; снимок баланса по
+  spot.balances — после проверки поля `change` на живой записи.
 - Решение 410 (t195, 18.11.2026): горячий путь DEX — не сделано (крупнее точечной правки или рискованно): копии Entry в
   `by_pair` с владением дальше — quote/mod.rs:247 (routing::Input.entries: Vec<Entry> → classic_direct, smart_quote),
   quote/fills.rs:107, quote/bound_set.rs pool_set; quote/route_cache.rs fresh — Registry::get (копия) на каждый шаг

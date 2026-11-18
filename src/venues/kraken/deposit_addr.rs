@@ -34,7 +34,7 @@ use reqwest::Method;
 use serde_json::Value;
 
 use crate::core::types::Asset;
-use crate::gateway::addr_book::AddrBook;
+use crate::gateway::addr_book::{AddrBook, Mark};
 use crate::gateway::addr_claim::{self, Missing};
 use crate::gateway::addr_create::{Creating, Failure, retry_text};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -66,8 +66,8 @@ impl DepositAddrs {
         let key = (asset.ticker.clone(), network.to_string());
         // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
         // Срок адреса (expire_time) отбирается до решения по режиму.
-        let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
-        let before = self.cached(mark, &key);
+        let mark = Mark::read(&ctx.vault, super::ctx::SECRET_API_KEY);
+        let before = self.cached(&mark, &key);
         if let Some(a) = self.book.apply(before.clone(), &key.0, &key.1)? {
             return Ok(a);
         }
@@ -76,7 +76,7 @@ impl DepositAddrs {
         let found =
             pick(&v).map_err(|m| invalid(ctx, format!("{} {network}: {m}", asset.ticker)))?;
         if let Some(e) = found {
-            return Ok(self.keep(mark, key, e));
+            return Ok(self.keep(&mark, key, e));
         }
         if addr_claim::on_missing() == Missing::Forbidden {
             let m = addr_claim::forbidden_text("Kraken", &asset.ticker, network);
@@ -87,7 +87,7 @@ impl DepositAddrs {
         // Создал ли адрес тот, кого ждали: память изменилась за время ожидания (решение 411: прежнее значение памяти
         // в режиме «только биржа» не берётся; в обычном режиме до сюда доходят только с пустой памятью).
         if let Some(a) = self
-            .cached(mark, &key)
+            .cached(&mark, &key)
             .filter(|a| Some(a) != before.as_ref())
         {
             return Ok(a);
@@ -104,7 +104,7 @@ impl DepositAddrs {
         match deposit_addr_claim::claim(ctx, &asset.ticker, network, &method_id).await {
             Ok(e) => {
                 self.creating.ok(&key);
-                Ok(self.keep(mark, key, e))
+                Ok(self.keep(&mark, key, e))
             }
             Err(f) => {
                 // Одна запись Warn на ключ — claim отправлен, адреса в списке нет.
@@ -123,13 +123,13 @@ impl DepositAddrs {
     }
 
     /// Адрес из памяти под отпечатком ключа API (решение 411), если не истёк. Ошибок нет.
-    fn cached(&self, mark: Option<u64>, key: &(String, String)) -> Option<String> {
+    fn cached(&self, mark: &Mark, key: &(String, String)) -> Option<String> {
         let (a, exp) = self.book.peek(mark, &key.0, &key.1)?;
         exp.is_none_or(|e| e > Utc::now()).then_some(a)
     }
 
     /// Адрес — в память под отпечатком ключа API (решение 411). Возвращает: адрес. Ошибок нет.
-    fn keep(&self, mark: Option<u64>, key: (String, String), e: Entry) -> String {
+    fn keep(&self, mark: &Mark, key: (String, String), e: Entry) -> String {
         let a = e.0.clone();
         self.book.keep(mark, key.0, key.1, e);
         a

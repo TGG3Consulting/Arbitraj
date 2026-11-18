@@ -1,23 +1,33 @@
 //! Файл: tests/core_deposit_proof_411.rs
-//! Что делает: решение 411 (задача t196) — чистая логика сверки адреса депозита биржи-получателя
-//! (core/deposit_proof_plan.rs) и памяти прогрева после смены ключей API (core/deposit_warm_plan.rs Memo::forget_all):
-//! - compare: свежий ответ совпал с памятью / изменился / в памяти не было;
-//! - for_withdraw: перевод берёт адрес только из свежего ответа сделки; свежего ответа нет (подтверждения нет, оно
-//!   другого ключа или запрос упал) — свой свежий запрос, а не память;
-//! - use_memory: предпроверка без ожидания — только если адрес в памяти и последний свежий запрос не падал;
-//! - тексты журнала и Telegram — без значений адреса;
-//! - Memo::forget_all: после смены секретов полученное забывается (прогрев проверит память под новым ключом).
+//! Что делает: решение 411 (задача t196, переделка «по триггеру»):
+//! 1) чистая логика core/deposit_proof_plan.rs: compare — ответ триггерного запроса совпал с памятью / изменился / в
+//!    памяти не было; use_memory — адрес из памяти без запроса, пока нет пометки «спросить заново»; тексты без адреса;
+//! 2) память адресов gateway/addr_book.rs с НАСТОЯЩИМ хранилищем секретов (secrets/vault.rs): адрес, положенный под
+//!    ключом API, после смены ключа в хранилище не находится сразу (до Core::secrets_changed) — тем же поиском, что у
+//!    предпроверки и вывода; ответ запроса, во время которого ключ сменили, в память не кладётся; возврат прежнего
+//!    ключа снова находит адрес; заблокированное хранилище — ничего;
+//! 3) Memo::forget_all прогрева после смены секретов.
 //! Адреса — настоящие адреса BSC из записи tests/data/native_2026-10-25 (вывод BNB с BingX 24.10: отправитель и
 //! получатель транзакции); к биржам тест не обращается.
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::core::deposit_proof_plan, arb::core::deposit_warm_plan, arb::gateway::errors, serde_json.
-//! Моков нет.
+//! От чего зависит: arb::core::deposit_proof_plan, arb::core::deposit_warm_plan, arb::gateway::addr_book,
+//! arb::secrets, serde_json. Моков нет.
 
-use arb::core::deposit_proof_plan::{
-    Pick, Seen, State, changed_text, compare, failed_text, for_withdraw, use_memory,
-};
+use arb::core::deposit_proof_plan::{Seen, changed_text, compare, doubt_text, use_memory};
 use arb::core::deposit_warm_plan::Memo;
+use arb::gateway::addr_book::{AddrBook, Mark};
+use arb::secrets::Vault;
+use arb::secrets::crypto::KdfParams;
 use serde_json::Value;
+use zeroize::Zeroizing;
+
+const KDF: KdfParams = KdfParams {
+    memory_kib: 64,
+    iterations: 1,
+    parallelism: 1,
+};
+/// Имя секрета ключа API (как в venues/kucoin/ctx.rs SECRET_API_KEY).
+const KEY: &str = "kucoin.api_key";
 
 /// Два настоящих адреса BSC из записи: (отправитель, получатель) транзакции вывода BNB с BingX.
 fn two_addresses() -> (String, String) {
@@ -31,8 +41,29 @@ fn two_addresses() -> (String, String) {
     (from, to)
 }
 
+fn pw() -> Zeroizing<String> {
+    Zeroizing::new("пароль теста 411".to_string())
+}
+
+/// Хранилище секретов во временной папке с ключом API `key`.
+async fn vault_with(tag: &str, key: &str) -> Vault {
+    let d = std::env::temp_dir().join(format!("arb-411-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let v = Vault::locked(d.join("secrets.enc"));
+    v.create(pw(), KDF).await.unwrap();
+    set_key(&v, key).await;
+    v
+}
+
+async fn set_key(v: &Vault, key: &str) {
+    v.change(pw(), KEY, Some(Zeroizing::new(key.to_string())), KDF)
+        .await
+        .unwrap();
+}
+
 #[test]
-fn fresh_same_changed_first() {
+fn trigger_answer_same_changed_first() {
     let (a, b) = two_addresses();
     assert_eq!(compare(Some(&a), &a), Seen::Same, "совпал");
     assert_eq!(compare(Some(&a), &b), Seen::Changed, "изменился");
@@ -40,35 +71,16 @@ fn fresh_same_changed_first() {
 }
 
 #[test]
-fn withdraw_only_fresh_address() {
-    let (a, _) = two_addresses();
-    // Свежий ответ сделки пришёл — вывод на него (что бы ни лежало в памяти).
-    assert_eq!(for_withdraw(State::Done(Ok(a.clone()))), Pick::Use(a));
-    // Нет свежего ответа: подтверждения нет, оно не к этому переводу, свежий запрос упал — свой свежий запрос.
-    for s in [
-        State::Absent,
-        State::Stale,
-        State::Done(Err("нет адреса депозита".into())),
-    ] {
-        assert!(matches!(for_withdraw(s), Pick::Ask(_)));
-    }
-    // Адрес из памяти сам по себе в Pick::Use попасть не может: Use — только из State::Done(Ok).
-}
-
-#[test]
-fn precheck_memory_only_when_confirmed() {
+fn memory_unless_doubted() {
     assert!(
         use_memory(true, false),
-        "в памяти и не было сбоя — без ожидания"
+        "в памяти, пометки нет — без запроса"
     );
     assert!(
         !use_memory(true, true),
-        "последний свежий запрос упал — ждём ответ биржи"
+        "пометка «спросить заново» — запрос"
     );
-    assert!(
-        !use_memory(false, false),
-        "нет в памяти — ждём ответ биржи (как раньше)"
-    );
+    assert!(!use_memory(false, false), "нет в памяти — запрос");
 }
 
 #[test]
@@ -79,13 +91,64 @@ fn texts_without_address() {
         t.contains("kucoin") && t.contains("ESIM") && t.contains("изменился"),
         "{t}"
     );
-    let f = failed_text("bitget", "LAB", "BEP20");
-    for s in [&t, &f] {
+    let d = doubt_text(
+        "bitget",
+        "LAB",
+        "BEP20",
+        "перевод идёт 900 с при норме 600 с",
+    );
+    for s in [&t, &d] {
         assert!(
             !s.contains(&a) && !s.contains(&b) && !s.contains("0x"),
             "{s}"
         );
     }
+}
+
+/// Путь предпроверки и вывода ищет адрес по отпечатку, прочитанному в момент поиска (Mark::read): смена ключа в
+/// хранилище — и адрес прежнего ключа уже не находится, без всякого secrets_changed.
+#[tokio::test]
+async fn key_change_hides_old_address_at_once() {
+    let (a, _) = two_addresses();
+    let v = vault_with("change", "ключ-аккаунта-1").await;
+    let book: AddrBook<String> = AddrBook::default();
+    let m1 = Mark::read(&v, KEY);
+    book.keep(&m1, "ESIM".into(), "BEP20".into(), a.clone());
+    assert_eq!(
+        book.peek(&Mark::read(&v, KEY), "ESIM", "BEP20"),
+        Some(a.clone())
+    );
+    set_key(&v, "ключ-аккаунта-2").await;
+    assert_eq!(
+        book.peek(&Mark::read(&v, KEY), "ESIM", "BEP20"),
+        None,
+        "новый ключ — адреса нет"
+    );
+    set_key(&v, "ключ-аккаунта-1").await;
+    assert_eq!(
+        book.peek(&Mark::read(&v, KEY), "ESIM", "BEP20"),
+        Some(a),
+        "тот же ключ снова — тот же аккаунт"
+    );
+    v.lock();
+    assert_eq!(
+        book.peek(&Mark::read(&v, KEY), "ESIM", "BEP20"),
+        None,
+        "секреты закрыты — ничего"
+    );
+}
+
+/// Ключ сменили, пока шёл запрос адреса: ответ (адрес прежнего или неизвестного аккаунта) в память не кладётся.
+#[tokio::test]
+async fn answer_during_key_change_not_kept() {
+    let (_, b) = two_addresses();
+    let v = vault_with("during", "ключ-аккаунта-1").await;
+    let book: AddrBook<String> = AddrBook::default();
+    let before = Mark::read(&v, KEY);
+    set_key(&v, "ключ-аккаунта-2").await;
+    book.keep(&before, "LAB".into(), "BEP20".into(), b);
+    assert_eq!(book.peek(&before, "LAB", "BEP20"), None);
+    assert_eq!(book.peek(&Mark::read(&v, KEY), "LAB", "BEP20"), None);
 }
 
 #[test]

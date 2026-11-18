@@ -17,7 +17,7 @@
 use reqwest::Method;
 
 use crate::core::types::Asset;
-use crate::gateway::addr_book::AddrBook;
+use crate::gateway::addr_book::{AddrBook, Mark};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::{Ctx, currency};
@@ -41,8 +41,8 @@ pub async fn deposit_address(
     network: &str,
 ) -> GatewayResult<String> {
     // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
-    let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
-    if let Some(a) = addrs.book.lookup(mark, &asset.ticker, network)? {
+    let mark = Mark::read(&ctx.vault, super::ctx::SECRET_API_KEY);
+    if let Some(a) = addrs.book.lookup(&mark, &asset.ticker, network)? {
         return Ok(a);
     }
     let p = vec![
@@ -82,7 +82,7 @@ pub async fn deposit_address(
         .with_raw(data.to_string())
     })?;
     addrs.book.keep(
-        mark,
+        &mark,
         asset.ticker.clone(),
         network.to_string(),
         address.clone(),

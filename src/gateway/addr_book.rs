@@ -2,27 +2,30 @@
 //! Что делает: решение 411 (задача t196, Тигран 19.11: «адрес депозита — из памяти, но умную связку: если я завтра
 //! поменяю API-ключи, бот не должен взять неправильный адрес») — общая память адресов депозита адаптеров бирж,
 //! привязанная к учётной записи, и режим запроса адреса на задаче.
-//! 1. Память AddrBook: ключ — (отпечаток ключа API биржи, монета, сеть). Отпечаток — secrets/vault.rs mark: хеш
-//!    значения секрета «<биржа>.api_key» с зерном процесса (сам ключ и секрет не хранятся и не пишутся в журнал).
-//!    Сменили ключ — другой отпечаток — адрес, полученный под старым ключом, не находится (и не используется).
-//!    Секреты заблокированы или ключа нет — отпечатка нет: из памяти ничего не берётся и в неё ничего не кладётся.
-//!    До решения 411 у каждого из 14 адаптеров бирж был свой HashMap по (монета, сеть) без привязки к ключу, до
-//!    перезапуска (смена ключа его не сбрасывала — факт кода venues/*/deposit_addr.rs на 7fefaeba).
-//! 2. Режим запроса на задаче tokio (task_local, как addr_claim.rs и patience.rs: ядро о площадках не знает):
-//!    - Normal (вне признака) — как раньше: есть в памяти — из памяти, нет — запрос к бирже;
-//!    - Memory (`memory_only`) — только память: нет в памяти — NotApplicable, запроса к бирже нет (предпроверка берёт
-//!      адрес без ожидания, core/deposit_proof.rs);
-//!    - Fresh (`fresh`) — память не читается, всегда запрос к бирже; ответ кладётся в память (свежий ответ биржи —
-//!      сверка и подтверждение адреса перед выводом, core/deposit_proof.rs).
-//!    Что делать — чистая логика `decide` (тест ниже).
-//! Кто вызывает: venues/*/deposit_addr.rs (14 адаптеров бирж: память и lookup/keep), core/deposit_proof.rs и
-//! core/deposit_warm_pass.rs (memory_only, fresh).
-//! От чего зависит: tokio (task_local), gateway/errors.rs.
+//!
+//! Память AddrBook: ключ — (отпечаток ключа API биржи, монета, сеть). Отпечаток — secrets/vault.rs mark: хеш значения
+//! секрета «<биржа>.api_key» с зерном процесса (сам ключ и секрет не хранятся и не пишутся в журнал). Отпечаток
+//! читается из хранилища секретов в момент поиска (Mark::read) — хранилище меняет ключи в памяти одним присваиванием
+//! под своим замком (vault.rs write), поэтому сразу после смены ключа адрес прежнего ключа не находится. Кладётся адрес
+//! только если отпечаток после ответа биржи тот же, что до запроса (Mark::still): ключ сменили во время запроса —
+//! ответ в память не идёт. Секреты заблокированы или ключа нет — из памяти ничего, в память ничего.
+//! До решения 411 у каждого из 14 адаптеров бирж был свой HashMap по (монета, сеть) без привязки к ключу.
+//!
+//! Режим запроса — на задаче tokio (task_local, как addr_claim.rs; ядро о площадках не знает): Normal (вне признака)
+//! — как раньше: есть в памяти — из памяти, нет — запрос; Memory (`memory_only`) — только память, нет — NotApplicable;
+//! Fresh (`fresh`) — память не читается, всегда запрос, ответ кладётся в память (триггерный запрос ядра,
+//! core/deposit_proof.rs). Что делать — чистая логика `decide` (тест ниже).
+//!
+//! Кто вызывает: venues/*/deposit_addr.rs (14 адаптеров бирж), core/deposit_proof.rs и core/deposit_warm_pass.rs
+//! (memory_only, fresh).
+//! От чего зависит: tokio (task_local), gateway/errors.rs, secrets/vault.rs (mark).
 //! Настройки: нет.
 
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, RwLock};
+
+use crate::secrets::vault::Vault;
 
 use super::errors::{ErrorCode, GatewayError, GatewayResult};
 
@@ -80,6 +83,44 @@ pub fn decide<V>(mode: Mode, mem: Option<V>) -> Look<V> {
     }
 }
 
+/// Отпечаток ключа API, прочитанный перед запросом адреса.
+#[derive(Clone)]
+pub struct Mark {
+    at: Option<u64>,
+    /// Откуда перечитать отпечаток после ответа; None — отпечаток задан готовым (Mark::fixed).
+    src: Option<(Vault, &'static str)>,
+}
+
+impl Mark {
+    /// Что делает: отпечаток секрета `name` сейчас. Принимает: хранилище, имя секрета ключа API. Ошибок нет.
+    pub fn read(vault: &Vault, name: &'static str) -> Self {
+        Self {
+            at: vault.mark(name),
+            src: Some((vault.clone(), name)),
+        }
+    }
+
+    /// Что делает: готовый отпечаток без хранилища (чистая логика и тесты). Ошибок нет.
+    pub fn fixed(at: Option<u64>) -> Self {
+        Self { at, src: None }
+    }
+
+    /// Что делает: отпечаток для записи — тот же, что до запроса (иначе None: ключ сменили во время запроса).
+    /// Ошибок нет.
+    pub fn still(&self) -> Option<u64> {
+        match &self.src {
+            Some((vault, name)) => same(self.at, vault.mark(name)),
+            None => self.at,
+        }
+    }
+}
+
+/// Что делает: чистая логика — отпечаток до запроса и после ответа совпали (и есть) — его можно класть.
+/// Принимает: до, после. Возвращает: отпечаток или None. Ошибок нет.
+pub fn same(before: Option<u64>, now: Option<u64>) -> Option<u64> {
+    before.filter(|b| Some(*b) == now)
+}
+
 /// Ключ памяти: (отпечаток ключа API, монета тикером биржи, сеть биржи).
 type Key = (u64, String, String);
 
@@ -107,8 +148,8 @@ impl<V> Default for AddrBook<V> {
 impl<V: Clone> AddrBook<V> {
     /// Что делает: адрес из памяти под отпечатком (без учёта режима). Принимает: отпечаток (None — нет ключа: ничего),
     /// монету, сеть. Возвращает: адрес или None. Ошибок нет.
-    pub fn peek(&self, mark: Option<u64>, coin: &str, net: &str) -> Option<V> {
-        let m = mark?;
+    pub fn peek(&self, mark: &Mark, coin: &str, net: &str) -> Option<V> {
+        let m = mark.at?;
         let map = self.map.read().unwrap_or_else(|p| p.into_inner());
         map.get(&(m, coin.to_string(), net.to_string())).cloned()
     }
@@ -131,15 +172,22 @@ impl<V: Clone> AddrBook<V> {
     }
 
     /// Что делает: peek + apply. Принимает: отпечаток, монету, сеть. Возвращает и ошибки: как apply.
-    pub fn lookup(&self, mark: Option<u64>, coin: &str, net: &str) -> GatewayResult<Option<V>> {
+    pub fn lookup(&self, mark: &Mark, coin: &str, net: &str) -> GatewayResult<Option<V>> {
         let mem = self.peek(mark, coin, net);
         self.apply(mem, coin, net)
     }
 
-    /// Что делает: кладёт адрес в память под отпечатком (заменяет прежний). Отпечатка нет — ничего не делает.
-    /// Принимает: отпечаток, монету, сеть, значение. Ошибок нет.
-    pub fn keep(&self, mark: Option<u64>, coin: String, net: String, v: V) {
-        if let Some(m) = mark {
+    /// Что делает: кладёт адрес в память под отпечатком (заменяет прежний). Отпечатка нет или он сменился за время
+    /// запроса (Mark::still) — ничего не делает. Принимает: отпечаток до запроса, монету, сеть, значение. Ошибок нет.
+    pub fn keep(&self, mark: &Mark, coin: String, net: String, v: V) {
+        if let Some(m) = mark.still() {
+            self.put(m, coin, net, v);
+        }
+    }
+
+    /// Что делает: кладёт под готовым отпечатком. Ошибок нет.
+    fn put(&self, m: u64, coin: String, net: String, v: V) {
+        {
             let mut map = self.map.write().unwrap_or_else(|p| p.into_inner());
             map.insert((m, coin, net), v);
         }
@@ -164,26 +212,41 @@ mod tests {
     /// Решение 411: другой отпечаток ключа — адрес старого ключа не находится; без отпечатка — не кладётся.
     #[test]
     fn book_bound_to_mark() {
+        let (k1, k2, none) = (
+            Mark::fixed(Some(1)),
+            Mark::fixed(Some(2)),
+            Mark::fixed(None),
+        );
         let b: AddrBook<String> = AddrBook::default();
-        b.keep(Some(1), "ESIM".into(), "BSC".into(), "a1".into());
-        assert_eq!(b.peek(Some(1), "ESIM", "BSC").as_deref(), Some("a1"));
-        assert_eq!(b.peek(Some(2), "ESIM", "BSC"), None, "другой ключ API");
-        assert_eq!(b.peek(None, "ESIM", "BSC"), None, "нет ключа");
-        b.keep(None, "LAB".into(), "BSC".into(), "a2".into());
-        assert_eq!(b.peek(Some(1), "LAB", "BSC"), None);
+        b.keep(&k1, "ESIM".into(), "BSC".into(), "a1".into());
+        assert_eq!(b.peek(&k1, "ESIM", "BSC").as_deref(), Some("a1"));
+        assert_eq!(b.peek(&k2, "ESIM", "BSC"), None, "другой ключ API");
+        assert_eq!(b.peek(&none, "ESIM", "BSC"), None, "нет ключа");
+        b.keep(&none, "LAB".into(), "BSC".into(), "a2".into());
+        assert_eq!(b.peek(&k1, "LAB", "BSC"), None);
+    }
+
+    /// Решение 411 (ревью п. 2): ключ сменили за время запроса — ответ не кладётся.
+    #[test]
+    fn keep_only_if_mark_unchanged() {
+        assert_eq!(same(Some(1), Some(1)), Some(1));
+        assert_eq!(same(Some(1), Some(2)), None);
+        assert_eq!(same(Some(1), None), None);
+        assert_eq!(same(None, None), None);
     }
 
     /// Решение 411: режим живёт на задаче и не протекает наружу.
     #[tokio::test]
     async fn mode_scoped() {
+        let k1 = Mark::fixed(Some(1));
         assert_eq!(mode(), Mode::Normal);
         assert_eq!(memory_only(async { mode() }).await, Mode::Memory);
         assert_eq!(fresh(async { mode() }).await, Mode::Fresh);
         let b: AddrBook<String> = AddrBook::default();
-        let miss = memory_only(async { b.lookup(Some(1), "ESIM", "BSC") }).await;
+        let miss = memory_only(async { b.lookup(&k1, "ESIM", "BSC") }).await;
         assert_eq!(miss.unwrap_err().code, ErrorCode::NotApplicable);
-        b.keep(Some(1), "ESIM".into(), "BSC".into(), "a1".into());
-        let f = fresh(async { b.lookup(Some(1), "ESIM", "BSC") }).await;
+        b.keep(&k1, "ESIM".into(), "BSC".into(), "a1".into());
+        let f = fresh(async { b.lookup(&k1, "ESIM", "BSC") }).await;
         assert_eq!(f.unwrap(), None, "свежий — память не читается");
         assert_eq!(mode(), Mode::Normal);
     }

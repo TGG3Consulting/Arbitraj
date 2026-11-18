@@ -21,7 +21,7 @@
 use serde_json::Value;
 
 use crate::core::types::Asset;
-use crate::gateway::addr_book::AddrBook;
+use crate::gateway::addr_book::{AddrBook, Mark};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -51,8 +51,8 @@ impl DepositAddrs {
     /// Ошибки: InvalidAddress — адреса в сети нет (создать в кабинете OKX) или он требует memo; связь, коды OKX.
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, network: &str) -> GatewayResult<DepositAddr> {
         // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
-        let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
-        if let Some(a) = self.book.lookup(mark, &asset.ticker, network)? {
+        let mark = Mark::read(&ctx.vault, super::ctx::SECRET_API_KEY);
+        if let Some(a) = self.book.lookup(&mark, &asset.ticker, network)? {
             return Ok(a);
         }
         let (chain, _) = wallet::chain(ctx, &asset.ticker, network).await?;
@@ -61,7 +61,7 @@ impl DepositAddrs {
         let a = pick(&data, &chain)
             .map_err(|m| invalid(ctx, format!("{} {chain}: {m}", asset.ticker)))?;
         self.book
-            .keep(mark, asset.ticker.clone(), network.to_string(), a.clone());
+            .keep(&mark, asset.ticker.clone(), network.to_string(), a.clone());
         Ok(a)
     }
 }

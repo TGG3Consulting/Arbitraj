@@ -23,7 +23,7 @@
 use std::time::Duration;
 
 use crate::core::types::Asset;
-use crate::gateway::addr_book::AddrBook;
+use crate::gateway::addr_book::{AddrBook, Mark};
 use crate::gateway::addr_claim::{self, Missing};
 use crate::gateway::addr_create::{Creating, Failure, retry_text};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -53,8 +53,8 @@ impl DepositAddrs {
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, chain: &str) -> GatewayResult<String> {
         let key = (asset.ticker.clone(), chain.to_string());
         // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
-        let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
-        let before = self.book.peek(mark, &asset.ticker, chain);
+        let mark = Mark::read(&ctx.vault, super::ctx::SECRET_API_KEY);
+        let before = self.book.peek(&mark, &asset.ticker, chain);
         if let Some(a) = self.book.apply(before.clone(), &asset.ticker, chain)? {
             return Ok(a);
         }
@@ -93,7 +93,7 @@ impl DepositAddrs {
         let got = deposit_addr_new::list(ctx, &coin).await?;
         // Решение 379: адреса в ответе нет — создать (предпроверка, перевод) или NotApplicable (прогрев без «да»).
         if let Some(a) = deposit_addr_new::pick(&got, &coin) {
-            self.keep(mark, key, &a);
+            self.keep(&mark, key, &a);
             return Ok(a);
         }
         if addr_claim::on_missing() == Missing::Forbidden {
@@ -104,7 +104,7 @@ impl DepositAddrs {
         let _pass = self.creating.enter(&key).await;
         // Создал ли адрес тот, кого ждали: память изменилась за время ожидания (решение 411: прежнее значение памяти
         // в режиме «только биржа» не берётся; в обычном режиме до сюда доходят только с пустой памятью).
-        let now = self.book.peek(mark, &asset.ticker, chain);
+        let now = self.book.peek(&mark, &asset.ticker, chain);
         if let Some(a) = now.filter(|a| Some(a) != before.as_ref()) {
             return Ok(a);
         }
@@ -120,7 +120,7 @@ impl DepositAddrs {
         match deposit_addr_new::create(ctx, &asset.ticker, chain, &coin).await {
             Ok(a) => {
                 self.creating.ok(&key);
-                self.keep(mark, key, &a);
+                self.keep(&mark, key, &a);
                 Ok(a)
             }
             Err(f) => {
@@ -140,7 +140,7 @@ impl DepositAddrs {
     }
 
     /// Адрес — в память под отпечатком ключа API (решение 411). Ошибок нет.
-    fn keep(&self, mark: Option<u64>, key: (String, String), a: &str) {
+    fn keep(&self, mark: &Mark, key: (String, String), a: &str) {
         self.book.keep(mark, key.0, key.1, a.to_string());
     }
 }

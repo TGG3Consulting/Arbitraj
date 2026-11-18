@@ -135,6 +135,10 @@ pub struct Inner {
     /// Решение 403 (ревью t188): сколько записей в `rides` (идущие сделки после учёта покупки, с группой и без) — 0:
     /// очередь расчёта (coin_ride.rs blocks_new) замок `rides` не берёт. Меняется только под замком `rides`.
     pub rides_live: std::sync::atomic::AtomicUsize,
+    /// Решение 405 (t191, ревью 3 М2): ID сделок, которые ещё что-то держат — не закрыты (кроме «Беру на себя») или ждут
+    /// / ведут возврат USDT (core/unsettled.rs). По нему резерв возвратов (usdt_hold.rs) и монеты других сделок на
+    /// счёте (remain_others.rs) — без прохода по всей истории учёта. Блокировка: берётся отдельно, не вместе с `deals`.
+    pub unsettled: Mutex<HashSet<String>>,
     /// Решение 174: монеты, которые сейчас продаются кнопкой «Продать» панели «Балансы» (повторное нажатие — отказ
     /// «уже продаётся»; метка Я-2 в active ставится вместе с этой, balance_sell.rs).
     pub balance_sells: Mutex<HashSet<super::coin_key::CoinKey>>,
@@ -267,6 +271,7 @@ impl Inner {
             trail: Mutex::default(),
             group_live: Default::default(),
             rides_live: Default::default(),
+            unsettled: Mutex::default(),
             balance_sells: Mutex::default(),
             bal_cache: Default::default(),
             usdt_moves: Mutex::default(),

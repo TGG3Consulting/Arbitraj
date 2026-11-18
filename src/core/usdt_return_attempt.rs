@@ -12,7 +12,8 @@
 //! Решение 249, дополнение 10.11 (п. 4): каждая попытка перепроверяет правило биржа ↔ биржа (правило могли поменять
 //! между попытками; usdt_return_deal::return_block) — запрещено: ничего не отправляет, ошибка «запрещено правилом: …».
 //! Кто вызывает: core/usdt_return_retry.rs (повторы), core/manual_usdt.rs («Перегнать»).
-//! От чего зависит: usdt_return.rs (relay_try, usdt), limits.rs (free_now), dex_account.rs, ledger.rs, deal.rs.
+//! От чего зависит: usdt_return.rs (relay_try, usdt), limits.rs (free_now), usdt_hold.rs (резерв других, решение 405),
+//! dex_account.rs, ledger.rs, deal.rs.
 //! Настройки: venue.quote_asset (через usdt_return.rs), usdt.return_tolerance_usd (площадка, где лежат USDT;
 //! необязательная: не задана — строго, как до допуска).
 
@@ -51,9 +52,18 @@ pub async fn attempt(
     let free = super::limits::free_now(core, from, acc.as_ref(), &usdt.ticker)
         .await
         .map_err(|e| OpError::from(format!("{}: свободные {}: {e}", from.0, usdt.ticker)))?;
+    // Решение 405 (ревью 3, Н3): резерв возвратов ДРУГИХ сделок не трогаем — свободное без него; свой резерв — наш.
+    let others = super::usdt_hold::held_except(core, from, acc.as_ref(), Some(&d.id));
+    let free = super::usdt_hold::spendable(free, &others);
     // Решение 227: никогда не больше части — остальное на площадке чужое (другие части, оборотные деньги кошелька).
-    let amount = amount_for(core, from, free, cap)
-        .map_err(|e| OpError::from(format!("{} ({}): {e}", from.0, usdt.ticker)))?;
+    let amount = amount_for(core, from, free, cap).map_err(|e| {
+        OpError::from(format!(
+            "{} ({}): {e}{}",
+            from.0,
+            usdt.ticker,
+            super::usdt_hold::suffix(&others, &usdt.ticker)
+        ))
+    })?;
     let id = format!("{deal}{tag}");
     let r = super::usdt_return::relay_try(core, &id, from, to, acc.as_ref(), amount).await?;
     if amount < cap {

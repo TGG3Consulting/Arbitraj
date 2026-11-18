@@ -340,6 +340,7 @@ pub mod uncapped_sum;
 pub mod uncapped_types;
 pub mod uncapped_view;
 pub mod uncapped_watch;
+pub mod unsettled;
 pub mod usdt_hold;
 pub mod usdt_relay_retry;
 pub mod usdt_return;

@@ -58,6 +58,8 @@ pub async fn save(core: &Core, deal: &Deal) {
     core.inner.window_kick.notify_one();
     super::window_deal::saved(core, rec); // Решение 245: цена DEX на объём сделки в окне — кто под наблюдением.
     lk(&core.inner.deals).insert(rec.id.clone(), rec.clone());
+    // Решение 405 (М2): набор сделок, которые ещё что-то держат (unsettled.rs) — после записи учёта.
+    super::unsettled::track(core, rec);
     recompute_exposure(core);
     if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &rec.id, rec).await {
         core.inner
@@ -210,6 +212,8 @@ pub fn open(
     // Решение 132: счёт DEX сделки — сразу в учёте (до первого шага сделки).
     deal.dex_account = account;
     deals.insert(id, deal.clone());
+    drop(deals);
+    super::unsettled::track(core, &deal);
     deal
 }
 

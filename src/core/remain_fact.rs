@@ -122,7 +122,7 @@ pub async fn apply_with(
     fact: Decimal,
     others: super::remain_others::Others,
 ) -> bool {
-    // Четвёртое ревью (С-3, С-5): у сделки остаток «не присвоено, перечитать» — снова ждёт доли (количество + остаток).
+    // Четвёртое ревью (С-3, С-5): у сделки остаток «не присвоено, перечитать» — снова ждёт доли по той же записи.
     super::credit_fact::reopen(deal);
     let sp = super::credit_split::split(&super::credit_apply::input(core, deal, fact, &others));
     if super::credit_fact::pending(deal) {

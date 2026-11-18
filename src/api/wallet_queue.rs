@@ -2,6 +2,8 @@
 //! Что делает: очередь транзакций кошелька DEX для интерфейса (решение 45) — состояние (свободна / ждёт итога /
 //! остановлена до ручной проверки с причиной) и кнопка «Снять очередь после ручной проверки». Данные — только из
 //! реестра шлюза (контракт адаптера wallet_queue, release_wallet_queue); к адаптерам напрямую api не ходит.
+//! Решение 408 (t193): снятие — команда ядра ManualAction::ReleaseWalletQueue (Core::command, журнал «кто нажал»), тот
+//! же путь, что у кнопки Telegram; 409 — до команды, по nonce_taken (wallet_queue адаптера).
 //! Кто вызывает: интерфейс (экран «Каналы отправки», components/WalletQueue.svelte).
 //! От чего зависит: api/state.rs, gateway/registry.rs, gateway/contract.rs, core/types (WalletQueue).
 //! Настройки: нет.
@@ -15,7 +17,11 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 
-use crate::core::types::WalletQueue;
+use axum::http::StatusCode;
+
+use crate::core::types::{
+    CommandSource, ManualAction, ManualCommand, WalletQueue, WalletQueueState,
+};
 
 use super::dex_executor::WalletQuery;
 
@@ -54,8 +60,34 @@ pub async fn release(
     let v = super::wallets_dex::venue_as(&st, &venue, w.wallet.as_deref())
         .await
         .map_err(ApiError::gateway)?;
-    v.release_wallet_queue("вручную, интерфейс", body.pending_ok)
-        .await
-        .map(Json)
-        .map_err(ApiError::gateway)
+    // Второе подтверждение (409): nonce удержанной транзакции ещё не занят — та же проверка, что у адаптера
+    // (wallet/deposit.rs release); код 409 нужен окну интерфейса (WalletQueue.svelte).
+    if !body.pending_ok {
+        let q = v.wallet_queue().await.map_err(ApiError::gateway)?;
+        if q.nonce_taken == Some(false) {
+            let n = match q.state {
+                WalletQueueState::Halted { nonce: Some(n), .. } => n.to_string(),
+                _ => "?".into(),
+            };
+            return Err(ApiError(
+                StatusCode::CONFLICT,
+                format!(
+                    "nonce {n} ещё не занят — висящая транзакция может пройти позже; снимать только с подтверждением"
+                ),
+            ));
+        }
+    }
+    // Решение 408 (t193): снятие — командой ядра (журнал core.command «кто нажал»), тем же путём, что кнопка Telegram.
+    let cmd = ManualCommand {
+        action: ManualAction::ReleaseWalletQueue {
+            venue,
+            wallet: w.wallet.clone(),
+            pending_ok: body.pending_ok,
+        },
+        source: CommandSource::Ui,
+        by: None,
+        at: chrono::Utc::now(),
+    };
+    st.core.command(cmd).await.map_err(ApiError::bad)?;
+    v.wallet_queue().await.map(Json).map_err(ApiError::gateway)
 }

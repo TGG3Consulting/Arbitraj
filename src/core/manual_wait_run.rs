@@ -10,8 +10,8 @@
 //!   (manual_wait::claim в coin_ride::take), иначе снимается после команды (ревью 4, Н3);
 //! - иначе — список «чьих окончаний ждём» обновляется на экране, ждём дальше.
 //!
-//! Конец без выполнения — журнал core.manual_wait (Warn) и событие Command {final, ok: false, text} (Telegram правит
-//! сообщение записи, экран — строку итога).
+//! Конец без выполнения — журнал core.manual_wait (Warn) и событие Command {final, ok: false, text, wait} (Telegram правит
+//! сообщение записи: «Не выполнено: причина», кнопки снова доступны — решение 408; экран — строку итога).
 //! Кто вызывает: manual_wait.rs (start).
 //! От чего зависит: manual_wait.rs, commands.rs (Core::command), manual.rs (publish), view.rs, engine.rs.
 //! Настройки: нет.
@@ -140,5 +140,7 @@ async fn end(core: &Core, key: &CoinKey, id: &str, cmd: &ManualCommand, why: &st
     mw::log(core, Level::Warn, &text).await;
     core.inner.live.send(CoreEvent::Command(json!({
         "final": true, "action": cmd.action, "who": super::commands::who(cmd), "ok": false, "text": text,
+        // Решение 408: ID ожидания — Telegram снимает «Ждёт…», пишет «Не выполнено: причина», кнопки снова доступны.
+        "wait": id,
     })));
 }

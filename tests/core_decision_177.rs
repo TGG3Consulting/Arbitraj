@@ -274,6 +274,7 @@ fn telegram_edits_returned_record_and_final_outcome() {
         at: chrono::Utc::now(),
         error: Some(MISMATCH_1.into()),
         attempts: 1,
+        holders: Vec::new(),
     };
     let rec = alert_record(&a, Decimal::ZERO);
     let mut st = MirrorState::default();

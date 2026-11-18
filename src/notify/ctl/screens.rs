@@ -2,12 +2,13 @@
 //! Что делает: экраны чата «Управление» (решение 176) без денег: «Главное меню» (с «📊 Отчёты» — решение 215), «Состояние» (режим, итог дня по
 //! площадкам — решение 173, паузы, карантин; кнопки Старт / Пауза / Стоп, «Снять паузу», «Снять карантин», «Сбросить
 //! лимит дня» общий и по площадке — те же кнопки «c:…», что у меню /menu «Общего», решение 157) и «Ручное управление»
-//! (сколько записей ждут и ссылка на чат, где их кнопки). Только рендер — данные даёт вызывающий.
+//! (сколько записей ждут и ссылка на чат, где их кнопки; решение 408 — ожидания ручных действий с «Отменить ожидание»). Только рендер — данные даёт вызывающий.
 //! Кто вызывает: notify/ctl/press.rs, notify/ctl/live.rs.
 //! От чего зависит: notify/menu.rs, menu_day.rs (тексты и кнопки плашки), ctl/kb.rs, core/risk.rs, core/types.
 //! Настройки: нет.
 
 use crate::core::commands_control::label;
+use crate::core::manual_wait::ManualWait;
 use crate::core::risk::Risk;
 use crate::core::types::{ManualRecord, RecordKind};
 
@@ -55,7 +56,13 @@ pub fn message_link(chat: i64, msg: i64) -> Option<String> {
 
 /// «Ручное управление»: сколько записей ждут, по видам, и где их кнопки. Принимает: ждущие записи, название чата с
 /// кнопками («Неудачные» или «Общий»), ссылку на последнее сообщение там (None — нет). Ошибок нет.
-pub fn manual(waiting: &[&ManualRecord], chat: &str, last: Option<String>) -> Screen {
+/// Решение 408: и ожидания ручных действий (решение 405) с «Отменить ожидание» (notify/menu_waits.rs).
+pub fn manual(
+    waiting: &[&ManualRecord],
+    chat: &str,
+    last: Option<String>,
+    waits: &[ManualWait],
+) -> Screen {
     let mut s = if waiting.is_empty() {
         Screen::new("Ручное управление: записей, ждущих действия, нет.")
     } else {
@@ -82,6 +89,9 @@ pub fn manual(waiting: &[&ManualRecord], chat: &str, last: Option<String>) -> Sc
         // Решение 192: карточка первой ждущей записи со всеми её кнопками и «Предыдущая» / «Следующая».
         s = s.one(btn("Обработать", &super::card::code(0, &waiting[0].key)));
     }
+    let (wt, _) = super::super::menu_waits::block(waits);
+    s.text.push_str(&wt);
+    s.rows.extend(super::super::menu_waits::rows(waits));
     if let Some(url) = last {
         s.rows
             .push(vec![link(&format!("Открыть в чате «{chat}»"), &url)]);

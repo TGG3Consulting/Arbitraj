@@ -5,6 +5,7 @@
 //! parameters.retry_after (ResponseParameters, https://core.telegram.org/bots/api#responseparameters).
 //! Решение 340: send_tagged не ждёт и «Общего» — задание в очередь уведомлений (notify/queue.rs); в задании
 //! (tagged_now) — роли своими задачами со снимком карточки (alert_card::current), «Общий» — по порядку очереди.
+//! Решение 408 (t193): кнопки события (notify/acts.rs) — и в чатах ролей.
 //! Кто вызывает: core/deps.rs (notify_tagged) — закрытие сделки (core/ledger.rs); core/deal_closed.rs (tagged_now в
 //! задании Notifier::later).
 //! От чего зависит: notify/dispatch.rs (html — шаблон решения 251, log, deliver), routes.rs, roles.rs, client.rs,
@@ -51,6 +52,8 @@ impl Notifier {
                 text.to_string(),
             );
             let job = async move { n.to_role(role, &code, venue.as_deref(), &text).await };
+            // Решение 408: кнопки события (notify/acts.rs) — и в чат роли.
+            let job = super::acts::scoped(super::acts::current(), job);
             tokio::spawn(super::alert_card::scoped(super::alert_card::current(), job));
         }
         if super::glue::glued(code) {
@@ -59,13 +62,20 @@ impl Notifier {
         self.deliver(code, venue, text, None).await;
     }
 
-    /// Одно сообщение в чат роли (без кнопок). Принимает: роль, код, площадку, текст. Ошибок нет: итог — в журнал.
+    /// Одно сообщение в чат роли (решение 408: с кнопками события, если они есть — notify/acts.rs). Принимает: роль,
+    /// код, площадку, текст. Ошибок нет: итог — в журнал.
     async fn to_role(&self, role: Role, code: &str, venue: Option<&str>, text: &str) {
         let Some(def) = catalog::find(code) else {
             return;
         };
         // Решение 251: тот же шаблон алерта в HTML, что у «Общего» (notify/alert.rs).
-        let msg = html(code, def, text);
+        // Решение 408: кнопки события (notify/acts.rs); не влезшие в 64 байта — строкой в тексте.
+        let (kb, notes) = super::acts::keyboard(&super::acts::current());
+        let msg = if notes.is_empty() {
+            html(code, def, text)
+        } else {
+            html(code, def, &format!("{text}\n\n{}", notes.join("\n")))
+        };
         let ready = match client::build_role(&self.http, &self.settings, &self.vault, role) {
             Ok(r) => r,
             Err(e) => {
@@ -78,10 +88,10 @@ impl Notifier {
                 return self.log(Level::Warn, venue, why).await;
             }
         };
-        let mut res = ready.tg.send_html(&ready.chat, &msg, None).await;
+        let mut res = ready.tg.send_html(&ready.chat, &msg, kb.clone()).await;
         if let Some(s) = res.as_ref().err().and_then(tg_methods::retry_after) {
             tokio::time::sleep(Duration::from_secs(s)).await;
-            res = ready.tg.send_html(&ready.chat, &msg, None).await;
+            res = ready.tg.send_html(&ready.chat, &msg, kb).await;
         }
         let (level, line) = match res {
             Ok(_) => (

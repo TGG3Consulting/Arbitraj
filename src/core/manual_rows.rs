@@ -109,6 +109,7 @@ pub fn alert_record(a: &StuckAlert, bot: Decimal) -> ManualRecord {
             .render(),
         reason: crate::notify::reason::short(&full),
         reason_full: full.clone(),
+        holders: a.holders.clone(),
         buttons: vec![
             btn(
                 "sell_now",
@@ -165,6 +166,7 @@ pub fn holding_record(h: &ManualHolding, bot: Decimal) -> ManualRecord {
             .render(),
         reason: crate::notify::reason::short(&h.reason),
         reason_full: h.reason.clone(),
+        holders: Vec::new(),
         buttons: vec![
             btn(
                 "return_bot",

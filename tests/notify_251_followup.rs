@@ -51,6 +51,7 @@ fn rec(id: &str, reason: &str) -> ManualRecord {
         at: Utc::now(),
         error: None,
         attempts: 1,
+        holders: Vec::new(),
     };
     alert_record(&a, Decimal::ZERO)
 }

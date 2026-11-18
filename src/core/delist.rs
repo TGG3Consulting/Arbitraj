@@ -173,5 +173,24 @@ async fn announce(core: &Core, venue: &VenueId, old: Option<&Delistings>, new: &
         None,
     )
     .await;
-    deps.notify("venue.delisting", Some(&venue.0), &text).await;
+    // Решение 408: «Продать» — только монеты, которые есть на счетах биржи (балансы — из памяти панели «Балансы» не
+    // старше ui.balances_refresh_ms, иначе запрос; доступность и счёт — по нажатию, notify/press_event_money.rs).
+    let acts: Vec<crate::notify::acts::Act> =
+        match core.venue_balances(venue, core.balances_age()).await {
+            Ok(b) => fresh
+                .iter()
+                .filter(|i| {
+                    b.accounts.iter().any(|a| {
+                        a.trading
+                            && a.rows.iter().any(|r| {
+                                r.asset == i.ticker && r.free > rust_decimal::Decimal::ZERO
+                            })
+                    })
+                })
+                .map(|i| crate::notify::acts::e::sell(&venue.0, &i.ticker))
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+    deps.notify_acts("venue.delisting", Some(&venue.0), &text, acts)
+        .await;
 }

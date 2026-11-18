@@ -143,12 +143,17 @@ async fn all_foreign(
     ));
     log(core, deal, &text).await;
     // В куче: путь застрявшей сделки чувствителен к стеку (решение 389).
-    Box::pin(super::manual::raise_alert(
+    // Решение 408: сделки-держатели — кнопки «Открыть сделку <ID>» у записи в Telegram (notify/mirror_view.rs).
+    let mut holders: Vec<String> = others.deals.iter().map(|(id, _)| id.clone()).collect();
+    holders.extend(others.unclear.iter().cloned());
+    holders.dedup();
+    Box::pin(super::manual::raise_alert_with(
         core,
         deal.clone(),
         None,
         text,
         None,
+        holders,
     ))
     .await;
     false

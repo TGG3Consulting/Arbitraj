@@ -29,7 +29,26 @@ pub async fn slow(core: &Core, t: Touched) {
         }
         Touched::Balance(b) => super::credit_event::on_change(core, b).await,
         Touched::Notice { venue, code, text } => {
-            core.inner.deps.notify(&code, Some(&venue.0), &text).await
+            // Решение 408: wallet.executor_v1 — «Развернуть исполнитель» у кошельков с исполнителем версии v1 (версия
+            // по сверке кода, settings/accounts executor_version; сначала оценка газа, потом «Да/Нет» — нажимает
+            // только человек).
+            let acts: Vec<crate::notify::acts::Act> = if code == "wallet.executor_v1" {
+                core.inner
+                    .deps
+                    .settings
+                    .accounts()
+                    .wallets()
+                    .into_iter()
+                    .filter(|w| w.executor.is_some() && w.executor_version.as_deref() == Some("v1"))
+                    .map(|w| crate::notify::acts::e::deploy_executor(&venue.0, &w.id, &w.name))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            core.inner
+                .deps
+                .notify_acts(&code, Some(&venue.0), &text, acts)
+                .await
         }
         // Решение 248: замер выхода продажи ниже модели — закрыть для входа; свежие налоги — снять, если сошлись.
         Touched::ExitGap(g) => super::exit_gap::on_gap(core, g).await,

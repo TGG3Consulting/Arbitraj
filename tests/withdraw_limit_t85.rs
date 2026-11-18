@@ -351,7 +351,8 @@ fn accounts_role_routes() {
     );
     assert_eq!(Role::Accounts.chat_key(), "notify.accounts_chat");
     assert_eq!(Role::Accounts.token_secret(), "telegram.accounts_token");
-    assert!(Role::Accounts.users_key().is_none(), "без кнопок");
+    // Решение 408: в «Аккаунтах» — кнопки тревог («Снять паузу» биржи), свои разрешённые пользователи.
+    assert_eq!(Role::Accounts.users_key(), Some("notify.accounts_users"));
     assert!(!arb::notify::press::accepts(Role::Accounts, "sell_now"));
     assert_eq!(Role::from_code("accounts"), Some(Role::Accounts));
     assert!(

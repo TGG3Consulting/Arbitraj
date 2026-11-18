@@ -131,7 +131,10 @@ pub async fn close(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &O
     };
     deps.log(Level::Warn, "core.withdraw_block", Some(from), &text, None)
         .await;
-    deps.notify("coin.withdraw_refused", Some(from), &text)
+    // Решение 408 (исключение из решения 157): «Открыть вход монеты» на тревоге (e:oe → «Да/Нет» → OpenCoinEntry).
+    let coin = crate::settings::scope::coin_id(&asset.ticker, asset.bsc_contract.as_ref());
+    let acts = vec![crate::notify::acts::e::open_entry(from, &coin, ticker)];
+    deps.notify_acts("coin.withdraw_refused", Some(from), &text, acts)
         .await;
 }
 

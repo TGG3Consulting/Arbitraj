@@ -5,6 +5,8 @@
 //! кнопки убираются. Второе нажатие того же «Да» или по уже выполненной записи — «Уже выполнено», действие не
 //! повторяется. Журнал: ядро пишет команду с источником и пользователем; здесь — кто нажал и итог.
 //! Решение 176: «Да» перевода USDT — отдельной задачей с ходом перевода в том же сообщении (notify/ctl/progress.rs).
+//! Решение 408 (t193): команда ушла ждать окончания сделок монеты (решение 405) — «Ждёт: …», не «Выполнено»; сообщение
+//! запоминается (mirror_wait.rs: конец ожидания без выполнения — «Не выполнено: причина», кнопки снова доступны).
 //! Кто вызывает: notify/press.rs, press_record.rs, menu_press.rs, tg_commands.rs, notify/ctl/*.
 //! От чего зависит: core (Core::command), core/types/control.rs, mirror_state.rs, tg_methods.rs, storage/journal.
 //! Настройки: нет.
@@ -121,7 +123,29 @@ impl Ctx<'_> {
             )
             .await;
         }
-        let text = self.execute(&p, &q.from, msg.chat.id).await;
+        let (text, wait) = run_pending_full(
+            self.core,
+            self.journal,
+            self.state,
+            &p,
+            &q.from,
+            msg.chat.id,
+        )
+        .await;
+        // Решение 408: команда ждёт окончания сделок — сообщение запоминается: конец ожидания без выполнения правит его
+        // «Не выполнено: причина», кнопки записи снова доступны (notify/mirror_wait.rs).
+        if let Some(id) = wait {
+            lock(self.state).waits.insert(
+                id,
+                super::mirror_wait::WaitMark {
+                    key: p.key.clone(),
+                    role: self.role,
+                    chat: chat.clone(),
+                    msg: msg.message_id,
+                    text: format!("{base}\n\n{text}"),
+                },
+            );
+        }
         if let Err(e) = self
             .tg
             .edit_text_markup(&chat, msg.message_id, &format!("{base}\n\n{text}"), None)
@@ -153,6 +177,22 @@ pub async fn run_pending(
     from: &User,
     chat: i64,
 ) -> String {
+    run_pending_full(core, journal, state, p, from, chat)
+        .await
+        .0
+}
+
+/// Как run_pending; решение 408: ещё и ID ожидания, если команда ушла ждать окончания сделок монеты (решение 405) —
+/// итог тогда «Ждёт: …», а не «Выполнено: …»; отметка записи «выполнена из Telegram» держится до конца ожидания
+/// (notify/mirror_wait.rs снимает её при конце без выполнения). Возвращает: (итог, ID ожидания). Ошибок нет.
+pub async fn run_pending_full(
+    core: &Core,
+    journal: &Journal,
+    state: &Shared,
+    p: &Pending,
+    from: &User,
+    chat: i64,
+) -> (String, Option<String>) {
     let who = from.describe();
     let cmd = ManualCommand {
         action: p.action.clone(),
@@ -174,7 +214,15 @@ pub async fn run_pending(
         lock(state).done.remove(k);
     }
     let at = Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
+    let wait = match &res {
+        Ok(_) => crate::core::manual_wait::deferred(core, &p.action),
+        Err(_) => None,
+    };
     let (level, text) = match res {
+        Ok(t) if wait.is_some() => (
+            Level::Info,
+            format!("Ждёт: {who}, «{}» — {t}, {at}.", p.title),
+        ),
         Ok(t) => (
             Level::Info,
             format!("Выполнено: {who}, «{}» — {t}, {at}.", p.title),
@@ -194,5 +242,5 @@ pub async fn run_pending(
             Some(data),
         )
         .await;
-    text
+    (text, wait)
 }

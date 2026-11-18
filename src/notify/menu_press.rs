@@ -112,6 +112,12 @@ pub fn control_action(r: &Risk, object: &str) -> Result<Pending, String> {
                 )
             },
         ),
+        // Решение 408: кнопка, чей callback_data не влез в 64 байта (menu.rs b).
+        "x" => {
+            return Err(
+                "только в интерфейсе — данные кнопки длиннее 64 байт callback_data Telegram".into(),
+            );
+        }
         _ => return Err("неизвестная кнопка".into()),
     };
     Ok(Pending {
@@ -131,7 +137,7 @@ impl Ctx<'_> {
         Some(match code {
             "root" => menu::root(),
             "st" => menu::state(&r, waiting.len()),
-            "man" => menu::manual(&waiting),
+            "man" => menu::manual(&waiting, &crate::core::manual_wait::list(self.core)),
             "mode" => menu::mode(&r),
             "ven" => menu::venues(&r),
             "day" => menu::day(&r),

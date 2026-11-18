@@ -76,7 +76,7 @@ pub async fn scope<F: Future>(cmd: ManualCommand, retry: Option<String>, f: F) -
     CMD.scope(cmd, RETRY.scope(retry, f)).await
 }
 
-pub use super::manual_wait_pause::{claim, is_retry, paused, paused_why, start_retry};
+pub use super::manual_wait_pause::{claim, deferred, is_retry, paused, paused_why, start_retry};
 
 /// Что делает: действие текущей команды задачи (признак scope; для manual_wait_pause.rs is_retry). Ошибок нет.
 pub(super) fn current_action() -> Option<ManualAction> {

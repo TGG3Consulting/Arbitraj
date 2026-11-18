@@ -46,5 +46,16 @@ pub async fn wallet_queue(
         ),
         _ => return,
     };
-    core.inner.deps.notify(code, Some(&venue), &text).await;
+    // Решение 408: «Снять очередь кошелька» на тревоге остановки (e:qh — notify/press_event.rs: состояние очереди и
+    // nonce — по нажатию, второе подтверждение при незанятом nonce; команда ядра ReleaseWalletQueue).
+    let acts = if code == "send.queue_halted" {
+        let w = q.account.as_ref().map(|a| a.0.as_str());
+        vec![crate::notify::acts::e::release_queue(&venue, w, "кошелька")]
+    } else {
+        Vec::new()
+    };
+    core.inner
+        .deps
+        .notify_acts(code, Some(&venue), &text, acts)
+        .await;
 }

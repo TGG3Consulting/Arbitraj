@@ -75,6 +75,7 @@ fn usdt_record(d: &Deal, part: &UsdtReturn) -> Option<ManualRecord> {
             .render(),
         reason: crate::notify::reason::short(why),
         reason_full: why.clone(),
+        holders: Vec::new(),
         buttons: vec![
             btn(
                 "usdt_retry",

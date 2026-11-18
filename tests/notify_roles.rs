@@ -76,10 +76,11 @@ fn buttons_only_from_own_chat() {
         assert!(accepts(Role::Control, c), "{c}");
     }
     assert!(!accepts(Role::Control, "m"));
-    for c in ["sell_now", "sold_man", "usdt_retry", "y", "n"] {
+    // Решение 408: в «Неудачных» — и кнопки плашки «c:» и тревог «e:».
+    for c in ["sell_now", "sold_man", "usdt_retry", "y", "n", "c", "e"] {
         assert!(accepts(Role::Failures, c), "{c}");
     }
-    for c in ["k", "s", "t", "m", "c", "r"] {
+    for c in ["k", "s", "t", "m", "r"] {
         assert!(!accepts(Role::Failures, c), "{c}");
     }
     // «Общий» — как раньше: меню /menu, плашка, записи, подтверждения; кнопок «Управления» нет.
@@ -90,6 +91,17 @@ fn buttons_only_from_own_chat() {
         assert!(!accepts(Role::General, c), "{c}");
     }
     assert!(!accepts(Role::Deals, "y"));
+    assert!(!accepts(Role::Deals, "e"));
+    // Решение 408: «Аккаунты» — кнопки тревог и «Да/Отмена», без записей и меню.
+    for c in ["y", "n", "c", "e"] {
+        assert!(accepts(Role::Accounts, c), "{c}");
+    }
+    for c in ["sell_now", "m", "k", "s", "t", "r"] {
+        assert!(!accepts(Role::Accounts, c), "{c}");
+    }
+    for r in [Role::General, Role::Control] {
+        assert!(accepts(r, "e"), "{r:?}");
+    }
 }
 
 /// Хранилище настроек в новой папке. Возвращает: (папка, база, журнал, настройки, поток изменений).

@@ -79,14 +79,21 @@ pub(super) async fn outcome(
     let tg = super::rules_apply::tg_error("send.outcome_unknown", op, venue, deal, err)
         .todo(todo)
         .render();
-    deps.notify("send.outcome_unknown", Some(&venue.0), &tg)
+    // Решение 408: «Снять паузу» площадки прямо на тревоге (то же, что меню /menu: c:vr, «Да/Отмена»).
+    let acts = || vec![crate::notify::acts::resume_venue(&venue.0)];
+    deps.notify_acts("send.outcome_unknown", Some(&venue.0), &tg, acts())
         .await;
     let note = key.as_ref().map(|_| {
         "Снимется сама, когда бот выяснит исход всех таких операций площадки (решение 231)"
             .to_string()
     });
-    deps.notify("risk.stop", Some(&venue.0), &paused_text(venue, &why, note))
-        .await;
+    deps.notify_acts(
+        "risk.stop",
+        Some(&venue.0),
+        &paused_text(venue, &why, note),
+        acts(),
+    )
+    .await;
 }
 
 /// Правило «стоп площадка»: пауза площадки (Kind::Rule), уведомление risk.stop; код из no_pause — только журнал.
@@ -106,9 +113,15 @@ pub(super) async fn stop_venue(core: &Core, rule: i64, venue: &VenueId, err: &Ga
     );
     risk::publish(core);
     let note = resume_note(core, venue, Kind::Rule);
+    // Решение 408: «Снять паузу» на тревоге.
     core.inner
         .deps
-        .notify("risk.stop", Some(&venue.0), &paused_text(venue, &why, note))
+        .notify_acts(
+            "risk.stop",
+            Some(&venue.0),
+            &paused_text(venue, &why, note),
+            vec![crate::notify::acts::resume_venue(&venue.0)],
+        )
         .await;
 }
 
@@ -156,7 +169,14 @@ pub(super) async fn stop_all(
         .line(note.unwrap_or_default())
         .id(deal.unwrap_or_default())
         .render();
-    deps.notify("risk.stop", Some(&venue.0), &tg).await;
+    // Решение 408: «Старт» на тревоге (c:mode.Running — доступность как у плашки).
+    deps.notify_acts(
+        "risk.stop",
+        Some(&venue.0),
+        &tg,
+        vec![crate::notify::acts::start()],
+    )
+    .await;
 }
 
 /// Код без паузы (auto_pause::no_pause): запись в журнал, что правило паузу не поставило. Принимает: ядро, № правила,

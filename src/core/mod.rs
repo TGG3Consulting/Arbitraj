@@ -53,6 +53,7 @@ pub mod coin_scope_migrate;
 pub mod coins_view;
 pub mod commands;
 pub mod commands_control;
+pub mod commands_ext;
 pub mod convert;
 pub mod convert_at;
 pub mod costs;
@@ -126,6 +127,7 @@ pub mod evaluate;
 pub mod exec_book;
 pub mod exec_book_fail;
 pub mod executor;
+pub mod executor_deploy;
 pub mod feed_confirm;
 pub mod feed_confirm_queue;
 #[cfg(test)]

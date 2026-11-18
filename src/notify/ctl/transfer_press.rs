@@ -98,7 +98,7 @@ impl Ctx<'_> {
 
     /// Доли «можно вывести» из notify.transfer_pct (%, больше 0 и не больше 100). Не задана — только «Всё» и ввод.
     /// Неверное значение — в журнал и пропускается. Ошибок нет.
-    async fn pcts(&self) -> Vec<Decimal> {
+    pub(crate) async fn pcts(&self) -> Vec<Decimal> {
         let list = self
             .settings
             .list("notify.transfer_pct", At::default())

@@ -60,10 +60,15 @@ pub async fn slow(
         &tg("Перевод идёт дольше нормы"),
     )
     .await;
-    deps.notify(
+    // Решение 408: «Снять карантин» на тревоге (c:qr — то же, что меню /menu).
+    deps.notify_acts(
         "route.quarantine_in",
         Some(&to.0),
         &tg("Монета на паузе: перевод идёт дольше нормы"),
+        vec![crate::notify::acts::release_quarantine(
+            &super::quarantine::id_of(asset),
+            &asset.ticker,
+        )],
     )
     .await;
 }

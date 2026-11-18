@@ -6,11 +6,13 @@
 //! «y:<n>» / «n:<n>» — «Да, …» / «Отмена» подтверждения (press_confirm.rs); «m:<экран>» — экран меню /menu «Общего»
 //! (menu_press.rs, решение 157); «c:<что>» — кнопка плашки режима (menu_press.rs; «Общий» и «Управление»);
 //! «k:<экран>», «s:<номер>.<строка>», «t:<номер>.<шаг>» — экраны, «Продать» и перевод USDT чата «Управление»
-//! (notify/ctl/*); «r:<что>» — «📊 Отчёты» чата «Управление» (notify/ctl/report.rs, решение 215). На каждое нажатие —
+//! (notify/ctl/*); «r:<что>» — «📊 Отчёты» чата «Управление» (notify/ctl/report.rs, решение 215); «e:<что>» — кнопки
+//! тревог (решение 408, notify/press_event.rs; «Общий», «Управление», «Неудачные», «Аккаунты»). На каждое нажатие —
 //! answerCallbackQuery.
 //! Кто вызывает: notify/updates_poll.rs — на каждое Update с callback_query.
 //! От чего зависит: notify/callback.rs (decode), roles.rs, press_record.rs, press_confirm.rs, menu_press.rs, ctl/*, core.
-//! Настройки: разрешённые пользователи ролей (notify.control_users, notify.general_users, notify.failures_users).
+//! Настройки: разрешённые пользователи ролей (notify.control_users, notify.general_users, notify.failures_users,
+//! notify.accounts_users — решение 408).
 
 use crate::core::Core;
 use crate::settings::store::Store;
@@ -47,12 +49,15 @@ pub struct Ctx<'a> {
 /// Возвращает: true — обработать. Ошибок нет.
 pub fn accepts(role: Role, code: &str) -> bool {
     match role {
-        Role::Deals | Role::Accounts => false,
+        Role::Deals => false,
+        // Решение 408 (Тигран 18.11 «да»): в «Аккаунтах» — кнопки тревог («c:» плашки, «e:» действия) и «Да/Отмена».
+        Role::Accounts => matches!(code, "y" | "n" | "c" | "e"),
         // Решение 192: и кнопки записей «Ручного управления» — с карточки проблемной сделки (ctl/card.rs).
         Role::Control => code != "m",
         // Решение 215: «r» — отчёты, только чат «Управление».
         Role::General => !matches!(code, "k" | "s" | "t" | "r"),
-        Role::Failures => !matches!(code, "m" | "c" | "k" | "s" | "t" | "r"),
+        // Решение 408 (Тигран 18.11 «да»): кнопки плашки «c:» и тревог «e:» — и в «Неудачных».
+        Role::Failures => !matches!(code, "m" | "k" | "s" | "t" | "r"),
     }
 }
 
@@ -118,6 +123,8 @@ impl Ctx<'_> {
             "s" => self.ctl_sell(&q, msg, object).await,
             "t" => self.ctl_transfer(&q, msg, object).await,
             "r" => self.ctl_report(&q, msg, object).await,
+            // Решение 408: действия кнопок тревог (notify/press_event.rs).
+            "e" => self.event_button(&q, msg, object).await,
             _ => self.record_button(&q, msg, code, object).await,
         }
     }

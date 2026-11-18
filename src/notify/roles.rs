@@ -95,12 +95,14 @@ impl Role {
         }
     }
 
-    /// Настройка разрешённых пользователей роли. None — у роли нет кнопок («Сделки», «Аккаунты»). Ошибок нет.
+    /// Настройка разрешённых пользователей роли. None — у роли нет кнопок («Сделки»). Ошибок нет.
     pub fn users_key(self) -> Option<&'static str> {
         match self {
             Role::Control => Some("notify.control_users"),
             Role::General => Some("notify.general_users"),
-            Role::Deals | Role::Accounts => None,
+            Role::Deals => None,
+            // Решение 408 (Тигран 18.11): кнопки тревог и в «Аккаунтах».
+            Role::Accounts => Some("notify.accounts_users"),
             Role::Failures => Some("notify.failures_users"),
         }
     }

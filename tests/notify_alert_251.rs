@@ -111,6 +111,7 @@ fn stuck_after_sell_refusal() {
         at: Utc.with_ymd_and_hms(2026, 11, 9, 20, 40, 0).unwrap(),
         error: Some(PIG_ERR.into()),
         attempts: 2,
+        holders: Vec::new(),
     };
     let rec = arb::core::manual_rows::alert_record(&a, Decimal::ZERO);
     let tg = telegram(&rec.text);

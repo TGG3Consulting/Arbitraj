@@ -204,8 +204,18 @@ async fn system(core: &Core, m: &ModeMark, v: &VenueId, details: &str) {
             );
             deps.log(Level::Warn, "core.daily_loss", None, &j, None)
                 .await;
-            deps.notify("risk.daily_loss", None, &super::deal_text::daily_stop(&t))
-                .await;
+            // Решение 408: «Сбросить лимит дня» и «Старт» на тревоге.
+            let acts = vec![
+                crate::notify::acts::reset_daily(),
+                crate::notify::acts::start(),
+            ];
+            deps.notify_acts(
+                "risk.daily_loss",
+                None,
+                &super::deal_text::daily_stop(&t),
+                acts,
+            )
+            .await;
         }
         Err(_) => {}
     }

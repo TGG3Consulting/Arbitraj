@@ -185,5 +185,9 @@ async fn block(core: &Core, deal: &Deal, run: &[Obs]) {
     let v = &deal.direction.sell_on.0;
     deps.log(Level::Error, "core.sell_slip_block", Some(v), &text, None)
         .await;
-    deps.notify("coin.sell_slip", Some(v), &text).await;
+    // Решение 408 (исключение из решения 157): «Убрать из чёрного списка» на тревоге (e:ub → «Да/Нет» → Unblacklist).
+    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
+    let acts = vec![crate::notify::acts::e::unblacklist(&coin, &a.ticker)];
+    deps.notify_acts("coin.sell_slip", Some(v), &text, acts)
+        .await;
 }

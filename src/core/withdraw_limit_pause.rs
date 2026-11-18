@@ -75,6 +75,8 @@ pub async fn pause(core: &Core, op: &str, venue: &VenueId, deal: Option<&str>, e
         ))
         .id(deal.unwrap_or_default())
         .render();
-    deps.notify_tagged(EVENT, Some(&venue.0), &text, Tag::Plain)
+    // Решение 408: «Снять паузу» биржи на тревоге (и в «Аккаунтах») — после сброса лимита вывода.
+    let acts = vec![crate::notify::acts::resume_venue(&venue.0)];
+    deps.notify_tagged_acts(EVENT, Some(&venue.0), &text, Tag::Plain, acts)
         .await;
 }

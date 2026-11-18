@@ -25,7 +25,7 @@ export const TELEGRAM_ROLES = [
   { code: 'deals', title: 'Сделки', chat: 'notify.deals_chat', token: 'telegram.deals_token', users: null },
   { code: 'failures', title: 'Неудачные', chat: 'notify.failures_chat', token: 'telegram.failures_token', users: 'notify.failures_users' },
   // Решение 253, дополнение t85: «Аккаунты» — проблема в аккаунте и лимит вывода (без кнопок).
-  { code: 'accounts', title: 'Аккаунты', chat: 'notify.accounts_chat', token: 'telegram.accounts_token', users: null },
+  { code: 'accounts', title: 'Аккаунты', chat: 'notify.accounts_chat', token: 'telegram.accounts_token', users: 'notify.accounts_users' },
 ];
 
 /** status: {file_exists, unlocked, names} или null — ещё не загружено; known: [{name, scope, description}]. */

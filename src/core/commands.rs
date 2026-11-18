@@ -70,6 +70,7 @@ impl Core {
         // Решение 201: команда ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
         // Решение 405 (ответ Тиграна на ревью Н3): признак команды на задачу — монета занята идущими сделками, команда
         // ждёт их окончания и выполняется заново (manual_wait.rs defer).
+        let retry_id = retry.clone();
         let res = Box::pin(super::manual_wait::scope(
             cmd.clone(),
             retry,
@@ -80,9 +81,15 @@ impl Core {
         ))
         .await;
         // Решение 156: итог команды — Telegram правит сообщения записи «выполнено: кто, что, итог» (notify/mirror.rs).
+        // Решение 408: команда ушла в ожидание (manual_wait.rs) — «wait»: ID ожидания (Telegram пишет «Ждёт…», а не
+        // «Выполнено»); повтор ожидания — «retry»: его ID.
+        let wait = match (&retry_id, &res) {
+            (None, Ok(_)) => super::manual_wait::deferred(self, &cmd.action),
+            _ => None,
+        };
         self.inner.live.send(super::view::CoreEvent::Command(json!({
             "action": cmd.action, "who": who(&cmd), "ok": res.is_ok(),
-            "text": res.clone().unwrap_or_else(|e| e),
+            "text": res.clone().unwrap_or_else(|e| e), "wait": wait, "retry": retry_id,
         })));
         let (level, text) = match &res {
             Ok(t) => (
@@ -125,6 +132,11 @@ impl Core {
         }
         // Решение 163: «Перегнать» / «Перегнано вручную» записи «USDT не вернулись» — manual_usdt.rs.
         if let Some(r) = super::manual_usdt::command(self, &cmd.action, &who(cmd)).await {
+            return r;
+        }
+        // Решение 408 (t193): «Снять очередь кошелька», «Открыть вход монеты», «Убрать из чёрного списка», «Развернуть
+        // исполнитель» — commands_ext.rs.
+        if let Some(r) = super::commands_ext::command(self, &cmd.action, &who(cmd)).await {
             return r;
         }
         // Команда по уже закрытому алерту (или вернувшимся монетам) — спокойно игнорируется (Issue #10).

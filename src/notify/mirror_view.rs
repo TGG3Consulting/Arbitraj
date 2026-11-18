@@ -4,6 +4,7 @@
 //! не показывается, её причина — в тексте; кнопка с вводом суммы — та же, ввод через ответ на сообщение (ForceReply).
 //! Плюс сообщение-напоминание пачкой: одно сообщение со списком записей и кнопками каждой (лимиты Telegram).
 //! Решение 176: в чате «Неудачные» показываются и недоступные кнопки (причина — по нажатию), в «Общем» — как раньше.
+//! Решение 408: у записи «своих монет не видно» — ещё «Открыть сделку <ID>» сделок-держателей (ManualRecord.holders).
 //! Кто вызывает: notify/mirror.rs, notify/menu.rs (экран «Ручное управление» меню).
 //! От чего зависит: core/types/manual_feed.rs, notify/callback.rs (encode, предел callback_data 64 байта).
 //! Настройки: нет.
@@ -47,6 +48,25 @@ pub fn buttons_for(r: &ManualRecord, prefix: &str, all: bool) -> (Vec<Value>, Ve
                 "«{}»: бот спросит сумму — ответьте на его сообщение числом",
                 b.title
             ));
+        }
+    }
+    // Решение 408: «Своих монет не видно» — «Открыть сделку <ID>» для сделок-держателей (notify/press_event.rs od).
+    let acts: Vec<_> = r
+        .holders
+        .iter()
+        .map(|id| super::acts::e::open_deal(id.as_str()))
+        .collect();
+    let (kb, more) = super::acts::keyboard(&acts);
+    notes.extend(more);
+    for row in kb
+        .and_then(|k| k["inline_keyboard"].as_array().cloned())
+        .unwrap_or_default()
+    {
+        for mut b in row.as_array().cloned().unwrap_or_default() {
+            if let Some(t) = b["text"].as_str().map(|t| format!("{prefix}{t}")) {
+                b["text"] = Value::String(t);
+            }
+            out.push(b);
         }
     }
     (out, notes)

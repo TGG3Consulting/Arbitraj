@@ -2,8 +2,10 @@
 //! Что делает: решение 405 (t191, ответ Тиграна на ревью Н3; вынесено из manual_wait.rs — размер файла) — пауза новых
 //! сделок монеты, пока ручное действие ждёт окончания её сделок: paused / paused_why (входы исполнителя, очередь
 //! расчёта, take — coin_ride.rs), start_retry (сделки кончились — «повтор идёт»), claim / is_retry (ревью 4, Н3: пауза
-//! держится, пока повтор той же команды не возьмёт монету в take).
-//! Кто вызывает: coin_ride.rs, balance_sell.rs, manual_wait_run.rs (через реэкспорт manual_wait::*).
+//! держится, пока повтор той же команды не возьмёт монету в take). Решение 408 (t193): deferred — ID ожидания, которое
+//! только что начала команда (итог команды «ждёт», а не «выполнено» — событие Command несёт его в «wait»).
+//! Кто вызывает: coin_ride.rs, balance_sell.rs, manual_wait_run.rs (через реэкспорт manual_wait::*), commands.rs
+//! (deferred).
 //! От чего зависит: manual_wait.rs (ожидания, current_action), coin_key.rs, engine.rs.
 //! Настройки: нет.
 
@@ -72,4 +74,17 @@ pub fn paused_why(core: &Core, key: &CoinKey) -> Option<String> {
     lk(&core.inner.manual_waits)
         .get(key)
         .map(super::manual_wait_text::paused)
+}
+
+/// Что делает: решение 408 — команда ушла в ожидание: ID ожидания с этим действием, повтор которого ещё не идёт (одна
+/// ожидающая команда на монету — manual_wait::defer). Принимает: ядро, действие. Возвращает: ID или None — команда
+/// выполнена (или отказ), не ждёт. Ошибок нет.
+pub fn deferred(core: &Core, a: &crate::core::types::ManualAction) -> Option<String> {
+    if core.inner.manual_waits_live.load(Ordering::Acquire) == 0 {
+        return None;
+    }
+    lk(&core.inner.manual_waits)
+        .values()
+        .find(|w| &w.action == a && !w.running)
+        .map(|w| w.id.clone())
 }

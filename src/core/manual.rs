@@ -96,10 +96,31 @@ pub async fn load(core: &Core) {
 /// Ошибок нет.
 pub async fn raise_alert(
     core: &Core,
+    deal: Deal,
+    loss_pct: Option<Decimal>,
+    reason: String,
+    error: Option<String>,
+) {
+    Box::pin(raise_alert_with(
+        core,
+        deal,
+        loss_pct,
+        reason,
+        error,
+        Vec::new(),
+    ))
+    .await
+}
+
+/// Как raise_alert; решение 408 — holders: сделки-держатели монет на счёте (remain_fact.rs all_foreign) — кнопки
+/// «Открыть сделку <ID>» у записи в Telegram. Ошибок нет.
+pub async fn raise_alert_with(
+    core: &Core,
     mut deal: Deal,
     loss_pct: Option<Decimal>,
     reason: String,
     error: Option<String>,
+    holders: Vec<String>,
 ) {
     let prev = super::manual_repeat::prior(&mut deal, error.as_deref());
     let id = match (&prev, super::ids::uuid_v4()) {
@@ -121,6 +142,7 @@ pub async fn raise_alert(
         at: prev.as_ref().map_or_else(Utc::now, |p| p.at),
         error,
         attempts: prev.as_ref().map_or(1, super::manual_repeat::next_attempt),
+        holders,
     };
     // Решение 247, п. Е: подпись по знаку (прибыль / убыток), пометка «по модели», если продажа по ней откатилась.
     let (loss_k, loss) = hu::sale_now_alert(loss_pct, alert.error.as_deref());

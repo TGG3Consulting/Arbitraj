@@ -40,14 +40,24 @@ pub async fn announce(core: &Core, trip: &Trip) {
         )
         .await;
         let tg = super::deal_text::pair_daily_stop(p, why);
-        deps.notify("risk.venue_daily_loss", v.as_deref(), &tg)
+        // Решение 408: «Снять паузу направления» и «Сбросить лимит дня» направления на тревоге.
+        let acts = vec![
+            crate::notify::acts::resume_venue(p),
+            crate::notify::acts::reset_venue_limit(p),
+        ];
+        deps.notify_acts("risk.venue_daily_loss", v.as_deref(), &tg, acts)
             .await;
     }
     if let Some(stop) = &trip.stop {
         deps.log(Level::Warn, "core.daily_loss", None, stop, None)
             .await;
         let tg = super::deal_text::daily_stop(stop);
-        deps.notify("risk.daily_loss", None, &tg).await;
+        // Решение 408: «Сбросить лимит дня» и «Старт» на тревоге.
+        let acts = vec![
+            crate::notify::acts::reset_daily(),
+            crate::notify::acts::start(),
+        ];
+        deps.notify_acts("risk.daily_loss", None, &tg, acts).await;
     }
 }
 

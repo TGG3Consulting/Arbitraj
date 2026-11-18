@@ -62,7 +62,7 @@
 | `withdraw_addr.rs`, `transfers.rs` | address_id по адресу, котировка комиссии, вывод, статус и поиск вывода при неизвестном итоге |
 | `account.rs` | Балансы `BalanceEx` (свободно = balance − hold_trade), «Проверить подключение» (`GetApiKeyInfo`, Funding, сеть BSC) |
 | `all_balances.rs` | Панель «Балансы» (решение 144): спот, прочие кошельки (.B .F .T .S .M), фьючерсы — только сведения |
-| `order_rules.rs` | Правила ордера — одни у ордера и `check_order` (решение 134); пробный ордер `validate=true` |
+| `order_rules.rs` | Правила ордера — одни у ордера и `check_order` (решение 134); пробный ордер `validate=true` — только в проверке без исполнения, перед настоящим ордером нет (решение 412) |
 | `trade.rs`, `order_state.rs` | Ордер limit IOC/FOK со своим cl_ord_id, итог `QueryOrders` (vol_exec, price, fee), отмена, поиск по cl_ord_id — фильтром cl_ord_id у OpenOrders / ClosedOrders (решение 264); EService:Deadline elapsed и EGeneral:Internal error у ордера — итог неизвестен, EOrder:Domain rate limit exceeded — лимит (`errors.rs`) |
 | `market_sell.rs` | Решение 268: рыночная продажа (контракт `trade_market_sell`) — ордер типа «market» на количество базовой монеты после отказа лимитного ордера «цена вне диапазона»; правила пары и разбор итога — те же, что у лимитного (`order_rules.rs`, `trade.rs`); код PriceOutOfRange рыночный ордер не отдаёт |
 | `depth.rs` | Разбор кадров WS v2: pong, ответы, heartbeat/status, book, balances |

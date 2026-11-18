@@ -1,9 +1,11 @@
 //! Файл: venues/kucoin/order_rules.rs
 //! Что делает: правила ордера KuCoin — ОДНА функция для настоящего ордера (trade.rs) и для проверки без исполнения
 //! (mod.rs → check_order, решение 134): пара торгуется, срок действия снимает неисполненное (IOC/FOK), количество и цена
-//! после округления до шагов, минимум и максимум количества, минимальная сумма, сроки ожидания итога; если включено
-//! venue.order_test_first — пробный ордер POST /api/v1/hf/orders/test с тем же телом.
-//! Кто вызывает: trade.rs (перед постановкой), mod.rs (check_order — предпроверка ядра перед покупкой), тесты.
+//! после округления до шагов, минимум и максимум количества, минимальная сумма, сроки ожидания итога (ready). Пробный
+//! ордер POST /api/v1/hf/orders/test с тем же телом (venue.order_test_first, probe) — ТОЛЬКО в проверке без исполнения
+//! (check); перед настоящей покупкой и продажей его нет (решение 412).
+//! Кто вызывает: trade.rs (ready — перед постановкой), mod.rs (check_order → check — предпроверка ядра перед покупкой),
+//! тесты.
 //! От чего зависит: symbols.rs (правила пары), rest.rs (пробный ордер), order_state.rs (сроки), ctx.rs.
 //! Настройки: venue.order_time_in_force [kucoin] (IOC или FOK), venue.order_test_first [kucoin]; через order_state.rs —
 //! venue.order_poll_ms, venue.order_final_wait_ms (без них ордер не ставится: после постановки — поздно).
@@ -17,7 +19,7 @@
 //! - Add Order Test https://www.kucoin.com/docs-new/api-3470187 — «the request parameters and return parameters of this
 //!   endpoint are exactly the same as the order endpoint… the order will not enter the matching system».
 //! - Защита цены priceLimitRate (GET /api/v2/symbols) правилами не проверяется: последней цены у адаптера нет — её
-//!   ловит пробный ордер или отказ биржи.
+//!   ловит пробный ордер в проверке без исполнения или отказ биржи у настоящего ордера.
 
 use reqwest::Method;
 use rust_decimal::{Decimal, RoundingStrategy};
@@ -44,7 +46,7 @@ pub struct Prepared {
     pub qty: Decimal,
     pub price: Decimal,
     pub client_oid: String,
-    /// Тело запроса (то же ушло в пробный ордер).
+    /// Тело запроса (то же уходит в пробный ордер проверки без исполнения — probe).
     pub body: Value,
 }
 
@@ -101,10 +103,10 @@ pub fn check_rules(
     Ok((qty, price))
 }
 
-/// Что делает: всё, что проходит ордер до постановки — правила пары, сроки ожидания, пробный ордер. Вызывают И
-/// настоящий ордер (trade.rs), И проверка без исполнения (check_order).
+/// Что делает: всё, что проходит ордер до постановки — правила пары, сроки ожидания. Вызывают И настоящий ордер
+/// (trade.rs), И проверка без исполнения (check). Пробного ордера здесь нет (решение 412).
 /// Принимает: окружение, справочник пар (свежесть — у вызывающего), запрос. Возвращает: Prepared.
-/// Ошибки: OrderRejected (правила, отказ пробного), NotConfigured (настройки), BadResponse (пары нет), сбой пробного.
+/// Ошибки: OrderRejected (правила), NotConfigured (настройки), BadResponse (пары нет).
 pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<Prepared> {
     let rules = symbols.get(ctx, &req.asset.ticker)?;
     let tif = ctx.text("venue.order_time_in_force")?;
@@ -122,9 +124,6 @@ pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayR
         "size": qty.normalize().to_string(),
         "timeInForce": tif,
     });
-    if ctx.flag("venue.order_test_first").unwrap_or(false) {
-        test(ctx, &rules.symbol, body.clone()).await?;
-    }
     Ok(Prepared {
         symbol: rules.symbol,
         qty,
@@ -132,6 +131,24 @@ pub async fn ready(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayR
         client_oid,
         body,
     })
+}
+
+/// Что делает: проверка ордера без исполнения (контракт check_order, решение 134 — предпроверка продажи на бирже B до
+/// покупки): правила (ready) и пробный ордер (probe), если включён. Ошибки: как у ready и probe.
+pub async fn check(ctx: &Ctx, symbols: &Symbols, req: &TradeRequest) -> GatewayResult<()> {
+    let p = ready(ctx, symbols, req).await?;
+    probe(ctx, &p).await
+}
+
+/// Что делает: пробный ордер с телом готового ордера, если venue.order_test_first = да (не задана — нет).
+/// Решение 412 (Тигран 19.11): только в проверке без исполнения (check), не перед настоящим ордером.
+/// Ошибки: OrderRejected (отказ пробного), прочие коды сбоя — как есть.
+/// Официально: Add Order Test https://www.kucoin.com/docs-new/api-3470187.
+pub async fn probe(ctx: &Ctx, p: &Prepared) -> GatewayResult<()> {
+    if ctx.flag("venue.order_test_first").unwrap_or(false) {
+        test(ctx, &p.symbol, p.body.clone()).await?;
+    }
+    Ok(())
 }
 
 /// Пробный ордер: проверка параметров без исполнения. Код ошибки сохраняется (RateLimited, Unreachable и др.);

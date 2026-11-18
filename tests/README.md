@@ -1109,3 +1109,9 @@ dex_dex.rank_max_cycles; причина отказа пула (legs_for_cycle) �
 заодно комиссия Algebra в steps::fee_pct), Solidly stable/volatile (getAmountOut контракта, solidly_fee_2026-11-14),
 StableSwap Nomiswap (getAmountOut контракта, nomiswap_stable_2026-11-15). DODO и Infinity Bin не покрыты — нет записи
 состояния без узла.
+
+Решение 412 (t197, Тигран 19.11) — tests/order_probe_412.rs: пробный ордер (venue.order_test_first) не делается перед
+настоящим ордером — ни перед покупкой, ни перед продажей; только в проверке без исполнения (check_order). MEXC — на
+записанном exchangeInfo 2026-11-02 (CAKEUSDT) и настоящем адаптере без сети (секреты заперты — запрос останавливается
+на ключах до сети): ready и trade без пробного у обеих сторон, order_rules::check — с пробным; Binance, KuCoin, Kraken —
+по исходникам (ready и trade.rs без пробного, check_order — с ним).

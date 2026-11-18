@@ -7,7 +7,8 @@
 //!   продажи — количество вниз до шага, цена вверх;
 //! - BingX, живой common/symbols 2026-10-24 (tests/data/bingx_2026-10-24/symbols.json): CAKE — успех и отказ по minQty;
 //!   TAG (API закрыт), SEA (status 10) — отказ стороны; BLUAI — сумма больше maxNotional 500; шаг XEC — 1 монета;
-//! - настоящий ордер и проверка зовут ОДНУ функцию правил (order_rules::ready) — по исходникам адаптеров.
+//! - настоящий ордер и проверка зовут ОДНУ функцию правил (order_rules::ready; у MEXC проверка — order_rules::check,
+//!   это ready и пробный ордер, решение 412) — по исходникам адаптеров.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::mexc (symbols, order_rules), arb::venues::bingx (symbols, order_rules). Моков нет.
@@ -122,7 +123,11 @@ fn trade_and_check_share_rules() {
     for (trade, module) in src {
         assert!(trade.contains("order_rules::ready(ctx, symbols, &req)"));
         assert!(module.contains("async fn check_order"));
-        assert!(module.contains("order_rules::ready(&self.ctx, &self.symbols, req)"));
+        // Решение 412: у MEXC check_order — order_rules::check (ready + пробный ордер); ready — та же функция правил.
+        assert!(
+            module.contains("order_rules::ready(&self.ctx, &self.symbols, req)")
+                || module.contains("order_rules::check(&self.ctx, &self.symbols, req)")
+        );
         for own in [
             "min_notional",
             "max_notional",

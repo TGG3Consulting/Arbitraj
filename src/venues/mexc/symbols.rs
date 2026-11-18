@@ -17,8 +17,9 @@
 //!
 //! Шага цены и количества (tickSize/stepSize) в документации НЕТ (docs/notes/mexc-analysis.md). Решение 107: шаг
 //! количества = 10^−baseAssetPrecision, шаг цены = 10^−quotePrecision — толкование целых precision как числа знаков
-//! после запятой. Ошибка толкования ловится до денег: перед каждым ордером — пробный ордер POST /api/v3/order/test
-//! (trade.rs, настройка venue.order_test_first [mexc]); отказ — ордер не ставится.
+//! после запятой. Ошибка толкования у продажи ловится до покупки — пробным ордером POST /api/v3/order/test в проверке
+//! без исполнения (order_rules::check, venue.order_test_first [mexc]); у настоящего ордера (решение 412: пробного перед
+//! ним нет) — отказом MEXC, ордер не поставлен, деньги не тронуты.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

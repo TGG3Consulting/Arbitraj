@@ -12,7 +12,7 @@
 //!   maxPrice, tickSize; «0» — правило выключено), LOT_SIZE (minQty, maxQty, stepSize), NOTIONAL (minNotional,
 //!   maxNotional), MIN_NOTIONAL (minNotional). Решение 392 (t180): PERCENT_PRICE / PERCENT_PRICE_BY_SIDE разбираются
 //!   в правила коридора (price_band.rs filters); опорную цену (референсная или средняя) читает price_band.rs перед
-//!   покупкой; пробный ордер (order_rules.rs) остаётся страховкой.
+//!   покупкой; пробный ордер проверки продажи без исполнения (order_rules::check) остаётся страховкой.
 //! - GET /api/v3/account — permissions (права аккаунта, например ["SPOT"]).
 
 use std::collections::{HashMap, HashSet};

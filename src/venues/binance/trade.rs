@@ -2,11 +2,12 @@
 //! Что делает: покупка или продажа на Binance лимитным ордером IOC (или FOK) с худшей допустимой ценой — что не
 //! исполнилось сразу, снимает биржа (статус EXPIRED). Итог берётся из ответа FULL (status, executedQty,
 //! cummulativeQuoteQty, fills с комиссией); если ответ не окончательный — опрос и отмена (order_state.rs).
-//! Правила пары и пробный ордер — order_rules.rs: та же функция у проверки без исполнения (решение 134).
+//! Правила пары — order_rules::ready: та же функция у проверки без исполнения (решение 134). Пробного ордера перед
+//! настоящим (покупка и продажа) нет — решение 412: он только в проверке без исполнения (order_rules::check).
 //! Кто вызывает: mod.rs (trade из контракта).
 //! Решение 268: тот же путь постановки и итога — у рыночной продажи (market_sell.rs передаёт готовый ордер, prepared).
 //! От чего зависит: order_rules.rs, order_state.rs, rest.rs, num.rs, ctx.rs, symbols.rs.
-//! Настройки: venue.order_time_in_force, venue.order_test_first [binance]; сроки итога — order_state.rs;
+//! Настройки: venue.order_time_in_force [binance]; сроки итога — order_state.rs;
 //! venue.my_trades_limit — fills.rs (все проверяются до отправки).
 //!
 //! Официально: POST /api/v3/order (вес 1, «Unfilled order count: 1») — ответ FULL: orderId, status, origQty,
@@ -28,7 +29,8 @@ use super::errors::Op;
 use super::symbols::Symbols;
 use super::{num, order_rules, order_state, rest};
 
-/// Ставит ордер и возвращает фактический результат. Ошибки: OrderRejected (правила, пробный ордер, отказ Binance),
+/// Ставит ордер и возвращает фактический результат (пробного ордера нет — решение 412). Ошибки: OrderRejected
+/// (правила, отказ Binance),
 /// InsufficientBalance, OutcomeUnknown — ордер мог быть принят, итог не получен (решение 64).
 /// Решение 268: `prepared` — уже подготовленный ордер (рыночная продажа, market_sell.rs): постановка и итог — тем же
 /// кодом; None — обычный лимитный ордер по правилам order_rules::ready.

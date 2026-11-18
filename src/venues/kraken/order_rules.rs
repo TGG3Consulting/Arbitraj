@@ -2,7 +2,8 @@
 //! Что делает: правила ордера Kraken — ОДНА функция для настоящего ордера (trade.rs) и для проверки без исполнения
 //! (mod.rs → check_order, решение 134): пара торгуется, срок действия снимает неисполненное (IOC / FOK), количество и
 //! цена после округления до шагов, минимум количества и суммы, сроки ожидания итога; пробный ордер validate=true — при
-//! venue.order_test_first = да (probe).
+//! venue.order_test_first = да (probe) — только в проверке без исполнения (mod.rs check_order); настоящий ордер
+//! (trade.rs) пробного не делает — ни покупка, ни продажа (решение 412).
 //! Кто вызывает: trade.rs (перед постановкой), mod.rs (check_order — предпроверка ядра перед покупкой), тесты.
 //! От чего зависит: symbols.rs (правила пары), order_state.rs (сроки), rest.rs, ctx.rs.
 //! Настройки: venue.order_time_in_force [kraken] (IOC или FOK), venue.order_test_first [kraken]; через order_state.rs —

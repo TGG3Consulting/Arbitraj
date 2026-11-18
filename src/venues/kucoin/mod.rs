@@ -186,12 +186,11 @@ impl Venue for Kucoin {
         market_sell::sell(&self.ctx, &self.symbols, req).await
     }
 
-    /// Решение 134: те же правила, что у настоящего ордера (order_rules::ready), и пробный ордер, если включён.
+    /// Решение 134: те же правила, что у настоящего ордера (order_rules::ready), и пробный ордер, если включён
+    /// (order_rules::check). Решение 412: пробный — только здесь, перед настоящим ордером его нет.
     async fn check_order(&self, req: &TradeRequest) -> GatewayResult<()> {
         self.symbols.ensure_fresh(&self.ctx).await?;
-        order_rules::ready(&self.ctx, &self.symbols, req)
-            .await
-            .map(|_| ())
+        order_rules::check(&self.ctx, &self.symbols, req).await
     }
 
     async fn withdraw(&self, req: WithdrawRequest) -> GatewayResult<Transfer> {

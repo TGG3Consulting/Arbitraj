@@ -398,8 +398,8 @@ Bybit назначить зачисление на UNIFIED (Set Deposit Account)
 Из официальной документации KuCoin (Classic) и живых ответов 04.11.2026. Перед торговлей — замер нагрузки при «Стопе» (решение 109).
 Решение Тиграна (04.11): счёт Classic, спот HF; адрес депозита BSC создаётся в кабинете с зачислением на TRADE —
 `venue.deposit_to_spot` не задавать (бот берёт адрес TRADE; адрес только MAIN — отказ с причиной); `venue.withdraw_from_trade`
-= да (вывод только с main — перед ним перевод trade → main). По желанию: `venue.order_test_first` = да (пробный ордер до
-проверки шагов на живом), `venue.balance_events` = да (поток аккаунта).
+= да (вывод только с main — перед ним перевод trade → main). По желанию: `venue.order_test_first` = да (пробный ордер продажи
+в предпроверке до покупки, решение 412; до проверки шагов на живом), `venue.balance_events` = да (поток аккаунта).
 
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
@@ -478,7 +478,7 @@ Classic (не UTA: «Проверить подключение» откажет)
 | venue.bsc_network | площадка Binance | `BSC` | Код сети вывода и депозита — сверить на живом getall | Wallet «All Coins' Information» (пример) |
 | venue.recv_window_ms | площадка Binance | `5000` | Совет документации | rest-api «Request Security» |
 | venue.order_time_in_force | площадка Binance | `IOC` | Остаток снимает биржа | enums.md «Time in force» |
-| venue.order_test_first | площадка Binance | `да` | Ловит PERCENT_PRICE_BY_SIDE и PRICE_RANGE | rest-api «Test new order» |
+| venue.order_test_first | площадка Binance | `да` | Ловит PERCENT_PRICE_BY_SIDE и PRICE_RANGE у ордера продажи в предпроверке до покупки (решение 412: перед настоящим ордером пробного нет) | rest-api «Test new order» |
 | venue.depth_levels | площадка Binance | `20` | Наибольшая глубина частичного стакана | Partial Book Depth: 5, 10, 20 |
 | venue.book_interval | площадка Binance | `100ms` | Самый частый снимок (одинаковые ядру не отдаются) | Partial Book Depth: 1000ms или 100ms |
 | venue.ws_subs_per_sec | площадка Binance | `2` | Лимит 5 сообщений/с включая pong | WebSocket Limits |

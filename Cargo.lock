@@ -550,6 +550,7 @@ dependencies = [
  "chacha20poly1305",
  "chrono",
  "flate2",
+ "foldhash",
  "futures-util",
  "getrandom 0.4.3",
  "hex",

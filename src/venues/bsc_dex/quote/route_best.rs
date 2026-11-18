@@ -21,7 +21,7 @@
 //! Решение 336: расчёт путей в отборе — на dex.quote_threads потоках (quote/par.rs), итоги по порядку путей — отбор тот
 //! же; брошенный расчёт останавливает и помощников.
 //! Кто вызывает: quote/graph_route.rs.
-//! От чего зависит: quote/par.rs, quote/abandon.rs, pools/graph.rs, quote/route_paths.rs (RoutePath), quote/route_hops.rs (решение 410: стек перебора по ссылкам), quote/graph_split.rs (Cand, score, better),
+//! От чего зависит: quote/par.rs, quote/abandon.rs, pools/graph.rs, quote/route_paths.rs (RoutePath), quote/route_hops.rs (решение 410: стек перебора по ссылкам), fast_hash.rs, quote/graph_split.rs (Cand, score, better),
 //! quote/route_calc.rs (eval), quote/pool_tax.rs (coin_keep).
 //! Настройки: dex.route_search_max_paths, dex.quote_threads (решение 336) [bsc_dex] (необязательные); через вызывающего — dex.route_max_hops,
 //! dex.route_max_paths, smart.split_step_pct, dex.route_gas_aware.
@@ -36,6 +36,7 @@ use crate::core::types::{PoolRef, Side, TokenTaxes};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::fast_hash::FastSet;
 use super::super::pools::graph::Graph;
 use super::graph_split::{Cand, better, score};
 use super::pool_tax;
@@ -78,8 +79,10 @@ pub fn enumerate(
         if out.len() >= cap {
             break;
         }
-        let mut visited = HashSet::from([from]);
-        let mut sites = HashSet::new();
+        // Решение 410 (t195): хеш foldhash (fast_hash.rs), только «есть ли».
+        let mut visited: FastSet<Address> = FastSet::default();
+        visited.insert(from);
+        let mut sites: FastSet<PoolRef> = FastSet::default();
         // Решение 410 (t195): стек — ссылки на рёбра (route_hops.rs).
         let mut steps: Vec<Hop<'_>> = Vec::new();
         let w = Walk {
@@ -110,8 +113,8 @@ impl<'a> Walk<'a> {
     fn dfs(
         &self,
         node: Address,
-        visited: &mut HashSet<Address>,
-        sites: &mut HashSet<PoolRef>,
+        visited: &mut FastSet<Address>,
+        sites: &mut FastSet<PoolRef>,
         steps: &mut Vec<Hop<'a>>,
         out: &mut Vec<RoutePath>,
     ) {

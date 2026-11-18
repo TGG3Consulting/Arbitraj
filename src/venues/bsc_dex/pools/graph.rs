@@ -23,7 +23,7 @@
 //! Решение 308: при dex.graph_background = да граф строит фоновый владелец (graph_owner.rs, накопительно — graph_work.rs,
 //! с нуля — graph_full.rs); build остаётся путём при выключенной настройке и для реестра без владельца.
 //! Кто вызывает: quote/graph_route.rs, quote/cycle_scan.rs (cached), graph_cache.rs (build), graph_work.rs (from_edges).
-//! От чего зависит: pools/registry.rs, pools/depth_book.rs, quote/side_fit.rs (решение 393), tokens.rs, ctx.rs.
+//! От чего зависит: pools/registry.rs, pools/depth_book.rs, quote/side_fit.rs (решение 393), tokens.rs, ctx.rs, fast_hash.rs (решение 410).
 //! Настройки: dex.route_max_pools_per_edge [bsc_dex]; через depth_book — dex.min_pool_liquidity_usd,
 //! dex.depth_band_pct, dex.depth_hysteresis_pct [bsc_dex].
 
@@ -36,6 +36,7 @@ use rust_decimal::Decimal;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::fast_hash::FastMap;
 use super::super::quote::shallow_pick;
 use super::super::tokens::Tokens;
 use super::depth_book;
@@ -65,8 +66,9 @@ impl Edge {
 #[derive(Default)]
 pub struct Graph {
     pub(super) edges: Vec<Arc<Edge>>,
-    /// Токен → индексы рёбер, у которых он один из концов.
-    adj: HashMap<Address, Vec<usize>>,
+    /// Токен → индексы рёбер, у которых он один из концов. Решение 410 (t195): хеш foldhash (fast_hash.rs) — только
+    /// поиск по токену, порядок рёбер внутри токена — порядок вставки.
+    adj: FastMap<Address, Vec<usize>>,
 }
 
 impl Graph {
@@ -109,7 +111,7 @@ impl Graph {
     /// Решение 308: граф из готовых рёбер (снимок фоновой сборки, graph_work.rs publish) — индекс «токен → рёбра» по
     /// концам a, b. Принимает: рёбра. Возвращает: граф. Ошибок нет.
     pub(super) fn from_edges(edges: Vec<Arc<Edge>>) -> Graph {
-        let mut adj: HashMap<Address, Vec<usize>> = HashMap::new();
+        let mut adj: FastMap<Address, Vec<usize>> = FastMap::default();
         for (i, e) in edges.iter().enumerate() {
             adj.entry(e.a).or_default().push(i);
             adj.entry(e.b).or_default().push(i);

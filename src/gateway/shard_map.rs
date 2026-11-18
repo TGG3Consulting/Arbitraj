@@ -7,17 +7,24 @@
 //! узнаётся один раз за процесс (OnceLock); не удалось узнать — одна часть (поведение как у обычной карты под замком).
 //! Кто вызывает: venues/bsc_dex/check/pool_facts_store.rs, venues/bsc_dex/quote/usable_reuse.rs,
 //! venues/bsc_dex/pools/registry_key.rs.
-//! От чего зависит: std.
+//! Решение 410 (t195): хеш — foldhash (быстрый, со случайным зерном процесса; см. venues/bsc_dex/fast_hash.rs —
+//! почему ключам не нужен SipHash) для выбора части и внутри части; порядок обхода (for_each) и раньше был случайным.
+//! От чего зависит: std, foldhash.
 //! Настройки: нет.
 
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::hash::{BuildHasher, Hash, RandomState};
+use std::hash::{BuildHasher, Hash};
+
+use foldhash::fast::RandomState;
+
+/// Часть карты: обычная карта с хешем foldhash (решение 410).
+type Part<K, V> = HashMap<K, V, RandomState>;
 use std::sync::{OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Карта по частям.
 pub struct ShardMap<K, V> {
-    shards: Box<[RwLock<HashMap<K, V>>]>,
+    shards: Box<[RwLock<Part<K, V>>]>,
     hash: RandomState,
 }
 
@@ -34,26 +41,26 @@ impl<K: Hash + Eq, V> Default for ShardMap<K, V> {
     fn default() -> Self {
         let n = parts();
         Self {
-            shards: (0..n).map(|_| RwLock::new(HashMap::new())).collect(),
-            hash: RandomState::new(),
+            shards: (0..n).map(|_| RwLock::new(Part::default())).collect(),
+            hash: RandomState::default(),
         }
     }
 }
 
 impl<K: Hash + Eq, V> ShardMap<K, V> {
     /// Что делает: часть карты для ключа. Ошибок нет.
-    fn shard<Q: Hash + ?Sized>(&self, k: &Q) -> &RwLock<HashMap<K, V>> {
+    fn shard<Q: Hash + ?Sized>(&self, k: &Q) -> &RwLock<Part<K, V>> {
         let i = self.hash.hash_one(k) as usize % self.shards.len();
         &self.shards[i]
     }
 
     /// Что делает: чтение части (отравленный замок — данные как есть). Ошибок нет.
-    fn read_of<Q: Hash + ?Sized>(&self, k: &Q) -> RwLockReadGuard<'_, HashMap<K, V>> {
+    fn read_of<Q: Hash + ?Sized>(&self, k: &Q) -> RwLockReadGuard<'_, Part<K, V>> {
         self.shard(k).read().unwrap_or_else(|p| p.into_inner())
     }
 
     /// Что делает: запись части (отравленный замок — данные как есть). Ошибок нет.
-    fn write_of<Q: Hash + ?Sized>(&self, k: &Q) -> RwLockWriteGuard<'_, HashMap<K, V>> {
+    fn write_of<Q: Hash + ?Sized>(&self, k: &Q) -> RwLockWriteGuard<'_, Part<K, V>> {
         self.shard(k).write().unwrap_or_else(|p| p.into_inner())
     }
 

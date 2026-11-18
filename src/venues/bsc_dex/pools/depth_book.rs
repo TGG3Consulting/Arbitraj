@@ -29,7 +29,7 @@
 //! Кто вызывает: quote/select.rs (deep_side), pools/listen_log.rs (emit — пересчёт на каждой смене состояния),
 //! pools/depth_facts.rs (экран «Монеты»), pools/graph.rs (build_measured — depth_prep_r, решение 301 д), pools/graph_eval.rs
 //! (фоновый граф, решение 308).
-//! От чего зависит: quote/depth_band.rs, depth_key.rs, depth_fail.rs, depth_units.rs, depth_log.rs, registry.rs, tokens.rs, ctx.rs.
+//! От чего зависит: quote/depth_band.rs, depth_key.rs, depth_fail.rs, depth_units.rs, depth_log.rs, registry.rs, tokens.rs, ctx.rs, fast_hash.rs (решение 410).
 //! Настройки: dex.depth_band_pct, dex.depth_hysteresis_pct, dex.depth_log_min_s, dex.min_pool_liquidity_usd [bsc_dex].
 
 use std::collections::HashMap;
@@ -42,6 +42,7 @@ use tokio::sync::Notify;
 use crate::core::types::PoolRef;
 
 use super::super::ctx::Ctx;
+use super::super::fast_hash::FastMap;
 use super::super::quote::depth_band::{self, Band};
 use super::super::tokens::Tokens;
 use super::depth_fail::{Fails, UnitsKey};
@@ -80,8 +81,9 @@ pub(super) struct Slot {
 #[derive(Clone, Default)]
 pub struct Book {
     /// Решение 336 (задача t157): RwLock — попадание по ключу (глубина из памяти) идёт под общим чтением, без очереди
-    /// всех потоков счёта на одном замке; пересчёт, журнал смен и сброс — под записью (lock).
-    pub(super) m: Arc<RwLock<HashMap<PoolRef, Slot>>>,
+    /// всех потоков счёта на одном замке; пересчёт, журнал смен и сброс — под записью (lock). Решение 410 (t195): хеш
+    /// foldhash (fast_hash.rs) — поиск по пулу; обход только в invalidate (порядок не важен).
+    pub(super) m: Arc<RwLock<FastMap<PoolRef, Slot>>>,
     wake: Arc<Mutex<Vec<Weak<Notify>>>>,
     /// Решение 217: книга замороженного реестра — прошлый вердикт гистерезиса, скопированный из живой книги в момент
     /// снимка (verdicts), без журнала и сигналов.
@@ -329,12 +331,12 @@ impl Book {
     }
 
     /// Запись (пересчёт, журнал смен, сброс ключей). Ошибок нет.
-    pub(super) fn lock(&self) -> std::sync::RwLockWriteGuard<'_, HashMap<PoolRef, Slot>> {
+    pub(super) fn lock(&self) -> std::sync::RwLockWriteGuard<'_, FastMap<PoolRef, Slot>> {
         self.m.write().unwrap_or_else(|p| p.into_inner())
     }
 
     /// Решение 336: чтение (попадание по ключу, последняя глубина, вердикты). Ошибок нет.
-    fn read(&self) -> std::sync::RwLockReadGuard<'_, HashMap<PoolRef, Slot>> {
+    fn read(&self) -> std::sync::RwLockReadGuard<'_, FastMap<PoolRef, Slot>> {
         self.m.read().unwrap_or_else(|p| p.into_inner())
     }
 }

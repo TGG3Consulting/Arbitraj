@@ -17,7 +17,7 @@
 //! Кто вызывает: граф-маршрутизатор (решение 80, шаг 80.4) — quote/graph_route.rs; поиск циклов DEX ↔ DEX
 //! (решение 85) — quote/cycle_scan.rs.
 //! Решение 410 (t195): стек перебора — ссылки на рёбра (quote/route_hops.rs), ребро копируется только в выданный путь.
-//! От чего зависит: pools/graph.rs, quote/route_hops.rs; настройки читает вызывающий (limits / cycle_scan::limits).
+//! От чего зависит: pools/graph.rs, quote/route_hops.rs, fast_hash.rs (решение 410); настройки читает вызывающий (limits / cycle_scan::limits).
 //! Настройки: dex.route_max_hops, dex.route_max_paths [bsc_dex] (через limits); пределы циклов — dex_dex.max_cycle_len,
 //! dex_dex.max_cycles [bsc_dex] (через quote/cycle_scan.rs).
 
@@ -29,6 +29,7 @@ use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
+use super::super::fast_hash::FastSet;
 use super::super::pools::graph::{Edge, Graph};
 use super::route_hops::{self, Hop};
 
@@ -87,10 +88,12 @@ pub fn enumerate(
     if max_hops == 0 || max_paths == 0 || from == to {
         return out;
     }
-    let mut visited: HashSet<Address> = HashSet::from([from]);
+    // Решение 410 (t195): посещённые токены и пулы — хеш foldhash (fast_hash.rs), только «есть ли».
+    let mut visited: FastSet<Address> = FastSet::default();
+    visited.insert(from);
     // Решение 410 (t195): стек — ссылки на рёбра (route_hops.rs), ребро копируется только в выданный путь.
     let mut steps: Vec<Hop<'_>> = Vec::new();
-    let mut sites: HashSet<PoolRef> = HashSet::new();
+    let mut sites: FastSet<PoolRef> = FastSet::default();
     dfs(
         graph,
         from,
@@ -118,8 +121,8 @@ fn dfs<'g>(
     allowed: &HashSet<Address>,
     max_hops: usize,
     max_paths: usize,
-    visited: &mut HashSet<Address>,
-    sites: &mut HashSet<PoolRef>,
+    visited: &mut FastSet<Address>,
+    sites: &mut FastSet<PoolRef>,
     steps: &mut Vec<Hop<'g>>,
     out: &mut Vec<RoutePath>,
 ) {
@@ -175,8 +178,10 @@ pub fn enumerate_cycles(
     if max_cycle_len < 2 || max_cycles == 0 {
         return out;
     }
-    let mut visited: HashSet<Address> = HashSet::from([base]);
-    let mut used: HashSet<PoolRef> = HashSet::new();
+    // Решение 410 (t195): хеш foldhash (fast_hash.rs), только «есть ли».
+    let mut visited: FastSet<Address> = FastSet::default();
+    visited.insert(base);
+    let mut used: FastSet<PoolRef> = FastSet::default();
     // Решение 410 (t195): стек — ссылки на рёбра (route_hops.rs).
     let mut steps: Vec<Hop<'_>> = Vec::new();
     dfs_cycle(
@@ -202,8 +207,8 @@ fn dfs_cycle<'g>(
     base: Address,
     max_cycle_len: usize,
     max_cycles: usize,
-    visited: &mut HashSet<Address>,
-    used: &mut HashSet<PoolRef>,
+    visited: &mut FastSet<Address>,
+    used: &mut FastSet<PoolRef>,
     steps: &mut Vec<Hop<'g>>,
     out: &mut Vec<RoutePath>,
 ) {

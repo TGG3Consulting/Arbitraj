@@ -126,7 +126,8 @@ pub struct Override {
 }
 
 /// То же с подменой состояния (blockStateCalls[].stateOverrides — execution-apis 16caee27 src/schemas/execute.yaml
-/// L40-L99). Принимает: вызовы, суммы BNB, подмены, номер базового блока. Ошибки: как у run.
+/// L40-L99). Принимает: вызовы, суммы BNB, подмены, номер базового блока. Ошибки: как у run; Internal — два счёта
+/// подмены с одним адресом (ревью t192 М1: в stateOverrides адрес — ключ словаря, второй молча заменил бы первый).
 pub async fn run_with(
     ctx: &Ctx,
     calls: &[Call],
@@ -135,6 +136,19 @@ pub async fn run_with(
     base: impl Into<Base>,
 ) -> GatewayResult<Vec<CallResult>> {
     let base = base.into();
+    if let Some(d) = overrides
+        .iter()
+        .enumerate()
+        .find(|(i, o)| overrides[..*i].iter().any(|p| p.address == o.address))
+    {
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!(
+                "eth_simulateV1: две подмены состояния одного адреса {:#x}",
+                d.1.address
+            ),
+        ));
+    }
     let blocks: Vec<BlockResult> = rpc::call(
         ctx,
         "eth_simulateV1",

@@ -57,6 +57,8 @@ pub struct Io<'a> {
     pub token_out: Option<Address>,
     /// Решение 407: подмена баланса входа кошелька (stateDiff токена: слот = need); None — пополнение как раньше.
     pub credit: Option<Override>,
+    /// Ревью t192 Н2: баланс входа кошелька, уже прочитанный на блоке симуляции (exec/presell_credit.rs); None — читать.
+    pub have: Option<U256>,
 }
 
 /// Итог симуляции.
@@ -87,7 +89,10 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
     let mut values: Vec<(usize, U256)> = Vec::new();
     let (mut watch, mut funded, mut credited) = (Vec::new(), U256::ZERO, false);
     if let Some(t) = io.token_in {
-        let have = balances::token_units(ctx, t, wallet).await?;
+        let have = match io.have {
+            Some(h) => h,
+            None => balances::token_units(ctx, t, wallet).await?,
+        };
         if have >= io.need {
             sim.funding = Some(format!("баланс кошелька ({have} ≥ {} единиц)", io.need));
         } else if io.credit.is_some() {

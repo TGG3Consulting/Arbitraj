@@ -12,23 +12,19 @@
 //! slot в память 0, key в 32, SHA3 по 64 байтам). Один вызов: у каждого кандидата j своя метка (need + 1 + j), затем
 //! balanceOf(holder); слот верный, только если balanceOf вернул РОВНО метку одного кандидата. Не вернул (рефлексия,
 //! ребейз, хранение вне 0..N−1, ERC-7201) — подмена недостоверна, путь как раньше (dry_fund: источники, урезание 380).
-//! Кэш — в памяти процесса по токену (раскладка хранения контракта не меняется без обновления прокси); хранить в базе не
-//! нужно: поиск — один вызов на токен за запуск. Устарел (прокси обновили) — ловит проверка в самой симуляции
-//! (exec/dry_sim.rs: balanceOf после подмены ≠ нужному → credit_bad, forget и повтор без подмены — exec/presell.rs).
+//! Здесь — чистые функции (ключ, кандидаты, метки, запрос, выбор, подмена, настройка). Поиск с проверкой, кэш и
+//! проверка упаковки слота — exec/presell_slot_find.rs.
 //! Только симуляция продажи до покупки: исполнение, учёт, проба налогов, сухая сделка и цикл подмену не получают.
-//! Кто вызывает: exec/presell.rs.
-//! От чего зависит: check/simulate.rs (run_with, Override), check/probe_calls.rs (balance, u256), ctx.rs.
+//! Кто вызывает: exec/presell_slot_find.rs, exec/presell_credit.rs.
+//! От чего зависит: check/simulate.rs (Call, Override), check/probe_calls.rs (balance), ctx.rs.
 //! Настройки: presell.balance_slot_scan [bsc_dex].
-
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
 
 use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::check::probe_calls as pc;
-use super::super::check::simulate::{self, Base, Call, Override};
+use super::super::check::simulate::{Call, Override};
 use super::super::ctx::Ctx;
 
 /// Имя настройки: сколько слотов маппинга balances перебирать (docs/SETTINGS.md).
@@ -47,16 +43,6 @@ pub struct Slot {
     pub index: u64,
     pub layout: Layout,
 }
-
-/// Что известно о токене: слот найден или не найден среди первых N.
-#[derive(Debug, Clone, Copy)]
-enum Known {
-    Found(Slot),
-    Missing(u64),
-}
-
-static CACHE: LazyLock<Mutex<HashMap<Address, Known>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Ключ хранилища баланса holder в слоте s. Принимает: слот, держателя. Возвращает: ключ. Ошибок нет.
 pub fn key(s: Slot, holder: Address) -> B256 {
@@ -131,51 +117,13 @@ pub fn credit(token: Address, holder: Address, s: Slot, amount: U256) -> Overrid
     }
 }
 
-/// Число слотов перебора. Принимает: окружение. Возвращает: Some(n > 0) или None — не задана / 0 (подмены нет).
+/// Число слотов перебора. Принимает: окружение. Возвращает: Some(n > 0) или None — не задана (подмены нет; 0 каталог
+/// не примет — L::Positive).
 /// Ошибки: Internal (хранилище).
 pub fn scan(ctx: &Ctx) -> GatewayResult<Option<u64>> {
     match ctx.int(SETTING) {
         Ok(n) => Ok((n > 0).then_some(n)),
         Err(e) if e.code == ErrorCode::NotConfigured => Ok(None),
         Err(e) => Err(e),
-    }
-}
-
-/// Слот баланса токена: из кэша или одним eth_simulateV1 на блоке base. Принимает: окружение, токен, держателя,
-/// нужное количество, блок, число слотов. Возвращает: Some(слот) или None — не найден достоверно (запоминается: не
-/// искать снова, пока n не вырастет). Ошибки: узел (вызов поиска) — кэш не меняется.
-pub async fn find(
-    ctx: &Ctx,
-    token: Address,
-    holder: Address,
-    need: U256,
-    base: Base,
-    n: u64,
-) -> GatewayResult<Option<Slot>> {
-    let known = CACHE.lock().ok().and_then(|c| c.get(&token).copied());
-    match known {
-        Some(Known::Found(s)) => return Ok(Some(s)),
-        Some(Known::Missing(m)) if m >= n => return Ok(None),
-        _ => {}
-    }
-    let Some((calls, over, slots)) = scan_request(token, holder, need, n) else {
-        return Ok(None);
-    };
-    let res = simulate::run_with(ctx, &calls, &[], &[over], base).await?;
-    let found = res
-        .first()
-        .filter(|r| r.ok())
-        .and_then(pc::u256)
-        .and_then(|got| pick(&slots, need, got));
-    if let Ok(mut c) = CACHE.lock() {
-        c.insert(token, found.map_or(Known::Missing(n), Known::Found));
-    }
-    Ok(found)
-}
-
-/// Забыть слот токена (подмена не дала ровно нужного баланса в симуляции — раскладка изменилась). Ошибок нет.
-pub fn forget(token: Address) {
-    if let Ok(mut c) = CACHE.lock() {
-        c.remove(&token);
     }
 }

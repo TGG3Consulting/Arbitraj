@@ -4,7 +4,8 @@
 //! tests/data/executor_v3_live_2026-11-17 (raw_rpc.json.zst, блок H = 0x7ff4ca0, только чтение). Без сети:
 //! 1. Ключ Solidity keccak256(pad(holder) . pad(slot)) = ключам eth_getStorageAt записи (USDT, держатель Vault
 //!    Infinity, слоты 0 и 1), и значение слота 1 = ответу balanceOf(Vault) того же блока — правило «слот верный, если
-//!    balanceOf = значению слота» на живом токене. Ключ Vyper (обратный порядок) — другой.
+//!    balanceOf = значению слота» на живом токене; это же — проверка упаковки (ревью М5, presell_slot_find::unpacked:
+//!    слово слота = balanceOf → слово — только баланс). Ключ Vyper (обратный порядок) — другой.
 //! 2. Подмена баланса (credit) в теле eth_simulateV1 — stateDiff без code, ключ и значение = записанной подмене баланса
 //!    W по USDT (та же запись, слот 1), у записанной подмены USDT тоже нет code.
 //! 3. Запрос поиска для NXT (0xae7484d162ba80b340eba7769a7a67838b1c16c1 — адрес из записей
@@ -12,6 +13,7 @@
 //!    2·N разных ключей (Solidity и Vyper), метки разные и больше нужного, один вызов balanceOf(holder) от holder;
 //!    выбор слота — только при ровном совпадении с меткой.
 //! 4. Расчёт «без потолка»: presell_sim — не «бюджет срезал», подпись есть.
+//!
 //! Ответа узла на сам поиск (eth_simulateV1 с метками) в записях нет — дозапись: docs/TASKS.md (t192).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{check::simulate, exec::presell_slot}, arb::core::uncapped_types,

@@ -138,6 +138,7 @@ async fn fill(
         taxes_in: None,
         token_out: Some(base),
         credit: None,
+        have: None,
     };
     let sim = dry_sim::run(q, &ready, wallet, &io).await?;
     r.gas_swap = Some(sim.gas_swap);

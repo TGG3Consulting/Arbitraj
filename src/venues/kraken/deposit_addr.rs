@@ -27,8 +27,6 @@
 //!
 //! Счёт зачисления у Kraken один (спот) — перевода после депозита нет.
 
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
@@ -36,6 +34,7 @@ use reqwest::Method;
 use serde_json::Value;
 
 use crate::core::types::Asset;
+use crate::gateway::addr_book::AddrBook;
 use crate::gateway::addr_claim::{self, Missing};
 use crate::gateway::addr_create::{Creating, Failure, retry_text};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -50,9 +49,10 @@ use super::{deposit_addr_claim, num, rest, wallet};
 pub type Entry = (String, Option<DateTime<Utc>>);
 
 /// Полученные адреса: (монета, сеть ядра) → адрес; память создания (решение 379). Дешёво клонируется.
+/// Решение 411: ключ памяти — ещё и отпечаток ключа API биржи (смена ключа — старый адрес не берётся).
 #[derive(Clone, Default)]
 pub struct DepositAddrs {
-    map: Arc<RwLock<HashMap<(String, String), Entry>>>,
+    book: AddrBook<Entry>,
     creating: Creating,
 }
 
@@ -64,7 +64,10 @@ impl DepositAddrs {
     /// не раньше срока venue.networks_fresh_ms; связь, ответ Kraken.
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, network: &str) -> GatewayResult<String> {
         let key = (asset.ticker.clone(), network.to_string());
-        if let Some(a) = self.cached(&key) {
+        // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
+        // Срок адреса (expire_time) отбирается до решения по режиму.
+        let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
+        if let Some(a) = self.book.apply(self.cached(mark, &key), &key.0, &key.1)? {
             return Ok(a);
         }
         let (method_id, _) = wallet::method(ctx, &asset.ticker, network, Dir::Deposit).await?;
@@ -72,7 +75,7 @@ impl DepositAddrs {
         let found =
             pick(&v).map_err(|m| invalid(ctx, format!("{} {network}: {m}", asset.ticker)))?;
         if let Some(e) = found {
-            return Ok(self.keep(key, e));
+            return Ok(self.keep(mark, key, e));
         }
         if addr_claim::on_missing() == Missing::Forbidden {
             let m = addr_claim::forbidden_text("Kraken", &asset.ticker, network);
@@ -80,7 +83,8 @@ impl DepositAddrs {
         }
         // Решение 379: одно создание за раз на (монета, сеть); дождавшийся берёт итог первого (кэш или неудача).
         let _pass = self.creating.enter(&key).await;
-        if let Some(a) = self.cached(&key) {
+        // Создал ли адрес тот, кого ждали (память без учёта режима: это ответ биржи, полученный сейчас).
+        if let Some(a) = self.cached(mark, &key) {
             return Ok(a);
         }
         // Ревью 2 Н-А: отказ Kraken не повторяется до срока venue.networks_fresh_ms (не задана — до перезапуска),
@@ -95,7 +99,7 @@ impl DepositAddrs {
         match deposit_addr_claim::claim(ctx, &asset.ticker, network, &method_id).await {
             Ok(e) => {
                 self.creating.ok(&key);
-                Ok(self.keep(key, e))
+                Ok(self.keep(mark, key, e))
             }
             Err(f) => {
                 // Одна запись Warn на ключ — claim отправлен, адреса в списке нет.
@@ -113,20 +117,16 @@ impl DepositAddrs {
         }
     }
 
-    /// Адрес из памяти, если не истёк. Ошибок нет.
-    fn cached(&self, key: &(String, String)) -> Option<String> {
-        let m = self.map.read().unwrap_or_else(|p| p.into_inner());
-        let (a, exp) = m.get(key)?;
-        exp.is_none_or(|e| e > Utc::now()).then(|| a.clone())
+    /// Адрес из памяти под отпечатком ключа API (решение 411), если не истёк. Ошибок нет.
+    fn cached(&self, mark: Option<u64>, key: &(String, String)) -> Option<String> {
+        let (a, exp) = self.book.peek(mark, &key.0, &key.1)?;
+        exp.is_none_or(|e| e > Utc::now()).then_some(a)
     }
 
-    /// Адрес — в кэш. Возвращает: адрес. Ошибок нет.
-    fn keep(&self, key: (String, String), e: Entry) -> String {
+    /// Адрес — в память под отпечатком ключа API (решение 411). Возвращает: адрес. Ошибок нет.
+    fn keep(&self, mark: Option<u64>, key: (String, String), e: Entry) -> String {
         let a = e.0.clone();
-        self.map
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(key, e);
+        self.book.keep(mark, key.0, key.1, e);
         a
     }
 }

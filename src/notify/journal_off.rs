@@ -78,6 +78,7 @@ pub static OWN_RECORD: &[&str] = &[
     "venue.feed_conn_blocked",   // core.feed_watch (feed_watch_act.rs)
     "venue.feed_conn_giveup",    // core.feed_watch (feed_watch_act.rs)
     "venue.transfer_status",     // core.transfer_status (registry_sync.rs)
+    "venue.deposit_address_changed", // core.deposit_address (deposit_proof.rs after, решение 411)
     "venue.delisting",           // core.delist (delist.rs)
     "coin.check_done",           // core.check_done (first_pass.rs, rebuild_report.rs)
     "coin.blacklisted",          // core.blacklist (rebuild_report.rs)

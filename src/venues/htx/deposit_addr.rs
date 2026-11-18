@@ -14,21 +14,20 @@
 //! https://huobiapi.github.io/docs/spot/v1/en/ — только Query Deposit Address и Query Deposit Address of Sub User);
 //! создаёт ли GET адрес, документация не говорит. Поведение прежнее: нет адреса — отказ (вопрос Тиграну — docs/TASKS.md).
 
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-
 use serde_json::Value;
 
 use crate::core::types::Asset;
+use crate::gateway::addr_book::AddrBook;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::{Ctx, currency};
 use super::{num, rest, wallet};
 
 /// Полученные адреса: (тикер, сеть ядра) → адрес. Дешёво клонируется.
+/// Решение 411: ключ памяти — ещё и отпечаток ключа API биржи (смена ключа — старый адрес не берётся).
 #[derive(Clone, Default)]
 pub struct DepositAddrs {
-    map: Arc<RwLock<HashMap<(String, String), String>>>,
+    book: AddrBook<String>,
 }
 
 impl DepositAddrs {
@@ -36,9 +35,10 @@ impl DepositAddrs {
     /// Принимает: окружение, монету, сеть ядра. Возвращает: адрес.
     /// Ошибки: InvalidAddress — адреса нет или адрес требует tag; NotConfigured — сети нет; связь, коды HTX.
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, network: &str) -> GatewayResult<String> {
-        let key = (asset.ticker.clone(), network.to_string());
-        if let Some(a) = self.map.read().unwrap_or_else(|p| p.into_inner()).get(&key) {
-            return Ok(a.clone());
+        // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
+        let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
+        if let Some(a) = self.book.lookup(mark, &asset.ticker, network)? {
+            return Ok(a);
         }
         let chain = wallet::chain_of(ctx, &asset.ticker, network).await?;
         let q = vec![("currency", currency(&asset.ticker))];
@@ -48,10 +48,12 @@ impl DepositAddrs {
             ctx.tag(GatewayError::new(ErrorCode::InvalidAddress, None, m))
                 .with_raw(data.to_string())
         })?;
-        self.map
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(key, address.clone());
+        self.book.keep(
+            mark,
+            asset.ticker.clone(),
+            network.to_string(),
+            address.clone(),
+        );
         Ok(address)
     }
 }

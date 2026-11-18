@@ -6,6 +6,7 @@
 //!   занята — запросов нет, проход по ней останавливается и ждёт повтора (VenueState::wait = её пауза; повтор —
 //!   deposit_warm.rs::wake);
 //! - запрос идёт под запретом создания адреса (gateway/addr_claim.rs::forbid), если venue.deposit_warm_create не «да»;
+//! - решение 411: адрес уже в памяти адаптера под текущим ключом API (gateway/addr_book.rs memory_only) — без запроса;
 //! - журнал core.deposit_warm: по бирже за проход — сколько запрошено, получено, отказов, первая причина кодом ошибки и
 //!   короткой причиной (deposit_warm_plan.rs::reason) — без адресов и без значений memo/tag из текста адаптера.
 //!
@@ -88,6 +89,12 @@ pub async fn venue_pass(
         };
         let key = (tg.on.ticker.clone(), tg.net.clone());
         if !s.memo.todo(&key) {
+            continue;
+        }
+        // Решение 411: адрес уже в памяти адаптера под текущим ключом API — получен, запроса к бирже нет.
+        let on_hand = crate::gateway::addr_book::memory_only(gw.deposit_address(&tg.on, &tg.net));
+        if on_hand.await.is_ok() {
+            s.memo.record(key, Ok(()));
             continue;
         }
         if t.asked > 0 {

@@ -37,7 +37,7 @@ SDK; чек-лист уроков (30 пунктов) и как каждый з�
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление справочника, подписка (решение 131), поток аккаунта |
 | `fees.rs` | Ставки ключа transact-fee-rate пачками; худшая ставка тейкера (скидка HT — не в расчёте) |
 | `wallet.rs`, `networks_parse.rs` | Монеты и сети /v2/reference/currencies (+ адрес контракта из /v1/settings/common/chains по venue.contract_field) |
-| `deposit_addr.rs` | Адрес депозита (кэш; addressTag — не поддерживается) |
+| `deposit_addr.rs` | Адрес депозита (кэш; addressTag — не поддерживается); решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
 | `records.rs`, `deposits.rs` | История депозитов и выводов; статус депозита по хешу; удержания вывода (confirmed ≠ safe) |
 | `transfers.rs` | Вывод со своим client-order-id, проверка списка адресов вывода, статус по client-order-id |
 | `order_rules.rs` | Правила ордера — одни у ордера и у `check_order` (решение 134); пробного ордера нет |

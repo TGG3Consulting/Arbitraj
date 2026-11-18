@@ -13,12 +13,10 @@
 //! субаккаунта (api-ai-skills, sub-account/api-reference.md, 5.2); создаёт ли GET адрес, документация не говорит.
 //! Поведение прежнее: нет адреса — отказ (вопрос Тиграну — docs/TASKS.md, t165).
 
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-
 use reqwest::Method;
 
 use crate::core::types::Asset;
+use crate::gateway::addr_book::AddrBook;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -26,9 +24,10 @@ use super::errors::Op;
 use super::{num, rest};
 
 /// Полученные адреса депозита: (монета, сеть) → адрес. Дешёво клонируется.
+/// Решение 411: ключ памяти — ещё и отпечаток ключа API биржи (смена ключа — старый адрес не берётся).
 #[derive(Clone, Default)]
 pub struct DepositAddrs {
-    map: Arc<RwLock<HashMap<(String, String), String>>>,
+    book: AddrBook<String>,
 }
 
 /// Что делает: адрес депозита монеты в сети — из памяти или запросом.
@@ -41,14 +40,10 @@ pub async fn deposit_address(
     asset: &Asset,
     network: &str,
 ) -> GatewayResult<String> {
-    let key = (asset.ticker.clone(), network.to_string());
-    if let Some(a) = addrs
-        .map
-        .read()
-        .unwrap_or_else(|p| p.into_inner())
-        .get(&key)
-    {
-        return Ok(a.clone());
+    // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
+    let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
+    if let Some(a) = addrs.book.lookup(mark, &asset.ticker, network)? {
+        return Ok(a);
     }
     let data = rest::signed(
         ctx,
@@ -83,11 +78,12 @@ pub async fn deposit_address(
         .with_raw(found.to_string()));
     }
     let address = num::text(found, "address")?;
-    addrs
-        .map
-        .write()
-        .unwrap_or_else(|p| p.into_inner())
-        .insert(key, address.clone());
+    addrs.book.keep(
+        mark,
+        asset.ticker.clone(),
+        network.to_string(),
+        address.clone(),
+    );
     Ok(address)
 }
 

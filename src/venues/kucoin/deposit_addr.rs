@@ -21,12 +21,10 @@
 //! contractAddress, chainName}. Адресов у сети может быть несколько (MAIN и TRADE): берётся TRADE (зачисление сразу на
 //! торговый счёт), иначе MAIN — тогда после зачисления нужен перевод main → trade (fund_move.rs).
 
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-
 use reqwest::Method;
 
 use crate::core::types::Asset;
+use crate::gateway::addr_book::AddrBook;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -42,9 +40,10 @@ pub struct DepositAddr {
 }
 
 /// Полученные адреса: (монета, chainId) → адрес. Дешёво клонируется.
+/// Решение 411: ключ памяти — ещё и отпечаток ключа API биржи (смена ключа — старый адрес не берётся).
 #[derive(Clone, Default)]
 pub struct DepositAddrs {
-    map: Arc<RwLock<HashMap<(String, String), DepositAddr>>>,
+    book: AddrBook<DepositAddr>,
 }
 
 impl DepositAddrs {
@@ -53,9 +52,10 @@ impl DepositAddrs {
     /// Ошибки: InvalidAddress — адрес не создан (решение 208) или требует memo; NotApplicable — адреса нет, а создание
     /// запрещено признаком задачи (решение 316, gateway/addr_claim.rs); связь, коды KuCoin.
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, chain: &str) -> GatewayResult<DepositAddr> {
-        let key = (asset.ticker.clone(), chain.to_string());
-        if let Some(a) = self.map.read().unwrap_or_else(|p| p.into_inner()).get(&key) {
-            return Ok(a.clone());
+        // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
+        let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
+        if let Some(a) = self.book.lookup(mark, &asset.ticker, chain)? {
+            return Ok(a);
         }
         let q = vec![
             ("currency", asset.ticker.clone()),
@@ -110,10 +110,8 @@ impl DepositAddrs {
                 .unwrap_or_default()
                 .to_ascii_uppercase(),
         };
-        self.map
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(key, a.clone());
+        self.book
+            .keep(mark, asset.ticker.clone(), chain.to_string(), a.clone());
         Ok(a)
     }
 }

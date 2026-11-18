@@ -130,6 +130,13 @@ impl Memo {
         self.failed.clear();
     }
 
+    /// Что делает: решение 411 — забывает всё (после смены секретов: полученное под прежним ключом API может быть не
+    /// в памяти адаптера под новым). Ошибок нет.
+    pub fn forget_all(&mut self) {
+        self.ok.clear();
+        self.failed.clear();
+    }
+
     /// Сколько адресов получено и сколько монет отказали. Ошибок нет.
     pub fn counts(&self) -> (usize, usize) {
         (self.ok.len(), self.failed.len())

@@ -53,7 +53,7 @@
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление справочника, подписка (решение 131) |
 | `fees.rs` | Ставки ключа all-trade-rate одним запросом; скидка BGB (deduct-info) — расчёт по обычной ставке |
 | `wallet.rs`, `networks_parse.rs` | Монеты и сети Get Coin Info (весь — вне рабочих потоков, за Arc; одна монета ?coin=), комиссия вывода |
-| `deposit_addr.rs` | Адрес депозита (кэш; tag — не поддерживается) |
+| `deposit_addr.rs` | Адрес депозита (кэш; tag — не поддерживается); решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
 | `records.rs`, `deposits.rs`, `transfers.rs` | Окно истории venue.history_window_s; статус депозита по хешу; вывод со своим clientOid, статус и поиск |
 | `fund_move.rs` | Перевод spot ↔ p2p по настройкам |
 | `account.rs` | Балансы спота (все и одной монеты), «Проверить подключение» (authorities — лишние права только предупреждение, решение 243; IP, Classic/UTA, BGB) |

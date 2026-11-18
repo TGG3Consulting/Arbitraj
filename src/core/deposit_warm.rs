@@ -13,7 +13,11 @@
 //! проверка перед каждым запросом; уступившая биржа продолжает проход, когда освободится: повтор проверки не чаще её
 //! venue.deposit_warm_gap_ms (своего числа нет) или со следующим толчком.
 //! Проход одной биржи — deposit_warm_pass.rs; что запоминается и когда проход прекращается — deposit_warm_plan.rs.
-//! Кто вызывает: core/engine.rs (run — при запуске; kick — Core::secrets_changed), core/rebuild.rs (kick — новый
+//! Решение 411 (t196): адаптеры держат адреса под отпечатком ключа API (gateway/addr_book.rs) — после смены секретов
+//! прогрев забывает и полученные (kick_account) и проверяет память без запроса; запросы — только по монетам, адреса
+//! которых под текущим ключом в памяти нет. Предпроверка берёт прогретый адрес без ожидания, но перевод — только после
+//! свежего ответа биржи в сделке (core/deposit_proof.rs).
+//! Кто вызывает: core/engine.rs (run — при запуске; kick_account — Core::secrets_changed), core/rebuild.rs (kick — новый
 //! справочник монет).
 //! От чего зависит: engine.rs, deposit_warm_pass.rs, registry_sync.rs (enabled), шлюз (вид площадки).
 //! Настройки: venue.deposit_warm (здесь); venue.deposit_warm_gap_ms, venue.deposit_warm_create — deposit_warm_pass.rs.
@@ -36,6 +40,9 @@ use super::engine::{Core, rd};
 static KICK: LazyLock<Notify> = LazyLock::new(Notify::new);
 /// Перед следующим проходом забыть отказы по монетам (секреты или настройки прогрева изменились).
 static RETRY_FAILED: AtomicBool = AtomicBool::new(false);
+/// Решение 411: перед следующим проходом забыть и полученные (секреты изменились — память адаптера под новым ключом API
+/// своя; полученное под прежним ключом проверяется заново, без запроса, если адрес в памяти есть).
+static FORGET_ALL: AtomicBool = AtomicBool::new(false);
 
 const ON: &str = "venue.deposit_warm";
 
@@ -46,6 +53,14 @@ pub fn kick(retry_failed: bool) {
         RETRY_FAILED.store(true, Ordering::SeqCst);
     }
     KICK.notify_one();
+}
+
+/// Что делает: решение 411 — толчок после смены секретов: забыть всё (и полученные, и отказы) и пройти заново; монета,
+/// адрес которой уже в памяти адаптера под текущим ключом API, запроса к бирже не делает (deposit_warm_pass.rs).
+/// Ошибок нет.
+pub fn kick_account() {
+    FORGET_ALL.store(true, Ordering::SeqCst);
+    kick(true);
 }
 
 /// Задача прогрева: первый проход — сразу, дальше — по толчку или (только уступившие сделке биржи) по их паузе.
@@ -66,6 +81,9 @@ pub async fn run(core: Core) {
         let only = wake(&states).await;
         if RETRY_FAILED.swap(false, Ordering::SeqCst) {
             states.values_mut().for_each(|s| s.memo.forget_failed());
+        }
+        if FORGET_ALL.swap(false, Ordering::SeqCst) {
+            states.values_mut().for_each(|s| s.memo.forget_all());
         }
         let venues: Vec<VenueId> = rd(&core.inner.kinds)
             .iter()

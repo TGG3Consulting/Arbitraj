@@ -33,7 +33,7 @@
 | order_rules.rs, trade.rs, order_state.rs | ордер Limit + ImmediateOrCancel, свой clOrdID (UUID), итог; решение 264: ответ постановки — bizError ≠ 0 / ordStatus Rejected — отказ; отмены IOC/FOK нет (коды 11109/11110) | #place-order-http-put-prefered, #query-orders-by-order-id-or-client-order-id |
 | market_sell.rs | решение 268: рыночная продажа (контракт trade_market_sell) — ордер ordType Market, qtyType ByBase на количество базовой монеты после отказа лимитного ордера «цена вне диапазона»; правила пары и разбор итога — те же, что у лимитного (order_rules.rs, trade.rs); код PriceOutOfRange рыночный ордер не отдаёт |
 | wallet.rs, networks_crawl.rs, networks_parse.rs | сети монет по одной (chainCfg + asset/info), фоновый круг | #query-deposit-chain-settings, #query-withdraw-chain-settings |
-| deposit_addr.rs, deposits.rs, transfers.rs, history.rs | адрес депозита, депозиты по хешу, вывод и его статус | #query-deposit-address-information, #create-withdraw-request |
+| deposit_addr.rs, deposits.rs, transfers.rs, history.rs | адрес депозита (решение 411 — память под отпечатком ключа API, gateway/addr_book.rs), депозиты по хешу, вывод и его статус | #query-deposit-address-information, #create-withdraw-request |
 | fund_move.rs | перевод CONTRACT → SPOT после депозита (по настройке) | #transfer-between-wallets-within-an-account |
 | account.rs, all_balances.rs | балансы спота, «Проверить подключение», все счета | #query-wallets, #query-wallets-2, #query-asset |
 | user_stream.rs, user_stream_conn.rs, wallet_update.rs | поток аккаунта wallet-order (баланс) | #subscribe-wallet-order |

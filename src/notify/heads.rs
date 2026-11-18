@@ -71,6 +71,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "venue.feed_conn_blocked" => (WARN, "Стаканы биржи молчат, но идёт сделка — соединение не трогаю"),
         "venue.feed_conn_giveup" => (STOP, "Соединение стаканов биржи не оживает — нужен человек"),
         "venue.transfer_status" => (INFO, "Изменился ввод или вывод монеты"),
+        "venue.deposit_address_changed" => (WARN, "Адрес депозита биржи изменился"),
         "venue.delisting" => (WARN, "Монета в делистинге на бирже"),
         "route.quarantine_in" => (WARN, "Направление на паузе (карантин)"),
         "route.quarantine_out" => (OK, "Направление снова торгуется"),

@@ -49,7 +49,7 @@
 | `fees.rs` | Ставки ключа по одной паре фоном (venue.fee_requests_per_sec); единицы — venue.fee_rate_percent |
 | `wallet.rs`, `networks_parse.rs`, `contracts.rs` | Монеты и сети (весь — вне рабочих потоков, за Arc; одна — ?ccy=), адрес контракта из /assets/info |
 | `delist.rs` | Решение 175: делистинги — `delisted_at` пар GET /v2/spot/market («Expected time to be delisted, in milliseconds»), только пары с venue.quote_asset |
-| `deposit_addr.rs` | Адрес депозита (кэш; memo — не поддерживается) |
+| `deposit_addr.rs` | Адрес депозита (кэш; memo — не поддерживается); решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
 | `deposits.rs` | Статус депозита по tx_id |
 | `transfers.rs` | Вывод on_chain со своей меткой remark, статус, поиск по remark |
 | `account.rs` | Баланс спота, «Проверить подключение» |

@@ -18,12 +18,10 @@
 //! адресов депозита только GET /api/v5/asset/deposit-address — это не документация). Поведение прежнее: нет адреса —
 //! отказ (проверить docs-v5 — docs/TASKS.md, t165).
 
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-
 use serde_json::Value;
 
 use crate::core::types::Asset;
+use crate::gateway::addr_book::AddrBook;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -41,9 +39,10 @@ pub struct DepositAddr {
 }
 
 /// Полученные адреса: (монета, сеть ядра) → адрес. Дешёво клонируется.
+/// Решение 411: ключ памяти — ещё и отпечаток ключа API биржи (смена ключа — старый адрес не берётся).
 #[derive(Clone, Default)]
 pub struct DepositAddrs {
-    map: Arc<RwLock<HashMap<(String, String), DepositAddr>>>,
+    book: AddrBook<DepositAddr>,
 }
 
 impl DepositAddrs {
@@ -51,19 +50,18 @@ impl DepositAddrs {
     /// Принимает: окружение, монету, сеть ядра. Возвращает: DepositAddr.
     /// Ошибки: InvalidAddress — адреса в сети нет (создать в кабинете OKX) или он требует memo; связь, коды OKX.
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, network: &str) -> GatewayResult<DepositAddr> {
-        let key = (asset.ticker.clone(), network.to_string());
-        if let Some(a) = self.map.read().unwrap_or_else(|p| p.into_inner()).get(&key) {
-            return Ok(a.clone());
+        // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
+        let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
+        if let Some(a) = self.book.lookup(mark, &asset.ticker, network)? {
+            return Ok(a);
         }
         let (chain, _) = wallet::chain(ctx, &asset.ticker, network).await?;
         let q = vec![("ccy", asset.ticker.clone())];
         let data = rest::get(ctx, "/api/v5/asset/deposit-address", q).await?;
         let a = pick(&data, &chain)
             .map_err(|m| invalid(ctx, format!("{} {chain}: {m}", asset.ticker)))?;
-        self.map
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(key, a.clone());
+        self.book
+            .keep(mark, asset.ticker.clone(), network.to_string(), a.clone());
         Ok(a)
     }
 }

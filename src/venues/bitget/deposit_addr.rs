@@ -14,12 +14,10 @@
 //! Address, Get SubAccount Deposit Address, Modify Deposit Account, записи депозитов); создаёт ли GET адрес, документация
 //! не говорит. Поведение прежнее: нет адреса — отказ (вопрос Тиграну — docs/TASKS.md, t165).
 
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-
 use reqwest::Method;
 
 use crate::core::types::Asset;
+use crate::gateway::addr_book::AddrBook;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
 use super::ctx::Ctx;
@@ -27,9 +25,10 @@ use super::errors::Op;
 use super::{num, rest};
 
 /// Полученные адреса: (монета, chain) → адрес. Дешёво клонируется.
+/// Решение 411: ключ памяти — ещё и отпечаток ключа API биржи (смена ключа — старый адрес не берётся).
 #[derive(Clone, Default)]
 pub struct DepositAddrs {
-    map: Arc<RwLock<HashMap<(String, String), String>>>,
+    book: AddrBook<String>,
 }
 
 impl DepositAddrs {
@@ -37,9 +36,10 @@ impl DepositAddrs {
     /// Принимает: окружение, монету, chain. Возвращает: адрес.
     /// Ошибки: InvalidAddress — адреса нет или адрес требует tag; связь, коды Bitget.
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, chain: &str) -> GatewayResult<String> {
-        let key = (asset.ticker.clone(), chain.to_string());
-        if let Some(a) = self.map.read().unwrap_or_else(|p| p.into_inner()).get(&key) {
-            return Ok(a.clone());
+        // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
+        let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
+        if let Some(a) = self.book.lookup(mark, &asset.ticker, chain)? {
+            return Ok(a);
         }
         let q = vec![("coin", asset.ticker.clone()), ("chain", chain.to_string())];
         let path = "/api/v2/spot/wallet/deposit-address";
@@ -61,10 +61,12 @@ impl DepositAddrs {
             );
             invalid(ctx, m).with_raw(raw.clone())
         })?;
-        self.map
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(key, address.clone());
+        self.book.keep(
+            mark,
+            asset.ticker.clone(),
+            chain.to_string(),
+            address.clone(),
+        );
         Ok(address)
     }
 }

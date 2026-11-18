@@ -35,7 +35,7 @@
 | `book_print.rs` | Решение 213 по содержимому: `GET /api/v3/depth` (limit = `venue.depth_levels`, вес 5) — первые N уровней ответа и стакана в памяти для сторожа ядра; номер lastUpdateId не сравнивается (у частичного стакана связи с REST в документации нет); Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `wallet.rs`, `networks_parse.rs` | config/getall (вне рабочих потоков, кэш): сеть BSC, contractAddress, флаги, комиссия, пределы, шаг вывода withdrawIntegerMultiple, минимум депозита — решение человека |
 | `delist.rs` | Решение 175: делистинги — GET /sapi/v1/spot/delist-schedule (MARKET_DATA, вес 100, подпись — по спецификации binance-api-swagger): `delistTime` (мс) и список символов; символ → монета по справочнику пар (symbols.rs). Разбор строго по спецификации (`delistTime`, `symbol`); живой ответ — записать и сверить |
-| `deposit_addr.rs` | Адрес депозита, кэш (монета, сеть); адрес с tag — отказ |
+| `deposit_addr.rs` | Адрес депозита, кэш (монета, сеть); адрес с tag — отказ; решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
 | `transfers.rs` | Вывод withdraw/apply (свой withdrawOrderId, walletType), статус по idList, поиск по withdrawOrderId; не чаще `venue.withdraw_history_min_ms` |
 | `deposits.rs` | Депозит по хешу (txId), удержание вывода — статус 6 (решение 150); отказ вывода −4060 CAPITAL_WITHDRAW_USER_ASSET_LOCK_DEPOSIT → WithdrawLocked (решение 166, errors.rs) |
 | `fund_move.rs` | Funding → Spot после зачисления (`venue.deposit_to_spot`) |

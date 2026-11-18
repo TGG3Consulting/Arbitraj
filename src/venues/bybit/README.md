@@ -39,7 +39,7 @@
 | `book.rs` | Стаканы в памяти, котировка на объём, свежесть соединения и пары; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
 | `book_print.rs` | Решение 213: `GET /v5/market/orderbook` (limit = `venue.depth_levels`) — первые N уровней ответа и стакана в памяти (по содержимому) и `u` ответа (по номеру, только при глубине 1000) для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `wallet.rs`, `networks_parse.rs` | Монеты и сети (`/v5/asset/coin/query-info`), запрос одной монеты, стоимость вывода |
-| `deposit_addr.rs` | Адрес депозита (master), tag — «не поддерживается» |
+| `deposit_addr.rs` | Адрес депозита (master), tag — «не поддерживается»; решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
 | `deposits.rs` | Статус депозита по txID |
 | `transfers.rs` | Вывод (forceChain=1, feeType=1, requestId, accountType = venue.withdraw_account), статус, поиск при неизвестном итоге |
 | `fund_move.rs` | FUND → UNIFIED после зачисления (venue.deposit_to_spot) |

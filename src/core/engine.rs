@@ -156,7 +156,10 @@ impl Core {
     /// Решение 316: и толчок прогрева адресов депозита с повтором отказавших монет (deposit_warm.rs).
     pub fn secrets_changed(&self) {
         self.inner.kick_networks.notify_waiters();
-        super::deposit_warm::kick(true);
+        // Решение 411: подтверждения адресов депозита прежних ключей не используются; прогрев проверяет память заново
+        // (под новым ключом API адреса прежнего ключа не находятся).
+        super::deposit_proof::forget();
+        super::deposit_warm::kick_account();
         // Решение 387: запросы минимума депозита по требованию расчёта — заново (deposit_min_ask.rs).
         super::deposit_min_ask::forget();
         self.request_rebuild();

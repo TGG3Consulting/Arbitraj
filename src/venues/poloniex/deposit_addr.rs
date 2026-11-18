@@ -20,11 +20,10 @@
 //! deposit_addr_new.rs, gateway/addr_create.rs.
 //! Счёт зачисления — спот: «accountType … SPOT is the default and only supported one» (Account Information).
 
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use crate::core::types::Asset;
+use crate::gateway::addr_book::AddrBook;
 use crate::gateway::addr_claim::{self, Missing};
 use crate::gateway::addr_create::{Creating, Failure, retry_text};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
@@ -36,9 +35,10 @@ use super::networks_parse::{PAYMENT_ID, chain_coin, coin_clash};
 use super::wallet;
 
 /// Полученные адреса: (монета, blockchain) → адрес; память создания (ревью t165 Н2, Н4). Дешёво клонируется.
+/// Решение 411: ключ памяти — ещё и отпечаток ключа API биржи (смена ключа — старый адрес не берётся).
 #[derive(Clone, Default)]
 pub struct DepositAddrs {
-    map: Arc<RwLock<HashMap<(String, String), String>>>,
+    book: AddrBook<String>,
     creating: Creating,
 }
 
@@ -52,8 +52,10 @@ impl DepositAddrs {
     /// сообщение (deposit_addr_new.rs); связь, коды Poloniex.
     pub async fn get(&self, ctx: &Ctx, asset: &Asset, chain: &str) -> GatewayResult<String> {
         let key = (asset.ticker.clone(), chain.to_string());
-        if let Some(a) = self.map.read().unwrap_or_else(|p| p.into_inner()).get(&key) {
-            return Ok(a.clone());
+        // Решение 411: память — под отпечатком ключа API биржи и по режиму задачи (gateway/addr_book.rs).
+        let mark = ctx.vault.mark(super::ctx::SECRET_API_KEY);
+        if let Some(a) = self.book.lookup(mark, &asset.ticker, chain)? {
+            return Ok(a);
         }
         let data = wallet::one_raw(ctx, &asset.ticker).await?;
         let (coin, ctype) = chain_coin(&data, &asset.ticker, chain).ok_or_else(|| {
@@ -90,7 +92,7 @@ impl DepositAddrs {
         let got = deposit_addr_new::list(ctx, &coin).await?;
         // Решение 379: адреса в ответе нет — создать (предпроверка, перевод) или NotApplicable (прогрев без «да»).
         if let Some(a) = deposit_addr_new::pick(&got, &coin) {
-            self.keep(key, &a);
+            self.keep(mark, key, &a);
             return Ok(a);
         }
         if addr_claim::on_missing() == Missing::Forbidden {
@@ -99,8 +101,9 @@ impl DepositAddrs {
         }
         // Ревью t165 Н4: одно создание за раз на (монета, сеть); дождавшийся берёт итог первого (кэш или неудача).
         let _pass = self.creating.enter(&key).await;
-        if let Some(a) = self.map.read().unwrap_or_else(|p| p.into_inner()).get(&key) {
-            return Ok(a.clone());
+        // Создал ли адрес тот, кого ждали (память без учёта режима: это ответ биржи, полученный сейчас).
+        if let Some(a) = self.book.peek(mark, &asset.ticker, chain) {
+            return Ok(a);
         }
         // Ревью t165 Н2 и ревью 2 Н-А: отказ биржи не повторяется до срока venue.networks_fresh_ms (не задана — до
         // перезапуска), отправленное без подтверждения создание — до перезапуска; причина видна в отказе.
@@ -114,7 +117,7 @@ impl DepositAddrs {
         match deposit_addr_new::create(ctx, &asset.ticker, chain, &coin).await {
             Ok(a) => {
                 self.creating.ok(&key);
-                self.keep(key, &a);
+                self.keep(mark, key, &a);
                 Ok(a)
             }
             Err(f) => {
@@ -133,12 +136,9 @@ impl DepositAddrs {
         }
     }
 
-    /// Адрес — в кэш. Ошибок нет.
-    fn keep(&self, key: (String, String), a: &str) {
-        self.map
-            .write()
-            .unwrap_or_else(|p| p.into_inner())
-            .insert(key, a.to_string());
+    /// Адрес — в память под отпечатком ключа API (решение 411). Ошибок нет.
+    fn keep(&self, mark: Option<u64>, key: (String, String), a: &str) {
+        self.book.keep(mark, key.0, key.1, a.to_string());
     }
 }
 

@@ -12,6 +12,7 @@
 //! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон — send_trade, решение 227), usdt_relay_retry.rs (USDT).
 //! От чего зависит: engine.rs, usdt_accepted.rs (решение 405: вывод перегона USDT принят), wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! precheck_deposit.rs (target_on — монета и сеть адреса получателя, решение 316), credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
+//! Решение 411: адрес биржи-получателя — только подтверждённый свежим ответом биржи (deposit_proof.rs for_transfer).
 //! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
 //! Решение 166: вывод отклонён «средства временно заблокированы для вывода» (WithdrawLocked) — повтор того же вывода
 //! по transfer.locked_retry_ms / transfer.locked_retries_max площадки-отправителя (transfer_locked.rs), затем — как раньше.
@@ -37,6 +38,7 @@ use rust_decimal::Decimal;
 use tokio::sync::Notify;
 
 use crate::core::types::{Asset, CostKind, Transfer, TransferStatus, VenueId, WithdrawRequest};
+use crate::gateway::contract::VenueKind;
 use crate::gateway::errors::ErrorCode;
 use crate::storage::journal::Level;
 
@@ -247,10 +249,19 @@ async fn go(
     } = super::precheck_deposit::target_on(core, asset, to)?;
     // Решение 211: каждой площадке — её тикер монеты (адрес тот же).
     let on_from = super::venue_ticker::on_venue(core, asset, from);
-    let address = gw_to
-        .deposit_address(&on_to, &net_to)
-        .await
-        .map_err(|e| format!("{}: адрес депозита: {}", to.0, e.message))?;
+    // Решение 411 (t196): на биржу — только адрес, подтверждённый свежим ответом биржи: из подтверждения предпроверки
+    // этой сделки (дождавшись его) или своим свежим запросом (deposit_proof.rs for_transfer); память адаптера без
+    // свежего ответа в вывод не идёт. DEX-получатель — как раньше (адрес кошелька счёта, решение 132).
+    let address = if gw_to.kind() == VenueKind::Cex {
+        super::deposit_proof::for_transfer(core, &gw_to, to, &on_to, &net_to)
+            .await
+            .map_err(|e| format!("{}: адрес депозита: {e}", to.0))?
+    } else {
+        gw_to
+            .deposit_address(&on_to, &net_to)
+            .await
+            .map_err(|e| format!("{}: адрес депозита: {}", to.0, e.message))?
+    };
     // Решение 398: интервал опроса статуса вывода (у отправителя) и зачисления (у получателя) — venue.status_poll_ms —
     // читается после вывода (Pacer, wait.rs: не задан — опрос стоит до задания). Проверяется до денег: не задан —
     // вывода нет, причина в журнале.

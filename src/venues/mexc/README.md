@@ -31,7 +31,7 @@
 | `fees.rs` | Ставки комиссии по паре (`GET /api/v3/tradeFee`, вес 20) |
 | `wallet.rs` | Монеты и сети (`config/getall`) с кэшем `venue.networks_fresh_ms`, комиссия вывода |
 | `networks_parse.rs` | Разбор `config/getall`: код `netWork` ↔ имя `network`, адрес контракта, пределы, шаг вывода `withdrawIntegerMultiple` (только дробный) |
-| `deposit_addr.rs` | Адрес депозита: кэш по (монета, сеть) на время процесса, адрес с `memo` — ошибка «не поддерживается» |
+| `deposit_addr.rs` | Адрес депозита: кэш по (монета, сеть) на время процесса, адрес с `memo` — ошибка «не поддерживается»; решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
 | `transfers.rs` | Вывод (`POST /api/v3/capital/withdraw`, `withdrawOrderId` с меткой попытки), его статус, поиск по `withdrawOrderId` при неизвестном итоге |
 | `deposits.rs` | Статус депозита по хешу (`gateway::tx_hash::same`) |
 | `deposit_hold.rs` | Удержания вывода (решение 150): предварительно зачисленные депозиты — `GET /api/v3/capital/deposit/hisrec` (вес 10), записи `status` = 9 PRE_SUCCESS за окно API по умолчанию (7 дней); торговать ими можно, выводить нельзя. Решение 166: отказ вывода 16021 → WithdrawLocked (errors.rs, по живому ответу 04.11) |

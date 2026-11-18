@@ -18,6 +18,8 @@
 //! интервала фонового опроса (precheck_nets.rs), иначе — запрос, как раньше; источник — в «Время по шагам»;
 //! precheck.balance_first = да — свободный баланс A читается здесь, прямо перед расчётом (precheck_balance.rs), расчёт
 //! идёт с пределом min(бюджет, свободно); исполнитель баланс повторно не читает.
+//! Решение 411 (t196): при precheck.parallel = да шаг «адрес депозита B» идёт одновременно с пересчётом и проверкой
+//! продажи (от них не зависит); адрес из памяти адаптера (под ключом API) — без ожидания (precheck_deposit.rs).
 //! Решение 392 (t180): ценовые коридоры бирж A и B (price_band.rs context: только у пар с правилом коридора, обе
 //! стороны одновременно; ревью Н3 — одновременно и с шагами сторон, своя строка «коридор цены» во времени шагов); пересчёт держит худшие цены плана внутри коридора; строки коридора — в журнал
 //! core.precheck и хронологию сделки всегда.
@@ -262,11 +264,13 @@ struct Timing {
 }
 
 /// Решение 266: пометка строк времени при precheck.parallel = да.
-const PAR_NOTE: &str = "шаги сетей, BNB и удержаний вывода шли одновременно (precheck.parallel) — сумма шагов не равна \
-                        общему времени";
+const PAR_NOTE: &str = "шаги сетей, BNB и удержаний вывода шли одновременно (precheck.parallel), адрес депозита — \
+                        одновременно с пересчётом и проверкой продажи (решение 411) — сумма шагов не равна общему \
+                        времени";
 /// То же при precheck.balance_first = да: одновременно читался и свободный баланс A.
 const PAR_NOTE_BAL: &str = "шаги сетей, BNB, удержаний вывода и свободного баланса шли одновременно \
-                            (precheck.parallel) — сумма шагов не равна общему времени";
+                            (precheck.parallel), адрес депозита — одновременно с пересчётом и проверкой продажи \
+                            (решение 411) — сумма шагов не равна общему времени";
 
 impl Timing {
     /// Запоминает шаг. Принимает: название, момент начала. Ошибок нет.
@@ -359,13 +363,15 @@ async fn steps(
             t.par = (!marks.is_empty()).then_some(note);
             t.steps.extend(marks);
             t.src.extend(src);
-            let (h, bal) = r?;
+            let (h, bal, due) = r?;
             held = h;
             // Часть 4: итог чтения баланса — на своём месте, перед расчётом (после шагов сторон).
             if let Some((r, ms)) = bal {
                 t.steps.push((free_step(), ms));
                 read = Some(r?);
             }
+            // Решение 411: адрес депозита B проверить — ниже, одновременно с пересчётом и проверкой продажи.
+            Ok::<bool, String>(due)
         } else {
             for (v, withdraw) in [(&d.buy_on, true), (&d.sell_on, false)] {
                 match super::trade_ops::kind(core, v)? {
@@ -407,11 +413,11 @@ async fn steps(
                 t.mark(free_step(), at);
                 read = Some(r?);
             }
+            Ok(false)
         }
-        Ok::<(), String>(())
     };
     // Ревью 2 t180, Н-C2: отказ стороны возвращается сразу — чтение коридора при этом отменяется (try_join).
-    let ((mut bands, band_ms), ()) = tokio::try_join!(band, sides)?;
+    let ((mut bands, band_ms), addr_due) = tokio::try_join!(band, sides)?;
     // Строка времени — только если коридор читался (есть строки коридора).
     if !bands.lines.is_empty() {
         t.steps.push((
@@ -432,49 +438,76 @@ async fn steps(
     let free = read.as_ref().and_then(Read::free);
     let cand = fast.balance.filter(|_| free.is_some());
     let short = cand.filter(|c| free.is_some_and(|f| c.short(f)));
-    let at = Instant::now();
-    // Будущее расчёта большое — в куче: обёртки замера иначе копируют его на стек (переполнение в отладочной сборке).
-    // Решение 265: этапы пересчёта по шагам — только при включённом замере (выключен — работа без обёрток).
-    // Решение 266 (precheck.fast_recalc = да): сначала — только объём кандидата; не прошёл — полный подбор (profit.rs).
-    let mut want = fast.qty.map(|q| Want {
-        spend: cand.map(|c| c.spend_max),
-        ..Want::new(q)
-    });
-    // Решение 392 (t180): план считается внутри коридора, прочитанного выше одновременно с шагами сторон (контекст —
-    // на справочнике сетей после шагов сторон).
-    let plan = Box::pin(replan_pre(core, d, free, want.as_mut(), pre));
-    let (verdict, m) = super::step_timing::measure_if(t.on, plan).await;
-    t.mark("пересчёт с финальной котировкой".into(), at);
-    t.calc = m.map(|m| m.calc_text("пересчёт с финальной котировкой"));
-    t.plan = want.and_then(|w| w.line());
-    let c = match (verdict, &read, short) {
-        (Verdict::Accept(c), _, _) => c,
-        // Часть 4: свободного меньше, чем нужно кандидату, и под остаток невыгодно — причина «свободный баланс».
-        // Только отказ по порогам прибыли (money.min_profit_usd / pct) на объёме под остаток: его profit.rs отдаёт с
-        // расчётом, у которого записан выбор объёма (best с size — так помечается только он); прочие отказы
-        // пересчёта (делистинг, закрытые входы, налоги, нет цены, бюджет, отказ подбора и финальной котировки) —
-        // прежним текстом: по типу Verdict::Reject их от «не про баланс» не отличить.
-        (Verdict::Reject { reason, best }, Some(Read::Got { free, quote }), Some(c))
-            if super::precheck_balance::by_thresholds(best.as_ref()) =>
-        {
-            return Err(super::precheck_balance::short_reject(
-                d, *free, quote, &c, &reason,
-            ));
+    // Решение 411 (t196, precheck.parallel = да): адрес депозита биржи B не зависит от пересчёта и проверки продажи —
+    // идёт одновременно с ними (живой факт 18.11 ESIM bsc_dex → kucoin: «адрес депозита kucoin 284 мс» + «проверка
+    // продажи kucoin 298 мс» шли по очереди). Итог — в прежнем порядке: ошибка адреса — первая (как будто пересчёта не
+    // было: его шаги и строки снимаются); время шага адреса — на его прежнем месте, перед пересчётом.
+    let addr_at = t.steps.len();
+    let addr = async {
+        if !addr_due {
+            return None;
         }
-        (Verdict::Reject { reason, .. }, _, _) => {
-            return Err(format!("пересчёт перед покупкой: {reason}"));
-        }
+        let at = Instant::now();
+        let r = super::precheck_deposit::ready(core, d).await;
+        let step = format!("адрес депозита {}", d.sell_on.0);
+        Some((step, at.elapsed().as_millis(), r))
     };
-    // Решение 134: биржа B примет ордер продажи на объём плана — до покупки (precheck_sell.rs). Решение 234: у DEX B —
-    // симуляция настоящей продажи кошельком сделки, расчёт — по её выходу (precheck_dex_sell.rs).
-    let at = Instant::now();
-    // Решение 380 (ревью t166, Н6): план до проверки продажи — чтобы урезание по симуляции было видно своей строкой.
-    let (pre, pre_sell) = (Cand::of(&c), c.sell_qty);
-    let r = super::precheck_sell::check(core, d, c).await;
-    t.mark(format!("проверка продажи {}", d.sell_on.0), at);
-    let c = r?;
-    let cut = (c.sell_qty < pre_sell).then_some(pre);
-    t.cut = cut.map(|p| super::precheck_dex_cut::chrono(&p, pre_sell, &c));
+    let calc = Box::pin(async {
+        let at = Instant::now();
+        // Будущее расчёта большое — в куче: обёртки замера иначе копируют его на стек (переполнение в отладочной сборке).
+        // Решение 265: этапы пересчёта по шагам — только при включённом замере (выключен — работа без обёрток).
+        // Решение 266 (precheck.fast_recalc = да): сначала — только объём кандидата; не прошёл — полный подбор (profit.rs).
+        let mut want = fast.qty.map(|q| Want {
+            spend: cand.map(|c| c.spend_max),
+            ..Want::new(q)
+        });
+        // Решение 392 (t180): план считается внутри коридора, прочитанного выше одновременно с шагами сторон (контекст —
+        // на справочнике сетей после шагов сторон).
+        let plan = Box::pin(replan_pre(core, d, free, want.as_mut(), pre));
+        let (verdict, m) = super::step_timing::measure_if(t.on, plan).await;
+        t.mark("пересчёт с финальной котировкой".into(), at);
+        t.calc = m.map(|m| m.calc_text("пересчёт с финальной котировкой"));
+        t.plan = want.and_then(|w| w.line());
+        let c = match (verdict, &read, short) {
+            (Verdict::Accept(c), _, _) => c,
+            // Часть 4: свободного меньше, чем нужно кандидату, и под остаток невыгодно — причина «свободный баланс».
+            // Только отказ по порогам прибыли (money.min_profit_usd / pct) на объёме под остаток: его profit.rs отдаёт с
+            // расчётом, у которого записан выбор объёма (best с size — так помечается только он); прочие отказы
+            // пересчёта (делистинг, закрытые входы, налоги, нет цены, бюджет, отказ подбора и финальной котировки) —
+            // прежним текстом: по типу Verdict::Reject их от «не про баланс» не отличить.
+            (Verdict::Reject { reason, best }, Some(Read::Got { free, quote }), Some(c))
+                if super::precheck_balance::by_thresholds(best.as_ref()) =>
+            {
+                return Err(super::precheck_balance::short_reject(
+                    d, *free, quote, &c, &reason,
+                ));
+            }
+            (Verdict::Reject { reason, .. }, _, _) => {
+                return Err(format!("пересчёт перед покупкой: {reason}"));
+            }
+        };
+        // Решение 134: биржа B примет ордер продажи на объём плана — до покупки (precheck_sell.rs). Решение 234: у DEX B —
+        // симуляция настоящей продажи кошельком сделки, расчёт — по её выходу (precheck_dex_sell.rs).
+        let at = Instant::now();
+        // Решение 380 (ревью t166, Н6): план до проверки продажи — чтобы урезание по симуляции было видно своей строкой.
+        let (pre, pre_sell) = (Cand::of(&c), c.sell_qty);
+        let r = super::precheck_sell::check(core, d, c).await;
+        t.mark(format!("проверка продажи {}", d.sell_on.0), at);
+        let c = r?;
+        let cut = (c.sell_qty < pre_sell).then_some(pre);
+        t.cut = cut.map(|p| super::precheck_dex_cut::chrono(&p, pre_sell, &c));
+        Ok::<_, String>((c, cut))
+    });
+    let (addr, calc) = tokio::join!(addr, calc);
+    if let Some((step, ms, r)) = addr {
+        t.steps.insert(addr_at, (step, ms));
+        if let Err(e) = r {
+            t.steps.truncate(addr_at + 1);
+            (t.calc, t.plan, t.cut) = (None, None, None);
+            return Err(e);
+        }
+    }
+    let (c, cut) = calc?;
     // Часть 4: инвариант пары buy_cap + refit — списание плана по худшей цене не больше предела списания
     // (min(бюджет плана, свободно)); расчёт его держит сам (final_calc), здесь — сверка после проверки продажи.
     if let Some(free) = free {

@@ -104,6 +104,8 @@ pub mod delist;
 pub mod delist_check;
 pub mod delist_text;
 pub mod deposit_min_ask;
+pub mod deposit_proof;
+pub mod deposit_proof_plan;
 pub mod deposit_warm;
 pub mod deposit_warm_busy;
 pub mod deposit_warm_pass;

@@ -49,7 +49,7 @@ Spot (`acctLv = 1`). Всё — только по официальной док�
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление, подписка; соединений ≤ 3/с, ≤ 30 на канал |
 | `fees.rs` | Ставки `GET /api/v5/account/trade-fee` по паре фоном (≤ 2/с; ставка = −taker — у OKX комиссия отрицательна) |
 | `wallet.rs`, `networks_parse.rs` | Монеты и сети `GET /api/v5/asset/currencies` (с ключом; весь — вне рабочих потоков; одна — `ccy=`), chain OKX по сети ядра, комиссия вывода |
-| `deposit_addr.rs` | Адрес депозита (кэш; Trading раньше Funding; tag/memo — не поддерживается) |
+| `deposit_addr.rs` | Адрес депозита (кэш; Trading раньше Funding; tag/memo — не поддерживается); решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
 | `deposits.rs` | Статус депозита по txId; удержания вывода — депозиты в state 1 «deposit credited» (решение 150). Решение 166: кода «заблокировано для вывода» в таблице кодов не сверено (сайт документации недоступен из сессии) — WithdrawLocked не выдаётся |
 | `transfers.rs` | Вывод `POST /asset/withdrawal` (dest 4, clientId, amt = сумма − fee), статус и поиск по clientId |
 | `fund_move.rs` | Перевод Funding ↔ Trading с проверкой transfer-state |

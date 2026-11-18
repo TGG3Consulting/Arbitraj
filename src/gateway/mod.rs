@@ -5,6 +5,7 @@
 //! От чего зависит: core/types. Никогда — venues (адаптеры регистрируются из main.rs).
 //! Настройки: правила шлюза (хранятся в SQLite, меняются из интерфейса).
 
+pub mod addr_book;
 pub mod addr_claim;
 pub mod addr_create;
 pub mod addr_create_memo;

@@ -48,9 +48,11 @@ enum Slot {
 /// Чтения: номер перевода → итог.
 static READS: LazyLock<Mutex<HashMap<u64, Slot>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// Хеш вывода → (посторонние, момент снимка).
+type Bound = HashMap<String, (Decimal, DateTime<Utc>)>;
+
 /// Снимки, привязанные к хешу вывода (нижний регистр, без 0x) — до записи зачисления в сделку.
-static BOUND: LazyLock<Mutex<HashMap<String, (Decimal, DateTime<Utc>)>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static BOUND: LazyLock<Mutex<Bound>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Номера переводов.
 static NEXT: AtomicU64 = AtomicU64::new(1);
@@ -154,7 +156,7 @@ pub fn outsider_of(
     o: &super::remain_others::Others,
     hold_pct: Decimal,
 ) -> Option<Decimal> {
-    if !o.unclear.is_empty() || o.busy {
+    if !o.unclear.is_empty() || o.busy || !o.leaving.is_empty() {
         return None;
     }
     let keep = Decimal::ONE - hold_pct / Decimal::ONE_HUNDRED;

@@ -93,6 +93,15 @@ async fn serve() -> (String, Server) {
                     }
                 } else if path.starts_with("/v4/public/symbol") {
                     ("200 OK", symbols)
+                } else if path.starts_with("/v4/balances") {
+                    // Решение 413 (повторное ревью t198, Б-3): перед продажей бот читает баланс спота — GET
+                    // /v4/balances (документация Get balances: result.assets[] — currency, availableAmount,
+                    // frozenAmount), согласованный со стендом: у сделок 1 BTC, ордера стенд не исполняет.
+                    let a = json!({"assets": [{"currency": "btc", "availableAmount": "1", "frozenAmount": "0"}]});
+                    (
+                        "200 OK",
+                        json!({"rc": 0, "mc": "SUCCESS", "ma": [], "result": a}).to_string(),
+                    )
                 } else {
                     ("404 Not Found", "{}".to_string())
                 };

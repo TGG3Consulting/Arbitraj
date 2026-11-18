@@ -5,7 +5,8 @@
 //! (tests/data/xt_live_2026-11-06/symbol_pepe.json); стакан — пример документации
 //! (tests/data/rest_book_2026-11-09/xt_depth_doc.json); POST /v4/order — {orderId} (Submit order); GET /v4/order —
 //! состояние по полям Query single: state CANCELED, executedQty 0 (ордер IOC снят без исполнения; собрано по
-//! документации, не записано); прочее — 404.
+//! документации, не записано); GET /v4/balances — 1 BTC на споте (решение 413: перед продажей бот читает баланс;
+//! согласовано со сделкой стенда — 1 BTC, ордера не исполняются; собрано по документации Get balances); прочее — 404.
 //! Кто вызывает: tests/core_sell_stuck_chain_t175.rs.
 //! От чего зависит: arb::core, arb::venues::xt, arb::settings, arb::storage, arb::gateway, arb::secrets.
 
@@ -112,6 +113,15 @@ fn answer(method: &str, path: &str, n: &Srv) -> (&'static str, String) {
     if path.starts_with("/v4/public/symbol") {
         let t = std::fs::read_to_string("tests/data/xt_live_2026-11-06/symbol_pepe.json").unwrap();
         return ("200 OK", ok(serde_json::from_str(&t).unwrap()));
+    }
+    // Решение 413 (повторное ревью t198, Б-3: баланс биржи не прочитан — продажи нет): баланс спота GET /v4/balances
+    // (https://doc.xt.com/docs/spot/Balance/GetBalances: result.assets[] — currency, availableAmount, frozenAmount),
+    // согласованный со стендом: у сделки 1 BTC (deal), ни один ордер не исполняется (CANCELED, executedQty 0) — на
+    // счёте всё время 1 BTC.
+    if path.starts_with("/v4/balances") {
+        let a =
+            json!({"assets": [{"currency": "btc", "availableAmount": "1", "frozenAmount": "0"}]});
+        return ("200 OK", ok(a));
     }
     if path.starts_with("/v4/order") && method == "POST" {
         let mut c = n.lock().unwrap();

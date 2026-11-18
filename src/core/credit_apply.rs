@@ -56,7 +56,8 @@ pub fn input(core: &Core, deal: &Deal, fact: Decimal, o: &Others) -> Input {
         fact,
         confirmed,
         pending,
-        unclear: !o.unclear.is_empty() || o.busy,
+        // Сделка в пути сюда, замок не взят или сделка уходит отсюда (повторное ревью, С-1) — замер неоднозначен.
+        unclear: !o.unclear.is_empty() || o.busy || !o.leaving.is_empty(),
         hold_pct: super::deposit_hold::expected_pct(core, &deal.at, a),
         tol_pct: tol,
     }

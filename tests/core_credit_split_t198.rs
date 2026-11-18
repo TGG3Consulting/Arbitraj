@@ -14,6 +14,7 @@ mod t198_common;
 use arb::core::credit_split::split;
 use arb::core::types::CostKind;
 use rust_decimal::Decimal;
+use serde_json::Value;
 use t198_common::{d, input, j, journal, pend};
 
 /// Обе сделки WKC ждут доли, факт — сверка 21:38:19: доли пропорционально записям, вместе не больше факта, удержано
@@ -330,6 +331,14 @@ fn outsider_snapshot_rules() {
         outsider_of(d("1"), &o, d("2")),
         None,
         "замок не взят — снимка нет"
+    );
+    // Повторное ревью (С-1): через счёт уходит сделка (её монеты здесь или уже нет) — снимок неоднозначен.
+    o.busy = false;
+    o.leaving = vec!["L".into()];
+    assert_eq!(
+        outsider_of(d("1"), &o, d("2")),
+        None,
+        "уходит сделка — снимка нет"
     );
 }
 

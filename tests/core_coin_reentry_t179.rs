@@ -695,12 +695,16 @@ async fn remain_fact_keeps_only_own_coins_on_shared_account() {
     let dx = dir_of("bingx", "bsc_dex");
     let w = |id: &str| Some(arb::core::types::DexAccountId(id.into()));
     // Б1 (а): A перевела 10 с BingX (шаг «перевод» — где её монеты, не доказано), B застряла на BingX: учёт 5, факт 5.
+    // Решение 413 (повторное ревью t198, С-1): A УХОДИТ с BingX (получатель — DEX) — не «в пути сюда», а «уходит
+    // отсюда» (Others.leaving); как и раньше, не вычитается и алерта нет — меняется только раскладка (замер удержания и
+    // снимок посторонних при ней неоднозначны).
     let a = bought("A", &dx, Step::Transfer, ("40", "10"), Some("A"));
     arb::core::ledger::save(&core, &a).await;
     let mut b = bought("B", &dx, Step::Stuck, ("20", "5"), Some("A"));
     arb::core::ledger::save(&core, &b).await;
     let o = on_account(&core, &b, &bingx);
-    assert_eq!(o.unclear, vec!["A".to_string()]);
+    assert!(o.unclear.is_empty());
+    assert_eq!(o.leaving, vec!["A".to_string()]);
     assert_eq!(o.qty, Decimal::ZERO);
     assert_eq!(own_qty(d("5"), d("5"), &o), Own::Qty(d("5")));
     assert!(
@@ -747,6 +751,7 @@ async fn remain_fact_keeps_only_own_coins_on_shared_account() {
         // Решение 413: ждущие доли других — в отдельном поле (здесь нет).
         pending: vec![],
         busy: false,
+        leaving: vec![],
         words: vec![],
     };
     assert_eq!(

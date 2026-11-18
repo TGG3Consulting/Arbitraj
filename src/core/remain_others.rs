@@ -53,6 +53,10 @@ pub struct Others {
     /// Ревью t198: замок счёта не взят за exec.rate_limit_wait_max_ms — продажа другой сделки, возможно, в полёте
     /// (credit_lock.rs fact): доля не выше ожидаемой, замера нет.
     pub busy: bool,
+    /// Решение 413 (повторное ревью, С-1): сделки на шаге «перевод», уходящие с этого счёта (вывод отсюда, получатель —
+    /// другой): не «в пути сюда», не вычитаются (решение 405, ревью 3 Б1 — их монеты здесь или уже нет, не доказано),
+    /// но замер удержания и снимок посторонних при них неоднозначны.
+    pub leaving: Vec<String>,
     /// Те же сделки словами для тревоги (deal_words.rs): доказуемые, затем в пути (требование Тиграна 18.11).
     pub words: Vec<String>,
 }
@@ -94,6 +98,8 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
                     "{} — в пути, где монеты сейчас, не доказано",
                     super::deal_words::deal(core, d)
                 ));
+            } else if d.at == *v {
+                out.leaving.push(d.id.clone());
             }
         } else if d.at == *v
             && super::credit_fact::pending(d)
@@ -118,6 +124,7 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
     }
     out.deals.sort();
     out.unclear.sort();
+    out.leaving.sort();
     out.pending.sort_by(|x, y| x.id.cmp(&y.id));
     out
 }

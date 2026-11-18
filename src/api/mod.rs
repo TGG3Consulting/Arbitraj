@@ -10,6 +10,7 @@ pub mod coins;
 pub mod control;
 pub mod core_api;
 pub mod delist;
+pub mod deposit_hold;
 pub mod dex;
 pub mod dex_dry;
 pub mod dex_executor;

@@ -5,16 +5,16 @@
 //!
 //! Состояния:
 //! - share = None — «ждёт доли»: количество сделки = запись депозита, факт ещё не прочитан (суммируется в распределение
-//!   credit_split.rs как ждущая, в сверке балансов — не участвует: учёт не доказан, reconcile_confirm.rs);
-//! - share = Some — подтверждено: Basis::Balance — по факту баланса; Record — по записи (монета без ожидаемого
-//!   удержания: налог токена 0 и замер 0 / нет — deposit_hold.rs suspect = нет; отказ «мало средств» на продаже вернёт
-//!   её в «ждёт доли», sell_fact.rs); Estimate — баланс не читался, оценка «запись × (1 − ожидаемое удержание)»
-//!   (не больше доли сделки при удержании не меньше ожидаемого).
+//!   credit_split.rs как ждущая; в сверке балансов — нижней оценкой запись × (1 − ожидаемое удержание),
+//!   reconcile_confirm.rs; подтверждается перед продажей / выводом или на круге сверки);
+//! - share = Some — подтверждено: Basis::Balance — по факту баланса; Estimate — баланс не читался, оценка «запись ×
+//!   (1 − ожидаемое удержание)» (не больше доли сделки при удержании не меньше ожидаемого); Record — только у записей
+//!   до ревью t198 (с ревью С1 любое зачисление на биржу ждёт доли: факт перед любой продажей и выводом).
 //!
 //! Поле reread — только в памяти: количество, на котором продажа получила отказ «мало средств» (sell_fact.rs).
 //! Кто вызывает: core/fills.rs (on_credit — после зачисления перевода сделки), credit_apply.rs, sell_fact.rs,
 //! remain_others.rs, reconcile_confirm.rs, tests.
-//! От чего зависит: credit_base.rs (посторонние до вывода), deposit_hold.rs (suspect), trade_ops.rs (вид площадки),
+//! От чего зависит: credit_base.rs (посторонние до вывода, по хешу), trade_ops.rs (вид площадки),
 //! deal.rs, core/types.
 //! Настройки: нет.
 
@@ -60,22 +60,22 @@ pub struct CreditFact {
     pub reread: Option<Decimal>,
 }
 
-/// Что делает: после зачисления перевода сделки (fills.rs transfer): запись зачисления. Биржа-получатель, монета с
-/// ожидаемым удержанием или неизмеренным налогом — «ждёт доли» (факт — перед продажей); иначе — подтверждено записью.
-/// Получатель DEX — записи нет (кошелёк получает по событию Transfer, решения 151, 222). Принимает: ядро, сделку (qty
-/// уже = запись), получателя. Ошибок нет.
-pub fn on_credit(core: &Core, deal: &mut Deal, to: &VenueId) {
+/// Что делает: после зачисления перевода сделки (fills.rs transfer): запись зачисления. Ревью t198 (С1): любая
+/// биржа-получатель — «ждёт доли» (факт — перед продажей или выводом, sell_fact.rs; на круге сверки — reconcile.rs),
+/// снимок посторонних — по хешу вывода (credit_base.rs). Получатель DEX — записи нет (кошелёк получает по событию
+/// Transfer, решения 151, 222). Принимает: ядро, сделку (qty уже = запись), получателя, хеш вывода. Ошибок нет.
+pub fn on_credit(core: &Core, deal: &mut Deal, to: &VenueId, tx: Option<&str>) {
+    let outsider = super::credit_base::take(tx);
     if super::trade_ops::kind(core, to) != Ok(VenueKind::Cex) {
         deal.credit = None;
         return;
     }
-    let pending = super::deposit_hold::suspect(core, to, &deal.direction.asset);
     deal.credit = Some(Box::new(CreditFact {
         venue: to.clone(),
         record: deal.qty,
-        outsider: super::credit_base::take(&deal.id),
-        share: (!pending).then_some(deal.qty),
-        basis: (!pending).then_some(Basis::Record),
+        outsider,
+        share: None,
+        basis: None,
         at: chrono::Utc::now(),
         reread: None,
     }));

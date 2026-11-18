@@ -3,30 +3,28 @@
 //! «ждём решения человека») — факт баланса перед продажей на БИРЖЕ и отказ «мало средств» без человека.
 //!
 //! before (вход в продажу sell.rs: sell_or_stuck, market_guarded — первая продажа после перевода, «Вернуть боту»,
-//! остаток, после перегона, режим застрявшей монеты, кнопки): свежий факт счёта (remain_fact::reconcile под замком
-//! счёта) и продажа доли сделки — min(доля по факту, факт − доли и учёт других живых сделок), если:
-//! - зачисление сделки ждёт доли (credit_fact.rs), или
-//! - была отметка отказа «мало средств» (reread), или
-//! - монета «подозрительная» на этой бирже (deposit_hold.rs suspect: ожидаемое удержание > 0 или налог токена не
-//!   измерен).
-//!
-//! Иначе (монета без налога токена и без замеренного удержания, зачисление подтверждено записью) — без чтения: запись =
-//! зачисленное, продажа не ждёт лишний запрос к бирже; если всё же «мало средств» — путь ниже.
+//! остаток, после перегона, режим застрявшей монеты, кнопки; ревью t198, Б2 — и перед ВЫВОДОМ монеты сделки с биржи и
+//! оценкой перегона: relay.rs «Перегон», manual_relay.rs «Продать и перегнать»): ВСЕГДА на бирже (ревью t198, С1 —
+//! и у монет без налога; «никаких если») свежий факт счёта (remain_fact::reconcile под замком счёта) и доля сделки —
+//! min(доля по факту, факт − доли и учёт других живых сделок). Сделка ждёт доли, а через счёт идёт сделка в пути —
+//! сначала ждём её зачисления (wait_transit). Повторного чтения из потока баланса нет: событие приватного потока
+//! с балансом счёта (не только изменением) по коду ядра не хранится — не гадаем.
 //! DEX и нативная BNB — без изменений (DEX считает факт продажи по балансу кошелька, решение 222).
 //!
 //! retry (отказ продажи на бирже с кодом InsufficientBalance, любой биржи: 10101/30004/30005 MEXC и т. п.): ордер не
 //! поставлен, денег не тронуто — отметка reread = количество отказа (подтверждённое только записью — снова «ждёт доли»),
 //! снова вход в продажу тем же правилом (before перечитает факт и пересчитает долю). Повторный отказ после свежего
 //! факта (или факт не меньше количества отказа: дело не в доле) — прежний путь: алерт человеку с цифрами в хронологии.
-//! Кто вызывает: core/sell.rs.
+//! Кто вызывает: core/sell.rs, core/relay.rs, core/manual_relay.rs.
 //! От чего зависит: remain_fact.rs, credit_fact.rs, deposit_hold.rs, sell_unsent.rs (alert), manual_outcome.rs,
 //! trade_ops.rs, native.rs, sell_range.rs (Rule), remeasure.rs (Guard), deal_words.rs, deal.rs.
-//! Настройки: нет (базовое поведение).
+//! Настройки: transfer.max_time_s, venue.status_poll_ms (ожидание сделки в пути — wait_transit).
 
 use rust_decimal::Decimal;
 
 use crate::gateway::contract::VenueKind;
 use crate::gateway::errors::ErrorCode;
+use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::deal::Deal;
@@ -35,25 +33,30 @@ use super::op_error::OpError;
 use super::remeasure::Guard;
 use super::sell_range::Rule;
 
-/// Что делает: нужен ли свежий факт перед продажей (шапка). Принимает: ядро, сделку. Ошибок нет.
+/// Что делает: нужен ли свежий факт перед продажей / выводом (ревью t198, С1: на бирже — всегда). Принимает: ядро,
+/// сделку. Ошибок нет.
 pub fn need(core: &Core, deal: &Deal) -> bool {
-    let a = &deal.direction.asset;
     deal.qty > Decimal::ZERO
         && super::trade_ops::kind(core, &deal.at) == Ok(VenueKind::Cex)
-        && !super::native::is_native(core, a)
-        && (super::credit_fact::pending(deal)
-            || super::credit_fact::here(deal).is_some_and(|c| c.reread.is_some())
-            || super::deposit_hold::suspect(core, &deal.at, a))
+        && !super::native::is_native(core, &deal.direction.asset)
 }
 
-/// Что делает: факт перед продажей (шапка). Принимает: ядро, сделку, причину продажи. Возвращает: сделку с долей —
-/// продавать; None — дальше не продаём (закрыта, алерт человеку). Ошибок нет.
+/// Что делает: факт перед продажей или выводом монеты сделки с биржи (шапка). Принимает: ядро, сделку, причину
+/// (продажи или вывода — для итога кнопки). Возвращает: сделку с долей — продавать / выводить; None — дальше не идём
+/// (закрыта, алерт человеку; у кнопки — итог кнопки). Ошибок нет.
 pub async fn before(core: &Core, mut deal: Deal, why: &str) -> Option<Deal> {
     if !need(core, &deal) {
         return Some(deal);
     }
+    // Ревью t198: через счёт идёт сделка в пути — её зачисление делит факт вместе с нашим; ждём его (шапка).
+    Box::pin(wait_transit(core, &deal)).await;
     let tried = super::credit_fact::here(&deal).and_then(|c| c.reread);
     if !Box::pin(super::remain_fact::reconcile(core, &mut deal)).await {
+        // Ревью t198: путь кнопки — итог кнопки (алерт или закрытие — уже в хронологии и «Ручном управлении»).
+        if why == super::sell::BUTTON {
+            let text = "по факту счёта у сделки монет нет (алерт или закрытие — см. хронологию сделки, решение 413)";
+            Box::pin(super::manual_outcome::failed(core, &deal, why, text)).await;
+        }
         return None;
     }
     match tried {
@@ -127,6 +130,47 @@ pub async fn retry(core: &Core, mut deal: Deal, e: &OpError, why: &str, rule: Ru
         }
         Rule::NoThreshold => {
             Box::pin(super::sell::market_guarded(core, deal, why, Guard::Off)).await
+        }
+    }
+}
+
+/// Что делает: ревью t198 — сделка ждёт доли, а через счёт идёт сделка той же монеты в пути (её монеты могли уже прийти,
+/// а записи депозита ещё нет): распределение подождёт её зачисления — не дольше transfer.max_time_s от нашего
+/// зачисления (тот же предел, что у перевода), опрос venue.status_poll_ms или сохранение учёта (coin_wake). Не задана
+/// любая — не ждём (доля тогда не выше ожидаемой: credit_split.rs cap). Принимает: ядро, сделку. Ошибок нет.
+async fn wait_transit(core: &Core, deal: &Deal) {
+    let Some(since) = super::credit_fact::here(deal)
+        .filter(|_| super::credit_fact::pending(deal))
+        .map(|c| c.at)
+    else {
+        return;
+    };
+    let a = &deal.direction.asset;
+    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
+    let s = &core.inner.deps.settings;
+    let at = |c: Option<&str>| At {
+        venue: Some(&deal.at.0),
+        coin: c,
+    };
+    let (Ok(max_s), Ok(poll)) = (
+        s.integer("transfer.max_time_s", at(Some(&coin))),
+        s.integer("venue.status_poll_ms", at(None)),
+    ) else {
+        return;
+    };
+    let max_s = i64::try_from(max_s).unwrap_or(i64::MAX);
+    loop {
+        let wake = core.inner.coin_wake.notified();
+        if super::remain_others::on_account(core, deal, &deal.at)
+            .unclear
+            .is_empty()
+            || (chrono::Utc::now() - since).num_seconds() >= max_s
+        {
+            return;
+        }
+        tokio::select! {
+            _ = wake => {}
+            _ = tokio::time::sleep(std::time::Duration::from_millis(poll)) => {}
         }
     }
 }

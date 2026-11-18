@@ -18,9 +18,10 @@ use tokio::net::TcpListener;
 use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
-    balances, check, coins, control, core_api, delist, dex, dex_dry, dex_executor, dex_graph,
-    episodes, first_run, journal, report, rules, rules_meta, secrets, settings, settings_io,
-    static_ui, uncapped, usdt_transfer, venues, wallet_queue, wallets, wallets_dex, windows, ws,
+    balances, check, coins, control, core_api, delist, deposit_hold, dex, dex_dry, dex_executor,
+    dex_graph, episodes, first_run, journal, report, rules, rules_meta, secrets, settings,
+    settings_io, static_ui, uncapped, usdt_transfer, venues, wallet_queue, wallets, wallets_dex,
+    windows, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
@@ -64,6 +65,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         )
         .route("/api/coins", get(coins::list))
         .route("/api/coins/recheck", post(coins::recheck))
+        .route("/api/coins/deposit-hold/reset", post(deposit_hold::reset))
         .route("/api/coins/ticker-splits", get(coins::ticker_splits))
         .route("/api/coins/names", get(coins::names))
         .route("/api/coins/{address}", get(coins::one))

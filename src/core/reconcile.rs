@@ -19,6 +19,7 @@
 //! Решение 230 (reconcile_wallet.rs): у DEX проблема кошелька ставит паузу только ЭТОМУ кошельку (Risk.wallet_paused),
 //! а не площадке; снимается сама по чистым кругам этого кошелька. Постановка паузы площадке или кошельку — отдельное
 //! короткое сообщение risk.reconcile_paused (чат «Неудачные» и «Общий»).
+//! Решение 413 (ревью t198): ждущие доли остановленные сделки биржи подтверждаются на круге (credit_apply.rs).
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: engine.rs, wait.rs, reconcile_pause.rs, reconcile_wallet.rs, usdt_return.rs, precheck.rs (BNB),
 //! deal.rs,
@@ -134,6 +135,11 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
             venue: Some(&v.0),
             coin: None,
         };
+        // Решение 413 (ревью t198): остановленные сделки, чьё зачисление на эту биржу ждёт доли, подтверждаются фактом
+        // на круге сверки (credit_apply::confirm_halted); у биржи — до снятия учёта.
+        if kind == VenueKind::Cex {
+            Box::pin(super::credit_apply::confirm_halted(core, &v)).await;
+        }
         // Учёт площадки до и после запроса балансов (решение 112): сверяются только монеты, по которым сделки за это
         // время не сдвинулись.
         let before = expected(core, &v, acc.as_ref());

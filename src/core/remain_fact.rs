@@ -21,10 +21,10 @@
 //! Решение 413 (t198): чтение факта и учёта других — под исключительным замком счёта (credit_lock.rs: продажи в полёте
 //! нет); сделки, чьё зачисление ждёт доли (credit_fact.rs), получают долю распределением факта (credit_split.rs,
 //! credit_apply.rs) — своя ждущая подтверждается долей, подтверждённая вычитает доли ждущих других. Факт не прочитан, а
-//! своя ждёт доли — оценка «запись × (1 − ожидаемое удержание)» (credit_apply::estimate), не запись.
+//! своя ждёт доли — оценка «запись × (1 − ожидаемое удержание)» (credit_alert::estimate), не запись.
 //! Кто вызывает: core/stuck.rs (handle), core/sell_unsent.rs, core/sell_fact.rs (перед продажей на бирже),
 //! core/credit_base.rs (fact_at).
-//! От чего зависит: manual_halted.rs (free_of, set_qty), remain_others.rs, manual.rs (raise_alert), dex_account.rs,
+//! От чего зависит: manual_halted.rs (free_of, set_qty), remain_others.rs, remain_alert.rs (всё чужое), dex_account.rs,
 //! venue_ticker.rs, native.rs, ledger.rs, deal.rs, credit_lock.rs, credit_split.rs, credit_apply.rs, credit_fact.rs.
 //! Настройки: нет.
 
@@ -51,15 +51,17 @@ pub async fn reconcile(core: &Core, deal: &mut Deal) -> bool {
     }
     // Решение 413: факт и учёт других — одним снимком под замком счёта (продажи в полёте нет).
     let (read, others) = {
-        let _g = super::credit_lock::fact(&deal.at, &deal.direction.asset).await;
+        let g = super::credit_lock::fact(core, &deal.at, &deal.direction.asset).await;
         // Ревью CI t198 (переполнение стека, как t157 / решение 389): будущие пути продажи — в куче.
         let read = Box::pin(fact_at(core, deal, &deal.at)).await;
-        (read, super::remain_others::on_account(core, deal, &deal.at))
+        let mut o = super::remain_others::on_account(core, deal, &deal.at);
+        o.busy = g.is_none();
+        (read, o)
     };
     let fact = match read {
         Ok(f) => f,
         Err(e) if super::credit_fact::pending(deal) => {
-            Box::pin(super::credit_apply::estimate(core, deal, &e)).await;
+            Box::pin(super::credit_alert::estimate(core, deal, &e)).await;
             return true;
         }
         Err(e) => {
@@ -100,7 +102,9 @@ pub async fn apply_with(
     let others = super::credit_apply::with_shares(&others, &sp);
     let qty = match super::remain_others::own_qty(deal.qty, fact, &others) {
         super::remain_others::Own::Qty(q) => q,
-        super::remain_others::Own::Human => return all_foreign(core, deal, fact, &others).await,
+        super::remain_others::Own::Human => {
+            return Box::pin(super::remain_alert::all_foreign(core, deal, fact, &others)).await;
+        }
     };
     if qty == deal.qty {
         return true;
@@ -142,56 +146,6 @@ pub async fn apply_with(
     }
     let why = "остатка на площадке нет — фантом учёта (решение 222)";
     super::ledger::finish(core, deal, Step::Closed, why).await;
-    false
-}
-
-/// Решение 405: на счёте что-то есть, но по учёту всё — монеты других сделок: сделка не закрывается как фантом (чей
-/// фантом — по факту не видно) и ничего не продаёт — алерт человеку (manual.rs raise_alert, кнопки «Ручного
-/// управления»). Принимает: ядро, сделку, факт счёта, другие сделки. Возвращает: false (дальше автоматика не ведёт).
-/// Ошибок нет.
-async fn all_foreign(
-    core: &Core,
-    deal: &Deal,
-    fact: Decimal,
-    others: &super::remain_others::Others,
-) -> bool {
-    // Требование Тиграна 18.11: что произошло, какая сделка, что хотели, сколько по учёту / на счёте / у других, что
-    // делать человеку.
-    let t = &deal.direction.asset.ticker;
-    let at = super::deal_words::place(core, &deal.at, deal.dex_account.as_ref());
-    let mut text = format!(
-        "Своих монет на счёте не видно: {} должна продать {}, на {at} сейчас {}, но по учёту {} из них \
-         принадлежат другим сделкам: {}",
-        super::deal_words::deal(core, deal),
-        super::deal_words::coins(deal.qty, t),
-        super::deal_words::coins(fact, t),
-        super::deal_words::coins(others.qty, t),
-        others.words.join("; ")
-    );
-    text.push_str(&format!(
-        ". Для этой сделки на счёте не остаётся ничего (не хватает {}). Бот ничего не продаёт и сделку не закрывает, \
-         чтобы не продать чужие монеты. Что сделать: проверьте баланс {t} на {at}; если монеты этой сделки есть — \
-         «Продать сейчас» по сделке {} на экране «Ручное управление», если их нет — «Продано вручную» (или закройте \
-         сделку с завышенным учётом из списка выше) (решение 405)",
-        super::deal_words::coins(deal.qty, t),
-        deal.id
-    ));
-    log(core, deal, &text).await;
-    // В куче: путь застрявшей сделки чувствителен к стеку (решение 389).
-    // Решение 408: сделки-держатели — кнопки «Открыть сделку <ID>» у записи в Telegram (notify/mirror_view.rs).
-    let mut holders: Vec<String> = others.deals.iter().map(|(id, _)| id.clone()).collect();
-    holders.extend(others.unclear.iter().cloned());
-    holders.sort();
-    holders.dedup();
-    Box::pin(super::manual::raise_alert_with(
-        core,
-        deal.clone(),
-        None,
-        text,
-        None,
-        holders,
-    ))
-    .await;
     false
 }
 

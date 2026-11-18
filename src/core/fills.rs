@@ -165,8 +165,9 @@ pub async fn transfer(
     deal.qty = t.amount;
     deal.at = to.clone();
     // Решение 413 (t198): на биржу — запись зачисления: запись депозита — верхняя граница, доля по факту баланса —
-    // перед продажей (credit_fact.rs, sell_fact.rs). На DEX — по событию Transfer, как раньше.
-    super::credit_fact::on_credit(core, deal, to);
+    // перед продажей и выводом (credit_fact.rs, sell_fact.rs); снимок посторонних — по хешу вывода. На DEX — по
+    // событию Transfer, как раньше.
+    super::credit_fact::on_credit(core, deal, to, sent.tx_hash.as_deref());
     if let Some(c) = sent.fee.clone()
         && !convert::in_coin(&c, &deal.direction.asset.ticker)
     {

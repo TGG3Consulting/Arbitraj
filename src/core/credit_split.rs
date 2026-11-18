@@ -19,7 +19,10 @@
 //! - 0 < P < R — каждой запись × P / R (пропорционально записям: удержание — доля перевода, одинаковая у депозитов
 //!   одной монеты на одной бирже), вниз до точности входных чисел; остаток округления не присваивается;
 //! - P ≤ 0 — всем 0 (на счёте нет монет ждущих — решает человек, а не «фантом»);
-//! - есть unclear — доля не больше запись × (1 − hold_pct / 100): в P могут быть монеты сделки в пути.
+//! - есть unclear или у ждущей нет снимка посторонних (перезапуск, снимок не успел) — доля не больше
+//!   запись × (1 − hold_pct / 100): в P могут быть монеты сделки в пути или ручные монеты (ревью t198, Б3); не
+//!   присвоенное — unassigned, в хронологию;
+//! - произведение запись × пул вне Decimal — запись × (пул / записи) (part).
 //!
 //! Почему пропорционально, а не «по приращению баланса в момент зачисления»: приращение однозначно только когда между
 //! двумя чтениями баланса зачислился ровно один депозит и ничего не продавалось; при двух депозитах между чтениями (или
@@ -63,13 +66,15 @@ pub struct Split {
     pub pool: Decimal,
     /// Сумма записей ждущих.
     pub records: Decimal,
-    /// Удержано биржей (записи − доли, не меньше 0) — монеты, которых по факту нет ни у одной ждущей.
+    /// Удержано биржей (записи − пул, не меньше 0; с остатком округления) — монет по факту нет ни у одной ждущей.
     pub held: Decimal,
+    /// Ревью t198 (Б3): по факту есть, но не присвоено — ограничение доли без снимка посторонних или при сделке в пути.
+    pub unassigned: Decimal,
     /// Лишнее на счёте сверх записей (не присвоено).
     pub excess: Decimal,
     /// Удержание больше ожидаемого (с допуском): пул меньше записи × (1 − hold_pct / 100) × (1 − tol_pct / 100).
     pub over: bool,
-    /// Замер однозначен: в пути через счёт никого, посторонние сняты у всех ждущих, записи > 0.
+    /// Замер однозначен (ревью t198, С2): одна ждущая, снимок посторонних есть, в пути никого, лишнего нет.
     pub measurable: bool,
 }
 
@@ -99,6 +104,7 @@ pub fn split(i: &Input) -> Split {
     let pool = i.fact - i.confirmed - outsider;
     let keep = (Decimal::ONE - i.hold_pct / Decimal::ONE_HUNDRED).max(Decimal::ZERO);
     let scale = scale_of(i);
+    let mut raw_sum = Decimal::ZERO;
     let shares: Vec<(String, Decimal)> = i
         .pending
         .iter()
@@ -109,9 +115,12 @@ pub fn split(i: &Input) -> Split {
             } else if pool <= Decimal::ZERO || records.is_zero() {
                 Decimal::ZERO
             } else {
-                (r * pool / records).trunc_with_scale(scale)
+                part(r, pool, records, scale)
             };
-            let cap = if i.unclear {
+            raw_sum += raw;
+            // Ревью t198 (Б3): нет снимка посторонних — доля не выше записи × (1 − ожидаемое удержание): ручные
+            // монеты на счёте не уходят сделке до записи; так же при сделке в пути через счёт.
+            let cap = if i.unclear || p.outsider.is_none() {
                 (r * keep).trunc_with_scale(scale)
             } else {
                 r
@@ -121,17 +130,32 @@ pub fn split(i: &Input) -> Split {
         .collect();
     let given: Decimal = shares.iter().map(|(_, q)| *q).sum();
     let tol = (Decimal::ONE - i.tol_pct / Decimal::ONE_HUNDRED).max(Decimal::ZERO);
+    let excess = (pool - records).max(Decimal::ZERO);
     Split {
         outsider,
-        held: (records - given).max(Decimal::ZERO),
-        excess: (pool - records).max(Decimal::ZERO),
+        held: (records - raw_sum).max(Decimal::ZERO),
+        unassigned: (raw_sum - given).max(Decimal::ZERO),
+        excess,
         over: pool < records * keep * tol,
+        // Ревью t198 (С2): замер — только однозначный: одна ждущая, снимок посторонних есть, в пути никого, лишнего нет.
         measurable: !i.unclear
+            && i.pending.len() == 1
             && records > Decimal::ZERO
+            && excess.is_zero()
             && i.pending.iter().all(|p| p.outsider.is_some()),
         shares,
         pool,
         records,
+    }
+}
+
+/// Что делает: запись × пул / записи вниз до точности `scale` без переполнения (ревью t198): произведение не
+/// помещается в Decimal — запись × (пул / записи), пул < записей, деление первым. Принимает: запись, пул, записи (> 0),
+/// точность. Возвращает: долю. Ошибок нет.
+pub fn part(r: Decimal, pool: Decimal, records: Decimal, scale: u32) -> Decimal {
+    match r.checked_mul(pool) {
+        Some(x) => (x / records).trunc_with_scale(scale),
+        None => (r * (pool / records)).trunc_with_scale(scale),
     }
 }
 

@@ -1,29 +1,21 @@
 //! Файл: core/deposit_hold.rs
-//! Что делает: решение 413 (t198) — УДЕРЖАНИЕ БИРЖИ ПРИ ЗАЧИСЛЕНИИ как мера по паре (биржа, монета). Живой случай
-//! 18.11 (WKC, налог токена 2 % на перевод, DEX → MEXC): MEXC записал депозиты ровно на 98 % отправленного (налог перевода
-//! учтён верно), а на спот зачислил ровно 98 % записей (сверка 21:38:19: учёт 6 036 003 243.34, на MEXC
-//! 5 915 283 179.1468). Механизм биржа не описывает (внутренний перевод с адреса депозита — догадка, не факт) — бот
-//! опирается только на факт баланса.
+//! Что делает: решение 413 (t198) — УДЕРЖАНИЕ БИРЖИ ПРИ ЗАЧИСЛЕНИИ как мера по паре (биржа, монета): хранение замеров.
+//! Живой случай 18.11 (WKC, налог токена 2 % на перевод, DEX → MEXC): MEXC записал депозиты ровно на 98 % отправленного,
+//! а на спот зачислил ровно 98 % записей (сверка 21:38:19: учёт 6 036 003 243.34, на MEXC 5 915 283 179.1468).
+//! Механизм биржа не описывает — бот опирается только на факт баланса.
 //!
-//! Замер (факт): последнее однозначное распределение факта счёта между ждущими долю сделками (credit_split.rs,
-//! measurable) — записи R, досталось сделкам C, удержано % = (R − C) / R × 100 (не меньше 0). Хранится сырым в учёте ядра
-//! (SQLite, вид deposit_hold), как факты переводов (withdraw_seen.rs): последний замер заменяет прежний; 0 % — тоже факт
-//! (биржа не удерживает) и снимает консервативное допущение.
-//!
-//! Ожидаемое удержание (expected_pct) — в расчёт прибыли и количества СЛЕДУЮЩИХ сделок (строка затрат DepositHold
-//! «перевод», в монете: приход на B меньше) и в распределение:
-//! - получатель DEX или нативная монета — 0 (кошелёк получает по событию Transfer = зачислено, решение 151/222);
-//! - замер есть — он;
-//! - замера нет — налог перевода токена (transfer_tax::measured, проверки налогов DEX): у WKC удержание равно ему —
-//!   консервативно, чтобы первая сделка не ушла в минус так, как WKC; налога нет (0) — 0 (монеты без налога токена —
-//!   поведение прежнее); налог не измерен — 0 (такие сделки и так не проходят расчёт: transfer_tax.rs).
-//!
-//! suspect — монета, перед продажей которой на бирже нужен свежий факт баланса (sell_fact.rs): ожидаемое удержание > 0
-//! или налог токена не измерен.
-//! Кто вызывает: core/costs_withdraw.rs (строка затрат), core/relay_value.rs (оценка «Перегона»), core/credit_apply.rs
-//! (ожидание и запись замера), core/sell_fact.rs (suspect), core/coins_view.rs (экран «Монеты»), core/engine.rs (load).
-//! От чего зависит: persist.rs, transfer_tax.rs, native.rs, trade_ops.rs (вид площадки), engine.rs, core/types.
-//! Настройки: нет (мера — данные учёта, не настройка).
+//! Замер (выборка) — однозначное распределение факта счёта (credit_apply.rs measurable: одна ждущая, снимок
+//! посторонних, никого в пути, без лишнего, доля не пыль, не ручное действие): записи R, досталось C, % = (R − C) / R.
+//! Ревью t198 (С2): хранятся последние N выборок (N — transfer.deposit_hold_samples, по бирже; не задана — 1: последняя),
+//! мера — НАИБОЛЬШИЙ процент из них. Почему максимум, а не медиана: мера идёт в затраты следующих сделок — недооценка
+//! удержания ведёт сделку в минус (живой WKC), переоценка только отсекает часть сделок; одна аномальная выборка держит
+//! меру не дольше N следующих зачислений, и её видно на экране («Сбросить замер» — снять). 0 % — тоже факт.
+//! Учёт ядра SQLite (вид deposit_hold), «Сбросить замер» — reset (журнал core.credit_fact с автором, как изменения
+//! настроек). Расчёт (ожидаемое удержание, строка затрат) — deposit_hold_calc.rs.
+//! Кто вызывает: core/credit_apply.rs (put, save), core/deposit_hold_calc.rs (get), core/coins_view.rs (of_coin),
+//! api/deposit_hold.rs (reset), core/engine.rs (load).
+//! От чего зависит: persist.rs, coin_key.rs, engine.rs, settings, core/types.
+//! Настройки: transfer.deposit_hold_samples.
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
@@ -32,35 +24,48 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::core::types::{Asset, Cost, CostKind, VenueId};
-use crate::gateway::contract::VenueKind;
+use crate::core::types::{Asset, VenueId};
+use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::coin_key::CoinKey;
-use super::engine::{Core, rd};
+use super::engine::Core;
+
+pub use super::deposit_hold_calc::{add, expected_of, expected_pct, line};
 
 /// Вид записи в учёте ядра.
 const KIND: &str = "deposit_hold";
 
-/// Замер удержания по (бирже, монете).
+/// Одна выборка замера.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Sample {
+    /// Запись депозита ждущей сделки.
+    pub records: Decimal,
+    /// Досталось сделке по факту баланса.
+    pub credited: Decimal,
+    /// Удержано, % от записи.
+    pub pct: Decimal,
+    pub at: DateTime<Utc>,
+    pub deals: Vec<String>,
+}
+
+/// Замер по (бирже, монете): последние выборки и мера (наибольший % из них).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Hold {
     pub venue: VenueId,
     pub asset: Asset,
-    /// Сумма записей депозитов ждущих сделок в замере.
-    pub records: Decimal,
-    /// Досталось сделкам по факту баланса.
-    pub credited: Decimal,
-    /// Удержано, % от записей.
+    pub samples: Vec<Sample>,
+    /// Мера: наибольший % выборок.
     pub pct: Decimal,
-    pub at: DateTime<Utc>,
-    /// Сделки замера.
-    pub deals: Vec<String>,
 }
 
-/// Замеры: (биржа, ключ монеты) → замер. Одно ядро на процесс.
 static HOLDS: LazyLock<Mutex<HashMap<(VenueId, CoinKey), Hold>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Замеры. Ошибок нет.
+fn holds() -> std::sync::MutexGuard<'static, HashMap<(VenueId, CoinKey), Hold>> {
+    HOLDS.lock().unwrap_or_else(|p| p.into_inner())
+}
 
 /// id записи в учёте: площадка и адрес (или тикер). Ошибок нет.
 fn id(v: &VenueId, a: &Asset) -> String {
@@ -71,11 +76,11 @@ fn id(v: &VenueId, a: &Asset) -> String {
     format!("{}:{coin}", v.0)
 }
 
-/// Что делает: загрузка замеров при запуске. Ошибка базы — журнал (замеры начнутся с новых зачислений). Ошибок нет.
+/// Что делает: загрузка замеров при запуске. Ошибка базы — журнал. Ошибок нет.
 pub async fn load(core: &Core) {
     match super::persist::load::<Hold>(&core.inner.deps.db, KIND).await {
         Ok(list) => {
-            let mut m = HOLDS.lock().unwrap_or_else(|p| p.into_inner());
+            let mut m = holds();
             for h in list {
                 m.insert((h.venue.clone(), CoinKey::of(&h.asset)), h);
             }
@@ -90,10 +95,57 @@ pub async fn load(core: &Core) {
     }
 }
 
-/// Что делает: записывает замер (заменяет прежний) и сохраняет. Ошибок нет: сбой базы — журнал.
-pub async fn record(core: &Core, h: Hold) {
-    let rid = id(&h.venue, &h.asset);
-    put(h.clone());
+/// Что делает: мера по выборкам (чистая функция): наибольший % последних `n` (n < 1 — 1). Принимает: выборки (старые
+/// первыми), n. Возвращает: (оставшиеся выборки, мера). Ошибок нет.
+pub fn fold(mut samples: Vec<Sample>, n: usize) -> (Vec<Sample>, Decimal) {
+    let n = n.max(1);
+    if samples.len() > n {
+        samples.drain(..samples.len() - n);
+    }
+    let pct = samples
+        .iter()
+        .map(|s| s.pct)
+        .fold(Decimal::ZERO, Decimal::max);
+    (samples, pct)
+}
+
+/// Сколько выборок держать (transfer.deposit_hold_samples по бирже; не задана — 1). Ошибок нет.
+fn keep_n(core: &Core, v: &VenueId) -> usize {
+    let at = At {
+        venue: Some(&v.0),
+        coin: None,
+    };
+    core.inner
+        .deps
+        .settings
+        .integer("transfer.deposit_hold_samples", at)
+        .map(|n| usize::try_from(n).unwrap_or(usize::MAX))
+        .unwrap_or(1)
+}
+
+/// Что делает: добавляет выборку в память (мера пересчитывается сразу — расчёт следующих сделок видит её). Ошибок нет.
+pub fn put(core: &Core, v: &VenueId, a: &Asset, s: Sample) {
+    let n = keep_n(core, v);
+    let mut m = holds();
+    let key = (v.clone(), CoinKey::of(a));
+    let mut list = m.get(&key).map(|h| h.samples.clone()).unwrap_or_default();
+    list.push(s);
+    let (samples, pct) = fold(list, n);
+    m.insert(
+        key,
+        Hold {
+            venue: v.clone(),
+            asset: a.clone(),
+            samples,
+            pct,
+        },
+    );
+}
+
+/// Что делает: сохраняет замер (биржа, монета) в учёт ядра. Ошибок нет: сбой базы — журнал.
+pub async fn save(core: &Core, v: &VenueId, a: &Asset) {
+    let Some(h) = get(v, a) else { return };
+    let rid = id(v, a);
     if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &rid, &h).await {
         let m = format!("Замер удержания {rid} не сохранён: {e}");
         core.inner
@@ -103,29 +155,15 @@ pub async fn record(core: &Core, h: Hold) {
     }
 }
 
-/// Что делает: кладёт замер в память (без базы; тесты и record). Ошибок нет.
-pub fn put(h: Hold) {
-    HOLDS
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .insert((h.venue.clone(), CoinKey::of(&h.asset)), h);
-}
-
 /// Замер по бирже и монете. None — не измерено. Ошибок нет.
 pub fn get(v: &VenueId, a: &Asset) -> Option<Hold> {
-    HOLDS
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .get(&(v.clone(), CoinKey::of(a)))
-        .cloned()
+    holds().get(&(v.clone(), CoinKey::of(a))).cloned()
 }
 
 /// Все замеры монеты (экран «Монеты»). Ошибок нет.
 pub fn of_coin(a: &Asset) -> Vec<Hold> {
     let key = CoinKey::of(a);
-    let mut out: Vec<Hold> = HOLDS
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
+    let mut out: Vec<Hold> = holds()
         .iter()
         .filter(|((_, k), _)| *k == key)
         .map(|(_, h)| h.clone())
@@ -134,69 +172,25 @@ pub fn of_coin(a: &Asset) -> Vec<Hold> {
     out
 }
 
-/// Что делает: ожидаемое удержание по чистым данным (правило — шапка). Принимает: получатель — биржа, монета нативная,
-/// замер (%), налог перевода токена (%; None — не измерен). Возвращает: %. Ошибок нет.
-pub fn expected_of(
-    cex: bool,
-    native: bool,
-    measured: Option<Decimal>,
-    token_tax: Option<Decimal>,
-) -> Decimal {
-    if !cex || native {
-        return Decimal::ZERO;
-    }
-    measured
-        .or(token_tax)
-        .unwrap_or_default()
-        .max(Decimal::ZERO)
-}
-
-/// Ожидаемое удержание биржи `to` при зачислении монеты, %. Ошибок нет.
-pub fn expected_pct(core: &Core, to: &VenueId, a: &Asset) -> Decimal {
-    let cex = super::trade_ops::kind(core, to) == Ok(VenueKind::Cex);
-    let native = super::native::is_native(core, a);
-    expected_of(cex, native, get(to, a).map(|h| h.pct), token_tax(core, a))
-}
-
-/// Нужен ли свежий факт баланса перед продажей монеты на бирже `v` (шапка). Ошибок нет.
-pub fn suspect(core: &Core, v: &VenueId, a: &Asset) -> bool {
-    if super::native::is_native(core, a) {
-        return false;
-    }
-    expected_pct(core, v, a) > Decimal::ZERO
-        || (get(v, a).is_none() && token_tax(core, a).is_none())
-}
-
-/// Налог перевода токена по проверкам DEX, %. None — не измерен или нет адреса. Ошибок нет.
-fn token_tax(core: &Core, a: &Asset) -> Option<Decimal> {
-    let t = a.bsc_contract?;
-    let kinds = rd(&core.inner.kinds).clone();
-    super::transfer_tax::measured(&rd(&core.inner.market), &kinds, t)
-}
-
-/// Что делает: строка затрат «удержание биржи при зачислении» на приход. Принимает: процент, приход в монете (вывод
-/// минус затраты вывода в монете), тикер. Возвращает: затрата DepositHold в монете (None — 0 %). Ошибок нет.
-pub fn line(pct: Decimal, arrive: Decimal, ticker: &str) -> Option<Cost> {
-    (pct > Decimal::ZERO && arrive > Decimal::ZERO).then(|| {
-        Cost::new(
-            CostKind::DepositHold,
-            arrive * pct / Decimal::ONE_HUNDRED,
-            ticker.to_string(),
-            false,
-        )
-    })
-}
-
-/// Что делает: добавляет к затратам вывода строку удержания получателя `to` (приход — сумма минус затраты в монете).
-/// Принимает: ядро, получателя, монету, сумму вывода, затраты вывода. Возвращает: затраты. Ошибок нет.
-pub fn add(core: &Core, to: &VenueId, a: &Asset, amount: Decimal, mut c: Vec<Cost>) -> Vec<Cost> {
-    let in_coin: Decimal = c
-        .iter()
-        .filter(|x| !x.in_price && super::convert::in_coin(x, &a.ticker))
-        .map(|x| x.amount)
-        .sum();
-    if let Some(l) = line(expected_pct(core, to, a), amount - in_coin, &a.ticker) {
-        c.push(l);
-    }
-    c
+/// Что делает: «Сбросить замер» (ревью t198, С2): замер (биржа, монета) удаляется из памяти и учёта; дальше —
+/// «не измерено» (в расчёте — налог перевода токена). Журнал core.credit_fact: кто, что было. Принимает: ядро, биржу,
+/// монету, автора. Возвращает: true — замер был. Ошибки: текст — сбой базы.
+pub async fn reset(core: &Core, v: &VenueId, a: &Asset, who: &str) -> Result<bool, String> {
+    let was = holds().remove(&(v.clone(), CoinKey::of(a)));
+    let Some(h) = was else { return Ok(false) };
+    super::persist::remove(&core.inner.deps.db, KIND, &id(v, a))
+        .await
+        .map_err(|e| e.to_string())?;
+    let text = format!(
+        "Замер удержания при зачислении {} на {} сброшен ({who}): было {}% по {} выборкам",
+        a.ticker,
+        v.0,
+        h.pct,
+        h.samples.len()
+    );
+    core.inner
+        .deps
+        .log(Level::Info, "core.credit_fact", Some(&v.0), text, None)
+        .await;
+    Ok(true)
 }

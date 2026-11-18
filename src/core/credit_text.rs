@@ -65,6 +65,13 @@ pub fn describe(
     if sp.over {
         s.push_str(" — удержано больше ожидаемого");
     }
+    if sp.unassigned > Decimal::ZERO {
+        s.push_str(&format!(
+            "; не присвоено {} — снимка посторонних монет до вывода нет или через счёт идёт сделка в пути: доля не \
+             выше записи × (1 − ожидаемое удержание), остаток остаётся на счёте",
+            w::coins(sp.unassigned, t)
+        ));
+    }
     if sp.excess > Decimal::ZERO {
         s.push_str(&format!(
             "; лишнее на счёте сверх записей ({}) никому не присвоено",

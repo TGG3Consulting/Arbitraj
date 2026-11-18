@@ -50,6 +50,9 @@ pub struct Others {
     pub unclear: Vec<String>,
     /// Решение 413: другие сделки на этом счёте, ждущие доли (запись депозита и посторонние до вывода) — не в qty.
     pub pending: Vec<super::credit_split::Pending>,
+    /// Ревью t198: замок счёта не взят за exec.rate_limit_wait_max_ms — продажа другой сделки, возможно, в полёте
+    /// (credit_lock.rs fact): доля не выше ожидаемой, замера нет.
+    pub busy: bool,
     /// Те же сделки словами для тревоги (deal_words.rs): доказуемые, затем в пути (требование Тиграна 18.11).
     pub words: Vec<String>,
 }

@@ -54,7 +54,8 @@ pub struct Prepared {
 
 /// Что делает: примет ли Binance на паре наш ордер — тип LIMIT есть в orderTypes пары (решение 254: тот же признак
 /// отсеивает пару ДО расчёта — symbols.rs → pairs.rs, и страхует ордер — check_rules). timeInForce в exchangeInfo не
-/// перечисляется (orderTypes — только типы; enums.md) — его подтверждает пробный ордер (venue.order_test_first).
+/// перечисляется (orderTypes — только типы; enums.md) — его подтверждает пробный ордер (venue.order_test_first) только в
+/// проверке продажи без исполнения (check); у настоящего ордера пробного нет (решение 412) — подтверждает сам ордер.
 /// Поля orderTypes нет — не ограничивает. Принимает: правила пары. Возвращает: None — примет; Some — причина.
 /// Ошибок нет. Официально: exchangeInfo https://developers.binance.com/docs/binance-spot-api-docs/rest-api/general-endpoints
 /// (orderTypes), enums.md (Order types).

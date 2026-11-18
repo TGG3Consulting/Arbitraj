@@ -10,7 +10,7 @@
 //!   (trade::trade) — покупка и продажа падают на постановке POST /api/v3/order, текста пробного нет; проверка без
 //!   исполнения (order_rules::check) — пробный идёт (покупка и продажа); при «нет» — проверка проходит без запроса.
 //! - Binance, KuCoin, Kraken — по исходникам (записанного справочника пар этих бирж в tests/data нет): ready и
-//!   trade.rs пробного не делают, check_order — через проверку с пробным.
+//!   trade.rs пробного не делают; check_order — order_rules::check (ready + probe; у Kraken — ready и probe прямо).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::mexc (ctx, symbols, order_rules, trade), arb::settings, arb::storage. Моков нет.
@@ -194,9 +194,22 @@ fn sources_no_probe_before_real_order() {
         );
         let check = &module[module.find("async fn check_order").expect(v)..];
         let check = &check[..check.find("\n    }\n").unwrap()];
-        assert!(
-            check.contains("order_rules::check(") || check.contains("order_rules::probe("),
-            "{v}: check_order без пробного"
-        );
+        if v == "kraken" {
+            // Kraken: check_order — ready (те же правила, что у ордера) и probe.
+            assert!(check.contains("order_rules::ready(") && check.contains("order_rules::probe("));
+        } else {
+            // MEXC, Binance, KuCoin: check_order → order_rules::check, а check — ready (одни правила у проверки и
+            // ордера) и probe.
+            assert!(
+                check.contains("order_rules::check("),
+                "{v}: check_order не через check"
+            );
+            let chk = code(body(rules, "check"));
+            assert!(
+                chk.contains("ready("),
+                "{v}: check без ready — правила разойдутся"
+            );
+            assert!(chk.contains("probe("), "{v}: check без пробного");
+        }
     }
 }

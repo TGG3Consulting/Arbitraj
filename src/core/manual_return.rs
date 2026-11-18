@@ -129,9 +129,11 @@ impl Core {
         let usdt = self.usdt_not_returned();
         // Решение 405 (ответ Тиграна на ревью Н3): ручные действия, ждущие окончания сделок монеты (manual_wait.rs).
         let waits = super::manual_wait::list(self);
+        // Решение 405 (ревью 4, Н2): резерв возвратов USDT по площадкам и кошелькам (usdt_hold_view.rs).
+        let reserves = super::usdt_hold_view::rows(self);
         serde_json::json!({
             "alerts": alerts, "holdings": holdings, "halted": halted, "usdt": usdt, "records": records,
-            "waits": waits
+            "waits": waits, "reserves": reserves
         })
     }
 }

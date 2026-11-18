@@ -26,6 +26,10 @@
     времени; новые сделки этой монеты на паузе; кнопка «Отменить ожидание» (команда CancelManualWait). Когда сделки
     кончатся, бот сам выполнит ту же команду; держащая сделка застряла — ожидание кончается с причиной (журнал
     core.manual_wait).
+  Решение 405 (ревью 4, Н2): «Резерв USDT возвратов» (reserves из GET /api/manual) — по площадке и кошельку DEX:
+    сделка, что ждёт (общий возврат группы, возврат идёт, ждёт повтора, не вернулись — ждут человека), сумма; эти
+    USDT покупки, ручной перевод и чужие перегоны не тратят. У «не вернулись» — кнопки записи «Перегнать» /
+    «Перегнано вручную» (те же, что в разделе «USDT не вернулись»): резерв снимается только кнопкой человека.
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/remote.svelte.js, lib/fmt.js, lib/coinLabels.js, lib/labels.js, components/NoData.svelte, ErrorText.svelte, DexDrySwap.svelte.
   Настройки: нет (режим и пороги — stuck.*, экран «Настройки»).
@@ -186,6 +190,22 @@
         </tr>
       {:else}
         <tr><td colspan="8" class="muted">Остановленных сделок нет.</td></tr>
+      {/each}
+    </tbody>
+  </table>
+
+  <h2>Резерв USDT возвратов</h2>
+  <p class="muted">Эти USDT лежат на площадке и ждут возврата: покупки, ручной перевод и перегоны других сделок их не тратят. «Не вернулись» держатся в резерве, пока вы не нажмёте «Перегнать» или «Перегнано вручную».</p>
+  <table>
+    <thead><tr><th>Площадка</th><th>Кошелёк</th><th>Сделка</th><th>Что ждёт</th><th class="num">Сумма, USDT</th><th></th></tr></thead>
+    <tbody>
+      {#each uniqBy(manual.data.reserves ?? [], (r) => r.venue + '|' + r.deal + '|' + r.what) as r (r.venue + '|' + r.deal + '|' + r.what)}
+        <tr>
+          <td>{r.venue}</td><td>{r.wallet ?? '—'}</td><td><code>{r.deal}</code></td><td>{r.what}</td><td class="num" title={r.amount}>{fmtUsd(r.amount)}</td>
+          <td class="row">{#if r.key}{@render buttons('u.' + r.key)}{/if}</td>
+        </tr>
+      {:else}
+        <tr><td colspan="6" class="muted">Резерва нет.</td></tr>
       {/each}
     </tbody>
   </table>

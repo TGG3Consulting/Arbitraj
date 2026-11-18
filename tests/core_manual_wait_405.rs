@@ -228,3 +228,81 @@ async fn cancel_wait_does_not_run_action() {
     );
     coin_ride::release(&core, &key, Some("D1"));
 }
+
+/// Ревью 4, Б1: обычный конец держащей сделки — ledger::finish сохраняет «закрыта» (будит ожидание) раньше, чем задача
+/// снимает запись в идущих: ожидание НЕ кончается отказом, ждёт снятия записи и выполняет команду.
+#[tokio::test]
+async fn normal_finish_then_release_keeps_waiting() {
+    let (core, j) = start("finish").await;
+    let key = CoinKey::of(&dir_of("bingx", "mexc").asset);
+    arb::core::ledger::save(&core, &deal("H", Step::Halted, "5")).await;
+    riding(&core, "D1", Step::Selling).await;
+    core.command(cmd(ManualAction::SellHalted {
+        deal_id: "H".into(),
+    }))
+    .await
+    .unwrap();
+    // Реальный порядок: finish(Closed) → сохранение будит ожидание → только потом release (ride_guard).
+    let mut d1 = core.inner.deals.lock().unwrap().get("D1").cloned().unwrap();
+    d1.qty = d("0");
+    arb::core::ledger::finish(&core, &mut d1, Step::Closed, "продано").await;
+    tokio::time::sleep(StdDuration::from_millis(50)).await;
+    assert_eq!(
+        manual_wait::list(&core).len(),
+        1,
+        "закрытая — не застрявшая"
+    );
+    let rows = j.list(500, None).await.unwrap();
+    assert!(
+        !rows
+            .iter()
+            .any(|e| e.kind == "core.manual_wait" && e.message.contains("прервано")),
+        "отказа «окончания не будет» нет"
+    );
+    coin_ride::release(&core, &key, Some("D1"));
+    logged(&j, "сделки по CAKE закончились — выполняю «Продать сейчас»").await;
+}
+
+/// Ревью 4, Н3: сделки кончились, повтор команды идёт — пауза держится, пока повтор не возьмёт монету (take внутри
+/// той же команды снимает ожидание); посторонний take и вход сделки в это время — отказ.
+#[tokio::test]
+async fn pause_holds_until_retry_takes_coin() {
+    let (core, _j) = start("hold").await;
+    let key = CoinKey::of(&dir_of("bingx", "mexc").asset);
+    arb::core::ledger::save(&core, &deal("H", Step::Halted, "5")).await;
+    // Монету держит замок целиком (вход сделки / другое действие) — задача ожидания ждёт его снятия.
+    core.inner.active.lock().unwrap().insert(key.clone());
+    let sell = ManualAction::SellHalted {
+        deal_id: "H".into(),
+    };
+    core.command(cmd(sell.clone())).await.unwrap();
+    // «Повтор идёт» (задача ожидания ставит его, когда монета свободна); замок снимается без пробуждения ожидания,
+    // чтобы задача не опередила проверку — пауза и её снятие проверяются через claim.
+    assert_eq!(
+        manual_wait::start_retry(&core, &key).as_deref(),
+        Some("CAKE")
+    );
+    let other = dir_of("mexc", "bsc_dex");
+    core.inner.active.lock().unwrap().remove(&key);
+    assert!(
+        coin_ride::admit(&core, &other)
+            .unwrap_err()
+            .contains("на паузе")
+    );
+    assert!(!coin_ride::take(&core, &key), "посторонний take — пауза");
+    // Другая команда (другое действие) — не повтор.
+    let wrong = manual_wait::scope(
+        cmd(ManualAction::ReturnToBot {
+            holding_id: "x".into(),
+        }),
+        async { coin_ride::take(&core, &key) },
+    )
+    .await;
+    assert!(!wrong);
+    // Повтор той же команды берёт монету — ожидание снято вместе с take.
+    let took = manual_wait::scope(cmd(sell), async { coin_ride::take(&core, &key) }).await;
+    assert!(took);
+    assert!(manual_wait::list(&core).is_empty());
+    assert!(!manual_wait::paused(&core, &key));
+    coin_ride::free_active(&core, &key);
+}

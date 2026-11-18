@@ -161,6 +161,22 @@ CAKE — «новые сделки CAKE на паузе: ручное дейст
 (coin.blocked не трогается); пробуждение — inner.coin_wake (coin_ride::release / free_active, ledger::save, отмена).
 Перезапуск — ожидания нет (память), кнопку нажать снова. Тесты — tests/core_manual_wait_405.rs.
 
+## Четвёртое ревью
+
+- **Б1** — `manual_wait.rs` stuck_of: «застряла» — только Stuck / WaitingHuman. Реальный порядок обычного конца:
+  ledger::finish(Closed) сохраняет и будит ожидание → потом ride_guard снимает запись (у группы — после общего
+  возврата) — ожидание ждёт снятия записи. Тест normal_finish_then_release_keeps_waiting.
+- **Б2** — `usdt_accepted.rs`: признака «вывод принят» в части не было (по коду: Pending без id вывода; хеш — позже).
+  Добавлен по факту ответа API на запрос вывода (transfers.rs go, `created`). Пример: X1 «идёт» 500, BingX принял вывод
+  (хеша нет) → резерв X1 0; Y1 (другая монета) перегоняет 300 при свободных 500 — уходит. Тест
+  accepted_withdrawal_frees_reserve_without_hash.
+- **Н1** — `remain_others.rs` own_qty: Y учёт 1000, Z 5000 доказуемо на W, K в пути: на W 5600 → Y 600; на W 5000 →
+  алерт (не 1000).
+- **Н2** — `usdt_hold_view.rs` и раздел «Резерв USDT возвратов».
+- **Н3** — `manual_wait_pause.rs`: claim в take снимает паузу вместе с взятием монеты. Тест pause_holds_until_retry_takes_coin.
+- **М4** — Telegram: TASKS (решение 405).
+- CI: clippy sort_by_key; tests/core_balance_sell.rs — под ожидание (balance_sell_check::busy: метка Я-2 больше не отказ).
+
 ## Риски и вопросы
 
 - Вопросы владельцу — docs/TASKS.md (решение 405): «не вернулись» в резерв; ручные действия при идущих (Н3).

@@ -91,7 +91,10 @@ async fn sell(core: &Core, v: &VenueId, account: &str, ticker: &str) -> Result<S
     // Решение 405 (ответ Тиграна на ревью Н3): монету держат идущие сделки — не отказ, ждём их окончания
     // (manual_wait.rs); остальные причины «в сделке» (сделка с монетами на бирже) — прежний отказ ниже.
     let key = CoinKey::of(&a);
-    if super::coin_ride::held(core, &key) || super::manual_wait::paused(core, &key) {
+    // Повтор самой ждавшей команды (ревью 4, Н3) паузой не останавливается — монету он возьмёт в mark (take).
+    let paused =
+        super::manual_wait::paused(core, &key) && !super::manual_wait::is_retry(core, &key);
+    if super::coin_ride::held(core, &key) || paused {
         return super::manual_wait::defer(core, &key, &a.ticker, chk::IN_DEAL.into());
     }
     let _mark = mark(core, v, &a)?;

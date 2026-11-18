@@ -3,15 +3,17 @@
 //! держат идущие сделки, не отказывает, а ЖДЁТ их окончания. Кнопки, которые берут монету целиком
 //! (coin_ride::take): «Продать сейчас» / «Продать и перегнать» остановленной сделки и «Продано вручную»
 //! (manual_halted.rs), «Вернуть боту» (manual_return.rs), «Продать» на «Балансах» (balance_sell.rs). Порядок:
-//! - нажатие — монета занята: если её держит сделка вне пути (застряла, ждёт человека — шаг не «перевод» и не
-//!   «продажа»), окончания не будет — сразу отказ с причиной (какая сделка держит), паузы нет;
+//! - нажатие — монета занята: если её держит застрявшая сделка (шаг «застряла» или «ждёт решения человека»; закрытая,
+//!   остановленная, «Беру на себя» — конец сделки, ждём снятия записи — ревью 4, Б1), окончания не будет — сразу
+//!   отказ с причиной (какая сделка держит), паузы нет;
 //! - иначе — пауза НОВЫХ сделок этой монеты (свой признак `inner.manual_waits`, не coin.blocked человека: входы
 //!   исполнителя, очередь расчёта и take — coin_ride.rs), журнал core.manual_wait и экран «Ручное управление»: «ждёт
 //!   окончания сделок по X: D1, D2»; ответ кнопке — «ждёт», не ошибка;
 //! - задача ожидания (manual_wait_run.rs) просыпается при снятии записи идущей сделки, освобождении замка монеты и
-//!   сохранении сделки (`inner.coin_wake`); все идущие кончились — пауза снимается и та же команда человека (тот же
-//!   источник и кто нажал) выполняется заново через Core::command — её итог, как у обычной команды;
-//! - идущая сделка ушла с пути — ожидание кончается отказом с причиной, пауза снимается; «Отменить ожидание» (кнопка
+//!   сохранении сделки (`inner.coin_wake`); все идущие кончились — та же команда человека (тот же источник и кто
+//!   нажал) выполняется заново через Core::command — её итог, как у обычной команды; пауза держится, пока повтор не
+//!   возьмёт монету (claim в coin_ride::take, ревью 4, Н3), не взял — снимается после команды;
+//! - идущая сделка застряла — ожидание кончается отказом с причиной, пауза снимается; «Отменить ожидание» (кнопка
 //!   экрана, команда CancelManualWait) — то же.
 //!
 //! Одна ожидающая команда на монету: вторая — отказ «уже ждёт …». Таймаута нет (настройки нет): ожидание кончается
@@ -59,6 +61,12 @@ pub struct ManualWait {
     /// Отменено кнопкой.
     #[serde(skip)]
     pub(super) cancel: bool,
+    /// Команда, которую ждём (повтор узнаётся по ней — claim).
+    #[serde(skip)]
+    pub(super) action: ManualAction,
+    /// Сделки кончились, повтор команды идёт: пауза держится, пока повтор не возьмёт монету (ревью 4, Н3).
+    #[serde(skip)]
+    pub(super) running: bool,
 }
 
 /// Что делает: выполнить команду человека с признаком задачи (для defer). Вызывает commands.rs. Ошибок нет.
@@ -66,25 +74,11 @@ pub async fn scope<F: Future>(cmd: ManualCommand, f: F) -> F::Output {
     CMD.scope(cmd, f).await
 }
 
-/// Что делает: стоит ли пауза новых сделок монеты (ждёт ручное действие). Быстрый путь — атомарный счётчик.
-/// Принимает: ядро, ключ монеты. Ошибок нет.
-pub fn paused(core: &Core, key: &CoinKey) -> bool {
-    core.inner.manual_waits_live.load(Ordering::Acquire) != 0
-        && lk(&core.inner.manual_waits).contains_key(key)
-}
+pub use super::manual_wait_pause::{claim, is_retry, paused, paused_why, start_retry};
 
-/// Что делает: причина отказа входа сделки при паузе. Принимает: ядро, ключ. Возвращает: текст; None — паузы нет.
-/// Ошибок нет.
-pub fn paused_why(core: &Core, key: &CoinKey) -> Option<String> {
-    if core.inner.manual_waits_live.load(Ordering::Acquire) == 0 {
-        return None;
-    }
-    lk(&core.inner.manual_waits).get(key).map(|w| {
-        format!(
-            "новые сделки {} на паузе: ручное действие «{}» ждёт окончания сделок (решение 405)",
-            w.coin, w.what
-        )
-    })
+/// Что делает: действие текущей команды задачи (признак scope; для manual_wait_pause.rs is_retry). Ошибок нет.
+pub(super) fn current_action() -> Option<ManualAction> {
+    CMD.try_with(|c| c.action.clone()).ok()
 }
 
 /// Сделки монеты, которые держат её сейчас: (ID, шаг) идущих и занят ли замок целиком. Ошибок нет.
@@ -102,10 +96,13 @@ pub(super) fn holders(core: &Core, key: &CoinKey) -> (Vec<(String, Option<Step>)
     (v, active)
 }
 
-/// Сделка, которая держит монету и уже не на пути (окончания не будет): текст причины. Ошибок нет.
+/// Сделка, которая держит монету и застряла (окончания не будет): текст причины. Ревью 4, Б1: застревание — только
+/// «застряла» и «ждёт решения человека»; закрыта / остановлена / «Беру на себя» — это конец сделки (ledger::finish
+/// сохраняет шаг раньше, чем задача снимает запись в идущих — coin_ride::release из ride_guard.rs; у группы ещё
+/// общий возврат), её запись вот-вот снимется — ждём. Ошибок нет.
 pub(super) fn stuck_of(list: &[(String, Option<Step>)]) -> Option<String> {
     list.iter()
-        .find(|(_, s)| !matches!(s, Some(Step::Transfer | Step::Selling)))
+        .find(|(_, s)| matches!(s, Some(Step::Stuck | Step::WaitingHuman)))
         .map(|(id, s)| {
             let step = s.map_or("нет в учёте", super::deal_text::step_name);
             format!(
@@ -145,6 +142,8 @@ pub fn defer(core: &Core, key: &CoinKey, ticker: &str, old: String) -> Result<St
         waits_for: waits_for(&list, active),
         since: Utc::now(),
         cancel: false,
+        action: cmd.action.clone(),
+        running: false,
     };
     {
         let mut m = lk(&core.inner.manual_waits);
@@ -192,7 +191,7 @@ pub fn command(core: &Core, a: &ManualAction) -> Option<Result<String, String>> 
 /// Что делает: ожидания для экрана (GET /api/manual — waits). Ошибок нет.
 pub fn list(core: &Core) -> Vec<ManualWait> {
     let mut v: Vec<ManualWait> = lk(&core.inner.manual_waits).values().cloned().collect();
-    v.sort_by(|a, b| a.since.cmp(&b.since));
+    v.sort_by_key(|w| w.since);
     v
 }
 

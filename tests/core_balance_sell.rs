@@ -5,7 +5,9 @@
 //! (tests/data/bingx/ws_spot_2026-10-23.jsonl). Моков нет. Проверяется:
 //! (1) состояние кнопки: котируемой USDT — кнопки нет; CAKE меньше minQty — недоступна с причиной check_order;
 //!     CAKE 5 — доступна; счёт фьючерсов — перевода нет; монеты без стакана — нет пары / не в подписке;
-//! (2) монета в сделке (метка Я-2, остановленная сделка с монетами на бирже) — недоступна и нажатие отказано;
+//! (2) монета в сделке: метка Я-2 (сделка в другом месте) — решение 405: кнопка доступна, нажатие ждёт окончания
+//!     сделки (отмена — продажи нет; сделка кончилась — команда выполняется сама); остановленная сделка с монетами на
+//!     этой бирже — недоступна и нажатие отказано;
 //! (3) «уже продаётся» — отказ, чужая метка не снимается;
 //! (4) нажатие, которое падает после постановки метки (балансы счетов не читаются — ключей нет) — метки сняты,
 //!     журнал core.balance_sell с тем, кто нажал;
@@ -162,6 +164,17 @@ async fn press(core: &Core, account: &str, asset: &str) -> Result<String, String
     .await
 }
 
+/// Ждёт условия (задача ожидания ручной кнопки — отдельная). Тест падает по сроку.
+async fn wait_until(f: impl Fn() -> bool) {
+    for _ in 0..400 {
+        if f() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+    panic!("условие не наступило");
+}
+
 /// Метки монеты сняты (и Я-2, и «продаётся»).
 fn unmarked(core: &Core) -> bool {
     let k = CoinKey::of(&cake());
@@ -223,16 +236,46 @@ async fn button_state_by_quote_minimum_account_and_book() {
 async fn coin_in_deal_is_refused() {
     let (core, journal, bx) = start(&dir("deal")).await;
     let gw: &dyn Venue = bx.as_ref();
-    // Метка Я-2: сделка бота по CAKE.
-    lk(&core.inner.active).insert(CoinKey::of(&cake()));
-    let e = chk::state(&core, gw, "Спот", "CAKE", d("5"))
+    let key = CoinKey::of(&cake());
+    // Решение 405 (ответ Тиграна на ревью Н3, вариант «в»): монету держит сделка бота (метка Я-2) — кнопка доступна,
+    // нажатие ждёт окончания сделки: ответ «ждёт …», новые сделки CAKE на паузе, метку сделки кнопка не трогает.
+    lk(&core.inner.active).insert(key.clone());
+    assert!(
+        chk::state(&core, gw, "Спот", "CAKE", d("5"))
+            .await
+            .unwrap()
+            .is_ok()
+    );
+    let t = press(&core, "Спот", "CAKE").await.unwrap();
+    assert!(t.contains("ждёт окончания сделок по CAKE"), "{t}");
+    assert!(lk(&core.inner.active).contains(&key));
+    assert!(arb::core::manual_wait::paused(&core, &key));
+    // «Отменить ожидание» — продажи нет, пауза снята, метка сделки на месте.
+    let id = arb::core::manual_wait::list(&core)[0].id.clone();
+    let ok = core
+        .command(ManualCommand {
+            action: ManualAction::CancelManualWait { id },
+            source: CommandSource::Ui,
+            by: Some("тест".into()),
+            at: chrono::Utc::now(),
+        })
         .await
-        .unwrap()
-        .unwrap_err();
-    assert_eq!(e, IN_DEAL);
-    assert_eq!(press(&core, "Спот", "CAKE").await.unwrap_err(), IN_DEAL);
-    // Метку сделки кнопка не трогает.
-    assert!(lk(&core.inner.active).contains(&CoinKey::of(&cake())));
+        .unwrap();
+    assert!(ok.contains("отменено"), "{ok}");
+    wait_until(|| arb::core::manual_wait::list(&core).is_empty()).await;
+    assert!(lk(&core.inner.active).contains(&key));
+    assert!(!lk(&core.inner.balance_sells).contains(&key));
+    // Снова нажатие; сделка кончилась (метка снята) — та же команда выполняется сама (здесь ключей нет — продажа
+    // падает после постановки меток, метки сняты, журнал core.manual_wait «выполняю»).
+    assert!(press(&core, "Спот", "CAKE").await.is_ok());
+    arb::core::coin_ride::free_active(&core, &key);
+    wait_until(|| arb::core::manual_wait::list(&core).is_empty() && unmarked(&core)).await;
+    let rows = journal.list(300, None).await.unwrap();
+    assert!(rows.iter().any(|r| {
+        r.kind == "core.manual_wait"
+            && r.message
+                .contains("сделки по CAKE закончились — выполняю «Продать»")
+    }));
     lk(&core.inner.active).clear();
     // Остановленная сделка с монетами на bingx.
     let mut x = Deal::new(

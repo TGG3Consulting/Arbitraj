@@ -95,18 +95,19 @@ pub fn held(core: &Core, key: &CoinKey) -> bool {
 
 /// Что делает: занять монету целиком (ручное действие, цикл DEX ↔ DEX, продажа «Балансов») — только если по ней нет
 /// ни замка, ни идущих сделок (как раньше `active.insert`). Принимает: ядро, ключ. Возвращает: true — занята этим
-/// вызовом; снимает её вызывающий (`active.remove`). Ошибок нет.
+/// вызовом; снимает её вызывающий (`active.remove`). Решение 405 (ответ Тиграна на ревью Н3): монету ждёт ручное
+/// действие — новых действий с ней нет, кроме повтора самой ждавшей команды: он берёт монету и этим снимает паузу
+/// (manual_wait::claim, ревью 4 Н3 — пауза держится до take). Ошибок нет. Замки: active, затем manual_waits.
 pub fn take(core: &Core, key: &CoinKey) -> bool {
-    // Решение 405 (ответ Тиграна на ревью Н3): монету ждёт ручное действие — новых действий с ней нет.
-    if super::manual_wait::paused(core, key) {
-        return false;
-    }
     let mut a = lk(&core.inner.active);
     if a.contains(key)
         || lk(&core.inner.rides)
             .get(key)
             .is_some_and(|v| !v.is_empty())
     {
+        return false;
+    }
+    if super::manual_wait::paused(core, key) && !super::manual_wait::claim(core, key) {
         return false;
     }
     a.insert(key.clone())

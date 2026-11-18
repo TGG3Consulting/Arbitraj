@@ -3,10 +3,11 @@
 //! просыпается по `inner.coin_wake` (снята запись идущей сделки — coin_ride::release, освобождён замок монеты —
 //! coin_ride::free_active, сохранена сделка — ledger::save, отмена — manual_wait::command) и проверяет монету:
 //! - отменено кнопкой — конец: «отменено», пауза снята;
-//! - держащая сделка ушла с пути (застряла, ждёт человека) — конец: отказ с причиной, пауза снята;
-//! - идущих сделок нет и замок монеты свободен — пауза снимается и та же команда (тот же источник и кто) выполняется
-//!   заново через Core::command (журнал core.command, событие Command — как у обычной команды); монету успели занять
-//!   снова — команда снова встанет в ожидание (manual_wait::defer);
+//! - держащая сделка застряла (застряла, ждёт человека; закрытая / остановленная — конец, ждём снятия записи) —
+//!   конец: отказ с причиной, пауза снята;
+//! - идущих сделок нет и замок монеты свободен — ожидание помечается «повтор идёт» (running) и та же команда (тот же
+//!   источник и кто) выполняется заново через Core::command; пауза держится, пока повтор не возьмёт монету
+//!   (manual_wait::claim в coin_ride::take), иначе снимается после команды (ревью 4, Н3);
 //! - иначе — список «чьих окончаний ждём» обновляется на экране, ждём дальше.
 //!
 //! Конец без выполнения — журнал core.manual_wait (Warn) и событие Command {final, ok: false, text} (Telegram правит
@@ -85,9 +86,8 @@ async fn run(core: &Core, key: &CoinKey, id: &str, cmd: ManualCommand) {
                 return end(core, key, id, &cmd, &t).await;
             }
             Next::Free => {
-                let w = mw::remove(core, key, id);
-                super::manual::publish(core);
-                let coin = w.map(|w| w.coin).unwrap_or_default();
+                // Ревью 4, Н3: пауза держится, пока повтор не возьмёт монету (manual_wait::claim в take).
+                let coin = mw::start_retry(core, key).unwrap_or_default();
                 let t = format!(
                     "сделки по {coin} закончились — выполняю «{}»",
                     cmd.action.title()
@@ -95,6 +95,9 @@ async fn run(core: &Core, key: &CoinKey, id: &str, cmd: ManualCommand) {
                 mw::log(core, Level::Info, &t).await;
                 // Та же команда человека — через Core::command (журнал core.command, итог — событие Command).
                 let _ = core.command(cmd).await;
+                // Повтор не взял монету (отказ до take) — пауза снимается здесь.
+                mw::remove(core, key, id);
+                super::manual::publish(core);
                 return;
             }
             Next::Wait(list) => {

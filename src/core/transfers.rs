@@ -10,7 +10,7 @@
 //! так же перегон застрявшей монеты (relay.rs → send_trade). Возврат USDT (send_as), биржа ↔ биржа и переводы на
 //! биржу — как раньше (решение 76).
 //! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон — send_trade, решение 227), usdt_relay_retry.rs (USDT).
-//! От чего зависит: engine.rs, wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
+//! От чего зависит: engine.rs, usdt_accepted.rs (решение 405: вывод перегона USDT принят), wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! precheck_deposit.rs (target_on — монета и сеть адреса получателя, решение 316), credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
 //! Недостача зачисления больше transfer.credit_shortfall_pct — монета в ручной чёрный список (credit_shortfall.rs).
 //! Решение 166: вывод отклонён «средства временно заблокированы для вывода» (WithdrawLocked) — повтор того же вывода
@@ -335,6 +335,11 @@ async fn go(
     };
     // Решение 176: ход ручного перевода USDT для экрана (usdt_transfer.rs; не ручной — ничего).
     super::usdt_transfer::stage(core, deal, super::usdt_transfer::Stage::Sent);
+    // Решение 405 (ревью 4, Б2): площадка приняла вывод перегона USDT — деньги списаны, резерв части «идёт» снимается
+    // сразу (usdt_accepted.rs; перевод монеты сделки — send_trade, chain — не сюда).
+    if !chain {
+        super::usdt_accepted::mark(core, deal, from, qty);
+    }
     let quiet = Notify::new();
     // 1. Ждём хеш транзакции вывода.
     let mut pacer = Pacer::new("venue.status_poll_ms", Unit::Ms, Some(from.0.clone()));
@@ -366,6 +371,8 @@ async fn go(
             Ok(t) if t.tx_hash.is_some() && t.status != TransferStatus::Pending => break t,
             Ok(_) => {}
             Err(e) if e.code == ErrorCode::WithdrawRejected => {
+                // Решение 405 (ревью 4, Б2): отклонён после принятия — деньги снова на площадке, резерв части целиком.
+                super::usdt_accepted::unmark(core, deal);
                 failed_gas(&e, gas);
                 rules_apply::on_error(core, "Вывод", from, Some(deal), &e, 1).await;
                 let _ = gw_to.deposit_abandoned(&on_to).await;

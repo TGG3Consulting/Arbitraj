@@ -174,6 +174,10 @@ async fn start(d: &Path) -> (Core, Store, Journal, Server) {
         x("venue.ws_subs_per_sec", json!(10)),
         x("venue.ws_streams_per_msg", json!(10)),
         x("venue.ws_reconnect_pause_ms", json!(1000)),
+        // Решение 413 (t198, CI ee08b81c): подписанный GET /v4/balances (баланс перед продажей) — как tests/t175_common.
+        // venue.order_time_in_force, venue.order_poll_ms, venue.order_final_wait_ms (есть в t175_common) здесь
+        // намеренно не заданы: тесты 238 проверяют отказ адаптера «не задана venue.order_time_in_force».
+        x("venue.recv_window_ms", json!(5000)),
     ] {
         settings.set(&n, sc, Some(v), "тест").await.unwrap();
     }

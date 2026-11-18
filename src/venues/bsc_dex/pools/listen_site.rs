@@ -22,6 +22,9 @@
 //! откатывается) дало бы второе обращение — больше, чем сейчас. Разбор — docs/notes/t152-event-reread-all-kinds-2026-11-16.md.
 //! Настройки: через вызываемые — dex.load_batch и настройки чтения вида; dex.event_refresh_urgency (класс очереди узла).
 
+use std::borrow::Borrow;
+use std::sync::Arc;
+
 use alloy::rpc::types::Log;
 
 use crate::core::types::PoolRef;
@@ -67,7 +70,8 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
     if !log.removed && topic.is_some_and(|t| events::liquidity_topics(family).contains(&t)) {
         for i in mine.iter().copied().filter(|i| !deep.contains(i)) {
             let r = &m.pools[i].0.reference;
-            if p.reg.get(r).is_some_and(|e| e.has_applied(block, index)) {
+            // Решение 409 (t194, п.4): запись без копирования (Arc) — нужна только отметка учтённого лога.
+            if p.reg.entry(r).is_some_and(|e| e.has_applied(block, index)) {
                 continue;
             }
             admit::wake(p, g, m, i, block).await?;
@@ -78,16 +82,21 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
     }
     // Ревью 295 (1а): лог пропускается, только если он учтён у ВСЕХ глубоких пар контракта в пачке; перечитываются
     // пары, у которых он не учтён (у каждой своя отметка synced_block / synced_log — load_one мог поднять одну пару).
-    let entries: Vec<(usize, Entry)> = deep
+    // Решение 409 (t194, п.4): записи без копирования (Arc) — раньше каждая запись копировалась дважды на каждый лог.
+    let entries: Vec<(usize, Arc<Entry>)> = deep
         .iter()
-        .filter_map(|&i| p.reg.get(&m.pools[i].0.reference).map(|e| (i, e)))
+        .filter_map(|&i| p.reg.entry(&m.pools[i].0.reference).map(|e| (i, e)))
         .collect();
-    let list: Vec<Entry> = entries.iter().map(|(_, e)| e.clone()).collect();
+    let list: Vec<Arc<Entry>> = entries.iter().map(|(_, e)| Arc::clone(e)).collect();
     let pick = stale(&list, block, index, log.removed);
     let Some(&k0) = pick.first() else {
         return Ok(true);
     };
     let r0 = entries[k0].1.pool.reference.clone();
+    // Номера пар к перечитке; записи (Arc) отпускаются до изменения реестра ниже — иначе Arc::make_mut в update
+    // скопировал бы запись, которую мы держим.
+    let picked: Vec<usize> = pick.iter().map(|&k| entries[k].0).collect();
+    drop((entries, list));
     let applied = if log.removed {
         Applied::Refresh("реорг: событие отменено (removed)".into())
     } else {
@@ -104,10 +113,9 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
     };
     // Решение 298: пары в очереди повтора не читаются (узел на старом блоке не спрашиваем, журнал не пишем) — позиция
     // лога отмечается, повтор прочитает их не раньше неё (stale_read::defer).
-    let (wait, deep): (Vec<usize>, Vec<usize>) =
-        pick.iter().map(|&k| entries[k].0).partition(|&i| {
-            stale_read::waiting(&m.missing, i) || pool_fail::paused(p, &m.pools[i].0.reference)
-        });
+    let (wait, deep): (Vec<usize>, Vec<usize>) = picked.into_iter().partition(|&i| {
+        stale_read::waiting(&m.missing, i) || pool_fail::paused(p, &m.pools[i].0.reference)
+    });
     if !log.removed {
         for &i in &wait {
             stale_read::defer(&p.reg, &m.pools[i].0.reference, block, index);
@@ -181,12 +189,12 @@ pub async fn on_log(p: &Pools, g: &mut Group, m: &mut Members, log: &Log) -> Res
 
 /// Что делает: какие глубокие пары контракта перечитать на лог (ревью 295, 1а): реорг — все; иначе — пары, у которых
 /// лог ещё не учтён (Entry::has_applied). Пусто — лог учтён у всех, пропуск. Принимает: записи пар, блок и номер лога,
-/// отменён ли лог. Возвращает: индексы записей. Ошибок нет.
-pub fn stale(entries: &[Entry], block: u64, index: u64, removed: bool) -> Vec<usize> {
+/// отменён ли лог (записи — свои или за Arc, решение 409). Возвращает: индексы записей. Ошибок нет.
+pub fn stale<E: Borrow<Entry>>(entries: &[E], block: u64, index: u64, removed: bool) -> Vec<usize> {
     entries
         .iter()
         .enumerate()
-        .filter(|(_, e)| removed || !e.has_applied(block, index))
+        .filter(|(_, e)| removed || !<E as Borrow<Entry>>::borrow(*e).has_applied(block, index))
         .map(|(k, _)| k)
         .collect()
 }

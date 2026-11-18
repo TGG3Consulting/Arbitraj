@@ -22,10 +22,13 @@
 //! Решение 395 (t181): шаги пулов внутри менеджеров — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только у исполнителя v3
 //! (since): у кошелька v1 / v2 — пулы Uniswap V4 / PancakeSwap Infinity без пути ЧЕРЕЗ ИСПОЛНИТЕЛЬ (свой Universal Router у
 //! них остаётся — family.tradable); артефакт версии для поиска селектора: v1 — out/v1/, v2 — out/v2/, v3 — out/.
+//! Решение 409 (t194): память итогов SEEN — снимок за ArcSwap (чтение без замка на горячем пути котировки).
 //! Настройки: dex.v3_swap_callback [DEX] (необязательная).
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, LazyLock, Mutex};
+
+use arc_swap::ArcSwap;
 
 use super::super::ctx::Ctx;
 use super::super::exec::executor::code::{self, Version};
@@ -37,11 +40,15 @@ use super::registry_key;
 /// Имя настройки.
 pub const SETTING: &str = "dex.v3_swap_callback";
 
-/// Память итогов: ключ (версия, сигнатура) → None — вызов есть, Some — причина.
-type Seen = HashMap<(Version, String), Option<String>>;
+/// Память итогов: версия → сигнатура → None — вызов есть, Some — причина.
+type Seen = HashMap<Version, HashMap<String, Option<String>>>;
 
-/// Итог поиска по ключу (версия, сигнатура) — артефакты неизменны до перезапуска.
-static SEEN: Mutex<Option<Seen>> = Mutex::new(None);
+/// Итог поиска по ключу (версия, сигнатура) — артефакты неизменны до перезапуска. Решение 409 (t194): снимок за
+/// ArcSwap — горячий путь котировки (usable на каждый хоп через exec_kind::via_executor) читает без замка и без
+/// выделения строки; новая запись — под SEEN_WRITE.
+static SEEN: LazyLock<ArcSwap<Seen>> = LazyLock::new(|| ArcSwap::from_pointee(HashMap::new()));
+/// Писатели памяти SEEN — по одному (поиск в артефакте — один раз на ключ).
+static SEEN_WRITE: Mutex<()> = Mutex::new(());
 
 /// Есть ли PUSH4 селектора в коде (0x63 и 4 байта селектора подряд). Принимает: код, селектор. Ошибок нет.
 pub fn has_selector(runtime: &[u8], sel: &[u8]) -> bool {
@@ -112,19 +119,29 @@ pub fn usable(ctx: &Ctx, f: &Family, ver: Option<Version>) -> bool {
         return true;
     }
     match ver {
-        Some(v) => seen(v, sig).is_none(),
+        Some(v) => seen_with(v, sig, |r| r.is_none()),
         None => false,
     }
 }
 
-/// Итог поиска селектора по памяти SEEN (артефакты неизменны до перезапуска). Принимает: версию, сигнатуру. Возвращает:
-/// None — вызов есть; Some — причина. Ошибок нет.
-fn seen(v: Version, sig: &str) -> Option<String> {
-    let mut g = SEEN.lock().unwrap_or_else(|e| e.into_inner());
-    g.get_or_insert_with(HashMap::new)
-        .entry((v, sig.to_string()))
-        .or_insert_with(|| check(v, sig))
-        .clone()
+/// Итог поиска селектора по памяти SEEN (артефакты неизменны до перезапуска), переданный в `f`. Решение 409: чтение
+/// снимка без замка; нет записи — поиск в артефакте (check) и новый снимок под SEEN_WRITE. Принимает: версию,
+/// сигнатуру, f (итог: None — вызов есть; Some — причина). Возвращает: итог f. Ошибок нет.
+fn seen_with<R>(v: Version, sig: &str, f: impl FnOnce(&Option<String>) -> R) -> R {
+    if let Some(r) = SEEN.load().get(&v).and_then(|m| m.get(sig)) {
+        return f(r);
+    }
+    let _turn = SEEN_WRITE.lock().unwrap_or_else(|e| e.into_inner());
+    let cur = SEEN.load_full();
+    if let Some(r) = cur.get(&v).and_then(|m| m.get(sig)) {
+        return f(r);
+    }
+    let r = check(v, sig);
+    let out = f(&r);
+    let mut next = (*cur).clone();
+    next.entry(v).or_default().insert(sig.to_string(), r);
+    SEEN.store(Arc::new(next));
+    out
 }
 
 /// Нет ли у исполнителя кошелька окружения обратного вызова, который зовёт пул этой DEX. Принимает: окружение, вид.
@@ -144,7 +161,7 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
         Ok(None) => return None,
         Err(why) => return Some(why),
     };
-    seen(v, &sig)
+    seen_with(v, &sig, |r| r.clone())
 }
 
 /// С какой версии исполнителя есть вид шага (у более ранней диспетчер _step откатывает «kind»). Решение 284: v2 —

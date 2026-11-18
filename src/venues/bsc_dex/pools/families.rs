@@ -16,9 +16,6 @@
 //! 395: у Uniswap V4 и PancakeSwap Infinity (tradable — свой UR) тоже есть вид шага (UNI_V4 / INF_*, исполнитель v3).
 //! Настройки: dex.kind, dex.pool_enabled и адреса dex.* [DEX индексатора]; smart.universal_router, smart.permit2 [bsc_dex].
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-
 use crate::core::types::PoolKind;
 use crate::settings::scope::Scope;
 
@@ -402,41 +399,33 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
     })
 }
 
-/// Записи видов: (id, протокол, graphable, tradable, fork, вид шага исполнителя) → вид. Новая запись — только при
-/// новом сочетании.
-type Interned = HashMap<(String, Proto, bool, bool, bool, Option<ExecKind>), &'static Family>;
-static INTERNED: Mutex<Option<Interned>> = Mutex::new(None);
-
-/// Вид пула DEX по id и варианту dex.kind. None — вариант неизвестен или «не поддерживается». Ошибок нет.
+/// Вид пула DEX по id и варианту dex.kind. None — вариант неизвестен или «не поддерживается». Одна запись на
+/// сочетание (id, протокол, graphable, tradable, fork, вид шага исполнителя); решение 409 — таблица без замка на чтение
+/// (pools/family_intern.rs). Ошибок нет.
 pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
     let (pk, proto, graphable, tradable, fork) = spec(kind)?;
     let executor_kind = exec_kind::of(kind);
-    let mut m = INTERNED.lock().unwrap_or_else(|p| p.into_inner());
-    let map = m.get_or_insert_with(HashMap::new);
-    let f = map
-        .entry((
-            id.to_string(),
+    Some(super::family_intern::intern(
+        id,
+        |f| {
+            f.proto == proto
+                && f.graphable == graphable
+                && f.tradable == tradable
+                && f.fork == fork
+                && f.executor_kind == executor_kind
+        },
+        |id| Family {
+            id,
+            kind: pk,
             proto,
+            title: id,
             graphable,
             tradable,
             fork,
             executor_kind,
-        ))
-        .or_insert_with(|| {
-            let id: &'static str = Box::leak(id.to_string().into_boxed_str());
-            Box::leak(Box::new(Family {
-                id,
-                kind: pk,
-                proto,
-                title: id,
-                graphable,
-                tradable,
-                fork,
-                executor_kind,
-                event: super::event_flags::EventFlags::new(),
-            }))
-        });
-    Some(*f)
+            event: super::event_flags::EventFlags::new(),
+        },
+    ))
 }
 
 /// Все DEX с поддержанным видом в настройках (включённые и нет), по id. Ошибок нет.

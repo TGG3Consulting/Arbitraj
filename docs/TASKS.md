@@ -13,6 +13,19 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 409 (18.11.2026, задача t194, ветка t194/hot-locks от d672411b) — горячий путь без конкурентных замков;
+  ждёт сборки и тестов в GitHub (cargo локально не запускался).** Разбор — docs/notes/t194-hot-locks-2026-11-18.md.
+  Сделано: настройки в памяти и таблица видов DEX — снимки за ArcSwap (чтение без замка), так же exec_callback SEEN и
+  registry_key KEYS; копии Entry ради чтения → Registry::entry (listen_site, depth, routing, breaks, classic_direct).
+  После выкладки — perf тем же способом (60 с, dex.depth_band_pct = 10, dex.shallow_pools_per_pair = 3): доля
+  native_queued_spin_lock_slowpath, потоки в futex_wait. **Следующие задачи по разбору (не сделаны, крупнее точечной
+  правки):** (а) `check/state.rs Checks::pool` — копия PoolFacts под RwLock на каждый пул котировки → Arc<PoolFacts>;
+  (б) `pools/graph.rs Edge.entry: Entry` и `quote/route_cache.rs fresh` — копия Entry на каждый хоп пути → Arc<Entry>,
+  вместе с `by_pair` (quote/mod.rs, via_pools, rate, bound_set, fills, route_gas, pools/depth_key.rs) → pair_arcs;
+  (в) `quote/usable_reuse.rs` — общий RwLock короба допуска на каждый пул; (г) `directory/mod.rs banned` — RwLock и клон
+  причины на каждый пул → снимок; (д) `Store::get_exact` — выделение ключа `(name.to_string(), scope.clone())` и SipHash
+  на каждое чтение → поиск без выделения.
+
 - **Решение 408 (18.11.2026, задача t193, ветка t193/tg-buttons от 5f7a0e2a) — тревоги из Telegram; ждёт сборки и
   тестов в GitHub (cargo локально не запускался).** Разбор — docs/notes/t193-tg-buttons-2026-11-18.md. Сделано: кнопки
   на тревогах («Снять паузу», «Старт», «Снять карантин», «Сбросить лимит дня», «Снять очередь кошелька», перегон USDT,

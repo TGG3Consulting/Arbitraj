@@ -15,6 +15,7 @@ pub mod read;
 pub mod read_scope;
 pub mod schema;
 pub mod scope;
+pub mod snapshot;
 pub mod store;
 pub mod store_mark;
 pub mod value;

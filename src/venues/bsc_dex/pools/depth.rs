@@ -81,7 +81,8 @@ pub fn mark(p: &Pools, r: &PoolRef, asleep: bool) {
 /// сверка, ждущие глубокого пула, проверяются сразу). Знаки USDT ещё не известны или глубина не считается — без
 /// пересчёта (причину покажет отбор пула). Ошибок нет.
 pub fn touch(p: &Pools, r: &PoolRef) {
-    let Some(e) = p.reg.get(r).filter(|e| e.valid && !e.asleep) else {
+    // Решение 409 (t194, п.4): запись без копирования (Arc) — на каждую смену состояния пула.
+    let Some(e) = p.reg.entry(r).filter(|e| e.valid && !e.asleep) else {
         return;
     };
     let Some(dec) = p

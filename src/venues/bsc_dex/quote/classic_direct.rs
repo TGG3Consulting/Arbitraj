@@ -104,7 +104,7 @@ fn signal(q: &super::Quoting, mut r: DexRoute) -> DexRoute {
 fn families(q: &super::Quoting, r: &DexRoute) -> String {
     let mut ids: Vec<String> = Vec::new();
     for h in r.legs.iter().flat_map(|l| &l.hops) {
-        let bad = q.reg.get(&h.pool).is_none_or(|e| !tradable(&e));
+        let bad = q.reg.entry(&h.pool).is_none_or(|e| !tradable(&e));
         if bad && !ids.contains(&h.family) {
             ids.push(h.family.clone());
         }

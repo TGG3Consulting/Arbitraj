@@ -61,7 +61,8 @@ pub async fn breaks(
         } else {
             leg.hops.last()
         };
-        let Some(e) = hop.and_then(|h| q.reg.get(&h.pool)) else {
+        // Решение 409 (t194, п.4): запись без копирования (Arc).
+        let Some(e) = hop.and_then(|h| q.reg.entry(&h.pool)) else {
             continue;
         };
         // Доля стороны через этот пул: продажа — доля входа; покупка — доля выхода монеты.

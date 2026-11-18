@@ -14,7 +14,6 @@
 //! Решение 352 (t160): отметка, как и set, увеличивает поколение значений хранилища (Store::generation).
 //! Настройки: settings.mark_retry_ms (необязательная).
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
@@ -57,27 +56,37 @@ impl Store {
             )));
         }
         let key = (name.to_string(), scope.clone());
-        let (old, new) = {
-            let mut guard = self.cache.write().unwrap_or_else(|p| p.into_inner());
-            let old = guard.get(&key).cloned();
-            let new = match f(old.as_ref()) {
-                Some(v) => Some(validate(def, &scope, &v).map_err(SetError::Invalid)?),
-                None => None,
-            };
-            if old == new {
-                return Ok(None);
-            }
-            // Решение 239: снимки (pinned.rs) держат прежний Arc — копия значений только если снимок жив.
-            let cache = Arc::make_mut(&mut *guard);
-            match &new {
-                Some(v) => cache.insert(key, v.clone()),
-                None => cache.remove(&key),
-            };
+        // Решение 409 (t194): текущее значение и новый снимок — под замком писателя кэша (settings/snapshot.rs), как у
+        // set; читатели снимка замок не берут.
+        let res = self.cache.update(
+            |cur| {
+                let old = cur.get(&key).cloned();
+                let new = match f(old.as_ref()) {
+                    Some(v) => match validate(def, &scope, &v) {
+                        Ok(v) => Some(v),
+                        Err(e) => return (Err(SetError::Invalid(e)), None),
+                    },
+                    None => None,
+                };
+                if old == new {
+                    return (Ok(None), None);
+                }
+                let mut next = (**cur).clone();
+                match &new {
+                    Some(v) => next.insert(key, v.clone()),
+                    None => next.remove(&key),
+                };
+                (Ok(Some((old, new))), Some(next))
+            },
             // Решение 352 (слияние t158 + t160): отметка меняет значение настройки — поколение растёт под тем же
             // замком записи кэша, что и у set (отпечаток настроек ядра должен смениться).
-            self.generation
-                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-            (old, new)
+            || {
+                self.generation
+                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            },
+        );
+        let Some((old, new)) = res? else {
+            return Ok(None);
         };
         let change = Change {
             name: name.to_string(),

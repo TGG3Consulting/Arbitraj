@@ -164,7 +164,8 @@ fn mids_ok(v: &Via<'_>, route: &DexRoute, mids: &[(Mid, u8)]) -> bool {
     route.legs.iter().all(|leg| {
         let mut running = start;
         leg.hops.iter().enumerate().all(|(n, h)| {
-            let Some(e) = v.q.reg.get(&h.pool) else {
+            // Решение 409 (t194, п.4): запись без копирования (Arc) — читаются только адреса токенов.
+            let Some(e) = v.q.reg.entry(&h.pool) else {
                 return false;
             };
             running = if e.usdt == running {

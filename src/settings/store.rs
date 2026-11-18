@@ -7,14 +7,15 @@
 //!
 //! Изменения выполняются строго по одному (writer): база, кэш и рассылка всегда в одном порядке.
 //! Решение 352: поколение значений (generation) растёт на каждое изменение после записи в кэш.
-//! Решение 239: копия значений на момент входа в сделку — settings/pinned.rs (кэш — Arc с копией при записи: снимок —
-//! без копирования всех значений, копия делается только при изменении настройки, пока снимок жив).
+//! Решение 239: копия значений на момент входа в сделку — settings/pinned.rs (тот же Arc значений, без копирования).
+//! Решение 409 (t194): значения в памяти — неизменяемый снимок за ArcSwap (settings/snapshot.rs): чтение без замка,
+//! изменение — копия значений и новый снимок под замком писателя.
 //! Решение 242, дополнение: пара «площадка · тип направления» при записи проверяется по видам площадок шлюза
 //! (settings/venue_kinds.rs).
 //! История — settings/history.rs. Кошельки DEX и маппинг (решение 132) — settings/accounts/, доступ — accounts(). Решение 128: новый id области «DEX» не длиннее dex.id_max_len (если задана).
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use chrono::Utc;
 use rusqlite::params;
@@ -27,6 +28,7 @@ use crate::storage::journal::{Journal, Level};
 use super::catalog;
 use super::live::Change;
 use super::scope::check_new_dex_id_len;
+use super::snapshot::{Key, Snapshot};
 use super::value::{Scope, validate};
 
 /// Ошибка записи настройки.
@@ -40,14 +42,13 @@ pub enum SetError {
     Db(#[from] DbError),
 }
 
-type Key = (String, Scope);
-
 /// Хранилище настроек. Дешёво клонируется.
 #[derive(Clone)]
 pub struct Store {
     pub(super) db: Db,
-    /// Значения в памяти. Решение 239: внутренний Arc — копия при записи (settings/pinned.rs).
-    pub(super) cache: Arc<RwLock<Arc<HashMap<Key, Value>>>>,
+    /// Значения в памяти. Решение 409 (t194): неизменяемый снимок за ArcSwap — чтение без замка, запись — новый
+    /// снимок (settings/snapshot.rs). Решение 239: копия на момент входа — тот же Arc значений (settings/pinned.rs).
+    pub(super) cache: Arc<Snapshot>,
     /// Решение 239: копия на момент входа — только чтение (set отказывает).
     pub(super) pinned: bool,
     pub(super) changes: broadcast::Sender<Change>,
@@ -103,7 +104,7 @@ impl Store {
         }
         Ok(Self {
             db,
-            cache: Arc::new(RwLock::new(Arc::new(map))),
+            cache: Arc::new(Snapshot::new(Arc::new(map))),
             pinned: false,
             changes,
             journal,
@@ -132,9 +133,9 @@ impl Store {
     }
 
     /// Значение ровно в этой области (без подстановки из общей).
-    /// Возвращает: значение или None — не задано.
+    /// Возвращает: значение или None — не задано. Решение 409: снимок без замка (settings/snapshot.rs).
     pub fn get_exact(&self, name: &str, scope: &Scope) -> Option<Value> {
-        let cache = self.cache.read().unwrap_or_else(|p| p.into_inner());
+        let cache = self.cache.load();
         cache.get(&(name.to_string(), scope.clone())).cloned()
     }
 
@@ -183,7 +184,7 @@ impl Store {
 
     /// Все заданные значения — для экрана «Настройки».
     pub fn all(&self) -> Vec<(String, Scope, Value)> {
-        let cache = self.cache.read().unwrap_or_else(|p| p.into_inner());
+        let cache = self.cache.load();
         cache
             .iter()
             .map(|((n, s), v)| (n.clone(), s.clone(), v.clone()))
@@ -230,10 +231,7 @@ impl Store {
             let max = self
                 .get_exact("dex.id_max_len", &Scope::Global)
                 .and_then(|v| v.as_u64());
-            let known = {
-                let cache = self.cache.read().unwrap_or_else(|p| p.into_inner());
-                cache.keys().any(|(_, s)| s == &scope)
-            };
+            let known = self.cache.load().keys().any(|(_, s)| s == &scope);
             check_new_dex_id_len(id, max, known).map_err(SetError::Invalid)?;
         }
         let old = self.get_exact(name, &scope);
@@ -270,30 +268,33 @@ impl Store {
                 tx.commit()
             })
             .await?;
-        let applied = {
-            let mut guard = self.cache.write().unwrap_or_else(|p| p.into_inner());
-            let key = (name.to_string(), scope.clone());
-            // Решение 355: пока шла запись в базу, отметка ядра (store_mark.rs) могла поменять значение в памяти —
-            // она сильнее: значение в памяти не трогаем, отметка сама запишется в базу поверх этого изменения.
-            if guard.get(&key) == old.as_ref() {
-                // Решение 239: снимки (pinned.rs) держат прежний Arc — копия значений только если снимок жив.
-                let cache = Arc::make_mut(&mut *guard);
+        let key = (name.to_string(), scope.clone());
+        // Решение 409: новый снимок значений под замком писателя кэша (settings/snapshot.rs); читатели видят старый
+        // или новый снимок целиком.
+        let applied = self.cache.update(
+            |cur| {
+                // Решение 355: пока шла запись в базу, отметка ядра (store_mark.rs) могла поменять значение в памяти —
+                // она сильнее: значение в памяти не трогаем, отметка сама запишется в базу поверх этого изменения.
+                if cur.get(&key) != old.as_ref() {
+                    tracing::warn!(
+                        name,
+                        "настройка изменена в базе, но в памяти осталась отметка ядра (решение 355)"
+                    );
+                    return (false, None);
+                }
+                let mut next: HashMap<Key, Value> = (**cur).clone();
                 match &new {
-                    Some(v) => cache.insert(key, v.clone()),
-                    None => cache.remove(&key),
+                    Some(v) => next.insert(key, v.clone()),
+                    None => next.remove(&key),
                 };
-                // Решение 352 (ревью t160 Н4): поколение растёт под замком записи кэша — вместе со значением.
+                (true, Some(next))
+            },
+            // Решение 352 (ревью t160 Н4): поколение растёт под замком записи кэша — вместе со значением.
+            || {
                 self.generation
                     .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-                true
-            } else {
-                tracing::warn!(
-                    name,
-                    "настройка изменена в базе, но в памяти осталась отметка ядра (решение 355)"
-                );
-                false
-            }
-        };
+            },
+        );
         // Ревью слияния (Н7): значение перебито отметкой ядра — в памяти его нет: журнал «изменено» и рассылку не
         // делаем (интерфейс не увидит «изменено» на недействующее значение), вызывающему — понятная причина.
         if !applied {

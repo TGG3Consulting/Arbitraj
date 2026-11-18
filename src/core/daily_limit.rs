@@ -16,6 +16,7 @@
 //! Кто вызывает: daily_commit.rs (check), risk.rs (view — snapshot), daily_venue_limit.rs (describe), api (reset).
 //! От чего зависит: daily.rs (today_book, commit), daily_venue.rs, day_pair.rs, daily_venue_limit.rs, day_view.rs, risk.rs,
 //! settings.
+//! Решение 414: направления с заданными risk.drawdown_* при общем сбросе — новый слепок баланса (drawdown_snap.rs).
 //! Настройки: risk.max_daily_loss_total_usd.
 
 use chrono::Utc;
@@ -134,14 +135,20 @@ pub async fn reset(core: &Core, who: &str) -> String {
         by: who.to_string(),
     };
     book.limit_reset = Some(mark(base));
-    let mut lifted = Vec::new();
+    let (mut lifted, mut snaps) = (Vec::new(), Vec::new());
     for (p, x) in super::daily_venue::days(core, &book, today) {
         book.pair_resets.insert(p.clone(), mark(x.result_usd));
+        // Решение 414: направление по просадке от пика — новый слепок (пауза снимется, когда он снят).
+        if super::drawdown_cfg::active(core, &p) {
+            snaps.push(p.clone());
+            continue;
+        }
         if super::daily_venue_limit::lift(core, &p) {
             lifted.push(super::day_pair::label(&p));
         }
     }
     let trip = super::daily::commit(core, today, book).await;
+    let snaps_text = super::drawdown_snap::request(core, &snaps, who, true).await;
     let stopped = lk(&core.inner.risk).daily_stop;
     let lifted = lifted.join(", ");
     let text = format!(
@@ -162,7 +169,7 @@ pub async fn reset(core: &Core, who: &str) -> String {
         } else {
             ""
         }
-    );
+    ) + &snaps_text;
     // Решение 164: в Telegram — коротко; подробности — в журнале.
     let tg = Msg::new(INFO, "Лимит дня сброшен")
         .kv("Кто", who)
@@ -180,6 +187,7 @@ pub async fn reset(core: &Core, who: &str) -> String {
         } else {
             ""
         })
+        .line(snaps_text.trim())
         .render();
     let deps = &core.inner.deps;
     deps.log(Level::Info, "core.loss_limit_reset", None, &text, None)

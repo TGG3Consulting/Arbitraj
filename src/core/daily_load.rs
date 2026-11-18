@@ -120,6 +120,9 @@ pub async fn load(core: &Core) {
                     provisional: book.provisional,
                     unpriced: book.unpriced,
                     deal_pairs: book.deal_pairs,
+                    // Решение 414: просадка пар не дневная — переносится (новый слепок снимет drawdown_snap.rs).
+                    draw: book.draw,
+                    draw_want: book.draw_want,
                     ..Book::default()
                 }
             };

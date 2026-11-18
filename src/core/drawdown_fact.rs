@@ -1,0 +1,135 @@
+//! Файл: core/drawdown_fact.rs
+//! Что делает: решение 414 — площадка покупки направления и USDT на ней по факту баланса (для слепка).
+//! Площадка покупки пары (п. 1 постановки t199): «биржа → DEX» и «биржа → биржа» — сама биржа; «DEX → биржа» —
+//! DEX-кошелёк ЭТОЙ биржи (строка маппинга биржи, решение 132); «DEX ↔ DEX» — кошелёк строки «DEX ↔ DEX».
+//! Факт — котируемая монета площадки (venue.quote_asset) так же, как остаток сделки в remain_fact.rs (решение 222):
+//! биржа — свободно + заморожено на торговом счёте и на счетах, с которых монета перекладывается на торговый (роль
+//! ToTrading, решение 174), только чтение; счёт с ошибкой — факта нет; DEX — баланс кошелька (один balanceOf, решение
+//! 113), свободно + заморожено. Своё чтение, а не вызов remain_fact.rs: там — монета сделки и её счёт, здесь — USDT
+//! направления (общая часть — account_balances / account_role шлюза).
+//! Кто вызывает: drawdown_snap.rs.
+//! От чего зависит: day_pair.rs, dex_account.rs (NO_WALLET), deal_words.rs (place), settings (accounts, venue.quote_asset),
+//! шлюз (get_as, account_balances, account_role, balance).
+//! Настройки: venue.quote_asset (площадки покупки), маппинг кошельков.
+
+use rust_decimal::Decimal;
+
+use crate::core::types::{DexAccountId, VenueId};
+use crate::gateway::contract::{AccountRole, VenueKind};
+use crate::settings::accounts::ROW_DEX_DEX;
+use crate::settings::read::At;
+use crate::settings::venue_dir::DirKind;
+
+use super::engine::Core;
+
+/// Площадка покупки направления: площадка, кошелёк DEX (у биржи — None), DEX ли.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Place {
+    pub venue: VenueId,
+    pub acc: Option<DexAccountId>,
+    pub dex: bool,
+}
+
+impl Place {
+    /// Тот же счёт: та же площадка; у DEX — тот же кошелёк (неизвестный кошелёк — считается тем же, как в
+    /// usdt_hold.rs). Принимает: площадку и кошелёк сделки. Ошибок нет.
+    pub fn same(&self, venue: &VenueId, acc: Option<&DexAccountId>) -> bool {
+        &self.venue == venue
+            && (!self.dex || self.acc.is_none() || acc.is_none() || self.acc.as_ref() == acc)
+    }
+}
+
+/// Что делает: площадка покупки пары. Принимает: ядро, id пары. Возвращает: Place. Ошибки: не пара; DEX нет в
+/// реестре; нет кошелька в маппинге (NO_WALLET).
+pub fn place(core: &Core, p: &str) -> Result<Place, String> {
+    let kind = super::day_pair::kind_of(p).ok_or_else(|| format!("{p}: не направление"))?;
+    let wallet = |row: &str| -> Result<Place, String> {
+        let dex = core
+            .dex_id()
+            .ok_or_else(|| "DEX нет в реестре площадок".to_string())?;
+        let acc = core
+            .inner
+            .deps
+            .settings
+            .accounts()
+            .row(row)
+            .ok_or_else(|| format!("{row}: {}", super::dex_account::NO_WALLET))?;
+        Ok(Place {
+            venue: dex,
+            acc: Some(DexAccountId(acc)),
+            dex: true,
+        })
+    };
+    match (kind, super::day_pair::venue_of(p)) {
+        (DirKind::CexToDex | DirKind::CexCex, Some(v)) => Ok(Place {
+            venue: VenueId(v.to_string()),
+            acc: None,
+            dex: false,
+        }),
+        (DirKind::DexToCex, Some(v)) => wallet(v),
+        (DirKind::DexDex, _) => wallet(ROW_DEX_DEX),
+        _ => Err(format!("{p}: у направления нет биржи")),
+    }
+}
+
+/// Площадка покупки словами (у DEX — с кошельком). Ошибок нет.
+pub fn words(core: &Core, pl: &Place) -> String {
+    super::deal_words::place(core, &pl.venue, pl.acc.as_ref())
+}
+
+/// Котируемая монета площадки (venue.quote_asset). Ошибки: не задана.
+pub fn quote(core: &Core, v: &VenueId) -> Result<String, String> {
+    let at = At {
+        venue: Some(&v.0),
+        coin: None,
+    };
+    core.inner
+        .deps
+        .settings
+        .text("venue.quote_asset", at)
+        .map_err(|e| e.message)
+}
+
+/// Что делает: USDT (котируемая монета) на площадке покупки по факту. Принимает: ядро, площадку.
+/// Возвращает: сумму. Ошибки: не задан venue.quote_asset, площадка не подключена, сбой балансов, счёт не прочитан.
+pub async fn usdt(core: &Core, pl: &Place) -> Result<Decimal, String> {
+    let q = quote(core, &pl.venue)?;
+    let gw = core
+        .inner
+        .deps
+        .gw
+        .get_as(&pl.venue, pl.acc.as_ref())
+        .await
+        .map_err(|e| e.message)?;
+    if gw.kind() != VenueKind::Cex {
+        return Ok(gw
+            .balance(&q)
+            .await
+            .map_err(|e| format!("{}: балансы: {}", pl.venue.0, e.message))?
+            .map(|b| b.free + b.locked)
+            .unwrap_or_default());
+    }
+    let accs = gw
+        .account_balances()
+        .await
+        .map_err(|e| format!("{}: балансы счетов: {}", pl.venue.0, e.message))?;
+    let mut sum = Decimal::ZERO;
+    for a in accs
+        .iter()
+        .filter(|x| gw.account_role(&x.account) != AccountRole::Other)
+    {
+        if let Some(e) = &a.error {
+            return Err(format!(
+                "{}: счёт «{}» не прочитан: {e}",
+                pl.venue.0, a.account
+            ));
+        }
+        sum += a
+            .balances
+            .iter()
+            .filter(|b| b.asset == q)
+            .map(|b| b.free + b.locked)
+            .sum::<Decimal>();
+    }
+    Ok(sum)
+}

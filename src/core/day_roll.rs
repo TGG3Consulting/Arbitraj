@@ -8,6 +8,8 @@
 //!   Затем итог дня пересчитывается на новую дату (daily::commit — новый день виден сразу, а не с первой сделкой).
 //!   Журнал core.control, уведомление risk.auto_resumed.
 //!
+//! Решение 414: паузы пар по просадке от пика (Risk.draw_paused) новый день не снимает — он запрашивает новый слепок
+//! баланса (drawdown_snap.rs request), слепок снимает и паузу.
 //! Кто вызывает: engine.rs (фоновая задача run).
 //! От чего зависит: auto_pause.rs, risk.rs, day_pair.rs (подписи), daily.rs (today_book, commit), daily_commit.rs
 //! (announce), deps.rs.
@@ -37,9 +39,18 @@ pub struct DayLift {
 /// Возвращает: что снято. Ошибок нет.
 pub fn new_day(r: &mut Risk) -> DayLift {
     let mut out = DayLift {
-        pairs: std::mem::take(&mut r.pair_paused).into_keys().collect(),
+        pairs: Vec::new(),
         mode: None,
     };
+    // Решение 414: пауза по просадке от пика новым днём не снимается — её снимет новый слепок (drawdown_snap.rs), пока
+    // он не снят, действует прежний пик.
+    for (p, why) in std::mem::take(&mut r.pair_paused) {
+        if r.draw_paused.contains(&p) {
+            r.pair_paused.insert(p, why);
+        } else {
+            out.pairs.push(p);
+        }
+    }
     r.loss_seen.clear();
     if let Some(m) = r.mode_auto.clone()
         && m.kind == ModeKind::DailyTotal
@@ -86,6 +97,9 @@ async fn roll(core: &Core) {
     let (today, book) = super::daily::today_book(core);
     let trip = super::daily::commit(core, today, book).await;
     super::daily_commit::announce(core, &trip).await;
+    // Решение 414: новый день — новый слепок баланса направлений с лимитом просадки.
+    let pairs = super::day_pair::all(core);
+    super::drawdown_snap::request(core, &pairs, "новый день (UTC)", false).await;
 }
 
 /// Журнал core.control (строка на каждое снятие) и одно уведомление risk.auto_resumed. Ничего не снято — тихо.

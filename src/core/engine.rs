@@ -100,6 +100,8 @@ impl Core {
         // Решение 225: софтовые паузы снимает сам бот — проверкой подключения и с новым днём (UTC).
         tokio::spawn(super::auto_resume::run(core.clone()));
         tokio::spawn(super::day_roll::run(core.clone()));
+        // Решение 414: слепки баланса направлений для лимита просадки — при запуске и при задании risk.drawdown_*.
+        tokio::spawn(super::drawdown_snap::run(core.clone()));
         tokio::spawn(super::rebuild::watch_settings(core.clone()));
         // Решение 348: сводка «кто вызвал котировку» (log.quote_count_s; не задана — ждёт настройку).
         tokio::spawn(super::quote_count_log::run(core.clone()));

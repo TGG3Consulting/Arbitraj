@@ -16,10 +16,13 @@
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
 //! От чего зависит: engine.rs, settings (catalog, read), view.rs, wallet_queue_gate.rs (очередь кошелька, решение 231 п. 4).
+//! Решение 414: у пары с заданными risk.drawdown_pct / risk.drawdown_max_usd лимит — просадка от пика (drawdown*.rs),
+//! пауза — тем же Risk.pair_paused с отметкой Risk.draw_paused.
 //! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd (у пары сделки: пара → площадка → вся
-//! система, day_pair.rs), risk.max_daily_loss_total_usd (необязательна), все обязательные money.* и risk.*.
+//! система, day_pair.rs), risk.drawdown_pct, risk.drawdown_max_usd, risk.max_daily_loss_total_usd (необязательна), все
+//! обязательные money.* и risk.*.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use rust_decimal::Decimal;
 
@@ -73,6 +76,12 @@ pub struct Risk {
     /// убытка (daily_venue_limit.rs). Новый день — с нуля.
     #[serde(skip)]
     pub loss_seen: BTreeMap<String, Decimal>,
+    /// Решение 414: пары, чья пауза в pair_paused поставлена просадкой от пика (drawdown_limit.rs) — новый день её не
+    /// снимает (снимет новый слепок, drawdown_snap.rs); «Снять паузу» снимает и отметку.
+    pub draw_paused: BTreeSet<String>,
+    /// Решение 414: просадка пары при прошлом пересчёте — повторная пауза только при росте (drawdown_limit.rs).
+    #[serde(skip)]
+    pub draw_seen: BTreeMap<String, Decimal>,
     /// Решение 225: паузы площадок, поставленные софтом (вид, когда) — их снимает сам бот (auto_resume.rs). Нет записи —
     /// пауза человека или другого модуля. «Снять паузу» человеком снимает отметку.
     pub venue_auto: HashMap<VenueId, super::auto_pause::VenueMark>,
@@ -102,6 +111,8 @@ impl Default for Risk {
             reconcile_venues: HashSet::new(),
             pair_paused: BTreeMap::new(),
             loss_seen: BTreeMap::new(),
+            draw_paused: BTreeSet::new(),
+            draw_seen: BTreeMap::new(),
             venue_auto: HashMap::new(),
             mode_auto: None,
             outcome_open: HashMap::new(),
@@ -241,6 +252,8 @@ pub fn resume_venue(core: &Core, venue: &VenueId) {
     // Решения 173, 258: паузы её пар по убытку дня тоже сняты; новая — только если убыток пары вырастет.
     for p in &pairs {
         r.pair_paused.remove(p);
+        // Решение 414: пауза по просадке — тоже; новая — только если просадка вырастет.
+        r.draw_paused.remove(p);
     }
     // Решение 225: паузу снял человек — софтовая отметка снята.
     r.venue_auto.remove(venue);
@@ -254,7 +267,12 @@ pub fn resume_venue(core: &Core, venue: &VenueId) {
 /// площадки и других пар не трогает; новая — только если убыток пары вырастет. Принимает: ядро, id пары.
 /// Возвращает: true — пауза была. Ошибок нет.
 pub fn resume_pair(core: &Core, pair: &str) -> bool {
-    let was = lk(&core.inner.risk).pair_paused.remove(pair).is_some();
+    let was = {
+        let mut r = lk(&core.inner.risk);
+        // Решение 414: пауза по просадке — тоже; новая — только если просадка вырастет.
+        r.draw_paused.remove(pair);
+        r.pair_paused.remove(pair).is_some()
+    };
     publish(core);
     was
 }
@@ -273,8 +291,27 @@ pub fn snapshot(core: &Core) -> Risk {
     let mut r = lk(&core.inner.risk).clone();
     r.day.limit = super::daily_limit::view(core, &r.day);
     let date = r.day.date;
+    let mut draw = BTreeMap::new();
+    for p in r.day.pairs.keys() {
+        if super::drawdown_cfg::active(core, p) {
+            draw.insert(p.clone(), super::drawdown_limit::view_of(core, p, &r.day));
+        }
+    }
     for (p, x) in r.day.pairs.iter_mut() {
-        x.limit = super::daily_venue_limit::view(core, p, x, date);
+        // Решение 414: пара по просадке от пика — старый лимит дня не действует; иначе — как раньше (решение 258).
+        match draw.remove(p) {
+            Some(v) => {
+                x.draw_on = true;
+                x.limit = None;
+                x.draw = v;
+            }
+            None => {
+                x.draw_on = false;
+                x.draw = None;
+                x.limit = super::daily_venue_limit::view(core, p, x, date);
+            }
+        }
+        x.draw_want = r.day.draw_want.get(p).cloned();
         x.paused = r.pair_paused.contains_key(p);
     }
     r

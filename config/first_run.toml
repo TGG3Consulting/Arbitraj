@@ -3253,6 +3253,26 @@ rationale = "Совет — 15 USDT по каждой бирже: один за�
 prefill = { kind = "Global" }
 
 [[section.rec]]
+name = "risk.drawdown_pct"
+area = "вся система (можно по площадке и по направлению площадки)"
+unit = "%"
+value = "5"
+source = "Решение 414 (Тигран, 19.11.2026)"
+method = "Предел просадки направления в % от пика теоретического баланса (слепок USDT на площадке покупки + итог сделок направления после слепка). Предел = меньшее из (этот % × пик) и risk.drawdown_max_usd. Задана эта или risk.drawdown_max_usd — старый risk.max_daily_loss_usd для направления не действует. Подбирает Тигран."
+rationale = "Пример Тиграна 19.11: пик 1000, 5 % но не более 30 USDT; отдали 35 — пауза направления."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "risk.drawdown_max_usd"
+area = "вся система (можно по площадке и по направлению площадки)"
+unit = "USDT"
+value = "30"
+source = "Решение 414 (Тигран, 19.11.2026)"
+method = "Предел просадки направления от пика в USDT: предел = меньшее из (risk.drawdown_pct × пик) и этого значения. Подбирает Тигран."
+rationale = "Пример Тиграна 19.11: 5 % но не более 30 USDT."
+prefill = { kind = "Global" }
+
+[[section.rec]]
 name = "risk.max_daily_loss_total_usd"
 area = "вся система"
 unit = "USDT"

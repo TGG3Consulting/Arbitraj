@@ -7,7 +7,9 @@
 //! (сброс лимита); announce — ledger.rs, ledger_load.rs, daily_load.rs, сбросы лимита.
 //! От чего зависит: daily.rs (Book, prov_on), daily_venue.rs, day_pair.rs, daily_venue_limit.rs, daily_limit.rs,
 //! deal_text.rs, storage/db.rs (решение 353: таблица daily_result — в файле учёта ledger.sqlite, Db::ledger).
-//! Настройки: нет (лимиты читают daily_venue_limit.rs и daily_limit.rs).
+//! Решение 414: перед записью — просадка пар от пика (drawdown_limit.rs advance: теоретический баланс и пик в книге),
+//! после — её проверка (drawdown_limit.rs check: пауза пары по просадке, Trip.draw).
+//! Настройки: нет (лимиты читают daily_venue_limit.rs, drawdown_limit.rs и daily_limit.rs).
 
 use chrono::{NaiveDate, Utc};
 use rusqlite::params;
@@ -22,6 +24,8 @@ use super::engine::{Core, lk};
 pub struct Trip {
     pub stop: Option<String>,
     pub paused: Vec<(String, String)>,
+    /// Решение 414: паузы пар по просадке от пика (id пары, причина с цифрами — drawdown_limit.rs).
+    pub draw: Vec<(String, String)>,
 }
 
 /// Что делает: журнал и Telegram по тому, что сработало при пересчёте: общий «Стоп» — core.daily_loss и
@@ -48,6 +52,25 @@ pub async fn announce(core: &Core, trip: &Trip) {
         deps.notify_acts("risk.venue_daily_loss", v.as_deref(), &tg, acts)
             .await;
     }
+    // Решение 414: пауза направления по просадке от пика — то же событие risk.venue_daily_loss, свой текст с цифрами.
+    for (p, why) in &trip.draw {
+        let v = super::day_pair::venue_or_dex(core, p);
+        deps.log(
+            Level::Warn,
+            "core.venue_daily_loss",
+            v.as_deref(),
+            why,
+            None,
+        )
+        .await;
+        let tg = super::drawdown_limit::stop_text(p, why);
+        let acts = vec![
+            crate::notify::acts::resume_venue(p),
+            crate::notify::acts::reset_venue_limit(p),
+        ];
+        deps.notify_acts("risk.venue_daily_loss", v.as_deref(), &tg, acts)
+            .await;
+    }
     if let Some(stop) = &trip.stop {
         deps.log(Level::Warn, "core.daily_loss", None, stop, None)
             .await;
@@ -63,9 +86,13 @@ pub async fn announce(core: &Core, trip: &Trip) {
 
 /// Пересчитывает DayView из книги дня, сохраняет и проверяет лимиты. Принимает: ядро, день, книгу.
 /// Возвращает: что сработало (общий «Стоп», паузы пар) — в журнал и Telegram его отдаёт daily_commit::announce.
-pub(super) async fn commit(core: &Core, date: NaiveDate, book: Book) -> Trip {
+pub(super) async fn commit(core: &Core, date: NaiveDate, mut book: Book) -> Trip {
     let prov = prov_on(&book, date);
     let pairs = super::daily_venue::days(core, &book, date);
+    // Решение 414: изменения итога пар — в теоретический баланс просадки (пик поднимается); плановые затраты возврата
+    // USDT — по сделкам учёта (drawdown_ledger.rs).
+    let pending = super::drawdown_ledger::pending(core);
+    super::drawdown_limit::advance(&mut book, &pairs, date, &pending);
     {
         let mut r = lk(&core.inner.risk);
         // Новый день — убыток пар считается с нуля; паузы прошлого дня по убытку сняты в полночь UTC (day_roll.rs,
@@ -82,6 +109,13 @@ pub(super) async fn commit(core: &Core, date: NaiveDate, book: Book) -> Trip {
         r.day.limit_reset = book.limit_reset.clone();
         r.day.pairs = pairs;
         r.day.deal_pairs = book.deal_pairs.clone();
+        r.day.draw = book.draw.clone();
+        r.day.draw_want = book.draw_want.clone();
+        r.day.draw_pending = pending;
+        let want = r.day.draw_want.clone();
+        for (p, x) in r.day.pairs.iter_mut() {
+            x.draw_want = want.get(p).cloned();
+        }
     }
     let body = serde_json::to_string(&book).unwrap_or_default();
     let day = date.to_string();
@@ -101,11 +135,12 @@ pub(super) async fn commit(core: &Core, date: NaiveDate, book: Book) -> Trip {
         deps.log(Level::Error, "core.daily", None, m, None).await;
     }
     let (paused, pair_cleared) = super::daily_venue_limit::check(core);
+    let (draw, draw_cleared) = super::drawdown_limit::check(core);
     let (stop, cleared) = super::daily_limit::check(core);
     // Решение 152: факт пришёл, лимит больше не превышен — остановку снимает человек, но он должен это видеть.
-    for t in pair_cleared.into_iter().chain(cleared) {
+    for t in pair_cleared.into_iter().chain(draw_cleared).chain(cleared) {
         deps.log(Level::Info, "core.daily_loss", None, t, None)
             .await;
     }
-    Trip { stop, paused }
+    Trip { stop, paused, draw }
 }

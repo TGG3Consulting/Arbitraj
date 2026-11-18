@@ -3,7 +3,8 @@
 //! часть и оценка позиций, неразобранные оценки сделок (и какие из них без цены — худший случай), сброс лимита дня
 //! и состояние лимита (сколько из скольких, превышен ли) — всей системы и по каждой паре «площадка × тип направления»
 //! (решение 258, было — по площадке, решение 173: у пары свой итог, свой лимит, своя пауза; пара — core/day_pair.rs).
-//! Значения ведёт core/daily.rs; лимиты — core/daily_limit.rs, daily_venue_limit.rs.
+//! Значения ведёт core/daily.rs; лимиты — core/daily_limit.rs, daily_venue_limit.rs; решение 414 — просадка от пика
+//! (core/drawdown*.rs): состояние пар и вид для экрана.
 //! Кто вызывает: core/risk.rs (поле Risk.day), core/daily.rs, core/daily_limit.rs, core/daily_venue.rs.
 //! От чего зависит: chrono, rust_decimal.
 //! Настройки: нет (лимиты — risk.max_daily_loss_usd по паре и risk.max_daily_loss_total_usd; читают
@@ -83,6 +84,16 @@ pub struct DayView {
     pub pairs: BTreeMap<String, PairDay>,
     /// Решение 258: пара неразобранной оценки (сделка → id пары).
     pub deal_pairs: BTreeMap<String, String>,
+    /// Решение 414: состояние просадки пар (слепок, баланс, пик — core/drawdown.rs) — из книги дня; на экран идёт вид
+    /// PairDay.draw.
+    #[serde(skip)]
+    pub draw: BTreeMap<String, super::drawdown::DrawState>,
+    /// Решение 414: запрошенные и ещё не снятые слепки пар (на экран — PairDay.draw_want).
+    #[serde(skip)]
+    pub draw_want: BTreeMap<String, super::drawdown::Want>,
+    /// Решение 414: плановые затраты возврата USDT пар при последнем пересчёте (drawdown_ledger.rs pending).
+    #[serde(skip)]
+    pub draw_pending: BTreeMap<String, Decimal>,
 }
 
 /// Итог дня одной пары «площадка × тип направления» (решение 258) и её лимит.
@@ -106,6 +117,14 @@ pub struct PairDay {
     pub limit: Option<LimitView>,
     /// Пара на паузе по убытку дня (Risk.pair_paused).
     pub paused: bool,
+    /// Решение 414: пара считается по просадке от пика (задан risk.drawdown_pct или risk.drawdown_max_usd); тогда
+    /// `limit` (старый лимит дня) не действует и не заполняется.
+    pub draw_on: bool,
+    /// Решение 414: просадка от пика (слепок, пик, теоретический баланс, предел); None — слепка ещё не было или пара по
+    /// старому лимиту.
+    pub draw: Option<super::drawdown::DrawView>,
+    /// Решение 414: новый слепок запрошен и ещё не снят (кто, когда, почему не снят).
+    pub draw_want: Option<super::drawdown::Want>,
 }
 
 impl Default for DayView {
@@ -121,6 +140,9 @@ impl Default for DayView {
             limit: None,
             pairs: BTreeMap::new(),
             deal_pairs: BTreeMap::new(),
+            draw: BTreeMap::new(),
+            draw_want: BTreeMap::new(),
+            draw_pending: BTreeMap::new(),
         }
     }
 }

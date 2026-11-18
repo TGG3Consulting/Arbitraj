@@ -12,6 +12,7 @@
 //! (daily_venue.rs, day_pair.rs): факт сделки и её оценка идут её паре (биржа → DEX, DEX → биржа — бирже этого
 //! направления; биржа → биржа — бирже покупки; DEX ↔ DEX — общей паре «DEX ↔ DEX»); общий итог — сумма сделок.
 //! Пересчёт, запись в базу и проверка лимитов — daily_commit.rs.
+//! Решение 414: в той же строке — просадка пар от пика (Book.draw, Book.draw_want; core/drawdown*.rs), не дневная.
 //! Решение 257: каждое изменение итога дня из-за сделки — ещё и начисление в её учёт (Deal.day_book, deal_book.rs):
 //! отчёт «Итоги сделок» складывает их по дням и получает итог дня бота.
 //! Кто вызывает: ledger.rs (finish), ledger_load.rs, manual_return.rs (перенос доли), engine.rs (load), daily_limit.rs,
@@ -59,6 +60,13 @@ pub(super) struct Book {
     /// Решение 258: сброс лимита дня пары (id пары → отметка) — только этого дня.
     #[serde(default)]
     pub(super) pair_resets: BTreeMap<String, LimitReset>,
+    /// Решение 414: просадка пар от пика (слепок, баланс, пик — core/drawdown.rs). Не дневное: переносится в новый день
+    /// (новый слепок снимается заново — drawdown_snap.rs; пока не снят, действует прежний пик).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) draw: BTreeMap<String, super::drawdown::DrawState>,
+    /// Решение 414: запрошенные и ещё не снятые слепки пар (переживают перезапуск — задача снятия поднимается снова).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) draw_want: BTreeMap<String, super::drawdown::Want>,
 }
 
 /// Сумма оценок, учтённых в день `date`. Ошибок нет.
@@ -97,6 +105,9 @@ pub(super) fn today_book(core: &Core) -> (NaiveDate, Book) {
             } else {
                 BTreeMap::new()
             },
+            // Решение 414: просадка не дневная — переносится всегда.
+            draw: r.day.draw.clone(),
+            draw_want: r.day.draw_want.clone(),
         },
     )
 }

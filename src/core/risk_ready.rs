@@ -7,7 +7,10 @@
 //! Кто вызывает: risk.rs (can_open).
 //! От чего зависит: settings (catalog, store), day_pair.rs (пара сделки и её лимит).
 //! Решение 242: money.* с областью «площадка + тип направления» — заданы и значением пары (core/venue_dir.rs).
-//! Настройки: все обязательные money.* и risk.*, risk.max_errors_in_row, risk.max_daily_loss_usd.
+//! Решение 414: вместо risk.max_daily_loss_usd у пары может быть задан предел просадки от пика (risk.drawdown_pct /
+//! risk.drawdown_max_usd, drawdown_cfg.rs) — тогда нужен снятый слепок баланса направления (drawdown_snap.rs).
+//! Настройки: все обязательные money.* и risk.*, risk.max_errors_in_row, risk.max_daily_loss_usd или
+//! risk.drawdown_pct / risk.drawdown_max_usd.
 
 use crate::core::types::Direction;
 use crate::settings::catalog;
@@ -49,13 +52,42 @@ pub(super) fn settings_ready(core: &Core, d: &Direction) -> Result<(), String> {
         ));
     }
     // Решение 258: у пары сделки — свой лимит дня (значение пары, площадки или «вся система»).
+    // Решение 414: или предел просадки от пика (risk.drawdown_pct / risk.drawdown_max_usd) — тогда старый не нужен.
     let pair = super::day_pair::of_direction(core, d);
+    if super::drawdown_cfg::active(core, &pair) {
+        return snap_ready(core, &pair);
+    }
     if !super::day_pair::is_set(core, &pair) {
         return Err(format!(
-            "торговля не включается: не задана настройка {} [venue_dir:{pair}] — ни у направления {}, ни у площадки, ни у всей системы",
+            "торговля не включается: не задана настройка {} [venue_dir:{pair}] — ни у направления {}, ни у площадки, ни у всей системы (и не задан предел просадки {} / {}, решение 414)",
             super::day_pair::SETTING,
-            super::day_pair::label(&pair)
+            super::day_pair::label(&pair),
+            super::drawdown_cfg::PCT,
+            super::drawdown_cfg::USD
         ));
     }
     Ok(())
+}
+
+/// Что делает: решение 414 — у направления по просадке от пика должен быть слепок баланса (хоть раз снятый): без
+/// него лимит не работает, и торговля направлением не включается — как при не заданном лимите (решение 258).
+/// Принимает: ядро, id пары. Возвращает: Ok или Err с причиной (почему слепок ещё не снят). Ошибок нет.
+fn snap_ready(core: &Core, pair: &str) -> Result<(), String> {
+    let r = super::engine::lk(&core.inner.risk);
+    if r.day.draw.contains_key(pair) {
+        return Ok(());
+    }
+    let why = r
+        .day
+        .draw_want
+        .get(pair)
+        .and_then(|w| w.note.clone())
+        .map_or_else(
+            || "снимается — до 2 минут, пока идут сделки направления".to_string(),
+            |n| format!("не снят: {n}"),
+        );
+    Err(format!(
+        "торговля не включается: у направления {} ещё нет слепка баланса для лимита просадки (решение 414) — {why}",
+        super::day_pair::label(pair)
+    ))
 }

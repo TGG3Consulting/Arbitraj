@@ -16,6 +16,8 @@
 //! Кто вызывает: daily_commit.rs (check), daily_limit.rs (общий сброс), risk.rs (snapshot), commands_control.rs, api.
 //! От чего зависит: daily.rs (today_book, commit), daily_venue.rs, day_pair.rs, daily_limit.rs (describe),
 //! daily_commit.rs (announce), day_view.rs.
+//! Решение 414: пара с заданными risk.drawdown_pct / risk.drawdown_max_usd здесь не проверяется (просадка от пика —
+//! drawdown_limit.rs); её «Сбросить лимит дня» — новый слепок баланса (drawdown_snap.rs request).
 //! Настройки: risk.max_daily_loss_usd (пара → площадка → вся система).
 
 use chrono::{NaiveDate, Utc};
@@ -54,6 +56,11 @@ pub(super) fn check(core: &Core) -> (Vec<(String, String)>, Vec<String>) {
     let date = r.day.date;
     let names: Vec<String> = r.day.pairs.keys().cloned().collect();
     for p in names {
+        // Решение 414: пара с заданными risk.drawdown_* — по просадке от пика (drawdown_limit.rs), старый лимит не
+        // действует.
+        if super::drawdown_cfg::active(core, &p) {
+            continue;
+        }
         let x = r.day.pairs[&p].clone();
         let l = view(core, &p, &x, date);
         let on = r.pair_paused.contains_key(&p);
@@ -107,8 +114,13 @@ pub async fn reset(core: &Core, id: &str, who: &str) -> String {
     let (today, mut book) = super::daily::today_book(core);
     let days = super::daily_venue::days(core, &book, today);
     let at = Utc::now();
-    let (mut parts, mut lifted) = (Vec::new(), Vec::new());
+    let (mut parts, mut lifted, mut snaps) = (Vec::new(), Vec::new(), Vec::new());
     for p in &pairs {
+        // Решение 414: направление по просадке от пика — «Сбросить лимит» = новый слепок (пауза снимется, когда он
+        // снят: drawdown_snap.rs); отметка старого лимита пишется как раньше (не действует).
+        if super::drawdown_cfg::active(core, p) {
+            snaps.push(p.clone());
+        }
         let x = days.get(p).cloned().unwrap_or_default();
         book.pair_resets.insert(
             p.clone(),
@@ -119,11 +131,12 @@ pub async fn reset(core: &Core, id: &str, who: &str) -> String {
             },
         );
         parts.push(format!("{} {} USDT", label(p), x.result_usd.round_dp(4)));
-        if lift(core, p) {
+        if !snaps.contains(p) && lift(core, p) {
             lifted.push(label(p));
         }
     }
     let trip = super::daily::commit(core, today, book).await;
+    let snaps_text = super::drawdown_snap::request(core, &snaps, who, true).await;
     let what = if is_pair(id) {
         format!("направления {}", label(id))
     } else {
@@ -140,7 +153,7 @@ pub async fn reset(core: &Core, id: &str, who: &str) -> String {
         } else {
             format!(" Пауза по убытку дня снята: {lifted} — снова торгует")
         }
-    );
+    ) + &snaps_text;
     let tg = Msg::new(INFO, format!("Лимит дня {what} сброшен"))
         .kv("Кто", who)
         .line(format!(
@@ -152,6 +165,7 @@ pub async fn reset(core: &Core, id: &str, who: &str) -> String {
         } else {
             format!("Пауза снята: {lifted} — торговля идёт")
         })
+        .line(snaps_text.trim())
         .render();
     let v = if is_pair(id) {
         super::day_pair::venue_or_dex(core, id).unwrap_or_default()
@@ -171,6 +185,8 @@ pub async fn reset(core: &Core, id: &str, who: &str) -> String {
 pub(super) fn lift(core: &Core, pair: &str) -> bool {
     let mut r = lk(&core.inner.risk);
     r.loss_seen.remove(pair);
+    r.draw_seen.remove(pair);
+    r.draw_paused.remove(pair);
     r.pair_paused.remove(pair).is_some()
 }
 

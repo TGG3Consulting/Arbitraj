@@ -187,6 +187,7 @@ pub async fn search_in<C: Curve>(m: &mut Memo<'_, C>, p: &Params) -> Result<Foun
         peaks,
         capped,
         why: String::new(),
+        presell_cut: None,
     };
     Ok(Found {
         best,

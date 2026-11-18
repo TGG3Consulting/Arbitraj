@@ -58,6 +58,7 @@ pub fn cand(core: &Core, d: &Direction, calc: &Calc, reason: Option<&str>, mode:
         plan_budget: None,
         free: None,
         parts: super::limits_parts::parts(core, d, mode).ok(),
+        presell_cut: None,
         window_from: window_from(core, d),
     };
     submit(core, Key::Cand(d.clone()), d, battle, None);
@@ -102,6 +103,7 @@ pub fn deal(
         plan_budget: Some(plan_budget),
         free,
         parts,
+        presell_cut: plan.size.as_ref().and_then(|s| s.presell_cut.clone()),
         window_from: window_from(core, &plan.direction),
     };
     // Снимка не брали (расчёт был выключен в момент решения) — причина, а не живые данные после покупки.

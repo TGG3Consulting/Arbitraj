@@ -186,6 +186,10 @@ pub struct SizeChoice {
     pub capped: bool,
     /// Почему этот объём лучший — человеческим текстом (заполняет profit.rs).
     pub why: String,
+    /// Решение 407 (t192): объём урезан симуляцией продажи до покупки (решение 380) — настоящая причина ограничения
+    /// (ставит core/precheck_dex_cut.rs mark); None — не урезался.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub presell_cut: Option<String>,
 }
 
 /// Итог поиска: лучшая точка и сводка.

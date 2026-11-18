@@ -5,7 +5,7 @@
 //! Время симулированного блока (решение 127): у всех проб перед отправкой и проб налогов — голова + 1 с
 //! (check/sim_base.rs head → blockOverrides.time), а не +12 с узла BSC; без времени — только проверка поддержки метода.
 //! Кто вызывает: check/{probe, native_probe, service_tax}.rs, exec/{precheck_sim, bundle_send, cycle_bundle_trade,
-//! cycle_exec, dry_sim}.rs, exec/executor/sim.rs.
+//! cycle_exec, dry_sim, presell_slot}.rs, exec/executor/sim.rs.
 //! От чего зависит: node/rpc.rs, ctx.rs, check/sim_base.rs (Base — номер и время базового блока).
 //! Настройки: узел — bsc.node_http_url (метод должен поддерживаться провайдером; не поддерживается — ошибка узла
 //! как есть, проверка монеты не проходит).
@@ -109,12 +109,20 @@ pub async fn run_valued(
 
 /// Подмена состояния счёта в симуляции (execute.yaml AccountOverride: code и state — полная замена хранилища):
 /// так «Сухая сделка DEX» проверяет ещё не развёрнутый исполнитель ArbExecutor на живой сети (решение 122, часть X).
+/// Решение 407 (t192): diff = true — точечная подмена слотов (AccountOverride.stateDiff, execution-apis 16caee27
+/// src/schemas/execute.yaml#L89-L92: «override individual slots»), БЕЗ code: код и прочие слоты счёта — как в сети
+/// (баланс токена кошелька в симуляции продажи до покупки — exec/presell_slot.rs). В узле BSC — override.go
+/// (bnb-chain/bsc 947ba1cb internal/ethapi/override/override.go#L115-L127: state и stateDiff вместе — ошибка;
+/// stateDiff — SetState по слоту).
 #[derive(Debug, Clone)]
 pub struct Override {
     pub address: Address,
+    /// Код счёта; при diff = true не отправляется.
     pub code: Bytes,
-    /// Слоты хранилища (ключ → значение); остальные слоты — нули.
+    /// Слоты хранилища (ключ → значение); при diff = false остальные слоты — нули, при diff = true — как в сети.
     pub state: Vec<(B256, B256)>,
+    /// true — stateDiff без code (решение 407); false — code + state (как до решения).
+    pub diff: bool,
 }
 
 /// То же с подменой состояния (blockStateCalls[].stateOverrides — execution-apis 16caee27 src/schemas/execute.yaml
@@ -179,10 +187,12 @@ pub fn params(
                     .iter()
                     .map(|(k, v)| (format!("{k:#x}"), json!(v)))
                     .collect();
-                (
-                    format!("{:#x}", o.address),
-                    json!({ "code": o.code, "state": state }),
-                )
+                let acc = if o.diff {
+                    json!({ "stateDiff": state })
+                } else {
+                    json!({ "code": o.code, "state": state })
+                };
+                (format!("{:#x}", o.address), acc)
             })
             .collect();
         block["stateOverrides"] = serde_json::Value::Object(map);

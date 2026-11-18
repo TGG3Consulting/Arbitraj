@@ -18,13 +18,14 @@ const LIMITED = {
   optimum: 'ничего: оптимум внутри бюджета',
   liquidity: 'ликвидность площадок',
   search_cap: 'предел поиска card.max_search_usdt',
+  presell_sim: 'симуляция продажи до покупки (решение 380): проверен меньший объём',
 };
 
 /** Что ограничило — по коду. */
 export const limitedLabel = (k) => LIMITED[k] ?? k;
 
 /** Бюджет срезал оптимум (как core budget_bound). */
-export const budgetBound = (k) => !['optimum', 'liquidity', 'search_cap'].includes(k);
+export const budgetBound = (k) => !['optimum', 'liquidity', 'search_cap', 'presell_sim'].includes(k);
 
 /** Деньги для экрана: до 4 знаков, без хвостовых нулей; null — «—». */
 export function money(x) {

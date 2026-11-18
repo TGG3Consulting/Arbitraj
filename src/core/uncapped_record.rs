@@ -117,6 +117,11 @@ pub fn limited_by<T>(
     parts: Option<&Parts>,
     budget: Decimal,
 ) -> String {
+    // Решение 407 (t192): сделку урезала симуляция продажи до покупки (решение 380) — оптимум больше взятого не из-за
+    // бюджета (живой NXT 18.11: писалось per_trade при объёме 207.35 из 6981.38).
+    if b.presell_cut.is_some() && u.opt.qty > b.qty {
+        return "presell_sim".into();
+    }
     if u.opt.invested <= budget {
         let edge = u.opt.qty >= u.upper_qty;
         return match (edge, u.cap_reached) {

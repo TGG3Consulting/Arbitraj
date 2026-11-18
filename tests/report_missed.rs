@@ -96,6 +96,7 @@ async fn brief(
             free: None,
             parts: None,
             window_from: deal.map(|_| at - Duration::seconds(42)),
+            presell_cut: None,
         },
         limited_by: "per_trade".into(),
         missed: missed(verdict, u.opt_passes, opt.profit, &u.at_budget),

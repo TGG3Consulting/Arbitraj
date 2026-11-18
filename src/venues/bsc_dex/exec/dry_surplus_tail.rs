@@ -55,6 +55,7 @@ pub async fn tail(
                 address: virtual_quoter::address(),
                 code,
                 state: Vec::new(),
+                diff: false,
             });
         }
         let out = simulate::run_with(ctx, &calls, &[], &over, at).await?;

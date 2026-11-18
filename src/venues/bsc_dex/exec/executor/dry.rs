@@ -119,6 +119,7 @@ pub async fn build(
                 address: at,
                 code: code::runtime().map_err(internal)?,
                 state,
+                diff: false,
             };
             let call = native(call::build(ctx, legs, at, now)?)?;
             let approvals = if call.value().is_zero() {

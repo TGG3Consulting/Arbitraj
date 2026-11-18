@@ -15,7 +15,8 @@
 //! токен продаётся этим путём этим кошельком и налог на ЭТОЙ сумме; не доказывает лимит размера перевода/продажи у
 //! токена (max tx, anti-whale), налог, зависящий от суммы, и прочую логику transfer токена — котировка пула и квотер
 //! transfer токена не исполняют. Это была бы торговля вслепую; урезание объёма — нет.
-//! Кто вызывает: core/precheck_dex_sell.rs (check), core/costs.rs (sell_max_ok), core/precheck.rs (chrono).
+//! Решение 407 (t192): mark — настоящая причина урезания в plan.size.why и в расчёт «без потолка» (presell_sim).
+//! Кто вызывает: core/precheck_dex_sell.rs (check, mark), core/costs.rs (sell_max_ok), core/precheck.rs (chrono).
 //! От чего зависит: profit.rs (decide_capped), dirctx.rs (DirCtx.sell_max), dry.rs (Mode::Live), size.rs (Fail),
 //! gateway/quote_purpose.rs (Purpose::Precheck), core::types::PresellShort.
 //! Настройки: нет своих (всё, что читает profit.rs).
@@ -92,6 +93,26 @@ pub fn note(plan: &Calc, short: &PresellShort, sell_qty: Decimal) -> String {
         plan.profit_usd.round_dp(4),
         short.why
     )
+}
+
+/// Решение 407 (t192, п. 2): честный ограничитель урезанного плана — в пояснение подбора (plan.size.why, первой частью) и в
+/// SizeChoice.presell_cut (оттуда — Battle расчёта «без потолка»: limited_by = presell_sim вместо per_trade). Живой
+/// NXT 18.11: в why стояло «оптимум … на бюджете 600 …», будто ограничил лимит на сделку. Принимает: новый план
+/// (меняется), исходный план, что сказал адаптер. Ошибок нет (у плана без выбора объёма — ничего).
+pub fn mark(c: &mut Calc, plan: &Calc, short: &PresellShort) {
+    let why = format!(
+        "объём ограничен симуляцией продажи до покупки (решение 380): проверено не больше {} монет продажи, хотели {} \
+         (объём {}, прибыль {} USDT); почему: {}",
+        short.fundable.normalize(),
+        plan.sell_qty.normalize(),
+        plan.qty.normalize(),
+        plan.profit_usd.round_dp(4),
+        short.why
+    );
+    if let Some(s) = c.size.as_mut() {
+        s.why = format!("{why}; подбор на проверяемом объёме: {}", s.why);
+        s.presell_cut = Some(why);
+    }
 }
 
 /// Строка хронологии сделки (ревью t166, Н6): объём урезан до проверенного симуляцией продажи — не путать с «Объём под

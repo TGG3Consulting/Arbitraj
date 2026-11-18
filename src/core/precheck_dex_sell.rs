@@ -67,8 +67,10 @@ pub async fn check(core: &Core, d: &Direction, plan: Calc) -> Result<Calc, Strin
         )
     })?;
     match again {
-        Once::Done(c) => {
+        Once::Done(mut c) => {
             let text = super::precheck_dex_cut::note(&plan, &short, cut_qty);
+            // Решение 407 (п. 2): настоящая причина ограничения — в пояснение подбора и в расчёт «без потолка».
+            super::precheck_dex_cut::mark(&mut c, &plan, &short);
             log(core, d, text).await;
             Ok(c)
         }

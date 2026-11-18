@@ -259,5 +259,6 @@ pub fn choice(c: &Calc, asked: Decimal, budget: Decimal, ticker: &str) -> SizeCh
         peaks: 0,
         capped: false,
         why,
+        presell_cut: None,
     }
 }

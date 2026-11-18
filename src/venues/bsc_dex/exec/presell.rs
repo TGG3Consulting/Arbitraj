@@ -22,10 +22,16 @@
 //! (core/precheck_dex_cut.rs) — сделка идёт только на объёме, проверенном симуляцией целиком.
 //! Решение 382 (выравнивание с 177): расхождение с квотером у продажи выхода — продажа собрана по квотеру, как настоящая
 //! (exec/dry_checks.rs), строка — в DexPresell.by_quoter и в текст отказа.
+//! Решение 407 (t192, живой бот 18.11, NXT mexc → bsc_dex: объём урезан 380 до 207.35 из 6981.38): при заданной
+//! presell.balance_slot_scan баланс монеты кошелька в симуляции — подменой слота баланса (exec/presell_credit.rs,
+//! presell_slot.rs), и проверяется продажа ПОЛНОГО объёма; слот не найден достоверно / подмена не дала ровно нужного —
+//! путь как раньше (пополнение dry_fund, Short 380), причина — в «монеты в симуляции» и в тексте Short.
 //! Кто вызывает: venue.rs (контракт dex_presell).
-//! От чего зависит: exec/{dry_build, dry_sim, dry_swap (io), trade (sides), native}.rs, quote/{direct, pool_tax}.rs,
+//! От чего зависит: exec/{dry_build, dry_sim (Io), dry_swap (io), presell_credit, trade (sides), native}.rs,
+//! quote/{direct, pool_tax}.rs,
 //! wallet/{signer, balances}.rs, num.rs.
-//! Настройки: через вызываемые — exec.dex_slippage_pct, exec.executor_address, dex.*, smart.*, verify.*.
+//! Настройки: presell.balance_slot_scan (через presell_credit); через вызываемые — exec.dex_slippage_pct,
+//! exec.executor_address, dex.*, smart.*, verify.*.
 
 use alloy_primitives::U256;
 use rust_decimal::Decimal;
@@ -38,9 +44,9 @@ use super::super::num;
 use super::super::quote::{Quoting, direct, pool_tax};
 use super::super::wallet::{balances, signer};
 use super::dry_build::{self, Built};
-use super::dry_sim::{self, Io};
+use super::dry_sim::Io;
 use super::executor::dry::DryMode;
-use super::{dry_fund_gather, dry_surplus_cut, dry_swap, native, trade};
+use super::{dry_fund_gather, dry_surplus_cut, dry_swap, native, presell_credit, trade};
 
 /// Симуляция продажи. Принимает: котировку (вид на счёт сделки), запрос продажи как у исполнения (маршрут из плана).
 /// Возвращает: PresellOutcome::Done(DexPresell); решение 380 — Short: пополнить кошелёк на весь объём нечем, с
@@ -112,7 +118,8 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<PresellOutcome
         taxes_in: taxes.as_ref(),
         ..dry_swap::io(&ready, Side::Sell, is_native, (coin, usdt))
     };
-    let sim = dry_sim::run(q, &ready, wallet, &io).await?;
+    // Решение 407: баланс входа подменой слота (exec/presell_credit.rs); не вышло — путь как раньше, с пометкой.
+    let sim = presell_credit::run(q, &ready, wallet, &io).await?;
     // Решение 252, вариант «б»: выход уже уменьшен на излишек пары от пополнения — строка в журнал и в причину отказа.
     let surplus = sim
         .surplus

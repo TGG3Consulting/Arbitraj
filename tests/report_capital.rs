@@ -171,6 +171,7 @@ async fn brief(
             free: None,
             parts: None,
             window_from: None,
+            presell_cut: None,
         },
         limited_by: limited_by.into(),
         missed: missed(verdict, u.opt_passes, opt.profit, &u.at_budget),

@@ -48,6 +48,10 @@ pub struct Battle {
     /// None — спред сейчас не выше порога или записи до решения 197.
     #[serde(default)]
     pub window_from: Option<DateTime<Utc>>,
+    /// Решение 407 (t192): только сделка — объём урезан симуляцией продажи до покупки (решение 380): сколько проверено,
+    /// сколько хотели, почему (SizeChoice.presell_cut). None — не урезался или записи до решения 407.
+    #[serde(default)]
+    pub presell_cut: Option<String>,
 }
 
 /// Эпизод: серия расчётов одного направления подряд (промежутки не длиннее uncapped.episode_gap_ms).
@@ -75,7 +79,8 @@ pub struct Record {
     pub budget: Decimal,
     /// Что ограничило: per_trade / per_coin / in_transit / dry / free (свободный остаток) / budget (составляющие не
     /// прочитаны) — бюджет срезал оптимум; optimum — оптимум внутри бюджета; liquidity — край площадок;
-    /// search_cap — предел поиска card.max_search_usdt.
+    /// search_cap — предел поиска card.max_search_usdt; presell_sim (решение 407) — сделку урезала симуляция продажи до
+    /// покупки (решение 380), не бюджет.
     pub limited_by: String,
     pub min_profit_usd: Decimal,
     pub min_profit_pct: Decimal,
@@ -207,7 +212,10 @@ impl Brief {
 
 /// Бюджет срезал оптимум (а не оптимум внутри, не край площадок или поиска). Ошибок нет.
 pub fn budget_bound(limited_by: &str) -> bool {
-    !matches!(limited_by, "optimum" | "liquidity" | "search_cap")
+    !matches!(
+        limited_by,
+        "optimum" | "liquidity" | "search_cap" | "presell_sim"
+    )
 }
 
 /// Упущено, USDT. Прошёл / сделка: (прибыль без потолка, если проходит пороги, иначе 0) − (взяли бы на боевом бюджете

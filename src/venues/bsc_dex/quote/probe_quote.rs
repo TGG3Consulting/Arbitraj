@@ -71,6 +71,7 @@ impl Way {
             address: virtual_quoter::address(),
             code,
             state: Vec::new(),
+            diff: false,
         }])
     }
 

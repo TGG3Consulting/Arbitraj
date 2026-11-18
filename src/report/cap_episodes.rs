@@ -11,7 +11,7 @@
 //!   uncapped.ladder_usdt), — пусто, а не 0;
 //! - «что ограничило» эпизода — у его пиковой записи (наибольшее упущено, как пик эпизода в core/uncapped_store.rs;
 //!   равные — первая): optimum → «выгодный объём», per_trade → «лимит на сделку», free → «свободный баланс»,
-//!   liquidity → «ликвидность», per_coin → «лимит на монету», остальное (in_transit, dry, budget, search_cap) → «другое»;
+//!   liquidity → «ликвидность», per_coin → «лимит на монету», остальное (in_transit, dry, budget, search_cap, presell_sim — решение 407) → «другое»;
 //! - эпизод со сделкой — в нём есть запись исполненной сделки (Item.deal);
 //! - день — дата начала эпизода (UTC); направление — «MEXC → DEX» (notify/human.rs route).
 //!

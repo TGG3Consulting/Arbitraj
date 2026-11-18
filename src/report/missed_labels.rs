@@ -19,6 +19,7 @@ pub fn limited_label(k: &str) -> String {
         "optimum" => "ничего: оптимум внутри бюджета",
         "liquidity" => "ликвидность площадок",
         "search_cap" => "предел поиска card.max_search_usdt",
+        "presell_sim" => "симуляция продажи до покупки (решение 380): проверен меньший объём",
         other => other,
     }
     .to_string()

@@ -63,6 +63,8 @@ pub mod precheck;
 pub mod precheck_quoter;
 pub mod precheck_sim;
 pub mod presell;
+pub mod presell_credit;
+pub mod presell_slot;
 pub mod quoter_favour;
 pub mod quoter_refetch;
 pub mod quoter_refetch_check;

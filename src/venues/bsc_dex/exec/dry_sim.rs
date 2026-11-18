@@ -12,6 +12,9 @@
 //! Выход BNB (покупка нативной монеты, UNWRAP_WETH) — Multicall3.getEthBalance (dex.multicall3); не задан — не измерен.
 //! Через исполнитель ArbExecutor (решение 122, часть X): разрешение ERC-20 исполнителю → execute; не развёрнут —
 //! его код и слот владельца подставляются подменой состояния (check/simulate.rs::run_with, stateOverrides).
+//! Решение 407 (t192): Io.credit (только симуляция продажи до покупки — exec/presell.rs) — входа у кошелька меньше
+//! нужного: вместо пополнения слот баланса кошелька = need подменой состояния (exec/presell_slot.rs); balanceOf входа
+//! после подмены ≠ need ровно — Sim.credit_bad (подмена недостоверна, presell повторяет без неё).
 //! Разбор итогов — exec/dry_judge.rs.
 //! Кто вызывает: exec/dry_swap.rs.
 //! От чего зависит: check/simulate.rs, check/probe_calls.rs, check/emitter.rs, exec/{dry_build, dry_fund, dry_surplus,
@@ -28,7 +31,7 @@ use crate::core::types::TokenTaxes;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::check::probe_calls as pc;
-use super::super::check::simulate::{self, Call};
+use super::super::check::simulate::{self, Call, Override};
 use super::super::node::multicall;
 use super::super::quote::Quoting;
 use super::super::wallet::balances;
@@ -52,6 +55,8 @@ pub struct Io<'a> {
     pub need: U256,
     pub taxes_in: Option<&'a TokenTaxes>,
     pub token_out: Option<Address>,
+    /// Решение 407: подмена баланса входа кошелька (stateDiff токена: слот = need); None — пополнение как раньше.
+    pub credit: Option<Override>,
 }
 
 /// Итог симуляции.
@@ -69,6 +74,8 @@ pub struct Sim {
     /// Решение 380: пополнить на полную сумму нечем — сколько единиц входа МОЖНО дать кошельку (вместе с его балансом);
     /// None — пополнение не было причиной отказа.
     pub fundable: Option<U256>,
+    /// Решение 407: подмена баланса применена, но balanceOf входа ≠ need ровно — подмена недостоверна.
+    pub credit_bad: bool,
 }
 
 /// Симуляция. Принимает: котировку, собранную сделку, кошелёк, вход и выход. Возвращает: Sim (отказ — reason).
@@ -78,11 +85,19 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
     let mut sim = Sim::default();
     let mut calls: Vec<Call> = Vec::new();
     let mut values: Vec<(usize, U256)> = Vec::new();
-    let (mut watch, mut funded) = (Vec::new(), U256::ZERO);
+    let (mut watch, mut funded, mut credited) = (Vec::new(), U256::ZERO, false);
     if let Some(t) = io.token_in {
         let have = balances::token_units(ctx, t, wallet).await?;
         if have >= io.need {
             sim.funding = Some(format!("баланс кошелька ({have} ≥ {} единиц)", io.need));
+        } else if io.credit.is_some() {
+            // Решение 407: баланс входа — подменой слота (exec/presell_slot.rs), источники не нужны.
+            sim.funding = Some(format!(
+                "подмена баланса кошелька в симуляции: {have} → {} единиц (stateDiff слота баланса, слот проверен \
+                 balanceOf; решение 407)",
+                io.need
+            ));
+            credited = true;
         } else {
             let fs = match dry_fund::plan(q, r, t, (have, io.need), io.taxes_in).await? {
                 Ok(v) => v,
@@ -130,11 +145,22 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
     });
     dry_surplus::after_swap(&mut calls, wallet, &mut watch);
     // Исполнитель не развёрнут (режим «через исполнитель», решение 122): его код и владелец — подменой состояния.
-    let over: Vec<_> = match &r.built {
+    let mut over: Vec<_> = match &r.built {
         Built::Exec(x) => x.over.iter().cloned().collect(),
         _ => Vec::new(),
     };
+    over.extend(io.credit.iter().filter(|_| credited).cloned());
     let res = simulate::run_with(ctx, &calls, &values, &over, r.at).await?;
+    // Решение 407: подмена достоверна, только если balanceOf входа после неё — ровно need.
+    let seen = in_idx.and_then(|i| pc::u256(&res[i]));
+    if credited && seen != Some(io.need) {
+        sim.credit_bad = true;
+        sim.reason = Some(format!(
+            "подмена баланса недостоверна: balanceOf после подмены {seen:?}, подставлено {}",
+            io.need
+        ));
+        return Ok(sim);
+    }
     judge(r, &res, &mains, in_idx.map(|i| (i, io.need)), &mut sim);
     if sim.reason.is_none() {
         let read = |i: Option<usize>| i.and_then(|i| pc::u256(&res[i]));

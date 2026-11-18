@@ -225,6 +225,7 @@ fn battle(plan: &costs::Calc) -> Battle {
         free: None,
         parts: None,
         window_from: None,
+        presell_cut: None,
     }
 }
 

@@ -142,6 +142,7 @@ async fn record(rec: &Rec, floor: Decimal, at: DateTime<Utc>) -> Record {
             free: None,
             parts: None,
             window_from: None,
+            presell_cut: None,
         },
         parts: None,
         limits_error: None,

@@ -34,6 +34,9 @@ pub enum StuckReason {
     Partial(Decimal),
     /// BNB на DEX: газ продажи не помещается сверх резерва (решение 62) — текст ошибки.
     GasReserve(String),
+    /// Решение 413 (повторное ревью, Б-3): баланс биржи не прочитан — доля сделки по факту неизвестна, вслепую не
+    /// продаём и не выводим — текст причины.
+    NoFact(String),
 }
 
 impl StuckReason {
@@ -61,6 +64,7 @@ impl StuckReason {
             StuckReason::Cancelled(_) => "продажа не попала в блок и отменена",
             StuckReason::Partial(_) => "продано не всё",
             StuckReason::GasReserve(_) => "газ продажи не помещается сверх резерва BNB",
+            StuckReason::NoFact(_) => "баланс биржи не прочитан",
         }
     }
 
@@ -74,7 +78,8 @@ impl StuckReason {
             | StuckReason::Unsent(e)
             | StuckReason::NotFilled(e)
             | StuckReason::Cancelled(e)
-            | StuckReason::GasReserve(e) => format!("{}: {e}", self.title()),
+            | StuckReason::GasReserve(e)
+            | StuckReason::NoFact(e) => format!("{}: {e}", self.title()),
         }
     }
 }

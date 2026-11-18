@@ -2,10 +2,10 @@
 //! Что делает: решение 413 (t198) — перевод зачисленного на торговый счёт (решение 102, у BingX — фонд → спот) получил
 //! отказ «мало средств»: биржа зачислила на счёт меньше записи депозита (удержание при зачислении, как у WKC на MEXC
 //! 18.11). Сумма повтора — факт: свободное этой монеты на счетах, с которых площадка перекладывает на торговый
-//! (AccountRole::ToTrading), не больше записи. Переложить чужие монеты на торговый безопасно — это не продажа (так же
-//! кнопка «Продать», решение 174); продаёт сделка только свою долю (sell_fact.rs). Один повтор; дальше — как раньше.
+//! (AccountRole::ToTrading), не больше записи × (1 − ожидаемое удержание) (повторное ревью t198: не весь свободный
+//! остаток — там могут быть монеты других сделок). Один повтор; дальше — как раньше.
 //! Кто вызывает: core/transfer_credit.rs (to_trading).
-//! От чего зависит: venue_ticker.rs, deps.rs (журнал), gateway (account_balances, account_role).
+//! От чего зависит: venue_ticker.rs, deposit_hold_calc.rs, deps.rs (журнал), gateway (account_balances, account_role).
 //! Настройки: нет.
 
 use std::sync::Arc;
@@ -46,20 +46,21 @@ pub async fn fund(
             return None;
         }
     };
-    if free <= Decimal::ZERO || free >= asked {
+    // Повторное ревью t198 (мелкое): не больше доли сделки — записи × (1 − ожидаемое удержание), не весь свободный
+    // остаток счёта (там могут быть монеты других сделок).
+    let pct = super::deposit_hold::expected_pct(core, leg.to, leg.asset);
+    let cap = asked * (Decimal::ONE - pct / Decimal::ONE_HUNDRED);
+    let amount = free.min(cap);
+    if amount <= Decimal::ZERO || amount >= asked {
         return None;
     }
     let text = format!(
-        "{}: перевод на торговый счёт {} {}: «мало средств» — на счёте перевода {}, переводится то, что есть \
-         (удержание биржи при зачислении {}; решение 413)",
-        leg.deal,
-        asked,
-        leg.asset.ticker,
-        free,
-        asked - free
+        "{}: перевод на торговый счёт {} {}: «мало средств» — на счёте перевода {}, переводится {} (не больше \
+         записи × (1 − ожидаемое удержание {}%); решение 413)",
+        leg.deal, asked, leg.asset.ticker, free, amount, pct
     );
     log(core, leg, text).await;
-    Some(free)
+    Some(amount)
 }
 
 /// Запись в журнал core.credit_fact. Ошибок нет.

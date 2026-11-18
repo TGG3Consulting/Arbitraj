@@ -81,7 +81,14 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
             continue;
         }
         if d.step == Step::Transfer {
-            if d.direction.buy_on == *v || d.direction.sell_on == *v || d.at == *v {
+            // Повторное ревью t198 (С-1): «в пути через счёт» — только сделка, у которой ПОЛУЧАТЕЛЬ — этот счёт
+            // (Deal.transit_to; у записей без него — площадка продажи, если монеты не здесь). Уходящие с этого счёта
+            // (площадка покупки, перегон отсюда) — не «в пути сюда»: их монет здесь уже или ещё нет по учёту.
+            let to_here = match &d.transit_to {
+                Some(t) => t == v,
+                None => d.direction.sell_on == *v && d.at != *v,
+            };
+            if to_here {
                 out.unclear.push(d.id.clone());
                 out.words.push(format!(
                     "{} — в пути, где монеты сейчас, не доказано",
@@ -96,6 +103,7 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
                 id: d.id.clone(),
                 record: c.record,
                 outsider: c.outsider,
+                seen: c.outsider_at,
             });
             out.words.push(format!(
                 "{} — зачисление ещё не подтверждено фактом (запись депозита {})",

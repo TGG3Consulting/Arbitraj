@@ -1,22 +1,24 @@
 //! Файл: core/credit_base.rs
 //! Что делает: решение 413 (t198, кейс 6) — «посторонние» монеты на счёте биржи-получателя перед зачислением перевода
-//! монеты сделки: баланс счёта (торговый + перекладываемые на торговый, free + locked — remain_fact.rs fact_at) минус
+//! монеты сделки: баланс счёта (торговый + перекладываемые на торговый, free + locked — remain_read.rs fact_at) минус
 //! учёт сделок этой монеты на счёте (подтверждённые — их количество; ждущие доли — запись × (1 − ожидаемое удержание));
 //! не меньше 0. Это ручные, старые, пыль закрытых сделок — их распределение долей (credit_split.rs) не отдаёт ни одной
 //! сделке.
 //!
-//! Ревью t198 (С1): снимок снимается ОДНОВРЕМЕННО с выводом (вывод его не ждёт): депозит биржи возможен только после
-//! того, как транзакция вывода попала в блок и набрала подтверждения биржи, — чтение баланса, начатое до запроса вывода,
-//! монет этого перевода не видит. Не успело к зачислению, упало или учёт сделок за чтение сдвинулся — снимка нет
+//! Ревью t198 (С1): снимок снимается ОДНОВРЕМЕННО с выводом (вывод его не ждёт). Повторное ревью (С-2): снимок
+//! принимается, только если ответ баланса получен ДО того, как отправитель вернул хеш вывода (seal в transfers.rs до
+//! ожидания зачисления): депозит возможен только после транзакции в сети, значит в таком снимке монет этого перевода
+//! нет. Не успело, упало, учёт сделок за чтение сдвинулся или замок счёта не взят сразу (credit_lock.rs) — снимка нет
 //! (правило Б3: доля не выше запись × (1 − ожидаемое удержание)).
 //! Ревью t198 (Б1): через счёт идёт сделка в пути (шаг «перевод») — её монеты могли уже прийти, а записи депозита ещё
 //! нет: такой снимок неоднозначен — не пишется (None), «посторонними» её монеты не становятся никогда.
 //! Ревью t198: снимок привязан к переводу — к хешу транзакции вывода (bind при зачислении), а не к сделке и бирже;
 //! сорванный перевод снимает свою ячейку (Drop у Snap). Сохранение — в учёте сделки (Deal.credit.outsider, SQLite):
 //! перезапуск его не теряет.
-//! Кто вызывает: core/transfers.rs (start — перевод монеты сделки на биржу, bind — после зачисления),
+//! Кто вызывает: core/transfers.rs (start — перевод монеты сделки на биржу, seal — хеш вывода получен, bind — после
+//! зачисления),
 //! core/credit_fact.rs (take).
-//! От чего зависит: remain_fact.rs (fact_at), remain_others.rs (учёт других), credit_lock.rs, deposit_hold.rs,
+//! От чего зависит: remain_read.rs (fact_at), remain_others.rs (учёт других), credit_lock.rs, deposit_hold.rs,
 //! trade_ops.rs, native.rs, gateway/tx_hash.rs, engine.rs.
 //! Настройки: нет.
 
@@ -24,6 +26,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, VenueId};
@@ -31,12 +34,22 @@ use crate::gateway::contract::VenueKind;
 
 use super::engine::{Core, lk};
 
-/// Чтения: номер перевода → итог (None — ещё читается; Some(None) — снимка нет; Some(Some(v)) — посторонние).
-static READS: LazyLock<Mutex<HashMap<u64, Option<Option<Decimal>>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// Итог чтения снимка.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Slot {
+    /// Чтение идёт.
+    Reading,
+    /// Готово до хеша вывода: посторонние и момент ответа баланса (None — снимка нет).
+    Done(Option<(Decimal, DateTime<Utc>)>),
+    /// Отправитель вернул хеш раньше ответа баланса — снимок недействителен (повторное ревью, С-2).
+    Late,
+}
+
+/// Чтения: номер перевода → итог.
+static READS: LazyLock<Mutex<HashMap<u64, Slot>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Снимки, привязанные к хешу вывода (нижний регистр, без 0x) — до записи зачисления в сделку.
-static BOUND: LazyLock<Mutex<HashMap<String, Decimal>>> =
+static BOUND: LazyLock<Mutex<HashMap<String, (Decimal, DateTime<Utc>)>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Номера переводов.
@@ -73,32 +86,48 @@ pub fn start(core: &Core, deal: &str, to: &VenueId, a: &Asset) -> Option<Snap> {
     READS
         .lock()
         .unwrap_or_else(|p| p.into_inner())
-        .insert(key, None);
+        .insert(key, Slot::Reading);
     let (c, id, to, a) = (core.clone(), deal.to_string(), to.clone(), a.clone());
     tokio::spawn(async move {
-        let v = Box::pin(read(&c, &id, &to, &a)).await;
+        let v = Box::pin(read(&c, &id, &to, &a))
+            .await
+            .map(|x| (x, Utc::now()));
         let mut m = READS.lock().unwrap_or_else(|p| p.into_inner());
-        if let Some(slot) = m.get_mut(&key) {
-            *slot = Some(v);
+        // Хеш уже вернулся (Late) или перевод сорван (ячейки нет) — ответ не нужен.
+        if let Some(slot) = m.get_mut(&key)
+            && *slot == Slot::Reading
+        {
+            *slot = Slot::Done(v);
         }
     });
     Some(Snap { key })
 }
 
-/// Что делает: зачисление получено — снимок (если чтение кончилось) привязывается к хешу вывода; не кончилось или
-/// снимка нет — ничего (правило Б3). Принимает: снимок перевода, хеш вывода. Ошибок нет.
+/// Что делает: отправитель вернул хеш вывода (transfers.rs, до ожидания зачисления) — чтение, не ответившее к этому
+/// моменту, недействительно (повторное ревью, С-2: депозит возможен только после транзакции в сети, а снимок — только
+/// без её монет). Принимает: снимок перевода. Ошибок нет.
+pub fn seal(snap: Option<&Snap>) {
+    let Some(s) = snap else { return };
+    let mut m = READS.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(slot) = m.get_mut(&s.key)
+        && *slot == Slot::Reading
+    {
+        *slot = Slot::Late;
+    }
+}
+
+/// Что делает: зачисление получено — снимок, готовый до хеша (seal), привязывается к хешу вывода; иначе ничего
+/// (правило Б3). Принимает: снимок перевода, хеш вывода. Ошибок нет.
 pub fn bind(snap: Option<Snap>, tx: Option<&str>) {
     let (Some(s), Some(tx)) = (snap, tx) else {
         return;
     };
-    let v = READS
+    let slot = READS
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .get(&s.key)
-        .copied()
-        .flatten()
-        .flatten();
-    if let Some(v) = v {
+        .copied();
+    if let Some(Slot::Done(Some(v))) = slot {
         BOUND
             .lock()
             .unwrap_or_else(|p| p.into_inner())
@@ -106,8 +135,10 @@ pub fn bind(snap: Option<Snap>, tx: Option<&str>) {
     }
 }
 
-/// Что делает: забирает снимок по хешу вывода (credit_fact::on_credit). Возвращает: посторонние или None. Ошибок нет.
-pub fn take(tx: Option<&str>) -> Option<Decimal> {
+/// Что делает: забирает снимок по хешу вывода (credit_fact::on_credit — сразу после зачисления в той же задаче
+/// перевода: bind и take идут подряд, запись без take не остаётся). Возвращает: (посторонние, момент) или None.
+/// Ошибок нет.
+pub fn take(tx: Option<&str>) -> Option<(Decimal, DateTime<Utc>)> {
     let tx = tx?;
     BOUND
         .lock()
@@ -137,7 +168,7 @@ async fn read(core: &Core, deal: &str, to: &VenueId, a: &Asset) -> Option<Decima
     let own = lk(&core.inner.deals).get(deal).cloned()?;
     let g = super::credit_lock::fact(core, to, a).await;
     let before = super::remain_others::on_account(core, &own, to);
-    let fact = Box::pin(super::remain_fact::fact_at(core, &own, to))
+    let fact = Box::pin(super::remain_read::fact_at(core, &own, to))
         .await
         .ok()?;
     let mut after = super::remain_others::on_account(core, &own, to);

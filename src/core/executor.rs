@@ -608,8 +608,16 @@ async fn run(
         deal.note(format!("{why} — продажа здесь"));
         return super::relay_here::sell_here(core, deal, &why).await;
     }
+    // Решение 413 (повторное ревью t198, Б-2): первый вывод монеты сделки с биржи (биржа → DEX / биржа) — только доля
+    // по факту счёта, как перед любой продажей и выводом (sell_fact::before; на DEX — без чтения). None — закрыта
+    // или алерт / режим застрявшей монеты.
+    let Some(mut deal) = Box::pin(super::sell_fact::before(core, deal, "вывод")).await else {
+        return;
+    };
     // Перевод на B.
     deal.step = Step::Transfer;
+    // Решение 413 (повторное ревью, С-1): получатель перевода — для распределения долей на его счёте.
+    deal.transit_to = Some(d.sell_on.clone());
     super::ledger::save(core, &deal).await;
     // Задача t179 (решение 394): покупка учтена во «вложено по монете» и «в пути» (save → recompute_exposure) — монета
     // из замка целиком в «идущие»: следующая сделка монеты может начаться (coin_ride.rs admit), её бюджет — за вычетом

@@ -6,8 +6,9 @@
 //! остаток, после перегона, режим застрявшей монеты, кнопки; ревью t198, Б2 — и перед ВЫВОДОМ монеты сделки с биржи и
 //! оценкой перегона: relay.rs «Перегон», manual_relay.rs «Продать и перегнать»): ВСЕГДА на бирже (ревью t198, С1 —
 //! и у монет без налога; «никаких если») свежий факт счёта (remain_fact::reconcile под замком счёта) и доля сделки —
-//! min(доля по факту, факт − доли и учёт других живых сделок). Сделка ждёт доли, а через счёт идёт сделка в пути —
-//! сначала ждём её зачисления (wait_transit). Повторного чтения из потока баланса нет: событие приватного потока
+//! min(доля по факту, факт − доли и учёт других живых сделок). Сделка в пути через счёт — не ждём (повторное ревью, С-1):
+//! доля ограничена ожидаемой (credit_split.rs). Факт свежий (Deal.fact_fresh: тот же шаг, количество, площадка —
+//! предыдущий вход подряд) — второй раз не читаем. Повторного чтения из потока баланса нет: событие приватного потока
 //! с балансом счёта (не только изменением) по коду ядра не хранится — не гадаем.
 //! DEX и нативная BNB — без изменений (DEX считает факт продажи по балансу кошелька, решение 222).
 //!
@@ -15,16 +16,15 @@
 //! поставлен, денег не тронуто — отметка reread = количество отказа (подтверждённое только записью — снова «ждёт доли»),
 //! снова вход в продажу тем же правилом (before перечитает факт и пересчитает долю). Повторный отказ после свежего
 //! факта (или факт не меньше количества отказа: дело не в доле) — прежний путь: алерт человеку с цифрами в хронологии.
-//! Кто вызывает: core/sell.rs, core/relay.rs, core/manual_relay.rs.
+//! Кто вызывает: core/sell.rs, core/relay.rs, core/manual_relay.rs, core/executor.rs (первый вывод с биржи).
 //! От чего зависит: remain_fact.rs, credit_fact.rs, deposit_hold.rs, sell_unsent.rs (alert), manual_outcome.rs,
 //! trade_ops.rs, native.rs, sell_range.rs (Rule), remeasure.rs (Guard), deal_words.rs, deal.rs.
-//! Настройки: transfer.max_time_s, venue.status_poll_ms (ожидание сделки в пути — wait_transit).
+//! Настройки: нет (базовое поведение).
 
 use rust_decimal::Decimal;
 
 use crate::gateway::contract::VenueKind;
 use crate::gateway::errors::ErrorCode;
-use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::deal::Deal;
@@ -48,8 +48,11 @@ pub async fn before(core: &Core, mut deal: Deal, why: &str) -> Option<Deal> {
     if !need(core, &deal) {
         return Some(deal);
     }
-    // Ревью t198: через счёт идёт сделка в пути — её зачисление делит факт вместе с нашим; ждём его (шапка).
-    Box::pin(wait_transit(core, &deal)).await;
+    // Повторное ревью (мелкое): факт уже прочитан при этом шаге, количестве и площадке (предыдущий вход подряд —
+    // stuck / «Продать и перегнать» / продажа здесь) — не читаем второй раз.
+    if deal.fact_fresh.as_deref() == Some(&(deal.step, deal.qty, deal.at.clone())) {
+        return Some(deal);
+    }
     let tried = super::credit_fact::here(&deal).and_then(|c| c.reread);
     if !Box::pin(super::remain_fact::reconcile(core, &mut deal)).await {
         // Ревью t198: путь кнопки — итог кнопки (алерт или закрытие — уже в хронологии и «Ручном управлении»).
@@ -99,6 +102,8 @@ pub fn wanted(core: &Core, deal: &Deal, e: &OpError) -> bool {
 pub async fn retry(core: &Core, mut deal: Deal, e: &OpError, why: &str, rule: Rule) {
     let tried = deal.qty;
     super::credit_fact::mark_reread(&mut deal, tried);
+    // Факт, по которому продавали, уже не свежий — перечитать.
+    deal.fact_fresh = None;
     let text = format!(
         "{}: биржа отказала в продаже {} — «мало средств» ({e}); ордер не поставлен, деньги не тронуты. Бот \
          перечитывает баланс счёта, пересчитывает долю сделки и продаёт её (решение 413)",
@@ -130,51 +135,6 @@ pub async fn retry(core: &Core, mut deal: Deal, e: &OpError, why: &str, rule: Ru
         }
         Rule::NoThreshold => {
             Box::pin(super::sell::market_guarded(core, deal, why, Guard::Off)).await
-        }
-    }
-}
-
-/// Что делает: ревью t198 — сделка ждёт доли, а через счёт идёт сделка той же монеты в пути (её монеты могли уже прийти,
-/// а записи депозита ещё нет): распределение подождёт её зачисления — не дольше transfer.max_time_s от нашего
-/// зачисления (тот же предел, что у перевода), опрос venue.status_poll_ms или сохранение учёта (coin_wake). Не задана
-/// любая — не ждём (доля тогда не выше ожидаемой: credit_split.rs cap). Принимает: ядро, сделку. Ошибок нет.
-async fn wait_transit(core: &Core, deal: &Deal) {
-    let Some(since) = super::credit_fact::here(deal)
-        .filter(|_| super::credit_fact::pending(deal))
-        .map(|c| c.at)
-    else {
-        return;
-    };
-    let a = &deal.direction.asset;
-    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
-    let s = &core.inner.deps.settings;
-    let with_coin = At {
-        venue: Some(&deal.at.0),
-        coin: Some(&coin),
-    };
-    let venue_only = At {
-        venue: Some(&deal.at.0),
-        coin: None,
-    };
-    let (Ok(max_s), Ok(poll)) = (
-        s.integer("transfer.max_time_s", with_coin),
-        s.integer("venue.status_poll_ms", venue_only),
-    ) else {
-        return;
-    };
-    let max_s = i64::try_from(max_s).unwrap_or(i64::MAX);
-    loop {
-        let wake = core.inner.coin_wake.notified();
-        if super::remain_others::on_account(core, deal, &deal.at)
-            .unclear
-            .is_empty()
-            || (chrono::Utc::now() - since).num_seconds() >= max_s
-        {
-            return;
-        }
-        tokio::select! {
-            _ = wake => {}
-            _ = tokio::time::sleep(std::time::Duration::from_millis(poll)) => {}
         }
     }
 }

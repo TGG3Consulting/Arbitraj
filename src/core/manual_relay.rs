@@ -142,6 +142,8 @@ async fn relay_to(core: &Core, mut deal: Deal, to: VenueId) {
         deal.dex_account = Some(acc);
     }
     deal.step = Step::Transfer;
+    // Решение 413 (повторное ревью, С-1): получатель перегона — для распределения долей на его счёте.
+    deal.transit_to = Some(to.clone());
     super::ledger::save(core, &deal).await;
     let price = deal.buy.as_ref().map(|b| b.avg_price).unwrap_or_default();
     let mut gas = Vec::new();

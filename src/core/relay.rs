@@ -220,6 +220,8 @@ pub async fn run(core: &Core, mut deal: Deal) {
         deal.dex_account = Some(acc);
     }
     deal.step = Step::Transfer;
+    // Решение 413 (повторное ревью, С-1): получатель перегона — для распределения долей на его счёте.
+    deal.transit_to = Some(to.clone());
     deal.note(format!(
         "Перегон на {} (ожидается {})",
         crate::notify::human::venue(&to.0),

@@ -1,15 +1,16 @@
 //! Файл: core/credit_alert.rs
 //! Что делает: решение 413 (вынесено из credit_apply.rs, ревью t198: файл > 200 строк) — уведомление deal.credit_hold
-//! (биржа удержала), доля 0 (алерт человеку, сделка не закрывается) и оценка доли при непрочитанном балансе.
-//! Кто вызывает: core/credit_apply.rs (notice, zero), core/remain_fact.rs (estimate).
-//! От чего зависит: credit_fact.rs, credit_lock.rs, deposit_hold.rs, deal_words.rs, manual.rs, notify/human.rs.
+//! (биржа удержала), доля 0 (алерт человеку, сделка не закрывается), баланс биржи не прочитан (повторное ревью, Б-3:
+//! режим застрявшей монеты один раз, потом алерт; оценки без факта нет).
+//! Кто вызывает: core/credit_apply.rs (notice, zero), core/remain_fact.rs (unread).
+//! От чего зависит: credit_fact.rs, deal_words.rs, manual.rs, sell_next.rs / sell_loop.rs (stuck_as_is), stuck_reason.rs,
+//! notify/human.rs.
 //! Настройки: нет.
 
 use rust_decimal::Decimal;
 
 use crate::storage::journal::Level;
 
-use super::credit_fact::Basis;
 use super::deal::Deal;
 use super::deal_words as w;
 use super::engine::Core;
@@ -78,38 +79,52 @@ pub async fn zero(core: &Core, deal: &Deal, o: &Others, text: String) -> bool {
     false
 }
 
-/// Что делает: баланс не прочитан, сделка ждёт доли — оценка «запись × (1 − ожидаемое удержание)» (шапка), основание
-/// Estimate. Принимает: ядро, сделку, причину. Ошибок нет.
-pub async fn estimate(core: &Core, deal: &mut Deal, why: &str) {
-    let Some(c) = super::credit_fact::here(deal) else {
-        return;
-    };
-    let record = c.record;
-    let pct = super::deposit_hold::expected_pct(core, &deal.at, &deal.direction.asset);
-    let q = (record * (Decimal::ONE - pct / Decimal::ONE_HUNDRED)).max(Decimal::ZERO);
+/// Что делает: повторное ревью t198 (Б-3) — факт счёта биржи не прочитан (после повторов по правилам шлюза): не
+/// продаём и не выводим (не вслепую — ни запись, ни оценка). Первый раз — режим застрявшей монеты без сверки
+/// (stuck::handle_as_is: «Ожидание», «Порог убытка», «Перегон» — каждый снова прочитает факт перед продажей или
+/// выводом, повтор позже по его механизму); повторно подряд — алерт человеку с причиной (решение 100: кнопки
+/// «Продать сейчас», «Беру на себя», «Продано вручную»). Принимает: ядро, сделку, причину. Возвращает: false (вызывающий
+/// дальше не ведёт). Ошибок нет.
+pub async fn unread(core: &Core, deal: &mut Deal, why: &str) -> bool {
     let t = &deal.direction.asset.ticker;
     let text = format!(
-        "{}: баланс {} не прочитан ({why}) — зачисление не подтверждено фактом; продаётся оценка: запись депозита {} × \
-         (1 − ожидаемое удержание {}) = {}; если биржа не удержала, остаток до {} останется на счёте — проверьте \
-         «Балансы» (решение 413)",
+        "{}: баланс {} на {} не прочитан ({why}) — сколько монет у сделки по факту, неизвестно; бот не продаёт и не \
+         выводит вслепую (учёт {}{}) (решение 413)",
         w::deal(core, deal),
+        t,
         w::place(core, &deal.at, deal.dex_account.as_ref()),
-        w::coins(record, t),
-        crate::notify::human::pct(pct),
-        w::coins(q, t),
-        w::coins(record - q, t)
+        w::coins(deal.qty, t),
+        super::credit_fact::here(deal)
+            .map(|c| format!(", запись депозита {}", w::coins(c.record, t)))
+            .unwrap_or_default()
     );
-    super::credit_fact::confirm(deal, q, Basis::Estimate);
-    deal.note(text.clone());
-    super::credit_lock::sync(core, deal);
     core.inner
         .deps
         .log(
             Level::Warn,
             "core.credit_fact",
             Some(&deal.at.0),
-            text,
+            &text,
             None,
         )
         .await;
+    if !deal.fact_unread {
+        deal.fact_unread = true;
+        let why = super::stuck_reason::StuckReason::NoFact(format!(
+            "{text}; режим застрявшей монеты — повтор позже"
+        ));
+        let job = super::sell_next::stuck_as_is(core, deal.clone(), why);
+        super::sell_loop::hop(job).await;
+        return false;
+    }
+    let reason = format!("{text}; повторно — решает человек");
+    Box::pin(super::manual::raise_alert(
+        core,
+        deal.clone(),
+        None,
+        reason,
+        None,
+    ))
+    .await;
+    false
 }

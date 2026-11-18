@@ -159,6 +159,20 @@ pub struct Deal {
     /// В коробке: сделка лежит по значению во всех задачах её пути (глубина стека, решение 389).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub credit: Option<Box<super::credit_fact::CreditFact>>,
+    /// Решение 413 (повторное ревью t198, С-1): куда идёт перевод монет сделки на шаге «перевод» (получатель) —
+    /// чтобы распределение долей на счёте получателя знало сделку в пути, а на счёте отправителя — нет. Ставится перед
+    /// выводом (executor.rs, relay.rs, manual_relay.rs), снимается при зачислении (fills.rs transfer).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transit_to: Option<VenueId>,
+    /// Решение 413 (повторное ревью, Б-3): факт счёта биржи не прочитан и сделка уже раз уходила из-за этого в режим
+    /// застрявшей монеты — следующий раз алерт человеку (remain_fact.rs). Только в памяти.
+    #[serde(skip)]
+    pub fact_unread: bool,
+    /// Решение 413 (повторное ревью, мелкое): факт счёта прочитан при этом шаге, количестве и площадке — второй вход в
+    /// продажу подряд не читает его снова (sell_fact.rs). Любое изменение шага, количества или площадки — читать.
+    /// Только в памяти.
+    #[serde(skip)]
+    pub fact_fresh: Option<Box<(Step, Decimal, VenueId)>>,
     pub started_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -204,6 +218,9 @@ impl Deal {
             decided_at: None,
             group: None,
             credit: None,
+            transit_to: None,
+            fact_unread: false,
+            fact_fresh: None,
             started_at: now,
             updated_at: now,
         }

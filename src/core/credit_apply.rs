@@ -8,9 +8,9 @@
 //! Баланс не прочитан (estimate) — оценка «запись × (1 − ожидаемое удержание)»: не больше доли сделки при удержании не
 //! меньше ожидаемого (чужие монеты не продаются); остаток сверх оценки, если удержания не было, остаётся на счёте и
 //! виден в хронологии.
-//! Ревью t198 (С2): замер — только однозначный (measurable); confirm_halted — выход из «ждёт доли» на круге сверки.
+//! Ревью t198 (С2): замер — только однозначный (measurable). Выход из «ждёт доли» на круге сверки — credit_halted.rs.
 //! Уведомление, доля 0 и оценка — credit_alert.rs.
-//! Кто вызывает: core/remain_fact.rs (apply_with, reconcile), core/reconcile.rs (confirm_halted).
+//! Кто вызывает: core/remain_fact.rs (apply_with, reconcile), core/credit_halted.rs (input).
 //! От чего зависит: credit_split.rs, credit_fact.rs, credit_text.rs, credit_lock.rs (sync), deposit_hold.rs,
 //! remain_others.rs, deal_words.rs, manual.rs (raise_alert_with), settings, deps.rs.
 //! Настройки: transfer.credit_amount_tolerance_pct (допуск на округление, по площадке и монете; не задан — 0).
@@ -36,6 +36,7 @@ pub fn input(core: &Core, deal: &Deal, fact: Decimal, o: &Others) -> Input {
             id: deal.id.clone(),
             record: c.record,
             outsider: c.outsider,
+            seen: c.outsider_at,
         }),
         None => confirmed += deal.qty,
     }
@@ -135,34 +136,4 @@ fn measurable(core: &Core, deal: &Deal, sp: &Split, share: Decimal) -> bool {
     };
     let on = super::venue_ticker::ticker_on(core, &deal.direction.asset, &deal.at);
     !super::dust::is_dust(core, &deal.at, &on, share, price)
-}
-
-/// Что делает: ревью t198 (мелкое, сверка 221) — выход из «ждёт доли» на круге сверки для сделок без своей задачи
-/// (остановленные, в том числе после перезапуска): факт счёта и доля тем же распределением; доля 0 — ничего (решит
-/// человек кнопкой, алерта с круга сверки нет). Принимает: ядро, площадку. Ошибок нет.
-pub async fn confirm_halted(core: &Core, v: &crate::core::types::VenueId) {
-    let ids: Vec<Deal> = super::engine::lk(&core.inner.deals)
-        .values()
-        .filter(|d| {
-            &d.at == v && d.step == super::deal::Step::Halted && super::credit_fact::pending(d)
-        })
-        .cloned()
-        .collect();
-    for mut d in ids {
-        let g = super::credit_lock::fact(core, v, &d.direction.asset).await;
-        let read = Box::pin(super::remain_fact::fact_at(core, &d, v)).await;
-        let mut o = super::remain_others::on_account(core, &d, v);
-        o.busy = g.is_none();
-        drop(g);
-        let Ok(fact) = read else { continue };
-        let sp = super::credit_split::split(&input(core, &d, fact, &o));
-        let share = sp.share_of(&d.id).unwrap_or_default();
-        if share <= Decimal::ZERO {
-            continue;
-        }
-        let text = super::credit_text::describe(core, &d, fact, &o, &sp, (d.qty, share));
-        super::credit_fact::confirm(&mut d, share, Basis::Balance);
-        d.note(format!("{text} (подтверждено на круге сверки балансов)"));
-        super::ledger::save(core, &d).await;
-    }
 }

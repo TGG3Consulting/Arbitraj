@@ -7,9 +7,9 @@
 //! - share = None — «ждёт доли»: количество сделки = запись депозита, факт ещё не прочитан (суммируется в распределение
 //!   credit_split.rs как ждущая; в сверке балансов — нижней оценкой запись × (1 − ожидаемое удержание),
 //!   reconcile_confirm.rs; подтверждается перед продажей / выводом или на круге сверки);
-//! - share = Some — подтверждено: Basis::Balance — по факту баланса; Estimate — баланс не читался, оценка «запись ×
-//!   (1 − ожидаемое удержание)» (не больше доли сделки при удержании не меньше ожидаемого); Record — только у записей
-//!   до ревью t198 (с ревью С1 любое зачисление на биржу ждёт доли: факт перед любой продажей и выводом).
+//! - share = Some — подтверждено: Basis::Balance — по факту баланса; Record — только у записей до ревью t198 (с ревью
+//!   С1 любое зачисление на биржу ждёт доли). Оценки без факта нет (повторное ревью, Б-3: баланс не прочитан — не
+//!   продаём).
 //!
 //! Поле reread — только в памяти: количество, на котором продажа получила отказ «мало средств» (sell_fact.rs).
 //! Кто вызывает: core/fills.rs (on_credit — после зачисления перевода сделки), credit_apply.rs, sell_fact.rs,
@@ -35,8 +35,6 @@ pub enum Basis {
     Record,
     /// Факт баланса счёта (распределение credit_split.rs).
     Balance,
-    /// Оценка: баланс не читался, запись × (1 − ожидаемое удержание).
-    Estimate,
 }
 
 /// Зачисление перевода сделки на биржу.
@@ -49,6 +47,9 @@ pub struct CreditFact {
     /// Посторонние монеты на счёте перед выводом (credit_base.rs); None — не сняты.
     #[serde(default)]
     pub outsider: Option<Decimal>,
+    /// Когда снят снимок посторонних (повторное ревью, С-3: в распределении — самый свежий).
+    #[serde(default)]
+    pub outsider_at: Option<DateTime<Utc>>,
     /// Подтверждённое количество; None — ждёт доли.
     #[serde(default)]
     pub share: Option<Decimal>,
@@ -65,7 +66,7 @@ pub struct CreditFact {
 /// снимок посторонних — по хешу вывода (credit_base.rs). Получатель DEX — записи нет (кошелёк получает по событию
 /// Transfer, решения 151, 222). Принимает: ядро, сделку (qty уже = запись), получателя, хеш вывода. Ошибок нет.
 pub fn on_credit(core: &Core, deal: &mut Deal, to: &VenueId, tx: Option<&str>) {
-    let outsider = super::credit_base::take(tx);
+    let snap = super::credit_base::take(tx);
     if super::trade_ops::kind(core, to) != Ok(VenueKind::Cex) {
         deal.credit = None;
         return;
@@ -73,7 +74,8 @@ pub fn on_credit(core: &Core, deal: &mut Deal, to: &VenueId, tx: Option<&str>) {
     deal.credit = Some(Box::new(CreditFact {
         venue: to.clone(),
         record: deal.qty,
-        outsider,
+        outsider: snap.map(|x| x.0),
+        outsider_at: snap.map(|x| x.1),
         share: None,
         basis: None,
         at: chrono::Utc::now(),
@@ -113,6 +115,7 @@ pub fn mark_reread(deal: &mut Deal, tried: Decimal) {
             venue: at,
             record: qty,
             outsider: None,
+            outsider_at: None,
             share: Some(qty),
             basis: None,
             at: chrono::Utc::now(),

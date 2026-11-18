@@ -89,3 +89,13 @@ pub fn short_retry(
     let (c, e, why) = (core.clone(), e.clone(), why.to_string());
     Box::pin(async move { super::sell_fact::retry(&c, deal, &e, &why, rule).await })
 }
+
+/// Решение 413 (повторное ревью, Б-3): факт счёта биржи не прочитан — режим застрявшей монеты без сверки
+/// (stuck::handle_as_is под risk_count::auto). Принимает: ядро, сделку, причину. Возвращает: продолжение. Ошибок нет.
+#[inline(never)]
+pub fn stuck_as_is(core: &Core, deal: Deal, why: StuckReason) -> Job {
+    let c = core.clone();
+    Box::pin(
+        async move { super::risk_count::auto(super::stuck::handle_as_is(&c, deal, why)).await },
+    )
+}

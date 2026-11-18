@@ -5,12 +5,13 @@
 //! в полёте, баланс уже меньше, а учёт продающей сделки ещё нет — такое чтение отдало бы её монеты не той сделке.
 //! После продажи, до снятия замка, учёт продающей сделки в памяти обновляется (sync) — следующее чтение факта видит
 //! согласованные учёт и баланс. Запись в базу — обычным ledger::save позже (сделка её не ждёт).
-//! Ревью t198: чтение факта ждёт продажу не дольше exec.rate_limit_wait_max_ms (fact).
+//! Ревью t198: чтение факта ждёт продажу не дольше exec.rate_limit_wait_max_ms (fact); не задана — не ждёт (занято —
+//! «продажа в полёте», Others.busy).
 //! Замки — только в памяти (после перезапуска продаж в полёте нет). Пар (биржа, монета) — столько, сколько торговалось.
 //! Кто вызывает: core/sell.rs и core/sell_range_run.rs (selling), core/remain_fact.rs и core/credit_base.rs (fact),
 //! core/credit_apply.rs (sync).
 //! От чего зависит: coin_key.rs, engine.rs (учёт сделок), op_error.rs, tokio::sync::RwLock.
-//! Настройки: exec.rate_limit_wait_max_ms (через fact; не задана — ждём, сколько нужно).
+//! Настройки: exec.rate_limit_wait_max_ms (через fact; не задана — не ждём).
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -49,7 +50,8 @@ pub async fn sale(v: &VenueId, a: &Asset) -> OwnedRwLockReadGuard<()> {
 /// Что делает: исключительный доступ на время чтения факта и снятия учёта других. Ревью t198: продажа держит общий
 /// доступ и во время пауз правил шлюза (HTTP 429) — ждём не дольше exec.rate_limit_wait_max_ms (тот же предел, сколько
 /// продажа ждёт паузы площадки, решение 201); не дождались — None: читающий считает счёт «продажа в полёте»
-/// (Others.busy: доля не выше ожидаемой, замера нет). Настройка не задана — ждём, сколько нужно. Принимает: ядро,
+/// (Others.busy: доля не выше ожидаемой, замера нет, учёт подтверждённой не уменьшается). Настройка не задана — не
+/// ждём (как «отказ сразу» решения 201): занято — None. Принимает: ядро,
 /// площадку, монету. Возвращает: охрану или None. Ошибок нет.
 pub async fn fact(core: &Core, v: &VenueId, a: &Asset) -> Option<OwnedRwLockWriteGuard<()>> {
     let lock = of(v, a);
@@ -67,7 +69,9 @@ pub async fn fact(core: &Core, v: &VenueId, a: &Asset) -> Option<OwnedRwLockWrit
             let wait = std::time::Duration::from_millis(ms);
             tokio::time::timeout(wait, lock.write_owned()).await.ok()
         }
-        None => Some(lock.write_owned().await),
+        // Повторное ревью (мелкое): не задана — как у продажи (решение 201: «не задано — отказ сразу»): не ждём,
+        // занято — «продажа в полёте».
+        None => lock.try_write_owned().ok(),
     }
 }
 

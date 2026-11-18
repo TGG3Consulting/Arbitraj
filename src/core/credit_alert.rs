@@ -108,7 +108,8 @@ pub fn wait_ms(core: &Core, v: &crate::core::types::VenueId) -> Option<u64> {
 /// «повторить»): не продаём и не выводим (не вслепую — ни запись, ни оценка). Кнопка человека — сразу итог кнопки с
 /// причиной «баланс биржи не прочитан» (manual_outcome::failed), сделка ждёт человека (алерт с той же причиной), без
 /// режима застрявшей монеты. Автоматика: первый раз — режим застрявшей монеты без сверки (stuck::handle_as_is —
-/// каждый его шаг снова прочитает факт перед продажей или выводом), повторно подряд — алерт человеку (решение 100).
+/// каждый его шаг снова прочитает факт перед продажей или выводом), повторно подряд — алерт человеку (решение 100);
+/// изнутри самого режима (шаг Stuck) — сразу алерт, без повторного входа (CI 85ebf10c).
 /// Принимает: ядро, сделку, причину, поведение. Возвращает: false (вызывающий дальше не ведёт). Ошибок нет.
 pub async fn unread(core: &Core, deal: &mut Deal, why: &str, mode: Unread) -> bool {
     let t = &deal.direction.asset.ticker;
@@ -145,7 +146,12 @@ pub async fn unread(core: &Core, deal: &mut Deal, why: &str, mode: Unread) -> bo
         .await;
         return false;
     }
-    if !deal.fact_unread {
+    // CI 85ebf10c (t198): сделка уже в режиме застрявшей монеты (stuck::handle_as_is ставит шаг Stuck; «Перегон» и
+    // продажа здесь читают факт изнутри режима) — повторный вход в режим из него же был циклом
+    // handle_as_is → relay::run → sell_fact::before → remain_fact::reconcile_as → unread → stuck_as_is → handle_as_is
+    // (вне цикла продолжений — вложенно, на стеке). Из режима — сразу человеку; в режим входим только снаружи и только
+    // продолжением sell_loop::hop (решение 389).
+    if !deal.fact_unread && deal.step != super::deal::Step::Stuck {
         deal.fact_unread = true;
         let why = super::stuck_reason::StuckReason::NoFact(format!(
             "{text}; режим застрявшей монеты — повтор позже"

@@ -234,3 +234,18 @@
 | М-4 | Тестовые файлы 362 и 299 строк | core_credit_split_t198 + core_credit_split2_t198, core_credit_fact_t198, core_credit_review3_t198, core_credit_review3b_t198; ядро и сделка — в tests/t198_common |
 | М-5 | Неизвестный basis в записи сделки — ошибка чтения сделки | Читается как «ждёт доли» (basis_lenient) |
 | CI 3f1905ce | Переполнение стека в core_exec_book_238::stuck_without_book_stale_ms_halts_at_once | Чтение баланса — своей задачей tokio (HTTP-будущие адаптера опрашиваются на её стеке, не в глубине пути продажи); новые .await цепочки (reconcile_as, ожидание первого вывода, credit_alert::unread, fact_pause, retry_pause, журнал итога чтения, credit_halted) — в Box::pin |
+
+## 12. CI 85ebf10c — переполнение стека в core_exec_book_238::stuck_without_book_stale_ms_halts_at_once
+
+Путь теста (по коду; cargo локально не запускался): стенд XT, хранилище ключей заперто — подписанный GET /v4/balances
+не уходит, счёт «Спот» в account_balances с ошибкой → remain_read::read — Err. Режим «Перегон»:
+stuck.rs:99 (handle_as_is → relay::run) → relay.rs:140 (sell_fact::before, «перегон», до котировки) →
+sell_fact.rs (reconcile_as, Unread::Stuck) → remain_fact.rs:83 (credit_alert::unread) → credit_alert.rs:153–154
+(sell_next::stuck_as_is + sell_loop::hop) → sell_next.rs:99 (handle_as_is) — повторный вход в режим застрявшей монеты
+изнутри него же. Тест зовёт handle_as_is вне цикла продолжений — hop исполнял вход вложенно (drive) на стеке первого
+прохода. Цикл обрывался только отметкой fact_unread и паузой NoFact (второй проход — продажа здесь → алерт), а не
+остановкой решения 238, которой тест ждёт.
+
+Исправлено: (1) relay::run — проверка «котировка не настроена» (решение 238) до чтения факта: остановка не продаёт и не
+выводит, баланс ей не нужен; (2) credit_alert::unread — изнутри режима (шаг Stuck) повторного входа нет, сразу алерт
+человеку; вход в режим — только снаружи и только продолжением sell_loop::hop (решение 389).

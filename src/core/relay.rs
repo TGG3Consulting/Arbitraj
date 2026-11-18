@@ -135,6 +135,15 @@ pub async fn run(core: &Core, mut deal: Deal) {
         );
         return super::relay_here::sell_here(core, deal, &why).await;
     }
+    // Решение 238 (ревью, п. 2): котировки здесь нет, потому что не задана настройка (NotConfigured, например
+    // venue.book_stale_ms площадки), — сделка остановлена с причиной (stuck_quote::halt_not_configured), а не перегон
+    // вслепую. CI 85ebf10c (t198): проверка — до чтения факта: остановка не продаёт и не выводит, баланс ей не нужен,
+    // а нечитаемый баланс иначе уводил бы сделку мимо остановки решения 238.
+    if let Err(e) = super::trade_ops::deal_quote(core, &deal).await
+        && super::stuck_quote::not_configured(&e)
+    {
+        return super::stuck_quote::halt_not_configured(core, deal, &e).await;
+    }
     // Решение 413 (ревью t198, Б2): оценка перегона и вывод с биржи — только доли сделки по факту счёта (как перед
     // продажей, sell_fact.rs): чужие монеты на общем счёте не выводятся; None — закрыта или алерт человеку.
     let Some(mut deal) = Box::pin(super::sell_fact::before(core, deal, "перегон")).await
@@ -142,9 +151,7 @@ pub async fn run(core: &Core, mut deal: Deal) {
         return;
     };
     let a = deal.direction.asset.clone();
-    // Решение 220: котировка — кошельком сделки.
-    // Решение 238 (ревью, п. 2): котировки здесь нет, потому что не задана настройка (NotConfigured, например
-    // venue.book_stale_ms площадки), — сделка остановлена с причиной (stuck_quote::halt_not_configured), а не перегон вслепую.
+    // Решение 220: котировка — кошельком сделки (количество — по факту).
     let here = match super::trade_ops::deal_quote(core, &deal).await {
         Ok((v, _, _)) => Some(v),
         Err(e) if super::stuck_quote::not_configured(&e) => {

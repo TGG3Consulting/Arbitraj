@@ -10,6 +10,7 @@
 //!   заданными, но без слепка — проверки нет (торговля направлением не включается — risk_ready.rs).
 //!   Снимают паузу: новый слепок («Сбросить лимит» направления / площадки / общий, новый день UTC — drawdown_snap.rs),
 //!   «Снять паузу» направления или площадки (risk.rs).
+//!
 //! Кто вызывает: daily_commit.rs (advance, check), risk.rs (snapshot — view_of), day_roll.rs.
 //! От чего зависит: drawdown.rs, drawdown_cfg.rs, daily.rs (Book), day_view.rs, day_pair.rs (label), notify/human.rs.
 //! Настройки: risk.drawdown_pct, risk.drawdown_max_usd (через drawdown_cfg.rs).

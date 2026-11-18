@@ -199,7 +199,12 @@ async fn ledger_snapshot_own_in_flight_minus_foreign_on_same_account() {
 async fn closed_minus_60_before_usdt_return_pauses() {
     let (core, _st) = core_at(&dir("dd-minus60"), "5", "30").await;
     arb::core::drawdown_snap::apply(&core, P, &mexc(), "USDT", d("1000")).await;
-    let x = close_aleo(&core, "m60", "-60").await;
+    // Сделка ALEO MEXC → DEX на 500 USDT (сумма примера Тиграна; у записанной вложено 39.94 — минус 60 дал бы
+    // отрицательную выручку, возвращать было бы нечего), итог −60: выручка 440 ждёт возврата USDT.
+    let mut x = deal(359, "m60");
+    x.invested = d("500");
+    x.proceeds = d("440");
+    arb::core::ledger::finish(&core, &mut x, Step::Closed, "пример Тиграна").await;
     let v60 = draw(&core, P);
     assert_eq!((v60.balance_usd, v60.drawdown_usd), (d("940"), d("60")));
     assert!(core.control().pair_paused.contains_key(P));

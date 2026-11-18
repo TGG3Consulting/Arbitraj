@@ -53,6 +53,10 @@ jobs:
           extra=""
           if [ "${{ matrix.shard }}" = "0" ]; then extra="--lib --bins"; fi
           cargo test --locked --no-fail-fast $extra ${{ steps.pick.outputs.args }}
+      # t190: таблица «ближайшая большая» против интерполяции на записи 18.11 — вывод теста виден только с --nocapture.
+      - name: Таблица кривых крючков (t190)
+        if: matrix.shard == 0
+        run: cargo test --locked --test bsc_dex_hook_curve_t190 -- --nocapture
       - name: Doc-тесты
         if: matrix.shard == 0
         run: cargo test --locked --doc

@@ -86,7 +86,6 @@ fn curve(steps: Vec<HookStep>, open: bool) -> HookCurve {
         steps: Some(Arc::new(steps)),
         limit: None,
         open,
-        margin: None,
     }
 }
 

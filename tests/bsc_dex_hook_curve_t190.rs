@@ -1,7 +1,7 @@
 //! Файл: tests/bsc_dex_hook_curve_t190.rs
 //! Что проверяет: задача t190 — какое правило лесенки влияния крючка ближе к факту: «ближайшая большая точка» (upper),
-//! линейная интерполяция (at) и правило решения 406 (with_margin: интерполяция × (1 + 5/100), не выше upper; 5 —
-//! совет координатора для hooks.impact_interp_margin_pct). Значение точки — накопленный максимум (решение 406).
+//! хорда (chord) и правило решения 406 (at: max(хорда, продолжение наклона прошлого участка), не выше upper; на
+//! первом участке — хорда). Значение точки — накопленный максимум по ней и меньшим суммам (решение 406).
 //! Только запись узла 18.11
 //! (tests/data/hook_curve_2026-11-18, блок 134300230): 7 пулов Infinity CL с крючками, квотер на 14 суммах в обе
 //! стороны. Влияние крючка на сумме = (наш − квотер) / наш · 100 (check/hooks_probe.rs impact; наш — полный обмен
@@ -18,13 +18,13 @@
 //! Δ = правило − факт (факт и правило — не меньше 0, как в коде); Δ < 0 — правило ЗАНИЖАЕТ влияние (опасно); занижение
 //! меньше разрешения точек (resolution, 100 / выход квотера) — шум, не считается. ИТОГ — по блокам и правилам.
 //! Ассерты — только факты записи: 7 пулов, 196 вызовов квотера (14 сумм × 2 стороны), суммы покупки = USDT·10^18,
-//! откаты — ровно те, что в README записи, лесенка А — суммы выше; новое правило лежит между at и upper (свойство
-//! кода). Ассерта «новое правило не занижает» нет: по прикидке вне бота BTCMT 80 / 100 / 300 USDT занижается при
-//! запасе 5 (docs/notes/t190-impact-interp-2026-11-18.md) — итог смотреть в строках ИТОГ.
+//! откаты — ровно те, что в README записи, лесенка А — суммы выше; chord ≤ at ≤ upper (свойство кода); в блоке A на
+//! суммах не ниже наименьшей точки лесенки at НЕ занижает (с допуском на разрешение). Ниже наименьшей точки (1, 5 USDT)
+//! все правила берут значение наименьшей точки — у CAKE 0xc6104625 (влияние падает с суммой) это занижение до 0,0007
+//! п.п. (прикидка вне бота); оно печатается в ИТОГ, ассерта на него нет.
 //!
 //! Кто вызывает: cargo test.
-//! От чего зависит: tests/hook_curve_common (points — точки записи), arb::venues::bsc_dex::{check::hook_points,
-//! quote::hook_curve}.
+//! От чего зависит: tests/hook_curve_common (points — точки записи и лесенка А), arb::venues::bsc_dex::quote::hook_curve.
 
 mod hook_curve_common;
 
@@ -34,9 +34,8 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
 use arb::core::types::HookStep;
-use arb::venues::bsc_dex::check::hook_points::{first_round, ladder_usd};
-use arb::venues::bsc_dex::quote::hook_curve::{at, monotone, resolution, upper, with_margin};
-use hook_curve_common::points::{Pt, REVERTS, side, sides, step};
+use arb::venues::bsc_dex::quote::hook_curve::{at, chord, monotone, resolution, upper};
+use hook_curve_common::points::{Pt, REVERTS, ladder_a, side, sides, step};
 
 /// Итог правила по блоку, п.п.: сравнений, занижений (больше разрешения точек — resolution), наибольшее занижение,
 /// сумма и наибольшее завышение.
@@ -64,9 +63,10 @@ impl Stat {
     }
 }
 
-/// Сравнение правил на точке p (upper, at, with_margin с запасом-советом 5 %): строка печатается, итог — в `st`.
-/// Ошибок нет; паника — новое правило вне [at, upper] (свойство кода).
-fn compare(tag: &str, steps: &[HookStep], p: &Pt, st: &mut [Stat; 3]) {
+/// Сравнение правил на точке p (upper, chord, at): строка печатается, итог — в `st`. `strict` — at не должен занижать
+/// на суммах не ниже наименьшей точки (блок A). Ошибок нет; паника — нарушено chord ≤ at ≤ upper или занижение при
+/// `strict`.
+fn compare(tag: &str, steps: &[HookStep], p: &Pt, st: &mut [Stat; 3], strict: bool) {
     let fact = p.pct.unwrap_or_default().max(Decimal::ZERO);
     let tol = step(p).map(|s| resolution(&s)).unwrap_or_default()
         + steps.iter().map(resolution).max().unwrap_or_default();
@@ -76,13 +76,17 @@ fn compare(tag: &str, steps: &[HookStep], p: &Pt, st: &mut [Stat; 3]) {
         })
     };
     let x = p.amount;
-    let (u, i, w) = (
-        upper(steps, x),
-        at(steps, x),
-        with_margin(steps, x, Decimal::from(5u8)),
-    );
+    let (u, i, w) = (upper(steps, x), chord(steps, x), at(steps, x));
     if let (Some(u), Some(i), Some(w)) = (u, i, w) {
         assert!(i <= w && w <= u, "{tag} {}: {i} ≤ {w} ≤ {u}", p.usd);
+    }
+    let inside = steps.first().is_some_and(|f| f.amount_in <= x);
+    if let Some(w) = w.filter(|_| strict && inside) {
+        assert!(
+            w >= fact - tol,
+            "{tag} {}: at {w} занижает факт {fact}",
+            p.usd
+        );
     }
     for (k, v) in [u, i, w].into_iter().enumerate() {
         if let Some(v) = v {
@@ -90,28 +94,12 @@ fn compare(tag: &str, steps: &[HookStep], p: &Pt, st: &mut [Stat; 3]) {
         }
     }
     println!(
-        "{tag} {:>4} | факт {fact:.4} | ближ. большая {} | интерп. {} | новое (интерп.×1,05 ≤ ближ.) {}",
+        "{tag} {:>4} | факт {fact:.4} | ближ. большая {} | хорда {} | новое (max(хорда, наклон) ≤ ближ.) {}",
         p.usd,
         show(u),
         show(i),
         show(w)
     );
-}
-
-/// Цели первого замера лесенки (А), привязанные к суммам записи по ln-расстоянию. Ошибок нет.
-fn ladder_a(sums: &[u64]) -> Vec<u64> {
-    let f = |d: Decimal| d.to_f64().unwrap_or(f64::NAN);
-    let raw = ladder_usd(Decimal::from(10), Decimal::from(850), first_round(16));
-    let mut out = BTreeSet::new();
-    for t in raw {
-        let dist = |s: u64| (f(t) / s as f64).ln().abs();
-        let near = sums
-            .iter()
-            .copied()
-            .min_by(|a, b| dist(*a).total_cmp(&dist(*b)));
-        out.extend(near);
-    }
-    out.into_iter().collect()
 }
 
 #[test]
@@ -163,7 +151,13 @@ fn hook_curve_rules_against_record() {
             .iter()
             .filter(|p| p.pct.is_some() && !used.contains(&p.usd))
         {
-            compare(&format!("A {n} {}", side(*b)), &steps, p, &mut worst[0]);
+            compare(
+                &format!("A {n} {}", side(*b)),
+                &steps,
+                p,
+                &mut worst[0],
+                true,
+            );
         }
     }
     println!("=== B: без одной точки (лесенка — остальные измеренные суммы стороны) ===");
@@ -177,13 +171,19 @@ fn hook_curve_rules_against_record() {
                 .filter(|(i, _)| *i != k)
                 .filter_map(|(_, q)| step(q))
                 .collect();
-            compare(&format!("B {n} {}", side(*b)), &steps, p, &mut worst[1]);
+            compare(
+                &format!("B {n} {}", side(*b)),
+                &steps,
+                p,
+                &mut worst[1],
+                false,
+            );
         }
     }
     let names = [
         "ближайшая большая",
-        "интерполяция",
-        "новое правило (накопл. максимум + интерп. × (1+5/100), не выше ближайшей большей)",
+        "хорда",
+        "новое правило (накопл. максимум; max(хорда, продолжение наклона прошлого участка), не выше ближайшей большей)",
     ];
     for (t, w) in ["A", "B"].iter().zip(worst) {
         for (name, r) in names.iter().zip(w) {

@@ -1,13 +1,15 @@
 //! Файл: tests/bsc_dex_hook_interp_t190.rs
-//! Что проверяет: решение 406 (задача t190, Тигран 18.11.2026) — влияние крючка между точками лесенки — линейная
-//! интерполяция по входу, а не значение ближайшей большей точки. Точки — запись узла 17.11
+//! Что проверяет: решение 406 (задача t190, Тигран 18.11.2026) — влияние крючка между точками лесенки: хорда (chord) и
+//! правило котировки at = max(хорда, продолжение наклона прошлого участка), не выше ближайшей большей точки (upper).
+//! Точки — запись узла 17.11
 //! (tests/data/hook_pools_ticks_2026-11-17, блок 134000292; крючок 0x32c59d…, GAIB 0x5c1b, BTCMT 0x6216; покупка
 //! 1 / 20 / 100 USDT — наш полный обмен по карте тиков против CLQuoter, формула check/hooks_probe.rs impact). Квотера
 //! на промежуточных суммах в записи нет — интерполяция проверяется как правило на реальных точках, не как факт крючка.
 //! 1. В точке — её значение; ниже наименьшей — значение наименьшей; выше наибольшей — «не измерено».
-//! 2. На 10 и 50 USDT — v₀ + (v₁ − v₀)·(x − a₀)/(a₁ − a₀) по соседним точкам (сверка независимым расчётом в Decimal);
-//!    прежнее правило (upper — ближайшая большая) на 50 USDT давало значение точки 100 USDT — новое строго меньше.
-//! 3. Интерполяция неубывает по сумме (1…100 USDT).
+//! 2. На 10 и 50 USDT хорда — v₀ + (v₁ − v₀)·(x − a₀)/(a₁ − a₀); at — на 10 (первый участок) хорда, на 50 — max(хорда,
+//!    продолжение наклона 1→20 USDT), не выше точки 100 (сверка независимым расчётом в Decimal); прежнее правило
+//!    (upper) на 50 USDT давало значение точки 100 USDT — at строго меньше.
+//! 3. at неубывает по сумме (1…100 USDT).
 //! 4. Точный выход «с конца» (HookCurve::settle) на количество монет ~50 USDT (наш обмен по записи пула с влиянием
 //!    интерполяции): применённое влияние не меньше влияния на итоговом входе и меньше прежнего (точка 100 USDT).
 //!
@@ -24,7 +26,7 @@ use rust_decimal::Decimal;
 
 use arb::core::types::HookStep;
 use arb::venues::bsc_dex::check::hooks_probe::impact;
-use arb::venues::bsc_dex::quote::hook_curve::{HookCurve, at, monotone, upper};
+use arb::venues::bsc_dex::quote::hook_curve::{HookCurve, at, chord, monotone, upper};
 use hook_ticks_common::{Pool, Quote, load, map, ours, pools, quotes};
 
 fn dec(v: U256) -> Decimal {
@@ -70,6 +72,13 @@ fn expect_lerp(s: &[HookStep], i: usize, x: U256) -> Decimal {
     v0 + (v1 - v0) * ((dec(x) - a0) / (a1 - a0))
 }
 
+/// Независимый расчёт продолжения наклона участка (h, h+1) от точки h+1 до x, значения — не меньше 0.
+fn expect_ext(s: &[HookStep], h: usize, x: U256) -> Decimal {
+    let (a0, a1) = (dec(s[h].amount_in), dec(s[h + 1].amount_in));
+    let (v0, v1) = (s[h].pct.max(Decimal::ZERO), s[h + 1].pct.max(Decimal::ZERO));
+    v1 + (v1 - v0) * (dec(x) - a1) / (a1 - a0)
+}
+
 #[test]
 fn interp_between_recorded_points() {
     let eps = Decimal::from_str("0.000000000000000001").expect("ε");
@@ -89,11 +98,19 @@ fn interp_between_recorded_points() {
         // 2. 10 USDT — между 1 и 20, 50 USDT — между 20 и 100.
         let usd = |u: u64| s[0].amount_in * U256::from(u);
         for (u, i) in [(10u64, 0usize), (50, 1)] {
+            let c = chord(&s, usd(u)).expect("измерено");
+            let line = expect_lerp(&s, i, usd(u));
+            assert!((c - line).abs() <= eps, "{pre} {u}: {c} против {line}");
+            // Правило котировки (решение 406): max(хорда, продолжение наклона прошлого участка), не выше большей точки;
+            // на первом участке — хорда.
+            let want = match i.checked_sub(1) {
+                Some(h) => line.max(expect_ext(&s, h, usd(u))).min(s[i + 1].pct),
+                None => line,
+            };
             let v = at(&s, usd(u)).expect("измерено");
-            let want = expect_lerp(&s, i, usd(u));
             assert!((v - want).abs() <= eps, "{pre} {u}: {v} против {want}");
             assert_eq!(upper(&s, usd(u)), Some(s[i + 1].pct), "{pre} {u}: прежнее");
-            assert!(v < s[i + 1].pct, "{pre} {u}: интерполяция ниже прежнего");
+            assert!(v < s[i + 1].pct, "{pre} {u}: ниже прежнего");
         }
         // 3. Неубывание по сумме: 101 сумма от точки 1 USDT до точки 100 USDT.
         let (a0, a2) = (s[0].amount_in, s[2].amount_in);
@@ -116,7 +133,6 @@ fn settle_with_interp_not_better_than_ladder() {
             steps: Some(Arc::new(s.clone())),
             limit: None,
             open: false,
-            margin: Some(Decimal::ZERO),
         };
         let x50 = s[0].amount_in * U256::from(50u64);
         let pct50 = at(&s, x50).expect("измерено");

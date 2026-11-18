@@ -4,12 +4,17 @@
 //! влияние крючка % = (наш − квотер) / наш · 100 (check/hooks_probe.rs impact). Суммы — из входов покупки (USDT·10^18,
 //! проверяется); у продажи — те же суммы по возрастанию входа (вход продажи серверный ИИ считал по цене slot0 — README).
 //! Кто вызывает: tests/bsc_dex_hook_curve_t190.rs.
-//! От чего зависит: tests/hook_curve_common (разбор записи), arb::venues::bsc_dex::check::hooks_probe, core/types.
+//! Здесь же — ladder_a: суммы первого замера лесенки hooks.impact_points = 16 (check/hook_points.rs), привязанные к
+//! суммам записи.
+//! От чего зависит: tests/hook_curve_common (разбор записи), arb::venues::bsc_dex::check::{hooks_probe, hook_points}.
 
 use alloy_primitives::U256;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
+use std::collections::BTreeSet;
 
 use arb::core::types::HookStep;
+use arb::venues::bsc_dex::check::hook_points::{first_round, ladder_usd};
 use arb::venues::bsc_dex::check::hooks_probe::impact;
 
 use super::{load, map, ours, pools, quotes};
@@ -111,4 +116,20 @@ pub fn side(buy: bool) -> &'static str {
     } else {
         "монета→USDT"
     }
+}
+
+/// Цели первого замера лесенки (А), привязанные к суммам записи по ln-расстоянию. Ошибок нет.
+pub fn ladder_a(sums: &[u64]) -> Vec<u64> {
+    let f = |d: Decimal| d.to_f64().unwrap_or(f64::NAN);
+    let raw = ladder_usd(Decimal::from(10), Decimal::from(850), first_round(16));
+    let mut out = BTreeSet::new();
+    for t in raw {
+        let dist = |s: u64| (f(t) / s as f64).ln().abs();
+        let near = sums
+            .iter()
+            .copied()
+            .min_by(|a, b| dist(*a).total_cmp(&dist(*b)));
+        out.extend(near);
+    }
+    out.into_iter().collect()
 }

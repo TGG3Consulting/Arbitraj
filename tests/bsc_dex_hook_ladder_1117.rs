@@ -82,7 +82,6 @@ fn ladder_quote_not_above_quoter() {
                 steps: Some(Arc::new(steps.clone())),
                 limit: None,
                 open: false,
-                margin: Some(Decimal::ZERO),
             };
             for q in &side {
                 let o = ours(p, &m, q.z, true, q.amount, p.lp).amount_out;
@@ -134,7 +133,6 @@ fn exact_out_not_better_than_fact() {
             steps: Some(Arc::new(ladder(p, &side))),
             limit: None,
             open: false,
-            margin: Some(Decimal::ZERO),
         };
         let q20 = side.iter().find(|q| q.usd == 20).expect("20");
         let want = dec(q20.remote);

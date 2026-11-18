@@ -8,13 +8,13 @@
 //!   850 → 4,584 % — на 45 USDT было 4,696 % при факте 1,72 %). x не больше наименьшей точки — её значение; x выше
 //!   наибольшей — «не измерено на такой сумме» (пул на этой сумме не идёт); open (ревью Б1: путь сделки до пробы,
 //!   продажа выхода, цикл DEX ↔ DEX) — вне измеренного наибольшее значение лесенки;
-//! - upper — значение ближайшей большей точки (правило до решения 406); at — линейная интерполяция по входу между
-//!   соседними точками; with_margin — at × (1 + hooks.impact_interp_margin_pct/100), но не выше upper (в точке — её
-//!   значение без запаса: факт пробы на точной сумме не завышается). Котировка (value) — with_margin, если запас
-//!   задан (HookCurve.margin), иначе upper. Отрицательное влияние — 0 (quote/quoter.rs less_hook, решение 261). Лимит
-//!   hooks.max_impact_b_pct / _c_pct — к влиянию на этой сумме.
-//!   Факты: запись 18.11 (tests/bsc_dex_hook_curve_t190.rs) — между точками факт и выше, и ниже интерполяции.
-//! - settle (quote/hook_settle.rs): точный выход (покупка «с конца») — подъём по upper, затем спуск по value.
+//! - upper — значение ближайшей большей точки; chord — хорда (линейная интерполяция по входу) между соседними
+//!   точками a1 < x < a2; at — правило котировки (решение 406, Тигран 18.11): max(хорда в x, продолжение наклона
+//!   предыдущего участка [a0, a1] от a1 до x), но не выше значения a2 (upper); на первом участке (нет a0) — хорда.
+//!   В точке — её значение. Для ускоряющегося роста хорда выше факта, для замедляющегося — продолжение наклона.
+//!   Отрицательное влияние — 0 (quote/quoter.rs less_hook, решение 261). Лимит hooks.max_impact_b_pct / _c_pct — к
+//!   влиянию на этой сумме. Факты — запись 18.11 (tests/bsc_dex_hook_curve_t190.rs).
+//! - settle (quote/hook_settle.rs): точный выход (покупка «с конца») — подъём по upper, затем спуск по at.
 //! - cut (ревью Б2): проба перед сделкой на сумме x не прошла — точки стороны с входом ≥ x убираются (суммы от x —
 //!   «не измерено»), меньшие суммы и другая сторона работают (check/hook_fold.rs);
 //! - merge: точка пробы перед сделкой — в лесенку стороны (заменяет точку того же входа или вставляется); у
@@ -23,8 +23,8 @@
 //!
 //! Кто вызывает: quote/select.rs (Usable.hook), quote/direct.rs, quote/route_calc.rs, quote/graph_seq.rs,
 //! quote/hook_settle.rs (value), check/hook_fold.rs (merge), check/reprobe_rule.rs (merge); тесты на записях узла.
-//! От чего зависит: core/types (HookStep).
-//! Настройки: нет своих (лимит и запас hooks.impact_interp_margin_pct передаёт quote/select.rs).
+//! От чего зависит: core/types (HookStep), quote/hook_rule.rs (at, upper, chord — реэкспорт).
+//! Настройки: нет своих (лимит передаёт quote/select.rs).
 
 use std::sync::Arc;
 
@@ -32,6 +32,9 @@ use alloy_primitives::U256;
 use rust_decimal::Decimal;
 
 use crate::core::types::HookStep;
+
+/// Правила значения между точками — quote/hook_rule.rs (вынесено: файл был бы больше 200 строк).
+pub use super::hook_rule::{at, chord, upper};
 
 /// Влияние крючка стороны пула для котировки.
 #[derive(Debug, Clone, Default)]
@@ -42,12 +45,7 @@ pub struct HookCurve {
     pub limit: Option<(&'static str, Decimal)>,
     /// Оценка (ревью Б1, см. шапку): сумма вне измеренного — наибольшее значение лесенки, а не «не измерено».
     pub open: bool,
-    /// Запас интерполяции, % (hooks.impact_interp_margin_pct, решение 406); None — не задан: правило upper.
-    pub margin: Option<Decimal>,
 }
-
-/// Настройка: запас интерполяции влияния крючка, % от значения (решение 406).
-pub const MARGIN: &str = "hooks.impact_interp_margin_pct";
 
 /// Разрешение влияния точки, % (ревью 3 Н-д): выход квотера известен с точностью до одной минимальной единицы, значит
 /// влияние — до 100 / выход; выход не сохранён — 0. Ошибок нет.
@@ -66,58 +64,6 @@ pub fn monotone(steps: &[HookStep]) -> bool {
         let tol = resolution(&w[0]) + resolution(&w[1]);
         w[0].pct.max(Decimal::ZERO) <= w[1].pct.max(Decimal::ZERO) + tol
     })
-}
-
-/// Что делает: интерполяция на входе `x` (см. шапку). Принимает: лесенку (по возрастанию входа), вход. Возвращает:
-/// влияние, % (не меньше 0); None — пусто или x больше наибольшего входа. Ошибок нет.
-pub fn at(steps: &[HookStep], x: U256) -> Option<Decimal> {
-    pick(steps, x, false)
-}
-
-/// Что делает: значение ближайшей большей точки (накопленный максимум). Принимает и возвращает — как at. Ошибок нет.
-pub fn upper(steps: &[HookStep], x: U256) -> Option<Decimal> {
-    pick(steps, x, true)
-}
-
-/// Что делает: интерполяция с запасом `margin` %, не выше upper (см. шапку). Принимает: лесенку, вход, запас.
-/// Возвращает: влияние, %; None — как at. Ошибок нет.
-pub fn with_margin(steps: &[HookStep], x: U256, margin: Decimal) -> Option<Decimal> {
-    let hi = upper(steps, x)?;
-    let k = Decimal::ONE + margin / Decimal::ONE_HUNDRED;
-    Some(at(steps, x)?.checked_mul(k).map_or(hi, |v| v.min(hi)))
-}
-
-/// Общий разбор at / upper: `up` — значение ближайшей большей точки, иначе интерполяция. Ошибок нет.
-fn pick(steps: &[HookStep], x: U256, up: bool) -> Option<Decimal> {
-    if x > steps.last()?.amount_in {
-        return None;
-    }
-    let j = steps.iter().position(|s| s.amount_in >= x)?;
-    let hi = steps[..=j].iter().map(|s| s.pct).max()?;
-    let v = match j.checked_sub(1) {
-        Some(i) if !up && steps[j].amount_in > x => {
-            let lo = steps[..=i].iter().map(|s| s.pct).max()?;
-            lerp((steps[i].amount_in, lo), (steps[j].amount_in, hi), x)
-        }
-        _ => hi,
-    };
-    Some(v.max(Decimal::ZERO))
-}
-
-/// Линейная интерполяция по входу между точками (a0, v0) и (a1, v1), a0 < x < a1, v0 ≤ v1 (решение 406). Отрицательные
-/// значения — 0. Вход не переводится в Decimal (больше 96 бит) — v1 (прежнее правило: не лучше ближайшей большей).
-/// Ошибок нет.
-fn lerp((a0, v0): (U256, Decimal), (a1, v1): (U256, Decimal), x: U256) -> Decimal {
-    let (v0, v1) = (v0.max(Decimal::ZERO), v1.max(Decimal::ZERO));
-    share(x - a0, a1 - a0)
-        .and_then(|w| (v1 - v0).checked_mul(w))
-        .map_or(v1, |p| (v0 + p).max(v0).min(v1))
-}
-
-/// Доля part / whole в Decimal; None — число не переводится в Decimal или whole = 0. Ошибок нет.
-fn share(part: U256, whole: U256) -> Option<Decimal> {
-    let dec = |u: U256| super::super::num::to_decimal(u, 0);
-    dec(part)?.checked_div(dec(whole)?)
 }
 
 /// Наибольшее влияние лесенки, не меньше 0; None — пусто. Ошибок нет.
@@ -167,17 +113,13 @@ impl HookCurve {
         }
     }
 
-    /// Что делает: влияние на входе `x` без лимита: `up` — upper, иначе правило котировки (with_margin при заданном
-    /// запасе, иначе upper). Принимает: одно число (без лесенки), вход, правило. Возвращает: влияние, %. Ошибки: «не
-    /// измерено на такой сумме».
+    /// Что делает: влияние на входе `x` без лимита: `up` — upper, иначе правило котировки at. Принимает: одно число
+    /// (без лесенки), вход, правило. Возвращает: влияние, %. Ошибки: «не измерено на такой сумме».
     pub(super) fn value(&self, flat: Decimal, x: U256, up: bool) -> Result<Decimal, String> {
         let Some(s) = self.steps.as_deref().filter(|s| !s.is_empty()) else {
             return Ok(flat);
         };
-        let v = match self.margin {
-            Some(m) if !up => with_margin(s, x, m),
-            _ => upper(s, x),
-        };
+        let v = if up { upper(s, x) } else { at(s, x) };
         match (v, self.open) {
             (Some(v), _) => Ok(v),
             (None, true) => Ok(top_pct(s).unwrap_or(flat)),

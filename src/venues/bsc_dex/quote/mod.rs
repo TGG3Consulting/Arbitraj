@@ -66,6 +66,7 @@ pub mod graph_route;
 pub mod graph_seq;
 pub mod graph_split;
 pub mod hook_curve;
+pub mod hook_settle;
 pub mod mixed_quoter;
 pub mod mixed_quoter_calls;
 pub mod native_gas;

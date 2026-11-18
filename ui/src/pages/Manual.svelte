@@ -21,6 +21,11 @@
     человеческий текст из records (reason), полный исходный текст — по наведению (reason_full).
     Решение 121 (C4): внизу — «Сухая сделка DEX» (components/DexDrySwap.svelte): проверка своего свопа без отправки,
     не зависит от данных ядра.
+  Решение 405 (ответ Тиграна на ревью Н3): «Ждут окончания сделок монеты» (waits из GET /api/manual) — ручное
+    действие, нажатое, пока монету держат идущие сделки: монета, что ждёт, кто нажал, чьих окончаний ждёт, с какого
+    времени; новые сделки этой монеты на паузе; кнопка «Отменить ожидание» (команда CancelManualWait). Когда сделки
+    кончатся, бот сам выполнит ту же команду; держащая сделка застряла — ожидание кончается с причиной (журнал
+    core.manual_wait).
   Кто вызывает: App.svelte.
   От чего зависит: lib/api.js, lib/remote.svelte.js, lib/fmt.js, lib/coinLabels.js, lib/labels.js, components/NoData.svelte, ErrorText.svelte, DexDrySwap.svelte.
   Настройки: нет (режим и пороги — stuck.*, экран «Настройки»).
@@ -120,6 +125,22 @@
 {#if manual.loading}
   <p class="muted">Загружаю…</p>
 {:else if manual.data}
+  <h2>Ждут окончания сделок монеты</h2>
+  <p class="muted">Кнопка нажата, пока монету держат идущие сделки: новые сделки этой монеты на паузе, действие выполнится само, когда они закончатся. Сделка застряла — ожидание кончится с причиной (журнал core.manual_wait).</p>
+  <table>
+    <thead><tr><th>Монета</th><th>Действие</th><th>Ждёт окончания</th><th>Кто нажал</th><th>С</th><th></th></tr></thead>
+    <tbody>
+      {#each uniqBy(manual.data.waits ?? [], (w) => w.id) as w (w.id)}
+        <tr>
+          <td>{w.coin}</td><td>{w.what}</td><td>{w.waits_for.join(', ')}</td><td>{w.who}</td><td>{showTime(w.since)}</td>
+          <td class="row"><button disabled={busy} onclick={() => command({ CancelManualWait: { id: w.id } }, `Отменить ожидание «${w.what}» по ${w.coin}? Действие не выполнится, пауза новых сделок монеты снимется.`)}>Отменить ожидание</button></td>
+        </tr>
+      {:else}
+        <tr><td colspan="6" class="muted">Ожиданий нет.</td></tr>
+      {/each}
+    </tbody>
+  </table>
+
   <h2>Застрявшие монеты — ждут решения</h2>
   <table>
     <thead><tr><th>Монета</th><th>Площадка</th><th class="num">Количество</th><th class="num" title="Итог сделки при продаже сейчас, % от вложенного: плюс — прибыль, минус — убыток (решение 247)">Итог, %</th><th>Причина</th><th>Сделка</th><th>Когда</th><th></th></tr></thead>

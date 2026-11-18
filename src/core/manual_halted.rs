@@ -10,7 +10,7 @@
 //! продажа на площадке, где больше после всех затрат перевода (manual_relay.rs), без порогов убытка.
 //! Решение 177: продажа кнопкой — ручная команда (risk_count.rs), итог отдельным событием (manual_outcome.rs).
 //! Кто вызывает: core/commands.rs (команды SellHalted, SellHaltedReturn, SoldManually), manual.rs (sell_now), manual_return.rs.
-//! От чего зависит: deal.rs, ledger.rs, sell.rs, manual.rs, native.rs, to_trading.rs, deps.rs (шлюз — балансы),
+//! От чего зависит: deal.rs, ledger.rs, sell.rs, manual.rs, manual_wait.rs (решение 405: ожидание окончания сделок монеты), native.rs, to_trading.rs, deps.rs (шлюз — балансы),
 //! manual_sold_check.rs (проверка ввода «Продано вручную», решение 236, дополнение п. 3).
 //! Настройки: risk.min_bnb_balance — через native.rs (BNB на DEX — сверх резерва на газ, решение 62);
 //! manual.sold_max_over_pct — через manual_sold_check.rs.
@@ -138,10 +138,12 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
         if let Some(d) = lk(&core.inner.deals).get_mut(deal_id) {
             d.step = Step::Halted;
         }
-        return Err(format!(
+        // Решение 405 (ответ Тиграна на ревью Н3): не отказ — ждём окончания идущих сделок монеты (manual_wait.rs).
+        let old = format!(
             "по монете {} идёт другая сделка — продайте после её окончания",
             deal.direction.asset.ticker
-        ));
+        );
+        return super::manual_wait::defer(core, &key, &deal.direction.asset.ticker, old);
     }
     match on_hand_sell(core, &deal, &deal.at, &deal.direction.asset, deal.qty).await {
         Ok((qty, note)) => set_qty(&mut deal, qty, note),
@@ -149,7 +151,7 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
             deal.step = Step::Halted;
             deal.note(format!("«Продать сейчас»: {e}"));
             super::ledger::save(core, &deal).await;
-            lk(&core.inner.active).remove(&key);
+            super::coin_ride::free_active(core, &key);
             return Err(e);
         }
     }
@@ -188,7 +190,7 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
         } else {
             super::sell::market(&c, deal, super::sell::BUTTON).await;
         }
-        lk(&c.inner.active).remove(&key);
+        super::coin_ride::free_active(&c, &key);
     }));
     Ok(text)
 }
@@ -238,10 +240,12 @@ pub async fn sold_manually(
         if let Some(d) = lk(&core.inner.deals).get_mut(deal_id) {
             d.step = Step::Halted;
         }
-        return Err(format!(
+        // Решение 405 (ответ Тиграна на ревью Н3): не отказ — ждём окончания идущих сделок монеты (manual_wait.rs).
+        let old = format!(
             "по монете {} идёт другая сделка — продайте после её окончания",
             deal.direction.asset.ticker
-        ));
+        );
+        return super::manual_wait::defer(core, &key, &deal.direction.asset.ticker, old);
     }
     lk(&core.inner.alerts).retain(|_, (_, d)| d.id != deal_id);
     lk(&core.inner.holdings).retain(|_, (_, d)| d.id != deal_id);
@@ -266,7 +270,7 @@ pub async fn sold_manually(
     super::ledger::finish(core, &mut deal, Step::Closed, "продано вручную человеком").await;
     // Решение 165 (05.11): снять метку монеты — иначе следующая сделка и «Продано вручную» по этой монете
     // получали отказ «идёт другая сделка» до перезапуска (найдено на двух LUCIC Gate).
-    lk(&core.inner.active).remove(&key);
+    super::coin_ride::free_active(core, &key);
     let tail = checked.map(|c| format!("; {c}")).unwrap_or_default();
     Ok(format!(
         "Сделка {deal_id} закрыта: ваша выручка {got} USDT + выручка бота {bot} USDT − вложено {} − затраты {} = итог {} USDT{tail}",

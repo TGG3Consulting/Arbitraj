@@ -3,7 +3,8 @@
 //! балансу площадки (не больше взятого), вложенное — пропорционально; дальше — продажа по общим правилам
 //! (sell.rs). Плюс данные экрана «Ручное управление» для api.
 //! Кто вызывает: core/commands.rs; api (Core::manual).
-//! От чего зависит: manual.rs, manual_halted.rs (on_hand — реальный баланс), deal.rs, ledger.rs, sell.rs.
+//! От чего зависит: manual.rs, manual_halted.rs (on_hand — реальный баланс), manual_wait.rs (решение 405: ожидание окончания
+//! сделок монеты и список ожиданий экрана), deal.rs, ledger.rs, sell.rs.
 //! Настройки: risk.min_bnb_balance — через native.rs (BNB на DEX — сверх резерва на газ, решение 62).
 
 use rust_decimal::Decimal;
@@ -23,14 +24,16 @@ pub async fn return_to_bot(core: &Core, holding_id: &str) -> Result<String, Stri
     // Решение 118 (Я-2): по монете одна сделка — идёт другая, возврат подождёт (монеты остаются у человека).
     let key = super::coin_key::CoinKey::of(&h.asset);
     if !super::coin_ride::take(core, &key) {
-        return Err(format!(
+        // Решение 405 (ответ Тиграна на ревью Н3): не отказ — ждём окончания идущих сделок монеты (manual_wait.rs).
+        let old = format!(
             "по {} сейчас идёт другая сделка — «Вернуть боту» после её окончания",
             h.asset.ticker
-        ));
+        );
+        return super::manual_wait::defer(core, &key, &h.asset.ticker, old);
     }
     let r = return_locked(core, holding_id, h, old).await;
     if r.is_err() {
-        lk(&core.inner.active).remove(&key);
+        super::coin_ride::free_active(core, &key);
     }
     r
 }
@@ -100,7 +103,7 @@ async fn return_locked(
     let c = core.clone();
     tokio::spawn(async move {
         super::sell::sell_or_stuck(&c, deal).await;
-        lk(&c.inner.active).remove(&key);
+        super::coin_ride::free_active(&c, &key);
     });
     Ok(text)
 }
@@ -124,8 +127,11 @@ impl Core {
         let records = self.manual_records();
         // Решение 163: закрытые сделки, чьи USDT не вернулись (manual_usdt.rs).
         let usdt = self.usdt_not_returned();
+        // Решение 405 (ответ Тиграна на ревью Н3): ручные действия, ждущие окончания сделок монеты (manual_wait.rs).
+        let waits = super::manual_wait::list(self);
         serde_json::json!({
-            "alerts": alerts, "holdings": holdings, "halted": halted, "usdt": usdt, "records": records
+            "alerts": alerts, "holdings": holdings, "halted": halted, "usdt": usdt, "records": records,
+            "waits": waits
         })
     }
 }

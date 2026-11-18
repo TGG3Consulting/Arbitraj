@@ -7,6 +7,8 @@
 //! «Управление»: старт, стоп, пауза системы, снятие паузы площадки и карантина монеты (решение 157: те же команды
 //! из Telegram — ManualAction::SetMode и др., commands_control.rs). Итог каждой команды — событие CoreEvent::Command.
 //! Решение 177: команда выполняется с признаком «ручная» (risk_count.rs) — не считается ошибкой площадки подряд.
+//! Решение 405: и с признаком команды на задачу (manual_wait::scope) — монета занята идущими сделками: команда ждёт их
+//! окончания; «Отменить ожидание» — manual_wait::command.
 //! Кто вызывает: api (POST /api/manual/command, экран «Управление») и notify (кнопки Telegram) — через методы Core.
 //! От чего зависит: manual.rs, commands_control.rs, risk.rs, risk_count.rs, settings, deps.rs, view.rs.
 //! Настройки: ID чатов ролей Telegram (notify.telegram_chat, notify.control_chat, notify.failures_chat …, решение 176).
@@ -40,9 +42,13 @@ impl Core {
         // (risk_count.rs). Продажи и перегон отдельной задачей ставят тот же признак сами (manual.rs, manual_halted.rs,
         // manual_usdt.rs).
         // Решение 201: команда ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
-        let res =
-            super::risk_count::manual(super::patience_scope::with(self, self.run_command(&cmd)))
-                .await;
+        // Решение 405 (ответ Тиграна на ревью Н3): признак команды на задачу — монета занята идущими сделками, команда
+        // ждёт их окончания и выполняется заново (manual_wait.rs defer).
+        let res = super::manual_wait::scope(
+            cmd.clone(),
+            super::risk_count::manual(super::patience_scope::with(self, self.run_command(&cmd))),
+        )
+        .await;
         // Решение 156: итог команды — Telegram правит сообщения записи «выполнено: кто, что, итог» (notify/mirror.rs).
         self.inner.live.send(super::view::CoreEvent::Command(json!({
             "action": cmd.action, "who": who(&cmd), "ok": res.is_ok(),
@@ -81,6 +87,10 @@ impl Core {
         }
         // Решение 174: «Продать» панели «Балансы» — balance_sell.rs.
         if let Some(r) = super::balance_sell::command(self, &cmd.action, &who(cmd)).await {
+            return r;
+        }
+        // Решение 405: «Отменить ожидание» ручного действия, ждущего окончания сделок монеты — manual_wait.rs.
+        if let Some(r) = super::manual_wait::command(self, &cmd.action) {
             return r;
         }
         // Решение 163: «Перегнать» / «Перегнано вручную» записи «USDT не вернулись» — manual_usdt.rs.

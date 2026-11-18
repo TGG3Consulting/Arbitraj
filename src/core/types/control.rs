@@ -126,6 +126,9 @@ pub enum ManualAction {
         account: String,
         asset: String,
     },
+    /// Решение 405 (ответ Тиграна на ревью Н3): «Отменить ожидание» ручного действия, ждущего окончания идущих сделок
+    /// монеты (core/manual_wait.rs); id — ID ожидания (GET /api/manual — waits).
+    CancelManualWait { id: String },
     /// Решение 176: «Перевести USDT» — с площадки `from` (у DEX — кошелёк `from_wallet`) на `to` (`to_wallet`) сумму
     /// `amount` (строка-число) тем же перегоном USDT ядра, что возврат выручки (core/usdt_transfer.rs).
     TransferUsdt {
@@ -163,6 +166,7 @@ impl ManualAction {
             Self::ResetVenueLimit { .. } => "Сбросить лимит дня площадки",
             Self::SellBalance { .. } => "Продать",
             Self::TransferUsdt { .. } => "Перевести USDT",
+            Self::CancelManualWait { .. } => "Отменить ожидание",
         }
     }
 }

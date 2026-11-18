@@ -21,6 +21,8 @@
 //! возврат группы уже ушёл (ревью 3, Н3) — новая сделка того же направления начинает новую группу.
 //! Начата ли идущая сделка с докупкой, видно по её записи (Ride.group: None — без докупки, ставится при board из
 //! Deal.group): пока по монете идёт такая сделка, очередь кандидатов (blocks_new) настройку не читает — сразу «занята».
+//! Решение 405 (ответ Тиграна на ревью Н3): пока ручное действие ждёт окончания сделок монеты (manual_wait.rs) — новых
+//! сделок, расчётов и действий с ней нет (admit, blocks_new, take); free_active и release будят ожидание.
 //! Блокировки: сначала `active`, потом `rides`, потом `deals`; через await не держатся.
 //! Кто вызывает: executor.rs (admit, board, release), candidates.rs (blocks_new), manual_halted.rs, manual_return.rs,
 //! balance_sell.rs, cycle_deal.rs (take), balance_sell_check.rs, busy_note.rs, uncapped_watch.rs,
@@ -95,6 +97,10 @@ pub fn held(core: &Core, key: &CoinKey) -> bool {
 /// ни замка, ни идущих сделок (как раньше `active.insert`). Принимает: ядро, ключ. Возвращает: true — занята этим
 /// вызовом; снимает её вызывающий (`active.remove`). Ошибок нет.
 pub fn take(core: &Core, key: &CoinKey) -> bool {
+    // Решение 405 (ответ Тиграна на ревью Н3): монету ждёт ручное действие — новых действий с ней нет.
+    if super::manual_wait::paused(core, key) {
+        return false;
+    }
     let mut a = lk(&core.inner.active);
     if a.contains(key)
         || lk(&core.inner.rides)
@@ -104,6 +110,13 @@ pub fn take(core: &Core, key: &CoinKey) -> bool {
         return false;
     }
     a.insert(key.clone())
+}
+
+/// Что делает: снять замок монеты целиком, взятый take (ручное действие, цикл, продажа «Балансов»), и разбудить
+/// ожидания ручных действий (решение 405, manual_wait_run.rs). Принимает: ядро, ключ. Ошибок нет.
+pub fn free_active(core: &Core, key: &CoinKey) {
+    lk(&core.inner.active).remove(key);
+    core.inner.coin_wake.notify_waiters();
 }
 
 /// Идущая сделка того же направления (та же площадка покупки и та же площадка продажи). Ошибок нет.
@@ -163,6 +176,10 @@ pub fn admit(core: &Core, d: &Direction) -> Result<Seat, String> {
         drop(a);
         return Err(busy());
     }
+    // Решение 405 (ответ Тиграна на ревью Н3): ручное действие ждёт окончания сделок монеты — новых сделок нет.
+    if let Some(why) = super::manual_wait::paused_why(core, &key) {
+        return Err(why);
+    }
     let rides = of_coin(core, &key);
     let seat = if rides.is_empty() {
         if top_up_on(core) {
@@ -214,7 +231,7 @@ pub fn board(core: &Core, d: &Direction, deal_id: &str, group: Option<String>) {
 /// board был (None — не был). Ошибок нет.
 pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
     let Some(id) = boarded else {
-        lk(&core.inner.active).remove(key);
+        free_active(core, key);
         return;
     };
     let mut r = lk(&core.inner.rides);
@@ -235,6 +252,9 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
             r.remove(key);
         }
     }
+    drop(r);
+    // Решение 405: запись снята — ожидания ручных действий проверяют монету (manual_wait_run.rs).
+    core.inner.coin_wake.notify_waiters();
 }
 
 /// Что делает: очередь расчёта (candidates::enqueue) — новый расчёт направления не нужен: монета занята целиком или
@@ -246,6 +266,10 @@ pub fn release(core: &Core, key: &CoinKey, boarded: Option<&str>) {
 pub fn blocks_new(core: &Core, d: &Direction) -> bool {
     let key = CoinKey::of(&d.asset);
     if lk(&core.inner.active).contains(&key) {
+        return true;
+    }
+    // Решение 405: ручное действие ждёт окончания сделок монеты — новых расчётов нет (атомарный быстрый путь).
+    if super::manual_wait::paused(core, &key) {
         return true;
     }
     // Решение 403 (ревью t188): идущих сделок нет ни по одной монете — замок `rides` не берётся (атомарное чтение).

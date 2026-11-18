@@ -177,6 +177,8 @@ pub mod manual_sell;
 pub mod manual_sold_check;
 pub mod manual_usdt;
 pub mod manual_usdt_credit;
+pub mod manual_wait;
+pub mod manual_wait_run;
 pub mod market_apply;
 pub mod market_read;
 pub mod market_state;

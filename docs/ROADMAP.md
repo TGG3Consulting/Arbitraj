@@ -29,6 +29,7 @@
 - Решение 424 (t208): сверх ориентира 200 — venues/poloniex/ws_conn.rs 215 (функция bad — вынести в ws_book.rs),
   ws_book.rs 216, fast_book.rs 240 после ревью (Stats и сверку снимка book — в отдельный файл). Сверка снимка book с быстрым стаканом — только по
   содержимому верха; по версии — после живой записи (общие ли id у book и book_lv2).
+- Решение 427 (t211): сверх ориентира 200 — venues/phemex/ws_conn.rs 276 после ревью (было 246; вынести разбор ответов и кадров стакана из select! в ws_frame.rs), book.rs 228 (было 210; freeze и stale — в book_fresh.rs), book_pick.rs 267 после ревью (Taken / Out / Event — в book_pick_types.rs).
 - Решение 415 (t200, после ревью): сверх ориентира 200 и до t200 — core/sell.rs 394 (было 375), core/sell_range_run.rs 363 (было 350), core/relay.rs 338 (было 331), core/stuck.rs 218 (было 215); t200 добавил только ход очереди и строки шапок. tests/core_sell_turn_t200.rs 466 — разнести (LQR / ключи и след / продолжение) с общим помощником.
 - Решение 414 (ревью 648177a2): core/drawdown_pending.rs 214 строк — вынести Cur, closing и Closing в
   drawdown_closing.rs (только перенос; пути arb::core::drawdown_pending::{closing, cur} в tests/core_drawdown_414.rs и

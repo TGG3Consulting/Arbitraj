@@ -3,7 +3,8 @@
 //! (сколько заплатим или получим за Q монет, с комиссией taker нашего аккаунта).
 //! Решение 217: freeze — снимок стакана и плана комиссии (gateway/frozen.rs FrozenBook) для контракта quote_snapshot;
 //! живая котировка — тот же снимок на один вызов (одна формула).
-//! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра; book_confirmed), book_print.rs (print).
+//! Решение 427: put_at / rebind — стакан запасного потока при потере основного (book_lane.rs).
+//! Кто вызывает: market.rs (обновляет стакан), book_lane.rs, mod.rs (quote для ядра; book_confirmed), book_print.rs (print).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: venue.quote_asset (монета комиссии продажи); feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
 //! устарели; venue.book_stale_ms [phemex] (обязательна — решение 238) — кадр стакана этой пары старше — котировки нет.
@@ -47,6 +48,8 @@ pub struct Books {
     map: Arc<RwLock<HashMap<String, Entry>>>,
     /// Решение 202 (для всех бирж, 08.11): свежесть соединений и пар для сторожа ядра (gateway/feed_health.rs).
     pub feed: crate::gateway::feed_reg::FeedReg,
+    /// Решение 427: счёт событий выбора основного / запасного потока с запуска (book_lane.rs).
+    pub lane_stats: Arc<super::book_lane::Stats>,
 }
 
 /// Сейчас, unix мс.
@@ -57,8 +60,14 @@ fn now_ms() -> i64 {
 impl Books {
     /// Сохраняет свежий стакан и связь с его соединением; время кадра пары — сейчас.
     pub fn put(&self, book: OrderBook, alive: Alive) {
+        self.put_at(book, alive, now_ms());
+    }
+
+    /// Решение 427: то же, что put, но время кадра пары — seen_ms (unix мс): стакан запасного потока, отданный при
+    /// потере основного, сохраняет время своего кадра (venue.book_stale_ms считается от него). Ошибок нет.
+    pub fn put_at(&self, book: OrderBook, alive: Alive, seen_ms: i64) {
         let mut m = self.map.write().unwrap_or_else(|p| p.into_inner());
-        let seen: Alive = Arc::new(AtomicI64::new(now_ms()));
+        let seen: Alive = Arc::new(AtomicI64::new(seen_ms));
         let until: Alive = Arc::new(AtomicI64::new(0));
         m.insert(book.asset.ticker.clone(), (book, alive, seen, until));
     }
@@ -88,6 +97,15 @@ impl Books {
         let m = self.map.read().unwrap_or_else(|p| p.into_inner());
         m.get(ticker)
             .map(|(b, ..)| crate::gateway::feed_health::BookPrint::top(&b.bids, &b.asks, n))
+    }
+
+    /// Решение 427: стакан в памяти остаётся, его живость — по другому соединению (основной поток потерян, запасной
+    /// синхронизирован, но его последний кадр не новее отданного). Стакана нет — ничего. Ошибок нет.
+    pub fn rebind(&self, ticker: &str, alive: Alive) {
+        let mut m = self.map.write().unwrap_or_else(|p| p.into_inner());
+        if let Some(e) = m.get_mut(ticker) {
+            e.1 = alive;
+        }
     }
 
     /// Убирает стакан (данные недостоверны — например, оборвалось соединение).

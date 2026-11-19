@@ -1967,6 +1967,15 @@ rationale = "Потолок документации; при venue.balance_event
 prefill = { kind = "Venue", id = "phemex" }
 
 [[section.rec]]
+name = "venue.book_reserve"
+area = "площадка Phemex"
+unit = "поток"
+method = "depth30, если пар Phemex в работе не больше (venue.ws_max_conns − поток аккаунта) / 2 × venue.ws_symbols_per_conn (при 5 и потоке аккаунта — 40); пар больше — не задавать (часть пар не подпишется); full — только если нужен поток другой глубины (кадры тяжелее, 100 мс)"
+source = "Subscribe orderBook «depth = 30 and interval = 20ms», Subscribe full orderBook «full depth and interval = 100ms»; API Rate Limits «concurrent connection limit to 5», «subscription limit to 20»"
+rationale = "Запасной поток той же скорости держит стакан, пока основной ждёт снимок (≤ 60 с)."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
 name = "venue.ws_subs_per_sec"
 area = "площадка Phemex"
 unit = "в секунду"

@@ -43,7 +43,8 @@ use t198_live::{Hit, Stand, big, start};
 fn btc() -> Asset {
     Asset {
         ticker: "BTC".into(),
-        bsc_contract: None,
+        chain: None,
+        contract: None,
     }
 }
 

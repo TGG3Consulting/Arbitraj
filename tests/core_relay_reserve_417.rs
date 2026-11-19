@@ -62,7 +62,8 @@ fn v(id: &str) -> VenueId {
 fn cake() -> Asset {
     Asset {
         ticker: "CAKE".into(),
-        bsc_contract: Some(address!("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82")),
+        chain: None,
+        contract: Some(address!("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82")),
     }
 }
 

@@ -102,7 +102,8 @@ fn hashes() -> (String, String) {
 fn asset() -> Asset {
     Asset {
         ticker: "USDT".into(),
-        bsc_contract: Some(USDT.parse::<Address>().unwrap()),
+        chain: None,
+        contract: Some(USDT.parse::<Address>().unwrap()),
     }
 }
 

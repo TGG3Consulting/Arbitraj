@@ -72,7 +72,7 @@ pub fn params_at(
     let s = &core.inner.deps.settings;
     let sigma = super::sigma_plan::entry_shared(&core.inner.vol, s, &dir, now)?;
     let transit_s = super::transit::seconds(core, &dir)?;
-    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
+    let coin = crate::settings::scope::coin_id(&a.ticker, a.contract.as_ref());
     let vd = super::venue_dir::of(core, &dir);
     let coin_at = At {
         venue: None,

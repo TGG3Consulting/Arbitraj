@@ -19,7 +19,10 @@ use super::backup_kind::{BackupAct, Held, Main, Print};
 
 impl Hub {
     /// Кадр страховки применён. Принимает: тикер, стакан страховки, отпечаток, отдачу ядру (под замком пары, при Give и
-    /// Mismatch). Возвращает: BackupAct. Ошибок нет.
+    /// Mismatch). Стакан ядра уже из страховки — отдаётся каждый её кадр (порядок внутри её потока держит u,
+    /// local_book.rs), даже если основной уже синхронизирован, но ещё не новее отданного: иначе стакан ядра замер бы до
+    /// кадра основного (ревью 428). Переход на страховку — только кадром новее отданного. Возвращает: BackupAct.
+    /// Ошибок нет.
     pub fn backup_frame(
         &self,
         ticker: &str,
@@ -31,17 +34,13 @@ impl Hub {
             let seq = held.seq;
             s.backup = Some(held);
             s.backup_print = Some(p);
-            if s.main == Main::Synced {
-                let Some((m, mp)) = s.main_at else {
-                    return BackupAct::Keep;
-                };
-                if m != seq || mp.0 != p.0 {
-                    return BackupAct::Keep;
-                }
+            let met = s
+                .main_at
+                .filter(|(m, mp)| s.main == Main::Synced && *m == seq && mp.0 == p.0);
+            if met.is_some() {
                 self.compares.fetch_add(1, Ordering::Relaxed);
-                if mp == p {
-                    return BackupAct::Keep;
-                }
+            }
+            if met.is_some_and(|(_, mp)| mp != p) {
                 // Расхождение при равном seq: стакан того же момента — страховки (seq равен отданному — замена).
                 s.main = Main::Resync;
                 s.main_at = None;
@@ -52,7 +51,8 @@ impl Hub {
                 }
                 return BackupAct::Mismatch(s.conn.clone());
             }
-            if !newer(seq, s.given) {
+            // Источник ядра — основной: только запомнить. Переход на страховку — только кадром новее отданного.
+            if !s.from_backup && (s.main == Main::Synced || !newer(seq, s.given)) {
                 return BackupAct::Keep;
             }
             s.given = Some(seq);

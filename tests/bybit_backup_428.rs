@@ -258,3 +258,51 @@ fn back_to_main_and_compare() {
     assert_eq!(hub.compares(), 2);
     assert!(hub.main_is_source(T));
 }
+
+/// Ревью 428: правило «не старее отданного» — только при смене источника. Пока стакан ядра из основного, его кадры
+/// отдаются по порядку u (local_book.rs): снимок после пересподписки с меньшим seq (Orderbook: «"u"=1, which is a
+/// snapshot data due to the restart of the service» — что при этом с seq, документация не пишет) не застревает. Пока
+/// стакан ядра из страховки — отдаётся каждый её кадр, даже когда основной уже получил снимок, но ещё не новее отданного.
+#[test]
+fn same_source_never_stuck() {
+    let fr = frames();
+    let hub = Hub::new(true, 50, 1);
+    hub.main_session(T, "market-1");
+    for f in &fr[..=9] {
+        hub.main_frame(T, f.snapshot, Some(f.seq), pr(f, 1), || {});
+    }
+    // Разрыв без страховки — стакан недостоверен; новый снимок основного (живой кадр 0 — seq меньше отданного) отдаётся.
+    assert!(matches!(
+        hub.main_lost(T, Main::Resync, Duration::from_secs(60), |_| {}),
+        Lost::Invalidate
+    ));
+    let mut gave = false;
+    assert_eq!(
+        hub.main_frame(T, true, Some(fr[0].seq), pr(&fr[0], 1), || gave = true),
+        MainAct::Give
+    );
+    assert!(gave && hub.main_is_source(T));
+    // Стакан ядра из страховки (основной оборван), основной получил снимок не новее отданного — кадры страховки
+    // по-прежнему идут ядру; основной возвращается кадром новее отданного.
+    hub.main_lost(T, Main::Off, Duration::from_secs(60), |_| {});
+    let mut got = vec![];
+    for i in [12, 14] {
+        assert!(matches!(
+            hub.backup_frame(T, held1(&fr[i]), pr(&fr[i], 1), |h| got.push(h.seq)),
+            BackupAct::Give
+        ));
+        if i == 12 {
+            assert_eq!(
+                hub.main_frame(T, true, Some(fr[11].seq), pr(&fr[11], 1), || panic!(
+                    "не новее"
+                )),
+                MainAct::Skip
+            );
+        }
+    }
+    assert_eq!(got, vec![fr[12].seq, fr[14].seq]);
+    assert_eq!(
+        hub.main_frame(T, false, Some(fr[15].seq), pr(&fr[15], 1), || {}),
+        MainAct::Back
+    );
+}

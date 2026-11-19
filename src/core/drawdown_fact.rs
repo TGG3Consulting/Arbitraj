@@ -5,7 +5,8 @@
 //! Факт — котируемая монета площадки (venue.quote_asset) так же, как остаток сделки в remain_fact.rs (решение 222):
 //! биржа — свободно + заморожено на торговом счёте и на счетах, с которых монета перекладывается на торговый (роль
 //! ToTrading, решение 174), только чтение; счёт с ошибкой — факта нет; DEX — баланс кошелька (один balanceOf, решение
-//! 113), свободно + заморожено. Своё чтение, а не вызов remain_fact.rs: там — монета сделки и её счёт, здесь — USDT
+//! 113), свободно + заморожено (у кошелька заморожено 0 — сложение для одинакового счёта с биржей); строки USDT у
+//! кошелька нет — «нет данных», ошибка, слепок не снимается (решение 140; ревью слияния 413×414, Н-2). Своё чтение, а не вызов remain_fact.rs: там — монета сделки и её счёт, здесь — USDT
 //! направления (общая часть — account_balances / account_role шлюза).
 //! Кто вызывает: drawdown_snap.rs.
 //! От чего зависит: day_pair.rs, dex_account.rs (NO_WALLET), deal_words.rs (place), settings (accounts, venue.quote_asset),
@@ -14,7 +15,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{DexAccountId, VenueId};
+use crate::core::types::{Balance, DexAccountId, VenueId};
 use crate::gateway::contract::{AccountRole, VenueKind};
 use crate::settings::accounts::ROW_DEX_DEX;
 use crate::settings::read::At;
@@ -90,8 +91,24 @@ pub fn quote(core: &Core, v: &VenueId) -> Result<String, String> {
         .map_err(|e| e.message)
 }
 
+/// Что делает: USDT кошелька DEX по строке баланса (ревью слияния 413×414, Н-2). Решение 140 (low_usdt::free_of,
+/// reconcile.rs): у кошелька DEX нет строки котируемой монеты — «нет данных», не 0 (список токенов адаптера DEX
+/// приходит с подпиской рынка; до неё — только строка BNB): слепок не снимается, повтор — как при ошибке чтения.
+/// Строка есть — свободно + заморожено, как у биржи (у кошелька заморожено по смыслу 0: balanceOf — весь баланс,
+/// решение 113; сложение — чтобы обе ветки считали одинаково). Принимает: площадку (для текста), строку баланса,
+/// котируемую монету. Возвращает: сумму. Ошибки: строки нет — «нет данных о USDT кошелька».
+pub fn wallet_usdt(v: &VenueId, b: Option<&Balance>, q: &str) -> Result<Decimal, String> {
+    b.map(|b| b.free + b.locked).ok_or_else(|| {
+        format!(
+            "{}: нет данных о {q} кошелька (строки {q} в балансах кошелька ещё нет — решение 140)",
+            v.0
+        )
+    })
+}
+
 /// Что делает: USDT (котируемая монета) на площадке покупки по факту. Принимает: ядро, площадку.
-/// Возвращает: сумму. Ошибки: не задан venue.quote_asset, площадка не подключена, сбой балансов, счёт не прочитан.
+/// Возвращает: сумму. Ошибки: не задан venue.quote_asset, площадка не подключена, сбой балансов, счёт не прочитан;
+/// у кошелька DEX нет строки котируемой монеты — «нет данных» (wallet_usdt, решение 140).
 pub async fn usdt(core: &Core, pl: &Place) -> Result<Decimal, String> {
     let q = quote(core, &pl.venue)?;
     let gw = core
@@ -102,12 +119,11 @@ pub async fn usdt(core: &Core, pl: &Place) -> Result<Decimal, String> {
         .await
         .map_err(|e| e.message)?;
     if gw.kind() != VenueKind::Cex {
-        return Ok(gw
+        let b = gw
             .balance(&q)
             .await
-            .map_err(|e| format!("{}: балансы: {}", pl.venue.0, e.message))?
-            .map(|b| b.free + b.locked)
-            .unwrap_or_default());
+            .map_err(|e| format!("{}: балансы: {}", pl.venue.0, e.message))?;
+        return wallet_usdt(&pl.venue, b.as_ref(), &q);
     }
     let accs = gw
         .account_balances()

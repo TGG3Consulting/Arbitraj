@@ -8,7 +8,8 @@
 //! записи). Итог несёт прочитанный факт и учёт других — вызывающий без второго чтения идёт обычным путём (С-1).
 //! Кто вызывает: core/remain_fact.rs (reconcile_as), core/credit_rest_park.rs, core/manual.rs, core/manual_halted.rs.
 //! От чего зависит: credit_rest.rs (busy, share_out, apply_one), remain_read.rs (with_fact), credit_lock.rs (sync),
-//! credit_fact.rs, deposit_hold.rs, ledger.rs, deps.rs, engine.rs.
+//! credit_fact.rs, deposit_hold.rs, credit_rest_value.rs (оценка после решения — ревью слияния 413×414), ledger.rs,
+//! deps.rs, engine.rs.
 //! Настройки: нет.
 
 use rust_decimal::Decimal;
@@ -47,6 +48,9 @@ pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
     let hold = super::deposit_hold::expected_pct(core, &deal.at, &deal.direction.asset);
     let mut texts: Vec<Resolved> = Vec::new();
     let mut joint: Vec<String> = Vec::new();
+    // Ревью слияния 413×414 (Н-1): количества до решения — своей (только если решала эта сделка) и соучастников.
+    let mut mine: Option<Decimal> = None;
+    let mut was: Vec<(String, Decimal)> = Vec::new();
     let (res, fact, others) = Box::pin(super::remain_read::with_fact(core, &probe, |r, o| {
         let mem = lk(&core.inner.deals).get(&deal.id).cloned();
         // Уже решён совместно другой сделкой — из памяти (восьмое ревью С-4: при guard шаг тот же, иначе взял человек;
@@ -103,6 +107,7 @@ pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
             .zip(shares.iter().skip(1))
             .map(|(x, q)| format!("{} → {q}", x.0))
             .collect();
+        mine = Some(deal.qty);
         texts.push(apply_one(
             deal,
             shares[0],
@@ -115,6 +120,7 @@ pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
         let mut m = lk(&core.inner.deals);
         for (x, q) in idle.iter().zip(shares.iter().skip(1)) {
             if let Some(d) = m.get_mut(&x.0) {
+                was.push((x.0.clone(), d.qty));
                 let me = format!("{} → {}", deal.id, shares[0]);
                 texts.push(apply_one(d, *q, f, prior, hold, &me));
                 joint.push(x.0.clone());
@@ -123,8 +129,16 @@ pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
         (Res::Done, r, o)
     }))
     .await;
-    for id in &joint {
-        let fresh = lk(&core.inner.deals).get(id).cloned();
+    // Ревью слияния 413×414 (Н-1): количество изменилось у остановленной с оценкой — оценка в итоге дня заново
+    // (credit_rest_value.rs, тот же daily::provisional, что у ledger::finish); иначе итог дня и «своё» в слепке просадки
+    // (решение 414) остались бы по прежнему количеству.
+    if let Some(before) = mine {
+        Box::pin(super::credit_rest_value::revalue_own(core, deal, before)).await;
+    }
+    for (id, before) in &was {
+        let fresh = Box::pin(super::credit_rest_value::revalue(core, id, *before))
+            .await
+            .or_else(|| lk(&core.inner.deals).get(id).cloned());
         if let Some(d) = fresh {
             Box::pin(super::ledger::save(core, &d)).await;
         }

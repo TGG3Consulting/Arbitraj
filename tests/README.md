@@ -1154,3 +1154,5 @@ StableSwap Nomiswap (getAmountOut контракта, nomiswap_stable_2026-11-15
 Решение 430: tests/core_gas_ticker_430.rs — газ по сети (core/gas_ticker.rs): одна площадка DEX — её тикер (как раньше); две сети — газ сети монеты (of_asset), у биржи — газ сети сделки (for_venue_in), бирже — стаканы газа всех сетей (all); без dex.default_chain при двух сетях — ошибка с причиной.
 
 Решение 430: tests/core_registry_chains_430.rs — справочник по сетям (core/registry_chains.rs) на записанном справочнике сетей BingX (config_getall.json, разбор адаптера): одна DEX — одна группа сети по умолчанию; две сети — две группы; записи бирж без сети — сеть по умолчанию (USDT BEP20), адреса Arbitrum появятся с шагом 3 (записи сети ARBITRUM с сетью «arbitrum» — USDT Arbitrum из ответа BingX); chain::kinds_in — DEX только своей сети.
+
+Решение 430: tests/core_transfer_net_430.rs — своё имя сети площадки по сети перевода (core/transfers.rs own_name): сеть по умолчанию — venue.bsc_network (как раньше); другая сеть — у биржи нет (шаг 3), у площадки DEX этой сети — её venue.bsc_network; имена сетей USDT — из записанного справочника BingX.

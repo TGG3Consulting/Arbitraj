@@ -41,7 +41,9 @@ use chrono::Utc;
 use rust_decimal::Decimal;
 use tokio::sync::Notify;
 
-use crate::core::types::{Asset, CostKind, Transfer, TransferStatus, VenueId, WithdrawRequest};
+use crate::core::types::{
+    Asset, ChainId, CostKind, Transfer, TransferStatus, VenueId, WithdrawRequest,
+};
 use crate::gateway::contract::VenueKind;
 use crate::gateway::errors::ErrorCode;
 use crate::storage::journal::Level;
@@ -57,10 +59,11 @@ use super::wait::{Pacer, Unit};
 /// Ошибка: ни у одной биржи монеты нет сети BSC.
 pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, String> {
     let coins = rd(&core.inner.coins);
-    // Решение 131: по карте адрес → монеты, без прохода справочника.
+    // Решение 131: по карте монета → место, без прохода справочника. Решение 430: монета с сетью — запись справочника
+    // ЕЁ сети (равенство монеты — сеть и адрес); с одной сетью — та же запись, что по адресу.
     let entry = asset
         .contract
-        .and_then(|t| super::ticker_index::find_by_token(core, &coins, t));
+        .and_then(|_| super::ticker_index::find(core, &coins, asset));
     // Решение 211 (ревью В1): по адресу И тикеру этой площадки — у адреса на бирже бывает несколько тикеров.
     let on = super::venue_ticker::ticker_on(core, asset, venue);
     let any = rd(&core.inner.networks)
@@ -81,13 +84,28 @@ pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, St
     // Решение 118 (Я-19): только своё название площадки — название сети другой площадки не годится (BingX «BEP20»,
     // MEXC «BSC»). Нет своего — ошибка: задайте venue.bsc_network площадки.
     own.or(any)
-        .or_else(|| own_bsc_name(core, venue))
-        .ok_or_else(|| {
-            format!(
+        .or_else(|| own_name(core, venue, asset.chain.as_ref()))
+        .ok_or_else(|| match &asset.chain {
+            None => format!(
                 "{}: нет сети BSC для {} — задайте venue.bsc_network площадки",
                 venue.0, asset.ticker
-            )
+            ),
+            Some(c) => format!(
+                "{}: нет имени сети {c} для {} — у биржи имя сети по сети приходит из её справочника (шаг 3 плана двух сетей)",
+                venue.0, asset.ticker
+            ),
         })
+}
+
+/// Что делает: своё имя сети площадки для сети монеты (решение 430). Сеть по умолчанию (None) — venue.bsc_network
+/// площадки, как раньше; другая сеть — только у площадки DEX (её venue.bsc_network — имя сети, которую она
+/// обслуживает); у биржи имени другой сети в настройке нет (venue.bsc_network — имя сети BSC) — None.
+/// Принимает: ядро, площадку, сеть монеты. Возвращает: имя или None. Ошибок нет.
+pub fn own_name(core: &Core, venue: &VenueId, chain: Option<&ChainId>) -> Option<String> {
+    if chain.is_some() && !super::daily_venue::is_dex(core, &venue.0) {
+        return None;
+    }
+    own_bsc_name(core, venue)
 }
 
 /// Название сети BSC самой площадки — настройка venue.bsc_network (решение 108). None — не задана. Ошибок нет.

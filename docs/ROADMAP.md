@@ -35,6 +35,9 @@
 - Решение 419 (дополнение, t203): venues/xt/ws_conn.rs 202 строки (ориентир 200) — при следующей правке вынести разбор
   отказа подписки (Msg::Error) в ws_book.rs или отдельный файл.
 - Решение 421 (t205): записать живые кадры spot.obu Gate (docs/TASKS.md, решение 421, п. 1) и добавить тест на них в tests/gate_fast_book.rs (сейчас — примеры документации и кадры spot.order_book_update); src/venues/gate/fast_pick.rs 213 строк после ревью (allow/ms/Src вынесены в fast_rule.rs; сверх ориентира 200 — вынести fallback/refused при следующей правке).
+- Решение 428 (t212): страховка стакана Bybit проверена тестами только на записи одной глубины (orderbook.50 04.11):
+  сверка двух глубин при равном seq и вообще частота равного seq — не проверены; нужна запись двух глубин одной пары
+  (docs/TASKS.md, решение 428).
 - Решение 415 (t200, после ревью): сверх ориентира 200 и до t200 — core/sell.rs 394 (было 375), core/sell_range_run.rs 363 (было 350), core/relay.rs 338 (было 331), core/stuck.rs 218 (было 215); t200 добавил только ход очереди и строки шапок. tests/core_sell_turn_t200.rs 466 — разнести (LQR / ключи и след / продолжение) с общим помощником.
 - Решение 414 (ревью 648177a2): core/drawdown_pending.rs 214 строк — вынести Cur, closing и Closing в
   drawdown_closing.rs (только перенос; пути arb::core::drawdown_pending::{closing, cur} в tests/core_drawdown_414.rs и

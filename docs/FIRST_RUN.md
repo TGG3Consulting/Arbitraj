@@ -394,6 +394,7 @@ Bybit назначить зачисление на UNIFIED (Set Deposit Account)
 | venue.withdraw_account | площадка Bybit | *метод:* `UTA` (торговый баланс — на UNIFIED, депозит туда же); решает Тигран | Торговый баланс — на UNIFIED | Withdraw: accountType |
 | venue.deposit_to_spot | площадка Bybit | *метод:* не задавать — депозит назначен на UNIFIED в кабинете; «да» — только запасной вариант при депозите на FUND (право Wallet: AccountTransfer) | Счёт зачисления API прочитать не даёт — проверяет Тигран в кабинете | Set Deposit Account; решение Тиграна 04.11 |
 | venue.book_seq_strict | площадка Bybit | *метод:* да — на живом потоке `u` изменений шёл строго +1 (запись 04.11); частые пересинхронизации в журнале — нет | Потерянный кадр виден сразу | Orderbook (+1 не обещано); решение Тиграна 04.11 |
+| venue.book_backup_levels | площадка Bybit | *метод:* `200` при venue.depth_levels = 50; `1` — если на время разрыва хватит лучшего уровня; решает Тигран | 200 уровней раз в 100 мс: на время пересинхронизации основного ядро считает по полной глубине (≥ 50 уровней), сверка — по первым 50; соединений вдвое больше | Orderbook → Depths → Spot; seq «compare different levels orderbook data»; решение 428 |
 | venue.recv_window_ms | площадка Bybit | `5000` | Значение по умолчанию Bybit | Integration Guidance: «default value is 5,000» |
 ## Биржа KuCoin (решение 137)
 

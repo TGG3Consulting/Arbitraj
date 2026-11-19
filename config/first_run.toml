@@ -944,6 +944,15 @@ method = "да — если на живом потоке u изменений ш
 source = "Orderbook: snapshot/delta (строгое +1 не обещано); живая запись 04.11; решение Тиграна 04.11"
 rationale = "Строгая проверка ловит потерянный кадр сразу; без неё — только откат номера."
 prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.book_backup_levels"
+area = "площадка Bybit"
+unit = "уровней"
+method = "200 при venue.depth_levels = 50; 1 — если на время разрыва основного хватит лучшего уровня; решает Тигран."
+source = "Orderbook → Depths → Spot (1 — 10 мс, 50 — 20 мс, 200 — 100 мс, 1000 — 200 мс); seq «compare different levels orderbook data»; решение 428"
+rationale = "На время пересинхронизации основного ядро считает по полной глубине (не меньше 50 уровней), сверка — по первым 50; соединений вдвое больше."
+prefill = { kind = "Venue", id = "bybit" }
 # --- Биржа KuCoin (решение 137) ---
 [[section]]
 title = "Биржа KuCoin (решение 137)"

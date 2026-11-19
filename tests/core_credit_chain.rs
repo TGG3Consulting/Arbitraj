@@ -6,7 +6,8 @@
 //! перевод USDT блока (другая сумма) — «чужое количество»; токен первого не-USDT перевода блока — «чужой токен».
 //! - приход нужного количества на кошелёк сделки — зачислено без хеша биржи;
 //! - чужое количество, чужой токен, другой кошелёк, приход раньше вывода, выключатель «нет» — не зачислено;
-//! - второй ожидаемый приход того же токена на тот же кошелёк — не зачислено.
+//! - второй ожидаемый приход того же токена на тот же кошелёк с тем же количеством — не зачислено (решение 418: с
+//!   другим количеством не мешает — tests/core_credit_chain_418.rs).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, tests/receipts_common. Моков нет: площадок в реестре нет —
@@ -205,17 +206,11 @@ async fn foreign_amount_or_token_not_credited() {
 async fn second_expected_inflow_not_credited() {
     let (core, s) = start("second").await;
     configure(&s, true).await;
-    let other = transfers()
-        .into_iter()
-        .find(|(h, tok, a)| h != OUR && *tok == usdt() && *a != ours())
-        .unwrap();
+    // Решение 418: мешает только ожидание, к которому тоже подходит количество события.
     let t = ticket(&core, "d1", ours(), before());
-    let t2 = ticket(&core, "d2", other.2, before());
+    let t2 = ticket(&core, "d2", ours(), before());
     credit_event::on_change(&core, deposit(OUR, usdt(), ours(), WALLET)).await;
-    assert!(
-        t.chain_hit().is_none(),
-        "ожидается ещё приход того же токена"
-    );
+    assert!(t.chain_hit().is_none(), "подходит к двум — Pick::Many");
     assert!(t2.chain_hit().is_none());
 }
 

@@ -8,7 +8,8 @@
 //! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
 //! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
 //! Кто вызывает: ws_conn.rs.
-//! От чего зависит: depth.rs, local_book.rs, snapshots.rs, book.rs, ws.rs, ctx.rs; изменения — ws_diff.rs.
+//! От чего зависит: depth.rs, local_book.rs, snapshots.rs, book.rs, ws.rs, ctx.rs; изменения — ws_diff.rs;
+//! страховка снимками depth@ при depth_update — backup.rs (решение 419, дополнение).
 //! Настройки: из ws.rs (Cfg).
 //!
 //! Официально: «Orderbook manage» https://doc.xt.com/docs/spot/WebSocket%20Public/OrderbookManage — буфер изменений, снимок REST,
@@ -27,6 +28,7 @@ use crate::gateway::core_out_book::{BookOut, Fed};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
+use super::backup::Backup;
 use super::book::{Alive, Books};
 use super::ctx::Ctx;
 use super::depth::{self, Data};
@@ -56,6 +58,8 @@ pub struct Conn<'a> {
     pub(super) dropped: u64,
     /// Решение 324: отдача стаканов ядру через общий набор канала ядра (venue.book_events_keep).
     pub(super) kept: BookOut,
+    /// Решение 419 (дополнение): страховка быстрого стакана снимками depth@ (backup.rs).
+    pub(super) backup: Backup,
 }
 
 impl<'a> Conn<'a> {
@@ -86,6 +90,7 @@ impl<'a> Conn<'a> {
             snap_tx,
             dropped: 0,
             kept: BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal),
+            backup: Backup::new(cfg.backup.is_some()),
         }
     }
 
@@ -114,6 +119,7 @@ impl<'a> Conn<'a> {
         self.last.remove(symbol);
         self.local.remove(symbol);
         self.not_before.remove(symbol);
+        self.backup.forget(symbol);
         if self.pending.insert(symbol.to_string()) {
             let limit = (self.stream == Stream::Depth).then_some(self.levels as u64);
             snapshots::request(self.ctx, symbol.to_string(), limit, self.snap_tx.clone());

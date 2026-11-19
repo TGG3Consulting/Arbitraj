@@ -4,7 +4,8 @@
 //! снимков REST — в ws_book.rs (память и ядро); отказ подписки — стаканы её пар недостоверны.
 //! Кто вызывает: ws.rs.
 //! От чего зависит: depth.rs, ws_book.rs, snapshots.rs, book.rs, ws.rs (Cfg, End), ctx.rs, gateway/feed_reg.rs,
-//! tokio-tungstenite.
+//! ws_dial.rs (yawc, сжатие permessage-deflate — решение 419; Ping сервера yawc отвечает Pong сам); страховка
+//! снимками depth@ при depth_update — backup.rs, backup_conn.rs (решение 419, дополнение и ревью).
 //! Настройки: из ws.rs (Cfg); raw.book_frames [xt] — писать ли кадры стаканов в сырой журнал.
 //!
 //! Официально (https://doc.xt.com/docs/spot/WebSocket%20Public/ — RequestMessageFormat, ResponseMessageFormat, Heartbeat):
@@ -21,11 +22,11 @@
 
 use std::collections::HashMap;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::SinkExt;
 use serde_json::json;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
-use tokio_tungstenite::tungstenite::Message;
+use yawc::{Frame, OpCode};
 
 use crate::core::types::Asset;
 use crate::gateway::events::MarketEvent;
@@ -36,6 +37,7 @@ use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
 use super::ws::{Cfg, End, Stream, invalidate};
 use super::ws_book::Conn;
+use super::ws_dial;
 use crate::gateway::feed_health::Cmd;
 use crate::gateway::feed_reg::ConnHandle;
 
@@ -45,11 +47,17 @@ pub struct Watch<'a> {
     pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
 }
 
-/// Имя темы стакана пары: «depth@<symbol>,<levels>» или «depth_update@<symbol>» (символ — как в справочнике). Ошибок нет.
-pub fn topic(symbol: &str, cfg: &Cfg) -> String {
-    match cfg.stream {
-        Stream::Depth => format!("depth@{symbol},{}", cfg.levels),
-        Stream::Update => format!("depth_update@{symbol}"),
+/// Темы стакана пары: «depth@<symbol>,<levels>» или «depth_update@<symbol>» и страховка «depth@<symbol>,<levels>»
+/// (решение 419, дополнение: подписок вдвое больше; https://doc.xt.com/docs/spot/WebSocket%20Public/LimitedDepth,
+/// IncrementalDepth). Символ — как в справочнике. Ошибок нет.
+pub fn topics(symbol: &str, cfg: &Cfg) -> Vec<String> {
+    match (cfg.stream, cfg.backup) {
+        (Stream::Depth, _) => vec![format!("depth@{symbol},{}", cfg.levels)],
+        (Stream::Update, None) => vec![format!("depth_update@{symbol}")],
+        (Stream::Update, Some(l)) => vec![
+            format!("depth_update@{symbol}"),
+            format!("depth@{symbol},{l}"),
+        ],
     }
 }
 
@@ -63,19 +71,12 @@ pub async fn session(
     cfg: Cfg,
     w: Watch<'_>,
 ) -> End {
-    let connect = tokio::time::timeout(
-        cfg.connect_timeout,
-        tokio_tungstenite::connect_async(cfg.url.as_str()),
-    )
-    .await;
-    let ws = match connect {
-        Err(_) => return End::Broken("не удалось подключиться за отведённое время".into()),
-        Ok(Err(e)) => return End::Broken(format!("подключение: {e}")),
-        Ok(Ok((ws, _))) => ws,
+    let mut ws = match ws_dial::dial(&cfg.url, cfg.connect_timeout).await {
+        Ok(ws) => ws,
+        Err(why) => return End::Broken(why),
     };
-    let (mut sink, mut stream) = ws.split();
     w.feed.session_started();
-    let names: Vec<String> = assets.iter().map(|(_, s)| topic(s, &cfg)).collect();
+    let names: Vec<String> = assets.iter().flat_map(|(_, s)| topics(s, &cfg)).collect();
     let mut batches: Vec<Vec<String>> = names.chunks(cfg.per_msg).map(<[_]>::to_vec).collect();
     batches.reverse();
     // id запроса → его темы (отказ подписки снимает стаканы этих пар).
@@ -92,13 +93,13 @@ pub async fn session(
                 let Some(params) = batches.pop() else { continue };
                 next_id += 1;
                 let sub = json!({ "method": "subscribe", "params": params, "id": next_id.to_string() });
-                if let Err(e) = sink.send(Message::Text(sub.to_string().into())).await {
+                if let Err(e) = ws.send(Frame::text(sub.to_string())).await {
                     return End::Broken(format!("отправка подписки: {e}"));
                 }
                 sent.insert(next_id.to_string(), params);
             }
             _ = ping_tick.tick() => {
-                if let Err(e) = sink.send(Message::Text("ping".into())).await {
+                if let Err(e) = ws.send(Frame::text("ping")).await {
                     return End::Broken(format!("отправка ping: {e}"));
                 }
             }
@@ -109,16 +110,16 @@ pub async fn session(
                 Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
                 Cmd::Resub(ticker) => {
                     let Some((_, sym)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
-                    let t = topic(sym, &cfg);
+                    let t = topics(sym, &cfg);
                     for method in ["unsubscribe", "subscribe"] {
                         next_id += 1;
-                        let m = json!({ "method": method, "params": [t], "id": next_id.to_string() });
-                        if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
+                        let m = json!({ "method": method, "params": t, "id": next_id.to_string() });
+                        if let Err(e) = ws.send(Frame::text(m.to_string())).await {
                             return End::Broken(format!("отправка {method} (сторож пар): {e}"));
                         }
                     }
                     // Отказ подписки — стакан пары недостоверен (разбор Msg::Error ниже).
-                    sent.insert(next_id.to_string(), vec![t]);
+                    sent.insert(next_id.to_string(), t);
                     conn.resub(sym);
                     w.feed.resubscribed(&ticker);
                 }
@@ -135,37 +136,36 @@ pub async fn session(
                     w.feed.frame_ver(&a.ticker, conn.version(&sym), None);
                 }
             }
-            next = stream.next() => {
+            next = ws.next_frame() => {
+                // Кадр уже распакован (permessage-deflate) и собран из фрагментов — yawc (решение 419).
                 let frame = match next {
-                    None => return End::Broken("соединение закрыто сервером".into()),
-                    Some(Err(e)) => return End::Broken(format!("ошибка чтения: {e}")),
-                    Some(Ok(f)) => f,
+                    Err(e) => return End::Broken(format!("ошибка чтения: {e}")),
+                    Ok(f) => f,
                 };
                 last_rx = Instant::now();
                 conn.alive();
                 w.feed.alive();
-                let t = match frame {
-                    Message::Text(t) => t,
-                    Message::Ping(p) => {
-                        if let Err(e) = sink.send(Message::Pong(p)).await {
-                            return End::Broken(format!("отправка Pong: {e}"));
-                        }
-                        continue;
-                    }
-                    Message::Close(c) => return End::Broken(format!("сервер закрыл соединение: {c:?}")),
+                match frame.opcode() {
+                    OpCode::Text => {}
+                    OpCode::Close => return End::Broken(format!("сервер закрыл соединение: {:?}", frame.close_code())),
                     _ => continue,
+                }
+                let Ok(t) = std::str::from_utf8(frame.payload()) else {
+                    return End::Broken("текстовый кадр не в UTF-8".into());
                 };
-                let msg = depth::parse(&t);
+                let msg = depth::parse(t);
                 let is_book = matches!(msg, Msg::Snapshot { .. } | Msg::Update { .. } | Msg::Pong);
                 if !is_book || matches!(ctx.flag("raw.book_frames"), Ok(true)) {
-                    ctx.raw.write(ID, name, &t);
+                    ctx.raw.write(ID, name, t);
                 }
                 match msg {
                     Msg::Snapshot { symbol, data } => {
-                        if let Some(a) = conn.asset(&symbol) {
+                        // Решение 419 (дополнение): при depth_update — страховка (backup.rs); пара на быстром — не отмечается.
+                        let (open, mark) = conn.on_depth_frame(&symbol, &data).await;
+                        if let (true, Some(a)) = (mark, conn.asset(&symbol)) {
                             w.feed.frame(&a.ticker);
                         }
-                        if !conn.on_depth(&symbol, &data).await {
+                        if !open {
                             return End::Done;
                         }
                     }
@@ -181,7 +181,9 @@ pub async fn session(
                         for s in sent.get(&id).into_iter().flatten() {
                             let sym = s.split_once('@').map_or("", |(_, r)| r);
                             let sym = sym.split(',').next().unwrap_or_default();
-                            if let Some(a) = conn.asset(sym) {
+                            // Отказ страховки depth@ при depth_update быстрый стакан не снимает (только журнал).
+                            let insurance = cfg.backup.is_some() && s.starts_with("depth@");
+                            if let (false, Some(a)) = (insurance, conn.asset(sym)) {
                                 invalidate(ctx, books, out, &a.ticker);
                             }
                         }

@@ -634,6 +634,11 @@ USDT 0.1, USDC 0.01, WIN «0» — минимум 0 (решение 370), мин
 HTX, Phemex, CoinEx на примерах официальной документации (записанных ответов справочника сетей этих бирж нет): «0» —
 минимум 0, нет поля / null — по настройке, нечитаемое — неизвестен при любой настройке.
 
+Решение 419 (дополнение и ревью) — `tests/xt_backup_419.rs`: страховка быстрого стакана XT на примерах официальной
+документации (xt4-api limitDepth.md, increDepth.md): темы подписки пары, разбор снимка и изменений, учёт пары «на
+быстром», сверка верха (same_top — общие уровни) и правило «два снимка depth@ подряд не равны быстрому, быстрый между
+ними не менялся» (Backup::observe). Живых кадров обоих потоков нет — команда записи выше (xt_ws_both.jsonl).
+
 ## Kraken (решение 172) — tests/kraken_real_data.rs
 
 Без сети: подпись спот REST на официальном проверочном примере гида
@@ -670,7 +675,9 @@ PY
 # сразу после — снимок REST ещё раз (для local_book_from_live_frames нужен снимок в середине потока):
 curl -sS 'https://sapi.xt.com/v4/public/depth?symbol=cake_usdt&limit=500' -o $D/xt_depth_cake_usdt.json
 # снимки depth@cake_usdt,20 — тем же скриптом с params ["depth@cake_usdt,20"] → $D/xt_ws_depth.jsonl
-# без сжатия (так подключается бот: tokio-tungstenite не умеет deflate) — принимает ли сервер:
+# решение 419 (дополнение): оба потока одной пары в одном соединении — тем же скриптом с params
+# ["depth_update@cake_usdt","depth@cake_usdt,20"] → $D/xt_ws_both.jsonl (шкала i у depth@ и depth_update — совпадает ли)
+# без сжатия — принимает ли сервер (бот с решения 419 подключается со сжатием, yawc; с 2026-12-10 без сжатия — отказ):
 { echo '{"method":"subscribe","params":["depth@cake_usdt,20"],"id":"1"}'; sleep 10; } \
   | websocat -t 'wss://stream.xt.com/public' > $D/xt_ws_depth_no_deflate.jsonl
 ```

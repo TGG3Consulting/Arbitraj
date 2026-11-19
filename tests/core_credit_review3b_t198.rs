@@ -118,6 +118,7 @@ fn sources_keep_review3_rules() {
         for what in [
             "transfers::send_trade(",
             "relay_value::value_at(",
+            "relay_value::value_parts(",
             "relay_to(core",
         ] {
             for (at, _) in src.match_indices(what) {

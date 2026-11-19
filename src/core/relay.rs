@@ -37,6 +37,9 @@
 //! с запасом на движение цены за перевод, как у плана входа (relay_reserve.rs), перегон — только если оценка с запасом
 //! больше выручки здесь; цель без запаса (σ не измерена, настройка не задана) не оценена. Расчёт запаса — в строке
 //! хронологии «Перегон на …» и в журнале core.relay. Пыль (решение 222) — по оценке без запаса, как раньше.
+//! Ревью t201: С-1 — продажа при итоге ≥ 0 проверяется под ходом очереди (relay_here.rs → sell_here_ok.rs); М-1 — цели
+//! не оценены из-за запаса — своя причина со списком; М-3 — run_as(…, false) у причины GasReserve (stuck.rs): без
+//! продажи при итоге ≥ 0, прежнее поведение. Звенья пути — в куче (Box::pin, стек: CI t201, core_exec_book_238).
 //! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs); venue.cex_cex,
 //! venue.cex_cex_deny (через cex_link.rs); запас — через relay_reserve.rs (новых нет).
 
@@ -99,7 +102,13 @@ pub fn targets_why(core: &Core, deal: &Deal) -> (Vec<VenueId>, Vec<String>) {
 }
 
 /// Режим «Перегон». Ошибок нет.
-pub async fn run(core: &Core, mut deal: Deal) {
+pub async fn run(core: &Core, deal: Deal) {
+    Box::pin(run_as(core, deal, true)).await
+}
+
+/// Режим «Перегон»; `profit_first` = false — без продажи здесь при итоге ≥ 0 (решение 417, ревью М-3: причина
+/// входа GasReserve — прежнее поведение, иначе быстрый круг «продажа → газ не помещается → режим»). Ошибок нет.
+pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
     let max = match core
         .inner
         .deps
@@ -112,7 +121,13 @@ pub async fn run(core: &Core, mut deal: Deal) {
     // Решение 220: продажа здесь — с порогом убытка stuck.relay_max_loss_pct (relay_here.rs), не по рынку вслепую.
     if deal.relays >= max {
         let why = format!("перегонов {max} — исчерпаны");
-        return super::relay_here::sell_here(core, deal, &why).await;
+        return Box::pin(super::relay_here::sell_here_as(
+            core,
+            deal,
+            &why,
+            profit_first,
+        ))
+        .await;
     }
     // Решение 220 (часть В): площадка, где лежит монета, на паузе (риск: ошибки подряд, балансы не получены) — вывода
     // с неё не делаем (живой случай Bitget 40938 — каждый перегон с неё отказывал тем же отказом).
@@ -122,7 +137,13 @@ pub async fn run(core: &Core, mut deal: Deal) {
             "площадка {} на паузе ({p}) — перегон с неё не делаем",
             deal.at.0
         );
-        return super::relay_here::sell_here(core, deal, &why).await;
+        return Box::pin(super::relay_here::sell_here_as(
+            core,
+            deal,
+            &why,
+            profit_first,
+        ))
+        .await;
     }
     // Решение 230: монета на кошельке DEX на паузе от сверки — перегона с него нет, как с площадки на паузе.
     if let Some(p) = super::wallet_pause::paused_at(core, &deal) {
@@ -131,7 +152,13 @@ pub async fn run(core: &Core, mut deal: Deal) {
             p.who(),
             p.why
         );
-        return super::relay_here::sell_here(core, deal, &why).await;
+        return Box::pin(super::relay_here::sell_here_as(
+            core,
+            deal,
+            &why,
+            profit_first,
+        ))
+        .await;
     }
     // Решение 227 (дополнение): площадка, где лежит монета, уже отказала в выводе в этой сделке (адресная книга и т. п.)
     // — перегон с неё заведомо откажет: продажа здесь по тем же правилам.
@@ -140,7 +167,13 @@ pub async fn run(core: &Core, mut deal: Deal) {
             "вывод с {} в этой сделке уже отклонён площадкой — перегон с неё не делаем",
             deal.at.0
         );
-        return super::relay_here::sell_here(core, deal, &why).await;
+        return Box::pin(super::relay_here::sell_here_as(
+            core,
+            deal,
+            &why,
+            profit_first,
+        ))
+        .await;
     }
     // Решение 238 (ревью, п. 2): котировки здесь нет, потому что не задана настройка (NotConfigured, например
     // venue.book_stale_ms площадки), — сделка остановлена с причиной (stuck_quote::halt_not_configured), а не перегон
@@ -168,7 +201,13 @@ pub async fn run(core: &Core, mut deal: Deal) {
     // уехал бы без решения): продажа здесь по тем же правилам, остаток решит тихий момент счёта (credit_rest.rs).
     if super::credit_fact::rest(&deal).is_some() {
         let why = "остаток зачисления на этой бирже не решён — перегон с неё не делаем";
-        return Box::pin(super::relay_here::sell_here(core, deal, why)).await;
+        return Box::pin(super::relay_here::sell_here_as(
+            core,
+            deal,
+            why,
+            profit_first,
+        ))
+        .await;
     }
     let a = deal.direction.asset.clone();
     // Решение 220: котировка — кошельком сделки. Котировка до факта — только если количество то же и с неё прошло
@@ -200,15 +239,17 @@ pub async fn run(core: &Core, mut deal: Deal) {
         Err(_) => (None, None),
     };
     // Решение 417 (правило Тиграна 19.11): продать здесь выгодно (итог сделки ≥ 0) — другие площадки не ищем.
-    if super::relay_reserve::here_first(&deal, here) {
-        let why =
-            "продажа здесь выгодна (итог сделки ≥ 0) — площадки для перегона не ищем (решение 417)";
-        let g = super::remeasure::PROFITABLE;
-        return Box::pin(super::stuck::sold_by_market(core, deal, why, g)).await;
+    // Ревью t201 (С-1): продажа — с проверкой «выгодно» под ходом очереди (relay_here → sell_here_ok.rs); под ходом
+    // итог < 0 — продажа здесь по порогу stuck.relay_max_loss_pct, как раньше. М-3: у GasReserve — без этой ветки.
+    if profit_first && super::relay_reserve::here_first(&deal, here) {
+        let why = "перегон не ищем: котировка-решение здесь — итог сделки не ниже нуля";
+        return Box::pin(super::relay_here::sell_here_as(core, deal, why, true)).await;
     }
     let mut best: Option<(VenueId, super::relay_reserve::Est)> = None;
     // Решение 222: лучшая оценка без запаса — для признака пыли, как до решения 417.
     let mut raw_best: Option<Decimal> = None;
+    // Ревью t201 (М-1): цели, не оценённые из-за запаса (σ / настройки), — «площадка: причина».
+    let mut no_reserve: Vec<String> = Vec::new();
     // Решение 222: перегон, выручка которого после затрат ≤ 0 (или приход — пыль на площадке-цели), не делается.
     let mut tiny = false;
     let (list, ruled) = targets_why(core, &deal);
@@ -226,7 +267,7 @@ pub async fn run(core: &Core, mut deal: Deal) {
             .ok()
             .flatten();
         let r = super::relay_value::value_parts(core, &deal.at, &to, &a, deal.qty, acc.as_ref());
-        match r.await.map(|p| (p.net, p)) {
+        match Box::pin(r).await.map(|p| (p.net, p)) {
             Ok((v, _)) if v <= Decimal::ZERO => {
                 tiny = true;
                 let t = format!(
@@ -269,6 +310,7 @@ pub async fn run(core: &Core, mut deal: Deal) {
                             "{}: перегон на {} не оценён: запас на движение цены за перевод не посчитан: {err}",
                             deal.id, to.0
                         );
+                        no_reserve.push(format!("{}: {err}", to.0));
                         core.inner
                             .deps
                             .log(Level::Info, "core.relay", Some(&to.0), t, None)
@@ -306,11 +348,38 @@ pub async fn run(core: &Core, mut deal: Deal) {
                 to.0,
                 super::relay_reserve::text(&e)
             );
-            return super::relay_here::sell_here(core, deal, &why).await;
+            return Box::pin(super::relay_here::sell_here_as(
+                core,
+                deal,
+                &why,
+                profit_first,
+            ))
+            .await;
+        }
+        // Ревью t201 (М-1): целей с оценкой нет, потому что запас не посчитан (σ / настройки), — своя причина со
+        // списком, а не «перегон не выгоднее».
+        None if !no_reserve.is_empty() => {
+            let why = format!(
+                "цели перегона не оценены: нет запаса на движение цены за перевод (σ / настройки) — {} (решение 417)",
+                no_reserve.join("; ")
+            );
+            return Box::pin(super::relay_here::sell_here_as(
+                core,
+                deal,
+                &why,
+                profit_first,
+            ))
+            .await;
         }
         None => {
-            return super::relay_here::sell_here(core, deal, "перегон не выгоднее продажи здесь")
-                .await;
+            let why = "перегон не выгоднее продажи здесь";
+            return Box::pin(super::relay_here::sell_here_as(
+                core,
+                deal,
+                why,
+                profit_first,
+            ))
+            .await;
         }
     };
     let from = deal.at.clone();

@@ -6,7 +6,9 @@
 //! перегонять или нет».
 //! 1) here_first — итог сделки при продаже здесь ≥ 0 (sell.rs profitable, решение 47) — продажа здесь, цели не ищутся.
 //! 2) Оценка цели перегона — с тем же запасом на движение цены за перевод, что у плана входа (reserve.rs amount):
-//!    max(выручка · (1 − e^(−k·σ·√T)), доля закрытия · (цена цели − цена здесь) · количество), не больше выручки.
+//!    min(выручка, max(выручка · (1 − e^(−k·σ·√T)), доля закрытия · (средняя цели − средняя здесь) / средняя цели ·
+//!    выручка)) — ровно reserve.rs amount (строки 125-142); доля действует, только когда средняя здесь > 0 и
+//!    средняя цели выше неё.
 //!    Параметры — как у плана входа направления «отсюда → на цель» (dirctx.rs build, момент Entry): σ — sigma_plan.rs
 //!    entry_shared (ряд продажи на цели с напарником «отсюда», проверка profit.sigma_min_changes, граница
 //!    profit.sigma_floor_per_s [цель]); T — transit.rs seconds (пара «отсюда → цель»); k — profit.price_move_k
@@ -17,7 +19,8 @@
 //!    план входа без этих данных (сделки нет).
 //! 3) better — перегон только если оценка цели С ЗАПАСОМ больше выручки здесь (выручка здесь — чистыми, после затрат
 //!    продажи здесь); порога-настройки нет.
-//! Кто вызывает: core/relay.rs.
+//!
+//! Кто вызывает: core/relay.rs, core/relay_here.rs (here_first).
 //! От чего зависит: sigma_plan.rs, transit.rs, venue_dir.rs, reserve.rs (closure_share, keep_of, amount), sell.rs
 //! (profitable), deal.rs, notify/human.rs (числа в тексте).
 //! Настройки (новых нет): profit.price_move_k, profit.closure_share, profit.sigma_window_min, profit.sigma_min_changes,

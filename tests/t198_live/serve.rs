@@ -23,9 +23,17 @@ fn hit(s: &Stand, h: Hit) {
 fn answer(method: &str, path: &str, s: &Stand) -> (&'static str, String, u64) {
     if path.starts_with("/v4/public/depth") {
         hit(s, Hit::Depth);
+        // Решение 417 (ревью t201, С-2): тело, подменённое тестом, иначе пример документации.
+        if let Some(t) = s.depth.lock().unwrap().clone() {
+            return ("200 OK", t, 0);
+        }
         let t =
             std::fs::read_to_string("tests/data/rest_book_2026-11-09/xt_depth_doc.json").unwrap();
         return ("200 OK", t, 0);
+    }
+    if path.starts_with("/v4/withdraw") {
+        hit(s, Hit::Withdraw);
+        return ("404 Not Found", "{}".to_string(), 0);
     }
     if path.starts_with("/v4/public/symbol") {
         let t = std::fs::read_to_string("tests/data/xt_live_2026-11-06/symbol_pepe.json").unwrap();

@@ -13,8 +13,13 @@
 //! монет нет — сделка остановлена, решает человек (transfer_failed).
 //! Решение 415 (t200): котировка «продать здесь» — под ходом очереди продажи счёта на время котировки
 //! (sell_turn_fresh::value).
-//! Кто вызывает: core/relay.rs, core/executor.rs (transfer_failed).
-//! От чего зависит: trade_ops.rs, sell_turn_fresh.rs, stuck.rs (sold_by_market), stuck_lag.rs (Ticks), manual.rs (raise_alert), manual_halted.rs
+//! Решение 417 (ревью t201, М-2; правило Тиграна 19.11): на ВСЕХ путях продажи здесь итог сделки ≥ 0 — продажа здесь
+//! с проверкой под ходом очереди (sell_here_ok.rs), без порога stuck.relay_max_loss_pct и без алерта при незаданной
+//! настройке; под ходом итог < 0 — порог, как раньше. Исключение (М-3): застрявшая BNB на DEX по причине GasReserve
+//! (relay.rs run_as → sell_here_as(…, false)) — прежнее поведение, без этой продажи: иначе быстрый круг «режим →
+//! продажа при итоге ≥ 0 → газ не помещается сверх резерва → режим».
+//! Кто вызывает: core/relay.rs, core/executor.rs (transfer_failed, sell_here), core/sell_unsent.rs (here).
+//! От чего зависит: sell_here_ok.rs, relay_reserve.rs (here_first), trade_ops.rs, sell_turn_fresh.rs, stuck.rs (sold_by_market), stuck_lag.rs (Ticks), manual.rs (raise_alert), manual_halted.rs
 //! (on_hand, set_qty), ledger.rs, deal.rs.
 //! Настройки: stuck.relay_max_loss_pct, stuck.no_quote_wait_ms.
 
@@ -81,9 +86,16 @@ pub fn decide(
     }
 }
 
-/// Продать здесь по рынку, если убыток не выше stuck.relay_max_loss_pct, иначе — алерт человеку. Принимает: ядро,
-/// сделку, почему продаём здесь (для хронологии, журнала и Telegram). Ошибок нет: всё — в алерте или продаже.
+/// Продать здесь по рынку, если убыток не выше stuck.relay_max_loss_pct, иначе — алерт человеку; решение 417 — при
+/// итоге сделки ≥ 0 продажа здесь без порога (sell_here_as). Принимает: ядро, сделку, почему продаём здесь (для
+/// хронологии, журнала и Telegram). Ошибок нет: всё — в алерте или продаже.
 pub async fn sell_here(core: &Core, deal: Deal, why: &str) {
+    Box::pin(sell_here_as(core, deal, why, true)).await
+}
+
+/// Как sell_here; `profit_first` = false — без продажи при итоге ≥ 0 (М-3 решения 417: причина GasReserve, прежнее
+/// поведение). Принимает: ядро, сделку, причину, признак. Ошибок нет.
+pub async fn sell_here_as(core: &Core, deal: Deal, why: &str, profit_first: bool) {
     let s = &core.inner.deps.settings;
     let max = s.decimal(SETTING, At::default()).map_err(|e| e.message);
     // Порог не задан — алерт и так: цену не ждём (ожидание ничего не решит).
@@ -95,18 +107,33 @@ pub async fn sell_here(core: &Core, deal: Deal, why: &str) {
     let cap = max.as_ref().ok().copied();
     let d = &deal;
     // Решение 415: котировка-решение — под ходом очереди продажи счёта только на время котировки (sell_turn_fresh.rs).
-    let value = quote_or_wait(core, d, wait, move || async move {
+    let mut value = quote_or_wait(core, d, wait, move || async move {
         Box::pin(super::sell_turn_fresh::value(core, d))
             .await
             .map(|(v, _)| v)
     })
     .await;
+    // Решение 417 (М-2): итог сделки ≥ 0 — продажа здесь, проверка под ходом (С-1); под ходом итог < 0 — порог ниже.
+    let mut deal = deal;
+    if profit_first && super::relay_reserve::here_first(&deal, value.as_ref().ok().copied()) {
+        let ok = format!("{why}; итог сделки при продаже здесь ≥ 0 — продаём здесь (решение 417)");
+        match Box::pin(super::sell_here_ok::try_sell(core, deal, &ok)).await {
+            super::sell_here_ok::HereOk::Sold | super::sell_here_ok::HereOk::Gone => return,
+            super::sell_here_ok::HereOk::NotNow(d, v) => {
+                deal = *d;
+                value =
+                    v.ok_or_else(|| "котировки продажи здесь под ходом очереди нет".to_string());
+            }
+        }
+    }
     match decide(&deal, why, max, value) {
         Here::Market(text) => {
             let g = cap.map_or(Guard::Off, Guard::MaxLoss);
-            super::stuck::sold_by_market(core, deal, &text, g).await
+            Box::pin(super::stuck::sold_by_market(core, deal, &text, g)).await
         }
-        Here::Alert { loss, why } => super::manual::raise_alert(core, deal, loss, why, None).await,
+        Here::Alert { loss, why } => {
+            Box::pin(super::manual::raise_alert(core, deal, loss, why, None)).await
+        }
     }
 }
 

@@ -23,6 +23,8 @@
 //! От чего зависит: sell.rs, trade_ops.rs, sell_turn_fresh.rs, stuck_quote.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
 //! Решение 334: ожидание тика монеты — stuck_lag.rs Ticks (подписка одна на всё ожидание — ревью 333, Н4; отставание —
 //! счёт, журнал и проверка сразу — решение 361).
+//! Решение 417 (ревью t201, М-3): причина GasReserve — «Перегон» без продажи здесь при итоге ≥ 0 (relay::run_as, прежнее
+//! поведение); ветки режима и продажа / алерт внутри них — в куче (Box::pin, стек теста core_exec_book_238).
 //! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
 
 use std::time::Duration;
@@ -97,10 +99,15 @@ pub async fn handle_as_is(core: &Core, mut deal: Deal, why: StuckReason) {
         .notify("stuck.detected", Some(&deal.at.0), &tg)
         .await;
     // Варианты настройки — wait / loss_limit / relay (settings/catalog/trade.rs).
+    // Решение 417 (CI t201, как 580e950f ветки feat/arbitrum): ветки режима — в куче (Box::pin): их будущие (продажа,
+    // перегон, алерт) крупные и вложены в будущее handle_as_is целиком — тест core_exec_book_238 переполнял стек.
+    // Ревью t201 (М-3): GasReserve (BNB на DEX, газ продажи не помещается сверх резерва) — «Перегон» без продажи здесь
+    // при итоге ≥ 0 (иначе быстрый круг «режим → продажа → газ не помещается → режим»), прежнее поведение.
+    let profit_first = !matches!(why, StuckReason::GasReserve(_));
     match mode.as_str() {
-        "wait" => wait(core, deal).await,
-        "loss_limit" => loss_limit(core, deal).await,
-        "relay" => super::relay::run(core, deal).await,
+        "wait" => Box::pin(wait(core, deal)).await,
+        "loss_limit" => Box::pin(loss_limit(core, deal)).await,
+        "relay" => Box::pin(super::relay::run_as(core, deal, profit_first)).await,
         other => {
             super::ledger::finish(
                 core,
@@ -135,7 +142,7 @@ async fn wait(core: &Core, mut deal: Deal) {
                 // Решение 247: пере-замер — по тому же условию «выгодно» (итог ≥ 0 — порог убытка 0).
                 let g = Guard::MaxLoss(rust_decimal::Decimal::ZERO);
                 let why = "ожидание: стало выгодно";
-                return super::sell::market_guarded(core, deal, why, g).await;
+                return Box::pin(super::sell::market_guarded(core, deal, why, g)).await;
             }
             Ok(_) => {}
             // Решение 238 (ревью, п. 2): не задана настройка — ждать нечего.
@@ -147,7 +154,8 @@ async fn wait(core: &Core, mut deal: Deal) {
     // убытка; пере-замер продажи DEX при откате «мало на выходе» — только при итоге сделки ≥ 0. t81 (дополнение к 247
     // п. Г, Тигран 10.11: согласовано): PROFITABLE_OPEN — исполнить может и агрегатор DEX, если он включён и лучше.
     let why = format!("ждали {ms} мс — выгодно не стало");
-    sold_by_market(core, deal, &why, super::remeasure::PROFITABLE_OPEN).await;
+    let g = super::remeasure::PROFITABLE_OPEN;
+    Box::pin(sold_by_market(core, deal, &why, g)).await;
 }
 
 /// «Порог убытка»: убыток не больше stuck.max_loss_pct — по рынку; больше — алерт человеку.
@@ -180,16 +188,18 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
     };
     let loss = deal.loss_pct_if(value);
     if loss <= max {
-        return sold_by_market(
-            core,
-            deal,
-            &h::loss_vs_max(loss, max, true),
-            Guard::MaxLoss(max),
-        )
-        .await;
+        let text = h::loss_vs_max(loss, max, true);
+        return Box::pin(sold_by_market(core, deal, &text, Guard::MaxLoss(max))).await;
     }
     let why = h::loss_vs_max(loss, max, false);
-    super::manual::raise_alert(core, deal, Some(loss), why, None).await;
+    Box::pin(super::manual::raise_alert(
+        core,
+        deal,
+        Some(loss),
+        why,
+        None,
+    ))
+    .await;
 }
 
 /// Продажа по рынку с уведомлением stuck.market_sold. Решение 247: `g` — порог, по которому решено продать (граница

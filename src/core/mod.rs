@@ -292,6 +292,7 @@ pub mod rules_apply;
 mod rules_stop;
 pub mod sell;
 pub mod sell_fact;
+pub mod sell_here_ok;
 pub mod sell_loop;
 pub mod sell_next;
 pub mod sell_range;

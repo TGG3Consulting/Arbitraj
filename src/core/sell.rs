@@ -44,7 +44,8 @@
 //! Решение 415 (t200, живой LQR 19.11): после факта — ход очереди продажи счёта (sell_turn.rs): котировка продажи
 //! (sell_turn_fresh.rs — не раньше прошлой продажи той же монеты на той же площадке) и ордер — под одним ходом; ход
 //! снимается сразу после итога ордера, до продолжений.
-//! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs.
+//! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs,
+//! sell_here_ok.rs (решение 417: sell — продажа здесь при итоге ≥ 0 под ходом).
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
 //! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_range_run.rs, sell_loop.rs, sell_next.rs,
 //! sell_turn.rs, sell_turn_fresh.rs.
@@ -200,8 +201,9 @@ fn quote_note(q: &Quote, qty: Decimal, w: Option<&super::trade_ops::Worst>) -> S
 /// Продажа всего количества по котировке q. Принимает: сделку, (котировку, стакан котировки — решение 238, ревью п. 3:
 /// худшая цена первой попытки — по нему; None — DEX; ход очереди продажи счёта, под которым взята котировка — решение
 /// 415: снимается сразу после итога ордера), причину (для хронологии), границу пере-замера продажи DEX (решение 247,
-/// remeasure::of; None — без пере-замера).
-async fn sell(
+/// remeasure::of; None — без пере-замера). Решение 417 (ревью t201, С-1): и продажа здесь при итоге ≥ 0 под ходом
+/// (sell_here_ok.rs).
+pub(super) async fn sell(
     core: &Core,
     mut deal: Deal,
     (q, book, turn): (

@@ -44,6 +44,7 @@ pub mod wallet;
 pub mod ws;
 pub mod ws_book;
 pub mod ws_conn;
+pub mod ws_dial;
 pub mod ws_diff;
 
 use async_trait::async_trait;

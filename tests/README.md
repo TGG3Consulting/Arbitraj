@@ -658,7 +658,7 @@ PY
 # сразу после — снимок REST ещё раз (для local_book_from_live_frames нужен снимок в середине потока):
 curl -sS 'https://sapi.xt.com/v4/public/depth?symbol=cake_usdt&limit=500' -o $D/xt_depth_cake_usdt.json
 # снимки depth@cake_usdt,20 — тем же скриптом с params ["depth@cake_usdt,20"] → $D/xt_ws_depth.jsonl
-# без сжатия (так подключается бот: tokio-tungstenite не умеет deflate) — принимает ли сервер:
+# без сжатия — принимает ли сервер (бот с решения 419 подключается со сжатием, yawc; с 2026-12-10 без сжатия — отказ):
 { echo '{"method":"subscribe","params":["depth@cake_usdt,20"],"id":"1"}'; sleep 10; } \
   | websocat -t 'wss://stream.xt.com/public' > $D/xt_ws_depth_no_deflate.jsonl
 ```

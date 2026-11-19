@@ -2,6 +2,9 @@
 //! Что делает: жизненный цикл одного соединения WebSocket с рыночными данными Phemex: настройки, сессия (ws_conn.rs),
 //! при обрыве — все стаканы соединения недостоверны, журнал, пауза, переподключение. Нет нужной настройки — соединение
 //! останавливается (без бесконечных повторов).
+//! Решение 427: соединение — поток основной или запасной (book_lane.rs Lane); при обрыве пары соединения теряют этот
+//! поток (Lane::lose: стакан запасного потока или «недостоверно»). Запасное соединение регистрируется в учёте свежести
+//! без пар: сторож ядра (решения 202/213) смотрит пары основных соединений, лишних проверок REST по запасным нет.
 //! Кто вызывает: market.rs (по задаче на соединение; config — проверка до запуска), user_stream_conn.rs (config_ping).
 //! От чего зависит: ws_conn.rs, book.rs, symbols.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_url, venue.ws_subs_per_sec (≤ 20), venue.ws_ping_ms (< 30 000), venue.ws_silence_ms,
@@ -22,6 +25,8 @@ use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
 use super::book::Books;
+use super::book_lane::Lane;
+use super::book_pick::Role;
 use super::ctx::Ctx;
 use super::symbols::Symbols;
 use super::ws_conn;
@@ -65,9 +70,14 @@ pub async fn run(
     symbols: Symbols,
     books: Books,
     out: mpsc::Sender<MarketEvent>,
+    lane: Lane,
 ) {
     // Решение 202: свежесть пар соединения и команды сторожа ядра (переподписать пару, переподключить соединение).
-    let tickers: Vec<String> = assets.iter().map(|(a, _)| a.ticker.clone()).collect();
+    // Решение 427: запасное соединение — без пар (см. шапку).
+    let tickers: Vec<String> = match lane.role {
+        Role::Main => assets.iter().map(|(a, _)| a.ticker.clone()).collect(),
+        Role::Reserve => vec![],
+    };
     let (feed, mut cmd) = books.feed.register(&name, &tickers);
     while !out.is_closed() {
         let end = match config(&ctx) {
@@ -76,12 +86,13 @@ pub async fn run(
                     feed: &feed,
                     cmd: &mut cmd,
                 };
-                ws_conn::session(&ctx, &name, &assets, &symbols, &books, &out, cfg, w).await
+                ws_conn::session(&ctx, &name, &assets, &symbols, &books, &out, cfg, w, &lane).await
             }
             Err(e) => End::Config(e),
         };
+        let why = format!("{name}: соединение закончилось");
         for (a, _) in &assets {
-            invalidate(&ctx, &books, &out, &a.ticker);
+            lane.lose(&ctx, &books, &out, &a.ticker, &why).await;
         }
         let (level, text, pause) = match (end, ctx.int("venue.ws_reconnect_pause_ms")) {
             (End::Done, _) => return,

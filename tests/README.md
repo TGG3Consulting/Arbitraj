@@ -349,6 +349,8 @@ bsig POST /api/v3/order/test 'symbol=CAKEUSDT&side=BUY&type=LIMIT&timeInForce=IO
 
 ### Phemex — tests/phemex_real_data.rs и команды записи (решение 168)
 
+Решение 427 — `tests/phemex_book_pick_427.rs`: сверка контрольного снимка и выбор основного / запасного потока на кадрах «Message sample: snapshot / incremental update» документации (живых кадров нет). Записать: кадры одной пары с ДВУХ соединений одновременно (та же команда websocat ниже, запущенная дважды параллельно, в файлы `phemex_ws_orderbook_sCAKEUSDT_a.jsonl` и `_b.jsonl`) — сверить sequence и timestamp.
+
 Решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор result GET /md/orderbook на **примере из
 документации** («Query Order Book», sBTCUSDT, масштабы 8 / 8); стакан в памяти — локальный стакан из снимка OrderBook
 того же вида, с уровнями примера REST (**собран в тесте, не запись**; живых ответов нет — api.phemex.com закрыт прокси):

@@ -13,6 +13,8 @@
 pub mod account;
 pub mod all_balances;
 pub mod book;
+pub mod book_lane;
+pub mod book_pick;
 pub mod book_print;
 pub mod ctx;
 pub mod delist;

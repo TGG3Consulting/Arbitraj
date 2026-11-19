@@ -98,6 +98,9 @@ pub async fn send_capped(
 ) -> GatewayResult<Done> {
     let ctx = &env.ctx;
     let cfg = SendCfg::read(ctx)?;
+    // Решение 416 (ревью М-1, М-3): chainId сети — dex.evm_chain_id, сверенный с eth_chainId узлов (node/chain_seen.rs),
+    // рядом с SendCfg до nonce; им же подписывается отмена (Watch).
+    let chain = super::super::node::chain_seen::ensure(ctx).await?;
     let ready = send::select(ctx, &env.stats)?;
     let price = env
         .gas
@@ -122,8 +125,6 @@ pub async fn send_capped(
         signer::sign_with(&key, t)
             .map_err(|e| ctx.err(ErrorCode::Internal, format!("Подпись транзакции: {e}")))
     };
-    // Решение 416: chainId сети — настройка dex.evm_chain_id, до отправки (им же подписывается отмена — Watch).
-    let chain = super::super::node::chain_id::chain_id(ctx)?;
     let signed = sign(tx::legacy(ctx, chain, nonce, price, gas, to, value, data)?)?;
     let mut tip_cost = None;
     let tip = match send::tip(&ready).filter(|_| with_tip) {

@@ -12,7 +12,9 @@
 
 use std::collections::HashSet;
 
+use alloy_primitives::Address;
 use rust_decimal::Decimal;
+use serde::Serialize;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 
@@ -35,6 +37,33 @@ fn recorded() -> Vec<Value> {
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str::<Value>(l).unwrap()["direction"].clone())
         .collect()
+}
+
+/// Монета до решения 416 (поля и порядок — как у прежнего Asset: ticker, bsc_contract).
+#[derive(Serialize)]
+struct OldAsset {
+    ticker: String,
+    bsc_contract: Option<Address>,
+}
+
+/// Направление до решения 416.
+#[derive(Serialize)]
+struct OldDirection {
+    asset: OldAsset,
+    buy_on: VenueId,
+    sell_on: VenueId,
+}
+
+/// Прежний вид записи направления из записанного JSON. Паника — запись не того вида.
+fn old_shape(raw: &Value) -> OldDirection {
+    OldDirection {
+        asset: OldAsset {
+            ticker: raw["asset"]["ticker"].as_str().unwrap().to_string(),
+            bsc_contract: serde_json::from_value(raw["asset"]["bsc_contract"].clone()).unwrap(),
+        },
+        buy_on: VenueId(raw["buy_on"].as_str().unwrap().to_string()),
+        sell_on: VenueId(raw["sell_on"].as_str().unwrap().to_string()),
+    }
 }
 
 /// Новая база настроек во временной папке.
@@ -79,17 +108,17 @@ async fn old_record_without_chain_reads_as_dex_chain() {
             ChainId("bsc".into()),
             "монета без сети — сеть площадки DEX (dex.chain)"
         );
-        // Запись без сети — байт в байт как раньше (и в составе сделки).
-        assert_eq!(serde_json::to_value(&d).unwrap(), raw);
+        // Запись без сети — байт в байт как раньше (ревью М-6: строки; прежний вид — структура до решения 416).
+        let was = serde_json::to_string(&old_shape(&raw)).unwrap();
+        assert_eq!(serde_json::to_string(&d).unwrap(), was);
         let deal = Deal::new("t".into(), d.clone(), Value::Null, Decimal::ZERO);
         let text = serde_json::to_string(&deal).unwrap();
-        let back: Deal = serde_json::from_str(&text).unwrap();
-        assert_eq!(back.direction, d);
-        assert_eq!(
-            serde_json::to_value(&back).unwrap()["direction"],
-            raw,
+        assert!(
+            text.contains(&format!("\"direction\":{was}")),
             "сделка пишет направление как раньше"
         );
+        let back: Deal = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.direction, d);
     }
 }
 

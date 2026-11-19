@@ -42,6 +42,9 @@ pub struct Ctx {
     pub pace: super::node::pace::Pace,
     /// Резервный узел: удержание на нём после сбоя основного (node/failover.rs).
     pub failover: super::node::failover::Failover,
+    /// Решение 416 (ревью М-1): подтверждённая сеть узлов HTTP (адрес → chainId) — сверка перед подписью
+    /// (node/chain_seen.rs).
+    pub chains: super::node::chain_seen::Seen,
     /// Справочник пулов от индексатора: очередь запросов и состояние (directory/, решение 58).
     pub index: super::directory::Directory,
     /// Счёт (кошелёк) DEX, к которому привязано окружение (решение 132, ctx_wallet.rs). None — без счёта: только

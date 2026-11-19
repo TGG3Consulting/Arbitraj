@@ -84,6 +84,9 @@ pub async fn send(
 ) -> GatewayResult<Sent> {
     let ctx = &env.ctx;
     let cfg = SendCfg::read(ctx)?;
+    // Решение 416 (ревью М-1, М-3): сеть узлов сверена с dex.evm_chain_id до подписи (node/chain_seen.rs); подпись —
+    // sign_txs тем же dex.evm_chain_id.
+    super::super::node::chain_seen::ensure(ctx).await?;
     // Решение 299: при send.bundle_skip_single = да — только бандловые каналы (одиночные исключены), иначе все как есть.
     let picked = send::bundle_pick::pick(ctx, send::select(ctx, &env.stats)?)?;
     let ready = picked.ready;

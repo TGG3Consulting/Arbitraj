@@ -67,6 +67,7 @@ async fn start(d: &std::path::Path) -> (Core, Store) {
         raw,
         pace: Default::default(),
         failover: Default::default(),
+        chains: Default::default(),
         account: None,
         index: Default::default(),
     };

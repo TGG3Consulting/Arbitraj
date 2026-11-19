@@ -54,6 +54,14 @@ pub async fn backup_http(ctx: &Ctx) -> Result<String, String> {
         return Ok("не задан (bsc.node_http_url_backup)".into());
     };
     let chain: U64 = call(ctx, &url, "eth_chainId").await?;
+    // Решение 416 (ревью М-1): ответ резервного узла — в подтверждения сети (сверка перед подписью, node/chain_seen.rs).
+    if let (Ok(plain), Ok(want)) = (
+        ctx.settings
+            .text(Link::Http.names(Node::Backup).0, At::default()),
+        super::node::chain_id::chain_id(ctx),
+    ) {
+        ctx.chains.note(&plain, chain.to(), want);
+    }
     same_chain(ctx, chain.to())?;
     let block: U64 = call(ctx, &url, "eth_blockNumber").await?;
     Ok(format!("сеть {chain}, блок {block}"))

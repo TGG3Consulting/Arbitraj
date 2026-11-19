@@ -51,6 +51,7 @@ async fn setup(tag: &str) -> (Ctx, String, String) {
         raw: RawLog::start(d.join("raw"), settings.clone()),
         pace: Default::default(),
         failover: Default::default(),
+        chains: Default::default(),
         account: None,
         index: Default::default(),
         settings,

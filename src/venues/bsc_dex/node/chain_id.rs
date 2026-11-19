@@ -11,6 +11,8 @@
 //! eth_chainId — https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth ;
 //! chainId в подписи — https://eips.ethereum.org/EIPS/eip-155 .
 
+use std::sync::Mutex;
+
 use alloy_primitives::U64;
 use serde_json::json;
 
@@ -62,7 +64,10 @@ pub async fn check_start(ctx: &Ctx) -> GatewayResult<()> {
     }
     let want = chain_id(ctx)?;
     match rpc::call::<U64>(ctx, "eth_chainId", json!([])).await {
-        Ok(got) if got.to::<u64>() == want => Ok(()),
+        Ok(got) if got.to::<u64>() == want => {
+            warn_once(None);
+            Ok(())
+        }
         Ok(got) => Err(ctx.err(
             ErrorCode::BadResponse,
             format!("узел другой сети: chainId {got}, у площадки {want} (dex.evm_chain_id) — подписки на рынок нет"),
@@ -72,8 +77,31 @@ pub async fn check_start(ctx: &Ctx) -> GatewayResult<()> {
                 "сеть узла не сверена перед подпиской (eth_chainId): {} — подписка идёт, сверка — в «Проверить подключение»",
                 e.message
             );
-            ctx.log(Level::Warn, "venue.chain_check", m, None).await;
+            // Ревью М-2: одна запись на причину (повтор подписки с той же причиной журнал не засоряет).
+            if warn_once(Some(&e.message)) {
+                ctx.log(Level::Warn, "venue.chain_check", m, None).await;
+            }
             Ok(())
+        }
+    }
+}
+
+/// Последняя записанная причина «сеть узла не сверена» (ревью М-2).
+static LAST_WARN: Mutex<Option<String>> = Mutex::new(None);
+
+/// Что делает: дедуп предупреждения — Some(причина): true, если причина новая (запомнена); None — сверка прошла, память
+/// очищена. Ошибок нет.
+fn warn_once(why: Option<&str>) -> bool {
+    let mut last = LAST_WARN.lock().unwrap_or_else(|p| p.into_inner());
+    match why {
+        None => {
+            *last = None;
+            false
+        }
+        Some(w) if last.as_deref() == Some(w) => false,
+        Some(w) => {
+            *last = Some(w.to_string());
+            true
         }
     }
 }

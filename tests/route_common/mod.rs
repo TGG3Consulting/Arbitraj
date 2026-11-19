@@ -239,6 +239,7 @@ pub async fn ctx() -> Ctx {
         raw: RawLog::start(d.join("raw"), settings.clone()),
         pace: Default::default(),
         failover: Default::default(),
+        chains: Default::default(),
         account: None,
         index: Default::default(),
         settings,

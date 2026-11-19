@@ -285,6 +285,7 @@ async fn run() -> Result<(), String> {
         raw,
         pace: Default::default(),
         failover: Default::default(),
+        chains: Default::default(),
         account: None,
         index: Default::default(),
     };

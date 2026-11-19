@@ -62,6 +62,7 @@ async fn ctx(name: &str) -> Ctx {
         raw: RawLog::start(dir.join("raw"), settings.clone()),
         pace: Default::default(),
         failover: Default::default(),
+        chains: Default::default(),
         account: None,
         index: Default::default(),
         settings,

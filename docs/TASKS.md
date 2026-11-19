@@ -88,6 +88,20 @@
      для venue.bsc_network;
   г) InertKey (rebuild.rs) — имена сети BSC; имена других сетей входят в ключ только через справочник сетей (смена
      venue.arbitrum_network толкает справочник — записи меняются).
+  Ревью 431 (19.11.2026, регрессий BSC не найдено; спорное — на BSC не влияет, только при двух площадках DEX):
+  д) Вопрос Тиграну: dex.default_chain ≠ bsc (например arbitrum, а BSC — вторая сеть). Факт кода: own_nets::setting_of(None)
+     = venue.bsc_network и setting_of(Some(bsc)) = venue.bsc_network — одна настройка на две сети; net_chain::others
+     смотрит только own_nets::OTHER (venue.arbitrum_network), а у площадки Arbitrum tag = None → её имя не находит
+     сеть (адрес Arbitrum снимается), записи сети venue.bsc_network ядро считает монетами сети по умолчанию (Arbitrum).
+     Предложение: при двух сетях требовать dex.default_chain = сеть, чьё имя у биржи — venue.bsc_network (ошибка с
+     причиной в rebuild), либо правило имени по dex.default_chain.
+  е) core/subscribe_assets.rs intermediate_assets: бирже промежуточная монета DEX другой сети идёт без сети
+     (chain None, адрес Arbitrum) — one_book её не сводит; одинаковый тикер промежуточной в двух сетях даст бирже две
+     записи на один стакан (как до 431 — шаг 2).
+  ж) HTX wallet.rs: неоднозначные сети не-BSC («тикер/сеть») пишутся в журнал под заголовком «…с именем сети BSC…» —
+     текст поправить при подключении Arbitrum (текст BSC не менялся намеренно).
+  з) rebuild.rs REGISTRY — «venue.arbitrum_network» строкой рядом с own_nets::OTHER: новая сеть = правка в двух местах
+     (тест own_nets проверяет только каталог); свести к own_nets::affects.
 - **Решение 416 — перенесено в следующие шаги плана (docs/notes/arbitrum/multichain-plan-2026-11-19.md):**
   1) ДО того, как адаптер DEX начнёт ставить сеть в монету (шаг 2): перенос `chain = None` → сеть (записи учёта
      core_state, учёт сделок, окна; карты в памяти) или «действующая сеть» в равенстве — иначе старая монета (None) ≠

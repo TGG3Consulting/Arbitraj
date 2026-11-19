@@ -3835,7 +3835,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Кейс:** у CoinEx адрес контракта есть только в справочнике /v2/assets/info, а имя цепи там своё (решение 170: для BSC — venue.bsc_contract_chain). Чтобы CoinEx отдавал адрес контракта и у сети Arbitrum (venue.arbitrum_network), нужно имя этой цепи в /v2/assets/info.
 - **Где задаётся:** «Настройки», группа «Площадки» и карточка площадки CoinEx; область — по площадке; каталог src/settings/catalog/coinex.rs (строка после venue.bsc_contract_chain).
 - **Что ставить:** *метод:* значение chain_info.chain_name сети Arbitrum One из живого ответа GET /v2/assets/info (записанного ответа нет — не угадывать); пока нет площадки DEX Arbitrum — не задавать.
-- **Если не задана:** необязательная. src/venues/coinex/wallet.rs names: имя цепи не читается — у записи сети Arbitrum CoinEx адреса контракта нет (на «Монетах» — «сеть есть, адреса нет»); BSC — как раньше.
+- **Если не задана:** необязательная. src/venues/coinex/own_chains.rs read: имя цепи не читается — у записи сети Arbitrum CoinEx адреса контракта нет (на «Монетах» — «сеть есть, адреса нет»); BSC — как раньше.
 - **Влияет на торговлю:** да — без неё монеты CoinEx в сети Arbitrum не сопоставляются с DEX Arbitrum.
 - **Связанные ключи:** venue.arbitrum_network, venue.bsc_contract_chain.
 - **Статус:** ещё не в релизе (ветка feat/arbitrum).

@@ -1,9 +1,9 @@
 //! Файл: venues/poloniex/depth.rs
 //! Что делает: разбор текстовых кадров публичного WebSocket Poloniex: pong, события (subscribe, error) и данные канала
-//! стакана book (снимки N уровней; в одном кадре может быть несколько записей) → стаканы формата ядра. Один разбор
-//! JSON на кадр (урок 13).
+//! стакана book (снимки N уровней; в одном кадре может быть несколько записей) → стаканы формата ядра; кадры канала
+//! book_lv2 (решение 424) разбирает lv2.rs. Один разбор JSON на кадр (урок 13).
 //! Кто вызывает: ws_conn.rs, user_stream.rs (ping), тесты.
-//! От чего зависит: core/types, serde_json.
+//! От чего зависит: core/types, serde_json, lv2.rs (кадры book_lv2).
 //! Настройки: нет.
 //!
 //! Официально:
@@ -52,6 +52,13 @@ pub enum Msg {
     Error(String),
     /// Снимки стаканов (записи кадра по порядку).
     Books(Vec<Depth>),
+    /// Решение 424: записи канала book_lv2 (снимок 20 уровней или изменения) по порядку.
+    Lv2(Vec<super::lv2::Lv2>),
+    /// Решение 424: кадр book_lv2 не разобран (символ, если известен, и причина) — разрыв быстрого стакана пары.
+    BadLv2 {
+        symbol: Option<String>,
+        reason: String,
+    },
     /// Кадр стакана не разобран (символ, если известен, и причина).
     Bad {
         symbol: Option<String>,
@@ -75,8 +82,10 @@ pub fn parse(text: &str) -> Msg {
         Some(_) => return Msg::Other,
         None => {}
     }
-    if v.get("channel").and_then(Value::as_str) != Some(BOOK) {
-        return Msg::Other;
+    match v.get("channel").and_then(Value::as_str) {
+        Some(BOOK) => {}
+        Some(super::lv2::BOOK_LV2) => return super::lv2::parse(&v),
+        _ => return Msg::Other,
     }
     let Some(items) = v.get("data").and_then(Value::as_array) else {
         return Msg::Bad {
@@ -125,6 +134,13 @@ fn depth(symbol: &str, d: &Value) -> Result<Depth, String> {
 
 /// Уровни [цена, количество] (строки) → PriceLevel; нулевое количество — уровня нет. Ошибка — текст причины.
 pub fn levels(d: &Value, side: &str) -> Result<Vec<PriceLevel>, String> {
+    levels_with(d, side, false)
+}
+
+/// Уровни [цена, количество] (строки) → PriceLevel. Принимает: запись, сторону, keep_zero — оставлять уровни с
+/// количеством 0 (решение 424: в изменениях book_lv2 «When quantity is 0, delete this price» — это команда удалить).
+/// Возвращает: уровни по порядку записи. Ошибка — текст причины (не число, не пара; при keep_zero — и количество < 0).
+pub fn levels_with(d: &Value, side: &str, keep_zero: bool) -> Result<Vec<PriceLevel>, String> {
     let arr = d
         .get(side)
         .and_then(Value::as_array)
@@ -144,7 +160,12 @@ pub fn levels(d: &Value, side: &str) -> Result<Vec<PriceLevel>, String> {
             Decimal::from_str(&s).map_err(|_| format!("{side}: {what} {x} не число"))
         };
         let (price, qty) = (num(&p[0], "цена")?, num(&p[1], "количество")?);
-        if qty > Decimal::ZERO {
+        // Снимки book — как раньше (нулевые и отрицательные молча не берутся); изменения book_lv2 — отрицательное
+        // количество не описано документацией → кадр не разобран.
+        if keep_zero && qty < Decimal::ZERO {
+            return Err(format!("{side}: количество {qty} меньше нуля"));
+        }
+        if qty > Decimal::ZERO || (keep_zero && qty.is_zero()) {
             out.push(PriceLevel { price, qty });
         }
     }

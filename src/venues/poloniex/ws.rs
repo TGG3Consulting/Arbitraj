@@ -5,12 +5,14 @@
 //! Кто вызывает: market.rs (по задаче на соединение; config — проверка до запуска).
 //! От чего зависит: ws_conn.rs, book.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_url, venue.ws_subs_per_sec (≤ 500), venue.ws_ping_ms (< 30 000), venue.ws_silence_ms,
-//! venue.ws_reconnect_pause_ms, venue.depth_levels (5, 10 или 20) [poloniex], http.timeout_ms (время на подключение).
+//! venue.ws_reconnect_pause_ms (и пауза переподписки book_lv2 пары — решение 424), venue.depth_levels (5, 10 или 20)
+//! [poloniex], http.timeout_ms (время на подключение).
 //!
 //! Официально (Spot → WebSocket, https://api-docs.poloniex.com/spot/websocket/): публичный адрес
 //! «wss://ws.poloniex.com/ws/public» (настройка venue.ws_url); «500 requests per second» на соединение; «The server
 //! expects a message or a ping every 30 seconds, or it ends the session without notice», сервер сам ping не шлёт.
-//! Канал book — «depth»: 5 (по умолчанию), 10 или 20 (Market Data → Book).
+//! Канал book — «depth»: 5 (по умолчанию), 10 или 20 (Market Data → Book); book_lv2 — 20 уровней всегда (решение 424:
+//! ядру — venue.depth_levels верхних уровней локального стакана).
 
 use std::time::Duration;
 
@@ -50,6 +52,9 @@ pub struct Cfg {
     pub ping: Duration,
     pub silence: Duration,
     pub connect_timeout: Duration,
+    /// Решение 424: не чаще раза в это время переподписка book_lv2 одной пары после разрыва
+    /// (venue.ws_reconnect_pause_ms; None — не задана: переподписки нет, пара остаётся на снимках book).
+    pub resync_pause: Option<Duration>,
 }
 
 /// Работает, пока жив канал out: подключается заново после каждого обрыва.
@@ -152,5 +157,9 @@ pub fn config(ctx: &Ctx) -> Result<Cfg, String> {
         ping,
         silence,
         connect_timeout: ctx.http_timeout().map_err(m)?,
+        resync_pause: ctx
+            .int("venue.ws_reconnect_pause_ms")
+            .ok()
+            .map(Duration::from_millis),
     })
 }

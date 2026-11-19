@@ -76,7 +76,7 @@ pub fn asset_back(core: &Core, venue: &VenueId, asset: Asset) -> Asset {
     }
     if asset.contract.is_none()
         && is_quote(core, venue, &asset.ticker)
-        && let Ok(a) = rd(&core.inner.usdt).clone()
+        && let Ok(a) = super::registry_chains::usdt_of(core, asset.chain.as_ref())
     {
         // Решение 416 (ревью С-2): сеть — исходной монеты (не теряется).
         return Asset {

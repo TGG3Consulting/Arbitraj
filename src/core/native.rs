@@ -7,6 +7,8 @@
 //! строго по адресу контракта у биржи (CLAUDE.md, первичный фильтр).
 //! Сопоставление не делается (монета остаётся «без адреса»), если: настройки не заданы; площадки DEX дают разные
 //! обёртки или тикеры; у биржи уже есть другая монета с адресом обёртки (две монеты на одном адресе не склеиваются).
+//! Решение 430 (две сети): нативная монета — по сети: монета DEX — сети монеты (Asset.chain), справочник сетей биржи —
+//! сети по умолчанию (адреса бирж по другим сетям — шаг 3); у BNB и ETH разные обёртки, они не мешают друг другу.
 //! Кто вызывает: core/registry_sync.rs (справочник сетей биржи), core/precheck.rs (свежий справочник перед сделкой);
 //! spendable — core/reconcile.rs (сверка), core/manual_return.rs («Вернуть боту»): BNB на DEX — сверх резерва на газ.
 //! От чего зависит: settings, core/types, engine.rs (виды площадок).
@@ -15,12 +17,12 @@
 use alloy_primitives::Address;
 use rust_decimal::Decimal;
 
-use crate::core::types::{Asset, CoinNetworkInfo, Side, VenueId};
+use crate::core::types::{Asset, ChainId, CoinNetworkInfo, Side, VenueId};
 use crate::gateway::contract::{Venue, VenueKind};
 use crate::settings::read::At;
 use crate::settings::store::Store;
 
-use super::engine::{Core, rd};
+use super::engine::Core;
 
 /// Нативная монета и её обёртка на DEX.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,11 +85,8 @@ pub fn apply(
 /// заданы или расходятся — список как есть (нативная монета остаётся без адреса, причина видна на экране «Монеты»).
 pub fn map(core: &Core, venue: &VenueId, list: Vec<CoinNetworkInfo>) -> Vec<CoinNetworkInfo> {
     let s = &core.inner.deps.settings;
-    let dex: Vec<VenueId> = rd(&core.inner.kinds)
-        .iter()
-        .filter(|(_, k)| *k == VenueKind::Dex)
-        .map(|(v, _)| v.clone())
-        .collect();
+    // Решение 430: справочник сетей биржи — сети по умолчанию (адреса по другим сетям — шаг 3), нативная — её сети.
+    let dex = chain_dex(core, None);
     let Ok(Some(n)) = read(s, &dex) else {
         return list;
     };
@@ -148,11 +147,8 @@ pub async fn minus_sell_gas(
 
 /// Тикер нативной монеты по текущим настройкам площадок DEX (read). None — не задано или расходится. Ошибок нет.
 pub fn ticker(core: &Core) -> Option<String> {
-    let dex: Vec<VenueId> = rd(&core.inner.kinds)
-        .iter()
-        .filter(|(_, k)| *k == VenueKind::Dex)
-        .map(|(v, _)| v.clone())
-        .collect();
+    // Решение 430: нативная монета биржи — сети по умолчанию (монеты бирж без сети).
+    let dex = chain_dex(core, None);
     read(&core.inner.deps.settings, &dex)
         .ok()
         .flatten()
@@ -161,18 +157,36 @@ pub fn ticker(core: &Core) -> Option<String> {
 
 /// Нативная ли это монета сети (решение 211, ревью К1): тикер dex.native_ticker И адрес обёртки dex.native_wrapped —
 /// токен с тем же тикером под другим адресом нативной монетой не считается. Ошибок нет: настройка не задана — нет.
+/// Решение 430: нативная монета СЕТИ МОНЕТЫ (Asset.chain; None — сеть по умолчанию).
 pub fn is_native(core: &Core, asset: &Asset) -> bool {
-    current(core).is_some_and(|n| asset.ticker == n.ticker && asset.contract == Some(n.wrapped))
+    current_in(core, asset.chain.as_ref())
+        .is_some_and(|n| asset.ticker == n.ticker && asset.contract == Some(n.wrapped))
 }
 
-/// Нативная монета по настройкам DEX ядра (dex.native_ticker, dex.native_wrapped). None — не задана. Ошибок нет.
+/// Нативная монета сети по умолчанию по настройкам её площадок DEX (dex.native_ticker, dex.native_wrapped).
+/// None — не задана. Ошибок нет.
 pub fn current(core: &Core) -> Option<Native> {
-    let dex: Vec<VenueId> = rd(&core.inner.kinds)
-        .iter()
-        .filter(|(_, k)| *k == VenueKind::Dex)
-        .map(|(v, _)| v.clone())
-        .collect();
-    read(&core.inner.deps.settings, &dex).ok().flatten()
+    current_in(core, None)
+}
+
+/// Решение 430: нативная монета сети `tag` (канонический вид; None — сеть по умолчанию) — по площадкам DEX этой сети.
+/// None — не задана, расходится или площадки сети нет. Ошибок нет.
+pub fn current_in(core: &Core, tag: Option<&ChainId>) -> Option<Native> {
+    read(&core.inner.deps.settings, &chain_dex(core, tag))
+        .ok()
+        .flatten()
+}
+
+/// Решение 430: площадки DEX сети `tag` (одна площадка DEX — она, без чтения настроек, как раньше; сеть площадки не
+/// прочитать — не входит). Принимает: ядро, сеть. Ошибок нет.
+fn chain_dex(core: &Core, tag: Option<&ChainId>) -> Vec<VenueId> {
+    let all = super::chain::dexes(core);
+    if all.len() == 1 && tag.is_none() {
+        return all;
+    }
+    all.into_iter()
+        .filter(|v| super::chain::tag_of_dex(core, v).is_ok_and(|t| t.as_ref() == tag))
+        .collect()
 }
 
 /// Меняет ли настройка сопоставление (тогда справочник сетей бирж перечитывается сразу). Ошибок нет.

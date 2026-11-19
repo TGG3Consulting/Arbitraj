@@ -63,9 +63,16 @@ async fn one_dex_answers_without_settings() {
     assert!(d.asset.chain.is_none(), "запись до решения 416");
     let one = [v("bsc_dex")];
     // dex.chain не задана — площадка DEX монеты без сети всё равно единственная (как «первая DEX» раньше).
-    assert_eq!(chain::dex_of(&s, &one, d.asset.chain.as_ref()).unwrap(), v("bsc_dex"));
+    assert_eq!(
+        chain::dex_of(&s, &one, d.asset.chain.as_ref()).unwrap(),
+        v("bsc_dex")
+    );
     set(&s, "dex.chain", Scope::Venue("bsc_dex".into()), "bsc").await;
-    assert_eq!(chain::tag(&s, &one, &c("bsc")).unwrap(), None, "сеть по умолчанию — без сети");
+    assert_eq!(
+        chain::tag(&s, &one, &c("bsc")).unwrap(),
+        None,
+        "сеть по умолчанию — без сети"
+    );
     assert_eq!(chain::dex_chain(&s, &one).unwrap(), c("bsc"));
 }
 
@@ -87,8 +94,14 @@ async fn two_chains_need_default_chain() {
     assert_eq!(chain::of(&s, &two, &d.asset).unwrap(), c("bsc"));
     assert_eq!(chain::dex_of(&s, &two, None).unwrap(), v("bsc_dex"));
     assert_eq!(chain::tag(&s, &two, &c("bsc")).unwrap(), None);
-    assert_eq!(chain::tag(&s, &two, &c("arbitrum")).unwrap(), Some(c("arbitrum")));
-    assert_eq!(chain::dex_of(&s, &two, Some(&c("arbitrum"))).unwrap(), v("arb_dex"));
+    assert_eq!(
+        chain::tag(&s, &two, &c("arbitrum")).unwrap(),
+        Some(c("arbitrum"))
+    );
+    assert_eq!(
+        chain::dex_of(&s, &two, Some(&c("arbitrum"))).unwrap(),
+        v("arb_dex")
+    );
     let e = chain::dex_of(&s, &two, Some(&c("solana"))).unwrap_err();
     assert!(e.contains("нет площадки DEX сети solana"), "{e}");
 }

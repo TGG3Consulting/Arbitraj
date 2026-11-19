@@ -174,7 +174,8 @@ impl DirCtx {
         let qb = s
             .text("venue.quote_asset", at(&dir.sell_on))
             .map_err(|e| e.message)?;
-        let usdt = rd(&core.inner.usdt).clone()?;
+        // Решение 430: USDT сети направления (монеты; сеть по умолчанию — как раньше).
+        let usdt = super::registry_chains::usdt_of(core, dir.asset.chain.as_ref())?;
         let cex: Vec<VenueId> = rd(&core.inner.kinds)
             .iter()
             .filter(|(v, k)| *k == VenueKind::Cex && super::registry_sync::enabled(core, v))
@@ -283,7 +284,7 @@ impl DirCtx {
             net_b,
             quote: vec![qa.clone(), qb],
             usdt: Asset {
-                chain: None,
+                chain: dir.asset.chain.clone(),
                 ticker: qa,
                 contract: Some(usdt),
             },

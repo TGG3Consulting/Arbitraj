@@ -63,5 +63,8 @@ async fn gas_by_chain() {
         "биржа — газ сети сделки"
     );
     assert_eq!(gas_ticker::for_venue_in(&core, &mexc, None).unwrap(), "BNB");
-    assert_eq!(gas_ticker::all(&core), vec!["BNB".to_string(), "ETH".to_string()]);
+    assert_eq!(
+        gas_ticker::all(&core),
+        vec!["BNB".to_string(), "ETH".to_string()]
+    );
 }

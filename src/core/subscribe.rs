@@ -46,15 +46,20 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
         // DEX — только монеты, которыми можно торговать хотя бы на одной бирже (dex_tradable). Флаги ввода и вывода
         // сюда не входят: биржа меняет их на время работ, а каждая смена списка — полная пересборка подписки DEX
         // с поиском пулов (тоже расход узла); направления по флагам отсекает справочник (registry.rs).
-        VenueKind::Dex => {
-            let kinds = rd(&core.inner.kinds);
-            let market = rd(&core.inner.market);
-            coins
-                .iter()
-                .filter(|c| dex_tradable(c, &kinds, &market))
-                .map(|c| c.asset.clone())
-                .collect()
-        }
+        // Решение 430: только монеты сети этой площадки DEX (канонический вид core/chain.rs; одна DEX — все, как раньше);
+        // сеть не прочитана — пустой список (подписки нет, причина — в журнале и «Проверить подключение»).
+        VenueKind::Dex => match super::chain::tag_of_dex(core, venue) {
+            Ok(tag) => {
+                let kinds = rd(&core.inner.kinds);
+                let market = rd(&core.inner.market);
+                coins
+                    .iter()
+                    .filter(|c| c.asset.chain == tag && dex_tradable(c, &kinds, &market))
+                    .map(|c| c.asset.clone())
+                    .collect()
+            }
+            Err(_) => vec![],
+        },
     };
     if kind == VenueKind::Dex && !out.is_empty() {
         // Котируемая монета (USDT) сама в справочник не входит, а адаптер DEX ищет пулы «монета — USDT»
@@ -64,7 +69,8 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
         }
         // Промежуточные монеты (решение 52) — их пулы с USDT нужны маршруту «USDT → промежуточная → монета»;
         // тикер промежуточной адаптер берёт из этого же списка (venues/bsc_dex/pools/mids.rs).
-        out.extend(intermediate_assets(core, None));
+        // Решение 430: промежуточные монеты только этой площадки DEX (своей сети).
+        out.extend(intermediate_assets(core, None, Some(venue)));
     }
     if kind == VenueKind::Cex && !out.is_empty() {
         // Цена газа в USDT — из живого стакана BNB биржи (решение 35, convert.rs).
@@ -75,7 +81,7 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
             out.push(super::convert::gas_asset(&g));
         }
         // Живые цены промежуточных монет (решение 52) — тикер ЭТОЙ биржи по адресу (решение 211).
-        out.extend(intermediate_assets(core, Some(venue)));
+        out.extend(intermediate_assets(core, Some(venue), None));
         // Решение 181: монеты для пересчёта затрат в USDT (комиссия Gate в GT) — venue.price_assets биржи.
         out.extend(price_assets(core, venue));
     }
@@ -211,16 +217,20 @@ fn dex_quote(core: &Core, venue: &VenueId) -> Option<Asset> {
         .settings
         .text("venue.quote_asset", at)
         .ok()?;
-    let addr = rd(&core.inner.usdt).clone().ok()?;
+    // Решение 430: USDT сети этой площадки DEX (сеть по умолчанию — адрес из справочника бирж, как раньше).
+    let tag = super::chain::tag_of_dex(core, venue).ok()?;
+    let addr = super::registry_chains::usdt_of(core, tag.as_ref()).ok()?;
     Some(Asset {
-        chain: None,
+        chain: tag,
         ticker,
         contract: Some(addr),
     })
 }
 
-/// Промежуточные монеты всех площадок DEX, которые биржи знают по адресу (тикер для стакана). Ошибок нет.
-fn intermediate_assets(core: &Core, venue: Option<&VenueId>) -> Vec<Asset> {
+/// Промежуточные монеты площадок DEX, которые биржи знают по адресу (тикер для стакана). Принимает: ядро, биржу
+/// (Some — тикер этой биржи; None — тикер любой биржи, для DEX), площадку DEX (Some — только её список и её сеть,
+/// решение 430; None — все площадки DEX). Ошибок нет.
+fn intermediate_assets(core: &Core, venue: Option<&VenueId>, only: Option<&VenueId>) -> Vec<Asset> {
     let s = &core.inner.deps.settings;
     let nets = rd(&core.inner.networks);
     // Решение 211: бирже — тикер промежуточной монеты в ЕЁ справочнике сетей (не знает адреса — не подписывается);
@@ -234,15 +244,23 @@ fn intermediate_assets(core: &Core, venue: Option<&VenueId>) -> Vec<Asset> {
         None => super::intermediate::ticker_of(&nets, a),
     };
     let mut out = vec![];
-    for (v, _) in rd(&core.inner.kinds)
-        .iter()
-        .filter(|(_, k)| *k == VenueKind::Dex)
-    {
-        if let super::intermediate::Intermediate::On(list) = super::intermediate::read(s, v) {
+    // Список площадок DEX — копией: сеть площадки (chain.rs) сама читает реестр, блокировка не держится вложенно.
+    for v in super::chain::dexes(core) {
+        if only.is_some_and(|o| *o != v) {
+            continue;
+        }
+        // Решение 430: у DEX монета промежуточной — в сети площадки (канонический вид; не прочитать — пропуск); у
+        // биржи — без сети (монета биржи, стакан по тикеру).
+        let tag = match (venue, super::chain::tag_of_dex(core, &v)) {
+            (_, Err(_)) => continue,
+            (Some(_), Ok(_)) => None,
+            (None, Ok(t)) => t,
+        };
+        if let super::intermediate::Intermediate::On(list) = super::intermediate::read(s, &v) {
             for a in list {
                 if let Some(t) = name(a) {
                     out.push(Asset {
-                        chain: None,
+                        chain: tag.clone(),
                         ticker: t,
                         contract: Some(a),
                     });

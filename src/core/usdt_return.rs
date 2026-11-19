@@ -26,7 +26,7 @@ use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::deal_return_cost::Relayed;
-use super::engine::{Core, rd};
+use super::engine::Core;
 use super::op_error::OpError;
 
 /// Держатель USDT в сверке: площадка и счёт DEX (None — биржа).
@@ -46,9 +46,15 @@ pub(super) fn usdt(core: &Core, venue: &VenueId) -> Result<Asset, String> {
             },
         )
         .map_err(|e| e.message)?;
-    let addr = rd(&core.inner.usdt).clone()?;
+    // Решение 430: у площадки DEX — USDT её сети; у биржи — сети по умолчанию (монета биржи без сети), как раньше.
+    let tag = if super::daily_venue::is_dex(core, &venue.0) {
+        super::chain::tag_of_dex(core, venue)?
+    } else {
+        None
+    };
+    let addr = super::registry_chains::usdt_of(core, tag.as_ref())?;
     Ok(Asset {
-        chain: None,
+        chain: tag,
         ticker,
         contract: Some(addr),
     })

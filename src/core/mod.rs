@@ -264,6 +264,7 @@ pub mod reconcile_wallet;
 pub mod refit;
 pub mod registry;
 pub mod registry_build;
+pub mod registry_chains;
 pub mod registry_merge;
 pub mod registry_native;
 pub mod registry_sync;

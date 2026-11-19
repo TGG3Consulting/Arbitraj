@@ -78,7 +78,11 @@ pub fn of(s: &Store, dex: &[VenueId], a: &Asset) -> Result<ChainId, String> {
 /// Принимает: хранилище, площадки DEX, сеть. Возвращает: значение для Asset.chain. Ошибки: как у dex_chain.
 pub fn tag(s: &Store, dex: &[VenueId], c: &ChainId) -> Result<Option<ChainId>, String> {
     let d = dex_chain(s, dex)?;
-    if *c == d { Ok(None) } else { Ok(Some(c.clone())) }
+    if *c == d {
+        Ok(None)
+    } else {
+        Ok(Some(c.clone()))
+    }
 }
 
 /// Что делает: площадки DEX реестра ядра (по порядку реестра). Принимает: ядро. Ошибок нет.
@@ -148,4 +152,22 @@ pub fn tag_of_dex(core: &Core, v: &VenueId) -> Result<Option<ChainId>, String> {
 /// Принимает: ядро, направление. Возвращает: id сети. Ошибки: как у dex_chain.
 pub fn of_dir(core: &Core, d: &Direction) -> Result<ChainId, String> {
     of_core(core, &d.asset)
+}
+
+/// Что делает: виды площадок реестра для сети `tag` (решение 430): все биржи и площадки DEX только этой сети (налог
+/// перевода монеты — по проверкам DEX её сети). Одна площадка DEX и сеть по умолчанию — реестр как есть, без чтения
+/// настроек. Принимает: ядро, сеть (канонический вид). Возвращает: (площадка, вид). Ошибок нет: DEX, чью сеть не
+/// прочитать, не входит.
+pub fn kinds_in(core: &Core, tag: Option<&ChainId>) -> Vec<(VenueId, VenueKind)> {
+    let kinds = rd(&core.inner.kinds).clone();
+    let dex = kinds.iter().filter(|(_, k)| *k == VenueKind::Dex).count();
+    if dex == 1 && tag.is_none() {
+        return kinds;
+    }
+    kinds
+        .into_iter()
+        .filter(|(v, k)| {
+            *k != VenueKind::Dex || tag_of_dex(core, v).is_ok_and(|t| t.as_ref() == tag)
+        })
+        .collect()
 }

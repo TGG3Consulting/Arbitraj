@@ -55,7 +55,9 @@ pub fn is_quote(core: &Core, c: &CoinCheck) -> bool {
 
 /// Адрес — USDT ядра (core/inner.rs usdt). Адрес USDT ещё не известен — нет. Ошибок нет.
 fn quote_token(core: &Core, token: Address) -> bool {
+    // Решение 430: USDT любой сети (сеть по умолчанию — Inner.usdt, другие — Inner.usdt_other).
     rd(&core.inner.usdt).as_ref().is_ok_and(|u| *u == token)
+        || rd(&core.inner.usdt_other).values().any(|u| *u == token)
 }
 
 /// Можно ли биржа ↔ биржа без измеренного налога (cex_cex.untaxed_ok = да). Не задана — нет. Ошибок нет.
@@ -78,8 +80,9 @@ pub fn pct(core: &Core, to: &VenueId, asset: &Asset) -> Result<Decimal, String> 
             asset.ticker
         )
     })?;
-    let kinds = rd(&core.inner.kinds).clone();
-    let to_dex = kinds.iter().any(|(v, k)| v == to && *k == VenueKind::Dex);
+    // Решение 430: налог перевода — по проверкам площадок DEX сети монеты (core/chain.rs kinds_in).
+    let kinds = super::chain::kinds_in(core, asset.chain.as_ref());
+    let to_dex = super::daily_venue::is_dex(core, &to.0);
     // Решение 277 (ревью): замер налога USDT — только получателю-DEX; получателю-биржи — как до решения 277.
     let use_measured = to_dex || !quote_token(core, token);
     if use_measured && let Some(p) = measured(&rd(&core.inner.market), &kinds, token) {

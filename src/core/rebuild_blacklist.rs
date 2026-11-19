@@ -15,7 +15,7 @@
 use chrono::Utc;
 
 use super::blacklist::{self, BlockChange, TaxLimits};
-use super::engine::{Core, rd, wr};
+use super::engine::{Core, wr};
 use super::market_state::MarketState;
 use super::rebuild::has_pool;
 use super::registry::CoinEntry;
@@ -31,7 +31,8 @@ pub fn apply_blacklist(
     let limits = TaxLimits::read(s);
     let mut bl = wr(&core.inner.blacklist);
     let now = Utc::now();
-    let kinds = rd(&core.inner.kinds).clone();
+    // Решение 430: налог перевода — по проверкам площадок DEX сети монеты (одна сеть — реестр как есть).
+    let kinds_of = |a: &crate::core::types::Asset| super::chain::kinds_in(core, a.chain.as_ref());
     let untaxed_ok = super::transfer_tax::untaxed_ok(s);
     let mut changes = vec![];
     for c in coins.iter_mut() {
@@ -40,7 +41,7 @@ pub fn apply_blacklist(
         let measured = c
             .asset
             .contract
-            .and_then(|t| super::transfer_tax::measured(market, &kinds, t));
+            .and_then(|t| super::transfer_tax::measured(market, &kinds_of(&c.asset), t));
         c.cex_cex = (cexes >= 2 && measured.is_none() && !untaxed_ok)
             .then(|| super::transfer_tax::UNMEASURED.to_string());
         // Решение 214: биржи с venue.cex_cex = нет (не задана — да) — без направлений биржа ↔ биржа.

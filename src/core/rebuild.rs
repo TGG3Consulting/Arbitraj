@@ -169,6 +169,14 @@ pub async fn rebuild(core: &Core) {
     // Направления, которых больше нет, уходят с «Живого экрана».
     wr(&inner.spreads).retain(|d, _| live_dirs.contains(d));
     *wr(&inner.usdt) = usdt;
+    // Решение 430: USDT сетей не по умолчанию — из справочников сетей бирж этой сети (registry_chains.rs).
+    let dex: Vec<VenueId> = venues
+        .iter()
+        .filter(|(_, k)| *k == VenueKind::Dex)
+        .map(|(v, _)| v.clone())
+        .collect();
+    let groups = super::registry_chains::groups(core, &dex);
+    *wr(&inner.usdt_other) = super::registry_chains::usdt_other(&groups, &nets, &quote);
     // Карта (площадка, тикер) → монета для тика (решение 118, Я-9) и журнал разных тикеров одного адреса (Я-8).
     super::ticker_index::rebuild(core, &coins).await;
     *wr(&inner.coins) = CoinBook {

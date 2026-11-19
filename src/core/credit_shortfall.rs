@@ -20,7 +20,7 @@ use crate::core::types::{Asset, Cost, VenueId};
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
-use super::engine::{Core, rd};
+use super::engine::Core;
 
 /// Кто меняет настройку (журнал изменений настроек).
 const AUTHOR: &str = "ядро: зачислено меньше ожидаемого (решение 118)";
@@ -43,7 +43,12 @@ pub async fn check(
     fee: Option<&Cost>,
 ) {
     let deps = &core.inner.deps;
-    if rd(&core.inner.usdt).as_ref().ok() == asset.contract.as_ref() {
+    // Решение 430: USDT сети монеты.
+    if super::registry_chains::usdt_of(core, asset.chain.as_ref())
+        .ok()
+        .as_ref()
+        == asset.contract.as_ref()
+    {
         return;
     }
     // Решение 247, п. Ж: комиссия вывода — факт из ответа площадки, если она в этой монете (имя площадки → ядра).

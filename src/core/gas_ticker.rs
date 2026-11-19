@@ -37,11 +37,7 @@ pub fn at(s: &Store, v: &VenueId) -> Result<String, String> {
 /// Что делает: тикер газа сети (канонический вид: None — сеть по умолчанию) — dex.gas_ticker площадки DEX этой сети.
 /// Принимает: ядро, сеть. Возвращает: тикер. Ошибки: текст — площадки DEX сети нет (core/chain.rs dex_of), не задана.
 pub fn of_chain(core: &Core, chain: Option<&ChainId>) -> Result<String, String> {
-    let dex = super::chain::dex_of(
-        &core.inner.deps.settings,
-        &super::chain::dexes(core),
-        chain,
-    )?;
+    let dex = super::chain::dex_of(&core.inner.deps.settings, &super::chain::dexes(core), chain)?;
     at(&core.inner.deps.settings, &dex)
 }
 

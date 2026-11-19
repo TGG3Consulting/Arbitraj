@@ -48,8 +48,10 @@ pub struct Inner {
     pub coins: RwLock<super::coin_book::CoinBook>,
     /// (площадка, тикер) → монета для тика стакана (решение 118, Я-9, ticker_index.rs).
     pub tickers: RwLock<super::ticker_index::TickerIndex>,
-    /// Адрес USDT в BSC или причина, почему его нет.
+    /// Адрес USDT сети по умолчанию (решение 430; BSC) или причина, почему его нет.
     pub usdt: RwLock<Result<Address, String>>,
+    /// Решение 430: адреса USDT сетей не по умолчанию (registry_chains.rs); адрес сети по умолчанию — `usdt`.
+    pub usdt_other: RwLock<HashMap<crate::core::types::ChainId, Address>>,
     pub blacklist: RwLock<Blacklist>,
     /// Пулы, исключённые по крючку (чтобы уведомлять только о новых).
     pub excluded_pools: Mutex<HashSet<(VenueId, String)>>,
@@ -248,6 +250,7 @@ impl Inner {
             coins: RwLock::default(),
             tickers: RwLock::default(),
             usdt: RwLock::new(Err("справочник бирж ещё не загружен".into())),
+            usdt_other: RwLock::new(HashMap::new()),
             blacklist: RwLock::default(),
             excluded_pools: Mutex::default(),
             told_blocks: Mutex::default(),

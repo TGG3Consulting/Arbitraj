@@ -139,7 +139,11 @@ fn wake_venue(core: &Core, venue: &VenueId, pools: &[(Address, Address)]) -> usi
     let super::intermediate::Intermediate::On(mids) = super::intermediate::read(s, venue) else {
         return 0;
     };
-    let Ok(usdt) = rd(&core.inner.usdt).clone() else {
+    // Решение 430: USDT сети этой площадки DEX (одна DEX — сеть по умолчанию, как раньше).
+    let Ok(tag) = super::chain::tag_of_dex(core, venue) else {
+        return 0;
+    };
+    let Ok(usdt) = super::registry_chains::usdt_of(core, tag.as_ref()) else {
         return 0;
     };
     let depth = extra_hops(core, venue, mids.len());

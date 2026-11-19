@@ -9,7 +9,7 @@
 //! Пересчитываются только сделки, у которых оценка уже есть (provisional_usd) и шаг «остановлена», «ждёт решения
 //! человека» или «Беру на себя» (те, что ledger::finish и ledger_load оценивают), и только если количество изменилось.
 //! Кто вызывает: core/credit_rest_lock.rs (locked — своя сделка и соучастники).
-//! От чего зависит: daily.rs (provisional), daily_commit.rs (announce), deal.rs, engine.rs.
+//! От чего зависит: daily.rs (record), daily_value.rs (value_now, estimate), daily_commit.rs (announce), deal.rs, engine.rs.
 //! Настройки: нет.
 
 use rust_decimal::Decimal;
@@ -24,24 +24,37 @@ pub fn valued(d: &Deal) -> bool {
         && d.provisional_usd.is_some()
 }
 
-/// Что делает: пересчёт оценки сделки учёта `id`, если её количество отличается от `before` (шапка): оценка — на копии
-/// (daily::provisional: котировка по рынку площадки, цены нет — худший случай), затем сумма, начисления дня и строки
-/// хронологии — в сделку учёта в памяти; журнал и Telegram сработавших лимитов (daily_commit::announce).
+/// Что делает: пересчёт оценки сделки учёта `id`, если её количество отличается от `before` (шапка). Котировка
+/// (daily_value::value_now — await, цены нет — худший случай) — до записи; после неё учёт в памяти перечитывается
+/// (ревью dd29ef5a): сделка всё ещё с оценкой (valued) и с тем же количеством — только тогда daily::record (как
+/// daily::provisional) на свежей копии; иначе (человек закрыл, продал, взял) ничего не пишется. Затем сумма, начисления
+/// дня и строки хронологии — в сделку учёта в памяти; журнал и Telegram сработавших лимитов (daily_commit::announce).
 /// Принимает: ядро, ID сделки, количество до решения. Возвращает: Some(сделка учёта после пересчёта) — пересчитана
-/// (сохраняет вызывающий), None — сделки нет, количество не изменилось или оценки у неё нет. Ошибок нет.
+/// (сохраняет вызывающий), None — сделки нет, количество не изменилось, оценки у неё нет или сделка изменилась за
+/// время котировки. Ошибок нет.
 pub async fn revalue(core: &Core, id: &str, before: Decimal) -> Option<Deal> {
-    let mut x = lk(&core.inner.deals).get(id).cloned()?;
+    let x = lk(&core.inner.deals).get(id).cloned()?;
     if x.qty == before || !valued(&x) {
         return None;
     }
-    let (tl, db) = (x.timeline.len(), x.day_book.len());
-    let trip = Box::pin(super::daily::provisional(core, &mut x)).await;
+    let value = Box::pin(super::daily_value::value_now(core, &x)).await;
+    let mut y = {
+        let m = lk(&core.inner.deals);
+        let y = m.get(id)?;
+        if !valued(y) || y.qty != x.qty {
+            return None;
+        }
+        y.clone()
+    };
+    let (tl, db) = (y.timeline.len(), y.day_book.len());
+    let est = super::daily_value::estimate(&y, value);
+    let trip = Box::pin(super::daily::record(core, &mut y, est)).await;
     let d = {
         let mut m = lk(&core.inner.deals);
         let d = m.get_mut(id)?;
-        d.provisional_usd = x.provisional_usd;
-        d.day_book.extend(x.day_book.iter().skip(db).cloned());
-        d.timeline.extend(x.timeline.iter().skip(tl).cloned());
+        d.provisional_usd = y.provisional_usd;
+        d.day_book.extend(y.day_book.iter().skip(db).cloned());
+        d.timeline.extend(y.timeline.iter().skip(tl).cloned());
         d.clone()
     };
     Box::pin(super::daily_commit::announce(core, &trip)).await;

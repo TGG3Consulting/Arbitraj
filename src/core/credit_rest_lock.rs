@@ -65,6 +65,9 @@ pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
             }
             (deal.qty, deal.credit) = (x.qty, x.credit.clone());
             (deal.timeline, deal.sale_unsure) = (x.timeline.clone(), x.sale_unsure);
+            // Ревью dd29ef5a (С-1): и оценка с начислениями дня (пересчёт соучастника, credit_rest_value.rs) — иначе
+            // сохранение вызывающего вернуло бы прежнюю оценку.
+            (deal.provisional_usd, deal.day_book) = (x.provisional_usd, x.day_book.clone());
             return (Res::Done, r, o);
         }
         if guard && mem.map(|x| (x.step, x.updated_at)) != Some((deal.step, deal.updated_at)) {

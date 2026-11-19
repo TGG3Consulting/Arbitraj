@@ -773,6 +773,15 @@ rationale = "Хватает, чтобы найти свой ордер по text
 prefill = { kind = "Venue", id = "gate" }
 
 [[section.rec]]
+name = "venue.obu_level"
+area = "площадка Gate"
+unit = "уровней"
+value = "50"
+source = "Документация spot.obu (Order Book V2): «400-level updates every 100 ms; 50-level updates every 20 ms»"
+rationale = "Решение 421: стакан в 5 раз чаще снимков 100 мс; снимки spot.order_book остаются страховкой. 400 — если нужна глубина больше 50."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
 name = "venue.window_diff_interval"
 area = "площадка Gate"
 unit = "интервал"

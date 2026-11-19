@@ -358,6 +358,7 @@ quiet_confirm_max_per_s запросов, ёмкость была quiet_confirm_
 | venue.bsc_network | площадка Gate | `BSC` | Имя сети BNB Smart Chain у Gate | Живая запись 04.11 (/spot/currencies, currency_chains CAKE) |
 | venue.depth_levels | площадка Gate | `20` | Как у других бирж | spot.order_book: 5, 10, 20, 50, 100 |
 | venue.book_interval | площадка Gate | `100ms` | Самый частый снимок | spot.order_book: 100ms, 1000ms |
+| venue.obu_level | площадка Gate | `50` | 50 уровней раз в 20 мс — в 5 раз чаще снимков 100 мс; страховка — снимки spot.order_book. 400 — если нужна глубина больше 50 (раз в 100 мс) | spot.obu: «400-level updates every 100 ms; 50-level updates every 20 ms» |
 | venue.order_time_in_force | площадка Gate | `ioc` | «Не исполнился — отменяем»: остаток снимает биржа; `fok` тоже допустим — выбор настройкой (Тигран, 04.11) | POST /spot/orders, time_in_force |
 | venue.fee_deduction | площадка Gate | *метод:* `coin` — скидка GT в кабинете выключена; `gt` — включена и есть GT. Должно совпадать с кабинетом, иначе котировок нет | Расчёт — по выбранной ставке и монете комиссии; факт — из ордера | GET /wallet/fee: gt_discount, gt_taker_fee; решение Тиграна 04.11 |
 | venue.deposit_info_requests_per_sec | площадка Gate | `2` | Минимум депозита по монетам подписки — фоном, с большим запасом от лимита Gate | Wallet «The Others: 200r/10s per endpoint»; решение 143 |

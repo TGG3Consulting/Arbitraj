@@ -581,6 +581,14 @@ transfer-state, «rest /api/v5/asset/withdrawal» и withdrawal-history по ш�
 знак `taker` в trade-fee (отрицательный — комиссия); `ruleType` у спот-пар; порядок уровней и пустые кадры books
 (seqId = prevSeqId); есть ли в perm права перевода; 51020 — минимальная сумма ордера CAKE-USDT.
 
+## Gate, быстрый стакан (решение 421) — tests/gate_fast_book.rs
+
+Разбор spot.obu — на значениях примеров официальной документации («Order Book V2 API»: полный снимок и изменение
+ob.BTC_USDT.50); правило номеров локального стакана и выбор стакана для ядра (быстрый → снимок при разрыве → снова
+быстрый) — на живых кадрах spot.order_book_update / spot.order_book записи 04.11 (у них те же U/u; lastUpdateId = u
+при том же t). Записать на живом боте: кадры spot.obu вместе с spot.order_book и GET /spot/order_book?with_id=true по
+одной паре (docs/TASKS.md, решение 421).
+
 ## XT (решение 167) — tests/xt_real_data.rs
 
 Всегда выполняются: сборка строки подписи на примере документации (signSteps.md, «sample of original signature

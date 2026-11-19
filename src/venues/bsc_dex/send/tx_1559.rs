@@ -141,8 +141,8 @@ mod tests {
     fn fees_and_effective_price() {
         let (c, _) = recorded();
         let f = fees(c.base_fee, Decimal::from(25), 1_000).unwrap();
-        // 0x1346150 = 20 209 000 wei; × 1,25 = 25 261 250.
-        assert_eq!(f.max_fee, 25_261_250 + 1_000);
+        // 0x1346150 = 20 210 000 wei; × 1,25 = 25 262 500.
+        assert_eq!(f.max_fee, 25_262_500 + 1_000);
         assert_eq!(
             effective_price(c.base_fee, f),
             Some(c.base_fee + U256::from(1_000u64))

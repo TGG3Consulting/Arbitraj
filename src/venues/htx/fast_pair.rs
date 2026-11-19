@@ -5,9 +5,9 @@
 //! mbp.refresh → сразу); стакан ядру — через выбор book_mode.rs (быстрый, пока синхронизирован; уход — запасной
 //! снимок). Подписка пары не принята (у 5/20 уровней — только пары из списка документации) — пара на снимках до
 //! конца сессии, запросов нет.
-//! Кто вызывает: fast_conn.rs (сессия), fast_ws.rs (back — конец сессии).
+//! Кто вызывает: fast_conn.rs (сессия).
 //! От чего зависит: fast_book.rs, fast_reqs.rs, book_mode.rs, book.rs, book_fast.rs, fast_log.rs, mbp.rs,
-//! ws.rs (invalidate), gateway/core_out_book.rs (решение 324).
+//! snap_out.rs (back — уход на снимки), gateway/core_out_book.rs (решение 324).
 //! Настройки: из fast_ws.rs (FastCfg).
 
 use std::collections::HashMap;
@@ -22,12 +22,11 @@ use crate::gateway::core_out_book::{BookOut, Fed};
 use crate::gateway::events::MarketEvent;
 
 use super::book::{Alive, Books};
-use super::book_mode::Back;
 use super::ctx::Ctx;
 use super::fast_book::{Applied, LocalBook, Update};
 use super::fast_reqs::Reqs;
 use super::fast_ws::FastCfg;
-use super::ws::invalidate;
+use super::snap_out::back;
 
 /// Состояние пар соединения на одну сессию.
 pub struct Conn<'a> {
@@ -41,30 +40,6 @@ pub struct Conn<'a> {
     pub local: HashMap<String, LocalBook>,
     /// Очередь запросов снимка (fast_reqs.rs).
     pub reqs: Reqs,
-}
-
-/// Уход пары с быстрого стакана (book_mode.rs fall_back): запасной снимок в память со своим временем кадра и ядру
-/// или «стакан недостоверен». Принимает: окружение, стаканы, канал ядра, отдачу ядру, тикер, причину. Возвращает:
-/// false — канал ядра закрыт. Ошибок нет.
-pub fn back(
-    ctx: &Ctx,
-    books: &Books,
-    out: &mpsc::Sender<MarketEvent>,
-    kept: &BookOut,
-    ticker: &str,
-    why: &str,
-) -> bool {
-    match books.mode.fall_back(ticker, why) {
-        Back::Nothing => true,
-        Back::Use(b, alive) => {
-            books.put_at(b.clone(), alive, b.received_at.timestamp_millis());
-            kept.book(out, b) != Fed::Closed
-        }
-        Back::Invalidate => {
-            invalidate(ctx, books, out, ticker);
-            true
-        }
-    }
 }
 
 impl<'a> Conn<'a> {
@@ -96,9 +71,14 @@ impl<'a> Conn<'a> {
         asks: &[PriceLevel],
     ) -> bool {
         self.reqs.answered(symbol);
-        if self.reqs.is_off(symbol) || self.asset(symbol).is_none() {
+        if self.reqs.is_off(symbol) {
             return true;
         }
+        let Some(asset) = self.asset(symbol) else {
+            return true;
+        };
+        // Новый снимок req: объявленное снимками расхождение снято (решение 422, ревью).
+        self.books.mode.resynced(&asset.ticker);
         let cap = self.cfg.levels as usize;
         let a = self
             .local
@@ -159,20 +139,32 @@ impl<'a> Conn<'a> {
         ok
     }
 
-    /// Расхождение со снимком (book_mode.rs Diverged — пара уже на снимках): сброс и запрос снимка сразу. Ошибок нет.
-    pub async fn on_resync(&mut self, symbol: &str) {
+    /// Расхождение со снимком (book_mode.rs Diverged — пара уже на снимках): сброс, уход на снимки ещё раз (если
+    /// между расхождением и этой просьбой пара успела вернуться на быстрый по снимку req) и запрос снимка сразу.
+    /// Возвращает: false — канал ядра закрыт. Ошибок нет.
+    pub async fn on_resync(&mut self, symbol: &str) -> bool {
+        let Some(asset) = self.asset(symbol) else {
+            return true;
+        };
         if self.reqs.is_off(symbol) {
-            return;
+            return true;
         }
+        let why = format!("{symbol}: расхождение со снимком mbp.refresh");
         if let Some(lb) = self.local.get_mut(symbol) {
-            lb.reset("расхождение со снимком mbp.refresh".into());
+            lb.reset(why.clone());
         }
-        self.books
-            .mode
-            .log()
-            .resync(&format!("{symbol}: расхождение со снимком mbp.refresh"));
+        self.books.mode.log().resync(&why);
+        let ok = back(
+            self.ctx,
+            self.books,
+            self.out,
+            &self.kept,
+            &asset.ticker,
+            &why,
+        );
         self.reqs.queue(symbol, Duration::ZERO);
         self.books.mode.log().flush(self.ctx).await;
+        ok
     }
 
     /// Что делать после изменения локального стакана. Возвращает: false — канал ядра закрыт. Ошибок нет.
@@ -185,20 +177,25 @@ impl<'a> Conn<'a> {
                 let Some(lb) = self.local.get(symbol) else {
                     return true;
                 };
-                if !self.books.mode.on_fast(&asset.ticker, lb.ts()) {
-                    return true;
-                }
+                let t = lb.ts();
                 let (bids, asks) = lb.top(self.cfg.depth);
                 let book = OrderBook {
                     venue: self.ctx.venue(),
                     asset: asset.clone(),
                     bids,
                     asks,
-                    exchange_time: lb.ts().and_then(|ms| Utc.timestamp_millis_opt(ms).single()),
+                    exchange_time: t.and_then(|ms| Utc.timestamp_millis_opt(ms).single()),
                     received_at: Utc::now(),
                 };
-                self.books.put(book.clone(), self.alive.clone());
-                self.kept.book(self.out, book) != Fed::Closed
+                // Решение «отдавать ли» и отдача — под одним замком book_mode.rs (решение 422, ревью).
+                let (books, alive, kept, out) = (self.books, &self.alive, &self.kept, self.out);
+                books
+                    .mode
+                    .on_fast(&asset.ticker, t, || {
+                        books.put(book.clone(), alive.clone());
+                        kept.book(out, book) != Fed::Closed
+                    })
+                    .unwrap_or(true)
             }
             Applied::Same | Applied::Repeat => {
                 if self.books.mode.fast_alive(&asset.ticker) {

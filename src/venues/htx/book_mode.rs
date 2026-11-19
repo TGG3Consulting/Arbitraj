@@ -2,17 +2,21 @@
 //! Что делает: решение 422 — какой стакан пары HTX отдаётся ядру: быстрый (локальный стакан канала /feed
 //! market.$symbol.mbp.$levels, fast_pair.rs), пока он синхронизирован, иначе — снимок канала /ws mbp.refresh
 //! (страховка, ws_conn.rs). Последний снимок пары хранится всегда (запасной). Разрыв, конец сессии быстрого канала —
-//! сразу запасной снимок (fall_back). Сверка по содержимому: снимок, совпавший с быстрым стаканом в первых
-//! min(venue.depth_levels, уровни быстрого канала) уровнях, подтверждает быстрый стакан (время кадра пары); быстрый
-//! стакан, который дольше venue.book_stale_ms не подтверждён ни своим кадром, ни совпадением, а снимок другой, —
-//! расхождение: ядру снимок, быстрый стакан пересинхронизируется (resync). Сопоставить кадры двух каналов по номеру
-//! нельзя: связь seqNum mbp.refresh и seqNum mbp.$levels документация не описывает.
+//! сразу запасной снимок (fall_back). Сверка по содержимому (book_rule.rs diverged; решение 422, ревью): снимок,
+//! совпавший с быстрым стаканом в первых min(venue.depth_levels, уровни быстрого канала) уровнях, подтверждает его
+//! (время кадра пары); два снимка подряд новее быстрого и не равны ему, а быстрый между ними не менялся, —
+//! расхождение: ядру снимок, быстрый пересинхронизируется (resync), возврат на быстрый — только после нового снимка
+//! req (resynced). Сопоставить кадры двух каналов по номеру нельзя: связь seqNum mbp.refresh и seqNum mbp.$levels
+//! документация не описывает.
 //! Правило «не старее отданного» (как решение 109): ядру не отдаётся стакан со временем биржи (ts кадра) меньше,
 //! чем у уже отданного; нет времени — сравнения нет.
-//! Кто вызывает: ws_conn.rs, ws.rs (снимки), fast_pair.rs, fast_conn.rs (быстрый канал), market.rs (сброс).
-//! От чего зависит: book.rs (Books, Alive), book_fast.rs (same_top), fast_log.rs, fast_resync.rs, core/types.
-//! Настройки: нет своих (venue.book_stale_ms читает вызывающий).
-//! Порядок замков: сначала pairs этого файла, потом стаканы Books (same_top) — обратного порядка нет.
+//! Порядок отдачи (решение 422, ревью; как ревью 427/429): решение «что отдать» и сама отдача (запись в память и канал
+//! ядра — действие вызывающего, без ожиданий) идут под одним замком pairs — соединения /ws и /feed не отдают ядру
+//! стаканы не по порядку.
+//! Кто вызывает: ws_conn.rs, ws.rs (снимки, через snap_out.rs), fast_pair.rs, fast_ws.rs (быстрый канал), market.rs.
+//! От чего зависит: book.rs (Books, Alive), book_fast.rs (same_top), book_rule.rs, fast_log.rs, fast_resync.rs.
+//! Настройки: нет своих.
+//! Порядок замков: pairs этого файла → стаканы Books (same_top, put) → набор канала ядра; обратного порядка нет.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -21,6 +25,7 @@ use std::sync::{Arc, Mutex};
 use crate::core::types::OrderBook;
 
 use super::book::{Alive, Books};
+use super::book_rule::{Pair, diverged, leave, older, ts};
 use super::fast_log::FastLog;
 use super::fast_resync::Resync;
 
@@ -40,19 +45,6 @@ struct Inner {
     log: FastLog,
 }
 
-/// Пара.
-#[derive(Default)]
-struct Pair {
-    /// Ядру отдаётся быстрый стакан.
-    fast: bool,
-    /// Время биржи (мс) последнего отданного ядру стакана.
-    last_ms: Option<i64>,
-    /// Наши часы (мс): последний кадр быстрого потока пары или совпадение со снимком.
-    ok_ms: i64,
-    /// Последний снимок mbp.refresh и живость его соединения.
-    spare: Option<(OrderBook, Alive)>,
-}
-
 /// Что делать с кадром снимков.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Snap {
@@ -62,11 +54,12 @@ pub enum Snap {
     Touch,
     /// Ничего: ядру отдаётся быстрый стакан, или снимок старее отданного.
     Hold,
-    /// Расхождение: вызывающий уводит пару на снимки (fall_back → fast_pair.rs back) и просит resync.
+    /// Расхождение: пара уже ушла на снимки (Back — что отдать); вызывающий просит resync.
     Diverged,
 }
 
 /// Что делать при уходе с быстрого стакана.
+#[derive(Debug)]
 pub enum Back {
     /// Пара уже на снимках.
     Nothing,
@@ -74,21 +67,6 @@ pub enum Back {
     Use(OrderBook, Alive),
     /// Запасного снимка нет или он старее отданного — стакан пары недостоверен до нового снимка.
     Invalidate,
-}
-
-/// Сейчас, unix мс.
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
-
-/// Время биржи стакана (мс). Ошибок нет.
-fn ts(b: &OrderBook) -> Option<i64> {
-    b.exchange_time.map(|t| t.timestamp_millis())
-}
-
-/// Старее ли ts уже отданного (нет одного из времён — нет). Ошибок нет.
-fn older(ts: Option<i64>, last: Option<i64>) -> bool {
-    matches!((ts, last), (Some(t), Some(l)) if t < l)
 }
 
 impl Mode {
@@ -111,7 +89,11 @@ impl Mode {
     /// последнего отданного остаётся. Ошибок нет.
     pub fn reset_all(&self) {
         let mut m = self.inner.pairs.lock().unwrap_or_else(|p| p.into_inner());
-        m.values_mut().for_each(|p| p.fast = false);
+        m.values_mut().for_each(|p| {
+            p.fast = false;
+            p.miss = None;
+            p.blocked = false;
+        });
         drop(m);
         self.inner.resync.clear();
     }
@@ -122,109 +104,124 @@ impl Mode {
     }
 
     /// Кадр снимков пары (только при enabled). Принимает: стаканы, тикер, новый снимок (None — тот же seqNum, решение
-    /// 109: сравнивается хранимый), живость соединения снимков, venue.depth_levels, чтение venue.book_stale_ms (мс;
-    /// None — не задана: расхождения по времени нет). Возвращает: Snap. Ошибок нет.
-    pub fn on_snapshot(
+    /// 109: сравнивается хранимый, в счёт «подряд» не идёт), живость соединения снимков, venue.depth_levels, действие
+    /// (выбор; при Diverged — что отдать) — выполняется под замком пар. Возвращает: выбор и итог действия. Ошибок нет.
+    pub fn on_snapshot<R>(
         &self,
         books: &Books,
         ticker: &str,
         frame: Option<&OrderBook>,
         alive: &Alive,
         depth_levels: usize,
-        stale_ms: impl FnOnce() -> Option<i64>,
-    ) -> Snap {
+        act: impl FnOnce(&Snap, Back) -> R,
+    ) -> (Snap, R) {
         let mut m = self.inner.pairs.lock().unwrap_or_else(|p| p.into_inner());
         let p = m.entry(ticker.to_string()).or_default();
         if let Some(f) = frame {
             p.spare = Some((f.clone(), alive.clone()));
         }
-        let t = match &p.spare {
-            None => return Snap::Hold,
-            Some((s, _)) => ts(s),
-        };
-        if !p.fast {
-            return match frame {
+        let spare_ts = p.spare.as_ref().map(|(s, _)| ts(s));
+        let snap = match spare_ts {
+            None => Snap::Hold,
+            Some(t) if !p.fast => match frame {
                 None => Snap::Touch,
                 Some(_) if older(t, p.last_ms) => Snap::Hold,
                 Some(_) => {
                     p.last_ms = t.or(p.last_ms);
                     Snap::Give
                 }
-            };
-        }
-        let n = depth_levels.min(self.inner.levels.load(Ordering::Relaxed) as usize);
-        let now = now_ms();
-        let same = p
-            .spare
-            .as_ref()
-            .is_some_and(|(s, _)| books.same_top(ticker, &s.bids, &s.asks, n));
-        if same {
-            p.ok_ms = now;
-            return Snap::Touch;
-        }
-        match stale_ms() {
-            Some(s) if now - p.ok_ms > s => Snap::Diverged,
-            _ => Snap::Hold,
-        }
+            },
+            Some(_) => {
+                let n = depth_levels.min(self.inner.levels.load(Ordering::Relaxed) as usize);
+                let same = p
+                    .spare
+                    .as_ref()
+                    .is_some_and(|(s, _)| books.same_top(ticker, &s.bids, &s.asks, n));
+                if same {
+                    p.miss = None;
+                    Snap::Touch
+                } else if frame.is_some() && diverged(p, false) {
+                    Snap::Diverged
+                } else {
+                    Snap::Hold
+                }
+            }
+        };
+        let back = if snap == Snap::Diverged {
+            p.blocked = true;
+            let b = leave(p);
+            let why =
+                format!("{ticker}: два снимка mbp.refresh подряд не совпали с быстрым стаканом");
+            self.inner.log.to_snap(&why);
+            b
+        } else {
+            Back::Nothing
+        };
+        let r = act(&snap, back);
+        (snap, r)
     }
 
-    /// Быстрый стакан пары изменился и синхронизирован. Принимает: тикер, время биржи последнего изменения.
-    /// Возвращает: true — отдать ядру (пара на быстром; возврат с снимков — только при известном времени, не старее
-    /// отданного). Ошибок нет.
-    pub fn on_fast(&self, ticker: &str, t: Option<i64>) -> bool {
+    /// Быстрый стакан пары изменился и синхронизирован. Принимает: тикер, время биржи последнего изменения, отдачу
+    /// ядру (выполняется под замком пар). Возвращает: Some — отдано (пара на быстром; возврат со снимков — только при
+    /// известном времени, не старее отданного и без объявленного расхождения). Ошибок нет.
+    pub fn on_fast<R>(&self, ticker: &str, t: Option<i64>, give: impl FnOnce() -> R) -> Option<R> {
         let mut m = self.inner.pairs.lock().unwrap_or_else(|p| p.into_inner());
         let p = m.entry(ticker.to_string()).or_default();
-        p.ok_ms = now_ms();
-        if p.fast {
-            p.last_ms = t.max(p.last_ms);
-            return true;
+        if !p.fast {
+            if p.blocked || t.is_none() || older(t, p.last_ms) {
+                return None;
+            }
+            p.fast = true;
+            p.miss = None;
+            self.inner.log.to_fast();
         }
-        if t.is_none() || older(t, p.last_ms) {
-            return false;
+        p.last_ms = t.max(p.last_ms);
+        p.ver += 1;
+        Some(give())
+    }
+
+    /// Пришёл снимок req быстрого канала пары (после сброса): объявленное расхождение снято. Ошибок нет.
+    pub fn resynced(&self, ticker: &str) {
+        let mut m = self.inner.pairs.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(p) = m.get_mut(ticker) {
+            p.blocked = false;
         }
-        p.fast = true;
-        p.last_ms = t;
-        drop(m);
-        self.inner.log.to_fast();
-        true
     }
 
     /// Кадр быстрого потока пары без изменений (цепочка продолжена). Возвращает: true — пара на быстром (тронуть время
     /// кадра пары). Ошибок нет.
     pub fn fast_alive(&self, ticker: &str) -> bool {
-        let mut m = self.inner.pairs.lock().unwrap_or_else(|p| p.into_inner());
-        let p = m.entry(ticker.to_string()).or_default();
-        p.ok_ms = now_ms();
-        p.fast
+        let m = self.inner.pairs.lock().unwrap_or_else(|p| p.into_inner());
+        m.get(ticker).is_some_and(|p| p.fast)
     }
 
-    /// Уход пары с быстрого стакана (разрыв, ошибка, конец сессии). Принимает: тикер, причину. Возвращает: Back.
-    /// Ошибок нет.
-    pub fn fall_back(&self, ticker: &str, why: &str) -> Back {
+    /// Уход пары с быстрого стакана (разрыв, ошибка, конец сессии). Принимает: тикер, причину, отдачу (выполняется под
+    /// замком пар). Возвращает: итог отдачи. Ошибок нет.
+    pub fn fall_back<R>(&self, ticker: &str, why: &str, act: impl FnOnce(Back) -> R) -> R {
         let mut m = self.inner.pairs.lock().unwrap_or_else(|p| p.into_inner());
-        let Some(p) = m.get_mut(ticker).filter(|p| p.fast) else {
-            return Back::Nothing;
-        };
-        p.fast = false;
-        let back = match &p.spare {
-            Some((b, a)) if !older(ts(b), p.last_ms) => {
-                p.last_ms = ts(b).or(p.last_ms);
-                Back::Use(b.clone(), a.clone())
+        let back = match m.get_mut(ticker).filter(|p| p.fast) {
+            None => Back::Nothing,
+            Some(p) => {
+                let b = leave(p);
+                self.inner.log.to_snap(&format!("{ticker}: {why}"));
+                b
             }
-            _ => Back::Invalidate,
         };
-        drop(m);
-        self.inner.log.to_snap(&format!("{ticker}: {why}"));
-        back
+        act(back)
     }
 
-    /// Соединение снимков пары оборвалось или кадр плохой: запасного снимка больше нет. Возвращает: true — пара на
-    /// быстром (её стакан не трогать). Ошибок нет.
-    pub fn snapshot_lost(&self, ticker: &str) -> bool {
+    /// Соединение снимков пары оборвалось или кадр плохой: запасного снимка больше нет; пара не на быстром — действие
+    /// «стакан недостоверен» под замком пар (быстрый канал не вернёт пару на быстрый между проверкой и снятием).
+    /// Принимает: тикер, действие. Ошибок нет.
+    pub fn snapshot_lost(&self, ticker: &str, drop_book: impl FnOnce()) {
         let mut m = self.inner.pairs.lock().unwrap_or_else(|p| p.into_inner());
-        m.get_mut(ticker).is_some_and(|p| {
+        let fast = m.get_mut(ticker).is_some_and(|p| {
             p.spare = None;
+            p.miss = None;
             p.fast
-        })
+        });
+        if !fast {
+            drop_book();
+        }
     }
 }

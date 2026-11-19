@@ -2,7 +2,8 @@
 //! Что делает: решение 422 — одна сессия WebSocket быстрого канала стакана HTX (адрес /feed): подключение, подписки
 //! market.$symbol.mbp.$levels по одной с паузой venue.ws_subs_per_sec, запросы снимка {"req"} по одному с паузой
 //! venue.fast_book_req_per_sec (официально «The limitation of single connection is 100 ms»), {"pong": n} на каждый
-//! {"ping": n}, тишина дольше venue.ws_silence_ms — обрыв; кадры GZIP. Изменения и снимки — fast_pair.rs.
+//! {"ping": n}, тишина дольше venue.ws_silence_ms — обрыв; кадры GZIP. Ответа на запрос снимка нет дольше
+//! http.timeout_ms — новый запрос (проверка на каждом ping сервера; решение 422, ревью). Изменения и снимки — fast_pair.rs.
 //! Канал 5/20 уровней при тишине рынка молчит («won't disseminate any update in such a case») — тишина пары не
 //! ошибка: свежесть тихой пары подтверждают снимки mbp.refresh (book_mode.rs) и сторож ядра (решение 213,
 //! book_print.rs); тишину всего соединения ловит venue.ws_silence_ms (ping сервера ~5 с идёт всегда).
@@ -10,7 +11,7 @@
 //! Кто вызывает: fast_ws.rs.
 //! От чего зависит: fast_pair.rs, fast_reqs.rs, mbp.rs, depth.rs (gunzip, Msg), book.rs, ctx.rs, ws.rs (End),
 //! tokio-tungstenite.
-//! Настройки: из fast_ws.rs (FastCfg); raw.book_frames [htx].
+//! Настройки: из fast_ws.rs (FastCfg; срок ответа на req — http.timeout_ms, connect_timeout); raw.book_frames [htx].
 //!
 //! Официально (https://huobiapi.github.io/docs/spot/v1/en/, «Websocket Market Data»): GZIP, ping/pong и подписка — как
 //! у /ws («Introduction», «Subscribe to Topic»); ошибки — {"status": "error", "err-code", "err-msg", "id"} (в т.ч.
@@ -97,7 +98,11 @@ pub async fn session(
                     return End::Broken(format!("отправка запроса снимка: {e}"));
                 }
             }
-            Some(s) = resync.recv() => c.on_resync(&s).await,
+            Some(s) = resync.recv() => {
+                if !c.on_resync(&s).await {
+                    return End::Done;
+                }
+            }
             _ = tokio::time::sleep_until(last_rx + cfg.silence) => {
                 return End::Broken(format!("нет кадров дольше venue.ws_silence_ms ({} мс)", cfg.silence.as_millis()));
             }
@@ -138,7 +143,14 @@ pub async fn session(
                         if let Err(e) = sink.send(Message::Text(pong.into())).await {
                             return End::Broken(format!("отправка pong: {e}"));
                         }
-                        true
+                        // Решение 422, ревью: ответа на req нет дольше http.timeout_ms — новый запрос (проверка на
+                        // ping сервера — не на каждый кадр).
+                        let mut open = true;
+                        for s in c.reqs.late(cfg.connect_timeout) {
+                            let why = format!("{s}: нет ответа на запрос снимка дольше http.timeout_ms");
+                            open = open && c.broken(&s, why).await;
+                        }
+                        open
                     }
                     Feed::Service(Msg::Subscribed(topic)) => {
                         // Шаги 1–2 процедуры: изменения уже копятся — запросить снимок того же числа уровней.

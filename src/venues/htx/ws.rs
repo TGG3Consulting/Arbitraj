@@ -111,9 +111,9 @@ pub fn invalidate(ctx: &Ctx, books: &Books, out: &mpsc::Sender<MarketEvent>, tic
 /// Решение 422: снимков пары больше нет (обрыв соединения снимков, ошибка, плохой кадр): пара на быстром стакане
 /// (book_mode.rs) — её стакан не трогается, только забыт запасной снимок; иначе — invalidate. Ошибок нет.
 pub fn invalidate_snap(ctx: &Ctx, books: &Books, out: &mpsc::Sender<MarketEvent>, ticker: &str) {
-    if !books.mode.snapshot_lost(ticker) {
-        invalidate(ctx, books, out, ticker);
-    }
+    books
+        .mode
+        .snapshot_lost(ticker, || invalidate(ctx, books, out, ticker));
 }
 
 /// Читает настройки соединения. Ошибка — текст «не задана …» или «вне пределов документации».

@@ -18,6 +18,7 @@ pub mod book;
 pub mod book_fast;
 pub mod book_mode;
 pub mod book_print;
+pub mod book_rule;
 pub mod ctx;
 pub mod delist;
 pub mod deposit_addr;

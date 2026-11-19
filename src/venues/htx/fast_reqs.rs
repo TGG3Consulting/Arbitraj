@@ -3,12 +3,14 @@
 //! канала HTX: символ стоит в очереди не больше одного раза (в очереди или ждёт ответа); у каждого — «не раньше»
 //! (после разрыва — пауза venue.ws_reconnect_pause_ms, урок 12); темп отправки — venue.fast_book_req_per_sec
 //! (fast_conn.rs; официально «The limitation of single connection is 100 ms»). Пары, чью подписку биржа не приняла,
-//! запросов не получают до конца сессии.
+//! запросов не получают до конца сессии. Ответа на отправленный запрос нет дольше срока (http.timeout_ms) — символ
+//! отдаётся вызывающему (late) на новый запрос: пара не ждёт снимок до переподключения, а копилка изменений до снимка
+//! (fast_book.rs) не растёт без предела (решение 422, ревью; срока ответа в документации нет).
 //! Кто вызывает: fast_pair.rs, fast_conn.rs.
 //! От чего зависит: tokio (Instant).
 //! Настройки: нет (паузу и темп передаёт вызывающий).
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Duration;
 
 use tokio::time::Instant;
@@ -22,6 +24,8 @@ pub struct Reqs {
     queued: HashSet<String>,
     /// Символы, чью подписку биржа не приняла (до конца сессии).
     off: HashSet<String>,
+    /// Отправленные запросы без ответа: символ → когда отправлен.
+    sent: HashMap<String, Instant>,
 }
 
 impl Reqs {
@@ -48,11 +52,13 @@ impl Reqs {
     /// Ответ на запрос пришёл (снимок или ошибка). Ошибок нет.
     pub fn answered(&mut self, symbol: &str) {
         self.queued.remove(symbol);
+        self.sent.remove(symbol);
     }
 
     /// Забывает запрос символа (в очереди и ждущий ответа) — неразборчивый кадр мог быть самим ответом. Ошибок нет.
     pub fn forget(&mut self, symbol: &str) {
         self.queued.remove(symbol);
+        self.sent.remove(symbol);
         self.queue.retain(|(_, s)| s != symbol);
     }
 
@@ -60,7 +66,25 @@ impl Reqs {
     pub fn due(&mut self) -> Option<String> {
         let now = Instant::now();
         let i = self.queue.iter().position(|(at, _)| *at <= now)?;
-        self.queue.remove(i).map(|(_, s)| s)
+        let s = self.queue.remove(i).map(|(_, s)| s)?;
+        self.sent.insert(s.clone(), now);
+        Some(s)
+    }
+
+    /// Запросы без ответа не меньше wait: убираются (символ снова можно ставить). Принимает: срок. Возвращает: символы.
+    /// Ошибок нет.
+    pub fn late(&mut self, wait: Duration) -> Vec<String> {
+        let now = Instant::now();
+        let late: Vec<String> = self
+            .sent
+            .iter()
+            .filter(|(_, at)| now.duration_since(**at) >= wait)
+            .map(|(s, _)| s.clone())
+            .collect();
+        for s in &late {
+            self.answered(s);
+        }
+        late
     }
 
     /// Подписку символа биржа не приняла: запросов больше нет. Ошибок нет.

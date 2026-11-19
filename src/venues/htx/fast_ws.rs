@@ -4,7 +4,7 @@
 //! mbp.refresh (book_mode.rs fall_back: запасной снимок ядру; его нет — стакан пары недостоверен), журнал, пауза,
 //! переподключение. Нужная настройка не задана — соединение останавливается, пары остаются на снимках (как до 422).
 //! Кто вызывает: market.rs (по задаче на соединение; config — до запуска).
-//! От чего зависит: fast_conn.rs, fast_pair.rs (back), book.rs, book_mode.rs, ws.rs (End), ctx.rs.
+//! От чего зависит: fast_conn.rs, snap_out.rs (back), book.rs, book_mode.rs, ws.rs (End), ctx.rs.
 //! Настройки: venue.ws_feed_url, venue.fast_book_levels, venue.fast_book_req_per_sec [htx] (решение 422);
 //! venue.ws_subs_per_sec, venue.ws_silence_ms, venue.ws_reconnect_pause_ms, venue.depth_levels [htx],
 //! http.timeout_ms — общие с соединением снимков (ws.rs).
@@ -27,7 +27,7 @@ use crate::storage::journal::Level;
 use super::book::Books;
 use super::ctx::Ctx;
 use super::ws::End;
-use super::{fast_conn, fast_pair, ws};
+use super::{fast_conn, snap_out, ws};
 
 /// Уровни канала, у которых есть запрос снимка (официально «REQ supports 5, 20, 150»).
 pub const FAST_LEVELS: [u64; 3] = [5, 20, 150];
@@ -44,6 +44,7 @@ pub struct FastCfg {
     pub sub_gap: Duration,
     pub req_gap: Duration,
     pub silence: Duration,
+    /// http.timeout_ms: время на подключение и срок ответа на запрос снимка (решение 422, ревью).
     pub connect_timeout: Duration,
     /// Пауза перед новым запросом снимка после разрыва или ошибки (venue.ws_reconnect_pause_ms — урок 12).
     pub pause: Duration,
@@ -79,7 +80,7 @@ pub async fn run(
         };
         let kept = BookOut::new(&out, ctx.venue(), &ctx.settings, &ctx.journal);
         for (a, _) in &assets {
-            if !fast_pair::back(&ctx, &books, &out, &kept, &a.ticker, &why) {
+            if !snap_out::back(&ctx, &books, &out, &kept, &a.ticker, &why) {
                 return;
             }
         }

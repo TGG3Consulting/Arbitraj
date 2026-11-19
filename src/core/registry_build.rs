@@ -142,7 +142,7 @@ pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
             let asset = Asset {
                 chain: None,
                 ticker: native.unwrap_or_else(|| super::registry_merge::display_ticker(&presence)),
-                contract: contract,
+                contract,
             };
             // DEX ищет пулы только монет своей подписки (core/subscribe.rs: то же условие, cex_pair) — у остальных
             // DEX-присутствия нет: «нет пула с USDT» им не ставится (решение 61).

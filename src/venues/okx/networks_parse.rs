@@ -103,7 +103,7 @@ fn network(
         asset: Asset {
             chain: None,
             ticker: ticker.to_string(),
-            contract: contract,
+            contract,
         },
         network: net.to_string(),
         deposit_enabled: num::flag(r, "canDep")?,

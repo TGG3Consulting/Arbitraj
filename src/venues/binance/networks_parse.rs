@@ -103,7 +103,7 @@ fn one(
         asset: Asset {
             chain: None,
             ticker: ticker.to_string(),
-            contract: contract,
+            contract,
         },
         network: code.to_string(),
         deposit_enabled: flag(n, "depositEnable")?,

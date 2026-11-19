@@ -83,7 +83,7 @@ pub fn parse_networks(
                 asset: Asset {
                     chain: None,
                     ticker: ticker.clone(),
-                    contract: contract,
+                    contract,
                 },
                 network,
                 deposit_enabled: flag(n, "depositEnable", &ticker)?,

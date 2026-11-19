@@ -156,7 +156,7 @@ fn one(
         asset: Asset {
             chain: None,
             ticker: t.to_string(),
-            contract: contract,
+            contract,
         },
         network: chain.to_string(),
         deposit_enabled: deposit,

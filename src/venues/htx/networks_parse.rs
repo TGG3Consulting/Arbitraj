@@ -150,7 +150,7 @@ fn network(
         asset: Asset {
             chain: None,
             ticker: t.to_string(),
-            contract: contract,
+            contract,
         },
         network: net.to_string(),
         deposit_enabled: allowed("depositStatus"),

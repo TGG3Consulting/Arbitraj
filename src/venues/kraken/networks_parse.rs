@@ -122,7 +122,7 @@ pub fn parse(
             asset: Asset {
                 chain: None,
                 ticker: ticker.clone(),
-                contract: contract,
+                contract,
             },
             network: net.clone(),
             deposit_enabled: dep_on,

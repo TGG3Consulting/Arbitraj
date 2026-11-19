@@ -125,13 +125,12 @@ impl Fast {
         let why = if lag {
             "два кадра снимков подряд новее быстрого стакана (sendTime) и не равны ему, кадров изменений между ними нет"
                 .to_string()
-        } else if let Some(l) = limit.filter(|l| quiet > Duration::from_millis(*l)) {
+        } else {
+            let l = limit.filter(|l| quiet > Duration::from_millis(*l))?;
             format!(
                 "кадров изменений и подтверждений нет {} мс (venue.book_stale_ms = {l}), а поток снимков показывает другую книгу",
                 quiet.as_millis()
             )
-        } else {
-            return None;
         };
         p.miss = false;
         p.book.reset(why.clone());

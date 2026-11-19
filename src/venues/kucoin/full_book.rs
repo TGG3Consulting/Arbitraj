@@ -47,6 +47,15 @@ pub struct Snap {
 /// Итог запроса снимка: символ и снимок или причина сбоя.
 pub type Done = (String, Result<Snap, String>);
 
+/// Сообщение очереди соединению (ревью 423, буфер).
+#[derive(Debug)]
+pub enum Event {
+    /// Запрос снимка пары уходит из очереди — с этого момента кадры изменений пары копятся (local_book.rs start).
+    Sent(String),
+    /// Итог запроса.
+    Done(Done),
+}
+
 /// Что делает: темп очереди — пауза между снимками (venue.full_book_per_sec). Ошибка — текст (не задана, 0).
 pub fn pace(ctx: &Ctx) -> Result<Duration, String> {
     let rate = ctx.int("venue.full_book_per_sec").map_err(|e| e.message)?;
@@ -66,18 +75,19 @@ pub fn ready(ctx: &Ctx) -> Result<(), String> {
 }
 
 /// Что делает: задача снимка пары: ждёт своей очереди, запрашивает, разбирает и шлёт итог в канал соединения.
-/// Соединение закрылось, пока пара ждала очереди, — запрос не отправляется. Принимает: окружение, символ, канал.
+/// Соединение закрылось, пока пара ждала очереди, — запрос не отправляется. Перед запросом — Event::Sent (ревью 423:
+/// кадры пары копятся только с этого момента). Принимает: окружение, символ, канал.
 /// Ошибок нет (сбой — в итоге).
-pub fn request(ctx: &Ctx, symbol: String, out: mpsc::Sender<Done>) {
+pub fn request(ctx: &Ctx, symbol: String, out: mpsc::Sender<Event>) {
     let ctx = ctx.clone();
     tokio::spawn(async move {
         let res = fetch(&ctx, &symbol, &out).await;
-        let _ = out.send((symbol, res)).await;
+        let _ = out.send(Event::Done((symbol, res))).await;
     });
 }
 
 /// Очередь, запрос и разбор одного снимка. Ошибка — текст причины.
-async fn fetch(ctx: &Ctx, symbol: &str, out: &mpsc::Sender<Done>) -> Result<Snap, String> {
+async fn fetch(ctx: &Ctx, symbol: &str, out: &mpsc::Sender<Event>) -> Result<Snap, String> {
     let gap = pace(ctx)?;
     {
         let mut next = NEXT.lock().await;
@@ -89,6 +99,9 @@ async fn fetch(ctx: &Ctx, symbol: &str, out: &mpsc::Sender<Done>) -> Result<Snap
         }
         *next = Some(Instant::now() + gap);
     }
+    // Ревью 423 (буфер): соединение начинает копить кадры пары до отправки запроса (сообщения канала — по порядку,
+    // Sent раньше итога).
+    let _ = out.send(Event::Sent(symbol.to_string())).await;
     let q = vec![("symbol", symbol.to_string())];
     let v = rest::signed(ctx, Method::GET, PATH, q, None, Op::Other, Pool::Spot)
         .await

@@ -2,8 +2,9 @@
 //! Что делает: решение 423 — снимок REST Get Full OrderBook для быстрого стакана пары в сессии KuCoin: просьба снимка
 //! в общей очереди (full_book.rs) — один на пару; после разрыва — не раньше venue.ws_reconnect_pause_ms; без темпа,
 //! ключей или версии ключа снимок не просится (одна запись журнала на сессию, пары на снимках); итог снимка →
-//! локальный стакан (local_book.rs snapshot: снимок + накопленные кадры) и дальше, как кадр (ws_fast.rs after).
-//! Кто вызывает: ws_fast.rs (want_full), ws_conn.rs (on_full).
+//! локальный стакан (local_book.rs snapshot: снимок + кадры, накопленные с ухода запроса — Event::Sent, ревью) и
+//! дальше, как кадр (ws_fast.rs after).
+//! Кто вызывает: ws_fast.rs (want_full), ws_conn.rs (on_queue).
 //! От чего зависит: ws_sess.rs (Sess), full_book.rs, local_book.rs, fast_log.rs, ws.rs (End).
 //! Настройки: venue.full_book_per_sec, venue.api_key_version, ключи kucoin.* (full_book.rs ready).
 //!
@@ -16,21 +17,35 @@ use crate::core::types::Asset;
 use crate::storage::journal::Level;
 
 use super::fast_log::{self, Ev};
-use super::full_book::{self, Done};
+use super::full_book::{self, Done, Event};
 use super::local_book::Applied;
 use super::ws::End;
 use super::ws_sess::Sess;
 
 impl Sess<'_> {
+    /// Сообщение очереди снимков: запрос ушёл — кадры пары копятся с пустого буфера (ревью, буфер); итог — on_full.
+    /// Возвращает: как on_incr. Ошибок нет.
+    pub async fn on_queue(&mut self, ev: Event) -> Option<End> {
+        match ev {
+            Event::Sent(symbol) => {
+                if let Some(f) = self.fast.as_mut() {
+                    f.local.entry(symbol).or_default().start();
+                }
+                None
+            }
+            Event::Done(d) => self.on_full(d).await,
+        }
+    }
+
     /// Итог снимка REST из очереди. Возвращает: как on_incr. Ошибок нет.
-    pub async fn on_full(&mut self, (symbol, res): Done) -> Option<End> {
+    async fn on_full(&mut self, (symbol, res): Done) -> Option<End> {
         let f = self.fast.as_mut()?;
         f.pending.remove(&symbol);
         let asset = self.by_symbol.get(symbol.as_str()).copied()?;
         let lb = f.local.entry(symbol.clone()).or_default();
         let applied = match res {
             Ok(s) => lb.snapshot(s.seq, &s.bids, &s.asks),
-            Err(why) => lb.reset(format!("снимок REST Full OrderBook не получен: {why}")),
+            Err(why) => lb.fail(format!("снимок REST Full OrderBook не получен: {why}")),
         };
         if applied == Applied::Changed {
             fast_log::note(self.ctx, Ev::Resync, &asset.ticker, "снимок REST применён");
@@ -52,9 +67,6 @@ impl Sess<'_> {
             full_book::ready(self.ctx)
         };
         if early || ready.is_err() {
-            if let Some(lb) = f.local.get_mut(symbol) {
-                lb.clear_buffer();
-            }
             if let Err(why) = ready {
                 f.not_before.insert(symbol.to_string(), now + f.pause);
                 if !std::mem::replace(&mut f.warned, true) {

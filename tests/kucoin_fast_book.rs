@@ -3,7 +3,7 @@
 //! - правила калибровки local_book.rs — на примере официальной документации Orderbook - Increment
 //!   (https://www.kucoin.com/docs-new/3470068w0: снимок sequence 16, кадр sequenceStart 15 — sequenceEnd 19, итог
 //!   asks 3988.62×8, 3988.60×47, 3988.59×3; bids 3988.51×56, 3988.50×44, 3988.49×100, 3988.48×10), и с кадром до снимка
-//!   (кэш и проигрывание — шаги 1–3 процедуры);
+//!   (кэш и проигрывание — шаги 1–3 процедуры); ревью 423 (буфер): до ухода запроса снимка кадры не копятся;
 //! - разбор кадров /market/level2 (incr.rs) и непрерывность номеров — на живой записи 04.11
 //!   (tests/data/cex_samples_2026_11_04/kucoin_ws.jsonl, CAKE-USDT, sequence 783409212–783409229);
 //! - разрыв: тот же поток без одного живого кадра — Gap;
@@ -105,10 +105,24 @@ fn official_calibration_example() {
 fn official_example_cached_before_snapshot() {
     let (bids, asks, u) = doc_example();
     let mut b = LocalBook::default();
+    // Ревью 423 (буфер): кадры копятся с ухода запроса снимка из очереди.
+    b.start();
     assert_eq!(b.apply(u), Applied::Waiting);
     assert!(!b.synced());
     assert_eq!(b.snapshot(16, &bids, &asks), Applied::Changed);
     doc_result(&b);
+}
+
+/// Ревью 423 (буфер): пока запрос снимка ждёт очереди (start не было), кадр примера документации не копится — после
+/// снимка стакан равен снимку (номер 16), буфер не растёт.
+#[test]
+fn frames_before_request_left_queue_are_not_buffered() {
+    let (bids, asks, u) = doc_example();
+    let mut b = LocalBook::default();
+    assert_eq!(b.apply(u), Applied::Waiting);
+    assert_eq!(b.snapshot(16, &bids, &asks), Applied::Changed);
+    assert_eq!(b.version(), Some(16));
+    assert_eq!(b.top(10), (bids, asks.into_iter().rev().collect()));
 }
 
 /// Живые кадры сообщений (type = message) записи по порядку.

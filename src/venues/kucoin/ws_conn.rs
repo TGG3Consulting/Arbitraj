@@ -3,7 +3,7 @@
 //! символов с паузой, свой ping раз в pingInterval токена, тишина дольше pingInterval + pingTimeout — обрыв; кадры —
 //! ws_sess.rs (снимки стакана → память и ядру; отказ подписки или неразборчивый снимок → стакан пары недостоверен).
 //! Решение 423: при быстром стакане (ws.rs Cfg.fast) у каждой пачки вторая тема — изменения /market/level2 (id
-//! sub{N}f); итоги снимков REST Full OrderBook приходят в канал сессии (ws_full.rs on_full); переподписка сторожем —
+//! sub{N}f); итоги снимков REST Full OrderBook приходят в канал сессии (ws_full.rs on_queue); переподписка сторожем —
 //! обе темы пачки, пары пачки на снимках до новой синхронизации (ws_fast.rs resubscribed).
 //! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
 //! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
@@ -146,8 +146,8 @@ pub async fn session(
     let mut ping = tokio::time::interval_at(Instant::now() + token.ping, token.ping);
     let silence = token.ping + token.ping_timeout;
     let mut last_rx = Instant::now();
-    // Решение 423: итоги снимков REST быстрого стакана — канал на все пары соединения.
-    let (snap_tx, mut snap_rx) = mpsc::channel(assets.len().max(1));
+    // Решение 423: сообщения очереди снимков REST (уход запроса и итог — по одному на пару в пути).
+    let (snap_tx, mut snap_rx) = mpsc::channel(assets.len().max(1) * 2);
     let fast_on = cfg.fast.is_some();
     let mut s = Sess {
         ctx,
@@ -198,8 +198,8 @@ pub async fn session(
                     }
                 }
             },
-            Some(done) = snap_rx.recv(), if fast_on => {
-                if let Some(end) = s.on_full(done).await {
+            Some(ev) = snap_rx.recv(), if fast_on => {
+                if let Some(end) = s.on_queue(ev).await {
                     return end;
                 }
             }

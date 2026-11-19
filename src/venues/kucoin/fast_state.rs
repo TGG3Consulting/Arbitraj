@@ -3,7 +3,7 @@
 //! снимками, какие пары сейчас отдаются ядру из быстрого стакана, снимки REST в пути, паузы после разрыва, последний
 //! кадр снимков пары (запас), канал итогов снимков REST.
 //! Кто вызывает: ws_conn.rs (создаёт), ws_sess.rs, ws_fast.rs, ws_full.rs.
-//! От чего зависит: local_book.rs, fast_check.rs, full_book.rs (Done), core/types.
+//! От чего зависит: local_book.rs, fast_check.rs, full_book.rs (Event), core/types.
 //! Настройки: пауза — venue.ws_reconnect_pause_ms (ws.rs Cfg.fast).
 
 use std::collections::{HashMap, HashSet};
@@ -15,7 +15,7 @@ use tokio::time::Instant;
 use crate::core::types::OrderBook;
 
 use super::fast_check::Check;
-use super::full_book::Done;
+use super::full_book::Event;
 use super::local_book::LocalBook;
 
 /// Решение 423: быстрый стакан соединения.
@@ -30,7 +30,7 @@ pub struct Fast {
     pub not_before: HashMap<String, Instant>,
     /// Последний кадр снимков пары — запас на случай сбоя быстрого стакана.
     pub snap: HashMap<String, OrderBook>,
-    pub tx: mpsc::Sender<Done>,
+    pub tx: mpsc::Sender<Event>,
     /// Пауза повторной пересинхронизации (venue.ws_reconnect_pause_ms).
     pub pause: Duration,
     /// Причина «снимок не просится» уже записана в этой сессии.
@@ -39,7 +39,7 @@ pub struct Fast {
 
 impl Fast {
     /// Новый быстрый стакан соединения. Принимает: канал итогов снимков, паузу. Ошибок нет.
-    pub fn new(tx: mpsc::Sender<Done>, pause: Duration) -> Self {
+    pub fn new(tx: mpsc::Sender<Event>, pause: Duration) -> Self {
         Self {
             local: HashMap::new(),
             check: HashMap::new(),

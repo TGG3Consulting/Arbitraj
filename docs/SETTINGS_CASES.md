@@ -3828,6 +3828,30 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** в описании не названы.
 - **Статус:** в релизе 141619bc.
 
+### `venue.arbitrum_contract_chain`
+
+- **Задача / решение:** шаг 3 плана двух сетей, решение 431 (docs/notes/arbitrum/step3-plan.md).
+- **Появилась:** 2026-11-19, ветка t215/arb-step3-cex-nets (feat/arbitrum).
+- **Кейс:** у CoinEx адрес контракта есть только в справочнике /v2/assets/info, а имя цепи там своё (решение 170: для BSC — venue.bsc_contract_chain). Чтобы CoinEx отдавал адрес контракта и у сети Arbitrum (venue.arbitrum_network), нужно имя этой цепи в /v2/assets/info.
+- **Где задаётся:** «Настройки», группа «Площадки» и карточка площадки CoinEx; область — по площадке; каталог src/settings/catalog/coinex.rs (строка после venue.bsc_contract_chain).
+- **Что ставить:** *метод:* значение chain_info.chain_name сети Arbitrum One из живого ответа GET /v2/assets/info (записанного ответа нет — не угадывать); пока нет площадки DEX Arbitrum — не задавать.
+- **Если не задана:** необязательная. src/venues/coinex/wallet.rs names: имя цепи не читается — у записи сети Arbitrum CoinEx адреса контракта нет (на «Монетах» — «сеть есть, адреса нет»); BSC — как раньше.
+- **Влияет на торговлю:** да — без неё монеты CoinEx в сети Arbitrum не сопоставляются с DEX Arbitrum.
+- **Связанные ключи:** venue.arbitrum_network, venue.bsc_contract_chain.
+- **Статус:** ещё не в релизе (ветка feat/arbitrum).
+
+### `venue.arbitrum_network`
+
+- **Задача / решение:** шаг 3 плана двух сетей, решение 431 (docs/notes/arbitrum/step3-plan.md).
+- **Появилась:** 2026-11-19, ветка t215/arb-step3-cex-nets (feat/arbitrum).
+- **Кейс:** решение Тиграна 19.11.2026 — один бот, две сети (BSC и Arbitrum). У всех 14 бирж в справочнике сетей есть адрес контракта по каждой сети, а адаптер оставлял его только у сети venue.bsc_network. Чтобы биржа отдала адрес и у сети Arbitrum, нужно знать, как она эту сеть называет (у каждой биржи по-своему: BingX `ARBITRUM`, KuCoin `arbitrum`, Gate `ARBEVM` — записанные ответы tests/data).
+- **Где задаётся:** «Настройки», группа «Площадки» и карточка биржи; область — по площадке; каталог src/settings/catalog/base.rs (строка после venue.bsc_network).
+- **Что ставить:** BingX `ARBITRUM`, KuCoin `arbitrum`, Gate `ARBEVM` (по записанным ответам API); остальным биржам — *метод:* по живому ответу справочника сетей биржи (то же поле, что у venue.bsc_network); пока нет площадки DEX Arbitrum — можно не задавать.
+- **Если не задана:** необязательная. src/gateway/own_nets.rs read: имя не входит в свои сети — адаптер не ставит адрес у сети Arbitrum (как раньше); core/net_chain.rs: записи Arbitrum к сети ядра не привязываются; core/transfers.rs own_name: у биржи нет имени сети Arbitrum — перевода по Arbitrum нет (причина «нет имени сети …»). Задана, но площадки DEX сети arbitrum нет — core/net_chain.rs снимает адрес у записи Arbitrum: справочник BSC прежний.
+- **Влияет на торговлю:** да — без неё монеты биржи в сети Arbitrum не торгуются.
+- **Связанные ключи:** venue.bsc_network, dex.chain, dex.default_chain, venue.arbitrum_contract_chain (CoinEx).
+- **Статус:** ещё не в релизе (ветка feat/arbitrum).
+
 ### `venue.book_events_keep`
 
 - **Задача / решение:** t151, решение 324.

@@ -1521,6 +1521,33 @@ rationale = "Глубокий снимок для окна умеренным в
 prefill = { kind = "Venue", id = "binance" }
 
 [[section.rec]]
+name = "venue.sbe_ws_url"
+area = "площадка Binance"
+unit = "URL"
+value = "wss://stream-sbe.binance.com:9443"
+source = "sbe-market-data-streams.md «General Information»: stream-sbe.binance.com или :9443; нужен ключ Ed25519"
+rationale = "Решение 425: быстрый стакан SBE (20 мс), JSON остаётся страховкой. Нужен секрет binance.sbe_api_key; venue.ws_silence_ms у Binance — больше 20000 (ping раз в 20 с), например 60000."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.sbe_snapshot_per_sec"
+area = "площадка Binance"
+unit = "в секунду"
+method = "Темп × вес снимка × 60 — малая доля REQUEST_WEIGHT по IP (rateLimits живого exchangeInfo), например 2 при limit 1000 (6000 веса в минуту) — решает Тигран."
+source = "rest-api «Order book»: вес по limit; REQUEST_WEIGHT — rateLimits живого exchangeInfo"
+rationale = "Снимки всех пар — одной очередью; решает Тигран."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.sbe_snapshot_limit"
+area = "площадка Binance"
+unit = "уровней"
+value = "1000"
+source = "rest-api «Order book»: limit до 5000, вес 5/25/50/250 по limit"
+rationale = "Снимок глубже стакана ядра (20 уровней) с умеренным весом 50."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
 name = "venue.deposit_dust_as_min"
 area = "площадка Binance"
 unit = "да/нет"

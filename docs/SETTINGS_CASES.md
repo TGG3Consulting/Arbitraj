@@ -486,6 +486,9 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `venue.quiet_confirm_max_per_s` * | —, р. 213 | Gate: *метод:* не меньше числа тихих пар Gate (журнал core.feed_watch) × 1000 / venue.quiet_confirm_min_ms с … | необязательная: Не задана — подтверждения нет (журнал) | в релизе 141619bc |
 | `venue.quiet_confirm_min_ms` * | —, р. 213 | Gate: *метод:* больше venue.book_stale_ms × venue.pair_dead_mult и такое, чтобы venue.quiet_confirm_max_per_s … | необязательная: Не задана — подтверждения нет (журнал) | в релизе 141619bc |
 | `venue.rate_limit_pause_ms` | —, р. 135 | площадка BingX: `10000` — Решение 244: пауза после HTTP 429 — только эндпоинта, после 418 — всей биржи … | без .optional(): ошибка «не задана»: Не задана — паузы нет (в тексте ошибки сказано) | в релизе 141619bc |
+| `venue.sbe_snapshot_limit` | t209, р. 425 | `1000` — снимок глубже стакана ядра (20) с умеренным весом 50 | необязательная: не задана — быстрого стакана SBE нет, стакан JSON, как раньше | ещё не в релизе (ветка t209/binance-sbe-book) |
+| `venue.sbe_snapshot_per_sec` | t209, р. 425 | *метод:* темп × вес снимка × 60 — малая доля REQUEST_WEIGHT по IP, например `2` (при limit 1000 — 6000 веса в минуту; сверить с rateLimits живого exchangeInfo) — решает Тигран | необязательная: не задана — быстрого стакана SBE нет, стакан JSON, как раньше | ещё не в релизе (ветка t209/binance-sbe-book) |
+| `venue.sbe_ws_url` | t209, р. 425 | `wss://stream-sbe.binance.com:9443` — адрес из документации | необязательная: не задана — быстрого стакана SBE нет, стакан JSON, как раньше (запись venue.book_fast) | ещё не в релизе (ветка t209/binance-sbe-book) |
 | `venue.status_confirm_polls` | —, р. 112 | совета нет, решает Тигран | необязательная: Не задано, 0 или 1 — сразу, как раньше | в релизе 141619bc |
 | `venue.trades_interval` | —, р. 125 | `10ms` — Ближе к сырому потоку: кадр за 10 мс, в нём каждая сделка отдельно с tradeId. | необязательная: Не задан — лента сделок MEXC в окна не пишется (стакан пишется) | в релизе 141619bc |
 | `venue.transfer_poll_ms` | —, р. 161 | `1000` — Опрос итога перевода без упора в лимит. | без .optional(): ошибка «не задана»: Не задана — перевод не отправляется | в релизе 141619bc |
@@ -4568,6 +4571,42 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** да — пауза площадки после 429 — ордеров нет (*/reply.rs).
 - **Связанные ключи:** в описании не названы.
 - **Статус:** в релизе 141619bc.
+
+### `venue.sbe_snapshot_limit`
+
+- **Задача / решение:** t209, решение 425.
+- **Появилась:** 2026-11-19, ветка t209/binance-sbe-book.
+- **Кейс:** DECISIONS 425 (2026-11-19, Тигран 20.11: «стакан для торговли брать из самого быстрого потока биржи; торговлю не останавливать из-за пропусков — держать параллельно нынешний поток снимков как страховку»): у Binance JSON-стакан не быстрее 100 мс; быстрее — только SBE (stream-sbe.binance.com): изменения <symbol>@depth раз в 20 мс, нужен ключ Ed25519. Локальный стакан по «How to manage a local order book correctly» требует снимок REST GET /api/v3/depth. Глубина снимка задаёт вес запроса (5 / 25 / 50 / 250).
+- **Где задаётся:** «Настройки», группа «Площадки» и «Площадки» → карточка Binance; область — по площадке; каталог src/settings/catalog/binance.rs:27.
+- **Что ставить:** `1000` — снимок глубже стакана ядра (venue.depth_levels = 20) с умеренным весом 50 (docs/FIRST_RUN.md)
+- **Если не задана:** необязательная (src/settings/schema.rs:137-139). По коду: venues/binance/sbe_run.rs config — любая из venue.sbe_ws_url / venue.sbe_snapshot_per_sec / venue.sbe_snapshot_limit не задана (или нет ключа binance.sbe_api_key) — соединение SBE не запускается, арбитр выключен (fast.rs Fast::default), стакан JSON, как раньше; в журнале одна строка venue.book_fast «быстрый стакан SBE не включён — <причина>» на подписку. Больше 5000 — та же причина в журнале.
+- **Влияет на торговлю:** да — данные: какой стакан Binance видит ядро (быстрый SBE 20 мс или JSON 100 мс).
+- **Связанные ключи:** venue.sbe_snapshot_per_sec, venue.sbe_ws_url, venue.depth_levels.
+- **Статус:** ещё не в релизе (ветка t209/binance-sbe-book).
+
+### `venue.sbe_snapshot_per_sec`
+
+- **Задача / решение:** t209, решение 425.
+- **Появилась:** 2026-11-19, ветка t209/binance-sbe-book.
+- **Кейс:** DECISIONS 425 (2026-11-19, Тигран 20.11: «стакан для торговли брать из самого быстрого потока биржи; торговлю не останавливать из-за пропусков — держать параллельно нынешний поток снимков как страховку»): у Binance JSON-стакан не быстрее 100 мс; быстрее — только SBE (stream-sbe.binance.com): изменения <symbol>@depth раз в 20 мс, нужен ключ Ed25519. Локальный стакан по «How to manage a local order book correctly» требует снимок REST GET /api/v3/depth. Снимки всех пар (старт, пересинхронизация после обрыва) идут одной очередью — без залпа по весу IP.
+- **Где задаётся:** «Настройки», группа «Площадки» и «Площадки» → карточка Binance; область — по площадке; каталог src/settings/catalog/binance.rs:26.
+- **Что ставить:** *метод:* темп × вес снимка × 60 — малая доля REQUEST_WEIGHT по IP (rateLimits живого exchangeInfo), например `2` при limit 1000 (6000 веса в минуту) — решает Тигран (docs/FIRST_RUN.md)
+- **Если не задана:** необязательная (src/settings/schema.rs:137-139). По коду: venues/binance/sbe_run.rs config — любая из venue.sbe_ws_url / venue.sbe_snapshot_per_sec / venue.sbe_snapshot_limit не задана (или нет ключа binance.sbe_api_key) — соединение SBE не запускается, арбитр выключен (fast.rs Fast::default), стакан JSON, как раньше; в журнале одна строка venue.book_fast «быстрый стакан SBE не включён — <причина>» на подписку. 0 — та же причина в журнале.
+- **Влияет на торговлю:** да — данные: какой стакан Binance видит ядро (быстрый SBE 20 мс или JSON 100 мс).
+- **Связанные ключи:** venue.sbe_snapshot_limit, venue.sbe_ws_url, venue.ws_reconnect_pause_ms (пауза перед новым снимком после пропуска).
+- **Статус:** ещё не в релизе (ветка t209/binance-sbe-book).
+
+### `venue.sbe_ws_url`
+
+- **Задача / решение:** t209, решение 425.
+- **Появилась:** 2026-11-19, ветка t209/binance-sbe-book.
+- **Кейс:** DECISIONS 425 (2026-11-19, Тигран 20.11: «стакан для торговли брать из самого быстрого потока биржи; торговлю не останавливать из-за пропусков — держать параллельно нынешний поток снимков как страховку»): у Binance JSON-стакан не быстрее 100 мс; быстрее — только SBE (stream-sbe.binance.com): изменения <symbol>@depth раз в 20 мс, нужен ключ Ed25519. Локальный стакан по «How to manage a local order book correctly» требует снимок REST GET /api/v3/depth. Адрес потоков SBE.
+- **Где задаётся:** «Настройки», группа «Площадки» и «Площадки» → карточка Binance; область — по площадке; каталог src/settings/catalog/binance.rs:25.
+- **Что ставить:** `wss://stream-sbe.binance.com:9443` — адрес из sbe-market-data-streams.md (docs/FIRST_RUN.md)
+- **Если не задана:** необязательная (src/settings/schema.rs:137-139). По коду: venues/binance/sbe_run.rs config — любая из venue.sbe_ws_url / venue.sbe_snapshot_per_sec / venue.sbe_snapshot_limit не задана (или нет ключа binance.sbe_api_key) — соединение SBE не запускается, арбитр выключен (fast.rs Fast::default), стакан JSON, как раньше; в журнале одна строка venue.book_fast «быстрый стакан SBE не включён — <причина>» на подписку. Кнопка «Проверить подключение» Binance пишет «SBE (быстрый стакан): venue.sbe_ws_url … не задана» (sbe_check.rs).
+- **Влияет на торговлю:** да — данные: какой стакан Binance видит ядро (быстрый SBE 20 мс или JSON 100 мс).
+- **Связанные ключи:** venue.sbe_snapshot_per_sec, venue.sbe_snapshot_limit, секрет binance.sbe_api_key, venue.ws_silence_ms, venue.ws_subs_per_sec, venue.ws_streams_per_msg.
+- **Статус:** ещё не в релизе (ветка t209/binance-sbe-book).
 
 ### `venue.status_confirm_polls`
 

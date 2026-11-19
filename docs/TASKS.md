@@ -13,6 +13,22 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 425 (19.11.2026, задача t209, ветка t209/binance-sbe-book) — Binance: быстрый стакан SBE.** Нужно от Тиграна:
+  1) Создать на Binance ключ API типа **Ed25519** по официальной инструкции «How to Generate an Ed25519 Key Pair to Send
+     API Requests on Binance» (https://www.binance.com/en/support/faq/6b9a63f1e3384cf48a2eedb82767a69a): пара ключей —
+     официальным Asymmetric Key Generator (https://developers.binance.com/en/docs/sdks-tools/tools/asymmetric-key-generator,
+     Ed25519 по умолчанию), затем Profile → API Management → Create API → Self-generated → вставить публичный ключ →
+     2FA. Прав не нужно (sbe-market-data-streams.md: «No extra API key permissions are necessary»); белый список IP — IP
+     сервера бота. В бот вводится только API Key созданного ключа → секрет `binance.sbe_api_key` (экран «Площадки» →
+     Binance); приватный ключ Ed25519 боту не нужен (подписи у потоков SBE нет) — его хранить у себя.
+  2) Задать venue.sbe_ws_url, venue.sbe_snapshot_per_sec, venue.sbe_snapshot_limit (советы — docs/FIRST_RUN.md);
+     проверить, что venue.ws_silence_ms у Binance больше 20000; нажать «Проверить подключение» (строка «SBE …»).
+  3) Применяется при следующей подписке на рынок (смена справочника пар или перезапуск) — так задумано?
+  Открытые вопросы документации (записать живые кадры и сверить, docs/notes/binance-sbe-book-2026-11-19.md):
+  (а) двоичный кадр /stream — ровно messageHeader + сообщение (без обёртки)? (б) подключение к /stream без streams= у
+  SBE принимается? (в) идут ли кадры изменений у пары без изменений книги? (г) записать живые кадры SBE (raw.book_frames
+  [binance] = да — пишутся hex) и написать тесты декодера sbe.rs и локального стакана на них.
+
 - **Решение 417 (19.11.2026, задача t201, ветка t201/relay-reserve от 274801a0) — «Перегон»: продажа здесь при итоге ≥ 0 без поиска целей, оценка цели с запасом на движение цены за перевод; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Вопросы Тиграну:
   1) «Цена здесь» для доли закрытия разницы (profit.closure_share) у перегона — средняя котировки продажи здесь (у плана входа это средняя покупки на A). Подтвердить или назвать другую цену (например, цену покупки сделки).
   2) «Продать и перегнать» (кнопка, manual_relay.rs) оценивает цели без запаса, как раньше (relay_value::value_at). Нужен ли запас и там?

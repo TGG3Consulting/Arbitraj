@@ -14,6 +14,7 @@
 | …/websocket-api/request-security, …/websocket-api/user-data-stream-requests | Подпись WebSocket API (параметры по алфавиту), userDataStream.subscribe.signature |
 | …/user-data-stream | События аккаунта: balanceUpdate, outboundAccountPosition, executionReport, eventStreamTerminated |
 | …/filters, …/enums, …/errors, …/faqs/commission_faq | Фильтры пар, статусы, коды ошибок, расчёт комиссии и скидки BNB |
+| github.com/binance/binance-spot-api-docs: sbe-market-data-streams.md, sbe/schemas/stream_1_0.xml, faqs/sbe_faq.md | Решение 425: потоки SBE (stream-sbe.binance.com, ключ Ed25519), схема, разбор SBE |
 | https://developers.binance.com/docs/wallet/ (capital, account, asset), официальный SDK binance-connector-rust | getall, withdraw/apply, withdraw/history, deposit/address, deposit/hisrec, apiRestrictions, get-funding-asset, asset/transfer, wallet/balance |
 
 ## Файлы
@@ -21,7 +22,7 @@
 | Файл | Что делает |
 | --- | --- |
 | `mod.rs` | Реализация контракта `Venue` |
-| `ctx.rs` | Окружение: настройки, секреты `binance.api_key` / `binance.api_secret`, HTTP, журнал; символ `CAKEUSDT` |
+| `ctx.rs` | Окружение: настройки, секреты `binance.api_key` / `binance.api_secret` / `binance.sbe_api_key` (решение 425), HTTP, журнал; символ `CAKEUSDT` |
 | `sign.rs` | Подпись HMAC SHA256 hex: строка REST (порядок отправки), строка WebSocket API (по алфавиту) |
 | `rest.rs`, `reply.rs`, `errors.rs` | REST: X-MBX-APIKEY, recvWindow ≤ 60000, резервный адрес только при сбое сети; 418/429/−1003 — пауза по Retry-After или `venue.rate_limit_pause_ms` отдельно для /api и /sapi; коды → единые. Отказы вывода (решение 253, дополнение t82): адрес −4007/−4008/−4012/−4033…−4036 → InvalidAddress; аккаунт −4004/−4006/−4013…−4017/−4039/−4046 → AccountRestricted; дополнение t85: −4023 (суточный лимит) → WithdrawLimit |
 | `num.rs` | Числа без потери точности |
@@ -43,6 +44,12 @@
 | `user_stream.rs`, `user_stream_conn.rs`, `account_update.rs` | Поток аккаунта WebSocket API (`userDataStream.subscribe.signature`), balanceUpdate → MarketEvent::Balance |
 | `withdraw_ready.rs` | Решение 253: остатки монет из outboundAccountPosition, ожидание доступности вывода (контракт withdraw_ready: событие, по сроку — GET /api/v3/account), своя покупка монеты — окно «ещё не доступна для вывода» (−4026/−4024 → WithdrawLocked в transfers.rs по venue.withdraw_unready_window_ms). Дополнение t89: отметка — у любой своей сделки (покупки и продажи) по монете и котируемой монете (USDT выручки), событие остатков — только после своего ордера, контракт since_own_trade (пауза ядра) |
 | `tap.rs`, `tap_decode.rs`, `feed.rs` | Окна (решение 125): кадры стакана, `<symbol>@trade`, `<symbol>@depth` + снимок `/api/v3/depth` при разрыве U/u |
+| `sbe.rs` | Решение 425: разбор двоичного кадра SBE по схеме stream_1_0.xml (schemaId 1, версия 0, semanticVersion 5.2) — только DepthDiffStreamEvent (templateId 10003), с проверками длины; смещения сверены с кодом официального генератора SbeTool 1.35.6 |
+| `sbe_book.rs` | Решение 425: локальный стакан пары по «How to manage a local order book correctly» (копить с начала запроса снимка, lastUpdateId < U — снимок заново, u ≤ lastUpdateId — отбросить, U > номер + 1 — пропуск) |
+| `sbe_snap.rs` | Решение 425: очередь снимков GET /api/v3/depth на адаптер (venue.sbe_snapshot_per_sec, limit venue.sbe_snapshot_limit; Start перед запросом) |
+| `sbe_run.rs`, `sbe_conn.rs`, `sbe_pair.rs` | Решение 425: соединение SBE на пачку монет рядом с JSON (адрес venue.sbe_ws_url, ключ Ed25519 binance.sbe_api_key в заголовке X-MBX-APIKEY), подписка `<symbol>@depth` (20 мс), пары → локальные стаканы → ядру; обрыв, serverShutdown, неразборчивый кадр — переподключение, пары на страховку |
+| `fast.rs`, `fast_sbe.rs` | Решение 425: арбитр стакана пары — быстрый SBE, пока синхронизирован; JSON depth<N>@100ms — страховка (кадр запоминается и сверяется по содержимому; совпал — время кадра пары и живость по JSON); пропуск/обрыв — сразу последний кадр JSON (если получен позже последнего быстрого) или «недостоверно» до следующего; счётчики — строка журнала venue.book_fast |
+| `sbe_check.rs` | Решение 425: часть «Проверить подключение» — подключение к stream-sbe с ключом Ed25519: «Подключено» или код и тело отказа; ключ не введён — стакан JSON, как раньше |
 | `price_band.rs` | Решение 392 (t180): PERCENT_PRICE_BY_SIDE и PERCENT_PRICE (filters, свой avgPriceMins) × опорная цена фильтра: GET /api/v3/referencePrice, её нет — GET /api/v3/avgPrice (только если mins = avgPriceMins), avgPriceMins = 0 — GET /api/v3/ticker/price; итог — строже из границ (контракт price_band) |
 
 ## Что важно знать

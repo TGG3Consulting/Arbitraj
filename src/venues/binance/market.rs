@@ -1,8 +1,9 @@
 //! Файл: venues/binance/market.rs
 //! Что делает: подписка на стаканы Binance по списку монет: делит монеты на соединения (venue.ws_symbols_per_conn на
 //! соединение, не больше 1024 потоков по документации) и запускает задачу на соединение; ядру — событие SpotPairs.
+//! Решение 425: на каждую пачку — ещё соединение SBE (sbe_run.rs) и общий арбитр стакана (fast.rs), если SBE настроен.
 //! Кто вызывает: subs.rs (подписка из контракта и пересподписка при смене справочника пар).
-//! От чего зависит: ws.rs, symbols.rs, pairs.rs, book.rs, ctx.rs.
+//! От чего зависит: ws.rs, sbe_run.rs, symbols.rs, pairs.rs, book.rs, ctx.rs.
 //! Настройки: venue.ws_symbols_per_conn (и всё, что читает ws.rs::config — проверяется до запуска соединений).
 //!
 //! Официально (web-socket-streams «WebSocket Limits»): «A single connection can listen to a maximum of 1024 streams»;
@@ -61,12 +62,17 @@ pub async fn subscribe(
     books.feed.clear();
     let mut tasks = Vec::new();
     for (i, chunk) in snap.books.chunks(per_conn as usize).enumerate() {
+        let name = format!("market-{}", i + 1);
+        // Решение 425: рядом с соединением JSON — соединение SBE той же пачки (быстрый стакан), если оно настроено.
+        let (fast, sbe) = super::sbe_run::start(ctx, &name, chunk, books, &out, i == 0).await;
+        tasks.extend(sbe);
         tasks.push(tokio::spawn(ws::run(
             ctx.clone(),
-            format!("market-{}", i + 1),
+            name,
             chunk.to_vec(),
             books.clone(),
             out.clone(),
+            fast,
         )));
     }
     let syms: Vec<String> = snap.books.iter().map(|(_, s)| s.clone()).collect();

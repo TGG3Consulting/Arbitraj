@@ -5,7 +5,8 @@
 //! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
 //! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, book.rs, ctx.rs, gateway/tap.rs, gateway/feed_reg.rs, tokio-tungstenite.
+//! От чего зависит: depth.rs, book.rs, ctx.rs, fast.rs (решение 425), gateway/tap.rs, gateway/feed_reg.rs,
+//! tokio-tungstenite.
 //! Настройки: из ws.rs (Cfg); raw.book_frames [binance] — писать ли кадры стаканов в сырой журнал.
 //!
 //! Решение 109: снимок с тем же lastUpdateId ядру не отдаётся и в Decimal не разбирается — частичный стакан приходит
@@ -19,6 +20,9 @@
 //! соединении (Live Subscribing/Unsubscribing to streams), соседи не трогаются; оба сообщения — в общую очередь
 //! отправки с темпом venue.ws_subs_per_sec (меньше «5 incoming messages per second», WebSocket Limits), не залпом;
 //! «переподключить соединение» — сессия заканчивается, ws.rs подключается заново с теми же парами.
+//! Решение 425: если у пачки есть соединение SBE (fast.rs), кадр пары, которая сейчас на быстром стакане, ядру не
+//! отдаётся — только запоминается как страховка и сверяется по содержимому; отдача кадра — под замком пары арбитра;
+//! переподписка пары сторожем — ещё и пересинхронизация её быстрого стакана.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::Ordering;
@@ -46,6 +50,8 @@ use crate::gateway::feed_reg::ConnHandle;
 pub struct Watch<'a> {
     pub feed: &'a ConnHandle,
     pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
+    /// Решение 425: арбитр быстрого стакана SBE пачки (выключен — всё как раньше).
+    pub fast: &'a super::fast::Fast,
 }
 
 /// Имя потока частичного стакана: «<symbol>@depth<N>[@100ms]», символ строчными (официально). Ошибок нет.
@@ -127,6 +133,7 @@ pub async fn session(
                     // Первый снимок после переподписки — ядру, даже с тем же lastUpdateId (решение 109).
                     last.remove(&sym.to_lowercase());
                     w.feed.resubscribed(&ticker);
+                    w.fast.resync(&ticker);
                 }
             },
             _ = tokio::time::sleep_until(last_rx + cfg.silence) => {
@@ -161,6 +168,11 @@ pub async fn session(
                         let Some(asset) = by_symbol.get(&symbol) else { continue };
                         w.feed.frame(&asset.ticker);
                         ctx.taps.push(ID, &asset.ticker, TapStream::Book, name, rx_ns, || TapData::Text(t.to_string()));
+                        // Решение 425: пара на быстром стакане SBE — кадр только страховка (fast.rs held).
+                        if w.fast.held(&asset.ticker, &t, book.last_update_id, rx_ns, &alive) {
+                            last.remove(&symbol);
+                            continue;
+                        }
                         if last.get(&symbol) == Some(&book.last_update_id) {
                             books.touch(&asset.ticker);
                             continue;
@@ -168,7 +180,9 @@ pub async fn session(
                         let (bids, asks) = match depth::levels(&book) {
                             Ok(l) => l,
                             Err(why) => {
-                                invalidate(ctx, books, out, &asset.ticker);
+                                if w.fast.json_lost(&asset.ticker) {
+                                    invalidate(ctx, books, out, &asset.ticker);
+                                }
                                 last.remove(&symbol);
                                 log(ctx, Level::Error, format!("WebSocket {name}: стакан {symbol} не разобран: {why}")).await;
                                 continue;
@@ -176,8 +190,11 @@ pub async fn session(
                         };
                         last.insert(symbol, book.last_update_id);
                         let ob = depth::to_book((*asset).clone(), bids, asks);
-                        books.put(ob.clone(), alive.clone());
-                        match kept.book(out, ob) {
+                        let fed = w.fast.give_json(&asset.ticker, book.last_update_id, || {
+                            books.put(ob.clone(), alive.clone());
+                            kept.book(out, ob)
+                        });
+                        match fed.unwrap_or(Fed::Sent) {
                             Fed::Sent | Fed::Kept => {}
                             Fed::Closed => return End::Done,
                             Fed::Lost => dropped += 1,
@@ -187,7 +204,9 @@ pub async fn session(
                         ctx.raw.write(ID, name, &t);
                         for s in sent.get(&id).into_iter().flatten() {
                             let sym = s.split('@').next().unwrap_or_default();
-                            if let Some(a) = by_symbol.get(sym) {
+                            if let Some(a) = by_symbol.get(sym)
+                                && w.fast.json_lost(&a.ticker)
+                            {
                                 invalidate(ctx, books, out, &a.ticker);
                                 last.remove(sym);
                             }

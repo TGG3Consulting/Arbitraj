@@ -1,8 +1,10 @@
 //! Файл: venues/binance/ws.rs
 //! Что делает: жизненный цикл одного соединения WebSocket рынка Binance: чтение настроек (с пределами документации),
 //! сессия (ws_conn.rs), при обрыве — все стаканы соединения недостоверны, журнал, пауза, переподключение. Нет нужной
-//! настройки — соединение останавливается (без бесконечных повторов).
-//! Кто вызывает: market.rs (по задаче на соединение), feed.rs (config — окна).
+//! настройки — соединение останавливается (без бесконечных повторов). Решение 425: при обрыве стаканы пар, которые
+//! сейчас на быстром стакане SBE (fast.rs), не снимаются.
+//! Кто вызывает: market.rs (по задаче на соединение), feed.rs (config — окна), sbe_run.rs (config — те же пределы у
+//! соединения SBE, решение 425).
 //! От чего зависит: ws_conn.rs, book.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_url, venue.depth_levels, venue.book_interval, venue.ws_subs_per_sec, venue.ws_streams_per_msg,
 //! venue.ws_silence_ms, venue.ws_reconnect_pause_ms [binance], http.timeout_ms.
@@ -63,6 +65,7 @@ pub async fn run(
     assets: Vec<(Asset, String)>,
     books: Books,
     out: mpsc::Sender<MarketEvent>,
+    fast: super::fast::Fast,
 ) {
     // Решение 202: свежесть пар соединения и команды сторожа ядра (переподписать пару, переподключить соединение).
     let tickers: Vec<String> = assets.iter().map(|(a, _)| a.ticker.clone()).collect();
@@ -73,13 +76,17 @@ pub async fn run(
                 let w = ws_conn::Watch {
                     feed: &feed,
                     cmd: &mut cmd,
+                    fast: &fast,
                 };
                 ws_conn::session(&ctx, &name, &assets, &books, &out, cfg, w).await
             }
             Err(e) => End::Config(e),
         };
         for (a, _) in &assets {
-            invalidate(&ctx, &books, &out, &a.ticker);
+            // Решение 425: пара на быстром стакане SBE — её стакан не снимается (страховка пропала, быстрый жив).
+            if !fast.json_down(&a.ticker) {
+                invalidate(&ctx, &books, &out, &a.ticker);
+            }
         }
         let (level, text, pause) = match (end, ctx.int("venue.ws_reconnect_pause_ms")) {
             (End::Done, _) => return,

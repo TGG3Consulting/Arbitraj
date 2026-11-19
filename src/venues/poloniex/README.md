@@ -16,7 +16,7 @@
 | https://api-docs.poloniex.com/spot/api/private/trade | Trades by Order Id (feeAmount, feeCurrency) |
 | https://api-docs.poloniex.com/spot/api/private/margin | Account Margin, Borrow Status (панель «Балансы») |
 | https://api-docs.poloniex.com/spot/websocket/ | Адреса WS, подписка, ping каждые 30 с, лимиты |
-| https://api-docs.poloniex.com/spot/websocket/market-data | Канал book (снимки 5/10/20), book_lv2 |
+| https://api-docs.poloniex.com/spot/websocket/market-data | Канал book (снимки 5/10/20), book_lv2 (снимок 20 уровней + изменения, lastId; решение 424) |
 | https://api-docs.poloniex.com/spot/websocket/authentication | Вход auth в приватный WS |
 | https://api-docs.poloniex.com/spot/websocket/balance | Канал balances |
 | https://api-docs.poloniex.com/spot/error-code | Коды ошибок (кодов ключа, подписи, прав и лимита нет) |
@@ -52,7 +52,8 @@
 | `order_rules.rs` | Правила ордера — одни у ордера и у `check_order` (решение 134); свой id 17 цифр; пробного ордера нет |
 | `trade.rs`, `order_state.rs`, `fills.rs` | Ордер LIMIT + IOC/FOK, итог по Order Details, отмена остатка, поиск по cid:, комиссия из сделок ордера; решение 263 — cancelReason в журнал `venue.order` (`trade::cancel_note`, 1004 self-trade — Warn) |
 | `market_sell.rs` | Решение 268: рыночная продажа (контракт `trade_market_sell`) — ордер типа «market» на количество базовой монеты после отказа лимитного ордера «цена вне диапазона»; правила пары и разбор итога — те же, что у лимитного (`order_rules.rs`, `trade.rs`); код PriceOutOfRange рыночный ордер не отдаёт |
-| `depth.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | Канал book снимками (5/10/20), отсев по id (решение 109; решение 263 — снимок с тем же или меньшим id свежесть пары не продлевает, `depth::newer`), ping, котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsubscribe + subscribe канала book) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
+| `depth.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | Решение 424: каждая пара подписана на book и book_lv2 (ниже). Канал book снимками (5/10/20), отсев по id (решение 109; решение 263 — снимок с тем же или меньшим id свежесть пары не продлевает, `depth::newer`), ping, котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsubscribe + subscribe каналов book и book_lv2) и переподключение одного соединения по команде сторожа; решение 213 — срок подтверждения тихой пары (`book_confirmed`) |
+| `lv2.rs`, `local_book.rs`, `fast_book.rs`, `ws_book.rs`, `ws_book_sync.rs` | Решение 424: быстрый стакан — канал book_lv2 (снимок 20 уровней + изменения, цепочка lastId = id прежней записи) → локальный стакан пары; канал book (снимки) слушается параллельно как страховка. Ядру — быстрый, пока синхронизирован; разрыв (lastId, пересечённый стакан, неразборчивый кадр) — сразу последний снимок book (не старше venue.book_stale_ms и не старше уже отданного по createTime), иначе пара недостоверна; переподписка book_lv2 пары (не чаще venue.ws_reconnect_pause_ms) и после нового снимка — снова быстрый. Снимок book при быстром стакане: верх совпал — подтверждение (время кадра пары продлевается), не совпал — ничего. Сводка переключений — журнал venue.book_fast (не чаще log.pool_events_lost_interval_s) |
 | `book_print.rs` | Решение 213 по содержимому: `GET /markets/{symbol}/orderBook` (limit = `venue.depth_levels`) — первые N уровней ответа и стакана в памяти для подтверждения тихой пары ядром; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `user_stream.rs`, `account_update.rs` | Поток аккаунта: вход auth, канал balances, изменение = разница остатков (опора — REST при входе) |
 
@@ -80,6 +81,12 @@
   `transfer.credit_by_event` у Poloniex до живой записи не включать.
 - **Удержание вывода (решение 150)** — статуса «предварительно зачислено» нет → `withdraw_hold` пусто.
 - **Скидка TRX** — размер не описан: расчёт по обычной ставке, факт — из сделок (feeCurrency).
+
+- **book_lv2 (решение 424):** частота не указана («real-time»); общая ли у book и book_lv2 последовательность id —
+  не сказано (сверка снимка book с быстрым стаканом — только по содержимому верха); шлёт ли сервер изменение для
+  уровня, вошедшего в первые 20 после удаления верхнего, — по смыслу «updates when the first 20 levels change», но
+  проверить на живой записи; ответ на повторную подписку без отписки не описан — переподписка = отписка + подписка.
+  Живых кадров book_lv2 нет — тесты на примерах офдоки (tests/poloniex_lv2_424.rs), запись — docs/TASKS.md.
 
 ## Что важно знать
 

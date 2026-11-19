@@ -536,11 +536,11 @@ QUERY, TRADE, WITHDRAW; ключ привязать к IP сервера; адр
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
 | venue.rest_url | площадка Poloniex | `https://api.poloniex.com` | Основной адрес REST Spot API. | Spot → API: «https://api.poloniex.com»; SDK request.py _default_url |
-| venue.ws_url | площадка Poloniex | `wss://ws.poloniex.com/ws/public` | Стаканы — канал book. | Spot → WebSocket: публичный «wss://ws.poloniex.com/ws/public» |
+| venue.ws_url | площадка Poloniex | `wss://ws.poloniex.com/ws/public` | Стаканы — каналы book (снимки, страховка) и book_lv2 (быстрый стакан, решение 424). | Spot → WebSocket: публичный «wss://ws.poloniex.com/ws/public» |
 | venue.ws_private_url | площадка Poloniex | `wss://ws.poloniex.com/ws/private` | Поток аккаунта: вход auth, канал balances. | Spot → WebSocket: приватный «wss://ws.poloniex.com/ws/private» |
 | venue.quote_asset | площадка Poloniex | `USDT` | Котируемая монета пар (символы BASE_USDT). | Symbol Information: quoteCurrencyName; 21350 «Amount must be greater than 1 USDT» |
 | venue.depth_levels | площадка Poloniex | `20` | Наибольшая глубина канала book для котировки на объём. | Market Data → Book: depth 5, 10 или 20, «updates every 100ms» |
-| venue.ws_symbols_per_conn | площадка Poloniex | *метод:* предела символов на соединение в документации нет — начать с небольшого числа (например, 50) и замерить на живом соединении; решает Тигран | Урок 12: число подписок — из документации, а её нет. | Spot → WebSocket: только «2000 connections» с IP и «500 requests per second» на соединение |
+| venue.ws_symbols_per_conn | площадка Poloniex | *метод:* предела символов на соединение в документации нет — начать с небольшого числа (например, 50) и замерить на живом соединении; решение 424: на пару две подписки (book и book_lv2) — при прежнем числе символов подписок вдвое больше; решает Тигран | Урок 12: число подписок — из документации, а её нет. | Spot → WebSocket: только «2000 connections» с IP и «500 requests per second» на соединение |
 | venue.ws_subs_per_sec | площадка Poloniex | `10` | Подписка — по одному символу в сообщении; с большим запасом до предела 500. | Spot → WebSocket: «500 requests per second» на соединение |
 | venue.ws_ping_ms | площадка Poloniex | `20000` | Меньше 30 с с запасом — иначе сервер закрывает сессию без уведомления. | Spot → WebSocket: «expects a message or a ping every 30 seconds» |
 | venue.ws_silence_ms | площадка Poloniex | *метод:* больше venue.ws_ping_ms с запасом на ответ pong (например, два интервала ping) — решает Тигран | Без кадров дольше — соединение оборвано. | Spot → WebSocket: {"event": "pong"} на каждый ping |

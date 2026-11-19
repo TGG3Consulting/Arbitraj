@@ -733,6 +733,10 @@ curl -sS 'https://api.poloniex.com/timestamp' > $D/poloniex_timestamp.json
 ( echo '{"event":"subscribe","channel":["book"],"symbols":["CAKE_USDT"],"depth":20}'; \
   echo '{"event":"subscribe","channel":["book"],"symbols":["USDC_USDT"],"depth":20}'; \
   for i in 1 2 3; do sleep 20; echo '{"event":"ping"}'; done ) | timeout 65 websocat -t wss://ws.poloniex.com/ws/public > $D/poloniex_ws_book.jsonl
+# Решение 424: book и book_lv2 одной пары параллельно (~10 минут) — цепочка lastId и частота book_lv2 против book
+( echo '{"event":"subscribe","channel":["book"],"symbols":["CAKE_USDT"],"depth":20}'; \
+  echo '{"event":"subscribe","channel":["book_lv2"],"symbols":["CAKE_USDT"]}'; \
+  for i in $(seq 30); do sleep 20; echo '{"event":"ping"}'; done ) | timeout 610 websocat -t wss://ws.poloniex.com/ws/public > $D/poloniex_ws_book_lv2.jsonl
 # Подписка на несуществующий символ — формат ошибки
 ( echo '{"event":"subscribe","channel":["book"],"symbols":["NOSUCH_USDT"]}'; sleep 5 ) | timeout 8 websocat -t wss://ws.poloniex.com/ws/public > $D/poloniex_ws_book_error.jsonl
 ```

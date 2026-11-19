@@ -4,7 +4,8 @@
 //! снимков REST — в ws_book.rs (память и ядро); отказ подписки — стаканы её пар недостоверны.
 //! Кто вызывает: ws.rs.
 //! От чего зависит: depth.rs, ws_book.rs, snapshots.rs, book.rs, ws.rs (Cfg, End), ctx.rs, gateway/feed_reg.rs,
-//! ws_dial.rs (yawc, сжатие permessage-deflate — решение 419; Ping сервера yawc отвечает Pong сам).
+//! ws_dial.rs (yawc, сжатие permessage-deflate — решение 419; Ping сервера yawc отвечает Pong сам); страховка
+//! снимками depth@ при depth_update — backup.rs (решение 419, дополнение).
 //! Настройки: из ws.rs (Cfg); raw.book_frames [xt] — писать ли кадры стаканов в сырой журнал.
 //!
 //! Официально (https://doc.xt.com/docs/spot/WebSocket%20Public/ — RequestMessageFormat, ResponseMessageFormat, Heartbeat):
@@ -46,11 +47,17 @@ pub struct Watch<'a> {
     pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
 }
 
-/// Имя темы стакана пары: «depth@<symbol>,<levels>» или «depth_update@<symbol>» (символ — как в справочнике). Ошибок нет.
-pub fn topic(symbol: &str, cfg: &Cfg) -> String {
-    match cfg.stream {
-        Stream::Depth => format!("depth@{symbol},{}", cfg.levels),
-        Stream::Update => format!("depth_update@{symbol}"),
+/// Темы стакана пары: «depth@<symbol>,<levels>» или «depth_update@<symbol>» и страховка «depth@<symbol>,<levels>»
+/// (решение 419, дополнение: подписок вдвое больше; https://doc.xt.com/docs/spot/WebSocket%20Public/LimitedDepth,
+/// IncrementalDepth). Символ — как в справочнике. Ошибок нет.
+pub fn topics(symbol: &str, cfg: &Cfg) -> Vec<String> {
+    match (cfg.stream, cfg.backup) {
+        (Stream::Depth, _) => vec![format!("depth@{symbol},{}", cfg.levels)],
+        (Stream::Update, None) => vec![format!("depth_update@{symbol}")],
+        (Stream::Update, Some(l)) => vec![
+            format!("depth_update@{symbol}"),
+            format!("depth@{symbol},{l}"),
+        ],
     }
 }
 
@@ -69,7 +76,7 @@ pub async fn session(
         Err(why) => return End::Broken(why),
     };
     w.feed.session_started();
-    let names: Vec<String> = assets.iter().map(|(_, s)| topic(s, &cfg)).collect();
+    let names: Vec<String> = assets.iter().flat_map(|(_, s)| topics(s, &cfg)).collect();
     let mut batches: Vec<Vec<String>> = names.chunks(cfg.per_msg).map(<[_]>::to_vec).collect();
     batches.reverse();
     // id запроса → его темы (отказ подписки снимает стаканы этих пар).
@@ -103,16 +110,16 @@ pub async fn session(
                 Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
                 Cmd::Resub(ticker) => {
                     let Some((_, sym)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
-                    let t = topic(sym, &cfg);
+                    let t = topics(sym, &cfg);
                     for method in ["unsubscribe", "subscribe"] {
                         next_id += 1;
-                        let m = json!({ "method": method, "params": [t], "id": next_id.to_string() });
+                        let m = json!({ "method": method, "params": t, "id": next_id.to_string() });
                         if let Err(e) = ws.send(Frame::text(m.to_string())).await {
                             return End::Broken(format!("отправка {method} (сторож пар): {e}"));
                         }
                     }
                     // Отказ подписки — стакан пары недостоверен (разбор Msg::Error ниже).
-                    sent.insert(next_id.to_string(), vec![t]);
+                    sent.insert(next_id.to_string(), t);
                     conn.resub(sym);
                     w.feed.resubscribed(&ticker);
                 }
@@ -153,10 +160,12 @@ pub async fn session(
                 }
                 match msg {
                     Msg::Snapshot { symbol, data } => {
-                        if let Some(a) = conn.asset(&symbol) {
+                        // Решение 419 (дополнение): при depth_update — страховка (backup.rs); пара на быстром — не отмечается.
+                        let (open, mark) = conn.on_depth_frame(&symbol, &data).await;
+                        if let (true, Some(a)) = (mark, conn.asset(&symbol)) {
                             w.feed.frame(&a.ticker);
                         }
-                        if !conn.on_depth(&symbol, &data).await {
+                        if !open {
                             return End::Done;
                         }
                     }
@@ -172,7 +181,9 @@ pub async fn session(
                         for s in sent.get(&id).into_iter().flatten() {
                             let sym = s.split_once('@').map_or("", |(_, r)| r);
                             let sym = sym.split(',').next().unwrap_or_default();
-                            if let Some(a) = conn.asset(sym) {
+                            // Отказ страховки depth@ при depth_update быстрый стакан не снимает (только журнал).
+                            let insurance = cfg.backup.is_some() && s.starts_with("depth@");
+                            if let (false, Some(a)) = (insurance, conn.asset(sym)) {
                                 invalidate(ctx, books, out, &a.ticker);
                             }
                         }

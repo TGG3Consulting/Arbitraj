@@ -7,7 +7,8 @@
 //! Настройки: venue.ws_url, venue.book_stream, venue.depth_levels, venue.ws_subs_per_sec, venue.ws_streams_per_msg,
 //! venue.ws_ping_ms, venue.ws_silence_ms, venue.ws_reconnect_pause_ms [xt], http.timeout_ms; при depth_update —
 //! venue.depth_snapshot_per_sec, venue.depth_snapshot_limit (snapshots.rs); при depth — venue.depth_snapshot_per_sec
-//! для снимка REST при переподписке пары сторожем (дополнение 10.11; не задана — снимка нет, журнал).
+//! для снимка REST при переподписке пары сторожем (дополнение 10.11; не задана — снимка нет, журнал). При
+//! depth_update — страховка снимками depth@{symbol},{venue.depth_levels} (решение 419, дополнение; backup.rs).
 //!
 //! Официально (https://doc.xt.com/docs/spot/WebSocket%20Public/wss-general и далее, `_websocket_public/*.md`): адрес
 //! wss://stream.xt.com/public; «Each link of the client needs to send a text "ping" periodically … If the server does not
@@ -60,6 +61,9 @@ pub struct Cfg {
     pub stream: Stream,
     /// Уровни снимка (Depth) или сколько верхних уровней локального стакана отдавать ядру (Update).
     pub levels: u64,
+    /// Решение 419 (дополнение): уровни снимков-страховки depth@ при Update (= levels, если она из DEPTH_LEVELS);
+    /// None — страховки нет (канал depth или недопустимые уровни).
+    pub backup: Option<u64>,
     pub sub_gap: Duration,
     pub per_msg: usize,
     pub ping: Duration,
@@ -84,6 +88,13 @@ pub async fn run(
     while !out.is_closed() {
         let end = match config(&ctx) {
             Ok(cfg) => {
+                if cfg.stream == Stream::Update && cfg.backup.is_none() {
+                    let m = format!(
+                        "WebSocket {name}: страховки снимками depth@ нет — venue.depth_levels = {} не из {DEPTH_LEVELS:?} (решение 419)",
+                        cfg.levels
+                    );
+                    ctx.log(Level::Warn, "venue.ws", m).await;
+                }
                 let w = ws_conn::Watch {
                     feed: &feed,
                     cmd: &mut cmd,
@@ -169,6 +180,7 @@ pub fn config(ctx: &Ctx) -> Result<Cfg, String> {
         url: ctx.text("venue.ws_url").map_err(m)?,
         stream,
         levels,
+        backup: (stream == Stream::Update && DEPTH_LEVELS.contains(&levels)).then_some(levels),
         sub_gap: Duration::from_secs_f64(1.0 / per_sec as f64),
         per_msg: ctx.int("venue.ws_streams_per_msg").map_err(m)?.max(1) as usize,
         ping: Duration::from_millis(ping),

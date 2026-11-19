@@ -5,7 +5,8 @@
 //! взятый при переподписке пары в канале depth (ws_book.rs resub), — верхние уровни ядру, если кадр depth@ после
 //! переподписки ещё не пришёл (кадр потока главнее).
 //! Кто вызывает: ws_conn.rs (через Conn из ws_book.rs).
-//! От чего зависит: ws_book.rs (Conn), depth.rs, local_book.rs, snapshots.rs.
+//! От чего зависит: ws_book.rs (Conn), depth.rs, local_book.rs, snapshots.rs; разрыв и отданный быстрый стакан —
+//! backup.rs (страховка снимками depth@, решение 419, дополнение).
 //! Настройки: из ws.rs (Cfg).
 //!
 //! Официально: «Orderbook manage» https://doc.xt.com/docs/spot/WebSocket%20Public/OrderbookManage.
@@ -34,8 +35,8 @@ impl<'a> Conn<'a> {
                     .entry(symbol.to_string())
                     .or_default()
                     .reset(why.clone());
-                self.bad(asset, format!("изменения {symbol} не разобраны: {why}"))
-                    .await;
+                let m = format!("изменения {symbol} не разобраны: {why}");
+                self.fast_lost(symbol, asset, m).await;
                 return true;
             }
         };
@@ -107,6 +108,7 @@ impl<'a> Conn<'a> {
                     .get(symbol)
                     .map(|l| l.top(self.levels))
                     .unwrap_or_default();
+                self.backup.given_fast(symbol);
                 self.give(asset, bids, asks, t)
             }
             Applied::Repeat => {
@@ -128,7 +130,7 @@ impl<'a> Conn<'a> {
                     .insert(symbol.to_string(), Instant::now() + self.resync_pause);
                 let m =
                     format!("{symbol} — {why}; новый снимок не раньше venue.ws_reconnect_pause_ms");
-                self.bad(asset, m).await;
+                self.fast_lost(symbol, asset, m).await;
                 true
             }
         }

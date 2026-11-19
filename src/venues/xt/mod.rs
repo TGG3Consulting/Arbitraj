@@ -10,6 +10,7 @@
 
 pub mod account;
 pub mod all_balances;
+pub mod backup;
 pub mod book;
 pub mod book_version;
 pub mod ctx;

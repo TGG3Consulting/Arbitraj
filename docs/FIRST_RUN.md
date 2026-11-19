@@ -518,7 +518,7 @@ QUERY, TRADE, WITHDRAW; ключ привязать к IP сервера; адр
 | venue.order_time_in_force | площадка XT | `IOC` | Остаток снимает биржа | publicModule.md «Time in force» |
 | venue.order_test_first | площадка XT | `нет` | Пробного ордера у XT нет | orderPost.md; SDK pyxt |
 | venue.book_stream | площадка XT | `depth_update` | Изменения раз в 100 мс; depth — раз в 1000 мс | increDepth.md, limitDepth.md |
-| venue.depth_levels | площадка XT | `20` | Верхние уровни локального стакана (у depth — 5, 10, 20, 50) | limitDepth.md |
+| venue.depth_levels | площадка XT | `20` | Верхние уровни локального стакана (у depth — 5, 10, 20, 50); при depth_update — и уровни снимков-страховки depth@ (решение 419, дополнение: только 5, 10, 20, 50, иначе страховки нет) | limitDepth.md |
 | venue.depth_snapshot_per_sec | площадка XT | `5` | Половина лимита 10/с на IP — запас для остальных публичных запросов | _market/3depth.md |
 | venue.depth_snapshot_limit | площадка XT | `500` | Совет «Orderbook manage» | orderBook.md |
 | venue.ws_ping_ms | площадка XT | `20000` | Сервер рвёт без ping дольше минуты | heartBeat.md |

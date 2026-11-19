@@ -29,6 +29,7 @@ pub mod errors;
 pub mod fast_book;
 pub mod fast_io;
 pub mod fast_pick;
+pub mod fast_rule;
 pub mod feed;
 pub mod fees;
 pub mod gt_balance;

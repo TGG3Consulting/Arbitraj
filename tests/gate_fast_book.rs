@@ -1,6 +1,7 @@
 //! Файл: tests/gate_fast_book.rs
 //! Что делает: решение 421 — быстрый стакан Gate со страховкой: разбор кадров spot.obu на примерах официальной
-//! документации и ведение локального стакана (fast_book.rs), выбор стакана для ядра (fast_pick.rs) на ЖИВОЙ записи
+//! документации и ведение локального стакана (fast_book.rs), выбор стакана для ядра (fast_pick.rs, fast_rule.rs —
+//! в т.ч. расхождение верха двух снимков подряд с быстрым, решение 421, ревью) на ЖИВОЙ записи
 //! 04.11 (tests/data/cex_samples_2026_11_04/gate_ws.jsonl).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::gate (obu, fast_book, fast_pick, depth). Моков нет.
@@ -196,7 +197,7 @@ fn pick_fast_then_snapshot_on_gap() {
     // 8 OB(t526) 9 UP(t526) 10 OB(t612) 11 UP(t612) 12 UP(t902) 13 OB(t902) 14 OB(t949).
     let (_, ob0) = snapshot(&rec[0].1, &asset);
     assert!(
-        fast.snapshot(sym, ob0).is_some(),
+        fast.snapshot(sym, ob0).0.is_some(),
         "быстрого ещё нет — снимок ядру"
     );
     // Полный снимок потока с тем же t, что отданный снимок, — не новее: ядру не отдаётся.
@@ -205,7 +206,9 @@ fn pick_fast_then_snapshot_on_gap() {
         (Give::Nothing, None)
     ));
     assert!(
-        fast.snapshot(sym, snapshot(&rec[2].1, &asset).1).is_some(),
+        fast.snapshot(sym, snapshot(&rec[2].1, &asset).1)
+            .0
+            .is_some(),
         "ядро ещё на снимках"
     );
     assert!(matches!(
@@ -222,15 +225,19 @@ fn pick_fast_then_snapshot_on_gap() {
     );
     assert!(fast.on_fast(sym));
     assert!(
-        fast.snapshot(sym, snapshot(&rec[5].1, &asset).1).is_none(),
+        fast.snapshot(sym, snapshot(&rec[5].1, &asset).1)
+            .0
+            .is_none(),
         "на быстром снимок придержан"
     );
     assert!(matches!(
         fast.frame(sym, &asset, &from_update(&rec[6].1)),
         (Give::Book(_), None)
     ));
-    for i in [7, 8, 10] {
-        assert!(fast.snapshot(sym, snapshot(&rec[i].1, &asset).1).is_none());
+    // Снимок 8 не подаётся: два несовпавших снимка подряд (8 и 10) — уже расхождение по содержимому (тест ниже).
+    for i in [7, 10] {
+        let (g, gap) = fast.snapshot(sym, snapshot(&rec[i].1, &asset).1);
+        assert!(g.is_none() && gap.is_none(), "снимок {i} придержан");
     }
     // Кадр 9 потерян: кадр 11 — разрыв; сразу придержанный снимок 10 (t612 новее отданного t393).
     let (g, gap) = fast.frame(sym, &asset, &from_update(&rec[11].1));
@@ -253,7 +260,9 @@ fn pick_fast_then_snapshot_on_gap() {
         (Give::Nothing, None)
     ));
     assert!(
-        fast.snapshot(sym, snapshot(&rec[13].1, &asset).1).is_some(),
+        fast.snapshot(sym, snapshot(&rec[13].1, &asset).1)
+            .0
+            .is_some(),
         "до синхронизации — снимки"
     );
     // Полный снимок после переподписки (t949 новее t902) — снова быстрый.
@@ -276,9 +285,56 @@ fn without_level_snapshots_pass_through() {
     for i in [0, 2, 5] {
         assert!(
             fast.snapshot("CAKE_USDT", snapshot(&rec[i].1, &asset).1)
+                .0
                 .is_some()
         );
     }
     fast.resync("CAKE_USDT");
     assert!(!fast.pending());
+}
+
+/// Решение 421 (ревью): номера быстрого идут подряд, но кадр 9 потерян, а кадр 11 ещё не пришёл — быстрый стоит на t393.
+/// Снимок 7 (тот же t393) совпал с ним; снимки 8 (t526) и 10 (t612) новее и не совпали (живая запись 04.11), быстрый
+/// между ними не менялся — на втором из них разрыв: ядру снимок 10, пара в очереди пересинхронизации.
+#[test]
+fn two_newer_snapshots_differ_then_gap() {
+    let rec = recorded();
+    let asset = Asset {
+        ticker: "CAKE".into(),
+        bsc_contract: None,
+    };
+    let sym = "CAKE_USDT";
+    let mut fast = Fast::new(Some(50), 20);
+    assert!(
+        fast.snapshot(sym, snapshot(&rec[0].1, &asset).1)
+            .0
+            .is_some()
+    );
+    let _ = fast.frame(sym, &asset, &full_from_book(&rec[0].1));
+    for i in [3, 4, 6] {
+        let _ = fast.frame(sym, &asset, &from_update(&rec[i].1));
+    }
+    assert!(fast.on_fast(sym), "быстрый t393 отдан ядру");
+    for i in [7, 8] {
+        let (g, gap) = fast.snapshot(sym, snapshot(&rec[i].1, &asset).1);
+        assert!(
+            g.is_none() && gap.is_none(),
+            "снимок {i}: ещё не расхождение"
+        );
+    }
+    let (g, gap) = fast.snapshot(sym, snapshot(&rec[10].1, &asset).1);
+    assert!(gap.is_some(), "второй несовпавший снимок подряд — разрыв");
+    assert_eq!(
+        g.and_then(|b| b.exchange_time)
+            .map(|t| t.timestamp_millis()),
+        rec[10].1["t"].as_i64(),
+        "ядру — этот снимок"
+    );
+    assert!(!fast.on_fast(sym));
+    assert_eq!(fast.next_resync().as_deref(), Some(sym));
+    // Кадр 11 продолжает старую цепочку, но стакан сброшен — ждём полный снимок.
+    assert!(matches!(
+        fast.frame(sym, &asset, &from_update(&rec[11].1)),
+        (Give::Nothing, None)
+    ));
 }

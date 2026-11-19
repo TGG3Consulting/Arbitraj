@@ -8,14 +8,9 @@
 //! От чего зависит: fast_book.rs, obu.rs (Frame), depth.rs (to_book), core/types.
 //! Настройки: нет (уровни потока и глубину передаёт ws_conn.rs из Cfg).
 //!
-//! «Никогда не старее отданного» (общая постановка решений 420–424, как решение 109): внутри одного потока порядок
-//! держат номера (снимки — lastUpdateId в ws_conn.rs, решение 109; быстрый — U = номер + 1). При смене потока номера
-//! сравнить нельзя: совпадает ли шкала U/u spot.obu с lastUpdateId spot.order_book, документация не говорит и живой
-//! записи spot.obu нет (вопрос в docs/TASKS.md) — поэтому при смене потока стакан отдаётся, только если его время биржи
-//! t строго больше t последнего отданного (оба — мс Gate: у spot.order_book «Order book update time in milliseconds», у
-//! spot.obu «order book generation timestamp»). Нет t — смены потока нет.
-//! Сверки верхних уровней снимка с быстрым стаканом нет: сопоставить кадры двух потоков по номеру или времени
-//! документация не позволяет (см. выше) — не выдумываем.
+//! Правило «не старее отданного» (смена потока — только по t строго больше) и сверка верха снимка с быстрым стаканом
+//! (два снимка подряд новее быстрого и не равны ему, быстрый между ними не менялся → разрыв; решение 421, ревью) —
+//! fast_rule.rs.
 
 use std::collections::{HashMap, VecDeque};
 
@@ -25,16 +20,8 @@ use crate::core::types::{Asset, OrderBook};
 
 use super::depth;
 use super::fast_book::{Applied, FastBook};
+use super::fast_rule::{Given, Src, allow, diverged, ms};
 use super::obu::Frame;
-
-/// Источник отданного ядру стакана.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Src {
-    /// Быстрый поток spot.obu.
-    Fast,
-    /// Снимки spot.order_book (страховка).
-    Snap,
-}
 
 /// Что сделать со стаканом пары у ядра.
 #[derive(Debug, Clone)]
@@ -52,13 +39,15 @@ pub enum Give {
 struct Pair {
     lb: FastBook,
     /// Последний отданный ядру: источник и время биржи t (мс).
-    given: Option<(Src, Option<i64>)>,
+    given: Given,
     /// Последний снимок, не отданный ядру (пока ядро на быстром стакане), — для немедленного возврата на снимки.
     held: Option<OrderBook>,
     /// Пара в очереди пересинхронизации.
     queued: bool,
     /// Подписка spot.obu отклонена биржей — до нового подключения только снимки.
     off: bool,
+    /// u быстрого стакана при прошлом несовпавшем снимке (fast_rule.rs diverged; решение 421, ревью).
+    miss: Option<i64>,
 }
 
 /// Быстрые стаканы одного соединения.
@@ -71,20 +60,6 @@ pub struct Fast {
     pairs: HashMap<String, Pair>,
     /// Очередь пересинхронизации (символы пар).
     queue: VecDeque<String>,
-}
-
-/// Время биржи стакана, мс. Ошибок нет.
-fn ms(b: &OrderBook) -> Option<i64> {
-    b.exchange_time.map(|d| d.timestamp_millis())
-}
-
-/// Можно ли отдать стакан источника src со временем t после уже отданного. Ошибок нет.
-fn allow(given: &Option<(Src, Option<i64>)>, src: Src, t: Option<i64>) -> bool {
-    match given {
-        None => true,
-        Some((s, _)) if *s == src => true,
-        Some((_, prev)) => matches!((prev, t), (Some(a), Some(b)) if b > *a),
-    }
 }
 
 impl Fast {
@@ -105,20 +80,33 @@ impl Fast {
     }
 
     /// Что делает: снимок spot.order_book (уже прошедший отсев решения 109). Принимает: символ, стакан. Возвращает:
-    /// Some — отдать ядру; None — придержан (ядро на быстром стакане) или старее отданного. Ошибок нет.
-    pub fn snapshot(&mut self, symbol: &str, book: OrderBook) -> Option<OrderBook> {
+    /// стакан ядру (None — придержан: ядро на быстром стакане, или старее отданного) и причину разрыва (Some — верх
+    /// снимка второй раз подряд разошёлся с быстрым стаканом: быстрый сброшен, пара в очереди пересинхронизации, ядру —
+    /// этот снимок; fast_rule.rs diverged). Ошибок нет.
+    pub fn snapshot(
+        &mut self,
+        symbol: &str,
+        book: OrderBook,
+    ) -> (Option<OrderBook>, Option<String>) {
         if self.level.is_none() {
-            return Some(book);
+            return (Some(book), None);
         }
+        let n = self.depth;
         let p = self.pairs.entry(symbol.to_string()).or_default();
         let on_fast = p.lb.synced() && matches!(p.given, Some((Src::Fast, _)));
-        if on_fast || !allow(&p.given, Src::Snap, ms(&book)) {
+        let gap = on_fast && diverged(&p.lb, &book, n, &mut p.miss);
+        if !gap && (on_fast || !allow(&p.given, Src::Snap, ms(&book))) {
             p.held = Some(book);
-            return None;
+            return (None, None);
         }
         p.given = Some((Src::Snap, ms(&book)));
         p.held = None;
-        Some(book)
+        if !gap {
+            return (Some(book), None);
+        }
+        self.resync(symbol);
+        let why = "два снимка spot.order_book подряд новее быстрого стакана и не совпали с ним, а он между ними не менялся";
+        (Some(book), Some(why.to_string()))
     }
 
     /// Что делает: кадр spot.obu пары. Принимает: символ, монету, кадр. Возвращает: что отдать ядру и причину разрыва
@@ -163,6 +151,7 @@ impl Fast {
         }
         let p = self.pairs.entry(symbol.to_string()).or_default();
         let _ = p.lb.reset(String::new());
+        p.miss = None;
         if !p.queued && !p.off {
             p.queued = true;
             self.queue.push_back(symbol.to_string());

@@ -2,8 +2,9 @@
 //! Что делает: кадры канала снимков spot.order_book в сессии WebSocket Gate: учёт свежести пары с lastUpdateId
 //! (решения 202, 213), кадр в окно (решение 125), отсев решения 109 (тот же или меньший lastUpdateId ядру не
 //! отдаётся — только время кадра пары), снимок ядру — через fast_pick.rs (решение 421: пока ядро на быстром стакане
-//! spot.obu, снимок придерживается как страховка); неразборчивый кадр и отказ подписки — стакан пары недостоверен
-//! (если ядро не на быстром стакане), журнал.
+//! spot.obu, снимок придерживается как страховка; верх снимка второй раз подряд разошёлся с быстрым — разрыв, счёт в
+//! журнале venue.fast_book, ядру этот снимок — решение 421, ревью); неразборчивый кадр и отказ подписки — стакан пары
+//! недостоверен (если ядро не на быстром стакане), журнал.
 //! Кто вызывает: ws_conn.rs.
 //! От чего зависит: depth.rs (Msg, to_book), fast_pick.rs, fast_io.rs (Env), ws.rs (invalidate), gateway/feed_reg.rs,
 //! gateway/tap.rs.
@@ -64,7 +65,10 @@ impl Snaps {
                     return None;
                 }
                 let book = depth::to_book(asset.clone(), bids, asks, exchange_time);
-                let given = fast.snapshot(&symbol, book);
+                let (given, gap) = fast.snapshot(&symbol, book);
+                if let Some(why) = gap {
+                    env.gap(&symbol, &why);
+                }
                 self.last.insert(symbol, update_id);
                 given.map(|b| env.give(b))
             }

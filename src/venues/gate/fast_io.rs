@@ -125,8 +125,9 @@ impl Env<'_> {
         self.apply(&asset.ticker, g)
     }
 
-    /// Счёт разрыва и, если пора, запись журнала. Принимает: символ, причину. Ошибок нет.
-    fn gap(&self, sym: &str, why: &str) {
+    /// Счёт разрыва и, если пора, запись журнала (и для расхождения со снимками — ws_snap.rs). Принимает: символ,
+    /// причину. Ошибок нет.
+    pub fn gap(&self, sym: &str, why: &str) {
         let note = Note {
             kind: KIND,
             venue: Some(ID),

@@ -2,6 +2,8 @@
 //! Что делает: решение 421 — локальный стакан одной пары Gate по потоку spot.obu (Order Book V2): полный снимок заменяет
 //! стакан, изменение применяется, только если U = номер стакана + 1; иначе — разрыв (стакан сброшен до нового полного
 //! снимка, пересинхронизацию делает fast_pick.rs / ws_conn.rs). Отдаёт верхние уровни в формате ядра.
+//! Решение 421 (ревью): стакан после кадра пересечён (лучшая покупка ≥ лучшей продажи) — тоже разрыв: такой стакан
+//! неверен при любой целой цепочке номеров.
 //! Кто вызывает: fast_pick.rs, тесты.
 //! От чего зависит: obu.rs (Frame), core/types (PriceLevel).
 //! Настройки: нет.
@@ -81,7 +83,7 @@ impl FastBook {
             put(&mut self.asks, &f.asks);
             self.id = Some(f.last);
             self.t = f.t;
-            return Applied::Changed;
+            return self.checked(f.last);
         }
         let Some(id) = self.id else {
             return Applied::Waiting;
@@ -100,7 +102,22 @@ impl FastBook {
         put(&mut self.asks, &f.asks);
         self.id = Some(f.last);
         self.t = f.t;
-        Applied::Changed
+        self.checked(f.last)
+    }
+
+    /// Решение 421 (ревью): после кадра — пересечён ли стакан (лучшая покупка ≥ лучшей продажи). Принимает: u кадра.
+    /// Возвращает: Changed или Gap (стакан сброшен). Ошибок нет.
+    fn checked(&mut self, u: i64) -> Applied {
+        let best = (
+            self.bids.keys().next_back().copied(),
+            self.asks.keys().next().copied(),
+        );
+        match best {
+            (Some(b), Some(a)) if b >= a => self.reset(format!(
+                "стакан пересечён после u {u}: покупка {b} ≥ продажа {a}"
+            )),
+            _ => Applied::Changed,
+        }
     }
 
     /// Сбрасывает стакан (недостоверен до нового полного снимка). Принимает: причину. Возвращает: Gap. Ошибок нет.

@@ -24,7 +24,6 @@ use super::super::math::solidly_fee;
 use super::super::num;
 use super::super::pools::mids::Mids;
 use super::super::pools::registry::Entry;
-use super::super::wallet::balances::BNB;
 use super::path::{Hop, Path};
 use super::pool_quote::swap_fee;
 use super::pool_tax::step_pct;
@@ -34,6 +33,8 @@ pub struct Names<'a> {
     pub usdt: (Address, &'a str),
     pub coin: (Address, &'a str),
     pub mids: &'a Mids,
+    /// Решение 416: тикер газа сети (dex.gas_ticker) — им пишется газ шага.
+    pub gas: &'a str,
 }
 
 impl Names<'_> {
@@ -95,7 +96,7 @@ pub fn path_costs(
             &mut out,
             CostKind::Gas,
             gas_bnb(ctx, gas_wei, h)?,
-            BNB,
+            names.gas,
             false,
         );
         add(

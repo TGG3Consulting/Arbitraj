@@ -312,7 +312,7 @@ prefill = { kind = "Global" }
 
 [[section]]
 title = "Сеть площадки DEX (решение 416)"
-intro = "Сеть, которую обслуживает площадка DEX: id сети в боте и номер цепи EVM. Без них площадка DEX не подписывается на рынок и не подписывает транзакции."
+intro = "Сеть, которую обслуживает площадка DEX: id сети в боте и номер цепи EVM. Без них площадка DEX не подписывается на рынок, не котирует и не подписывает транзакции."
 
 [[section.rec]]
 name = "dex.chain"
@@ -330,6 +330,15 @@ unit = "chainId"
 value = "56"
 source = "docs.bnbchain.org, JSON-RPC endpoint: «HTTP mainnet (ChainID 56)» (research/flow/bsc_node.md, раздел 1)"
 rationale = "Номер цепи BSC mainnet: им подписываются транзакции (EIP-155) и сверяется узел. Раньше было зашито в коде."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "dex.gas_ticker"
+area = "по площадке DEX"
+unit = "тикер"
+value = "BNB"
+source = "Газ сети BSC платится в BNB (решение 416, ревью шага 1)"
+rationale = "Тикер монеты газа: газ и чаевые в затратах, баланс газа кошелька, стакан газа бирж (цена газа в USDT). Раньше было зашито «BNB» в коде."
 prefill = { kind = "Venue", id = "bsc_dex" }
 
 [[section]]

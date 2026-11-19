@@ -24,6 +24,7 @@ pub mod errors;
 pub mod exec;
 pub mod fast_hash;
 pub mod frozen;
+pub mod gas_ticker;
 pub mod math;
 pub mod node;
 pub mod num;

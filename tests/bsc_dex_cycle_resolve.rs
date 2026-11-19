@@ -130,17 +130,30 @@ async fn ctx(tag: &str) -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    Ctx {
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        chains: Default::default(),
-        account: None,
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    {
+        let c = Ctx {
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     }
 }
 
@@ -392,6 +405,16 @@ async fn core(name: &str) -> Core {
             .await
             .unwrap();
     }
+    // Решение 416: тикер газа площадки DEX — настройка (газ цикла в учёте).
+    settings
+        .set(
+            "dex.gas_ticker",
+            Scope::Venue("bsc_dex".into()),
+            Some(json!("BNB")),
+            "тест",
+        )
+        .await
+        .unwrap();
     core
 }
 
@@ -411,7 +434,7 @@ async fn core_closes_cycle_by_found_outcome() {
     assert_eq!(deal.step, Step::Closed);
     assert_eq!(deal.invested, landed.input * landed.base_usdt);
     assert_eq!(deal.proceeds, landed.output * landed.base_usdt);
-    let gas = landed.trade.fee_in(arb::core::convert::GAS_TICKER);
+    let gas = landed.trade.fee_in("BNB");
     assert!(gas > Decimal::ZERO, "газ обеих транзакций");
     assert_eq!(
         deal.spent,

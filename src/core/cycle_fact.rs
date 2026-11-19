@@ -24,7 +24,15 @@ pub(super) async fn filled(core: &Core, deal: &mut Deal, r: CycleTradeResult) {
     deal.invested = r.input * r.base_usdt;
     deal.proceeds = r.output * r.base_usdt;
     // Решение 219: комиссия — список; у цикла DEX — газ в BNB.
-    let gas = r.trade.fee_in(super::convert::GAS_TICKER);
+    // Решение 416: тикер газа — dex.gas_ticker площадки цикла (core/gas_ticker.rs). Не задана — газ не учтён, причина в
+    // хронологии (после исполнения учёт не останавливается; адаптер без настройки до исполнения не доходит).
+    let gas = match super::gas_ticker::at(&core.inner.deps.settings, &r.trade.request.venue) {
+        Ok(g) => r.trade.fee_in(&g),
+        Err(e) => {
+            deal.note(format!("газ цикла не учтён: {e}"));
+            Decimal::ZERO
+        }
+    };
     // Решение 236, дополнение: approve перед циклом, чаевые канала и газ их перевода (п. 6; факт транзакции) — тем же
     // курсом BNB адаптера.
     let extra_list = super::deal_gas::of_filled(&r.trade);

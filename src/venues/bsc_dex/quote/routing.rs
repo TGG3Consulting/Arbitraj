@@ -68,10 +68,13 @@ pub async fn run(q: Quoting, i: Input) -> GatewayResult<Quote> {
         coin_dec: i.coin_dec,
         usdt_dec: i.usdt_dec,
     };
+    // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs).
+    let gas_ticker = super::super::gas_ticker::read(ctx)?;
     let names = Names {
         usdt: (i.usdt, &i.usdt_ticker),
         coin: (i.coin, &i.asset.ticker),
         mids: &q.mids,
+        gas: &gas_ticker,
     };
     let (asset, qty, gas) = (&i.asset, i.qty, i.gas);
     // Классика (решения 29, 38): прямой или умный режим. При dex.router_mode = graph ниже сравним с графом.

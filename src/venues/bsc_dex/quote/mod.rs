@@ -145,7 +145,6 @@ use super::num;
 use super::pools::mids::Mids;
 use super::pools::registry::Registry;
 use super::tokens::Tokens;
-use super::wallet::balances::BNB;
 use gas::GasPrice;
 use quote_timing_outer::{Outcome, Outer};
 use quote_timing_stages::Part;
@@ -315,6 +314,8 @@ impl Quoting {
                 r.exec_note = Some(w);
             }
         }
+        // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs).
+        let gas_t = super::gas_ticker::read(ctx)?;
         // Газ разрешений и чаевые — к первому шагу маршрута (разрешения — на токен входа первого шага).
         let first = q.costs.iter().find_map(|c| c.step.clone());
         let with_step = |c: Cost| match &first {
@@ -330,8 +331,12 @@ impl Quoting {
                     format!("Газ разрешений {wei} wei не переводится в BNB"),
                 )
             })?;
-            q.costs
-                .push(with_step(Cost::new(CostKind::ApproveGas, bnb, BNB, false)));
+            q.costs.push(with_step(Cost::new(
+                CostKind::ApproveGas,
+                bnb,
+                &gas_t,
+                false,
+            )));
         }
         tm.add(Part::Approve, t);
         let t = tm.now();
@@ -351,13 +356,17 @@ impl Quoting {
             .filter(|_| tip_sent)
             .and_then(|w| num::to_decimal(w, num::BNB_DECIMALS))
         {
-            q.costs
-                .push(with_step(Cost::new(CostKind::ChannelTip, tip, BNB, false)));
+            q.costs.push(with_step(Cost::new(
+                CostKind::ChannelTip,
+                tip,
+                &gas_t,
+                false,
+            )));
             // Тигран 09.11 (согласовано): газ отдельной транзакции перевода чаевых (exec/txs.rs, nonce + 1, та же цена
             // газа) — та же статья, что в факте (core/deal_gas.rs «газ перевода чаевых», вид ChannelTip).
             if let Some(g) = super::send::tip_gas::planned_bnb(ctx, gas).await? {
                 q.costs
-                    .push(with_step(Cost::new(CostKind::ChannelTip, g, BNB, false)));
+                    .push(with_step(Cost::new(CostKind::ChannelTip, g, &gas_t, false)));
             }
         }
         tm.add(Part::Tip, t);

@@ -100,10 +100,13 @@ pub async fn verified(
         coin_dec: decs.0,
         usdt_dec: decs.1,
     };
+    // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs).
+    let gas_ticker = super::super::gas_ticker::read(ctx)?;
     let names = Names {
         usdt: (usdt, &usdt_ticker),
         coin: (coin, &req.asset.ticker),
         mids: &q.mids,
+        gas: &gas_ticker,
     };
     let verdict = verify::run(&v, &names, &plan, gas, req.worst_price).await?;
     Ok(verify_gate::outcome(ctx, verdict)?.amount_out_min)

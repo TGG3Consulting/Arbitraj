@@ -14,7 +14,6 @@ use rust_decimal::Decimal;
 use crate::core::types::{Quote, Side};
 
 use super::super::num;
-use super::super::wallet::balances::BNB;
 use super::{Quoting, pool_quote};
 
 /// Больший итог из двух котировок. Ошибок нет.
@@ -46,10 +45,12 @@ pub async fn pick(q: &Quoting, a: Quote, b: Quote, side: Side, usdt_dec: u8) -> 
 pub async fn gas_usdt(q: &Quoting, x: &Quote, usdt_dec: u8) -> Option<Decimal> {
     let ctx = &q.ctx;
     let usdt = q.tokens.usdt(ctx).ok()?;
+    // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs); не задана — газа не перевести (None).
+    let gas_t = super::super::gas_ticker::read(ctx).ok()?;
     let bnb: Decimal = x
         .costs
         .iter()
-        .filter(|c| c.asset == BNB && !c.in_price)
+        .filter(|c| c.asset == gas_t && !c.in_price)
         .map(|c| c.amount)
         .sum();
     // Решение 211: пулы BNB — по адресу обёртки нативной монеты (dex.native_wrapped, решение 62), не по тикеру.

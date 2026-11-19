@@ -68,7 +68,11 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
     }
     if kind == VenueKind::Cex && !out.is_empty() {
         // Цена газа в USDT — из живого стакана BNB биржи (решение 35, convert.rs).
-        out.push(super::convert::gas_asset());
+        // Решение 416: тикер газа — dex.gas_ticker площадок DEX; не задана — стакана газа нет (затраты газа не
+        // переводятся в USDT — «нет живой цены», сделки нет), причина — в «Проверить подключение» DEX и в настройках.
+        if let Ok(g) = super::gas_ticker::of_core(core) {
+            out.push(super::convert::gas_asset(&g));
+        }
         // Живые цены промежуточных монет (решение 52) — тикер ЭТОЙ биржи по адресу (решение 211).
         out.extend(intermediate_assets(core, Some(venue)));
         // Решение 181: монеты для пересчёта затрат в USDT (комиссия Gate в GT) — venue.price_assets биржи.

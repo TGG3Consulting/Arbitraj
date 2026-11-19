@@ -133,10 +133,12 @@ pub async fn bnb_ok(core: &Core, d: &Direction, v: &VenueId, need: Decimal) -> R
         .settings
         .decimal("risk.min_bnb_balance", At::default())
         .map_err(|e| e.message)?;
+    // Решение 416: тикер газа — dex.gas_ticker этой площадки DEX (core/gas_ticker.rs); не задана — точная причина.
+    let gas = super::gas_ticker::at(&core.inner.deps.settings, v)?;
     let gw = super::dex_account::venue_dir(&core.inner.deps, d, v).await?;
     // Решение 113: только BNB (у DEX — eth_getBalance), а не балансы всех токенов кошелька (~11 с на вызов).
     let have = gw
-        .balance(super::convert::GAS_TICKER)
+        .balance(&gas)
         .await
         .map_err(|e| format!("{}: балансы: {}", v.0, e.message))?
         .map_or(Decimal::ZERO, |x| x.free);
@@ -162,11 +164,12 @@ pub fn bnb_enough(who: &str, have: Decimal, min: Decimal, need: Decimal) -> Resu
 }
 
 /// Газ (BNB) транзакций сделки на одной площадке: строки расчёта её стадий с газом в BNB (газ обмена, разрешений,
-/// перевода, обёртки, чаевые; у «возврат USDT» — газ перевода USDT, convert::usdt_return). Ошибок нет.
-pub fn gas_need(costs: &[CostLine], stages: &[&str]) -> Decimal {
+/// перевода, обёртки, чаевые; у «возврат USDT» — газ перевода USDT, convert::usdt_return). Решение 416: `gas` — тикер
+/// газа площадки (dex.gas_ticker). Ошибок нет.
+pub fn gas_need(costs: &[CostLine], stages: &[&str], gas: &str) -> Decimal {
     costs
         .iter()
-        .filter(|l| stages.contains(&l.stage) && l.asset == super::convert::GAS_TICKER)
+        .filter(|l| stages.contains(&l.stage) && l.asset == gas)
         .filter(|l| super::convert::is_gas(l.kind))
         .map(|l| l.amount)
         .sum()
@@ -597,7 +600,8 @@ async fn steps(
             continue;
         }
         let at = Instant::now();
-        let r = bnb_ok(core, d, v, gas_need(&c.costs, &stages)).await;
+        let gas = super::gas_ticker::at(&core.inner.deps.settings, v)?;
+        let r = bnb_ok(core, d, v, gas_need(&c.costs, &stages, &gas)).await;
         t.mark(format!("газ BNB {}", v.0), at);
         if let Err(e) = r {
             core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;

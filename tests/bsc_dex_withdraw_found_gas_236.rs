@@ -67,7 +67,7 @@ fn transfer(
 fn fee_is_gas_of_receipt() {
     let (r, used, price) = receipt();
     assert_eq!(used, U256::from(21000u64));
-    let c = resolve_withdraw::fee(&r).unwrap();
+    let c = resolve_withdraw::fee(&r, "BNB").unwrap();
     assert_eq!(c.kind, CostKind::TransferGas);
     assert_eq!(c.asset, "BNB");
     let wei = Decimal::from_str(&(used * price).to_string()).unwrap();
@@ -83,7 +83,7 @@ fn fee_is_gas_of_receipt() {
 async fn found_withdraw_gas_charged_once() {
     let (core, _j) = start(&dir("a236wfound"), None).await;
     let (r, _, _) = receipt();
-    let fee = resolve_withdraw::fee(&r);
+    let fee = resolve_withdraw::fee(&r, "BNB");
     let gas = fee.as_ref().unwrap().amount;
     let mut x = doge("w7DOGE");
     let spent = x.spent;

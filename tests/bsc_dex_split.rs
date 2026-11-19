@@ -48,6 +48,7 @@ fn names<'a>(p: &'a Parts) -> Names<'a> {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &p.mids,
+        gas: "BNB",
     }
 }
 

@@ -321,7 +321,8 @@ async fn sell(
         // сейчас не помещается сверх резерва: «застрявшая монета» (stuck.rs), а не остановка сделки.
         Err(e)
             if e.code == Some(ErrorCode::InsufficientBalance)
-                && a.ticker == super::convert::GAS_TICKER =>
+                && super::gas_ticker::at(&core.inner.deps.settings, &deal.at)
+                    .is_ok_and(|g| a.ticker == g) =>
         {
             // Решение 235: у кнопки — алерт с точной причиной, не режим застрявшей монеты (там пороги убытка).
             if why == BUTTON {

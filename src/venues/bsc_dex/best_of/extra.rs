@@ -13,13 +13,14 @@ use rust_decimal::Decimal;
 use crate::core::types::Quote;
 
 use super::super::quote::{Quoting, pick};
-use super::super::wallet::balances::BNB;
 
 /// Затраты вне цены в USDT. Принимает: окружение котировки, котировку. Возвращает: сумму; None — BNB не переведён
 /// (нет пула «BNB — USDT»), тикер USDT не задан или затрата в неизвестной валюте. Ошибок нет.
 pub async fn usdt(q: &Quoting, x: &Quote) -> Option<Decimal> {
     let ctx = &q.ctx;
     let usdt_ticker = ctx.text("venue.quote_asset").ok()?;
+    // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs); не задана — затрату не перевести (None).
+    let gas_t = super::super::gas_ticker::read(ctx).ok()?;
     let mut sum = Decimal::ZERO;
     let mut bnb = false;
     for c in x
@@ -27,7 +28,7 @@ pub async fn usdt(q: &Quoting, x: &Quote) -> Option<Decimal> {
         .iter()
         .filter(|c| !c.in_price && !c.amount.is_zero())
     {
-        if c.asset == BNB {
+        if c.asset == gas_t {
             bnb = true;
         } else if c.asset == usdt_ticker {
             sum += c.amount;

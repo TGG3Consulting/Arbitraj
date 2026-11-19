@@ -151,7 +151,14 @@ impl Core {
         };
         let quote = self.inner.deps.settings.text("venue.quote_asset", at).ok();
         let mut errs = Vec::new();
-        let bnb = read_one(gw.as_ref(), super::convert::GAS_TICKER, &mut errs).await;
+        // Решение 416: тикер газа — dex.gas_ticker площадки DEX; не задана — причина в ошибке кошелька.
+        let bnb = match super::gas_ticker::at(&self.inner.deps.settings, &dex) {
+            Ok(g) => read_one(gw.as_ref(), &g, &mut errs).await,
+            Err(e) => {
+                errs.push(e);
+                None
+            }
+        };
         let usdt = match &quote {
             Some(q) => read_one(gw.as_ref(), q, &mut errs).await,
             None => None,

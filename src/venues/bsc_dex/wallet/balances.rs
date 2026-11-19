@@ -26,8 +26,8 @@ use super::super::num;
 use super::super::tokens::{Token, Tokens};
 use super::signer;
 
-/// Как ядро называет нативную монету сети для газа (стык: core/types/cost.rs, поле Cost.asset — «BNB»).
-pub const BNB: &str = "BNB";
+// Решение 416 (ревью шага 1): тикер монеты газа — настройка площадки dex.gas_ticker (venues/bsc_dex/gas_ticker.rs), а
+// не константа «BNB»; ядро называет газ тем же тикером (core/gas_ticker.rs).
 
 /// Баланс BNB кошелька.
 /// Принимает: адрес. Возвращает: BNB. Ошибки: узел; BadResponse — сумма не помещается в Decimal.
@@ -47,6 +47,8 @@ pub async fn token_units(ctx: &Ctx, token: Address, owner: Address) -> GatewayRe
 /// обёртка нативной монеты WBNB в строке BNB, решение 62).
 /// Ошибки: ключ кошелька, узел; ошибка по любому токену — ошибка целиком (половина балансов — не факт).
 pub async fn all(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Balance>> {
+    // Решение 416: строка газа — тикер dex.gas_ticker площадки; не задана — балансов нет, точная причина.
+    let gas = super::super::gas_ticker::read(ctx)?;
     let owner = signer::address(ctx)?;
     let list = tokens.all();
     let addrs: Vec<Address> = list.iter().map(|t| t.address).collect();
@@ -68,12 +70,12 @@ pub async fn all(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Balance>> {
             (bnb_free, out)
         }
     };
-    let mut out = vec![balance(ctx, BNB, bnb_free)];
+    let mut out = vec![balance(ctx, &gas, bnb_free)];
     let native = super::super::exec::native::wrapped(ctx);
     for (t, free) in list.iter().zip(found) {
         // Нативная монета (решение 62): WBNB — та же монета BNB, но на газ и нативный перевод не годится без
         // UNWRAP — в locked строки BNB (сверка ядра считает free + locked, газ — только free).
-        if is_native_row(&native, t) {
+        if is_native_row(&native, t, &gas) {
             out[0].locked += free;
             continue;
         }
@@ -90,10 +92,12 @@ pub async fn all(ctx: &Ctx, tokens: &Tokens) -> GatewayResult<Vec<Balance>> {
 pub async fn single(ctx: &Ctx, tokens: &Tokens, asset: &str) -> GatewayResult<Option<Balance>> {
     let owner = signer::address(ctx)?;
     let list = tokens.all();
-    if asset == BNB {
+    // Решение 416: строка газа — тикер dex.gas_ticker (не задана — газа среди активов нет, токены — как раньше).
+    let gas = super::super::gas_ticker::read(ctx).ok();
+    if let Some(g) = gas.as_deref().filter(|g| *g == asset) {
         let native = super::super::exec::native::wrapped(ctx);
-        let mut row = balance(ctx, BNB, bnb(ctx, owner).await?);
-        for t in list.iter().filter(|t| is_native_row(&native, t)) {
+        let mut row = balance(ctx, g, bnb(ctx, owner).await?);
+        for t in list.iter().filter(|t| is_native_row(&native, t, g)) {
             row.locked += one(ctx, tokens, t, owner).await?;
         }
         return Ok(Some(row));
@@ -114,8 +118,8 @@ pub async fn single(ctx: &Ctx, tokens: &Tokens, asset: &str) -> GatewayResult<Op
 }
 
 /// Токен — обёртка нативной монеты (WBNB под тикером BNB, решение 62): его баланс идёт в locked строки BNB. Ошибок нет.
-fn is_native_row(native: &Option<(String, Address)>, t: &Token) -> bool {
-    native.as_ref() == Some(&(t.ticker.clone(), t.address)) && t.ticker == BNB
+fn is_native_row(native: &Option<(String, Address)>, t: &Token, gas: &str) -> bool {
+    native.as_ref() == Some(&(t.ticker.clone(), t.address)) && t.ticker == gas
 }
 
 /// wei → BNB. Ошибки: BadResponse — не помещается в Decimal.

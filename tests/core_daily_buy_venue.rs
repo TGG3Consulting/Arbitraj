@@ -61,6 +61,15 @@ async fn core_at(p: &std::path::Path, limit: &str) -> (Core, Store) {
             .await
             .unwrap();
     }
+    // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+    st.set(
+        "dex.gas_ticker",
+        Scope::Venue("bsc_dex".into()),
+        Some(json!("BNB")),
+        "тест",
+    )
+    .await
+    .unwrap();
     for id in ["bingx", "bsc_dex", "kucoin", "mexc"] {
         st.set(
             "risk.max_errors_in_row",

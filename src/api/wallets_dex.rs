@@ -76,7 +76,15 @@ pub async fn balances(
         let v = v.clone();
         async move { v.balance(&a).await.map(|b| b.map(|x| x.free)) }
     };
-    let bnb = one(crate::core::convert::GAS_TICKER.to_string()).await;
+    // Решение 416: тикер газа — dex.gas_ticker площадки DEX; не задана — причина в поле error.
+    let bnb = match crate::core::gas_ticker::at(&st.settings, &dex) {
+        Ok(g) => one(g).await,
+        Err(e) => Err(crate::gateway::errors::GatewayError::not_set(
+            None,
+            "dex.gas_ticker",
+            e,
+        )),
+    };
     let usdt = match &quote {
         Some(q) => Some(one(q.clone()).await),
         None => None,

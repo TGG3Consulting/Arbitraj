@@ -104,9 +104,18 @@ pub async fn wallets(
         };
         p.at = Some(Utc::now());
         let quote = quote_of(core, &dv);
+        // Решение 416: тикер газа — dex.gas_ticker площадки DEX; не задана — причина в строке кошелька.
+        let gas = match crate::core::gas_ticker::at(&core.inner.deps.settings, &dv) {
+            Ok(g) => g,
+            Err(e) => {
+                p.error = Some(e);
+                out.push(p);
+                continue;
+            }
+        };
         let bnb = Asset {
             chain: None,
-            ticker: crate::core::convert::GAS_TICKER.into(),
+            ticker: gas,
             contract: None,
         };
         p.lines

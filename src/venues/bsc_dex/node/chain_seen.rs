@@ -28,14 +28,28 @@ use super::super::errors::Op;
 use super::failover::{Link, Node};
 use super::{chain_id, jsonrpc, rpc};
 
-/// Адрес узла (настройка, без ключа) → (chainId узла, dex.evm_chain_id при сверке). Дешёво клонируется.
+/// Адрес узла (настройка, без ключа) → (chainId узла, dex.evm_chain_id при сверке); тикер газа (dex.gas_ticker),
+/// прочитанный до последней отправки (gas_ticker.rs, решение 398). Дешёво клонируется.
 #[derive(Clone, Default)]
-pub struct Seen(Arc<Mutex<HashMap<String, (u64, u64)>>>);
+pub struct Seen {
+    nodes: Arc<Mutex<HashMap<String, (u64, u64)>>>,
+    gas: Arc<Mutex<Option<String>>>,
+}
 
 impl Seen {
+    /// Что делает: запоминает тикер газа, прочитанный из настроек. Принимает: тикер. Ошибок нет.
+    pub fn note_gas(&self, t: &str) {
+        *self.gas.lock().unwrap_or_else(|p| p.into_inner()) = Some(t.to_string());
+    }
+
+    /// Что делает: тикер газа, прочитанный последним (None — ещё не читался). Ошибок нет.
+    pub fn gas(&self) -> Option<String> {
+        self.gas.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
     /// Что делает: запоминает ответ узла. Принимает: адрес узла, chainId узла, dex.evm_chain_id. Ошибок нет.
     pub fn note(&self, url: &str, got: u64, want: u64) {
-        self.0
+        self.nodes
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .insert(url.to_string(), (got, want));
@@ -44,7 +58,7 @@ impl Seen {
     /// Что делает: chainId узла, подтверждённый при том же dex.evm_chain_id. Принимает: адрес, dex.evm_chain_id.
     /// Возвращает: None — не подтверждён (новый адрес, сменилась настройка). Ошибок нет.
     pub fn get(&self, url: &str, want: u64) -> Option<u64> {
-        self.0
+        self.nodes
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .get(url)
@@ -87,8 +101,11 @@ async fn ask(ctx: &Ctx, node: Node) -> GatewayResult<Option<(String, u64)>> {
 }
 
 /// Что делает: сверка перед подписью (шапка). Принимает: окружение. Возвращает: chainId для подписи.
-/// Ошибки: NotConfigured (dex.evm_chain_id, адрес основного узла), BadResponse (узел другой сети), связь с основным.
+/// Ошибки: NotConfigured (dex.gas_ticker, dex.evm_chain_id, адрес основного узла), BadResponse (узел другой сети),
+/// связь с основным.
 pub async fn ensure(ctx: &Ctx) -> GatewayResult<u64> {
+    // Решение 416 (ревью): тикер газа — до отправки (затраты газа после неё берут его из памяти, gas_ticker.rs sent).
+    super::super::gas_ticker::ticker(ctx)?;
     let want = chain_id::chain_id(ctx)?;
     for (node, who) in [(Node::Main, "основной"), (Node::Backup, "резервный")] {
         let url = Link::Http.names(node).0;

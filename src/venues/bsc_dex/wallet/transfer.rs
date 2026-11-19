@@ -30,7 +30,6 @@ use super::super::exec::txs::{self, Env};
 use super::super::node::abi::IERC20;
 use super::super::num;
 use super::super::tokens::Tokens;
-use super::balances::BNB;
 use super::nonce::Nonces;
 /// Стоимость перевода — в wallet/transfer_cost.rs (контракт withdraw_cost зовёт её отсюда, mod.rs).
 pub use super::transfer_cost::cost;
@@ -111,10 +110,12 @@ pub async fn withdraw(
                 .with_tx(d.chain));
         }
     }
+    // Решение 416: тикер газа — прочитанный перед отправкой (gas_ticker.rs sent, решение 398).
+    let gas_t = super::super::gas_ticker::sent(ctx)?;
     let fee = d
         .chain
         .gas_bnb
-        .map(|g| Cost::new(CostKind::TransferGas, g, BNB, false));
+        .map(|g| Cost::new(CostKind::TransferGas, g, &gas_t, false));
     Ok(transfer(
         ctx,
         req.asset,

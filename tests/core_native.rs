@@ -204,6 +204,6 @@ fn usdt_return_gas_stays_gas() {
         line(Cost::new(CostKind::Gas, bnb, "BNB", false), "B"),
         line(Cost::new(CostKind::Gas, bnb, "BNB", false), "A"),
     ];
-    assert_eq!(gas_need(&lines, &["B", "возврат USDT"]), bnb + bnb);
-    assert_eq!(gas_need(&lines, &["A", "перевод"]), bnb);
+    assert_eq!(gas_need(&lines, &["B", "возврат USDT"], "BNB"), bnb + bnb);
+    assert_eq!(gas_need(&lines, &["A", "перевод"], "BNB"), bnb);
 }

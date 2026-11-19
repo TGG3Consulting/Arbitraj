@@ -100,10 +100,14 @@ pub async fn record_tx_as(core: &Core, asset: &Asset, tx: &ChainTx, in_deal: boo
             .filter(|(_, k)| *k == VenueKind::Cex)
             .map(|(v, _)| v.clone())
             .collect();
-        super::convert::bnb_price(&core.inner.deps, &cex, gas)
-            .await
-            .map(|p| p * gas)
-            .ok()
+        // Решение 416: тикер газа — dex.gas_ticker (не задана — цены нет, как без стакана).
+        match super::gas_ticker::of_core(core) {
+            Ok(g) => super::convert::bnb_price(&core.inner.deps, &cex, &g, gas)
+                .await
+                .map(|p| p * gas)
+                .ok(),
+            Err(_) => None,
+        }
     } else {
         None
     };

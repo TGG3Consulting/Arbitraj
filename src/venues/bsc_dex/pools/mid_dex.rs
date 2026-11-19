@@ -29,7 +29,6 @@ use super::super::ctx::Ctx;
 use super::super::node::abi::IERC20;
 use super::super::node::{call, rpc};
 use super::super::tokens::Tokens;
-use super::super::wallet::balances::BNB;
 
 /// Почему подпись — адрес, а не symbol() с цепи.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,7 +108,8 @@ pub async fn label(ctx: &Ctx, tokens: &Tokens, address: Address, taken: &[String
 pub fn busy(ctx: &Ctx, tokens: &Tokens, taken: &[String]) -> Vec<String> {
     let mut busy: Vec<String> = tokens.all().into_iter().map(|t| t.ticker).collect();
     busy.extend(taken.iter().cloned());
-    busy.push(BNB.to_string());
+    // Решение 416: тикер газа — dex.gas_ticker площадки (не задана — в списке не участвует, как соседние).
+    busy.extend(super::super::gas_ticker::read(ctx).ok());
     busy.extend(ctx.text("dex.native_ticker").ok());
     busy.extend(ctx.text("venue.quote_asset").ok());
     // Решение 181: venue.price_assets задаётся у каждой биржи своей областью — берутся значения всех областей.

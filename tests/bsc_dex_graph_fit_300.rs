@@ -214,6 +214,7 @@ async fn executable_best_has_no_fit() {
                 usdt: (USDT, "USDT"),
                 coin: (CAKE, "CAKE"),
                 mids: &p.mids,
+                gas: "BNB",
             };
             for qty in QTYS {
                 let (a, b) = (Decimal::from(qty), U256::from(GAS));

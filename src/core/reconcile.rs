@@ -175,16 +175,14 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
         // Мало BNB на газ — по уже полученным балансам (решение 113: раньше bnb_ok запрашивал балансы кошелька второй
         // раз за круг). Резерв не задан — та же причина, что у bnb_ok.
         if kind == VenueKind::Dex {
-            let have: Decimal = b
-                .iter()
-                .filter(|x| x.asset == super::convert::GAS_TICKER)
-                .map(|x| x.free)
-                .sum();
-            let r = deps
-                .settings
-                .decimal("risk.min_bnb_balance", At::default())
-                .map_err(|e| e.message)
-                .and_then(|min| super::precheck::bnb_enough(&label, have, min, Decimal::ZERO));
+            // Решение 416: тикер газа — dex.gas_ticker площадки DEX; не задана — та же тревога с точной причиной.
+            let r = super::gas_ticker::at(&deps.settings, &v).and_then(|gas| {
+                let have: Decimal = b.iter().filter(|x| x.asset == gas).map(|x| x.free).sum();
+                deps.settings
+                    .decimal("risk.min_bnb_balance", At::default())
+                    .map_err(|e| e.message)
+                    .and_then(|min| super::precheck::bnb_enough(&label, have, min, Decimal::ZERO))
+            });
             if let Err(e) = r {
                 out.push(("risk.low_bnb", Some(v.0.clone()), e, None, w.clone()));
             }

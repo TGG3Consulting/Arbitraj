@@ -112,10 +112,15 @@ pub async fn minus_sell_gas(
     qty: Decimal,
 ) -> (Decimal, Option<String>) {
     // Решение 211 (ревью К1): монета газа — нативная по тикеру И адресу обёртки, не любой токен с тикером BNB.
-    if asset.ticker != super::convert::GAS_TICKER
-        || !is_native(core, asset)
-        || super::trade_ops::kind(core, venue).ok() != Some(VenueKind::Dex)
-    {
+    if !is_native(core, asset) || super::trade_ops::kind(core, venue).ok() != Some(VenueKind::Dex) {
+        return (qty, None);
+    }
+    // Решение 416: тикер газа — dex.gas_ticker площадки DEX; не задана — газ не вычтен, причина в заметке.
+    let gas_t = match super::gas_ticker::at(&core.inner.deps.settings, venue) {
+        Ok(g) => g,
+        Err(e) => return (qty, Some(format!("газ продажи не вычтен: {e}"))),
+    };
+    if asset.ticker != gas_t {
         return (qty, None);
     }
     match gw.quote(asset, Side::Sell, qty).await {
@@ -123,7 +128,7 @@ pub async fn minus_sell_gas(
             let gas: Decimal = q
                 .costs
                 .iter()
-                .filter(|c| super::convert::is_gas(c.kind) && c.asset == super::convert::GAS_TICKER)
+                .filter(|c| super::convert::is_gas(c.kind) && c.asset == gas_t)
                 .map(|c| c.amount)
                 .sum();
             (

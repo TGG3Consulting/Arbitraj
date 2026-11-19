@@ -35,7 +35,6 @@ use super::parts::Parts;
 use super::resolve::{keys, receipt, release_if_ours};
 use super::send::receipt::Receipt;
 use super::wallet;
-use super::wallet::balances::BNB;
 
 /// Что делает: вывод (перевод из кошелька) с неизвестным исходом (см. шапку). Принимает: части адаптера, исходный
 /// запрос, «чем найти». Возвращает: Some(перевод с хешем, Pending — дальше опрос статуса); None — исход пока не установлен.
@@ -103,7 +102,8 @@ async fn landed(
     // этой квитанции, как у обычного пути (wallet/transfer.rs). В учёт идёт один раз: обычно ядро (core/transfers.rs go)
     // ждёт статус withdrawal_status (тот же газ той же квитанции) и берёт его fee, а этот перевод — только на пути
     // «зачислено по блокчейну» (core/transfer_chain.rs: вывод как есть; получатель — DEX, core/credit_chain.rs arm).
-    let fee = fee(&r);
+    // Решение 416: тикер газа — dex.gas_ticker (в памяти после отправки, иначе из настроек).
+    let fee = fee(&r, &super::gas_ticker::sent(&p.ctx)?);
     Ok(wallet::transfer::transfer(
         &p.ctx,
         req.asset,
@@ -117,8 +117,8 @@ async fn landed(
 
 /// Что делает: газ перевода по его квитанции — затрата TransferGas в BNB (gasUsed × effectiveGasPrice), как у обычного
 /// пути (wallet/transfer.rs) и статуса (wallet/transfer_status.rs). Принимает: квитанцию. Возвращает: None — газ не
-/// помещается в Decimal. Ошибок нет.
-pub fn fee(r: &Receipt) -> Option<Cost> {
+/// помещается в Decimal. Решение 416: `gas` — тикер газа сети (dex.gas_ticker). Ошибок нет.
+pub fn fee(r: &Receipt, gas: &str) -> Option<Cost> {
     r.gas_bnb()
-        .map(|g| Cost::new(CostKind::TransferGas, g, BNB, false))
+        .map(|g| Cost::new(CostKind::TransferGas, g, gas, false))
 }

@@ -187,6 +187,7 @@ pub mod fills;
 pub mod first_pass;
 pub mod frozen;
 pub mod gas_stats;
+pub mod gas_ticker;
 pub mod group_notice;
 pub mod ids;
 pub mod inner;

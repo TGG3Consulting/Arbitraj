@@ -91,17 +91,30 @@ async fn state() -> AppState {
         raw: r,
         taps: t,
     };
-    let dx = arb::venues::bsc_dex::ctx::Ctx {
-        settings: settings.clone(),
-        vault: vault.clone(),
-        http: http.clone(),
-        journal: journal.clone(),
-        raw,
-        pace: Default::default(),
-        failover: Default::default(),
-        chains: Default::default(),
-        account: None,
-        index: Default::default(),
+    let dx = {
+        let c = arb::venues::bsc_dex::ctx::Ctx {
+            settings: settings.clone(),
+            vault: vault.clone(),
+            http: http.clone(),
+            journal: journal.clone(),
+            raw,
+            pace: Default::default(),
+            failover: Default::default(),
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     };
     registry
         .register(Arc::new(arb::venues::bingx::Bingx::new(bx)))

@@ -19,7 +19,6 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::num;
-use super::super::wallet::balances::BNB;
 use super::txs;
 use super::{bundle_native, fill};
 
@@ -143,6 +142,9 @@ pub fn result(
     } else {
         TradeStatus::Filled
     };
+    // Решение 416: тикер газа — прочитанный перед отправкой (gas_ticker.rs sent; после отправки настройки не читаются,
+    // решение 398).
+    let gas_t = super::super::gas_ticker::sent(ctx)?;
     Ok(TradeResult {
         status,
         filled_qty: coins,
@@ -151,7 +153,7 @@ pub fn result(
         } else {
             usdt / coins
         },
-        fees: Fee::single(fee, BNB),
+        fees: Fee::single(fee, &gas_t),
         venue_ref: d.chain.hash.to_string(),
         chain: Some(d.chain),
         finished_at: Utc::now(),

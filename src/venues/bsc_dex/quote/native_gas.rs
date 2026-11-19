@@ -19,7 +19,6 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::exec::native;
 use super::super::num;
 use super::super::pools::families;
-use super::super::wallet::balances::BNB;
 use super::Quoting;
 
 /// Затрата газа обёртки и её единицы газа. Принимает: котировку (маршрут), цену газа (wei).
@@ -90,5 +89,10 @@ pub fn cost(q: &Quoting, quote: &Quote, gas_wei: U256) -> GatewayResult<Option<(
             format!("Газ обёртки {wei} wei не переводится в BNB"),
         )
     })?;
-    Ok(Some((Cost::new(CostKind::WrapGas, bnb, BNB, false), units)))
+    // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs).
+    let gas_t = super::super::gas_ticker::read(ctx)?;
+    Ok(Some((
+        Cost::new(CostKind::WrapGas, bnb, &gas_t, false),
+        units,
+    )))
 }

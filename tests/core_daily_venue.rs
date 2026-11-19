@@ -91,6 +91,16 @@ async fn start(d: &std::path::Path) -> (Core, Store) {
     ] {
         set(&settings, n, Scope::Global, x).await;
     }
+    // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+    settings
+        .set(
+            "dex.gas_ticker",
+            Scope::Venue("bsc_dex".into()),
+            Some(json!("BNB")),
+            "тест",
+        )
+        .await
+        .unwrap();
     for id in ["bingx", "bsc_dex", "mexc"] {
         let scope = Scope::Venue(id.into());
         settings

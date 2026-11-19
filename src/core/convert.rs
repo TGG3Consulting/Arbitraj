@@ -15,15 +15,15 @@ use crate::core::types::{Asset, Cost, CostKind, Side, VenueId};
 
 use super::deps::Deps;
 
-/// Монета газа сети BSC. Задана протоколом сети (газ платится в BNB) и стыком:
-/// core/types/cost.rs — `Cost.asset` для газа и чаевых — «BNB».
-pub const GAS_TICKER: &str = "BNB";
+// Решение 416 (ревью шага 1): тикер газа — настройка площадки DEX dex.gas_ticker (core/gas_ticker.rs), а не «BNB» в
+// коде; `Cost.asset` газа и чаевых адаптер DEX пишет этим же тикером.
 
-/// Монета газа как актив для подписки на стакан биржи (у нативной монеты нет адреса контракта).
-pub fn gas_asset() -> Asset {
+/// Монета газа как актив для подписки на стакан биржи (у нативной монеты нет адреса контракта). Принимает: тикер газа
+/// (dex.gas_ticker). Ошибок нет.
+pub fn gas_asset(gas: &str) -> Asset {
     Asset {
         chain: None,
-        ticker: GAS_TICKER.to_string(),
+        ticker: gas.to_string(),
         contract: None,
     }
 }
@@ -84,11 +84,11 @@ pub fn to_usdt(c: &Cost, r: &Rates) -> Result<Decimal, String> {
     }
 }
 
-/// Сколько BNB среди затрат (газ, approve, перевод, чаевые). Ошибок нет.
-pub fn bnb_total(costs: &[Cost]) -> Decimal {
+/// Сколько газовой монеты среди затрат (газ, approve, перевод, чаевые). Принимает: затраты, тикер газа. Ошибок нет.
+pub fn bnb_total(costs: &[Cost], gas: &str) -> Decimal {
     costs
         .iter()
-        .filter(|c| c.asset == GAS_TICKER)
+        .filter(|c| c.asset == gas)
         .map(|c| c.amount)
         .sum()
 }
@@ -141,9 +141,15 @@ pub async fn quote_one(
     }
 }
 
-/// Цена BNB в USDT по живому стакану биржи (газ). Ошибки: как у price_of.
-pub async fn bnb_price(deps: &Deps, cex: &[VenueId], qty: Decimal) -> Result<Decimal, String> {
-    price_of(deps, cex, GAS_TICKER, qty).await
+/// Цена газовой монеты в USDT по живому стакану биржи. Принимает: зависимости, биржи, тикер газа (dex.gas_ticker),
+/// количество. Ошибки: как у price_of.
+pub async fn bnb_price(
+    deps: &Deps,
+    cex: &[VenueId],
+    gas: &str,
+    qty: Decimal,
+) -> Result<Decimal, String> {
+    price_of(deps, cex, gas, qty).await
 }
 
 /// Собирает курсы для набора затрат: живая цена каждой валюты, кроме котируемых и монеты сделки,

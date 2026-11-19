@@ -101,6 +101,15 @@ async fn core_at(name: &str) -> (Core, Store) {
             .await
             .unwrap();
     }
+    // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+    st.set(
+        "dex.gas_ticker",
+        Scope::Venue("bsc_dex".into()),
+        Some(json!("BNB")),
+        "тест",
+    )
+    .await
+    .unwrap();
     for (id, _) in kinds {
         let sc = Scope::Venue(id.into());
         st.set("risk.max_errors_in_row", sc, Some(json!(3)), "тест")

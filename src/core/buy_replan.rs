@@ -108,7 +108,9 @@ async fn gas_ok(core: &Core, d: &Direction, c: &Calc) -> Result<(), String> {
         if super::trade_ops::kind(core, v)? != VenueKind::Dex {
             continue;
         }
-        let need = super::precheck::gas_need(&c.costs, &stages);
+        // Решение 416: тикер газа — dex.gas_ticker площадки DEX.
+        let gas = super::gas_ticker::at(&core.inner.deps.settings, v)?;
+        let need = super::precheck::gas_need(&c.costs, &stages, &gas);
         if let Err(e) = super::precheck::bnb_ok(core, d, v, need).await {
             core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
             return Err(e);

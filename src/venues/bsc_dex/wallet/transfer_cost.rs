@@ -16,7 +16,6 @@ use super::super::check::state::Checks;
 use super::super::exec::native;
 use super::super::exec::txs::Env;
 use super::super::num;
-use super::balances::BNB;
 use super::transfer::same_network;
 
 /// Стоимость перевода: газ (пробный перевод × цена газа) и налог на перевод (% проверки монеты).
@@ -69,7 +68,9 @@ pub async fn cost(
             format!("Газ перевода {wei} wei не переводится в BNB"),
         )
     })?;
-    let mut out = vec![Cost::new(CostKind::TransferGas, bnb, BNB, false)];
+    // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs).
+    let gas_t = super::super::gas_ticker::read(ctx)?;
+    let mut out = vec![Cost::new(CostKind::TransferGas, bnb, &gas_t, false)];
     if !native {
         out.push(Cost::new(
             CostKind::TransferTax,

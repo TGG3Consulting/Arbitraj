@@ -83,17 +83,30 @@ async fn start(tag: &str) -> (Core, Store, arb::secrets::Vault) {
         raw: raw.clone(),
         taps: Default::default(),
     };
-    let dx = arb::venues::bsc_dex::ctx::Ctx {
-        settings: settings.clone(),
-        vault: vault.clone(),
-        http: reqwest::Client::new(),
-        journal: journal.clone(),
-        raw,
-        pace: Default::default(),
-        failover: Default::default(),
-        chains: Default::default(),
-        account: None,
-        index: Default::default(),
+    let dx = {
+        let c = arb::venues::bsc_dex::ctx::Ctx {
+            settings: settings.clone(),
+            vault: vault.clone(),
+            http: reqwest::Client::new(),
+            journal: journal.clone(),
+            raw,
+            pace: Default::default(),
+            failover: Default::default(),
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     };
     gw.register(std::sync::Arc::new(arb::venues::bingx::Bingx::new(bx)))
         .await;

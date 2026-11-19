@@ -903,6 +903,18 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** dex.chain, bsc.node_http_url, bsc.node_ws_url.
 - **Статус:** ещё не в релизе (ветка feat/arbitrum).
 
+### `dex.gas_ticker`
+
+- **Задача / решение:** ревью шага 1 плана двух сетей, решение «416 (ревью шага 1)».
+- **Появилась:** 2026-11-19, ветка feat/arbitrum.
+- **Кейс:** тикер монеты газа был зашит «BNB» в коде (core/convert.rs GAS_TICKER, venues/bsc_dex/wallet/balances.rs BNB). У Arbitrum газ — ETH. dex.native_ticker для этого не годится: по решениям 62/270/276 она может быть не задана (бот торгует без обёртки), а тест tests/bsc_dex_mid_dex_read.rs задаёт ей значение, отличное от тикера газа, — это разные понятия. Решение техлида 19.11.2026: отдельная обязательная настройка площадки DEX.
+- **Где задаётся:** «Настройки», группа «DEX» и «Площадки» → карточка площадки DEX; область — по площадке DEX (bsc_dex); каталог src/settings/catalog/dex.rs:96.
+- **Что ставить:** `BNB` у площадки bsc_dex (газ сети BSC платится в BNB); у будущей площадки Arbitrum — `ETH`. Совет — docs/FIRST_RUN.md.
+- **Если не задана:** в каталоге без .optional() (обязательная). По коду: адаптер DEX — котировок нет (NotConfigured «Не задана настройка dex.gas_ticker …»: src/venues/bsc_dex/quote/routing.rs, quote/mod.rs, exec/verify_gate.rs, exec/dry_paths.rs), транзакции не отправляются (node/chain_seen.rs ensure до отправки), балансы кошелька — ошибка с этой причиной (wallet/balances.rs all), стоимость перевода — ошибка (wallet/transfer_cost.rs); ядро — предпроверка газа на DEX — отказ с причиной (core/precheck.rs bnb_ok, buy_replan.rs), сверка балансов — тревога risk.low_bnb с причиной (core/reconcile.rs), газ вне обмена — «не пересчитан» и запись в журнал (core/deal_gas.rs), газ цикла DEX ↔ DEX — строка «газ цикла не учтён: …» в хронологии (core/cycle_fact.rs), стакан газа бирж не подписывается (core/subscribe.rs) — цена газа в USDT неизвестна, сделок с газом нет; «Вернуть боту» BNB — газ продажи не вычтен, причина в заметке (core/native.rs minus_sell_gas). Пустая строка — то же.
+- **Влияет на торговлю:** да — без неё площадка DEX не котирует и не торгует.
+- **Связанные ключи:** dex.native_ticker (отдельная — нативная монета на бирже), risk.min_bnb_balance, dex.chain, dex.evm_chain_id.
+- **Статус:** ещё не в релизе (ветка feat/arbitrum).
+
 ### `dex.graph_alert_min_s`
 
 - **Задача / решение:** t137, решение 308.

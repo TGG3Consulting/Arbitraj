@@ -42,6 +42,7 @@ async fn graph_alone(p: &Parts, side: Side) -> Quote {
         usdt: (USDT, "USDT"),
         coin: (COIN, "COIN"),
         mids: &p.mids,
+        gas: "BNB",
     };
     graph_route::quote(&v, &names, &coin(), Decimal::from(1000u32), U256::from(GAS))
         .await

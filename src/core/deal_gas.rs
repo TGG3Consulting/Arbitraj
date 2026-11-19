@@ -100,7 +100,12 @@ pub fn of_err_approve(e: &GatewayError) -> Vec<Wasted> {
 /// Ошибки: текст — нет живой цены BNB или не задана venue.quote_asset.
 async fn usd(core: &Core, venue: &VenueId, list: &[Wasted]) -> (Decimal, Result<Decimal, String>) {
     let bnb: Decimal = list.iter().map(|w| w.bnb).sum();
-    let c = Cost::new(CostKind::Gas, bnb, super::convert::GAS_TICKER, false);
+    // Решение 416: тикер газа — dex.gas_ticker площадки (core/gas_ticker.rs); не задана — пересчёта нет, причина.
+    let gas = match super::gas_ticker::for_venue(core, venue) {
+        Ok(g) => g,
+        Err(e) => return (bnb, Err(e)),
+    };
+    let c = Cost::new(CostKind::Gas, bnb, &gas, false);
     (
         bnb,
         super::fills::usdt(core, venue, "", Decimal::ONE, &c).await,

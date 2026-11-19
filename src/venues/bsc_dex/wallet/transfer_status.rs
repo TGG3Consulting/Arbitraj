@@ -23,7 +23,6 @@ use super::super::node::rpc;
 use super::super::num;
 use super::super::send::track::Receipt;
 use super::super::tokens::Tokens;
-use super::balances::BNB;
 use super::native_status;
 use super::transfer::{token, transfer};
 
@@ -128,9 +127,11 @@ async fn status(
         )
     })?;
     if deposit.is_none() {
+        // Решение 416: тикер газа — dex.gas_ticker (в памяти после отправки этим процессом, иначе из настроек).
+        let gas_t = super::super::gas_ticker::sent(ctx)?;
         let fee = r
             .gas_bnb()
-            .map(|g| Cost::new(CostKind::TransferGas, g, BNB, false));
+            .map(|g| Cost::new(CostKind::TransferGas, g, &gas_t, false));
         return Ok(transfer(
             ctx,
             asset,

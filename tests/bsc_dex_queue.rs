@@ -37,17 +37,30 @@ async fn ctx(d: &std::path::Path) -> Ctx {
             id
         }
     };
-    Ctx {
-        account: Some(id),
-        raw: RawLog::start(d.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        chains: Default::default(),
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    {
+        let c = Ctx {
+            account: Some(id),
+            raw: RawLog::start(d.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            chains: Default::default(),
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(d.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     }
 }
 

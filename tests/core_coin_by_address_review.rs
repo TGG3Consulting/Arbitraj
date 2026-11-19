@@ -278,6 +278,16 @@ async fn start_with(d: &Path, list: &[CoinEntry], pre: &[(&str, &str, Value)]) -
     let settings = Store::load(db.clone(), changes.clone(), journal.clone())
         .await
         .unwrap();
+    // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+    settings
+        .set(
+            "dex.gas_ticker",
+            arb::settings::scope::Scope::Venue("bsc_dex".into()),
+            Some(serde_json::json!("BNB")),
+            "тест",
+        )
+        .await
+        .unwrap();
     for (venue, name, value) in pre {
         let at = arb::settings::scope::Scope::Venue(venue.to_string());
         settings

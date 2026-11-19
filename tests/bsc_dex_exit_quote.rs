@@ -58,17 +58,30 @@ async fn ctx(name: &str) -> Ctx {
     let (jtx, _) = broadcast::channel(64);
     let journal = Journal::new(db.clone(), jtx);
     let settings = Store::load(db, changes, journal.clone()).await.unwrap();
-    let c = Ctx {
-        raw: RawLog::start(dir.join("raw"), settings.clone()),
-        pace: Default::default(),
-        failover: Default::default(),
-        chains: Default::default(),
-        account: None,
-        index: Default::default(),
-        settings,
-        vault: arb::secrets::Vault::locked(dir.join("secrets.enc")),
-        http: reqwest::Client::new(),
-        journal,
+    let c = {
+        let c = Ctx {
+            raw: RawLog::start(dir.join("raw"), settings.clone()),
+            pace: Default::default(),
+            failover: Default::default(),
+            chains: Default::default(),
+            account: None,
+            index: Default::default(),
+            settings,
+            vault: arb::secrets::Vault::locked(dir.join("secrets.enc")),
+            http: reqwest::Client::new(),
+            journal,
+        };
+        // Решение 416: тикер газа площадки DEX — настройка (dex.gas_ticker).
+        c.settings
+            .set(
+                "dex.gas_ticker",
+                arb::settings::scope::Scope::Venue("bsc_dex".into()),
+                Some(serde_json::json!("BNB")),
+                "тест",
+            )
+            .await
+            .unwrap();
+        c
     };
     for (n, v) in [
         ("dex.quoter_max_diff_pct", json!("0.1")),

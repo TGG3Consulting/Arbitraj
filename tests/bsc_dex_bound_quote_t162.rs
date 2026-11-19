@@ -154,6 +154,7 @@ async fn all_modes(p: &Parts) -> (usize, usize, usize) {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &q.mids,
+        gas: "BNB",
     };
     let (mut n, mut via_mid, mut split) = (0, 0, 0);
     for side in [Side::Sell, Side::Buy] {

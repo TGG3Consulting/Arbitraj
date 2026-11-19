@@ -137,11 +137,13 @@ pub fn default_dex(core: &Core) -> Option<VenueId> {
     dex_of(&core.inner.deps.settings, &dexes(core), None).ok()
 }
 
-/// Что делает: сеть площадки DEX в каноническом виде (None — сеть по умолчанию). Одна площадка DEX — None без чтения
-/// настроек. Принимает: ядро, площадку DEX. Ошибки: как у chain_at / dex_chain.
+/// Что делает: сеть площадки DEX в каноническом виде (None — сеть по умолчанию). Площадок DEX в реестре не больше одной —
+/// None без чтения настроек. Принимает: ядро, площадку DEX. Ошибки: как у chain_at / dex_chain.
 pub fn tag_of_dex(core: &Core, v: &VenueId) -> Result<Option<ChainId>, String> {
     let dex = dexes(core);
-    if dex.len() == 1 && dex[0] == *v {
+    // Площадок DEX в реестре не больше одной — сеть одна, это сеть по умолчанию (как до решения 430). Реестр бывает пуст
+    // (ядро без площадок — тесты на записанных данных, площадка ещё не зарегистрирована): ответ тот же, без настроек.
+    if dex.len() <= 1 {
         return Ok(None);
     }
     let s = &core.inner.deps.settings;

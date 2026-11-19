@@ -14,22 +14,12 @@
 ## Ждут решения Тиграна
 
 - **Решение 416 (19.11.2026, ветка feat/arbitrum) — две сети, шаг 1: сеть в типах ядра; ждёт сборки и тестов в GitHub
-  (cargo локально не запускался).** После выкладки ДО запуска задать у площадки bsc_dex: `dex.chain` = `bsc`,
-  `dex.evm_chain_id` = `56` (без них площадка DEX не подписывается на рынок и не подписывает транзакции; совет —
-  docs/FIRST_RUN.md). Вопрос Тиграну:
-  1) **Тикер газа (п. 3 постановки шага 1) не сделан — нужен выбор.** Постановка: газ (core/convert.rs GAS_TICKER «BNB»,
-     venues/bsc_dex/wallet/balances.rs BNB) брать из `dex.native_ticker`. Факт кода: по решениям 62/270/276
-     dex.native_ticker не задана — рабочая конфигурация (обёртка не используется, бот торгует), а тест
-     tests/bsc_dex_mid_dex_read.rs:132-133 нарочно задаёт ей «WBNB» как значение, «отличное от тикера газа «BNB»» —
-     в коде это разные понятия. Варианты: (а) dex.native_ticker обязательна и она же — тикер газа (меняется смысл
-     решений 62/270/276; без неё DEX не котирует и не торгует; тест 276 переписать); (б) новая обязательная настройка
-     площадки DEX «тикер газа сети» (например dex.gas_ticker = BNB), dex.native_ticker — как есть. Места замены:
-     ядро — convert.rs (GAS_TICKER, gas_asset, bnb_total, bnb_price), deal_gas.rs:103, cycle_fact.rs:27,
-     precheck.rs:139,169, native.rs:114,125, balances_cache.rs:154, convert_at.rs:41, sell.rs:324, reconcile.rs:180,
-     subscribe.rs:70, gas_stats.rs:103, report/snap_dex.rs:108, api/wallets_dex.rs:79; адаптер DEX — wallet/balances.rs
-     (BNB), exec/result.rs, wallet/{transfer,transfer_cost,transfer_status}.rs, resolve_withdraw.rs, quote/{mod,pick,
-     steps,native_gas}.rs, best_of/extra.rs, pools/mid_dex.rs. Тесты с газом «BNB» (42 файла tests/) — им нужна будет
-     эта настройка в окружении.
+  (cargo локально не запускался).** Порядок выкладки (docs/notes/arbitrum/deploy-step1.md): «Стоп» → дождаться
+  закрытия всех сделок и возвратов USDT → выкладка → задать у bsc_dex `dex.chain` = `bsc`, `dex.evm_chain_id` = `56`,
+  `dex.gas_ticker` = `BNB` → «Проверить подключение» DEX → «Старт». Без трёх настроек площадка DEX не подписывается
+  на рынок, не котирует и не подписывает транзакции (совет — docs/FIRST_RUN.md).
+  Тикер газа решён техлидом (ревью шага 1): отдельная обязательная настройка dex.gas_ticker, dex.native_ticker не
+  тронута (решения 62/270/276).
 - **Решение 416 — перенесено в следующие шаги плана (docs/notes/arbitrum/multichain-plan-2026-11-19.md):**
   1) ДО того, как адаптер DEX начнёт ставить сеть в монету (шаг 2): перенос `chain = None` → сеть (записи учёта
      core_state, учёт сделок, окна; карты в памяти) или «действующая сеть» в равенстве — иначе старая монета (None) ≠
@@ -38,9 +28,10 @@
   2) Сравнения адресов полем без сети (`a.contract == b.contract`): core/venue_ticker.rs asset_back, credit_watch.rs
      same_asset, native.rs apply/is_native, registry_build.rs, ticker_index.rs (карты (площадка, адрес)), core/subscribe.rs;
      ~20 статиков адаптера DEX с ключом Address (pools/, exec/executor/, quote/ — список в плане).
-  3) Ключ монеты на счёте биржи (core/coin_account.rs): вызывать `remember` из справочника (ticker_index / registry_build)
-     для бирж, когда биржи отдадут адрес контракта по каждой сети (шаг 3). Пока карта пуста — монеты разных сетей на
-     бирже не склеиваются (только по факту тикера биржи).
+  3) Ключ монеты на счёте биржи (core/coin_account.rs): вызывать `remember_saved` из справочника (ticker_index /
+     registry_build) для бирж ДО публикации справочника, когда биржи отдадут адрес контракта по каждой сети (шаг 3).
+     Карта только пополняется и хранится в учёте ядра — ключ сделки не меняется посреди её жизни (ревью С-3). Пока
+     карта пуста — монеты разных сетей на бирже не склеиваются (только по факту тикера биржи).
   4) core/quarantine.rs key_of_id — ключ из интерфейса без сети; core/deposit_hold.rs — замер удержания по
      (биржа, CoinKey с сетью): решить, мерить по сети перевода или по монете биржи.
   5) Тип адреса: свой тип с 20-байтовым EVM-вариантом и местом под адрес Solana — не сделан (Address во всём адаптере

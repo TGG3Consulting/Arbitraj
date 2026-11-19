@@ -2187,6 +2187,15 @@ rationale = "Глубина для котировки на объём; чек-с
 prefill = { kind = "Venue", id = "kraken" }
 
 [[section.rec]]
+name = "venue.book_standby_depth"
+area = "площадка Kraken"
+unit = "уровней"
+value = "25"
+source = "spot-websocket-v2/book: depth 10, 25, 100, 500, 1000; guides/websockets/introduction: ~150 подключений за 10 минут на IP"
+rationale = "Решение 426: равна venue.depth_levels — на страховке ядро видит ту же глубину; трафик и подключения удваиваются. Меньше (10) — легче, но котировка на объём на время страховки по 10 уровням."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
 name = "venue.ws_ping_ms"
 area = "площадка Kraken"
 unit = "мс"

@@ -152,6 +152,6 @@ async fn usdt_check_is_quote_other_coin_not() {
     assert!(transfer_tax::is_quote(&core, &c));
     let mut other = c.clone();
     // Другой адрес из той же записи: пул-источник пробы (PancakeSwap V2 WBNB/USDT, tests/bsc_dex_service_tax.rs).
-    other.asset.bsc_contract = Some(address!("0x16b9a82891338f9ba80e2d6970fdda79d1eb0dae"));
+    other.asset.contract = Some(address!("0x16b9a82891338f9ba80e2d6970fdda79d1eb0dae"));
     assert!(!transfer_tax::is_quote(&core, &other));
 }

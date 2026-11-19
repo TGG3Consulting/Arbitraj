@@ -57,7 +57,7 @@ pub async fn all(p: &Parts) -> GatewayResult<Vec<Balance>> {
     let tokens: Vec<(String, Address)> = p
         .assets()
         .into_iter()
-        .filter_map(|a| a.bsc_contract.map(|addr| (a.ticker, addr)))
+        .filter_map(|a| a.contract.map(|addr| (a.ticker, addr)))
         .collect();
     let found = join_all(tokens.iter().map(|(_, a)| one(p, *a, owner))).await;
     for ((ticker, _), r) in tokens.iter().zip(found) {

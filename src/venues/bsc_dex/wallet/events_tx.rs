@@ -99,8 +99,9 @@ pub async fn change(
     Ok(BalanceChange {
         venue: ctx.venue(),
         asset: Asset {
+            chain: None,
             ticker,
-            bsc_contract: Some(mv.token),
+            contract: Some(mv.token),
         },
         delta: if mv.inbound { amount } else { -amount },
         kind: kind(mv.inbound, own),

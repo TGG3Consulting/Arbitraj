@@ -62,8 +62,9 @@ async fn quote(p: &Parts, side: Side, qty: u32) -> Quote {
         mids: &p.mids,
     };
     let asset = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     };
     graph_route::quote(&v, &names, &asset, Decimal::from(qty), U256::from(GAS))
         .await

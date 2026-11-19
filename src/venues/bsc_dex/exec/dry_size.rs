@@ -20,7 +20,7 @@ use super::super::quote::{Quoting, spot};
 /// для спот-цены), котировка.
 pub async fn sized(q: &Quoting, r: &mut DexDrySwap) -> GatewayResult<Quote> {
     let ctx = &q.ctx;
-    let coin = r.asset.bsc_contract.ok_or_else(|| {
+    let coin = r.asset.contract.ok_or_else(|| {
         let why = format!("{}: нет адреса контракта в BSC", r.asset.ticker);
         ctx.err(ErrorCode::NoRoute, why)
     })?;

@@ -62,8 +62,9 @@ fn book(venue: &str, ticker: &str, ms: i64) -> OrderBook {
     OrderBook {
         venue: v(venue),
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: None,
+            contract: None,
         },
         bids: vec![],
         asks: vec![],

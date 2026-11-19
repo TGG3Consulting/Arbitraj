@@ -171,7 +171,7 @@ pub async fn save_row(core: &Core, info: &WindowInfo) {
         started_at: info.started_at.to_rfc3339(),
         ticker: info.asset.ticker.clone(),
         // Решение 211: адрес монеты — для фильтра окон по адресу.
-        address: info.asset.bsc_contract.map(|a| format!("{a:#x}")),
+        address: info.asset.contract.map(|a| format!("{a:#x}")),
         deal: !info.deals.is_empty(),
         outcome: info.outcome.clone(),
         body,

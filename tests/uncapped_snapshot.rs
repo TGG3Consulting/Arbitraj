@@ -36,8 +36,9 @@ fn book(rec: &Rec) -> OrderBook {
     OrderBook {
         venue: VenueId("bingx".into()),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         bids: rec.bids.clone(),
         asks: rec.asks.clone(),

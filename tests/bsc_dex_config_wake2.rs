@@ -54,8 +54,9 @@ async fn threshold_change_recomputes_and_wakes_shallow() {
     let p = Parts::new(ctx.clone());
     let usdt = alloy_primitives::address!("0x55d398326f99059ff775485246999027b3197955");
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(usdt),
+        contract: Some(usdt),
     }]);
     p.tokens.remember_decimals(usdt, 18);
     let (e, _, _) = aave_v3(&rec());

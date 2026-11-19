@@ -68,8 +68,9 @@ fn lv(p: &str, q: &str) -> PriceLevel {
 
 fn asset(t: &str) -> Asset {
     Asset {
+        chain: None,
         ticker: t.into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

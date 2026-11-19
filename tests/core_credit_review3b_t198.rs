@@ -24,8 +24,9 @@ use t198_common::{code_of, credited, d, start};
 async fn fact_waits_for_sale_snapshot_does_not() {
     let v = VenueId("mexc".into());
     let a = Asset {
+        chain: None,
         ticker: "LOCK198".into(),
-        bsc_contract: None,
+        contract: None,
     };
     let sale = credit_lock::sale(&v, &a).await;
     assert!(credit_lock::fact_try(&v, &a).is_none(), "снимок не ждёт");

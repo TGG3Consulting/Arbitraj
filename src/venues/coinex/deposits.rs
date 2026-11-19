@@ -78,8 +78,9 @@ fn transfer(ctx: &Ctx, rec: &Value, tx: &str, status: TransferStatus) -> Gateway
     Ok(Transfer {
         venue: ctx.venue(),
         asset: Asset {
+            chain: None,
             ticker: num::text(rec, "ccy")?.to_ascii_uppercase(),
-            bsc_contract: None,
+            contract: None,
         },
         network: num::text_opt(rec, "chain").unwrap_or_default(),
         amount,

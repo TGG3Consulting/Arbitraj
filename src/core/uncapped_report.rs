@@ -62,7 +62,7 @@ impl Core {
                 continue;
             }
             let mut names = vec![a.ticker.clone()];
-            if a.bsc_contract.is_some()
+            if a.contract.is_some()
                 && let Some(c) = coins.all().find(|c| c.asset == *a)
             {
                 let mut venues: Vec<_> = c.presence.iter().collect();

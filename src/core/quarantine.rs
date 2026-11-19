@@ -41,7 +41,7 @@ pub fn serialize<S: Serializer>(m: &Map, s: S) -> Result<S::Ok, S::Error> {
 
 /// id монеты для «Снять карантин»: адрес контракта или тикер. Ошибок нет.
 pub fn id_of(a: &Asset) -> String {
-    a.bsc_contract
+    a.contract
         .map(|c| c.to_string())
         .unwrap_or_else(|| a.ticker.clone())
 }
@@ -49,8 +49,9 @@ pub fn id_of(a: &Asset) -> String {
 /// Ключ по id из интерфейса: адрес (0x…) — по адресу, иначе тикер. Ошибок нет.
 pub fn key_of_id(id: &str) -> CoinKey {
     match id.parse() {
-        Ok(a) => CoinKey::Contract(a),
-        Err(_) => CoinKey::Ticker(id.to_string()),
+        // Решение 416: id из интерфейса — без сети (в шаге 1 сеть у монет не указана; шаг 2 — docs/TASKS.md).
+        Ok(a) => CoinKey::Contract(None, a),
+        Err(_) => CoinKey::Ticker(None, id.to_string()),
     }
 }
 

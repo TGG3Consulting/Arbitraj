@@ -34,8 +34,9 @@ fn d(s: &str) -> Decimal {
 fn pig() -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "PIG".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("mexc".into()),
         sell_on: VenueId("bsc_dex".into()),

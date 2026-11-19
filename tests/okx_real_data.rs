@@ -133,7 +133,7 @@ fn currencies_cake_bsc() {
         .iter()
         .find(|i| i.network == "BSC")
         .expect("сеть BSC у CAKE");
-    assert!(bsc.asset.bsc_contract.is_some(), "ctAddr не полный адрес");
+    assert!(bsc.asset.contract.is_some(), "ctAddr не полный адрес");
     assert!(
         p.chains
             .iter()

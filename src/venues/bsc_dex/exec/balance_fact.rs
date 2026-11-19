@@ -120,7 +120,7 @@ pub async fn apply(
     r: GatewayResult<TradeResult>,
 ) -> GatewayResult<TradeResult> {
     let t = r?;
-    let (Some(chain), Some(token)) = (t.chain.as_ref(), t.request.asset.bsc_contract) else {
+    let (Some(chain), Some(token)) = (t.chain.as_ref(), t.request.asset.contract) else {
         return Ok(t);
     };
     let Some(block) = chain.block.filter(|_| chain.outcome == TxOutcome::Included) else {

@@ -140,7 +140,7 @@ pub async fn save(core: &Core, key: &Key, mut rec: Record) {
         deal_id,
         ticker: rec.direction.asset.ticker.clone(),
         // Решение 211: адрес монеты (столбец address).
-        address: rec.direction.asset.bsc_contract.map(|a| format!("{a:#x}")),
+        address: rec.direction.asset.contract.map(|a| format!("{a:#x}")),
         started_at: ts(rec.at),
         body: body.to_string(),
     };

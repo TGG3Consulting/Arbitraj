@@ -144,8 +144,9 @@ pub fn outcome(
     CoinCheck {
         venue,
         asset: Asset {
+            chain: None,
             ticker: ticker.to_string(),
-            bsc_contract: Some(usdt),
+            contract: Some(usdt),
         },
         taxes,
         source: SOURCE.into(),

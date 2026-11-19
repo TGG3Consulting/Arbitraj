@@ -149,7 +149,7 @@ fn coins_of(
 
 fn coin_at(list: &[CoinEntry], a: Address) -> &CoinEntry {
     list.iter()
-        .find(|c| c.asset.bsc_contract == Some(a))
+        .find(|c| c.asset.contract == Some(a))
         .expect("адрес есть в справочнике")
 }
 
@@ -169,8 +169,9 @@ fn k1_native_bnb_one_coin_across_cex_and_dex() {
         wrapped: WBNB,
     };
     let bnb = Asset {
+        chain: None,
         ticker: "BNB".into(),
-        bsc_contract: Some(WBNB),
+        contract: Some(WBNB),
     };
     let list = coins(Some(&n), &bingx_pairs(&[bnb]));
     let c = coin_at(&list, WBNB);
@@ -185,7 +186,7 @@ fn k1_native_bnb_one_coin_across_cex_and_dex() {
     assert!(c.presence.iter().any(|p| p.venue.0 == "bsc_dex"));
     assert_eq!(
         list.iter()
-            .filter(|x| x.asset.bsc_contract == Some(WBNB))
+            .filter(|x| x.asset.contract == Some(WBNB))
             .count(),
         1
     );
@@ -228,7 +229,7 @@ fn k1_wrapper_token_is_separate_asset() {
     );
     // Свой нативный BNB Gate не сопоставлен (Gate листит адрес обёртки) — без адреса, отдельная запись.
     assert!(list.iter().any(|x| {
-        x.asset.bsc_contract.is_none()
+        x.asset.contract.is_none()
             && x.presence
                 .iter()
                 .any(|p| p.venue.0 == "gate" && p.ticker == "BNB")
@@ -240,8 +241,9 @@ fn k2_address_on_one_side_is_other_asset() {
     let list = coins(None, &MarketState::default());
     let c = coin_at(&list, NIULAI).asset.clone();
     let raw = Asset {
+        chain: None,
         ticker: c.ticker.clone(),
-        bsc_contract: None,
+        contract: None,
     };
     assert!(same_asset(&c, &c.clone()));
     assert!(!same_asset(&c, &raw), "адрес только у одной стороны");
@@ -320,7 +322,7 @@ async fn v1_v2_v3_v7_by_address_and_venue_ticker() {
     gate.reverse();
     let first = gate
         .iter()
-        .find(|i| i.asset.bsc_contract == Some(ETERNAL))
+        .find(|i| i.asset.contract == Some(ETERNAL))
         .unwrap();
     assert_ne!(
         first.asset.ticker, chosen,
@@ -352,15 +354,17 @@ async fn v1_v2_v3_v7_by_address_and_venue_ticker() {
     assert_eq!(key(&core, &coin, &v("bingx")), "NIULAI");
     assert_eq!(key(&core, &coin, &v("gate")), "牛来");
     let bnb = Asset {
+        chain: None,
         ticker: "BNB".into(),
-        bsc_contract: Some(WBNB),
+        contract: Some(WBNB),
     };
     set_native(&core, WBNB).await;
     assert_eq!(key(&core, &bnb, &v("bsc_dex")), "BNB");
     // Второе ревью, п.6: токен с тикером BNB, но другим адресом — не монета газа, ключ — адрес.
     let fake = Asset {
+        chain: None,
         ticker: "BNB".into(),
-        bsc_contract: Some(NIULAI),
+        contract: Some(NIULAI),
     };
     assert_eq!(key(&core, &fake, &v("bsc_dex")), format!("{NIULAI:#x}"));
     assert!(arb::core::reconcile_key::is_native_key(&core, "BNB"));
@@ -371,8 +375,9 @@ async fn v1_v2_v3_v7_by_address_and_venue_ticker() {
 
     // В3: биржа выключена, по ней идёт сделка с монетой под показным именем — подписке тикер биржи, один раз.
     let shown = Asset {
+        chain: None,
         ticker: "牛来".into(),
-        bsc_contract: Some(NIULAI),
+        contract: Some(NIULAI),
     };
     let dir = Direction {
         asset: shown.clone(),
@@ -393,7 +398,7 @@ async fn v1_v2_v3_v7_by_address_and_venue_ticker() {
     assert!(held);
     assert_eq!(want.len(), 1, "{want:?}");
     assert_eq!(
-        (want[0].ticker.as_str(), want[0].bsc_contract),
+        (want[0].ticker.as_str(), want[0].contract),
         ("NIULAI", Some(NIULAI))
     );
 
@@ -466,8 +471,8 @@ fn r2_native_and_token_on_same_venue() {
     };
     let mut nets = networks(None);
     for i in nets.get_mut(&v("gate")).unwrap().iter_mut() {
-        if i.asset.ticker == "BNB" && i.asset.bsc_contract.is_none() {
-            i.asset.bsc_contract = Some(NMT);
+        if i.asset.ticker == "BNB" && i.asset.contract.is_none() {
+            i.asset.contract = Some(NMT);
         }
     }
     let list = coins_of(nets, Some(&n), &MarketState::default());
@@ -488,7 +493,7 @@ fn r2_native_and_token_on_same_venue() {
     // П.5: исключённый токен не в картах переводчика — тикер Gate «NETMIND» не переводится в монету нативной.
     let idx = index_of(&list);
     assert_eq!(
-        idx.get(&v("gate"), "BNB").map(|a| a.bsc_contract),
+        idx.get(&v("gate"), "BNB").map(|a| a.contract),
         Some(Some(NMT))
     );
     assert!(idx.get(&v("gate"), "NETMIND").is_none());
@@ -521,12 +526,14 @@ async fn r2_usdt_event_without_address_matches_relay() {
     let core = start_with(&tmp, &list, &pre).await;
     *core.inner.usdt.write().unwrap() = Ok(USDT);
     let expect = Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(USDT),
+        contract: Some(USDT),
     };
     let raw = Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: None,
+        contract: None,
     };
     assert_eq!(vt::asset_back(&core, &v("bingx"), raw.clone()), expect);
     let amount = Decimal::new(100, 0);
@@ -567,8 +574,9 @@ async fn r2_feed_hold_prefers_deal_coin() {
     let deal = arb::core::deal::Deal::new("d1".into(), dir_, Value::Null, Decimal::ZERO);
     core.inner.deals.lock().unwrap().insert("d1".into(), deal);
     let old = Asset {
+        chain: None,
         ticker: "NIULAI_OLD".into(),
-        bsc_contract: Some(NIULAI),
+        contract: Some(NIULAI),
     };
     {
         let mut subs = core.inner.subs.lock().unwrap();

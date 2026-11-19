@@ -111,7 +111,7 @@ impl Checks {
     /// После вывода (venue.rs withdraw): монета сделки ушла с кошелька — её запись снята. Принимает: запрос, итог
     /// (ошибка — монеты на месте или исход неизвестен: запись остаётся). Ошибок нет.
     pub fn forget_after_withdraw<T>(&self, req: &WithdrawRequest, r: &GatewayResult<T>) {
-        if let (Ok(_), Some(coin)) = (r, req.asset.bsc_contract.as_ref()) {
+        if let (Ok(_), Some(coin)) = (r, req.asset.contract.as_ref()) {
             self.forget_deal(&req.deal_id, Some(coin));
         }
     }

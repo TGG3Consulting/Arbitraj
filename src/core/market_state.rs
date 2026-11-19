@@ -94,7 +94,7 @@ impl MarketState {
                 }
             }
             MarketEvent::CoinCheck(c) => {
-                if let Some(addr) = c.asset.bsc_contract {
+                if let Some(addr) = c.asset.contract {
                     self.coin_checks.insert((c.venue.clone(), addr), c.clone());
                 }
                 Touched::CoinCheck(c)

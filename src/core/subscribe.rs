@@ -37,8 +37,9 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
                     .iter()
                     .find(|p| &p.venue == venue && p.info.is_some())
                     .map(|p| Asset {
+                        chain: None,
                         ticker: p.ticker.clone(),
-                        bsc_contract: c.asset.bsc_contract,
+                        contract: c.asset.contract,
                     })
             })
             .collect(),
@@ -100,8 +101,9 @@ fn price_assets(core: &Core, venue: &VenueId) -> Vec<Asset> {
         .unwrap_or_default()
         .into_iter()
         .map(|t| Asset {
+            chain: None,
             ticker: t.trim().to_uppercase(),
-            bsc_contract: None,
+            contract: None,
         })
         .filter(|a| !a.ticker.is_empty())
         .collect()
@@ -112,7 +114,7 @@ fn price_assets(core: &Core, venue: &VenueId) -> Vec<Asset> {
 /// Монета, известная бирже только по адресу (сеть BSC есть, пары нет — например BITLIGHT), не нужна.
 /// Принимает: монету справочника, виды площадок, состояние рынка. Возвращает: да/нет. Ошибок нет.
 pub fn dex_tradable(c: &CoinEntry, kinds: &[(VenueId, VenueKind)], market: &MarketState) -> bool {
-    c.asset.bsc_contract.is_some() && cex_pair(&c.presence, kinds, market)
+    c.asset.contract.is_some() && cex_pair(&c.presence, kinds, market)
 }
 
 /// Есть ли у монеты на какой-либо бирже сеть BSC (данные сети — Presence::info) и торгуемая спот-пара — то же
@@ -206,8 +208,9 @@ fn dex_quote(core: &Core, venue: &VenueId) -> Option<Asset> {
         .ok()?;
     let addr = rd(&core.inner.usdt).clone().ok()?;
     Some(Asset {
+        chain: None,
         ticker,
-        bsc_contract: Some(addr),
+        contract: Some(addr),
     })
 }
 
@@ -220,7 +223,7 @@ fn intermediate_assets(core: &Core, venue: Option<&VenueId>) -> Vec<Asset> {
     let name = |a| match venue {
         Some(v) => nets.get(v).and_then(|l| {
             l.iter()
-                .find(|i| i.asset.bsc_contract == Some(a))
+                .find(|i| i.asset.contract == Some(a))
                 .map(|i| i.asset.ticker.clone())
         }),
         None => super::intermediate::ticker_of(&nets, a),
@@ -234,8 +237,9 @@ fn intermediate_assets(core: &Core, venue: Option<&VenueId>) -> Vec<Asset> {
             for a in list {
                 if let Some(t) = name(a) {
                     out.push(Asset {
+                        chain: None,
                         ticker: t,
-                        bsc_contract: Some(a),
+                        contract: Some(a),
                     });
                 }
             }

@@ -146,8 +146,9 @@ async fn start(tag: &str) -> (Core, Store, arb::secrets::Vault) {
 fn dir(buy: &str, sell: &str) -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(address!("0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82")),
+            contract: Some(address!("0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82")),
         },
         buy_on: VenueId(buy.into()),
         sell_on: VenueId(sell.into()),

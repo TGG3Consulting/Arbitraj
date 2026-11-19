@@ -53,8 +53,9 @@ fn book() -> OrderBook {
     OrderBook {
         venue: VenueId("bybit".into()),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         bids: lv("b"),
         asks: lv("a"),

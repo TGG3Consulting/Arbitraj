@@ -49,8 +49,9 @@ fn transfer(
     Transfer {
         venue: VenueId(venue.into()),
         asset: Asset {
+            chain: None,
             ticker: "DOGE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         network: "BSC".into(),
         amount: Decimal::from_str(amount).unwrap(),

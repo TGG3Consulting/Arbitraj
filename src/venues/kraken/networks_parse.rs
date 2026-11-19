@@ -120,8 +120,9 @@ pub fn parse(
         p.list.push(CoinNetworkInfo {
             venue: venue.clone(),
             asset: Asset {
+                chain: None,
                 ticker: ticker.clone(),
-                bsc_contract: contract,
+                contract: contract,
             },
             network: net.clone(),
             deposit_enabled: dep_on,

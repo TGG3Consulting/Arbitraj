@@ -46,7 +46,7 @@ pub struct Plan {
 pub fn addresses_by_ticker(coins: &[CoinEntry]) -> BTreeMap<String, BTreeSet<Address>> {
     let mut m: BTreeMap<String, BTreeSet<Address>> = BTreeMap::new();
     for c in coins {
-        let Some(a) = c.asset.bsc_contract else {
+        let Some(a) = c.asset.contract else {
             continue;
         };
         m.entry(c.asset.ticker.clone()).or_default().insert(a);

@@ -47,8 +47,9 @@ const ROUTER: &str = "0x0000000000000000000000000000000000000099";
 
 fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     }
 }
 
@@ -76,8 +77,9 @@ fn mids_checked(p: &Parts) {
         p.checks.set_coin(CoinCheck {
             venue: VenueId("bsc_dex".into()),
             asset: Asset {
+                chain: None,
                 ticker: t.into(),
-                bsc_contract: Some(a),
+                contract: Some(a),
             },
             taxes: CheckState::Known(zero()),
             source: "тест".into(),

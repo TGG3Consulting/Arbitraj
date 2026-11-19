@@ -37,8 +37,9 @@ fn dir(d: Dir) -> Direction {
     };
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         buy_on: VenueId(b.into()),
         sell_on: VenueId(s.into()),

@@ -181,8 +181,9 @@ async fn no_order_without_wait_setting() {
     let req = TradeRequest {
         venue: VenueId("bingx".into()),
         asset: Asset {
+            chain: None,
             ticker: "NEMS".into(),
-            bsc_contract: None,
+            contract: None,
         },
         side: Side::Sell,
         qty: Decimal::from(115),

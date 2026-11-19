@@ -125,8 +125,9 @@ async fn ledger_takes_points_at_doc_rate() {
     let core = start("ledger").await;
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("htx".into()),
         sell_on: VenueId("bsc_dex".into()),

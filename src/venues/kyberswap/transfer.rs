@@ -104,13 +104,14 @@ pub async fn withdrawal_status(p: &Parts, hash: &str) -> GatewayResult<Transfer>
             let ticker = p
                 .assets()
                 .into_iter()
-                .find(|a| a.bsc_contract == Some(t))
+                .find(|a| a.contract == Some(t))
                 .map(|a| a.ticker)
                 .unwrap_or_default();
             (
                 Asset {
+                    chain: None,
                     ticker,
-                    bsc_contract: Some(t),
+                    contract: Some(t),
                 },
                 moved(&r, t, Some(wallet), None),
                 decimals(p, t).await?,
@@ -239,7 +240,7 @@ pub async fn withdraw_cost(
 
 /// Адрес токена монеты. Ошибки: NoRoute — у монеты нет адреса в BSC.
 fn token(ctx: &Ctx, a: &Asset) -> GatewayResult<Address> {
-    a.bsc_contract.ok_or_else(|| {
+    a.contract.ok_or_else(|| {
         ctx.err(
             ErrorCode::NoRoute,
             format!("{}: нет адреса контракта в BSC", a.ticker),
@@ -298,8 +299,9 @@ fn rejected(ctx: &Ctx, h: B256, network: String) -> Transfer {
 /// Монета без данных (для статусов до разбора логов). Ошибок нет.
 fn empty_asset() -> Asset {
     Asset {
+        chain: None,
         ticker: String::new(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

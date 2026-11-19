@@ -169,7 +169,7 @@ fn wake_venue(core: &Core, venue: &VenueId, pools: &[(Address, Address)]) -> usi
     WOKEN.fetch_add(coins.len() as u64, Ordering::Relaxed);
     let n = coins.len();
     for a in coins {
-        if let Some(token) = a.bsc_contract {
+        if let Some(token) = a.contract {
             lk(&core.inner.quote_cache).bump(venue, token);
         }
         let venues = cex_venues(core, &a);

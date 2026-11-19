@@ -181,8 +181,9 @@ fn created_transfer_from_request() {
     let req = WithdrawRequest {
         venue: mexc(),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         network: "BSC".into(),
         address: "0x1".into(),

@@ -70,16 +70,18 @@ pub fn shopinx_contract() -> Address {
 /// Монета SHOPINX с адресом контракта (как в запросах ядра).
 pub fn shopinx() -> Asset {
     Asset {
+        chain: None,
         ticker: "SHOPINX".into(),
-        bsc_contract: Some(shopinx_contract()),
+        contract: Some(shopinx_contract()),
     }
 }
 
 /// Монета без адреса (значение монеты к ней не применяется).
 pub fn bare(ticker: &str) -> Asset {
     Asset {
+        chain: None,
         ticker: ticker.into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 
@@ -136,7 +138,7 @@ pub async fn set(s: &Store, name: &str, v: Option<Value>) {
 
 /// venue.ignore_deprecated_qty у монеты — ключом интерфейса (coin_id: адрес строчными, решение 211).
 pub async fn set_coin(s: &Store, a: &Asset, v: bool) {
-    let sc = Scope::Coin(coin_id(&a.ticker, a.bsc_contract.as_ref()));
+    let sc = Scope::Coin(coin_id(&a.ticker, a.contract.as_ref()));
     s.set(symbols_qty::SETTING, sc, Some(json!(v)), "тест")
         .await
         .unwrap();

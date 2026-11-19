@@ -68,7 +68,7 @@ fn by_address(
     let mut out: BTreeMap<Address, BTreeMap<String, BTreeSet<String>>> = BTreeMap::new();
     for (venue, list) in n {
         for i in list.iter().filter(|i| i.asset.ticker != "USDT") {
-            if let Some(a) = i.asset.bsc_contract {
+            if let Some(a) = i.asset.contract {
                 out.entry(a)
                     .or_default()
                     .entry(venue.0.clone())
@@ -120,8 +120,8 @@ fn one_coin_per_address_venue_tickers_kept() {
     let addr = by_address(&n);
     // Одна запись справочника на адрес.
     let mut seen: HashMap<Address, usize> = HashMap::new();
-    for c in coins.iter().filter(|c| c.asset.bsc_contract.is_some()) {
-        *seen.entry(c.asset.bsc_contract.unwrap()).or_default() += 1;
+    for c in coins.iter().filter(|c| c.asset.contract.is_some()) {
+        *seen.entry(c.asset.contract.unwrap()).or_default() += 1;
     }
     assert!(seen.values().all(|&k| k == 1), "у адреса несколько записей");
     assert_eq!(seen.len(), addr.len(), "каждый адрес — в справочнике");
@@ -139,15 +139,12 @@ fn one_coin_per_address_venue_tickers_kept() {
             continue;
         }
         cross += 1;
-        let c = coins
-            .iter()
-            .find(|c| c.asset.bsc_contract == Some(*a))
-            .unwrap();
+        let c = coins.iter().find(|c| c.asset.contract == Some(*a)).unwrap();
         for (venue, t) in &single {
             let p = c.presence.iter().find(|p| &p.venue.0 == *venue).unwrap();
             assert_eq!(&&p.ticker, t);
             let on = idx.on_venue(&c.asset, &v(venue));
-            assert_eq!((&on.ticker, on.bsc_contract), (*t, Some(*a)));
+            assert_eq!((&on.ticker, on.contract), (*t, Some(*a)));
             assert_eq!(idx.get(&v(venue), t).as_ref(), Some(&c.asset));
         }
     }
@@ -180,26 +177,30 @@ fn asset_equality_is_by_address() {
         .parse()
         .unwrap();
     let nmt = Asset {
+        chain: None,
         ticker: "NMT".into(),
-        bsc_contract: Some(a),
+        contract: Some(a),
     };
     let netmind = Asset {
+        chain: None,
         ticker: "NETMIND".into(),
-        bsc_contract: Some(a),
+        contract: Some(a),
     };
     assert_eq!(nmt, netmind);
     let set: std::collections::HashSet<Asset> = [nmt.clone(), netmind].into_iter().collect();
     assert_eq!(set.len(), 1);
     let gate_nmt = Asset {
+        chain: None,
         ticker: "NMT".into(),
-        bsc_contract: None,
+        contract: None,
     };
     assert_ne!(nmt, gate_nmt, "адрес только у одной — разные монеты");
     assert_eq!(
         gate_nmt,
         Asset {
+            chain: None,
             ticker: "NMT".into(),
-            bsc_contract: None
+            contract: None
         }
     );
 }

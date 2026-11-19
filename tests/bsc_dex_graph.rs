@@ -121,12 +121,14 @@ async fn parts_with(max_per_edge: i64) -> Parts {
     let e18 = 10u128.pow(18);
     p.tokens.set(&[
         Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         Asset {
+            chain: None,
             ticker: "X".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
     ]);
     for e in [

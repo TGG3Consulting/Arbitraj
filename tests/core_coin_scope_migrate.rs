@@ -68,8 +68,9 @@ async fn migrate_unambiguous_keep_ambiguous_idempotent() {
     assert_eq!(p.ambiguous.len(), 1);
     for a in [b1, b2] {
         let coin = Asset {
+            chain: None,
             ticker: "BOMB".into(),
-            bsc_contract: Some(a),
+            contract: Some(a),
         };
         assert_eq!(
             blacklist::manual(&s, &coin, &[]),
@@ -78,8 +79,9 @@ async fn migrate_unambiguous_keep_ambiguous_idempotent() {
     }
     // CAKE по адресу — блок действует.
     let c = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(cake),
+        contract: Some(cake),
     };
     assert_eq!(blacklist::manual(&s, &c, &[]), Some(Some("скам".into())));
     // Повтор: переносить нечего, значения не меняются.

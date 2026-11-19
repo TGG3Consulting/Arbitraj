@@ -77,8 +77,9 @@ async fn status(
             let ticker = found.map(|x| x.ticker).unwrap_or_default();
             (
                 Asset {
+                    chain: None,
                     ticker,
-                    bsc_contract: t,
+                    contract: t,
                 },
                 t,
             )

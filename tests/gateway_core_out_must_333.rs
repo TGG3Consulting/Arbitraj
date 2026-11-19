@@ -77,8 +77,9 @@ fn check(state: CheckState<arb::core::types::TokenTaxes>, tag: &str) -> MarketEv
     MarketEvent::CoinCheck(CoinCheck {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "T".into(),
-            bsc_contract: None,
+            contract: None,
         },
         taxes: state,
         source: "тест".into(),

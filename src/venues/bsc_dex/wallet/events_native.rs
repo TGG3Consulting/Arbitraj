@@ -101,8 +101,9 @@ impl Native {
         Ok(Some(BalanceChange {
             venue: ctx.venue(),
             asset: Asset {
+                chain: None,
                 ticker,
-                bsc_contract: Some(w),
+                contract: Some(w),
             },
             delta,
             kind,

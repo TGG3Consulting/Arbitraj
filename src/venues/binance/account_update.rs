@@ -113,8 +113,9 @@ fn balance(ev: &Value, venue: &VenueId) -> Event {
     Event::Balance(BalanceChange {
         venue: venue.clone(),
         asset: Asset {
+            chain: None,
             ticker: asset.to_string(),
-            bsc_contract: None,
+            contract: None,
         },
         delta,
         kind,

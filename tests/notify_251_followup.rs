@@ -42,8 +42,9 @@ fn rec(id: &str, reason: &str) -> ManualRecord {
         deal_id: "20261104120000123CAKE".into(),
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         qty: Decimal::new(1234, 2),
         loss_pct: Some(Decimal::new(-35, 1)),

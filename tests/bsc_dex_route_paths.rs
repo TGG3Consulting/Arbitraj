@@ -234,8 +234,9 @@ async fn graph_and_ctx() -> (graph::Graph, Parts) {
     let got = load();
     let p = Parts::new(ctx().await);
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(USDT),
+        contract: Some(USDT),
     }]);
     for e in [
         v3(

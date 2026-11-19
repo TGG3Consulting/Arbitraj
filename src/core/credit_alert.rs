@@ -177,7 +177,7 @@ pub async fn unread(core: &Core, deal: &mut Deal, why: &str, mode: Unread) -> bo
 /// transfer.max_time_s по площадке и монете. Принимает: ядро, сделку. Возвращает: None — не задано. Ошибок нет.
 pub fn pace(core: &Core, deal: &Deal) -> Option<(u64, u64)> {
     let a = &deal.direction.asset;
-    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
+    let coin = crate::settings::scope::coin_id(&a.ticker, a.contract.as_ref());
     let at = crate::settings::read::At {
         venue: Some(&deal.at.0),
         coin: Some(&coin),

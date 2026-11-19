@@ -144,8 +144,9 @@ pub fn clean(ticker: &str, a: Address) -> CoinCheck {
     CoinCheck {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: Some(a),
+            contract: Some(a),
         },
         taxes: CheckState::Known(TokenTaxes {
             buy_pct: Decimal::ZERO,
@@ -163,12 +164,14 @@ pub fn clean(ticker: &str, a: Address) -> CoinCheck {
 pub fn prepare(p: &Parts, pools: &[&Entry], usdt: Address, coin: Address) {
     p.tokens.set(&[
         Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(usdt),
+            contract: Some(usdt),
         },
         Asset {
+            chain: None,
             ticker: "ETH".into(),
-            bsc_contract: Some(coin),
+            contract: Some(coin),
         },
     ]);
     for e in pools {

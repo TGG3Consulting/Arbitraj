@@ -42,8 +42,9 @@ fn zero() -> TokenTaxes {
 
 fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     }
 }
 

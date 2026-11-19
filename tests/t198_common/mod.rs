@@ -114,8 +114,9 @@ pub async fn start(name: &str) -> Core {
 pub fn credited(id: &str, to: &str, record: Decimal) -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "WKC".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bsc_dex".into()),
         sell_on: VenueId(to.into()),

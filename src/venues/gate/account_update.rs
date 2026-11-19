@@ -118,8 +118,9 @@ pub fn parse(text: &str, venue: &VenueId) -> Frame {
         changes.push(BalanceChange {
             venue: venue.clone(),
             asset: Asset {
+                chain: None,
                 ticker: cur,
-                bsc_contract: None,
+                contract: None,
             },
             delta,
             kind,

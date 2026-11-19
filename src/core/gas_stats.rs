@@ -62,7 +62,7 @@ pub async fn load(core: &Core) {
 async fn store(core: &Core, s: CoinGasStats) {
     let id = s
         .asset
-        .bsc_contract
+        .contract
         .map(|a| a.to_string())
         .unwrap_or(s.asset.ticker.clone());
     if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &id, &s).await {

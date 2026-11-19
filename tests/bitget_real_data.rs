@@ -140,7 +140,7 @@ fn recorded_coins_bsc() {
         let want: alloy::primitives::Address = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"
             .parse()
             .unwrap();
-        assert_eq!(cake.asset.bsc_contract, Some(want), "{file}");
+        assert_eq!(cake.asset.contract, Some(want), "{file}");
         assert!(cake.withdraw_fee.is_some() || p.extra_fee.iter().any(|x| x.starts_with("CAKE")));
     }
 }

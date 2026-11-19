@@ -95,7 +95,7 @@ fn currencies_bsc_network() {
     let addr: alloy::primitives::Address = "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82"
         .parse()
         .unwrap();
-    assert_eq!(cake.asset.bsc_contract, Some(addr));
+    assert_eq!(cake.asset.contract, Some(addr));
     assert_eq!(cake.withdraw_fee, Some(d("0.41")));
     assert_eq!(cake.withdraw_min, Some(d("0.82")));
     assert_eq!(cake.deposit_min, Some(d("0.01")));
@@ -107,7 +107,7 @@ fn currencies_bsc_network() {
         .iter()
         .find(|i| i.asset.ticker == "CAKE" && i.network == "bsc")
         .unwrap();
-    assert_eq!(in_all.asset.bsc_contract, Some(addr));
+    assert_eq!(in_all.asset.contract, Some(addr));
 }
 
 #[test]

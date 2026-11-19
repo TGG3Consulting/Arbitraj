@@ -24,8 +24,9 @@ fn d(s: &str) -> Decimal {
 fn dir(ticker: &str) -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bsc_dex".into()),
         sell_on: VenueId("bingx".into()),

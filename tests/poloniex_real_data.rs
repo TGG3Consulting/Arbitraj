@@ -136,7 +136,7 @@ fn recorded_currencies_bsc() {
             .iter()
             .find(|i| i.asset.ticker == "CAKE" && i.network == bsc)
             .expect("CAKE в сети BSC");
-        assert_eq!(cake.asset.bsc_contract, Some(want), "{file}");
+        assert_eq!(cake.asset.contract, Some(want), "{file}");
         assert!(cake.withdraw_fee.is_some(), "{file}");
         let (coin, _) = networks_parse::chain_coin(&raw, "CAKE", &bsc).expect("имя монеты в сети");
         assert!(!coin.is_empty());

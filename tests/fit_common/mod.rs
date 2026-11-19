@@ -38,8 +38,9 @@ pub fn d(s: &str) -> Decimal {
 
 pub fn shopinx() -> Asset {
     Asset {
+        chain: None,
         ticker: "SHOPINX".into(),
-        bsc_contract: Some(SHOPINX),
+        contract: Some(SHOPINX),
     }
 }
 
@@ -57,8 +58,9 @@ pub async fn scene() -> Parts {
     let got = super::route_common::load(DIR);
     let p = Parts::new(super::route_common::ctx().await);
     let usdt = Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(USDT),
+        contract: Some(USDT),
     };
     p.tokens.set(&[usdt, shopinx()]);
     for t in [SHOPINX, WBNB, USDT] {
@@ -66,8 +68,9 @@ pub async fn scene() -> Parts {
     }
     // Налоги SHOPINX и WBNB (промежуточная, Via::mid_ok) — проверены и нулевые, как CAKE в route_common.
     let wbnb = Asset {
+        chain: None,
         ticker: "BNB".into(),
-        bsc_contract: Some(WBNB),
+        contract: Some(WBNB),
     };
     for asset in [shopinx(), wbnb] {
         p.checks.set_coin(CoinCheck {

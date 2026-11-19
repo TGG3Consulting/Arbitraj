@@ -110,7 +110,7 @@ pub(super) fn dex_side(core: &Core, d: &Direction) -> Option<(VenueId, Side)> {
 pub fn generation(core: &Core, d: &Direction) -> Option<u64> {
     lk(&core.inner.windows).dex_slot(d)?;
     let (venue, _) = dex_side(core, d)?;
-    let token = d.asset.bsc_contract?;
+    let token = d.asset.contract?;
     Some(lk(&core.inner.quote_cache).generation(&venue, token))
 }
 

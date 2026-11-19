@@ -88,8 +88,9 @@ pub fn parse_networks(
                 Ok(CoinNetworkInfo {
                     venue: venue.clone(),
                     asset: Asset {
+                        chain: None,
                         ticker: ticker.clone(),
-                        bsc_contract: contract,
+                        contract: contract,
                     },
                     network: code.clone(),
                     deposit_enabled: flag(n, "depositEnable", &ticker)?,

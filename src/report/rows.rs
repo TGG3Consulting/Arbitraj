@@ -153,7 +153,7 @@ pub fn coin_labels(deals: &[Deal]) -> BTreeMap<String, String> {
     let mut addrs: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
     for d in deals {
         let a = &d.direction.asset;
-        let key = a.bsc_contract.map(|c| format!("{c:?}")).unwrap_or_default();
+        let key = a.contract.map(|c| format!("{c:?}")).unwrap_or_default();
         addrs.entry(a.ticker.as_str()).or_default().insert(key);
     }
     deals
@@ -161,7 +161,7 @@ pub fn coin_labels(deals: &[Deal]) -> BTreeMap<String, String> {
         .map(|d| {
             let a = &d.direction.asset;
             let many = addrs.get(a.ticker.as_str()).is_some_and(|s| s.len() > 1);
-            let label = match (many, a.bsc_contract) {
+            let label = match (many, a.contract) {
                 (true, Some(c)) => format!("{} {c:?}", a.ticker),
                 _ => a.ticker.clone(),
             };

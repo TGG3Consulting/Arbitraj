@@ -47,8 +47,9 @@ fn input(q: &Quoting) -> routing::Input {
     let mids = q.mids.active(&q.ctx).into_iter().map(|m| (m, 18)).collect();
     routing::Input {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         side: Side::Buy,
         qty: Decimal::from(5_000),

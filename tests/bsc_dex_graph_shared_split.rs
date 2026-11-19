@@ -70,8 +70,9 @@ async fn line(p: &Parts, side: Side, qty: u32, tag: &str) -> String {
         mids: &p.mids,
     };
     let asset = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     };
     match graph_route::quote(
         &v,

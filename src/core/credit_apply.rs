@@ -43,7 +43,7 @@ pub fn input(core: &Core, deal: &Deal, fact: Decimal, o: &Others) -> Input {
         None => confirmed += deal.qty,
     }
     let a = &deal.direction.asset;
-    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
+    let coin = crate::settings::scope::coin_id(&a.ticker, a.contract.as_ref());
     let at = At {
         venue: Some(&deal.at.0),
         coin: Some(&coin),

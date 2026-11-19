@@ -314,8 +314,9 @@ fn pools() -> Vec<Entry> {
 async fn graph_and_parts(reverse: bool) -> (graph::Graph, Parts) {
     let p = Parts::new(ctx().await);
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(USDT),
+        contract: Some(USDT),
     }]);
     let mut list = pools();
     if reverse {

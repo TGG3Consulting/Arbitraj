@@ -344,8 +344,9 @@ fn xt() -> VenueId {
 fn deal(id: &str, invested: &str) -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "BTC".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bsc_dex".into()),
         sell_on: xt(),

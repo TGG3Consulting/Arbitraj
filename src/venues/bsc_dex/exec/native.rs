@@ -66,7 +66,7 @@ pub fn wrapped(ctx: &Ctx) -> Option<(String, Address)> {
 /// Нативная ли монета: адрес = dex.native_wrapped и тикер = dex.native_ticker (монета биржи без адреса, которой ядро
 /// дало адрес обёртки). Токен WBNB, который биржа сама перечисляет с адресом под другим тикером, — обычный токен.
 pub fn is_native(ctx: &Ctx, a: &Asset) -> bool {
-    wrapped(ctx).is_some_and(|(t, w)| a.ticker == t && a.bsc_contract == Some(w))
+    wrapped(ctx).is_some_and(|(t, w)| a.ticker == t && a.contract == Some(w))
 }
 
 /// Виды пулов, через которые путь BNB проверен живой записью узла (решение 62): V2 и V3 (UR PancakeSwap и Uniswap,

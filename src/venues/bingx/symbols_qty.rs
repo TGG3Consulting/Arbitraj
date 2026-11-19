@@ -2,7 +2,7 @@
 //! Что делает: решение 293 — необязательная настройка venue.ignore_deprecated_qty [bingx]: «не соблюдать устаревшие
 //! minQty / maxQty справочника пар». Области: площадка и монета (значение монеты сильнее — можно включить сначала у
 //! одной монеты, например SHOPINX). Ключ монеты — как у всех настроек области «монета» (решение 211,
-//! settings/scope.rs coin_id): адрес контракта BSC строчными; адрес берётся из монеты запроса ядра (Asset.bsc_contract:
+//! settings/scope.rs coin_id): адрес контракта BSC строчными; адрес берётся из монеты запроса ядра (Asset.contract:
 //! ордер — TradeRequest.asset, состояние пары — монеты подписки). Адреса у монеты нет — значение монеты не
 //! применяется, действует значение площадки. Старое значение по тикеру («coin:SHOPINX») читается только после
 //! переноса на адрес (core/coin_scope_migrate.rs): тикеры-синонимы адреса settings/store.rs resolve применяет только
@@ -63,7 +63,7 @@ pub fn ignored(store: &Store, asset: &Asset) -> bool {
         coin: None,
     };
     let venue = || store.flag(SETTING, venue_only).unwrap_or(false);
-    let Some(addr) = asset.bsc_contract.as_ref() else {
+    let Some(addr) = asset.contract.as_ref() else {
         return venue();
     };
     let coin = coin_id(&asset.ticker, Some(addr));

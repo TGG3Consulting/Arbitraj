@@ -90,8 +90,9 @@ pub fn parse(data: &[u8], venue: &VenueId) -> Frame {
         change: Some(BalanceChange {
             venue: venue.clone(),
             asset: Asset {
+                chain: None,
                 ticker: a.vcoin_name.clone(),
-                bsc_contract: None,
+                contract: None,
             },
             delta,
             kind,

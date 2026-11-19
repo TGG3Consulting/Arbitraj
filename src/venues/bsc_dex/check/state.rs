@@ -112,7 +112,7 @@ impl Checks {
     /// Записывает проверку монеты — по адресу контракта (решение 211). Монета без адреса не записывается: налоги
     /// меряются пробным обменом в пуле, а пул всегда знает адрес токена. Ошибок нет.
     pub fn set_coin(&self, c: CoinCheck) {
-        let Some(a) = c.asset.bsc_contract else {
+        let Some(a) = c.asset.contract else {
             return;
         };
         let mut m = self.coins.write().unwrap_or_else(|p| p.into_inner());
@@ -148,7 +148,7 @@ impl Checks {
 
     /// Проверка монеты ядра (по её адресу; монета без адреса — None). Ошибок нет.
     pub fn coin_of(&self, asset: &crate::core::types::Asset) -> Option<CoinCheck> {
-        asset.bsc_contract.and_then(|a| self.coin(&a))
+        asset.contract.and_then(|a| self.coin(&a))
     }
 
     /// Записывает газ перевода монеты (по адресу контракта). Ошибок нет.

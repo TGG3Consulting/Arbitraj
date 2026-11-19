@@ -77,8 +77,9 @@ pub fn transfer(
     Ok(Transfer {
         venue: ctx.venue(),
         asset: Asset {
+            chain: None,
             ticker: ticker.to_string(),
-            bsc_contract: None,
+            contract: None,
         },
         network: network.to_string(),
         amount: num::dec(rec, "amount")?,

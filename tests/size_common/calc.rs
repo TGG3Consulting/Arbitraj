@@ -20,8 +20,9 @@ use super::{CAKE, Rec};
 pub fn direction() -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         buy_on: VenueId("bingx".into()),
         sell_on: VenueId("bsc_dex".into()),

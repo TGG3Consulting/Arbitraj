@@ -33,8 +33,9 @@ fn v(id: &str) -> VenueId {
 fn dir(buy: &str, sell: &str) -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: v(buy),
         sell_on: v(sell),

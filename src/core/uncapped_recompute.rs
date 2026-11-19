@@ -210,7 +210,7 @@ async fn run(
         kind: "deal",
         deal_id: Some(d.id.clone()),
         ticker: d.direction.asset.ticker.clone(),
-        address: d.direction.asset.bsc_contract.map(|a| format!("{a:#x}")),
+        address: d.direction.asset.contract.map(|a| format!("{a:#x}")),
         started_at: row.started_at.clone(),
         body,
     };

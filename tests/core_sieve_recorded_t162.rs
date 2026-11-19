@@ -47,8 +47,9 @@ fn net(venue: &str, ticker: &str, fix: Decimal) -> CoinNetworkInfo {
     CoinNetworkInfo {
         venue: VenueId(venue.into()),
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: None,
+            contract: None,
         },
         network: "BEP20".into(),
         deposit_enabled: true,
@@ -148,8 +149,9 @@ fn one(c: &Value) -> (String, bool) {
     );
     let (dex_a, dex_b) = (buy_on == "bsc_dex", sell_on == "bsc_dex");
     let asset = Asset {
+        chain: None,
         ticker: ticker.clone(),
-        bsc_contract: None,
+        contract: None,
     };
     let (q, buy, sell) = (dv(&c["qty"]), dv(&c["buy_avg"]), dv(&c["sell_avg"]));
     let (pro, profit) = (dv(&c["proceeds"]), dv(&c["profit_usd"]));
@@ -199,8 +201,9 @@ fn one(c: &Value) -> (String, bool) {
         net_b: "BEP20".into(),
         quote: vec!["USDT".into(), "USDT".into()],
         usdt: Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: None,
+            contract: None,
         },
         cex: vec![],
         sigma,

@@ -119,8 +119,9 @@ async fn v8_explicit_address_value_wins_over_ticker_block() {
     let s = fresh("v8").await;
     let id = format!("{CAKE:#x}");
     let cake = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     };
     s.set(
         "coin.blocked",

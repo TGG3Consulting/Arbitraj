@@ -48,8 +48,9 @@ async fn config_wait_rechecks_on_settings_change() {
     let p = Parts::new(ctx.clone());
     let usdt = alloy_primitives::address!("0x55d398326f99059ff775485246999027b3197955");
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(usdt),
+        contract: Some(usdt),
     }]);
     let (e, _, _) = aave_v3(&rec());
     p.registry.put(e.clone());

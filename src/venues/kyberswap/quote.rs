@@ -41,7 +41,7 @@ pub fn usdt(p: &Parts) -> GatewayResult<Address> {
     p.assets()
         .into_iter()
         .find(|a| a.ticker == quote)
-        .and_then(|a| a.bsc_contract)
+        .and_then(|a| a.contract)
         .ok_or_else(|| {
             p.ctx.not_set(
                 "venue.quote_asset",
@@ -54,7 +54,7 @@ pub fn usdt(p: &Parts) -> GatewayResult<Address> {
 /// Ошибки: NoRoute (нет адреса монеты / маршрута у агрегатора), NotConfigured, узел (decimals), сеть.
 pub async fn quote(p: &Parts, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Quote> {
     let ctx = &p.ctx;
-    let coin = asset.bsc_contract.ok_or_else(|| {
+    let coin = asset.contract.ok_or_else(|| {
         ctx.err(
             ErrorCode::NoRoute,
             format!("{}: нет адреса контракта в BSC", asset.ticker),

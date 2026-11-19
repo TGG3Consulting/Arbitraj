@@ -88,7 +88,7 @@ async fn fast_at(
     // Предварительные шаги priced — те же и в том же порядке (их ошибки — ошибки полной котировки).
     direct::taxes(q, asset)?;
     let usdt = q.tokens.usdt(ctx)?;
-    let coin = asset.bsc_contract.ok_or_else(|| {
+    let coin = asset.contract.ok_or_else(|| {
         ctx.err(
             ErrorCode::NoRoute,
             format!("{}: нет адреса контракта в BSC", asset.ticker),

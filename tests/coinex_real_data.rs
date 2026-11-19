@@ -162,7 +162,7 @@ fn recorded_cake_contract_and_network() {
         .iter()
         .find(|i| i.network == bsc)
         .expect("CAKE в сети BSC");
-    assert_eq!(cake.asset.bsc_contract, Some(want));
+    assert_eq!(cake.asset.contract, Some(want));
     assert!(cake.withdraw_fee.is_some() || !p.deflation.is_empty());
 }
 

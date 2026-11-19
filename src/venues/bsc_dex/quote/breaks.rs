@@ -42,7 +42,7 @@ pub async fn breaks(
     limit: u32,
 ) -> GatewayResult<Vec<Decimal>> {
     let ctx = &q.ctx;
-    let coin = asset.bsc_contract.ok_or_else(|| {
+    let coin = asset.contract.ok_or_else(|| {
         ctx.err(
             ErrorCode::NoRoute,
             format!("{}: нет адреса контракта в BSC", asset.ticker),

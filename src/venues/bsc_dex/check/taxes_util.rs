@@ -196,8 +196,9 @@ pub fn loading_check(
     crate::core::types::CoinCheck {
         venue: p.ctx.venue(),
         asset: crate::core::types::Asset {
+            chain: None,
             ticker: ticker.to_string(),
-            bsc_contract: Some(addr),
+            contract: Some(addr),
         },
         taxes: crate::core::types::CheckState::NotChecked,
         source: super::taxes::SOURCE.into(),

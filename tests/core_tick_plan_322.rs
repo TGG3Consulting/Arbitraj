@@ -25,8 +25,9 @@ use tokio::sync::Notify;
 
 fn coin() -> Asset {
     Asset {
+        chain: None,
         ticker: "SHOPINX".into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

@@ -49,7 +49,7 @@ pub async fn subscribe(
     let coins: HashMap<Address, String> = assets
         .iter()
         .filter(|a| a.ticker != quote)
-        .filter_map(|a| a.bsc_contract.map(|c| (c, a.ticker.clone())))
+        .filter_map(|a| a.contract.map(|c| (c, a.ticker.clone())))
         .collect();
     let per = subs::per_sub(&p.ctx)?;
     // Без опроса блоков нет свежести — подписка не начинается, ядро повторит её после задания настройки.

@@ -149,8 +149,9 @@ async fn dex_quote(q: &Quoting, qty: u32) -> Quote {
 
 fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     }
 }
 

@@ -194,7 +194,7 @@ pub fn register(
 /// адрес только у одного — разные активы (событие площадки без адреса уже переведено в монету ядра —
 /// credit_event::on_change, venue_ticker::asset_back). Ошибок нет.
 pub fn same_asset(a: &Asset, b: &Asset) -> bool {
-    match (a.bsc_contract, b.bsc_contract) {
+    match (a.contract, b.contract) {
         (Some(x), Some(y)) => x == y,
         (None, None) => a.ticker == b.ticker,
         _ => false,

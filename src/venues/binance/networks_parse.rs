@@ -101,8 +101,9 @@ fn one(
     Ok(CoinNetworkInfo {
         venue: venue.clone(),
         asset: Asset {
+            chain: None,
             ticker: ticker.to_string(),
-            bsc_contract: contract,
+            contract: contract,
         },
         network: code.to_string(),
         deposit_enabled: flag(n, "depositEnable")?,

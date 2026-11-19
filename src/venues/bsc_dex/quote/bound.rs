@@ -61,7 +61,7 @@ pub fn rate_bound(p: &Parts, asset: &Asset, side: Side) -> RateBound {
 /// Принимает: части адаптера, монету, сторону. Возвращает: RateBound. Ошибок нет.
 pub fn bound_now(p: &Parts, asset: &Asset, side: Side) -> RateBound {
     let ctx = &p.ctx;
-    let Some(coin) = asset.bsc_contract else {
+    let Some(coin) = asset.contract else {
         return RateBound::na("no_data", "нет адреса контракта монеты");
     };
     let Ok(usdt) = p.tokens.usdt(ctx) else {

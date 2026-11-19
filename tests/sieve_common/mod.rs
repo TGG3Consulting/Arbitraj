@@ -50,8 +50,9 @@ pub enum Way {
 
 pub fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     }
 }
 
@@ -103,8 +104,9 @@ pub fn cx_with(
         net_b: "BEP20".into(),
         quote: vec!["USDT".into(), "USDT".into()],
         usdt: Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         cex: vec![],
         sigma,
@@ -149,8 +151,9 @@ pub fn usdt_net() -> CoinNetworkInfo {
     CoinNetworkInfo {
         venue: VenueId("bingx".into()),
         asset: Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         network: "BEP20".into(),
         deposit_enabled: true,

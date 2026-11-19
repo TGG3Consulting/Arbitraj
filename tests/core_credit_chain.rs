@@ -111,8 +111,9 @@ fn transfers() -> Vec<(String, Address, Decimal)> {
 
 fn asset(token: Address) -> Asset {
     Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(token),
+        contract: Some(token),
     }
 }
 

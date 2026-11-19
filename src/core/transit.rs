@@ -37,7 +37,7 @@ struct Record {
 /// id записи в учёте: адрес контракта (или тикер), откуда, куда.
 fn id(a: &Asset, from: &VenueId, to: &VenueId) -> String {
     let coin = a
-        .bsc_contract
+        .contract
         .map(|x| x.to_string())
         .unwrap_or(a.ticker.clone());
     format!("{coin}:{}:{}", from.0, to.0)

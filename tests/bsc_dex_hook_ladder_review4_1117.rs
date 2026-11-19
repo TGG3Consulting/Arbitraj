@@ -286,8 +286,9 @@ fn n3_side_off_visible() {
         family: "pancakeswap-infinity-clmm".into(),
         pool: PoolRef::Contract(Address::ZERO),
         asset: Asset {
+            chain: None,
             ticker: "GAIB".into(),
-            bsc_contract: None,
+            contract: None,
         },
         group: HookGroup::B,
         impact: CheckState::Known(i.clone()),

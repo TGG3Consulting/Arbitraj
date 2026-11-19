@@ -49,7 +49,7 @@ impl TaxLimits {
 pub fn manual(s: &Store, asset: &Asset, tickers: &[&str]) -> Option<Option<String>> {
     let own = Scope::Coin(crate::settings::scope::coin_id(
         &asset.ticker,
-        asset.bsc_contract.as_ref(),
+        asset.contract.as_ref(),
     ));
     if s.get_exact("coin.blocked", &own)
         .and_then(|v| v.as_bool())
@@ -58,7 +58,7 @@ pub fn manual(s: &Store, asset: &Asset, tickers: &[&str]) -> Option<Option<Strin
         return marked(s, &own);
     }
     // Монета без адреса: её область и есть тикер — уже проверена выше.
-    asset.bsc_contract?;
+    asset.contract?;
     let mut ids = vec![asset.ticker.clone()];
     ids.extend(tickers.iter().map(|t| t.to_string()));
     let mut seen = std::collections::HashSet::new();
@@ -81,7 +81,7 @@ fn marked(s: &Store, scope: &Scope) -> Option<Option<String>> {
 pub fn coin_scope(asset: &Asset) -> Scope {
     Scope::Coin(crate::settings::scope::coin_id(
         &asset.ticker,
-        asset.bsc_contract.as_ref(),
+        asset.contract.as_ref(),
     ))
 }
 

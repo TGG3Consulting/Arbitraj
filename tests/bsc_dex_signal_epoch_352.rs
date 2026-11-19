@@ -39,8 +39,9 @@ const GAS: u64 = 1_000_000_000;
 
 fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     }
 }
 

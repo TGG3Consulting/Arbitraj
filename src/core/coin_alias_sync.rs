@@ -14,7 +14,7 @@ use super::registry::CoinEntry;
 pub fn aliases<'a>(coins: impl Iterator<Item = &'a CoinEntry>) -> HashMap<String, Vec<String>> {
     let mut m: HashMap<String, Vec<String>> = HashMap::new();
     for c in coins {
-        let Some(a) = c.asset.bsc_contract else {
+        let Some(a) = c.asset.contract else {
             continue;
         };
         let list = m

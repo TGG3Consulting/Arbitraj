@@ -87,8 +87,9 @@ fn v(id: &str) -> VenueId {
 fn deal(id: &str) -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "JCT".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: v("mexc"),
         sell_on: v("bsc_dex"),

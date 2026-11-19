@@ -60,8 +60,9 @@ async fn graph_quote(q: &Quoting) -> arb::core::types::Quote {
         mids: &q.mids,
     };
     let cake = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     };
     let amount = Decimal::from(50_000u32);
     graph_route::quote(&via, &names, &cake, amount, U256::from(1_000_000_000u64))

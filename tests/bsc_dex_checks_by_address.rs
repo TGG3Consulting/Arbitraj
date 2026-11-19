@@ -17,8 +17,9 @@ const NMT: Address = address!("0x03aa6298f1370642642415edc0db8b957783e8d6");
 /// Монета с тикером `t` и адресом `a`. Ошибок нет.
 fn asset(t: &str, a: Option<Address>) -> Asset {
     Asset {
+        chain: None,
         ticker: t.into(),
-        bsc_contract: a,
+        contract: a,
     }
 }
 

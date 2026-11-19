@@ -184,7 +184,7 @@ fn recorded_coins_bsc() {
         .find(|i| i.asset.ticker == "CAKE" && i.network == bsc)
         .expect("CAKE в сети BSC");
     let want: alloy_primitives::Address = CAKE.parse().unwrap();
-    assert_eq!(cake.asset.bsc_contract, Some(want));
+    assert_eq!(cake.asset.contract, Some(want));
     assert!(p.chains.iter().any(|(t, n, _)| t == "CAKE" && *n == bsc));
 }
 

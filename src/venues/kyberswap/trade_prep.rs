@@ -45,7 +45,7 @@ pub struct Prepared {
 /// (RateLimited, Timeout …).
 pub async fn prepare(p: &Parts, req: &TradeRequest) -> GatewayResult<Prepared> {
     let ctx = &p.ctx;
-    let coin = req.asset.bsc_contract.ok_or_else(|| {
+    let coin = req.asset.contract.ok_or_else(|| {
         ctx.err(
             ErrorCode::NoRoute,
             format!("{}: нет адреса контракта в BSC", req.asset.ticker),

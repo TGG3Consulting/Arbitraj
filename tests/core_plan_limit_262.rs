@@ -30,8 +30,9 @@ fn dec(s: &str) -> Decimal {
 
 fn btc() -> Asset {
     Asset {
+        chain: None,
         ticker: "BTC".into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

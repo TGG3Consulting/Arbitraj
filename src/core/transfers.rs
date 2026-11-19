@@ -59,16 +59,15 @@ pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, St
     let coins = rd(&core.inner.coins);
     // Решение 131: по карте адрес → монеты, без прохода справочника.
     let entry = asset
-        .bsc_contract
+        .contract
         .and_then(|t| super::ticker_index::find_by_token(core, &coins, t));
     // Решение 211 (ревью В1): по адресу И тикеру этой площадки — у адреса на бирже бывает несколько тикеров.
     let on = super::venue_ticker::ticker_on(core, asset, venue);
     let any = rd(&core.inner.networks)
         .get(venue)
         .and_then(|l| {
-            l.iter().find(|i| {
-                &i.asset == asset && i.asset.bsc_contract.is_some() && i.asset.ticker == on
-            })
+            l.iter()
+                .find(|i| &i.asset == asset && i.asset.contract.is_some() && i.asset.ticker == on)
         })
         .map(|i| i.network.clone());
     let own = entry.and_then(|e| {

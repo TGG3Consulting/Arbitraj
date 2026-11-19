@@ -50,8 +50,9 @@ fn real_gas() -> Decimal {
 /// Монета BNB.
 fn bnb() -> Asset {
     Asset {
+        chain: None,
         ticker: "BNB".into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

@@ -175,8 +175,9 @@ fn clean(ticker: &str, a: Address) -> CoinCheck {
     CoinCheck {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: Some(a),
+            contract: Some(a),
         },
         taxes: CheckState::Known(zero),
         source: "тест".into(),
@@ -192,12 +193,14 @@ async fn buy_and_sell_through_wbnb() {
     let e18 = 10u128.pow(18);
     p.tokens.set(&[
         Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         Asset {
+            chain: None,
             ticker: "X".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
     ]);
     p.mids.set(vec![Mid {
@@ -322,8 +325,9 @@ async fn buy_and_sell_through_wbnb() {
         let req = TradeRequest {
             venue: VenueId("bsc_dex".into()),
             asset: Asset {
+                chain: None,
                 ticker: "X".into(),
-                bsc_contract: Some(COIN),
+                contract: Some(COIN),
             },
             side,
             qty,

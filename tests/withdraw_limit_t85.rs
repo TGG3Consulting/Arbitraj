@@ -298,8 +298,9 @@ async fn limit_refusal_pauses_venue_keeps_coin() {
     let (core, j) = start(&d, None).await;
     let binance = VenueId("binance".into());
     let coin = Asset {
+        chain: None,
         ticker: "CYBER".into(),
-        bsc_contract: Some(alloy_primitives::address!(
+        contract: Some(alloy_primitives::address!(
             "0x0000000000000000000000000000000000085a01"
         )),
     };

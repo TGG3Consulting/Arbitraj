@@ -210,7 +210,7 @@ pub async fn names(State(st): State<AppState>) -> Json<serde_json::Value> {
     let list: Vec<serde_json::Value> = coins
         .all()
         .filter_map(|c| {
-            let a = c.asset.bsc_contract?;
+            let a = c.asset.contract?;
             let venues: serde_json::Map<String, serde_json::Value> = c
                 .presence
                 .iter()

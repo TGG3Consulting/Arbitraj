@@ -77,8 +77,9 @@ fn deals() -> Vec<Deal> {
             let codes: Vec<char> = f[3].chars().collect();
             let dir = Direction {
                 asset: Asset {
+                    chain: None,
                     ticker: f[2].into(),
-                    bsc_contract: None,
+                    contract: None,
                 },
                 buy_on: VenueId(venue(codes[0]).into()),
                 sell_on: VenueId(venue(codes[1]).into()),
@@ -111,8 +112,9 @@ fn cake(dr: Dir) -> Direction {
     };
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         buy_on: VenueId(b.into()),
         sell_on: VenueId(s.into()),

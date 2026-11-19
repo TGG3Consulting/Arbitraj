@@ -59,7 +59,7 @@ async fn api(p: &Parts) -> Result<String, String> {
     let Some(coin) = p
         .assets()
         .into_iter()
-        .find_map(|a| a.bsc_contract.filter(|c| *c != usdt))
+        .find_map(|a| a.contract.filter(|c| *c != usdt))
     else {
         return Ok(format!(
             "{base} (адрес и сеть заданы; монет для пробного маршрута пока нет)"

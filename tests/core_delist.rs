@@ -85,8 +85,9 @@ fn now() -> DateTime<Utc> {
 fn ion(buy: &str, sell: &str) -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "ION".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId(buy.into()),
         sell_on: VenueId(sell.into()),

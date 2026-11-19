@@ -178,8 +178,9 @@ async fn graph_route_needs_checked_mid() {
     p.checks.set_coin(CoinCheck {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "BNB".into(),
-            bsc_contract: Some(WBNB),
+            contract: Some(WBNB),
         },
         taxes: CheckState::Known(zero()),
         source: "тест".into(),

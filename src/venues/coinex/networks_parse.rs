@@ -159,8 +159,9 @@ fn network(
     let info = CoinNetworkInfo {
         venue: venue.clone(),
         asset: Asset {
+            chain: None,
             ticker: ticker.to_string(),
-            bsc_contract: contract,
+            contract: contract,
         },
         network: chain.to_string(),
         deposit_enabled: coin_dep && num::flag(n, "deposit_enabled")?,

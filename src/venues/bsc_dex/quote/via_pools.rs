@@ -86,8 +86,9 @@ impl Via<'_> {
             native::is_native(
                 &self.q.ctx,
                 &Asset {
+                    chain: None,
                     ticker,
-                    bsc_contract: Some(self.coin),
+                    contract: Some(self.coin),
                 },
             )
         })

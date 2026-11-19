@@ -106,8 +106,9 @@ async fn scene() -> Parts {
             .unwrap();
     }
     let asset = |t: &str, a: Address| Asset {
+        chain: None,
         ticker: t.into(),
-        bsc_contract: Some(a),
+        contract: Some(a),
     };
     p.tokens.set(&[asset("USDT", USDT), asset("COIN", COIN)]);
     p.tokens.remember_decimals(USDT, 18);
@@ -148,8 +149,9 @@ async fn quote_route(p: &Parts) -> DexRoute {
         mids: &p.mids,
     };
     let asset = Asset {
+        chain: None,
         ticker: "COIN".into(),
-        bsc_contract: Some(COIN),
+        contract: Some(COIN),
     };
     let (qty, gas) = (Decimal::from(1000u32), U256::from(2_000_000u64));
     let quote = graph_route::quote(&v, &names, &asset, qty, gas).await;

@@ -99,7 +99,7 @@ pub(super) fn accept(
     if e.account.is_none() || e.account != b.account {
         return Verdict::No("не кошелёк сделки".into());
     }
-    if e.asset.bsc_contract.is_none() || e.asset.bsc_contract != b.asset.bsc_contract {
+    if e.asset.contract.is_none() || e.asset.contract != b.asset.contract {
         return Verdict::No("токен не по адресу контракта монеты сделки".into());
     }
     if !super::credit_match::fits(e.amount, b.delta, tol) {

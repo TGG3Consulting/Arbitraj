@@ -119,8 +119,9 @@ async fn set(s: &Store, name: &str, v: Option<Value>) {
 fn coin(ticker: &str, a: Address) -> CoinEntry {
     CoinEntry {
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: Some(a),
+            contract: Some(a),
         },
         presence: vec![],
         block: None,
@@ -146,7 +147,7 @@ async fn install(core: &Core, usdt: Address, coins: &[CoinEntry]) {
     *wr(&core.inner.usdt) = Ok(usdt);
     arb::core::ticker_index::rebuild(core, coins).await;
     for c in coins {
-        let a = c.asset.bsc_contract.unwrap();
+        let a = c.asset.contract.unwrap();
         assert!(
             !arb::core::engine::rd(&core.inner.tickers)
                 .by_tokens((a, a))

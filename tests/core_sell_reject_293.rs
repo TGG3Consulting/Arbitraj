@@ -137,8 +137,9 @@ async fn start(p: &Path) -> (Core, Store, Journal, String) {
 
 fn asset() -> Asset {
     Asset {
+        chain: None,
         ticker: "SHOPINX".into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

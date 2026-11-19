@@ -255,8 +255,9 @@ pub async fn set(s: &Store, name: &str, v: Value) {
 pub fn deal(id: &str, invested: &str) -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "BTC".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bsc_dex".into()),
         sell_on: VenueId("xt".into()),

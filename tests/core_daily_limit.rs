@@ -115,8 +115,9 @@ fn mexc_paused(core: &Core) -> bool {
 fn deal(id: &str, ticker: &str) -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("mexc".into()),
         sell_on: VenueId("bsc_dex".into()),

@@ -308,8 +308,9 @@ fn req(venue: &str, side: Side) -> TradeRequest {
     TradeRequest {
         venue: v(venue),
         asset: Asset {
+            chain: None,
             ticker: "FAR".into(),
-            bsc_contract: None,
+            contract: None,
         },
         side,
         qty: Decimal::from(100),

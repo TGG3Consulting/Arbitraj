@@ -26,7 +26,7 @@ pub struct Change {
 /// не смена. Принимает: старые статусы (тикер, сеть) → (ввод, вывод), новый справочник. Ошибок нет.
 pub fn diff(old: &HashMap<(String, String), (bool, bool)>, new: &[CoinNetworkInfo]) -> Vec<Change> {
     new.iter()
-        .filter(|i| i.asset.bsc_contract.is_some())
+        .filter(|i| i.asset.contract.is_some())
         .filter_map(|i| {
             let &(dep, wd) = old.get(&(i.asset.ticker.clone(), i.network.clone()))?;
             (dep != i.deposit_enabled || wd != i.withdraw_enabled).then(|| Change {

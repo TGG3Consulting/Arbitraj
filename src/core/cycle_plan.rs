@@ -47,8 +47,9 @@ pub struct CyclePlan {
 pub fn direction(c: &DexCycle) -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: c.base_ticker.clone(),
-            bsc_contract: Some(c.base),
+            contract: Some(c.base),
         },
         buy_on: c.venue.clone(),
         sell_on: c.venue.clone(),

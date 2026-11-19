@@ -84,8 +84,9 @@ async fn bound_view_uses_own_key_and_unbound_refuses() {
     let (c, bingx, mexc) = setup("bound").await;
     let dex = arb::venues::bsc_dex::BscDex::new(c.clone());
     let cake = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(address!("0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82")),
+        contract: Some(address!("0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82")),
     };
     // Без счёта: адрес депозита, балансы, очередь — отказ, а не адрес кошелька проб.
     let e = dex.deposit_address(&cake, "BEP20").await.unwrap_err();

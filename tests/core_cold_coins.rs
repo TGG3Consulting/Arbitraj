@@ -73,7 +73,7 @@ fn market_events(n: &[CoinNetworkInfo]) -> Vec<MarketEvent> {
     );
     let assets: Vec<_> = n
         .iter()
-        .filter(|i| i.asset.bsc_contract.is_some())
+        .filter(|i| i.asset.contract.is_some())
         .map(|i| i.asset.clone())
         .collect();
     let mut out = vec![Snapshot::build(&s, &assets).event(bingx(), at)];
@@ -179,7 +179,7 @@ fn parts_together_equal_whole() {
         assert_eq!(found, Some(c), "{}", c.asset.ticker);
     }
     // Неподвижные — без адреса контракта (PONS: сети BEP20 нет; BNB, ZBC, RAMP: BEP20 без адреса).
-    assert!(inert.iter().all(|c| c.asset.bsc_contract.is_none()));
+    assert!(inert.iter().all(|c| c.asset.contract.is_none()));
     for t in ["PONS", "BNB", "ZBC", "RAMP"] {
         assert!(inert.iter().any(|c| c.asset.ticker == t), "{t}");
     }
@@ -226,11 +226,7 @@ async fn coin_gets_bsc_network_and_goes_hot_without_restart() {
         .find(|c| c.asset.ticker == "CAKE")
         .expect("CAKE среди рабочих монет");
     let p = cake.at(&bingx()).expect("CAKE на BingX без причин отсева");
-    assert!(
-        p.info
-            .as_ref()
-            .is_some_and(|i| i.asset.bsc_contract.is_some())
-    );
+    assert!(p.info.as_ref().is_some_and(|i| i.asset.contract.is_some()));
     assert!(!after.inert.iter().any(|c| c.asset.ticker == "CAKE"));
     assert_eq!(after.total(), after.all().count());
 }

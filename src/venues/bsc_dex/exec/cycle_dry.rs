@@ -35,8 +35,9 @@ use super::{cycle_bundle, cycle_exec};
 /// Ошибок нет.
 pub async fn run(q: &Quoting, req: CycleTradeRequest, mode: DryMode) -> DexDrySwap {
     let asset = Asset {
+        chain: None,
         ticker: req.cycle.base_ticker.clone(),
-        bsc_contract: Some(req.cycle.base),
+        contract: Some(req.cycle.base),
     };
     let mut r = DexDrySwap::new(q.ctx.venue(), asset, Side::Sell, Decimal::ZERO);
     r.qty = Some(req.input);

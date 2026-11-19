@@ -103,12 +103,12 @@ async fn scene(tag: &str) -> (Parts, Address, Address, Address, Address) {
         set_dex(&c, "ellipsis", k, val).await;
     }
     let p = Parts::new(c);
-    p.tokens.set(&[Asset { ticker: "USDT".into(), bsc_contract: Some(usdt) }, Asset { ticker: "BUSD".into(), bsc_contract: Some(busd) }]);
+    p.tokens.set(&[Asset { chain: None, ticker: "USDT".into(), contract: Some(usdt) }, Asset { chain: None, ticker: "BUSD".into(), contract: Some(busd) }]);
     for (a, d) in [busd, usdc, usdt].into_iter().zip(multi_common::decimals(&probe, "ellipsis", "coins", 3)) {
         p.tokens.remember_decimals(a, d);
     }
     let zero = TokenTaxes { buy_pct: Decimal::ZERO, sell_pct: Decimal::ZERO, transfer_pct: Decimal::ZERO };
-    p.checks.set_coin(CoinCheck { venue: VenueId("bsc_dex".into()), asset: Asset { ticker: "USDC".into(), bsc_contract: Some(usdc) }, taxes: CheckState::Known(zero), source: "тест".into(), checked_at: Some(Utc::now()), wait: None });
+    p.checks.set_coin(CoinCheck { venue: VenueId("bsc_dex".into()), asset: Asset { chain: None, ticker: "USDC".into(), contract: Some(usdc) }, taxes: CheckState::Known(zero), source: "тест".into(), checked_at: Some(Utc::now()), wait: None });
     p.mids.set(vec![Mid { address: usdc, ticker: "USDC".into() }]);
     for e in [entry(pool, &raw, busd, usdt), entry(pool, &raw, usdc, usdt), entry(pool, &raw, busd, usdc)] {
         let r = e.pool.reference.clone();

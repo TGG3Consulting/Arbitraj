@@ -126,8 +126,9 @@ fn req(side: Side, worst: &str, exit: bool) -> TradeRequest {
     TradeRequest {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "GAIB".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
         side,
         qty: d("2434.66"),

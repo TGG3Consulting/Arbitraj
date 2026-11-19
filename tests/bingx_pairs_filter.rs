@@ -68,7 +68,7 @@ fn nets() -> Vec<CoinNetworkInfo> {
 fn assets(n: &[CoinNetworkInfo]) -> Vec<Asset> {
     let mut a: Vec<Asset> = n
         .iter()
-        .filter(|i| i.asset.bsc_contract.is_some())
+        .filter(|i| i.asset.contract.is_some())
         .map(|i| i.asset.clone())
         .collect();
     a.sort_by(|x, y| x.ticker.cmp(&y.ticker));

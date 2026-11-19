@@ -202,7 +202,7 @@ fn config_getall_cake_bsc() {
     let want: alloy_primitives::Address = "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82"
         .parse()
         .unwrap();
-    assert_eq!(cake.asset.bsc_contract, Some(want));
+    assert_eq!(cake.asset.contract, Some(want));
     assert!(cake.withdraw_fee.is_some() && cake.withdraw_min.is_some());
     assert_eq!(
         cake.deposit_min, None,

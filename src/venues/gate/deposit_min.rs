@@ -169,8 +169,9 @@ async fn want_min(
     }
     pace(ctx, nets).await;
     let a = Asset {
+        chain: None,
         ticker: ticker.to_string(),
-        bsc_contract: None,
+        contract: None,
     };
     match deposit_addr::fetch(ctx, addrs, nets, &a, &bsc).await {
         Ok(_) => Ok(()),

@@ -191,7 +191,7 @@ pub async fn build(core: &Core, calc: &Calc, dry: bool) -> Card {
     Card {
         dry,
         ticker: d.asset.ticker.clone(),
-        contract: d.asset.bsc_contract.map(|a| format!("{a:#x}")),
+        contract: d.asset.contract.map(|a| format!("{a:#x}")),
         buy_on: d.buy_on.0.clone(),
         sell_on: d.sell_on.0.clone(),
         qty: calc.qty,

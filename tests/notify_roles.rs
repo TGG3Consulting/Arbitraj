@@ -44,8 +44,9 @@ fn outgoing_routes_by_role() {
 fn deal(step: Step, result: Option<i64>) -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bingx".into()),
         sell_on: VenueId("bsc_dex".into()),

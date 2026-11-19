@@ -86,8 +86,9 @@ async fn set(s: &Store, name: &str, v: Value) {
 fn aster() -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "ASTER".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bingx".into()),
         sell_on: VenueId("bsc_dex".into()),
@@ -524,8 +525,9 @@ async fn lagged_ticks_wake_at_once() {
     let mut ticks = Ticks::new(&core);
     // Ёмкость рассылки тиков — buffer 64 (start): 65 тиков другой монеты до чтения — подписчик отстал на один.
     let other = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: None,
+        contract: None,
     };
     for _ in 0..65 {
         let _ = core.inner.coin_ticks.send(other.clone());

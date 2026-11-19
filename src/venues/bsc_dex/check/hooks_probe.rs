@@ -74,8 +74,9 @@ pub fn pool_check(
         family: e.family.id.to_string(),
         pool: e.pool.reference.clone(),
         asset: Asset {
+            chain: None,
             ticker: e.ticker.clone(),
-            bsc_contract: Some(e.coin),
+            contract: Some(e.coin),
         },
         group,
         impact,

@@ -148,8 +148,9 @@ fn network(
     Ok(CoinNetworkInfo {
         venue: venue.clone(),
         asset: Asset {
+            chain: None,
             ticker: t.to_string(),
-            bsc_contract: contract,
+            contract: contract,
         },
         network: net.to_string(),
         deposit_enabled: allowed("depositStatus"),

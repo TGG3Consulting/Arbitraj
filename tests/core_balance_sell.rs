@@ -57,8 +57,9 @@ fn bingx() -> VenueId {
 
 fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

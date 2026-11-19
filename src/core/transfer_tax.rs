@@ -50,7 +50,7 @@ pub fn measured(
 /// перевода (measured), не справочнику монет и не экрану «Монеты» (USDT там нет). Принимает: ядро, проверку.
 /// Возвращает: да — это проверка USDT; адрес USDT ядру ещё не известен — нет. Ошибок нет.
 pub fn is_quote(core: &Core, c: &CoinCheck) -> bool {
-    c.asset.bsc_contract.is_some_and(|t| quote_token(core, t))
+    c.asset.contract.is_some_and(|t| quote_token(core, t))
 }
 
 /// Адрес — USDT ядра (core/inner.rs usdt). Адрес USDT ещё не известен — нет. Ошибок нет.
@@ -72,7 +72,7 @@ pub fn pct(core: &Core, to: &VenueId, asset: &Asset) -> Result<Decimal, String> 
     if super::native::is_native(core, asset) {
         return Ok(Decimal::ZERO);
     }
-    let token = asset.bsc_contract.ok_or_else(|| {
+    let token = asset.contract.ok_or_else(|| {
         format!(
             "{}: нет адреса контракта — налог перевода неизвестен",
             asset.ticker

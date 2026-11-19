@@ -54,7 +54,7 @@ pub fn usdt_address(
     for (v, list) in networks {
         let Some(q) = quote.get(v) else { continue };
         for i in list.iter().filter(|i| &i.asset.ticker == q) {
-            if let Some(a) = i.asset.bsc_contract {
+            if let Some(a) = i.asset.contract {
                 found.push((v.clone(), a));
             }
         }
@@ -102,7 +102,7 @@ pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
                 .push(i);
         }
         for (ticker, nets) in by_ticker {
-            let live = nets.iter().any(|i| i.asset.bsc_contract.is_some());
+            let live = nets.iter().any(|i| i.asset.contract.is_some());
             if (part == Part::Live && !live) || (part == Part::Inert && live) {
                 continue;
             }
@@ -114,7 +114,7 @@ pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
                 ))
             });
             let p = super::presence::cex(venue, ticker, &nets, bsc, &fresh, inp.market);
-            let contract = p.info.as_ref().and_then(|i| i.asset.bsc_contract);
+            let contract = p.info.as_ref().and_then(|i| i.asset.contract);
             // Решение 211: ключ — только адрес. Один адрес под разными тикерами у разных бирж — одна монета (у каждой
             // биржи свой тикер в Presence); один тикер с разными адресами — разные монеты.
             let key = contract
@@ -140,13 +140,14 @@ pub fn build_part(inp: &Inputs, part: Part) -> Vec<CoinEntry> {
             // Решение 211: один тикер на биржу (правило выбора — registry_merge.rs) и показное имя монеты.
             let mut presence = super::registry_merge::one_per_venue(presence);
             let asset = Asset {
+                chain: None,
                 ticker: native.unwrap_or_else(|| super::registry_merge::display_ticker(&presence)),
-                bsc_contract: contract,
+                contract: contract,
             };
             // DEX ищет пулы только монет своей подписки (core/subscribe.rs: то же условие, cex_pair) — у остальных
             // DEX-присутствия нет: «нет пула с USDT» им не ставится (решение 61).
             let searched = super::subscribe::cex_pair(&presence, inp.venues, inp.market);
-            if let Some(token) = asset.bsc_contract.filter(|_| searched) {
+            if let Some(token) = asset.contract.filter(|_| searched) {
                 for v in &dex {
                     presence.push(super::presence::dex(v, token, &asset.ticker, inp));
                 }

@@ -82,8 +82,9 @@ fn transfer(ctx: &Ctx, rec: &Value, status: TransferStatus) -> GatewayResult<Tra
         venue: ctx.venue(),
         network: core_network(&ticker, &chain),
         asset: Asset {
+            chain: None,
             ticker,
-            bsc_contract: None,
+            contract: None,
         },
         amount: num::dec(rec, "amt")?,
         status,

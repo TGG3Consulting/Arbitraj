@@ -1283,8 +1283,9 @@ async fn trail_waits_for_book_after_group_sale() {
 /// USDT кошелька bsc_dex (адрес — записи tests/size_common).
 fn usdt() -> Asset {
     Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(size_common::USDT),
+        contract: Some(size_common::USDT),
     }
 }
 

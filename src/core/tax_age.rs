@@ -28,7 +28,7 @@ pub fn check(core: &Core, d: &Direction, now: DateTime<Utc>) -> Result<(), Strin
     else {
         return Ok(());
     };
-    let Some(token) = d.asset.bsc_contract else {
+    let Some(token) = d.asset.contract else {
         return Ok(());
     };
     for v in [&d.buy_on, &d.sell_on] {

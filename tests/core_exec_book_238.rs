@@ -212,8 +212,9 @@ async fn start(d: &Path) -> (Core, Store, Journal, Server) {
 
 fn btc() -> Asset {
     Asset {
+        chain: None,
         ticker: "BTC".into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

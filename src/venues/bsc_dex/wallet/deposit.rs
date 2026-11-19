@@ -32,7 +32,7 @@ pub async fn status(p: &Parts, asset: &Asset, tx_hash: &str) -> GatewayResult<Tr
         ),
         Err(e) => e.code == ErrorCode::BadResponse,
     };
-    if finished && let Some(token) = asset.bsc_contract {
+    if finished && let Some(token) = asset.contract {
         p.inflows.done(token, tx_hash);
     }
     res
@@ -40,7 +40,7 @@ pub async fn status(p: &Parts, asset: &Asset, tx_hash: &str) -> GatewayResult<Tr
 
 /// Вывод на кошелёк не состоялся: снимает ожидание поступления, запись в журнал. Ошибок нет.
 pub async fn abandoned(p: &Parts, asset: &Asset) {
-    if let Some(token) = asset.bsc_contract {
+    if let Some(token) = asset.contract {
         p.inflows.abandoned(token);
         let msg = format!(
             "{}: вывод на кошелёк не состоялся — ожидание поступления снято",

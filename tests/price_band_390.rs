@@ -237,8 +237,9 @@ fn deep_buy_beyond_band_shrinks_not_kills() {
     let book = OrderBook {
         venue: VenueId("gate".into()),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         bids: lv("bids"),
         asks: lv("asks"),

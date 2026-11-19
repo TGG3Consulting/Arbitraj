@@ -128,7 +128,7 @@ pub async fn withdraw(
 
 /// Адрес токена монеты. Ошибки: NotConfigured — у монеты нет адреса в BSC.
 pub fn token(ctx: &Ctx, a: &Asset) -> GatewayResult<Address> {
-    a.bsc_contract.ok_or_else(|| {
+    a.contract.ok_or_else(|| {
         ctx.err(
             ErrorCode::NotConfigured,
             format!("{}: нет адреса контракта в BSC", a.ticker),

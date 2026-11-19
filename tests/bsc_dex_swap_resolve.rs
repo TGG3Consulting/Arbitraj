@@ -82,8 +82,9 @@ fn req() -> TradeRequest {
     TradeRequest {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "COIN".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
         side: Side::Sell,
         qty: Decimal::new(400, 0),

@@ -335,12 +335,14 @@ pub async fn parts_from(dir: &str) -> Parts {
     let p = Parts::new(ctx().await);
     p.tokens.set(&[
         Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
     ]);
     for t in [CAKE, USDT, BTCB, WBNB] {
@@ -350,8 +352,9 @@ pub async fn parts_from(dir: &str) -> Parts {
     p.checks.set_coin(CoinCheck {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         taxes: CheckState::Known(TokenTaxes {
             buy_pct: Decimal::ZERO,

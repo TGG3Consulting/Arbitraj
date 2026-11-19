@@ -94,8 +94,9 @@ fn req(side: Side, qty: Decimal, wbnb: Address) -> TradeRequest {
     TradeRequest {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "BNB".into(),
-            bsc_contract: Some(wbnb),
+            contract: Some(wbnb),
         },
         side,
         qty,
@@ -300,8 +301,9 @@ async fn graph_quote(q: &Quoting) -> arb::core::types::Quote {
         mids: &q.mids,
     };
     let cake = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     };
     graph_route::quote(
         &via,

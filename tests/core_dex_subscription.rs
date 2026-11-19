@@ -56,8 +56,9 @@ fn bsc_net(ticker: &str, token: Address) -> CoinNetworkInfo {
     CoinNetworkInfo {
         venue: bingx(),
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: Some(token),
+            contract: Some(token),
         },
         network: "BEP20".into(),
         deposit_enabled: true,
@@ -127,8 +128,9 @@ fn spot_pairs(fx: &Value) -> MarketEvent {
         .unwrap()
         .iter()
         .map(|p| Asset {
+            chain: None,
             ticker: p["ticker"].as_str().unwrap().to_string(),
-            bsc_contract: Some(addr(&p["token"])),
+            contract: Some(addr(&p["token"])),
         })
         .collect();
     Snapshot::build(&syms, &assets).event(bingx(), at)

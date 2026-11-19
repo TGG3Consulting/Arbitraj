@@ -47,7 +47,7 @@ fn networks() -> Vec<CoinNetworkInfo> {
 /// Монеты подписки, как их собирает ядро (core/subscribe.rs wanted): сеть BSC с адресом контракта.
 fn subscription(list: &[CoinNetworkInfo]) -> Vec<Asset> {
     list.iter()
-        .filter(|n| n.network == "BSC" && n.asset.bsc_contract.is_some())
+        .filter(|n| n.network == "BSC" && n.asset.contract.is_some())
         .map(|n| n.asset.clone())
         .collect()
 }

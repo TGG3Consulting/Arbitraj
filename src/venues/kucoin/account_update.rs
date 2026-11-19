@@ -63,8 +63,9 @@ pub fn parse(data: &Value, venue: &VenueId) -> Result<(String, Option<BalanceCha
     let change = BalanceChange {
         venue: venue.clone(),
         asset: Asset {
+            chain: None,
             ticker: currency,
-            bsc_contract: None,
+            contract: None,
         },
         delta,
         kind,

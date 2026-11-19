@@ -37,8 +37,9 @@ fn v(id: &str) -> VenueId {
 fn pig_relayed() -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "PIG".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: v("mexc"),
         sell_on: v("bingx"),

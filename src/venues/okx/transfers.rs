@@ -167,8 +167,9 @@ fn transfer(
         venue: ctx.venue(),
         network: core_network(&ticker, &chain),
         asset: Asset {
+            chain: None,
             ticker,
-            bsc_contract: None,
+            contract: None,
         },
         // Сумма ядра — списание целиком (amt + fee: «fees are not included in amt»), как в запросе вывода.
         amount: num::dec(rec, "amt")? + fee_amt.unwrap_or(Decimal::ZERO),

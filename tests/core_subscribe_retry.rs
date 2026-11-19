@@ -26,13 +26,15 @@ fn assets() -> Vec<Asset> {
         .unwrap()
         .iter()
         .map(|p| Asset {
+            chain: None,
             ticker: p["ticker"].as_str().unwrap().into(),
-            bsc_contract: Some(Address::from_str(p["token"].as_str().unwrap()).unwrap()),
+            contract: Some(Address::from_str(p["token"].as_str().unwrap()).unwrap()),
         })
         .collect();
     out.push(Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(Address::from_str(fx["usdt"].as_str().unwrap()).unwrap()),
+        contract: Some(Address::from_str(fx["usdt"].as_str().unwrap()).unwrap()),
     });
     out
 }

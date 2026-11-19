@@ -124,8 +124,9 @@ fn cx_to_xt(info: CoinNetworkInfo) -> DirCtx {
         net_b: "BNB Smart Chain".into(),
         quote: vec!["USDT".into(), "USDT".into()],
         usdt: Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: None,
+            contract: None,
         },
         cex: vec![],
         sigma: Decimal::ZERO,

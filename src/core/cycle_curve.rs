@@ -78,8 +78,9 @@ impl Curve for CycleCurve {
             exec_note: None,
         };
         let base = Asset {
+            chain: None,
             ticker: self.cycle.base_ticker.clone(),
-            bsc_contract: Some(self.cycle.base),
+            contract: Some(self.cycle.base),
         };
         let r = self
             .venue

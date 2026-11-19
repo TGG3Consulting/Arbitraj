@@ -104,7 +104,7 @@ async fn cycle(p: &Parts, assets: &[Asset], out: &mpsc::Sender<MarketEvent>) -> 
 
     let coins: Vec<Asset> = assets
         .iter()
-        .filter(|a| a.bsc_contract.is_some_and(|c| c != usdt))
+        .filter(|a| a.contract.is_some_and(|c| c != usdt))
         .cloned()
         .collect();
 
@@ -112,7 +112,7 @@ async fn cycle(p: &Parts, assets: &[Asset], out: &mpsc::Sender<MarketEvent>) -> 
     for chunk in coins.chunks(concurrency) {
         let results = join_all(chunk.iter().map(|a| probe_one(p, a, usdt, probe_units))).await;
         for (asset, res) in chunk.iter().zip(results) {
-            let token = asset.bsc_contract.expect("отфильтровано выше");
+            let token = asset.contract.expect("отфильтровано выше");
             if let Some(route) = res {
                 routed.insert(token);
                 let pool = marker(ctx.venue(), usdt, token, probe_units, &route, block);
@@ -125,7 +125,7 @@ async fn cycle(p: &Parts, assets: &[Asset], out: &mpsc::Sender<MarketEvent>) -> 
 
     let (gone, entered) = p.update_routed(routed);
     for token in gone {
-        if let Some(a) = coins.iter().find(|a| a.bsc_contract == Some(token)) {
+        if let Some(a) = coins.iter().find(|a| a.contract == Some(token)) {
             let _ = out
                 .send(MarketEvent::Invalidated {
                     venue: ctx.venue(),
@@ -142,7 +142,7 @@ async fn cycle(p: &Parts, assets: &[Asset], out: &mpsc::Sender<MarketEvent>) -> 
         .unwrap_or(false)
     {
         for token in entered {
-            if let Some(a) = coins.iter().find(|a| a.bsc_contract == Some(token)) {
+            if let Some(a) = coins.iter().find(|a| a.contract == Some(token)) {
                 let _ = out
                     .send(MarketEvent::CoinCheck(zero_taxes(ctx.venue(), a)))
                     .await;
@@ -154,7 +154,7 @@ async fn cycle(p: &Parts, assets: &[Asset], out: &mpsc::Sender<MarketEvent>) -> 
 
 /// Один маршрут USDT→монета на пробный объём. None — маршрута нет или сбой (монета выпадет из routed). Ошибок нет.
 async fn probe_one(p: &Parts, asset: &Asset, usdt: Address, probe_units: U256) -> Option<Route> {
-    let token = asset.bsc_contract?;
+    let token = asset.contract?;
     rest::routes(&p.ctx, usdt, token, probe_units).await.ok()
 }
 

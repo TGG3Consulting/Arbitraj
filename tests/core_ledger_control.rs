@@ -65,8 +65,9 @@ async fn start(d: &std::path::Path) -> (Core, Store) {
 fn cake() -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bingx".into()),
         sell_on: VenueId("bsc_dex".into()),

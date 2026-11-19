@@ -22,8 +22,9 @@ pub const GAS_TICKER: &str = "BNB";
 /// Монета газа как актив для подписки на стакан биржи (у нативной монеты нет адреса контракта).
 pub fn gas_asset() -> Asset {
     Asset {
+        chain: None,
         ticker: GAS_TICKER.to_string(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 
@@ -104,8 +105,9 @@ pub async fn price_of(
     qty: Decimal,
 ) -> Result<Decimal, String> {
     let asset = Asset {
+        chain: None,
         ticker: ticker.to_string(),
-        bsc_contract: None,
+        contract: None,
     };
     let mut why = vec![];
     for v in cex {

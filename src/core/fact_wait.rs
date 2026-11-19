@@ -31,7 +31,7 @@ pub enum Waited {
 /// transfer.max_time_s сделки (по площадке и монете). None — не задана. Ошибок нет.
 fn limit_s(core: &Core, deal: &Deal) -> Option<u64> {
     let a = &deal.direction.asset;
-    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
+    let coin = crate::settings::scope::coin_id(&a.ticker, a.contract.as_ref());
     let at = At {
         venue: Some(&deal.at.0),
         coin: Some(&coin),

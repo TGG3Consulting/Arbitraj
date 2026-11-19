@@ -119,8 +119,9 @@ async fn base(path: &std::path::Path) -> (Core, Store) {
 fn dir_of(buy: &str, sell: &str) -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "ALEO".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: v(buy),
         sell_on: v(sell),

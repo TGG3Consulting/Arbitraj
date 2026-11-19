@@ -107,8 +107,9 @@ fn update(body: &Value, venue: &VenueId) -> Result<(String, Vec<BalanceChange>),
         out.push(BalanceChange {
             venue: venue.clone(),
             asset: Asset {
+                chain: None,
                 ticker: ticker.to_string(),
-                bsc_contract: None,
+                contract: None,
             },
             delta,
             kind,

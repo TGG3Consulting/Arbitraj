@@ -73,8 +73,9 @@ async fn settings(ctx: &Ctx, min_usd: u32, per_pair: u32) {
 /// Встречный токен — «USDT» для токенов бота (18 знаков). Ошибок нет.
 fn usdt_is(p: &Parts, usdt: Address) {
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(usdt),
+        contract: Some(usdt),
     }]);
     p.tokens.remember_decimals(usdt, 18);
 }

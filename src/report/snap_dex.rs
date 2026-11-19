@@ -105,8 +105,9 @@ pub async fn wallets(
         p.at = Some(Utc::now());
         let quote = quote_of(core, &dv);
         let bnb = Asset {
+            chain: None,
             ticker: crate::core::convert::GAS_TICKER.into(),
-            bsc_contract: None,
+            contract: None,
         };
         p.lines
             .push(coin_line(core, &gw, &dv, &bnb, &quote, "газ кошелька", deadline).await);

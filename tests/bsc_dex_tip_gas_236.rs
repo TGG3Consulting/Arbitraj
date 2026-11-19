@@ -153,8 +153,9 @@ async fn tip_gas_reaches_deal_timeline() {
         request: TradeRequest {
             venue: VenueId("bsc_dex".into()),
             asset: Asset {
+                chain: None,
                 ticker: "DOGE".into(),
-                bsc_contract: None,
+                contract: None,
             },
             side: Side::Sell,
             qty: Decimal::ONE,

@@ -123,8 +123,9 @@ impl Rec {
         let net = CoinNetworkInfo {
             venue: VenueId("bingx".into()),
             asset: Asset {
+                chain: None,
                 ticker: "CAKE".into(),
-                bsc_contract: Some(CAKE),
+                contract: Some(CAKE),
             },
             network: "BEP20".into(),
             deposit_enabled: true,

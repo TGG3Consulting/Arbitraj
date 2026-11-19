@@ -59,8 +59,9 @@ async fn sides_are_independent() {
     let p = Parts::new(ctx.clone());
     let usdt = alloy_primitives::address!("0x55d398326f99059ff775485246999027b3197955");
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(usdt),
+        contract: Some(usdt),
     }]);
     // decimals() USDT в BSC — 18 (в записи глубины балансы и глубины USDT сходятся с замером только при 18).
     p.tokens.remember_decimals(usdt, 18);

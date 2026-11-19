@@ -43,7 +43,7 @@ pub async fn check(
     fee: Option<&Cost>,
 ) {
     let deps = &core.inner.deps;
-    if rd(&core.inner.usdt).as_ref().ok() == asset.bsc_contract.as_ref() {
+    if rd(&core.inner.usdt).as_ref().ok() == asset.contract.as_ref() {
         return;
     }
     // Решение 247, п. Ж: комиссия вывода — факт из ответа площадки, если она в этой монете (имя площадки → ядра).
@@ -115,7 +115,7 @@ pub async fn check(
     )
     .await;
     // Решение 408 (исключение из решения 157): «Убрать из чёрного списка» на тревоге (e:ub → «Да/Нет» → Unblacklist).
-    let coin = crate::settings::scope::coin_id(&asset.ticker, asset.bsc_contract.as_ref());
+    let coin = crate::settings::scope::coin_id(&asset.ticker, asset.contract.as_ref());
     let acts = vec![crate::notify::acts::e::unblacklist(&coin, &asset.ticker)];
     deps.notify_acts("coin.credit_shortfall", Some(&to.0), &text, acts)
         .await;

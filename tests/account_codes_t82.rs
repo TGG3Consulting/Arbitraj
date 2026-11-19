@@ -376,8 +376,9 @@ async fn account_refusal_does_not_close_coin() {
     let (core, j) = start(&d, None).await;
     let binance = VenueId("binance".into());
     let coin = Asset {
+        chain: None,
         ticker: "CYBER".into(),
-        bsc_contract: Some(alloy_primitives::address!(
+        contract: Some(alloy_primitives::address!(
             "0x0000000000000000000000000000000000082a01"
         )),
     };

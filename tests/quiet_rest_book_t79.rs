@@ -87,8 +87,9 @@ fn now_ms() -> i64 {
 
 fn asset(t: &str) -> Asset {
     Asset {
+        chain: None,
         ticker: t.into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

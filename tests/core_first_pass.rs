@@ -132,12 +132,14 @@ async fn reset_of_pools_is_not_a_blacklist_event() {
     )
     .await;
     let a = Asset {
+        chain: None,
         ticker: "UB".into(),
-        bsc_contract: None,
+        contract: None,
     };
     let b = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: None,
+        contract: None,
     };
     let block = |asset: &Asset, reason: BlockReason| CoinBlock {
         asset: asset.clone(),

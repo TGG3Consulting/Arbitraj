@@ -70,7 +70,7 @@ fn holds() -> std::sync::MutexGuard<'static, HashMap<(VenueId, CoinKey), Hold>> 
 /// id записи в учёте: площадка и адрес (или тикер). Ошибок нет.
 fn id(v: &VenueId, a: &Asset) -> String {
     let coin = a
-        .bsc_contract
+        .contract
         .map(|x| x.to_string())
         .unwrap_or(a.ticker.clone());
     format!("{}:{coin}", v.0)

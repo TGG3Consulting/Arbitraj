@@ -45,8 +45,9 @@ fn pit_sold_by_logs() -> TradeResult {
         request: TradeRequest {
             venue: VenueId("bsc_dex".into()),
             asset: Asset {
+                chain: None,
                 ticker: "PIT".into(),
-                bsc_contract: None,
+                contract: None,
             },
             side: Side::Sell,
             qty: d("304051696654.08"),

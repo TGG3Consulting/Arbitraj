@@ -53,7 +53,7 @@ pub async fn taxes(
         // продажа падала «налоги ещё не проверены» (RWA 04.11 21:59, сделка в ручное управление). Известный итог (прошла
         // / не прошла) той же монеты по тому же адресу остаётся в памяти и действует, пока новая проверка его не заменит.
         let kept = p.checks.coin(addr).is_some_and(|c| {
-            c.asset.bsc_contract == Some(*addr)
+            c.asset.contract == Some(*addr)
                 && matches!(c.taxes, CheckState::Known(_) | CheckState::Failed { .. })
         });
         if kept {
@@ -62,8 +62,9 @@ pub async fn taxes(
         let c = CoinCheck {
             venue: p.ctx.venue(),
             asset: Asset {
+                chain: None,
                 ticker: ticker.clone(),
-                bsc_contract: Some(*addr),
+                contract: Some(*addr),
             },
             taxes: CheckState::NotChecked,
             source: taxes::SOURCE.into(),

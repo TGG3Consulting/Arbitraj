@@ -45,7 +45,7 @@ pub async fn dry_swap(
     State(st): State<AppState>,
     Json(b): Json<DryReq>,
 ) -> Result<Json<DexDrySwap>, ApiError> {
-    if b.asset.bsc_contract.is_none() {
+    if b.asset.contract.is_none() {
         return Err(ApiError::bad(
             "у монеты нет адреса контракта в BSC (asset.bsc_contract)",
         ));

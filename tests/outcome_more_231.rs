@@ -50,8 +50,9 @@ fn req() -> WithdrawRequest {
     WithdrawRequest {
         venue: VenueId("bybit".into()),
         asset: Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: None,
+            contract: None,
         },
         network: "BSC".into(),
         address: "0xabc".into(),

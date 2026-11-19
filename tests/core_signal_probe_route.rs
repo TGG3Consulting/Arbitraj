@@ -74,8 +74,9 @@ async fn avg_price_not_worse_on_smaller_volume_with_route_changes() {
                             mids: &p.mids,
                         };
                         let a = Asset {
+                            chain: None,
                             ticker: "CAKE".into(),
-                            bsc_contract: Some(CAKE),
+                            contract: Some(CAKE),
                         };
                         let r = graph_route::quote(
                             &v,

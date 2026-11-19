@@ -42,8 +42,9 @@ fn books() -> Vec<OrderBook> {
                 } => Some(OrderBook {
                     venue: VenueId("bingx".into()),
                     asset: Asset {
+                        chain: None,
                         ticker: symbol.trim_end_matches("-USDT").to_string(),
-                        bsc_contract: None,
+                        contract: None,
                     },
                     bids,
                     asks,

@@ -351,8 +351,9 @@ async fn panic_outside_guard_and_cancel_halt_queue() {
     let req = TradeRequest {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         side: Side::Sell,
         qty: Decimal::ONE,

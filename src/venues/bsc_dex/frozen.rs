@@ -74,7 +74,7 @@ pub fn take(q: Quoting, asset: &Asset, side: Side) -> GatewayResult<FrozenDex> {
     let head = q.heads.fresh(ctx)?.number;
     q.lag.check(ctx)?;
     let usdt = q.tokens.usdt(ctx)?;
-    let coin = asset.bsc_contract.ok_or_else(|| {
+    let coin = asset.contract.ok_or_else(|| {
         ctx.err(
             ErrorCode::NoRoute,
             format!("{}: нет адреса контракта в BSC", asset.ticker),

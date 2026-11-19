@@ -37,8 +37,9 @@ pub fn v(s: &str) -> VenueId {
 
 pub fn usdt() -> Asset {
     Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(USDT),
+        contract: Some(USDT),
     }
 }
 

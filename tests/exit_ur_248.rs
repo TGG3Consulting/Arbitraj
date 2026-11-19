@@ -162,8 +162,9 @@ fn exit_gap_event_reaches_core_state() {
     let g = ExitGap {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "SMARS".into(),
-            bsc_contract: Some(
+            contract: Some(
                 "0xc0366a104b429f0806bfa98d0008daa9555b2bed"
                     .parse()
                     .unwrap(),

@@ -389,8 +389,9 @@ async fn capital_total_equals_results_and_edges() {
             }
             let dd = arb::core::types::Direction {
                 asset: arb::core::types::Asset {
+                    chain: None,
                     ticker: "CAKE".into(),
-                    bsc_contract: Some(size_common::CAKE),
+                    contract: Some(size_common::CAKE),
                 },
                 buy_on: a.clone(),
                 sell_on: bb.clone(),

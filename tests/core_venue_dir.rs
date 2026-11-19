@@ -48,8 +48,9 @@ fn d(s: &str) -> Decimal {
 fn dir(a: &str, b: &str) -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE.parse().unwrap()),
+            contract: Some(CAKE.parse().unwrap()),
         },
         buy_on: v(a),
         sell_on: v(b),

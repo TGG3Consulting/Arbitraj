@@ -33,8 +33,9 @@ const ID: &str = "20261023120000000CAKE";
 fn deal(plan: Decimal, invested: Decimal, proceeds: Decimal) -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bsc_dex".into()),
         sell_on: VenueId("bingx".into()),

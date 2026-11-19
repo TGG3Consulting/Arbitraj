@@ -239,8 +239,9 @@ async fn regions_bracket_every_change() {
     let book = OrderBook {
         venue: VenueId("bingx".into()),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         bids: rec.bids.clone(),
         asks: vec![],

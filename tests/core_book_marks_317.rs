@@ -57,8 +57,9 @@ fn cake(received: DateTime<Utc>) -> OrderBook {
                 } if symbol == "CAKE-USDT" => Some(OrderBook {
                     venue: bingx(),
                     asset: Asset {
+                        chain: None,
                         ticker: "CAKE".into(),
-                        bsc_contract: None,
+                        contract: None,
                     },
                     bids,
                     asks,
@@ -155,8 +156,9 @@ fn no_gap_setting_for_venue_keeps_count() {
 fn dir() -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bsc_dex".into()),
         sell_on: bingx(),

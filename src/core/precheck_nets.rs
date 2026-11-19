@@ -74,7 +74,7 @@ pub fn recent(
         .cloned()
         .collect();
     let contract = contract?;
-    if !list.iter().any(|i| i.asset.bsc_contract == Some(contract)) {
+    if !list.iter().any(|i| i.asset.contract == Some(contract)) {
         return None;
     }
     let now = Utc::now();

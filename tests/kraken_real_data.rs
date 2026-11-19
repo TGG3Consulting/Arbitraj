@@ -191,10 +191,7 @@ fn funding_methods_bsc() {
         .iter()
         .find(|i| i.asset.ticker == "CAKE" && i.network == bsc)
         .expect("CAKE на BSC");
-    assert!(
-        cake.asset.bsc_contract.is_some(),
-        "contract_address у CAKE/BSC"
-    );
+    assert!(cake.asset.contract.is_some(), "contract_address у CAKE/BSC");
 }
 
 #[test]

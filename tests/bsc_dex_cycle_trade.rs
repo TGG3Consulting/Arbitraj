@@ -342,7 +342,7 @@ async fn trade_request_is_base_for_base_at_boundary() {
     };
     let t = cycle_steps::trade_request(&req);
     assert_eq!((t.side, t.qty), (Side::Sell, Decimal::new(200, 0)));
-    assert_eq!(t.asset.bsc_contract, Some(USDT));
+    assert_eq!(t.asset.contract, Some(USDT));
     assert_eq!(t.worst_price, Decimal::new(201, 0) / Decimal::new(200, 0));
 }
 

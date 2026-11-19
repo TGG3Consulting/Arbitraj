@@ -66,13 +66,14 @@ pub fn apply(
     n: &Native,
 ) -> Vec<CoinNetworkInfo> {
     let Some(bsc) = bsc else { return list };
-    if list.iter().any(|i| i.asset.bsc_contract == Some(n.wrapped)) {
+    if list.iter().any(|i| i.asset.contract == Some(n.wrapped)) {
         return list;
     }
-    for i in list.iter_mut().filter(|i| {
-        i.asset.ticker == n.ticker && i.network == bsc && i.asset.bsc_contract.is_none()
-    }) {
-        i.asset.bsc_contract = Some(n.wrapped);
+    for i in list
+        .iter_mut()
+        .filter(|i| i.asset.ticker == n.ticker && i.network == bsc && i.asset.contract.is_none())
+    {
+        i.asset.contract = Some(n.wrapped);
     }
     list
 }
@@ -156,7 +157,7 @@ pub fn ticker(core: &Core) -> Option<String> {
 /// Нативная ли это монета сети (решение 211, ревью К1): тикер dex.native_ticker И адрес обёртки dex.native_wrapped —
 /// токен с тем же тикером под другим адресом нативной монетой не считается. Ошибок нет: настройка не задана — нет.
 pub fn is_native(core: &Core, asset: &Asset) -> bool {
-    current(core).is_some_and(|n| asset.ticker == n.ticker && asset.bsc_contract == Some(n.wrapped))
+    current(core).is_some_and(|n| asset.ticker == n.ticker && asset.contract == Some(n.wrapped))
 }
 
 /// Нативная монета по настройкам DEX ядра (dex.native_ticker, dex.native_wrapped). None — не задана. Ошибок нет.

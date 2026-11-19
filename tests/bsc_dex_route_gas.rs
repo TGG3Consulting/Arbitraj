@@ -74,8 +74,9 @@ async fn quote_side(p: &Parts, side: Side, qty: u32, gas: u64) -> Quote {
         mids: &p.mids,
     };
     let asset = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     };
     graph_route::quote(&v, &names, &asset, Decimal::from(qty), U256::from(gas))
         .await
@@ -178,8 +179,9 @@ async fn gas_aware_needs_wbnb() {
         mids: &p.mids,
     };
     let asset = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     };
     let e = graph_route::quote(&v, &names, &asset, Decimal::from(1000u32), U256::from(GAS))
         .await

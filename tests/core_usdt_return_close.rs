@@ -74,8 +74,9 @@ async fn start(d: &Path, mode: &str) -> (Core, Journal) {
 fn deal(id: &str, buy: &str, at: &str) -> Deal {
     let d = Direction {
         asset: Asset {
+            chain: None,
             ticker: "TWT".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId(buy.into()),
         sell_on: VenueId(at.into()),

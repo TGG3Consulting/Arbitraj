@@ -58,8 +58,9 @@ fn dex_to_bingx(rec: &Rec, q: Decimal) -> Prices {
 fn direction() -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         buy_on: VenueId("bsc_dex".into()),
         sell_on: VenueId("bingx".into()),

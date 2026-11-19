@@ -80,7 +80,7 @@ async fn side_quote(
         .any(|(v, k)| v == venue && *k == VenueKind::Dex);
     // Решение 352: signal.book_same_skip = да — котировка DEX из памяти по отпечатку входов (signal_dex.rs); у площадки
     // без эпохи (KyberSwap, голова не свежая) — прежний путь ниже с signal.dex_quote_cache_ms (ревью t160 Б5).
-    if let (true, Some(token)) = (dex, dir.asset.bsc_contract)
+    if let (true, Some(token)) = (dex, dir.asset.contract)
         && super::signal_dex::on(core)
         && let Some(q) = super::signal_dex::quote(core, dir, venue, token, side, qty).await
     {
@@ -92,7 +92,7 @@ async fn side_quote(
         .ok()
         .filter(|ms| *ms > 0)
         .map(std::time::Duration::from_millis);
-    let cached = match (dex, ttl, dir.asset.bsc_contract) {
+    let cached = match (dex, ttl, dir.asset.contract) {
         (true, Some(ttl), Some(token)) => {
             let key = (venue.clone(), token, side == Side::Buy);
             let cache = lk(&core.inner.quote_cache);

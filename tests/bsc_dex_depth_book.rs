@@ -68,8 +68,9 @@ async fn hysteresis_journal_and_rise_signal() {
     }
     let p = Parts::new(ctx.clone());
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(usdt),
+        contract: Some(usdt),
     }]);
     let ready = Arc::new(tokio::sync::Notify::new());
     p.registry.depth().on_rise(ready.clone());

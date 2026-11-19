@@ -115,9 +115,7 @@ fn currencies_bsc_networks() {
         .find(|n| n.asset.ticker == "CAKE" && n.network == "BSC")
         .expect("CAKE в BSC");
     assert_eq!(
-        cake.asset
-            .bsc_contract
-            .map(|a| a.to_string().to_lowercase()),
+        cake.asset.contract.map(|a| a.to_string().to_lowercase()),
         Some("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82".into())
     );
     assert!(cake.deposit_enabled && cake.withdraw_enabled);
@@ -129,13 +127,13 @@ fn currencies_bsc_networks() {
         .iter()
         .find(|n| n.asset.ticker == "USDT" && n.network == "BSC")
         .expect("USDT в BSC");
-    assert!(usdt.asset.bsc_contract.is_some());
+    assert!(usdt.asset.contract.is_some());
     let eth = p
         .list
         .iter()
         .find(|n| n.asset.ticker == "USDT" && n.network == "ETH")
         .expect("USDT в ETH");
-    assert!(eth.asset.bsc_contract.is_none());
+    assert!(eth.asset.contract.is_none());
     // Сеть 0G USDT закрыта на ввод и вывод.
     let og = p
         .list

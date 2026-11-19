@@ -47,8 +47,9 @@ fn assets() -> Vec<Asset> {
     ["BTC", "PEPE"]
         .iter()
         .map(|t| Asset {
+            chain: None,
             ticker: t.to_string(),
-            bsc_contract: None,
+            contract: None,
         })
         .collect()
 }

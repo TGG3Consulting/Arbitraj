@@ -59,8 +59,9 @@ fn mids_checked(p: &arb::venues::bsc_dex::parts::Parts) {
         p.checks.set_coin(CoinCheck {
             venue: VenueId("bsc_dex".into()),
             asset: Asset {
+                chain: None,
                 ticker: t.into(),
-                bsc_contract: Some(a),
+                contract: Some(a),
             },
             taxes: CheckState::Known(zero()),
             source: "тест".into(),
@@ -133,8 +134,9 @@ async fn three_hop_steps_chain_on_router() {
     let req = TradeRequest {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         side: Side::Buy,
         qty: Decimal::ONE,
@@ -299,8 +301,9 @@ async fn taxed_coin_multihop_v3_not_executable_in_quote() {
         mids: &p.mids,
     };
     let asset = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     };
     // 50 000 CAKE на записи раскладываются в том числе по пути через WBNB (пул CAKE-WBNB — V3).
     let quote = graph_route::quote(

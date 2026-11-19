@@ -57,8 +57,9 @@ async fn set(p: &Parts, name: &str, v: Option<serde_json::Value>) {
 
 fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     }
 }
 

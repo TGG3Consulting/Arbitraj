@@ -23,8 +23,9 @@ use crate::size_common::{CAKE, Rec, USDT, d};
 
 fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     }
 }
 
@@ -60,8 +61,9 @@ fn cx(rec: &Rec) -> DirCtx {
         net_b: "BEP20".into(),
         quote: vec!["USDT".into(), "USDT".into()],
         usdt: Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         cex: vec![],
         sigma: d("0.00002"),

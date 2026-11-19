@@ -34,7 +34,7 @@ use super::parts::Parts;
 /// эпохи нет (gate или state не собрались). Ошибок нет.
 pub fn of(p: &Parts, asset: &Asset) -> Option<String> {
     let g = gate(p)?;
-    let s = state(p, asset.bsc_contract?)?;
+    let s = state(p, asset.contract?)?;
     Some(format!("{g}|{s}"))
 }
 

@@ -59,7 +59,7 @@ pub(super) async fn transfer_open(
     let on = super::venue_ticker::ticker_on(core, &d.asset, v);
     let mem = match nets {
         Some(src) => {
-            let m = super::precheck_nets::recent(core, v, &on, d.asset.bsc_contract);
+            let m = super::precheck_nets::recent(core, v, &on, d.asset.contract);
             *src = m.as_ref().map_or(Src::Http, |(_, age)| Src::Memory(*age));
             m.map(|(list, _)| list)
         }
@@ -82,7 +82,7 @@ pub(super) async fn transfer_open(
     };
     let open = list
         .iter()
-        .find(|i| i.asset.bsc_contract.is_some() && i.asset.bsc_contract == d.asset.bsc_contract)
+        .find(|i| i.asset.contract.is_some() && i.asset.contract == d.asset.contract)
         .map(|i| {
             if withdraw {
                 i.withdraw_enabled

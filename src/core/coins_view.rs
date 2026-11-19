@@ -53,9 +53,7 @@ impl Core {
     /// Принимает: адрес. Возвращает: строку или None — монеты с таким адресом в справочнике нет. Ошибок нет.
     pub fn coin_json(&self, address: Address) -> Option<Value> {
         let coins = rd(&self.inner.coins);
-        let c = coins
-            .all()
-            .find(|c| c.asset.bsc_contract == Some(address))?;
+        let c = coins.all().find(|c| c.asset.contract == Some(address))?;
         let market = rd(&self.inner.market);
         let usdt = rd(&self.inner.usdt).clone().ok();
         let nets = rd(&self.inner.networks);
@@ -74,7 +72,7 @@ impl Core {
 fn row(c: &CoinEntry, x: &Ctx) -> Value {
     let (market, s, nets) = (x.market, x.s, x.nets);
     let dex: Vec<_> = c.presence.iter().filter(|p| p.info.is_none()).collect();
-    let checks: Vec<_> = match c.asset.bsc_contract {
+    let checks: Vec<_> = match c.asset.contract {
         Some(t) => dex
             .iter()
             .filter_map(|p| market.coin_check(&p.venue, t))
@@ -84,7 +82,7 @@ fn row(c: &CoinEntry, x: &Ctx) -> Value {
     let first = checks.first();
     // Пулы монеты с USDT и (решение 52) с промежуточными монетами площадки; pair — второй токен.
     let mut pools: Vec<Value> = vec![];
-    if let (Some(t), Some(u)) = (c.asset.bsc_contract, x.usdt) {
+    if let (Some(t), Some(u)) = (c.asset.contract, x.usdt) {
         for p in &dex {
             let mut others = vec![(u, "USDT".to_string())];
             if let Intermediate::On(list) = intermediate::read(s, &p.venue) {

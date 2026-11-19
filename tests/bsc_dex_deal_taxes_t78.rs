@@ -43,8 +43,9 @@ fn d(s: &str) -> Decimal {
 
 fn pig() -> Asset {
     Asset {
+        chain: None,
         ticker: "PIG".into(),
-        bsc_contract: Some(PIG),
+        contract: Some(PIG),
     }
 }
 
@@ -195,8 +196,9 @@ fn deal_taxes_released_when_coins_leave_wallet() {
         deal_id: DEAL.into(),
     };
     let usdt = Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(OTHER),
+        contract: Some(OTHER),
     };
     c.forget_after_withdraw(&w(usdt), &Ok(()));
     let failed: GatewayResult<()> = Err(GatewayError::new(

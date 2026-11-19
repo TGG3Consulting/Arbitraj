@@ -46,8 +46,9 @@ pub fn zero() -> TokenTaxes {
 /// Монета сцены.
 pub fn coin() -> Asset {
     Asset {
+        chain: None,
         ticker: "COIN".into(),
-        bsc_contract: Some(COIN),
+        contract: Some(COIN),
     }
 }
 
@@ -98,8 +99,9 @@ pub async fn setup() -> Parts {
     venue(&p, "dex.bundle_max_routers", Some(json!(3))).await;
     p.tokens.set(&[
         Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         coin(),
     ]);

@@ -31,8 +31,9 @@ use t198_live::{Hit, big, start};
 fn deal(id: &str) -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "BTC".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bsc_dex".into()),
         sell_on: VenueId("xt".into()),

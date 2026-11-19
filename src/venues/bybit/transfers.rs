@@ -191,8 +191,9 @@ pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
     Ok(Transfer {
         venue: ctx.venue(),
         asset: Asset {
+            chain: None,
             ticker,
-            bsc_contract: None,
+            contract: None,
         },
         network: num::text_opt(rec, "chain").unwrap_or_default(),
         amount: num::dec(rec, "amount")?,

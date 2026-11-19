@@ -51,8 +51,9 @@ fn frozen(
 ) -> FrozenBook {
     let level = vec![PriceLevel { price, qty }];
     let asset = Asset {
+        chain: None,
         ticker: ticker.into(),
-        bsc_contract: None,
+        contract: None,
     };
     FrozenBook {
         venue: VenueId(venue.into()),

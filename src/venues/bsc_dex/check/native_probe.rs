@@ -54,8 +54,9 @@ pub async fn after(
     m: &Measured,
 ) {
     let asset = Asset {
+        chain: None,
         ticker: e.ticker.clone(),
-        bsc_contract: Some(e.coin),
+        contract: Some(e.coin),
     };
     // Только V2/V3 (exec/native.rs::pool_ok): через V4 / Infinity BNB не торгуется — и мерить нечего.
     // Решение 272: и любой вид с шагом исполнителя (pools/exec_kind.rs::via_executor) — мерить через executeNative.

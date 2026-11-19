@@ -214,7 +214,7 @@ async fn start(d: &Path) -> Core {
 /// Монета справочника ядра по адресу.
 fn coin_at(list: &[arb::core::registry::CoinEntry], a: Address) -> arb::core::registry::CoinEntry {
     list.iter()
-        .find(|c| c.asset.bsc_contract == Some(a))
+        .find(|c| c.asset.contract == Some(a))
         .expect("адрес есть в записанных сетях")
         .clone()
 }
@@ -234,12 +234,13 @@ async fn one_address_two_tickers_end_to_end() {
     assert_eq!(at("gate").ticker, GT);
     for (venue, t) in [("bingx", BT), ("gate", GT)] {
         let on = vt::on_venue(&core, &coin, &v(venue));
-        assert_eq!((on.ticker.as_str(), on.bsc_contract), (t, Some(addr)));
+        assert_eq!((on.ticker.as_str(), on.contract), (t, Some(addr)));
         // Монета ядра под ЛЮБЫМ показным именем (имя не ключ) — тот же тикер площадки.
         for name in [BT, GT] {
             let shown = Asset {
+                chain: None,
                 ticker: name.into(),
-                bsc_contract: Some(addr),
+                contract: Some(addr),
             };
             assert_eq!(vt::ticker_on(&core, &shown, &v(venue)), t);
         }
@@ -253,8 +254,9 @@ async fn one_address_two_tickers_end_to_end() {
     // (2) Котировка из ядра доходит до BingX с её тикером, даже когда показное имя — тикер Gate (стакана в записи
     // нет — ответ адаптера называет монету).
     let shown = Asset {
+        chain: None,
         ticker: GT.into(),
-        bsc_contract: Some(addr),
+        contract: Some(addr),
     };
     let err = arb::core::trade_ops::sell_value(&core, None, &v("bingx"), &shown, d_qty())
         .await
@@ -275,29 +277,32 @@ async fn one_address_two_tickers_end_to_end() {
 
     // (3) Событие BingX без адреса (баланс, перевод) — монета ядра; без перевода тикер не совпал бы.
     let raw = Asset {
+        chain: None,
         ticker: BT.into(),
-        bsc_contract: None,
+        contract: None,
     };
     let back = vt::asset_back(&core, &v("bingx"), raw.clone());
     assert_eq!(back, coin);
-    assert_eq!(back.bsc_contract, Some(addr));
+    assert_eq!(back.contract, Some(addr));
     assert!(same_asset(&shown, &back), "зачисление BingX не узнано");
     assert!(
         !same_asset(&shown, &raw) || coin.ticker == BT,
         "сравнение без перевода не должно узнавать"
     );
     let gate_raw = Asset {
+        chain: None,
         ticker: GT.into(),
-        bsc_contract: None,
+        contract: None,
     };
     assert_eq!(vt::asset_back(&core, &v("gate"), gate_raw), coin);
     // Тикер BingX на Gate ничего не значит — не наша монета.
     let foreign = vt::asset_back(&core, &v("gate"), raw.clone());
-    assert_ne!(foreign.bsc_contract, Some(addr));
+    assert_ne!(foreign.contract, Some(addr));
     // USDT и монеты вне справочника — как есть.
     let usdt = Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: None,
+        contract: None,
     };
     assert_eq!(vt::asset_back(&core, &v("bingx"), usdt.clone()), usdt);
     // Затраты и fee_asset в тикере площадки — в имя ядра; USDT, BNB — как есть.
@@ -335,7 +340,7 @@ async fn one_address_two_tickers_end_to_end() {
     let req = arb::core::balance_sell_check::request(&core, &v("bingx"), &cake, d("5"), "t")
         .expect("запрос ордера CAKE");
     assert_eq!(req.asset.ticker, "CAKE");
-    assert_eq!(req.asset.bsc_contract, cake.bsc_contract);
+    assert_eq!(req.asset.contract, cake.contract);
     let _ = std::fs::remove_dir_all(&tmp);
 }
 

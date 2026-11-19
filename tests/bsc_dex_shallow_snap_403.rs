@@ -98,8 +98,9 @@ async fn snapshot_equals_direct_pick() {
     let r = rec();
     let mut pairs: Vec<_> = PAIRS.iter().map(|a| v2(&r, a, true)).collect();
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(pairs[0].usdt),
+        contract: Some(pairs[0].usdt),
     }]);
     p.tokens.remember_decimals(pairs[0].usdt, 18);
     for e in &pairs {
@@ -242,8 +243,9 @@ async fn setup(tag: &str, per_pair: u32) -> (Ctx, Parts, Vec<Entry>, shallow_bui
     let r = rec();
     let pairs: Vec<Entry> = PAIRS.iter().map(|a| v2(&r, a, true)).collect();
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(pairs[0].usdt),
+        contract: Some(pairs[0].usdt),
     }]);
     p.tokens.remember_decimals(pairs[0].usdt, 18);
     for e in &pairs {
@@ -336,8 +338,9 @@ async fn non_usdt_counter_recomputed_by_rate_marks() {
     let (c, t) = (ents[0].coin, ents[0].usdt);
     assert_eq!((ents[2].coin, ents[2].usdt), (t, c));
     p.tokens.set(&[Asset {
+        chain: None,
         ticker: "USDT".into(),
-        bsc_contract: Some(c),
+        contract: Some(c),
     }]);
     p.tokens.remember_decimals(c, 18);
     for e in &ents {

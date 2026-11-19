@@ -36,7 +36,7 @@ pub fn card(d: &Deal) -> DealCard {
 /// «PIG (0x1234…abcd)» или тикер, если адреса нет. Ошибок нет.
 pub fn coin(d: &Deal) -> String {
     let a = &d.direction.asset;
-    match &a.bsc_contract {
+    match &a.contract {
         Some(c) => format!("{} ({})", a.ticker, h::addr(&c.to_string())),
         None => a.ticker.clone(),
     }

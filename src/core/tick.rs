@@ -105,9 +105,8 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
             } => {
                 // У DEX данные монеты — её пулы: удаляем их по адресу контракта. Решение 211 (ревью В2): адрес из
                 // события (DEX) — сразу; нет — монета по (площадка, тикер площадки).
-                let token = address.or_else(|| {
-                    asset_by_ticker(&core, &venue, &ticker).and_then(|a| a.bsc_contract)
-                });
+                let token = address
+                    .or_else(|| asset_by_ticker(&core, &venue, &ticker).and_then(|a| a.contract));
                 if let Some(token) = token {
                     lk(&core.inner.quote_cache).bump(&venue, token);
                     wr(&core.inner.market).drop_pools_of(&venue, token);

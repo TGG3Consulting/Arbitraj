@@ -31,7 +31,7 @@ pub async fn cost(
     let ctx = &env.ctx;
     same_network(ctx, network)?;
     // Решение 211: налоги и газ перевода — по адресу контракта монеты.
-    let token = asset.bsc_contract.ok_or_else(|| {
+    let token = asset.contract.ok_or_else(|| {
         ctx.err(
             ErrorCode::CoinNotChecked,
             format!("{}: нет адреса контракта — налоги не найти", asset.ticker),

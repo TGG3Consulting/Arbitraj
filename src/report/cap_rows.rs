@@ -131,7 +131,7 @@ fn row(d: &Deal, w: &Window, hold: Hold, cx: &RowsCtx) -> DealRow {
     DealRow {
         id: d.id.clone(),
         coin: x.asset.ticker.clone(),
-        contract: (x.asset.bsc_contract)
+        contract: (x.asset.contract)
             .map(|a| format!("{a:#x}"))
             .unwrap_or_default(),
         buy: venue(&x.buy_on.0),

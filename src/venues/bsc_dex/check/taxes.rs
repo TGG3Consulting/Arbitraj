@@ -96,8 +96,9 @@ pub async fn check_coin(
     let check = CoinCheck {
         venue: ctx.venue(),
         asset: Asset {
+            chain: None,
             ticker: ticker.to_string(),
-            bsc_contract: Some(coin),
+            contract: Some(coin),
         },
         taxes,
         source: SOURCE.to_string(),

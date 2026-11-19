@@ -47,7 +47,7 @@ impl Tokens {
         let list = assets
             .iter()
             .filter_map(|a| {
-                a.bsc_contract.map(|address| Token {
+                a.contract.map(|address| Token {
                     ticker: a.ticker.clone(),
                     address,
                 })

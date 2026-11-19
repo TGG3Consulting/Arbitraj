@@ -95,7 +95,7 @@ fn head(src: &SignalsSrc, d: &Direction) -> MainRow {
         coin: d.asset.ticker.clone(),
         contract: d
             .asset
-            .bsc_contract
+            .contract
             .map(|a| format!("{a:#x}"))
             .unwrap_or_else(|| "нет: площадка не сообщила адрес контракта".into()),
         venue1: venue(&d.buy_on.0),

@@ -23,7 +23,7 @@ pub async fn slow(
     asset: &Asset,
     started: chrono::DateTime<Utc>,
 ) {
-    let coin = crate::settings::scope::coin_id(&asset.ticker, asset.bsc_contract.as_ref());
+    let coin = crate::settings::scope::coin_id(&asset.ticker, asset.contract.as_ref());
     let at = At {
         venue: Some(&to.0),
         coin: Some(&coin),

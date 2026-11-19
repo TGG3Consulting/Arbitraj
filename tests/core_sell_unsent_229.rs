@@ -87,8 +87,9 @@ async fn set(s: &Store, name: &str, v: Value) {
 fn jct() -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "JCT".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("mexc".into()),
         sell_on: VenueId("bsc_dex".into()),

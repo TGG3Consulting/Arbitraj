@@ -83,8 +83,9 @@ async fn wait_returns_on_event_or_at_once() {
     let ctx = bn(&core, &d);
     set(&core, "venue.withdraw_wallet", json!("spot")).await;
     let coin = |t: &str| Asset {
+        chain: None,
         ticker: t.into(),
-        bsc_contract: None,
+        contract: None,
     };
     let amount = Decimal::new(1234, 1);
     // Остаток уже есть — сразу.
@@ -215,8 +216,9 @@ async fn refusal_closes_entries_from_that_exchange_only() {
     let d = dir("bn251block");
     let (core, j) = start(&d, None).await;
     let cyber = Asset {
+        chain: None,
         ticker: "CYBER".into(),
-        bsc_contract: Some(alloy_primitives::address!(
+        contract: Some(alloy_primitives::address!(
             "0x14778860e937f509e651192a90589de711fb88a9"
         )),
     };
@@ -292,8 +294,9 @@ async fn history_fee_and_seen_cost() {
     );
     // В расчёт — только при transfer.seen_cost площадки (одна формула и у оценки «Перегона» — adjust_at).
     let coin = Asset {
+        chain: None,
         ticker: "SQQQB".into(),
-        bsc_contract: None,
+        contract: None,
     };
     let info = net(Some(Decimal::ZERO), None);
     let s = fact("SQQQB", "1000", "990.25", Some("0"));
@@ -332,8 +335,9 @@ fn net(fee: Option<Decimal>, pct: Option<Decimal>) -> arb::core::types::CoinNetw
     arb::core::types::CoinNetworkInfo {
         venue: venue(),
         asset: Asset {
+            chain: None,
             ticker: "X".into(),
-            bsc_contract: None,
+            contract: None,
         },
         network: "BSC".into(),
         deposit_enabled: true,
@@ -354,8 +358,9 @@ fn net(fee: Option<Decimal>, pct: Option<Decimal>) -> arb::core::types::CoinNetw
 fn fact(t: &str, sent: &str, credited: &str, fee: Option<&str>) -> arb::core::withdraw_seen::Seen {
     arb::core::withdraw_seen::Seen {
         asset: Asset {
+            chain: None,
             ticker: t.into(),
-            bsc_contract: None,
+            contract: None,
         },
         from: venue(),
         sent: d(sent),
@@ -520,8 +525,9 @@ async fn account_refusal_alerts_without_closing_coin() {
     let d = dir("bn253acc");
     let (core, j) = start(&d, None).await;
     let coin = Asset {
+        chain: None,
         ticker: "SQQQB".into(),
-        bsc_contract: Some(alloy_primitives::address!(
+        contract: Some(alloy_primitives::address!(
             "0x00000000000000000000000000000000000253a1"
         )),
     };

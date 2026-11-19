@@ -123,8 +123,9 @@ pub fn deal(k: usize, prefix: &str) -> Deal {
     let (t, _, coin, b, s, inv, fact, plan) = rows().swap_remove(k);
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: coin.clone(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId(b),
         sell_on: VenueId(s),

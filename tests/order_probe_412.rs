@@ -90,8 +90,9 @@ fn req(side: Side) -> TradeRequest {
     TradeRequest {
         venue: VenueId("mexc".into()),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         side,
         qty: d("10"),

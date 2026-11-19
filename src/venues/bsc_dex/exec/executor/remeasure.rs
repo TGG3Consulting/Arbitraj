@@ -113,7 +113,7 @@ pub async fn probe(
     }
     let orig = sim::explain(no_route(ctx, &r), diag);
     // Решение 247, п. Б: модель налога монеты не сошлась с сетью — внеочередная перепроверка (для следующих сделок).
-    if let Some(a) = req.asset.bsc_contract {
+    if let Some(a) = req.asset.contract {
         // Дополнение 10.11 (Тигран: согласовано): перепроверка — и кошельком сделки (счёт окружения сделки); t78: его
         // итог — только для продажи этой сделки (check/deal_taxes.rs), общие налоги — кошельком строки «Пробы».
         let by = env.ctx.account.clone().map(|account| By {

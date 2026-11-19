@@ -57,8 +57,9 @@ pub fn transfer(
     Ok(Transfer {
         venue: ctx.venue(),
         asset: Asset {
+            chain: None,
             ticker: ticker.clone(),
-            bsc_contract: None,
+            contract: None,
         },
         network: num::text_opt(rec, "chainName").unwrap_or_default(),
         amount: num::scaled(rec, "amountEv", scale)?,

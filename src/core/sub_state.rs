@@ -116,8 +116,9 @@ mod tests {
 
     fn a(t: &str) -> Asset {
         Asset {
+            chain: None,
             ticker: t.into(),
-            bsc_contract: None,
+            contract: None,
         }
     }
 

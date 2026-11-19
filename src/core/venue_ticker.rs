@@ -21,7 +21,7 @@ impl TickerIndex {
     /// без адреса или без присутствия на площадке — её собственный тикер. Ошибок нет.
     pub fn ticker_on(&self, asset: &Asset, venue: &VenueId) -> String {
         asset
-            .bsc_contract
+            .contract
             .and_then(|a| self.venue_ticker.get(&(venue.clone(), a)).cloned())
             .unwrap_or_else(|| asset.ticker.clone())
     }
@@ -29,8 +29,9 @@ impl TickerIndex {
     /// Монета для вызова площадки: тот же адрес, тикер площадки. Ошибок нет.
     pub fn on_venue(&self, asset: &Asset, venue: &VenueId) -> Asset {
         Asset {
+            chain: None,
             ticker: self.ticker_on(asset, venue),
-            bsc_contract: asset.bsc_contract,
+            contract: asset.contract,
         }
     }
 }
@@ -57,7 +58,7 @@ pub fn balance_key(core: &Core, asset: &Asset, venue: &VenueId) -> String {
     let dex = rd(&core.inner.kinds)
         .iter()
         .any(|(v, k)| v == venue && *k == crate::gateway::contract::VenueKind::Dex);
-    match asset.bsc_contract {
+    match asset.contract {
         Some(a) if dex => format!("{a:#x}"),
         _ => ticker_on(core, asset, venue),
     }
@@ -69,17 +70,18 @@ pub fn balance_key(core: &Core, asset: &Asset, venue: &VenueId) -> String {
 /// (BNB, монета вне справочника). Ошибок нет.
 pub fn asset_back(core: &Core, venue: &VenueId, asset: Asset) -> Asset {
     if let Some(c) = asset_by_venue_ticker(core, venue, &asset.ticker)
-        && (asset.bsc_contract.is_none() || asset.bsc_contract == c.bsc_contract)
+        && (asset.contract.is_none() || asset.contract == c.contract)
     {
         return c;
     }
-    if asset.bsc_contract.is_none()
+    if asset.contract.is_none()
         && is_quote(core, venue, &asset.ticker)
         && let Ok(a) = rd(&core.inner.usdt).clone()
     {
         return Asset {
+            chain: None,
             ticker: asset.ticker,
-            bsc_contract: Some(a),
+            contract: Some(a),
         };
     }
     asset
@@ -154,16 +156,18 @@ impl super::dirctx::DirCtx {
     /// Решение 211: монета для вызова площадки A — её тикер (Presence::ticker), адрес монеты ядра. Ошибок нет.
     pub fn on_a(&self) -> Asset {
         Asset {
+            chain: None,
             ticker: self.a.ticker.clone(),
-            bsc_contract: self.dir.asset.bsc_contract,
+            contract: self.dir.asset.contract,
         }
     }
 
     /// Решение 211: монета для вызова площадки B (как on_a). Ошибок нет.
     pub fn on_b(&self) -> Asset {
         Asset {
+            chain: None,
             ticker: self.b.ticker.clone(),
-            bsc_contract: self.dir.asset.bsc_contract,
+            contract: self.dir.asset.contract,
         }
     }
 }

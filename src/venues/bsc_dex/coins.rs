@@ -36,8 +36,9 @@ pub fn networks(ctx: &Ctx, reg: &Registry) -> GatewayResult<Vec<CoinNetworkInfo>
         .map(|(addr, ticker)| CoinNetworkInfo {
             venue: ctx.venue(),
             asset: Asset {
+                chain: None,
                 ticker,
-                bsc_contract: Some(addr),
+                contract: Some(addr),
             },
             network: network.clone(),
             deposit_enabled: true,

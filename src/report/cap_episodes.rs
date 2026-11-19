@@ -111,7 +111,7 @@ pub fn episodes(t: &Totals, ladder: &[Decimal]) -> Episodes {
             continue;
         }
         let d = &i.b.direction;
-        let coin = match d.asset.bsc_contract {
+        let coin = match d.asset.contract {
             Some(a) => format!("{a:#x}"),
             None => format!("ticker:{}", d.asset.ticker),
         };

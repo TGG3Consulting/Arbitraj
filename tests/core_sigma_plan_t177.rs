@@ -38,8 +38,9 @@ fn d(s: &str) -> Decimal {
 
 fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(address!("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82")),
+        contract: Some(address!("0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82")),
     }
 }
 

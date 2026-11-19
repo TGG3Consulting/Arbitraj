@@ -127,7 +127,7 @@ fn cake_bsc_contract_from_live_reply() {
     let want: alloy::primitives::Address = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82"
         .parse()
         .unwrap();
-    assert_eq!(cake.asset.bsc_contract, Some(want));
+    assert_eq!(cake.asset.contract, Some(want));
     assert!(cake.withdraw_fee.is_some());
 }
 

@@ -84,8 +84,9 @@ mod tests {
         use crate::core::types::{Asset, VenueId};
         let d = Direction {
             asset: Asset {
+                chain: None,
                 ticker: "ESIM".into(),
-                bsc_contract: None,
+                contract: None,
             },
             buy_on: VenueId("bsc_dex".into()),
             sell_on: VenueId("poloniex".into()),

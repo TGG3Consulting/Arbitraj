@@ -39,7 +39,7 @@ pub fn apply_blacklist(
         let cexes = c.presence.iter().filter(|p| p.info.is_some()).count();
         let measured = c
             .asset
-            .bsc_contract
+            .contract
             .and_then(|t| super::transfer_tax::measured(market, &kinds, t));
         c.cex_cex = (cexes >= 2 && measured.is_none() && !untaxed_ok)
             .then(|| super::transfer_tax::UNMEASURED.to_string());
@@ -52,7 +52,7 @@ pub fn apply_blacklist(
             .collect();
         // Решение 249: список «не взаимодействовать» биржи покупки — запрещённые направления биржа → биржа.
         c.cex_cex_deny = super::cex_link::deny_pairs(s, &c.presence);
-        let checks: Vec<_> = match c.asset.bsc_contract {
+        let checks: Vec<_> = match c.asset.contract {
             Some(token) => c
                 .presence
                 .iter()
@@ -93,7 +93,7 @@ pub fn apply_blacklist(
 
 /// Пулы монеты на DEX сняты до перечитывания (Invalidated, inner.held), а не исчезли из справочника. Ошибок нет.
 pub fn held(core: &Core, c: &CoinEntry) -> bool {
-    let Some(token) = c.asset.bsc_contract else {
+    let Some(token) = c.asset.contract else {
         return false;
     };
     let held = super::engine::lk(&core.inner.held);

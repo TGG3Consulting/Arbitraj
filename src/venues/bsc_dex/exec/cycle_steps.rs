@@ -42,8 +42,9 @@ pub fn trade_request(req: &CycleTradeRequest) -> TradeRequest {
     TradeRequest {
         venue: req.venue.clone(),
         asset: Asset {
+            chain: None,
             ticker: req.cycle.base_ticker.clone(),
-            bsc_contract: Some(req.cycle.base),
+            contract: Some(req.cycle.base),
         },
         side: Side::Sell,
         qty: req.input,

@@ -119,8 +119,9 @@ pub fn rows(s: &Store, kinds: &[(VenueId, VenueKind)]) -> Vec<LimitRow> {
         for (a, ka, b, kb) in &pairs {
             let d = Direction {
                 asset: Asset {
+                    chain: None,
                     ticker: String::new(),
-                    bsc_contract: None,
+                    contract: None,
                 },
                 buy_on: (*a).clone(),
                 sell_on: (*b).clone(),

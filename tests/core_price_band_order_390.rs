@@ -34,8 +34,9 @@ async fn read_needs_no_context_and_context_is_separate() {
         .set(kinds.iter().map(|(id, k)| (id.to_string(), *k)));
     let d = Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: v("bingx"),
         sell_on: v("bsc_dex"),

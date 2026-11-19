@@ -21,7 +21,7 @@ pub fn networks(p: &Parts) -> GatewayResult<Vec<CoinNetworkInfo>> {
     let quote = ctx.venue_text("venue.quote_asset").unwrap_or_default();
     Ok(p.assets()
         .into_iter()
-        .filter(|a| a.bsc_contract.is_some() && a.ticker != quote)
+        .filter(|a| a.contract.is_some() && a.ticker != quote)
         .map(|asset| CoinNetworkInfo {
             venue: ctx.venue(),
             asset,

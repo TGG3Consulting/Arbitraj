@@ -38,8 +38,9 @@ fn d(s: &str) -> Decimal {
 fn dir() -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "SHOPINX".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bsc_dex".into()),
         sell_on: VenueId("bingx".into()),
@@ -167,8 +168,9 @@ fn cake(received: DateTime<Utc>) -> OrderBook {
                 } if symbol == "CAKE-USDT" => Some(OrderBook {
                     venue: VenueId("bingx".into()),
                     asset: Asset {
+                        chain: None,
                         ticker: "CAKE".into(),
-                        bsc_contract: None,
+                        contract: None,
                     },
                     bids,
                     asks,

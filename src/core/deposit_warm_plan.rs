@@ -88,7 +88,7 @@ pub fn pick(
     let mut seen = HashSet::new();
     dirs.into_iter()
         .filter(|d| &d.sell_on == venue)
-        .filter(|d| seen.insert((d.asset.ticker.clone(), d.asset.bsc_contract)))
+        .filter(|d| seen.insert((d.asset.ticker.clone(), d.asset.contract)))
         .collect()
 }
 

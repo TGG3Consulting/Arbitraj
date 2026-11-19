@@ -87,8 +87,9 @@ fn dex() -> VenueId {
 /// Монета теста (свой тикер в каждом тесте: замки очереди — общие на процесс).
 fn coin(t: &str) -> Asset {
     Asset {
+        chain: None,
         ticker: t.into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

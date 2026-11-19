@@ -131,8 +131,9 @@ mod tests {
         CoinNetworkInfo {
             venue: VenueId("v".into()),
             asset: Asset {
+                chain: None,
                 ticker: "T".into(),
-                bsc_contract: None,
+                contract: None,
             },
             network: "BSC".into(),
             deposit_enabled: true,

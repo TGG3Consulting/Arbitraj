@@ -130,8 +130,9 @@ fn bingx_bnb_withdraw_is_direct_native_transfer() {
         address!("0x1c8f435a7a86a47490e9c9e15cd1af573985d94d")
     );
     let bnb = Asset {
+        chain: None,
         ticker: "BNB".into(),
-        bsc_contract: Some(WBNB),
+        contract: Some(WBNB),
     };
     // Зачисление на кошелёк: сумма = value транзакции.
     let (a, wei) = native_status::judge(&tx, wallet, bnb.clone(), true)

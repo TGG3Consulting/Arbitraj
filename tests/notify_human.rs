@@ -127,8 +127,9 @@ fn unknown_code_goes_to_answer_line() {
 fn deal(plan: &str, invested: &str, proceeds: &str, spent: &str) -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "BABYDOGE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("mexc".into()),
         sell_on: VenueId("bsc_dex".into()),

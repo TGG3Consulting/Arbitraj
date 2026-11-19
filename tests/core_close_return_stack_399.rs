@@ -148,7 +148,7 @@ async fn group_core() -> (Core, Decimal) {
     let (core, _j) = usdt_return_common::start_with(&d, None, extra).await;
     let (max, list) = bingx_networks();
     let usdt = list.iter().find(|x| is_usdt_bsc(x)).unwrap();
-    *core.inner.usdt.write().unwrap() = Ok(usdt.asset.bsc_contract.unwrap());
+    *core.inner.usdt.write().unwrap() = Ok(usdt.asset.contract.unwrap());
     core.inner
         .networks
         .write()
@@ -163,8 +163,9 @@ fn close_then_group_return_pieces_fit_worker_stack() {
         let (core, max) = group_core().await;
         let dir = Direction {
             asset: Asset {
+                chain: None,
                 ticker: "DOGE".into(),
-                bsc_contract: None,
+                contract: None,
             },
             buy_on: VenueId("mexc".into()),
             sell_on: VenueId("bingx".into()),

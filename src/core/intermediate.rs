@@ -52,7 +52,7 @@ pub fn ticker_of(networks: &super::registry_build::Networks, addr: Address) -> O
     networks
         .values()
         .flat_map(|l| l.iter())
-        .find(|i| i.asset.bsc_contract == Some(addr))
+        .find(|i| i.asset.contract == Some(addr))
         .map(|i| i.asset.ticker.clone())
 }
 

@@ -105,8 +105,9 @@ async fn start() -> (Ctx, Store, Arc<AtomicUsize>) {
 
 fn coin() -> Asset {
     Asset {
+        chain: None,
         ticker: "MX".into(),
-        bsc_contract: None,
+        contract: None,
     }
 }
 

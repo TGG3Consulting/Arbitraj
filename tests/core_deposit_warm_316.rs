@@ -23,8 +23,9 @@ use arb::gateway::errors::ErrorCode;
 fn dir(t: &str, a: &str, b: &str) -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: t.into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId(a.into()),
         sell_on: VenueId(b.into()),

@@ -221,8 +221,9 @@ fn market_split_limits() {
         .map(|i| {
             (
                 Asset {
+                    chain: None,
                     ticker: format!("C{i}"),
-                    bsc_contract: None,
+                    contract: None,
                 },
                 format!("C{i}USDT"),
             )

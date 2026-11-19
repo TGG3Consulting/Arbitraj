@@ -32,7 +32,7 @@ pub fn cex(
     fresh: &Result<(), String>,
     market: &MarketState,
 ) -> Presence {
-    let with_contract = nets.iter().find(|i| i.asset.bsc_contract.is_some());
+    let with_contract = nets.iter().find(|i| i.asset.contract.is_some());
     let net = with_contract.or_else(|| nets.iter().find(|i| Some(i.network.as_str()) == bsc));
     let pair = market.pair(venue, ticker);
     let excluded = match (net, with_contract, pair) {

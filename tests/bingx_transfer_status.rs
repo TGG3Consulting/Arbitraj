@@ -40,8 +40,9 @@ fn net(ticker: &str, open: bool) -> CoinNetworkInfo {
     CoinNetworkInfo {
         venue: VenueId("bingx".into()),
         asset: Asset {
+            chain: None,
             ticker: ticker.into(),
-            bsc_contract: Some(Address::ZERO),
+            contract: Some(Address::ZERO),
         },
         network: "BEP20".into(),
         deposit_enabled: open,

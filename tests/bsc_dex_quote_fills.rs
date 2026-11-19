@@ -59,8 +59,9 @@ const GAS: u64 = 1_000_000_000;
 /// CAKE записи пулов (route_common).
 fn cake() -> Asset {
     Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(route_common::CAKE),
+        contract: Some(route_common::CAKE),
     }
 }
 
@@ -278,8 +279,9 @@ fn cx(rec: &Rec) -> DirCtx {
     DirCtx {
         dir: Direction {
             asset: Asset {
+                chain: None,
                 ticker: "CAKE".into(),
-                bsc_contract: Some(size_common::CAKE),
+                contract: Some(size_common::CAKE),
             },
             buy_on: VenueId("bingx".into()),
             sell_on: VenueId("bsc_dex".into()),
@@ -290,8 +292,9 @@ fn cx(rec: &Rec) -> DirCtx {
         net_b: "BEP20".into(),
         quote: vec!["USDT".into(), "USDT".into()],
         usdt: Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(size_common::USDT),
+            contract: Some(size_common::USDT),
         },
         cex: vec![],
         sigma: d("0.0005"),
@@ -315,8 +318,9 @@ fn cx(rec: &Rec) -> DirCtx {
 /// Снимок стакана BingX (покупка — комиссия taker 0,1 % в монете).
 fn frozen_buy(rec: &Rec) -> FrozenBook {
     let asset = Asset {
+        chain: None,
         ticker: "CAKE".into(),
-        bsc_contract: Some(size_common::CAKE),
+        contract: Some(size_common::CAKE),
     };
     let book = OrderBook {
         venue: VenueId("bingx".into()),

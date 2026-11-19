@@ -77,8 +77,9 @@ pub fn parse(
     let c = BalanceChange {
         venue: venue.clone(),
         asset: Asset {
+            chain: None,
             ticker: t,
-            bsc_contract: None,
+            contract: None,
         },
         delta,
         kind,

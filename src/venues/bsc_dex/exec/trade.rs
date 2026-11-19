@@ -179,7 +179,7 @@ async fn run(
 /// Адреса монеты и USDT и их decimals. Ошибки: NoRoute (у монеты нет адреса в BSC), NotConfigured, узел.
 pub async fn sides(q: &Quoting, req: &TradeRequest) -> GatewayResult<(Address, Address, (u8, u8))> {
     let ctx = &q.ctx;
-    let coin = req.asset.bsc_contract.ok_or_else(|| {
+    let coin = req.asset.contract.ok_or_else(|| {
         ctx.err(
             ErrorCode::NoRoute,
             format!("{}: нет адреса контракта в BSC", req.asset.ticker),

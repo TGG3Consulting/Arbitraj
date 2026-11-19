@@ -235,7 +235,7 @@ impl Quoting {
         // Налоги — до любого запроса к узлу (decimals, цена газа, разрешения): не проверены — сразу отказ.
         let taxes = direct::taxes(self, asset)?;
         let usdt = self.tokens.usdt(ctx)?;
-        let coin = asset.bsc_contract.ok_or_else(|| {
+        let coin = asset.contract.ok_or_else(|| {
             ctx.err(
                 ErrorCode::NoRoute,
                 format!("{}: нет адреса контракта в BSC", asset.ticker),

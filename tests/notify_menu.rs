@@ -163,8 +163,9 @@ async fn halted_record_sold_manually_from_telegram_once() {
     let core = start("sold").await;
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("bingx".into()),
         sell_on: VenueId("bsc_dex".into()),

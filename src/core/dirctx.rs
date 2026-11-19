@@ -202,8 +202,7 @@ impl DirCtx {
                 )?
             }
         };
-        let coin =
-            crate::settings::scope::coin_id(&dir.asset.ticker, dir.asset.bsc_contract.as_ref());
+        let coin = crate::settings::scope::coin_id(&dir.asset.ticker, dir.asset.contract.as_ref());
         let coin_at = At {
             venue: None,
             coin: Some(&coin),
@@ -284,8 +283,9 @@ impl DirCtx {
             net_b,
             quote: vec![qa.clone(), qb],
             usdt: Asset {
+                chain: None,
                 ticker: qa,
-                bsc_contract: Some(usdt),
+                contract: Some(usdt),
             },
             cex,
             sigma,

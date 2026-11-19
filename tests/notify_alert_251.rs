@@ -60,8 +60,9 @@ fn tr(venue: &str, asset: &Asset, amount: &str) -> Transfer {
 /// PIG 09.11: монета на DEX после перевода с MEXC, ждёт решения человека.
 fn pig() -> Deal {
     let asset = Asset {
+        chain: None,
         ticker: "PIG".into(),
-        bsc_contract: None,
+        contract: None,
     };
     let dir = Direction {
         asset: asset.clone(),
@@ -148,8 +149,9 @@ fn stuck_after_sell_refusal() {
 /// JCT 08.11: закрыта на DEX (кошелёк w7) после перегона с Bitget, возврат выручки на BingX идёт.
 fn jct() -> Deal {
     let asset = Asset {
+        chain: None,
         ticker: "JCT".into(),
-        bsc_contract: None,
+        contract: None,
     };
     let dir = Direction {
         asset: asset.clone(),

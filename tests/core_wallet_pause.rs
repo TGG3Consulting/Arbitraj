@@ -128,8 +128,9 @@ async fn start(name: &str) -> Core {
 fn dir_of(buy: &str, sell: &str) -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "PORTO".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: v(buy),
         sell_on: v(sell),

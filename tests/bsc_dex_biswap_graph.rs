@@ -137,12 +137,14 @@ async fn scene(id: &str, kind: &str) -> Parts {
         .unwrap();
     p.tokens.set(&[
         Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         Asset {
+            chain: None,
             ticker: "COIN".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
     ]);
     p.tokens.remember_decimals(USDT, 18);
@@ -150,8 +152,9 @@ async fn scene(id: &str, kind: &str) -> Parts {
     p.checks.set_coin(CoinCheck {
         venue: VenueId("bsc_dex".into()),
         asset: Asset {
+            chain: None,
             ticker: "COIN".into(),
-            bsc_contract: Some(COIN),
+            contract: Some(COIN),
         },
         taxes: CheckState::Known(zero()),
         source: "тест".into(),
@@ -188,8 +191,9 @@ async fn quote_route(p: &Parts) -> DexRoute {
         mids: &p.mids,
     };
     let asset = Asset {
+        chain: None,
         ticker: "COIN".into(),
-        bsc_contract: Some(COIN),
+        contract: Some(COIN),
     };
     let quote = graph_route::quote(
         &v,
@@ -399,8 +403,9 @@ async fn fork_excluded_from_classic_direct() {
         mids: &p.mids,
     };
     let asset = Asset {
+        chain: None,
         ticker: "COIN".into(),
-        bsc_contract: Some(COIN),
+        contract: Some(COIN),
     };
     let fork = q
         .reg
@@ -559,8 +564,9 @@ async fn classic(
         mids: &p.mids,
     };
     let asset = Asset {
+        chain: None,
         ticker: "COIN".into(),
-        bsc_contract: Some(COIN),
+        contract: Some(COIN),
     };
     let gas = U256::from(2_000_000u64);
     arb::venues::bsc_dex::quote::classic_direct::quote(

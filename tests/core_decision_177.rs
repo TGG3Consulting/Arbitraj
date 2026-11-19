@@ -181,8 +181,9 @@ async fn auto_failure_after_send_counts_as_before() {
 fn gaib() -> Deal {
     let dir = Direction {
         asset: Asset {
+            chain: None,
             ticker: "GAIB".into(),
-            bsc_contract: None,
+            contract: None,
         },
         buy_on: VenueId("mexc".into()),
         sell_on: dex(),
@@ -265,8 +266,9 @@ fn telegram_edits_returned_record_and_final_outcome() {
         deal_id: "20261105131254836GAIB".into(),
         venue: dex(),
         asset: Asset {
+            chain: None,
             ticker: "GAIB".into(),
-            bsc_contract: None,
+            contract: None,
         },
         qty: Decimal::from_str("2434.66").unwrap(),
         loss_pct: None,

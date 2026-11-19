@@ -68,8 +68,9 @@ fn v(id: &str) -> VenueId {
 fn dir_of(buy: &str, sell: &str) -> Direction {
     Direction {
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         buy_on: v(buy),
         sell_on: v(sell),
@@ -132,8 +133,9 @@ fn cx(rec: &Rec) -> DirCtx {
         net_b: "BEP20".into(),
         quote: vec!["USDT".into(), "USDT".into()],
         usdt: Asset {
+            chain: None,
             ticker: "USDT".into(),
-            bsc_contract: Some(USDT),
+            contract: Some(USDT),
         },
         cex: vec![],
         sigma: d("0.0005"),
@@ -408,7 +410,7 @@ async fn parallel_keeps_order_and_texts() {
 fn remember(core: &Core, rec: &Rec, age_ms: i64, withdraw: bool) {
     let mut net = rec.net.clone();
     net.venue = v("bingx");
-    net.asset.bsc_contract = Some(CAKE);
+    net.asset.contract = Some(CAKE);
     net.withdraw_enabled = withdraw;
     net.updated_at = chrono::Utc::now() - chrono::Duration::milliseconds(age_ms);
     core.inner
@@ -425,8 +427,9 @@ async fn networks_memory_skips_request_while_fresh() {
     let ticker = rec.net.asset.ticker.clone();
     let dd = Direction {
         asset: Asset {
+            chain: None,
             ticker: ticker.clone(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         buy_on: v("bingx"),
         sell_on: v("bsc_dex"),
@@ -685,7 +688,7 @@ async fn pending_status_change_forces_request() {
     let raw = || {
         let mut n = rec.net.clone();
         n.venue = bingx.clone();
-        n.asset.bsc_contract = Some(CAKE);
+        n.asset.contract = Some(CAKE);
         n.withdraw_enabled = false;
         n.updated_at = chrono::Utc::now();
         vec![n]
@@ -709,8 +712,9 @@ async fn pending_status_change_forces_request() {
     assert!(precheck_nets::recent(&core, &bingx, &ticker, Some(CAKE)).is_none());
     let dd = Direction {
         asset: Asset {
+            chain: None,
             ticker: ticker.clone(),
-            bsc_contract: Some(CAKE),
+            contract: Some(CAKE),
         },
         buy_on: bingx.clone(),
         sell_on: v("bsc_dex"),
@@ -849,8 +853,9 @@ async fn side_a_passes_side_b_refuses_same_in_both_modes() {
     let rec = Rec::load("fast-266-ab").await;
     let ticker = rec.pair.ticker.clone();
     let asset = Asset {
+        chain: None,
         ticker: ticker.clone(),
-        bsc_contract: Some(CAKE),
+        contract: Some(CAKE),
     };
     for id in ["bingx", "mexc"] {
         let sc = || Scope::Venue(id.into());

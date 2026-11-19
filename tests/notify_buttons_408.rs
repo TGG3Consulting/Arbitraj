@@ -151,8 +151,9 @@ fn foreign(holders: Vec<String>) -> StuckAlert {
         deal_id: "20261104120000123CAKE".into(),
         venue: VenueId("bingx".into()),
         asset: Asset {
+            chain: None,
             ticker: "CAKE".into(),
-            bsc_contract: None,
+            contract: None,
         },
         qty: Decimal::new(1234, 2),
         loss_pct: None,

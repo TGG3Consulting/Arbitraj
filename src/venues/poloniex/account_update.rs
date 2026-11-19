@@ -180,8 +180,9 @@ impl Totals {
         Some(BalanceChange {
             venue: venue.clone(),
             asset: Asset {
+                chain: None,
                 ticker: r.currency.clone(),
-                bsc_contract: None,
+                contract: None,
             },
             delta,
             kind,

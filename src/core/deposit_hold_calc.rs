@@ -55,7 +55,7 @@ pub fn expected_pct(core: &Core, to: &VenueId, a: &Asset) -> Decimal {
 
 /// Налог перевода токена по проверкам DEX, %. None — не измерен или нет адреса. Ошибок нет.
 fn token_tax(core: &Core, a: &Asset) -> Option<Decimal> {
-    let t = a.bsc_contract?;
+    let t = a.contract?;
     let kinds = rd(&core.inner.kinds);
     super::transfer_tax::measured(&rd(&core.inner.market), &kinds, t)
 }

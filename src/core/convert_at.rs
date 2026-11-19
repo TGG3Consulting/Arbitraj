@@ -43,14 +43,15 @@ pub fn plan(
             || super::native::is_native(
                 core,
                 &Asset {
+                    chain: None,
                     ticker: ticker.to_string(),
-                    bsc_contract: addr,
+                    contract: addr,
                 },
             ));
     let addr = match addr {
         Some(a) => Some(a),
         None => super::venue_ticker::asset_by_venue_ticker(core, origin, ticker)
-            .and_then(|a| a.bsc_contract),
+            .and_then(|a| a.contract),
     };
     let idx = rd(&core.inner.tickers);
     for v in cex.iter().filter(|v| *v != origin) {
@@ -87,8 +88,9 @@ pub async fn price_at(
     let mut why = vec![];
     for (v, t) in list {
         let a = Asset {
+            chain: None,
             ticker: t,
-            bsc_contract: None,
+            contract: None,
         };
         match super::convert::quote_one(&core.inner.deps, &v, &a, qty).await {
             Ok(p) => return Ok(p),

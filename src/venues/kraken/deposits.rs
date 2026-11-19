@@ -74,8 +74,9 @@ pub async fn deposit_status(ctx: &Ctx, asset: &Asset, tx: &str) -> GatewayResult
     Ok(Transfer {
         venue: ctx.venue(),
         asset: Asset {
+            chain: None,
             ticker: asset.ticker.clone(),
-            bsc_contract: None,
+            contract: None,
         },
         network: num::text_opt(rec, "network_id").unwrap_or_default(),
         amount,

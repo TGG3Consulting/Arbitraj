@@ -136,7 +136,7 @@ pub fn index_of(coins: &[CoinEntry]) -> TickerIndex {
         ..TickerIndex::default()
     };
     for c in coins {
-        let Some(addr) = c.asset.bsc_contract else {
+        let Some(addr) = c.asset.contract else {
             continue;
         };
         idx.by_token.entry(addr).or_default().push(c.asset.clone());
@@ -194,6 +194,6 @@ pub fn find_by_token<'a>(
         .and_then(|v| v.first().cloned());
     match first {
         Some(a) => find(core, coins, &a),
-        None => coins.iter().find(|c| c.asset.bsc_contract == Some(token)),
+        None => coins.iter().find(|c| c.asset.contract == Some(token)),
     }
 }

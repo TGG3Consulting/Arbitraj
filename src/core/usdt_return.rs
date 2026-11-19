@@ -48,8 +48,9 @@ pub(super) fn usdt(core: &Core, venue: &VenueId) -> Result<Asset, String> {
         .map_err(|e| e.message)?;
     let addr = rd(&core.inner.usdt).clone()?;
     Ok(Asset {
+        chain: None,
         ticker,
-        bsc_contract: Some(addr),
+        contract: Some(addr),
     })
 }
 

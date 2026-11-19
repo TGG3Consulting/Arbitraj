@@ -47,8 +47,9 @@ pub fn quote_of(core: &Core, v: &VenueId) -> Result<String, String> {
 /// Принимает: ядро, биржу, тикер. Возвращает: монету. Ошибок нет.
 pub fn asset_of(core: &Core, v: &VenueId, ticker: &str) -> Asset {
     rd(&core.inner.tickers).get(v, ticker).unwrap_or(Asset {
+        chain: None,
         ticker: ticker.to_string(),
-        bsc_contract: None,
+        contract: None,
     })
 }
 

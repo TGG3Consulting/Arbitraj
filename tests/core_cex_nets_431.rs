@@ -31,6 +31,9 @@ const DIR: &str = "tests/data/cex_samples_2026_11_04";
 const USDT_BSC: Address = address!("55d398326f99059fF775485246999027B3197955");
 const USDT_ARB: Address = address!("Fd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9");
 
+/// Запись для сравнения справочников: (тикер, сеть биржи, адрес, сеть ядра).
+type Row = (String, String, Option<Address>, Option<ChainId>);
+
 /// Площадка по id. Ошибок нет.
 fn v(id: &str) -> VenueId {
     VenueId(id.into())
@@ -161,7 +164,7 @@ async fn core_tags_records_by_chain() {
 
     // (б) площадки DEX Arbitrum нет — адрес записи Arbitrum снят, справочник как с одним именем BSC.
     let one = arb::core::net_chain::tag(&core, &v("bingx"), raw.clone());
-    let key = |l: &[CoinNetworkInfo]| -> Vec<(String, String, Option<Address>, Option<ChainId>)> {
+    let key = |l: &[CoinNetworkInfo]| -> Vec<Row> {
         l.iter()
             .map(|i| {
                 let a = &i.asset;

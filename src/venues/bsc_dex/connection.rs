@@ -35,6 +35,8 @@ use super::wallet::{balances, signer};
 /// Полная проверка. Возвращает: ConnectionCheck (ok — только если все части в порядке). Ошибок нет.
 pub async fn check(ctx: &Ctx) -> ConnectionCheck {
     let parts = [
+        // Решение 416: сеть площадки из настроек (dex.chain, dex.evm_chain_id).
+        ("Сеть площадки", super::node::chain_id::describe(ctx)),
         ("Узел HTTP", http(ctx).await),
         (
             "Синхронизация узла",

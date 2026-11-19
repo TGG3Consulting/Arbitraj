@@ -38,6 +38,17 @@ pub fn same_chain(ctx: &Ctx, got: u64) -> Result<(), String> {
     }
 }
 
+/// Что делает: часть «Сеть площадки» в «Проверить подключение» — заданы ли dex.chain и dex.evm_chain_id.
+/// Принимает: окружение. Возвращает: описание («bsc, chainId 56») или текст причины.
+pub fn describe(ctx: &Ctx) -> Result<String, String> {
+    let id = ctx.text("dex.chain").map_err(|e| e.message)?;
+    if id.trim().is_empty() {
+        return Err("dex.chain пуста — задайте id сети площадки DEX".into());
+    }
+    let n = chain_id(ctx).map_err(|e| e.message)?;
+    Ok(format!("{id}, chainId {n}"))
+}
+
 /// Что делает: проверка сети перед подпиской на рынок — dex.chain и dex.evm_chain_id заданы, eth_chainId узла равен
 /// dex.evm_chain_id. Узел не ответил — подписка идёт как раньше (её собственные запросы покажут сбой связи), в журнал
 /// venue.chain_check — предупреждение; узел другой сети — подписки нет.

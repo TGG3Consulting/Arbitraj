@@ -37,6 +37,9 @@ use super::fast::Fast;
 use super::sbe_conn;
 use super::ws::{self, End};
 
+/// Сервер шлёт ping раз в 20 с (sbe-market-data-streams.md: «The server sends a ping frame every 20 seconds»).
+const SERVER_PING: Duration = Duration::from_secs(20);
+
 /// Соединение WebSocket.
 pub type Ws =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
@@ -57,15 +60,33 @@ pub fn url(ctx: &Ctx) -> Result<String, String> {
     Ok(format!("{}/stream", u.trim_end_matches('/')))
 }
 
-/// Что делает: все настройки SBE. Ошибка — текст причины (не задано, ключ не введён или секреты закрыты, вне пределов).
+/// Что делает: все настройки SBE. Ошибка — текст причины (не задано, ключ не введён или секреты закрыты, вне пределов,
+/// venue.ws_silence_ms не больше 20 с, venue.sbe_snapshot_limit меньше venue.depth_levels).
 pub fn config(ctx: &Ctx) -> Result<SbeCfg, String> {
     let url = url(ctx)?;
     let key = ctx
         .vault
         .get(SECRET_SBE_API_KEY)
         .map_err(|e| format!("ключ Ed25519 для SBE ({SECRET_SBE_API_KEY}): {}", e.message))?;
-    super::sbe_snap::config(ctx)?;
+    let (_, limit) = super::sbe_snap::config(ctx)?;
     let base = ws::config(ctx)?;
+    // Ревью 425: изменения SBE у тихих пар не идут, кадры соединения — только ping сервера раз в 20 с. Тишина не
+    // длиннее — соединение рвалось бы по кругу (300 подключений за 5 мин с IP и снимки всех пар заново).
+    if base.silence <= SERVER_PING {
+        return Err(format!(
+            "venue.ws_silence_ms = {} мс: у потоков SBE ping сервера раз в {} с — нужно больше",
+            base.silence.as_millis(),
+            SERVER_PING.as_secs()
+        ));
+    }
+    // Ревью 425: снимок мельче стакана ядра — верхние уровни быстрого стакана неполны, сверка со страховкой
+    // расходилась бы всегда (пересинхронизации по кругу).
+    if limit < base.levels {
+        return Err(format!(
+            "venue.sbe_snapshot_limit = {limit} меньше venue.depth_levels = {} — снимок должен быть не мельче",
+            base.levels
+        ));
+    }
     let pause = ctx
         .int("venue.ws_reconnect_pause_ms")
         .map_err(|e| e.message)?;

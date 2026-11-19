@@ -6,9 +6,9 @@
 //! Пропуск номеров, сбой снимка, обрыв SBE → пара сразу на страховку: последний кадр JSON, если он получен ПОСЛЕ
 //! последнего отданного быстрого стакана, — ядру сейчас; иначе стакан пары снимается (ядро знает «недостоверно») и
 //! следующий кадр JSON (≤ 100 мс) отдаётся как раньше. После пересинхронизации — снова быстрый.
-//! Здесь — состояние и сторона JSON; сторона SBE и счётчики журнала — fast_sbe.rs.
-//! Кто вызывает: ws_conn.rs и ws.rs (сторона JSON), sbe_run.rs (создаёт), sbe_conn.rs (Pairs), fast_sbe.rs.
-//! От чего зависит: book.rs (Books), depth.rs, gateway/core_out_book.rs.
+//! Здесь — состояние и сторона JSON (кроме сверки кадра — fast_check.rs); сторона SBE и счётчики — fast_sbe.rs.
+//! Кто вызывает: ws_conn.rs и ws.rs (сторона JSON), sbe_run.rs (создаёт), sbe_conn.rs (Pairs), fast_sbe.rs, fast_check.rs.
+//! От чего зависит: book.rs (Books), gateway/core_out_book.rs.
 //! Настройки: нет своих (уровни ядру — venue.depth_levels из ws.rs Cfg).
 //!
 //! Почему не по номеру (п.3–4 постановки): связь lastUpdateId частичного стакана JSON с номерами потока изменений
@@ -17,7 +17,9 @@
 //! сверка — только по содержимому: верхние N уровней кадра JSON равны верхним N быстрого стакана — пара подтверждена
 //! (время кадра пары — сейчас, живость стакана — по соединению JSON, book.rs rebind: тихая пара без изменений SBE не
 //! устаревает, пока страховка подтверждает её содержимое); не равны — ничего (кадры двух соединений приходят в разные
-//! моменты, расхождение само по себе не доказывает пропуск). Счётчики — fast_sbe.rs.
+//! моменты, одно расхождение само по себе не доказывает пропуск). Ревью 425 (правило ревью 420/424): два кадра JSON
+//! ПОДРЯД получены после последнего быстрого стакана и не совпали с ним, а быстрый между ними не менялся — быстрый
+//! неверен: пара на страховку этим кадром и пересинхронизация (fast_check.rs). Счётчики — fast_sbe.rs.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -27,11 +29,9 @@ use tokio_tungstenite::tungstenite::Utf8Bytes;
 
 use crate::gateway::core_out_book::{BookOut, Fed};
 use crate::gateway::events::MarketEvent;
-use crate::gateway::feed_health::BookPrint;
 
 use super::book::{Alive, Books};
 use super::ctx::Ctx;
-use super::depth;
 
 /// Арбитр пачки монет. Default — SBE выключен: всё как раньше, без замков.
 #[derive(Clone, Default)]
@@ -47,8 +47,9 @@ pub(super) struct Inner {
     pub(super) kept: BookOut,
     pub(super) levels: usize,
     pub(super) pairs: Mutex<HashMap<String, Pair>>,
-    /// Канал пересинхронизации пар в сессию SBE (команда сторожа ядра «переподписать пару»).
-    pub(super) resync: Mutex<Option<mpsc::UnboundedSender<String>>>,
+    /// Канал пересинхронизации пар в сессию SBE: (тикер, после паузы venue.ws_reconnect_pause_ms). Без паузы — команда
+    /// сторожа ядра «переподписать пару»; с паузой — быстрый стакан разошёлся со страховкой (fast_check.rs).
+    pub(super) resync: Mutex<Option<mpsc::UnboundedSender<(String, bool)>>>,
     pub(super) stats: Mutex<Stats>,
 }
 
@@ -67,6 +68,11 @@ pub(super) struct Pair {
     pub(super) matched: Option<(i64, u64)>,
     /// lastUpdateId кадра JSON, уже отданного ядру при переходе на страховку (тот же кадр второй раз не отдаётся).
     pub(super) given: Option<i64>,
+    /// Ревью 425: номер быстрого стакана (seq), с которым не совпал кадр JSON, полученный после него.
+    pub(super) miss: Option<u64>,
+    /// Ревью 425: быстрый стакан разошёлся со страховкой — изменения SBE ядру не отдаются, пока пара не сброшена
+    /// (fast_lost после пересинхронизации).
+    pub(super) diverged: bool,
 }
 
 /// Счётчики соединения и метка строки журнала.
@@ -113,30 +119,6 @@ impl Fast {
         }
     }
 
-    /// Сторона JSON: кадр пары (до разбора). Принимает: тикер, текст кадра, lastUpdateId, время получения, живость
-    /// соединения JSON. Возвращает: true — пара на быстром стакане (кадр запомнен и сверен, ядру не отдаётся). Ошибок нет.
-    pub fn held(&self, ticker: &str, text: &Utf8Bytes, id: i64, rx: i64, alive: &Alive) -> bool {
-        let Some(i) = &self.inner else { return false };
-        let mut m = lock(&i.pairs);
-        let Some(p) = m.get_mut(ticker) else {
-            return false;
-        };
-        p.json = Some((text.clone(), rx, alive.clone(), id));
-        if !p.fast {
-            return false;
-        }
-        if p.matched == Some((id, p.seq)) {
-            i.books.touch(ticker);
-            return true;
-        }
-        let json = top(text, i.levels);
-        if json.is_some() && json == i.books.print(ticker, i.levels) {
-            p.matched = Some((id, p.seq));
-            i.books.rebind(ticker, alive.clone());
-        }
-        true
-    }
-
     /// Сторона JSON: отдать стакан из кадра — под замком пары. Принимает: тикер, lastUpdateId, отдача (books.put +
     /// ядру). Возвращает: None — пара уже на быстром стакане или этот кадр уже отдан при переходе (не отдан). Ошибок нет.
     pub fn give_json(&self, ticker: &str, id: i64, f: impl FnOnce() -> Fed) -> Option<Fed> {
@@ -153,26 +135,29 @@ impl Fast {
         Some(f())
     }
 
-    /// Сторона JSON: стакан пары из JSON недостоверен (отказ подписки, кадр не разобран). Возвращает: true — пара не
-    /// на быстром стакане, снять её стакан, как раньше. Ошибок нет.
-    pub fn json_lost(&self, ticker: &str) -> bool {
-        let Some(i) = &self.inner else { return true };
+    /// Сторона JSON: стакан пары из JSON недостоверен (отказ подписки, кадр не разобран). Принимает: тикер, снятие
+    /// стакана (ws.rs invalidate) — выполняется под замком пары, если пара не на быстром стакане (как раньше; под
+    /// замком — чтобы быстрый стакан, отданный в этот момент, не был снят). Возвращает: true — снят. Ошибок нет.
+    pub fn json_lost(&self, ticker: &str, clear: impl FnOnce()) -> bool {
+        let Some(i) = &self.inner else {
+            clear();
+            return true;
+        };
         let mut m = lock(&i.pairs);
-        m.get_mut(ticker).is_none_or(|p| {
+        let off = m.get_mut(ticker).is_none_or(|p| {
             p.json = None;
             !p.fast
-        })
+        });
+        if off {
+            clear();
+        }
+        off
     }
 
-    /// Сторона JSON: сессия JSON закончилась — страховки нет, запомненные кадры забыты. Принимает: тикер.
-    /// Возвращает: true — пара на быстром стакане (его не снимать). Ошибок нет.
-    pub fn json_down(&self, ticker: &str) -> bool {
-        let Some(i) = &self.inner else { return false };
-        let mut m = lock(&i.pairs);
-        m.get_mut(ticker).is_some_and(|p| {
-            p.json = None;
-            p.fast
-        })
+    /// Сторона JSON: сессия JSON закончилась — страховки нет, запомненные кадры забыты. Принимает: тикер, снятие
+    /// стакана — выполняется под замком пары, если пара не на быстром стакане (его не снимать). Ошибок нет.
+    pub fn json_down(&self, ticker: &str, clear: impl FnOnce()) {
+        self.json_lost(ticker, clear);
     }
 
     /// Сторона JSON: сторож ядра переподписывает пару — быстрый стакан пары тоже собрать заново со снимка. Ошибок нет.
@@ -180,16 +165,7 @@ impl Fast {
         if let Some(i) = &self.inner
             && let Some(tx) = lock(&i.resync).as_ref()
         {
-            let _ = tx.send(ticker.to_string());
+            let _ = tx.send((ticker.to_string(), false));
         }
     }
-}
-
-/// Верхние n уровней кадра JSON частичного стакана. None — не разобран. Ошибок нет.
-fn top(text: &str, n: usize) -> Option<BookPrint> {
-    let depth::Msg::Depth { book, .. } = depth::parse(text) else {
-        return None;
-    };
-    let (bids, asks) = depth::levels(&book).ok()?;
-    Some(BookPrint::top(&bids, &asks, n))
 }

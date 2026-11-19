@@ -23,6 +23,7 @@ pub mod depth;
 pub mod discount_balance;
 pub mod errors;
 pub mod fast;
+pub mod fast_check;
 pub mod fast_sbe;
 pub mod fee_rates;
 pub mod feed;

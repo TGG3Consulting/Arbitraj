@@ -21,7 +21,8 @@
 //! отправки с темпом venue.ws_subs_per_sec (меньше «5 incoming messages per second», WebSocket Limits), не залпом;
 //! «переподключить соединение» — сессия заканчивается, ws.rs подключается заново с теми же парами.
 //! Решение 425: если у пачки есть соединение SBE (fast.rs), кадр пары, которая сейчас на быстром стакане, ядру не
-//! отдаётся — только запоминается как страховка и сверяется по содержимому; отдача кадра — под замком пары арбитра;
+//! отдаётся — только запоминается как страховка и сверяется по содержимому (fast_check.rs; два несовпадения подряд —
+//! кадр отдаётся, быстрый пересобирается); отдача и снятие стакана — под замком пары арбитра;
 //! переподписка пары сторожем — ещё и пересинхронизация её быстрого стакана.
 
 use std::collections::{HashMap, VecDeque};
@@ -168,7 +169,7 @@ pub async fn session(
                         let Some(asset) = by_symbol.get(&symbol) else { continue };
                         w.feed.frame(&asset.ticker);
                         ctx.taps.push(ID, &asset.ticker, TapStream::Book, name, rx_ns, || TapData::Text(t.to_string()));
-                        // Решение 425: пара на быстром стакане SBE — кадр только страховка (fast.rs held).
+                        // Решение 425: пара на быстром стакане SBE — кадр только страховка (fast_check.rs held).
                         if w.fast.held(&asset.ticker, &t, book.last_update_id, rx_ns, &alive) {
                             last.remove(&symbol);
                             continue;
@@ -180,9 +181,7 @@ pub async fn session(
                         let (bids, asks) = match depth::levels(&book) {
                             Ok(l) => l,
                             Err(why) => {
-                                if w.fast.json_lost(&asset.ticker) {
-                                    invalidate(ctx, books, out, &asset.ticker);
-                                }
+                                w.fast.json_lost(&asset.ticker, || invalidate(ctx, books, out, &asset.ticker));
                                 last.remove(&symbol);
                                 log(ctx, Level::Error, format!("WebSocket {name}: стакан {symbol} не разобран: {why}")).await;
                                 continue;
@@ -205,9 +204,8 @@ pub async fn session(
                         for s in sent.get(&id).into_iter().flatten() {
                             let sym = s.split('@').next().unwrap_or_default();
                             if let Some(a) = by_symbol.get(sym)
-                                && w.fast.json_lost(&a.ticker)
+                                && w.fast.json_lost(&a.ticker, || invalidate(ctx, books, out, &a.ticker))
                             {
-                                invalidate(ctx, books, out, &a.ticker);
                                 last.remove(sym);
                             }
                         }

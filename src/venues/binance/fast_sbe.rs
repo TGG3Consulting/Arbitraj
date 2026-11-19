@@ -4,7 +4,7 @@
 //! после последнего отданного быстрого стакана, иначе стакан снимается до следующего кадра JSON); канал
 //! пересинхронизации пар сессии SBE; счётчики переключений и пересинхронизаций — одна повторяющаяся строка журнала
 //! venue.book_fast на соединение (решения 155/354, storage/journal_counted.rs — без ожидания базы).
-//! Кто вызывает: sbe_pair.rs, sbe_conn.rs, sbe_run.rs.
+//! Кто вызывает: sbe_pair.rs, sbe_conn.rs, sbe_run.rs, fast_check.rs (note).
 //! От чего зависит: fast.rs (состояние), depth.rs (разбор запомненного кадра JSON), ws.rs (invalidate),
 //! gateway/core_out_book.rs, storage/journal_counted.rs.
 //! Настройки: нет.
@@ -34,6 +34,10 @@ impl Fast {
             let Some(p) = m.get_mut(&ticker) else {
                 return Fed::Lost;
             };
+            // Ревью 425: быстрый разошёлся со страховкой (fast_check.rs) — до сброса пары (fast_lost) ядру не отдаётся.
+            if p.diverged {
+                return Fed::Sent;
+            }
             let first = !p.fast;
             p.fast = true;
             p.seq += 1;
@@ -58,6 +62,9 @@ impl Fast {
             let Some(p) = m.get_mut(&asset.ticker) else {
                 return;
             };
+            // Пара сброшена (сессия SBE пересобирает стакан со снимка) — запрет отдачи после расхождения снят.
+            p.diverged = false;
+            p.miss = None;
             let moved = p.fast;
             if moved {
                 p.fast = false;
@@ -87,15 +94,15 @@ impl Fast {
     }
 
     /// Сторона SBE: канал пересинхронизации пар сессии SBE (None — сессии нет). Ошибок нет.
-    pub fn set_resync(&self, tx: Option<mpsc::UnboundedSender<String>>) {
+    pub fn set_resync(&self, tx: Option<mpsc::UnboundedSender<(String, bool)>>) {
         if let Some(i) = &self.inner {
             *lock(&i.resync) = tx;
         }
     }
 
     /// Счётчики и строка журнала соединения (одна, повторяющаяся). Принимает: прибавки (на страховку, на быстрый,
-    /// пересинхронизаций), последнее событие. Ошибок нет.
-    fn note(&self, to_json: u64, to_fast: u64, resyncs: u64, last: &str) {
+    /// пересинхронизаций), последнее событие. Вызывать не под замком пар. Ошибок нет.
+    pub(super) fn note(&self, to_json: u64, to_fast: u64, resyncs: u64, last: &str) {
         let Some(i) = &self.inner else { return };
         let mut s = lock(&i.stats);
         s.to_json += to_json as i64;

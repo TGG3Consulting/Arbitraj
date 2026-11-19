@@ -103,13 +103,13 @@ fn i64_at(s: &[u8], at: usize) -> i64 {
 
 /// Что делает: разбирает двоичный кадр. Принимает: байты кадра WebSocket. Возвращает: Frame.
 /// Ошибки: текст — кадр короче полей схемы, schemaId не 1, длина блока меньше версии 0, число вне Decimal, symbol не
-/// UTF-8, лишние байты в конце.
+/// UTF-8, лишние байты в конце кадра версии 0.
 pub fn decode(buf: &[u8]) -> Result<Frame, String> {
     let mut r = Rd { b: buf, pos: 0 };
     let block = r.u16()? as usize;
     let template = r.u16()?;
     let schema = r.u16()?;
-    let _version = r.u16()?;
+    let version = r.u16()?;
     debug_assert_eq!(r.pos, HEADER_LEN);
     if schema != SCHEMA_ID {
         return Err(format!(
@@ -133,7 +133,10 @@ pub fn decode(buf: &[u8]) -> Result<Frame, String> {
     let symbol = std::str::from_utf8(r.take(len)?)
         .map_err(|_| "symbol не UTF-8".to_string())?
         .to_string();
-    if r.pos != buf.len() {
+    // Версия 0 — лишних байт быть не может. Версия выше (то же schemaId — «non-breaking change», faqs/sbe_faq.md
+    // «Regarding Legacy support») — новые группы и строки дописываются в конец сообщения (FIX SBE «schema extension
+    // mechanism»): декодер версии 0 их пропускает, а не рвёт соединение на каждом кадре.
+    if version == 0 && r.pos != buf.len() {
         return Err(format!(
             "после symbol ещё {} байт — в схеме 1:0 их нет",
             buf.len() - r.pos

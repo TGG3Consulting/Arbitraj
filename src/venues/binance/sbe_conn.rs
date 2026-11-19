@@ -2,7 +2,8 @@
 //! Что делает: решение 425 — одна сессия WebSocket SBE рынка Binance для пачки монет: подключение с ключом
 //! (sbe_run.rs connect), SUBSCRIBE потоков <symbol>@depth пачками по venue.ws_streams_per_msg с темпом
 //! venue.ws_subs_per_sec, Pong на Ping (тот же payload), двоичные кадры → sbe.rs → пары (sbe_pair.rs), снимки из очереди
-//! (sbe_snap.rs), команды «пересинхронизировать пару» от сторожа ядра (fast.rs resync). Текстовые кадры — ответы на
+//! (sbe_snap.rs), команды «пересинхронизировать пару» от сторожа ядра (fast.rs resync) и при расхождении со
+//! страховкой (fast_check.rs, ревью 425). Текстовые кадры — ответы на
 //! подписку (отказ — пары запроса на страховку) и serverShutdown (сессия заканчивается — переподключение).
 //! Кто вызывает: sbe_run.rs.
 //! От чего зависит: sbe.rs, sbe_pair.rs, sbe_snap.rs, fast.rs, depth.rs (разбор ответов JSON), book.rs (Alive), ctx.rs.
@@ -83,7 +84,7 @@ pub async fn session(
                     return End::Done;
                 }
             }
-            Some(ticker) = resync_rx.recv() => pairs.resync(&ticker),
+            Some((ticker, paused)) = resync_rx.recv() => pairs.resync(&ticker, paused),
             _ = sub_tick.tick(), if !batches.is_empty() => {
                 let Some(params) = batches.pop() else { continue };
                 next_id += 1;

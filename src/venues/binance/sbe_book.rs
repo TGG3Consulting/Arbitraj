@@ -125,8 +125,12 @@ impl LocalBook {
     }
 
     /// Что делает: снимок REST (пункты 4–7). Принимает: lastUpdateId, уровни снимка. Возвращает: Changed, Retry
-    /// (lastUpdateId < U первого отложенного) или Gap (отложенные не продолжают снимок). Ошибок нет.
+    /// (lastUpdateId < U первого отложенного), Gap (отложенные не продолжают снимок) или Idle — кадры не копятся (стакан
+    /// сброшен после запроса снимка: изменения с тех пор не отложены — снимок не годен, просить новый). Ошибок нет.
     pub fn snapshot(&mut self, last_id: i64, bids: &[PriceLevel], asks: &[PriceLevel]) -> Applied {
+        if !self.buffering {
+            return Applied::Idle;
+        }
         if let Some(first) = self.buffer.first()
             && last_id < first.first
         {

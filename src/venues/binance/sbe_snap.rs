@@ -86,6 +86,10 @@ async fn fetch(
         if let Some(at) = *next {
             tokio::time::sleep_until(at).await;
         }
+        // Ревью 425: соединение уже закрыто (обрыв, пока ждали очереди) — место в очереди не занимаем, запроса нет.
+        if out.is_closed() {
+            return Err("соединение закрыто".into());
+        }
         *next = Some(Instant::now() + gap);
     }
     if out.send(Done::Start(key.to_string())).await.is_err() {

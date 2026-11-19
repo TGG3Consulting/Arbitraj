@@ -83,10 +83,9 @@ pub async fn run(
             Err(e) => End::Config(e),
         };
         for (a, _) in &assets {
-            // Решение 425: пара на быстром стакане SBE — её стакан не снимается (страховка пропала, быстрый жив).
-            if !fast.json_down(&a.ticker) {
-                invalidate(&ctx, &books, &out, &a.ticker);
-            }
+            // Решение 425: пара на быстром стакане SBE — её стакан не снимается (страховка пропала, быстрый жив);
+            // снятие — под замком пары арбитра (ревью 425: не снять быстрый, отданный в этот момент).
+            fast.json_down(&a.ticker, || invalidate(&ctx, &books, &out, &a.ticker));
         }
         let (level, text, pause) = match (end, ctx.int("venue.ws_reconnect_pause_ms")) {
             (End::Done, _) => return,

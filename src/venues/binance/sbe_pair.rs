@@ -4,7 +4,7 @@
 //! на страховку JSON (fast.rs), новый снимок не раньше venue.ws_reconnect_pause_ms (без круга ресинков, урок 12);
 //! пункт 4 процедуры (lastUpdateId < U) — снимок заново сразу. Изменился стакан — верхние venue.depth_levels уровней
 //! ядру через fast.rs (формат ядра тот же, что у JSON).
-//! Кто вызывает: sbe_conn.rs.
+//! Кто вызывает: sbe_conn.rs (кадры, снимки, команды пересинхронизации из fast.rs / fast_check.rs).
 //! От чего зависит: sbe.rs (Diff), sbe_book.rs, sbe_snap.rs, fast.rs, depth.rs (to_book), book.rs (Alive), ctx.rs.
 //! Настройки: venue.ws_reconnect_pause_ms [binance] (пауза перед новым снимком после пропуска); venue.depth_levels
 //! (уровней ядру — из ws.rs Cfg).
@@ -113,8 +113,10 @@ impl<'a> Pairs<'a> {
         }
     }
 
-    /// Что делает: сторож ядра переподписал пару — быстрый стакан пары заново со снимка. Принимает: тикер. Ошибок нет.
-    pub fn resync(&mut self, ticker: &str) {
+    /// Что делает: пересинхронизация пары — быстрый стакан заново со снимка. Принимает: тикер, после паузы ли:
+    /// false — сторож ядра переподписал пару (снимок сразу); true — быстрый разошёлся со страховкой JSON (ревью 425,
+    /// fast_check.rs): снимок не раньше venue.ws_reconnect_pause_ms, как после пропуска (без круга ресинков). Ошибок нет.
+    pub fn resync(&mut self, ticker: &str, paused: bool) {
         let Some(key) = self
             .by_key
             .iter()
@@ -127,12 +129,21 @@ impl<'a> Pairs<'a> {
             .entry(key.clone())
             .or_default()
             .reset(String::new());
+        let why = if paused {
+            "расхождение со страховкой JSON — снимок заново после паузы"
+        } else {
+            "сторож ядра переподписал пару — снимок заново"
+        };
         if let Some((a, _)) = self.by_key.get(&key) {
-            self.fast
-                .fast_lost(a, "сторож ядра переподписал пару — снимок заново", true);
+            self.fast.fast_lost(a, why, true);
         }
-        self.not_before.remove(&key);
-        self.ask(&key);
+        if paused {
+            self.not_before
+                .insert(key, Instant::now() + self.resync_pause);
+        } else {
+            self.not_before.remove(&key);
+            self.ask(&key);
+        }
     }
 
     /// Что делать после изменения локального стакана. Принимает: ключ, итог, время события (мкс). Возвращает: false —

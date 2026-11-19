@@ -8,7 +8,7 @@
 | Источник | Что там |
 | --- | --- |
 | https://www.gate.com/docs/developers/apiv4/en/ | Основная документация API v4: Access URL, Authentication (подпись), Frequency limit rule, Error label list, API key permissions, эндпоинты |
-| https://www.gate.com/docs/developers/apiv4/ws/en/ | Spot WebSocket v4: формат запросов, spot.ping/pong, spot.order_book, spot.order_book_update, spot.trades, spot.balances, подпись приватных каналов |
+| https://www.gate.com/docs/developers/apiv4/ws/en/ | Spot WebSocket v4: формат запросов, spot.ping/pong, spot.order_book, spot.obu (Order Book V2, решение 421), spot.order_book_update, spot.trades, spot.balances, подпись приватных каналов |
 | https://github.com/gate/gateapi-python (v4.106.179) | Официальный SDK, сгенерирован из спецификации: docs/*.md — поля моделей и параметры методов (CurrencyPair, Currency, CurrencyChain, Order, WithdrawalRecord, DepositRecord, LedgerRecord, WithdrawStatus, DepositAddress, AccountDetail, AccountKeyInfo); gate_api/api_client.py — gen_sign |
 | https://github.com/gate/gatews | Официальный SDK WebSocket: имена каналов (go/constant.go), подпись (python/gate_ws/client.py), модели уведомлений (go/response_spot.go) |
 | tests/data/cex_samples_2026_11_04/gate_* | Живая запись публичных ответов 04.11.2026 (REST и WebSocket) |
@@ -42,6 +42,8 @@
 | `market_sell.rs` | Решение 268: рыночная продажа (контракт `trade_market_sell`) — ордер типа «market» на количество базовой монеты после отказа лимитного ордера «цена вне диапазона»; правила пары и разбор итога — те же, что у лимитного (`order_rules.rs`, `trade.rs`); код PriceOutOfRange рыночный ордер не отдаёт |
 | `withdraw_notice.rs` | Вывод в статусе FAIL — журнал и событие exec.withdraw_fail_pending, один раз на вывод (вывод не проваливается — ждём) |
 | `depth.rs`, `market.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | WebSocket стаканов spot.order_book (снимки N уровней, отсев по lastUpdateId — решение 109), spot.ping, котировка, свежесть по соединению и кадру пары (решение 213: или подтверждение тихой пары до срока) |
+| `obu.rs`, `fast_book.rs`, `fast_pick.rs`, `fast_rule.rs`, `fast_io.rs` | Решение 421: быстрый стакан — канал spot.obu (Order Book V2, «ob.<пара>.<50|400>»: полный снимок, затем изменения U/u), локальный стакан (U = номер + 1, иначе разрыв; пересечённый стакан — разрыв), выбор стакана для ядра (быстрый, пока синхронизирован; разрыв — сразу снимок spot.order_book, если новее отданного по t, и пересинхронизация; fast_rule.rs — два снимка подряд новее быстрого и не равны его верху, а он между ними не менялся, — тоже разрыв), счёт разрывов (журнал venue.fast_book) |
+| `ws_plan.rs`, `ws_snap.rs` | Очередь подписок соединения (снимки, затем spot.obu; пересинхронизация — отписка + подписка; темп venue.ws_subs_per_sec) и кадры снимков spot.order_book (решения 109, 125, 202, 213; при быстром стакане — придерживаются как страховка) |
 | `book_version.rs` | Решение 213: версия стакана пары по REST для сторожа ядра — GET /spot/order_book?with_id=true (id, update, current); id и lastUpdateId кадра — одна шкала; Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
 | `user_stream.rs`, `account_update.rs` | Поток балансов spot.balances с подписью (решение 76) |
 | `tap.rs`, `feed.rs`, `tap_snap.rs` | Окна (решение 125): кадры стакана, spot.trades, spot.order_book_update + снимок REST по U/u |
@@ -61,3 +63,6 @@
   10 с на IP. Retry-After в документации нет — пауза venue.rate_limit_pause_ms.
 - Сеть BSC у Gate — «BSC» (живая запись 04.11).
 - Функции контракта только для DEX отвечают `NotApplicable`.
+- Решение 421: при venue.obu_level у пары две подписки (spot.order_book — страховка, spot.obu — быстрый стакан). Номера
+  spot.obu со шкалой lastUpdateId / id REST в документации не связаны — сторож пар (решение 213) работает по снимкам,
+  смена потока у ядра — только на стакан с t биржи строго больше отданного.

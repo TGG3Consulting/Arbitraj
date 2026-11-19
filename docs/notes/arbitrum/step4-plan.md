@@ -98,3 +98,14 @@ Arbitrum, и обе вместе; «Старт» нажимает только �
 прежние столбцы; API без `venue` — DEX сети по умолчанию; имя «DEX», карточка с кошельком — как раньше.
 Тесты на записанных данных: tests/core_chain_run_432.rs (запуск по сети на Risk и записанном направлении),
 tests/accounts_chain_exec_432.rs (исполнитель и очередь по площадке на настоящей SQLite).
+
+## 7. Сделано (19.11.2026)
+
+- 937f994f — 4.1 запуск по сети: core/chain_run.rs, Risk.chain_off/chains, can_open, Core::set_chain_by,
+  POST /api/control/chain/{id}, плашка «Сети:», tests/core_chain_run_432.rs.
+- 150057ef — 4.2 кошельки по сети: settings/accounts/chain_exec.rs, таблица dex_wallet_exec, адаптер DEX глазами своей
+  площадки, развёртывание и кнопка v1 по площадке, API ?venue= (api/wallets_chain.rs), tests/accounts_chain_exec_432.rs.
+- 9397fbe0 — 4.3а интерфейс кошельков по сети (WalletChain.svelte, «Балансы» по сетям).
+- edcd846f — 4.3б имена площадок DEX по сети (notify/venue_names.rs), deal_card без «bsc_dex», USDT монеты по сети,
+  слепок кошельков по площадкам DEX.
+- Не сделано и вопросы — docs/TASKS.md, блок 432.

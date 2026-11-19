@@ -118,9 +118,9 @@ Permit2, Multicall3, исполнитель с тем же nonce, токены-�
 
 | № | Что | Где | Статус |
 | --- | --- | --- | --- |
-| 433-а | План и таблица покрытия DEX Arbitrum | docs/notes/arbitrum/step5-plan.md, dex-coverage-arbitrum.md | план — сделано; таблица — в работе |
-| 433-б | Модель газа площадки `dex.gas_mode` и разбор NodeInterface `gasEstimateComponents` (`dex.node_interface`), стоимость газа Arbitrum | send/gas_mode.rs, node/arb_gas.rs | в работе |
-| 433-в | Сборка транзакции EIP-1559 (тип 2) | send/tx_1559.rs | в работе |
+| 433-а | План и таблица покрытия DEX Arbitrum | docs/notes/arbitrum/step5-plan.md, dex-coverage-arbitrum.md | сделано (таблица: 84 GeckoTerminal + 62 DefiLlama, у каждого DEX статус и задача T433-NNN; семейства — T433-F1…F8) |
+| 433-б | Модель газа площадки `dex.gas_mode` и разбор NodeInterface `gasEstimateComponents` (`dex.node_interface`), стоимость газа Arbitrum | send/gas_mode.rs, node/arb_gas.rs, connection_gas.rs | сделано: настройки dex.gas_mode, dex.node_interface; разбор и вызов NodeInterface; часть «Газ сети» в «Проверить подключение»; тесты на записях 04/05 |
+| 433-в | Сборка транзакции EIP-1559 (тип 2) | send/tx_1559.rs | сделано: сборка, maxFee/чаевые, цена по EIP-1559; тест подписи типа 2 на chainId и baseFee из записей 01/05. В отправку — 433-д |
 | 433-г | Id площадки из окружения (1.1) | ctx.rs и 7 файлов | задача (TASKS) |
 | 433-д | Включение `dex.gas_mode` в отправку: exec/txs.rs:118-149, exec/bundle_send.rs, send/cancel.rs (отмена — тип 2 с повышением обеих цен), wallet/transfer.rs, quote/gas.rs (baseFee головы вместо eth_gasPrice), предпроверка газа exec/gas_fund.rs; запас `maxFee` и чаевые — настройки | send/, exec/, quote/ | задача |
 | 433-е | Канал секвенсора: отдельный канал списка send/channels.rs с адресом-настройкой, одиночная отправка; бандл на площадке без бандловых каналов — отказ до отправки с причиной | send/sequencer.rs | задача |
@@ -129,7 +129,8 @@ Permit2, Multicall3, исполнитель с тем же nonce, токены-�
 | 433-и | Статики по площадке (1.3) | 20 файлов | задача (onchain.rs, exec_callback.rs — после слияния шага 4) |
 | 433-к | Регистрация `arb_dex` в main.rs по настройке `dex.venues`; до неё — проверка, что живой BSC задал `dex.default_chain` (решение 430: две DEX без неё — ошибка) | main.rs | задача |
 | 433-л | Голова по WS newHeads при блоке 250 мс (опрос eth_blockNumber — 4 запроса/с) | node/heads.rs | задача (вопрос 3) |
-| 433-м | Семейства DEX Arbitrum, которых нет в коде | dex-coverage-arbitrum.md | задачи t-arb-1…11 в TASKS |
+| 433-м | «Проверить подключение» и подписка arb_dex целиком (сверка chainId перед подпиской, блоки и события по WS своего узла) | connection*.rs, venue.rs | задача (после 433-г, 433-ж, 433-к) |
+| T433 | Каждый DEX Arbitrum и каждое отсутствующее семейство | dex-coverage-arbitrum.md | задачи T433-001…146, T433-F1…F8, T433-R1 в TASKS |
 
 Почему 433-г…к не в этом коммите: правки идут в горячий путь BSC (ctx.rs, чтение узла, 20 статиков), а сборка и тесты —
 только в CI; шаг 4 правит соседние файлы параллельно. Каждый пункт — отдельный коммит с прогоном CI, BSC — на прежних

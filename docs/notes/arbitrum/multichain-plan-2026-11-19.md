@@ -115,3 +115,14 @@
 - Поддержка cancun/transient storage (исполнитель собран под cancun).
 - Id сети Arbitrum у GeckoTerminal и id DEX — пересекаются ли с BSC (область DEX без площадки).
 - Имя сети Arbitrum у каждой из 14 бирж — по живым ответам их API.
+
+## Шаг 1 — сделано (решение 416, 19.11.2026)
+
+- ChainId (core/types/chain.rs); настройки площадки DEX dex.chain и dex.evm_chain_id вместо chainId 56 в коде
+  (подпись, «Проверить подключение», проверка перед подпиской на рынок — venues/bsc_dex/node/chain_id.rs).
+- Asset{ticker, chain: Option<ChainId>, contract} — JSON прежний («bsc_contract»; «chain» — только если указана);
+  равенство и хэш — (сеть, адрес); CoinKey с сетью; в шаге 1 сеть не ставится (None) — поведение BSC прежнее.
+- Старые записи: None; сеть — dex.chain единственной сети площадок DEX (core/chain.rs).
+- Ключ монеты на счёте площадки (core/coin_account.rs): биржа — одна монета на все сети (по тикеру биржи, карта
+  remember), DEX — по сети. Карту заполнит справочник в шаге 3.
+- Не сделано и почему — docs/TASKS.md («Решение 416 — перенесено…»; тикер газа — вопрос Тиграну).

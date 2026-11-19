@@ -129,7 +129,14 @@ impl Core {
         wallet: &str,
         max_age: Option<Duration>,
     ) -> Result<WalletView, String> {
-        let dex = super::chain::default_dex(self).ok_or("площадка DEX не подключена")?;
+        // Решение 430 (ревью): DEX нет — причины в прежнем порядке (до 430: сначала «кошелька нет», потом «DEX не
+        // подключена»), чтобы при пустом реестре площадок ответ был тот же.
+        let Some(dex) = super::chain::default_dex(self) else {
+            if self.inner.deps.settings.accounts().wallet(wallet).is_none() {
+                return Err(format!("кошелька {wallet} нет"));
+            }
+            return Err("площадка DEX не подключена".into());
+        };
         self.wallet_balances_on(&dex, wallet, max_age).await
     }
 

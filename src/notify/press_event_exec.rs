@@ -41,7 +41,8 @@ impl Ctx<'_> {
         let w = self
             .settings
             .accounts()
-            .wallet(wallet)
+            // Решение 432: исполнитель кошелька на площадке DEX кнопки (её сети).
+            .wallet_at(venue, wallet)
             .ok_or_else(|| format!("Кошелька {wallet} нет"))?;
         if w.executor_version.as_deref() != Some("v1") {
             return Err(format!(

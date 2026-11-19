@@ -60,6 +60,7 @@ impl Accounts {
             executor_wrapped: None,
             queue_key: queue_key.to_string(),
             created_at: Utc::now().to_rfc3339(),
+            chains: Default::default(),
         };
         self.insert_locked(w, by).await
     }
@@ -170,6 +171,8 @@ impl Accounts {
         };
         let i = id.to_string();
         self.commit(h, by, move |tx| {
+            // Решение 432: и исполнители кошелька на площадках DEX других сетей.
+            tx.execute("DELETE FROM dex_wallet_exec WHERE wallet = ?1", params![i])?;
             tx.execute("DELETE FROM dex_wallets WHERE id = ?1", params![i])
                 .map(|_| ())
         })

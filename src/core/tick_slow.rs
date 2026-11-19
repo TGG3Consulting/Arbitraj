@@ -38,7 +38,8 @@ pub async fn slow(core: &Core, t: Touched) {
                     .deps
                     .settings
                     .accounts()
-                    .wallets()
+                    // Решение 432: исполнители площадки DEX этой тревоги (её сети).
+                    .wallets_at(&venue.0)
                     .into_iter()
                     .filter(|w| {
                         w.executor_version.as_deref() == Some("v1")

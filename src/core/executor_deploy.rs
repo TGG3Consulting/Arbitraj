@@ -9,6 +9,8 @@
 //! (М3) от этой сверки до записи нового адреса — одно развёртывание на кошелёк (второе одновременное — отказ).
 //! Кто вызывает: api/dex_executor.rs (deploy), core/commands_ext.rs (DeployExecutor).
 //! От чего зависит: gateway (Registry::get_as, контракт Venue), settings/accounts (set_executor), notify (Notifier).
+//! Решение 432: исполнитель — у кошелька на площадке DEX развёртывания (settings/accounts/chain_exec.rs set_executor_at;
+//! домашняя площадка кошелька — прежние поля).
 //! Настройки: нет.
 
 use std::collections::HashSet;
@@ -93,9 +95,10 @@ fn same(settings: &Store, r: &Req<'_>) -> Result<(), DeployError> {
     let Some(wid) = r.wallet else {
         return Ok(());
     };
+    // Решение 432: исполнитель кошелька на площадке DEX развёртывания (её сети).
     let w = settings
         .accounts()
-        .wallet(wid)
+        .wallet_at(r.venue, wid)
         .ok_or_else(|| DeployError::Bad(format!("кошелька {wid} нет")))?;
     let low = |x: Option<&str>| x.map(|a| a.trim().to_ascii_lowercase());
     let (now, seen) = (low(w.executor.as_deref()), low(r.executor));
@@ -159,7 +162,7 @@ pub async fn deploy(
     let a = settings.accounts();
     let addr = format!("{:#x}", d.address);
     if let Err(e) = a
-        .set_executor(wid, Some(addr.clone()), "развёртывание")
+        .set_executor_at(venue, wid, Some(addr.clone()), "развёртывание")
         .await
     {
         return Err(DeployError::Bad(format!(

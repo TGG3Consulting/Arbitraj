@@ -3,9 +3,11 @@
 //! ключа; ключ наружу не отдаётся), балансы BNB и USDT, «Проверить подключение» кошелька, ручная запись адреса
 //! исполнителя (только после проверки «код совпал, владелец — этот кошелёк»).
 //!
-//! GET  /api/wallets/{id}/balances           → {bnb, usdt, quote, error?}
-//! POST /api/check/wallet/{id}                → ConnectionCheck («Подключено: «имя»: адрес …, BNB …» или причина)
-//! PUT  /api/wallets/{id}/executor {address}  → кошелёк (address null — снять); адрес проверяется на узле
+//! GET  /api/wallets/{id}/balances?venue=           → {bnb, usdt, quote, error?}
+//! POST /api/check/wallet/{id}?venue=                → ConnectionCheck («Подключено: «имя»: адрес …, BNB …» или причина)
+//! PUT  /api/wallets/{id}/executor?venue= {address}  → кошелёк (address null — снять); адрес проверяется на узле
+//! Решение 432: `venue` — площадка DEX сети (api/wallets_chain.rs); не указан — DEX сети по умолчанию, как раньше;
+//! исполнитель — у кошелька на этой площадке (settings/accounts/chain_exec.rs).
 //!
 //! Кто вызывает: api/server.rs, api/wallets.rs (адреса в списке), api/dex_executor.rs, api/wallet_queue.rs, api/check.rs.
 //! От чего зависит: api/state.rs, gateway (реестр, контракт), settings/accounts/.
@@ -14,16 +16,17 @@
 use std::sync::Arc;
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::core::types::{DexAccountId, VenueId};
-use crate::gateway::contract::{ConnectionCheck, Venue, VenueKind};
+use crate::gateway::contract::{ConnectionCheck, Venue};
 use crate::gateway::errors::GatewayResult;
 use crate::settings::read::At;
 
 use super::state::{ApiError, AppState};
+use super::wallets_chain::VenueQuery;
 
 /// Площадка по id, привязанная к кошельку (wallet — id кошелька; None — без привязки). Ошибки: шлюз.
 pub async fn venue_as(
@@ -41,14 +44,7 @@ pub async fn venue_as(
 /// Выбор площадки DEX по сети в интерфейсе — шаг 4 плана двух сетей. Ошибки: 404 — DEX не подключена или сеть по
 /// умолчанию не выбрать (причина).
 pub async fn dex_id(st: &AppState) -> Result<VenueId, ApiError> {
-    let mut dex = vec![];
-    for id in st.registry.ids().await {
-        if let Ok(v) = st.registry.get(&id).await
-            && v.kind() == VenueKind::Dex
-        {
-            dex.push(id);
-        }
-    }
+    let dex = super::wallets_chain::dex_ids(st).await;
     if dex.is_empty() {
         return Err(ApiError::no_data("площадка DEX не подключена"));
     }
@@ -57,10 +53,20 @@ pub async fn dex_id(st: &AppState) -> Result<VenueId, ApiError> {
 
 /// DEX на кошелёк. Ошибки: 404 — нет DEX; 400 — нет такого кошелька.
 pub async fn dex_for(st: &AppState, wallet: &str) -> Result<Arc<dyn Venue>, ApiError> {
+    dex_for_at(st, wallet, None).await
+}
+
+/// Решение 432: DEX сети `venue` на кошелёк (None — DEX сети по умолчанию, как dex_for). Ошибки: 400 — нет кошелька или
+/// не площадка DEX; 404 — нет DEX.
+pub async fn dex_for_at(
+    st: &AppState,
+    wallet: &str,
+    venue: Option<&str>,
+) -> Result<Arc<dyn Venue>, ApiError> {
     if st.settings.accounts().wallet(wallet).is_none() {
         return Err(ApiError::bad(format!("Кошелька {wallet} нет")));
     }
-    let id = dex_id(st).await?;
+    let id = super::wallets_chain::pick(st, venue).await?;
     venue_as(st, &id.0, Some(wallet))
         .await
         .map_err(ApiError::gateway)
@@ -70,9 +76,10 @@ pub async fn dex_for(st: &AppState, wallet: &str) -> Result<Arc<dyn Venue>, ApiE
 pub async fn balances(
     State(st): State<AppState>,
     Path(id): Path<String>,
+    Query(q): Query<VenueQuery>,
 ) -> Result<Json<Value>, ApiError> {
-    let v = dex_for(&st, &id).await?;
-    let dex = dex_id(&st).await?;
+    let v = dex_for_at(&st, &id, q.venue.as_deref()).await?;
+    let dex = super::wallets_chain::pick(&st, q.venue.as_deref()).await?;
     let at = At {
         venue: Some(&dex.0),
         coin: None,
@@ -113,8 +120,12 @@ pub async fn balances(
 
 /// «Проверить подключение» кошелька: узел, адрес и BNB кошелька (шлюз check_connection у DEX на счёт).
 /// Ошибок нет: причина — в details.
-pub async fn check(State(st): State<AppState>, Path(id): Path<String>) -> Json<ConnectionCheck> {
-    let res = match dex_for(&st, &id).await {
+pub async fn check(
+    State(st): State<AppState>,
+    Path(id): Path<String>,
+    Query(q): Query<VenueQuery>,
+) -> Json<ConnectionCheck> {
+    let res = match dex_for_at(&st, &id, q.venue.as_deref()).await {
         Ok(v) => v
             .check_connection()
             .await
@@ -142,11 +153,15 @@ pub struct ExecutorBody {
 pub async fn set_executor(
     State(st): State<AppState>,
     Path(id): Path<String>,
+    Query(q): Query<VenueQuery>,
     Json(b): Json<ExecutorBody>,
 ) -> Result<Json<Value>, ApiError> {
     let a = st.settings.accounts();
+    // Решение 432: исполнитель кошелька на площадке DEX сети запроса (домашняя площадка — прежние поля).
+    let dex = super::wallets_chain::pick(&st, q.venue.as_deref()).await?;
+    let at = dex.0.as_str();
     let before = a
-        .wallet(&id)
+        .wallet_at(at, &id)
         .ok_or_else(|| ApiError::bad(format!("Кошелька {id} нет")))?;
     let addr = b
         .address
@@ -156,22 +171,23 @@ pub async fn set_executor(
         x.parse::<alloy_primitives::Address>()
             .map_err(|_| ApiError::bad(format!("{x} — не адрес")))?;
     }
-    a.set_executor(&id, addr.clone(), "интерфейс")
+    a.set_executor_at(at, &id, addr.clone(), "интерфейс")
         .await
         .map_err(|e| ApiError::bad(e.to_string()))?;
     if addr.is_some() {
-        let v = dex_for(&st, &id).await?;
+        let v = dex_for_at(&st, &id, Some(at)).await?;
         let c = v.check_executor().await.map_err(ApiError::gateway)?;
         if !c.ok {
             // Проверка не прошла — прежний адрес обратно. Ревью 272 (Б2): и прежняя сверенная версия с обёрткой — смена
             // адреса их сбросила, а память сверки (onchain.rs) осталась при старом адресе: без восстановления нативный
             // BNB через исполнитель молча выключился бы до перезапуска.
             let _ = a
-                .set_executor(&id, before.executor.clone(), "интерфейс (откат)")
+                .set_executor_at(at, &id, before.executor.clone(), "интерфейс (откат)")
                 .await;
             if let Some(old) = before.executor.as_deref() {
                 let _ = a
-                    .set_executor_version(
+                    .set_executor_version_at(
+                        at,
                         &id,
                         old,
                         before.executor_version.clone(),
@@ -186,5 +202,5 @@ pub async fn set_executor(
             )));
         }
     }
-    Ok(Json(json!(a.wallet(&id))))
+    Ok(Json(json!(a.wallet_at(at, &id))))
 }

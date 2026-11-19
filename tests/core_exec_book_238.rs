@@ -26,7 +26,7 @@
 //!   запроса.
 //!
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::core, arb::venues::xt, arb::settings, arb::storage, arb::gateway.
+//! От чего зависит: arb::core, arb::venues::xt, arb::settings, arb::storage, arb::gateway, arb::secrets.
 
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -39,6 +39,7 @@ use arb::core::deps::Deps;
 use arb::core::types::{Asset, Direction, Side, VenueId};
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
+use arb::secrets::crypto::KdfParams;
 use arb::settings::store::Store;
 use arb::settings::value::Scope;
 use arb::storage::db::Db;
@@ -49,6 +50,14 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
+use zeroize::Zeroizing;
+
+/// Параметры шифрования хранилища ключей теста (малые — быстро).
+const KDF: KdfParams = KdfParams {
+    memory_kib: 64,
+    iterations: 1,
+    parallelism: 1,
+};
 
 /// Счётчик запросов стакана и выключатель «REST не отвечает» локального сервера.
 #[derive(Clone, Default)]
@@ -93,6 +102,15 @@ async fn serve() -> (String, Server) {
                     }
                 } else if path.starts_with("/v4/public/symbol") {
                     ("200 OK", symbols)
+                } else if path.starts_with("/v4/balances") {
+                    // Решение 413 (повторное ревью t198, Б-3): перед продажей бот читает баланс спота — GET
+                    // /v4/balances (документация Get balances: result.assets[] — currency, availableAmount,
+                    // frozenAmount), согласованный со стендом: у сделок 1 BTC, ордера стенд не исполняет.
+                    let a = json!({"assets": [{"currency": "btc", "availableAmount": "1", "frozenAmount": "0"}]});
+                    (
+                        "200 OK",
+                        json!({"rc": 0, "mc": "SUCCESS", "ma": [], "result": a}).to_string(),
+                    )
                 } else {
                     ("404 Not Found", "{}".to_string())
                 };
@@ -115,7 +133,8 @@ fn dir(name: &str) -> PathBuf {
     d
 }
 
-/// Ядро с адаптером XT на базе в папке. Возвращает: ядро, настройки, журнал, счётчики сервера.
+/// Ядро с адаптером XT на базе в папке (ключи заданы, хранилище открыто). Возвращает: ядро, настройки, журнал, счётчики
+/// сервера.
 async fn start(d: &Path) -> (Core, Store, Journal, Server) {
     let db = Db::open(&d.join("t.sqlite")).unwrap();
     let (changes, _) = broadcast::channel(64);
@@ -126,6 +145,14 @@ async fn start(d: &Path) -> (Core, Store, Journal, Server) {
         .unwrap();
     let (url, srv) = serve().await;
     let vault = arb::secrets::Vault::locked(d.join("secrets.enc"));
+    // Решение 413 (t198, CI 1576258a): перед продажей бот читает баланс счёта подписанным GET /v4/balances — хранилище
+    // открыто тестовым паролем, ключи XT заданы (как в tests/t175_common), баланс стенда — монеты сделки (1 BTC).
+    let pw = || Zeroizing::new("тест".to_string());
+    vault.create(pw(), KDF).await.unwrap();
+    for n in ["xt.api_key", "xt.api_secret"] {
+        let v = Some(Zeroizing::new("k".to_string()));
+        vault.change(pw(), n, v, KDF).await.unwrap();
+    }
     let g = |n: &str, v: Value| (n.to_string(), Scope::Global, v);
     let x = |n: &str, v: Value| (n.to_string(), Scope::Venue("xt".into()), v);
     for (n, sc, v) in [
@@ -147,6 +174,10 @@ async fn start(d: &Path) -> (Core, Store, Journal, Server) {
         x("venue.ws_subs_per_sec", json!(10)),
         x("venue.ws_streams_per_msg", json!(10)),
         x("venue.ws_reconnect_pause_ms", json!(1000)),
+        // Решение 413 (t198, CI ee08b81c): подписанный GET /v4/balances (баланс перед продажей) — как tests/t175_common.
+        // venue.order_time_in_force, venue.order_poll_ms, venue.order_final_wait_ms (есть в t175_common) здесь
+        // намеренно не заданы: тесты 238 проверяют отказ адаптера «не задана venue.order_time_in_force».
+        x("venue.recv_window_ms", json!(5000)),
     ] {
         settings.set(&n, sc, Some(v), "тест").await.unwrap();
     }

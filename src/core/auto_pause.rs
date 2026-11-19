@@ -38,6 +38,9 @@ use super::risk::{Mode, Risk};
 /// Вид софтовой паузы площадки. Порядок — сила: более сильная отметка заменяет слабую, обратно — нет.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum Kind {
+    /// Решение 413 (третье ревью t198, С-Д): баланс биржи не читается (после повторов) — новых входов нет; снимает само
+    /// первое успешное чтение баланса (fact_pause.rs), не проверка подключения.
+    NoFact,
     /// N ошибок подряд (risk.max_errors_in_row): снятие — после risk.errors_resume_after_s проверкой подключения.
     Errors,
     /// Правило шлюза «стоп площадка»: снятие — проверкой подключения.
@@ -142,7 +145,8 @@ pub fn human_only(r: &Risk, v: &VenueId) -> bool {
 }
 
 /// Пора ли проверять подключение для автоснятия. Errors — после ожидания `wait_errors_s` с постановки (не задано —
-/// никогда, снимает человек); Rule — на каждом круге; Outcome и WithdrawLimit — никогда.
+/// никогда, снимает человек); Rule — на каждом круге; Outcome и WithdrawLimit — никогда; NoFact — не проверкой
+/// подключения (снимает успешное чтение баланса, fact_pause.rs).
 /// Принимает: отметку, сейчас, ожидание для Errors (секунды). Ошибок нет.
 pub fn due(m: &VenueMark, now: DateTime<Utc>, wait_errors_s: Option<u64>) -> bool {
     match m.kind {
@@ -150,7 +154,7 @@ pub fn due(m: &VenueMark, now: DateTime<Utc>, wait_errors_s: Option<u64>) -> boo
             .and_then(|w| i64::try_from(w).ok())
             .is_some_and(|w| (now - m.since).num_seconds() >= w),
         Kind::Rule => true,
-        Kind::WithdrawLimit | Kind::Outcome => false,
+        Kind::WithdrawLimit | Kind::Outcome | Kind::NoFact => false,
     }
 }
 

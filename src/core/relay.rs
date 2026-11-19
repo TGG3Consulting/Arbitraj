@@ -19,6 +19,7 @@
 //! Решение 230: кошелёк DEX на паузе от сверки (wallet_pause.rs) — не цель перегона; монета на нём — продажа на месте.
 //! Решение 227 (дополнение): площадка уже отказала в выводе в этой сделке (Deal.withdraw_refused) — перегона с неё нет,
 //! продажа здесь (relay_here.rs); отказ вывода перегона ставит эту метку (withdraw_refused.rs).
+//! Решение 413 (ревью t198, Б2): перед оценкой и выводом с биржи — доля сделки по факту счёта (sell_fact::before).
 //! Решение 227: перегон на DEX — через send_trade (зачисление по приходу в блокчейне, решение 151), как перевод сделки.
 //! Решение 249 (живой случай Тиграна 10.11: сделка BingX → DEX, перегон увёз монету на MEXC с venue.cex_cex = нет):
 //! биржа-цель, запрещённая правилами биржа ↔ биржа (venue.cex_cex у биржи пути монеты или у цели, список
@@ -134,11 +135,51 @@ pub async fn run(core: &Core, mut deal: Deal) {
         );
         return super::relay_here::sell_here(core, deal, &why).await;
     }
-    let a = deal.direction.asset.clone();
-    // Решение 220: котировка — кошельком сделки.
     // Решение 238 (ревью, п. 2): котировки здесь нет, потому что не задана настройка (NotConfigured, например
-    // venue.book_stale_ms площадки), — сделка остановлена с причиной (stuck_quote::halt_not_configured), а не перегон вслепую.
-    let here = match super::trade_ops::deal_quote(core, &deal).await {
+    // venue.book_stale_ms площадки), — сделка остановлена с причиной (stuck_quote::halt_not_configured), а не перегон
+    // вслепую. CI 85ebf10c (t198): проверка — до чтения факта: остановка не продаёт и не выводит, баланс ей не нужен,
+    // а нечитаемый баланс иначе уводил бы сделку мимо остановки решения 238.
+    // Седьмое ревью (мелкое 7): возраст котировки — от момента запроса.
+    let t0 = tokio::time::Instant::now();
+    let pre = Box::pin(super::trade_ops::deal_quote(core, &deal)).await;
+    if let Err(e) = &pre
+        && super::stuck_quote::not_configured(e)
+    {
+        return super::stuck_quote::halt_not_configured(core, deal, e).await;
+    }
+    let qty0 = deal.qty;
+    // Решение 413 (ревью t198, Б2): оценка перегона и вывод с биржи — только доли сделки по факту счёта (как перед
+    // продажей, sell_fact.rs): чужие монеты на общем счёте не выводятся; None — закрыта или алерт человеку.
+    let Some(mut deal) = Box::pin(super::sell_fact::before(core, deal, "перегон")).await
+    else {
+        return;
+    };
+    // Решение 413 (пятое ревью t198): остаток зачисления «не присвоено» не решён — с этой биржи не перегоняем (он
+    // уехал бы без решения): продажа здесь по тем же правилам, остаток решит тихий момент счёта (credit_rest.rs).
+    if super::credit_fact::rest(&deal).is_some() {
+        let why = "остаток зачисления на этой бирже не решён — перегон с неё не делаем";
+        return Box::pin(super::relay_here::sell_here(core, deal, why)).await;
+    }
+    let a = deal.direction.asset.clone();
+    // Решение 220: котировка — кошельком сделки. Котировка до факта — только если количество то же и с неё прошло
+    // меньше venue.book_stale_ms (шестое ревью, С-4: факт мог ждать замок или повторы); иначе — новая.
+    let at = At {
+        venue: Some(&deal.at.0),
+        coin: None,
+    };
+    let stale = core
+        .inner
+        .deps
+        .settings
+        .integer("venue.book_stale_ms", at)
+        .ok();
+    let fresh = stale.is_some_and(|ms| t0.elapsed() < std::time::Duration::from_millis(ms));
+    let quote = if deal.qty == qty0 && fresh {
+        pre
+    } else {
+        Box::pin(super::trade_ops::deal_quote(core, &deal)).await
+    };
+    let here = match quote {
         Ok((v, _, _)) => Some(v),
         Err(e) if super::stuck_quote::not_configured(&e) => {
             return super::stuck_quote::halt_not_configured(core, deal, &e).await;
@@ -213,6 +254,8 @@ pub async fn run(core: &Core, mut deal: Deal) {
         deal.dex_account = Some(acc);
     }
     deal.step = Step::Transfer;
+    // Решение 413 (повторное ревью, С-1): получатель перегона — для распределения долей на его счёте.
+    deal.transit_to = Some(to.clone());
     deal.note(format!(
         "Перегон на {} (ожидается {})",
         crate::notify::human::venue(&to.0),
@@ -228,6 +271,10 @@ pub async fn run(core: &Core, mut deal: Deal) {
         super::transfers::send_trade(core, &deal.id, (&from, &to), &a, deal.qty, &mut gas).await;
     // Решение 236, дополнение: газ неудачных переводов из кошелька DEX (откат, отмена) — в затраты сделки.
     super::deal_gas::charge(core, &mut deal, &from, &mut gas).await;
+    // Решение 413 (третье ревью, М-2): вывода не было (исход известен) — сделка не в пути.
+    if matches!(&res, Err(e) if !e.outcome_unknown()) {
+        deal.transit_to = None;
+    }
     match res {
         Ok((sent, credited, chain)) => {
             if let Some(line) = chain {

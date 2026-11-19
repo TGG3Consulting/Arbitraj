@@ -17,6 +17,7 @@
 //! как обычно. Оценка каждой площадки (выручка или причина) — строкой в хронологию сделки и журнал core.manual_relay.
 //! Перевод не состоялся (отказ, исход известен) — монеты на месте: продажа здесь кнопкой; монет нет или исход
 //! неизвестен — сделка остановлена, итог кнопки — причина.
+//! Решение 413 (ревью t198, Б2): оценка и вывод — доля сделки по факту счёта (sell_fact::before).
 //! Кто вызывает: core/manual.rs (sell_now), core/manual_halted.rs (sell_halted) — при ret = «Продать и перегнать».
 //! От чего зависит: relay_value.rs, trade_ops.rs, transfers.rs, fills.rs, sell.rs, dex_account.rs, wallet_pause.rs,
 //! withdraw_refused.rs, relay_here.rs (place), manual_halted.rs (on_hand, set_qty),
@@ -60,7 +61,19 @@ pub fn pick(here: Option<Decimal>, targets: &[(VenueId, Decimal)]) -> Pick {
 /// «Продать и перегнать» кнопкой: проход оценки, выбор, перегон (если лучше) и продажа по рынку кнопкой. Принимает:
 /// ядро, сделку (шаг Selling, количество — по реальному балансу, deal.return_usdt = true). Ошибок нет: итог — событием
 /// кнопки (manual_outcome.rs) и в хронологии сделки.
-pub async fn run(core: &Core, mut deal: Deal) {
+pub async fn run(core: &Core, deal: Deal) {
+    // Решение 413 (ревью t198, Б2; живая кнопка WKC 18.11 перегнала 5 915 283 179 — все монеты счёта, и второй сделки):
+    // оценка и вывод — только доля сделки по факту счёта (как перед продажей, sell_fact.rs); перегон идёт сразу после
+    // оценки (relay_to), отдельного чтения перед выводом нет — тот же факт. None — алерт / закрыта, итог кнопки отправлен.
+    let Some(mut deal) = Box::pin(super::sell_fact::before(core, deal, BUTTON)).await else {
+        return;
+    };
+    // Решение 413 (пятое ревью t198): остаток зачисления «не присвоено» не решён — с этой биржи не перегоняем: продажа
+    // здесь кнопкой, остаток решит тихий момент счёта (credit_rest.rs).
+    if super::credit_fact::rest(&deal).is_some() {
+        deal.note("Продать и перегнать: остаток зачисления на этой бирже не решён — перегона нет, продажа здесь");
+        return Box::pin(super::sell::market(core, deal, BUTTON)).await;
+    }
     let a = deal.direction.asset.clone();
     let here = super::trade_ops::deal_value(core, &deal).await.map(|x| x.0);
     let (list, skipped) = super::manual_relay_targets::targets(core, &deal);
@@ -135,6 +148,8 @@ async fn relay_to(core: &Core, mut deal: Deal, to: VenueId) {
         deal.dex_account = Some(acc);
     }
     deal.step = Step::Transfer;
+    // Решение 413 (повторное ревью, С-1): получатель перегона — для распределения долей на его счёте.
+    deal.transit_to = Some(to.clone());
     super::ledger::save(core, &deal).await;
     let price = deal.buy.as_ref().map(|b| b.avg_price).unwrap_or_default();
     let mut gas = Vec::new();
@@ -142,6 +157,10 @@ async fn relay_to(core: &Core, mut deal: Deal, to: VenueId) {
         super::transfers::send_trade(core, &deal.id, (&from, &to), &a, deal.qty, &mut gas).await;
     // Решение 236, дополнение: газ неудачных переводов из кошелька DEX (откат, отмена) — в затраты сделки.
     super::deal_gas::charge(core, &mut deal, &from, &mut gas).await;
+    // Решение 413 (третье ревью, М-2): вывода не было (исход известен) — сделка не в пути.
+    if matches!(&res, Err(e) if !e.outcome_unknown()) {
+        deal.transit_to = None;
+    }
     match res {
         Ok((sent, credited, chain)) => {
             if let Some(line) = chain {

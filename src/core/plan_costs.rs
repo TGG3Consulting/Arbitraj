@@ -99,7 +99,9 @@ impl PlanCosts {
         self.transfer
             .iter()
             .map(|l| match l.kind {
-                CostKind::TransferTax | CostKind::TransferShortfall if !plan_net.is_zero() => {
+                CostKind::TransferTax | CostKind::TransferShortfall | CostKind::DepositHold
+                    if !plan_net.is_zero() =>
+                {
                     as_cost(l, (amount - fee).max(Decimal::ZERO) * l.amount / plan_net)
                 }
                 _ => as_cost(l, l.amount),

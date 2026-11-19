@@ -34,7 +34,10 @@ fn last_note(d: &Deal) -> String {
 /// доступна (лучшая площадка может быть другой; продано здесь — перегон USDT не нужен).
 pub fn halted_record(d: &Deal) -> ManualRecord {
     let (t, v, buy) = (&d.direction.asset.ticker, &d.at.0, &d.direction.buy_on.0);
-    let empty = (d.qty <= Decimal::ZERO)
+    // Решение 413 (шестое ревью, Б-1, С-2): остаток «не присвоено» — отдельной строкой; с ним «Продать сейчас» доступна
+    // (решит его по факту), «Продано вручную» — за количество с остатком (остаток к человеку).
+    let rest = super::credit_fact::rest(d).unwrap_or_default();
+    let empty = (d.qty <= Decimal::ZERO && rest <= Decimal::ZERO)
         .then(|| "монет в сделке нет — закройте её «Продано вручную»".to_string());
     let est = d
         .provisional_usd
@@ -47,6 +50,14 @@ pub fn halted_record(d: &Deal) -> ManualRecord {
         .kv("Вложено", usd(d.invested));
     if d.proceeds > Decimal::ZERO {
         text = text.kv("Выручка бота", usd(d.proceeds));
+    }
+    if rest > Decimal::ZERO {
+        text = text.kv(
+            "Не присвоено",
+            format!(
+                "{rest} {t} — не подтверждено фактом; решится в тихий момент счёта или кнопкой"
+            ),
+        );
     }
     ManualRecord {
         key: ManualRecord::key_of(RecordKind::Halted, &d.id),
@@ -89,7 +100,7 @@ pub fn halted_record(d: &Deal) -> ManualRecord {
                 empty,
                 false,
             ),
-            sold(&d.id, t, d.qty, d.proceeds),
+            sold(&d.id, t, d.qty + rest, d.proceeds),
         ],
     }
 }

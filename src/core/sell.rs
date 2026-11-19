@@ -38,6 +38,9 @@
 //! Решение 389 (t175, авария f9634504 17.11): все продолжения после итога продажи (режим застрявшей монеты, повтор
 //! неушедшей продажи, продажа здесь по порогу, повтор / остаток / газ кнопки) и вход в режим из sell_or_stuck — через
 //! цикл sell_loop.rs (sell_next.rs собирает их): тот же порядок шагов, но стек не растёт с числом повторов.
+//! Решение 413 (t198, живой WKC 18.11): вход в продажу на бирже — свежий факт баланса и доля сделки (sell_fact.rs
+//! before); продажа — под замком счёта (credit_lock.rs); «мало средств» — перечитать факт и продать долю тем же правилом
+//! (sell_fact.rs retry через sell_next.rs), повторный отказ — прежний путь.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
 //! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_range_run.rs, sell_loop.rs, sell_next.rs.
@@ -86,6 +89,11 @@ pub async fn sell_after_relay(core: &Core, deal: Deal) {
 /// Выгодно — продажа с пере-замером по порогу `g`, иначе — режим застрявшей монеты.
 /// Принимает: ядро, сделку, порог пере-замера. Ошибок нет.
 async fn sell_or_stuck_guarded(core: &Core, deal: Deal, g: Guard) {
+    // Решение 413: на бирже — свежий факт и доля сделки перед продажей (sell_fact.rs); None — закрыта или человеку.
+    // В куче: путь продажи чувствителен к стеку (решение 389), цикл вызовов через алерт — без рекурсии типов.
+    let Some(deal) = Box::pin(super::sell_fact::before(core, deal, "выгодно")).await else {
+        return;
+    };
     let value = super::trade_ops::deal_quote(core, &deal).await;
     match value {
         Ok((v, q, b)) if profitable(&deal, v) => {
@@ -129,6 +137,10 @@ pub fn guard_of(why: &str) -> Guard {
 pub async fn market_guarded(core: &Core, deal: Deal, why: &str, g: Guard) {
     // Решение 201: продажа ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
     super::patience_scope::with(core, async {
+        // Решение 413: на бирже — свежий факт и доля сделки перед продажей (sell_fact.rs).
+        let Some(deal) = Box::pin(super::sell_fact::before(core, deal, why)).await else {
+            return;
+        };
         match super::trade_ops::deal_quote(core, &deal).await {
             Ok((v, q, b)) => {
                 let f = super::remeasure::of(&deal, v, deal.qty * q.avg_price, g);
@@ -188,7 +200,9 @@ async fn sell(
     let (v, a) = (deal.at.clone(), deal.direction.asset.clone());
     let mut seen = None;
     let mut gas = Vec::new();
-    let mut res = super::trade_ops::trade_seen(
+    // Решение 413: продажа — под общим доступом к счёту (credit_lock.rs): чтение факта для долей другой сделки не идёт,
+    // пока ордер в полёте; проданное сразу в учёте памяти.
+    let trade = super::trade_ops::trade_seen(
         core,
         &deal.id,
         &v,
@@ -205,8 +219,9 @@ async fn sell(
         Some(&mut gas),
         floor,
         false,
-    )
-    .await;
+    );
+    // Ревью CI t198 (переполнение стека): продажа под замком — в куче.
+    let mut res = Box::pin(super::credit_lock::selling(core, &deal, trade)).await;
     // Решение 236, дополнение: approve, чаевые, газ неудачных попыток — в затраты сделки.
     super::deal_gas::charge(core, &mut deal, &v, &mut gas).await;
     // Решение 227: котировка продажи и стакан худшей цены — в хронологию сделки (разбор живых случаев вроде JCT).
@@ -223,6 +238,7 @@ async fn sell(
     }
     match res {
         Ok(r) => {
+            deal.sale_unsure = false;
             super::fills::trade(core, &mut deal, &r).await;
             deal.sells.push(r.clone());
             // Решение 177: продано — запись, с которой продавали, больше не нужна.
@@ -260,6 +276,21 @@ async fn sell(
                 let job = super::sell_next::stuck(core, deal, left, true);
                 return super::sell_loop::hop(job).await;
             }
+            // Решение 413 (пятое ревью t198): у сделки остаток зачисления «не присвоено» — не закрываем: тихий момент
+            // счёта и добор (credit_rest.rs), продолжением цикла.
+            if super::credit_fact::rest(&deal).is_some() {
+                // Шестое ревью (С-1): продажа — в учёт до ожидания (перезапуск во время ожидания её не теряет).
+                Box::pin(super::ledger::save(core, &deal)).await;
+                Box::pin(super::manual_outcome::sold(
+                    core,
+                    &deal,
+                    why,
+                    &r,
+                    Decimal::ZERO,
+                ))
+                .await;
+                return super::sell_loop::hop(super::sell_next::rest_close(core, deal, why)).await;
+            }
             // Возврат USDT на площадку покупки — общий шаг закрытия (ledger::finish, решение 138).
             super::ledger::finish(core, &mut deal, Step::Closed, &format!("продано ({why})")).await;
             // Решение 235: итог кнопки — после закрытия: в нём и возврат USDT (начат / не нужен / не вернётся).
@@ -285,8 +316,17 @@ async fn sell(
             let gas = StuckReason::GasReserve(e.message.clone());
             super::sell_loop::hop(super::sell_next::stuck(core, deal, gas, true)).await
         }
+        // Решение 413 (живой WKC 18.11, MEXC 30005 Oversold): биржа ответила «мало средств» — ордер не поставлен; не
+        // человеку сразу, а свежий факт, доля сделки и снова продажа тем же правилом (sell_fact.rs); повторный отказ на
+        // свежем факте — прежний путь ниже.
+        Err(e) if super::sell_fact::wanted(core, &deal, &e) => {
+            let job = super::sell_next::short_retry(core, deal, &e, why, rule);
+            super::sell_loop::hop(job).await
+        }
         // Исход продажи неизвестен (транзакция могла исполниться) — ни продавать, ни перегонять: ручная проверка.
         Err(e) if e.outcome_unknown() => {
+            // Решение 413 (С-7): счёт «неясно», пока исход не выяснен (в учёте — переживает перезапуск).
+            deal.sale_unsure = true;
             let text = format!("исход продажи неизвестен: {e} — проверьте вручную");
             super::ledger::finish(core, &mut deal, Step::Halted, &text).await;
             super::manual_outcome::failed(core, &deal, why, &text).await;

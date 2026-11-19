@@ -11,7 +11,8 @@
 //!   («Trigger PROTECTION_LIMIT Filter» → PriceOutOfRange), на РЫНОЧНЫЙ — ORDER_F0601 («Trigger PROTECTION_MARKET
 //!   Filter» → обычный отказ); успех постановки — result {orderId} (Submit order); состояние ордера — поля Query single
 //!   (https://doc.xt.com/docs/spot/Order/QuerySingle): state, origQty, executedQty, avgPrice, tradeQuote, fee,
-//!   feeCurrency; HTTP 500 на постановку — «итог неизвестен».
+//!   feeCurrency; HTTP 500 на постановку — «итог неизвестен»; баланс спота GET /v4/balances (решение 413: перед каждой
+//!   продажей бот читает баланс) — согласован с планом: 1 BTC минус исполненное рыночным ордером.
 //!
 //! Проверяется путь целиком:
 //! - обычная продажа, выгодно: ровно один рыночный ордер (type MARKET, IOC, quantity, без price, свой clientOrderId);
@@ -180,6 +181,19 @@ async fn serve() -> (String, Srv) {
                     }
                 } else if path.starts_with("/v4/public/symbol") {
                     ("200 OK", symbols)
+                } else if path.starts_with("/v4/balances") {
+                    // Решение 413 (повторное ревью t198, Б-3): баланс спота GET /v4/balances (документация Get
+                    // balances: result.assets[] — currency, availableAmount, frozenAmount), согласованный с планом
+                    // стенда: у сделки 1 BTC; исполнился только рыночный ордер (если принят) — на свою долю.
+                    let p = s.lock().unwrap();
+                    let market = p.orders.iter().any(|o| o["type"] == "MARKET");
+                    let sold = match (market, p.market_fill) {
+                        (true, Some(f)) => Decimal::from_str(f).unwrap(),
+                        _ => Decimal::ZERO,
+                    };
+                    let left = (Decimal::ONE - sold).to_string();
+                    let a = json!({"assets": [{"currency": "btc", "availableAmount": left, "frozenAmount": "0"}]});
+                    ("200 OK", ok(a))
                 } else if path.starts_with("/v4/order") && method == "POST" {
                     let o: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
                     let mut p = s.lock().unwrap();

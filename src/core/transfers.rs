@@ -9,6 +9,9 @@
 //! хеша от биржи-отправителя (credit_chain.rs, transfer_chain.rs; transfer.credit_by_chain получателя). Решение 227:
 //! так же перегон застрявшей монеты (relay.rs → send_trade). Возврат USDT (send_as), биржа ↔ биржа и переводы на
 //! биржу — как раньше (решение 76).
+//! Решение 413 (t198, ревью С1): перевод монеты сделки на биржу — снимок посторонних монет на получателе одновременно
+//! с выводом (credit_base.rs; вывод его не ждёт); принимается, только если ответил до ответа на запрос вывода (seal), после
+//! зачисления привязывается к хешу вывода.
 //! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон — send_trade, решение 227), usdt_relay_retry.rs (USDT).
 //! От чего зависит: engine.rs, usdt_accepted.rs (решение 405: вывод перегона USDT принят), wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! precheck_deposit.rs (target_on — монета и сеть адреса получателя, решение 316), credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
@@ -281,6 +284,13 @@ async fn go(
     gas: &mut Vec<Wasted>,
 ) -> Result<(Transfer, Transfer, Option<String>), OpError> {
     let deps = &core.inner.deps;
+    // Решение 413 (t198, ревью С1): посторонние монеты на бирже-получателе (credit_base.rs) — чтение параллельно
+    // выводу, вывод его не ждёт; сорванный перевод снимает ячейку (Snap::drop). Только перевод монеты сделки на биржу.
+    let base = if chain {
+        super::credit_base::start(core, deal, to, asset)
+    } else {
+        None
+    };
     let gw_from = deps.gw.get_as(from, acc).await.map_err(|e| e.message)?;
     let gw_to = deps.gw.get_as(to, acc).await.map_err(|e| e.message)?;
     let net_from = network(core, asset, from)?;
@@ -393,6 +403,9 @@ async fn go(
             },
         }
     };
+    // Решение 413 (третье ревью, С-Ж): площадка приняла вывод — снимок посторонних, не ответивший до этого,
+    // недействителен (credit_base::seal).
+    super::credit_base::seal(base.as_ref());
     // Решение 176: ход ручного перевода USDT для экрана (usdt_transfer.rs; не ручной — ничего).
     super::usdt_transfer::stage(core, deal, super::usdt_transfer::Stage::Sent);
     // Решение 405 (ревью 4, Б2): площадка приняла вывод перегона USDT — деньги списаны, резерв части «идёт» снимается
@@ -548,6 +561,8 @@ async fn go(
         started,
     };
     let credited = super::transfer_credit::wait(core, &leg, gw_to, ticket).await;
+    // Решение 413: снимок посторонних (если чтение кончилось) — к хешу вывода, для записи зачисления сделки.
+    super::credit_base::bind(base, sent.tx_hash.as_deref());
     // Решение 118 (Я-3): дошло меньше ожидаемого больше допуска — монета в ручной чёрный список.
     let (f, a) = (&net_from, credited.amount);
     // Решение 247, п. Ж: комиссия вывода — из ответа площадки (статус вывода, иначе ответ на создание).

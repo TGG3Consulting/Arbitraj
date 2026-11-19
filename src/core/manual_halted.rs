@@ -124,7 +124,7 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
                 d.step
             ));
         }
-        if d.qty <= Decimal::ZERO {
+        if d.qty <= Decimal::ZERO && super::credit_fact::rest(d).is_none() {
             return Err(format!(
                 "в сделке {deal_id} монет нет — закройте её «Продано вручную»"
             ));
@@ -144,6 +144,22 @@ pub async fn sell_halted(core: &Core, deal_id: &str, ret: bool) -> Result<String
             deal.direction.asset.ticker
         );
         return super::manual_wait::defer(core, &key, &deal.direction.asset.ticker, old);
+    }
+    // Решение 413 (шестое ревью, С-3): у сделки остаток «не присвоено» — «Продать сейчас» сначала решает его по факту
+    // счёта в тихий момент (credit_rest::locked); не тихо или баланс не прочитан — отказ с причиной, сделка остаётся.
+    match Box::pin(super::credit_rest::for_button(core, &mut deal)).await {
+        Ok(None) => {}
+        Ok(Some(t)) => {
+            super::coin_ride::free_active(core, &key);
+            return Ok(t);
+        }
+        Err(e) => {
+            deal.step = Step::Halted;
+            deal.note(format!("«Продать сейчас»: {e}"));
+            Box::pin(super::ledger::save(core, &deal)).await;
+            super::coin_ride::free_active(core, &key);
+            return Err(e);
+        }
     }
     match on_hand_sell(core, &deal, &deal.at, &deal.direction.asset, deal.qty).await {
         Ok((qty, note)) => set_qty(&mut deal, qty, note),
@@ -214,7 +230,9 @@ pub async fn sold_manually(
     // отказ (manual_sold_check.rs). Снимок сделки — до метки «идёт разбор»; шаг проверяется ниже, как раньше.
     let snap = lk(&core.inner.deals).get(deal_id).cloned();
     let checked = match snap {
-        Some(d) if matches!(d.step, Step::Halted | Step::TakenOver | Step::WaitingHuman) => {
+        Some(mut d) if matches!(d.step, Step::Halted | Step::TakenOver | Step::WaitingHuman) => {
+            // Шестое ревью (С-2): с остатком «не присвоено» — человек продал и его.
+            d.qty += super::credit_fact::rest(&d).unwrap_or_default();
             super::manual_sold_check::check(core, &d, got).await?
         }
         _ => None,
@@ -254,6 +272,10 @@ pub async fn sold_manually(
     // Решение 236 (живой случай PIT): ввод — выручка человека только за его монеты (deal.qty); выручка продаж бота уже
     // в deal.proceeds. В хронологии — обе части и сумма, чтобы задвоение было видно сразу.
     let bot = deal.proceeds;
+    // Решение 413 (шестое ревью, С-2): остаток «не присвоено» — к человеку целиком (в вопросе кнопки — количество с ним).
+    let rest = super::credit_fact::rest(&deal).unwrap_or_default();
+    deal.qty += rest;
+    super::credit_fact::set_rest(&mut deal, Decimal::ZERO);
     deal.proceeds += got;
     deal.note(format!(
         "Продано вручную ({who}): {} {ticker}, выручка человека {got} USDT (ввод) + выручка продаж бота {bot} USDT = {} USDT; газ и комиссия ручной продажи в итог не входят",
@@ -272,6 +294,13 @@ pub async fn sold_manually(
     // получали отказ «идёт другая сделка» до перезапуска (найдено на двух LUCIC Gate).
     super::coin_ride::free_active(core, &key);
     let tail = checked.map(|c| format!("; {c}")).unwrap_or_default();
+    // Шестое ревью (С-2): ответ — по фактическому шагу сделки.
+    if deal.step != Step::Closed {
+        return Ok(format!(
+            "Сделка {deal_id}: выручка {got} USDT записана, сделка не закрыта (шаг {:?}) — см. хронологию{tail}",
+            deal.step
+        ));
+    }
     Ok(format!(
         "Сделка {deal_id} закрыта: ваша выручка {got} USDT + выручка бота {bot} USDT − вложено {} − затраты {} = итог {} USDT{tail}",
         deal.invested.round_dp(4),

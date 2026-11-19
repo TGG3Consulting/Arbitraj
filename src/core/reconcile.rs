@@ -19,6 +19,7 @@
 //! Решение 230 (reconcile_wallet.rs): у DEX проблема кошелька ставит паузу только ЭТОМУ кошельку (Risk.wallet_paused),
 //! а не площадке; снимается сама по чистым кругам этого кошелька. Постановка паузы площадке или кошельку — отдельное
 //! короткое сообщение risk.reconcile_paused (чат «Неудачные» и «Общий»).
+//! Решение 413 (ревью t198): ждущие доли остановленные сделки биржи подтверждаются по балансу круга (credit_halted.rs).
 //! Кто вызывает: core/engine.rs (задача run).
 //! От чего зависит: engine.rs, wait.rs, reconcile_pause.rs, reconcile_wallet.rs, usdt_return.rs, precheck.rs (BNB),
 //! deal.rs,
@@ -137,6 +138,7 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
         // Учёт площадки до и после запроса балансов (решение 112): сверяются только монеты, по которым сделки за это
         // время не сдвинулись.
         let before = expected(core, &v, acc.as_ref());
+        let hp_before = super::credit_halted::prints(core, &v);
         let g = deps.gw.get_as(&v, acc.as_ref()).await;
         let b = match &g {
             Ok(x) => x.balances().await,
@@ -156,6 +158,11 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
                 continue;
             }
         };
+        // Решение 413 (четвёртое ревью С-1, пятое): пауза «баланс не читается» — проверка по тем же счетам, по которым
+        // она ставится (account_balances; отметки нет — без запроса).
+        if kind == VenueKind::Cex {
+            Box::pin(super::fact_pause::recheck_venue(core, &v)).await;
+        }
         all.insert(label.clone(), json!(b));
         // Решение 140: у кошелька DEX нет строки USDT — «нет данных», не 0: ни алерта, ни перегона «отдельно».
         if let Ok(q) = deps.settings.text("venue.quote_asset", at)
@@ -183,6 +190,19 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
             }
         }
         let Ok(gw) = &g else { continue };
+        // Решение 413 (третье ревью С-Б, четвёртое С-2): ждущие доли без задачи (остановлены, ждут человека) — доля по
+        // балансу этого же круга только запоминается для сверки (подтверждает её факт под замком перед продажей), только
+        // по монетам, где они не менялись за запрос баланса.
+        if kind == VenueKind::Cex {
+            let hp_after = super::credit_halted::prints(core, &v);
+            for key in super::credit_halted::stable(&hp_before, &hp_after) {
+                if let Ok(t) = super::reconcile_key::total(kind, gw.as_ref(), &b, &key).await {
+                    Box::pin(super::credit_halted::observe(core, &v, &key, t)).await;
+                }
+            }
+            // Шестое ревью (С-3): остановленные с остатком «не присвоено» — решение в тихий момент счёта.
+            Box::pin(super::credit_rest_park::round(core, &v)).await;
+        }
         for (key, need) in &held {
             let ev = &v;
             // Решение 211 (ревью В2): у кошелька DEX — остаток по адресу (reconcile_key.rs), у биржи — строки по тикеру.

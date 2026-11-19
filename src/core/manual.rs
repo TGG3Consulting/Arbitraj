@@ -122,6 +122,8 @@ pub async fn raise_alert_with(
     error: Option<String>,
     holders: Vec<String>,
 ) {
+    // Решение 413 (третье ревью, Б-1): дальше решает человек (часы) — свежесть факта не переносится.
+    deal.fact_fresh = None;
     let prev = super::manual_repeat::prior(&mut deal, error.as_deref());
     let id = match (&prev, super::ids::uuid_v4()) {
         (Some(p), _) => p.id.clone(),
@@ -197,6 +199,26 @@ pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, 
     let (mut alert, mut deal) = lk(&core.inner.alerts)
         .remove(alert_id)
         .ok_or(format!("алерта {alert_id} нет"))?;
+    // Решение 413 (t198, после шестого ревью): у сделки остаток «не присвоено» — любая кнопка продажи сначала решает его
+    // по факту счёта в тихий момент (credit_rest::locked): не тихо — «счёт занят», не прочитан — причина (алерт
+    // остаётся); остатка на счёте нет — фантом закрывается.
+    match Box::pin(super::credit_rest::for_button(core, &mut deal)).await {
+        Ok(None) => {}
+        Ok(Some(t)) => {
+            persist(core).await;
+            return Ok(t);
+        }
+        Err(e) => {
+            // Седьмое ревью (мелкое 5): причина алерта не затирается — дополняется.
+            alert.reason = Some(match alert.reason.take() {
+                Some(r) => format!("{r}; «Продать сейчас»: {e}"),
+                None => e.clone(),
+            });
+            lk(&core.inner.alerts).insert(alert_id.to_string(), (alert, deal));
+            persist(core).await;
+            return Err(e);
+        }
+    }
     match super::manual_halted::on_hand_sell(core, &deal, &deal.at, &deal.direction.asset, deal.qty)
         .await
     {
@@ -250,6 +272,33 @@ pub async fn take_over(core: &Core, alert_id: &str, who: &str) -> Result<String,
     let (alert, mut deal) = lk(&core.inner.alerts)
         .remove(alert_id)
         .ok_or(format!("алерта {alert_id} нет"))?;
+    // Решение 413 (седьмое ревью мелкое 6, восьмое С-3): остаток «не присвоено» — человеку только решённое по факту
+    // (тихий момент, credit_rest::for_button); не решить сейчас — отказ с причиной, алерт остаётся (как «Продать сейчас»):
+    // свои монеты не теряются.
+    if let Some(rest) = super::credit_fact::rest(&deal) {
+        let t = deal.direction.asset.ticker.clone();
+        match Box::pin(super::credit_rest::for_button(core, &mut deal)).await {
+            Ok(None) => {}
+            Ok(Some(text)) => {
+                persist(core).await;
+                return Ok(text);
+            }
+            Err(e) => {
+                let e = format!(
+                    "«Беру на себя»: остаток {} не решён — {e}; попробуйте позже",
+                    super::deal_words::coins(rest, &t)
+                );
+                let mut alert = alert;
+                alert.reason = Some(match alert.reason.take() {
+                    Some(r) => format!("{r}; {e}"),
+                    None => e.clone(),
+                });
+                lk(&core.inner.alerts).insert(alert_id.to_string(), (alert, deal));
+                persist(core).await;
+                return Err(e);
+            }
+        }
+    }
     let h = ManualHolding {
         id: super::ids::uuid_v4().unwrap_or_else(|_| alert.id.clone()),
         deal_id: deal.id.clone(),

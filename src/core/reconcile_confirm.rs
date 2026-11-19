@@ -9,8 +9,10 @@
 //!     ledger.reconcile_confirm_rounds кругов подряд (не задано или 0 — с первого круга, как раньше).
 //! Решение 118 (Я-11): «балансы площадки не получены» — пауза этой площадки, а не системы; с решения 221 пауза площадки
 //! от сверки (и по расхождению монет) ставится и снимается в reconcile_pause.rs.
+//! Решение 413 (t198, ревью): сделка, чьё зачисление ждёт доли (credit_fact.rs), входит в учёт площадки нижней оценкой
+//! запись × (1 − ожидаемое удержание) (deposit_hold_calc.rs).
 //! Кто вызывает: core/reconcile.rs.
-//! От чего зависит: engine.rs (сделки), deal.rs.
+//! От чего зависит: engine.rs (сделки), deal.rs, credit_fact.rs, deposit_hold_calc.rs.
 //! Настройки: ledger.reconcile_confirm_rounds.
 
 use std::collections::{HashMap, HashSet};
@@ -59,7 +61,21 @@ pub fn expected(
         // Решение 211: биржа — по её тикеру монеты; кошелёк DEX — по адресу (ревью В2, reconcile_key.rs).
         let t = super::reconcile_key::key(core, &d.direction.asset, venue);
         let e = out.entry(t).or_default();
-        e.0 += d.qty;
+        // Решение 413 (ревью t198): зачисление ждёт доли — нижней оценкой запись × (1 − ожидаемое удержание): учёт
+        // (запись) фактом не доказан, удержание биржи расхождением не считается; меньше и этого — расхождение, как
+        // раньше. Подтверждённые — долями.
+        e.0 += if super::credit_fact::pending(&d) {
+            let pct = super::deposit_hold::expected_pct(core, venue, &d.direction.asset);
+            let low = d.qty * (Decimal::ONE - pct / Decimal::ONE_HUNDRED);
+            // Третье ревью (С-Б): на круге сверки удержано больше ожидаемого — доля по факту, не нижняя оценка (иначе
+            // пауза биржи из-за удержания — повтор WKC).
+            match super::credit_halted::observed(&d) {
+                Some(seen) => low.min(seen),
+                None => low,
+            }
+        } else {
+            d.qty
+        };
         e.1.push((d.id.clone(), d.step, d.qty, d.updated_at));
     }
     for e in out.values_mut() {

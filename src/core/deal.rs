@@ -154,6 +154,31 @@ pub struct Deal {
     /// (exec.top_up выключена): запись и API — как раньше.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Box<super::deal_group::DealGroup>>,
+    /// Решение 413 (t198): зачисление перевода сделки на биржу — запись депозита (верхняя граница) и подтверждённое
+    /// фактом баланса количество (credit_fact.rs). None — получатель DEX, сделка без перевода или до решения 413.
+    /// В коробке: сделка лежит по значению во всех задачах её пути (глубина стека, решение 389).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credit: Option<Box<super::credit_fact::CreditFact>>,
+    /// Решение 413 (повторное ревью t198, С-1): куда идёт перевод монет сделки на шаге «перевод» (получатель) —
+    /// чтобы распределение долей на счёте получателя знало сделку в пути, а на счёте отправителя — нет. Ставится перед
+    /// выводом (executor.rs, relay.rs, manual_relay.rs), снимается при зачислении (fills.rs transfer).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transit_to: Option<VenueId>,
+    /// Решение 413 (повторное ревью, Б-3): факт счёта биржи не прочитан и сделка уже раз уходила из-за этого в режим
+    /// застрявшей монеты — следующий раз алерт человеку (remain_fact.rs). Только в памяти.
+    #[serde(skip)]
+    pub fact_unread: bool,
+    /// Решение 413 (повторное ревью, мелкое): факт счёта прочитан при этом шаге, количестве и площадке — второй вход в
+    /// продажу подряд не читает его снова (sell_fact.rs). Любое изменение шага, количества или площадки — читать.
+    /// Только в памяти.
+    #[serde(skip)]
+    pub fact_fresh: Option<Box<(Step, Decimal, VenueId)>>,
+    /// Решение 413 (четвёртое ревью С-7, пятое ревью): продажа сделки на бирже кончилась «исход неизвестен» — её учёт не
+    /// согласован с балансом: счёт (биржа, монета) «неясно» (credit_lock::unsure), её монеты — не «подтверждённые» в
+    /// распределении других. Снимается успешной продажей или прочитанным фактом этой сделки. В учёте (переживает
+    /// перезапуск).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sale_unsure: bool,
     pub started_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -198,6 +223,11 @@ impl Deal {
             timeline: vec![],
             decided_at: None,
             group: None,
+            credit: None,
+            transit_to: None,
+            fact_unread: false,
+            fact_fresh: None,
+            sale_unsure: false,
             started_at: now,
             updated_at: now,
         }

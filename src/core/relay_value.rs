@@ -9,7 +9,7 @@
 //! От чего зависит: deposit_min_ask.rs (решение 387), dirctx_venue.rs (справочник сетей, свежесть), transfers.rs (сеть BSC), transfer_tax.rs,
 //! costs_withdraw.rs (точность вывода), trade_ops.rs (выручка продажи), convert.rs.
 //! Решение 253 (д), дополнение: затраты вывода с биржи — с поправкой по факту прошлого перевода (withdraw_seen.rs,
-//! transfer.seen_cost), как в расчёте сделки.
+//! transfer.seen_cost), как в расчёте сделки. Решение 413: удержание биржи-цели при зачислении (deposit_hold.rs).
 //! Настройки: venue.quote_asset, venue.networks_stale_s (через dirctx_venue.rs), cex_cex.untaxed_ok (через transfer_tax.rs).
 
 use rust_decimal::Decimal;
@@ -127,6 +127,8 @@ pub async fn value_at(
     } else {
         cex_costs(core, from, to, a, &net, qty)?
     };
+    // Решение 413 (t198): удержание биржи-цели при зачислении — как в расчёте сделки (deposit_hold.rs).
+    let costs = super::deposit_hold::add(core, to, a, qty, costs);
     let coin: Decimal = costs
         .iter()
         .filter(|c| c.asset == a.ticker)

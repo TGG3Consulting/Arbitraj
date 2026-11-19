@@ -57,7 +57,14 @@ pub async fn save(core: &Core, deal: &Deal) {
     // Решение 125: сделка изменилась — задача окон проверяет, не пора ли закрыть окно монеты.
     core.inner.window_kick.notify_one();
     super::window_deal::saved(core, rec); // Решение 245: цена DEX на объём сделки в окне — кто под наблюдением.
-    lk(&core.inner.deals).insert(rec.id.clone(), rec.clone());
+    // Решение 413 (третье ревью, Б-1): в учёт памяти — без отметки «факт свежий» (её видит только задача сделки; кнопки
+    // и другие входы берут сделку из учёта — читают факт заново).
+    // Четвёртое ревью (М-5): и без отметки «баланс не прочитан» — следующий вход из учёта (кнопка, «Вернуть боту»)
+    // получает свою попытку режима застрявшей монеты.
+    let mut stored = rec.clone();
+    stored.fact_fresh = None;
+    stored.fact_unread = false;
+    lk(&core.inner.deals).insert(rec.id.clone(), stored);
     // Решение 405 (М2): набор сделок, которые ещё что-то держат (unsettled.rs) — после записи учёта.
     super::unsettled::track(core, rec);
     // Решение 405 (ревью Н3): сделка сохранена (могла уйти с пути) — ожидания ручных действий проверяют монету.
@@ -98,6 +105,16 @@ pub async fn finish(core: &Core, deal: &mut Deal, step: Step, why: &str) {
 /// нехватки средств, — паузы нет (executor.rs buy_refusal_pauses); всё остальное в закрытии — как у finish.
 /// Принимает: как finish и `pause` (true — как finish). Ошибок нет.
 pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, pause: bool) {
+    // Решение 413 (пятое ревью t198): закрытие с остатком зачисления «не присвоено» — остаток не теряется: сделка
+    // остаётся отдельной позицией (остановлена, количество = остаток, алерт) — credit_rest::park.
+    if step == Step::Closed && super::credit_fact::rest(deal).is_some() {
+        let why = format!("закрытие ({why}) при нерешённом остатке зачисления");
+        return Box::pin(super::credit_rest_park::park(core, deal, &why)).await;
+    }
+    // Шестое ревью (М-7): закрыта или взята человеком — её «исход продажи неизвестен» счёт больше не путает.
+    if matches!(step, Step::Closed | Step::TakenOver) {
+        deal.sale_unsure = false;
+    }
     // Решение 180: место в окне выводов, не дошедшее до вывода, освобождается.
     super::withdraw_limit::release(core, &deal.id);
     deal.step = step;

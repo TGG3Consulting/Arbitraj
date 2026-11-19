@@ -156,7 +156,6 @@ tax.max_sell_pct
 tax.max_transfer_pct
 tax.recheck_interval_s
 tax.retry_s
-transfer.credit_amount_tolerance_pct
 transfer.credit_by_event
 transfer.credit_mismatch_s
 transfer.external_notify_min_usd

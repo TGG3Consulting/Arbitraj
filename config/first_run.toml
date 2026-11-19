@@ -1049,6 +1049,15 @@ rationale = "Снимок для изменений стакана в окнах
 prefill = { kind = "Venue", id = "kucoin" }
 
 [[section.rec]]
+name = "venue.full_book_per_sec"
+area = "площадка KuCoin"
+unit = "в секунду"
+value = "5"
+source = "Документация KuCoin: Get Full OrderBook — пул Spot, вес 3; Rate limit — VIP0 Spot 4000 за 30 с"
+rationale = "Быстрый стакан (решение 423): 3 × 5 × 30 = 450 веса за 30 с, ~11 % пула Spot — запас ордерам; старт 400 пар — 80 с. Нужны ключи и venue.api_key_version."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
 name = "venue.withdraw_from_trade"
 area = "площадка KuCoin"
 unit = "да/нет"

@@ -43,6 +43,8 @@
 - Решение 425 (t209): venues/binance/ws_conn.rs 233 строки (было 214 до t209; дробить: разбор кадра стакана — в
   ws_frame.rs). После ревью: sbe_pair.rs 208, sbe_run.rs 202 — вынести ask/not_before в sbe_pair_ask.rs, проверки config в
   sbe_cfg.rs. Тестов декодера SBE (sbe.rs) на живых кадрах нет — записать кадры и добавить (docs/TASKS.md).
+- Решение 423 (t207): src/venues/kucoin/ws_conn.rs 251 строка (было 246 до t207) — вынести open() и Ws в ws_open.rs (пути
+  ws_conn::open у feed.rs и user_stream_conn.rs — поправить вместе).
 - Решение 415 (t200, после ревью): сверх ориентира 200 и до t200 — core/sell.rs 394 (было 375), core/sell_range_run.rs 363 (было 350), core/relay.rs 338 (было 331), core/stuck.rs 218 (было 215); t200 добавил только ход очереди и строки шапок. tests/core_sell_turn_t200.rs 466 — разнести (LQR / ключи и след / продолжение) с общим помощником.
 - Решение 414 (ревью 648177a2): core/drawdown_pending.rs 214 строк — вынести Cur, closing и Closing в
   drawdown_closing.rs (только перенос; пути arb::core::drawdown_pending::{closing, cur} в tests/core_drawdown_414.rs и

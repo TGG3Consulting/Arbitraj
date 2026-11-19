@@ -9,7 +9,8 @@
 //! - разрыв: тот же поток без одного живого кадра — Gap;
 //! - сверка fast_check.rs: стакан, начатый с первого живого кадра level2Depth50 (его timestamp равен time кадра
 //!   изменений 783409212 — факт записи), после живых изменений совпадает (5 уровней) со всеми 10 следующими живыми
-//!   кадрами level2Depth50; отпечаток другого времени — Diverge, когда стакан уходит дальше;
+//!   кадрами level2Depth50; отпечаток другого времени — Diverge, когда стакан уходит дальше; ревью: два живых кадра
+//!   level2Depth50 подряд новее застывшего стакана и не равны ему — Diverge;
 //! - разбор ответа снимка (full_book.rs parse) — на живом ответе Get Part OrderBook level2_20 (те же поля time,
 //!   sequence-строка, bids, asks; живой записи Get Full OrderBook нет — docs/TASKS.md).
 //!
@@ -220,10 +221,9 @@ fn live_level50_matches_fast_book() {
     assert_eq!(ok, 10);
 }
 
-#[test]
-fn unmatched_snapshot_diverges_when_book_moves_on() {
-    let fr = frames();
-    let snaps: Vec<(i64, BookPrint)> = fr
+/// Живые кадры level2Depth50 записи: (timestamp, отпечаток верхних 5 уровней).
+fn snapshots() -> Vec<(i64, BookPrint)> {
+    frames()
         .iter()
         .filter_map(|m| match depth::parse(&m.to_string()) {
             depth::Msg::Depth {
@@ -237,7 +237,12 @@ fn unmatched_snapshot_diverges_when_book_moves_on() {
             )),
             _ => None,
         })
-        .collect();
+        .collect()
+}
+
+#[test]
+fn unmatched_snapshot_diverges_when_book_moves_on() {
+    let snaps = snapshots();
     // Снимок 1793740793775 (bid 1.892 × 377.2251) против состояния того же времени с отпечатком прежнего снимка.
     let (at, want) = snaps[4].clone();
     let mut c = Check::default();
@@ -268,4 +273,35 @@ fn full_book_reply_parses() {
     assert_eq!(s.bids.len(), 20);
     assert_eq!(s.bids[0], lv("1.892", "330.1572"));
     assert_eq!(s.asks[0], lv("1.894", "0.1946"));
+}
+
+/// Ревью решения 423 (правило ревью 420/421/424): быстрый стакан застыл на состоянии живого снимка 1793740793775, а
+/// живые снимки 1793740797565 и 1793740798551 новее и не равны ему — второй подряд даёт расхождение; изменение стакана
+/// между снимками счёт сбрасывает.
+#[test]
+fn two_newer_unequal_snapshots_without_local_change_diverge() {
+    let snaps = snapshots();
+    let (t4, p4) = snaps[4].clone();
+    let mut c = Check::default();
+    assert_eq!(c.on_local(t4, p4.clone()), Verdict::Skip);
+    assert_eq!(
+        c.on_snapshot(snaps[5].0, snaps[5].1.clone(), Some(t4)),
+        Verdict::Wait
+    );
+    assert!(matches!(
+        c.on_snapshot(snaps[6].0, snaps[6].1.clone(), Some(t4)),
+        Verdict::Diverge(_)
+    ));
+    let mut c = Check::default();
+    assert_eq!(c.on_local(t4, p4.clone()), Verdict::Skip);
+    assert_eq!(
+        c.on_snapshot(snaps[5].0, snaps[5].1.clone(), Some(t4)),
+        Verdict::Wait
+    );
+    // Стакан изменился (то же время): снимок 1793740797565 ещё ждёт состояния своего времени, счёт сброшен.
+    assert_eq!(c.on_local(t4, p4), Verdict::Wait);
+    assert_eq!(
+        c.on_snapshot(snaps[6].0, snaps[6].1.clone(), Some(t4)),
+        Verdict::Wait
+    );
 }

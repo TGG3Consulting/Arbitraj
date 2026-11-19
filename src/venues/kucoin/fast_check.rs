@@ -16,6 +16,9 @@
 //! (https://www.kucoin.com/docs-new/3470070w0) называет поле только «timestamp»; связь с time изменений не описана —
 //! вопрос в docs/TASKS.md. Несколько кадров изменений с одним time — снимок мог быть снят после любого из них, поэтому
 //! хранятся отпечатки всех состояний с последним временем.
+//! Решение 423 (ревью, как ревью решений 420/421/424): два кадра снимков подряд новее быстрого стакана (timestamp больше
+//! времени его последнего кадра) и не равны ему, а он между ними не менялся, — быстрый стакан застыл (поток изменений
+//! молчит, разрыв номеров не виден) — расхождение: пара на снимки и пересинхронизация.
 
 use crate::gateway::feed_health::BookPrint;
 
@@ -47,6 +50,8 @@ pub struct Check {
     /// Отпечатки состояний с последним временем биржи: (время, отпечатки по порядку).
     recent: Option<(i64, Vec<BookPrint>)>,
     want: Option<Want>,
+    /// Прошлый кадр снимков был новее стакана и не равен ему, а стакан с тех пор не менялся (правило двух снимков).
+    ahead: bool,
 }
 
 impl Check {
@@ -54,6 +59,7 @@ impl Check {
     /// верхних уровней. Возвращает: Verdict (Diverge — снимок с временем T не совпал ни с одним состоянием T, а стакан
     /// ушёл дальше). Ошибок нет.
     pub fn on_local(&mut self, time: i64, print: BookPrint) -> Verdict {
+        self.ahead = false;
         match self.recent.as_mut() {
             Some((t, prints)) if *t == time => prints.push(print.clone()),
             _ => self.recent = Some((time, vec![print.clone()])),
@@ -81,12 +87,24 @@ impl Check {
 
     /// Что делает: кадр снимков быстрой пары. Принимает: timestamp снимка (мс), отпечаток его верхних уровней, время
     /// последнего кадра изменений локального стакана (None — нет). Прежний несопоставленный снимок заменяется новым.
-    /// Возвращает: Ok, Wait или Skip. Ошибок нет.
+    /// Возвращает: Ok, Wait, Skip или Diverge (второй подряд снимок новее стакана и не равен ему, стакан между ними не
+    /// менялся). Ошибок нет.
     pub fn on_snapshot(&mut self, at: i64, print: BookPrint, local: Option<i64>) -> Verdict {
         self.want = None;
         let Some(lt) = local else {
+            self.ahead = false;
             return Verdict::Skip;
         };
+        let cur = self.recent.as_ref().and_then(|(_, p)| p.last());
+        let behind = lt < at && cur.is_some_and(|c| *c != print);
+        if behind && std::mem::replace(&mut self.ahead, true) {
+            self.ahead = false;
+            return Verdict::Diverge(format!(
+                "два кадра снимков подряд новее быстрого стакана (timestamp {at} > time {lt}) и не равны ему, а он \
+                 между ними не менялся"
+            ));
+        }
+        self.ahead = behind;
         if lt > at {
             return Verdict::Skip;
         }

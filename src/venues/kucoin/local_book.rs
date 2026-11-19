@@ -17,6 +17,8 @@
 //! ["3988.62","8","15"] пропускаются (номер записи ≤ номера снимка), ["3988.61","0","19"] убирает уровень,
 //! ["3988.50","44","18"] меняет количество. Номер записи «does not serve as a basis for judging message continuity» —
 //! непрерывность только по sequenceStart / sequenceEnd кадра; номер записи — только пропуск уже учтённого (пример).
+//! Решение 423 (ревью, как ревью решения 421): стакан после кадра или снимка пересечён (лучшая покупка ≥ лучшей
+//! продажи) — тоже разрыв: такой стакан ядру не отдаётся, пара на снимки до новой синхронизации.
 
 use std::collections::BTreeMap;
 
@@ -101,7 +103,8 @@ impl LocalBook {
         self.seq.and(self.time)
     }
 
-    /// Что делает: кадр изменений. Принимает: кадр. Возвращает: Applied. Ошибок нет: разрыв — Gap (стакан сброшен).
+    /// Что делает: кадр изменений. Принимает: кадр. Возвращает: Applied. Ошибок нет: разрыв или пересечённый стакан —
+    /// Gap (стакан сброшен).
     pub fn apply(&mut self, u: Update) -> Applied {
         let Some(seq) = self.seq else {
             self.buffer.push(u);
@@ -120,7 +123,19 @@ impl LocalBook {
         put(&mut self.asks, &u.asks, seq);
         self.seq = Some(u.end);
         self.time = Some(u.time);
-        Applied::Changed
+        self.uncrossed(u.end)
+    }
+
+    /// Решение 423 (ревью): после кадра или снимка с номером seq — Changed, если стакан не пересечён, иначе сброс
+    /// (Gap). Ошибок нет.
+    fn uncrossed(&mut self, seq: i64) -> Applied {
+        match (self.bids.keys().next_back(), self.asks.keys().next()) {
+            (Some(b), Some(a)) if b >= a => {
+                let why = format!("стакан пересечён после номера {seq}: покупка {b} ≥ продажа {a}");
+                self.reset(why)
+            }
+            _ => Applied::Changed,
+        }
     }
 
     /// Что делает: снимок REST: уровни целиком, затем накопленные кадры по правилам. Принимает: sequence снимка,
@@ -135,6 +150,9 @@ impl LocalBook {
         }
         self.seq = Some(seq);
         self.time = None;
+        if let Applied::Gap(why) = self.uncrossed(seq) {
+            return Applied::Gap(why);
+        }
         for u in std::mem::take(&mut self.buffer) {
             if let Applied::Gap(why) = self.apply(u) {
                 return Applied::Gap(why);

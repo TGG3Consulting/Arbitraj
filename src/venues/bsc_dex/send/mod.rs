@@ -30,6 +30,7 @@ pub mod channels;
 pub mod check;
 pub mod club48;
 pub mod flashblock;
+pub mod gas_mode;
 pub mod jetbuilder;
 pub mod mev_guard;
 pub mod nodereal;
@@ -44,6 +45,7 @@ pub mod tip_gas;
 pub mod track;
 pub mod track_util;
 pub mod tx;
+pub mod tx_1559;
 
 use alloy_primitives::{Bytes, U256};
 use futures_util::future::join_all;

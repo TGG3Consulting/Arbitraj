@@ -136,6 +136,8 @@ log.signal_hold (core/book_marks_on.rs).
 | dex.evm_chain_id | по площадке DEX | `56` | Номер цепи BSC mainnet: подпись транзакций (EIP-155) и сверка eth_chainId узла | docs.bnbchain.org, JSON-RPC endpoint «ChainID 56» |
 | dex.gas_ticker | по площадке DEX | `BNB` | Тикер монеты газа сети BSC: газ и чаевые в затратах, баланс газа кошелька, стакан газа бирж | Газ сети BSC платится в BNB |
 | dex.default_chain | вся система | не задавать, пока площадка DEX одна; при второй сети (Arbitrum) — `bsc` | Сеть по умолчанию: монеты без сети (весь учёт BSC до двух сетей) | Ключи и записи BSC остаются прежними |
+| dex.gas_mode | по площадке DEX | `legacy` у bsc_dex; у площадки Arbitrum (arb_dex, когда появится) — `eip1559_l1` | Модель газа сети: BSC — одна цена gasPrice (legacy), Arbitrum — EIP-1559 + газ с частью L1 | Решение 433; BSC — research/flow/bsc_dex.md, раздел 5 (база газа 0); Arbitrum — docs.arbitrum.io «Gas and fees» |
+| dex.node_interface | по площадке DEX | у bsc_dex не задавать; у arb_dex — `0x00000000000000000000000000000000000000C8` | Адрес NodeInterface узла Nitro: части газа (L2, L1, baseFee) | docs.arbitrum.io, NodeInterface reference («available at address 0xc8»); запись узла tests/data/arbitrum_node_2026-11-19/05_*.json |
 
 ## Нативная монета BNB
 

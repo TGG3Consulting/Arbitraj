@@ -4,7 +4,7 @@
 //! нет, ответ техлида в Issue #7), доступ к истории состояния для включённых видов пулов V4 (блок развёртывания
 //! менеджера по eth_getCode — pools/deploy_block.rs; без архивного узла пулы V4 не найти), кошелёк (ключ → адрес,
 //! баланс BNB), резервный узел HTTP и WebSocket и Multicall3 (connection_extra.rs), синхронизация узла и возраст
-//! головы (connection_sync.rs, решение 121). Ответ — «Подключено»
+//! головы (connection_sync.rs, решение 121), модель газа сети (connection_gas.rs, решение 433). Ответ — «Подключено»
 //! или точная причина по каждой части.
 //! Кто вызывает: mod.rs (контракт: check_connection) ← api (кнопка на экране «Площадки»).
 //! От чего зависит: ctx.rs, node/rpc.rs, node/ws.rs, wallet/signer.rs, wallet/balances.rs, pools/deploy_block.rs, pools/families.rs,
@@ -38,6 +38,8 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
         // Решение 416: сеть площадки из настроек (dex.chain, dex.evm_chain_id).
         ("Сеть площадки", super::node::chain_id::describe(ctx)),
         ("Узел HTTP", http(ctx).await),
+        // Решение 433: модель газа сети (dex.gas_mode; Arbitrum — части газа NodeInterface).
+        ("Газ сети", super::connection_gas::check(ctx).await),
         (
             "Синхронизация узла",
             super::connection_sync::check(ctx).await,

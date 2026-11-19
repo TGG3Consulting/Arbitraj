@@ -8,9 +8,12 @@
 //! instId) — стакан пары недостоверен. Сырые кадры стакана — в журнал только при raw.book_frames = да (решение 109).
 //! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
 //! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
+//! Решение 429: стакан в память и ядру — failover.rs deliver (основное соединение — пока быстрый стакан синхронизирован;
+//! страховочное books5 — пока нет); потеря пары (разрыв, отказ подписки, неразборчивый кадр, переподписка сторожем) —
+//! failover.rs lost (сразу снимок books5 из памяти, если годен).
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, local_book.rs, book.rs, ws.rs (Cfg, End), ws_req.rs (подключение, подписки), ctx.rs,
-//! gateway/feed_reg.rs (решение 202).
+//! От чего зависит: depth.rs, local_book.rs, book.rs, failover.rs, ws.rs (Cfg, End), ws_req.rs (подключение, подписки),
+//! ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: из ws.rs (Cfg); raw.book_frames [okx].
 //!
 //! Решение 202 (для всех бирж, Тигран 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs) — кадр
@@ -44,8 +47,9 @@ use crate::storage::journal::Level;
 use super::book::{Alive, Books};
 use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
+use super::failover::{deliver, lost};
 use super::local_book::{Applied, LocalBook};
-use super::ws::{Cfg, End, invalidate};
+use super::ws::{Cfg, End};
 use super::ws_req::{MAX_OPS_PER_HOUR, open, requests, resub};
 use crate::gateway::feed_health::Cmd;
 use crate::gateway::feed_reg::ConnHandle;
@@ -110,6 +114,8 @@ pub async fn session(
                     if cfg.channel == "books" {
                         resync.insert(inst.clone());
                     }
+                    // Решение 429: пока пара пересподписывается — снимок books5 из памяти (стакан не сбрасывается).
+                    lost(ctx, books, out, cfg.role, &ticker, false);
                     if let Err(e) = resub(&mut sink, cfg.channel, inst, &mut ops).await {
                         return End::Broken(format!("{e} (сторож пар)"));
                     }
@@ -150,7 +156,7 @@ pub async fn session(
                     Msg::Bad { inst, reason } => {
                         if let Some(a) = inst.as_deref().and_then(|s| by_inst.get(s)) {
                             w.feed.frame(&a.ticker);
-                            invalidate(ctx, books, out, &a.ticker);
+                            lost(ctx, books, out, cfg.role, &a.ticker, true);
                         }
                         ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: кадр не разобран: {reason}")).await;
                         continue;
@@ -161,7 +167,7 @@ pub async fn session(
                         }
                         if event == "error" {
                             if let Some(a) = inst.as_deref().and_then(|s| by_inst.get(s)) {
-                                invalidate(ctx, books, out, &a.ticker);
+                                lost(ctx, books, out, cfg.role, &a.ticker, true);
                             }
                             ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: ошибка OKX: {text}")).await;
                         }
@@ -186,7 +192,7 @@ pub async fn session(
                             continue;
                         }
                         Applied::Gap(why) => {
-                            invalidate(ctx, books, out, &asset.ticker);
+                            lost(ctx, books, out, cfg.role, &asset.ticker, true);
                             let again = last_gap.get(&d.inst).is_some_and(|t| t.elapsed() < cfg.resync_gap);
                             if again || ops + 2 > MAX_OPS_PER_HOUR {
                                 return End::Broken(format!("{}: повторный разрыв стакана ({why})", d.inst));
@@ -213,11 +219,10 @@ pub async fn session(
                     exchange_time: d.exchange_time,
                     received_at: chrono::Utc::now(),
                 };
-                books.put(book.clone(), alive.clone());
-                match kept.book(out, book) {
-                    Fed::Sent | Fed::Kept => {}
-                    Fed::Closed => return End::Done,
-                    Fed::Lost => dropped += 1,
+                match deliver(ctx, books, out, &kept, cfg.role, &alive, book) {
+                    None | Some(Fed::Sent | Fed::Kept) => {}
+                    Some(Fed::Closed) => return End::Done,
+                    Some(Fed::Lost) => dropped += 1,
                 }
                 if dropped > 0 && dropped.is_power_of_two() {
                     tracing::warn!(conn = name, dropped, "ядро не успевает принимать стаканы OKX");

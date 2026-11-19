@@ -2,8 +2,14 @@
 //! Что делает: подписка на стаканы OKX по списку монет: делит монеты на соединения (venue.ws_symbols_per_conn монет на
 //! соединение) и запускает по задаче на соединение; соединения открываются не чаще venue.ws_connects_per_sec в секунду.
 //! Состояние пар монет сообщает ядру событием SpotPairs (pairs.rs) — при каждой подписке, в том числе пустой.
+//! Решение 429 (страховка стакана): при канале books (venue.depth_levels = 400) на те же группы пар открываются ещё
+//! столько же страховочных соединений «backup-N» с каналом books5 — у каждого соединения свой предел «480 times per
+//! hour» запросов подписки; подключения обоих видов идут одной очередью темпа venue.ws_connects_per_sec (предел IP «3
+//! requests per second» общий); предел «30 WebSocket connections per specific WebSocket channel» проверяется по каналу
+//! books, у books5 соединений столько же. Совместная подписка books и books5 на одну пару документацией не запрещена
+//! (запрещена только «books-l2-tbt and books50-l2-tbt/books channels for the same trading symbol»).
 //! Кто вызывает: subs.rs (подписка из контракта и пересподписка при смене справочника пар).
-//! От чего зависит: ws.rs, symbols.rs, pairs.rs, book.rs, ctx.rs.
+//! От чего зависит: ws.rs, backup.rs, symbols.rs, pairs.rs, book.rs, ctx.rs.
 //! Настройки: venue.ws_symbols_per_conn, venue.ws_connects_per_sec [okx].
 //!
 //! Официально (https://www.okx.com/docs-v5/en/, «Overview → WebSocket → Connect»): «Connection limit: 3 requests per
@@ -21,6 +27,7 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
+use super::backup::Role;
 use super::book::Books;
 use super::ctx::Ctx;
 use super::pairs::Snapshot;
@@ -56,7 +63,7 @@ pub async fn subscribe(
         ));
     }
     // Настройки соединения проверяются до запуска: ошибка видна сразу, а не в журнале каждого соединения.
-    ws::config(ctx).map_err(|m| bad(ctx, m))?;
+    let main = ws::config(ctx, Role::Main).map_err(|m| bad(ctx, m))?;
     symbols.ensure_fresh(ctx).await?;
     let snap = Snapshot::build(symbols, &assets);
     let conns = snap.books.len().div_ceil(per_conn);
@@ -87,16 +94,27 @@ pub async fn subscribe(
     let gap = Duration::from_secs_f64(1.0 / per_sec as f64);
     // Решение 202: прежние соединения остановлены (subs.rs) — сторож видит только соединения этой подписки.
     books.feed.clear();
+    books.backup.clear();
+    // Решение 429: страховочные соединения books5 — только при быстром канале books.
+    let mut roles = vec![(Role::Main, "market")];
+    if main.channel == "books" {
+        roles.push((Role::Backup, "backup"));
+    }
     let mut tasks = Vec::new();
-    for (i, chunk) in snap.books.chunks(per_conn).enumerate() {
-        tasks.push(tokio::spawn(ws::run(
-            ctx.clone(),
-            format!("market-{}", i + 1),
-            chunk.to_vec(),
-            books.clone(),
-            out.clone(),
-            gap * i as u32,
-        )));
+    let mut n = 0u32;
+    for (role, prefix) in roles {
+        for (i, chunk) in snap.books.chunks(per_conn).enumerate() {
+            tasks.push(tokio::spawn(ws::run(
+                ctx.clone(),
+                format!("{prefix}-{}", i + 1),
+                chunk.to_vec(),
+                books.clone(),
+                out.clone(),
+                gap * n,
+                role,
+            )));
+            n += 1;
+        }
     }
     let syms: Vec<String> = snap.books.iter().map(|(_, s)| s.clone()).collect();
     Ok((tasks, snap, syms))

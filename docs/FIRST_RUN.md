@@ -462,6 +462,7 @@ Classic (не UTA: «Проверить подключение» откажет)
 | venue.deposit_to_spot | площадка OKX | *метод:* Не задавать, если в кабинете у адреса BSC зачисление на Trading account (to = 18). «да» — только если адрес зачисляет на Funding (6): тогда после зачисления перевод 6 → 18. | Адрес Funding при выключенном переводе бот не отдаёт — отказ с причиной. | Документация OKX v5, Get deposit address: to «6: Funding account 18: Trading account» |
 | venue.transfer_poll_ms | площадка OKX | `1000` | Опрос итога перевода без упора в лимит. | Документация OKX v5, Funds transfer: «2 requests per second»; Get funds transfer state |
 | venue.transfer_wait_ms | площадка OKX | `30000` | Не дождались — итог неизвестен, ручная проверка. | Документация OKX v5, Funds transfer: «does not necessarily reflect the actual transfer result» |
+| venue.book_backup_log_s | площадка OKX | `60` | Видно, как часто быстрый стакан books теряет синхронизацию и ядро считает по снимкам books5; журнал не засоряется (не чаще раза в минуту). | Решение 429; совет, не документация (как log.pool_events_lost_interval_s = 60) |
 | venue.order_test_first | площадка OKX | *метод:* Не задавать: пробного ордера для спота у OKX нет (order-precheck — только Multi-currency и Portfolio margin); «да» — ошибка настройки. | check_order — только правила пары. | Документация OKX v5, Order precheck |
 ## Биржа Binance (решение 160)
 

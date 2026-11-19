@@ -191,6 +191,10 @@ Bin на блоках нет — проверяется счёт шагов.
   Записать на сервере бота подряд кадры books5 пары (raw.book_frames = да) и сразу
   `GET /api/v5/market/books?instId=<SYM>&sz=5`: (1) равенство отпечатков на одной книге; (2) seqId ответа против seqId
   последнего кадра books5 / books — одна ли шкала (вопрос «по номеру» — docs/TASKS.md).
+- `okx_book_backup.rs`, решение 429: страховка стакана OKX (venues/okx/backup.rs) — снимок books5 до синхронизации books,
+  переключение на снимок при потере синхронизации (не старше venue.book_stale_ms, не старее отданного по ts), возврат на
+  books, обрыв страховки. Стакан — пример документации GET / Order book (как выше); живых кадров books и books5 нет —
+  записать оба канала одновременно (раздел OKX ниже, файлы okx_books_pair_*.txt).
 - `coinex_real_data.rs`, решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор GET /v2/spot/depth на
   **примере из документации** (Get Market Depth, Response example; вложенность data → depth — по таблице полей; живого
   ответа и кадров нет — api.coinex.com закрыт прокси): уровень с количеством "0" не берётся, разбор пуша (depth.rs) того
@@ -549,6 +553,12 @@ curl -sS --compressed "$R/api/v5/market/books?instId=CAKE-USDT&sz=400" -o $D/okx
   | websocat -t "$W" > $D/okx_books5.jsonl
 (echo '{"op":"subscribe","args":[{"channel":"books","instId":"CAKE-USDT"}]}'; sleep 120) \
   | websocat -t "$W" > $D/okx_books.jsonl
+# Решение 429 (страховка books5): оба канала ОДНОВРЕМЕННО, на двух соединениях, с временем получения строки —
+# совпадают ли seqId / ts кадров books и books5 (сверка быстрого стакана со снимком, docs/TASKS.md).
+(echo '{"op":"subscribe","args":[{"channel":"books","instId":"CAKE-USDT"}]}'; sleep 120) \
+  | websocat -t "$W" | while IFS= read -r l; do echo "$(date +%s%3N) $l"; done > $D/okx_books_pair_books.txt &
+(echo '{"op":"subscribe","args":[{"channel":"books5","instId":"CAKE-USDT"}]}'; sleep 120) \
+  | websocat -t "$W" | while IFS= read -r l; do echo "$(date +%s%3N) $l"; done > $D/okx_books_pair_books5.txt; wait
 ```
 
 Приватные (ключ бота; переменные `OKX_KEY`, `OKX_SECRET`, `OKX_PASS` — только в оболочке, в файлы не писать). Подпись —

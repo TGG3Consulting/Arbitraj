@@ -13,7 +13,8 @@
 //! Кто вызывает: mod.rs (book_version, quote_rest).
 //! От чего зависит: rest.rs (public — паузы и коды OKX там), ctx.rs (настройки), depth.rs (levels — разбор уровней, как у
 //! кадра), book.rs (Books::print), gateway/feed_health.rs.
-//! Настройки: venue.depth_levels [okx] (N; у OKX 5 или 400 — ws.rs), адрес REST и прочее — rest.rs.
+//! Настройки: venue.depth_levels [okx] (N; у OKX 5 или 400 — ws.rs; решение 429: пока ядро считает по снимку books5
+//! страховки — не больше 5), адрес REST и прочее — rest.rs.
 //!
 //! Официально (https://www.okx.com/docs-v5/en/, «Order Book Trading → Market Data → GET / Order book»): «GET
 //! /api/v5/market/books»; instId; sz — «Order book depth per side. Maximum 400, e.g. 400 bids + 400 asks», «Default
@@ -45,6 +46,11 @@ pub async fn book_version(
     ticker: &str,
 ) -> GatewayResult<BookVersion> {
     let n = ctx.int("venue.depth_levels")?;
+    // Решение 429: ядро считает по снимку books5 страховки — в памяти 5 уровней, сравниваются первые 5.
+    let n = match books.backup.mode(ticker) {
+        super::backup::Mode::Snap => n.min(super::backup::SNAP_LEVELS as u64),
+        _ => n,
+    };
     let q = vec![("instId", inst.to_string()), ("sz", n.to_string())];
     let data = rest::public(ctx, PATH, q).await?;
     let rest = parse(&data, n as usize).map_err(|why| {

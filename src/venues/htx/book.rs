@@ -3,7 +3,8 @@
 //! (сколько заплатим или получим за Q монет, с худшей комиссией тейкера нашего ключа — fees.rs).
 //! Решение 217: freeze — снимок стакана и плана комиссии (gateway/frozen.rs FrozenBook) для контракта quote_snapshot;
 //! живая котировка — тот же снимок на один вызов (одна формула).
-//! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра; book_confirmed), book_print.rs (print).
+//! Кто вызывает: market.rs (обновляет стакан), mod.rs (quote для ядра; book_confirmed), book_print.rs (print);
+//! решение 422 — ws_conn.rs и fast_pair.rs (стакан ядру выбирает book_mode.rs; put_at и same_top — book_fast.rs).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
 //! устарели; venue.book_stale_ms [htx] (обязательна — решение 238) — кадр стакана этой пары старше — котировки нет;
@@ -42,14 +43,17 @@ pub type Alive = Arc<AtomicI64>;
 
 /// Стакан пары, живость его соединения, время последнего кадра стакана пары и срок подтверждения тихой пары
 /// (решение 213; 0 — нет) (unix мс).
-type Entry = (OrderBook, Alive, Alive, Alive);
+pub(super) type Entry = (OrderBook, Alive, Alive, Alive);
 
 /// Стаканы по тикеру. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Books {
-    map: Arc<RwLock<HashMap<String, Entry>>>,
+    /// Стаканы по тикеру (book_fast.rs — решение 422 — дополняет методы).
+    pub(super) map: Arc<RwLock<HashMap<String, Entry>>>,
     /// Решение 202 (для всех бирж, 08.11): свежесть соединений и пар для сторожа ядра (gateway/feed_health.rs).
     pub feed: crate::gateway::feed_reg::FeedReg,
+    /// Решение 422: какой стакан пары отдаётся ядру — быстрый (канал /feed) или снимок mbp.refresh (book_mode.rs).
+    pub mode: super::book_mode::Mode,
 }
 
 /// Сейчас, unix мс.

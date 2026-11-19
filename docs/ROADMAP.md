@@ -39,6 +39,7 @@
   сверка двух глубин при равном seq и вообще частота равного seq — не проверены; нужна запись двух глубин одной пары
   (docs/TASKS.md, решение 428).
 - Решение 420 (t204): src/venues/mexc/depth.rs 208 строк, ws_sess.rs 207, fast_pair.rs 214 (после ревью) (ориентир 200; вынести разбор кадра изменений из depth.rs в depth_diff.rs). Подтверждение тихой пары MEXC при быстром стакане по-прежнему по содержимому (book_print.rs); можно по lastUpdateId против версии быстрого стакана (та же шкала — процедура MEXC) — отдельной задачей. Сверка с потоком снимков по номеру — после записи живых кадров (TASKS, решение 420).
+- Решение 422 (t206): сверх ориентира 200 — htx/book_mode.rs 227 (после ревью: Pair и правила вынесены в book_rule.rs), htx/fast_pair.rs 216 (после ревью: back / deliver — в snap_out.rs), htx/ws_conn.rs 220 (было 205), htx/book.rs 234 (было 230).
 - Решение 415 (t200, после ревью): сверх ориентира 200 и до t200 — core/sell.rs 394 (было 375), core/sell_range_run.rs 363 (было 350), core/relay.rs 338 (было 331), core/stuck.rs 218 (было 215); t200 добавил только ход очереди и строки шапок. tests/core_sell_turn_t200.rs 466 — разнести (LQR / ключи и след / продолжение) с общим помощником.
 - Решение 414 (ревью 648177a2): core/drawdown_pending.rs 214 строк — вынести Cur, closing и Closing в
   drawdown_closing.rs (только перенос; пути arb::core::drawdown_pending::{closing, cur} в tests/core_drawdown_414.rs и

@@ -27,11 +27,17 @@ pub async fn all_foreign(
     // делать человеку.
     let t = &deal.direction.asset.ticker;
     let at = super::deal_words::place(core, &deal.at, deal.dex_account.as_ref());
+    // Решение 413 (восьмое ревью t198): остаток «не присвоено» решён в 0 (количество 0) — свой текст, без «должна
+    // продать 0».
+    let want = if deal.qty > Decimal::ZERO {
+        format!("должна продать {}", super::deal_words::coins(deal.qty, t))
+    } else {
+        "по остатку зачисления не получила ничего".to_string()
+    };
     let mut text = format!(
-        "Своих монет на счёте не видно: {} должна продать {}, на {at} сейчас {}, но по учёту {} из них \
-         принадлежат другим сделкам: {}",
+        "Своих монет на счёте не видно: {} {want}, на {at} сейчас {}, но по учёту {} из них принадлежат другим \
+         сделкам: {}",
         super::deal_words::deal(core, deal),
-        super::deal_words::coins(deal.qty, t),
         super::deal_words::coins(fact, t),
         super::deal_words::coins(others.qty, t),
         others.words.join("; ")

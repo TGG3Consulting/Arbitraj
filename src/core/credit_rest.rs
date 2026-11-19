@@ -27,7 +27,7 @@ use super::remain_others::Others;
 pub use super::credit_rest_lock::{Locked, Res, for_button, locked};
 
 /// Что делает: почему момент счёта не тихий (шапка); None — тихий (остатки других, что не в работе, — не помеха).
-/// Принимает: ядро, сделку, учёт других. Ошибок нет.
+/// В тексте — только настоящие помехи (восьмое ревью). Принимает: ядро, сделку, учёт других. Ошибок нет.
 pub fn busy(core: &Core, deal: &Deal, o: &Others) -> Option<String> {
     let idle: HashSet<&str> = o
         .rests
@@ -35,47 +35,61 @@ pub fn busy(core: &Core, deal: &Deal, o: &Others) -> Option<String> {
         .filter(|r| r.3)
         .map(|r| r.0.as_str())
         .collect();
-    let unclear: Vec<&String> = o
+    let unclear: Vec<&str> = o
         .unclear
         .iter()
-        .filter(|id| !idle.contains(id.as_str()))
+        .map(String::as_str)
+        .filter(|id| !idle.contains(id))
         .collect();
     let unsure = super::credit_lock::unsure(core, &deal.at, &deal.direction.asset, &deal.id);
-    if o.pending.is_empty() && unclear.is_empty() && o.leaving.is_empty() && !unsure {
-        return None;
+    let pending: Vec<&str> = o.pending.iter().map(|p| p.id.as_str()).collect();
+    let mut why = Vec::new();
+    if !pending.is_empty() {
+        why.push(format!("ждут доли сделки {}", pending.join(", ")));
     }
-    let mut why = o.words.clone();
+    if !unclear.is_empty() {
+        why.push(format!(
+            "в пути сюда, остаток в работе или исход продажи неизвестен — сделки {}",
+            unclear.join(", ")
+        ));
+    }
+    if !o.leaving.is_empty() {
+        why.push(format!(
+            "уходят с этого счёта сделки {}",
+            o.leaving.join(", ")
+        ));
+    }
     if unsure {
         why.push("продажа другой сделки с неизвестным исходом".into());
     }
-    Some(why.join("; "))
+    (!why.is_empty()).then(|| why.join("; "))
 }
 
-/// Что делает: дележ пула между сделками с остатком (шапка). Принимает: пул, (количество, остаток) каждой, точность.
-/// Возвращает: новые количества по порядку. Ошибок нет.
+/// Что делает: дележ пула между сделками с остатком (шапка; восьмое ревью С-1). Первая — своя сделка, остальные —
+/// соучастники. Подтверждённые количества соучастников не урезаются никогда: им — их количество; своей — из того, что
+/// осталось, не больше её количества (своя с неизвестным исходом продажи передаёт количество с базой 0 — всё её в
+/// остатке); остаток пула — добавкой пропорционально остаткам, каждой не больше «количество + остаток».
+/// Принимает: пул, (база, остаток) каждой (своя — первой), точность. Возвращает: новые количества по порядку. Ошибок нет.
 pub fn share_out(pool: Decimal, parts: &[(Decimal, Decimal)], scale: u32) -> Vec<Decimal> {
-    let base: Decimal = parts.iter().map(|p| p.0).sum();
-    let rests: Decimal = parts.iter().map(|p| p.1).sum();
-    if pool <= Decimal::ZERO {
-        return vec![Decimal::ZERO; parts.len()];
+    let Some(((own, own_rest), peers)) = parts.split_first() else {
+        return Vec::new();
+    };
+    let peers_base: Decimal = peers.iter().map(|p| p.0).sum();
+    let left = (pool - peers_base).max(Decimal::ZERO);
+    let own_base = (*own).min(left);
+    let mut out = vec![own_base];
+    out.extend(peers.iter().map(|p| p.0));
+    let extra = left - own_base;
+    let rests: Decimal = own_rest + peers.iter().map(|p| p.1).sum::<Decimal>();
+    if extra > Decimal::ZERO && rests > Decimal::ZERO && own_base == *own {
+        let add = extra.min(rests);
+        for (q, p) in out.iter_mut().zip(parts) {
+            *q += p.1 * add / rests;
+        }
     }
-    if pool <= base {
-        return parts
-            .iter()
-            .map(|p| (p.0 * pool / base).trunc_with_scale(scale))
-            .collect();
-    }
-    let extra = (pool - base).min(rests);
-    parts
-        .iter()
-        .map(|p| {
-            let add = if rests.is_zero() {
-                Decimal::ZERO
-            } else {
-                p.1 * extra / rests
-            };
-            (p.0 + add).min(p.0 + p.1).trunc_with_scale(scale)
-        })
+    out.into_iter()
+        .zip(parts)
+        .map(|(q, p)| q.min(p.0 + p.1).trunc_with_scale(scale))
         .collect()
 }
 
@@ -89,7 +103,8 @@ pub struct Resolved {
 }
 
 /// Что делает: записывает решённое количество сделке (остатка больше нет, отметка «исход неизвестен» снята) и тексты.
-/// Принимает: сделку, новое количество, факт, подтверждённые прочих, ожидаемое удержание %. Возвращает: Resolved.
+/// Принимает: сделку, новое количество, факт, подтверждённые прочих, ожидаемое удержание %, доли соучастников
+/// словами (пусто — нет). Возвращает: Resolved.
 /// Ошибок нет.
 pub fn apply_one(
     deal: &mut Deal,
@@ -114,6 +129,9 @@ pub fn apply_one(
         w::coins(others, &t),
         w::coins(qty, &t)
     );
+    if !peers.is_empty() {
+        text.push_str(&format!("; совместно с {peers}"));
+    }
     let record = super::credit_fact::here(deal).map_or(Decimal::ZERO, |c| c.record);
     let sold: Decimal = deal.sells.iter().map(|s| s.filled_qty).sum();
     let expected = record * (Decimal::ONE - hold / Decimal::ONE_HUNDRED);
@@ -140,15 +158,4 @@ pub fn apply_one(
         )
     });
     Resolved { short, over }
-}
-
-/// Что делает: решение остатка одной сделки без других с остатком (чистая часть для тестов и совместного решения из
-/// одной сделки): min(количество + остаток, факт − подтверждённые других). Принимает: сделку, факт, учёт других,
-/// ожидаемое удержание %. Возвращает: Resolved. Ошибок нет.
-pub fn resolve(deal: &mut Deal, fact: Decimal, o: &Others, hold: Decimal) -> Resolved {
-    let Some(rest) = super::credit_fact::rest(deal) else {
-        return Resolved::default();
-    };
-    let qty = (deal.qty + rest).min((fact - o.qty).max(Decimal::ZERO));
-    apply_one(deal, qty, fact, o.qty, hold)
 }

@@ -49,13 +49,18 @@ pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
     let mut joint: Vec<String> = Vec::new();
     let (res, fact, others) = Box::pin(super::remain_read::with_fact(core, &probe, |r, o| {
         let mem = lk(&core.inner.deals).get(&deal.id).cloned();
-        // Уже решён совместно другой сделкой — из памяти.
+        // Уже решён совместно другой сделкой — из памяти (восьмое ревью С-4: при guard шаг тот же, иначе взял человек;
+        // переносятся и хронология, и отметка «исход неизвестен»).
         if let Some(x) = &mem
             && x.credit.is_some()
             && super::credit_fact::rest(x).is_none()
             && super::credit_fact::rest(deal).is_some()
         {
+            if guard && x.step != deal.step {
+                return (Res::Taken, r, o);
+            }
             (deal.qty, deal.credit) = (x.qty, x.credit.clone());
+            (deal.timeline, deal.sale_unsure) = (x.timeline.clone(), x.sale_unsure);
             return (Res::Done, r, o);
         }
         if guard && mem.map(|x| (x.step, x.updated_at)) != Some((deal.step, deal.updated_at)) {
@@ -76,7 +81,14 @@ pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
             .collect();
         let theirs: Decimal = idle.iter().map(|x| x.1).sum();
         let rest = super::credit_fact::rest(deal).unwrap_or_default();
-        let mut parts = vec![(deal.qty, rest)];
+        // Восьмое ревью (С-1): своя с неизвестным исходом продажи — база 0 (её количество не доказано): получает только
+        // после подтверждённых соучастников, верхняя граница та же.
+        let own = if deal.sale_unsure {
+            (Decimal::ZERO, deal.qty + rest)
+        } else {
+            (deal.qty, rest)
+        };
+        let mut parts = vec![own];
         parts.extend(idle.iter().map(|x| (x.1, x.2)));
         let scale = parts
             .iter()
@@ -86,12 +98,25 @@ pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
             .unwrap_or(0);
         let prior = o.qty - theirs;
         let shares = share_out(f - prior, &parts, scale);
-        texts.push(apply_one(deal, shares[0], f, prior, hold));
+        let peers: Vec<String> = idle
+            .iter()
+            .zip(shares.iter().skip(1))
+            .map(|(x, q)| format!("{} → {q}", x.0))
+            .collect();
+        texts.push(apply_one(
+            deal,
+            shares[0],
+            f,
+            prior,
+            hold,
+            &peers.join(", "),
+        ));
         super::credit_lock::sync(core, deal);
         let mut m = lk(&core.inner.deals);
         for (x, q) in idle.iter().zip(shares.iter().skip(1)) {
             if let Some(d) = m.get_mut(&x.0) {
-                texts.push(apply_one(d, *q, f, prior, hold));
+                let me = format!("{} → {}", deal.id, shares[0]);
+                texts.push(apply_one(d, *q, f, prior, hold, &me));
                 joint.push(x.0.clone());
             }
         }
@@ -141,10 +166,7 @@ pub async fn for_button(core: &Core, deal: &mut Deal) -> Result<Option<String>, 
         Res::Done => match l.fact {
             Ok(f) => {
                 let why = "остатка зачисления на счёте нет — фантом учёта (решение 222, 413)";
-                Box::pin(super::credit_rest_park::empty(
-                    core, deal, f, &l.others, why,
-                ))
-                .await;
+                Box::pin(super::remain_rest::empty(core, deal, f, &l.others, why)).await;
                 let what = if f > Decimal::ZERO {
                     "на счёте только монеты других сделок — алерт человеку (решение 405)"
                 } else {

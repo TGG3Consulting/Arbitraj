@@ -272,20 +272,30 @@ pub async fn take_over(core: &Core, alert_id: &str, who: &str) -> Result<String,
     let (alert, mut deal) = lk(&core.inner.alerts)
         .remove(alert_id)
         .ok_or(format!("алерта {alert_id} нет"))?;
-    // Решение 413 (седьмое ревью, мелкое 6): остаток «не присвоено» — человеку только решённое по факту (тихий момент,
-    // credit_rest::for_button); не решить сейчас — человек берёт подтверждённое, остаток не присваивается никому.
+    // Решение 413 (седьмое ревью мелкое 6, восьмое С-3): остаток «не присвоено» — человеку только решённое по факту
+    // (тихий момент, credit_rest::for_button); не решить сейчас — отказ с причиной, алерт остаётся (как «Продать сейчас»):
+    // свои монеты не теряются.
     if let Some(rest) = super::credit_fact::rest(&deal) {
+        let t = deal.direction.asset.ticker.clone();
         match Box::pin(super::credit_rest::for_button(core, &mut deal)).await {
             Ok(None) => {}
-            Ok(Some(t)) => {
+            Ok(Some(text)) => {
                 persist(core).await;
-                return Ok(t);
+                return Ok(text);
             }
             Err(e) => {
-                deal.note(format!(
-                    "«Беру на себя»: остаток {rest} не присвоен ({e}) — у человека подтверждённое количество"
-                ));
-                super::credit_fact::set_rest(&mut deal, Decimal::ZERO);
+                let e = format!(
+                    "«Беру на себя»: остаток {} не решён — {e}; попробуйте позже",
+                    super::deal_words::coins(rest, &t)
+                );
+                let mut alert = alert;
+                alert.reason = Some(match alert.reason.take() {
+                    Some(r) => format!("{r}; {e}"),
+                    None => e.clone(),
+                });
+                lk(&core.inner.alerts).insert(alert_id.to_string(), (alert, deal));
+                persist(core).await;
+                return Err(e);
             }
         }
     }

@@ -136,9 +136,11 @@ async fn rest_is_taken_after_leaving_deal_goes() {
         arb::core::credit_rest::busy(&core, &a, &o).is_none(),
         "тихий момент"
     );
-    arb::core::credit_rest::resolve(&mut a, d("100"), &o, d("0"));
-    assert_eq!(a.qty, d("100"), "добрано");
-    assert_eq!(a.credit.as_deref().unwrap().rest, None);
+    // Восьмое ревью: дележ — credit_rest::share_out (решение под замком при читаемом балансе —
+    // tests/core_credit_rest_live_t198.rs).
+    let rest = a.credit.as_deref().unwrap().rest.unwrap();
+    let q = arb::core::credit_rest::share_out(d("100") - o.qty, &[(a.qty, rest)], 0);
+    assert_eq!(q, vec![d("100")], "добрано");
 }
 
 /// С-7, пятое ревью (5): продажа с неизвестным исходом — отметка в учёте сделки, счёт «неясно» (замок снят), её

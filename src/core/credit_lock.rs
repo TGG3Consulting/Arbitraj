@@ -89,6 +89,8 @@ pub fn sync(core: &Core, deal: &Deal) {
         d.at = deal.at.clone();
         d.credit = deal.credit.clone();
         d.sale_unsure = deal.sale_unsure;
+        // Восьмое ревью t198: и хронология — строка решения не теряется при записи учёта из памяти (круг сверки).
+        d.timeline = deal.timeline.clone();
     }
 }
 

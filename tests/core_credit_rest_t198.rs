@@ -42,8 +42,8 @@ async fn rest_after_partial_sale_and_outsiders() {
     arb::core::ledger::save(&core, &c).await;
     let o = arb::core::remain_others::on_account(&core, &a, &a.at);
     assert!(arb::core::credit_rest::busy(&core, &a, &o).is_none());
-    arb::core::credit_rest::resolve(&mut a, d("115"), &o, d("0"));
-    assert_eq!((a.qty, rest(&a)), (d("50"), None));
+    let q = arb::core::credit_rest::share_out(d("115") - o.qty, &[(a.qty, rest(&a).unwrap())], 0);
+    assert_eq!(q, vec![d("50")]);
     assert_eq!(o.qty, d("40"), "чужие подтверждённые вычтены, не выданы");
 }
 

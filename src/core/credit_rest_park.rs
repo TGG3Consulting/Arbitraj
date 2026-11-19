@@ -55,17 +55,6 @@ pub async fn park(core: &Core, deal: &mut Deal, why: &str) {
     Box::pin(super::ledger::finish(core, deal, Step::Halted, &text)).await
 }
 
-/// Что делает: решённая сделка без монет (седьмое ревью, мелкое 1): на счёте пусто — фантом закрывается; на счёте
-/// есть, но всё — других (решение 405) — алерт человеку (remain_alert::all_foreign), не молчаливое закрытие.
-/// Принимает: ядро, сделку, факт, учёт других, причину закрытия. Ошибок нет.
-pub async fn empty(core: &Core, deal: &mut Deal, fact: Decimal, others: &Others, why: &str) {
-    if fact > Decimal::ZERO {
-        Box::pin(super::remain_alert::all_foreign(core, deal, fact, others)).await;
-        return;
-    }
-    Box::pin(super::ledger::finish(core, deal, Step::Closed, why)).await
-}
-
 /// Что делает: круг сверки (шестое ревью С-3, седьмое С-3) — остановленные сделки с остатком на бирже `v`: по каждой
 /// монете — сначала дешёвая проверка «тихо» по учёту (без запроса), затем одно чтение и совместное решение всех сделок
 /// с остатком этой монеты под одним замком (credit_rest::locked, guard: взял человек — не трогаем); решённая без монет
@@ -79,14 +68,17 @@ pub async fn round(core: &Core, v: &VenueId) {
     let mut done = std::collections::HashSet::new();
     for mut d in list {
         let key = super::coin_key::CoinKey::of(&d.direction.asset);
-        if !done.insert(key) {
+        if done.contains(&key) {
             continue;
         }
+        // Восьмое ревью (С-2): занята для этой сделки — пробуем следующую той же монеты; решённой монета считается
+        // только после настоящего чтения под замком.
         let o = super::remain_others::on_account(core, &d, v);
         if super::credit_rest::busy(core, &d, &o).is_some() {
             continue;
         }
         let l = Box::pin(super::credit_rest::locked(core, &mut d, true)).await;
+        done.insert(key);
         let (Res::Done, Ok(fact)) = (l.res, l.fact) else {
             continue;
         };
@@ -98,7 +90,10 @@ pub async fn round(core: &Core, v: &VenueId) {
             let x = lk(&core.inner.deals).get(&id).cloned();
             if let Some(mut x) = x.filter(|x| x.step == Step::Halted && x.qty <= Decimal::ZERO) {
                 let why = "остатка зачисления на счёте нет — фантом учёта (решение 222, 413)";
-                Box::pin(empty(core, &mut x, fact, &l.others, why)).await;
+                Box::pin(super::remain_rest::empty(
+                    core, &mut x, fact, &l.others, why,
+                ))
+                .await;
             }
         }
         if d.qty > Decimal::ZERO {
@@ -163,6 +158,21 @@ pub async fn at_close(core: &Core, mut deal: Deal, why: String) {
     match Box::pin(wait_quiet(core, &mut deal)).await {
         Waited::Gone => {}
         Waited::Timeout => {
+            // Восьмое ревью: остаток мог быть решён совместно между последним чтением и пределом — решённое не
+            // перезаписываем.
+            let mem = lk(&core.inner.deals).get(&deal.id).cloned();
+            if let Some(x) =
+                mem.filter(|x| x.credit.is_some() && super::credit_fact::rest(x).is_none())
+            {
+                deal = x;
+                if deal.qty > Decimal::ZERO {
+                    let left = super::stuck_reason::StuckReason::Partial(deal.qty);
+                    return super::sell_loop::hop(super::sell_next::stuck(core, deal, left, true))
+                        .await;
+                }
+                let t = "остаток решён совместно, баланс сейчас не прочитан — проверьте сделку (решение 413)";
+                return Box::pin(super::ledger::finish(core, &mut deal, Step::Halted, t)).await;
+            }
             let t =
                 "тихий момент счёта не наступил (не задано или вышел предел transfer.max_time_s)";
             Box::pin(park(core, &mut deal, t)).await
@@ -179,7 +189,10 @@ pub async fn at_close(core: &Core, mut deal: Deal, why: String) {
         }
         Waited::Done(fact, others) => {
             let t = format!("продано ({why}); остатка зачисления на счёте нет");
-            Box::pin(empty(core, &mut deal, fact, &others, &t)).await
+            Box::pin(super::remain_rest::empty(
+                core, &mut deal, fact, &others, &t,
+            ))
+            .await
         }
     }
 }

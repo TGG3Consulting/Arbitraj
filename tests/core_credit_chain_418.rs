@@ -5,7 +5,10 @@
 //! 12 493,47 (эта сделка), 554,59 (сделка 17:23:28) и около 3 тыс. (сделка 17:23:52; в журнале — «~3 тыс.», здесь
 //! 3000); Transfer 12 493,47 тогда не засчитан — «ожидается ещё 2 поступлений».
 //! - Transfer 12 493,47 — засчитан своей сделке сразу; соседние не тронуты; следом Transfer 554,59 — засчитан своей;
-//! - Transfer, подходящий к двум ожиданиям (одинаковые количества), — не засчитан, ждём хеш.
+//! - Transfer, подходящий к двум ожиданиям (одинаковые количества), — не засчитан, ждём хеш;
+//! - ревью 418: ожидание с тем же количеством, что у уже зачисленного по блокчейну, — не засчитано (ветка accept
+//!   «подходит ещё к ожиданию»), пока у зачисленного не известен его хеш вывода (другой хеш — не мешает).
+//!
 //! Количества — из журнала сделки; хеши событий и адрес токена — настоящие из записи квитанций блока 129702236
 //! (tests/data/receipts_2026-10-25/responses.json; адрес контракта SINGULARRY в записях нет — не придумываем, берём
 //! записанный адрес токена: проверяется сверка по количеству, не сам токен).
@@ -35,6 +38,8 @@ use arb::storage::journal::Journal;
 use receipts_common::{load, result};
 
 const USDT: &str = "0x55d398326f99059ff775485246999027b3197955";
+/// Перевод 58,69 USDT из записи блока 129702236 (как в tests/core_credit_chain.rs).
+const OUR: &str = "0x3263576c6e5102aa5d25fcfbf93717423687652f2a6dbd04d205523318f20835";
 /// Кошелёк сделки (id счёта DEX из маппинга биржи-отправителя).
 const WALLET: &str = "mexc";
 
@@ -181,4 +186,29 @@ async fn amount_fits_two_waits_for_hash() {
     assert!(a.chain_hit().is_none(), "подходит к двум — ждём хеш");
     assert!(b.chain_hit().is_none(), "подходит к двум — ждём хеш");
     assert!(big.chain_hit().is_none());
+}
+
+#[tokio::test]
+async fn same_amount_as_credited_waits_until_its_hash_known() {
+    let (core, _s) = start("taken").await;
+    let (h1, h2) = hashes();
+    let other = if h1 == OUR { h2 } else { h1 };
+    let t1 = ticket(&core, "d1", d("58.69"));
+    credit_event::on_change(&core, deposit(OUR, d("58.69"))).await;
+    assert!(t1.chain_hit().is_some(), "первое зачислено по блокчейну");
+    let t2 = ticket(&core, "d2", d("58.69"));
+    credit_event::on_change(&core, deposit(&other, d("58.69"))).await;
+    assert!(
+        t2.chain_hit().is_none(),
+        "Pick::One, но количество подходит и к занятому t1 — ждём хеш"
+    );
+    drop(t2);
+    // Хеш вывода t1 известен и он не хеш нового события — t1 не мешает.
+    t1.set_tx(OUR);
+    let t3 = ticket(&core, "d3", d("58.69"));
+    credit_event::on_change(&core, deposit(&other, d("58.69"))).await;
+    assert!(
+        t3.chain_hit().is_some(),
+        "у соседа известен другой хеш — засчитано"
+    );
 }

@@ -210,10 +210,7 @@ async fn second_expected_inflow_not_credited() {
     let t = ticket(&core, "d1", ours(), before());
     let t2 = ticket(&core, "d2", ours(), before());
     credit_event::on_change(&core, deposit(OUR, usdt(), ours(), WALLET)).await;
-    assert!(
-        t.chain_hit().is_none(),
-        "ожидается ещё приход того же токена"
-    );
+    assert!(t.chain_hit().is_none(), "подходит к двум — Pick::Many");
     assert!(t2.chain_hit().is_none());
 }
 

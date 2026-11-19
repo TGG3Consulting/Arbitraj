@@ -9,7 +9,8 @@
 //! - количество — ожидаемый приход (вывод минус комиссия вывода в монете, credit_expect.rs) в допуске
 //!   transfer.credit_amount_tolerance_pct (тот же допуск сверки прихода, credit_match.rs);
 //! - на этом кошельке по этому токену нет другого ожидания (другой сделки, перегона, возврата), к которому подходит
-//!   количество события (credit_match::fits, тот же допуск; решение 418 — ожидания с другим количеством не мешают);
+//!   количество события (credit_match::fits, тот же допуск; решение 418 — ожидания с другим количеством не мешают;
+//!   ревью 418 — не мешает и ожидание, у которого известен другой хеш вывода);
 //! - момент события (Transfer после нужных подтверждений) не раньше отправки запроса вывода;
 //! - хеш вывода от отправителя ещё не известен (известен — обычная сверка по хешу, решение 76).
 //!
@@ -25,7 +26,7 @@ use rust_decimal::Decimal;
 use crate::core::types::{BalanceChange, VenueId};
 use crate::gateway::contract::VenueKind;
 
-use super::credit_watch::{State, Ticket, lock, same_asset};
+use super::credit_watch::{State, Ticket, lock, norm, same_asset};
 use super::engine::{Core, rd};
 
 /// Итог проверки поступления на зачисление по блокчейну.
@@ -94,7 +95,8 @@ pub(super) fn accept(
     let (Some(since), None, true) = (e.chain_since, &e.tx, on) else {
         return Verdict::Off;
     };
-    if b.tx_hash.is_none() {
+    let hash = b.tx_hash.as_deref().map(norm);
+    if hash.is_none() {
         return Verdict::No("в событии нет хеша транзакции".into());
     }
     if e.account.is_none() || e.account != b.account {
@@ -118,6 +120,8 @@ pub(super) fn accept(
         .filter(|(k, x)| **k != id && x.to == b.venue && same_asset(&x.asset, &b.asset))
         .filter(|(_, x)| x.same_wallet(b))
         .filter(|(_, x)| super::credit_match::fits(x.amount, b.delta, tol))
+        // Ревью 418: у соседа известен хеш вывода, и он не хеш события — этот Transfer не его, не мешает.
+        .filter(|(_, x)| x.tx.is_none() || x.tx == hash)
         .count();
     if others > 0 {
         return Verdict::No(format!(

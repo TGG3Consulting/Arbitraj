@@ -57,7 +57,7 @@ impl Reqs {
     }
 
     /// Первый символ, которому уже можно слать (убирается из очереди, остаётся «ждёт ответа»). Ошибок нет.
-    pub fn next(&mut self) -> Option<String> {
+    pub fn due(&mut self) -> Option<String> {
         let now = Instant::now();
         let i = self.queue.iter().position(|(at, _)| *at <= now)?;
         self.queue.remove(i).map(|(_, s)| s)

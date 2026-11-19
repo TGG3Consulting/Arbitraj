@@ -92,7 +92,7 @@ pub async fn session(
                 }
             }
             _ = req_tick.tick(), if !c.reqs.is_empty() => {
-                let Some(s) = c.reqs.next() else { continue };
+                let Some(s) = c.reqs.due() else { continue };
                 if let Err(e) = sink.send(Message::Text(mbp::req_message(&s, cfg.levels).into())).await {
                     return End::Broken(format!("отправка запроса снимка: {e}"));
                 }

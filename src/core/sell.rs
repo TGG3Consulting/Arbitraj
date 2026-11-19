@@ -41,9 +41,13 @@
 //! Решение 413 (t198, живой WKC 18.11): вход в продажу на бирже — свежий факт баланса и доля сделки (sell_fact.rs
 //! before); продажа — под замком счёта (credit_lock.rs); «мало средств» — перечитать факт и продать долю тем же правилом
 //! (sell_fact.rs retry через sell_next.rs), повторный отказ — прежний путь.
+//! Решение 415 (t200, живой LQR 19.11): после факта — ход очереди продажи счёта (sell_turn.rs): котировка продажи
+//! (sell_turn_fresh.rs — не раньше прошлой продажи той же монеты на той же площадке) и ордер — под одним ходом; ход
+//! снимается сразу после итога ордера, до продолжений.
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs.
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
-//! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_range_run.rs, sell_loop.rs, sell_next.rs.
+//! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_range_run.rs, sell_loop.rs, sell_next.rs,
+//! sell_turn.rs, sell_turn_fresh.rs.
 //! Настройки: через sell_unsent.rs — stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154);
 //! через sell_range.rs — sell.market_on_price_range (решение 268).
 
@@ -94,19 +98,24 @@ async fn sell_or_stuck_guarded(core: &Core, deal: Deal, g: Guard) {
     let Some(deal) = Box::pin(super::sell_fact::before(core, deal, "выгодно")).await else {
         return;
     };
-    let value = super::trade_ops::deal_quote(core, &deal).await;
+    // Решение 415: ход очереди продажи счёта — после факта (sell_fact::before), котировка не раньше прошлой продажи
+    // ключа; ход держится до итога ордера (sell), без ордера — снимается сразу (sell_turn.rs).
+    let mut turn = Box::pin(super::sell_turn::take(&deal.at, &deal.direction.asset)).await;
+    let value = Box::pin(super::sell_turn_fresh::quote(core, &deal, &mut turn)).await;
     match value {
         Ok((v, q, b)) if profitable(&deal, v) => {
             let f = super::remeasure::of(&deal, v, deal.qty * q.avg_price, g);
-            sell(core, deal, q, b, "выгодно", f, Rule::Entry).await
+            sell(core, deal, (q, b, turn), "выгодно", f, Rule::Entry).await
         }
         // Решение 220: в режим застрявшей монеты — с настоящей причиной.
         // Решение 389: вход в режим застрявшей монеты — продолжением цикла sell_loop.rs (стек не растёт).
         Ok(_) => {
+            drop(turn);
             let job = super::sell_next::stuck(core, deal, StuckReason::Unprofitable, false);
             super::sell_loop::hop(job).await
         }
         Err(e) => {
+            drop(turn);
             let why = StuckReason::NoQuote(e.message);
             super::sell_loop::hop(super::sell_next::stuck(core, deal, why, false)).await
         }
@@ -141,14 +150,17 @@ pub async fn market_guarded(core: &Core, deal: Deal, why: &str, g: Guard) {
         let Some(deal) = Box::pin(super::sell_fact::before(core, deal, why)).await else {
             return;
         };
-        match super::trade_ops::deal_quote(core, &deal).await {
+        // Решение 415: ход очереди продажи счёта — после факта; котировка и ордер — под одним ходом (sell_turn.rs).
+        let mut turn = Box::pin(super::sell_turn::take(&deal.at, &deal.direction.asset)).await;
+        match Box::pin(super::sell_turn_fresh::quote(core, &deal, &mut turn)).await {
             Ok((v, q, b)) => {
                 let f = super::remeasure::of(&deal, v, deal.qty * q.avg_price, g);
                 // Решение 268: условие, по которому продажа решена (кнопка / порог режима / без порога).
                 let rule = super::sell_range::rule_of(why, g);
-                sell(core, deal, q, b, why, f, rule).await
+                sell(core, deal, (q, b, turn), why, f, rule).await
             }
             Err(e) => {
+                drop(turn);
                 let mut deal = deal;
                 let text = format!("продажа по рынку ({why}) невозможна: {e}");
                 super::ledger::finish(core, &mut deal, Step::Halted, &text).await;
@@ -185,14 +197,18 @@ fn quote_note(q: &Quote, qty: Decimal, w: Option<&super::trade_ops::Worst>) -> S
     )
 }
 
-/// Продажа всего количества по котировке q. Принимает: сделку, котировку, стакан котировки (решение 238, ревью п. 3:
-/// худшая цена первой попытки — по нему; None — DEX), причину (для хронологии), границу пере-замера продажи DEX
-/// (решение 247, remeasure::of; None — без пере-замера).
+/// Продажа всего количества по котировке q. Принимает: сделку, (котировку, стакан котировки — решение 238, ревью п. 3:
+/// худшая цена первой попытки — по нему; None — DEX; ход очереди продажи счёта, под которым взята котировка — решение
+/// 415: снимается сразу после итога ордера), причину (для хронологии), границу пере-замера продажи DEX (решение 247,
+/// remeasure::of; None — без пере-замера).
 async fn sell(
     core: &Core,
     mut deal: Deal,
-    q: Quote,
-    book: Option<super::exec_book::Book>,
+    (q, book, turn): (
+        Quote,
+        Option<super::exec_book::Book>,
+        super::sell_turn::Turn,
+    ),
     why: &str,
     floor: Option<crate::core::types::Remeasure>,
     rule: Rule,
@@ -222,6 +238,9 @@ async fn sell(
     );
     // Ревью CI t198 (переполнение стека): продажа под замком — в куче.
     let mut res = Box::pin(super::credit_lock::selling(core, &deal, trade)).await;
+    // Решение 415: итог ордера есть, учёт сделки в памяти уже обновлён (credit_lock::selling) — ход очереди снимается
+    // до любых продолжений (ветка 268, режим застрявшей монеты, повтор, алерт — без очереди; ветка 268 берёт свой ход).
+    turn.done(&res);
     // Решение 236, дополнение: approve, чаевые, газ неудачных попыток — в затраты сделки.
     super::deal_gas::charge(core, &mut deal, &v, &mut gas).await;
     // Решение 227: котировка продажи и стакан худшей цены — в хронологию сделки (разбор живых случаев вроде JCT).

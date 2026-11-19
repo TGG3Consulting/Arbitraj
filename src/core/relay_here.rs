@@ -11,8 +11,10 @@
 //! вышло — алерт, как раньше. (2) Перевод не состоялся (отказ вывода в «Перегоне», «перевод не состоялся» после
 //! покупки в executor.rs) — вывод не повторяем: монеты на месте (баланс площадки) — продажа здесь по тем же правилам;
 //! монет нет — сделка остановлена, решает человек (transfer_failed).
+//! Решение 415 (t200): котировка «продать здесь» — под ходом очереди продажи счёта на время котировки
+//! (sell_turn_fresh::value).
 //! Кто вызывает: core/relay.rs, core/executor.rs (transfer_failed).
-//! От чего зависит: trade_ops.rs, stuck.rs (sold_by_market), stuck_lag.rs (Ticks), manual.rs (raise_alert), manual_halted.rs
+//! От чего зависит: trade_ops.rs, sell_turn_fresh.rs, stuck.rs (sold_by_market), stuck_lag.rs (Ticks), manual.rs (raise_alert), manual_halted.rs
 //! (on_hand, set_qty), ledger.rs, deal.rs.
 //! Настройки: stuck.relay_max_loss_pct, stuck.no_quote_wait_ms.
 
@@ -92,8 +94,11 @@ pub async fn sell_here(core: &Core, deal: Deal, why: &str) {
     // Решение 247: порог продажи здесь — и граница пере-замера продажи DEX (core/remeasure.rs).
     let cap = max.as_ref().ok().copied();
     let d = &deal;
+    // Решение 415: котировка-решение — под ходом очереди продажи счёта только на время котировки (sell_turn_fresh.rs).
     let value = quote_or_wait(core, d, wait, move || async move {
-        super::trade_ops::deal_value(core, d).await.map(|(v, _)| v)
+        Box::pin(super::sell_turn_fresh::value(core, d))
+            .await
+            .map(|(v, _)| v)
     })
     .await;
     match decide(&deal, why, max, value) {

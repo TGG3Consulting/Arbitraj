@@ -30,6 +30,7 @@
 //! выгодно (итог ≥ 0) → по рынку с пере-замером продажи DEX при откате «мало на выходе» в пределах того же условия
 //! (порог убытка 0, remeasure::PROFITABLE); невыгодно — режим застрявшей монеты, как раньше. Продажа здесь — relay_here.rs
 //! (порог stuck.relay_max_loss_pct — он же граница пере-замера, решение 247).
+//! Решение 415 (t200): котировки «продать здесь» — под ходом очереди продажи счёта на время котировки (sell_turn_fresh::once).
 //! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs); venue.cex_cex,
 //! venue.cex_cex_deny (через cex_link.rs).
 
@@ -141,7 +142,8 @@ pub async fn run(core: &Core, mut deal: Deal) {
     // а нечитаемый баланс иначе уводил бы сделку мимо остановки решения 238.
     // Седьмое ревью (мелкое 7): возраст котировки — от момента запроса.
     let t0 = tokio::time::Instant::now();
-    let pre = Box::pin(super::trade_ops::deal_quote(core, &deal)).await;
+    // Решение 415: котировка-решение — под ходом очереди продажи счёта только на время котировки (sell_turn_fresh.rs).
+    let pre = Box::pin(super::sell_turn_fresh::once(core, &deal)).await;
     if let Err(e) = &pre
         && super::stuck_quote::not_configured(e)
     {
@@ -177,7 +179,7 @@ pub async fn run(core: &Core, mut deal: Deal) {
     let quote = if deal.qty == qty0 && fresh {
         pre
     } else {
-        Box::pin(super::trade_ops::deal_quote(core, &deal)).await
+        Box::pin(super::sell_turn_fresh::once(core, &deal)).await
     };
     let here = match quote {
         Ok((v, _, _)) => Some(v),

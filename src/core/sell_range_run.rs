@@ -8,9 +8,12 @@
 //! застрявшей монеты. Все будущие ветки собираются в коробки в отдельных не-async функциях: состояние ветки не занимает
 //! место в задаче продажи sell.rs и в задачах, которые её вкладывают (stuck.rs, relay.rs) — глубина стека у продажи
 //! без этой ветки не растёт (замер — docs/ROADMAP.md, «Техдолг»).
+//! Решение 415 (t200): котировка и рыночный ордер ветки — под своим ходом очереди продажи счёта (sell_turn.rs; ход
+//! лимитного ордера sell.rs к этому моменту снят), ход снимается сразу после итога рыночного ордера.
 //! Кто вызывает: core/sell.rs (run — после wanted).
 //! От чего зависит: sell_range.rs (decide, Act, Outcome), trade_ops.rs (deal_quote, trade_seen), sell.rs (profitable,
-//! BUTTON), stuck.rs (handle — через sell_loop.rs / sell_next.rs, решение 389), deal_gas.rs, ledger.rs, exec_book.rs, stuck_reason.rs, op_error.rs, deps.rs.
+//! BUTTON), stuck.rs (handle — через sell_loop.rs / sell_next.rs, решение 389), deal_gas.rs, ledger.rs, exec_book.rs, stuck_reason.rs, op_error.rs, deps.rs,
+//! sell_turn.rs, sell_turn_fresh.rs.
 //! Настройки: нет (включатель sell.market_on_price_range читает sell_range.rs).
 
 use std::future::Future;
@@ -91,7 +94,10 @@ pub async fn branch(
 ) -> Outcome {
     let head =
         format!("Биржа отклонила лимитный ордер продажи: цена вне разрешённого диапазона ({e})");
-    let quote = quote_boxed(core, deal).await;
+    // Решение 415: свой ход очереди продажи счёта (ход лимитного ордера sell.rs снят с его итогом): котировка не раньше
+    // прошлой продажи ключа, рыночный ордер — под тем же ходом; без ордера ход снимается сразу.
+    let mut turn = Box::pin(super::sell_turn::take(&deal.at, &deal.direction.asset)).await;
+    let quote = quote_boxed(core, deal, &mut turn).await;
     let fresh = quote.as_ref().ok().map(|(v, _, _)| Fresh {
         profitable: super::sell::profitable(deal, *v),
         loss_pct: deal.loss_pct_if(*v),
@@ -104,6 +110,7 @@ pub async fn branch(
             (Err(err.message), prev.q.clone(), None, prev.worst)
         }
         (Act::Stuck, quote) => {
+            drop(turn);
             deal.mark_range_stuck(deal.at.clone());
             let (what, why) = match quote {
                 Ok((v, _, _)) => (
@@ -120,6 +127,7 @@ pub async fn branch(
             return Outcome::Stuck(why);
         }
         (_, Err(err)) => {
+            drop(turn);
             let m = format!("{e} — рыночная продажа невозможна: нет котировки ({err})");
             let text = format!("{head}. Котировки нет: {err} — рыночного ордера нет (решение 268)");
             note(core, deal, text).await;
@@ -129,6 +137,7 @@ pub async fn branch(
             });
         }
         (_, Ok((v, _, _))) => {
+            drop(turn);
             let text = format!(
                 "{head}. {} — рыночного ордера нет (решение 268)",
                 unmet(rule, marks(deal), fresh, v)
@@ -164,6 +173,8 @@ pub async fn branch(
     let v = deal.at.clone();
     let (mut seen, mut gas) = (None, Vec::new());
     let res = market_order(core, deal, &q, book, given, &mut seen, &mut gas).await;
+    // Решение 415: итог рыночного ордера — ход снимается (журнал, уведомление и продолжения — без очереди).
+    turn.done(&res);
     super::deal_gas::charge(core, deal, &v, &mut gas).await;
     journal(core, deal, &text).await;
     // Уведомление — по факту: ордер ушёл на биржу (исполнен или итог неизвестен); не ушёл / отклонён — обычный алерт.
@@ -277,14 +288,16 @@ fn stuck<'a>(
     )))
 }
 
-/// Свежая котировка продажи сделки (trade_ops::deal_quote) — будущее в коробке, собранное вне кадра ветки (глубина
-/// стека). Принимает: ядро, сделку. Возвращает и ошибки: как deal_quote.
+/// Свежая котировка продажи сделки (trade_ops::deal_quote; решение 415 — под ходом очереди, sell_turn_fresh.rs) —
+/// будущее в коробке, собранное вне кадра ветки (глубина стека). Принимает: ядро, сделку, ход. Возвращает и ошибки:
+/// как deal_quote.
 #[inline(never)]
 fn quote_boxed<'a>(
     core: &'a Core,
     deal: &'a Deal,
+    turn: &'a mut super::sell_turn::Turn,
 ) -> Pin<Box<dyn Future<Output = Quoted> + Send + 'a>> {
-    Box::pin(super::trade_ops::deal_quote(core, deal))
+    Box::pin(super::sell_turn_fresh::quote(core, deal, turn))
 }
 
 /// Итог котировки продажи: (выручка чистыми, котировка, стакан котировки биржи).

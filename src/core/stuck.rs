@@ -16,8 +16,11 @@
 //! Решение 247: продажа режима — с пере-замером продажи DEX при откате по minOut в пределах порога режима
 //! («Порог убытка» — stuck.max_loss_pct, «Ожидание: стало выгодно» — итог ≥ 0; по истечении ожидания — тоже итог ≥ 0:
 //! дополнение 10.11, t78 — Тигран: согласовано; прежде без пере-замера).
+//! Решение 415 (t200): котировки-решения «Ожидания» и «Порога убытка» — под ходом очереди продажи счёта только на время
+//! котировки (sell_turn_fresh::once): не между котировкой и ордером другой продажи той же монеты на той же площадке и не
+//! раньше её итога; сама продажа — sell.rs market_guarded (своя котировка и ордер под ходом).
 //! Кто вызывает: sell.rs, sell_unsent.rs, relay.rs (executor.rs — через sell.rs; перевод не состоялся — relay_here.rs, решение 220).
-//! От чего зависит: sell.rs, trade_ops.rs, stuck_quote.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
+//! От чего зависит: sell.rs, trade_ops.rs, sell_turn_fresh.rs, stuck_quote.rs, transfers.rs, fills.rs, manual.rs, relay.rs, ledger.rs, deal.rs, remain_fact.rs.
 //! Решение 334: ожидание тика монеты — stuck_lag.rs Ticks (подписка одна на всё ожидание — ревью 333, Н4; отставание —
 //! счёт, журнал и проверка сразу — решение 361).
 //! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
@@ -126,7 +129,7 @@ async fn wait(core: &Core, mut deal: Deal) {
     let until = Instant::now() + Duration::from_millis(ms);
     let mut first = true;
     while ticks.next(core, &deal, Some(until)).await {
-        match super::trade_ops::deal_quote(core, &deal).await {
+        match Box::pin(super::sell_turn_fresh::once(core, &deal)).await {
             // Решение 47: выгодно — итог сделки не ниже нуля.
             Ok((v, _, _)) if super::sell::profitable(&deal, v) => {
                 // Решение 247: пере-замер — по тому же условию «выгодно» (итог ≥ 0 — порог убытка 0).
@@ -164,7 +167,7 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
     // Ревью 333, Н4: подписка на тики — до первой котировки и на всё ожидание (тик во время котировки не теряется).
     let mut ticks = Ticks::new(core);
     let value = loop {
-        match super::trade_ops::deal_quote(core, &deal).await {
+        match Box::pin(super::sell_turn_fresh::once(core, &deal)).await {
             Ok((v, _, _)) => break v,
             Err(e) if q::not_configured(&e) => return q::halt_not_configured(core, deal, &e).await,
             Err(e) => {

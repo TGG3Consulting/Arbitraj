@@ -8,7 +8,7 @@
 //! - money.max_per_coin_usd, money.max_in_transit_usd — вся система (limits_parts.rs; бюджет сделки — значение минус
 //!   уже вложенное в открытые сделки монеты / в пути на момент решения);
 //! - risk.max_daily_loss_usd — по каждой паре «площадка × тип направления» реестра (решение 258, core/day_pair.rs max:
-//!   пара → площадка пары (у «DEX ↔ DEX» — DEX реестра, первая, как Core::dex_id) → вся система; у биржи три пары, у DEX
+//!   пара → площадка пары (у «DEX ↔ DEX» — DEX сети по умолчанию, core/chain.rs default_dex) → вся система; у биржи три пары, у DEX
 //!   одна общая «DEX ↔ DEX») и значение «вся система»; risk.max_daily_loss_total_usd — вся система (core/daily_limit.rs;
 //!   не задана — общего стопа по убытку нет).
 //!
@@ -142,10 +142,14 @@ pub fn rows(s: &Store, kinds: &[(VenueId, VenueKind)]) -> Vec<LimitRow> {
     put("money.max_per_coin_usd", all.clone(), None, None, lim);
     put("money.max_in_transit_usd", all.clone(), None, None, lim);
     let day = "core/day_pair.rs max: пара «площадка × тип» → площадка пары → вся система";
-    let dex = kinds
+    // Решение 430: «DEX ↔ DEX» без сети — площадка DEX сети по умолчанию (core/chain.rs; одна DEX — она).
+    let dexes: Vec<VenueId> = kinds
         .iter()
-        .find(|(_, k)| *k == VenueKind::Dex)
-        .map(|(v, _)| v.0.as_str());
+        .filter(|(_, k)| *k == VenueKind::Dex)
+        .map(|(v, _)| v.clone())
+        .collect();
+    let dex_id = crate::core::chain::dex_of(s, &dexes, None).ok();
+    let dex = dex_id.as_ref().map(|v| v.0.as_str());
     for (v, _) in kinds.iter().filter(|(_, k)| *k == VenueKind::Cex) {
         for kind in [DirKind::CexToDex, DirKind::DexToCex, DirKind::CexCex] {
             let vd = VenueDir { venue: &v.0, kind };

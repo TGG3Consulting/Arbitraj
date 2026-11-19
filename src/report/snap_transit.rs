@@ -7,7 +7,7 @@
 //! - сделки, чья площадка не в реестре шлюза (выключена) или чей кошелёк не найден, — отдельный блок «нет данных».
 //!
 //! Кто вызывает: report/snap.rs.
-//! От чего зависит: report/snap.rs (Place, Line, loc, deal_line), report/snap_price.rs, core (dex_id, шлюз),
+//! От чего зависит: report/snap.rs (Place, Line, loc, deal_line), report/snap_price.rs, core (daily_venue::is_dex, шлюз),
 //! core/usdt_return_parts.rs, core/balance_sell_check.rs (quote_of), notify/human.rs.
 //! Настройки: venue.quote_asset (читается).
 
@@ -58,7 +58,7 @@ pub async fn transit(
             let acc = d
                 .dex_account
                 .as_ref()
-                .filter(|_| core.dex_id().as_ref() == Some(v));
+                .filter(|_| crate::core::daily_venue::is_dex(core, &v.0));
             let pr = match core.inner.deps.gw.get_as(v, acc).await {
                 Ok(gw) => match quote_of(core, v) {
                     Ok(qa) => price(core, &gw, v, &d.direction.asset, d.qty, &qa, deadline)

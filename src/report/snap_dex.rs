@@ -7,7 +7,7 @@
 //! «В пути» и сделки вне слепка — report/snap_transit.rs.
 //!
 //! Кто вызывает: report/snap.rs.
-//! От чего зависит: report/snap.rs (Place, Line, loc, deal_line), report/snap_price.rs, core (dex_id, шлюз, настройки),
+//! От чего зависит: report/snap.rs (Place, Line, loc, deal_line), report/snap_price.rs, core (chain::default_dex, шлюз, настройки),
 //! core/coin_key.rs, core/venue_ticker.rs, core/balance_sell_check.rs (quote_of), notify/human.rs.
 //! Настройки: venue.quote_asset (читается).
 
@@ -66,7 +66,8 @@ pub async fn wallets(
     used: &mut [bool],
     deadline: Instant,
 ) -> Vec<Place> {
-    let dex = core.dex_id();
+    // Решение 430: кошельки — на площадке DEX сети по умолчанию (по сетям — шаг 4 плана, docs/TASKS.md).
+    let dex = crate::core::chain::default_dex(core);
     let mut ws = core.inner.deps.settings.accounts().wallets();
     ws.sort_by(|a, b| a.name.cmp(&b.name));
     let mut out = Vec::new();

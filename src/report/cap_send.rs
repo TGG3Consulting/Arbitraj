@@ -42,7 +42,8 @@ pub async fn gather(core: &Core, deals: &[Deal]) -> Inputs {
             }
         }
     }
-    let dex = core.dex_id();
+    // Решение 430: адрес кошелька один на все сети — читается у площадки DEX сети по умолчанию (core/chain.rs).
+    let dex = crate::core::chain::default_dex(core);
     for w in s.accounts().wallets() {
         rows.names.insert(w.id.clone(), w.name.clone());
         let addr = match &dex {

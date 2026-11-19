@@ -37,16 +37,22 @@ pub async fn venue_as(
         .await
 }
 
-/// Первая площадка DEX реестра (кошельки — у неё). Ошибки: 404 — DEX не подключена.
+/// Площадка DEX сети по умолчанию (решение 430: вместо «первой DEX реестра» — core/chain.rs dex_of; одна DEX — она).
+/// Выбор площадки DEX по сети в интерфейсе — шаг 4 плана двух сетей. Ошибки: 404 — DEX не подключена или сеть по
+/// умолчанию не выбрать (причина).
 pub async fn dex_id(st: &AppState) -> Result<VenueId, ApiError> {
+    let mut dex = vec![];
     for id in st.registry.ids().await {
         if let Ok(v) = st.registry.get(&id).await
             && v.kind() == VenueKind::Dex
         {
-            return Ok(id);
+            dex.push(id);
         }
     }
-    Err(ApiError::no_data("площадка DEX не подключена"))
+    if dex.is_empty() {
+        return Err(ApiError::no_data("площадка DEX не подключена"));
+    }
+    crate::core::chain::dex_of(&st.settings, &dex, None).map_err(ApiError::no_data)
 }
 
 /// DEX на кошелёк. Ошибки: 404 — нет DEX; 400 — нет такого кошелька.

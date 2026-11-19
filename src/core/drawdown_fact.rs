@@ -45,8 +45,8 @@ impl Place {
 pub fn place(core: &Core, p: &str) -> Result<Place, String> {
     let kind = super::day_pair::kind_of(p).ok_or_else(|| format!("{p}: не направление"))?;
     let wallet = |row: &str| -> Result<Place, String> {
-        let dex = core
-            .dex_id()
+        // Решение 430: площадка DEX сети по умолчанию (пара без сети — сеть по умолчанию; core/chain.rs).
+        let dex = super::chain::default_dex(core)
             .ok_or_else(|| "DEX нет в реестре площадок".to_string())?;
         let acc = core
             .inner

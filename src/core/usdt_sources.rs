@@ -71,33 +71,44 @@ pub async fn all(core: &Core, max_age: Option<Duration>) -> Vec<Source> {
             error,
         });
     }
-    let Some(dex) = core.dex_id() else {
-        return out;
-    };
+    // Решение 430: кошельки — на каждой площадке DEX (кошелёк один на все сети, USDT — по сети). Одна DEX — как раньше
+    // (подпись без сети); несколько — к подписи добавляется сеть площадки.
+    let dexes = super::chain::dexes(core);
+    let many = dexes.len() > 1;
     let accounts = core.inner.deps.settings.accounts();
     let mut wallets = accounts.wallets();
     wallets.sort_by(|a, b| a.name.cmp(&b.name));
-    for w in wallets {
-        let rows = accounts.rows_of(&w.id).join(", ");
-        let label = if rows.is_empty() {
-            format!("Кошелёк DEX «{}»", w.name)
+    for dex in dexes {
+        let net = if many {
+            match super::chain::chain_at(&core.inner.deps.settings, &dex) {
+                Ok(c) => format!(", сеть {c}"),
+                Err(_) => format!(", {}", dex.0),
+            }
         } else {
-            format!("Кошелёк DEX «{}» ({rows})", w.name)
+            String::new()
         };
-        let (usdt, error) = match core.wallet_balances(&w.id, max_age).await {
-            Ok(b) => (b.usdt, b.error),
-            Err(e) => (None, Some(e)),
-        };
-        let end = End {
-            venue: dex.clone(),
-            wallet: Some(DexAccountId(w.id)),
-        };
-        out.push(Source {
-            end,
-            label,
-            usdt,
-            error,
-        });
+        for w in &wallets {
+            let rows = accounts.rows_of(&w.id).join(", ");
+            let label = if rows.is_empty() {
+                format!("Кошелёк DEX «{}»{net}", w.name)
+            } else {
+                format!("Кошелёк DEX «{}» ({rows}){net}", w.name)
+            };
+            let (usdt, error) = match core.wallet_balances_on(&dex, &w.id, max_age).await {
+                Ok(b) => (b.usdt, b.error),
+                Err(e) => (None, Some(e)),
+            };
+            let end = End {
+                venue: dex.clone(),
+                wallet: Some(DexAccountId(w.id.clone())),
+            };
+            out.push(Source {
+                end,
+                label,
+                usdt,
+                error,
+            });
+        }
     }
     out
 }

@@ -8,7 +8,7 @@
 //! (settings/venue_dir.rs id: «bingx:cex_dex», «dex_dex»). Площадка без записи в реестре шлюза (вид неизвестен)
 //! считается биржей (как раньше в учёте дня).
 //! Лимит пары — risk.max_daily_loss_usd: значение пары → значение площадки → вся система (порядок решения 242,
-//! Store::decimal_dir). Площадка второго шага — биржа пары; у «DEX ↔ DEX» — площадка DEX реестра (Core::dex_id).
+//! Store::decimal_dir). Площадка второго шага — биржа пары; у «DEX ↔ DEX» — площадка DEX сети по умолчанию (core/chain.rs default_dex, решение 430).
 //! Кто вызывает: daily_venue.rs (учёт дня), daily_venue_limit.rs, daily_limit.rs, daily_migrate.rs, daily_load.rs,
 //! daily_commit.rs, day_roll.rs, risk.rs, risk_ready.rs, commands.rs, commands_control.rs, notify (меню),
 //! report (rows_text.rs, cap_limits.rs).
@@ -108,7 +108,8 @@ pub fn all(core: &Core) -> Vec<String> {
 pub fn venue_or_dex(core: &Core, p: &str) -> Option<String> {
     match venue_of(p) {
         Some(v) => Some(v.to_string()),
-        None => core.dex_id().map(|v| v.0),
+        // Решение 430: DEX сети по умолчанию (бывшая «первая DEX»; одна DEX — она).
+        None => super::chain::default_dex(core).map(|v| v.0),
     }
 }
 

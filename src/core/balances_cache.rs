@@ -28,7 +28,8 @@ use super::engine::{Core, lk, rd};
 #[derive(Debug, Default)]
 pub struct Cache {
     venues: Mutex<HashMap<String, VenueView>>,
-    wallets: Mutex<HashMap<String, WalletView>>,
+    /// Решение 430: ключ — (площадка DEX, кошелёк): один кошелёк в двух сетях — два ответа.
+    wallets: Mutex<HashMap<(VenueId, String), WalletView>>,
 }
 
 /// Свободно монеты на площадке (нет строки — 0). Принимает: адаптер, тикер, список ошибок (сбой — туда).
@@ -120,15 +121,30 @@ impl Core {
         Ok(v)
     }
 
-    /// Балансы кошелька DEX (BNB и USDT): из памяти или запросом — как venue_balances.
-    /// Принимает: id кошелька, допустимый возраст. Ошибки: кошелька нет, DEX не подключена.
+    /// Балансы кошелька DEX (BNB и USDT) на площадке DEX сети по умолчанию (решение 430: бывшая «первая DEX» —
+    /// core/chain.rs default_dex; одна DEX — она). Принимает: id кошелька, допустимый возраст.
+    /// Ошибки: кошелька нет, DEX не подключена.
     pub async fn wallet_balances(
         &self,
         wallet: &str,
         max_age: Option<Duration>,
     ) -> Result<WalletView, String> {
+        let dex = super::chain::default_dex(self).ok_or("площадка DEX не подключена")?;
+        self.wallet_balances_on(&dex, wallet, max_age).await
+    }
+
+    /// Балансы кошелька DEX на площадке DEX `dex` (решение 430: кошелёк один на все сети, баланс — по сети):
+    /// из памяти или запросом — как venue_balances. Принимает: площадку DEX, id кошелька, допустимый возраст.
+    /// Ошибки: кошелька нет, адаптер площадки не получен.
+    pub async fn wallet_balances_on(
+        &self,
+        dex: &VenueId,
+        wallet: &str,
+        max_age: Option<Duration>,
+    ) -> Result<WalletView, String> {
+        let key = (dex.clone(), wallet.to_string());
         if let Some(w) = lk(&self.inner.bal_cache.wallets)
-            .get(wallet)
+            .get(&key)
             .filter(|w| fresh(w.got, max_age))
         {
             return Ok(w.clone());
@@ -136,7 +152,7 @@ impl Core {
         if self.inner.deps.settings.accounts().wallet(wallet).is_none() {
             return Err(format!("кошелька {wallet} нет"));
         }
-        let dex = self.dex_id().ok_or("площадка DEX не подключена")?;
+        let dex = dex.clone();
         let acc = DexAccountId(wallet.to_string());
         let gw = self
             .inner
@@ -173,16 +189,8 @@ impl Core {
             quote,
             error,
         };
-        lk(&self.inner.bal_cache.wallets).insert(wallet.to_string(), w.clone());
+        lk(&self.inner.bal_cache.wallets).insert(key, w.clone());
         Ok(w)
-    }
-
-    /// Площадка DEX реестра ядра (кошельки — у неё). None — DEX не подключена. Ошибок нет.
-    pub fn dex_id(&self) -> Option<VenueId> {
-        rd(&self.inner.kinds)
-            .iter()
-            .find(|(_, k)| *k == VenueKind::Dex)
-            .map(|(v, _)| v.clone())
     }
 
     /// Биржи реестра ядра по id. Ошибок нет.

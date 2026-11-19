@@ -35,6 +35,9 @@
   сервера; ключ бота не использовать в других программах: nonce общий, запросы не по порядку — «EAPI:Invalid nonce» и
   временный бан. Токен WebSocket (GetWebSocketsToken) — секрет сессии: в журнал и сырой журнал не пишется.
 - Binance (решение 160): API-ключ `binance.api_key` и секрет `binance.api_secret`, тип ключа — HMAC (passphrase нет).
+  Решение 425: отдельный секрет `binance.sbe_api_key` — API Key ключа типа Ed25519, только для потоков SBE
+  (stream-sbe.binance.com, заголовок X-MBX-APIKEY; «Only Ed25519 keys are allowed», подписи нет, прав не нужно).
+  Приватный ключ Ed25519 боту не нужен и не вводится; ключ в журнал и сырой журнал не пишется.
   Права (GET /sapi/v1/account/apiRestrictions, «Проверить подключение» читает права ТЕКУЩЕГО ключа): Enable Reading,
   Enable Spot & Margin Trading (у Binance спот и маржа — один флаг), Enable Withdrawals (Binance включает вывод только
   при ограничении ключа по IP — привязать к IP сервера), Permits Universal Transfer — только если депозит зачисляется на

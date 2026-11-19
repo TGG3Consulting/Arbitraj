@@ -6,7 +6,7 @@
 //! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
 //! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, book.rs, ctx.rs, gateway/feed_reg.rs, tokio-tungstenite.
+//! От чего зависит: depth.rs, book.rs, ctx.rs, ws_sess.rs, gateway/feed_reg.rs, tokio-tungstenite.
 //! Настройки: приходят из ws.rs (Cfg).
 //!
 //! Тишина считается от последнего кадра (как решение 98 у bsc_dex): любой кадр, включая PONG, — соединение живо.
@@ -24,8 +24,14 @@
 //! https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/live-subscriptionunsubscription-to-data-streams; тот же
 //! вид отписки — feed.rs), соседи не трогаются; «переподключить соединение» — сессия заканчивается, ws.rs подключается
 //! заново с теми же парами.
+//! Решение 420 (быстрый стакан, задана venue.fast_book_interval): на каждую пару — ещё канал изменений
+//! spot@public.aggre.depth.v3.api.pb@<интервал>@<SYMBOL> в этом же соединении (2 подписки на пару, предел 30 — пар не
+//! больше 15, market.rs); состояние сессии и разбор кадров — ws_sess.rs; какой стакан ядру и страховка снимками —
+//! fast_pair.rs; отдача ядру — ws_out.rs. Настройки очереди снимков не заданы или вне пределов, пар больше 15 —
+//! быстрый стакан в этой сессии выключен (журнал), только снимки. Переподписка сторожем — оба канала пары, быстрый
+//! стакан пары заново со снимка.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 
 use futures_util::{SinkExt, StreamExt};
@@ -35,17 +41,14 @@ use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::core::types::Asset;
-use crate::gateway::core_out_book::{BookOut, Fed};
 use crate::gateway::events::MarketEvent;
 use crate::gateway::tap::{TapData, TapStream, now_ns};
-use crate::storage::journal::Level;
-
-use crate::core::types::PriceLevel;
 
 use super::book::{Alive, Books};
 use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
-use super::ws::{Cfg, End, invalidate};
+use super::ws::{Cfg, End};
+use super::ws_sess::Sess;
 use crate::gateway::feed_health::Cmd;
 use crate::gateway::feed_reg::ConnHandle;
 
@@ -58,6 +61,12 @@ pub struct Watch<'a> {
 /// Канал частичного стакана: «spot@public.limit.depth.v3.api.pb@<symbol>@<level>» (официальная документация).
 pub fn channel(symbol: &str, levels: u64) -> String {
     format!("spot@public.limit.depth.v3.api.pb@{symbol}@{levels}")
+}
+
+/// Решение 420: канал изменений «spot@public.aggre.depth.v3.api.pb@(100ms|10ms)@<symbol>» (Diff.Depth Stream,
+/// https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/diffdepth-stream). Принимает: интервал, символ.
+pub fn fast_channel(interval: &str, symbol: &str) -> String {
+    format!("spot@public.aggre.depth.v3.api.pb@{interval}@{symbol}")
 }
 
 /// Сессия: работает до обрыва. Возвращает причину окончания.
@@ -86,21 +95,12 @@ pub async fn session(
     // t79: пары соединения подписаны в этой сессии — стакан из ответа REST сторожа (book_rest.rs) только с её
     // живостью.
     books.bind(assets, &alive);
-    let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
-    let by_channel: HashMap<String, String> = assets
-        .iter()
-        .map(|(a, s)| (channel(s, cfg.levels), a.ticker.clone()))
-        .collect();
-    let mut pending: VecDeque<String> =
-        assets.iter().map(|(_, s)| channel(s, cfg.levels)).collect();
+    let (mut sess, mut snap_rx) =
+        Sess::new(ctx, name, assets, books, out, w.feed, &cfg, alive.clone()).await;
+    let mut pending: VecDeque<String> = assets.iter().flat_map(|(_, s)| sess.channels(s)).collect();
     let mut sub_tick = tokio::time::interval(cfg.sub_gap);
     let mut ping = tokio::time::interval(cfg.ping);
     let mut last_rx = Instant::now();
-    let mut dropped = 0u64;
-    // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
-    let kept = BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal);
-    // Последний отданный ядру снимок по символу (решение 109).
-    let mut last: HashMap<String, (Vec<PriceLevel>, Vec<PriceLevel>)> = HashMap::new();
     loop {
         tokio::select! {
             _ = sub_tick.tick(), if !pending.is_empty() => {
@@ -114,18 +114,27 @@ pub async fn session(
                 Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
                 Cmd::Resub(ticker) => {
                     let Some((_, sym)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
-                    let ch = channel(sym, cfg.levels);
-                    for method in ["UNSUBSCRIPTION", "SUBSCRIPTION"] {
-                        let m = json!({ "method": method, "params": [ch] });
-                        if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
-                            return End::Broken(format!("отправка {method} (сторож пар): {e}"));
+                    for ch in sess.channels(sym) {
+                        for method in ["UNSUBSCRIPTION", "SUBSCRIPTION"] {
+                            let m = json!({ "method": method, "params": [ch] });
+                            if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
+                                return End::Broken(format!("отправка {method} (сторож пар): {e}"));
+                            }
                         }
                     }
-                    // Первый снимок после переподписки — ядру, даже если такой же (решение 109).
-                    last.remove(sym);
+                    // Первый снимок после переподписки — ядру, даже если такой же (решение 109); быстрый стакан —
+                    // заново (решение 420).
+                    if !sess.resubscribed(&ticker) {
+                        return End::Done;
+                    }
                     w.feed.resubscribed(&ticker);
                 }
             },
+            Some(note) = snap_rx.recv() => {
+                if !sess.on_note(note) {
+                    return End::Done;
+                }
+            }
             _ = ping.tick() => {
                 let p = json!({ "method": "PING" });
                 if let Err(e) = sink.send(Message::Text(p.to_string().into())).await {
@@ -152,7 +161,7 @@ pub async fn session(
                         }
                         let m = depth::parse_binary(&b);
                         if let Msg::Depth { symbol, .. } | Msg::Bad { symbol: Some(symbol), .. } = &m
-                            && let Some(a) = by_symbol.get(symbol.as_str())
+                            && let Some(a) = sess.asset(symbol)
                         {
                             ctx.taps.push(ID, &a.ticker, TapStream::Book, name, rx_ns, || TapData::Binary(b.to_vec()));
                         }
@@ -171,60 +180,14 @@ pub async fn session(
                     Message::Close(c) => return End::Broken(format!("сервер закрыл соединение: {c:?}")),
                     _ => continue,
                 };
-                match msg {
-                    Msg::Depth { symbol, bids, asks, exchange_time } => {
-                        let Some(asset) = by_symbol.get(symbol.as_str()) else { continue };
-                        w.feed.frame(&asset.ticker);
-                        // Решение 109: тот же снимок — ядру не отдаём (стакан в памяти уже такой); время кадра пары
-                        // обновляется (решение 118, А-🟠8).
-                        // t79: стакан пары из ответа REST (book_rest.rs) кадр с прошлым снимком не продлевает — кадр
-                        // кладётся заново (touch = false).
-                        if last.get(&symbol).is_some_and(|(b, a)| *b == bids && *a == asks)
-                            && books.touch(&asset.ticker)
-                        {
-                            continue;
-                        }
-                        last.insert(symbol.clone(), (bids.clone(), asks.clone()));
-                        let book = depth::to_book((*asset).clone(), bids, asks, exchange_time);
-                        books.put(book.clone(), alive.clone());
-                        match kept.book(out, book) {
-                            Fed::Sent | Fed::Kept => {}
-                            Fed::Closed => return End::Done,
-                            Fed::Lost => dropped += 1,
-                        }
-                    }
-                    Msg::Bad { symbol, reason } => {
-                        if let Some(a) = symbol.as_deref().and_then(|s| by_symbol.get(s)) {
-                            invalidate(ctx, books, out, &a.ticker);
-                            // Стакан снят — следующий снимок обязательно отдать ядру, даже если он такой же.
-                            last.clear();
-                        }
-                        log(ctx, Level::Error, format!("WebSocket {name}: кадр не разобран: {reason}")).await;
-                    }
-                    // Ответ на подписку с кодом не 0 — отказ (формата ошибки в документации нет: пишем как есть).
-                    Msg::Ack { code, msg } if code != 0 => {
-                        for (ch, ticker) in &by_channel {
-                            if msg.contains(ch.as_str()) {
-                                invalidate(ctx, books, out, ticker);
-                                last.clear();
-                            }
-                        }
-                        log(ctx, Level::Error, format!("WebSocket {name}: отказ, код {code}: {msg}")).await;
-                    }
-                    _ => {}
+                if !sess.on_msg(msg).await {
+                    return End::Done;
                 }
+                let dropped = sess.give.dropped;
                 if dropped > 0 && pending.is_empty() && dropped.is_power_of_two() {
                     tracing::warn!(conn = name, dropped, "ядро не успевает принимать стаканы MEXC");
                 }
             }
         }
     }
-}
-
-/// Запись в журнал.
-async fn log(ctx: &Ctx, level: Level, msg: String) {
-    let _ = ctx
-        .journal
-        .write(level, "venue.ws", Some(ID), msg, None)
-        .await;
 }

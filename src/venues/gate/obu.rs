@@ -15,8 +15,8 @@
 //!   this update»; u — «Ending order book update ID of this update»; b / a — [цена, количество] строками, количество
 //!   «0» — убрать уровень. В примере полного снимка поля U нет (только u);
 //! - «For the same spot trading pair and the same depth stream, a single connection is allowed to subscribe only once».
-//! В примере уведомления поля event нет — уведомлением считается кадр spot.obu с result и без event subscribe /
-//! unsubscribe.
+//!   В примере уведомления поля event нет — уведомлением считается кадр spot.obu с result и без event subscribe /
+//!   unsubscribe.
 
 use std::str::FromStr;
 

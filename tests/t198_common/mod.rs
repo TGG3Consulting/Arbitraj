@@ -134,8 +134,6 @@ pub fn credited(id: &str, to: &str, record: Decimal) -> Deal {
         basis: None,
         at: chrono::Utc::now(),
         rest: None,
-        tx: None,
-        deposits: None,
         reread: None,
     }));
     x

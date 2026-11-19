@@ -71,7 +71,7 @@ pub async fn withdraw_a(deps: &Deps, cx: &DirCtx, amount: Decimal) -> Result<Vec
     let a = super::dex_account::venue_dir(deps, d, &d.buy_on).await?;
     // Решение 211: площадке — монета с её тикером; затраты — обратно в имя ядра.
     let on = crate::core::types::Asset {
-        chain: None,
+        chain: d.asset.chain.clone(),
         ticker: cx.a.ticker.clone(),
         contract: d.asset.contract,
     };

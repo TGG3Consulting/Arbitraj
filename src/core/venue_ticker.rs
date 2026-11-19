@@ -29,7 +29,7 @@ impl TickerIndex {
     /// Монета для вызова площадки: тот же адрес, тикер площадки. Ошибок нет.
     pub fn on_venue(&self, asset: &Asset, venue: &VenueId) -> Asset {
         Asset {
-            chain: None,
+            chain: asset.chain.clone(),
             ticker: self.ticker_on(asset, venue),
             contract: asset.contract,
         }
@@ -78,8 +78,9 @@ pub fn asset_back(core: &Core, venue: &VenueId, asset: Asset) -> Asset {
         && is_quote(core, venue, &asset.ticker)
         && let Ok(a) = rd(&core.inner.usdt).clone()
     {
+        // Решение 416 (ревью С-2): сеть — исходной монеты (не теряется).
         return Asset {
-            chain: None,
+            chain: asset.chain,
             ticker: asset.ticker,
             contract: Some(a),
         };
@@ -156,7 +157,7 @@ impl super::dirctx::DirCtx {
     /// Решение 211: монета для вызова площадки A — её тикер (Presence::ticker), адрес монеты ядра. Ошибок нет.
     pub fn on_a(&self) -> Asset {
         Asset {
-            chain: None,
+            chain: self.dir.asset.chain.clone(),
             ticker: self.a.ticker.clone(),
             contract: self.dir.asset.contract,
         }
@@ -165,7 +166,7 @@ impl super::dirctx::DirCtx {
     /// Решение 211: монета для вызова площадки B (как on_a). Ошибок нет.
     pub fn on_b(&self) -> Asset {
         Asset {
-            chain: None,
+            chain: self.dir.asset.chain.clone(),
             ticker: self.b.ticker.clone(),
             contract: self.dir.asset.contract,
         }

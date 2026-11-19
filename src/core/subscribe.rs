@@ -37,7 +37,7 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
                     .iter()
                     .find(|p| &p.venue == venue && p.info.is_some())
                     .map(|p| Asset {
-                        chain: None,
+                        chain: c.asset.chain.clone(),
                         ticker: p.ticker.clone(),
                         contract: c.asset.contract,
                     })

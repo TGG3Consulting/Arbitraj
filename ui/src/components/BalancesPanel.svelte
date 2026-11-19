@@ -14,6 +14,7 @@
   От чего зависит: lib/api.js (GET /api/balances, /api/balances/{id}, /api/wallets, /api/wallets/{id}/balances,
     POST /api/manual/command),
     lib/prefs.js, lib/fmt.js.
+  Решение 432: две сети и больше — кошелёк DEX строкой на каждую сеть (GET /api/wallets/{id}/balances?venue=).
   Настройки: ui.balances_refresh_ms (не задана — только кнопки ⟳, причина видна в панели).
 -->
 <script>
@@ -63,7 +64,8 @@
           r.error = d.error ?? '';
         }
       } else {
-        const d = await get(`/api/wallets/${seg(r.id)}/balances`);
+        // Решение 432: при двух сетях — строка кошелька на площадке DEX каждой сети (?venue=).
+        const d = await get(`/api/wallets/${seg(r.id)}/balances${r.venue ? `?venue=${encodeURIComponent(r.venue)}` : ''}`);
         r.data = d;
         r.error = d.error ?? '';
       }
@@ -106,8 +108,10 @@
       const keep = (key, init) => old.get(key) ?? init;
       rows = [
         ...uniq(b.venues).map((id) => keep(`cex:${id}`, { key: `cex:${id}`, kind: 'cex', id, title: id, data: null, error: '', at: null, busy: false, again: false, sold: null, selling: '' })),
-        ...(w.wallets ?? []).map((x) =>
-          keep(`dex:${x.id}`, { key: `dex:${x.id}`, kind: 'dex', id: x.id, title: `Кошелёк DEX «${x.name}»`, data: null, error: '', at: null, busy: false, again: false }),
+        ...(w.wallets ?? []).flatMap((x) =>
+          x.chains?.length
+            ? x.chains.map((c) => keep(`dex:${x.id}@${c.venue}`, { key: `dex:${x.id}@${c.venue}`, kind: 'dex', id: x.id, venue: c.venue, title: `Кошелёк DEX «${x.name}», сеть ${c.chain ?? c.venue}`, data: null, error: '', at: null, busy: false, again: false }))
+            : [keep(`dex:${x.id}`, { key: `dex:${x.id}`, kind: 'dex', id: x.id, title: `Кошелёк DEX «${x.name}»`, data: null, error: '', at: null, busy: false, again: false })],
         ),
       ];
     } catch (e) {

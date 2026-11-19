@@ -238,6 +238,11 @@ pub async fn session(
                     Applied::Gap(why) => {
                         let m = format!("{name}: {why}; поток ждёт снимок (≤ 60 с)");
                         lane.lose(ctx, books, out, &p.asset.ticker, &m).await;
+                        if !lane.pick.reserve() {
+                            // Ревью 427: без запасного потока журнал как до решения 427 — каждый разрыв.
+                            let m = format!("WebSocket {name}: {} — {why}; стакан недостоверен до снимка (≤ 60 с)", f.symbol);
+                            ctx.log(Level::Warn, "venue.ws", m).await;
+                        }
                         continue;
                     }
                 }
@@ -250,11 +255,14 @@ pub async fn session(
                     exchange_time: f.ts_ns.map(|ns| Utc.timestamp_nanos(ns)),
                     received_at: Utc::now(),
                 };
-                let Some(book) = lane.take(ctx, books, &p.asset.ticker, book, f.ts_ns, &alive).await else {
-                    continue;
-                };
-                books.put(book.clone(), alive.clone());
-                match kept.book(out, book) {
+                // Ревью 427: память и ядро — под замком пары (порядок двух соединений пары).
+                let (fed, ev) = lane.take(&p.asset.ticker, book, f.ts_ns, &alive, |b| {
+                    books.put(b.clone(), alive.clone());
+                    kept.book(out, b)
+                });
+                lane.events(ctx, books, &ev, &p.asset.ticker, "кадр стакана").await;
+                let Some(fed) = fed else { continue };
+                match fed {
                     Fed::Sent | Fed::Kept => {}
                     Fed::Closed => return End::Done,
                     Fed::Lost => dropped += 1,

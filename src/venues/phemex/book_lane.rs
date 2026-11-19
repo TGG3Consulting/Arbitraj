@@ -3,6 +3,8 @@
 //! выбору: отдать стакан ядру, при потере потока — стакан запасного потока или «недостоверно»; счёт событий и запись
 //! журнала `venue.book_reserve` на 1-е, 2-е, 4-е, 8-е… событие каждого вида (как решение 334 без интервала: шквал даёт
 //! несколько строк, а не тысячи; в тексте — всего с запуска, чтобы видеть частоту). Читает настройку venue.book_reserve.
+//! Ревью 427: без запасного потока события выбора не считаются и не пишутся (журнал как до 427: разрыв — venue.ws,
+//! ws_conn.rs); запись в память и отдача ядру — под замком пары (book_pick.rs frame_with / lost_with).
 //! Кто вызывает: market.rs (reserve_kind, Lane), ws.rs (обрыв соединения), ws_conn.rs (кадры, разрывы).
 //! От чего зависит: book_pick.rs, book.rs, ws.rs (invalidate), ctx.rs, gateway/core_out_book.rs (решение 324).
 //! Настройки: venue.book_reserve [phemex] (необязательная).
@@ -129,23 +131,28 @@ pub async fn snap_differs(ctx: &Ctx, books: &Books, ticker: &str, conn: &str) {
 }
 
 impl Lane {
-    /// Кадр изменил синхронизированный стакан потока. Принимает: окружение, стаканы, тикер, стакан, timestamp кадра
-    /// (нс), живость соединения. Возвращает: стакан для ядра (None — не отдавать). Ошибок нет.
-    pub async fn take(
+    /// Кадр изменил синхронизированный стакан потока. Принимает: тикер, стакан, timestamp кадра (нс), живость
+    /// соединения, deliver — запись в память и отдача ядру (вызывается под замком пары, только если стакан отдаётся).
+    /// Возвращает: итог deliver (None — не отдан) и события для events. Ошибок нет.
+    pub fn take<R>(
         &self,
-        ctx: &Ctx,
-        books: &Books,
         ticker: &str,
         book: OrderBook,
         ns: Option<i64>,
         alive: &Alive,
-    ) -> Option<OrderBook> {
+        deliver: impl FnOnce(OrderBook) -> R,
+    ) -> (Option<R>, Vec<Event>) {
         let now = Utc::now().timestamp_millis();
-        let (give, ev) = self.pick.frame(self.role, ticker, book, ns, alive, now);
-        if !ev.is_empty() {
-            note(ctx, books, &ev, ticker, "кадр стакана").await;
+        self.pick
+            .frame_with(self.role, ticker, book, ns, alive, now, deliver)
+    }
+
+    /// События выбора — в счёт и журнал (только при запасном потоке). Принимает: окружение, стаканы, события, тикер,
+    /// причину. Ошибок нет.
+    pub async fn events(&self, ctx: &Ctx, books: &Books, ev: &[Event], ticker: &str, why: &str) {
+        if self.pick.reserve() && !ev.is_empty() {
+            note(ctx, books, ev, ticker, why).await;
         }
-        give
     }
 
     /// Поток пары потерян: стакан другого потока ядру, стакан в памяти остаётся или «недостоверно» (book_pick.rs).
@@ -158,8 +165,7 @@ impl Lane {
         ticker: &str,
         why: &str,
     ) {
-        let (act, ev) = self.pick.lost(self.role, ticker);
-        match act {
+        let ((), ev) = self.pick.lost_with(self.role, ticker, |act| match act {
             Out::Give(t) => {
                 books.put_at(t.book.clone(), t.alive, t.seen_ms);
                 // Решение 324: стакан ядру тем же путём, что кадр соединения.
@@ -169,7 +175,7 @@ impl Lane {
             Out::Keep(alive) => books.rebind(ticker, alive),
             Out::Invalidate => invalidate(ctx, books, out, ticker),
             Out::Nothing => {}
-        }
-        note(ctx, books, &ev, ticker, why).await;
+        });
+        self.events(ctx, books, &ev, ticker, why).await;
     }
 }

@@ -147,3 +147,46 @@ fn without_reserve_gap_invalidates() {
     assert!(g.is_some());
     assert_eq!(ev, vec![Event::MainResync]);
 }
+
+/// Ревью 427: контрольный снимок с тем же sequence (и тем же timestamp), исправивший стакан в памяти (Differs), доходит
+/// до ядра; deliver (память и канал ядра) вызывается только для отданного стакана.
+#[test]
+fn same_timestamp_snapshot_reaches_core() {
+    let alive = Arc::new(AtomicI64::new(0));
+    let pick = Pick::new(&["BTC".to_string()], true);
+    let mut main = local_book::LocalBook::default();
+    main.apply(&frame(SNAP), false);
+    main.apply(&frame(INC), false);
+    let (g, _) = pick.frame(Role::Main, "BTC", book(&main), Some(T_INC), &alive, 1);
+    assert!(g.is_some());
+    let stale = SNAP
+        .replace("677996311", "677996941")
+        .replace("1590570810187571000", "1590570811244189000");
+    assert_eq!(
+        main.apply(&frame(&stale), false),
+        local_book::Applied::Differs
+    );
+    let (n, _) = pick.frame_with(
+        Role::Main,
+        "BTC",
+        book(&main),
+        Some(T_INC),
+        &alive,
+        2,
+        |b| b.bids.len(),
+    );
+    assert_eq!(n, Some(2), "исправленный снимок с тем же timestamp отдан");
+    let mut called = false;
+    let (n, _) = pick.frame_with(
+        Role::Main,
+        "BTC",
+        book(&main),
+        Some(T_SNAP),
+        &alive,
+        3,
+        |_| {
+            called = true;
+        },
+    );
+    assert!(n.is_none() && !called, "кадр старее отданного не отдаётся");
+}

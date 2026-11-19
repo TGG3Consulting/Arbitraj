@@ -8,9 +8,12 @@
 //! стакан недостоверен (как до решения 427).
 //! Никогда не отдаётся стакан старее уже отданного: порядок — по `timestamp` кадра (наносекунды, часы биржи; одна шкала
 //! у обоих потоков — поле одного и того же сообщения OrderBook). Номера sequence двух соединений не сравниваются: что
-//! они общие, документация не говорит.
+//! они общие, документация не говорит. Кадр с тем же timestamp отдаётся (та же версия; ревью 427: контрольный снимок с
+//! тем же sequence, исправивший стакан, иначе не дошёл бы до ядра).
+//! Ревью 427: запись в память и отдача ядру — внутри замка пары (frame_with / lost_with), иначе два соединения пары
+//! могли отдать стаканы ядру не по порядку timestamp.
 //! Без запасного потока (venue.book_reserve не задана) — поведение до решения 427: каждый кадр основного потока отдаётся,
-//! разрыв — стакан недостоверен; только счёт событий.
+//! разрыв — стакан недостоверен.
 //! Кто вызывает: book_lane.rs (по кадру и по потере потока), тесты.
 //! От чего зависит: core/types (OrderBook), book.rs (Alive).
 //! Настройки: нет (наличие запасного потока передаёт market.rs).
@@ -129,10 +132,40 @@ impl Pick {
         alive: &Alive,
         now_ms: i64,
     ) -> (Option<OrderBook>, Vec<Event>) {
+        self.frame_with(role, ticker, book, ns, alive, now_ms, |b| b)
+    }
+
+    /// Ревью 427: то же, что frame, но стакан для ядра передаётся в deliver ПОД замком пары (память и канал ядра).
+    /// Возвращает: итог deliver (None — не отдавать) и события. Ошибок нет.
+    #[allow(clippy::too_many_arguments)]
+    pub fn frame_with<R>(
+        &self,
+        role: Role,
+        ticker: &str,
+        book: OrderBook,
+        ns: Option<i64>,
+        alive: &Alive,
+        now_ms: i64,
+        deliver: impl FnOnce(OrderBook) -> R,
+    ) -> (Option<R>, Vec<Event>) {
         let Some(cell) = self.map.get(ticker) else {
-            return ((!self.reserve).then_some(book), vec![]);
+            return ((!self.reserve).then(|| deliver(book)), vec![]);
         };
         let mut st = cell.lock().unwrap_or_else(|p| p.into_inner());
+        let (give, ev) = self.step(&mut st, role, book, ns, alive, now_ms);
+        (give.map(deliver), ev)
+    }
+
+    /// Шаг выбора по кадру (под замком пары). Принимает и возвращает — как frame. Ошибок нет.
+    fn step(
+        &self,
+        st: &mut St,
+        role: Role,
+        book: OrderBook,
+        ns: Option<i64>,
+        alive: &Alive,
+        now_ms: i64,
+    ) -> (Option<OrderBook>, Vec<Event>) {
         let r = role as usize;
         let mut ev = vec![];
         st.ok[r] = true;
@@ -165,7 +198,7 @@ impl Pick {
             Role::Reserve
         };
         st.src = Some(src);
-        if role != src || st.given_ns.is_some_and(|g| ns <= g) {
+        if role != src || st.given_ns.is_some_and(|g| ns < g) {
             return (None, ev);
         }
         st.given_ns = Some(ns);
@@ -175,10 +208,28 @@ impl Pick {
     /// Поток пары потерян. Принимает: поток, тикер. Возвращает: что сделать и события. Ошибок нет; неизвестный тикер —
     /// Invalidate.
     pub fn lost(&self, role: Role, ticker: &str) -> (Out, Vec<Event>) {
+        self.lost_with(role, ticker, |o| o)
+    }
+
+    /// Ревью 427: то же, что lost, но действие act выполняется ПОД замком пары. Возвращает: итог act и события.
+    /// Ошибок нет.
+    pub fn lost_with<R>(
+        &self,
+        role: Role,
+        ticker: &str,
+        act: impl FnOnce(Out) -> R,
+    ) -> (R, Vec<Event>) {
         let Some(cell) = self.map.get(ticker) else {
-            return (Out::Invalidate, vec![]);
+            return (act(Out::Invalidate), vec![]);
         };
         let mut st = cell.lock().unwrap_or_else(|p| p.into_inner());
+        let (o, ev) = self.lose_step(&mut st, role);
+        (act(o), ev)
+    }
+
+    /// Шаг выбора при потере потока (под замком пары). Принимает: состояние пары, поток. Возвращает — как lost.
+    /// Ошибок нет.
+    fn lose_step(&self, st: &mut St, role: Role) -> (Out, Vec<Event>) {
         let r = role as usize;
         st.ok[r] = false;
         st.lost[r] = true;

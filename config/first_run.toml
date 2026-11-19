@@ -1328,6 +1328,15 @@ rationale = "Не дождались — итог неизвестен, ручн
 prefill = { kind = "Venue", id = "okx" }
 
 [[section.rec]]
+name = "venue.book_backup_log_s"
+area = "площадка OKX"
+unit = "секунды"
+value = "60"
+source = "Решение 429; совет, не документация (как log.pool_events_lost_interval_s = 60)"
+rationale = "Видно, как часто быстрый стакан books теряет синхронизацию и ядро считает по снимкам books5; журнал не засоряется (не чаще раза в минуту)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
 name = "venue.order_test_first"
 area = "площадка OKX"
 unit = "да/нет"

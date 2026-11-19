@@ -111,3 +111,10 @@ venue.arbitrum_network) — справочник прежний; presence пол
 1. Этот план. 2. Шлюз own_nets + настройки (каталог, SETTINGS, SETTINGS_CASES, FIRST_RUN). 3. Биржи (14 разборов,
 fund_move, xt). 4. Ядро (net_chain, presence, USDT, precheck, transfers, subscribe, coins_view, tick, rebuild).
 5. Тесты на записанных данных + DECISIONS 431, TASKS, ROADMAP, ARCHITECTURE, README.
+
+## 6. Сделано (19.11.2026)
+- 69404298 — план. 076e7cb5 — шлюз own_nets, настройки venue.arbitrum_network, venue.arbitrum_contract_chain.
+- 5a8ac7cd — 14 бирж: адрес у каждой своей сети; CoinEx own_chains.rs; KuCoin/OKX fund_move, XT deposits — сеть по Asset.chain.
+- 81786390 — ядро: net_chain.rs, presence/USDT/precheck/перевод/подписки/tick по (сеть, адрес); subscribe_assets.rs.
+- Тест и документы — следующий коммит (DECISIONS 431, TASKS блок 431, ROADMAP, ARCHITECTURE, tests/README).
+- Не сделано и вопросы — docs/TASKS.md, блок 431.

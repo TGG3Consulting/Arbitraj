@@ -12,8 +12,9 @@
 //! sendTime обоих — «Event time», но кадр изменений собирается за интервал, и одно и то же состояние книги по времени не
 //! сопоставить (решение 420, открытый вопрос — docs/TASKS.md). Поэтому: верхние уровни кадра снимков равны быстрому
 //! стакану — быстрый подтверждён (время кадра пары продлевается, book.rs touch); не равны — ничего, пока быстрый поток
-//! жив; не равны и кадров изменений пары (и подтверждений) нет дольше venue.book_stale_ms — быстрый стакан признаётся
-//! отставшим: на снимки и снимок REST заново.
+//! жив; быстрый стакан признаётся отставшим (на снимки и снимок REST заново), если (ревью 420) два кадра снимков подряд
+//! новее его по sendTime и не равны ему, а кадров изменений пары между ними не было, или если не равны и кадров
+//! изменений пары (и подтверждений) нет дольше venue.book_stale_ms.
 //! Снимки REST, их итоги и переключение на снимки — fast_resync.rs.
 //! Кто вызывает: ws_sess.rs.
 //! От чего зависит: fast_book.rs, fast_resync.rs, fast_stats.rs, ws_out.rs, ctx.rs.
@@ -50,6 +51,8 @@ pub(super) struct Pair {
     pub(super) retry_at: Option<Instant>,
     /// Последнее подтверждение быстрого стакана: кадр изменений или равный кадр снимков.
     pub(super) active: Option<Instant>,
+    /// Ревью 420: прошлый кадр снимков не совпал с быстрым стаканом и был новее его (sendTime), кадров изменений с тех пор нет.
+    pub(super) miss: bool,
     /// Последний кадр потока снимков: уровни, время биржи, время получения (unix мс, часы бота).
     pub(super) snap: Option<Snapped>,
 }
@@ -102,22 +105,35 @@ impl Fast {
             Utc::now().timestamp_millis(),
         ));
         if !p.fast {
+            p.miss = false;
             return Some(out.give(asset, symbol, bids, asks, time));
         }
         let (fb, fa) = p.book.top(levels);
         if fb == bids && fa == asks {
             p.active = Some(Instant::now());
+            p.miss = false;
             return Some(out.give(asset, symbol, fb, fa, to_time(p.book.time_ms())));
         }
+        // Ревью 420: кадр снимков новее быстрого стакана (sendTime) и не совпал — второй такой подряд без кадров
+        // изменений между ними: быстрый отстал (канал изменений — «(100ms|10ms)», Diff.Depth Stream; кадр снимков — раз
+        // в ~500 мс, замер решения 420; живой проверки правила нет — TASKS).
+        let newer = matches!((time, to_time(p.book.time_ms())), (Some(ts), Some(tf)) if ts > tf);
+        let lag = newer && p.miss;
+        p.miss = newer;
         let quiet = p.active.map(|a| a.elapsed()).unwrap_or(Duration::MAX);
-        let limit = ctx.int("venue.book_stale_ms").ok()?;
-        if quiet <= Duration::from_millis(limit) {
+        let limit = ctx.int("venue.book_stale_ms").ok();
+        let why = if lag {
+            "два кадра снимков подряд новее быстрого стакана (sendTime) и не равны ему, кадров изменений между ними нет"
+                .to_string()
+        } else if let Some(l) = limit.filter(|l| quiet > Duration::from_millis(*l)) {
+            format!(
+                "кадров изменений и подтверждений нет {} мс (venue.book_stale_ms = {l}), а поток снимков показывает другую книгу",
+                quiet.as_millis()
+            )
+        } else {
             return None;
-        }
-        let why = format!(
-            "кадров изменений и подтверждений нет {} мс (venue.book_stale_ms = {limit}), а поток снимков показывает другую книгу",
-            quiet.as_millis()
-        );
+        };
+        p.miss = false;
         p.book.reset(why.clone());
         self.fallback(ctx, out, asset, symbol, &why)
     }
@@ -136,6 +152,7 @@ impl Fast {
         if p.off {
             return None;
         }
+        p.miss = false;
         let applied = match frame {
             Ok(u) => p.book.apply(u),
             Err(why) => p.book.reset(format!("кадр изменений не разобран: {why}")),

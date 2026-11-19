@@ -87,6 +87,11 @@ async fn fetch(ctx: &Ctx, symbol: &str, out: &mpsc::Sender<Note>) -> Result<Snap
         if let Some(at) = *next {
             tokio::time::sleep_until(at).await;
         }
+        // Ревью 420: сессия соединения закончилась, пока запрос ждал очереди, — снимок никому не нужен: не тратить
+        // вес IP и не задерживать снимки новой сессии (место в очереди не занимается).
+        if out.is_closed() {
+            return Err("сессия соединения закрыта — снимок не запрашивался".into());
+        }
         *next = Some(Instant::now() + gap);
     }
     let _ = out.send(Note::Sent(symbol.to_string())).await;

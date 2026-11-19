@@ -9,6 +9,7 @@
 //! решение 125), gate.rs, okx.rs, kraken.rs и др. (настройки только одной биржи).
 //! решение 125), gate.rs, okx.rs, coinex.rs (настройки только Gate, только OKX, только CoinEx).
 //! решение 125), gate.rs, okx.rs, htx.rs и др. (настройки одной биржи).
+//! kucoin.rs — только KuCoin (решение 423).
 //! cpu.rs — счёт процессора (решения 336–338, задача t157). bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
 //! lost_events.rs — сообщения ядру и кандидаты не теряются молча (решения 333/334).
 //! write_path.rs — очередь уведомлений, очередь и пачки журнала, synchronous учёта ядра (решения 340, 341, 353).
@@ -38,6 +39,7 @@ mod gate;
 mod htx;
 mod index;
 mod kraken;
+mod kucoin;
 mod kyber;
 mod lost_events;
 mod sieve;
@@ -141,6 +143,7 @@ static PARTS: &[&[SettingDef]] = &[
     okx::OKX,
     binance::BINANCE,
     xt::XT,
+    kucoin::KUCOIN,
     phemex::PHEMEX,
     kraken::KRAKEN,
     coinex::COINEX,

@@ -26,6 +26,8 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 423 (t207): src/venues/kucoin/ws_conn.rs 251 строка (было 246 до t207) — вынести open() и Ws в ws_open.rs (пути
+  ws_conn::open у feed.rs и user_stream_conn.rs — поправить вместе).
 - Решение 415 (t200, после ревью): сверх ориентира 200 и до t200 — core/sell.rs 394 (было 375), core/sell_range_run.rs 363 (было 350), core/relay.rs 338 (было 331), core/stuck.rs 218 (было 215); t200 добавил только ход очереди и строки шапок. tests/core_sell_turn_t200.rs 466 — разнести (LQR / ключи и след / продолжение) с общим помощником.
 - Решение 414 (ревью 648177a2): core/drawdown_pending.rs 214 строк — вынести Cur, closing и Closing в
   drawdown_closing.rs (только перенос; пути arb::core::drawdown_pending::{closing, cur} в tests/core_drawdown_414.rs и

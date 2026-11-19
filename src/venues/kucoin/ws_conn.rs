@@ -1,12 +1,14 @@
 //! Файл: venues/kucoin/ws_conn.rs
 //! Что делает: одна сессия WebSocket рынка KuCoin: подключение по токену, ожидание welcome, подписки темами по ≤ 100
-//! символов с паузой, свой ping раз в pingInterval токена, тишина дольше pingInterval + pingTimeout — обрыв; снимки
-//! стакана → память и ядру (без ожидания, try_send); отказ подписки (type error) или неразборчивый снимок → стакан
-//! пары недостоверен. Сырые кадры стакана — в журнал только при raw.book_frames = да (решение 109), в окно — всегда.
+//! символов с паузой, свой ping раз в pingInterval токена, тишина дольше pingInterval + pingTimeout — обрыв; кадры —
+//! ws_sess.rs (снимки стакана → память и ядру; отказ подписки или неразборчивый снимок → стакан пары недостоверен).
+//! Решение 423: при быстром стакане (ws.rs Cfg.fast) у каждой пачки вторая тема — изменения /market/level2 (id
+//! sub{N}f); итоги снимков REST Full OrderBook приходят в канал сессии (ws_full.rs on_full); переподписка сторожем —
+//! обе темы пачки, пары пачки на снимках до новой синхронизации (ws_fast.rs resubscribed).
 //! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
 //! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
 //! Кто вызывает: ws.rs; open() — feed.rs, user_stream_conn.rs.
-//! От чего зависит: depth.rs, book.rs, bullet.rs, ctx.rs, gateway/feed_reg.rs, tokio-tungstenite.
+//! От чего зависит: depth.rs, book.rs, bullet.rs, ctx.rs, ws_sess.rs, ws_fast.rs, gateway/feed_reg.rs, tokio-tungstenite.
 //! Настройки: приходят из ws.rs (Cfg); raw.book_frames [kucoin].
 //!
 //! Официально (Classic WebSocket introduction): «The connection is usable only after the welcome message arrives»;
@@ -35,17 +37,18 @@ use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-use crate::core::types::{Asset, OrderBook};
-use crate::gateway::core_out_book::{BookOut, Fed};
+use crate::core::types::Asset;
+use crate::gateway::core_out_book::BookOut;
 use crate::gateway::events::MarketEvent;
-use crate::gateway::tap::{TapData, TapStream, now_ns};
-use crate::storage::journal::Level;
+use crate::gateway::tap::now_ns;
 
 use super::book::{Alive, Books};
 use super::bullet::Token;
-use super::ctx::{Ctx, ID};
+use super::ctx::Ctx;
 use super::depth::{self, Msg};
-use super::ws::{Cfg, End, invalidate};
+use super::fast_state::Fast;
+use super::ws::{Cfg, End};
+use super::ws_sess::{FAST_ID, INCR_TOPIC, Sess};
 use crate::gateway::feed_health::Cmd;
 use crate::gateway::feed_reg::ConnHandle;
 
@@ -66,6 +69,12 @@ pub type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
 /// Тема снимка стакана для символов. Ошибок нет.
 pub fn topic(levels: u64, symbols: &[&str]) -> String {
     format!("/spotMarket/level2Depth{levels}:{}", symbols.join(","))
+}
+
+/// Решение 423: тема изменений стакана для символов — «/market/level2:{symbol},{symbol}», «A topic supports up to 100
+/// symbols» (https://www.kucoin.com/docs-new/3470068w0). Ошибок нет.
+pub fn incr_topic(symbols: &[&str]) -> String {
+    format!("{INCR_TOPIC}{}", symbols.join(","))
 }
 
 /// Что делает: подключение по токену и ожидание welcome. Принимает: токен, срок. Ошибка — текст (без токена).
@@ -120,27 +129,47 @@ pub async fn session(
     // t79: пары соединения подписаны в этой сессии — стакан из ответа REST сторожа (book_rest.rs) только с её
     // живостью.
     books.bind(assets, &alive);
-    let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
     let syms: Vec<&str> = assets.iter().map(|(_, s)| s.as_str()).collect();
-    let mut pending: Vec<(String, Vec<&str>)> = syms
+    let by_id: HashMap<String, Vec<&str>> = syms
         .chunks(SYMBOLS_PER_TOPIC)
         .enumerate()
         .map(|(i, c)| (format!("sub{i}"), c.to_vec()))
         .collect();
-    let by_id: HashMap<String, Vec<&str>> = pending.iter().cloned().collect();
+    // Подписки пачек: тема снимков (id sub{N}); решение 423 — и тема изменений (id sub{N}f).
+    let mut pending: Vec<(String, String)> = Vec::new();
+    for i in 0..by_id.len() {
+        let id = format!("sub{i}");
+        pending.extend(topics(&cfg, &id, &by_id[&id]));
+    }
     pending.reverse();
     let mut sub_tick = tokio::time::interval(cfg.sub_gap);
     let mut ping = tokio::time::interval_at(Instant::now() + token.ping, token.ping);
     let silence = token.ping + token.ping_timeout;
     let mut last_rx = Instant::now();
-    let mut dropped = 0u64;
-    // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
-    let kept = BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal);
+    // Решение 423: итоги снимков REST быстрого стакана — канал на все пары соединения.
+    let (snap_tx, mut snap_rx) = mpsc::channel(assets.len().max(1));
+    let fast_on = cfg.fast.is_some();
+    let mut s = Sess {
+        ctx,
+        name,
+        books,
+        out,
+        // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
+        kept: BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal),
+        alive: alive.clone(),
+        feed: w.feed,
+        by_symbol: assets.iter().map(|(a, s)| (s.as_str(), a)).collect(),
+        by_id: by_id.clone(),
+        levels: cfg.levels as usize,
+        given: HashMap::new(),
+        dropped: 0,
+        fast: cfg.fast.map(|pause| Fast::new(snap_tx, pause)),
+    };
     loop {
         tokio::select! {
             _ = sub_tick.tick(), if !pending.is_empty() => {
-                let Some((id, chunk)) = pending.pop() else { continue };
-                let sub = json!({"id": id, "type": "subscribe", "topic": topic(cfg.levels, &chunk), "response": true});
+                let Some((id, t)) = pending.pop() else { continue };
+                let sub = json!({"id": id, "type": "subscribe", "topic": t, "response": true});
                 if let Err(e) = sink.send(Message::Text(sub.to_string().into())).await {
                     return End::Broken(format!("отправка подписки: {e}"));
                 }
@@ -150,21 +179,30 @@ pub async fn session(
                 Cmd::Resub(ticker) => {
                     let Some((_, sym)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
                     let Some((id, chunk)) = by_id.iter().find(|(_, c)| c.contains(&sym.as_str())) else { continue };
-                    let t = topic(cfg.levels, chunk);
                     // Отказ подписки — тем же id темы (стаканы темы недостоверны), отписки — своим id.
-                    for (op, rid) in [("unsubscribe", format!("{id}-un")), ("subscribe", id.clone())] {
-                        let m = json!({"id": rid, "type": op, "topic": t, "response": true});
-                        if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
-                            return End::Broken(format!("отправка {op} (сторож пар): {e}"));
+                    for (sid, t) in topics(&cfg, id, chunk) {
+                        for (op, rid) in [("unsubscribe", format!("{sid}-un")), ("subscribe", sid.clone())] {
+                            let m = json!({"id": rid, "type": op, "topic": t, "response": true});
+                            if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
+                                return End::Broken(format!("отправка {op} (сторож пар): {e}"));
+                            }
                         }
                     }
-                    for s in chunk {
-                        if let Some(a) = by_symbol.get(s) {
+                    for sy in chunk {
+                        if let Some(a) = s.by_symbol.get(sy) {
                             w.feed.resubscribed(&a.ticker);
                         }
                     }
+                    if let Some(end) = s.resubscribed(chunk).await {
+                        return end;
+                    }
                 }
             },
+            Some(done) = snap_rx.recv(), if fast_on => {
+                if let Some(end) = s.on_full(done).await {
+                    return end;
+                }
+            }
             _ = ping.tick() => {
                 let p = json!({"id": now_ns().to_string(), "type": "ping"});
                 if let Err(e) = sink.send(Message::Text(p.to_string().into())).await {
@@ -195,52 +233,20 @@ pub async fn session(
                     Message::Close(c) => return End::Broken(format!("сервер закрыл соединение: {c:?}")),
                     _ => continue,
                 };
-                let msg = depth::parse(&text);
-                let is_book = matches!(&msg, Msg::Depth { .. } | Msg::Bad { symbol: Some(_), .. });
-                if !is_book || matches!(ctx.flag("raw.book_frames"), Ok(true)) {
-                    ctx.raw.write(ID, name, &text);
-                }
-                match msg {
-                    Msg::Depth { symbol, bids, asks, exchange_time } => {
-                        let Some(asset) = by_symbol.get(symbol.as_str()) else { continue };
-                        w.feed.frame(&asset.ticker);
-                        ctx.taps.push(ID, &asset.ticker, TapStream::Book, name, rx_ns, || TapData::Text(text.to_string()));
-                        let book = OrderBook {
-                            venue: ctx.venue(),
-                            asset: (*asset).clone(),
-                            bids,
-                            asks,
-                            exchange_time,
-                            received_at: chrono::Utc::now(),
-                        };
-                        books.put(book.clone(), alive.clone());
-                        match kept.book(out, book) {
-                            Fed::Sent | Fed::Kept => {}
-                            Fed::Closed => return End::Done,
-                            Fed::Lost => dropped += 1,
-                        }
-                    }
-                    Msg::Bad { symbol, reason } => {
-                        if let Some(a) = symbol.as_deref().and_then(|s| by_symbol.get(s)) {
-                            w.feed.frame(&a.ticker);
-                            invalidate(ctx, books, out, &a.ticker);
-                        }
-                        ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: кадр не разобран: {reason}")).await;
-                    }
-                    Msg::Error { id, text } => {
-                        for s in id.as_ref().and_then(|i| by_id.get(i)).into_iter().flatten() {
-                            if let Some(a) = by_symbol.get(s) {
-                                invalidate(ctx, books, out, &a.ticker);
-                            }
-                        }
-                        ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: ошибка KuCoin: {text}")).await;
-                    }
-                    _ => {}
-                }
-                if dropped > 0 && dropped.is_power_of_two() {
-                    tracing::warn!(conn = name, dropped, "ядро не успевает принимать стаканы KuCoin");
+                if let Some(end) = s.on_text(&text, rx_ns).await {
+                    return end;
                 }
             }
         }
     }
+}
+
+/// Темы пачки для подписки: (id, тема) снимков; при быстром стакане (решение 423) — и (id + FAST_ID, тема изменений).
+/// Ошибок нет.
+fn topics(cfg: &Cfg, id: &str, chunk: &[&str]) -> Vec<(String, String)> {
+    let mut v = vec![(id.to_string(), topic(cfg.levels, chunk))];
+    if cfg.fast.is_some() {
+        v.push((format!("{id}{FAST_ID}"), incr_topic(chunk)));
+    }
+    v
 }

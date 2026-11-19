@@ -412,6 +412,7 @@ Bybit назначить зачисление на UNIFIED (Set Deposit Account)
 | venue.depth_levels | площадка KuCoin | `50` | Глубина для котировки; 5 — меньше нагрузки | Документация: level2Depth5 / level2Depth50 |
 | venue.ws_subs_per_sec | площадка KuCoin | `10` | Потолок темпа подписок | Документация: 100 сообщений за 10 с |
 | venue.window_depth_limit | площадка KuCoin | `100` | Снимок для изменений стакана в окнах | Документация: Get Part OrderBook, size 20 или 100 |
+| venue.full_book_per_sec | площадка KuCoin | `5` | Быстрый стакан (решение 423): 5 снимков Get Full OrderBook в секунду — вес 3 × 5 × 30 = 450 из квоты пула Spot 4000 за 30 с (VIP0), ~11 %: запас ордерам; старт 400 пар — 80 с (до синхронизации — снимки). Нужны ключи и venue.api_key_version; решает Тигран | Документация: Get Full OrderBook (пул Spot, вес 3), Rate limit (VIP0 Spot 4000/30s) |
 | venue.withdraw_from_trade | площадка KuCoin | `да` | Вывод только с main: перед ним trade → main (право FlexTransfers) | Код 115007; решение Тиграна 04.11 |
 | venue.deposit_to_spot | площадка KuCoin | *метод:* не задавать — адрес депозита зачисляет на TRADE | Перевод main → trade не нужен | Get Deposit Address V3 (to); решение Тиграна 04.11 |
 

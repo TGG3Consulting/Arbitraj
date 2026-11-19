@@ -1,13 +1,14 @@
 //! Файл: core/types/mod.rs
 //! Что делает: общие типы ядра — единый язык данных между ядром, шлюзом, адаптерами и интерфейсом.
 //! Кто вызывает: весь проект.
-//! От чего зависит: account.rs (id счёта DEX, решение 132), balance.rs, market.rs, pool.rs, trade.rs, fee.rs (часть комиссии ордера), cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs, dex_graph.rs (фоновый граф маршрутов DEX, решение 308), cycle_trade.rs, dry_swap.rs, executor.rs, hold.rs (удержания вывода, решение 150), presell.rs (симуляция продажи DEX до покупки, решение 234), delist.rs (делистинги, решение 175), manual_feed.rs (записи экрана «Ручное управление» с кнопками, решение 156), window.rs.
+//! От чего зависит: account.rs (id счёта DEX, решение 132), chain.rs (id сети, решение 416), balance.rs, market.rs, pool.rs, trade.rs, fee.rs (часть комиссии ордера), cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs, dex_graph.rs (фоновый граф маршрутов DEX, решение 308), cycle_trade.rs, dry_swap.rs, executor.rs, hold.rs (удержания вывода, решение 150), presell.rs (симуляция продажи DEX до покупки, решение 234), delist.rs (делистинги, решение 175), manual_feed.rs (записи экрана «Ручное управление» с кнопками, решение 156), window.rs.
 //! Настройки: нет.
 //!
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
 
 pub mod account;
 pub mod balance;
+pub mod chain;
 pub mod check;
 pub mod control;
 pub mod cost;
@@ -38,6 +39,7 @@ pub mod window;
 
 pub use account::DexAccountId;
 pub use balance::{BalanceChange, BalanceKind};
+pub use chain::ChainId;
 pub use check::{
     BlockReason, CheckState, CoinBlock, CoinCheck, ExitGap, HookImpact, HookLadder, HookStep,
     PoolCheck, TaxKind, TokenTaxes,

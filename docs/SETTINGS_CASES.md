@@ -771,6 +771,18 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** bsc.node_http_rps.
 - **Статус:** в релизе 141619bc.
 
+### `dex.chain`
+
+- **Задача / решение:** шаг 1 плана двух сетей (docs/notes/arbitrum/multichain-plan-2026-11-19.md), решение 416.
+- **Появилась:** 2026-11-19, ветка feat/arbitrum.
+- **Кейс:** Тигран 19.11.2026: один процесс, две сети (BSC и Arbitrum), кошельки те же. Монета на DEX — это (сеть, адрес): одинаковый адрес в BSC и в Arbitrum — разные монеты. Ядро не знает сетей, id сети берётся только из настройки площадки DEX. Записи учёта до решения 416 сети не содержат — читаются как сеть площадки DEX (src/core/chain.rs).
+- **Где задаётся:** «Настройки», группа «DEX» и «Площадки» → карточка площадки DEX; область — по площадке DEX (bsc_dex); каталог src/settings/catalog/dex.rs:87.
+- **Что ставить:** `bsc` у площадки bsc_dex (id сети в боте; для будущей площадки Arbitrum — `arbitrum`). Совет — docs/FIRST_RUN.md.
+- **Если не задана:** в каталоге без .optional(). По коду: подписка площадки DEX на рынок не идёт — NotConfigured «Не задана настройка dex.chain» (src/venues/bsc_dex/node/chain_id.rs check_start ← src/venues/bsc_dex/venue.rs subscribe_market), в журнале core.subscribe «Подписка не удалась … повтор при следующей пересборке или изменении настроек» (src/core/subscribe.rs:170-185): цен DEX нет — торговли через DEX нет. Пустая строка — то же. Сеть монеты без сети (src/core/chain.rs dex_chain) — ошибка «dex.chain не задана».
+- **Влияет на торговлю:** да — без неё площадка DEX не подписывается на рынок.
+- **Связанные ключи:** dex.evm_chain_id.
+- **Статус:** ещё не в релизе (ветка feat/arbitrum).
+
 ### `dex.check_due_read_only`
 
 - **Задача / решение:** t141, решение 310.
@@ -878,6 +890,18 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** нет — нагрузка: класс очереди узла (pools/refresh_urgency.rs).
 - **Связанные ключи:** bsc.node_background_share_pct.
 - **Статус:** в релизе 141619bc.
+
+### `dex.evm_chain_id`
+
+- **Задача / решение:** шаг 1 плана двух сетей, решение 416.
+- **Появилась:** 2026-11-19, ветка feat/arbitrum.
+- **Кейс:** chainId 56 был зашит в коде адаптера DEX (venues/bsc_dex/node/mod.rs BSC_CHAIN_ID: подпись EIP-155 в send/tx.rs и сверка узла в «Проверить подключение»). Для второй сети (Arbitrum One — 42161) номер цепи должен быть настройкой площадки DEX (решение Тиграна 19.11.2026, «две сети в одном боте»).
+- **Где задаётся:** «Настройки», группа «DEX» и «Площадки» → карточка площадки DEX; область — по площадке DEX (bsc_dex); каталог src/settings/catalog/dex.rs:88.
+- **Что ставить:** `56` у площадки bsc_dex (BSC mainnet: «HTTP mainnet (ChainID 56)» — https://docs.bnbchain.org/bnb-smart-chain/developers/json_rpc/json-rpc-endpoint/, research/flow/bsc_node.md, раздел 1). Совет — docs/FIRST_RUN.md.
+- **Если не задана:** в каталоге без .optional(). По коду: транзакции кошелька не подписываются — NotConfigured «Не задана настройка dex.evm_chain_id» до отправки (src/venues/bsc_dex/exec/txs.rs send_capped, src/venues/bsc_dex/exec/bundle_sim.rs sign_txs); подписки площадки DEX на рынок нет (src/venues/bsc_dex/node/chain_id.rs check_start); «Проверить подключение» — ошибка по каждому узлу (src/venues/bsc_dex/node/chain_id.rs same_chain ← connection.rs, connection_extra.rs). Узел другой сети (eth_chainId ≠ значению) — подписки нет (BadResponse «узел другой сети»).
+- **Влияет на торговлю:** да — без неё нет ни подписки на рынок DEX, ни транзакций.
+- **Связанные ключи:** dex.chain, bsc.node_http_url, bsc.node_ws_url.
+- **Статус:** ещё не в релизе (ветка feat/arbitrum).
 
 ### `dex.graph_alert_min_s`
 

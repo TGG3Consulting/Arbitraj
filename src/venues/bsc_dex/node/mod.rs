@@ -8,6 +8,7 @@ pub mod abi;
 pub mod abi_dex;
 pub mod block_ms;
 pub mod call;
+pub mod chain_id;
 pub mod events_lag;
 pub mod failover;
 pub mod head_age;
@@ -43,7 +44,4 @@ pub mod subs;
 pub mod ws;
 pub mod ws_task;
 
-/// Chain ID сети BSC mainnet — значение протокола: «HTTP mainnet (ChainID 56)» —
-/// https://docs.bnbchain.org/bnb-smart-chain/developers/json_rpc/json-rpc-endpoint/ (research/flow/bsc_node.md, раздел 1).
-/// Им подписываются транзакции (EIP-155) и сверяется узел в «Проверить подключение».
-pub const BSC_CHAIN_ID: u64 = 56;
+// Решение 416: chainId сети — настройка dex.evm_chain_id площадки DEX (chain_id.rs), а не константа 56 в коде.

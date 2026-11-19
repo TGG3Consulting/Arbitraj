@@ -2,7 +2,8 @@
 
 | Файл | Что делает |
 | --- | --- |
-| `mod.rs` | Модуль и chainId BSC mainnet (56, значение протокола со ссылкой) |
+| `mod.rs` | Модуль (chainId больше не константа — решение 416, chain_id.rs) |
+| `chain_id.rs` | Решение 416: номер цепи EVM площадки из настройки dex.evm_chain_id (подпись EIP-155), сверка eth_chainId узла (`same_chain` — «Проверить подключение»; `check_start` — перед подпиской на рынок: dex.chain и dex.evm_chain_id заданы, узел той же сети) |
 | `jsonrpc.rs` | Запрос JSON-RPC 2.0 и разбор ответа/ошибки в единые коды |
 | `rpc.rs` | HTTP: одиночный запрос, пачка (batch), общий POST JSON (для каналов отправки) |
 | `ws.rs` | Соединение WebSocket: открыть, запрос с ответом, eth_subscribe (источник событий пулов при bsc.pool_events_source=ws, решения 68, 79) |

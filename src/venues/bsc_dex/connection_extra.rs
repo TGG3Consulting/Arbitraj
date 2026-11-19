@@ -6,7 +6,7 @@
 //! Кто вызывает: connection.rs.
 //! От чего зависит: ctx.rs, node/rpc.rs (post), node/ws.rs (Conn::connect), node/jsonrpc.rs, node/multicall.rs, node/call.rs.
 //! Обёртка нативной монеты (решение 62) — код по адресу dex.native_wrapped и совпадение с WETH() роутеров V2.
-//! Настройки: bsc.node_http_url_backup, bsc.node_ws_url_backup, dex.multicall3, dex.native_wrapped; секреты bsc.node_*_key_backup.
+//! Настройки: dex.evm_chain_id (сверка сети, решение 416; node/chain_id.rs), bsc.node_http_url_backup, bsc.node_ws_url_backup, dex.multicall3, dex.native_wrapped; секреты bsc.node_*_key_backup.
 //!
 //! eth_chainId, eth_blockNumber, eth_getCode — https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth
 //! Multicall3.getBlockNumber() — https://github.com/mds1/multicall3/blob/main/src/Multicall3.sol#L170 .
@@ -18,10 +18,11 @@ use crate::settings::read::At;
 
 use super::ctx::Ctx;
 use super::errors::Op;
+use super::node::chain_id::same_chain;
 use super::node::failover::{Link, Node};
 use super::node::rpc::{self, SOURCE};
 use super::node::ws::Conn;
-use super::node::{BSC_CHAIN_ID, jsonrpc, multicall};
+use super::node::{jsonrpc, multicall};
 use super::pools::{mids, wrapped};
 
 /// Адрес резервного узла с ключом. None — резервный не задан. Ошибка — текст (ключ не введён и т.п.).
@@ -47,18 +48,18 @@ async fn call<T: serde::de::DeserializeOwned>(
     jsonrpc::decode(&raw, SOURCE).map_err(|e| e.message)
 }
 
-/// Резервный узел HTTP: сеть BSC и номер блока. Возвращает: описание или текст причины.
+/// Резервный узел HTTP: сеть (dex.evm_chain_id, решение 416) и номер блока. Возвращает: описание или текст причины.
 pub async fn backup_http(ctx: &Ctx) -> Result<String, String> {
     let Some(url) = backup_url(ctx, Link::Http)? else {
         return Ok("не задан (bsc.node_http_url_backup)".into());
     };
     let chain: U64 = call(ctx, &url, "eth_chainId").await?;
-    same(chain.to())?;
+    same_chain(ctx, chain.to())?;
     let block: U64 = call(ctx, &url, "eth_blockNumber").await?;
     Ok(format!("сеть {chain}, блок {block}"))
 }
 
-/// Резервный узел WebSocket: подключение и сеть BSC. Возвращает: описание или текст причины.
+/// Резервный узел WebSocket: подключение и сеть (dex.evm_chain_id, решение 416). Возвращает: описание или текст причины.
 pub async fn backup_ws(ctx: &Ctx) -> Result<String, String> {
     let Some(url) = backup_url(ctx, Link::Ws)? else {
         return Ok("не задан (bsc.node_ws_url_backup)".into());
@@ -70,7 +71,7 @@ pub async fn backup_ws(ctx: &Ctx) -> Result<String, String> {
         .request("eth_chainId", json!([]))
         .await
         .map_err(|e| e.message)?;
-    same(chain.to())?;
+    same_chain(ctx, chain.to())?;
     Ok(format!("сеть {chain}, подключение есть"))
 }
 
@@ -118,15 +119,4 @@ pub async fn native_wrapped(ctx: &Ctx) -> Result<String, String> {
     // Решение 270: чужой WETH() (другая обёртка, fstswap) — факт, не ошибка, если хоть один роутер вернул
     // dex.native_wrapped; ни один не вернул — ошибка, как раньше (pools/wrapped.rs::verdict).
     wrapped::verdict(addr, mids::router_weths(ctx).await)
-}
-
-/// Сверка сети с BSC mainnet. Ошибка — текст.
-fn same(chain: u64) -> Result<(), String> {
-    if chain == BSC_CHAIN_ID {
-        Ok(())
-    } else {
-        Err(format!(
-            "узел другой сети: chainId {chain}, у BSC mainnet {BSC_CHAIN_ID}"
-        ))
-    }
 }

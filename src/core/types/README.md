@@ -2,6 +2,7 @@
 
 | Файл | Типы |
 | --- | --- |
+| `chain.rs` | ChainId — id сети (решение 416): строка только из настроек (dex.chain площадки DEX), ядро сравнивает на равенство |
 | `account.rs` | DexAccountId — абстрактный id счёта (кошелька) DEX, решение 132: ядро знает только id, адреса и ключи — у адаптера |
 | `market.rs` | VenueId, Asset (тикер + адрес контракта BSC), Direction, PriceLevel, OrderBook |
 | `pool.rs` | PoolKind (V2/V3/Cl/Bin/Pmm/Solidly/StableSwap/TickBin), PoolRef (адрес или менеджер + PoolId), PoolState, HookGroup (A/B/C), HookInfo, Pool |

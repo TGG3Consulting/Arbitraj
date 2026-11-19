@@ -1,10 +1,11 @@
 //! Файл: venues/bsc_dex/send/tx.rs
-//! Что делает: сборка транзакции кошелька — лимит газа (eth_estimateGas + запас) и legacy-транзакция с chainId BSC;
+//! Что делает: сборка транзакции кошелька — лимит газа (eth_estimateGas + запас) и legacy-транзакция с chainId сети
+//! площадки (решение 416: dex.evm_chain_id, читает вызывающий до отправки — node/chain_id.rs);
 //! общие настройки отправки, без которых транзакция не уходит (сроки ожидания, надбавка отмены, запас газа отмены).
 //! Решение 398: всё, что трекер и отмена используют ПОСЛЕ отправки, читается в SendCfg до неё и передаётся значением —
 //! после отправки настройки не читаются (сторож tests/settings_before_send_guard.rs).
 //! Кто вызывает: exec/txs.rs, send/cancel.rs, send/track.rs.
-//! От чего зависит: node/rpc.rs, node/mod.rs (chainId), ctx.rs.
+//! От чего зависит: node/rpc.rs, ctx.rs.
 //! Настройки: send.gas_limit_margin_pct, send.max_wait_blocks, send.bundle_max_blocks, send.cancel_gas_bump_pct,
 //! send.replaced_confirm_blocks, send.cancel_max_gas_gwei, send.cancel_max_attempts, send.queue_max_wait_s,
 //! feed.stale_after_ms [bsc_dex].
@@ -23,7 +24,6 @@ use serde_json::json;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::node::BSC_CHAIN_ID;
 use super::super::node::rpc;
 use super::super::num;
 
@@ -141,10 +141,13 @@ fn with_margin(ctx: &Ctx, est: U64, margin: Decimal) -> GatewayResult<u64> {
     })
 }
 
-/// Legacy-транзакция с chainId BSC (EIP-155); to — адрес вызова или TxKind::Create (развёртывание исполнителя,
-/// решение 122). Ошибки: BadResponse — цена газа больше u128.
+/// Legacy-транзакция с chainId сети (EIP-155); chain — dex.evm_chain_id, прочитанный вызывающим до отправки (решение 416;
+/// отмена — из Watch, решение 398); to — адрес вызова или TxKind::Create (развёртывание исполнителя, решение 122).
+/// Ошибки: BadResponse — цена газа больше u128.
+#[allow(clippy::too_many_arguments)]
 pub fn legacy(
     ctx: &Ctx,
+    chain: u64,
     nonce: u64,
     price: U256,
     gas: u64,
@@ -159,7 +162,7 @@ pub fn legacy(
         )
     })?;
     Ok(TxLegacy {
-        chain_id: Some(BSC_CHAIN_ID),
+        chain_id: Some(chain),
         nonce,
         gas_price,
         gas_limit: gas,

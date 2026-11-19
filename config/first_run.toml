@@ -311,6 +311,28 @@ rationale = "Строка повторов в базе обновляется н
 prefill = { kind = "Global" }
 
 [[section]]
+title = "Сеть площадки DEX (решение 416)"
+intro = "Сеть, которую обслуживает площадка DEX: id сети в боте и номер цепи EVM. Без них площадка DEX не подписывается на рынок и не подписывает транзакции."
+
+[[section.rec]]
+name = "dex.chain"
+area = "по площадке DEX"
+unit = "id сети"
+value = "bsc"
+source = "Решение 416 (Тигран 19.11.2026: две сети в одном боте)"
+rationale = "Монета на DEX — (сеть, адрес): по этому id ядро отличает одинаковый адрес в BSC и в Arbitrum; старые записи без сети читаются как сеть этой площадки."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section.rec]]
+name = "dex.evm_chain_id"
+area = "по площадке DEX"
+unit = "chainId"
+value = "56"
+source = "docs.bnbchain.org, JSON-RPC endpoint: «HTTP mainnet (ChainID 56)» (research/flow/bsc_node.md, раздел 1)"
+rationale = "Номер цепи BSC mainnet: им подписываются транзакции (EIP-155) и сверяется узел. Раньше было зашито в коде."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section]]
 title = "Нативная монета BNB"
 intro = "Чтобы торговать BNB на DEX: у BNB нет адреса контракта, поэтому он сопоставляется с обёрткой WBNB."
 

@@ -55,7 +55,7 @@ impl Venue for BscDex {
         self.on_account(account)
     }
 
-    /// «Проверить подключение»: узел HTTP (eth_chainId = 56, eth_blockNumber), узел WebSocket (newHeads), кошелёк,
+    /// «Проверить подключение»: узел HTTP (eth_chainId = dex.evm_chain_id, решение 416; eth_blockNumber), узел WebSocket (newHeads), кошелёк,
     /// eth_simulateV1 — connection.rs (execution-apis src/eth, коммит 16caee27). Ошибок нет: причина — в ответе.
     async fn check_connection(&self) -> GatewayResult<ConnectionCheck> {
         Ok(connection::check(&self.p.ctx).await)
@@ -68,7 +68,8 @@ impl Venue for BscDex {
 
     /// Подписка на рынок: опрос блоков (решение 57), пулы монет (eth_subscribe logs, execution-apis subscribe.yaml), новые пулы,
     /// циклы проверок; события — в `out` (pools/market.rs). Прежние задачи подписки останавливаются.
-    /// Ошибки: NotConfigured (venue.quote_asset, dex.*), узел.
+    /// Решение 416: перед подпиской — сеть площадки (node/chain_id.rs check_start).
+    /// Ошибки: NotConfigured (venue.quote_asset, dex.*, dex.chain, dex.evm_chain_id), BadResponse (узел другой сети), узел.
     async fn subscribe_market(
         &self,
         assets: Vec<Asset>,
@@ -81,6 +82,8 @@ impl Venue for BscDex {
                 "подписка на рынок — у адаптера DEX без привязки к кошельку",
             ));
         }
+        // Решение 416: сеть площадки задана (dex.chain, dex.evm_chain_id) и узел — той же сети; иначе подписки нет.
+        super::node::chain_id::check_start(&self.p.ctx).await?;
         // Исполнению через KyberSwap (exec.via_kyber) нужен тот же набор монет (адрес USDT и монет) — отдаём его
         // контексту KS. KyberSwap как площадку-цены не подписываем: цены и сигналы идут с bsc_dex.
         self.kyber.set_assets(assets.clone());

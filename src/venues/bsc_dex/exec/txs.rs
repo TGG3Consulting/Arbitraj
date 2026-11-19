@@ -122,13 +122,24 @@ pub async fn send_capped(
         signer::sign_with(&key, t)
             .map_err(|e| ctx.err(ErrorCode::Internal, format!("Подпись транзакции: {e}")))
     };
-    let signed = sign(tx::legacy(ctx, nonce, price, gas, to, value, data)?)?;
+    // Решение 416: chainId сети — настройка dex.evm_chain_id, до отправки (им же подписывается отмена — Watch).
+    let chain = super::super::node::chain_id::chain_id(ctx)?;
+    let signed = sign(tx::legacy(ctx, chain, nonce, price, gas, to, value, data)?)?;
     let mut tip_cost = None;
     let tip = match send::tip(&ready).filter(|_| with_tip) {
         Some((tip_to, amount)) => {
             let g = tx::limit(ctx, from, tip_to, &Bytes::new(), amount).await?;
             tip_cost = Some((amount, g));
-            let t = tx::legacy(ctx, nonce + 1, price, g, tip_to, amount, Bytes::new())?;
+            let t = tx::legacy(
+                ctx,
+                chain,
+                nonce + 1,
+                price,
+                g,
+                tip_to,
+                amount,
+                Bytes::new(),
+            )?;
             Some((sign(t)?, amount))
         }
         None => None,
@@ -167,6 +178,7 @@ pub async fn send_capped(
         channels: channels.clone(),
         cancels: cancel_log.clone(),
         key,
+        chain_id: chain,
     };
     let hold = slot.hold();
     let after = After {

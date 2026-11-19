@@ -249,6 +249,8 @@ pub async fn ctx() -> Ctx {
     let v = Scope::Venue("bsc_dex".into());
     let venue: Vec<(String, Scope, Value)> = [
         ("venue.quote_asset", json!("USDT")),
+        // Решение 416: chainId сети площадки — настройка (BSC mainnet 56 — значение протокола); подпись бандла.
+        ("dex.evm_chain_id", json!(56)),
         ("dex.min_pool_liquidity_usd", json!(1)),
         ("dex.depth_band_pct", json!(5)),
         ("dex.depth_hysteresis_pct", json!(0)),

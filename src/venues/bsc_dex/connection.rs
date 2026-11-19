@@ -9,7 +9,7 @@
 //! Кто вызывает: mod.rs (контракт: check_connection) ← api (кнопка на экране «Площадки»).
 //! От чего зависит: ctx.rs, node/rpc.rs, node/ws.rs, wallet/signer.rs, wallet/balances.rs, pools/deploy_block.rs, pools/families.rs,
 //! directory/check.rs (индексатор справочника пулов).
-//! Настройки: bsc.node_http_url, bsc.node_ws_url, http.timeout_ms, venue.ws_silence_ms [bsc_dex],
+//! Настройки: dex.evm_chain_id (сверка сети узла, решение 416; node/chain_id.rs), bsc.node_http_url, bsc.node_ws_url, http.timeout_ms, venue.ws_silence_ms [bsc_dex],
 //! feed.stale_after_ms [bsc_dex] (сколько ждать блок по подписке), dex.pool_enabled, dex.pool_manager [V4], dex.history_scan; секреты bsc.node_*_key, bsc_dex.wallet_key.
 //!
 //! Методы: eth_chainId, eth_blockNumber, eth_subscribe newHeads, eth_simulateV1, eth_getCode —
@@ -25,8 +25,9 @@ use crate::gateway::contract::ConnectionCheck;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::ctx::Ctx;
+use super::node::chain_id::same_chain;
+use super::node::rpc;
 use super::node::ws::Conn;
-use super::node::{BSC_CHAIN_ID, rpc};
 use super::pools::deploy_block;
 use super::pools::families::{self, Proto};
 use super::wallet::{balances, signer};
@@ -80,24 +81,24 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
     }
 }
 
-/// Узел по HTTP: сеть BSC и номер блока. Возвращает: описание или текст причины.
+/// Узел по HTTP: сеть (eth_chainId = dex.evm_chain_id, решение 416) и номер блока. Возвращает: описание или текст причины.
 async fn http(ctx: &Ctx) -> Result<String, String> {
     let chain: U64 = rpc::call(ctx, "eth_chainId", json!([]))
         .await
         .map_err(|e| e.message)?;
-    same_chain(chain.to())?;
+    same_chain(ctx, chain.to())?;
     let block: U64 = rpc::call(ctx, "eth_blockNumber", json!([]))
         .await
         .map_err(|e| e.message)?;
     Ok(format!("сеть {chain}, блок {block}"))
 }
 
-/// Узел по WebSocket: сеть BSC и блок по подписке newHeads за feed.stale_after_ms.
+/// Узел по WebSocket: сеть (dex.evm_chain_id, решение 416) и блок по подписке newHeads за feed.stale_after_ms.
 async fn ws(ctx: &Ctx) -> Result<String, String> {
     let run = async {
         let conn = Conn::open(ctx, "check").await?;
         let chain: U64 = conn.request("eth_chainId", json!([])).await?;
-        same_chain(chain.to()).map_err(|m| ctx.err(ErrorCode::BadResponse, m))?;
+        same_chain(ctx, chain.to()).map_err(|m| ctx.err(ErrorCode::BadResponse, m))?;
         let mut sub = conn.subscribe(json!(["newHeads"])).await?;
         let wait = Duration::from_millis(ctx.int("feed.stale_after_ms")?);
         match tokio::time::timeout(wait, sub.rx.recv()).await {
@@ -195,15 +196,4 @@ async fn wallet(ctx: &Ctx) -> Result<String, String> {
         GatewayResult::Ok(format!("«{name}»: адрес {addr}, BNB {bnb}"))
     };
     run.await.map_err(|e| e.message)
-}
-
-/// Сверка сети с BSC mainnet. Ошибка — текст причины.
-fn same_chain(chain: u64) -> Result<(), String> {
-    if chain == BSC_CHAIN_ID {
-        Ok(())
-    } else {
-        Err(format!(
-            "узел другой сети: chainId {chain}, у BSC mainnet {BSC_CHAIN_ID}"
-        ))
-    }
 }

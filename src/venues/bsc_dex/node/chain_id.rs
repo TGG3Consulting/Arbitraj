@@ -1,0 +1,68 @@
+//! Файл: venues/bsc_dex/node/chain_id.rs
+//! Что делает: решение 416 (шаг 1 двух сетей) — сеть площадки DEX из настроек вместо зашитого chainId 56: номер цепи EVM
+//! (dex.evm_chain_id) для подписи транзакций (EIP-155) и сверка с eth_chainId узла — в «Проверить подключение»
+//! (connection.rs, connection_extra.rs) и при подписке на рынок (venue.rs subscribe_market: узел другой сети — подписки
+//! нет). Id сети в боте (dex.chain) при подписке тоже обязателен: не задан — подписки нет.
+//! Кто вызывает: send/tx.rs (chain_id — до отправки, решение 398), exec/txs.rs, exec/bundle_sim.rs, connection*.rs,
+//! venue.rs.
+//! От чего зависит: ctx.rs, node/rpc.rs.
+//! Настройки: dex.evm_chain_id, dex.chain [bsc_dex].
+//!
+//! eth_chainId — https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth ;
+//! chainId в подписи — https://eips.ethereum.org/EIPS/eip-155 .
+
+use alloy_primitives::U64;
+use serde_json::json;
+
+use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::storage::journal::Level;
+
+use super::super::ctx::Ctx;
+use super::rpc;
+
+/// Что делает: номер цепи EVM площадки. Возвращает: chainId. Ошибки: NotConfigured — dex.evm_chain_id не задана.
+pub fn chain_id(ctx: &Ctx) -> GatewayResult<u64> {
+    ctx.int("dex.evm_chain_id")
+}
+
+/// Что делает: сверка ответа eth_chainId узла с dex.evm_chain_id. Принимает: окружение, chainId узла.
+/// Возвращает: Ok или текст причины (настройка не задана; узел другой сети).
+pub fn same_chain(ctx: &Ctx, got: u64) -> Result<(), String> {
+    let want = chain_id(ctx).map_err(|e| e.message)?;
+    if got == want {
+        Ok(())
+    } else {
+        Err(format!(
+            "узел другой сети: chainId {got}, у площадки {want} (dex.evm_chain_id)"
+        ))
+    }
+}
+
+/// Что делает: проверка сети перед подпиской на рынок — dex.chain и dex.evm_chain_id заданы, eth_chainId узла равен
+/// dex.evm_chain_id. Узел не ответил — подписка идёт как раньше (её собственные запросы покажут сбой связи), в журнал
+/// venue.chain_check — предупреждение; узел другой сети — подписки нет.
+/// Принимает: окружение. Ошибки: NotConfigured — настройка не задана; BadResponse — узел другой сети.
+pub async fn check_start(ctx: &Ctx) -> GatewayResult<()> {
+    if ctx.text("dex.chain")?.trim().is_empty() {
+        return Err(ctx.not_set(
+            "dex.chain",
+            "dex.chain пуста — задайте id сети площадки DEX",
+        ));
+    }
+    let want = chain_id(ctx)?;
+    match rpc::call::<U64>(ctx, "eth_chainId", json!([])).await {
+        Ok(got) if got.to::<u64>() == want => Ok(()),
+        Ok(got) => Err(ctx.err(
+            ErrorCode::BadResponse,
+            format!("узел другой сети: chainId {got}, у площадки {want} (dex.evm_chain_id) — подписки на рынок нет"),
+        )),
+        Err(e) => {
+            let m = format!(
+                "сеть узла не сверена перед подпиской (eth_chainId): {} — подписка идёт, сверка — в «Проверить подключение»",
+                e.message
+            );
+            ctx.log(Level::Warn, "venue.chain_check", m, None).await;
+            Ok(())
+        }
+    }
+}

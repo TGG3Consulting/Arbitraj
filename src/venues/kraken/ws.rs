@@ -100,9 +100,12 @@ pub async fn run(
             Err(e) => {
                 let m = format!("WebSocket {name} остановлен: {e}");
                 ctx.log(Level::Error, "venue.ws", m).await;
-                // Решение 426: остановленное соединение не держит стаканы своих пар в выборе.
-                for s in &subs {
-                    o.lose(&link, &s.asset.ticker).await;
+                // Решение 426: остановленное соединение не держит стаканы своих пар в выборе. Без страховки — как
+                // раньше: стаканы не трогаются (ревью 426: lose без выбора — это invalidate, раньше его здесь не было).
+                if link.arb.is_some() {
+                    for s in &subs {
+                        o.lose(&link, &s.asset.ticker).await;
+                    }
                 }
                 return;
             }

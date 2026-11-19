@@ -3,13 +3,18 @@
 //! ДОКУМЕНТАЦИИ (github.com/xt-com/xt4-api, исходник doc.xt.com): темы подписки пары (быстрый поток и страховка),
 //! разбор примера снимка limitDepth.md (updateId и время t есть) и примера изменений increDepth.md (времени нет —
 //! поэтому «не старее отданного» при смене потока держится порядком получения, venues/xt/backup.rs), учёт пары
-//! «ядру отдан быстрый стакан». Живых записей потоков XT нет (docs/TASKS.md — записать). Моков нет.
-//! Кто вызывает: cargo test. От чего зависит: arb::venues::xt (backup, depth, ws, ws_conn).
+//! «ядру отдан быстрый стакан»; ревью 419 — сверка верха снимка с быстрым (same_top) и правило «два снимка подряд не
+//! равны быстрому, быстрый между ними не менялся» (Backup::observe) на тех же примерах: быстрый стакан — локальный
+//! стакан (local_book.rs) с уровнями примера limitDepth.md (равен) или пустой (не равен). Живых записей потоков XT
+//! нет (docs/TASKS.md — записать). Моков нет.
+//! Кто вызывает: cargo test. От чего зависит: arb::venues::xt (backup, depth, local_book, ws, ws_conn).
 
 use std::time::Duration;
 
-use arb::venues::xt::backup::Backup;
+use arb::core::types::PriceLevel;
+use arb::venues::xt::backup::{Backup, Snap, same_top};
 use arb::venues::xt::depth::{self, Msg};
+use arb::venues::xt::local_book::LocalBook;
 use arb::venues::xt::ws::{Cfg, Stream};
 use arb::venues::xt::ws_conn::topics;
 
@@ -69,4 +74,65 @@ fn backup_tracks_fast_pairs() {
     let mut off = Backup::new(false);
     off.given_fast("btc_usdt");
     assert!(!off.forget("btc_usdt"));
+}
+
+/// Снимок примера limitDepth.md в числах ядра.
+fn doc_snap() -> Snap {
+    let Msg::Snapshot { data, .. } = depth::parse(LIMIT_DOC) else {
+        panic!("пример limitDepth.md не разобран как снимок depth")
+    };
+    let (bids, asks) = depth::snapshot_levels(&data).expect("уровни примера limitDepth.md");
+    Snap {
+        bids,
+        asks,
+        t: data.t,
+        i: data.i,
+    }
+}
+
+/// Верх быстрого стакана: локальный стакан с уровнями того же примера (номер — i примера increDepth.md).
+fn doc_fast() -> (Vec<PriceLevel>, Vec<PriceLevel>) {
+    let s = doc_snap();
+    let mut lb = LocalBook::default();
+    lb.snapshot(123, &s.bids, &s.asks);
+    lb.top(20)
+}
+
+#[test]
+fn same_top_compares_common_levels() {
+    let s = doc_snap();
+    let (fb, fa) = doc_fast();
+    assert!(same_top(&s.bids, &fb) && same_top(&s.asks, &fa));
+    // Быстрый мельче снимка (снимок REST меньше venue.depth_levels) — общие уровни равны, не расхождение.
+    assert!(same_top(&s.asks, &fa[..1]));
+    // Сторона быстрого пуста, у снимка нет — расхождение.
+    assert!(!same_top(&s.asks, &[]));
+    // Другой верх: лучший ask снимка против второго уровня быстрого.
+    assert!(!same_top(&s.asks, &fa[1..]));
+}
+
+#[test]
+fn two_differing_snapshots_in_a_row_mean_divergence() {
+    let (fb, fa) = doc_fast();
+    let mut b = Backup::new(true);
+    b.given_fast("btc_usdt");
+    // Равен — не расхождение; не равен один раз — ещё нет; второй подряд — да.
+    assert!(!b.observe("btc_usdt", doc_snap(), &fb, &fa));
+    assert!(!b.observe("btc_usdt", doc_snap(), &[], &[]));
+    assert!(b.observe("btc_usdt", doc_snap(), &[], &[]));
+    // Быстрый изменился между снимками — счёт заново, принятый снимок забыт (старее отданного).
+    b.given_fast("btc_usdt");
+    assert!(b.take_seen("btc_usdt").is_none());
+    assert!(!b.observe("btc_usdt", doc_snap(), &[], &[]));
+    b.given_fast("btc_usdt");
+    assert!(!b.observe("btc_usdt", doc_snap(), &[], &[]));
+    // Совпавший снимок между двумя несовпавшими прерывает «подряд».
+    assert!(!b.observe("btc_usdt", doc_snap(), &fb, &fa));
+    assert!(!b.observe("btc_usdt", doc_snap(), &[], &[]));
+    // Снимок, принятый после последнего изменения быстрого, — для отдачи ядру при разрыве.
+    let seen = b
+        .take_seen("btc_usdt")
+        .expect("снимок принят после изменения быстрого");
+    assert_eq!((seen.i, seen.t), (12345678, Some(1657699200000)));
+    assert!(b.forget("btc_usdt"));
 }

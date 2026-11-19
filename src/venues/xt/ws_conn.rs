@@ -5,7 +5,7 @@
 //! Кто вызывает: ws.rs.
 //! От чего зависит: depth.rs, ws_book.rs, snapshots.rs, book.rs, ws.rs (Cfg, End), ctx.rs, gateway/feed_reg.rs,
 //! ws_dial.rs (yawc, сжатие permessage-deflate — решение 419; Ping сервера yawc отвечает Pong сам); страховка
-//! снимками depth@ при depth_update — backup.rs (решение 419, дополнение).
+//! снимками depth@ при depth_update — backup.rs, backup_conn.rs (решение 419, дополнение и ревью).
 //! Настройки: из ws.rs (Cfg); raw.book_frames [xt] — писать ли кадры стаканов в сырой журнал.
 //!
 //! Официально (https://doc.xt.com/docs/spot/WebSocket%20Public/ — RequestMessageFormat, ResponseMessageFormat, Heartbeat):

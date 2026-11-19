@@ -1,0 +1,158 @@
+//! Файл: core/credit_rest_lock.rs
+//! Что делает: решение 413 (шестое и седьмое ревью t198) — решение остатка «не присвоено» под ОДНИМ замком счёта
+//! (remain_read::with_fact: чтение баланса, учёт других и запись решения в учёт памяти — без окна для продажи другой
+//! сделки). Совместно (Б-1): сделка и все другие сделки с остатком на счёте, что не в работе, — пул делится между ними
+//! (credit_rest::share_out), решение каждой записывается в учёт памяти сразу и затем в базу (по свежей записи памяти —
+//! действие человека между ними не перетирается). Уже решён другой сделкой — берётся из памяти. guard (круг сверки,
+//! ожидание после продажи): запись сделки в памяти изменилась (взял человек) — Taken, без решения (С-2, под замком до
+//! записи). Итог несёт прочитанный факт и учёт других — вызывающий без второго чтения идёт обычным путём (С-1).
+//! Кто вызывает: core/remain_fact.rs (reconcile_as), core/credit_rest_park.rs, core/manual.rs, core/manual_halted.rs.
+//! От чего зависит: credit_rest.rs (busy, share_out, apply_one), remain_read.rs (with_fact), credit_lock.rs (sync),
+//! credit_fact.rs, deposit_hold.rs, ledger.rs, deps.rs, engine.rs.
+//! Настройки: нет.
+
+use rust_decimal::Decimal;
+
+use crate::storage::journal::Level;
+
+use super::credit_rest::{Resolved, apply_one, busy, share_out};
+use super::deal::Deal;
+use super::engine::{Core, lk};
+use super::remain_others::Others;
+
+/// Итог решения остатка.
+pub enum Res {
+    /// Решён (количество обновлено, остатка нет).
+    Done,
+    /// Счёт не тихий — причина словами.
+    Busy(String),
+    /// Баланс не прочитан — причина.
+    Unread(String),
+    /// Запись сделки в памяти изменилась (взял человек) — не решаем.
+    Taken,
+}
+
+/// Итог с прочитанным фактом и учётом других.
+pub struct Locked {
+    pub res: Res,
+    pub fact: Result<Decimal, String>,
+    pub others: Others,
+    /// Другие сделки, решённые совместно (их записи уже в учёте).
+    pub joint: Vec<String>,
+}
+
+/// Что делает: решение под замком (шапка). Принимает: ядро, сделку, guard. Возвращает: Locked. Ошибок нет.
+pub async fn locked(core: &Core, deal: &mut Deal, guard: bool) -> Locked {
+    let probe = deal.clone();
+    let hold = super::deposit_hold::expected_pct(core, &deal.at, &deal.direction.asset);
+    let mut texts: Vec<Resolved> = Vec::new();
+    let mut joint: Vec<String> = Vec::new();
+    let (res, fact, others) = Box::pin(super::remain_read::with_fact(core, &probe, |r, o| {
+        let mem = lk(&core.inner.deals).get(&deal.id).cloned();
+        // Уже решён совместно другой сделкой — из памяти.
+        if let Some(x) = &mem
+            && x.credit.is_some()
+            && super::credit_fact::rest(x).is_none()
+            && super::credit_fact::rest(deal).is_some()
+        {
+            (deal.qty, deal.credit) = (x.qty, x.credit.clone());
+            return (Res::Done, r, o);
+        }
+        if guard && mem.map(|x| (x.step, x.updated_at)) != Some((deal.step, deal.updated_at)) {
+            return (Res::Taken, r, o);
+        }
+        if let Some(why) = busy(core, deal, &o) {
+            return (Res::Busy(why), r, o);
+        }
+        let f = match &r {
+            Ok(f) => *f,
+            Err(e) => return (Res::Unread(e.clone()), r, o),
+        };
+        let idle: Vec<(String, Decimal, Decimal)> = o
+            .rests
+            .iter()
+            .filter(|x| x.3)
+            .map(|x| (x.0.clone(), x.1, x.2))
+            .collect();
+        let theirs: Decimal = idle.iter().map(|x| x.1).sum();
+        let rest = super::credit_fact::rest(deal).unwrap_or_default();
+        let mut parts = vec![(deal.qty, rest)];
+        parts.extend(idle.iter().map(|x| (x.1, x.2)));
+        let scale = parts
+            .iter()
+            .flat_map(|p| [p.0.scale(), p.1.scale()])
+            .chain([f.scale()])
+            .max()
+            .unwrap_or(0);
+        let prior = o.qty - theirs;
+        let shares = share_out(f - prior, &parts, scale);
+        texts.push(apply_one(deal, shares[0], f, prior, hold));
+        super::credit_lock::sync(core, deal);
+        let mut m = lk(&core.inner.deals);
+        for (x, q) in idle.iter().zip(shares.iter().skip(1)) {
+            if let Some(d) = m.get_mut(&x.0) {
+                texts.push(apply_one(d, *q, f, prior, hold));
+                joint.push(x.0.clone());
+            }
+        }
+        (Res::Done, r, o)
+    }))
+    .await;
+    for id in &joint {
+        let fresh = lk(&core.inner.deals).get(id).cloned();
+        if let Some(d) = fresh {
+            Box::pin(super::ledger::save(core, &d)).await;
+        }
+    }
+    let (deps, v) = (&core.inner.deps, deal.at.0.clone());
+    for t in texts {
+        if let Some(x) = t.over {
+            Box::pin(deps.log(Level::Info, "core.credit_fact", Some(&v), &x, None)).await;
+        }
+        if let Some(x) = t.short {
+            Box::pin(deps.log(Level::Warn, "core.credit_fact", Some(&v), &x, None)).await;
+            Box::pin(deps.notify("deal.credit_hold", Some(&v), &x)).await;
+        }
+    }
+    Locked {
+        res,
+        fact,
+        others,
+        joint,
+    }
+}
+
+/// Что делает: кнопка продажи / «Беру на себя» у сделки с остатком (седьмое ревью): решение под замком; не тихо —
+/// «счёт занят», не прочитан — причина; решено без монет — фантом закрыт или (на счёте только чужое) алерт человеку.
+/// Принимает: ядро, сделку. Возвращает: Ok(None) — остатка нет или решён с монетами: продолжать; Ok(Some(текст)) —
+/// сделка закрыта / передана человеку; Err(причина) — не решить сейчас. Ошибок сверх этого нет.
+pub async fn for_button(core: &Core, deal: &mut Deal) -> Result<Option<String>, String> {
+    if super::credit_fact::rest(deal).is_none() {
+        return Ok(None);
+    }
+    let l = Box::pin(locked(core, deal, false)).await;
+    match l.res {
+        Res::Busy(w) => Err(format!(
+            "счёт занят: {w} — остаток «не присвоено» сейчас не решить"
+        )),
+        Res::Unread(e) => Err(format!("баланс биржи не прочитан: {e}")),
+        Res::Taken => Err("сделку уже взял человек".into()),
+        Res::Done if deal.qty > Decimal::ZERO => Ok(None),
+        Res::Done => match l.fact {
+            Ok(f) => {
+                let why = "остатка зачисления на счёте нет — фантом учёта (решение 222, 413)";
+                Box::pin(super::credit_rest_park::empty(
+                    core, deal, f, &l.others, why,
+                ))
+                .await;
+                let what = if f > Decimal::ZERO {
+                    "на счёте только монеты других сделок — алерт человеку (решение 405)"
+                } else {
+                    why
+                };
+                Ok(Some(format!("Сделка {}: {what}", deal.id)))
+            }
+            Err(e) => Err(format!("баланс биржи не прочитан: {e}")),
+        },
+    }
+}

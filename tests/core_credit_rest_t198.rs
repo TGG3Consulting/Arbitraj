@@ -109,10 +109,9 @@ async fn others_see_rest_and_taken_over() {
     arb::core::ledger::save(&core, &b).await;
     let o = arb::core::remain_others::on_account(&core, &b, &b.at);
     assert_eq!(o.unclear, vec!["A5".to_string()]);
-    assert!(
-        arb::core::credit_rest::busy(&core, &b, &o).is_some(),
-        "у другой остаток — не тихо"
-    );
+    // Седьмое ревью (Б-1): остаток другой сделки, что не в работе, — не помеха, а участник совместного решения.
+    assert_eq!(o.rests, vec![("A5".to_string(), d("0"), d("2"), true)]);
+    assert!(arb::core::credit_rest::busy(&core, &b, &o).is_none());
     let h = arb::core::types::ManualHolding {
         id: "h5".into(),
         deal_id: "T5".into(),

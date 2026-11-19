@@ -8,6 +8,8 @@
 //! ответ можно задержать (окно «человек нажал кнопку во время чтения»); GET /v4/balance?currency= — та же ячейка (одна
 //! монета, документация Get single currency asset); POST /v4/order — {orderId}; GET /v4/order —
 //! CANCELED, executedQty 0 (ордер IOC снят без исполнения; по документации Query single); прочее — 404.
+//! Это сервер-стенд по формату официальной документации XT; справочник пар — живая запись (в ней есть пара btc_usdt
+//! — монета тестов BTC); значения баланса и ордеров задаёт тест (как tests/t175_common, tests/core_exec_book_238.rs).
 //! Сервер — serve.rs.
 //! Кто вызывает: tests/core_credit_rest_live_t198.rs.
 //! От чего зависит: arb::core, arb::venues::xt, arb::settings, arb::storage, arb::gateway, arb::secrets.

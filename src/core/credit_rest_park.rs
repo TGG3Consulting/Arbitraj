@@ -22,6 +22,7 @@ use super::credit_rest::Res;
 use super::deal::{Deal, Step};
 use super::deal_words as w;
 use super::engine::{Core, lk};
+use super::remain_others::Others;
 
 /// Что делает: остаток отдельно, без подтверждения (шапка): сделка остановлена с подтверждённым количеством, остаток
 /// «не присвоено» остаётся в записи. Принимает: ядро, сделку, причину. Ошибок нет.
@@ -54,36 +55,57 @@ pub async fn park(core: &Core, deal: &mut Deal, why: &str) {
     Box::pin(super::ledger::finish(core, deal, Step::Halted, &text)).await
 }
 
-/// Что делает: круг сверки (шестое ревью, С-3) — остановленные сделки с остатком на бирже `v`: решить в тихий момент
-/// (остатка на счёте нет — закрыть фантом; есть — сделка остаётся остановленной с решённым количеством). Принимает:
-/// ядро, биржу. Ошибок нет.
+/// Что делает: решённая сделка без монет (седьмое ревью, мелкое 1): на счёте пусто — фантом закрывается; на счёте
+/// есть, но всё — других (решение 405) — алерт человеку (remain_alert::all_foreign), не молчаливое закрытие.
+/// Принимает: ядро, сделку, факт, учёт других, причину закрытия. Ошибок нет.
+pub async fn empty(core: &Core, deal: &mut Deal, fact: Decimal, others: &Others, why: &str) {
+    if fact > Decimal::ZERO {
+        Box::pin(super::remain_alert::all_foreign(core, deal, fact, others)).await;
+        return;
+    }
+    Box::pin(super::ledger::finish(core, deal, Step::Closed, why)).await
+}
+
+/// Что делает: круг сверки (шестое ревью С-3, седьмое С-3) — остановленные сделки с остатком на бирже `v`: по каждой
+/// монете — сначала дешёвая проверка «тихо» по учёту (без запроса), затем одно чтение и совместное решение всех сделок
+/// с остатком этой монеты под одним замком (credit_rest::locked, guard: взял человек — не трогаем); решённая без монет
+/// — empty. Принимает: ядро, биржу. Ошибок нет.
 pub async fn round(core: &Core, v: &VenueId) {
     let list: Vec<Deal> = lk(&core.inner.deals)
         .values()
         .filter(|d| &d.at == v && d.step == Step::Halted && super::credit_fact::rest(d).is_some())
         .cloned()
         .collect();
+    let mut done = std::collections::HashSet::new();
     for mut d in list {
-        let seen = (d.step, d.updated_at);
-        if !matches!(
-            Box::pin(super::credit_rest::locked(core, &mut d)).await,
-            Res::Done
-        ) {
+        let key = super::coin_key::CoinKey::of(&d.direction.asset);
+        if !done.insert(key) {
             continue;
         }
-        // Человек успел нажать кнопку — его действие не перетираем (учёт памяти уже обновлён sync — только количество).
-        if lk(&core.inner.deals)
-            .get(&d.id)
-            .map(|x| (x.step, x.updated_at))
-            != Some(seen)
-        {
+        let o = super::remain_others::on_account(core, &d, v);
+        if super::credit_rest::busy(core, &d, &o).is_some() {
             continue;
         }
-        if d.qty <= Decimal::ZERO {
-            let why = "остатка зачисления на счёте нет — фантом учёта (решение 222, 413)";
-            Box::pin(super::ledger::finish(core, &mut d, Step::Closed, why)).await;
-        } else {
-            Box::pin(super::ledger::save(core, &d)).await;
+        let l = Box::pin(super::credit_rest::locked(core, &mut d, true)).await;
+        let (Res::Done, Ok(fact)) = (l.res, l.fact) else {
+            continue;
+        };
+        // Решённые этим чтением (сама и совместные), остановленные и без монет — фантом или человеку.
+        let ids: Vec<String> = std::iter::once(d.id.clone())
+            .chain(l.joint.iter().cloned())
+            .collect();
+        for id in ids {
+            let x = lk(&core.inner.deals).get(&id).cloned();
+            if let Some(mut x) = x.filter(|x| x.step == Step::Halted && x.qty <= Decimal::ZERO) {
+                let why = "остатка зачисления на счёте нет — фантом учёта (решение 222, 413)";
+                Box::pin(empty(core, &mut x, fact, &l.others, why)).await;
+            }
+        }
+        if d.qty > Decimal::ZERO {
+            let fresh = lk(&core.inner.deals).get(&d.id).cloned();
+            if let Some(x) = fresh {
+                Box::pin(super::ledger::save(core, &x)).await;
+            }
         }
     }
 }
@@ -107,36 +129,31 @@ fn pace(core: &Core, deal: &Deal) -> Option<(u64, u64)> {
 
 /// Итог ожидания тихого момента.
 enum Waited {
-    Done,
+    Done(Decimal, Others),
+    Unknown,
     Timeout,
     Gone,
 }
 
-/// Ожидание тихого момента и решение (шапка). Ошибок нет.
+/// Ожидание тихого момента и решение (шапка; седьмое ревью С-2: «взял человек» — под замком, до решения). Ошибок нет.
 async fn wait_quiet(core: &Core, deal: &mut Deal) -> Waited {
     let Some((ms, max)) = pace(core, deal) else {
         return Waited::Timeout;
     };
-    let mark = lk(&core.inner.deals)
-        .get(&deal.id)
-        .map(|d| (d.step, d.updated_at));
     let until = tokio::time::Instant::now() + std::time::Duration::from_secs(max);
     loop {
-        if let Res::Done = Box::pin(super::credit_rest::locked(core, deal)).await {
-            return Waited::Done;
+        let l = Box::pin(super::credit_rest::locked(core, deal, true)).await;
+        match (l.res, l.fact) {
+            (Res::Done, Ok(f)) => return Waited::Done(f, l.others),
+            // Решён совместно другой сделкой, а этот баланс не прочитан — без закрытия: решит человек.
+            (Res::Done, Err(_)) => return Waited::Unknown,
+            (Res::Taken, _) => return Waited::Gone,
+            _ => {}
         }
         if tokio::time::Instant::now() >= until {
             return Waited::Timeout;
         }
         tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
-        // Шестое ревью (М-3): сделку взял человек (её запись в учёте изменилась) — ожидание кончается.
-        if lk(&core.inner.deals)
-            .get(&deal.id)
-            .map(|d| (d.step, d.updated_at))
-            != mark
-        {
-            return Waited::Gone;
-        }
     }
 }
 
@@ -150,15 +167,19 @@ pub async fn at_close(core: &Core, mut deal: Deal, why: String) {
                 "тихий момент счёта не наступил (не задано или вышел предел transfer.max_time_s)";
             Box::pin(park(core, &mut deal, t)).await
         }
-        Waited::Done if deal.qty > Decimal::ZERO => {
+        Waited::Done(..) | Waited::Unknown if deal.qty > Decimal::ZERO => {
             // Добранное продаёт автоматика, как остаток частичной продажи (решение 177) — продолжением цикла.
             Box::pin(super::ledger::save(core, &deal)).await;
             let left = super::stuck_reason::StuckReason::Partial(deal.qty);
             super::sell_loop::hop(super::sell_next::stuck(core, deal, left, true)).await
         }
-        Waited::Done => {
+        Waited::Unknown => {
+            let t = "остаток решён совместно, баланс сейчас не прочитан — проверьте сделку (решение 413)";
+            Box::pin(super::ledger::finish(core, &mut deal, Step::Halted, t)).await
+        }
+        Waited::Done(fact, others) => {
             let t = format!("продано ({why}); остатка зачисления на счёте нет");
-            Box::pin(super::ledger::finish(core, &mut deal, Step::Closed, &t)).await
+            Box::pin(empty(core, &mut deal, fact, &others, &t)).await
         }
     }
 }

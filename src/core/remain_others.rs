@@ -56,6 +56,10 @@ pub struct Others {
     pub leaving: Vec<String>,
     /// Третье ревью (С-Е): их количество — пул ждущих долю его не включает (монеты могут ещё лежать здесь).
     pub leaving_qty: Decimal,
+    /// Седьмое ревью t198 (Б-1): другие сделки с остатком «не присвоено» (они же в unclear): (ID, количество, остаток,
+    /// не в работе — остановлена, ждёт человека или ждёт тихий момент после продажи с количеством 0). Совместное решение
+    /// остатков — credit_rest.rs.
+    pub rests: Vec<(String, Decimal, Decimal, bool)>,
     /// Те же сделки словами для тревоги (deal_words.rs): доказуемые, затем в пути (требование Тиграна 18.11).
     pub words: Vec<String>,
 }
@@ -93,6 +97,9 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
             out.qty += d.qty;
             out.deals.push((d.id.clone(), d.qty));
             out.unclear.push(d.id.clone());
+            let idle =
+                matches!(d.step, Step::Halted | Step::WaitingHuman) || d.qty <= Decimal::ZERO;
+            out.rests.push((d.id.clone(), d.qty, r, idle));
             out.words.push(format!(
                 "{} — у неё не присвоено {}",
                 super::deal_words::deal(core, d),
@@ -164,6 +171,7 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
     }
     out.deals.sort();
     out.unclear.sort();
+    out.rests.sort_by(|x, y| x.0.cmp(&y.0));
     out.leaving.sort();
     out.pending.sort_by(|x, y| x.id.cmp(&y.id));
     out

@@ -30,24 +30,56 @@ pub async fn read(core: &Core, deal: &Deal) -> (Result<Decimal, String>, Others)
     Box::pin(read_with(core, deal, true)).await
 }
 
-/// Что делает: шестое ревью t198 (Б-2) — одно чтение факта и учёта других и решение по ним `f` под ОДНИМ замком счёта
-/// (чтение и запись решения в учёт памяти — без окна для продажи другой сделки). Без повторов и без строки журнала
-/// (повторяет вызывающий). Принимает: ядро, сделку (для чтения), решение. Возвращает: итог решения. Ошибок нет.
+/// Что делает: шестое ревью t198 (Б-2), седьмое (мелкое 3) — чтение факта и учёта других и решение по ним `f` под ОДНИМ
+/// замком счёта (чтение и запись решения в учёт памяти — без окна для продажи другой сделки). Как read_with: повторы
+/// только по правилу «повторить» для кода (между попытками замок отпущен), итог на бирже снимает или ставит паузу
+/// «баланс не читается» (fact_pause.rs); строки Warn нет (пишет вызывающий). Принимает: ядро, сделку (для чтения),
+/// решение. Возвращает: итог решения. Ошибок нет.
 pub async fn with_fact<R>(
     core: &Core,
     deal: &Deal,
     f: impl FnOnce(Result<Decimal, String>, Others) -> R,
 ) -> R {
-    let g = super::credit_lock::fact(&deal.at, &deal.direction.asset).await;
-    let (c, d) = (core.clone(), deal.clone());
-    let r = match tokio::spawn(async move { fact_try(&c, &d, &d.at).await }).await {
-        Ok(r) => r.map_err(|e| e.0),
-        Err(e) => Err(format!("{}: чтение баланса прервано: {e}", deal.at.0)),
-    };
-    let o = super::remain_others::on_account(core, deal, &deal.at);
-    let out = f(r, o);
-    drop(g);
-    out
+    let cex = super::trade_ops::kind(core, &deal.at) == Ok(VenueKind::Cex);
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        let g = super::credit_lock::fact(&deal.at, &deal.direction.asset).await;
+        let (c, d) = (core.clone(), deal.clone());
+        let r = match tokio::spawn(async move { fact_try(&c, &d, &d.at).await }).await {
+            Ok(r) => r,
+            Err(e) => Err((format!("{}: чтение баланса прервано: {e}", deal.at.0), None)),
+        };
+        let (text, ge) = match r {
+            Ok(v) => {
+                let o = super::remain_others::on_account(core, deal, &deal.at);
+                let out = f(Ok(v), o);
+                drop(g);
+                if cex {
+                    Box::pin(super::fact_pause::lift(core, &deal.at)).await;
+                }
+                return out;
+            }
+            Err(x) => x,
+        };
+        drop(g);
+        let pause = match &ge {
+            Some(e) => Box::pin(retry_pause(core, &deal.at, e, attempt)).await,
+            None => None,
+        };
+        if let Some(ms) = pause {
+            tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+            continue;
+        }
+        let g = super::credit_lock::fact(&deal.at, &deal.direction.asset).await;
+        let o = super::remain_others::on_account(core, deal, &deal.at);
+        let out = f(Err(text.clone()), o);
+        drop(g);
+        if cex {
+            Box::pin(super::fact_pause::set(core, &deal.at, &text)).await;
+        }
+        return out;
+    }
 }
 
 /// Что делает: как read; `warn` = false — без строки Warn на итог (четвёртое ревью t198, С-4: повторные чтения

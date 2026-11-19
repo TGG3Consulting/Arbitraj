@@ -65,7 +65,8 @@ pub fn busy(core: &Core, v: &VenueId, a: &Asset) -> Option<&'static str> {
     let open = lk(&core.inner.deals).values().any(|d| {
         let live = match d.step {
             Step::Closed | Step::TakenOver => false,
-            Step::Halted => d.qty > Decimal::ZERO,
+            // Решение 413 (седьмое ревью t198, С-4): и с остатком «не присвоено» — его монеты на счёте не свободны.
+            Step::Halted => d.qty > Decimal::ZERO || super::credit_fact::rest(d).is_some(),
             _ => true,
         };
         // Решение 211: монета сделки — по ключу монеты (адрес; без адреса — тикер), не по тикеру площадки.

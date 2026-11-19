@@ -202,25 +202,21 @@ pub async fn sell_now(core: &Core, alert_id: &str, ret: bool) -> Result<String, 
     // Решение 413 (t198, после шестого ревью): у сделки остаток «не присвоено» — любая кнопка продажи сначала решает его
     // по факту счёта в тихий момент (credit_rest::locked): не тихо — «счёт занят», не прочитан — причина (алерт
     // остаётся); остатка на счёте нет — фантом закрывается.
-    if super::credit_fact::rest(&deal).is_some() {
-        let why = match Box::pin(super::credit_rest::locked(core, &mut deal)).await {
-            super::credit_rest::Res::Done => None,
-            super::credit_rest::Res::Busy(w) => Some(format!(
-                "счёт занят: {w} — остаток «не присвоено» сейчас не решить"
-            )),
-            super::credit_rest::Res::Unread(e) => Some(format!("баланс биржи не прочитан: {e}")),
-        };
-        if let Some(e) = why {
-            alert.reason = Some(e.clone());
+    match Box::pin(super::credit_rest::for_button(core, &mut deal)).await {
+        Ok(None) => {}
+        Ok(Some(t)) => {
+            persist(core).await;
+            return Ok(t);
+        }
+        Err(e) => {
+            // Седьмое ревью (мелкое 5): причина алерта не затирается — дополняется.
+            alert.reason = Some(match alert.reason.take() {
+                Some(r) => format!("{r}; «Продать сейчас»: {e}"),
+                None => e.clone(),
+            });
             lk(&core.inner.alerts).insert(alert_id.to_string(), (alert, deal));
             persist(core).await;
             return Err(e);
-        }
-        if deal.qty <= Decimal::ZERO {
-            let why = "остатка зачисления на счёте нет — фантом учёта (решение 222, 413)";
-            Box::pin(super::ledger::finish(core, &mut deal, Step::Closed, why)).await;
-            persist(core).await;
-            return Ok(format!("Сделка {}: {why} — закрыта", deal.id));
         }
     }
     match super::manual_halted::on_hand_sell(core, &deal, &deal.at, &deal.direction.asset, deal.qty)
@@ -276,10 +272,22 @@ pub async fn take_over(core: &Core, alert_id: &str, who: &str) -> Result<String,
     let (alert, mut deal) = lk(&core.inner.alerts)
         .remove(alert_id)
         .ok_or(format!("алерта {alert_id} нет"))?;
-    // Решение 413 (шестое ревью, С-2): остаток «не присвоено» — к человеку целиком.
+    // Решение 413 (седьмое ревью, мелкое 6): остаток «не присвоено» — человеку только решённое по факту (тихий момент,
+    // credit_rest::for_button); не решить сейчас — человек берёт подтверждённое, остаток не присваивается никому.
     if let Some(rest) = super::credit_fact::rest(&deal) {
-        deal.qty += rest;
-        super::credit_fact::set_rest(&mut deal, Decimal::ZERO);
+        match Box::pin(super::credit_rest::for_button(core, &mut deal)).await {
+            Ok(None) => {}
+            Ok(Some(t)) => {
+                persist(core).await;
+                return Ok(t);
+            }
+            Err(e) => {
+                deal.note(format!(
+                    "«Беру на себя»: остаток {rest} не присвоен ({e}) — у человека подтверждённое количество"
+                ));
+                super::credit_fact::set_rest(&mut deal, Decimal::ZERO);
+            }
+        }
     }
     let h = ManualHolding {
         id: super::ids::uuid_v4().unwrap_or_else(|_| alert.id.clone()),

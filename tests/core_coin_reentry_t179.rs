@@ -752,6 +752,7 @@ async fn remain_fact_keeps_only_own_coins_on_shared_account() {
         pending: vec![],
         leaving: vec![],
         leaving_qty: Decimal::ZERO,
+        rests: vec![],
         words: vec![],
     };
     assert_eq!(

@@ -1,10 +1,10 @@
 //! Файл: tests/core_credit_rest_live_t198.rs
-//! Что делает: решение 413 (t198, после шестого ревью) — решение остатка «не присвоено» под замком счёта при
+//! Что делает: решение 413 (t198, шестое и седьмое ревью) — решение остатка «не присвоено» под замком счёта при
 //! ПРОЧИТАННОМ балансе биржи (стенд tests/t198_live: настоящий адаптер XT, хранилище открыто, баланс BTC — из ячейки):
-//! credit_rest::locked — тихо → добор (и строка журнала «взято сверх зачисления … решение 76»), не тихо → «счёт занят»;
-//! круг сверки credit_rest_park::round — тихо → решено, на счёте ничего → фантом закрыт, человек нажал кнопку во время
-//! чтения → его действие не перетирается; «Продать сейчас» по алерту (manual::sell_now) — через locked: тихо → продажа
-//! с добором, не тихо → «счёт занят», ничего → фантом закрыт. Моков нет.
+//! credit_rest::locked — тихо → добор (журнал: «удержание биржи меньше ожидаемого» / «взято сверх зачисления —
+//! остатки прошлых сделок, решение 76»), не тихо → «занят»; круг сверки credit_rest_park::round — тихо → решено,
+//! ничего → фантом закрыт, две сделки с остатком → совместное решение одним чтением, человек нажал кнопку во время
+//! чтения → ни шаг, ни количество, ни остаток не тронуты; «Продать сейчас» по алерту — через решение под замком.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core; tests/t198_common, tests/t198_live.
@@ -14,7 +14,7 @@ mod t198_live;
 
 use arb::core::Core;
 use arb::core::credit_fact::{Basis, confirm, rest, set_rest};
-use arb::core::credit_rest::Res;
+use arb::core::credit_rest::{Res, locked};
 use arb::core::deal::{Deal, Step};
 use t198_common::{credited, d};
 use t198_live::{big, start};
@@ -34,6 +34,13 @@ fn mem(core: &Core, id: &str) -> Deal {
     core.inner.deals.lock().unwrap().get(id).cloned().unwrap()
 }
 
+/// Есть ли строка журнала core.credit_fact с текстом.
+async fn logged(core: &Core, has: &str) -> bool {
+    let all = core.inner.deps.journal.list(500, None).await.unwrap();
+    all.iter()
+        .any(|e| e.kind == "core.credit_fact" && e.message.contains(has))
+}
+
 /// Другая сделка BTC на xt, ждущая доли (счёт не тихий).
 async fn busy_neighbor(core: &Core, id: &str) {
     let mut p = credited(id, "xt", d("0.1"));
@@ -41,12 +48,12 @@ async fn busy_neighbor(core: &Core, id: &str) {
     arb::core::ledger::save(core, &p).await;
 }
 
-/// locked: тихо — добор min(0.5 + 0.3, 1) = 0.8, сверх ожидаемого зачисления (замер 50 %: 0.5) — строка журнала;
-/// не тихо — «занят».
+/// locked: тихо — добор min(0.5 + 0.3, 1) = 0.8 (больше ожидаемого 0.5 при замере 50 % — «удержание меньше
+/// ожидаемого»); больше записи (1.1 из записи 1 при балансе 2) — «остатки прошлых сделок»; не тихо — Busy.
 #[test]
 fn locked_reads_and_resolves() {
     big(async {
-        let (core, _) = start(&t198_common::dir("live-locked"), "1").await;
+        let (core, stand) = start(&t198_common::dir("live-locked"), "1").await;
         let mut a = deal("L1", "0.5", "0.3", Step::Selling);
         let s = arb::core::deposit_hold::Sample {
             records: d("1"),
@@ -57,24 +64,24 @@ fn locked_reads_and_resolves() {
         };
         arb::core::deposit_hold::put(&core, &a.at, &a.direction.asset, s);
         arb::core::ledger::save(&core, &a).await;
-        assert!(matches!(
-            arb::core::credit_rest::locked(&core, &mut a).await,
-            Res::Done
-        ));
+        assert!(matches!(locked(&core, &mut a, false).await.res, Res::Done));
         assert_eq!((a.qty, rest(&a)), (d("0.8"), None));
         assert_eq!(mem(&core, "L1").qty, d("0.8"), "учёт памяти — сразу");
-        let all = core.inner.deps.journal.list(500, None).await.unwrap();
-        assert!(all.iter().any(|e| e.kind == "core.credit_fact"
-            && e.message.contains("сверх зачисления")
-            && e.message.contains("решение 76")));
-        let mut b = deal("L2", "0.2", "0.3", Step::Selling);
+        assert!(logged(&core, "удержание биржи меньше ожидаемого").await);
+        *stand.btc.lock().unwrap() = "2".into();
+        let mut b = deal("L3", "0.8", "0.3", Step::Selling);
         arb::core::ledger::save(&core, &b).await;
+        assert!(matches!(locked(&core, &mut b, false).await.res, Res::Done));
+        assert_eq!(b.qty, d("1.1"));
+        assert!(logged(&core, "остатки прошлых сделок (решение 76)").await);
+        let mut c = deal("L2", "0.2", "0.3", Step::Selling);
+        arb::core::ledger::save(&core, &c).await;
         busy_neighbor(&core, "P2").await;
         assert!(matches!(
-            arb::core::credit_rest::locked(&core, &mut b).await,
+            locked(&core, &mut c, false).await.res,
             Res::Busy(_)
         ));
-        assert_eq!(rest(&b), Some(d("0.3")));
+        assert_eq!(rest(&c), Some(d("0.3")));
     });
 }
 
@@ -96,7 +103,24 @@ fn round_resolves_and_closes_phantom() {
     });
 }
 
-/// Круг сверки: человек нажал «Беру на себя» во время чтения баланса — шаг человека не перетирается.
+/// Седьмое ревью (Б-1): две остановленные с остатком — одно чтение, совместное решение: пул 1 — сначала их 0.2 и 0.1,
+/// добавка 0.5 по остаткам 0.3 и 0.2 → 0.5 и 0.3; никто не ждёт другого.
+#[test]
+fn round_resolves_two_rests_jointly() {
+    big(async {
+        let (core, _) = start(&t198_common::dir("live-joint"), "1").await;
+        let a = deal("J1", "0.2", "0.3", Step::Halted);
+        let b = deal("J2", "0.1", "0.2", Step::Halted);
+        arb::core::ledger::save(&core, &a).await;
+        arb::core::ledger::save(&core, &b).await;
+        arb::core::credit_rest_park::round(&core, &a.at).await;
+        let (x, y) = (mem(&core, "J1"), mem(&core, "J2"));
+        assert_eq!((x.qty, rest(&x)), (d("0.5"), None));
+        assert_eq!((y.qty, rest(&y)), (d("0.3"), None));
+    });
+}
+
+/// Круг сверки: человек нажал «Беру на себя» во время чтения баланса — ни шаг, ни количество, ни остаток не тронуты.
 #[test]
 fn round_keeps_human_action() {
     big(async {
@@ -112,7 +136,11 @@ fn round_keeps_human_action() {
         human.step = Step::TakenOver;
         arb::core::ledger::save(&core, &human).await;
         h.await.unwrap();
-        assert_eq!(mem(&core, "H1").step, Step::TakenOver);
+        let m = mem(&core, "H1");
+        assert_eq!(
+            (m.step, m.qty, rest(&m)),
+            (Step::TakenOver, d("0.2"), Some(d("0.3")))
+        );
     });
 }
 
@@ -145,7 +173,7 @@ fn sell_now_by_alert_goes_through_locked() {
         let ok = arb::core::manual::sell_now(&core, &id, false)
             .await
             .unwrap();
-        assert!(ok.contains("закрыта"), "{ok}");
+        assert!(ok.contains("фантом"), "{ok}");
         assert_eq!(mem(&core, "S2").step, Step::Closed);
     });
 }

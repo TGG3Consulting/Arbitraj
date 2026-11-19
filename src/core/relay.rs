@@ -139,13 +139,15 @@ pub async fn run(core: &Core, mut deal: Deal) {
     // venue.book_stale_ms площадки), — сделка остановлена с причиной (stuck_quote::halt_not_configured), а не перегон
     // вслепую. CI 85ebf10c (t198): проверка — до чтения факта: остановка не продаёт и не выводит, баланс ей не нужен,
     // а нечитаемый баланс иначе уводил бы сделку мимо остановки решения 238.
+    // Седьмое ревью (мелкое 7): возраст котировки — от момента запроса.
+    let t0 = tokio::time::Instant::now();
     let pre = Box::pin(super::trade_ops::deal_quote(core, &deal)).await;
     if let Err(e) = &pre
         && super::stuck_quote::not_configured(e)
     {
         return super::stuck_quote::halt_not_configured(core, deal, e).await;
     }
-    let (qty0, t0) = (deal.qty, tokio::time::Instant::now());
+    let qty0 = deal.qty;
     // Решение 413 (ревью t198, Б2): оценка перегона и вывод с биржи — только доли сделки по факту счёта (как перед
     // продажей, sell_fact.rs): чужие монеты на общем счёте не выводятся; None — закрыта или алерт человеку.
     let Some(mut deal) = Box::pin(super::sell_fact::before(core, deal, "перегон")).await

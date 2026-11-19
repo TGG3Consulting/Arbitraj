@@ -2,7 +2,8 @@
 //! Что делает: решение 413 (вынесено из credit_apply.rs, ревью t198: файл > 200 строк) — уведомление deal.credit_hold
 //! (биржа удержала), доля 0 (алерт человеку, сделка не закрывается), баланс биржи не прочитан (повторное ревью, Б-3:
 //! режим застрявшей монеты один раз, потом алерт; оценки без факта нет).
-//! Кто вызывает: core/credit_apply.rs (notice, zero), core/remain_fact.rs (unread, Unread, wait_ms).
+//! Кто вызывает: core/credit_rest_park.rs (pace — ожидание тихого момента), core/credit_apply.rs (notice, zero),
+//! core/remain_fact.rs (unread, Unread, wait_ms).
 //! От чего зависит: credit_fact.rs, deal_words.rs, manual.rs, sell_next.rs / sell_loop.rs (stuck_as_is), stuck_reason.rs,
 //! notify/human.rs.
 //! Настройки: нет.
@@ -170,4 +171,22 @@ pub async fn unread(core: &Core, deal: &mut Deal, why: &str, mode: Unread) -> bo
     ))
     .await;
     false
+}
+
+/// Что делает: (интервал мс, предел с) ожидания тихого момента остатка (credit_rest_park.rs) — venue.status_poll_ms и
+/// transfer.max_time_s по площадке и монете. Принимает: ядро, сделку. Возвращает: None — не задано. Ошибок нет.
+pub fn pace(core: &Core, deal: &Deal) -> Option<(u64, u64)> {
+    let a = &deal.direction.asset;
+    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
+    let at = crate::settings::read::At {
+        venue: Some(&deal.at.0),
+        coin: Some(&coin),
+    };
+    let max = core
+        .inner
+        .deps
+        .settings
+        .integer("transfer.max_time_s", at)
+        .ok()?;
+    Some((wait_ms(core, &deal.at)?, max))
 }

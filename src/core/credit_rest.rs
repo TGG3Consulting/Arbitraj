@@ -112,6 +112,7 @@ pub fn apply_one(
     fact: Decimal,
     others: Decimal,
     hold: Decimal,
+    peers: &str,
 ) -> Resolved {
     let Some(rest) = super::credit_fact::rest(deal) else {
         return Resolved::default();

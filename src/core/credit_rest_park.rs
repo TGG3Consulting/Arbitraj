@@ -15,7 +15,6 @@
 use rust_decimal::Decimal;
 
 use crate::core::types::VenueId;
-use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::credit_rest::Res;
@@ -42,6 +41,23 @@ pub async fn park(core: &Core, deal: &mut Deal, why: &str) {
         w::coins(deal.qty, &t),
         w::coins(rest, &t)
     );
+    // Финальное ревью t198: «уже решено совместно» — проверка памяти прямо перед закрытием, без ожиданий между ними;
+    // решённое не перетирается (сделка остановлена с решённым количеством), журнал и Telegram — после закрытия.
+    let mem = lk(&core.inner.deals).get(&deal.id).cloned();
+    let text = match mem.filter(|x| x.credit.is_some() && super::credit_fact::rest(x).is_none()) {
+        Some(x) => {
+            (deal.qty, deal.credit) = (x.qty, x.credit.clone());
+            (deal.timeline, deal.sale_unsure) = (x.timeline.clone(), x.sale_unsure);
+            format!(
+                "{}: {why}; остаток уже решён совместно — у сделки {}; сделка остановлена — продайте или разберите \
+                 её кнопкой «Ручного управления» (решение 413)",
+                w::deal(core, deal),
+                w::coins(deal.qty, &t)
+            )
+        }
+        None => text,
+    };
+    Box::pin(super::ledger::finish(core, deal, Step::Halted, &text)).await;
     let deps = &core.inner.deps;
     Box::pin(deps.log(
         Level::Warn,
@@ -51,8 +67,7 @@ pub async fn park(core: &Core, deal: &mut Deal, why: &str) {
         None,
     ))
     .await;
-    Box::pin(deps.notify("deal.credit_hold", Some(&deal.at.0), &text)).await;
-    Box::pin(super::ledger::finish(core, deal, Step::Halted, &text)).await
+    Box::pin(deps.notify("deal.credit_hold", Some(&deal.at.0), &text)).await
 }
 
 /// Что делает: круг сверки (шестое ревью С-3, седьмое С-3) — остановленные сделки с остатком на бирже `v`: по каждой
@@ -105,23 +120,6 @@ pub async fn round(core: &Core, v: &VenueId) {
     }
 }
 
-/// (интервал мс, предел с) ожидания тихого момента; None — не задано. Ошибок нет.
-fn pace(core: &Core, deal: &Deal) -> Option<(u64, u64)> {
-    let a = &deal.direction.asset;
-    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
-    let at = At {
-        venue: Some(&deal.at.0),
-        coin: Some(&coin),
-    };
-    let max = core
-        .inner
-        .deps
-        .settings
-        .integer("transfer.max_time_s", at)
-        .ok()?;
-    Some((super::credit_alert::wait_ms(core, &deal.at)?, max))
-}
-
 /// Итог ожидания тихого момента.
 enum Waited {
     Done(Decimal, Others),
@@ -132,7 +130,7 @@ enum Waited {
 
 /// Ожидание тихого момента и решение (шапка; седьмое ревью С-2: «взял человек» — под замком, до решения). Ошибок нет.
 async fn wait_quiet(core: &Core, deal: &mut Deal) -> Waited {
-    let Some((ms, max)) = pace(core, deal) else {
+    let Some((ms, max)) = super::credit_alert::pace(core, deal) else {
         return Waited::Timeout;
     };
     let until = tokio::time::Instant::now() + std::time::Duration::from_secs(max);

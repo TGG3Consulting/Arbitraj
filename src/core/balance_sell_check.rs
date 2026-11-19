@@ -57,6 +57,8 @@ pub fn asset_of(core: &Core, v: &VenueId, ticker: &str) -> Asset {
 /// Возвращает: None — свободна; Some(SELLING | IN_DEAL). Ошибок нет.
 pub fn busy(core: &Core, v: &VenueId, a: &Asset) -> Option<&'static str> {
     let key = CoinKey::of(a);
+    // Решение 416 (ревью М-5): монета на счёте биржи — тот же ключ, что у сделок ниже (coin_account::key); метка
+    // продажи кнопкой и замок сделок монеты (balance_sells, coin_ride) — по CoinKey::of, как у сделок (Я-2).
     let on = super::coin_account::key(v, a);
     if lk(&core.inner.balance_sells).contains(&key) {
         return Some(SELLING);

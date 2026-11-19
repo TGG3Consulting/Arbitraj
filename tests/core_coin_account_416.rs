@@ -8,6 +8,7 @@
 //! сетей — один ключ счёта: один замок факта (credit_lock), одна очередь продажи (sell_turn), соседи по остатку
 //! (remain_others: подтверждённое количество другой сети вычитается); (4) на DEX — разные ключи, разные замки и очереди,
 //! соседей нет.
+//! (5) ревью С-3: запись карты не перезаписывается, монета без сети ищется в сети по умолчанию, запись — в учёте ядра.
 //! Ядро — t198_common (SQLite во временной папке, площадок в реестре нет; bingx, mexc — биржи, bsc_dex — DEX).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::{coin_account, coin_key, credit_lock, sell_turn, remain_others, credit_fact, ledger}.
@@ -142,4 +143,51 @@ async fn neighbours_on_one_exchange_rest_across_chains() {
         "на DEX сделка другой сети — не сосед: {:?}",
         o.deals
     );
+}
+
+/// Ревью шага 1 (С-3): запись карты не перезаписывается; монета без сети ищется в сети по умолчанию (dex.chain площадок
+/// DEX при запуске) — тот же ключ, что у монеты с этой сетью; запись пишется в учёт ядра.
+#[tokio::test]
+async fn venue_coin_is_stable_and_saved() {
+    let core = start("coin-account-416-stable").await;
+    // Своя биржа теста (карта — общая на процесс).
+    let v = VenueId("gate".into());
+    let bsc = ChainId("bsc".into());
+    assert!(coin_account::remember(&v, &bsc, USDT_BSC, "USDT"));
+    assert!(
+        !coin_account::remember(&v, &bsc, USDT_BSC, "OTHER"),
+        "запись не перезаписывается"
+    );
+    assert_eq!(
+        coin_account::key(&v, &usdt("bsc", USDT_BSC)),
+        CoinKey::Venue("USDT".into())
+    );
+    let old = Asset {
+        ticker: "USDT".into(),
+        chain: None,
+        contract: Some(USDT_BSC),
+    };
+    assert_eq!(
+        coin_account::key_with(&v, &old, Some(&bsc)),
+        CoinKey::Venue("USDT".into()),
+        "монета без сети — в сети по умолчанию"
+    );
+    assert_eq!(
+        coin_account::key_with(&v, &old, None),
+        CoinKey::of(&old),
+        "сети по умолчанию нет — как раньше"
+    );
+    // В учёт ядра пишется только новая запись.
+    let e = coin_account::Entry {
+        venue: VenueId("kucoin".into()),
+        chain: ChainId("arbitrum".into()),
+        address: USDT_ARB,
+        ticker: "USDT".into(),
+    };
+    coin_account::remember_saved(&core, &e).await;
+    let saved: Vec<coin_account::Entry> =
+        arb::core::persist::load(&core.inner.deps.db, coin_account::KIND)
+            .await
+            .unwrap();
+    assert_eq!(saved, vec![e]);
 }

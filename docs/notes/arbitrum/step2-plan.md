@@ -134,3 +134,14 @@ market_state (ключи `(площадка, адрес)` — площадка D
 `gas_ticker::of_asset` = `dex.gas_ticker` bsc_dex, USDT сети по умолчанию = прежний, DEX-присутствие и подписка —
 те же монеты (все с `None`), сеть перевода — `venue.bsc_network`, ключи пар и монет — прежние. Новая настройка
 `dex.default_chain` при одной сети не читается.
+
+## 5. Сделано (19.11.2026)
+
+- a40468c2 — 2.1 сети ядра: core/chain.rs (dex.default_chain, tag, dex_of, default_dex, tag_of_dex, of_dir), Core::dex_id
+  удалён, балансы кошелька по (DEX, кошелёк), «Перегон USDT» по всем DEX, отчёты/API — DEX сети по умолчанию.
+- 405067aa — 2.2 газ по сети (gas_ticker of_chain / of_asset / all / for_venue_in).
+- ef0cebfe — 2.3 справочник по сетям (core/registry_chains.rs), USDT других сетей (Inner.usdt_other), подписка DEX,
+  нативная монета, налог перевода (chain::kinds_in), USDT по сети в ядре.
+- 8cb6a00e — 2.4 сеть перевода по направлению (transfers::network по монете, own_name).
+- Не сделано (2.5 ключи второй сети, 2.6 *_bnb, отображение, карты по адресу) — docs/TASKS.md, блок 430.
+

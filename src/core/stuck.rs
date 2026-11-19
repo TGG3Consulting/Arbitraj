@@ -28,6 +28,7 @@
 //! «417 (ожидание)» (Тигран 19.11): продажи «Ожидания» (стало выгодно; истечение срока при итоге ≥ 0) и «Порога
 //! убытка» — с перепроверкой условия на котировке под ходом очереди (sell_here_ok.rs try_sell_if): не выполнено —
 //! ордера нет; «Ожидание» продолжается (истечение — по рынку, как раньше), «Порог убытка» — алерт (over_max).
+//! Ревью 2 t201 (М-1): «Порог убытка» — котировки под ходом нет — снова ждём тика монеты и котируем, а не сразу алерт.
 //! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
 
 use std::time::Duration;
@@ -153,6 +154,7 @@ async fn wait(core: &Core, mut deal: Deal) {
                     guard: Guard::MaxLoss(zero),
                     rule: Rule::MaxLoss(zero),
                     note: Note::None,
+                    kind: "core.stuck",
                 };
                 let why = "ожидание: стало выгодно";
                 match Box::pin(super::sell_here_ok::try_sell_if(core, deal, why, how)).await {
@@ -178,6 +180,7 @@ async fn wait(core: &Core, mut deal: Deal) {
         guard: g,
         rule: Rule::NoThreshold,
         note: Note::ProfitHere,
+        kind: "core.stuck",
     };
     let deal = match Box::pin(super::sell_here_ok::try_sell_if(core, deal, &why, how)).await {
         HereOk::NotNow(d, _) => *d,
@@ -202,46 +205,62 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
     let mut first = true;
     // Ревью 333, Н4: подписка на тики — до первой котировки и на всё ожидание (тик во время котировки не теряется).
     let mut ticks = Ticks::new(core);
-    let value = loop {
-        match Box::pin(super::sell_turn_fresh::once(core, &deal)).await {
-            Ok((v, _, _)) => break v,
-            Err(e) if q::not_configured(&e) => return q::halt_not_configured(core, deal, &e).await,
-            Err(e) => {
-                q::no_quote_once(core, &deal, &e, &mut first).await;
-                if !ticks.next(core, &deal, None).await {
-                    return super::ledger::finish(core, &mut deal, Step::Halted, &e.message).await;
+    // Ревью 2 t201 (М-1): под ходом котировки нет — снова цикл котировки (ждём тика монеты), а не сразу алерт.
+    loop {
+        let value = loop {
+            match Box::pin(super::sell_turn_fresh::once(core, &deal)).await {
+                Ok((v, _, _)) => break v,
+                Err(e) if q::not_configured(&e) => {
+                    return q::halt_not_configured(core, deal, &e).await;
+                }
+                Err(e) => {
+                    q::no_quote_once(core, &deal, &e, &mut first).await;
+                    if !ticks.next(core, &deal, None).await {
+                        return super::ledger::finish(core, &mut deal, Step::Halted, &e.message)
+                            .await;
+                    }
                 }
             }
+        };
+        let loss = deal.loss_pct_if(value);
+        if loss <= max {
+            let text = h::loss_vs_max(loss, max, true);
+            // «417 (ожидание)»: порог перепроверяется на котировке под ходом очереди (sell_here_ok.rs); выше порога или
+            // котировки нет — алерт человеку, как «больше — алерт» (убыток — по котировке под ходом).
+            let how = How {
+                cond: Cond::MaxLoss(max),
+                guard: Guard::MaxLoss(max),
+                rule: Rule::MaxLoss(max),
+                note: Note::StuckMarket,
+                kind: "core.stuck",
+            };
+            let (d, v) =
+                match Box::pin(super::sell_here_ok::try_sell_if(core, deal, &text, how)).await {
+                    HereOk::NotNow(d, Some((v, _))) => (*d, v),
+                    // М-1: котировки под ходом нет — ждём тика монеты и котируем снова.
+                    HereOk::NotNow(d, None) => {
+                        deal = *d;
+                        if !ticks.next(core, &deal, None).await {
+                            let t = "ожидание тика монеты прервано — котировки под ходом нет";
+                            return super::ledger::finish(core, &mut deal, Step::Halted, t).await;
+                        }
+                        continue;
+                    }
+                    HereOk::Sold | HereOk::Gone => return,
+                };
+            let (loss, why) = over_max(&d, Some(v), max);
+            return Box::pin(super::manual::raise_alert(core, d, loss, why, None)).await;
         }
-    };
-    let loss = deal.loss_pct_if(value);
-    if loss <= max {
-        let text = h::loss_vs_max(loss, max, true);
-        // «417 (ожидание)»: порог перепроверяется на котировке под ходом очереди (sell_here_ok.rs); выше порога или
-        // котировки нет — алерт человеку, как «больше — алерт» (убыток — по котировке под ходом).
-        let how = How {
-            cond: Cond::MaxLoss(max),
-            guard: Guard::MaxLoss(max),
-            rule: Rule::MaxLoss(max),
-            note: Note::StuckMarket,
-        };
-        let (d, v) = match Box::pin(super::sell_here_ok::try_sell_if(core, deal, &text, how)).await
-        {
-            HereOk::NotNow(d, v) => (*d, v),
-            HereOk::Sold | HereOk::Gone => return,
-        };
-        let (loss, why) = over_max(&d, v, max);
-        return Box::pin(super::manual::raise_alert(core, d, loss, why, None)).await;
+        let why = h::loss_vs_max(loss, max, false);
+        return Box::pin(super::manual::raise_alert(
+            core,
+            deal,
+            Some(loss),
+            why,
+            None,
+        ))
+        .await;
     }
-    let why = h::loss_vs_max(loss, max, false);
-    Box::pin(super::manual::raise_alert(
-        core,
-        deal,
-        Some(loss),
-        why,
-        None,
-    ))
-    .await;
 }
 
 /// «417 (ожидание)»: порог не выполнен на котировке под ходом — убыток и причина алерта. Принимает: сделку, выручку

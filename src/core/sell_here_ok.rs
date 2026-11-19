@@ -14,11 +14,15 @@
 //! Кто вызывает: core/relay_here.rs (try_sell, try_sell_if), core/stuck.rs (wait, loss_limit), core/sell_fact.rs (retry).
 //! От чего зависит: sell_fact.rs (факт перед продажей), sell_turn.rs, sell_turn_fresh.rs, sell.rs (profitable, sell),
 //! remeasure.rs, sell_range.rs (Rule), notify/human.rs, deal_card.rs.
+//! Ревью 2 t201: NotNow снимает свежесть факта (С-1), пишет строку «под ходом итог … — ордера нет» в хронологию и
+//! журнал (М-2), отдаёт выручку и среднюю под ходом (С-3: relay.rs продолжает оценку целей с ней); PROFIT_HERE —
+//! Rule::MaxLoss(0) (С-2).
 //! Настройки: нет (базовое поведение; уведомление — событие stuck.market_sold, как у продажи режима).
 
 use rust_decimal::Decimal;
 
 use crate::notify::human::{self as h, Msg};
+use crate::storage::journal::Level;
 
 use super::deal::Deal;
 use super::engine::Core;
@@ -31,8 +35,9 @@ pub enum HereOk {
     Sold,
     /// Сделки больше нет у вызывающего (факт счёта: закрыта или алерт человеку — sell_fact::before).
     Gone,
-    /// Ордера нет: условие под ходом не выполнено (Some — выручка под ходом) или котировки нет (None). Сделка — обратно.
-    NotNow(Box<Deal>, Option<Decimal>),
+    /// Ордера нет: условие под ходом не выполнено (Some — выручка под ходом и средняя котировки) или котировки нет
+    /// (None). Сделка — обратно; свежесть факта снята (ревью 2 t201, С-1); строка хронологии и журнала — М-2.
+    NotNow(Box<Deal>, Option<(Decimal, Decimal)>),
 }
 
 /// Условие, по которому продажа решена.
@@ -72,14 +77,19 @@ pub struct How {
     pub guard: Guard,
     pub rule: Rule,
     pub note: Note,
+    /// Вид журнала строки «под ходом условие не подтвердилось» (ревью 2 t201, М-2): core.stuck, core.relay_here, ….
+    pub kind: &'static str,
 }
 
-/// Продажа здесь при итоге ≥ 0 (М-2, relay_here.rs): пере-замер «выгодно», правило Entry, уведомление INFO.
+/// Продажа здесь при итоге ≥ 0 (М-2, relay_here.rs, relay.rs): пере-замер «выгодно», уведомление INFO. Ревью 2 t201
+/// (С-2): правило ветки 268 — Rule::MaxLoss(0), не Entry: продажа, решённая режимом, снова в режим не уходит (отказ по
+/// коридору, «мало средств» — порог 0 и алерт, как «Ожидание: стало выгодно»).
 pub const PROFIT_HERE: How = How {
     cond: Cond::Profitable,
     guard: super::remeasure::PROFITABLE,
-    rule: Rule::Entry,
+    rule: Rule::MaxLoss(Decimal::ZERO),
     note: Note::ProfitHere,
+    kind: "core.relay_here",
 };
 
 /// Что делает: продать здесь, если под ходом очереди итог сделки ≥ 0 (PROFIT_HERE). Принимает: ядро, сделку,
@@ -112,15 +122,39 @@ pub async fn try_sell_if(core: &Core, deal: Deal, why: &str, how: How) -> HereOk
             .await;
             HereOk::Sold
         }
-        Ok((v, _, _)) => {
+        Ok((v, q, _)) => {
             drop(turn);
-            HereOk::NotNow(Box::new(deal), Some(v))
+            let t = format!(
+                "{why}: под ходом очереди итог {} (выручка {}) — условие не подтвердилось, ордера нет (решение 417)",
+                h::signed_usd(deal.result_if(v)),
+                h::usd(v)
+            );
+            let deal = Box::pin(not_now(core, deal, how.kind, t)).await;
+            HereOk::NotNow(Box::new(deal), Some((v, q.avg_price)))
         }
-        Err(_) => {
+        Err(e) => {
             drop(turn);
+            let t =
+                format!("{why}: под ходом очереди котировки нет ({e}) — ордера нет (решение 417)");
+            let deal = Box::pin(not_now(core, deal, how.kind, t)).await;
             HereOk::NotNow(Box::new(deal), None)
         }
     }
+}
+
+/// Ордера нет (ревью 2 t201): свежесть факта не переносится дальше (С-1, как stuck.rs handle_as_is — Б-1 t198),
+/// строка в хронологию сделки и журнал `kind` (М-2). Принимает: ядро, сделку, вид журнала, текст. Возвращает: сделку.
+/// Ошибок нет.
+async fn not_now(core: &Core, mut deal: Deal, kind: &str, t: String) -> Deal {
+    deal.fact_fresh = None;
+    deal.note(t.clone());
+    super::ledger::save(core, &deal).await;
+    let line = format!("{}: {t}", deal.id);
+    core.inner
+        .deps
+        .log(Level::Info, kind, Some(&deal.at.0), line, None)
+        .await;
+    deal
 }
 
 /// Уведомление перед ордером (Note). Принимает: ядро, сделку, причину, вид. Ошибок нет.

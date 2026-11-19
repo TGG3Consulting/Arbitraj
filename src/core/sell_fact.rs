@@ -160,10 +160,11 @@ pub async fn retry(core: &Core, mut deal: Deal, e: &OpError, why: &str, rule: Ru
                 guard: Guard::MaxLoss(m),
                 rule: Rule::MaxLoss(m),
                 note: super::sell_here_ok::Note::None,
+                kind: "core.credit_fact",
             };
             let (d, v) =
                 match Box::pin(super::sell_here_ok::try_sell_if(core, deal, why, how)).await {
-                    super::sell_here_ok::HereOk::NotNow(d, v) => (*d, v),
+                    super::sell_here_ok::HereOk::NotNow(d, v) => (*d, v.map(|x| x.0)),
                     _ => return,
                 };
             let (loss, w) = super::stuck::over_max(&d, v, m);

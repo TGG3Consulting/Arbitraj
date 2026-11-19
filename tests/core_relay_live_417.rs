@@ -17,7 +17,9 @@
 //! - (г) «417 (ожидание)»: режим wait, тик монеты — «стало выгодно» по котировке-решению (первый запрос стакана); тест
 //!   подменяет стакан на худший сразу после него; ответ баланса задержан стендом (300 мс), venue.book_stale_ms xt =
 //!   200 мс — котировка под ходом идёт новым запросом стакана (второй) и видит худший стакан: ордера нет, ожидание
-//!   продолжается (задача режима не закончена); по истечении stuck.wait_ms — как раньше, по рынку (ордер есть).
+//!   продолжается (задача режима не закончена), в хронологии — «под ходом очереди итог …»; по истечении
+//!   stuck.wait_ms факт перечитывается (свежесть снята — ревью 2 t201, С-1) и — как раньше, по рынку (ордер есть).
+//!   Тик шлётся в цикле, пока стенд не увидит первый запрос стакана (М-3).
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core (stuck, relay_here, sell_here_ok, relay_reserve, sell_turn_fresh, exec_book, ledger),
@@ -180,7 +182,7 @@ fn worse_book_under_turn_does_not_sell() {
         *stand.depth.lock().unwrap() = Some(worse_book());
         arb::core::exec_book::forget(&core, &VenueId("xt".into()), &btc(), Side::Sell);
         let back = match arb::core::sell_here_ok::try_sell(&core, x, "тест С-1").await {
-            HereOk::NotNow(d, Some(v2)) => {
+            HereOk::NotNow(d, Some((v2, _))) => {
                 assert!(!arb::core::sell::profitable(&d, v2), "{v2}");
                 *d
             }
@@ -218,37 +220,47 @@ fn wait_profitable_then_worse_keeps_waiting() {
         let task = tokio::spawn(async move {
             arb::core::stuck::handle_as_is(&c, x, StuckReason::Unprofitable).await
         });
-        // Тик монеты — «Ожидание» котирует (котировка-решение).
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let _ = core.inner.coin_ticks.send(btc());
         let st = &stand;
-        let wait_hits = move |n: usize| async move {
-            for _ in 0..500 {
-                if count(st, Hit::Depth) >= n {
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(10)).await;
+        // Ревью 2 t201 (М-3): тик монеты — в цикле, пока стенд не увидит первый запрос стакана (котировка-решение
+        // «Ожидания»; подписка на тики появляется при входе в режим).
+        let mut seen = false;
+        for _ in 0..500 {
+            let _ = core.inner.coin_ticks.send(btc());
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            if count(st, Hit::Depth) >= 1 {
+                seen = true;
+                break;
             }
-            panic!("запросов стакана меньше {n}");
-        };
-        wait_hits(1).await;
+        }
+        assert!(seen, "котировки-решения не было");
         *stand.depth.lock().unwrap() = Some(worse_book());
-        wait_hits(2).await;
+        for _ in 0..500 {
+            if count(st, Hit::Depth) >= 2 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(count(st, Hit::Depth) >= 2, "котировки под ходом не было");
         tokio::time::sleep(Duration::from_millis(300)).await;
-        assert_eq!(
-            count(&stand, Hit::Post),
-            0,
-            "под ходом итог < 0 — ордера нет"
-        );
+        assert_eq!(count(st, Hit::Post), 0, "под ходом итог < 0 — ордера нет");
         assert!(!task.is_finished(), "ожидание продолжается");
+        // Ревью 2 t201 (М-2): строка «под ходом очереди итог …» в хронологии.
+        let y = core.deals().into_iter().find(|d| d.id == "T417D").unwrap();
+        assert!(
+            y.timeline
+                .iter()
+                .any(|(_, t)| t.contains("под ходом очереди итог")),
+            "{:?}",
+            y.timeline
+        );
+        // Ревью 2 t201 (С-1): свежесть факта снята — истечение срока перечитывает баланс.
+        let read = count(st, Hit::Balance);
         // Срок вышел — как раньше: по рынку без порога (ордер есть).
         tokio::time::timeout(Duration::from_secs(30), task)
             .await
             .expect("режим закончился")
             .unwrap();
-        assert!(
-            count(&stand, Hit::Post) >= 1,
-            "по истечении срока — по рынку"
-        );
+        assert!(count(st, Hit::Post) >= 1, "по истечении срока — по рынку");
+        assert!(count(st, Hit::Balance) > read, "истечение перечитало факт");
     });
 }

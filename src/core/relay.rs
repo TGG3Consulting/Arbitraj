@@ -40,6 +40,8 @@
 //! Ревью t201: С-1 — продажа при итоге ≥ 0 проверяется под ходом очереди (relay_here.rs → sell_here_ok.rs); М-1 — цели
 //! не оценены из-за запаса — своя причина со списком; М-3 — run_as(…, false) у причины GasReserve (stuck.rs): без
 //! продажи при итоге ≥ 0, прежнее поведение. Звенья пути — в куче (Box::pin, стек: CI t201, core_exec_book_238).
+//! Ревью 2 t201 (С-3): правило 1 — продажа здесь под ходом (sell_here_ok::try_sell); под ходом итог < 0 — оценка целей
+//! с запасом продолжается с выручкой под ходом, и только если перегон не лучше — продажа здесь по порогу.
 //! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs); venue.cex_cex,
 //! venue.cex_cex_deny (через cex_link.rs); запас — через relay_reserve.rs (новых нет).
 
@@ -231,7 +233,7 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
         Box::pin(super::sell_turn_fresh::once(core, &deal)).await
     };
     // Решение 417: средняя котировки здесь — «цена здесь» для доли закрытия разницы в запасе цели (relay_reserve.rs).
-    let (here, here_avg) = match quote {
+    let (mut here, mut here_avg) = match quote {
         Ok((v, q, _)) => (Some(v), Some(q.avg_price)),
         Err(e) if super::stuck_quote::not_configured(&e) => {
             return super::stuck_quote::halt_not_configured(core, deal, &e).await;
@@ -241,9 +243,22 @@ pub async fn run_as(core: &Core, mut deal: Deal, profit_first: bool) {
     // Решение 417 (правило Тиграна 19.11): продать здесь выгодно (итог сделки ≥ 0) — другие площадки не ищем.
     // Ревью t201 (С-1): продажа — с проверкой «выгодно» под ходом очереди (relay_here → sell_here_ok.rs); под ходом
     // итог < 0 — продажа здесь по порогу stuck.relay_max_loss_pct, как раньше. М-3: у GasReserve — без этой ветки.
+    // Ревью 2 t201 (С-3, слова Тиграна 19.11: «если у нас выгода больше 0 — в минус не уходим — искать другие
+    // площадки даже не нужно; если сделка минусовая — тогда по расчётам понимаем, перегонять выгодно или нет»): под
+    // ходом итог < 0 (NotNow) — оценка целей с запасом продолжается с выручкой и средней под ходом; котировки под ходом
+    // нет — с котировкой-решением. Перегон не лучше — продажа здесь по порогу (sell_here_as ниже).
     if profit_first && super::relay_reserve::here_first(&deal, here) {
-        let why = "перегон не ищем: котировка-решение здесь — итог сделки не ниже нуля";
-        return Box::pin(super::relay_here::sell_here_as(core, deal, why, true)).await;
+        let why = "перегон не ищем: итог сделки при продаже здесь не ниже нуля (решение 417)";
+        match Box::pin(super::sell_here_ok::try_sell(core, deal, why)).await {
+            super::sell_here_ok::HereOk::Sold | super::sell_here_ok::HereOk::Gone => return,
+            super::sell_here_ok::HereOk::NotNow(d, q) => {
+                deal = *d;
+                if let Some((v, avg)) = q {
+                    here = Some(v);
+                    here_avg = Some(avg);
+                }
+            }
+        }
     }
     let mut best: Option<(VenueId, super::relay_reserve::Est)> = None;
     // Решение 222: лучшая оценка без запаса — для признака пыли, как до решения 417.

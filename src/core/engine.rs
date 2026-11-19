@@ -60,6 +60,8 @@ impl Core {
         let core = Core {
             inner: Arc::new(Inner::new(deps, kinds.clone(), market_tx, cand_tx)),
         };
+        // Решение 432: имена площадок DEX для человека («DEX» при одной сети, «DEX <сеть>» при нескольких).
+        super::chain_run::publish_names(&core);
         // Решение 251: шаблон алерта Telegram берёт карточку сделки (путь, где сейчас) по id из учёта — свежую на
         // момент отправки (notify/alert_card.rs). Слабая ссылка: ядро не держится уведомлениями.
         let weak = Arc::downgrade(&core.inner);

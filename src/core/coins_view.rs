@@ -7,6 +7,7 @@
 //! Решение 413: deposit_holds — замеры удержания бирж при зачислении монеты (deposit_hold.rs).
 //! Кто вызывает: api/coins.rs — GET /api/coins (Core::coins_json) и GET /api/coins/{address} (Core::coin_json).
 //! От чего зависит: engine.rs, registry.rs, market_state.rs, blacklist.rs, intermediate.rs, deposit_hold.rs.
+//! Решение 432: пулы монеты с USDT — USDT её сети (монета сети не по умолчанию — Inner.usdt_other).
 //! Настройки: нет.
 
 use alloy_primitives::Address;
@@ -26,6 +27,8 @@ use super::registry_build::Networks;
 struct Ctx<'a> {
     market: &'a MarketState,
     usdt: Option<Address>,
+    /// Решение 432: USDT других сетей (Inner.usdt_other) — у монеты сети не по умолчанию пулы с USDT её сети.
+    usdt_other: std::collections::HashMap<crate::core::types::ChainId, Address>,
     s: &'a Store,
     nets: &'a Networks,
 }
@@ -41,6 +44,7 @@ impl Core {
         let x = Ctx {
             market: &market,
             usdt,
+            usdt_other: rd(&self.inner.usdt_other).clone(),
             s: &self.inner.deps.settings,
             nets: &nets,
         };
@@ -60,6 +64,7 @@ impl Core {
         let x = Ctx {
             market: &market,
             usdt,
+            usdt_other: rd(&self.inner.usdt_other).clone(),
             s: &self.inner.deps.settings,
             nets: &nets,
         };
@@ -82,7 +87,12 @@ fn row(c: &CoinEntry, x: &Ctx) -> Value {
     let first = checks.first();
     // Пулы монеты с USDT и (решение 52) с промежуточными монетами площадки; pair — второй токен.
     let mut pools: Vec<Value> = vec![];
-    if let (Some(t), Some(u)) = (c.asset.contract, x.usdt) {
+    // Решение 432: USDT сети монеты (сеть по умолчанию — Inner.usdt, как раньше).
+    let usdt = match &c.asset.chain {
+        None => x.usdt,
+        Some(ch) => x.usdt_other.get(ch).copied(),
+    };
+    if let (Some(t), Some(u)) = (c.asset.contract, usdt) {
         for p in &dex {
             let mut others = vec![(u, "USDT".to_string())];
             if let Intermediate::On(list) = intermediate::read(s, &p.venue) {

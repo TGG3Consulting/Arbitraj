@@ -8,6 +8,7 @@
 //!   «(план)»; возврат выручки начат — «→ <куда> (USDT)»; DEX — с кошельком сделки (Deal.dex_account);
 //! - где сейчас: по шагу сделки — монета на площадке / в пути / у человека / монет нет и где USDT.
 //!
+//! Решение 432: «это DEX» — по именам площадок DEX от ядра (notify/human.rs is_dex), без зашитого id.
 //! Логику не меняет — только то, что видит человек.
 //! Кто вызывает: core/deal_text.rs, stuck.rs, manual.rs, manual_feed.rs (алерты), core/engine.rs (поиск карточки для
 //! notify — install).
@@ -20,9 +21,6 @@ use crate::notify::human as h;
 
 use super::deal::{Deal, Step};
 use super::usdt_return_state::UsdtReturn;
-
-/// Площадка DEX (id адаптера, venues/bsc_dex) — у неё показывается кошелёк сделки.
-const DEX: &str = "bsc_dex";
 
 /// Карточка сделки. Принимает: сделку. Возвращает: DealCard. Ошибок нет.
 pub fn card(d: &Deal) -> DealCard {
@@ -44,7 +42,8 @@ pub fn coin(d: &Deal) -> String {
 
 /// Имя площадки для пути: DEX — с кошельком сделки. Принимает: сделку, id площадки. Ошибок нет.
 fn place(d: &Deal, id: &str) -> String {
-    match (&d.dex_account, id == DEX) {
+    // Решение 432: площадка DEX любой сети (notify/human.rs is_dex), а не одна зашитая «bsc_dex».
+    match (&d.dex_account, h::is_dex(id)) {
         (Some(w), true) => format!("{} (кошелёк {w})", h::venue(id)),
         _ => h::venue(id),
     }

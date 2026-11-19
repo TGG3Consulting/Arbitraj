@@ -9,7 +9,8 @@
 //! общий «Стоп». Общий «Старт» человека (Core::set_mode_by) очищает chain_off — запущены все сети.
 //! **Одна сеть площадок DEX — сетей для кнопок нет (chains = []), chain_off всегда пуст, can_open настроек сверх
 //! прежнего не читает: поведение и плашка — как до решения 432.**
-//! Кто вызывает: core/risk.rs (can_open — gate_input, refusal; snapshot — chains, view), core/commands.rs
+//! Имена площадок DEX для человека («DEX» / «DEX <сеть>») — publish_names (Core::start).
+//! Кто вызывает: core/engine.rs (publish_names), core/risk.rs (can_open — gate_input, refusal; snapshot — chains, view), core/commands.rs
 //! (Core::set_chain_by — set), тесты tests/core_chain_run_432.rs.
 //! От чего зависит: core/chain.rs (сети площадок DEX, сеть направления), core/risk.rs (Risk, Mode, put_mode, publish).
 //! Настройки: нет своих (сеть площадки — dex.chain, решение 416).
@@ -141,4 +142,23 @@ pub fn set(core: &Core, chain: &str, run: bool, who: &str) -> Result<String, Str
     )?;
     super::risk::publish(core);
     Ok(t)
+}
+
+/// Что делает: имена площадок DEX для человека (notify/venue_names.rs): одна сеть — «DEX» (как раньше), сетей несколько —
+/// «DEX <сеть>» (dex.chain; не задана — «DEX <id площадки>»). Вызывает Core::start. Принимает: ядро. Ошибок нет.
+pub fn publish_names(core: &Core) {
+    let many = !chains(core).is_empty();
+    let s = &core.inner.deps.settings;
+    let names = super::chain::dexes(core).into_iter().map(|v| {
+        let name = if many {
+            match super::chain::chain_at(s, &v) {
+                Ok(c) => format!("DEX {c}"),
+                Err(_) => format!("DEX {}", v.0),
+            }
+        } else {
+            "DEX".to_string()
+        };
+        (v.0, name)
+    });
+    crate::notify::venue_names::set_dex(names);
 }

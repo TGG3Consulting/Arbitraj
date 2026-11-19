@@ -33,10 +33,26 @@ const QTY_DIGITS: u32 = 4;
 /// Сколько символов адреса показывать с каждого края.
 const ADDR_EDGE: usize = 4;
 
-/// Имя площадки для человека по id адаптера (venues/*/ctx.rs, ID). Неизвестная — id как есть.
+/// Имя площадки для человека по id адаптера (venues/*/ctx.rs, ID); у площадок DEX — имя от ядра (решение 432,
+/// notify/venue_names.rs). Неизвестная — id как есть.
 /// Принимает: id площадки («bingx», «bsc_dex»…). Возвращает: «BingX», «DEX»…
 pub fn venue(id: &str) -> String {
-    match id {
+    // Решение 432: имя площадки DEX от ядра («DEX» при одной сети, «DEX <сеть>» при нескольких).
+    if let Some(n) = super::venue_names::dex_name(id) {
+        return n;
+    }
+    table(id).unwrap_or(id).to_string()
+}
+
+/// Решение 432: площадка — DEX (у неё в пути сделки показывается кошелёк, core/deal_card.rs): сообщённая ядром площадка
+/// DEX или, без ядра, площадка с именем «DEX» в таблице адаптеров. Принимает: id. Ошибок нет.
+pub fn is_dex(id: &str) -> bool {
+    super::venue_names::dex_name(id).is_some() || table(id) == Some("DEX")
+}
+
+/// Имя площадки по таблице адаптеров (venues/*/ctx.rs, ID) — запасное, без ядра. None — неизвестная. Ошибок нет.
+fn table(id: &str) -> Option<&'static str> {
+    Some(match id {
         "bingx" => "BingX",
         "mexc" => "MEXC",
         "gate" => "Gate",
@@ -54,9 +70,8 @@ pub fn venue(id: &str) -> String {
         "bitget" => "Bitget",
         "okx" => "OKX",
         "binance" => "Binance",
-        other => other,
-    }
-    .to_string()
+        _ => return None,
+    })
 }
 
 /// Деньги по модулю без знака: «44.98 USDT» (меньше 0.01 — 4 знака). Принимает: сумму.

@@ -10,6 +10,8 @@
 //! Кто вызывает: ws_conn.rs (кадры и потери в сессии), ws.rs (обрыв соединения — все пары).
 //! От чего зависит: backup.rs, book.rs, ws.rs (invalidate), ctx.rs, gateway/core_out_book.rs (стакан ядру),
 //! storage/journal.rs.
+//! Ревью 429: решение «отдавать ли» и отдача (память book.rs + канал ядра) — под замком Backup::order, общим для
+//! основного и страховочного соединений: ядро получает кадры пары в том же порядке, в каком приняты решения.
 //! Настройки: venue.book_stale_ms [okx] (срок свежести снимка при переключении), venue.book_backup_log_s [okx].
 
 use std::sync::atomic::Ordering;
@@ -48,6 +50,8 @@ pub fn deliver(
     alive: &Alive,
     book: OrderBook,
 ) -> Option<Fed> {
+    // Ревью 429: решение и отдача — под одним замком (не старее отданного и при гонке двух соединений).
+    let _order = books.backup.order();
     let book = match role {
         Role::Main => {
             let t = book.exchange_time.map(|t| t.timestamp_millis());
@@ -78,6 +82,8 @@ pub fn lost(
     ticker: &str,
     drop: bool,
 ) {
+    // Ревью 429: как в deliver — снимок из памяти или «недостоверно» уходит ядру до кадра другого соединения.
+    let _order = books.backup.order();
     match role {
         Role::Main => {
             // Решение 238: venue.book_stale_ms обязательна; не задана — снимок не отдаётся (как и котировка).

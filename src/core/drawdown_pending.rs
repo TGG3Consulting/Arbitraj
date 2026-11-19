@@ -17,7 +17,7 @@
 //! в чужом общем возврате группы (shared_in); Cur закрываемой сделки держится в Inner.draw_closing до её сохранения —
 //! пересчёт итога дня из-за другой сделки в этом окне видит её затраты.
 //! Кто вызывает: drawdown_ledger.rs (count, own_of), daily_commit.rs (pending), daily.rs (cur, closing), ledger.rs
-//! (closing — снять после сохранения).
+//! (Closing — охрана отметки закрываемой сделки, снимает в Drop).
 //! От чего зависит: usdt_return_parts.rs, usdt_accepted.rs (sent_of), usdt_return_deal.rs (wanted, multi),
 //! uncapped_replay_plan.rs (PlanLine), day_pair.rs, unsettled.rs, drawdown_ledger.rs (pair_fn).
 //! Настройки: нет (usdt_return.mode — через usdt_return_deal::wanted).

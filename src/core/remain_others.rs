@@ -29,7 +29,8 @@
 //! монет нет» из-за удержания биржи (было: вторая сделка WKC вычитала запись первой 6 008 053 740.36 из факта
 //! 5 915 283 179 — «всё чужое»).
 //! Кто вызывает: remain_fact.rs (reconcile), credit_base.rs, credit_apply.rs.
-//! От чего зависит: unsettled.rs, coin_key.rs, deal.rs, trade_ops.rs (вид площадки), engine.rs, credit_fact.rs.
+//! Решение 416: «та же монета» — монета на счёте площадки (coin_account.rs): на бирже — одна на все сети.
+//! От чего зависит: unsettled.rs, coin_account.rs, deal.rs, trade_ops.rs (вид площадки), engine.rs, credit_fact.rs.
 //! Настройки: нет (базовое поведение).
 
 use rust_decimal::Decimal;
@@ -37,7 +38,6 @@ use rust_decimal::Decimal;
 use crate::core::types::VenueId;
 use crate::gateway::contract::VenueKind;
 
-use super::coin_key::CoinKey;
 use super::deal::{Deal, Step};
 use super::engine::{Core, lk};
 
@@ -68,7 +68,8 @@ pub struct Others {
 /// сделку, площадку. Возвращает: Others. Ошибок нет. Замок: deals (по набору unsettled).
 pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
     let cex = super::trade_ops::kind(core, v) == Ok(VenueKind::Cex);
-    let key = CoinKey::of(&deal.direction.asset);
+    // Решение 416: монета на счёте площадки (биржа — одна на все сети) — coin_account.rs.
+    let key = super::coin_account::key(v, &deal.direction.asset);
     let ids = super::unsettled::ids(core);
     let deals = lk(&core.inner.deals);
     let mut out = Others::default();
@@ -78,7 +79,7 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
         if d.id == deal.id
             || (d.qty <= Decimal::ZERO && super::credit_fact::rest(d).is_none())
             || matches!(d.step, Step::Closed | Step::TakenOver)
-            || CoinKey::of(&d.direction.asset) != key
+            || super::coin_account::key(v, &d.direction.asset) != key
         {
             continue;
         }
@@ -159,7 +160,10 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
     drop(deals);
     // Шестое ревью (Б-2): монеты «Беру на себя» на этом счёте — человека: вычитаются, как подтверждённые.
     for (h, d) in lk(&core.inner.holdings).values() {
-        if h.venue == *v && h.qty > Decimal::ZERO && CoinKey::of(&h.asset) == key && d.id != deal.id
+        if h.venue == *v
+            && h.qty > Decimal::ZERO
+            && super::coin_account::key(v, &h.asset) == key
+            && d.id != deal.id
         {
             out.qty += h.qty;
             out.deals.push((d.id.clone(), h.qty));

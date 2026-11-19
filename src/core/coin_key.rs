@@ -5,7 +5,8 @@
 //! (Asset.chain) — одинаковый адрес в двух сетях — разные ключи; сделки одной монеты в разных сетях друг друга не ждут.
 //! Кто вызывает: core/executor.rs, candidates.rs, ledger.rs, manual_halted.rs (замок «одна сделка на монету»),
 //! core/risk.rs (карантин), core/reconcile.rs (вложено по монетам на «Балансах»).
-//! От чего зависит: core/types (Asset), alloy-primitives.
+//! Ключ монеты на счёте площадки (биржа — одна монета на все сети) — core/coin_account.rs.
+//! От чего зависит: core/types (Asset, ChainId), alloy-primitives.
 //! Настройки: нет.
 
 use alloy_primitives::Address;
@@ -21,6 +22,9 @@ pub enum CoinKey {
     Contract(Option<ChainId>, Address),
     /// Сеть и тикер монеты без адреса контракта.
     Ticker(Option<ChainId>, String),
+    /// Решение 416: монета на счёте биржи — тикер этой биржи (остаток один на все сети; площадка — рядом в ключе
+    /// замка). Даёт только core/coin_account.rs, когда сеть монеты указана и биржа её знает.
+    Venue(String),
 }
 
 impl CoinKey {
@@ -41,6 +45,7 @@ impl std::fmt::Debug for CoinKey {
             CoinKey::Contract(Some(c), a) => f.debug_tuple("Contract").field(c).field(a).finish(),
             CoinKey::Ticker(None, t) => f.debug_tuple("Ticker").field(t).finish(),
             CoinKey::Ticker(Some(c), t) => f.debug_tuple("Ticker").field(c).field(t).finish(),
+            CoinKey::Venue(t) => f.debug_tuple("Venue").field(t).finish(),
         }
     }
 }

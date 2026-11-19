@@ -17,7 +17,9 @@
 //! Замки — только в памяти (после перезапуска продаж в полёте нет). Пар (биржа, монета) — столько, сколько торговалось.
 //! Кто вызывает: core/sell.rs и core/sell_range_run.rs (selling), core/remain_fact.rs и core/credit_base.rs (fact),
 //! core/credit_apply.rs (sync).
-//! От чего зависит: coin_key.rs, engine.rs (учёт сделок), op_error.rs, tokio::sync::RwLock.
+//! Решение 416: ключ (площадка, монета на счёте площадки) — coin_account.rs: на бирже сделки одной монеты из разных
+//! сетей — один замок (остаток один), на DEX сеть разделяет.
+//! От чего зависит: coin_key.rs, coin_account.rs, engine.rs (учёт сделок), op_error.rs, tokio::sync::RwLock.
 //! Настройки: нет (базовое поведение).
 
 use std::collections::HashMap;
@@ -28,6 +30,7 @@ use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 
 use crate::core::types::{Asset, TradeResult, VenueId};
 
+use super::coin_account;
 use super::coin_key::CoinKey;
 use super::deal::{Deal, Step};
 use super::engine::{Core, lk};
@@ -42,13 +45,14 @@ static LOCKS: LazyLock<Mutex<Locks>> = LazyLock::new(|| Mutex::new(HashMap::new(
 /// (Deal.sale_unsure, С-7; шестое ревью М-1: свою сделку проверяет её собственное чтение факта). Принимает: ядро,
 /// площадку, монету, ID своей сделки. Ошибок нет.
 pub fn unsure(core: &Core, v: &VenueId, a: &Asset, except: &str) -> bool {
-    let key = CoinKey::of(a);
+    // Решение 416: монета на счёте площадки (биржа — одна на все сети) — coin_account.rs.
+    let key = coin_account::key(v, a);
     lk(&core.inner.deals).values().any(|d| {
         d.id != except
             && d.sale_unsure
             && &d.at == v
             && !matches!(d.step, Step::Closed | Step::TakenOver)
-            && CoinKey::of(&d.direction.asset) == key
+            && coin_account::key(v, &d.direction.asset) == key
     })
 }
 
@@ -57,7 +61,7 @@ fn of(v: &VenueId, a: &Asset) -> Arc<RwLock<()>> {
     LOCKS
         .lock()
         .unwrap_or_else(|p| p.into_inner())
-        .entry((v.clone(), CoinKey::of(a)))
+        .entry((v.clone(), coin_account::key(v, a)))
         .or_default()
         .clone()
 }

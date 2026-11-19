@@ -8,7 +8,7 @@
 //! биржа не примет ордер — та же проверка, что у предпроверки продажи (контракт check_order → order_rules::check
 //! адаптера: правила order_rules::ready и пробный ордер, если включён — решения 134, 412). Те же проверки ядро повторяет при нажатии (balance_sell.rs).
 //! Кто вызывает: core/balance_sell.rs (нажатие), api/balances.rs (состояние кнопок в ответе панели).
-//! От чего зависит: engine.rs (рынок, сделки, метки), coin_key.rs, worst.rs, deal.rs, gateway (контракт Venue), settings.
+//! От чего зависит: engine.rs (рынок, сделки, метки), coin_key.rs, coin_account.rs (решение 416), worst.rs, deal.rs, gateway (контракт Venue), settings.
 //! Настройки: venue.quote_asset (по бирже; читается, своих нет).
 
 use rust_decimal::Decimal;
@@ -57,6 +57,7 @@ pub fn asset_of(core: &Core, v: &VenueId, ticker: &str) -> Asset {
 /// Возвращает: None — свободна; Some(SELLING | IN_DEAL). Ошибок нет.
 pub fn busy(core: &Core, v: &VenueId, a: &Asset) -> Option<&'static str> {
     let key = CoinKey::of(a);
+    let on = super::coin_account::key(v, a);
     if lk(&core.inner.balance_sells).contains(&key) {
         return Some(SELLING);
     }
@@ -71,7 +72,8 @@ pub fn busy(core: &Core, v: &VenueId, a: &Asset) -> Option<&'static str> {
             _ => true,
         };
         // Решение 211: монета сделки — по ключу монеты (адрес; без адреса — тикер), не по тикеру площадки.
-        live && d.at == *v && CoinKey::of(&d.direction.asset) == key
+        // Решение 416: на счёте площадки — монета счёта (биржа — одна на все сети), coin_account.rs.
+        live && d.at == *v && super::coin_account::key(v, &d.direction.asset) == on
     });
     open.then_some(IN_DEAL)
 }

@@ -41,6 +41,7 @@ pub mod card_max;
 pub mod card_text;
 pub mod cex_link;
 pub mod chain;
+pub mod coin_account;
 pub mod coin_alias_sync;
 pub mod coin_book;
 pub mod coin_counter;

@@ -30,7 +30,9 @@
 //! (проверка «Продано вручную»).
 //! Кто вызывает: core/sell.rs (sell_or_stuck_guarded, market_guarded → sell), core/sell_range_run.rs (branch),
 //! core/sell_turn_fresh.rs (котировка под ходом; once — stuck.rs, relay.rs, relay_here.rs).
-//! От чего зависит: sell_turn_last.rs (Last, route_known), coin_key.rs, op_error.rs, deal.rs, core/types, tokio::sync::Mutex.
+//! Решение 416: ключ — (площадка, монета на счёте площадки, coin_account.rs): на бирже сделки одной монеты из разных
+//! сетей продают по одной (остаток один), на DEX сеть разделяет.
+//! От чего зависит: sell_turn_last.rs (Last, route_known), coin_key.rs, coin_account.rs, op_error.rs, deal.rs, core/types, tokio::sync::Mutex.
 //! Настройки: своих нет (базовое поведение, как credit_lock.rs).
 
 use std::collections::HashMap;
@@ -41,6 +43,7 @@ use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
 use crate::core::types::{Asset, DexRoute, TradeResult, VenueId};
 
+use super::coin_account;
 use super::coin_key::CoinKey;
 use super::deal::Deal;
 use super::engine::Core;
@@ -58,7 +61,7 @@ static SOLD: LazyLock<Mutex<Sold>> = LazyLock::new(|| Mutex::new(HashMap::new())
 pub fn sold_after(v: &VenueId, a: &Asset, t: DateTime<Utc>) -> bool {
     SOLD.lock()
         .unwrap_or_else(|p| p.into_inner())
-        .get(&(v.clone(), CoinKey::of(a)))
+        .get(&(v.clone(), coin_account::key(v, a)))
         .is_some_and(|x| *x > t)
 }
 
@@ -81,7 +84,7 @@ pub async fn take(v: &VenueId, a: &Asset) -> Turn {
     let slot = TURNS
         .lock()
         .unwrap_or_else(|p| p.into_inner())
-        .entry((v.clone(), CoinKey::of(a)))
+        .entry((v.clone(), coin_account::key(v, a)))
         .or_default()
         .clone();
     Turn {
@@ -95,7 +98,7 @@ pub fn try_take(v: &VenueId, a: &Asset) -> Option<Turn> {
     let slot = TURNS
         .lock()
         .unwrap_or_else(|p| p.into_inner())
-        .entry((v.clone(), CoinKey::of(a)))
+        .entry((v.clone(), coin_account::key(v, a)))
         .or_default()
         .clone();
     slot.try_lock_owned().ok().map(|g| Turn { g })
@@ -128,7 +131,10 @@ impl Turn {
             Err(e) if e.outcome_unknown() => Last::unknown(&deal.id, route, known),
             _ => return,
         };
-        let key = (deal.at.clone(), CoinKey::of(&deal.direction.asset));
+        let key = (
+            deal.at.clone(),
+            coin_account::key(&deal.at, &deal.direction.asset),
+        );
         SOLD.lock()
             .unwrap_or_else(|p| p.into_inner())
             .insert(key, last.at);

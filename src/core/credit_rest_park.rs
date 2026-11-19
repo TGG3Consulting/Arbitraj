@@ -82,7 +82,8 @@ pub async fn round(core: &Core, v: &VenueId) {
         .collect();
     let mut done = std::collections::HashSet::new();
     for mut d in list {
-        let key = super::coin_key::CoinKey::of(&d.direction.asset);
+        // Решение 416: монета на счёте биржи (одна на все сети) — coin_account.rs.
+        let key = super::coin_account::key(v, &d.direction.asset);
         if done.contains(&key) {
             continue;
         }

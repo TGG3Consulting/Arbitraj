@@ -23,7 +23,9 @@
 //! 11) С1′ — затраты «как при подготовке возврата» только в самом закрытии и не у сделки в чужом общем возврате группы;
 //!     закрываемая сделка (Inner.draw_closing) видна любому пересчёту до сохранения;
 //! 12) пауза старого лимита при превышенной просадке получает отметку «по просадке»;
-//! 13) снизили предел ниже просадки — пауза сразу.
+//! 13) снизили предел ниже просадки — пауза сразу;
+//! 14) финальное ревью: после «Снять паузу» смена настройки другого направления паузу не возвращает, снижение предела
+//!     своего — возвращает сразу.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core, arb::settings, arb::storage, tests/report_common.
@@ -505,4 +507,43 @@ async fn lowered_limit_pauses_at_once() {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
     assert!(core.control().draw_paused.contains(P));
+}
+
+#[tokio::test]
+async fn resume_survives_other_direction_setting_but_not_own_lower_limit() {
+    // Финальное ревью: пауза A → «Снять паузу» → сменили risk.drawdown_pct у B — A без паузы (просадка не росла);
+    // снизили предел самой A ниже просадки — пауза сразу.
+    let (core, st) = core_at(&dir("dd-seen-limit"), "5", "30").await;
+    arb::core::drawdown_snap::apply(&core, P, &mexc(), "USDT", d("1000")).await;
+    close_aleo(&core, "sl", "-35").await;
+    assert!(core.control().draw_paused.contains(P));
+    assert!(arb::core::risk::resume_pair(&core, P));
+    arb::core::drawdown_limit::save(&core).await;
+    assert!(!core.control().pair_paused.contains_key(P));
+    set(
+        &st,
+        "risk.drawdown_pct",
+        Scope::VenueDir("bingx:cex_dex".into()),
+        "4",
+    )
+    .await;
+    arb::core::drawdown_limit::save(&core).await;
+    assert!(
+        !core.control().pair_paused.contains_key(P),
+        "настройка другого направления паузу не вернула"
+    );
+    set(
+        &st,
+        "risk.drawdown_max_usd",
+        Scope::VenueDir(P.into()),
+        "20",
+    )
+    .await;
+    arb::core::drawdown_limit::save(&core).await;
+    let r = core.control();
+    assert!(
+        r.draw_paused.contains(P),
+        "предел A снизили ниже просадки — пауза сразу"
+    );
+    assert!(r.pair_paused[P].contains("больше предела 20.00 USDT"));
 }

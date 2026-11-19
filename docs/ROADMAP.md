@@ -26,6 +26,8 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 414 (финальное ревью t199): tests/core_drawdown_414.rs 547 строк — разнести по темам (слепок, затраты
+  возврата, переход со старого лимита, перезапуск) с общим помощником в tests/drawdown_common/.
 - Решение 414 (повторное ревью t199): сверх ориентира 200 после t199 — core/daily.rs 219 (было 173; дробить: settle /
   settle_close / record — в daily_settle.rs), core/daily_limit.rs 212 (тексты сброса — в daily_limit_text.rs),
   core/daily_venue_limit.rs 205 (reset — в daily_venue_reset.rs), core/ledger.rs 241 (было 238). drawdown_limit.rs

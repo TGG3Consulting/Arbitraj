@@ -74,6 +74,9 @@ pub(super) struct Book {
     pub(super) draw_paused: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(super) draw_seen: BTreeMap<String, Decimal>,
+    /// Финальное ревью t199: предел, при котором замечена просадка (Risk.draw_seen_limit).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) draw_seen_limit: BTreeMap<String, Decimal>,
     /// Ревью t199, С1: сделка, ради которой пересчитывается итог дня, и её плановые затраты возврата (в базу не пишется;
     /// ставят settle и record — drawdown_pending.rs cur).
     #[serde(skip)]

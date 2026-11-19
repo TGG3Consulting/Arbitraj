@@ -82,6 +82,10 @@ pub struct Risk {
     /// Решение 414: просадка пары при прошлом пересчёте — повторная пауза только при росте (drawdown_limit.rs).
     #[serde(skip)]
     pub draw_seen: BTreeMap<String, Decimal>,
+    /// Решение 414 (финальное ревью t199): предел, при котором замечена просадка draw_seen — его снижение тоже «рост»
+    /// (пауза сразу), смена настроек других направлений замеченное не трогает.
+    #[serde(skip)]
+    pub draw_seen_limit: BTreeMap<String, Decimal>,
     /// Решение 225: паузы площадок, поставленные софтом (вид, когда) — их снимает сам бот (auto_resume.rs). Нет записи —
     /// пауза человека или другого модуля. «Снять паузу» человеком снимает отметку.
     pub venue_auto: HashMap<VenueId, super::auto_pause::VenueMark>,
@@ -113,6 +117,7 @@ impl Default for Risk {
             loss_seen: BTreeMap::new(),
             draw_paused: BTreeSet::new(),
             draw_seen: BTreeMap::new(),
+            draw_seen_limit: BTreeMap::new(),
             venue_auto: HashMap::new(),
             mode_auto: None,
             outcome_open: HashMap::new(),

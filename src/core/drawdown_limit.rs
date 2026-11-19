@@ -5,7 +5,8 @@
 //!   направления существующим механизмом Risk.pair_paused решения 258 (идущие доводятся, новые не начинаются; у
 //!   «DEX ↔ DEX» — пауза циклов), отметка Risk.draw_paused; уведомление risk.venue_daily_loss с цифрами (слепок, пик,
 //!   баланс, просадка, предел — % и USDT). Повторная пауза после «Снять паузу» без нового слепка — только если
-//!   просадка выросла (как у старого лимита, Risk.draw_seen).
+//!   просадка выросла (как у старого лимита, Risk.draw_seen) или снизили предел этого направления
+//!   (Risk.draw_seen_limit, финальное ревью t199).
 //!   Пара без заданных risk.drawdown_* — по старому лимиту дня (daily_venue_limit.rs), здесь не трогается. Пара с
 //!   заданными, но без слепка — проверки нет (торговля направлением не включается — risk_ready.rs).
 //!   Снимают паузу: новый слепок («Сбросить лимит» направления / площадки / общий, новый день UTC — drawdown_snap.rs),
@@ -78,10 +79,14 @@ pub(super) fn check(core: &Core) -> (Vec<(String, String)>, Vec<String>) {
         let v = view_of(core, &p, &r.day);
         let was = r.pair_paused.contains_key(&p);
         let seen = r.draw_seen.get(&p).copied();
+        let seen_limit = r.draw_seen_limit.get(&p).copied();
         if let Some(v) = &v {
             r.draw_seen.insert(p.clone(), v.drawdown_usd);
-            // Пауза — при переходе через предел или при росте просадки (после «Снять паузу» без нового слепка).
-            let grew = seen.is_none_or(|s| s <= v.limit_usd || v.drawdown_usd > s);
+            r.draw_seen_limit.insert(p.clone(), v.limit_usd);
+            // Пауза — при переходе через предел, при росте просадки (после «Снять паузу» без нового слепка) или при
+            // снижении предела этого направления (финальное ревью t199: limit < предела, при котором замечено).
+            let lowered = seen_limit.is_some_and(|l| v.limit_usd < l);
+            let grew = lowered || seen.is_none_or(|s| s <= v.limit_usd || v.drawdown_usd > s);
             if v.exceeded && grew && !was {
                 let t = describe(&p, v, "больше предела");
                 r.pair_paused.insert(p.clone(), t.clone());
@@ -131,6 +136,9 @@ pub(super) fn restore(core: &Core, book: &Book) {
     }
     for (p, v) in &book.draw_seen {
         r.draw_seen.entry(p.clone()).or_insert(*v);
+    }
+    for (p, v) in &book.draw_seen_limit {
+        r.draw_seen_limit.entry(p.clone()).or_insert(*v);
     }
 }
 

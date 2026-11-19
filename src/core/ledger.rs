@@ -120,6 +120,9 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
     // Итог дня (решения 53, 152): закрыта — факт (снимает оценку этой сделки); остановлена или «Беру на себя» —
     // оценка позиции: стоимость монет по рынку площадки, где они лежат, − вложено (цены нет — худший случай).
     // Решение 173: итог идёт и площадкам сделки — лимит площадки ставит паузу только ей.
+    // Решение 414 (финальное ревью t199): охрана отметки закрываемой сделки (Inner.draw_closing) — снимается в Drop.
+    let closing =
+        (step == Step::Closed).then(|| super::drawdown_pending::Closing::new(core, &deal.id));
     let trip = match step {
         // Решение 414 (повторное ревью t199): само закрытие — плановые затраты возврата до сохранения (settle_close).
         Step::Closed => super::daily::settle_close(core, deal, result).await,
@@ -138,8 +141,9 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
     // Решение 236: возврат USDT идёт — deal.closed ждёт его конца (факт с затратами возврата; usdt_return_state::set).
     let held = wants && super::deal_closed::hold(deal, step, why);
     save(core, deal).await;
-    // Решение 414: сделка сохранена с частями возврата — её затраты дальше по учёту ядра.
-    super::drawdown_pending::closing(core, &deal.id, None);
+    // Решение 414: сделка сохранена с частями возврата — её затраты дальше по учёту ядра (отметку снимает Drop охраны,
+    // и при панике выше — финальное ревью t199).
+    drop(closing);
     for job in ret {
         job.start(core);
     }

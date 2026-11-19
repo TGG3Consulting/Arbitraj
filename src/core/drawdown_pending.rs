@@ -174,6 +174,30 @@ pub fn pending(core: &Core, cur: Option<&Cur>) -> BTreeMap<String, Decimal> {
     out
 }
 
+/// Отметка закрываемой сделки в Inner.draw_closing: снимается в Drop (финальное ревью t199 — и при панике в подготовке
+/// возврата или сохранении). Ставит ledger::finish до итога дня, снимает — после сохранения (drop).
+pub struct Closing {
+    core: Core,
+    id: String,
+}
+
+impl Closing {
+    /// Что делает: охрана отметки сделки (саму отметку ставит daily::settle_close). Принимает: ядро, ID. Ошибок нет.
+    pub fn new(core: &Core, id: &str) -> Closing {
+        Closing {
+            core: core.clone(),
+            id: id.to_string(),
+        }
+    }
+}
+
+impl Drop for Closing {
+    /// Снимает отметку закрываемой сделки. Ошибок нет.
+    fn drop(&mut self) {
+        closing(&self.core, &self.id, None);
+    }
+}
+
 /// Что делает: остаток С1 — закрываемая сделка (ledger::finish) держит свои плановые затраты в Inner.draw_closing от
 /// итога дня до сохранения (`Some` — поставить, `None` — снять после сохранения). Принимает: ядро, ID, Cur. Ошибок
 /// нет. Замок: draw_closing (коротко).

@@ -128,6 +128,7 @@ pub(super) async fn commit(core: &Core, date: NaiveDate, mut book: Book) -> Trip
             .map(|p| (p.clone(), r.pair_paused.get(p).cloned().unwrap_or_default()))
             .collect();
         book.draw_seen = r.draw_seen.clone();
+        book.draw_seen_limit = r.draw_seen_limit.clone();
     }
     let body = serde_json::to_string(&book).unwrap_or_default();
     let day = date.to_string();

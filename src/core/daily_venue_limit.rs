@@ -192,6 +192,7 @@ pub(super) fn lift(core: &Core, pair: &str) -> bool {
     let mut r = lk(&core.inner.risk);
     r.loss_seen.remove(pair);
     r.draw_seen.remove(pair);
+    r.draw_seen_limit.remove(pair);
     r.draw_paused.remove(pair);
     r.pair_paused.remove(pair).is_some()
 }

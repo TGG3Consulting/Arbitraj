@@ -126,6 +126,7 @@ pub async fn apply(core: &Core, p: &str, pl: &Place, quote: &str, fact: Decimal)
     let lifted = {
         let mut r = lk(&core.inner.risk);
         r.draw_seen.remove(p);
+        r.draw_seen_limit.remove(p);
         r.loss_seen.remove(p);
         let draw = r.draw_paused.remove(p);
         match r.pair_paused.remove(p) {

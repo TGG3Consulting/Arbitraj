@@ -73,7 +73,7 @@ async fn old_record_without_chain_reads_as_dex_chain() {
         assert!(raw["asset"].get("chain").is_none(), "запись до решения 416");
         let d: Direction = serde_json::from_value(raw.clone()).unwrap();
         assert!(d.asset.contract.is_some(), "адрес из «bsc_contract»");
-        assert_eq!(d.asset.chain, None, "сеть в записи не указана");
+        assert!(d.asset.chain.is_none(), "сеть в записи не указана");
         assert_eq!(
             chain::of(&s, &dex, &d.asset).unwrap(),
             ChainId("bsc".into()),

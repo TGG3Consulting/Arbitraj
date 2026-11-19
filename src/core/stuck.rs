@@ -25,6 +25,9 @@
 //! счёт, журнал и проверка сразу — решение 361).
 //! Решение 417 (ревью t201, М-3): причина GasReserve — «Перегон» без продажи здесь при итоге ≥ 0 (relay::run_as, прежнее
 //! поведение); ветки режима и продажа / алерт внутри них — в куче (Box::pin, стек теста core_exec_book_238).
+//! «417 (ожидание)» (Тигран 19.11): продажи «Ожидания» (стало выгодно; истечение срока при итоге ≥ 0) и «Порога
+//! убытка» — с перепроверкой условия на котировке под ходом очереди (sell_here_ok.rs try_sell_if): не выполнено —
+//! ордера нет; «Ожидание» продолжается (истечение — по рынку, как раньше), «Порог убытка» — алерт (over_max).
 //! Настройки: stuck.mode, stuck.wait_ms, stuck.max_loss_pct, stuck.max_relays.
 
 use std::time::Duration;
@@ -38,6 +41,8 @@ use crate::storage::journal::Level;
 use super::deal::{Deal, Step};
 use super::engine::Core;
 use super::remeasure::Guard;
+use super::sell_here_ok::{Cond, HereOk, How, Note};
+use super::sell_range::Rule;
 use super::stuck_lag::Ticks;
 use super::stuck_quote as q;
 use super::stuck_reason::StuckReason;
@@ -140,9 +145,20 @@ async fn wait(core: &Core, mut deal: Deal) {
             // Решение 47: выгодно — итог сделки не ниже нуля.
             Ok((v, _, _)) if super::sell::profitable(&deal, v) => {
                 // Решение 247: пере-замер — по тому же условию «выгодно» (итог ≥ 0 — порог убытка 0).
-                let g = Guard::MaxLoss(rust_decimal::Decimal::ZERO);
+                // «417 (ожидание)»: условие перепроверяется на котировке под ходом очереди (sell_here_ok.rs); под ходом
+                // итог < 0 или котировки нет — ордера нет, ожидание продолжается (срок вышел — правила истечения ниже).
+                let zero = rust_decimal::Decimal::ZERO;
+                let how = How {
+                    cond: Cond::Profitable,
+                    guard: Guard::MaxLoss(zero),
+                    rule: Rule::MaxLoss(zero),
+                    note: Note::None,
+                };
                 let why = "ожидание: стало выгодно";
-                return Box::pin(super::sell::market_guarded(core, deal, why, g)).await;
+                match Box::pin(super::sell_here_ok::try_sell_if(core, deal, why, how)).await {
+                    HereOk::NotNow(d, _) => deal = *d,
+                    HereOk::Sold | HereOk::Gone => return,
+                }
             }
             Ok(_) => {}
             // Решение 238 (ревью, п. 2): не задана настройка — ждать нечего.
@@ -155,6 +171,18 @@ async fn wait(core: &Core, mut deal: Deal) {
     // п. Г, Тигран 10.11: согласовано): PROFITABLE_OPEN — исполнить может и агрегатор DEX, если он включён и лучше.
     let why = format!("ждали {ms} мс — выгодно не стало");
     let g = super::remeasure::PROFITABLE_OPEN;
+    // «417 (ожидание)»: под ходом итог ≥ 0 — продажа (правило Тиграна); иначе — как раньше по истечении срока: по рынку
+    // без порога (котировка ордера — под ходом, market_guarded).
+    let how = How {
+        cond: Cond::Profitable,
+        guard: g,
+        rule: Rule::NoThreshold,
+        note: Note::ProfitHere,
+    };
+    let deal = match Box::pin(super::sell_here_ok::try_sell_if(core, deal, &why, how)).await {
+        HereOk::NotNow(d, _) => *d,
+        HereOk::Sold | HereOk::Gone => return,
+    };
     Box::pin(sold_by_market(core, deal, &why, g)).await;
 }
 
@@ -189,7 +217,21 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
     let loss = deal.loss_pct_if(value);
     if loss <= max {
         let text = h::loss_vs_max(loss, max, true);
-        return Box::pin(sold_by_market(core, deal, &text, Guard::MaxLoss(max))).await;
+        // «417 (ожидание)»: порог перепроверяется на котировке под ходом очереди (sell_here_ok.rs); выше порога или
+        // котировки нет — алерт человеку, как «больше — алерт» (убыток — по котировке под ходом).
+        let how = How {
+            cond: Cond::MaxLoss(max),
+            guard: Guard::MaxLoss(max),
+            rule: Rule::MaxLoss(max),
+            note: Note::StuckMarket,
+        };
+        let (d, v) = match Box::pin(super::sell_here_ok::try_sell_if(core, deal, &text, how)).await
+        {
+            HereOk::NotNow(d, v) => (*d, v),
+            HereOk::Sold | HereOk::Gone => return,
+        };
+        let (loss, why) = over_max(&d, v, max);
+        return Box::pin(super::manual::raise_alert(core, d, loss, why, None)).await;
     }
     let why = h::loss_vs_max(loss, max, false);
     Box::pin(super::manual::raise_alert(
@@ -200,6 +242,26 @@ async fn loss_limit(core: &Core, mut deal: Deal) {
         None,
     ))
     .await;
+}
+
+/// «417 (ожидание)»: порог не выполнен на котировке под ходом — убыток и причина алерта. Принимает: сделку, выручку
+/// под ходом (None — котировки нет), порог. Возвращает: (убыток, текст). Ошибок нет.
+pub fn over_max(
+    deal: &Deal,
+    v: Option<rust_decimal::Decimal>,
+    max: rust_decimal::Decimal,
+) -> (Option<rust_decimal::Decimal>, String) {
+    match v {
+        Some(v) => {
+            let loss = deal.loss_pct_if(v);
+            (Some(loss), h::loss_vs_max(loss, max, false))
+        }
+        None => (
+            None,
+            "котировки продажи под ходом очереди нет — убыток неизвестен, по рынку не продаём"
+                .to_string(),
+        ),
+    }
 }
 
 /// Продажа по рынку с уведомлением stuck.market_sold. Решение 247: `g` — порог, по которому решено продать (граница

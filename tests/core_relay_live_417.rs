@@ -4,15 +4,21 @@
 //! запись, стакан — пример документации tests/data/rest_book_2026-11-09/xt_depth_doc.json (бид 200 × 0.996, 100 ×
 //! 0.001, 20 × 10), баланс BTC — ячейка стенда, ордер IOC снят без исполнения). Сделка 1 BTC на xt; вложено — параметр
 //! теста (итог при продаже здесь ≥ 0 или < 0). Журнал стенда — запросы стакана, ордеров и вывода.
-//! (а) режим relay, итог здесь ≥ 0 — продажа здесь: ордер на xt есть, запросов вывода нет; stuck.relay_max_loss_pct не
-//!     задана — алерта «не задана настройка» нет (правило Тиграна на всех путях продажи здесь, М-2);
-//! (б) итог < 0 — перегона нет (целей на стенде нет: одна площадка), продажа здесь по stuck.relay_max_loss_pct: убыток
-//!     сверх порога — алерт человеку, ордера и вывода нет. Ветка «у цели нет ряда σ» требует второй площадки с
-//!     котировкой — на стенде её нет; она проверена чистыми функциями (tests/core_relay_reserve_417.rs, params_at —
-//!     ошибка) и текстом причины М-1 в relay.rs;
-//! (в) случай С-1: котировка-решение — итог ≥ 0; затем стакан хуже (тело стенда — тот же пример документации без
-//!     двух верхних бидов; снимок REST забыт, как после ордера другой продажи — exec_book::forget) — продажа под ходом
-//!     (sell_here_ok::try_sell) ордер не ставит; дальше продажа здесь по порогу — алерт, ордера нет.
+//!
+//! - (а) режим relay, итог здесь ≥ 0 — продажа здесь: ордер на xt есть, запросов вывода нет; stuck.relay_max_loss_pct не
+//!   задана — алерта «не задана настройка» нет (правило Тиграна на всех путях продажи здесь, М-2);
+//! - (б) итог < 0 — перегона нет (целей на стенде нет: одна площадка), продажа здесь по stuck.relay_max_loss_pct: убыток
+//!   сверх порога — алерт человеку, ордера и вывода нет. Ветка «у цели нет ряда σ» требует второй площадки с
+//!   котировкой — на стенде её нет; она проверена чистыми функциями (tests/core_relay_reserve_417.rs, params_at —
+//!   ошибка) и текстом причины М-1 в relay.rs;
+//! - (в) случай С-1: котировка-решение — итог ≥ 0; затем стакан хуже (тело стенда — тот же пример документации без
+//!   двух верхних бидов; снимок REST забыт, как после ордера другой продажи — exec_book::forget) — продажа под ходом
+//!   (sell_here_ok::try_sell) ордер не ставит; дальше продажа здесь по порогу — алерт, ордера нет.
+//! - (г) «417 (ожидание)»: режим wait, тик монеты — «стало выгодно» по котировке-решению (первый запрос стакана); тест
+//!   подменяет стакан на худший сразу после него; ответ баланса задержан стендом (300 мс), venue.book_stale_ms xt =
+//!   200 мс — котировка под ходом идёт новым запросом стакана (второй) и видит худший стакан: ордера нет, ожидание
+//!   продолжается (задача режима не закончена); по истечении stuck.wait_ms — как раньше, по рынку (ордер есть).
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core (stuck, relay_here, sell_here_ok, relay_reserve, sell_turn_fresh, exec_book, ledger),
 //! tests/t198_live.
@@ -190,5 +196,59 @@ fn worse_book_under_turn_does_not_sell() {
         let y = saved(&core, "T417C");
         assert_eq!(y.step, Step::WaitingHuman, "{:?}", y.timeline);
         assert_eq!(count(&stand, Hit::Post), 0, "ордера нет");
+    });
+}
+
+/// (г) «Ожидание»: стало выгодно по котировке-решению, под ходом стакан хуже — ордера нет, ожидание продолжается.
+#[test]
+fn wait_profitable_then_worse_keeps_waiting() {
+    big(async {
+        let (core, stand) = start(&dir("d"), "1").await;
+        set(&core, "stuck.mode", json!("wait")).await;
+        set(&core, "stuck.wait_ms", json!(3000)).await;
+        let xt = Scope::Venue("xt".into());
+        let s = &core.inner.deps.settings;
+        s.set("venue.book_stale_ms", xt, Some(json!(200)), "тест")
+            .await
+            .unwrap();
+        *stand.delay_ms.lock().unwrap() = 300;
+        let x = deal("T417D", "100");
+        arb::core::ledger::save(&core, &x).await;
+        let c = core.clone();
+        let task = tokio::spawn(async move {
+            arb::core::stuck::handle_as_is(&c, x, StuckReason::Unprofitable).await
+        });
+        // Тик монеты — «Ожидание» котирует (котировка-решение).
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let _ = core.inner.coin_ticks.send(btc());
+        let st = &stand;
+        let wait_hits = move |n: usize| async move {
+            for _ in 0..500 {
+                if count(st, Hit::Depth) >= n {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            panic!("запросов стакана меньше {n}");
+        };
+        wait_hits(1).await;
+        *stand.depth.lock().unwrap() = Some(worse_book());
+        wait_hits(2).await;
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert_eq!(
+            count(&stand, Hit::Post),
+            0,
+            "под ходом итог < 0 — ордера нет"
+        );
+        assert!(!task.is_finished(), "ожидание продолжается");
+        // Срок вышел — как раньше: по рынку без порога (ордер есть).
+        tokio::time::timeout(Duration::from_secs(30), task)
+            .await
+            .expect("режим закончился")
+            .unwrap();
+        assert!(
+            count(&stand, Hit::Post) >= 1,
+            "по истечении срока — по рынку"
+        );
     });
 }

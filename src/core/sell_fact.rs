@@ -16,6 +16,8 @@
 //! поставлен, денег не тронуто — отметка reread = количество отказа (подтверждённое только записью — снова «ждёт доли»),
 //! снова вход в продажу тем же правилом (before перечитает факт и пересчитает долю). Повторный отказ после свежего
 //! факта (или факт не меньше количества отказа: дело не в доле) — прежний путь: алерт человеку с цифрами в хронологии.
+//! «417 (ожидание)»: повтор с порогом режима (Rule::MaxLoss) — порог перепроверяется на котировке под ходом
+//! (sell_here_ok.rs try_sell_if); не выполнен — алерт (stuck::over_max), а не ордер по рынку.
 //! Кто вызывает: core/sell.rs, core/relay.rs, core/manual_relay.rs, core/executor.rs (первый вывод с биржи).
 //! От чего зависит: remain_fact.rs, credit_fact.rs, deposit_hold.rs, sell_unsent.rs (alert), manual_outcome.rs,
 //! trade_ops.rs, native.rs, sell_range.rs (Rule), remeasure.rs (Guard), deal_words.rs, deal.rs.
@@ -150,14 +152,22 @@ pub async fn retry(core: &Core, mut deal: Deal, e: &OpError, why: &str, rule: Ru
     match rule {
         Rule::Entry => Box::pin(super::sell::sell_or_stuck(core, deal)).await,
         Rule::Button => Box::pin(super::sell::market(core, deal, super::sell::BUTTON)).await,
+        // «417 (ожидание)»: порог режима перепроверяется на котировке под ходом очереди (sell_here_ok.rs); не
+        // выполнен или котировки нет — алерт человеку (stuck::over_max), а не ордер по рынку.
         Rule::MaxLoss(m) => {
-            Box::pin(super::sell::market_guarded(
-                core,
-                deal,
-                why,
-                Guard::MaxLoss(m),
-            ))
-            .await
+            let how = super::sell_here_ok::How {
+                cond: super::sell_here_ok::Cond::MaxLoss(m),
+                guard: Guard::MaxLoss(m),
+                rule: Rule::MaxLoss(m),
+                note: super::sell_here_ok::Note::None,
+            };
+            let (d, v) =
+                match Box::pin(super::sell_here_ok::try_sell_if(core, deal, why, how)).await {
+                    super::sell_here_ok::HereOk::NotNow(d, v) => (*d, v),
+                    _ => return,
+                };
+            let (loss, w) = super::stuck::over_max(&d, v, m);
+            Box::pin(super::manual::raise_alert(core, d, loss, w, None)).await
         }
         Rule::NoThreshold => {
             Box::pin(super::sell::market_guarded(core, deal, why, Guard::Off)).await

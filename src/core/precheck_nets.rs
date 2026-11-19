@@ -26,7 +26,7 @@
 use alloy_primitives::Address;
 use chrono::Utc;
 
-use crate::core::types::{CoinNetworkInfo, VenueId};
+use crate::core::types::{ChainId, CoinNetworkInfo, VenueId};
 
 use super::engine::{Core, rd};
 
@@ -55,10 +55,23 @@ impl Src {
 /// Что делает: записи монеты площадки из памяти ядра, если они моложе интервала фонового опроса этой площадки.
 /// Принимает: ядро, биржу, тикер монеты на этой бирже, адрес контракта монеты направления. Возвращает: Some(записи,
 /// возраст самой старой, мс) — запрос к бирже не нужен; None — нужен запрос (причины — в шапке). Ошибок нет.
+/// Монета сети по умолчанию (без сети) — как recent_in с None.
 pub fn recent(
     core: &Core,
     v: &VenueId,
     on: &str,
+    contract: Option<Address>,
+) -> Option<(Vec<CoinNetworkInfo>, i64)> {
+    recent_in(core, v, on, None, contract)
+}
+
+/// Что делает: как recent, но запись монеты ищется по сети и адресу (решение 431: адрес в другой сети — другая монета).
+/// Принимает: ядро, биржу, тикер на бирже, сеть монеты (Asset.chain), адрес. Возвращает и ошибки: как recent.
+pub fn recent_in(
+    core: &Core,
+    v: &VenueId,
+    on: &str,
+    chain: Option<&ChainId>,
     contract: Option<Address>,
 ) -> Option<(Vec<CoinNetworkInfo>, i64)> {
     // Смена статуса монеты ждёт подтверждения сглаживателя — в памяти прежний статус: только запрос.
@@ -74,7 +87,10 @@ pub fn recent(
         .cloned()
         .collect();
     let contract = contract?;
-    if !list.iter().any(|i| i.asset.contract == Some(contract)) {
+    if !list
+        .iter()
+        .any(|i| i.asset.contract == Some(contract) && i.asset.chain.as_ref() == chain)
+    {
         return None;
     }
     let now = Utc::now();

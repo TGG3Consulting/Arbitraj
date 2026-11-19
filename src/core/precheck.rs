@@ -59,7 +59,13 @@ pub(super) async fn transfer_open(
     let on = super::venue_ticker::ticker_on(core, &d.asset, v);
     let mem = match nets {
         Some(src) => {
-            let m = super::precheck_nets::recent(core, v, &on, d.asset.contract);
+            let m = super::precheck_nets::recent_in(
+                core,
+                v,
+                &on,
+                d.asset.chain.as_ref(),
+                d.asset.contract,
+            );
             *src = m.as_ref().map_or(Src::Http, |(_, age)| Src::Memory(*age));
             m.map(|(list, _)| list)
         }
@@ -77,12 +83,18 @@ pub(super) async fn transfer_open(
                 .await
                 .map_err(|e| format!("{}: справочник сетей: {}", v.0, e.message))?;
             // Нативная монета ↔ обёртка (решение 62): тот же справочник, что у ядра (native.rs).
-            super::native::map(core, v, list)
+            // Решение 431: записи — к сети ядра (net_chain.rs), затем нативная монета.
+            super::net_chain::prepare(core, v, list)
         }
     };
     let open = list
         .iter()
-        .find(|i| i.asset.contract.is_some() && i.asset.contract == d.asset.contract)
+        // Решение 431: запись — по сети и адресу монеты (адрес в другой сети — другая монета, core/net_chain.rs).
+        .find(|i| {
+            i.asset.contract.is_some()
+                && i.asset.contract == d.asset.contract
+                && i.asset.chain == d.asset.chain
+        })
         .map(|i| {
             if withdraw {
                 i.withdraw_enabled

@@ -160,7 +160,7 @@ async fn one(core: &Core, key: &Key, last: &mut Option<String>) -> Outcome {
     };
     match res {
         Ok(list) => {
-            let list = super::native::map(core, v, list);
+            let list = super::net_chain::prepare(core, v, list);
             let min = list
                 .iter()
                 .find(|i| &i.asset.ticker == on && i.deposit_min.is_some())

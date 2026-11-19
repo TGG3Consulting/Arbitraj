@@ -89,7 +89,7 @@ pub async fn run(core: Core, mut rx: mpsc::Receiver<MarketEvent>) {
                 }
                 // Решение 124: новые состояния пулов — толчок поиска циклов DEX ↔ DEX для исполнения (cycle_watch.rs).
                 core.inner.cycles.kick.notify_one();
-                for a in assets_by_tokens(&core, tokens) {
+                for a in assets_by_tokens(&core, &venue, tokens) {
                     super::tick_sched::schedule_pool(&core, a, venue.clone(), mark);
                 }
                 // Решение 349: соседи токенов (первый пул пары) и отметка пары — O(1); рассылка — задача mid_wake.rs.
@@ -156,7 +156,17 @@ fn asset_by_ticker(core: &Core, venue: &VenueId, ticker: &str) -> Option<Asset> 
 /// (ticker_index.rs), а не проходом всего справочника на каждое событие пула. Ошибок нет.
 fn assets_by_tokens(
     core: &Core,
+    venue: &VenueId,
     t: (alloy_primitives::Address, alloy_primitives::Address),
 ) -> Vec<Asset> {
-    rd(&core.inner.tickers).by_tokens(t)
+    let all = rd(&core.inner.tickers).by_tokens(t);
+    // Решение 431: монеты только сети площадки DEX события (адрес в другой сети — другая монета, её пулы — у другой
+    // площадки DEX). Все монеты без сети (одна сеть, BSC) — без проверки и без чтения настроек, как раньше.
+    if all.iter().all(|a| a.chain.is_none()) {
+        return all;
+    }
+    match super::chain::tag_of_dex(core, venue) {
+        Ok(tag) => all.into_iter().filter(|a| a.chain == tag).collect(),
+        Err(_) => all,
+    }
 }

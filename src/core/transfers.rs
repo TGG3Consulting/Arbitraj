@@ -91,19 +91,25 @@ pub fn network(core: &Core, asset: &Asset, venue: &VenueId) -> Result<String, St
                 venue.0, asset.ticker
             ),
             Some(c) => format!(
-                "{}: нет имени сети {c} для {} — у биржи имя сети по сети приходит из её справочника (шаг 3 плана двух сетей)",
-                venue.0, asset.ticker
+                "{}: нет имени сети {c} для {} — задайте {} площадки (имя сети по живому ответу её справочника сетей)",
+                venue.0,
+                asset.ticker,
+                crate::gateway::own_nets::setting_of(Some(c))
             ),
         })
 }
 
 /// Что делает: своё имя сети площадки для сети монеты (решение 430). Сеть по умолчанию (None) — venue.bsc_network
-/// площадки, как раньше; другая сеть — только у площадки DEX (её venue.bsc_network — имя сети, которую она
-/// обслуживает); у биржи имени другой сети в настройке нет (venue.bsc_network — имя сети BSC) — None.
+/// площадки, как раньше; другая сеть у площадки DEX — её venue.bsc_network (имя сети, которую она обслуживает); у биржи
+/// (решение 431) — имя этой сети у биржи, venue.<сеть>_network (gateway/own_nets.rs); не задано — None.
 /// Принимает: ядро, площадку, сеть монеты. Возвращает: имя или None. Ошибок нет.
 pub fn own_name(core: &Core, venue: &VenueId, chain: Option<&ChainId>) -> Option<String> {
     if chain.is_some() && !super::daily_venue::is_dex(core, &venue.0) {
-        return None;
+        let at = crate::settings::read::At {
+            venue: Some(&venue.0),
+            coin: None,
+        };
+        return crate::gateway::own_nets::name_of(&core.inner.deps.settings, at, chain).ok();
     }
     own_bsc_name(core, venue)
 }

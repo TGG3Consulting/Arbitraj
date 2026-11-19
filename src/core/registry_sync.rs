@@ -71,7 +71,8 @@ pub async fn run(core: Core, venue: VenueId) {
                     fetched = Some(started);
                     last_err = None;
                     // Нативная монета (BNB без адреса) ↔ обёртка WBNB по настройке DEX — решение 62 (native.rs).
-                    let list = super::native::map(&core, &venue, list);
+                    // Решение 431: записи — к сети ядра (net_chain.rs), затем нативная монета.
+                    let list = super::net_chain::prepare(&core, &venue, list);
                     let list = debounce.apply(&core, &venue, list);
                     report_changes(&core, &venue, &list).await;
                     // Решение 129: тот же справочник (кроме времени получения) — без пересборки справочника монет.

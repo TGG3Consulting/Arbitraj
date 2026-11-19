@@ -10,6 +10,7 @@
 //! решение 125), gate.rs, okx.rs, coinex.rs (настройки только Gate, только OKX, только CoinEx).
 //! решение 125), gate.rs, okx.rs, htx.rs и др. (настройки одной биржи).
 //! cpu.rs — счёт процессора (решения 336–338, задача t157). bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
+//! bybit.rs — только Bybit (решение 428, страховка стакана).
 //! lost_events.rs — сообщения ядру и кандидаты не теряются молча (решения 333/334).
 //! write_path.rs — очередь уведомлений, очередь и пачки журнала, synchronous учёта ядра (решения 340, 341, 353).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
@@ -25,6 +26,7 @@ mod binance;
 mod bingx;
 mod book_events;
 mod bitget;
+mod bybit;
 mod coinex;
 mod cpu;
 pub mod dex;
@@ -141,6 +143,7 @@ static PARTS: &[&[SettingDef]] = &[
     okx::OKX,
     binance::BINANCE,
     xt::XT,
+    bybit::BYBIT,
     phemex::PHEMEX,
     kraken::KRAKEN,
     coinex::COINEX,

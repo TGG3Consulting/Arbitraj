@@ -1,14 +1,16 @@
 //! Файл: venues/bybit/ws_conn.rs
 //! Что делает: одна сессия публичного WebSocket спота Bybit: подключение, подписки пачками не больше 10 args
 //! ({"op":"subscribe","req_id","args"}) с паузой, свой {"op":"ping"} раз в venue.ws_ping_ms, Pong на Ping-кадр,
-//! локальные стаканы из снимка и изменений (local_book.rs) → память и ядру (try_send). Разрыв номера u — стакан пары
+//! локальные стаканы из снимка и изменений (local_book.rs) → память и ядру (try_send). Решение 428: та же сессия —
+//! у соединения страховки (другая глубина, без сторожа ядра); кадры разбирает ws_book.rs / ws_lane.rs, выбор
+//! источника стакана ядра — backup.rs. Разрыв номера u — стакан пары
 //! недостоверен и пересподписка этой пары (новый снимок); второй разрыв той же пары раньше venue.ws_reconnect_pause_ms —
 //! переподключение соединения с паузой (урок 12: без бесконечного круга ресинков). Отказ подписки — стаканы её пачки
 //! недостоверны.
 //! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
 //! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, local_book.rs, book.rs, book_print.rs (U_LEVELS), ctx.rs, gateway/feed_reg.rs,
+//! От чего зависит: ws_book.rs (состояние сессии и кадры), ws_lane.rs, depth.rs, book.rs, ctx.rs, gateway/feed_reg.rs,
 //! tokio-tungstenite.
 //! Настройки: из ws.rs (Cfg); raw.book_frames [bybit] — кадры стаканов в сырой журнал; venue.book_seq_strict — u строго +1.
 //!
@@ -26,7 +28,7 @@
 //! successfully, you will receive a snapshot»). «Переподключить соединение» — сессия заканчивается, ws.rs подключается
 //! заново с теми же парами.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 
 use futures_util::{SinkExt, StreamExt};
@@ -35,22 +37,20 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::core::types::{Asset, OrderBook, VenueId};
-use crate::gateway::core_out_book::{BookOut, Fed};
+use crate::core::types::Asset;
 use crate::gateway::events::MarketEvent;
-use crate::gateway::tap::{TapData, TapStream, now_ns};
-use crate::storage::journal::Level;
+use crate::gateway::tap::now_ns;
 
-use super::book::{Alive, Books};
-use super::book_print::U_LEVELS;
-use super::ctx::{Ctx, ID};
-use super::depth::{self, Msg, channel};
-use super::local_book::{Applied, LocalBook};
-use super::ws::{Cfg, End, invalidate};
+use super::book::Books;
+use super::ctx::Ctx;
+use super::depth::channel;
+use super::ws::{Cfg, End};
+use super::ws_book::St;
+use super::ws_give::Insure;
 use crate::gateway::feed_health::Cmd;
 use crate::gateway::feed_reg::ConnHandle;
 
-/// Учёт свежести соединения и канал команд сторожа (решение 202).
+/// Учёт свежести соединения и канал команд сторожа (решение 202). У соединения страховки (решение 428) — нет.
 pub struct Watch<'a> {
     pub feed: &'a ConnHandle,
     pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
@@ -59,7 +59,17 @@ pub struct Watch<'a> {
 /// Сколько args в одном запросе подписки спота — из официальной документации («up to 10 args for each subscription»).
 pub const SUB_ARGS_MAX: usize = 10;
 
-/// Сессия: работает до обрыва. Возвращает причину окончания.
+/// Следующая команда сторожа; у соединения без сторожа — никогда. Ошибок нет.
+async fn next_cmd(cmd: &mut Option<&mut mpsc::UnboundedReceiver<Cmd>>) -> Option<Cmd> {
+    match cmd {
+        Some(c) => c.recv().await,
+        None => std::future::pending().await,
+    }
+}
+
+/// Сессия: работает до обрыва. Принимает: окружение, имя соединения, пары, стаканы, канал ядра, настройки соединения,
+/// страховку подписки, сторож (None — соединение страховки). Возвращает причину окончания.
+#[allow(clippy::too_many_arguments)]
 pub async fn session(
     ctx: &Ctx,
     name: &str,
@@ -67,7 +77,8 @@ pub async fn session(
     books: &Books,
     out: &mpsc::Sender<MarketEvent>,
     cfg: Cfg,
-    w: Watch<'_>,
+    ins: &Insure,
+    w: Option<Watch<'_>>,
 ) -> End {
     let connect = tokio::time::timeout(
         cfg.connect_timeout,
@@ -80,59 +91,51 @@ pub async fn session(
         Ok(Ok((ws, _))) => ws,
     };
     let (mut sink, mut stream) = ws.split();
-    w.feed.session_started();
-    let alive: Alive = Default::default();
-    let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
-    let topics: Vec<String> = assets.iter().map(|(_, s)| channel(cfg.levels, s)).collect();
+    let (feed, mut cmd) = match w {
+        Some(w) => (Some(w.feed), Some(w.cmd)),
+        None => (None, None),
+    };
+    if let Some(feed) = feed {
+        feed.session_started();
+        for (a, _) in assets {
+            ins.hub.main_session(&a.ticker, name);
+        }
+    }
+    let mut st = St::new(ctx, name, assets, books, out, &cfg, ins, feed);
     // Пачки подписки по SUB_ARGS_MAX; req_id → символы пачки (чтобы снять их стаканы при отказе).
-    let mut pending: VecDeque<(String, Vec<String>)> = topics
+    let mut pending: VecDeque<(String, Vec<String>)> = st
+        .topics
         .chunks(SUB_ARGS_MAX)
         .enumerate()
         .map(|(i, c)| (format!("s{}", i + 1), c.to_vec()))
         .collect();
-    let mut sent: HashMap<String, Vec<String>> = HashMap::new();
-    let mut local: HashMap<String, LocalBook> = HashMap::new();
-    let mut resynced: HashMap<String, Instant> = HashMap::new();
     let mut sub_tick = tokio::time::interval(cfg.sub_gap);
     let mut ping = tokio::time::interval(cfg.ping);
     let mut last_rx = Instant::now();
-    let mut dropped = 0u64;
-    // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
-    let kept = BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal);
-    let depth = cfg.levels as usize;
-    let venue = VenueId(ID.to_string());
     loop {
+        let mut send: Vec<String> = vec![];
         tokio::select! {
             _ = sub_tick.tick(), if !pending.is_empty() => {
                 let Some((id, args)) = pending.pop_front() else { continue };
-                let sub = json!({ "op": "subscribe", "req_id": id, "args": args });
-                if let Err(e) = sink.send(Message::Text(sub.to_string().into())).await {
-                    return End::Broken(format!("отправка подписки: {e}"));
-                }
-                sent.insert(id, args);
+                send.push(json!({ "op": "subscribe", "req_id": id, "args": args }).to_string());
+                st.sent.insert(id, args);
             }
-            Some(c) = w.cmd.recv() => match c {
+            Some(c) = next_cmd(&mut cmd) => match c {
                 Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
                 Cmd::Resub(ticker) => {
                     let Some((_, sym)) = assets.iter().find(|(a, _)| a.ticker == ticker) else { continue };
                     let (topic, id) = (channel(cfg.levels, sym), format!("w-{sym}"));
                     // Отказ этой подписки — недостоверна только эта пара (ответ op с тем же req_id).
-                    sent.insert(id.clone(), vec![topic.clone()]);
+                    st.sent.insert(id.clone(), vec![topic.clone()]);
                     for op in ["unsubscribe", "subscribe"] {
-                        let m = json!({ "op": op, "req_id": id, "args": [topic.clone()] });
-                        if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
-                            return End::Broken(format!("отправка {op} (сторож пар): {e}"));
-                        }
+                        send.push(json!({ "op": op, "req_id": id, "args": [topic.clone()] }).to_string());
                     }
-                    w.feed.resubscribed(&ticker);
+                    if let Some(feed) = feed {
+                        feed.resubscribed(&ticker);
+                    }
                 }
             },
-            _ = ping.tick() => {
-                let p = json!({ "op": "ping" });
-                if let Err(e) = sink.send(Message::Text(p.to_string().into())).await {
-                    return End::Broken(format!("отправка ping: {e}"));
-                }
-            }
+            _ = ping.tick() => send.push(json!({ "op": "ping" }).to_string()),
             _ = tokio::time::sleep_until(last_rx + cfg.silence) => {
                 return End::Broken(format!("нет кадров дольше {} мс", cfg.silence.as_millis()));
             }
@@ -144,100 +147,35 @@ pub async fn session(
                 };
                 let rx_ns = now_ns();
                 last_rx = Instant::now();
-                alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
-                w.feed.alive();
-                let t = match frame {
-                    Message::Text(t) => t,
+                st.alive.store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
+                if let Some(feed) = feed {
+                    feed.alive();
+                }
+                match frame {
+                    Message::Text(t) => {
+                        let step = st.on_text(&t, rx_ns).await;
+                        if let Some(end) = step.end {
+                            return end;
+                        }
+                        send = step.send;
+                    }
                     Message::Ping(p) => {
                         if let Err(e) = sink.send(Message::Pong(p)).await {
                             return End::Broken(format!("отправка Pong: {e}"));
                         }
-                        continue;
                     }
                     Message::Close(c) => return End::Broken(format!("сервер закрыл соединение: {c:?}")),
-                    _ => continue,
-                };
-                match depth::parse(&t) {
-                    Msg::Book { symbol, snapshot, u, ts, bids, asks } => {
-                        let Some(asset) = by_symbol.get(symbol) else { continue };
-                        w.feed.frame_ver(&asset.ticker, (cfg.levels == U_LEVELS).then_some(u), None);
-                        if matches!(ctx.flag("raw.book_frames"), Ok(true)) {
-                            ctx.raw.write(ID, name, &t);
-                        }
-                        ctx.taps.push(ID, &asset.ticker, TapStream::Book, name, rx_ns, || TapData::Text(t.to_string()));
-                        // Без новой строки ключа на каждый кадр (урок 13): вставка — только у первого кадра пары.
-                        if !local.contains_key(symbol) {
-                            local.insert(symbol.to_string(), LocalBook::default());
-                        }
-                        let Some(lb) = local.get_mut(symbol) else { continue };
-                        let strict = matches!(ctx.flag("venue.book_seq_strict"), Ok(true));
-                        match lb.apply(snapshot, u, strict, &bids, &asks) {
-                            Applied::Changed => {
-                                let (b, a) = lb.top(depth);
-                                let book = OrderBook {
-                                    venue: venue.clone(),
-                                    asset: (*asset).clone(),
-                                    bids: b,
-                                    asks: a,
-                                    exchange_time: ts.and_then(chrono::DateTime::from_timestamp_millis),
-                                    received_at: chrono::Utc::now(),
-                                };
-                                books.put(book.clone(), alive.clone());
-                                match kept.book(out, book) {
-                                    Fed::Sent | Fed::Kept => {}
-                                    Fed::Closed => return End::Done,
-                                    Fed::Lost => dropped += 1,
-                                }
-                            }
-                            Applied::Repeat => books.touch(&asset.ticker),
-                            Applied::Gap(why) => {
-                                invalidate(ctx, books, out, &asset.ticker);
-                                let topic = channel(cfg.levels, symbol);
-                                if resynced.get(symbol).is_some_and(|at| at.elapsed() < cfg.resync_gap) {
-                                    return End::Broken(format!("{topic}: снова разрыв стакана ({why}) — переподключение"));
-                                }
-                                resynced.insert(symbol.to_string(), Instant::now());
-                                log(ctx, Level::Warn, format!("WebSocket {name}: {topic}: {why} — пересподписка за новым снимком")).await;
-                                for op in ["unsubscribe", "subscribe"] {
-                                    let m = json!({ "op": op, "req_id": format!("r-{symbol}"), "args": [topic.clone()] });
-                                    if let Err(e) = sink.send(Message::Text(m.to_string().into())).await {
-                                        return End::Broken(format!("отправка {op}: {e}"));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Msg::Ack { op, success, msg, req_id } => {
-                        ctx.raw.write(ID, name, &t);
-                        if op == "subscribe" && !success {
-                            let batch = req_id.and_then(|id| sent.get(&id).cloned()).unwrap_or_else(|| topics.clone());
-                            for (a, s) in assets {
-                                if batch.contains(&channel(cfg.levels, s)) {
-                                    invalidate(ctx, books, out, &a.ticker);
-                                    local.remove(s);
-                                }
-                            }
-                            log(ctx, Level::Error, format!("WebSocket {name}: отказ подписки ({}): {msg}", batch.join(", "))).await;
-                        }
-                    }
-                    Msg::Bad(reason) => {
-                        ctx.raw.write(ID, name, &t);
-                        log(ctx, Level::Error, format!("WebSocket {name}: кадр не разобран: {reason}")).await;
-                    }
-                    Msg::Other => ctx.raw.write(ID, name, &t),
+                    _ => {}
                 }
-                if dropped > 0 && pending.is_empty() && dropped.is_power_of_two() {
-                    tracing::warn!(conn = name, dropped, "ядро не успевает принимать стаканы Bybit");
+                if st.dropped > 0 && pending.is_empty() && st.dropped.is_power_of_two() {
+                    tracing::warn!(conn = name, dropped = st.dropped, "ядро не успевает принимать стаканы Bybit");
                 }
             }
         }
+        for m in send {
+            if let Err(e) = sink.send(Message::Text(m.into())).await {
+                return End::Broken(format!("отправка в соединение: {e}"));
+            }
+        }
     }
-}
-
-/// Запись в журнал.
-async fn log(ctx: &Ctx, level: Level, msg: String) {
-    let _ = ctx
-        .journal
-        .write(level, "venue.ws", Some(ID), msg, None)
-        .await;
 }

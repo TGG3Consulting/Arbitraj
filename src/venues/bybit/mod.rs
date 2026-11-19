@@ -14,6 +14,10 @@
 pub mod account;
 pub mod all_balances;
 pub mod all_balances_parse;
+pub mod backup;
+pub mod backup_kind;
+pub mod backup_log;
+pub mod backup_side;
 pub mod book;
 pub mod book_print;
 pub mod ctx;
@@ -54,7 +58,10 @@ pub mod user_stream_conn;
 pub mod wallet;
 pub mod withdrawable;
 pub mod ws;
+pub mod ws_book;
 pub mod ws_conn;
+pub mod ws_give;
+pub mod ws_lane;
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;

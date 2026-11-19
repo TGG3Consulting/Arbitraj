@@ -72,6 +72,7 @@ async fn avg_price_not_worse_on_smaller_volume_with_route_changes() {
                             usdt: (USDT, "USDT"),
                             coin: (CAKE, "CAKE"),
                             mids: &p.mids,
+                            gas: "BNB",
                         };
                         let a = Asset {
                             chain: None,

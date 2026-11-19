@@ -147,6 +147,7 @@ async fn quote_route(p: &Parts) -> DexRoute {
         usdt: (USDT, "USDT"),
         coin: (COIN, "COIN"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
         chain: None,

@@ -94,6 +94,7 @@ fn names<'a>(q: &'a Quoting) -> Names<'a> {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &q.mids,
+        gas: "BNB",
     }
 }
 

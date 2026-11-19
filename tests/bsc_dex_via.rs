@@ -266,6 +266,7 @@ async fn buy_and_sell_through_wbnb() {
         usdt: (USDT, "USDT"),
         coin: (COIN, "X"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let qty = Decimal::from(10u8);
     for side in [Side::Buy, Side::Sell] {

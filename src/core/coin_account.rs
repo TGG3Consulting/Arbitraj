@@ -59,12 +59,13 @@ static DEFAULT: OnceLock<ChainId> = OnceLock::new();
 /// Возвращает: true — запись новая. Ошибок нет.
 pub fn remember(v: &VenueId, chain: &ChainId, addr: Address, ticker: &str) -> bool {
     let mut m = VENUE_COIN.write().unwrap_or_else(|p| p.into_inner());
-    let key = (v.clone(), chain.clone(), addr);
-    if m.contains_key(&key) {
-        return false;
+    match m.entry((v.clone(), chain.clone(), addr)) {
+        std::collections::hash_map::Entry::Occupied(_) => false,
+        std::collections::hash_map::Entry::Vacant(e) => {
+            e.insert(ticker.to_string());
+            true
+        }
     }
-    m.insert(key, ticker.to_string());
-    true
 }
 
 /// Что делает: remember и, если запись новая, — в учёт ядра (переживает перезапуск). Принимает: ядро, запись.

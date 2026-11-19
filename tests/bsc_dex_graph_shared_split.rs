@@ -68,6 +68,7 @@ async fn line(p: &Parts, side: Side, qty: u32, tag: &str) -> String {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
         chain: None,

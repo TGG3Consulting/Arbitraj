@@ -58,6 +58,7 @@ async fn graph_quote(q: &Quoting) -> arb::core::types::Quote {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &q.mids,
+        gas: "BNB",
     };
     let cake = Asset {
         chain: None,

@@ -60,6 +60,7 @@ async fn quote(p: &Parts, side: Side, qty: u32) -> Quote {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
         chain: None,

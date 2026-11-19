@@ -125,6 +125,7 @@ async fn dex_quote(q: &Quoting, qty: u32) -> Quote {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &q.mids,
+        gas: "BNB",
     };
     let entries: Vec<Entry> = q
         .reg

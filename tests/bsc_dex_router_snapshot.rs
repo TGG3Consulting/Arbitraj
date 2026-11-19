@@ -100,6 +100,7 @@ async fn graph_quote(q: &Quoting, qty: u32) -> Quote {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &q.mids,
+        gas: "BNB",
     };
     graph_route::quote(&v, &names, &cake(), Decimal::from(qty), U256::from(GAS))
         .await

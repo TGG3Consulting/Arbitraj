@@ -75,6 +75,7 @@ async fn usdt_fist_eth_path() {
         usdt: (usdt, "USDT"),
         coin: (eth, "ETH"),
         mids: &p.mids,
+        gas: "BNB",
     };
     assert_eq!(names.of(&q.ctx, fist).unwrap(), "FIST");
     // Середина рынка из тех же резервов: USDT за FIST × FIST за ETH.

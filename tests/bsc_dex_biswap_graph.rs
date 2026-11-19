@@ -189,6 +189,7 @@ async fn quote_route(p: &Parts) -> DexRoute {
         usdt: (USDT, "USDT"),
         coin: (COIN, "COIN"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
         chain: None,
@@ -401,6 +402,7 @@ async fn fork_excluded_from_classic_direct() {
         usdt: (USDT, "USDT"),
         coin: (COIN, "COIN"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
         chain: None,
@@ -562,6 +564,7 @@ async fn classic(
         usdt: (USDT, "USDT"),
         coin: (COIN, "COIN"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
         chain: None,

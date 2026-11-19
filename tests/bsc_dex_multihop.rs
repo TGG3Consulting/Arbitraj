@@ -299,6 +299,7 @@ async fn taxed_coin_multihop_v3_not_executable_in_quote() {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
         chain: None,

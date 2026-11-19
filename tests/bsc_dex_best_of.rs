@@ -64,6 +64,7 @@ async fn classic(q: &Quoting, side: Side, qty: u32) -> Quote {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &q.mids,
+        gas: "BNB",
     };
     let entries: Vec<Entry> = q
         .reg
@@ -161,6 +162,7 @@ async fn own_not_executable_is_not_taken() {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &q.mids,
+        gas: "BNB",
     };
     let qty = Decimal::from(50_000u32);
     let split = graph_route::quote(&v, &names, &cake(), qty, U256::from(GAS))

@@ -72,6 +72,7 @@ async fn quote_side(p: &Parts, side: Side, qty: u32, gas: u64) -> Quote {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
         chain: None,
@@ -177,6 +178,7 @@ async fn gas_aware_needs_wbnb() {
         usdt: (USDT, "USDT"),
         coin: (CAKE, "CAKE"),
         mids: &p.mids,
+        gas: "BNB",
     };
     let asset = Asset {
         chain: None,

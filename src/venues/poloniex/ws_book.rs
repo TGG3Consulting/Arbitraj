@@ -90,8 +90,9 @@ impl<'a> BookConn<'a> {
         }
     }
 
-    /// Снимки book кадра. Возвращает: false — канал ядра закрыт. Ошибок нет.
-    pub fn on_books(&mut self, list: Vec<Depth>) -> bool {
+    /// Снимки book кадра; расхождение с быстрым стаканом (fast_book.rs) — переподписка book_lv2 в очередь pending.
+    /// Возвращает: false — канал ядра закрыт. Ошибок нет.
+    pub fn on_books(&mut self, list: Vec<Depth>, pending: &mut Vec<String>) -> bool {
         for d in list {
             if !self.by_symbol.contains_key(d.symbol.as_str())
                 || !depth::newer(&mut self.last_seq, &d)
@@ -99,7 +100,12 @@ impl<'a> BookConn<'a> {
                 continue;
             }
             let symbol = d.symbol.clone();
-            let act = self.fast.on_book(d, self.depth);
+            let ctx = self.ctx;
+            let (act, why) = self.fast.on_book(d, self.depth, || stale(ctx));
+            if why.is_some() {
+                self.resync(&symbol, pending);
+                self.note();
+            }
             if !self.apply(&symbol, act) {
                 return false;
             }

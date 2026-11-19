@@ -13,7 +13,12 @@
 //! createTime меньше последнего отданного ядру не отдаётся. Нет createTime — отдаётся (как «нет id» у book).
 //! Сверка снимка book с быстрым стаканом по версии невозможна (общие id не документированы) — только по содержимому:
 //! первые venue.depth_levels уровней совпали — быстрый стакан подтверждён, время кадра пары продлевается (Confirm);
-//! не совпали — не разрыв (каналы приходят в разные моменты), ничего.
+//! один несовпавший снимок — не разрыв (каналы приходят в разные моменты), ничего. Решение 424 (ревью): два снимка
+//! book ПОДРЯД не совпали с быстрым, оба созданы не раньше его последнего изменения (createTime), а быстрый между ними
+//! не менялся (тот же id) — расхождение при целой цепочке lastId: book_lv2 шлёт изменения «when the first 20 levels
+//! change», значит за период book (≥ 100 мс) он молчал о реальном изменении верха — разрыв (страховка — этот снимок,
+//! переподписка). Иначе неверный быстрый стакан при целой цепочке держался бы до изменения этих уровней. Нет
+//! createTime у снимка или быстрого — сравнить по времени нельзя, такой разрыв не объявляется.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -77,6 +82,8 @@ pub struct FastBooks {
     snaps: HashMap<String, Snap>,
     /// createTime последнего отданного ядру стакана пары.
     last_out: HashMap<String, DateTime<Utc>>,
+    /// Решение 424 (ревью): id быстрого стакана пары при прошлом несовпавшем снимке book (созданном не раньше него).
+    miss: HashMap<String, i64>,
     pub stats: Stats,
 }
 
@@ -120,35 +127,56 @@ impl FastBooks {
         self.gap(symbol, was, why, stale)
     }
 
-    /// Что делает: новый снимок book (уже прошёл depth::newer). Принимает: снимок (во владение), уровней ядру.
-    /// Возвращает: Publish — быстрый не синхронизирован; Confirm — синхронизирован и верх совпал; иначе Nothing.
-    /// Ошибок нет.
-    pub fn on_book(&mut self, d: Depth, depth: usize) -> Act {
+    /// Что делает: новый снимок book (уже прошёл depth::newer). Принимает: снимок (во владение), уровней ядру, чтение
+    /// срока свежести снимка (как у on_lv2; читается только при разрыве). Возвращает: Publish — быстрый не
+    /// синхронизирован; Confirm — синхронизирован и верх совпал; второй подряд несовпавший снимок при неизменном
+    /// быстром — разрыв (как on_lv2: страховка этим снимком и причина для переподписки); иначе Nothing. Ошибок нет.
+    pub fn on_book(
+        &mut self,
+        d: Depth,
+        depth: usize,
+        stale: impl FnOnce() -> Option<Duration>,
+    ) -> (Act, Option<String>) {
+        let symbol = d.symbol;
         let snap = Snap {
             bids: d.bids,
             asks: d.asks,
             time: d.exchange_time,
             at: Instant::now(),
         };
-        let act = match self.local.get(&d.symbol).filter(|lb| lb.synced()) {
-            Some(lb) => {
-                let (bids, asks) = lb.top(depth);
-                let n = |v: &[PriceLevel]| v.len().min(depth);
-                if bids[..] == snap.bids[..n(&snap.bids)] && asks[..] == snap.asks[..n(&snap.asks)]
-                {
-                    Act::Confirm {
-                        bids,
-                        asks,
-                        time: lb.time(),
-                    }
-                } else {
-                    Act::Nothing
-                }
-            }
-            None => self.publish(&d.symbol, snap.bids.clone(), snap.asks.clone(), snap.time),
+        let Some(lb) = self.local.get_mut(&symbol).filter(|lb| lb.synced()) else {
+            let act = self.publish(&symbol, snap.bids.clone(), snap.asks.clone(), snap.time);
+            self.snaps.insert(symbol, snap);
+            return (act, None);
         };
-        self.snaps.insert(d.symbol, snap);
-        act
+        let (bids, asks) = lb.top(depth);
+        let n = |v: &[PriceLevel]| v.len().min(depth);
+        if bids[..] == snap.bids[..n(&snap.bids)] && asks[..] == snap.asks[..n(&snap.asks)] {
+            self.miss.remove(&symbol);
+            let time = lb.time();
+            self.snaps.insert(symbol, snap);
+            return (Act::Confirm { bids, asks, time }, None);
+        }
+        // Снимок создан не раньше последнего изменения быстрого — иначе расхождение объяснимо отставанием book.
+        let after = matches!((snap.time, lb.time()), (Some(s), Some(l)) if s >= l);
+        let id = lb.id();
+        let twice = after && id.is_some() && self.miss.get(&symbol).copied() == id;
+        if !twice {
+            if let Some(i) = id.filter(|_| after) {
+                self.miss.insert(symbol.clone(), i);
+            } else {
+                self.miss.remove(&symbol);
+            }
+            self.snaps.insert(symbol, snap);
+            return (Act::Nothing, None);
+        }
+        self.miss.remove(&symbol);
+        let why =
+            "два снимка book подряд не совпали с быстрым стаканом, а он между ними не менялся"
+                .to_string();
+        lb.reset(String::new());
+        self.snaps.insert(symbol.clone(), snap);
+        self.gap(&symbol, true, why, stale)
     }
 
     /// Что делает: неразборчивый снимок book пары — страховки нет. Принимает: символ. Возвращает: true — быстрый тоже не
@@ -163,6 +191,7 @@ impl FastBooks {
     pub fn forget(&mut self, symbol: &str) {
         self.local.remove(symbol);
         self.snaps.remove(symbol);
+        self.miss.remove(symbol);
     }
 
     /// Разрыв: счёт, страховка или недостоверно. Возвращает: что сделать и причину (переподписка). Ошибок нет.

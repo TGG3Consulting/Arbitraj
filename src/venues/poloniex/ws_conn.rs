@@ -170,7 +170,7 @@ pub async fn session(
                     ctx.raw.write(ID, name, &text);
                 }
                 let open = match msg {
-                    Msg::Books(list) => bc.on_books(list),
+                    Msg::Books(list) => bc.on_books(list, &mut pending),
                     Msg::Lv2(list) => bc.on_lv2(list, &mut pending),
                     Msg::Bad { symbol, reason } => bad(ctx, name, &mut bc, symbol, false, reason, &mut pending).await,
                     Msg::BadLv2 { symbol, reason } => bad(ctx, name, &mut bc, symbol, true, reason, &mut pending).await,

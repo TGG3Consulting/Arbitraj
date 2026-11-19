@@ -8,7 +8,8 @@
 //!   же изменения («If id of the last message does not match lastId of the current message»), ожидание снимка;
 //! - выбор стакана (fast_book.rs): до синхронизации ядру — снимок book (пример офдоки Market Data → Book), после
 //!   снимка book_lv2 — быстрый, разрыв — страховка, но не старше уже отданного (createTime снимка book в примере офдоки
-//!   раньше createTime book_lv2 — ядру не уходит, стакан пары недостоверен);
+//!   раньше createTime book_lv2 — ядру не уходит, стакан пары недостоверен); ревью 424: два несовпавших снимка book
+//!   подряд при неизменном быстром, но созданные раньше него (пример офдоки), — не разрыв;
 //! - `#[ignore]` до записи с сервера бота: кадры book_lv2 по всей цепочке без разрывов.
 //!
 //! Кто вызывает: cargo test.
@@ -108,15 +109,20 @@ fn fast_book_insurance_never_older() {
     let mut fb = FastBooks::default();
     // Быстрый не синхронизирован — ядру снимок book, как до решения 424.
     assert!(matches!(
-        fb.on_book(books.remove(0), 20),
-        Act::Publish { .. }
+        fb.on_book(books[0].clone(), 20, stale),
+        (Act::Publish { .. }, None)
     ));
     // Снимок book_lv2 — переход на быстрый (createTime новее отданного).
     let (act, why) = fb.on_lv2(&snap, 20, stale);
     assert!(matches!(act, Act::Publish { .. }) && why.is_none());
     assert_eq!(fb.stats.to_fast, 1);
-    // Быстрый синхронизирован: снимок book ядру не уходит (верх не совпал — не подтверждение и не разрыв).
-    assert_eq!(fb.on_book(books.remove(0), 20), Act::Nothing);
+    // Быстрый синхронизирован: снимок book ядру не уходит (верх не совпал — не подтверждение и не разрыв). Ревью 424:
+    // и второй подряд несовпавший снимок при неизменном быстром — не разрыв, т.к. createTime снимков book примера офдоки
+    // раньше createTime быстрого (расхождение объяснимо отставанием book).
+    for b in books.drain(..) {
+        assert_eq!(fb.on_book(b, 20, stale), (Act::Nothing, None));
+    }
+    assert_eq!(fb.stats.gaps, 0);
     assert!(matches!(fb.on_lv2(&upd, 20, stale).0, Act::Publish { .. }));
     // Разрыв: страховочный снимок book есть, но его createTime раньше уже отданного — ядру не уходит, пара недостоверна.
     let (act, why) = fb.on_lv2(&upd, 20, stale);

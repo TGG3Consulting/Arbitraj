@@ -115,6 +115,11 @@ impl LocalBook {
         self.id.is_some()
     }
 
+    /// id последней применённой записи (None — не синхронизирован). Ошибок нет.
+    pub fn id(&self) -> Option<i64> {
+        self.id
+    }
+
     /// createTime последней применённой записи. Ошибок нет.
     pub fn time(&self) -> Option<DateTime<Utc>> {
         self.time

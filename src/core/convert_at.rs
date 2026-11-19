@@ -38,8 +38,9 @@ pub fn plan(
     if cex.contains(origin) {
         out.push((origin.clone(), ticker.to_string()));
     }
-    // Решение 416: тикер газа — dex.gas_ticker площадок DEX (не задана — валюта как любая другая).
-    let gas = super::gas_ticker::of_core(core).is_ok_and(|g| ticker == g)
+    // Решение 416: тикер газа — dex.gas_ticker площадок DEX (не задана — валюта как любая другая). Решение 430: газ любой
+    // сети площадок DEX (одна DEX — её тикер, как раньше).
+    let gas = super::gas_ticker::all(core).iter().any(|g| ticker == g)
         && (addr.is_none()
             || super::native::is_native(
                 core,

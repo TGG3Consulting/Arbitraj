@@ -70,7 +70,8 @@ fn wanted(core: &Core, venue: &VenueId, kind: VenueKind) -> Vec<Asset> {
         // Цена газа в USDT — из живого стакана BNB биржи (решение 35, convert.rs).
         // Решение 416: тикер газа — dex.gas_ticker площадок DEX; не задана — стакана газа нет (затраты газа не
         // переводятся в USDT — «нет живой цены», сделки нет), причина — в «Проверить подключение» DEX и в настройках.
-        if let Ok(g) = super::gas_ticker::of_core(core) {
+        // Решение 430: газ всех сетей площадок DEX (одна DEX — один стакан, как раньше).
+        for g in super::gas_ticker::all(core) {
             out.push(super::convert::gas_asset(&g));
         }
         // Живые цены промежуточных монет (решение 52) — тикер ЭТОЙ биржи по адресу (решение 211).

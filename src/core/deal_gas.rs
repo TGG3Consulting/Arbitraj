@@ -22,7 +22,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{ChainTx, Cost, CostKind, TradeResult, TxOutcome, VenueId};
+use crate::core::types::{ChainId, ChainTx, Cost, CostKind, TradeResult, TxOutcome, VenueId};
 use crate::gateway::errors::GatewayError;
 use crate::storage::journal::Level;
 
@@ -98,10 +98,16 @@ pub fn of_err_approve(e: &GatewayError) -> Vec<Wasted> {
 /// Что делает: сумма статей в USDT живой ценой BNB (fills::usdt; монета сделки не участвует — у сделки с BNB газ тоже по
 /// живой цене BNB). Принимает: ядро, площадку (котируемая монета venue.quote_asset), статьи. Возвращает: (BNB, USDT).
 /// Ошибки: текст — нет живой цены BNB или не задана venue.quote_asset.
-async fn usd(core: &Core, venue: &VenueId, list: &[Wasted]) -> (Decimal, Result<Decimal, String>) {
+async fn usd(
+    core: &Core,
+    venue: &VenueId,
+    chain: Option<&ChainId>,
+    list: &[Wasted],
+) -> (Decimal, Result<Decimal, String>) {
     let bnb: Decimal = list.iter().map(|w| w.bnb).sum();
     // Решение 416: тикер газа — dex.gas_ticker площадки (core/gas_ticker.rs); не задана — пересчёта нет, причина.
-    let gas = match super::gas_ticker::for_venue(core, venue) {
+    // Решение 430: у биржи — газ сети сделки (chain; None — сеть по умолчанию).
+    let gas = match super::gas_ticker::for_venue_in(core, venue, chain) {
         Ok(g) => g,
         Err(e) => return (bnb, Err(e)),
     };
@@ -134,7 +140,8 @@ pub async fn charge(core: &Core, deal: &mut Deal, venue: &VenueId, list: &mut Ve
     if list.is_empty() {
         return;
     }
-    let (bnb, u) = usd(core, venue, &list).await;
+    let chain = deal.direction.asset.chain.clone();
+    let (bnb, u) = usd(core, venue, chain.as_ref(), &list).await;
     deal.note(line(&list, bnb, &u));
     match u {
         Ok(u) => super::deal_book::spend_wasted(deal, &list, u),
@@ -152,7 +159,14 @@ pub async fn charge_closed(core: &Core, id: &str, venue: &VenueId, list: &mut Ve
     if list.is_empty() {
         return;
     }
-    let (bnb, u) = usd(core, venue, &list).await;
+    // Решение 430: сеть сделки перегона — для тикера газа у биржи (сделки нет — сеть по умолчанию).
+    let chain = {
+        let deals = lk(&core.inner.deals);
+        super::relay_owner::owner(deals.keys(), id)
+            .and_then(|k| deals.get(&k))
+            .and_then(|d| d.direction.asset.chain.clone())
+    };
+    let (bnb, u) = usd(core, venue, chain.as_ref(), &list).await;
     let text = line(&list, bnb, &u);
     let found = {
         let mut deals = lk(&core.inner.deals);

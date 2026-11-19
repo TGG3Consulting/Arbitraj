@@ -6,13 +6,16 @@
 //! Telegram deal.credit_hold с цифрами. round: остановленные с остатком на бирже круга — решение в тихий момент
 //! (credit_rest::locked); остатка на счёте нет — фантом закрывается; есть — сделка остаётся остановленной с решённым
 //! количеством (продаст человек кнопкой); человек успел нажать кнопку — его действие не перетирается.
-//! Кто вызывает: core/credit_rest.rs (at_close), core/ledger.rs (finish — закрытие с остатком), core/reconcile.rs.
+//! Ожидание тихого момента после продажи (at_close): перечитывание с интервалом venue.status_poll_ms, не дольше
+//! transfer.max_time_s; сделку взял человек — выход; решено — добор продолжением sell_loop::hop или закрытие.
+//! Кто вызывает: core/sell_next.rs (at_close), core/ledger.rs (finish — закрытие с остатком), core/reconcile.rs.
 //! От чего зависит: credit_rest.rs (locked), credit_fact.rs, ledger.rs, deal_words.rs, deps.rs, engine.rs.
-//! Настройки: нет.
+//! Настройки: venue.status_poll_ms, transfer.max_time_s (существующие).
 
 use rust_decimal::Decimal;
 
 use crate::core::types::VenueId;
+use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::credit_rest::Res;
@@ -81,6 +84,81 @@ pub async fn round(core: &Core, v: &VenueId) {
             Box::pin(super::ledger::finish(core, &mut d, Step::Closed, why)).await;
         } else {
             Box::pin(super::ledger::save(core, &d)).await;
+        }
+    }
+}
+
+/// (интервал мс, предел с) ожидания тихого момента; None — не задано. Ошибок нет.
+fn pace(core: &Core, deal: &Deal) -> Option<(u64, u64)> {
+    let a = &deal.direction.asset;
+    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
+    let at = At {
+        venue: Some(&deal.at.0),
+        coin: Some(&coin),
+    };
+    let max = core
+        .inner
+        .deps
+        .settings
+        .integer("transfer.max_time_s", at)
+        .ok()?;
+    Some((super::credit_alert::wait_ms(core, &deal.at)?, max))
+}
+
+/// Итог ожидания тихого момента.
+enum Waited {
+    Done,
+    Timeout,
+    Gone,
+}
+
+/// Ожидание тихого момента и решение (шапка). Ошибок нет.
+async fn wait_quiet(core: &Core, deal: &mut Deal) -> Waited {
+    let Some((ms, max)) = pace(core, deal) else {
+        return Waited::Timeout;
+    };
+    let mark = lk(&core.inner.deals)
+        .get(&deal.id)
+        .map(|d| (d.step, d.updated_at));
+    let until = tokio::time::Instant::now() + std::time::Duration::from_secs(max);
+    loop {
+        if let Res::Done = Box::pin(super::credit_rest::locked(core, deal)).await {
+            return Waited::Done;
+        }
+        if tokio::time::Instant::now() >= until {
+            return Waited::Timeout;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+        // Шестое ревью (М-3): сделку взял человек (её запись в учёте изменилась) — ожидание кончается.
+        if lk(&core.inner.deals)
+            .get(&deal.id)
+            .map(|d| (d.step, d.updated_at))
+            != mark
+        {
+            return Waited::Gone;
+        }
+    }
+}
+
+/// Что делает: продажа сделки с остатком кончилась — ждём тихий момент (шапка). Принимает: ядро, сделку, причину
+/// продажи. Ошибок нет.
+pub async fn at_close(core: &Core, mut deal: Deal, why: String) {
+    match Box::pin(wait_quiet(core, &mut deal)).await {
+        Waited::Gone => {}
+        Waited::Timeout => {
+            let t =
+                "тихий момент счёта не наступил (не задано или вышел предел transfer.max_time_s)";
+            Box::pin(park(core, &mut deal, t)).await
+        }
+        Waited::Done if deal.qty > Decimal::ZERO => {
+            // Добранное продаёт автоматика, как остаток частичной продажи (решение 177) — продолжением цикла.
+            Box::pin(super::ledger::save(core, &deal)).await;
+            let left = super::stuck_reason::StuckReason::Partial(deal.qty);
+            super::sell_loop::hop(super::sell_next::stuck(core, deal, left, true)).await
+        }
+        Waited::Done => {
+            let t = format!("продано ({why}); остатка зачисления на счёте нет");
+            Box::pin(super::ledger::finish(core, &mut deal, Step::Closed, &t)).await
         }
     }
 }

@@ -18,21 +18,20 @@
 //!
 //! Ожидание держит отметку монеты (coin_ride) сделки — новые сделки этой монеты не начинаются, пока на счёте идут
 //! другие сделки (принято: иначе тихий момент не наступит).
-//! Отдельная позиция (park) и круг сверки (round) — credit_rest_park.rs.
-//! Кто вызывает: core/remain_fact.rs (busy, locked), core/sell_next.rs (at_close), core/credit_rest_park.rs (locked),
-//! core/manual_halted.rs (locked).
+//! Ожидание после продажи (at_close), отдельная позиция (park) и круг сверки (round) — credit_rest_park.rs.
+//! Кто вызывает: core/remain_fact.rs (busy, locked), core/credit_rest_park.rs (locked), core/manual_halted.rs и
+//! core/manual.rs (locked — кнопки продажи).
 //! От чего зависит: credit_fact.rs, credit_lock.rs, remain_read.rs (with_fact), remain_others.rs, deposit_hold.rs,
 //! credit_alert.rs (wait_ms), ledger.rs, sell_loop.rs, sell_next.rs, deal_words.rs, settings, deps.rs.
 //! Настройки: venue.status_poll_ms, transfer.max_time_s (существующие).
 
 use rust_decimal::Decimal;
 
-use crate::settings::read::At;
 use crate::storage::journal::Level;
 
-use super::deal::{Deal, Step};
+use super::deal::Deal;
 use super::deal_words as w;
-use super::engine::{Core, lk};
+use super::engine::Core;
 use super::remain_others::Others;
 
 /// Итог решения остатка под замком.
@@ -58,11 +57,24 @@ pub fn busy(core: &Core, deal: &Deal, o: &Others) -> Option<String> {
     Some(why.join("; "))
 }
 
+/// Итог чистого решения остатка: тексты для журнала.
+pub struct Resolved {
+    /// Вышло меньше количества — Warn и Telegram.
+    pub short: Option<String>,
+    /// Взято сверх ожидаемого зачисления (остатки прошлых сделок, решение 76) — Info в журнал.
+    pub over: Option<String>,
+}
+
 /// Что делает: решение остатка в тихий момент (чистая часть; вызывать под замком счёта — locked): количество =
 /// min(количество + остаток, факт − подтверждённые других). Принимает: сделку, факт, учёт других, ожидаемое удержание
-/// %. Возвращает: текст Warn, если вышло меньше количества. Ошибок нет.
-pub fn resolve(deal: &mut Deal, fact: Decimal, o: &Others, hold: Decimal) -> Option<String> {
-    let rest = super::credit_fact::rest(deal)?;
+/// %. Возвращает: тексты для журнала (остатка нет — пусто). Ошибок нет.
+pub fn resolve(deal: &mut Deal, fact: Decimal, o: &Others, hold: Decimal) -> Resolved {
+    let Some(rest) = super::credit_fact::rest(deal) else {
+        return Resolved {
+            short: None,
+            over: None,
+        };
+    };
     let t = deal.direction.asset.ticker.clone();
     let before = deal.qty;
     let qty = (deal.qty + rest).min((fact - o.qty).max(Decimal::ZERO));
@@ -80,119 +92,54 @@ pub fn resolve(deal: &mut Deal, fact: Decimal, o: &Others, hold: Decimal) -> Opt
     let record = super::credit_fact::here(deal).map_or(Decimal::ZERO, |c| c.record);
     let sold: Decimal = deal.sells.iter().map(|s| s.filled_qty).sum();
     let expected = record * (Decimal::ONE - hold / Decimal::ONE_HUNDRED) - sold;
+    let mut over = None;
     if qty > expected && expected >= Decimal::ZERO {
-        let over = w::coins(qty - expected, &t);
+        let n = w::coins(qty - expected, &t);
         text.push_str(&format!(
-            "; взято сверх зачисления {over} — остатки прошлых сделок (решение 76)"
+            "; взято сверх зачисления {n} — остатки прошлых сделок (решение 76)"
         ));
+        over = Some(format!("{}: {text}", deal.id));
     }
     deal.note(text.clone());
-    (qty < before).then(|| {
+    let short = (qty < before).then(|| {
         format!(
             "{}: {text}; не хватает {}",
             deal.id,
             w::coins(before - qty, &t)
         )
-    })
+    });
+    Resolved { short, over }
 }
 
-/// Что делает: чтение факта и решение остатка под одним замком счёта (шапка). Принимает: ядро, сделку. Возвращает:
-/// Res. Ошибок нет.
+/// Что делает: чтение факта и решение остатка под одним замком счёта (шапка); журнал core.credit_fact — Info «взято
+/// сверх зачисления», Warn и Telegram — «не хватает». Принимает: ядро, сделку. Возвращает: Res. Ошибок нет.
 pub async fn locked(core: &Core, deal: &mut Deal) -> Res {
     let probe = deal.clone();
     let hold = super::deposit_hold::expected_pct(core, &deal.at, &deal.direction.asset);
-    let mut short = None;
+    let mut out = None;
     let res = Box::pin(super::remain_read::with_fact(core, &probe, |r, o| {
         match (busy(core, deal, &o), r) {
             (Some(why), _) => Res::Busy(why),
             (None, Err(e)) => Res::Unread(e),
             (None, Ok(fact)) => {
-                short = resolve(deal, fact, &o, hold);
+                out = Some(resolve(deal, fact, &o, hold));
                 super::credit_lock::sync(core, deal);
                 Res::Done
             }
         }
     }))
     .await;
-    if let Some(t) = short {
-        let deps = &core.inner.deps;
-        Box::pin(deps.log(Level::Warn, "core.credit_fact", Some(&deal.at.0), &t, None)).await;
-        Box::pin(deps.notify("deal.credit_hold", Some(&deal.at.0), &t)).await;
+    let (deps, v) = (&core.inner.deps, deal.at.0.clone());
+    let out = out.unwrap_or(Resolved {
+        short: None,
+        over: None,
+    });
+    if let Some(t) = out.over {
+        Box::pin(deps.log(Level::Info, "core.credit_fact", Some(&v), &t, None)).await;
+    }
+    if let Some(t) = out.short {
+        Box::pin(deps.log(Level::Warn, "core.credit_fact", Some(&v), &t, None)).await;
+        Box::pin(deps.notify("deal.credit_hold", Some(&v), &t)).await;
     }
     res
-}
-
-/// (интервал мс, предел с) ожидания тихого момента; None — не задано. Ошибок нет.
-fn pace(core: &Core, deal: &Deal) -> Option<(u64, u64)> {
-    let a = &deal.direction.asset;
-    let coin = crate::settings::scope::coin_id(&a.ticker, a.bsc_contract.as_ref());
-    let at = At {
-        venue: Some(&deal.at.0),
-        coin: Some(&coin),
-    };
-    let max = core
-        .inner
-        .deps
-        .settings
-        .integer("transfer.max_time_s", at)
-        .ok()?;
-    Some((super::credit_alert::wait_ms(core, &deal.at)?, max))
-}
-
-/// Итог ожидания тихого момента.
-enum Waited {
-    Done,
-    Timeout,
-    Gone,
-}
-
-/// Ожидание тихого момента и решение (шапка). Ошибок нет.
-async fn wait_quiet(core: &Core, deal: &mut Deal) -> Waited {
-    let Some((ms, max)) = pace(core, deal) else {
-        return Waited::Timeout;
-    };
-    let mark = lk(&core.inner.deals)
-        .get(&deal.id)
-        .map(|d| (d.step, d.updated_at));
-    let until = tokio::time::Instant::now() + std::time::Duration::from_secs(max);
-    loop {
-        if let Res::Done = Box::pin(locked(core, deal)).await {
-            return Waited::Done;
-        }
-        if tokio::time::Instant::now() >= until {
-            return Waited::Timeout;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
-        // Шестое ревью (М-3): сделку взял человек (её запись в учёте изменилась) — ожидание кончается.
-        if lk(&core.inner.deals)
-            .get(&deal.id)
-            .map(|d| (d.step, d.updated_at))
-            != mark
-        {
-            return Waited::Gone;
-        }
-    }
-}
-
-/// Что делает: продажа сделки с остатком кончилась — ждём тихий момент (шапка). Принимает: ядро, сделку, причину
-/// продажи. Ошибок нет.
-pub async fn at_close(core: &Core, mut deal: Deal, why: String) {
-    match Box::pin(wait_quiet(core, &mut deal)).await {
-        Waited::Gone => {}
-        Waited::Timeout => {
-            let t =
-                "тихий момент счёта не наступил (не задано или вышел предел transfer.max_time_s)";
-            Box::pin(super::credit_rest_park::park(core, &mut deal, t)).await
-        }
-        Waited::Done if deal.qty > Decimal::ZERO => {
-            // Добранное продаёт автоматика, как остаток частичной продажи (решение 177) — продолжением цикла.
-            Box::pin(super::ledger::save(core, &deal)).await;
-            let left = super::stuck_reason::StuckReason::Partial(deal.qty);
-            super::sell_loop::hop(super::sell_next::stuck(core, deal, left, true)).await
-        }
-        Waited::Done => {
-            let t = format!("продано ({why}); остатка зачисления на счёте нет");
-            Box::pin(super::ledger::finish(core, &mut deal, Step::Closed, &t)).await
-        }
-    }
 }

@@ -101,10 +101,10 @@ pub fn stuck_as_is(core: &Core, deal: Deal, why: StuckReason) -> Job {
 }
 
 /// Решение 413 (пятое ревью t198): продажа сделки с остатком «не присвоено» кончилась — ожидание тихого момента счёта
-/// и добор вместо закрытия (credit_rest::at_close). Принимает: ядро, сделку, причину продажи. Возвращает: продолжение.
+/// и добор вместо закрытия (credit_rest_park::at_close). Принимает: ядро, сделку, причину продажи. Возвращает: продолжение.
 /// Ошибок нет.
 #[inline(never)]
 pub fn rest_close(core: &Core, deal: Deal, why: &str) -> Job {
     let (c, why) = (core.clone(), why.to_string());
-    Box::pin(async move { super::credit_rest::at_close(&c, deal, why).await })
+    Box::pin(async move { super::credit_rest_park::at_close(&c, deal, why).await })
 }

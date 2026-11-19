@@ -191,7 +191,7 @@ async fn sell_now_busy_and_wait_limit() {
     let mut b = with_rest("W8", "98", "2");
     b.qty = d("0");
     arb::core::ledger::save(&core, &b).await;
-    arb::core::credit_rest::at_close(&core, b, "выгодно".into()).await;
+    arb::core::credit_rest_park::at_close(&core, b, "выгодно".into()).await;
     let rec = core.inner.deals.lock().unwrap().get("W8").cloned().unwrap();
     assert_eq!(
         (rec.step, rec.qty, rest(&rec)),

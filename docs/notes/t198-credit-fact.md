@@ -304,3 +304,9 @@ sell_fact.rs (reconcile_as, Unread::Stuck) → remain_fact.rs:83 (credit_alert::
 | М-5 | Box::pin: ledger::save в at_close, manual_outcome::sold, relay_here::sell_here |
 | М-7 | sale_unsure сбрасывается при закрытии и «Беру на себя» |
 | Тесты | tests/core_credit_rest_t198.rs. Решение под замком при читаемом балансе (locked) не покрыто — стенда биржи у тестов t198 нет; чистая часть — busy, resolve |
+
+Доделки после шестого ревью: «Продать сейчас» по алерту (manual::sell_now) — тот же путь через credit_rest::locked, что у
+кнопки остановленной сделки (любая кнопка продажи сделки с остатком); «взято сверх зачисления N — остатки прошлых
+сделок (решение 76)» — и строкой Info core.credit_fact в журнал; ожидание после продажи перенесено в
+credit_rest_park.rs (at_close) — размер файла; тесты под замком при прочитанном балансе — tests/core_credit_rest_live_t198.rs
+(стенд tests/t198_live).

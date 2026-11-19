@@ -517,6 +517,33 @@ source = "Документация MEXC: Order Book «max 5000»; процеду
 rationale = "Глубина снимка, которую берёт сама процедура MEXC; предел — 5000."
 prefill = { kind = "Venue", id = "mexc" }
 
+[[section.rec]]
+name = "venue.fast_book_interval"
+area = "площадка MEXC"
+unit = "интервал"
+value = "10ms"
+source = "Решение 420; Diff.Depth Stream: (100ms|10ms)"
+rationale = "Быстрый стакан из самого частого потока изменений; поток снимков (~500 мс) — страховка, торговля из-за пропусков не останавливается."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "venue.fast_book_snapshot_per_sec"
+area = "площадка MEXC"
+unit = "в секунду"
+value = "2"
+source = "Order Book «Weight(IP): 3»; «IP-weighted endpoints share 300 weight per 10 seconds»"
+rationale = "6 веса/с из 30 корзины IP; 300 пар синхронизируются за 150 с, всё это время — по снимкам."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "venue.fast_book_snapshot_limit"
+area = "площадка MEXC"
+unit = "уровней"
+value = "5000"
+source = "How to Properly Maintain a Local Copy of the Order Book, шаг 3: limit=5000; Order Book «max 5000»"
+rationale = "Глубина, которую берёт сама процедура MEXC; уровни вне снимка без изменений в быстром стакане не видны."
+prefill = { kind = "Venue", id = "mexc" }
+
 # --- Упущено из-за потолка (решение 141) ---
 [[section]]
 title = "Упущено из-за потолка (решение 141)"

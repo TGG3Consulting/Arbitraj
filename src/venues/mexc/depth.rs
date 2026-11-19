@@ -2,8 +2,10 @@
 //! Что делает: разбор кадров WebSocket рынка MEXC: текстовые JSON-ответы (подписка, PONG) и двоичные кадры
 //! Protocol Buffers (обёртка PushDataV3ApiWrapper) → частичный стакан канала spot@public.limit.depth.v3.api.pb →
 //! OrderBook формата ядра.
+//! Решение 420: кадр канала изменений spot@public.aggre.depth.v3.api.pb (тело 313) → Msg::Diff — кадр быстрого
+//! стакана (fast_book.rs Update): fromVersion / toVersion, уровни с нулевым количеством (0 — убрать уровень), sendTime.
 //! Кто вызывает: ws_conn.rs.
-//! От чего зависит: proto.rs, core/types, prost.
+//! От чего зависит: proto.rs, fast_book.rs (Update), core/types, prost.
 //! Настройки: нет.
 //!
 //! Официальная документация:
@@ -12,6 +14,10 @@
 //! - подписка и PING https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/ —
 //!   {"method":"SUBSCRIPTION","params":[…]}, {"method":"PING"} → {"id":0,"code":0,"msg":"PONG"}; «If the msg in the
 //!   response matches the corresponding request field, it indicates that the request was sent successfully».
+//!
+//! - изменения стакана https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/diffdepth-stream — канал
+//!   «spot@public.aggre.depth.v3.api.pb@(100ms|10ms)@<symbol>», поля symbol, sendTime, publicAggreDepths {asks, bids,
+//!   fromVersion, toVersion} (строки), «quantity 0 … that price level should be removed».
 //!
 //! Порядок уровней не оговорён — сортируем сами: asks по возрастанию цены, bids по убыванию (как у BingX).
 
@@ -24,7 +30,8 @@ use serde_json::Value;
 
 use crate::core::types::{Asset, OrderBook, PriceLevel};
 
-use super::proto::{Body, DepthItem, Wrapper};
+use super::fast_book::Update;
+use super::proto::{AggreDepths, Body, DepthItem, Wrapper};
 
 /// Что пришло в кадре.
 pub enum Msg {
@@ -36,6 +43,11 @@ pub enum Msg {
         bids: Vec<PriceLevel>,
         asks: Vec<PriceLevel>,
         exchange_time: Option<DateTime<Utc>>,
+    },
+    /// Решение 420: кадр изменений стакана (символ MEXC); кадр или причина, почему он не разобран.
+    Diff {
+        symbol: String,
+        frame: Result<Update, String>,
     },
     /// Текстовый ответ: code 0 — успех (msg — канал подписки); иначе — отказ с текстом.
     Ack { code: i64, msg: String },
@@ -76,6 +88,9 @@ pub fn parse_binary(data: &[u8]) -> Msg {
             };
         }
     };
+    if let Some(Body::AggreDepths(d)) = &w.body {
+        return diff(&w, d);
+    }
     let symbol = w.symbol.clone().or_else(|| symbol_from_channel(&w.channel));
     let Some(Body::LimitDepths(d)) = w.body else {
         return Msg::Other;
@@ -104,6 +119,54 @@ pub fn parse_binary(data: &[u8]) -> Msg {
         asks,
         exchange_time: ms.and_then(|ms| Utc.timestamp_millis_opt(ms).single()),
     }
+}
+
+/// Решение 420: кадр изменений (Diff.Depth Stream, шапка). Символ — поле symbol обёртки, иначе последняя часть канала
+/// «…@100ms@BTCUSDT». Ошибок нет: без символа — Msg::Bad; номера или уровни не разобраны — Diff с причиной.
+fn diff(w: &Wrapper, d: &AggreDepths) -> Msg {
+    let Some(symbol) = w
+        .symbol
+        .clone()
+        .or_else(|| w.channel.rsplit('@').next().map(str::to_string))
+    else {
+        return Msg::Bad {
+            symbol: None,
+            reason: format!("изменения стакана без символа (канал {})", w.channel),
+        };
+    };
+    let frame = diff_frame(w, d);
+    Msg::Diff { symbol, frame }
+}
+
+/// Решение 420: номера, уровни и sendTime кадра изменений. Ошибка — текст причины (номер или уровень не число).
+fn diff_frame(w: &Wrapper, d: &AggreDepths) -> Result<Update, String> {
+    let num = |s: &str, what: &str| -> Result<i64, String> {
+        s.trim()
+            .parse::<i64>()
+            .map_err(|_| format!("{what} «{s}» не число"))
+    };
+    Ok(Update {
+        from: num(&d.from_version, "fromVersion")?,
+        to: num(&d.to_version, "toVersion")?,
+        bids: all_levels(&d.bids, "bids")?,
+        asks: all_levels(&d.asks, "asks")?,
+        time_ms: w.send_time.or(w.create_time),
+    })
+}
+
+/// Решение 420: уровни кадра изменений вместе с нулевыми (0 — убрать уровень). Ошибка — текст причины.
+fn all_levels(items: &[DepthItem], side: &str) -> Result<Vec<PriceLevel>, String> {
+    items
+        .iter()
+        .map(|l| {
+            Ok(PriceLevel {
+                price: Decimal::from_str(l.price.trim())
+                    .map_err(|_| format!("{side}: цена «{}» не число", l.price))?,
+                qty: Decimal::from_str(l.quantity.trim())
+                    .map_err(|_| format!("{side}: количество «{}» не число", l.quantity))?,
+            })
+        })
+        .collect()
 }
 
 /// Символ из канала «spot@public.limit.depth.v3.api.pb@CAKEUSDT@20» (третья часть после @). Ошибок нет.

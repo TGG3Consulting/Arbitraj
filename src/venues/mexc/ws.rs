@@ -5,7 +5,8 @@
 //! Кто вызывает: market.rs (по задаче на соединение).
 //! От чего зависит: ws_conn.rs (сама сессия), book.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_url, venue.ws_subs_per_sec, venue.ws_silence_ms, venue.ws_reconnect_pause_ms,
-//! venue.ws_ping_ms, venue.depth_levels, http.timeout_ms (время на подключение).
+//! venue.ws_ping_ms, venue.depth_levels, http.timeout_ms (время на подключение); решение 420 — venue.fast_book_interval
+//! (быстрый стакан: интервал канала изменений; не задана — только снимки, как раньше).
 //!
 //! Официально (https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/): адрес wss://wbs-api.mexc.com/ws;
 //! данные — protobuf; не больше 30 подписок на соединение, сервер — до 100 запросов/с; без подписки соединение
@@ -43,6 +44,8 @@ pub struct Cfg {
     /// Как часто слать {"method":"PING"} (venue.ws_ping_ms [mexc]).
     pub ping: Duration,
     pub connect_timeout: Duration,
+    /// Решение 420: интервал канала изменений быстрого стакана (10ms / 100ms); None — только снимки.
+    pub fast: Option<String>,
 }
 
 /// Работает, пока жив канал out: подключается заново после каждого обрыва.
@@ -122,5 +125,6 @@ pub fn config(ctx: &Ctx) -> Result<Cfg, String> {
         silence: Duration::from_millis(ctx.int("venue.ws_silence_ms").map_err(|e| e.message)?),
         ping: Duration::from_millis(ctx.int("venue.ws_ping_ms").map_err(|e| e.message)?),
         connect_timeout: ctx.http_timeout().map_err(|e| e.message)?,
+        fast: ctx.text("venue.fast_book_interval").ok(),
     })
 }

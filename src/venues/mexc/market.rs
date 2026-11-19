@@ -4,8 +4,10 @@
 //! Состояние пар монет и монеты, которыми можно торговать через API, сообщает ядру событием SpotPairs (pairs.rs).
 //! Кто вызывает: subs.rs (подписка из контракта и пересподписка при смене справочника пар).
 //! От чего зависит: ws.rs, symbols.rs, pairs.rs, book.rs, ctx.rs.
-//! Настройки: venue.ws_symbols_per_conn, venue.depth_levels; venue.order_type — для признака пары «MEXC не примет наш
-//! ордер» (решение 254, pairs.rs).
+//! Решение 420: задана venue.fast_book_interval — у пары 2 подписки (снимки и изменения), монет на соединение не больше
+//! 30 / 2 = 15 (меньшее из venue.ws_symbols_per_conn и 15; урезано — строка журнала).
+//! Настройки: venue.ws_symbols_per_conn, venue.depth_levels, venue.fast_book_interval; venue.order_type — для
+//! признака пары «MEXC не примет наш ордер» (решение 254, pairs.rs).
 //!
 //! Официально (https://www.mexc.com/api-docs/spot-v3/websocket-market-streams/): «One ws connection supports a maximum
 //! of 30 subscriptions», превышение — «Any subscription will be invalid after the limit is exceeded» (FAQ); уровни
@@ -26,7 +28,9 @@ use super::symbols::Symbols;
 use super::ws;
 
 /// Предел подписок на одно соединение — из официальной документации MEXC.
-const MAX_TOPICS_PER_CONN: u64 = 30;
+pub const MAX_TOPICS_PER_CONN: u64 = 30;
+/// Решение 420: подписок на пару с быстрым стаканом — канал снимков и канал изменений.
+pub const TOPICS_PER_FAST_PAIR: u64 = 2;
 /// Допустимые уровни частичного стакана — из официальной документации MEXC.
 const DEPTH_LEVELS: [u64; 3] = [5, 10, 20];
 
@@ -72,6 +76,7 @@ pub async fn subscribe(
         .send(snap.event(VenueId(super::ctx::ID.to_string()), loaded_at))
         .await;
     let ok = snap.books.clone();
+    let per_conn = fast_cap(ctx, per_conn).await;
     let chunks: Vec<Vec<(Asset, String)>> =
         ok.chunks(per_conn as usize).map(|c| c.to_vec()).collect();
     // Решение 202: прежние соединения остановлены (subs.rs) — сторож видит только соединения этой подписки.
@@ -91,6 +96,29 @@ pub async fn subscribe(
     // subs.rs: при том же списке символов круг tradeFee не начинается заново (решение 131).
     let syms: Vec<String> = ok.iter().map(|(_, s)| s.clone()).collect();
     Ok((tasks, snap, syms))
+}
+
+/// Решение 420: монет на соединение при быстром стакане — не больше MAX_TOPICS_PER_CONN / 2 (шапка); урезано —
+/// строка журнала. Принимает: окружение, venue.ws_symbols_per_conn. Возвращает: монет на соединение. Ошибок нет.
+async fn fast_cap(ctx: &Ctx, per_conn: u64) -> u64 {
+    let cap = MAX_TOPICS_PER_CONN / TOPICS_PER_FAST_PAIR;
+    if ctx.text("venue.fast_book_interval").is_err() || per_conn <= cap {
+        return per_conn;
+    }
+    let m = format!(
+        "MEXC: быстрый стакан (решение 420) — 2 подписки на пару, venue.ws_symbols_per_conn = {per_conn} урезано до {cap} монет на соединение (предел MEXC {MAX_TOPICS_PER_CONN} подписок)"
+    );
+    let _ = ctx
+        .journal
+        .write(
+            Level::Warn,
+            "venue.subscribe",
+            Some(super::ctx::ID),
+            m,
+            None,
+        )
+        .await;
+    cap
 }
 
 /// Запись в журнал: монеты без торгуемой пары, пары, где MEXC не примет наш ордер (решение 254), и пары, закрытые

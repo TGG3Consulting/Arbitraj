@@ -3,6 +3,7 @@
 //   «Старт», «Пауза»; паузы площадок, карантины монет, итог дня (решение 173 — и по площадкам), «Сбросить лимит дня»
 //   общий и по площадке (решения 153, 173). Данные — GET /api/control, живое
 //   сообщение control (src/api/README.md); команды — POST /api/control и снятие паузы/карантина.
+//   Решение 432: запуск/остановка по сети — POST /api/control/chain/{id} {run}.
 // Кто вызывает: App.svelte (start), components/ControlBar.svelte.
 // От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js (один запрос в полёте).
 // Настройки: нет.
@@ -47,6 +48,9 @@ async function command(path, body) {
 
 /** «Старт» / «Стоп» / «Пауза». Принимает: 'Running' | 'Stopped' | 'Paused'. */
 export const setMode = (mode) => command('/api/control', { mode });
+
+/** Решение 432: «Старт <сеть>» / «Стоп <сеть>» (только при двух и более сетях площадок DEX). Принимает: id сети, запуск ли. */
+export const setChain = (id, run) => command(`/api/control/chain/${seg(id)}`, { run });
 
 /** Снять паузу площадки. Принимает: id площадки. */
 export const resumeVenue = (id) => command(`/api/control/venue/${seg(id)}/resume`);

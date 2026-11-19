@@ -84,6 +84,7 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
             "/api/control",
             get(core_api::control).post(core_api::set_mode),
         )
+        .route("/api/control/chain/{id}", post(core_api::set_chain))
         .route(
             "/api/control/venue/{id}/resume",
             post(core_api::resume_venue),

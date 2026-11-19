@@ -16,6 +16,7 @@
 //! Кто вызывает: executor.rs (перед сделкой и при ошибках), daily_limit.rs (стоп по лимиту дня), transfers.rs
 //! (карантин), api (команды управления через методы Core).
 //! От чего зависит: engine.rs, settings (catalog, read), view.rs, wallet_queue_gate.rs (очередь кошелька, решение 231 п. 4).
+//! Решение 432: запуск/остановка по сети — Risk.chain_off (chain_run.rs): сеть направления остановлена — отказ входу.
 //! Решение 414: у пары с заданными risk.drawdown_pct / risk.drawdown_max_usd лимит — просадка от пика (drawdown*.rs),
 //! пауза — тем же Risk.pair_paused с отметкой Risk.draw_paused.
 //! Настройки: risk.max_errors_in_row (по площадке), risk.max_daily_loss_usd (у пары сделки: пара → площадка → вся
@@ -100,6 +101,11 @@ pub struct Risk {
     /// сделки этим кошельком (маппинг, решение 132) не начинаются, остальные кошельки торгуют. Ставит и сама снимает
     /// сверка (reconcile_wallet.rs), вручную — «Снять паузу» кошелька.
     pub wallet_paused: BTreeMap<String, super::wallet_pause::WalletPause>,
+    /// Решение 432: сети, остановленные человеком (id сети → причина; chain_run.rs) — новые сделки направлений этой сети
+    /// не начинаются, идущие доводятся. Одна сеть площадок DEX — всегда пусто (как раньше).
+    pub chain_off: BTreeMap<String, String>,
+    /// Решение 432: сети для плашки (chain_run::view, заполняет snapshot); одна сеть — пусто, кнопок по сети нет.
+    pub chains: Vec<super::chain_run::ChainRun>,
 }
 
 impl Default for Risk {
@@ -122,6 +128,8 @@ impl Default for Risk {
             mode_auto: None,
             outcome_open: HashMap::new(),
             wallet_paused: BTreeMap::new(),
+            chain_off: BTreeMap::new(),
+            chains: Vec::new(),
         }
     }
 }
@@ -146,6 +154,8 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
     let pair = super::day_pair::of_direction(core, d);
     // Решение 231 (дополнение, п. 4): очередь кошелька остановлена — «биржа → DEX» не начинается (до замка риска).
     let queue_halt = super::wallet_queue_gate::halted_for(core, d, wallet.as_ref());
+    // Решение 432: сеть направления — только когда какая-то сеть остановлена (одна сеть — None, настройки не читаются).
+    let chain = super::chain_run::gate_input(core, d);
     let r = lk(&core.inner.risk);
     if r.mode != Mode::Running {
         // Решение 164: режим по-русски («Стоп», «Пауза»), а не внутреннее имя.
@@ -159,6 +169,10 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
             "торговля в режиме «{}»{why}",
             super::commands_control::label(r.mode)
         ));
+    }
+    // Решение 432: сеть направления остановлена человеком — новые сделки её направлений не начинаются.
+    if let Some(why) = chain.and_then(|c| super::chain_run::refusal(&r, c)) {
+        return Err(why);
     }
     for v in [&d.buy_on, &d.sell_on] {
         if let Some(why) = r.venue_paused.get(v) {
@@ -191,19 +205,22 @@ pub fn can_open(core: &Core, d: &Direction) -> Result<(), String> {
 
 /// Команда управления (интерфейс): режим системы. Возвращает: текст для журнала.
 pub fn set_mode(core: &Core, mode: Mode, reason: Option<String>) -> String {
-    {
-        let mut r = lk(&core.inner.risk);
-        r.mode = mode;
-        r.reason = reason.clone();
-        r.daily_stop = false;
-        // Решение 225: режим сменили — софтовая отметка «Стоп» снята (правило «стоп всё» ставит её после этой смены).
-        r.mode_auto = None;
-    }
+    put_mode(&mut lk(&core.inner.risk), mode, reason.clone());
     publish(core);
     format!(
         "Режим системы: {mode:?}{}",
         reason.map(|r| format!(" — {r}")).unwrap_or_default()
     )
+}
+
+/// Смена режима под замком риска (set_mode; решение 432 — и запуск/остановка сети, chain_run.rs). Принимает: состояние
+/// риска, режим, причину. Ошибок нет.
+pub fn put_mode(r: &mut Risk, mode: Mode, reason: Option<String>) {
+    r.mode = mode;
+    r.reason = reason;
+    r.daily_stop = false;
+    // Решение 225: режим сменили — софтовая отметка «Стоп» снята (правило «стоп всё» ставит её после этой смены).
+    r.mode_auto = None;
 }
 
 /// Ошибка площадки: считает подряд; достигнут risk.max_errors_in_row — пауза площадки.
@@ -329,5 +346,7 @@ pub fn snapshot(core: &Core) -> Risk {
         x.paused = r.pair_paused.contains_key(p);
         x.draw_paused = r.draw_paused.contains(p);
     }
+    // Решение 432: сети для плашки (одна сеть — пусто).
+    r.chains = super::chain_run::view(&r, &super::chain_run::chains(core));
     r
 }

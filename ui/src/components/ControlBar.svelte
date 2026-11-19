@@ -15,13 +15,16 @@
     лимита (время сброса биржа не сообщает).
     Решение 230: паузы кошельков DEX от сверки (wallet_paused) — строка кошелька с кнопкой «Снять паузу»
     (POST /api/control/wallet/{id}/resume); снимается и сама, когда балансы кошелька сойдутся.
+    Решение 432: две сети и больше (Risk.chains) — строка «Сети:» с «Старт <сеть>» / «Стоп <сеть>» (POST
+    /api/control/chain/{id}): новые сделки остановленной сети не начинаются, идущие доводятся; «Старт (все сети)» —
+    общий. Одна сеть — плашка прежняя.
     Команды уходят ядру (POST /api/control…) и пишутся в журнал.
   Кто вызывает: App.svelte.
   От чего зависит: lib/control.svelte.js, lib/coreLabels.js, lib/labels.js, components/DayVenues.svelte.
   Настройки: risk.max_daily_loss_usd, risk.max_daily_loss_total_usd (только показ; задаются на экране «Настройки»).
 -->
 <script>
-  import { control, setMode, resumeVenue, resumeWallet, releaseCoin, resetDailyLimit } from '../lib/control.svelte.js';
+  import { control, setMode, setChain, resumeVenue, resumeWallet, releaseCoin, resetDailyLimit } from '../lib/control.svelte.js';
   import { modeLabel } from '../lib/coreLabels.js';
   import { showTime } from '../lib/labels.js';
   import DayVenues from './DayVenues.svelte';
@@ -29,6 +32,8 @@
   const r = $derived(control.data);
   const cls = $derived(r?.mode === 'Running' ? 'run' : r?.mode === 'Paused' ? 'warn' : 'stop');
   const lim = $derived(r?.day?.limit);
+  // Решение 432: сети площадок DEX (две и больше — кнопки по сети; одна — пусто, плашка прежняя).
+  const chains = $derived(r?.chains ?? []);
   const reset = $derived(r?.day?.limit_reset);
   // Убыток для лимита до сброса: −итог дня в момент сброса (отрицательное — день был в плюсе).
   const before = $derived(reset ? -Number(reset.base_usd) : 0);
@@ -70,10 +75,23 @@
       · итог дня {r.day.date}: {r.day.result_usd} USDT (факт {r.day.final_usd}, оценка позиций {r.day.provisional_usd})
     </span>
     <span class="row inline">
-      <button disabled={control.busy || r.mode === 'Running'} onclick={() => setMode('Running')}>Старт</button>
+      <button disabled={control.busy || (r.mode === 'Running' && !chains.some((c) => !c.running))} onclick={() => setMode('Running')}>{chains.length ? 'Старт (все сети)' : 'Старт'}</button>
       <button class="quiet" disabled={control.busy || r.mode !== 'Running'} onclick={() => setMode('Paused')}>Пауза</button>
       <button class="quiet" disabled={control.busy || r.mode === 'Stopped'} onclick={() => setMode('Stopped')}>Стоп</button>
     </span>
+    {#if chains.length}
+      <div>
+        Сети:
+        {#each chains as c (c.id)}
+          <span class="row inline">
+            <strong class={c.running ? '' : 'muted'}>{c.id}: {c.running ? 'в работе' : 'стоит'}</strong>
+            {#if c.why}<span class="muted">({c.why})</span>{/if}
+            <button disabled={control.busy || c.running} onclick={() => setChain(c.id, true)}>Старт {c.id}</button>
+            <button class="quiet" disabled={control.busy || !c.running} onclick={() => setChain(c.id, false)}>Стоп {c.id}</button>
+          </span>
+        {/each}
+      </div>
+    {/if}
     <div class={lim?.exceeded ? 'err' : 'muted'}>
       {#if lim}
         Общий лимит дня (Стоп всей системы): {lim.loss_usd} из {lim.max_usd} USDT{#if reset} (сброшен в {showTime(reset.at)}, до сброса {before >= 0 ? `проиграно ${before}` : `итог +${-before}`} USDT){/if}{#if lim.exceeded} — достигнут{/if}

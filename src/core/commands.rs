@@ -206,6 +206,10 @@ impl Core {
 
     /// То же, что set_mode, с причиной «кто» (решение 157: Telegram — «команда из Telegram, @имя»). Ошибок нет.
     pub async fn set_mode_by(&self, mode: Mode, reason: &str) -> String {
+        // Решение 432: общий «Старт» человека — все сети (остановленные по сети запускаются); одна сеть — пусто, как раньше.
+        if mode == Mode::Running {
+            lk(&self.inner.risk).chain_off.clear();
+        }
         let t = risk::set_mode(self, mode, Some(reason.into()));
         self.inner
             .deps
@@ -218,6 +222,20 @@ impl Core {
         };
         self.inner.deps.notify(code, None, &t).await;
         t
+    }
+
+    /// Решение 432: «Старт <сеть>» / «Стоп <сеть>» (core/chain_run.rs) — журнал core.control, уведомление
+    /// system.started / system.stopped. Принимает: id сети, запуск ли, кто. Возвращает: текст для журнала.
+    /// Ошибки: текст — сетей меньше двух или такой сети нет у площадок DEX.
+    pub async fn set_chain_by(&self, chain: &str, run: bool, who: &str) -> Result<String, String> {
+        let t = super::chain_run::set(self, chain, run, who)?;
+        self.inner
+            .deps
+            .log(Level::Info, "core.control", None, &t, None)
+            .await;
+        let code = if run { "system.started" } else { "system.stopped" };
+        self.inner.deps.notify(code, None, &t).await;
+        Ok(t)
     }
 
     /// Снять паузу площадки (после ошибок подряд или правила шлюза). Решение 258: id пары «площадка × тип направления»

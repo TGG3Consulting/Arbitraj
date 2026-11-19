@@ -1,0 +1,2274 @@
+[
+ {
+  "name": "index.network",
+  "scope": {
+   "id": "bsc_dex",
+   "kind": "Venue"
+  },
+  "value": "bsc"
+ },
+ {
+  "name": "index.key_header",
+  "scope": {
+   "id": "bsc_dex",
+   "kind": "Venue"
+  },
+  "value": "x-cg-demo-api-key"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "pancakeswap_v2",
+   "kind": "Dex"
+  },
+  "value": "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "uniswap-v4-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x95C086d7fE28AdD842ee220fef225a777474d781"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "uniswap_v3",
+   "kind": "Dex"
+  },
+  "value": "0x78D78E420Da98ad378D7799bE8f4AF69033EB077"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "pancakeswap-infinity-clmm",
+   "kind": "Dex"
+  },
+  "value": "0xd0737C9762912dD34c3271197E362Aa736Df0926"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "uniswap_v4",
+   "kind": "Dex"
+  },
+  "value": "0x95C086d7fE28AdD842ee220fef225a777474d781"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "kyberswap_elastic_bsc",
+   "kind": "Dex"
+  },
+  "value": "0x4d47fd5a29904Dae0Ef51b1c450C9750F15D7856"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "pancakeswap_infinity_cl",
+   "kind": "Dex"
+  },
+  "value": "0xd0737C9762912dD34c3271197E362Aa736Df0926"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "thena-fusion",
+   "kind": "Dex"
+  },
+  "value": "0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "pancakeswap-infinity-lbamm-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xC631f4B0Fc2Dd68AD45f74B2942628db117dD359"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "lista-v3",
+   "kind": "Dex"
+  },
+  "value": "0x6B61a2C67c45B40d754e4e7c1c565590685C03E2"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "squadswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xAF78c3C4100070337DBa8C79065339CfB77CFe7F"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "uniswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x78D78E420Da98ad378D7799bE8f4AF69033EB077"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "maverick-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xb40AfdB85a07f37aE217E7D6462e609900dD8D7A"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "pancakeswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "topaz",
+   "kind": "Dex"
+  },
+  "value": "0x7CCB89bB9BdEF68688F39a2c22d249fD1D9759f1"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "pancakeswap_infinity_bin",
+   "kind": "Dex"
+  },
+  "value": "0xC631f4B0Fc2Dd68AD45f74B2942628db117dD359"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "pancakeswap_v3",
+   "kind": "Dex"
+  },
+  "value": "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "kyberswap_classic_bsc",
+   "kind": "Dex"
+  },
+  "value": "0x78df70615ffc8066cc0887917f2cd72092c86409"
+ },
+ {
+  "name": "dex.quoter",
+  "scope": {
+   "id": "sushiswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xb1E835Dc2785b52265711e17fCCb0fd018226a6e"
+ },
+ {
+  "name": "index.factory_scan",
+  "scope": {
+   "id": "bsc_dex",
+   "kind": "Venue"
+  },
+  "value": true
+ },
+ {
+  "name": "index.page_size",
+  "scope": {
+   "id": "bsc_dex",
+   "kind": "Venue"
+  },
+  "value": 20
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "hello-dex-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x0f9823775b670bd123a6369de2a6e8b30341fdae"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "metric-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x2a53833cc95548cf52c7b159110e22d3a9018f32"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "iziswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x93bb94a0d5269cb437a1f71ff3a77ab753844422"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "traderjoe-v2-1-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x8e42f2f4101563bf679975178e880fd87d3efd4e"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "dodo-dvm",
+   "kind": "Dex"
+  },
+  "value": "0x790B4A80Fb1094589A3c0eFC8740aA9b0C1733fB"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "curve-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xd7E72f3615aa65b92A4DBdC211E296a35512988B"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "thena-v3",
+   "kind": "Dex"
+  },
+  "value": "0x30055f87716d3dfd0e5198c27024481099fb4a98"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "topaz",
+   "kind": "Dex"
+  },
+  "value": "0x73DC984D9490286E735548f61dfCCec67Af82ed9"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "omni-exchange-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xd6Ab0566e7E60B67c50AC73ddFf4e3DdcB829EC2"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "kyberswap_elastic_bsc",
+   "kind": "Dex"
+  },
+  "value": "0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "pancakeswap_v2",
+   "kind": "Dex"
+  },
+  "value": "0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "uniswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "thena-fusion",
+   "kind": "Dex"
+  },
+  "value": "0x306F06C147f064A010530292A1EB6737c3e378e4"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "babyswap",
+   "kind": "Dex"
+  },
+  "value": "0x86407bEa2078ea5f5EB5A52B2caA963bC1F889Da"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "wault_finance",
+   "kind": "Dex"
+  },
+  "value": "0xB42E3FE71b7E0673335b3331B3e1053BD9822570"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "safemoon_swap",
+   "kind": "Dex"
+  },
+  "value": "0x4d05D0045df5562D6D52937e93De6Ec1FECDAd21"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "julswap",
+   "kind": "Dex"
+  },
+  "value": "0x553990f2cba90272390f62c5bdb1681ffc899675"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "orbitalswap",
+   "kind": "Dex"
+  },
+  "value": "0x1A04Afe9778f95829017741bF46C9524B91433fB"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "squadswap-v3-bsc-deprecated",
+   "kind": "Dex"
+  },
+  "value": "0x009c4ef7c0e0dd6bd1ea28417c01ea16341367c3"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "pancakeswap_stableswap",
+   "kind": "Dex"
+  },
+  "value": "0x25a55f9f2279A54951133D503490342b50E5cd15"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "smardex-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xa8ef6fea013034e62e2c4a9ec1cdb059fe23af33"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "jetswap_bsc",
+   "kind": "Dex"
+  },
+  "value": "0x0eb58e5c8aa63314ff5547289185cc4583dfcbd5"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "nomiswap",
+   "kind": "Dex"
+  },
+  "value": "0xd6715A8be3944ec72738F0BFDC739d48C3c29349"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "babydogeswap",
+   "kind": "Dex"
+  },
+  "value": "0x4693b62e5fc9c0a45f89d62e6300a03c85f43137"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "padswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xB836017ACf10b8A7c6c6C9e99eFE0f5B0250FC45"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "pancakeswap-v1-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xBCfCcbde45cE874adCB698cC183deBcF17952812"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "pancakeswap_v3",
+   "kind": "Dex"
+  },
+  "value": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "ampleswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x381fEfaDAB5466BFf0e8e96842e8e76A143E8F73"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "pls2e",
+   "kind": "Dex"
+  },
+  "value": "0x0944AB692786D9104AE9a29778285c41C33c0415"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "nomiswap_stable",
+   "kind": "Dex"
+  },
+  "value": "0xc6b7ee49d386bae4fd501f2d2f8d18828f1f6285"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "apeswap_bsc",
+   "kind": "Dex"
+  },
+  "value": "0x0841BD0B734E4F5853f0dD8d7Ea041c241fb0Da6"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "dinosaureggs",
+   "kind": "Dex"
+  },
+  "value": "0x73D9F93D53505cB8C4c7f952ae42450d9E859D10"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "biswap-v3-1",
+   "kind": "Dex"
+  },
+  "value": "0x4d175f2cfe3e2215c1b55865b07787b751cedd36"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "squadswap-deprecated",
+   "kind": "Dex"
+  },
+  "value": "0x1d9f43a6195054313ac1ae423b1f810f593b6ac1"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "coinswap",
+   "kind": "Dex"
+  },
+  "value": "0xC2D8d27F3196D9989aBf366230a47384010440c0"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "mdex_bsc",
+   "kind": "Dex"
+  },
+  "value": "0x3CD1C46068dAEa5Ebb0d3f55F6915B10648062B8"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "howswap",
+   "kind": "Dex"
+  },
+  "value": "0xf4866c04a88cb593374865d73d7cf5b5b3a9c641"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "traderjoe-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x4f8bdc85E3eec5b9dE67097c3f59B6Db025d9986"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "maverick-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "autoshark_finance",
+   "kind": "Dex"
+  },
+  "value": "0xe759Dd4B9f99392Be64f1050a6A8018f73B53a13"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "dao_swap",
+   "kind": "Dex"
+  },
+  "value": "0x940BEb635cbEeC04720AC97FADb97205676e6aa4"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "dexswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x869479270ff5ff40a9cecd49c004d0698ab4b66a"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "unchain-x",
+   "kind": "Dex"
+  },
+  "value": "0x82fa7b2ce2a76c7888a9d3b0a81e0b2ecfd8d40c"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "alium",
+   "kind": "Dex"
+  },
+  "value": "0xbEAC7e750728e865A3cb39D5ED6E3A3044ae4B98"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "leonicornswap",
+   "kind": "Dex"
+  },
+  "value": "0xEB10f4Fe2A57383215646b4aC0Da70F8EDc69D4F"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "acsi-finance",
+   "kind": "Dex"
+  },
+  "value": "0xb7238020c331e8cdfd26db299cfd2076df812e6f"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "biswap-v3",
+   "kind": "Dex"
+  },
+  "value": "0x7c3d53606f9c03e7f54abddffc3868e1c5466863"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "pandora_digital_swap",
+   "kind": "Dex"
+  },
+  "value": "0xFf9A4E72405Df3ca3D909523229677e6B2b8dC71"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "orion-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xe52ccf7b6ce4817449f2e6fa7efd7b567803e4b4"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "saitaswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x6a6dEa0cD52689819Eb3bF2c15594BeAfB646CB7"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "honorswap",
+   "kind": "Dex"
+  },
+  "value": "0x5b19629db8d16d551e9f3faac150fa8a11051b33"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "melegaswap",
+   "kind": "Dex"
+  },
+  "value": "0xb7e5848e1d0cb457f2026670fcb9bbdb7e9e039c"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "sushiswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x126555dd55a39328F69400d6aE4F782Bd4C34ABb"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "kyberswap_classic_bsc",
+   "kind": "Dex"
+  },
+  "value": "0x878dfe971d44e9122048308301f540910bbd934c"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "dodo-dsp",
+   "kind": "Dex"
+  },
+  "value": "0x0fb9815938Ad069Bf90E14FE6C596c514BEDe767"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "squadswap-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x918Adf1f2C03b244823Cd712E010B6e3CD653DbA"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "plearn",
+   "kind": "Dex"
+  },
+  "value": "0x4750A965f72E09c434b7a40f1735144c983440D2"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "tiktokfun",
+   "kind": "Dex"
+  },
+  "value": "0xad18ed8d918e14e5b424d919fb5c829f4d80a4bd"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "uniswap_v2",
+   "kind": "Dex"
+  },
+  "value": "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "pancakeswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "baryon_network",
+   "kind": "Dex"
+  },
+  "value": "0x03879E2a3944FD601e7638DfCBC9253fb793b599"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "omni-exchange-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x7d9D51267f7e9e6b46a48E0A75c0086F46777087"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "uniswap_v3",
+   "kind": "Dex"
+  },
+  "value": "0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "lista-v3",
+   "kind": "Dex"
+  },
+  "value": "0xcb010ed373523942706F730b89792aA1C1597b20"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "sheepdex",
+   "kind": "Dex"
+  },
+  "value": "0x571521f8c16f3c4ed5f2490f19187ba7a5a3cbdf"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "usdfi",
+   "kind": "Dex"
+  },
+  "value": "0xb3863573d9f25e6a84895d4685a408db7a488416"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "bakeryswap",
+   "kind": "Dex"
+  },
+  "value": "0x01bF7C66c6BD861915CdaaE475042d3c4BaE16A7"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "fstswap",
+   "kind": "Dex"
+  },
+  "value": "0x9A272d734c5a0d7d84E0a892e891a553e8066dce"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "biswap",
+   "kind": "Dex"
+  },
+  "value": "0x858E3312ed3A876947EA49d572A7C42DE08af7EE"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "sphynx_swap",
+   "kind": "Dex"
+  },
+  "value": "0x8ba1a4c24de655136ded68410e222cca80d43444"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "dodo-dpp",
+   "kind": "Dex"
+  },
+  "value": "0xd9CAc3D964327e47399aebd8e1e6dCC4c251DaAE"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "intercroneswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "0xFa51B0746eb96deBC619Fd2EA88d5D8B43BD8230"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "liquidus-finance-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x80CEe6A5c97b1003f272ba8C759a7c17796C2Cdc"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "planet_finance",
+   "kind": "Dex"
+  },
+  "value": "0xa053582601214FEb3778031a002135cbBB7DBa18"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "definix",
+   "kind": "Dex"
+  },
+  "value": "0x43ebb0cb9bd53a3ed928dd662095ace1cef92d19"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "uniswap-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "thena",
+   "kind": "Dex"
+  },
+  "value": "0xAFD89d21BdB66d00817d4153E055830B1c2B3970"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "jswap_bsc",
+   "kind": "Dex"
+  },
+  "value": "0xd654cbf99f2907f06c88399ae123606121247d5c"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "squadswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "0x10d8612D9D8269e322AB551C18a307cB4D6BC07B"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "sushiswap_bsc",
+   "kind": "Dex"
+  },
+  "value": "0xc35DADB65012eC5796536bD9864eD8773aBc74C4"
+ },
+ {
+  "name": "dex.factory",
+  "scope": {
+   "id": "dooar_bsc",
+   "kind": "Dex"
+  },
+  "value": "0x1e895bFe59E3A5103e8B7dA3897d1F2391476f3c"
+ },
+ {
+  "name": "index.attribution_url",
+  "scope": {
+   "id": "bsc_dex",
+   "kind": "Venue"
+  },
+  "value": "https://www.geckoterminal.com"
+ },
+ {
+  "name": "index.refresh_s",
+  "scope": {
+   "id": "bsc_dex",
+   "kind": "Venue"
+  },
+  "value": 108000
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "bakeryswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "pls2e",
+   "kind": "Dex"
+  },
+  "value": "v2_fork_executor"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "iziswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "iziswap"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "apeswap_bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "mdex_bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "julswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "pancakeswap-v1-bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "thena-fusion",
+   "kind": "Dex"
+  },
+  "value": "thena_fusion"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "thena-v3",
+   "kind": "Dex"
+  },
+  "value": "algebra_integral"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "coinswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "squadswap-v3-bsc-deprecated",
+   "kind": "Dex"
+  },
+  "value": "v3_fork_pancake"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "dodo-dsp",
+   "kind": "Dex"
+  },
+  "value": "dodo_dsp"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "biswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "dao_swap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork_executor"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "liquidus-finance-bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "intercroneswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "pancakeswap_v2",
+   "kind": "Dex"
+  },
+  "value": "pancakeswap_v2"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "pancakeswap-infinity-lbamm-bsc",
+   "kind": "Dex"
+  },
+  "value": "pancakeswap_infinity_bin"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "orion-bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "autoshark_finance",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "orbitalswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "sheepdex",
+   "kind": "Dex"
+  },
+  "value": "v3_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "uniswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "uniswap_v3"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "nomiswap_stable",
+   "kind": "Dex"
+  },
+  "value": "nomiswap_stable"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "leonicornswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "metric-bsc",
+   "kind": "Dex"
+  },
+  "value": "metric_omm"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "traderjoe-v2-1-bsc",
+   "kind": "Dex"
+  },
+  "value": "lb_v21"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "nerve",
+   "kind": "Dex"
+  },
+  "value": "saddle_stableswap"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "uniswap-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": "uniswap_v2"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "honorswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "pancakeswap-infinity-clmm",
+   "kind": "Dex"
+  },
+  "value": "pancakeswap_infinity_cl"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "sphynx_swap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "squadswap-deprecated",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "sushiswap_bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "babydogeswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "wault_finance",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "safemoon_swap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "squadswap-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "omni-exchange-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork_executor"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "biswap-v3-1",
+   "kind": "Dex"
+  },
+  "value": "biswap_v3"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "ellipsis",
+   "kind": "Dex"
+  },
+  "value": "curve_stableswap"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "dinosaureggs",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "usdfi",
+   "kind": "Dex"
+  },
+  "value": "solidly_v1"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "definix",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "sushiswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "v3_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "baryon_network",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "thena",
+   "kind": "Dex"
+  },
+  "value": "solidly_v1"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "jswap_bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "babyswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "kyberswap_classic_bsc",
+   "kind": "Dex"
+  },
+  "value": "kyber_dmm"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "saitaswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "tiktokfun",
+   "kind": "Dex"
+  },
+  "value": "v3_fork_pancake"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "nomiswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "biswap-v3",
+   "kind": "Dex"
+  },
+  "value": "biswap_v3"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "smardex-bsc",
+   "kind": "Dex"
+  },
+  "value": "smardex"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "fstswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "pancakeswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "pancakeswap_v3"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "maverick-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": "maverick_v2"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "ampleswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "padswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "acsi-finance",
+   "kind": "Dex"
+  },
+  "value": "balancer_v2"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "planet_finance",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "howswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "unchain-x",
+   "kind": "Dex"
+  },
+  "value": "v3_fork_pancake"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "dodo-dvm",
+   "kind": "Dex"
+  },
+  "value": "dodo_dvm"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "kyberswap_elastic_bsc",
+   "kind": "Dex"
+  },
+  "value": "kyber_elastic"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "pancakeswap_stableswap",
+   "kind": "Dex"
+  },
+  "value": "pancake_stableswap"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "traderjoe-bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "dooar_bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "curve-bsc",
+   "kind": "Dex"
+  },
+  "value": "curve_stableswap_ng"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "uniswap-v4-bsc",
+   "kind": "Dex"
+  },
+  "value": "uniswap_v4"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "topaz",
+   "kind": "Dex"
+  },
+  "value": "slipstream"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "lista-v3",
+   "kind": "Dex"
+  },
+  "value": "v3_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "dodo-dpp",
+   "kind": "Dex"
+  },
+  "value": "dodo_dpp"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "melegaswap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "jetswap_bsc",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "dexswap-bsc",
+   "kind": "Dex"
+  },
+  "value": "algebra_integral"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "hello-dex-bsc",
+   "kind": "Dex"
+  },
+  "value": "v3_fork_pancake"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "woofi",
+   "kind": "Dex"
+  },
+  "value": "woofi_v2"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "omni-exchange-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "v3_fork_pancake"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "pandora_digital_swap",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "alium",
+   "kind": "Dex"
+  },
+  "value": "v2_fork"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "squadswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": "v3_fork_pancake"
+ },
+ {
+  "name": "dex.kind",
+  "scope": {
+   "id": "plearn",
+   "kind": "Dex"
+  },
+  "value": "v2_fork_executor"
+ },
+ {
+  "name": "index.api_url",
+  "scope": {
+   "id": "bsc_dex",
+   "kind": "Venue"
+  },
+  "value": "https://api.coingecko.com/api/v3/onchain"
+ },
+ {
+  "name": "index.attribution_text",
+  "scope": {
+   "id": "bsc_dex",
+   "kind": "Venue"
+  },
+  "value": "On-chain data provided by GeckoTerminal"
+ },
+ {
+  "name": "index.requests_per_min",
+  "scope": {
+   "id": "bsc_dex",
+   "kind": "Venue"
+  },
+  "value": 30
+ },
+ {
+  "name": "index.pages_per_token",
+  "scope": {
+   "id": "bsc_dex",
+   "kind": "Venue"
+  },
+  "value": 2
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "omni-exchange-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "orion-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "safemoon_swap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "squadswap-deprecated",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pandora_digital_swap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "traderjoe-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "leonicornswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "maverick-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "omni-exchange-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "jetswap_bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "plearn",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "kyberswap_classic_bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "acsi-finance",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "dooar_bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "usdfi",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "nomiswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "ellipsis",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "biswap-v3",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "apeswap_bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "iziswap-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "alium",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "topaz",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "wault_finance",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "liquidus-finance-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "ampleswap-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "autoshark_finance",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "intercroneswap-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "saitaswap-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "dodo-dvm",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "bakeryswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "sushiswap_bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "dodo-dsp",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "tiktokfun",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "biswap-v3-1",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pancakeswap_infinity_cl",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "julswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "curve-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pls2e",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "fstswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "woofi",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "orbitalswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pancakeswap-v1-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "uniswap_v3",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "jswap_bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "dodo-dpp",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "dinosaureggs",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "kyberswap_elastic_bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pancakeswap-infinity-lbamm-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "squadswap-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "uniswap_v2",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "howswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "babyswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "nomiswap_stable",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "dexswap-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pancakeswap_infinity_bin",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "babydogeswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "definix",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "uniswap_v4",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "thena-v3",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "uniswap-v4-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "thena-fusion",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "planet_finance",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pancakeswap_v3",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "smardex-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "traderjoe-v2-1-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pancakeswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "padswap-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "hello-dex-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "metric-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "squadswap-v3-bsc-deprecated",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "nerve",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "mdex_bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pancakeswap_stableswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pancakeswap-infinity-clmm",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "melegaswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "lista-v3",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "uniswap-v2-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "sheepdex",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "biswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "squadswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "unchain-x",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "uniswap-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "coinswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "pancakeswap_v2",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "thena",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "sphynx_swap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "sushiswap-v3-bsc",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "honorswap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "dao_swap",
+   "kind": "Dex"
+  },
+  "value": true
+ },
+ {
+  "name": "dex.pool_enabled",
+  "scope": {
+   "id": "baryon_network",
+   "kind": "Dex"
+  },
+  "value": true
+ }
+]

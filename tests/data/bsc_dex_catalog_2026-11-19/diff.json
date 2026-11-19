@@ -1,0 +1,285 @@
+{
+ "gt_ids_not_in_dex_kind": [
+  [
+   "firebird_bsc",
+   "Firebird (BSC)"
+  ],
+  [
+   "impossible_finance",
+   "Impossible Finance v2"
+  ],
+  [
+   "mars_ecosystem",
+   "Mars Ecosystem"
+  ],
+  [
+   "elk_finance_bsc",
+   "Elk Finance (BSC)"
+  ],
+  [
+   "annex_finance_bsc",
+   "Annex Finance (BSC)"
+  ],
+  [
+   "yoshi_exchange_bsc",
+   "Yoshi.exchange (BSC)"
+  ],
+  [
+   "empiredex_bsc",
+   "EmpireDEX (BSC)"
+  ],
+  [
+   "polkaex_bsc",
+   "PolkaEx (BSC)"
+  ],
+  [
+   "knightswap",
+   "KnightSwap"
+  ],
+  [
+   "impossible_finance_v3",
+   "Impossible Finance v3"
+  ],
+  [
+   "moonlift",
+   "Moonlift"
+  ],
+  [
+   "justmoney_bsc",
+   "Justmoney (BSC)"
+  ],
+  [
+   "radioshack_bsc",
+   "RadioShack (BSC)"
+  ],
+  [
+   "pyeswap_bsc",
+   "PYESwap (BSC)"
+  ],
+  [
+   "winery_swap",
+   "Winery Swap"
+  ],
+  [
+   "dddx",
+   "DDDX"
+  ],
+  [
+   "swych",
+   "SWYCH"
+  ],
+  [
+   "fraxswap_bsc",
+   "Fraxswap (BSC)"
+  ],
+  [
+   "bridges",
+   "Bridges"
+  ],
+  [
+   "whaleswap",
+   "WhaleSwap"
+  ],
+  [
+   "pinkswap",
+   "Pinkswap"
+  ],
+  [
+   "spice_trade_bsc",
+   "Spice Trade (BSC)"
+  ],
+  [
+   "cone_exchange",
+   "Cone Exchange"
+  ],
+  [
+   "ellipsis_finance",
+   "Ellipsis Finance"
+  ],
+  [
+   "cakewswap_bsc",
+   "CakeWSwap (BSC)"
+  ],
+  [
+   "corgiswap",
+   "CorgiSwap"
+  ],
+  [
+   "niob",
+   "Niob"
+  ],
+  [
+   "w3swap",
+   "W3Swap"
+  ],
+  [
+   "openocean",
+   "OpenOcean"
+  ],
+  [
+   "kyotoswap",
+   "KyotoSwap"
+  ],
+  [
+   "lif3-bsc",
+   "lif3 (BSC)"
+  ],
+  [
+   "traderjoe-v2-bsc",
+   "LFJ V2 (BSC)"
+  ],
+  [
+   "archly-bsc",
+   "Archly (BSC)"
+  ],
+  [
+   "hkswap",
+   "HKSwap"
+  ],
+  [
+   "stronghands-dex-v2",
+   "StrongHands DEX V2"
+  ],
+  [
+   "surge-protocol-bsc",
+   "Surge Protocol (BSC)"
+  ],
+  [
+   "magicfox",
+   "Magicfox"
+  ],
+  [
+   "veplus",
+   "Veplus"
+  ],
+  [
+   "dex-on-crypto",
+   "Dex on Crypto"
+  ],
+  [
+   "allinxswap-bsc",
+   "AllInXSwap (BSC)"
+  ],
+  [
+   "diamondswap-bsc",
+   "DiamondSwap (BSC)"
+  ],
+  [
+   "creamswap",
+   "CreamSwap"
+  ],
+  [
+   "degendex-bsc",
+   "DegenDex (BSC)"
+  ],
+  [
+   "donaswap-v3-bsc",
+   "Donaswap V3 (BSC)"
+  ],
+  [
+   "woken-exchange-bsc",
+   "Woken Exchange (BSC)"
+  ],
+  [
+   "lif3-v3-bsc",
+   "Lif3 V3 (BSC)"
+  ],
+  [
+   "lovely-swap",
+   "Lovely Swap"
+  ],
+  [
+   "reddex-bsc",
+   "Reddex (BSC)"
+  ],
+  [
+   "agus-dex-bsc",
+   "AGUS DEX (BSC)"
+  ],
+  [
+   "orangedx",
+   "OrangeDX"
+  ],
+  [
+   "pyreswap-bsc",
+   "PyreSwap (BSC)"
+  ],
+  [
+   "smbswap-v2-bsc",
+   "SMBSwap V2 (BSC)"
+  ],
+  [
+   "smbswap-v3-bsc",
+   "SMBSwap V3 (BSC)"
+  ],
+  [
+   "marswap-bsc",
+   "MarSwap (BSC)"
+  ],
+  [
+   "pipiswap-bsc",
+   "PipiSwap (BSC)"
+  ],
+  [
+   "token-dex",
+   "Token DEX"
+  ],
+  [
+   "tidaldex",
+   "TidalDex"
+  ],
+  [
+   "coinfair-bsc",
+   "Coinfair (BSC)"
+  ],
+  [
+   "kewlswap-bsc",
+   "KEWLSwap (BSC)"
+  ],
+  [
+   "omni-exchange-v4-bsc",
+   "Omni Exchange V4 (BSC)"
+  ],
+  [
+   "four-meme",
+   "Four.meme"
+  ],
+  [
+   "coinhain",
+   "Coinhain"
+  ],
+  [
+   "ring-exchange-bsc",
+   "Ring Exchange (BSC)"
+  ],
+  [
+   "dnax",
+   "DNAX"
+  ],
+  [
+   "forest-protocol",
+   "Forest Protocol"
+  ],
+  [
+   "falcox-swap-bnb",
+   "FalcoX Swap (BNB)"
+  ],
+  [
+   "qom-x",
+   "Qom X"
+  ]
+ ],
+ "dex_kind_not_in_gt": [
+  "dodo-dpp",
+  "dodo-dsp",
+  "dodo-dvm",
+  "ellipsis",
+  "lista-v3",
+  "nerve",
+  "plearn",
+  "sheepdex",
+  "squadswap-deprecated",
+  "squadswap-v3-bsc-deprecated",
+  "woofi"
+ ]
+}

@@ -41,17 +41,19 @@ pub struct Parsed {
 }
 
 /// Что делает: разбор getall.
-/// Принимает: ответ (массив монет), код сети BSC, площадку, «минимум депозита неизвестен — 0», справочник пар.
+/// Принимает: ответ (массив монет), свои сети (решение 431: код BSC и другие — gateway/own_nets.rs; «BSC» — только
+/// BSC; адрес — у каждой своей сети), площадку, «минимум депозита неизвестен — 0», справочник пар.
 /// Возвращает: Parsed — сеть с неразборчивым полем (живой ответ 2026-11-02: withdrawMax не число) не валит весь
 /// справочник, а только исключается.
 /// Ошибки: BadResponse — ответ не массив или у монеты нет поля coin.
 pub fn parse_networks(
     data: &Value,
-    bsc: &str,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
     venue: &VenueId,
     min_ok: bool,
     symbols: &Symbols,
 ) -> GatewayResult<Parsed> {
+    let own = own.into();
     let coins = data
         .as_array()
         .ok_or_else(|| errors::bad("config/getall не массив", &data.to_string()))?;
@@ -74,8 +76,8 @@ pub fn parse_networks(
             }
             p.names
                 .insert((ticker.clone(), code.clone()), display.clone());
-            let is_bsc = code == bsc;
-            let contract = if is_bsc {
+            let is_bsc = own.is_bsc(&code);
+            let contract = if own.has(&code) {
                 num::text_opt(n, "contract").and_then(|a| a.parse().ok())
             } else {
                 None

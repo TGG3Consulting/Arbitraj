@@ -3,7 +3,8 @@
 //! venue.history_window_s (фильтра по хешу у XT нет) — поиск записи с тем же transactionId (gateway::tx_hash::same).
 //! Кто вызывает: mod.rs (deposit_status из контракта).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, transfers.rs (transfer), gateway/tx_hash.rs.
-//! Настройки: venue.bsc_network, venue.history_window_s [xt].
+//! Настройки: venue.bsc_network / venue.arbitrum_network (сеть — по Asset.chain монеты, решение 431),
+//! venue.history_window_s [xt].
 //!
 //! Официально: GET /v4/deposit/history (https://doc.xt.com/docs/spot/Deposit&Withdrawal/GetDepositHistory,
 //! `_deposit_withdrawal/historyDepositGet.md`) — currency и chain обязательны, status, fromId, direction, limit
@@ -29,7 +30,9 @@ const PAGE: &str = "200";
 
 /// Статус депозита по хешу. Ошибки: не виден (DepositNotCredited), не выполнен, неописанный статус, связь, настройки.
 pub async fn deposit_status(ctx: &Ctx, asset: &Asset, hash: &str) -> GatewayResult<Transfer> {
-    let chain = ctx.text("venue.bsc_network")?;
+    // Решение 431: сеть истории — по монете запроса (Asset.chain; без сети — venue.bsc_network, как раньше).
+    let chain = crate::gateway::own_nets::name_of(&ctx.settings, ctx.at(), asset.chain.as_ref())
+        .map_err(|e| ctx.tag(e))?;
     let window = ctx.int("venue.history_window_s")?;
     let now = chrono::Utc::now().timestamp_millis();
     let from = now.saturating_sub(i64::try_from(window.saturating_mul(1000)).unwrap_or(i64::MAX));

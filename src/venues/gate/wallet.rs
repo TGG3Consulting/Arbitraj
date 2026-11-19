@@ -6,7 +6,7 @@
 //! (кэш); удачное получение справочника — толчок фоновому кругу сведений депозита (deposit_min.rs, deposit_info.rs).
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs (сведения адреса депозита).
 //! От чего зависит: rest.rs, networks_parse.rs, ctx.rs, symbols.rs (запасная точность), core/types.
-//! Настройки: venue.bsc_network [gate] — название сети BSC у Gate (поле name сети / chain; ядро сравнивает с ним сеть
+//! Настройки (решение 431: и venue.arbitrum_network [gate] — свои сети, gateway/own_nets.rs): venue.bsc_network [gate] — название сети BSC у Gate (поле name сети / chain; ядро сравнивает с ним сеть
 //! монеты), venue.deposit_min_absent_ok [gate], venue.networks_fresh_ms [gate] (необязательная).
 //!
 //! Официальная документация https://www.gate.com/docs/developers/apiv4/en/ : GET /spot/currencies (публичный, все
@@ -209,7 +209,7 @@ fn parse(
     cur: &Value,
     w: &Value,
 ) -> GatewayResult<Parsed> {
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let extra = nets.extra.read().unwrap_or_else(|e| e.into_inner());
     parse_networks(cur, w, &bsc, &ctx.venue(), min_ok, &extra, &|t| {

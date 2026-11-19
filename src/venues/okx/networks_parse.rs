@@ -52,7 +52,13 @@ pub fn core_network(ccy: &str, chain: &str) -> String {
 /// Что делает: разбор массива data ответа Get currencies (строка = монета + сеть).
 /// Принимает: data, сеть BSC ядра (venue.bsc_network), площадку, «минимум депозита неизвестен — 0».
 /// Возвращает: Parsed. Ошибка BadResponse — data не массив.
-pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayResult<Parsed> {
+pub fn parse(
+    data: &Value,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
+    venue: &VenueId,
+    min_ok: bool,
+) -> GatewayResult<Parsed> {
+    let own = own.into();
     let rows = data
         .as_array()
         .ok_or_else(|| super::errors::bad("currencies: data не массив", ""))?;
@@ -67,8 +73,8 @@ pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayR
             continue;
         };
         let net = core_network(&ticker, &chain);
-        let is_bsc = net == bsc;
-        match network(r, &ticker, &net, is_bsc, venue, min_ok) {
+        let is_bsc = own.is_bsc(&net);
+        match network(r, &ticker, &net, own.has(&net), venue, min_ok) {
             Ok((info, bad)) => {
                 if is_bsc && matches!(r.get("needTag"), Some(Value::Bool(true))) {
                     p.need_tag.push(ticker.clone());

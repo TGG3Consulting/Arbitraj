@@ -5,7 +5,7 @@
 //! ?currency= (решение 113); имя сети HTX (chain) по сети ядра — для вывода и адреса депозита; стоимость вывода.
 //! Кто вызывает: mod.rs (функции контракта), transfers.rs, deposit_addr.rs.
 //! От чего зависит: rest.rs, networks_parse.rs, ctx.rs, core/types.
-//! Настройки: venue.bsc_network [htx] — сеть BSC ядра (baseChainProtocol по живому ответу; по умолчанию нет),
+//! Настройки (решение 431: и venue.arbitrum_network [htx] — свои сети, gateway/own_nets.rs): venue.bsc_network [htx] — сеть BSC ядра (baseChainProtocol по живому ответу; по умолчанию нет),
 //! venue.contract_field [htx] — поле адреса контракта в Get Chains Information (ac или ca — по живому ответу; не задано —
 //! адресов нет, монеты HTX не сопоставляются), venue.deposit_min_absent_ok, venue.networks_fresh_ms (необязательная).
 //!
@@ -93,7 +93,7 @@ async fn one(ctx: &Ctx, ticker: &str) -> GatewayResult<Parsed> {
 /// Что делает: запросы справочника (монеты + сети с адресом контракта, если задано поле) и разбор вне рабочих потоков.
 /// Принимает: параметры (пусто — все монеты). Ошибки: настройки, связь, формат.
 async fn load(ctx: &Ctx, q: Params) -> GatewayResult<Parsed> {
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let field = ctx.text("venue.contract_field").ok();
     let data = heavy(ctx, CURRENCIES, q.clone()).await?;

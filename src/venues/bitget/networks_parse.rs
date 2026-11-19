@@ -44,9 +44,16 @@ pub struct Parsed {
 }
 
 /// Что делает: разбор массива монет (data Get Coin Info; при ?coin= — массив из одной монеты).
-/// Принимает: data ответа, имя сети BSC (venue.bsc_network), площадку, «минимум депозита неизвестен — 0».
+/// Принимает: data ответа, свои сети (venue.bsc_network и, решение 431, другие — gateway/own_nets.rs; «BSC» — только
+/// BSC), площадку, «минимум депозита неизвестен — 0». Адрес контракта — у каждой своей сети; пометки журнала — у BSC.
 /// Возвращает: Parsed. Ошибка BadResponse — data не массив или у монеты нет поля coin.
-pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayResult<Parsed> {
+pub fn parse(
+    data: &Value,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
+    venue: &VenueId,
+    min_ok: bool,
+) -> GatewayResult<Parsed> {
+    let own = own.into();
     let coins = data
         .as_array()
         .ok_or_else(|| super::errors::bad("coins: data не массив", ""))?;
@@ -61,8 +68,8 @@ pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayR
                 p.skipped.push(format!("{ticker}: сеть без chain"));
                 continue;
             };
-            let is_bsc = chain == bsc;
-            match network(n, &ticker, &chain, is_bsc, venue, min_ok) {
+            let is_bsc = own.is_bsc(&chain);
+            match network(n, &ticker, &chain, own.has(&chain), venue, min_ok) {
                 Ok((info, extra)) => {
                     if let Some(x) = dmin::note(MIN_FIELD, &min_raw(n)) {
                         p.skipped.push(format!("{ticker}/{chain}: {x}"));

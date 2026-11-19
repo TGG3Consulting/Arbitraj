@@ -4,7 +4,7 @@
 //! монета — GET /v2/currencies/{currency} (решение 113: свежий статус одной монеты для предпроверки); стоимость вывода.
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs (one_raw — имя монеты в сети).
 //! От чего зависит: rest.rs (Req, heavy), networks_parse.rs, ctx.rs, core/types.
-//! Настройки: venue.bsc_network [poloniex] — имя сети BSC (поле blockchain; в документации и SDK примеры только BTC,
+//! Настройки (решение 431: и venue.arbitrum_network [poloniex] — свои сети, gateway/own_nets.rs): venue.bsc_network [poloniex] — имя сети BSC (поле blockchain; в документации и SDK примеры только BTC,
 //! ETH, TRX — по живому ответу справочника, значения по умолчанию нет), venue.deposit_min_absent_ok [poloniex],
 //! venue.networks_fresh_ms [poloniex] (необязательная).
 //!
@@ -64,7 +64,7 @@ pub async fn one_raw(ctx: &Ctx, ticker: &str) -> GatewayResult<serde_json::Value
 
 /// Сети одной монеты — запросом /v2/currencies/{currency} (решение 113). Ошибки: как coin_networks.
 pub async fn coin_networks_of(ctx: &Ctx, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let data = one_raw(ctx, ticker).await?;
     if data.is_null() {
@@ -87,7 +87,7 @@ async fn shared(ctx: &Ctx, nets: &Networks) -> GatewayResult<Arc<Vec<CoinNetwork
     if let Some(list) = fresh.and_then(|f| nets.cached(f)) {
         return Ok(list);
     }
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let r = Req {
         method: Method::GET,

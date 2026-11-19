@@ -51,13 +51,25 @@ pub struct Parsed {
     pub no_contract: Vec<String>,
 }
 
-/// Что делает: разбор data (массив монет или одна монета-объект).
+/// Что делает: разбор data (массив монет или одна монета-объект) — только сеть BSC своя (как до решения 431).
 /// Принимает: data, имя сети BSC (venue.bsc_network), адреса BSC (contracts.rs), площадку, «минимум депозита
-/// неизвестен — 0». Возвращает: Parsed. Ошибка BadResponse — data не массив и не объект, у монеты нет asset.ccy.
+/// неизвестен — 0». Возвращает: Parsed. Ошибки: как parse_with.
 pub fn parse(
     data: &Value,
     bsc: &str,
     contracts: &HashMap<String, Address>,
+    venue: &VenueId,
+    min_ok: bool,
+) -> GatewayResult<Parsed> {
+    parse_with(data, &[(bsc, contracts)], venue, min_ok)
+}
+
+/// Что делает: разбор со своими сетями (решение 431). Принимает: data, свои сети — (имя сети в справочнике ввода/вывода,
+/// адреса этой сети из /assets/info), первая — BSC (пометки журнала — только у неё), площадку, «минимум депозита
+/// неизвестен — 0». Возвращает: Parsed. Ошибка BadResponse — data не массив и не объект, у монеты нет asset.ccy.
+pub fn parse_with(
+    data: &Value,
+    own: &[(&str, &HashMap<String, Address>)],
     venue: &VenueId,
     min_ok: bool,
 ) -> GatewayResult<Parsed> {
@@ -85,12 +97,11 @@ pub fn parse(
                 p.skipped.push(format!("{ticker}: сеть без chain"));
                 continue;
             };
-            let is_bsc = chain == bsc;
-            let contract = if is_bsc {
-                contracts.get(&ticker).copied()
-            } else {
-                None
-            };
+            let is_bsc = own.first().is_some_and(|(n, _)| *n == chain);
+            let contract = own
+                .iter()
+                .find(|(n, _)| *n == chain)
+                .and_then(|(_, m)| m.get(&ticker).copied());
             match network(
                 n,
                 &ticker,

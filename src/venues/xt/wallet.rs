@@ -4,7 +4,7 @@
 //! потоков tokio (решение 131).
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs.
 //! От чего зависит: rest.rs, networks_parse.rs, ctx.rs, core/types.
-//! Настройки: venue.bsc_network [xt] (название сети BSC в поле chain — его принимает вывод и адрес депозита; в
+//! Настройки (решение 431: и venue.arbitrum_network [xt] — свои сети, gateway/own_nets.rs): venue.bsc_network [xt] (название сети BSC в поле chain — его принимает вывод и адрес депозита; в
 //! документации не указано — из живого справочника), venue.deposit_min_absent_ok [xt] (нет поля depositMinAmount или не прочитано; «0» — минимум 0, решение 370 —
 //! решение человека, урок 21; t163, решение 366), venue.networks_fresh_ms [xt] (необязательная; не задана — запрос каждый раз).
 //!
@@ -66,7 +66,7 @@ pub async fn shared(ctx: &Ctx, nets: &Networks) -> GatewayResult<Arc<Vec<CoinNet
             return Ok(list.clone());
         }
     }
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let absent_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let (support, statuses) = tokio::join!(
         rest::public_heavy(ctx, "/v4/public/wallet/support/currency", vec![]),

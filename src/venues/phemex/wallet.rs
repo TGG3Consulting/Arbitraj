@@ -5,7 +5,7 @@
 //! запросов). Одна монета (предпроверка, решение 113) — свежими запросами сразу. Стоимость вывода — по сумме вывода.
 //! Кто вызывает: mod.rs (функции контракта), networks_crawl.rs.
 //! От чего зависит: rest.rs, networks_parse.rs, networks_crawl.rs, symbols.rs, ctx.rs, core/types.
-//! Настройки: venue.bsc_network [phemex] — имя сети BSC (chainName; в документации примеры только BTC, ETH, TRX, EOS —
+//! Настройки (решение 431: и venue.arbitrum_network [phemex] — свои сети, gateway/own_nets.rs): venue.bsc_network [phemex] — имя сети BSC (chainName; в документации примеры только BTC, ETH, TRX, EOS —
 //! по живому ответу, значения по умолчанию нет), venue.deposit_min_absent_ok [phemex].
 //!
 //! Официально (Deposit And Withdraw REST API, https://phemex-docs.github.io/): chainCfg и asset/info — шапка
@@ -94,7 +94,7 @@ pub async fn coin_networks_of(
     nets: &Networks,
     ticker: &str,
 ) -> GatewayResult<Vec<CoinNetworkInfo>> {
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let q = || vec![("currency", ticker.to_string())];
     let dep = rest::signed(ctx, Method::GET, DEPOSIT_CFG, q(), None, Op::Other).await?;

@@ -70,17 +70,18 @@ pub fn parse_statuses(data: &Value) -> GatewayResult<HashMap<String, (bool, bool
     Ok(map)
 }
 
-/// Что делает: разбор справочника сетей. Принимает: ответ support/currency, статусы монет, название сети BSC,
-/// площадку, считать ли нулём минимум депозита, когда depositMinAmount = 0 или поля нет (venue.deposit_min_absent_ok).
+/// Что делает: разбор справочника сетей. Принимает: ответ support/currency, статусы монет, свои сети (решение
+/// 431: BSC и другие — gateway/own_nets.rs; «BSC» — только BSC; адрес — у каждой своей сети), площадку, считать ли нулём минимум депозита, когда depositMinAmount = 0 или поля нет (venue.deposit_min_absent_ok).
 /// Возвращает: Parsed — сеть с неразборчивым полем исключается, остальные работают.
 /// Ошибка BadResponse — ответ не массив или у монеты нет currency.
 pub fn parse_networks(
     data: &Value,
     statuses: &HashMap<String, (bool, bool)>,
-    bsc: &str,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
     venue: &VenueId,
     absent_ok: bool,
 ) -> GatewayResult<Parsed> {
+    let own = own.into();
     let coins = data
         .as_array()
         .ok_or_else(|| errors::bad("support/currency не массив", &data.to_string()))?;
@@ -96,7 +97,7 @@ pub fn parse_networks(
             let Some(chain) = num::text_opt(n, "chain") else {
                 continue;
             };
-            match one(n, &t, &chain, chain == bsc, venue, absent_ok) {
+            match one(n, &t, &chain, own.has(&chain), venue, absent_ok) {
                 Ok((mut i, note)) => {
                     i.deposit_enabled &= dep_open;
                     i.withdraw_enabled &= wd_open;

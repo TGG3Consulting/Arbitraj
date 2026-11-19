@@ -45,7 +45,13 @@ pub struct Parsed {
 /// Что делает: разбор массива монет (Get All Currencies) или одной монеты (Get Currency — объект).
 /// Принимает: data ответа, chainId сети BSC, площадку, «минимум депозита неизвестен — 0».
 /// Возвращает: Parsed. Ошибка BadResponse — data не массив и не объект с currency.
-pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayResult<Parsed> {
+pub fn parse(
+    data: &Value,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
+    venue: &VenueId,
+    min_ok: bool,
+) -> GatewayResult<Parsed> {
+    let own = own.into();
     let one = std::slice::from_ref(data);
     let coins: &[Value] = match data {
         Value::Array(a) => a,
@@ -63,8 +69,8 @@ pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayR
                 p.skipped.push(format!("{ticker}: сеть без chainId"));
                 continue;
             };
-            let is_bsc = chain == bsc;
-            match network(n, &ticker, &chain, is_bsc, venue, min_ok) {
+            let is_bsc = own.is_bsc(&chain);
+            match network(n, &ticker, &chain, own.has(&chain), venue, min_ok) {
                 Ok((info, rate)) => {
                     if is_bsc && matches!(n.get("needTag"), Some(Value::Bool(true))) {
                         p.need_tag.push(ticker.clone());

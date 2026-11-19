@@ -4,10 +4,12 @@
 //! разбор вне рабочих потоков, за `Arc` без копий, решение 131); одна монета — те же запросы с ?ccy= (решение 113:
 //! свежий статус одной монеты для предпроверки); стоимость вывода.
 //! Кто вызывает: mod.rs (функции контракта).
-//! От чего зависит: rest.rs (Req, heavy), networks_parse.rs, contracts.rs, ctx.rs, core/types.
+//! От чего зависит: rest.rs (Req, heavy), own_chains.rs, networks_parse.rs, contracts.rs, ctx.rs, core/types.
 //! Настройки: venue.bsc_network [coinex] — имя сети BSC в поле chain справочника ввода/вывода; venue.bsc_contract_chain
 //! [coinex] — имя той же сети в chain_info.chain_name справочника /assets/info (в документации обоих имён нет — по живым
-//! ответам, значений по умолчанию нет); venue.deposit_min_absent_ok, venue.networks_fresh_ms (необязательная) [coinex].
+//! ответам, значений по умолчанию нет); решение 431 — venue.arbitrum_network и venue.arbitrum_contract_chain [coinex]
+//! (необязательные; имена своих сетей — own_chains.rs); venue.deposit_min_absent_ok, venue.networks_fresh_ms
+//! (необязательная) [coinex].
 //!
 //! Официально: Get Deposit and Withdrawal Configuration / List All… (группа «Query spot accounts (10r/1s)», Rate Limit)
 //! https://docs.coinex.com/api/v2/assets/deposit-withdrawal/http/list-all-deposit-withdrawal-config; Get Coin/Token
@@ -15,11 +17,9 @@
 //! страницах не сказано: эндпоинты раздела Assets в группе лимитов пользователя — запросы подписываются (проверить на
 //! живом ответе, урок 2). Размер полного справочника не указан (урок 9, 28).
 
-use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
-use alloy_primitives::Address;
 use reqwest::Method;
 
 use crate::core::types::{Asset, CoinNetworkInfo, Cost, CostKind};
@@ -28,7 +28,7 @@ use crate::storage::journal::Level;
 
 use super::ctx::Ctx;
 use super::errors::Op;
-use super::networks_parse::{Parsed, parse};
+use super::networks_parse::Parsed;
 use super::rest::{self, Params, Req};
 
 /// Справочник и когда он получен.
@@ -59,29 +59,23 @@ pub async fn coin_networks(ctx: &Ctx, nets: &Networks) -> GatewayResult<Vec<Coin
 
 /// Сети одной монеты — запросами с ?ccy= (решение 113). Ошибки: как coin_networks; монеты нет — пусто.
 pub async fn coin_networks_of(ctx: &Ctx, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
-    let (bsc, chain, min_ok) = names(ctx)?;
+    let names = super::own_chains::read(ctx)?;
     let q = || vec![("ccy", ticker.to_string())];
     let info = get(ctx, "/v2/assets/info", q(), false).await?;
-    let contracts = super::contracts::parse(&info, &chain)?;
     let data = get(ctx, "/v2/assets/deposit-withdraw-config", q(), false).await?;
     if data.is_null() {
+        // Как до решения 431: неразборчивый /assets/info — ошибка и при пустом справочнике монеты.
+        for (_, chain) in &names.pairs {
+            super::contracts::parse(&info, chain)?;
+        }
         return Ok(vec![]);
     }
-    let p = parse(&data, &bsc, &contracts.by_ticker, &ctx.venue(), min_ok)?;
-    note(ctx, None, &p, &contracts.bad).await;
+    let (p, bad) = super::own_chains::parse_all(&info, &data, &names, &ctx.venue())?;
+    note(ctx, None, &p, &bad).await;
     Ok(p.list
         .into_iter()
         .filter(|i| i.asset.ticker.eq_ignore_ascii_case(ticker))
         .collect())
-}
-
-/// Имена сети BSC в двух справочниках и «минимум депозита неизвестен — 0». Ошибка NotConfigured.
-fn names(ctx: &Ctx) -> GatewayResult<(String, String, bool)> {
-    Ok((
-        ctx.text("venue.bsc_network")?,
-        ctx.text("venue.bsc_contract_chain")?,
-        ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false),
-    ))
 }
 
 /// Подписанный GET справочника (heavy — разбор вне рабочих потоков). Возвращает: data. Ошибки: как rest::send.
@@ -112,14 +106,12 @@ async fn shared(ctx: &Ctx, nets: &Networks) -> GatewayResult<Arc<Vec<CoinNetwork
     if let Some(list) = fresh.and_then(|f| nets.cached(f)) {
         return Ok(list);
     }
-    let (bsc, chain, min_ok) = names(ctx)?;
+    let names = super::own_chains::read(ctx)?;
     let info = get(ctx, "/v2/assets/info", vec![], true).await?;
     let data = get(ctx, "/v2/assets/all-deposit-withdraw-config", vec![], true).await?;
     let (c, venue) = (ctx.clone(), ctx.venue());
     let (p, bad) = tokio::task::spawn_blocking(move || {
-        let contracts = super::contracts::parse(&info, &chain)?;
-        let by: HashMap<String, Address> = contracts.by_ticker;
-        Ok::<_, GatewayError>((parse(&data, &bsc, &by, &venue, min_ok)?, contracts.bad))
+        super::own_chains::parse_all(&info, &data, &names, &venue)
     })
     .await
     .map_err(|e| {

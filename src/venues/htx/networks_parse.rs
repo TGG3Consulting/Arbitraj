@@ -56,15 +56,16 @@ pub fn core_network(n: &Value) -> Option<String> {
 }
 
 /// Что делает: разбор data /v2/reference/currencies.
-/// Принимает: data, сеть BSC ядра, адреса контракта (пусто — поле не задано), площадку, «минимум депозита неизвестен
+/// Принимает: data, свои сети (решение 431: BSC и другие — gateway/own_nets.rs; «BEP20» — только BSC), адреса контракта (пусто — поле не задано), площадку, «минимум депозита неизвестен
 /// — 0». Возвращает: Parsed. Ошибка BadResponse — data не массив или у монеты нет currency.
 pub fn parse(
     data: &Value,
-    bsc: &str,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
     contracts: &Contracts,
     venue: &VenueId,
     min_ok: bool,
 ) -> GatewayResult<Parsed> {
+    let own = own.into();
     let coins = match data {
         Value::Null => return Ok(Parsed::default()),
         Value::Array(a) => a,
@@ -78,23 +79,34 @@ pub fn parse(
         let Some(chains) = c.get("chains").and_then(Value::as_array) else {
             continue;
         };
-        let bsc_count = chains
-            .iter()
-            .filter(|n| core_network(n).as_deref() == Some(bsc))
-            .count();
-        if bsc_count > 1 {
-            p.ambiguous.push(t.clone());
+        // Своя сеть, у которой несколько chain с тем же baseChainProtocol, — неоднозначна и пропускается (у BSC — как
+        // раньше; решение 431 — то же у каждой своей сети). В журнал — тикер (у не-BSC — «тикер/сеть»).
+        let many = |name: &str| {
+            chains
+                .iter()
+                .filter(|n| core_network(n).as_deref() == Some(name))
+                .count()
+                > 1
+        };
+        let ambiguous: Vec<&String> = own.names().iter().filter(|x| many(x.as_str())).collect();
+        for x in &ambiguous {
+            p.ambiguous.push(if own.is_bsc(x.as_str()) {
+                t.clone()
+            } else {
+                format!("{t}/{x}")
+            });
         }
         for n in chains {
             let (Some(chain), Some(net)) = (num::text_opt(n, "chain"), core_network(n)) else {
                 p.skipped.push(format!("{t}: сеть без chain"));
                 continue;
             };
-            let is_bsc = net == bsc;
-            if is_bsc && bsc_count > 1 {
+            let is_bsc = own.is_bsc(&net);
+            if ambiguous.contains(&&net) {
                 continue;
             }
-            let contract = is_bsc
+            let contract = own
+                .has(&net)
                 .then(|| contracts.get(&(t.clone(), chain.clone())))
                 .flatten()
                 .and_then(|a| a.parse().ok());

@@ -4,7 +4,7 @@
 //! Решение 131: справочник — за Arc (кэш без копии), ответ и разбор — вне рабочих потоков tokio.
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs.
 //! От чего зависит: rest.rs, networks_parse.rs (разбор), ctx.rs, core/types.
-//! Настройки: venue.bsc_network [bybit] — название сети BSC у Bybit (поле chain; ядро сравнивает с ним сеть монеты),
+//! Настройки (решение 431: и venue.arbitrum_network [bybit] — свои сети, gateway/own_nets.rs): venue.bsc_network [bybit] — название сети BSC у Bybit (поле chain; ядро сравнивает с ним сеть монеты),
 //! venue.networks_fresh_ms [bybit] (необязательная; не задана — запрос каждый раз).
 //!
 //! Официальная документация: GET /v5/asset/coin/query-info (подписанный; параметр coin — «Coin, uppercase only»,
@@ -56,7 +56,7 @@ pub async fn coin_networks(ctx: &Ctx, nets: &Networks) -> GatewayResult<Vec<Coin
 
 /// Сети одной монеты — запросом с coin= (решение 113): свежий статус, без всего справочника. Ошибки: как coin_networks.
 pub async fn coin_networks_of(ctx: &Ctx, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let data = rest::get(ctx, PATH, vec![("coin", ticker.to_string())], Op::Other).await?;
     // Предупреждения разбора пишет полный справочник (shared): одна монета их не перезаписывает.
     let p = parse_networks(&data, &bsc, &ctx.venue())?;
@@ -75,7 +75,7 @@ async fn shared(ctx: &Ctx, nets: &Networks) -> GatewayResult<Arc<Vec<CoinNetwork
     if let Some(list) = fresh.and_then(|f| nets.cached(f)) {
         return Ok(list);
     }
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let data = rest::get_heavy(ctx, PATH, vec![], Op::Other).await?;
     let venue = ctx.venue();
     let p = tokio::task::spawn_blocking(move || parse_networks(&data, &bsc, &venue))

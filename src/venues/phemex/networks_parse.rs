@@ -42,16 +42,18 @@ pub struct Parsed {
 const ACTIVE: &str = "Active";
 
 /// Что делает: сводит справочники одной монеты.
-/// Принимает: тикер, data chainCfg (массив), data asset/info (объект), имя сети BSC, площадку, «минимум 0».
+/// Принимает: тикер, data chainCfg (массив), data asset/info (объект), свои сети (решение 431: BSC и
+/// другие — gateway/own_nets.rs; «BSC» — только BSC; адрес — у каждой своей сети), площадку, «минимум 0».
 /// Возвращает: Parsed. Ошибка BadResponse — data chainCfg не массив или у asset/info нет chainInfos.
 pub fn merge(
     ticker: &str,
     deposit: &Value,
     withdraw: &Value,
-    bsc: &str,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
     venue: &VenueId,
     min_ok: bool,
 ) -> GatewayResult<Parsed> {
+    let own = own.into();
     let dep = deposit
         .as_array()
         .ok_or_else(|| super::errors::bad("chainCfg: data не массив", &deposit.to_string()))?;
@@ -69,7 +71,7 @@ pub fn merge(
     }
     let mut p = Parsed::default();
     for (chain, (d, w)) in chains {
-        match network(ticker, &chain, d, w, chain == bsc, venue, min_ok) {
+        match network(ticker, &chain, d, w, own.has(&chain), venue, min_ok) {
             Ok(info) => {
                 if let Some(x) = dmin::note(MIN_FIELD, &min_raw(d)) {
                     p.skipped.push(format!("{ticker}/{chain}: {x}"));

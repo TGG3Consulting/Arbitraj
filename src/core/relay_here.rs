@@ -13,8 +13,17 @@
 //! монет нет — сделка остановлена, решает человек (transfer_failed).
 //! Решение 415 (t200): котировка «продать здесь» — под ходом очереди продажи счёта на время котировки
 //! (sell_turn_fresh::value).
-//! Кто вызывает: core/relay.rs, core/executor.rs (transfer_failed).
-//! От чего зависит: trade_ops.rs, sell_turn_fresh.rs, stuck.rs (sold_by_market), stuck_lag.rs (Ticks), manual.rs (raise_alert), manual_halted.rs
+//! Решение 417 (ревью t201, М-2; правило Тиграна 19.11): на ВСЕХ путях продажи здесь итог сделки ≥ 0 — продажа здесь
+//! с проверкой под ходом очереди (sell_here_ok.rs), без порога stuck.relay_max_loss_pct и без алерта при незаданной
+//! настройке; под ходом итог < 0 — порог, как раньше. Исключение (М-3): застрявшая BNB на DEX по причине GasReserve
+//! (relay.rs run_as → sell_here_as(…, false)) — прежнее поведение, без этой продажи: иначе быстрый круг «режим →
+//! продажа при итоге ≥ 0 → газ не помещается сверх резерва → режим».
+//! «417 (ожидание)»: продажа по порогу (Here::Market) — с перепроверкой порога на котировке под ходом очереди
+//! (sell_here_ok.rs try_sell_if); не выполнен — алерт с убытком под ходом.
+//! Ревью 2 t201 (М-1): под ходом котировки нет — одна повторная котировка с ожиданием цены (quote_or_wait), второй
+//! раз нет — алерт.
+//! Кто вызывает: core/relay.rs, core/executor.rs (transfer_failed, sell_here), core/sell_unsent.rs (here).
+//! От чего зависит: sell_here_ok.rs, relay_reserve.rs (here_first), trade_ops.rs, sell_turn_fresh.rs, stuck.rs (sold_by_market), stuck_lag.rs (Ticks), manual.rs (raise_alert), manual_halted.rs
 //! (on_hand, set_qty), ledger.rs, deal.rs.
 //! Настройки: stuck.relay_max_loss_pct, stuck.no_quote_wait_ms.
 
@@ -31,6 +40,7 @@ use crate::storage::journal::Level;
 use super::deal::{Deal, Step};
 use super::engine::Core;
 use super::remeasure::Guard;
+use super::sell_here_ok::{Cond, HereOk, How, Note, try_sell_if};
 
 /// Имя настройки порога убытка продажи здесь в режиме «Перегон».
 pub const SETTING: &str = "stuck.relay_max_loss_pct";
@@ -81,9 +91,16 @@ pub fn decide(
     }
 }
 
-/// Продать здесь по рынку, если убыток не выше stuck.relay_max_loss_pct, иначе — алерт человеку. Принимает: ядро,
-/// сделку, почему продаём здесь (для хронологии, журнала и Telegram). Ошибок нет: всё — в алерте или продаже.
+/// Продать здесь по рынку, если убыток не выше stuck.relay_max_loss_pct, иначе — алерт человеку; решение 417 — при
+/// итоге сделки ≥ 0 продажа здесь без порога (sell_here_as). Принимает: ядро, сделку, почему продаём здесь (для
+/// хронологии, журнала и Telegram). Ошибок нет: всё — в алерте или продаже.
 pub async fn sell_here(core: &Core, deal: Deal, why: &str) {
+    Box::pin(sell_here_as(core, deal, why, true)).await
+}
+
+/// Как sell_here; `profit_first` = false — без продажи при итоге ≥ 0 (М-3 решения 417: причина GasReserve, прежнее
+/// поведение). Принимает: ядро, сделку, причину, признак. Ошибок нет.
+pub async fn sell_here_as(core: &Core, deal: Deal, why: &str, profit_first: bool) {
     let s = &core.inner.deps.settings;
     let max = s.decimal(SETTING, At::default()).map_err(|e| e.message);
     // Порог не задан — алерт и так: цену не ждём (ожидание ничего не решит).
@@ -93,20 +110,70 @@ pub async fn sell_here(core: &Core, deal: Deal, why: &str) {
         .and_then(|_| s.integer(WAIT, At::default()).ok());
     // Решение 247: порог продажи здесь — и граница пере-замера продажи DEX (core/remeasure.rs).
     let cap = max.as_ref().ok().copied();
-    let d = &deal;
-    // Решение 415: котировка-решение — под ходом очереди продажи счёта только на время котировки (sell_turn_fresh.rs).
-    let value = quote_or_wait(core, d, wait, move || async move {
-        Box::pin(super::sell_turn_fresh::value(core, d))
-            .await
-            .map(|(v, _)| v)
-    })
-    .await;
-    match decide(&deal, why, max, value) {
-        Here::Market(text) => {
-            let g = cap.map_or(Guard::Off, Guard::MaxLoss);
-            super::stuck::sold_by_market(core, deal, &text, g).await
+    let mut deal = deal;
+    // Ревью 2 t201 (М-1): под ходом котировки нет — одна повторная котировка с ожиданием цены (quote_or_wait,
+    // stuck.no_quote_wait_ms), а не сразу алерт; второй раз нет — алерт, как раньше.
+    let mut again = true;
+    loop {
+        let d = &deal;
+        // Решение 415: котировка-решение — под ходом очереди продажи счёта только на время котировки.
+        let mut value = Box::pin(quote_or_wait(core, d, wait, move || async move {
+            Box::pin(super::sell_turn_fresh::value(core, d))
+                .await
+                .map(|(v, _)| v)
+        }))
+        .await;
+        // Решение 417 (М-2): итог сделки ≥ 0 — продажа здесь, проверка под ходом (С-1); под ходом итог < 0 — порог.
+        if profit_first && super::relay_reserve::here_first(&deal, value.as_ref().ok().copied()) {
+            let ok =
+                format!("{why}; итог сделки при продаже здесь ≥ 0 — продаём здесь (решение 417)");
+            match Box::pin(super::sell_here_ok::try_sell(core, deal, &ok)).await {
+                HereOk::Sold | HereOk::Gone => return,
+                HereOk::NotNow(d, Some((v, _))) => {
+                    deal = *d;
+                    value = Ok(v);
+                }
+                HereOk::NotNow(d, None) => {
+                    deal = *d;
+                    if std::mem::take(&mut again) {
+                        continue;
+                    }
+                    value = Err("котировки продажи здесь под ходом очереди нет".to_string());
+                }
+            }
         }
-        Here::Alert { loss, why } => super::manual::raise_alert(core, deal, loss, why, None).await,
+        match (decide(&deal, why, max.clone(), value), cap) {
+            // «417 (ожидание)»: порог перепроверяется на котировке под ходом очереди (sell_here_ok.rs); выше порога
+            // или котировки нет — алерт с убытком по котировке под ходом (stuck::over_max).
+            (Here::Market(text), Some(m)) => {
+                let how = How {
+                    cond: Cond::MaxLoss(m),
+                    guard: Guard::MaxLoss(m),
+                    rule: super::sell_range::Rule::MaxLoss(m),
+                    note: Note::StuckMarket,
+                    kind: "core.relay_here",
+                };
+                let (d, v) = match Box::pin(try_sell_if(core, deal, &text, how)).await {
+                    HereOk::NotNow(d, None) if again => {
+                        again = false;
+                        deal = *d;
+                        continue;
+                    }
+                    HereOk::NotNow(d, v) => (*d, v.map(|x| x.0)),
+                    HereOk::Sold | HereOk::Gone => return,
+                };
+                let (loss, w) = super::stuck::over_max(&d, v, m);
+                let why = format!("{why}; {w} ({SETTING})");
+                return Box::pin(super::manual::raise_alert(core, d, loss, why, None)).await;
+            }
+            // Market без порога decide не возвращает (Market — только при заданном пороге); ветка — для полноты.
+            (Here::Market(text), None) => {
+                return Box::pin(super::stuck::sold_by_market(core, deal, &text, Guard::Off)).await;
+            }
+            (Here::Alert { loss, why }, _) => {
+                return Box::pin(super::manual::raise_alert(core, deal, loss, why, None)).await;
+            }
+        }
     }
 }
 

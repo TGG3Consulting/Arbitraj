@@ -10,6 +10,8 @@
 //! costs_withdraw.rs (точность вывода), trade_ops.rs (выручка продажи), convert.rs.
 //! Решение 253 (д), дополнение: затраты вывода с биржи — с поправкой по факту прошлого перевода (withdraw_seen.rs,
 //! transfer.seen_cost), как в расчёте сделки. Решение 413: удержание биржи-цели при зачислении (deposit_hold.rs).
+//! Решение 417: value_parts — та же оценка и выручка цели до затрат с её средней (для запаса на движение цены за
+//! перевод, relay_reserve.rs); value_at — как раньше (кнопка «Продать и перегнать», manual_relay.rs).
 //! Настройки: venue.quote_asset, venue.networks_stale_s (через dirctx_venue.rs), cex_cex.untaxed_ok (через transfer_tax.rs).
 
 use rust_decimal::Decimal;
@@ -114,6 +116,31 @@ pub async fn value_at(
     qty: Decimal,
     acc_to: Option<&DexAccountId>,
 ) -> Result<Decimal, String> {
+    value_parts(core, from, to, a, qty, acc_to)
+        .await
+        .map(|p| p.net)
+}
+
+/// Решение 417: оценка перегона по частям — для запаса на движение цены за перевод (relay_reserve.rs).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Parts {
+    /// Чистая выручка (USDT) — то же, что value_at.
+    pub net: Decimal,
+    /// Выручка продажи на цели до затрат: приход × средняя котировки цели (приход-пыль — 0).
+    pub proceeds: Decimal,
+    /// Средняя котировки продажи на цели.
+    pub avg: Decimal,
+}
+
+/// Как value_at, с выручкой цели до затрат и средней (решение 417). Принимает и ошибки: как value_at.
+pub async fn value_parts(
+    core: &Core,
+    from: &VenueId,
+    to: &VenueId,
+    a: &Asset,
+    qty: Decimal,
+    acc_to: Option<&DexAccountId>,
+) -> Result<Parts, String> {
     let net = super::transfers::network(core, a, from)?;
     let costs = if is_dex(core, from) {
         let gw = core.inner.deps.gw.get(from).await.map_err(|e| e.message)?;
@@ -140,10 +167,10 @@ pub async fn value_at(
     // Решение 222: приход меньше шага / minQty / minNotional пары цели (dust.rs, решение 66) — продать там нельзя,
     // выручка 0 (остаются только затраты перевода — перегон не окупается).
     let on_to = super::venue_ticker::ticker_on(core, a, to);
-    let v = if super::dust::is_dust(core, to, &on_to, arrive, q.avg_price) {
-        Decimal::ZERO
+    let (v, proceeds) = if super::dust::is_dust(core, to, &on_to, arrive, q.avg_price) {
+        (Decimal::ZERO, Decimal::ZERO)
     } else {
-        v
+        (v, arrive * q.avg_price)
     };
     let quote = core
         .inner
@@ -175,5 +202,9 @@ pub async fn value_at(
     for c in costs.iter().filter(|c| c.asset != a.ticker) {
         out -= convert::to_usdt(c, &rates)?;
     }
-    Ok(out)
+    Ok(Parts {
+        net: out,
+        proceeds,
+        avg: q.avg_price,
+    })
 }

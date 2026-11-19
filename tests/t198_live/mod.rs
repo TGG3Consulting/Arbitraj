@@ -10,11 +10,14 @@
 //! CANCELED, executedQty 0 (ордер IOC снят без исполнения; по документации Query single); прочее — 404.
 //! Решение 415 (ревью t200): ответ POST /v4/order можно задержать (post_ms), запросы стакана и ордеров пишутся в журнал
 //! стенда (hits: вид, время прихода) — порядок котировок и ордеров двух продаж (tests/core_sell_turn_live_t200.rs).
+//! Решение 417 (ревью t201, С-2): тело стакана можно подменить (depth: Some — его отдаёт GET /v4/public/depth;
+//! тест берёт уровни из того же примера документации), запросы вывода (/v4/withdraw) и баланса (ревью 2 t201) пишутся
+//! в журнал стенда.
 //! Это сервер-стенд по формату официальной документации XT; справочник пар — живая запись (в ней есть пара btc_usdt
 //! — монета тестов BTC); значения баланса и ордеров задаёт тест (как tests/t175_common, tests/core_exec_book_238.rs).
 //! Сервер — serve.rs.
 //! Кто вызывает: tests/core_credit_rest_live_t198.rs, tests/core_credit_rest_live2_t198.rs, tests/core_merge_413x414.rs,
-//! tests/core_sell_turn_live_t200.rs, tests/core_sell_turn_t200.rs (big).
+//! tests/core_sell_turn_live_t200.rs, tests/core_sell_turn_t200.rs (big), tests/core_relay_live_417.rs.
 //! От чего зависит: arb::core, arb::venues::xt, arb::settings, arb::storage, arb::gateway, arb::secrets.
 
 #![allow(dead_code)]
@@ -56,6 +59,10 @@ pub enum Hit {
     Post,
     /// GET /v4/order… — запрос состояния ордера (итог).
     Get,
+    /// /v4/withdraw… — вывод (решение 417: продажа здесь без перегона).
+    Withdraw,
+    /// GET /v4/balances или /v4/balance? — чтение баланса (решение 417, ревью 2 t201: факт перечитывается).
+    Balance,
 }
 
 /// Ячейка стенда: баланс BTC на споте, задержка ответа баланса (мс); задержка ответа POST /v4/order (мс, решение 415)
@@ -66,6 +73,8 @@ pub struct Stand {
     pub delay_ms: Arc<Mutex<u64>>,
     pub post_ms: Arc<Mutex<u64>>,
     pub hits: Arc<Mutex<Vec<(Hit, std::time::Instant)>>>,
+    /// Решение 417: подменённое тело GET /v4/public/depth (None — пример документации).
+    pub depth: Arc<Mutex<Option<String>>>,
 }
 
 /// Выполняет тело теста в потоке со стеком STACK на своём однопоточном рантайме. Паника тела — паника теста.

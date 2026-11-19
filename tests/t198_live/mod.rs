@@ -5,7 +5,8 @@
 //! recv_window_ms). Сервер: справочник пар — живой ответ XT 06.11.2026 (tests/data/xt_live_2026-11-06/symbol_pepe.json);
 //! стакан — пример документации (tests/data/rest_book_2026-11-09/xt_depth_doc.json); GET /v4/balances — баланс BTC на
 //! споте из ячейки стенда (документация Get balances: result.assets[] — currency, availableAmount, frozenAmount),
-//! ответ можно задержать (окно «человек нажал кнопку во время чтения»); POST /v4/order — {orderId}; GET /v4/order —
+//! ответ можно задержать (окно «человек нажал кнопку во время чтения»); GET /v4/balance?currency= — та же ячейка (одна
+//! монета, документация Get single currency asset); POST /v4/order — {orderId}; GET /v4/order —
 //! CANCELED, executedQty 0 (ордер IOC снят без исполнения; по документации Query single); прочее — 404.
 //! Сервер — serve.rs.
 //! Кто вызывает: tests/core_credit_rest_live_t198.rs.

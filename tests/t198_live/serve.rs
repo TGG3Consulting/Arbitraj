@@ -31,6 +31,13 @@ fn answer(method: &str, path: &str, s: &Stand) -> (&'static str, String, u64) {
             json!({"assets": [{"currency": "btc", "availableAmount": btc, "frozenAmount": "0"}]});
         return ("200 OK", ok(a), *s.delay_ms.lock().unwrap());
     }
+    // GET /v4/balance?currency= (https://doc.xt.com/docs/spot/Balance/GetSingleCurrencyAsset: одна монета, поля как
+    // у assets[] Get balances) — «Продать сейчас» берёт количество по реальному балансу (manual_halted::on_hand).
+    if path.starts_with("/v4/balance?") {
+        let btc = s.btc.lock().unwrap().clone();
+        let a = json!({"currency": "btc", "frozenAmount": "0", "availableAmount": btc, "totalAmount": btc});
+        return ("200 OK", ok(a), *s.delay_ms.lock().unwrap());
+    }
     if path.starts_with("/v4/order") && method == "POST" {
         return ("200 OK", ok(json!({"orderId": "L1"})), 0);
     }

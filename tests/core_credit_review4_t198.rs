@@ -161,7 +161,7 @@ async fn outcome_unknown_marks_account_unsure() {
     let r = arb::core::credit_lock::selling(&core, &a, async move { Err(e) }).await;
     assert!(r.is_err());
     let (v, coin) = (a.at.clone(), a.direction.asset.clone());
-    assert!(arb::core::credit_lock::unsure(&core, &v, &coin));
+    assert!(arb::core::credit_lock::unsure(&core, &v, &coin, "U8"));
     assert!(
         arb::core::credit_lock::fact_try(&v, &coin).is_some(),
         "замок снят"

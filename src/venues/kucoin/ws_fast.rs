@@ -33,9 +33,7 @@ use super::ws_sess::Sess;
 impl<'a> Sess<'a> {
     /// Кадр изменений (data). Возвращает: Some — сессия кончается. Ошибок нет (неразборчивый — пара на снимках).
     pub async fn on_incr(&mut self, data: &Value) -> Option<End> {
-        if self.fast.is_none() {
-            return None;
-        }
+        self.fast.as_ref()?;
         let (symbol, u) = match incr::parse(data) {
             Ok(x) => x,
             Err((sym, why)) => {

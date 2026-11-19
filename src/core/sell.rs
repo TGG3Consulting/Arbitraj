@@ -240,7 +240,7 @@ async fn sell(
     let mut res = Box::pin(super::credit_lock::selling(core, &deal, trade)).await;
     // Решение 415: итог ордера есть, учёт сделки в памяти уже обновлён (credit_lock::selling) — ход очереди снимается
     // до любых продолжений (ветка 268, режим застрявшей монеты, повтор, алерт — без очереди; ветка 268 берёт свой ход).
-    turn.done(&res);
+    turn.done(core, &deal, q.route.as_ref(), &res);
     // Решение 236, дополнение: approve, чаевые, газ неудачных попыток — в затраты сделки.
     super::deal_gas::charge(core, &mut deal, &v, &mut gas).await;
     // Решение 227: котировка продажи и стакан худшей цены — в хронологию сделки (разбор живых случаев вроде JCT).

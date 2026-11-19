@@ -13,16 +13,20 @@
 //!    отказ, как вживую); учёт A в памяти уже 0 — «своих монет не видно» нет (сверка 5372 оставляет B её 5371.95816);
 //!    учёт обеих после продаж — 0.
 //! 2) other_keys_run_in_parallel: другие монеты и другие площадки ход не ждут; та же монета той же площадки — по
-//!    одной; след продажи — только после исполнения.
+//!    одной; след продажи — после исполнения и (ревью t200, С-2) после исхода «неизвестен» (конец — сейчас, блок
+//!    неизвестен, пулы из запроса); маршрут следа известен, только если exec.via_kyber не «да» (С-3).
 //! 3) continuation_does_not_hold_turn: путь sell::sell_or_stuck без котировки (площадки нет) → режим застрявшей монеты
 //!    «Ожидание» (минуты): ход свободен всё время ожидания, котировка-решение на тике берёт ход и сразу снимает.
 //!
+//! Настоящий путь продажи двух сделок (sell.rs, стенд XT) — tests/core_sell_turn_live_t200.rs.
 //! Блоки и адрес пула в записях случая нет — это метки теста (номер 100 / 101, адрес-метка), как в t179 (route(PAIR,
 //! 100)); exec.dex_slippage_pct = 0,5 — по числам случая (0.117895 / 0.11848772843 ≈ 0,995), feed.stale_after_ms —
 //! параметр теста.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core (sell_turn, sell_turn_fresh, credit_lock, remain_others, remain_fact, worst, sell,
-//! ledger), arb::settings, arb::storage, arb::notify.
+//! ledger), arb::settings, arb::storage, arb::notify; tests/t198_live (big).
+
+mod t198_live;
 
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -38,7 +42,7 @@ use arb::core::deps::Deps;
 use arb::core::op_error::OpError;
 use arb::core::remain_others::{Own, on_account, own_qty};
 use arb::core::sell_turn::{self, Last};
-use arb::core::sell_turn_fresh::{self, Quoted};
+use arb::core::sell_turn_fresh::{self, Quoted, Use};
 use arb::core::types::{
     Asset, ChainTx, DexAccountId, DexRoute, Direction, PoolKind, PoolRef, Quote, RouteHop,
     RouteLeg, RouteMode, SendMethod, Side, TradeRequest, TradeResult, TradeStatus, TxOutcome,
@@ -71,8 +75,6 @@ const B_POST: &str = "0.1174479740659173351024386981";
 const W1_AFTER_A: &str = "5372";
 /// Блок продажи A — метка теста (в записях случая блока нет).
 const A_BLOCK: u64 = 100;
-/// Стек потока теста 3 (путь продажи глубокий — как tests/t198_live). Параметр теста, не настройка бота.
-const STACK: usize = 16 * 1024 * 1024;
 
 fn d(s: &str) -> Decimal {
     Decimal::from_str(s).unwrap()
@@ -281,7 +283,7 @@ async fn lqr_b_quotes_after_a_sale() {
             let r: Quoted = Ok((qty * avg, quote(&asset, qty, avg, blk), None));
             async move { r }
         };
-        let (_, q, _) = sell_turn_fresh::quote_with(&c, &bb, &mut t, f)
+        let (_, q, _) = sell_turn_fresh::quote_with(&c, &bb, &mut t, Use::Sale, f)
             .await
             .unwrap();
         let worst = worst::worst_price(&c, &dex(), &l, Side::Sell, qty, q.avg_price).unwrap();
@@ -298,7 +300,7 @@ async fn lqr_b_quotes_after_a_sale() {
             }
         };
         let res = credit_lock::selling(&c, &bb, order).await;
-        t.done(&res);
+        t.done(&c, &bb, q.route.as_ref(), &res);
         (q, worst, res)
     });
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -321,7 +323,7 @@ async fn lqr_b_quotes_after_a_sale() {
         Decimal::ZERO,
         "учёт A в памяти обновлён"
     );
-    ta.done(&ra);
+    ta.done(&core, &a, Some(&route(A_BLOCK - 1)), &ra);
     // Квитанция A есть, а событие пула ещё не пришло: B котирует по блоку до A — отвергается, ждёт тика.
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert!(got.load(Ordering::SeqCst));
@@ -368,8 +370,10 @@ fn b_of(core: &Core, id: &str) -> Deal {
 
 #[tokio::test]
 async fn other_keys_run_in_parallel() {
+    let (core, s, _j) = start("par").await;
     let (x, y) = (coin("T200PX"), coin("T200PY"));
     let bingx = VenueId("bingx".into());
+    let dx = deal("T200PX1", &x, "10");
     let t = sell_turn::take(&dex(), &x).await;
     assert!(sell_turn::try_take(&dex(), &y).is_some(), "другая монета");
     assert!(sell_turn::try_take(&bingx, &x).is_some(), "другая площадка");
@@ -382,42 +386,49 @@ async fn other_keys_run_in_parallel() {
     assert!(other.is_ok(), "ход другой монеты не ждёт");
     drop(other);
     // Неисполненный ордер следа не оставляет; исполненный — оставляет до проверки котировкой.
-    t.done(&Err(OpError::from("Продажа не исполнилась".to_string())));
+    let none = OpError::from("Продажа не исполнилась".to_string());
+    t.done(&core, &dx, Some(&route(6)), &Err(none));
     let t = sell_turn::take(&dex(), &x).await;
     assert!(t.last().is_none());
     let r = sold("X1", &x, d("10"), d("2"), 7);
-    t.done(&Ok(r.clone()));
+    t.done(&core, &dx, r.request.route.as_ref(), &Ok(r.clone()));
     let mut t = sell_turn::take(&dex(), &x).await;
-    assert_eq!(t.last(), Some(&Last::of(&r)));
+    // exec.via_kyber не задана — исполнял свой сборщик: маршрут запроса — фактический (ревью t200, С-3).
+    assert_eq!(t.last(), Some(&Last::of(&r, true)));
     assert_eq!(t.last().unwrap().pools, vec![pool()]);
     assert_eq!(t.last().unwrap().block, Some(7));
     t.seen();
-    assert!(t.last().is_none());
-}
-
-/// Тело теста в потоке со стеком STACK на своём однопоточном рантайме (как tests/t198_live).
-fn big<F>(body: F)
-where
-    F: std::future::Future<Output = ()> + Send + 'static,
-{
-    let run = move || {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        rt.block_on(body);
+    // Ревью t200 (С-2): исход «неизвестен» — след: конец сейчас, блок неизвестен, пулы из запроса.
+    let unknown = OpError {
+        code: Some(arb::gateway::errors::ErrorCode::OutcomeUnknown),
+        message: "исход неизвестен".into(),
+        sent: true,
+        cancelled: false,
+        price_moved: false,
     };
-    std::thread::Builder::new()
-        .stack_size(STACK)
-        .spawn(run)
-        .unwrap()
-        .join()
-        .unwrap();
+    let before = Utc::now();
+    t.done(&core, &dx, Some(&route(8)), &Err(unknown));
+    let t = sell_turn::take(&dex(), &x).await;
+    let l = t.last().cloned().unwrap();
+    assert_eq!(
+        (l.block, l.pools, l.deal.as_str()),
+        (None, vec![pool()], "T200PX1")
+    );
+    assert!(l.at >= before);
+    assert!(sell_turn::sold_after(
+        &dex(),
+        &x,
+        before - chrono::Duration::milliseconds(1)
+    ));
+    // exec.via_kyber = да — маршрут обмена строит KyberSwap: маршрут следа «неизвестен».
+    drop(t);
+    set_dex(&s, "exec.via_kyber", json!(true)).await;
+    assert!(!sell_turn::route_known(&core, &dex()));
 }
 
 #[test]
 fn continuation_does_not_hold_turn() {
-    big(async {
+    t198_live::big(async {
         let (core, s, _j) = start("cont").await;
         set(&s, "stuck.mode", json!("wait")).await;
         set(&s, "stuck.wait_ms", json!(600_000)).await;

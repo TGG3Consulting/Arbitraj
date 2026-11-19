@@ -7,16 +7,22 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-use super::Stand;
+use super::{Hit, Stand};
 
 /// Тело ответа XT {"rc": 0, "mc": "SUCCESS", "ma": [], "result": …}.
 fn ok(result: Value) -> String {
     json!({"rc": 0, "mc": "SUCCESS", "ma": [], "result": result}).to_string()
 }
 
+/// Запрос — в журнал стенда (вид, время прихода). Ошибок нет.
+fn hit(s: &Stand, h: Hit) {
+    s.hits.lock().unwrap().push((h, std::time::Instant::now()));
+}
+
 /// Ответ сервера (шапка). Принимает: метод, путь, ячейку. Возвращает: (статус, тело, задержка мс).
 fn answer(method: &str, path: &str, s: &Stand) -> (&'static str, String, u64) {
     if path.starts_with("/v4/public/depth") {
+        hit(s, Hit::Depth);
         let t =
             std::fs::read_to_string("tests/data/rest_book_2026-11-09/xt_depth_doc.json").unwrap();
         return ("200 OK", t, 0);
@@ -39,9 +45,15 @@ fn answer(method: &str, path: &str, s: &Stand) -> (&'static str, String, u64) {
         return ("200 OK", ok(a), *s.delay_ms.lock().unwrap());
     }
     if path.starts_with("/v4/order") && method == "POST" {
-        return ("200 OK", ok(json!({"orderId": "L1"})), 0);
+        hit(s, Hit::Post);
+        return (
+            "200 OK",
+            ok(json!({"orderId": "L1"})),
+            *s.post_ms.lock().unwrap(),
+        );
     }
     if path.starts_with("/v4/order") && method == "GET" {
+        hit(s, Hit::Get);
         let o = json!({"symbol": "btc_usdt", "orderId": "L1", "state": "CANCELED", "type": "LIMIT",
                        "side": "SELL", "origQty": "1", "executedQty": "0", "leavingQty": "1",
                        "avgPrice": "0", "tradeQuote": "0", "fee": "0", "feeCurrency": "usdt"});

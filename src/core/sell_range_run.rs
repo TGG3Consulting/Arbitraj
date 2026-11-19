@@ -174,7 +174,7 @@ pub async fn branch(
     let (mut seen, mut gas) = (None, Vec::new());
     let res = market_order(core, deal, &q, book, given, &mut seen, &mut gas).await;
     // Решение 415: итог рыночного ордера — ход снимается (журнал, уведомление и продолжения — без очереди).
-    turn.done(&res);
+    turn.done(core, deal, q.route.as_ref(), &res);
     super::deal_gas::charge(core, deal, &v, &mut gas).await;
     journal(core, deal, &text).await;
     // Уведомление — по факту: ордер ушёл на биржу (исполнен или итог неизвестен); не ушёл / отклонён — обычный алерт.

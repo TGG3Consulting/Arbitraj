@@ -31,6 +31,7 @@
 //! (порог убытка 0, remeasure::PROFITABLE); невыгодно — режим застрявшей монеты, как раньше. Продажа здесь — relay_here.rs
 //! (порог stuck.relay_max_loss_pct — он же граница пере-замера, решение 247).
 //! Решение 415 (t200): котировки «продать здесь» — под ходом очереди продажи счёта на время котировки (sell_turn_fresh::once).
+//! Ревью t200 (М-3): котировка до чтения факта не берётся, если после неё на ключе прошла продажа (sell_turn::sold_after).
 //! Настройки: stuck.max_relays, venue.quote_asset, stuck.relay_max_loss_pct (через relay_here.rs); venue.cex_cex,
 //! venue.cex_cex_deny (через cex_link.rs).
 
@@ -142,6 +143,8 @@ pub async fn run(core: &Core, mut deal: Deal) {
     // а нечитаемый баланс иначе уводил бы сделку мимо остановки решения 238.
     // Седьмое ревью (мелкое 7): возраст котировки — от момента запроса.
     let t0 = tokio::time::Instant::now();
+    // Ревью t200 (М-3): момент котировки — продажа ключа после него делает её устаревшей (ниже — котировка заново).
+    let at0 = chrono::Utc::now();
     // Решение 415: котировка-решение — под ходом очереди продажи счёта только на время котировки (sell_turn_fresh.rs).
     let pre = Box::pin(super::sell_turn_fresh::once(core, &deal)).await;
     if let Err(e) = &pre
@@ -176,7 +179,9 @@ pub async fn run(core: &Core, mut deal: Deal) {
         .integer("venue.book_stale_ms", at)
         .ok();
     let fresh = stale.is_some_and(|ms| t0.elapsed() < std::time::Duration::from_millis(ms));
-    let quote = if deal.qty == qty0 && fresh {
+    // Ревью t200 (М-3): пока читался факт, на ключе прошла продажа другой сделки — котировку до неё не берём.
+    let sold = super::sell_turn::sold_after(&deal.at, &a, at0);
+    let quote = if deal.qty == qty0 && fresh && !sold {
         pre
     } else {
         Box::pin(super::sell_turn_fresh::once(core, &deal)).await

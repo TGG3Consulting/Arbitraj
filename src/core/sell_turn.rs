@@ -19,12 +19,21 @@
 //!    ходом этого же ключа (sell.rs, sell_range_run.rs), поэтому держатель хода — единственный продавец ключа.
 //! 4. Ход не вкладывается сам в себя: держатель хода не вызывает путей, которые берут ход (продолжения — после done).
 //!
-//! След прошлой продажи ключа (Last: конец, блок, пулы) хранится в самом замке: им пользуется проверка свежести
-//! следующей котировки; прошла (или вышел срок) — след снят. Замки и следы — только в памяти.
+//! След прошлой продажи ключа (Last: конец, блок, пулы, известен ли маршрут) хранится в самом замке: им пользуется
+//! проверка свежести следующей котировки; прошла (или вышел срок у продажи) — след снят. Замки и следы — только в памяти.
+//! Ревью t200 (С-2): исход ордера «неизвестен» тоже оставляет след (конец — сейчас, блок неизвестен, пулы — из
+//! запроса): транзакция могла попасть в блок. С-3: маршрут из запроса — фактический, только если исполнял свой сборщик
+//! (exec.via_kyber площадки не «да» — venues/bsc_dex/trade_path.rs of: тогда путь Own, а итог несёт исходный запрос —
+//! exec/result.rs); при exec.via_kyber KyberSwap строит свой маршрут (kyberswap/trade_prep.rs), а итог несёт наш
+//! запрос (kyberswap/trade_fact.rs) — маршрут следа «неизвестен».
+//! Время последней продажи ключа (sold_after) — для котировки, взятой до чтения факта (relay.rs, М-3).
+//! Оценки НЕ под ходом (М-4: к ордеру не ведут — только текст и решение человека): manual_relay.rs (оценка «продать
+//! здесь» «Продать и перегнать»), sell_unsent.rs (убыток в алерте), manual_sell.rs (убыток кнопки), manual_sold_check.rs
+//! (проверка «Продано вручную»).
 //! Кто вызывает: core/sell.rs (sell_or_stuck_guarded, market_guarded → sell), core/sell_range_run.rs (branch),
 //! core/sell_turn_fresh.rs (котировка под ходом; once — stuck.rs, relay.rs, relay_here.rs).
-//! От чего зависит: coin_key.rs, op_error.rs, core/types, tokio::sync::Mutex.
-//! Настройки: нет (базовое поведение, как credit_lock.rs).
+//! От чего зависит: sell_turn_last.rs (Last, route_known), coin_key.rs, op_error.rs, deal.rs, core/types, tokio::sync::Mutex.
+//! Настройки: своих нет (базовое поведение, как credit_lock.rs); читает exec.via_kyber [площадка DEX] (С-3).
 
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
@@ -32,42 +41,27 @@ use std::sync::{Arc, LazyLock, Mutex};
 use chrono::{DateTime, Utc};
 use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
-use crate::core::types::{Asset, PoolRef, TradeResult, VenueId};
+use crate::core::types::{Asset, DexRoute, TradeResult, VenueId};
 
 use super::coin_key::CoinKey;
+use super::deal::Deal;
+use super::engine::Core;
 use super::op_error::OpError;
 
-/// След прошлой исполненной продажи на ключе очереди.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Last {
-    /// Сделка, которая продала.
-    pub deal: String,
-    /// Конец продажи (ответ площадки) — у биржи котировка должна быть новее.
-    pub at: DateTime<Utc>,
-    /// DEX: блок транзакции продажи; None — неизвестен (у биржи — всегда None).
-    pub block: Option<u64>,
-    /// DEX: пулы маршрута продажи (как в запросе ордера); пусто — маршрут неизвестен (агрегатор) или биржа.
-    pub pools: Vec<PoolRef>,
-}
+pub use super::sell_turn_last::{Last, route_known};
 
-impl Last {
-    /// Что делает: след по исполненной продаже. Принимает: итог ордера. Возвращает: след. Ошибок нет.
-    pub fn of(r: &TradeResult) -> Self {
-        let mut pools: Vec<PoolRef> = r
-            .request
-            .route
-            .iter()
-            .flat_map(|x| x.legs.iter())
-            .flat_map(|l| l.hops.iter().map(|h| h.pool.clone()))
-            .collect();
-        pools.dedup();
-        Self {
-            deal: r.request.deal_id.clone(),
-            at: r.finished_at,
-            block: r.chain.as_ref().and_then(|c| c.block),
-            pools,
-        }
-    }
+/// Время последней исполненной (или с неизвестным исходом) продажи по ключу (М-3).
+type Sold = HashMap<(VenueId, CoinKey), DateTime<Utc>>;
+
+static SOLD: LazyLock<Mutex<Sold>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Что делает: была ли продажа по ключу позже `t` (М-3: котировка, взятая до ожидания, устарела). Принимает: площадку,
+/// монету, время. Ошибок нет.
+pub fn sold_after(v: &VenueId, a: &Asset, t: DateTime<Utc>) -> bool {
+    SOLD.lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&(v.clone(), CoinKey::of(a)))
+        .is_some_and(|x| *x > t)
 }
 
 /// Замок ключа очереди со следом прошлой продажи.
@@ -120,13 +114,26 @@ impl Turn {
         *self.g = None;
     }
 
-    /// Что делает: итог ордера продажи под ходом — исполнено (в том числе частично) — след для следующей котировки;
-    /// ход снимается сразу (до продолжений). Принимает: итог ордера. Ошибок нет.
-    pub fn done(mut self, r: &Result<TradeResult, OpError>) {
-        if let Ok(x) = r
-            && x.filled_qty > rust_decimal::Decimal::ZERO
-        {
-            *self.g = Some(Last::of(x));
-        }
+    /// Что делает: итог ордера продажи под ходом — исполнено (в том числе частично) или исход «неизвестен» (С-2) —
+    /// след для следующей котировки; ход снимается сразу (до продолжений). Принимает: ядро, сделку, маршрут запроса
+    /// (котировки), итог ордера. Ошибок нет.
+    pub fn done(
+        mut self,
+        core: &Core,
+        deal: &Deal,
+        route: Option<&DexRoute>,
+        r: &Result<TradeResult, OpError>,
+    ) {
+        let known = route_known(core, &deal.at);
+        let last = match r {
+            Ok(x) if x.filled_qty > rust_decimal::Decimal::ZERO => Last::of(x, known),
+            Err(e) if e.outcome_unknown() => Last::unknown(&deal.id, route, known),
+            _ => return,
+        };
+        let key = (deal.at.clone(), CoinKey::of(&deal.direction.asset));
+        SOLD.lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(key, last.at);
+        *self.g = Some(last);
     }
 }

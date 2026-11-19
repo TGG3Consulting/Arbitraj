@@ -89,7 +89,6 @@ episode.max_mb
 episode.min_interval_ms
 episode.min_notify_ms
 episode.zstd_level
-feed.stale_after_ms
 http.body_idle_ms
 http.max_body_bytes
 http.timeout_ms

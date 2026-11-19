@@ -8,10 +8,13 @@
 //! ответ можно задержать (окно «человек нажал кнопку во время чтения»); GET /v4/balance?currency= — та же ячейка (одна
 //! монета, документация Get single currency asset); POST /v4/order — {orderId}; GET /v4/order —
 //! CANCELED, executedQty 0 (ордер IOC снят без исполнения; по документации Query single); прочее — 404.
+//! Решение 415 (ревью t200): ответ POST /v4/order можно задержать (post_ms), запросы стакана и ордеров пишутся в журнал
+//! стенда (hits: вид, время прихода) — порядок котировок и ордеров двух продаж (tests/core_sell_turn_live_t200.rs).
 //! Это сервер-стенд по формату официальной документации XT; справочник пар — живая запись (в ней есть пара btc_usdt
 //! — монета тестов BTC); значения баланса и ордеров задаёт тест (как tests/t175_common, tests/core_exec_book_238.rs).
 //! Сервер — serve.rs.
-//! Кто вызывает: tests/core_credit_rest_live_t198.rs.
+//! Кто вызывает: tests/core_credit_rest_live_t198.rs, tests/core_credit_rest_live2_t198.rs, tests/core_merge_413x414.rs,
+//! tests/core_sell_turn_live_t200.rs, tests/core_sell_turn_t200.rs (big).
 //! От чего зависит: arb::core, arb::venues::xt, arb::settings, arb::storage, arb::gateway, arb::secrets.
 
 #![allow(dead_code)]
@@ -44,11 +47,25 @@ const KDF: KdfParams = KdfParams {
 /// Стек потока теста (путь продажи кнопкой глубокий — как tests/t175_common). Параметр теста, не настройка бота.
 const STACK: usize = 16 * 1024 * 1024;
 
-/// Ячейка стенда: баланс BTC на споте и задержка ответа баланса (мс).
+/// Вид запроса в журнале стенда (решение 415, ревью t200: порядок котировок и ордеров двух продаж).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hit {
+    /// GET /v4/public/depth — снимок стакана (котировка продажи).
+    Depth,
+    /// POST /v4/order — постановка ордера.
+    Post,
+    /// GET /v4/order… — запрос состояния ордера (итог).
+    Get,
+}
+
+/// Ячейка стенда: баланс BTC на споте, задержка ответа баланса (мс); задержка ответа POST /v4/order (мс, решение 415)
+/// и журнал запросов стенда (вид, время прихода).
 #[derive(Clone, Default)]
 pub struct Stand {
     pub btc: Arc<Mutex<String>>,
     pub delay_ms: Arc<Mutex<u64>>,
+    pub post_ms: Arc<Mutex<u64>>,
+    pub hits: Arc<Mutex<Vec<(Hit, std::time::Instant)>>>,
 }
 
 /// Выполняет тело теста в потоке со стеком STACK на своём однопоточном рантайме. Паника тела — паника теста.

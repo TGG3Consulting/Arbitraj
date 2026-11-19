@@ -298,6 +298,7 @@ pub mod sell_range_run;
 pub mod sell_slip;
 pub mod sell_turn;
 pub mod sell_turn_fresh;
+pub mod sell_turn_last;
 pub mod shutdown;
 pub mod sell_unsent;
 pub mod sieve;

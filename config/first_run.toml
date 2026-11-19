@@ -2497,7 +2497,7 @@ name = "venue.ws_url"
 area = "площадка HTX"
 unit = "URL"
 value = "wss://api.huobi.pro/ws"
-source = "Websocket Market Data: «wss://api.huobi.pro/ws» (MBP-изменения — /feed, бот их не использует)"
+source = "Websocket Market Data: «wss://api.huobi.pro/ws» (MBP-изменения — /feed, venue.ws_feed_url, решение 422)"
 rationale = "Снимки стакана mbp.refresh."
 prefill = { kind = "Venue", id = "htx" }
 
@@ -2616,6 +2616,33 @@ unit = "символов"
 method = "Предел не указан — начать с 10 и проверить ответ на живом; решает Тигран"
 source = "Get Current Fee Rate Applied to The User: symbols через запятую, предел не указан"
 rationale = "Ставки комиссии пачками."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_feed_url"
+area = "площадка HTX"
+unit = "URL"
+method = "wss://api.huobi.pro/feed — после записи живых кадров /feed (docs/TASKS.md, решение 422); до того — не задавать (только снимки mbp.refresh)"
+source = "Websocket Market Data → Introduction: «wss://api.huobi.pro/feed» для MBP incremental и REQ"
+rationale = "Быстрый стакан + снимки mbp.refresh как страховка (решение 422)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.fast_book_levels"
+area = "площадка HTX"
+unit = "уровней"
+method = "решает Тигран: 20 — «tick by tick», но только ~30 пар списка документации (остальные на снимках); 150 — все пары, но раз в 100 мс, как и снимки mbp.refresh"
+source = "Market By Price (incremental update): 5/20 — «tick by tick», 150/400 — «100ms interval»; REQ — 5, 20, 150"
+rationale = "Быстрее снимков только 5/20 и только для пар списка."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.fast_book_req_per_sec"
+area = "площадка HTX"
+unit = "в секунду"
+value = "5"
+source = "Websocket Market Data → Rate Limit: «The limitation of single connection is 100 ms»"
+rationale = "Половина лимита на соединение — запас на повторы."
 prefill = { kind = "Venue", id = "htx" }
 
 [[section.rec]]

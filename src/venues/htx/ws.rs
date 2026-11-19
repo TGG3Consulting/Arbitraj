@@ -2,7 +2,8 @@
 //! Что делает: жизненный цикл одного соединения WebSocket с рыночными данными HTX: настройки, сессия (ws_conn.rs),
 //! при обрыве — все стаканы соединения недостоверны, журнал, пауза, переподключение. Нет нужной настройки — соединение
 //! останавливается (без бесконечных повторов).
-//! Кто вызывает: market.rs (по задаче на соединение; config — проверка до запуска).
+//! Решение 422: обрыв не снимает стакан пары, которая на быстром стакане (канал /feed, invalidate_snap).
+//! Кто вызывает: market.rs (по задаче на соединение; config — проверка до запуска); fast_ws.rs (config — общие).
 //! От чего зависит: ws_conn.rs, book.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_url, venue.ws_subs_per_sec, venue.ws_silence_ms, venue.ws_reconnect_pause_ms,
 //! venue.depth_levels (5, 10 или 20) [htx], http.timeout_ms (время на подключение).
@@ -72,7 +73,7 @@ pub async fn run(
             Err(e) => End::Config(e),
         };
         for (a, _) in &assets {
-            invalidate(&ctx, &books, &out, &a.ticker);
+            invalidate_snap(&ctx, &books, &out, &a.ticker);
         }
         let (level, text, pause) = match (end, ctx.int("venue.ws_reconnect_pause_ms")) {
             (End::Done, _) => return,
@@ -105,6 +106,14 @@ pub fn invalidate(ctx: &Ctx, books: &Books, out: &mpsc::Sender<MarketEvent>, tic
     books.drop_ticker(ticker);
     // Решение 324: не теряется при полном канале ядра (в общий набор срочным, старый кадр пары снимается).
     crate::gateway::core_out_book::invalidated(out, ctx.venue(), ticker);
+}
+
+/// Решение 422: снимков пары больше нет (обрыв соединения снимков, ошибка, плохой кадр): пара на быстром стакане
+/// (book_mode.rs) — её стакан не трогается, только забыт запасной снимок; иначе — invalidate. Ошибок нет.
+pub fn invalidate_snap(ctx: &Ctx, books: &Books, out: &mpsc::Sender<MarketEvent>, ticker: &str) {
+    if !books.mode.snapshot_lost(ticker) {
+        invalidate(ctx, books, out, ticker);
+    }
 }
 
 /// Читает настройки соединения. Ошибка — текст «не задана …» или «вне пределов документации».

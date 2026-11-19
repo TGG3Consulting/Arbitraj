@@ -172,7 +172,7 @@ async fn read(core: &Core, deal: &str, to: &VenueId, a: &Asset) -> Option<Decima
     // Третье ревью (С-Ж): замок не ждём — занято продажей, снимка нет (баланс не читаем).
     let _g = super::credit_lock::fact_try(to, a)?;
     // Четвёртое ревью (С-7): продажа с неизвестным исходом на счёте — снимок неоднозначен.
-    if super::credit_lock::unsure(core, to, a) {
+    if super::credit_lock::unsure(core, to, a, deal) {
         return None;
     }
     let before = super::remain_others::on_account(core, &own, to);

@@ -109,7 +109,11 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
     // остаётся отдельной позицией (остановлена, количество = остаток, алерт) — credit_rest::park.
     if step == Step::Closed && super::credit_fact::rest(deal).is_some() {
         let why = format!("закрытие ({why}) при нерешённом остатке зачисления");
-        return Box::pin(super::credit_rest::park(core, deal, &why)).await;
+        return Box::pin(super::credit_rest_park::park(core, deal, &why)).await;
+    }
+    // Шестое ревью (М-7): закрыта или взята человеком — её «исход продажи неизвестен» счёт больше не путает.
+    if matches!(step, Step::Closed | Step::TakenOver) {
+        deal.sale_unsure = false;
     }
     // Решение 180: место в окне выводов, не дошедшее до вывода, освобождается.
     super::withdraw_limit::release(core, &deal.id);

@@ -145,7 +145,7 @@ pub async fn run(core: &Core, mut deal: Deal) {
     {
         return super::stuck_quote::halt_not_configured(core, deal, e).await;
     }
-    let qty0 = deal.qty;
+    let (qty0, t0) = (deal.qty, tokio::time::Instant::now());
     // Решение 413 (ревью t198, Б2): оценка перегона и вывод с биржи — только доли сделки по факту счёта (как перед
     // продажей, sell_fact.rs): чужие монеты на общем счёте не выводятся; None — закрыта или алерт человеку.
     let Some(mut deal) = Box::pin(super::sell_fact::before(core, deal, "перегон")).await
@@ -156,11 +156,23 @@ pub async fn run(core: &Core, mut deal: Deal) {
     // уехал бы без решения): продажа здесь по тем же правилам, остаток решит тихий момент счёта (credit_rest.rs).
     if super::credit_fact::rest(&deal).is_some() {
         let why = "остаток зачисления на этой бирже не решён — перегон с неё не делаем";
-        return super::relay_here::sell_here(core, deal, why).await;
+        return Box::pin(super::relay_here::sell_here(core, deal, why)).await;
     }
     let a = deal.direction.asset.clone();
-    // Решение 220: котировка — кошельком сделки; количество по факту то же — котировка до факта (пятое ревью, С-5).
-    let quote = if deal.qty == qty0 {
+    // Решение 220: котировка — кошельком сделки. Котировка до факта — только если количество то же и с неё прошло
+    // меньше venue.book_stale_ms (шестое ревью, С-4: факт мог ждать замок или повторы); иначе — новая.
+    let at = At {
+        venue: Some(&deal.at.0),
+        coin: None,
+    };
+    let stale = core
+        .inner
+        .deps
+        .settings
+        .integer("venue.book_stale_ms", at)
+        .ok();
+    let fresh = stale.is_some_and(|ms| t0.elapsed() < std::time::Duration::from_millis(ms));
+    let quote = if deal.qty == qty0 && fresh {
         pre
     } else {
         Box::pin(super::trade_ops::deal_quote(core, &deal)).await

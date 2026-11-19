@@ -252,6 +252,11 @@ pub async fn take_over(core: &Core, alert_id: &str, who: &str) -> Result<String,
     let (alert, mut deal) = lk(&core.inner.alerts)
         .remove(alert_id)
         .ok_or(format!("алерта {alert_id} нет"))?;
+    // Решение 413 (шестое ревью, С-2): остаток «не присвоено» — к человеку целиком.
+    if let Some(rest) = super::credit_fact::rest(&deal) {
+        deal.qty += rest;
+        super::credit_fact::set_rest(&mut deal, Decimal::ZERO);
+    }
     let h = ManualHolding {
         id: super::ids::uuid_v4().unwrap_or_else(|_| alert.id.clone()),
         deal_id: deal.id.clone(),

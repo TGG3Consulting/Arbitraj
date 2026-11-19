@@ -279,7 +279,16 @@ async fn sell(
             // Решение 413 (пятое ревью t198): у сделки остаток зачисления «не присвоено» — не закрываем: тихий момент
             // счёта и добор (credit_rest.rs), продолжением цикла.
             if super::credit_fact::rest(&deal).is_some() {
-                super::manual_outcome::sold(core, &deal, why, &r, Decimal::ZERO).await;
+                // Шестое ревью (С-1): продажа — в учёт до ожидания (перезапуск во время ожидания её не теряет).
+                Box::pin(super::ledger::save(core, &deal)).await;
+                Box::pin(super::manual_outcome::sold(
+                    core,
+                    &deal,
+                    why,
+                    &r,
+                    Decimal::ZERO,
+                ))
+                .await;
                 return super::sell_loop::hop(super::sell_next::rest_close(core, deal, why)).await;
             }
             // Возврат USDT на площадку покупки — общий шаг закрытия (ledger::finish, решение 138).

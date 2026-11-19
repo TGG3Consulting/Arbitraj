@@ -94,6 +94,7 @@ pub async fn reconcile_as(core: &Core, deal: &mut Deal, mode: super::credit_aler
     deal.fact_unread = false;
     // Четвёртое ревью (С-7): факт этой сделки прочитан — её учёт сверен с балансом, отметка «исход неизвестен» снята.
     deal.sale_unsure = false;
+    super::credit_lock::sync(core, deal);
     let ok = Box::pin(apply_with(core, deal, fact, others)).await;
     // Повторное ревью (мелкое): факт свежий при этом шаге, количестве и площадке — второй вход подряд не читает.
     if ok {
@@ -124,9 +125,18 @@ pub async fn apply_with(
 ) -> bool {
     // Пятое ревью t198: остаток «не присвоено» решается только в тихий момент счёта (credit_rest.rs): количество =
     // min(количество + остаток, факт − подтверждённые других). Не тихий — сделка ведётся подтверждённой долей.
-    if super::credit_fact::rest(deal).is_some() && super::credit_rest::quiet(core, deal, &others) {
-        super::credit_rest::resolve(deal, fact, &others);
-        super::credit_lock::sync(core, deal);
+    // Шестое ревью (Б-2): решение — под замком счёта (credit_rest::locked; чтение и запись в учёт памяти вместе).
+    if super::credit_fact::rest(deal).is_some()
+        && super::credit_rest::busy(core, deal, &others).is_none()
+    {
+        if let super::credit_rest::Res::Done =
+            Box::pin(super::credit_rest::locked(core, deal)).await
+            && deal.qty <= Decimal::ZERO
+        {
+            let why = "остатка на площадке нет — фантом учёта (решение 222)";
+            super::ledger::finish(core, deal, Step::Closed, why).await;
+            return false;
+        }
         return true;
     }
     let sp = super::credit_split::split(&super::credit_apply::input(core, deal, fact, &others));
@@ -178,6 +188,8 @@ pub async fn apply_with(
         super::ledger::save(core, deal).await;
         return true;
     }
+    // Шестое ревью (Б-1): монет на счёте нет — и остатку взяться неоткуда: фантом закрывается, как раньше.
+    super::credit_fact::set_rest(deal, Decimal::ZERO);
     let why = "остатка на площадке нет — фантом учёта (решение 222)";
     super::ledger::finish(core, deal, Step::Closed, why).await;
     false

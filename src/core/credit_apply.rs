@@ -62,7 +62,7 @@ pub fn input(core: &Core, deal: &Deal, fact: Decimal, o: &Others) -> Input {
         // Четвёртое ревью (С-7): на счёте продажа с неизвестным исходом — тоже неоднозначно.
         unclear: !o.unclear.is_empty()
             || !o.leaving.is_empty()
-            || super::credit_lock::unsure(core, &deal.at, &deal.direction.asset),
+            || super::credit_lock::unsure(core, &deal.at, &deal.direction.asset, &deal.id),
         hold_pct: super::deposit_hold::expected_pct(core, &deal.at, a),
         tol_pct: tol,
     }
@@ -94,14 +94,18 @@ pub async fn own(core: &Core, deal: &mut Deal, fact: Decimal, o: &Others, sp: &S
     let record = super::credit_fact::here(deal).map_or(deal.qty, |c| c.record);
     // Пятое ревью t198: доля не окончательна — остаток «не присвоено» (решит тихий момент счёта, credit_rest.rs;
     // ограничение удержанием применено один раз, здесь): лишнее сверх ограничения; через счёт идут другие сделки или
-    // продажа с неизвестным исходом — всё до записи депозита (верхняя граница доли = количество + остаток).
+    // продажа с неизвестным исходом — до записи × (1 − ожидаемое удержание) (верхняя граница = количество + остаток).
     let unclear = !o.unclear.is_empty()
         || !o.leaving.is_empty()
-        || super::credit_lock::unsure(core, &deal.at, &deal.direction.asset);
+        || super::credit_lock::unsure(core, &deal.at, &deal.direction.asset, &deal.id);
+    // Шестое ревью (Б-1): верхняя граница — запись × (1 − ожидаемое удержание), не запись: удержанное биржей в остаток
+    // не входит (иначе — фантом).
+    let hold = super::deposit_hold::expected_pct(core, &deal.at, &deal.direction.asset);
+    let cap = record * (Decimal::ONE - hold / Decimal::ONE_HUNDRED);
     let rest = if measured {
         Decimal::ZERO
     } else if unclear {
-        record - share
+        cap.max(raw) - share
     } else {
         raw - share
     };

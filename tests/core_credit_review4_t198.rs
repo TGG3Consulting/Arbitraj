@@ -130,7 +130,13 @@ async fn rest_is_taken_after_leaving_deal_goes() {
     l.at = VenueId("bingx".into());
     l.step = Step::Selling;
     arb::core::ledger::save(&core, &l).await;
-    assert!(arb::core::remain_fact::apply_fact(&core, &mut a, d("100")).await);
+    // Шестое ревью: решение — под замком счёта (credit_rest::locked; здесь баланс не читается — чистая часть).
+    let o = arb::core::remain_others::on_account(&core, &a, &a.at);
+    assert!(
+        arb::core::credit_rest::busy(&core, &a, &o).is_none(),
+        "тихий момент"
+    );
+    arb::core::credit_rest::resolve(&mut a, d("100"), &o, d("0"));
     assert_eq!(a.qty, d("100"), "добрано");
     assert_eq!(a.credit.as_deref().unwrap().rest, None);
 }

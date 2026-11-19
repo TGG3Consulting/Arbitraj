@@ -38,12 +38,14 @@ type Locks = HashMap<(VenueId, CoinKey), Arc<RwLock<()>>>;
 
 static LOCKS: LazyLock<Mutex<Locks>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Что делает: счёт «неясно» — на нём открытая сделка той же монеты с неизвестным исходом продажи (Deal.sale_unsure,
-/// С-7). Принимает: ядро, площадку, монету. Ошибок нет.
-pub fn unsure(core: &Core, v: &VenueId, a: &Asset) -> bool {
+/// Что делает: счёт «неясно» — на нём ДРУГАЯ открытая сделка той же монеты с неизвестным исходом продажи
+/// (Deal.sale_unsure, С-7; шестое ревью М-1: свою сделку проверяет её собственное чтение факта). Принимает: ядро,
+/// площадку, монету, ID своей сделки. Ошибок нет.
+pub fn unsure(core: &Core, v: &VenueId, a: &Asset, except: &str) -> bool {
     let key = CoinKey::of(a);
     lk(&core.inner.deals).values().any(|d| {
-        d.sale_unsure
+        d.id != except
+            && d.sale_unsure
             && &d.at == v
             && !matches!(d.step, Step::Closed | Step::TakenOver)
             && CoinKey::of(&d.direction.asset) == key
@@ -86,6 +88,7 @@ pub fn sync(core: &Core, deal: &Deal) {
         d.qty = deal.qty;
         d.at = deal.at.clone();
         d.credit = deal.credit.clone();
+        d.sale_unsure = deal.sale_unsure;
     }
 }
 

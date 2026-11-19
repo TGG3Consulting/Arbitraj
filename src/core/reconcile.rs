@@ -200,6 +200,8 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
                     Box::pin(super::credit_halted::observe(core, &v, &key, t)).await;
                 }
             }
+            // Шестое ревью (С-3): остановленные с остатком «не присвоено» — решение в тихий момент счёта.
+            Box::pin(super::credit_rest_park::round(core, &v)).await;
         }
         for (key, need) in &held {
             let ev = &v;

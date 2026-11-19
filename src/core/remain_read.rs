@@ -30,6 +30,26 @@ pub async fn read(core: &Core, deal: &Deal) -> (Result<Decimal, String>, Others)
     Box::pin(read_with(core, deal, true)).await
 }
 
+/// Что делает: шестое ревью t198 (Б-2) — одно чтение факта и учёта других и решение по ним `f` под ОДНИМ замком счёта
+/// (чтение и запись решения в учёт памяти — без окна для продажи другой сделки). Без повторов и без строки журнала
+/// (повторяет вызывающий). Принимает: ядро, сделку (для чтения), решение. Возвращает: итог решения. Ошибок нет.
+pub async fn with_fact<R>(
+    core: &Core,
+    deal: &Deal,
+    f: impl FnOnce(Result<Decimal, String>, Others) -> R,
+) -> R {
+    let g = super::credit_lock::fact(&deal.at, &deal.direction.asset).await;
+    let (c, d) = (core.clone(), deal.clone());
+    let r = match tokio::spawn(async move { fact_try(&c, &d, &d.at).await }).await {
+        Ok(r) => r.map_err(|e| e.0),
+        Err(e) => Err(format!("{}: чтение баланса прервано: {e}", deal.at.0)),
+    };
+    let o = super::remain_others::on_account(core, deal, &deal.at);
+    let out = f(r, o);
+    drop(g);
+    out
+}
+
 /// Что делает: как read; `warn` = false — без строки Warn на итог (четвёртое ревью t198, С-4: повторные чтения
 /// ожидания первого вывода — Warn только при первом сбое). Принимает: ядро, сделку, писать ли Warn. Возвращает: как
 /// read. Ошибок нет.

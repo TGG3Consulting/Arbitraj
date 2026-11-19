@@ -69,8 +69,10 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
     let deals = lk(&core.inner.deals);
     let mut out = Others::default();
     for d in ids.iter().filter_map(|id| deals.get(id)) {
+        // Шестое ревью (Б-2): сделка с остатком «не присвоено» учитывается при любом количестве (в ожидании после
+        // продажи её количество 0).
         if d.id == deal.id
-            || d.qty <= Decimal::ZERO
+            || (d.qty <= Decimal::ZERO && super::credit_fact::rest(d).is_none())
             || matches!(d.step, Step::Closed | Step::TakenOver)
             || CoinKey::of(&d.direction.asset) != key
         {
@@ -81,6 +83,21 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
             || deal.dex_account.is_none()
             || d.dex_account == deal.dex_account;
         if !same {
+            continue;
+        }
+        // Шестое ревью (Б-2): у сделки остаток «не присвоено» — её подтверждённое количество вычитается, а остаток —
+        // «неясно»: не вычитается и никому не выдаётся.
+        if d.at == *v
+            && let Some(r) = super::credit_fact::rest(d)
+        {
+            out.qty += d.qty;
+            out.deals.push((d.id.clone(), d.qty));
+            out.unclear.push(d.id.clone());
+            out.words.push(format!(
+                "{} — у неё не присвоено {}",
+                super::deal_words::deal(core, d),
+                super::deal_words::coins(r, &d.direction.asset.ticker)
+            ));
             continue;
         }
         // Пятое ревью t198 (С-7): продажа сделки с неизвестным исходом — её монеты на счёте не доказаны (в том числе у
@@ -130,6 +147,19 @@ pub fn on_account(core: &Core, deal: &Deal, v: &VenueId) -> Others {
             out.qty += d.qty;
             out.deals.push((d.id.clone(), d.qty));
             out.words.push(super::deal_words::deal(core, d));
+        }
+    }
+    drop(deals);
+    // Шестое ревью (Б-2): монеты «Беру на себя» на этом счёте — человека: вычитаются, как подтверждённые.
+    for (h, d) in lk(&core.inner.holdings).values() {
+        if h.venue == *v && h.qty > Decimal::ZERO && CoinKey::of(&h.asset) == key && d.id != deal.id
+        {
+            out.qty += h.qty;
+            out.deals.push((d.id.clone(), h.qty));
+            out.words.push(format!(
+                "{} — у человека («Беру на себя»)",
+                super::deal_words::coins(h.qty, &h.asset.ticker)
+            ));
         }
     }
     out.deals.sort();

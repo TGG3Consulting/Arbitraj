@@ -119,6 +119,8 @@
       {:else}<span class="muted">итога ещё нет</span>{/if}
       {#if d.relays}<span class="muted"> · перегонов {d.relays}</span>{/if}
       {#if d.dust && Number(d.dust) > 0}<span class="muted"> · пыль {d.dust} на <code>{d.at}</code> (меньше шага или минимума ордера, решение 66)</span>{/if}
+      <!-- Решение 413 (t198, шестое ревью): остаток зачисления «не присвоено» — не подтверждён фактом, отдельно от монет. -->
+      {#if d.credit?.rest && Number(d.credit.rest) > 0}<span class="err"> · не присвоено {d.credit.rest} на <code>{d.credit.venue}</code> (решится в тихий момент счёта или кнопкой «Ручного управления»)</span>{/if}
     </p>
     <!-- Решение 138: возврат выручки USDT на площадку покупки после закрытия (поле сделки usdt_return).
          Решение 227: по частям — usdt_return (первая) и usdt_return_parts (остальные площадки выручки). -->

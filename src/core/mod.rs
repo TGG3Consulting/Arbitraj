@@ -71,6 +71,7 @@ pub mod credit_fact;
 pub mod credit_halted;
 pub mod credit_lock;
 pub mod credit_rest;
+pub mod credit_rest_park;
 pub mod credit_match;
 pub mod credit_mismatch;
 pub mod credit_shortfall;

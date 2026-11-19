@@ -79,10 +79,13 @@ pub async fn wallets(
     let mut ws = core.inner.deps.settings.accounts().wallets();
     ws.sort_by(|a, b| a.name.cmp(&b.name));
     let mut out = Vec::new();
-    for (w, dex) in ws
+    // Пары (кошелёк, площадка) собраны заранее: итератор с замыканием, живущий через await, ломает вывод
+    // типов будущего для axum (CI 44635049510, «FnOnce is not general enough»).
+    let pairs: Vec<(&_, Option<VenueId>)> = ws
         .iter()
         .flat_map(|w| dexes.iter().map(move |d| (w, d.clone())))
-    {
+        .collect();
+    for (w, dex) in pairs {
         let acc = DexAccountId(w.id.clone());
         let net = match (&dex, many) {
             (Some(v), true) => match crate::core::chain::chain_at(&core.inner.deps.settings, v) {

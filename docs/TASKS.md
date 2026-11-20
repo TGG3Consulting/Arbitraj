@@ -157,6 +157,24 @@
   5) dex.venues читается при запуске (площадка регистрируется в шлюзе до ядра). Подходит, или нужна регистрация
      на лету без перезапуска?
   6) Значения send.priority_fee_gwei и send.max_fee_margin_pct у arb_dex (вопрос 1 решения 433 о чаевых — тот же).
+  Ревью 435 (20.11.2026, dc68bbe6..bac765de, только чтение кода, cargo не запускался) — регрессий BSC при одной площадке
+  и dex.gas_mode = legacy не найдено; исправить:
+  а) src/main.rs:301 — Place.all = все id dex.venues, а id, занятый площадкой шлюза (main.rs:339), пропускается, но
+     остаётся в all: у bsc_dex alone() = false → families::all (pools/families.rs:436), channels::serves
+     (send/channels.rs:54), directory/fetch.rs читают dex.default_chain; не задана → у BSC пусто видов DEX и ни одного
+     канала. Сценарий: dex.venues = ["bingx"] (грамматику dex_venues.rs проходит). Строить all из реально
+     зарегистрированных площадок.
+  б) src/venues/bsc_dex/errors.rs:6 — в шапке «node/rpc_capped.rs перепомечают», файл в ветке не менялся; у arb_dex
+     ошибки rpc_capped.rs, ws.rs (request/subscribe), multicall.rs, call.rs, receipts_handle.rs, rpc_race.rs — с площадкой
+     bsc_dex (ядро правила берёт по своей площадке, core/rules_apply.rs:152 — торговли не меняет; текст ошибки — да).
+  в) устаревшие строки: src/venues/bsc_dex/README.md:50 (connection_gas — «не задана — пометка, не ошибка»),
+     src/venues/bsc_dex/send/README.md:27 (gas_mode.rs — «отправка по режиму — задача 433-д»),
+     docs/notes/arbitrum/step5-plan.md:145 («живой BSC от неё не зависит») — после 433-д неверно.
+  г) connection_events.rs: dex.native_wrapped задана, но не адрес — текст «не задана» (ctx.addr любая ошибка).
+  Условия выкладки (факт кода): dex.gas_mode = legacy у bsc_dex до выкладки (quote/gas.rs base, exec/tx_fee.rs,
+  connection_gas.rs); канал sequencer на BSC не включать без channel.chain — при одной площадке он канал BSC
+  (channels.rs serves → default_chain → alone), открытый (sequencer.rs private: false), и вместе с каналами билдеров
+  select (send/mod.rs) откажет «Открытый канал включён вместе с другими» — отправка BSC встанет.
 - **Решение 433 (19.11.2026, ветка t217/arb-step5-adapter) — две сети, шаг 5: площадка DEX сети Arbitrum (arb_dex);
   ждёт сборки и тестов в GitHub (cargo локально не запускался).** ЖЕЛЕЗОБЕТОННОЕ ПРАВИЛО ТИГРАНА (20.11.2026): «Не
   пропустить ни единого DEX. Все DEX, которые есть, — без разделения на мелкие/крупные, без «можно потом». Ты ничего не

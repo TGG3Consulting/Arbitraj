@@ -148,7 +148,7 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
         PoolKind::VaultPool => {
             return Err(ctx.err(
                 ErrorCode::Internal,
-                "Balancer V2 не исполняется умным маршрутом (только шаг BALANCER контракта-исполнителя)",
+                "Balancer V2 / V3 не исполняется умным маршрутом (только шаги BALANCER / BALANCER_V3 исполнителя)",
             ));
         }
         // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): MixedQuoter их не знает — сверка getSwapOut пула.

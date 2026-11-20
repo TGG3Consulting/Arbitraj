@@ -186,6 +186,15 @@ pub enum Proto {
     /// getSwapOut (math/lb_swap.rs, lb_fee.rs); перечитывание каждым блоком (время блока). Квотер сверки — сам пул
     /// getSwapOut. Исполнение — шаг LB исполнителя v2 (вход переводом в пул, swap(swapForY, to)). Вид ядра — LbBin.
     LbV21,
+    /// Balancer V3 (решение 441, T433-F2; balancer_v3, DEX balancer-v3-arbitrum): хранилище Vault V3 (одно на все пулы,
+    /// id пула — его адрес) и пулы фабрик Balancer — весовые (20241205, 20260115) и стейблсвап (20241205, 20250324,
+    /// 20260116); выпуск фабрики задаёт правило onSwap (списки dex.bv3_*_factories). Токены — в хранилище; хранилище
+    /// пересчитывает суммы курсом токена (поставщик курса) и снимает комиссию; пулы с крючком обмена не берутся.
+    /// Проверка — verify_balancer_v3.rs, чтение — load_balancer_v3*.rs (каждым блоком: балансы и курсы меняются без
+    /// событий пула), события — events_balancer_v3.rs, математика — math/balancer_v3*.rs, квотер — Router V3
+    /// querySwapSingleTokenExactIn (dex.quoter). Исполнение — шаг BALANCER_V3 исполнителя (unlock → swap → settle →
+    /// sendTo). Вид ядра — VaultPool (состояние с частью V3).
+    BalancerV3,
 }
 
 impl Proto {
@@ -198,6 +207,7 @@ impl Proto {
             Proto::CurveStable
                 | Proto::CurveNg
                 | Proto::BalancerV2
+                | Proto::BalancerV3
                 | Proto::SaddleStable
                 | Proto::PancakeStable
         )
@@ -355,6 +365,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "smardex" => (PoolKind::Fictive, Proto::Smardex, true, false, false),
         // Balancer V2 (решение 289): в графе и сигналах (формулы пулов); исполнение — шаг BALANCER (только v2).
         "balancer_v2" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
+        // Balancer V3 (решение 441): в графе и сигналах (расчёт хранилища V3); исполнение — шаг BALANCER_V3 (с v4).
+        "balancer_v3" => (PoolKind::VaultPool, Proto::BalancerV3, true, false, false),
         // Liquidity Book V2.1 (решение 290): в графе и сигналах (порт getSwapOut); исполнение — шаг LB (только v2).
         "lb_v21" => (PoolKind::LbBin, Proto::LbV21, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
@@ -593,6 +605,16 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // пулов (isPoolFromFactory). Фабрика стейблсвапов dex.balancer_stable_factory — по желанию (не задана — только
         // весовые пулы).
         Proto::BalancerV2 => list.extend(["dex.vault", "dex.factory"]),
+        // Balancer V3 (решение 441): хранилище (состояние, обмен), роутер V3 — квотер сверки querySwapSingleTokenExactIn
+        // (dex.quoter), списки фабрик по выпускам (пустой список — у DEX нет фабрик этого выпуска).
+        Proto::BalancerV3 => list.extend([
+            "dex.vault",
+            "dex.quoter",
+            "dex.bv3_weighted_factories",
+            "dex.bv3_weighted_min_factories",
+            "dex.bv3_stable_factories",
+            "dex.bv3_stable_guard_factories",
+        ]),
         // Liquidity Book V2.1 (решение 290): фабрика (getFactory пула и реестр getLBPairInformation). Квотер сверки — сам
         // пул getSwapOut (адрес не нужен).
         Proto::LbV21 => list.push("dex.factory"),

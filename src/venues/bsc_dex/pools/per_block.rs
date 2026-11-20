@@ -75,6 +75,7 @@ pub fn needs(f: &Family) -> bool {
             | Proto::KyberDmm
             | Proto::Smardex
             | Proto::BalancerV2
+            | Proto::BalancerV3
             | Proto::LbV21
     )
 }

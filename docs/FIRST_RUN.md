@@ -993,6 +993,24 @@ core.rules «Правила для PriceOutOfRange нет»), как у любо
 | hooks.impact_points | площадка DEX (bsc_dex) | **Можно задавать после зелёной сборки и тестов в GitHub ветки t173 (ревью 4: Н1, Н3, Н4, Н5 закрыты — DECISIONS «335 (лесенка влияния, ревью 4 — правки)»)**; до выкладки этой сборки — не задавать. *метод:* столько точек, чтобы соседние суммы первого пакета (⌈n/2⌉ точек) отличались не больше чем вдвое: ⌈n/2⌉ = 1 + ⌈log₂(money.max_per_trade_usd / signal.probe_usd)⌉ (например, 20 → 640 USDT: 6 точек первого пакета, n = 12; вторые 6 — доуточнение там, где влияние скачет). Вместе с ней задать dex.multicall3: без него пакет — пачка JSON-RPC весом N вызовов (задержка следующего запроса к узлу N / bsc.node_http_rps) | Влияние крючка растёт с суммой (запись 17.11: GAIB 0 / 0,099 / 0,674 %, BTCMT 0 / 0,744 / 3,366 % на 1 / 20 / 100 USDT); котировка на сумме между точками берёт наибольшее из хорды и продолжения наклона прошлого участка, не выше ближайшей большей точки (решение 406; запись 18.11, лесенка 16 точек: на суммах не ниже наименьшей точки занижений нет) — чем гуще лесенка, тем точнее. **Нагрузка на узел (по коду):** цикл крючков — на пул с крючком B/C за каждый hooks.recheck_interval_s не больше 2 · n вызовов квотера (по n на сторону) двумя пакетами (два круга до узла) на одном блоке, плюс чтение пула на блоке; при n = 12 и k пулах с крючком — до 24 · k вызовов за интервал. **Путь сделки от n не зависит:** кругов пробы — два (hooks.trade_probe_rounds_max не задана), в круге — по вызову на вход каждого шага с крючком всех долей (и входы по порядку исполнения у долей с общим пулом). Память: точек стороны — не больше n цикла + n проб сделки | DECISIONS «335 (лесенка влияния)», «335 (лесенка влияния, ревью 2)», «335 (лесенка влияния, ревью 4 — правки)» |
 | hooks.trade_probe_rounds_max | площадка DEX (bsc_dex) | **не задавать** (ровно два круга) | Два круга — сам способ (проба на оценке и проба с подъёмом); третий и далее — каждый ещё одна задержка до узла на пути сделки. Задавать, только если в журнале dex.check / причинах отказа часто «не покрыто фактом пробы за 2 кругов» (крючок со ступенькой по сумме) — тогда 3 | DECISIONS «335 (лесенка влияния, ревью 4 — правки)» |
 
+## DEX Balancer V3 на Arbitrum (решение 441, T433-F2)
+
+Область «DEX» — ключ DEX площадки arb_dex: id GeckoTerminal `balancer-v3-arbitrum` с суффиксом сети (решение 435:
+`balancer-v3-arbitrum@arbitrum`, если сеть по умолчанию — bsc). Адреса — balancer/balancer-deployments@b55dc2b8,
+`output/arbitrum.json` задач (официальный репозиторий Balancer). Пулы с крючком обмена (StableSurge, MEV Capture и
+прочие) не берутся — вопрос в docs/TASKS.md (решение 441).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `balancer-v3-arbitrum@arbitrum` | `balancer_v3` | Вид пулов: хранилище Vault V3 | решение 441 |
+| dex.vault | DEX `balancer-v3-arbitrum@arbitrum` | `0xbA1333333333a1BA1108E8412f11850A5C319bA9` | Vault V3: состояние пулов и обмен | v3/tasks/20241204-v3-vault/output/arbitrum.json |
+| dex.quoter | DEX `balancer-v3-arbitrum@arbitrum` | `0xEAedc32a51c510d35ebC11088fD5fF2b47aACF2E` | Router V3 (querySwapSingleTokenExactIn) — квотер сверки | v3/tasks/20250307-v3-router-v2/output/arbitrum.json |
+| dex.bv3_weighted_factories | DEX `balancer-v3-arbitrum@arbitrum` | `["0xD961E30156C2E0D0d925A0De45f931CB7815e970"]` | Фабрика весовых пулов 20241205 (без нижних балансов) | v3/deprecated/20241205-v3-weighted-pool/output/arbitrum.json |
+| dex.bv3_weighted_min_factories | DEX `balancer-v3-arbitrum@arbitrum` | `["0x83bf399FA3DC49Af8fb5c34031a50c7C93F56129"]` | Фабрика весовых пулов 20260115-v2 (нижние балансы, вход + 1) | v3/tasks/20260115-v3-weighted-pool-v2/output/arbitrum.json |
+| dex.bv3_stable_factories | DEX `balancer-v3-arbitrum@arbitrum` | `["0xEB1eeaBF0126d813589C3D2CfeFFE410D9aE3863", "0x44d33798dddCdAbc93Fe6a40C80588033Dc502d3"]` | Фабрики стейблсвап-пулов 20241205 и 20250324-v2 (без проверки дисбаланса) | v3/deprecated/20241205-v3-stable-pool, v3/deprecated/20250324-v3-stable-pool-v2 (output/arbitrum.json) |
+| dex.bv3_stable_guard_factories | DEX `balancer-v3-arbitrum@arbitrum` | `["0x1FC7F1F84CFE61a04224AC8D3F87f56214FeC08c"]` | Фабрика стейблсвап-пулов 20260116-v3 (проверка дисбаланса) | v3/tasks/20260116-v3-stable-pool-v3/output/arbitrum.json |
+| dex.pool_enabled | DEX `balancer-v3-arbitrum@arbitrum` | `да` — после записи tools/arbitrum_record/balancer_v3.py и зелёного теста tests/arbitrum_balancer_v3.rs | Включение DEX | решение 441 |
+
 ## Деньги и риск — вводит Тигран под капитал
 
 Торговля не включается, пока не заданы ВСЕ обязательные `money.*` и `risk.*` (docs/SETTINGS.md; `risk.max_daily_loss_total_usd` — необязательна). Готовых чисел здесь нет — только метод (кроме советов решения 173 по лимитам дня).

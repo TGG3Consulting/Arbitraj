@@ -248,6 +248,7 @@ pub fn one_by_one(f: &Family) -> bool {
         || f.proto == Proto::KyberDmm
         || f.proto == Proto::Smardex
         || f.proto == Proto::BalancerV2
+        || f.proto == Proto::BalancerV3
         || f.proto == Proto::LbV21
 }
 

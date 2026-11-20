@@ -39,6 +39,7 @@ use super::super::exec::chain::Step;
 use super::super::exec::executor::{self, call, callback_at, entry, onchain};
 use super::super::exec::plan::Order;
 use super::super::pools::abi_balancer::IBalancerVault;
+use super::super::pools::abi_balancer_v3::IBalancerV3Vault;
 use super::super::pools::{exec_callback, exec_kind};
 use super::super::pools::registry::Entry;
 use super::super::wallet::approve::Approval;
@@ -150,7 +151,13 @@ pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()>
     // Swaps.sol L297); пул (onSwap — view) событий не шлёт.
     if let PoolState::VaultPool(d) = &e.pool.state {
         let vault = ctx.dex_addr("dex.vault", e.family.id)?;
-        let swap = IBalancerVault::Swap::SIGNATURE_HASH;
+        // Решение 441: у Balancer V3 событие Swap хранилища V3 — адрес пула в topic1 (IVaultEvents.sol L53-L61; pool_id
+        // состояния V3 — адрес пула словом).
+        let swap = if d.v3.is_some() {
+            IBalancerV3Vault::Swap::SIGNATURE_HASH
+        } else {
+            IBalancerVault::Swap::SIGNATURE_HASH
+        };
         if logs.iter().any(|l| {
             l.address == vault && l.topics.first() == Some(&swap) && l.topics.get(1) == Some(&d.pool_id)
         }) {

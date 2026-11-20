@@ -130,6 +130,9 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // TokensRegistered, IVault.sol L235, L273); подписка на них не подключена (техдолг, docs/ROADMAP.md) — новые
             // пулы приходят из справочника индексатора.
             Proto::BalancerV2 => continue,
+            // Balancer V3 (решение 441): пул регистрирует хранилище (PoolRegistered — от адреса Vault, IVaultEvents.sol);
+            // подписка не подключена (техдолг, docs/ROADMAP.md) — новые пулы приходят из справочника индексатора.
+            Proto::BalancerV3 => continue,
             // Liquidity Book V2.1 (решение 290): событие фабрики LBPairCreated(tokenX, tokenY, binStep — все indexed,
             // LBPair, pid) (ILBFactory.sol L49-L51) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы
             // приходят из справочника индексатора.

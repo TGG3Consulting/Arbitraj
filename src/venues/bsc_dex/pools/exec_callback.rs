@@ -65,7 +65,8 @@ pub fn check(v: Version, sig: &str) -> Option<String> {
     let rt = match v {
         Version::V1 => code::runtime_v1(),
         Version::V2 => code::runtime_v2(),
-        Version::V3 => code::runtime(),
+        Version::V3 => code::runtime_v3(),
+        Version::V4 => code::runtime(),
     };
     let ver = v.label();
     match rt {
@@ -179,6 +180,8 @@ pub fn since(k: ExecKind) -> Version {
         | ExecKind::Balancer
         | ExecKind::Lb => Version::V2,
         ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => Version::V3,
+        // Решение 441: BALANCER_V3 = 23 — с v4.
+        ExecKind::BalancerV3 => Version::V4,
         _ => Version::V1,
     }
 }
@@ -194,7 +197,9 @@ pub fn v2_only(k: ExecKind) -> bool {
 pub fn step_absent(k: ExecKind, v: Version) -> Option<String> {
     let need = since(k);
     (v < need).then(|| {
-        let todo = if need >= Version::V3 {
+        let todo = if need >= Version::V4 {
+            "нужен исполнитель v4 — пересоберите contracts/build.sh и переразверните исполнитель (решение 441)"
+        } else if need >= Version::V3 {
             deploy_gate::need_v3()
         } else {
             "переразверните исполнитель кошелька (экран «Маппинг кошельков»)"

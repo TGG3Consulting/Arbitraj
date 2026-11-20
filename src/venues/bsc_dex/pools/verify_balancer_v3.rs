@@ -1,0 +1,143 @@
+//! Файл: venues/bsc_dex/pools/verify_balancer_v3.rs
+//! Что делает: решение 441 (T433-F2) — проверка пула Balancer V3 из справочника на своём узле (решение 59). Кто
+//! подтверждает пул: (1) хранилище dex.vault знает пул — getPoolTokenInfo(пул) (withRegisteredPool: незарегистрированный
+//! адрес — откат) и отдаёт его токены; (2) пул создан фабрикой DEX — isPoolFromFactory фабрики из dex.bv3_*_factories
+//! (выпуск фабрики = правило расчёта, balancer_v3_factories.rs); (3) у пула нет крючка, участвующего в обмене
+//! (getHooksConfig: динамическая комиссия, beforeSwap, afterSwap — расчёт крючка не сверен); (4) монета и встречный
+//! токен — среди токенов пула (CLAUDE.md: адрес токена у биржи = адрес в пуле). Один проход частями по dex.verify_batch.
+//! Кто вызывает: pools/verify.rs.
+//! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_balancer_v3.rs, balancer_v3_factories.rs,
+//! load_balancer_v3_fixed.rs (swap_hook), discover.rs, multi_pair.rs, verify.rs.
+//! Настройки: dex.vault, dex.bv3_weighted_factories, dex.bv3_weighted_min_factories, dex.bv3_stable_factories,
+//! dex.bv3_stable_guard_factories [DEX вида balancer_v3].
+//!
+//! Источник: VaultExtension.sol (20241204-v3-vault) L520-L549 getPoolTokenInfo (withRegisteredPool), L585-L589
+//! getHooksConfig; BasePoolFactory.sol L69-L72 isPoolFromFactory (только пулы, созданные этой фабрикой).
+
+use std::str::FromStr;
+
+use alloy::sol_types::SolCall;
+use alloy_primitives::{Address, Bytes};
+
+use crate::core::types::PoolRef;
+
+use super::super::ctx::Ctx;
+use super::super::node::call;
+use super::abi_balancer_v3::{IBalancerV3Factory as F, IBalancerV3Vault as V};
+use super::balancer_v3_factories::{self as fac, Release};
+use super::discover::{Found, sorted};
+use super::load_balancer_v3_fixed::swap_hook;
+use super::multi_pair;
+use super::verify::{Candidate, Verdict};
+
+/// Адреса проверки: пул, хранилище, фабрики с выпуском.
+pub type Plan = (Address, Address, Vec<(Address, Release)>);
+
+/// Проверка пачки кандидатов. Возвращает: итог по каждому. Ошибок нет (не задана настройка, пул не прошёл — отказ с
+/// причиной; сбой узла — Failed).
+pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> {
+    let plans: Vec<Result<Plan, String>> = cands.iter().map(|c| plan(ctx, c)).collect();
+    let all: Vec<(Address, Bytes)> = plans.iter().flatten().flat_map(calls).collect();
+    let got = call::try_chunks(ctx, &all, "latest", size).await;
+    let mut got = got.into_iter();
+    let mut out = Vec::new();
+    for (c, p) in cands.iter().zip(plans) {
+        out.push(match p {
+            Err(w) => Verdict::Rejected(w),
+            Ok(p) => {
+                let part: Vec<call::Piece> = got.by_ref().take(calls(&p).len()).collect();
+                match part.into_iter().collect::<Result<Vec<_>, String>>() {
+                    Err(node) => Verdict::Failed(node),
+                    Ok(a) => match decide(c, &p, &a) {
+                        Ok(f) => {
+                            let tokens = tokens(&a);
+                            Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &tokens)))
+                        }
+                        Err(w) => Verdict::Rejected(w),
+                    },
+                }
+            }
+        });
+    }
+    out
+}
+
+/// Адреса проверки кандидата. Возвращает: план или причину отказа (не адрес, не задана dex.vault / dex.bv3_*).
+fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
+    let pool = Address::from_str(&c.pool)
+        .map_err(|_| format!("«{}» — не адрес контракта пула Balancer V3", c.pool))?;
+    let vault = ctx
+        .dex_addr("dex.vault", c.family.id)
+        .map_err(|e| e.message)?;
+    Ok((pool, vault, fac::all(ctx, c.family.id)?))
+}
+
+/// Вызовы проверки: getPoolTokenInfo и getHooksConfig хранилища, isPoolFromFactory каждой фабрики. Ошибок нет.
+pub fn calls(p: &Plan) -> Vec<(Address, Bytes)> {
+    let (pool, vault, list) = p;
+    let pool = *pool;
+    let mut l: Vec<(Address, Bytes)> = vec![
+        (*vault, V::getPoolTokenInfoCall { pool }.abi_encode().into()),
+        (*vault, V::getHooksConfigCall { pool }.abi_encode().into()),
+    ];
+    for (f, _) in list {
+        l.push((*f, F::isPoolFromFactoryCall { pool }.abi_encode().into()));
+    }
+    l
+}
+
+/// Решение по ответам (без сети). Принимает: кандидата, план, ответы по порядку calls. Возвращает: найденный пул или
+/// причину отказа.
+pub fn decide(c: &Candidate, p: &Plan, a: &[Result<Bytes, String>]) -> Result<Found, String> {
+    let (pool, _, list) = p;
+    let at = |i: usize| match a.get(i) {
+        Some(Ok(b)) => Ok(b),
+        Some(Err(r)) => Err(format!(
+            "хранилище или фабрика Balancer V3 откатили вызов {i}: {r}"
+        )),
+        None => Err("нет ответа хранилища / фабрики Balancer V3".to_string()),
+    };
+    let info = V::getPoolTokenInfoCall::abi_decode_returns(at(0)?)
+        .map_err(|e| format!("getPoolTokenInfo не по ABI: {e}"))?;
+    let hooks = V::getHooksConfigCall::abi_decode_returns(at(1)?)
+        .map_err(|e| format!("getHooksConfig не по ABI: {e}"))?;
+    let mut yes = Vec::with_capacity(list.len());
+    for i in 0..list.len() {
+        let r = F::isPoolFromFactoryCall::abi_decode_returns(at(2 + i)?)
+            .map_err(|e| format!("isPoolFromFactory: {e}"))?;
+        yes.push(r);
+    }
+    fac::release(list, &yes).map_err(|w| format!("пул {pool:#x}: {w}"))?;
+    if let Some(why) = swap_hook(&hooks) {
+        return Err(format!("пул {pool:#x}: {why}"));
+    }
+    if !info.tokens.contains(&c.coin) || !info.tokens.contains(&c.quote) {
+        return Err(format!(
+            "среди токенов пула Balancer V3 {pool:#x} нет пары {} / {}",
+            c.coin, c.quote
+        ));
+    }
+    let (token0, token1) = sorted(c.coin, c.quote);
+    Ok(Found {
+        family: c.family,
+        reference: PoolRef::Contract(*pool),
+        token0,
+        token1,
+        coin: c.coin,
+        fee_pips: None,
+        tick_spacing: None,
+        bin_step: None,
+        key: None,
+        hooks: None,
+    })
+}
+
+/// Токены пула по ответу getPoolTokenInfo (решение 295, развёртка пар). Ответ не по ABI — пусто. Ошибок нет.
+fn tokens(answers: &[Result<Bytes, String>]) -> Vec<Address> {
+    answers
+        .first()
+        .and_then(|a| a.as_ref().ok())
+        .and_then(|b| V::getPoolTokenInfoCall::abi_decode_returns(b).ok())
+        .map(|i| i.tokens)
+        .unwrap_or_default()
+}

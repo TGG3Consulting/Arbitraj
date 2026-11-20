@@ -65,6 +65,7 @@ const CHOICE = {
   smardex: 'SmarDex (фиктивные резервы, средняя цена по времени блока)',
   lb_v21: 'Liquidity Book V2.1 (LFJ / Trader Joe: бины, изменчивая комиссия)',
   balancer_v2: 'Balancer V2 (хранилище Vault, весовые и стейблсвап-пулы)',
+  balancer_v3: 'Balancer V3 (хранилище Vault V3, весовые и стейблсвап-пулы фабрик, без крючков обмена)',
   pancake_stableswap: 'StableSwap PancakeSwap',
   lista_stableswap: 'StableSwap Lista (с оракулом)',
   saddle_stableswap: 'StableSwap Saddle (Nerve)',

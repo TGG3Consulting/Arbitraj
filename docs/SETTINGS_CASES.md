@@ -175,6 +175,10 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.balancer_stable_factory` | t120, р. 289 | совета нет, решает Тигран | необязательная: Не задана — стейблсвап-пулы DEX не берутся (весовые — берутся) | в релизе 141619bc |
 | `dex.bin_reread_left_pct` | t154, р. 332 | после приёмки решения 332 — 50 у lb_v21; у pancakeswap_infinity_bin — НЕ задавать, пока нет записи пула … | необязательная: Не задана — как раньше: бины вне полосы не читаются до переподключения | в релизе 141619bc |
 | `dex.block_read_parallel_max` | t153, р. 330 | `2` после выкладки t153 (проверка механизма, число не из замера), дальше — по замеру; если в журнале появятся … | необязательная: Не задана — как раньше, по одному | в релизе 141619bc |
+| `dex.bv3_weighted_factories` | T433-F2, р. 441 | 0xD961E301… (Arbitrum, FIRST_RUN) | без .optional(): DEX вида balancer_v3 не подключена; пустой список — пулов этого выпуска нет | ещё не в релизе (ветка t223-f2/arb-family-f2) |
+| `dex.bv3_weighted_min_factories` | T433-F2, р. 441 | 0x83bf399F… (Arbitrum, FIRST_RUN) | без .optional(): DEX вида balancer_v3 не подключена; пустой список — пулов этого выпуска нет | ещё не в релизе (ветка t223-f2/arb-family-f2) |
+| `dex.bv3_stable_factories` | T433-F2, р. 441 | 0xEB1eeaBF…, 0x44d33798… (Arbitrum, FIRST_RUN) | без .optional(): DEX вида balancer_v3 не подключена; пустой список — пулов этого выпуска нет | ещё не в релизе (ветка t223-f2/arb-family-f2) |
+| `dex.bv3_stable_guard_factories` | T433-F2, р. 441 | 0x1FC7F1F8… (Arbitrum, FIRST_RUN) | без .optional(): DEX вида balancer_v3 не подключена; пустой список — пулов этого выпуска нет | ещё не в релизе (ветка t223-f2/arb-family-f2) |
 | `dex.check_due_read_only` | t141, р. 310 | `да` (после выкладки t141; сначала на время замера, см. docs/TASKS.md t141) | необязательная: не задана — как раньше | в релизе 141619bc |
 | `dex.cl_tick_spacings` | —, р. 122 | совета нет, решает Тигран | необязательная: Не задана — Slipstream этой DEX по фабрике не ищется | в релизе 141619bc |
 | `dex.curve_ng_versions` | t107, р. 275 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана или пуста — DEX не подключена | в релизе 141619bc |
@@ -770,6 +774,54 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** нет — нагрузка: одновременность чтений пулов (pools/per_block.rs).
 - **Связанные ключи:** bsc.node_http_rps.
 - **Статус:** в релизе 141619bc.
+
+### `dex.bv3_weighted_factories`
+
+- **Задача / решение:** T433-F2 (T433-077), решение 441.
+- **Появилась:** 2026-11-20, ветка t223-f2/arb-family-f2.
+- **Кейс:** DEX Balancer V3 сети Arbitrum (GeckoTerminal `balancer-v3-arbitrum`, таблица покрытия docs/notes/arbitrum/dex-coverage-arbitrum.md, строка 77): у выпусков фабрик Balancer V3 разный onSwap пула (balancer-deployments@b55dc2b8 build-info: весовой 20260115 — баланс входа + 1 и нижние балансы, стейблсвап 20260116 — проверка дисбаланса); выпуск пула узнаётся только по фабрике (isPoolFromFactory). Эта настройка — фабрики весовых пулов выпуска 20241205-v3-weighted-pool (onSwap без нижних балансов).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (вид пула или DEX); каталог src/settings/catalog/dex.rs:194.
+- **Что ставить:** `["0xD961E30156C2E0D0d925A0De45f931CB7815e970"]` у DEX `balancer-v3-arbitrum@arbitrum` (docs/FIRST_RUN.md, раздел «DEX Balancer V3 на Arbitrum»).
+- **Если не задана:** без .optional(): DEX вида balancer_v3 не подключена — «не задана dex.bv3_weighted_factories» (src/venues/bsc_dex/pools/families.rs, required: Proto::BalancerV3; pools/balancer_v3_factories.rs all — NotConfigured); пустой список — фабрик этого выпуска у DEX нет (пулы этого выпуска не берутся с причиной «пул не создан фабриками DEX»).
+- **Влияет на торговлю:** да — какие пулы Balancer V3 берутся и по какому правилу считается их обмен (pools/verify_balancer_v3.rs, math/balancer_v3.rs).
+- **Связанные ключи:** dex.vault, dex.quoter, dex.kind, dex.bv3_weighted_min_factories, dex.bv3_stable_factories, dex.bv3_stable_guard_factories.
+- **Статус:** ещё не в релизе (ветка t223-f2/arb-family-f2).
+
+### `dex.bv3_weighted_min_factories`
+
+- **Задача / решение:** T433-F2 (T433-077), решение 441.
+- **Появилась:** 2026-11-20, ветка t223-f2/arb-family-f2.
+- **Кейс:** DEX Balancer V3 сети Arbitrum (GeckoTerminal `balancer-v3-arbitrum`, таблица покрытия docs/notes/arbitrum/dex-coverage-arbitrum.md, строка 77): у выпусков фабрик Balancer V3 разный onSwap пула (balancer-deployments@b55dc2b8 build-info: весовой 20260115 — баланс входа + 1 и нижние балансы, стейблсвап 20260116 — проверка дисбаланса); выпуск пула узнаётся только по фабрике (isPoolFromFactory). Эта настройка — фабрики весовых пулов выпуска 20260115-v3-weighted-pool-v2 (баланс входа + 1, нижние балансы).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (вид пула или DEX); каталог src/settings/catalog/dex.rs:195.
+- **Что ставить:** `["0x83bf399FA3DC49Af8fb5c34031a50c7C93F56129"]` у DEX `balancer-v3-arbitrum@arbitrum` (docs/FIRST_RUN.md).
+- **Если не задана:** без .optional(): DEX вида balancer_v3 не подключена — «не задана dex.bv3_weighted_min_factories» (src/venues/bsc_dex/pools/families.rs, required: Proto::BalancerV3; pools/balancer_v3_factories.rs all — NotConfigured); пустой список — фабрик этого выпуска у DEX нет (пулы этого выпуска не берутся с причиной «пул не создан фабриками DEX»).
+- **Влияет на торговлю:** да — какие пулы Balancer V3 берутся и по какому правилу считается их обмен (pools/verify_balancer_v3.rs, math/balancer_v3.rs).
+- **Связанные ключи:** dex.vault, dex.quoter, dex.kind, dex.bv3_weighted_factories, dex.bv3_stable_factories, dex.bv3_stable_guard_factories.
+- **Статус:** ещё не в релизе (ветка t223-f2/arb-family-f2).
+
+### `dex.bv3_stable_factories`
+
+- **Задача / решение:** T433-F2 (T433-077), решение 441.
+- **Появилась:** 2026-11-20, ветка t223-f2/arb-family-f2.
+- **Кейс:** DEX Balancer V3 сети Arbitrum (GeckoTerminal `balancer-v3-arbitrum`, таблица покрытия docs/notes/arbitrum/dex-coverage-arbitrum.md, строка 77): у выпусков фабрик Balancer V3 разный onSwap пула (balancer-deployments@b55dc2b8 build-info: весовой 20260115 — баланс входа + 1 и нижние балансы, стейблсвап 20260116 — проверка дисбаланса); выпуск пула узнаётся только по фабрике (isPoolFromFactory). Эта настройка — фабрики стейблсвап-пулов выпусков 20241205-v3-stable-pool и 20250324-v3-stable-pool-v2 (без проверки дисбаланса).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (вид пула или DEX); каталог src/settings/catalog/dex.rs:196.
+- **Что ставить:** `["0xEB1eeaBF0126d813589C3D2CfeFFE410D9aE3863", "0x44d33798dddCdAbc93Fe6a40C80588033Dc502d3"]` у DEX `balancer-v3-arbitrum@arbitrum` (docs/FIRST_RUN.md).
+- **Если не задана:** без .optional(): DEX вида balancer_v3 не подключена — «не задана dex.bv3_stable_factories» (src/venues/bsc_dex/pools/families.rs, required: Proto::BalancerV3; pools/balancer_v3_factories.rs all — NotConfigured); пустой список — фабрик этого выпуска у DEX нет (пулы этого выпуска не берутся с причиной «пул не создан фабриками DEX»).
+- **Влияет на торговлю:** да — какие пулы Balancer V3 берутся и по какому правилу считается их обмен (pools/verify_balancer_v3.rs, math/balancer_v3.rs).
+- **Связанные ключи:** dex.vault, dex.quoter, dex.kind, dex.bv3_weighted_factories, dex.bv3_weighted_min_factories, dex.bv3_stable_guard_factories.
+- **Статус:** ещё не в релизе (ветка t223-f2/arb-family-f2).
+
+### `dex.bv3_stable_guard_factories`
+
+- **Задача / решение:** T433-F2 (T433-077), решение 441.
+- **Появилась:** 2026-11-20, ветка t223-f2/arb-family-f2.
+- **Кейс:** DEX Balancer V3 сети Arbitrum (GeckoTerminal `balancer-v3-arbitrum`, таблица покрытия docs/notes/arbitrum/dex-coverage-arbitrum.md, строка 77): у выпусков фабрик Balancer V3 разный onSwap пула (balancer-deployments@b55dc2b8 build-info: весовой 20260115 — баланс входа + 1 и нижние балансы, стейблсвап 20260116 — проверка дисбаланса); выпуск пула узнаётся только по фабрике (isPoolFromFactory). Эта настройка — фабрики стейблсвап-пулов выпуска 20260116-v3-stable-pool-v3 (проверка дисбаланса < 10 000).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (вид пула или DEX); каталог src/settings/catalog/dex.rs:197.
+- **Что ставить:** `["0x1FC7F1F84CFE61a04224AC8D3F87f56214FeC08c"]` у DEX `balancer-v3-arbitrum@arbitrum` (docs/FIRST_RUN.md).
+- **Если не задана:** без .optional(): DEX вида balancer_v3 не подключена — «не задана dex.bv3_stable_guard_factories» (src/venues/bsc_dex/pools/families.rs, required: Proto::BalancerV3; pools/balancer_v3_factories.rs all — NotConfigured); пустой список — фабрик этого выпуска у DEX нет (пулы этого выпуска не берутся с причиной «пул не создан фабриками DEX»).
+- **Влияет на торговлю:** да — какие пулы Balancer V3 берутся и по какому правилу считается их обмен (pools/verify_balancer_v3.rs, math/balancer_v3.rs).
+- **Связанные ключи:** dex.vault, dex.quoter, dex.kind, dex.bv3_weighted_factories, dex.bv3_weighted_min_factories, dex.bv3_stable_factories.
+- **Статус:** ещё не в релизе (ветка t223-f2/arb-family-f2).
 
 ### `dex.chain`
 

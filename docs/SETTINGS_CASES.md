@@ -1376,8 +1376,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Где задаётся:** «Настройки», группа «DEX», область — площадка DEX (arb_dex); каталог src/settings/catalog/dex.rs.
 - **Что ставить:** `0x0000000000000000000000000000000000000064` у площадки DEX Arbitrum; у bsc_dex не задавать.
 - **Если не задана:** необязательная: пулы с крючком MEV Capture не читаются (NotConfigured «не задана dex.arb_sys»), прочие пулы — как без неё.
-- **Влияет на торговлю:** да — котируются ли пулы с MEV Capture (pools/load_balancer_v3.rs, load_balancer_v3_hook_read.rs).
-- **Связанные ключи:** dex.bv3_mev_capture_hooks, dex.arb_sys, dex.arb_owner_public, dex.node_interface.
+- **Влияет на торговлю:** да — котируются ли пулы с MEV Capture (pools/load_balancer_v3.rs, load_balancer_v3_hook_read.rs). Решение 470 (T470-02, ветка t240/arb-aero): ещё MEV-налог пулов Aero (aero_basic, slipstream_aero — pools/aero_mev.rs): не задана — пулы Aero с ненулевым множителем модуля MEV-налога не читаются.
+- **Связанные ключи:** dex.bv3_mev_capture_hooks, dex.arb_sys, dex.arb_owner_public, dex.node_interface; решение 470 — send.tip_mode, send.priority_fee_gwei, send.tip_cap_gwei.
 - **Статус:** ещё не в релизе (ветка t228/arb-balancer-v3-more).
 
 ### `dex.arb_owner_public`
@@ -1388,8 +1388,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Где задаётся:** «Настройки», группа «DEX», область — площадка DEX (arb_dex); каталог src/settings/catalog/dex.rs.
 - **Что ставить:** `0x000000000000000000000000000000000000006b` у площадки DEX Arbitrum; у bsc_dex не задавать.
 - **Если не задана:** необязательная: пулы с крючком MEV Capture не читаются (NotConfigured «не задана dex.arb_owner_public»), прочие пулы — как без неё.
-- **Влияет на торговлю:** да — котируются ли пулы с MEV Capture (pools/load_balancer_v3.rs, load_balancer_v3_hook_read.rs).
-- **Связанные ключи:** dex.bv3_mev_capture_hooks, dex.arb_sys, dex.arb_owner_public, dex.node_interface.
+- **Влияет на торговлю:** да — котируются ли пулы с MEV Capture (pools/load_balancer_v3.rs, load_balancer_v3_hook_read.rs). Решение 470 (T470-02, ветка t240/arb-aero): ещё MEV-налог пулов Aero (aero_basic, slipstream_aero — pools/aero_mev.rs): не задана — пулы Aero с ненулевым множителем модуля MEV-налога не читаются.
+- **Связанные ключи:** dex.bv3_mev_capture_hooks, dex.arb_sys, dex.arb_owner_public, dex.node_interface; решение 470 — send.tip_mode, send.priority_fee_gwei, send.tip_cap_gwei.
 - **Статус:** ещё не в релизе (ветка t228/arb-balancer-v3-more).
 
 ### `dex.arb_gas_info`
@@ -5807,18 +5807,3 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** dex.kind = slipstream_aero, dex.factory, dex.quoter_virtual, dex.gas_mode, send.tip_mode, send.priority_fee_gwei, send.tip_cap_gwei.
 - **Статус:** новая (ветка t240/arb-aero).
 
-### `dex.arb_sys`
-- **Кейс:** решение 470 (T470-02) — MEV-налог Aero зависит от tx.gasprice; в Nitro до ArbOS 60 чаевые не собираются (tx.gasprice = basefee).
-- **Что ставить:** `0x0000000000000000000000000000000000000064` (ArbSys, nitro-precompile-interfaces). (docs/FIRST_RUN.md)
-- **Если не задана:** пулы Aero с ненулевым множителем модуля MEV-налога не читаются (причина в журнале).
-- **Влияет на торговлю:** да — комиссия пулов Aero.
-- **Связанные ключи:** dex.arb_owner_public, send.tip_mode, send.priority_fee_gwei, send.tip_cap_gwei.
-- **Статус:** новая (ветка t240/arb-aero).
-
-### `dex.arb_owner_public`
-- **Кейс:** решение 470 (T470-02) — с ArbOS 60 сбор чаевых — настройка сети (getCollectTips).
-- **Что ставить:** `0x000000000000000000000000000000000000006b` (ArbOwnerPublic). (docs/FIRST_RUN.md)
-- **Если не задана:** при ArbOS ≥ 60 пулы Aero с ненулевым множителем модуля не читаются.
-- **Влияет на торговлю:** да — комиссия пулов Aero.
-- **Связанные ключи:** dex.arb_sys.
-- **Статус:** новая (ветка t240/arb-aero).

@@ -23,6 +23,7 @@
 //!   (execution/gethexec/tx_pre_checker.go:153-161); меняет минимум владелец сети — ArbOwner.SetMinimumL2BaseFee
 //!   (precompiles/ArbOwner.go:252); docs.arbitrum.io «Gas and fees» (content/docs/how-arbitrum-works/deep-dives/
 //!   gas-and-fees.mdx:181: «has a set floor, which can be queried via ArbGasInfo's getMinimumGasPrice»).
+//!
 //! Записи ответа своего узла нет — тест разбора не написан (docs/TASKS.md, «Решение 436»: нужна запись).
 
 use std::collections::HashMap;

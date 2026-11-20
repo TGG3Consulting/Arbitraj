@@ -6,7 +6,8 @@
 //! среднее по последним profit.transit_auto_after реальным переводам. Расчёт по подтверждениям блоков
 //! не используется. История переводов хранится в учёте ядра (SQLite) и переживает перезапуск.
 //! Решение 464 (t238): у монеты переводов меньше profit.transit_auto_after, а у пары площадок (все монеты) не меньше —
-//! среднее записанных переводов пары (transit_source.rs), иначе — «вручную»; источник — seconds_from.
+//! среднее записанных переводов пары (transit_source.rs; решение 487 — в той же сети перевода), иначе — «вручную»;
+//! источник — seconds_from.
 //! Кто вызывает: core/dirctx.rs (T), core/transit_source.rs (seconds_from), core/transfer_watch.rs (запись перевода), core/engine.rs (загрузка).
 //! От чего зависит: engine.rs, persist.rs, settings.
 //! Решение 118 (Я-4): «вручную» = отправка с источника (profit.transit_manual_s[A]) + зачисление на получателе
@@ -53,10 +54,13 @@ pub async fn load(core: &Core) {
             let mut t = lk(&core.inner.transits);
             for r in list {
                 // Ревью t238: готовая сумма пары площадок (transit_source.rs) — вместе с историей.
+                // Решение 487: сеть перевода — Asset.chain записи (старая запись без chain — сеть по умолчанию).
                 let after = sum_len(Some(r.secs.as_slice()));
+                let chain = r.asset.chain.clone();
                 let old = t.insert((r.asset, r.from.clone(), r.to.clone()), r.secs);
                 let before = sum_len(old.as_deref());
-                super::transit_source::pair_update(core, (&r.from, &r.to), before, after);
+                let key = (chain.as_ref(), &r.from, &r.to);
+                super::transit_source::pair_update(core, key, before, after);
             }
         }
         Err(e) => {
@@ -98,7 +102,8 @@ pub async fn record(core: &Core, asset: &Asset, from: &VenueId, to: &VenueId, se
             v.drain(..v.len() - n);
         }
         let after = sum_len(Some(v.as_slice()));
-        super::transit_source::pair_update(core, (from, to), before, after);
+        let key = (asset.chain.as_ref(), from, to);
+        super::transit_source::pair_update(core, key, before, after);
         Record {
             asset: asset.clone(),
             from: from.clone(),

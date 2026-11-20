@@ -8,6 +8,9 @@
 //! выделить — берутся все записанные); иначе — значение из настроек. Источник числа — строкой в хронологию сделки.
 //! Основание: Тигран 20.11: да (решение 464).
 //! Ревью t238: сумма пары — готовая (Pairs, обновляется в transit.rs load / record), расчёт не проходит историю.
+//! Решение 487 (T487-03, координатор): пара — в СЕТИ перевода (Asset.chain монеты: None — сеть по умолчанию, канонический
+//! вид решения 430; Some — другая сеть): переводы BSC и Arbitrum одной пары площадок не смешиваются. Старые записи учёта
+//! (до 416, без chain) читаются с chain = None — сеть по умолчанию (BSC), как ключи монет решения 416.
 //! Кто вызывает: core/transit.rs (seconds_from, pair_update), core/executor.rs (note — строка хронологии).
 //! От чего зависит: engine.rs (история inner.transits), core/types.
 //! Настройки: нет своих (порог n — profit.transit_auto_after площадки-источника, читает transit.rs).
@@ -16,7 +19,7 @@ use std::collections::HashMap;
 
 use rust_decimal::Decimal;
 
-use crate::core::types::{Direction, VenueId};
+use crate::core::types::{ChainId, Direction, VenueId};
 
 use super::engine::{Core, lk};
 
@@ -41,21 +44,24 @@ struct Agg {
     coins: usize,
 }
 
-/// Суммы пар площадок (поле inner.transit_pairs): откуда → [(куда, сумма)] — поиск по ссылке, без выделений.
+/// Ключ суммы: (сеть перевода — Asset.chain, None — сеть по умолчанию; откуда).
+type From = (Option<ChainId>, VenueId);
+
+/// Суммы пар площадок (поле inner.transit_pairs): (сеть, откуда) → [(куда, сумма)] — поиск по ссылке, без выделений.
 /// Ведётся вместе с историей inner.transits (transit.rs load, record; порядок замков: transits, затем пары).
 #[derive(Debug, Default)]
-pub struct Pairs(std::sync::Mutex<HashMap<VenueId, Vec<(VenueId, Agg)>>>);
+pub struct Pairs(std::sync::Mutex<HashMap<From, Vec<(VenueId, Agg)>>>);
 
-/// Что делает: ряд монеты пары площадок изменился — поправить сумму пары. Принимает: ядро, откуда, куда, (сумма,
-/// число) ряда до и после. Ошибок нет.
+/// Что делает: ряд монеты пары площадок изменился — поправить сумму пары этой сети. Принимает: ядро, (сеть монеты —
+/// Asset.chain, откуда, куда), (сумма, число) ряда до и после. Ошибок нет.
 pub fn pair_update(
     core: &Core,
-    (from, to): (&VenueId, &VenueId),
+    (chain, from, to): (Option<&ChainId>, &VenueId, &VenueId),
     before: (Decimal, usize),
     after: (Decimal, usize),
 ) {
     let mut g = lk(&core.inner.transit_pairs.0);
-    let list = g.entry(from.clone()).or_default();
+    let list = g.entry((chain.cloned(), from.clone())).or_default();
     let i = match list.iter().position(|(x, _)| x == to) {
         Some(i) => i,
         None => {
@@ -73,15 +79,15 @@ pub fn pair_update(
     }
 }
 
-/// Что делает: среднее записанных переводов пары площадок направления по всем монетам, если их не меньше n (готовая
-/// сумма, без прохода по истории). Принимает: ядро, направление, n (profit.transit_auto_after; 0 — статистики нет).
+/// Что делает: среднее записанных переводов пары площадок направления по всем монетам ТОЙ ЖЕ сети (Asset.chain
+/// монеты направления), если их не меньше n (готовая сумма, без прохода по истории). Принимает: ядро, направление, n (profit.transit_auto_after; 0 — статистики нет).
 /// Возвращает: (среднее, переводов, монет); None — меньше n. Ошибок нет.
 pub fn pair_mean(core: &Core, d: &Direction, n: usize) -> Option<(Decimal, usize, usize)> {
     if n == 0 {
         return None;
     }
     let g = lk(&core.inner.transit_pairs.0);
-    let list = g.get(&d.buy_on)?;
+    let list = g.get(&(d.asset.chain.clone(), d.buy_on.clone()))?;
     let (_, a) = list.iter().find(|(x, _)| x == &d.sell_on)?;
     if a.count < n || a.count == 0 {
         return None;
@@ -107,7 +113,8 @@ pub fn text(d: &Direction, secs: Decimal, src: &Source) -> String {
             d.asset.ticker
         ),
         Source::Pair(n, c) => format!(
-            "статистика пары {pair} по всем монетам, {n} переводов ({c} монет); у {} своих меньше",
+            "статистика пары {pair}{} по всем монетам, {n} переводов ({c} монет); у {} своих меньше",
+            net(d),
             d.asset.ticker
         ),
     };
@@ -115,6 +122,15 @@ pub fn text(d: &Direction, secs: Decimal, src: &Source) -> String {
         "Время в пути {pair}: {} с — {why} (решение 464)",
         secs.round_dp(1)
     )
+}
+
+/// Сеть перевода для текста: другая сеть — « (сеть id)», сеть по умолчанию — пусто (текст как до решения 487).
+/// Ошибок нет.
+fn net(d: &Direction) -> String {
+    d.asset
+        .chain
+        .as_ref()
+        .map_or_else(String::new, |c| format!(" (сеть {})", c.0))
 }
 
 /// Что делает: строка хронологии сделки о времени в пути ПЛАНА (ревью t238: T — из плана, не пересчёт): источник —

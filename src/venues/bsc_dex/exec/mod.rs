@@ -85,6 +85,7 @@ pub mod tip_cycle;
 pub mod tip_judge;
 pub mod tip_pick;
 pub mod tip_state;
+pub mod tip_state_store;
 pub mod trade;
 pub mod trade_direct;
 pub mod trade_direct_prep;

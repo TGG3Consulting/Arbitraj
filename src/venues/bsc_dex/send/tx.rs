@@ -56,8 +56,9 @@ pub struct SendCfg {
 }
 
 impl SendCfg {
-    /// Читает настройки. Ошибки: NotConfigured — не задано (у eip1559_l1 — и send.drop_wait_ms) или
-    /// send.max_wait_blocks < send.bundle_max_blocks (бандл мог бы попасть в блок, когда трекер уже отменяет).
+    /// Читает настройки. Ошибки: NotConfigured — не задано (у eip1559_l1 — и send.drop_wait_ms),
+    /// send.max_wait_blocks < send.bundle_max_blocks (бандл мог бы попасть в блок, когда трекер уже отменяет) или
+    /// send.drop_wait_ms ≥ send.queue_max_wait_s (ревью 437, п. 7).
     pub fn read(ctx: &Ctx) -> GatewayResult<Self> {
         let cfg = Self {
             max_wait: ctx.int("send.max_wait_blocks")?,
@@ -95,6 +96,16 @@ impl SendCfg {
                     cfg.max_wait, cfg.bundle_max
                 ),
             ));
+        }
+        // Ревью 437, п. 7: окно «выброшена» не короче очереди — иначе итог всегда «исход неизвестен» (send/track_l1.rs).
+        if let Some(d) = cfg.drop_wait.filter(|d| *d >= cfg.queue_max_wait) {
+            let why = format!(
+                "send.drop_wait_ms ({} мс) не меньше send.queue_max_wait_s ({} с): итог «выброшена» не наступит \
+                 раньше остановки очереди — отправка не работает",
+                d.as_millis(),
+                cfg.queue_max_wait.as_secs()
+            );
+            return Err(ctx.not_set("send.drop_wait_ms", why));
         }
         Ok(cfg)
     }

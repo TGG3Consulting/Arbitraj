@@ -283,12 +283,13 @@ impl Venue for BscDex {
         .await
     }
 
-    /// Решение 437 (3): доля прибыли на чаевые сделок DEX ↔ DEX площадки — exec/tip_state.rs. Ошибок нет.
+    /// Решение 437 (3): доля прибыли на чаевые сделок DEX ↔ DEX площадки — exec/tip_state.rs. Ошибки: NotApplicable
+    /// — площадка не dex.gas_mode = eip1559_l1 (ревью 437, п. 6).
     async fn tip_share(&self) -> GatewayResult<crate::core::types::TipShare> {
-        Ok(exec::tip_state::view(&self.p.ctx).await)
+        exec::tip_state::view(&self.p.ctx).await
     }
 
-    /// Решение 437 (3): «Сбросить долю чаевых» к минимуму — exec/tip_state.rs. Ошибки: база.
+    /// Решение 437 (3): «Сбросить долю чаевых» к минимуму — exec/tip_state.rs. Ошибки: NotApplicable (не eip1559_l1).
     async fn reset_tip_share(&self, by: &str) -> GatewayResult<crate::core::types::TipShare> {
         exec::tip_state::reset(&self.p.ctx, by).await
     }

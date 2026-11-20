@@ -5,7 +5,8 @@
     чаевые последней сделки, счётчики (победы, проигрыши по чаевым, по скорости, побед подряд), последний проигрыш
     (наша транзакция, блок, перехватчик и его чаевые, наши чаевые); кнопка «Сбросить долю к минимуму». Каждый проигрыш
     — и в журнале (send.tip_loss). Перечитывается при открытии, по «Обновить», после сброса и по записям журнала
-    send.tip_loss / send.tip_share (живой поток) — без таймеров.
+    send.tip_loss / send.tip_share (живой поток) — без таймеров. Ревью 437, п. 6: площадка не eip1559_l1 (BSC) — API
+    отвечает 400 (NotApplicable), блок не показывается вовсе; п. 8 — победа тоже строка send.tip_share.
   Кто вызывает: pages/Channels.svelte.
   От чего зависит: lib/api.js (get, request, seg), lib/live.svelte.js (onLive), components/ErrorText.svelte.
   Настройки: send.tip_mode, send.tip_floor_gwei, send.tip_cap_gwei, send.tip_share_min_pct, send.tip_share_max_pct,
@@ -22,16 +23,20 @@
   let st = $state(null);
   let error = $state('');
   let busy = $state(false);
+  /** Площадка не eip1559_l1 (400 NotApplicable) — блока нет. */
+  let na = $state(false);
 
   /** Что делает: читает GET /api/venues/{id}/tip-share. Ошибки — в error («не применимо» — пусто). */
   async function load() {
     try {
       st = await get(`/api/venues/${seg(venue)}/tip-share`);
       error = '';
+      na = false;
     } catch (e) {
       if (e.aborted) return;
       st = null;
-      error = e.status === 400 ? '' : e.message;
+      na = e.status === 400;
+      error = na ? '' : e.message;
     }
   }
 
@@ -61,7 +66,9 @@
   const kinds = { LostTip: 'по чаевым', LostSpeed: 'по скорости', Win: 'победа' };
 </script>
 
+{#if !na}
 <h3>Доля чаевых (PGA) — решение 437</h3>
+{/if}
 {#if st}
   <p class={st.note ? 'err' : 'muted'}>
     Режим send.tip_mode: {v(st.mode)}{st.note ? ` — не работает: ${st.note}` : ''}.

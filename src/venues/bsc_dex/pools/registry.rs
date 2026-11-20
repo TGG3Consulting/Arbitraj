@@ -3,7 +3,7 @@
 //! монета и встречный токен пула (USDT или промежуточная монета), ключ V4, карта тиков, резервы бинов, блок синхронизации, достоверность.
 //! Кто вызывает: pools/market.rs, pools/listen.rs, pools/events_*.rs (пишут), quote/*, check/*, exec/* (читают).
 //! От чего зависит: core/types (Pool, PoolRef), pools/families.rs, key.rs, ticks.rs, bins.rs, registry_index.rs, prefetch_memo.rs (ревью 325:
-//! retain забывает вызовы прошлого чтения снятых пулов), fusion_head.rs (решение 463: retain забывает данные оракула).
+//! retain забывает вызовы прошлого чтения снятых пулов), fusion_book.rs (решение 463: retain забывает данные оракула).
 //! Решение 129: номер версии реестра (растёт при любой записи — put, update существующего пула, retain) — по нему граф маршрутов строится
 //! один раз на состояние реестра, а не на каждую котировку (pools/graph.rs cached); pair_marks — отметки синхронизации
 //! пулов пары без копирования записей (ключ кэша глубины, pools/depth_key.rs). Записи — за `Arc`, пары и тикеры —
@@ -304,8 +304,8 @@ impl Registry {
         super::prefetch_memo::forget(&gone);
         // Ревью t153 (Н6): отметки неудач чтения удалённых пулов (pool_fail.rs) — тоже долой.
         self.fails.forget(&gone);
-        // Решение 463 (ревью t236): и данные оракула THENA Fusion (fusion_head.rs).
-        super::fusion_head::forget(&gone);
+        // Решение 463 (ревью t236): и данные оракула THENA Fusion (fusion_book.rs).
+        super::fusion_book::forget(&gone);
         // Решение 357 (ревью слияния, Н4): и отметки «в обновлении» удалённых пулов.
         self.holds.forget_all(&gone);
         // Решение 403: пулы удалены — построителю отбора мелких пулов полный проход (quote/shallow_build.rs).

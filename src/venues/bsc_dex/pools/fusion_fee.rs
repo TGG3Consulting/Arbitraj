@@ -7,13 +7,14 @@
 //! volumePerLiquidityInBlock) и заранее на голове у края горизонта (fusion_head_read.rs). Опроса нет.
 //!
 //! Начало окна берётся на время блока + 0 … + 1 + dex.fusion_fee_horizon_s: по нему комиссия пересчитывается на каждой
-//! новой голове без обращения к узлу (fusion_head.rs; данные — remember). Ревью t236 (пп. 1, 2): настройка обязательна
-//! и больше 0 (не задана — NotConfigured с её именем: пул не читается и ждёт её, revive.rs; 0 — так же: при 0 тихий
-//! пул перечитывался бы каждым блоком); так же обязательна dex.fusion_oracle_chunk (> 0). Комиссия следующего
-//! блока не считается — ошибка с причиной, включая причины отсутствующих частей начала окна (откат getTimepoints).
+//! новой голове без обращения к узлу (fusion_head.rs; данные — fusion_book.rs remember). Ревью t236 (пп. 1, 2):
+//! настройка обязательна и больше 0 (не задана — NotConfigured с её именем: пул не читается и ждёт её, revive.rs;
+//! 0 — так же: при 0 тихий пул перечитывался бы каждым блоком); так же обязательна dex.fusion_oracle_chunk (> 0).
+//! Комиссия следующего блока не считается — ошибка с причиной, включая причины отсутствующих частей начала окна
+//! (откат getTimepoints).
 //! Кто вызывает: pools/load_algebra.rs (next_fee), pools/integral_fee.rs (read_fee — после Swap THENA Fusion),
 //! pools/fusion_head_read.rs (read_fee — край горизонта на голове).
-//! От чего зависит: ctx.rs, node/call.rs, pools/abi_algebra.rs, fusion_oracle.rs, fusion_head.rs (remember),
+//! От чего зависит: ctx.rs, node/call.rs, pools/abi_algebra.rs, fusion_oracle.rs, fusion_book.rs (remember),
 //! math/fee_algebra_v1.rs.
 //! Настройки: dex.fusion_fee_horizon_s [bsc_dex] (обязательна для THENA Fusion; горизонт начала окна, секунды);
 //! dex.fusion_oracle_chunk [bsc_dex] (обязательна; точек в одном eth_call getTimepoints).
@@ -57,7 +58,7 @@ pub async fn read_fee(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<u32>
 }
 
 /// Комиссия следующего блока по состоянию пула `head` на блоке `tag` (fee_algebra_v1::next_block_fee); данные — в
-/// книгу fusion_head.rs (remember). Принимает: окружение, пул, состояние, блок-тег. Возвращает: комиссию (пипсы).
+/// книгу fusion_book.rs (remember). Принимает: окружение, пул, состояние, блок-тег. Возвращает: комиссию (пипсы).
 /// Ошибки: NotConfigured (dex.fusion_fee_horizon_s или dex.fusion_oracle_chunk не задана или 0); узел;
 /// BadResponse — ответ не по ABI, откат нужного вызова, комиссия не считается (нужного начала окна нет — с причинами
 /// частей getTimepoints).
@@ -76,7 +77,7 @@ pub async fn next_fee(ctx: &Ctx, pool: Address, head: Head, tag: &str) -> Gatewa
     };
     // Пересчёт на новых головах без узла (fusion_head.rs) — по этим же данным.
     if let Ok(block) = u64::from_str_radix(tag.trim_start_matches("0x"), 16) {
-        super::fusion_head::remember(pool, block, got);
+        super::fusion_book::remember(pool, block, got);
     }
     Ok(fee)
 }

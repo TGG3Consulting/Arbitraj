@@ -9,7 +9,7 @@
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, settle.rs, settle_bins.rs (бины события; ревью 290,
 //! решение 357), integral_fee.rs (решение 325), registry.rs, stale_read.rs (решение 298), pool_fail.rs (решение 339),
-//! refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321), fusion_head.rs
+//! refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321), fusion_book.rs
 //! (orphan — решение 463).
 //! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs). Решение 321:
 //! emit вынесен в emit_pool.rs (здесь — реэкспорт для прежних вызывающих) — при dex.pool_events_keep = да событие не
@@ -103,9 +103,9 @@ pub async fn on_log(
             "лог подписки без blockNumber/logIndex — порядок событий неизвестен".into(),
         ));
     };
-    // Решение 463 (ревью t236): реорг — данные оракула THENA Fusion с этого блока и позже долой (fusion_head.rs).
+    // Решение 463 (ревью t236): реорг — данные оракула THENA Fusion с этого блока и позже долой (fusion_book.rs).
     if log.removed {
-        super::fusion_head::orphan(&r, block);
+        super::fusion_book::orphan(&r, block);
     }
     if !log.removed && entry.has_applied(block, index) {
         return Ok(revive);

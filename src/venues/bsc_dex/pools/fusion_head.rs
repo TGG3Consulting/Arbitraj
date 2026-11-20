@@ -2,7 +2,8 @@
 //! Что делает: решение 463 (T463-02, решение координатора 20.11; ревью t236) — комиссия THENA Fusion следующего блока
 //! зависит от ВРЕМЕНИ (новая точка оракула: волатильность за время с последней точки, начало окна WINDOW сдвигается), а
 //! не только от событий пула. Узел спрашивается по событиям пула (fusion_fee.rs: чтение пула, Swap); на каждой новой
-//! голове комиссия пересчитывается ЛОКАЛЬНО по прочитанным данным оракула (книга — remember) на время следующего блока.
+//! голове комиссия пересчитывается ЛОКАЛЬНО по прочитанным данным оракула (книга — fusion_book.rs) на время следующего
+//! блока.
 //! Время головы — node/heads.rs time_since: время блока головы или более нового, никогда не более старого (ревью п. 4).
 //! Изменилась — пул уходит ядру.
 //! Не торгуем вслепую (ревью п. 1): комиссию следующего блока посчитать нельзя (времени головы нет; данных оракула нет
@@ -13,21 +14,12 @@
 //! Край горизонта (ревью п. 3): на следующей голове начала окна уже не хватит (комиссия на время головы + 1 с не
 //! считается) — оракул пула перечитывается на этой голове заранее, одновременно у всех таких пулов
 //! (fusion_head_read.rs), пока комиссия ещё известна. Пул на паузе решения 339 заранее не перечитывается.
-//! Книга (ревью п. 4): снятые пулы — forget (registry.rs retain); лог пула с removed (реорг) — orphan: данные,
-//! прочитанные на блоке лога или позже, долой (могли быть с сиротского блока; сравнение номера блока).
-//! Сверка с квотером на блоке (решение 73): same_block — комиссия свопа в САМОМ блоке H по данным оракула ЭТОГО ЖЕ
-//! чтения (own_read: чтение сверки пишет данные в свою ячейку задачи, а не в книгу).
-//! Кто вызывает: pools/fusion_fee.rs (remember), pools/per_block.rs (any, on_head), check/quoter_block.rs (own_read,
-//! same_block), registry.rs (forget), listen_log.rs (orphan).
-//! От чего зависит: math/fee_algebra_v1.rs, fusion_oracle.rs (Got), fusion_head_read.rs, listen.rs (Pools),
+//! Книга, её чистка (forget, orphan) и комиссия того же блока для сверки (own_read, same_block) — fusion_book.rs.
+//! Кто вызывает: pools/per_block.rs (any, on_head).
+//! От чего зависит: math/fee_algebra_v1.rs, fusion_book.rs (with, Held), fusion_head_read.rs, listen.rs (Pools),
 //! emit_pool.rs, registry.rs, settle.rs (pending, hold, Need::Fee), pool_fail.rs (paused), node/heads.rs,
 //! depth_book.rs (label).
 //! Настройки: через fusion_fee.rs — dex.fusion_fee_horizon_s [bsc_dex].
-
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::future::Future;
-use std::sync::{LazyLock, Mutex, MutexGuard};
 
 use alloy_primitives::Address;
 
@@ -37,109 +29,10 @@ use crate::storage::journal::Level;
 use super::super::math::fee_algebra_v1;
 use super::discover::Found;
 use super::families::Proto;
-use super::fusion_oracle::Got;
+use super::fusion_book::Held;
 use super::listen::{End, Pools};
 use super::registry::Entry;
 use super::settle::Need;
-
-/// Данные оракула пула, прочитанные на блоке `block`.
-#[derive(Debug, Clone)]
-pub struct Held {
-    pub block: u64,
-    pub got: Got,
-}
-
-/// Последние прочитанные данные оракула по адресу пула THENA Fusion.
-static BOOK: LazyLock<Mutex<HashMap<Address, Held>>> = LazyLock::new(Default::default);
-
-tokio::task_local! {
-    /// Ячейка чтения сверки (own_read): задана — remember пишет сюда, а не в книгу.
-    static OWN: RefCell<Option<Held>>;
-}
-
-/// Книга под замком (отравленный замок — данные как есть). Ошибок нет.
-fn book() -> MutexGuard<'static, HashMap<Address, Held>> {
-    BOOK.lock().unwrap_or_else(|p| p.into_inner())
-}
-
-/// Запоминает данные оракула пула, прочитанные на блоке `block` (в ячейку own_read, если задача в ней; иначе в книгу:
-/// более старый блок не вытесняет более новый, тот же номер — заменяет: после реорга это канонический блок).
-/// Ошибок нет.
-pub fn remember(pool: Address, block: u64, got: Got) {
-    let mut held = Some(Held { block, got });
-    if OWN.try_with(|c| *c.borrow_mut() = held.take()).is_ok() {
-        return;
-    }
-    let Some(held) = held else {
-        return;
-    };
-    let mut m = book();
-    if m.get(&pool).is_some_and(|h| h.block > block) {
-        return;
-    }
-    m.insert(pool, held);
-}
-
-/// Чтение `f` с ячейкой own_read: данные оракула, прочитанные внутри (fusion_fee.rs next_fee), — в итог, не в книгу.
-/// Принимает: future чтения. Возвращает: (итог чтения, данные оракула; None — не читались). Ошибок нет.
-pub async fn own_read<F: Future>(f: F) -> (F::Output, Option<Held>) {
-    OWN.scope(RefCell::new(None), async {
-        let out = f.await;
-        (out, OWN.with(|c| c.borrow_mut().take()))
-    })
-    .await
-}
-
-/// Сверка с квотером на блоке (решение 73): в свежем состоянии пула, прочитанном на `block`, комиссия — та, что получит
-/// своп в САМОМ этом блоке (fee_at на время блока чтения), по данным оракула этого же чтения `own`. Не THENA Fusion —
-/// ничего. Принимает: запись, данные чтения, блок. Ошибки (текст): данных чтения нет / не того блока, комиссия не
-/// считается.
-pub fn same_block(e: &mut Entry, own: Option<&Held>, block: u64) -> Result<(), String> {
-    if e.family.proto != Proto::Algebra {
-        return Ok(());
-    }
-    let PoolState::Algebra { tick, fee, .. } = &mut e.pool.state else {
-        return Ok(());
-    };
-    let Some(h) = own.filter(|h| h.block == block) else {
-        return Err(format!("THENA Fusion: данных оракула чтения на блоке {block} нет"));
-    };
-    let o = &h.got.oracle;
-    if h.got.ts < o.last.ts {
-        return Err(format!("THENA Fusion: время блока {block} раньше последней точки оракула"));
-    }
-    match fee_algebra_v1::fee_at(o, h.got.ts, *tick) {
-        Some(f) => {
-            *fee = f;
-            Ok(())
-        }
-        None => Err(format!(
-            "THENA Fusion: комиссия блока {block} не считается{}",
-            super::fusion_fee::gaps(&h.got.gaps)
-        )),
-    }
-}
-
-/// Пулы `gone` сняты из реестра — их данные долой. Ошибок нет.
-pub fn forget(gone: &[PoolRef]) {
-    let mut m = book();
-    for r in gone {
-        if let PoolRef::Contract(a) = r {
-            m.remove(a);
-        }
-    }
-}
-
-/// Лог пула с removed (реорг) на блоке `block`: данные, прочитанные на нём или позже, долой. Ошибок нет.
-pub fn orphan(r: &PoolRef, block: u64) {
-    let PoolRef::Contract(a) = r else {
-        return;
-    };
-    let mut m = book();
-    if m.get(a).is_some_and(|h| h.block >= block) {
-        m.remove(a);
-    }
-}
 
 /// Есть ли в пачке пулы THENA Fusion (голова им нужна). Ошибок нет.
 pub fn any(pools: &[(Found, String)]) -> bool {
@@ -211,8 +104,13 @@ fn step(e: &Entry, addr: Address, ts: &Result<u32, String>) -> Step {
         Ok(t) => *t,
         Err(why) => return Step::Dark(why.clone()),
     };
-    let m = book();
-    let Some(h) = m.get(&addr) else {
+    super::fusion_book::with(addr, |h| judge(h, (synced, ts), (*tick, *fee)))
+}
+
+/// Комиссия по данным книги `h` на время головы. Принимает: данные книги, (synced_block записи, время головы),
+/// (тик, комиссия записи). Возвращает: итог шага. Ошибок нет.
+fn judge(h: Option<&Held>, (synced, ts): (u64, u32), (tick, fee): (i32, u32)) -> Step {
+    let Some(h) = h else {
         return Step::Dark("данных оракула нет".into());
     };
     if h.block < synced {
@@ -228,7 +126,7 @@ fn step(e: &Entry, addr: Address, ts: &Result<u32, String>) -> Step {
             o.last.ts
         ));
     }
-    let Some(n) = fee_algebra_v1::next_block_fee(o, ts, *tick) else {
+    let Some(n) = fee_algebra_v1::next_block_fee(o, ts, tick) else {
         return Step::Dark(format!(
             "нет начала окна оракула на время {ts} и + 1 с (прочитано на блоке {}, время {read_ts}, горизонт \
              dex.fusion_fee_horizon_s){}",
@@ -236,8 +134,8 @@ fn step(e: &Entry, addr: Address, ts: &Result<u32, String>) -> Step {
             super::fusion_fee::gaps(&h.got.gaps)
         ));
     };
-    let edge = fee_algebra_v1::next_block_fee(o, ts.saturating_add(1), *tick).is_none();
-    Step::Fee((n != *fee).then_some(n), edge)
+    let edge = fee_algebra_v1::next_block_fee(o, ts.saturating_add(1), tick).is_none();
+    Step::Fee((n != fee).then_some(n), edge)
 }
 
 /// Новая комиссия `n` — в запись, если пул достоверен. Возвращает: пул ядру, если комиссия изменилась. Ошибок нет.

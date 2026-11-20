@@ -84,6 +84,7 @@ pub mod fee_override;
 pub mod fee_probe;
 pub mod fee_refresh;
 pub mod fee_watch;
+pub mod fusion_book;
 pub mod fusion_fee;
 pub mod fusion_head;
 pub mod fusion_head_read;

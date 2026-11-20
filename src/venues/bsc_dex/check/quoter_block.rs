@@ -22,7 +22,7 @@
 //! Факты своего узла BSC 12.11.2026 (tests/data/node_limits_2026-11-12): состояние на номер блока — только H … H−127;
 //! eth_getLogs — не больше 5000 блоков (больше не используется: eth_getLogs из сверки убран).
 //! Кто вызывает: check/quoter_verify.rs (at_head — лениво, один раз на пул), check/quoter_one.rs (memory_note).
-//! От чего зависит: node/rpc.rs, node/jsonrpc.rs, pools/load.rs (refresh), pools/fusion_head.rs (own_read, same_block —
+//! От чего зависит: node/rpc.rs, node/jsonrpc.rs, pools/load.rs (refresh), pools/fusion_book.rs (own_read, same_block —
 //! решение 463: комиссия THENA Fusion того же блока H по данным оракула этого же чтения), pools/registry.rs, tokens.rs.
 //! Настройки: dex.quoter_memory_lag_blocks [bsc_dex] (необязательна); через pools/load.rs — настройки чтения пула.
 //!
@@ -37,7 +37,7 @@ use crate::gateway::errors::ErrorCode;
 
 use super::super::ctx::Ctx;
 use super::super::node::{jsonrpc, rpc};
-use super::super::pools::fusion_head;
+use super::super::pools::fusion_book;
 use super::super::pools::listen::Pools;
 use super::super::pools::load;
 use super::super::pools::registry::Entry;
@@ -75,14 +75,14 @@ pub async fn at_head(p: &Pools, e: &Entry) -> Head {
         },
         Err(err) => return no_block(format!("eth_blockNumber: {}", err.message)),
     };
-    // Решение 463 (ревью t236): данные оракула THENA Fusion этого же чтения, не общая книга (fusion_head::own_read).
+    // Решение 463 (ревью t236): данные оракула THENA Fusion этого же чтения, не общая книга (fusion_book::own_read).
     let (read, own) =
-        fusion_head::own_read(load::refresh(&p.ctx, &p.tokens, &p.reg, e, block)).await;
+        fusion_book::own_read(load::refresh(&p.ctx, &p.tokens, &p.reg, e, block)).await;
     match read {
         Ok(mut entry) => {
             // Решение 463: THENA Fusion — комиссия свопа в самом блоке H (квотер зовётся на H), не «следующего блока»;
             // не считается — «не сверено (блок)» с причиной.
-            if let Err(why) = fusion_head::same_block(&mut entry, own.as_ref(), block) {
+            if let Err(why) = fusion_book::same_block(&mut entry, own.as_ref(), block) {
                 return no_block(why);
             }
             Head::Ready {

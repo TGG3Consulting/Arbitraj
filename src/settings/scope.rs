@@ -108,8 +108,7 @@ pub fn check_dex_id(id: &str) -> Result<(), String> {
     if id.is_empty() {
         return Err("Не указан id DEX".into());
     }
-    let mut parts = id.splitn(2, '@');
-    for part in parts.by_ref() {
+    for part in id.splitn(2, '@') {
         if part.is_empty() {
             return Err(format!(
                 "id DEX «{id}»: пустая часть — нужно «id» или «id@сеть»"

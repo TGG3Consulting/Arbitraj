@@ -57,6 +57,9 @@ pub fn extra(s: &Store) -> Result<Vec<String>, String> {
 /// один раз при запуске). Принимает: id сверх bsc_dex. Возвращает: срез id. Ошибок нет.
 pub fn all(extra: Vec<String>) -> &'static [&'static str] {
     let mut ids: Vec<&'static str> = vec![BSC_ID];
-    ids.extend(extra.into_iter().map(|s| &*Box::leak(s.into_boxed_str())));
+    for s in extra {
+        let id: &'static str = Box::leak(s.into_boxed_str());
+        ids.push(id);
+    }
     Box::leak(ids.into_boxed_slice())
 }

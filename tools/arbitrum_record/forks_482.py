@@ -5,7 +5,9 @@
 #   (v2_fork_executor, swapFee 25/10000); V3 — Rubicon CLMM и Arbitrum Exchange V3 (v3_fork; часть forks_482_v3.py).
 #   ZyberSwap Stableswap (saddle_stableswap) пишет saddle.py отдельным шагом record_steps.py (тот же разбор, что
 #   решение 451). Только чтение (eth_call, eth_getCode, eth_getBlockByNumber), без ключей, подписей и транзакций.
-#   Пишет tests/data/arbitrum_forks_482_<дата>/ (meta.json, v2.json, v3.json, README.md); тест —
+#   Поручение координатора к решению 482: источники пулов без индексатора — Swapline V1 (lb_v21, getAllLBPairs) и
+#   Metric V1 (metric_omm, перечисление фабрики) — forks_482_reg.py, файл reg.json.
+#   Пишет tests/data/arbitrum_forks_482_<дата>/ (meta.json, v2.json, v3.json, reg.json, README.md); тест —
 #   tests/arbitrum_forks_482_live.rs (#[ignore] до записи).
 # Кто вызывает: Тигран (record_all.py → record_steps.py, шаг forks_482) или вручную.
 # От чего зависит: Python 3.8+ (стандартная библиотека), recnode.py (fresh), curve_plain_pools.py (Batch, call),
@@ -34,6 +36,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import forks_482_v2 as v2m  # noqa: E402
+import forks_482_reg as reg  # noqa: E402
 import forks_482_v3 as v3  # noqa: E402
 import recnode  # noqa: E402
 import v4live_slots as slots  # noqa: E402
@@ -160,12 +163,18 @@ def main():
     ap.add_argument("--pairs", type=int, default=3, help="сколько пар V2 на DEX писать")
     ap.add_argument("--words", type=int, default=8, help="слов битмапа V3 по обе стороны от текущего")
     ap.add_argument("--vq-runtime", default="contracts/out/VirtualQuoter.bin-runtime")
+    ap.add_argument("--reg-log-blocks", type=int, default=2_000_000,
+                    help="окно логов событий создания Swapline / Metric (решение 482, forks_482_reg.py)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     b, node = Batch(a.rpc), Node(a.rpc)
     pre = prepare(b, node, a)
     head, v2recs, v3recs = recnode.fresh(lambda: b.one("eth_getBlockByNumber", ["latest", False])["result"],
                                          lambda h: phase(b, pre, a, h), say=say)
+    try:
+        reg_rec = reg.record(b, a.reg_log_blocks, say)
+    except (Exception, recnode.StaleState) as e:  # noqa: BLE001 — причина в запись, остальное уже записано
+        reg_rec = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
     day = os.environ.get("ARB_RECORD_DATE") or datetime.date.today().isoformat()
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = a.out or os.path.join(root, "tests", "data", "arbitrum_forks_482_" + day)
@@ -173,7 +182,7 @@ def main():
     meta = {"chainId": b.one("eth_chainId", [])["result"], "block": int(head["number"], 16),
             "timestamp": int(head["timestamp"], 16), "fractions": a.fractions, "words": a.words,
             "dexes_v2": DEXES_V2, "dexes_v3": DEXES_V3, "uniswap_lens": UNI_LENS, "sender": SENDER}
-    files = {"meta.json": meta, "v2.json": v2recs, "v3.json": v3recs}
+    files = {"meta.json": meta, "v2.json": v2recs, "v3.json": v3recs, "reg.json": reg_rec}
     hashes = []
     for name, data in files.items():
         text = json.dumps(data, ensure_ascii=False, indent=1)

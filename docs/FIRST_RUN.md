@@ -1249,4 +1249,6 @@ ReClamm, LBP, LBP с фиксированной ценой, QuantAMM и пулы
 | dex.tick_lens, dex.quoter | DEX `rubicon-clmm-arbitrum@arbitrum` | `0xdf7e8987421F541C50f821f8Cf22A6bDA5e1E05b`, `0x22066f5A85076630CF9DEEB0A12186b73CD3284C` | TickLens и QuoterV2 Rubicon | там же |
 | dex.v3_fee_tiers | DEX `rubicon-clmm-arbitrum@arbitrum` | `500, 3000, 10000` | уровни конструктора фабрики; GeckoTerminal пулов не отдаёт — только поиск по фабрике | Sourcify UniswapV3Factory 0x045B…62ba |
 | dex.kind, dex.stable_pools | DEX `zyberswap-stableswap@arbitrum` | `saddle_stableswap`, `0x969f7699fbb9c79d8b61315630cdeed95977cfb8` | клон SwapFlashLoan (Saddle), единственный пул деплоера | адрес деплоера — адаптер DefiLlama; Sourcify match SwapFlashLoan / exact_match SwapDeployer |
-| dex.pool_enabled | семь DEX выше | `да` — после записи T482-01 и теста | решение Тиграна | — |
+| dex.kind, dex.factory | DEX `swapline-v1@arbitrum` | `lb_v21`, `0xEE0616a2DEAa5331e2047Bc61E0b588195A49cEa` | LB V2.1 без изменений; пулы — поиск getAllLBPairs и LBPairCreated (решение 482, доделка) | адаптер DefiLlama + код Sourcify exact_match |
+| dex.kind, dex.factory, dex.quoter_virtual | DEX `metric-v1@arbitrum` | `metric_omm`, `0x2a53833cc95548cf52c7b159110e22D3a9018f32`, `да` | та же фабрика, что у metric-bsc; пулы — перечисление фабрики и PoolCreated (решение 482, доделка) | docs.metric.xyz (supported-chains-and-deployments) |
+| dex.pool_enabled | девять DEX выше | `да` — после записи T482-01 и тестов tests/arbitrum_forks_482_live.rs, tests/arbitrum_forks_482_reg_live.rs | решение Тиграна | — |

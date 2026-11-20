@@ -13,7 +13,8 @@
 //! Решение 305: до плана — quoteToken() контрактов WooFi с dex.multi_pair = да (woo_quote.rs read) — в план.
 //! Настройки: index.factory_scan, dex.load_batch, dex.verify_retry_s [bsc_dex]; через factory_calls — dex.factory,
 //! dex.v3_fee_tiers [DEX]; через stable_list.rs — dex.stable_pools [DEX] (решение 292: пулы Saddle / Curve 2020 из
-//! списка — кандидаты без индексатора).
+//! списка — кандидаты без индексатора); через metric_list.rs — dex.factory вида metric_omm (решение 482: пулы Metric
+//! перечислением фабрики nextPoolIdx / idxToPool — реестра по паре у неё нет).
 
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -32,6 +33,7 @@ use super::super::directory::gt_parse::IndexedPool;
 use super::super::node::call;
 use super::factory_ask::{Q, decode_q};
 use super::factory_calls::{self, Plan};
+use super::metric_list;
 use super::stable_list;
 use super::woo_quote;
 
@@ -103,7 +105,14 @@ async fn pass(
     }
     notes.extend(extra.notes);
     no_answer += extra.no_answer;
-    let n_calls = plan.calls.len() + extra.calls + woo_calls;
+    // Решение 482: пулы Metric OMM — перечислением фабрики, кандидаты по монетам пула (как список выше).
+    let metric = metric_list::scan(ctx, coins, &quote_list, size).await;
+    for (coin, list) in metric.found {
+        found.entry(coin).or_default().extend(list);
+    }
+    notes.extend(metric.notes);
+    no_answer += metric.no_answer;
+    let n_calls = plan.calls.len() + extra.calls + metric.calls + woo_calls;
     let total: usize = found.values().map(Vec::len).sum();
     let fresh = ctx.index.with(|s| {
         let mut fresh = Vec::new();

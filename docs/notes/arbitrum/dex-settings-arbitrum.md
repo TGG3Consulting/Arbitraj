@@ -101,7 +101,9 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-111 = T433-041 (решение 482) | `arbidex-v3@arbitrum` | v3_fork | **готово настройками, ждёт записи T482-01** (TickLens Uniswap, §7.5) |
 | T433-092 / T433-082 (решение 482) | `rubicon-clmm-arbitrum@arbitrum` | v3_fork | **готово настройками, ждёт записи T482-01** (§7.6) |
 | T433-092 (решение 482) | `rubicon-aquila@arbitrum` (id — предложение) | v2_fork | **готово настройками, ждёт записи T482-01** (§7.7) |
-| T433-107, T433-144, T433-133 (решение 482) | `swapline-v1`, `metric-v1`, `omni-exchange-flux` | lb_v21, metric_omm, pancakeswap_infinity_cl | **нужен код** — T482-02…04 (§7.8) |
+| T433-107 (решение 482, доделка) | `swapline-v1@arbitrum` (id — предложение) | lb_v21 | **код источника пулов есть (getAllLBPairs, LBPairCreated), ждёт записи T482-01** (§7.9) |
+| T433-144 (решение 482, доделка) | `metric-v1@arbitrum` (id — предложение) | metric_omm | **код источника пулов есть (перечисление фабрики, PoolCreated), ждёт записи T482-01** (§7.10) |
+| T433-133 (решение 482) | `omni-exchange-flux` | pancakeswap_infinity_cl | **нужен код** — T482-04 (§7.8) |
 
 Решение 451 (20.11.2026): Kyber Elastic, Saddle, WOOFi → **готово** (с оговорками записи узла), Aero Slipstream →
 **нужен код** (новое семейство), PancakeSwap StableSwap — **не подтверждено**. Итог после 451: **готово 15**, **нужен код
@@ -785,14 +787,7 @@ GeckoTerminal `rubicon-clmm-arbitrum` 20.11.2026 пулов не отдал (п�
 
 ### 7.8 Не подключены настройками (вид подходит, не хватает кода или адресов)
 
-- **Swapline V1** (`swapline-v1`, T433-107) — вид `lb_v21` подходит (фабрика 0xEE0616a2DEAa5331e2047Bc61E0b588195A49cEa
-  и реализация пары — Sourcify exact_match, файлы = lfj-gg/joe-v2 v2.1.0; dex49/1.md). Не подключено: пулы lb_v21 бот
-  берёт только из справочника GeckoTerminal (pools/created_log.rs L156-L159: подписки LBPairCreated нет; поиска по фабрике
-  у Proto::LbV21 нет — pools/factory_calls.rs), а у GeckoTerminal этой DEX нет — пулов не будет. Задача T482-02.
-- **Metric V1** (`metric-v1`, T433-144) — вид `metric_omm` подходит (MetricOmmPoolFactory 0x2a53833cc95548cf52c7b159110e22D3a9018f32
-  — тот же адрес, что у BSC в abi_metric.rs; Sourcify 42161 match; metricOmmSwapCallback, swap(address,bool,int128,uint128,
-  bytes,bytes)). Не подключено: пулы metric_omm — только из справочника (created_log.rs L143-L145; поиска по фабрике нет),
-  у GeckoTerminal DEX Metric в сети arbitrum нет. Задача T482-03.
+- **Swapline V1** и **Metric V1** — были здесь до доделки 482: источник пулов сделан кодом (§7.9, §7.10).
 - **Omni Exchange Flux** (`omni-exchange-flux`, T433-133) — код Vault / CLPoolManager = PancakeSwap Infinity (dex49/3.md,
   Sourcify match, побайтно с BSC). Не подключено: вид `pancakeswap_infinity_cl` tradable и не форк — required() требует
   dex.universal_router, dex.universal_router_version, dex.permit2 и dex.quoter (families.rs L645-L651, L670-L672);
@@ -800,3 +795,28 @@ GeckoTerminal `rubicon-clmm-arbitrum` 20.11.2026 пулов не отдал (п�
   официально не найдены. Задача T482-04.
 - **AutoRange** (`autorange`, T433-143) — не DEX: хранилища позиций Uniswap V3 (фабрика хранилищ — uniswapV3Factory
   0x1F98431c…F984, dex49/4.md); ликвидность — в пулах `uniswap_v3_arbitrum@arbitrum` (§2.2). Настроек не нужно.
+
+### 7.9 Swapline V1 — `swapline-v1@arbitrum` (T433-107), вид `lb_v21` (решение 482, доделка — код)
+
+Источник пулов без индексатора (у GeckoTerminal этой DEX нет): поиск по фабрике — getAllLBPairs(монета, встречный)
+(pools/factory_ask.rs Q::Lb; LBFactory.sol L265, токены сортируются — порядок любой) и подписка на LBPairCreated фабрики
+(pools/created_log.rs). Нужно index.factory_scan = да площадки arb_dex.
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `lb_v21` | фабрика 0xEE06…9cEa и реализация пары 0x5a5c…1496 — Sourcify exact_match, файлы = lfj-gg/joe-v2 v2.1.0 (исследование 20.11, dex49/1.md); getAllLBPairs и LBPairCreated — тот же исходник (проверено 20.11.2026) |
+| dex.factory | `0xEE0616a2DEAa5331e2047Bc61E0b588195A49cEa` | адаптер DefiLlama registries/traderJoeV2.js «swapline.arbitrum» + код Sourcify (основание — решение 482) |
+| dex.pool_enabled | да — решает Тигран (после записи T482-01: reg.json, тест tests/arbitrum_forks_482_reg_live.rs) | — |
+
+### 7.10 Metric V1 — `metric-v1@arbitrum` (T433-144), вид `metric_omm` (решение 482, доделка — код)
+
+Источник пулов без индексатора: перечисление фабрики (реестра «пул по паре» у неё нет) — nextPoolIdx(), idxToPool(1..n − 1),
+getImmutables() пулов (pools/metric_list.rs, проход поиска по фабрикам) и подписка на PoolCreated фабрики (created_log.rs).
+Нужно index.factory_scan = да площадки arb_dex.
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `metric_omm` | MetricOmmPoolFactory — тот же адрес, что у metric-bsc (abi_metric.rs); Sourcify 42161 match: swap(address,bool,int128,uint128,bytes,bytes), metricOmmSwapCallback, getImmutables (одно поле переименовано — тип тот же; проверка разбором — тест записи) |
+| dex.factory | `0x2a53833cc95548cf52c7b159110e22D3a9018f32` | docs.metric.xyz/reference/supported-chains-and-deployments.md |
+| dex.quoter_virtual | `да` | как у metric-bsc (решение 285: сверка — quoteMetric виртуального квотера) |
+| dex.pool_enabled | да — решает Тигран (после записи T482-01 и теста tests/arbitrum_forks_482_reg_live.rs: проверка пулов, topic0 событий пула в коде пула Arbitrum) | — |

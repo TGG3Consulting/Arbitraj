@@ -628,11 +628,15 @@
     обмена в паре (наш выход принят, выход + 1 откатан) у всех четырёх V2; тики TickLens (Rubicon — свой, Arbidex V3 —
     Uniswap) = ticks(t) пула; математика V3 = виртуальный квотер (и QuoterV2 Rubicon). Затем ключи из §7 и
     dex.pool_enabled — Тигран. Расхождение в любом пункте — DEX не включать, разбор.
-  - T482-02 Swapline V1 (lb_v21 сверен): источник пулов — поиск по фабрике LB (getNumberOfLBPairs / getLBPairAtIndex,
-    ILBFactory v2.1.0) или подписка LBPairCreated (pools/created_log.rs: сейчас continue у LbV21 / LbV22); код + запись.
-    То же нужно любой DEX lb_v21 / lb_v22 вне GeckoTerminal.
-  - T482-03 Metric V1 (metric_omm сверен, фабрика = BSC): источник пулов — idxToPool(1..nextPoolIdx − 1) фабрики
-    (MetricOmmPoolFactory, Sourcify 42161) или событие PoolCreated (исходник опубликован — topic0 из него); код + запись.
+  - T482-02 **Сделано (доделка 482):** Swapline V1 — поиск по фабрике getAllLBPairs (factory_ask.rs Q::Lb) и подписка
+    LBPairCreated (created_log.rs) у lb_v21; запись — reg.json forks_482.py, тест tests/arbitrum_forks_482_reg_live.rs
+    (T482-01). У lb_v22 подписки и поиска нет (фабрика V2.2 не сверялась) — если появится lb_v22 вне GeckoTerminal,
+    отдельная задача.
+  - T482-03 **Сделано (доделка 482):** Metric V1 — перечисление фабрики (pools/metric_list.rs: nextPoolIdx, idxToPool,
+    getImmutables) и подписка PoolCreated (created_log.rs; подпись — исходник Arbitrum, на BSC может не совпасть — там
+    пулы, как раньше, из индексатора и перечисления). Запись и тест — T482-01; тест проверяет и topic0 событий пула
+    abi_metric::topics() (записаны на BSC) в коде пула Arbitrum — если их там нет, пул на Arbitrum не слушается событиями,
+    нужен разбор (событие пула Swap в исходнике Arbitrum опубликовано).
   - T482-04 Omni Exchange Flux (код = PancakeSwap Infinity CL): у вида нужны Universal Router, Permit2, CLQuoter — у Omni
     официально не найдены (сайт мёртв, адреса Vault / CLPoolManager — только адаптер DefiLlama). Варианты (решает
     Тигран): вид Infinity CL «только исполнитель» (tradable = нет, шаг INF_CL v3) + виртуальный квотер для менеджера CL —

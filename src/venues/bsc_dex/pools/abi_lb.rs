@@ -13,6 +13,10 @@
 //! getSwapOut; src/interfaces/ILBPair.sol L37-L78 события; src/LBFactory.sol L170-L177, L607-L614
 //! getLBPairInformation (токены сортируются — порядок аргументов не важен), src/interfaces/ILBFactory.sol L42-L47
 //! LBPairInformation.
+//! Решение 482: фабрика — ещё getAllLBPairs(tokenX, tokenY) (все пулы пары, поиск по фабрике — factory_ask.rs Q::Lb) и
+//! событие LBPairCreated(tokenX, tokenY, binStep — indexed, LBPair, pid) (подписка — created_log.rs): src/LBFactory.sol
+//! L265 (токены сортируются _sortTokens — порядок аргументов не важен), src/interfaces/ILBFactory.sol L123 и событие
+//! LBPairCreated — lfj-gg/joe-v2@v2.1.0 = Sourcify exact_match LBFactory Swapline 0xEE06…9cEa (Arbitrum, 20.11.2026).
 
 // Код функций и событий генерирует alloy::sol! — число аргументов задаёт ABI контракта, а не мы.
 #![allow(clippy::too_many_arguments)]
@@ -51,6 +55,8 @@ alloy::sol! {
             bool ignoredForRouting;
         }
         function getLBPairInformation(address tokenA, address tokenB, uint256 binStep) external view returns (LBPairInformation memory);
+        function getAllLBPairs(address tokenX, address tokenY) external view returns (LBPairInformation[] memory lbPairsAvailable);
+        event LBPairCreated(address indexed tokenX, address indexed tokenY, uint256 indexed binStep, address LBPair, uint256 pid);
     }
 }
 

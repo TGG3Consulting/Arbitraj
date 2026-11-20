@@ -36,6 +36,7 @@ use arb::core::types::PoolRef;
 use arb::settings::scope::Scope;
 use arb::venues::bsc_dex::check::pass_judge::{self, Outcome, Side};
 use arb::venues::bsc_dex::check::simulate::CallResult;
+use arb::venues::bsc_dex::ctx::BSC_ID;
 use arb::venues::bsc_dex::exec::executor::call::ExecCall;
 use arb::venues::bsc_dex::exec::executor::pool_pass::{self, Fact, Gated, Kind, State};
 use arb::venues::bsc_dex::exec::executor::{entry, pass_view};
@@ -349,23 +350,31 @@ fn deal_revert_marks_pools() {
     ];
     // Откат крючка 0xddc5… (продажа 0x25c3 записи) — помечен только пул этого крючка.
     let x1 = Address::repeat_byte(0xa1);
-    let by_hook = pool_pass::on_sim(&exec_call(x1, gated.clone()), &recorded("0x25c3a0dd", "b"));
+    let by_hook = pool_pass::on_sim(
+        BSC_ID,
+        &exec_call(x1, gated.clone()),
+        &recorded("0x25c3a0dd", "b"),
+    );
     assert_eq!(by_hook, vec![pool(1)]);
-    assert_eq!(pool_pass::kind(x1, &pool(1)), Some(Kind::Rejected));
-    let f = pool_pass::get(x1, &pool(1)).expect("факт");
+    assert_eq!(pool_pass::kind(BSC_ID, x1, &pool(1)), Some(Kind::Rejected));
+    let f = pool_pass::get(BSC_ID, x1, &pool(1)).expect("факт");
     assert!(
         matches!(&f.state, State::Rejected { deal: true, why } if why.contains("UA")),
         "{f:?}"
     );
-    assert!(pool_pass::get(x1, &pool(3)).is_none());
+    assert!(pool_pass::get(BSC_ID, x1, &pool(3)).is_none());
     // Откат без WrappedError крючка (Bin 0x96aa65ad) — откат не приписывается ни одному пулу.
     let x2 = Address::repeat_byte(0xa2);
-    let plain = pool_pass::on_sim(&exec_call(x2, gated.clone()), &recorded("0x9994aa29", "a"));
-    assert!(plain.is_empty() && pool_pass::kind(x2, &pool(1)).is_none());
+    let plain = pool_pass::on_sim(
+        BSC_ID,
+        &exec_call(x2, gated.clone()),
+        &recorded("0x9994aa29", "a"),
+    );
+    assert!(plain.is_empty() && pool_pass::kind(BSC_ID, x2, &pool(1)).is_none());
     // Успех — ничего.
     let x3 = Address::repeat_byte(0xa3);
-    let none = pool_pass::on_sim(&exec_call(x3, gated), &recorded("0x92e5d26c", "a"));
-    assert!(none.is_empty() && pool_pass::get(x3, &pool(1)).is_none());
+    let none = pool_pass::on_sim(BSC_ID, &exec_call(x3, gated), &recorded("0x92e5d26c", "a"));
+    assert!(none.is_empty() && pool_pass::get(BSC_ID, x3, &pool(1)).is_none());
 }
 
 #[tokio::test]
@@ -459,9 +468,9 @@ async fn gate_follows_pool_fact() {
         at: chrono::Utc::now(),
         block: Some(134171808),
     };
-    pool_pass::put(xa, &hooked.pool.reference, fact(State::Passed));
+    pool_pass::put(BSC_ID, xa, &hooked.pool.reference, fact(State::Passed));
     assert_eq!(
-        pool_pass::kind(xa, &hooked.pool.reference),
+        pool_pass::kind(BSC_ID, xa, &hooked.pool.reference),
         Some(Kind::Passed)
     );
     assert!(check(&hooked));
@@ -476,17 +485,17 @@ async fn gate_follows_pool_fact() {
         why: "покупка: крючок отверг вызов".into(),
         deal: false,
     };
-    pool_pass::put(xa, &hooked.pool.reference, fact(no.clone()));
+    pool_pass::put(BSC_ID, xa, &hooked.pool.reference, fact(no.clone()));
     let rejected = entry::fits(&q.ctx, &hooked).expect_err("отвергнут");
     assert!(rejected.contains("отвергнут"), "{rejected}");
     assert!(entry::params(&q.ctx, &hooked, usdt).is_err());
     assert!(!check(&hooked));
-    pool_pass::put(xa, &plain.pool.reference, fact(no));
+    pool_pass::put(BSC_ID, xa, &plain.pool.reference, fact(no));
     assert!(!check(&plain));
     // Не проверено — как решение 400.
     let unchecked = State::Unchecked("квотер не ответил".into());
-    pool_pass::put(xa, &plain.pool.reference, fact(unchecked.clone()));
+    pool_pass::put(BSC_ID, xa, &plain.pool.reference, fact(unchecked.clone()));
     assert!(check(&plain));
-    pool_pass::put(xa, &hooked.pool.reference, fact(unchecked));
+    pool_pass::put(BSC_ID, xa, &hooked.pool.reference, fact(unchecked));
     assert!(!check(&hooked));
 }

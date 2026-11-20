@@ -41,10 +41,11 @@ struct Key {
     gens: Vec<u64>,
 }
 
-/// Итоги по (монета, сторона) с ключом входов.
-type Memo = HashMap<(Address, bool), (Key, RateBound)>;
+/// Итоги по (площадка DEX, монета, сторона) с ключом входов. Решение 435 (433-и): монета с тем же адресом в другой
+/// сети — другая монета со своими пулами.
+type Memo = HashMap<(&'static str, Address, bool), (Key, RateBound)>;
 
-/// Память итогов (одна на процесс: реестр пулов у адаптера один, вид на кошелёк делит его — venue_account.rs).
+/// Память итогов (одна на процесс, по площадке DEX; вид на кошелёк делит реестр своей площадки — venue_account.rs).
 static MEMO: LazyLock<Mutex<Memo>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Что делает: верх курса стороны DEX (см. шапку). Принимает: части адаптера, монету, сторону. Возвращает: RateBound.
@@ -93,7 +94,7 @@ pub fn bound_now(p: &Parts, asset: &Asset, side: Side) -> RateBound {
         gens: g,
     };
     let sell = side == Side::Sell;
-    if let Some((k, r)) = memo().get(&(coin, sell))
+    if let Some((k, r)) = memo().get(&(ctx.place.id, coin, sell))
         && *k == key
     {
         return r.clone();
@@ -119,7 +120,7 @@ pub fn bound_now(p: &Parts, asset: &Asset, side: Side) -> RateBound {
         }
         Err((class, why)) => RateBound::na(class, why),
     };
-    memo().insert((coin, sell), (key, r.clone()));
+    memo().insert((ctx.place.id, coin, sell), (key, r.clone()));
     r
 }
 

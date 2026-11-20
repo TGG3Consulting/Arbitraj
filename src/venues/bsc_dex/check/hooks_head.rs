@@ -27,7 +27,7 @@
 //! Настройки: hooks.keep_impact_max_age_s [bsc_dex] — необязательная (docs/SETTINGS.md); через check/hook_points.rs —
 //! hooks.impact_points, check.probe_usdt, signal.probe_usd, money.max_per_trade_usd, dex.depth_band_pct.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 use chrono::Utc;
 
@@ -87,7 +87,7 @@ pub async fn probe(p: &Pools, e: &Entry) -> Probe {
         Ok(v) => v,
         Err((why, setting)) => return failed(why, setting, None),
     };
-    if sides.flat && !FLAT_SAID.swap(true, Ordering::Relaxed) {
+    if sides.flat && first_flat(p.ctx.place.id) {
         let msg = format!(
             "{} не задана — влияние крючков B/C меряется одной точкой на check.probe_usdt и действует на все суммы, \
              как до лесенки (решение «335 (лесенка влияния)», ревью Н6); проба перед сделкой — на сумме сделки",
@@ -115,8 +115,19 @@ pub async fn probe(p: &Pools, e: &Entry) -> Probe {
     }
 }
 
-/// Запись «hooks.impact_points не задана» — уже в журнале (один раз за запуск).
-static FLAT_SAID: AtomicBool = AtomicBool::new(false);
+/// Площадки DEX, у которых запись «hooks.impact_points не задана» уже в журнале (один раз за запуск на площадку —
+/// решение 435, 433-и).
+static FLAT_SAID: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
+
+/// Что делает: первый ли раз запись «не задана» у площадки — запоминает. Принимает: площадку DEX. Ошибок нет.
+fn first_flat(venue: &'static str) -> bool {
+    let mut said = FLAT_SAID.lock().unwrap_or_else(|p| p.into_inner());
+    if said.contains(&venue) {
+        return false;
+    }
+    said.push(venue);
+    true
+}
 
 /// Что делает: «не перемерено» — прежний итог остаётся (Keep); прежнего итога нет — «не измерено» с причиной
 /// (иначе сверка ждала бы влияния до следующего полного прохода молча). Ревью Н1: hooks.keep_impact_max_age_s задана

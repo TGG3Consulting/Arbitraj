@@ -85,7 +85,7 @@ pub async fn run(p: Pools, queue: Queue) {
 async fn full(p: &Pools) {
     let Some(xs) = executors(p) else { return };
     let all = p.reg.refs().into_iter().filter_map(|r| p.reg.entry(&r));
-    each(p, ordered(&xs, all), false).await;
+    each(p, ordered(p.ctx.place.id, &xs, all), false).await;
 }
 
 /// Внеочередной проход по очереди (ревью Н5): пулы переданных монет и при «новых пулах» — все, но только у кошельков,
@@ -93,7 +93,11 @@ async fn full(p: &Pools) {
 async fn woken(p: &Pools, coins: &HashSet<Address>, new_pools: bool) {
     let Some(xs) = executors(p) else { return };
     let all = p.reg.refs().into_iter().filter_map(|r| p.reg.entry(&r));
-    let list = ordered(&xs, all.filter(|e| new_pools || coins.contains(&e.coin)));
+    let list = ordered(
+        p.ctx.place.id,
+        &xs,
+        all.filter(|e| new_pools || coins.contains(&e.coin)),
+    );
     each(p, list, true).await;
 }
 
@@ -126,13 +130,17 @@ fn executors(p: &Pools) -> Option<Vec<Address>> {
 }
 
 /// Пулы-кандидаты (шаг менеджера, достоверные) по порядку: метка отката, не спят, спят. Принимает: исполнители v3,
-/// записи реестра (без копий). Ошибок нет.
-fn ordered(xs: &[Address], pools: impl Iterator<Item = Arc<Entry>>) -> Vec<PoolRef> {
+/// записи реестра (без копий); площадка DEX — первым аргументом (решение 435). Ошибок нет.
+fn ordered(
+    venue: &'static str,
+    xs: &[Address],
+    pools: impl Iterator<Item = Arc<Entry>>,
+) -> Vec<PoolRef> {
     let mut list: Vec<(u8, PoolRef)> = pools
         .filter(|e| e.valid)
         .filter(|e| entry::shape(e).is_ok_and(|(k, _, _)| k.singleton()))
         .map(|e| {
-            let rank = if marked(xs, &e.pool.reference) {
+            let rank = if marked(venue, xs, &e.pool.reference) {
                 0
             } else if e.asleep {
                 2
@@ -146,10 +154,11 @@ fn ordered(xs: &[Address], pools: impl Iterator<Item = Arc<Entry>>) -> Vec<PoolR
     list.into_iter().map(|(_, r)| r).collect()
 }
 
-/// Есть ли у пула метка отката пробы сделки у какого-либо из исполнителей. Ошибок нет.
-fn marked(xs: &[Address], r: &PoolRef) -> bool {
+/// Есть ли у пула метка отката пробы сделки у какого-либо из исполнителей площадки DEX. Ошибок нет.
+fn marked(venue: &'static str, xs: &[Address], r: &PoolRef) -> bool {
     xs.iter().any(|x| {
-        pool_pass::get(*x, r).is_some_and(|f| matches!(f.state, State::Rejected { deal: true, .. }))
+        pool_pass::get(venue, *x, r)
+            .is_some_and(|f| matches!(f.state, State::Rejected { deal: true, .. }))
     })
 }
 
@@ -167,7 +176,7 @@ async fn pool(p: &Pools, sources: &Sources, e: &Entry, unsettled: bool) {
     let r = &e.pool.reference;
     for w in p.ctx.settings.accounts().wallets_at(p.ctx.place.id) {
         let Some(x) = pool_pass::v3(&w) else { continue };
-        let prev = pool_pass::get(x, r);
+        let prev = pool_pass::get(p.ctx.place.id, x, r);
         let deal = matches!(
             prev.as_ref().map(|f| &f.state),
             Some(State::Rejected { deal: true, .. })
@@ -194,7 +203,7 @@ async fn pool(p: &Pools, sources: &Sources, e: &Entry, unsettled: bool) {
             at: Utc::now(),
             block: state.1,
         };
-        if !pool_pass::put(x, r, fact.clone()) {
+        if !pool_pass::put(p.ctx.place.id, x, r, fact.clone()) {
             continue;
         }
         let level = match (&prev, &fact.state) {

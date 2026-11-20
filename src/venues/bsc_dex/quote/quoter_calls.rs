@@ -292,7 +292,7 @@ pub fn request(
             // dex.v3_registry_fee_method (решение 281, SquadSwap V3) — ключ реестра (defaultFee), иначе квотер откатится.
             let set = registry_key::method(ctx, e.family).is_some();
             let key = match e.pool.reference {
-                PoolRef::Contract(a) => registry_key::get(a),
+                PoolRef::Contract(a) => registry_key::get(ctx.place.id, a),
                 _ => None,
             };
             let fee = U24::from(

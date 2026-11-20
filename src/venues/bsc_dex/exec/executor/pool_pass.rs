@@ -82,41 +82,44 @@ pub struct Gated {
     pub hooks: Address,
 }
 
-/// Полные факты: исполнитель → пул → факт. Только писатели и текст / экран.
-type Facts = HashMap<Address, HashMap<PoolRef, Fact>>;
-/// Виды итогов: исполнитель → пул → вид. Снимок для горячего пути.
-type Kinds = HashMap<Address, HashMap<PoolRef, Kind>>;
+/// Решение 435 (433-и): ключ — (площадка DEX, исполнитель): исполнитель с тем же адресом (CREATE2 / тот же nonce) в
+/// другой сети — другой контракт, его пробы не смешиваются.
+type Key = (&'static str, Address);
+/// Полные факты: (площадка, исполнитель) → пул → факт. Только писатели и текст / экран.
+type Facts = HashMap<Key, HashMap<PoolRef, Fact>>;
+/// Виды итогов: (площадка, исполнитель) → пул → вид. Снимок для горячего пути.
+type Kinds = HashMap<Key, HashMap<PoolRef, Kind>>;
 
 static FACTS: LazyLock<Mutex<Facts>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 static KINDS: LazyLock<ArcSwap<Kinds>> = LazyLock::new(|| ArcSwap::from_pointee(HashMap::new()));
 
 /// Горячий путь (ревью t186, Н1): вид итога пула по исполнителю — из снимка без замка и без копий. None — проверок не
-/// было. Ошибок нет.
-pub fn kind(executor: Address, pool: &PoolRef) -> Option<Kind> {
-    KINDS.load().get(&executor)?.get(pool).copied()
+/// было. Принимает: площадку DEX (ctx.place.id), исполнитель, пул. Ошибок нет.
+pub fn kind(venue: &'static str, executor: Address, pool: &PoolRef) -> Option<Kind> {
+    KINDS.load().get(&(venue, executor))?.get(pool).copied()
 }
 
 /// Полный факт (причина, время, блок) — для текста причины, экрана и цикла проб (не горячий путь: Mutex). None —
-/// проверок не было. Ошибок нет.
-pub fn get(executor: Address, pool: &PoolRef) -> Option<Fact> {
+/// проверок не было. Принимает: площадку DEX, исполнитель, пул. Ошибок нет.
+pub fn get(venue: &'static str, executor: Address, pool: &PoolRef) -> Option<Fact> {
     let m = FACTS.lock().unwrap_or_else(|p| p.into_inner());
-    m.get(&executor)?.get(pool).cloned()
+    m.get(&(venue, executor))?.get(pool).cloned()
 }
 
-/// Записывает факт; вид итога сменился — новый снимок видов. Принимает: исполнитель, пул, факт. Возвращает: сменился ли
-/// итог (вид или текст причины) — для журнала «только при смене». Ошибок нет.
-pub fn put(executor: Address, pool: &PoolRef, fact: Fact) -> bool {
+/// Записывает факт; вид итога сменился — новый снимок видов. Принимает: площадку DEX, исполнитель, пул, факт.
+/// Возвращает: сменился ли итог (вид или текст причины) — для журнала «только при смене». Ошибок нет.
+pub fn put(venue: &'static str, executor: Address, pool: &PoolRef, fact: Fact) -> bool {
     let mut m = FACTS.lock().unwrap_or_else(|p| p.into_inner());
     let kind_now = fact.state.to_kind();
     let prev = m
-        .entry(executor)
+        .entry((venue, executor))
         .or_default()
         .insert(pool.clone(), fact.clone());
     let kind_was = prev.as_ref().map(|p| p.state.to_kind());
     if kind_was != Some(kind_now) {
         // Под замком писателей: снимки не теряют друг друга.
         let mut next: Kinds = (**KINDS.load()).clone();
-        next.entry(executor)
+        next.entry((venue, executor))
             .or_default()
             .insert(pool.clone(), kind_now);
         KINDS.store(Arc::new(next));
@@ -128,9 +131,9 @@ pub fn put(executor: Address, pool: &PoolRef, fact: Fact) -> bool {
 /// Решение 401, ревью t186 (Н3): откат пробы execute перед отправкой сделки помечает «отвергнут» до следующей
 /// перепроверки ТОЛЬКО пул, на котором откат произошёл: WrappedError отката называет крючок (check/pass_judge.rs
 /// hook_revert), и помечается пул шага с этим крючком. Откат без WrappedError крючка пула вызова (другой шаг маршрута,
-/// цена, состояние) — не помечается никто. Не помечает и успех, срок, minOut (решение 247). Принимает: вызов, итог пробы.
-/// Возвращает: помеченные пулы. Ошибок нет; синхронно — без await на пути сделки.
-pub fn on_sim(c: &ExecCall, r: &CallResult) -> Vec<PoolRef> {
+/// цена, состояние) — не помечается никто. Не помечает и успех, срок, minOut (решение 247). Принимает: площадку DEX
+/// (решение 435), вызов, итог пробы. Возвращает: помеченные пулы. Ошибок нет; синхронно — без await на пути сделки.
+pub fn on_sim(venue: &'static str, c: &ExecCall, r: &CallResult) -> Vec<PoolRef> {
     if r.ok() || pass_judge::late(r) || super::remeasure::is_min_out(r) {
         return Vec::new();
     }
@@ -155,7 +158,7 @@ pub fn on_sim(c: &ExecCall, r: &CallResult) -> Vec<PoolRef> {
             at: Utc::now(),
             block: None,
         };
-        put(c.executor, &g.pool, fact);
+        put(venue, c.executor, &g.pool, fact);
     }
     tracing::warn!(
         executor = %c.executor,

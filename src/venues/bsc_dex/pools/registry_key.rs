@@ -35,7 +35,8 @@ pub const SETTING: &str = "dex.v3_registry_fee_method";
 /// Ключ реестра по адресу пула (значение метода, прочитанное при проверке). Решение 409 (t194, ревью М3): карта по
 /// частям (gateway/shard_map.rs) — get (каждый запрос QuoterV2 к пулу V3) берёт замок только своей части, remember —
 /// вставка без копии карты.
-static KEYS: LazyLock<ShardMap<Address, u32>> = LazyLock::new(ShardMap::default);
+/// Решение 435 (433-и): ключ — (площадка DEX, пул): пул с тем же адресом в другой сети — другой контракт.
+static KEYS: LazyLock<ShardMap<(&'static str, Address), u32>> = LazyLock::new(ShardMap::default);
 
 /// Сигнатура метода ключа: Some только у вида V3 (ABI Uniswap или PancakeSwap) с заданной непустой настройкой.
 /// Ошибок нет: не задана — None (поведение прежнее).
@@ -76,14 +77,15 @@ pub fn from_answers(got: &[Result<Bytes, String>]) -> Result<Option<u32>, String
     }
 }
 
-/// Запомнить ключ пула (проверка прошла: реестр фабрики по этому ключу вернул сам пул). Ошибок нет.
-pub fn remember(pool: Address, key: u32) {
-    KEYS.insert(pool, key);
+/// Запомнить ключ пула (проверка прошла: реестр фабрики по этому ключу вернул сам пул). Принимает: площадку DEX, пул,
+/// ключ. Ошибок нет.
+pub fn remember(venue: &'static str, pool: Address, key: u32) {
+    KEYS.insert((venue, pool), key);
 }
 
-/// Ключ пула из памяти. None — пул с настройкой ещё не проверялся. Ошибок нет.
-pub fn get(pool: Address) -> Option<u32> {
-    KEYS.get(&pool)
+/// Ключ пула из памяти. Принимает: площадку DEX, пул. None — пул с настройкой ещё не проверялся. Ошибок нет.
+pub fn get(venue: &'static str, pool: Address) -> Option<u32> {
+    KEYS.get(&(venue, pool))
 }
 
 /// Комиссия для QuoterV2 (параметр fee): без настройки — fee_pips пула (как раньше), с настройкой — ключ реестра.

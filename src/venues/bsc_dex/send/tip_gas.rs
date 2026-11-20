@@ -31,8 +31,9 @@ use super::super::num;
 use super::super::wallet::signer;
 use super::ready::Ready;
 
-/// Ключ оценки: (кошелёк, адрес чаевых, сумма wei).
-type Key = (Address, Address, U256);
+/// Ключ оценки: (площадка DEX, кошелёк, адрес чаевых, сумма wei) — решение 435 (433-и): газ перевода в разных сетях
+/// разный.
+type Key = (&'static str, Address, Address, U256);
 
 /// Оценки узла: ключ → единицы газа перевода.
 static UNITS: LazyLock<Mutex<HashMap<Key, u64>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -48,7 +49,7 @@ pub async fn planned_units(ctx: &Ctx) -> GatewayResult<Option<u64>> {
         return Ok(None);
     };
     let from = signer::address(ctx)?;
-    let key = (from, to, amount);
+    let key = (ctx.place.id, from, to, amount);
     let known = memo().get(&key).copied();
     if let Some(u) = known {
         return Ok(Some(u));

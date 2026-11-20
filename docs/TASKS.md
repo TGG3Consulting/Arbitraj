@@ -188,7 +188,16 @@
     настроек), у другой — «id@сеть». Перевод на входе — directory/fetch.rs (список DEX и пулы монеты); Family.id — уже
     ключ, поэтому ctx.rs dex_*, event_flags.rs, family_intern.rs не меняются; свои ключи — pools/families.rs all и
     pools/dex_ids.rs extra (у bsc_dex — ключи без «@»). Тест — ctx_place.rs (id camelot из записи GeckoTerminal Arbitrum).
-  - 433-и статики по площадке (20 файлов, список — step5-plan.md 1.3; onchain.rs, exec_callback.rs — после слияния шага 4).
+  - 433-и — СДЕЛАНО (решение 435): с площадкой DEX (ctx.place.id) в ключе — exec/executor/onchain.rs CHECKED,
+    v1_notice.rs SENT, pool_pass.rs FACTS/KINDS (kind/get/put/on_sim — с площадкой), exec/presell_slot_find.rs CACHE,
+    pools/registry_key.rs KEYS, load_curve_ng.rs N_COINS, load_balancer_fixed.rs FIXED, load_smardex.rs BLOCK_TIME,
+    off_map_bins_log.rs LAST, quote/bound.rs MEMO, quote/cycle_audit.rs WRONG/QUEUE (разбор очереди — только своей
+    площадки), send/tip_gas.rs UNITS, node/chain_id.rs LAST_WARN, check/hooks_head.rs FLAT_SAID. По факту кода без правок:
+    exec/executor/callback_at.rs SEEN и pools/exec_callback.rs SEEN — ключ (версия исполнителя, сигнатура): свойства
+    артефактов contracts/out, от сети не зависят; pools/prefetch_memo.rs — ключ уже (VenueId, пул); quote/cycle_tally.rs
+    — уже по площадке; pools/fee_probe.rs, ladder_counter.rs, solidly_gate_read.rs — ключ с id DEX, а он с 433-з у другой
+    сети «id@сеть» (уникален между площадками). Общие намеренно — как в плане (cpu, par_pool, quote_timing, abandon,
+    prefetch, req_trail, auto_release, константы).
   - 433-к регистрация arb_dex в main.rs по настройке dex.venues; перед ней — dex.default_chain = bsc на живом боте.
   - 433-л голова по WS newHeads при блоке 250 мс (после ответа на вопрос 2).
   - 433-м «Проверить подключение» arb_dex целиком: сверка chainId перед подпиской (node/chain_id.rs check_start уже

@@ -51,7 +51,7 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
     if sim.credit_bad {
         let why = sim.reason.take().unwrap_or_default();
         if let Some(t) = io.token_in {
-            find::reject(t, p.n, &why);
+            find::reject(q.ctx.place.id, t, p.n, &why);
         }
         note = Some(format!("{why} — повтор без подмены (решение 407)"));
         let plain = Io {
@@ -100,7 +100,7 @@ async fn prepare(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
     let owner = IERC20::balanceOfCall { owner: wallet };
     let block = r.at.number;
     // Ревью М-a: слот уже в кэше — баланс и слово слота читаются параллельно (круга до узла не добавляется).
-    let known = find::cached(token);
+    let known = find::cached(q.ctx.place.id, token);
     let (have, raw) = match known {
         Some(s) => {
             let (h, w) = tokio::join!(

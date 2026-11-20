@@ -308,7 +308,7 @@ fn found(
     };
     // Решение 281: ключ реестра подтверждён реестром фабрики (registered) — в память для QuoterV2 (quoter_calls.rs).
     if let Some(k) = key {
-        super::registry_key::remember(pool, k);
+        super::registry_key::remember(ctx.place.id, pool, k);
     }
     Ok(Found {
         family: c.family,

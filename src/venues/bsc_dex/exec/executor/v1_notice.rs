@@ -18,8 +18,9 @@ use super::super::super::ctx::Ctx;
 use super::super::super::send::stats::Stats;
 use super::code::Version;
 
-/// Пары (id кошелька, адрес исполнителя 0x…), о которых уже сообщено.
-static SENT: Mutex<Option<HashSet<(String, String)>>> = Mutex::new(None);
+/// (площадка DEX, id кошелька, адрес исполнителя 0x…), о которых уже сообщено (решение 435: исполнитель кошелька в каждой
+/// сети свой).
+static SENT: Mutex<Option<HashSet<(&'static str, String, String)>>> = Mutex::new(None);
 
 /// Сообщает, если сверенная версия исполнителя кошелька окружения — v1 и об этой паре ещё не сообщали. Принимает:
 /// окружение, счётчики отправки (канал событий ядру), версию. Ошибок нет (кошелька или адреса нет — ничего).
@@ -33,7 +34,7 @@ pub async fn once(ctx: &Ctx, stats: &Stats, v: Version) {
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .get_or_insert_with(HashSet::new)
-        .insert((w.id.clone(), x.to_ascii_lowercase()));
+        .insert((ctx.place.id, w.id.clone(), x.to_ascii_lowercase()));
     if !fresh {
         return;
     }

@@ -31,9 +31,10 @@ use super::super::super::wallet::signer;
 use super::code::{self, Version};
 use super::{deploy_gate, live_proof};
 
-/// Последняя успешно проверенная пара (адрес исполнителя, кошелёк), версия кода по адресу и (ревью 272 А1) обёртка из
-/// хранилища v2 (None у v1).
-type Checked = (Address, Address, Version, Option<Address>);
+/// Последняя успешно проверенная пара (адрес исполнителя, кошелёк) площадки DEX (решение 435, 433-и: исполнитель с тем
+/// же адресом в другой сети — другой контракт), версия кода по адресу и (ревью 272 А1) обёртка из хранилища v2 (None у
+/// v1).
+type Checked = (&'static str, Address, Address, Version, Option<Address>);
 static CHECKED: Mutex<Option<Checked>> = Mutex::new(None);
 
 /// Исполнитель по адресу — наш и принадлежит кошельку. Принимает: адрес исполнителя, кошелёк бота.
@@ -43,8 +44,8 @@ static CHECKED: Mutex<Option<Checked>> = Mutex::new(None);
 /// адрес) — запись восстанавливается из памяти (иначе нативный BNB молча выключен до перезапуска).
 pub async fn ensure(ctx: &Ctx, executor: Address, wallet: Address) -> GatewayResult<Version> {
     let hit = *CHECKED.lock().unwrap_or_else(|p| p.into_inner());
-    if let Some((x, w, v, wrapped)) = hit
-        && (x, w) == (executor, wallet)
+    if let Some((at, x, w, v, wrapped)) = hit
+        && (at, x, w) == (ctx.place.id, executor, wallet)
     {
         let rec = ctx.wallet().ok();
         let same = rec.is_some_and(|r| {
@@ -59,7 +60,7 @@ pub async fn ensure(ctx: &Ctx, executor: Address, wallet: Address) -> GatewayRes
     match inspect(ctx, executor, wallet).await? {
         Ok((_, v, wrapped)) => {
             *CHECKED.lock().unwrap_or_else(|p| p.into_inner()) =
-                Some((executor, wallet, v, wrapped));
+                Some((ctx.place.id, executor, wallet, v, wrapped));
             remember(ctx, executor, v, wrapped).await;
             Ok(v)
         }

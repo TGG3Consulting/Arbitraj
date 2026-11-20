@@ -65,7 +65,7 @@ pub async fn check_start(ctx: &Ctx) -> GatewayResult<()> {
     let want = chain_id(ctx)?;
     match rpc::call::<U64>(ctx, "eth_chainId", json!([])).await {
         Ok(got) if got.to::<u64>() == want => {
-            warn_once(None);
+            warn_once(ctx.place.id, None);
             Ok(())
         }
         Ok(got) => Err(ctx.err(
@@ -78,7 +78,7 @@ pub async fn check_start(ctx: &Ctx) -> GatewayResult<()> {
                 e.message
             );
             // Ревью М-2: одна запись на причину (повтор подписки с той же причиной журнал не засоряет).
-            if warn_once(Some(&e.message)) {
+            if warn_once(ctx.place.id, Some(&e.message)) {
                 ctx.log(Level::Warn, "venue.chain_check", m, None).await;
             }
             Ok(())
@@ -86,21 +86,28 @@ pub async fn check_start(ctx: &Ctx) -> GatewayResult<()> {
     }
 }
 
-/// Последняя записанная причина «сеть узла не сверена» (ревью М-2).
-static LAST_WARN: Mutex<Option<String>> = Mutex::new(None);
+/// Последняя записанная причина «сеть узла не сверена» по площадке DEX (ревью М-2; решение 435, 433-и: предупреждение
+/// одной сети не глушит другую).
+static LAST_WARN: Mutex<Vec<(&'static str, String)>> = Mutex::new(Vec::new());
 
-/// Что делает: дедуп предупреждения — Some(причина): true, если причина новая (запомнена); None — сверка прошла, память
-/// очищена. Ошибок нет.
-fn warn_once(why: Option<&str>) -> bool {
+/// Что делает: дедуп предупреждения площадки — Some(причина): true, если причина новая (запомнена); None — сверка
+/// прошла, память площадки очищена. Принимает: площадку DEX, причину. Ошибок нет.
+fn warn_once(venue: &'static str, why: Option<&str>) -> bool {
     let mut last = LAST_WARN.lock().unwrap_or_else(|p| p.into_inner());
-    match why {
-        None => {
-            *last = None;
+    let had = last.iter().position(|(v, _)| *v == venue);
+    match (why, had) {
+        (None, Some(i)) => {
+            last.remove(i);
             false
         }
-        Some(w) if last.as_deref() == Some(w) => false,
-        Some(w) => {
-            *last = Some(w.to_string());
+        (None, None) => false,
+        (Some(w), Some(i)) if last[i].1 == w => false,
+        (Some(w), Some(i)) => {
+            last[i].1 = w.to_string();
+            true
+        }
+        (Some(w), None) => {
+            last.push((venue, w.to_string()));
             true
         }
     }

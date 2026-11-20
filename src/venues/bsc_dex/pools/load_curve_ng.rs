@@ -29,8 +29,9 @@ use super::super::math::stableswap_ng::{A_PRECISION, MAX_ROUNDS};
 use super::super::node::call;
 use super::abi_curve_ng::{ICurveNgPool as P, NG_MAX_COINS};
 
-/// N_COINS прочитанных пулов (неизменяемое у пула — CurveStableSwapNG.vy L157, public immutable).
-static N_COINS: Mutex<Option<HashMap<Address, usize>>> = Mutex::new(None);
+/// N_COINS прочитанных пулов (неизменяемое у пула — CurveStableSwapNG.vy L157, public immutable). Решение 435 (433-и):
+/// ключ — (площадка DEX, пул): пул с тем же адресом в другой сети — другой контракт.
+static N_COINS: Mutex<Option<HashMap<(&'static str, Address), usize>>> = Mutex::new(None);
 
 /// N_COINS пула: из памяти или с узла (один раз на пул). Принимает: окружение, пул, блок-тег. Ошибки: узел, ответ не
 /// по ABI, N_COINS вне 2..=8 (не запоминается).
@@ -39,7 +40,7 @@ async fn n_coins(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<usize> {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
-        .and_then(|m| m.get(&pool).copied());
+        .and_then(|m| m.get(&(ctx.place.id, pool)).copied());
     if let Some(n) = known {
         return Ok(n);
     }
@@ -50,7 +51,8 @@ async fn n_coins(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<usize> {
     }
     let n = n.to::<usize>();
     let mut g = N_COINS.lock().unwrap_or_else(|e| e.into_inner());
-    g.get_or_insert_with(HashMap::new).insert(pool, n);
+    g.get_or_insert_with(HashMap::new)
+        .insert((ctx.place.id, pool), n);
     Ok(n)
 }
 

@@ -43,7 +43,10 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
             it.0.push(f);
             continue;
         }
-        match (cached(a), p.ctx.dex_addr("dex.vault", f.family.id)) {
+        match (
+            cached(p.ctx.place.id, a),
+            p.ctx.dex_addr("dex.vault", f.family.id),
+        ) {
             (Some(fx), Ok(v)) => items.push((vec![f], fx, v, a)),
             _ => {
                 if let Err(why) = reload::load_one_block(p, f, t, block).await? {

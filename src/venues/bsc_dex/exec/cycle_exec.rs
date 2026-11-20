@@ -157,7 +157,7 @@ async fn probe(
         .first()
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "eth_simulateV1: нет итога вызова"))?;
     // Решение 401: откат (не срок, не minOut) помечает пулы шагов менеджера «отвергнут» до перепроверки.
-    pool_pass::on_sim(c, r);
+    pool_pass::on_sim(ctx.place.id, c, r);
     let got = sim::received(ctx, r)?;
     if got < c.min_out {
         let why = format!("проба исполнителя: получено {got} < minOut {}", c.min_out);

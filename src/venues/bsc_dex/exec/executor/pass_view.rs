@@ -56,7 +56,7 @@ pub fn details(ctx: &Ctx, e: &Entry) -> Vec<String> {
     };
     let mut out = vec![head];
     for (name, x) in wallets {
-        let f = pool_pass::get(x, &e.pool.reference);
+        let f = pool_pass::get(ctx.place.id, x, &e.pool.reference);
         out.push(pool_pass::line(&name, f.as_ref()));
     }
     out
@@ -77,7 +77,7 @@ pub fn proofs(ctx: &Ctx, reg: &Registry) -> Vec<ExecutorClassProof> {
     for r in reg.refs() {
         let Some(e) = reg.get(&r) else { continue };
         let Some((c, _)) = class(&e) else { continue };
-        let slot = match pool_pass::get(x, &r).map(|f| f.state) {
+        let slot = match pool_pass::get(ctx.place.id, x, &r).map(|f| f.state) {
             Some(State::Passed) => 0,
             Some(State::Rejected { .. }) => 1,
             Some(State::Unchecked(_)) | None => 2,

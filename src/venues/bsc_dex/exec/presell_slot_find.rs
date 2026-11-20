@@ -45,13 +45,14 @@ enum Known {
     Failed(u64, String),
 }
 
-static CACHE: LazyLock<Mutex<HashMap<Address, Known>>> =
+/// Решение 435 (433-и): ключ — (площадка DEX, токен): токен с тем же адресом в другой сети — другой контракт.
+static CACHE: LazyLock<Mutex<HashMap<(&'static str, Address), Known>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Запомнить итог по токену. Ошибок нет.
-fn put(token: Address, k: Known) {
+/// Запомнить итог по токену площадки. Ошибок нет.
+fn put(venue: &'static str, token: Address, k: Known) {
     if let Ok(mut c) = CACHE.lock() {
-        c.insert(token, k);
+        c.insert((venue, token), k);
     }
 }
 
@@ -66,7 +67,11 @@ pub async fn find(
     base: Base,
     n: u64,
 ) -> Result<Slot, String> {
-    let known = CACHE.lock().ok().and_then(|c| c.get(&token).cloned());
+    let venue = ctx.place.id;
+    let known = CACHE
+        .lock()
+        .ok()
+        .and_then(|c| c.get(&(venue, token)).cloned());
     match known {
         Some(Known::Found(s)) => return Ok(s),
         Some(Known::Bad(m, why)) if m >= n => return Err(why),
@@ -75,11 +80,11 @@ pub async fn find(
     }
     match search(ctx, token, holder, need, base, n).await {
         Ok(Ok(s)) => {
-            put(token, Known::Found(s));
+            put(venue, token, Known::Found(s));
             Ok(s)
         }
         Ok(Err(why)) => {
-            put(token, Known::Bad(n, why.clone()));
+            put(venue, token, Known::Bad(n, why.clone()));
             Err(why)
         }
         Err(e) => {
@@ -87,7 +92,7 @@ pub async fn find(
                 "поиск слота баланса не выполнен: {} (решение 407)",
                 e.message
             );
-            put(token, Known::Failed(base.number, why.clone()));
+            put(venue, token, Known::Failed(base.number, why.clone()));
             Err(why)
         }
     }
@@ -169,16 +174,17 @@ pub fn unpacked(raw: U256, have: U256) -> Result<(), String> {
     ))
 }
 
-/// Слот токена из кэша без поиска (для параллельного чтения слова — ревью М-a). Ошибок нет.
-pub fn cached(token: Address) -> Option<Slot> {
-    match CACHE.lock().ok()?.get(&token) {
+/// Слот токена из кэша без поиска (для параллельного чтения слова — ревью М-a). Принимает: площадку DEX, токен.
+/// Ошибок нет.
+pub fn cached(venue: &'static str, token: Address) -> Option<Slot> {
+    match CACHE.lock().ok()?.get(&(venue, token)) {
         Some(Known::Found(s)) => Some(*s),
         _ => None,
     }
 }
 
 /// Подмена не дала ровно need в самой симуляции продажи — токен недостоверен при n (не искать снова до роста n;
-/// ревью Н1: не забывать — иначе поиск на каждой предпроверке). Ошибок нет.
-pub fn reject(token: Address, n: u64, why: &str) {
-    put(token, Known::Bad(n, why.to_string()));
+/// ревью Н1: не забывать — иначе поиск на каждой предпроверке). Принимает: площадку DEX, токен, n, причину. Ошибок нет.
+pub fn reject(venue: &'static str, token: Address, n: u64, why: &str) {
+    put(venue, token, Known::Bad(n, why.to_string()));
 }

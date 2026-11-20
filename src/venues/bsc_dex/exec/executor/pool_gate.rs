@@ -60,7 +60,7 @@ pub fn decide(ctx: &Ctx, e: &Entry, k: ExecKind, hooks: Address) -> Result<Admit
     let Some((x, _)) = ctx.exec_info() else {
         return by_record;
     };
-    match pool_pass::kind(x, &e.pool.reference) {
+    match pool_pass::kind(ctx.place.id, x, &e.pool.reference) {
         Some(Kind::Passed) if record => Ok(Admit::Record),
         Some(Kind::Passed) => Ok(Admit::Pass),
         Some(Kind::Rejected) => Err(Refuse::Rejected),
@@ -83,7 +83,7 @@ pub fn admits(ctx: &Ctx, e: &Entry, k: ExecKind, hooks: Address) -> Result<Admit
 fn refusal(ctx: &Ctx, e: &Entry, k: ExecKind, hooks: Address, r: Refuse) -> String {
     let fact = ctx
         .exec_info()
-        .and_then(|(x, _)| pool_pass::get(x, &e.pool.reference));
+        .and_then(|(x, _)| pool_pass::get(ctx.place.id, x, &e.pool.reference));
     let line = pool_pass::line(&ctx.wallet_name(), fact.as_ref());
     match r {
         Refuse::Rejected => line,

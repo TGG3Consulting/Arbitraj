@@ -69,7 +69,7 @@ pub async fn run(
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "eth_simulateV1: нет итога вызова"))?;
     // Решение 401: откат (не срок, не minOut) — пулы шагов менеджера помечаются «отвергнут» до перепроверки
     // (синхронно, без await на пути сделки).
-    super::pool_pass::on_sim(c, &r);
+    super::pool_pass::on_sim(ctx.place.id, c, &r);
     Ok(r)
 }
 

@@ -73,20 +73,21 @@ pub async fn load(ctx: &Ctx, pool: Address, block: u64) -> GatewayResult<PoolSta
 }
 
 /// Время последнего запрошенного блока (номер, секунды) — без dex.multicall3 время блока запрашивается один раз на блок
-/// на все пары SmarDex (перечитывание каждым блоком, per_block.rs), а не на каждую пару.
-static BLOCK_TIME: Mutex<Option<(u64, u64)>> = Mutex::new(None);
+/// на все пары SmarDex (перечитывание каждым блоком, per_block.rs), а не на каждую пару. Решение 435 (433-и): с
+/// площадкой DEX — номера блоков разных сетей совпадают, а время у них своё.
+static BLOCK_TIME: Mutex<Option<(&'static str, u64, u64)>> = Mutex::new(None);
 
 /// Время блока (секунды Unix): из памяти, если этот блок уже спрашивали, иначе eth_getBlockByNumber (node/head_age.rs).
 /// Принимает: окружение, номер блока. Ошибки: узел; BadResponse (узел не знает блок).
 pub async fn block_secs(ctx: &Ctx, block: u64) -> GatewayResult<u64> {
     let hit = *BLOCK_TIME.lock().unwrap_or_else(|p| p.into_inner());
-    if let Some((n, t)) = hit
-        && n == block
+    if let Some((at, n, t)) = hit
+        && (at, n) == (ctx.place.id, block)
     {
         return Ok(t);
     }
     let t = head_age::fetch(ctx, block, true).await?.secs;
-    *BLOCK_TIME.lock().unwrap_or_else(|p| p.into_inner()) = Some((block, t));
+    *BLOCK_TIME.lock().unwrap_or_else(|p| p.into_inner()) = Some((ctx.place.id, block, t));
     Ok(t)
 }
 

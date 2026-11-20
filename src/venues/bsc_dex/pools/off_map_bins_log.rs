@@ -29,8 +29,12 @@ pub enum What {
     Unknown,
 }
 
-/// Когда была прошлая запись по (пул, вид).
-static LAST: Mutex<Option<HashMap<(PoolRef, What), Instant>>> = Mutex::new(None);
+/// Отметки прошлых записей: (площадка DEX, пул, вид) → когда. Решение 435 (433-и): пул с тем же адресом в другой сети —
+/// свой счёт интервала.
+type Last = HashMap<(&'static str, PoolRef, What), Instant>;
+
+/// Когда была прошлая запись по (площадка, пул, вид).
+static LAST: Mutex<Option<Last>> = Mutex::new(None);
 
 /// Пора ли писать запись `w` о пуле `r`: интервал задан и с прошлой такой записи прошло не меньше него (первая — сразу).
 /// Пора — отметка ставится сразу (вызывающий пишет). Принимает: окружение, пул, вид. Возвращает: true — писать.
@@ -41,24 +45,24 @@ pub fn due(ctx: &Ctx, r: &PoolRef, w: What) -> bool {
     };
     pass(
         &mut LAST.lock().unwrap_or_else(|p| p.into_inner()),
-        r,
+        (ctx.place.id, r),
         w,
         secs,
         Instant::now(),
     )
 }
 
-/// Чистая логика due (без настройки и часов процесса). Принимает: отметки, пул, вид, интервал, сейчас. Возвращает: true
-/// — пора (отметка обновлена). Ошибок нет.
+/// Чистая логика due (без настройки и часов процесса). Принимает: отметки, (площадка, пул), вид, интервал, сейчас.
+/// Возвращает: true — пора (отметка обновлена). Ошибок нет.
 fn pass(
-    last: &mut Option<HashMap<(PoolRef, What), Instant>>,
-    r: &PoolRef,
+    last: &mut Option<Last>,
+    (venue, r): (&'static str, &PoolRef),
     w: What,
     secs: u64,
     now: Instant,
 ) -> bool {
     let m = last.get_or_insert_with(HashMap::new);
-    let key = (r.clone(), w);
+    let key = (venue, r.clone(), w);
     if let Some(t) = m.get(&key)
         && now.saturating_duration_since(*t) < Duration::from_secs(secs)
     {

@@ -33,8 +33,8 @@ pub struct Fixed {
     pub scaling: HashMap<Address, U256>,
 }
 
-/// Память неизменяемого по адресу пула.
-static FIXED: Mutex<Option<HashMap<Address, Fixed>>> = Mutex::new(None);
+/// Память неизменяемого по (площадка DEX, адрес пула) — решение 435 (433-и): пул с тем же адресом в другой сети — другой.
+static FIXED: Mutex<Option<HashMap<(&'static str, Address), Fixed>>> = Mutex::new(None);
 
 /// Неизменяемое пула: из памяти или с узла (два прохода: id и фабрики, затем токены и их decimals). Ошибки: узел, ответ
 /// не по ABI, пул не из фабрик DEX, decimals > 18.
@@ -49,7 +49,7 @@ pub async fn fixed(
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
-        .and_then(|m| m.get(&pool).cloned())
+        .and_then(|m| m.get(&(ctx.place.id, pool)).cloned())
     {
         return Ok(x);
     }
@@ -105,16 +105,16 @@ pub async fn fixed(
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get_or_insert_with(HashMap::new)
-        .insert(pool, x.clone());
+        .insert((ctx.place.id, pool), x.clone());
     Ok(x)
 }
 
 /// Неизменяемое пула из памяти без обращения к узлу (пачка каждого блока, per_block_balancer.rs). None — пул ещё не
-/// читался. Ошибок нет.
-pub fn cached(pool: Address) -> Option<Fixed> {
+/// читался. Принимает: площадку DEX, пул. Ошибок нет.
+pub fn cached(venue: &'static str, pool: Address) -> Option<Fixed> {
     FIXED
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
-        .and_then(|m| m.get(&pool).cloned())
+        .and_then(|m| m.get(&(venue, pool)).cloned())
 }

@@ -53,12 +53,15 @@ pub type Key = Vec<(PoolRef, Address)>;
 
 /// Номер прохода поиска — сдвиг отбора.
 static PASSES: AtomicU64 = AtomicU64::new(0);
-/// Пути с записанным нарушением (до перезапуска): отсев к ним не применяется.
-static WRONG: LazyLock<Mutex<HashSet<Key>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+/// Пути с записанным нарушением (до перезапуска) по площадке DEX (решение 435, 433-и: тот же адрес пула в другой сети —
+/// другой путь): отсев к ним не применяется.
+static WRONG: LazyLock<Mutex<HashSet<(&'static str, Key)>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
 /// Множество WRONG не пусто (чтобы не брать замок на каждый цикл).
 static ANY_WRONG: AtomicBool = AtomicBool::new(false);
-/// Найденные, ещё не записанные нарушения.
-static QUEUE: LazyLock<Mutex<VecDeque<Violation>>> = LazyLock::new(|| Mutex::new(VecDeque::new()));
+/// Найденные, ещё не записанные нарушения (с площадкой DEX — пишет и исключает их разбор своей площадки).
+static QUEUE: LazyLock<Mutex<VecDeque<(&'static str, Violation)>>> =
+    LazyLock::new(|| Mutex::new(VecDeque::new()));
 /// Замок разбора очереди (одна запись на путь).
 static FLUSH: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
 
@@ -80,6 +83,8 @@ pub struct Audit {
     seen: AtomicU64,
     /// Есть ли пути с записанным нарушением (снимок на начало прохода).
     any_wrong: bool,
+    /// Площадка DEX прохода (решение 435).
+    venue: &'static str,
 }
 
 /// Итог отсева цикла с контролем (Audit::gate).
@@ -123,6 +128,7 @@ impl Audit {
             shift: PASSES.fetch_add(1, Ordering::Relaxed),
             seen: AtomicU64::new(0),
             any_wrong: ANY_WRONG.load(Ordering::Relaxed),
+            venue: ctx.place.id,
         }
     }
 
@@ -148,7 +154,7 @@ impl Audit {
             && WRONG
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .contains(&key(legs))
+                .contains(&(self.venue, key(legs)))
     }
 
     /// Что делает: идёт ли этот отсечённый в контрольный полный счёт (hit по номеру со сдвигом); да — счётчик
@@ -170,7 +176,10 @@ impl Audit {
     pub fn verify(&self, rho: Decimal, s: &CycleSignal, legs: &[Leg]) {
         if violated(rho, s) {
             let v = report(rho, s, key(legs));
-            QUEUE.lock().unwrap_or_else(|e| e.into_inner()).push_back(v);
+            QUEUE
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push_back((self.venue, v));
         }
     }
 }
@@ -190,24 +199,28 @@ pub fn violated(rho: Decimal, s: &CycleSignal) -> bool {
 }
 
 /// Что делает: разбор очереди нарушений (см. шапку): запись, Telegram, счётчик, затем путь — в исключённые. Принимает:
-/// окружение (журнал, площадка), канал событий ядру. Ошибок нет (сбой записи журнала выводит сам журнал).
+/// окружение (журнал, площадка — разбираются только её нарушения, решение 435), канал событий ядру. Ошибок нет (сбой
+/// записи журнала выводит сам журнал).
 pub async fn flush(ctx: &Ctx, stats: &Stats) {
     let empty = QUEUE.lock().unwrap_or_else(|e| e.into_inner()).is_empty();
     if empty {
         return;
     }
+    let venue = ctx.place.id;
     let _one = FLUSH.lock().await;
     loop {
         let next = QUEUE
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .front()
-            .cloned();
+            .iter()
+            .find(|(at, _)| *at == venue)
+            .map(|(_, v)| v.clone());
         let Some(v) = next else { break };
+        let path = (venue, v.key.clone());
         let known = WRONG
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .contains(&v.key);
+            .contains(&path);
         if !known {
             ctx.log(Level::Error, CODE, v.text.clone(), Some(v.data))
                 .await;
@@ -217,13 +230,13 @@ pub async fn flush(ctx: &Ctx, stats: &Stats) {
                 text: v.text,
             });
             cycle_count(4);
-            WRONG
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .insert(v.key);
+            WRONG.lock().unwrap_or_else(|e| e.into_inner()).insert(path);
             ANY_WRONG.store(true, Ordering::Relaxed);
         }
-        QUEUE.lock().unwrap_or_else(|e| e.into_inner()).pop_front();
+        let mut q = QUEUE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(i) = q.iter().position(|(at, _)| *at == venue) {
+            q.remove(i);
+        }
     }
 }
 

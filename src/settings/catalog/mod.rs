@@ -43,7 +43,7 @@ mod lost_events;
 mod sieve;
 mod okx;
 mod phemex;
-mod send;
+pub mod send;
 mod signals;
 mod sizing;
 mod trade;

@@ -3,13 +3,17 @@
 //! одной транзакции или бандла в формате канала; разбор ответа (принято / ошибка канала как есть).
 //! Канал с ключом без введённого ключа не используется (ChannelState::NoKey).
 //! Кто вызывает: send/mod.rs, send/check.rs.
-//! От чего зависит: send/channel.rs, send/sequencer_cond.rs, node/rpc.rs (POST), node/jsonrpc.rs,
+//! От чего зависит: send/channel.rs, send/sequencer_cond.rs, send/seq_opts.rs, node/rpc.rs (POST), node/jsonrpc.rs,
 //! node/arb_min_gas.rs, errors.rs, ctx.rs.
 //! Настройки: channel.enabled, channel.url, channel.method, channel.min_gas_price_gwei, channel.tip_enabled,
-//! channel.tip_bnb, channel.tip_address, channel.cond_time_window_s [канал]; dex.arb_gas_info [площадка DEX]; секрет channel.<id>.key (открытая отправка — bsc.node_http_key).
+//! channel.tip_bnb, channel.tip_address, channel.cond_time_window_s, channel.http_timeout_ms, channel.submit_method,
+//! channel.sync_timeout_ms [канал]; dex.arb_gas_info [площадка DEX]; секрет channel.<id>.key (открытая отправка —
+//! bsc.node_http_key).
 //!
 //! Решение 436: у секвенсора Arbitrum (Single::Sequencer) минимум цены газа — с узла (node/arb_min_gas.rs floor), окно
 //! условной отправки — channel.cond_time_window_s (send/sequencer_cond.rs); всё читается здесь, до отправки (решение 398).
+//! Решение 437 (1): у него же метод отправки (channel.submit_method: eth_sendRawTransaction или
+//! eth_sendRawTransactionSync) и таймаут HTTP запроса (channel.http_timeout_ms) — send/seq_opts.rs.
 //!
 //! «already known» — транзакция уже принята этим узлом/каналом: не ошибка (research/flow/bsc_send.md, раздел 6 п. 5;
 //! текст — core/txpool/errors.go#L26 узла BSC).
@@ -30,6 +34,7 @@ use super::super::node::{arb_min_gas, jsonrpc, rpc};
 use super::super::num;
 use super::bloxroute_cloud::NETWORK;
 use super::channel::{Auth, Bundle, Channel, Single};
+use super::seq_opts::{self, Submit};
 use super::sequencer_cond::{self, Cond};
 
 /// Канал, готовый к отправке.
@@ -43,6 +48,10 @@ pub struct Ready {
     /// Решение 436: окно условной отправки, секунды (channel.cond_time_window_s; только Single::Sequencer). None —
     /// обычная отправка.
     pub cond: Option<u64>,
+    /// Решение 437: метод отправки секвенсора (channel.submit_method); у остальных каналов — Raw (не читается).
+    pub submit: Submit,
+    /// Решение 437: таймаут HTTP запроса отправки секвенсора, мс (channel.http_timeout_ms); None — общие http.*.
+    pub http_ms: Option<u64>,
     /// Чаевые: (адрес, сумма в wei); None — выключены.
     pub tip: Option<(Address, U256)>,
 }
@@ -83,9 +92,12 @@ pub fn prepare(ctx: &Ctx, ch: &'static Channel) -> Result<Ready, ChannelState> {
         }
     };
     let min_gas_wei = min_gas(ctx, ch, &s)?;
-    let cond = match ch.single {
-        Some(Single::Sequencer) => sequencer_cond::window(ctx, &s).map_err(nc)?,
-        _ => None,
+    let (cond, submit, http_ms) = match ch.single {
+        Some(Single::Sequencer) => {
+            let o = seq_opts::read(ctx, &s).map_err(nc)?;
+            (o.cond, o.submit, Some(o.http_ms))
+        }
+        _ => (None, Submit::Raw, None),
     };
     let tip = if ch.tips && st.flag_in("channel.tip_enabled", &s).map_err(nc)? {
         let bnb = st.decimal_in("channel.tip_bnb", &s).map_err(nc)?;
@@ -104,6 +116,8 @@ pub fn prepare(ctx: &Ctx, ch: &'static Channel) -> Result<Ready, ChannelState> {
         method,
         min_gas_wei,
         cond,
+        submit,
+        http_ms,
         tip,
     })
 }
@@ -162,7 +176,9 @@ impl Ready {
         max_block: u64,
         cond: Cond,
     ) -> GatewayResult<()> {
-        let conditional = self.ch.single == Some(Single::Sequencer) && cond != Cond::Plain;
+        let seq = self.ch.single == Some(Single::Sequencer);
+        let conditional = seq && cond != Cond::Plain;
+        let sync = seq && !conditional && matches!(self.submit, Submit::Sync(_));
         let body = self.body(txs, max_block, cond);
         let auth;
         let mut headers: Vec<(&str, &str)> = Vec::new();
@@ -170,16 +186,18 @@ impl Ready {
             auth = k.clone();
             headers.push(("Authorization", auth.as_str()));
         }
-        let text = rpc::post(ctx, &self.url, &body, &headers, self.ch.title).await?;
+        let lim = self.http_ms;
+        let text = rpc::post_within(ctx, &self.url, &body, &headers, self.ch.title, lim).await?;
         match jsonrpc::parse_text(&text, self.ch.title, Op::Send) {
             Ok(_) => Ok(()),
             Err(e) if e.message.to_ascii_lowercase().contains("already known") => Ok(()),
             Err(e) if conditional => Err(sequencer_cond::explain(&text, e)),
+            Err(e) if sync => Err(seq_opts::explain_sync(&text, e)),
             Err(e) => Err(e),
         }
     }
 
-    /// Тело запроса в формате канала (условие — только у Single::Sequencer).
+    /// Тело запроса в формате канала (условие и eth_sendRawTransactionSync — только у Single::Sequencer).
     fn body(&self, txs: &[Bytes], max_block: u64, cond: Cond) -> Value {
         let no0x = |b: &Bytes| alloy_primitives::hex::encode(b);
         let (method, params) = match (self.method, self.ch.single, self.ch.bundle) {
@@ -189,9 +207,10 @@ impl Ready {
             (SendMethod::Single, Some(Single::Sequencer), _) if cond != Cond::Plain => {
                 (sequencer_cond::METHOD, sequencer_cond::params(&txs[0], cond))
             }
-            (SendMethod::Single, Some(Single::Sequencer), _) => {
-                ("eth_sendRawTransaction", json!([txs[0]]))
-            }
+            (SendMethod::Single, Some(Single::Sequencer), _) => match self.submit {
+                Submit::Sync(t) => (seq_opts::SYNC_METHOD, seq_opts::sync_params(&txs[0], t)),
+                Submit::Raw => ("eth_sendRawTransaction", json!([txs[0]])),
+            },
             (SendMethod::Single, Some(Single::Private), _) => {
                 ("eth_sendPrivateTransaction", json!([txs[0]]))
             }

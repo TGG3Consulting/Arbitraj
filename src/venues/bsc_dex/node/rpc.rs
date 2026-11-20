@@ -5,6 +5,7 @@
 //! От чего зависит: ctx.rs (адрес bsc.node_http_url с ключом, http.timeout_ms), node/jsonrpc.rs, errors.rs.
 //! Темп и повтор на «превышен лимит» — node/pace.rs (bsc.node_http_rps, правило шлюза RateLimited); сбой основного
 //! узла — тот же запрос на резервный (node/failover.rs), и только потом правило шлюза.
+//! Решение 437: post_within — POST канала со своим сроком (секвенсор Arbitrum, channel.http_timeout_ms).
 //! Настройки: bsc.node_http_url, http.timeout_ms, bsc.node_http_rps; секрет bsc.node_http_key (если в адресе есть {key}).
 //!
 //! Транспорт — HTTP POST с телом JSON-RPC 2.0 (https://www.jsonrpc.org/specification, разделы 4–6);
@@ -141,9 +142,27 @@ pub async fn post(
     headers: &[(&str, &str)],
     source: &str,
 ) -> GatewayResult<String> {
+    post_within(ctx, url, body, headers, source, None).await
+}
+
+/// post со своим сроком (решение 437: канал секвенсора Arbitrum — channel.http_timeout_ms, ответ ждёт постановки в
+/// блок). Принимает: как post и срок, мс: до заголовков и весь обмен не меньше него (None — общие http.*).
+/// Возвращает: текст ответа. Ошибки: как post.
+pub async fn post_within(
+    ctx: &Ctx,
+    url: &str,
+    body: &Value,
+    headers: &[(&str, &str)],
+    source: &str,
+    within_ms: Option<u64>,
+) -> GatewayResult<String> {
     // Два срока (gateway/http.rs): до заголовков — http.timeout_ms, тело (пачка Multicall3 — до ~1 МБ) дочитывается,
     // пока данные идут чаще http.body_idle_ms.
-    let lim = ctx.limits()?;
+    let mut lim = ctx.limits()?;
+    if let Some(ms) = within_ms {
+        lim.head = std::time::Duration::from_millis(ms);
+        lim.total = lim.total.max(lim.head);
+    }
     // Решение 142: сжатие HTTP включено для площадок; узел BSC свой и локальный — без сжатия (лишний процессор).
     let mut req = ctx
         .http

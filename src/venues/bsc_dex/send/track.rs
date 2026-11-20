@@ -8,6 +8,8 @@
 //! Исход не установлен: лимит отмен (send.cancel_max_attempts), потолок цены газа отмены (send.cancel_max_gas_gwei),
 //! время ожидания (send.queue_max_wait_s) — итог «исход неизвестен» (exec/txs.rs останавливает очередь). Хеш каждой
 //! отправленной отмены — в журнал отмен Watch.cancels (для «чем найти», exec/txs.rs).
+//! Решение 437 (1): у сети dex.gas_mode = eip1559_l1 (SendCfg.drop_wait задан) отмен нет — итог по времени и nonce
+//! (send/track_l1.rs).
 //! Кто вызывает: exec/txs.rs (задача трекера держит место в очереди кошелька).
 //! От чего зависит: node/rpc.rs, send/track_util.rs, send/receipt.rs, send/cancel.rs, send/tx.rs (SendCfg), ctx.rs.
 //! Настройки: send.max_wait_blocks, send.replaced_confirm_blocks, send.cancel_*, send.queue_max_wait_s,
@@ -35,6 +37,9 @@ pub use super::track_util::{Tracked, Watch};
 /// Ждёт, пока nonce не занят в блоке или исход не признан неизвестным (см. шапку). Возвращает: итог.
 /// Ошибок нет — сбои узла повторяются.
 pub async fn resolve(w: Watch) -> Tracked {
+    if let Some(window) = w.cfg.drop_wait {
+        return super::track_l1::resolve(w, window).await;
+    }
     let ctx = &w.ctx;
     let started = Instant::now();
     let mut rx = heads_rx(&w.heads);

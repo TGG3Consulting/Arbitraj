@@ -72,7 +72,7 @@ const READS: [&str; 31] = [
 ];
 
 /// (файл от корня, функция или «*» — весь файл, метка отправки; пусто — вся функция после отправки).
-const AFTER: [(&str, &str, &str); 38] = [
+const AFTER: [(&str, &str, &str); 39] = [
     ("src/venues/kyberswap/tx.rs", "send", "node::send_raw("),
     ("src/venues/kyberswap/tx.rs", "track", ""),
     (
@@ -96,6 +96,8 @@ const AFTER: [(&str, &str, &str); 38] = [
     ("src/venues/bsc_dex/exec/bundle_send.rs", "confirm", ""),
     ("src/venues/bsc_dex/exec/bundle_send.rs", "all_receipts", ""),
     ("src/venues/bsc_dex/send/track.rs", "*", ""),
+    // Решение 437: трекер сети eip1559_l1 без отмен — весь файл после отправки.
+    ("src/venues/bsc_dex/send/track_l1.rs", "*", ""),
     ("src/venues/bsc_dex/send/track_util.rs", "*", ""),
     ("src/venues/bsc_dex/send/settle.rs", "*", ""),
     ("src/venues/bsc_dex/send/receipt.rs", "*", ""),

@@ -94,7 +94,7 @@ pub fn result(
                 .err(
                     ErrorCode::TxNotIncluded,
                     format!(
-                        "Транзакция не попала в блок за send.max_wait_blocks, tx {}{}",
+                        "Транзакция не попала в блок (send.max_wait_blocks; у eip1559_l1 — выброшена: без квитанции и nonce не занят за send.drop_wait_ms), tx {}{}",
                         d.chain.hash,
                         d.cancel.as_ref().map_or(String::new(), |(h, _)| format!(
                             " — nonce занят отменой {h}"

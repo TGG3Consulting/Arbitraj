@@ -139,6 +139,7 @@ fn cfg() -> SendCfg {
         cancel_max_attempts: 1,
         queue_max_wait: Duration::from_secs(60),
         gas_margin_pct: Decimal::ZERO,
+        drop_wait: None,
     }
 }
 

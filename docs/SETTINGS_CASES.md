@@ -1023,6 +1023,54 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** channel.url, channel.method, channel.chain, channel.enabled.
 - **Статус:** ещё не в релизе (ветка t220/arb-conditional-mingas).
 
+### `send.drop_wait_ms`
+
+- **Задача / решение:** решение 437 (1), Тигран 20.11.2026: на Arbitrum отмену («пустая транзакция себе с тем же nonce») не слать; нет ответа — ждать по времени, затем квитанция + nonce «latest».
+- **Появилась:** 2026-11-20, ветка t221/arb-send-tips.
+- **Кейс:** у Arbitrum нет пула транзакций (nitro-geth arbitrum/apibackend.go:729-745); невключённую транзакцию секвенсор выбрасывает по queue-timeout (по умолчанию 12 с, nitro execution/gethexec/sequencer.go:217-218, 1158-1170) или по окну дыры nonce (1 с, sequencer.go:224-225). Отмена тем же nonce либо сожжёт газ, либо получит «nonce too low» — вытеснять нечего (/home/claude/src-ext/reports/arb-cancel.md). Блоки Arbitrum идут только при транзакциях — ждать нужно по времени, а не по блокам.
+- **Где задаётся:** «Настройки», группа «Отправка», и карточка площадки DEX; область — по площадке DEX; каталог src/settings/catalog/send.rs (после send.cancel_gas_bump_pct).
+- **Что ставить:** у bsc_dex — не задавать (не читается). У arb_dex — совета нет, решает Тигран; *метод:* не меньше queue-timeout + окно дыры nonce секвенсора (по коду Nitro 12 с + 1 с; значения Arbitrum One не опубликованы — docs nonce-management.mdx:29 «on the order of seconds»).
+- **Если не задана:** необязательная. При dex.gas_mode = eip1559_l1 — SendCfg::read (src/venues/bsc_dex/send/tx.rs read, поле drop_wait) возвращает NotConfigured: транзакция не уходит (exec/txs.rs send_capped, первая строка). При legacy (BSC) не читается — трекер с отменами, как раньше (send/track.rs resolve).
+- **Влияет на торговлю:** да — у Arbitrum без неё транзакций нет; заданная — через сколько бот признаёт транзакцию без квитанции выброшенной (nonce не занят → NotIncluded, сделка закрывается без повтора, очередь кошелька свободна сразу — send/settle.rs) или ищет свою квитанцию (nonce занят).
+- **Связанные ключи:** dex.gas_mode, send.replaced_confirm_blocks, send.queue_max_wait_s, channel.http_timeout_ms.
+- **Статус:** ещё не в релизе (ветка t221/arb-send-tips).
+
+### `channel.http_timeout_ms`
+
+- **Задача / решение:** решение 437 (1), Тигран 20.11.2026: таймаут HTTP отправки секвенсору — настройка, больше 2 × queue-timeout.
+- **Появилась:** 2026-11-20, ветка t221/arb-send-tips.
+- **Кейс:** ответ eth_sendRawTransaction секвенсора Arbitrum приходит после постановки транзакции в блок; секвенсор ждёт её итог до queueTimeout × 2 (nitro execution/gethexec/sequencer.go:628-656). Если клиент оборвёт запрос раньше, исход неизвестен (транзакция могла попасть в блок, sequencer-transaction-flow.mdx:86). Общий http.timeout_ms у бота — для узла и каналов BSC, он короче.
+- **Где задаётся:** экран «Каналы отправки» (карточка канала sequencer) и «Настройки», группа «Каналы отправки»; область — канал; каталог src/settings/catalog/send.rs.
+- **Что ставить:** каналам BSC — не задавать (не читается, на экране не показывается). Каналу `sequencer` — совета нет, решает Тигран; *метод:* больше 2 × queue-timeout (по коду Nitro по умолчанию 12 с → больше 24 000 мс; через свой узел пересылка ждёт секвенсор до 30 с — forwarder.go:40-47) и больше channel.sync_timeout_ms при sync.
+- **Если не задана:** необязательная в каталоге; у канала sequencer — канал не готов: src/venues/bsc_dex/send/seq_opts.rs read → NotConfigured «не задана channel.http_timeout_ms», send/ready.rs prepare → состояние канала, отправки площадки Arbitrum нет («Нет ни одного готового канала отправки»), «Проверить подключение» канала — причина.
+- **Влияет на торговлю:** да — без неё у Arbitrum транзакций нет; короче ответа секвенсора — исход «без ясного ответа», трекер ждёт send.drop_wait_ms.
+- **Связанные ключи:** channel.submit_method, channel.sync_timeout_ms, send.drop_wait_ms, http.timeout_ms.
+- **Статус:** ещё не в релизе (ветка t221/arb-send-tips).
+
+### `channel.submit_method`
+
+- **Задача / решение:** решение 437 (1), Тигран 20.11.2026: заложить eth_sendRawTransactionSync; выбор метода — настройкой канала, если формат подтверждён.
+- **Появилась:** 2026-11-20, ветка t221/arb-send-tips.
+- **Кейс:** уведомление docs.arbitrum.io «Transaction submission changes» (notices/transaction-submission-changes-notice.mdx:14-16, 33-34, 49-51): с Nitro 3.14.x eth_sendRawTransaction будет отвечать при приёме в очередь, без ошибок постановки в блок; для них — eth_sendRawTransactionSync. Формат подтверждён исходником nitro-geth internal/ethapi/api.go:1934 ([raw, timeoutMs], ответ — квитанция; срок — код 4 с хешем, errors.go:125, 187-189). Эндпоинт секвенсора Arbitrum One sync не принимает (transaction-lifecycle.mdx:79-82).
+- **Где задаётся:** экран «Каналы отправки» (карточка канала sequencer) и «Настройки», группа «Каналы отправки»; область — канал.
+- **Что ставить:** каналам BSC — не задавать. Каналу `sequencer` — `raw` (или не задавать) пока channel.url — секвенсор Arbitrum One; `sync` — только с channel.url своего узла Nitro (который отвечает на метод) — решение Тиграна.
+- **Если не задана:** необязательная. Канал sequencer отправляет eth_sendRawTransaction (или условную при channel.cond_time_window_s) — src/venues/bsc_dex/send/seq_opts.rs read (None → Submit::Raw). Значение не из списка или `sync` вместе с channel.cond_time_window_s — канал не готов (NotConfigured с причиной).
+- **Влияет на торговлю:** да — метод отправки; при `sync` узел без метода ответит −32601 — канал NotConfigured («Проверить подключение» — причина).
+- **Связанные ключи:** channel.sync_timeout_ms, channel.http_timeout_ms, channel.cond_time_window_s, channel.url.
+- **Статус:** ещё не в релизе (ветка t221/arb-send-tips).
+
+### `channel.sync_timeout_ms`
+
+- **Задача / решение:** решение 437 (1), Тигран 20.11.2026: eth_sendRawTransactionSync.
+- **Появилась:** 2026-11-20, ветка t221/arb-send-tips.
+- **Кейс:** у eth_sendRawTransactionSync второй параметр timeoutMs — сколько узел ждёт квитанцию (nitro-geth internal/ethapi/api.go:1962-1971; больше tx-sync-max-timeout узла — урезается, у Nitro по умолчанию 1 мин — eth/ethconfig/config.go:75-76). Без него действует умолчание узла (20 с), которое бот не видит — поэтому срок задаётся явно.
+- **Где задаётся:** экран «Каналы отправки» (карточка канала sequencer); область — канал.
+- **Что ставить:** только при channel.submit_method = sync — совета нет, решает Тигран; *метод:* больше queue-timeout секвенсора и меньше channel.http_timeout_ms.
+- **Если не задана:** необязательная; при sync — канал не готов: src/venues/bsc_dex/send/seq_opts.rs read → NotConfigured; не меньше channel.http_timeout_ms — тоже канал не готов с причиной. При raw не читается.
+- **Влияет на торговлю:** да — срок ответа sync; вышел — исход «без ясного ответа», трекер ждёт send.drop_wait_ms.
+- **Связанные ключи:** channel.submit_method, channel.http_timeout_ms.
+- **Статус:** ещё не в релизе (ветка t221/arb-send-tips).
+
 ### `dex.graph_alert_min_s`
 
 - **Задача / решение:** t137, решение 308.

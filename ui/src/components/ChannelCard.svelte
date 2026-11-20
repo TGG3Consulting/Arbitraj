@@ -29,7 +29,13 @@
   const TIP_PREFIX = 'channel.tip_';
   // Решение 436 (ревью): настройки, которые читает только канал вида «секвенсор Arbitrum» (send/ready.rs,
   // send/sequencer_cond.rs); у него же не читается минимум газа канала — он с узла (node/arb_min_gas.rs).
-  const SEQUENCER_ONLY = ['channel.cond_time_window_s'];
+  // Решение 437 (1): метод отправки, срок sync и таймаут HTTP — тоже только у секвенсора (send/seq_opts.rs).
+  const SEQUENCER_ONLY = [
+    'channel.cond_time_window_s',
+    'channel.http_timeout_ms',
+    'channel.submit_method',
+    'channel.sync_timeout_ms',
+  ];
   const NOT_SEQUENCER = ['channel.min_gas_price_gwei'];
   const byKind = (name) =>
     info.sequencer ? !NOT_SEQUENCER.includes(name) : !SEQUENCER_ONLY.includes(name);

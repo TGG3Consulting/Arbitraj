@@ -8,7 +8,7 @@
 //! От чего зависит: node/rpc.rs, ctx.rs.
 //! Настройки: send.gas_limit_margin_pct, send.max_wait_blocks, send.bundle_max_blocks, send.cancel_gas_bump_pct,
 //! send.replaced_confirm_blocks, send.cancel_max_gas_gwei, send.cancel_max_attempts, send.queue_max_wait_s,
-//! feed.stale_after_ms [bsc_dex].
+//! feed.stale_after_ms [bsc_dex]; решение 437 — send.drop_wait_ms (только dex.gas_mode = eip1559_l1).
 //!
 //! eth_estimateGas — https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/execute.yaml#L43-L60 ;
 //! legacy-транзакция с chainId (EIP-155) — https://eips.ethereum.org/EIPS/eip-155 ; база газа в BSC всегда 0 —
@@ -26,6 +26,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::node::rpc;
 use super::super::num;
+use super::gas_mode::{self, GasMode};
 
 /// Настройки ожидания и отмены — читаются до отправки: не задано — транзакция не уходит.
 #[derive(Debug, Clone, Copy)]
@@ -48,11 +49,15 @@ pub struct SendCfg {
     pub queue_max_wait: Duration,
     /// send.gas_limit_margin_pct — запас лимита газа отмены (решение 398: отмена уходит после исходной, значение — до неё).
     pub gas_margin_pct: Decimal,
+    /// Решение 437: только dex.gas_mode = eip1559_l1 (Arbitrum) — send.drop_wait_ms: сколько ждать квитанции после
+    /// отправки, прежде чем по nonce («latest») решить «выброшена» (отмен у этой сети нет, send/track_l1.rs).
+    /// None — legacy (BSC): трекер с отменами, как раньше.
+    pub drop_wait: Option<Duration>,
 }
 
 impl SendCfg {
-    /// Читает настройки. Ошибки: NotConfigured — не задано или send.max_wait_blocks < send.bundle_max_blocks
-    /// (бандл мог бы попасть в блок, когда трекер уже отменяет).
+    /// Читает настройки. Ошибки: NotConfigured — не задано (у eip1559_l1 — и send.drop_wait_ms; dex.gas_mode) или
+    /// send.max_wait_blocks < send.bundle_max_blocks (бандл мог бы попасть в блок, когда трекер уже отменяет).
     pub fn read(ctx: &Ctx) -> GatewayResult<Self> {
         let cfg = Self {
             max_wait: ctx.int("send.max_wait_blocks")?,
@@ -73,6 +78,10 @@ impl SendCfg {
             cancel_max_attempts: ctx.int("send.cancel_max_attempts")?,
             queue_max_wait: Duration::from_secs(ctx.int("send.queue_max_wait_s")?),
             gas_margin_pct: ctx.dec("send.gas_limit_margin_pct")?,
+            drop_wait: match gas_mode::read(ctx)? {
+                GasMode::Eip1559L1 => Some(Duration::from_millis(ctx.int("send.drop_wait_ms")?)),
+                GasMode::Legacy => None,
+            },
         };
         if cfg.max_wait < cfg.bundle_max {
             return Err(ctx.not_set(

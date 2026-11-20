@@ -8,6 +8,7 @@
 //! пока она держит Hold: ловит панику и тогда, когда вызывающий уже прерван; joined — у вызывающего: задача упала мимо
 //! guarded или отменена). Никогда не освобождаем очередь, не зная исхода; вызывающий отдаёт «исход неизвестен» с «чем
 //! найти» (exec/txs.rs, exec/bundle_send.rs), исход выясняет ядро (решения 231/233).
+//! Решение 437: «выброшена» без отмены (сеть eip1559_l1, send/track_l1.rs) — nonce свободен, очередь свободна сразу.
 //! Кто вызывает: exec/txs.rs (задача трекера одиночной), exec/bundle_send.rs (задача трекера бандла — settle_bundle);
 //! guarded / joined — те же два места.
 //! От чего зависит: wallet/nonce.rs (Hold), send/track_util.rs (Tracked, Quiet), send/stats.rs, send/tx.rs, node/rpc.rs,
@@ -64,6 +65,13 @@ pub async fn settle(a: &After<'_>, hold: &Hold, t: &Tracked) {
             format!("исход транзакции {} неизвестен: {why}", a.hash),
         )
         .await;
+    }
+    // Решение 437: «выброшена» без отмены (NotIncluded, cancel нет — send/track_l1.rs, сеть eip1559_l1) — nonce не
+    // занят, как у истёкшего бандла: очередь свободна сразу, рост nonce не ждём (он не вырастет). У BSC «не попала»
+    // всегда с отменой, занявшей nonce (send/track_util.rs landed), — сюда не попадает.
+    if t.outcome == TxOutcome::NotIncluded && t.cancel.is_none() {
+        emit(a, hold.free()).await;
+        return;
     }
     let started = Instant::now();
     let mut rx = a.heads.watch();

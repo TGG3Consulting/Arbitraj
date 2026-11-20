@@ -131,6 +131,30 @@
   з) докупка (core/executor.rs, через risk::can_open) в остановленной сети отказывает — как и при общем «Стоп»;
   и) chain_off проверяется на отдельном коротком замке до основного (gate_input): сделка, прошедшая проверку за мгновение
      до «Стоп <сеть>», начнётся — то же окно, что у общего «Стоп».
+- **Решение 437 (20.11.2026, ветка t221/arb-send-tips) — Arbitrum (только dex.gas_mode = eip1559_l1): итог отправки
+  без отмен, газ L1 без чаевых, динамические чаевые; ждёт сборки и тестов в GitHub (cargo локально не запускался;
+  формат — вручную по правилам rustfmt).** BSC (legacy) — поведение без изменений.
+  Часть 1 (отмена) — СДЕЛАНО: send/track_l1.rs — у eip1559_l1 отмен нет; квитанция на каждый блок; без квитанции
+  дольше send.drop_wait_ms (по времени) — nonce «latest»: не занят → выброшена (NotIncluded без отмены, очередь
+  свободна сразу — send/settle.rs, сделка без повтора), занят → поиск своей квитанции, потом «вытеснена». Ошибки
+  ответа отправки — прежний разбор (send/mod.rs classify + решение 154: «nonce too low» и прочие отказы проверяются
+  своим узлом по хешу; −32003 условной отправки — отказ). Канал sequencer: channel.http_timeout_ms (таймаут HTTP
+  отправки, rpc::post_within), channel.submit_method (raw / sync — eth_sendRawTransactionSync, формат подтверждён
+  исходником nitro-geth internal/ethapi/api.go:1934, ошибка срока — код 4, errors.go:125), channel.sync_timeout_ms —
+  send/seq_opts.rs; «Проверить подключение» канала — методом отправки, с таймаутами в ответе.
+  Нужны записи (тестов нет — записей нет):
+  - ответы секвенсора Arbitrum One на eth_sendRawTransaction с временем: успех, «nonce too low», «context deadline
+    exceeded», «max fee per gas less than block base fee» — тест разбора send/mod.rs classify у сети eip1559_l1;
+  - ответ своего узла Nitro v3.12.4 на eth_sendRawTransactionSync пустой транзакции (есть ли метод в v3.12.4 —
+    не проверено: клон nitro-geth 260bc5dc новее/другой ветки) и на настоящую транзакцию (квитанция; код 4 при сроке);
+  - сценарий «выброшена» (nonce не вырос за send.drop_wait_ms) — запись квитанции null + eth_getTransactionCount.
+  Вопросы Тиграну:
+  1) send.max_wait_blocks, send.cancel_* и send.bundle_max_blocks у arb_dex по-прежнему обязательны (SendCfg::read
+     читает их у любой сети), хотя при eip1559_l1 трекер их не использует (кроме replaced_confirm_blocks,
+     queue_max_wait_s). Снять обязательность для eip1559_l1? Пока — задать любые допустимые (техдолг ROADMAP).
+  2) eth_sendRawTransactionSync: эндпоинт секвенсора Arbitrum One его не принимает (docs transaction-lifecycle.mdx:
+     79-82) — sync возможен только через свой узел Nitro (лишний шаг пересылки). Переключать на sync — после выхода
+     Nitro 3.14.x и смены поведения eth_sendRawTransaction на Arbitrum One (сроки не объявлены)?
 - **Решение 436 (20.11.2026, ветка t220/arb-conditional-mingas) — Arbitrum: eth_sendRawTransactionConditional и
   минимум цены газа канала с узла; ждёт сборки и тестов в GitHub (cargo локально не запускался; формат — вручную по
   правилам rustfmt).** Ответ Тиграна на вопросы 1 и 3 решения 435 — сделать оба; источник формата — исходники Nitro.

@@ -6,6 +6,8 @@
 //! Решение 436: у секвенсора Arbitrum с окном channel.cond_time_window_s проверка идёт условным методом
 //! (eth_sendRawTransactionConditional, пустые условия); метод не принимается (−32601) — не «Подключено», причина.
 //! К ответу дописан минимум цены газа канала с узла (ArbGasInfo, node/arb_min_gas.rs) и окно условия.
+//! Решение 437 (1): при channel.submit_method = sync проверка идёт eth_sendRawTransactionSync (пустая транзакция);
+//! метод не принимается (−32601) — не «Подключено», причина; к ответу — метод, срок sync и таймаут HTTP.
 //! Кто вызывает: mod.rs (контракт check_send_channel).
 //! От чего зависит: send/ready.rs, send/channels.rs, node/arb_min_gas.rs, ctx.rs.
 //! Настройки: channel.* [канал]; секрет channel.<id>.key.
@@ -21,6 +23,7 @@ use super::super::ctx::Ctx;
 use super::super::node::arb_min_gas;
 use super::channels;
 use super::ready;
+use super::seq_opts::{self, Submit};
 
 /// Проверка канала. Возвращает: ConnectionCheck. Ошибки: NotConfigured — такого канала нет.
 pub async fn check(ctx: &Ctx, id: &str) -> GatewayResult<ConnectionCheck> {
@@ -73,6 +76,13 @@ fn node_part(ctx: &Ctx, r: &ready::Ready) -> String {
         out.push_str(&format!(
             "; условная отправка eth_sendRawTransactionConditional, окно {w} с (timestampMax)"
         ));
+    }
+    if let Submit::Sync(t) = r.submit {
+        let m = seq_opts::SYNC_METHOD;
+        out.push_str(&format!("; отправка {m} (timeoutMs {t} мс)"));
+    }
+    if let Some(ms) = r.http_ms {
+        out.push_str(&format!("; таймаут HTTP отправки {ms} мс"));
     }
     out
 }

@@ -66,8 +66,11 @@ pub async fn get(ctx: &Ctx, path: &str, page: u32) -> GatewayResult<Got> {
         let (status, text) = crate::gateway::http::exchange(req, lim)
             .await
             .map_err(|f| errors::from_fail(&f, &lim, SOURCE))?;
-        ctx.raw
-            .write(ctx.place.id, "index", &format!("GET {url} → {status} {text}"));
+        ctx.raw.write(
+            ctx.place.id,
+            "index",
+            &format!("GET {url} → {status} {text}"),
+        );
         answer(status.as_u16(), page, &text, path)
     })
     .await

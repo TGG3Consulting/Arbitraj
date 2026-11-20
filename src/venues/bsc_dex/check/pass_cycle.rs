@@ -117,7 +117,11 @@ async fn each(p: &Pools, list: Vec<PoolRef>, unsettled: bool) {
 fn executors(p: &Pools) -> Option<Vec<Address>> {
     let acc = p.ctx.settings.accounts();
     // Решение 432: исполнители этой площадки DEX (её сети).
-    let xs: Vec<Address> = acc.wallets_at(p.ctx.place.id).iter().filter_map(pool_pass::v3).collect();
+    let xs: Vec<Address> = acc
+        .wallets_at(p.ctx.place.id)
+        .iter()
+        .filter_map(pool_pass::v3)
+        .collect();
     (!xs.is_empty() && !p.lag.busy()).then_some(xs)
 }
 

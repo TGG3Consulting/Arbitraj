@@ -84,7 +84,14 @@ async fn remember(ctx: &Ctx, executor: Address, v: Version, wrapped: Option<Addr
     if let Err(e) = ctx
         .settings
         .accounts()
-        .set_executor_version_at(ctx.place.id, &w.id, &addr, label, wrap, "сверка кода исполнителя")
+        .set_executor_version_at(
+            ctx.place.id,
+            &w.id,
+            &addr,
+            label,
+            wrap,
+            "сверка кода исполнителя",
+        )
         .await
     {
         let text = format!(

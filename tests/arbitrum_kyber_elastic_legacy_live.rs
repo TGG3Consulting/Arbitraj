@@ -2,10 +2,10 @@
 //! Что делает: решение 475 — KyberSwap Elastic Legacy (v1) на Arbitrum и чтение тиков частями на записи своего узла
 //! (tools/arbitrum_record/kyber_elastic_legacy.py):
 //! 1. тики частями (pools/elastic_ticks.rs merge по записанным ответам getTicksInRange(pool, start, length)) — части
-//!   идут подряд (каждая следующая — от последнего тика прошлой), список доходит до MAX_TICK и совпадает с ответом
-//!   «всё сразу» (length = 0), где узел его дал (у малого tickDistance — «out of gas», решение 462);
+//!    идут подряд (каждая следующая — от последнего тика прошлой), список доходит до MAX_TICK и совпадает с ответом
+//!    «всё сразу» (length = 0), где узел его дал (у малого tickDistance — «out of gas», решение 462);
 //! 2. фабрика v1: getPool(token0, token1, swapFeeUnits) = пул и factory() пула = фабрика v1 (проверка пула бота —
-//!   pools/verify_calls.rs);
+//!    pools/verify_calls.rs);
 //! 3. наш выход Elastic v1 (math/swap_elastic, v1 = true) на тиках из частей = returnedAmount QuoterV2 v1.
 //!
 //! Кто вызывает: cargo test -- --ignored (после записи).

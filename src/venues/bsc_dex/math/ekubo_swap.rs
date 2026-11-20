@@ -178,7 +178,7 @@ fn next_step(
     match shape {
         Shape::FullRange => Some((if increasing { MAX_TICK } else { MIN_TICK }, false, true)),
         Shape::Stable { lower, upper } => {
-            if tick >= lower && tick < upper {
+            if (lower..upper).contains(&tick) {
                 return Some((if increasing { upper } else { lower }, false, true));
             }
             if tick < lower {

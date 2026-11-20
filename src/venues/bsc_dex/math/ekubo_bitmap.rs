@@ -35,7 +35,7 @@ pub fn tick_of(word: u64, index: u32, spacing: u32) -> i64 {
 
 /// Биты слова из прочитанного: Some(биты) — слово прочитано (нулевое — не хранится), None — не прочитано.
 fn bits(d: &EkuboData, word: u64) -> Option<U256> {
-    if word < d.words.0 || word > d.words.1 {
+    if !(d.words.0..=d.words.1).contains(&word) {
         return None;
     }
     Some(

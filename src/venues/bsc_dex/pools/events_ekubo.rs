@@ -135,7 +135,7 @@ fn touch_mev(d: &mut EkuboData, ts: Option<u64>) -> bool {
 /// слов — не трогается. Возвращает: false — net ушёл бы ниже нуля или переполнение (карта разошлась). Ошибок нет.
 fn update_tick(d: &mut EkuboData, spacing: u32, tick: i32, delta: i128, upper: bool) -> bool {
     let (word, bit) = word_index(tick, spacing);
-    if word < d.words.0 || word > d.words.1 {
+    if !(d.words.0..=d.words.1).contains(&word) {
         return true;
     }
     let pos = d.ticks.binary_search_by_key(&tick, |t| t.tick);

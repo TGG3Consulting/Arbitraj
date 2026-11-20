@@ -10,7 +10,11 @@
 //! идёт при недостоверном из-за этой отметки пуле); лог другого действия — отметка потеряна, полное чтение
 //! (settle_lost.rs lost, как Follow); голова выше блока отметки — полное чтение (settle_close.rs). Сбой чтения — пул
 //! недостоверен, отметка долой (listen_log.rs, как у любой ошибки чтения).
-//! Кто вызывает: settle.rs (step → next_fee), listen_log.rs (next_fee_open), integral_fee.rs (fee_written).
+//! Повторное ревью t236, п. 2: Need::Clock — время головы не получено: пулы недостоверны на этот блок без полного
+//! чтения (clock_hold — fusion_clock.rs); на голове со временем fusion_head.rs снимает её (clock_back), если комиссия
+//! по книге считается, иначе ставит Need::Fee (полное чтение).
+//! Кто вызывает: settle.rs (step → next_fee), listen_log.rs (next_fee_open), integral_fee.rs (fee_written),
+//! fusion_clock.rs (clock_hold), fusion_head.rs (on_clock, clock_back).
 //! От чего зависит: settle.rs (Holds, Need), registry.rs, events.rs (Applied), families.rs, abi_algebra.rs (Fee).
 //! Настройки: нет (базовое поведение).
 
@@ -71,5 +75,24 @@ impl Holds {
         self.get(r).is_some_and(|h| {
             h.need == Some(Need::NextFee) && h.block == block && h.tx == tx
         })
+    }
+
+    /// Решение 463 (повторное ревью t236, п. 2): время головы не получено — пул недостоверен на этот блок
+    /// (Need::Clock, без полного чтения). Принимает: реестр, ссылку, голову. Ошибок нет.
+    pub fn clock_hold(&self, reg: &Registry, r: &PoolRef, block: u64) {
+        self.hold(reg, r, (block, Need::Clock), Vec::new(), false);
+    }
+
+    /// Стоит ли Need::Clock. Ошибок нет.
+    pub fn on_clock(&self, r: &PoolRef) -> bool {
+        self.get(r).is_some_and(|h| h.need == Some(Need::Clock))
+    }
+
+    /// Время снова есть и комиссия по книге считается (fusion_head.rs): Need::Clock снимается, достоверность — как до
+    /// отметки (settle.rs release). Другая отметка не трогается. Ошибок нет.
+    pub fn clock_back(&self, reg: &Registry, r: &PoolRef) {
+        if self.on_clock(r) {
+            self.release(reg, r);
+        }
     }
 }

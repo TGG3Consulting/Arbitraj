@@ -15,7 +15,7 @@
 //! полное чтение пула на голове (не возврат достоверности), лишняя работа, не деньги. Числа и настройки нет.
 //! Решение 382: так же закрывается отметка Need::Reread (память пула разошлась с узлом) — полное чтение на голове выше
 //! блока отметки. Решение 463 (ревью t236): и Need::Fee (комиссия THENA Fusion следующего блока не считалась —
-//! fusion_head.rs).
+//! fusion_head.rs). Need::Clock (время головы не получено) здесь НЕ закрывается — её снимает fusion_head.rs.
 //! Кто вызывает: pools/session.rs (ветка новой головы, до reload::retry).
 //! От чего зависит: settle.rs (Holds, Hold), reload.rs (load_one), stale_read.rs (waiting), pool_fail.rs (note, requeue,
 //! base), invalidated.rs, admit.rs (Members), refresh_urgency.rs (класс dex.event_refresh_urgency), listen.rs.
@@ -31,7 +31,8 @@ use super::{pool_fail, refresh_urgency, reload, stale_read};
 /// Пора ли закрыть отметку на голове `at`; `transit` — могут ли логи пула блока отметки ещё быть в пути (см. шапку).
 /// Ошибок нет.
 pub fn due(h: &Hold, at: u64, transit: bool) -> bool {
-    h.need.is_some() && at > h.block && !transit
+    // Решение 463 (повторное ревью t236, п. 2): Need::Clock закрывает fusion_head.rs без полного чтения.
+    h.need.is_some_and(|n| n != Need::Clock) && at > h.block && !transit
 }
 
 /// В пути ли логи пула (см. шапку). Принимает: событий в полосе пула, сообщений в канале пачки, самый поздний блок

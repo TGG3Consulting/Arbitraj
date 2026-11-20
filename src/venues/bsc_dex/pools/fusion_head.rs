@@ -6,7 +6,7 @@
 //! блока.
 //! Время головы — node/heads.rs time_since: время блока головы или более нового, никогда не более старого (ревью п. 4).
 //! Изменилась — пул уходит ядру.
-//! Не торгуем вслепую (ревью п. 1): комиссию следующего блока посчитать нельзя (времени головы нет; данных оракула нет
+//! Не торгуем вслепую (ревью п. 1): комиссию следующего блока посчитать нельзя (данных оракула нет
 //! или они старее состояния пула; время головы раньше времени чтения или последней точки оракула — без wrapping_sub;
 //! начала окна на нужное время нет) — пул недостоверен: отметка settle.rs Need::Fee (valid = false, ядру не уходит),
 //! причина — журнал dex.pool. Достоверность возвращает только полное чтение пула (settle_close.rs на следующей голове;
@@ -15,6 +15,8 @@
 //! считается) — оракул пула перечитывается на этой голове заранее, одновременно у всех таких пулов
 //! (fusion_head_read.rs), пока комиссия ещё известна. Пул на паузе решения 339 заранее не перечитывается.
 //! Книга, её чистка (forget, orphan) и комиссия того же блока для сверки (own_read, same_block) — fusion_book.rs.
+//! Повторное ревью t236: времени головы нет — fusion_clock.rs (Need::Clock, без полного чтения; снимается здесь,
+//! если книга покрывает); спящие пулы (asleep) пропускаются.
 //! Кто вызывает: pools/per_block.rs (any, on_head).
 //! От чего зависит: math/fee_algebra_v1.rs, fusion_book.rs (with, Held), fusion_head_read.rs, listen.rs (Pools),
 //! emit_pool.rs, registry.rs, settle.rs (pending, hold, Need::Fee), pool_fail.rs (paused), node/heads.rs,
@@ -59,21 +61,34 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
         Ok((_, t)) => u32::try_from(t).map_err(|_| format!("время головы {t} вне uint32")),
         Err(e) => Err(format!("время головы {block} не получено: {}", e.message)),
     };
+    // Повторное ревью t236 (п. 2): нет времени — пулы недостоверны на этот блок без полного чтения (fusion_clock.rs).
+    let ts = match ts {
+        Ok(t) => t,
+        Err(why) => {
+            super::fusion_clock::lost(p, pools, block, &why).await;
+            return Ok(());
+        }
+    };
     let mut due = Vec::new();
     for (f, t) in pools {
         let r = &f.reference;
         let PoolRef::Contract(addr) = *r else {
             continue;
         };
-        if f.family.proto != Proto::Algebra || p.holds.pending(r) {
+        let clock = p.holds.on_clock(r);
+        if f.family.proto != Proto::Algebra || (p.holds.pending(r) && !clock) {
             continue;
         }
         // Чтение записи без изменения реестра (версия реестра растёт только при новой комиссии).
         let Some(e) = p.reg.entry(r) else {
             continue;
         };
-        match step(&e, addr, &ts) {
+        match step(&e, addr, ts, clock) {
             Step::Fee(new, edge) => {
+                // Время снова есть и книга покрывает — отметка «нет времени» долой (достоверность — как до неё).
+                if clock {
+                    p.holds.clock_back(&p.reg, r);
+                }
                 if let Some(n) = new
                     && let Some(Some(pool)) = p.reg.update(r, |e| set(e, n))
                 {
@@ -91,18 +106,16 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
 }
 
 /// Пересчёт комиссии записи по книге на время головы. Данные книги — не старее состояния записи (synced_block).
-/// Принимает: запись, адрес, время головы или причина его отсутствия. Возвращает: итог шага. Ошибок нет.
-fn step(e: &Entry, addr: Address, ts: &Result<u32, String>) -> Step {
-    if !e.valid {
+/// Недостоверная запись — только с отметкой Need::Clock (`clock`: недостоверна ею); спящая (asleep: обмены не
+/// приходят, не котируется; при пробуждении — полное чтение) — пропуск, её оракул не читается.
+/// Принимает: запись, адрес, время головы, стоит ли Need::Clock. Возвращает: итог шага. Ошибок нет.
+fn step(e: &Entry, addr: Address, ts: u32, clock: bool) -> Step {
+    if (!e.valid && !clock) || e.asleep {
         return Step::Skip;
     }
     let synced = e.synced_block;
     let PoolState::Algebra { tick, fee, .. } = &e.pool.state else {
         return Step::Skip;
-    };
-    let ts = match ts {
-        Ok(t) => *t,
-        Err(why) => return Step::Dark(why.clone()),
     };
     super::fusion_book::with(addr, |h| judge(h, (synced, ts), (*tick, *fee)))
 }

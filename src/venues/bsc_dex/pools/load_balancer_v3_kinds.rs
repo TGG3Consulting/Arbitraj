@@ -91,7 +91,7 @@ pub fn decode(
     let dec = |e: alloy::sol_types::Error| format!("ответ вида не по ABI: {e}");
     let r = fx.release;
     let amp = if r.stable() {
-        let a = P::getAmplificationParameterCall::abi_decode_returns(cur.next()?).map_err(dec)?;
+        let a = P::getAmplificationParameterCall::abi_decode_returns(cur.take()?).map_err(dec)?;
         if a.precision != U256::from(1_000u32) {
             return Err(format!("точность A {} ≠ 1000 (StableMath.sol L38)", a.precision));
         }
@@ -100,13 +100,13 @@ pub fn decode(
         U256::ZERO
     };
     let weights = if r.moving_weights() {
-        P::getNormalizedWeightsCall::abi_decode_returns(cur.next()?).map_err(dec)?
+        P::getNormalizedWeightsCall::abi_decode_returns(cur.take()?).map_err(dec)?
     } else {
         Vec::new()
     };
     let lbp = matches!(r, Release::LbpV1 | Release::LbpV2 | Release::LbpV3 | Release::LbpV4);
     let enabled = if lbp || r == Release::FixedLbp {
-        ILbp::isSwapEnabledCall::abi_decode_returns(cur.next()?).map_err(dec)?
+        ILbp::isSwapEnabledCall::abi_decode_returns(cur.take()?).map_err(dec)?
     } else {
         false
     };
@@ -175,9 +175,9 @@ fn reclamm(
     initialized: bool,
 ) -> Result<(U256, U256), String> {
     let dec = |e: alloy::sol_types::Error| format!("ReClamm не по ABI: {e}");
-    let view = cur.next();
+    let view = cur.take();
     let (last, margin) = if r == Release::ReClamm {
-        (Some(cur.next()), Some(cur.next()))
+        (Some(cur.take()), Some(cur.take()))
     } else {
         (None, None)
     };

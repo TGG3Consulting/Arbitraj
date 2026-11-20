@@ -107,7 +107,7 @@ fn imbalance(b: &[U256]) -> Option<U256> {
     let mut sorted = b.to_vec();
     sorted.sort();
     let mid = sorted.len() / 2;
-    let median = if sorted.len() % 2 == 0 {
+    let median = if sorted.len().is_multiple_of(2) {
         sorted.get(mid.checked_sub(1)?)?.checked_add(*sorted.get(mid)?)? / U256::from(2u8)
     } else {
         *sorted.get(mid)?

@@ -35,7 +35,7 @@ pub struct Cursor<'a> {
 
 impl<'a> Cursor<'a> {
     /// Следующий ответ. Ошибки (текст): откат вызова, нет ответа.
-    pub fn next(&mut self) -> Result<&'a Bytes, String> {
+    pub fn take(&mut self) -> Result<&'a Bytes, String> {
         let i = self.at;
         self.at += 1;
         match self.got.get(i) {
@@ -53,19 +53,19 @@ pub fn hook(k: HookKind, cur: &mut Cursor) -> Result<V3Hook, String> {
     Ok(match k {
         HookKind::None => V3Hook::None,
         HookKind::Surge(_) => V3Hook::Surge {
-            max: S::getMaxSurgeFeePercentageCall::abi_decode_returns(cur.next()?).map_err(dec)?,
-            threshold: S::getSurgeThresholdPercentageCall::abi_decode_returns(cur.next()?)
+            max: S::getMaxSurgeFeePercentageCall::abi_decode_returns(cur.take()?).map_err(dec)?,
+            threshold: S::getSurgeThresholdPercentageCall::abi_decode_returns(cur.take()?)
                 .map_err(dec)?,
         },
         HookKind::Mev(_) => {
-            let enabled = M::isMevTaxEnabledCall::abi_decode_returns(cur.next()?).map_err(dec)?;
+            let enabled = M::isMevTaxEnabledCall::abi_decode_returns(cur.take()?).map_err(dec)?;
             let max = M::getMaxMevSwapFeePercentageCall::abi_decode_returns;
-            let max = max(cur.next()?).map_err(dec)?;
+            let max = max(cur.take()?).map_err(dec)?;
             let mult = M::getPoolMevTaxMultiplierCall::abi_decode_returns;
-            let mult = mult(cur.next()?).map_err(dec)?;
-            let thr = M::getPoolMevTaxThresholdCall::abi_decode_returns(cur.next()?).map_err(dec)?;
-            let ver = IArbSys::arbOSVersionCall::abi_decode_returns(cur.next()?).map_err(dec)?;
-            let tips = cur.next();
+            let mult = mult(cur.take()?).map_err(dec)?;
+            let thr = M::getPoolMevTaxThresholdCall::abi_decode_returns(cur.take()?).map_err(dec)?;
+            let ver = IArbSys::arbOSVersionCall::abi_decode_returns(cur.take()?).map_err(dec)?;
+            let tips = cur.take();
             let ver = ver.saturating_sub(U256::from(ARBOS_OFFSET));
             // tx_processor.go L995-L1015: ArbOS 9 — чаевые собираются, ниже 60 — нет, с 60 — флаг getCollectTips.
             let collect = if ver == U256::from(9u8) {

@@ -601,7 +601,8 @@ async fn run(
                 // выходе» — по порогу «итог сделки ≥ 0»; t81 (дополнение к 247 п. Г): PROFITABLE_OPEN — исполнить может и
                 // агрегатор DEX, если он включён и его маршрут лучше.
                 let g = super::remeasure::PROFITABLE_OPEN;
-                return super::sell::market_guarded(core, deal, &why, g).await;
+                // Решение 480 (ревью 2): граница «итог ≥ 0» — на том же худшем случае A, что у выбора (partial_back.rs).
+                return super::sell::market_guarded_back(core, deal, &why, g).await;
             }
             super::partial::Choice::Neither(e) => {
                 let why = format!("частичная покупка: ни один путь не считается — {e}");

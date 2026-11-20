@@ -51,7 +51,7 @@
 //! sell_here_ok.rs (решение 417: sell — продажа здесь при итоге ≥ 0 под ходом).
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
 //! manual_outcome.rs, risk_count.rs, remeasure.rs, sell_range.rs, sell_range_run.rs, sell_loop.rs, sell_next.rs,
-//! sell_turn.rs, sell_turn_fresh.rs.
+//! sell_turn.rs, sell_turn_fresh.rs, partial_back.rs (решение 480: market_guarded_back).
 //! Настройки: через sell_unsent.rs — stuck.unsent_retries_max (решение 110), stuck.reject_retry_pause_ms (решение 154);
 //! через sell_range.rs — sell.market_on_price_range (решение 268).
 
@@ -148,17 +148,40 @@ pub fn guard_of(why: &str) -> Guard {
 /// Как market, с пере-замером продажи DEX при откате по minOut (решение 247): граница реального выхода — по порогу
 /// `g` и свежей котировке (remeasure::floor). Принимает: ядро, сделку, причину, порог. Ошибок нет (как market).
 pub async fn market_guarded(core: &Core, deal: Deal, why: &str, g: Guard) {
+    Box::pin(market_guarded_as(core, deal, why, g, false)).await
+}
+
+/// Решение 480 (ревью 2, п. 4): как market_guarded — продажа на A частичной покупки (executor.rs, выбор «продать на
+/// A»): граница «итог ≥ 0» (remeasure::of) — по оценке на том же худшем случае, что у решения (partial_back::
+/// exec_values: наши продажи на A впереди); сдвига нет — как market_guarded. Принимает: как market_guarded.
+pub async fn market_guarded_back(core: &Core, deal: Deal, why: &str, g: Guard) {
+    Box::pin(market_guarded_as(core, deal, why, g, true)).await
+}
+
+/// market_guarded / market_guarded_back (back — граница на худшем случае A). Ошибок нет.
+async fn market_guarded_as(core: &Core, deal: Deal, why: &str, g: Guard, back: bool) {
     // Решение 201: продажа ждёт конец паузы площадки после 429 (exec.rate_limit_wait_max_ms), а не отказывает сразу.
     super::patience_scope::with(core, async {
         // Решение 413: на бирже — свежий факт и доля сделки перед продажей (sell_fact.rs).
-        let Some(deal) = Box::pin(super::sell_fact::before(core, deal, why)).await else {
+        let Some(mut deal) = Box::pin(super::sell_fact::before(core, deal, why)).await else {
             return;
         };
         // Решение 415: ход очереди продажи счёта — после факта; котировка и ордер — под одним ходом (sell_turn.rs).
         let mut turn = Box::pin(super::sell_turn::take(&deal.at, &deal.direction.asset)).await;
         match Box::pin(super::sell_turn_fresh::quote(core, &deal, &mut turn)).await {
             Ok((v, q, b)) => {
-                let f = super::remeasure::of(&deal, v, deal.qty * q.avg_price, g);
+                let (mut v, mut gross) = (v, deal.qty * q.avg_price);
+                if back {
+                    match Box::pin(super::partial_back::exec_values(core, &deal)).await {
+                        Ok(Some(x)) => (v, gross) = x,
+                        Ok(None) => {}
+                        Err(e) => deal.note(format!(
+                            "Продажа на A: худший случай для границы «итог ≥ 0» не посчитан ({e}) — граница по \
+                             котировке продажи (решение 480)"
+                        )),
+                    }
+                }
+                let f = super::remeasure::of(&deal, v, gross, g);
                 // Решение 268: условие, по которому продажа решена (кнопка / порог режима / без порога).
                 let rule = super::sell_range::rule_of(why, g);
                 sell(core, deal, (q, b, turn), why, f, rule).await

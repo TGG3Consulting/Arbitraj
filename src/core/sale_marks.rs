@@ -14,7 +14,7 @@
 //! Горячий путь: атомарные счётчики «ордеров в полёте» и «неясных» — 0: без замков; поиск по монете — по ссылке на
 //! ключ (у монеты с адресом контракта без выделения памяти), площадки монеты — коротким списком.
 //! Кто вызывает: credit_lock.rs (order, finish, track), ledger.rs и ledger_load.rs (track), ride_settled.rs (busy,
-//! sales, unsure_ids), partial.rs (busy, unsure_ids), costs_source.rs (any_unsure).
+//! sales, unsure_ids), partial.rs и partial_back.rs (busy, done).
 //! От чего зависит: coin_key.rs, deal.rs, engine.rs, core/types, deps.rs (уведомление).
 //! Настройки: нет (базовое поведение; уведомление — событие deal.sale_unknown_block в настройках уведомлений).
 
@@ -172,12 +172,6 @@ pub fn track(core: &Core, d: &Deal) {
             core.inner.deps.notify(EVENT, Some(&v), &text).await;
         });
     }
-}
-
-/// Что делает: есть ли сделка с неизвестным исходом продажи монеты на площадке (быстрый путь — атомарный счётчик).
-/// Принимает: ядро, площадку, монету. Ошибок нет.
-pub fn any_unsure(core: &Core, v: &VenueId, a: &Asset) -> bool {
-    !unsure_ids(core, v, a).is_empty()
 }
 
 /// Что делает: все сделки с неизвестным исходом продажи монеты на площадке. Принимает: ядро, площадку, монету.

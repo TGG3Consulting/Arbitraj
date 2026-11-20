@@ -20,7 +20,8 @@
 //!   цену; не продала и продаст — учтено. Ордер в полёте — короткое ожидание его итога (выше), не вечная блокировка.
 //!
 //! Сделки других монет через общие промежуточные пулы и циклы DEX ↔ DEX здесь не учитываются (docs/TASKS.md, 464).
-//! Кто вызывает: core/ride_quote.rs (live — продажа на B; ahead_noted — worst, text).
+//! Кто вызывает: core/ride_quote.rs (live_sell — before / after), core/partial_back.rs (before / after), core/ride_shift.rs
+//! (worst, text).
 //! От чего зависит: sale_marks.rs (busy, sales, unsure_ids), coin_ride.rs (идущие), engine.rs, core/types.
 //! Настройки: нет (базовое поведение).
 

@@ -15,8 +15,9 @@
 //! Решение 394 (t179, докупка): Live при идущих сделках группы — ride_quote.rs, ride_trail.rs (продажа после их монет,
 //! свежесть данных), возврат USDT докупки без фиксированной части (costs_withdraw.rs return_b_top_up).
 //! Решение 480 (меняет блокировку решения 464): исход нашей продажи монеты на площадке продажи неизвестен — продажа
-//! новой сделки считается после её остатка как ещё не исполненной (худший случай, ride_quote::ahead), и без групп.
-//! От чего зависит: costs_quote.rs, ride_quote.rs, sale_marks.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
+//! новой сделки считается после её остатка как ещё не исполненной (худший случай), и без групп. Ревью 2: сдвиг продажи
+//! снимается один раз на расчёт (Source::shift, ride_shift.rs) и передаётся quote_at / fillable_at / worst_at.
+//! От чего зависит: costs_quote.rs, ride_quote.rs, ride_shift.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
 //! Настройки: нет (у источника Live — через costs_quote.rs и convert.rs).
 
 use std::future::Future;
@@ -43,17 +44,6 @@ pub trait Source: Sync {
         qty: Decimal,
     ) -> impl Future<Output = Result<Quote, Fail>> + Send;
 
-    /// Что делает: котировка продажи на B и строка хронологии о худшем случае, по которому она посчитана (решение 480,
-    /// ревью: строку несёт расчёт — Calc.worst_b, набор не пересобирается). По умолчанию — quote без строки.
-    /// Принимает: направление, количество. Возвращает: (Quote, строка; None — не было). Ошибки: как у quote.
-    fn quote_sell(
-        &self,
-        d: &Direction,
-        qty: Decimal,
-    ) -> impl Future<Output = Result<(Quote, Option<String>), Fail>> + Send {
-        async move { self.quote(d, true, qty).await.map(|q| (q, None)) }
-    }
-
     /// Что делает: исполнимое количество стороны на объём (решение 250: проверка доли глубины h — costs.rs; цена не
     /// нужна). По умолчанию — fillable_qty котировки quote. Принимает: направление, сторону, количество.
     /// Возвращает: исполнимое количество. Ошибки: как у quote.
@@ -64,6 +54,47 @@ pub trait Source: Sync {
         qty: Decimal,
     ) -> impl Future<Output = Result<Decimal, Fail>> + Send {
         async move { self.quote(d, sell, qty).await.map(|q| q.fillable_qty) }
+    }
+
+    /// Что делает: решение 480 (ревью 2) — сдвиг продажи на B одним чтением на расчёт (ride_shift.rs); costs.rs снимает
+    /// его в начале расчёта и передаёт quote_at, fillable_at, worst_at. По умолчанию — без сдвига (как раньше).
+    /// Принимает: направление. Возвращает: Shift. Ошибки: Stop — сдвиг не снимается (запись сделки не найдена).
+    fn shift(&self, _d: &Direction) -> Result<super::ride_shift::Shift, Fail> {
+        Ok(super::ride_shift::Shift::default())
+    }
+
+    /// Что делает: котировка продажи на B на сдвиге расчёта. По умолчанию — quote. Принимает: направление, количество,
+    /// сдвиг. Ошибки: как у quote.
+    fn quote_at(
+        &self,
+        d: &Direction,
+        qty: Decimal,
+        _sh: &super::ride_shift::Shift,
+    ) -> impl Future<Output = Result<Quote, Fail>> + Send {
+        self.quote(d, true, qty)
+    }
+
+    /// Что делает: исполнимое продажи на B на сдвиге расчёта. По умолчанию — fillable. Принимает: направление,
+    /// количество, сдвиг. Ошибки: как у fillable.
+    fn fillable_at(
+        &self,
+        d: &Direction,
+        qty: Decimal,
+        _sh: &super::ride_shift::Shift,
+    ) -> impl Future<Output = Result<Decimal, Fail>> + Send {
+        self.fillable(d, true, qty)
+    }
+
+    /// Что делает: худшая цена продажи на B на сдвиге расчёта. По умолчанию — worst. Принимает: направление,
+    /// количество, среднюю цену, сдвиг. Ошибки: как у worst.
+    fn worst_at(
+        &self,
+        d: &Direction,
+        qty: Decimal,
+        avg: Decimal,
+        _sh: &super::ride_shift::Shift,
+    ) -> Result<Decimal, Fail> {
+        self.worst(d, true, qty, avg)
     }
 
     /// Что делает: худшая цена ордера, как её поставит исполнение. Принимает: направление, сторону, количество, среднюю
@@ -112,24 +143,9 @@ impl Live<'_> {
         self.src.is_none() && !super::busy_budget::in_shadow()
     }
 
-    /// Решение 480: сдвиг продажи живого расчёта (ride_quote::ahead: группы + продажи с неизвестным исходом); покупка,
-    /// снимок, теневой замер — 0. Ошибки: Stop — как у ride_quote::ahead.
-    fn off(&self, d: &Direction, sell: bool) -> Result<Decimal, Fail> {
-        if sell && self.rides() {
-            super::ride_quote::ahead(self.core, d).map_err(Fail::Stop)
-        } else {
-            Ok(Decimal::ZERO)
-        }
-    }
-
-    /// Котировка как раньше (без сдвигов): снимок / теневой замер, или групп нет и (для продажи) продаж с неизвестным
-    /// исходом на площадке продажи нет — атомарные быстрые пути. Ошибок нет.
-    fn plain(&self, d: &Direction, sell: bool) -> bool {
-        if !self.rides() {
-            return true;
-        }
-        let unsure = sell && super::sale_marks::any_unsure(self.core, &d.sell_on, &d.asset);
-        super::ride_quote::idle(self.core, d) && !unsure
+    /// Покупка на A как раньше (без ветки докупки): снимок / теневой замер или групп нет. Ошибок нет.
+    fn plain_buy(&self, d: &Direction) -> bool {
+        !self.rides() || super::ride_quote::idle(self.core, d)
     }
 
     /// Решение 237: затраты плана снимка (входы момента решения); None — живой расчёт или входы не сняты.
@@ -141,52 +157,73 @@ impl Live<'_> {
 
 impl Source for Live<'_> {
     /// Котировка шлюза или снимка (costs_quote.rs fetch). Решение 394 (t179, докупка), только живой расчёт сделки (не
-    /// снимок, не теневой замер 267 — busy_budget::in_shadow): продажа на B — после монет идущих сделок группы на той же
-    /// B (ride_quote.rs) и по данным новее продаж сделок групп (ride_trail.rs); покупка на A — по данным новее покупок
-    /// идущих сделок группы. Групп нет — как раньше. Ошибки: как у fetch; Stop — данные не доказуемо свежее.
+    /// снимок, не теневой замер 267 — busy_budget::in_shadow): продажа на B — на сдвиге (shift, quote_at); покупка на
+    /// A — по данным новее покупок идущих сделок группы (ride_quote::live_buy). Групп нет — как раньше. Ошибки: как у
+    /// fetch; Stop — данные не доказуемо свежее.
     async fn quote(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
-        // Решение 480: исход нашей продажи монеты на площадке продажи неизвестен — не блокировка, а худший случай:
-        // ветка ride_quote::live со сдвигом на её остаток (и без идущих сделок; быстрый путь — sale_marks.rs).
-        if self.plain(d, sell) {
-            return super::costs_quote::fetch(self.core, d, sell, qty, self.src).await;
+        if sell {
+            let sh = self.shift(d)?;
+            return self.quote_at(d, qty, &sh).await;
+        }
+        if self.plain_buy(d) {
+            return super::costs_quote::fetch(self.core, d, false, qty, self.src).await;
         }
         // Решение 394: ветка докупки — в куче (размер будущего котировки как раньше; путь сделки чувствителен к стеку).
-        Box::pin(super::ride_quote::live(self.core, d, sell, qty))
-            .await
-            .map(|x| x.0)
+        Box::pin(super::ride_quote::live_buy(self.core, d, qty)).await
     }
 
-    /// Решение 480 (ревью): как quote продажи, и строка худшего случая из того же чтения набора (ride_quote::live).
-    /// Ошибки: как у quote.
-    async fn quote_sell(
+    /// Решение 480 (ревью 2): сдвиг продажи — одно чтение (ride_shift::read); снимок и теневой замер — без сдвига.
+    /// Ошибки: Stop — как у ride_shift::read.
+    fn shift(&self, d: &Direction) -> Result<super::ride_shift::Shift, Fail> {
+        if !self.rides() {
+            return Ok(super::ride_shift::Shift::default());
+        }
+        super::ride_shift::read(self.core, d).map_err(Fail::Stop)
+    }
+
+    /// Продажа на B на сдвиге расчёта: не live — как раньше (fetch); live — ride_quote::live_sell (граница своих
+    /// продаж, сдвиг: группы решения 394 / 464 и худший случай решения 480, свежесть). Ошибки: как у quote.
+    async fn quote_at(
         &self,
         d: &Direction,
         qty: Decimal,
-    ) -> Result<(Quote, Option<String>), Fail> {
-        if self.plain(d, true) {
-            let q = super::costs_quote::fetch(self.core, d, true, qty, self.src).await?;
-            return Ok((q, None));
+        sh: &super::ride_shift::Shift,
+    ) -> Result<Quote, Fail> {
+        if !sh.live {
+            return super::costs_quote::fetch(self.core, d, true, qty, self.src).await;
         }
-        Box::pin(super::ride_quote::live(self.core, d, true, qty)).await
+        Box::pin(super::ride_quote::live_sell(self.core, d, qty, sh)).await
     }
 
     /// Решение 250: исполнимое количество — живое через контракт quote_fills (costs_quote.rs fillable); со снимком
-    /// рынка — fillable_qty котировки снимка (как раньше). Решение 394: продажа на B при идущих сделках группы на той
-    /// же B — исполнимое на (их монеты + объём) минус их монеты; решение 480 — и остаток продаж с неизвестным исходом
-    /// (ride_quote::ahead). Ошибки: как у quote.
+    /// рынка — fillable_qty котировки снимка (как раньше). Продажа — на сдвиге (fillable_at). Ошибки: как у quote.
     async fn fillable(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Decimal, Fail> {
         if self.src.is_some() {
             return self.quote(d, sell, qty).await.map(|q| q.fillable_qty);
         }
-        let off = self.off(d, sell)?;
-        // Решение 394: сдвиг 0 (докупка выключена или групп нет, продаж с неизвестным исходом нет) — тот же вызов.
-        let f = super::costs_quote::fillable(self.core, d, sell, qty + off).await?;
-        Ok((f - off).max(Decimal::ZERO))
+        if sell {
+            let sh = self.shift(d)?;
+            return self.fillable_at(d, qty, &sh).await;
+        }
+        super::costs_quote::fillable(self.core, d, false, qty).await
     }
 
-    /// Худшая цена (costs_quote.rs worst). Решение 394: живая продажа на B при идущих сделках группы на той же B —
-    /// уровень стакана на (их монеты + объём): наш ордер дойдёт до него, если они продадут раньше; решение 480 — и
-    /// остаток продаж с неизвестным исходом (ride_quote::ahead). Ошибки: как у worst; Stop — как у ahead.
+    /// Решение 394 / 480: исполнимое продажи на B — на (сдвиг + объём) минус сдвиг; сдвиг 0 — тот же вызов, что раньше.
+    /// Ошибки: как у quote.
+    async fn fillable_at(
+        &self,
+        d: &Direction,
+        qty: Decimal,
+        sh: &super::ride_shift::Shift,
+    ) -> Result<Decimal, Fail> {
+        if self.src.is_some() {
+            return self.quote_at(d, qty, sh).await.map(|q| q.fillable_qty);
+        }
+        let f = super::costs_quote::fillable(self.core, d, true, qty + sh.off).await?;
+        Ok((f - sh.off).max(Decimal::ZERO))
+    }
+
+    /// Худшая цена (costs_quote.rs worst). Продажа — на сдвиге (worst_at). Ошибки: как у worst; Stop — как у shift.
     fn worst(
         &self,
         d: &Direction,
@@ -194,13 +231,24 @@ impl Source for Live<'_> {
         qty: Decimal,
         avg: Decimal,
     ) -> Result<Decimal, Fail> {
-        let (v, side) = if sell {
-            (&d.sell_on, Side::Sell)
-        } else {
-            (&d.buy_on, Side::Buy)
-        };
-        let off = self.off(d, sell)?;
-        super::costs_quote::worst(self.core, v, &d.asset, side, qty + off, avg, self.src)
+        if sell {
+            let sh = self.shift(d)?;
+            return self.worst_at(d, qty, avg, &sh);
+        }
+        super::costs_quote::worst(self.core, &d.buy_on, &d.asset, Side::Buy, qty, avg, self.src)
+    }
+
+    /// Решение 394 / 480: худшая цена продажи на B — уровень стакана на (сдвиг + объём): наш ордер дойдёт до него, если
+    /// продажи впереди исполнятся раньше. Ошибки: как у costs_quote::worst.
+    fn worst_at(
+        &self,
+        d: &Direction,
+        qty: Decimal,
+        avg: Decimal,
+        sh: &super::ride_shift::Shift,
+    ) -> Result<Decimal, Fail> {
+        let (v, a, off) = (&d.sell_on, &d.asset, sh.off);
+        super::costs_quote::worst(self.core, v, a, Side::Sell, qty + off, avg, self.src)
     }
 
     /// Справочник сетей ядра (из контекста) или шлюз DEX (costs_withdraw.rs withdraw_a); решение 237 — DEX на A со

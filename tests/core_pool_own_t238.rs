@@ -11,7 +11,8 @@
 //! - ордер продажи в полёте (credit_lock::selling ждёт итога) и исполнившийся за время котировки (счётчик итогов) —
 //!   котировки нет до итога (ride_settled.rs, sale_marks.rs); котировка-решение без ордера не держит; решение 480 —
 //!   исход неизвестен: не блокировка, остаток сделки впереди продажи новой ровно один раз (худший случай), и после
-//!   перезапуска, и без групп;
+//!   перезапуска, и без групп (ride_shift::read — одно чтение сдвига); пара котировок marginal DEX — по одному блоку
+//!   пула (ride_pair::same_state на записанных маршрутах);
 //! - решение 476: approve заранее (sell_approve.rs) — продажа на бирже ничего не отправляет; на DEX без площадки в
 //!   реестре — не блокирует (строка в хронологию, approve перед обменом, как раньше);
 //! - время в пути монеты без своей истории: настройки (37 + 2 = 39 с) или статистика пары gate → bsc_dex по всем монетам
@@ -39,8 +40,8 @@ use arb::core::types::{
     SendMethod, Side, TradeRequest, TradeResult, TradeStatus, TxOutcome, VenueId,
 };
 use arb::core::{
-    coin_ride, credit_lock, ledger, ride_quote, ride_settled, ride_trail, sale_marks, sell_approve,
-    sell_turn, transit, transit_source,
+    coin_ride, credit_lock, ledger, ride_pair, ride_quote, ride_settled, ride_shift, ride_trail,
+    sale_marks, sell_approve, sell_turn, transit, transit_source,
 };
 use arb::gateway::contract::VenueKind;
 use arb::gateway::registry::Registry;
@@ -331,6 +332,10 @@ async fn executed_sale_leaves_projection_and_sets_block() {
     let (q505, q509) = (quote_at(&r, 134740505), quote_at(&r, 134740509));
     assert!(ride_trail::check(&core, &key, &v, &q505).is_err());
     assert!(ride_trail::check(&core, &key, &v, &q509).is_ok());
+    // Решение 480 (ревью 2): пара котировок marginal DEX — только по одному блоку пула (записанные маршруты NUM).
+    assert!(ride_pair::same_state(&v, &q505, &q505).is_ok());
+    let two = ride_pair::same_state(&v, &q505, &q509).unwrap_err();
+    assert!(two.contains("134740505") && two.contains("134740509"), "{two}");
 }
 
 #[tokio::test]
@@ -377,10 +382,11 @@ async fn sale_order_in_flight_waits_unknown_counted_as_worst() {
     assert!(ride_settled::before(&core, &ku).is_ok());
     assert_eq!(ride_quote::sell_ahead(&core, &ku), Decimal::ZERO);
     assert_eq!(ride_quote::ahead(&core, &ku).unwrap(), gate.qty);
-    // Строка хронологии — из того же чтения набора, что сдвиг (ahead_noted → Calc.worst_b).
-    let (off, line) = ride_quote::ahead_noted(&core, &ku).unwrap();
-    assert_eq!(off, gate.qty);
-    let line = line.unwrap();
+    // Строка хронологии — из того же чтения, что сдвиг (ride_shift::read → Calc.worst_b); котировка — ветка live_sell.
+    let sh = ride_shift::read(&core, &ku).unwrap();
+    assert!(sh.live);
+    assert_eq!(sh.off, gate.qty);
+    let line = sh.note.unwrap();
     let want = format!(
         "исход продажи сделки {GATE} неизвестен — посчитано как ещё не исполненная (худший случай)"
     );
@@ -388,8 +394,8 @@ async fn sale_order_in_flight_waits_unknown_counted_as_worst() {
     // Разобрана (шаг «Беру на себя») — худшего случая нет.
     gate.step = Step::TakenOver;
     ledger::save(&core, &gate).await;
-    let (off, line) = ride_quote::ahead_noted(&core, &ku).unwrap();
-    assert_eq!((off, line), (Decimal::ZERO, None));
+    let sh = ride_shift::read(&core, &ku).unwrap();
+    assert_eq!((sh.off, sh.note), (Decimal::ZERO, None));
 }
 
 /// Настройка площадки (тест падает при ошибке).
@@ -498,15 +504,20 @@ async fn unsure_survives_restart_counted_as_worst_without_groups() {
     let ku = dir(&r, "kucoin", "bsc_dex");
     // Решение 480: идущих сделок и групп нет — остаток Gate всё равно впереди продажи новой сделки (худший случай).
     assert_eq!(ride_quote::ahead(&core, &ku).unwrap(), gate.qty);
-    let why = ride_quote::ahead_noted(&core, &ku).unwrap().1.unwrap();
+    let sh = ride_shift::read(&core, &ku).unwrap();
+    // Групп нет (idle), но худший случай есть — котировка не «как раньше», а ветка live_sell со сдвигом.
+    assert!(sh.live);
+    let why = sh.note.unwrap();
     assert!(why.contains(GATE), "{why}");
     // Котировка продажи новой сделки не отказана из-за Gate: идёт к шлюзу (площадок в реестре нет — его отказ).
     let live = Live {
         core: &core,
         src: None,
     };
-    if let Err(Fail::Stop(t)) = live.quote(&ku, true, Decimal::ONE).await {
-        assert!(!t.contains(GATE), "{t}");
+    match live.quote(&ku, true, Decimal::ONE).await {
+        Err(Fail::Stop(t)) => assert!(!t.contains(GATE), "{t}"),
+        Ok(_) => panic!("площадок в реестре нет — котировки быть не может"),
+        Err(e) => panic!("ждали отказ шлюза (Stop), получили {e}"),
     }
 }
 

@@ -88,6 +88,9 @@ pub async fn evaluate_capped<S: Source>(
 ) -> Result<Calc, Fail> {
     let d = &cx.dir;
     let coin = d.asset.ticker.clone();
+    // Решение 480 (ревью 2): сдвиг продажи на B — одно чтение на расчёт (ride_shift.rs); котировка, доля глубины и
+    // худшая цена продажи и строка хронологии (Calc.worst_b) — на нём.
+    let sh = src.shift(d)?;
     let qa = stage(
         || format!("котировка A {}", d.buy_on.0),
         src.quote(d, false, qty),
@@ -144,17 +147,17 @@ pub async fn evaluate_capped<S: Source>(
         true => format!("доля глубины B {}", d.sell_on.0),
         false => name_b(),
     };
-    stage(name_h, src.fillable(d, true, deep))
+    stage(name_h, src.fillable_at(d, deep, &sh))
         .await
         .and_then(|f| enough_qty(&d.sell_on.0, f, deep))
         .map_err(|e| match e {
             Fail::TooLarge(t) => Fail::TooLarge(format!("доля глубины B (h = {}): {t}", cx.h)),
             e => e,
         })?;
-    // Решение 480 (ревью): строка худшего случая — из того же чтения, что котировка (в Calc.worst_b).
-    let (qb, worst_note) = stage(name_b, src.quote_sell(d, sell_qty)).await?;
-    let qb = enough(&d.sell_on.0, qb, sell_qty)?;
-    let worst_b = src.worst(d, true, sell_qty, qb.avg_price)?;
+    let qb = stage(name_b, src.quote_at(d, sell_qty, &sh))
+        .await
+        .and_then(|q| enough(&d.sell_on.0, q, sell_qty))?;
+    let worst_b = src.worst_at(d, sell_qty, qb.avg_price, &sh)?;
     order_limits(&d.sell_on.0, cx.pair_b.as_ref(), sell_qty, worst_b)?;
     super::price_band::check(&d.sell_on.0, cx.band_b.as_deref(), Side::Sell, worst_b)?;
     lines.extend(qb.costs.iter().map(|c| (c.clone(), "B")));
@@ -273,7 +276,7 @@ pub async fn evaluate_capped<S: Source>(
         buy_worst: worst_a,
         buy_band: cx.band_a.is_some(),
         spend_fee,
-        worst_b: worst_note,
+        worst_b: sh.note,
         size: None,
     })
 }

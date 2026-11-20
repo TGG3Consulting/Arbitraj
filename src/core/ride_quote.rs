@@ -20,10 +20,13 @@
 //! проданные в блок котировки, — в состоянии пула и в остаток не входят: Deal.qty уменьшен, след ride_trail); наша
 //! продажа в полёте или исполнившаяся за время котировки — отказ до её итога (ride_settled.rs).
 //! Решение 480 (Тигран 21.11): к сдвигу добавляется остаток наших продаж с неизвестным исходом на той же площадке
-//! (ride_settled::worst — как ещё не исполненных, худший случай; и без групп и при выключенной докупке) — ahead.
-//! Кто вызывает: costs_source.rs (Live: quote — idle / live, fillable, worst — ahead), precheck_dex_sell.rs (ahead).
-//! От чего зависит: coin_ride.rs, costs_quote.rs, ride_trail.rs (sites), ride_settled.rs (before / after, worst),
-//! trade_ops.rs, engine.rs, core/types.
+//! (ride_settled::worst — как ещё не исполненных, худший случай; и без групп и при выключенной докупке). Ревью 2: сдвиг
+//! снимается один раз на расчёт (ride_shift.rs) и передаётся live_sell; пара котировок marginal — по одному состоянию
+//! площадки (ride_pair.rs).
+//! Кто вызывает: costs_source.rs (Live: idle, live_buy, live_sell, sell_ahead через ride_shift), precheck_dex_sell.rs
+//! (ahead), ride_shift.rs (idle, sell_ahead), partial_back.rs (marginal).
+//! От чего зависит: coin_ride.rs, costs_quote.rs, ride_trail.rs (sites, check), ride_settled.rs (before / after),
+//! ride_shift.rs, ride_pair.rs, trade_ops.rs, engine.rs, core/types.
 //! Настройки: нет (включатель — coin_ride.rs).
 
 use rust_decimal::Decimal;
@@ -70,61 +73,42 @@ pub fn idle(core: &Core, d: &Direction) -> bool {
     none && lk(&core.inner.trail).is_empty()
 }
 
-/// Что делает: живая котировка стороны при докупке (вызывает costs_source.rs Live, в куче): продажа — после монет
-/// идущих сделок группы и по данным новее продаж сделок групп (ride_trail.rs); покупка — по данным новее их покупки.
-/// Принимает: ядро, направление, сторону (true — продажа на B), количество. Возвращает: котировку и строку худшего
-/// случая (решение 480; None — не было). Ошибки: как у costs_quote::fetch; Stop — данные не доказуемо свежее.
-pub async fn live(
+/// Что делает: живая котировка покупки на A при идущих сделках групп (вызывает costs_source.rs Live, в куче) — по данным
+/// новее их покупки (buy_fresh). Принимает: ядро, направление, количество. Ошибки: как у costs_quote::fetch; Stop —
+/// данные не доказуемо свежее.
+pub async fn live_buy(core: &Core, d: &Direction, qty: Decimal) -> Result<Quote, Fail> {
+    let q = Box::pin(super::costs_quote::fetch(core, d, false, qty, None)).await?;
+    buy_fresh(core, d, &q).map_err(Fail::Stop)?;
+    Ok(q)
+}
+
+/// Что делает: живая котировка продажи на B (вызывает costs_source.rs Live, в куче): после сдвига расчёта
+/// (ride_shift.rs — одно чтение на расчёт: идущие сделки групп и худший случай решения 480) и по данным новее продаж
+/// сделок групп (ride_trail.rs); граница «наша продажа уже в пуле / ещё нет» (ride_settled.rs) — до и после котировки.
+/// Принимает: ядро, направление, количество, сдвиг. Ошибки: как у costs_quote::fetch; Stop — данные не доказуемо
+/// свежее, своя продажа в полёте, одно состояние пары котировок не доказано (ride_pair.rs).
+pub async fn live_sell(
     core: &Core,
     d: &Direction,
-    sell: bool,
     qty: Decimal,
-) -> Result<(Quote, Option<String>), Fail> {
-    // Решение 464 (t238): граница «наша продажа уже в пуле / ещё нет» (ride_settled.rs) — до и после котировки.
-    let seq = if sell {
-        Some(super::ride_settled::before(core, d).map_err(Fail::Stop)?)
+    sh: &super::ride_shift::Shift,
+) -> Result<Quote, Fail> {
+    let seq = super::ride_settled::before(core, d).map_err(Fail::Stop)?;
+    let q = if sh.off > Decimal::ZERO {
+        sell_after(core, d, qty, sh.off).await?
     } else {
-        None
+        Box::pin(super::costs_quote::fetch(core, d, true, qty, None)).await?
     };
-    let (off, worst) = if sell {
-        ahead_noted(core, d).map_err(Fail::Stop)?
-    } else {
-        (Decimal::ZERO, None)
-    };
-    let q = if off > Decimal::ZERO {
-        sell_after(core, d, qty, off).await?
-    } else {
-        Box::pin(super::costs_quote::fetch(core, d, sell, qty, None)).await?
-    };
-    if let Some(seq) = seq {
-        super::ride_settled::after(core, d, seq).map_err(Fail::Stop)?;
-        super::ride_trail::check(core, &CoinKey::of(&d.asset), &d.sell_on, &q)
-            .map_err(Fail::Stop)?;
-    } else {
-        buy_fresh(core, d, &q).map_err(Fail::Stop)?;
-    }
-    Ok((q, worst))
+    super::ride_settled::after(core, d, seq).map_err(Fail::Stop)?;
+    super::ride_trail::check(core, &CoinKey::of(&d.asset), &d.sell_on, &q).map_err(Fail::Stop)?;
+    Ok(q)
 }
 
-/// Что делает: решение 480 — весь сдвиг продажи направления: монеты идущих сделок групп (sell_ahead; докупка
-/// выключена или групп нет — 0, как раньше) плюс остаток наших продаж с неизвестным исходом на площадке продажи
-/// (ride_settled::worst, худший случай). Принимает: ядро, направление. Возвращает: количество (0 — нет).
+/// Что делает: весь сдвиг продажи направления (ride_shift::read — группы и худший случай решения 480) — для
+/// предпроверки DEX (precheck_dex_sell.rs). Принимает: ядро, направление. Возвращает: количество (0 — нет).
 /// Ошибки: текст — как у ride_settled::worst.
 pub fn ahead(core: &Core, d: &Direction) -> Result<Decimal, String> {
-    ahead_noted(core, d).map(|x| x.0)
-}
-
-/// Что делает: как ahead, и строка хронологии о худшем случае из того же чтения набора (ride_settled::text) — её несёт
-/// расчёт (Calc.worst_b) в план сделки и «довезти». Принимает: ядро, направление. Возвращает: (сдвиг, строка; None —
-/// продаж с неизвестным исходом нет). Ошибки: как у ahead.
-pub fn ahead_noted(core: &Core, d: &Direction) -> Result<(Decimal, Option<String>), String> {
-    let (unsure, ids) = super::ride_settled::worst(core, d)?;
-    let rides = if idle(core, d) {
-        Decimal::ZERO
-    } else {
-        sell_ahead(core, d)
-    };
-    Ok((rides + unsure, super::ride_settled::text(d, unsure, &ids)))
+    super::ride_shift::read(core, d).map(|s| s.off)
 }
 
 /// Что делает: сколько монет идущих сделок группы будет продано на площадке продажи направления (остаток Deal.qty —
@@ -206,15 +190,16 @@ pub fn marginal(total: &Quote, ahead: &Quote, qty: Decimal, off: Decimal) -> Quo
 }
 
 /// Что делает: живая котировка продажи на B после монет идущих сделок (ahead > 0). Принимает: ядро, направление, наш
-/// объём, ahead. Возвращает: marginal. Ошибки: как у costs_quote::fetch (на любой из двух котировок).
+/// объём, ahead. Возвращает: marginal. Ошибки: как у costs_quote::fetch (на любой из двух котировок); Stop — одно
+/// состояние не доказано (ride_pair.rs).
 pub async fn sell_after(
     core: &Core,
     d: &Direction,
     qty: Decimal,
     off: Decimal,
 ) -> Result<Quote, Fail> {
-    let total = Box::pin(super::costs_quote::fetch(core, d, true, qty + off, None)).await?;
-    let ahead = Box::pin(super::costs_quote::fetch(core, d, true, off, None)).await?;
+    // Решение 480 (ревью 2): обе котировки — по одному состоянию площадки (ride_pair.rs).
+    let (total, ahead) = Box::pin(super::ride_pair::live_pair(core, d, qty, off)).await?;
     Ok(marginal(&total, &ahead, qty, off))
 }
 

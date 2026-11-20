@@ -3,6 +3,9 @@
 //! пустая страница, HTTP 400 на странице > 1 или страница короче index.page_size — конец списка) и список DEX сети по links.next
 //! (сохраняется в SQLite и в состояние справочника). 404 по монете — сведение «индексатор не знает пулов монеты»
 //! (решение 121, C2), а не ошибка.
+//! Решение 435 (433-з): id DEX индексатора у площадки другой сети (не сети по умолчанию) — сразу ключ области «DEX»
+//! «id@сеть» (ctx_place.rs dex_suffix): списки DEX и пулы справочника дальше живут с ключом; у сети по умолчанию
+//! (bsc_dex) id — как есть.
 //! Кто вызывает: directory/refresh.rs.
 //! От чего зависит: ctx.rs, directory/{gt_http,gt_parse,store,mod}.rs.
 //! Настройки: через вызываемые — index.* [bsc_dex].
@@ -25,6 +28,8 @@ use super::store;
 /// Список DEX сети по всем страницам (links.next). Сбой связи — в журнал, список прежний.
 /// Ошибки: NotConfigured, SecretsLocked.
 pub async fn dexes(ctx: &Ctx, net: &str) -> GatewayResult<()> {
+    // Решение 435 (433-з): суффикс ключа области «DEX» площадки — до запросов (не задана сеть — справочника нет).
+    let suffix = ctx.dex_suffix()?;
     let mut all = Vec::new();
     let mut page = 1;
     loop {
@@ -50,7 +55,7 @@ pub async fn dexes(ctx: &Ctx, net: &str) -> GatewayResult<()> {
                 return Ok(());
             }
         };
-        let (list, next) = match gt_parse::dexes(&body) {
+        let (mut list, next) = match gt_parse::dexes(&body) {
             Ok(v) => v,
             Err(why) => {
                 ctx.log(Level::Warn, "dex.index", format!("Список DEX: {why}"), None)
@@ -58,6 +63,9 @@ pub async fn dexes(ctx: &Ctx, net: &str) -> GatewayResult<()> {
                 return Ok(());
             }
         };
+        if let Some(s) = &suffix {
+            list.iter_mut().for_each(|d| d.id.push_str(s));
+        }
         all.extend(list);
         if !next {
             break;
@@ -86,6 +94,8 @@ pub async fn token_pools(
     pages: u32,
     size: usize,
 ) -> GatewayResult<TokenPools> {
+    // Решение 435 (433-з): id DEX пулов — ключ области «DEX» площадки (у сети по умолчанию — как есть).
+    let suffix = ctx.dex_suffix()?;
     let mut out = Vec::new();
     let mut read = 0;
     for page in 1..=pages {
@@ -104,7 +114,7 @@ pub async fn token_pools(
                 return Err(ctx.err(ErrorCode::BadResponse, why));
             }
         };
-        let list = gt_parse::pools(&body).map_err(|w| {
+        let mut list = gt_parse::pools(&body).map_err(|w| {
             ctx.err(
                 ErrorCode::BadResponse,
                 format!("{}: {path}: {w}", gt_http::SOURCE),
@@ -113,6 +123,9 @@ pub async fn token_pools(
         // Пустая страница — конец списка (как и 400 на странице > 1 и страница короче index.page_size).
         if list.is_empty() {
             break;
+        }
+        if let Some(s) = &suffix {
+            list.iter_mut().for_each(|p| p.dex_id.push_str(s));
         }
         read = page;
         let last = list.len() < size;

@@ -16,6 +16,7 @@ use crate::gateway::contract::DexFamily;
 use crate::settings::scope::Scope;
 
 use super::super::ctx::Ctx;
+use super::super::ctx_place::own_dex;
 use super::super::directory;
 
 /// Откуда id попал в список (для названия строки).
@@ -89,8 +90,12 @@ pub fn extra(ctx: &Ctx) -> Vec<(String, Source, Option<String>)> {
             (id, Source::Directory, k)
         })
         .collect();
+    // Решение 435 (433-з): только ключи области «DEX» этой площадки (сеть не определить — настроек нет).
+    let suffix = ctx.dex_suffix().ok();
     for (_, scope, _) in ctx.settings.all() {
-        if let Scope::Dex(id) = scope {
+        if let Scope::Dex(id) = scope
+            && suffix.as_ref().is_some_and(|s| own_dex(&id, s.as_deref()))
+        {
             let k = kind(&id);
             out.push((id, Source::Settings, k));
         }

@@ -20,6 +20,7 @@ use crate::core::types::PoolKind;
 use crate::settings::scope::Scope;
 
 use super::super::ctx::Ctx;
+use super::super::ctx_place::own_dex;
 use super::exec_kind::{self, ExecKind};
 
 /// Протокол вида пула: от него зависит ABI событий и чтение состояния.
@@ -428,15 +429,20 @@ pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
     ))
 }
 
-/// Все DEX с поддержанным видом в настройках (включённые и нет), по id. Ошибок нет.
+/// Все DEX с поддержанным видом в настройках (включённые и нет), по id. Решение 435 (433-з): только ключи области
+/// «DEX» этой площадки (ctx_place.rs own_dex: сеть по умолчанию — без «@», другая — «@сеть»); сеть площадки не
+/// определить (несколько площадок DEX без dex.chain / dex.default_chain) — пусто. Ошибок нет.
 pub fn all(ctx: &Ctx) -> Vec<&'static Family> {
+    let Ok(suffix) = ctx.dex_suffix() else {
+        return Vec::new();
+    };
     let mut out: Vec<&'static Family> = ctx
         .settings
         .all()
         .into_iter()
         .filter(|(name, _, _)| name == "dex.kind")
         .filter_map(|(_, scope, v)| match scope {
-            Scope::Dex(id) => make(&id, v.as_str()?),
+            Scope::Dex(id) if own_dex(&id, suffix.as_deref()) => make(&id, v.as_str()?),
             _ => None,
         })
         .collect();

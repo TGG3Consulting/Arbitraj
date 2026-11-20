@@ -5,8 +5,12 @@
 //! и записи venue_state.
 //! Сеть по умолчанию (решение 430): площадка DEX одна — её сеть, без чтения настроек; несколько — dex.default_chain
 //! (default_chain). По ней каналы отправки без channel.chain относятся к сети по умолчанию (send/channels.rs, 433-е).
-//! Кто вызывает: ctx.rs (venue, at, log), main.rs (создание окружений), send/channels.rs (serves), тесты (Place::BSC —
-//! одна площадка bsc_dex).
+//! Ключ области «DEX» с сетью (433-з, план step5-plan.md 1.2): id DEX индексатора у площадки сети по умолчанию — как
+//! есть (все живые настройки BSC прежние), у площадки другой сети — «id@сеть» (camelot@arbitrum): id GeckoTerminal у
+//! сетей пересекаются. Перевод — на входе id от индексатора (directory/fetch.rs dex_key); вид пула Family.id — уже ключ,
+//! все чтения области «DEX» идут по нему; свои ключи площадки — own_dex (families::all, dex_ids::extra).
+//! Кто вызывает: ctx.rs (venue, at, log), main.rs (создание окружений), send/channels.rs (serves), directory/fetch.rs
+//! (dex_key), pools/families.rs и pools/dex_ids.rs (dex_suffix, own_dex), тесты (Place::BSC — одна площадка bsc_dex).
 //! От чего зависит: ctx.rs (чтение настроек).
 //! Настройки: dex.chain [площадка DEX], dex.default_chain (вся система; только при нескольких площадках DEX); список
 //! площадок DEX — dex.venues (читает main.rs).
@@ -56,5 +60,55 @@ impl Ctx {
             .text("dex.default_chain", At::default())
             .map_err(|e| self.tag(e))?;
         Ok(own.trim() == def.trim())
+    }
+
+    /// Суффикс ключа области «DEX» этой площадки (433-з): None — сеть по умолчанию (ключ = id индексатора, как раньше);
+    /// Some(«@сеть») — другая сеть (dex.chain). Принимает: окружение.
+    /// Ошибки: NotConfigured — при нескольких площадках DEX не задана dex.chain или dex.default_chain.
+    pub fn dex_suffix(&self) -> GatewayResult<Option<String>> {
+        if self.default_chain()? {
+            return Ok(None);
+        }
+        Ok(Some(format!("@{}", self.text("dex.chain")?.trim())))
+    }
+
+    /// Ключ области «DEX» для id DEX индексатора (433-з): «id» у сети по умолчанию, «id@сеть» у другой.
+    /// Принимает: id индексатора. Ошибки: как dex_suffix.
+    pub fn dex_key(&self, raw: &str) -> GatewayResult<String> {
+        Ok(key_of(raw, self.dex_suffix()?.as_deref()))
+    }
+}
+
+/// Ключ области «DEX» по id индексатора и суффиксу площадки (None — сеть по умолчанию). Ошибок нет.
+pub fn key_of(raw: &str, suffix: Option<&str>) -> String {
+    match suffix {
+        None => raw.to_string(),
+        Some(s) => format!("{raw}{s}"),
+    }
+}
+
+/// Ключ области «DEX» принадлежит площадке с этим суффиксом (433-з): сети по умолчанию — ключи без «@» (id индексатора
+/// «@» не содержат), другой сети — ключи, оканчивающиеся на «@сеть». Принимает: ключ, суффикс. Ошибок нет.
+pub fn own_dex(key: &str, suffix: Option<&str>) -> bool {
+    match suffix {
+        None => !key.contains('@'),
+        Some(s) => key.len() > s.len() && key.ends_with(s),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Ключи сети по умолчанию — id индексатора как есть; другой сети — с «@сеть»; чужие ключи не свои.
+    #[test]
+    fn dex_keys_split_networks() {
+        assert_eq!(key_of("camelot", None), "camelot");
+        assert_eq!(key_of("camelot", Some("@arbitrum")), "camelot@arbitrum");
+        assert!(own_dex("pancakeswap_v2", None));
+        assert!(!own_dex("camelot@arbitrum", None));
+        assert!(own_dex("camelot@arbitrum", Some("@arbitrum")));
+        assert!(!own_dex("pancakeswap_v2", Some("@arbitrum")));
+        assert!(!own_dex("@arbitrum", Some("@arbitrum")));
     }
 }

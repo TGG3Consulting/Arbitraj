@@ -183,7 +183,11 @@
     площадка → вся система, settings/store.rs resolve). Остальные At::default() адаптера (risk.min_bnb_balance,
     sieve.audit_share, hooks.*, tax.*, notify.summary_reasons, лимиты квотера) — не узел, общие намеренно. Секреты
     ключей узла bsc.node_*_key — общие (свой узел Arbitrum без ключа; имя секрета по площадке — когда понадобится).
-  - 433-з ключ области «DEX» с сетью (id@arbitrum) — families.rs, dex_ids.rs, event_flags.rs, ctx.rs dex_*.
+  - 433-з — СДЕЛАНО (решение 435): ключ области «DEX» — ctx_place.rs (dex_suffix, dex_key, own_dex): у площадки сети по
+    умолчанию — id индексатора как есть (живые настройки DEX bsc_dex — без изменений; площадка одна — без чтения
+    настроек), у другой — «id@сеть». Перевод на входе — directory/fetch.rs (список DEX и пулы монеты); Family.id — уже
+    ключ, поэтому ctx.rs dex_*, event_flags.rs, family_intern.rs не меняются; свои ключи — pools/families.rs all и
+    pools/dex_ids.rs extra (у bsc_dex — ключи без «@»). Тест — ctx_place.rs (id camelot из записи GeckoTerminal Arbitrum).
   - 433-и статики по площадке (20 файлов, список — step5-plan.md 1.3; onchain.rs, exec_callback.rs — после слияния шага 4).
   - 433-к регистрация arb_dex в main.rs по настройке dex.venues; перед ней — dex.default_chain = bsc на живом боте.
   - 433-л голова по WS newHeads при блоке 250 мс (после ответа на вопрос 2).

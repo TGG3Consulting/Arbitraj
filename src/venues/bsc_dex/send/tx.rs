@@ -56,7 +56,7 @@ pub struct SendCfg {
 }
 
 impl SendCfg {
-    /// Читает настройки. Ошибки: NotConfigured — не задано (у eip1559_l1 — и send.drop_wait_ms; dex.gas_mode) или
+    /// Читает настройки. Ошибки: NotConfigured — не задано (у eip1559_l1 — и send.drop_wait_ms) или
     /// send.max_wait_blocks < send.bundle_max_blocks (бандл мог бы попасть в блок, когда трекер уже отменяет).
     pub fn read(ctx: &Ctx) -> GatewayResult<Self> {
         let cfg = Self {
@@ -78,9 +78,13 @@ impl SendCfg {
             cancel_max_attempts: ctx.int("send.cancel_max_attempts")?,
             queue_max_wait: Duration::from_secs(ctx.int("send.queue_max_wait_s")?),
             gas_margin_pct: ctx.dec("send.gas_limit_margin_pct")?,
-            drop_wait: match gas_mode::read(ctx)? {
-                GasMode::Eip1559L1 => Some(Duration::from_millis(ctx.int("send.drop_wait_ms")?)),
-                GasMode::Legacy => None,
+            // Модель газа не задана или неверна — здесь как legacy (SendCfg до решения 437 её не читал): транзакция
+            // всё равно не уйдёт — цену газа без модели не посчитать (exec/tx_fee.rs, exec/bundle_send.rs).
+            drop_wait: match gas_mode::read(ctx) {
+                Ok(GasMode::Eip1559L1) => {
+                    Some(Duration::from_millis(ctx.int("send.drop_wait_ms")?))
+                }
+                Ok(GasMode::Legacy) | Err(_) => None,
             },
         };
         if cfg.max_wait < cfg.bundle_max {

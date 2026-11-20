@@ -120,7 +120,7 @@ pub fn has_selector(runtime: &[u8], sel: &[u8]) -> bool {
 /// причина (не исполняем вслепую).
 pub fn check(v: Version, sig: &str) -> Option<String> {
     let sel = registry_key::selector(sig);
-    // Решение 470: у v5 сборки нет — code::runtime_of даёт причину.
+    // Решение 488: v5 собрана (contracts/out/) — code::runtime_of даёт её код; артефакт не сверен по хешу — причина.
     let rt = code::runtime_of(v);
     let ver = v.label();
     match rt {

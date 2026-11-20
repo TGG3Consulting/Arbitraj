@@ -1,12 +1,12 @@
 //! Файл: venues/bsc_dex/exec/executor/onchain.rs
 //! Что делает: проверка развёрнутого исполнителя по адресу exec.executor_address (ревью 122, пункт 1) — адрес вводится
 //! руками, поэтому до любого approve и до сделки сверяется: код по адресу (eth_getCode) побайтно равен
-//! contracts/out/ArbExecutor.bin-runtime (как после развёртывания, deploy.rs) — версия v3 (решение 395, t181), или
-//! contracts/out/v2/ArbExecutor.bin-runtime — версия v2, или contracts/out/v1/ArbExecutor.bin-runtime — версия v1
-//! (решения 272 и 395: развёрнутые раньше исполнители работают как раньше), и слот владельца (раскладка solc, code.rs::owner_slot; у v1 и v2 — слот 0) хранит кошелёк бота. Не
+//! contracts/out/ArbExecutor.bin-runtime (как после развёртывания, deploy.rs) — версия v5 (решение 488), или
+//! замороженным копиям contracts/out/v4|v3|v2|v1/ArbExecutor.bin-runtime — версии v4 / v3 / v2 / v1
+//! (решения 272, 395, 488: развёрнутые раньше исполнители работают как раньше), и слот владельца (раскладка solc, code.rs::owner_slot; у v1 и v2 — слот 0) хранит кошелёк бота. Не
 //! совпало — ни разрешения, ни сделки, ошибка с точной причиной. Сверенная версия записывается у кошелька
 //! (settings/accounts/edit_version.rs) — по ней котировка решает, идёт ли нативный BNB через исполнитель (mod.rs).
-//! Ревью 272 (А1): у v2 и v3 читается и слот wnative (обёртка из конструктора) — пишется у кошелька рядом с версией и
+//! Ревью 272 (А1): у v2…v5 читается и слот wnative (обёртка из конструктора) — пишется у кошелька рядом с версией и
 //! сверяется с dex.native_wrapped (mod.rs::native_block); несовпадение — нативный BNB через исполнитель не идёт, причина
 //! в тексте проверки; ERC-20 путь не затронут.
 //! Успешная проверка помнится по паре (адрес, кошелёк) — до смены настройки или кошелька (другая пара — проверка
@@ -122,21 +122,22 @@ async fn inspect(
         return Ok(Err(format!("по адресу {executor:#x} нет кода контракта")));
     }
     let Some(version) = code::version_of(&have).map_err(internal)? else {
-        // Решение 441 (ревью, п. 7): текущая сборка contracts/out/ — v4 после пересборки (до неё побайтно v3), v3 —
-        // замороженная копия contracts/out/v3/.
-        let (cur, v3, v2, v1) = (
+        // Решение 488: текущая сборка contracts/out/ — v5; v4 / v3 — замороженные копии contracts/out/v4/ и v3/.
+        let (cur, v4, v3, v2, v1) = (
             code::runtime().map_err(internal)?,
+            code::runtime_v4().map_err(internal)?,
             code::runtime_v3().map_err(internal)?,
             code::runtime_v2().map_err(internal)?,
             code::runtime_v1().map_err(internal)?,
         );
         return Ok(Err(format!(
             "код по адресу {executor:#x} ({} байт) не совпал ни с текущей сборкой contracts/out/ArbExecutor.bin-runtime \
-             ({} байт), ни с v3 contracts/out/v3/ArbExecutor.bin-runtime ({} байт), ни с v2 \
-             contracts/out/v2/ArbExecutor.bin-runtime ({} байт), ни с v1 contracts/out/v1/ArbExecutor.bin-runtime ({} \
-             байт)",
+             ({} байт), ни с v4 contracts/out/v4/ArbExecutor.bin-runtime ({} байт), ни с v3 \
+             contracts/out/v3/ArbExecutor.bin-runtime ({} байт), ни с v2 contracts/out/v2/ArbExecutor.bin-runtime \
+             ({} байт), ни с v1 contracts/out/v1/ArbExecutor.bin-runtime ({} байт)",
             have.len(),
             cur.len(),
+            v4.len(),
             v3.len(),
             v2.len(),
             v1.len()

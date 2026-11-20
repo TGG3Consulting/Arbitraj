@@ -13,6 +13,23 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 488 (20.11.2026, ветка t258/exec-v5-build) — исполнитель v5 собран (T488-01); привязка версии v5 в коде бота.**
+  `contracts/out/` = v5 (v4 + шаги AERO_BASIC = 26, BALANCER_V3_BUF = 27, CURVE_ETH = 28, BASIN = 29, WOMBAT = 30, SHELL = 31;
+  via-IR + runs 1 + strip revert; код в сети 24 542 байта, запас EIP-170 — 34 байта; bin-runtime SHA-256
+  36643fab…17cd). Прежний v4 заморожен в `contracts/out/v4/`. Привязано (образец v1…v4): `exec/executor/code.rs` —
+  RUNTIME_V4 / SHA_V4 / runtime_v4(), version_of (out/v1…v4/ → V1…V4, out/ → V5), current_version → V5, runtime_of /
+  runtime_sha256_of; onchain.rs — текст «код не совпал» называет v4; abi.rs подхватывает ABI v5 (alloy::sol!) без правок.
+  Задачи:
+  - T488-01 **Разбивка исполнителя при следующем DEX.** Запас EIP-170 — 34 байта: любой новый шаг не поместится. Нужно
+    разнести исполнение по нескольким контрактам (делегат-вызов или маршрутизатор шагов) — конструктивно, до следующего DEX.
+  - T488-02 **Запись приёмки v5 на живых пулах (exec_v5_live) и развёртывание.** Live-доказательство — по ключу
+    (версия, chainId): записи для v5 пока нет (`exec/executor/live_record.rs`), поэтому шаги v5 в коде есть, но ни один
+    класс не принят — «Развернуть исполнитель» для v5 закрыт правилом решения 400. Сделать запись своим узлом (как
+    executor_v4_live), добавить Source v5 в live_record.rs, развернуть исполнитель v5 в сети. Вне агентов (узел, сеть).
+  - T488-03 **EVM-сценарии шагов 26–31.** В `contracts/evmtest` нет сценариев для AERO_BASIC = 26, BALANCER_V3_BUF = 27,
+    CURVE_ETH = 28, BASIN = 29, WOMBAT = 30, SHELL = 31 (есть только v4: fluid, balancer_v3, ekubo, ekubo_twamm, lb20).
+    Написать по образцу решения 458 с официальным кодом протоколов (vendor), добавить в run.mjs. Требует solc/node — вне агентов.
+
 - **Решение 487 (20.11.2026, ветка t256/arb-merge-bsc от feat/arbitrum 2ca8dba2) — слияние BSC (e49efd67: 419–429, 449,
   463, 464, 476) в Arbitrum и Zyberswap V3 видом thena_fusion; cargo не запускался (формат — вручную).** Задачи:
   - T487-01 Zyberswap V3 (Arbitrum): **адрес фабрики** `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` — источник

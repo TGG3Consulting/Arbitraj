@@ -7,7 +7,7 @@
 | Файл | Что делает |
 | --- | --- |
 | `ArbExecutor.sol` | Исполнитель: владелец, execute, шаги двенадцати видов, обратные вызовы пулов, приём BNB только от ожидаемого адреса (receive), возврат остатков |
-| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — восемнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286; KYBER_DMM, решение 287; SMARDEX, решение 288; BALANCER, решение 289; LB, решение 290; v3 — двадцати одного: UNI_V4, INF_CL, INF_BIN, решение 395; v4 — двадцати шести: FLUID, BALANCER_V3, LB20, EKUBO — решения 440, 441, 445, 447, 456; сборка v4 — решение 457; v5 — + AERO_BASIC = 26, решение 470 (T470-06); BALANCER_V3_BUF = 27, решение 474; CURVE_ETH = 28, решение 472 (T472-08); BASIN = 29, решение 485; WOMBAT = 30, решение 484; SHELL = 31, решение 486 (номер выдан координатором; 29 — шаг ветки Basin, 31 — Shell): в исходнике, сборки v5 НЕТ — нужна пересборка как v5, `out/` — v4), обратные вызовы пулов (v3 — ещё unlockCallback / lockAcquired менеджеров Uniswap V4 и PancakeSwap Infinity; v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286; smardexSwapCallback, решение 288; v5 — ещё ramsesV2SwapCallback, решение 483: пул Ramses CL RamsesV2Pool.sol L1238, L1256), приём BNB только от ожидаемого адреса (receive), возврат остатков |
+| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — восемнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286; KYBER_DMM, решение 287; SMARDEX, решение 288; BALANCER, решение 289; LB, решение 290; v3 — двадцати одного: UNI_V4, INF_CL, INF_BIN, решение 395; v4 — двадцати шести: FLUID, BALANCER_V3, LB20, EKUBO — решения 440, 441, 445, 447, 456; сборка v4 — решение 457; v5 — + AERO_BASIC = 26, решение 470 (T470-06); BALANCER_V3_BUF = 27, решение 474; CURVE_ETH = 28, решение 472 (T472-08); BASIN = 29, решение 485; WOMBAT = 30, решение 484; SHELL = 31, решение 486 (номер выдан координатором; 29 — шаг ветки Basin, 31 — Shell): собраны в v5, `out/` — v5, решение 488), обратные вызовы пулов (v3 — ещё unlockCallback / lockAcquired менеджеров Uniswap V4 и PancakeSwap Infinity; v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286; smardexSwapCallback, решение 288; v5 — ещё ramsesV2SwapCallback, решение 483: пул Ramses CL RamsesV2Pool.sol L1238, L1256), приём BNB только от ожидаемого адреса (receive), возврат остатков |
 | `VirtualQuoter.sol` | Решение 186 (решение 288: + quoteSmardex и smardexSwapCallback — пара SmarDex): виртуальный квотер — НЕ разворачивается; бот подставляет его код в eth_call (state override) и спрашивает выход у самого пула (swap + откат в обратном вызове). Собирается отдельным заданием solc в `out/VirtualQuoter.bin-runtime`, `.abi`, `.sha256`. Решение 274: ещё обратный вызов swapCallback (SheepDex SpePool); решение 281: squadV3SwapCallback (SquadSwap V3, 0xc4e21d86); решение 285: quoteMetric + metricOmmSwapCallback (Metric OMM, 0xc3251075); решение 286: quoteIzi + swapX2YCallback / swapY2XCallback (iZiSwap / Biswap V3, 0x18780684 / 0xd3e1c284; откат 64 байтами — оплата с флагом края пула и выход); решение 483: ramsesV2SwapCallback (Ramses CL, 0x654b6487) — в исходнике, `out/VirtualQuoter.*` не пересобран |
 | `IPools.sol` | Интерфейсы токена, WBNB и пулов — только вызываемые функции, подписи из официальных исходников (ссылки в файле); решение 395 — PoolManager Uniswap V4, Vault / CLPoolManager / BinPoolManager PancakeSwap Infinity |
 | `build.mjs` | Сборка solc-js стандартным JSON-входом: оптимизатор (200 прогонов), EVM `cancun`; ArbExecutor — конвейером via-IR (`settings.viaIR`, решение 457), VirtualQuoter — прежним; пишет `out/` и хеши |
@@ -18,7 +18,8 @@
 | `out/ArbExecutor.abi` | ABI JSON — из него Rust-типы (`alloy::sol!`, `src/venues/bsc_dex/exec/executor/abi.rs`) |
 | `out/ArbExecutor.layout.json` | Раскладка хранилища solc: `owner` — слот 0 |
 | `out/ArbExecutor.sha256` | Версия компилятора и SHA-256 каждого артефакта; бот не берёт байткод, если хеш не совпал |
-| `out/v3/` | Решение 441: артефакты версии v3 (до шага BALANCER_V3; копия `out/` на ветке t223-f2 до пересборки v4; обычный конвейер, без via-IR) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v3 (onchain.rs, code.rs). Решение 457: `out/` — сборка v4 |
+| `out/v4/` | Решение 488: артефакты версии v4 (до шагов v5; копия `out/` до пересборки v5; via-IR, runs 200, 21 775 байт) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v4 (onchain.rs, code.rs runtime_v4). `out/` — сборка v5 |
+| `out/v3/` | Решение 441: артефакты версии v3 (до шага BALANCER_V3; копия `out/` на ветке t223-f2 до пересборки v4; обычный конвейер, без via-IR) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v3 (onchain.rs, code.rs) |
 | `out/v2/` | Решение 395 (t181): артефакты версии v2 (до шагов UNI_V4 / INF_CL / INF_BIN; копия `out/` на 982e0503) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v2 (onchain.rs) |
 | `out/v1/` | Решение 272: артефакты версии v1 (до executeNative; коммит 2180cf9) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v1 (onchain.rs) |
 | `evmtest/` | Решение 272: EVM-тест исполнителя (ethereumjs, официальные PancakePair/WETH9) — `evmtest/README.md`; сценарии ревью 272 — `evmtest/review.mjs`; решение 395 — шаги UNI_V4 / INF_CL / INF_BIN с официальным кодом менеджеров (`evmtest/singleton.mjs`); решение 458 — шаги FLUID / BALANCER_V3 / EKUBO с официальным кодом (`fluid_cases.mjs`, `balancerv3.mjs`, `ekubo_cases.mjs`) |
@@ -49,6 +50,24 @@
 - EVM-сценарии шагов 22–25 с официальным кодом — сделаны (решение 458, ниже); запись симуляции v4 на живых пулах (без неё правило решения 400 закрывает «Развернуть
   исполнитель» для текущей сборки); развёртывание v4 в Arbitrum — Тигран (docs/TASKS.md, решение 457).
 
+## Решение 488: исполнитель v5 собран конвейером via-IR (T488-01)
+- `out/` = v5 (v4 + шаги AERO_BASIC = 26, BALANCER_V3_BUF = 27, CURVE_ETH = 28, BASIN = 29, WOMBAT = 30, SHELL = 31; via-IR).
+  **Выбрано via-IR + runs 1 + strip revert** (не runs 200, как у v4): без них v5 не укладывалась в предел EIP-170 (24 576 байт).
+- **Код в сети 24 542 байта, запас до EIP-170 — 34 байта** (у v4 было 21 775, запас 2 801); код создания 24 697 байт
+  (с аргументом конструктора — 24 729). solc 0.8.37+commit.f401782d.Emscripten.clang. SHA-256 (`out/ArbExecutor.sha256`):
+  `ArbExecutor.bin` bb61c8a3dd00cd065ab98dbb60bb24f84a38f90109607976979dd7f6371317cd,
+  `ArbExecutor.bin-runtime` 36643fab78603cb0ac92620dae73729bceb07b4bb44f04be74a16a5ef57150ab,
+  `ArbExecutor.abi` bc2b2547f839bb305805c93ddd23d4d233fc784b0853ab7f8e068097a0d4dad4,
+  `ArbExecutor.layout.json` 7ac2e51be7dc7d966629203ca3afa8e014dadf084ded4a16f0279c81df8c4d98 (`owner` — слот 0, `wnative` — слот 1, как у v4).
+- Прежняя сборка v4 перенесена в `out/v4/` (бот сверяет развёрнутые v4 с ней — code.rs runtime_v4). ABI v5 — надмножество
+  v4: добавлен только внешний `ramsesV2SwapCallback` (решение 483); внутренние шаги 26–31 в ABI не видны. `out/v3/`, `out/v2/`, `out/v1/` не тронуты.
+- `exec/executor/code.rs`: version_of — `out/v1…v4/` → V1…V4, `out/` → V5; current_version → V5; runtime_of(V5) = `out/`,
+  runtime_of(V4) = `out/v4/`; runtime_sha256_of(V5) = текущий, (V4) = `out/v4/`.
+- Техдолг (docs/ROADMAP.md): газ runs 1 (дороже runs 200 — компромисс ради размера), тексты ошибок после strip revert без
+  текста (только селектор отката), запас EIP-170 всего 34 байта — следующий DEX потребует разбивки исполнителя (T488-01).
+- Не сделано агентом (сборка solc и сеть запрещены): EVM-сценарии шагов 26–31 (T488-03), запись приёмки v5 на живых пулах
+  и развёртывание (T488-02).
+
 ## Решение 458: EVM-сценарии шагов 22–25 с официальным кодом (T457-01, T458-01, T458-02)
 - `evmtest/fluid.mjs` + `fluid_cases.mjs` — FLUID (21 проверка), `evmtest/balancerv3.mjs` — BALANCER_V3 (25), `evmtest/ekubo.mjs`
   + `ekubo_cases.mjs` — EKUBO (53), `evmtest/ekubo_twamm.mjs` — EKUBO на пуле TWAMM с активным ордером, оба TWAMM сети 0xd4f1 / 0xd47f (32, T458-02): ERC-20 обе стороны, нативный вход и выход (FLUID, EKUBO), MEVCapture forward (EKUBO),
@@ -72,8 +91,10 @@
   причиной «сборки v4 нет — пересоберите как v4 и переразверните» (`src/venues/bsc_dex/pools/exec_callback.rs`
   step_absent).
 
-## Версии (решения 272, 395, 440, 441, 445, 447, 454, 456, 457)
-- **v4 собран (решение 457)**: `out/` — v4 (via-IR, 21 775 байт); ниже — история решений 440, 441, 447 до сборки.
+## Версии (решения 272, 395, 440, 441, 445, 447, 454, 456, 457, 474, 488)
+- **v5 собран (решение 488)**: `out/` — v5 (via-IR, runs 1 + strip, 24 542 байта, запас EIP-170 — 34 байта); прежний v4
+  заморожен в `out/v4/`. Шаги v5: AERO_BASIC = 26, BALANCER_V3_BUF = 27, CURVE_ETH = 28, BASIN = 29, WOMBAT = 30, SHELL = 31.
+- **v4 собран (решение 457, заморожен в `out/v4/` решением 488)**: via-IR, runs 200, 21 775 байт; ниже — история решений 440, 441, 447 до сборки.
 - **v4** (решение 440) — v3 + шаг FLUID = 22 (пул Fluid DEX T1: approve пулу ровно на шаг + `swapIn(swap0to1, сумма, 0, to)`;
   нативная монета пула — через обёртку: вход `withdraw` → `swapIn{value}`, выход — `receive` только от слоя ликвидности из
   data → `deposit`) и интерфейс `IFluidDexT1` в `IPools.sol`. **Только исходник:** артефакты `out/` ещё v3 (агенту сборка
@@ -82,7 +103,15 @@
   задача решения 440) → «Развернуть исполнитель». До этого шаг FLUID ни у одного кошелька не строится (exec_callback.rs
   since = V4, причина «нужна сборка исполнителя v4»).
 - **v4** (решение 441, T433-F2) — v3 + шаг BALANCER_V3 = 23 (пул Balancer V3: unlock → balancerV3Callback → swap / settle / sendTo). Исходник — в `ArbExecutor.sol`; **артефакты `out/` ещё НЕ пересобраны** (solc локально не запускался): до пересборки `out/` = v3 побайтно, копия v3 заморожена в `out/v3/` (бот сверяет развёрнутые v3 с ней, code.rs). Пересборка: `contracts/build.sh` → в `out/` код v4 → обновить тест `tests/bsc_dex_executor_v3.rs` (version_of текущей сборки — V4) и размер кода здесь → EVM-тест шага с официальным кодом Vault V3 (evmtest — ещё нет) → развёртывание v4 в сети (Arbitrum — новое развёртывание).
-- **v5 (решение 474) — НЕ собрана.** Сборка — конвейером via-IR (`contracts/build.mjs` L35 `viaIR: true`, решение 457): via-IR переносит переменные в память и снимает большинство ошибок «stack too deep» (balancerV3Callback v5 держит больше локальных переменных, чем v4) — факт для v5 будет только после сборки. Перенос `out/` → `out/v4/` проверяет тест `tests/bsc_dex_executor_abi.rs` v4_kept_after_rebuild (out/ ≠ v4 без out/v4/ = v4 — красный CI). Исходник: + шаг BALANCER_V3_BUF = 27 (обмен через буфер ERC4626 хранилища V3, общий balancerV3Callback с шагом 23 — у шага 23 обёрток нет, поведение то же; новые вызовы — `erc4626BufferWrapOrUnwrap` в `IPools.sol`). Нужно: `contracts/build.sh` → `out/` = v5, прежний `out/` (v4) — в `out/v4/`; `exec/executor/code.rs` — Version::V5 и сверка v4 по `out/v4/`; хеши и размер кода (EIP-170); EVM-тест шага 27 с официальным кодом Vault V3 (`evmtest/balancerv3.mjs` — сценарий с буфером); запись приёмки на живых пулах; развёртывание. До этого бот шаг 27 не строит: в коде исполнителя кошелька нет селектора erc4626BufferWrapOrUnwrap (`pools/exec_callback.rs` BUFFER_MARK) — пары через буфер без пути исполнения с причиной.
+- **v5 (решения 474, 488) — собрана.** Конвейер via-IR + runs 1 + strip revert (`contracts/build.mjs`, решение 457): via-IR
+  переносит переменные в память и снимает большинство ошибок «stack too deep»; runs 1 + strip понадобились, чтобы 24 542
+  байта уложились в EIP-170 (запас 34 байта). Перенос `out/` → `out/v4/` проверяет тест `tests/bsc_dex_executor_abi.rs`
+  v4_kept_after_rebuild (out/ ≠ v4 без out/v4/ = v4 — красный CI). Шаги v5: AERO_BASIC = 26, BALANCER_V3_BUF = 27 (обмен
+  через буфер ERC4626 хранилища V3, общий balancerV3Callback с шагом 23; вызов `erc4626BufferWrapOrUnwrap` в `IPools.sol`),
+  CURVE_ETH = 28, BASIN = 29, WOMBAT = 30, SHELL = 31. Сделано: `out/` = v5, прежний v4 — в `out/v4/`; `exec/executor/code.rs`
+  — Version::V5, сверка v4 по `out/v4/` (runtime_v4), version_of/current_version → V5. Осталось: EVM-сценарии шагов 26–31
+  (T488-03), запись приёмки v5 на живых пулах и развёртывание (T488-02). До развёртывания и приёмки шаги v5 у кошельков
+  не исполняются (решение 400).
 - **Шаг EKUBO = 25 (решение 447; номер 25 — решение 456, в ветке было 22) — в исходнике, артефакты НЕ собраны.** `ArbExecutor.sol` (шаг `_ekubo`, обратный вызов
   ядра Ekubo `locked_6416899205` — селектор 0x00000000, `_ekuboCall`) и `IPools.sol` (`IEkuboCore` — селекторы lock /
   forward / startPayments / completePayments / withdraw) изменены, `out/` — прежняя сборка v3 (сборка solc локально

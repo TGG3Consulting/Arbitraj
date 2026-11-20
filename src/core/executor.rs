@@ -579,7 +579,7 @@ async fn run(
         .await;
     if r.filled_qty < plan.qty {
         // Решение 48: больший итог из «довезти» и «продать на A»; застрявшая монета не включается.
-        match super::partial::choose(core, &deal).await {
+        match super::partial::choose(core, &mut deal).await {
             super::partial::Choice::Deliver(x) => {
                 deal.note(format!(
                     "Частичная покупка: довезти и продать (итог {} USDT)",

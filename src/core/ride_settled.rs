@@ -25,6 +25,7 @@ use crate::core::types::Direction;
 
 use super::coin_key::CoinKey;
 use super::engine::Core;
+use super::sale_marks::MARK;
 
 /// Что делает: проверка до котировки продажи — ордера нашей продажи этой монеты на площадке продажи в полёте нет.
 /// Принимает: ядро, направление. Возвращает: счётчик итогов продаж (сравнить после котировки — after). Ошибки: текст
@@ -42,7 +43,7 @@ pub fn after(core: &Core, d: &Direction, seq: u64) -> Result<(), String> {
     if super::sale_marks::sales(core, &d.sell_on, &d.asset) != seq {
         return Err(format!(
             "{}: наша продажа {} исполнилась, пока шла котировка — в каком блоке пула она уже есть, не сверено; \
-             котировка повторится по пулу после неё",
+             котировка повторится по пулу после неё {MARK}",
             d.sell_on.0, d.asset.ticker
         ));
     }
@@ -58,7 +59,7 @@ pub fn unsure(core: &Core, d: &Direction) -> Option<String> {
     Some(match deals.get(&id) {
         Some(x) => super::sale_marks::blocked_text(x),
         None => format!(
-            "монета {} на площадке {} заблокирована: исход продажи сделки {id} не известен — разберите сделку",
+            "монета {} на площадке {} заблокирована: исход продажи сделки {id} не известен — разберите сделку {MARK}",
             d.asset.ticker, d.sell_on.0
         ),
     })
@@ -69,7 +70,7 @@ fn in_flight(core: &Core, d: &Direction) -> Result<(), String> {
     if super::sale_marks::busy(core, &d.sell_on, &d.asset) {
         return Err(format!(
             "{}: идёт наша продажа {} ({}) — попала ли она уже в пул, по которому считаем, не видно: ждём её итога, \
-             чтобы не посчитать её монеты дважды или не пропустить",
+             чтобы не посчитать её монеты дважды или не пропустить {MARK}",
             d.sell_on.0, d.asset.ticker, riders(core, d)
         ));
     }

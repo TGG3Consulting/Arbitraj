@@ -21,18 +21,20 @@ use alloy_primitives::{Address, B256};
 use arb::core::Core;
 use arb::core::coin_key::CoinKey;
 use arb::core::coin_ride::Seat;
+use arb::core::costs_source::{Live, Source as _};
 use arb::core::deal::{Deal, Step};
 use arb::core::deal_group::DealGroup;
 use arb::core::deps::Deps;
 use arb::core::op_error::OpError;
+use arb::core::size::Fail;
 use arb::core::transit_source::Source;
 use arb::core::types::{
     Asset, ChainTx, DexRoute, Direction, PoolKind, PoolRef, Quote, RouteHop, RouteLeg, RouteMode,
     SendMethod, Side, TradeRequest, TradeResult, TradeStatus, TxOutcome, VenueId,
 };
 use arb::core::{
-    coin_ride, credit_lock, ledger, ride_quote, ride_settled, ride_trail, sell_turn, transit,
-    transit_source,
+    coin_ride, credit_lock, ledger, ride_quote, ride_settled, ride_trail, sale_marks, sell_turn,
+    transit, transit_source,
 };
 use arb::gateway::contract::VenueKind;
 use arb::gateway::registry::Registry;
@@ -105,6 +107,11 @@ async fn start(name: &str) -> Core {
     let d = std::env::temp_dir().join(format!("arb-t238-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
+    start_in(d).await
+}
+
+/// Ядро на базе в папке `d` (как есть — для перезапуска на той же базе). Возвращает ядро.
+async fn start_in(d: std::path::PathBuf) -> Core {
     let db = Db::open(&d.join("t.sqlite")).unwrap();
     let (changes, _) = broadcast::channel(64);
     let (jtx, _) = broadcast::channel(64);
@@ -433,4 +440,56 @@ async fn transit_takes_pair_statistics_when_coin_has_none() {
         line.contains("статистика пары gate → bsc_dex по всем монетам, 123 переводов"),
         "{line}"
     );
+}
+
+#[tokio::test]
+async fn order_mark_cleared_on_cancel_and_error() {
+    let r = rec();
+    let core = start("drop").await;
+    let mut gate = in_transit(&r, GATE);
+    ride(&core, &gate).await;
+    credited(&core, &r, &mut gate).await;
+    let (v, a) = (gate.at.clone(), gate.direction.asset.clone());
+    // Будущее продажи отменено после отметки (drop без итога): отметка снята, итог засчитан (исход не известен ядру).
+    let seq = sale_marks::sales(&core, &v, &a);
+    let mark = sale_marks::order(&core, &v, &a);
+    assert!(sale_marks::busy(&core, &v, &a));
+    drop(mark);
+    assert!(!sale_marks::busy(&core, &v, &a));
+    assert_eq!(sale_marks::sales(&core, &v, &a), seq + 1);
+    // Ордер отказал до исполнения (исход известен): отметка снята, итога продажи нет.
+    let seq = sale_marks::sales(&core, &v, &a);
+    let e = OpError::not_configured("тест: отказ до отправки".into());
+    let f = async move { Err::<TradeResult, _>(e) };
+    assert!(credit_lock::selling(&core, &gate, f).await.is_err());
+    assert!(!sale_marks::busy(&core, &v, &a));
+    assert_eq!(sale_marks::sales(&core, &v, &a), seq);
+}
+
+#[tokio::test]
+async fn unsure_block_survives_restart_and_blocks_without_groups() {
+    let r = rec();
+    let d = std::env::temp_dir().join(format!("arb-t238-restart-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let core = start_in(d.clone()).await;
+    let mut gate = in_transit(&r, GATE);
+    gate.at = VenueId("bsc_dex".into());
+    gate.step = Step::Halted;
+    gate.sale_unsure = true;
+    ledger::save(&core, &gate).await;
+    // Перезапуск на той же базе: набор «исход неизвестен» восстановлен из учёта (ledger_load → sale_marks::track).
+    let core = start_in(d).await;
+    let ku = dir(&r, "kucoin", "bsc_dex");
+    let why = ride_settled::unsure(&core, &ku).unwrap();
+    assert!(why.contains(GATE), "{why}");
+    // Идущих сделок и групп нет — котировка продажи новой сделки всё равно отказана (Live::quote, до шлюза).
+    let live = Live {
+        core: &core,
+        src: None,
+    };
+    match live.quote(&ku, true, Decimal::ONE).await {
+        Err(Fail::Stop(t)) => assert!(t.contains("заблокирована"), "{t}"),
+        other => panic!("ждали отказ Stop, исполнено: {}", other.is_ok()),
+    }
 }

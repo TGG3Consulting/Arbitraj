@@ -32,6 +32,10 @@ use super::engine::{Core, lk};
 /// Событие уведомления: монета на площадке заблокирована — исход продажи сделки неизвестен.
 pub const EVENT: &str = "deal.sale_unknown_block";
 
+/// Метка в тексте каждого отказа из-за НАШЕЙ продажи (ride_settled.rs, blocked_text): по ней partial.rs отличает этот
+/// отказ от прочих.
+pub const MARK: &str = "(решение 464: своя продажа)";
+
 /// Отметки одной площадки монеты.
 #[derive(Debug, Default)]
 struct Mark {
@@ -49,7 +53,7 @@ pub struct Marks {
     /// ID сделки → (площадка, монета) с неизвестным исходом продажи.
     unsure: Mutex<HashMap<String, (VenueId, CoinKey)>>,
     unsure_live: AtomicUsize,
-    /// Будит ждущих конца ордера продажи (partial.rs).
+    /// Будит ждущих конца ордера продажи или снятия блокировки «исход неизвестен» (partial.rs).
     pub done: Notify,
 }
 
@@ -58,6 +62,8 @@ pub struct Order<'a> {
     core: &'a Core,
     v: VenueId,
     key: CoinKey,
+    /// Итог ордера отдан finish.
+    finished: bool,
 }
 
 /// Правка отметки (площадка, монета) под замком. Ошибок нет.
@@ -85,23 +91,34 @@ pub fn order<'a>(core: &'a Core, v: &VenueId, a: &Asset) -> Order<'a> {
         core,
         v: v.clone(),
         key,
+        finished: false,
     }
 }
 
 impl Order<'_> {
     /// Что делает: итог ордера — `counted` (исполнено или исход неизвестен) прибавляет итог продажи ДО снятия
     /// отметки «в полёте». Принимает: признак. Ошибок нет.
-    pub fn finish(self, counted: bool) {
+    pub fn finish(mut self, counted: bool) {
+        self.finished = true;
         if counted {
             edit(&self.core.inner.sales, &self.v, &self.key, |x| x.sales += 1);
         }
     }
 }
 
+/// ВНИМАНИЕ: отметка снимается и без finish — будущее продажи отменено (drop) или паника в задаче. Транзакция могла
+/// уже уйти в сеть, итога ядро не знает: такой конец засчитывается как итог продажи (счётчик растёт) — расчёт, шедший
+/// в это время, получит отказ «исполнилась, пока шла котировка», а не посчитает пул без неё.
 impl Drop for Order<'_> {
     fn drop(&mut self) {
         let m = &self.core.inner.sales;
-        let dec = |x: &mut Mark| x.orders = x.orders.saturating_sub(1);
+        let unknown = !self.finished;
+        let dec = |x: &mut Mark| {
+            x.orders = x.orders.saturating_sub(1);
+            if unknown {
+                x.sales += 1;
+            }
+        };
         edit(m, &self.v, &self.key, dec);
         m.orders_live.fetch_sub(1, Ordering::AcqRel);
         m.done.notify_waiters();
@@ -142,7 +159,10 @@ pub fn track(core: &Core, d: &Deal) {
             let at = (d.at.clone(), CoinKey::of(&d.direction.asset));
             g.insert(d.id.clone(), at).is_none()
         } else {
-            g.remove(&d.id);
+            // Снята — ждущие «довезти» (partial.rs) проверяют снова.
+            if g.remove(&d.id).is_some() {
+                m.done.notify_waiters();
+            }
             false
         };
         m.unsure_live.store(g.len(), Ordering::Release);
@@ -174,7 +194,7 @@ pub fn unsure_of(core: &Core, v: &VenueId, a: &Asset) -> Option<String> {
 pub fn blocked_text(d: &Deal) -> String {
     format!(
         "монета {} на площадке {} заблокирована: исход продажи сделки {} не известен — разберите сделку (экран \
-         «Сделки» / «Ручное управление»); пока не разобрана, новые сделки этой монеты на {} не считаются",
+         «Сделки» / «Ручное управление»); пока не разобрана, новые сделки этой монеты на {} не считаются {MARK}",
         d.direction.asset.ticker, d.at.0, d.id, d.at.0
     )
 }

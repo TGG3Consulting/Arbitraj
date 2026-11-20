@@ -5,12 +5,15 @@
 //! math/swap_algebra (режим pool_quote::algebra_next(Proto::Algebra) = Row).
 //! Кто вызывает: tests/bsc_thena_fusion_window_t236.rs (ревью t236: off_map и глубина на записи 20.11),
 //! tests/bsc_thena_fusion_math_t237.rs и tests/bsc_thena_fusion_fee_t237.rs (запись t237),
-//! tests/bsc_thena_fusion_fee_slot3.rs (запись со слотом 3).
+//! tests/bsc_thena_fusion_fee_slot3.rs (запись со слотом 3), tests/arbitrum_zyberswap_v3_live.rs (решение 487:
+//! запись Zyberswap V3 Arbitrum тем же скриптом — latest, pools_all, file).
 //! От чего зависит: arb::venues::bsc_dex::{math::swap_algebra, pools::{families, load_algebra, ticks},
 //! quote::pool_quote}; serde_json.
 //! Настройки: нет.
 // Каждый тест берёт часть общего — остальное для него не используется.
 #![allow(dead_code)]
+
+pub mod oracle;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -43,6 +46,37 @@ pub fn pools(rel: &str, n: usize) -> Vec<Value> {
     names.sort();
     assert_eq!(names.len(), n, "пулов в записи {rel}");
     names.iter().map(|p| read_json(p)).collect()
+}
+
+/// Решение 487: папка последней записи `prefix`<дата> в tests/data (путь от корня репозитория; None — записи нет).
+/// Ошибок нет.
+pub fn latest(prefix: &str) -> Option<String> {
+    let d = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data");
+    let mut found: Vec<String> = std::fs::read_dir(d)
+        .ok()?
+        .filter_map(|e| e.ok()?.file_name().into_string().ok())
+        .filter(|n| n.starts_with(prefix) && !n.ends_with(".zip"))
+        .collect();
+    found.sort();
+    found.pop().map(|n| format!("tests/data/{n}"))
+}
+
+/// Решение 487: все файлы пулов записи `rel` (число пулов заранее неизвестно), по имени. Ошибок нет (тест падает).
+pub fn pools_all(rel: &str) -> Vec<Value> {
+    let d = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
+    let mut names: Vec<PathBuf> = std::fs::read_dir(d)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| is_pool(p))
+        .collect();
+    names.sort();
+    assert!(!names.is_empty(), "пулов в записи {rel} нет");
+    names.iter().map(|p| read_json(p)).collect()
+}
+
+/// JSON файла записи `rel/name`. Ошибок нет (тест падает).
+pub fn file(rel: &str, name: &str) -> Value {
+    read_json(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel).join(name))
 }
 
 /// Файл пула записи (pool_<адрес>.json). Ошибок нет.

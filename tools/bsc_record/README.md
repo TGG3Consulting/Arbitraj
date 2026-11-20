@@ -18,6 +18,17 @@
 
 Адреса — официальная таблица контрактов THENA (docs.thena.fi/thena/official-links, «List of smart contracts»):
 AlgebraFactory `0x306F06C147f064A010530292A1EB6737c3e378e4`, Quoter `0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA`.
-Пулы — первая страница GeckoTerminal `thena-fusion-bsc` (`--gecko-pools`, по умолчанию 8) и/или `--pool 0x…`.
+Пулы — страницы GeckoTerminal `thena-fusion` (`--gecko-pages`, по умолчанию 3; `--gecko-pools`, по умолчанию 60;
+id `thena-fusion-bsc` GeckoTerminal не знает — запись 20.11) и/или `--pool 0x…`. Сжатых слов битмапа — `--words`
+(8), сырых — `--raw-words` (1). Ещё пишутся данные оракула динамической комиссии (оператор, feeConfig, точки оракула,
+getFee / getAverages / getTimepoints от имени пула на время блока + 0 / 1 / 3 с) и котировки на время блока + 1 и + 3 с
+(t237, решение 463 ветки BSC, задача T463-02); повтор T237-02 — ещё слово хранилища пула slot 3 (liquidity |
+volumePerLiquidityInBlock), точки оракула index + 2 и 0, начало окна на время блока + 0 / + 1 (oracle.starts).
 Нужен доступ в интернет к api.geckoterminal.com (до записи блоков) и sourcify.dev (после; сбой Sourcify запись не
 останавливает). Узел с короткой историей состояния: каждый пул читается тремя пачками на голове, взятой перед пулом.
+
+Решение 487: сеть — параметрами `--chain-id` (56), `--name` (папка записи), `--gecko-network` (bsc), `--pair-token`
+(поиск пулов poolByPair фабрики), `--heads` (времена последних блоков — heads.json), `--quoter ""` (без официального
+квотера); общий ход записи — `thena_fusion_run.py`. Ход и формат записи BSC прежние (версия скрипта t237 с oracle /
+slot 3 — та, что сделала tests/data/bsc_thena_fusion_2026-11-20_slot3). Zyberswap V3 (Arbitrum) —
+`tools/arbitrum_record/zyberswap_v3.py`.

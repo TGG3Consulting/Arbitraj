@@ -126,6 +126,7 @@ camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo_more, ekubo, balancer_v2_more
 | `sub_dex_find.py` | 460 п. 9 | модуль sub_dex.py: пулы без скана истории (allPools фабрик KyberSwap Classic, GeckoTerminal kyberswap_classic_arbitrum / balancer_arbitrum / пулы сети, реестр iZiSwap по парам), событие создания узким окном вокруг pool_created_at | — |
 | `camelot_v2_logs.py` | 460 | модуль camelot_v2.py: нижняя граница (PairCreated первой пары фабрики или --from-block) и поиск редких событий с делением окна; п. 10 — потолок времени | — |
 | `algebra_dir_fee.py` | 444 | Algebra V1.9 с направленными комиссиями (T433-F5; Camelot V3) — команда и хеши кода пула — раздел ниже | `tests/arb_dex_algebra_dir.rs` |
+| `zyberswap_v3.py` | 487 (T487-01, T487-02) | Zyberswap V3 (вид thena_fusion): ход и формат записи THENA Fusion BSC (tools/bsc_record/thena_fusion.py + thena_fusion_run.py) на сети 42161 — пулы poolByPair фабрики 0x9c2a…8544 по парам `--pair-token` (WETH, USDC) и/или `--pool`; состояние, сжатые слова и ticks(), слот 3, оракул комиссии (feeConfig, getFee / getAverages / getTimepoints на время блока + 0 / 1 / 3 с, oracle.starts), виртуальный квотер на 4 временах (официального квотера нет); heads.json — времена последних `--heads` блоков — tests/data/arbitrum_zyberswap_v3_<дата>/ | `tests/arbitrum_zyberswap_v3_live.rs` |
 
 ## algebra_dir_fee.py — Algebra V1.9 с направленными комиссиями (решение 444, T433-F5; Camelot V3)
 

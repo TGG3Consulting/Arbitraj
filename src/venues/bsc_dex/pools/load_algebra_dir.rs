@@ -1,7 +1,8 @@
 //! Файл: venues/bsc_dex/pools/load_algebra_dir.rs
 //! Что делает: решение 444 — чтение состояния пула Algebra V1.9 с направленными комиссиями (Camelot V3, вид
 //! algebra_dir_fee) на заданном блоке: globalState (цена, тик, комиссии feeZto и feeOtz), liquidity и карта СЫРЫХ тиков
-//! (тот же TickTable и ticks(), что у THENA Fusion — load_algebra.rs tick_map). Собирает PoolState::Algebra с
+//! (тот же ticks(), что у THENA Fusion, но битмап СЫРОЙ — load_algebra.rs tick_map при шаге карты 1; у THENA Fusion
+//! битмап сжатый, решение 463). Собирает PoolState::Algebra с
 //! fee = feeZto и fee_otz = Some(feeOtz) — math/swap_algebra берёт комиссию стороны (math/algebra_fee.rs).
 //! Кто вызывает: pools/load.rs (и через него load_batch.rs — пулы этого вида читаются по одному, как Algebra V1.9).
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_algebra_dir.rs, pools/abi_algebra.rs (liquidity),
@@ -18,8 +19,9 @@
 //! dex.pool_code_hashes); запись — tools/arbitrum_record/algebra_dir_fee.py.
 //!
 //! Комиссия — значение globalState на блоке чтения. Первый обмен в новой секунде пишет точку оракула и пересчитывает
-//! комиссии до шага цены (AlgebraPool.sol:777-795, _updateFee :549-558) — этого пересчёта здесь нет (как у THENA
-//! Fusion, load_algebra.rs); расхождение ловит сверка с квотером (решение 73, виртуальный квотер — решение 186).
+//! комиссии до шага цены (AlgebraPool.sol:777-795, _updateFee :549-558) — этого пересчёта здесь нет (у THENA Fusion
+//! он есть с решения 463 — pools/fusion_fee.rs, линия AlgebraV1; для V1.9 Camelot не портирован); расхождение ловит
+//! сверка с квотером (решение 73, виртуальный квотер — решение 186).
 
 use alloy_primitives::{Address, U256};
 
@@ -41,7 +43,7 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
     let liquidity = call::view(ctx, pool, &IAlgebraPool::liquidityCall {}, tag).await?;
     let tick = gs.tick.as_i32();
     let state = state_of(&gs, liquidity);
-    Ok((state, tick_map(ctx, pool, tick, tag).await?))
+    Ok((state, tick_map(ctx, pool, tick, 1, tag).await?))
 }
 
 /// Состояние пула из ответа globalState и liquidity. Принимает: разобранный globalState, ликвидность. Возвращает:

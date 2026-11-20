@@ -3,7 +3,8 @@
 //! сообщений, приёмники окон (решение 125) — и чтение настроек площадки в одном месте.
 //! Кто вызывает: все файлы адаптера Binance, main.rs (создаёт).
 //! От чего зависит: settings, secrets, storage (journal, raw_log), core/types.
-//! Настройки: venue.* с областью «binance» (docs/SETTINGS.md); секреты binance.api_key, binance.api_secret.
+//! Настройки: venue.* с областью «binance» (docs/SETTINGS.md); секреты binance.api_key, binance.api_secret,
+//! binance.sbe_api_key (решение 425).
 //!
 //! Официально (https://developers.binance.com/legacy-docs/binance-spot-api-docs/rest-api/request-security): ключ —
 //! заголовок X-MBX-APIKEY, подпись HMAC SHA256 секретом ключа (hex). Passphrase у Binance нет. Тип ключа — HMAC
@@ -27,6 +28,9 @@ pub const ID: &str = "binance";
 pub const SECRET_API_KEY: &str = "binance.api_key";
 /// Имя секрета секретного ключа (подпись HMAC SHA256).
 pub const SECRET_API_SECRET: &str = "binance.api_secret";
+/// Решение 425: API-ключ Binance типа Ed25519 — только для потоков SBE (sbe-market-data-streams.md: «Only Ed25519 keys
+/// are allowed», ключ — заголовок X-MBX-APIKEY, подпись не нужна, поэтому приватный ключ Ed25519 боту не нужен).
+pub const SECRET_SBE_API_KEY: &str = "binance.sbe_api_key";
 
 /// Окружение адаптера. Дешёво клонируется.
 #[derive(Clone)]

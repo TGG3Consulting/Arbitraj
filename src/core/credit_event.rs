@@ -35,7 +35,7 @@ pub async fn on_change(core: &Core, mut b: BalanceChange) {
     // Решение 211: монета события — тикер площадки; в монету ядра (адрес, показное имя) — до сверки с ожиданиями.
     // Настройки монеты — по адресу (не нашёлся адрес — тикер, как раньше).
     b.asset = super::venue_ticker::asset_back(core, &b.venue, b.asset);
-    let coin = crate::settings::scope::coin_id(&b.asset.ticker, b.asset.contract.as_ref());
+    let coin = super::coin_key::scope_id(&b.asset);
     let at = At {
         venue: Some(&b.venue.0),
         coin: Some(&coin),

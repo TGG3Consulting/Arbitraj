@@ -47,7 +47,7 @@ const AUTHOR: &str = "ядро: вывод отклонён (решение 253)
 /// Что делает: проверка до расчёта — входы по монете с биржи покупки направления не закрыты. Принимает: ядро,
 /// направление. Ошибки: текст причины отказа («входы с binance закрыты: …»).
 pub fn check(core: &Core, d: &Direction) -> Result<(), String> {
-    let coin = crate::settings::scope::coin_id(&d.asset.ticker, d.asset.contract.as_ref());
+    let coin = super::coin_key::scope_id(&d.asset);
     let s = &core.inner.deps.settings;
     let at = At {
         venue: None,
@@ -132,7 +132,7 @@ pub async fn close(core: &Core, deal: &str, asset: &Asset, from: &VenueId, e: &O
     deps.log(Level::Warn, "core.withdraw_block", Some(from), &text, None)
         .await;
     // Решение 408 (исключение из решения 157): «Открыть вход монеты» на тревоге (e:oe → «Да/Нет» → OpenCoinEntry).
-    let coin = crate::settings::scope::coin_id(&asset.ticker, asset.contract.as_ref());
+    let coin = super::coin_key::scope_id(asset);
     let acts = vec![crate::notify::acts::e::open_entry(from, &coin, ticker)];
     deps.notify_acts("coin.withdraw_refused", Some(from), &text, acts)
         .await;

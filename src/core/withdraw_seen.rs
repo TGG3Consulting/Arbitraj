@@ -67,13 +67,10 @@ pub struct Seen {
 static SEEN: LazyLock<Mutex<HashMap<(Asset, VenueId), Seen>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// id записи в учёте: адрес контракта (или тикер) и площадка.
+/// id записи в учёте: адрес контракта (или тикер) и площадка; решение 487 (сети в id) — у монеты другой сети
+/// «…@сеть» (coin_key::rid; ключ памяти — Asset с сетью), сеть по умолчанию — id прежний. Ошибок нет.
 fn id(a: &Asset, from: &VenueId) -> String {
-    let coin = a
-        .contract
-        .map(|x| x.to_string())
-        .unwrap_or(a.ticker.clone());
-    format!("{coin}:{}", from.0)
+    format!("{}:{}", super::coin_key::rid(a), from.0)
 }
 
 /// Что делает: загружает факты при запуске. Ошибка базы — в журнал (поправки начнутся с новых переводов). Ошибок нет.

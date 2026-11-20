@@ -1,31 +1,36 @@
 //! Файл: venues/gate/ws_conn.rs
-//! Что делает: одна сессия WebSocket рынка Gate: подключение, подписки spot.order_book по одной с паузой
-//! (venue.ws_subs_per_sec), свой spot.ping раз в venue.ws_ping_ms, Pong на Ping-кадр сервера, запись сырых кадров,
-//! снимки стаканов → память и ядру; отказ подписки или неразборчивый стакан → стакан этой пары недостоверен;
-//! spot.system upgrade → переподключение. Ядру стаканы отдаются без ожидания (try_send).
+//! Что делает: одна сессия WebSocket рынка Gate: подключение, подписки по одной с паузой (venue.ws_subs_per_sec), свой
+//! spot.ping раз в venue.ws_ping_ms, Pong на Ping-кадр сервера, запись сырых кадров, стаканы → память и ядру; отказ
+//! подписки или неразборчивый стакан → стакан этой пары недостоверен; spot.system upgrade → переподключение. Ядру
+//! стаканы отдаются без ожидания (try_send).
 //! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
 //! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
+//! Решение 421 (быстрый стакан со страховкой): при venue.obu_level у каждой пары две подписки — снимки spot.order_book
+//! (страховка, первой) и поток spot.obu; какой стакан отдавать ядру, решает fast_pick.rs (быстрый, пока синхронизирован;
+//! разрыв — сразу снимок и пересинхронизация: unsubscribe + subscribe потока в общей очереди подписок с тем же темпом
+//! venue.ws_subs_per_sec), исполняет fast_io.rs. Не задана — только снимки, как раньше.
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, book.rs, ctx.rs, gateway/tap.rs, tokio-tungstenite.
-//! Настройки: приходят из ws.rs (Cfg); raw.book_frames [gate] — писать ли кадры стаканов в сырой журнал.
+//! От чего зависит: depth.rs, obu.rs, ws_plan.rs (очередь подписок), ws_snap.rs (кадры снимков), fast_pick.rs,
+//! fast_io.rs, book.rs, ctx.rs, gateway/tap.rs, tokio-tungstenite.
+//! Настройки: приходят из ws.rs (Cfg); raw.book_frames [gate] — писать ли кадры стаканов (обоих каналов) в сырой журнал.
 //!
 //! Решение 109 (как MEXC): снимок с тем же lastUpdateId, что прежний, ядру не отдаётся — стакан не менялся («Order book
 //! ID, which is updated whenever the order book is changed», модель OrderBook REST; в канале — lastUpdateId); меньший
 //! — устаревший, пропускается. Время кадра пары обновляется в обоих случаях (book.rs, touch; решение 118, А-🟠8).
 //! Сравнение по номеру, а не по уровням: без копий уровней на каждый кадр (решения 130, 131).
-//! Решение 125: каждый кадр стакана монеты с открытым окном — в приёмник окна как есть (текст).
-//! Решение 202: каждый кадр отмечается в учёте свежести (gateway/feed_health.rs) — кадр стакана по паре; команды
-//! сторожа ядра: «переподписать пару» — unsubscribe + subscribe этой пары (тот же id = номер пары; Spot WebSocket v4:
-//! event subscribe | unsubscribe, https://www.gate.com/docs/developers/apiv4/ws/en/), соседи не трогаются;
-//! «переподключить соединение» — сессия заканчивается, ws.rs подключается заново с теми же парами.
-//! Решение 213: в учёт свежести с кадром стакана идёт его lastUpdateId (на каждом кадре, и с тем же номером) — ядро
-//! сравнивает его с id ответа GET /spot/order_book?with_id=true (book_version.rs, там же основание «одна шкала»).
+//! Решение 125: каждый кадр стакана spot.order_book монеты с открытым окном — в приёмник окна как есть (текст).
+//! Решение 202: каждый кадр снимков отмечается в учёте свежести (gateway/feed_health.rs); команды сторожа ядра:
+//! «переподписать пару» — unsubscribe + subscribe снимков этой пары (тот же id = номер пары; Spot WebSocket v4: event
+//! subscribe | unsubscribe, https://www.gate.com/docs/developers/apiv4/ws/en/) и пересинхронизация её потока spot.obu,
+//! соседи не трогаются; «переподключить соединение» — сессия заканчивается, ws.rs подключается заново с теми же парами.
+//! Решение 213: в учёт свежести идёт lastUpdateId кадра снимков (на каждом кадре, и с тем же номером) — ядро сравнивает
+//! его с id ответа GET /spot/order_book?with_id=true (book_version.rs). Номера spot.obu в учёт не идут: их шкала с id
+//! REST в документации не связана (решение 421, вопрос в docs/TASKS.md); поток снимков работает и при быстром стакане.
 
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
 use futures_util::{SinkExt, StreamExt};
-use serde_json::json;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
@@ -33,13 +38,17 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::core::types::Asset;
 use crate::gateway::core_out_book::{BookOut, Fed};
 use crate::gateway::events::MarketEvent;
-use crate::gateway::tap::{TapData, TapStream, now_ns};
-use crate::storage::journal::Level;
+use crate::gateway::tap::now_ns;
 
 use super::book::{Alive, Books};
 use super::ctx::{Ctx, ID};
 use super::depth::{self, BOOK_CHANNEL, Msg};
-use super::ws::{Cfg, End, invalidate};
+use super::fast_io::Env;
+use super::fast_pick::Fast;
+use super::obu::{self, Obu};
+use super::ws::{Cfg, End};
+use super::ws_plan::Plan;
+use super::ws_snap::Snaps;
 use crate::gateway::feed_health::Cmd;
 use crate::gateway::feed_reg::ConnHandle;
 
@@ -78,39 +87,49 @@ pub async fn session(
     w.feed.session_started();
     let alive: Alive = Default::default();
     let by_symbol: HashMap<&str, &Asset> = assets.iter().map(|(a, s)| (s.as_str(), a)).collect();
-    // Номер запроса подписки = номер пары в соединении (по нему ответ-отказ находит пару).
-    let mut next_sub = 0usize;
+    // Решение 421: быстрые стаканы соединения и очередь подписок (ws_plan.rs).
+    let mut fast = Fast::new(cfg.obu, cfg.levels);
+    let mut plan = Plan::new(assets, &cfg);
     let mut sub_tick = tokio::time::interval(cfg.sub_gap);
     let mut ping = tokio::time::interval(cfg.ping);
     let mut last_rx = Instant::now();
     let mut dropped = 0u64;
     // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
     let kept = BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal);
-    // Последний отданный ядру номер стакана по символу (решение 109).
-    let mut last: HashMap<String, i64> = HashMap::new();
+    let env = Env {
+        ctx,
+        name,
+        books,
+        out,
+        kept: &kept,
+        alive: &alive,
+        by_symbol: &by_symbol,
+        assets,
+    };
+    // Кадры снимков spot.order_book: последний отданный ядру номер по символу (решение 109) — ws_snap.rs.
+    let mut snaps = Snaps::default();
     loop {
         tokio::select! {
-            _ = sub_tick.tick(), if next_sub < assets.len() => {
-                let (_, sym) = &assets[next_sub];
-                let p = json!([sym, cfg.levels.to_string(), cfg.interval]);
-                let req = depth::request(BOOK_CHANNEL, "subscribe", p, next_sub as i64);
-                next_sub += 1;
-                if let Err(e) = sink.send(Message::Text(req.into())).await {
-                    return End::Broken(format!("отправка подписки: {e}"));
+            _ = sub_tick.tick(), if plan.busy(&fast) => {
+                let reqs = plan.step(&mut fast);
+                for req in reqs {
+                    if let Err(e) = sink.send(Message::Text(req.into())).await {
+                        return End::Broken(format!("отправка подписки: {e}"));
+                    }
                 }
             }
             Some(c) = w.cmd.recv() => match c {
                 Cmd::Reconnect => return End::Broken("сторож пар: переподключение соединения (решение 202)".into()),
                 Cmd::Resub(ticker) => {
                     let Some(i) = assets.iter().position(|(a, _)| a.ticker == ticker) else { continue };
-                    let p = json!([assets[i].1, cfg.levels.to_string(), cfg.interval]);
                     for ev in ["unsubscribe", "subscribe"] {
-                        let req = depth::request(BOOK_CHANNEL, ev, p.clone(), i as i64);
+                        let req = plan.book_req(ev, i);
                         if let Err(e) = sink.send(Message::Text(req.into())).await {
                             return End::Broken(format!("отправка {ev} (сторож пар): {e}"));
                         }
                     }
-                    last.remove(&assets[i].1);
+                    snaps.last.remove(&assets[i].1);
+                    fast.resync(&assets[i].1);
                     w.feed.resubscribed(&ticker);
                 }
             },
@@ -143,47 +162,27 @@ pub async fn session(
                     Message::Close(c) => return End::Broken(format!("сервер закрыл соединение: {c:?}")),
                     _ => continue,
                 };
-                let m = depth::parse(&t);
-                let is_book = matches!(m, Msg::Depth { .. } | Msg::Bad { .. });
-                if !is_book || matches!(ctx.flag("raw.book_frames"), Ok(true)) {
-                    ctx.raw.write(ID, name, &t);
-                }
-                match m {
-                    Msg::Depth { symbol, update_id, bids, asks, exchange_time } => {
-                        let Some(asset) = by_symbol.get(symbol.as_str()) else { continue };
-                        w.feed.frame_ver(&asset.ticker, Some(update_id), None);
-                        ctx.taps.push(ID, &asset.ticker, TapStream::Book, name, rx_ns, || TapData::Text(t.to_string()));
-                        if last.get(&symbol).is_some_and(|&id| update_id <= id) {
-                            books.touch(&asset.ticker);
-                            continue;
-                        }
-                        last.insert(symbol, update_id);
-                        let book = depth::to_book((*asset).clone(), bids, asks, exchange_time);
-                        books.put(book.clone(), alive.clone());
-                        match kept.book(out, book) {
-                            Fed::Sent | Fed::Kept => {}
-                            Fed::Closed => return End::Done,
-                            Fed::Lost => dropped += 1,
-                        }
+                let raw_books = matches!(ctx.flag("raw.book_frames"), Ok(true));
+                let fed = if let Some(m) = obu::parse(&t) {
+                    if matches!(m, Obu::Ack { .. }) || raw_books {
+                        ctx.raw.write(ID, name, &t);
                     }
-                    Msg::Bad { symbol, reason } => {
-                        if let Some(s) = symbol.as_deref()
-                            && let Some(a) = by_symbol.get(s)
-                        {
-                            invalidate(ctx, books, out, &a.ticker);
-                            last.remove(s);
-                        }
-                        log(ctx, Level::Error, format!("WebSocket {name}: кадр не разобран: {reason}")).await;
+                    env.on_obu(&mut fast, m).await
+                } else {
+                    let m = depth::parse(&t);
+                    if !matches!(m, Msg::Depth { .. } | Msg::Bad { .. }) || raw_books {
+                        ctx.raw.write(ID, name, &t);
                     }
-                    Msg::Ack { id, error: Some(err) } => {
-                        if let Some((a, s)) = id.and_then(|i| assets.get(i as usize)) {
-                            invalidate(ctx, books, out, &a.ticker);
-                            last.remove(s);
-                        }
-                        log(ctx, Level::Error, format!("WebSocket {name}: отказ подписки (id {id:?}): {err}")).await;
+                    if matches!(m, Msg::Upgrade) {
+                        return End::Broken("spot.system: сервер обновляется (upgrade)".into());
                     }
-                    Msg::Upgrade => return End::Broken("spot.system: сервер обновляется (upgrade)".into()),
-                    _ => {}
+                    let Some(fed) = snaps.on_msg(&env, &mut fast, w.feed, m, &t, rx_ns).await else { continue };
+                    fed
+                };
+                match fed {
+                    Fed::Sent | Fed::Kept => {}
+                    Fed::Closed => return End::Done,
+                    Fed::Lost => dropped += 1,
                 }
                 if dropped > 0 && dropped.is_power_of_two() {
                     tracing::warn!(conn = name, dropped, "ядро не успевает принимать стаканы Gate");
@@ -191,12 +190,4 @@ pub async fn session(
             }
         }
     }
-}
-
-/// Запись в журнал.
-async fn log(ctx: &Ctx, level: Level, msg: String) {
-    let _ = ctx
-        .journal
-        .write(level, "venue.ws", Some(ID), msg, None)
-        .await;
 }

@@ -3,7 +3,7 @@
 //! (сколько заплатим или получим за Q монет, с комиссией taker нашего аккаунта).
 //! Решение 217: freeze — снимок стакана и плана комиссии (gateway/frozen.rs FrozenBook) для контракта quote_snapshot;
 //! живая котировка — тот же снимок на один вызов (одна формула).
-//! Кто вызывает: ws_conn.rs (обновляет стакан), mod.rs (quote для ядра; book_confirmed), book_print.rs (print).
+//! Кто вызывает: ws_conn.rs, standby_emit.rs (решение 426: put_at, счётчики страховки standby) — обновляют стакан; mod.rs (quote для ядра; book_confirmed), book_print.rs (print).
 //! От чего зависит: core/types, fees.rs, ctx.rs.
 //! Настройки: venue.quote_asset (монета комиссии продажи); feed.stale_after_ms (по площадке) — если соединение, по которому пришёл стакан, молчит дольше, данные
 //! устарели; venue.book_stale_ms [kraken] (обязательна — решение 238) — кадр стакана этой пары старше — котировки нет.
@@ -47,6 +47,8 @@ pub struct Books {
     map: Arc<RwLock<HashMap<String, Entry>>>,
     /// Решение 202 (для всех бирж, 08.11): свежесть соединений и пар для сторожа ядра (gateway/feed_health.rs).
     pub feed: crate::gateway::feed_reg::FeedReg,
+    /// Решение 426: счётчики страховки стакана (переключения, потери) для журнала venue.book_standby.
+    pub standby: Arc<super::standby_log::Tally>,
 }
 
 /// Сейчас, unix мс.
@@ -57,8 +59,14 @@ fn now_ms() -> i64 {
 impl Books {
     /// Сохраняет свежий стакан и связь с его соединением; время кадра пары — сейчас.
     pub fn put(&self, book: OrderBook, alive: Alive) {
+        self.put_at(book, alive, now_ms());
+    }
+
+    /// Решение 426: сохраняет стакан, его соединение и время кадра пары seen_ms (unix мс) — у стакана страховки это
+    /// время его последнего кадра, а не момент переключения (свежесть по venue.book_stale_ms та же). Ошибок нет.
+    pub fn put_at(&self, book: OrderBook, alive: Alive, seen_ms: i64) {
         let mut m = self.map.write().unwrap_or_else(|p| p.into_inner());
-        let seen: Alive = Arc::new(AtomicI64::new(now_ms()));
+        let seen: Alive = Arc::new(AtomicI64::new(seen_ms));
         let until: Alive = Arc::new(AtomicI64::new(0));
         m.insert(book.asset.ticker.clone(), (book, alive, seen, until));
     }

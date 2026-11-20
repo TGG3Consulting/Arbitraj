@@ -160,8 +160,9 @@ pub fn swap(
                 .map_err(why)
         }
         // Algebra (THENA Fusion, решения 80, 81): одна ликвидность, динамическая комиссия (globalState.fee, постоянна
-        // на весь своп), СЫРОЙ битмап тиков — своя математика (math/swap_algebra, фаза A). Вид ядра Cl. Решение 444:
-        // у направленных комиссий (Camelot V3) — комиссия своей стороны (math/algebra_fee.rs).
+        // на весь своп) — своя математика (math/swap_algebra, фаза A). Вид ядра Cl. Решение 463: цель шага по коду пула
+        // (algebra_next: THENA Fusion — строка сжатого битмапа, Camelot V3 — строка сырого, Integral — связный список).
+        // Решение 444: у направленных комиссий (Camelot V3) — комиссия своей стороны (math/algebra_fee.rs).
         (
             PoolState::Algebra {
                 sqrt_price_x96,
@@ -594,8 +595,9 @@ pub fn swap(
     }
 }
 
-/// Решение 461: цель шага цикла обмена Algebra по версии кода пула (math/swap_algebra.rs, шапка, пункт 5) — Integral
-/// (связный список тиков) — следующий инициализированный тик, V1.9 (THENA Fusion, Camelot V3) — строка битмапа.
+/// Решения 461, 463: цель шага цикла обмена Algebra по коду пула (math/swap_algebra.rs, шапка, пункт 5): Algebra
+/// Integral (связный список тиков) — Linked; THENA Fusion (Proto::Algebra, код AlgebraV1, сжатый битмап) и Algebra
+/// V1.9 Camelot V3 (Proto::AlgebraDirFee, сырой битмап — шаг карты 1) — Row.
 /// Принимает: протокол вида. Возвращает: режим. Ошибок нет.
 pub fn algebra_next(proto: Proto) -> NextTick {
     if proto == Proto::AlgebraIntegral {

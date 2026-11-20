@@ -129,7 +129,7 @@ pub async fn finish(
             from: c.from.clone(),
             to: c.to.clone(),
             ticker: c.asset.ticker.clone(),
-            coin: crate::settings::scope::coin_id(&c.asset.ticker, c.asset.contract.as_ref()),
+            coin: super::coin_key::scope_id(c.asset),
             venue_ref: c.created.venue_ref.clone(),
             hash: hash.clone(),
             started: c.started,

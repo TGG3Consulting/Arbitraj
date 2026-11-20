@@ -2,8 +2,12 @@
 //! Что делает: жизненный цикл одного соединения WebSocket стаканов OKX: настройки, сессия (ws_conn.rs), при обрыве — все
 //! стаканы соединения недостоверны, журнал, пауза, переподключение. Нет нужной настройки — соединение останавливается
 //! (без бесконечных повторов).
-//! Кто вызывает: market.rs (по задаче на соединение), user_stream.rs (config_ping — те же сроки пинга).
-//! От чего зависит: ws_conn.rs, book.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
+//! Решение 429: соединение бывает основным (books или books5 — по venue.depth_levels) или страховочным (books5 тех же пар
+//! на отдельном соединении — только при канале books); обрыв основного — пары сразу на снимки books5 из памяти
+//! (failover.rs), обрыв страховочного — недостоверны только пары, по снимкам которых ядро считало.
+//! Кто вызывает: market.rs (по задаче на соединение), user_stream.rs (config_ping — те же сроки пинга), failover.rs
+//! (invalidate).
+//! От чего зависит: ws_conn.rs, book.rs, backup.rs, failover.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_url, venue.depth_levels (5 → books5, 400 → books), venue.ws_ping_ms, venue.ws_silence_ms,
 //! venue.ws_reconnect_pause_ms [okx], http.timeout_ms (время на подключение).
 //!
@@ -22,9 +26,10 @@ use crate::core::types::Asset;
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
+use super::backup::Role;
 use super::book::Books;
 use super::ctx::Ctx;
-use super::ws_conn;
+use super::{failover, ws_conn};
 
 /// Срок тишины сервера, после которого OKX рвёт соединение, мс — «more than 30 seconds»: пинг должен быть чаще.
 pub const SERVER_SILENCE_MS: u64 = 30_000;
@@ -49,11 +54,13 @@ pub struct Cfg {
     pub connect_timeout: Duration,
     /// Повторный разрыв той же пары раньше этого — переподключение, а не пересподписка (урок 12).
     pub resync_gap: Duration,
+    /// Решение 429: основное или страховочное соединение.
+    pub role: Role,
 }
 
 /// Работает, пока жив канал out: подключается заново после каждого обрыва.
 /// Принимает: окружение, имя соединения, монеты (монета, instId), стаканы, канал ядра, сдвиг подключения (не больше
-/// venue.ws_connects_per_sec подключений в секунду — market.rs).
+/// venue.ws_connects_per_sec подключений в секунду — market.rs), роль соединения (решение 429).
 pub async fn run(
     ctx: Ctx,
     name: String,
@@ -61,13 +68,19 @@ pub async fn run(
     books: Books,
     out: mpsc::Sender<MarketEvent>,
     delay: Duration,
+    role: Role,
 ) {
     // Решение 202: свежесть пар соединения и команды сторожа ядра (переподписать пару, переподключить соединение).
-    let tickers: Vec<String> = assets.iter().map(|(a, _)| a.ticker.clone()).collect();
+    // Решение 429: страховочное соединение регистрируется без пар — сторож видит его живость, но не переподписывает
+    // и не подтверждает пары по нему (стакан пары в памяти — от основного соединения, пока оно синхронизировано).
+    let tickers: Vec<String> = match role {
+        Role::Main => assets.iter().map(|(a, _)| a.ticker.clone()).collect(),
+        Role::Backup => Vec::new(),
+    };
     let (feed, mut cmd) = books.feed.register(&name, &tickers);
     tokio::time::sleep(delay).await;
     while !out.is_closed() {
-        let end = match config(&ctx) {
+        let end = match config(&ctx, role) {
             Ok(cfg) => {
                 let w = ws_conn::Watch {
                     feed: &feed,
@@ -87,7 +100,7 @@ pub async fn run(
         };
         let End::Broken(why) = end else { return };
         for (a, _) in &assets {
-            invalidate(&ctx, &books, &out, &a.ticker);
+            failover::lost(&ctx, &books, &out, role, &a.ticker, true);
         }
         let Ok(pause) = ctx.int("venue.ws_reconnect_pause_ms") else {
             let m = format!(
@@ -127,10 +140,12 @@ pub fn config_ping(ctx: &Ctx) -> Result<(Duration, Duration), String> {
     Ok((Duration::from_millis(ping), Duration::from_millis(silence)))
 }
 
-/// Читает настройки соединения. Ошибка — текст «не задана …» или «вне пределов документации».
-pub fn config(ctx: &Ctx) -> Result<Cfg, String> {
+/// Читает настройки соединения. Принимает: окружение, роль (страховочное — всегда books5, 5 уровней: «5 depth levels
+/// snapshot»). Ошибка — текст «не задана …» или «вне пределов документации».
+pub fn config(ctx: &Ctx, role: Role) -> Result<Cfg, String> {
     let (channel, levels) = match ctx.int("venue.depth_levels").map_err(|e| e.message)? {
         5 => ("books5", 5),
+        400 if role == Role::Backup => ("books5", super::backup::SNAP_LEVELS),
         400 => ("books", 400),
         other => {
             return Err(format!(
@@ -150,5 +165,6 @@ pub fn config(ctx: &Ctx) -> Result<Cfg, String> {
         silence,
         connect_timeout: ctx.http_timeout().map_err(|e| e.message)?,
         resync_gap: Duration::from_millis(pause),
+        role,
     })
 }

@@ -67,13 +67,10 @@ fn holds() -> std::sync::MutexGuard<'static, HashMap<(VenueId, CoinKey), Hold>> 
     HOLDS.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// id записи в учёте: площадка и адрес (или тикер). Ошибок нет.
+/// id записи в учёте: площадка и адрес (или тикер); решение 487 (сети в id) — у монеты другой сети «…@сеть»
+/// (coin_key::rid; ключ памяти — CoinKey с сетью), сеть по умолчанию — id прежний. Ошибок нет.
 fn id(v: &VenueId, a: &Asset) -> String {
-    let coin = a
-        .contract
-        .map(|x| x.to_string())
-        .unwrap_or(a.ticker.clone());
-    format!("{}:{coin}", v.0)
+    format!("{}:{}", v.0, super::coin_key::rid(a))
 }
 
 /// Что делает: загрузка замеров при запуске. Ошибка базы — журнал. Ошибок нет.

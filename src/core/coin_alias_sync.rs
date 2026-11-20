@@ -17,6 +17,11 @@ pub fn aliases<'a>(coins: impl Iterator<Item = &'a CoinEntry>) -> HashMap<String
         let Some(a) = c.asset.contract else {
             continue;
         };
+        // Решение 487 (сети в id): старые значения по тикеру — эпохи одной сети (BSC); монете другой сети (id области
+        // «0x…@сеть», coin_key::scope_id) запасное чтение по тикеру не даётся.
+        if c.asset.chain.is_some() {
+            continue;
+        }
         let list = m
             .entry(crate::settings::scope::coin_id(&c.asset.ticker, Some(&a)))
             .or_default();

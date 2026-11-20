@@ -150,7 +150,9 @@ pub fn more(ctx: &Ctx, e: &Entry, b: &Book) -> Ask {
         (Proto::Slipstream, PoolRef::Contract(a)) => {
             prefetch_ticks::slip_more(ctx, e, *a, b).into()
         }
-        (Proto::Algebra, PoolRef::Contract(a)) => prefetch_ticks::algebra_more(ctx, *a, b).into(),
+        (Proto::Algebra, PoolRef::Contract(a)) => {
+            prefetch_ticks::algebra_more(ctx, e, *a, b).into()
+        }
         (Proto::AlgebraDirFee, PoolRef::Contract(a)) => {
             prefetch_algebra_dir::more(ctx, *a, b).into()
         }

@@ -4,7 +4,7 @@
 //! при каждой подписке, в том числе пустой.
 //! Кто вызывает: subs.rs (подписка из контракта и пересподписка при смене справочника пар).
 //! От чего зависит: ws.rs, ws_conn.rs (пределы), symbols.rs, pairs.rs, book.rs, ctx.rs.
-//! Настройки: venue.ws_symbols_per_conn [kucoin].
+//! Настройки: venue.ws_symbols_per_conn [kucoin]; решение 423 — при быстром стакане (ws.rs config) у пачки две темы.
 //!
 //! Официально (rate-limit-rule-classic): «Spot/Margin is limited to 400» тем на соединение, «a topic supports up to 100
 //! symbols» — не больше 40 000 символов на соединение; «Up to 800» соединений (публичные — по IP).
@@ -35,17 +35,23 @@ pub async fn subscribe(
     out: mpsc::Sender<MarketEvent>,
 ) -> GatewayResult<(Vec<JoinHandle<()>>, Snapshot, Vec<String>)> {
     let per_conn = ctx.int("venue.ws_symbols_per_conn")? as usize;
-    let max = SYMBOLS_PER_TOPIC * TOPICS_PER_CONN;
+    // Настройки соединения проверяются до запуска: ошибка видна сразу, а не в журнале каждого соединения.
+    let cfg = ws::config(ctx).map_err(|m| bad(ctx, m))?;
+    // Решение 423: при быстром стакане у каждой пачки две темы (снимки и изменения) — символов вдвое меньше.
+    let topics = if cfg.fast.is_some() {
+        TOPICS_PER_CONN / 2
+    } else {
+        TOPICS_PER_CONN
+    };
+    let max = SYMBOLS_PER_TOPIC * topics;
     if per_conn == 0 || per_conn > max {
         return Err(bad(
             ctx,
             format!(
-                "venue.ws_symbols_per_conn = {per_conn}: у KuCoin от 1 до {max} (400 тем × 100 символов)"
+                "venue.ws_symbols_per_conn = {per_conn}: у KuCoin от 1 до {max} ({topics} тем × 100 символов)"
             ),
         ));
     }
-    // Настройки соединения проверяются до запуска: ошибка видна сразу, а не в журнале каждого соединения.
-    ws::config(ctx).map_err(|m| bad(ctx, m))?;
     symbols.ensure_fresh(ctx).await?;
     let snap = Snapshot::build(symbols, &assets);
     if !snap.missing.is_empty() {

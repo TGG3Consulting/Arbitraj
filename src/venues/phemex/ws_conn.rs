@@ -6,6 +6,11 @@
 //! стакана — в журнал только при raw.book_frames = да (решение 109).
 //! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
 //! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
+//! Решение 427: поток соединения (book_lane.rs Lane) — основной (orderbook.subscribe [symbol]) или запасной
+//! (venue.book_reserve: [symbol] или [symbol, true] — «Subscribe full orderBook»); стакан ядру — через выбор
+//! book_pick.rs (основной, пока синхронизирован; потеря — сразу запасной); разрыв, неразборчивый кадр пары (локальный
+//! стакан пары сброшен до снимка) и отказ подписки — потеря потока пары (Lane::lose), журнал — с прореживанием
+//! (book_lane.rs); контрольный снимок, разошедшийся со стаканом в памяти, — счёт (local_book.rs Applied::Differs).
 //! Кто вызывает: ws.rs.
 //! От чего зависит: depth.rs, local_book.rs, book.rs, symbols.rs, ws.rs (Cfg, End), ctx.rs, tokio-tungstenite,
 //! gateway/feed_reg.rs (решение 202).
@@ -43,11 +48,12 @@ use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
 use super::book::{Alive, Books};
+use super::book_lane::{self, Lane};
 use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
 use super::local_book::{Applied, LocalBook};
 use super::symbols::Symbols;
-use super::ws::{Cfg, End, invalidate};
+use super::ws::{Cfg, End};
 use crate::gateway::feed_health::Cmd;
 use crate::gateway::feed_reg::ConnHandle;
 
@@ -69,6 +75,16 @@ pub fn sub_message(id: u64, symbol: &str) -> String {
     json!({"id": id, "method": "orderbook.subscribe", "params": [symbol]}).to_string()
 }
 
+/// Решение 427: подписка на полный стакан пары («Subscribe full orderBook»: params ["<symbol>", true], «full depth and
+/// interval = 100ms») при full, иначе — sub_message. Принимает: id, символ, полный ли. Ошибок нет.
+pub fn sub_message_lane(id: u64, symbol: &str, full: bool) -> String {
+    if full {
+        json!({"id": id, "method": "orderbook.subscribe", "params": [symbol, true]}).to_string()
+    } else {
+        sub_message(id, symbol)
+    }
+}
+
 /// Сообщение отписки от всех стаканов соединения («Unsubscribe OrderBook»). Принимает: id запроса. Ошибок нет.
 pub fn unsub_message(id: u64) -> String {
     json!({"id": id, "method": "orderbook.unsubscribe", "params": []}).to_string()
@@ -85,6 +101,7 @@ pub async fn session(
     out: &mpsc::Sender<MarketEvent>,
     cfg: Cfg,
     w: Watch<'_>,
+    lane: &Lane,
 ) -> End {
     let rules = symbols.all();
     let mut pairs: HashMap<&str, Pair> = HashMap::new();
@@ -140,7 +157,7 @@ pub async fn session(
         tokio::select! {
             _ = sub_tick.tick(), if !pending.is_empty() => {
                 let Some((id, s)) = pending.pop() else { continue };
-                let m = s.map_or_else(|| unsub_message(id), |s| sub_message(id, s));
+                let m = s.map_or_else(|| unsub_message(id), |s| sub_message_lane(id, s, lane.full));
                 if let Err(e) = sink.send(Message::Text(m.into())).await {
                     return End::Broken(format!("отправка подписки: {e}"));
                 }
@@ -194,15 +211,17 @@ pub async fn session(
                     Msg::Book(f) => f,
                     Msg::Reply { id, ok: false, text } => {
                         if let Some(p) = id.and_then(|i| by_id.get(&i)).and_then(|s| pairs.get(s)) {
-                            invalidate(ctx, books, out, &p.asset.ticker);
+                            lane.lose(ctx, books, out, &p.asset.ticker, &format!("{name}: отказ подписки")).await;
                         }
                         ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: ошибка Phemex: {text}")).await;
                         continue;
                     }
                     Msg::Bad { symbol, reason } => {
-                        if let Some(p) = symbol.as_deref().and_then(|s| pairs.get(s)) {
+                        if let Some((s, p)) = symbol.as_deref().and_then(|s| pairs.get(s).map(|p| (s, p))) {
                             w.feed.frame(&p.asset.ticker);
-                            invalidate(ctx, books, out, &p.asset.ticker);
+                            // Решение 427: изменение потеряно — стакан пары этого потока ждёт снимок.
+                            local.remove(s);
+                            lane.lose(ctx, books, out, &p.asset.ticker, &format!("{name}: кадр не разобран")).await;
                         }
                         ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: кадр не разобран: {reason}")).await;
                         continue;
@@ -214,11 +233,16 @@ pub async fn session(
                 let lb = local.entry(f.symbol.clone()).or_default();
                 match lb.apply(&f, cfg.strict) {
                     Applied::Changed => {}
+                    Applied::Differs => book_lane::snap_differs(ctx, books, &p.asset.ticker, name).await,
                     Applied::Waiting => continue,
                     Applied::Gap(why) => {
-                        invalidate(ctx, books, out, &p.asset.ticker);
-                        let m = format!("WebSocket {name}: {} — {why}; стакан недостоверен до снимка (≤ 60 с)", f.symbol);
-                        ctx.log(Level::Warn, "venue.ws", m).await;
+                        let m = format!("{name}: {why}; поток ждёт снимок (≤ 60 с)");
+                        lane.lose(ctx, books, out, &p.asset.ticker, &m).await;
+                        if !lane.pick.reserve() {
+                            // Ревью 427: без запасного потока журнал как до решения 427 — каждый разрыв.
+                            let m = format!("WebSocket {name}: {} — {why}; стакан недостоверен до снимка (≤ 60 с)", f.symbol);
+                            ctx.log(Level::Warn, "venue.ws", m).await;
+                        }
                         continue;
                     }
                 }
@@ -231,8 +255,14 @@ pub async fn session(
                     exchange_time: f.ts_ns.map(|ns| Utc.timestamp_nanos(ns)),
                     received_at: Utc::now(),
                 };
-                books.put(book.clone(), alive.clone());
-                match kept.book(out, book) {
+                // Ревью 427: память и ядро — под замком пары (порядок двух соединений пары).
+                let (fed, ev) = lane.take(&p.asset.ticker, book, f.ts_ns, &alive, |b| {
+                    books.put(b.clone(), alive.clone());
+                    kept.book(out, b)
+                });
+                lane.events(ctx, books, &ev, &p.asset.ticker, "кадр стакана").await;
+                let Some(fed) = fed else { continue };
+                match fed {
                     Fed::Sent | Fed::Kept => {}
                     Fed::Closed => return End::Done,
                     Fed::Lost => dropped += 1,

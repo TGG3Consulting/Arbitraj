@@ -5,8 +5,12 @@
 //! пары недостоверен. Сырые кадры стакана — в журнал только при raw.book_frames = да (решение 109).
 //! Решение 324: стакан ядру — gateway/core_out_book.rs (канал полон: venue.book_events_keep = да — последний кадр
 //! пары ждёт места в общем наборе канала ядра; не задана — прежний сброс и счёт dropped).
+//! Решение 422: при быстром стакане (канал /feed, fast_ws.rs) этот поток — страховка: снимок ядру отдаётся только
+//! когда пара не на быстром стакане, иначе он запасной и сверяется с быстрым (snap_out.rs, book_mode.rs); ошибка или
+//! неразборчивый снимок пары на быстром стакане её стакан не снимают (ws.rs invalidate_snap).
 //! Кто вызывает: ws.rs.
-//! От чего зависит: depth.rs, book.rs, ctx.rs, tokio-tungstenite, gateway/feed_reg.rs (решение 202).
+//! От чего зависит: snap_out.rs (решение 422), depth.rs, book.rs, ctx.rs, tokio-tungstenite, gateway/feed_reg.rs
+//! (решение 202).
 //! Настройки: приходят из ws.rs (Cfg); raw.book_frames [htx].
 //!
 //! Решение 202 (для всех бирж, Тигран 08.11): каждый кадр отмечается в учёте свежести (gateway/feed_reg.rs) — снимок
@@ -40,7 +44,8 @@ use crate::storage::journal::Level;
 use super::book::{Alive, Books};
 use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
-use super::ws::{Cfg, End, invalidate};
+use super::snap_out::To;
+use super::ws::{Cfg, End, invalidate_snap};
 use crate::gateway::feed_health::Cmd;
 use crate::gateway::feed_reg::ConnHandle;
 
@@ -95,6 +100,15 @@ pub async fn session(
     let mut dropped = 0u64;
     // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
     let kept = BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal);
+    // Решение 422: снимок ядру или запасным при быстром стакане (snap_out.rs, book_mode.rs).
+    let to = To {
+        ctx,
+        books,
+        out,
+        kept: &kept,
+        alive: &alive,
+        levels: cfg.levels as usize,
+    };
     loop {
         tokio::select! {
             _ = sub_tick.tick(), if !pending.is_empty() => {
@@ -161,7 +175,10 @@ pub async fn session(
                         w.feed.frame(&asset.ticker);
                         if let Some(seq) = seq {
                             if last_seq.get(&symbol).is_some_and(|&s| seq <= s) {
-                                books.touch(&asset.ticker);
+                                // Решение 422: при быстром стакане — сверка хранимого снимка (snap_out.rs).
+                                if !to.repeat(&asset.ticker).await {
+                                    return End::Done;
+                                }
                                 continue;
                             }
                             last_seq.insert(symbol, seq);
@@ -174,8 +191,7 @@ pub async fn session(
                             exchange_time,
                             received_at: chrono::Utc::now(),
                         };
-                        books.put(book.clone(), alive.clone());
-                        match kept.book(out, book) {
+                        match to.give(book).await {
                             Fed::Sent | Fed::Kept => {}
                             Fed::Closed => return End::Done,
                             Fed::Lost => dropped += 1,
@@ -184,13 +200,13 @@ pub async fn session(
                     Msg::Bad { symbol, reason } => {
                         if let Some(a) = symbol.as_deref().and_then(|s| by_symbol.get(s)) {
                             w.feed.frame(&a.ticker);
-                            invalidate(ctx, books, out, &a.ticker);
+                            invalidate_snap(ctx, books, out, &a.ticker);
                         }
                         ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: кадр не разобран: {reason}")).await;
                     }
                     Msg::Error { id, text } => {
                         if let Some(a) = id.as_deref().and_then(|s| by_symbol.get(s)) {
-                            invalidate(ctx, books, out, &a.ticker);
+                            invalidate_snap(ctx, books, out, &a.ticker);
                         }
                         ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: ошибка HTX: {text}")).await;
                     }

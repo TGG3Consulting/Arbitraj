@@ -10,7 +10,7 @@
 //! одновременные промахи ждут один запрос). Решение 121 (A2): задан feed.max_block_age_ms — время каждой новой головы
 //! берётся сразу в опросе, и fresh() отказывает (StaleData), если блок старше порога (node/head_age.rs). Реорги — по removed: true в логах пулов и по квитанциям (send/track.rs).
 //! Кто вызывает: pools/market.rs (запуск при подписке на рынок), quote/*, exec/*, check/tax_pass.rs, send/*,
-//! pools/http_wait.rs, pools/session.rs.
+//! pools/http_wait.rs, pools/session.rs, pools/fusion_head.rs (time_since — решение 463).
 //! Решение 282: каждый круг опроса — уведомление «блок не растёт» / «блоки снова идут» (node/head_stall.rs).
 //! Решение 368 (t163): ритм опроса — раз в bsc.blocks_poll_ms от НАЧАЛА круга (сон — остаток периода после работы
 //! круга); раньше сон шёл после работы, и при узле на другом сервере период рос на RTT eth_blockNumber и
@@ -134,6 +134,22 @@ impl Heads {
                     }
                 }
             },
+        }
+    }
+
+    /// Решение 463 (ревью t236, п. 4): время блока `number` или более нового — никогда не более старого (at при занятом
+    /// запросе отдаёт последнее известное, оно может быть раньше головы). В кэше нет — ждёт идущий запрос, затем свой
+    /// eth_getBlockByNumber на `number` (один на всех, под flight). Принимает: окружение, номер блока.
+    /// Возвращает: (номер ≥ `number`, время Unix). Ошибки: узел; BadResponse (нет блока/timestamp).
+    pub async fn time_since(&self, ctx: &Ctx, number: u64) -> GatewayResult<(u64, u64)> {
+        let hit = || self.block_time().filter(|(n, _)| *n >= number);
+        if let Some(x) = hit() {
+            return Ok(x);
+        }
+        let _one = self.flight.lock().await;
+        match hit() {
+            Some(x) => Ok(x),
+            None => self.fetch_time(ctx, number).await,
         }
     }
 

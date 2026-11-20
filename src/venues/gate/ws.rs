@@ -5,7 +5,9 @@
 //! Кто вызывает: market.rs (по задаче на соединение).
 //! От чего зависит: ws_conn.rs (сама сессия), book.rs, ctx.rs, gateway/feed_health.rs (решение 202).
 //! Настройки: venue.ws_url, venue.ws_subs_per_sec, venue.ws_silence_ms, venue.ws_reconnect_pause_ms,
-//! venue.ws_ping_ms, venue.depth_levels, venue.book_interval, http.timeout_ms (время на подключение).
+//! venue.ws_ping_ms, venue.depth_levels, venue.book_interval, http.timeout_ms (время на подключение);
+//! venue.obu_level (решение 421, необязательная): уровни быстрого потока spot.obu — 50 (раз в 20 мс) или 400 (раз в
+//! 100 мс); не задана — только снимки spot.order_book, как до решения 421.
 //!
 //! Официально (Spot WebSocket v4, https://www.gate.com/docs/developers/apiv4/ws/en/): адрес «wss://api.gateio.ws/ws/v4/»
 //! (задаётся настройкой venue.ws_url); данные — JSON; пинг приложения spot.ping → spot.pong сбрасывает таймер
@@ -18,11 +20,13 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::core::types::Asset;
+use crate::gateway::errors::ErrorCode;
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
 use super::book::Books;
 use super::ctx::{Ctx, ID};
+use super::obu::OBU_LEVELS;
 use super::ws_conn;
 
 /// Почему сессия закончилась.
@@ -46,6 +50,8 @@ pub struct Cfg {
     /// Как часто слать spot.ping (venue.ws_ping_ms [gate]).
     pub ping: Duration,
     pub connect_timeout: Duration,
+    /// Решение 421: уровни быстрого потока spot.obu (venue.obu_level [gate]); None — только снимки.
+    pub obu: Option<u64>,
 }
 
 /// Работает, пока жив канал out: подключается заново после каждого обрыва.
@@ -126,5 +132,21 @@ pub fn config(ctx: &Ctx) -> Result<Cfg, String> {
         silence: Duration::from_millis(ctx.int("venue.ws_silence_ms").map_err(|e| e.message)?),
         ping: Duration::from_millis(ctx.int("venue.ws_ping_ms").map_err(|e| e.message)?),
         connect_timeout: ctx.http_timeout().map_err(|e| e.message)?,
+        obu: obu_level(ctx)?,
     })
+}
+
+/// Решение 421: уровни быстрого потока spot.obu (venue.obu_level). Возвращает: None — не задана (только снимки).
+/// Ошибка — текст: значение вне официальных «400, 50» (Spot WebSocket v4, «Order Book V2 API»), сбой чтения.
+fn obu_level(ctx: &Ctx) -> Result<Option<u64>, String> {
+    match ctx.text("venue.obu_level") {
+        Ok(v) => match v.trim().parse::<u64>() {
+            Ok(n) if OBU_LEVELS.contains(&n) => Ok(Some(n)),
+            _ => Err(format!(
+                "venue.obu_level = {v}: у spot.obu только {OBU_LEVELS:?}"
+            )),
+        },
+        Err(e) if e.code == ErrorCode::NotConfigured => Ok(None),
+        Err(e) => Err(e.message),
+    }
 }

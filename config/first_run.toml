@@ -557,6 +557,33 @@ source = "Документация MEXC: Order Book «max 5000»; процеду
 rationale = "Глубина снимка, которую берёт сама процедура MEXC; предел — 5000."
 prefill = { kind = "Venue", id = "mexc" }
 
+[[section.rec]]
+name = "venue.fast_book_interval"
+area = "площадка MEXC"
+unit = "интервал"
+value = "10ms"
+source = "Решение 420; Diff.Depth Stream: (100ms|10ms)"
+rationale = "Быстрый стакан из самого частого потока изменений; поток снимков (~500 мс) — страховка, торговля из-за пропусков не останавливается."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "venue.fast_book_snapshot_per_sec"
+area = "площадка MEXC"
+unit = "в секунду"
+value = "2"
+source = "Order Book «Weight(IP): 3»; «IP-weighted endpoints share 300 weight per 10 seconds»"
+rationale = "6 веса/с из 30 корзины IP; 300 пар синхронизируются за 150 с, всё это время — по снимкам."
+prefill = { kind = "Venue", id = "mexc" }
+
+[[section.rec]]
+name = "venue.fast_book_snapshot_limit"
+area = "площадка MEXC"
+unit = "уровней"
+value = "5000"
+source = "How to Properly Maintain a Local Copy of the Order Book, шаг 3: limit=5000; Order Book «max 5000»"
+rationale = "Глубина, которую берёт сама процедура MEXC; уровни вне снимка без изменений в быстром стакане не видны."
+prefill = { kind = "Venue", id = "mexc" }
+
 # --- Упущено из-за потолка (решение 141) ---
 [[section]]
 title = "Упущено из-за потолка (решение 141)"
@@ -813,6 +840,15 @@ rationale = "Хватает, чтобы найти свой ордер по text
 prefill = { kind = "Venue", id = "gate" }
 
 [[section.rec]]
+name = "venue.obu_level"
+area = "площадка Gate"
+unit = "уровней"
+value = "50"
+source = "Документация spot.obu (Order Book V2): «400-level updates every 100 ms; 50-level updates every 20 ms»"
+rationale = "Решение 421: стакан в 5 раз чаще снимков 100 мс; снимки spot.order_book остаются страховкой. 400 — если нужна глубина больше 50."
+prefill = { kind = "Venue", id = "gate" }
+
+[[section.rec]]
 name = "venue.window_diff_interval"
 area = "площадка Gate"
 unit = "интервал"
@@ -975,6 +1011,15 @@ method = "да — если на живом потоке u изменений ш
 source = "Orderbook: snapshot/delta (строгое +1 не обещано); живая запись 04.11; решение Тиграна 04.11"
 rationale = "Строгая проверка ловит потерянный кадр сразу; без неё — только откат номера."
 prefill = { kind = "Venue", id = "bybit" }
+
+[[section.rec]]
+name = "venue.book_backup_levels"
+area = "площадка Bybit"
+unit = "уровней"
+method = "200 при venue.depth_levels = 50; 1 — если на время разрыва основного хватит лучшего уровня; решает Тигран."
+source = "Orderbook → Depths → Spot (1 — 10 мс, 50 — 20 мс, 200 — 100 мс, 1000 — 200 мс); seq «compare different levels orderbook data»; решение 428"
+rationale = "На время пересинхронизации основного ядро считает по полной глубине (не меньше 50 уровней), сверка — по первым 50; соединений вдвое больше."
+prefill = { kind = "Venue", id = "bybit" }
 # --- Биржа KuCoin (решение 137) ---
 [[section]]
 title = "Биржа KuCoin (решение 137)"
@@ -1041,6 +1086,15 @@ unit = "уровней"
 value = "100"
 source = "Документация KuCoin, Get Part OrderBook: size «optional value: 20, 100»"
 rationale = "Снимок для изменений стакана в окнах; больше 100 у этого эндпоинта нет."
+prefill = { kind = "Venue", id = "kucoin" }
+
+[[section.rec]]
+name = "venue.full_book_per_sec"
+area = "площадка KuCoin"
+unit = "в секунду"
+value = "5"
+source = "Документация KuCoin: Get Full OrderBook — пул Spot, вес 3; Rate limit — VIP0 Spot 4000 за 30 с"
+rationale = "Быстрый стакан (решение 423): 3 × 5 × 30 = 450 веса за 30 с, ~11 % пула Spot — запас ордерам; старт 400 пар — 80 с. Нужны ключи и venue.api_key_version."
 prefill = { kind = "Venue", id = "kucoin" }
 
 [[section.rec]]
@@ -1368,6 +1422,15 @@ rationale = "Не дождались — итог неизвестен, ручн
 prefill = { kind = "Venue", id = "okx" }
 
 [[section.rec]]
+name = "venue.book_backup_log_s"
+area = "площадка OKX"
+unit = "секунды"
+value = "60"
+source = "Решение 429; совет, не документация (как log.pool_events_lost_interval_s = 60)"
+rationale = "Видно, как часто быстрый стакан books теряет синхронизацию и ядро считает по снимкам books5; журнал не засоряется (не чаще раза в минуту)."
+prefill = { kind = "Venue", id = "okx" }
+
+[[section.rec]]
 name = "venue.order_test_first"
 area = "площадка OKX"
 unit = "да/нет"
@@ -1561,6 +1624,33 @@ rationale = "Глубокий снимок для окна умеренным в
 prefill = { kind = "Venue", id = "binance" }
 
 [[section.rec]]
+name = "venue.sbe_ws_url"
+area = "площадка Binance"
+unit = "URL"
+value = "wss://stream-sbe.binance.com:9443"
+source = "sbe-market-data-streams.md «General Information»: stream-sbe.binance.com или :9443; нужен ключ Ed25519"
+rationale = "Решение 425: быстрый стакан SBE (20 мс), JSON остаётся страховкой. Нужен секрет binance.sbe_api_key; venue.ws_silence_ms у Binance — больше 20000 (ping раз в 20 с), например 60000."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.sbe_snapshot_per_sec"
+area = "площадка Binance"
+unit = "в секунду"
+method = "Темп × вес снимка × 60 — малая доля REQUEST_WEIGHT по IP (rateLimits живого exchangeInfo), например 2 при limit 1000 (6000 веса в минуту) — решает Тигран."
+source = "rest-api «Order book»: вес по limit; REQUEST_WEIGHT — rateLimits живого exchangeInfo"
+rationale = "Снимки всех пар — одной очередью; решает Тигран."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
+name = "venue.sbe_snapshot_limit"
+area = "площадка Binance"
+unit = "уровней"
+value = "1000"
+source = "rest-api «Order book»: limit до 5000, вес 5/25/50/250 по limit"
+rationale = "Снимок глубже стакана ядра (20 уровней) с умеренным весом 50."
+prefill = { kind = "Venue", id = "binance" }
+
+[[section.rec]]
 name = "venue.deposit_dust_as_min"
 area = "площадка Binance"
 unit = "да/нет"
@@ -1697,7 +1787,7 @@ area = "площадка XT"
 unit = "уровней"
 value = "20"
 source = "Документация XT: limitDepth.md"
-rationale = "Верхние уровни локального стакана (у depth — 5, 10, 20, 50)"
+rationale = "Верхние уровни локального стакана (у depth — 5, 10, 20, 50); при depth_update — и уровни снимков-страховки depth@ (решение 419, дополнение: только 5, 10, 20, 50, иначе страховки нет)"
 prefill = { kind = "Venue", id = "xt" }
 
 [[section.rec]]
@@ -2007,6 +2097,15 @@ rationale = "Потолок документации; при venue.balance_event
 prefill = { kind = "Venue", id = "phemex" }
 
 [[section.rec]]
+name = "venue.book_reserve"
+area = "площадка Phemex"
+unit = "поток"
+method = "depth30, если пар Phemex в работе не больше (venue.ws_max_conns − поток аккаунта) / 2 × venue.ws_symbols_per_conn (при 5 и потоке аккаунта — 40); пар больше — не задавать (часть пар не подпишется); full — только если нужен поток другой глубины (кадры тяжелее, 100 мс)"
+source = "Subscribe orderBook «depth = 30 and interval = 20ms», Subscribe full orderBook «full depth and interval = 100ms»; API Rate Limits «concurrent connection limit to 5», «subscription limit to 20»"
+rationale = "Запасной поток той же скорости держит стакан, пока основной ждёт снимок (≤ 60 с)."
+prefill = { kind = "Venue", id = "phemex" }
+
+[[section.rec]]
 name = "venue.ws_subs_per_sec"
 area = "площадка Phemex"
 unit = "в секунду"
@@ -2224,6 +2323,15 @@ unit = "уровней"
 value = "25"
 source = "spot-websocket-v2/book: depth 10, 25, 100, 500, 1000"
 rationale = "Глубина для котировки на объём; чек-сумма — по верхним 10 при любой глубине."
+prefill = { kind = "Venue", id = "kraken" }
+
+[[section.rec]]
+name = "venue.book_standby_depth"
+area = "площадка Kraken"
+unit = "уровней"
+value = "25"
+source = "spot-websocket-v2/book: depth 10, 25, 100, 500, 1000; guides/websockets/introduction: ~150 подключений за 10 минут на IP"
+rationale = "Решение 426: равна venue.depth_levels — на страховке ядро видит ту же глубину; трафик и подключения удваиваются. Меньше (10) — легче, но котировка на объём на время страховки по 10 уровням."
 prefill = { kind = "Venue", id = "kraken" }
 
 [[section.rec]]
@@ -2537,7 +2645,7 @@ name = "venue.ws_url"
 area = "площадка HTX"
 unit = "URL"
 value = "wss://api.huobi.pro/ws"
-source = "Websocket Market Data: «wss://api.huobi.pro/ws» (MBP-изменения — /feed, бот их не использует)"
+source = "Websocket Market Data: «wss://api.huobi.pro/ws» (MBP-изменения — /feed, venue.ws_feed_url, решение 422)"
 rationale = "Снимки стакана mbp.refresh."
 prefill = { kind = "Venue", id = "htx" }
 
@@ -2656,6 +2764,33 @@ unit = "символов"
 method = "Предел не указан — начать с 10 и проверить ответ на живом; решает Тигран"
 source = "Get Current Fee Rate Applied to The User: symbols через запятую, предел не указан"
 rationale = "Ставки комиссии пачками."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.ws_feed_url"
+area = "площадка HTX"
+unit = "URL"
+method = "wss://api.huobi.pro/feed — после записи живых кадров /feed (docs/TASKS.md, решение 422); до того — не задавать (только снимки mbp.refresh)"
+source = "Websocket Market Data → Introduction: «wss://api.huobi.pro/feed» для MBP incremental и REQ"
+rationale = "Быстрый стакан + снимки mbp.refresh как страховка (решение 422)."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.fast_book_levels"
+area = "площадка HTX"
+unit = "уровней"
+method = "решает Тигран: 20 — «tick by tick», но только ~30 пар списка документации (остальные на снимках); 150 — все пары, но раз в 100 мс, как и снимки mbp.refresh"
+source = "Market By Price (incremental update): 5/20 — «tick by tick», 150/400 — «100ms interval»; REQ — 5, 20, 150"
+rationale = "Быстрее снимков только 5/20 и только для пар списка."
+prefill = { kind = "Venue", id = "htx" }
+
+[[section.rec]]
+name = "venue.fast_book_req_per_sec"
+area = "площадка HTX"
+unit = "в секунду"
+value = "5"
+source = "Websocket Market Data → Rate Limit: «The limitation of single connection is 100 ms»"
+rationale = "Половина лимита на соединение — запас на повторы."
 prefill = { kind = "Venue", id = "htx" }
 
 [[section.rec]]

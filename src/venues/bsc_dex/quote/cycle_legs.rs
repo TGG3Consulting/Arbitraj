@@ -13,7 +13,7 @@
 //! Решение 438: fresh_at — перечтение на заданном блоке (exec/pool_cond_read.rs читает на нём же условие пулов).
 //! Кто вызывает: quote/cycle_cost.rs, exec/cycle_trade.rs, exec/cycle_dry.rs, exec/pool_cond_read.rs.
 //! От чего зависит: quote/{route_calc, select, graph_legs, verify}.rs, pools/{registry, load, load_batch,
-//! load_batch_par}.rs, tokens.rs.
+//! load_batch_par, fusion_book}.rs (fusion_book isolated — решение 463), tokens.rs.
 //! Настройки: verify.max_staleness_blocks, verify.timeout_ms (через verify::limits), verify.read_parallel_max
 //! (решение 331, необязательная) [bsc_dex].
 
@@ -24,7 +24,7 @@ use alloy_primitives::Address;
 use crate::core::types::DexCycle;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::pools::load;
+use super::super::pools::{fusion_book, load};
 use super::super::pools::load_batch::Want;
 use super::super::pools::load_batch_par;
 use super::super::pools::registry::Entry;
@@ -83,7 +83,9 @@ pub async fn fresh_at(
         })
         .collect();
     let par = load_batch_par::limit(ctx, verify::PAR);
+    // Решение 463 (повторное ревью t236): оракул THENA Fusion этого чтения — не в книгу (fusion_book.rs isolated).
     let fetch = load_batch_par::states_with(ctx, &q.tokens, &q.reg, &wants, block, par);
+    let fetch = fusion_book::isolated(fetch);
     let loaded = tokio::time::timeout(Duration::from_millis(timeout_ms), fetch)
         .await
         .map_err(|_| {

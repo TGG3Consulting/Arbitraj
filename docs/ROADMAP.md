@@ -183,6 +183,25 @@
 - Решение 433: папка адаптера называется venues/bsc_dex и тип BscDex, хотя код общий для EVM-сетей (arb_dex — второй экземпляр) — переименование отдельной механической задачей после того, как обе сети заработают (step5-plan.md, раздел 1). Адаптер пока одноэкземплярный: константа ID и общие на процесс переменные без площадки — задачи 433-г, 433-и (docs/TASKS.md).
 - Решение 430 (шаг 2 двух сетей): core/transfers.rs 589 строк (было 571 — и до 430 сверх 200), core/native.rs 224 (было 210) — сверх ориентира 200; ключи второй сети (пара venue_dir и область «монета» с сетью), *_bnb → *_native, отображение по сетям (deal_card «bsc_dex», notify/human.rs, экран «Монеты», слепок кошельков), карты ticker_index по адресу без сети — docs/TASKS.md, блок 430.
 - Решение 431 (шаг 3 двух сетей): сверх ориентира 200 строк — core/transfers.rs 595, core/native.rs 230, core/rebuild.rs 206, core/precheck.rs 667 (было 655), venues/htx/networks_parse.rs 213 (201), venues/coinex/networks_parse.rs 201; subscribe.rs разнесён (186 + subscribe_assets.rs 117). Не сделано по сетям — docs/TASKS.md, блок 431.
+- Решение 424 (t208): сверх ориентира 200 — venues/poloniex/ws_conn.rs 215 (функция bad — вынести в ws_book.rs),
+  ws_book.rs 216, fast_book.rs 240 после ревью (Stats и сверку снимка book — в отдельный файл). Сверка снимка book с быстрым стаканом — только по
+  содержимому верха; по версии — после живой записи (общие ли id у book и book_lv2).
+- Решение 427 (t211): сверх ориентира 200 — venues/phemex/ws_conn.rs 276 после ревью (было 246; вынести разбор ответов и кадров стакана из select! в ws_frame.rs), book.rs 228 (было 210; freeze и stale — в book_fresh.rs), book_pick.rs 267 после ревью (Taken / Out / Event — в book_pick_types.rs).
+- Решение 426 (t210): venues/kraken/ws_conn.rs 239 строк (было 215) и ws.rs 210 — сверх ориентира 200; вынести разбор строк кадра book (lose / offer / пересподписка при разрыве) из session в ws_rows.rs. Пока активна страховка меньшей глубины, подтверждение тихой пары (book_print.rs, N = venue.depth_levels) видит меньше уровней — «другой стакан», лишняя переподписка основного (вреда торговле нет); при равной глубине этого нет.
+- Решение 429 (t213): сверх ориентира 200 — src/venues/okx/ws_conn.rs 233 (было 228; дробить: разбор события / Bad — в ws_event.rs), src/venues/okx/backup.rs 238 (типы Snap / Counts / Lost — в backup_types.rs), src/venues/okx/book.rs 229 (было 221).
+- Решение 419 (дополнение, t203): venues/xt/ws_conn.rs 202 строки (ориентир 200) — при следующей правке вынести разбор
+  отказа подписки (Msg::Error) в ws_book.rs или отдельный файл.
+- Решение 421 (t205): записать живые кадры spot.obu Gate (docs/TASKS.md, решение 421, п. 1) и добавить тест на них в tests/gate_fast_book.rs (сейчас — примеры документации и кадры spot.order_book_update); src/venues/gate/fast_pick.rs 213 строк после ревью (allow/ms/Src вынесены в fast_rule.rs; сверх ориентира 200 — вынести fallback/refused при следующей правке).
+- Решение 428 (t212): страховка стакана Bybit проверена тестами только на записи одной глубины (orderbook.50 04.11):
+  сверка двух глубин при равном seq и вообще частота равного seq — не проверены; нужна запись двух глубин одной пары
+  (docs/TASKS.md, решение 428).
+- Решение 420 (t204): src/venues/mexc/depth.rs 208 строк, ws_sess.rs 207, fast_pair.rs 214 (после ревью) (ориентир 200; вынести разбор кадра изменений из depth.rs в depth_diff.rs). Подтверждение тихой пары MEXC при быстром стакане по-прежнему по содержимому (book_print.rs); можно по lastUpdateId против версии быстрого стакана (та же шкала — процедура MEXC) — отдельной задачей. Сверка с потоком снимков по номеру — после записи живых кадров (TASKS, решение 420).
+- Решение 422 (t206): сверх ориентира 200 — htx/book_mode.rs 227 (после ревью: Pair и правила вынесены в book_rule.rs), htx/fast_pair.rs 216 (после ревью: back / deliver — в snap_out.rs), htx/ws_conn.rs 220 (было 205), htx/book.rs 234 (было 230).
+- Решение 425 (t209): venues/binance/ws_conn.rs 233 строки (было 214 до t209; дробить: разбор кадра стакана — в
+  ws_frame.rs). После ревью: sbe_pair.rs 208, sbe_run.rs 202 — вынести ask/not_before в sbe_pair_ask.rs, проверки config в
+  sbe_cfg.rs. Тестов декодера SBE (sbe.rs) на живых кадрах нет — записать кадры и добавить (docs/TASKS.md).
+- Решение 423 (t207): src/venues/kucoin/ws_conn.rs 251 строка (было 246 до t207) — вынести open() и Ws в ws_open.rs (пути
+  ws_conn::open у feed.rs и user_stream_conn.rs — поправить вместе).
 - Решение 415 (t200, после ревью): сверх ориентира 200 и до t200 — core/sell.rs 394 (было 375), core/sell_range_run.rs 363 (было 350), core/relay.rs 338 (было 331), core/stuck.rs 218 (было 215); t200 добавил только ход очереди и строки шапок. tests/core_sell_turn_t200.rs 466 — разнести (LQR / ключи и след / продолжение) с общим помощником.
 - Решение 414 (ревью 648177a2): core/drawdown_pending.rs 214 строк — вынести Cur, closing и Closing в
   drawdown_closing.rs (только перенос; пути arb::core::drawdown_pending::{closing, cur} в tests/core_drawdown_414.rs и

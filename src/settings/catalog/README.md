@@ -27,8 +27,10 @@
 | `uncapped.rs` | Упущено из-за потолка (решение 141): uncapped.enabled, uncapped.max_concurrent, uncapped.min_interval_ms, uncapped.queue_max, uncapped.max_evals, uncapped.ladder_usdt, uncapped.episode_gap_ms, uncapped.keep_days; решение 245 — uncapped.maxwin_gap_ms, uncapped.deal_time_min_n |
 | `window.rs` | Окна (решение 125): window.enabled, window.min_hold_ms, window.queue_max, window.max_mb, window.keep_days, window.zstd_level, window.cleanup_s, window.dex_price, window.dex_price_min_ms (решение 241), window.dex_pool_state (решение 255), window.busy_calc, window.busy_calc_min_ms (решение 267), venue.trades_interval, venue.window_depth_interval, venue.window_depth_limit [mexc] |
 | `bingx.rs` | Только BingX (решение 293): venue.ignore_deprecated_qty — не соблюдать устаревшие minQty / maxQty справочника пар |
+| `kucoin.rs` | Только KuCoin (решение 423): venue.full_book_per_sec — темп снимков Get Full OrderBook быстрого стакана (не задана — стакан только из снимков) |
 | `gate.rs` | Только Gate (решение 135): venue.book_interval, venue.window_diff_interval, venue.rate_limit_pause_ms, venue.order_history_limit |
 | `dex_fail.rs` | Задача t153, решение 339: dex.pool_fail_pause_ms, dex.pool_fail_pause_max_ms — ошибка чтения одного пула не рвёт сессию пачки, повтор пула с растущей паузой |
 | `dex_par.rs` | Задача t153: решение 331 — verify.read_parallel_max (пулы маршрута перед сделкой и ног цикла DEX ↔ DEX одновременно); решение 330 — dex.event_lanes_max, dex.block_read_parallel_max (сессия пачки) |
 | `dex_ekubo.rs` | Решение 447: Ekubo — dex.ekubo_core, dex.ekubo_key_index, dex.ekubo_mev_capture (необязательная), dex.ekubo_bitmap_words |
 | `dex_bv3_buffer.rs` | Решение 474: Balancer V3 через буфер ERC4626 хранилища — dex.bv3_buffer_preview_raw, dex.bv3_batch_router (обе необязательные) |
+| `mexc.rs` | Только MEXC (решение 420): venue.fast_book_interval, venue.fast_book_snapshot_per_sec, venue.fast_book_snapshot_limit — быстрый стакан (изменения + снимок REST) со страховкой потоком снимков |

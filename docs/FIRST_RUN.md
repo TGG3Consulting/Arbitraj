@@ -230,6 +230,22 @@ docs/TASKS.md «Решение 444»).
 | dex.quoter_virtual | DEX `camelot-v3@arbitrum` | `да` | Сверка расчёта — обмен самого пула в eth_call (VirtualQuoter, решение 186): какой квотер развёрнут у Camelot (Quoter или QuoterV2 ветки), не сверено — dex.quoter не задавать | Решение 444, вопрос 1 (docs/TASKS.md) |
 | dex.pool_enabled | DEX `camelot-v3@arbitrum` | `да` — после записи и прохода тестов tests/arb_dex_algebra_dir.rs без метки ignore | Включить пулы DEX в справочник, граф и торговлю | Решение 444 |
 
+## DEX Zyberswap V3 на Arbitrum — вид thena_fusion (решение 487)
+
+Область «DEX» с ключом `zyberswap-v3@arbitrum` (id — предложение, вводит Тигран: у GeckoTerminal пулов Zyberswap V3 нет;
+площадка arb_dex, решение 435). Код пула, сжатый битмап и комиссия оракула — те же, что у THENA Fusion (Sourcify,
+docs/notes/arbitrum/dex-settings-arbitrum.md §4.7). Задавать после записи своего узла (docs/TASKS.md T487-01).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `zyberswap-v3@arbitrum` | `thena_fusion` | код AlgebraV1 с TICK_SPACING = 60 и DataStorageOperator / AdaptiveFee — дословно как у THENA Fusion | Sourcify 42161 фабрика 0x9c2a…8544 и деплоер 0x24e8…56e3 против Sourcify 56 THENA (решение 487) |
+| dex.factory | DEX `zyberswap-v3@arbitrum` | `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` | проверка пула poolByPair, поиск по фабрике | адрес из адаптера DefiLlama, код подтверждён Sourcify; принято координатором по правилу Тиграна 20.11 (взрослые продовые решения без вопросов); включает DEX Тигран после записи (Sourcify 42161; dex-settings-arbitrum.md §4.7) |
+| dex.quoter_virtual | DEX `zyberswap-v3@arbitrum` | `да` | официального квотера нет — сверка обменом самого пула | решение 186 |
+| dex.pool_enabled | DEX `zyberswap-v3@arbitrum` | `да` — после записи и теста T487-01 | включить пулы DEX | решение 487 |
+| index.factory_scan | arb_dex | `да` | пулы Zyberswap V3 есть только у фабрики (не у GeckoTerminal) | решение 121 (C3) |
+| dex.fusion_fee_horizon_s | arb_dex | числа нет — как у bsc_dex: по записи своего узла Arbitrum (время блока чтения минус время последней точки оракула пулов) | без неё пулы thena_fusion не читаются (Обязательна для THENA Fusion) | решение 463 |
+| dex.fusion_oracle_chunk | arb_dex | числа нет — по ответу своего узла Arbitrum (откат части getTimepoints с out of gas — уменьшить) | то же | решение 463 |
+
 ## DEX Ekubo сети Arbitrum (решение 447)
 
 Вид пулов `ekubo` (Ekubo V3, id DEX у GeckoTerminal `ekubo-v3-arbitrum`; у площадки arb_dex ключ области «DEX» — с «@arbitrum»,
@@ -293,6 +309,13 @@ docs/TASKS.md «Решение 444»).
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
 | dex.tick_read_band_algebra_pct | bsc_dex | не задавать, пока dex.tick_read_band_pct не выше 20; при подъёме dex.tick_read_band_pct выше 20 — СНАЧАЛА задать здесь прежнее значение dex.tick_read_band_pct (то, на котором Algebra работала до подъёма), ЗАТЕМ поднимать dex.tick_read_band_pct. *Метод, если прежде dex.tick_read_band_pct не была задана* (окно Algebra было n = dex.tick_words слов в сторону): окно сохраняет любое P, у которого band_words(P, 1) ≤ dex.tick_words, где band_words(P, 1) = ⌈T / 256⌉ + 1, T = ⌊−ln(1 − P/100) / ln 1,0001⌋ (load_v2v3.rs band_words, depth_band.rs band_ticks; нижняя сторона полосы шире верхней); то же неравенство: P < 100 · (1 − 1,0001^−(256 · (dex.tick_words − 1) + 1)). Посчитать по своему dex.tick_words (пример по формуле: при dex.tick_words = 2 — P меньше ≈2,537%). P на границе или выше — окно Algebra шире прежнего | Algebra V1/V1.9 (THENA Fusion) перечитывает пул целиком на каждом Mint/Burn: при шаге сырого битмапа 1 полоса 20% — ±10 слов (21 вызов слов на пул), 70% — ±49 (99 вызовов) + по вызову ticks() на каждый найденный тик. Не задана — Algebra следует dex.tick_read_band_pct | Решения 296, 319; load_algebra.rs raw_band_words |
+
+## Комиссия THENA Fusion по оракулу (решение 463)
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.fusion_fee_horizon_s | bsc_dex | числа нет: не меньше обычной паузы между Swap тихих пулов THENA Fusion (секунды) — посчитать по своей записи: время блока чтения минус время последней точки оракула пула (tests/data/bsc_thena_fusion_2026-11-20_t237: поля at_block / last_timepoint_ts) | тихий пул перечитывает оракул раз в горизонт (край горизонта — pools/fusion_head.rs, fusion_head_read.rs); больше горизонт — реже такие чтения, но больше частей getTimepoints (по dex.fusion_oracle_chunk точек) на каждом чтении оракула | Решение 463; pools/fusion_fee.rs, pools/fusion_oracle.rs |
+| dex.fusion_oracle_chunk | bsc_dex | подобрать по ответу узла: откат части getTimepoints с out of gas (журнал dex.pool, «getTimepoints на время …») — уменьшить; числа нет | факта газа getTimepoints на точку в репозитории нет; предел газа eth_call своего узла — RPCGasCap (docs/notes/own-node-connect-audit-2026-11-03.md, конфиг узла) | Решение 463 (ревью t236); pools/fusion_oracle.rs |
 
 ## Перечитывание Algebra по выходу полосы глубины за карту (решение 320)
 
@@ -502,6 +525,7 @@ quiet_confirm_max_per_s запросов, ёмкость была quiet_confirm_
 | venue.bsc_network | площадка Gate | `BSC` | Имя сети BNB Smart Chain у Gate | Живая запись 04.11 (/spot/currencies, currency_chains CAKE) |
 | venue.depth_levels | площадка Gate | `20` | Как у других бирж | spot.order_book: 5, 10, 20, 50, 100 |
 | venue.book_interval | площадка Gate | `100ms` | Самый частый снимок | spot.order_book: 100ms, 1000ms |
+| venue.obu_level | площадка Gate | `50` | 50 уровней раз в 20 мс — в 5 раз чаще снимков 100 мс; страховка — снимки spot.order_book. 400 — если нужна глубина больше 50 (раз в 100 мс) | spot.obu: «400-level updates every 100 ms; 50-level updates every 20 ms» |
 | venue.order_time_in_force | площадка Gate | `ioc` | «Не исполнился — отменяем»: остаток снимает биржа; `fok` тоже допустим — выбор настройкой (Тигран, 04.11) | POST /spot/orders, time_in_force |
 | venue.fee_deduction | площадка Gate | *метод:* `coin` — скидка GT в кабинете выключена; `gt` — включена и есть GT. Должно совпадать с кабинетом, иначе котировок нет | Расчёт — по выбранной ставке и монете комиссии; факт — из ордера | GET /wallet/fee: gt_discount, gt_taker_fee; решение Тиграна 04.11 |
 | venue.deposit_info_requests_per_sec | площадка Gate | `2` | Минимум депозита по монетам подписки — фоном, с большим запасом от лимита Gate | Wallet «The Others: 200r/10s per endpoint»; решение 143 |
@@ -537,6 +561,7 @@ Bybit назначить зачисление на UNIFIED (Set Deposit Account)
 | venue.withdraw_account | площадка Bybit | *метод:* `UTA` (торговый баланс — на UNIFIED, депозит туда же); решает Тигран | Торговый баланс — на UNIFIED | Withdraw: accountType |
 | venue.deposit_to_spot | площадка Bybit | *метод:* не задавать — депозит назначен на UNIFIED в кабинете; «да» — только запасной вариант при депозите на FUND (право Wallet: AccountTransfer) | Счёт зачисления API прочитать не даёт — проверяет Тигран в кабинете | Set Deposit Account; решение Тиграна 04.11 |
 | venue.book_seq_strict | площадка Bybit | *метод:* да — на живом потоке `u` изменений шёл строго +1 (запись 04.11); частые пересинхронизации в журнале — нет | Потерянный кадр виден сразу | Orderbook (+1 не обещано); решение Тиграна 04.11 |
+| venue.book_backup_levels | площадка Bybit | *метод:* `200` при venue.depth_levels = 50; `1` — если на время разрыва хватит лучшего уровня; решает Тигран | 200 уровней раз в 100 мс: на время пересинхронизации основного ядро считает по полной глубине (≥ 50 уровней), сверка — по первым 50; соединений вдвое больше | Orderbook → Depths → Spot; seq «compare different levels orderbook data»; решение 428 |
 | venue.recv_window_ms | площадка Bybit | `5000` | Значение по умолчанию Bybit | Integration Guidance: «default value is 5,000» |
 ## Биржа KuCoin (решение 137)
 
@@ -556,6 +581,7 @@ Bybit назначить зачисление на UNIFIED (Set Deposit Account)
 | venue.depth_levels | площадка KuCoin | `50` | Глубина для котировки; 5 — меньше нагрузки | Документация: level2Depth5 / level2Depth50 |
 | venue.ws_subs_per_sec | площадка KuCoin | `10` | Потолок темпа подписок | Документация: 100 сообщений за 10 с |
 | venue.window_depth_limit | площадка KuCoin | `100` | Снимок для изменений стакана в окнах | Документация: Get Part OrderBook, size 20 или 100 |
+| venue.full_book_per_sec | площадка KuCoin | `5` | Быстрый стакан (решение 423): 5 снимков Get Full OrderBook в секунду — вес 3 × 5 × 30 = 450 из квоты пула Spot 4000 за 30 с (VIP0), ~11 %: запас ордерам; старт 400 пар — 80 с (до синхронизации — снимки). Нужны ключи и venue.api_key_version; решает Тигран | Документация: Get Full OrderBook (пул Spot, вес 3), Rate limit (VIP0 Spot 4000/30s) |
 | venue.withdraw_from_trade | площадка KuCoin | `да` | Вывод только с main: перед ним trade → main (право FlexTransfers) | Код 115007; решение Тиграна 04.11 |
 | venue.deposit_to_spot | площадка KuCoin | *метод:* не задавать — адрес депозита зачисляет на TRADE | Перевод main → trade не нужен | Get Deposit Address V3 (to); решение Тиграна 04.11 |
 
@@ -606,6 +632,7 @@ Classic (не UTA: «Проверить подключение» откажет)
 | venue.deposit_to_spot | площадка OKX | *метод:* Не задавать, если в кабинете у адреса BSC зачисление на Trading account (to = 18). «да» — только если адрес зачисляет на Funding (6): тогда после зачисления перевод 6 → 18. | Адрес Funding при выключенном переводе бот не отдаёт — отказ с причиной. | Документация OKX v5, Get deposit address: to «6: Funding account 18: Trading account» |
 | venue.transfer_poll_ms | площадка OKX | `1000` | Опрос итога перевода без упора в лимит. | Документация OKX v5, Funds transfer: «2 requests per second»; Get funds transfer state |
 | venue.transfer_wait_ms | площадка OKX | `30000` | Не дождались — итог неизвестен, ручная проверка. | Документация OKX v5, Funds transfer: «does not necessarily reflect the actual transfer result» |
+| venue.book_backup_log_s | площадка OKX | `60` | Видно, как часто быстрый стакан books теряет синхронизацию и ядро считает по снимкам books5; журнал не засоряется (не чаще раза в минуту). | Решение 429; совет, не документация (как log.pool_events_lost_interval_s = 60) |
 | venue.order_test_first | площадка OKX | *метод:* Не задавать: пробного ордера для спота у OKX нет (order-precheck — только Multi-currency и Portfolio margin); «да» — ошибка настройки. | check_order — только правила пары. | Документация OKX v5, Order precheck |
 ## Биржа Binance (решение 160)
 
@@ -639,6 +666,9 @@ Classic (не UTA: «Проверить подключение» откажет)
 | venue.withdraw_min_delay_ms | площадка Binance | `1000` | Отказы вывода были через 0.35–0.77 с после покупки (12 сделок 10.11): пауза 1 с больше наибольшего замера; дальше — ожидание по событию и повтор | Решение 253, дополнение (Тигран 10.11) |
 | venue.withdraw_unready_window_ms | площадка Binance | `16000` | Окно должно покрыть паузу (1 с), ожидание (3 с) и все повторы (transfer.locked_retry_ms × transfer.locked_retries_max = 1 с × 10): каждый отказ в окне — «ещё не доступна», повтор; вне окна — отказ | Решение 253; Wallet Error Code −4026, −4024 |
 | venue.window_depth_limit | площадка Binance | `1000` | Снимок для изменений стакана окна | Order book: limit ≤ 5000 |
+| venue.sbe_ws_url | площадка Binance | `wss://stream-sbe.binance.com:9443` | Решение 425: быстрый стакан SBE (изменения раз в 20 мс), JSON depth20@100ms остаётся страховкой. Нужен ключ Ed25519 (секрет binance.sbe_api_key); у соединения SBE та же venue.ws_silence_ms — больше 20000 (ping сервера раз в 20 с, тихие пары изменений не шлют), например `60000` | sbe-market-data-streams.md «General Information» |
+| venue.sbe_snapshot_per_sec | площадка Binance | *метод:* темп × вес снимка × 60 — малая доля REQUEST_WEIGHT по IP (rateLimits живого exchangeInfo), например `2` при limit 1000 (6000 веса в минуту) — решает Тигран | Старт 200 пар — 100 с по очереди (всё это время пары на страховке JSON) | rest-api «Order book»: вес по limit |
+| venue.sbe_snapshot_limit | площадка Binance | `1000` | Снимок глубже стакана ядра (20 уровней) с умеренным весом 50 | rest-api «Order book»: limit до 5000, вес 5/25/50/250 |
 | venue.deposit_dust_as_min | площадка Binance | `да` (задано 08.11.2026) | depositDust — минимальная зачисляемая сумма | официальный Changelog Binance Wallet 2021-09-03: «depositDust means minimum creditable amount» (https://developers.binance.com/docs/wallet/change-log) |
 | venue.deposit_to_spot | площадка Binance | *метод:* да — если депозит в кабинете на Фонд; проще выставить Спот | Торговля только на споте | Withdraw walletType; Universal Transfer |
 
@@ -662,7 +692,7 @@ QUERY, TRADE, WITHDRAW; ключ привязать к IP сервера; адр
 | venue.order_time_in_force | площадка XT | `IOC` | Остаток снимает биржа | publicModule.md «Time in force» |
 | venue.order_test_first | площадка XT | `нет` | Пробного ордера у XT нет | orderPost.md; SDK pyxt |
 | venue.book_stream | площадка XT | `depth_update` | Изменения раз в 100 мс; depth — раз в 1000 мс | increDepth.md, limitDepth.md |
-| venue.depth_levels | площадка XT | `20` | Верхние уровни локального стакана (у depth — 5, 10, 20, 50) | limitDepth.md |
+| venue.depth_levels | площадка XT | `20` | Верхние уровни локального стакана (у depth — 5, 10, 20, 50); при depth_update — и уровни снимков-страховки depth@ (решение 419, дополнение: только 5, 10, 20, 50, иначе страховки нет) | limitDepth.md |
 | venue.depth_snapshot_per_sec | площадка XT | `5` | Половина лимита 10/с на IP — запас для остальных публичных запросов | _market/3depth.md |
 | venue.depth_snapshot_limit | площадка XT | `500` | Совет «Orderbook manage» | orderBook.md |
 | venue.ws_ping_ms | площадка XT | `20000` | Сервер рвёт без ping дольше минуты | heartBeat.md |
@@ -680,11 +710,11 @@ QUERY, TRADE, WITHDRAW; ключ привязать к IP сервера; адр
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
 | venue.rest_url | площадка Poloniex | `https://api.poloniex.com` | Основной адрес REST Spot API. | Spot → API: «https://api.poloniex.com»; SDK request.py _default_url |
-| venue.ws_url | площадка Poloniex | `wss://ws.poloniex.com/ws/public` | Стаканы — канал book. | Spot → WebSocket: публичный «wss://ws.poloniex.com/ws/public» |
+| venue.ws_url | площадка Poloniex | `wss://ws.poloniex.com/ws/public` | Стаканы — каналы book (снимки, страховка) и book_lv2 (быстрый стакан, решение 424). | Spot → WebSocket: публичный «wss://ws.poloniex.com/ws/public» |
 | venue.ws_private_url | площадка Poloniex | `wss://ws.poloniex.com/ws/private` | Поток аккаунта: вход auth, канал balances. | Spot → WebSocket: приватный «wss://ws.poloniex.com/ws/private» |
 | venue.quote_asset | площадка Poloniex | `USDT` | Котируемая монета пар (символы BASE_USDT). | Symbol Information: quoteCurrencyName; 21350 «Amount must be greater than 1 USDT» |
 | venue.depth_levels | площадка Poloniex | `20` | Наибольшая глубина канала book для котировки на объём. | Market Data → Book: depth 5, 10 или 20, «updates every 100ms» |
-| venue.ws_symbols_per_conn | площадка Poloniex | *метод:* предела символов на соединение в документации нет — начать с небольшого числа (например, 50) и замерить на живом соединении; решает Тигран | Урок 12: число подписок — из документации, а её нет. | Spot → WebSocket: только «2000 connections» с IP и «500 requests per second» на соединение |
+| venue.ws_symbols_per_conn | площадка Poloniex | *метод:* предела символов на соединение в документации нет — начать с небольшого числа (например, 50) и замерить на живом соединении; решение 424: на пару две подписки (book и book_lv2) — при прежнем числе символов подписок вдвое больше; решает Тигран | Урок 12: число подписок — из документации, а её нет. | Spot → WebSocket: только «2000 connections» с IP и «500 requests per second» на соединение |
 | venue.ws_subs_per_sec | площадка Poloniex | `10` | Подписка — по одному символу в сообщении; с большим запасом до предела 500. | Spot → WebSocket: «500 requests per second» на соединение |
 | venue.ws_ping_ms | площадка Poloniex | `20000` | Меньше 30 с с запасом — иначе сервер закрывает сессию без уведомления. | Spot → WebSocket: «expects a message or a ping every 30 seconds» |
 | venue.ws_silence_ms | площадка Poloniex | *метод:* больше venue.ws_ping_ms с запасом на ответ pong (например, два интервала ping) — решает Тигран | Без кадров дольше — соединение оборвано. | Spot → WebSocket: {"event": "pong"} на каждый ping |
@@ -708,6 +738,7 @@ QUERY, TRADE, WITHDRAW; ключ привязать к IP сервера; адр
 | venue.depth_levels | площадка Phemex | `30` | Вся глубина канала для котировки на объём. | Subscribe orderBook: «depth = 30 and interval = 20ms» |
 | venue.ws_symbols_per_conn | площадка Phemex | `20` | Предел документации. | API Rate Limits: «Each connection has subscription limit to 20 in maximum» |
 | venue.ws_max_conns | площадка Phemex | `5` | Потолок документации; при venue.balance_events = да одно соединение — поток аккаунта. | API Rate Limits: «Each Client has concurrent connection limit to 5 in maximum» |
+| venue.book_reserve | площадка Phemex | *метод:* `depth30`, если пар Phemex в работе не больше (venue.ws_max_conns − поток аккаунта) / 2 × venue.ws_symbols_per_conn (при 5 и потоке аккаунта — 40); пар больше — не задавать (часть пар не подпишется); `full` — только если нужен поток другой глубины (кадры тяжелее, 100 мс) | Запасной поток той же скорости держит стакан, пока основной ждёт снимок (≤ 60 с). | Subscribe orderBook «depth = 30 and interval = 20ms», Subscribe full orderBook «full depth and interval = 100ms»; API Rate Limits «concurrent connection limit to 5», «subscription limit to 20» |
 | venue.ws_subs_per_sec | площадка Phemex | `10` | Половина предела — запас на server.ping. | API Rate Limits: «Each connection has throttle limit to 20 request/s» |
 | venue.ws_ping_ms | площадка Phemex | `5000` | Совет документации. | Heartbeat: «interval less than 30 seconds», «recommended to be set as 5 seconds» |
 | venue.ws_silence_ms | площадка Phemex | `15000` | Три интервала ping. | Heartbeat: «reconnect … if don't receive messages in 3 heartbeat intervals» |
@@ -742,6 +773,7 @@ Funding: есть ли сеть BSC и contract_address. Перед торгов
 | venue.bsc_network | площадка Kraken | *метод:* network_name метода сети BSC в живом ответе GET /funding/v1/methods/withdraw?asset[class]=currency&asset[name]=CAKE (в документации примера BSC нет). | Без него ни одна монета Kraken не сопоставится с DEX. | list-funding-methods: network.network_name |
 | venue.deposit_min_absent_ok | площадка Kraken | *метод:* По живому ответу методов deposit: minimum_amount у монет BSC приходит — не задавать; пустой — решение Тиграна. | Решение 143: «0» и пустое у биржи могут значить разное. | list-funding-methods: minimum_amount (необязательное поле) |
 | venue.depth_levels | площадка Kraken | `25` | Глубина для котировки на объём; чек-сумма — по верхним 10 при любой глубине. | spot-websocket-v2/book: depth 10, 25, 100, 500, 1000 |
+| venue.book_standby_depth | площадка Kraken | `25` | Решение 426: равна venue.depth_levels — на страховке ядро видит ту же глубину; трафик и подключения удваиваются. Меньше (10) — легче, но котировка на объём на время страховки по 10 уровням. | spot-websocket-v2/book: depth 10, 25, 100, 500, 1000; guides/websockets/introduction: ~150 подключений за 10 минут на IP |
 | venue.ws_ping_ms | площадка Kraken | `30000` | Сервер закрывает молчащее соединение примерно через минуту. | Spot WebSocket: ping «at least every 60 seconds» |
 | venue.ws_silence_ms | площадка Kraken | `45000` | Пинг через 30 с тишины + 15 с на pong (heartbeat приходит раз в секунду). | Spot WebSocket: «within approximately one minute of inactivity» |
 | venue.ws_streams_per_msg | площадка Kraken | *метод:* Начать с 50; отказы подписки (success false) — уменьшить. | Предела символов в запросе в документации нет. | spot-websocket-v2/book: «multiple symbols in one request» |
@@ -787,7 +819,7 @@ Funding: есть ли сеть BSC и contract_address. Перед торгов
 | --- | --- | --- | --- | --- |
 | venue.rest_url | площадка HTX | `https://api.huobi.pro` | Основной адрес REST спота. | Quick Start → Access URLs: «https://api.huobi.pro», «https://api-aws.huobi.pro» |
 | venue.rest_fallback_url | площадка HTX | `https://api-aws.huobi.pro` | Резерв только при сбое сети основного адреса. | Quick Start → Access URLs (api-aws — рекомендован для серверов AWS Japan) |
-| venue.ws_url | площадка HTX | `wss://api.huobi.pro/ws` | Снимки стакана mbp.refresh. | Websocket Market Data: «wss://api.huobi.pro/ws» (MBP-изменения — /feed, бот их не использует) |
+| venue.ws_url | площадка HTX | `wss://api.huobi.pro/ws` | Снимки стакана mbp.refresh. | Websocket Market Data: «wss://api.huobi.pro/ws» (MBP-изменения — /feed, venue.ws_feed_url, решение 422) |
 | venue.ws_private_url | площадка HTX | `wss://api.huobi.pro/ws/v2` | Поток аккаунта (accounts.update#2). | Websocket Account and Order: «wss://api.huobi.pro/ws/v2» |
 | venue.quote_asset | площадка HTX | `USDT` | Котируемая монета пар. | Get Market Symbols Setting: qc |
 | venue.depth_levels | площадка HTX | `20` | Глубина для котировки на объём. | market.$symbol.mbp.refresh.$levels: 5, 10, 20, «around 100ms» |
@@ -801,8 +833,25 @@ Funding: есть ли сеть BSC и contract_address. Перед торгов
 | venue.contract_field | площадка HTX | *метод:* Поле (ac или ca) ответа GET /v1/settings/common/chains?currency=cake, равное адресу CAKE 0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82; ни одно не равно — не задавать (HTX не подключать) | Без адреса контракта монеты не сопоставляются (CLAUDE.md). | Get Chains Information: ac «address of chain»; SDK getchainsresponse.go: ca |
 | venue.deposit_min_absent_ok | площадка HTX | *метод:* решает Тигран (решение 371): minDepositAmt «0» — минимум 0 (решение Тиграна 17.11, читается сам); настройка — только для сетей без поля / null: да — минимум 0, не задано — перевода на HTX по таким монетам нет | Решение 371: смысл «0» документация не определяет — решение владельца; нечитаемое значение — минимум неизвестен при любой настройке | minDepositAmt: «0» в документации не определён |
 | venue.fee_symbols_per_req | площадка HTX | *метод:* Предел не указан — начать с 10 и проверить ответ на живом; решает Тигран | Ставки комиссии пачками. | Get Current Fee Rate Applied to The User: symbols через запятую, предел не указан |
+| venue.ws_feed_url | площадка HTX | `wss://api.huobi.pro/feed` — после записи живых кадров /feed (docs/TASKS.md, решение 422); до того — не задавать | Быстрый стакан + снимки mbp.refresh как страховка (решение 422). | Websocket Market Data → Introduction: «wss://api.huobi.pro/feed» для MBP incremental и REQ |
+| venue.fast_book_levels | площадка HTX | *метод:* решает Тигран: `20` — «tick by tick», но только ~30 пар списка документации (остальные на снимках); `150` — все пары, но раз в 100 мс, как и снимки mbp.refresh (выигрыша в скорости нет, есть проверка цепочки номеров и до 150 уровней) | Быстрее снимков только 5/20 и только для пар списка. | Market By Price (incremental update): 5/20 — «tick by tick», 150/400 — «100ms interval»; REQ — 5, 20, 150 |
+| venue.fast_book_req_per_sec | площадка HTX | `5` | Половина лимита «100 ms» на соединение — запас на повторы. | Websocket Market Data → Rate Limit: «The limitation of single connection is 100 ms» |
 | venue.fee_requests_per_sec | площадка HTX | *метод:* Лимит не указан: 1–2 запроса в секунду — решает Тигран | Не упереться в лимит UID. | Get Current Fee Rate: лимит не указан; правило лимитов — «N times/2s» по UID на эндпоинт |
 | venue.rate_limit_pause_ms | площадка HTX | *метод:* Окно лимитов HTX — 2 с («N times/2s»): пауза 2000–4000 мс — решает Тигран | Урок 15: после «слишком часто» не слать дальше. | API Access → New Version Rate limit Rule; ответ на превышение не описан |
+
+## Биржа MEXC: быстрый стакан (решение 420)
+
+Стакан для торговли — из канала изменений spot@public.aggre.depth.v3.api.pb (10 или 100 мс) со снимком REST по
+процедуре MEXC; поток снимков spot@public.limit.depth.v3.api.pb (~500 мс) остаётся страховкой. Все три — по площадке MEXC.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| venue.fast_book_interval | площадка MEXC | `10ms` | Самый частый поток изменений; страховка — поток снимков, торговля не останавливается из-за пропусков | Diff.Depth Stream: «(100ms\|10ms)» |
+| venue.fast_book_snapshot_per_sec | площадка MEXC | `2` | 6 веса/с из 30 корзины IP (вместе с подтверждениями тихих пар и справочником); 300 пар синхронизируются за 150 с, всё это время — по снимкам | Order Book «Weight(IP): 3»; «300 weight per 10 seconds» |
+| venue.fast_book_snapshot_limit | площадка MEXC | `5000` | Глубина, которую берёт сама процедура MEXC; уровни вне снимка без изменений не видны | «How to Properly Maintain a Local Copy of the Order Book», шаг 3: limit=5000; Order Book «max 5000» |
+
+Монет на соединение при быстром стакане — не больше 15 (2 подписки на пару, предел MEXC 30): venue.ws_symbols_per_conn
+больше 15 урезается сам (строка журнала venue.subscribe).
 
 ## Зачисление по блокчейну (решение 151)
 

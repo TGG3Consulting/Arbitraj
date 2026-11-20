@@ -23,7 +23,8 @@
 //! симуляция продажи до покупки (exec/dry_build.rs). Бандл свопов и циклы DEX ↔ DEX квотером не сверяются (решение 261).
 //! Кто вызывает: перечисленные выше; exec/live.rs, exec/live_hops.rs (entry).
 //! От чего зависит: pools/load.rs (refresh), pools/registry.rs, node/heads.rs, check/hook_batch.rs (RouteFresh),
-//! exec/quoter_refetch_note.rs, pools/settle_reread.rs, quote/mod.rs (Quoting).
+//! exec/quoter_refetch_note.rs, pools/settle_reread.rs, quote/mod.rs (Quoting), pools/fusion_book.rs (isolated —
+//! решение 463: оракул THENA Fusion чтения не в книгу).
 //! Настройки: через вызываемые — feed.stale_after_ms, настройки чтения пула (dex.tick_words, dex.tick_lens и др.).
 //! Журнал: dex.memory_refetch (Warn) — расчёт по памяти разошёлся с квотером, пулы перечитаны на H, чем память отличалась.
 
@@ -35,7 +36,7 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::storage::journal::Level;
 
 use super::super::check::hook_batch::RouteFresh;
-use super::super::pools::load;
+use super::super::pools::{fusion_book, load};
 use super::super::pools::registry::Entry;
 use super::super::quote::Quoting;
 use super::super::quote::via::Via;
@@ -136,7 +137,8 @@ pub async fn pinned(q: &Quoting, pools: &[PoolRef], first: GatewayError) -> Gate
             let block = q.heads.fresh(ctx).map_err(|e| fail(e.message))?.number;
             // Ревью 2 (Н4): в причине — пул, который не прочитался.
             let reads = mems.iter().map(|m| async move {
-                load::refresh(ctx, &q.tokens, &q.reg, m, block)
+                // Решение 463 (повторное ревью t236): оракул THENA Fusion этого чтения — не в книгу.
+                fusion_book::isolated(load::refresh(ctx, &q.tokens, &q.reg, m, block))
                     .await
                     .map_err(|e| format!("{} {}: {}", m.family.title, m.ticker, e.message))
             });

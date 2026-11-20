@@ -6,6 +6,8 @@
 //! Кто вызывает: core/executor.rs, candidates.rs, ledger.rs, manual_halted.rs (замок «одна сделка на монету»),
 //! core/risk.rs (карантин), core/reconcile.rs (вложено по монетам на «Балансах»).
 //! Ключ монеты на счёте площадки (биржа — одна монета на все сети) — core/coin_account.rs.
+//! Решение 487 (сети в id): строковый id монеты для записей учёта, интерфейса и области настроек «монета» — rid /
+//! scope_id / parse_rid: у монеты другой сети (Asset.chain = Some) — суффикс «@сеть», у сети по умолчанию — прежний.
 //! От чего зависит: core/types (Asset, ChainId), alloy-primitives.
 //! Настройки: нет.
 
@@ -64,5 +66,34 @@ pub fn label(a: &Asset) -> String {
     match &a.contract {
         Some(c) => format!("{} ({})", a.ticker, short(c)),
         None => a.ticker.clone(),
+    }
+}
+
+/// Решение 487 (сети в id): id монеты в записях учёта (core_state) и в интерфейсе — адрес контракта (вид «0x…» как
+/// Address::to_string) или тикер; у монеты другой сети — «…@сеть». Сеть по умолчанию — id прежний (старые записи
+/// читаются как есть). Ошибок нет.
+pub fn rid(a: &Asset) -> String {
+    let coin = a
+        .contract
+        .map(|x| x.to_string())
+        .unwrap_or_else(|| a.ticker.clone());
+    match &a.chain {
+        Some(c) => format!("{coin}@{}", c.0),
+        None => coin,
+    }
+}
+
+/// Решение 487: id области настроек «монета» (settings/scope.rs coin_id_in): адрес строчными или тикер, у монеты
+/// другой сети — «…@сеть». Ошибок нет.
+pub fn scope_id(a: &Asset) -> String {
+    let chain = a.chain.as_ref().map(|c| c.0.as_str());
+    crate::settings::scope::coin_id_in(&a.ticker, a.contract.as_ref(), chain)
+}
+
+/// Решение 487: разбор id rid (из интерфейса): «id@сеть» → (id, Some(сеть)), без «@» — (id, None). Ошибок нет.
+pub fn parse_rid(id: &str) -> (&str, Option<ChainId>) {
+    match id.split_once('@') {
+        Some((c, net)) if !net.is_empty() => (c, Some(ChainId(net.to_string()))),
+        _ => (id, None),
     }
 }

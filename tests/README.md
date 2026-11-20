@@ -95,7 +95,7 @@ size.max_evals; пыль; точность вывода. Полный costs::eva
 
 Глубина, ревью #63 (решение 73): общее разбора записи — tests/depth_common/ (cl.rs, pairs.rs); полоса шире прочитанных слов — full = false (tests/bsc_dex_depth_band.rs); V3 AAVE в полосе и пары V2 (монета токен0 и токен1) против формул — tests/bsc_dex_depth_pairs.rs; кэш с гистерезисом, журнал смен с ограничением частоты и отложенной записью, сигнал «пул готов» ровно один раз — tests/bsc_dex_depth_book.rs.
 
-Дальность чтения карты тиков (решение 296) — tests/bsc_dex_tick_read_band.rs: word_range / raw_word_range без dex.tick_read_band_pct — прежние границы на всех tickSpacing записи depth_2026-10-25, с ней — +слова только при мелком шаге; tests/bsc_dex_tick_read_band_swap.rs: пул PancakeSwap V3 AAVE/USDT tickSpacing 1 — расчёт обмена идёт дальше прежнего края ±2 слов, глубина в полосе та же. Общее — tests/tick_band_common/. Решение 319 — tests/bsc_dex_tick_read_band_algebra.rs: dex.tick_read_band_algebra_pct не задана — окно сырого битмапа Algebra по dex.tick_read_band_pct, как раньше (не задана, 2, 10, 20, 70%); задана — Algebra по ней, V3/CL/V4 по dex.tick_read_band_pct.
+Дальность чтения карты тиков (решение 296) — tests/bsc_dex_tick_read_band.rs: word_range / raw_word_range без dex.tick_read_band_pct — прежние границы на всех tickSpacing записи depth_2026-10-25, с ней — +слова только при мелком шаге; tests/bsc_dex_tick_read_band_swap.rs: пул PancakeSwap V3 AAVE/USDT tickSpacing 1 — расчёт обмена идёт дальше прежнего края ±2 слов, глубина в полосе та же. Общее — tests/tick_band_common/. Решение 319 — tests/bsc_dex_tick_read_band_algebra.rs: dex.tick_read_band_algebra_pct не задана — окно битмапа Algebra (решение 463: сжатые слова при tickSpacing пула) по dex.tick_read_band_pct, как раньше (не задана, 2, 10, 20, 70%); задана — Algebra по ней, V3/CL/V4 по dex.tick_read_band_pct.
 
 Выход полосы глубины за карту тиков у Algebra (решение 320) — tests/bsc_dex_off_map_algebra.rs: depth.rs off_map для PoolState::Algebra (THENA Fusion, Algebra Integral) на карте пула AAVE/USDT tickSpacing 1 записи depth_2026-10-25 — dex.algebra_off_map_reread не задана / нет → false; да и полоса вне окна → true (Integral — только тик вне окна); полоса внутри окна или окно уже по тику → false; V3 не меняется; Integral с тиком ровно hi (вверх нули, ревью 323) → true, пока выше тика в карте меньше dex.integral_tick_steps тиков, иначе false (без петли).
 
@@ -120,6 +120,14 @@ Fee → Swap одной tx — ядру одно состояние = запис
 Bin на блоках нет — проверяется счёт шагов.
 
 `lb_node/mod.rs` — локальный узел JSON-RPC (петля), отдающий только записанные ответы пулов LB V2.1 (lb_v21_2026-11-15) по блоку и адресу; для тестов 332.
+
+THENA Fusion на записи своего узла (решение 463) — tests/bsc_thena_fusion_record.rs: запись tests/data/bsc_thena_fusion_2026-11-20 (8 пулов, блок 134740226; скрипт tools/bsc_record/thena_fusion.py ветки feat/arbitrum); битмап сжатый (сырые слова пусты у 7 из 8), карта бота из сжатых слов (load_algebra::row_ticks), обмен бота (NextTick::Row) = Quoter THENA и виртуальный квотер (время последней точки оракула) до wei в 63 из 64 случаев, 64-й — честный неполный итог; разбор globalState по ABI бота; факт пересчёта комиссии первым свопом блока (0x1b93…: 1539 против 1537).
+
+Ревью t236 (решение 463) — tests/bsc_thena_fusion_window_t236.rs на той же записи (общее — tests/thena_fusion_common): load_algebra::row_range при dex.tick_words = 2 и tickSpacing 60 = записанные сжатые строки; pools/depth.rs off_map ветки Proto::Algebra (dex.algebra_off_map_reread: не задана — false; да — полоса внутри окна false, у края и за окном true); глубина quote/depth_band_algebra в полосе 2 % у всех 8 пулов в обе стороны (граница достигнута, swap_to той же суммой — тот же итог, без предела выход не меньше, 1 % ≤ 2 %).
+
+THENA Fusion, вторая запись своего узла (решение 463, T463-02) — tests/data/bsc_thena_fusion_2026-11-20_t237 (60 пулов GeckoTerminal «thena-fusion», блоки 134742633…638, сжатых слов ±8, данные оракула комиссии; скрипт tools/bsc_record/thena_fusion.py ветки t237/bsc-thena-record 88e17fd2): tests/bsc_thena_fusion_math_t237.rs — обмен бота = Quoter / виртуальный квотер до wei в 1896 случаях (60 × 8 × 4 времени, комиссия — из ответа Quoter), 24 — неполный обмен у самого пула (вход квотера меньше суммы), бот = пул до wei с complete = false; комиссия Quoter на времени последней точки = globalState.fee; сырых тиков нет у 58 из 60; два пула без тиков в ±8 словах; tests/bsc_thena_fusion_fee_t237.rs — AdaptiveFee от getAverages = getFee оператора (180), math/fee_algebra_v1 fee_at без объёма блока = getFee (180), Quoter не ниже getFee (выше — 81 случай: объём блока, слота 3 в записи нет).
+
+THENA Fusion, повтор записи со слотом 3 (решение 463, T463-02) — tests/data/bsc_thena_fusion_2026-11-20_slot3 (60 пулов, блоки 134760116–134760122; скрипт tools/bsc_record/thena_fusion.py 45da3813 + 06a2c160): tests/bsc_thena_fusion_fee_slot3.rs — комиссия бота fee_at (с volumePerLiquidityInBlock из слота 3, начало окна — тот же getTimepoints, что у бота) = комиссия Quoter THENA на 4 временах: 1920 из 1920 (объём блока ≠ 0 у 51 пула из 60); next_block_fee = большая из Quoter на блоке и + 1 с у всех 60; без объёма блока = getFee оператора 180 из 180; обмен бота с этой комиссией = виртуальный квотер / Quoter до wei — 1880 полных и 40 неполных у самого пула.
 
 Тик Algebra вне прочитанного окна (решение 323) — tests/bsc_dex_algebra_out_of_window.rs: запись Algebra Integral algebra_integral_2026-11-06 (два пула thena-v3), карта сужена до одного слова сырого битмапа вокруг тика; записанный тик — выход равен записанному виртуальному квотеру ($1, $100, обе стороны); тик hi + 1 (состояние после Swap, цена тика по TickMath) — обмен и глубина 2% в обе стороны — нули, complete = false; тик lo − 1 — то же вниз, а вверх считается (как V3 next_tick) и равен тому же обмену ($1, $100 до цены тика hi) и глубине 2% на полной карте записи; тик ровно hi — вверх нули, вниз считается; пустое окно — нули. Разбор записи (probe, word, pool_state) — tests/algebra_integral_common/ (общий с tests/bsc_dex_algebra_integral_live.rs).
 
@@ -147,6 +155,7 @@ Bin на блоках нет — проверяется счёт шагов.
 Решение 79 (ws-подписка logs как источник): tests/bsc_dex_ws_source.rs на живых записях публичного узла wss://bsc-rpc.publicnode.com (tests/data/ws_logs_2026-10-26, рекордер record_ws_logs.js): кадр eth_subscription = лог квитанции, и фильтр адаптера by_address (V2/V3) доставляет настоящий записанный кадр (node/log_filter.rs); by_pool_id кладёт наши PoolId в topics[1] у менеджера — лог с нашим PoolId проходит, с чужим нет (CL/V4, вариант (а)); по записи пределов — один фильтр принял 5000 адресов и 5000 PoolId/topics[1] на обоих менеджерах, 10 соединений на IP держатся (дробить ~2850 пулов не нужно). Селекторы событий — из ABI пути квитанций, запись подтверждает доставку и формат. Пробел покрытия: removed:true (реоргов за окно записи не было) — как у depth, на длинной записи; полный прогон источника — нужен живой узел (сеть к BSC из песочницы закрыта).
 - `mexc_real_data.rs` — справочник пар MEXC на живом exchangeInfo 2026-11-02 (`data/mexc_2026-11-02`), решение 107.
 - `bingx_rate_pause.rs` — решение 244: пауза REST BingX на настоящем транспорте адаптера и локальном HTTP-сервере (примеры ответов Order Book и Create an Order из docs-v3; тело 429/418 в документации не описано): не задана `venue.rate_limit_pause_ms` — паузы нет, Warn; 429 стакана — пауза только стакана, ордер проходит; Retry-After; 418 — пауза всей биржи, Error, событие `venue.rate_limited`.
+- `mexc_fast_book_420.rs` — решение 420 (быстрый стакан MEXC): разбор кадра канала изменений (Msg::Diff) и снимка REST, шаги 2/3/5/7 процедуры MEXC на примерах официальной документации (Diff.Depth Stream, Order Book); строгая последовательность версий — `#[ignore]` до записи `data/mexc_ws/depth_diff.hex` + `depth_snapshot.json` (пункт (4) ниже).
 - `mexc_ip_weight.rs` — свой ограничитель веса публичных REST-запросов MEXC (Тигран 09.11, `venues/mexc/ip_weight.rs`): настоящий адаптер и локальный HTTP-сервер с примером ответа GET /api/v3/depth из документации; фон ждёт места в окне 10 с, путь сделки (exec_scope) — нет; бюджет меньше веса — NotConfigured; не задана — без ограничителя.
   Решение 213 по содержимому (Тигран 08.11): `book_print_docs_example` — разбор GET /api/v3/depth на **примере из
   документации** (Market Data → Order Book), не на живом ответе: живой пары «кадр limit.depth + ответ /api/v3/depth в
@@ -191,6 +200,10 @@ Bin на блоках нет — проверяется счёт шагов.
   Записать на сервере бота подряд кадры books5 пары (raw.book_frames = да) и сразу
   `GET /api/v5/market/books?instId=<SYM>&sz=5`: (1) равенство отпечатков на одной книге; (2) seqId ответа против seqId
   последнего кадра books5 / books — одна ли шкала (вопрос «по номеру» — docs/TASKS.md).
+- `okx_book_backup.rs`, решение 429: страховка стакана OKX (venues/okx/backup.rs) — снимок books5 до синхронизации books,
+  переключение на снимок при потере синхронизации (не старше venue.book_stale_ms, не старее отданного по ts), возврат на
+  books, обрыв страховки. Стакан — пример документации GET / Order book (как выше); живых кадров books и books5 нет —
+  записать оба канала одновременно (раздел OKX ниже, файлы okx_books_pair_*.txt).
 - `coinex_real_data.rs`, решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор GET /v2/spot/depth на
   **примере из документации** (Get Market Depth, Response example; вложенность data → depth — по таблице полей; живого
   ответа и кадров нет — api.coinex.com закрыт прокси): уровень с количеством "0" не берётся, разбор пуша (depth.rs) того
@@ -348,6 +361,8 @@ bsig POST /api/v3/order/test 'symbol=CAKEUSDT&side=BUY&type=LIMIT&timeInForce=IO
 Затем `cargo test --test binance_real_data -- --ignored` и снять `#[ignore]` с прошедших.
 
 ### Phemex — tests/phemex_real_data.rs и команды записи (решение 168)
+
+Решение 427 — `tests/phemex_book_pick_427.rs`: сверка контрольного снимка и выбор основного / запасного потока на кадрах «Message sample: snapshot / incremental update» документации (живых кадров нет). Записать: кадры одной пары с ДВУХ соединений одновременно (та же команда websocat ниже, запущенная дважды параллельно, в файлы `phemex_ws_orderbook_sCAKEUSDT_a.jsonl` и `_b.jsonl`) — сверить sequence и timestamp.
 
 Решения 202/213 (Тигран 08.11): `book_print_docs_example` — разбор result GET /md/orderbook на **примере из
 документации** («Query Order Book», sBTCUSDT, масштабы 8 / 8); стакан в памяти — локальный стакан из снимка OrderBook
@@ -549,6 +564,12 @@ curl -sS --compressed "$R/api/v5/market/books?instId=CAKE-USDT&sz=400" -o $D/okx
   | websocat -t "$W" > $D/okx_books5.jsonl
 (echo '{"op":"subscribe","args":[{"channel":"books","instId":"CAKE-USDT"}]}'; sleep 120) \
   | websocat -t "$W" > $D/okx_books.jsonl
+# Решение 429 (страховка books5): оба канала ОДНОВРЕМЕННО, на двух соединениях, с временем получения строки —
+# совпадают ли seqId / ts кадров books и books5 (сверка быстрого стакана со снимком, docs/TASKS.md).
+(echo '{"op":"subscribe","args":[{"channel":"books","instId":"CAKE-USDT"}]}'; sleep 120) \
+  | websocat -t "$W" | while IFS= read -r l; do echo "$(date +%s%3N) $l"; done > $D/okx_books_pair_books.txt &
+(echo '{"op":"subscribe","args":[{"channel":"books5","instId":"CAKE-USDT"}]}'; sleep 120) \
+  | websocat -t "$W" | while IFS= read -r l; do echo "$(date +%s%3N) $l"; done > $D/okx_books_pair_books5.txt; wait
 ```
 
 Приватные (ключ бота; переменные `OKX_KEY`, `OKX_SECRET`, `OKX_PASS` — только в оболочке, в файлы не писать). Подпись —
@@ -580,6 +601,14 @@ transfer-state, «rest /api/v5/asset/withdrawal» и withdrawal-history по ш�
 `ctAddr` в currencies; `canDep` / `canWd` — boolean или строка; пустой ли `minDep`; `to` адреса депозита — «6» / «18»;
 знак `taker` в trade-fee (отрицательный — комиссия); `ruleType` у спот-пар; порядок уровней и пустые кадры books
 (seqId = prevSeqId); есть ли в perm права перевода; 51020 — минимальная сумма ордера CAKE-USDT.
+
+## Gate, быстрый стакан (решение 421) — tests/gate_fast_book.rs
+
+Разбор spot.obu — на значениях примеров официальной документации («Order Book V2 API»: полный снимок и изменение
+ob.BTC_USDT.50); правило номеров локального стакана и выбор стакана для ядра (быстрый → снимок при разрыве → снова
+быстрый) — на живых кадрах spot.order_book_update / spot.order_book записи 04.11 (у них те же U/u; lastUpdateId = u
+при том же t). Записать на живом боте: кадры spot.obu вместе с spot.order_book и GET /spot/order_book?with_id=true по
+одной паре (docs/TASKS.md, решение 421).
 
 ## XT (решение 167) — tests/xt_real_data.rs
 
@@ -622,6 +651,11 @@ USDT 0.1, USDC 0.01, WIN «0» — минимум 0 (решение 370), мин
 HTX, Phemex, CoinEx на примерах официальной документации (записанных ответов справочника сетей этих бирж нет): «0» —
 минимум 0, нет поля / null — по настройке, нечитаемое — неизвестен при любой настройке.
 
+Решение 419 (дополнение и ревью) — `tests/xt_backup_419.rs`: страховка быстрого стакана XT на примерах официальной
+документации (xt4-api limitDepth.md, increDepth.md): темы подписки пары, разбор снимка и изменений, учёт пары «на
+быстром», сверка верха (same_top — общие уровни) и правило «два снимка depth@ подряд не равны быстрому, быстрый между
+ними не менялся» (Backup::observe). Живых кадров обоих потоков нет — команда записи выше (xt_ws_both.jsonl).
+
 ## Kraken (решение 172) — tests/kraken_real_data.rs
 
 Без сети: подпись спот REST на официальном проверочном примере гида
@@ -658,7 +692,9 @@ PY
 # сразу после — снимок REST ещё раз (для local_book_from_live_frames нужен снимок в середине потока):
 curl -sS 'https://sapi.xt.com/v4/public/depth?symbol=cake_usdt&limit=500' -o $D/xt_depth_cake_usdt.json
 # снимки depth@cake_usdt,20 — тем же скриптом с params ["depth@cake_usdt,20"] → $D/xt_ws_depth.jsonl
-# без сжатия (так подключается бот: tokio-tungstenite не умеет deflate) — принимает ли сервер:
+# решение 419 (дополнение): оба потока одной пары в одном соединении — тем же скриптом с params
+# ["depth_update@cake_usdt","depth@cake_usdt,20"] → $D/xt_ws_both.jsonl (шкала i у depth@ и depth_update — совпадает ли)
+# без сжатия — принимает ли сервер (бот с решения 419 подключается со сжатием, yawc; с 2026-12-10 без сжатия — отказ):
 { echo '{"method":"subscribe","params":["depth@cake_usdt,20"],"id":"1"}'; sleep 10; } \
   | websocat -t 'wss://stream.xt.com/public' > $D/xt_ws_depth_no_deflate.jsonl
 ```
@@ -733,6 +769,10 @@ curl -sS 'https://api.poloniex.com/timestamp' > $D/poloniex_timestamp.json
 ( echo '{"event":"subscribe","channel":["book"],"symbols":["CAKE_USDT"],"depth":20}'; \
   echo '{"event":"subscribe","channel":["book"],"symbols":["USDC_USDT"],"depth":20}'; \
   for i in 1 2 3; do sleep 20; echo '{"event":"ping"}'; done ) | timeout 65 websocat -t wss://ws.poloniex.com/ws/public > $D/poloniex_ws_book.jsonl
+# Решение 424: book и book_lv2 одной пары параллельно (~10 минут) — цепочка lastId и частота book_lv2 против book
+( echo '{"event":"subscribe","channel":["book"],"symbols":["CAKE_USDT"],"depth":20}'; \
+  echo '{"event":"subscribe","channel":["book_lv2"],"symbols":["CAKE_USDT"]}'; \
+  for i in $(seq 30); do sleep 20; echo '{"event":"ping"}'; done ) | timeout 610 websocat -t wss://ws.poloniex.com/ws/public > $D/poloniex_ws_book_lv2.jsonl
 # Подписка на несуществующий символ — формат ошибки
 ( echo '{"event":"subscribe","channel":["book"],"symbols":["NOSUCH_USDT"]}'; sleep 5 ) | timeout 8 websocat -t wss://ws.poloniex.com/ws/public > $D/poloniex_ws_book_error.jsonl
 ```
@@ -1011,6 +1051,7 @@ tests/window_deal_price.rs deal_point_path: путь точки на объём 
 - `core_market_sell_268.rs` — решение 268, путь целиком на живом ядре с настоящим адаптером XT и локальным сервером (справочник пар — живой ответ 06.11, стакан — пример документации и он же с ценами × 0.9; ОТВЕТЫ НА ОРДЕРА СОБРАНЫ ПО ОФИЦИАЛЬНОЙ ДОКУМЕНТАЦИИ, а не записаны — заменить записанными после первого живого случая): рыночный ордер исполнен — сделка закрыта, выручка учтена; исполнен частично — остаток; отклонён — алерт, третьего ордера нет; правило «Повторить» рыночный не повторяет; «итог неизвестен» лимитного — рыночный не уходит; обычная продажа невыгодна — режим застрявшей монеты, затем условие режима в пороге — рыночный; продажа здесь в «Перегоне» и «Порог убытка»: в пороге — ровно один MARKET, выше порога — алерт; «Ожидание» истекло — алерт; кнопка — рыночный без проверки порогов с процентом в хронологии, без котировки — «оценки нет», ордер уходит; настройка не задана — как до решения. Тесты идут в потоке со стеком 16 МиБ (отладочная сборка: путь продажи с настоящим адаптером не помещается в 2 МиБ и на ef2c8a4 — замер в шапке константы STACK).
 - `core_close_return_stack_399.rs` (общее — `usdt_return_common/`) — решение 399 (финальное ревью релиза 17.11, Н5): строгий сторож стека пути «закрытие → возврат USDT» по образцу core_sell_loop_t175: настоящий ledger::finish и задачи перегона в потоке со стеком рабочего потока tokio по умолчанию (2 МиБ, однопоточный рантайм): без группы — «не вернулись» (площадок нет); группа докупки — первая ждёт, последняя — общий возврат кусками выше максимума вывода (запись BingX config/getall 24.10), кусок 1 не дошёл — «не вернулись» на всю сумму. Переполнение роняет процесс теста.
 - `core_coin_reentry_t179.rs` — решение 394 (t179, докупка по записке 269), настоящее ядро и SQLite, площадок нет: exec.top_up не задана — одна сделка, прежний текст отказа, нет поля group, пауза после удачной сделки как раньше, событие без хеша закрывает как раньше; «да» — докупка того же направления, другие направления и застрявшая — отказ, бюджет за вычетом первой, разность котировок на записанных bids BingX и пуле V2, свежесть покупки (стакан / блок / агрегатор), след продажи, событие без хеша при двух ожиданиях не закрывает (сценарий ревью Б2), общий возврат USDT у последней сделки, застрявшая не держит возврат. Не покрыто: путь executor целиком, Live-источник с котировками шлюза, симуляция продажи DEX, сам перегон USDT.
+- `core_pool_own_t238.rs` — решение 464 (t238), настоящее ядро и SQLite, площадок нет, запись сделок NUM живого бота 20.11 (`data/num_pool_2026-11-20/deals.json`: Gate → DEX и три KuCoin → DEX, пул PCS V3): продажа новой KuCoin-сделки — после монет сделки Gate (другая биржа покупки), вложенная KuCoin — в группу первой (как в записи), продажа на бирже монеты DEX-продаж не считает; исполненная продажа уходит из сдвига в момент итога, след с её блоком ставится сразу (котировка по блоку ниже — отказ), блок следа — самый высокий; ордер продажи в полёте, исполнившийся за время котировки и с неизвестным исходом — котировки нет, котировка-решение без ордера не держит, «Беру на себя» снимает блокировку; отметка ордера снимается при отмене и отказе; блокировка «исход неизвестен» переживает перезапуск и отказывает Live::quote без групп; время в пути NUM gate → bsc_dex без своей истории — из настроек 39 с, с историей пары из записи /api/transits (`transits_gate_bsc_dex.json`) — среднее пары (122 / 123 перевода, 49,1 с). Не покрыто: Live-источник с котировками шлюза.
 Решение 274 — tests/bsc_dex_sheepdex_live.rs (SheepDex на записи tests/data/sheepdex_2026-11-14: пул фабрики, swapFee получателей = 0, математика V3 = виртуальный квотер со swapCallback в 10 случаях из 12, два на 10000 $ — за записанными словами, частичный расчёт, логи Swap по ABI Uni V3).
 Решение 275 — tests/bsc_dex_curve_ng_live.rs (Curve StableSwap-NG на записи tests/data/curve_ng_2026-11-14: version v7.0.0, реестр фабрики get_coins/is_meta, математика NG = get_dy пула, лог TokenExchange).
 iZiSwap и Biswap V3 (решение 286) — tests/bsc_dex_izi_live.rs на записанных ответах узла BSC (tests/data/izi_2026-11-15): проверка пула (поля + реестр фабрики двух подписей), разбор ответов quoteIzi (выход = пробному обмену, край пула), лесенка, шаг IZI = 14 и проба исполнителя v2 на цепи.
@@ -1171,10 +1212,16 @@ Ekubo (решение 447, T433-F8 / T433-079) — tests/arbitrum_ekubo_live.rs 
 
 Решение 461 (T456-03, T457-02): записи своего узла Arbitrum (прогон 20.11, tests/data/arbitrum_*_2026-11-20; журналы — tests/data/arbitrum_record_2026-11-20). Без #[ignore]: arbitrum_saddle_live, arbitrum_fluid_t1 (math_matches_pool_and_resolver_on_record), arb_curve_crypto_live, arb_curve_crypto_v1_live (tricrypto_v1), arb_dex_algebra_dir, arb_dex_algebra_dir_events, bsc_dex_lb_v20_arbitrum. Под #[ignore] с причиной-фактом записи: arbitrum_sub_dex_live, arbitrum_kyber_elastic_v1_live, arbitrum_woofi_live, arb_curve_crypto_v1_live (crypto_v1), arbitrum_ekubo_live; без записи — arbitrum_balancer_v3, arb_dex_camelot_v2, arb_dex_lb_v22_live, arbitrum_ekubo_more_live (docs/TASKS.md T461-02/03). tests/bsc_dex_executor_v4_live.rs — запись приёмки v4 (tests/data/executor_v4_live_2026-11-20, chainId 42161): SHA README = bin-runtime v4, chainId README = chain_id строк = eth_chainId, код X во всех симуляциях = v4; вердикт пары (v4, 42161) — принят только Uniswap V4 без крючка; развёртывание v4 — только кошельком площадки Arbitrum; виды 22 / 24 / 1 / 0 — получено (б) = quoter_out_after_a. tests/bsc_dex_executor_v3_live.rs — запись v3 судит только пару (v3, 56).
 
-Ревью t235 (решение 461, T461-06): tests/bsc_thena_fusion_row_live.rs — вид thena_fusion (THENA Fusion, BSC) на записи своего узла BSC (tools/bsc_record/thena_fusion.py → tests/data/bsc_thena_fusion_<дата>/): poolByPair и один код пулов; bitmap_is_raw_as_bot_reads — каждый бит сырого окна (как load_algebra.rs) — тик с ликвидностью (факт Sourcify 56: деплоер THENA собран как AlgebraV1 со сжатием тика на TICK_SPACING = 60 — тест это решит); math_equals_pool_swap — режим Row = виртуальный квотер и Quoter THENA. Все три под #[ignore] до записи. tests/bsc_dex_executor_v3_live.rs record_bound_to_current_code — сеть записи v3 = 56 по строке README_repo.md. tests/pool_pass_hot_guard.rs — Ctx::chain_id / chain_from в списке горячего пути.
+**Файл удалён (решение 487, слияние t256 — см. ниже).** Ревью t235 (решение 461, T461-06): tests/bsc_thena_fusion_row_live.rs — вид thena_fusion (THENA Fusion, BSC) на записи своего узла BSC (tools/bsc_record/thena_fusion.py → tests/data/bsc_thena_fusion_<дата>/): poolByPair и один код пулов; bitmap_is_raw_as_bot_reads — каждый бит сырого окна (как load_algebra.rs) — тик с ликвидностью (факт Sourcify 56: деплоер THENA собран как AlgebraV1 со сжатием тика на TICK_SPACING = 60 — тест это решит); math_equals_pool_swap — режим Row = виртуальный квотер и Quoter THENA. Все три под #[ignore] до записи. tests/bsc_dex_executor_v3_live.rs record_bound_to_current_code — сеть записи v3 = 56 по строке README_repo.md. tests/pool_pass_hot_guard.rs — Ctx::chain_id / chain_from в списке горячего пути.
+
+Слияние BSC → Arbitrum (t256, решение 463): tests/bsc_thena_fusion_row_live.rs удалён — запись tests/data/bsc_thena_fusion_2026-11-20 (сделана его скриптом tools/bsc_record/thena_fusion.py) опровергла сырое толкование (у 7 из 8 пулов сырые слова пусты); thena_fusion читается сжатым битмапом, проверка — tests/bsc_thena_fusion_record.rs (bitmap_is_compressed, bot_math_equals_thena_quoter). Режим Row по сырым строкам (шаг карты 1) остаётся у Algebra V1.9 Camelot V3 — tests/arb_dex_algebra_dir.rs.
 
 Решение 474 (Balancer V3 через буфер ERC4626): tests/arbitrum_balancer_v3_buffer.rs — #[ignore] до записи tools/arbitrum_record/balancer_v3_buffer.py (tests/data/arbitrum_bv3_buffer_<дата>/): расчёт бота с точными превью обёртки = BatchRouter querySwapExactIn того же блока побитово; превью по одной точке (сумма ≤ опорной) — не больше точного и меньше не больше чем на 1 единицу (граница для линейного превью). tests/bsc_dex_executor_abi.rs — номер шага BALANCER_V3_BUF = 27, раскладка data, вызова erc4626BufferWrapOrUnwrap нет ни в одной собранной версии (v1–v4).
 
 Решение 472 (T450-02, #[ignore] до записи своим узлом): tests/arbitrum_curve_plain_live.rs — вид curve_stableswap_plain (Curve StableSwap 2021: 2pool Arbitrum, Plain2/3/4Basic фабрики Curve Sidechain/L2): состояние тем же кодом бота (load_curve_plain::calls → ответы по calldata → state_with), наш выход exchange_out_t = get_dy пула побайтно, A_precise() = формула _A() рампы на блоке записи, селектор exchange(int128,int128,uint256,uint256) в коде 2pool и реализаций. Доделка 472: все реализации plain (Balances / ETH / Optimized / EMA — save_p), метапулы (curve_stableswap_meta), симуляция exchange на суммах лесенки (model_revert_equals_pool_revert: пул откатил ↔ наша котировка None). Запись — `python3 tools/arbitrum_record/curve_plain.py --node <узел>` (или record_all.py).
 
 Решение 481 (T472-10, #[ignore] до записи своим узлом): tests/arbitrum_curve_ren_wsteth_live.rs — WBTC/renBTC 0x3E01…F0Fb (curve_stableswap_plain: курсы 10^28 = RATE_MULTIPLIER исходника, наш выход exchange_out_t = get_dy побайтно) и ETH/wstETH 0x6eB2…7d80 (curve_stableswap_oracle: курс wstETH = latestAnswer() оракула пула, get_dy пула = формула get_dy исходника без «− 1» на нашем состоянии, симуляция exchange = наш выход с «− 1»), рампа A, селекторы exchange / oracle() в коде. Запись — `python3 tools/arbitrum_record/curve_ren_wsteth.py --node <узел>` (или record_all.py).
+
+Решение 487 (T487-03): tests/core_transit_chain_487.rs — статистика пары площадок времени в пути в сети перевода: история BSC записи /api/transits 20.11 (num_pool_2026-11-20/transits_gate_bsc_dex.json) не входит в пару той же биржи в сети arbitrum; перезапуск на той же базе — записи без chain читаются сетью по умолчанию.
+
+Решение 487 (T487-01, T487-02): tests/arbitrum_zyberswap_v3_live.rs — Zyberswap V3 (Arbitrum, вид thena_fusion) на записи tools/arbitrum_record/zyberswap_v3.py (tests/data/arbitrum_zyberswap_v3_<дата>/): пул = poolByPair и CREATE2 деплоера фабрики; комиссия бота = getFee оператора; обмен бота = виртуальный квотер на 4 временах; времена соседних блоков — 0 или 1 с. Под #[ignore] до записи.

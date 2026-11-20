@@ -1,0 +1,31 @@
+{
+ "chainId": "0x38",
+ "client": {
+  "jsonrpc": "2.0",
+  "id": 20,
+  "result": "Geth/v1.8.2-54afaff4-20261103/linux-amd64/go1.25.14"
+ },
+ "args": {
+  "factory": "0x306F06C147f064A010530292A1EB6737c3e378e4",
+  "quoter": "0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA",
+  "gecko_dex": "thena-fusion",
+  "gecko_pages": 3,
+  "gecko_pools": 60,
+  "pool": [],
+  "init_hash": [
+   "0xbce37a54eab2fcd71913a0d40723e04238970e7fc1159bfd58ad5b79531697e7",
+   "0x6ec6c9c8091d160c0aa74b2b14ba9c1717e95093bd3ac085cee99a49aab294a4"
+  ],
+  "words": 8,
+  "raw_words": 1,
+  "bps": [
+   1,
+   10,
+   100,
+   1000
+  ],
+  "batch": 100,
+  "vq_runtime": "/home/ubuntu/bsc-record/contracts/out/VirtualQuoter.bin-runtime",
+  "out": "/home/ubuntu/bsc-record/out_localfix"
+ }
+}

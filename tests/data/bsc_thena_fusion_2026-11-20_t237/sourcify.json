@@ -1,0 +1,22 @@
+{
+ "deployer": {
+  "url": "https://sourcify.dev/server/v2/contract/56/0xc89f69baa3ff17a842ab2de89e5fc8a8e2cc7358?fields=compilation",
+  "status": 200,
+  "body": "{\"compilation\":{\"language\":\"Solidity\",\"compiler\":\"solc\",\"compilerVersion\":\"0.7.6+commit.7338295f\",\"compilerSettings\":{\"metadata\":{\"bytecodeHash\":\"none\"},\"libraries\":{},\"optimizer\":{\"runs\":0,\"enabled\":true}},\"name\":\"AlgebraPoolDeployer\",\"fullyQualifiedName\":\"contracts/AlgebraPoolDeployer.sol:AlgebraPoolDeployer\"},\"matchId\":\"7921225\",\"creationMatch\":\"match\",\"runtimeMatch\":\"match\",\"verifiedAt\":\"2025-07-22T13:22:43Z\",\"match\":\"match\",\"chainId\":\"56\",\"address\":\"0xc89F69Baa3ff17a842AB2DE89E5Fc8a8e2cc7358\"}"
+ },
+ "factory": {
+  "url": "https://sourcify.dev/server/v2/contract/56/0x306F06C147f064A010530292A1EB6737c3e378e4?fields=compilation",
+  "status": 200,
+  "body": "{\"compilation\":{\"language\":\"Solidity\",\"compiler\":\"solc\",\"compilerVersion\":\"0.7.6+commit.7338295f\",\"compilerSettings\":{\"metadata\":{\"bytecodeHash\":\"none\"},\"libraries\":{},\"optimizer\":{\"runs\":0,\"enabled\":true}},\"name\":\"AlgebraFactory\",\"fullyQualifiedName\":\"contracts/AlgebraFactory.sol:AlgebraFactory\"},\"matchId\":\"6906855\",\"creationMatch\":\"match\",\"runtimeMatch\":\"match\",\"verifiedAt\":\"2025-07-09T13:44:10Z\",\"match\":\"match\",\"chainId\":\"56\",\"address\":\"0x306F06C147f064A010530292A1EB6737c3e378e4\"}"
+ },
+ "quoter": {
+  "url": "https://sourcify.dev/server/v2/contract/56/0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA?fields=compilation",
+  "status": 200,
+  "body": "{\"compilation\":{\"language\":\"Solidity\",\"compiler\":\"solc\",\"compilerVersion\":\"0.7.6+commit.7338295f\",\"compilerSettings\":{\"metadata\":{\"bytecodeHash\":\"none\"},\"libraries\":{},\"optimizer\":{\"runs\":1000000,\"enabled\":true}},\"name\":\"Quoter\",\"fullyQualifiedName\":\"contracts/lens/Quoter.sol:Quoter\"},\"matchId\":\"7061239\",\"creationMatch\":\"match\",\"runtimeMatch\":\"match\",\"verifiedAt\":\"2025-07-10T11:20:39Z\",\"match\":\"match\",\"chainId\":\"56\",\"address\":\"0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA\"}"
+ },
+ "pool": {
+  "url": "https://sourcify.dev/server/v2/contract/56/0x1b9a1120a17617d8ec4dc80b921a9a1c50caef7d?fields=compilation",
+  "status": 200,
+  "body": "{\"compilation\":{\"language\":\"Solidity\",\"compiler\":\"solc\",\"compilerVersion\":\"0.7.6+commit.7338295f\",\"compilerSettings\":{\"metadata\":{\"bytecodeHash\":\"none\"},\"libraries\":{},\"optimizer\":{\"runs\":0,\"enabled\":true},\"evmVersion\":\"istanbul\",\"remappings\":[]},\"name\":\"AlgebraPool\",\"fullyQualifiedName\":\"contracts/AlgebraPool.sol:AlgebraPool\"},\"matchId\":\"6890467\",\"creationMatch\":\"match\",\"runtimeMatch\":\"match\",\"verifiedAt\":\"2025-07-09T13:03:28Z\",\"match\":\"match\",\"chainId\":\"56\",\"address\":\"0x1b9a1120a17617D8eC4dC80B921A9A1C50Caef7d\"}"
+ }
+}

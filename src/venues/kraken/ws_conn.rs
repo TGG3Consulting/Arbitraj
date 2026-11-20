@@ -22,6 +22,10 @@
 //! — только темп подписки при подключении). «Переподключить соединение» — сессия заканчивается, ws.rs подключается
 //! заново с теми же парами.
 //!
+//! Решение 426: соединение — основное или страховка (Watch::link, standby_emit.rs). Сверенный кадр и потеря стакана
+//! пары идут через выбор стакана (standby.rs): основной потерял стакан — ядру сразу стакан страховки (если сверен и не
+//! старше отданного), а не «недостоверен» до нового снимка; страховка не задана — как раньше.
+//!
 //! Официально: https://docs.kraken.com/exchange/api-reference/spot-websocket-v2/book.md (подписка, снимок, изменения,
 //! «one acknowledgement per symbol»); https://docs.kraken.com/exchange/api-reference/spot-websocket.md (ping / pong).
 
@@ -43,7 +47,9 @@ use super::ctx::{Ctx, ID};
 use super::depth::{self, Msg};
 use super::local_book::{Applied, LocalBook};
 use super::market::Sub;
-use super::ws::{Cfg, End, invalidate};
+use super::standby::{Frame, Ver};
+use super::standby_emit::{Link, Out};
+use super::ws::{Cfg, End};
 use super::ws_req::{book_requests, open, ping, resub};
 use crate::gateway::feed_health::Cmd;
 use crate::gateway::feed_reg::ConnHandle;
@@ -52,6 +58,8 @@ use crate::gateway::feed_reg::ConnHandle;
 pub struct Watch<'a> {
     pub feed: &'a ConnHandle,
     pub cmd: &'a mut mpsc::UnboundedReceiver<Cmd>,
+    /// Решение 426: роль соединения и выбор стакана пар.
+    pub link: &'a Link,
 }
 
 /// Сессия: работает до обрыва. Возвращает причину окончания.
@@ -88,6 +96,12 @@ pub async fn session(
     let (mut last_rx, mut pinged, mut dropped) = (Instant::now(), false, 0u64);
     // Решение 324: стакан ядру через общий набор канала ядра (venue.book_events_keep).
     let kept = BookOut::new(out, ctx.venue(), &ctx.settings, &ctx.journal);
+    let o = Out {
+        ctx,
+        books,
+        out,
+        kept: &kept,
+    };
     loop {
         tokio::select! {
             _ = tokio::time::sleep_until(last_rx + cfg.ping), if !pinged => {
@@ -139,8 +153,10 @@ pub async fn session(
                 let rows = match msg {
                     Msg::Book(rows) => rows,
                     Msg::Ack { success: false, symbol, error, method, .. } => {
-                        if let Some(s) = symbol.as_deref().and_then(|s| by_ws.get(s)) {
-                            invalidate(ctx, books, out, &s.asset.ticker);
+                        if let Some(s) = symbol.as_deref().and_then(|s| by_ws.get(s))
+                            && let Some(Fed::Closed) = o.lose(w.link, &s.asset.ticker).await
+                        {
+                            return End::Done;
                         }
                         let m = format!("WebSocket {name}: {method} {symbol:?} отклонён Kraken: {}", error.unwrap_or_default());
                         ctx.log(Level::Error, "venue.ws", m).await;
@@ -158,7 +174,9 @@ pub async fn session(
                         Err((sym, why)) => {
                             if let Some(s) = sym.as_deref().and_then(|s| by_ws.get(s)) {
                                 w.feed.frame(&s.asset.ticker);
-                                invalidate(ctx, books, out, &s.asset.ticker);
+                                if let Some(Fed::Closed) = o.lose(w.link, &s.asset.ticker).await {
+                                    return End::Done;
+                                }
                             }
                             ctx.log(Level::Error, "venue.ws", format!("WebSocket {name}: кадр book не разобран: {why}")).await;
                             continue;
@@ -176,7 +194,9 @@ pub async fn session(
                         .entry(d.symbol.clone())
                         .or_insert_with(|| LocalBook::new(cfg.depth as usize, sub.price_dp, sub.lot_dp));
                     if let Applied::Gap(why) = lb.apply(&d) {
-                        invalidate(ctx, books, out, &sub.asset.ticker);
+                        if let Some(Fed::Closed) = o.lose(w.link, &sub.asset.ticker).await {
+                            return End::Done;
+                        }
                         let again = last_gap.get(&d.symbol).is_some_and(|t| t.elapsed() < cfg.resync_gap);
                         if again {
                             return End::Broken(format!("{}: повторный разрыв стакана ({why})", d.symbol));
@@ -190,6 +210,8 @@ pub async fn session(
                         w.feed.resubscribed(&sub.asset.ticker);
                         continue;
                     }
+                    // Applied::Changed — чек-сумма кадра была и совпала (local_book.rs).
+                    let Some(crc) = d.checksum else { continue };
                     let (bids, asks) = lb.top(cfg.depth as usize);
                     let book = OrderBook {
                         venue: ctx.venue(),
@@ -199,11 +221,13 @@ pub async fn session(
                         exchange_time: d.exchange_time,
                         received_at: chrono::Utc::now(),
                     };
-                    books.put(book.clone(), alive.clone());
-                    match kept.book(out, book) {
-                        Fed::Sent | Fed::Kept => {}
-                        Fed::Closed => return End::Done,
-                        Fed::Lost => dropped += 1,
+                    let ver = Ver { ts: d.exchange_time, crc };
+                    let seen_ms = book.received_at.timestamp_millis();
+                    let f = Frame { book, alive: alive.clone(), seen_ms, ver };
+                    match o.offer(w.link, &sub.asset.ticker, f).await {
+                        None | Some(Fed::Sent | Fed::Kept) => {}
+                        Some(Fed::Closed) => return End::Done,
+                        Some(Fed::Lost) => dropped += 1,
                     }
                     if dropped > 0 && dropped.is_power_of_two() {
                         tracing::warn!(conn = name, dropped, "ядро не успевает принимать стаканы Kraken");

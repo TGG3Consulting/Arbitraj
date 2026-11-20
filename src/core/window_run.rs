@@ -158,13 +158,14 @@ pub fn current(core: &Core) -> Option<Cfg> {
     r.ok()
 }
 
-/// id окна: время до мс и тикер — только буквы, цифры и «-» (годится как имя файла). Ошибок нет.
-fn new_id(d: &Direction, now: chrono::DateTime<Utc>) -> String {
-    let t: String = d
-        .asset
-        .ticker
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .collect();
-    format!("{}-{t}", now.format("%Y%m%d%H%M%S%3f"))
+/// id окна: время до мс и тикер — только буквы, цифры и «-» (годится как имя файла). Решение 487 (сети в id): у монеты
+/// другой сети ещё «-сеть» (окна одного тикера в BSC и Arbitrum в одну мс не делят id); сеть по умолчанию — id
+/// прежний. Ошибок нет.
+pub fn new_id(d: &Direction, now: chrono::DateTime<Utc>) -> String {
+    let clean = |s: &str| -> String { s.chars().filter(char::is_ascii_alphanumeric).collect() };
+    let t = clean(&d.asset.ticker);
+    match &d.asset.chain {
+        Some(c) => format!("{}-{t}-{}", now.format("%Y%m%d%H%M%S%3f"), clean(&c.0)),
+        None => format!("{}-{t}", now.format("%Y%m%d%H%M%S%3f")),
+    }
 }

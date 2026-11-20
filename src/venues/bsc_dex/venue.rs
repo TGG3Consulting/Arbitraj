@@ -474,6 +474,26 @@ impl Venue for BscDex {
         scope(class, exec::presell::run(&q, req.clone())).await
     }
 
+    /// Решение 476: разрешения (approve) продажи заранее, пока монета идёт на кошелёк сделки — exec/preapprove.rs (сборка
+    /// плана как у исполнения, wallet/approve.rs lacking, отправка exec/swap_send.rs send_approvals). Ошибки: как у run.
+    /// Ревью t238: путь исполнения продажи не свой сборщик (exec.via_kyber: KyberSwap / «лучший из двух»,
+    /// trade_path.rs — как в trade_logs) — разрешение получит другой: NotApplicable с причиной.
+    async fn dex_preapprove(
+        &self,
+        req: &TradeRequest,
+        horizon_s: u64,
+    ) -> GatewayResult<Option<Decimal>> {
+        let via_kyber = self.p.ctx.flag("exec.via_kyber").unwrap_or(false);
+        let path = super::trade_path::of(req, via_kyber, super::best_of::enabled(&self.p.ctx));
+        if path != super::trade_path::Path::Own {
+            let why = "продажа не своим сборщиком (exec.via_kyber) — разрешение получит другой";
+            return Err(self.p.ctx.err(ErrorCode::NotApplicable, why));
+        }
+        let (q, env) = (self.p.quoting(), self.p.env());
+        let run = exec::preapprove::run(&q, &env, &self.p.nonces, req.clone(), horizon_s);
+        scope(Class::Trade, run).await
+    }
+
     /// «Сухая сделка DEX» через исполнитель ArbExecutor с подставленным в симуляцию кодом (решение 122, часть X) —
     /// проверка исполнителя на живой сети до развёртывания. Ничего не отправляет. Ошибок нет: отказ — причиной в итоге.
     async fn dex_dry_swap_executor(

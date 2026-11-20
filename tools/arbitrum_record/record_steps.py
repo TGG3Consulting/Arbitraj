@@ -9,6 +9,7 @@
   ядра из broadcast-файлов Ekubo, --ekubo-from-block — только переопределение.
   Решение 462: woofi — только --rpc (оракул — wooracle() пула с цепи, базы — события WooSwap); kyber_elastic_v1 — версия
   пула по factory(), адреса v1 и v2 — в шапке скрипта.
+  Решение 487: zyberswap_v3 — тот же ход, что запись THENA Fusion BSC (tools/bsc_record/thena_fusion_run.py).
   Решение 460 п. 9–10: sub_dex — без поиска событий назад (--blocks убран): пулы — перечисление фабрик, GeckoTerminal, реестр по
   парам, потолок времени --time-limit (по умолчанию 600 с); camelot_v2 — тот же потолок для редких событий.
 Кто вызывает: tools/arbitrum_record/record_all.py.
@@ -125,6 +126,9 @@ def steps(rpc, wallet, ekubo_from):
         ("curve_ren_wsteth", "curve_ren_wsteth.py", ["--node", rpc]),
         ("camelot_v2", "camelot_v2.py", [rpc, "--factory", "0x6EcCab422D763aC031210895C81787E87B43A652"]),
         ("algebra_dir_fee", "algebra_dir_fee.py", algebra),
+        # Решение 487 (T487-01): Zyberswap V3 — вид thena_fusion; пулы poolByPair фабрики, адреса — в шапке скрипта,
+        # ход записи — tools/bsc_record/thena_fusion_run.py; heads.json — времена блоков (T487-02).
+        ("zyberswap_v3", "zyberswap_v3.py", ["--rpc", rpc]),
         ("lb_v20", "lb_v20.py", [rpc, "--factory", "0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982",
                                  "--router", "0x7BFd7192E76D950832c77BB412aaE841049D8D9B"]),
         ("lb_v22", "lb_v22.py", [rpc, "--factory", "0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c"]),

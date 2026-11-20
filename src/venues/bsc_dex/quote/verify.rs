@@ -15,7 +15,7 @@
 //! Кто вызывает: exec/verify_gate.rs (предторговый путь DEX, графовый маршрут); тесты.
 //! От чего зависит: pools/load_batch.rs, pools/load_batch_par.rs, pools/load.rs, pools/registry.rs,
 //! quote/verify_decide.rs, quote/via.rs,
-//! quote/steps.rs, node/heads.rs, tokens.rs.
+//! quote/steps.rs, node/heads.rs, tokens.rs, pools/fusion_book.rs (isolated — решение 463).
 //! Настройки: verify.max_staleness_blocks, verify.max_price_drift_pct, verify.timeout_ms, exec.dex_slippage_pct,
 //! verify.read_parallel_max (решение 331, необязательная) [bsc_dex].
 
@@ -28,7 +28,7 @@ use rust_decimal::Decimal;
 use crate::core::types::{PoolRef, Quote};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::pools::load;
+use super::super::pools::{fusion_book, load};
 use super::super::pools::load_batch::Want;
 use super::super::pools::load_batch_par;
 use super::super::pools::registry::Entry;
@@ -129,7 +129,9 @@ pub async fn run(
     // Пулы маршрута на свежем блоке (решение 83), с таймаутом: V2/V3/CL/V4 — ступенями Multicall3; виды «по одному» —
     // по очереди (не задана verify.read_parallel_max) или одновременно с пределом (решение 331, load_batch_par.rs).
     let par = load_batch_par::limit(ctx, PAR);
+    // Решение 463 (повторное ревью t236): оракул THENA Fusion этого чтения — не в книгу (fusion_book.rs isolated).
     let fetch = load_batch_par::states_with(ctx, &v.q.tokens, &v.q.reg, &wants, block, par);
+    let fetch = fusion_book::isolated(fetch);
     let loaded = match tokio::time::timeout(Duration::from_millis(timeout_ms), fetch).await {
         Ok(v) => v,
         Err(_) => {

@@ -94,6 +94,14 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-083 | `aero-slipstream-arbitrum@arbitrum` | slipstream_aero | **решение 470: код есть, запись aero.py** (было: нужен код) — развёртывание Arbitrum найдено (Dromos-Labs/metadex-slipstream-public, «Slipstream V3»), комиссия — от крючка обмена, вид slipstream не подходит (T448-09, решение 451, §4.4) |
 | T433-087 | `saddle-finance@arbitrum` (id — предложение) | saddle_stableswap | **готово** (решение 451: математика = Nerve; swapStorage 7 полей и FlashLoan — исправлено в виде; оговорка — запись tools/arbitrum_record/saddle.py, §4.5) |
 | T433-095 | `woofi-swap@arbitrum` (id — предложение) | woofi_v2 | **готово** (решение 451; решение 462: dex.oracle = wooracle() пула с цепи 0xf9b0…8081, не адрес документации; state() этого оракула — повтор записи woofi.py; реализация 0x7b5f…4281 своим узлом совпала, §4.6) |
+| T433-090 (решение 482) | `joe-dex@arbitrum` (id — предложение) | v2_fork | **готово настройками, ждёт записи T482-01** (§7.1) |
+| T433-097 (решение 482) | `swapsicle-v1@arbitrum` (id — предложение) | v2_fork_executor | **готово настройками, ждёт записи T482-01** (адрес фабрики — DefiLlama, §7.2) |
+| T433-101 (решение 482) | `zyberswap-stableswap@arbitrum` (id — предложение) | saddle_stableswap | **готово настройками, ждёт записи T482-01** (§7.3) |
+| T433-106 = T433-026 (решение 482) | `arbidex@arbitrum` | v2_fork_executor | **готово настройками, ждёт записи T482-01** (§7.4) |
+| T433-111 = T433-041 (решение 482) | `arbidex-v3@arbitrum` | v3_fork | **готово настройками, ждёт записи T482-01** (TickLens Uniswap, §7.5) |
+| T433-092 / T433-082 (решение 482) | `rubicon-clmm-arbitrum@arbitrum` | v3_fork | **готово настройками, ждёт записи T482-01** (§7.6) |
+| T433-092 (решение 482) | `rubicon-aquila@arbitrum` (id — предложение) | v2_fork | **готово настройками, ждёт записи T482-01** (§7.7) |
+| T433-107, T433-144, T433-133 (решение 482) | `swapline-v1`, `metric-v1`, `omni-exchange-flux` | lb_v21, metric_omm, pancakeswap_infinity_cl | **нужен код** — T482-02…04 (§7.8) |
 
 Решение 451 (20.11.2026): Kyber Elastic, Saddle, WOOFi → **готово** (с оговорками записи узла), Aero Slipstream →
 **нужен код** (новое семейство), PancakeSwap StableSwap — **не подтверждено**. Итог после 451: **готово 15**, **нужен код
@@ -685,3 +693,110 @@ getPool(монета, встречный, swapFeeUnits) по уровням dex.
 решение 460); (2) сверка расчёта v1 с QuoterV2 v1 и тиков частями — tests/arbitrum_kyber_elastic_legacy_live.rs после
 записи (T475-01); (3) исполнения у вида нет (tradable = false) — только сигнал, исполнитель не менялся. У
 `kyberswap_elastic_arbitrum@arbitrum` (v2, §4.3) тоже нужна dex.elastic_ticks_chunk (решение 475).
+
+## 7. Форки поддержанных видов — решение 482 (20.11.2026, ветка t251/arb-dex-forks-config)
+
+Код не менялся: каждый DEX ниже — существующий вид, сверенный по исходнику Sourcify (sourcify.dev/server/v2/contract/
+42161/<адрес>?fields=sources,compilation, браузер, 20.11.2026) и по коду бота (pools/families.rs spec / required,
+exec/fork_swap.rs, contracts/ArbExecutor.sol). Факты сверки — docs/DECISIONS.md, решение 482. Запись своего узла —
+tools/arbitrum_record/forks_482.py (шаг `forks_482`) и saddle.py (шаг `zyber_stable`), тест
+tests/arbitrum_forks_482_live.rs (#[ignore] до записи, T482-01). dex.pool_enabled ставит Тигран — после записи и теста.
+Id без строки GeckoTerminal — предложение (решает Тигран); пулы таких DEX — поиск по фабрике (index.factory_scan площадки
+arb_dex = да: V2 — getPair, V3 — getPool по dex.v3_fee_tiers; pools/factory_calls.rs) или dex.stable_pools.
+Адрес «(DefiLlama)» — из адаптера DefiLlama-Adapters (не официальный источник DEX: сайт DEX мёртв, docs нет); код по нему
+верифицирован в Sourcify — это факт кода, не факт принадлежности DEX (оговорка в строке).
+
+### 7.1 Joe DEX / LFJ V1 — `joe-dex@arbitrum` (T433-090), вид `v2_fork`
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `v2_fork` | JoeFactory (Sourcify exact_match, solc 0.6.12): JoePair.swap — `balance0.mul(1000).sub(amount0In.mul(3))` (0,3 %, как UniswapV2Pair); Swap / Sync(uint112, uint112) / PairCreated(token0, token1, pair, uint256), swap(uint256, uint256, address, bytes) — ABI Uniswap V2 |
+| dex.factory | `0xaE4EC9901c3076D0DdBe76A520F9E90a6227aCB7` | developers.lfj.gg/deployment-addresses/arbitrum (Factory V1) |
+| dex.router | `0xbeE5c10Cf6E4F68f831E11C1D9E59B43560B3642` | там же (Router V1); Sourcify exact_match JoeRouter02 |
+| dex.v2_fee_source / dex.v2_fee_pct | `fixed` / `0.3` | JoePair (выше) |
+| dex.pool_enabled | да — решает Тигран (после T482-01) | — |
+
+Роутер: бот зовёт у роутера V2 только getAmountsOut, swapExactTokensForTokensSupportingFeeOnTransferTokens (exec/fork_swap.rs,
+node/abi_dex.rs IV2Router) и WETH() (pools/mids.rs router_weths). Первые два у JoeRouter02 есть (Sourcify: function
+getAmountsOut, function swapExactTokensForTokensSupportingFeeOnTransferTokens); WETH() нет — есть WAVAX(). Отказ WETH()
+бот терпит (решение 205, pools/mids.rs L146-L180: «WETH() роутера не прочитан … обёртка берётся из dex.native_wrapped»,
+уровень Info при заданной dex.native_wrapped) — dex.native_wrapped площадки arb_dex должна быть задана (WETH Arbitrum,
+§0). Функций …AVAX… бот не вызывает.
+
+### 7.2 Swapsicle V1 — `swapsicle-v1@arbitrum` (T433-097), вид `v2_fork_executor`
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `v2_fork_executor` | SicleFactory (Sourcify exact_match, solc 0.6.12): SiclePair.swap `mul(1000).sub(amount0In.mul(3))` = 0,3 %; события и swap — ABI Uniswap V2; _mintFee с feeToStake — только протокольная доля (на обмен не влияет). Роутер Arbitrum не найден — исполнение шагом V2 исполнителя прямо в паре (data пусто — обратного вызова нет, ArbExecutor.sol L385) |
+| dex.factory | `0x2f0c7c98462651bb2102f6cd05acdad333e031b0` | (DefiLlama) projects/swapsicle; официального источника нет |
+| dex.v2_fee_source / dex.v2_fee_pct | `fixed` / `0.3` | SiclePair (выше) |
+| dex.pool_enabled | да — решает Тигран (после T482-01) | — |
+
+### 7.3 ZyberSwap Stableswap — `zyberswap-stableswap@arbitrum` (T433-101), вид `saddle_stableswap`
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `saddle_stableswap` | пул — EIP-1167 клон цели 0x0c3c31363ba33e7dcbf1e49fa52d8a49c7f3dbd8 = Sourcify match «SwapFlashLoan» (29 файлов); сверка с saddle-contract 2cfdd055 (исследование 20.11, dex49/0.md): AmplificationUtils, MathUtils — те же; SwapUtils — отличия только WithdrawAdminFee и ветка первого вкладчика calculateTokenAmount (getD / getY / _calculateSwap / struct Swap — те же) |
+| dex.stable_pools | `0x969f7699fbb9c79d8b61315630cdeed95977cfb8` | единственный пул SwapDeployer 0xc25e230afb1b67162350cd405add199a002c6abd (DefiLlama; Sourcify exact_match «SwapDeployer»): событие NewSwapPool, блок 59 965 888 |
+| dex.pool_enabled | да — решает Тигран (после T482-01) | — |
+
+### 7.4 Arbitrum Exchange V2 — `arbidex@arbitrum` (строка 26 таблицы 1 = T433-106), вид `v2_fork_executor`
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `v2_fork_executor` | ArbDexPair (Sourcify match, пара 0xc4e56bfe61a5259cbd5ad1b9c98c75a97c337b7b пула GeckoTerminal `arbidex`): `swapFee = 25`, проверка K `balance0.mul(10000).sub(amount0In.mul(_swapFee))`, сеттера swapFee нет; Swap / Sync(uint112, uint112) / swap(uint256, uint256, address, bytes) — ABI V2; обратный вызов arbdexCall — только при непустом data (шаг V2 исполнителя шлёт пустое). Роутер официально не найден |
+| dex.factory | `0x1C6E968f2E6c9DEC61DB874E28589fd5CE3E1f2c` | (DefiLlama) projects/ArbitrumExchange; Sourcify match ArbDexFactory |
+| dex.v2_fee_source / dex.v2_fee_pct | `fixed` / `0.25` | swapFee = 25 из 10000 (× 10000 — целое 25, как требует вид) |
+| dex.pool_enabled | да — решает Тигран (после T482-01) | — |
+
+### 7.5 Arbitrum Exchange V3 — `arbidex-v3@arbitrum` (строка 41 таблицы 1 = T433-111), вид `v3_fork`
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `v3_fork` | пулы GeckoTerminal `arbidex-v3` 0x837823ed246a7e34a59aa96701c6f2de9e96d592 и 0x48d7e1a9d652ba5f5d80a8dc396df37993659f35 — Sourcify match «UniswapV3Pool» (solc 0.7.6): uniswapV3SwapCallback, SwapMath.computeSwapStep, slot0 с uint8 feeProtocol, Tick.Info — liquidityGross, liquidityNet первыми (TickLens Uniswap читает их); отличие от v3-core — только протокольная доля (defaultProtocolFees фабрики), на выход трейдера не влияет; фабрика swapFee не имеет (проба решения 274 пулы не отсечёт) |
+| dex.factory | `0x855f2c70cf5cb1d56c15ed309a4dfefb88ed909e` | (DefiLlama) registries/uniswapV3.js «arbitrumexchange-v3»; Sourcify match UniswapV3Factory |
+| dex.tick_lens | `0xbfd8137f7d1516D3ea5cA83523914859ec47F573` (TickLens Uniswap V3) | своего у DEX нет; TickLens читает только tickBitmap / ticks переданного пула (v3-periphery TickLens.sol) — совпадение с ticks(t) пула проверяет запись (T482-01) |
+| dex.quoter_virtual | `да` | своего квотера нет (решение 186: обмен самого пула в eth_call) |
+| dex.v3_fee_tiers | `80, 450, 2500, 10000` | конструктор фабрики (Sourcify): feeAmountTickSpacing[80] = 1, [450] = 10, [2500] = 60, [10000] = 200 |
+| dex.pool_enabled | да — решает Тигран (после T482-01) | — |
+
+### 7.6 Rubicon CLMM — `rubicon-clmm-arbitrum@arbitrum` (строка 82 таблицы 1 = T433-092), вид `v3_fork`
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `v3_fork` | RubiconV3Factory — Sourcify match «UniswapV3Factory» (114 файлов); пул WETH/USDC 0,05 % 0xee57310555a957cec1debb65b1e165d7c9ed700f (getPool фабрики, 20.11) — Sourcify match «UniswapV3Pool»: uniswapV3SwapCallback, slot0 uint8 feeProtocol. POOL_INIT_CODE_HASH Rubicon ≠ Uniswap — бот адрес пула хешем не считает (проверка — getPool фабрики, pools/verify_calls.rs) |
+| dex.factory | `0x045B7012CbD158C1b48874310F985Adb48aA62ba` | docs.rubicon.finance/developers/deployments (CLMM) |
+| dex.tick_lens | `0xdf7e8987421F541C50f821f8Cf22A6bDA5e1E05b` | там же (TickLens); исходника в Sourcify нет (404), код есть (1385 байт) — совпадение с TickLens Uniswap и ticks(t) проверяет запись (T482-01) |
+| dex.quoter | `0x22066f5A85076630CF9DEEB0A12186b73CD3284C` (QuoterV2) | там же; Sourcify match QuoterV2 (POOL_INIT_CODE_HASH Rubicon) |
+| dex.v3_fee_tiers | `500, 3000, 10000` | конструктор фабрики (Sourcify): [500] = 10, [3000] = 60, [10000] = 200 |
+| dex.pool_enabled | да — решает Тигран (после T482-01) | — |
+
+GeckoTerminal `rubicon-clmm-arbitrum` 20.11.2026 пулов не отдал (пустой список) — пулы только поиском по фабрике.
+
+### 7.7 Rubicon Aquila — `rubicon-aquila@arbitrum` (T433-092), вид `v2_fork`
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `v2_fork` | фабрика в Sourcify — нет (404); единственная пара фабрики (allPairs(0), allPairsLength = 1, 20.11) 0xf776a4bbf6482d610f28dec02c960309f5ee72a2 — Sourcify exact_match «AquilaPair»: `mul(1000).sub(amount0In.mul(3))` (0,3 %), Sync(uint112, uint112), swap(uint, uint, address, bytes), PairCreated(token0, token1, pair, uint); обратный вызов aquilaCall — только при непустом data |
+| dex.factory | `0xEca3EA559b7566e610d113bbA8D1B15B085C9c68` | docs.rubicon.finance/developers/deployments (AquilaFactory) |
+| dex.router | `0x9C42Fae9e3C63150BCBe4Aaba292681d5b0b0720` | там же (AquilaRouter); Sourcify exact_match: getAmountsOut, swapExactTokensForTokensSupportingFeeOnTransferTokens, WETH() есть |
+| dex.v2_fee_source / dex.v2_fee_pct | `fixed` / `0.3` | AquilaPair (выше) |
+| dex.pool_enabled | да — решает Тигран (после T482-01) | — |
+
+### 7.8 Не подключены настройками (вид подходит, не хватает кода или адресов)
+
+- **Swapline V1** (`swapline-v1`, T433-107) — вид `lb_v21` подходит (фабрика 0xEE0616a2DEAa5331e2047Bc61E0b588195A49cEa
+  и реализация пары — Sourcify exact_match, файлы = lfj-gg/joe-v2 v2.1.0; dex49/1.md). Не подключено: пулы lb_v21 бот
+  берёт только из справочника GeckoTerminal (pools/created_log.rs L156-L159: подписки LBPairCreated нет; поиска по фабрике
+  у Proto::LbV21 нет — pools/factory_calls.rs), а у GeckoTerminal этой DEX нет — пулов не будет. Задача T482-02.
+- **Metric V1** (`metric-v1`, T433-144) — вид `metric_omm` подходит (MetricOmmPoolFactory 0x2a53833cc95548cf52c7b159110e22D3a9018f32
+  — тот же адрес, что у BSC в abi_metric.rs; Sourcify 42161 match; metricOmmSwapCallback, swap(address,bool,int128,uint128,
+  bytes,bytes)). Не подключено: пулы metric_omm — только из справочника (created_log.rs L143-L145; поиска по фабрике нет),
+  у GeckoTerminal DEX Metric в сети arbitrum нет. Задача T482-03.
+- **Omni Exchange Flux** (`omni-exchange-flux`, T433-133) — код Vault / CLPoolManager = PancakeSwap Infinity (dex49/3.md,
+  Sourcify match, побайтно с BSC). Не подключено: вид `pancakeswap_infinity_cl` tradable и не форк — required() требует
+  dex.universal_router, dex.universal_router_version, dex.permit2 и dex.quoter (families.rs L645-L651, L670-L672);
+  виртуальный квотер Infinity CL не поддерживает (quote/virtual_quoter.rs supports). Universal Router и CLQuoter Omni
+  официально не найдены. Задача T482-04.
+- **AutoRange** (`autorange`, T433-143) — не DEX: хранилища позиций Uniswap V3 (фабрика хранилищ — uniswapV3Factory
+  0x1F98431c…F984, dex49/4.md); ликвидность — в пулах `uniswap_v3_arbitrum@arbitrum` (§2.2). Настроек не нужно.

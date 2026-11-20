@@ -615,6 +615,74 @@
     угаданной длины: ожидание записи журнала опросом (20 мс, предел 10 с), конец окна второй проверки — от момента,
     когда отложенная запись видна; окно 2 с. Управляемое время tokio невозможно без правки кода: окно пула — от
     std::time::Instant (depth_log.rs), tokio::time::pause его не двигает. Поведение кода не менялось.
+- **Решение 482 (20.11.2026, ветка t251/arb-dex-forks-config от origin/feat/arbitrum 2ca8dba2) — форки поддержанных
+  видов настройками и статус всех 49 DEX таблицы 3 покрытия Arbitrum; код бота не менялся, cargo не запускался.**
+  Сделано: настройки Joe DEX / LFJ V1, Rubicon CLMM и Aquila, Swapsicle V1, ZyberSwap Stableswap, Arbitrum Exchange V2 /
+  V3 (docs/notes/arbitrum/dex-settings-arbitrum.md §7, docs/FIRST_RUN.md), запись tools/arbitrum_record/forks_482.py
+  (+ forks_482_v2.py, forks_482_v3.py; шаги forks_482 и zyber_stable в record_steps.py), тест
+  tests/arbitrum_forks_482_live.rs (#[ignore]). Таблица покрытия — docs/notes/arbitrum/dex-coverage-arbitrum.md (итог
+  в шапке). Задачи (железное правило — у каждого незакрытого DEX):
+  - T482-01 Запись своим узлом: `python3 tools/arbitrum_record/record_all.py --rpc http://УЗЕЛ:8547 --only
+    forks_482,zyber_stable`; коммит tests/data/arbitrum_forks_482_<дата>/ и arbitrum_zyber_stable_<дата>/, снять
+    #[ignore] у трёх тестов tests/arbitrum_forks_482_live.rs. Тест проверяет: getAmountsOut Joe / Aquila и симуляцию
+    обмена в паре (наш выход принят, выход + 1 откатан) у всех четырёх V2; тики TickLens (Rubicon — свой, Arbidex V3 —
+    Uniswap) = ticks(t) пула; математика V3 = виртуальный квотер (и QuoterV2 Rubicon). Затем ключи из §7 и
+    dex.pool_enabled — Тигран. Расхождение в любом пункте — DEX не включать, разбор.
+  - T482-02 Swapline V1 (lb_v21 сверен): источник пулов — поиск по фабрике LB (getNumberOfLBPairs / getLBPairAtIndex,
+    ILBFactory v2.1.0) или подписка LBPairCreated (pools/created_log.rs: сейчас continue у LbV21 / LbV22); код + запись.
+    То же нужно любой DEX lb_v21 / lb_v22 вне GeckoTerminal.
+  - T482-03 Metric V1 (metric_omm сверен, фабрика = BSC): источник пулов — idxToPool(1..nextPoolIdx − 1) фабрики
+    (MetricOmmPoolFactory, Sourcify 42161) или событие PoolCreated (исходник опубликован — topic0 из него); код + запись.
+  - T482-04 Omni Exchange Flux (код = PancakeSwap Infinity CL): у вида нужны Universal Router, Permit2, CLQuoter — у Omni
+    официально не найдены (сайт мёртв, адреса Vault / CLPoolManager — только адаптер DefiLlama). Варианты (решает
+    Тигран): вид Infinity CL «только исполнитель» (tradable = нет, шаг INF_CL v3) + виртуальный квотер для менеджера CL —
+    код; либо найти официальные адреса. TVL $5.85 (DefiLlama 20.11.2026).
+  - T482-05 Integral SIZE — оракульный Relayer (не AMM): новое семейство; функции квоты Relayer в docs не названы —
+    читать исходник Relayer (адрес docs.integral.link 0x3c69…5f42) в Sourcify, затем вид.
+  - T482-06 Clipper — RFQ: адаптер по API Clipper (документация API и адрес пула Arbitrum не найдены; api.clipper.exchange
+    20.11 не ответил) — найти официальную документацию.
+  - T482-07 Rubicon Classic — ончейн-книга заявок RubiconMarket (0xc715…2db8, RubiconRouter 0x7b24…7f03 — docs Rubicon):
+    новое семейство «книга заявок».
+  - T482-08 ZipSwap — семейство не установлено: фабрика 0x9e34…F05E (DefiLlama) и пары в Sourcify не верифицированы,
+    официального источника нет; нужен исходник пары (Тигран: Arbiscan) или запись обмена.
+  - T482-09 Clober V1 — книга заявок (MarketFactory 0x24aC…111D, clober-dex/core README): новое семейство.
+  - T482-10 Zyberswap V3 — Algebra v1.0.0 (сжатый битмап на шаг 60): вариант вида после слияния ветки BSC с решением 463
+    (сжатый битмап Algebra V1); фабрика 0x9c2a…8544 (DefiLlama, Sourcify match), квотер — виртуальный.
+  - T482-11 Lighter V1 — книга заявок (Factory 0x3564…8af4, DefiLlama, Sourcify match): новое семейство; события книги
+    сверить по OrderBook.sol.
+  - T482-12 E3 — фабрика LB V2.1 с изменениями; исходник реализации пары 0xd9751ad0767ecd82c815628b0c3402aa788c11f3 в
+    Sourcify нет — нужен verified-исходник (Тигран: Arbiscan), затем сверка с lb_v21.
+  - T482-13 Swaap Maker V2 — RFQ (/v1/rfq/quote, ключ x-api-key от Swaap Labs): адаптер RFQ.
+  - T482-14 Nabla Finance — оракульный AMM (обмен с данными обновления Pyth): новое семейство; исходник пулов в Sourcify
+    не найден — NablaFinance/integration-guide.
+  - T482-15 BrownFi V2 — оракульный AMM с интерфейсом пары V2 (BrownFiV2Factory 0xD053…592E, Sourcify exact_match):
+    новое семейство.
+  - T482-16 BrownFi V3 — оракульный AMM (BrownFiV3Factory 0xe498…F1F0, Sourcify exact_match; OracleGateway не прочитан):
+    новое семейство.
+  - T482-17 Raindex — книга заявок Rainlang (OrderBook v5 0x8dF8…94ab): новое семейство (quote2 / takeOrders3).
+  - T482-18 Mangrove — ончейн-книга (Mangrove 0x109d…3f61, MgvReader 0x7E10…1875): новое семейство.
+  - T482-19 Skate AMM — кросс-сетевой, обмен не атомарный (executeTask отдельным вызовом): решение Тиграна, как брать.
+  - T482-20 Kaliber — PropAMM, официальных docs / адресов / исходника нет (контракты 0x1545…7312, 0xf639…FC63 — DefiLlama,
+    Sourcify 404): найти официальный источник.
+  - T482-21 1inch Aqua — SwapVM-стратегии, тейкеры — KYB-резолверы 1inch (tx.origin держит токен): решение Тиграна (KYB) и
+    новое семейство.
+  - T482-22 PancakeSwap X — интенты UniswapX (ExclusiveDutchOrderReactor, адрес — DefiLlama): роль филлера — решение
+    Тиграна.
+  - T482-23 Renegade — dark pool / RFQ (ключ EXTERNAL_MATCH_KEY от команды): адаптер RFQ.
+  - T482-24 Tristero — dark pool / маршрутизатор по API (getQuote, Permit2): адаптер по API.
+  - T482-25 Cables Finance — RFQ / perp, адресов в docs нет, TVL 0: найти официальный источник спота.
+  - T482-26 Alphix — пул Uniswap V4 с крючком JIT (beforeSwap добавляет ликвидность): своя математика по StateView
+    исказит выход — котировать квотером V4 или не допускать крючок (hooks.allowed_groups) — решение Тиграна.
+  - T482-27 Chronos V2 — движок и адреса не найдены (docs недоступны; DefiLlama deadUrl, TVL $252): найти.
+  - T482-28 Horiza — форк Uniswap V3 (пост Horiza), фабрика не найдена (deadUrl, TVL $660): найти и сверить.
+  - T482-29 Thick — код и адреса не опубликованы (TVL $413): найти официальный источник.
+  - T482-30 Tegro — CLOB, TVL Arbitrum нет, объём 0 с 29.07.2025: подтвердить, жив ли на Arbitrum; если жив — семейство
+    «книга».
+  - T482-31 Level AMM — оракульный своп общего LP-пула perp-биржи (адреса docs.level.finance; объём 0 с 23.01.2026):
+    решение Тиграна — брать ли оракульный своп (не пул).
+  - T482-32 Vertex — закрытие на Arbitrum только по новости The Block 08.07.2025: подтвердить официальным источником.
+  - T482-33 Bunni V2 — закрытие только по DefiLlama (deprecated, «hacked») и новости The Block: подтвердить официальным
+    заявлением; пулы — крючок в PoolManager uniswap-v4-arbitrum.
 - **Решение 481 (20.11.2026, ветка t248/arb-curve-ren-wsteth от origin/feat/arbitrum 3d852b93) — T472-10: пулы Curve
   WBTC/renBTC и ETH/wstETH (Arbitrum) по исходникам Sourcify; cargo не запускался (формат — вручную).** Сделано:
   исходники как есть — docs/sources/curve_arbitrum/ (SHA-256 совпал с посчитанным в браузере); ren — та же математика,

@@ -32,6 +32,7 @@ pub mod pool_depth;
 pub mod pool_solidly;
 pub mod pool_tick_bin;
 pub mod pool_vault;
+pub mod pool_vault_v3;
 pub mod presell;
 pub mod send;
 pub mod tip_share;

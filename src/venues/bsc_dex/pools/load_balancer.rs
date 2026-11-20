@@ -153,6 +153,8 @@ pub fn state(
     let weights_ok = match &curve {
         VaultCurve::Weighted { weights } => weights.len() == n,
         VaultCurve::Stable { .. } => true,
+        // Решение 452: кривая пула Balancer V3 — у пула V2 не бывает.
+        VaultCurve::V3 => false,
     };
     if n < 2 || balances.len() != n || scaling.len() != n || !weights_ok {
         return Err(format!(

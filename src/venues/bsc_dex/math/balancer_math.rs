@@ -132,6 +132,8 @@ pub fn amount_out(d: &VaultPoolData, i: usize, j: usize, amount_in: U256) -> Opt
             a,
         )?,
         VaultCurve::Stable { amp } => balancer_stable::out_given_in(*amp, &upscaled(d)?, i, j, a)?,
+        // Решение 452: кривая V3 — только у пула с частью V3 (ветка выше).
+        VaultCurve::V3 => return None,
     };
     Some(out / s_out)
 }
@@ -157,6 +159,7 @@ pub fn amount_in(d: &VaultPoolData, i: usize, j: usize, amount_out: U256) -> Opt
             a,
         )?,
         VaultCurve::Stable { amp } => balancer_stable::in_given_out(*amp, &upscaled(d)?, i, j, a)?,
+        VaultCurve::V3 => return None,
     };
     // _downscaleUp — Math.divUp (не FixedPoint): ceil(raw / множитель).
     let down = if raw.is_zero() {

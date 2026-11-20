@@ -7,6 +7,8 @@
 //! Решение 441 (T433-F2): пул хранилища Balancer V3 — то же состояние плюс часть V3 (`VaultPoolData.v3`): живые
 //! балансы 18 знаков, курсы токенов, наименьшая сумма обмена хранилища и правило пула (какой фабрикой создан). У пула
 //! Balancer V2 часть V3 пуста (None) — его состояние и расчёт прежние.
+//! Решение 452: виды Gyro / ReClamm / LBP / QuantAMM и крючки комиссии — новые правила VaultV3Rule, кривая V3 и поля
+//! hook / open части V3 (типы — core/types/pool_vault_v3.rs).
 //! Кто вызывает: core/types/pool.rs (PoolState::VaultPool), адаптер DEX (pools/load_balancer.rs создаёт,
 //! math/balancer*.rs считает).
 //! От чего зависит: alloy-primitives, serde.
@@ -15,6 +17,8 @@
 use alloy_primitives::{B256, U256};
 use serde::{Deserialize, Serialize};
 
+pub use super::pool_vault_v3::{EclpParams, LbpState, LbpVer, V3Hook};
+
 /// Кривая пула хранилища. Математика — в адаптере.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VaultCurve {
@@ -22,6 +26,9 @@ pub enum VaultCurve {
     Weighted { weights: Vec<U256> },
     /// Стейблсвап: коэффициент усиления A в том виде, в каком его отдаёт пул (A × точность A пула) на блоке чтения.
     Stable { amp: U256 },
+    /// Решение 452: пул хранилища Balancer V3, чья формула — не весовая и не стейблсвап (Gyro 2-CLP / E-CLP, ReClamm, LBP
+    /// с фиксированной ценой): параметры формулы — в правиле части V3 (`VaultV3.rule`). У Balancer V2 не бывает.
+    V3,
 }
 
 /// Состояние пула хранилища на блоке — боксируется в `PoolState::VaultPool`.
@@ -61,6 +68,13 @@ pub struct VaultV3 {
     pub min_trade: U256,
     /// Правило пула — по фабрике, создавшей пул (у разных выпусков фабрик onSwap разный).
     pub rule: VaultV3Rule,
+    /// Решение 452: крючок, считающий комиссию обмена (StableSurge, MEV Capture); None — статическая комиссия.
+    #[serde(default)]
+    pub hook: V3Hook,
+    /// Решение 452: onSwap пула открыт не только хранилищу (нет onlyVault) — крючок StableSurge зовёт его сам
+    /// (StableSurgeHook.sol L136); у пула с onlyVault такой вызов откатывается, обмен невозможен.
+    #[serde(default)]
+    pub open: bool,
 }
 
 /// Решение 441: правило onSwap пула Balancer V3 — по выпуску фабрики (исходники — balancer-deployments@b55dc2b8).
@@ -75,4 +89,17 @@ pub enum VaultV3Rule {
     Stable,
     /// Стейблсвап 20260116-v3-stable-pool-v3: после обмена наибольший / наименьший баланс < 10 000.
     StableGuard,
+    /// Решение 452: Gyro 2-CLP (20250120-v3-gyro-2clp, 20260123-v3-gyro-2clp-v2; кривая V3): √α и √β пула, 18 знаков.
+    Gyro2Clp { sqrt_alpha: U256, sqrt_beta: U256 },
+    /// Решение 452: Gyro E-CLP (20250124-v3-gyro-eclp, 20260126-v3-gyro-eclp-v2; кривая V3): параметры getECLPParams.
+    GyroEclp(Box<EclpParams>),
+    /// Решение 452: ReClamm (кривая V3): виртуальные балансы токенов A и B на блоке чтения (18 знаков).
+    ReClamm { va: U256, vb: U256 },
+    /// Решение 452: LBP (кривая — весовая, веса на блоке чтения): окно продажи, токен проекта, виртуальный резерв.
+    Lbp(Box<LbpState>),
+    /// Решение 452: LBP с фиксированной ценой (20251205-v3-fixed-price-lbp; кривая V3): окно продажи, индекс токена
+    /// проекта, цена токена проекта в резерве (getProjectTokenRate, 18 знаков).
+    FixedLbp { enabled: bool, project: u8, rate: U256 },
+    /// Решение 452: QuantAMM (кривая — весовая, веса на блоке чтения): предел доли сделки maxTradeSizeRatio (18 знаков).
+    QuantAmm { max_trade: U256 },
 }

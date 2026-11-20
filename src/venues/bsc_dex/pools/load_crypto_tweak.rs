@@ -32,12 +32,13 @@ pub fn calls(pool: Address, n: usize) -> Vec<(Address, Bytes)> {
             .collect(),
         _ => return Vec::new(),
     };
-    data.extend([
+    let tail: [Bytes; 4] = [
         P2::totalSupplyCall {}.abi_encode().into(),
         P2::xcp_profitCall {}.abi_encode().into(),
         P2::virtual_priceCall {}.abi_encode().into(),
         P2::packed_rebalancing_paramsCall {}.abi_encode().into(),
-    ]);
+    ];
+    data.extend(tail);
     data.into_iter().map(|d| (pool, d)).collect()
 }
 

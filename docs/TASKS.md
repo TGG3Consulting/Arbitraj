@@ -164,7 +164,7 @@
   - T475-02 **Выкладка: dex.elastic_ticks_chunk задать у КАЖДОЙ DEX вида kyber_elastic / kyber_elastic_v1 — и на BSC
     (bsc_dex), и на arb_dex** (FIRST_RUN — 1000). Без неё DEX «не подключена: не задана dex.elastic_ticks_chunk» — на BSC
     пулы Elastic выпадут из графа (правило «нет параметра — функция не работает»; раньше тики читались одним вызовом
-    length = 0 без настройки). Подключена ли Elastic на BSC у Тиграна — в репозитории не записано.
+    length = 0 без настройки). На живом BSC DEX `kyberswap_elastic_bsc` (вид kyber_elastic) включена (dex.pool_enabled = да, проверено через интерфейс бота 20.11.2026) — при выкладке ОБЯЗАТЕЛЬНО задать ей dex.elastic_ticks_chunk.
   - T475-03 Вопрос Тиграну: id DEX для Elastic Legacy на arb_dex (предложение `kyberswap_elastic_legacy_arbitrum@arbitrum`)
     и включение (dex.pool_enabled); у arb_dex — index.factory_scan = да (иначе пулы v1 не найдутся: у GeckoTerminal их
     нет). Уровни dex.v3_fee_tiers = 8, 10, 40, 300, 1000 — конструктор фабрики v1 (Sourcify 42161); уровни, включённые

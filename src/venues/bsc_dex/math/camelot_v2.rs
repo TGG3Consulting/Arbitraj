@@ -6,8 +6,10 @@
 //! Комиссия — НАПРАВЛЕННАЯ: своя у входа token0 и у входа token1 (token0FeePercent / token1FeePercent, над
 //! FEE_DENOMINATOR = 100000). Волатильная пара — формула Uniswap V2 с комиссией (FEE_DENOMINATOR − fee)/FEE_DENOMINATOR;
 //! стабильная — инвариант `x³y + xy³` (Ньютон до |Δy| ≤ 1 за 255 раундов, без отката при несходимости).
-//! Сверх getAmountOut — проверки самого обмена (swap): выход > 0 (L259) и выход < резерва выхода (L262), иначе своп
-//! откатился бы — `None`.
+//! Сверх getAmountOut — проверки самого обмена (swap): выход > 0 (L259), выход < резерва выхода (L262) и проверка K
+//! (L320-L323): `_k(баланс0 − комиссия0, баланс1 − комиссия1) ≥ _k(резерв0, резерв1)`, где баланс входа = резерв + вход,
+//! баланс выхода = резерв − выход, комиссия = floor(вход·fee/FEE_DENOMINATOR) (L280-L281; доли реферера и владельца
+//! уходят из баланса и из комиссии одновременно — L286-L318, разность та же). Не выполнена — своп откатился бы, `None`.
 //! Кто вызывает: quote/pool_quote.rs (ветка Solidly при виде camelot_v2); тесты (tests/arb_dex_camelot_v2.rs).
 //! От чего зависит: math/solidly_math.rs (e18).
 //! Настройки: нет (резервы, флаг stable, множители точности, комиссии — с контракта пары, pools/load_camelot.rs).
@@ -138,10 +140,40 @@ pub fn get_amount_out(p: &Pair, amount_in: U256, zero_for_one: bool) -> Option<U
     }
 }
 
-/// Выход обмена на точный вход, как его исполнит пара: getAmountOut и проверки swap — выход > 0 (L259) и выход меньше
-/// резерва выхода (L262). Принимает: состояние, вход, направление. Возвращает: выход. None — обмен откатился бы.
+/// Выход обмена на точный вход, как его исполнит пара: getAmountOut и проверки swap — выход > 0 (L259), выход меньше
+/// резерва выхода (L262) и K (L320-L323, k_holds). Принимает: состояние, вход, направление. Возвращает: выход. None —
+/// обмен откатился бы.
 pub fn swap_out(p: &Pair, amount_in: U256, zero_for_one: bool) -> Option<U256> {
     let out = get_amount_out(p, amount_in, zero_for_one)?;
-    let r_out = if zero_for_one { p.reserve1 } else { p.reserve0 };
-    (!out.is_zero() && out < r_out).then_some(out)
+    let r_out = if zero_for_one {
+        p.reserve1
+    } else {
+        p.reserve0
+    };
+    if out.is_zero() || out >= r_out || !k_holds(p, amount_in, out, zero_for_one)? {
+        return None;
+    }
+    Some(out)
+}
+
+/// Проверка K обмена (Pair.sol L276-L281, L320-L323): балансы после обмена минус комиссия входа (SafeMath) — инвариант не
+/// меньше, чем у резервов. Принимает: состояние, вход, выход, направление. Возвращает: выполнена ли. None — откат
+/// SafeMath (переполнение, недобор, деление на ноль в _k).
+pub fn k_holds(p: &Pair, amount_in: U256, out: U256, zero_for_one: bool) -> Option<bool> {
+    let den = U256::from(FEE_DENOMINATOR);
+    let (fee, r_in, r_out) = if zero_for_one {
+        (p.fee0, p.reserve0, p.reserve1)
+    } else {
+        (p.fee1, p.reserve1, p.reserve0)
+    };
+    let cut = amount_in.checked_mul(fee)? / den;
+    let b_in = r_in.checked_add(amount_in)?.checked_sub(cut)?;
+    let b_out = r_out.checked_sub(out)?;
+    let (b0, b1) = if zero_for_one {
+        (b_in, b_out)
+    } else {
+        (b_out, b_in)
+    };
+    let after = k(b0, b1, p.stable, p.pm0, p.pm1)?;
+    Some(after >= k(p.reserve0, p.reserve1, p.stable, p.pm0, p.pm1)?)
 }

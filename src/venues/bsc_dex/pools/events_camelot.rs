@@ -42,7 +42,7 @@ pub fn liquidity_topics() -> Vec<B256> {
 }
 
 /// Разбор события. Принимает: лог. Возвращает: Some(изменение) — событие состояния; None — иное событие. Ошибка —
-/// текст (данные не по ABI; комиссия больше MAX_FEE_PERCENT — пара Camelot V2 так не позволяет, L99).
+/// текст (данные не по ABI; комиссия больше MAX_FEE_PERCENT или 0 — пара Camelot V2 так не позволяет, L99-L100).
 pub fn parse(log: &Log) -> Result<Option<Change>, String> {
     let Some(t) = log.topic0() else {
         return Ok(None);
@@ -59,6 +59,10 @@ pub fn parse(log: &Log) -> Result<Option<Change>, String> {
         let max = u32::from(s.token0FeePercent.max(s.token1FeePercent));
         if max > MAX_FEE_PERCENT {
             return Err(format!("FeePercentUpdated: комиссия {max} > MAX_FEE_PERCENT"));
+        }
+        // L100: setFeePercent требует обе комиссии > 0.
+        if s.token0FeePercent == 0 || s.token1FeePercent == 0 {
+            return Err("FeePercentUpdated: комиссия 0 (пара так не позволяет, L100)".into());
         }
         return Ok(Some(Change::Fees(s.token0FeePercent, s.token1FeePercent)));
     }

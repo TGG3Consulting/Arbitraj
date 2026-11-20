@@ -78,7 +78,8 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<PoolStat
 
 /// Сборка состояния из прочитанного (без сети; её же зовут тесты на записанных ответах). Принимает: прочитанное.
 /// Возвращает: PoolState::Solidly с fee1. Ошибки: множитель точности 0 (пара не инициализирована — initialize ставит
-/// 10^decimals, L86-L87); комиссия больше MAX_FEE_PERCENT (пара так не позволяет — L99: это не пара Camelot V2).
+/// 10^decimals, L86-L87); комиссия больше MAX_FEE_PERCENT или 0 (пара так не позволяет — L99, L100: это не пара
+/// Camelot V2).
 pub fn state(r: &Read) -> Result<PoolState, &'static str> {
     if r.pm0.is_zero() || r.pm1.is_zero() {
         return Err("множитель точности 0 — пара не инициализирована");
@@ -86,6 +87,10 @@ pub fn state(r: &Read) -> Result<PoolState, &'static str> {
     let max = u32::from(r.fee0.max(r.fee1));
     if max > MAX_FEE_PERCENT {
         return Err("комиссия больше MAX_FEE_PERCENT — не пара Camelot V2");
+    }
+    // L27-L28: по умолчанию 300; setFeePercent требует > 0 (L100) — нулевой комиссии у пары не бывает.
+    if r.fee0 == 0 || r.fee1 == 0 {
+        return Err("комиссия 0 — у пары Camelot V2 так не бывает (L27-L28, L100)");
     }
     let fee = |value: u16| SolidlyFee {
         value: u32::from(value),

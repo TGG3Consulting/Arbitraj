@@ -120,6 +120,10 @@ fn math_equals_pair_get_amount_out() {
         }
     }
     assert!(n > 0, "в записи нет ответов getAmountOut");
+    assert!(
+        stable > 0,
+        "в записи нет стабильных пар — запишите заново (скрипт добирает их полным просмотром)"
+    );
     println!("сверено {n}, из них стабильных {stable}, откатов {reverted}");
 }
 
@@ -167,16 +171,29 @@ fn real_logs_parsed() {
         let data = v["data"].as_str().unwrap();
         assert_eq!(parse(v), Change::Reserves(word(data, 0), word(data, 1)));
     }
-    for v in logs["fee_percent_updated"].as_array().unwrap() {
-        assert!(matches!(parse(v), Change::Fees(..)));
-    }
-    for v in logs["set_stable_swap"].as_array().unwrap() {
+    let fees = logs["fee_percent_updated"].as_array().unwrap();
+    for v in fees {
         let data = v["data"].as_str().unwrap();
+        let (f0, f1) = (word(data, 0).to::<u16>(), word(data, 1).to::<u16>());
+        assert_eq!(parse(v), Change::Fees(f0, f1));
+    }
+    let stables = logs["set_stable_swap"].as_array().unwrap();
+    for v in stables {
+        let data = v["data"].as_str().unwrap();
+        assert!(word(data, 0) <= U256::from(1u8), "prevStableSwap — bool");
         assert_eq!(parse(v), Change::Stable(word(data, 1) == U256::from(1u8)));
     }
-    for v in logs["pair_created"].as_array().unwrap() {
+    let created = logs["pair_created"].as_array().unwrap();
+    for v in created {
         let t: B256 = v["topics"][0].as_str().unwrap().parse().unwrap();
         assert_eq!(t, IV2Factory::PairCreated::SIGNATURE_HASH);
+    }
+    let (s, f, st, c) = (sync.len(), fees.len(), stables.len(), created.len());
+    println!("логов: Sync {s}, FeePercentUpdated {f}, SetStableSwap {st}, PairCreated {c}");
+    for (name, k) in [("FeePercentUpdated", f), ("SetStableSwap", st), ("PairCreated", c)] {
+        if k == 0 {
+            println!("в записи нет {name} — разбор этого события на реальном логе не проверен");
+        }
     }
 }
 

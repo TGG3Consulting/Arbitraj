@@ -31,7 +31,9 @@
   (242), core/types/pool.rs 432 (427). Глубина стабильной пары Camelot V2 (quote/depth_band.rs → quote/solidly_depth.rs)
   считается формулами Velodrome (тот же инвариант x³y+xy³, другое округление и проверки) — оценка полосы, не котировка;
   своя глубина по math/camelot_v2.rs — задача. Тесты на записи узла Arbitrum — #[ignore] до записи
-  (tools/arbitrum_record/camelot_v2.py).
+  (tools/arbitrum_record/camelot_v2.py). Ревью 443: сверх ориентира 200 — tools/arbitrum_record/camelot_v2.py 343
+  (keccak, узел, выборка пар, редкие события — в отдельные модули tools/arbitrum_record/), tests/arb_dex_camelot_v2.rs
+  222 (разнести: математика / проверка и логи).
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

@@ -111,18 +111,36 @@ class Node:
         return res
 
     def calls(self, items, tag, size=200):
-        """items: [(to, data)] → [hex | None (откат)]."""
+        """items: [(to, data)] → [hex | None (откат)]. Откат — ошибка узла с кодом 3 или текстом «execution reverted»
+        (geth / Nitro); любая другая ошибка узла (лимит, нет блока, сбой) — исключение: запись не продолжается."""
         out = []
         for i in range(0, len(items), size):
             part = items[i:i + size]
             res = self.batch([("eth_call", [{"to": to, "data": d}, tag]) for to, d in part])
-            out += [None if isinstance(x, dict) else x for x in res]
+            for (to, d), x in zip(part, res):
+                if not isinstance(x, dict):
+                    out.append(x)
+                    continue
+                err = x.get("error") or {}
+                if err.get("code") == 3 or "execution reverted" in str(err.get("message", "")).lower():
+                    out.append(None)
+                else:
+                    raise RuntimeError(f"eth_call {to} {d[:10]}: ошибка узла (не откат): {err}")
         return out
 
 
 def word(h, i=0):
+    """Слово i ответа. Пустой или короткий ответ («0x» — у адреса нет кода или вызов ничего не вернул) — понятная
+    причина, а не ValueError разбора."""
     h = h[2:] if h.startswith("0x") else h
+    if len(h) < 64 * (i + 1):
+        raise RuntimeError(f"ответ 0x{h} короче {i + 1} слов — у адреса нет кода или вызов не вернул данных")
     return int(h[64 * i:64 * (i + 1)], 16)
+
+
+def full(h, n):
+    """Ответ не короче n слов (пары без кода / не той ABI отсеиваются при выборке)."""
+    return h is not None and len(h[2:] if h.startswith("0x") else h) >= 64 * n
 
 
 def addr_word(h):
@@ -173,7 +191,7 @@ def main():
     n = word(node.calls([(fac, S["allPairsLength()"])], tag)[0])
     step = max(1, n // max(1, a.scan))
     idx = list(range(0, n, step))
-    addrs = [addr_word(x) for x in node.calls([(fac, S["allPairs(uint256)"] + enc_uint(i)) for i in idx], tag) if x]
+    addrs = [addr_word(x) for x in node.calls([(fac, S["allPairs(uint256)"] + enc_uint(i)) for i in idx], tag) if full(x, 1)]
     rare = {"fee": [], "stable": [], "created": []}
     hi = b
     while hi > a.from_block and any(len(v) < a.rare for v in rare.values()):
@@ -182,7 +200,7 @@ def main():
                                         "topics": [[T["fee"], T["stable"]]]}])
         own = sorted({g["address"] for g in got})
         facs = node.calls([(x, S["factory()"]) for x in own], tag) if own else []
-        ours = {x for x, f in zip(own, facs) if f and addr_word(f).lower() == fac.lower()}
+        ours = {x for x, f in zip(own, facs) if full(f, 1) and addr_word(f).lower() == fac.lower()}
         for g in reversed(got):
             k = "fee" if g["topics"][0] == T["fee"] else "stable"
             if g["address"] in ours and len(rare[k]) < a.rare:
@@ -204,7 +222,7 @@ def main():
     cands = []
     for k, p in enumerate(addrs):
         r = raw[k * len(fields):(k + 1) * len(fields)]
-        if any(x is None for x in r):
+        if not all(full(x, 4 if j == 3 else 1) for j, x in enumerate(r)):
             continue
         res = r[3]
         if word(res, 0) == 0 or word(res, 1) == 0 or addr_word(r[0]).lower() != fac.lower():
@@ -216,6 +234,30 @@ def main():
             "fees": [word(res, 2), word(res, 3)],
         })
     stable = [c for c in cands if c["stableSwap"]]
+    if not stable:
+        # Выборка и SetStableSwap не дали стабильных пар — полный просмотр allPairs: stableSwap() каждой пары.
+        sampled = set(idx)
+        rest = [i for i in range(n) if i not in sampled]
+        print(f"стабильных в выборке нет — полный просмотр {len(rest)} пар", file=sys.stderr)
+        more = [addr_word(x) for x in node.calls([(fac, S["allPairs(uint256)"] + enc_uint(i)) for i in rest], tag)
+                if full(x, 1)]
+        flags = node.calls([(p, S["stableSwap()"]) for p in more], tag)
+        extra2 = [p for p, f in zip(more, flags) if full(f, 1) and word(f) == 1]
+        raw2 = node.calls([(p, S[f]) for p in extra2 for f in fields], tag)
+        for k, p in enumerate(extra2):
+            r = raw2[k * len(fields):(k + 1) * len(fields)]
+            if not all(full(x, 4 if j == 3 else 1) for j, x in enumerate(r)):
+                continue
+            res = r[3]
+            if word(res, 0) == 0 or word(res, 1) == 0 or addr_word(r[0]).lower() != fac.lower():
+                continue
+            stable.append({
+                "pair": p, "factory": addr_word(r[0]), "token0": addr_word(r[1]), "token1": addr_word(r[2]),
+                "getReserves": res, "stableSwap": True,
+                "precisionMultiplier0": str(word(r[5])), "precisionMultiplier1": str(word(r[6])),
+                "fees": [word(res, 2), word(res, 3)],
+            })
+        print(f"стабильных с резервами после полного просмотра: {len(stable)}", file=sys.stderr)
     chosen, seen = stable[: a.pairs // 2], set()
     for c in cands:
         if len(chosen) >= a.pairs:
@@ -235,10 +277,12 @@ def main():
     divs = [int(x) for x in a.divs.split(",")]
     for c in chosen:
         dec = node.calls([(c["token0"], S["decimals()"]), (c["token1"], S["decimals()"])], tag)
-        c["decimals"] = [word(x) if x else None for x in dec]
+        c["decimals"] = [word(x) if full(x, 1) else None for x in dec]
         gp = node.calls([(fac, S["getPair(address,address)"] + enc_addr(c["token0"]) + enc_addr(c["token1"]))], tag)
-        c["getPair"] = addr_word(gp[0]) if gp[0] else None
+        c["getPair"] = addr_word(gp[0]) if full(gp[0], 1) else None
         code = node.one("eth_getCode", [c["pair"], tag])
+        if code in ("0x", ""):
+            raise RuntimeError(f"у пары {c['pair']} нет кода на блоке {b}")
         cb = bytes.fromhex(code[2:])
         c["code_sha256"], c["code_len"] = hashlib.sha256(cb).hexdigest(), len(cb)
         items, meta = [], []
@@ -251,7 +295,7 @@ def main():
                 items.append((c["pair"], S["getAmountOut(uint256,address)"] + enc_uint(amt) + enc_addr(tin)))
                 meta.append((side, amt))
         outs = node.calls(items, tag)
-        c["getAmountOut"] = [[s, str(amt), (str(word(o)) if o else None)] for (s, amt), o in zip(meta, outs)]
+        c["getAmountOut"] = [[s, str(amt), (str(word(o)) if o is not None else None)] for (s, amt), o in zip(meta, outs)]
         del c["fees"]
 
     lo = max(0, b - a.log_blocks)

@@ -239,7 +239,7 @@ docs/notes/arbitrum/dex-settings-arbitrum.md §4.7). Задавать после
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
 | dex.kind | DEX `zyberswap-v3@arbitrum` | `thena_fusion` | код AlgebraV1 с TICK_SPACING = 60 и DataStorageOperator / AdaptiveFee — дословно как у THENA Fusion | Sourcify 42161 фабрика 0x9c2a…8544 и деплоер 0x24e8…56e3 против Sourcify 56 THENA (решение 487) |
-| dex.factory | DEX `zyberswap-v3@arbitrum` | `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` | проверка пула poolByPair, поиск по фабрике | источник — адаптер DefiLlama + код подтверждён Sourcify 42161 (принцип координатора, как решение 482; dex-settings-arbitrum.md §4.7) |
+| dex.factory | DEX `zyberswap-v3@arbitrum` | `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` | проверка пула poolByPair, поиск по фабрике | адрес из адаптера DefiLlama, код подтверждён Sourcify; принято координатором по правилу Тиграна 20.11 (взрослые продовые решения без вопросов); включает DEX Тигран после записи (Sourcify 42161; dex-settings-arbitrum.md §4.7) |
 | dex.quoter_virtual | DEX `zyberswap-v3@arbitrum` | `да` | официального квотера нет — сверка обменом самого пула | решение 186 |
 | dex.pool_enabled | DEX `zyberswap-v3@arbitrum` | `да` — после записи и теста T487-01 | включить пулы DEX | решение 487 |
 | index.factory_scan | arb_dex | `да` | пулы Zyberswap V3 есть только у фабрики (не у GeckoTerminal) | решение 121 (C3) |

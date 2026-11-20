@@ -10,7 +10,7 @@
   нет (--quoter "" — только виртуальный квотер, обмен самого пула); heads.json — времена последних --heads блоков
   (T487-02: следующий блок в ту же или следующую секунду?). Только чтение.
 Адреса (источники — docs/notes/arbitrum/dex-settings-arbitrum.md): фабрика 0x9c2abd632771b433e5e7507bcaa41ca3b25d8544
-  (адаптер DefiLlama + Sourcify 42161, принцип координатора — как решение 482); WETH
+  (адрес из адаптера DefiLlama, код подтверждён Sourcify 42161; принято координатором по правилу Тиграна 20.11); WETH
   0x82aF49447D8a07e3bd95BD0d56f35241523fBab1 (Uniswap docs v3-arbitrum-deployments, «Wrapped Native Token»); USDC
   0xaf88d065e77c8cC2239327C5EDb3A432268e5831 (quoteToken() пула WooPP на записи своего узла, решение 462). Хеш кода
   пула Zyberswap (POOL_INIT_CODE_HASH фабрики, Sourcify 42161) — 0x6ec6…94a4, тот же, что AlgebraV1 по умолчанию.

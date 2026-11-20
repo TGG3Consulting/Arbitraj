@@ -45,12 +45,12 @@ struct Agg {
 }
 
 /// Ключ суммы: (сеть перевода — Asset.chain, None — сеть по умолчанию; откуда).
-type From = (Option<ChainId>, VenueId);
+type Key = (Option<ChainId>, VenueId);
 
 /// Суммы пар площадок (поле inner.transit_pairs): (сеть, откуда) → [(куда, сумма)] — поиск по ссылке, без выделений.
 /// Ведётся вместе с историей inner.transits (transit.rs load, record; порядок замков: transits, затем пары).
 #[derive(Debug, Default)]
-pub struct Pairs(std::sync::Mutex<HashMap<From, Vec<(VenueId, Agg)>>>);
+pub struct Pairs(std::sync::Mutex<HashMap<Key, Vec<(VenueId, Agg)>>>);
 
 /// Что делает: ряд монеты пары площадок изменился — поправить сумму пары этой сети. Принимает: ядро, (сеть монеты —
 /// Asset.chain, откуда, куда), (сумма, число) ряда до и после. Ошибок нет.
@@ -80,8 +80,8 @@ pub fn pair_update(
 }
 
 /// Что делает: среднее записанных переводов пары площадок направления по всем монетам ТОЙ ЖЕ сети (Asset.chain
-/// монеты направления), если их не меньше n (готовая сумма, без прохода по истории). Принимает: ядро, направление, n (profit.transit_auto_after; 0 — статистики нет).
-/// Возвращает: (среднее, переводов, монет); None — меньше n. Ошибок нет.
+/// монеты направления), если их не меньше n (готовая сумма, без прохода по истории). Принимает: ядро, направление,
+/// n (profit.transit_auto_after; 0 — статистики нет). Возвращает: (среднее, переводов, монет); None — меньше n. Ошибок нет.
 pub fn pair_mean(core: &Core, d: &Direction, n: usize) -> Option<(Decimal, usize, usize)> {
     if n == 0 {
         return None;

@@ -43,7 +43,8 @@ pub fn opens(f: &Family, log: &Log, a: &Applied) -> bool {
 }
 
 /// Третье ревью t236 (блокер 1): закрывает ли лог пул до следующего лога / чтения — Follow (settle.rs opens: Integral
-/// SwapFee, LB CompositionFees) или Need::NextFee (THENA Fusion). По нему listen_log.rs ставит valid = false в том же
+/// SwapFee, LB V2.1 / V2.2 CompositionFees, LB v2.0 CompositionFee — решение 445, Camelot V3 Fee(feeZto, feeOtz) —
+/// решение 444) или Need::NextFee (THENA Fusion). По нему listen_log.rs ставит valid = false в том же
 /// изменении реестра, что применяет лог. Принимает: вид, лог, итог применения. Ошибок нет.
 pub fn shuts(f: &Family, log: &Log, a: &Applied) -> bool {
     super::settle::opens(f, log, a).is_some() || opens(f, log, a)

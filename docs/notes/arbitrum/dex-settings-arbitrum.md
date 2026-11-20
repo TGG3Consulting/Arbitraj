@@ -94,7 +94,7 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-083 | `aero-slipstream-arbitrum@arbitrum` | slipstream_aero | **решение 470: код есть, запись aero.py** (было: нужен код) — развёртывание Arbitrum найдено (Dromos-Labs/metadex-slipstream-public, «Slipstream V3»), комиссия — от крючка обмена, вид slipstream не подходит (T448-09, решение 451, §4.4) |
 | T433-087 | `saddle-finance@arbitrum` (id — предложение) | saddle_stableswap | **готово** (решение 451: математика = Nerve; swapStorage 7 полей и FlashLoan — исправлено в виде; оговорка — запись tools/arbitrum_record/saddle.py, §4.5) |
 | T433-095 | `woofi-swap@arbitrum` (id — предложение) | woofi_v2 | **готово** (решение 451; решение 462: dex.oracle = wooracle() пула с цепи 0xf9b0…8081, не адрес документации; state() этого оракула — повтор записи woofi.py; реализация 0x7b5f…4281 своим узлом совпала, §4.6) |
-| T433-104 | `zyberswap-v3@arbitrum` (id — предложение; у GeckoTerminal нет) | thena_fusion | **готово по принципу координатора** (как решение 482: адрес фабрики — адаптер DefiLlama, код — Sourcify 42161 = THENA Fusion; включение — Тигран после записи T487-01, §4.7) |
+| T433-104 | `zyberswap-v3@arbitrum` (id — предложение; у GeckoTerminal нет) | thena_fusion | **готово** (адрес из адаптера DefiLlama, код подтверждён Sourcify; принято координатором по правилу Тиграна 20.11 (взрослые продовые решения без вопросов); включает DEX Тигран после записи T487-01; код — Sourcify 42161 = THENA Fusion, §4.7) |
 
 Решение 451 (20.11.2026): Kyber Elastic, Saddle, WOOFi → **готово** (с оговорками записи узла), Aero Slipstream →
 **нужен код** (новое семейство), PancakeSwap StableSwap — **не подтверждено**. Итог после 451: **готово 15**, **нужен код
@@ -682,13 +682,13 @@ AlgebraFactory.sol — только POOL_INIT_CODE_HASH (THENA 0xd613…2736, Zy
 | Настройка | Значение | Источник |
 | --- | --- | --- |
 | dex.kind | `thena_fusion` | сверка выше (решение 487) |
-| dex.factory | `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` | **источник — адаптер DefiLlama + код подтверждён Sourcify** (принцип координатора, как решение 482; официального источника проекта нет): адаптер DefiLlama (registries/uniswapV3.js, isAlgebra; src-ext dex49/1.md стр. 104) + Sourcify 42161 match AlgebraFactory; сайт и документация Zyberswap — deadUrl (DefiLlama) |
+| dex.factory | `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` | **адрес из адаптера DefiLlama, код подтверждён Sourcify; принято координатором по правилу Тиграна 20.11 (взрослые продовые решения без вопросов); включает DEX Тигран после записи** (официального источника проекта нет): адаптер DefiLlama (registries/uniswapV3.js, isAlgebra; src-ext dex49/1.md стр. 104) + Sourcify 42161 match AlgebraFactory; сайт и документация Zyberswap — deadUrl (DefiLlama) |
 | dex.quoter_virtual | да | официального квотера не найдено (dex49/1.md); сверка — обмен самого пула (VirtualQuoter) |
 | dex.pool_enabled | решает Тигран — после записи (T487-01) | — |
 
 У площадки arb_dex для вида нужны dex.fusion_fee_horizon_s и dex.fusion_oracle_chunk (решение 463; совет — docs/FIRST_RUN.md,
-«Zyberswap V3»). **Статус (решение 487, координатор):** принцип «адрес из адаптера DefiLlama + код подтверждён Sourcify» принят (как
-решение 482) — источник адреса помечен в таблице. Состояние пулов, feeConfig() оператора и комиссия следующего блока на
+«Zyberswap V3»). **Статус (решение 487):** адрес из адаптера DefiLlama, код подтверждён Sourcify; принято координатором по правилу
+Тиграна 20.11 (взрослые продовые решения без вопросов); включает DEX Тигран после записи — источник помечен в таблице. Состояние пулов, feeConfig() оператора и комиссия следующего блока на
 Arbitrum своим узлом — запись tools/arbitrum_record/zyberswap_v3.py (T487-01); dex.pool_enabled — Тигран после неё.
 
 ## 5. Что не делалось

@@ -1,9 +1,9 @@
 //! Файл: tests/thena_fusion_common/oracle.rs
 //! Что делает: решение 487 — разбор данных оракула комиссии записи кода AlgebraV1 (точки timepoints, feeConfig()
 //! оператора, начало окна getTimepoints, слот 3 — volumePerLiquidityInBlock) в math/fee_algebra_v1::Oracle — те же
-//! функции, что в tests/bsc_thena_fusion_fee_slot3.rs (там — свои копии, тест записи BSC не менялся); для записи
-//! Zyberswap V3 Arbitrum (tests/arbitrum_zyberswap_v3_live.rs) — тот же формат (tools/bsc_record/thena_fusion.py).
-//! Кто вызывает: tests/arbitrum_zyberswap_v3_live.rs.
+//! функции вынесены из tests/bsc_thena_fusion_fee_slot3.rs (ревью t256); запись Zyberswap V3 Arbitrum
+//! (tests/arbitrum_zyberswap_v3_live.rs) — того же формата (tools/bsc_record/thena_fusion.py).
+//! Кто вызывает: tests/bsc_thena_fusion_fee_slot3.rs, tests/arbitrum_zyberswap_v3_live.rs.
 //! От чего зависит: thena_fusion_common (word, signed, len, hex_u256, gs_fee); arb::venues::bsc_dex::math::{adaptive_fee,
 //! fee_algebra_v1}.
 //! Настройки: нет.

@@ -69,8 +69,9 @@ def args(defaults=None, doc=None):
     a.add_argument("--chain-id", type=int, default=56, help="ожидаемый eth_chainId узла (решение 487)")
     a.add_argument("--name", default="bsc_thena_fusion", help="папка записи tests/data/<name>_<дата UTC>")
     a.add_argument("--gecko-network", default="bsc", help="сеть GeckoTerminal")
-    a.add_argument("--pair-token", action="append", default=[],
-                   help="монета для поиска пулов poolByPair фабрики по всем парам (решение 487; можно несколько)")
+    a.add_argument("--pair-token", action="append", default=None,
+                   help="монета для поиска пулов poolByPair фабрики по всем парам (решение 487; можно несколько; "
+                        "заданные заменяют список по умолчанию)")
     a.add_argument("--heads", type=int, default=0, help="времена последних N блоков узла — heads.json (решение 487)")
     a.add_argument("--factory", default="0x306F06C147f064A010530292A1EB6737c3e378e4", help="AlgebraFactory THENA")
     a.add_argument("--quoter", default="0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA", help="Quoter THENA")
@@ -85,9 +86,13 @@ def args(defaults=None, doc=None):
     a.add_argument("--batch", type=int, default=100, help="вызовов в одной пачке JSON-RPC")
     a.add_argument("--vq-runtime", default=os.path.join(ROOT, "contracts", "out", "VirtualQuoter.bin-runtime"))
     a.add_argument("--out", default=os.path.join(ROOT, "tests", "data"), help="папка tests/data")
+    defaults = dict(defaults or {})
+    # Ревью t256: --pair-token заменяет список по умолчанию, а не дописывает к нему (append к default дописал бы).
+    pair_default = defaults.pop("pair_token", [])
     if defaults:
         a.set_defaults(**defaults)
     o = a.parse_args()
+    o.pair_token = o.pair_token or list(pair_default)
     # Хеши кода пула (PoolAddress.sol POOL_INIT_CODE_HASH): cryptoalgebra/AlgebraV1.9 main и cryptoalgebra/AlgebraV1.
     o.init_hash = o.init_hash or ["0xbce37a54eab2fcd71913a0d40723e04238970e7fc1159bfd58ad5b79531697e7",
                                   "0x6ec6c9c8091d160c0aa74b2b14ba9c1717e95093bd3ac085cee99a49aab294a4"]

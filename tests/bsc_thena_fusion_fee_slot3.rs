@@ -18,21 +18,16 @@
 //! Числа пунктов 1–3 — из прогона порта на записи (вне cargo, 20.11); пункт 4 — по записи (вход виртуального квотера).
 //!
 //! Кто вызывает: cargo test.
-//! От чего зависит: tests/thena_fusion_common; arb::venues::bsc_dex::math::{adaptive_fee, fee_algebra_v1,
-//! swap_algebra}.
+//! От чего зависит: tests/thena_fusion_common (oracle.rs — разбор оракула, ревью t256); arb::venues::bsc_dex::math::{
+//! fee_algebra_v1, swap_algebra}.
 
 mod thena_fusion_common;
 
-use alloy_primitives::{I256, U256};
-use serde_json::Value;
-
-use arb::venues::bsc_dex::math::adaptive_fee::FeeConfig;
-use arb::venues::bsc_dex::math::fee_algebra_v1::{
-    Oracle, Timepoint, WindowStart, fee_at, next_block_fee,
-};
+use arb::venues::bsc_dex::math::fee_algebra_v1::{Oracle, fee_at, next_block_fee};
 use arb::venues::bsc_dex::math::swap_algebra;
 
-use thena_fusion_common::{SLOT3, gs_fee, hex_u256, len, map_of, pools, signed, state, word};
+use thena_fusion_common::oracle::oracle;
+use thena_fusion_common::{SLOT3, hex_u256, map_of, pools, state, word};
 
 /// Времена котировок записи и сдвиг от времени блока (None — время последней точки оракула).
 const AT: [(&str, Option<u32>); 4] = [
@@ -41,80 +36,6 @@ const AT: [(&str, Option<u32>); 4] = [
     ("at_plus_1", Some(1)),
     ("at_plus_3", Some(3)),
 ];
-
-/// Точка оракула из ответа timepoints(uint256) (7 слов). Ошибок нет (тест падает).
-fn timepoint(r: &Value) -> Timepoint {
-    assert_eq!(len(r), 7);
-    Timepoint {
-        initialized: !word(r, 0).is_zero(),
-        ts: word(r, 1).to::<u32>(),
-        tick_cum: signed(r, 2).as_i64(),
-        vol: word(r, 4).to::<u128>(),
-        avg_tick: signed(r, 5).as_i32(),
-        vpl: word(r, 6),
-    }
-}
-
-/// feeConfig() оператора (9 слов). Ошибок нет (тест падает).
-fn config(r: &Value) -> FeeConfig {
-    let u = |i: usize| word(r, i).to::<u32>();
-    FeeConfig {
-        alpha1: u(0) as u16,
-        alpha2: u(1) as u16,
-        beta1: u(2),
-        beta2: u(3),
-        gamma1: u(4) as u16,
-        gamma2: u(5) as u16,
-        volume_beta: u(6),
-        volume_gamma: u(7) as u16,
-        base_fee: u(8) as u16,
-    }
-}
-
-/// Значение `k` массива `j` ответа getTimepoints (4 массива: смещения, затем [длина, значения…]). Ошибок нет.
-fn arr(r: &Value, j: usize, k: usize) -> U256 {
-    let at = word(r, j).to::<usize>() / 32;
-    assert!(word(r, at).to::<usize>() > k, "длина массива {j}");
-    word(r, at + 1 + k)
-}
-
-/// Начало окна из ответа getTimepoints: значение `k`. Ошибок нет (тест падает).
-fn start(r: &Value, k: usize) -> WindowStart {
-    WindowStart {
-        tick_cum: I256::from_raw(arr(r, 0, k)).as_i64(),
-        vol: arr(r, 2, k).to::<u128>(),
-        vpl: arr(r, 3, k),
-    }
-}
-
-/// Оракул записи (`block_vpl` — volumePerLiquidityInBlock слота 3; false — 0). Возвращает: оракул, время блока, тик,
-/// volumePerLiquidityInBlock. Ошибок нет (тест падает).
-fn oracle(p: &Value, block_vpl: bool) -> (Oracle, u32, i32, u128) {
-    let gs = &p["globalState()"]["result"];
-    let (tick, index) = (signed(gs, 1).as_i32(), word(gs, 3).to::<u16>());
-    let ts = hex_u256(&p["block"]["timestamp"]).to::<u32>();
-    let around = |i: u16| timepoint(&p["timepoints_around"][i.to_string()]["result"]);
-    let s = &p["oracle"]["starts"];
-    assert_eq!(s["time"].as_u64(), Some(u64::from(ts) + 1));
-    let g = &s["getTimepoints"]["result"];
-    let plus3 = &p["oracle"]["by_time"][(ts + 3).to_string()]["getTimepoints"]["result"];
-    let starts = vec![(ts, start(g, 0)), (ts + 1, start(g, 1)), (ts + 3, start(plus3, 1))];
-    let slot = hex_u256(&p["storage_slot3"]["result"]);
-    let vpl = (slot >> 128usize).to::<u128>();
-    let o = Oracle {
-        cfg: config(&p["oracle"]["feeConfig"]["result"]),
-        index,
-        prev: around(index.wrapping_sub(1)),
-        last: timepoint(&p["timepoints"]["result"]),
-        next1: around(index.wrapping_add(1)),
-        next2: around(index.wrapping_add(2)),
-        zero: around(0),
-        vpl_in_block: if block_vpl { vpl } else { 0 },
-        fee: gs_fee(p),
-        starts,
-    };
-    (o, ts, tick, vpl)
-}
 
 /// Время котировки `at`: время блока + сдвиг или время последней точки оракула. Ошибок нет.
 fn time_of(o: &Oracle, ts: u32, d: Option<u32>) -> u32 {

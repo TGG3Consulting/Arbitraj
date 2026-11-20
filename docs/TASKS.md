@@ -16,8 +16,9 @@
 - **Решение 487 (20.11.2026, ветка t256/arb-merge-bsc от feat/arbitrum 2ca8dba2) — слияние BSC (e49efd67: 419–429, 449,
   463, 464, 476) в Arbitrum и Zyberswap V3 видом thena_fusion; cargo не запускался (формат — вручную).** Задачи:
   - T487-01 Zyberswap V3 (Arbitrum): **адрес фабрики** `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` — источник
-    «адаптер DefiLlama + код подтверждён Sourcify»; принцип принят координатором (как решение 482), помечен в
-    dex-settings-arbitrum.md §4.7 и FIRST_RUN. Осталось: запись своим узлом — `python3 tools/arbitrum_record/zyberswap_v3.py
+    — адрес из адаптера DefiLlama, код подтверждён Sourcify; принято координатором по правилу Тиграна 20.11 (взрослые
+    продовые решения без вопросов); включает DEX Тигран после записи. Помечено в dex-settings-arbitrum.md §4.7 и
+    FIRST_RUN. Осталось: запись своим узлом — `python3 tools/arbitrum_record/zyberswap_v3.py
     --rpc http://УЗЕЛ:8547` (или record_all.py, шаг zyberswap_v3; пулы — poolByPair WETH/USDC, другие пары —
     `--pair-token`, пулы — `--pool`), коммит tests/data/arbitrum_zyberswap_v3_<дата>/, снять #[ignore] в
     tests/arbitrum_zyberswap_v3_live.rs; dex.pool_enabled — Тигран после записи.

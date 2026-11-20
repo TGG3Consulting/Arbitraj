@@ -20,7 +20,8 @@ use super::code::Version;
 
 /// (площадка DEX, id кошелька, адрес исполнителя 0x…), о которых уже сообщено (решение 435: исполнитель кошелька в каждой
 /// сети свой).
-static SENT: Mutex<Option<HashSet<(&'static str, String, String)>>> = Mutex::new(None);
+type Said = (&'static str, String, String);
+static SENT: Mutex<Option<HashSet<Said>>> = Mutex::new(None);
 
 /// Сообщает, если сверенная версия исполнителя кошелька окружения — v1 и об этой паре ещё не сообщали. Принимает:
 /// окружение, счётчики отправки (канал событий ядру), версию. Ошибок нет (кошелька или адреса нет — ничего).

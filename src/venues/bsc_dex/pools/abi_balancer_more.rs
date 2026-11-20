@@ -16,6 +16,7 @@
 //! LiquidityBootstrappingPool.sol (20210721) L76-L82 события, L137 getSwapEnabled; InvestmentPool.sol (20210907)
 //! L157 getSwapEnabled, L237-L249 getCollectedManagementFees (уже downscaleDown); IManagedPool.sol (20221021,
 //! 20230411) события L21-L47, ManagedPoolSettings.sol (20221021) L177 getActualSupply, L382 getSwapEnabled, L743-L774
+//!
 //! getCircuitBreakerState (границы × множитель токена); LinearPool.sol (20211208) L158-L168 индексы, L569
 //! getWrappedTokenRate, L575 getTargets, L99 TargetsSet; IRateProvider.sol L22 getRate.
 

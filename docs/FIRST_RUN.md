@@ -1160,3 +1160,14 @@ ReClamm, LBP, LBP с фиксированной ценой, QuantAMM и пулы
 | dex.kind | DEX `camelot@arbitrum` | `camelot_v2` | Пара CamelotPair: направленная комиссия и stable / volatile — своя математика (math/camelot_v2.rs), проверка и поиск пар — путём V2, шаг SOLIDLY исполнителя | verified-исходник фабрики Arbiscan (src/venues/bsc_dex/pools/abi_camelot.rs) |
 | dex.factory | DEX `camelot@arbitrum` | `0x6EcCab422D763aC031210895C81787E87B43A652` | Фабрика Camelot V2 (AMMv2 Factory): factory() пары, реестр getPair, событие PairCreated | docs.camelot.exchange/contracts/arbitrum/one-mainnet |
 | dex.pool_enabled | DEX `camelot@arbitrum` | «да» — после записи tools/arbitrum_record/camelot_v2.py и прохода тестов tests/arb_dex_camelot_v2.rs | Пулы Camelot V2 в граф и сигналы; сделки — через исполнитель кошелька Arbitrum (шаг SOLIDLY есть у v1/v2/v3) | Решение 443 |
+
+## PancakeSwap StableSwap в сети Arbitrum (решение 471, T448-10)
+
+Новых настроек нет: вид `pancake_stableswap` (как на BSC). Область «DEX» площадки arb_dex, ключ
+`pancakeswap-stableswap-arbitrum@arbitrum` (id GeckoTerminal `pancakeswap-stableswap-arbitrum` с сетью, решение 435).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `pancakeswap-stableswap-arbitrum@arbitrum` | `pancake_stableswap` | Пулы PancakeStableSwapTwoPool — тот же исходник, что у пулов фабрики BSC (CBOR метаданных в коде совпадает) | Sourcify 42161 exact_match; docs/notes/arbitrum/dex-settings-arbitrum.md §4.2 |
+| dex.factory | DEX `pancakeswap-stableswap-arbitrum@arbitrum` | `0x5D5fBB19572c4A89846198c3DBEdB2B6eF58a77a` | PancakeStableSwapFactory: реестр getPairInfo / getThreePoolPairInfo подтверждает пул | pancakeswap/infinity-universal-router 1b6d479 script/deployParameters/mainnet/DeployArbitrum.s.sol L30 |
+| dex.pool_enabled | DEX `pancakeswap-stableswap-arbitrum@arbitrum` | `да` — после записи tools/arbitrum_record/pancake_stable.py и снятия #[ignore] с tests/arbitrum_pancake_stable_live.rs | Пулы в граф и сигналы; сделки — шаг STABLE_U256 исполнителя кошелька | Решение 471 |

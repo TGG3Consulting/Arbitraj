@@ -25,7 +25,7 @@
 `-text`): SHA-256 кода исполнителя на Windows совпадает с ArbExecutor.sha256.
 
 Что запускается (адреса — `record_steps.py`, те же, что в шапках скриптов и ниже): sub_dex, kyber_elastic_v1, saddle,
-woofi, fluid_t1, balancer_v3, curve_crypto, camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo, ekubo_more,
+woofi, pancake_stable, fluid_t1, balancer_v3, curve_crypto, camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo, ekubo_more,
 exec_v4_live.
 
 Тесты проекта — только на реально записанных ответах (CLAUDE.md). У разработчика нет доступа к узлу Arbitrum: после
@@ -40,6 +40,7 @@ exec_v4_live.
 | `kyber_elastic_v1.py` | 451 (T448-06) | пулы KyberSwap Elastic v1: состояние, тики, QuoterV2, getPool фабрики, логи | `tests/arbitrum_kyber_elastic_v1_live.rs` |
 | `saddle.py` | 451 (T448-07) | пулы Saddle: монеты, балансы, A, swapStorage (7 слов), calculateSwap, логи | `tests/arbitrum_saddle_live.rs` |
 | `woofi.py` | 451 (T448-08) | WooPPV2.2: слот EIP-1967, селекторы в коде реализации, state() оракула, query | `tests/arbitrum_woofi_live.rs` |
+| `pancake_stable.py` | 471 (T448-10) | PancakeSwap StableSwap: реестр фабрики 0x5D5f…a77a (pairLength, swapPairContract, getPairInfo, getThreePoolPairInfo), вызовы бота к пулу (coins/balances k < 8, fee, A, is_killed), рампа A, admin_fee, decimals, хвост кода (метаданные компилятора), лесенка get_dy, логи узким окном | `tests/arbitrum_pancake_stable_live.rs` |
 | `sub_dex.py` | 450 (T448-01…05) | KyberSwap Classic DMM / Static Fee / Legacy (события создания, getTradeInfo, getPools, getAmountsOut роутеров), Balancer V2 по фабрикам с версией библиотек (состояние, isPoolFromFactory, queryBatchSwap), iZiSwap (fee2pointDelta, NewPool, реестр pool(x, y, fee)), код Universal Router PancakeSwap v3 — tests/data/arbitrum_sub_dex_<дата>/ | `tests/arbitrum_sub_dex_live.rs` |
 | `fluid_t1.py` | 440 | Fluid DEX T1 (решение 440): состояние всех пулов резолвера на одном блоке и лесенка обменов (swapIn пула → 0x…dEaD, estimateSwapIn резолвера) — для tests/arbitrum_fluid_t1.rs | `tests/arbitrum_fluid_t1.rs` |
 | `balancer_v3.py` | 441 | Решения 441, 452 (T433-F2): пулы Balancer V3 всех видов — все вызовы бота к пулу (хранилище, фабрики из списков, виды пулов, крючок, прекомпайлы) и ответы Router V3 querySwapSingleTokenExactIn / ExactOut на одном блоке; тест — tests/arbitrum_balancer_v3.rs | `tests/arbitrum_balancer_v3.rs` |

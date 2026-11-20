@@ -169,8 +169,13 @@ pub fn parse(
     };
     let amp = call::decode::<S::getAPreciseCall>(ok(0)?)?;
     // Решение 451: swapStorage Nerve (10 полей) и Saddle saddle-contract (7 полей) — abi_saddle::swap_fee.
-    let fee = swap_fee(ok(1)?)
-        .ok_or_else(|| bad("swapStorage() не по ABI (не 7 и не 10 слов)".into()))?;
+    let raw = ok(1)?;
+    let fee = swap_fee(raw).ok_or_else(|| {
+        bad(format!(
+            "swapStorage() не по ABI (не 7 и не 10 слов): длина {} байт, ответ {raw}",
+            raw.len()
+        ))
+    })?;
     let paused = call::decode::<S::pausedCall>(ok(2)?)?;
     let index = |t: Address| {
         coins

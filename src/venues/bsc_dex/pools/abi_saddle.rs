@@ -15,7 +15,10 @@
 //!
 //! Решение 451 (T448-07, Saddle на Arbitrum): saddle-finance/saddle-contract 2cfdd055 — пулы deployments/arbitrum_mainnet
 //! (SaddleArbUSDPool, SaddleArbUSDPoolV2, SaddleFRAXBPPool — SwapFlashLoan; CommunityfUSDCPool — PermissionlessSwap)
-//! связаны с библиотеками SwapUtils 0xcF70…6894 и AmplificationUtils 0x4f6A…c62e (solcInputs/83663b3e…; тексты
+//! связаны с библиотеками SwapUtils 0xcF70…6894 и AmplificationUtils 0x4f6A…c62e (линковка — поле libraries в
+//! SaddleArbUSDPoolV2.json, SaddleFRAXBPPool.json, CommunityfUSDCPool.json; у SaddleArbUSDPool.json только abi и address —
+//! по нему не подтверждено, но SwapFlashLoan.json того же адреса 0xBea9…56e9 даёт те же libraries; код по адресу закроет
+//! запись tools/arbitrum_record/saddle.py; solcInputs/83663b3e…; тексты
 //! библиотек = contracts/SwapUtils.sol, AmplificationUtils.sol, MathUtils.sol коммита). Математика совпадает с Nerve
 //! (SwapUtils.sol getD L307-L357, getY L428-L480, _calculateSwap L519-L540, MAX_LOOP_LIMIT L124, A_PRECISION —
 //! AmplificationUtils.sol L25, _getAPrecise L60-L88). Отличия ABI: (1) `swapStorage` Saddle — 7 полей (struct Swap
@@ -63,10 +66,10 @@ alloy::sol! {
 pub fn swap_fee(out: &[u8]) -> Option<U256> {
     use alloy::sol_types::SolCall;
     match out.len() {
-        320 => ISaddleSwap::swapStorageCall::abi_decode_returns(out)
+        n if n == 10 * 32 => ISaddleSwap::swapStorageCall::abi_decode_returns(out)
             .ok()
             .map(|r| r.swapFee),
-        224 => ISaddleOwn::swapStorageCall::abi_decode_returns(out)
+        n if n == 7 * 32 => ISaddleOwn::swapStorageCall::abi_decode_returns(out)
             .ok()
             .map(|r| r.swapFee),
         _ => None,

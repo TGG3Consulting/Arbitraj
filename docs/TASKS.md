@@ -138,6 +138,9 @@
   и FlashLoan в событиях вида saddle_stableswap; WOOFi — код не менялся (оракул сверен). Скрипты записи
   tools/arbitrum_record/{kyber_elastic_v1,saddle,woofi}.py и тесты tests/arbitrum_{kyber_elastic_v1,saddle,woofi}_live.rs
   (#[ignore] до записи). Исполнитель не менялся (переразвёртывать не нужно). Новых настроек нет (новое значение dex.kind).
+  Ревью 451: v1 — код фабрики 0x5F1d…D50a в любой сети (README ks-elastic-sc «v1» — в т.ч. BSC); на живом боте BSC
+  kyberswap_elastic_bsc — фабрика 0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A (Sourcify 56: SwapMath `usedAmount >
+  specifiedAmount` — v2), вид kyber_elastic там верен. Вид выбирается по коду фабрики, а не по сети.
   BSC: kyber_elastic — без изменений; saddle_stableswap — подписка получила topic0 FlashLoan (у Nerve его нет — исходник
   bda7578 без flashLoan) и разбор swapFee по длине ответа (у Nerve 10 слов — прежний путь).
   Сделано однозначно, на подтверждение Тиграну:

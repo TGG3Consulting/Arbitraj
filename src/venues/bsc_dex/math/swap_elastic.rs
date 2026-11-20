@@ -15,7 +15,7 @@
 //! битмапа — иначе ΔL-компаундинг разойдётся с QuoterV2.
 //! Настройки: нет (комиссия пула feeUnits передаётся вызывающим — читается с контракта в 81b).
 //!
-//! Решение 451: ElasticState.v1 — развёртывания Elastic v1 (Arbitrum; цикл Pool.swap тот же, отличие — правило шага).
+//! Решение 451: ElasticState.v1 — код фабрики Elastic v1 (0x5F1d…D50a, любая сеть); в расчёте сумм отличие — правило шага.
 //! Источники (официальные, решение 23): KyberNetwork/ks-elastic-sc (HEAD 4ab08c0): цикл swap и tempNextTick-ограничение
 //! MAX_TICK_DISTANCE — contracts/Pool.sol; _updateLiquidityAndCrossTick (liquidityNet к baseL: +net вверх, −net вниз),
 //! _getInitialSwapData (nextTick: вверх строго выше, вниз ≤ текущего) — contracts/PoolTicksState.sol.

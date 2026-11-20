@@ -1122,6 +1122,18 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** в описании не названы.
 - **Статус:** в релизе 141619bc.
 
+### `dex.pool_code_hashes`
+
+- **Задача / решение:** T433-F5, ревью решения 444.
+- **Появилась:** 2026-11-20, ветка t223-f5/arb-family-f5 (коммит «Решение 444 (ревью, правки)»).
+- **Кейс:** ревью 444: в ветке direction-based-fee cryptoalgebra/AlgebraV1.9 есть версии пула со СЖАТЫМ битмапом тиков (TICK_SPACING = 60, коммиты 0d5612b … a3dc950, январь 2023) и с СЫРЫМ (с 4ada8b0, 06.06.2023); бот читает сырой (load_algebra.rs). Какая версия у пулов Camelot V3, документация не говорит — без сверки пул другой версии считался бы неверно. Пул принимается, только если его адрес = CREATE2(poolDeployer() фабрики, keccak256(abi.encode(token0, token1)), хеш из списка) — pools/verify_algebra_dir.rs.
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (`camelot-v3@arbitrum`); каталог src/settings/catalog/dex.rs.
+- **Что ставить:** пять хешей версий «направленные комиссии + сырой битмап» — docs/FIRST_RUN.md, раздел «DEX Camelot V3 на Arbitrum»: 0xac97ff1b…e89b (4ada8b0), 0x0ca66607…92b9 (237524b), 0x5d100e2d…6dbd (4c885a5), 0xab9acbca…40fd (cd4fd3b), 0x6c1bebd3…61d3 (c63c18f…a45417e); полные значения — FIRST_RUN и tools/arbitrum_record/README.md.
+- **Если не задана:** обязательная для вида algebra_dir_fee: pools/families.rs required → classify — «DEX … не подключена: не задана dex.pool_code_hashes», пулы вида не берутся; в проверке пула (pools/verify_algebra_dir.rs hashes) не задана, пуста или элемент не хеш — пул отклонён с причиной. У других видов не читается.
+- **Влияет на торговлю:** да — какие пулы algebra_dir_fee допускаются в расчёт и сделки (pools/verify_algebra.rs, verify_algebra_dir.rs).
+- **Связанные ключи:** dex.kind (algebra_dir_fee), dex.factory.
+- **Статус:** ещё не в релизе (ветка t223-f5/arb-family-f5).
+
 ### `dex.event_lanes_max`
 
 - **Задача / решение:** t153, решение 330.

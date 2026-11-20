@@ -73,6 +73,7 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
         tick,
         liquidity,
         fee: u32::from(fee),
+        fee_otz: None,
     };
     Ok((
         state,

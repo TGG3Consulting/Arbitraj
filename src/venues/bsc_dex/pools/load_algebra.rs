@@ -5,7 +5,8 @@
 //! пула ticks(). Собирает PoolState::Algebra и TickMap с сырыми тиками (как ждёт math/swap_algebra).
 //! Читается по одному пулу (как Elastic/Bin): целевой Multicall3 идёт через call::view_many (node/call.rs), под общую
 //! пачку load_batch.rs (ступени по словам компрессированного битмапа V3/CL) этот сырой битмап не ложится.
-//! Кто вызывает: pools/load.rs (и через него load_batch.rs для Algebra).
+//! Кто вызывает: pools/load.rs (и через него load_batch.rs для Algebra); tick_map — ещё pools/load_algebra_dir.rs
+//! (решение 444).
 //! От чего зависит: ctx.rs, node/call.rs (view/view_many, Multicall3 — решение 83), pools/abi_algebra.rs, load_cl.rs
 //! (i24), ticks.rs, core/types (PoolState).
 //! Настройки: dex.tick_words [bsc_dex] (сколько слов сырого битмапа читать в каждую сторону от текущего);
@@ -48,7 +49,16 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
         tick,
         liquidity,
         fee: u32::from(gs.fee),
+        fee_otz: None,
     };
+    Ok((state, tick_map(ctx, pool, tick, tag).await?))
+}
+
+/// Карта СЫРЫХ тиков пула Algebra V1.9 вокруг тика `tick` на блоке (см. ниже). Общая для THENA Fusion и Algebra V1.9
+/// с направленными комиссиями (решение 444, load_algebra_dir.rs: TickTable и ticks() у них одни —
+/// cryptoalgebra/AlgebraV1.9 a45417ed, IAlgebraPoolState.sol:72, :87, TickTable.sol). Принимает: окружение, пул,
+/// текущий тик, блок-тег. Возвращает: TickMap. Ошибки: NotConfigured (dex.tick_words), узел, ответ не по ABI.
+pub async fn tick_map(ctx: &Ctx, pool: Address, tick: i32, tag: &str) -> GatewayResult<TickMap> {
     // Окно СЫРЫХ слов битмапа вокруг текущего тика: слово тика = tick >> 8 (TickTable.sol), по n = dex.tick_words
     // в каждую сторону (решение 296: не меньше слов полосы чтения; решение 319: полоса — dex.tick_read_band_algebra_pct,
     // не задана — dex.tick_read_band_pct, raw_band_words). Полоса цены dex.depth_band_pct для Algebra не разворачивается
@@ -83,14 +93,11 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
             );
         }
     }
-    Ok((
-        state,
-        TickMap {
-            spacing: 1,
-            ticks: map.into(),
-            words: (lo, hi),
-        },
-    ))
+    Ok(TickMap {
+        spacing: 1,
+        ticks: map.into(),
+        words: (lo, hi),
+    })
 }
 
 /// Сырые слова битмапа вокруг текущего тика: [w − n, w + n] в пределах int16, где w = tick >> 8 (TickTable.sol:

@@ -448,6 +448,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
 fn virtual_only(p: Proto) -> Option<&'static str> {
     match p {
         Proto::AlgebraIntegral => Some("Algebra Integral"),
+        Proto::AlgebraDirFee => Some("Algebra V1.9 с направленными комиссиями"),
         Proto::MetricOmm => Some("Metric"),
         // Proto::is_izi (pools/families.rs) — ровно IziSwap и BiswapV3.
         p if p.is_izi() => Some("iZiSwap / Biswap V3"),

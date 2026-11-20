@@ -20,7 +20,7 @@ use crate::core::types::{Cost, CostKind, PoolKind, PoolState, RouteStep, Side, T
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::math::{crypto_swap, solidly_fee};
+use super::super::math::{algebra_fee, crypto_swap, solidly_fee};
 use super::super::num;
 use super::super::pools::mids::Mids;
 use super::super::pools::registry::Entry;
@@ -241,8 +241,11 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
             .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "комиссия Liquidity Book не считается")),
         // Ревью t189 (Н4, дефект до решения 404): Algebra (THENA Fusion, Algebra Integral; вид ядра Cl, состояние Algebra)
         // раньше падала в «состояние пула не того вида» — затраты маршрута и сигнал цикла с таким шагом не собирались.
-        // Комиссия — та же, что берёт котировка (pool_quote.rs → math/swap_algebra.rs): globalState.fee в пипсах (1e-6).
-        (PoolState::Algebra { fee, .. }, _) => Ok(pips(*fee)),
+        // Комиссия — та же, что берёт котировка (pool_quote.rs → math/swap_algebra.rs): globalState.fee в пипсах (1e-6);
+        // решение 444: у направленных комиссий (Camelot V3) — комиссия стороны обмена (math/algebra_fee.rs).
+        (PoolState::Algebra { fee, fee_otz, .. }, _) => {
+            Ok(pips(algebra_fee::swap_fee(*fee, *fee_otz, zero_for_one)))
+        }
         // PMM от оракула (WooFi, Metric, iZiSwap, Biswap V3): котировка — лесенка ответов квотера пула (pool_quote.rs,
         // quote/pmm_ladder.rs), квотер возвращает выход обмена — комиссия пула уже в нём; отдельной строки нет — 0
         // (строка затрат «в цене», in_price, — для прозрачности, в прибыль не вычитается).

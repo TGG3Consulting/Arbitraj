@@ -94,7 +94,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::DodoDpp => ("dex.factory", IDodoFactory::NewDPP::SIGNATURE_HASH, false),
             Proto::DodoDsp => ("dex.factory", IDodoFactory::NewDSP::SIGNATURE_HASH, false),
             // Algebra (THENA Fusion, решения 80, 81): фабрика эмитит Pool(token0, token1, pool) при создании пула.
-            Proto::Algebra | Proto::AlgebraIntegral => {
+            Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee => {
                 ("dex.factory", IAlgebraFactory::Pool::SIGNATURE_HASH, false)
             }
             // Solidly (Topaz v2, THENA V1; решения 80, 85): фабрика эмитит PoolCreated(token0, token1, stable, pool, n)
@@ -338,7 +338,7 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
             (e.baseToken, e.quoteToken, e.DSP)
         }
         // Algebra (THENA Fusion, решения 80, 81): событие Pool(token0, token1, pool) — IAlgebraFactory.sol.
-        Proto::Algebra | Proto::AlgebraIntegral => {
+        Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee => {
             let e = IAlgebraFactory::Pool::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("Pool (Algebra) не по ABI: {e}"))?;
             (e.token0, e.token1, e.pool)

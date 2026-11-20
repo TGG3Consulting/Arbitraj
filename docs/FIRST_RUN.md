@@ -203,6 +203,20 @@ log.signal_hold (core/book_marks_on.rs).
 | dex.pair_lookup_max | DEX crypto v1 | решение Тиграна; *метод:* сколько пулов одной пары держит фабрика (market_counts) — за последним нулевой адрес | find_pool_for_coins и событие создания | Factory.vy L117, L335-L345 |
 | dex.pool_enabled | DEX crypto v1 / tricrypto 2021 | `да` после записи (tools/arbitrum_record/curve_crypto.py) и снятия #[ignore] у tests/arb_curve_crypto_live.rs | Сверка порта с get_dy пула до торговли | Решение 453 |
 
+## DEX Camelot V3 на Arbitrum — Algebra V1.9 с направленными комиссиями (решение 444)
+
+Область «DEX» с ключом `camelot-v3@arbitrum` (id GeckoTerminal `camelot-v3`, площадка arb_dex; решение 435, 433-з).
+Задавать, когда поднята площадка arb_dex (dex.venues) и записан тест вида (tools/arbitrum_record/algebra_dir_fee.py,
+docs/TASKS.md «Решение 444»).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `camelot-v3@arbitrum` | `algebra_dir_fee` | Camelot V3 — Algebra V1.9 с направленными комиссиями (feeZto / feeOtz) | docs.camelot.exchange/protocol/amm-v3 («based on Algebra's V1.9», directional fees); cryptoalgebra/AlgebraV1.9 ветка direction-based-fee a45417ed |
+| dex.factory | DEX `camelot-v3@arbitrum` | `0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B` | AlgebraFactory Camelot V3: проверка пула poolByPair, событие создания Pool | docs.camelot.exchange/contracts/arbitrum/one-mainnet («AMM V3 AlgebraFactory») |
+| dex.pool_code_hashes | DEX `camelot-v3@arbitrum` | `["0xac97ff1b66ef7517262cbf16db0195b400714e8ecb499fc86f349e77f50ae89b", "0x0ca66607e4d0ece7798fce9ae13cad1a28be1eee443451573f92ba6e3bcd92b9", "0x5d100e2dbf4b80b9451c29380def0d6c4abeb3db0d166c81fda155a89e106dbd", "0xab9acbcae566bd662fb801895320dc3dd170e64394f78600b969ab128a3a40fd", "0x6c1bebd370ba84753516bc1393c0d0a6c645856da55f5393ac8ab3d6dbc861d3"]` | Пул берётся, только если он из кода версии с направленными комиссиями и СЫРЫМ битмапом тиков (как считает бот): сверка адреса пула по CREATE2 с хешем кода пула; пул другой версии (сжатый битмап) — отказ с причиной | cryptoalgebra/AlgebraV1.9, ветка direction-based-fee, src/core/contracts/AlgebraFactory.sol POOL_INIT_CODE_HASH в коммитах 4ada8b0, 237524b, 4c885a5, cd4fd3b, c63c18f (…a45417e); таблица версий — tools/arbitrum_record/README.md; ревью решения 444 |
+| dex.quoter_virtual | DEX `camelot-v3@arbitrum` | `да` | Сверка расчёта — обмен самого пула в eth_call (VirtualQuoter, решение 186): какой квотер развёрнут у Camelot (Quoter или QuoterV2 ветки), не сверено — dex.quoter не задавать | Решение 444, вопрос 1 (docs/TASKS.md) |
+| dex.pool_enabled | DEX `camelot-v3@arbitrum` | `да` — после записи и прохода тестов tests/arb_dex_algebra_dir.rs без метки ignore | Включить пулы DEX в справочник, граф и торговлю | Решение 444 |
+
 ## Нативная монета BNB
 
 У BNB нет адреса контракта — он сопоставляется с обёрткой WBNB.

@@ -61,6 +61,13 @@ pub enum Proto {
     /// Чтение — load_algebra_integral.rs, события — events_algebra_integral.rs. Квотер — только виртуальный
     /// (dex.quoter_virtual = да, решение 186): официальный квотер Integral в код не подключён.
     AlgebraIntegral,
+    /// Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3; cryptoalgebra/AlgebraV1.9, ветка
+    /// direction-based-fee, a45417ed): всё как у Algebra (обмен, сырой битмап тиков, Swap/Mint/Burn, фабрика poolByPair /
+    /// Pool, swap + algebraSwapCallback), но globalState несёт две комиссии (feeZto, feeOtz — по стороне обмена,
+    /// AlgebraPool.sol:739) и событие Fee(feeZto, feeOtz). Состояние — PoolState::Algebra с fee_otz; чтение —
+    /// load_algebra_dir.rs, события — events_algebra_dir.rs. Квотер — только виртуальный (dex.quoter_virtual = да):
+    /// какой квотер развёрнут у DEX (Quoter или QuoterV2 ветки) — не сверено, решение 444, вопрос.
+    AlgebraDirFee,
     /// Solidly (ve(3,3)-форки: Topaz v2, THENA V1; решения 80, 85): пул с резервами и флагом `stable` (volatile `x·y=k`
     /// → math/v2.rs; stable `x³y+xy³=k` → math/swap_solidly.rs). Свой Pair-интерфейс (Sync с резервами uint256,
     /// getAmountOut и metadata в самом пуле) — не обычный V2-форк. Чтение — load_solidly.rs, события — events_solidly.rs,
@@ -405,6 +412,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Algebra Integral (THENA V3, DexSwap; решение 188): как thena_fusion — в графе (математика swap_algebra),
         // исполнение — шаг ALGEBRA контракта-исполнителя (тот же swap + algebraSwapCallback, exec_kind.rs).
         "algebra_integral" => (PoolKind::Cl, Proto::AlgebraIntegral, true, false, false),
+        // Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3) — как thena_fusion: в графе (математика
+        // swap_algebra, комиссия стороны), исполнение — шаг ALGEBRA исполнителя (exec_kind.rs).
+        "algebra_dir_fee" => (PoolKind::Cl, Proto::AlgebraDirFee, true, false, false),
         // Solidly ve(3,3)-форки (Topaz v2, THENA V1; решения 80, 85): в графе (своя математика — volatile math/v2,
         // stable math/swap_solidly), НО tradable=false — исполнения пока нет (роутер Solidly — следующая фаза).
         // graphable=true, tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как
@@ -635,6 +645,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Algebra Integral (решение 188): фабрика (poolByPair, событие Pool — как V1.9); квотер — виртуальный
         // (dex.quoter_virtual = да убирает dex.quoter из списка, virtual_quoter.rs); без него пул не подключается.
         Proto::AlgebraIntegral => list.extend(["dex.factory", "dex.quoter"]),
+        // Решение 444: фабрика (poolByPair, событие Pool — как V1.9); квотер — виртуальный (dex.quoter_virtual = да).
+        // Ревью 444: допустимые хеши кода пула (сверка версии по CREATE2 — verify_algebra_dir.rs).
+        Proto::AlgebraDirFee => list.extend(["dex.factory", "dex.pool_code_hashes", "dex.quoter"]),
         // Solidly (Topaz v2, THENA V1; решения 80, 85): только фабрика — ею проверяется пул (getPool(coin, quote,
         // stable), решение 59), читается комиссия (getFee(pool, stable), load_solidly.rs) и слушается событие создания
         // (PoolCreated). Квотер — сам пул (getAmountOut; адрес из справочника), отдельной настройки dex.quoter нет.

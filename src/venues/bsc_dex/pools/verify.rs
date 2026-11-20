@@ -98,7 +98,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
         match c.family.proto {
             Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4 => v4.push(i),
             p if p.is_dodo() => dodo.push(i),
-            Proto::Algebra | Proto::AlgebraIntegral => algebra.push(i),
+            Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee => algebra.push(i),
             p if p.is_solidly() => solidly.push(i),
             // Решение 453: tricrypto 2021 — фабрики нет, как Curve 2020: список dex.stable_pools + coins(k).
             Proto::CurveStable | Proto::CurveTricryptoV1 => curve.push(i),

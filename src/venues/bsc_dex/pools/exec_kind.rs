@@ -147,6 +147,10 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 188: swap(recipient, zeroToOne, amountRequired, limitSqrtPrice, data) и algebraSwapCallback у
         // Integral — те же (integral-core 1.2.10 AlgebraPool.sol L246-L252, IAlgebraSwapCallback).
         "algebra_integral" => ExecKind::Algebra,
+        // Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3) — swap(recipient, zeroToOne,
+        // amountRequired, limitSqrtPrice, data) и algebraSwapCallback(int256, int256, bytes) те же (cryptoalgebra/
+        // AlgebraV1.9 a45417ed AlgebraPool.sol:604-610, IAlgebraSwapCallback.sol:18-22) — шаг ALGEBRA, исполнитель тот же.
+        "algebra_dir_fee" => ExecKind::Algebra,
         "solidly_v2" | "solidly_v1" => ExecKind::Solidly,
         // Решение 443: пара Camelot V2 — тот же шаг SOLIDLY: getReserves (первые два слова — резервы), getAmountOut(uint256,
         // address) и swap(uint256, uint256, address, bytes) есть у CamelotPair (Pair.sol L46, L372, L228 — verified-исходник

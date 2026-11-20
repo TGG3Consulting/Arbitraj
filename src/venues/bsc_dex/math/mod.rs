@@ -5,6 +5,7 @@
 //! От чего зависит: alloy-primitives.
 //! Настройки: нет.
 
+pub mod algebra_fee;
 pub mod balancer_log_exp;
 pub mod balancer_log_exp_table;
 pub mod balancer_math;

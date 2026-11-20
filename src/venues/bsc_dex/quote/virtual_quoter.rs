@@ -63,6 +63,7 @@ pub fn supports(p: Proto) -> bool {
             | Proto::PancakeV3
             | Proto::Algebra
             | Proto::AlgebraIntegral
+            | Proto::AlgebraDirFee
             | Proto::Slipstream
             | Proto::MetricOmm
             | Proto::IziSwap

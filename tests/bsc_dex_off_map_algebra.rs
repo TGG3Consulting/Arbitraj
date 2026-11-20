@@ -74,6 +74,7 @@ fn algebra(e: &Entry, kind: &str) -> Entry {
         tick,
         liquidity,
         fee: e.pool.fee_pips.unwrap(),
+        fee_otz: None,
     };
     out
 }
@@ -202,6 +203,7 @@ fn integral(p: &serde_json::Value) -> Entry {
         tick,
         liquidity,
         fee,
+        fee_otz: None,
     };
     e.ticks = Some(map);
     e

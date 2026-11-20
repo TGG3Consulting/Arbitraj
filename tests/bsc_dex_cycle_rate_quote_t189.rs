@@ -251,6 +251,7 @@ async fn algebra_rate_matches_contract_quoter() {
             tick,
             liquidity: liq,
             fee,
+            fee_otz: None,
         };
         let mut e = entry(&rec.pool, "thena_fusion", state, None, (T0, T1));
         e.ticks = Some(map);

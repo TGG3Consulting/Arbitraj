@@ -102,6 +102,7 @@ fn swap12(e: &mut Entry, sqrt: U256, liq: u128, t: i32, f: Swapfee) -> Applied {
         tick,
         liquidity,
         fee,
+        ..
     } = &mut e.pool.state
     else {
         return Applied::Refresh("состояние пула не Algebra".into());

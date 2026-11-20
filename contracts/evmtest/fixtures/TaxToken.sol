@@ -4,8 +4,9 @@
 //   менеджер засчитывает оплату по приросту своего баланса (settle), налог даёт недоплату → откат всего unlock / lock.
 //   Освобождённые от налога адреса (exempt) — поставщик ликвидности и LP, чтобы пул можно было наполнить. В сети не
 //   разворачивается.
-// Кто вызывает: contracts/evmtest/singleton.mjs.
-// От чего зависит: ничего (EIP-20: transfer / transferFrom / approve / balanceOf / allowance).
+// Кто вызывает: contracts/evmtest/singleton.mjs, balancerv3.mjs (решение 458).
+// От чего зависит: ничего (EIP-20: transfer / transferFrom / approve / balanceOf / allowance; decimals — его читает
+//   регистрация пула Balancer V3, решение 458).
 // Настройки: нет.
 pragma solidity 0.8.37;
 
@@ -14,6 +15,7 @@ contract TaxToken {
     mapping(address => mapping(address => uint256)) public allowance;
     mapping(address => bool) public exempt;
     address public admin;
+    uint8 public constant decimals = 18;
 
     constructor(uint256 supply) {
         admin = msg.sender;

@@ -21,7 +21,7 @@
 | `out/v3/` | Решение 441: артефакты версии v3 (до шага BALANCER_V3; копия `out/` на ветке t223-f2 до пересборки v4; обычный конвейер, без via-IR) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v3 (onchain.rs, code.rs). Решение 457: `out/` — сборка v4 |
 | `out/v2/` | Решение 395 (t181): артефакты версии v2 (до шагов UNI_V4 / INF_CL / INF_BIN; копия `out/` на 982e0503) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v2 (onchain.rs) |
 | `out/v1/` | Решение 272: артефакты версии v1 (до executeNative; коммит 2180cf9) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v1 (onchain.rs) |
-| `evmtest/` | Решение 272: EVM-тест исполнителя (ethereumjs, официальные PancakePair/WETH9) — `evmtest/README.md`; сценарии ревью 272 — `evmtest/review.mjs`; решение 395 — шаги UNI_V4 / INF_CL / INF_BIN с официальным кодом менеджеров (`evmtest/singleton.mjs`) |
+| `evmtest/` | Решение 272: EVM-тест исполнителя (ethereumjs, официальные PancakePair/WETH9) — `evmtest/README.md`; сценарии ревью 272 — `evmtest/review.mjs`; решение 395 — шаги UNI_V4 / INF_CL / INF_BIN с официальным кодом менеджеров (`evmtest/singleton.mjs`); решение 458 — шаги FLUID / BALANCER_V3 / EKUBO с официальным кодом (`fluid_cases.mjs`, `balancerv3.mjs`, `ekubo_cases.mjs`) |
 
 Пересборка: `contracts/build.sh` → `git diff contracts/out` (пусто — артефакты в репозитории собраны из этих исходников)
 → `cargo test --test bsc_dex_executor_abi` (ABI, номера видов, хеши) → `cd evmtest && npm ci && node run.mjs`.
@@ -46,9 +46,19 @@
 - `evmtest` (run.mjs и все сценарии из него) против `out/` v4: 205 проверок, `ВСЕ ПРОВЕРКИ ПРОШЛИ` (сверка «out/ =
   компиляция» — с via-IR, `world.mjs` execOpt). Запись сценария G1 — `tests/data/executor_v4_evm_2026-11-20/`
   (отличается от v3 только газом).
-- Осталось: EVM-сценарии шагов 22–25 с официальным кодом Fluid DEX T1 / Balancer V3 Vault / LFJ V2.0 LBPair / Ekubo
-  Core (в `evmtest/` их нет); запись симуляции v4 на живых пулах (без неё правило решения 400 закрывает «Развернуть
+- Осталось: EVM-сценарий шага 24 (LB20) с официальным LFJ V2.0 LBPair — нет solc 0.8.10 (решение 458, T458-01); шаги
+  22, 23, 25 — сделаны (решение 458, ниже); запись симуляции v4 на живых пулах (без неё правило решения 400 закрывает «Развернуть
   исполнитель» для текущей сборки); развёртывание v4 в Arbitrum — Тигран (docs/TASKS.md, решение 457).
+
+## Решение 458: EVM-сценарии шагов 22, 23, 25 с официальным кодом (T457-01)
+- `evmtest/fluid.mjs` + `fluid_cases.mjs` — FLUID (21 проверка), `evmtest/balancerv3.mjs` — BALANCER_V3 (25), `evmtest/ekubo.mjs`
+  + `ekubo_cases.mjs` — EKUBO (53): ERC-20 обе стороны, нативный вход и выход (FLUID, EKUBO), MEVCapture forward (EKUBO),
+  получено = котировка протокола, на исполнителе пусто, откаты при чужом обратном вызове / неверном пуле / налоговом
+  токене, исполнитель v3 — «kind». Код протоколов — байткод развёртывания из официальных репозиториев
+  (`evmtest/vendor/{fluid-contracts-public,balancer-deployments,ekubo}`, источники и коммиты — `evmtest/README.md`).
+- `node run.mjs` против `out/` v4: 304 проверки (205 + 99), `ВСЕ ПРОВЕРКИ ПРОШЛИ`. Исполнитель, `IPools.sol`, `out/` не менялись.
+- Не покрыто: LB20 (pragma 0.8.10 у lfj-gg/joe-v2@v2.0.0, solc 0.8.10 нет в package-lock, артефактов нет — T458-01),
+  EKUBO с TWAMM (T458-02).
 
 ## Решение 445: шаг LB20 (решение 456: номер 24, было 22 в ветке; решение 457 — собран в v4)
 - `ArbExecutor.sol`: вид шага `LB20 = 24` — пара Liquidity Book v2.0 (LFJ V2, Arbitrum One): вход переводом в пару

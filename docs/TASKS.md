@@ -167,10 +167,19 @@
     out/ = V4, out/v3/ = V3; тесты под факт сборки (bsc_dex_executor_abi / _v2 / _v3 / _v3_live, exec_callback
     lb20_only_v4 + via_ir_selector_form). cargo не запускался — проверка тестов в CI (T456-01).
     ОСТАЛОСЬ после сборки (решение 457):
-    - T457-01 EVM-сценарии шагов 22–25 в contracts/evmtest с ОФИЦИАЛЬНЫМ кодом: Fluid DEX T1 (Instadapp/fluid-contracts-public),
-      Balancer V3 Vault (balancer-deployments 20241204-v3-vault), LFJ V2.0 LBPair (lfj-gg/joe-v2@v2.0.0), Ekubo Core
-      (EkuboProtocol/evm-contracts@61d09daa; ERC-20, нативный вход / выход, MEVCapture, TWAMM). Сейчас шаги 22–25 на EVM
-      не проверены.
+    - T457-01 **ЧАСТИЧНО СДЕЛАНО (решение 458, 20.11.2026; ветка t232/arb-v4-evmtest)** — EVM-сценарии шагов 22–25 в
+      contracts/evmtest с ОФИЦИАЛЬНЫМ кодом (байткод развёртывания из официальных репозиториев, solc не нужен): FLUID —
+      fluid.mjs + fluid_cases.mjs (Instadapp/fluid-contracts-public@404d73f deployments/arbitrum: Liquidity, Admin/User
+      модули, Dex_USDC_ETH и его операции; ERC-20, нативный вход и выход, два шага, защита) — 21 проверка; BALANCER_V3 —
+      balancerv3.mjs (balancer/balancer-deployments@b55dc2b8 20241204-v3-vault + 20241205 weighted) — 25; EKUBO —
+      ekubo.mjs + ekubo_cases.mjs (EkuboProtocol/evm-contracts broadcast 42161: Core / MEVCapture @61d09da, Positions
+      @8a99714; ERC-20, нативный вход / выход, MEVCapture forward, защита) — 53. `node run.mjs`: 304 проверки (205 прежних
+      + 99), ВСЕ ПРОВЕРКИ ПРОШЛИ. ОСТАЛОСЬ:
+      - T458-01 LB20 (24): официальный LBPair v2.0 — `pragma solidity 0.8.10` (lfj-gg/joe-v2@v2.0.0 src/LBPair.sol L3), solc
+        0.8.10 нет в package-lock evmtest / contracts; артефактов с байткодом в репозитории нет (нет broadcast / deployments).
+        Вопрос Тиграну: разрешить `solc@0.8.10` (npm, как solc-0.8.26) в package.json evmtest — тогда сценарий LB20 тем же
+        путём, что singleton.mjs (исходник v2.0.0 в vendor/, настройки foundry.toml: optimizer_runs 800).
+      - T458-02 EKUBO с расширением TWAMM (код развёртывания есть в том же broadcast 42161) — сценарий не написан.
     - T457-02 Запись симуляции v4 на живых пулах (как tests/data/executor_v3_live_2026-11-17, решение 400): правило
       deploy_gate сверяет запись с кодом текущей сборки — для v4 записи нет, поэтому «Развернуть исполнитель» для текущей
       сборки ЗАКРЫТО (факт кода: deploy_gate::refusal → verdicts_of(V4) → «запись о другом коде»; тест

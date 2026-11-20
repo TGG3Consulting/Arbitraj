@@ -746,7 +746,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Кейс:** Balancer V2 на Arbitrum: под одним id GeckoTerminal balancer_arbitrum — пулы фабрик weighted-pool v2 / v3 / v4 и stable-pool-v2. Их библиотеки (build-info balancer-deployments@b55dc2b8) считают иначе, чем v1, по которой сделан вид: FixedPoint.powUp v2+ — точные степени 1, 2, 4 (пулы 50/50 и 80/20), StableMath v2 — другой инвариант (формула Curve, округление вниз). Без версии обмен таких пулов считался бы с ошибкой.
 - **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (ключ вида balancer_v2); каталог src/settings/catalog/dex.rs (dex.balancer_math).
 - **Что ставить:** совета нет, решает Тигран; по исходникам: v1 — ключи фабрик 20210418 (WeightedPool, WeightedPool2Tokens) и 20210624; v2 — ключи фабрик weighted-pool v2 / v3 / v4 и stable-pool-v2 (docs/notes/arbitrum/dex-settings-arbitrum.md §2.11).
-- **Если не задана:** необязательная; по коду (pools/load_balancer_fixed.rs math_v2): не задана — v1 (как до решения, ACSI Finance BSC); значение не из списка — NotConfigured, пул не читается.
+- **Если не задана:** необязательная; по коду (pools/load_balancer_fixed.rs math_v2): не задана (NotConfigured) — v1, как до решения (ACSI Finance BSC); значение не из списка или прочая ошибка чтения настройки — ошибка NotConfigured «dex.balancer_math», пул не читается (не v1; ревью 450, п. 4).
 - **Влияет на торговлю:** да — формула обмена пулов Balancer V2 ключа (math/balancer_math.rs, math/balancer_stable.rs).
 - **Связанные ключи:** dex.factory, dex.balancer_stable_factory, dex.vault, dex.sub_dex.
 - **Статус:** ещё не в релизе (ветка t226/arb-dex-code-a).
@@ -1795,9 +1795,9 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Кейс:** на Arbitrum под одним id индексатора GeckoTerminal лежат пулы разных фабрик с разным кодом: curve_arbitrum (StableSwap-NG, 2pool, Twocrypto / Tricrypto), balancer_arbitrum (WeightedPool 20210418, WeightedPool2Tokens, weighted v2 / v3 / v4, stable v1 / v2, composable stable v1–v6 …), kyberswap_classic_arbitrum (DMM и Static Fee). Одна dex.kind на ключ (pools/families.rs) брала пулы только одной фабрики (docs/notes/arbitrum/dex-settings-arbitrum.md, решение 448).
 - **Где задаётся:** «Настройки», группа «DEX»; область — по DEX (ключ строки индексатора, например balancer_arbitrum@arbitrum); каталог src/settings/catalog/dex.rs (dex.sub_dex).
 - **Что ставить:** совета нет, решает Тигран; для Arbitrum — список дочерних ключей из docs/notes/arbitrum/dex-settings-arbitrum.md (у каждого дочернего — свои dex.kind, dex.pool_enabled, фабрика и адреса).
-- **Если не задана:** необязательная; по коду (pools/sub_dex.rs keys, index_pass.rs pass): не задана — у строки один вид — её ключа, как до решения; ключи другой сети, повтор и сам ключ в списке не берутся.
+- **Если не задана:** необязательная; по коду (pools/sub_dex.rs keys, index_pass.rs pass): не задана — у строки один вид — её ключа, как до решения; ключи другой сети, повтор и сам ключ в списке не берутся; dex.pool_enabled = нет у ключа строки — дочерние виды не проверяются (ревью 450, п. 3).
 - **Влияет на торговлю:** да — какие пулы справочника берутся и каким видом считаются (проверка реестром своей фабрики).
-- **Связанные ключи:** dex.kind, dex.pool_enabled, dex.factory, dex.multi_pair (режим общий у ключа и дочерних).
+- **Связанные ключи:** dex.kind, dex.pool_enabled, dex.factory, dex.multi_pair (режим общий у ключа и дочерних: да у любого ключа группы — да у всей группы, pools/multi_pair.rs enabled).
 - **Статус:** ещё не в релизе (ветка t226/arb-dex-code-a).
 
 ### `dex.tick_radius`

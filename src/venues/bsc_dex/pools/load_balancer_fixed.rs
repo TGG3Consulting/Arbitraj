@@ -37,10 +37,12 @@ pub struct Fixed {
 
 /// Решение 450: версия библиотек пулов ключа DEX — dex.balancer_math: v1 (не задана — v1, как раньше) или v2
 /// (FixedPoint с точными степенями 1/2/4 и StableMath v2 — math/balancer_math.rs). Принимает: окружение, вид DEX.
-/// Возвращает: true — v2. Ошибки (текст): значение не из списка.
+/// Возвращает: true — v2. Ошибки (текст): значение не из списка; настройка не читается (ревью 450, п. 4: только «не
+/// задана» — NotConfigured — значит v1, прочие ошибки чтения — ошибка, пул не читается).
 pub fn math_v2(ctx: &Ctx, f: &Family) -> Result<bool, String> {
     match ctx.dex_text("dex.balancer_math", f.id) {
-        Err(_) => Ok(false),
+        Err(e) if e.code == ErrorCode::NotConfigured => Ok(false),
+        Err(e) => Err(format!("dex.balancer_math [{}]: {}", f.id, e.message)),
         Ok(v) => match v.trim() {
             "v1" => Ok(false),
             "v2" => Ok(true),

@@ -67,13 +67,37 @@ pub fn groups(ctx: &Ctx) -> Vec<(String, Vec<String>)> {
     out
 }
 
+/// Ревью 450 (п. 1): группа ключа — ключ с dex.sub_dex и его дочерние ключи; ключ без группы — он сам. Для дочернего
+/// ключа группа — группа его родителя (первого по порядку ключей, в чьём dex.sub_dex он есть). Принимает: окружение,
+/// ключ. Возвращает: ключи группы (первый — родитель). Ошибок нет.
+pub fn group(ctx: &Ctx, id: &str) -> Vec<String> {
+    let own = keys(ctx, id);
+    if !own.is_empty() {
+        return std::iter::once(id.to_string()).chain(own).collect();
+    }
+    groups(ctx)
+        .into_iter()
+        .find(|(_, subs)| subs.iter().any(|k| k == id))
+        .map_or_else(
+            || vec![id.to_string()],
+            |(p, subs)| std::iter::once(p).chain(subs).collect(),
+        )
+}
+
 /// Виды проверки строки справочника с id `id`: вид самого ключа (если подключён) и подключённые дочерние ключи по
 /// порядку dex.sub_dex. Принимает: окружение, ключ. Возвращает: (виды, причины неподключённых — «ключ: причина»).
 /// Пустой список видов — DEX не подключена (причина — в списке). Ошибок нет.
+///
+/// Ревью 450 (п. 3): dex.pool_enabled = нет у ключа строки — дочерние виды не проверяются (строка выключена целиком,
+/// причина — та же, что без dex.sub_dex).
 pub fn kinds(ctx: &Ctx, id: &str) -> (Vec<&'static Family>, Vec<String>) {
     let mut fams = Vec::new();
     let mut why = Vec::new();
-    for k in std::iter::once(id.to_string()).chain(keys(ctx, id)) {
+    let subs = match ctx.dex_flag("dex.pool_enabled", id) {
+        Ok(false) => Vec::new(),
+        _ => keys(ctx, id),
+    };
+    for k in std::iter::once(id.to_string()).chain(subs) {
         match families::classify(ctx, &k) {
             Ok(f) => fams.push(f),
             Err(w) => why.push(w),

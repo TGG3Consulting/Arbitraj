@@ -10,7 +10,7 @@
 //! Кто вызывает: pools/load.rs (ветка Proto::BalancerV2), pools/per_block_balancer.rs (calls / decode — все пулы вида за
 //! блок одной пачкой).
 //! От чего зависит: ctx.rs, node/call.rs, abi_balancer.rs, load_balancer_fixed.rs (неизменяемое у пула).
-//! Настройки: dex.vault, dex.factory, dex.balancer_stable_factory [DEX]; dex.multicall3 [bsc_dex].
+//! Настройки: dex.vault, dex.factory, dex.balancer_stable_factory, dex.balancer_math (решение 450) [DEX]; dex.multicall3 [bsc_dex].
 //!
 //! Источник — шапка abi_balancer.rs; множитель 10^(18 − decimals) — BasePool.sol (весовой) L474-L481, у стейбла
 //! L510-L517 (см. math/balancer_math.rs); точность A — _AMP_PRECISION = 1e3 (StableMath.sol L31, отдаёт

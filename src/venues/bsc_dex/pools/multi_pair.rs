@@ -28,16 +28,28 @@ use super::stable_list::pairs;
 
 /// Что делает: включён ли режим «все пары пула» у DEX этого вида. Принимает: окружение, вид DEX.
 /// Возвращает: true — вид многомонетный и dex.multi_pair = да; иначе (не задана, нет, не читается) — false. Ошибок нет.
+///
+/// Ревью 450 (п. 1): флаг — групповой (flag): у ключа или у любого ключа его группы dex.sub_dex — иначе ссылка пары
+/// (adopt), сверка реестра (entry_fits) и ключ справочника (multi_dex) расходились бы, пары одного контракта
+/// перетирали бы друг друга в реестре, а retune снимал бы их каждый проход.
 pub fn enabled(ctx: &Ctx, f: &Family) -> bool {
-    f.proto.is_multi_coin() && matches!(ctx.dex_flag("dex.multi_pair", f.id), Ok(true))
+    f.proto.is_multi_coin() && flag(ctx, f.id)
+}
+
+/// Ревью 450 (п. 1): dex.multi_pair = да у ключа или у любого ключа его группы dex.sub_dex (sub_dex::group). Сначала —
+/// свой флаг (без группы — как до решения 450). Принимает: окружение, ключ. Возвращает: true / false. Ошибок нет.
+fn flag(ctx: &Ctx, id: &str) -> bool {
+    let on = |k: &str| matches!(ctx.dex_flag("dex.multi_pair", k), Ok(true));
+    on(id) || super::sub_dex::group(ctx, id).iter().any(|k| on(k))
 }
 
 /// Что делает: решение 305 — строки справочника WooFi (вид woofi_v2) с ключом-ПАРОЙ: dex.multi_pair = да у этой DEX.
 /// WooPPV2 — один общий контракт на все пары (PoolRef::Member), ссылка пары не меняется (развёртки и Multi нет); меняется
 /// только ключ строки справочника (status / taken / seen). Принимает: окружение, вид DEX. Возвращает: true — вид
 /// woofi_v2 и dex.multi_pair = да; иначе (не задана, нет, не читается) — false, как до решения. Ошибок нет.
+/// Ревью 450 (п. 1): флаг — групповой, как у enabled.
 pub fn woo_pairs(ctx: &Ctx, f: &Family) -> bool {
-    f.proto == Proto::WooPP && matches!(ctx.dex_flag("dex.multi_pair", f.id), Ok(true))
+    f.proto == Proto::WooPP && flag(ctx, f.id)
 }
 
 /// Что делает: id DEX, у которых строка справочника — ПАРА (ключ «пул|монета|монета», dir_key): DEX в режиме «все пары

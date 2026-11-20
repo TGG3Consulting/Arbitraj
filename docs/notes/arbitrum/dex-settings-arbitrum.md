@@ -1,8 +1,9 @@
 # Настройки области «DEX» площадки arb_dex — DEX Arbitrum One с видом пула в коде (решение 448, 20.11.2026)
 
 **Решение 450 (20.11.2026, ветка t226/arb-dex-code-a):** код T448-01…05 сделан — статусы ниже обновлены (пометка
-«решение 450»): PancakeSwap V2 / V3 — готово (`pancakeswap_v3`), iZiSwap — готово (поиск по фабрике), KyberSwap Classic
-Static Fee и Legacy — готово (дочерние ключи dex.sub_dex), Balancer V2 — + 2Tokens, weighted v2/v3/v4, stable v2
+«решение 450»; ревью 450: везде, где код есть, — «код есть, сверка — T450-01 (запись)», не «готово»: записи узла ещё нет): PancakeSwap V2 / V3 —
+код есть, сверка — T450-01 (запись) (`pancakeswap_v3`), iZiSwap — код есть, сверка — T450-01 (запись) (поиск по фабрике), KyberSwap Classic Static Fee и
+Legacy — код есть, сверка — T450-01 (запись) (дочерние ключи dex.sub_dex), Balancer V2 — + 2Tokens, weighted v2/v3/v4, stable v2
 (dex.balancer_math), Curve — механизм есть, 2pool / старые plain — T450-02, crypto — T433-F3.
 
 Задача: для каждого DEX Arbitrum One со статусом «вид есть в коде» (docs/notes/arbitrum/dex-coverage-arbitrum.md,
@@ -77,17 +78,17 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-073 | `uniswap-v4-arbitrum@arbitrum` | uniswap_v4 | **готово** |
 | T433-001 | `sushiswap_arbitrum@arbitrum` | v2_fork | **готово** |
 | T433-044 (новое) | `sushiswap-v3-arbitrum@arbitrum` | v3_fork | **готово** (семейство установлено этой проверкой) |
-| T433-007 | `kyberswap_classic_arbitrum@arbitrum` | kyber_dmm | **готово** (DMM; решение 450: Static Fee и Legacy — дочерние ключи, §2.6) |
+| T433-007 | `kyberswap_classic_arbitrum@arbitrum` | kyber_dmm | **готово** (DMM; решение 450: Static Fee и Legacy — код есть, сверка — T450-01 (запись), дочерние ключи, §2.6) |
 | T433-051 | `smardex-arbitrum@arbitrum` | smardex | **готово** |
 | T433-074 | `maverick-v2-arbitrum@arbitrum` | maverick_v2 | **готово** |
 | T433-084 | `camelot-v4@arbitrum` | algebra_integral | **готово** |
 | T433-034 | `traderjoe-v2-1-arbitrum@arbitrum` | lb_v21 | **готово** (оговорка — реализация пары, T448-11) |
-| T433-014 | `balancer_arbitrum@arbitrum` | balancer_v2 | **готово частично** (решение 450: 20210418 / 2Tokens / 20210624 / weighted v2–v4 / stable v2 — дочерние ключи, §2.11; composable stable, meta-stable, LBP, linear, managed — нужен код, T450-03…07) |
+| T433-014 | `balancer_arbitrum@arbitrum` | balancer_v2 | **готово частично** (решение 450: 20210418 / 20210624 — готово; 2Tokens / weighted v2–v4 / stable v2 — код есть, сверка — T450-01 (запись), дочерние ключи, §2.11; composable stable, meta-stable, LBP, linear, managed — нужен код, T450-03…07) |
 | T433-005 | `curve_arbitrum@arbitrum` | curve_stableswap_ng | **готово частично** (пулы фабрики NG; решение 450: механизм дочерних ключей есть; 2pool / старые plain — нужен код, T450-02; crypto — T433-F3) |
 | T433-086 | `dodo-amm-dvm@arbitrum`, `dodo-amm-dpp@arbitrum`, `dodo-amm-dsp@arbitrum` (id — предложение) | dodo_dvm / dodo_dpp / dodo_dsp | **готово** (пулы — только поиском по фабрике) |
-| T433-098 | `iziswap@arbitrum` (id — предложение) | iziswap | **готово** (решение 450: поиск по фабрике pool(x, y, fee), §3.1) |
-| T433-049 | `pancakeswap-v2-arbitrum@arbitrum` | pancakeswap_v2 | **готово** (решение 450: dex.universal_router_version = `pancakeswap_v3`, §4.1) |
-| T433-050 | `pancakeswap-v3-arbitrum@arbitrum` | pancakeswap_v3 | **готово** (решение 450, §4.1) |
+| T433-098 | `iziswap@arbitrum` (id — предложение) | iziswap | **код есть, сверка — T450-01 (запись)** (решение 450: поиск по фабрике pool(x, y, fee), §3.1) |
+| T433-049 | `pancakeswap-v2-arbitrum@arbitrum` | pancakeswap_v2 | **код есть, сверка — T450-01 (запись)** (решение 450: dex.universal_router_version = `pancakeswap_v3`, §4.1) |
+| T433-050 | `pancakeswap-v3-arbitrum@arbitrum` | pancakeswap_v3 | **код есть, сверка — T450-01 (запись)** (решение 450, §4.1) |
 | T433-064 | `pancakeswap-stableswap-arbitrum@arbitrum` | pancake_stableswap | **не подтверждено** — нет официального адреса фабрики Arbitrum (T448-10) |
 | T433-006 | `kyberswap_elastic_arbitrum@arbitrum` | kyber_elastic | **не подтверждено** — адреса только v1, код сделан по v2 (T448-06) |
 | T433-083 | `aero-slipstream-arbitrum@arbitrum` | slipstream | **не подтверждено** — нет официального развёртывания Arbitrum в репозиториях Slipstream (T448-09) |
@@ -97,7 +98,7 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 Итог: из 20 DEX с видом в коде (15 GeckoTerminal + Curve частично + 4 DefiLlama) — **готово 12**, **нужен код 1**,
 **не подтверждено 7**; плюс Sushi V3 (T433-044) — семейство установлено, **готово** (13-й). Готовы частично (пулы
 других семейств под тем же id) — Curve, Balancer V2, KyberSwap Classic: задачи кода T448-02…04.
-Решение 450: + PancakeSwap V2, PancakeSwap V3, iZiSwap — готово; KyberSwap Classic — полностью (DMM + Static Fee + Legacy);
+Решение 450: PancakeSwap V2, PancakeSwap V3, iZiSwap, KyberSwap Static Fee / Legacy — код есть, сверка — T450-01 (запись);
 Balancer V2 и Curve — частично (нужен код: T450-02…07).
 
 ## 2. Готово к включению настройками
@@ -304,7 +305,7 @@ dex.pool_enabled = да у каждого. Оговорка: шаблоны пу
 
 ## 3. Нужен код (решение 450: сделан)
 
-### 3.1 iZiSwap — `iziswap@arbitrum` (T433-098) — готово (решение 450)
+### 3.1 iZiSwap — `iziswap@arbitrum` (T433-098) — код есть, сверка — T450-01 (запись) (решение 450)
 
 Значения есть: dex.kind `iziswap`, dex.factory `0xCFD8A067e1fa03474e79Be646c5f6b6A27847399` (izumi-docs
 deployed_contracts/mainnet.rst L53-L64, «Arbitrum (chainId: 42161) (updated on 2023.07.17)», Core factory), dex.quoter_virtual
@@ -346,7 +347,7 @@ amountOutMin, path, payerIsUser) — те же байты, что пишет к�
 включает умный роутер Infinity (dex_rules.rs:16-27), `2.0` — имя Uniswap. Нужен вариант формата для v3 UR PancakeSwap
 или решение Тиграна (T448-01).
 
-**Решение 450 — готово:** вариант `pancakeswap_v3` (exec/ur.rs Format::PancakeV3). Прочитано (Sourcify 42161 exact_match):
+**Решение 450 — код есть, сверка — T450-01 (запись):** вариант `pancakeswap_v3` (exec/ur.rs Format::PancakeV3). Прочитано (Sourcify 42161 exact_match):
 BALANCE_CHECK_ERC20 — abi.decode(address owner, address token, uint256 minBalance), успех — balanceOf(owner) ≥ minBalance;
 WRAP_ETH / UNWRAP_WETH — (address, uint256); Constants: CONTRACT_BALANCE = 1 << 255, ADDRESS_THIS = address(2);
 Payments.pay — CONTRACT_BALANCE = весь баланс роутера; 0x10 = OWNER_CHECK_721 (Infinity нет). Параметры конструктора

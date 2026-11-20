@@ -2,8 +2,8 @@
 //! Что делает: решение 475 (T451-03) — все инициализированные тики пула KyberSwap Elastic частями: вызовы
 //! TicksFeesReader.getTicksInRange(pool, start, length) с длиной части из dex.elastic_ticks_chunk, первая часть — от
 //! MIN_TICK, каждая следующая — от последнего тика прошлой, пока не встретится MAX_TICK.
-//! Почему частями: при length = 0 читатель выделяет массив на ВСЕ возможные тики пула — (MAX_TICK − 1) / tickDistance · 2
-//! + 3 слова у v2 (ks-elastic-sc 4ab08c0a contracts/periphery/TicksFeesReader.sol L46-L61), (MAX_TICK − MIN_TICK) /
+//! Почему частями: при length = 0 читатель выделяет массив на ВСЕ возможные тики пула — (MAX_TICK − 1) / tickDistance · 2 +
+//! 3 слова у v2 (ks-elastic-sc 4ab08c0a contracts/periphery/TicksFeesReader.sol L46-L61), (MAX_TICK − MIN_TICK) /
 //! tickDistance у v1 (Sourcify 42161 0x165c…E75D); стоимость памяти 3a + a²/512 газа (Yellow Paper) — у tickDistance 8 и
 //! 10 это ≈ 96 и 62 млн газа, узел ответил «out of gas» (запись 20.11.2026, решение 462). С length > 0 массив — length
 //! слов (L57-L58), цикл L61-L66 одинаков у v1 и v2: allTicks[i] = startTick; на MAX_TICK — break; иначе (, startTick) =

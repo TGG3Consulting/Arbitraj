@@ -20,12 +20,17 @@ export const OTHER = '0x' + 'c3'.repeat(20);
 export const FAR = 2n ** 40n;
 
 export const opt = { optimizer: { enabled: true, runs: 200 }, evmVersion: 'cancun' };
+// Решение 457: исполнитель v4 (contracts/out/) собирается конвейером via-IR (settings.viaIR —
+// https://docs.soliditylang.org/en/v0.8.37/using-the-compiler.html) — как в contracts/build.mjs; фикстуры — `opt`.
+export const execOpt = { ...opt, viaIR: true };
 const big = { optimizer: { enabled: true, runs: 999999 } };
 export const v2 = L.artifact('out');
 export const v1 = L.artifact('out/v1');
 // Решение 395 (t181): `v2` выше — текущая сборка contracts/out/ (с решения 395 это исполнитель v3); `v2f` — замороженные
 // артефакты v2 (contracts/out/v2/, до шагов UNI_V4 / INF_CL / INF_BIN) — с ними бот сверяет уже развёрнутые v2.
 export const v2f = L.artifact('out/v2');
+// Решение 457: замороженные артефакты v3 (contracts/out/v3/) — текущая сборка out/ с этого решения v4 (via-IR).
+export const v3f = L.artifact('out/v3');
 const pc = join(L.here, 'vendor', 'pancake-swap-core');
 const fx = join(L.here, 'fixtures');
 export const ERC20 = L.compile(L.solc05, pc, 'test/ERC20.sol', 'ERC20', big);

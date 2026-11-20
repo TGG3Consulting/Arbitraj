@@ -7,10 +7,10 @@
 | Файл | Что делает |
 | --- | --- |
 | `ArbExecutor.sol` | Исполнитель: владелец, execute, шаги двенадцати видов, обратные вызовы пулов, приём BNB только от ожидаемого адреса (receive), возврат остатков |
-| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — восемнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286; KYBER_DMM, решение 287; SMARDEX, решение 288; BALANCER, решение 289; LB, решение 290; v3 — двадцати одного: UNI_V4, INF_CL, INF_BIN, решение 395; исходник после решения 445 — двадцати двух: LB20, артефакты не пересобраны), обратные вызовы пулов (v3 — ещё unlockCallback / lockAcquired менеджеров Uniswap V4 и PancakeSwap Infinity; v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286; smardexSwapCallback, решение 288), приём BNB только от ожидаемого адреса (receive), возврат остатков |
+| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — восемнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286; KYBER_DMM, решение 287; SMARDEX, решение 288; BALANCER, решение 289; LB, решение 290; v3 — двадцати одного: UNI_V4, INF_CL, INF_BIN, решение 395; v4 — двадцати шести: FLUID, BALANCER_V3, LB20, EKUBO — решения 440, 441, 445, 447, 456; сборка v4 — решение 457), обратные вызовы пулов (v3 — ещё unlockCallback / lockAcquired менеджеров Uniswap V4 и PancakeSwap Infinity; v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286; smardexSwapCallback, решение 288), приём BNB только от ожидаемого адреса (receive), возврат остатков |
 | `VirtualQuoter.sol` | Решение 186 (решение 288: + quoteSmardex и smardexSwapCallback — пара SmarDex): виртуальный квотер — НЕ разворачивается; бот подставляет его код в eth_call (state override) и спрашивает выход у самого пула (swap + откат в обратном вызове). Собирается отдельным заданием solc в `out/VirtualQuoter.bin-runtime`, `.abi`, `.sha256`. Решение 274: ещё обратный вызов swapCallback (SheepDex SpePool); решение 281: squadV3SwapCallback (SquadSwap V3, 0xc4e21d86); решение 285: quoteMetric + metricOmmSwapCallback (Metric OMM, 0xc3251075); решение 286: quoteIzi + swapX2YCallback / swapY2XCallback (iZiSwap / Biswap V3, 0x18780684 / 0xd3e1c284; откат 64 байтами — оплата с флагом края пула и выход) |
 | `IPools.sol` | Интерфейсы токена, WBNB и пулов — только вызываемые функции, подписи из официальных исходников (ссылки в файле); решение 395 — PoolManager Uniswap V4, Vault / CLPoolManager / BinPoolManager PancakeSwap Infinity |
-| `build.mjs` | Сборка solc-js стандартным JSON-входом: оптимизатор (200 прогонов), EVM `cancun`; пишет `out/` и хеши |
+| `build.mjs` | Сборка solc-js стандартным JSON-входом: оптимизатор (200 прогонов), EVM `cancun`; ArbExecutor — конвейером via-IR (`settings.viaIR`, решение 457), VirtualQuoter — прежним; пишет `out/` и хеши |
 | `build.sh` | `npm ci` (solc ровно из `package-lock.json`) + `node build.mjs` |
 | `package.json`, `package-lock.json` | Компилятор solc-js `0.8.37` — фиксированная версия |
 | `out/ArbExecutor.bin` | Код создания — его отправляет кнопка «Развернуть исполнитель» |
@@ -18,7 +18,7 @@
 | `out/ArbExecutor.abi` | ABI JSON — из него Rust-типы (`alloy::sol!`, `src/venues/bsc_dex/exec/executor/abi.rs`) |
 | `out/ArbExecutor.layout.json` | Раскладка хранилища solc: `owner` — слот 0 |
 | `out/ArbExecutor.sha256` | Версия компилятора и SHA-256 каждого артефакта; бот не берёт байткод, если хеш не совпал |
-| `out/v3/` | Решение 441: артефакты версии v3 (до шага BALANCER_V3; копия `out/` на ветке t223-f2 до пересборки v4) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v3 (onchain.rs, code.rs) |
+| `out/v3/` | Решение 441: артефакты версии v3 (до шага BALANCER_V3; копия `out/` на ветке t223-f2 до пересборки v4; обычный конвейер, без via-IR) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v3 (onchain.rs, code.rs). Решение 457: `out/` — сборка v4 |
 | `out/v2/` | Решение 395 (t181): артефакты версии v2 (до шагов UNI_V4 / INF_CL / INF_BIN; копия `out/` на 982e0503) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v2 (onchain.rs) |
 | `out/v1/` | Решение 272: артефакты версии v1 (до executeNative; коммит 2180cf9) — НЕ пересобираются; с ними бот сверяет уже развёрнутые исполнители v1 (onchain.rs) |
 | `evmtest/` | Решение 272: EVM-тест исполнителя (ethereumjs, официальные PancakePair/WETH9) — `evmtest/README.md`; сценарии ревью 272 — `evmtest/review.mjs`; решение 395 — шаги UNI_V4 / INF_CL / INF_BIN с официальным кодом менеджеров (`evmtest/singleton.mjs`) |
@@ -26,7 +26,31 @@
 Пересборка: `contracts/build.sh` → `git diff contracts/out` (пусто — артефакты в репозитории собраны из этих исходников)
 → `cargo test --test bsc_dex_executor_abi` (ABI, номера видов, хеши) → `cd evmtest && npm ci && node run.mjs`.
 
-## Решение 445: шаг LB20 (решение 456: номер 24, было 22 в ветке) — исходник изменён, артефакты НЕ пересобраны
+## Решение 457: исполнитель v4 собран конвейером via-IR
+- Причина — предел размера кода в сети EIP-170 (24 576 байт, https://eips.ethereum.org/EIPS/eip-170). Замер solc 0.8.37
+  (package-lock.json) по тем же исходникам: обычный конвейер, runs 200 — 26 330 байт (не входит); runs 1 — 26 030;
+  via-IR + runs 200 — 21 775; via-IR + runs 1 — 21 422. Выбрано via-IR + runs 200 (`settings.viaIR` —
+  https://docs.soliditylang.org/en/v0.8.37/using-the-compiler.html, «Input Description»). Код контрактов не менялся.
+- `out/` = v4: **код в сети 21 775 байт, запас до EIP-170 — 2 801 байт**; код создания 21 977 байт (с аргументом конструктора — 22 009). solc
+  0.8.37+commit.f401782d.Emscripten.clang. SHA-256 (`out/ArbExecutor.sha256`):
+  `ArbExecutor.bin` 134ccc433a9e6bc7c58982b4db6494e9b5f08bbd9c2b677fa8d77fee44b29ed8,
+  `ArbExecutor.bin-runtime` 2bf86e58e5719f88d709bcf06350570cbd60318f1e49e9f9d3a9c85c3ee10762,
+  `ArbExecutor.abi` c8cd9630f6e57e510a48446eaa84b34b99b6fc8fed050357ba4e709adc650e5f,
+  `ArbExecutor.layout.json` a522296ded4612a154866538f6f134a9ecf52467460754e72832f80d3f80ba40 (раскладка: `owner` — слот 0,
+  `wnative` — слот 1, как у v3; изменились только astId).
+- VirtualQuoter собирается прежним конвейером (без via-IR): `out/VirtualQuoter.*` побайтно прежние. `out/v3/` не тронут.
+- Факт кода v4: via-IR кладёт селектор ВНЕШНЕГО вызова с k младшими нулевыми битами как `PUSHn (селектор >> k)
+  PUSH1 (0xe0 + k) SHL` (например sync(address) 0xa5841194 — `PUSH4 0x29610465 PUSH1 0xe2 SHL`), а не PUSH4; селекторы
+  своих функций в диспетчере — PUSH4, как раньше. Поиск селектора в коде (`pools/exec_callback.rs` has_selector) узнаёт обе
+  формы.
+- `evmtest` (run.mjs и все сценарии из него) против `out/` v4: 205 проверок, `ВСЕ ПРОВЕРКИ ПРОШЛИ` (сверка «out/ =
+  компиляция» — с via-IR, `world.mjs` execOpt). Запись сценария G1 — `tests/data/executor_v4_evm_2026-11-20/`
+  (отличается от v3 только газом).
+- Осталось: EVM-сценарии шагов 22–25 с официальным кодом Fluid DEX T1 / Balancer V3 Vault / LFJ V2.0 LBPair / Ekubo
+  Core (в `evmtest/` их нет); запись симуляции v4 на живых пулах (без неё правило решения 400 закрывает «Развернуть
+  исполнитель» для текущей сборки); развёртывание v4 в Arbitrum — Тигран (docs/TASKS.md, решение 457).
+
+## Решение 445: шаг LB20 (решение 456: номер 24, было 22 в ветке; решение 457 — собран в v4)
 - `ArbExecutor.sol`: вид шага `LB20 = 24` — пара Liquidity Book v2.0 (LFJ V2, Arbitrum One): вход переводом в пару
   (`_pushed` — прямой вход первым шагом разрешён), `swap(tokenX() == tokenIn, to)`; `IPools.sol`: `ILBPairV20` (tokenX,
   swap — lfj-gg/joe-v2@v2.0.0). Шаг LB (= 18) с парой v2.0 не работает: у неё нет `getTokenX`.
@@ -39,7 +63,8 @@
   причиной «сборки v4 нет — пересоберите как v4 и переразверните» (`src/venues/bsc_dex/pools/exec_callback.rs`
   step_absent).
 
-## Версии (решения 272, 395, 440, 441, 445, 447, 454, 456)
+## Версии (решения 272, 395, 440, 441, 445, 447, 454, 456, 457)
+- **v4 собран (решение 457)**: `out/` — v4 (via-IR, 21 775 байт); ниже — история решений 440, 441, 447 до сборки.
 - **v4** (решение 440) — v3 + шаг FLUID = 22 (пул Fluid DEX T1: approve пулу ровно на шаг + `swapIn(swap0to1, сумма, 0, to)`;
   нативная монета пула — через обёртку: вход `withdraw` → `swapIn{value}`, выход — `receive` только от слоя ликвидности из
   data → `deposit`) и интерфейс `IFluidDexT1` в `IPools.sol`. **Только исходник:** артефакты `out/` ещё v3 (агенту сборка

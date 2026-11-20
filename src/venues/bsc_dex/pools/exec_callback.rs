@@ -22,8 +22,12 @@
 //! Решение 395 (t181): шаги пулов внутри менеджеров — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только у исполнителя v3
 //! (since): у кошелька v1 / v2 — пулы Uniswap V4 / PancakeSwap Infinity без пути ЧЕРЕЗ ИСПОЛНИТЕЛЬ (свой Universal Router у
 //! них остаётся — family.tradable); артефакт версии для поиска селектора: v1 — out/v1/, v2 — out/v2/, v3 — out/.
-//! Решение 445 (ревью): шаг LB20 = 24 (решение 456; Liquidity Book v2.0) — только у исполнителя v4 (since); сборки v4 в
-//! contracts/out/ ещё нет — шаг не строится ни у одного кошелька (причина «пересоберите как v4 и переразверните»).
+//! Решение 445 (ревью): шаг LB20 = 24 (решение 456; Liquidity Book v2.0) — только у исполнителя v4 (since).
+//! Решение 457: contracts/out/ — сборка v4 (via-IR); артефакт версии для поиска селектора: v3 — out/v3/, v4 — out/.
+//! Шаги 22–25 строятся только у кошелька, сверенного как v4; у v1–v3 — причина need_v4.
+//! Решение 457: конвейер via-IR кладёт селектор ВНЕШНЕГО вызова с k младшими нулевыми битами как
+//! PUSHn (селектор >> k) PUSH1 (224 + k) SHL (факт кода out/ArbExecutor.bin-runtime: sync(address) 0xa5841194 —
+//! PUSH4 0x29610465 PUSH1 0xe2 SHL) — has_selector узнаёт обе формы.
 //! Решение 409 (t194): память итогов SEEN — снимок за ArcSwap (чтение без замка на горячем пути котировки).
 //! Настройки: dex.v3_swap_callback [DEX] (необязательная).
 
@@ -42,11 +46,23 @@ use super::registry_key;
 /// Имя настройки.
 pub const SETTING: &str = "dex.v3_swap_callback";
 
-/// Решения 440, 441, 456: исполнитель v4 (шаги FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25) есть только в
-/// исходнике contracts/ArbExecutor.sol — артефакты contracts/out/ ещё v3; кошелька v4 быть не может, пока артефакты не
-/// пересобраны (contracts/build.sh) и исполнитель не переразвёрнут.
-pub const V4_TODO: &str =
-    "нужен исполнитель v4: пересоберите contracts/build.sh и переразверните (решение 456)";
+/// Решения 440, 441, 456, 457: исполнитель v4 (шаги FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25) собран —
+/// contracts/out/ (via-IR). Кошелёк с v1–v3 этих шагов не знает. Развёртывание текущей сборки закрыто правилом
+/// deploy_gate (решение 400: запись симуляции на живых пулах должна быть о коде v4) — пока закрыто, причина без
+/// призыва переразвернуть (как need_v3, решение 399). Возвращает: текст «что делать». Ошибок нет.
+pub fn need_v4() -> &'static str {
+    need_v4_for(deploy_gate::refusal().is_some())
+}
+
+/// То же при известном запрете развёртывания (проверяемо тестом). Принимает: запрещено ли. Ошибок нет.
+pub fn need_v4_for(refused: bool) -> &'static str {
+    if refused {
+        "нужен исполнитель v4; развёртывание v4 закрыто, пока в записи симуляции на живых пулах \
+         нет кода v4 (решения 400, 457)"
+    } else {
+        "переразверните исполнитель кошелька как v4 (экран «Маппинг кошельков»)"
+    }
+}
 
 /// Память итогов: версия → сигнатура → None — вызов есть, Some — причина.
 type Seen = HashMap<Version, HashMap<String, Option<String>>>;
@@ -58,11 +74,36 @@ static SEEN: LazyLock<ArcSwap<Seen>> = LazyLock::new(|| ArcSwap::from_pointee(Ha
 /// Писатели памяти SEEN — по одному (поиск в артефакте — один раз на ключ).
 static SEEN_WRITE: Mutex<()> = Mutex::new(());
 
-/// Есть ли PUSH4 селектора в коде (0x63 и 4 байта селектора подряд). Принимает: код, селектор. Ошибок нет.
+/// Есть ли селектор в коде: PUSH4 селектора (0x63 и 4 байта подряд — диспетчер solc и внешние вызовы обычного
+/// конвейера) или форма via-IR (решение 457) для селектора с k ≥ 1 младшими нулевыми битами: PUSHn (селектор >> k),
+/// PUSH1 (0xe0 + k), SHL (0x1b). Принимает: код, селектор (4 байта; иная длина — только форма PUSH4). Ошибок нет.
 pub fn has_selector(runtime: &[u8], sel: &[u8]) -> bool {
-    let mut want = vec![0x63u8];
-    want.extend_from_slice(sel);
-    runtime.windows(want.len()).any(|w| w == want.as_slice())
+    let found = |want: &[u8]| runtime.windows(want.len()).any(|w| w == want);
+    let mut push4 = vec![0x63u8];
+    push4.extend_from_slice(sel);
+    if found(&push4) {
+        return true;
+    }
+    let Ok(word) = <[u8; 4]>::try_from(sel) else {
+        return false;
+    };
+    let s = u32::from_be_bytes(word);
+    if s == 0 {
+        return false;
+    }
+    for k in 1..=s.trailing_zeros() {
+        let b = (s >> k).to_be_bytes();
+        let lead = b.iter().take(3).take_while(|x| **x == 0).count();
+        for n in (4 - lead)..=4 {
+            let mut want = vec![0x5f + n as u8];
+            want.extend_from_slice(&b[4 - n..]);
+            want.extend_from_slice(&[0x60, 0xe0 + k as u8, 0x1b]);
+            if found(&want) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Причина «исполнитель этой версии не поддерживает обратный вызов» (без памяти). Принимает: версию, сигнатуру.
@@ -202,7 +243,7 @@ pub fn since(k: ExecKind) -> Version {
         ExecKind::Fluid => Version::V4,
         // Решение 441: BALANCER_V3 = 23 — с v4.
         ExecKind::BalancerV3 => Version::V4,
-        // Решение 445 (ревью): LB20 — только v4 (сборки v4 ещё нет — шаг не строится ни у одного кошелька).
+        // Решение 445 (ревью): LB20 — только v4 (решение 457: сборка v4 — contracts/out/).
         ExecKind::Lb20 => Version::V4,
         // Решение 456: EKUBO = 25 — с v4 (в ветке t230 — с v3 по EKUBO_MARK; метка кода остаётся второй проверкой).
         ExecKind::Ekubo => Version::V4,
@@ -212,8 +253,8 @@ pub fn since(k: ExecKind) -> Version {
 
 /// Решение 447: сигнатура вызова, который есть в коде исполнителя только вместе с шагом EKUBO = 25 (решение 456; шаг зовёт
 /// Core.completePayments(), селектор 0x12e103f1 — EkuboProtocol/evm-contracts@61d09daa src/interfaces/IFlashAccountant.sol
-/// L60). Артефакт contracts/out/ собран до шага EKUBO (сборка solc — не в этой задаче, contracts/README.md): пока
-/// селектора в коде нет, пулы Ekubo — без пути исполнения с причиной.
+/// L60). Решение 457: в коде v4 (contracts/out/) селектор есть, в v1–v3 — нет: у кошелька не v4 пулы Ekubo — без пути
+/// исполнения с причиной.
 pub const EKUBO_MARK: &str = "completePayments()";
 
 /// Причина «у исполнителя кошелька нет шага EKUBO». Принимает: окружение. Возвращает: None — шаг есть или
@@ -226,8 +267,8 @@ fn ekubo_absent(ctx: &Ctx) -> Option<String> {
     };
     seen_with(v, EKUBO_MARK, |r| r.clone()).map(|why| {
         format!(
-            "шаг EKUBO: {why}; код исполнителя с шагом EKUBO ещё не собран (contracts/build.sh) — пересобрать и \
-             переразвернуть"
+            "шаг EKUBO: {why}; шаг EKUBO есть с исполнителя v4 — {}",
+            need_v4()
         )
     })
 }
@@ -244,7 +285,7 @@ pub fn step_absent(k: ExecKind, v: Version) -> Option<String> {
     let need = since(k);
     (v < need).then(|| {
         let todo = if need >= Version::V4 {
-            V4_TODO
+            need_v4()
         } else if need >= Version::V3 {
             deploy_gate::need_v3()
         } else {
@@ -276,7 +317,8 @@ pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
 mod tests {
     use super::*;
 
-    /// Решение 445 (ревью): шаг LB20 — только v4; у v1 / v2 / v3 — причина «сборки v4 нет», шаг LB — с v2.
+    /// Решение 445 (ревью): шаг LB20 — только v4; у v1 / v2 / v3 — причина «нужен v4», шаг LB — с v2. Решение 457:
+    /// сборка v4 есть — селектор tokenX() (0x16dc165b, ILBPairV20) в коде v4 есть, в v3 (out/v3/) — нет.
     #[test]
     fn lb20_only_v4() {
         assert_eq!(since(ExecKind::Lb20), Version::V4);
@@ -286,31 +328,66 @@ mod tests {
         }
         assert!(step_absent(ExecKind::Lb20, Version::V4).is_none());
         assert!(step_absent(ExecKind::Lb, Version::V3).is_none());
-        assert!(check(Version::V4, "tokenX()").is_some());
+        assert!(check(Version::V4, "tokenX()").is_none());
+        assert!(check(Version::V3, "tokenX()").is_some());
+        let refused = need_v4_for(true);
+        assert!(refused.contains("v4") && !refused.contains("переразверн"));
+        assert!(need_v4_for(false).contains("переразверн"));
     }
 
-    /// Селектор squadV3SwapCallback = 0xc4e21d86 (SquadV3Pool.sol L794): в артефакте v1 его нет, в v2 (t114) и v3
-    /// (решение 395, текущая сборка contracts/out/) есть; pancakeV3SwapCallback / uniswapV3SwapCallback — во всех (тот же
-    /// поиск PUSH4, реальные артефакты contracts/out/v1/, out/v2/, out/). Ревью t181 (Н7): v2 — out/v2/, v3 — out/.
+    /// Решение 457: форма via-IR селектора внешнего вызова (PUSHn (селектор >> k) PUSH1 (0xe0 + k) SHL) — факт кода
+    /// v4: sync(address) 0xa5841194, settle() 0x11da60b4, swapIn(bool,uint256,uint256,address) 0x2668dfaa как PUSH4 в
+    /// коде v4 нет, в форме via-IR — есть; completePayments() (EKUBO_MARK) — PUSH4 в v4, нет в v3.
+    #[test]
+    fn via_ir_selector_form() {
+        let v4 = code::runtime().unwrap();
+        let v3 = code::runtime_v3().unwrap();
+        for sig in ["sync(address)", "settle()", "swapIn(bool,uint256,uint256,address)"] {
+            let sel = registry_key::selector(sig);
+            let mut push4 = vec![0x63u8];
+            push4.extend_from_slice(&sel);
+            assert!(
+                !v4.windows(5).any(|w| w == push4.as_slice()),
+                "{sig}: PUSH4 в v4"
+            );
+            assert!(has_selector(&v4, &sel), "{sig}: форма via-IR в v4");
+        }
+        assert!(has_selector(&v3, &registry_key::selector("sync(address)")));
+        let mark = registry_key::selector(EKUBO_MARK);
+        assert!(has_selector(&v4, &mark) && !has_selector(&v3, &mark));
+        assert!(
+            check(Version::V4, EKUBO_MARK).is_none() && check(Version::V3, EKUBO_MARK).is_some()
+        );
+    }
+
+    /// Селектор squadV3SwapCallback = 0xc4e21d86 (SquadV3Pool.sol L794): в артефакте v1 его нет, в v2 (t114), v3 и v4
+    /// есть; pancakeV3SwapCallback / uniswapV3SwapCallback — во всех (реальные артефакты contracts/out/v1/, out/v2/,
+    /// out/v3/, out/). Ревью t181 (Н7): v2 — out/v2/; решение 457: v3 — out/v3/, v4 — out/.
     #[test]
     fn squad_callback_by_executor_version() {
         let squad = registry_key::selector("squadV3SwapCallback(int256,int256,bytes)");
         assert_eq!(squad.to_vec(), vec![0xc4, 0xe2, 0x1d, 0x86]);
         let v1 = code::runtime_v1().unwrap();
         let v2 = code::runtime_v2().unwrap();
-        let v3 = code::runtime().unwrap();
+        let v3 = code::runtime_v3().unwrap();
+        let v4 = code::runtime().unwrap();
         assert!(!has_selector(&v1, &squad));
-        assert!(has_selector(&v2, &squad) && has_selector(&v3, &squad));
+        assert!(
+            has_selector(&v2, &squad) && has_selector(&v3, &squad) && has_selector(&v4, &squad)
+        );
         for sig in [
             "pancakeV3SwapCallback(int256,int256,bytes)",
             "uniswapV3SwapCallback(int256,int256,bytes)",
         ] {
             let sel = registry_key::selector(sig);
             assert!(
-                has_selector(&v1, &sel) && has_selector(&v2, &sel) && has_selector(&v3, &sel),
+                has_selector(&v1, &sel)
+                    && has_selector(&v2, &sel)
+                    && has_selector(&v3, &sel)
+                    && has_selector(&v4, &sel),
                 "{sig}"
             );
-            for v in [Version::V1, Version::V2, Version::V3] {
+            for v in [Version::V1, Version::V2, Version::V3, Version::V4] {
                 assert!(check(v, sig).is_none(), "{sig} {v:?}");
             }
         }
@@ -318,6 +395,10 @@ mod tests {
         assert!(
             check(Version::V1, s).is_some_and(|w| w.contains("v1") && w.contains("0xc4e21d86"))
         );
-        assert!(check(Version::V2, s).is_none() && check(Version::V3, s).is_none());
+        assert!(
+            check(Version::V2, s).is_none()
+                && check(Version::V3, s).is_none()
+                && check(Version::V4, s).is_none()
+        );
     }
 }

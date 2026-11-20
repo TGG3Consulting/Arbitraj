@@ -3,7 +3,8 @@
 //   PancakeFactory / ERC20 (pancake-swap-core@3b214306) и WETH9 (v2-periphery@ed249913) — обёртка с withdraw через
 //   transfer (стипендия 2300 газа); фикстуры только там, где официального кода в репозитории нет (fixtures/, окружение —
 //   world.mjs). Здесь проверяется:
-//   1) код из contracts/out/ — ровно результат компиляции contracts/ArbExecutor.sol (те же настройки, что build.mjs);
+//   1) код из contracts/out/ — ровно результат компиляции contracts/ArbExecutor.sol (те же настройки, что build.mjs:
+//      решение 457 — via-IR, W.execOpt);
 //   2) продажа BNB executeNative(wrapIn = true): value → deposit → пара V2 → USDT владельцу; NativeSettled(value, 0);
 //   3) продажа с недоеденным остатком (доля 5000 bps): остаток развёрнут и вернулся нативным BNB, NativeSettled(value, остаток);
 //   4) покупка BNB executeNative(wrapIn = false): USDT → пара (прямой вход) → WBNB исполнителю → withdraw → BNB владельцу;
@@ -41,9 +42,9 @@ const { E18, OWNER, LP, OTHER, ERC20, FACT, PAIR, WETH, RE, v2, v1, world, v2Ste
 const record = { note: 'EVM ethereumjs Cancun, contracts/out/ArbExecutor.bin-runtime v2 — contracts/evmtest/run.mjs', cases: {} };
 
 // 1) Сборка и сверка с out/.
-const built = L.compile(L.solc08, join(L.here, '..'), 'ArbExecutor.sol', 'ArbExecutor', W.opt);
+const built = L.compile(L.solc08, join(L.here, '..'), 'ArbExecutor.sol', 'ArbExecutor', W.execOpt);
 check(built.runtime === v2.runtime && built.bin === v2.bin, 'contracts/out/ArbExecutor.* = компиляция ArbExecutor.sol');
-console.log(`размер кода в сети текущей сборки (v3): ${v2.runtime.length / 2} байт (EIP-170: 24576, запас ${24576 - v2.runtime.length / 2})`);
+console.log(`размер кода в сети текущей сборки (v4, via-IR): ${v2.runtime.length / 2} байт (EIP-170: 24576, запас ${24576 - v2.runtime.length / 2})`);
 
 // 2) Продажа BNB.
 {
@@ -166,7 +167,8 @@ await smardex();
 await balancer();
 await lb();
 const steps = await singleton();
-const out3 = join(L.here, '..', '..', 'tests', 'data', 'executor_v3_evm_2026-11-17');
+// Решение 457: запись текущей сборки (v4) — в свою папку; запись v3 (executor_v3_evm_2026-11-17) не перезаписывается.
+const out3 = join(L.here, '..', '..', 'tests', 'data', 'executor_v4_evm_2026-11-20');
 mkdirSync(out3, { recursive: true });
 writeFileSync(join(out3, 'singleton_steps.json'), JSON.stringify(steps, null, 2) + '\n');
 const out = join(L.here, '..', '..', 'tests', 'data', 'executor_v2_evm_2026-11-14');

@@ -5,12 +5,13 @@
 //! ArbExecutor.sha256 — иначе байткод не используется (кто-то поменял артефакт без пересборки).
 //! Решение 272: версии исполнителя — v1 (contracts/out/v1/, только execute; развёрнутые до решения 272) и v2
 //! (contracts/out/v2/, + executeNative; решение 395 — артефакты заморожены, не пересобираются). Решение 395 (t181): v3
-//! (contracts/out/ — текущая сборка: v2 + шаги UNI_V4 / INF_CL / INF_BIN пулов внутри менеджеров Uniswap V4 и
-//! PancakeSwap Infinity). Развёртывается и подставляется в симуляцию только текущая сборка (v3); код в сети сверяется со
-//! всеми тремя.
+//! (v2 + шаги UNI_V4 / INF_CL / INF_BIN пулов внутри менеджеров Uniswap V4 и PancakeSwap Infinity; с решения 441 —
+//! contracts/out/v3/). Развёртывается и подставляется в симуляцию только текущая сборка contracts/out/ (решение 457 —
+//! v4); код в сети сверяется со всеми четырьмя.
 //! Решение 441 (T433-F2): v4 — v3 + шаг BALANCER_V3 (contracts/ArbExecutor.sol, номер 23). Артефакты v3 заморожены в
-//! contracts/out/v3/ (копия contracts/out/ на ветке t223-f2 до пересборки); contracts/out/ — текущая сборка: до
-//! пересборки contracts/build.sh она побайтно равна v3 (version_of отдаёт V3), после — код v4.
+//! contracts/out/v3/ (копия contracts/out/ на ветке t223-f2 до пересборки).
+//! Решение 457: contracts/out/ — сборка v4 (шаги FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25; конвейер via-IR,
+//! solc 0.8.37, runtime 21 775 байт). version_of: out/v3/ → V3 (развёрнутые v3 в сети), out/ → V4.
 //! Решение 400 (t185): приёмка сборки на живых пулах — по классам шага из записи симуляции (live_proof.rs, live_rule.rs);
 //! здесь — только SHA-256 текущего bin-runtime (runtime_sha256), к которому привязана запись.
 //! Кто вызывает: exec/executor/{deploy, deploy_gate, dry, live_proof}.rs, тесты.
@@ -84,8 +85,8 @@ pub enum Version {
     /// Решение 395 (t181): v2 + шаги UNI_V4 / INF_CL / INF_BIN (contracts/out/ — текущая сборка, её разворачивает кнопка
     /// «Развернуть исполнитель»).
     V3,
-    /// Решения 440, 441, 456: v3 + шаги FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25 (contracts/out/ — текущая
-    /// сборка после пересборки contracts/build.sh; до неё артефакты — v3 и version_of v4 не возвращает).
+    /// Решения 440, 441, 456: v3 + шаги FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25 (решение 457:
+    /// contracts/out/ — текущая сборка v4, via-IR).
     V4,
 }
 
@@ -117,10 +118,11 @@ impl Version {
     }
 }
 
-/// Версия исполнителя по коду в сети: побайтно равен коду v3 (текущая сборка), v2 или v1 из репозитория. Принимает: код
-/// по адресу. Возвращает: Some(версия) или None — код не наш. Ошибки (текст): артефакт не сверен по хешу.
+/// Версия исполнителя по коду в сети: побайтно равен коду v4 (текущая сборка contracts/out/, решение 457), v3
+/// (out/v3/), v2 или v1 из репозитория. Принимает: код по адресу. Возвращает: Some(версия) или None — код не наш.
+/// Ошибки (текст): артефакт не сверен по хешу.
 pub fn version_of(have: &Bytes) -> Result<Option<Version>, String> {
-    // Решение 441: замороженный v3 — раньше текущей сборки: до пересборки contracts/out/ = out/v3/ (это v3, не v4).
+    // Решение 441: замороженный v3 — раньше текущей сборки (решение 457: out/ — v4, с out/v3/ не совпадает).
     if *have == runtime_v3()? {
         return Ok(Some(Version::V3));
     }
@@ -155,8 +157,8 @@ pub fn runtime_sha256_of(v: Version) -> Option<&'static str> {
     }
 }
 
-/// Версия текущей сборки contracts/out/ (её разворачивает кнопка «Развернуть исполнитель»): до пересборки
-/// contracts/build.sh — V3 (побайтно out/v3/), после — V4. Ошибки (текст): артефакт не сверен по хешу.
+/// Версия текущей сборки contracts/out/ (её разворачивает кнопка «Развернуть исполнитель»): совпала с out/v3/ — V3,
+/// иначе V4 (решение 457: сборка v4 — V4). Ошибки (текст): артефакт не сверен по хешу.
 pub fn current_version() -> Result<Version, String> {
     Ok(if runtime()? == runtime_v3()? {
         Version::V3
@@ -265,8 +267,7 @@ pub fn creation_with(wnative: alloy_primitives::Address) -> Result<Bytes, String
     Ok(Bytes::from(v))
 }
 
-/// Код исполнителя в сети — текущая сборка (решение 395 — v3; решение 441 — v4 после пересборки contracts/build.sh, до
-/// неё — побайтно v3). Ошибки: как checked.
+/// Код исполнителя в сети — текущая сборка contracts/out/ (решение 457 — v4, via-IR). Ошибки: как checked.
 pub fn runtime() -> Result<Bytes, String> {
     checked("ArbExecutor.bin-runtime", RUNTIME)
 }

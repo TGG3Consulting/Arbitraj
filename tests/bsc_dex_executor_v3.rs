@@ -8,9 +8,11 @@
 //! 2. Ключи 37 настоящих пулов PancakeSwap Infinity CL с крючками (tests/data/hook_pools_2026-11-16, ответы узла
 //!    poolIdToPoolKey): PoolId ключа = id пула записи, data шага INF_CL = слова ключа из ответа менеджера; пул с нативной
 //!    валютой (address 0) шагом не кодируется (контракт: «native»).
-//! 3. Версии: код v3 / v2 / v1 различается, вид шага 19–21 — с v3 (since / step_absent), прежние виды v2 — с v2.
-//! 4. ABI и код: unlockCallback(bytes) / lockAcquired(bytes) — в v3, нет в v2; в коде v3 — селекторы официальных подписей
-//!    менеджеров (те же строки — в vendor-копиях v4-core / infinity-core).
+//! 3. Версии: код v4 / v3 / v2 / v1 различается, вид шага 19–21 — с v3 (since / step_absent), прежние виды v2 — с v2.
+//!    Решение 457: v3 — замороженная копия contracts/out/v3/, текущая сборка contracts/out/ — v4 (via-IR).
+//! 4. ABI и код: unlockCallback(bytes) / lockAcquired(bytes) — в v3 и v4, нет в v2; в коде v3 и v4 — селекторы
+//!    официальных подписей менеджеров (те же строки — в vendor-копиях v4-core / infinity-core); в коде v4 часть из них
+//!    — в форме via-IR (exec_callback::has_selector).
 //! 5. Шаг из записи реестра (entry.rs): ключ сверяется со ссылкой (PoolId, менеджер), пул шага — PoolManager / Vault.
 //!
 //! Кто вызывает: cargo test.
@@ -173,11 +175,14 @@ fn recorded_infinity_keys_encode_as_manager_answers() {
 
 #[test]
 fn versions_and_steps() {
-    let (v3, v2, v1) = (
+    let (v4, v3, v2, v1) = (
         code::runtime().unwrap(),
+        code::runtime_v3().unwrap(),
         code::runtime_v2().unwrap(),
         code::runtime_v1().unwrap(),
     );
+    // Решение 457: текущая сборка contracts/out/ — v4.
+    assert_eq!(code::version_of(&v4).unwrap(), Some(Version::V4));
     assert_eq!(code::version_of(&v3).unwrap(), Some(Version::V3));
     assert_eq!(code::version_of(&v2).unwrap(), Some(Version::V2));
     assert_eq!(code::version_of(&v1).unwrap(), Some(Version::V1));
@@ -188,6 +193,7 @@ fn versions_and_steps() {
         assert!(!exec_callback::v2_only(k));
         assert!(k.singleton());
         assert!(exec_callback::step_absent(k, Version::V3).is_none());
+        assert!(exec_callback::step_absent(k, Version::V4).is_none());
         let why = exec_callback::step_absent(k, Version::V2).expect("v2 шага не знает");
         assert!(
             why.contains("v2") && why.contains("с v3") && why.contains(k.name()),
@@ -245,16 +251,20 @@ fn has_push4(code: &[u8], sig: &str) -> bool {
 
 #[test]
 fn abi_and_code_call_official_manager_functions() {
-    let (v3, v2) = (
+    // Решение 457: v3 — contracts/out/v3/, v4 — текущая сборка contracts/out/.
+    let (v4, v3, v2) = (
         abi("contracts/out/ArbExecutor.abi"),
+        abi("contracts/out/v3/ArbExecutor.abi"),
         abi("contracts/out/v2/ArbExecutor.abi"),
     );
     for sig in ["unlockCallback(bytes)", "lockAcquired(bytes)"] {
         let name = sig.split('(').next().unwrap();
         assert_eq!(v3.function(name).expect(sig)[0].signature(), sig);
+        assert_eq!(v4.function(name).expect(sig)[0].signature(), sig);
         assert!(v2.function(name).is_none(), "{sig} — нет в v2");
     }
-    let rt = code::runtime().unwrap();
+    let rt = code::runtime_v3().unwrap();
+    let rt4 = code::runtime().unwrap();
     // Подписи — строки официальных интерфейсов (vendor-копии без изменений): v4-core IPoolManager.sol L114, L145, L171,
     // L179, L183, IExttload.sol L9; infinity-core Vault.sol / IVault.sol L56, ICLPoolManager.sol, IBinPoolManager.sol L191.
     for sig in [
@@ -270,6 +280,8 @@ fn abi_and_code_call_official_manager_functions() {
         "swap((address,address,address,address,uint24,bytes32),bool,int128,bytes)",
     ] {
         assert!(has_push4(&rt, sig), "{sig} в коде v3");
+        let sel = &keccak256(sig.as_bytes())[..4];
+        assert!(exec_callback::has_selector(&rt4, sel), "{sig} в коде v4");
     }
     let src = |p: &str| {
         std::fs::read_to_string(format!(

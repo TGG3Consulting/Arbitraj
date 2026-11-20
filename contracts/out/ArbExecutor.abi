@@ -55,6 +55,25 @@
   {
     "inputs": [
       {
+        "internalType": "bytes",
+        "name": "cb",
+        "type": "bytes"
+      }
+    ],
+    "name": "balancerV3Callback",
+    "outputs": [
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "tokenIn",
         "type": "address"
@@ -225,6 +244,19 @@
         "type": "bytes"
       }
     ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "locked_6416899205",
+    "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },

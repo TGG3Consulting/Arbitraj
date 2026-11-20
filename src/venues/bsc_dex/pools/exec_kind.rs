@@ -79,7 +79,7 @@ pub enum ExecKind {
     BalancerV3,
     /// Liquidity Book v2.0 (решение 445): перевод входа в пул + `pair.swap(swapForY = (tokenX() пула == вход), to)`
     /// (у пары v2.0 нет getTokenX — шаг LB v2.1 откатился бы); без обратного вызова, data пусто. Шаг 24 — в исходнике
-    /// contracts/ArbExecutor.sol; в коде исполнителя — только сборка v4 (exec_callback.rs since; её ещё нет).
+    /// contracts/ArbExecutor.sol; в коде исполнителя — только сборка v4 (exec_callback.rs since; решение 457 — out/).
     Lb20,
     /// Решение 395 (t181): пул Uniswap V4 внутри PoolManager — `unlock` → `unlockCallback` → `swap(ключ, …)` → `sync` /
     /// перевод / `settle` долга, `take` выхода; data = abi.encode(PoolKey). Только исполнитель v3.

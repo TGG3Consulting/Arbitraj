@@ -161,20 +161,28 @@
   - T456-01 CI ветки t231/arb-merge (fmt, clippy -D warnings, тесты). Слияние проверено только глазами: исчерпывающие
     match по Proto / PoolKind / PoolState / ExecKind / Params / VaultCurve, дубли mod / вариантов / ключей каталога,
     поля LbBinData (v20 + hooks_parameters + swap_blocked) во всех литералах, SETTINGS_CASES по каждому ключу каталога.
-  - T456-02 **Исполнитель v4 — собрать одним разом** (шаги FLUID, BALANCER_V3, LB20, EKUBO — только исходник):
-    contracts/out/v3/ уже заморожен (t228, code.rs runtime_v3 / version_of / current_version) → `contracts/build.sh`
-    (out/ = v4) → `git diff contracts/out`, хеши ArbExecutor.sha256 и размер кода в contracts/README.md (предел EIP-170
-    — 24 576 байт; v3 — 20 102: проверить, что v4 со всеми четырьмя шагами в него входит) → тесты, завязанные на «out/ =
-    v3»: tests/bsc_dex_executor_v3.rs (version_of текущей сборки — V4), pools/exec_callback.rs тест lb20_only_v4
-    (check(V4, «tokenX()») после сборки станет None — заменить на проверку селектора), прогнать tests/bsc_dex_executor_abi.rs
-    на новом ABI out/ → evmtest шагов FLUID, BALANCER_V3, LB20,
-    EKUBO (ERC-20, нативный вход / выход, MEVCapture, TWAMM) → «Развернуть исполнитель» в Arbitrum. До сборки шаги не
-    строятся ни у одного кошелька (причина V4_TODO).
+  - T456-02 **СДЕЛАНО (решение 457, 20.11.2026)** — исполнитель v4 собран одним разом: `contracts/build.sh`, ArbExecutor —
+    конвейером via-IR (обычным — 26 330 байт > EIP-170), out/ = v4: 21 775 байт (запас 2 801), SHA-256 bin-runtime
+    2bf86e58…0762; VirtualQuoter и out/v3/ побайтно прежние; evmtest против v4 — 205 проверок, все прошли; code.rs
+    out/ = V4, out/v3/ = V3; тесты под факт сборки (bsc_dex_executor_abi / _v2 / _v3 / _v3_live, exec_callback
+    lb20_only_v4 + via_ir_selector_form). cargo не запускался — проверка тестов в CI (T456-01).
+    ОСТАЛОСЬ после сборки (решение 457):
+    - T457-01 EVM-сценарии шагов 22–25 в contracts/evmtest с ОФИЦИАЛЬНЫМ кодом: Fluid DEX T1 (Instadapp/fluid-contracts-public),
+      Balancer V3 Vault (balancer-deployments 20241204-v3-vault), LFJ V2.0 LBPair (lfj-gg/joe-v2@v2.0.0), Ekubo Core
+      (EkuboProtocol/evm-contracts@61d09daa; ERC-20, нативный вход / выход, MEVCapture, TWAMM). Сейчас шаги 22–25 на EVM
+      не проверены.
+    - T457-02 Запись симуляции v4 на живых пулах (как tests/data/executor_v3_live_2026-11-17, решение 400): правило
+      deploy_gate сверяет запись с кодом текущей сборки — для v4 записи нет, поэтому «Развернуть исполнитель» для текущей
+      сборки ЗАКРЫТО (факт кода: deploy_gate::refusal → verdicts_of(V4) → «запись о другом коде»; тест
+      bsc_dex_executor_v3_live приведён к этому факту). Вопрос Тиграну: снимать запрет для v4 записью симуляции (как v3)
+      или иным правилом. Тексты запрета и подсказки need_v3 (deploy_gate.rs, WalletRow.svelte) говорят «v3 не принят» —
+      при текущей сборке v4 это неточно (у v3 запись принята; закрыт v4); правка — после ответа.
+    - T457-03 Развёртывание v4 в Arbitrum — Тигран (после T457-02).
   - T456-03 Записи своего узла Arbitrum (tools/arbitrum_record/README.md): sub_dex.py, kyber_elastic_v1.py, saddle.py,
     woofi.py, fluid_t1.py, balancer_v3.py, curve_crypto.py, camelot_v2.py, algebra_dir_fee.py, lb_v20.py, lb_v22.py,
     ekubo.py + ekubo_more.py → коммит tests/data/arbitrum_*_<дата>/ и снятие #[ignore] в тестах семейств.
   - T456-04 Выкладка: настройки области «DEX» площадки arb_dex по docs/notes/arbitrum/dex-settings-arbitrum.md и
-    FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; после T456-02 — развернуть v4.
+    FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; развернуть v4 — T457-03.
   - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по
     метке кода». Подтвердить.
 - **Решение 450 (20.11.2026, ветка t226/arb-dex-code-a) — код T448-01…05; cargo не запускался (формат — вручную).**

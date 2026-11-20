@@ -1,6 +1,7 @@
 // Файл: contracts/build.mjs
 // Что делает: сборка ArbExecutor.sol компилятором solc-js фиксированной версии (package.json, package-lock.json):
-//   стандартный JSON-вход solc, оптимизатор, EVM cancun (transient-переменные EIP-1153; BSC — с хардфорка Haber).
+//   стандартный JSON-вход solc, оптимизатор, конвейер via-IR (решение 457 — только ArbExecutor), EVM cancun
+//   (transient-переменные EIP-1153; BSC — с хардфорка Haber).
 //   Пишет артефакты в contracts/out/: ArbExecutor.bin (код создания), ArbExecutor.bin-runtime (код в сети — его
 //   подставляет «Сухая сделка DEX»), ArbExecutor.abi (ABI JSON — из него alloy sol! в Rust), ArbExecutor.layout.json
 //   (раскладка хранилища — слот владельца), ArbExecutor.sha256 (хеши артефактов и версия компилятора).
@@ -26,6 +27,12 @@ const input = {
   sources: Object.fromEntries(sources.map((f) => [f, { content: readFileSync(join(here, f), 'utf8') }])),
   settings: {
     optimizer: { enabled: true, runs: 200 },
+    // Решение 457: исполнитель v4 — конвейер via-IR (settings.viaIR, «Input Description» —
+    // https://docs.soliditylang.org/en/v0.8.37/using-the-compiler.html). Причина — предел размера кода EIP-170
+    // (24 576 байт): обычным конвейером runtime v4 — 26 330 байт (runs 1 — 26 030), via-IR + runs 200 — 21 775.
+    // Код контракта не менялся. Только для ArbExecutor; VirtualQuoter ниже — прежний конвейер (артефакты прежние).
+    // Артефакты v3 (out/v3/) собраны без via-IR и заморожены.
+    viaIR: true,
     evmVersion: 'cancun',
     outputSelection: {
       'ArbExecutor.sol': {

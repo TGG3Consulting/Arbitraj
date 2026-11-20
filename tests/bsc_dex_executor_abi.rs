@@ -9,9 +9,12 @@
 //!   обмена новых видов — по официальным подписям; шаг с нативным BNB пула — receive() только от bnbFrom, WBNB
 //!   withdraw/deposit в коде, BNB после маршрута — владельцу (решение «122 X (нативный BNB в стейблсвапах)»);
 //! - хеши артефактов совпадают с ArbExecutor.sha256, код в сети — хвост кода создания, слот владельца — из раскладки.
+//! - решение 457: сборка contracts/out/ — v4 (via-IR, solc 0.8.37): SHA-256 кода в сети, размер ≤ 24 576 байт
+//!   (EIP-170), функции и селекторы шагов 22–25 в ABI и коде; селекторы внешних вызовов — exec_callback::has_selector
+//!   (PUSH4 или форма via-IR PUSHn (селектор >> k) PUSH1 (0xe0 + k) SHL).
 //!
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bsc_dex::exec::executor::{abi, kind, code}, contracts/*.
+//! От чего зависит: arb::venues::bsc_dex::exec::executor::{abi, kind, code}, pools::exec_callback, contracts/*.
 
 use alloy::json_abi::JsonAbi;
 use alloy::sol_types::{SolCall, SolValue};
@@ -20,6 +23,7 @@ use alloy_primitives::{Address, B256, U256, address};
 use arb::venues::bsc_dex::exec::executor::abi::ArbExecutor;
 use arb::venues::bsc_dex::exec::executor::code;
 use arb::venues::bsc_dex::exec::executor::kind::{self, ALL_BPS, Params, StepSpec};
+use arb::venues::bsc_dex::pools::exec_callback::has_selector;
 
 /// Реальные адреса BSC: USDT (BEP20) и WBNB — справочные адреса токенов сети; пул — PancakeSwap V2 WBNB/USDT
 /// (тот же, что в записи маршрута tests/data/routes_2026-10-29, route_common::WBNB_USDT_V2).
@@ -122,9 +126,9 @@ fn kinds_match_contract_constants() {
         ("FLUID", Params::Fluid(fluid_step(1))),
         // Решение 441: пул Balancer V3 — только v4.
         ("BALANCER_V3", Params::BalancerV3 { pool: Address::ZERO }),
-        // Решение 445: пул Liquidity Book v2.0 — шаг 24 (решение 456; исходник, артефакты — после пересборки).
+        // Решение 445: пул Liquidity Book v2.0 — шаг 24 (решение 456; решение 457 — в сборке v4 out/).
         ("LB20", Params::Lb20),
-        // Решение 447: пул Ekubo в ядре Core (артефакты out/ с шагом ещё не собраны — сверяется исходник).
+        // Решение 447: пул Ekubo в ядре Core — шаг 25 (решение 456; решение 457 — в сборке v4 out/).
         (
             "EKUBO",
             Params::Ekubo {
@@ -368,12 +372,11 @@ fn stable_bnb_contract_rules_present() {
         abi.function("execute").unwrap()[0].state_mutability,
         StateMutability::NonPayable
     );
+    // Решение 457: код v4 (via-IR) — селектор внешнего вызова PUSH4 или в форме via-IR (has_selector).
     let runtime = code::runtime().unwrap();
     for sig in ["withdraw(uint256)", "deposit()"] {
-        let mut push = vec![0x63u8];
-        push.extend(&keccak256(sig.as_bytes())[..4]);
         assert!(
-            runtime.windows(5).any(|w| w == push.as_slice()),
+            has_selector(&runtime, &keccak256(sig.as_bytes())[..4]),
             "{sig} в коде"
         );
     }
@@ -433,11 +436,40 @@ fn stable_kinds_call_official_selectors() {
         "swap(uint8,uint8,uint256,uint256,uint256)",
         "exchange(int128,int128,uint256,uint256)",
     ] {
-        let mut push = vec![0x63u8];
-        push.extend(sel(sig));
-        assert!(
-            runtime.windows(5).any(|w| w == push.as_slice()),
-            "{sig} в коде"
-        );
+        assert!(has_selector(&runtime, &sel(sig)), "{sig} в коде");
+    }
+}
+
+/// Решение 457: сборка contracts/out/ — исполнитель v4 конвейером via-IR (solc 0.8.37, оптимизатор 200 прогонов):
+/// SHA-256 кода в сети, размер ≤ 24 576 байт (EIP-170 — https://eips.ethereum.org/EIPS/eip-170), обратные вызовы шагов
+/// 23 и 25 в ABI, вызовы шагов 22–25 в коде; в замороженном v3 (contracts/out/v3/) их нет.
+#[test]
+fn v4_build_size_hash_and_step_selectors() {
+    use alloy_primitives::keccak256;
+    let rt = code::runtime().unwrap();
+    assert_eq!(rt.len(), 21_775, "размер кода в сети v4");
+    assert!(rt.len() <= 24_576, "EIP-170");
+    assert_eq!(
+        code::runtime_sha256(),
+        Some("2bf86e58e5719f88d709bcf06350570cbd60318f1e49e9f9d3a9c85c3ee10762")
+    );
+    assert_eq!(code::current_version().unwrap(), code::Version::V4);
+    let abi = abi();
+    for sig in ["balancerV3Callback(bytes)", "locked_6416899205(uint256)"] {
+        let name = sig.split('(').next().unwrap();
+        assert_eq!(abi.function(name).expect(sig)[0].signature(), sig);
+    }
+    let v3 = code::runtime_v3().unwrap();
+    // FLUID — swapIn (IFluidDexT1), BALANCER_V3 — balancerV3Callback, LB20 — tokenX() пары v2.0, EKUBO —
+    // completePayments() ядра (селекторы — подписи contracts/IPools.sol).
+    for sig in [
+        "swapIn(bool,uint256,uint256,address)",
+        "balancerV3Callback(bytes)",
+        "tokenX()",
+        "completePayments()",
+    ] {
+        let s = &keccak256(sig.as_bytes())[..4];
+        assert!(has_selector(&rt, s), "{sig} в коде v4");
+        assert!(!has_selector(&v3, s), "{sig} — нет в коде v3");
     }
 }

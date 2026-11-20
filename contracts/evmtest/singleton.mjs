@@ -138,15 +138,17 @@ async function one(e, step, tin, tout, amt, mgr, abi) {
   return { r, got, paid, evIn, evOut };
 }
 
-/// Сценарии G1–G6. Возвращает запись для тестов бота (tests/data/executor_v3_evm_2026-11-17/singleton_steps.json):
+/// Сценарии G1–G6. Возвращает запись для тестов бота (решение 457: run.mjs пишет её в
+/// tests/data/executor_v4_evm_2026-11-20/singleton_steps.json — текущая сборка out/ = v4; запись v3 —
+/// tests/data/executor_v3_evm_2026-11-17/, не перезаписывается):
 /// шаги G1, прошедшие в EVM, — ключ пула, данные шага (байты, принятые контрактом), токены, вход, получено. Ошибок нет:
 /// провал — check бросает.
 export async function singleton() {
-  const record = { note: 'EVM ethereumjs Cancun, contracts/out/ArbExecutor.bin-runtime v3, официальные менеджеры — contracts/evmtest/singleton.mjs', cases: [] };
+  const record = { note: 'EVM ethereumjs Cancun, contracts/out/ArbExecutor.bin-runtime v4 (via-IR, решение 457), официальные менеджеры — contracts/evmtest/singleton.mjs', cases: [] };
   // Оценка газа развёртывания (для заметки владельцу): исполнение конструктора с записью кода (ethereumjs
   // executionGasUsed) + внутренняя цена транзакции создания: 21000 + 32000 + calldata (16 газа за ненулевой байт, 4 — за
   // нулевой; EIP-2028) + 2 газа за слово кода создания (EIP-3860).
-  for (const [name, art] of [['v3 (текущая сборка)', v2], ['v2 (out/v2)', v2f]]) {
+  for (const [name, art] of [['v4 (текущая сборка out/)', v2], ['v3 (out/v3)', W.v3f], ['v2 (out/v2)', v2f]]) {
     const c = await L.chain();
     await L.fund(c, OWNER, 10n ** 24n);
     const w = await L.deploy(c, LP, W.WETH);

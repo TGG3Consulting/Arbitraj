@@ -75,6 +75,7 @@ const CHOICE = {
   balancer_v2: 'Balancer V2 (хранилище Vault, весовые и стейблсвап-пулы)',
   balancer_v3: 'Balancer V3 (хранилище Vault V3, весовые и стейблсвап-пулы фабрик, без крючков обмена)',
   camelot_v2: 'Camelot V2 (направленная комиссия, stable / volatile пары)',
+  aero_basic: 'Aero Basic (VolatilePool / StablePool, MEV-налог модуля)',
   pancake_stableswap: 'StableSwap PancakeSwap',
   lista_stableswap: 'StableSwap Lista (с оракулом)',
   saddle_stableswap: 'StableSwap Saddle (Nerve)',

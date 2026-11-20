@@ -334,3 +334,16 @@ Ekubo (решение 447, вид `ekubo`; EkuboProtocol/evm-contracts@61d09daa 
 | `history_ekubo.rs` | Решение 454: история PoolInitialized ядра (ключ без PoolKeyIndex) и развилки истории V4 / Ekubo |
 | `load_ekubo_twamm.rs` | Решение 454: состояние TWAMM пула — TwammPoolState, слова битмапа времён до горизонта, TimeInfo |
 | `ekubo_hub.rs` | Решение 454: одна подписка на логи ядра (и TWAMM) на площадку с раздачей пачкам по PoolId (источник ws) |
+
+### Aero Basic и Aero Slipstream V3 (решение 470, T451-01/02)
+
+| Файл | Что делает |
+| --- | --- |
+| `abi_aero_basic.rs` | ABI пула Aero Basic (metadata 6 полей, POOL_TYPE, getAmountOut), фабрики кривой (getPool(a, b), PoolCreated без stable, isPaused, getBaseFee, mevTaxModule) и модуля MEV-налога (priorityFeeMultiplier, minThreshold) — metadex-public 1.1.0 |
+| `load_aero_basic.rs` | Состояние пула Aero Basic в PoolState::Solidly: резервы, кривая по POOL_TYPE, комиссия getBaseFee, пауза фабрики, правило MEV-налога |
+| `aero_mev.rs` | Правило «MEV-налог 0»: множитель модуля 0 или наибольшие чаевые режима ≤ minThreshold (тип 2, eip1559_l1); fresh — пауза и правило перед отправкой |
+| `aero_cl.rs` | Aero Slipstream V3 (вариант SlipstreamAero вида slipstream): крючок пула = dex.cl_swap_hook, правило MEV-налога крючка, комиссия — fee() пула на блоке |
+| `aero_first_fee.rs` | Решение 470 (T470-01): порт первой комиссии нового блока крючка DynamicSwapFeeHook (_getFirstSwapFee, _getDynamicFee — TWAP-тик на время блока + δ), худшая за δ = 0…N — без узла |
+| `aero_cl_head.rs` | Решение 470 (T470-01, T470-07): комиссия пулов Aero Slipstream V3 пачкой (два прохода: fee(), slot0, конфиг крючка, tickSpacingToFee; наблюдения и observe на каждое δ) — наибольшая из fee() и первой комиссии следующего блока |
+| `per_block_aero.rs` | Решение 470 (T470-07): лёгкое чтение каждым блоком — только комиссия крючка (+ MEV-налог) в запись реестра; состояние пула — по событиям |
+| `aero_fee_seen.rs` | Ревью t240: комиссия Aero Slipstream V3 из чтения старого блока не перетирает комиссию более нового (память блок → комиссия по пулу) |

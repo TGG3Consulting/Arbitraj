@@ -21,13 +21,14 @@ use super::bins::BinMap;
 use super::discover::Found;
 use super::families::Family;
 use super::families::Proto;
+use super::family_variant::Variant;
 use super::fee_fresh;
 use super::hooks::DYNAMIC_FEE_FLAG;
 use super::load_algebra_dir;
 use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_ng, load_dmm, load_dodo, load_ekubo,
+    aero_cl, load_aero_basic, load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_ng, load_dmm, load_dodo, load_ekubo,
     load_elastic, load_fluid, load_inf_stable, load_izi, load_lb, load_lb20, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
@@ -251,6 +252,19 @@ pub async fn state(
             fee_pips: None,
         });
     }
+    // Решение 470: Aero Basic — вид ядра Solidly, пул — отдельный контракт; metadata/POOL_TYPE пула и комиссия,
+    // пауза, модуль MEV-налога фабрики (load_aero_basic.rs).
+    if f.proto == Proto::AeroBasic {
+        let PoolRef::Contract(a) = reference else {
+            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул Aero Basic не того вида", f.title)));
+        };
+        return Ok(Loaded {
+            state: load_aero_basic::load(ctx, f, *a, &tag).await?,
+            ticks: None,
+            bins: None,
+            fee_pips: None,
+        });
+    }
     // Liquidity Book v2.0 (решение 445): тот же вид ядра LbBin (признак v20), свои геттеры v2.0 (load_lb20.rs).
     if f.proto == Proto::LbV20 {
         let PoolRef::Contract(a) = reference else {
@@ -423,11 +437,17 @@ pub async fn state(
         if let PoolRef::Contract(a) = reference {
             let sp = spacing.ok_or_else(|| missing("tickSpacing"))?;
             let (state, t) = load_slipstream::load(ctx, *a, sp, &tag).await?;
+            // Решение 470: Aero Slipstream V3 — комиссия крючка на этом блоке и проверки (aero_cl.rs).
+            let fee_pips = if f.variant == Variant::SlipstreamAero {
+                Some(aero_cl::fee(ctx, f, *a, sp, block).await?)
+            } else {
+                None
+            };
             return Ok(Loaded {
                 state,
                 ticks: Some(t),
                 bins: None,
-                fee_pips: None,
+                fee_pips,
             });
         }
         return Err(ctx.err(

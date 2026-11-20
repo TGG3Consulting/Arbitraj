@@ -201,7 +201,7 @@ impl EventLanes {
         let hit: Vec<bool> = (0..m.pools.len())
             .map(|i| {
                 stale_read::waiting(&m.missing, i)
-                    || per_block::needs(m.pools[i].0.family)
+                    || per_block::touched(m.pools[i].0.family)
                     || per_block::ramping(p, &m.pools[i].0)
                     || super::transfer_in::due(p, &m.pools[i].0)
                     || p.holds.get(&m.pools[i].0.reference).is_some()

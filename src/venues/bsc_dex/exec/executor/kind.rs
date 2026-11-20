@@ -3,7 +3,7 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); FLUID = 22 — только v4, решение 440; BALANCER_V3 = 23, LB20 = 24, EKUBO = 25 — только v4, решения 441, 445, 447, 456; сверяет тест tests/bsc_dex_executor_abi.rs с
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); FLUID = 22 — только v4, решение 440; BALANCER_V3 = 23, LB20 = 24, EKUBO = 25 — только v4, решения 441, 445, 447, 456; AERO_BASIC = 26 — только v5, решение 470 (T470-06); сверяет тест tests/bsc_dex_executor_abi.rs с
 //! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
 //! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), METRIC — (bool zeroForOne),
@@ -122,6 +122,10 @@ pub enum Params {
     /// ликвидности пула (constantsView), только от него контракт принимает нативную монету на шаге.
     /// data = abi.encode(bool, uint8, address).
     Fluid(FluidStep),
+    /// Решение 470 (T470-06; только исполнитель v5): пул Aero Basic — вход переводом в пул, выход —
+    /// getAmountOutWithTotalFee пула (комиссия с MEV-налогом этой транзакции, Dromos-Labs/metadex-public 79c8d5b6
+    /// V3/src/pools/Pool.sol L548-L555), swap — подпись V2. Данных нет.
+    AeroBasic,
 }
 
 /// Решение 440: параметры шага FLUID (см. Params::Fluid).
@@ -176,6 +180,8 @@ impl Params {
             Params::Lb20 => 24,
             // Решение 456: EKUBO = 25 (в ветке t230 было 22 — перенумеровано при слиянии).
             Params::Ekubo { .. } => 25,
+            // Решение 470 (T470-06): AERO_BASIC = 26 — только v5 (сборки v5 пока нет).
+            Params::AeroBasic => 26,
         }
     }
 

@@ -86,6 +86,8 @@ pub fn plan(
             // SmarDex (решение 288): getPair(a, b) — как V2 (SmardexFactory.sol L20).
             // Camelot V2 (решение 443): getPair(a, b) — как V2 (CamelotFactory.sol L19).
             Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => vec![Q::V2],
+            // Решение 470: Aero Basic — getPool(a, b) фабрики своей кривой.
+            Proto::AeroBasic => vec![Q::AeroBasic],
             // KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары.
             Proto::KyberDmm => vec![Q::Dmm],
             // Curve Twocrypto-NG / Tricrypto-NG (решение 442) и crypto v1 фабрики (решение 453):

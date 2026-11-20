@@ -91,7 +91,7 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-050 | `pancakeswap-v3-arbitrum@arbitrum` | pancakeswap_v3 | **код есть, сверка — T450-01 (запись)** (решение 450, §4.1) |
 | T433-064 | `pancakeswap-stableswap-arbitrum@arbitrum` | pancake_stableswap | **готово** (решение 471: фабрика 0x5D5f…a77a — infinity-universal-router DeployArbitrum.s.sol; вид без изменений, шаг STABLE_U256; оговорка — запись tools/arbitrum_record/pancake_stable.py, §4.2) |
 | T433-006 | `kyberswap_elastic_arbitrum@arbitrum` | kyber_elastic (решение 462; было kyber_elastic_v1) | **готово** (решение 462: пулы GeckoTerminal — фабрика v2 0xC7a5…8C4A, адреса v2 docs.kyberswap.com; оговорка — повтор записи kyber_elastic_v1.py, pools_v2.json; пулы v1 Legacy — T462-01; включать ли — Тигран, §4.3) |
-| T433-083 | `aero-slipstream-arbitrum@arbitrum` | — (новое семейство) | **нужен код** — развёртывание Arbitrum найдено (Dromos-Labs/metadex-slipstream-public, «Slipstream V3»), комиссия — от крючка обмена, вид slipstream не подходит (T448-09, решение 451, §4.4) |
+| T433-083 | `aero-slipstream-arbitrum@arbitrum` | slipstream_aero | **решение 470: код есть, запись aero.py** (было: нужен код) — развёртывание Arbitrum найдено (Dromos-Labs/metadex-slipstream-public, «Slipstream V3»), комиссия — от крючка обмена, вид slipstream не подходит (T448-09, решение 451, §4.4) |
 | T433-087 | `saddle-finance@arbitrum` (id — предложение) | saddle_stableswap | **готово** (решение 451: математика = Nerve; swapStorage 7 полей и FlashLoan — исправлено в виде; оговорка — запись tools/arbitrum_record/saddle.py, §4.5) |
 | T433-095 | `woofi-swap@arbitrum` (id — предложение) | woofi_v2 | **готово** (решение 451; решение 462: dex.oracle = wooracle() пула с цепи 0xf9b0…8081, не адрес документации; state() этого оракула — повтор записи woofi.py; реализация 0x7b5f…4281 своим узлом совпала, §4.6) |
 
@@ -537,6 +537,12 @@ mevTaxModule.mevTax(); после цикла afterSwap может добавит
 fee() пула — «legacy»-представление с пустыми параметрами (CLPool.sol L189-L195), не комиссия конкретного обмена.
 Итог: **нужен код — новое семейство «Slipstream V3 (Aero)»** (комиссия крючка, состояние крючка и модуля MEV, квотер
 Metaquoter), вид slipstream с dex.factory = clFactory котировал бы неверно. Задача T448-09.
+
+**Решение 470.** Сделан вариант `slipstream_aero` вида slipstream (pools/aero_cl.rs): CLPool и шаг V3 те же, комиссия —
+fee() пула каждым блоком, крючок пула = dex.cl_swap_hook `0xC0ed888AfE87ed1AcF01D9f19bB850159e3ce434`, MEV-налог модуля
+крючка 0xce01…45aB (множитель 0 по конструктору) — pools/aero_mev.rs. Настройки: dex.kind `slipstream_aero`, dex.factory
+`0x88a60ee77392577c355C0acb2A8d476D5a4EC03a`, dex.cl_swap_hook, dex.quoter_virtual = да (docs/FIRST_RUN.md). Aero Basic —
+вид `aero_basic` (два ключа по фабрикам volatile/stable, pools-arbitrum.json). Вопросы — TASKS T470-01…05.
 
 ### 4.5 Saddle — `saddle-finance@arbitrum` (T433-087)
 

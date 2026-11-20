@@ -31,6 +31,14 @@ interface ISolidlyPair {
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external;
 }
 
+// Решение 470 (T470-06): пул Aero Basic — Dromos-Labs/metadex-public 79c8d5b6 V3/src/pools/Pool.sol L530 getReserves
+// (три uint256), L548-L555 getAmountOutWithTotalFee (комиссия с MEV-налогом, msg.sender — вызывающий), L143 swap
+// (подпись V2 — вызывается через IV2Pair). Интерфейс — V3/src/interfaces/pools/IPool.sol L269.
+interface IAeroBasicPool {
+    function getReserves() external view returns (uint256 reserve0, uint256 reserve1, uint256 blockTimestampLast);
+    function getAmountOutWithTotalFee(uint256 amountIn, address tokenIn) external view returns (uint256);
+}
+
 // Nomiswap Stable (решение 284): пара NomiswapStablePair — verified-исходник Sourcify full match, chain 56, адрес
 // 0x1e40450f8e21bb68490d7d91ab422888fb3d60f1 (те же исходники у 0x3a66…da87, 0xca25…a7ec), contracts/NomiswapStablePair.sol
 // L132 swap (подпись как у пары V2), L251 getAmountOut(address tokenIn, uint256 amountIn) — порядок аргументов обратный

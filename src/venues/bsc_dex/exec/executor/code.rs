@@ -75,7 +75,7 @@ const SHA_V1: &str = include_str!(concat!(
 ));
 
 /// Версия исполнителя по коду в сети (решение 272). Hash — ключ памяти pools/exec_callback.rs (версия, сигнатура).
-/// Порядок (Ord) — порядок выпуска: V1 < V2 < V3 < V4; каждая следующая — надмножество предыдущей (решение 395).
+/// Порядок (Ord) — порядок выпуска: V1 < V2 < V3 < V4 < V5; каждая следующая — надмножество предыдущей (решение 395).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Version {
     /// Только execute (contracts/out/v1/): нативный BNB монетой сделки не идёт.
@@ -88,6 +88,12 @@ pub enum Version {
     /// Решения 440, 441, 456: v3 + шаги FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25 (решение 457:
     /// contracts/out/ — текущая сборка v4, via-IR).
     V4,
+    /// Решение 470 (T470-06): v4 + шаг AERO_BASIC = 26 (пул Aero Basic с MEV-налогом); решение 474: шаг
+    /// BALANCER_V3_BUF = 27 (пул Balancer V3 через буфер ERC4626; бот строит по метке кода kind_buffer::BUFFER_MARK).
+    /// Сборки v5 НЕТ (contracts/out/ — v4;
+    /// пересборка — вне агентов, docs/TASKS.md «нужна сборка исполнителя v5»): version_of её не узнаёт, кода для поиска
+    /// селекторов нет (runtime_of — причина), кошелёк v5 появится только после сборки и развёртывания.
+    V5,
 }
 
 impl Version {
@@ -98,6 +104,7 @@ impl Version {
             Version::V2 => "v2",
             Version::V3 => "v3",
             Version::V4 => "v4",
+            Version::V5 => "v5",
         }
     }
 
@@ -113,6 +120,7 @@ impl Version {
             "v2" => Some(Version::V2),
             "v3" => Some(Version::V3),
             "v4" => Some(Version::V4),
+            "v5" => Some(Version::V5),
             _ => None,
         }
     }
@@ -154,6 +162,8 @@ pub fn runtime_sha256_of(v: Version) -> Option<&'static str> {
         Version::V1 | Version::V2 => None,
         Version::V3 => recorded_in(SHA_V3, "ArbExecutor.bin-runtime"),
         Version::V4 => runtime_sha256(),
+        // Решение 470: сборки v5 нет — записи симуляции v5 быть не может.
+        Version::V5 => None,
     }
 }
 
@@ -165,6 +175,18 @@ pub fn current_version() -> Result<Version, String> {
     } else {
         Version::V4
     })
+}
+
+/// Код в сети данной версии (для поиска селекторов, pools/exec_callback.rs). Решение 470: у v5 сборки нет — причина.
+/// Ошибки (текст): артефакт не сверен по хешу; сборки версии нет.
+pub fn runtime_of(v: Version) -> Result<Bytes, String> {
+    match v {
+        Version::V1 => runtime_v1(),
+        Version::V2 => runtime_v2(),
+        Version::V3 => runtime_v3(),
+        Version::V4 => runtime(),
+        Version::V5 => Err("сборки исполнителя v5 нет (out/ — v4; решение 470)".into()),
+    }
 }
 
 /// Код в сети версии v3 (решение 441: замороженная копия). Ошибки: как checked (хеш — из contracts/out/v3/ArbExecutor.sha256).

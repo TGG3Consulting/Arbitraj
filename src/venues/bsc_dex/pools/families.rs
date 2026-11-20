@@ -243,6 +243,13 @@ pub enum Proto {
     /// математика — math/camelot_v2.rs (арифметика Solidity 0.5), квотер — сама пара getAmountOut(uint256, address)
     /// (селектор тот же, что у Solidly). Исполнение — шаг SOLIDLY исполнителя. Вид ядра — Solidly.
     CamelotV2,
+    /// Решение 470 (T451-02; aero_basic, Aero «Basic» сети Arbitrum — Dromos-Labs/metadex-public 1.1.0): пул
+    /// VolatilePool / StablePool — кривые Solidly, но metadata() из 6 полей (без stable; кривая — POOL_TYPE()),
+    /// фабрика на одну кривую (getPool(a, b), PoolCreated без stable), комиссия — getBaseFee фабрики, MEV-налог модуля
+    /// (aero_mev.rs). Состояние — PoolState::Solidly (load_aero_basic.rs), события — events_solidly.rs (Sync тот же),
+    /// проверка и поиск — путём V2 (factory/token0/token1, getPool), квотер — сам пул getAmountOut. Исполнение — шаг
+    /// SOLIDLY исполнителя. Вид ядра — Solidly.
+    AeroBasic,
     /// Liquidity Book v2.0 (решение 445; lb_v20, DEX traderjoe-v2-arbitrum — LFJ V2 на Arbitrum): тот же пул из бинов, но
     /// ABI v2.0 (tokenX / factory / getReservesAndId / feeParameters / findFirstNonEmptyBinId, события на бин) и правила
     /// v2.0 (комиссия вне бина, пределы uint24/uint112, без MAX_FEE). Фабрика LBFactory v2.0 (dex.factory) — реестр
@@ -476,6 +483,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "curve_tricrypto_v1" => (PoolKind::Crypto, Proto::CurveTricryptoV1, true, false, false),
         // Camelot V2 (решение 443): в графе и сигналах (своя математика пары); исполнение — шаг SOLIDLY исполнителя.
         "camelot_v2" => (PoolKind::Solidly, Proto::CamelotV2, true, false, false),
+        // Решение 470: Aero Basic — в графе и сигналах (математика Solidly); исполнение — шаг SOLIDLY исполнителя.
+        "aero_basic" => (PoolKind::Solidly, Proto::AeroBasic, true, false, false),
         // Liquidity Book v2.0 (решение 445): в графе и сигналах (порт swap v2.0); исполнение — шаг LB20 исполнителя.
         "lb_v20" => (PoolKind::LbBin, Proto::LbV20, true, false, false),
         // Liquidity Book V2.2 (решение 446): тот же путь, что у lb_v21 (порт getSwapOut + откат MAX_LIQUIDITY_PER_BIN), шаг LB.
@@ -510,7 +519,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как THENA Algebra /
         // Solidly — в графе и для сигналов, но guard executable (quote/graph_route.rs, cycle.rs) по family.tradable в
         // авто-сделку не пускает. Вид ядра — V3 (PoolState::V3), чтение/дискавери/квотер — свои (два отличия от Uni V3).
-        "slipstream" => (PoolKind::V3, Proto::Slipstream, true, false, false),
+        // Решение 470: Aero Slipstream V3 — тот же CLPool (вариант SlipstreamAero: комиссия крючка, pools/aero_cl.rs).
+        "slipstream" | "slipstream_aero" => (PoolKind::V3, Proto::Slipstream, true, false, false),
         // Maverick V2 (решение 122 F): в графе и сигналах (порт расчёта команды Maverick); исполнение — шаг MAVERICK
         // контракта-исполнителя (exec_kind::via_executor), своего пути через Universal Router нет.
         "maverick_v2" => (PoolKind::TickBin, Proto::Maverick, true, false, false),
@@ -760,6 +770,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Camelot V2 (решение 443): фабрика (factory() пары, реестр getPair, событие PairCreated — как V2). Квотер сверки —
         // сама пара getAmountOut (адрес не нужен).
         Proto::CamelotV2 => list.push("dex.factory"),
+        // Решение 470: Aero Basic — фабрика своей кривой (реестр getPool, PoolCreated, getBaseFee, isPaused,
+        // mevTaxModule). Квотер сверки — сам пул getAmountOut.
+        // Ревью t240: и закреплённые модули комиссии и MEV-налога фабрики (load_aero_basic.rs, aero_mev.rs pinned).
+        Proto::AeroBasic => {
+            list.extend(["dex.factory", "dex.aero_fee_module", "dex.aero_mev_module"])
+        }
         // Liquidity Book v2.0 (решение 445): фабрика (factory() пула и реестр getLBPairInformation) и квотер сверки —
         // LBRouter v2.0 getSwapOut(пара, вход, swapForY): у пары v2.0 своего getSwapOut нет.
         Proto::LbV20 => list.extend(["dex.factory", "dex.quoter"]),
@@ -784,7 +800,14 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // решение 59; события создания PoolCreated) и квотер (сверка ISlipstreamQuoterV2.quoteExactInputSingle по
         // tickSpacing, решение 73). Своего читателя тиков нет — битмап читается прямо у пула (load_slipstream.rs),
         // dex.tick_lens не нужен. Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
-        Proto::Slipstream => list.extend(["dex.factory", "dex.quoter"]),
+        Proto::Slipstream => {
+            list.extend(["dex.factory", "dex.quoter"]);
+            // Решение 470: Aero Slipstream V3 — ещё официальный крючок обмена (pools/aero_cl.rs) и окно первой
+            // комиссии нового блока (T470-01, pools/aero_cl_head.rs).
+            if f.variant == Variant::SlipstreamAero {
+                list.extend(["dex.cl_swap_hook", "dex.cl_hook_ahead_s", "dex.aero_mev_module"]);
+            }
+        }
         // Maverick V2 (решение 122 F): фабрика (isFactoryPool, PoolCreated), квотер (сверка перед сделкой, решение 73),
         // PoolLens и радиус тиков — без них состояние пула не прочитать.
         Proto::Maverick => list.extend([

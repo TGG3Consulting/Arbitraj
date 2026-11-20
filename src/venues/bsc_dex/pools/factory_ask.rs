@@ -38,6 +38,7 @@ use alloy::sol_types::SolCall;
 use alloy_primitives::aliases::{I24, U24};
 use alloy_primitives::{Address, Bytes};
 
+use super::abi_aero_basic::IAeroBasicFactory;
 use super::abi_algebra::IAlgebraFactory;
 use super::abi_crypto::ICryptoFactory;
 use super::abi_dmm::IDmmFactory;
@@ -84,6 +85,8 @@ pub enum Q {
     /// Curve Twocrypto-NG / Tricrypto-NG (решение 442), crypto v1 фабрики (решение 453): find_pool_for_coins(a, b, i) —
     /// i-й пул пары.
     CurveCrypto(u32),
+    /// Решение 470: Aero Basic — getPool(a, b) фабрики своей кривой (metadex-public 1.1.0 PoolFactory.sol L159-L161).
+    AeroBasic,
 }
 
 impl Q {
@@ -105,6 +108,7 @@ impl Q {
             Q::Dmm => "getPools",
             Q::Izi(_) => "pool(tokenX, tokenY, fee)",
             Q::CurveCrypto(_) => "find_pool_for_coins",
+            Q::AeroBasic => "getPool(a, b)",
         }
     }
 }
@@ -185,6 +189,13 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         }
         .abi_encode()
         .into(),
+        // Aero Basic: реестр заполнен в обе стороны токенов (PoolFactory.sol L334-L335) — порядок любой.
+        Q::AeroBasic => IAeroBasicFactory::getPoolCall {
+            tokenA: coin,
+            tokenB: quote,
+        }
+        .abi_encode()
+        .into(),
         Q::Slipstream(ts) => ICLFactory::getPoolCall {
             tokenA: coin,
             tokenB: quote,
@@ -205,6 +216,10 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
         Q::Solidly { .. } => vec![
             ISolidlyFactory::getPoolCall::abi_decode_returns(out)
                 .map_err(|e| format!("ответ {} не по ABI: {e}", q.name()))?,
+        ],
+        Q::AeroBasic => vec![
+            IAeroBasicFactory::getPoolCall::abi_decode_returns(out)
+                .map_err(|e| format!("ответ getPool(a, b) не по ABI: {e}"))?,
         ],
         Q::Algebra => vec![
             IAlgebraFactory::poolByPairCall::abi_decode_returns(out)

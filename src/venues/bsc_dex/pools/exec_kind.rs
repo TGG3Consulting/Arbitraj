@@ -20,8 +20,9 @@
 //! amountSpecified, sqrtPriceLimitX96, data)` — вопрос Тиграну (отчёт части F).
 
 use super::super::ctx::Ctx;
+use super::super::exec::executor::code::Version;
 use super::exec_callback;
-use super::families::Family;
+use super::families::{Family, Proto};
 
 /// Вид шага исполнителя (по официальному интерфейсу контракта DEX; кодировщик — exec/executor/*, часть X).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -101,6 +102,11 @@ pub enum ExecKind {
     /// (его сторона шага — обёртка wnative), forward: обмен через Core.forward(расширение) у MEVCapture
     /// (contracts/ArbExecutor.sol _ekubo). Есть только у кода исполнителя с шагом EKUBO (exec_callback.rs EKUBO_MARK).
     Ekubo,
+    /// Решение 470 (T470-06): пул Aero Basic — как SOLIDLY (перевод входа в пул, swap подписи V2), но выход —
+    /// getAmountOutWithTotalFee пула (комиссия с MEV-налогом этой транзакции, Dromos-Labs/metadex-public 79c8d5b6
+    /// V3/src/pools/Pool.sol L548-L555). Шаг 26 — только исполнитель v5 (exec_callback.rs since). Вид семейства
+    /// aero_basic остаётся SOLIDLY (of); шаг AERO_BASIC выбирает for_version по версии исполнителя кошелька.
+    AeroBasic,
 }
 
 impl ExecKind {
@@ -131,6 +137,7 @@ impl ExecKind {
             ExecKind::InfBin => "INF_BIN",
             ExecKind::Fluid => "FLUID",
             ExecKind::Ekubo => "EKUBO",
+            ExecKind::AeroBasic => "AERO_BASIC",
         }
     }
 
@@ -152,7 +159,8 @@ impl ExecKind {
 pub fn of(kind: &str) -> Option<ExecKind> {
     Some(match kind {
         "pancakeswap_v2" | "uniswap_v2" | "v2_fork" | "v2_fork_executor" => ExecKind::V2,
-        "pancakeswap_v3" | "uniswap_v3" | "v3_fork" | "v3_fork_pancake" | "slipstream" => {
+        "pancakeswap_v3" | "uniswap_v3" | "v3_fork" | "v3_fork_pancake" | "slipstream"
+        | "slipstream_aero" => {
             ExecKind::V3
         }
         "thena_fusion" => ExecKind::Algebra,
@@ -168,6 +176,11 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // address) и swap(uint256, uint256, address, bytes) есть у CamelotPair (Pair.sol L46, L372, L228 — verified-исходник
         // фабрики Arbitrum 0x6EcC…A652, math/camelot_v2.rs); вход = баланс − резерв — так и считает swap пары (L276-L277).
         "camelot_v2" => ExecKind::Solidly,
+        // Решение 470: пул Aero Basic — тот же шаг SOLIDLY: getReserves (три uint256, Pool.sol L530), getAmountOut(uint256,
+        // address) L537 (комиссия getBaseFee без MEV-налога — налог исключён правилом aero_mev.rs) и swap(uint256, uint256,
+        // address, bytes) L143 (metadex-public 1.1.0); вход = баланс − резерв — так и считает swap пула (L161-L162).
+        // T470-06: у исполнителя v5 — шаг AERO_BASIC (for_version), налог > 0 исполняется.
+        "aero_basic" => ExecKind::Solidly,
         "dodo_dvm" | "dodo_dpp" | "dodo_dsp" => ExecKind::Dodo,
         // Решение 275: Curve StableSwap-NG — exchange(int128, int128, dx, min_dy) с receiver = msg.sender по умолчанию
         // (curvefi/stableswap-ng 3332cd4, CurveStableSwapNG.vy L504-L531): тот же шаг CURVE.
@@ -232,6 +245,23 @@ pub fn of(kind: &str) -> Option<ExecKind> {
     })
 }
 
+/// Решение 470 (T470-06): вид шага пула с учётом версии исполнителя кошелька. Пул Aero Basic (Proto::AeroBasic) у
+/// сверенного исполнителя не ниже since(AERO_BASIC) (v5) — AERO_BASIC (выход getAmountOutWithTotalFee, MEV-налог
+/// исполняется); иначе — вид семейства (SOLIDLY: налог > 0 — отказ перед отправкой, pools/aero_mev.rs fresh).
+/// Принимает: вид, сверенную версию исполнителя (None — не сверена). Ошибок нет.
+pub fn for_version(f: &Family, ver: Option<Version>) -> Option<ExecKind> {
+    let aero = f.proto == Proto::AeroBasic && f.executor_kind == Some(ExecKind::Solidly);
+    if aero && ver.is_some_and(|v| v >= exec_callback::since(ExecKind::AeroBasic)) {
+        return Some(ExecKind::AeroBasic);
+    }
+    f.executor_kind
+}
+
+/// Решение 470: то же по исполнителю кошелька окружения (снимок без замка, Ctx::exec_info). Ошибок нет.
+pub fn for_wallet(ctx: &Ctx, f: &Family) -> Option<ExecKind> {
+    for_version(f, ctx.exec_info().and_then(|(_, v)| v))
+}
+
 /// Задан ли адрес контракта-исполнителя у кошелька окружения (решение 132: счёт или, без счёта, строка «пробы»).
 /// Ошибок нет: не задан или не читается — нет.
 pub fn executor_set(ctx: &Ctx) -> bool {
@@ -270,7 +300,7 @@ pub fn describe(ctx: &Ctx, f: &Family) -> String {
 /// Решение 461: что приняла запись приёмки версии исполнителя кошелька (не сверена — v3, как pool_gate.rs) в сети
 /// площадки (dex.evm_chain_id). Ошибок нет.
 fn wallet_listing(ctx: &Ctx) -> String {
-    use super::super::exec::executor::{code::Version, live_proof};
+    use super::super::exec::executor::live_proof;
     let ver = ctx.exec_info().and_then(|(_, v)| v).unwrap_or(Version::V3);
     live_proof::listing_for(ver, live_proof::chain_of(ctx))
 }

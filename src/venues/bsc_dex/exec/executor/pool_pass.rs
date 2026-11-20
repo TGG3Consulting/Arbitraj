@@ -173,7 +173,7 @@ pub fn on_sim(venue: &'static str, c: &ExecCall, r: &CallResult) -> Vec<PoolRef>
 pub fn v3(w: &Wallet) -> Option<Address> {
     let v = w.executor_version.as_deref().and_then(Version::parse);
     // Решение 441: v4 — надмножество v3.
-    if !matches!(v, Some(Version::V3 | Version::V4)) {
+    if !matches!(v, Some(Version::V3 | Version::V4 | Version::V5)) {
         return None;
     }
     w.executor.as_deref()?.parse().ok()

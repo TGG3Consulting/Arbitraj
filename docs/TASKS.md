@@ -501,6 +501,48 @@
     0xEaE4…Fd55 (DMMRouter); фактом будет ответ getAmountsOut в записи T450-01 (откат по пулам Legacy — адрес неверен).
   - T450-09 iZiSwap: уровни dex.v3_fee_tiers — конструктор (100, 400, 2000, 10000); включённые позже enableFeeAmount —
     fee2pointDelta своим узлом (запись T450-01).
+- **Решение 470 (20.11.2026, ветка t240/arb-aero) — T451-01, T451-02: Aero Basic (`aero_basic`) и Aero Slipstream V3
+  (`slipstream_aero`).** Код — DECISIONS 470; исполнитель не менялся (шаги SOLIDLY и V3), переразвёртывание не нужно.
+  Новая настройка dex.cl_swap_hook. Настройки DEX — docs/FIRST_RUN.md «Aero Basic и Aero Slipstream V3». Запись:
+  `python3 tools/arbitrum_record/aero.py --rpc <узел>` (или record_all.py) → снять #[ignore] в tests/arbitrum_aero_live.rs.
+  - T470-01 **СДЕЛАНО (координатор: порт).** Котировка — max(fee() пула, первая комиссия нового блока на время блока + δ,
+    δ = 0…dex.cl_hook_ahead_s) + налог (pools/aero_first_fee.rs, aero_cl_head.rs). Новая настройка dex.cl_hook_ahead_s —
+    значение решает Тигран по записи (fee_at +1/+3 с). Сверка — tests/arbitrum_aero_first_fee_live.rs после записи aero.py.
+    Вопросы по записи: (а) принимает ли Nitro blockOverrides в eth_call и меняет ли number ArbSys.arbBlockNumber (ключ
+    blockFee у ArbDynamicSwapFeeHook); (б) скидка DiscountRegistry для caller = 0 и MEV-налог при eth_call — 0 (тест
+    сравнивает fee() с портом без скидки и налога).
+  - T470-02 **Координатор: налог по формуле. СДЕЛАНО** (8ac32c60: aero_mev.rs tax — формула модуля, сбор чаевых — ArbSys/ArbOwnerPublic, факт nitro ccc5c828 tx_processor.go L995-L1035). Было: вопрос Тиграну: tx.gasprice в Nitro при чаевых — правило MEV-налога взято по верхней оценке (gasprice ≤
+    baseFee + чаевые). При profit_share верхний предел send.tip_cap_gwei выше minThreshold модуля (volatile 1 gwei,
+    stable 2 gwei по аргументам конструкторов) — пулы Basic не читаются. Нужен ли учёт налога в котировке вместо отказа?
+  - T470-03 Запись aero.py: проверить своим узлом feeModule() фабрик = volatile/stableCustomFeeModule
+    (0x7949…7a7A, 0x0195…3Da6), mevTaxModule() = 0xd724…c50a / 0x8173…8130, параметры модулей; tickSpacingToFee CL.
+  - T470-04 **Координатор: ключи приняты.** Ключи DEX Aero Basic (`aero-basic-volatile@arbitrum`, `aero-basic-stable@arbitrum`) — предложение: у
+    GeckoTerminal Aero Basic нет (DefiLlama `aero-basic`); пулы — поиск по фабрике (index.factory_scan) или dex.sub_dex
+    (решение 450) под одним ключом — решение Тиграна.
+  - T470-06 **СДЕЛАНО в коде, НУЖНА СБОРКА ИСПОЛНИТЕЛЯ v5.** Шаг AERO_BASIC = 26 (contracts/ArbExecutor.sol _aeroOut +
+    IPools.sol IAeroBasicPool): вход переводом в пул, выход — getAmountOutWithTotalFee пула (Pool.sol L548-L555: getFee с
+    msg.sender = исполнитель и tx.gasprice этой транзакции — та же комиссия, что у swap L172), swap подписи V2. Rust:
+    Params::AeroBasic (kind.rs), ExecKind::AeroBasic + for_version/for_wallet (exec_kind.rs: вид семейства aero_basic
+    остаётся SOLIDLY, у кошелька v5 — AERO_BASIC), since = Version::V5 (exec_callback.rs; code.rs — Version::V5 без
+    артефактов, runtime_of — причина «сборки v5 нет»); отказ «налог > 0» перед отправкой снят для кошелька v5
+    (aero_mev.rs fresh taxed_ok, exec/solidly_gate.rs). **Нужна сборка исполнителя v5** (contracts/build.sh → out/ как v5,
+    out/ v4 заморозить в out/v4/, code.rs: RUNTIME_V4, version_of V5) и EVM-сценарий шага 26 — вне агентов (solc/npm
+    запрещены). До сборки у всех кошельков — SOLIDLY и прежний отказ при налоге > 0.
+  - T470-07 **СДЕЛАНО.** Порт первой комиссии (T470-01); лёгкое чтение каждым блоком — pools/per_block_aero.rs (только
+    комиссия пачкой: fee(), slot0, dynamicFeeConfig, tickSpacingToFee + наблюдения и observe; налог — раз на DEX), полное
+    — по событиям пула; запись наблюдений и параметров крючка — tools/arbitrum_record/aero_more.py.
+  - T470-05 **Запись сделана:** Metaquoter quoteExactInputSingleV3 / V2 в aero_more.py рядом с виртуальным квотером бота и
+    getAmountOutWithTotalFee (тест metaquoter_equals_virtual_and_total_fee, #[ignore] до записи). В боте сверка — по-прежнему
+    виртуальный квотер (dex.quoter_virtual); подключать ли Metaquoter квотером DEX — по итогам записи (решение Тиграна).
+  - T470-10 **Ревью t240 — СДЕЛАНО:** модули закреплены (dex.aero_fee_module, dex.aero_mev_module — задать по
+    docs/FIRST_RUN.md; адрес модуля крючка Slipstream V3 сверить записью aero.py: hook.mevTaxModule = clMevTaxModule
+    0xce01…45aB); свежая комиссия Slipstream V3 перед отправкой против котировки; чтение старого блока не перетирает
+    комиссию; доказательство памяти для Aero Slipstream включено; ArbOS 9 — сбор чаевых.
+  - T470-08 Запись: `python3 tools/arbitrum_record/aero.py --rpc <узел>` (или record_all.py) → снять #[ignore] в
+    tests/arbitrum_aero_live.rs и tests/arbitrum_aero_first_fee_live.rs; задать dex.cl_hook_ahead_s.
+  - T470-09 **Нужна сборка исполнителя v5** (T470-06): contracts/build.sh → out/ как v5, out/ v4 заморозить в out/v4/,
+    code.rs (RUNTIME_V4, version_of → V5, current_version), EVM-сценарий шага AERO_BASIC с официальным байткодом пула Aero
+    (если он есть в официальном репозитории развёртываний) — вне агентов (solc/npm запрещены).
 - **Решение 451 (20.11.2026, ветка t227/arb-dex-code-b) — T448-06…T448-10: Kyber Elastic v1, Saddle, WOOFi, Aero
   Slipstream, PancakeSwap StableSwap на Arbitrum; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Подробно —
   docs/notes/arbitrum/dex-settings-arbitrum.md §4.2–§4.6. СДЕЛАНО: вид `kyber_elastic_v1` (pools/family_variant.rs —
@@ -518,10 +560,10 @@
      различаются по ответу). Так оставить?
   2) Family Debug: поле variant выводится только у не-Base (золотые снимки прежних видов не меняются).
   Задачи:
-  - T451-01 Новое семейство «Slipstream V3 (Aero)» на Arbitrum: CLPool + крючок DynamicSwapFeeHook (комиссия блока по
+  - T451-01 **Решение 470: СДЕЛАНО** (вариант slipstream_aero; вопросы T470-01/02, запись T470-03). Новое семейство «Slipstream V3 (Aero)» на Arbitrum: CLPool + крючок DynamicSwapFeeHook (комиссия блока по
     TWAP-тику, скидка DiscountRegistry по вызывающему, MEV-налог модуля, afterSwap-комиссия), квотер Metaquoter; исходники —
     Dromos-Labs/metadex-slipstream-public cf1ae46f, metadex-public 79c8d5b6 (лицензия Dromos Restricted Use 1.0).
-  - T451-02 Aero «Basic»-пулы Arbitrum (pools-arbitrum.json: volatilePoolFactory 0x8E6a…76D2, stablePoolFactory 0x7858…EF2D;
+  - T451-02 **Решение 470: СДЕЛАНО** (вид aero_basic, шаг SOLIDLY; запись T470-03, ключи T470-04). Aero «Basic»-пулы Arbitrum (pools-arbitrum.json: volatilePoolFactory 0x8E6a…76D2, stablePoolFactory 0x7858…EF2D;
     модули комиссии и MEV-налога) — в таблицу покрытия (GeckoTerminal/DefiLlama id сверить) и сверить с видами solidly_*.
   - T451-03 TicksFeesReader.getTicksInRange(pool, MIN_TICK, 0) (load_elastic.rs) выделяет массив на все возможные тики
     (у tickDistance 1 ≈1,77 млн слов) — уложится ли в предел газа eth_call узла, покажет запись (kyber_elastic_v1.py пишет
@@ -1556,7 +1598,7 @@
   - T433-080 `ramses-legacy-arbitrum` (Ramses Legacy (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-081 `ramses-v3-arbitrum` (Ramses V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-082 `rubicon-clmm-arbitrum` (Rubicon CLMM (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-083 `aero-slipstream-arbitrum` (Aero Slipstream (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-09. Решение 451: нужен код — новое семейство «Slipstream V3 (Aero)», T448-09** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-083 `aero-slipstream-arbitrum` (Aero Slipstream (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-09. Решение 451: нужен код — новое семейство «Slipstream V3 (Aero)», T448-09. Решение 470: код есть — вид `slipstream_aero`, сверка — запись aero.py (T470-03)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-084 `camelot-v4` (Camelot V4) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-085 Shell Protocol (DefiLlama `shell-protocol`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-086 DODO AMM (DefiLlama `dodo-amm`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: готово (пулы — поиском по фабрике), шаблоны — T448-13** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
@@ -1619,7 +1661,7 @@
   - T433-143 AutoRange (DefiLlama `autorange`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-144 Metric V1 (DefiLlama `metric-v1`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-145 PancakeSwap X (DefiLlama `pancakeswap-x`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
-  - T433-146 Aero Basic (DefiLlama `aero-basic`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-146 Aero Basic (DefiLlama `aero-basic`, нет в GeckoTerminal) — **Решение 470: вид `aero_basic` (код есть, запись T470-03, ключи T470-04).** Было: семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   Семейства кода:
   - T433-F1 Fluid DEX (T1) — СДЕЛАНО в коде (решение 440): математика, чтение, события, проверка, квотер, шаг исполнителя FLUID (v4 — только исходник); осталось: запись узла (tools/arbitrum_record/fluid_t1.py) и снятие #[ignore], сборка и развёртывание исполнителя v4, вопросы а)–е) решения 440.
   - T433-F2 Balancer V3 — решения 441, 452: СДЕЛАНО в коде (все виды пулов и официальные крючки комиссии Arbitrum, PoolRegistered, шаг BALANCER_V3 исполнителя v4); ОСТАЛОСЬ — запись узла и снятие #[ignore], пересборка и развёртывание исполнителя v4 (план — «Решение 441», ревью), буфер ERC4626 — решение 474 (в коде; нужна сборка исполнителя v5 и запись balancer_v3_buffer.py).

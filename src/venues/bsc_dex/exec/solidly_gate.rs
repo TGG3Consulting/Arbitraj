@@ -8,18 +8,24 @@
 //!   транзакции (legacy gasPrice; чаевые канала — отдельным переводом, на gasPrice свопа не влияют); свежие
 //!   ограничения, отличные от памяти, — в реестр всем пулам DEX (ревью 273, п. 3).
 //!
+//! Решение 470: у Aero Slipstream V3 — pools/aero_cl.rs fee (крючок, MEV-налог); у Aero Basic перед отправкой — pools/aero_mev.rs fresh (пауза фабрики, правило MEV-налога).
 //! Кто вызывает: quote/cycle_cost.rs, quote/mod.rs (planned), exec/executor/trade.rs, exec/cycle_exec.rs (fresh_cap).
 //! От чего зависит: math/solidly_fee.rs (blocked), pools/{registry, solidly_fee_read}.rs, quote/mod.rs (Quoting),
 //! core/types (PoolState, SolidlyGate).
 //! Настройки: через solidly_fee_read.rs — dex.factory, dex.solidly_pause_method, dex.solidly_max_gas_method [DEX].
 
-use alloy_primitives::U256;
+use alloy_primitives::{Address, U256};
 
-use crate::core::types::{PoolState, SolidlyGate};
+use crate::core::types::{PoolRef, PoolState, SolidlyGate};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::math::solidly_fee;
+use super::super::pools::aero_cl;
+use super::super::pools::aero_mev;
+use super::super::pools::exec_kind::{self, ExecKind};
+use super::super::pools::families::Proto;
+use super::super::pools::family_variant::Variant;
 use super::super::pools::registry::{Entry, Registry};
 use super::super::pools::solidly_fee_read;
 use super::super::quote::Quoting;
@@ -57,10 +63,24 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut cap: Option<U256> = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        // Решение 470: пул Aero Slipstream V3 — крючок, модуль и правило MEV-налога и комиссия заново (aero_fresh).
+        if f.variant == Variant::SlipstreamAero
+            && let PoolRef::Contract(pool) = e.pool.reference
+        {
+            aero_fresh(q, e, pool).await?;
+            continue;
+        }
         if !matches!(e.pool.state, PoolState::Solidly { .. }) || seen.contains(&f.id) {
             continue;
         }
         seen.push(f.id);
+        // Решение 470: Aero Basic — пауза фабрики и правило MEV-налога (pools/aero_mev.rs) заново перед отправкой;
+        // T470-06: у исполнителя v5 (шаг AERO_BASIC) налог исполняется — проверяется только пауза.
+        if f.proto == Proto::AeroBasic {
+            let taxed_ok = exec_kind::for_wallet(ctx, f) == Some(ExecKind::AeroBasic);
+            aero_mev::fresh(ctx, f.id, ctx.dex_addr("dex.factory", f.id)?, taxed_ok).await?;
+            continue;
+        }
         if !solidly_fee_read::has_gate(ctx, f)? {
             continue;
         }
@@ -78,6 +98,28 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
         }
     }
     Ok(cap)
+}
+
+/// Решение 470 (ревью t240): пул Aero Slipstream V3 перед отправкой — комиссия на последнем блоке (aero_cl::fee_latest:
+/// крючок пула, закреплённый модуль MEV-налога, первая комиссия следующего блока) против комиссии записи, по которой
+/// посчитана котировка. Выросла — отказ: выход сделки был бы ниже посчитанного. Реестр здесь не пишется (ревью t240):
+/// у исполнения нет канала к ядру, а запись в реестр без отправки ядру скрыла бы смену от лёгкого чтения следующего
+/// блока (per_block_aero::put отправляет пул ядру только при отличии от реестра) — реестр и ядро обновит оно. Принимает: котировку, пул шага, адрес пула. Ошибки: NoRoute — нет tickSpacing / комиссии
+/// записи, комиссия выросла; как aero_cl::fee_latest.
+async fn aero_fresh(q: &Quoting, e: &Entry, pool: Address) -> GatewayResult<()> {
+    let (ctx, f) = (&q.ctx, e.family);
+    let (Some(spacing), Some(was)) = (e.pool.tick_spacing, e.pool.fee_pips) else {
+        let why = format!("{}: у пула Aero Slipstream V3 нет tickSpacing или комиссии", f.id);
+        return Err(ctx.err(ErrorCode::NoRoute, why));
+    };
+    let now = aero_cl::fee_latest(ctx, f, pool, spacing).await?;
+    if now <= was {
+        return Ok(());
+    }
+    Err(ctx.err(
+        ErrorCode::NoRoute,
+        format!("{}: комиссия пула {now} пипс выше котировки {was} — своп не отправлен", f.id),
+    ))
 }
 
 /// Свежие ограничения фабрики DEX `id` — в реестр, если у пулов шагов этой DEX в памяти другие: всем пулам Solidly

@@ -1181,3 +1181,33 @@ ReClamm, LBP, LBP с фиксированной ценой, QuantAMM и пулы
 | --- | --- | --- | --- | --- |
 | dex.elastic_ticks_chunk | каждая DEX вида kyber_elastic / kyber_elastic_v1: на bsc_dex — `kyberswap_elastic_bsc` (включена на живом боте; задать при выкладке, иначе DEX отключится), на arb_dex — `kyberswap_elastic_arbitrum@arbitrum` и `kyberswap_elastic_legacy_arbitrum@arbitrum` | `1000` | Газ части из n тиков по исходнику TicksFeesReader.getTicksInRange (L57-L66; у v1 — тот же цикл): память массива 3·n + n²/512 (Yellow Paper) и на каждый тик вызов pool.initializedTicks — не меньше 2 300 газа по EIP-2929 (холодный SLOAD слота initializedTicks 2 100 — Linkedlist.Data из двух int24 в одном слоте; тёплые EXTCODESIZE и STATICCALL по 100) плюс исполнение (оценка, не замер). n = 1000: ≈ 2,3 млн + 5 тыс. Факт узла Тиграна (запись 20.11.2026): вызов с массивом 70 981 слов (память ≈ 10,05 млн газа, tickDistance 25) — ответ есть; 177 457 слов (≈ 62 млн) — «out of gas»; предел газа eth_call узла — между ними, запас у 1000 — по оценке примерно вчетверо до 10 млн. Пулы с ≤ 998 инициализированными тиками (в часть входят и граничные MIN_TICK / MAX_TICK) — один вызов, как раньше | ks-elastic-sc 4ab08c0a contracts/periphery/TicksFeesReader.sol; Sourcify 42161 0x165c…E75D; tests/data/arbitrum_kyber_elastic_v1_2026-11-20 |
 | dex.kind, dex.factory, dex.router, dex.quoter, dex.tick_reader, dex.v3_fee_tiers, dex.pool_enabled | DEX `kyberswap_elastic_legacy_arbitrum@arbitrum` (id — предложение, решает Тигран) | `kyber_elastic_v1`, `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a`, `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83`, `0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f`, `0x165c68077ac06c83800d19200e6E2B08D02dE75D`, `8, 10, 40, 300, 1000`, «да» — решает Тигран после записи kyber_elastic_legacy.py | Elastic Legacy (v1) на Arbitrum: пулов нет у GeckoTerminal — только поиском по фабрике (index.factory_scan = да у arb_dex): getPool(монета, встречный, swapFeeUnits) по уровням dex.v3_fee_tiers (конструктор фабрики v1) | docs/notes/arbitrum/dex-settings-arbitrum.md §6 |
+
+## Aero Basic и Aero Slipstream V3 в сети Arbitrum (решение 470, T451-01/02)
+
+Новые варианты dex.kind: `aero_basic`, `slipstream_aero`; новые настройки — `dex.cl_swap_hook`, `dex.cl_hook_ahead_s`,
+`dex.aero_fee_module`, `dex.aero_mev_module` (ревью t240: модули закреплены). Ключи области «DEX»
+площадки arb_dex — с сетью (решение 435); адреса — Dromos-Labs/metadex-public `deployment-addresses/pools-arbitrum.json`
+и Dromos-Labs/metadex-slipstream-public `deployment-addresses/cl-arbitrum.json` (версии 1.1.0). Ключи `aero-basic-…` —
+предложение (у GeckoTerminal Aero Basic нет; DefiLlama `aero-basic`), пулы — поиск по фабрике (index.factory_scan = да).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `aero-basic-volatile@arbitrum` | `aero_basic` | VolatilePool (x·y=k), фабрика одной кривой | metadex-public V3/src/pools/VolatilePool.sol |
+| dex.factory | DEX `aero-basic-volatile@arbitrum` | `0x8E6a9FCd1d638CC760Ffba397605Fe3355dE76D2` | volatilePoolFactory | pools-arbitrum.json |
+| dex.aero_fee_module | DEX `aero-basic-volatile@arbitrum` | `0x7949DE8d67E4F6b8509Bdbb43FF0503aF1247a7A` | volatileCustomFeeModule — feeModule() фабрики должен совпасть (ревью t240) | pools-arbitrum.json |
+| dex.aero_mev_module | DEX `aero-basic-volatile@arbitrum` | `0xd724433C0C637c7e273Ac623427D806Ef396c50a` | volatileMevTaxModule — mevTaxModule() фабрики должен совпасть | pools-arbitrum.json |
+| dex.kind | DEX `aero-basic-stable@arbitrum` | `aero_basic` | StablePool (x³y+xy³), фабрика одной кривой | metadex-public V3/src/pools/StablePool.sol |
+| dex.factory | DEX `aero-basic-stable@arbitrum` | `0x78589E876edcEbdce72ee3436ab3c9AD3a7cEF2D` | stablePoolFactory | pools-arbitrum.json |
+| dex.aero_fee_module | DEX `aero-basic-stable@arbitrum` | `0x0195fC76Da986D66B2A468133a1be41E90893Da6` | stableCustomFeeModule — feeModule() фабрики должен совпасть | pools-arbitrum.json |
+| dex.aero_mev_module | DEX `aero-basic-stable@arbitrum` | `0x8173816c3638650343B0a67E688AbB966C458130` | stableMevTaxModule — mevTaxModule() фабрики должен совпасть | pools-arbitrum.json |
+| dex.kind | DEX `aero-slipstream-arbitrum@arbitrum` | `slipstream_aero` | CLPool с крючком DynamicSwapFeeHook | metadex-slipstream-public CLPool.sol |
+| dex.factory | DEX `aero-slipstream-arbitrum@arbitrum` | `0x88a60ee77392577c355C0acb2A8d476D5a4EC03a` | clFactory | cl-arbitrum.json |
+| dex.cl_swap_hook | DEX `aero-slipstream-arbitrum@arbitrum` | `0xC0ed888AfE87ed1AcF01D9f19bB850159e3ce434` | dynamicSwapFeeHook | cl-arbitrum.json |
+| dex.aero_mev_module | DEX `aero-slipstream-arbitrum@arbitrum` | `0xce015007D03f3E3964938f11c29F24bDB0b945aB` | clMevTaxModule — mevTaxModule() крючка должен совпасть (сверить записью aero.py: hook.mevTaxModule) | cl-arbitrum.json |
+| dex.cl_hook_ahead_s | DEX `aero-slipstream-arbitrum@arbitrum` | совета нет — по записи aero.py (fee() на +1 / +3 с); 0 — только время блока | окно первой комиссии нового блока (T470-01) | DynamicSwapFeeHook.sol |
+| dex.quoter_virtual | DEX `aero-slipstream-arbitrum@arbitrum` | `да` | QuoterV2 в развёртывании нет (только metaquoter — не подключён) | cl-arbitrum.json |
+| dex.cl_tick_spacings | DEX `aero-slipstream-arbitrum@arbitrum` | `1, 10, 50, 100, 150, 200, 250` (поиск по фабрике) | слова массива в clFactoryConstructorArgs: 1/100, 10/500, 50/3000, 100/10000, 150/15000, 200/20000, 250/25000 (tickSpacing/fee — разбор слов, сверить tickSpacingToFee своим узлом: tools/arbitrum_record/aero.py) | cl-arbitrum.json |
+| send.priority_fee_gwei / send.tip_cap_gwei | площадка arb_dex | не выше minThreshold модулей MEV-налога с ненулевым priorityFeeMultiplier (аргументы конструкторов: volatile — множитель 1e9, порог 1 gwei; stable — 5e8, 2 gwei; CL — множитель 0, налога нет) | иначе пулы Aero не читаются (pools/aero_mev.rs) | constructor args модулей; читать своим узлом (tools/arbitrum_record/aero.py) |
+| dex.pool_enabled | три DEX выше | «да» — после записи tools/arbitrum_record/aero.py и прохода тестов | решение Тиграна | — |
+| dex.arb_sys | площадка arb_dex | `0x0000000000000000000000000000000000000064` | ArbSys.arbOSVersion — до ArbOS 60 чаевые не собираются, MEV-налог Aero 0 (решение 470, T470-02) | nitro-precompile-interfaces ArbSys.sol |
+| dex.arb_owner_public | площадка arb_dex | `0x000000000000000000000000000000000000006b` | ArbOwnerPublic.getCollectTips (ArbOS 60+) | nitro-precompile-interfaces ArbOwnerPublic.sol |

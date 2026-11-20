@@ -20,6 +20,7 @@ use alloy_primitives::{Address, B256};
 use super::super::ctx::Ctx;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::directory::pool_key;
+use super::abi_aero_basic::IAeroBasicFactory;
 use super::abi_algebra::IAlgebraFactory;
 use super::abi_dmm::{self, IDmmFactory};
 use super::abi_dodo::IDodoFactory;
@@ -98,6 +99,13 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee => {
                 ("dex.factory", IAlgebraFactory::Pool::SIGNATURE_HASH, false)
             }
+            // Решение 470: Aero Basic — PoolCreated(token0 indexed, token1 indexed, pool, n) без stable (metadex-public 1.1.0
+            // IPoolFactory.sol L53, эмит PoolFactory.sol L343).
+            Proto::AeroBasic => (
+                "dex.factory",
+                IAeroBasicFactory::PoolCreated::SIGNATURE_HASH,
+                false,
+            ),
             // Solidly (Topaz v2, THENA V1; решения 80, 85): фабрика эмитит PoolCreated(token0, token1, stable, pool, n)
             // при создании пула (velodrome-finance PoolFactory.sol).
             Proto::Solidly => (
@@ -360,6 +368,12 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
         Proto::Solidly => {
             let e = ISolidlyFactory::PoolCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PoolCreated (Solidly) не по ABI: {e}"))?;
+            (e.token0, e.token1, e.pool)
+        }
+        // Решение 470: Aero Basic — PoolCreated(token0, token1, pool, n); кривую читает load_aero_basic.rs (POOL_TYPE).
+        Proto::AeroBasic => {
+            let e = IAeroBasicFactory::PoolCreated::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("PoolCreated (Aero Basic) не по ABI: {e}"))?;
             (e.token0, e.token1, e.pool)
         }
         Proto::SolidlyV1 => {

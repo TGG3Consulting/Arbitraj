@@ -6,7 +6,7 @@
 //! проверка в entry.rs fits / fits_ok).
 //! Кто вызывает: exec/executor/entry.rs (params, fits, fits_ok).
 //! От чего зависит: core/types (VaultPoolData), exec/executor/kind.rs (Params), ctx_wallet.rs (exec_info),
-//! pools/exec_callback.rs (has_call), quote/quoter_balancer_v3_buffer.rs (wrappers).
+//! pools/exec_callback.rs (has_call, need_v5), quote/quoter_balancer_v3_buffer.rs (wrappers).
 //! Настройки: нет.
 
 use alloy_primitives::Address;
@@ -44,9 +44,9 @@ pub fn refusal(ctx: &Ctx, state: &PoolState) -> Option<String> {
         }
         Some((_, Some(v))) if exec_callback::has_call(v, BUFFER_MARK) => None,
         Some((_, Some(v))) => Some(format!(
-            "исполнитель {} не знает шаг BALANCER_V3_BUF = 27 (обмен через буфер ERC4626, решение 474) — нужна \
-             сборка исполнителя v5",
-            v.label()
+            "исполнитель {} не знает шаг BALANCER_V3_BUF = 27 (обмен через буфер ERC4626, решение 474) — {}",
+            v.label(),
+            exec_callback::need_v5()
         )),
     }
 }

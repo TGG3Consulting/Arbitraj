@@ -31,8 +31,6 @@ fn out(d: &ProteusData, in_x: bool, input: U256) -> Option<U256> {
     swap_given_input(d, d.x_bal, d.y_bal, input, in_x)
 }
 
-/// Масштаб доли полосы (18 знаков) — точность расчёта, не порог (как quote/depth_band.rs).
-const SCALE: f64 = 1e18;
 /// Проба спота (единицы учёта) и выход за неё. None — пул не отвечает. Ошибок нет.
 fn probe(d: &ProteusData, in_x: bool) -> Option<(U256, U256)> {
     let bal = if in_x { d.x_bal } else { d.y_bal };

@@ -7,10 +7,15 @@
 //! От чего зависит: alloy-primitives (I256, U256).
 //! Настройки: нет (пределы 64.64 — константы библиотеки).
 //!
-//! Источник (решение 23): ABDKMath64x64.sol, побайтно та же копия, что в исходниках развёрнутых реализаций Proteus
-//! (Sourcify 42161 0x537e2d22… и др., git-блоб bfef6d78) — github.com/cowri/Proteus@027b5ec contracts/ABDKMath64x64.sol:
+//! Источник (решение 23): ABDKMath64x64.sol — github.com/cowri/Proteus@027b5ec contracts/ABDKMath64x64.sol (git-блоб
+//! bfef6d78 = копия в исходниках Sourcify 42161 реализаций v1/v2-группы 0x537e2d22…, 0x243e8336… и др.):
 //! MIN_64x64 / MAX_64x64 L20, L25; sub L132-L138; mul L147-L153; muli L163-L191; mulu L201-L218; divi L244-L266;
-//! inv L318-L325; divuu L677-L717.
+//! inv L318-L325; divuu L677-L717 — divuu этой копии кончается `assert (xh == hi >> 128); result += xl / y;`.
+//! Реализация SHELL+ETH 0xf6e9c132 (Ocean v3) несёт более новую копию ABDK, у которой divuu вместо assert делает
+//! `result += xh == hi >> 128 ? xl / y : 1` (прочие функции совпадают, сверка Sourcify 20.11.2026). Порт — форма с
+//! assert: при xh != hi>>128 возвращает None. Эта ветка у обеих копий недостижима для входов, прошедших предыдущий
+//! `require (result <= 2^128 − 1)`, при реальных балансах пула (приведённый учёт, 18 знаков) — расчёт совпадает с
+//! обеими развёрнутыми копиями на всех достижимых суммах.
 
 use alloy_primitives::{I256, U256};
 
@@ -138,8 +143,8 @@ pub fn divuu(x: U256, y: U256) -> Option<U256> {
         }
         let hi = r.wrapping_mul(y >> 128);
         let lo = r.wrapping_mul(y & m128);
-        let mut xh = x >> 192;
-        let mut xl = x << 64;
+        let mut xh: U256 = x >> 192;
+        let mut xl: U256 = x << 64;
         if xl < lo {
             xh = xh.wrapping_sub(one);
         }

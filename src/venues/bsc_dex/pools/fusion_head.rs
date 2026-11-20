@@ -19,8 +19,10 @@
 //! если книга покрывает); спящие пулы (asleep) пропускаются.
 //! Кто вызывает: pools/per_block.rs (any, on_head).
 //! От чего зависит: math/fee_algebra_v1.rs, fusion_book.rs (with, Held), fusion_head_read.rs, listen.rs (Pools),
-//! emit_pool.rs, registry.rs, settle.rs (pending, hold, Need::Fee), pool_fail.rs (paused), node/heads.rs,
-//! depth_book.rs (label).
+//! emit_pool.rs, registry.rs, settle.rs (pending, hold, Need::Fee), settle_fusion.rs (on_clock, clock_back),
+//! fusion_clock.rs (lost), pool_fail.rs (paused), node/heads.rs, depth_book.rs (label).
+//! Третье ревью t236 (пп. 2, 3): комиссия и снятие Need::Clock — одним изменением реестра (сначала комиссия, затем
+//! достоверность); запись новее той, по которой посчитана комиссия (synced_block), не перетирается.
 //! Настройки: через fusion_fee.rs — dex.fusion_fee_horizon_s [bsc_dex].
 
 use alloy_primitives::Address;
@@ -85,13 +87,18 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
         };
         match step(&e, addr, ts, clock) {
             Step::Fee(new, edge) => {
-                // Время снова есть и книга покрывает — отметка «нет времени» долой (достоверность — как до неё).
-                if clock {
-                    p.holds.clock_back(&p.reg, r);
+                // Третье ревью t236 (пп. 2, 3): комиссия, затем (Need::Clock: время снова есть, книга покрывает)
+                // достоверность до отметки — ОДНИМ изменением реестра и только если запись не новее посчитанной.
+                let was = if clock {
+                    p.holds.get(r).map(|h| h.was_valid)
+                } else {
+                    None
+                };
+                let done = p.reg.update(r, |x| set(x, new, e.synced_block, was));
+                if clock && matches!(done, Some(Some(_))) {
+                    p.holds.clock_back(r);
                 }
-                if let Some(n) = new
-                    && let Some(Some(pool)) = p.reg.update(r, |e| set(e, n))
-                {
+                if let Some(Some(Some(pool))) = done {
                     super::emit_pool::emit(p, pool)?;
                 }
                 if edge && !super::pool_fail::paused(p, r) {
@@ -151,18 +158,28 @@ fn judge(h: Option<&Held>, (synced, ts): (u64, u32), (tick, fee): (i32, u32)) ->
     Step::Fee((n != fee).then_some(n), edge)
 }
 
-/// Новая комиссия `n` — в запись, если пул достоверен. Возвращает: пул ядру, если комиссия изменилась. Ошибок нет.
-fn set(e: &mut Entry, n: u32) -> Option<Pool> {
-    if !e.valid {
+/// Комиссия `n` (None — та же) в запись, затем достоверность `was` (Need::Clock снимается) — одним изменением; запись
+/// новее посчитанной (`synced` ≠ synced_block) — ничего (третье ревью t236, п. 3). Недостоверная без `was` — ничего.
+/// Принимает: запись, комиссию, synced_block расчёта, достоверность до отметки Clock. Возвращает: None — запись новее;
+/// Some(пул ядру, если комиссия изменилась и пул достоверен). Ошибок нет.
+fn set(e: &mut Entry, n: Option<u32>, synced: u64, was: Option<bool>) -> Option<Option<Pool>> {
+    if e.synced_block != synced {
         return None;
     }
-    match &mut e.pool.state {
-        PoolState::Algebra { fee, .. } if *fee != n => {
-            *fee = n;
-            Some(e.pool.clone())
-        }
-        _ => None,
+    if !e.valid && was.is_none() {
+        return Some(None);
     }
+    let mut changed = false;
+    if let (Some(n), PoolState::Algebra { fee, .. }) = (n, &mut e.pool.state)
+        && *fee != n
+    {
+        *fee = n;
+        changed = true;
+    }
+    if let Some(w) = was {
+        e.valid = w;
+    }
+    Some((changed && e.valid).then(|| e.pool.clone()))
 }
 
 /// Комиссия не считается: пул недостоверен до полного чтения (settle.rs Need::Fee) и причина в журнал. Принимает:

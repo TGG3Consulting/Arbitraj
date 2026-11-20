@@ -104,7 +104,7 @@
 | 76 | `omni-exchange-v3-arbitrum` | Omni Exchange V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-076 |
 | 77 | `balancer-v3-arbitrum` | Balancer V3 (Arbitrum) | Balancer V3 (docs/notes/arbitrum/docs-check-2026-11-20.md) | — | **семейства нет в коде** | не сверены | T433-077 |
 | 78 | `fluid-arbitrum` | Fluid (Arbitrum) | Fluid DEX T1 (docs/notes/arbitrum/docs-check-2026-11-20.md) | — | **семейства нет в коде** | не сверены | T433-078 |
-| 79 | `ekubo-v3-arbitrum` | Ekubo V3 (Arbitrum) | Ekubo | — | **семейства нет в коде** | не сверены | T433-079 |
+| 79 | `ekubo-v3-arbitrum` | Ekubo V3 (Arbitrum) | Ekubo (EkuboProtocol/evm-contracts@61d09daa — ядро Arbitrum) | `ekubo` — src/venues/bsc_dex/pools/families.rs (решение 447) | **семейство в коде (решение 447): ждёт CI, записи узла, сборки исполнителя; нативный ETH, TWAMM — не берутся (вопросы TASKS 447)** | docs.ekubo.org/reference/contracts/evm-v3: Core 0x00000000000014aA86C5d3c41765bb24e11bd701, MEVCapture 0x5555fF9Ff2757500BF4EE020DcfD0210CFfa41Be, MEVCaptureRouter 0xd26f20001a72a18C002b00e6710000d68700ce00; PoolKeyIndex 0x898956fc2aed01d5f81f556ff5dcb10534285718 (broadcast DeployAll.s.sol/42161) | T433-079 |
 | 80 | `ramses-legacy-arbitrum` | Ramses Legacy (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-080 |
 | 81 | `ramses-v3-arbitrum` | Ramses V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-081 |
 | 82 | `rubicon-clmm-arbitrum` | Rubicon CLMM (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-082 |
@@ -304,7 +304,7 @@
 - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F6 Liquidity Book v2.0 (LFJ V2) — новое семейство (в коде только v2.1); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F7 Liquidity Book v2.2 (LFJ V2.2) — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
-- T433-F8 Ekubo — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+- T433-F8 Ekubo — **код есть (решение 447, вид `ekubo`)**: math/ekubo_*, pools/*ekubo*, quote/quoter_ekubo.rs, depth_ekubo.rs, шаг EKUBO = 22 (исходник; артефакты не собраны); тесты — tests/arbitrum_ekubo_live.rs (#[ignore] до записи tools/arbitrum_record/ekubo.py).
 
 ## 5. Записи DefiLlama других категорий (не DEX спота) — 53
 

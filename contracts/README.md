@@ -26,6 +26,14 @@
 → `cargo test --test bsc_dex_executor_abi` (ABI, номера видов, хеши) → `cd evmtest && npm ci && node run.mjs`.
 
 ## Версии (решения 272, 395)
+- **Шаг EKUBO = 22 (решение 447) — в исходнике, артефакты НЕ собраны.** `ArbExecutor.sol` (шаг `_ekubo`, обратный вызов
+  ядра Ekubo `locked_6416899205` — селектор 0x00000000, `_ekuboCall`) и `IPools.sol` (`IEkuboCore` — селекторы lock /
+  forward / startPayments / completePayments / withdraw) изменены, `out/` — прежняя сборка v3 (сборка solc локально
+  запрещена). Нужно: (1) скопировать текущий `out/` в `out/v3/` и научить `exec/executor/code.rs` узнавать v3 по `out/v3/`
+  (как v2 / v1), новая версия — `out/`; (2) `contracts/build.sh`, `git diff contracts/out`, обновить хеши и размер кода
+  (предел EIP-170 — 24 576); (3) EVM-тест шага EKUBO с официальным кодом ядра Ekubo (`evmtest/`, как singleton.mjs);
+  (4) переразвернуть исполнитель кошелька Arbitrum. До этого бот не строит шаг EKUBO: в коде исполнителя нет вызова
+  completePayments() (`pools/exec_callback.rs` EKUBO_MARK) — пулы Ekubo в графе и сигналах без пути исполнения.
 - **v3** (решение 395, t181) — v2 + шаги UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 (пулы внутри менеджеров Uniswap V4 и
   PancakeSwap Infinity) и обратные вызовы `unlockCallback` / `lockAcquired`. Текущая сборка `out/` — v3; «Развернуть
   исполнитель» разворачивает её. Хранилище то же (owner — слот 0, wnative — слот 1), execute / executeNative — те же.

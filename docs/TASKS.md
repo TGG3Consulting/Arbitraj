@@ -578,7 +578,7 @@
   - T433-076 `omni-exchange-v3-arbitrum` (Omni Exchange V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-077 `balancer-v3-arbitrum` (Balancer V3 (Arbitrum)) — семейства нет в коде: семейство T433-F2; официальные адреса; завести и включить в arb_dex.
   - T433-078 `fluid-arbitrum` (Fluid (Arbitrum)) — семейства нет в коде: семейство T433-F1; официальные адреса; завести и включить в arb_dex.
-  - T433-079 `ekubo-v3-arbitrum` (Ekubo V3 (Arbitrum)) — семейства нет в коде: семейство T433-F8; официальные адреса; завести и включить в arb_dex.
+  - T433-079 `ekubo-v3-arbitrum` (Ekubo V3 (Arbitrum)) — **код семейства есть (решение 447, вид `ekubo`), ждёт CI, записи узла и сборки исполнителя**: адреса официальные (docs.ekubo.org evm-v3: Core, MEVCapture, MEVCaptureRouter; PoolKeyIndex — broadcast evm-contracts 42161) — в docs/FIRST_RUN.md, раздел «DEX Ekubo сети Arbitrum»; включить в arb_dex (dex.kind = ekubo по ключу DEX площадки) после записи tools/arbitrum_record/ekubo.py и снятия #[ignore] с tests/arbitrum_ekubo_live.rs; вопросы — блок «Решение 447».
   - T433-080 `ramses-legacy-arbitrum` (Ramses Legacy (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-081 `ramses-v3-arbitrum` (Ramses V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-082 `rubicon-clmm-arbitrum` (Rubicon CLMM (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
@@ -654,8 +654,30 @@
   - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F6 Liquidity Book v2.0 (LFJ V2) — новое семейство (в коде только v2.1); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F7 Liquidity Book v2.2 (LFJ V2.2) — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
-  - T433-F8 Ekubo — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+  - T433-F8 Ekubo — **сделано кодом (решение 447, ветка t223-f8/arb-family-f8), ждёт CI**: математика (порт ядра, векторы официальных тестов), чтение, события, проверка, котировка, сверка Router.quote, шаг EKUBO = 22 в исходнике исполнителя (артефакты не собраны), настройки dex.ekubo_*; тесты на записи — #[ignore] до записи tools/arbitrum_record/ekubo.py. Осталось — блок «Решение 447».
   - T433-R1 Записать ответ DefiLlama overview/dexs/arbitrum со своего сервера в tests/data (сейчас — чтение WebFetch 19.11).
+- **Решение 447 (20.11.2026, ветка t223-f8/arb-family-f8) — семейство пулов Ekubo (T433-F8, T433-079); ждёт сборки и
+  тестов в GitHub (cargo локально не запускался).** Сделано: вид `ekubo` целиком кодом (DECISIONS 447). Осталось:
+  1) Запись своего узла: `python3 tools/arbitrum_record/ekubo.py --rpc <узел> --gt` → tests/data/arbitrum_ekubo_<дата>/,
+     снять #[ignore] с tests/arbitrum_ekubo_live.rs (расчёт = Router.quote, ключ → PoolId, логи ядра).
+  2) Исполнитель: собрать contracts (out/ → out/v3/, новая сборка в out/, распознавание версии в exec/executor/code.rs),
+     EVM-тест шага EKUBO с официальным кодом ядра, переразвернуть исполнитель кошелька Arbitrum (contracts/README.md).
+  3) Замер нагрузки при «Стоп» (docs/ADAPTER_TEMPLATE.md п. 8): каждая пачка пулов Ekubo подписана на ВСЕ логи ядра
+     (PoolId не в topics) — число пачек = пулы / dex.pools_per_sub.
+  Вопросы Тиграну:
+  1) Пулы с нативным ETH (token0 = адрес 0 — так устроен NATIVE_TOKEN_ADDRESS ядра) не берутся: граф и исполнитель —
+     ERC-20 (WETH). Делать ли шаг с разворотом WETH ↔ ETH (оплата ядру value, receive у исполнителя)? Без этого пулы
+     ETH/… Ekubo на Arbitrum пропущены (сколько их — покажет запись GeckoTerminal).
+  2) Ключ пула берётся только у PoolKeyIndex (реестр необязательный — PoolKeyIndex.sol L11). Пул без регистрации не
+     берётся. Нужна ли история PoolInitialized ядра (как история V4, dex.history_scan) — после записи (доля пулов
+     GeckoTerminal без ключа в реестре).
+  3) Формат адреса пула Ekubo у GeckoTerminal не проверен фактом (код ждёт PoolId, 32 байта) — запись gt_pools.json.
+  4) Расширения TWAMM, Oracle (только пары с нативным ETH), BoostedFees — не поддержаны (TWAMM исполняет ордера до обмена —
+     своей математики нет; BoostedFees в развёрнутом ядре 61d09da отсутствует, разворачивался позже — 69b642d). Нужны ли?
+  5) MEVCapture: состояние расширения после события берётся из blockTimestamp лога; если узел Nitro его в логах не
+     отдаёт — пул с MEVCapture перечитывается на каждое событие (запись core_logs.json покажет).
+- **Решение 447 — техдолг:** exec/tip_judge.rs (решение 437) ищет перехватчика по topics[1] = PoolId — логи ядра Ekubo
+  (PoolId в данных) не распознаются; check/memory_proof_rules.rs подписка доказательства памяти — по PoolId в topics.
 - **Решение 416 — перенесено в следующие шаги плана (docs/notes/arbitrum/multichain-plan-2026-11-19.md):**
   1) ДО того, как адаптер DEX начнёт ставить сеть в монету (шаг 2): перенос `chain = None` → сеть (записи учёта
      core_state, учёт сделок, окна; карты в памяти) или «действующая сеть» в равенстве — иначе старая монета (None) ≠

@@ -225,10 +225,12 @@ fn off(ctx: &Ctx, error: Option<String>) -> Option<Duration> {
     None
 }
 
-/// Проход не выполнен (не задана настройка): причина — в справочник и в журнал при смене. Возвращает: None.
+/// Проход не выполнен (не задана настройка): причина — в справочник и в журнал при смене; начало прохода
+/// снимается (ревью 449: иначе экран показывал «Идёт проход» до следующего успешного). Возвращает: None.
 async fn failed(ctx: &Ctx, why: String) -> Option<Duration> {
     let changed = ctx.index.with(|s| {
         s.factory_scan.enabled = true;
+        s.factory_scan.started = None;
         let was = s.factory_scan.error.replace(why.clone());
         was.as_deref() != Some(why.as_str())
     });

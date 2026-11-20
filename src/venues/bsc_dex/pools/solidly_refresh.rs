@@ -35,6 +35,10 @@ pub async fn refresh(p: &Pools) {
     let mut by: Vec<(&'static Family, Vec<Item>)> = Vec::new();
     for r in p.reg.refs() {
         let Some(e) = p.reg.get(&r) else { continue };
+        // Решение 443: пары Camelot V2 (тоже PoolState::Solidly) — не Solidly: комиссии у них из события пары.
+        if !e.family.proto.is_solidly() {
+            continue;
+        }
         let (PoolState::Solidly { stable, .. }, PoolRef::Contract(pool)) = (&e.pool.state, &r)
         else {
             continue;

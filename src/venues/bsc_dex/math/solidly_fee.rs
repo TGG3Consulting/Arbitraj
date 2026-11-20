@@ -8,6 +8,7 @@
 //!   https://bscscan.com/address/0xb3863573d9f25e6a84895d4685a408db7a488416#code — фабрика, пары по её коду).
 //!
 //! Solidity 0.8 — checked: деление на ноль и недобор откатываются → None.
+//! Решение 443: side — комиссия входа направления у пары с направленной комиссией (Camelot V2).
 //! Кто вызывает: quote/pool_quote.rs, quote/steps.rs, quote/emptiness.rs, exec/solidly_gate.rs; тесты.
 //! От чего зависит: core/types (SolidlyFee, FeeRule, SolidlyGate), rust_decimal.
 //! Настройки: нет (правило — в состоянии пула, его задаёт pools/load_solidly.rs по dex.solidly_fee_* [DEX]).
@@ -36,6 +37,20 @@ pub fn net_in(amount: U256, fee: &SolidlyFee) -> Option<U256> {
         }
     };
     amount.checked_sub(cut)
+}
+
+/// Комиссия входа направления (решение 443): у пары с направленной комиссией (Camelot V2) `fee` — вход token0,
+/// `fee1` — вход token1; без `fee1` — одна комиссия на оба направления. Принимает: комиссии, вход token0 ли. Возвращает:
+/// комиссию этого входа. Ошибок нет.
+pub fn side<'a>(
+    fee: &'a SolidlyFee,
+    fee1: Option<&'a SolidlyFee>,
+    zero_for_one: bool,
+) -> &'a SolidlyFee {
+    match fee1 {
+        Some(f1) if !zero_for_one => f1,
+        _ => fee,
+    }
 }
 
 /// Комиссия в процентах. Числитель: value / denominator · 100 (делитель 10000 → value / 100, как до решения 273);

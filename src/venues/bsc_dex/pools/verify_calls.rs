@@ -44,6 +44,9 @@ pub fn field_calls(ctx: &Ctx, f: &Family) -> Result<Vec<Bytes>, String> {
         // SmarDex (решение 288): factory/token0/token1 (SmardexPair.sol L31-L33: factory immutable, token0/token1), реестр —
         // getPair (как V2); фиктивные резервы и комиссии — с состоянием (load_smardex.rs).
         Proto::Smardex => {}
+        // Camelot V2 (решение 443): factory/token0/token1 (CamelotPair: public factory, token0, token1 — Pair.sol L16-L18);
+        // комиссии, stableSwap и множители — с состоянием (load_camelot.rs), реестр — getPair (registry_call_with).
+        Proto::CamelotV2 => {}
         // KyberSwap Elastic (решение 81): swapFeeUnits (uint24) и tickDistance (int24) вместо fee/tickSpacing/lmPool.
         Proto::KyberElastic => {
             l.push(Bytes::from(IElasticPool::swapFeeUnitsCall {}.abi_encode()));
@@ -93,7 +96,8 @@ pub fn registry_call_with(f: &Family, r: &Read, key: Option<u32>) -> Bytes {
     match f.proto {
         // Nomiswap Stable (решение 284): фабрика getPair(a, b) — как UniswapV2Factory (NomiswapStableFactory L1189).
         // SmarDex (решение 288): getPair(a, b) — mapping фабрики (SmardexFactory.sol L20, L44-L45).
-        Proto::V2 | Proto::NomiStable | Proto::Smardex => Bytes::from(
+        // Camelot V2 (решение 443): getPair(a, b) — mapping фабрики (CamelotFactory.sol L19, L66-L67).
+        Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => Bytes::from(
             IV2Factory::getPairCall {
                 tokenA: r.token0,
                 tokenB: r.token1,

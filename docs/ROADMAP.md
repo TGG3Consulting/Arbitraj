@@ -74,6 +74,14 @@
   котировка считает исполнимым (как и get_dy пула) — сделка откатится целиком (атомарный бандл), потеря — газ.
   Тесты — #[ignore] до записи (tests/arb_curve_crypto_live.rs).
 - Решение 442 (T433-F3, crypto-пулы Curve Arbitrum; `wc -l`): сверх ориентира 200 — venues/bsc_dex/math/crypto_y2.rs 227 (get_y + _newton_y Twocrypto; вынести _newton_y в crypto_newton2.rs), math/crypto_ops.rs 207 (тесты в отдельный файл), pools/families.rs 676 (было 651), pools/load.rs 515 (502), exec/executor/entry.rs 447 (422), quote/pool_quote.rs 537 (524), quote/depth_band.rs 515 (508), quote/quoter_calls.rs 464 (457) — давно сверх. Рампа A/gamma и события создания пулов фабрик — сделаны в решении 453 (вопросы 4, 6). Тесты на записи узла Arbitrum — #[ignore] до записи (tests/arb_curve_crypto_live.rs).
+- Решение 443 (`wc -l`): сверх ориентира 200 и до решения — venues/bsc_dex/quote/pool_quote.rs 532 (было 524; ветка
+  Camelot V2), pools/families.rs 664 (651), pools/load.rs 514 (502), quote/quoter_calls.rs 458 (457), quote/steps.rs 246
+  (242), core/types/pool.rs 432 (427). Глубина стабильной пары Camelot V2 (quote/depth_band.rs → quote/solidly_depth.rs)
+  считается формулами Velodrome (тот же инвариант x³y+xy³, другое округление и проверки) — оценка полосы, не котировка;
+  своя глубина по math/camelot_v2.rs — задача. Тесты на записи узла Arbitrum — #[ignore] до записи
+  (tools/arbitrum_record/camelot_v2.py). Ревью 443: сверх ориентира 200 — tools/arbitrum_record/camelot_v2.py 343
+  (keccak, узел, выборка пар, редкие события — в отдельные модули tools/arbitrum_record/), tests/arb_dex_camelot_v2.rs
+  222 (разнести: математика / проверка и логи).
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

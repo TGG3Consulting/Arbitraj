@@ -251,9 +251,17 @@ pub fn swap(
                 decimals1,
                 fee,
                 gate,
+                fee1,
             },
             _,
         ) => {
+            // Решение 443: пара Camelot V2 — своя математика (направленная комиссия, арифметика Solidity 0.5).
+            if e.family.proto == Proto::CamelotV2 {
+                let st = (*reserve0, *reserve1, *stable, *decimals0, *decimals1);
+                let q = (zero_for_one, exact_in, amount);
+                let r = super::camelot_quote::swap(st, fee, fee1.as_ref(), q);
+                return r.map_err(|w| why(&w));
+            }
             // Решение 273: пауза фабрики — обмен пары откатился бы (предел цены газа проверяет план сделки, exec/solidly_gate.rs).
             if let Some(w) = solidly_fee::blocked(gate, None) {
                 return Err(why(&w));

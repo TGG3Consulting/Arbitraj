@@ -25,7 +25,7 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_ng, load_dmm, load_dodo,
+    load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_ng, load_dmm, load_dodo,
     load_elastic, load_fluid, load_inf_stable, load_izi, load_lb, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
@@ -226,6 +226,18 @@ pub async fn state(
         let resolver = ctx.dex_addr("dex.quoter", f.id)?;
         return Ok(Loaded {
             state: load_fluid::load(ctx, resolver, *a, block).await?,
+            ticks: None,
+            bins: None,
+            fee_pips: None,
+        });
+    }
+    // Camelot V2 (решение 443): вид ядра Solidly, пара — отдельный контракт; одно try_many (load_camelot.rs).
+    if f.proto == Proto::CamelotV2 {
+        let PoolRef::Contract(a) = reference else {
+            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пару Camelot не того вида", f.title)));
+        };
+        return Ok(Loaded {
+            state: load_camelot::load(ctx, *a, &tag).await?,
             ticks: None,
             bins: None,
             fee_pips: None,

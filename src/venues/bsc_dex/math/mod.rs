@@ -17,6 +17,7 @@ pub mod balancer_v3_stable;
 pub mod balancer_v3_weighted;
 pub mod bin_price;
 pub mod bin_swap;
+pub mod camelot_v2;
 pub mod crypto_d2;
 pub mod crypto_d3;
 pub mod crypto_lim2;

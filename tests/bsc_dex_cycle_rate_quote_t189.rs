@@ -308,6 +308,7 @@ async fn solidly_rate_matches_contract() {
             decimals1: u(&m["dec1"]),
             fee: solidly273_common::fee_of(&dex, &d, &p),
             gate: Default::default(),
+            fee1: None,
         };
         let e = entry(&rec.pool, "solidly_v1", state, None, (t0, t1));
         let r = edge_rate(&rec.ctx, &edge(e), tin).expect("у пары записи есть курс");

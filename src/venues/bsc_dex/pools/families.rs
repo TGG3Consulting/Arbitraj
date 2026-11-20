@@ -228,6 +228,14 @@ pub enum Proto {
     /// подтверждает список dex.stable_pools (журнал развёртывания curvefi); математика — math/crypto_v1_3.rs.
     /// Многомонетный (решение 295). Квотер — get_dy пула; исполнение — шаг STABLE_U256. Вид ядра — Crypto.
     CurveTricryptoV1,
+    /// Camelot V2 (решение 443, T433-F4; camelot_v2, DEX camelot сети Arbitrum): пара CamelotPair — резервы uint112,
+    /// НАПРАВЛЕННАЯ комиссия (token0FeePercent / token1FeePercent над 100000, меняется событием FeePercentUpdated) и
+    /// флаг stableSwap (volatile — x·y=k, stable — x³y+xy³; меняется событием SetStableSwap). Фабрика getPair /
+    /// PairCreated, поля пары factory/token0/token1, Sync / Mint, обмен swap(out0, out1, to, data) — как у V2 (проверка
+    /// и поиск — путём V2). Состояние — PoolState::Solidly с fee1 (load_camelot.rs), события — events_camelot.rs,
+    /// математика — math/camelot_v2.rs (арифметика Solidity 0.5), квотер — сама пара getAmountOut(uint256, address)
+    /// (селектор тот же, что у Solidly). Исполнение — шаг SOLIDLY исполнителя. Вид ядра — Solidly.
+    CamelotV2,
 }
 
 impl Proto {
@@ -434,6 +442,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // STABLE_U256 исполнителя (exchange(uint256, uint256, dx, 0) у обоих есть).
         "curve_crypto_v1" => (PoolKind::Crypto, Proto::CurveCryptoV1, true, false, false),
         "curve_tricrypto_v1" => (PoolKind::Crypto, Proto::CurveTricryptoV1, true, false, false),
+        // Camelot V2 (решение 443): в графе и сигналах (своя математика пары); исполнение — шаг SOLIDLY исполнителя.
+        "camelot_v2" => (PoolKind::Solidly, Proto::CamelotV2, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
         // Router их не исполняет (tradable = false); исполнение — шагом контракта-исполнителя: STABLE_U256 у pancake / lista
         // (exchange с индексами uint256), SADDLE у saddle (swap uint8 + deadline) — exec_kind.rs (решение 122 X, стейблсвапы).
@@ -701,6 +711,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::CurveCryptoV1 => list.extend(["dex.factory", "dex.curve_crypto_v1_templates"]),
         // Tricrypto 2021 (решение 453): фабрики нет — список адресов пулов из журнала развёртывания curvefi.
         Proto::CurveTricryptoV1 => list.push("dex.stable_pools"),
+        // Camelot V2 (решение 443): фабрика (factory() пары, реестр getPair, событие PairCreated — как V2). Квотер сверки —
+        // сама пара getAmountOut (адрес не нужен).
+        Proto::CamelotV2 => list.push("dex.factory"),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

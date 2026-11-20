@@ -1095,3 +1095,14 @@ ReClamm, LBP, LBP с фиксированной ценой, QuantAMM и пулы
 | dex.quoter | DEX `fluid-arbitrum` | `0x05Bd8269A20C472b148246De20E6852091BF16Ff` | FluidDexReservesResolver — состояние пула (getPoolReservesAdjusted) и сверка выхода (estimateSwapIn); конструктор: фабрика 0x9171…9085, Liquidity 0x52Aa…e497, LiquidityResolver 0xca13…5C60 | deployments/arbitrum/DexReservesResolver.json (поле `args`) |
 | dex.pool_enabled | DEX `fluid-arbitrum` | `да` — после записи данных узла (tools/arbitrum_record/fluid_t1.py) и снятия #[ignore] с tests/arbitrum_fluid_t1.rs | Порт _swapIn сверен с пулами Arbitrum только по записи | Решение 440 |
 | dex.native_wrapped | площадка arb_dex | обёртка нативной монеты сети (WETH Arbitrum One) — значение площадки arb_dex | Пулы Fluid с нативной монетой (0xEeee…: USDC/ETH, wstETH/ETH, weETH/ETH, ezETH/ETH, rsETH/ETH, FLUID/ETH) берутся только с ней | Instadapp/fluid-contracts-public poolT1/common/constantVariables.sol L17 (NATIVE_TOKEN) |
+
+## Camelot V2 в сети Arbitrum (решение 443, T433-F4)
+
+Новых настроек нет: вид пула `camelot_v2` — новый вариант dex.kind. Задаётся в области «DEX» площадки arb_dex (ключ
+`camelot@arbitrum` — id GeckoTerminal `camelot` с сетью, решение 435), когда площадка arb_dex поднята (dex.venues).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `camelot@arbitrum` | `camelot_v2` | Пара CamelotPair: направленная комиссия и stable / volatile — своя математика (math/camelot_v2.rs), проверка и поиск пар — путём V2, шаг SOLIDLY исполнителя | verified-исходник фабрики Arbiscan (src/venues/bsc_dex/pools/abi_camelot.rs) |
+| dex.factory | DEX `camelot@arbitrum` | `0x6EcCab422D763aC031210895C81787E87B43A652` | Фабрика Camelot V2 (AMMv2 Factory): factory() пары, реестр getPair, событие PairCreated | docs.camelot.exchange/contracts/arbitrum/one-mainnet |
+| dex.pool_enabled | DEX `camelot@arbitrum` | «да» — после записи tools/arbitrum_record/camelot_v2.py и прохода тестов tests/arb_dex_camelot_v2.rs | Пулы Camelot V2 в граф и сигналы; сделки — через исполнитель кошелька Arbitrum (шаг SOLIDLY есть у v1/v2/v3) | Решение 443 |

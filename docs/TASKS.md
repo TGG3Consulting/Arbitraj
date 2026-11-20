@@ -859,6 +859,31 @@
   connection_gas.rs); канал sequencer на BSC не включать без channel.chain — при одной площадке он канал BSC
   (channels.rs serves → default_chain → alone), открытый (sequencer.rs private: false), и вместе с каналами билдеров
   select (send/mod.rs) откажет «Открытый канал включён вместе с другими» — отправка BSC встанет.
+- **Решение 443 (20.11.2026, ветка t223-f4/arb-family-f4) — Arbitrum, семейство T433-F4 Camelot V2 (вид `camelot_v2`);
+  ждёт сборки и тестов в GitHub CI (cargo локально не запускался).** Сделано: математика пары (math/camelot_v2.rs, порт
+  getAmountOut с арифметикой Solidity 0.5.16), чтение (pools/load_camelot.rs), события Sync / FeePercentUpdated /
+  SetStableSwap (pools/events_camelot.rs), проверка и поиск пар путём V2, квотер сверки — сама пара getAmountOut,
+  шаг SOLIDLY исполнителя (переразвёртывание не нужно), поле fee1 у PoolState::Solidly (направленная комиссия),
+  каталог dex.kind и подпись в интерфейсе; новых настроек нет. Источник — verified-исходник Arbiscan официальной
+  фабрики 0x6EcCab42…A652 (её код создаёт пары, CamelotFactory.sol L59), копия — tintinweb/smart-contract-sanctuary-arbitrum@465b149.
+  Осталось:
+  - Запись своего узла: `python3 tools/arbitrum_record/camelot_v2.py http://УЗЕЛ:8547 --factory 0x6EcCab422D763aC031210895C81787E87B43A652`
+    (из корня репозитория) → tests/data/arbitrum_camelot_v2_<дата>/; затем снять #[ignore] в tests/arb_dex_camelot_v2.rs
+    (сверка нашей математики с getAmountOut пары, проверка путём V2, разбор реальных логов, один код у всех пар).
+  - Завести DEX в области «DEX» `camelot@arbitrum` (docs/FIRST_RUN.md) и включить после зелёных тестов на записи.
+  - Сухая сделка шага SOLIDLY через пару Camelot на исполнителе кошелька Arbitrum (бот делает её перед первой сделкой —
+    exec/executor/dry.rs): записанной пробы исполнителя на паре Camelot нет.
+  Ревью t223-f4 — правки сделаны (DECISIONS «443 (ревью, правки)»): проверка K в swap_out, комиссия 0 — отказ, тест
+  на записи требует стабильные пары и сверяет значения логов, скрипт отделяет откат от ошибок узла и добирает
+  стабильные пары полным просмотром allPairs.
+  Вопросы Тиграну:
+  1) Официального репозитория Camelot V2 на GitHub нет (у github.com/CamelotLabs — только SDK, списки токенов и
+     расширения Frontier); исходник взят из verified-кода Arbiscan через зеркало tintinweb (прямой доступ к Arbiscan
+     и Sourcify из среды агента закрыт). Принимаете это как источник, или сверить текст на arbiscan.io вручную
+     (фабрика 0x6EcCab42…A652, вкладка Contract)?
+  2) Другие DEX Arbitrum семейства Camelot V2 (форки) в таблице покрытия не установлены: у строк «семейство не
+     установлено» (Zyberswap, SwapFish, Arbidex и др.) — свои задачи T433-NNN; форк включается видом camelot_v2 только
+     после сверки исходника пары (FEE_DENOMINATOR, формулы, события).
 - **Решение 433 (19.11.2026, ветка t217/arb-step5-adapter) — две сети, шаг 5: площадка DEX сети Arbitrum (arb_dex);
   ждёт сборки и тестов в GitHub (cargo локально не запускался).** ЖЕЛЕЗОБЕТОННОЕ ПРАВИЛО ТИГРАНА (20.11.2026): «Не
   пропустить ни единого DEX. Все DEX, которые есть, — без разделения на мелкие/крупные, без «можно потом». Ты ничего не
@@ -948,7 +973,7 @@
   - T433-006 `kyberswap_elastic_arbitrum` (Kyberswap Elastic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-06. Решение 451: готово — вид `kyber_elastic_v1`; ждёт записи узла и решения о включении (T448-06)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-007 `kyberswap_classic_arbitrum` (Kyberswap Classic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово для пулов DMM; Static Fee — T448-04; решение 450: Static Fee и Legacy — код есть, сверка — T450-01 (запись) (дочерние ключи dex.sub_dex)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-008 `elk_finance_arbitrum` (Elk Finance (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-009 `camelot` (Camelot) — семейства нет в коде: семейство T433-F4; официальные адреса; завести и включить в arb_dex.
+  - T433-009 `camelot` (Camelot) — **код сделан (решение 443)**: вид `camelot_v2`, адрес фабрики — официальный (docs.camelot.exchange); осталось: запись своего узла (tools/arbitrum_record/camelot_v2.py), снять #[ignore] в tests/arb_dex_camelot_v2.rs, завести в области «DEX» `camelot@arbitrum` (docs/FIRST_RUN.md, «Camelot V2 в сети Arbitrum») и включить.
   - T433-010 `3xcalibur` (3xcalibur) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-011 `swapfish` (SwapFish) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-012 `arbswap_arbitrum_one` (Arbswap (Arbitrum One)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
@@ -1092,7 +1117,7 @@
   - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — КОД СДЕЛАН (решение 442, ветка t223-f3/arb-family-f3): виды curve_twocrypto_ng / curve_tricrypto_ng, математика, чтение, события, проверка, поиск по фабрике, квотер get_dy, шаг STABLE_U256 (без переразвёртывания исполнителя); ждёт CI и записи узла (tools/arbitrum_record/curve_crypto.py), тесты tests/arb_curve_crypto_live.rs — #[ignore] до записи.
   - T433-F3a Curve Twocrypto-NG v2.0.0 (реализация amm_v2_0_0, math 0x2005995a… Arbitrum) — **код сделан (решение 453)**: исходник d612fde (сверен CREATE2-адресом), формула по MATH() пула; ждёт CI и записи узла.
   - T433-F3b Старые crypto-пулы Curve Arbitrum v1 — tricrypto 0x960ea3e3… (curve-crypto-contract) и фабрика crypto v1 0xE5De15A9… (curve-factory-crypto): **код сделан (решение 453)** — виды `curve_tricrypto_v1`, `curve_crypto_v1`; правки ревью — решение 455 (перевод токена на пул без события, остановленный tricrypto 2021); ждёт CI и записи узла.
-  - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+  - T433-F4 Camelot V2 — **код сделан (решение 443, ветка t223-f4/arb-family-f4; ждёт сборки и тестов в GitHub CI)**; тесты на записи — после записи узла (блок «Решение 443»).
   - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F6 Liquidity Book v2.0 (LFJ V2) — новое семейство (в коде только v2.1); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F7 Liquidity Book v2.2 (LFJ V2.2) — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.

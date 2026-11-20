@@ -532,6 +532,7 @@ async fn scene_with_signal_only() -> Parts {
             },
         },
         gate: Default::default(),
+        fee1: None,
     };
     p.registry.put(e);
     p.checks.update_pool(&PoolRef::Contract(POOL2), |f| {

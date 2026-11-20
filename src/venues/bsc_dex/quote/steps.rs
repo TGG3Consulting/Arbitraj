@@ -20,7 +20,7 @@ use crate::core::types::{Cost, CostKind, PoolKind, PoolState, RouteStep, Side, T
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::math::solidly_fee;
+use super::super::math::{crypto_swap, solidly_fee};
 use super::super::num;
 use super::super::pools::mids::Mids;
 use super::super::pools::registry::Entry;
@@ -201,6 +201,12 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
                 "комиссия StableSwap не помещается в Decimal",
             )
         }),
+        // Crypto-пул Curve (решение 442): комиссия при текущих балансах — `_fee(xp)` пула над 10^10 → проценты = fee /
+        // 10^8 (math/crypto_swap.rs fee; при обмене котировка считает её на балансах после обмена).
+        (PoolState::Crypto(d), _) => crypto_swap::scaled(d, &d.balances)
+            .and_then(|xp| crypto_swap::fee(d, &xp))
+            .and_then(|f| num::to_decimal(f, 8))
+            .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "комиссия crypto-пула Curve не считается")),
         // TickBin (Maverick V2, решение 122 F): комиссия по направлению fee(tokenAIn), D18 (1e18 = 100%) → проценты =
         // fee / 1e16; tokenA = token0.
         (PoolState::TickBin(d), _) => {

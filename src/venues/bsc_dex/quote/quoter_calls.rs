@@ -81,6 +81,10 @@ pub fn request(
     if e.family.proto == Proto::FluidT1 {
         return super::quoter_fluid::request(ctx, e, token_in, amount);
     }
+    // Crypto-пулы Curve (решения 442, 453; NG и v1): квотер — сам пул, get_dy(uint256, …) (quoter_crypto.rs).
+    if e.family.proto.is_curve_crypto() {
+        return super::quoter_crypto::request(ctx, e, token_in, amount);
+    }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
     // DODO PMM (решение 86b): квотер — сам пул (querySellBase/querySellQuote; отдельного квотера нет). Сверка
     // идёт тем же трейдером FEE_TRADER, что и чтение комиссии getUserFeeRate (load_dodo.rs) — выход включает
@@ -399,6 +403,9 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     }
     if e.family.proto == Proto::FluidT1 {
         return super::quoter_fluid::decode(out);
+    }
+    if e.family.proto.is_curve_crypto() {
+        return super::quoter_crypto::decode(out);
     }
     // Infinity Stable: основной квотер — CLQuoter (amountOut, gasEstimate), как у Infinity CL (ветка PoolKey ниже).
     // StableSwap (остальные шаблоны) и WooFi query: один uint256 — выход после комиссии (одно слово — разбор одинаков).

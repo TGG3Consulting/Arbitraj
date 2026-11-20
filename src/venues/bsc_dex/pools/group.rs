@@ -4,27 +4,31 @@
 //! (pools/depth.rs). Состав меняется на том же соединении, без переподключения: сначала подписка с новым составом,
 //! потом отписка от старой (события на стыке приходят дважды — второе отбрасывает реестр по (блок, logIndex),
 //! registry.rs has_applied). Уведомления всех подписок сливаются в один поток; обрыв соединения — сообщение Closed.
+//! Решение 455: подписка «все события» пулов видов transfer_in::watched (crypto-пулы Curve с gulp балансов) — ещё и
+//! второй фильтр logs на том же соединении: ERC-20 Transfer с to = адрес пула (transfer_in.rs filter); оба фильтра —
+//! одна Held (создаются до eth_blockNumber приёма, снимаются вместе). У прочих видов второго фильтра нет.
 //! Кто вызывает: pools/session.rs, pools/admit.rs.
-//! От чего зависит: node/ws.rs (Conn, Sub), node/subs.rs (фильтры), pools/events.rs (topic0), discover.rs (Found).
+//! От чего зависит: node/source.rs (Link), group_filter.rs (фильтр logs, индексы пачки), discover.rs (Found),
+//! transfer_in.rs (решение 455).
 //! Настройки: через node/ws.rs (адрес узла, таймауты).
 //!
 //! eth_subscribe / eth_unsubscribe — execution-apis subscribe.yaml#L1-L60
 //! (https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/subscribe.yaml#L1-L60);
 //! подписки живут, пока живо соединение — https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub .
 
-use alloy_primitives::{B256, U64};
+use alloy_primitives::U64;
 use serde_json::value::RawValue;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::node::source::Link;
-use super::super::node::subs;
 use super::discover::Found;
-use super::events;
+
+/// Фильтр подписки и индексы пачки — group_filter.rs (вынесены из этого файла; прежние пути вызова сохранены).
+pub use super::group_filter::{filter, index, multi_sites};
 
 /// Сообщение слитого потока подписок пачки.
 pub enum Msg {
@@ -34,10 +38,12 @@ pub enum Msg {
     Closed,
 }
 
-/// Подписка узла и задача, переносящая её уведомления в общий поток.
+/// Подписка узла и задача, переносящая её уведомления в общий поток; решение 455 — и подписка Transfer на пулы
+/// (transfer_in.rs), если у пулов подписки она есть.
 pub struct Held {
     id: String,
     fwd: JoinHandle<()>,
+    transfers: Option<(String, JoinHandle<()>)>,
 }
 
 /// Какие события слушать у пулов.
@@ -75,12 +81,37 @@ impl Group {
         })
     }
 
-    /// Подписка на события пулов. Принимает: пулы одного вида, какие события. Ошибки: узел отказал, обрыв.
+    /// Подписка на события пулов. Принимает: пулы одного вида, какие события. Решение 455: «все события» пулов видов
+    /// transfer_in::watched — и подписка Transfer на их адреса (не удалась — первая снимается, ошибка наружу).
+    /// Ошибки: узел отказал, обрыв.
     pub async fn subscribe(&self, pools: &[&Found], topics: Topics) -> GatewayResult<Held> {
-        let mut sub = self
-            .conn
-            .subscribe(json!(["logs", filter(pools, topics)]))
-            .await?;
+        let (id, fwd) = self.forward(filter(pools, topics)).await?;
+        let extra = match topics {
+            Topics::Full => super::transfer_in::filter(pools),
+            Topics::Liquidity => None,
+        };
+        let transfers = match extra {
+            None => None,
+            Some(f) => match self.forward(f).await {
+                Ok(x) => Some(x),
+                Err(e) => {
+                    let h = Held {
+                        id,
+                        fwd,
+                        transfers: None,
+                    };
+                    let _ = self.release(h).await;
+                    return Err(e);
+                }
+            },
+        };
+        Ok(Held { id, fwd, transfers })
+    }
+
+    /// Подписка logs с фильтром и задача переноса её уведомлений в общий поток. Возвращает: id подписки и задачу.
+    /// Ошибки: узел отказал, обрыв.
+    async fn forward(&self, f: Value) -> GatewayResult<(String, JoinHandle<()>)> {
+        let mut sub = self.conn.subscribe(json!(["logs", f])).await?;
         let tx = self.tx.clone();
         let fwd = tokio::spawn(async move {
             while let Some(m) = sub.rx.recv().await {
@@ -90,13 +121,20 @@ impl Group {
             }
             let _ = tx.send(Msg::Closed);
         });
-        Ok(Held { id: sub.id, fwd })
+        Ok((sub.id, fwd))
     }
 
-    /// Отписка: eth_unsubscribe и остановка переноса. Ошибки: узел, обрыв (поток уже закрыт).
+    /// Отписка: eth_unsubscribe и остановка переноса (решение 455 — и подписки Transfer). Ошибки: узел, обрыв (поток
+    /// уже закрыт).
     pub async fn release(&self, h: Held) -> GatewayResult<()> {
         h.fwd.abort();
+        if let Some((_, fwd)) = &h.transfers {
+            fwd.abort();
+        }
         let _: bool = self.conn.request("eth_unsubscribe", json!([h.id])).await?;
+        if let Some((id, _)) = h.transfers {
+            let _: bool = self.conn.request("eth_unsubscribe", json!([id])).await?;
+        }
         Ok(())
     }
 
@@ -144,66 +182,9 @@ impl Drop for Group {
     fn drop(&mut self) {
         for (h, _) in self.full.iter().chain(self.liquidity.iter()) {
             h.fwd.abort();
+            if let Some((_, fwd)) = &h.transfers {
+                fwd.abort();
+            }
         }
     }
-}
-
-/// Фильтр logs для пулов одного вида: V2/V3 — по адресам пулов, V4 — по PoolId у менеджера. Ошибок нет.
-pub fn filter(pools: &[&Found], topics: Topics) -> Value {
-    let Some(first) = pools.first() else {
-        return json!({});
-    };
-    let topic0: Vec<B256> = match topics {
-        Topics::Full => events::topics(first.family),
-        Topics::Liquidity => events::liquidity_topics(first.family),
-    };
-    match first.reference {
-        // Пара общего контракта (PMM от оракула, решение 122 F, 3) — по адресу общего контракта (события у него).
-        // Решение 295: пары многомонетного пула — по адресу его контракта (одна строка адреса на все пары).
-        PoolRef::Contract(_) | PoolRef::Member { .. } | PoolRef::Multi { .. } => {
-            let mut addrs: Vec<_> = pools
-                .iter()
-                .filter_map(|f| match f.reference {
-                    PoolRef::Contract(a) => Some(a),
-                    PoolRef::Member { contract, .. } => Some(contract),
-                    PoolRef::Multi { contract, .. } => Some(contract),
-                    PoolRef::Singleton { .. } => None,
-                })
-                .collect();
-            addrs.sort();
-            addrs.dedup();
-            subs::by_address(&addrs, &topic0)
-        }
-        PoolRef::Singleton { manager, .. } => {
-            let ids: Vec<_> = pools
-                .iter()
-                .filter_map(|f| match f.reference {
-                    PoolRef::Singleton { id, .. } => Some(id),
-                    PoolRef::Contract(_) | PoolRef::Member { .. } | PoolRef::Multi { .. } => None,
-                })
-                .collect();
-            subs::by_pool_id(manager, &ids, &topic0)
-        }
-    }
-}
-
-/// Индекс пулов пачки по ссылке (pools/session.rs: лог → пул). Ошибок нет.
-pub fn index(pools: &[(Found, String)]) -> std::collections::HashMap<PoolRef, usize> {
-    pools
-        .iter()
-        .enumerate()
-        .map(|(i, (f, _))| (f.reference.clone(), i))
-        .collect()
-}
-
-/// Адреса контрактов пар многомонетных пулов (PoolRef::Multi) пачки (решение 295, ревью): лог такого адреса идёт и в
-/// listen_site.rs, даже если в пачке есть Contract того же адреса. Пусто — пар Multi нет. Ошибок нет.
-pub fn multi_sites(pools: &[(Found, String)]) -> std::collections::HashSet<alloy_primitives::Address> {
-    pools
-        .iter()
-        .filter_map(|(f, _)| match f.reference {
-            PoolRef::Multi { contract, .. } => Some(contract),
-            _ => None,
-        })
-        .collect()
 }

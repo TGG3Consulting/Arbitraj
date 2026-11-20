@@ -106,8 +106,10 @@
 | `quoter_fluid.rs` | Сверка Fluid DEX T1 (решение 440): estimateSwapIn(пул, swap0to1, вход, 0) официального резолвера FluidDexReservesResolver (dex.quoter) через eth_call; 0 — выхода нет (пределы слоя ликвидности или скачок цены) |
 | `fluid_depth.rs` | Fluid DEX T1 (решение 440): спот-цена для сизинга пробы, пустота пула, комиссия в процентах и глубина в полосе цены по мнимым резервам частей (оценки, не сверяемые величины) |
 | `quoter_balancer_v3.rs` | Сверка Balancer V3 (решение 441): Router V3 querySwapSingleTokenExactIn(пул, вход, выход, сумма, 0, «») через eth_call без from (Vault.quote — tx.origin = 0) — dex.quoter |
+| `quoter_crypto.rs` | Сверка crypto-пула Curve (решение 442): get_dy(i, j, dx) самого пула через eth_call (индексы — из состояния Crypto) |
 | `quoter_balancer.rs` | Сверка Balancer V2 (решение 289): Vault.queryBatchSwap(GIVEN_IN, шаг по id пула) через eth_call — dex.vault; выход — минус дельта токена выхода |
 | `vault_depth.rs` | Глубина пула Balancer V2 в полосе (решение 289): средняя цена исполнения без комиссии в полосе от цены малой пробы, деление отрезка пополам; весовой — не дальше 30 % баланса входа |
+| `crypto_depth.rs` | Глубина crypto-пула Curve в полосе (решение 442): средняя цена исполнения без комиссии (math/crypto_swap.rs с нулевыми mid_fee / out_fee) не выходит за полосу от цены малой пробы — деление отрезка пополам |
 | `emptiness.rs` | Пустой пул (резерв 0, ликвидность 0, нет бинов) и причины «не хватает ликвидности на сумму сверки» |
 | `quoter_revert.rs` | Откаты квотера «не хватает ликвидности»: NotEnoughLiquidity, BinPool__OutOfLiquidity, SPL, Unexpected error — читаемым текстом |
 

@@ -169,6 +169,40 @@ log.signal_hold (core/book_marks_on.rs).
 | send.tip_wins_to_step_down | по площадке DEX | у arb_dex при profit_share — решение Тиграна | Динамические чаевые (решение 437 (3)) | /home/claude/src-ext/reports/arb-tips.md, раздел 3; nitro arbos/tx_processor.go:627-645; pga/tx.go:43-46 |
 | send.pool_cond_mode | по площадке DEX | у bsc_dex не задавать; у arb_dex — `off` на старте (решение Тиграна 20.11.2026: не терять сделки); `pools` — после статистики (экран «Каналы отправки», блок «Условие пулов: статистика»), решение Тиграна | Режим условия пулов маршрута в условной отправке секвенсора (решение 439) | nitro-geth arbitrum_types/txoptions.go:79-107; решение 438 |
 
+## Curve crypto-пулы Arbitrum — Twocrypto-NG и Tricrypto-NG (решение 442)
+
+У GeckoTerminal все пулы Curve в Arbitrum — под одним id `curve_arbitrum` (StableSwap и crypto), а вид у id DEX один
+(dex.kind). Поэтому crypto-пулы берутся под **отдельными id DEX, заданными вручную** (кнопка «Добавить DEX», ключ
+площадки arb_dex — с «@arbitrum», например `curve-twocrypto-ng@arbitrum` и `curve-tricrypto-ng@arbitrum`): их пулы
+находит поиск по фабрике (index.factory_scan), а не индексатор. Адреса — только из официальных deployments.yaml
+репозиториев curvefi (twocrypto-ng 89c8dfb, tricrypto-ng ecaa816, раздел `arbitrum:mainnet`).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX Twocrypto / Tricrypto | `curve_twocrypto_ng` / `curve_tricrypto_ng` | Вид пулов фабрики | Решение 442 |
+| dex.factory | DEX Twocrypto / Tricrypto | `0x98EE851a00abeE0d95D08cF4CA2BdCE32aeaAF7F` / `0xbC0797015fcFc47d9C1856639CaE50D0e69FbEE8` | Реестр фабрики (get_coins, find_pool_for_coins) | twocrypto-ng deployments.yaml `arbitrum:mainnet factory`; tricrypto-ng deployments.yaml `arbitrum:mainnet factory` |
+| dex.curve_crypto_versions | DEX Twocrypto / Tricrypto | `["v2.1.0", "v2.0.0"]` / `["v2.0.0"]` | Версии пула, по исходнику которых сверены формулы (решение 453: Twocrypto v2.0.0 — реализация `amm_v2_0_0`, исходник d612fde сверен CREATE2-адресом; формулу выбирает адрес математики) | CurveTwocryptoOptimized.vy L189 (89c8dfb); CurveTricryptoOptimizedWETH.vy L215, CurveTricryptoOptimized.vy L199 (ecaa816) |
+| dex.curve_crypto_math | DEX Twocrypto / Tricrypto | `["0x1Fd8Af16DC4BEBd950521308D55d0543b6cDF4A1"]` / `["0x604388Bb1159AFd21eB5191cE22b4DeCdEE2Ae22"]` | Математика, развёрнутая с тем же исходником, что порт | deployments.yaml `arbitrum:mainnet math` обоих репозиториев |
+| dex.curve_crypto_math_v2_0_0 | DEX Twocrypto | `["0x2005995a71243be9FB995DaB4742327dc76564Df"]` (у Tricrypto не задавать) | Математика Twocrypto-NG v2.0.0: пулы с ней считаются формулами v2.0.0 (решение 453) | twocrypto-ng deployments.yaml `arbitrum:mainnet math_v2_0_0`; исходник d612fde — перекомпиляция Vyper 0.3.10 даёт этот CREATE2-адрес (scripts/deploy_infra.py d612fde) |
+| dex.pair_lookup_max | DEX Twocrypto / Tricrypto | решение Тиграна; *метод:* сколько пулов одной пары держит фабрика (get_market_counts(a, b) фабрики) — номер за последним пулом не ошибка | Сколько номеров i спросить у find_pool_for_coins | CurveTwocryptoFactory.vy L376-L386, L474 |
+| dex.pool_enabled | DEX Twocrypto / Tricrypto | `да` после записи данных узла (tools/arbitrum_record/curve_crypto.py) и снятия #[ignore] у tests/arb_curve_crypto_live.rs | Сверка порта с get_dy пула на своём узле до торговли | Решение 442 |
+
+## Curve crypto-пулы Arbitrum первого поколения — crypto v1 фабрики и tricrypto 2021 (решение 453)
+
+Те же правила id DEX, что выше (отдельные id, вручную, «@arbitrum»): например `curve-crypto-v1@arbitrum` и
+`curve-tricrypto-v1@arbitrum`. Адреса — официальные журналы развёртывания curvefi: curve-factory-crypto 7ed1011
+`deployment-logs/others.log` (раздел «arbitrum, avalanche, fantom, polygon») и curve-crypto-contract d7d04cd
+`deployment-logs/2021-09-13. Arbitrum/log.txt`.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX crypto v1 / tricrypto 2021 | `curve_crypto_v1` / `curve_tricrypto_v1` | Вид пулов | Решение 453 |
+| dex.factory | DEX crypto v1 | `0xE5De15A9C9bBedb4F5EC13B131E61245f2983A69` | Реестр фабрики (get_coins, find_pool_for_coins), событие CryptoPoolDeployed | others.log «Factory» |
+| dex.curve_crypto_v1_templates | DEX crypto v1 | `["0x5bcA7dDF1bcccB2eE8e46c56bfc9d3CDC77262bC"]` | Шаблон пула, с исходником которого сверена формула (пул — прокси EIP-1167 на него) | others.log «Pool template» |
+| dex.stable_pools | DEX tricrypto 2021 | `["0x960ea3e3C7FB317332d990873d354E18d7645590"]` | Пул без фабрики — подтверждает список | log.txt «Swap» |
+| dex.pair_lookup_max | DEX crypto v1 | решение Тиграна; *метод:* сколько пулов одной пары держит фабрика (market_counts) — за последним нулевой адрес | find_pool_for_coins и событие создания | Factory.vy L117, L335-L345 |
+| dex.pool_enabled | DEX crypto v1 / tricrypto 2021 | `да` после записи (tools/arbitrum_record/curve_crypto.py) и снятия #[ignore] у tests/arb_curve_crypto_live.rs | Сверка порта с get_dy пула до торговли | Решение 453 |
+
 ## Нативная монета BNB
 
 У BNB нет адреса контракта — он сопоставляется с обёрткой WBNB.

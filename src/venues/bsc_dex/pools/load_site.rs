@@ -24,7 +24,8 @@ use super::families::{Family, Proto};
 use super::load::Loaded;
 use super::load_batch::Want;
 use super::{
-    load_balancer, load_balancer_v3, load_curve, load_curve_ng, load_saddle, load_stable_u,
+    load_balancer, load_balancer_v3, load_crypto, load_crypto_v1, load_curve, load_curve_ng,
+    load_saddle, load_stable_u,
 };
 
 /// Что делает: состояния всех пар одного контракта на блоке одним чтением. Принимает: окружение, токены (decimals),
@@ -50,6 +51,16 @@ pub async fn states(
         },
         Proto::CurveNg => match load_curve_ng::read(ctx, contract, &tag).await {
             Ok(raw) => pairs.iter().map(|p| load_curve_ng::state(ctx, &raw, *p)).collect(),
+            Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
+        },
+        // Curve Tricrypto-NG (решение 442): одно чтение пула и время блока на все пары (load_crypto.rs).
+        Proto::CurveTricrypto => match load_crypto::read(ctx, f, contract, block).await {
+            Ok(raw) => pairs.iter().map(|p| load_crypto::state(ctx, f, &raw, *p)).collect(),
+            Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
+        },
+        // Tricrypto 2021 (решение 453): одно чтение пула на все пары (load_crypto_v1.rs).
+        Proto::CurveTricryptoV1 => match load_crypto_v1::read(ctx, tokens, f, contract, block).await {
+            Ok(raw) => pairs.iter().map(|p| load_crypto_v1::state(ctx, &raw, *p)).collect(),
             Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
         },
         Proto::PancakeStable => match pancake_read(ctx, tokens, contract, &tag).await {

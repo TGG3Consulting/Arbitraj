@@ -13,10 +13,14 @@
 //! - узкое окно свежих логов (narrow_from) — когда логи за весь [S, H] узел не отдал (предел диапазона, ревью 3 Б2):
 //!   свежие неприменённые в последних dex.quoter_memory_lag_blocks блоках — отставание; нет — сравнение на H (у
 //!   событийных видов без событий состояние то же, пропущенное раньше окна событие и есть расхождение);
-//! - фильтр логов пула — как у подписки пачки (pools/group.rs filter, node/subs.rs).
+//! - фильтр логов пула — как у подписки пачки (pools/group.rs filter, node/subs.rs);
+//! - решение 455: crypto-пулы Curve без событий пула (рампа, остановленный tricrypto 2021, нативный ETH на пул с WETH —
+//!   per_block::unevented) и виды с переводом токена на пул без события пула (pools/transfer_in.rs watched: отметок
+//!   перевода правила не видят, поэтому — весь вид) — тоже «каждым блоком».
 //!
 //! Кто вызывает: check/memory_proof.rs; тесты (tests/bsc_dex_quoter_refetch_382.rs).
-//! От чего зависит: pools/per_block.rs (needs), pools/events.rs (topics), node/subs.rs, node/call.rs, pools/registry.rs.
+//! От чего зависит: pools/per_block.rs (needs, unevented), pools/transfer_in.rs (watched), pools/events.rs (topics),
+//! node/subs.rs, node/call.rs, pools/registry.rs.
 //! Настройки: нет (допуск отставания передаёт вызывающий — dex.quoter_memory_lag_blocks).
 
 use alloy::rpc::types::Log;
@@ -26,7 +30,7 @@ use crate::core::types::PoolRef;
 
 use super::super::node::{call, subs};
 use super::super::pools::registry::Entry;
-use super::super::pools::{events, per_block};
+use super::super::pools::{events, per_block, transfer_in};
 
 /// Неприменённые памятью логи узла.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,7 +87,8 @@ pub fn filter(e: &Entry, from: u64, to: u64) -> Value {
 /// Вид «каждым блоком»: сравнение только на блоке памяти. Принимает: запись памяти, голову. Возвращает: причину
 /// «отставание» (Some) — сравнивать нельзя; None — можно (не такой вид или память прочитана целиком на H). Ошибок нет.
 pub fn per_block_gate(mem: &Entry, head: u64) -> Option<String> {
-    if !per_block::needs(mem.family) || (mem.synced_block == head && mem.synced_log.is_none()) {
+    let each = each_block(mem);
+    if !each || (mem.synced_block == head && mem.synced_log.is_none()) {
         return None;
     }
     Some(format!(
@@ -93,9 +98,16 @@ pub fn per_block_gate(mem: &Entry, head: u64) -> Option<String> {
     ))
 }
 
+/// Пул «каждым блоком» для правил: вид per_block::needs; решение 453 — crypto-пул Curve в рампе A/gamma или
+/// остановленный tricrypto 2021, решение 455 — с нативным ETH на пул с WETH (per_block::unevented) и вид с переводом
+/// токена на пул без события пула (transfer_in::watched). Принимает: запись памяти. Ошибок нет.
+fn each_block(e: &Entry) -> bool {
+    per_block::needs(e.family) || per_block::unevented(e) || transfer_in::watched(e.family)
+}
+
 /// Доказывают ли неприменённые логи этого пула пропуск события (см. шапку). Ошибок нет.
 pub fn own(e: &Entry) -> bool {
-    !per_block::needs(e.family)
+    !each_block(e)
         && matches!(
             e.pool.reference,
             PoolRef::Contract(_) | PoolRef::Singleton { .. } | PoolRef::Multi { .. }

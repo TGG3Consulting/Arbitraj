@@ -3,7 +3,8 @@
 //! (адрес контракта и topic0) сверяется с подключёнными DEX: V2 PairCreated / V3 PoolCreated своей фабрики — пул из
 //! события проверяется на узле (verify.rs: токены, реестр фабрики, своя комиссия пары) и подключается; V4 Initialize
 //! своего менеджера — ключ из события, PoolId сверяется (discover_v4::parse), затем та же проверка ключа у менеджера
-//! (Infinity Stable — тот же Initialize CLPoolManager, пул — если крючок из dex.stable_hooks).
+//! (Infinity Stable — тот же Initialize CLPoolManager, пул — если крючок из dex.stable_hooks); решение 453 — события
+//! фабрик crypto-пулов Curve (created_crypto.rs).
 //! Пул из события попадает в справочник (показ и итог проверки — index::record). Встречный токен — наблюдателя.
 //! Кто вызывает: pools/created.rs.
 //! От чего зависит: ctx.rs, families.rs, verify.rs, discover_v4.rs, discover.rs (against), attach.rs, abi_v2v3.rs, abi_v4.rs.
@@ -30,6 +31,7 @@ use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::abi_v4::{IInfinityBin, IInfinityCl, IUniswapV4};
 use super::attach;
 use super::created::Watch;
+use super::created_crypto;
 use super::discover::against;
 use super::discover_v4;
 use super::events_balancer_v3;
@@ -121,6 +123,13 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Curve StableSwap-NG (решение 275): событие фабрики PlainPoolDeployed адреса пула не содержит
             // (CurveStableSwapFactoryNG.vy L52-L56) — новые пулы приходят из справочника индексатора.
             Proto::CurveNg => continue,
+            // Crypto-пулы Curve (решение 453): события фабрик TwocryptoPoolDeployed / TricryptoPoolDeployed (адрес пула —
+            // неиндексированное поле) и CryptoPoolDeployed фабрики v1 (адреса нет — поиск по фабрике на блоке события),
+            // created_crypto.rs. У tricrypto 2021 фабрики нет — пул из dex.stable_pools.
+            p @ (Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 | Proto::CurveTricryptoV1) => match created_crypto::topic(p) {
+                Some(t) => ("dex.factory", t, false),
+                None => continue,
+            },
             // Metric OMM (решение 285): событие создания пула фабрики BSC — не установлено (createPool BSC ≠ SDK, исходника
             // нет) — новые пулы приходят из справочника индексатора.
             Proto::MetricOmm => continue,
@@ -195,6 +204,19 @@ pub async fn on_log(p: &Pools, w: &Watch, raw: &str) -> Result<(), String> {
 
 /// Событие одного вида DEX → проверка → подписка. Ошибка — текст (как у on_log).
 async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> Result<(), String> {
+    // Решение 453: событие фабрики crypto-пулов Curve — до двух пар пула (Tricrypto) или поиск по фабрике (v1).
+    if f.proto.is_curve_crypto() {
+        let mut errs = Vec::new();
+        for c in created_crypto::candidates(&p.ctx, f, log, w.usdt).await? {
+            if let Err(why) = take(p, w, f, c).await {
+                errs.push(why);
+            }
+        }
+        if errs.is_empty() {
+            return Ok(());
+        }
+        return Err(errs.join("; "));
+    }
     let c = if v4 {
         // Infinity Stable: событие пула не с крючком из dex.stable_hooks — не его пул (None).
         let Some(all) = discover_v4::parse_opt(&p.ctx, f, log).map_err(|e| e.message)? else {
@@ -223,6 +245,11 @@ async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> R
     } else {
         candidate(f, log, w.usdt)?
     };
+    take(p, w, f, c).await
+}
+
+/// Кандидат из события → проверка → подписка (монета не из подписки — пропуск). Ошибка — текст (как у on_log).
+async fn take(p: &Pools, w: &Watch, f: &'static Family, c: Candidate) -> Result<(), String> {
     if !w.coins.contains_key(&c.coin) {
         return Ok(());
     }

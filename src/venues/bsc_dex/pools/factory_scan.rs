@@ -30,7 +30,7 @@ use crate::storage::journal::Level;
 use super::super::ctx::Ctx;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::node::call;
-use super::factory_ask::decode_q;
+use super::factory_ask::{Q, decode_q};
 use super::factory_calls::{self, Plan};
 use super::stable_list;
 use super::woo_quote;
@@ -168,6 +168,9 @@ fn sort(plan: &Plan, answers: Vec<call::Piece>, coins: &HashMap<Address, String>
                     continue;
                 }
             },
+            // Решение 442 (ревью): откат find_pool_for_coins при i > 0 — у Twocrypto-NG номер за последним пулом пары
+            // (DynArray, factory_ask.rs), не ошибка; откат при i = 0 — в «вызовов откатилось» (неверная фабрика).
+            Ok(Err(_)) if matches!(ask.q, Q::CurveCrypto(i) if i > 0) => continue,
             Ok(Err(_)) => {
                 reverted += 1;
                 continue;

@@ -158,6 +158,13 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "Liquidity Book не исполняется умным маршрутом (только шаг LB контракта-исполнителя)",
             ));
         }
+        // Crypto-пул Curve (решение 442): MixedQuoter его не знает — сверка get_dy самого пула (quote/quoter_calls.rs).
+        PoolKind::Crypto => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "Crypto-пул Curve не исполняется умным маршрутом (только шаг STABLE_U256 контракта-исполнителя)",
+            ));
+        }
         // Пара с фиктивными резервами (SmarDex, решение 288): MixedQuoter её не знает — сверка виртуальным квотером.
         PoolKind::Fictive => {
             return Err(ctx.err(

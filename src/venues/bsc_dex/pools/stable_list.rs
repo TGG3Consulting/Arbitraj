@@ -43,7 +43,8 @@ pub struct Extra {
 
 /// Вид, у которого список dex.stable_pools — источник пулов (решение 292). Ошибок нет.
 pub fn is_listed_kind(proto: Proto) -> bool {
-    matches!(proto, Proto::SaddleStable | Proto::CurveStable)
+    // Решение 453: tricrypto 2021 (curve_tricrypto_v1) — тоже пул из списка, монеты — coins(k).
+    matches!(proto, Proto::SaddleStable | Proto::CurveStable | Proto::CurveTricryptoV1)
 }
 
 /// Вызовы «монеты пула»: Saddle — getToken(0..MAX_TOKENS), Curve 2020 — coins(0..MAX_COINS). Ошибок нет.

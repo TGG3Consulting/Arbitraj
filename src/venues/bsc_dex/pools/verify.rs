@@ -31,7 +31,7 @@ use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_call_with};
 pub use super::verify_rules::{Read, check, fill, registered, registered_for, v2_fee_pips, v3_abi};
 use super::{
-    fee_probe, verify_algebra, verify_balancer, verify_balancer_v3, verify_curve, verify_lb, verify_curve_ng, verify_dodo, verify_fluid, verify_inf_stable, verify_izi, verify_metric,
+    fee_probe, verify_algebra, verify_balancer, verify_balancer_v3, verify_crypto, verify_crypto_v1, verify_curve, verify_lb, verify_curve_ng, verify_dodo, verify_fluid, verify_inf_stable, verify_izi, verify_metric,
     verify_maverick, verify_solidly, verify_stable_u, verify_v4,
 };
 
@@ -82,6 +82,8 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut solidly = Vec::new();
     let mut curve = Vec::new();
     let mut curve_ng = Vec::new();
+    let mut crypto = Vec::new();
+    let mut crypto_v1 = Vec::new();
     let mut metric = Vec::new();
     let mut izi = Vec::new();
     let mut balancer = Vec::new();
@@ -98,8 +100,11 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             p if p.is_dodo() => dodo.push(i),
             Proto::Algebra | Proto::AlgebraIntegral => algebra.push(i),
             p if p.is_solidly() => solidly.push(i),
-            Proto::CurveStable => curve.push(i),
+            // Решение 453: tricrypto 2021 — фабрики нет, как Curve 2020: список dex.stable_pools + coins(k).
+            Proto::CurveStable | Proto::CurveTricryptoV1 => curve.push(i),
             Proto::CurveNg => curve_ng.push(i),
+            Proto::CurveTwocrypto | Proto::CurveTricrypto => crypto.push(i),
+            Proto::CurveCryptoV1 => crypto_v1.push(i),
             Proto::MetricOmm => metric.push(i),
             Proto::IziSwap | Proto::BiswapV3 => izi.push(i),
             Proto::BalancerV2 => balancer.push(i),
@@ -147,6 +152,22 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     for (i, r) in curve_ng
         .into_iter()
         .zip(verify_curve_ng::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    // Curve Twocrypto-NG / Tricrypto-NG (решение 442): реестр фабрики, версия, математика (verify_crypto.rs).
+    let list: Vec<Candidate> = crypto.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in crypto
+        .into_iter()
+        .zip(verify_crypto::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    // Curve crypto v1 фабрики (решение 453): реестр фабрики и шаблон прокси пула (verify_crypto_v1.rs).
+    let list: Vec<Candidate> = crypto_v1.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in crypto_v1
+        .into_iter()
+        .zip(verify_crypto_v1::verify(ctx, &list, size).await)
     {
         out[i] = Some(r);
     }

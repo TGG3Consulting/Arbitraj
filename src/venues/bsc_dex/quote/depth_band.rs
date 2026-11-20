@@ -411,6 +411,13 @@ fn side(
             super::vault_depth::side(d, i.into(), j.into(), b, buy)
                 .ok_or_else(|| "расчёт глубины пула Balancer невозможен".to_string())
         }
+        // Crypto-пул Curve (решение 442): средняя цена исполнения в полосе по формуле пула без комиссии
+        // (quote/crypto_depth.rs).
+        (PoolState::Crypto(d), PoolKind::Crypto) => {
+            let (i, j) = if zfo { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            super::crypto_depth::side(d, i.into(), j.into(), b, buy)
+                .ok_or_else(|| "расчёт глубины crypto-пула Curve невозможен".to_string())
+        }
         // Пара с фиктивными резервами (SmarDex, решение 288): оценка — x·y=k по фиктивным резервам без комиссии (формула
         // первого шага обмена пары); выход не доходит до резерва пары — тогда до него и full = false. Деление обмена на два
         // шага по средней цене здесь не учитывается (глубина — оценка для порога, котировку считает math/smardex.rs).

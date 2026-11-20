@@ -151,6 +151,7 @@ impl Parts {
             gas: self.gas.clone(),
             kept,
             holds: self.registry.holds().clone(),
+            transfers: Default::default(),
         }
     }
 }

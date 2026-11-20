@@ -168,6 +168,11 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "Liquidity Book не исполняется Universal Router (шаг LB контракта-исполнителя)",
         )),
+        // Crypto-пул Curve (решение 442): только шаг STABLE_U256 исполнителя.
+        PoolKind::Crypto => Err(ctx.err(
+            ErrorCode::Internal,
+            "Crypto-пул Curve не исполняется Universal Router (шаг STABLE_U256 контракта-исполнителя)",
+        )),
         // Пара с фиктивными резервами (SmarDex, решение 288): только шаг SMARDEX исполнителя v2.
         PoolKind::Fictive => Err(ctx.err(
             ErrorCode::Internal,

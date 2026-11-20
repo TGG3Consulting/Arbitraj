@@ -3,8 +3,10 @@
 //! (вынесено из live_rule.rs: файл был больше 200 строк). Формат строки — заметка
 //! docs/notes/t181-executor-all-kinds-2026-11-17.md, п. 5, и README записи: case («a» — покупка (а), «b» — продажа (б),
 //! «c» — сплит (в), «g_cycle» — цикл (г), «нет пулов»), kind (19 / 20 / 21), pool_id, hooks, status (0 / 1), got,
-//! quoter_out (квотер на H), quoter_out_after_a (у (б): квотер в той же симуляции сразу после (а)), got_eq_swap_credit,
-//! x_left (остатки на исполнителе по токенам шага: ключи usdt и coin), revert; необязательное `"stable": true` — пул Infinity Stable.
+//! quoter_out (у (а): квотер своей симуляции на том же блоке, что покупка — решение 478; квотер на H — quoter_out_h, не
+//! читается; запись v3 17.11 — квотер на H), quoter_out_after_a (у (б): квотер в той же симуляции сразу после (а)),
+//! got_eq_swap_credit, x_left (остатки на исполнителе по токенам шага: ключи usdt и coin), revert; необязательное
+//! `"stable": true` — пул Infinity Stable.
 //! Кто вызывает: exec/executor/live_rule.rs.
 //! От чего зависит: serde_json, alloy-primitives, exec/executor/live_class.rs (Class, Hook).
 //! Настройки: нет.

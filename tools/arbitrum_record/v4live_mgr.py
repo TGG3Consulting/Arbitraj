@@ -10,7 +10,8 @@
   — не шаг исполнителя (ArbExecutor.sol, UNI_V4) — такие пулы не берутся; с крючком — не берутся (класс «с крючком»
   правило не принимает никогда, live_rule.rs).
   Balancer V3 (docs/FIRST_RUN.md «Balancer V3»; pools/abi_balancer_v3.rs): пулы — из записи balancer_v3.py этой же
-  команды (meta.json pools), --bv3-pool и (T477-01, решение 478) getPools() фабрик списков meta.json lists; токены — Vault.getPoolTokenInfo; квотер — Router
+  команды (meta.json pools), --bv3-pool и (T477-01, решение 478) getPools() фабрик списков meta.json lists;
+  токены — Vault.getPoolTokenInfo; квотер — Router
   querySwapSingleTokenExactIn без from (Vault.quote: tx.origin = 0); кредит — Swap(pool, tokenIn, tokenOut, amountIn,
   amountOut, …) хранилища. В строке записи hooks = 0: у шага BALANCER_V3 класс только «без крючка» (live_class.rs);
   крючок пула — поле bv3_hook. Координатор (T457-02): пулы с крючком, которые бот берёт (вид крючка — как
@@ -137,9 +138,8 @@ def bv3_hook_kind(node, tag, pool, h, lists):
 def _factory_pools(node, tag, lists, skipped):
     """T477-01: второй источник пулов Balancer V3 — перечисление фабрик списков dex.bv3_*_factories: getPools()
     (balancer-v3-monorepo@2b9ce4b1 pkg/pool-utils/contracts/BasePoolFactory.sol L73-L75 getPools — массив _pools, L127
-    push при создании пула; так же
-    tools/arbitrum_record/balancer_v3_buffer.py ветки t244). Порядок — с конца списка каждой фабрики (новые пулы
-    первыми). Возвращает: [(пул, фабрика)]; откат getPools — в skipped. Ошибок-исключений нет, кроме сетевых."""
+    push при создании пула; так же tools/arbitrum_record/balancer_v3_buffer.py в ветке t244/arb-bv3-buffer).
+    Порядок — с конца списка каждой фабрики (новые пулы первыми). Возвращает: [(пул, фабрика)]; откат getPools — в skipped. Ошибок-исключений нет, кроме сетевых."""
     out, seen = [], set()
     for name in BV3_LISTS:
         for f in lists.get(name, []):
@@ -158,8 +158,8 @@ def _factory_pools(node, tag, lists, skipped):
 
 
 def bv3_pools(node, tag, a, skipped):
-    """Пулы Balancer V3: из последней записи balancer_v3.py (meta.json pools, lists), --bv3-pool и (T477-01) перечислением
-    getPools() фабрик списков; вид крючка — как у бота (bv3_hook_kind), пулы, которые бот не берёт, — в skipped; пул с
+    """Пулы Balancer V3: из последней записи balancer_v3.py (meta.json pools, lists), --bv3-pool и (T477-01)
+    перечислением getPools() фабрик списков; вид крючка — как у бота (bv3_hook_kind), пулы, которые бот не берёт, — в skipped; пул с
     нулевым балансом токена (getPoolTokenInfo balancesRaw) — в skipped. Кандидатов (пулов, которые бот берёт) — не
     больше --bv3-max-pools (чтение идёт на блоке H — узел хранит только недавнее состояние, решение 460). Поле src —
     откуда пул. Ошибок-исключений нет, кроме сетевых."""

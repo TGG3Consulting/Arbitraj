@@ -3,8 +3,8 @@
   src/venues/bsc_dex/exec/executor/live_row.rs, правило — live_rule.rs; так же писалась запись
   tests/data/executor_v3_live_2026-11-17): по пулу —
   (а) case «a»: execute X от W «A → B» поверх блока H (eth_simulateV1), получено = возврат execute, кредит Swap
-      менеджера, x_left — balanceOf(X) по A и B после вызова; quoter_out — квотер A → B в СВОЕЙ симуляции [квотер] поверх
-      H (T477-01, решение 478, все виды): тот же симулированный блок H + 1 (номер и время сверяются — sim_block_a /
+      менеджера, x_left — balanceOf(X) по A и B после вызова; quoter_out — квотер A → B в СВОЕЙ симуляции [квотер]
+      поверх H (T477-01, решение 478, все виды): тот же симулированный блок H + 1 (номер и время сверяются — sim_block_a /
       sim_block_quoter_a), то же состояние, что перед покупкой. Запись 20.11.2026 показала: квотер eth_call на H (время
       блока H) у пула Balancer V3 с курсами токенов ≠ обмену в блоке H + 1 (время +12 с); квотер на H — поле
       quoter_out_h (правило его не сравнивает). Своя симуляция, а не общая с покупкой: квотер Balancer V3 пишет
@@ -106,6 +106,17 @@ def _row(case, p, tin, tout, amt, res, xlr, qo, extra):
     return d, call
 
 
+def _same_block(x, y):
+    """Ревью t246, п. 3: две симуляции — один и тот же симулированный блок, только если у обеих узел вернул номер и
+    время блока и они равны. Возвращает: (True, None) или (False, причина). Ошибок нет."""
+    for name, b in (("первая", x), ("вторая", y)):
+        if not b or b.get("number") is None or b.get("timestamp") is None:
+            return False, f"{name} симуляция без номера / времени блока ({b})"
+    if (x["number"], x["timestamp"]) != (y["number"], y["timestamp"]):
+        return False, f"разные симулированные блоки: {x} и {y}"
+    return True, None
+
+
 def case_ab(node, tag, p, a, ctx, tin, tout, amt, qa):
     """(а) и (б) по пулу. ctx: w, x, deadline, overrides. Возвращает: (строки summary, вызовы calls, откаты крючков,
     ошибка симуляции или None). Ошибок-исключений нет, кроме сетевых."""
@@ -121,10 +132,11 @@ def case_ab(node, tag, p, a, ctx, tin, tout, amt, qa):
     cqa, errqa = node.simulate(tag, ov, [qcall_a])
     blk_q = node.last_block
     qa_sim, qa_err = None, None
+    same, why = _same_block(blk_a, blk_q)
     if cqa is None:
         qa_err = f"eth_simulateV1 (а, квотер): {errqa}"
-    elif blk_q != blk_a:
-        qa_err = f"квотер (а) — другой симулированный блок {blk_q}, обмен — {blk_a}"
+    elif not same:
+        qa_err = f"квотер (а) и покупка: {why}"
     else:
         rq = cqa[0].get("returnData", "0x")
         if cqa[0].get("status") == "0x1" and len(rq) >= 66:
@@ -156,11 +168,15 @@ def case_ab(node, tag, p, a, ctx, tin, tout, amt, qa):
         cq, errq = node.simulate(tag, ov, [buy, qcall])
         if cq is None:
             return rows, calls, f"eth_simulateV1 (б, квотер): {errq}"
-        qc = cq[1]
+        qc, blk_qb = cq[1], node.last_block
         cs2, err2 = node.simulate(tag, ov, [buy] + bal + [sell] + bal)
         if cs2 is None:
             return rows, calls, f"eth_simulateV1 (б): {err2}"
         ra2, rb, xb = parse_call(cs2[0]), parse_call(cs2[3]), _xleft(cs2[4], cs2[5])
+        # Ревью t246, п. 3: квотер после (а) и продажа — разные симуляции: блок должен совпасть, иначе квотера нет.
+        same_b, why_b = _same_block(blk_qb, node.last_block)
+        if not same_b:
+            qc = {"status": None, "returnData": "0x", "why": f"квотер (б) и продажа: {why_b}"}
     else:
         cs2, err2 = node.simulate(tag, ov, [buy] + bal + [qcall, sell] + bal)
         if cs2 is None:
@@ -169,6 +185,7 @@ def case_ab(node, tag, p, a, ctx, tin, tout, amt, qa):
     rd = qc.get("returnData", "0x")
     q_after = qdec(rd) if qc.get("status") == "0x1" and len(rd) >= 66 else None
     extra = {"coin": tout, "quoter_out_after_a": str(q_after) if q_after else None, "quoter_err": qse,
+             "quoter_after_a_err": qc.get("why"),
              "a_rerun_got": str(int(ra2["returnData"], 16)) if ra2["status"] else None,
              "a_rerun_same": ra2["returnData"] == ra["returnData"],
              "quoter_after_a_sim": "отдельная [buy, квотер]" if p["fam"] == "bv3" else "та же, перед продажей"}

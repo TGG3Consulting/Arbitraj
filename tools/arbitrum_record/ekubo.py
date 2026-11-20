@@ -16,8 +16,8 @@
 #                      ключа в реестре нет — ключ из события PoolInitialized ядра (pool_initialized.json ekubo_more.py
 #                      той же папки, --initialized; решение 479: PoolKeyIndex — «Optional registry», регистрация —
 #                      публичный register(), ядро его не вызывает — evm-contracts@58eef0a src/PoolKeyIndex.sol L11, L32;
-#                      так же бот: ключ из истории ядра, history_ekubo.rs) — поля key_source, key (token0, token1, config),
-#                      key_event (лог события как есть);
+#                      так же бот: ключ из истории ядра, history_ekubo.rs) — поля key_source,
+#                      key (token0, token1, config), key_event (лог события как есть);
 #                      Core.sload(состояние), слова битмапа (±--words от слова текущего тика), тики установленных битов,
 #                      MEVCapture.sload(PoolId) у пула с этим расширением, decimals токенов, ответы
 #                      MEVCaptureRouter.quote на суммы --sizes в обе стороны (сырой hex; откат — текст ошибки);
@@ -283,9 +283,14 @@ def main():
 
     # Фильтр — только address ядра, без topics: обмен ядра — анонимный log0 (решение 479).
     lo = max(0, b - args.log_blocks)
-    fetch = lambda x, y: rpc.call("eth_getLogs", [{"address": args.core, "fromBlock": hex(x), "toBlock": hex(y)}])  # noqa: E731
+    def fetch(x, y):
+        return rpc.call("eth_getLogs", [{"address": args.core, "fromBlock": hex(x), "toBlock": hex(y)}])
+
+    def say(t):
+        print(t, file=sys.stderr)
+
     files["core_logs.json"] = {"from": hex(lo), "to": tag,
-                               "logs": recnode.logs_split(fetch, lo, b, args.log_min, say=lambda t: print(t, file=sys.stderr))}
+                               "logs": recnode.logs_split(fetch, lo, b, args.log_min, say=say)}
 
     hashes = []
     for name, body in files.items():

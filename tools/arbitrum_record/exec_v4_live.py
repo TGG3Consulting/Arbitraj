@@ -25,6 +25,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import recnode  # noqa: E402 — решение 460: свежий блок состояния
 import v4live_cases as cases  # noqa: E402
 import v4live_mgr as mgr  # noqa: E402
 import v4live_old as old  # noqa: E402
@@ -32,6 +33,7 @@ import v4live_slots as slots  # noqa: E402
 from curve_crypto_rpc import keccak256  # noqa: E402
 from v4live_rpc import Node, w  # noqa: E402
 from v4live_write import write  # noqa: E402
+from stdhttp import StaleState  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
@@ -120,25 +122,23 @@ def pick(node, tag, a, ctx, cands, rec, limit=None):
     return chosen
 
 
-def main():
-    a = args()
-    node = Node(a.rpc)
-    if int(node.ok("eth_chainId", []), 16) != 42161:
-        fail("узел не Arbitrum One (chainId ≠ 42161)")
-    # Ревью t233, п. 2: SHA-256 — по тексту с переводами строк LF (как файл в репозитории; checkout с
-    # core.autocrlf=true на Windows дал бы CRLF — .gitattributes это запрещает, здесь — вторая защита).
-    raw = open(a.runtime, "rb").read().replace(b"\r\n", b"\n")
-    sha = hashlib.sha256(raw).hexdigest()
-    want = [ln.split()[0] for ln in open(a.sha_file, encoding="utf-8") if ln.strip().endswith("ArbExecutor.bin-runtime")]
-    if want != [sha]:
-        fail(f"SHA-256 {a.runtime} = {sha}, в {a.sha_file}: {want} — пересоберите contracts/build.sh")
-    code = "".join(raw.decode("ascii").split())  # hex без пробелов и переводов строк — в подмену state override
-    code = code if code.startswith("0x") else "0x" + code
-    # Решение 460: события Initialize Uniswap V4 (окно --v4-blocks, долгий поиск логов) — ДО выбора блока H: узел
-    # хранит только недавнее состояние; всё чтение состояния и симуляции — на свежем H после поиска.
-    skipped = []
-    v4_found = mgr.v4_inits(node, int(node.ok("eth_blockNumber", []), 16), a, skipped)
-    head = int(node.ok("eth_blockNumber", []), 16)
+def state_phase(node, a, code, v4_found, skipped, head):
+    """Фаза состояния на блоке H = head (решение 460; ревью t246, п. 2): X и W, подбор пулов (до --bv3-max-pools
+    Balancer V3 и квотеры подбора суммы), симуляции (а) / (б) и квотеры (а) в своей симуляции (решение 478) — всё на
+    одном свежем H. Узел хранит только ~128 блоков: ответ «historical state … is not available» — stdhttp.StaleState —
+    ловит recnode.fresh и повторяет фазу на новом свежем блоке; запросы неудачной попытки убираются из журнала узла
+    (raw_rpc.json — только попытка записи). Возвращает: (head, время H, X, W, rec, ctx). Ошибки: fail — выход с
+    причиной; StaleState — наружу (recnode.fresh).
+    """
+    start = len(node.log)
+    try:
+        return _state_phase(node, a, code, v4_found, skipped, head)
+    except StaleState:
+        del node.log[start:]
+        raise
+
+
+def _state_phase(node, a, code, v4_found, skipped, head):
     tag = hex(head)
     ht = int(node.ok("eth_getBlockByNumber", [tag, False])["timestamp"], 16)
     x = "0x" + keccak256(b"arb.exec_v4_live.executor").hex()[-40:]
@@ -150,7 +150,7 @@ def main():
     if probe is None:
         fail(f"eth_simulateV1 не работает на узле: {err} — без него нет логов вызова (кредит Swap) и (б) после (а)")
     ctx = {"w": wl, "x": x, "deadline": ht + 600, "slots": {}}
-    rec = {"skipped": skipped, "summary": [], "calls": [], "hooks_reject": [], "pools": {}, "sim_errors": []}
+    rec = {"skipped": list(skipped), "summary": [], "calls": [], "hooks_reject": [], "pools": {}, "sim_errors": []}
     found = {19: mgr.v4_pools(node, tag, v4_found, a, rec["skipped"]), 23: mgr.bv3_pools(node, tag, a, rec["skipped"]),
              22: old.fluid_pools(node, tag, a, rec["skipped"]), 24: old.lb20_pools(node, tag, a, rec["skipped"])}
     chosen = {k: pick(node, tag, a, ctx, v, rec) for k, v in found.items() if k != 23}
@@ -195,6 +195,29 @@ def main():
                 rec["sim_errors"].append({"kind": k, "pool_id": p["pool_id"], "error": str(err)[:400]})
             print(k, p["pool_id"][:12], [(r["case"], r["status"], r["got"], r.get("quoter_out")) for r in rows],
                   file=sys.stderr, flush=True)
+    return head, ht, x, wl, rec, ctx
+
+
+def main():
+    a = args()
+    node = Node(a.rpc)
+    if int(node.ok("eth_chainId", []), 16) != 42161:
+        fail("узел не Arbitrum One (chainId ≠ 42161)")
+    # Ревью t233, п. 2: SHA-256 — по тексту с переводами строк LF (как файл в репозитории; checkout с
+    # core.autocrlf=true на Windows дал бы CRLF — .gitattributes это запрещает, здесь — вторая защита).
+    raw = open(a.runtime, "rb").read().replace(b"\r\n", b"\n")
+    sha = hashlib.sha256(raw).hexdigest()
+    want = [ln.split()[0] for ln in open(a.sha_file, encoding="utf-8") if ln.strip().endswith("ArbExecutor.bin-runtime")]
+    if want != [sha]:
+        fail(f"SHA-256 {a.runtime} = {sha}, в {a.sha_file}: {want} — пересоберите contracts/build.sh")
+    code = "".join(raw.decode("ascii").split())  # hex без пробелов и переводов строк — в подмену state override
+    code = code if code.startswith("0x") else "0x" + code
+    # Решение 460: события Initialize Uniswap V4 (окно --v4-blocks, долгий поиск логов) — ДО выбора блока H: узел
+    # хранит только недавнее состояние; всё чтение состояния и симуляции — на свежем H после поиска.
+    skipped = []
+    v4_found = mgr.v4_inits(node, int(node.ok("eth_blockNumber", []), 16), a, skipped)
+    head, ht, x, wl, rec, ctx = recnode.fresh(lambda: int(node.ok("eth_blockNumber", []), 16),
+                                              lambda h: state_phase(node, a, code, v4_found, skipped, h))
     date = datetime.datetime.fromtimestamp(ht, datetime.timezone.utc).strftime("%Y-%m-%d")
     out = a.out or os.path.join(a.data_root, f"executor_v4_live_{date}")
     for r in rec["summary"]:

@@ -120,6 +120,10 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Curve StableSwap-NG (решение 275): событие фабрики PlainPoolDeployed адреса пула не содержит
             // (CurveStableSwapFactoryNG.vy L52-L56) — новые пулы приходят из справочника индексатора.
             Proto::CurveNg => continue,
+            // Curve Twocrypto-NG / Tricrypto-NG (решение 442): события фабрик TwocryptoPoolDeployed /
+            // TricryptoPoolDeployed (адрес пула — неиндексированное поле) не подключены — новые пулы приходят из
+            // справочника индексатора и поиска по реестру фабрики (find_pool_for_coins, factory_ask.rs).
+            Proto::CurveTwocrypto | Proto::CurveTricrypto => continue,
             // Metric OMM (решение 285): событие создания пула фабрики BSC — не установлено (createPool BSC ≠ SDK, исходника
             // нет) — новые пулы приходят из справочника индексатора.
             Proto::MetricOmm => continue,

@@ -22,13 +22,18 @@
 //!   maverickprotocol/v2-common d91e871, IMaverickV2Factory.sol L352-L357 (постраничный список пулов пары —
 //!   maverick-v2-examples 68e4d2f README.md L8-L25); endIndex — dex.pair_lookup_max;
 //! - KyberSwap Classic DMM getPools(token0, token1) → пулы[] — KyberNetwork/dmm-smart-contracts@e557b57, DMMFactory.sol
-//!   L94-L105 (решение 287).
+//!   L94-L105 (решение 287);
+//! - Curve Twocrypto-NG / Tricrypto-NG find_pool_for_coins(_from, _to, i) → пул (решение 442) — curvefi/twocrypto-ng
+//!   89c8dfb CurveTwocryptoFactory.vy L376-L386, curvefi/tricrypto-ng ecaa816 CurveL2TricryptoFactory.vy L369-L379:
+//!   `self.markets[from ^ to][i]` — порядок токенов любой (ключ — XOR адресов), i за последним пулом пары — откат
+//!   (выход за DynArray), он означает «пулов больше нет» (factory_scan.rs не считает его ошибкой).
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::aliases::I24;
 use alloy_primitives::{Address, Bytes};
 
 use super::abi_algebra::IAlgebraFactory;
+use super::abi_crypto::ICryptoFactory;
 use super::abi_dmm::IDmmFactory;
 use super::abi_dodo::IDodoFactory;
 use super::abi_maverick::IMaverickV2Factory;
@@ -67,6 +72,8 @@ pub enum Q {
     Maverick(u32),
     /// KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары (с разным усилением).
     Dmm,
+    /// Curve Twocrypto-NG / Tricrypto-NG (решение 442): find_pool_for_coins(a, b, i) — i-й пул пары.
+    CurveCrypto(u32),
 }
 
 impl Q {
@@ -86,6 +93,7 @@ impl Q {
             Q::Woo(_) => "state(base)",
             Q::Maverick(_) => "lookup(tokenA, tokenB)",
             Q::Dmm => "getPools",
+            Q::CurveCrypto(_) => "find_pool_for_coins",
         }
     }
 }
@@ -151,6 +159,13 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
             .abi_encode()
             .into()
         }
+        Q::CurveCrypto(i) => ICryptoFactory::find_pool_for_coinsCall {
+            from: coin,
+            to: quote,
+            i: alloy_primitives::U256::from(i),
+        }
+        .abi_encode()
+        .into(),
         Q::Slipstream(ts) => ICLFactory::getPoolCall {
             tokenA: coin,
             tokenB: quote,
@@ -184,6 +199,10 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
             .map_err(|e| format!("ответ lookup(tokenA, tokenB) не по ABI: {e}"))?,
         Q::Dmm => IDmmFactory::getPoolsCall::abi_decode_returns(out)
             .map_err(|e| format!("ответ getPools не по ABI: {e}"))?,
+        Q::CurveCrypto(_) => vec![
+            ICryptoFactory::find_pool_for_coinsCall::abi_decode_returns(out)
+                .map_err(|e| format!("ответ find_pool_for_coins не по ABI: {e}"))?,
+        ],
         Q::Dodo => {
             let r = IDodoFactory::getDODOPoolBidirectionCall::abi_decode_returns(out)
                 .map_err(|e| format!("ответ getDODOPoolBidirection не по ABI: {e}"))?;

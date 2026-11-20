@@ -186,11 +186,24 @@ pub enum Proto {
     /// getSwapOut (math/lb_swap.rs, lb_fee.rs); перечитывание каждым блоком (время блока). Квотер сверки — сам пул
     /// getSwapOut. Исполнение — шаг LB исполнителя v2 (вход переводом в пул, swap(swapForY, to)). Вид ядра — LbBin.
     LbV21,
+    /// Curve Twocrypto-NG (решение 442; curve_twocrypto_ng): crypto-пул из двух монет разной цены фабрики Twocrypto-NG
+    /// (curvefi/twocrypto-ng 89c8dfb, тег prod-v2.1.0, CurveTwocryptoOptimized.vy) — инвариант с A и gamma, внутренняя
+    /// цена price_scale, динамическая комиссия mid_fee → out_fee. Математика — math/crypto_y2.rs, crypto_swap.rs (своя
+    /// математика пула — внешний контракт MATH(): пул берётся, только если его адрес в dex.curve_crypto_math, а
+    /// version() — в dex.curve_crypto_versions). Чтение — load_crypto.rs, события — events_crypto.rs, проверка — реестр
+    /// фабрики get_coins (verify_crypto.rs), поиск — find_pool_for_coins (factory_ask.rs); квотер — сам пул
+    /// get_dy(uint256, …); исполнение — шаг STABLE_U256 исполнителя (exchange(uint256, uint256, dx, 0)). Вид ядра — Crypto.
+    CurveTwocrypto,
+    /// Curve Tricrypto-NG (решение 442; curve_tricrypto_ng): crypto-пул из трёх монет фабрики Tricrypto-NG
+    /// (curvefi/tricrypto-ng ecaa816, CurveTricryptoOptimizedWETH.vy / CurveTricryptoOptimized.vy) — всё как у
+    /// CurveTwocrypto, математика — math/crypto_y3.rs, комиссия — reduction_coefficient. Многомонетный (решение 295).
+    CurveTricrypto,
 }
 
 impl Proto {
     /// Многомонетный вид (решение 295): пул держит 2..8 монет в одном контракте и может дать боту несколько пар —
-    /// Curve 2020 (Ellipsis), Curve StableSwap-NG, Balancer V2, Saddle (Nerve), PancakeSwap StableSwap. Lista (форк
+    /// Curve 2020 (Ellipsis), Curve StableSwap-NG, Balancer V2, Saddle (Nerve), PancakeSwap StableSwap, Curve
+    /// Tricrypto-NG (решение 442). Lista (форк
     /// TwoPool), Infinity Stable (N_COINS = 2) и Nomiswap Stable (пара) — не входят. Ошибок нет.
     pub fn is_multi_coin(self) -> bool {
         matches!(
@@ -200,6 +213,7 @@ impl Proto {
                 | Proto::BalancerV2
                 | Proto::SaddleStable
                 | Proto::PancakeStable
+                | Proto::CurveTricrypto
         )
     }
 
@@ -357,6 +371,10 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "balancer_v2" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
         // Liquidity Book V2.1 (решение 290): в графе и сигналах (порт getSwapOut); исполнение — шаг LB (только v2).
         "lb_v21" => (PoolKind::LbBin, Proto::LbV21, true, false, false),
+        // Curve Twocrypto-NG / Tricrypto-NG (решение 442): в графе и сигналах (порт get_y и комиссии пула); исполнение —
+        // шаг STABLE_U256 контракта-исполнителя (exchange с индексами uint256).
+        "curve_twocrypto_ng" => (PoolKind::Crypto, Proto::CurveTwocrypto, true, false, false),
+        "curve_tricrypto_ng" => (PoolKind::Crypto, Proto::CurveTricrypto, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
         // Router их не исполняет (tradable = false); исполнение — шагом контракта-исполнителя: STABLE_U256 у pancake / lista
         // (exchange с индексами uint256), SADDLE у saddle (swap uint8 + deadline) — exec_kind.rs (решение 122 X, стейблсвапы).
@@ -596,6 +614,13 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Liquidity Book V2.1 (решение 290): фабрика (getFactory пула и реестр getLBPairInformation). Квотер сверки — сам
         // пул getSwapOut (адрес не нужен).
         Proto::LbV21 => list.push("dex.factory"),
+        // Curve Twocrypto-NG / Tricrypto-NG (решение 442): реестр фабрики (get_coins, find_pool_for_coins), версии
+        // реализации пула и адреса математики, с исходником которых сверены формулы (verify_crypto.rs).
+        Proto::CurveTwocrypto | Proto::CurveTricrypto => list.extend([
+            "dex.factory",
+            "dex.curve_crypto_versions",
+            "dex.curve_crypto_math",
+        ]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

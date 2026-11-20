@@ -10,6 +10,8 @@
 //! Монета пары — нативный BNB пула (StableData.native, в паре — обёртка WBNB; решение «122 X (нативный BNB в
 //! стейблсвапах)»): вид STABLE_U256_BNB (bnb_in — по тому, вход это или выход); у CURVE / SADDLE — отказ.
 //! Решение 273: пул Solidly с фабрикой на паузе — шаг не строится (NoRoute с причиной).
+//! Решение 442: crypto-пул Curve (Twocrypto-NG / Tricrypto-NG, PoolState::Crypto) — шаг STABLE_U256 (exchange(uint256 i,
+//! uint256 j, dx, 0)), индексы — из состояния пула; пул в рампе A/gamma — не исполняется.
 //! Решение 395 (t181): пул внутри менеджера (Uniswap V4 — PoolRef::Singleton PoolManager; Infinity CL / Bin — Singleton
 //! своего менеджера; Infinity Stable — Contract(крючок)) — шаги UNI_V4 / INF_CL / INF_BIN исполнителя v3: ключ пула из
 //! реестра (Entry.key) сверяется с ссылкой (PoolId ключа = id ссылки и менеджер ключа = менеджер ссылки; у Infinity
@@ -238,6 +240,11 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => {
             return singleton(ctx, e, k);
         }
+        // Решение 442: crypto-пул Curve (Twocrypto-NG / Tricrypto-NG) — шаг STABLE_U256, exchange(uint256 i, uint256 j,
+        // dx, 0); индексы — из прочитанного состояния Crypto (crypto_step).
+        ExecKind::StableU256 if matches!(e.pool.state, PoolState::Crypto(_)) => {
+            crypto_step(e, token_in).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
+        }
         ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
             stable(e, k, token_in, stable_native::wrapped(ctx))
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
@@ -325,6 +332,24 @@ pub fn singleton_step(ctx: &Ctx, e: &Entry, k: ExecKind) -> GatewayResult<(Param
             Ok((p, vault))
         }
         _ => Err(no(format!("ключ пула не того вида для шага {}", k.name()))),
+    }
+}
+
+/// Решение 442: индексы шага STABLE_U256 crypto-пула Curve — i монета входа, j выхода. Принимает: пул реестра, токен
+/// входа. Возвращает: параметры шага или причину (состояние не Crypto; пул в рампе A/gamma; токен входа не из пары).
+fn crypto_step(e: &Entry, token_in: Address) -> Result<Params, String> {
+    let PoolState::Crypto(d) = &e.pool.state else {
+        return Err(format!("{}: у пула нет состояния crypto-пула Curve", e.family.id));
+    };
+    if d.halted {
+        return Err(format!("{}: пул в рампе A/gamma — шаг не строится", e.family.id));
+    }
+    if token_in == e.pool.token0 {
+        Ok(Params::StableU256 { i: d.i0, j: d.i1 })
+    } else if token_in == e.pool.token1 {
+        Ok(Params::StableU256 { i: d.i1, j: d.i0 })
+    } else {
+        Err(format!("{}: токен входа {token_in} не из пары пула", e.family.id))
     }
 }
 

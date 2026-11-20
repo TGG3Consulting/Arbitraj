@@ -143,6 +143,11 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "curve_stableswap" | "curve_stableswap_ng" => ExecKind::Curve,
         "maverick_v2" => ExecKind::Maverick,
         "pancake_stableswap" | "lista_stableswap" => ExecKind::StableU256,
+        // Решение 442: Curve Twocrypto-NG / Tricrypto-NG — exchange(uint256 i, uint256 j, dx, min_dy) с receiver =
+        // msg.sender по умолчанию; вход — transferFrom(msg.sender) (twocrypto-ng 89c8dfb CurveTwocryptoOptimized.vy
+        // L364-L404, L286-L335; tricrypto-ng ecaa816 CurveTricryptoOptimizedWETH.vy L410-L442, L313-L379 — use_eth =
+        // False: монета ERC-20, у WETH-монеты пул отдаёт WETH): тот же шаг STABLE_U256 (без нового кода исполнителя).
+        "curve_twocrypto_ng" | "curve_tricrypto_ng" => ExecKind::StableU256,
         "saddle_stableswap" => ExecKind::Saddle,
         // Решение 284: swap пары — подпись V2, выход — getAmountOut(address, uint256) самой пары (шаг 12, только v2).
         "nomiswap_stable" => ExecKind::NomiStable,

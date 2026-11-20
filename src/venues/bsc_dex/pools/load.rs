@@ -25,7 +25,7 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_algebra_integral, load_balancer, load_bin, load_cl, load_curve, load_curve_ng, load_dmm, load_dodo,
+    load_algebra, load_algebra_integral, load_balancer, load_bin, load_cl, load_crypto, load_curve, load_curve_ng, load_dmm, load_dodo,
     load_elastic, load_inf_stable, load_izi, load_lb, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
@@ -113,6 +113,19 @@ pub async fn state(
             ErrorCode::Internal,
             format!("{}: ссылка на пул Curve NG не того вида", f.title),
         ));
+    }
+    // Curve Twocrypto-NG / Tricrypto-NG (решение 442): вид ядра Crypto, пул — отдельный контракт; состояние и время
+    // блока одной пачкой (load_crypto.rs). Tricrypto — и пара многомонетного пула (PoolRef::Multi).
+    if matches!(f.proto, Proto::CurveTwocrypto | Proto::CurveTricrypto) {
+        let Some(a) = reference.own_contract() else {
+            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на crypto-пул не того вида", f.title)));
+        };
+        return Ok(Loaded {
+            state: load_crypto::load(ctx, f, a, pair, block).await?,
+            ticks: None,
+            bins: None,
+            fee_pips: None,
+        });
     }
     // Metric OMM (решение 285): вид ядра OraclePmm, пул — отдельный контракт, лесенка ответов пула (load_metric.rs).
     if f.proto == Proto::MetricOmm {

@@ -101,6 +101,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `verify_dodo.rs` | Проверка пула DODO PMM (решение 86b): реестр фабрики DVM/DPP/DSP (getDODOPoolBidirection) содержит пул |
 | `verify_curve.rs` | Проверка пула StableSwap (решение 122 F): пул в dex.stable_pools DEX и пара среди его coins(k) |
 | `verify_curve_ng.rs` | Проверка пула Curve StableSwap-NG (решение 275): реестр фабрики dex.factory — get_coins(pool) не пуст, is_meta = false, пара среди монет |
+| `verify_crypto.rs` | Проверка crypto-пула Curve (решение 442: Twocrypto-NG, Tricrypto-NG): реестр фабрики dex.factory — get_coins(pool) не нулевые, монета и встречный среди них, version() пула в dex.curve_crypto_versions, MATH() пула в dex.curve_crypto_math (математика, сверенная с портом); Tricrypto в режиме dex.multi_pair — ссылка с парой |
 | `verify_lb.rs` | Проверка пула Liquidity Book V2.1 (решение 290): getFactory = dex.factory, токены X/Y = монета и встречный, реестр фабрики getLBPairInformation(X, Y, binStep) = этот адрес (самозванец отсекается) |
 | `verify_balancer.rs` | Проверка пула Balancer V2 (решение 289): getVault = dex.vault, getPool(getPoolId) хранилища = этот адрес (самозванец отсекается), isPoolFromFactory у dex.factory / dex.balancer_stable_factory, пара — среди getPoolTokens |
 | `verify_metric.rs` | Проверка пула Metric OMM (решение 285): isPool фабрики dex.factory + getImmutables (фабрика, токены пары; порядок токенов пула любой) |
@@ -117,6 +118,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `abi_dodo.rs` | ABI пула/фабрики DODO PMM (решение 86b): getPMMStateForCall/getUserFeeRate/_BASE_TOKEN_/_QUOTE_TOKEN_/querySellBase/querySellQuote, DODOSwap/BuyShares/SellShares/RChange/DODOFlashLoan, getDODOPoolBidirection, NewDVM/NewDPP/NewDSP |
 | `abi_curve.rs` | ABI пула StableSwap шаблона Curve 2020 — Ellipsis (решение 122 F): coins/balances/A/fee/get_dy/exchange, события; topic0 событий с массивами uint256[N] — по числу монет (topics_for), MAX_COINS = 8 |
 | `abi_curve_ng.rs` | ABI пула Curve StableSwap-NG v7.0.0 и фабрики NG (curvefi/stableswap-ng 3332cd4): геттеры, get_dy, события с uint256[], get_coins/is_meta |
+| `abi_crypto.rs` | ABI crypto-пулов Curve (решение 442): геттеры Twocrypto-NG (curvefi/twocrypto-ng 89c8dfb) и Tricrypto-NG (curvefi/tricrypto-ng ecaa816, обе реализации), get_dy(uint256, …), реестр фабрик (get_coins, find_pool_for_coins), topic0 событий обеих реализаций (посчитаны один раз) |
 | `abi_nomi.rs` | ABI пары Nomiswap Stable (решение 284; Sourcify full match 56/0x1e40…60f1): getReserves, swapFee, getA, множители, getAmountOut(address, uint256) — 0xca706bcf; события Sync/Swap/Mint/Burn (подписи V2), RampA/StopRampA; константы MAX_FEE, A_PRECISION, MAX_LOOP_LIMIT |
 | `abi_dmm.rs` | ABI KyberSwap Classic DMM (решение 287; dmm-smart-contracts@e557b57, фабрика BSC — Sourcify match): пул getTradeInfo и события (Sync с виртуальными резервами, Swap, Mint, Burn, UpdateEMA), фабрика getPools / isPool / PoolCreated, роутер DMMRouter02.getAmountsOut (квотер сверки) |
 | `abi_smardex.rs` | ABI пары SmarDex (решение 288; фабрика BSC — Sourcify match = SmarDex-Ecosystem/dex-smart-contracts deployments/bsc): getReserves, getFictiveReserves, getPriceAverage, getPairFees, события пары; Multicall3.getCurrentBlockTimestamp; реестр и поля пары — как V2 |
@@ -164,6 +166,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `load_dodo.rs` | Состояние пула DODO PMM на блоке (решение 86b): getPMMStateForCall + getUserFeeRate(0) + _BASE_TOKEN_/_QUOTE_TOKEN_ → PoolState::Pmm; net_after_fees, rstate — по одному пулу |
 | `load_curve.rs` | Состояние пула StableSwap на блоке (решение 122 F): coins(k)/balances(k) до первого отката, A(), fee() одним Multicall3 + rates по decimals монет → PoolState::StableSwap |
 | `load_curve_ng.rs` | Состояние пула Curve NG на блоке одним Multicall3: N_COINS, coins/balances, stored_rates, A_precise, fee, offpeg → StableSwap с шаблоном NG |
+| `load_crypto.rs` | Состояние crypto-пула Curve на блоке одним Multicall3 (решение 442): A, gamma, D, mid_fee, out_fee, fee_gamma, future_A_gamma_time, precisions, coins/balances, price_scale и время блока → PoolState::Crypto; рампа A/gamma (future_A_gamma_time > время блока) — halted; Tricrypto — одно чтение на все пары (load_site.rs) |
 | `load_nomi.rs` | Состояние пары Nomiswap Stable на блоке одним Multicall3: token0, getReserves, swapFee, getA, множители → StableSwap шаблона input_fee (решение 284) |
 | `load_dmm.rs` | Состояние пула KyberSwap Classic DMM на блоке одним getTradeInfo (решение 287): реальные и виртуальные резервы, комиссия блока → PoolState::AmpV2; перечитывается каждым блоком (комиссия по номеру блока) |
 | `load_smardex.rs` | Состояние пары SmarDex на блоке одной пачкой (решение 288): резервы, фиктивные резервы, средняя цена и её время, комиссии, время блока → PoolState::Fictive; перечитывается каждым блоком |
@@ -208,6 +211,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `events_dodo.rs` | События DODO PMM (решение 86b): любое событие кривой (DODOSwap/BuyShares/SellShares/RChange/DODOFlashLoan) → перечитывание пула (событие не несёт пост-состояние кривой) |
 | `events_curve.rs` | События StableSwap (решение 122 F): любое событие пула (обмен, ликвидность, комиссия, A) → перечитывание |
 | `events_curve_ng.rs` | События Curve NG (решение 275): любое событие пула → перечитать (ещё — каждый блок) |
+| `events_crypto.rs` | События crypto-пула Curve (решение 442): любое событие пула (обмен, ликвидность, параметры, рампа, доля админа) → перечитать; каждым блоком не перечитывается |
 | `events_nomi.rs` | События пары Nomiswap Stable (решение 284): любое событие пары → перечитать (ещё — каждый блок: swapFee без события, рампа A) |
 | `events_dmm.rs` | События пула KyberSwap Classic DMM (решение 287): любое известное событие (Sync, Swap, UpdateEMA, Mint, Burn) → перечитать пул (getTradeInfo) |
 | `events_smardex.rs` | События пары SmarDex (решение 288): любое известное событие (Sync, Swap, FeesChanged, Mint, Burn) → перечитать пару |

@@ -77,6 +77,8 @@ pub fn plan(
             Proto::V2 | Proto::NomiStable | Proto::Smardex => vec![Q::V2],
             // KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары.
             Proto::KyberDmm => vec![Q::Dmm],
+            // Curve Twocrypto-NG / Tricrypto-NG (решение 442): find_pool_for_coins(a, b, i), i < dex.pair_lookup_max.
+            Proto::CurveTwocrypto | Proto::CurveTricrypto => Vec::new(),
             Proto::PancakeV3 | Proto::UniswapV3 => Vec::new(),
             p if p.is_solidly() => {
                 let v1 = p == Proto::SolidlyV1;
@@ -115,6 +117,15 @@ pub fn plan(
         if f.proto == Proto::Slipstream {
             match spacings(ctx, f.id) {
                 Ok(list) => qs = list.into_iter().map(Q::Slipstream).collect(),
+                Err(why) => {
+                    out.notes.push(format!("{}: {why}", f.id));
+                    continue;
+                }
+            }
+        }
+        if matches!(f.proto, Proto::CurveTwocrypto | Proto::CurveTricrypto) {
+            match lookup_max(ctx, f.id) {
+                Ok(n) => qs = (0..n).map(Q::CurveCrypto).collect(),
                 Err(why) => {
                     out.notes.push(format!("{}: {why}", f.id));
                     continue;
@@ -250,7 +261,7 @@ pub fn lookup_max(ctx: &Ctx, id: &str) -> Result<u32, String> {
     match ctx.dex_int("dex.pair_lookup_max", id) {
         Ok(n) => u32::try_from(n).map_err(|_| "dex.pair_lookup_max слишком велик".to_string()),
         Err(e) if e.code == ErrorCode::NotConfigured => {
-            Err("не задана dex.pair_lookup_max — Maverick V2 этой DEX по фабрике не ищется".into())
+            Err("не задана dex.pair_lookup_max — пулы этой DEX по фабрике не ищутся".into())
         }
         Err(e) => Err(format!("dex.pair_lookup_max: {}", e.message)),
     }

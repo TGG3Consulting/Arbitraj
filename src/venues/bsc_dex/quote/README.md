@@ -103,8 +103,10 @@
 | `quoter_maverick.rs` | Сверка Maverick V2 (решения 73, 122 F): MaverickV2Quoter.calculateSwap на точный вход без предела тика (как шаг MAVERICK исполнителя) и разбор amountOut |
 | `quoter_dmm.rs` | Сверка KyberSwap Classic DMM (решение 287): DMMRouter02.getAmountsOut(сумма, [пул], [вход, выход]) — dex.quoter; выход — последний элемент |
 | `quoter_lb.rs` | Сверка Liquidity Book V2.1 (решение 290): getSwapOut(amountIn, swapForY) самого пула через eth_call; остаток входа > 0 — выхода нет (swap откатился бы) |
+| `quoter_crypto.rs` | Сверка crypto-пула Curve (решение 442): get_dy(i, j, dx) самого пула через eth_call (индексы — из состояния Crypto) |
 | `quoter_balancer.rs` | Сверка Balancer V2 (решение 289): Vault.queryBatchSwap(GIVEN_IN, шаг по id пула) через eth_call — dex.vault; выход — минус дельта токена выхода |
 | `vault_depth.rs` | Глубина пула Balancer V2 в полосе (решение 289): средняя цена исполнения без комиссии в полосе от цены малой пробы, деление отрезка пополам; весовой — не дальше 30 % баланса входа |
+| `crypto_depth.rs` | Глубина crypto-пула Curve в полосе (решение 442): средняя цена исполнения без комиссии (math/crypto_swap.rs с нулевыми mid_fee / out_fee) не выходит за полосу от цены малой пробы — деление отрезка пополам |
 | `emptiness.rs` | Пустой пул (резерв 0, ликвидность 0, нет бинов) и причины «не хватает ликвидности на сумму сверки» |
 | `quoter_revert.rs` | Откаты квотера «не хватает ликвидности»: NotEnoughLiquidity, BinPool__OutOfLiquidity, SPL, Unexpected error — читаемым текстом |
 

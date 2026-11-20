@@ -57,6 +57,8 @@ const CHOICE = {
   solidly_v1: 'Solidly V1 (THENA V1)',
   curve_stableswap: 'StableSwap (Curve 2020, Ellipsis)',
   curve_stableswap_ng: 'Curve StableSwap-NG (plain-пул фабрики NG)',
+  curve_twocrypto_ng: 'Curve Twocrypto-NG (crypto-пул из 2 монет)',
+  curve_tricrypto_ng: 'Curve Tricrypto-NG (crypto-пул из 3 монет)',
   nomiswap_stable: 'Nomiswap Stable (стейбл-пара, комиссия со входа)',
   metric_omm: 'Metric OMM (цена провайдера, лесенка ответов пула)',
   iziswap: 'iZiSwap (точки и лимитные ордера, лесенка ответов пула)',
@@ -115,6 +117,7 @@ const POOL_KIND = {
   Fictive: 'Фиктивные резервы (SmarDex)',
   LbBin: 'Бины с изменчивой комиссией (Liquidity Book V2.1)',
   VaultPool: 'Пул в хранилище (Balancer V2)',
+  Crypto: 'Crypto-пул Curve (Twocrypto / Tricrypto)',
 };
 const METHOD = { Single: 'одиночная', Bundle: 'бандл' };
 const LEVEL = { Info: 'инфо', Warn: 'внимание', Error: 'ошибка' };

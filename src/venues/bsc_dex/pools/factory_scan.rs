@@ -30,7 +30,7 @@ use crate::storage::journal::Level;
 use super::super::ctx::Ctx;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::node::call;
-use super::factory_ask::decode_q;
+use super::factory_ask::{Q, decode_q};
 use super::factory_calls::{self, Plan};
 use super::stable_list;
 use super::woo_quote;
@@ -168,6 +168,8 @@ fn sort(plan: &Plan, answers: Vec<call::Piece>, coins: &HashMap<Address, String>
                     continue;
                 }
             },
+            // Решение 442: откат find_pool_for_coins Curve crypto — номер за последним пулом пары (factory_ask.rs), не ошибка.
+            Ok(Err(_)) if matches!(ask.q, Q::CurveCrypto(_)) => continue,
             Ok(Err(_)) => {
                 reverted += 1;
                 continue;

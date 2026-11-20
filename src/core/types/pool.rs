@@ -1,7 +1,7 @@
 //! Файл: core/types/pool.rs
 //! Что делает: типы пулов DEX — вид пула (V2, V3, V4 с концентрированной ликвидностью, V4 Bin, PMM, Solidly,
 //! StableSwap, TickBin, PMM от оракула, V2 с усилением — решение 287, пара с фиктивными резервами — решение 288, пул в
-//! общем хранилище — решение 289, бины с изменчивой комиссией — решение 290),
+//! общем хранилище — решение 289, бины с изменчивой комиссией — решение 290, crypto-пул Curve — решение 442),
 //! ссылка на пул, состояние пула на уровне «текущая цена и комиссия», крючок V4 и его группа A/B/C.
 //! Кто вызывает: адаптер DEX (создаёт), ядро и интерфейс (показывают, учитывают группу крючка).
 //! От чего зависит: core/types/market.rs, alloy-primitives.
@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use super::market::VenueId;
 pub use super::pool_amp::AmpV2Data;
+pub use super::pool_crypto::CryptoData;
 pub use super::pool_fictive::FictiveData;
 pub use super::pool_lb::LbBinData;
 pub use super::pool_vault::{VaultCurve, VaultPoolData};
@@ -73,6 +74,10 @@ pub enum PoolKind {
     /// порядку создателя пула; комиссия = база + изменчивая часть, которая растёт с каждым пройденным бином и затухает
     /// по времени блока. Резервы бинов — в адаптере (как у Bin). Состояние — LbBinData.
     LbBin,
+    /// Crypto-пул Curve (решение 442: Twocrypto-NG, Tricrypto-NG): 2–3 монеты разной цены в одном контракте, ликвидность
+    /// сосредоточена около внутренней цены price_scale, инвариант с A и gamma, комиссия динамическая (mid_fee → out_fee
+    /// по удалённости от равновесия). Свой контракт на пул. Состояние — CryptoData.
+    Crypto,
 }
 
 /// Как найти пул в сети.
@@ -232,6 +237,9 @@ pub enum PoolState {
     /// Бины с изменчивой комиссией (решение 290): активный бин, шаг, порядок X/Y, параметры комиссии и время блока.
     /// Боксируется, как Pmm. Поля — в LbBinData (core/types/pool_lb.rs).
     LbBin(Box<LbBinData>),
+    /// Crypto-пул Curve (решение 442): балансы, множители точности, price_scale, D, A, gamma, комиссия, индексы пары.
+    /// Боксируется, как Pmm. Поля — в CryptoData (core/types/pool_crypto.rs).
+    Crypto(Box<CryptoData>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

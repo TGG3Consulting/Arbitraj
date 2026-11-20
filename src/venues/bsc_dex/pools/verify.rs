@@ -31,7 +31,7 @@ use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_call_with};
 pub use super::verify_rules::{Read, check, fill, registered, registered_for, v2_fee_pips, v3_abi};
 use super::{
-    fee_probe, verify_algebra, verify_balancer, verify_curve, verify_lb, verify_curve_ng, verify_dodo, verify_inf_stable, verify_izi, verify_metric,
+    fee_probe, verify_algebra, verify_balancer, verify_crypto, verify_curve, verify_lb, verify_curve_ng, verify_dodo, verify_inf_stable, verify_izi, verify_metric,
     verify_maverick, verify_solidly, verify_stable_u, verify_v4,
 };
 
@@ -82,6 +82,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut solidly = Vec::new();
     let mut curve = Vec::new();
     let mut curve_ng = Vec::new();
+    let mut crypto = Vec::new();
     let mut metric = Vec::new();
     let mut izi = Vec::new();
     let mut balancer = Vec::new();
@@ -98,6 +99,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             p if p.is_solidly() => solidly.push(i),
             Proto::CurveStable => curve.push(i),
             Proto::CurveNg => curve_ng.push(i),
+            Proto::CurveTwocrypto | Proto::CurveTricrypto => crypto.push(i),
             Proto::MetricOmm => metric.push(i),
             Proto::IziSwap | Proto::BiswapV3 => izi.push(i),
             Proto::BalancerV2 => balancer.push(i),
@@ -143,6 +145,14 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     for (i, r) in curve_ng
         .into_iter()
         .zip(verify_curve_ng::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    // Curve Twocrypto-NG / Tricrypto-NG (решение 442): реестр фабрики, версия, математика (verify_crypto.rs).
+    let list: Vec<Candidate> = crypto.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in crypto
+        .into_iter()
+        .zip(verify_crypto::verify(ctx, &list, size).await)
     {
         out[i] = Some(r);
     }

@@ -170,6 +170,11 @@ fn by_quote(ctx: &Ctx, e: &Edge, token_in: Address) -> Option<Option<Decimal>> {
             let i = if zfo { d.i0 } else { d.i1 };
             d.balances.get(usize::from(i)).copied()
         }
+        // Crypto-пул Curve (решение 442): баланс монеты входа, как у StableSwap.
+        PoolState::Crypto(d) => {
+            let i = if zfo { d.i0 } else { d.i1 };
+            d.balances.get(usize::from(i)).copied()
+        }
         PoolState::V3 {
             sqrt_price_x96,
             liquidity,

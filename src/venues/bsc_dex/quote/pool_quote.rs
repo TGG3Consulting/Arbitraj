@@ -22,7 +22,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    balancer_math, bin_swap, dmm, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
+    balancer_math, bin_swap, crypto_swap, dmm, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
     stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
@@ -465,6 +465,19 @@ pub fn swap(
             };
             r.map(|(amount_in, amount_out)| Swapped { amount_in, amount_out, complete: true })
                 .ok_or_else(none)
+        }
+        // Crypto-пул Curve (решение 442): выход как в `_exchange` пула (math/crypto_swap.rs: get_y Twocrypto / Tricrypto,
+        // комиссия с выхода); только точный вход (шаг исполнителя — exchange на точный вход). Рампа A/gamma — halted.
+        (PoolState::Crypto(d), PoolKind::Crypto) => {
+            if !exact_in {
+                return Err(why("crypto-пул Curve: точный выход не поддерживается"));
+            }
+            if d.halted {
+                return Err(why("crypto-пул Curve в рампе A/gamma (обмен пересчитал бы D — расчёт не точен)"));
+            }
+            let (i, j) = if zero_for_one { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            let out = crypto_swap::exchange_out(d, i.into(), j.into(), amount).ok_or_else(none)?;
+            Ok(Swapped { amount_in: amount, amount_out: out, complete: true })
         }
         // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): порт getSwapOut по прочитанной полосе бинов на
         // времени блока чтения (math/lb_swap.rs). Только точный вход (шаг исполнителя — вход переводом и swap).

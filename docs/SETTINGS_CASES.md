@@ -177,6 +177,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.block_read_parallel_max` | t153, р. 330 | `2` после выкладки t153 (проверка механизма, число не из замера), дальше — по замеру; если в журнале появятся … | необязательная: Не задана — как раньше, по одному | в релизе 141619bc |
 | `dex.check_due_read_only` | t141, р. 310 | `да` (после выкладки t141; сначала на время замера, см. docs/TASKS.md t141) | необязательная: не задана — как раньше | в релизе 141619bc |
 | `dex.cl_tick_spacings` | —, р. 122 | совета нет, решает Тигран | необязательная: Не задана — Slipstream этой DEX по фабрике не ищется | в релизе 141619bc |
+| `dex.curve_crypto_math` | T433-F3, р. 442 | Twocrypto-NG Arbitrum `["0x1Fd8Af16DC4BEBd950521308D55d0543b6cDF4A1"]`, Tricrypto-NG `["0x604388Bb1159AFd21eB5191cE22b4DeCdEE2Ae22"]` | без .optional(): DEX не подключена | ещё не в релизе (t223-f3) |
+| `dex.curve_crypto_versions` | T433-F3, р. 442 | Twocrypto-NG `["v2.1.0"]`, Tricrypto-NG `["v2.0.0"]` | без .optional(): DEX не подключена | ещё не в релизе (t223-f3) |
 | `dex.curve_ng_versions` | t107, р. 275 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана или пуста — DEX не подключена | в релизе 141619bc |
 | `dex.custom_deployers` | —, р. 188 | совета нет, решает Тигран | необязательная: Не задан — только poolByPair (кастомные пулы отклоняются) | в релизе 141619bc |
 | `dex.event_lanes_max` | t153, р. 330 | `2` после выкладки t153 — проверка механизма, число не из замера; дальше — по замеру (сначала вместе с … | необязательная: Не задана — как раньше: события пачки по одному в сессии | в релизе 141619bc |
@@ -806,6 +808,30 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** да — какие пулы Slipstream находятся по фабрике (pools/factory_calls.rs).
 - **Связанные ключи:** index.factory_scan.
 - **Статус:** в релизе 141619bc.
+
+### `dex.curve_crypto_math`
+
+- **Задача / решение:** T433-F3, решение 442.
+- **Появилась:** 2026-11-20, ветка t223-f3/arb-family-f3.
+- **Кейс:** решение 442: crypto-пул Curve (Twocrypto-NG / Tricrypto-NG) считает обмен внешним контрактом математики MATH() (immutable пула); у фабрики Twocrypto-NG в Arbitrum две реализации — math v2.0.0 (0x2005995a…) и v2.1.0 (0x1Fd8Af16…) (twocrypto-ng deployments.yaml, коммит 99b5192). Порт math/crypto_y2.rs, crypto_y3.rs сверен с исходником только одной математики каждой фабрики — пул с другой математикой посчитался бы чужой формулой.
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id DEX вида curve_twocrypto_ng / curve_tricrypto_ng); каталог src/settings/catalog/dex.rs.
+- **Что ставить:** Twocrypto-NG Arbitrum — `["0x1Fd8Af16DC4BEBd950521308D55d0543b6cDF4A1"]`, Tricrypto-NG Arbitrum — `["0x604388Bb1159AFd21eB5191cE22b4DeCdEE2Ae22"]` (docs/FIRST_RUN.md, решение 442).
+- **Если не задана:** в каталоге без .optional(): DEX не подключена — families::required (src/venues/bsc_dex/pools/families.rs, ветка CurveTwocrypto | CurveTricrypto) → classify «не задана dex.curve_crypto_math»; пуста или не адрес — пулы отклоняются с причиной (pools/verify_crypto.rs plan).
+- **Влияет на торговлю:** да — какие crypto-пулы Curve берутся (pools/verify_crypto.rs).
+- **Связанные ключи:** dex.curve_crypto_versions, dex.factory, dex.kind.
+- **Статус:** ещё не в релизе (ветка t223-f3/arb-family-f3).
+
+### `dex.curve_crypto_versions`
+
+- **Задача / решение:** T433-F3, решение 442.
+- **Появилась:** 2026-11-20, ветка t223-f3/arb-family-f3.
+- **Кейс:** решение 442: у фабрики crypto-пулов Curve несколько реализаций пула (pool_implementations); формулы обмена (math/crypto_swap.rs) сверены с исходником Twocrypto-NG `v2.1.0` (twocrypto-ng 89c8dfb, CurveTwocryptoOptimized.vy L189) и Tricrypto-NG `v2.0.0` (tricrypto-ng ecaa816, CurveTricryptoOptimizedWETH.vy L215, CurveTricryptoOptimized.vy L199). Пул иной версии не берётся.
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id DEX вида curve_twocrypto_ng / curve_tricrypto_ng); каталог src/settings/catalog/dex.rs.
+- **Что ставить:** Twocrypto-NG — `["v2.1.0"]`, Tricrypto-NG — `["v2.0.0"]` (docs/FIRST_RUN.md, решение 442).
+- **Если не задана:** в каталоге без .optional(): DEX не подключена — families::required (src/venues/bsc_dex/pools/families.rs, ветка CurveTwocrypto | CurveTricrypto) → classify «не задана dex.curve_crypto_versions»; пуста — пулы отклоняются с причиной (pools/verify_crypto.rs plan).
+- **Влияет на торговлю:** да — какие crypto-пулы Curve берутся (pools/verify_crypto.rs).
+- **Связанные ключи:** dex.curve_crypto_math, dex.factory, dex.kind.
+- **Статус:** ещё не в релизе (ветка t223-f3/arb-family-f3).
 
 ### `dex.curve_ng_versions`
 

@@ -16,6 +16,7 @@ use alloy_primitives::U256;
 use crate::core::types::PoolState;
 
 use super::super::math::bin_price::{self, SCALE_OFFSET};
+use super::super::math::crypto_swap;
 use super::super::math::full_math::mul_div;
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::pools::load_dodo::rstate;
@@ -100,6 +101,12 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             } else {
                 mul_div(amount, price, one)
             }
+        }
+        // Crypto-пул Curve (решение 442): по внутренней цене пула price_scale и множителям точности
+        // (math/crypto_swap.rs spot) — оценка размера пробы (решение 73.19), не сверяемая величина.
+        PoolState::Crypto(d) => {
+            let (ic, iu) = if coin0 { (d.i0, d.i1) } else { (d.i1, d.i0) };
+            crypto_swap::spot(d, ic.into(), iu.into(), amount)
         }
         // V2 с усилением (KyberSwap Classic DMM, решение 287): спот-цена — отношение ВИРТУАЛЬНЫХ резервов (по ним формула).
         PoolState::AmpV2(d) => {

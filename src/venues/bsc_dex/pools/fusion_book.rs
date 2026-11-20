@@ -7,8 +7,11 @@
 //! прочитанные на блоке лога или позже, долой (могли быть с сиротского блока; сравнение номера блока).
 //! Сверка с квотером на блоке (решение 73): own_read — чтение сверки пишет данные в свою ячейку задачи (tokio
 //! task_local), а не в книгу; same_block — комиссия свопа в САМОМ блоке H по данным оракула этого же чтения.
+//! Повторное ревью t236 (п. 3): чтения, не пишущие реестр, — только через own_read / isolated (сверка, перечитывание
+//! перед сделкой, доказательство памяти): в книгу попадают лишь данные чтений, чья запись идёт в реестр.
 //! Кто вызывает: pools/fusion_fee.rs (remember), pools/fusion_head.rs (with), check/quoter_block.rs (own_read,
-//! same_block), registry.rs (forget), listen_log.rs (orphan).
+//! same_block), exec/quoter_refetch.rs, check/memory_proof.rs, quote/verify.rs, quote/cycle_legs.rs,
+//! check/hook_batch.rs (isolated), registry.rs (forget), listen_log.rs (orphan).
 //! От чего зависит: fusion_oracle.rs (Got), fusion_fee.rs (gaps), math/fee_algebra_v1.rs (fee_at), registry.rs
 //! (Entry), families.rs (Proto).
 //! Настройки: нет.
@@ -73,6 +76,13 @@ pub async fn own_read<F: Future>(f: F) -> (F::Output, Option<Held>) {
         (out, OWN.with(|c| c.borrow_mut().take()))
     })
     .await
+}
+
+/// Повторное ревью t236 (п. 3): чтение `f`, не пишущее реестр (перечитывание перед сделкой, проверки), —
+/// данные оракула THENA Fusion внутри него не попадают в книгу (иначе книга оказалась бы новее записи реестра).
+/// Принимает: future чтения. Возвращает: его итог. Ошибок нет.
+pub async fn isolated<F: Future>(f: F) -> F::Output {
+    own_read(f).await.0
 }
 
 /// Сверка с квотером на блоке (решение 73): в свежем состоянии пула, прочитанном на `block`, комиссия — та, что получит

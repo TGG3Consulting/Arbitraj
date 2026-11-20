@@ -19,7 +19,7 @@
 //! Виртуальный квотер (решение 186) — прежний путь по одному (hooks_probe).
 //! Кто вызывает: exec/trade_probe.rs (hooks_again). Чтение CL в пакете и разбор ответов — check/hook_batch_read.rs.
 //! От чего зависит: check/hooks_probe.rs, check/hook_batch_read.rs, pools/{load, load_batch}.rs,
-//! quote/{quoter_calls, virtual_quoter}.rs, node/call.rs.
+//! quote/{quoter_calls, virtual_quoter}.rs, node/call.rs, pools/fusion_book.rs (isolated — решение 463).
 //! Настройки: dex.multicall3 [bsc_dex] (через try_many); check.probe_usdt, dex.quoter, dex.tick_words — через вызываемые.
 
 use std::collections::HashMap;
@@ -32,7 +32,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::call;
-use super::super::pools::load;
+use super::super::pools::{fusion_book, load};
 use super::super::pools::load_batch::{self, Want};
 use super::super::pools::registry::{Entry, Registry};
 use super::super::quote::virtual_quoter;
@@ -102,7 +102,8 @@ pub async fn measure(
     let wants: Vec<Want> = apart.iter().map(|k| want(&pools[plans[*k].0].0)).collect();
     let (ans, sep) = tokio::join!(
         call::try_many(ctx, &calls, &tag),
-        load_batch::states(ctx, tokens, reg, &wants, block)
+        // Решение 463 (повторное ревью t236): оракул THENA Fusion этого чтения — не в книгу (fusion_book.rs).
+        fusion_book::isolated(load_batch::states(ctx, tokens, reg, &wants, block))
     );
     let ans = ans?;
     let mut sep: HashMap<usize, _> = apart.into_iter().zip(sep).collect();
@@ -129,7 +130,7 @@ pub async fn measure(
     let wants: Vec<Want> = again.iter().map(|k| want(&pools[plans[*k].0].0)).collect();
     for (k, r) in again
         .iter()
-        .zip(load_batch::states(ctx, tokens, reg, &wants, block).await)
+        .zip(fusion_book::isolated(load_batch::states(ctx, tokens, reg, &wants, block)).await)
     {
         let i = plans[*k].0;
         match r {

@@ -441,6 +441,25 @@
     API configs.pancakeswap.com (из песочницы закрыт); у SmartRouter 0x3222…AC77 и v3 UR 0xFE65…9912 Arbitrum
     stableFactory = 0 (Sourcify constructorArguments). Вопрос Тиграну: ответ
     `https://configs.pancakeswap.com/api/data/cached/stableswaps?chainId=42161` со своей машины (адреса пулов/фабрики).
+    **Решение 471 (20.11.2026, ветка t241/arb-pcs-stable): подтверждено, вид `pancake_stableswap` без изменений кода,
+    шаг STABLE_U256 (9) исполнителя.** Фабрика `0x5D5fBB19572c4A89846198c3DBEdB2B6eF58a77a` — официальный
+    pancakeswap/infinity-universal-router 1b6d479 script/deployParameters/mainnet/DeployArbitrum.s.sol L30 (stableFactory,
+    добавлена 8b18bad «update stable swap impl (#46)»; stableInfo 0x58B2…b1b0 L31), тест test/stableSwap/StableSwapArb.t.sol
+    L27-L28, L56 (getPairInfo(PENDLE, mPENDLE), ссылка на пул 0x73ed…6CE0). Пулы — API конфигов (ответ получен 20.11):
+    mBTC-WBTC 0xE80b…FA57, DLP-mDLP 0xd0f0…22bD, PENDLE-mPENDLE 0x73ed…6CE0. Sourcify 42161: фабрика exact_match
+    PancakeStableSwapFactory (getPairInfo, getThreePoolPairInfo, pairLength, swapPairContract, NewStableSwapPair), info
+    exact_match PancakeStableSwapTwoPoolInfo, все три пула exact_match PancakeStableSwapTwoPool (solc 0.8.10, runs 100) с
+    CBOR метаданных 1220 1e3d34d8…c6b595 — то же CBOR в коде пулов фабрики BSC (0x25d0…67e2, 0x7c76…ae1e; Sourcify 56
+    onchainBytecode) и во вложенном коде пула официального pancakeswap/infinity-periphery 56a7a4f
+    test/bin/pancakeStableSwapTwoPoolDeployer.bytecode → исходник и настройки компиляции те же, что у BSC.
+    exchange(uint256,uint256,uint256,uint256) — тот же вызов, что шаг STABLE_U256 (ArbExecutor.sol L432-L434).
+    - T471-01 Запись своего узла: `python3 tools/arbitrum_record/pancake_stable.py --rpc http://УЗЕЛ:8547` (или
+      record_all.py — шаг pancake_stable); после записи — снять #[ignore] с tests/arbitrum_pancake_stable_live.rs.
+    - T471-02 Включение DEX `pancakeswap-stableswap-arbitrum@arbitrum` (dex.kind, dex.factory, dex.pool_enabled) —
+      решает Тигран после T471-01 (docs/notes/arbitrum/dex-settings-arbitrum.md §4.2, docs/FIRST_RUN.md).
+    - T471-03 Исходник PancakeStableSwapTwoPool.sol из официального GitHub не прочитан: pancakeswap/pancake-smart-contracts
+      из песочницы недоступен (git clone — нет доступа, add_repo — not found); формулы get_dy / exchange взяты из
+      исходника Sourcify 42161 через WebFetch (пересказ, без номеров строк) — проверка записью T471-01.
   - T448-11 LFJ V2.1: getLBPairImplementation() фабрики `0x8e42…fd4e` своим узлом Arbitrum, Sourcify реализации = v2.1.0.
   - T448-12 Уровни комиссии V3 (только для index.factory_scan): feeAmountTickSpacing(100) у Uniswap V3, уровни Sushi V3 —
     своим узлом.
@@ -1312,7 +1331,7 @@
   - T433-061 `uniswap-v2-arbitrum` (Uniswap V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-062 `dackieswap-v2-arbitrum` (DackieSwap V2 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-063 `dackieswap-v3-arbitrum` (DackieSwap V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-064 `pancakeswap-stableswap-arbitrum` (Pancakeswap Stableswap (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-10. Решение 451: не подтверждено — адреса фабрики нет, вопрос Тиграну (T448-10)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-064 `pancakeswap-stableswap-arbitrum` (Pancakeswap Stableswap (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-10. Решение 451: не подтверждено — адреса фабрики нет, вопрос Тиграну (T448-10). Решение 471: подтверждено — фабрика 0x5D5f…a77a, вид без изменений, ждёт записи T471-01** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-065 `solidly-v3-arbitrum` (Solidly V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-066 `kewlswap-arbitrum` (KEWLSwap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-067 `traderjoe-v2-2-arbitrum` (LFJ V2.2 (Arbitrum)) — **вид есть в коде (решение 446): `lb_v22`**; адрес фабрики официальный (LBFactory V2.2 0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c — документация LFJ, Sourcify exact_match). Осталось: запись tools/arbitrum_record/lb_v22.py, снять ignore тестов, задать dex.lb_implementations (после сверки кода реализаций) и включить ключ `traderjoe-v2-2-arbitrum@arbitrum` (dex.kind = lb_v22, dex.factory, dex.pool_enabled) — блок «Решение 446».

@@ -89,7 +89,7 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-098 | `iziswap@arbitrum` (id — предложение) | iziswap | **код есть, сверка — T450-01 (запись)** (решение 450: поиск по фабрике pool(x, y, fee), §3.1) |
 | T433-049 | `pancakeswap-v2-arbitrum@arbitrum` | pancakeswap_v2 | **код есть, сверка — T450-01 (запись)** (решение 450: dex.universal_router_version = `pancakeswap_v3`, §4.1) |
 | T433-050 | `pancakeswap-v3-arbitrum@arbitrum` | pancakeswap_v3 | **код есть, сверка — T450-01 (запись)** (решение 450, §4.1) |
-| T433-064 | `pancakeswap-stableswap-arbitrum@arbitrum` | pancake_stableswap | **не подтверждено** — нет официального адреса фабрики Arbitrum; у SmartRouter и v3 UR Arbitrum stableFactory = 0 (T448-10, решение 451, §4.2) |
+| T433-064 | `pancakeswap-stableswap-arbitrum@arbitrum` | pancake_stableswap | **готово** (решение 471: фабрика 0x5D5f…a77a — infinity-universal-router DeployArbitrum.s.sol; вид без изменений, шаг STABLE_U256; оговорка — запись tools/arbitrum_record/pancake_stable.py, §4.2) |
 | T433-006 | `kyberswap_elastic_arbitrum@arbitrum` | kyber_elastic_v1 | **готово** (решение 451: вариант вида v1; оговорка — запись узла tools/arbitrum_record/kyber_elastic_v1.py; включать ли — Тигран, §4.3) |
 | T433-083 | `aero-slipstream-arbitrum@arbitrum` | — (новое семейство) | **нужен код** — развёртывание Arbitrum найдено (Dromos-Labs/metadex-slipstream-public, «Slipstream V3»), комиссия — от крючка обмена, вид slipstream не подходит (T448-09, решение 451, §4.4) |
 | T433-087 | `saddle-finance@arbitrum` (id — предложение) | saddle_stableswap | **готово** (решение 451: математика = Nerve; swapStorage 7 полей и FlashLoan — исправлено в виде; оговорка — запись tools/arbitrum_record/saddle.py, §4.5) |
@@ -382,6 +382,39 @@ docs/pages/contracts/stableswap/overview.md L9-L12 даёт фабрику то�
 Итог: официального адреса фабрики StableSwap Arbitrum в прочитанных источниках нет; API конфигов не прочитан.
 Вопрос Тиграну (T448-10): получить ответ API конфигов со своей машины (stableSwapAddress, lpAddress, infoStableSwapAddress
 пулов chainId=42161); без адреса фабрики вид pancake_stableswap не подключается (families.rs: нужна dex.factory).
+
+**Решение 471 (20.11.2026) — подтверждено.** Официальный адрес фабрики есть: pancakeswap/infinity-universal-router
+`1b6d479` script/deployParameters/mainnet/DeployArbitrum.s.sol L30-L31 (stableFactory, stableInfo; добавлены коммитом
+8b18bad «feat: update stable swap impl (#46)», 07.09.2026 — после SmartRouter / v3 UR с нулями выше) и тест
+test/stableSwap/StableSwapArb.t.sol L27-L28 (форк Arbitrum, блок 348588274; getPairInfo(PENDLE, mPENDLE), пул
+0x73ed…6CE0 — L56). Пулы — ответ API конфигов `configs.pancakeswap.com/api/data/cached/stableswaps?chainId=42161`
+(прочитан 20.11, тот же, что в отчёте координатора): mBTC-WBTC `0xE80bD6fE6CB209E5546153AF19F151a3e651FA57` (fee 0,02 %),
+DLP-mDLP `0xd0f0be815a76eFE677c92b07b39a5e972BAf22bD` (0,25 %), PENDLE-mPENDLE `0x73ed25e04Aa673ddf7411441098fC5ae19976CE0`
+(0,25 %); info `0x58B2F00f74a1877510Ec37b22f116Bf5D63Ab1b0`.
+
+Sourcify 42161 (через WebFetch): фабрика — exact_match contracts/PancakeStableSwapFactory.sol (solc 0.8.10, блок
+169319653): getPairInfo / getThreePoolPairInfo (те же структуры, что IPancakeStableFactory бота), pairLength,
+swapPairContract(uint256), событие NewStableSwapPair(address indexed, address, address, address, address); info —
+exact_match PancakeStableSwapTwoPoolInfo; три пула — exact_match contracts/PancakeStableSwapTwoPool.sol (solc 0.8.10, runs
+100, keccak исходника 0x31235deb…3e76), CBOR метаданных в коде `…12201e3d34d8dc76b32f3f336a45636f73765a13007ed41ad27fa869d83470c6b595…0033`.
+То же CBOR — в коде пулов фабрики BSC (Sourcify 56 onchainBytecode: mDLP-DLP 0x25d0eD3b…67e2, USDT-USD1 0x7c762fa6…ae1e;
+их Sourcify-исходник — переименованный форк Arbswap, совпадение partial) и во вложенном коде пула в официальном
+pancakeswap/infinity-periphery 56a7a4f test/bin/pancakeStableSwapTwoPoolDeployer.bytecode. Хеш метаданных покрывает
+keccak исходников и настройки компиляции — пулы Arbitrum собраны из того же исходника, что пулы фабрики BSC, с которыми
+работает вид `pancake_stableswap`: математика (get_D, get_y, exchange без A_PRECISION), геттеры, события, вызов
+exchange(uint256,uint256,uint256,uint256) — те же. Исполнение — шаг STABLE_U256 (9) ArbExecutor (есть во всех версиях,
+новый шаг не нужен).
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `pancake_stableswap` | вид BSC, решение 122 F, 3 |
+| dex.factory | `0x5D5fBB19572c4A89846198c3DBEdB2B6eF58a77a` | infinity-universal-router DeployArbitrum.s.sol L30; Sourcify exact_match |
+| dex.multi_pair (необяз.) | решение Тиграна | три пула API — двухмонетные (PancakeStableSwapTwoPool, Sourcify); остальные пулы реестра покажет запись (swapPairContract) |
+| dex.pool_enabled | да — после записи tools/arbitrum_record/pancake_stable.py и снятия #[ignore] с tests/arbitrum_pancake_stable_live.rs | решение 471 (T471-01) |
+
+dex.stable_pools не нужна (пулы первого поколения — только BSC). Оговорка: формулы get_dy / exchange сверены с
+исходником Sourcify пересказом WebFetch (официальный GitHub pancake-smart-contracts из песочницы недоступен) —
+окончательная проверка — запись своего узла (T471-01, T471-03).
 
 ### 4.3 KyberSwap Elastic — `kyberswap_elastic_arbitrum@arbitrum` (T433-006)
 

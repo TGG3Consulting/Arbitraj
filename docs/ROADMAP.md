@@ -26,6 +26,9 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 471: tools/arbitrum_record/pancake_stable.py — 236 строк (ориентир 200): вынести pool_state в
+  pancake_stable_pool.py. Общие модули записи recnode.py / gt.py (решение 460) в базе origin/feat/arbitrum ещё нет —
+  скрипт со своей обработкой «состояние недоступно» и потолком времени; после слияния 460 — перевести на recnode.fresh.
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

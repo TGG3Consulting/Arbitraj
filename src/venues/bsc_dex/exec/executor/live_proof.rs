@@ -10,6 +10,7 @@
 //!   exec/cycle_gate.rs, check/probe_exec.rs, call::build; check/pass_cycle.rs);
 //! - listing_of / proofs: что принято и что нет — текст причины запрета развёртывания (deploy_gate.rs), строка сверки
 //!   исполнителя (onchain.rs), строки окна кошельков и развёртывания (pass_view.rs, deploy.rs).
+//!
 //! Решение 401: admits_for зовёт exec/executor/pool_gate.rs — к классу добавлен факт пробы пула через исполнитель кошелька.
 //! Кто вызывает: exec/executor/{pool_gate, pass_view, deploy_gate, deploy, onchain}.rs, check/pass_cycle.rs,
 //! pools/exec_kind.rs (describe), тесты.

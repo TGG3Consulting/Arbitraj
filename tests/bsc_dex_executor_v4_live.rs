@@ -129,7 +129,7 @@ fn verdict_v4_arbitrum_by_rule() {
     assert_eq!(code::current_version(), Ok(Version::V4));
     assert!(deploy_gate::refusal_at(ARB).is_none());
     let bsc = deploy_gate::refusal_at(BSC).expect("записи v4 в BSC нет");
-    assert!(bsc.contains("не проверен"), "{bsc}");
+    assert!(bsc.contains("записи приёмки для версии v4 в сети chainId 56 нет"), "{bsc}");
     assert!(deploy_gate::refusal_at(None).is_some());
     assert!(!deploy_gate::closed_everywhere());
     // Шаги: Uniswap V4 без крючка у v4 — только в Arbitrum; Balancer V3 — нигде; не шаг менеджера — всегда.

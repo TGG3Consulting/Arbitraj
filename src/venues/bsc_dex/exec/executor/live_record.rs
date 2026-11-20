@@ -6,6 +6,7 @@
 //!   задана здесь по факту README: «WBNB (dex.native_wrapped, bsc_dex)», адреса BSC, решение 400);
 //! - v4, chainId из строки README «- chainId: 42161» — tests/data/executor_v4_live_2026-11-20 (свой узел Arbitrum One,
 //!   tools/arbitrum_record/exec_v4_live.py, решение 459); поле chain_id строк summary.json должно с ней совпасть.
+//!
 //! Вердикты — правило live_rule.rs (SHA-256 bin-runtime той версии — code::runtime_sha256_of), один разбор за запуск.
 //! Записи для пары нет — missing: все классы «не проверен» (текст с парой — pair).
 //! Новая запись (новая версия или сеть) — новая строка SOURCES и папка tests/data в том же коммите.

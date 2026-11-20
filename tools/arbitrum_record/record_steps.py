@@ -12,10 +12,19 @@
   Решение 487: zyberswap_v3 — тот же ход, что запись THENA Fusion BSC (tools/bsc_record/thena_fusion_run.py).
   Решение 460 п. 9–10: sub_dex — без поиска событий назад (--blocks убран): пулы — перечисление фабрик, GeckoTerminal, реестр по
   парам, потолок времени --time-limit (по умолчанию 600 с); camelot_v2 — тот же потолок для редких событий.
+  Решение 482: forks_482 — форки V2 / V3, подключённые настройками (адреса — шапка forks_482.py); zyber_stable — тот
+  же saddle.py на пуле ZyberSwap Stableswap в свою папку tests/data/arbitrum_zyber_stable_<дата>.
 Кто вызывает: tools/arbitrum_record/record_all.py.
-От чего зависит: нет.
+От чего зависит: нет (дата папки zyber_stable — ARB_RECORD_DATE, её ставит record_all.py).
 Ошибок нет.
 """
+
+import datetime
+import os
+
+# Решение 482: пул ZyberSwap Stableswap — единственный пул SwapDeployer 0xc25e…6abd (NewSwapPool, блок 59 965 888;
+# клон SwapFlashLoan 0x0c3c…dbd8, Sourcify match) — docs/notes/arbitrum/dex-settings-arbitrum.md §7.3.
+ZYBER_STABLE = "0x969f7699fbb9c79d8b61315630cdeed95977cfb8"
 
 # Камелот V3 (решение 444): хеши кода пула — README этой папки, раздел algebra_dir_fee.py.
 ALGEBRA_HASHES = [
@@ -94,6 +103,11 @@ def steps(rpc, wallet, ekubo_from):
         ("kyber_elastic_legacy", "kyber_elastic_legacy.py", ["--rpc", rpc]),
         ("saddle", "saddle.py", ["--rpc", rpc]),
         ("woofi", "woofi.py", ["--rpc", rpc]),
+        # Решение 482: форки V2 / V3 настройками и ZyberSwap Stableswap (saddle.py — тот же разбор, что решение 451).
+        ("forks_482", "forks_482.py", ["--rpc", rpc]),
+        ("zyber_stable", "saddle.py", ["--rpc", rpc, "--pool", ZYBER_STABLE, "--out", os.path.join(
+            "tests", "data", "arbitrum_zyber_stable_"
+            + (os.environ.get("ARB_RECORD_DATE") or datetime.date.today().isoformat()))]),
         # Решение 471: PancakeSwap StableSwap — фабрика и пулы по умолчанию в шапке pancake_stable.py.
         ("pancake_stable", "pancake_stable.py", ["--rpc", rpc]),
         # Решение 470: Aero Basic и Slipstream V3 — фабрики перечислением allPools, всё на одном блоке.

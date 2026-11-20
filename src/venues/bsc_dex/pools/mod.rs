@@ -164,6 +164,8 @@ pub mod history_v4;
 pub mod hooks;
 pub mod http_wait;
 pub mod index;
+// Ревью t251 (решение 482): есть ли у DEX справочник индексатора.
+pub mod indexer_gap;
 pub mod index_pass;
 pub mod index_watch;
 pub mod integral_fee;
@@ -247,6 +249,8 @@ pub mod loading;
 pub mod lost_events;
 pub mod market;
 pub mod market_mids;
+// Решение 482: пулы Metric OMM перечислением фабрики (поиск по фабрикам).
+pub mod metric_list;
 pub mod mid_dex;
 pub mod mids;
 pub mod multi_pair;

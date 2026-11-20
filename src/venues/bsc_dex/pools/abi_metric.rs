@@ -16,6 +16,12 @@
 //! кортеж SDK v1); у фабрики 0x2a53833c… есть isPool 0x5b16ebb7, nextPoolIdx, idxToPool, poolToIdx. ОТЛИЧИЯ BSC от SDK:
 //! simulateSwapAndRevert на BSC — 0x658b6cb7 (в SDK 0x5cced60b — подпись другая; бот его не зовёт), createPool другой;
 //! topic0 событий пула BSC в SDK нет (имена не установлены) — берутся из записанных логов (topics()).
+//! Решение 482 (Metric V1 на Arbitrum): исходник фабрики 0x2a53…8f32 опубликован в Sourcify 42161 (match;
+//! lib/metric-core/contracts/MetricOmmPoolFactory.sol): nextPoolIdx — L101 (= 1 в конструкторе, L146), idxToPool —
+//! L104, createPool — L285-L287 (номер пула = nextPoolIdx++, idxToPool[номер] = пул): пулы фабрики — номера
+//! 1..nextPoolIdx − 1 (перечисление — pools/metric_list.rs); событие PoolCreated — interfaces/IMetricOmmPoolFactory
+//! (адрес пула и оба токена — indexed; подписка — created_log.rs). Код фабрики BSC по тому же адресу исходника не имеет
+//! (createPool другой, см. выше) — событие BSC может не совпасть: тогда подписка на BSC просто не срабатывает.
 
 // Код функций генерирует alloy::sol! — число полей задаёт ABI контракта, а не мы.
 #![allow(clippy::too_many_arguments)]
@@ -57,8 +63,22 @@ alloy::sol! {
         function swap(address recipient, bool zeroForOne, int128 amountSpecified, uint128 priceLimitX64, bytes callbackData, bytes extensionData) external returns (int128, int128);
     }
 
+    /// Решение 482: порядок срабатываний расширений (struct ExtensionOrders — PoolExtensionsConfig.sol, Sourcify 42161
+    /// MetricOmmPoolFactory) — нужен только для подписи события PoolCreated.
+    struct ExtensionOrders {
+        uint256 beforeAddLiquidity;
+        uint256 afterAddLiquidity;
+        uint256 beforeRemoveLiquidity;
+        uint256 afterRemoveLiquidity;
+        uint256 beforeSwap;
+        uint256 afterSwap;
+    }
+
     interface IMetricOmmFactory {
         function isPool(address pool) external view returns (bool);
+        function nextPoolIdx() external view returns (uint256);
+        function idxToPool(uint256 idx) external view returns (address);
+        event PoolCreated(address indexed poolAddress, address indexed token0, address indexed token1, uint256 poolIdx, address factory, address admin, address priceProvider, address[] extensions, ExtensionOrders extensionOrders, uint256 priceProviderTimelock, uint256 initialScaledAmount0PerE18Shares, uint256 initialScaledAmount1PerE18Shares, uint256 minimalOperationalLiquidity, uint24 spreadProtocolFeeE6, uint24 protocolNotionalFeeE8, uint24 adminSpreadFeeE6, uint24 adminNotionalFeeE8, address adminFeeDestination, int24 curBinDistFromProvidedPriceE6, uint256[] nonNegativeBinDataArray, uint256[] negativeBinDataArray);
     }
 }
 

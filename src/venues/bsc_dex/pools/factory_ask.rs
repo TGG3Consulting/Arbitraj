@@ -33,6 +33,9 @@
 //!   DynArray, CurveTwocryptoFactory.vy L91), у Tricrypto-NG L2 и фабрики v1 — нулевой адрес (address[4294967296],
 //!   CurveL2TricryptoFactory.vy L89, Factory.vy L117). factory_scan.rs не считает ошибкой откат при i > 0; нулевой
 //!   адрес отбрасывается как «пула нет».
+//! - Решение 482: Liquidity Book V2.1 getAllLBPairs(tokenX, tokenY) → LBPairInformation[] (все шаги бина пары) —
+//!   lfj-gg/joe-v2@v2.1.0 src/LBFactory.sol L265 (токены сортируются — порядок любой), = Sourcify exact_match LBFactory
+//!   Swapline (Arbitrum) и фабрики BSC (abi_lb.rs).
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::aliases::{I24, U24};
@@ -44,6 +47,7 @@ use super::abi_crypto::ICryptoFactory;
 use super::abi_dmm::IDmmFactory;
 use super::abi_dodo::IDodoFactory;
 use super::abi_izi::IIziFactory;
+use super::abi_lb::ILBFactory;
 use super::abi_maverick::IMaverickV2Factory;
 use super::abi_slipstream::ICLFactory;
 use super::abi_solidly::ISolidlyFactory;
@@ -87,6 +91,8 @@ pub enum Q {
     CurveCrypto(u32),
     /// Решение 470: Aero Basic — getPool(a, b) фабрики своей кривой (metadex-public 1.1.0 PoolFactory.sol L159-L161).
     AeroBasic,
+    /// Решение 482: Liquidity Book V2.1 — getAllLBPairs(a, b), все пулы пары (по шагам бина).
+    Lb,
 }
 
 impl Q {
@@ -109,6 +115,7 @@ impl Q {
             Q::Izi(_) => "pool(tokenX, tokenY, fee)",
             Q::CurveCrypto(_) => "find_pool_for_coins",
             Q::AeroBasic => "getPool(a, b)",
+            Q::Lb => "getAllLBPairs",
         }
     }
 }
@@ -196,6 +203,12 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
         }
         .abi_encode()
         .into(),
+        Q::Lb => ILBFactory::getAllLBPairsCall {
+            tokenX: coin,
+            tokenY: quote,
+        }
+        .abi_encode()
+        .into(),
         Q::Slipstream(ts) => ICLFactory::getPoolCall {
             tokenA: coin,
             tokenB: quote,
@@ -235,6 +248,13 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
             IIziFactory::poolCall::abi_decode_returns(out)
                 .map_err(|e| format!("ответ pool(tokenX, tokenY, fee) не по ABI: {e}"))?,
         ],
+        // Ревью t251: пары с ignoredForRouting = да (фабрика сняла их с маршрутизации) не берутся.
+        Q::Lb => ILBFactory::getAllLBPairsCall::abi_decode_returns(out)
+            .map_err(|e| format!("ответ getAllLBPairs не по ABI: {e}"))?
+            .into_iter()
+            .filter(|i| !i.ignoredForRouting)
+            .map(|i| i.LBPair)
+            .collect(),
         Q::Dmm => IDmmFactory::getPoolsCall::abi_decode_returns(out)
             .map_err(|e| format!("ответ getPools не по ABI: {e}"))?,
         Q::CurveCrypto(_) => vec![

@@ -8,6 +8,9 @@
 //! Пул из события попадает в справочник (показ и итог проверки — index::record). Встречный токен — наблюдателя.
 //! Кто вызывает: pools/created.rs.
 //! От чего зависит: ctx.rs, families.rs, verify.rs, discover_v4.rs, history_ekubo.rs (решение 454: PoolInitialized ядра Ekubo), discover.rs (against), attach.rs, abi_v2v3.rs, abi_v4.rs.
+//! Решение 482: Liquidity Book V2.1 — LBPairCreated(tokenX, tokenY, binStep, LBPair, pid) фабрики; Metric OMM —
+//! PoolCreated(poolAddress, token0, token1 — indexed, …) фабрики (подписи — исходники Sourcify 42161, abi_lb.rs,
+//! abi_metric.rs).
 //! Настройки: dex.factory, dex.pool_manager, dex.stable_hooks [DEX].
 //!
 //! События — research/flow/bsc_dex.md (схема п. 2: PairCreated(token0, token1, pair, n), PoolCreated(token0, token1,
@@ -26,7 +29,9 @@ use super::abi_dmm::{self, IDmmFactory};
 use super::abi_dodo::IDodoFactory;
 use super::abi_ekubo::IEkuboCore;
 use super::abi_elastic::IElasticFactory;
+use super::abi_lb::ILBFactory;
 use super::abi_maverick::IMaverickV2Factory;
+use super::abi_metric::IMetricOmmFactory;
 use super::abi_slipstream::ICLFactory;
 use super::abi_solidly::{ISolidlyFactory, IThenaV1Factory};
 use super::abi_v2v3::{IV2Factory, IV3Factory};
@@ -39,6 +44,7 @@ use super::events_balancer_v3;
 use super::families::{self, Family, Proto};
 use super::history_ekubo;
 use super::index;
+use super::indexer_gap;
 use super::listen::Pools;
 use super::verify::{self, Candidate, Verdict};
 
@@ -141,7 +147,14 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
                 None => continue,
             },
             // Metric OMM (решение 285): событие создания пула фабрики BSC — не установлено (createPool BSC ≠ SDK, исходника
-            // нет) — новые пулы приходят из справочника индексатора.
+            // нет) — на BSC подписки нет, как раньше. Решение 482 (ревью t251): подпись PoolCreated подтверждена только
+            // исходником фабрики сети Arbitrum One (Sourcify, chainId 42161) — подписка только в этой сети
+            // (dex.evm_chain_id площадки) и только у DEX без справочника индексатора (indexer_gap.rs).
+            Proto::MetricOmm if metric_created(ctx, f.id) => (
+                "dex.factory",
+                IMetricOmmFactory::PoolCreated::SIGNATURE_HASH,
+                false,
+            ),
             Proto::MetricOmm => continue,
             // iZiSwap / Biswap V3 (решение 286): подписка на NewPool фабрики не подключена (техдолг, docs/ROADMAP.md) —
             // новые пулы приходят из справочника индексатора.
@@ -154,8 +167,14 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // L26-L35); кандидат — events_balancer_v3::registered.
             Proto::BalancerV3 => ("dex.vault", events_balancer_v3::registered_topic(), false),
             // Liquidity Book V2.1 (решение 290): событие фабрики LBPairCreated(tokenX, tokenY, binStep — все indexed,
-            // LBPair, pid) (ILBFactory.sol L49-L51) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы
-            // приходят из справочника индексатора.
+            // LBPair, pid) (ILBFactory.sol L49-L51). Решение 482: подписка у lb_v21 (Swapline V1 на Arbitrum нет у
+            // индексатора); у lb_v22 — не подключена (фабрика V2.2 в этом решении не сверялась).
+            // Ревью t251: только у DEX без справочника индексатора (LFJ BSC и др. — как раньше, без подписки).
+            Proto::LbV21 if indexer_gap::outside(ctx, f.id) == Some(true) => (
+                "dex.factory",
+                ILBFactory::LBPairCreated::SIGNATURE_HASH,
+                false,
+            ),
             Proto::LbV21 | Proto::LbV22 => continue,
             // Fluid DEX T1 (решение 440): событие фабрики LogDexDeployed(dex, dexId) токенов не несёт
             // (factory/main.sol L62) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы приходят из
@@ -204,6 +223,16 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
         }
     }
     out
+}
+
+/// Сеть, в которой подпись PoolCreated фабрики Metric подтверждена исходником: Arbitrum One — Sourcify chainId 42161
+/// (MetricOmmPoolFactory 0x2a53…8f32, IMetricOmmPoolFactory.sol; решение 482). Это факт источника, не параметр.
+const METRIC_CREATED_CHAIN: u64 = 42161;
+
+/// Подписка на PoolCreated фабрики Metric у DEX: сеть площадки — METRIC_CREATED_CHAIN и DEX без справочника
+/// индексатора. Ошибок нет (сеть не задана — нет).
+fn metric_created(ctx: &Ctx, id: &str) -> bool {
+    ctx.chain_id() == Some(METRIC_CREATED_CHAIN) && indexer_gap::outside(ctx, id) == Some(true)
 }
 
 /// Событие → проверенный пул → подписка. Принимает: окружение, наблюдателя, сырой лог.
@@ -397,6 +426,19 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
             let e = IMaverickV2Factory::PoolCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PoolCreated (Maverick V2) не по ABI: {e}"))?;
             (e.tokenA, e.tokenB, e.poolAddress)
+        }
+        // Решение 482: Liquidity Book V2.1 — пул и токены из LBPairCreated (tokenX, tokenY — indexed).
+        Proto::LbV21 => {
+            let e = ILBFactory::LBPairCreated::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("LBPairCreated не по ABI: {e}"))?;
+            (e.tokenX, e.tokenY, e.LBPair)
+        }
+        // Решение 482: Metric OMM — пул и токены из PoolCreated (все три — indexed); порядок токенов пула не по адресу —
+        // монету и встречный разбирает код ниже, проверка — verify_metric.rs.
+        Proto::MetricOmm => {
+            let e = IMetricOmmFactory::PoolCreated::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("PoolCreated (Metric) не по ABI: {e}"))?;
+            (e.token0, e.token1, e.poolAddress)
         }
         _ => {
             let e = IV3Factory::PoolCreated::decode_log_data(&log.inner.data)

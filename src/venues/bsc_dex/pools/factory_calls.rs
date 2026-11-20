@@ -14,6 +14,7 @@
 //! индексатора в сети arbitrum — пулы только поиском по фабрике).
 //! Решение 475 (T462-01): KyberSwap Elastic (kyber_elastic, kyber_elastic_v1) — getPool(монета, встречный,
 //! swapFeeUnits) по уровням dex.v3_fee_tiers (как V3; Elastic Legacy на Arbitrum нет у индексатора).
+//! Решение 482: Liquidity Book V2.1 — getAllLBPairs(монета, встречный) (factory_ask.rs Q::Lb).
 //! Maverick V2 (решение 122 F) — lookup(tokenA, tokenB, 0, dex.pair_lookup_max) (не задана — по фабрике не ищется).
 //! PancakeSwap Stable / Lista: пара с обёрткой BNB спрашивается и с меткой 0xEeee… (пул с нативным BNB фабрика хранит
 //! под меткой; решение «122 X (нативный BNB в стейблсвапах)», stable_native.rs) — найденный пул записан с обёрткой.
@@ -39,6 +40,7 @@ use super::super::ctx::Ctx;
 use super::abi_v2v3::{IV2Factory, IV3Factory};
 use super::factory_ask::{Q, encode_q};
 use super::families::{self, Family, Proto};
+use super::indexer_gap;
 use super::multi_pair;
 use super::stable_native;
 use super::woo_quote::{self, WooQuotes};
@@ -90,6 +92,17 @@ pub fn plan(
             Proto::AeroBasic => vec![Q::AeroBasic],
             // KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары.
             Proto::KyberDmm => vec![Q::Dmm],
+            // Решение 482: Liquidity Book V2.1 — getAllLBPairs(a, b) только у DEX без справочника индексатора
+            // (indexer_gap.rs; Swapline V1 в сети arbitrum): у DEX из списка индексатора (LFJ BSC и др.) — как раньше,
+            // без поиска. V2.2 / v2.0 — отдельные виды, их фабрики здесь не сверялись.
+            Proto::LbV21 => match indexer_gap::outside(ctx, f.id) {
+                Some(true) => vec![Q::Lb],
+                Some(false) => continue,
+                None => {
+                    out.notes.push(indexer_gap::why_not(f.id, None));
+                    continue;
+                }
+            },
             // Curve Twocrypto-NG / Tricrypto-NG (решение 442) и crypto v1 фабрики (решение 453):
             // find_pool_for_coins(a, b, i), i < dex.pair_lookup_max.
             Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 => Vec::new(),

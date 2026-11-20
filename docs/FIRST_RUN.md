@@ -1272,3 +1272,32 @@ ReClamm, LBP, LBP с фиксированной ценой, QuantAMM и пулы
 | dex.pool_enabled | три DEX выше | «да» — после записи tools/arbitrum_record/aero.py и прохода тестов | решение Тиграна | — |
 | dex.arb_sys | площадка arb_dex | `0x0000000000000000000000000000000000000064` | ArbSys.arbOSVersion — до ArbOS 60 чаевые не собираются, MEV-налог Aero 0 (решение 470, T470-02) | nitro-precompile-interfaces ArbSys.sol |
 | dex.arb_owner_public | площадка arb_dex | `0x000000000000000000000000000000000000006b` | ArbOwnerPublic.getCollectTips (ArbOS 60+) | nitro-precompile-interfaces ArbOwnerPublic.sol |
+
+## DEX Arbitrum — форки поддержанных видов настройками (решение 482)
+
+Площадка arb_dex, ключи области «DEX» с «@arbitrum» (решение 435). Id без строки GeckoTerminal — предложение (решает
+Тигран). Новых настроек нет — только значения существующих. Источники и сверка — docs/notes/arbitrum/dex-settings-arbitrum.md
+§7, docs/DECISIONS.md (решение 482). Задавать, когда поднята arb_dex; dex.pool_enabled — после записи
+`tools/arbitrum_record/record_all.py --rpc … --only forks_482,zyber_stable` и прохода tests/arbitrum_forks_482_live.rs без
+#[ignore] (T482-01). Пулы DEX без GeckoTerminal — поиском по фабрике: у площадки arb_dex index.factory_scan = да.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind, dex.factory, dex.router | DEX `joe-dex@arbitrum` | `v2_fork`, `0xaE4EC9901c3076D0DdBe76A520F9E90a6227aCB7`, `0xbeE5c10Cf6E4F68f831E11C1D9E59B43560B3642` | JoePair = пара Uniswap V2 0,3 %; JoeRouter02 — getAmountsOut и swap…SupportingFeeOnTransferTokens есть, WETH() нет (WAVAX — бот терпит, решение 205; нужна dex.native_wrapped площадки) | developers.lfj.gg/deployment-addresses/arbitrum; Sourcify exact_match |
+| dex.v2_fee_source, dex.v2_fee_pct | DEX `joe-dex@arbitrum` | `fixed`, `0.3` | JoePair.swap `mul(1000).sub(amountIn.mul(3))` | Sourcify JoeFactory |
+| dex.kind, dex.factory, dex.router | DEX `rubicon-aquila@arbitrum` | `v2_fork`, `0xEca3EA559b7566e610d113bbA8D1B15B085C9c68`, `0x9C42Fae9e3C63150BCBe4Aaba292681d5b0b0720` | AquilaPair = пара V2 0,3 % (Sourcify exact_match), AquilaRouter — функции V2 Router02 | docs.rubicon.finance/developers/deployments |
+| dex.v2_fee_source, dex.v2_fee_pct | DEX `rubicon-aquila@arbitrum` | `fixed`, `0.3` | AquilaPair.swap `mul(1000).sub(amountIn.mul(3))` | Sourcify AquilaPair |
+| dex.kind, dex.factory | DEX `swapsicle-v1@arbitrum` | `v2_fork_executor`, `0x2f0c7c98462651bb2102f6cd05acdad333e031b0` | SiclePair = пара V2 0,3 %; роутера нет — шаг V2 исполнителя | адрес — адаптер DefiLlama (официального нет); код — Sourcify exact_match SicleFactory |
+| dex.v2_fee_source, dex.v2_fee_pct | DEX `swapsicle-v1@arbitrum` | `fixed`, `0.3` | SiclePair.swap | Sourcify SicleFactory |
+| dex.kind, dex.factory | DEX `arbidex@arbitrum` | `v2_fork_executor`, `0x1C6E968f2E6c9DEC61DB874E28589fd5CE3E1f2c` | ArbDexPair: swapFee = 25 из 10000, сеттера нет; роутер официально не найден | адрес — адаптер DefiLlama; Sourcify match ArbDexFactory / ArbDexPair |
+| dex.v2_fee_source, dex.v2_fee_pct | DEX `arbidex@arbitrum` | `fixed`, `0.25` | K: `balance·10000 − amountIn·swapFee` | Sourcify ArbDexPair |
+| dex.kind, dex.factory | DEX `arbidex-v3@arbitrum` | `v3_fork`, `0x855f2c70cf5cb1d56c15ed309a4dfefb88ed909e` | пул = UniswapV3Pool (кроме протокольной доли) | адрес — адаптер DefiLlama; Sourcify match |
+| dex.tick_lens, dex.quoter_virtual | DEX `arbidex-v3@arbitrum` | `0xbfd8137f7d1516D3ea5cA83523914859ec47F573` (TickLens Uniswap), `да` | своих TickLens и квотера у DEX нет; TickLens читает переданный пул — сверка записью | Uniswap docs v3-arbitrum-deployments.mdx L17 |
+| dex.v3_fee_tiers | DEX `arbidex-v3@arbitrum` | `80, 450, 2500, 10000` | уровни конструктора фабрики (поиск по фабрике) | Sourcify UniswapV3Factory 0x855f…909e |
+| dex.kind, dex.factory | DEX `rubicon-clmm-arbitrum@arbitrum` | `v3_fork`, `0x045B7012CbD158C1b48874310F985Adb48aA62ba` | пул = UniswapV3Pool (Sourcify match) | docs.rubicon.finance/developers/deployments |
+| dex.tick_lens, dex.quoter | DEX `rubicon-clmm-arbitrum@arbitrum` | `0xdf7e8987421F541C50f821f8Cf22A6bDA5e1E05b`, `0x22066f5A85076630CF9DEEB0A12186b73CD3284C` | TickLens и QuoterV2 Rubicon | там же |
+| dex.v3_fee_tiers | DEX `rubicon-clmm-arbitrum@arbitrum` | `500, 3000, 10000` | уровни конструктора фабрики; GeckoTerminal пулов не отдаёт — только поиск по фабрике | Sourcify UniswapV3Factory 0x045B…62ba |
+| dex.kind, dex.stable_pools | DEX `zyberswap-stableswap@arbitrum` | `saddle_stableswap`, `0x969f7699fbb9c79d8b61315630cdeed95977cfb8` | клон SwapFlashLoan (Saddle), единственный пул деплоера | адрес деплоера — адаптер DefiLlama; Sourcify match SwapFlashLoan / exact_match SwapDeployer |
+| dex.kind, dex.factory | DEX `swapline-v1@arbitrum` | `lb_v21`, `0xEE0616a2DEAa5331e2047Bc61E0b588195A49cEa` | LB V2.1 без изменений; пулы — поиск getAllLBPairs и LBPairCreated (решение 482, доделка) | адаптер DefiLlama + код Sourcify exact_match |
+| dex.kind, dex.factory, dex.quoter_virtual | DEX `metric-v1@arbitrum` | `metric_omm`, `0x2a53833cc95548cf52c7b159110e22D3a9018f32`, `да` | та же фабрика, что у metric-bsc; пулы — перечисление фабрики и PoolCreated (решение 482, доделка) | docs.metric.xyz (supported-chains-and-deployments) |
+| dex.pool_enabled | девять DEX выше | `да` — после записи T482-01 и тестов tests/arbitrum_forks_482_live.rs, tests/arbitrum_forks_482_reg_live.rs | решение Тиграна | — |

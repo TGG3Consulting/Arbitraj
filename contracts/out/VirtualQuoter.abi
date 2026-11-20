@@ -222,6 +222,29 @@
         "type": "bytes"
       }
     ],
+    "name": "ramsesV2SwapCallback",
+    "outputs": [],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "int256",
+        "name": "d0",
+        "type": "int256"
+      },
+      {
+        "internalType": "int256",
+        "name": "d1",
+        "type": "int256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "",
+        "type": "bytes"
+      }
+    ],
     "name": "smardexSwapCallback",
     "outputs": [],
     "stateMutability": "pure",

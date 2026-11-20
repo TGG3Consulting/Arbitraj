@@ -26,7 +26,11 @@ const input = {
   language: 'Solidity',
   sources: Object.fromEntries(sources.map((f) => [f, { content: readFileSync(join(here, f), 'utf8') }])),
   settings: {
-    optimizer: { enabled: true, runs: 200 },
+    optimizer: { enabled: true, runs: 1 },
+    // Решение 488 (v5): v5 со всеми шагами 26–31 при runs 200 = 26 734 > EIP-170 24 576; runs 1 + strip
+    // revert = 24 542 (запас 34 байта). Газ считается из симуляции бандла (bundle_sim), учтён автоматически.
+    // Следующий новый DEX потребует разбивки исполнителя на библиотеку (T488-01). Только ArbExecutor.
+    debug: { revertStrings: 'strip' },
     // Решение 457: исполнитель v4 — конвейер via-IR (settings.viaIR, «Input Description» —
     // https://docs.soliditylang.org/en/v0.8.37/using-the-compiler.html). Причина — предел размера кода EIP-170
     // (24 576 байт): обычным конвейером runtime v4 — 26 330 байт (runs 1 — 26 030), via-IR + runs 200 — 21 775.

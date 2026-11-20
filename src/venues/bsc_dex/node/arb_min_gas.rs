@@ -21,9 +21,10 @@
 //! - смысл: базовая цена блока не ниже этого минимума — nitro arbos/l2pricing/model.go:204-209 (baseFee = minBaseFee ×
 //!   exp(…) ≥ minBaseFee); проверка транзакции перед секвенсором (execution/gethexec/tx_pre_checker.go:153-161):
 //!   при строгости по умолчанию 20 maxFeePerGas сравнивается с header.BaseFee (ниже — ErrFeeCapTooLow), с
-//!   MinBaseFeeWei — только при строгости ниже 20 (ревью 436); меняет минимум владелец сети — ArbOwner.SetMinimumL2BaseFee
-//!   (precompiles/ArbOwner.go:252); docs.arbitrum.io «Gas and fees» (content/docs/how-arbitrum-works/deep-dives/
-//!   gas-and-fees.mdx:181: «has a set floor, which can be queried via ArbGasInfo's getMinimumGasPrice»).
+//!   MinBaseFeeWei — только при строгости ниже 20 (ревью 436); меняет минимум владелец сети —
+//!   ArbOwner.SetMinimumL2BaseFee (precompiles/ArbOwner.go:252); docs.arbitrum.io «Gas and fees»
+//!   (content/docs/how-arbitrum-works/deep-dives/gas-and-fees.mdx:181: «has a set floor, which can be queried via
+//!   ArbGasInfo's getMinimumGasPrice»).
 //!
 //! Ревью 436 (свежесть): канал берёт минимум, только если площадка сейчас eip1559_l1 и dex.arb_gas_info задана (снята
 //! на лету — запись площадки удаляется при следующем чтении цены газа и не берётся сразу), а значение прочитано не
@@ -99,18 +100,16 @@ pub fn last(ctx: &Ctx) -> Option<(u64, U256)> {
 pub fn floor(ctx: &Ctx) -> Result<U256, String> {
     let mode = gas_mode::read(ctx).map_err(|e| e.message)?;
     if mode != GasMode::Eip1559L1 {
-        return Err(format!(
-            "минимум цены газа с узла (ArbGasInfo) — только при dex.gas_mode = eip1559_l1 (сейчас {})",
-            mode.as_str()
-        ));
+        let why = "минимум цены газа с узла (ArbGasInfo) — только при dex.gas_mode = eip1559_l1";
+        return Err(format!("{why} (сейчас {})", mode.as_str()));
     }
     ctx.addr("dex.arb_gas_info").map_err(|e| e.message)?;
     let stale = ctx.int("feed.stale_after_ms").map_err(|e| e.message)?;
     let all = LAST.lock().unwrap_or_else(|p| p.into_inner());
     let Some((block, v, at)) = all.get(ctx.place.id).copied() else {
-        let why = "минимальная цена газа сети с узла (ArbGasInfo.getMinimumGasPrice) ещё не прочитана: \
-                   читается вместе с baseFee головы при dex.gas_mode = eip1559_l1 \
-                   (котировка, прогрев цены газа)";
+        let why = "минимальная цена газа сети с узла (ArbGasInfo.getMinimumGasPrice) \
+                   ещё не прочитана: читается вместе с baseFee головы \
+                   при dex.gas_mode = eip1559_l1 (котировка, прогрев цены газа)";
         return Err(why.into());
     };
     let age = at.elapsed();

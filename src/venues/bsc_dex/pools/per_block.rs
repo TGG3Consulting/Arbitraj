@@ -37,11 +37,15 @@
 //! (load_one_block, reload_many::load_group_block, put_emit в per_block_balancer.rs / per_block_lb.rs); пары общего
 //! контракта по логу (on_member_log) — как раньше. Не задана — как раньше.
 //! • Решение 453: crypto-пулы Curve в рампе A/gamma (A и gamma — по времени блока) — пока последнее чтение видит
-//!   рампу (CryptoData.moving, ramping).
-//! Кто вызывает: pools/session.rs, session_lanes.rs (ramping), check/memory_proof_rules.rs (moving).
+//!   рампу (CryptoData.moving, ramping); ревью 453 — и tricrypto 2021, пока is_killed (unkill_me без события;
+//!   per_block_crypto.rs killed).
+//! • Решение 454: crypto-пулы Curve с переводом токена на пул без события пула (transfer_in.rs due) — один раз, на
+//!   первой голове после перевода, если чтение его ещё не учло.
+//! Кто вызывает: pools/session.rs, session_lanes.rs (ramping), check/memory_proof_rules.rs (unevented).
 //! От чего зависит: listen.rs (Pools, End), reload.rs (load_one, load_one_block), reload_many.rs (load_group_block,
 //! load_group_with),
 //! per_block_par.rs, load_batch_par.rs (limit), pool_fail.rs, discover.rs (Found), families.rs, ladder_counter.rs,
+//! per_block_crypto.rs (решение 453), transfer_in.rs (решение 454),
 //! refresh_urgency.rs (решение 314: лог общего контракта — класс очереди узла, только при парах контракта).
 //! Настройки: dex.pmm_ladder_counter, dex.pmm_ladder_usd [DEX] (ladder_counter.rs each_block); dex.event_refresh_urgency
 //! (on_member_log); dex.block_read_parallel_max [bsc_dex] (решение 330); через вызываемые — dex.*.
@@ -49,16 +53,19 @@
 use alloy::rpc::types::Log;
 use alloy_primitives::Address;
 
-use crate::core::types::{PoolRef, PoolState};
+use crate::core::types::PoolRef;
 
 use super::discover::Found;
 use super::families::{Family, Proto};
 use super::listen::{End, Pools};
-use super::registry::Entry;
 use super::{
     ladder_counter, load_batch_par, per_block_balancer, per_block_lb, per_block_par, pool_fail,
     reload, reload_many,
 };
+
+/// Решения 453, 454: crypto-пулы Curve без событий пула (рампа A/gamma, остановленный tricrypto 2021) —
+/// per_block_crypto.rs; прежние пути вызова сохранены.
+pub use super::per_block_crypto::{any_ramping, killed, moving, ramping, unevented};
 
 /// Настройка предела одновременных чтений пулов блока, пар общего контракта и приёма / повтора (решение 330).
 pub const PAR: &str = "dex.block_read_parallel_max";
@@ -87,24 +94,6 @@ pub fn any(pools: &[(Found, String)]) -> bool {
     pools.iter().any(|(f, _)| needs(f.family))
 }
 
-/// Решение 453: crypto-пул Curve в рампе A/gamma — A и gamma меняются по времени блока без событий пула: запись
-/// реестра, последнее чтение которой видит рампу (CryptoData.moving), перечитывается каждым блоком; первое чтение после
-/// конца рампы снимает отметку. Принимает: запись реестра. Ошибок нет.
-pub fn moving(e: &Entry) -> bool {
-    matches!(&e.pool.state, PoolState::Crypto(d) if d.moving)
-}
-
-/// Решение 453: пул пачки в рампе A/gamma (moving по записи реестра; не crypto-вид — false без чтения реестра).
-/// Принимает: окружение пачки, пул. Ошибок нет.
-pub fn ramping(p: &Pools, f: &Found) -> bool {
-    f.family.proto.is_curve_crypto() && p.reg.get(&f.reference).is_some_and(|e| moving(&e))
-}
-
-/// Есть ли в пачке пулы в рампе A/gamma (решение 453). Ошибок нет.
-pub fn any_ramping(p: &Pools, pools: &[(Found, String)]) -> bool {
-    pools.iter().any(|(f, _)| ramping(p, f))
-}
-
 /// Перечитывать ли этот пул на каждом блоке. Ревью t118 (решение 286): пул iZiSwap / Biswap V3 без USDT в паре лесенки
 /// не получает никогда (load_metric_ladder.rs read_with: котируемая не USDT — пусто) — каждым блоком не перечитывается
 /// (состояние без лесенки = «без котировки», устаревать нечему; события пула его по-прежнему перечитывают). USDT не
@@ -130,7 +119,10 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
     // Решение 306: при dex.pmm_ladder_counter = да — и пулы iZiSwap / Biswap V3 без USDT в паре (ladder_counter.rs).
     // Решение 339: пул на паузе после неудач чтения (pool_fail.rs) в этот блок не читается.
     let per = |f: &Found| {
-        (each_block(f, usdt) || ladder_counter::each_block(&p.ctx, f, usdt) || ramping(p, f))
+        (each_block(f, usdt)
+            || ladder_counter::each_block(&p.ctx, f, usdt)
+            || ramping(p, f)
+            || super::transfer_in::due(p, f))
             && !pool_fail::paused(p, &f.reference)
     };
     // Решение 330: задан предел — свои пулы копятся и читаются одновременно (per_block_par.rs); не задан — по одному.

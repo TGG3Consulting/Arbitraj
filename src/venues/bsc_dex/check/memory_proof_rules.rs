@@ -83,8 +83,9 @@ pub fn filter(e: &Entry, from: u64, to: u64) -> Value {
 /// Вид «каждым блоком»: сравнение только на блоке памяти. Принимает: запись памяти, голову. Возвращает: причину
 /// «отставание» (Some) — сравнивать нельзя; None — можно (не такой вид или память прочитана целиком на H). Ошибок нет.
 pub fn per_block_gate(mem: &Entry, head: u64) -> Option<String> {
-    // Решение 453: crypto-пул Curve в рампе A/gamma (per_block::moving) — тоже «каждым блоком».
-    let each = per_block::needs(mem.family) || per_block::moving(mem);
+    // Решение 453: crypto-пул Curve в рампе A/gamma или остановленный tricrypto 2021 (ревью 453;
+    // per_block::unevented) — тоже «каждым блоком».
+    let each = per_block::needs(mem.family) || per_block::unevented(mem);
     if !each || (mem.synced_block == head && mem.synced_log.is_none()) {
         return None;
     }
@@ -98,7 +99,7 @@ pub fn per_block_gate(mem: &Entry, head: u64) -> Option<String> {
 /// Доказывают ли неприменённые логи этого пула пропуск события (см. шапку). Ошибок нет.
 pub fn own(e: &Entry) -> bool {
     !per_block::needs(e.family)
-        && !per_block::moving(e)
+        && !per_block::unevented(e)
         && matches!(
             e.pool.reference,
             PoolRef::Contract(_) | PoolRef::Singleton { .. } | PoolRef::Multi { .. }

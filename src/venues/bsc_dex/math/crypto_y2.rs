@@ -11,8 +11,8 @@
 //! Источник: curvefi/twocrypto-ng 89c8dfb (тег prod-v2.1.0; математика та же, что на коммите 99b5192 «updated arbitrum
 //! amm and math implementation» — git diff пуст; развёрнута в Arbitrum One: deployments.yaml `arbitrum:mainnet math`
 //! 0x1Fd8Af16DC4BEBd950521308D55d0543b6cDF4A1), contracts/main/CurveCryptoMathOptimized2.vy: константы L17-L27,
-//! `_newton_y` L143-L206, `get_y` L229-L379. Решение 453: та же формула у v2.0.0 (d612fde, `get_y` L225-L364) — версии
-//! отличаются только пределами assert'ов (math/crypto_lim2.rs).
+//! `_newton_y` L143-L206, `get_y` L229-L371 (frac — L368-L369). Решение 453: та же формула у v2.0.0 (d612fde,
+//! `get_y` L225-L363, frac — L360-L361) — версии отличаются только пределами assert'ов (math/crypto_lim2.rs).
 
 use alloy_primitives::{I256, U256};
 
@@ -30,7 +30,7 @@ const N: u64 = 2;
 /// A_MULTIPLIER (L18).
 const A_MULTIPLIER: u64 = 10_000;
 
-/// `get_y(ANN, gamma, x, D, i)` (L229-L379). Принимает: версию математики (решение 453: TwoNg210 / TwoNg200 — пределы
+/// `get_y(ANN, gamma, x, D, i)` (L229-L371). Принимает: версию математики (решение 453: TwoNg210 / TwoNg200 — пределы
 /// assert'ов, math/crypto_lim2.rs), A (как отдаёт пул), gamma, балансы в 18 знаках и ценах пула, D, индекс искомой
 /// монеты (0 или 1). Возвращает: [y, K0_prev] или None (откат контракта).
 pub fn get_y(
@@ -62,9 +62,9 @@ pub fn get_y(
     let mut a = ie(32);
     let mut b = b_coef(d, ann_gamma2, x_j, gamma)?;
     let mut c = c_coef(d, ann_gamma2, x_j, gamma, gamma2)?;
-    // d = -unsafe_div(unsafe_add(10**18, gamma)**2, 10**4) (L282).
+    // d = -unsafe_div(unsafe_add(10**18, gamma)**2, 10**4) (L281).
     let mut dd = neg(udiv(sq(gamma.wrapping_add(ie(18)))?, ie(4)))?;
-    // delta0 = 3*a*c/b - b (L285); delta1 = 3*delta0 + b - 27*a**2/b*d/b (L288).
+    // delta0 = 3*a*c/b - b (L284); delta1 = 3*delta0 + b - 27*a**2/b*d/b (L287).
     let delta0 = sub(div(mul(mul(three, a)?, c)?, b)?, b)?;
     let t = div(mul(div(mul(iu(27), sq(a)?)?, b)?, dd)?, b)?;
     let delta1 = sub(add(mul(three, delta0)?, b)?, t)?;
@@ -74,11 +74,12 @@ pub fn get_y(
     b = udiv(b, divider);
     c = udiv(c, divider);
     dd = udiv(dd, divider);
-    // Пересчёт после деления (L327-L331).
+    // Деление на divider (L320-L323), пересчёт delta0 / delta1 (L326, L329).
     let delta0 = sub(udiv(umul(umul(three, a), c), b), b)?;
     let t = udiv(umul(udiv(umul(iu(27), sq(a)?), b), dd), b);
     let delta1 = sub(add(mul(three, delta0)?, b)?, t)?;
-    // sqrt_arg = delta1**2 + unsafe_mul(unsafe_div(4*delta0**2, b), delta0) (L334).
+    // sqrt_arg = delta1**2 + unsafe_mul(unsafe_div(4*delta0**2, b), delta0) (L332); sqrt_val (L333-L335),
+    // иначе _newton_y (L336-L340).
     let tail = umul(udiv(mul(iu(4), sq(delta0)?)?, b), delta0);
     let sqrt_arg = add(sq(delta1)?, tail)?;
     if sqrt_arg <= I256::ZERO {
@@ -87,10 +88,10 @@ pub fn get_y(
     }
     let sqrt_val = to_i(isqrt(to_u(sqrt_arg)?))?;
     let root = root(a, b, delta0, delta1, sqrt_val)?;
-    // y = D**2/x_j*root/4/10**18 (L368) — unsafe, кроме D**2 и convert.
+    // y = D**2/x_j*root/4/10**18 (L366) — unsafe, кроме D**2 и convert.
     let y = to_u(udiv(udiv(umul(udiv(sq(d)?, x_j), root), iu(4)), ie(18)))?;
     let k0 = to_u(root)?;
-    // frac = unsafe_div(y*10**18, D) в пределах (L370-L371).
+    // frac = unsafe_div(y*10**18, D) в пределах (L368-L369).
     let frac = udiv_u(mu(y, E18)?, d_u);
     if !lim2::within(frac, l.frac_y) {
         return None;
@@ -116,7 +117,7 @@ fn c_coef(d: I256, ann_gamma2: I256, x_j: I256, gamma: I256, gamma2: I256) -> Op
     sub(c, q)
 }
 
-/// Корень кубического уравнения (L341-L365): кубические корни b и (delta1 ± sqrt_val)/2, C1, root. None — откат.
+/// Корень кубического уравнения (L342-L360): кубические корни b и (delta1 ± sqrt_val)/2, C1, root. None — откат.
 fn root(a: I256, b: I256, delta0: I256, delta1: I256, sqrt_val: I256) -> Option<I256> {
     let two = U256::from(2u8);
     let b_cbrt = if b > I256::ZERO {
@@ -130,9 +131,9 @@ fn root(a: I256, b: I256, delta0: I256, delta1: I256, sqrt_val: I256) -> Option<
         let v = to_u(sqrt_val.wrapping_sub(delta1))?;
         neg(to_i(cbrt(udiv_u(v, two)))?)?
     };
-    // C1 = unsafe_div(unsafe_mul(unsafe_div(b_cbrt**2, 10**18), second_cbrt), 10**18) (L360).
+    // C1 = unsafe_div(unsafe_mul(unsafe_div(b_cbrt**2, 10**18), second_cbrt), 10**18) (L357).
     let c1 = udiv(umul(udiv(sq(b_cbrt)?, ie(18)), second_cbrt), ie(18));
-    // root = (10**18*C1 - 10**18*b - 10**18*b/C1*delta0) / (3*a) (L363).
+    // root = (10**18*C1 - 10**18*b - 10**18*b/C1*delta0) / (3*a) (L360).
     let e18 = ie(18);
     let part = mul(div(umul(e18, b), c1)?, delta0)?;
     let r = sub(sub(umul(e18, c1), umul(e18, b))?, part)?;
@@ -144,7 +145,7 @@ fn neg(v: I256) -> Option<I256> {
     I256::ZERO.checked_sub(v)
 }
 
-/// Делитель по порогу (L292-L320): цепочка elif исходника. Ошибок нет.
+/// Делитель по порогу (L289-L318): цепочка elif исходника. Ошибок нет.
 fn divider(threshold: I256) -> I256 {
     // Пороги 10^p и делители 10^q по убыванию p.
     const P: [u64; 14] = [48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 20];
@@ -204,8 +205,8 @@ fn newton_y(ann: U256, gamma: U256, x: [U256; 2], d: U256, idx: usize, l: &Lim) 
     None
 }
 
-/// mul1 = 10**18 * D / gamma * _g1k0 / gamma * _g1k0 * A_MULTIPLIER / ANN (L176) — общий для Twocrypto и
-/// Tricrypto (CurveCryptoMathOptimized3.vy L298). None — откат.
+/// mul1 = 10**18 * D / gamma * _g1k0 / gamma * _g1k0 * A_MULTIPLIER / ANN (L171) — общий для Twocrypto и
+/// Tricrypto (CurveCryptoMathOptimized3.vy L297). None — откат.
 pub fn mul1(d: U256, gamma: U256, g1k0: U256, ann: U256) -> Option<U256> {
     let v = du(mu(E18, d)?, gamma)?;
     let v = du(mu(v, g1k0)?, gamma)?;

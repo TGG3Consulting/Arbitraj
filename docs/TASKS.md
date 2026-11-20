@@ -161,7 +161,8 @@
   Нужна запись (Тигран): `python3 tools/arbitrum_record/curve_crypto.py --node <HTTP своего узла Arbitrum>` с адресами из
   шапки скрипта (все — официальные журналы развёртывания curvefi) → tests/data/arbitrum_curve_crypto_<дата>/
   (twocrypto.json, tricrypto.json, crypto_v1.json, tricrypto_v1.json, README); затем снять #[ignore] у
-  tests/arb_curve_crypto_live.rs. До записи dex.pool_enabled этих DEX не включать.
+  tests/arb_curve_crypto_live.rs и tests/arb_curve_crypto_v1_live.rs (разбиты — решение 454). До записи dex.pool_enabled
+  этих DEX не включать.
   Вопросы Тиграну / не сделано:
   1) Время рампы: котировка — на A/gamma блока чтения (пул в рампе перечитывается каждым блоком), а сделка идёт в
      следующем блоке с бо́льшим временем; A/gamma меняются линейно за ≥ MIN_RAMP_TIME = 86400 с (CurveTwocryptoOptimized.vy
@@ -189,6 +190,30 @@
      новые виды (`curve_crypto_v1`, `curve_tricrypto_v1`) до неё — тоже под отдельными id DEX, заданными вручную.
   6) Шаблон фабрики v1: в официальном журнале один (0x5bcA7dDF…). Пул на другом шаблоне (если фабрика его меняла) —
      отказ «формула не сверена» с адресом шаблона в журнале проверки; подтвердить на записи (code пулов v1).
+- **Решение 454 (20.11.2026, ветка t229/arb-curve-crypto-more) — ревью решения 453; ждёт сборки и тестов в GitHub
+  (cargo локально не запускался) и записи узла.** СДЕЛАНО:
+  1) Перевод токена на crypto-пул Curve без события пула (crypto v1, tricrypto 2021, Tricrypto-NG — gulp в
+     `_claim_admin_fees`): подписка Transfer с to = адрес пула (pools/transfer_in.rs, group.rs), отметка и полное
+     чтение пула на голове, если чтение перевод не учло (per_block.rs, session.rs, session_lanes.rs).
+  2) Tricrypto 2021 с is_killed — каждым блоком, пока остановлен (pools/per_block_crypto.rs killed).
+  3) Шапка exec/executor/entry.rs (рампа исполняется — решение 453); строки исходника math/crypto_y2.rs.
+  4) MATH() в обоих списках — отказ пула; ошибка разбора dex.curve_crypto_math_v2_0_0 — отказ с причиной
+     (crypto_variant.rs lists / variant; verify_crypto.rs, load_crypto.rs).
+  5) Разбиты: tests/arb_curve_crypto_live.rs (+ arb_curve_crypto_v1_live.rs, curve_crypto_common),
+     tools/arbitrum_record/curve_crypto.py (+ curve_crypto_rpc.py, curve_crypto_pools.py); group.rs → group_filter.rs,
+     per_block.rs → per_block_crypto.rs. Запись узла — та же команда, что у решения 453 (модули рядом со скриптом).
+  Вопросы Тиграну / не сделано:
+  1) Нативный ETH на пул с монетой WETH20 (crypto v1 фабрики — CurveCryptoSwap2ETH.vy `__default__` payable L171-L174,
+     gulp `self.balance` L485; Tricrypto-NG WETH — `__default__` L305-L309, gulp L1195): перевод ETH логов не даёт вовсе
+     — состояние после claim_admin_fees с таким ETH событием не ловится (claim_admin_fees тоже без события при
+     receiver = 0 / fees = 0). Варианты: такие пулы каждым блоком (как рампа) или принять риск (сделка с неверным
+     балансом откатится целиком — потеря газ). Ваше решение.
+  2) Проверка «память неверна» (check/memory_proof_rules.rs, решение 382) для видов с переводом без события: между
+     переводом и чтением на голове память отличается от узла без логов пула — правило «у событийных видов без событий
+     состояние то же» для них не строго. Отметки transfer_in правило не видит (нет доступа к Pools). Нужно ли
+     учитывать (например, виды transfer_in::watched — как «каждым блоком» в per_block_gate)? Ваше решение.
+  3) Подписка logs без address (только topics) — по спецификации execution-apis filter.yaml address необязателен;
+     на узле Arbitrum (Nitro) подтвердить на живом узле (журнал dex.pool / приход Transfer) после выкладки.
 - **Решение 442 (20.11.2026, ветка t223-f3/arb-family-f3) — T433-F3: crypto-пулы Curve Arbitrum (Twocrypto-NG,
   Tricrypto-NG); ждёт сборки и тестов в GitHub (cargo локально не запускался) и записи узла.** СДЕЛАНО: виды dex.kind
   `curve_twocrypto_ng` / `curve_tricrypto_ng` (PoolKind::Crypto, PoolState::Crypto); точная математика — порт Vyper
@@ -750,7 +775,7 @@
   - T433-F2 Balancer V3 — новое семейство (хранилище V3, крючки): математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — КОД СДЕЛАН (решение 442, ветка t223-f3/arb-family-f3): виды curve_twocrypto_ng / curve_tricrypto_ng, математика, чтение, события, проверка, поиск по фабрике, квотер get_dy, шаг STABLE_U256 (без переразвёртывания исполнителя); ждёт CI и записи узла (tools/arbitrum_record/curve_crypto.py), тесты tests/arb_curve_crypto_live.rs — #[ignore] до записи.
   - T433-F3a Curve Twocrypto-NG v2.0.0 (реализация amm_v2_0_0, math 0x2005995a… Arbitrum) — **код сделан (решение 453)**: исходник d612fde (сверен CREATE2-адресом), формула по MATH() пула; ждёт CI и записи узла.
-  - T433-F3b Старые crypto-пулы Curve Arbitrum v1 — tricrypto 0x960ea3e3… (curve-crypto-contract) и фабрика crypto v1 0xE5De15A9… (curve-factory-crypto): **код сделан (решение 453)** — виды `curve_tricrypto_v1`, `curve_crypto_v1`; ждёт CI и записи узла.
+  - T433-F3b Старые crypto-пулы Curve Arbitrum v1 — tricrypto 0x960ea3e3… (curve-crypto-contract) и фабрика crypto v1 0xE5De15A9… (curve-factory-crypto): **код сделан (решение 453)** — виды `curve_tricrypto_v1`, `curve_crypto_v1`; правки ревью — решение 454 (перевод токена на пул без события, остановленный tricrypto 2021); ждёт CI и записи узла.
   - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F6 Liquidity Book v2.0 (LFJ V2) — новое семейство (в коде только v2.1); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.

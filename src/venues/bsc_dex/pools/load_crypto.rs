@@ -26,7 +26,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::node::{call, multicall};
 use super::abi_crypto::{ICryptoPool as P, ITricryptoPool as P3, ITwocryptoPool as P2};
-use super::crypto_variant::{self, MATH_V200};
+use super::crypto_variant;
 use super::families::{Family, Proto};
 use super::load_lb::{decode_time, time_call};
 use super::load_smardex;
@@ -127,16 +127,14 @@ pub async fn load(
 
 /// Что делает: состояние пары из прочитанного (без сети). Принимает: окружение (настройки и текст ошибки), вид, Raw,
 /// пару. Возвращает: PoolState::Crypto. Ошибки: откат вызова, ответ не по ABI, MATH() не из списков настроек (формула
-/// не сверена), нет монеты пары среди монет пула.
+/// не сверена) или сразу в обоих, нет монеты пары среди монет пула; списки математики (crypto_variant::lists) —
+/// NotConfigured (не задана dex.curve_crypto_math), Internal (не список, не адрес).
 pub fn state(ctx: &Ctx, f: &Family, raw: &Raw, pair: (Address, Address)) -> GatewayResult<PoolState> {
     let pool = raw.pool;
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("Crypto {pool}: {what}"));
     let (coins, mut data, math) = decode(raw).map_err(&bad)?;
-    let list = |name: &str| -> Vec<Address> {
-        let v = ctx.dex_list(name, f.id).unwrap_or_default();
-        v.iter().filter_map(|a| a.parse().ok()).collect()
-    };
-    let (v200, ng) = (list(MATH_V200), list("dex.curve_crypto_math"));
+    // Ревью 453: списки — crypto_variant::lists (не задана v2.0.0 — пусто; ошибка разбора — ошибка чтения с причиной).
+    let (v200, ng) = crypto_variant::lists(ctx, f.id)?;
     data.math = crypto_variant::variant(raw.n, math, &v200, &ng).map_err(&bad)?;
     let index = |t: Address| {
         coins

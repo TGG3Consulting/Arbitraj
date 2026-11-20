@@ -7,6 +7,8 @@
 //! `MATH()` пула — в списке dex.curve_crypto_math (адреса контрактов математики, с исходником которых сверена
 //! math/crypto_y2.rs / crypto_y3.rs: пул зовёт свою математику, у разных версий она разная; решение 453 — и адреса
 //! dex.curve_crypto_math_v2_0_0, математика Twocrypto-NG v2.0.0). Иначе — отказ с причиной.
+//! Ревью 453: версия формул выбирается уже здесь (crypto_variant::variant): адрес MATH() сразу в обоих списках или
+//! математика v2.0.0 у трёх монет — отказ с причиной; списки — crypto_variant::lists (ошибка разбора не гасится).
 //! Вызовы — частями по dex.verify_batch.
 //! Кто вызывает: pools/verify.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_crypto.rs, discover.rs, multi_pair.rs, verify.rs.
@@ -25,7 +27,7 @@ use crate::core::types::PoolRef;
 use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_crypto::{ICryptoPool as P, ITricryptoFactory as F3, ITwocryptoFactory as F2};
-use super::crypto_variant::MATH_V200;
+use super::crypto_variant;
 use super::discover::{Found, sorted};
 use super::families::Proto;
 use super::multi_pair;
@@ -34,12 +36,13 @@ use super::verify::{Candidate, Verdict};
 /// Вызовов на кандидата: get_coins (фабрика), version, MATH (пул).
 const PER: usize = 3;
 
-/// Что нужно для решения по кандидату: пул, фабрика, версии, адреса математики.
+/// Что нужно для решения по кандидату: пул, фабрика, версии, адреса математики v2.0.0 и прочие (решение 453).
 struct Plan {
     pool: Address,
     factory: Address,
     versions: Vec<String>,
-    maths: Vec<Address>,
+    v200: Vec<Address>,
+    ng: Vec<Address>,
 }
 
 /// Проверка пачки кандидатов. Возвращает: итог по каждому. Ошибок нет (нет настройки или пул не из реестра — отказ с
@@ -84,7 +87,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
 }
 
 /// Пул кандидата и настройки DEX. Возвращает: Plan или причину отказа (не адрес, нет dex.factory, списки версий или
-/// математики не заданы, пусты или с неверным адресом). Ошибок нет.
+/// математики не заданы, пусты, хранятся не списком или с неверным адресом). Ошибок нет.
 fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     let id = c.family.id;
     let pool = Address::from_str(&c.pool)
@@ -94,29 +97,21 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     let versions = ctx
         .dex_list("dex.curve_crypto_versions", id)
         .map_err(|e| not_taken(e.message))?;
-    let mut maths = ctx
-        .dex_list("dex.curve_crypto_math", id)
-        .map_err(|e| not_taken(e.message))?;
-    // Решение 453: математика Twocrypto-NG v2.0.0 — отдельный список (не задан — пулы v2.0.0 не берутся).
-    maths.extend(ctx.dex_list(MATH_V200, id).unwrap_or_default());
-    if versions.is_empty() || maths.is_empty() {
+    // Решение 453 (ревью): dex.curve_crypto_math_v2_0_0 не задана — пустой список (пулы v2.0.0 не берутся,
+    // docs/SETTINGS_CASES.md); хранится не списком или не адрес — отказ с причиной (crypto_variant::lists).
+    let (v200, ng) = crypto_variant::lists(ctx, id).map_err(|e| not_taken(e.message))?;
+    if versions.is_empty() || (v200.is_empty() && ng.is_empty()) {
         let what = format!(
             "dex.curve_crypto_versions / dex.curve_crypto_math [dex:{id}] пуст"
         );
         return Err(not_taken(what));
     }
-    let mut addrs = Vec::with_capacity(maths.len());
-    for m in &maths {
-        let Ok(a) = Address::from_str(m) else {
-            return Err(not_taken(format!("«{m}» — не адрес")));
-        };
-        addrs.push(a);
-    }
     Ok(Plan {
         pool,
         factory,
         versions,
-        maths: addrs,
+        v200,
+        ng,
     })
 }
 
@@ -163,10 +158,10 @@ fn decide(
     }
     let math = P::MATHCall::abi_decode_returns(at(2)?)
         .map_err(|e| format!("MATH() пула {pool:#x} не по ABI: {e}"))?;
-    if !p.maths.contains(&math) {
-        return Err(format!(
-            "пул {pool:#x} зовёт математику {math:#x} — её нет в dex.curve_crypto_math / {MATH_V200} [dex:{id}]: формула не сверена"
-        ));
+    // Решение 453 (ревью): версия формул по MATH() — как при чтении (load_crypto.rs state); неоднозначный адрес (в
+    // обоих списках), v2.0.0 у трёх монет, адреса нет в списках — отказ с причиной.
+    if let Err(w) = crypto_variant::variant(coins.len(), math, &p.v200, &p.ng) {
+        return Err(format!("пул {pool:#x} [dex:{id}]: {w}"));
     }
     if !coins.contains(&c.coin) || !coins.contains(&c.quote) {
         return Err(format!(

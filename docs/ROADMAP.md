@@ -26,6 +26,13 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 454 (ревью 453; `wc -l`): разбиты tests/arb_curve_crypto_live.rs (227 → 114 + arb_curve_crypto_v1_live.rs 67 +
+  tests/curve_crypto_common 83) и tools/arbitrum_record/curve_crypto.py (357 → 126 + curve_crypto_rpc.py 104 +
+  curve_crypto_pools.py 145); group.rs 209 → 190 (фильтр и индексы — group_filter.rs), per_block.rs 234 → 226 (crypto —
+  per_block_crypto.rs), verify_crypto.rs 201 → 196. Сверх ориентира 200 остаются: math/crypto_y2.rs 214 (вынести
+  _newton_y в crypto_newton2.rs), pools/load_crypto.rs 212, per_block.rs 226, session.rs 376 (было 369: +лог Transfer),
+  session_lanes.rs 225 (было 223). Не покрыто: нативный ETH на пул с монетой WETH20 без логов (docs/TASKS.md «Решение
+  454», вопрос 1); проверка «память неверна» не знает отметок перевода (вопрос 2). Тесты — #[ignore] до записи.
 - Решение 453 (T433-F3a/F3b, ревью 442 п. 9; `wc -l`): сверх ориентира 200 — math/crypto_y2.rs 213 (было 227: пределы
   версий вынесены в crypto_lim2.rs; ещё вынести _newton_y в crypto_newton2.rs), math/crypto_ops.rs 207 (тесты — в
   отдельный файл), pools/load_crypto.rs 214, load_crypto_v1.rs 207, verify_crypto.rs 201, per_block.rs 234 (+рампа),

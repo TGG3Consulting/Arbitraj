@@ -11,7 +11,9 @@
 //! стейблсвапах)»): вид STABLE_U256_BNB (bnb_in — по тому, вход это или выход); у CURVE / SADDLE — отказ.
 //! Решение 273: пул Solidly с фабрикой на паузе — шаг не строится (NoRoute с причиной).
 //! Решение 442: crypto-пул Curve (Twocrypto-NG / Tricrypto-NG, PoolState::Crypto) — шаг STABLE_U256 (exchange(uint256 i,
-//! uint256 j, dx, 0)), индексы — из состояния пула; пул в рампе A/gamma — не исполняется.
+//! uint256 j, dx, 0)), индексы — из состояния пула; пул с halted (tricrypto 2021 is_killed) — не исполняется. Решение
+//! 453: пул в рампе A/gamma исполняется — котировка считает рампу, как контракт (D пересчитывается через newton_D,
+//! math/crypto_swap.rs), пул перечитывается каждым блоком, пока рампа идёт (pools/per_block_crypto.rs).
 //! Решение 395 (t181): пул внутри менеджера (Uniswap V4 — PoolRef::Singleton PoolManager; Infinity CL / Bin — Singleton
 //! своего менеджера; Infinity Stable — Contract(крючок)) — шаги UNI_V4 / INF_CL / INF_BIN исполнителя v3: ключ пула из
 //! реестра (Entry.key) сверяется с ссылкой (PoolId ключа = id ссылки и менеджер ключа = менеджер ссылки; у Infinity

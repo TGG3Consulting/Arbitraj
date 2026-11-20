@@ -121,7 +121,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `abi_curve_ng.rs` | ABI пула Curve StableSwap-NG v7.0.0 и фабрики NG (curvefi/stableswap-ng 3332cd4): геттеры, get_dy, события с uint256[], get_coins/is_meta |
 | `abi_crypto.rs` | ABI crypto-пулов Curve (решение 442): геттеры Twocrypto-NG (curvefi/twocrypto-ng 89c8dfb) и Tricrypto-NG (curvefi/tricrypto-ng ecaa816, обе реализации), get_dy(uint256, …), реестр фабрик (get_coins, find_pool_for_coins), topic0 событий обеих реализаций (посчитаны один раз) |
 | `abi_crypto_v1.rs` | ABI crypto-пулов Curve v1 (решение 453): price_scale() / is_killed(), get_coins фабрики v1, CryptoPoolDeployed, topic0 своих событий v1 | curve-factory-crypto 7ed1011 CurveCryptoSwap2ETH.vy, Factory.vy; curve-crypto-contract a0f8401 «2021-09-13. Arbitrum/CryptoSwap.vy» |
-| `crypto_variant.rs` | Версия формул crypto-пула NG по MATH() пула (решение 453): dex.curve_crypto_math_v2_0_0 — Twocrypto-NG v2.0.0, dex.curve_crypto_math — v2.1.0 / Tricrypto-NG | deployments.yaml twocrypto-ng |
+| `crypto_variant.rs` | Версия формул crypto-пула NG по MATH() пула (решение 453): dex.curve_crypto_math_v2_0_0 — Twocrypto-NG v2.0.0, dex.curve_crypto_math — v2.1.0 / Tricrypto-NG; ревью 453 — адрес в обоих списках — отказ с причиной, списки — lists (не задана v2.0.0 — пусто, ошибка разбора — отказ) | deployments.yaml twocrypto-ng |
 | `created_crypto.rs` | События создания crypto-пулов фабрик (решение 453): TwocryptoPoolDeployed / TricryptoPoolDeployed (адрес пула в данных), CryptoPoolDeployed v1 (адреса нет — find_pool_for_coins на блоке события) → кандидаты | CurveTwocryptoFactory.vy L18-L30, CurveL2TricryptoFactory.vy L18-L31, Factory.vy L38-L51 |
 | `abi_nomi.rs` | ABI пары Nomiswap Stable (решение 284; Sourcify full match 56/0x1e40…60f1): getReserves, swapFee, getA, множители, getAmountOut(address, uint256) — 0xca706bcf; события Sync/Swap/Mint/Burn (подписи V2), RampA/StopRampA; константы MAX_FEE, A_PRECISION, MAX_LOOP_LIMIT |
 | `abi_dmm.rs` | ABI KyberSwap Classic DMM (решение 287; dmm-smart-contracts@e557b57, фабрика BSC — Sourcify match): пул getTradeInfo и события (Sync с виртуальными резервами, Swap, Mint, Burn, UpdateEMA), фабрика getPools / isPool / PoolCreated, роутер DMMRouter02.getAmountsOut (квотер сверки) |
@@ -144,7 +144,9 @@ DEX — строки таблицы сопоставления (решение 5
 | `history_start.rs` | Стартовая точка истории V4: память → SQLite без узла; блок развёртывания — только при dex.history_scan = да (решение 121, C1) |
 | `history_store.rs` | История V4 в SQLite: события найденных пулов и последний прочитанный блок по менеджеру |
 | `attach.rs` | Найденные позже пулы — в открытую пачку своего вида (её соединение), заполнена — новая пачка |
-| `group.rs` | Подписки пачки на одном соединении: «все события» и «только ликвидность», смена состава без переподключения |
+| `group.rs` | Подписки пачки на одном соединении: «все события» и «только ликвидность», смена состава без переподключения; решение 454 — у «все события» crypto-пулов Curve вторая подписка Transfer на адреса пулов (transfer_in.rs) |
+| `group_filter.rs` | Фильтр logs пачки (по адресам пулов / PoolId у менеджера) и индексы пачки (index, multi_sites) — вынесены из group.rs (решение 454), пути group::filter / index / multi_sites сохранены |
+| `transfer_in.rs` | Решение 454: ERC-20 Transfer с to = адрес crypto-пула Curve (crypto v1, tricrypto 2021, Tricrypto-NG — gulp балансов в `_claim_admin_fees` без события) — фильтр подписки, отметка позиции, полное чтение пула на голове, если чтение перевод не учло |
 | `admit.rs` | Приём пулов в пачку (подписка → блок → чтение → глубокие/мелкие) и возврат выросшего пула |
 | `depth.rs` | Глубокий пул или мелкий (по обоим направлениям, пустой; при receipts не спят), пересчёт глубины на каждой отправке пула ядру (touch) — решение 73. Решение 393: мелкий пул, у которого хоть одну сторону пропускает сумма пробы (quote/side_fit.rs), не спит |
 | `depth_book.rs` | Глубина пулов по направлениям в памяти: пересчёт на смене состояния, гистерезис dex.depth_hysteresis_pct, сигнал «пул готов» при росте (решение 73); решение 217 — `verdicts` (копия вердиктов в момент снимка) и `seeded`; решение 336 — карта слотов на RwLock: попадание под общим чтением |
@@ -225,7 +227,8 @@ DEX — строки таблицы сопоставления (решение 5
 | `events_metric.rs` | События пула Metric OMM (решение 285): topic0 из записанных логов → перечитать (ещё — каждый блок) |
 | `events_izi.rs` | События пулов iZiSwap / Biswap V3 (решение 286): любое известное событие → перечитать пул (ещё — каждым блоком, per_block.rs) |
 | `events_stable_u.rs` | События PancakeSwap / Lista Stable, Saddle, WooFi и крючка Infinity Stable: любое известное → перечитать |
-| `per_block.rs` | Перечитывание Lista Stable и WooFi на каждом новом блоке (оракул без событий пула) и всех пар общего контракта по его логу |
+| `per_block.rs` | Перечитывание Lista Stable и WooFi на каждом новом блоке (оракул без событий пула) и всех пар общего контракта по его логу; решение 454 — пулы с непрочитанным переводом токена (transfer_in.rs due) |
+| `per_block_crypto.rs` | Crypto-пулы Curve каждым блоком (решение 453 и ревью): рампа A/gamma (moving) и остановленный tricrypto 2021 (killed: unkill_me без события) — unevented, ramping (curve-crypto-contract a0f8401 «2021-09-13. Arbitrum/CryptoSwap.vy» L1154-L1163) |
 | `events_maverick.rs` | События Maverick V2 (решение 122 F): PoolSwap / PoolAddLiquidity / PoolRemoveLiquidity / PoolMigrateBinsUpStack / PoolSetVariableFee → перечитывание пула |
 | `events_solidly.rs` | События Solidly (решения 80, 85): Sync(uint256,uint256) → новые резервы в PoolState::Solidly (stable/decimals/комиссия сохраняются) |
 | `listen.rs` | Слушатель пачки пулов |

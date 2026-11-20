@@ -20,26 +20,30 @@
 
 Итог по 84 DEX GeckoTerminal: вид есть в коде — 15, частично — 1, семейства нет — 7,
 семейство не установлено — 61, не пул — 0. Из DefiLlama сверх GeckoTerminal — 62 DEX.
+**Решение 448 (20.11.2026):** Sushi V3 (строка 44) — семейство установлено (v3_fork): GeckoTerminal — вид есть в коде 16,
+семейство не установлено 60. Настройки области «DEX» arb_dex для всех DEX с видом в коде — docs/notes/arbitrum/dex-settings-arbitrum.md:
+из 20 (15 GeckoTerminal + Curve частично + 4 DefiLlama) готово 12, нужен код 1 (iZiSwap), не подтверждено 7;
+плюс Sushi V3 — готово. Статус каждой строки — в столбце «Статус» (→ …).
 **У каждой строки — задача с номером (docs/TASKS.md, «Решение 433»). Приоритетов нет: все задачи обязательны.**
 
 ## 1. GeckoTerminal, сеть arbitrum — все 84 DEX (порядок ответа API)
 
 | № | id GeckoTerminal | Название | Семейство пулов (основание) | В коде (файл:строка) | Статус | Официальные адреса | Задача |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `sushiswap_arbitrum` | SushiSwap (Arbitrum) | Sushi V2 (docs/notes/arbitrum/docs-check-2026-11-20.md) | `v2_fork` — src/venues/bsc_dex/pools/families.rs:297 | **вид есть в коде** | не сверены | T433-001 |
-| 2 | `uniswap_v3_arbitrum` | Uniswap V3 (Arbitrum) | Uniswap V3 | `uniswap_v3` — src/venues/bsc_dex/pools/families.rs:292 | **вид есть в коде** | docs.uniswap.org/contracts/v3/reference/deployments/arbitrum-deployments: UniswapV3Factory 0x1F98431c8aD98523631AE4a59f267346ea31F984, QuoterV2 0x61fFE014bA17989E743c5F6cB21bF9697530B21e, TickLens 0xbfd8137f7d1516D3ea5cA83523914859ec47F573, UniversalRouter 0xa51afafe0263b40edaef0df8781ea9aa03e381a3, Permit2 0x000000000022D473030F116dDEE9F6B43aC78BA3 | T433-002 |
+| 1 | `sushiswap_arbitrum` | SushiSwap (Arbitrum) | Sushi V2 (docs/notes/arbitrum/docs-check-2026-11-20.md) | `v2_fork` — src/venues/bsc_dex/pools/families.rs:297 | **вид есть в коде** → **готово** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-001 |
+| 2 | `uniswap_v3_arbitrum` | Uniswap V3 (Arbitrum) | Uniswap V3 | `uniswap_v3` — src/venues/bsc_dex/pools/families.rs:292 | **вид есть в коде** → **готово** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-002 |
 | 3 | `swapr_arbitrum` | Swapr (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-003 |
 | 4 | `fraxswap_arbitrum` | Fraxswap (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-004 |
-| 5 | `curve_arbitrum` | Curve (Arbitrum) | StableSwap — есть; Twocrypto/Tricrypto — нет (docs/notes/arbitrum/docs-check-2026-11-20.md) | `curve_stableswap` — src/venues/bsc_dex/pools/families.rs:341; `curve_stableswap_ng` — src/venues/bsc_dex/pools/families.rs:343 | **частично: вид есть / семейства нет** | не сверены | T433-005 |
-| 6 | `kyberswap_elastic_arbitrum` | Kyberswap Elastic (Arbitrum) | KyberSwap Elastic | `kyber_elastic` — src/venues/bsc_dex/pools/families.rs:316 | **вид есть в коде** | не сверены | T433-006 |
-| 7 | `kyberswap_classic_arbitrum` | Kyberswap Classic (Arbitrum) | KyberSwap Classic DMM | `kyber_dmm` — src/venues/bsc_dex/pools/families.rs:352 | **вид есть в коде** | не сверены | T433-007 |
+| 5 | `curve_arbitrum` | Curve (Arbitrum) | StableSwap — есть; Twocrypto/Tricrypto — нет (docs/notes/arbitrum/docs-check-2026-11-20.md) | `curve_stableswap` — src/venues/bsc_dex/pools/families.rs:341; `curve_stableswap_ng` — src/venues/bsc_dex/pools/families.rs:343 | **частично: вид есть / семейства нет** → **готово для NG (curve_stableswap_ng); 2pool и crypto — T448-02, T433-F3** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-005 |
+| 6 | `kyberswap_elastic_arbitrum` | Kyberswap Elastic (Arbitrum) | KyberSwap Elastic | `kyber_elastic` — src/venues/bsc_dex/pools/families.rs:316 | **вид есть в коде** → **не подтверждено — развёрнут v1, вид по v2 (T448-06)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-006 |
+| 7 | `kyberswap_classic_arbitrum` | Kyberswap Classic (Arbitrum) | KyberSwap Classic DMM | `kyber_dmm` — src/venues/bsc_dex/pools/families.rs:352 | **вид есть в коде** → **готово (только пулы DMM; Static Fee — T448-04)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-007 |
 | 8 | `elk_finance_arbitrum` | Elk Finance (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-008 |
 | 9 | `camelot` | Camelot | Camelot V2: направленные комиссии, стабильные пары (docs/notes/arbitrum/docs-check-2026-11-20.md) | — | **семейства нет в коде** | docs.camelot.exchange/contracts/arbitrum/one-mainnet: AMM V2 Factory 0x6EcCab422D763aC031210895C81787E87B43A652, Router 0xc873fEcbd354f5A56E00E710B90EF4201db2448d | T433-009 |
 | 10 | `3xcalibur` | 3xcalibur | — | — | **семейство не установлено** | не сверены | T433-010 |
 | 11 | `swapfish` | SwapFish | — | — | **семейство не установлено** | не сверены | T433-011 |
 | 12 | `arbswap_arbitrum_one` | Arbswap (Arbitrum One) | — | — | **семейство не установлено** | не сверены | T433-012 |
 | 13 | `oreoswap` | OreoSwap | — | — | **семейство не установлено** | не сверены | T433-013 |
-| 14 | `balancer_arbitrum` | Balancer V2 (Arbitrum) | Balancer V2 | `balancer_v2` — src/venues/bsc_dex/pools/families.rs:356 | **вид есть в коде** | не сверены | T433-014 |
+| 14 | `balancer_arbitrum` | Balancer V2 (Arbitrum) | Balancer V2 | `balancer_v2` — src/venues/bsc_dex/pools/families.rs:356 | **вид есть в коде** → **готово (фабрики 20210418/20210624; остальные — T448-03)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-014 |
 | 15 | `traderjoe-v2-arbitrum` | LFJ V2 (Arbitrum) | Liquidity Book v2.0 | (в коде только `lb_v21` — src/venues/bsc_dex/pools/families.rs:358) | **семейства нет в коде** | не сверены | T433-015 |
 | 16 | `magicswap` | Magicswap | — | — | **семейство не установлено** | не сверены | T433-016 |
 | 17 | `zyberswap` | Zyberswap | — | — | **семейство не установлено** | не сверены | T433-017 |
@@ -59,7 +63,7 @@
 | 31 | `aegis` | Aegis | — | — | **семейство не установлено** | не сверены | T433-031 |
 | 32 | `mm-finance-v3-arbitrum` | MM Finance V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-032 |
 | 33 | `camelot-v3` | Camelot V3 | Algebra 1.9 с направленными комиссиями feeZtO/feeOtZ (docs/notes/arbitrum/docs-check-2026-11-20.md) | (вид Algebra с одной комиссией — `thena_fusion` — src/venues/bsc_dex/pools/families.rs:328) | **семейства нет в коде** | docs.camelot.exchange/contracts/arbitrum/one-mainnet: AMM V3 AlgebraFactory 0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B, Quoter 0x0Fc73040b26E9bC8514fA028D998E73A254Fa76E, SwapRouter 0x1F721E2E82F6676FCE4eA07A5958cF098D339e18 | T433-033 |
-| 34 | `traderjoe-v2-1-arbitrum` | LFJ V2.1 (Arbitrum) | Liquidity Book v2.1 | `lb_v21` — src/venues/bsc_dex/pools/families.rs:358 | **вид есть в коде** | не сверены | T433-034 |
+| 34 | `traderjoe-v2-1-arbitrum` | LFJ V2.1 (Arbitrum) | Liquidity Book v2.1 | `lb_v21` — src/venues/bsc_dex/pools/families.rs:358 | **вид есть в коде** → **готово (реализация пары — T448-11)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-034 |
 | 35 | `arbswap-stableswap-arbitrum` | Arbswap StableSwap (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-035 |
 | 36 | `whitehole-arbitrum` | Whitehole (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-036 |
 | 37 | `chronos` | Chronos | — | — | **семейство не установлено** | не сверены | T433-037 |
@@ -69,14 +73,14 @@
 | 41 | `arbidex-v3` | Arbidex V3 | — | — | **семейство не установлено** | не сверены | T433-041 |
 | 42 | `crescentswap` | CrescentSwap | — | — | **семейство не установлено** | не сверены | T433-042 |
 | 43 | `ramses-v2` | Ramses V2 | — | — | **семейство не установлено** | не сверены | T433-043 |
-| 44 | `sushiswap-v3-arbitrum` | Sushiswap V3 (Arbitrum) | Sushi V3 — ABI не сверен (docs/notes/arbitrum/docs-check-2026-11-20.md) | (возможный вид `v3_fork` — src/venues/bsc_dex/pools/families.rs:307 — не сверено) | **семейство не установлено** | не сверены | T433-044 |
+| 44 | `sushiswap-v3-arbitrum` | Sushiswap V3 (Arbitrum) | Sushi V3 — код пула Uniswap V3: POOL_INIT_CODE_HASH Sushi V3 Arbitrum = Uniswap V3 (решение 448) | `v3_fork` — src/venues/bsc_dex/pools/families.rs:308 | **вид есть в коде** → **готово** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-044 |
 | 45 | `dexswap` | dexSWAP | — (на BSC DexSwap — Algebra Integral, комментарий src/venues/bsc_dex/pools/families.rs:74; на Arbitrum не сверено) | — | **семейство не установлено** | не сверены | T433-045 |
 | 46 | `forge-sx` | Forge Sx | — | — | **семейство не установлено** | не сверены | T433-046 |
 | 47 | `degenbrains` | Degenbrains | — | — | **семейство не установлено** | не сверены | T433-047 |
 | 48 | `spartadex` | SpartaDEX | — | — | **семейство не установлено** | не сверены | T433-048 |
-| 49 | `pancakeswap-v2-arbitrum` | Pancakeswap V2 (Arbitrum) | PancakeSwap V2 | `pancakeswap_v2` — src/venues/bsc_dex/pools/families.rs:290 | **вид есть в коде** | не сверены | T433-049 |
-| 50 | `pancakeswap-v3-arbitrum` | Pancakeswap V3 (Arbitrum) | PancakeSwap V3 | `pancakeswap_v3` — src/venues/bsc_dex/pools/families.rs:291 | **вид есть в коде** | developer.pancake.xyz/contracts/v3/addresses: PancakeV3Factory 0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865, PoolDeployer 0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9, QuoterV2 0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997, TickLens 0x9a489505a00cE272eAa5e07Dba6491314CaE3796, Smart Router 0x32226588378236Fd0c7c4053999F88aC0e5cAc77 | T433-050 |
-| 51 | `smardex-arbitrum` | SmarDex (Arbitrum) | SmarDex | `smardex` — src/venues/bsc_dex/pools/families.rs:354 | **вид есть в коде** | не сверены | T433-051 |
+| 49 | `pancakeswap-v2-arbitrum` | Pancakeswap V2 (Arbitrum) | PancakeSwap V2 | `pancakeswap_v2` — src/venues/bsc_dex/pools/families.rs:290 | **вид есть в коде** → **не подтверждено — формат Universal Router v3 PancakeSwap (T448-01)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-049 |
+| 50 | `pancakeswap-v3-arbitrum` | Pancakeswap V3 (Arbitrum) | PancakeSwap V3 | `pancakeswap_v3` — src/venues/bsc_dex/pools/families.rs:291 | **вид есть в коде** → **не подтверждено — формат Universal Router v3 PancakeSwap (T448-01)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-050 |
+| 51 | `smardex-arbitrum` | SmarDex (Arbitrum) | SmarDex | `smardex` — src/venues/bsc_dex/pools/families.rs:354 | **вид есть в коде** → **готово** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-051 |
 | 52 | `darwinswap` | DarwinSwap | — | — | **семейство не установлено** | не сверены | T433-052 |
 | 53 | `pixelswap-arbitrum` | PixelSwap (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-053 |
 | 54 | `antfarm-arbitrum` | Antfarm (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-054 |
@@ -86,10 +90,10 @@
 | 58 | `woken-exchange-arbitrum` | Woken Exchange (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-058 |
 | 59 | `kaleidoswap-arbitrum` | KaleidoSwap (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-059 |
 | 60 | `gasx` | GasX | — | — | **семейство не установлено** | не сверены | T433-060 |
-| 61 | `uniswap-v2-arbitrum` | Uniswap V2 (Arbitrum) | Uniswap V2 | `uniswap_v2` — src/venues/bsc_dex/pools/families.rs:290 | **вид есть в коде** | не сверены (страница развёртываний V2 не открылась — задача) | T433-061 |
+| 61 | `uniswap-v2-arbitrum` | Uniswap V2 (Arbitrum) | Uniswap V2 | `uniswap_v2` — src/venues/bsc_dex/pools/families.rs:290 | **вид есть в коде** → **готово** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-061 |
 | 62 | `dackieswap-v2-arbitrum` | DackieSwap V2 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-062 |
 | 63 | `dackieswap-v3-arbitrum` | DackieSwap V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-063 |
-| 64 | `pancakeswap-stableswap-arbitrum` | Pancakeswap Stableswap (Arbitrum) | PancakeSwap StableSwap | `pancake_stableswap` — src/venues/bsc_dex/pools/families.rs:362 | **вид есть в коде** | не сверены | T433-064 |
+| 64 | `pancakeswap-stableswap-arbitrum` | Pancakeswap Stableswap (Arbitrum) | PancakeSwap StableSwap | `pancake_stableswap` — src/venues/bsc_dex/pools/families.rs:362 | **вид есть в коде** → **не подтверждено — нет официального адреса фабрики Arbitrum (T448-10)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-064 |
 | 65 | `solidly-v3-arbitrum` | Solidly V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-065 |
 | 66 | `kewlswap-arbitrum` | KEWLSwap (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-066 |
 | 67 | `traderjoe-v2-2-arbitrum` | LFJ V2.2 (Arbitrum) | Liquidity Book v2.2 | (в коде только `lb_v21` — src/venues/bsc_dex/pools/families.rs:358) | **семейства нет в коде** | не сверены | T433-067 |
@@ -98,8 +102,8 @@
 | 70 | `ethervista-arbitrum` | EtherVista (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-070 |
 | 71 | `squadswap-v2-arbitrum` | SquadSwap V2 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-071 |
 | 72 | `squadswap-v3-arbitrum` | SquadSwap V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-072 |
-| 73 | `uniswap-v4-arbitrum` | Uniswap V4 (Arbitrum) | Uniswap V4 | `uniswap_v4` — src/venues/bsc_dex/pools/families.rs:295 | **вид есть в коде** | не сверены (страница развёртываний V4 без адресов Arbitrum — задача) | T433-073 |
-| 74 | `maverick-v2-arbitrum` | Maverick V2 (Arbitrum) | Maverick V2 | `maverick_v2` — src/venues/bsc_dex/pools/families.rs:388 | **вид есть в коде** | не сверены | T433-074 |
+| 73 | `uniswap-v4-arbitrum` | Uniswap V4 (Arbitrum) | Uniswap V4 | `uniswap_v4` — src/venues/bsc_dex/pools/families.rs:295 | **вид есть в коде** → **готово** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-073 |
+| 74 | `maverick-v2-arbitrum` | Maverick V2 (Arbitrum) | Maverick V2 | `maverick_v2` — src/venues/bsc_dex/pools/families.rs:388 | **вид есть в коде** → **готово** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-074 |
 | 75 | `omni-exchange-v2-arbitrum` | Omni Exchange V2 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-075 |
 | 76 | `omni-exchange-v3-arbitrum` | Omni Exchange V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-076 |
 | 77 | `balancer-v3-arbitrum` | Balancer V3 (Arbitrum) | Balancer V3 (docs/notes/arbitrum/docs-check-2026-11-20.md) | — | **семейства нет в коде** | не сверены | T433-077 |
@@ -108,8 +112,8 @@
 | 80 | `ramses-legacy-arbitrum` | Ramses Legacy (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-080 |
 | 81 | `ramses-v3-arbitrum` | Ramses V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-081 |
 | 82 | `rubicon-clmm-arbitrum` | Rubicon CLMM (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-082 |
-| 83 | `aero-slipstream-arbitrum` | Aero Slipstream (Arbitrum) | Slipstream — ABI на Arbitrum не сверен (docs/notes/arbitrum/docs-check-2026-11-20.md) | `slipstream` — src/venues/bsc_dex/pools/families.rs:385 | **вид есть в коде** | не сверены | T433-083 |
-| 84 | `camelot-v4` | Camelot V4 | Algebra Integral (docs/notes/arbitrum/docs-check-2026-11-20.md) | `algebra_integral` — src/venues/bsc_dex/pools/families.rs:331 | **вид есть в коде** | docs.camelot.exchange/contracts/arbitrum/one-mainnet: AMM V4 AlgebraFactory 0xBefC4b405041c5833f53412fF997ed2f697a2f37, Quoter 0xFe24b2cDfF01B644995bc248bA8497467d688F7B, SwapRouter 0x4ee15342d6Deb297c3A2aA7CFFd451f788675F53 | T433-084 |
+| 83 | `aero-slipstream-arbitrum` | Aero Slipstream (Arbitrum) | Slipstream — ABI на Arbitrum не сверен (docs/notes/arbitrum/docs-check-2026-11-20.md) | `slipstream` — src/venues/bsc_dex/pools/families.rs:385 | **вид есть в коде** → **не подтверждено — нет официального развёртывания Arbitrum (T448-09)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-083 |
+| 84 | `camelot-v4` | Camelot V4 | Algebra Integral (docs/notes/arbitrum/docs-check-2026-11-20.md) | `algebra_integral` — src/venues/bsc_dex/pools/families.rs:331 | **вид есть в коде** → **готово** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-084 |
 
 ## 2. DefiLlama, категории «Dexs» и «DEX Aggregator» — все 107 записей и их строка в GeckoTerminal
 
@@ -233,8 +237,8 @@
 | № | DefiLlama | slug | Категория | Семейство (основание) | В коде (файл:строка) | Статус | Официальные адреса | Задача |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 85 | Shell Protocol | `shell-protocol` | Dexs | — | — | **семейство не установлено** | не сверены | T433-085 |
-| 86 | DODO AMM | `dodo-amm` | Dexs | DODO PMM: DVM / DPP / DSP (docs/notes/arbitrum/docs-check-2026-11-20.md); пулы индексатор GeckoTerminal в сети arbitrum не отдаёт (в списке 84 DEX нет DODO) | `dodo_dvm` — src/venues/bsc_dex/pools/families.rs:321, `dodo_dpp` — src/venues/bsc_dex/pools/families.rs:322, `dodo_dsp` — src/venues/bsc_dex/pools/families.rs:323 | **вид есть в коде** | не сверены | T433-086 |
-| 87 | Saddle Finance | `saddle-finance` | Dexs | Saddle StableSwap (протокол Saddle; ABI развёртывания Arbitrum не сверен) | `saddle_stableswap` — src/venues/bsc_dex/pools/families.rs:370 | **вид есть в коде** | не сверены | T433-087 |
+| 86 | DODO AMM | `dodo-amm` | Dexs | DODO PMM: DVM / DPP / DSP (docs/notes/arbitrum/docs-check-2026-11-20.md); пулы индексатор GeckoTerminal в сети arbitrum не отдаёт (в списке 84 DEX нет DODO) | `dodo_dvm` — src/venues/bsc_dex/pools/families.rs:321, `dodo_dpp` — src/venues/bsc_dex/pools/families.rs:322, `dodo_dsp` — src/venues/bsc_dex/pools/families.rs:323 | **вид есть в коде** → **готово (пулы — поиском по фабрике)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-086 |
+| 87 | Saddle Finance | `saddle-finance` | Dexs | Saddle StableSwap (протокол Saddle; ABI развёртывания Arbitrum не сверен) | `saddle_stableswap` — src/venues/bsc_dex/pools/families.rs:370 | **вид есть в коде** → **не подтверждено — математика Saddle SwapUtils (T448-07)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-087 |
 | 88 | Integral | `integral` | Dexs | — | — | **семейство не установлено** | не сверены | T433-088 |
 | 89 | WardenSwap | `wardenswap` | Dexs | — | — | **семейство не установлено** | не сверены | T433-089 |
 | 90 | Joe DEX | `joe-dex` | Dexs | — | — | **семейство не установлено** | не сверены | T433-090 |
@@ -242,10 +246,10 @@
 | 92 | Rubicon | `rubicon` | Dexs | — | — | **семейство не установлено** | не сверены | T433-092 |
 | 93 | ZipSwap | `zipswap` | Dexs | — | — | **семейство не установлено** | не сверены | T433-093 |
 | 94 | Hashflow | `hashflow` | DEX Aggregator | категория DefiLlama «DEX Aggregator» — свой пул не установлен | — | **не пул** | не сверены | T433-094 |
-| 95 | WOOFi Swap | `woofi-swap` | Dexs | WOOFi WooPPV2 (docs/notes/arbitrum/docs-check-2026-11-20.md) | `woofi_v2` — src/venues/bsc_dex/pools/families.rs:379 | **вид есть в коде** | не сверены | T433-095 |
+| 95 | WOOFi Swap | `woofi-swap` | Dexs | WOOFi WooPPV2 (docs/notes/arbitrum/docs-check-2026-11-20.md) | `woofi_v2` — src/venues/bsc_dex/pools/families.rs:379 | **вид есть в коде** → **не подтверждено — оракул WooracleV2_2_1 и реализация прокси (T448-08)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-095 |
 | 96 | Wombat Exchange | `wombat-exchange` | Dexs | — | — | **семейство не установлено** | не сверены | T433-096 |
 | 97 | Swapsicle V1 | `swapsicle-v1` | Dexs | — | — | **семейство не установлено** | не сверены | T433-097 |
-| 98 | iZiSwap | `iziswap` | Dexs | iZiSwap (ABI развёртывания Arbitrum не сверен) | `iziswap` — src/venues/bsc_dex/pools/families.rs:349 | **вид есть в коде** | не сверены | T433-098 |
+| 98 | iZiSwap | `iziswap` | Dexs | iZiSwap (ABI развёртывания Arbitrum не сверен) | `iziswap` — src/venues/bsc_dex/pools/families.rs:349 | **вид есть в коде** → **нужен код — источник пулов (T448-05)** (решение 448) | адреса, источники, статус — docs/notes/arbitrum/dex-settings-arbitrum.md (решение 448) | T433-098 |
 | 99 | 0x | `0x` | DEX Aggregator | категория DefiLlama «DEX Aggregator» — свой пул не установлен | — | **не пул** | не сверены | T433-099 |
 | 100 | Sushi Trident | `sushi-trident` | Dexs | — | — | **семейство не установлено** | не сверены | T433-100 |
 | 101 | ZyberSwap Stableswap | `zyberswap-stableswap` | Dexs | — | — | **семейство не установлено** | не сверены | T433-101 |

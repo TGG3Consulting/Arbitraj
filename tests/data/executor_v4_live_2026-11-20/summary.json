@@ -9,13 +9,6 @@
  {
   "case": "нет пулов",
   "kind": 23,
-  "bv3_hook_kind": "surge",
-  "note": "пула Balancer V3 с этим видом крючка, который бот берёт, нет",
-  "chain_id": 42161
- },
- {
-  "case": "нет пулов",
-  "kind": 23,
   "bv3_hook_kind": "mev",
   "note": "пула Balancer V3 с этим видом крючка, который бот берёт, нет",
   "chain_id": 42161
@@ -51,12 +44,12 @@
   "quoter_out_h": "4392522",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -128,12 +121,12 @@
   "quoter_out_h": "39388",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -205,12 +198,12 @@
   "quoter_out_h": "603541",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -264,7 +257,7 @@
   "got": "1001481790",
   "quoter_out": "1001481790",
   "ur_out": null,
-  "gas": 235991,
+  "gas": 236001,
   "status": 1,
   "revert": "",
   "x_left": {
@@ -279,12 +272,12 @@
   "quoter_out_h": "1001481790",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -349,12 +342,12 @@
   "quoter_out_h": "9983455",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -368,8 +361,8 @@
   "token_in": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
   "token_out": "0x7dff72693f6a4149b17e7c6314655f6a9f7c8b33",
   "amount_in": "9983455",
-  "got": "9997999049693000000",
-  "quoter_out": "9995834764406000000",
+  "got": "9997999048006000000",
+  "quoter_out": "9995834764884000000",
   "ur_out": null,
   "gas": 261446,
   "status": 1,
@@ -383,7 +376,7 @@
   "liquidity": "0x52aa899454998be5b000ad077a46bbe360f4e497",
   "diff_vs_quoter_pct": 0.021652,
   "coin": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
-  "quoter_out_after_a": "9997999049693000000",
+  "quoter_out_after_a": "9997999048006000000",
   "quoter_err": null,
   "quoter_after_a_err": null,
   "a_rerun_got": "9983455",
@@ -402,8 +395,8 @@
   "token_in": "0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef",
   "token_out": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
   "amount_in": "1000000000000000000000",
-  "got": "1000041371",
-  "quoter_out": "1000041371",
+  "got": "1000039867",
+  "quoter_out": "1000039867",
   "ur_out": null,
   "gas": 277098,
   "status": 1,
@@ -417,15 +410,15 @@
   "liquidity": "0x52aa899454998be5b000ad077a46bbe360f4e497",
   "diff_vs_quoter_pct": 0.0,
   "coin": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
-  "quoter_out_h": "1000041371",
+  "quoter_out_h": "1000039867",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -438,9 +431,9 @@
   "hooks": "0x0000000000000000000000000000000000000000",
   "token_in": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
   "token_out": "0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef",
-  "amount_in": "1000041371",
-  "got": "999600044905111000000",
-  "quoter_out": "999572728221365000000",
+  "amount_in": "1000039867",
+  "got": "999600044894069000000",
+  "quoter_out": "999572728258474000000",
   "ur_out": null,
   "gas": 276620,
   "status": 1,
@@ -454,10 +447,10 @@
   "liquidity": "0x52aa899454998be5b000ad077a46bbe360f4e497",
   "diff_vs_quoter_pct": 0.002733,
   "coin": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
-  "quoter_out_after_a": "999600044905111000000",
+  "quoter_out_after_a": "999600044894069000000",
   "quoter_err": null,
   "quoter_after_a_err": null,
-  "a_rerun_got": "1000041371",
+  "a_rerun_got": "1000039867",
   "a_rerun_same": true,
   "quoter_after_a_sim": "та же, перед продажей",
   "diff_vs_quoter_after_a_pct": 0.0,
@@ -490,12 +483,12 @@
   "quoter_out_h": "2424936906169381409",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -558,12 +551,12 @@
   "quoter_out_h": "11284156377191930279",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -626,12 +619,12 @@
   "quoter_out_h": "388215460803719626",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -677,8 +670,8 @@
   "token_in": "0x4ce13a79f45c1be00bdabd38b764ac28c082704e",
   "token_out": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
   "amount_in": "10000000000000000000",
-  "got": "9058160559060321285",
-  "quoter_out": "9058160559060321285",
+  "got": "9058161949786664727",
+  "quoter_out": "9058161949786664727",
   "ur_out": null,
   "gas": 260007,
   "status": 1,
@@ -689,7 +682,7 @@
   },
   "swap_credit": {
    "amount_in": 10000000000000000000,
-   "out_side": 9058160559060321285,
+   "out_side": 9058161949786664727,
    "token_out": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8"
   },
   "got_eq_swap_credit": true,
@@ -697,15 +690,15 @@
   "bv3_hook_kind": "none",
   "diff_vs_quoter_pct": 0.0,
   "coin": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
-  "quoter_out_h": "9058160531786064311",
+  "quoter_out_h": "9058161922519349485",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -718,9 +711,9 @@
   "hooks": "0x0000000000000000000000000000000000000000",
   "token_in": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
   "token_out": "0x4ce13a79f45c1be00bdabd38b764ac28c082704e",
-  "amount_in": "9058160559060321285",
-  "got": "9992035276879294322",
-  "quoter_out": "9874863550647642585",
+  "amount_in": "9058161949786664727",
+  "got": "9992035276884808334",
+  "quoter_out": "9874863545933215083",
   "ur_out": null,
   "gas": 264956,
   "status": 1,
@@ -730,8 +723,8 @@
    "coin": "0"
   },
   "swap_credit": {
-   "amount_in": 9058160559060321285,
-   "out_side": 9992035276879294322,
+   "amount_in": 9058161949786664727,
+   "out_side": 9992035276884808334,
    "token_out": "0x4ce13a79f45c1be00bdabd38b764ac28c082704e"
   },
   "got_eq_swap_credit": true,
@@ -739,10 +732,91 @@
   "bv3_hook_kind": "none",
   "diff_vs_quoter_pct": 1.186566,
   "coin": "0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
-  "quoter_out_after_a": "9992035276879294322",
+  "quoter_out_after_a": "9992035276884808334",
   "quoter_err": null,
   "quoter_after_a_err": null,
-  "a_rerun_got": "9058160559060321285",
+  "a_rerun_got": "9058161949786664727",
+  "a_rerun_same": true,
+  "quoter_after_a_sim": "отдельная [buy, квотер]",
+  "diff_vs_quoter_after_a_pct": 0.0,
+  "chain_id": 42161
+ },
+ {
+  "case": "a",
+  "kind": 23,
+  "pool_id": "0x412d928c31b82b78ccb8b04aa8bfcdadb9236fc6",
+  "manager": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+  "pool_manager": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+  "hooks": "0x0000000000000000000000000000000000000000",
+  "token_in": "0xd09acb80c1e8f2291862c4978a008791c9167003",
+  "token_out": "0xe98fc055c99decd8da0c111b090885d5d15c774e",
+  "amount_in": "10000000000000000",
+  "got": "9441727720608621",
+  "quoter_out": "9441727720608621",
+  "ur_out": null,
+  "gas": 348248,
+  "status": 1,
+  "revert": "",
+  "x_left": {
+   "usdt": "0",
+   "coin": "0"
+  },
+  "swap_credit": {
+   "amount_in": 10000000000000000,
+   "out_side": 9441727720608621,
+   "token_out": "0xe98fc055c99decd8da0c111b090885d5d15c774e"
+  },
+  "got_eq_swap_credit": true,
+  "bv3_hook": "0x7c1b7a97bfacd39975de53e989a16c7bc4c78275",
+  "bv3_hook_kind": "surge",
+  "diff_vs_quoter_pct": 0.0,
+  "coin": "0xe98fc055c99decd8da0c111b090885d5d15c774e",
+  "quoter_out_h": "9441727720608680",
+  "quoter_a_sim": "своя [квотер]",
+  "sim_block_a": {
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
+  },
+  "sim_block_quoter_a": {
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
+  },
+  "chain_id": 42161
+ },
+ {
+  "case": "b",
+  "kind": 23,
+  "pool_id": "0x412d928c31b82b78ccb8b04aa8bfcdadb9236fc6",
+  "manager": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+  "pool_manager": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+  "hooks": "0x0000000000000000000000000000000000000000",
+  "token_in": "0xe98fc055c99decd8da0c111b090885d5d15c774e",
+  "token_out": "0xd09acb80c1e8f2291862c4978a008791c9167003",
+  "amount_in": "9441727720608621",
+  "got": "9389997981962474",
+  "quoter_out": "9388576729953360",
+  "ur_out": null,
+  "gas": 335573,
+  "status": 1,
+  "revert": "",
+  "x_left": {
+   "usdt": "0",
+   "coin": "0"
+  },
+  "swap_credit": {
+   "amount_in": 9441727720608621,
+   "out_side": 9389997981962474,
+   "token_out": "0xd09acb80c1e8f2291862c4978a008791c9167003"
+  },
+  "got_eq_swap_credit": true,
+  "bv3_hook": "0x7c1b7a97bfacd39975de53e989a16c7bc4c78275",
+  "bv3_hook_kind": "surge",
+  "diff_vs_quoter_pct": 0.015138,
+  "coin": "0xe98fc055c99decd8da0c111b090885d5d15c774e",
+  "quoter_out_after_a": "9389997981962474",
+  "quoter_err": null,
+  "quoter_after_a_err": null,
+  "a_rerun_got": "9441727720608621",
   "a_rerun_same": true,
   "quoter_after_a_sim": "отдельная [buy, квотер]",
   "diff_vs_quoter_after_a_pct": 0.0,
@@ -776,12 +850,12 @@
   "quoter_out_h": "6708",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -829,8 +903,8 @@
   "token_in": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
   "token_out": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
   "amount_in": "1000000000",
-  "got": "1000504781",
-  "quoter_out": "1000504781",
+  "got": "1000504981",
+  "quoter_out": "1000504981",
   "ur_out": null,
   "gas": 209763,
   "status": 1,
@@ -844,15 +918,15 @@
   "fee": 500,
   "diff_vs_quoter_pct": 0.0,
   "coin": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
-  "quoter_out_h": "1000504781",
+  "quoter_out_h": "1000504981",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -865,9 +939,9 @@
   "hooks": "0x0000000000000000000000000000000000000000",
   "token_in": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
   "token_out": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
-  "amount_in": "1000504781",
-  "got": "999000377",
-  "quoter_out": "998049993",
+  "amount_in": "1000504981",
+  "got": "999000378",
+  "quoter_out": "998043834",
   "ur_out": null,
   "gas": 206331,
   "status": 1,
@@ -879,12 +953,12 @@
   "swap_credit": null,
   "got_eq_swap_credit": null,
   "fee": 500,
-  "diff_vs_quoter_pct": 0.095224,
+  "diff_vs_quoter_pct": 0.095842,
   "coin": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
-  "quoter_out_after_a": "999000377",
+  "quoter_out_after_a": "999000378",
   "quoter_err": null,
   "quoter_after_a_err": null,
-  "a_rerun_got": "1000504781",
+  "a_rerun_got": "1000504981",
   "a_rerun_same": true,
   "quoter_after_a_sim": "та же, перед продажей",
   "diff_vs_quoter_after_a_pct": 0.0,
@@ -918,12 +992,12 @@
   "quoter_out_h": "9967864",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },
@@ -988,12 +1062,12 @@
   "quoter_out_h": "9923550",
   "quoter_a_sim": "своя [квотер]",
   "sim_block_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "sim_block_quoter_a": {
-   "number": "0x1f5ac0e9",
-   "timestamp": "0x6b00b2c5"
+   "number": "0x1f5aca00",
+   "timestamp": "0x6b00b529"
   },
   "chain_id": 42161
  },

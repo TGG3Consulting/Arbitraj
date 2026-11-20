@@ -5,7 +5,7 @@
 //! - v3, chainId 56 — tests/data/executor_v3_live_2026-11-17 (свой узел BSC; строки chainId в её README нет — сеть
 //!   задана здесь по факту README: «WBNB (dex.native_wrapped, bsc_dex)», адреса BSC, решение 400);
 //! - v4, chainId из строки README «- chainId: 42161» — tests/data/executor_v4_live_2026-11-20 (свой узел Arbitrum One,
-//!   tools/arbitrum_record/exec_v4_live.py, решение 459); поле chain_id строк summary.json должно с ней совпасть.
+//!   H = 526043647 — четвёртый прогон 20.11, решение 478; tools/arbitrum_record/exec_v4_live.py, решение 459); поле chain_id строк summary.json должно с ней совпасть.
 //!
 //! Вердикты — правило live_rule.rs (SHA-256 bin-runtime той версии — code::runtime_sha256_of), один разбор за запуск.
 //! Записи для пары нет — missing: все классы «не проверен» (текст с парой — pair).

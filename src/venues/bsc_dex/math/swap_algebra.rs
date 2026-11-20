@@ -13,22 +13,23 @@
 //! Поэтому для расчёта одного обмена она приходит сюда числом (s.fee) — ровно как fee у V3. Её чтение (globalState.fee)
 //! — в загрузчике семейства (фаза B), сверка с живым квотером — решение 73.
 //! (3) Окно карты: у Integral (Linked) — слова по 256 СЫРЫХ тиков (load_algebra_integral.rs, window_ticks); у THENA
-//! Fusion (Row) — сжатые строки по 256·spacing тиков (решение 462, пункт 5; до 462 здесь было ошибочно «сырой битмап»
+//! Fusion (Row) — сжатые строки по 256·spacing тиков (решение 463, пункт 5; до 463 здесь было ошибочно «сырой битмап»
 //! и для THENA Fusion).
 //! Ликвидность одна (u128), reinvestL у Algebra нет (это Elastic).
 //! (4) Решение 323: текущий тик вне окна, нужного обмену (вниз — lo ≤ tick ≤ hi, вверх — lo − 1 ≤ tick < hi, как V3
 //! swap_cl::next_tick), — неполный итог с нулями (complete = false), как у V3, а не шаг к краю окна по другую сторону
 //! цены. Общая функция для THENA Fusion (V1/V1.9) и Algebra Integral, котировки (quote/pool_quote.rs) и глубины
 //! (quote/depth_band_algebra.rs); то же правило — blocked_by_window для перечитывания (pools/off_map_algebra.rs).
-//! (5) Решение 462 (запись своего узла BSC 20.11, THENA Fusion): цель шага у пула с битмапом (режим NextTick::Row) —
+//! (5) Решение 463 (запись своего узла BSC 20.11, THENA Fusion): цель шага у пула с битмапом (режим NextTick::Row) —
 //! НЕ следующий инициализированный тик, а порт TickTable.nextTickInTheSameRow официального кода пула: инициализированный
 //! тик в той же строке битмапа или, если его нет, край строки (неинициализированный — шаг до него без пересечения;
 //! каждый шаг округляет вход вверх, выход вниз — прыжок через край строки дал бы другой итог). Строка — 256 СЖАТЫХ
-//! тиков: THENA Fusion — код cryptoalgebra/AlgebraV1 master (Sourcify 56, пул 0x1b9a…ef7d и деплоер 0xc89F…7358 —
-//! полное совпадение): TickTable.sol toggleTick `tick /= Constants.TICK_SPACING`, nextTickInTheSameRow сжимает тик
+//! тиков: THENA Fusion — исходник Sourcify THENA (сеть 56, пул 0x1b9a…ef7d и деплоер 0xc89F…7358 — полное совпадение
+//! байткода; линия AlgebraV1: TickTable, TICK_SPACING и цикл совпадают с cryptoalgebra/AlgebraV1 master, комиссия
+//! сообщества — uint16): TickTable.sol toggleTick `tick /= Constants.TICK_SPACING`, nextTickInTheSameRow сжимает тик
 //! (sdiv с округлением к −∞) и возвращает uncompressAndBoundTick (× TICK_SPACING, в пределах MIN_TICK…MAX_TICK);
 //! цикл — AlgebraPool.sol _calculateSwapAndLock (пересечение только у initialized, currentTick = zeroToOne ?
-//! nextTick − 1 : nextTick). Шаг — TickMap.spacing (tickSpacing() пула, load_algebra.rs). До 462 бот читал битмап
+//! nextTick − 1 : nextTick). Шаг — TickMap.spacing (tickSpacing() пула, load_algebra.rs). До 463 бот читал битмап
 //! THENA Fusion как СЫРОЙ (слово тика tick >> 8) — у 7 из 8 записанных пулов карта была пустой, обмен шёл по одной
 //! ликвидности без пересечений (на записи: до +0,96% к выходу квотера). Algebra Integral (связный список тиков) —
 //! режим NextTick::Linked: сразу следующий инициализированный тик, поведение прежнее.
@@ -38,7 +39,7 @@
 //! От чего зависит: math/swap_step.rs (step_v3), math/tick_math.rs, pools/ticks.rs (TickMap).
 //! Настройки: нет (комиссия пула s.fee читается с контракта в фазе B).
 //!
-//! Источники (официальные, решение 23; версия THENA Fusion — AlgebraV1 master, решение 462): cryptoalgebra/AlgebraV1.9 и V1:
+//! Источники (официальные, решение 23; версия THENA Fusion — исходник Sourcify THENA, линия AlgebraV1 (TickTable, TICK_SPACING и цикл = master; комиссия сообщества — uint16), решение 463): cryptoalgebra/AlgebraV1.9 и V1:
 //! цикл свопа `_calculateSwapAndLock` (пересечение тика: zeroToOne вычитает liquidityDelta тика, иначе прибавляет;
 //! currentTick = zeroToOne ? nextTick-1 : nextTick) — src/core/contracts/AlgebraPool.sol; поиск следующего тика
 //! `nextTickInTheSameRow` (lte = zeroToOne) — src/core/contracts/libraries/TickTable.sol; TickMath (константы и
@@ -56,9 +57,9 @@ const OVERFLOW: &str = "переполнение/недобор в матема�
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NextTick {
     /// Битмап строками по 256 сжатых тиков (шаг — TickMap.spacing): TickTable.nextTickInTheSameRow —
-    /// инициализированный тик строки или край строки. THENA Fusion (код AlgebraV1, решение 462).
+    /// инициализированный тик строки или край строки. THENA Fusion (код AlgebraV1, решение 463).
     Row,
-    /// Algebra Integral: связный список тиков — сразу следующий инициализированный тик (поведение до 462).
+    /// Algebra Integral: связный список тиков — сразу следующий инициализированный тик (поведение до 463).
     Linked,
 }
 
@@ -209,7 +210,8 @@ pub fn swap_to(
     ))
 }
 
-/// Цель шага режима Row — порт TickTable.nextTickInTheSameRow (cryptoalgebra/AlgebraV1 master libraries/TickTable.sol):
+/// Цель шага режима Row — порт TickTable.nextTickInTheSameRow (исходник Sourcify THENA, libraries/TickTable.sol — как в
+/// cryptoalgebra/AlgebraV1 master):
 /// c = floor(cur / spacing); lte (zeroToOne) — строка c >> 8, наибольший инициализированный сжатый тик не выше c, иначе
 /// начало строки; иначе — строка c + 1, наименьший инициализированный сжатый тик не ниже c + 1, иначе конец строки.
 /// Итог — × spacing в пределах [MIN_TICK; MAX_TICK] (uncompressAndBoundTick). Карта хранит несжатые тики (кратные
@@ -251,10 +253,10 @@ fn next_init(t: &TickMap, cur: i32, zero_for_one: bool) -> Option<i32> {
     }
 }
 
-/// Диапазон СЫРЫХ тиков, для которого прочитаны все инициализированные тики. Битмап Algebra индексирует сырой тик
-/// (TickTable: rowNumber = tick >> 8), поэтому слово w покрывает тики [w·256, w·256+255] — БЕЗ умножения на spacing
-/// (в отличие от V3/Elastic). Загрузчик фазы B заполняет words сырыми позициями слов (или (i16::MIN, i16::MAX),
-/// когда читает все тики сразу). Ошибок нет.
+/// Диапазон тиков окна карты в режиме Linked (Algebra Integral): слово w покрывает тики [w·256, w·256+255] — карта
+/// Integral строится по 256 сырых тиков (load_algebra_integral.rs; (i16::MIN, i16::MAX), когда прочитано всё). THENA
+/// Fusion (режим Row, решение 463) этим окном не пользуется: его окно — сжатые строки TickMap.words при TickMap.spacing
+/// (in_same_row). Ошибок нет.
 fn window_ticks(t: &TickMap) -> (i32, i32) {
     let lo = t.words.0 as i32 * 256;
     let hi = t.words.1 as i32 * 256 + 255;

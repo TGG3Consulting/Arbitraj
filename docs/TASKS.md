@@ -13,15 +13,18 @@
 
 ## Ждут решения Тиграна
 
-- **Решение 462 (20.11.2026, задача t236, ветка t236/bsc-thena-fusion-v1) — THENA Fusion: сжатый битмап и цикл AlgebraV1;
+- **Решение 463 (20.11.2026, задача t236, ветка t236/bsc-thena-fusion-v1) — THENA Fusion: сжатый битмап и цикл AlgebraV1;
   ждёт сборки и тестов в GitHub (cargo локально не запускался).** Факт: бот читал битмап THENA Fusion сырым — у 7 из 8
-  пулов записи карта пустая, котировка завышалась до +0,96 %. Исправлено (DECISIONS 462): чтение по сжатым словам,
+  пулов записи карта пустая, котировка завышалась до +0,96 %. Исправлено (DECISIONS 463): чтение по сжатым словам,
   шаг по сжатым строкам, события Fee / Initialize; тест tests/bsc_thena_fusion_record.rs (63 из 64 случаев = Quoter до wei,
   64-й — честный неполный итог). Живой бот: THENA Fusion выключена (dex.pool_enabled = нет, 20.11) — после выкладки
-  включает Тигран. Задачи:
-  - T462-01 **Окно чтения.** Число слов THENA Fusion теперь считается при tickSpacing пула (60): та же полоса % даёт в 60
+  включает Тигран. Ревью t236 (сделано): номер 462 → 463 (462 занят веткой Arbitrum t234/arb-merge-2); dex.kind —
+  thena_fusion исполняется через ArbExecutor; подписка Integral — прежняя; tickSpacing — в Pool.tick_spacing записи (не
+  перечитывается), слова — в первом заходе заранее читаемых вызовов; тест tests/bsc_thena_fusion_window_t236.rs (off_map,
+  глубина на записи). Задачи:
+  - T463-01 **Окно чтения.** Число слов THENA Fusion теперь считается при tickSpacing пула (60): та же полоса % даёт в 60
     раз меньше слов; dex.tick_words — сжатых слов (±n строк по 256·60 тиков). Значения менять не нужно (docs/SETTINGS_CASES.md).
-  - T462-02 **Комиссия следующего блока (не сделано).** Первый своп блока пересчитывает комиссию (AlgebraPool.sol
+  - T463-02 **Комиссия следующего блока (не сделано).** Первый своп блока пересчитывает комиссию (AlgebraPool.sol
     _getNewFee → DataStorageOperator.getFee: AdaptiveFee по средним волатильности и volumePerLiquidity за 24 ч ПОСЛЕ
     записи новой точки оракула с volumePerLiquidityInBlock пула — DataStorage.write / getAverages). Факт записи: у
     0x1b93…2210 Quoter на времени блока 1539 при globalState.fee 1537. Бот берёт globalState.fee (событие Fee держит её
@@ -29,11 +32,11 @@
     после повторной записи (оракул: feeConfig, точки, getFee / getAverages на время блока + 0/1/3 с; скрипт —
     ветка t237/bsc-thena-record, T237-01). volumePerLiquidityInBlock у AlgebraV1 — internal (геттера нет), слот
     хранилища — по раскладке исходника THENA (сверить).
-  - T462-03 **Исполнение.** Шаг ALGEBRA ArbExecutor: swap(recipient, zeroToOne, int256, limitSqrtPrice, data) +
+  - T463-03 **Исполнение.** Шаг ALGEBRA ArbExecutor: swap(recipient, zeroToOne, int256, limitSqrtPrice, data) +
     algebraSwapCallback — подпись совпадает с IAlgebraPoolActions / IAlgebraSwapCallback исходника THENA (Sourcify);
     тот же вызов делает VirtualQuoter, и на записи 20.11 он исполнился на всех 8 пулах (ответы = Quoter THENA). EVM-сценария
     исполнителя с кодом пула THENA (evmtest) нет — задача: развернуть код пула из записи (eth_getCode) и прогнать шаг.
-  - T462-04 **Поиск пулов.** Уже есть: poolByPair фабрики по парам монет (factory_calls.rs) и событие Pool(token0, token1,
+  - T463-04 **Поиск пулов.** Уже есть: poolByPair фабрики по парам монет (factory_calls.rs) и событие Pool(token0, token1,
     pool) фабрики (created_log.rs). Полного списка пулов фабрики (история событий Pool с блока создания) нет — задача.
 - **Решение 449 (20.11.2026, задача t225, ветка t225/bsc-pool-directory) — справочник пулов DEX не обновлялся с 14.11;
   скан фабрик назвал orangedx неподключённой; ждёт сборки и тестов в GitHub (cargo локально не запускался).**

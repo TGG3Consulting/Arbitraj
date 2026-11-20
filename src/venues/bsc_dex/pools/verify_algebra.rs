@@ -155,7 +155,8 @@ fn found(c: &Candidate, pool: Address) -> Found {
         coin: c.coin,
         // Комиссия Algebra динамическая — её текущее значение читает load_algebra.rs (globalState.fee).
         fee_pips: None,
-        // tickSpacing THENA Fusion читает load_algebra.rs на каждом чтении (решение 462: TickMap.spacing = tickSpacing пула).
+        // tickSpacing THENA Fusion читает load_algebra.rs при первом чтении пула и хранит в Pool.tick_spacing записи
+        // (решение 463, ревью t236: load.rs known_spacing).
         tick_spacing: None,
         bin_step: None,
         key: None,

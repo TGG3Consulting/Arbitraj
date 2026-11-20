@@ -1,6 +1,6 @@
 //! Файл: tests/bsc_dex_tick_read_band_algebra.rs
 //! Что делает: решение 319 — отдельная полоса чтения сырого битмапа Algebra dex.tick_read_band_algebra_pct
-//! (load_algebra::row_range / algebra_band_words; решение 462 — при tickSpacing пула) рядом с общей dex.tick_read_band_pct (load_v2v3::word_range):
+//! (load_algebra::row_range / algebra_band_words; решение 463 — при tickSpacing пула) рядом с общей dex.tick_read_band_pct (load_v2v3::word_range):
 //! - не задана — окно Algebra ровно прежнее (решение 296) при любой dex.tick_read_band_pct (не задана, 2, 10, 20, 70%):
 //!   n = max(dex.tick_words, band_words(dex.tick_read_band_pct, 1));
 //! - задана — окно Algebra по ней (шире и уже общей), а окно V3/CL/V4 — по-прежнему по dex.tick_read_band_pct;
@@ -42,7 +42,7 @@ fn around(w: i32, n: i32) -> (i16, i16) {
 }
 
 /// Ожидаемое окно битмапа THENA Fusion при полосе `pct` (None — полосы нет): n = max(dex.tick_words, слов полосы при
-/// шаге пула `sp`), слово — floor(tick / sp) >> 8 (решение 462). Ошибок нет.
+/// шаге пула `sp`), слово — floor(tick / sp) >> 8 (решение 463). Ошибок нет.
 fn raw_expected(tick: i32, sp: i32, pct: Option<i64>) -> (i16, i16) {
     let n = pct.map_or(TICK_WORDS, |p| {
         TICK_WORDS.max(band_words(Decimal::from(p), sp))

@@ -149,7 +149,9 @@ pub fn more(ctx: &Ctx, e: &Entry, b: &Book) -> Ask {
         (Proto::Slipstream, PoolRef::Contract(a)) => {
             prefetch_ticks::slip_more(ctx, e, *a, b).into()
         }
-        (Proto::Algebra, PoolRef::Contract(a)) => prefetch_ticks::algebra_more(ctx, *a, b).into(),
+        (Proto::Algebra, PoolRef::Contract(a)) => {
+            prefetch_ticks::algebra_more(ctx, e, *a, b).into()
+        }
         (Proto::AlgebraIntegral, PoolRef::Contract(a)) => prefetch_integral::more(ctx, *a, b),
         // KyberSwap Elastic: ticks() списка — одним view_many кода чтения (ревью 325, Н5), заранее не читаются.
         _ => Ask::default(),

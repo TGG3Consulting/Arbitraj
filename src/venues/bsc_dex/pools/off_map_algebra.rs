@@ -7,7 +7,7 @@
 //! проверка полосы и перечитывание — те же, что у V3/CL (depth.rs off_map → pools/listen_log.rs ветка off_map →
 //! load::refresh, тот же путь, что перечитывание Algebra на Mint/Burn).
 //! Поможет ли перечитывание (без него каждый Swap перечитывал бы пул, у которого полоса шире окна по настройкам):
-//! - THENA Fusion (решение 462): окно сжатого битмапа вокруг нового тика (load_algebra::row_range при шаге карты)
+//! - THENA Fusion (решение 463): окно сжатого битмапа вокруг нового тика (load_algebra::row_range при шаге карты)
 //!   не совпадает с прочитанным — перечитывание сдвинет окно; совпадает — ничего не добавит (не чаще раза на слово =
 //!   256·spacing тиков);
 //! - Algebra Integral: отрезок списка тиков от нового тика заранее неизвестен (dex.integral_tick_steps — тики, а не
@@ -30,7 +30,7 @@
 //! Настройки: dex.algebra_off_map_reread [bsc_dex] (необязательная, да/нет; не задана или нет — false, как до 320);
 //! dex.integral_tick_steps [bsc_dex] (Integral, тик ровно hi; не задана — не перечитывать).
 //!
-//! Битмап THENA Fusion (решение 462, код AlgebraV1): rowNumber = floor(tick / TICK_SPACING) >> 8 — TickMap.covers при
+//! Битмап THENA Fusion (решение 463, код AlgebraV1): rowNumber = floor(tick / TICK_SPACING) >> 8 — TickMap.covers при
 //! spacing карты = tickSpacing пула считает слово так же (TickMap::word_of); у Integral — слова по 256 сырых тиков
 //! (load_algebra_integral.rs window, spacing 1).
 

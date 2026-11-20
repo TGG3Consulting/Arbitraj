@@ -4,7 +4,7 @@
 //!   Router/Permit2/роутера/читателя тиков — graphable, но НЕ tradable, исполнения пока нет);
 //! (2) разбор ответа globalState()/ticks() по ABI (IAlgebraPool) на структуре официального контракта
 //!   (@cryptoalgebra/v1.9-core) — поля встают на свои места;
-//! (3) восстановление тиков из слова битмапа tickTable (row_ticks, решение 462): бит b слова w → тик (w·256 + b)·spacing;
+//! (3) восстановление тиков из слова битмапа tickTable (row_ticks, решение 463): бит b слова w → тик (w·256 + b)·spacing;
 //! (4) проверка пула через фабрику Algebra (verify_algebra::decide на ABI-ответе poolByPair) — принимает свой пул,
 //!   отвергает чужой.
 //! Кто вызывает: cargo test.
@@ -180,7 +180,7 @@ fn algebra_ticks_abi() {
     assert_eq!(t.liquidityDelta, delta);
 }
 
-/// Восстановление тиков из слова битмапа tickTable (row_ticks): бит b слова w → тик (w·256 + b)·spacing (решение 462:
+/// Восстановление тиков из слова битмапа tickTable (row_ticks): бит b слова w → тик (w·256 + b)·spacing (решение 463:
 /// THENA Fusion — код AlgebraV1, TickTable сжимает тик на TICK_SPACING). Шаг 1 — прежние числа; шаг 60 — как у пулов
 /// записи tests/data/bsc_thena_fusion_2026-11-20. Проверяем положительное и отрицательное слово.
 #[test]

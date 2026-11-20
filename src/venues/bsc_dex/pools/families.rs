@@ -50,7 +50,8 @@ pub enum Proto {
     /// 4 значения, как DPP.
     DodoDsp,
     /// Algebra V1/V1.9 (THENA Fusion и форки, решения 80, 81): отдельный контракт на пул (как V3), одна ликвидность,
-    /// динамическая комиссия (globalState.fee), СЫРОЙ битмап тиков (tickTable). Свои геттеры/события/квотер (QuoterV2
+    /// динамическая комиссия (globalState.fee), СЖАТЫЙ битмап тиков tickTable (слово = floor(tick / tickSpacing) >> 8,
+    /// решение 463). Свои геттеры/события/квотер (QuoterV2
     /// без параметра fee), своя фабрика (poolByPair — один пул на пару). Математика — math/swap_algebra.rs.
     Algebra,
     /// Algebra Integral (THENA V3, DexSwap; решение 188): тот же обмен, события Swap/Mint/Burn и фабрика, что у
@@ -531,7 +532,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => list.push("dex.factory"),
         // Algebra (THENA Fusion, решения 80, 81, фаза B): фабрика (проверка пула poolByPair, решение 59; события
         // создания Pool) и квотер (сверка QuoterV2.quoteExactInputSingle без параметра fee, решение 73). Своего
-        // читателя тиков нет — сжатый битмап tickTable (решение 462) читается прямо у пула (load_algebra.rs). Роутера нет
+        // читателя тиков нет — сжатый битмап tickTable (решение 463) читается прямо у пула (load_algebra.rs). Роутера нет
         // (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
         Proto::Algebra => list.extend(["dex.factory", "dex.quoter"]),
         // Algebra Integral (решение 188): фабрика (poolByPair, событие Pool — как V1.9); квотер — виртуальный

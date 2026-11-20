@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/pools/prefetch_ticks.rs
 //! Что делает: решение 325 — заранее читаемые вызовы (prefetch_plan.rs) пулов, чьё чтение по одному идёт «голова →
 //! слова битмапа вокруг тика → данные тиков по битам»: Slipstream (load_slipstream.rs: slot0, liquidity, tickBitmap,
-//! ticks) и THENA Fusion (load_algebra.rs: globalState, liquidity, tickSpacing, сжатый битмап tickTable, ticks — решение 462).
+//! ticks) и THENA Fusion (load_algebra.rs: globalState, liquidity, tickSpacing, сжатый битмап tickTable, ticks — решение 463).
 //! first — голова и слова вокруг тика ЗАПИСИ (off_map — после события, Refresh — до; подсказка); more — по голове из
 //! книги слова НАСТОЯЩЕГО диапазона
 //! (та же функция диапазона, что у чтения: load_v2v3.rs word_range / load_algebra.rs row_range), а когда все
@@ -76,33 +76,47 @@ fn slip_words(pool: Address, (lo, hi): (i16, i16)) -> Vec<Call> {
         .collect()
 }
 
-/// THENA Fusion (решение 462): globalState, liquidity, tickSpacing и сжатые слова tickTable вокруг тика записи (шаг —
-/// из прочитанной ранее карты пула). Ошибок нет.
+/// tickSpacing пула THENA Fusion, известный записи (ревью t236: Pool.tick_spacing — load.rs known_spacing, иначе шаг
+/// прочитанной карты). None — ещё не читался. Ошибок нет.
+fn algebra_spacing(e: &Entry) -> Option<i32> {
+    e.pool
+        .tick_spacing
+        .or(e.ticks.as_ref().map(|m| m.spacing))
+}
+
+/// THENA Fusion (решение 463): globalState, liquidity и сжатые слова tickTable вокруг тика записи при известном шаге
+/// (ревью t236: слова — в первом заходе; tickSpacing() — только если шаг ещё не известен, как в load_algebra.rs).
+/// Ошибок нет.
 pub fn algebra_first(ctx: &Ctx, e: &Entry, pool: Address) -> Vec<Call> {
     let mut l = vec![
         enc(pool, &IAlgebraPool::globalStateCall {}),
         enc(pool, &IAlgebraPool::liquidityCall {}),
-        enc(pool, &IAlgebraPool::tickSpacingCall {}),
     ];
+    let Some(sp) = algebra_spacing(e) else {
+        l.push(enc(pool, &IAlgebraPool::tickSpacingCall {}));
+        return l;
+    };
     if let PoolState::Algebra { tick, .. } = &e.pool.state
-        && let Some(map) = &e.ticks
-        && let Ok(r) = row_range(ctx, *tick, map.spacing)
+        && let Ok(r) = row_range(ctx, *tick, sp)
     {
         l.extend(algebra_words(pool, r));
     }
     l
 }
 
-/// THENA Fusion (решение 462): по globalState и tickSpacing из книги — сжатые слова настоящего диапазона (как
-/// load_algebra.rs); все в книге — ticks() по их битам. Ошибок нет (нет ответа — пусто).
-pub fn algebra_more(ctx: &Ctx, pool: Address, b: &Book) -> Vec<Call> {
+/// THENA Fusion (решение 463): по globalState из книги и шагу (известному записи или tickSpacing из книги) — сжатые
+/// слова настоящего диапазона (как load_algebra.rs); все в книге — ticks() по их битам. Ошибок нет (нет ответа —
+/// пусто).
+pub fn algebra_more(ctx: &Ctx, e: &Entry, pool: Address, b: &Book) -> Vec<Call> {
     let Some(gs) = got(b, pool, &IAlgebraPool::globalStateCall {}) else {
         return Vec::new();
     };
-    let Some(sp) = got(b, pool, &IAlgebraPool::tickSpacingCall {}) else {
+    let Some(sp) = algebra_spacing(e)
+        .or_else(|| got(b, pool, &IAlgebraPool::tickSpacingCall {}).map(|s| s.as_i32()))
+    else {
         return Vec::new();
     };
-    let Ok(sp) = spacing_of(ctx, sp.as_i32()) else {
+    let Ok(sp) = spacing_of(ctx, sp) else {
         return Vec::new();
     };
     let Ok((lo, hi)) = row_range(ctx, gs.tick.as_i32(), sp) else {

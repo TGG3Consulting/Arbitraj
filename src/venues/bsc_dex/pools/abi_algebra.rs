@@ -15,7 +15,7 @@
 //! - события (IAlgebraPoolEvents.sol): Swap(sender, recipient, amount0, amount1, price, liquidity, tick),
 //!   Mint(sender, owner, bottomTick, topTick, liquidityAmount, amount0, amount1),
 //!   Burn(owner, bottomTick, topTick, liquidityAmount, amount0, amount1) — Swap несёт цену/ликвидность/тик после обмена;
-//! - решение 462 (исходник пула THENA Fusion, Sourcify 56, пул 0x1b9a…ef7d — код AlgebraV1): communityFeeToken0/1 в
+//! - решение 463 (исходник пула THENA Fusion, Sourcify 56, пул 0x1b9a…ef7d — код AlgebraV1): communityFeeToken0/1 в
 //!   globalState — uint16 (Constants.MAX_COMMUNITY_FEE = 1000; событие CommunityFee(uint16, uint16)); uint16 читает и
 //!   значения ≤ 255. События, меняющие расчёт обмена: Fee(uint16 fee) — новая динамическая комиссия (AlgebraPool.sol
 //!   _getNewFee, первый своп в блоке, до Swap), Initialize(uint160 price, int24 tick) — начальная цена пула;

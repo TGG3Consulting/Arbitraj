@@ -1,5 +1,5 @@
 //! Файл: tests/bsc_thena_fusion_record.rs
-//! Что проверяет: решение 462 — математика бота для THENA Fusion (вид thena_fusion, код AlgebraV1: сжатый битмап
+//! Что проверяет: решение 463 — математика бота для THENA Fusion (вид thena_fusion, код AlgebraV1: сжатый битмап
 //! tickTable на TICK_SPACING) на записи своего узла BSC 20.11 (tests/data/bsc_thena_fusion_2026-11-20, блок 134740226,
 //! 8 пулов GeckoTerminal «thena-fusion»; запись tools/bsc_record/thena_fusion.py ветки feat/arbitrum dbdbe2be).
 //! 1. Факт битмапа: у 7 из 8 пулов записанные СЫРЫЕ слова (tick >> 8) пусты, у всех 8 СЖАТЫЕ слова дают тики
@@ -11,7 +11,7 @@
 //!    уложился в записанные строки (63 из 64 случаев). Один случай (0xd405…668b, 1 → 0, 1000 б.п.) выходит за 5
 //!    записанных строк — у бота честный неполный итог (complete = false) с выходом не больше квотера.
 //! 3. Динамическая комиссия: у пула 0x1b93…2210 Quoter при времени блока записи (`at_block`, первый своп в новом
-//!    блоке — _getNewFee) вернул комиссию 1539, а globalState.fee = 1537 — факт для задачи T462-02 (комиссия
+//!    блоке — _getNewFee) вернул комиссию 1539, а globalState.fee = 1537 — факт для задачи T463-02 (комиссия
 //!    следующего блока), тест его фиксирует.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{math::swap_algebra, pools::{load_algebra, ticks, families},
@@ -178,7 +178,7 @@ fn first_swap_in_block_changes_fee() {
     assert_eq!(word(&q["at_block"]["quoter"]["result"], 1).to::<u32>(), 1539);
 }
 
-/// Ответы globalState() записи разбираются ABI бота (abi_algebra.rs: communityFeeToken0/1 — uint16, решение 462) в те же
+/// Ответы globalState() записи разбираются ABI бота (abi_algebra.rs: communityFeeToken0/1 — uint16, решение 463) в те же
 /// цену, тик и комиссию, что и по словам. Ошибок нет (тест падает).
 #[test]
 fn global_state_abi_on_record() {

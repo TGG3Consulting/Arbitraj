@@ -156,7 +156,7 @@ pub fn swap(
                 .map_err(why)
         }
         // Algebra (THENA Fusion, решения 80, 81): одна ликвидность, динамическая комиссия (globalState.fee, постоянна
-        // на весь своп) — своя математика (math/swap_algebra, фаза A). Вид ядра Cl. Решение 462: цель шага по коду пула
+        // на весь своп) — своя математика (math/swap_algebra, фаза A). Вид ядра Cl. Решение 463: цель шага по коду пула
         // (algebra_next: THENA Fusion — строка сжатого битмапа, Integral — связный список).
         (
             PoolState::Algebra {
@@ -489,7 +489,7 @@ pub fn swap(
     }
 }
 
-/// Решение 462: цель шага цикла обмена Algebra по коду пула (math/swap_algebra.rs, шапка, пункт 5): Algebra Integral
+/// Решение 463: цель шага цикла обмена Algebra по коду пула (math/swap_algebra.rs, шапка, пункт 5): Algebra Integral
 /// (связный список тиков) — Linked; THENA Fusion (Proto::Algebra, код AlgebraV1, сжатый битмап) — Row.
 /// Принимает: протокол вида. Возвращает: режим. Ошибок нет.
 pub fn algebra_next(proto: Proto) -> NextTick {

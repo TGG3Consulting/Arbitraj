@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/pools/load_algebra.rs
 //! Что делает: чтение состояния пула THENA Fusion (вид thena_fusion — код Algebra V1 с шагом тиков TICK_SPACING,
-//! решение 462) на заданном блоке: globalState (цена, тик, текущая динамическая комиссия), liquidity (одна
+//! решение 463) на заданном блоке: globalState (цена, тик, текущая динамическая комиссия), liquidity (одна
 //! ликвидность — reinvestL у Algebra нет), tickSpacing() и карта тиков по СЖАТОМУ битмапу tickTable(int16) в словах
 //! вокруг текущего тика + liquidityTotal / liquidityDelta каждого тика методом пула ticks(). Собирает PoolState::Algebra
 //! и TickMap (spacing = tickSpacing пула, words — сжатые слова), как ждёт math/swap_algebra (режим NextTick::Row).
@@ -14,8 +14,10 @@
 //! dex.tick_read_band_algebra_pct [bsc_dex] (необязательная, решение 319: задана — полоса чтения Algebra берётся из неё
 //! вместо dex.tick_read_band_pct).
 //!
-//! ФАКТ кода (решение 462): исходник пула THENA Fusion на Sourcify (chain 56, пул 0x1b9a…ef7d, полное совпадение;
-//! деплоер 0xc89F…7358 — полное совпадение) — линия cryptoalgebra/AlgebraV1 master: Constants.TICK_SPACING = 60;
+//! ФАКТ кода (решение 463): исходник пула THENA Fusion на Sourcify (chain 56, пул 0x1b9a…ef7d и деплоер 0xc89F…7358 —
+//! полное совпадение байткода с исходником THENA) — линия AlgebraV1: TickTable, TICK_SPACING и цикл обмена совпадают
+//! с cryptoalgebra/AlgebraV1 master, но дословной копией master он не является (комиссия сообщества у THENA — uint16,
+//! предел 1000; в master — uint8, 250): Constants.TICK_SPACING = 60;
 //! TickTable.toggleTick: `tick /= Constants.TICK_SPACING` (сжатие), rowNumber = сжатый тик >> 8, bitNumber = & 0xFF;
 //! nextTickInTheSameRow сжимает тик (округление к −∞) и возвращает uncompressAndBoundTick (× TICK_SPACING, в пределах
 //! MIN_TICK / MAX_TICK). Запись своего узла 20.11 (tests/data/bsc_thena_fusion_2026-11-20): у 7 из 8 пулов сырые слова
@@ -38,13 +40,25 @@ use super::load_v2v3::{band_words, read_band_words};
 use super::ticks::{TickData, TickMap};
 
 /// Состояние и карта тиков пула THENA Fusion на блоке.
-/// Принимает: адрес пула, блок-тег.
+/// Принимает: адрес пула, известный tickSpacing пула (ревью t236: он неизменен — Constants.TICK_SPACING кода пула;
+/// после первого чтения хранится в Pool.tick_spacing записи, load.rs built / renewed; None — первое чтение: читается
+/// tickSpacing()), блок-тег.
 /// Ошибки: NotConfigured (dex.tick_words), узел, ответ не по ABI, BadResponse (tickSpacing ≤ 0, тик вне int24).
-pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolState, TickMap)> {
+pub async fn load(
+    ctx: &Ctx,
+    pool: Address,
+    known: Option<i32>,
+    tag: &str,
+) -> GatewayResult<(PoolState, TickMap)> {
     let gs = call::view(ctx, pool, &IAlgebraPool::globalStateCall {}, tag).await?;
     let liquidity = call::view(ctx, pool, &IAlgebraPool::liquidityCall {}, tag).await?;
-    let spacing = call::view(ctx, pool, &IAlgebraPool::tickSpacingCall {}, tag).await?;
-    let spacing = spacing_of(ctx, spacing.as_i32())?;
+    let spacing = match known {
+        Some(s) => s,
+        None => call::view(ctx, pool, &IAlgebraPool::tickSpacingCall {}, tag)
+            .await?
+            .as_i32(),
+    };
+    let spacing = spacing_of(ctx, spacing)?;
     let tick = gs.tick.as_i32();
     let state = PoolState::Algebra {
         sqrt_price_x96: U256::from(gs.price),
@@ -53,7 +67,7 @@ pub async fn load(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<(PoolSta
         fee: u32::from(gs.fee),
     };
     // Окно СЖАТЫХ слов битмапа вокруг текущего тика: слово = floor(tick / spacing) >> 8, по n слов в каждую сторону
-    // (row_range). Полоса цены dex.depth_band_pct сюда не разворачивается (как до решения 462): если обмен выйдет за
+    // (row_range). Полоса цены dex.depth_band_pct сюда не разворачивается (как до решения 463): если обмен выйдет за
     // окно, math/swap_algebra вернёт частичный итог (complete = false). Решение 320: тик, ушедший после Swap за окно, —
     // pools/off_map_algebra.rs.
     let (lo, hi) = row_range(ctx, tick, spacing)?;
@@ -119,7 +133,7 @@ pub fn row_range(ctx: &Ctx, tick: i32, spacing: i32) -> GatewayResult<(i16, i16)
     Ok((lo, hi))
 }
 
-/// Решение 319 (решение 462 — при шаге пула): слова битмапа Algebra в каждую сторону по полосе чтения. Задана
+/// Решение 319 (решение 463 — при шаге пула): слова битмапа Algebra в каждую сторону по полосе чтения. Задана
 /// dex.tick_read_band_algebra_pct — слова по ней (band_words), и dex.tick_read_band_pct на Algebra тогда не действует;
 /// не задана или не читается — read_band_words по dex.tick_read_band_pct. Принимает: окружение, шаг пула. Возвращает:
 /// число слов (0 — полосы нет). Ошибок нет.

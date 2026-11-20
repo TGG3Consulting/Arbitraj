@@ -252,7 +252,7 @@ async fn algebra_rate_matches_contract_quoter() {
             liquidity: liq,
             fee,
         };
-        // Решение 462: запись — пулы Algebra Integral (связный список тиков, карта по 256 сырых тиков) — вид
+        // Решение 463: запись — пулы Algebra Integral (связный список тиков, карта по 256 сырых тиков) — вид
         // algebra_integral (у thena_fusion теперь режим строк сжатого битмапа AlgebraV1, другая карта).
         let mut e = entry(&rec.pool, "algebra_integral", state, None, (T0, T1));
         e.ticks = Some(map);

@@ -26,6 +26,11 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 441 (T433-F2, Balancer V3): событие PoolRegistered хранилища V3 не слушается (новые пулы — из справочника
+  индексатора, pools/created_log.rs); исполнитель v4 не пересобран (contracts/build.sh; out/v3/ — копия v3) и нет EVM-теста шага
+  BALANCER_V3 (contracts/evmtest); тест tests/arbitrum_balancer_v3.rs — #[ignore] до записи узла; пулы с крючком обмена и
+  виды Gyro / ReClamm / LBP не подключены (docs/TASKS.md, «Решение 441»). `wc -l`: math/balancer_v3.rs, load_balancer_v3.rs —
+  в пределах 200; pools/families.rs (было 651) — давно сверх, +Proto::BalancerV3.
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

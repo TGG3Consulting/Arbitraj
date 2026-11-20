@@ -131,6 +131,47 @@
   з) докупка (core/executor.rs, через risk::can_open) в остановленной сети отказывает — как и при общем «Стоп»;
   и) chain_off проверяется на отдельном коротком замке до основного (gate_input): сделка, прошедшая проверку за мгновение
      до «Стоп <сеть>», начнётся — то же окно, что у общего «Стоп».
+- **Решение 441 (20.11.2026, ветка t223-f2/arb-family-f2) — T433-F2: семейство Balancer V3 (хранилище Vault V3) на
+  Arbitrum One (DEX T433-077 `balancer-v3-arbitrum` — единственная DEX этого семейства в таблице покрытия).** cargo,
+  rustfmt, clippy, solc локально не запускались — сборка и тесты только в CI. Источники — balancer/balancer-deployments@
+  b55dc2b8 (build-info развёрнутого кода: 20241204-v3-vault, 20241205-v3-weighted-pool, 20260115-v3-weighted-pool-v2,
+  20241205-v3-stable-pool, 20250324-v3-stable-pool-v2, 20260116-v3-stable-pool-v3, 20250307-v3-router-v2; адреса —
+  output/arbitrum.json задач).
+  СДЕЛАНО: вид dex.kind `balancer_v3` (Proto::BalancerV3, вид ядра VaultPool с частью V3 `VaultPoolData.v3`);
+  математика — math/balancer_v3.rs (расчёт хранилища: курс токена, комиссия, наименьшая сумма, обратный пересчёт),
+  balancer_v3_weighted.rs (powUp V3, WeightedMath), balancer_v3_stable.rs (StableMath V3); правило onSwap по выпуску
+  фабрики (весовой 20260115 — вход + 1 и нижние балансы; стейблсвап 20260116 — проверка дисбаланса); чтение —
+  pools/load_balancer_v3*.rs (каждым блоком); события — events_balancer_v3.rs (рампа A); проверка —
+  verify_balancer_v3.rs (хранилище знает пул, фабрика DEX, нет крючка обмена, монета среди токенов); квотер сверки —
+  quote/quoter_balancer_v3.rs (Router V3 querySwapSingleTokenExactIn); шаг исполнителя BALANCER_V3 = 23
+  (contracts/ArbExecutor.sol: unlock → balancerV3Callback → swap / settle / sendTo; IPools.sol IBalancerV3Vault) и
+  кодирование (exec/executor/kind.rs, entry.rs); версия исполнителя v4 (code.rs, out/v3/ — замороженная копия v3);
+  настройки dex.bv3_weighted_factories, dex.bv3_weighted_min_factories, dex.bv3_stable_factories,
+  dex.bv3_stable_guard_factories (каталог, SETTINGS.md, SETTINGS_CASES.md, FIRST_RUN.md); скрипт записи
+  tools/arbitrum_record/balancer_v3.py и тест tests/arbitrum_balancer_v3.rs (#[ignore] до записи). BSC — без изменений
+  (вид balancer_v2 и его расчёт прежние: часть V3 у них None).
+  НЕ СДЕЛАНО / ОСТАЛОСЬ:
+  1) Запись своего узла: `python3 tools/arbitrum_record/balancer_v3.py --rpc <узел> …` (пример команды — шапка скрипта),
+     затем `cargo test --test arbitrum_balancer_v3 -- --ignored`; зелёный — снять #[ignore]. До этого dex.pool_enabled
+     у `balancer-v3-arbitrum@arbitrum` не включать.
+  2) Пересборка исполнителя v4: `contracts/build.sh` (в out/ — v4; out/v3/ не трогать), поправить
+     tests/bsc_dex_executor_v3.rs (version_of текущей сборки — V4) и размер кода в contracts/README.md; EVM-тест шага
+     BALANCER_V3 с официальным кодом Vault V3 (contracts/evmtest — сценария нет); развёртывание исполнителя v4 на
+     Arbitrum. Номер шага 23 выбран как 21 + номер семейства (F1 — 22, F3 — 24 …), чтобы шаги параллельных семейств не
+     совпали; версия v4 и out/v3/ — общие для всех семейств: при слиянии — одна пересборка.
+  3) ВОПРОС Тиграну: пулы с крючком обмена (StableSurge — динамическая комиссия; MEV Capture; прочие крючки) не берутся
+     (pools/load_balancer_v3_fixed.rs swap_hook) — расчёт крючка не сверен. Нужны ли они? Если да — по каждому крючку
+     отдельная задача: исходник крючка (balancer-deployments 20250403-v3-stable-surge-hook-v2,
+     20250212-v3-mev-capture-hook), порт onComputeDynamicSwapFeePercentage, сверка с роутером.
+  4) ВОПРОС Тиграну: виды пулов Balancer V3 других фабрик (Gyro 2-CLP и E-CLP, ReClamm, LBP, QuantAMM, пулы со своей
+     фабрикой) в этой задаче не подключены — пул не из dex.bv3_*_factories отвергается с причиной. Каждый вид — своя
+     математика и своя задача (T433-F2a…: Gyro 2-CLP, Gyro E-CLP, ReClamm, LBP).
+  5) Пулы ERC4626 (boosted: токен пула — обёртка, буферы хранилища) считаются как обычные токены с курсом (курс —
+     getPoolTokenRates); обмен через буфер (обёртка ↔ базовый токен) не строится — вопрос: нужен ли.
+  6) Рампа A стейблсвапа: A читается на блоке чтения (getAmplificationParameter); пересчёта по времени блока между
+     чтениями нет — расхождение только во время рампы (вид перечитывается каждым блоком).
+  7) Событие PoolRegistered хранилища (новые пулы без индексатора) не слушается — новые пулы приходят из справочника
+     (техдолг, docs/ROADMAP.md).
 - **Решение 438 (ревью t222, правки) (20.11.2026, ветка t222/arb-known-accounts)** — cargo не запускался. СДЕЛАНО: A)
   send/track_l1.rs — caught_up → голова H, затем квитанция и eth_getTransactionCount(from, H); B) начало окна — время
   блока головы при отправке (не часы сервера); C) exec/pool_cond_check.rs + pool_cond_decode.rs — самопроверка слотов
@@ -576,7 +617,7 @@
   - T433-074 `maverick-v2-arbitrum` (Maverick V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить.
   - T433-075 `omni-exchange-v2-arbitrum` (Omni Exchange V2 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-076 `omni-exchange-v3-arbitrum` (Omni Exchange V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-077 `balancer-v3-arbitrum` (Balancer V3 (Arbitrum)) — семейства нет в коде: семейство T433-F2; официальные адреса; завести и включить в arb_dex.
+  - T433-077 `balancer-v3-arbitrum` (Balancer V3 (Arbitrum)) — решение 441: вид `balancer_v3` в коде (T433-F2), официальные адреса — balancer-deployments@b55dc2b8 (docs/FIRST_RUN.md, «DEX Balancer V3 на Arbitrum»); включение в arb_dex — после записи узла (tools/arbitrum_record/balancer_v3.py) и зелёного теста; пулы с крючками обмена и пулы других фабрик — вопросы «Решение 441», п. 3–4.
   - T433-078 `fluid-arbitrum` (Fluid (Arbitrum)) — семейства нет в коде: семейство T433-F1; официальные адреса; завести и включить в arb_dex.
   - T433-079 `ekubo-v3-arbitrum` (Ekubo V3 (Arbitrum)) — семейства нет в коде: семейство T433-F8; официальные адреса; завести и включить в arb_dex.
   - T433-080 `ramses-legacy-arbitrum` (Ramses Legacy (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
@@ -648,7 +689,7 @@
   - T433-146 Aero Basic (DefiLlama `aero-basic`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   Семейства кода:
   - T433-F1 Fluid DEX (T1) — новое семейство пулов: математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
-  - T433-F2 Balancer V3 — новое семейство (хранилище V3, крючки): математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+  - T433-F2 Balancer V3 — решение 441: СДЕЛАНО в коде (весовые и стейблсвап-пулы фабрик Balancer без крючков обмена: математика, чтение, события, проверка, квотер Router V3, шаг BALANCER_V3 исполнителя v4); ОСТАЛОСЬ — запись узла и снятие #[ignore], пересборка и развёртывание исполнителя v4, крючки и другие виды пулов (вопросы «Решение 441»).
   - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.

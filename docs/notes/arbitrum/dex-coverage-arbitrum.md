@@ -102,7 +102,7 @@
 | 74 | `maverick-v2-arbitrum` | Maverick V2 (Arbitrum) | Maverick V2 | `maverick_v2` — src/venues/bsc_dex/pools/families.rs:388 | **вид есть в коде** | не сверены | T433-074 |
 | 75 | `omni-exchange-v2-arbitrum` | Omni Exchange V2 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-075 |
 | 76 | `omni-exchange-v3-arbitrum` | Omni Exchange V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-076 |
-| 77 | `balancer-v3-arbitrum` | Balancer V3 (Arbitrum) | Balancer V3 (docs/notes/arbitrum/docs-check-2026-11-20.md) | — | **семейства нет в коде** | не сверены | T433-077 |
+| 77 | `balancer-v3-arbitrum` | Balancer V3 (Arbitrum) | Balancer V3 (docs/notes/arbitrum/docs-check-2026-11-20.md) | `balancer_v3` — src/venues/bsc_dex/pools/families.rs (Proto::BalancerV3, решение 441) | **вид есть в коде** (решение 441: весовые и стейблсвап-пулы фабрик без крючков обмена; запись узла и тест — не сделаны; крючки и Gyro/ReClamm/LBP — вопросы) | balancer/balancer-deployments@b55dc2b8 output/arbitrum.json: Vault 0xbA1333333333a1BA1108E8412f11850A5C319bA9, Router 0xEAedc32a51c510d35ebC11088fD5fF2b47aACF2E, фабрики — docs/FIRST_RUN.md | T433-077 |
 | 78 | `fluid-arbitrum` | Fluid (Arbitrum) | Fluid DEX T1 (docs/notes/arbitrum/docs-check-2026-11-20.md) | — | **семейства нет в коде** | не сверены | T433-078 |
 | 79 | `ekubo-v3-arbitrum` | Ekubo V3 (Arbitrum) | Ekubo | — | **семейства нет в коде** | не сверены | T433-079 |
 | 80 | `ramses-legacy-arbitrum` | Ramses Legacy (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-080 |
@@ -298,7 +298,7 @@
 ## 4. Семейства, которых нет в коде (задачи кода)
 
 - T433-F1 Fluid DEX (T1) — новое семейство пулов: математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
-- T433-F2 Balancer V3 — новое семейство (хранилище V3, крючки): математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+- T433-F2 Balancer V3 — новое семейство (хранилище V3, крючки): математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum. **Решение 441: сделано в коде** (вид `balancer_v3`; пулы с крючком обмена и пулы фабрик Gyro / ReClamm / LBP — не берутся, вопросы в docs/TASKS.md «Решение 441»; запись узла — tools/arbitrum_record/balancer_v3.py, тест tests/arbitrum_balancer_v3.rs — #[ignore] до записи).
 - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.

@@ -235,6 +235,14 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
+        // Решение 445: пул Liquidity Book v2.0 — шаг без данных (направление контракт берёт по tokenX() пары).
+        ExecKind::Lb20 => match &e.pool.state {
+            PoolState::LbBin(d) if d.v20 => Params::Lb20,
+            _ => {
+                let why = format!("{}: у пула нет состояния Liquidity Book v2.0", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => {
             return singleton(ctx, e, k);
         }

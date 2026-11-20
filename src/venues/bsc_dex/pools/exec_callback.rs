@@ -22,6 +22,9 @@
 //! Решение 395 (t181): шаги пулов внутри менеджеров — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только у исполнителя v3
 //! (since): у кошелька v1 / v2 — пулы Uniswap V4 / PancakeSwap Infinity без пути ЧЕРЕЗ ИСПОЛНИТЕЛЬ (свой Universal Router у
 //! них остаётся — family.tradable); артефакт версии для поиска селектора: v1 — out/v1/, v2 — out/v2/, v3 — out/.
+//! Решение 445: шаг LB20 = 22 (Liquidity Book v2.0) — с v3 и только при признаке в коде сверенной версии (code_probe:
+//! PUSH4 tokenX() — его зовёт только LB20); артефакты contracts/out/ решением 445 не пересобраны — шага нет ни у одной
+//! версии до пересборки (probe_absent — причина «пересоберите и переразверните»).
 //! Решение 409 (t194): память итогов SEEN — снимок за ArcSwap (чтение без замка на горячем пути котировки).
 //! Настройки: dex.v3_swap_callback [DEX] (необязательная).
 
@@ -112,6 +115,12 @@ pub fn usable(ctx: &Ctx, f: &Family, ver: Option<Version>) -> bool {
     {
         return false;
     }
+    // Решение 445: вид шага с признаком в коде (code_probe) — селектор есть в коде сверенной версии.
+    if let Some(sig) = f.executor_kind.and_then(code_probe)
+        && !ver.is_some_and(|v| seen_with(v, sig, |r| r.is_none()))
+    {
+        return false;
+    }
     let Ok(text) = ctx.dex_text(SETTING, f.id) else {
         return true;
     };
@@ -178,8 +187,22 @@ pub fn since(k: ExecKind) -> Version {
         | ExecKind::Smardex
         | ExecKind::Balancer
         | ExecKind::Lb => Version::V2,
-        ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => Version::V3,
+        // Решение 445: LB20 — не раньше v3 (v1 / v2 — замороженные артефакты без него) и только при признаке в коде
+        // сверенной версии (code_probe).
+        ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin | ExecKind::Lb20 => Version::V3,
         _ => Version::V1,
+    }
+}
+
+/// Решение 445: признак вида шага в коде исполнителя — селектор, который зовёт ТОЛЬКО этот шаг (PUSH4 в коде версии).
+/// Нужен виду, добавленному в contracts/ArbExecutor.sol без пересборки артефактов contracts/out/ (сборка solc — вне
+/// агентов): пока в коде сверенной версии селектора нет — шага нет (пулы DEX без пути через исполнитель, причина —
+/// step_missing). LB20 — tokenX() пары Liquidity Book v2.0 (0x16dc165b; в артефактах v1, v2, v3 на решении 445 его
+/// нет — тест code_probe_absent_until_rebuild). Ошибок нет.
+pub fn code_probe(k: ExecKind) -> Option<&'static str> {
+    match k {
+        ExecKind::Lb20 => Some("tokenX()"),
+        _ => None,
     }
 }
 
@@ -215,15 +238,42 @@ pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
     let k = f.executor_kind.filter(|k| since(*k) > Version::V1)?;
     let what = format!("шаг исполнителя {}", k.name());
     match wallet_version(ctx, &what) {
-        Ok(Some(v)) => step_absent(k, v),
+        Ok(Some(v)) => step_absent(k, v).or_else(|| probe_absent(k, v)),
         Ok(None) => None,
         Err(why) => Some(why),
     }
 }
 
+/// Решение 445: причина «вид шага в исходнике есть, а в коде исполнителя версии v — нет» (code_probe). None — признака
+/// у вида нет или селектор в коде есть. Принимает: вид, версию. Ошибок нет.
+pub fn probe_absent(k: ExecKind, v: Version) -> Option<String> {
+    let sig = code_probe(k)?;
+    seen_with(v, sig, |r| r.is_some()).then(|| {
+        format!(
+            "в коде исполнителя {} нет шага {} (селектор {sig} не найден): шаг добавлен в contracts/ArbExecutor.sol \
+             решением 445, артефакты contracts/out/ не пересобраны — пересоберите contracts/build.sh и переразверните \
+             исполнитель кошелька",
+            v.label(),
+            k.name()
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Решение 445: признак шага LB20 — tokenX() = 0x16dc165b; в артефактах v1, v2 и v3 (contracts/out/ на решении 445)
+    /// его нет — шаг LB20 недоступен до пересборки contracts/build.sh (probe_absent — причина у каждой версии).
+    #[test]
+    fn code_probe_absent_until_rebuild() {
+        let sel = registry_key::selector(code_probe(ExecKind::Lb20).unwrap());
+        assert_eq!(sel.to_vec(), vec![0x16, 0xdc, 0x16, 0x5b]);
+        for v in [Version::V1, Version::V2, Version::V3] {
+            assert!(probe_absent(ExecKind::Lb20, v).is_some_and(|w| w.contains("LB20")), "{v:?}");
+            assert!(probe_absent(ExecKind::Lb, v).is_none(), "{v:?}");
+        }
+    }
 
     /// Селектор squadV3SwapCallback = 0xc4e21d86 (SquadV3Pool.sol L794): в артефакте v1 его нет, в v2 (t114) и v3
     /// (решение 395, текущая сборка contracts/out/) есть; pancakeV3SwapCallback / uniswapV3SwapCallback — во всех (тот же

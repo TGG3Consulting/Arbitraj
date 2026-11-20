@@ -73,6 +73,10 @@ pub fn request(
     if e.family.proto == Proto::LbV21 {
         return super::quoter_lb::request(ctx, e, token_in, amount);
     }
+    // Liquidity Book v2.0 (решение 445): квотер — LBRouter v2.0 getSwapOut(пара, вход, swapForY) (quoter_lb20.rs).
+    if e.family.proto == Proto::LbV20 {
+        return super::quoter_lb20::request(ctx, e, token_in, amount);
+    }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
     // DODO PMM (решение 86b): квотер — сам пул (querySellBase/querySellQuote; отдельного квотера нет). Сверка
     // идёт тем же трейдером FEE_TRADER, что и чтение комиссии getUserFeeRate (load_dodo.rs) — выход включает
@@ -385,6 +389,9 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     }
     if e.family.proto == Proto::LbV21 {
         return super::quoter_lb::decode(out);
+    }
+    if e.family.proto == Proto::LbV20 {
+        return super::quoter_lb20::decode(out);
     }
     // Infinity Stable: основной квотер — CLQuoter (amountOut, gasEstimate), как у Infinity CL (ветка PoolKey ниже).
     // StableSwap (остальные шаблоны) и WooFi query: один uint256 — выход после комиссии (одно слово — разбор одинаков).

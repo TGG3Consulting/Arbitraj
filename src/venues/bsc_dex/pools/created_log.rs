@@ -134,6 +134,9 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // LBPair, pid) (ILBFactory.sol L49-L51) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы
             // приходят из справочника индексатора.
             Proto::LbV21 => continue,
+            // Liquidity Book v2.0 (решение 445): LBPairCreated фабрики v2.0 (ILBFactory.sol v2.0.0 L26-L32) — подписка не
+            // подключена (как у v2.1, техдолг docs/ROADMAP.md): новые пулы — из справочника индексатора.
+            Proto::LbV20 => continue,
             // KyberSwap Classic DMM (решение 287): PoolCreated(token0 indexed, token1 indexed, pool, ampBps, totalPool) фабрики
             // (DMMFactory.sol L22-L28, L60).
             Proto::KyberDmm => (

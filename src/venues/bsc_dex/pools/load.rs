@@ -2,7 +2,7 @@
 //! Что делает: чтение состояния любого пула на заданном блоке (по его виду) и сборка записи реестра
 //! из найденного пула; перечитывание записи (после реорга, обрыва или расхождения карты с событием).
 //! Кто вызывает: pools/listen.rs.
-//! От чего зависит: load_v2v3.rs, load_cl.rs, load_bin.rs, load_lb.rs, registry.rs, discover.rs, tokens.rs.
+//! От чего зависит: load_v2v3.rs, load_cl.rs, load_bin.rs, load_lb.rs, load_lb20.rs, registry.rs, discover.rs, tokens.rs.
 //! Решение 281: у DEX с dex.v3_fee_source = pool_fee_each_read fee() пула V3 читается с состоянием (fee_fresh.rs) и
 //! заменяет комиссию записи (built, renewed).
 //! Настройки: через вызываемые файлы (dex.tick_words, dex.bin_depth_usd, dex.tick_lens, dex.state_view, dex.v3_fee_source).
@@ -26,7 +26,7 @@ use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
     load_algebra, load_algebra_integral, load_balancer, load_bin, load_cl, load_curve, load_curve_ng, load_dmm, load_dodo,
-    load_elastic, load_inf_stable, load_izi, load_lb, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
+    load_elastic, load_inf_stable, load_izi, load_lb, load_lb20, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
 
@@ -176,6 +176,14 @@ pub async fn state(
             return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул LB не того вида", f.title)));
         };
         let (state, bins) = load_lb::load(ctx, tokens, *a, pair, usdt, block).await?;
+        return Ok(Loaded { state, ticks: None, bins: Some(bins), fee_pips: None });
+    }
+    // Liquidity Book v2.0 (решение 445): тот же вид ядра LbBin (признак v20), свои геттеры v2.0 (load_lb20.rs).
+    if f.proto == Proto::LbV20 {
+        let PoolRef::Contract(a) = reference else {
+            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул LB v2.0 не того вида", f.title)));
+        };
+        let (state, bins) = load_lb20::load(ctx, tokens, *a, pair, usdt, block).await?;
         return Ok(Loaded { state, ticks: None, bins: Some(bins), fee_pips: None });
     }
     // SmarDex (решение 288): вид ядра Fictive, пара — отдельный контракт; состояние и время блока (load_smardex.rs).

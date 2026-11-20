@@ -22,7 +22,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::core::types::PoolRef;
+use crate::core::types::{PoolRef, PoolState};
 use crate::gateway::errors::GatewayResult;
 
 use super::super::node::call::block_tag;
@@ -94,7 +94,12 @@ pub async fn on_bins(p: &Pools, r: &PoolRef, ids: &[u32], block: u64) -> Gateway
         Plan::Held => return Ok(Settled::Held),
         Plan::Read(list) => list,
     };
-    match settle_read::read(&p.ctx, r, &list, &block_tag(block)).await? {
+    // Решение 445: пул LB v2.0 — активный бин getReservesAndId (settle_read.rs read_for).
+    let v20 = p
+        .reg
+        .get(r)
+        .is_some_and(|e| matches!(&e.pool.state, PoolState::LbBin(d) if d.v20));
+    match settle_read::read_for(&p.ctx, r, &list, &block_tag(block), v20).await? {
         Some(read) => Ok(finish(&p.holds, &p.reg, r, block, read)),
         None => Ok(Settled::Done),
     }

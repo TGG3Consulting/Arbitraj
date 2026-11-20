@@ -64,6 +64,7 @@ const CHOICE = {
   kyber_dmm: 'KyberSwap Classic DMM (усиление amp, динамическая комиссия)',
   smardex: 'SmarDex (фиктивные резервы, средняя цена по времени блока)',
   lb_v21: 'Liquidity Book V2.1 (LFJ / Trader Joe: бины, изменчивая комиссия)',
+  lb_v20: 'Liquidity Book v2.0 (LFJ V2 / Trader Joe V2: бины, изменчивая комиссия; решение 445)',
   balancer_v2: 'Balancer V2 (хранилище Vault, весовые и стейблсвап-пулы)',
   pancake_stableswap: 'StableSwap PancakeSwap',
   lista_stableswap: 'StableSwap Lista (с оракулом)',

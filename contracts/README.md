@@ -7,7 +7,7 @@
 | Файл | Что делает |
 | --- | --- |
 | `ArbExecutor.sol` | Исполнитель: владелец, execute, шаги двенадцати видов, обратные вызовы пулов, приём BNB только от ожидаемого адреса (receive), возврат остатков |
-| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — восемнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286; KYBER_DMM, решение 287; SMARDEX, решение 288; BALANCER, решение 289; LB, решение 290; v3 — двадцати одного: UNI_V4, INF_CL, INF_BIN, решение 395), обратные вызовы пулов (v3 — ещё unlockCallback / lockAcquired менеджеров Uniswap V4 и PancakeSwap Infinity; v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286; smardexSwapCallback, решение 288), приём BNB только от ожидаемого адреса (receive), возврат остатков |
+| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — восемнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286; KYBER_DMM, решение 287; SMARDEX, решение 288; BALANCER, решение 289; LB, решение 290; v3 — двадцати одного: UNI_V4, INF_CL, INF_BIN, решение 395; исходник после решения 445 — двадцати двух: LB20, артефакты не пересобраны), обратные вызовы пулов (v3 — ещё unlockCallback / lockAcquired менеджеров Uniswap V4 и PancakeSwap Infinity; v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286; smardexSwapCallback, решение 288), приём BNB только от ожидаемого адреса (receive), возврат остатков |
 | `VirtualQuoter.sol` | Решение 186 (решение 288: + quoteSmardex и smardexSwapCallback — пара SmarDex): виртуальный квотер — НЕ разворачивается; бот подставляет его код в eth_call (state override) и спрашивает выход у самого пула (swap + откат в обратном вызове). Собирается отдельным заданием solc в `out/VirtualQuoter.bin-runtime`, `.abi`, `.sha256`. Решение 274: ещё обратный вызов swapCallback (SheepDex SpePool); решение 281: squadV3SwapCallback (SquadSwap V3, 0xc4e21d86); решение 285: quoteMetric + metricOmmSwapCallback (Metric OMM, 0xc3251075); решение 286: quoteIzi + swapX2YCallback / swapY2XCallback (iZiSwap / Biswap V3, 0x18780684 / 0xd3e1c284; откат 64 байтами — оплата с флагом края пула и выход) |
 | `IPools.sol` | Интерфейсы токена, WBNB и пулов — только вызываемые функции, подписи из официальных исходников (ссылки в файле); решение 395 — PoolManager Uniswap V4, Vault / CLPoolManager / BinPoolManager PancakeSwap Infinity |
 | `build.mjs` | Сборка solc-js стандартным JSON-входом: оптимизатор (200 прогонов), EVM `cancun`; пишет `out/` и хеши |
@@ -24,6 +24,18 @@
 
 Пересборка: `contracts/build.sh` → `git diff contracts/out` (пусто — артефакты в репозитории собраны из этих исходников)
 → `cargo test --test bsc_dex_executor_abi` (ABI, номера видов, хеши) → `cd evmtest && npm ci && node run.mjs`.
+
+## Решение 445: шаг LB20 = 22 — исходник изменён, артефакты НЕ пересобраны
+- `ArbExecutor.sol`: вид шага `LB20 = 22` — пара Liquidity Book v2.0 (LFJ V2, Arbitrum One): вход переводом в пару
+  (`_pushed` — прямой вход первым шагом разрешён), `swap(tokenX() == tokenIn, to)`; `IPools.sol`: `ILBPairV20` (tokenX,
+  swap — lfj-gg/joe-v2@v2.0.0). Шаг LB (= 18) с парой v2.0 не работает: у неё нет `getTokenX`.
+- `contracts/out/` (v3) этим решением **не пересобран**: сборка solc (`contracts/build.sh`) агентам запрещена. Нужно:
+  решить, какой версией станет новая сборка (v4 или замена v3 — у развёрнутых v3 код перестанет совпадать с `out/`;
+  перед пересборкой скопировать `out/` в `out/v3/` и завести Version::V4 в exec/executor/code.rs — задача в docs/TASKS.md,
+  «Решение 445»), пересобрать, прогнать `cargo test --test bsc_dex_executor_abi` и `evmtest`, развернуть исполнитель в
+  сети Arbitrum. До этого бот шаг LB20 не строит: в коде сверенной версии исполнителя нет селектора `tokenX()`
+  (0x16dc165b) — пулы lb_v20 без пути через исполнитель с причиной «пересоберите и переразверните»
+  (`src/venues/bsc_dex/pools/exec_callback.rs` code_probe / probe_absent).
 
 ## Версии (решения 272, 395)
 - **v3** (решение 395, t181) — v2 + шаги UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 (пулы внутри менеджеров Uniswap V4 и

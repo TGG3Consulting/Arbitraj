@@ -28,7 +28,12 @@
 //! неперечитанными бинами события (вывод из неактивного бина — лишняя ликвидность в памяти, «равны» на голове её не
 //! видит). Ревью слияния «357 × 339» (Б1): голова не возвращает достоверность и тому, у кого сняла её сама, — такой
 //! пул per_block_lb.rs читает целиком (settle_head.rs needs_full); недостоверная запись ядру не отправляется.
-//! Кто вызывает: pools/per_block_lb.rs (calls, decode, same, renewed, at_synced, put).
+//! Решение 445: пул Liquidity Book v2.0 (вид lb_v20) — те же правила; вызовы на пул и разбор — lb20_head.rs
+//! (getReservesAndId, feeParameters, getBin; calls_for, per_pool, decode по LbBinData.v20 памяти). Правило «равны» у
+//! v2.0 то же: обмен с ненулевым входом в бин меняет резервы активного бина или сдвигает его (LBPair.sol v2.0.0
+//! L358-L392); займ и сбор комиссий бины v2.0 не меняют (комиссии — вне бинов, L470-L480); обмен пылью (вход в бин 0)
+//! бины не меняет, а комиссию головы на блоке чтения пишет верно.
+//! Кто вызывает: pools/per_block_lb.rs (calls_for, per_pool, decode, same, renewed, at_synced, put).
 //! От чего зависит: load_lb.rs (calls, decode, time_call, decode_time), load.rs (renewed, Loaded), abi_lb.rs (getBin),
 //! node/call.rs, node/multicall.rs, load_batch.rs, load_smardex.rs (block_secs), listen_log.rs, registry.rs,
 //! reload.rs (put_new — задача t160, dex.per_block_skip_same).
@@ -51,6 +56,7 @@ use super::discover::Found;
 use super::listen::{End, Pools};
 use super::load::{self, Loaded};
 use super::registry::Entry;
+use super::families::Proto;
 use super::{listen_log, load_batch, load_lb, load_smardex, reload};
 
 /// Вызовов на пул в пачке головы: состояние (load_lb::calls) и getBin(активный бин памяти).
@@ -75,10 +81,38 @@ pub fn calls(pool: Address, active: u32) -> Vec<(Address, Bytes)> {
     out
 }
 
+/// Решение 445: вызовов на пул в пачке головы по версии (v2.0 — lb20_head.rs). Ошибок нет.
+pub fn per_pool(v20: bool) -> usize {
+    if v20 {
+        super::lb20_head::PER_POOL
+    } else {
+        PER_POOL
+    }
+}
+
+/// Решение 445: v2.0 ли вид пула (Proto::LbV20). Ошибок нет.
+pub fn is_v20(f: &Found) -> bool {
+    f.family.proto == Proto::LbV20
+}
+
+/// Вызовы пула на голове по версии: v2.1 — calls; v2.0 — getReservesAndId, feeParameters, getBin(`active`).
+/// Принимает: адрес пула, активный бин памяти, v2.0 ли. Ошибок нет.
+pub fn calls_for(pool: Address, active: u32, v20: bool) -> Vec<(Address, Bytes)> {
+    if v20 {
+        super::lb20_head::calls(pool, active)
+    } else {
+        calls(pool, active)
+    }
+}
+
 /// Разбор ответов calls (без сети; её же зовут тесты на записанных ответах). Принимает: ответы по порядку, состояние
 /// памяти (порядок X/Y, шаг), время блока чтения. Возвращает: (состояние на блоке чтения, резервы бина (X, Y)).
 /// Ошибка — ответов не PER_POOL, ответ не по ABI.
 pub fn decode(a: &[Bytes], mem: &LbBinData, ts: u64) -> Result<(LbBinData, (u128, u128)), String> {
+    // Решение 445: пул v2.0 — свой разбор (lb20_head.rs).
+    if mem.v20 {
+        return super::lb20_head::decode(a, mem, ts);
+    }
     if a.len() != PER_POOL {
         return Err(format!("ответов {} из {PER_POOL}", a.len()));
     }
@@ -154,7 +188,7 @@ pub async fn at_synced(p: &Pools, pools: &[&Found], head: u64, skip: bool) -> Re
     for (block, list) in by_block {
         let mut all: Vec<(Address, Bytes)> = list
             .iter()
-            .flat_map(|(f, a)| calls(f.reference.address(), *a))
+            .flat_map(|(f, a)| calls_for(f.reference.address(), *a, is_v20(f)))
             .collect();
         let mc = multicall::address(&p.ctx);
         if let Some(m) = mc {
@@ -172,7 +206,12 @@ pub async fn at_synced(p: &Pools, pools: &[&Found], head: u64, skip: bool) -> Re
         let Some(ts) = ts else {
             continue;
         };
-        for ((f, _), part) in list.iter().zip(got.chunks(PER_POOL)) {
+        // Решение 445: у пулов v2.0 и v2.1 вызовов на пул разное число — части по per_pool каждого.
+        let mut at = 0usize;
+        for (f, _) in list.iter() {
+            let n = per_pool(is_v20(f));
+            let part = got.get(at..at + n).unwrap_or(&[]);
+            at += n;
             let Some(e) = p.reg.get(&f.reference) else {
                 continue;
             };

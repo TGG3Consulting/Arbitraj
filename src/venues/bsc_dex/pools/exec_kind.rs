@@ -73,6 +73,10 @@ pub enum ExecKind {
     /// Liquidity Book V2.1 (решение 290): перевод входа в пул + `pair.swap(swapForY = (getTokenX() пула == вход), to)`;
     /// без обратного вызова, data пусто. Только исполнитель v2.
     Lb,
+    /// Liquidity Book v2.0 (решение 445): перевод входа в пул + `pair.swap(swapForY = (tokenX() пула == вход), to)`
+    /// (у пары v2.0 нет getTokenX — шаг LB v2.1 откатился бы); без обратного вызова, data пусто. Шаг 22 — в исходнике
+    /// contracts/ArbExecutor.sol; в коде исполнителя — после пересборки (exec_callback.rs code_probe).
+    Lb20,
     /// Решение 395 (t181): пул Uniswap V4 внутри PoolManager — `unlock` → `unlockCallback` → `swap(ключ, …)` → `sync` /
     /// перевод / `settle` долга, `take` выхода; data = abi.encode(PoolKey). Только исполнитель v3.
     UniV4,
@@ -105,6 +109,7 @@ impl ExecKind {
             ExecKind::Smardex => "SMARDEX",
             ExecKind::Balancer => "BALANCER",
             ExecKind::Lb => "LB",
+            ExecKind::Lb20 => "LB20",
             ExecKind::UniV4 => "UNI_V4",
             ExecKind::InfCl => "INF_CL",
             ExecKind::InfBin => "INF_BIN",
@@ -162,6 +167,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
         // шаг 18, v2.
         "lb_v21" => ExecKind::Lb,
+        // Решение 445: LBPair v2.0 swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв −
+        // накопленные комиссии (lfj-gg/joe-v2@v2.0.0 src/LBPair.sol L335-L347, TokenHelper.sol L61-L71); шаг 22 (LB20).
+        "lb_v20" => ExecKind::Lb20,
         // Решение 395 (t181): пулы внутри менеджеров — шаги v3. Uniswap V4: PoolManager.unlock / swap / sync / settle /
         // take (Uniswap/v4-core@bea7f6d1 src/PoolManager.sol L104-L114, L187-L227, L279-L302); Infinity CL и Bin:
         // Vault.lock / sync / settle / take + CLPoolManager.swap / BinPoolManager.swap (pancakeswap/infinity-core@3c5ef1be

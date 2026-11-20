@@ -1,15 +1,18 @@
 //! Файл: venues/bsc_dex/pools/load_crypto.rs
 //! Что делает: чтение состояния crypto-пула Curve (решение 442: Twocrypto-NG — 2 монеты, Tricrypto-NG — 3) на блоке
 //! одним try_many (Multicall3): coins(k), balances(k), precisions(), price_scale (Twocrypto — price_scale(), Tricrypto —
-//! price_scale(0), price_scale(1)), D(), A(), gamma(), mid_fee(), out_fee(), fee_gamma(), future_A_gamma_time() и время
-//! блока (Multicall3.getCurrentBlockTimestamp в той же пачке; без dex.multicall3 — eth_getBlockByNumber). Собирает
-//! PoolState::Crypto. Пул в рампе A/gamma (future_A_gamma_time > время блока) — halted: обмен в рампе пересчитывает D
-//! через newton_D (`_exchange` Twocrypto L770-L781, Tricrypto L901-L913), этой формулы в нашей математике нет — расчёт
-//! был бы не точен, сделки нет.
+//! price_scale(0), price_scale(1)), D(), A(), gamma(), mid_fee(), out_fee(), fee_gamma(), future_A_gamma_time(), MATH()
+//! и время блока (Multicall3.getCurrentBlockTimestamp в той же пачке; без dex.multicall3 — eth_getBlockByNumber).
+//! Собирает PoolState::Crypto. Решение 453: версия формул — по MATH() пула: адрес из dex.curve_crypto_math_v2_0_0 —
+//! Twocrypto-NG v2.0.0, из dex.curve_crypto_math — v2.1.0 / Tricrypto-NG, иначе отказ. Рампа A/gamma
+//! (future_A_gamma_time > время блока; `_exchange` Twocrypto L770-L781, Tricrypto L901-L913) — ramp и moving: обмен
+//! пересчитает D через newton_D (math/crypto_swap.rs), A() и gamma() пул отдаёт на время блока чтения, пул
+//! перечитывается каждым блоком, пока рампа идёт (per_block.rs).
 //! Кто вызывает: pools/load.rs (ветка CurveTwocrypto / CurveTricrypto), pools/load_site.rs (пары многомонетного пула).
-//! От чего зависит: ctx.rs, node/call.rs, node/multicall.rs, abi_crypto.rs, load_lb.rs (вызов времени блока),
+//! От чего зависит: ctx.rs, node/call.rs, node/multicall.rs, abi_crypto.rs, crypto_variant.rs, load_lb.rs (вызов времени блока),
 //! load_smardex.rs (время блока без Multicall3), families.rs.
-//! Настройки: dex.multicall3 [bsc_dex] (не задан — пачкой JSON-RPC и время блока eth_getBlockByNumber).
+//! Настройки: dex.multicall3 [bsc_dex] (не задан — пачкой JSON-RPC и время блока eth_getBlockByNumber);
+//! dex.curve_crypto_math, dex.curve_crypto_math_v2_0_0 [DEX] (версия формул по MATH()).
 //!
 //! Источник — строки геттеров в abi_crypto.rs; `_A_gamma` (рампа) — CurveTwocryptoOptimized.vy L1137-L1159,
 //! CurveTricryptoOptimizedWETH.vy L1263-L1286.
@@ -17,12 +20,13 @@
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
-use crate::core::types::{CryptoData, PoolState};
+use crate::core::types::{CryptoData, CryptoMath, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::{call, multicall};
 use super::abi_crypto::{ICryptoPool as P, ITricryptoPool as P3, ITwocryptoPool as P2};
+use super::crypto_variant::{self, MATH_V200};
 use super::families::{Family, Proto};
 use super::load_lb::{decode_time, time_call};
 use super::load_smardex;
@@ -48,7 +52,8 @@ pub struct Raw {
     pub now: u64,
 }
 
-/// Вызовы чтения пула по порядку: HEAD, затем coins(k), balances(k) по монетам, затем price_scale. Ошибок нет.
+/// Вызовы чтения пула по порядку: HEAD, затем coins(k), balances(k) по монетам, затем price_scale, последним MATH().
+/// Ошибок нет.
 pub fn calls(pool: Address, n: usize) -> Vec<(Address, Bytes)> {
     let mut data: Vec<Bytes> = vec![
         P::ACall {}.abi_encode().into(),
@@ -77,6 +82,7 @@ pub fn calls(pool: Address, n: usize) -> Vec<(Address, Bytes)> {
             data.push(P3::price_scaleCall { k }.abi_encode().into());
         }
     }
+    data.push(P::MATHCall {}.abi_encode().into());
     data.into_iter().map(|d| (pool, d)).collect()
 }
 
@@ -116,15 +122,22 @@ pub async fn load(
     pair: (Address, Address),
     block: u64,
 ) -> GatewayResult<PoolState> {
-    state(ctx, &read(ctx, f, pool, block).await?, pair)
+    state(ctx, f, &read(ctx, f, pool, block).await?, pair)
 }
 
-/// Что делает: состояние пары из прочитанного (без сети). Принимает: окружение (текст ошибки), Raw, пару.
-/// Возвращает: PoolState::Crypto. Ошибки: откат вызова, ответ не по ABI, нет монеты пары среди монет пула.
-pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<PoolState> {
+/// Что делает: состояние пары из прочитанного (без сети). Принимает: окружение (настройки и текст ошибки), вид, Raw,
+/// пару. Возвращает: PoolState::Crypto. Ошибки: откат вызова, ответ не по ABI, MATH() не из списков настроек (формула
+/// не сверена), нет монеты пары среди монет пула.
+pub fn state(ctx: &Ctx, f: &Family, raw: &Raw, pair: (Address, Address)) -> GatewayResult<PoolState> {
     let pool = raw.pool;
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("Crypto {pool}: {what}"));
-    let (coins, mut data) = decode(raw).map_err(&bad)?;
+    let (coins, mut data, math) = decode(raw).map_err(&bad)?;
+    let list = |name: &str| -> Vec<Address> {
+        let v = ctx.dex_list(name, f.id).unwrap_or_default();
+        v.iter().filter_map(|a| a.parse().ok()).collect()
+    };
+    let (v200, ng) = (list(MATH_V200), list("dex.curve_crypto_math"));
+    data.math = crypto_variant::variant(raw.n, math, &v200, &ng).map_err(&bad)?;
     let index = |t: Address| {
         coins
             .iter()
@@ -138,9 +151,10 @@ pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<Po
     Ok(PoolState::Crypto(Box::new(data)))
 }
 
-/// Что делает: разбор ответов (без сети) — монеты пула и состояние (индексы пары — 0, ставит state). Принимает: Raw.
-/// Возвращает: (монеты, CryptoData) или текст причины (откат вызова, ответ не по ABI).
-pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData), String> {
+/// Что делает: разбор ответов (без сети) — монеты пула, состояние (индексы пары — 0, версия — по числу монет: v2.1.0 /
+/// Tricrypto-NG; точную ставит state по MATH()) и MATH() пула. Принимает: Raw. Возвращает: (монеты, CryptoData,
+/// MATH()) или текст причины (откат вызова, ответ не по ABI).
+pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData, Address), String> {
     let got = &raw.got;
     let ok = |i: usize| match got.get(i) {
         Some(Ok(b)) => Ok(b),
@@ -175,9 +189,10 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData), String> {
     let price_scale = (0..raw.n - 1)
         .map(|k| w(tail + k))
         .collect::<Result<Vec<_>, _>>()?;
-    let ramp_end = w(6)?;
-    // Рампа A/gamma: обмен пересчитал бы D (newton_D) — пул остановлен до следующего чтения (шапка).
-    let halted = ramp_end > U256::from(raw.now);
+    let math = P::MATHCall::abi_decode_returns(ok(tail + raw.n - 1)?)
+        .map_err(|e| e.to_string())?;
+    // Рампа A/gamma (`if t > block.timestamp`): обмен пересчитает D (newton_D), A и gamma меняются со временем (шапка).
+    let ramp = w(6)? > U256::from(raw.now);
     let data = CryptoData {
         balances,
         precisions,
@@ -188,9 +203,12 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData), String> {
         mid_fee: w(3)?,
         out_fee: w(4)?,
         fee_gamma: w(5)?,
-        halted,
+        math: if raw.n == 2 { CryptoMath::TwoNg210 } else { CryptoMath::TriNg },
+        ramp,
+        moving: ramp,
+        halted: false,
         i0: 0,
         i1: 0,
     };
-    Ok((coins, data))
+    Ok((coins, data, math))
 }

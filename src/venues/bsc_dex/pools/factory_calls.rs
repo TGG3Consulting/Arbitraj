@@ -77,8 +77,9 @@ pub fn plan(
             Proto::V2 | Proto::NomiStable | Proto::Smardex => vec![Q::V2],
             // KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары.
             Proto::KyberDmm => vec![Q::Dmm],
-            // Curve Twocrypto-NG / Tricrypto-NG (решение 442): find_pool_for_coins(a, b, i), i < dex.pair_lookup_max.
-            Proto::CurveTwocrypto | Proto::CurveTricrypto => Vec::new(),
+            // Curve Twocrypto-NG / Tricrypto-NG (решение 442) и crypto v1 фабрики (решение 453):
+            // find_pool_for_coins(a, b, i), i < dex.pair_lookup_max.
+            Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 => Vec::new(),
             Proto::PancakeV3 | Proto::UniswapV3 => Vec::new(),
             p if p.is_solidly() => {
                 let v1 = p == Proto::SolidlyV1;
@@ -123,7 +124,7 @@ pub fn plan(
                 }
             }
         }
-        if matches!(f.proto, Proto::CurveTwocrypto | Proto::CurveTricrypto) {
+        if matches!(f.proto, Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1) {
             match lookup_max(ctx, f.id) {
                 Ok(n) => qs = (0..n).map(Q::CurveCrypto).collect(),
                 Err(why) => {

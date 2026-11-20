@@ -249,7 +249,7 @@ pub fn one_by_one(f: &Family) -> bool {
         || f.proto == Proto::Smardex
         || f.proto == Proto::BalancerV2
         || f.proto == Proto::LbV21
-        || matches!(f.proto, Proto::CurveTwocrypto | Proto::CurveTricrypto)
+        || f.proto.is_curve_crypto()
 }
 
 /// Размер части пачки: dex.load_batch (вызовов в одном eth_call Multicall3). Ошибки: NotConfigured (не задана или 0).

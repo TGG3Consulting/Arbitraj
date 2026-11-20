@@ -194,7 +194,9 @@ async fn events(
                 }
             }
             // Решение 357: и когда есть пулы «в обновлении» — их закрывает голова (settle_close.rs).
-            changed = heads.changed(), if !m.missing.is_empty() || per_block::any(&m.pools) || p.holds.any() => {
+            // Решение 453: и когда есть crypto-пулы Curve в рампе A/gamma (per_block::any_ramping).
+            changed = heads.changed(), if !m.missing.is_empty() || per_block::any(&m.pools) || p.holds.any()
+                || per_block::any_ramping(p, &m.pools) => {
                 if changed.is_err() {
                     return (End::Broken("поток новых блоков остановлен".into()), true);
                 }

@@ -8,8 +8,8 @@
 //!
 //! Источник: curvefi/twocrypto-ng 89c8dfb CurveTwocryptoOptimized.vy get_dy L1522-L1534 (→ Views
 //! CurveCryptoViews2Optimized.vy get_dy L63-L76); curvefi/tricrypto-ng ecaa816 CurveTricryptoOptimizedWETH.vy get_dy
-//! L1669-L1681. Views считает выход так же, как `_exchange` (без рампы: при рампе — свой пересчёт D, наша котировка
-//! такой пул не берёт).
+//! L1669-L1681. Views считает выход так же, как `_exchange` (в рампе — тот же пересчёт D через newton_D,
+//! CurveCryptoViews2Optimized.vy `_calc_D_ramp` L161-L178; решение 453 — наша котировка делает то же).
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};

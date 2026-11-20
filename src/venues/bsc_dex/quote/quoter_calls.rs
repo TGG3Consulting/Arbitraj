@@ -73,8 +73,8 @@ pub fn request(
     if e.family.proto == Proto::LbV21 {
         return super::quoter_lb::request(ctx, e, token_in, amount);
     }
-    // Curve Twocrypto-NG / Tricrypto-NG (решение 442): квотер — сам пул, get_dy(uint256, …) (quoter_crypto.rs).
-    if matches!(e.family.proto, Proto::CurveTwocrypto | Proto::CurveTricrypto) {
+    // Crypto-пулы Curve (решения 442, 453; NG и v1): квотер — сам пул, get_dy(uint256, …) (quoter_crypto.rs).
+    if e.family.proto.is_curve_crypto() {
         return super::quoter_crypto::request(ctx, e, token_in, amount);
     }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
@@ -390,7 +390,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     if e.family.proto == Proto::LbV21 {
         return super::quoter_lb::decode(out);
     }
-    if matches!(e.family.proto, Proto::CurveTwocrypto | Proto::CurveTricrypto) {
+    if e.family.proto.is_curve_crypto() {
         return super::quoter_crypto::decode(out);
     }
     // Infinity Stable: основной квотер — CLQuoter (amountOut, gasEstimate), как у Infinity CL (ветка PoolKey ниже).

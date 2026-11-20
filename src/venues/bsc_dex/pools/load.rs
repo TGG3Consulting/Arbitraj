@@ -25,7 +25,7 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_algebra_integral, load_balancer, load_bin, load_cl, load_crypto, load_curve, load_curve_ng, load_dmm, load_dodo,
+    load_algebra, load_algebra_integral, load_balancer, load_bin, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_ng, load_dmm, load_dodo,
     load_elastic, load_inf_stable, load_izi, load_lb, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
@@ -122,6 +122,19 @@ pub async fn state(
         };
         return Ok(Loaded {
             state: load_crypto::load(ctx, f, a, pair, block).await?,
+            ticks: None,
+            bins: None,
+            fee_pips: None,
+        });
+    }
+    // Curve crypto v1 (решение 453): фабрика crypto v1 и tricrypto 2021 — свои геттеры, точность по decimals
+    // (load_crypto_v1.rs).
+    if matches!(f.proto, Proto::CurveCryptoV1 | Proto::CurveTricryptoV1) {
+        let Some(a) = reference.own_contract() else {
+            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на crypto-пул не того вида", f.title)));
+        };
+        return Ok(Loaded {
+            state: load_crypto_v1::load(ctx, tokens, f, a, pair, block).await?,
             ticks: None,
             bins: None,
             fee_pips: None,

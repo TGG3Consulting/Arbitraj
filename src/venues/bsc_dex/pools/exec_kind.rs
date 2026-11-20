@@ -148,6 +148,12 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // L364-L404, L286-L335; tricrypto-ng ecaa816 CurveTricryptoOptimizedWETH.vy L410-L442, L313-L379 — use_eth =
         // False: монета ERC-20, у WETH-монеты пул отдаёт WETH): тот же шаг STABLE_U256 (без нового кода исполнителя).
         "curve_twocrypto_ng" | "curve_tricrypto_ng" => ExecKind::StableU256,
+        // Решение 453: crypto v1 — exchange(uint256 i, uint256 j, dx, min_dy) с умолчаниями use_eth = False и (у
+        // фабрики v1) receiver = msg.sender — тот же селектор (curve-factory-crypto 7ed1011 CurveCryptoSwap2ETH.vy
+        // L859-L866: вход transferFrom(sender) L709-L716, выход transfer(receiver) L733-L738; curve-crypto-contract
+        // a0f8401 «2021-09-13. Arbitrum/CryptoSwap.vy» L591-L686: transferFrom(msg.sender) L614, transfer(msg.sender)
+        // L669) — шаг STABLE_U256, без нового кода исполнителя.
+        "curve_crypto_v1" | "curve_tricrypto_v1" => ExecKind::StableU256,
         "saddle_stableswap" => ExecKind::Saddle,
         // Решение 284: swap пары — подпись V2, выход — getAmountOut(address, uint256) самой пары (шаг 12, только v2).
         "nomiswap_stable" => ExecKind::NomiStable,

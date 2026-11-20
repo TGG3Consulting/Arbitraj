@@ -26,7 +26,14 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
-- Решение 442 (T433-F3, crypto-пулы Curve Arbitrum; `wc -l`): сверх ориентира 200 — venues/bsc_dex/math/crypto_y2.rs 227 (get_y + _newton_y Twocrypto; вынести _newton_y в crypto_newton2.rs), math/crypto_ops.rs 207 (тесты в отдельный файл), pools/families.rs 676 (было 651), pools/load.rs 515 (502), exec/executor/entry.rs 447 (422), quote/pool_quote.rs 537 (524), quote/depth_band.rs 515 (508), quote/quoter_calls.rs 464 (457) — давно сверх. Рампа A/gamma: пул стоит до следующего события (порта newton_D нет; вопрос 4 решения 442). События создания пулов фабрик Twocrypto-NG / Tricrypto-NG не подключены (вопрос 6). Тесты на записи узла Arbitrum — #[ignore] до записи (tests/arb_curve_crypto_live.rs).
+- Решение 453 (T433-F3a/F3b, ревью 442 п. 9; `wc -l`): сверх ориентира 200 — math/crypto_y2.rs 213 (было 227: пределы
+  версий вынесены в crypto_lim2.rs; ещё вынести _newton_y в crypto_newton2.rs), math/crypto_ops.rs 207 (тесты — в
+  отдельный файл), pools/load_crypto.rs 214, load_crypto_v1.rs 207, verify_crypto.rs 201, per_block.rs 234 (+рампа),
+  created_log.rs 373, verify.rs 346, families.rs 709 — давно сверх. Не смоделированы откаты tweak_price после расчёта
+  dy (ревью 442 п. 6 — разбор в docs/TASKS.md «Решение 453», вопрос 3): обмен, который пул откатит в tweak_price,
+  котировка считает исполнимым (как и get_dy пула) — сделка откатится целиком (атомарный бандл), потеря — газ.
+  Тесты — #[ignore] до записи (tests/arb_curve_crypto_live.rs).
+- Решение 442 (T433-F3, crypto-пулы Curve Arbitrum; `wc -l`): сверх ориентира 200 — venues/bsc_dex/math/crypto_y2.rs 227 (get_y + _newton_y Twocrypto; вынести _newton_y в crypto_newton2.rs), math/crypto_ops.rs 207 (тесты в отдельный файл), pools/families.rs 676 (было 651), pools/load.rs 515 (502), exec/executor/entry.rs 447 (422), quote/pool_quote.rs 537 (524), quote/depth_band.rs 515 (508), quote/quoter_calls.rs 464 (457) — давно сверх. Рампа A/gamma и события создания пулов фабрик — сделаны в решении 453 (вопросы 4, 6). Тесты на записи узла Arbitrum — #[ignore] до записи (tests/arb_curve_crypto_live.rs).
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

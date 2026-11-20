@@ -336,13 +336,13 @@ pub fn singleton_step(ctx: &Ctx, e: &Entry, k: ExecKind) -> GatewayResult<(Param
 }
 
 /// Решение 442: индексы шага STABLE_U256 crypto-пула Curve — i монета входа, j выхода. Принимает: пул реестра, токен
-/// входа. Возвращает: параметры шага или причину (состояние не Crypto; пул в рампе A/gamma; токен входа не из пары).
+/// входа. Возвращает: параметры шага или причину (состояние не Crypto; обмены пула остановлены; токен входа не из пары).
 fn crypto_step(e: &Entry, token_in: Address) -> Result<Params, String> {
     let PoolState::Crypto(d) = &e.pool.state else {
         return Err(format!("{}: у пула нет состояния crypto-пула Curve", e.family.id));
     };
     if d.halted {
-        return Err(format!("{}: пул в рампе A/gamma — шаг не строится", e.family.id));
+        return Err(format!("{}: обмены пула остановлены — шаг не строится", e.family.id));
     }
     if token_in == e.pool.token0 {
         Ok(Params::StableU256 { i: d.i0, j: d.i1 })

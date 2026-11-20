@@ -467,13 +467,14 @@ pub fn swap(
                 .ok_or_else(none)
         }
         // Crypto-пул Curve (решение 442): выход как в `_exchange` пула (math/crypto_swap.rs: get_y Twocrypto / Tricrypto,
-        // комиссия с выхода); только точный вход (шаг исполнителя — exchange на точный вход). Рампа A/gamma — halted.
+        // комиссия с выхода); только точный вход (шаг исполнителя — exchange на точный вход). Рампа A/gamma — D через
+        // newton_D (решение 453); halted — обмены пула остановлены.
         (PoolState::Crypto(d), PoolKind::Crypto) => {
             if !exact_in {
                 return Err(why("crypto-пул Curve: точный выход не поддерживается"));
             }
             if d.halted {
-                return Err(why("crypto-пул Curve в рампе A/gamma (обмен пересчитал бы D — расчёт не точен)"));
+                return Err(why("crypto-пул Curve: обмены остановлены (is_killed)"));
             }
             let (i, j) = if zero_for_one { (d.i0, d.i1) } else { (d.i1, d.i0) };
             let out = crypto_swap::exchange_out(d, i.into(), j.into(), amount).ok_or_else(none)?;

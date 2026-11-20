@@ -198,6 +198,18 @@ pub enum Proto {
     /// (curvefi/tricrypto-ng ecaa816, CurveTricryptoOptimizedWETH.vy / CurveTricryptoOptimized.vy) — всё как у
     /// CurveTwocrypto, математика — math/crypto_y3.rs, комиссия — reduction_coefficient. Многомонетный (решение 295).
     CurveTricrypto,
+    /// Curve crypto v1 фабрики (решение 453; curve_crypto_v1): двухмонетный crypto-пул первого поколения
+    /// (curvefi/curve-factory-crypto 7ed1011, CurveCryptoSwap2ETH.vy; пулы — прокси EIP-1167 на шаблон фабрики) —
+    /// математика внутри пула (math/crypto_v1_2.rs), без precisions()/version()/MATH(): точность монет — по decimals,
+    /// шаблон — по коду прокси (dex.curve_crypto_v1_templates). Чтение — load_crypto_v1.rs, события —
+    /// abi_crypto_v1.rs, проверка — реестр фабрики get_coins + код прокси (verify_crypto_v1.rs), поиск —
+    /// find_pool_for_coins. Квотер — get_dy пула; исполнение — шаг STABLE_U256. Вид ядра — Crypto.
+    CurveCryptoV1,
+    /// Curve tricrypto 2021 (решение 453; curve_tricrypto_v1): трёхмонетный crypto-пул первого поколения
+    /// (curvefi/curve-crypto-contract a0f8401, CryptoSwap.vy + CurveCryptoMath3.vy Vyper 0.2.15) — пул без фабрики,
+    /// подтверждает список dex.stable_pools (журнал развёртывания curvefi); математика — math/crypto_v1_3.rs.
+    /// Многомонетный (решение 295). Квотер — get_dy пула; исполнение — шаг STABLE_U256. Вид ядра — Crypto.
+    CurveTricryptoV1,
 }
 
 impl Proto {
@@ -214,6 +226,18 @@ impl Proto {
                 | Proto::SaddleStable
                 | Proto::PancakeStable
                 | Proto::CurveTricrypto
+                | Proto::CurveTricryptoV1
+        )
+    }
+
+    /// Crypto-пул Curve (решения 442, 453): Twocrypto-NG, Tricrypto-NG, crypto v1 фабрики, tricrypto 2021. Ошибок нет.
+    pub fn is_curve_crypto(self) -> bool {
+        matches!(
+            self,
+            Proto::CurveTwocrypto
+                | Proto::CurveTricrypto
+                | Proto::CurveCryptoV1
+                | Proto::CurveTricryptoV1
         )
     }
 
@@ -375,6 +399,10 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // шаг STABLE_U256 контракта-исполнителя (exchange с индексами uint256).
         "curve_twocrypto_ng" => (PoolKind::Crypto, Proto::CurveTwocrypto, true, false, false),
         "curve_tricrypto_ng" => (PoolKind::Crypto, Proto::CurveTricrypto, true, false, false),
+        // Curve crypto v1 (решение 453): фабрика crypto v1 и tricrypto 2021 — в графе и сигналах; исполнение — шаг
+        // STABLE_U256 исполнителя (exchange(uint256, uint256, dx, 0) у обоих есть).
+        "curve_crypto_v1" => (PoolKind::Crypto, Proto::CurveCryptoV1, true, false, false),
+        "curve_tricrypto_v1" => (PoolKind::Crypto, Proto::CurveTricryptoV1, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
         // Router их не исполняет (tradable = false); исполнение — шагом контракта-исполнителя: STABLE_U256 у pancake / lista
         // (exchange с индексами uint256), SADDLE у saddle (swap uint8 + deadline) — exec_kind.rs (решение 122 X, стейблсвапы).
@@ -621,6 +649,11 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             "dex.curve_crypto_versions",
             "dex.curve_crypto_math",
         ]),
+        // Curve crypto v1 фабрики (решение 453): реестр фабрики (get_coins, find_pool_for_coins) и адреса шаблонов
+        // пула, с исходником которых сверена формула (код прокси EIP-1167 пула).
+        Proto::CurveCryptoV1 => list.extend(["dex.factory", "dex.curve_crypto_v1_templates"]),
+        // Tricrypto 2021 (решение 453): фабрики нет — список адресов пулов из журнала развёртывания curvefi.
+        Proto::CurveTricryptoV1 => list.push("dex.stable_pools"),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

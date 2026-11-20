@@ -5,11 +5,12 @@
 //! монеты из реестра не нулевые; монета и встречный токен — среди них (CLAUDE.md: адрес токена у биржи = адрес в пуле);
 //! `version()` пула — в списке dex.curve_crypto_versions (у фабрики несколько реализаций пула, pool_implementations);
 //! `MATH()` пула — в списке dex.curve_crypto_math (адреса контрактов математики, с исходником которых сверена
-//! math/crypto_y2.rs / crypto_y3.rs: пул зовёт свою математику, у разных версий она разная). Иначе — отказ с причиной.
+//! math/crypto_y2.rs / crypto_y3.rs: пул зовёт свою математику, у разных версий она разная; решение 453 — и адреса
+//! dex.curve_crypto_math_v2_0_0, математика Twocrypto-NG v2.0.0). Иначе — отказ с причиной.
 //! Вызовы — частями по dex.verify_batch.
 //! Кто вызывает: pools/verify.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_crypto.rs, discover.rs, multi_pair.rs, verify.rs.
-//! Настройки: dex.factory, dex.curve_crypto_versions, dex.curve_crypto_math [DEX].
+//! Настройки: dex.factory, dex.curve_crypto_versions, dex.curve_crypto_math, dex.curve_crypto_math_v2_0_0 [DEX].
 //!
 //! Источник: curvefi/twocrypto-ng 89c8dfb, CurveTwocryptoFactory.vy get_coins L404-L410 (`self.pool_data[_pool].coins`);
 //! curvefi/tricrypto-ng ecaa816, CurveL2TricryptoFactory.vy get_coins L387-L393; version и MATH — abi_crypto.rs.
@@ -24,6 +25,7 @@ use crate::core::types::PoolRef;
 use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_crypto::{ICryptoPool as P, ITricryptoFactory as F3, ITwocryptoFactory as F2};
+use super::crypto_variant::MATH_V200;
 use super::discover::{Found, sorted};
 use super::families::Proto;
 use super::multi_pair;
@@ -92,9 +94,11 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     let versions = ctx
         .dex_list("dex.curve_crypto_versions", id)
         .map_err(|e| not_taken(e.message))?;
-    let maths = ctx
+    let mut maths = ctx
         .dex_list("dex.curve_crypto_math", id)
         .map_err(|e| not_taken(e.message))?;
+    // Решение 453: математика Twocrypto-NG v2.0.0 — отдельный список (не задан — пулы v2.0.0 не берутся).
+    maths.extend(ctx.dex_list(MATH_V200, id).unwrap_or_default());
     if versions.is_empty() || maths.is_empty() {
         let what = format!(
             "dex.curve_crypto_versions / dex.curve_crypto_math [dex:{id}] пуст"
@@ -161,7 +165,7 @@ fn decide(
         .map_err(|e| format!("MATH() пула {pool:#x} не по ABI: {e}"))?;
     if !p.maths.contains(&math) {
         return Err(format!(
-            "пул {pool:#x} зовёт математику {math:#x} — её нет в dex.curve_crypto_math [dex:{id}]: формула не сверена"
+            "пул {pool:#x} зовёт математику {math:#x} — её нет в dex.curve_crypto_math / {MATH_V200} [dex:{id}]: формула не сверена"
         ));
     }
     if !coins.contains(&c.coin) || !coins.contains(&c.quote) {

@@ -24,10 +24,11 @@
 //! - KyberSwap Classic DMM getPools(token0, token1) → пулы[] — KyberNetwork/dmm-smart-contracts@e557b57, DMMFactory.sol
 //!   L94-L105 (решение 287);
 //! - Curve Twocrypto-NG / Tricrypto-NG find_pool_for_coins(_from, _to, i) → пул (решение 442) — curvefi/twocrypto-ng
-//!   89c8dfb CurveTwocryptoFactory.vy L376-L386, curvefi/tricrypto-ng ecaa816 CurveL2TricryptoFactory.vy L369-L379:
-//!   `self.markets[from ^ to][i]` — порядок токенов любой (ключ — XOR адресов). За последним пулом пары: у
-//!   Twocrypto-NG — откат (markets — DynArray, CurveTwocryptoFactory.vy L91), у Tricrypto-NG L2 — нулевой адрес
-//!   (address[4294967296], CurveL2TricryptoFactory.vy L89). factory_scan.rs не считает ошибкой откат при i > 0; нулевой
+//!   89c8dfb CurveTwocryptoFactory.vy L376-L386, curvefi/tricrypto-ng ecaa816 CurveL2TricryptoFactory.vy L369-L379;
+//!   crypto v1 фабрики (решение 453) — curvefi/curve-factory-crypto 7ed1011 Factory.vy L335-L345: `markets[from ^
+//!   to][i]` — порядок токенов любой (ключ — XOR адресов). За последним пулом пары: у Twocrypto-NG — откат (markets —
+//!   DynArray, CurveTwocryptoFactory.vy L91), у Tricrypto-NG L2 и фабрики v1 — нулевой адрес (address[4294967296],
+//!   CurveL2TricryptoFactory.vy L89, Factory.vy L117). factory_scan.rs не считает ошибкой откат при i > 0; нулевой
 //!   адрес отбрасывается как «пула нет».
 
 use alloy::sol_types::SolCall;
@@ -74,7 +75,8 @@ pub enum Q {
     Maverick(u32),
     /// KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары (с разным усилением).
     Dmm,
-    /// Curve Twocrypto-NG / Tricrypto-NG (решение 442): find_pool_for_coins(a, b, i) — i-й пул пары.
+    /// Curve Twocrypto-NG / Tricrypto-NG (решение 442), crypto v1 фабрики (решение 453): find_pool_for_coins(a, b, i) —
+    /// i-й пул пары.
     CurveCrypto(u32),
 }
 

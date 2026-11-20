@@ -7,4 +7,4 @@
 
 | Скрипт | Что пишет | Тест |
 | --- | --- | --- |
-| `curve_crypto.py` | Curve Twocrypto-NG / Tricrypto-NG (решение 442): пулы фабрик, геттеры состояния, проверка (get_coins, version, MATH), лесенка get_dy — tests/data/arbitrum_curve_crypto_<дата>/ | tests/arb_curve_crypto_live.rs |
+| `curve_crypto.py` | Curve crypto-пулы (решения 442, 453): Twocrypto-NG (v2.1.0 и v2.0.0 — по MATH()), Tricrypto-NG, фабрика crypto v1, tricrypto 2021 — ответы на вызовы бота по calldata, проверка (get_coins, version, MATH, get_decimals), eth_getCode реализаций / математики / пулов, balanceOf и ETH пулов, decimals монет v1, лесенка get_dy — tests/data/arbitrum_curve_crypto_<дата>/ | tests/arb_curve_crypto_live.rs |

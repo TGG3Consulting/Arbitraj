@@ -11,53 +11,40 @@
 //! Источник: curvefi/twocrypto-ng 89c8dfb (тег prod-v2.1.0; математика та же, что на коммите 99b5192 «updated arbitrum
 //! amm and math implementation» — git diff пуст; развёрнута в Arbitrum One: deployments.yaml `arbitrum:mainnet math`
 //! 0x1Fd8Af16DC4BEBd950521308D55d0543b6cDF4A1), contracts/main/CurveCryptoMathOptimized2.vy: константы L17-L27,
-//! `_newton_y` L143-L206, `get_y` L229-L379.
+//! `_newton_y` L143-L206, `get_y` L229-L379. Решение 453: та же формула у v2.0.0 (d612fde, `get_y` L225-L364) — версии
+//! отличаются только пределами assert'ов (math/crypto_lim2.rs).
 
 use alloy_primitives::{I256, U256};
 
+use crate::core::types::CryptoMath;
+
+use super::crypto_lim2::{self as lim2, Lim};
 use super::crypto_ops::{
     abs, add, au, cbrt, div, du, i, ie, isqrt, iu, mu, mul, sq, su, sub, to_i, to_u, udiv,
     udiv_u, umul,
 };
-use super::ten::{self, E18, E36};
+use super::ten::{self, E18};
 
 /// N_COINS (L17).
 const N: u64 = 2;
 /// A_MULTIPLIER (L18).
 const A_MULTIPLIER: u64 = 10_000;
 
-/// Пределы assert'ов get_y (L237-L239): A ∈ [MIN_A; MAX_A] (MIN_A = N^N·A_MULTIPLIER/10, MAX_A = N^N·A_MULTIPLIER·1000),
-/// gamma ∈ [10^10; 199·10^15], D ∈ [10^17; 10^33]. Ошибок нет (false — откат).
-fn safe(ann: U256, gamma: U256, d: U256) -> bool {
-    let nn = N * N;
-    let min_a = U256::from(nn * A_MULTIPLIER / 10);
-    let max_a = U256::from(nn * A_MULTIPLIER * 1000);
-    let max_g = U256::from(199u64) * ten::pow(15);
-    let a_ok = (min_a..=max_a).contains(&ann);
-    let g_ok = (ten::E10..=max_g).contains(&gamma);
-    a_ok && g_ok && (ten::E17..=ten::pow(33)).contains(&d)
-}
-
-/// lim_mul (L240-L242): 100·10^18, при gamma > MAX_GAMMA_SMALL (2·10^16) — unsafe_div(100·10^18·2·10^16, gamma).
-/// Ошибок нет.
-fn lim_mul(gamma: U256) -> U256 {
-    let base = U256::from(100u8) * E18;
-    let small = U256::from(2u8) * ten::pow(16);
-    if gamma > small {
-        udiv_u(base.wrapping_mul(small), gamma)
-    } else {
-        base
-    }
-}
-
-/// `get_y(ANN, gamma, x, D, i)` (L229-L379). Принимает: A (как отдаёт пул), gamma, балансы в 18 знаках и ценах пула,
-/// D, индекс искомой монеты (0 или 1). Возвращает: [y, K0_prev] или None (откат контракта).
-pub fn get_y(ann_u: U256, gamma_u: U256, x: [U256; 2], d_u: U256, idx: usize) -> Option<[U256; 2]> {
-    if idx > 1 || !safe(ann_u, gamma_u, d_u) {
+/// `get_y(ANN, gamma, x, D, i)` (L229-L379). Принимает: версию математики (решение 453: TwoNg210 / TwoNg200 — пределы
+/// assert'ов, math/crypto_lim2.rs), A (как отдаёт пул), gamma, балансы в 18 знаках и ценах пула, D, индекс искомой
+/// монеты (0 или 1). Возвращает: [y, K0_prev] или None (откат контракта).
+pub fn get_y(
+    m: CryptoMath,
+    ann_u: U256,
+    gamma_u: U256,
+    x: [U256; 2],
+    d_u: U256,
+    idx: usize,
+) -> Option<[U256; 2]> {
+    let l = lim2::of(m, gamma_u);
+    if idx > 1 || !lim2::a_gamma_ok(&l, ann_u, gamma_u) || !lim2::d_ok(d_u) {
         return None;
     }
-    let lim = lim_mul(gamma_u);
-    let lim_s = to_i(lim)?;
     let ann = to_i(ann_u)?;
     let gamma = to_i(gamma_u)?;
     let d = to_i(d_u)?;
@@ -67,7 +54,7 @@ pub fn get_y(ann_u: U256, gamma_u: U256, x: [U256; 2], d_u: U256, idx: usize) ->
     let _y0 = div(sq(d)?, mul(x_j, iu(N * N))?)?;
     // K0_i = unsafe_div(10**18 * N_COINS * x_j, D) (L256), assert в пределах lim_mul (L257).
     let k0_i = udiv(mul(i(E18 * U256::from(N)), x_j)?, d);
-    if !(udiv(i(E36), lim_s)..=lim_s).contains(&k0_i) {
+    if !(to_i(l.k0.0)?..=to_i(l.k0.1)?).contains(&k0_i) {
         return None;
     }
     let ann_gamma2 = mul(ann, gamma2)?;
@@ -95,7 +82,7 @@ pub fn get_y(ann_u: U256, gamma_u: U256, x: [U256; 2], d_u: U256, idx: usize) ->
     let tail = umul(udiv(mul(iu(4), sq(delta0)?)?, b), delta0);
     let sqrt_arg = add(sq(delta1)?, tail)?;
     if sqrt_arg <= I256::ZERO {
-        let y = newton_y(ann_u, gamma_u, x, d_u, idx, lim)?;
+        let y = newton_y(ann_u, gamma_u, x, d_u, idx, &l)?;
         return Some([y, U256::ZERO]);
     }
     let sqrt_val = to_i(isqrt(to_u(sqrt_arg)?))?;
@@ -105,8 +92,7 @@ pub fn get_y(ann_u: U256, gamma_u: U256, x: [U256; 2], d_u: U256, idx: usize) ->
     let k0 = to_u(root)?;
     // frac = unsafe_div(y*10**18, D) в пределах (L370-L371).
     let frac = udiv_u(mu(y, E18)?, d_u);
-    let two = U256::from(N);
-    if !(udiv_u(E36 / two, lim)..=udiv_u(lim, two)).contains(&frac) {
+    if !lim2::within(frac, l.frac_y) {
         return None;
     }
     Some([y, k0])
@@ -171,16 +157,16 @@ fn divider(threshold: I256) -> I256 {
     iu(1)
 }
 
-/// `_newton_y(ANN, gamma, x, D, i, lim_mul)` (L143-L206) — запасной метод Ньютона (uint256, все операции
-/// проверяемые). Возвращает: y или None (откат: assert K0_i, переполнение, деление на ноль, нет сходимости за 255
-/// раундов).
-fn newton_y(ann: U256, gamma: U256, x: [U256; 2], d: U256, idx: usize, lim: U256) -> Option<U256> {
+/// `_newton_y(ANN, gamma, x, D, i, lim_mul)` (L143-L206; v2.0.0 — без lim_mul, d612fde L142-L204) — запасной метод
+/// Ньютона (uint256, все операции проверяемые). Принимает: пределы версии (K0_i). Возвращает: y или None (откат:
+/// assert K0_i, переполнение, деление на ноль, нет сходимости за 255 раундов).
+fn newton_y(ann: U256, gamma: U256, x: [U256; 2], d: U256, idx: usize, l: &Lim) -> Option<U256> {
     let n = U256::from(N);
     let one = U256::from(1u8);
     let x_j = x[1 - idx];
     let mut y = du(mu(d, d)?, mu(x_j, n * n)?)?;
     let k0_i = du(mu(E18 * n, x_j)?, d)?;
-    if !(udiv_u(E36, lim)..=lim).contains(&k0_i) {
+    if !lim2::within(k0_i, l.k0) {
         return None;
     }
     let e14 = ten::pow(14);

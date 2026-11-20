@@ -82,7 +82,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::VaultPool(d) => d.paused || [d.i0, d.i1]
             .iter()
             .any(|i| d.balances.get(*i as usize).is_none_or(|b| b.is_zero())),
-        // Crypto-пул Curve (решение 442): пуст в рампе A/gamma (halted) или при нулевом балансе любой монеты пары.
+        // Crypto-пул Curve (решения 442, 453): пуст, когда обмены остановлены (halted) или баланс монеты пары нулевой.
         PoolState::Crypto(d) => d.halted || [d.i0, d.i1]
             .iter()
             .any(|i| d.balances.get(*i as usize).is_none_or(|b| b.is_zero())),

@@ -201,6 +201,7 @@ impl EventLanes {
             .map(|i| {
                 stale_read::waiting(&m.missing, i)
                     || per_block::needs(m.pools[i].0.family)
+                    || per_block::ramping(p, &m.pools[i].0)
                     || p.holds.get(&m.pools[i].0.reference).is_some()
             })
             .collect();

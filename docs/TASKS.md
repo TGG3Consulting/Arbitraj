@@ -131,6 +131,64 @@
   з) докупка (core/executor.rs, через risk::can_open) в остановленной сети отказывает — как и при общем «Стоп»;
   и) chain_off проверяется на отдельном коротком замке до основного (gate_input): сделка, прошедшая проверку за мгновение
      до «Стоп <сеть>», начнётся — то же окно, что у общего «Стоп».
+- **Решение 453 (20.11.2026, ветка t229/arb-curve-crypto-more) — T433-F3a, T433-F3b и остаток решения 442: Curve
+  Twocrypto-NG v2.0.0, crypto-пулы v1, рампа A/gamma, события создания пулов; ждёт сборки и тестов в GitHub (cargo
+  локально не запускался) и записи узла.** СДЕЛАНО:
+  1) T433-F3a — Twocrypto-NG v2.0.0: исходник — twocrypto-ng d612fde (ФАКТ: официальный scripts/deploy_infra.py этого
+     коммита разворачивает через CREATE2 0x13b0D85C… с солью keccak(42069) и проверяет calculated_address; наша сборка
+     исходника d612fde Vyper 0.3.10 даёт ровно math 0x2005995a…, amm 0x04Fd6beC…, views 0x07CdEBF8…; так же 99b5192 →
+     math 0x1Fd8Af16…, amm 0x934791f7… — v2.1.0 решения 442 подтверждена тем же способом). Отличия v2.0.0 для обмена —
+     только пределы assert'ов get_y / _newton_y / newton_D (math/crypto_lim2.rs); формула выбирается по MATH() пула
+     (pools/crypto_variant.rs: dex.curve_crypto_math_v2_0_0 — v2.0.0), а не по version(): math — immutable пула.
+  2) T433-F3b — виды `curve_crypto_v1` (фабрика crypto v1, CurveCryptoSwap2ETH Vyper 0.3.1; проверка — get_coins
+     фабрики + код пула = прокси EIP-1167 на шаблон из dex.curve_crypto_v1_templates) и `curve_tricrypto_v1` (tricrypto
+     2021, CryptoSwap.vy + CurveCryptoMath3.vy Vyper 0.2.15; пул из dex.stable_pools, монеты coins(k), источник пулов —
+     список, как Curve 2020). Математика — math/crypto_v1_2.rs, crypto_v1_3.rs (все операции проверяемые); чтение —
+     pools/load_crypto_v1.rs (точность 10^(18 − decimals)); события v1 — abi_crypto_v1.rs; квотер — get_dy пула;
+     исполнение — STABLE_U256 (exchange(uint256,uint256,uint256,uint256) у обоих — умолчания use_eth/receiver).
+  3) Рампа A/gamma (вопрос 4 решения 442): порт newton_D (K0_prev = 0) — Twocrypto-NG обеих версий (crypto_d2.rs),
+     Tricrypto-NG (crypto_d3.rs, _geometric_mean), v1 (crypto_v1_2.rs, crypto_v1_3.rs); обмен в рампе считает D по
+     балансам до обмена, как `_exchange`; A() и gamma() пул отдаёт на время блока чтения; пул в рампе (moving)
+     перечитывается каждым блоком (per_block.rs ramping), первое чтение после конца рампы снимает отметку.
+  4) События создания (вопрос 6): TwocryptoPoolDeployed / TricryptoPoolDeployed (адрес пула — в данных лога) и
+     CryptoPoolDeployed фабрики v1 (адреса нет — find_pool_for_coins на блоке события) — pools/created_crypto.rs.
+  5) Ревью 442: п. 1, 5, 8 — tests/arb_curve_crypto_live.rs и tools/arbitrum_record/curve_crypto.py переписаны (ответы
+     по calldata вызовов бота, фильтр по математике и ≥ 1 сверенный пул каждой, пулы с конца pool_list по MATH(),
+     eth_getCode и хеши кода Twocrypto-NG из сборки исходника); п. 9 — ROADMAP.
+  Настройки: dex.curve_crypto_math_v2_0_0, dex.curve_crypto_v1_templates [DEX] (каталог, SETTINGS, SETTINGS_CASES,
+  FIRST_RUN); интерфейс — выбор видов `curve_crypto_v1` / `curve_tricrypto_v1` (labels.js), настройки — экран DEX.
+  Исполнитель переразвёртывать не нужно (шаг STABLE_U256 есть).
+  Нужна запись (Тигран): `python3 tools/arbitrum_record/curve_crypto.py --node <HTTP своего узла Arbitrum>` с адресами из
+  шапки скрипта (все — официальные журналы развёртывания curvefi) → tests/data/arbitrum_curve_crypto_<дата>/
+  (twocrypto.json, tricrypto.json, crypto_v1.json, tricrypto_v1.json, README); затем снять #[ignore] у
+  tests/arb_curve_crypto_live.rs. До записи dex.pool_enabled этих DEX не включать.
+  Вопросы Тиграну / не сделано:
+  1) Время рампы: котировка — на A/gamma блока чтения (пул в рампе перечитывается каждым блоком), а сделка идёт в
+     следующем блоке с бо́льшим временем; A/gamma меняются линейно за ≥ MIN_RAMP_TIME = 86400 с (CurveTwocryptoOptimized.vy
+     ramp_A_gamma) — разница за секунды мала, но не ноль. Считать A/gamma на ожидаемое время блока исполнения (нужны
+     initial_A_gamma / future_A_gamma и время) или оставить так? — ваше решение.
+  2) Код математики Tricrypto-NG (0x604388Bb…) и реализаций (amm_native_transfers_enabled 0xd7E72f36…, disabled
+     0x1f7C86Af…): развёрнуты не через CREATE2 — хеш сборки сверить нельзя без версии компилятора развёртывания
+     (2d03e6f — `@version 0.3.9`, ecaa816 — 0.3.10); скрипт пишет их eth_getCode, тест хеш Tricrypto не проверяет —
+     сверка только get_dy. Шаблон фабрики v1 (0x5bcA7dDF…, Vyper 0.3.1) и математика tricrypto 2021 (0x2F0AF8eC…, Vyper
+     0.2.15) — так же.
+  3) Откаты tweak_price (ревью 442, п. 6) НЕ смоделированы: после dy обмен зовёт tweak_price, который может откатиться —
+     Twocrypto-NG 89c8dfb CurveTwocryptoOptimized.vy tweak_price L813: MATH.wad_exp (assert переполнения, CurveCryptoMathOptimized2.vy
+     L536), newton_D(…, K0_prev) L887 (assert'ы newton_D), get_p L892 (assert D), `assert virtual_price >
+     old_virtual_price` L921 (вне рампы), newton_D(…, 0) при подстройке price_scale L966; Tricrypto-NG — L1013, L1044,
+     L1048, L1079 («Loss»), L1132; v1 фабрики — halfpow L541, newton_D L549, L607. Для модели нужно ещё состояние
+     (last_timestamp, cached_price_oracle, last_prices, packed_rebalancing_params, xcp_profit, xcp_profit_a,
+     virtual_price, totalSupply / admin_lp_virtual_balance) и порт get_p, wad_exp / halfpow, get_xcp. get_dy пула
+     (квотер сверки) их тоже не проверяет. Следствие: такой обмен откатит бандл целиком (потеря — газ). Делать полный
+     порт tweak_price? — ваше решение (оценка: отдельная задача, ~5–7 новых файлов на версию).
+  4) Вопрос 5 решения 442 (Tricrypto с нативным ETH — держатель для проб налога): по коду ответ есть — источник
+     встречного токена пробы выбирается по фактическому balanceOf(токен) пула ≥ суммы (check/taxes_util.rs quote_source);
+     пул, держащий ETH вместо WETH, такого баланса WETH не имеет и источником не берётся; exec/dry_fund_holder.rs —
+     только синглтоны V4 / Vault. Запись пишет balanceOf монет и eth_getBalance пулов (holdings) — подтвердить на записи.
+  5) Вопрос 1 решения 442 (один id индексатора — несколько видов) решает задача T448-02 (ветка t226, другой агент);
+     новые виды (`curve_crypto_v1`, `curve_tricrypto_v1`) до неё — тоже под отдельными id DEX, заданными вручную.
+  6) Шаблон фабрики v1: в официальном журнале один (0x5bcA7dDF…). Пул на другом шаблоне (если фабрика его меняла) —
+     отказ «формула не сверена» с адресом шаблона в журнале проверки; подтвердить на записи (code пулов v1).
 - **Решение 442 (20.11.2026, ветка t223-f3/arb-family-f3) — T433-F3: crypto-пулы Curve Arbitrum (Twocrypto-NG,
   Tricrypto-NG); ждёт сборки и тестов в GitHub (cargo локально не запускался) и записи узла.** СДЕЛАНО: виды dex.kind
   `curve_twocrypto_ng` / `curve_tricrypto_ng` (PoolKind::Crypto, PoolState::Crypto); точная математика — порт Vyper
@@ -545,7 +603,7 @@
   - T433-002 `uniswap_v3_arbitrum` (Uniswap V3 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить.
   - T433-003 `swapr_arbitrum` (Swapr (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-004 `fraxswap_arbitrum` (Fraxswap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-005 `curve_arbitrum` (Curve (Arbitrum)) — частично: StableSwap — сверить и включить; crypto-пулы Twocrypto-NG v2.1.0 / Tricrypto-NG — код сделан (решение 442, T433-F3; ждёт CI и записи узла; под отдельными id DEX — вопрос 1 решения 442); официальные адреса crypto-фабрик — deployments.yaml curvefi (решение 442); остаток crypto — T433-F3a (Twocrypto v2.0.0), T433-F3b (crypto v1).
+  - T433-005 `curve_arbitrum` (Curve (Arbitrum)) — частично: StableSwap — сверить и включить; crypto-пулы Twocrypto-NG v2.1.0 / Tricrypto-NG — код сделан (решение 442, T433-F3; ждёт CI и записи узла; под отдельными id DEX — вопрос 1 решения 442); официальные адреса crypto-фабрик — deployments.yaml curvefi (решение 442); T433-F3a (Twocrypto v2.0.0) и T433-F3b (crypto v1) — код сделан (решение 453), ждёт CI и записи узла.
   - T433-006 `kyberswap_elastic_arbitrum` (Kyberswap Elastic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить.
   - T433-007 `kyberswap_classic_arbitrum` (Kyberswap Classic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить.
   - T433-008 `elk_finance_arbitrum` (Elk Finance (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
@@ -691,8 +749,8 @@
   - T433-F1 Fluid DEX (T1) — новое семейство пулов: математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F2 Balancer V3 — новое семейство (хранилище V3, крючки): математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — КОД СДЕЛАН (решение 442, ветка t223-f3/arb-family-f3): виды curve_twocrypto_ng / curve_tricrypto_ng, математика, чтение, события, проверка, поиск по фабрике, квотер get_dy, шаг STABLE_U256 (без переразвёртывания исполнителя); ждёт CI и записи узла (tools/arbitrum_record/curve_crypto.py), тесты tests/arb_curve_crypto_live.rs — #[ignore] до записи.
-  - T433-F3a Curve Twocrypto-NG v2.0.0 (реализация amm_v2_0_0, math 0x2005995a… Arbitrum) — сверить исходник с развёрнутым кодом и включить (решение 442, вопрос 2).
-  - T433-F3b Старые crypto-пулы Curve Arbitrum v1 — tricrypto 0x960ea3e3… (curve-crypto-contract) и фабрика crypto v1 0xE5De15A9… (curve-factory-crypto): новое семейство (решение 442, вопрос 3).
+  - T433-F3a Curve Twocrypto-NG v2.0.0 (реализация amm_v2_0_0, math 0x2005995a… Arbitrum) — **код сделан (решение 453)**: исходник d612fde (сверен CREATE2-адресом), формула по MATH() пула; ждёт CI и записи узла.
+  - T433-F3b Старые crypto-пулы Curve Arbitrum v1 — tricrypto 0x960ea3e3… (curve-crypto-contract) и фабрика crypto v1 0xE5De15A9… (curve-factory-crypto): **код сделан (решение 453)** — виды `curve_tricrypto_v1`, `curve_crypto_v1`; ждёт CI и записи узла.
   - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F6 Liquidity Book v2.0 (LFJ V2) — новое семейство (в коде только v2.1); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.

@@ -56,7 +56,7 @@
 | `dex.min_pool_liquidity_usd` | фильтр и расчёт: глубина пула по стороне (pools/depth_book.rs, quote/shallow_pick.rs) | без .optional(): ошибка «не задана»: глубина пулов не считается — ошибка «не задана» … |
 | `dex.multi_pair` | расчёт: пары многомонетных пулов как рёбра графа (pools/multi_pair.rs) | необязательная: не задана — одна пара на пул, как до решения 295 (у WooFi — как до решения 305) |
 | `dex.oracle` | какие пулы WooFi допускаются (pools/verify_woo.rs) | без .optional(): ошибка «не задана»: Не задан — DEX не подключена |
-| `dex.pair_lookup_max` | какие пулы Maverick и crypto-пулы Curve находятся по фабрике (pools/factory_calls.rs) | необязательная: Не задана — Maverick V2 / crypto-пулы Curve по фабрике не ищутся |
+| `dex.pair_lookup_max` | какие пулы Maverick и crypto-пулы Curve (NG, crypto v1) находятся по фабрике (pools/factory_calls.rs), у crypto v1 — и по событию создания | необязательная: Не задана — Maverick V2 / crypto-пулы Curve по фабрике не ищутся |
 | `dex.pmm_ladder_usd` | расчёт: лесенка цен WooFi (pools/load_woo_ladder.rs) | необязательная: Не задана — пара WooFi только сигнал |
 | `dex.pmm_pool` | какой контракт WooPPV2 берётся (pools/factory_calls.rs) | без .optional(): ошибка «не задана»: Не задан — DEX не подключена |
 | `dex.pool_implementation` | какие пулы WooFi допускаются (pools/verify_woo.rs) | без .optional(): ошибка «не задана»: Не задан — DEX не подключена |
@@ -178,7 +178,9 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.check_due_read_only` | t141, р. 310 | `да` (после выкладки t141; сначала на время замера, см. docs/TASKS.md t141) | необязательная: не задана — как раньше | в релизе 141619bc |
 | `dex.cl_tick_spacings` | —, р. 122 | совета нет, решает Тигран | необязательная: Не задана — Slipstream этой DEX по фабрике не ищется | в релизе 141619bc |
 | `dex.curve_crypto_math` | T433-F3, р. 442 | Twocrypto-NG Arbitrum `["0x1Fd8Af16DC4BEBd950521308D55d0543b6cDF4A1"]`, Tricrypto-NG `["0x604388Bb1159AFd21eB5191cE22b4DeCdEE2Ae22"]` | без .optional(): DEX не подключена | ещё не в релизе (t223-f3) |
-| `dex.curve_crypto_versions` | T433-F3, р. 442 | Twocrypto-NG `["v2.1.0"]`, Tricrypto-NG `["v2.0.0"]` | без .optional(): DEX не подключена | ещё не в релизе (t223-f3) |
+| `dex.curve_crypto_versions` | T433-F3, р. 442; р. 453 | Twocrypto-NG `["v2.1.0", "v2.0.0"]` (v2.0.0 — с dex.curve_crypto_math_v2_0_0), Tricrypto-NG `["v2.0.0"]` | без .optional(): DEX не подключена | ещё не в релизе (t223-f3) |
+| `dex.curve_crypto_math_v2_0_0` | T433-F3a, р. 453 | Twocrypto-NG Arbitrum `["0x2005995a71243be9FB995DaB4742327dc76564Df"]` | необязательная: не задана — пулы с математикой v2.0.0 не берутся | ещё не в релизе (t229) |
+| `dex.curve_crypto_v1_templates` | T433-F3b, р. 453 | crypto v1 фабрики Arbitrum `["0x5bcA7dDF1bcccB2eE8e46c56bfc9d3CDC77262bC"]` | без .optional(): DEX не подключена | ещё не в релизе (t229) |
 | `dex.curve_ng_versions` | t107, р. 275 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана или пуста — DEX не подключена | в релизе 141619bc |
 | `dex.custom_deployers` | —, р. 188 | совета нет, решает Тигран | необязательная: Не задан — только poolByPair (кастомные пулы отклоняются) | в релизе 141619bc |
 | `dex.event_lanes_max` | t153, р. 330 | `2` после выкладки t153 — проверка механизма, число не из замера; дальше — по замеру (сначала вместе с … | необязательная: Не задана — как раньше: события пачки по одному в сессии | в релизе 141619bc |
@@ -204,7 +206,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.min_pool_liquidity_usd` * | —, р. 73 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: глубина пулов не считается — ошибка «не задана» … | в релизе 141619bc |
 | `dex.multi_pair` | t126, р. 295 | совета нет, решает Тигран | необязательная: не задана — одна пара на пул, как до решения 295 (у WooFi — как до решения 305) | в релизе 141619bc |
 | `dex.oracle` | —, р. 122 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задан — DEX не подключена | в релизе 141619bc |
-| `dex.pair_lookup_max` | —, р. 122 (Maverick V2); р. 442 (Curve crypto) | совета нет, решает Тигран | необязательная: Не задана — Maverick V2 / crypto-пулы Curve по фабрике не ищутся | в релизе 141619bc; смысл расширен (t223-f3) |
+| `dex.pair_lookup_max` | —, р. 122 (Maverick V2); р. 442, 453 (Curve crypto) | совета нет, решает Тигран | необязательная: Не задана — Maverick V2 / crypto-пулы Curve по фабрике не ищутся | в релизе 141619bc; смысл расширен (t223-f3, t229) |
 | `dex.per_block_skip_same` | t153, р. 339 (ревью, t153) | `да` только при dex.pool_events_keep = да (без неё не действует) | необязательная: Не задана / нет — как раньше: событие на каждое чтение | в релизе 141619bc |
 | `dex.pmm_ladder_counter` | t136, р. 306 | не задавать при первом запуске; «да» у DEX с заданной dex.pmm_ladder_usd — после приёмки решения 306 и … | необязательная: Не задана / «нет» — пары не с USDT без лесенки, как раньше (решение 297) | в релизе 141619bc |
 | `dex.pmm_ladder_usd` | —, р. 122 | совета нет, решает Тигран | необязательная: Не задана — пара WooFi только сигнал | в релизе 141619bc |
@@ -827,11 +829,49 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Появилась:** 2026-11-20, ветка t223-f3/arb-family-f3.
 - **Кейс:** решение 442: у фабрики crypto-пулов Curve несколько реализаций пула (pool_implementations); формулы обмена (math/crypto_swap.rs) сверены с исходником Twocrypto-NG `v2.1.0` (twocrypto-ng 89c8dfb, CurveTwocryptoOptimized.vy L189) и Tricrypto-NG `v2.0.0` (tricrypto-ng ecaa816, CurveTricryptoOptimizedWETH.vy L215, CurveTricryptoOptimized.vy L199). Пул иной версии не берётся.
 - **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id DEX вида curve_twocrypto_ng / curve_tricrypto_ng); каталог src/settings/catalog/dex.rs.
-- **Что ставить:** Twocrypto-NG — `["v2.1.0"]`, Tricrypto-NG — `["v2.0.0"]` (docs/FIRST_RUN.md, решение 442).
+- **Что ставить:** Twocrypto-NG — `["v2.1.0"]`, Tricrypto-NG — `["v2.0.0"]` (docs/FIRST_RUN.md, решение 442). Решение 453:
+  у Twocrypto-NG — `["v2.1.0", "v2.0.0"]` вместе с dex.curve_crypto_math_v2_0_0 (формулу v2.0.0 выбирает адрес
+  математики, не version()).
 - **Если не задана:** в каталоге без .optional(): DEX не подключена — families::required (src/venues/bsc_dex/pools/families.rs, ветка CurveTwocrypto | CurveTricrypto) → classify «не задана dex.curve_crypto_versions»; пуста — пулы отклоняются с причиной (pools/verify_crypto.rs plan).
 - **Влияет на торговлю:** да — какие crypto-пулы Curve берутся (pools/verify_crypto.rs).
 - **Связанные ключи:** dex.curve_crypto_math, dex.factory, dex.kind.
 - **Статус:** ещё не в релизе (ветка t223-f3/arb-family-f3).
+
+### `dex.curve_crypto_math_v2_0_0`
+
+- **Задача / решение:** T433-F3a, решение 453.
+- **Появилась:** 2026-11-20, ветка t229/arb-curve-crypto-more.
+- **Кейс:** решение 453: у фабрики Twocrypto-NG Arbitrum вторая математика — v2.0.0 (deployments.yaml `math_v2_0_0`
+  0x2005995a…). Её исходник — twocrypto-ng d612fde (факт: сборка Vyper 0.3.10 этого коммита даёт CREATE2-адреса
+  deployments.yaml, официальный scripts/deploy_infra.py d612fde). Формулы get_y / newton_D v2.0.0 отличаются от v2.1.0
+  только пределами assert'ов (math/crypto_lim2.rs) — пул считается формулой своей математики (pools/crypto_variant.rs).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id DEX вида curve_twocrypto_ng); каталог
+  src/settings/catalog/dex.rs.
+- **Что ставить:** Twocrypto-NG Arbitrum — `["0x2005995a71243be9FB995DaB4742327dc76564Df"]`; в dex.curve_crypto_versions
+  добавить «v2.0.0» (docs/FIRST_RUN.md, решение 453). У Tricrypto-NG не задавать.
+- **Если не задана:** необязательная — пулы с этой математикой отклоняются проверкой (pools/verify_crypto.rs) и не
+  читаются (pools/load_crypto.rs state: «формула не сверена»).
+- **Влияет на торговлю:** да — берутся ли пулы Twocrypto-NG v2.0.0.
+- **Связанные ключи:** dex.curve_crypto_math, dex.curve_crypto_versions, dex.factory, dex.kind.
+- **Статус:** ещё не в релизе (ветка t229/arb-curve-crypto-more).
+
+### `dex.curve_crypto_v1_templates`
+
+- **Задача / решение:** T433-F3b, решение 453.
+- **Появилась:** 2026-11-20, ветка t229/arb-curve-crypto-more.
+- **Кейс:** решение 453: пул фабрики crypto v1 — прокси EIP-1167 на шаблон фабрики (Factory.vy deploy_pool L206), а
+  шаблон фабрика может сменить (set_pool_implementation L269). Формула (math/crypto_v1_2.rs) сверена с исходником
+  шаблона curve-factory-crypto 7ed1011 — пул берётся, только если его код — прокси на адрес из списка
+  (pools/verify_crypto_v1.rs).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id DEX вида curve_crypto_v1); каталог
+  src/settings/catalog/dex.rs.
+- **Что ставить:** Arbitrum — `["0x5bcA7dDF1bcccB2eE8e46c56bfc9d3CDC77262bC"]` (deployment-logs/others.log «Pool
+  template»; docs/FIRST_RUN.md).
+- **Если не задана:** в каталоге без .optional(): DEX не подключена — families::required (ветка CurveCryptoV1) →
+  classify «не задана dex.curve_crypto_v1_templates»; пуста или не адрес — пулы отклоняются с причиной.
+- **Влияет на торговлю:** да — какие пулы crypto v1 берутся.
+- **Связанные ключи:** dex.factory, dex.kind, dex.pair_lookup_max.
+- **Статус:** ещё не в релизе (ветка t229/arb-curve-crypto-more).
 
 ### `dex.curve_ng_versions`
 
@@ -1433,12 +1473,14 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Что ставить:** совета нет, решает Тигран
 - **Если не задана:** необязательная (src/settings/schema.rs:137-139: не задана — функция работает, отключается только описанное). Описание каталога (src/settings/catalog/dex.rs:167): «Не задана — Maverick V2 по фабрике не ищется»
 - **Влияет на торговлю:** да — какие пулы Maverick находятся по фабрике (pools/factory_calls.rs).
-- **Смысл расширен (решение 442, ревью):** Curve Twocrypto-NG / Tricrypto-NG — find_pool_for_coins(a, b, i) для
-  i = 0 … это число − 1. За последним пулом пары у Twocrypto-NG — откат (DynArray, CurveTwocryptoFactory.vy L91; при
-  i > 0 не ошибка, при i = 0 — в заметке «вызовов откатилось»), у Tricrypto-NG L2 — нулевой адрес (address[4294967296],
-  CurveL2TricryptoFactory.vy L89). Не задана — crypto-пулы этой DEX по фабрике не ищутся.
+- **Смысл расширен (решения 442, 453, ревью 442):** Curve Twocrypto-NG / Tricrypto-NG и crypto v1 фабрики —
+  find_pool_for_coins(a, b, i) для i = 0 … это число − 1. За последним пулом пары у Twocrypto-NG — откат (DynArray,
+  CurveTwocryptoFactory.vy L91; при i > 0 не ошибка, при i = 0 — в заметке «вызовов откатилось»), у Tricrypto-NG L2 и
+  фабрики v1 — нулевой адрес (address[4294967296], CurveL2TricryptoFactory.vy L89, Factory.vy L117). У crypto v1 —
+  ещё и поиск пулов пары по событию CryptoPoolDeployed (адреса пула в нём нет, pools/created_crypto.rs). Не задана —
+  crypto-пулы этой DEX по фабрике не ищутся, событие создания v1 не обрабатывается.
 - **Связанные ключи:** index.factory_scan.
-- **Статус:** в релизе 141619bc; смысл расширен — ветка t223-f3.
+- **Статус:** в релизе 141619bc; смысл расширен — ветки t223-f3, t229.
 
 ### `dex.per_block_skip_same`
 

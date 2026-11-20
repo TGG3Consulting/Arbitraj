@@ -28,7 +28,7 @@ use super::load_algebra_dir;
 use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
-    aero_cl, load_aero_basic, load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_meta, load_curve_ng, load_curve_plain, load_dmm, load_dodo, load_ekubo,
+    aero_cl, load_aero_basic, load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_meta, load_curve_ng, load_curve_oracle, load_curve_plain, load_dmm, load_dodo, load_ekubo,
     load_elastic, load_fluid, load_inf_stable, load_izi, load_lb, load_lb20, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
@@ -95,6 +95,8 @@ pub async fn state(
                 Variant::CurvePlain => load_curve_plain::load(ctx, tokens, a, pair, &tag).await?,
                 // Решение 472 (доделка): метапул — курс LP базового пула (load_curve_meta.rs).
                 Variant::CurveMeta => load_curve_meta::load(ctx, tokens, a, pair, &tag).await?,
+                // Решение 480: пул с курсом оракула и нативным ETH (ETH/wstETH, load_curve_oracle.rs).
+                Variant::CurveOracle => load_curve_oracle::load(ctx, tokens, a, pair, &tag).await?,
                 _ => load_curve::load(ctx, tokens, a, pair, &tag).await?,
             };
             return Ok(Loaded {

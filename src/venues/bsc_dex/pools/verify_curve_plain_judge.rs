@@ -7,7 +7,7 @@
 //! 200 строк).
 //! Кто вызывает: pools/verify_curve_plain.rs.
 //! От чего зависит: ctx.rs, load_curve.rs (coins_of), stable_native.rs, verify_woo.rs (found), multi_pair.rs,
-//! load_curve_meta.rs, abi_curve_plain.rs.
+//! load_curve_meta.rs, abi_curve_plain.rs, load_curve_oracle.rs (решение 480: remember оракула пула).
 //! Настройки: dex.native_wrapped (через stable_native.rs).
 //!
 //! Источники: curvefi/curve-factory f389123 Plain2ETH.vy L132-L135 (coins[0] = 0xEeee…); FactorySidechains.vy fb61207
@@ -23,6 +23,7 @@ use super::super::node::call;
 use super::abi_curve_plain::ICurvePlainFactory;
 use super::load_curve::coins_of;
 use super::load_curve_meta;
+use super::load_curve_oracle;
 use super::multi_pair;
 use super::stable_native;
 use super::verify::{Candidate, Verdict};
@@ -46,13 +47,15 @@ pub fn base_of(answer: Option<call::Piece>) -> Result<Address, Option<String>> {
 }
 
 /// Итог по ответам coins(k). Принимает: окружение, кандидата, пул, ответы coins(0..MAX_COINS), базовый пул (Some —
-/// метапул). Возвращает: Taken или Rejected с причиной. Ошибок нет.
+/// метапул), оракул курса (Some — пул с курсом оракула, решение 480: монет две, coins(0) — метка ETH; оракул
+/// запоминается для чтения). Возвращает: Taken или Rejected с причиной. Ошибок нет.
 pub fn judge(
     ctx: &Ctx,
     c: &Candidate,
     pool: Address,
     answers: &[Result<Bytes, String>],
     base: Option<Address>,
+    oracle: Option<Address>,
 ) -> Verdict {
     let coins = match coins_of(answers) {
         Ok(v) => v,
@@ -68,6 +71,15 @@ pub fn judge(
             ));
         }
         load_curve_meta::remember(ctx.place.id, pool, b);
+    }
+    if let Some(o) = oracle {
+        // Исходник ETH/wstETH: `assert _coins[0] == 0xEeee…` (__init__ L144), N_COINS = 2.
+        if coins.len() != 2 || coins[0] != stable_native::NATIVE {
+            return Verdict::Rejected(format!(
+                "пул Curve с оракулом {pool:#x}: монет не две или coins(0) — не метка ETH 0xEeee… (не этот исходник)"
+            ));
+        }
+        load_curve_oracle::remember(ctx.place.id, pool, o);
     }
     let mapped = match stable_native::pair_coins(&coins, stable_native::wrapped(ctx)) {
         Ok(v) => v,

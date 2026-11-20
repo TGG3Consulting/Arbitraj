@@ -44,6 +44,15 @@ pub enum Variant {
     /// load_curve_meta.rs, проверка — verify_curve_plain.rs (реализация из dex.curve_plain_implementations и
     /// get_base_pool фабрики = coins(1)), события — events_curve.rs, состояние — каждым блоком (per_block.rs).
     CurveMeta,
+    /// Пул Curve StableSwap с курсом оракула и нативным ETH (dex.kind = curve_stableswap_oracle, решение 480, T472-10):
+    /// ETH/wstETH Arbitrum 0x6eB2dc694eB516B16Dc9FBc678C60052BbdD7d80 (Vyper 0.3.1, Sourcify 42161 creationMatch match,
+    /// runtimeMatch null; docs/sources/curve_arbitrum/). Протокол Proto::CurveStable (coins/balances/fee, A_precise,
+    /// exchange(int128, int128, dx, min_dy) — те же), пул — из списка dex.stable_pools; отличие от CurvePlain: курс
+    /// монеты 1 — `Oracle(ORACLE).latestAnswer()` на блоке (`_stored_rates` L193-L199; адрес — `oracle()` пула L851,
+    /// подтверждается проверкой), курс монеты 0 (метка ETH 0xEeee…, `__init__` L144) — 10^18, D_P — циклом (get_D
+    /// L213-L239). Чтение — load_curve_oracle.rs, проверка — verify_curve_plain.rs, состояние — каждым блоком (курс
+    /// оракула меняется без событий пула, per_block.rs), шаг — CURVE_ETH (v5).
+    CurveOracle,
     /// Двухмонетный crypto-пул Curve первого поколения без фабрики (dex.kind = curve_crypto2_v1, решение 472, T472-10):
     /// протокол Proto::CurveTricryptoV1 (пул из списка dex.stable_pools, монеты — coins(k), is_killed), но монет две и
     /// математика — CurveCryptoSwap2 (CryptoMath::TwoV1). Исходник — EURS/2CRV Arbitrum
@@ -62,6 +71,7 @@ pub fn of(kind: &str) -> Variant {
         "slipstream_aero" => Variant::SlipstreamAero,
         "curve_stableswap_plain" => Variant::CurvePlain,
         "curve_stableswap_meta" => Variant::CurveMeta,
+        "curve_stableswap_oracle" => Variant::CurveOracle,
         "curve_crypto2_v1" => Variant::CryptoPair,
         _ => Variant::Base,
     }
@@ -82,6 +92,7 @@ mod tests {
         assert_eq!(of("curve_stableswap"), Variant::Base);
         assert_eq!(of("curve_stableswap_plain"), Variant::CurvePlain);
         assert_eq!(of("curve_stableswap_meta"), Variant::CurveMeta);
+        assert_eq!(of("curve_stableswap_oracle"), Variant::CurveOracle);
         assert_eq!(of("curve_crypto2_v1"), Variant::CryptoPair);
         assert_eq!(of("curve_tricrypto_v1"), Variant::Base);
     }

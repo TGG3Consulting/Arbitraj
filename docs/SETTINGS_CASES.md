@@ -2321,6 +2321,14 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Если не задана:** в каталоге без .optional() — интерфейс показывает её как «не задано»; чтение без значения — ошибка «Не задана настройка … — задайте её в интерфейсе» (src/settings/read.rs:24-29). Описание каталога (src/settings/catalog/dex.rs:157): «Не задана — DEX не подключена»
 - **Влияет на торговлю:** да — какие стейблсвап-пулы допускаются (pools/stable_list.rs).
 - **Связанные ключи:** index.factory_scan.
+- **Дополнено решением 480 (T472-10, 2026-11-20, ветка t248/arb-curve-ren-wsteth):** новый вид dex.kind =
+  `curve_stableswap_oracle` (пул Curve с курсом оракула и нативным ETH — ETH/wstETH Arbitrum) берёт пулы только из этого
+  списка; новых ключей настроек нет. Что ставить (Arbitrum, docs/FIRST_RUN.md): ключ curve_stableswap_plain —
+  `["0x7f90122BF0700F9E7e1F688fe926940E8839F353", "0x3E01dD8a5E1fb3481F0F589056b428Fc308AF0Fb"]` (2pool и WBTC/renBTC);
+  дочерний ключ curve_stableswap_oracle — `["0x6eB2dc694eB516B16Dc9FBc678C60052BbdD7d80"]` (curvefi/curve-js ab3f1c2
+  src/constants/pools/arbitrum.ts L98, L152). Не задана у ключа curve_stableswap_oracle — DEX не подключена; адреса нет
+  в списке — отказ проверки «пул … не в dex.stable_pools DEX … (пул Curve с курсом оракула — только список)». Нужна
+  ещё dex.native_wrapped площадки (WETH): без неё пул с меткой ETH не читается.
 - **Статус:** в релизе 141619bc.
 
 ### `dex.sub_dex`

@@ -6,9 +6,10 @@
 //! (verify_stable_u.rs / verify_curve.rs) → реестр. Список не задан или пуст — ничего (как до 292). Одна пачка на проход.
 //! Кто вызывает: pools/factory_scan.rs (pass); sort — ещё tests/bsc_dex_stable_list_sort.rs.
 //! От чего зависит: ctx.rs, families.rs (all, classify, Proto), abi_saddle.rs, abi_curve.rs, load_saddle.rs,
-//! load_curve.rs, node/call.rs (try_chunks), directory/gt_parse.rs (IndexedPool).
+//! load_curve.rs, node/call.rs (try_chunks), directory/gt_parse.rs (IndexedPool), stable_native.rs (решение 480:
+//! метка ETH → обёртка у вариантов CurvePlain / CurveOracle).
 //! Настройки: dex.stable_pools [DEX] (через classify — dex.kind, dex.pool_enabled); dex.load_batch [bsc_dex] —
-//! размер пачки передаёт factory_scan.rs.
+//! размер пачки передаёт factory_scan.rs; dex.native_wrapped (через stable_native.rs).
 //!
 //! Источники ABI (официальные): Saddle — nerve-finance/contracts bda7578, Swap.sol L231 `getToken(uint8)` (откат
 //! «Out of range» за последним индексом), не больше 32 монет — L125; Curve 2020 — ellipsis-finance/ellipsis 6bdf778,
@@ -26,8 +27,10 @@ use super::super::node::call;
 use super::abi_curve::{IStableSwapV1, MAX_COINS};
 use super::abi_saddle::{ISaddleSwap, MAX_TOKENS};
 use super::families::{self, Family, Proto};
+use super::family_variant::Variant;
 use super::load_curve::coins_of;
 use super::load_saddle::tokens_of;
+use super::stable_native;
 
 /// Хвост заметки прохода без режима dex.multi_pair (решение 295 меняет его у DEX в режиме — scan).
 const ONE_PAIR: &str = "в реестр попадёт одна пара пула (TASKS 289 п. 7)";
@@ -167,7 +170,8 @@ pub async fn scan(
         };
     }
     let answers = call::try_chunks(ctx, &calls, "latest", size).await;
-    let mut out = sort(&pools, answers, coins, quotes);
+    let wrapped = stable_native::wrapped(ctx);
+    let mut out = sort_with(&pools, answers, coins, quotes, wrapped);
     // Решение 295: у DEX в режиме dex.multi_pair в реестр идут все пары пула — заметка прохода об этом.
     for f in pools.iter().map(|(f, _)| *f).filter(|f| super::multi_pair::enabled(ctx, f)) {
         let mine = format!("{}: пул ", f.id);
@@ -189,6 +193,20 @@ pub fn sort(
     coins: &HashMap<Address, String>,
     quotes: &[Address],
 ) -> Extra {
+    sort_with(pools, answers, coins, quotes, None)
+}
+
+/// Решение 480: sort с обёрткой нативной монеты — у вариантов, чей загрузчик читает метку ETH 0xEeee… (CurvePlain:
+/// Plain*ETH; CurveOracle: ETH/wstETH), метка среди монет пула заменяется обёрткой (stable_native::pair_coins), как
+/// при проверке (verify_curve_plain_judge.rs) — иначе пара с WETH из списка не строится. Прочие виды — без замены.
+/// Принимает: как sort и обёртку (None — не задана). Возвращает: Extra. Ошибок нет.
+pub fn sort_with(
+    pools: &[(&'static Family, Address)],
+    answers: Vec<call::Piece>,
+    coins: &HashMap<Address, String>,
+    quotes: &[Address],
+    wrapped: Option<Address>,
+) -> Extra {
     let mut x = Extra::default();
     let mut got = answers.into_iter();
     for (f, pool) in pools {
@@ -198,7 +216,15 @@ pub fn sort(
             x.no_answer += n;
             continue;
         };
-        let list = match tokens(f.proto, &answers) {
+        let native_ok = matches!(f.variant, Variant::CurvePlain | Variant::CurveOracle);
+        let mapped = tokens(f.proto, &answers).and_then(|t| {
+            if native_ok {
+                stable_native::pair_coins(&t, wrapped)
+            } else {
+                Ok(t)
+            }
+        });
+        let list = match mapped {
             Ok(t) => candidates(f.id, *pool, &t, coins, quotes),
             Err(why) => {
                 x.notes.push(format!(

@@ -7,7 +7,8 @@
 //! Множители точности: у Plain*Basic — `rate_multipliers[i] = 10 ** (36 - decimals[i])` фабрики (геттера у пула
 //! нет), у 2pool — константа RATE_MULTIPLIER = 10^30 при двух монетах по 6 знаков — то же правило 10^(36 − decimals),
 //! что у Curve 2020 (load_curve::build). Пары token0/token1 — по адресам монет пула.
-//! Кто вызывает: pools/load.rs, pools/load_site.rs (вариант CurvePlain); тест tests/arbitrum_curve_plain_live.rs.
+//! Кто вызывает: pools/load.rs, pools/load_site.rs (вариант CurvePlain), load_curve_oracle.rs (решение 480: read_calls,
+//! state_with); тест tests/arbitrum_curve_plain_live.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_many), tokens.rs, load_curve.rs (parse, build, Raw), abi_curve_plain.rs,
 //! stable_native.rs.
 //! Настройки: dex.native_wrapped [DEX-площадка] (пул с ETH; не задана — такой пул не читается); dex.multicall3 — через
@@ -86,7 +87,20 @@ pub async fn load(
 /// ответ coins() не по ABI.
 pub async fn read(ctx: &Ctx, tokens: &Tokens, pool: Address, tag: &str) -> GatewayResult<Raw> {
     let (calls, tail) = calls(pool);
-    let got = call::try_many(ctx, &calls, tag).await?;
+    read_calls(ctx, tokens, pool, tag, &calls, tail).await
+}
+
+/// Решение 480: read с заданными вызовами (calls этого файла и сверху — свои вызовы варианта, load_curve_oracle.rs).
+/// Принимает: окружение, токены, пул, блок-тег, вызовы, индекс A_precise(). Ошибки: как у read.
+pub async fn read_calls(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    pool: Address,
+    tag: &str,
+    calls: &[(Address, Bytes)],
+    tail: usize,
+) -> GatewayResult<Raw> {
+    let got = call::try_many(ctx, calls, tag).await?;
     if got.len() != calls.len() {
         let what = format!("Curve 2021 {pool}: ответов {} из {}", got.len(), calls.len());
         return Err(ctx.err(ErrorCode::BadResponse, what));

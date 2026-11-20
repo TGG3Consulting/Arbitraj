@@ -43,10 +43,12 @@ pub fn topics() -> Vec<B256> {
 
 /// topic0 событий пула по варианту исходника: Base — topics(), CurvePlain (решение 472) — ещё RemoveLiquidityOne из
 /// 4 полей и CommitNewFee (Plain2Basic.vy f389123 L48-L52; 2pool Arbitrum — ABI curve-js ab3f1c2), события комиссии
-/// реализаций с оракулом; CurveMeta — то же и TokenExchangeUnderlying. Ошибок нет.
+/// реализаций с оракулом; CurveMeta — то же и TokenExchangeUnderlying. Решение 480: CurveOracle (ETH/wstETH) — как
+/// CurvePlain (его события — TokenExchange, ликвидность (RemoveLiquidityOne из 3 полей — topics()), CommitNewFee из 3
+/// полей, NewFee, RampA, StopRampA; исходник L21-L77). Ошибок нет.
 pub fn topics_of(v: Variant) -> Vec<B256> {
     let mut out = topics();
-    if matches!(v, Variant::CurvePlain | Variant::CurveMeta) {
+    if matches!(v, Variant::CurvePlain | Variant::CurveMeta | Variant::CurveOracle) {
         out.push(ICurvePlain::RemoveLiquidityOne::SIGNATURE_HASH);
         out.push(ICurvePlain::CommitNewFee::SIGNATURE_HASH);
         // Решение 472 (доделка): реализации с оракулом — смена комиссии CommitNewFee(uint256) / ApplyNewFee(uint256)

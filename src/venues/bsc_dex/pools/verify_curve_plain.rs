@@ -13,9 +13,11 @@
 //! dex.curve_plain_implementations путь 2 не работает (пул не из списка — отказ с причиной).
 //! Решение 472 (доделка): метапул (вариант CurveMeta) — только путь 2 и ещё `get_base_pool(pool)` фабрики: базовый
 //! пул должен быть coins(1) метапула (его get_virtual_price — курс монеты 1; load_curve_meta.rs).
-//! Кто вызывает: pools/verify.rs (Proto::CurveStable с вариантом CurvePlain).
+//! Решение 481: пул с курсом оракула (вариант CurveOracle) — только путь 1 (список) и ещё `oracle()` пула: адрес
+//! оракула (не ноль) запоминается для чтения (load_curve_oracle.rs remember).
+//! Кто вызывает: pools/verify.rs (Proto::CurveStable с вариантом CurvePlain / CurveMeta / CurveOracle).
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_curve.rs, abi_curve_plain.rs, verify_curve_plain_judge.rs,
-//! family_variant.rs.
+//! family_variant.rs, load_curve_oracle.rs.
 //! Настройки: dex.stable_pools, dex.factory, dex.curve_plain_implementations [DEX].
 //!
 //! Источник реестра: curvefi/curve-factory fb61207 contracts/FactorySidechains.vy L451-L458 (Sourcify 42161 match
@@ -32,12 +34,15 @@ use super::super::node::call;
 use super::abi_curve::{IStableSwapV1, MAX_COINS};
 use super::abi_curve_plain::ICurvePlainFactory;
 use super::family_variant::Variant;
+use super::load_curve_oracle;
 use super::verify::{Candidate, Verdict};
 use super::verify_curve_plain_judge::{base_of, judge};
 
-/// Кто подтверждает пул: список или фабрика (с её адресом, сверенными реализациями и признаком метапула).
+/// Кто подтверждает пул: список, список с oracle() пула (решение 481) или фабрика (с её адресом, сверенными
+/// реализациями и признаком метапула).
 enum Plan {
     Listed(Address),
+    Oracle(Address),
     Factory(Address, Address, Vec<Address>, bool),
 }
 
@@ -50,6 +55,10 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         let plan = plan(ctx, c);
         match &plan {
             Ok(Plan::Listed(pool)) => push_coins(&mut calls, *pool),
+            Ok(Plan::Oracle(pool)) => {
+                calls.push(load_curve_oracle::oracle_call(*pool));
+                push_coins(&mut calls, *pool);
+            }
             Ok(Plan::Factory(pool, factory, _, meta)) => {
                 let q = ICurvePlainFactory::get_implementation_addressCall { pool: *pool };
                 calls.push((*factory, q.abi_encode().into()));
@@ -67,9 +76,10 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
     let mut got = got.into_iter();
     let mut out = Vec::new();
     for (c, plan) in cands.iter().zip(plans) {
-        let (pool, allowed, meta) = match plan {
-            Ok(Plan::Listed(p)) => (p, None, false),
-            Ok(Plan::Factory(p, _, list, meta)) => (p, Some(list), meta),
+        let (pool, allowed, meta, with_oracle) = match plan {
+            Ok(Plan::Listed(p)) => (p, None, false, false),
+            Ok(Plan::Oracle(p)) => (p, None, false, true),
+            Ok(Plan::Factory(p, _, list, meta)) => (p, Some(list), meta, false),
             Err(w) => {
                 out.push(Verdict::Rejected(w));
                 continue;
@@ -77,6 +87,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         };
         let imp = allowed.map(|list| (got.next(), list));
         let base = if meta { Some(base_of(got.next())) } else { None };
+        let oracle = with_oracle.then(|| load_curve_oracle::oracle_of(got.next()));
         let part: Vec<call::Piece> = got.by_ref().take(MAX_COINS).collect();
         if let Some((answer, list)) = imp {
             match implementation(answer, &list, pool) {
@@ -104,10 +115,23 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 continue;
             }
         };
+        let oracle = match oracle {
+            None => None,
+            Some(Ok(o)) => Some(o),
+            Some(Err(Some(node))) => {
+                out.push(Verdict::Failed(node));
+                continue;
+            }
+            Some(Err(None)) => {
+                let w = format!("пул {pool:#x}: oracle() откатился или ноль — не пул Curve с курсом оракула");
+                out.push(Verdict::Rejected(w));
+                continue;
+            }
+        };
         let answers: Result<Vec<_>, String> = part.into_iter().collect();
         out.push(match answers {
             Err(node) => Verdict::Failed(node),
-            Ok(a) => judge(ctx, c, pool, &a, base),
+            Ok(a) => judge(ctx, c, pool, &a, base, oracle),
         });
     }
     out
@@ -134,6 +158,16 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
         .iter()
         .filter_map(|s| Address::from_str(s.trim()).ok())
         .any(|a| a == pool);
+    // Решение 481: пул с курсом оракула — фабрики нет, только список.
+    if c.family.variant == Variant::CurveOracle {
+        return if known {
+            Ok(Plan::Oracle(pool))
+        } else {
+            Err(format!(
+                "пул {pool:#x} не в dex.stable_pools DEX {id} (пул Curve с курсом оракула — только список)"
+            ))
+        };
+    }
     if known && !meta {
         return Ok(Plan::Listed(pool));
     }

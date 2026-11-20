@@ -195,6 +195,7 @@ pub mod load_crypto_v1_decode;
 pub mod load_curve;
 pub mod load_curve_meta;
 pub mod load_curve_ng;
+pub mod load_curve_oracle;
 pub mod load_curve_plain;
 pub mod load_dmm;
 pub mod load_dodo;

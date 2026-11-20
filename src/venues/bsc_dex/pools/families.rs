@@ -459,6 +459,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "curve_stableswap_plain" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
         // Решение 472 (доделка): метапулы фабрики Curve Sidechain/L2 — вариант CurveMeta, шаг CURVE исполнителя.
         "curve_stableswap_meta" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
+        // Решение 481: пул Curve с курсом оракула и нативным ETH (ETH/wstETH Arbitrum) — вариант CurveOracle, шаг
+        // CURVE_ETH исполнителя v5.
+        "curve_stableswap_oracle" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
         // Curve StableSwap-NG (решение 275): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
         "curve_stableswap_ng" => (PoolKind::StableSwap, Proto::CurveNg, true, false, false),
         // Nomiswap Stable (решение 284): в графе и сигналах; исполнение — шаг NOMI_STABLE контракта-исполнителя (только v2).

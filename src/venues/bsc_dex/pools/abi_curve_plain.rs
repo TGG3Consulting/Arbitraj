@@ -3,7 +3,8 @@
 //! и Plain*Basic фабрики Curve Sidechain/L2) сверх ABI Curve 2020 (abi_curve.rs, геттеры coins/balances/fee, get_dy,
 //! exchange — те же): `A_precise()` (A·A_PRECISION — им считает пул), события, которых у Curve 2020 нет или они другие
 //! (RemoveLiquidityOne с token_supply, CommitNewFee), и реестр фабрики `get_implementation_address(pool)`.
-//! Кто вызывает: pools/load_curve_plain.rs, load_curve_meta.rs, verify_curve_plain.rs, events_curve.rs (topics_of).
+//! Кто вызывает: pools/load_curve_plain.rs, load_curve_meta.rs, load_curve_oracle.rs, verify_curve_plain.rs,
+//! events_curve.rs (topics_of).
 //! От чего зависит: alloy::sol!.
 //! Настройки: нет.
 //!
@@ -44,6 +45,14 @@ alloy::sol! {
         event TokenExchangeUnderlying(address indexed buyer, int128 sold_id, uint256 tokens_sold, int128 bought_id, uint256 tokens_bought);
 
         function get_virtual_price() external view returns (uint256);
+    }
+
+    interface ICurveOraclePool {
+        function oracle() external view returns (address);
+    }
+
+    interface IRateOracle {
+        function latestAnswer() external view returns (int256);
     }
 
     interface ICurvePlainFactory {
@@ -102,6 +111,11 @@ mod tests {
         assert_eq!(
             ICurveMeta::get_virtual_priceCall::SELECTOR.to_vec(),
             sel("get_virtual_price()")
+        );
+        assert_eq!(ICurveOraclePool::oracleCall::SELECTOR.to_vec(), sel("oracle()"));
+        assert_eq!(
+            IRateOracle::latestAnswerCall::SELECTOR.to_vec(),
+            sel("latestAnswer()")
         );
     }
 }

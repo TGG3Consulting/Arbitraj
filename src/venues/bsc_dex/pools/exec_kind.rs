@@ -194,9 +194,14 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // у Plain*Basic `_receiver = msg.sender` по умолчанию (curve-factory f389123 Plain2Basic.vy L530-L536), у 2pool —
         // перегрузка из 4 аргументов в официальном ABI curvefi/curve-js ab3f1c2 src/constants/abis/2pool/swap.json.
         // Метапул фабрики (MetaUSD.vy f389123 L606-L612) — та же подпись exchange, монеты — ERC-20 (монета и LP-токен).
-        "curve_stableswap" | "curve_stableswap_ng" | "curve_stableswap_plain" | "curve_stableswap_meta" => {
-            ExecKind::Curve
-        }
+        // Решение 481: пул ETH/wstETH (curve_stableswap_oracle) — exchange(int128, int128, dx, min_dy) payable
+        // (docs/sources/curve_arbitrum/0x6eB2…7d80.vy L444); монета пары — всегда нативный ETH пула, поэтому шаг —
+        // CURVE_ETH (exec/executor/entry.rs stable → curve_eth, только исполнитель v5).
+        "curve_stableswap"
+        | "curve_stableswap_ng"
+        | "curve_stableswap_plain"
+        | "curve_stableswap_meta"
+        | "curve_stableswap_oracle" => ExecKind::Curve,
         "maverick_v2" => ExecKind::Maverick,
         "pancake_stableswap" | "lista_stableswap" => ExecKind::StableU256,
         // Решение 442: Curve Twocrypto-NG / Tricrypto-NG — exchange(uint256 i, uint256 j, dx, min_dy) с receiver =

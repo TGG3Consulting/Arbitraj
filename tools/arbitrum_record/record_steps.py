@@ -114,11 +114,15 @@ def steps(rpc, wallet, ekubo_from):
             "--v1-template", "0x5bcA7dDF1bcccB2eE8e46c56bfc9d3CDC77262bC",
             "--tricrypto-v1-pool", "0x960ea3e3C7FB317332d990873d354E18d7645590",
             # Решение 472 (T472-10): EURS/2CRV — «2021-10-30. EURS/deployment.log»; WBTC/renBTC, ETH/wstETH — код
-            # (исходник не найден), адреса — curve-js ab3f1c2 src/constants/pools/arbitrum.ts L98, L152.
+            # (решение 481: исходники найдены в Sourcify, запись — curve_ren_wsteth.py), адреса — curve-js ab3f1c2
+            # src/constants/pools/arbitrum.ts L98, L152.
             "--crypto2-v1-pool", "0xA827a652Ead76c6B0b3D19dba05452E06e25c27e",
             "--code-pools", "0x3E01dD8a5E1fb3481F0F589056b428Fc308AF0Fb,0x6eB2dc694eB516B16Dc9FBc678C60052BbdD7d80,"
             "0x7f90122BF0700F9E7e1F688fe926940E8839F353"]),
         ("curve_plain", "curve_plain.py", ["--node", rpc]),
+        # Решение 481 (T472-10): WBTC/renBTC и ETH/wstETH — исходники Sourcify (docs/sources/curve_arbitrum/), адреса —
+        # в шапке скрипта; фаза состояния — recnode.fresh.
+        ("curve_ren_wsteth", "curve_ren_wsteth.py", ["--node", rpc]),
         ("camelot_v2", "camelot_v2.py", [rpc, "--factory", "0x6EcCab422D763aC031210895C81787E87B43A652"]),
         ("algebra_dir_fee", "algebra_dir_fee.py", algebra),
         ("lb_v20", "lb_v20.py", [rpc, "--factory", "0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982",

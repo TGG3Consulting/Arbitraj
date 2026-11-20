@@ -221,8 +221,8 @@ fn step_data_layouts() {
     let sh = Params::Shell(shell_step(1)).data();
     assert_eq!(sh.len(), 96);
     assert_eq!(
-        <(Address, u8, u8)>::abi_decode_params(&sh).unwrap(),
-        (shell_step(1).primitive, 1, 6)
+        <(Address, U256, U256)>::abi_decode_params(&sh).unwrap(),
+        (shell_step(1).primitive, U256::from(1), U256::from(6))
     );
     // Решение 472: CURVE_ETH — abi.encode(int128 i, int128 j, bool ethIn): три слова.
     let ce = Params::CurveEth {

@@ -339,6 +339,19 @@ fn side(
                 minus_one(pair_depth(eff, r_in, r_out, buy))
             }
         }
+        // Решение 484: пул Wombat — средняя цена исполнения в полосе по идеальному выходу (quote/wombat_depth.rs).
+        (PoolState::StableSwap(d), PoolKind::StableSwap) if d.wombat.is_some() => {
+            let (ic, iu) = if e.coin == e.pool.token0 {
+                (d.i0, d.i1)
+            } else {
+                (d.i1, d.i0)
+            };
+            if d.halted {
+                return Err("пул Wombat на паузе".into());
+            }
+            super::wombat_depth::side(d, (usize::from(ic), usize::from(iu)), b, buy)
+                .ok_or_else(|| "расчёт глубины пула Wombat невозможен".to_string())
+        }
         // StableSwap (решение 122 F): средняя цена исполнения в полосе (quote/stable_depth.rs), без комиссии.
         (PoolState::StableSwap(d), PoolKind::StableSwap) => {
             let (ic, iu) = if e.coin == e.pool.token0 {

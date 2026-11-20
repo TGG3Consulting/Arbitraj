@@ -48,6 +48,8 @@
 //!   блока, у 2pool donate_admin_fees без события — перечитываются все.
 //! • Решение 455: crypto-пулы Curve с переводом токена на пул без события пула (transfer_in.rs due) — один раз, на
 //!   первой голове после перевода, если чтение его ещё не учло.
+//! • Решение 484: Wombat — mintFee(token) любым адресом меняет cash / liability актива без события пула,
+//!   setCovRatioFeeParam — без события, цены активов динамического пула (getRelativePrice) — внешние: перечитываются все.
 //! • Решение 470 (T470-07): пулы Aero Slipstream V3 — ЛЁГКОЕ чтение (light): только комиссия крючка пачкой
 //!   (per_block_aero.rs); цена, ликвидность и тики — по событиям пула полным чтением.
 //! Кто вызывает: pools/session.rs, session_lanes.rs (ramping), check/memory_proof_rules.rs (unevented).
@@ -113,6 +115,7 @@ pub fn needs(f: &Family) -> bool {
             | Proto::FluidT1
             | Proto::LbV20
             | Proto::LbV22
+            | Proto::Wombat
     )
 }
 

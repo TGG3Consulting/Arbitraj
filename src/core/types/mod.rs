@@ -38,6 +38,7 @@ pub mod pool_tick_bin;
 pub mod pool_vault;
 pub mod pool_vault_v2;
 pub mod pool_vault_v3;
+pub mod pool_wombat;
 pub mod presell;
 pub mod send;
 pub mod tip_share;
@@ -74,7 +75,7 @@ pub use pool::{
     EkuboTwamm, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, LbBinData, OraclePmmData,
     PmmData, Pool, PoolKind, PoolRef, PoolState, SmartColDebtData, SolidlyFee, SolidlyGate,
     StableData, StableGuard, StableNg, TickBinData,
-    TickReserves, VaultCurve, VaultPoolData,
+    TickReserves, VaultCurve, VaultPoolData, WombatData,
 };
 pub use pool_cond_stat::{PoolCondCounts, PoolCondStat};
 pub use pool_depth::{CrossCheck, PoolDepth, SideCheck, UnreadPool};

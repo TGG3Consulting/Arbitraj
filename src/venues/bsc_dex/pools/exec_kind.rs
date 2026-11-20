@@ -112,6 +112,11 @@ pub enum ExecKind {
     /// _curveEth). Шаг 28 — только исполнитель v5 (exec_callback.rs since). Вид семейства остаётся CURVE (of); шаг
     /// CURVE_ETH выбирает exec/executor/entry.rs, когда монета пары — нативная монета пула (StableData.native).
     CurveEth,
+    /// Решение 484: пул Wombat Exchange — approve пулу ровно на шаг + `pool.swap(tokenIn, tokenOut, вход, 1, to,
+    /// block.timestamp)`: пул списывает вход transferFrom(исполнитель → актив входа) и переводит выход `to` из актива
+    /// выхода (wombat-exchange/v1-core 2ac067b8 PoolV2.sol L843-L876). Шаг 30 — только исполнитель v5 (exec_callback.rs
+    /// since).
+    Wombat,
 }
 
 impl ExecKind {
@@ -144,6 +149,7 @@ impl ExecKind {
             ExecKind::Ekubo => "EKUBO",
             ExecKind::AeroBasic => "AERO_BASIC",
             ExecKind::CurveEth => "CURVE_ETH",
+            ExecKind::Wombat => "WOMBAT",
         }
     }
 
@@ -261,6 +267,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 447: Core.lock / swap / forward / startPayments / completePayments / withdraw (EkuboProtocol/evm-contracts
         // @61d09daa src/base/FlashAccountant.sol L146-L187, L190-L221, L224-L381; src/Core.sol L510-L858). Шаг 25 (решение 456).
         "ekubo" => ExecKind::Ekubo,
+        // Решение 484: PoolV2.swap — вызывающий не ограничен (nonReentrant, whenNotPaused, срок, пауза актива входа;
+        // PoolV2.sol L843-L876), вход — safeTransferFrom(msg.sender) по разрешению пулу; шаг 30, только v5.
+        "wombat" => ExecKind::Wombat,
         _ => return None,
     })
 }

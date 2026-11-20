@@ -260,6 +260,7 @@ pub fn one_by_one(f: &Family) -> bool {
         || f.proto == Proto::LbV20
         || f.proto == Proto::LbV22
         || f.proto == Proto::Ekubo
+        || f.proto == Proto::Wombat
 }
 
 /// Размер части пачки: dex.load_batch (вызовов в одном eth_call Multicall3). Ошибки: NotConfigured (не задана или 0).

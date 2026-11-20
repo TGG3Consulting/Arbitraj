@@ -147,6 +147,7 @@ async fn stable_steps_take_indices_from_state() {
             input_fee: false,
             pair_d: false,
             ema: false,
+            wombat: None,
         };
         Entry {
             family: f,

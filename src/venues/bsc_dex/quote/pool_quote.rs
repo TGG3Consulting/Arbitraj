@@ -24,7 +24,7 @@ use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
     balancer_math, bin_swap, crypto_swap, dmm, ekubo_mev, ekubo_swap, fluid_check, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_ema, stable_guard, stableswap_ng,
-    stableswap_nomi, stableswap_v1, swap_solidly, v2,
+    stableswap_nomi, stableswap_v1, swap_solidly, v2, wombat,
 };
 use super::super::pools::ekubo_native;
 use super::super::pools::families::Proto;
@@ -351,6 +351,17 @@ pub fn swap(
                 return Err(why(
                     "StableSwap: пул на паузе или выключен (обмен откатился бы)",
                 ));
+            }
+            // Решение 484: пул Wombat — выход PoolV2.swap (math/wombat.rs: CoreV2, haircut, высокое покрытие, проверки
+            // addCash / removeCash / покрытия 1 %; пауза актива входа).
+            if d.wombat.is_some() {
+                let out = wombat::swap_out(d, usize::from(i), usize::from(j), amount)
+                    .ok_or_else(none)?;
+                return Ok(Swapped {
+                    amount_in: amount,
+                    amount_out: out,
+                    complete: true,
+                });
             }
             // Шаблон пула (решение 122 F, 3): точность A, раунды, откат при несходимости — из состояния.
             let t = stableswap_v1::Template {

@@ -124,5 +124,6 @@ pub async fn load(
         input_fee: false,
         pair_d: false,
         ema: false,
+        wombat: None,
     })))
 }

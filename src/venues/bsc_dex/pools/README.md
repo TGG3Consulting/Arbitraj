@@ -362,6 +362,13 @@ Ekubo (решение 447, вид `ekubo`; EkuboProtocol/evm-contracts@61d09daa 
 | `aero_cl_head.rs` | Решение 470 (T470-01, T470-07): комиссия пулов Aero Slipstream V3 пачкой (два прохода: fee(), slot0, конфиг крючка, tickSpacingToFee; наблюдения и observe на каждое δ) — наибольшая из fee() и первой комиссии следующего блока |
 | `per_block_aero.rs` | Решение 470 (T470-07): лёгкое чтение каждым блоком — только комиссия крючка (+ MEV-налог) в запись реестра; состояние пула — по событиям |
 | `aero_fee_seen.rs` | Ревью t240: комиссия Aero Slipstream V3 из чтения старого блока не перетирает комиссию более нового (память блок → комиссия по пулу) |
+| `abi_wombat.rs` | Решение 484: ABI пула Wombat Exchange и активов (геттеры, quotePotentialSwap, swap, события), слоты хранилища — реализация EIP-1967 и _pausedAssets (слот 201, storageLayout Sourcify) |
+| `load_wombat.rs` | Решение 484: чтение пула Wombat на блоке — реализация прокси из dex.wombat_implementations / dex.wombat_dynamic_implementations (kind_of), три ступени Multicall3 и слоты пауз активов пачкой JSON-RPC; Raw — одно чтение на все пары |
+| `load_wombat_calls.rs` | Решение 484: вызовы ступеней чтения Wombat и разбор ответов без сети (head / assets / detail) |
+| `load_wombat_build.rs` | Решение 484: сборка PoolState::StableSwap со StableData.wombat из разобранных ответов |
+| `verify_wombat.rs` | Решение 484: проверка пула Wombat — dex.stable_pools, монеты пары среди getTokens(), реализация прокси сверена |
+| `events_wombat.rs` | Решение 484: события пула Wombat — любое → перечитать (и каждым блоком: mintFee, цены активов — без событий) |
+| `load_wombat_memo.rs` | Решение 484 (ревью): память монет, активов и decimals пула Wombat до AssetAdded / AssetRemoved или проверки — каждым блоком читаются только меняющиеся величины |
 
 Решение 483 — Ramses на Arbitrum (варианты видов, `family_variant.rs`: RamsesCl, RamsesClV2, RamsesLegacy):
 

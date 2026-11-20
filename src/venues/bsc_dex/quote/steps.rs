@@ -199,6 +199,14 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
                 .ok_or_else(|| ctx.err(ErrorCode::BadResponse, solidly_fee::no_pct(fee)))
         }
         // StableSwap (решение 122 F): комиссия — числитель над 10^10 (fee() пула) → проценты = fee / 10^8.
+        // Решение 484: пул Wombat — haircutRate над 10^18 → проценты = haircut / 10^16 (комиссия за высокое покрытие —
+        // только в расчёте обмена, math/wombat.rs: зависит от суммы).
+        (PoolState::StableSwap(d), _) if d.wombat.is_some() => {
+            let h = d.wombat.as_ref().map_or(U256::ZERO, |w| w.haircut);
+            num::to_decimal(h, 16).ok_or_else(|| {
+                ctx.err(ErrorCode::BadResponse, "haircut Wombat не помещается в Decimal")
+            })
+        }
         (PoolState::StableSwap(d), _) => num::to_decimal(d.fee, 8).ok_or_else(|| {
             ctx.err(
                 ErrorCode::BadResponse,

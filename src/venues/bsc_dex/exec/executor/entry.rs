@@ -13,6 +13,7 @@
 //! (exec_callback.rs since), у v1–v4 и у несверенного — отказ с причиной («нужна сборка v5»).
 //! Решение 273: пул Solidly с фабрикой на паузе — шаг не строится (NoRoute с причиной).
 //! Решение 470 (T470-06): пул Aero Basic у исполнителя v5 — шаг AERO_BASIC (pools/exec_kind.rs for_wallet).
+//! Решение 484: пул Wombat — шаг WOMBAT = 30 (только v5; пауза пула и актива входа — шаг не строится).
 //! Решение 442: crypto-пул Curve (Twocrypto-NG / Tricrypto-NG, PoolState::Crypto) — шаг STABLE_U256 (exchange(uint256 i,
 //! uint256 j, dx, 0)), индексы — из состояния пула; пул с halted (tricrypto 2021 is_killed) — не исполняется. Решение
 //! 453: пул в рампе A/gamma исполняется — котировка считает рампу, как контракт (D пересчитывается через newton_D,
@@ -36,7 +37,7 @@ use alloy_primitives::Address;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
-use crate::core::types::{PoolRef, PoolState, SmartColDebtData};
+use crate::core::types::{PoolRef, PoolState, SmartColDebtData, StableData};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::super::ctx::Ctx;
@@ -330,6 +331,15 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             stable(e, k, token_in, stable_native::wrapped(ctx), ver)
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
         }
+        // Решение 484: пул Wombat — шаг без данных (approve + swap пула); пул на паузе или актив монеты входа на паузе
+        // (StableData.wombat.asset_paused) — обмен откатился бы, шаг не строится.
+        ExecKind::Wombat => match &e.pool.state {
+            PoolState::StableSwap(d) if !d.halted && wombat_open(d, e, token_in) => Params::Wombat,
+            _ => {
+                let why = format!("{}: Wombat не прочитан или на паузе", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         // Решение 470 (T470-06): вид семейства aero_basic — SOLIDLY (ветка выше выбирает AERO_BASIC у кошелька v5);
         // как вид семейства AERO_BASIC не встречается — сюда тоже на случай такой пометки (пауза — та же проверка).
         ExecKind::AeroBasic => match &e.pool.state {
@@ -341,6 +351,22 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         },
     };
     Ok((p, pool))
+}
+
+/// Решение 484: монета входа — из пары пула, и её актив не на паузе (PoolV2.swap requireAssetNotPaused(fromToken)).
+/// Принимает: состояние StableSwap пула Wombat, запись, токен входа. Ошибок нет (нет части Wombat — false).
+fn wombat_open(d: &StableData, e: &Entry, token_in: Address) -> bool {
+    let i = if token_in == e.pool.token0 {
+        d.i0
+    } else if token_in == e.pool.token1 {
+        d.i1
+    } else {
+        return false;
+    };
+    d.wombat
+        .as_ref()
+        .and_then(|w| w.asset_paused.get(usize::from(i)))
+        .is_some_and(|p| !*p)
 }
 
 /// Решение 440: параметры шага FLUID. Принимает: состояние пула, токен входа шага (в паре — обёртка нативной монеты).

@@ -90,3 +90,5 @@
 | `ekubo_twamm.rs` | Ekubo TWAMM: сумма по скорости, скорость ± дельта, computeC, sqrt отношения скоростей, цена после виртуальных ордеров (computeNextSqrtRatio); векторы официального теста |
 | `ekubo_time.rs` | Ekubo TWAMM: шаг и следующее допустимое время, поиск инициализированного времени по прочитанным словам битмапа времён |
 | `ekubo_virtual.rs` | Ekubo TWAMM: исполнение виртуальных ордеров до времени блока (порт цикла TWAMM) — состояние пула перед нашим обменом |
+| `wombat_core.rs` | Wombat Exchange (решение 484): DSMath / SignedSafeMath (wmul, wdiv, toWad, fromWad, корень с приближением — качание = откат по газу) и ядро CoreV2 (_swapQuoteFunc, _solveQuad) | wombat-exchange/v1-core 2ac067b8 `libraries/DSMath.sol`, `libraries/SignedSafeMath.sol`, `pool/CoreV2.sol` |
+| `wombat.rs` | Wombat Exchange (решение 484): _quoteFrom (множитель динамического пула, haircut, комиссия за высокое покрытие), quotePotentialSwap и выход swap с проверками addCash / removeCash / покрытия 1 % | `pool/PoolV2.sol`, `pool/HighCovRatioFeePoolV2.sol`, `pool/DynamicPoolV2.sol`, `asset/Asset.sol` (развёрнутые реализации Arbitrum — docs/sources/wombat_arbitrum/README.md) |

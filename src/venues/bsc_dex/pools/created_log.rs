@@ -204,6 +204,8 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
                 continue;
             }
+            // Решение 484: Wombat — фабрики нет; пулы — справочник и список dex.stable_pools.
+            Proto::Wombat => continue,
             // Maverick V2 (решение 122 F): PoolCreated(poolAddress, …, tokenA, tokenB, kinds, accessor) фабрики, все поля
             // не индексированы (IMaverickV2Factory.sol L35-L47).
             Proto::Maverick => (

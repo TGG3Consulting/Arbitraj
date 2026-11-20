@@ -259,6 +259,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.cl_hook_ahead_s` | t240, р. 470 (T470-01) | совета нет — по записи aero.py (fee() на +1 / +3 с) | без .optional(): ошибка «не задана»: Не задана — DEX вида slipstream_aero не подключена | ещё не в релизе (ветка t240/arb-aero) |
 | `dex.aero_fee_module` | t240, р. 470 (ревью) | volatile `0x7949DE8d67E4F6b8509Bdbb43FF0503aF1247a7A`, stable `0x0195fC76Da986D66B2A468133a1be41E90893Da6` | без .optional(): Не задана — DEX вида aero_basic не подключена | ещё не в релизе (ветка t240/arb-aero) |
 | `dex.aero_mev_module` | t240, р. 470 (ревью) | volatile `0xd724433C0C637c7e273Ac623427D806Ef396c50a`, stable `0x8173816c3638650343B0a67E688AbB966C458130`, Slipstream V3 `0xce015007D03f3E3964938f11c29F24bDB0b945aB` | без .optional(): Не задана — DEX видов aero_basic / slipstream_aero не подключена | ещё не в релизе (ветка t240/arb-aero) |
+| `dex.wombat_implementations` | t253, р. 484 | 9 адресов HighCovRatioFeePoolV2 (docs/FIRST_RUN.md, раздел «Wombat Exchange») | без .optional(): Не задана — DEX вида wombat не подключена | ещё не в релизе (ветка t253/arb-wombat) |
+| `dex.wombat_dynamic_implementations` | t253, р. 484 | 3 адреса DynamicPoolV2 (docs/FIRST_RUN.md) | необязательная: Не задана — динамические пулы не читаются (реализация не сверена) | ещё не в релизе (ветка t253/arb-wombat) |
 | `dex.arb_sys` | t240, р. 470 | Arbitrum One: `0x0000000000000000000000000000000000000064` | необязательна: пулы Aero с ненулевым множителем модуля не читаются | новая (ветка t240/arb-aero) |
 | `dex.arb_owner_public` | t240, р. 470 | Arbitrum One: `0x000000000000000000000000000000000000006b` | необязательна: при ArbOS ≥ 60 пулы Aero с ненулевым множителем модуля не читаются | новая (ветка t240/arb-aero) |
 | `dex.stable_pools` | —, р. 122 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана — DEX не подключена | в релизе 141619bc |
@@ -6143,3 +6145,27 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** да — пул с другим крючком не допускается; правило MEV-налога модуля крючка.
 - **Связанные ключи:** dex.kind = slipstream_aero, dex.factory, dex.quoter_virtual, dex.gas_mode, send.tip_mode, send.priority_fee_gwei, send.tip_cap_gwei.
 - **Статус:** новая (ветка t240/arb-aero).
+
+### `dex.wombat_implementations`
+
+- **Задача / решение:** t253 / решение 484.
+- **Появилась:** 2026-11-20, ветка t253/arb-wombat.
+- **Кейс:** решение 484 (Тигран 20.11.2026: все DEX сети): Wombat Exchange на Arbitrum One — 17 пулов официальной страницы docs.wombat.exchange, каждый — прокси EIP-1967 (OptimizedTransparentUpgradeableProxy), владелец может сменить реализацию. Математика вида — порт wombat-exchange/v1-core 2ac067b8; развёрнутые реализации сверены по Sourcify (docs/sources/wombat_arbitrum/README.md). Чтобы не считать пул чужого кода нашей формулой, пул читается только при реализации из сверенного списка.
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (ключ `wombat-exchange-arbitrum@arbitrum` — предложение, решает Тигран); каталог src/settings/catalog/dex_wombat.rs.
+- **Что ставить:** 9 адресов HighCovRatioFeePoolV2 — docs/FIRST_RUN.md, раздел «Wombat Exchange в сети Arbitrum (решение 484)» (Sourcify proxyResolution пулов). Пауза актива читается слотом 201 хранилища пула (_pausedAssets): слот проверен storageLayout Sourcify для перечисленных реализаций (docs/sources/wombat_arbitrum/README.md); новую реализацию добавлять в список только после сверки её storageLayout (слот _pausedAssets = 201) и пути обмена с исходником.
+- **Если не задана:** в каталоге без .optional(); src/venues/bsc_dex/pools/families.rs required (ветка Proto::Wombat) — DEX «не подключена: не задана dex.wombat_implementations» (classify), пулы не проверяются и не торгуются. Реализация пула не в списках — pools/load_wombat.rs kind_of: чтение пула — ошибка InvalidAddress с причиной, проверка (verify_wombat.rs) — отказ.
+- **Влияет на торговлю:** да — какие пулы Wombat читаются и котируются.
+- **Связанные ключи:** dex.kind (`wombat`), dex.stable_pools, dex.wombat_dynamic_implementations.
+- **Статус:** ещё не в релизе (ветка t253/arb-wombat).
+
+### `dex.wombat_dynamic_implementations`
+
+- **Задача / решение:** t253 / решение 484.
+- **Появилась:** 2026-11-20, ветка t253/arb-wombat.
+- **Кейс:** решение 484: у динамических пулов Wombat (DynamicPoolV2 — frxETH, wstETH, ankrETH, jUSDC на Arbitrum) вход умножается на отношение относительных цен активов (_quoteFactor, getRelativePrice), у обычных — нет; по коду пула вид не отличить, поэтому реализация DynamicPoolV2 задаётся отдельным списком.
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX вида wombat; каталог src/settings/catalog/dex_wombat.rs.
+- **Что ставить:** 3 адреса DynamicPoolV2 — docs/FIRST_RUN.md, раздел «Wombat Exchange в сети Arbitrum (решение 484)». Пауза актива читается слотом 201 хранилища пула (_pausedAssets): слот проверен storageLayout Sourcify для перечисленных реализаций (docs/sources/wombat_arbitrum/README.md); новую реализацию добавлять в список только после сверки её storageLayout (слот _pausedAssets = 201) и пути обмена с исходником.
+- **Если не задана:** необязательная (.optional()); pools/load_wombat.rs list — пусто: пул с реализацией DynamicPoolV2 не в dex.wombat_implementations — чтение и проверка отказывают («реализация не сверена»), прочие пулы — как обычно.
+- **Влияет на торговлю:** да — динамические пулы Wombat в граф и котировки только с ней.
+- **Связанные ключи:** dex.kind (`wombat`), dex.wombat_implementations, dex.stable_pools.
+- **Статус:** ещё не в релизе (ветка t253/arb-wombat).

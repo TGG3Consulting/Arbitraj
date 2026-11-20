@@ -183,6 +183,7 @@ pub fn build(
         input_fee: false,
         pair_d: false,
         ema: false,
+        wombat: None,
     })))
 }
 

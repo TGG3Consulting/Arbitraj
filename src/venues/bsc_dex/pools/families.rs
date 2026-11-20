@@ -273,6 +273,16 @@ pub enum Proto {
     /// Сверка — Router.quote (MEVCaptureRouter, dex.quoter). Исполнение — шаг EKUBO исполнителя (lock → swap / forward).
     /// Вид ядра — Ekubo.
     Ekubo,
+    /// Решение 484 (wombat, DEX wombat-exchange сети Arbitrum): пул Wombat Exchange (wombat-exchange/v1-core 2ac067b8;
+    /// развёрнутые реализации HighCovRatioFeePoolV2 / DynamicPoolV2 — Sourcify, docs/sources/wombat_arbitrum/) —
+    /// стейблсвап с коэффициентом покрытия: у каждой монеты свой актив (cash, liability), haircut с выхода, комиссия за
+    /// покрытие входа выше startCovRatio; у динамического пула — относительные цены активов. Пул — прокси, реализация
+    /// из dex.wombat_implementations / dex.wombat_dynamic_implementations; пулы — список dex.stable_pools (фабрики нет).
+    /// Чтение — load_wombat*.rs (каждым блоком: mintFee и цены активов меняются без событий пула), события —
+    /// events_wombat.rs, проверка — verify_wombat.rs, математика — math/wombat*.rs, квотер — quotePotentialSwap пула
+    /// (quote/quoter_wombat.rs). Исполнение — шаг WOMBAT исполнителя v5. Многомонетный. Вид ядра — StableSwap (часть
+    /// StableData.wombat).
+    Wombat,
 }
 
 impl Proto {
@@ -291,6 +301,7 @@ impl Proto {
                 | Proto::PancakeStable
                 | Proto::CurveTricrypto
                 | Proto::CurveTricryptoV1
+                | Proto::Wombat
         )
     }
 
@@ -530,6 +541,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // WooFi WooPPV2 (решение 122 F, 3): в графе и сигналах; своей математики нет (развёрнутый код закрыт) — котировка
         // по лесенке ответов квотера контракта (dex.pmm_ladder_usd, quote/pmm_ladder.rs); шага WOO нет до сухой сделки.
         "woofi_v2" => (PoolKind::OraclePmm, Proto::WooPP, true, false, false),
+        // Решение 484: Wombat Exchange — в графе и сигналах (порт CoreV2 + haircut + высокое покрытие); исполнение — шаг
+        // WOMBAT исполнителя v5 (exec_kind.rs).
+        "wombat" => (PoolKind::StableSwap, Proto::Wombat, true, false, false),
         // Fluid DEX T1 (решение 440): в графе и сигналах (порт _swapIn); исполнение — шаг FLUID исполнителя.
         "fluid_t1" => (PoolKind::SmartColDebt, Proto::FluidT1, true, false, false),
         // Slipstream (Topaz v3 на BSC; решения 80, 85): форк Uniswap V3 core — в графе, котируется общей математикой V3
@@ -827,6 +841,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.
         Proto::SaddleStable => list.push("dex.stable_pools"),
+        // Решение 484: Wombat — фабрики нет: пулы — список dex.stable_pools (docs.wombat.exchange), реализации пула —
+        // сверенные с исходником (dex.wombat_dynamic_implementations — необязательная: без неё динамические пулы не
+        // читаются).
+        Proto::Wombat => list.extend(["dex.stable_pools", "dex.wombat_implementations"]),
         // WooFi: общий контракт, оракул и закреплённая реализация прокси (сменилась — семейство стоит до сверки).
         Proto::WooPP => list.extend(["dex.pmm_pool", "dex.oracle", "dex.pool_implementation"]),
         // Slipstream (Topaz v3; решения 80, 85): фабрика (проверка пула getPool(coin, quote, int24 tickSpacing),

@@ -26,6 +26,9 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 484 (Wombat): нужна сборка исполнителя v5 (шаг WOMBAT = 30 — только в исходнике) и EVM-сценарий шага;
+  Cross Chain Pool (CoreV3 / PoolV3) не портирован (TASKS T484-03); pools/stable_list.rs — 263 строки (было 249; ориентир
+  200): вынести token_calls / tokens видов в stable_list_tokens.rs; exec/executor/entry.rs — 620 строк (было 594).
 - Решение 471: tools/arbitrum_record/pancake_stable.py — 236 строк (ориентир 200): вынести pool_state в
   pancake_stable_pool.py. Общие модули записи recnode.py / gt.py (решение 460) в базе origin/feat/arbitrum ещё нет —
   скрипт со своей обработкой «состояние недоступно» и потолком времени; после слияния 460 — перевести на recnode.fresh.

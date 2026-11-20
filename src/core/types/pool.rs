@@ -26,6 +26,7 @@ pub use super::pool_smart::{ColReserves, DebtReserves, SmartColDebtData};
 pub use super::pool_vault::{VaultCurve, VaultPoolData};
 pub use super::pool_solidly::{FeeRule, SolidlyFee, SolidlyGate};
 pub use super::pool_tick_bin::{TickBinData, TickReserves};
+pub use super::pool_wombat::WombatData;
 
 /// Вид пула — по его математике, без названия конкретной DEX (ядро не знает площадок).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -367,6 +368,12 @@ pub struct StableData {
     /// записи эпизодов.
     #[serde(default)]
     pub ema: bool,
+    /// Решение 484: пул Wombat Exchange (core/types/pool_wombat.rs) — Some: выход считает математика Wombat (адаптер,
+    /// math/wombat.rs) по cash / liability активов, а не формулы Curve; balances — cash в единицах монеты, rates —
+    /// 10^(36 − decimals) (у динамического пула — ещё × относительная цена / 1e18), amp — ampFactor (18 знаков), fee —
+    /// haircutRate / 10^8 (только для показа). None — прочие шаблоны. `#[serde(default)]` — старые записи эпизодов.
+    #[serde(default)]
+    pub wombat: Option<Box<WombatData>>,
 }
 
 /// Данные шаблона StableSwap-NG (решение «122 (Infinity Stable)») — с контракта пула на блоке. Курсы монет с внешним

@@ -15,6 +15,7 @@
 //! dex_elastic.rs — KyberSwap Elastic, части чтения тиков (решение 475).
 //! bybit.rs — только Bybit (решение 428, страховка стакана).
 //! mexc.rs — только MEXC (решение 420, быстрый стакан).
+//! dex_wombat.rs — Wombat Exchange, реализации пула (решение 484).
 //! lost_events.rs — сообщения ядру и кандидаты не теряются молча (решения 333/334).
 //! write_path.rs — очередь уведомлений, очередь и пачки журнала, synchronous учёта ядра (решения 340, 341, 353).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
@@ -43,6 +44,7 @@ mod dex_par;
 mod dex_fit;
 mod dex_graph;
 mod dex_lb;
+mod dex_wombat;
 mod feed_watch;
 mod gate;
 mod htx;
@@ -170,6 +172,7 @@ static PARTS: &[&[SettingDef]] = &[
     dex_ekubo::DEX_EKUBO,
     dex_bv3_buffer::DEX_BV3_BUFFER,
     dex_elastic::DEX_ELASTIC,
+    dex_wombat::DEX_WOMBAT,
     index::INDEX,
     kyber::KYBER,
     send::SEND,

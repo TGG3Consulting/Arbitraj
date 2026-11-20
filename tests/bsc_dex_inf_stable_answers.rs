@@ -164,6 +164,7 @@ fn entry(kind: &str) -> Entry {
         input_fee: false,
         pair_d: false,
         ema: false,
+        wombat: None,
     };
     Entry {
         family: f,

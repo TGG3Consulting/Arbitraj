@@ -1326,3 +1326,18 @@ exact_match прокси (T483-05). Включать (dex.pool_enabled) — по
 | dex.solidly_fee_rule | DEX `ramses-legacy-arbitrum@arbitrum` | `numerator` | `amountIn -= amountIn·fee/FEE_DENOM` | Pair.sol L455 |
 | dex.solidly_fee_denominator | DEX `ramses-legacy-arbitrum@arbitrum` | `1000000` | FEE_DENOM = 1_000_000 | Pair.sol L63 |
 | dex.pool_enabled | три DEX выше | «да» — после записи ramses.py и прохода тестов; Ramses CL — ещё после пересборки (T483-02) | решение Тиграна | — |
+## Wombat Exchange в сети Arbitrum (решение 484)
+
+Новый вариант dex.kind — `wombat`; новые настройки — `dex.wombat_implementations`, `dex.wombat_dynamic_implementations`
+(каталог src/settings/catalog/dex_wombat.rs). Область «DEX» площадки arb_dex, ключ `wombat-exchange-arbitrum@arbitrum`
+(предложение — у DefiLlama slug `wombat-exchange`; id у GeckoTerminal не проверялся, решает Тигран). Адреса пулов —
+docs.wombat.exchange/developers/contracts/arbitrum (раздел Pool, прочитано 20.11.2026); реализации — Sourcify
+proxyResolution каждого пула (docs/sources/wombat_arbitrum/README.md).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `wombat-exchange-arbitrum@arbitrum` | `wombat` | Пулы HighCovRatioFeePoolV2 / DynamicPoolV2 — путь обмена = wombat-exchange/v1-core 2ac067b8 | docs/sources/wombat_arbitrum/README.md |
+| dex.stable_pools | DEX `wombat-exchange-arbitrum@arbitrum` | `["0xc6bc781E20f9323012F6e422bdf552Ff06bA6CD1","0xCF20fDA54e37f3fB456930f02fb07FccF49e4849","0x29eeB257a2A6eCDE2984aCeDF80A1B687f18eC91","0x917caF2b4D6040a9D67A5F8CEfC4F89d1b214c1A","0x90eCddEC4E4116E30769A4e1EA52c319aca338B6","0xEE9b42b40852a53c7361F527e638B485D49750cD","0x12Fa5AB079CFf564d599466d39715D35d90Af978","0x20D7ee728900848752FA280fAD51aF40c47302f1","0xe14302040c0A1eb6fB5A4A79EfA46D60029358d9","0xB9bdfE449Da096256Fe7954Ef61A18eE195Db77B","0x4a8686df475D4c44324210FFA3Fc1DEA705296e0","0xc7a6bA5F28993BaDb566007bD2E0CB253c431974","0x956454C7BE9318863297309183C79b793D370401","0xe7159f15e7b1d6045506B228A1ed2136dcc56F48","0xa6eF6C45EbFDBc13f6D032fbDFeC9b389C1603E5","0x3cc8c886575968642Cab9F430261c81C5b044d4b"]` | 16 пулов страницы docs (Main, Overnight, MIM, BOB, mWOM, wmxWOM, qWOM, frxETH, wstETH, ankrETH, FRAX-MAI-USD+, jUSDC, fUSDC, mPENDLE, USDV, FRAX-USDV); Cross Chain `0xe788…1145` — нет (CrossChainPool на CoreV3, в код не взят — docs/TASKS.md T484-03) | docs.wombat.exchange |
+| dex.wombat_implementations | DEX `wombat-exchange-arbitrum@arbitrum` | `["0x82E62f4e174E3C5e1641Df670c91Ac6Ab8541518","0x6A4b5988692F8C47eA3BcCFB8A127288db61f5E1","0x30E27c4E1C9D8845a961CA703bf4B5e46e1F554c","0x3ccC0dC754E380cDA16EF94292F278bbc4Ff463E","0xC096FF2606152eD2A06dd12F15A3c0466Aa5A9fa","0xbEd0509801634CcC29Fa9f2faD764Bf194c7927d","0x9cbeE53A48390A3205B14F6B8e48Ca81Fe105dEE","0x38D2259fDeEdc94Eaf915a872139c985Ce36d5Ad","0x44A0e2AC2c99D5cB2910ec1784DD158b7fa3A642"]` | Реализации HighCovRatioFeePoolV2 (exact_match), тексты пути обмена = v1-core 2ac067b8 | Sourcify 42161 |
+| dex.wombat_dynamic_implementations | DEX `wombat-exchange-arbitrum@arbitrum` | `["0x4d1CC84a33462c35ad3dd68756d330CBbA087053","0x3DbF3e359a570D46CF5a663AC92DC7Cae77110FB","0x7585bae98800C621b427Fe045EA3b4052559C11b"]` | Реализации DynamicPoolV2 (frxETH; wstETH и ankrETH; jUSDC) | Sourcify 42161 |
+| dex.pool_enabled | DEX `wombat-exchange-arbitrum@arbitrum` | `да` — после записи tools/arbitrum_record/wombat.py и прохода tests/arbitrum_wombat_live.rs (снять #[ignore]) | Пулы в граф и сигналы; сделки — шаг WOMBAT = 30 только у исполнителя v5 (сборки v5 нет) | Решение 484 |

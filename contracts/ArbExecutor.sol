@@ -33,7 +33,8 @@
 // BALANCER_V3_BUF = 27 (решение 474: пул Balancer V3 с обменом через буфер ERC4626 хранилища — монета шага — базовый
 // токен обёртки пула: в том же unlock, что BALANCER_V3, — erc4626BufferWrapOrUnwrap (WRAP) → swap →
 // erc4626BufferWrapOrUnwrap (UNWRAP) → settle / sendTo; шаг 23 — как был, обёрток нет) и CURVE_ETH = 28 (решение 472,
-// T472-08: пул Curve с нативным ETH — exchange{value}(int128, int128, uint256, uint256), обёртка withdraw / deposit);
+// T472-08: пул Curve с нативным ETH — exchange{value}(int128, int128, uint256, uint256), обёртка withdraw / deposit),
+// WOMBAT = 30 (решение 484: пул Wombat Exchange — approve пулу + swap(from, to, сумма, 1, to, block.timestamp));
 // всё прочее — как v4. Сборки v5 нет: contracts/out/ — v4; пересобрать как v5 (бот: Version::V5) — вне агентов
 // (docs/TASKS.md «нужна сборка исполнителя v5»).
 pragma solidity 0.8.37;
@@ -129,6 +130,12 @@ contract ArbExecutor {
     // `assert msg.value == _dx` (L580), выход ETH — raw_call(_receiver, b"", value=dy) (L606, весь газ). data =
     // abi.encode(int128 i, int128 j, bool ethIn); токены шага — обёртка wnative и встречная монета (_curveEth).
     uint8 internal constant CURVE_ETH = 28;
+    // Решение 484 (только v5): пул Wombat Exchange (wombat-exchange/v1-core 2ac067b8 contracts/wombat-core/pool/PoolV2.sol
+    // L843-L876; развёрнутые реализации Arbitrum — HighCovRatioFeePoolV2 / DynamicPoolV2, Sourcify): swap(fromToken,
+    // toToken, fromAmount, minimumToAmount, to, deadline) — nonReentrant, whenNotPaused, срок (L150-L152), пауза актива
+    // входа (L855); вход — IERC20(fromToken).safeTransferFrom(msg.sender, актив входа, fromAmount) (L872) по разрешению
+    // пулу, выход — toAsset.transferUnderlyingToken(to, выход) (L873). Нативной монеты нет. data пусто.
+    uint8 internal constant WOMBAT = 30;
     // Пределы цены Ekubo MIN_SQRT_RATIO_RAW / MAX_SQRT_RATIO_RAW (evm-contracts@61d09daa src/types/sqrtRatio.sol L13, L15):
     // тот же предел ставит Router (withDefaultSqrtRatioLimit, swapParameters.sol L74-L82).
     uint256 internal constant EKUBO_MIN_SQRT = 4611797791050542631;
@@ -417,6 +424,8 @@ contract ArbExecutor {
             _stableBnb(s, amount);
         } else if (k == CURVE_ETH) {
             _curveEth(s, amount);
+        } else if (k == WOMBAT) {
+            _wombat(s, amount, to);
         } else if (k == DODO) {
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             if (IDodoPool(s.pool)._BASE_TOKEN_() == s.tokenIn) IDodoPool(s.pool).sellBase(to);
@@ -990,6 +999,20 @@ contract ArbExecutor {
         if (b > 0) {
             (bool ok,) = owner.call{value: b}("");
             require(ok, "bnb sweep");
+        }
+    }
+
+    // Решение 484 (v5): пул Wombat (WOMBAT, ссылки — у константы). Токены шага — ERC-20 (метка 0xEeee… — «native», как
+    // _stable). approve пулу ровно на шаг (пул списывает вход transferFrom(исполнитель → актив входа)), swap с минимумом
+    // 1: нулевой выход откатывает _checkAmount пула (PoolV2.sol L146-L148: minimumToAmount.toWad > выход), итог
+    // маршрута проверяет minOut; срок — block.timestamp (срок всей транзакции проверен в execute); выход — `to` прямо из
+    // актива выхода. Разрешение после шага — 0.
+    function _wombat(Step calldata s, uint256 amount, address to) internal {
+        require(s.tokenIn != NATIVE && s.tokenOut != NATIVE, "native");
+        _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount)));
+        IWombatPool(s.pool).swap(s.tokenIn, s.tokenOut, amount, 1, to, block.timestamp);
+        if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
+            _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
         }
     }
 

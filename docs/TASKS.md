@@ -167,7 +167,23 @@
      — отдельная задача, если таких пулов будет заметно.
   6) Комиссия в разбивке шага (quote/steps.rs) — статическая; комиссия крючка уже учтена в выходе котировки.
   7) `wc -l`: pools/load_balancer_v3_kinds.rs 220, math/gyro_eclp.rs 188, pools/balancer_v3_factories.rs 157 — kinds сверх
-     200 (техдолг, docs/ROADMAP.md).
+     200 (техдолг, docs/ROADMAP.md). ЗАКРЫТО ревью (ниже): kinds 180, load_balancer_v3.rs 138.
+  Ревью решения 452 (независимое, 20.11.2026) — СДЕЛАНО:
+  - Глубина по решению 73 п. 17 (без комиссии пула в обе стороны): у пула V3 с крючком StableSurge (onSwap открыт) для
+    глубины крючок снимается — надбавка всплеска не остаётся при статической 0 (quote/vault_depth.rs); пул StableSurge с
+    onlyVault — откат, как был; MEV Capture не тронут (при нулевых чаевых комиссия статическая).
+  - Разбиение: pools/load_balancer_v3_kinds.rs 220 → 180 + load_balancer_v3_reclamm.rs 77 (виртуальные балансы
+    ReClamm); pools/load_balancer_v3.rs 201 → 138 + load_balancer_v3_state.rs 77 (Parts, state; реэкспорт).
+  - Шапки: math/gyro_sqrt.rs (вызывающие — gyro_2clp.rs, gyro_eclp.rs, gyro_eclp_inv.rs), quote/vault_depth.rs (Balancer
+    V3); SETTINGS_CASES сводная: 0x44d33798… — у dex.bv3_stable_open_factories, не у dex.bv3_stable_factories.
+  - QuantAMM onSwap сверен с QuantAMMProtocol/QuantAMM-V1@4dca4932 pkg/pool-quantamm/contracts/QuantAMMWeightedPool.sol
+    (побайтно = deployment@e7867165 build-info): L271-L340 onSwap, L353-L448 веса пары / одного токена, L451-L552
+    getNormalizedWeights, L558-L572 calculateBlockNormalisedWeight; WeightedMath / FixedPoint / LogExpMath побайтно =
+    20241205-v3-weighted-pool. Формула и округления совпадают. Расхождение одно: onSwap откатывается при
+    lastInteropTime < lastUpdateTime (L284, проверяемое вычитание uint40), getNormalizedWeights — нет (unchecked,
+    L463-L466). Исправлено: чтение каждым блоком getQuantAMMWeightedPoolDynamicData (L595-L612; ABI L29-L40, L137) и
+    отказ в котировке с причиной (pools/load_balancer_v3_kinds.rs); вызов добавлен в tools/arbitrum_record/balancer_v3.py.
+    Запись узла, сделанная до этого коммита, вызова не содержит — записать заново.
 - **Решение 441 (20.11.2026, ветка t223-f2/arb-family-f2) — T433-F2: семейство Balancer V3 (хранилище Vault V3) на
   Arbitrum One (DEX T433-077 `balancer-v3-arbitrum` — единственная DEX этого семейства в таблице покрытия).** cargo,
   rustfmt, clippy, solc локально не запускались — сборка и тесты только в CI. Источники — balancer/balancer-deployments@

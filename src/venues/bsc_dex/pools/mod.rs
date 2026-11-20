@@ -162,6 +162,8 @@ pub mod load_balancer_v3_extra;
 pub mod load_balancer_v3_fixed;
 pub mod load_balancer_v3_hook_read;
 pub mod load_balancer_v3_kinds;
+pub mod load_balancer_v3_reclamm;
+pub mod load_balancer_v3_state;
 pub mod load_lb;
 pub mod load_lb_bins;
 pub mod load_solidly;

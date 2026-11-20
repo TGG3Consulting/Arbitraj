@@ -1,16 +1,20 @@
 //! Файл: venues/bsc_dex/quote/vault_depth.rs
-//! Что делает: глубина пула в общем хранилище (Balancer V2, решение 289) по направлению в полосе цены (решение 73) —
-//! без комиссии пула (чистый объём, решение Тиграна к 73): средняя цена исполнения не выходит за полосу от цены малой
-//! пробы (покупка — не выше p0·(1+b), продажа — не ниже p0·(1−b)). Поиск суммы — делением отрезка пополам по той же
-//! формуле, что котировка (math/balancer_math.rs с нулевой комиссией). Весовой пул не берёт вход больше 30 % баланса
-//! (MAX_IN_RATIO) — тогда глубина до этого предела и full = false.
+//! Что делает: глубина пула в общем хранилище (Balancer V2, решение 289; Balancer V3, решения 441 и 452) по направлению
+//! в полосе цены (решение 73) — без комиссии пула (чистый объём, решение 73 п. 17): средняя цена исполнения не выходит
+//! за полосу от цены малой пробы (покупка — не выше p0·(1+b), продажа — не ниже p0·(1−b)). Поиск суммы — делением
+//! отрезка пополам по той же формуле, что котировка (math/balancer_math.rs с нулевой комиссией). Весовой пул не берёт
+//! вход больше 30 % баланса (MAX_IN_RATIO) — тогда глубина до этого предела и full = false. Balancer V3 с крючком
+//! StableSurge: статическая комиссия 0 не снимает надбавку всплеска (math/balancer_v3_hook.rs: 0 + наибольшая·часть),
+//! поэтому для глубины крючок снимается — комиссии нет целиком (решение 73 п. 17). Пул StableSurge с onSwap только для
+//! хранилища (open = false) не трогается: крючок откатывает обмен — пул неторгуемый, глубины нет. MEV Capture не
+//! трогается (при нулевых чаевых комиссия и так статическая, 0).
 //! Кто вызывает: quote/depth_band.rs (ветка VaultPool).
-//! От чего зависит: core/types (VaultPoolData), math/balancer_math.rs.
+//! От чего зависит: core/types (VaultPoolData, V3Hook), math/balancer_math.rs.
 //! Настройки: нет (полосу даёт вызывающий).
 
 use alloy_primitives::U256;
 
-use crate::core::types::VaultPoolData;
+use crate::core::types::pool_vault::{V3Hook, VaultPoolData};
 
 use super::super::math::balancer_math;
 
@@ -35,6 +39,13 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     }
     let mut nf = d.clone();
     nf.fee = U256::ZERO;
+    // Решение 73 п. 17: без всей комиссии — у StableSurge снять надбавку всплеска (open = false — откат, не трогать).
+    if let Some(v3) = nf.v3.as_mut()
+        && v3.open
+        && matches!(v3.hook, V3Hook::Surge { .. })
+    {
+        v3.hook = V3Hook::None;
+    }
     let bal_in = *d.balances.get(i)?;
     let probe = bal_in / U256::from(PROBE_DIV);
     if probe.is_zero() {

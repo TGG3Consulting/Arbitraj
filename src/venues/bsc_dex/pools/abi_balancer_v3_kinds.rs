@@ -17,7 +17,7 @@
 //! getProjectTokenRate; pool-hooks/IStableSurgeHook.sol, IMevCaptureHook.sol; vault/IVaultEvents.sol L26-L35
 //! PoolRegistered, VaultTypes.sol L119-L123 PoolRoleAccounts, L211-L216 TokenConfig. QuantAMM —
 //! QuantAMMProtocol/deployment@e7867165 v3/tasks/20250429-v3-arbitrum-quantamm build-info → IQuantAMMWeightedPool.sol
-//! L54-L64. Прекомпайлы — OffchainLabs/nitro-precompile-interfaces@72f30751 ArbSys.sol L38 (arbOSVersion = 55 + версия
+//! L54-L64, L29-L40 и L137 (getQuantAMMWeightedPoolDynamicData — времена интерполяции весов). Прекомпайлы — OffchainLabs/nitro-precompile-interfaces@72f30751 ArbSys.sol L38 (arbOSVersion = 55 + версия
 //! ArbOS), ArbOwnerPublic.sol L92 (getCollectTips — с ArbOS 60).
 
 // Код функций и событий генерирует alloy::sol! — число аргументов задаёт ABI контракта, а не мы.
@@ -120,6 +120,19 @@ alloy::sol! {
             uint256 maxTradeSizeRatio;
         }
         function getQuantAMMWeightedPoolImmutableData() external view returns (QuantAMMWeightedPoolImmutableData memory data);
+        struct QuantAMMWeightedPoolDynamicData {
+            uint256[] balancesLiveScaled18;
+            uint256[] tokenRates;
+            uint256 totalSupply;
+            bool isPoolInitialized;
+            bool isPoolPaused;
+            bool isPoolInRecoveryMode;
+            int256[] firstFourWeightsAndMultipliers;
+            int256[] secondFourWeightsAndMultipliers;
+            uint40 lastUpdateTime;
+            uint40 lastInteropTime;
+        }
+        function getQuantAMMWeightedPoolDynamicData() external view returns (QuantAMMWeightedPoolDynamicData memory data);
     }
 
     interface IStableSurgeHook {

@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/math/gyro_sqrt.rs
 //! Что делает: решение 452 — порт GyroPoolMath.sqrt (корень фикс-точки 18 знаков методом Ньютона: начальное
 //! приближение по двоичному логарифму / таблице, ровно 7 итераций, проверка допуска — иначе откат «_sqrt FAILED»).
-//! Кто вызывает: math/gyro_2clp.rs, math/gyro_eclp_inv.rs, math/gyro_eclp_swap.rs.
+//! Кто вызывает: math/gyro_2clp.rs, math/gyro_eclp.rs, math/gyro_eclp_inv.rs.
 //! От чего зависит: math/balancer_math.rs (mulDown, mulUp, ONE).
 //! Настройки: нет.
 //!

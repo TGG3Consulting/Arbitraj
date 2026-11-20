@@ -1,37 +1,36 @@
 //! Файл: venues/bsc_dex/pools/load_balancer_v3_kinds.rs
 //! Что делает: решение 452 — часть пачки чтения пула Balancer V3 на блоке, своя у выпуска и крючка (общая часть —
-//! load_balancer_v3.rs): A стейблсвапа; веса на блоке и окно продажи LBP / QuantAMM; виртуальные балансы ReClamm;
+//! load_balancer_v3.rs): A стейблсвапа; веса на блоке и окно продажи LBP / QuantAMM; времена интерполяции весов
+//! QuantAMM (lastInteropTime < lastUpdateTime — onSwap откатывается, котировки нет); виртуальные балансы ReClamm;
 //! параметры крючков StableSurge и MEV Capture; у MEV Capture — собирает ли ArbOS чаевые (ArbSys.arbOSVersion,
 //! ArbOwnerPublic.getCollectTips). Разбор — в кривую, правило и крючок части V3. Без сети (вызовы и разбор зовут и тесты).
 //! Кто вызывает: pools/load_balancer_v3.rs, тесты.
 //! От чего зависит: abi_balancer_v3.rs, abi_balancer_v3_kinds.rs, balancer_v3_factories.rs, balancer_v3_hooks.rs,
-//! load_balancer_v3_extra.rs, load_balancer_v3_fixed.rs, math/balancer_math.rs (divDown), core/types.
+//! load_balancer_v3_extra.rs, load_balancer_v3_fixed.rs, load_balancer_v3_hook_read.rs,
+//! load_balancer_v3_reclamm.rs (виртуальные балансы ReClamm), core/types.
 //! Настройки: нет (адреса прекомпайлов dex.arb_sys / dex.arb_owner_public передаёт load_balancer_v3.rs).
 //!
 //! Источник: шапки abi_balancer_v3*.rs. Чаевые: OffchainLabs/nitro@ccc5c828 arbos/tx_processor.go L995-L1035
 //! (GASPRICE = GetPaidGasPrice: чаевые не собираются — базовая цена, т. е. tx.gasprice − block.basefee = 0 у крючка
-//! MEV Capture; CollectTips: ArbOS 9 — да, ниже 60 — нет, с 60 — флаг getCollectTips). ReClamm 20250409 / 20250702:
-//! computeCurrentVirtualBalances считает по lastBalancesLiveScaled18 (getPoolTokenInfo), onSwap — по живым балансам
-//! обмена (ReClammPool.sol _getRealAndVirtualBalances / onSwap); виртуальные балансы зависят от балансов только при
-//! пересчёте (ReClammMath.sol computeCurrentVirtualBalances: обновление отношения цен — по времени, сдвиг диапазона —
-//! при центрированности < границы; computeCenteredness выпусков 1–2: a·Vb vs Va·b, divDown). У 20260428 вид считает по
-//! getCurrentLiveBalances — совпадает с onSwap.
+//! MEV Capture; CollectTips: ArbOS 9 — да, ниже 60 — нет, с 60 — флаг getCollectTips). ReClamm — шапка
+//! load_balancer_v3_reclamm.rs.
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
 use crate::core::types::pool_vault::{LbpState, LbpVer, V3Hook, VaultCurve, VaultV3Rule};
 
-use super::super::math::balancer_math::div_down;
 use super::abi_balancer_v3::IBalancerV3Pool as P;
 use super::abi_balancer_v3_kinds::{
-    IArbOwnerPublic, IArbSys, ILbp, IMevCaptureHook as M, IReClamm, IStableSurgeHook as S,
+    IArbOwnerPublic, IArbSys, ILbp, IMevCaptureHook as M, IQuantAmm, IReClamm,
+    IStableSurgeHook as S,
 };
 use super::balancer_v3_factories::Release;
 use super::balancer_v3_hooks::HookKind;
 use super::load_balancer_v3_extra::Extra;
 use super::load_balancer_v3_fixed::Fixed;
 use super::load_balancer_v3_hook_read::{Cursor, hook};
+use super::load_balancer_v3_reclamm::reclamm;
 
 /// Вызовы выпуска и крючка (после общих шести). Принимает: пул, неизменяемое, адреса ArbSys и ArbOwnerPublic (нужны
 /// только крючку MEV Capture). Ошибок нет.
@@ -44,6 +43,9 @@ pub fn calls(pool: Address, fx: &Fixed, pre: Option<(Address, Address)>) -> Vec<
     }
     if r.moving_weights() {
         l.push(c(pool, P::getNormalizedWeightsCall {}.abi_encode()));
+    }
+    if r == Release::QuantAmm {
+        l.push(c(pool, IQuantAmm::getQuantAMMWeightedPoolDynamicDataCall {}.abi_encode()));
     }
     if matches!(r, Release::LbpV1 | Release::LbpV2 | Release::LbpV3 | Release::LbpV4)
         || r == Release::FixedLbp
@@ -104,6 +106,19 @@ pub fn decode(
     } else {
         Vec::new()
     };
+    if r == Release::QuantAmm {
+        let call = IQuantAmm::getQuantAMMWeightedPoolDynamicDataCall::abi_decode_returns;
+        let t = call(cur.take()?).map_err(dec)?;
+        // onSwap (QuantAMMWeightedPool.sol L277-L284): время весов — min(block.timestamp, lastInteropTime),
+        // вычитание lastUpdateTime проверяемое (откат); getNormalizedWeights (L455-L466) вычитает в unchecked и
+        // откат не видит. block.timestamp ≥ lastUpdateTime (L658, L690: lastUpdateTime = block.timestamp записи),
+        // поэтому onSwap откатывается ровно при lastInteropTime < lastUpdateTime.
+        let (end, upd) = (t.lastInteropTime, t.lastUpdateTime);
+        if end < upd {
+            let w = "onSwap откатывается (L284), котировки нет";
+            return Err(format!("QuantAMM: lastInteropTime {end} < lastUpdateTime {upd} — {w}"));
+        }
+    }
     let lbp = matches!(r, Release::LbpV1 | Release::LbpV2 | Release::LbpV3 | Release::LbpV4);
     let enabled = if lbp || r == Release::FixedLbp {
         ILbp::isSwapEnabledCall::abi_decode_returns(cur.take()?).map_err(dec)?
@@ -163,58 +178,4 @@ pub fn decode(
     };
     let hook = hook(fx.hook, &mut cur)?;
     Ok((curve, rule, hook))
-}
-
-/// Виртуальные балансы ReClamm на блоке (см. шапку). Ответы выпуска читаются все (порядок calls) до решения.
-/// Ошибки (текст): не по ABI, расчёт на живых балансах не сверен.
-fn reclamm(
-    cur: &mut Cursor,
-    r: Release,
-    live: &[U256],
-    last_live: &[U256],
-    initialized: bool,
-) -> Result<(U256, U256), String> {
-    let dec = |e: alloy::sol_types::Error| format!("ReClamm не по ABI: {e}");
-    let view = cur.take();
-    let (last, margin) = if r == Release::ReClamm {
-        (Some(cur.take()), Some(cur.take()))
-    } else {
-        (None, None)
-    };
-    if !initialized {
-        // Пул не инициализирован — обменов нет (paused в load_balancer_v3.rs), выпуск 3 откатывает вид.
-        return Ok((U256::ZERO, U256::ZERO));
-    }
-    let v = IReClamm::computeCurrentVirtualBalancesCall::abi_decode_returns(view?).map_err(dec)?;
-    if r == Release::ReClammLive || live == last_live {
-        return Ok((v.currentVirtualBalanceA, v.currentVirtualBalanceB));
-    }
-    let (Some(last), Some(margin)) = (last, margin) else {
-        return Err("ReClamm: нет ответов getLastVirtualBalances / getCenterednessMargin".into());
-    };
-    let last = IReClamm::getLastVirtualBalancesCall::abi_decode_returns(last?).map_err(dec)?;
-    let margin = IReClamm::getCenterednessMarginCall::abi_decode_returns(margin?).map_err(dec)?;
-    let (la, lb) = (last.lastVirtualBalanceA, last.lastVirtualBalanceB);
-    if !v.changed && centeredness(live, la, lb).is_some_and(|c| c >= margin) {
-        return Ok((la, lb));
-    }
-    Err("ReClamm (выпуск 2025): курсы токенов изменились с последней операции пула, а виртуальные балансы сдвигаются — \
-         вид пула считает их по прежним балансам, onSwap — по живым; расчёт не сверен, котировки нет (решение 452)"
-        .into())
-}
-
-/// computeCenteredness выпусков 20250409 / 20250702 (ReClammMath.sol L579-L605): a = 0 или b = 0 — 0; иначе меньшее из
-/// a·Vb, Va·b divDown большее. None — переполнение / деление на ноль.
-fn centeredness(live: &[U256], va: U256, vb: U256) -> Option<U256> {
-    let (a, b) = (*live.first()?, *live.get(1)?);
-    if a.is_zero() || b.is_zero() {
-        return Some(U256::ZERO);
-    }
-    let num = a.checked_mul(vb)?;
-    let den = va.checked_mul(b)?;
-    if num <= den {
-        div_down(num, den)
-    } else {
-        div_down(den, num)
-    }
 }

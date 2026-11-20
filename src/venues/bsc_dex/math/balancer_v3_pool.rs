@@ -131,9 +131,19 @@ fn stable_swap(
     Some(calc)
 }
 
-/// QuantAMM onSwap (QuantAMMWeightedPool.sol L299-L338): точный вход — вход ≤ баланс входа · maxTradeSizeRatio (mulDown),
+/// QuantAMM onSwap (QuantAMMWeightedPool.sol L301-L340): точный вход — вход ≤ баланс входа · maxTradeSizeRatio (mulDown),
 /// WeightedMath, выход ≤ баланс выхода · maxTradeSizeRatio; точный выход — наоборот. Веса — на блоке чтения
-/// (getNormalizedWeights считает их тем же calculateBlockNormalisedWeight, что onSwap, L353-L452). None — откат.
+/// (getNormalizedWeights L451-L552 считает их тем же calculateBlockNormalisedWeight L558-L572, что onSwap L271-L299,
+/// с теми же индексами слов весов и множителей). Откат onSwap при lastInteropTime < lastUpdateTime (L284) —
+/// pools/load_balancer_v3_kinds.rs. None — откат.
+///
+/// Сверено (ревью T433-F2, 20.11.2026): QuantAMMProtocol/QuantAMM-V1@4dca4932
+/// pkg/pool-quantamm/contracts/QuantAMMWeightedPool.sol (GitHub, побайтно равен исходнику развёртывания
+/// QuantAMMProtocol/deployment@e7867165 v3/tasks/20250429-v3-arbitrum-quantamm build-info QuantAMMWeightedPool.json):
+/// пределы до и после WeightedMath — mulDown от живых балансов обмена (L302, L314, L321, L334), WeightedMath /
+/// FixedPoint / LogExpMath — побайтно равны balancer-deployments@b55dc2b8 20241205-v3-weighted-pool. Формула и
+/// округления совпадают; найдено одно расхождение чтения — откат L284, который getNormalizedWeights не видит (там
+/// вычитание в unchecked, L463-L466), — исправлено проверкой времён в pools/load_balancer_v3_kinds.rs.
 fn quant_amm(
     weights: &[U256],
     bal: &[U256],

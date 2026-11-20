@@ -28,8 +28,9 @@
 ## Техдолг
 - Решение 452 (T433-F2, доделка Balancer V3): обмен через буфер ERC4626 не строится (вопрос docs/TASKS.md «Решение 452»,
   п. 2); MEV Capture при сборе чаевых ArbOS — без котировки (п. 3); ReClamm 2025 при сдвиге — без котировки (п. 5);
-  тест tests/arbitrum_balancer_v3.rs — #[ignore] до записи узла. `wc -l`: pools/load_balancer_v3_kinds.rs 220 (сверх
-  200), pools/created_log.rs 356 (было 349), pools/families.rs +2.
+  тест tests/arbitrum_balancer_v3.rs — #[ignore] до записи узла. `wc -l`: pools/created_log.rs 356 (было 349),
+  pools/families.rs +2; pools/load_balancer_v3_kinds.rs 220 и load_balancer_v3.rs 201 — разбиты ревью (180 / 138, новые
+  load_balancer_v3_reclamm.rs, load_balancer_v3_state.rs).
 - Решение 441 (T433-F2, Balancer V3): событие PoolRegistered хранилища V3 — подключено решением 452; исполнитель v4 не пересобран (contracts/build.sh; out/v3/ — копия v3) и нет EVM-теста шага
   BALANCER_V3 (contracts/evmtest); тест tests/arbitrum_balancer_v3.rs — #[ignore] до записи узла; пулы с крючком обмена и
   виды Gyro / ReClamm / LBP не подключены (docs/TASKS.md, «Решение 441»). `wc -l`: math/balancer_v3.rs, load_balancer_v3.rs —

@@ -154,7 +154,7 @@ POOL_VIEWS = ["getNormalizedWeights()", "getMinTokenBalances()", "getAmplificati
               "getGyro2CLPPoolImmutableData()", "getECLPParams()", "getLBPoolImmutableData()", "isSwapEnabled()",
               "getTokenIndices()", "isProjectTokenSwapInBlocked()", "getReserveTokenVirtualBalance()",
               "getProjectTokenRate()", "getQuantAMMWeightedPoolImmutableData()", "computeCurrentVirtualBalances()",
-              "getLastVirtualBalances()", "getCenterednessMargin()"]
+              "getLastVirtualBalances()", "getCenterednessMargin()", "getQuantAMMWeightedPoolDynamicData()"]
 VAULT_POOL = ["getHooksConfig(address)", "getPoolTokenInfo(address)", "getCurrentLiveBalances(address)",
               "getPoolTokenRates(address)", "getPoolConfig(address)", "isPoolPaused(address)"]
 HOOK_POOL = ["getMaxSurgeFeePercentage(address)", "getSurgeThresholdPercentage(address)",

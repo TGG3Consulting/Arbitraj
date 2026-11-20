@@ -23,6 +23,7 @@
 //! Отметки пачки снимает и invalidate (обрыв сессии).
 //! Решение 382: Need::Reread — память пула доказанно разошлась с узлом, нужно полное чтение (settle_reread.rs).
 //! Решение 463 (ревью t236): Need::Fee — комиссия THENA Fusion следующего блока не считается (fusion_head.rs), так же.
+//! Решение 463 (повторное ревью t236): Need::NextFee — Swap / Fee THENA Fusion до записи комиссии (settle_fusion.rs).
 //! Пределы: Active/Follow закрывает приход недостающих логов, иначе — голова сети выше блока отметки, когда логам этого
 //! пула негде ждать (settle_close.rs: полное чтение пула на голове).
 //! Снятие отметок, которые своих логов уже не дождутся (lost, forget_all, keep_only), — settle_lost.rs.
@@ -65,6 +66,9 @@ pub enum Need {
     /// (fusion_head.rs) — пул ждёт ПОЛНОГО чтения, как Reread (settle_close.rs на голове выше блока отметки, первый лог
     /// пула — settle_lost.rs). Достоверность возвращает только полное чтение.
     Fee,
+    /// Решение 463 (повторное ревью t236, блокер): Swap / Fee пула THENA Fusion — ждёт записи комиссии СЛЕДУЮЩЕГО
+    /// блока (settle_fusion.rs): снимает fee_written (достоверность — was_valid); лог другого действия — как Follow.
+    NextFee,
 }
 
 impl Need {
@@ -245,6 +249,10 @@ impl Holds {
         let (r, f) = at;
         if waiting {
             return false;
+        }
+        // Решение 463 (повторное ревью t236): THENA Fusion — Swap / Fee до записи комиссии следующего блока.
+        if self.next_fee(reg, (r, f), log, a) {
+            return true;
         }
         let block = log.block_number.unwrap_or_default();
         if let Some(bins) = opens(f, log, a) {

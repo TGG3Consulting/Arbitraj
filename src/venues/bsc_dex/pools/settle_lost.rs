@@ -45,7 +45,8 @@ impl Holds {
     pub fn lost(&self, r: &PoolRef, block: u64, tx: Option<u64>) -> bool {
         self.get(r).is_some_and(|h| match h.need {
             Some(Need::Active(_)) => block != h.block,
-            Some(Need::Follow) => block != h.block || tx != h.tx,
+            // Решение 463 (повторное ревью t236): Need::NextFee — как Follow (Swap той же транзакции после Fee).
+            Some(Need::Follow | Need::NextFee) => block != h.block || tx != h.tx,
             // Решение 382: память неверна — любой лог пула ставит его на полное чтение сразу (не ждать головы).
             // Решение 463 (ревью t236): комиссия THENA Fusion не считается — так же.
             Some(Need::Reread | Need::Fee) => true,

@@ -19,6 +19,9 @@
 //! Решение 463 (T463-02): у THENA Fusion (Proto::Algebra; Integral зовёт этот apply для Swap / Mint / Burn — у него
 //! прежнее Updated) Swap после применения — Applied::Fee: комиссия следующего блока перечитывается на блоке события
 //! (pools/integral_fee.rs apply → pools/fusion_fee.rs read_fee). Fee — комиссия текущего блока (до Swap той же tx).
+//! Повторное ревью t236 (блокер): после Swap и после Fee пул THENA Fusion «в обновлении» до записи комиссии следующего
+//! блока (settle_fusion.rs, Need::NextFee): ни новая цена с прежней комиссией, ни комиссия текущего блока из Fee ядру
+//! и котировке не видны.
 
 use alloy::rpc::types::Log;
 use alloy::sol_types::SolEvent;

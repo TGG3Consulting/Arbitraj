@@ -10,7 +10,7 @@
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, settle.rs, settle_bins.rs (бины события; ревью 290,
 //! решение 357), integral_fee.rs (решение 325), registry.rs, stale_read.rs (решение 298), pool_fail.rs (решение 339),
 //! refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321), fusion_book.rs
-//! (orphan — решение 463).
+//! (orphan — решение 463), settle_fusion.rs (next_fee_open — решение 463, повторное ревью t236).
 //! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs). Решение 321:
 //! emit вынесен в emit_pool.rs (здесь — реэкспорт для прежних вызывающих) — при dex.pool_events_keep = да событие не
 //! теряется, а ждёт места в канале (gateway/core_out.rs, решение 324).
@@ -128,8 +128,12 @@ pub async fn on_log(
     };
     // Решение 325: «только комиссия» — при dex.event_refresh_fee_only, пуле не в очереди повтора, достоверном и с
     // состоянием Algebra (ревью 325, Н2/Н3 — integral_fee::fits); иначе прежний Refresh.
+    // Решение 463 (повторное ревью t236): THENA Fusion после Fee той же tx — «только комиссия» (settle_fusion.rs).
+    let open = p.holds.next_fee_open(&r, block, log.transaction_index);
     let applied = match applied {
-        Applied::Fee(why) if !integral_fee::fits(&p.ctx, &entry, waiting) => Applied::Refresh(why),
+        Applied::Fee(why) if !integral_fee::fits(&p.ctx, &entry, waiting, open) => {
+            Applied::Refresh(why)
+        }
         x => x,
     };
     // Решение 357: за этим логом в том же вызове по коду контракта идёт ещё лог пула — пул «в обновлении», ядру не
@@ -167,7 +171,8 @@ pub async fn on_log(
             // Ревью 325 (Н4): класс очереди и замер (причина «fee») — refresh_event.rs fee.
             match refresh_event::fee(p, &entry, &r, (block, log.log_index), queued).await {
                 // Решение 357 при 325: SwapFee — пул уже «в обновлении» (step выше, до чтения) до Swap той же tx.
-                Ok(()) if held => return Ok(false),
+                // Решение 463: у THENA Fusion отметку снимает сама запись комиссии (settle_fusion.rs) — тогда дальше.
+                Ok(()) if held && p.holds.pending(&r) => return Ok(false),
                 Ok(()) => match p.reg.get(&r) {
                     Some(e) if super::depth::off_map(&p.ctx, &e) => {
                         refresh_event::off_map(p, &e, block, queued)

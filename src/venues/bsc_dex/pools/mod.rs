@@ -208,6 +208,7 @@ pub mod session_lanes;
 pub mod settle;
 pub mod settle_bins;
 pub mod settle_close;
+pub mod settle_fusion;
 pub mod settle_head;
 pub mod settle_lost;
 pub mod settle_read;

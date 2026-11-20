@@ -22,6 +22,8 @@
 //! Решение 463 (T463-02): тем же путём после Swap пула THENA Fusion (events_algebra.rs → Applied::Fee) перечитывается
 //! комиссия следующего блока (fusion_fee.rs read_fee) — всегда, без dex.event_refresh_fee_only (базовое поведение:
 //! комиссия обмена — та, что даст контракт); остальные условия fits — те же.
+//! Решение 463 (повторное ревью t236): у THENA Fusion после записи — settle_fusion.rs fee_written (пул был «в
+//! обновлении» с лога Swap / Fee); fits пускает и пул, недостоверный только отметкой Fee той же транзакции.
 //! Настройки: dex.event_refresh_fee_only [DEX] (не для THENA Fusion); dex.multicall3 [bsc_dex] (через try_many).
 //!
 //! ABI — cryptoalgebra/Algebra, integral-core 1.2.10, коммит 1ff43e11407872f7c09b001cdeee1a59d2c334ec:
@@ -52,11 +54,15 @@ pub fn dynamic(plugin_config: u8) -> bool {
 
 /// Идёт ли событие «только комиссия» (Applied::Fee) путём этого файла: dex.event_refresh_fee_only = да для DEX пула,
 /// пул не ждёт повтора (решение 298), достоверен (ревью 325, Н2) и его состояние — Algebra (Н3). Иначе — прежний
-/// Refresh. Принимает: окружение, запись пула (до события), ждёт ли пул повтора. Ошибок нет.
-pub fn fits(ctx: &Ctx, e: &Entry, waiting: bool) -> bool {
+/// Refresh. Решение 463 (повторное ревью t236): THENA Fusion, недостоверный только отметкой Need::NextFee от Fee той же
+/// транзакции (`open`, settle_fusion.rs), — тоже «только комиссия». Принимает: окружение, запись пула (до события),
+/// ждёт ли пул повтора, открыта ли такая отметка. Ошибок нет.
+pub fn fits(ctx: &Ctx, e: &Entry, waiting: bool, open: bool) -> bool {
     // Решение 463: THENA Fusion — комиссия следующего блока после Swap — базовое поведение, без настройки.
-    let allowed = e.family.proto == Proto::Algebra || super::event_flags::fee_only(ctx, e.family);
-    !waiting && e.valid && matches!(e.pool.state, PoolState::Algebra { .. }) && allowed
+    let fusion = e.family.proto == Proto::Algebra;
+    let allowed = fusion || super::event_flags::fee_only(ctx, e.family);
+    let valid = e.valid || (fusion && open);
+    !waiting && valid && matches!(e.pool.state, PoolState::Algebra { .. }) && allowed
 }
 
 /// Комиссия пула на блоке одним обращением. Принимает: окружение, пул, блок-тег.
@@ -118,7 +124,13 @@ pub async fn apply(
             ErrorCode::Internal,
             format!("Algebra Integral {pool}: состояние пула не Algebra — комиссия не записана"),
         )),
-        _ => Ok(()),
+        _ => {
+            // Решение 463 (повторное ревью t236): комиссия следующего блока записана — «в обновлении» снято.
+            if proto == Proto::Algebra {
+                p.holds.fee_written(&p.reg, r);
+            }
+            Ok(())
+        }
     }
 }
 

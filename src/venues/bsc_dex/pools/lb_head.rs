@@ -33,7 +33,8 @@
 //! v2.0 то же: обмен с ненулевым входом в бин меняет резервы активного бина или сдвигает его (LBPair.sol v2.0.0
 //! L358-L392); займ и сбор комиссий бины v2.0 не меняют (комиссии — вне бинов, L470-L480); обмен пылью (вход в бин 0)
 //! бины не меняет, а комиссию головы на блоке чтения пишет верно.
-//! Кто вызывает: pools/per_block_lb.rs (decode, same, renewed, at_synced, put), pools/lb20_head.rs (calls, PER_POOL).
+//! Кто вызывает: pools/per_block_lb.rs (decode, same, renewed, at_synced, put) — lb_v21, lb_v20 и lb_v22 (решения 445,
+//! 446), pools/lb20_head.rs (calls, PER_POOL).
 //! От чего зависит: load_lb.rs (calls, decode, time_call, decode_time), load.rs (renewed, Loaded), abi_lb.rs (getBin),
 //! node/call.rs, node/multicall.rs, load_batch.rs, load_smardex.rs (block_secs), listen_log.rs, registry.rs,
 //! reload.rs (put_new — задача t160, dex.per_block_skip_same).
@@ -91,7 +92,11 @@ pub fn decode(a: &[Bytes], mem: &LbBinData, ts: u64) -> Result<(LbBinData, (u128
     if a.len() != PER_POOL {
         return Err(format!("ответов {} из {PER_POOL}", a.len()));
     }
-    let d = load_lb::decode(&a[..load_lb::PER_POOL], mem.x_is_token0, mem.bin_step, ts)?;
+    let mut d = load_lb::decode(&a[..load_lb::PER_POOL], mem.x_is_token0, mem.bin_step, ts)?;
+    // Решение 446 (ревью): крючки LB 2.2 голова не читает — их меняет только фабрика с событием HooksParametersSet
+    // (events_lb22.rs → полное чтение); слово крючков и причина исключения обмена — из памяти.
+    d.hooks_parameters = mem.hooks_parameters;
+    d.swap_blocked = mem.swap_blocked.clone();
     let b = P::getBinCall::abi_decode_returns(&a[load_lb::PER_POOL])
         .map_err(|e| format!("getBin: {e}"))?;
     Ok((d, (b.binReserveX, b.binReserveY)))

@@ -212,11 +212,17 @@ pub async fn state(
     }
     // Liquidity Book V2.1 (решение 290): вид ядра LbBin, пул — отдельный контракт; состояние, время блока и полоса бинов
     // (load_lb.rs).
-    if f.proto == Proto::LbV21 {
+    // Решение 446 (ревью С1, С3): Liquidity Book V2.2 — то же чтение и в той же пачке слово крючков (lb_hooks.rs load);
+    // недопущенный крючок обмена — не ошибка чтения: состояние пишется, обмен через пул исключён с причиной.
+    if matches!(f.proto, Proto::LbV21 | Proto::LbV22) {
         let PoolRef::Contract(a) = reference else {
             return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул LB не того вида", f.title)));
         };
-        let (state, bins) = load_lb::load(ctx, tokens, *a, pair, usdt, block).await?;
+        let (state, bins) = if f.proto == Proto::LbV22 {
+            super::lb_hooks::load(ctx, f, tokens, *a, pair, usdt, block).await?
+        } else {
+            load_lb::load(ctx, tokens, *a, pair, usdt, block).await?
+        };
         return Ok(Loaded { state, ticks: None, bins: Some(bins), fee_pips: None });
     }
     // Fluid DEX T1 (решение 440): вид ядра SmartColDebt, пул — отдельный контракт; резолвер (dex.quoter), слова пула и

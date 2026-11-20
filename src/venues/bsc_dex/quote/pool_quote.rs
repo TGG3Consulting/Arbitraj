@@ -503,7 +503,17 @@ pub fn swap(
             let amount: u128 = amount.try_into().map_err(|_| none())?;
             // X — token0 записи (x_is_token0) или token1; swapForY — отдаём X.
             let for_y = zero_for_one == d.x_is_token0;
-            let r = lb_swap::swap_out(d, bins, d.block_ts, for_y, amount).ok_or_else(none)?;
+            // Решение 446 (ревью С1): обмен через пул исключён (крючок обмена не допущен) — причина наружу.
+            if let Some(blocked) = &d.swap_blocked {
+                return Err(why(&format!("Liquidity Book: {blocked}")));
+            }
+            // Решение 446: LB V2.2 — ещё откат по ликвидности бина (math/lb_cap.rs).
+            let swap = if e.family.proto == Proto::LbV22 {
+                lb_swap::swap_out_v22
+            } else {
+                lb_swap::swap_out
+            };
+            let r = swap(d, bins, d.block_ts, for_y, amount).ok_or_else(none)?;
             Ok(Swapped {
                 amount_in: U256::from(amount - r.in_left),
                 amount_out: U256::from(r.out),

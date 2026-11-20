@@ -27,6 +27,7 @@
 //! | KyberElastic | пул | 3 — poolData (sqrtP, тики, locked); 4 — baseL, reinvestL | KyberNetwork/ks-elastic-sc 4ab08c0a contracts/PoolStorage.sol:21-32 (PoolData), 62-68 (immutable), 70 (ticks 0), 71 (1), 73 (2), 75 (poolData 3, 4, …); ERC20 токена reinvest — после (Pool.sol:26, правая база) |
 //! | LbV21 | пул | 4 — _parameters (activeId, изменчивость); 5 — _reserves | lfj-gg/joe-v2 v2.1.0 8eeb42d7 src/LBToken.sol:21-31 (0-2), src/libraries/ReentrancyGuard.sol:30 (3), src/LBPair.sol:31 (порядок баз), 58-63 (_parameters 4, _reserves 5) |
 //! | LbV20 | пул | 6 — activeId + reserveX; 7 — reserveY + оракул; 10 — _feeParameters | lfj-gg/joe-v2 v2.0.0 07f10212 src/LBToken.sol:18-24 (0-2), src/libraries/ReentrancyGuardUpgradeable.sol:25 (3), src/LBPair.sol:26 (порядок баз), 51 (immutable), 56 (tokenX 4), 59 (tokenY 5), 65 (_pairInformation 6-9: src/interfaces/ILBPair.sol:40-51 — 24+136 = 160 бит → 6; 136+16+16+16+40+16 = 240 → 7; feesX 8, feesY 9), 68 (_feeParameters 10); сверка с кодом пары: _getReservesAndId L1032-L1041 (слот+1 — reserveY, слот — activeId, reserveX со сдвига 24), _getGlobalFees L1083-L1084 (слот+2, +3) |
+//! | LbV22 (решение 446) | пул | 3 — _parameters; 4 — _reserves; 65545 — _hooksParameters (ревью 446: смена крючков пула ловится условием) | lfj-gg/joe-v2 v2.2.0 1297c38 src/LBToken.sol:21-31 (0-2), src/libraries/ReentrancyGuardUpgradeable.sol:44-50 и OpenZeppelin contracts-upgradeable b40cdf32 Initializable.sol:65-77 (свои слоты ERC-7201 — обычных не занимают), src/LBPair.sol:33 (порядок баз), 63-73 (_parameters 3, _reserves 4, _protocolFees 5, _bins 6, _tree 7-9 — TreeMath.sol:15-19 bytes32 + 2 mapping, _oracle 10..65544 — OracleHelper.sol:31-33 bytes32[65535], _hooksParameters 65545); на узле не сверено — запись tools/arbitrum_record/lb_v22.py, самопроверка exec/pool_cond_check.rs |
 //! | UniswapV4 | PoolManager | S = keccak256(PoolId . 6): S — slot0 (цена, тик, комиссии), S+3 — liquidity | Uniswap/v4-core bea7f6d1 src/libraries/StateLibrary.sol:11 (POOLS_SLOT 6), 19 (LIQUIDITY_OFFSET 3), 324-325 (слот пула); src/libraries/Pool.sol:83-91 |
 //! | BalancerV2 | — | без условия | балансы в общем Vault: слоты посчитаны только вручную по AST (/home/claude/src-ext/reports/arb-known-accounts.md, 3.1), не сверены — docs/TASKS.md «Решение 438» |
 //! | BalancerV3 | — | без условия | решение 441: балансы в общем Vault V3, курсы — у поставщиков курса; слоты не сверены |
@@ -81,14 +82,14 @@ fn plus(s: B256, n: u8) -> B256 {
 }
 
 /// Номер слота как слово. Ошибок нет.
-fn slot(n: u8) -> B256 {
+fn slot(n: u32) -> B256 {
     B256::from(U256::from(n).to_be_bytes::<32>())
 }
 
 /// Что ставить в условие по пулу маршрута (таблица в шапке). Принимает: запись реестра. Ошибок нет.
 pub fn rule(e: &Entry) -> How {
     let f = e.family;
-    let own = |a: Address, slots: &[u8], what: &'static str| {
+    let own = |a: Address, slots: &[u32], what: &'static str| {
         How::Slots(a, slots.iter().map(|n| slot(*n)).collect(), what)
     };
     match (&e.pool.reference, f.proto) {
@@ -128,6 +129,13 @@ pub fn rule(e: &Entry) -> How {
         // Решение 445: LB v2.0 — раскладка v2.0.0 (таблица в шапке).
         (PoolRef::Contract(a), Proto::LbV20) => {
             own(*a, &[6, 7, 10], "_pairInformation + _feeParameters (слоты 6, 7, 10)")
+        }
+        (PoolRef::Contract(a), Proto::LbV22) => {
+            own(
+                *a,
+                &[3, 4, 65545],
+                "_parameters + _reserves + _hooksParameters (слоты 3, 4, 65545)",
+            )
         }
         (PoolRef::Contract(a), _) => How::Root(*a),
         (PoolRef::Multi { contract, .. }, _) => How::Root(*contract),

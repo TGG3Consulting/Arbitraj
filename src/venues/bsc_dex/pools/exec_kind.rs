@@ -203,6 +203,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 445: LBPair v2.0 swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв −
         // накопленные комиссии (lfj-gg/joe-v2@v2.0.0 src/LBPair.sol L335-L347, TokenHelper.sol L61-L71); шаг 24 (LB20).
         "lb_v20" => ExecKind::Lb20,
+        // Решение 446: LB V2.2 — тот же swap(swapForY, to) и getTokenX() (lfj-gg/joe-v2@v2.2.0 src/LBPair.sol L134,
+        // L493-L579; вызывающий не ограничен), шаг 18 без изменений исполнителя.
+        "lb_v22" => ExecKind::Lb,
         // Решение 395 (t181): пулы внутри менеджеров — шаги v3. Uniswap V4: PoolManager.unlock / swap / sync / settle /
         // take (Uniswap/v4-core@bea7f6d1 src/PoolManager.sol L104-L114, L187-L227, L279-L302); Infinity CL и Bin:
         // Vault.lock / sync / settle / take + CLPoolManager.swap / BinPoolManager.swap (pancakeswap/infinity-core@3c5ef1be

@@ -75,6 +75,9 @@ pub fn decode(a: &[Bytes], x_is_token0: bool, block_ts: u64) -> Result<LbBinData
         time_of_last_update: f.time.to(),
         block_ts,
         v20: true,
+        // Решение 446: крючков пула у v2.0 нет, обмен не исключён (поля LB 2.2).
+        hooks_parameters: None,
+        swap_blocked: None,
     })
 }
 

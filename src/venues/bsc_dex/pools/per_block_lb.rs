@@ -14,7 +14,8 @@
 //! поднимает никогда (ревью слияния «357 × 339», Б1).
 //! Решение 445: и пулы Liquidity Book v2.0 (вид lb_v20) в той же пачке — вызовы на пул по версии (lb20_head.rs calls_for,
 //! per_pool: v2.0 — getReservesAndId, feeParameters, getBin).
-//! Кто вызывает: pools/per_block.rs (on_head).
+//! Кто вызывает: pools/per_block.rs (on_head) — пулы lb_v21 и lb_v22 (решение 446: голова та же; крючки V2.2 голова
+//! не читает — lb_head.rs decode берёт их из памяти).
 //! От чего зависит: load_lb.rs, load_batch.rs (batch), load_smardex.rs (block_secs),
 //! node/call.rs, node/multicall.rs, listen_log.rs, reload.rs (load_one_block, skip_same), lb_head.rs (ревью 332),
 //! settle.rs (pending), settle_head.rs (head_failed, needs_full — решение 357), pool_fail.rs (block_failed — решение 339).

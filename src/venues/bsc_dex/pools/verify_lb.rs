@@ -6,7 +6,7 @@
 //! адрес: запись делает только createLBPair фабрики — самозванец (свой клон, пул другой фабрики) отсекается. Пометка
 //! ignoredForRouting — подсказка роутеру LFJ, на обмен не влияет: пул не отклоняет. Два прохода частями по
 //! dex.verify_batch.
-//! Кто вызывает: pools/verify.rs.
+//! Кто вызывает: pools/verify.rs (lb_v21), pools/verify_lb22.rs (lb_v22, решение 446: первые два прохода те же).
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_lb.rs, discover.rs, verify.rs.
 //! Настройки: dex.factory [DEX вида lb_v21].
 //!
@@ -109,6 +109,15 @@ pub fn first_calls(pool: Address) -> Vec<(Address, Bytes)> {
     .collect()
 }
 
+/// Версия вида кандидата для текстов отказа (ревью 446, Н5): V2.2 у lb_v22, иначе V2.1. Ошибок нет.
+fn version(c: &Candidate) -> &'static str {
+    if c.family.proto == super::families::Proto::LbV22 {
+        "V2.2"
+    } else {
+        "V2.1"
+    }
+}
+
 /// Первый проход (без сети): фабрика пула = dex.factory, монета и встречный — токены X и Y. Принимает: кандидата,
 /// план, ответы по порядку first_calls (откат — Err с текстом). Возвращает: (X, Y, шаг) или причину отказа.
 pub fn first_pass(c: &Candidate, p: &Plan, a: &[Result<Bytes, String>]) -> Result<Fields, String> {
@@ -116,7 +125,8 @@ pub fn first_pass(c: &Candidate, p: &Plan, a: &[Result<Bytes, String>]) -> Resul
     let at = |i: usize, what: &str| match a.get(i) {
         Some(Ok(b)) => Ok(b.clone()),
         Some(Err(r)) => Err(format!(
-            "пул {pool:#x} откатил {what}: {r} — не пул Liquidity Book V2.1"
+            "пул {pool:#x} откатил {what}: {r} — не пул Liquidity Book {}",
+            version(c)
         )),
         None => Err(format!("нет ответа пула {pool:#x} на {what}")),
     };

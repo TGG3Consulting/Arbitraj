@@ -147,7 +147,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Liquidity Book V2.1 (решение 290): событие фабрики LBPairCreated(tokenX, tokenY, binStep — все indexed,
             // LBPair, pid) (ILBFactory.sol L49-L51) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы
             // приходят из справочника индексатора.
-            Proto::LbV21 => continue,
+            Proto::LbV21 | Proto::LbV22 => continue,
             // Fluid DEX T1 (решение 440): событие фабрики LogDexDeployed(dex, dexId) токенов не несёт
             // (factory/main.sol L62) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы приходят из
             // справочника индексатора.

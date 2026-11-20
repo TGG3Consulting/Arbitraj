@@ -59,6 +59,7 @@ pub const DEX_KINDS: &[&str] = &[
     "curve_tricrypto_v1",
     "camelot_v2",
     "lb_v20",
+    "lb_v22",
     "pancake_stableswap",
     "lista_stableswap",
     "saddle_stableswap",

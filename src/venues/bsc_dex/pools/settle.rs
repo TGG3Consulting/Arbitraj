@@ -104,7 +104,7 @@ pub fn active(e: &Entry) -> Option<u32> {
 
 /// Вид из бинов (его отметки снимает settle_bins.rs). Ошибок нет.
 pub fn bin_kind(f: &Family) -> bool {
-    matches!(f.proto, Proto::LbV21 | Proto::LbV20 | Proto::InfinityBin)
+    matches!(f.proto, Proto::LbV21 | Proto::LbV20 | Proto::LbV22 | Proto::InfinityBin)
 }
 
 /// Лог, за которым в том же вызове по коду контракта всегда идёт ещё лог пула (см. шапку). Принимает: вид, лог,
@@ -125,7 +125,9 @@ pub fn opens(f: &Family, log: &Log, applied: &Applied) -> Option<Vec<u32>> {
         (Proto::AlgebraDirFee, Applied::Updated) if *t0 == AlgebraDir::Fee::SIGNATURE_HASH => {
             Some(Vec::new())
         }
-        (Proto::LbV21, Applied::Bins(ids)) if *t0 == Lb::CompositionFees::SIGNATURE_HASH => {
+        (Proto::LbV21 | Proto::LbV22, Applied::Bins(ids))
+            if *t0 == Lb::CompositionFees::SIGNATURE_HASH =>
+        {
             Some(ids.clone())
         }
         // Решение 445: LB v2.0 — CompositionFee бина, за ним в той же итерации mint всегда DepositedToBin того же бина

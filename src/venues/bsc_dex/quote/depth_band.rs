@@ -458,7 +458,17 @@ fn side(
             nf.base_factor = 0;
             nf.variable_fee_control = 0;
             let for_y = (token_in == e.pool.token0) == d.x_is_token0;
-            let r = super::super::math::lb_swap::swap_out(&nf, bins, d.block_ts, for_y, u128::MAX)
+            // Решение 446 (ревью Н2): LB V2.2 — бин сверх MAX_LIQUIDITY_PER_BIN — конец ликвидности полосы (depth_v22);
+            // обмен через пул исключён (ревью С1) — глубины нет, причина наружу.
+            if let Some(blocked) = &d.swap_blocked {
+                return Err(format!("Liquidity Book: {blocked}"));
+            }
+            let swap = if e.family.proto == super::super::pools::families::Proto::LbV22 {
+                super::super::math::lb_swap::depth_v22
+            } else {
+                super::super::math::lb_swap::swap_out
+            };
+            let r = swap(&nf, bins, d.block_ts, for_y, u128::MAX)
                 .ok_or("расчёт бинов Liquidity Book невозможен")?;
             Ok((pick(U256::from(u128::MAX - r.in_left), U256::from(r.out)), false))
         }

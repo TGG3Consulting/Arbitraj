@@ -74,7 +74,7 @@ pub fn request(
         return super::quoter_balancer_v3::request(ctx, e, token_in, amount);
     }
     // Liquidity Book V2.1 (решение 290): квотер — сам пул, getSwapOut через eth_call (quoter_lb.rs).
-    if e.family.proto == Proto::LbV21 {
+    if matches!(e.family.proto, Proto::LbV21 | Proto::LbV22) {
         return super::quoter_lb::request(ctx, e, token_in, amount);
     }
     // Fluid DEX T1 (решение 440): квотер — резолвер FluidDexReservesResolver.estimateSwapIn (quoter_fluid.rs).
@@ -403,7 +403,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     if e.family.proto == Proto::BalancerV3 {
         return super::quoter_balancer_v3::decode(out);
     }
-    if e.family.proto == Proto::LbV21 {
+    if matches!(e.family.proto, Proto::LbV21 | Proto::LbV22) {
         return super::quoter_lb::decode(out);
     }
     if e.family.proto == Proto::FluidT1 {

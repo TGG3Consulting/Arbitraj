@@ -15,6 +15,7 @@
 //!   OracleLengthIncreased (760, _parameters), ForcedDecay (807, _parameters), StaticFeeParametersSet (911,
 //!   _parameters); строка 78 — конструктор. Сигнатуры — src/interfaces/ILBPair.sol:37-78 (pools/abi_lb.rs;
 //!   OracleLengthIncreased в abi_lb.rs нет — topic0 = keccak256 сигнатуры здесь);
+//!   LB 2.2 (решение 446) — те же события (v2.2.0 1297c38 src/LBPair.sol:538, 564-568, 677-682, 748-751);
 //! - Uniswap V4 (slot0 и liquidity пула у PoolManager): Swap и ModifyLiquidity с topics[1] = PoolId (pools/abi_v4.rs).
 //!
 //! Ревью 439 (4): фильтр отправки строится по ИТОГОВОМУ условию (by_cond — knownAccounts после самопроверки
@@ -82,7 +83,7 @@ pub fn topics(e: &Entry) -> Option<Vec<B256>> {
             IElasticPool::Burn::SIGNATURE_HASH,
             IElasticPool::BurnRTokens::SIGNATURE_HASH,
         ],
-        Proto::LbV21 => vec![
+        Proto::LbV21 | Proto::LbV22 => vec![
             ILBPair::Swap::SIGNATURE_HASH,
             ILBPair::DepositedToBins::SIGNATURE_HASH,
             ILBPair::WithdrawnFromBins::SIGNATURE_HASH,

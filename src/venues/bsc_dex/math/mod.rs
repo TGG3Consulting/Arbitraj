@@ -42,6 +42,7 @@ pub mod gyro_signed;
 pub mod gyro_sqrt;
 pub mod lb20_fee;
 pub mod lb20_swap;
+pub mod lb_cap;
 pub mod lb_fee;
 pub mod lb_swap;
 pub mod maverick_math;

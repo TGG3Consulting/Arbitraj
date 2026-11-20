@@ -8,6 +8,10 @@
 //!    теста (факт для разбора: get_dy пула tweak_price не проверяет — откат реального обмена этим тестом не доказан,
 //!    TASKS 472).
 //!
+//! 3. Решение 472 (доделка, T472-02): симуляция exchange на тех же суммах (exchange_sim записи — eth_call с подменой
+//!    баланса и разрешения, tools/arbitrum_record/curve_sim.py): пул отдал выход — наш расчёт с моделью тот же; пул
+//!    откатил — наш расчёт None («модель говорит откат ↔ пул откатывает»).
+//!
 //! До записи с вызовами tweak — #[ignore] (в записи 2026-11-20 их нет).
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/curve_crypto_common, arb::venues::bsc_dex::{pools::{load_crypto, load_crypto_tweak,
@@ -55,6 +59,7 @@ fn check(name: &str, n: usize) {
         (maths.clone(), Vec::new())
     };
     let (mut same, mut refused, mut pools) = (0usize, 0usize, 0usize);
+    let (mut sim_ok, mut sim_rev) = (0usize, 0usize);
     for p in d["pools"].as_array().unwrap() {
         let pool = Address::from_str(p["pool"].as_str().unwrap()).unwrap();
         let mut calls = load_crypto::calls(pool, n);
@@ -89,7 +94,37 @@ fn check(name: &str, n: usize) {
                 None => refused += 1,
             }
         }
+        let (o, r) = sims(p, &data);
+        (sim_ok, sim_rev) = (sim_ok + o, sim_rev + r);
     }
     println!("{name}: пулов {pools}, сумм с выходом {same}, отклонено tweak_price {refused}");
+    println!("{name}: симуляций exchange — выход {sim_ok}, откат {sim_rev}");
     assert!(pools > 0 && same > 0, "нет сверенных пулов");
+    assert!(sim_ok > 0, "нет симуляций exchange с выходом");
+}
+
+/// Симуляции exchange пула p: пул отдал выход — наш расчёт (с моделью tweak_price) тот же, откатил — None.
+/// Строки без подтверждённой подмены пропускаются. Возвращает: (с выходом, с откатом).
+fn sims(p: &serde_json::Value, data: &arb::core::types::CryptoData) -> (usize, usize) {
+    let (mut ok, mut rev) = (0, 0);
+    for s in p["exchange_sim"].as_array().into_iter().flatten() {
+        if s["ok"].is_null() || s["override_ok"] == serde_json::Value::Bool(false) {
+            continue;
+        }
+        let i = s["i"].as_u64().unwrap() as usize;
+        let j = s["j"].as_u64().unwrap() as usize;
+        let dx = U256::from_str(s["dx"].as_str().unwrap()).unwrap();
+        let ours = crypto_swap::exchange_out(data, i, j, dx);
+        let pool = &p["pool"];
+        if s["ok"] == serde_json::Value::Bool(true) {
+            let h = s["result"].as_str().unwrap().trim_start_matches("0x");
+            let want = U256::from_str_radix(&h[..64.min(h.len())], 16).unwrap();
+            assert_eq!(ours, Some(want), "{pool} {i}->{j} {dx}: пул отдал выход");
+            ok += 1;
+        } else {
+            assert_eq!(ours, None, "{pool} {i}->{j} {dx}: пул откатил ({})", s["revert"]);
+            rev += 1;
+        }
+    }
+    (ok, rev)
 }

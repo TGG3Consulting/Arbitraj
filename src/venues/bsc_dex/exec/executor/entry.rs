@@ -226,6 +226,18 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
+        // Решение 441: пул Balancer V3 — шаг вызывает хранилище V3 (dex.vault), data — адрес пула; пул на паузе (или
+        // хранилище на паузе, пул не инициализирован — paused при чтении) не исполняется.
+        ExecKind::BalancerV3 => match &e.pool.state {
+            PoolState::VaultPool(d) if !d.paused && d.v3.is_some() => {
+                let vault = ctx.dex_addr("dex.vault", e.family.id)?;
+                return Ok((Params::BalancerV3 { pool }, vault));
+            }
+            _ => {
+                let why = format!("{}: пул Balancer V3 не прочитан или на паузе", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         // Решение 290: пул Liquidity Book V2.1 — шаг без данных (направление контракт берёт по getTokenX пула); без
         // прочитанного состояния LbBin не строится.
         ExecKind::Lb => match &e.pool.state {

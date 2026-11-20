@@ -289,3 +289,28 @@ interface ISingletonSettle {
     function take(address currency, address to, uint256 amount) external;
     function settle() external payable returns (uint256 paid);
 }
+
+// Решение 441 (T433-F2): хранилище Balancer V3 (Vault V3, balancer/balancer-deployments@b55dc2b8 build-info
+// v3/tasks/20241204-v3-vault; Arbitrum One — 0xbA1333333333a1BA1108E8412f11850A5C319bA9, output/arbitrum.json).
+// IVaultMain.sol L27 unlock (Vault.sol L133-L135: обратный вызов msg.sender.functionCall(data); модификатор transient —
+// в конце все дельты должны быть нулевые, иначе BalanceNotSettled), L49 settle (Vault.sol L138-L156: кредит = прирост
+// баланса хранилища, не больше подсказки), L60 sendTo (L158-L163: долг + перевод получателю), L74 swap (Vault.sol
+// L197-L291: onlyWhenUnlocked, дельты — вызывающему: долг по входу, кредит по выходу; VaultTypes.sol L287-L295
+// VaultSwapParams, SwapKind EXACT_IN = 0, L263). Белого списка вызывающих нет.
+interface IBalancerV3Vault {
+    struct VaultSwapParams {
+        uint8 kind;
+        address pool;
+        address tokenIn;
+        address tokenOut;
+        uint256 amountGivenRaw;
+        uint256 limitRaw;
+        bytes userData;
+    }
+    function unlock(bytes calldata data) external returns (bytes memory result);
+    function swap(VaultSwapParams memory vaultSwapParams)
+        external
+        returns (uint256 amountCalculatedRaw, uint256 amountInRaw, uint256 amountOutRaw);
+    function settle(address token, uint256 amountHint) external returns (uint256 credit);
+    function sendTo(address token, address to, uint256 amount) external;
+}

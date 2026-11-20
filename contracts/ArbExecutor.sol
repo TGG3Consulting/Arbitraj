@@ -20,6 +20,8 @@
 // + шаги пулов внутри общего менеджера: UNI_V4 (Uniswap V4 PoolManager: unlock → unlockCallback), INF_CL и INF_BIN
 // (PancakeSwap Infinity Vault: lock → lockAcquired; Infinity Stable — пул в крючке пула CL, тот же INF_CL). execute,
 // executeNative, хранилище (owner — слот 0, wnative — слот 1) и прежние виды — без изменений.
+// v4 (решение 441, T433-F2) — + шаг BALANCER_V3 = 23 (пул Balancer V3: Vault V3 unlock → balancerV3Callback → swap /
+// settle / sendTo); всё прочее — как v3. Номер 23 = 21 + номер семейства F2 (22 оставлен семейству F1).
 pragma solidity 0.8.37;
 
 import "./IPools.sol";
@@ -72,6 +74,11 @@ contract ArbExecutor {
     uint8 internal constant UNI_V4 = 19;
     uint8 internal constant INF_CL = 20;
     uint8 internal constant INF_BIN = 21;
+    // Решение 441 (только v4): пул Balancer V3. s.pool — хранилище Vault V3, data = abi.encode(address пула). Шаг открывает
+    // хранилище (unlock), обмен и расчёт — в balancerV3Callback (только от s.pool и только с данными шага — хеш в
+    // transient, как у UNI_V4): swap(EXACT_IN, сумма, предел 1) → перевод ровно суммы хранилищу + settle → sendTo выхода
+    // получателю шага. Недоплата (налог перевода) — долг не погашен, хранилище откатит всё (BalanceNotSettled).
+    uint8 internal constant BALANCER_V3 = 23;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -90,7 +97,7 @@ contract ArbExecutor {
     // data: V2 — abi.encode(uint32 feePips); CURVE — abi.encode(int128 i, int128 j); STABLE_U256 — abi.encode(uint256 i,
     // uint256 j); SADDLE — abi.encode(uint8 i, uint8 j); STABLE_U256_BNB — abi.encode(uint256 i, uint256 j, bool bnbIn)
     // (bnbIn: true — монета i пула нативная, tokenIn = WBNB; false — монета j нативная, tokenOut = WBNB); METRIC — abi.encode(bool
-    // zeroForOne); BALANCER — abi.encode(bytes32 poolId); UNI_V4 — abi.encode(V4PoolKey); INF_CL / INF_BIN —
+    // zeroForOne); BALANCER — abi.encode(bytes32 poolId); BALANCER_V3 — abi.encode(address pool); UNI_V4 — abi.encode(V4PoolKey); INF_CL / INF_BIN —
     // abi.encode(InfPoolKey); остальные — пусто.
     struct Step {
         uint8 kind;
@@ -349,6 +356,8 @@ contract ArbExecutor {
             ILBPair(s.pool).swap(ILBPair(s.pool).getTokenX() == s.tokenIn, to);
         } else if (k == UNI_V4 || k == INF_CL || k == INF_BIN) {
             _singleton(s, amount, to);
+        } else if (k == BALANCER_V3) {
+            _balancerV3(s, amount, to);
         } else if (k == WOO) {
             uint256 had = IERC20(s.tokenIn).balanceOf(s.pool);
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
@@ -580,6 +589,44 @@ contract ArbExecutor {
             require(k == INF_BIN, "kind");
             IInfBinPoolManager(key.poolManager).swap(key, zf, -int128(int256(amount)), "");
         }
+    }
+
+    // Решение 441: шаг Balancer V3 (v4). Хранилище Vault V3 (s.pool) по unlock зовёт у вызывающего ровно переданные данные
+    // (Vault.sol 20241204-v3-vault L133-L135) — это вызов balancerV3Callback(cb); после unlock обратный вызов обязан
+    // быть («cb»). Метки оплаты прошлых шагов стираются (как в _singleton), expMax = 0 — _pay из хранилища откатится.
+    function _balancerV3(Step calldata s, uint256 amount, address to) internal {
+        address pool = abi.decode(s.data, (address));
+        bytes memory cb = abi.encode(pool, s.tokenIn, s.tokenOut, amount, to);
+        (expPool, expToken, expMax) = (s.pool, address(0), 0);
+        expHash = keccak256(cb);
+        IBalancerV3Vault(s.pool).unlock(abi.encodeWithSelector(this.balancerV3Callback.selector, cb));
+        require(expHash == bytes32(0), "cb");
+    }
+
+    // Обмен внутри открытого хранилища V3: только хранилище текущего шага (expPool) и только данные шага (expHash), один
+    // раз (оба стираются до обмена). swap(EXACT_IN = 0, пул, вход, выход, сумма, предел 1, «») (Vault.sol L197-L291;
+    // нулевой выход — откат SwapLimit) → хранилище должно было взять ровно сумму («owed») и дать выход > 0 («out») →
+    // перевод ровно суммы хранилищу, settle(вход, сумма) (Vault.sol L138-L156: кредит = прирост баланса, не больше
+    // подсказки) → sendTo(выход, получатель шага, выход) (L158-L163). Дельты исполнителя после этого нулевые — иначе
+    // хранилище откатит unlock. Ответ пуст.
+    function balancerV3Callback(bytes calldata cb) external returns (bytes memory) {
+        address v = expPool;
+        require(v != address(0) && msg.sender == v && keccak256(cb) == expHash, "pool");
+        expPool = address(0);
+        expHash = bytes32(0);
+        // kind = 0 (EXACT_IN) и userData пусто — значения по умолчанию; поля — прямо в параметры (меньше переменных стека).
+        IBalancerV3Vault.VaultSwapParams memory p;
+        address to;
+        (p.pool, p.tokenIn, p.tokenOut, p.amountGivenRaw, to) =
+            abi.decode(cb, (address, address, address, uint256, address));
+        p.limitRaw = 1;
+        (, uint256 inRaw, uint256 outRaw) = IBalancerV3Vault(v).swap(p);
+        require(inRaw == p.amountGivenRaw, "owed");
+        require(outRaw > 0, "out");
+        _transfer(p.tokenIn, v, inRaw);
+        IBalancerV3Vault(v).settle(p.tokenIn, inRaw);
+        IBalancerV3Vault(v).sendTo(p.tokenOut, to, outRaw);
+        return "";
     }
 
     // Направление по валютам ключа: токены шага — ровно currency0 / currency1 (иначе «key»), ERC-20 (нативная валюта

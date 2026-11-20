@@ -13,6 +13,165 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 434 (20.11.2026, ветка t218/bsc-dex-coverage) — покрытие всех DEX BSC (правило CLAUDE.md «Все DEX сети»).**
+  Таблица — docs/notes/bsc-dex-coverage-2026-11-20.md, данные — tests/data/bsc_dex_catalog_2026-11-19. Код не менялся.
+  GT 140: (а) 73, (б) 37, (в) 7, (г) 1, (д) 8, (е) 14; вне GT в настройках (а) 11; DefiLlama Dexs без id бота — 144 (+3
+  части протоколов): (в) 3, (г) 31, (д) 23, (е) 90; агрегаторы/OTC/запуски — 42.
+  - **T434-S — Тиграну «да» на настройки (б)** (раздел 4 таблицы): сразу — `orangedx` (v2_fork_executor, комиссия 0,25 —
+    запись решения 280), `magicfox`, `veplus` (solidly_v1, значения решения 273), `lif3-v3-bsc` (v3_fork, виртуальный
+    квотер, TickLens Uniswap). Остальные 33 — после T434-M.
+  - **T434-M — замер на узле (чтение):** комиссия 30 V2-форков раздела 4.1 методом решения 280; делитель swapFee()
+    Winery; правило и делитель комиссии Cone (getAmountOut пар, как решение 273); dex.tick_lens SMBSwap V3. Запись —
+    tests/data, значения — в таблицу раздела 4.
+  - **T434-L — площадки запуска DefiLlama (20 строк (е) раздела 8):** по официальной документации установить, торгует
+    ли площадка спотом на кривой; если да — своя задача «свой источник котировок» (как four.meme, решение 291 — спросить Тиграна).
+  - **(в) — семейства нет в коде (по задаче на DEX):**
+    - T434-F-FIREBIRD — Firebird (BSC) (`firebird_bsc`): Взвешенные пары Firebird FLP: фабрика 0x5de74546…18c8 — getPair(address,address,uint32,uint32), createPair(address,address,uint32,uint32), getWeightsAndSwapFee(address), getSwapFee(), isPair; пара — getTokenWeights(), текст отката «FLP: K». Обычной getPair(address,address) нет
+    - T434-F-MARS — Mars Ecosystem (`mars_ecosystem`): Своя пара: фабрика 0x6f12482d…f3be (getPair/createPair V2), но swap(uint256,uint256,address) без bytes, fee(address), feeScale(), pause(); текст отката «MarsSwapPair::swap: K» — шаг V2 исполнителя зовёт swap(…,bytes)
+    - T434-F-MULTIFAC — Annex Finance (BSC) (`annex_finance_bsc`): V2 (текст отката «Annex: K»), но пулы GT этой id — от ДВУХ фабрик: 0x6100af69…e4ea и 0x6a616606…4622; dex.factory — один адрес (K::Address) — пулы второй фабрики проверку не пройдут
+    - T434-F-IMPOSSIBLE3 — Impossible Finance v3 (`impossible_finance_v3`): Impossible v3: фабрика 0x4233ad9b…f85f — getPair/createPair V2, но у пары makeXybk(uint32,uint32), makeUni(), calcBoost(), getPairSettings(), updateBoost — пары в режиме xybk считают не по x·y=k
+    - T434-F-PYE — PYESwap (BSC) (`pyeswap_bsc`): Своя пара: фабрика 0x7b56573c…2f2c — createPair(address,address,bool), swap(uint256,uint256,uint256,uint256,address,bytes) (6 аргументов), totalFee(), depositLPFee; текст отката «PYESwap: K»
+    - T434-F-FRAX — Fraxswap (BSC) (`fraxswap_bsc`): Fraxswap (TWAMM): фабрика 0xf89e6ca0…a011 — пары с executeVirtualOrders, getTwammReserves(), longTermSwapFrom0To1, getAmountOut(uint256,address), fee(); резервы getReserves() без исполнения длинных ордеров не равны резервам обмена
+    - T434-F-RING — Ring Exchange (BSC) (`ring-exchange-bsc`): V2-пары (фабрика 0x4de602a3…dd9b, текст отката «SwapV2: K») над обёртками Few: пулы GT — fwAMDB/fwWBNB, fwSNDKB/fwWBNB; адрес токена пула ≠ адрес монеты биржи (первичный фильтр CLAUDE.md) — нужен шаг обёртки/развёртки
+    - T434-F-WOMBAT-EXCHANGE — Wombat Exchange (`wombat-exchange`): описание DL: stableswap Wombat (своя математика; ROADMAP.md:21)
+    - T434-F-MAVERICK-V1 — Maverick V1 (`maverick-v1`): Maverick V1 (в коде только maverick_v2)
+    - T434-F-TOPAZ2 — Topaz AMM (`topaz-amm`): Topaz AMM (Solidly, вид solidly_v2 есть), но GT id topaz = slipstream: один id — один вид (families.rs classify)
+  - **(г) — не пул: свой источник котировок или причина Тиграна (по задаче на DEX):**
+    - T434-Q-THORCHAIN-DEX — THORChain DEX (`thorchain-dex`): описание DL: межсетевые обмены THORChain (нативные активы, не пул BSC)
+    - T434-Q-ELFOMOFI — ElfomoFi (`elfomofi`): описание DL: «Oracle-based DEX»
+    - T434-Q-TEXTILE-FX — Textile FX (`textile-fx`): описание DL: «on-chain FX liquidity network»
+    - T434-Q-KIPSELI — Kipseli (`kipseli`): описание DL: proprietary AMM
+    - T434-Q-WARDENSWAP — WardenSwap (`wardenswap`): описание DL: маршрутизация по чужим пулам
+    - T434-Q-BURGERSWAP — BurgerSwap (`burgerswap`): описание DL: агрегатор DEX и CEX
+    - T434-Q-DEXALOT-DEX — Dexalot DEX (`dexalot-dex`): описание DL: книга ордеров на своей сети
+    - T434-Q-LUNARBASE — Lunarbase (`lunarbase`): описание DL: Proactive Market Maker
+    - T434-Q-METACOIN-SWAP — MetaCoin Swap (`metacoin-swap`): описание DL: книга ордеров
+    - T434-Q-PICWE — PICWE (`picwe`): описание DL: омничейн-ликвидность
+    - T434-Q-BURVE-PROTOCOL — Burve Protocol (`burve-protocol`): описание DL: кривая запуска (bonding curve)
+    - T434-Q-SKATE-AMM — Skate AMM (`skate-amm`): описание DL: общий пул разных сетей
+    - T434-Q-RAINDEX — Raindex (`raindex`): описание DL: стратегии-ордера Rainlang
+    - T434-Q-BALANCED-EXCHANGE — Balanced Exchange (`balanced-exchange`): описание DL: межсетевая биржа
+    - T434-Q-KWIKSWAP — KwikSwap (`kwikswap`): описание DL: межсетевой протокол
+    - T434-Q-NATIVE-SWAP — Native Swap (`native-swap`): описание DL: PMM-цены, книга с автоподписью (RFQ)
+    - T434-Q-FYND-AMM — Fynd AMM (`fynd-amm`): описание DL: расширение пула с динамической комиссией
+    - T434-Q-ORION-LIQUIDITY-NODES — Orion Liquidity Nodes (`orion-liquidity-nodes`): описание DL: котировки 1:1 с CEX
+    - T434-Q-OCTANE-FINANCE — Octane Finance (`octane-finance`): описание DL: лимитные ордера
+    - T434-Q-BRIDGERS — Bridgers (`bridgers`): описание DL: межсетевой обмен
+    - T434-Q-AFRASWAP — AfraSwap (`afraswap`): описание DL: агрегирует AMM
+    - T434-Q-KAPINUS — Kapinus (`kapinus`): описание DL: фиат-реплики по внутреннему P2P-курсу
+    - T434-Q-COMDEX-EXCHANGE — COMDEX Exchange (`comdex-exchange`): описание DL: цены оракула Pyth
+    - T434-Q-SWAAP-MAKER-V2 — Swaap Maker V2 (`swaap-maker-v2`): описание DL: алгоритмический маркет-мейкинг
+    - T434-Q-IGNITE-DEX — Ignite DEX (`ignite-dex`): описание DL: книга ордеров (CLOB) с хранилищами
+    - T434-Q-METATDEX — MetaTdex (`metatdex`): описание DL: сведение ордеров
+    - T434-Q-1INCH-SWAP — 1inch Swap (`1inch-swap`): агрегатор DEX (категория DefiLlama)
+    - T434-Q-DE1 — De1 (`de1`): агрегатор DEX (категория DefiLlama)
+    - T434-Q-HASHFLOW — Hashflow (`hashflow`): агрегатор DEX (категория DefiLlama); описание DL: RFQ
+    - T434-Q-RUBIC — Rubic (`rubic`): агрегатор DEX (категория DefiLlama)
+  - **(е) — семейство не установлено: адрес фабрики/пула из официальной документации → проба узлом → класс (по задаче на DEX):**
+    - T434-P-POLKAEXBSC — PolkaEx (BSC) (`polkaex_bsc`): GT: пулов 0 (стр. 1, ответ 200), но DefiLlama даёт TVL BSC > 0 — фабрики нет
+    - T434-P-DDDX — DDDX (`dddx`): factory() пулов 0x9fa51cc5…, 0x12706dea… — откат; token0/token1 отвечают. Фабрика неизвестна
+    - T434-P-WHALESWAP — WhaleSwap (`whaleswap`): GT: пулов 0 (стр. 1, ответ 200), но DefiLlama даёт TVL BSC > 0 — фабрики нет
+    - T434-P-ELLIPSISF — Ellipsis Finance (`ellipsis_finance`): Фабрика пулов Ellipsis 0xf65bed27…5870 (find_pool_for_coins, get_coins, is_meta, get_n_coins, exchange(int128,int128,uint256,uint256)); token0()/token1() пулов — откат. Плоский пул или метапул — не проверено (dex.kind ellipsis = curve_stableswap берёт только пулы из dex.stable_pools)
+    - T434-P-TRADERJOEV2BSC — LFJ V2 (BSC) (`traderjoe-v2-bsc`): GT: пулов 0 (стр. 1, ответ 200), но DefiLlama даёт TVL BSC > 0 — фабрики нет
+    - T434-P-ARCHLY — Archly (BSC) (`archly-bsc`): factory() пула 0x3035f843… — откат; token0/token1 отвечают. Фабрика неизвестна
+    - T434-P-DIAMOND — DiamondSwap (BSC) (`diamondswap-bsc`): factory() пула → 0x81a1417c…39ca — прокси Diamond (EIP-2535: facets(), facetAddress(bytes4), diamondCut); функции в фасетах, код фасетов не снят
+    - T434-P-DEGENDEXBSC — DegenDex (BSC) (`degendex-bsc`): GT: пулов 0 (стр. 1, ответ 200), но DefiLlama даёт TVL BSC > 0 — фабрики нет
+    - T434-P-WOKENEXCHANGEBSC — Woken Exchange (BSC) (`woken-exchange-bsc`): GT: пулов 0 (стр. 1, ответ 200), но DefiLlama даёт TVL BSC > 0 — фабрики нет
+    - T434-P-LOVELYSWAP — Lovely Swap (`lovely-swap`): GT: пулов 0 (стр. 1, ответ 200), но DefiLlama даёт TVL BSC > 0 — фабрики нет
+    - T434-P-KEWL — KEWLSwap (BSC) (`kewlswap-bsc`): factory() пула → 0x5636a64b…7646 — прокси Diamond (EIP-2535); код фасетов не снят
+    - T434-P-COINHAIN — Coinhain (`coinhain`): GT: пулов 0 (стр. 1, ответ 200), но DefiLlama даёт TVL BSC > 0 — фабрики нет
+    - T434-P-DNAX — DNAX (`dnax`): GT: пулов 0 (стр. 1, ответ 200), но DefiLlama даёт TVL BSC > 0 — фабрики нет
+    - T434-P-FOREST — Forest Protocol (`forest-protocol`): factory() пула → 0x8ad812a3…2f81: есть getPair/createPair/allPairs и одновременно buyTokens/sellTokens/slope()/tokensSold()/lastPrice() (кривая) — тип пула не установлен
+    - T434-P-INFSTABLE — PancakeSwap Infinity (`pancakeswap-infinity`): PancakeSwap Infinity Stable (вид pancake_infinity_stable есть, dex.kind ни у одного id нет)
+    - T434-P-LISTA — Lista DEX (`lista-dex`): Lista StableSwap (вид lista_stableswap есть, dex.kind ни у одного id нет; lista-v3 — v3_fork)
+    - T434-P-BSCSWAP — BSCSwap (`bscswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-KAOYASWAP — KaoyaSwap (`kaoyaswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-DEPTH — Depth (`depth`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-AEQUINOX — Aequinox (`aequinox`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-GIBXSWAP — GIBXSwap (`gibxswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-VALUEDEFI — ValueDefi (`valuedefi`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-NARWHALSWAP — Narwhalswap (`narwhalswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-PANTHERSWAP — PantherSwap (`pantherswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-PARALUNI-DEX — Paraluni Dex (`paraluni-dex`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-PURESWAP — PureSwap (`pureswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-HYPERJUMP — HyperJump (`hyperjump`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-ALITA-FINANCE — Alita Finance (`alita-finance`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-YOUSWAP — YouSwap (`youswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-IDEX-CLASSIC — IDEX Classic (`idex-classic`): описание DL не называет тип пула
+    - T434-P-BUTTERSWAP — ButterSwap (`butterswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SMOOTHY — Smoothy (`smoothy`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BUNICORN — Bunicorn (`bunicorn`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-LATTESWAP — LatteSwap (`latteswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-VELO-FINANCE — Velo Finance (`velo-finance`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-MOCHISWAP — MochiSwap (`mochiswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-DEFIBOX — DefiBox (`defibox`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-COBRASWAP — CobraSwap (`cobraswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SHIBANOVA — ShibaNova (`shibanova`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BUSTA-EXCHANGE — Busta Exchange (`busta-exchange`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-ANCHORSWAP — AnchorSwap (`anchorswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-FOODCOURT — Foodcourt (`foodcourt`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-GRAVIS-FINANCE — Gravis Finance (`gravis-finance`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-PANDASWAP — PandaSwap (`pandaswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-PEPETEAM-DEX — PepeTeam DEX (`pepeteam-dex`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-KOKOMOSWAP — KokomoSwap (`kokomoswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-ROBINIASWAP — RobiniaSwap (`robiniaswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-GAS404SWAP — Gas404Swap (`gas404swap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-MACARONSWAP — MacaronSwap (`macaronswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SASHIMISWAP — SashimiSwap (`sashimiswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BEGLOBAL-FINANCE — BeGlobal Finance (`beglobal-finance`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-CAFESWAP — CafeSwap (`cafeswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-YIELDFIELDS — YieldFields (`yieldfields`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-0.EXCHANGE — 0.exchange (`0.exchange`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SWIPE — Swipe (`swipe`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BAMBOODEFI — BambooDeFi (`bamboodefi`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-DINO.EXCHANGE — Dino.Exchange (`dino.exchange`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SHIBANCE — Shibance (`shibance`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SPARTAN — Spartan (`spartan`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-TIFI — TiFi (`tifi`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-CROWDSWAP — CrowdSwap (`crowdswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-GOBLINS-AMM — Goblins AMM (`goblins-amm`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-MORPHEUS — Morpheus (`morpheus`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-RBX — RBX (`rbx`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SWAPFISH — SwapFish (`swapfish`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-KACO-FINANCE — KACO Finance (`kaco-finance`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-FNDZ — FNDZ (`fndz`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-UNIFI — UniFi (`unifi`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-COMPLUS-NETWORK — Complus Network (`complus-network`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-ARENASWAP — ArenaSwap (`arenaswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-CRYPTOSWAP — CryptoSwap (`cryptoswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BXH — BXH (`bxh`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-TENDIESWAP — TendieSwap (`tendieswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BITBLOCKS-FINANCE-V2 — BitBlocks Finance V2 (`bitblocks-finance-v2`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-LITX — Litx (`litx`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BBBFI-SWAP-V2 — BBBFi Swap V2 (`bbbfi-swap-v2`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BENSWAP — BenSwap (`benswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-ONI-EXCHANGE — Oni Exchange (`oni-exchange`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-CHAMPAGNESWAP — ChampagneSwap (`champagneswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-PANKUKU — PanKUKU (`pankuku`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-PATTIESWAP — PattieSwap (`pattieswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SQUADSWAP-THANOS — SquadSwap Thanos (`squadswap-thanos`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BITBLOCKS-FINANCE-V3 — BitBlocks Finance V3 (`bitblocks-finance-v3`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-ONESWAP — OneSwap (`oneswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BSCSTATION — BSCStation (`bscstation`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SOLANA-FARM — Solana Farm (`solana-farm`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BIOKRIPT — Biokript (`biokript`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SUNFLOWER-FINANCE — SunFlower Finance (`sunflower-finance`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SWAPSICLE-V1 — Swapsicle V1 (`swapsicle-v1`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-OPENBISEA — OpenBiSea (`openbisea`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BREWSWAP — BrewSwap (`brewswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BOOMSWAP — BoomSwap (`boomswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-JELLYBEANSWAP — JellyBeanSwap (`jellybeanswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BABYDOGE-ALGEBRA — BabyDoge Algebra (`babydoge-algebra`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-PRODUS — PRODUS (`produs`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-OMNI-EXCHANGE-FLUX — Omni Exchange Flux (`omni-exchange-flux`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-AKRONSWAP — Akronswap (`akronswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-KOLSWAP — KOLSwap (`kolswap`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BUNNI-V2 — Bunni V2 (`bunni-v2`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BROWNFI-V2 — BrownFi V2 (`brownfi-v2`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-KEBAB-FINANCE — Kebab Finance (`kebab-finance`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-GULLY-CORE — Gully Core (`gully-core`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-BBBFI-SWAP-V3 — BBBFi Swap V3 (`bbbfi-swap-v3`): в GeckoTerminal нет, адресов в данных нет
+    - T434-P-SOY-FINANCE — Soy Finance (`soy-finance`): в GeckoTerminal нет, адресов в данных нет
 - **Решение 424 (20.11.2026, задача t208, ветка t208/poloniex-fast-book) — быстрый стакан Poloniex book_lv2 со
   страховкой снимками book; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Живых кадров book_lv2 нет
   (docs/FIRST_RUN.md, раздел Poloniex) — тесты на примерах офдоки. **На сервере бота:** при raw.book_frames = да

@@ -92,7 +92,7 @@
 | 64 | `pancakeswap-stableswap-arbitrum` | Pancakeswap Stableswap (Arbitrum) | PancakeSwap StableSwap | `pancake_stableswap` — src/venues/bsc_dex/pools/families.rs:362 | **вид есть в коде** | не сверены | T433-064 |
 | 65 | `solidly-v3-arbitrum` | Solidly V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-065 |
 | 66 | `kewlswap-arbitrum` | KEWLSwap (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-066 |
-| 67 | `traderjoe-v2-2-arbitrum` | LFJ V2.2 (Arbitrum) | Liquidity Book v2.2 | (в коде только `lb_v21` — src/venues/bsc_dex/pools/families.rs:358) | **семейства нет в коде** | не сверены | T433-067 |
+| 67 | `traderjoe-v2-2-arbitrum` | LFJ V2.2 (Arbitrum) | Liquidity Book v2.2 | `lb_v22` — src/venues/bsc_dex/pools/families.rs (решение 446) | **вид есть в коде** (ждёт записи узла и dex.lb_implementations) | LBFactory 0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c — документация LFJ (lfj-gg/joe-docs 61c1666), Sourcify exact_match | T433-067 |
 | 68 | `moonbase-alpha` | Moonbase Alpha | — | — | **семейство не установлено** | не сверены | T433-068 |
 | 69 | `deltaswap` | Deltaswap (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-069 |
 | 70 | `ethervista-arbitrum` | EtherVista (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-070 |
@@ -303,7 +303,7 @@
 - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F6 Liquidity Book v2.0 (LFJ V2) — новое семейство (в коде только v2.1); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
-- T433-F7 Liquidity Book v2.2 (LFJ V2.2) — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+- T433-F7 Liquidity Book v2.2 (LFJ V2.2) — **сделано кодом (решение 446): вид `lb_v22` (расширение lb_v21); ждёт записи узла (tools/arbitrum_record/lb_v22.py)** — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F8 Ekubo — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 
 ## 5. Записи DefiLlama других категорий (не DEX спота) — 53

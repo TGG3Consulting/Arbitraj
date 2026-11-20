@@ -157,7 +157,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `history_store.rs` | История V4 в SQLite: события найденных пулов и последний прочитанный блок по менеджеру |
 | `attach.rs` | Найденные позже пулы — в открытую пачку своего вида (её соединение), заполнена — новая пачка |
 | `group.rs` | Подписки пачки на одном соединении: «все события» и «только ликвидность», смена состава без переподключения; решение 455 — у «все события» crypto-пулов Curve вторая подписка Transfer на адреса пулов (transfer_in.rs) |
-| `group_filter.rs` | Фильтр logs пачки (по адресам пулов / PoolId у менеджера) и индексы пачки (index, multi_sites) — вынесены из group.rs (решение 455), пути group::filter / index / multi_sites сохранены |
+| `group_filter.rs` | Вид событий пачки (Topics), фильтр logs пачки (адреса пулов / PoolId у менеджера / Ekubo), индексы пачки (index, multi_sites) и адреса Multi — вынесены из `group.rs` (решения 454, 455; реэкспорт в group.rs, пути group::filter / index / multi_sites сохранены) |
 | `transfer_in.rs` | Решение 455: ERC-20 Transfer с to = адрес crypto-пула Curve (crypto v1, tricrypto 2021, Tricrypto-NG — gulp балансов в `_claim_admin_fees` без события) — фильтр подписки, отметка позиции, полное чтение пула на голове, если чтение перевод не учло |
 | `admit.rs` | Приём пулов в пачку (подписка → блок → чтение → глубокие/мелкие) и возврат выросшего пула |
 | `depth.rs` | Глубокий пул или мелкий (по обоим направлениям, пустой; при receipts не спят), пересчёт глубины на каждой отправке пула ядру (touch) — решение 73. Решение 393: мелкий пул, у которого хоть одну сторону пропускает сумма пробы (quote/side_fit.rs), не спит |
@@ -305,3 +305,22 @@ DEX — строки таблицы сопоставления (решение 5
 Algebra Integral (решение 188): `abi_algebra_integral.rs` (геттеры и события комиссии Integral), `load_algebra_integral.rs` (тики связным списком, комиссия fee() плагина), `events_algebra_integral.rs` (SwapFee/Fee; Swap/Mint/Burn — `events_algebra.rs`). Математика, проверка и исполнение — общие с Algebra V1.9.
 
 Algebra V1.9 с направленными комиссиями (решение 444, вид `algebra_dir_fee` — Camelot V3 на Arbitrum): `abi_algebra_dir.rs` (globalState с feeZto/feeOtz, событие Fee(feeZto, feeOtz)), `load_algebra_dir.rs` (globalState своего ABI; карта сырых тиков — `load_algebra.rs` tick_map), `events_algebra_dir.rs` (Fee — обе комиссии сразу; Swap/Mint/Burn — `events_algebra.rs`), `prefetch_algebra_dir.rs` (предзагрузка решения 325). Состояние — PoolState::Algebra с fee_otz; комиссия стороны — math/algebra_fee.rs; проверка, фабрика, исполнение (шаг ALGEBRA) — общие с Algebra V1.9; Fee → Follow в settle.rs. Ревью 444: `verify_algebra_dir.rs` — сверка версии кода пула по CREATE2 (poolDeployer фабрики + dex.pool_code_hashes [DEX]); пул другой версии (сжатый битмап) отклоняется с причиной.
+
+Ekubo (решение 447, вид `ekubo`; EkuboProtocol/evm-contracts@61d09daa — ядро Arbitrum):
+
+| Файл | Что делает |
+| --- | --- |
+| `abi_ekubo.rs` | Ключ пула и PoolId, слоты ядра (состояние, тик, слово битмапа) и разбор значений, Core.sload, PoolKeyIndex.poolKeyById, Router.quote, события ядра, анонимный лог обмена (log0) |
+| `ekubo_keys.rs` | Память config ключей пулов по (площадка, PoolId) — кладёт проверка, читает загрузка |
+| `verify_ekubo.rs` | Проверка пула из справочника: ключ у PoolKeyIndex = PoolId, пул создан в ядре, токены = монета и встречный, token0 не нативный ETH, расширение — нет или MEVCapture |
+| `load_ekubo.rs` | Состояние на блоке: Core.sload состояния, слов битмапа (dex.ekubo_bitmap_words) и тиков; MEVCapture.sload; время блока |
+| `events_ekubo.rs` | События ядра: анонимный обмен (stateAfter), PositionUpdated (stateAfter, тики границ, биты битмапа), PositionFeesCollected (MEVCapture); метка SWAP_MARK |
+| `events_ekubo_ticks.rs` | PositionUpdated концентрированного пула: тики границ позиции (liquidityDelta, liquidityNet) и биты битмапа — вынесено из `events_ekubo.rs` |
+| `ekubo_route.rs` | Лог ядра → пул (PoolId из данных) и «topic0» анонимного лога — для session.rs и listen_log.rs |
+| `ekubo_shallow.rs` | Фильтр подписки пачки Ekubo (по адресу ядра без topics / с PositionUpdated) и правило пробуждения мелкого пула |
+| `ekubo_native.rs` | Решение 454: нативный ETH ключа (token0 = 0) ↔ обёртка dex.native_wrapped в паре графа; токены и направление в порядке ключа |
+| `ekubo_ext.rs` | Решение 454: расширение пула — нет / MEVCapture / TWAMM / Oracle / BoostedFees по настройкам; разбор, как каждое меняет обмен |
+| `ekubo_accept.rs` | Решение 454: правила ключа пула (PoolId, расширение, нативный ETH) — общие для справочника и истории |
+| `history_ekubo.rs` | Решение 454: история PoolInitialized ядра (ключ без PoolKeyIndex) и развилки истории V4 / Ekubo |
+| `load_ekubo_twamm.rs` | Решение 454: состояние TWAMM пула — TwammPoolState, слова битмапа времён до горизонта, TimeInfo |
+| `ekubo_hub.rs` | Решение 454: одна подписка на логи ядра (и TWAMM) на площадку с раздачей пачкам по PoolId (источник ws) |

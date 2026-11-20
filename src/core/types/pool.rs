@@ -1,7 +1,8 @@
 //! Файл: core/types/pool.rs
 //! Что делает: типы пулов DEX — вид пула (V2, V3, V4 с концентрированной ликвидностью, V4 Bin, PMM, Solidly,
 //! StableSwap, TickBin, PMM от оракула, V2 с усилением — решение 287, пара с фиктивными резервами — решение 288, пул в
-//! общем хранилище — решение 289, бины с изменчивой комиссией — решение 290, crypto-пул Curve — решение 442),
+//! общем хранилище — решение 289, бины с изменчивой комиссией — решение 290, crypto-пул Curve — решение 442,
+//! синглтон-ядро Ekubo — решение 447),
 //! ссылка на пул, состояние пула на уровне «текущая цена и комиссия», крючок V4 и его группа A/B/C.
 //! Кто вызывает: адаптер DEX (создаёт), ядро и интерфейс (показывают, учитывают группу крючка).
 //! От чего зависит: core/types/market.rs, alloy-primitives.
@@ -18,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use super::market::VenueId;
 pub use super::pool_amp::AmpV2Data;
 pub use super::pool_crypto::{CryptoData, CryptoMath};
+pub use super::pool_ekubo::{EkuboData, EkuboMev, EkuboTick, EkuboTwamm};
 pub use super::pool_fictive::FictiveData;
 pub use super::pool_lb::LbBinData;
 pub use super::pool_smart::{ColReserves, DebtReserves, SmartColDebtData};
@@ -83,6 +85,11 @@ pub enum PoolKind {
     /// сосредоточена около внутренней цены price_scale, инвариант с A и gamma, комиссия динамическая (mid_fee → out_fee
     /// по удалённости от равновесия). Свой контракт на пул. Состояние — CryptoData.
     Crypto,
+    /// Синглтон-ядро Ekubo (решение 447): все пулы — в одном контракте Core, ключ пула (token0, token1, config) —
+    /// PoolId = keccak256 ключа; концентрированная ликвидность по тикам (тик — 1e-6, своя сжатая цена sqrtRatio) или
+    /// стейблсвап / полный диапазон; комиссия 0.64 со входа; расширение пула (MEVCapture — доплата за пройденные тики).
+    /// Состояние — EkuboData (тики и битмап — в нём).
+    Ekubo,
 }
 
 /// Как найти пул в сети.
@@ -262,6 +269,9 @@ pub enum PoolState {
     /// Crypto-пул Curve (решение 442): балансы, множители точности, price_scale, D, A, gamma, комиссия, индексы пары.
     /// Боксируется, как Pmm. Поля — в CryptoData (core/types/pool_crypto.rs).
     Crypto(Box<CryptoData>),
+    /// Синглтон-ядро Ekubo (решение 447): config, цена, тик, ликвидность, битмап и тики, MEVCapture, время блока.
+    /// Боксируется, как Pmm. Поля — в EkuboData (core/types/pool_ekubo.rs).
+    Ekubo(Box<EkuboData>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

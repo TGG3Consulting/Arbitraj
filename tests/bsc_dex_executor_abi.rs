@@ -124,6 +124,15 @@ fn kinds_match_contract_constants() {
         ("BALANCER_V3", Params::BalancerV3 { pool: Address::ZERO }),
         // Решение 445: пул Liquidity Book v2.0 — шаг 24 (решение 456; исходник, артефакты — после пересборки).
         ("LB20", Params::Lb20),
+        // Решение 447: пул Ekubo в ядре Core (артефакты out/ с шагом ещё не собраны — сверяется исходник).
+        (
+            "EKUBO",
+            Params::Ekubo {
+                config: B256::ZERO,
+                native: false,
+                forward: false,
+            },
+        ),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
@@ -340,13 +349,14 @@ fn stable_bnb_contract_rules_present() {
         assert!(src.contains(must), "нет в контракте: {must}");
     }
     // bnbFrom обнуляется после каждого вызова, где BNB ждётся: сколько установок — столько обнулений (stable BNB —
-    // две, _unwrapAll executeNative — одна, решение 272; шаг FLUID — две, решение 440: вход и выход в нативной монете).
-    // Только строки кода (комментарии тоже содержат «bnbFrom = …»).
+    // две, _unwrapAll executeNative — одна, решение 272; шаг FLUID — две, решение 440: вход и выход в нативной монете;
+    // шаг EKUBO — две, решение 454: нативный вход и выход; решение 456 — слияние: 3 + 2 + 2 = 7). Только строки кода
+    // (комментарии тоже содержат «bnbFrom = …»).
     let code: Vec<&str> =
         src.lines().map(str::trim).filter(|l| l.starts_with("bnbFrom = ")).collect();
     let resets = code.iter().filter(|l| **l == "bnbFrom = address(0);").count();
     let sets = code.len() - resets;
-    assert_eq!(resets, 5);
+    assert_eq!(resets, 7);
     assert_eq!(sets, resets);
     let abi = abi();
     assert_eq!(

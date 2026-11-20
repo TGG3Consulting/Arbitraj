@@ -7,7 +7,7 @@
 //! фабрик crypto-пулов Curve (created_crypto.rs).
 //! Пул из события попадает в справочник (показ и итог проверки — index::record). Встречный токен — наблюдателя.
 //! Кто вызывает: pools/created.rs.
-//! От чего зависит: ctx.rs, families.rs, verify.rs, discover_v4.rs, discover.rs (against), attach.rs, abi_v2v3.rs, abi_v4.rs.
+//! От чего зависит: ctx.rs, families.rs, verify.rs, discover_v4.rs, history_ekubo.rs (решение 454: PoolInitialized ядра Ekubo), discover.rs (against), attach.rs, abi_v2v3.rs, abi_v4.rs.
 //! Настройки: dex.factory, dex.pool_manager, dex.stable_hooks [DEX].
 //!
 //! События — research/flow/bsc_dex.md (схема п. 2: PairCreated(token0, token1, pair, n), PoolCreated(token0, token1,
@@ -23,6 +23,7 @@ use super::super::directory::pool_key;
 use super::abi_algebra::IAlgebraFactory;
 use super::abi_dmm::{self, IDmmFactory};
 use super::abi_dodo::IDodoFactory;
+use super::abi_ekubo::IEkuboCore;
 use super::abi_elastic::IElasticFactory;
 use super::abi_maverick::IMaverickV2Factory;
 use super::abi_slipstream::ICLFactory;
@@ -33,9 +34,9 @@ use super::attach;
 use super::created::Watch;
 use super::created_crypto;
 use super::discover::against;
-use super::discover_v4;
 use super::events_balancer_v3;
 use super::families::{self, Family, Proto};
+use super::history_ekubo;
 use super::index;
 use super::listen::Pools;
 use super::verify::{self, Candidate, Verdict};
@@ -155,6 +156,14 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Liquidity Book v2.0 (решение 445): LBPairCreated фабрики v2.0 (ILBFactory.sol v2.0.0 L26-L32) — подписка не
             // подключена (как у v2.1, техдолг docs/ROADMAP.md): новые пулы — из справочника индексатора.
             Proto::LbV20 => continue,
+            // Ekubo (решение 454; раньше — решение 447: только справочник): PoolInitialized ядра (ICore.sol L111) — ключ
+            // пула из события, PoolId сверяется (history_ekubo.rs), дальше та же проверка (verify_ekubo.rs, ключ — из
+            // памяти, без PoolKeyIndex).
+            Proto::Ekubo => (
+                "dex.ekubo_core",
+                IEkuboCore::PoolInitialized::SIGNATURE_HASH,
+                true,
+            ),
             // KyberSwap Classic DMM (решение 287): PoolCreated(token0 indexed, token1 indexed, pool, ampBps, totalPool) фабрики
             // (DMMFactory.sol L22-L28, L60).
             Proto::KyberDmm => (
@@ -223,7 +232,7 @@ async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> R
     }
     let c = if v4 {
         // Infinity Stable: событие пула не с крючком из dex.stable_hooks — не его пул (None).
-        let Some(all) = discover_v4::parse_opt(&p.ctx, f, log).map_err(|e| e.message)? else {
+        let Some(all) = history_ekubo::parse_opt(&p.ctx, f, log).map_err(|e| e.message)? else {
             return Ok(());
         };
         let Some(x) = against(&all, w.usdt) else {

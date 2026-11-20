@@ -73,6 +73,8 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
         PoolRef::Member { contract, .. } => Ok((k, *contract)),
         // Решение 295: пара многомонетного пула — шаг по контракту пула (индексы/токены — из записи пары).
         PoolRef::Multi { contract, .. } => Ok((k, *contract)),
+        // Решение 447: пул Ekubo — в ядре; шаг EKUBO открывает само ядро (lock), адрес шага — ядро.
+        PoolRef::Singleton { manager, .. } if k == ExecKind::Ekubo => Ok((k, *manager)),
         PoolRef::Singleton { .. } => Err(format!(
             "{}: пул внутри менеджера исполнитель не вызывает",
             f.id
@@ -109,7 +111,8 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
         if k == ExecKind::BalancerV3 && !super::pool_gate::admitted(ctx, e, k, Address::ZERO) {
             return false;
         }
-        return !matches!(e.pool.reference, PoolRef::Singleton { .. });
+        // Решение 447: у шага EKUBO ссылка — пул в ядре (Singleton), у остальных — не Singleton.
+        return matches!(e.pool.reference, PoolRef::Singleton { .. }) == (k == ExecKind::Ekubo);
     }
     let reference = match &e.pool.reference {
         PoolRef::Singleton { .. } => true,
@@ -273,6 +276,19 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             PoolState::LbBin(d) if d.v20 => Params::Lb20,
             _ => {
                 let why = format!("{}: у пула нет состояния Liquidity Book v2.0", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
+        // Решение 447: пул Ekubo — config ключа из прочитанного состояния (токены ключа — токены шага по порядку адресов).
+        // Решение 454: нативный ETH ключа и forward — только у MEVCapture (pools/ekubo_ext.rs).
+        ExecKind::Ekubo => match &e.pool.state {
+            PoolState::Ekubo(d) => Params::Ekubo {
+                config: d.config,
+                native: d.native.is_some(),
+                forward: d.mev.is_some(),
+            },
+            _ => {
+                let why = format!("{}: у пула нет состояния Ekubo", e.family.id);
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },

@@ -71,3 +71,15 @@
 | `bin_price.rs` | Цена бина 128.128 | PriceHelper, Uint128x128Math.pow (тест — PriceHelper.t.sol) |
 | `bin_swap.rs` | Обмен в пуле Bin по резервам бинов | BinPool.swap, BinHelper, FeeHelper |
 | `algebra_fee.rs` | Решение 444: комиссия обмена Algebra по направлению (Algebra V1.9 с направленными комиссиями — feeZto / feeOtz; у одной комиссии — она на обе стороны) | cryptoalgebra/AlgebraV1.9 direction-based-fee a45417ed `AlgebraPool.sol:739` |
+| `ekubo_sqrt.rs` | Ekubo (решение 447): сжатая цена SqrtRatio ↔ 64.128 (`to_fixed`, `to_sqrt_ratio`), цена после суммы token0 / token1 (`next_from_amount0/1`), комиссия 0.64 (`compute_fee`, `amount_before_fee`); векторы официальных тестов | EkuboProtocol/evm-contracts@61d09daa `src/types/sqrtRatio.sol`, `src/math/sqrtRatio.sol`, `src/math/fee.sol` |
+| `ekubo_delta.rs` | Ekubo: суммы token0 / token1 между ценами (`amount0`, `amount1`, отсортированные варианты) с округлением ядра; векторы официальных тестов | `src/math/delta.sol` |
+| `ekubo_tick.rs` | Ekubo: тик ↔ сжатая цена (`to_sqrt_ratio_at`, `tick_at`), MIN_TICK / MAX_TICK; векторы официальных тестов | `src/math/ticks.sol`, `src/math/constants.sol` |
+| `ekubo_config.rs` | Ekubo: разбор config ключа пула — расширение, комиссия, вид (концентрированный / полный диапазон / стейблсвап с диапазоном) | `src/types/poolConfig.sol` |
+| `ekubo_bitmap.rs` | Ekubo: слово и бит тика, поиск следующего / предыдущего тика при skipAhead = 0 по прочитанным словам | `src/math/tickBitmap.sol`, `src/types/bitmap.sol` |
+| `ekubo_step.rs` | Ekubo: следующий тик шага обмена (полный диапазон, границы стейблсвапа, битмап концентрированного пула) — вынесен из `ekubo_swap.rs` | `src/Core.sol` L576-L620 |
+| `ekubo_swap.rs` | Ekubo: обмен на точный вход — цикл swap ядра (шаги до тиков, комиссия со входа, пересечение тиков, стейблсвап) | `src/Core.sol` L510-L858 |
+| `ekubo_mev.rs` | Ekubo: доплата расширения MEVCapture с выхода (тики, пройденные с начала секунды), худший из возможных tickLast | `src/extensions/MEVCapture.sol` L177-L258 |
+| `ekubo_exp2.rs` | Ekubo (решение 454): exp2 5.64 → 64.64 — порт exp2.sol; векторы официального теста |
+| `ekubo_twamm.rs` | Ekubo TWAMM: сумма по скорости, скорость ± дельта, computeC, sqrt отношения скоростей, цена после виртуальных ордеров (computeNextSqrtRatio); векторы официального теста |
+| `ekubo_time.rs` | Ekubo TWAMM: шаг и следующее допустимое время, поиск инициализированного времени по прочитанным словам битмапа времён |
+| `ekubo_virtual.rs` | Ekubo TWAMM: исполнение виртуальных ордеров до времени блока (порт цикла TWAMM) — состояние пула перед нашим обменом |

@@ -1,12 +1,15 @@
 //! Файл: venues/bsc_dex/pools/group_filter.rs
-//! Что делает: фильтр logs подписки пачки пулов одного вида (по адресам пулов или по PoolId у менеджера) и индексы
-//! пачки (ссылка → номер пула; адреса контрактов пар многомонетных пулов). Вынесено из group.rs (решение 455: файл
-//! вырос подпиской Transfer), поведение прежнее; group.rs реэкспортирует функции под прежними путями.
-//! Кто вызывает: pools/group.rs (subscribe), pools/session.rs (index, multi_sites), тесты (group::filter).
-//! От чего зависит: node/subs.rs (фильтры), pools/events.rs (topic0), discover.rs (Found).
+//! Что делает: вид событий пачки (Topics), фильтр подписки logs пачки пулов одного вида (по адресам пулов /
+//! контрактов или по PoolId у менеджера; Ekubo — ekubo_shallow.rs) и индексы пачки (ссылка → номер пула; адреса
+//! контрактов пар многомонетных пулов). Вынесено из group.rs (решение 454 — Ekubo, решение 455 — файл вырос подпиской
+//! Transfer, она — в transfer_in.rs); поведение прежнее, group.rs реэкспортирует всё под прежними путями (group::Topics
+//! / filter / index / multi_sites).
+//! Кто вызывает: pools/group.rs (subscribe), pools/session.rs (index, multi_sites; через group::),
+//! tests/bsc_dex_receipts.rs, tests/bsc_dex_subs_live.rs (group::filter).
+//! От чего зависит: node/subs.rs (фильтры), pools/events.rs (topic0), discover.rs (Found), ekubo_shallow.rs.
 //! Настройки: нет.
 //!
-//! Фильтр logs — execution-apis subscribe.yaml#L1-L60
+//! eth_subscribe("logs", фильтр) — execution-apis subscribe.yaml#L1-L60
 //! (https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/subscribe.yaml#L1-L60).
 
 use alloy_primitives::B256;
@@ -17,13 +20,25 @@ use crate::core::types::PoolRef;
 use super::super::node::subs;
 use super::discover::Found;
 use super::events;
-use super::group::Topics;
+
+/// Какие события слушать у пулов.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Topics {
+    /// Все события, по которым ведётся состояние (events::topics).
+    Full,
+    /// Только добавление ликвидности (events::liquidity_topics).
+    Liquidity,
+}
 
 /// Фильтр logs для пулов одного вида: V2/V3 — по адресам пулов, V4 — по PoolId у менеджера. Ошибок нет.
 pub fn filter(pools: &[&Found], topics: Topics) -> Value {
     let Some(first) = pools.first() else {
         return json!({});
     };
+    // Решение 447: Ekubo — события ядра без PoolId в topics (ekubo_shallow.rs filter).
+    if let Some(f) = super::ekubo_shallow::filter(first, topics == Topics::Liquidity) {
+        return f;
+    }
     let topic0: Vec<B256> = match topics {
         Topics::Full => events::topics(first.family),
         Topics::Liquidity => events::liquidity_topics(first.family),

@@ -217,6 +217,29 @@ docs/TASKS.md «Решение 444»).
 | dex.quoter_virtual | DEX `camelot-v3@arbitrum` | `да` | Сверка расчёта — обмен самого пула в eth_call (VirtualQuoter, решение 186): какой квотер развёрнут у Camelot (Quoter или QuoterV2 ветки), не сверено — dex.quoter не задавать | Решение 444, вопрос 1 (docs/TASKS.md) |
 | dex.pool_enabled | DEX `camelot-v3@arbitrum` | `да` — после записи и прохода тестов tests/arb_dex_algebra_dir.rs без метки ignore | Включить пулы DEX в справочник, граф и торговлю | Решение 444 |
 
+## DEX Ekubo сети Arbitrum (решение 447)
+
+Вид пулов `ekubo` (Ekubo V3, id DEX у GeckoTerminal `ekubo-v3-arbitrum`; у площадки arb_dex ключ области «DEX» — с «@arbitrum»,
+решение 435). Адреса — официальные (docs.ekubo.org/reference/contracts/evm-v3; PoolKeyIndex — broadcast evm-contracts).
+Шаг EKUBO исполнителя появится только после сборки contracts/out с ним и переразвёртывания (contracts/README.md) — до этого
+пулы Ekubo в графе и сигналах, без исполнения.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX ekubo-v3-arbitrum | `ekubo` | Вид пулов Ekubo (синглтон-ядро) | Решение 447 |
+| dex.pool_enabled | DEX ekubo-v3-arbitrum | `да` — после замера нагрузки (docs/ADAPTER_TEMPLATE.md п. 8) | Подписка на все логи ядра | Решение 447 |
+| dex.ekubo_core | DEX ekubo-v3-arbitrum | `0x00000000000014aA86C5d3c41765bb24e11bd701` | Ядро Core | docs.ekubo.org evm-v3; evm-contracts broadcast/DeployAll.s.sol/42161 run-1767194711580.json |
+| dex.ekubo_key_index | DEX ekubo-v3-arbitrum | `0x898956fc2aed01d5f81f556ff5dcb10534285718` | Реестр ключей пулов | evm-contracts broadcast/DeployAll.s.sol/42161 run-1785724793522.json (commit 02e0d82f) |
+| dex.ekubo_mev_capture | DEX ekubo-v3-arbitrum | `0x5555fF9Ff2757500BF4EE020DcfD0210CFfa41Be` | Пулы с расширением MEVCapture | docs.ekubo.org evm-v3 |
+| dex.quoter | DEX ekubo-v3-arbitrum | `0xd26f20001a72a18C002b00e6710000d68700ce00` | MEVCaptureRouter — Router.quote для сверки (и пулов с MEVCapture) | docs.ekubo.org evm-v3 («legacy, v3.1.1») |
+| dex.ekubo_bitmap_words | DEX ekubo-v3-arbitrum | решение Тиграна — *метод:* ln(1 + dex.depth_band_pct/100) / ln(1,000001) / (256 × наименьший шаг тика пулов), вверх до целого; шаги — из записи tools/arbitrum_record/ekubo.py | Глубина прочитанной карты тиков | Решение 447 |
+| dex.ekubo_twamm | DEX ekubo-v3-arbitrum | `0xd4f1060cb9c1a13e1d2d20379b8aa2cf7541ed9b`, `0xd47f1B1eDCfEaBb08F6eBd8FC337c27E636C75BA` | Пулы с TWAMM (оба развёртывания) | evm-contracts broadcast/DeployAll.s.sol/42161 run-1767194711580.json (61d09daa), run-1777073880286.json (8c1b721); второй — docs.ekubo.org evm-v3 |
+| dex.ekubo_twamm_horizon_s | DEX ekubo-v3-arbitrum | решение Тиграна — *метод:* сколько секунд тихий пул с TWAMM должен котироваться без перечитывания (слово битмапа времён — 65 536 с) | Горизонт виртуальных ордеров | Решение 454 |
+| dex.ekubo_oracle | DEX ekubo-v3-arbitrum | `0x517E506700271AEa091b02f42756F5E174Af5230` | Пулы с Oracle (обмен не меняет) | docs.ekubo.org evm-v3; run-1767194711580.json |
+| dex.ekubo_boosted_fees | DEX ekubo-v3-arbitrum | `0xd4B54d0ca6979Da05F25895E6e269E678ba00f9e`, `0x948b9C2C99718034954110cB61a6e08e107745f9` | Пулы с BoostedFees (обмен не меняет) | docs.ekubo.org evm-v3; run-1770053979549.json (69b642d) |
+| dex.ekubo_hub_buffer | arb_dex | решение Тиграна — *метод:* логов ядра в блок (запись core_load.json: logs_per_block) × блоков допустимой задержки пачки | Одна подписка на ядро на площадку | Решение 454 |
+| dex.native_wrapped | arb_dex | WETH Arbitrum — адрес решает Тигран по официальному списку токенов (нужен пулам Ekubo с нативным ETH и Oracle) | Нативный ETH ключа ↔ обёртка | Решение 454 |
+
 ## Нативная монета BNB
 
 У BNB нет адреса контракта — он сопоставляется с обёрткой WBNB.

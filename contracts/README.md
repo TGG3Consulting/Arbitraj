@@ -39,7 +39,7 @@
   причиной «сборки v4 нет — пересоберите как v4 и переразверните» (`src/venues/bsc_dex/pools/exec_callback.rs`
   step_absent).
 
-## Версии (решения 272, 395, 440, 441, 445, 456)
+## Версии (решения 272, 395, 440, 441, 445, 447, 454, 456)
 - **v4** (решение 440) — v3 + шаг FLUID = 22 (пул Fluid DEX T1: approve пулу ровно на шаг + `swapIn(swap0to1, сумма, 0, to)`;
   нативная монета пула — через обёртку: вход `withdraw` → `swapIn{value}`, выход — `receive` только от слоя ликвидности из
   data → `deposit`) и интерфейс `IFluidDexT1` в `IPools.sol`. **Только исходник:** артефакты `out/` ещё v3 (агенту сборка
@@ -48,6 +48,18 @@
   задача решения 440) → «Развернуть исполнитель». До этого шаг FLUID ни у одного кошелька не строится (exec_callback.rs
   since = V4, причина «нужна сборка исполнителя v4»).
 - **v4** (решение 441, T433-F2) — v3 + шаг BALANCER_V3 = 23 (пул Balancer V3: unlock → balancerV3Callback → swap / settle / sendTo). Исходник — в `ArbExecutor.sol`; **артефакты `out/` ещё НЕ пересобраны** (solc локально не запускался): до пересборки `out/` = v3 побайтно, копия v3 заморожена в `out/v3/` (бот сверяет развёрнутые v3 с ней, code.rs). Пересборка: `contracts/build.sh` → в `out/` код v4 → обновить тест `tests/bsc_dex_executor_v3.rs` (version_of текущей сборки — V4) и размер кода здесь → EVM-тест шага с официальным кодом Vault V3 (evmtest — ещё нет) → развёртывание v4 в сети (Arbitrum — новое развёртывание).
+- **Шаг EKUBO = 25 (решение 447; номер 25 — решение 456, в ветке было 22) — в исходнике, артефакты НЕ собраны.** `ArbExecutor.sol` (шаг `_ekubo`, обратный вызов
+  ядра Ekubo `locked_6416899205` — селектор 0x00000000, `_ekuboCall`) и `IPools.sol` (`IEkuboCore` — селекторы lock /
+  forward / startPayments / completePayments / withdraw) изменены, `out/` — прежняя сборка v3 (сборка solc локально
+  запрещена). Нужно: (1) скопировать текущий `out/` в `out/v3/` и научить `exec/executor/code.rs` узнавать v3 по `out/v3/`
+  (как v2 / v1), новая версия — `out/`; (2) `contracts/build.sh`, `git diff contracts/out`, обновить хеши и размер кода
+  (предел EIP-170 — 24 576); (3) EVM-тест шага EKUBO с официальным кодом ядра Ekubo (`evmtest/`, как singleton.mjs);
+  (4) переразвернуть исполнитель кошелька Arbitrum. До этого бот не строит шаг EKUBO: в коде исполнителя нет вызова
+  completePayments() (`pools/exec_callback.rs` EKUBO_MARK) — пулы Ekubo в графе и сигналах без пути исполнения.
+  Решение 454: data шага EKUBO = abi.encode(bytes32 config, bool native, bool forward); native — token0 ключа нативный
+  ETH (вход — wnative.withdraw(долг) → ETH ядру value, receive ядра гасит долг; выход — withdraw исполнителю → deposit в
+  wnative → получателю шага), forward — только MEVCapture (TWAMM / Oracle / BoostedFees — обычный swap ядра). EVM-тест
+  шага: ERC-20, нативный вход, нативный выход, MEVCapture, TWAMM.
 - **v3** (решение 395, t181) — v2 + шаги UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 (пулы внутри менеджеров Uniswap V4 и
   PancakeSwap Infinity) и обратные вызовы `unlockCallback` / `lockAcquired`. Текущая сборка `out/` — v3; «Развернуть
   исполнитель» разворачивает её. Хранилище то же (owner — слот 0, wnative — слот 1), execute / executeNative — те же.

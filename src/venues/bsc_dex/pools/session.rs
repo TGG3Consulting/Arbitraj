@@ -285,9 +285,12 @@ async fn on_log(
         manager: log.address(),
         id: *id,
     });
+    // Решение 447: пул Ekubo — PoolId в данных лога ядра (ekubo_route.rs), не в topics[1].
+    let ekubo = super::ekubo_route::singleton(log);
     let found = single
         .and_then(|r| index.get(&r))
-        .or_else(|| index.get(&PoolRef::Contract(log.address())));
+        .or_else(|| index.get(&PoolRef::Contract(log.address())))
+        .or_else(|| ekubo.and_then(|r| index.get(&r)));
     // Ревью 295: в пачке и Contract(адрес), и пары Multi того же адреса (смена dex.multi_pair на лету: старая подписка
     // ещё жива, index_watch уже подключил пары нового вида в её позднюю пачку — attach.rs) — пары Multi тоже получают
     // лог. У пачек без пар Multi множество пусто — путь прежний.
@@ -309,10 +312,8 @@ async fn on_log(
     if m.deep.get(i).copied().unwrap_or(true) {
         // Событие только для мелких (V2 Mint) — у глубокого пула состояние ведёт Sync.
         let family = m.pools[i].0.family;
-        if log
-            .topic0()
-            .is_some_and(|t| events::topics(family).contains(t))
-        {
+        // Решение 447: у анонимного лога обмена Ekubo topic0 нет — метка из ekubo_route::topic.
+        if super::ekubo_route::topic(log).is_some_and(|t| events::topics(family).contains(&t)) {
             // Решение 330: полосы — событие в конец полосы пула (порядок пула прежний), запуск в пределах.
             if lanes.wants(p) {
                 lanes.push(i, raw)?;
@@ -329,7 +330,7 @@ async fn on_log(
         }
         return Ok(());
     }
-    if log.removed {
+    if log.removed || !super::ekubo_shallow::wakes(m.pools[i].0.family, log) {
         return Ok(());
     }
     match log.block_number {
@@ -349,9 +350,11 @@ fn deep_log(m: &Members, index: &HashMap<PoolRef, usize>, log: &Log) -> bool {
         manager: log.address(),
         id: *id,
     });
+    let ekubo = super::ekubo_route::singleton(log);
     single
         .and_then(|r| index.get(&r))
         .or_else(|| index.get(&PoolRef::Contract(log.address())))
+        .or_else(|| ekubo.and_then(|r| index.get(&r)))
         .is_some_and(|&i| m.deep.get(i).copied().unwrap_or(true))
 }
 

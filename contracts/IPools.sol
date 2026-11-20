@@ -335,3 +335,20 @@ interface IBalancerV3Vault {
     function settle(address token, uint256 amountHint) external returns (uint256 credit);
     function sendTo(address token, address to, uint256 amount) external;
 }
+
+// Решение 447: ядро Ekubo (Core) — EkuboProtocol/evm-contracts@61d09daa (ядро Arbitrum, broadcast DeployAll.s.sol/42161):
+// src/base/FlashAccountant.sol L146-L187 (lock: зовёт у вызывающего locked_6416899205(id) с данными после селектора; в
+// конце долгов быть не должно — DebtsNotZeroed), L190-L221 (forward(to): зовёт у расширения forwarded_2374103877 с
+// данными после 36 байт), L224-L254 (startPayments: токены словами после селектора), L257-L319 (completePayments:
+// оплачено = прирост баланса ядра), L322-L381 (withdraw: записи по 56 байт — токен 20 | получатель 20 | сумма 16);
+// src/Core.sol L510-L858 (swap_6269342730, селектор 0x00000000: ключ пула 3 слова + SwapParameters 1 слово; ответ —
+// balanceUpdate, stateAfter); src/interfaces/IFlashAccountant.sol L7 (locked_6416899205 — селектор 0x00000000).
+// Функции объявлены только ради селекторов (lock 0xf83d08ba, forward 0x101e8952, startPayments 0xf9b6a796,
+// completePayments 0x12e103f1, withdraw 0x3ccfd60b): данные этих вызовов — не ABI, их собирает ArbExecutor.
+interface IEkuboCore {
+    function lock() external;
+    function forward(address to) external;
+    function startPayments() external;
+    function completePayments() external;
+    function withdraw() external;
+}

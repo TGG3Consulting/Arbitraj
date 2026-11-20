@@ -165,6 +165,13 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "Crypto-пул Curve не исполняется умным маршрутом (только шаг STABLE_U256 контракта-исполнителя)",
             ));
         }
+        // Ekubo (решение 447): MixedQuoter его не знает — сверка Router.quote (quoter_ekubo.rs), только шаг EKUBO.
+        PoolKind::Ekubo => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "Ekubo не исполняется умным маршрутом (только шаг EKUBO контракта-исполнителя)",
+            ));
+        }
         // Пара с фиктивными резервами (SmarDex, решение 288): MixedQuoter её не знает — сверка виртуальным квотером.
         PoolKind::Fictive => {
             return Err(ctx.err(

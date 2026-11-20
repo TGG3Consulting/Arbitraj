@@ -4,7 +4,7 @@
 //! Multicall3 — неизменяемые поля пула (factory, token0, token1; V3 — fee, tickSpacing и lmPool() — ABI PancakeSwap
 //! или Uniswap; V2 со своей комиссией — метод dex.v2_fee_method), затем реестр фабрики DEX (getPair / getPool) —
 //! именно он подтверждает, что это пул этой фабрики (поддельный контракт может вернуть из factory() что угодно).
-//! V4/Infinity — verify_v4.rs. Вызовы — частями по dex.verify_batch: сбой узла на части — итог «не проверен» только
+//! V4/Infinity — verify_v4.rs; Ekubo — verify_ekubo.rs (решение 447). Вызовы — частями по dex.verify_batch: сбой узла на части — итог «не проверен» только
 //! у её пулов (повтор — pools/index.rs), откат вызова — это ответ (пул отклонён с причиной).
 //! V3: во второй проход — проба swapFee фабрики (решение 274, fee_probe.rs): фабрика берёт комиссию обмена, а
 //! dex.v3_fee_source не задана — пулы DEX не берутся с причиной. V3 с dex.v3_registry_fee_method (решение 281,
@@ -32,7 +32,7 @@ pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_c
 pub use super::verify_rules::{Read, check, fill, registered, registered_for, v2_fee_pips, v3_abi};
 use super::{
     fee_probe, verify_algebra, verify_balancer, verify_balancer_v3, verify_crypto, verify_crypto_v1, verify_curve, verify_lb, verify_lb20, verify_lb22, verify_curve_ng, verify_dodo, verify_fluid, verify_inf_stable, verify_izi, verify_metric,
-    verify_maverick, verify_solidly, verify_stable_u, verify_v4,
+    verify_ekubo, verify_maverick, verify_solidly, verify_stable_u, verify_v4,
 };
 
 /// Кандидат на проверку: DEX (вид), пул как у источника (адрес или PoolId), монета и встречный токен.
@@ -95,6 +95,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut mav = Vec::new();
     let mut inf_stable = Vec::new();
     let mut fluid = Vec::new();
+    let mut ekubo = Vec::new();
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
@@ -121,6 +122,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::Maverick => mav.push(i),
             Proto::InfinityStable => inf_stable.push(i),
             Proto::FluidT1 => fluid.push(i),
+            Proto::Ekubo => ekubo.push(i),
             _ => v2v3.push(i),
         }
     }
@@ -252,6 +254,11 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     // Fluid DEX T1 (решение 440): isDex фабрики + constantsView пула (verify_fluid.rs).
     let list: Vec<Candidate> = fluid.iter().map(|i| cands[*i].clone()).collect();
     for (i, r) in fluid.into_iter().zip(verify_fluid::verify(ctx, &list, size).await) {
+        out[i] = Some(r);
+    }
+    // Ekubo (решение 447): ключ у PoolKeyIndex + состояние у ядра (verify_ekubo.rs).
+    let list: Vec<Candidate> = ekubo.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in ekubo.into_iter().zip(verify_ekubo::verify(ctx, &list, size).await) {
         out[i] = Some(r);
     }
     let list: Vec<Candidate> = v2v3.iter().map(|i| cands[*i].clone()).collect();

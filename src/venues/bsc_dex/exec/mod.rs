@@ -78,6 +78,7 @@ pub mod presell_slot_find;
 pub mod quoter_favour;
 pub mod quoter_refetch;
 pub mod quoter_refetch_check;
+pub mod quoter_refetch_ekubo;
 pub mod quoter_refetch_note;
 pub mod quoter_refetch_proof;
 pub mod result;

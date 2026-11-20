@@ -95,6 +95,12 @@ pub enum ExecKind {
     /// (withdraw → swapIn{value} / приход от слоя ликвидности → deposit); data = abi.encode(bool swap0to1, uint8 native,
     /// address liquidity). Только исполнитель v4.
     Fluid,
+    /// Решение 447: пул Ekubo в ядре Core — `Core.lock()` → `locked_6416899205` → `swap_6269342730` (у пула с
+    /// MEVCapture — `forward(расширение)`) → `startPayments` / перевод / `completePayments` долга, `withdraw` выхода;
+    /// решение 454: data = abi.encode(bytes32 config, bool native, bool forward) — native: token0 ключа нативный ETH
+    /// (его сторона шага — обёртка wnative), forward: обмен через Core.forward(расширение) у MEVCapture
+    /// (contracts/ArbExecutor.sol _ekubo). Есть только у кода исполнителя с шагом EKUBO (exec_callback.rs EKUBO_MARK).
+    Ekubo,
 }
 
 impl ExecKind {
@@ -124,6 +130,7 @@ impl ExecKind {
             ExecKind::InfCl => "INF_CL",
             ExecKind::InfBin => "INF_BIN",
             ExecKind::Fluid => "FLUID",
+            ExecKind::Ekubo => "EKUBO",
         }
     }
 
@@ -218,6 +225,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 440: swapIn пула без белого списка вызывающих (poolT1 main.sol L51-L58, L689-L700: пауза и
         // повторный вход — общие для всех); шаг 22, только v4.
         "fluid_t1" => ExecKind::Fluid,
+        // Решение 447: Core.lock / swap / forward / startPayments / completePayments / withdraw (EkuboProtocol/evm-contracts
+        // @61d09daa src/base/FlashAccountant.sol L146-L187, L190-L221, L224-L381; src/Core.sol L510-L858). Шаг 25 (решение 456).
+        "ekubo" => ExecKind::Ekubo,
         _ => return None,
     })
 }

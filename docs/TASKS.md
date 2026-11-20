@@ -1146,7 +1146,7 @@
   - T433-076 `omni-exchange-v3-arbitrum` (Omni Exchange V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-077 `balancer-v3-arbitrum` (Balancer V3 (Arbitrum)) — решения 441, 452: вид `balancer_v3` в коде — все пулы официальных фабрик Arbitrum (весовые, стейблсвап, StableSurge, Gyro 2-CLP / E-CLP, ReClamm, LBP v1–v4, LBP с фиксированной ценой, QuantAMM) и крючки StableSurge / MEV Capture; адреса — docs/FIRST_RUN.md; включение в arb_dex — после записи узла (tools/arbitrum_record/balancer_v3.py) и зелёного теста; буфер ERC4626 и MEV Capture при сборе чаевых — вопросы «Решение 452», п. 2–3.
   - T433-078 `fluid-arbitrum` (Fluid (Arbitrum)) — вид `fluid_t1` в коде (решение 440, T433-F1); официальные адреса сверены (deployments/arbitrum: DexFactory 0x9171…9085, DexReservesResolver 0x05Bd…16Ff — docs/FIRST_RUN.md); включить в arb_dex — после записи узла и зелёного tests/arbitrum_fluid_t1.rs (решение 440, «НУЖНО ОТ ТИГРАНА»).
-  - T433-079 `ekubo-v3-arbitrum` (Ekubo V3 (Arbitrum)) — семейства нет в коде: семейство T433-F8; официальные адреса; завести и включить в arb_dex.
+  - T433-079 `ekubo-v3-arbitrum` (Ekubo V3 (Arbitrum)) — **код семейства есть (решения 447, 454: все пулы — нативный ETH, TWAMM / Oracle / BoostedFees, история PoolInitialized ядра, одна подписка на ядро), ждёт CI, записи узла и сборки исполнителя**: адреса официальные — docs/FIRST_RUN.md, раздел «DEX Ekubo сети Arbitrum»; включить в arb_dex (dex.kind = ekubo по ключу DEX площадки) после записей tools/arbitrum_record/ekubo.py и ekubo_more.py и снятия #[ignore] с tests/arbitrum_ekubo_live.rs и tests/arbitrum_ekubo_more_live.rs; вопросы — блоки «Решение 447», «Решение 454».
   - T433-080 `ramses-legacy-arbitrum` (Ramses Legacy (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-081 `ramses-v3-arbitrum` (Ramses V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-082 `rubicon-clmm-arbitrum` (Rubicon CLMM (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
@@ -1226,8 +1226,89 @@
     проверка, квотер LBRouter v2.0, условие пулов, шаг LB20 в исходнике исполнителя); тесты на записи — #[ignore] до
     записи tools/arbitrum_record/lb_v20.py. Осталось — блок «Решение 445».
   - T433-F7 Liquidity Book v2.2 (LFJ V2.2) — **сделано кодом (решение 446): расширение lb_v21 видом `lb_v22`; ждёт записи узла и сборки в GitHub** — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
-  - T433-F8 Ekubo — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+  - T433-F8 Ekubo — **сделано кодом (решения 447, 454; ветки t223-f8/arb-family-f8, t230/arb-ekubo-more), ждёт CI**: математика (порт ядра, TWAMM, векторы официальных тестов), чтение (ядро, MEVCapture, TWAMM), события (ядро и TWAMM, перечитывание пула с TWAMM), проверка (PoolKeyIndex или история PoolInitialized), котировка, сверка Router.quote, нативный ETH (обёртка), шаг EKUBO = 25 (решение 456; в ветке — 22; native, forward; артефакты не собраны), хаб подписки; тесты на записи — #[ignore] до записей tools/arbitrum_record/ekubo.py, ekubo_more.py. Осталось — блоки «Решение 447», «Решение 454».
   - T433-R1 Записать ответ DefiLlama overview/dexs/arbitrum со своего сервера в tests/data (сейчас — чтение WebFetch 19.11).
+- **Решение 447 (20.11.2026, ветка t223-f8/arb-family-f8) — семейство пулов Ekubo (T433-F8, T433-079); ждёт сборки и
+  тестов в GitHub (cargo локально не запускался).** Сделано: вид `ekubo` целиком кодом (DECISIONS 447). Осталось:
+  1) Запись своего узла: `python3 tools/arbitrum_record/ekubo.py --rpc <узел> --gt` → tests/data/arbitrum_ekubo_<дата>/,
+     снять #[ignore] с tests/arbitrum_ekubo_live.rs (расчёт = Router.quote, ключ → PoolId, логи ядра).
+  2) Исполнитель: собрать contracts (out/ → out/v3/, новая сборка в out/, распознавание версии в exec/executor/code.rs),
+     EVM-тест шага EKUBO с официальным кодом ядра, переразвернуть исполнитель кошелька Arbitrum (contracts/README.md).
+  3) Замер нагрузки при «Стоп» (docs/ADAPTER_TEMPLATE.md п. 8): каждая пачка пулов Ekubo подписана на ВСЕ логи ядра
+     (PoolId не в topics) — число пачек = пулы / dex.pools_per_sub.
+  Вопросы Тиграну:
+  1) Пулы с нативным ETH (token0 = адрес 0 — так устроен NATIVE_TOKEN_ADDRESS ядра) не берутся: граф и исполнитель —
+     ERC-20 (WETH). Делать ли шаг с разворотом WETH ↔ ETH (оплата ядру value, receive у исполнителя)? Без этого пулы
+     ETH/… Ekubo на Arbitrum пропущены (сколько их — покажет запись GeckoTerminal).
+  2) Ключ пула берётся только у PoolKeyIndex (реестр необязательный — PoolKeyIndex.sol L11). Пул без регистрации не
+     берётся. Нужна ли история PoolInitialized ядра (как история V4, dex.history_scan) — после записи (доля пулов
+     GeckoTerminal без ключа в реестре).
+  3) Формат адреса пула Ekubo у GeckoTerminal не проверен фактом (код ждёт PoolId, 32 байта) — запись gt_pools.json.
+  4) Расширения TWAMM, Oracle (только пары с нативным ETH), BoostedFees — не поддержаны (TWAMM исполняет ордера до обмена —
+     своей математики нет; BoostedFees в развёрнутом ядре 61d09da отсутствует, разворачивался позже — 69b642d). Нужны ли?
+  5) MEVCapture: состояние расширения после события берётся из blockTimestamp лога; если узел Nitro его в логах не
+     отдаёт — пул с MEVCapture перечитывается на каждое событие (запись core_logs.json покажет).
+- **Решение 447 — техдолг (закрыт: tip_judge — решение 454, memory_proof — «Решение 447 (ревью, правки)»):** exec/tip_judge.rs (решение 437) ищет перехватчика по topics[1] = PoolId — логи ядра Ekubo
+  (PoolId в данных) не распознаются; check/memory_proof_rules.rs подписка доказательства памяти — по PoolId в topics.
+- **Решение 447 — ответы решения 454:** вопрос 1 (нативный ETH) — сделано: обёртка dex.native_wrapped, разворот в шаге
+  EKUBO; вопрос 2 (пулы вне PoolKeyIndex) — сделано: история и событие PoolInitialized ядра; вопрос 4 (TWAMM, Oracle,
+  BoostedFees) — сделано (разбор — DECISIONS 454); п. 3 «Осталось» (нагрузка подписки) — одна подписка на ядро (хаб),
+  замер — core_load.json записи ekubo_more.py. Открыты: вопросы 3 и 5, п. 1–2 «Осталось» (записи, сборка исполнителя).
+- **Решение 454 (20.11.2026, ветка t230/arb-ekubo-more) — Ekubo: все пулы; ждёт сборки и тестов в GitHub (cargo локально
+  не запускался).** Сделано — DECISIONS 454. Осталось:
+  1) Запись своего узла: `python3 tools/arbitrum_record/ekubo_more.py --rpc <узел> --from-block <блок ядра>` (блок ядра —
+     блок транзакции CREATE2 Core в broadcast DeployAll.s.sol/42161 run-1767194711580.json или deploy_block бота) →
+     pool_initialized.json, native_pools.json, twamm_pools.json, core_load.json; снять #[ignore] с
+     tests/arbitrum_ekubo_more_live.rs (ключ события → PoolId, нативный ETH = Router.quote, TWAMM = Router.quote).
+  2) Исполнитель: шаг EKUBO изменён (data = config, native, forward; _ekuboPay / _ekuboTake) — собрать contracts, EVM-тест
+     шага EKUBO с официальным ядром (ERC-20, нативный вход, нативный выход, MEVCapture forward, TWAMM без forward),
+     переразвернуть исполнитель кошелька Arbitrum (contracts/README.md). wnative исполнителя Arbitrum = WETH Arbitrum
+     (dex.native_wrapped arb_dex). **Сверено фактом (ревью 454, 20.11.2026):** WETH Arbitrum One —
+     `0x82aF49447D8a07e3bd95BD0d56f35241523fBab1` (официальный список адресов Arbitrum: OffchainLabs/arbitrum-docs@5ce1a9e1
+     content/partials/_reference-arbitrum-contract-addresses-partial.mdx L73, «L2 Weth»; https://docs.arbitrum.io/partials/_reference-arbitrum-contract-addresses-partial);
+     на arbiscan — TransparentUpgradeableProxy, реализация `0x8b194bEae1d3e0788A1a35173978001ACDFba668` — aeWETH,
+     solc v0.6.11, «Source Code Verified (Exact Match)» (https://arbiscan.io/token/0x82af49447d8a07e3bd95bd0d56f35241523fbab1#code,
+     https://arbiscan.io/token/0x8b194bEae1d3e0788A1a35173978001ACDFba668#code), Sourcify — полное совпадение
+     (https://sourcify.dev/server/v2/contract/42161/0x8b194bEae1d3e0788A1a35173978001ACDFba668?fields=sources).
+     Исходник — OffchainLabs/token-bridge-contracts contracts/tokenbridge/libraries/aeWETH.sol (версия 0.6.11 —
+     f7cae4224 L50-L70; текущая 0.8 a4bb3f53 — то же тело): `deposit()` payable → `_mint(msg.sender, msg.value)`,
+     `withdraw(uint256)` → `withdrawTo(msg.sender, amount)` → `_burn` и `account.call{ value: amount }("")` +
+     `require(success, "FAIL_TRANSFER")` — **call со всем газом, не transfer 2300** (transfer заменён на call коммитом
+     6171a34ad от 24.06.2021 «forward gas in aeWETH for bridgeBurn and withdrawTo»; текст реализации на Sourcify — call).
+     Значит receive() ArbExecutor (`require(msg.sender == bnbFrom)`, transient) получает весь газ — ограничения 2300 нет;
+     ядро Ekubo тоже шлёт ETH `call(gas(), …)` (FlashAccountant.sol L350). Сигнатуры IWBNB исполнителя (deposit(),
+     withdraw(uint256)) совпадают с ABI реализации. Проблем нет; остаётся сборка, EVM-тест и переразвёртывание.
+  3) Новые настройки задать: dex.ekubo_twamm, dex.ekubo_twamm_horizon_s, dex.ekubo_oracle, dex.ekubo_boosted_fees (DEX
+     ekubo-v3-arbitrum), dex.ekubo_hub_buffer и dex.native_wrapped (arb_dex) — docs/FIRST_RUN.md.
+  Вопросы Тиграну:
+  1) Время блока сделки для TWAMM: котировка берёт t = max(время блока чтения, часы сервера) и t + 1 и считает по худшему
+     (как MEVCapture решения 447, сравнение времени блока с часами сервера — как node/head_age.rs решения 259). Годится ли
+     часы сервера как оценка времени следующего блока Arbitrum (секвенсор ставит своё время — по документации Arbitrum не
+     сверено в этой задаче)?
+  2) Тихий пул с TWAMM дольше dex.ekubo_twamm_horizon_s не котируется до перечитывания (событие пула, переподключение).
+     Нужно ли плановое перечитывание таких пулов (например, раз в горизонт)?
+  3) Как GeckoTerminal отдаёт нативный ETH в парах Ekubo (0x0 / 0xEeee / WETH) — по записи gt_pools.json; справочник
+     сейчас показывает пулы с валютой 0x0 «не поддержан» (directory/mod.rs is_native). Пулы с ETH всё равно находятся
+     историей PoolInitialized.
+  4) Хаб: при обрыве общей подписки переподключаются ВСЕ пачки Ekubo площадки (перечитывание всех пулов) — допустимо?
+- **Ревью 447/454 (20.11.2026, ветка t230/arb-ekubo-more) — исправлено:**
+  1) math/ekubo_mev.rs — номера строк MEVCapture.sol@61d09daa сверены: tickLast L183-L184, обновление в новой секунде
+     L191-L207, CORE.swap L209, доплата L212-L215, точный выход L218-L236, точный вход L237-L251.
+  2) pools/exec_kind.rs (Ekubo) — data шага = abi.encode(bytes32 config, bool native, bool forward), как
+     contracts/ArbExecutor.sol _ekubo.
+  3) math/ekubo_swap.rs exact_in_to — порядок как в ядре (Core.sol L544-L558): сначала «сумма 0 / цена = предел» —
+     без обмена, направление предела — только при обмене (раньше нулевая сумма с пределом не в ту сторону давала None).
+  4) math/ekubo_time.rs search — первое допустимое время за пределом поиска: контракт читает его слово
+     (timeBitmap.sol L76), но результат от слова не зависит (findNextInitializedTime даёт время ≥ fromTime, L77-L80
+     сводят к (until, false)) — возвращается (until, false) без слова. Пул TWAMM котируется до конца
+     dex.ekubo_twamm_horizon_s включительно (раньше мог перестать раньше, если это слово не прочитано). Чтение слов
+     (load_ekubo_twamm.rs words_until) не менялось — его хватает.
+  5) Файлы > 200 строк разбиты: math/ekubo_swap.rs 206 → 179 (+ ekubo_step.rs 45), pools/events_ekubo.rs 230 → 174
+     (+ events_ekubo_ticks.rs 74), pools/group.rs 270 → 198 (+ group_filter.rs 92, реэкспорт group::Topics / filter /
+     index / multi_sites — вызовы не менялись), tests/arbitrum_ekubo_more_live.rs 214 → 95 (+ tests/ekubo_more_common/mod.rs
+     135). contracts/IPools.sol 308 и contracts/ArbExecutor.sol 799 — в техдолг (ROADMAP).
+  6) WETH Arbitrum — сверено (п. 2 выше «Решение 454»): deposit()/withdraw(uint256) есть, ETH — call со всем газом.
+  Ждёт CI (cargo локально не запускался).
 - **Решение 416 — перенесено в следующие шаги плана (docs/notes/arbitrum/multichain-plan-2026-11-19.md):**
   1) ДО того, как адаптер DEX начнёт ставить сеть в монету (шаг 2): перенос `chain = None` → сеть (записи учёта
      core_state, учёт сделок, окна; карты в памяти) или «действующая сеть» в равенстве — иначе старая монета (None) ≠

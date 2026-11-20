@@ -1134,6 +1134,114 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** dex.kind (algebra_dir_fee), dex.factory.
 - **Статус:** ещё не в релизе (ветка t223-f5/arb-family-f5).
 
+### `dex.ekubo_bitmap_words`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 447.
+- **Появилась:** 2026-11-20, ветка t223-f8/arb-family-f8.
+- **Кейс:** DECISIONS 447 (2026-11-20): «Ekubo — состояние пула читается Core.sload: слова битмапа тиков по dex.ekubo_bitmap_words по каждую сторону от слова текущего тика и тики установленных битов; расчёт обмена за прочитанными словами не идёт (частичный).»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id области — ключ DEX площадки, у arb_dex с «@arbitrum», решение 435); каталог src/settings/catalog/dex_ekubo.rs:22.
+- **Что ставить:** совета нет, решает Тигран — *метод:* слово = 256 шагов тика пула (цена тика 1,000001^tick); слов должно хватать на полосу dex.depth_band_pct у пула с наименьшим шагом: ln(1 + полоса) / ln(1,000001) / (256 × шаг); шаги пулов — из записи tools/arbitrum_record/ekubo.py (docs/FIRST_RUN.md).
+- **Если не задана:** в каталоге без .optional() — DEX «не подключена: не задана dex.ekubo_bitmap_words» (pools/families.rs required); чтение пула — ошибка «не задана» (pools/load_ekubo.rs). Описание каталога: «Не задана — DEX не подключена»
+- **Влияет на торговлю:** да — глубина расчёта обмена в пулах Ekubo (pools/load_ekubo.rs, math/ekubo_swap.rs).
+- **Связанные ключи:** dex.ekubo_core, dex.depth_band_pct.
+- **Статус:** ещё не в релизе (ветка t223-f8/arb-family-f8).
+
+### `dex.ekubo_boosted_fees`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 454.
+- **Появилась:** 2026-11-20, ветка t230/arb-ekubo-more.
+- **Кейс:** DECISIONS 454 (2026-11-20): «железобетонное правило — все пулы: пулы Ekubo с расширением BoostedFees берутся; перед обменом расширение только начисляет пожертвованные комиссии (Core.accumulateAsFees — комиссии на ликвидность, не цена, тик и ликвидность), обмен не меняется (BoostedFees.sol@69b642d L100-L102, L138-L237).»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id области — ключ DEX площадки, у arb_dex с «@arbitrum», решение 435); каталог src/settings/catalog/dex_ekubo.rs.
+- **Что ставить:** `0xd4B54d0ca6979Da05F25895E6e269E678ba00f9e`, `0x948b9C2C99718034954110cB61a6e08e107745f9` у DEX ekubo-v3-arbitrum — docs.ekubo.org/reference/contracts/evm-v3 (BoostedFees concentrated / stableswap) = broadcast/DeployAll.s.sol/42161 run-1770053979549.json (docs/FIRST_RUN.md).
+- **Если не задана:** необязательная (src/settings/schema.rs: не задана — функция работает, отключается только описанное). Описание каталога: «Не задана — пулы с BoostedFees не берутся» (pools/ekubo_ext.rs: причина на экране).
+- **Влияет на торговлю:** да — какие пулы Ekubo берутся (pools/ekubo_ext.rs, ekubo_accept.rs).
+- **Связанные ключи:** dex.ekubo_core, dex.ekubo_twamm, dex.ekubo_oracle.
+- **Статус:** ещё не в релизе (ветка t230/arb-ekubo-more).
+
+### `dex.ekubo_core`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 447.
+- **Появилась:** 2026-11-20, ветка t223-f8/arb-family-f8.
+- **Кейс:** DECISIONS 447 (2026-11-20): «Ekubo — все пулы в одном ядре Core: состояние, тики и битмап читаются sload ядра, события (анонимный лог обмена, PositionUpdated) — от ядра, обмен — шаг EKUBO исполнителя через Core.lock.»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_ekubo.rs:19.
+- **Что ставить:** `0x00000000000014aA86C5d3c41765bb24e11bd701` у DEX ekubo-v3-arbitrum площадки arb_dex — docs.ekubo.org/reference/contracts/evm-v3 (Core, один адрес во всех сетях, Arbitrum — Live) = broadcast/DeployAll.s.sol/42161 evm-contracts (docs/FIRST_RUN.md).
+- **Если не задана:** в каталоге без .optional() — DEX «не подключена: не задана dex.ekubo_core» (pools/families.rs required). Описание каталога: «Не задан — DEX не подключена»
+- **Влияет на торговлю:** да — без неё пулы Ekubo не проверяются, не читаются и не исполняются (pools/verify_ekubo.rs).
+- **Связанные ключи:** dex.ekubo_key_index, dex.ekubo_mev_capture, dex.quoter.
+- **Статус:** ещё не в релизе (ветка t223-f8/arb-family-f8).
+
+### `dex.ekubo_hub_buffer`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 454.
+- **Появилась:** 2026-11-20, ветка t230/arb-ekubo-more.
+- **Кейс:** DECISIONS 454 (2026-11-20), техдолг 447 п. 3: «подписка пачки на все логи ядра — нагрузка не должна множиться на число пачек»: при bsc.pool_events_source = ws одна подписка logs на ядро (и TWAMM) площадки, логи раздаются пачкам по PoolId (pools/ekubo_hub.rs); канал раздачи — tokio broadcast с этой ёмкостью.
+- **Где задаётся:** «Настройки», группа «DEX»; область — площадка DEX (arb_dex); каталог src/settings/catalog/dex_ekubo.rs.
+- **Что ставить:** совета нет, решает Тигран — *метод:* число логов ядра за время, на которое может задержаться обработка самой медленной пачки: логов ядра в блок (замер — tools/arbitrum_record/ekubo.py, файл core_load.json: logs_per_block) × блоков за допустимую задержку; отстала больше — пачка переподключается и перечитывает пулы.
+- **Если не задана:** обязательная для пулов Ekubo при источнике ws: подписка пачки Ekubo — ошибка «не задана dex.ekubo_hub_buffer» (журнал, пачка переподключается), пулы не слушаются. Описание каталога: «Не задана — пачки пулов Ekubo не подписываются (причина в журнале)».
+- **Влияет на торговлю:** косвенно — без неё пулы Ekubo не слушаются и не котируются.
+- **Связанные ключи:** bsc.pool_events_source, dex.pools_per_sub, dex.ekubo_core.
+- **Статус:** ещё не в релизе (ветка t230/arb-ekubo-more).
+
+### `dex.ekubo_key_index`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 447.
+- **Появилась:** 2026-11-20, ветка t223-f8/arb-family-f8.
+- **Кейс:** DECISIONS 447 (2026-11-20): «Ekubo — у справочника индексатора адрес пула — PoolId; ключ пула (token0, token1, config) берётся у реестра PoolKeyIndex (poolKeyById) и сверяется: keccak256 ключа = PoolId.»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_ekubo.rs:20.
+- **Что ставить:** `0x898956fc2aed01d5f81f556ff5dcb10534285718` у DEX ekubo-v3-arbitrum — EkuboProtocol/evm-contracts broadcast/DeployAll.s.sol/42161 (run-1785724793522.json, commit 02e0d82f); на странице контрактов docs.ekubo.org адреса нет (docs/FIRST_RUN.md).
+- **Если не задана:** в каталоге без .optional() — DEX «не подключена: не задана dex.ekubo_key_index». Описание каталога: «Не задан — DEX не подключена»
+- **Влияет на торговлю:** да — какие пулы Ekubo берутся (pools/verify_ekubo.rs): пул без ключа в реестре не берётся.
+- **Связанные ключи:** dex.ekubo_core.
+- **Статус:** ещё не в релизе (ветка t223-f8/arb-family-f8).
+
+### `dex.ekubo_mev_capture`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 447.
+- **Появилась:** 2026-11-20, ветка t223-f8/arb-family-f8.
+- **Кейс:** DECISIONS 447 (2026-11-20): «Ekubo — пулы с расширением MEVCapture: обмен через Core.forward к расширению, расчёт — с доплатой за тики, пройденные с начала секунды (MEVCapture.sol L177-L258); другие расширения не берутся.»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_ekubo.rs:21.
+- **Что ставить:** `0x5555fF9Ff2757500BF4EE020DcfD0210CFfa41Be` у DEX ekubo-v3-arbitrum — docs.ekubo.org/reference/contracts/evm-v3 (MEVCapture) = broadcast/DeployAll.s.sol/42161 (docs/FIRST_RUN.md).
+- **Если не задана:** необязательная (src/settings/schema.rs: не задана — функция работает, отключается только описанное). Описание каталога: «Не задан — пулы с MEVCapture не берутся (пулы без расширения — берутся)»
+- **Влияет на торговлю:** да — какие пулы Ekubo берутся и доплата MEVCapture в котировке (pools/verify_ekubo.rs, math/ekubo_mev.rs).
+- **Связанные ключи:** dex.ekubo_core, dex.quoter (MEVCaptureRouter).
+- **Статус:** ещё не в релизе (ветка t223-f8/arb-family-f8).
+
+### `dex.ekubo_oracle`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 454.
+- **Появилась:** 2026-11-20, ветка t230/arb-ekubo-more.
+- **Кейс:** DECISIONS 454 (2026-11-20): «пулы Ekubo с расширением Oracle берутся: beforeSwap Oracle только пишет снимок цены в своё хранилище (Oracle.sol@61d09daa L97-L141, L193-L201), обмен не меняется; такие пулы — только с нативным ETH (L150).»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id области — ключ DEX площадки, у arb_dex с «@arbitrum», решение 435); каталог src/settings/catalog/dex_ekubo.rs.
+- **Что ставить:** `0x517E506700271AEa091b02f42756F5E174Af5230` у DEX ekubo-v3-arbitrum — docs.ekubo.org/reference/contracts/evm-v3 (Oracle) = broadcast/DeployAll.s.sol/42161 run-1767194711580.json (docs/FIRST_RUN.md).
+- **Если не задана:** необязательная (src/settings/schema.rs). Описание каталога: «Не задан — пулы с Oracle не берутся».
+- **Влияет на торговлю:** да — какие пулы Ekubo берутся (pools/ekubo_ext.rs).
+- **Связанные ключи:** dex.ekubo_core, dex.native_wrapped.
+- **Статус:** ещё не в релизе (ветка t230/arb-ekubo-more).
+
+### `dex.ekubo_twamm`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 454.
+- **Появилась:** 2026-11-20, ветка t230/arb-ekubo-more.
+- **Кейс:** DECISIONS 454 (2026-11-20): «пулы Ekubo с TWAMM берутся: ядро перед обменом зовёт TWAMM.beforeSwap — исполнение виртуальных ордеров до времени блока (TWAMM.sol@61d09daa L394-L600, L655-L657); котировка проводит их сама (math/ekubo_virtual.rs).»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id области — ключ DEX площадки, у arb_dex с «@arbitrum», решение 435); каталог src/settings/catalog/dex_ekubo.rs.
+- **Что ставить:** `0xd4f1060cb9c1a13e1d2d20379b8aa2cf7541ed9b`, `0xd47f1B1eDCfEaBb08F6eBd8FC337c27E636C75BA` у DEX ekubo-v3-arbitrum — broadcast/DeployAll.s.sol/42161 run-1767194711580.json (commit 61d09daa) и run-1777073880286.json (commit 8c1b721; он же на docs.ekubo.org evm-v3) (docs/FIRST_RUN.md).
+- **Если не задана:** необязательная (src/settings/schema.rs). Описание каталога: «Не задана — пулы с TWAMM не берутся (причина на экране)».
+- **Влияет на торговлю:** да — какие пулы Ekubo берутся и расчёт обмена после виртуальных ордеров (pools/ekubo_ext.rs, load_ekubo_twamm.rs, math/ekubo_virtual.rs).
+- **Связанные ключи:** dex.ekubo_twamm_horizon_s, dex.ekubo_core.
+- **Статус:** ещё не в релизе (ветка t230/arb-ekubo-more).
+
+### `dex.ekubo_twamm_horizon_s`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 454.
+- **Появилась:** 2026-11-20, ветка t230/arb-ekubo-more.
+- **Кейс:** DECISIONS 454 (2026-11-20): «котировка пула с TWAMM проводит виртуальные ордера до времени блока сделки; для этого читаются слова битмапа времён и TimeInfo до «время блока чтения + горизонт» (pools/load_ekubo_twamm.rs); позже — пул нужно перечитать.»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id области — ключ DEX площадки, у arb_dex с «@arbitrum», решение 435); каталог src/settings/catalog/dex_ekubo.rs.
+- **Что ставить:** совета нет, решает Тигран — *метод:* сколько секунд пул с TWAMM может быть без событий и оставаться котируемым; цена — число слов битмапа времён при каждом чтении (слово = 65 536 с; допустимые времена — шаг 256 с и растёт степенями 16 с удалением, time.sol L17-L31).
+- **Если не задана:** необязательная (src/settings/schema.rs). Описание каталога: «Не задана — пулы с TWAMM не читаются (причина на экране)».
+- **Влияет на торговлю:** да — сколько котируется тихий пул с TWAMM (quote/ekubo_trade_state.rs).
+- **Связанные ключи:** dex.ekubo_twamm.
+- **Статус:** ещё не в релизе (ветка t230/arb-ekubo-more).
+
 ### `dex.event_lanes_max`
 
 - **Задача / решение:** t153, решение 330.

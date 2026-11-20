@@ -254,6 +254,14 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
         (PoolState::SmartColDebt(d), _) => super::fluid_depth::fee_pct(d).ok_or_else(|| {
             ctx.err(ErrorCode::BadResponse, "комиссия Fluid не помещается в Decimal")
         }),
+        // Ekubo (решение 447): комиссия пула 0.64 (config, math/ekubo_config.rs) → проценты = fee · 100 / 2^64 (в 18
+        // знаках); доплата MEVCapture — в выходе котировки (pool_quote.rs), отдельной строкой не идёт.
+        (PoolState::Ekubo(d), _) => {
+            let fee = U256::from(super::super::math::ekubo_config::fee(&d.config));
+            let scaled = (fee * U256::from(10u8).pow(U256::from(20u8))) >> 64usize;
+            num::to_decimal(scaled, 18)
+                .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "комиссия Ekubo не считается"))
+        }
         _ => Err(ctx.err(ErrorCode::BadResponse, "состояние пула не того вида")),
     }
 }

@@ -2,7 +2,7 @@
 //! Что делает: общий итог применения события пула и выбор разбора по виду пула; topic0 событий для подписки
 //! (все события — глубоким пулам, только добавление ликвидности — мелким).
 //! Кто вызывает: pools/listen_log.rs.
-//! От чего зависит: events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, families.rs, registry.rs.
+//! От чего зависит: events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, events_ekubo.rs (решение 447), families.rs, registry.rs.
 //! Настройки: нет.
 
 use alloy::rpc::types::Log;
@@ -12,7 +12,7 @@ use super::events_algebra_dir;
 use super::families::{Family, Proto};
 use super::registry::Entry;
 use super::{
-    events_algebra, events_algebra_integral, events_balancer, events_balancer_v3, events_camelot, events_lb, events_lb20, events_lb22, events_bin, events_cl, events_crypto, events_curve, events_curve_ng, events_dmm,
+    events_algebra, events_algebra_integral, events_balancer, events_balancer_v3, events_camelot, events_ekubo, events_lb, events_lb20, events_lb22, events_bin, events_cl, events_crypto, events_curve, events_curve_ng, events_dmm,
     events_dodo, events_fluid, events_metric, events_elastic, events_izi, events_maverick, events_nomi, events_smardex, events_solidly, events_stable_u,
     events_v2, events_v3,
 };
@@ -65,6 +65,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::LbV20 => events_lb20::topics(),
         // Решение 446: LB V2.2 — те же события и HooksParametersSet (events_lb22.rs).
         Proto::LbV22 => events_lb22::topics(),
+        Proto::Ekubo => events_ekubo::topics(),
         // PancakeSwap / Lista StableSwap, Saddle, WooFi — решение 122 F, 3; Infinity Stable (события крючка) —
         // решение «122 (Infinity Stable)» (events_stable_u.rs).
         Proto::PancakeStable
@@ -112,6 +113,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::FluidT1 => events_fluid::liquidity_topics(),
         Proto::CamelotV2 => events_camelot::liquidity_topics(),
         Proto::LbV20 => events_lb20::liquidity_topics(),
+        Proto::Ekubo => events_ekubo::liquidity_topics(),
         Proto::PancakeStable
         | Proto::ListaStable
         | Proto::SaddleStable
@@ -149,6 +151,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::CamelotV2 => events_camelot::apply(e, log),
         Proto::LbV20 => events_lb20::apply(e, log),
         Proto::LbV22 => events_lb22::apply(e, log),
+        Proto::Ekubo => events_ekubo::apply(e, log),
         Proto::PancakeStable
         | Proto::ListaStable
         | Proto::SaddleStable

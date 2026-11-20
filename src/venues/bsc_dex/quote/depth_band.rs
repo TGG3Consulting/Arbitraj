@@ -477,6 +477,15 @@ fn side(
         (PoolState::SmartColDebt(d), PoolKind::SmartColDebt) => {
             super::fluid_depth::side(d, token_in, b, buy)
         }
+        // Ekubo (решение 447): обмен без комиссии до границы полосы в тиках Ekubo (depth_ekubo.rs).
+        // Решение 454: направление — в порядке ключа (нативный ETH); у пула с TWAMM — состояние к блоку сделки (первое из
+        // двух времён, quote/ekubo_trade_state.rs).
+        (PoolState::Ekubo(d), PoolKind::Ekubo) => {
+            let kz = !super::super::pools::ekubo_native::is_token1(d, e.pool.token0, token_in);
+            let s = super::ekubo_trade_state::at_trade(d)?;
+            let s = s.first().ok_or("нет состояния Ekubo к блоку сделки")?;
+            super::depth_ekubo::side(s, kz, b, buy)
+        }
         _ => Err("вид пула и состояние не совпадают".into()),
     }
 }

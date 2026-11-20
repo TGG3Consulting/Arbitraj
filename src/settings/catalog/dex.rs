@@ -60,6 +60,7 @@ pub const DEX_KINDS: &[&str] = &[
     "camelot_v2",
     "lb_v20",
     "lb_v22",
+    "ekubo",
     "pancake_stableswap",
     "lista_stableswap",
     "saddle_stableswap",

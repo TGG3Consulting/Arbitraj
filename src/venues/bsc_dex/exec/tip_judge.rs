@@ -17,8 +17,9 @@
 //! Ревью 438 (D): «изменил пул» — лог события, пишущего слоты условия этого пула (topic0 — exec/pool_cond_topics.rs);
 //! у пулов с корнем хранилища или без условия — любой лог пула.
 //! Пул V4 (Singleton) — лог менеджера с topics[1] = PoolId (события менеджера с bytes32 indexed id первым —
-//! pools/abi_v4.rs:25-47, сверка PoolId с topics[1] — pools/discover_v4.rs); пара общего контракта — любой лог
-//! контракта.
+//! pools/abi_v4.rs:25-47, сверка PoolId с topics[1] — pools/discover_v4.rs); пул Ekubo (тоже Singleton, решение 454 —
+//! техдолг 447) — лог ядра с PoolId в ДАННЫХ (анонимный лог обмена, PositionUpdated…; pools/ekubo_route.rs
+//! pool_id_raw); пара общего контракта — любой лог контракта.
 //! Кто вызывает: exec/tip_cycle.rs (фоновая задача после итога сделки).
 //! От чего зависит: node/rpc.rs, node/call.rs (block_tag), quote/gas_base.rs (baseFee блока), send/tip_mode.rs, ctx.rs.
 //! Настройки: нет.
@@ -26,7 +27,7 @@
 //! eth_getLogs (address — адрес или массив; fromBlock/toBlock), квитанция (effectiveGasPrice, transactionIndex) —
 //! execution-apis 16caee27 src/eth/filter.yaml, src/eth/transaction.yaml#L127-L165, src/schemas/receipt.yaml.
 
-use alloy_primitives::{Address, B256, U64, U256};
+use alloy_primitives::{Address, B256, Bytes, U64, U256};
 use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
@@ -37,6 +38,7 @@ use crate::gateway::errors::GatewayResult;
 use super::super::ctx::Ctx;
 use super::super::node::call::block_tag;
 use super::super::node::rpc;
+use super::super::pools::ekubo_route;
 use super::super::quote::gas_base;
 use super::super::send::tip_mode;
 
@@ -64,6 +66,9 @@ pub struct Probe {
 struct RawLog {
     address: Address,
     topics: Vec<B256>,
+    /// Решение 454: данные лога (PoolId Ekubo — в них).
+    #[serde(default)]
+    data: Bytes,
     block_number: Option<U64>,
     transaction_hash: Option<B256>,
     transaction_index: Option<U64>,
@@ -140,13 +145,15 @@ async fn rivals(ctx: &Ctx, p: &Probe) -> GatewayResult<Vec<(u64, B256)>> {
     found.sort_by_key(|f| (f.0, f.1));
     Ok(found.into_iter().map(|(b, _, h)| (b, h)).collect())
 }
-/// Лог относится к пулу маршрута: V4 — менеджер и topics[1] = PoolId; прочие — адрес контракта; ревью 438 (D) — и
+/// Лог относится к пулу маршрута: V4 — менеджер и topics[1] = PoolId (Ekubo — PoolId в данных лога); прочие — адрес контракта; ревью 438 (D) — и
 /// topic0 из событий, пишущих слоты условия этого пула (None — любое). Ошибок нет.
 fn touches(l: &RawLog, p: &Probe) -> bool {
     p.pools.iter().zip(&p.topics).any(|(r, t)| {
         let at = match r {
             PoolRef::Singleton { manager, id } => {
-                l.address == *manager && l.topics.get(1) == Some(id)
+                l.address == *manager
+                    && (l.topics.get(1) == Some(id)
+                        || ekubo_route::pool_id_raw(l.address, &l.topics, &l.data) == Some(*id))
             }
             other => l.address == other.address(),
         };

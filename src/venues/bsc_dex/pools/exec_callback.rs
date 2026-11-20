@@ -121,6 +121,11 @@ pub fn usable(ctx: &Ctx, f: &Family, ver: Option<Version>) -> bool {
     {
         return false;
     }
+    // Решение 447: шаг EKUBO — только у кода исполнителя, где есть вызов Core.completePayments() (EKUBO_MARK).
+    let ekubo = f.executor_kind == Some(ExecKind::Ekubo);
+    if ekubo && !ver.is_some_and(|v| seen_with(v, EKUBO_MARK, |r| r.is_none())) {
+        return false;
+    }
     let Ok(text) = ctx.dex_text(SETTING, f.id) else {
         return true;
     };
@@ -162,6 +167,11 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
     if let Some(why) = step_missing(ctx, f) {
         return Some(why);
     }
+    if f.executor_kind == Some(ExecKind::Ekubo)
+        && let Some(why) = ekubo_absent(ctx)
+    {
+        return Some(why);
+    }
     let sig = ctx.dex_text(SETTING, f.id).ok()?.trim().to_string();
     if sig.is_empty() {
         return None;
@@ -177,7 +187,8 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
 /// С какой версии исполнителя есть вид шага (у более ранней диспетчер _step откатывает «kind»). Решение 284: v2 —
 /// NOMI_STABLE = 12, METRIC = 13, IZI = 14 — решение 286, KYBER_DMM = 15 — решение 287, SMARDEX = 16 — решение 288,
 /// BALANCER = 17 — решение 289, LB = 18 — решение 290. Решение 395 (t181): v3 — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21.
-/// Решение 440: v4 — FLUID = 22. Остальные — с v1. Принимает: вид шага. Ошибок нет.
+/// Решения 440, 441, 445, 447, 456: v4 — FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25. Остальные — с v1.
+/// Принимает: вид шага. Ошибок нет.
 pub fn since(k: ExecKind) -> Version {
     match k {
         ExecKind::NomiStable
@@ -193,8 +204,32 @@ pub fn since(k: ExecKind) -> Version {
         ExecKind::BalancerV3 => Version::V4,
         // Решение 445 (ревью): LB20 — только v4 (сборки v4 ещё нет — шаг не строится ни у одного кошелька).
         ExecKind::Lb20 => Version::V4,
+        // Решение 456: EKUBO = 25 — с v4 (в ветке t230 — с v3 по EKUBO_MARK; метка кода остаётся второй проверкой).
+        ExecKind::Ekubo => Version::V4,
         _ => Version::V1,
     }
+}
+
+/// Решение 447: сигнатура вызова, который есть в коде исполнителя только вместе с шагом EKUBO = 25 (решение 456; шаг зовёт
+/// Core.completePayments(), селектор 0x12e103f1 — EkuboProtocol/evm-contracts@61d09daa src/interfaces/IFlashAccountant.sol
+/// L60). Артефакт contracts/out/ собран до шага EKUBO (сборка solc — не в этой задаче, contracts/README.md): пока
+/// селектора в коде нет, пулы Ekubo — без пути исполнения с причиной.
+pub const EKUBO_MARK: &str = "completePayments()";
+
+/// Причина «у исполнителя кошелька нет шага EKUBO». Принимает: окружение. Возвращает: None — шаг есть или
+/// исполнителя нет (это решает executor_set). Ошибок нет.
+fn ekubo_absent(ctx: &Ctx) -> Option<String> {
+    let v = match wallet_version(ctx, "шаг EKUBO") {
+        Ok(Some(v)) => v,
+        Ok(None) => return None,
+        Err(why) => return Some(why),
+    };
+    seen_with(v, EKUBO_MARK, |r| r.clone()).map(|why| {
+        format!(
+            "шаг EKUBO: {why}; код исполнителя с шагом EKUBO ещё не собран (contracts/build.sh) — пересобрать и \
+             переразвернуть"
+        )
+    })
 }
 
 /// Вид шага появился в v2 (решения 284–290: есть у v2 и v3, нет у v1) — прежнее имя, им пользуются тесты видов. Ошибок нет.

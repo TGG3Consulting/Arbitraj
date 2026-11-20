@@ -257,6 +257,14 @@ pub enum Proto {
     /// (_parameters — слот 3, _reserves — 4: защита от повторного входа и Initializable — в своих слотах ERC-7201),
     /// реализация пула implementation() — из dex.lb_implementations (pools/verify_lb22.rs). Вид ядра — LbBin.
     LbV22,
+    /// Ekubo (решение 447; ekubo, DEX ekubo-v3-arbitrum): синглтон-ядро Core (EkuboProtocol/evm-contracts@61d09daa) — все
+    /// пулы в одном контракте, ключ (token0, token1, config: расширение, комиссия 0.64, шаг тика или стейблсвап), PoolId =
+    /// keccak256 ключа. Ссылка — PoolRef::Singleton (Core, PoolId). Ключ пула — у PoolKeyIndex (verify_ekubo.rs);
+    /// состояние, битмап и тики — Core.sload (load_ekubo.rs); события Core — анонимный лог обмена (log0) и PositionUpdated
+    /// (events_ekubo.rs); математика — math/ekubo_swap.rs; расширения — нет или MEVCapture (доплата — math/ekubo_mev.rs).
+    /// Сверка — Router.quote (MEVCaptureRouter, dex.quoter). Исполнение — шаг EKUBO исполнителя (lock → swap / forward).
+    /// Вид ядра — Ekubo.
+    Ekubo,
 }
 
 impl Proto {
@@ -472,6 +480,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "lb_v20" => (PoolKind::LbBin, Proto::LbV20, true, false, false),
         // Liquidity Book V2.2 (решение 446): тот же путь, что у lb_v21 (порт getSwapOut + откат MAX_LIQUIDITY_PER_BIN), шаг LB.
         "lb_v22" => (PoolKind::LbBin, Proto::LbV22, true, false, false),
+        // Ekubo (решение 447): в графе и сигналах (порт swap ядра); исполнение — шаг EKUBO исполнителя.
+        "ekubo" => (PoolKind::Ekubo, Proto::Ekubo, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
         // Router их не исполняет (tradable = false); исполнение — шагом контракта-исполнителя: STABLE_U256 у pancake / lista
         // (exchange с индексами uint256), SADDLE у saddle (swap uint8 + deadline) — exec_kind.rs (решение 122 X, стейблсвапы).
@@ -750,6 +760,15 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::LbV20 => list.extend(["dex.factory", "dex.quoter"]),
         // Liquidity Book V2.2 (решение 446): ещё реализации пула, сверенные с исходником (implementation() пула).
         Proto::LbV22 => list.extend(["dex.factory", "dex.lb_implementations"]),
+        // Ekubo (решение 447): ядро (состояние, события, обмен), PoolKeyIndex (ключ пула по PoolId), слова битмапа и
+        // квотер сверки (Router.quote — MEVCaptureRouter). Расширение MEVCapture — по желанию (не задано — пулы с ним
+        // не берутся).
+        Proto::Ekubo => list.extend([
+            "dex.ekubo_core",
+            "dex.ekubo_key_index",
+            "dex.ekubo_bitmap_words",
+            "dex.quoter",
+        ]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

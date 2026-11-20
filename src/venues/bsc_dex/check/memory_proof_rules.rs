@@ -17,6 +17,9 @@
 //! - решение 455: crypto-пулы Curve без событий пула (рампа, остановленный tricrypto 2021, нативный ETH на пул с WETH —
 //!   per_block::unevented) и виды с переводом токена на пул без события пула (pools/transfer_in.rs watched: отметок
 //!   перевода правила не видят, поэтому — весь вид) — тоже «каждым блоком».
+//! - Ekubo (ревью 447): PoolId не в topics — фильтр по адресу ядра без topics, логи пула отбирает mine по PoolId из
+//!   данных (pools/ekubo_route.rs); пул Ekubo с TWAMM меняет состояние со временем без логов — как вид «каждым блоком»
+//!   (per_block_gate, own).
 //!
 //! Кто вызывает: check/memory_proof.rs; тесты (tests/bsc_dex_quoter_refetch_382.rs).
 //! От чего зависит: pools/per_block.rs (needs, unevented), pools/transfer_in.rs (watched), pools/events.rs (topics),
@@ -26,11 +29,12 @@
 use alloy::rpc::types::Log;
 use serde_json::Value;
 
-use crate::core::types::PoolRef;
+use crate::core::types::{PoolRef, PoolState};
 
 use super::super::node::{call, subs};
+use super::super::pools::families::Proto;
 use super::super::pools::registry::Entry;
-use super::super::pools::{events, per_block, transfer_in};
+use super::super::pools::{ekubo_route, events, per_block, transfer_in};
 
 /// Неприменённые памятью логи узла.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +80,10 @@ pub fn positions(logs: &[Log]) -> Vec<(u64, u64)> {
 pub fn filter(e: &Entry, from: u64, to: u64) -> Value {
     let topic0 = events::topics(e.family);
     let mut f = match &e.pool.reference {
+        // Ревью 447: у ядра Ekubo PoolId в данных — все логи ядра, отбор — mine.
+        PoolRef::Singleton { manager, .. } if e.family.proto == Proto::Ekubo => {
+            serde_json::json!({ "address": manager })
+        }
         PoolRef::Singleton { manager, id } => subs::by_pool_id(*manager, &[*id], &topic0),
         r => subs::by_address(&[r.address()], &topic0),
     };
@@ -84,10 +92,26 @@ pub fn filter(e: &Entry, from: u64, to: u64) -> Value {
     f
 }
 
+/// Лог узла относится к пулу записи: у Ekubo — PoolId из данных лога (ответ фильтра — все логи ядра); у прочих —
+/// любой (фильтр уже по пулу). Ошибок нет.
+pub fn mine(e: &Entry, log: &Log) -> bool {
+    match &e.pool.reference {
+        PoolRef::Singleton { id, .. } if e.family.proto == Proto::Ekubo => {
+            ekubo_route::pool_id(log) == Some(*id)
+        }
+        _ => true,
+    }
+}
+
+/// Пул Ekubo с TWAMM: состояние расширения идёт со временем без логов (виртуальные ордера). Ошибок нет.
+fn time_driven(e: &Entry) -> bool {
+    matches!(&e.pool.state, PoolState::Ekubo(d) if d.twamm.is_some())
+}
+
 /// Вид «каждым блоком»: сравнение только на блоке памяти. Принимает: запись памяти, голову. Возвращает: причину
 /// «отставание» (Some) — сравнивать нельзя; None — можно (не такой вид или память прочитана целиком на H). Ошибок нет.
 pub fn per_block_gate(mem: &Entry, head: u64) -> Option<String> {
-    let each = each_block(mem);
+    let each = each_block(mem) || time_driven(mem);
     if !each || (mem.synced_block == head && mem.synced_log.is_none()) {
         return None;
     }
@@ -108,6 +132,7 @@ fn each_block(e: &Entry) -> bool {
 /// Доказывают ли неприменённые логи этого пула пропуск события (см. шапку). Ошибок нет.
 pub fn own(e: &Entry) -> bool {
     !each_block(e)
+        && !time_driven(e)
         && matches!(
             e.pool.reference,
             PoolRef::Contract(_) | PoolRef::Singleton { .. } | PoolRef::Multi { .. }

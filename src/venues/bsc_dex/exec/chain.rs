@@ -173,6 +173,11 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "Crypto-пул Curve не исполняется Universal Router (шаг STABLE_U256 контракта-исполнителя)",
         )),
+        // Ekubo (решение 447): только шаг EKUBO исполнителя.
+        PoolKind::Ekubo => Err(ctx.err(
+            ErrorCode::Internal,
+            "Ekubo не исполняется Universal Router (шаг EKUBO контракта-исполнителя)",
+        )),
         // Пара с фиктивными резервами (SmarDex, решение 288): только шаг SMARDEX исполнителя v2.
         PoolKind::Fictive => Err(ctx.err(
             ErrorCode::Internal,

@@ -3,7 +3,7 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); FLUID = 22 — только v4, решение 440; сверяет тест tests/bsc_dex_executor_abi.rs с
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); FLUID = 22 — только v4, решение 440; BALANCER_V3 = 23, LB20 = 24, EKUBO = 25 — только v4, решения 441, 445, 447, 456; сверяет тест tests/bsc_dex_executor_abi.rs с
 //! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
 //! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), METRIC — (bool zeroForOne),
@@ -96,6 +96,16 @@ pub enum Params {
     InfCl { key: InfKey },
     /// Решение 395 (только v3): пул PancakeSwap Infinity Bin — ключ пула; пул шага — Vault Infinity (dex.vault).
     InfBin { key: InfKey },
+    /// Решение 447: пул Ekubo в ядре Core — config ключа пула (токены ключа — токены шага по порядку адресов); пул шага —
+    /// ядро. Шаг есть только у кода исполнителя с EKUBO (pools/exec_callback.rs). Решение 454: data = abi.encode(bytes32
+    /// config, bool native, bool forward): native — token0 ключа нативный ETH (сторона шага в обёртке wnative
+    /// исполнителя разворачивается), forward — обмен через Core.forward(расширение) (только MEVCapture; TWAMM, Oracle,
+    /// BoostedFees — обычный swap ядра, их beforeSwap зовёт само ядро).
+    Ekubo {
+        config: B256,
+        native: bool,
+        forward: bool,
+    },
     /// Решение 440 (только исполнитель v4): пул Fluid DEX T1 — zero_for_one в порядке токенов САМОГО пула (swap0to1),
     /// native: 0 — нативной монеты на шаге нет, 1 — вход в нативной монете пула (токен шага — обёртка: withdraw →
     /// swapIn{value}), 2 — выход в нативной монете (приходит от слоя ликвидности → deposit в обёртку); liquidity — слой
@@ -152,6 +162,8 @@ impl Params {
             Params::BalancerV3 { .. } => 23,
             // Решение 456: LB20 = 24 (в ветке t223-f6 было 22 — перенумеровано при слиянии).
             Params::Lb20 => 24,
+            // Решение 456: EKUBO = 25 (в ветке t230 было 22 — перенумеровано при слиянии).
+            Params::Ekubo { .. } => 25,
         }
     }
 
@@ -172,6 +184,11 @@ impl Params {
             Params::Metric { zero_for_one } => Bytes::from(zero_for_one.abi_encode()),
             Params::Balancer { pool_id } => Bytes::from(pool_id.abi_encode()),
             Params::BalancerV3 { pool } => Bytes::from(pool.abi_encode()),
+            Params::Ekubo {
+                config,
+                native,
+                forward,
+            } => Bytes::from((config, native, forward).abi_encode_params()),
             // Решение 395: abi.encode(ключ) — статическая структура, слова подряд (как PoolId — keccak тех же байт).
             Params::UniV4 { key } => Bytes::from(key.pool_key().abi()),
             Params::InfCl { key } | Params::InfBin { key } => Bytes::from(key.pool_key().abi()),

@@ -6,6 +6,9 @@
 //! с округлением хранилища.
 //! Решение 452: формула пула — math/balancer_v3_pool.rs (все виды), комиссия — math/balancer_v3_hook.rs (статическая
 //! или крючка StableSurge / MEV Capture), выход не больше сырого баланса хранилища (Vault.sol L466-L470).
+//! Решение 474: сторона пары через буфер ERC4626 (VaultV3.via) — до обмена WRAP входа, после — UNWRAP выхода
+//! (math/balancer_v3_buffer.rs); точный выход через буфер не считается (нужны previewMint / previewWithdraw обёртки —
+//! бот их не читает): amount_in — None.
 //! Кто вызывает: math/balancer_math.rs (amount_out / amount_in — ветка состояния с частью V3).
 //! От чего зависит: core/types (VaultPoolData, VaultV3, VaultV3Rule, VaultCurve), math/balancer_math.rs (FixedPoint),
 //! math/balancer_v3_weighted.rs (powUp V3 и WeightedMath), math/balancer_v3_stable.rs (StableMath V3).
@@ -32,6 +35,7 @@ use alloy_primitives::U256;
 use crate::core::types::pool_vault::{VaultPoolData, VaultV3};
 
 use super::balancer_math::{div_down, div_up, mul_down, mul_up, one};
+use super::balancer_v3_buffer;
 use super::balancer_v3_hook;
 use super::balancer_v3_pool::on_swap;
 use super::balancer_v3_weighted::{complement, mul_div_up};
@@ -45,8 +49,14 @@ fn rate_up(r: U256) -> U256 {
     }
 }
 
+/// Решение 474: буфер стороны пары с индексом токена пула k (None — сторона — сам токен пула). Ошибок нет.
+fn via(v3: &VaultV3, k: usize) -> Option<&crate::core::types::pool_vault::V3Buffer> {
+    v3.via.get(k).and_then(|b| b.as_ref())
+}
+
 /// Выход на точный вход (Vault.swap EXACT_IN). Принимает: состояние пула, его часть V3, индексы входа и выхода, вход в
-/// единицах токена. Возвращает: выход в единицах токена. None — пауза, индексы, сумма меньше наименьшей, откат пула.
+/// единицах монеты пары (решение 474: у стороны через буфер — базового токена обёртки). Возвращает: выход в единицах
+/// монеты пары. None — пауза, индексы, сумма меньше наименьшей, откат пула, буфер (balancer_v3_buffer.rs).
 pub fn amount_out(
     d: &VaultPoolData,
     v3: &VaultV3,
@@ -57,6 +67,20 @@ pub fn amount_out(
     if d.paused || i == j || amount_in.is_zero() {
         return None;
     }
+    // Решение 474: WRAP входа в буфере (Vault.sol L1139-L1187), обмен — по обёртке, UNWRAP выхода.
+    let amount_in = match via(v3, i) {
+        Some(b) => balancer_v3_buffer::wrap(b, amount_in)?,
+        None => amount_in,
+    };
+    let out = pool_out(d, v3, i, j, amount_in)?;
+    match via(v3, j) {
+        Some(b) => balancer_v3_buffer::unwrap(b, out),
+        None => Some(out),
+    }
+}
+
+/// Выход обмена в самом пуле (токены пула). Принимает и возвращает — как amount_out, в единицах токенов пула.
+fn pool_out(d: &VaultPoolData, v3: &VaultV3, i: usize, j: usize, amount_in: U256) -> Option<U256> {
     // _computeAmountGivenScaled18 (L333-L337): (сумма · множитель).mulDown(курс).
     let scaled = mul_down(amount_in.checked_mul(*d.scaling.get(i)?)?, *v3.rates.get(i)?)?;
     // Решение 452: комиссия — статическая или крючка (Vault.sol L246-L253: крючок видит полную сумму до комиссии).
@@ -88,7 +112,8 @@ pub fn amount_in(
     j: usize,
     amount_out: U256,
 ) -> Option<U256> {
-    if d.paused || i == j || amount_out.is_zero() {
+    // Решение 474: точный выход через буфер не считается (шапка файла).
+    if d.paused || i == j || amount_out.is_zero() || via(v3, i).is_some() || via(v3, j).is_some() {
         return None;
     }
     // Решение 452: выход больше сырого баланса — откат хранилища (L466-L470).

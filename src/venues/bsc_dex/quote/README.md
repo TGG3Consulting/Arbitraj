@@ -107,6 +107,7 @@
 | `quoter_fluid.rs` | Сверка Fluid DEX T1 (решение 440): estimateSwapIn(пул, swap0to1, вход, 0) официального резолвера FluidDexReservesResolver (dex.quoter) через eth_call; 0 — выхода нет (пределы слоя ликвидности или скачок цены) |
 | `fluid_depth.rs` | Fluid DEX T1 (решение 440): спот-цена для сизинга пробы, пустота пула, комиссия в процентах и глубина в полосе цены по мнимым резервам частей (оценки, не сверяемые величины) |
 | `quoter_balancer_v3.rs` | Сверка Balancer V3 (решение 441): Router V3 querySwapSingleTokenExactIn(пул, вход, выход, сумма, 0, «») через eth_call без from (Vault.quote — tx.origin = 0) — dex.quoter |
+| `quoter_balancer_v3_buffer.rs` | Решение 474: сверка пары Balancer V3 через буфер ERC4626 — BatchRouter V3 (dex.bv3_batch_router) querySwapExactIn с путём «буфер → пул → буфер» (шаги isBuffer), ответ — pathAmountsOut[0]; обёртки пары по направлению (wrappers — общие с шагом 27) |
 | `quoter_crypto.rs` | Сверка crypto-пула Curve (решение 442): get_dy(i, j, dx) самого пула через eth_call (индексы — из состояния Crypto) |
 | `quoter_lb20.rs` | Сверка Liquidity Book v2.0 (решение 445): LBRouter v2.0 getSwapOut(пара, вход, swapForY) через eth_call (dex.quoter); вход не исполнился целиком — откат роутера, выхода нет |
 | `quoter_balancer.rs` | Сверка Balancer V2 (решение 289): Vault.queryBatchSwap(GIVEN_IN, шаг по id пула) через eth_call — dex.vault; выход — минус дельта токена выхода |

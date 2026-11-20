@@ -25,7 +25,7 @@
 `-text`): SHA-256 кода исполнителя на Windows совпадает с ArbExecutor.sha256.
 
 Что запускается (адреса — `record_steps.py`, те же, что в шапках скриптов и ниже): sub_dex, kyber_elastic_v1, saddle,
-woofi, fluid_t1, balancer_v3, curve_crypto, camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo, ekubo_more,
+woofi, fluid_t1, balancer_v3, balancer_v3_buffer, curve_crypto, camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo, ekubo_more,
 exec_v4_live.
 
 Тесты проекта — только на реально записанных ответах (CLAUDE.md). У разработчика нет доступа к узлу Arbitrum: после
@@ -43,6 +43,7 @@ exec_v4_live.
 | `sub_dex.py` | 450 (T448-01…05) | KyberSwap Classic DMM / Static Fee / Legacy (события создания, getTradeInfo, getPools, getAmountsOut роутеров), Balancer V2 по фабрикам с версией библиотек (состояние, isPoolFromFactory, queryBatchSwap), iZiSwap (fee2pointDelta, NewPool, реестр pool(x, y, fee)), код Universal Router PancakeSwap v3 — tests/data/arbitrum_sub_dex_<дата>/ | `tests/arbitrum_sub_dex_live.rs` |
 | `fluid_t1.py` | 440 | Fluid DEX T1 (решение 440): состояние всех пулов резолвера на одном блоке и лесенка обменов (swapIn пула → 0x…dEaD, estimateSwapIn резолвера) — для tests/arbitrum_fluid_t1.rs | `tests/arbitrum_fluid_t1.rs` |
 | `balancer_v3.py` | 441 | Решения 441, 452 (T433-F2): пулы Balancer V3 всех видов — все вызовы бота к пулу (хранилище, фабрики из списков, виды пулов, крючок, прекомпайлы) и ответы Router V3 querySwapSingleTokenExactIn / ExactOut на одном блоке; тест — tests/arbitrum_balancer_v3.rs | `tests/arbitrum_balancer_v3.rs` |
+| `balancer_v3_buffer.py` | 474 | Balancer V3 через буфер ERC4626: пулы фабрик (getPools) с буфером у токена, все вызовы бота к пулу и буферам, BatchRouter querySwapExactIn (буфер → пул → буфер и с буфером на одной стороне), точные previewDeposit / previewRedeem обёрток на суммах обмена, события буфера (окно `--log-blocks`) | `tests/arbitrum_balancer_v3_buffer.rs` |
 | `curve_crypto.py` | 442 | Curve crypto-пулы (решения 442, 453): Twocrypto-NG (v2.1.0 и v2.0.0 — по MATH()), Tricrypto-NG, фабрика crypto v1, tricrypto 2021 — ответы на вызовы бота по calldata, проверка (get_coins, version, MATH, get_decimals), eth_getCode реализаций / математики / пулов, balanceOf и ETH пулов, decimals монет v1, лесенка get_dy — tests/data/arbitrum_curve_crypto_<дата>/ | tests/arb_curve_crypto_live.rs (NG), tests/arb_curve_crypto_v1_live.rs (v1) | `tests/arb_curve_crypto_live.rs`, `tests/arb_curve_crypto_v1_live.rs` |
 | `camelot_v2.py` | 443 | Решение 443 (T433-F4): Camelot V2 — пары фабрики (резервы, комиссии входа, stableSwap, множители точности, getPair, код), getAmountOut пары на суммах в обе стороны на одном блоке; логи Sync, FeePercentUpdated, SetStableSwap, PairCreated. Запуск: `python3 tools/arbitrum_record/camelot_v2.py http://УЗЕЛ:8547 --factory 0x6EcCab422D763aC031210895C81787E87B43A652` (из корня репозитория) | — |
 | `lb_v20.py` | 445 | Liquidity Book v2.0 (LFJ V2, вид lb_v20, решение 445) | фабрика v2.0, состояние пулов, все бины, getSwapOut роутера v2.0, слоты условия, логи; тест — tests/bsc_dex_lb_v20_arbitrum.rs | `tests/bsc_dex_lb_v20_arbitrum.rs` |

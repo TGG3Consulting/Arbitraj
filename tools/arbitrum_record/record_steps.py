@@ -58,6 +58,13 @@ def steps(rpc, wallet, ekubo_from):
            "--router", "0xEAedc32a51c510d35ebC11088fD5fF2b47aACF2E", "--gt-pages", "5"]
     for item in BV3_LISTS:
         bv3 += ["--list", item]
+    # Решение 474: буферы ERC4626 — BatchRouter 20241205-v3-batch-router (output/arbitrum.json), опорная сумма превью —
+    # совет docs/FIRST_RUN.md (dex.bv3_buffer_preview_raw).
+    bv3buf = ["--rpc", rpc, "--vault", "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+              "--batch-router", "0xaD89051bEd8d96f045E8912aE1672c6C0bF8a85E",
+              "--preview-raw", "1000000000000000000000000000000"]
+    for item in BV3_LISTS:
+        bv3buf += ["--list", item]
     out = [
         ("sub_dex", "sub_dex.py", [
             "--node", rpc, "--blocks", "2000000", "--log-step", "100000", "--max-pools", "20",
@@ -81,6 +88,7 @@ def steps(rpc, wallet, ekubo_from):
                                      "--resolver", "0x05Bd8269A20C472b148246De20E6852091BF16Ff",
                                      "--wrapped", "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", "--gt"]),
         ("balancer_v3", "balancer_v3.py", bv3),
+        ("balancer_v3_buffer", "balancer_v3_buffer.py", bv3buf),
         ("curve_crypto", "curve_crypto.py", [
             "--node", rpc, "--twocrypto-factory", "0x98EE851a00abeE0d95D08cF4CA2BdCE32aeaAF7F",
             "--twocrypto-math", "0x1Fd8Af16DC4BEBd950521308D55d0543b6cDF4A1",

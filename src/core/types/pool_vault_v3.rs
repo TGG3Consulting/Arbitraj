@@ -3,12 +3,14 @@
 //! которых нет у весового и стейблсвап-пула решения 441: крючок, считающий комиссию обмена (StableSurge, MEV Capture),
 //! параметры E-CLP Gyro, состояние LBP (окно продажи, токен проекта, виртуальный баланс резерва). Без названия площадки:
 //! только числа, которые передаёт пулу хранилище или отдаёт сам пул. Вынесено из pool_vault.rs (предел размера файла).
+//! Решение 474: буфер ERC4626 хранилища (V3Buffer) — сторона пары через буфер: монета пары — базовый токен обёртки,
+//! токен пула — обёртка.
 //! Кто вызывает: core/types/pool_vault.rs (VaultV3, VaultV3Rule), адаптер DEX (pools/load_balancer_v3*.rs создаёт,
 //! math/balancer_v3*.rs, math/gyro_*.rs, math/reclamm.rs считают).
 //! От чего зависит: alloy-primitives, serde.
 //! Настройки: нет.
 
-use alloy_primitives::{I256, U256};
+use alloy_primitives::{Address, I256, U256};
 use serde::{Deserialize, Serialize};
 
 /// Крючок пула, который считает комиссию обмена (Vault.sol 20241204-v3-vault L246-L253: onComputeDynamicSwapFeePercentage
@@ -75,4 +77,29 @@ pub struct LbpState {
     pub block_in: bool,
     pub virt: U256,
     pub min: Vec<U256>,
+}
+
+/// Решение 474: буфер ERC4626 хранилища Balancer V3 для токена пула — обёртки (Vault.sol 20241204-v3-vault L1139-L1423).
+/// Монета пары — базовый токен обёртки (`underlying`); обмен идёт WRAP → пул → UNWRAP в одном шаге исполнителя. Числа — на
+/// блоке чтения, в единицах токенов (сырых).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct V3Buffer {
+    /// Обёртка ERC4626 — токен пула (ей открывается буфер; адрес шага исполнителя).
+    pub wrapped: Address,
+    /// Базовый токен буфера (getERC4626BufferAsset хранилища = asset() обёртки).
+    pub underlying: Address,
+    /// Наименьшая сумма обёртки / развёртки хранилища (getMinimumWrapAmount; вход и выход меньше — откат).
+    pub min_wrap: U256,
+    /// Опорная сумма превью (настройка dex.bv3_buffer_preview_raw), в единицах того токена, который подаётся в превью.
+    pub reference: U256,
+    /// previewDeposit(опорная сумма) обёртки: сколько обёртки дают за опорную сумму базового токена.
+    pub deposit: U256,
+    /// previewRedeem(опорная сумма) обёртки: сколько базового токена дают за опорную сумму обёртки.
+    pub redeem: U256,
+    /// Базовый токен в буфере (getBufferBalance, первая величина) — предел выхода UNWRAP без внешнего вызова.
+    pub underlying_bal: U256,
+    /// Обёртка в буфере (getBufferBalance, вторая величина) — предел выхода WRAP без внешнего вызова.
+    pub wrapped_bal: U256,
+    /// Буферы хранилища на паузе (areBuffersPaused) — обмен через буфер откатится.
+    pub paused: bool,
 }

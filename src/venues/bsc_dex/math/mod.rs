@@ -11,6 +11,7 @@ pub mod balancer_log_exp_table;
 pub mod balancer_math;
 pub mod balancer_stable;
 pub mod balancer_v3;
+pub mod balancer_v3_buffer;
 pub mod balancer_v3_hook;
 pub mod balancer_v3_lbp;
 pub mod balancer_v3_pool;

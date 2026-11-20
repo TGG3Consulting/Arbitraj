@@ -38,6 +38,9 @@ pub struct Fixed {
     pub min_trade: U256,
     pub hook: HookKind,
     pub extra: Extra,
+    /// Решение 474: опорная сумма превью буферов ERC4626 (dex.bv3_buffer_preview_raw) — не неизменяемое пула: ставит
+    /// load_balancer_v3::read у копии на каждое чтение; в памяти — None. None — буферы не читаются.
+    pub buffer: Option<U256>,
 }
 
 /// Память неизменяемого по (площадка DEX, адрес пула) — пул с тем же адресом в другой сети — другой (решение 435).
@@ -69,6 +72,7 @@ pub async fn fixed(
         min_trade,
         hook,
         extra: extra::decode(release, &more).map_err(bad)?,
+        buffer: None,
     };
     FIXED
         .lock()

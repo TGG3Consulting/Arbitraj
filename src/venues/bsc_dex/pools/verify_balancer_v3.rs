@@ -6,11 +6,14 @@
 //! комиссии из списков DEX (решение 452, balancer_v3_hooks.rs: StableSurge, MEV Capture; beforeSwap / afterSwap и чужой
 //! крючок — отказ); (4) монета и встречный
 //! токен — среди токенов пула (CLAUDE.md: адрес токена у биржи = адрес в пуле). Один проход частями по dex.verify_batch.
+//! Решение 474: задана dex.bv3_buffer_preview_raw — второй проход (verify_balancer_v3_buffer.rs): базовые токены
+//! буферов ERC4626 токенов пула; монета пары может быть таким базовым токеном (обмен через буфер), и они же идут в
+//! развёртку пар (multi_pair).
 //! Кто вызывает: pools/verify.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_balancer_v3.rs, balancer_v3_factories.rs,
-//! balancer_v3_hooks.rs, discover.rs, multi_pair.rs, verify.rs.
+//! balancer_v3_hooks.rs, discover.rs, multi_pair.rs, verify.rs, verify_balancer_v3_buffer.rs.
 //! Настройки: dex.vault, dex.bv3_*_factories, dex.bv3_stable_surge_hooks, dex.bv3_mev_capture_hooks [DEX вида
-//! balancer_v3].
+//! balancer_v3]; dex.bv3_buffer_preview_raw (решение 474).
 //!
 //! Источник: VaultExtension.sol (20241204-v3-vault) L520-L549 getPoolTokenInfo (withRegisteredPool), L585-L589
 //! getHooksConfig; BasePoolFactory.sol L69-L72 isPoolFromFactory (только пулы, созданные этой фабрикой).
@@ -30,6 +33,7 @@ use super::balancer_v3_hooks::{self, Lists};
 use super::discover::{Found, sorted};
 use super::multi_pair;
 use super::verify::{Candidate, Verdict};
+use super::verify_balancer_v3_buffer as buffer;
 
 /// Адреса проверки: пул, хранилище, фабрики с выпуском, списки крючков (решение 452).
 pub type Plan = (Address, Address, Vec<(Address, Release)>, Lists);
@@ -41,23 +45,46 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
     let all: Vec<(Address, Bytes)> = plans.iter().flatten().flat_map(calls).collect();
     let got = call::try_chunks(ctx, &all, "latest", size).await;
     let mut got = got.into_iter();
-    let mut out = Vec::new();
-    for (c, p) in cands.iter().zip(plans) {
-        out.push(match p {
-            Err(w) => Verdict::Rejected(w),
+    let mut first: Vec<Result<(Plan, Vec<Result<Bytes, String>>), Verdict>> = Vec::new();
+    for p in plans {
+        first.push(match p {
+            Err(w) => Err(Verdict::Rejected(w)),
             Ok(p) => {
                 let part: Vec<call::Piece> = got.by_ref().take(calls(&p).len()).collect();
                 match part.into_iter().collect::<Result<Vec<_>, String>>() {
-                    Err(node) => Verdict::Failed(node),
-                    Ok(a) => match decide(c, &p, &a) {
-                        Ok(f) => {
-                            let tokens = tokens(&a);
-                            Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &tokens)))
-                        }
-                        Err(w) => Verdict::Rejected(w),
-                    },
+                    Err(node) => Err(Verdict::Failed(node)),
+                    Ok(a) => Ok((p, a)),
                 }
             }
+        });
+    }
+    // Решение 474: базовые токены буферов ERC4626 токенов пула (второй проход; опорная сумма не задана — пусто).
+    let lists: Vec<(Address, Vec<Address>)> = cands
+        .iter()
+        .zip(&first)
+        .map(|(c, r)| match r {
+            Ok((p, a)) if buffer::enabled(ctx, c.family.id) => (p.1, tokens(a)),
+            _ => (Address::ZERO, Vec::new()),
+        })
+        .collect();
+    let under = buffer::assets(ctx, &lists, size).await;
+    let mut out = Vec::new();
+    for ((c, r), u) in cands.iter().zip(first).zip(under) {
+        out.push(match (r, u) {
+            (Err(v), _) => v,
+            (Ok(_), Err(node)) => Verdict::Failed(node),
+            (Ok((p, a)), Ok(u)) => match decide(c, &p, &a, &u) {
+                Ok(f) => {
+                    let mut tokens = tokens(&a);
+                    for x in &u {
+                        if !tokens.contains(x) {
+                            tokens.push(*x);
+                        }
+                    }
+                    Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &tokens)))
+                }
+                Err(w) => Verdict::Rejected(w),
+            },
         });
     }
     out
@@ -88,9 +115,14 @@ pub fn calls(p: &Plan) -> Vec<(Address, Bytes)> {
     l
 }
 
-/// Решение по ответам (без сети). Принимает: кандидата, план, ответы по порядку calls. Возвращает: найденный пул или
-/// причину отказа.
-pub fn decide(c: &Candidate, p: &Plan, a: &[Result<Bytes, String>]) -> Result<Found, String> {
+/// Решение по ответам (без сети). Принимает: кандидата, план, ответы по порядку calls, базовые токены буферов ERC4626
+/// токенов пула (решение 474; пусто — буферов нет или не читались). Возвращает: найденный пул или причину отказа.
+pub fn decide(
+    c: &Candidate,
+    p: &Plan,
+    a: &[Result<Bytes, String>],
+    under: &[Address],
+) -> Result<Found, String> {
     let (pool, _, list, hooks_list) = p;
     let at = |i: usize| match a.get(i) {
         Some(Ok(b)) => Ok(b),
@@ -113,9 +145,10 @@ pub fn decide(c: &Candidate, p: &Plan, a: &[Result<Bytes, String>]) -> Result<Fo
     // Решение 452: крючки StableSurge / MEV Capture из списков DEX берутся, прочие крючки обмена — нет.
     balancer_v3_hooks::kind(hooks_list, &hooks, release)
         .map_err(|w| format!("пул {pool:#x}: {w}"))?;
-    if !info.tokens.contains(&c.coin) || !info.tokens.contains(&c.quote) {
+    let has = |t: &Address| info.tokens.contains(t) || under.contains(t);
+    if !has(&c.coin) || !has(&c.quote) {
         return Err(format!(
-            "среди токенов пула Balancer V3 {pool:#x} нет пары {} / {}",
+            "среди токенов пула Balancer V3 {pool:#x} и базовых токенов их буферов нет пары {} / {}",
             c.coin, c.quote
         ));
     }

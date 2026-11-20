@@ -126,6 +126,15 @@ fn kinds_match_contract_constants() {
         ("FLUID", Params::Fluid(fluid_step(1))),
         // Решение 441: пул Balancer V3 — только v4.
         ("BALANCER_V3", Params::BalancerV3 { pool: Address::ZERO }),
+        // Решение 474: пул Balancer V3 через буфер ERC4626 — шаг 27 (сборка v5 не собрана).
+        (
+            "BALANCER_V3_BUF",
+            Params::BalancerV3Buf {
+                pool: Address::ZERO,
+                w_in: POOL,
+                w_out: Address::ZERO,
+            },
+        ),
         // Решение 445: пул Liquidity Book v2.0 — шаг 24 (решение 456; решение 457 — в сборке v4 out/).
         ("LB20", Params::Lb20),
         // Решение 447: пул Ekubo в ядре Core — шаг 25 (решение 456; решение 457 — в сборке v4 out/).
@@ -223,6 +232,18 @@ fn step_data_layouts() {
     assert_eq!(
         <(bool, U256, Address)>::abi_decode_params(&fl).unwrap(),
         (true, U256::from(2u8), FLUID_LIQUIDITY)
+    );
+    // BALANCER_V3_BUF (решение 474) — abi.encode(address пула, address wIn, address wOut): три слова.
+    let bb = Params::BalancerV3Buf {
+        pool: POOL,
+        w_in: USDT,
+        w_out: Address::ZERO,
+    }
+    .data();
+    assert_eq!(bb.len(), 96);
+    assert_eq!(
+        <(Address, Address, Address)>::abi_decode_params(&bb).unwrap(),
+        (POOL, USDT, Address::ZERO)
     );
     let sd = Params::Saddle { i: 2, j: 1 }.data();
     assert_eq!(sd.len(), 64);
@@ -472,4 +493,29 @@ fn v4_build_size_hash_and_step_selectors() {
         assert!(has_selector(&rt, s), "{sig} в коде v4");
         assert!(!has_selector(&v3, s), "{sig} — нет в коде v3");
     }
+}
+
+/// Решение 474: вызова erc4626BufferWrapOrUnwrap (метка шага BALANCER_V3_BUF = 27, kind_buffer::BUFFER_MARK, селектор
+/// 0x43583be5) нет ни в одной собранной версии исполнителя (out/, out/v3/, out/v2/, out/v1/) — шаг 27 бот не строит,
+/// пока нет сборки v5. Исходник contracts/ArbExecutor.sol шаг содержит.
+#[test]
+fn buffer_step_only_in_source() {
+    use alloy_primitives::keccak256;
+    use arb::venues::bsc_dex::exec::executor::kind_buffer::BUFFER_MARK;
+    let sel = &keccak256(BUFFER_MARK.as_bytes())[..4];
+    assert_eq!(sel, [0x43, 0x58, 0x3b, 0xe5]);
+    for rt in [
+        code::runtime().unwrap(),
+        code::runtime_v3().unwrap(),
+        code::runtime_v2().unwrap(),
+        code::runtime_v1().unwrap(),
+    ] {
+        assert!(!has_selector(&rt, sel));
+    }
+    let src = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/contracts/ArbExecutor.sol"
+    ))
+    .unwrap();
+    assert!(src.contains("IBalancerV3Vault(v).erc4626BufferWrapOrUnwrap("));
 }

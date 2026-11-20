@@ -1000,6 +1000,30 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** dex.vault, dex.quoter, dex.bv3_*_factories, dex.bv3_stable_surge_hooks, dex.bv3_mev_capture_hooks.
 - **Статус:** ещё не в релизе (ветка t228/arb-balancer-v3-more).
 
+
+### `dex.bv3_buffer_preview_raw`
+
+- **Задача / решение:** T433-F2 (T433-077), решение 474 (вопрос «Решение 452», п. 2 / «Решение 441», п. 5 — решение Тиграна: делать).
+- **Появилась:** 2026-11-20, ветка t244/arb-bv3-buffer.
+- **Кейс:** железобетонное правило Тиграна (все DEX сети, все пулы): boosted-пулы Balancer V3 на Arbitrum — токен пула — обёртка ERC4626 (например waArbUSDC), монета биржи — её базовый токен; обмен идёт через буфер хранилища (Vault.erc4626BufferWrapOrUnwrap: выход = previewDeposit / previewRedeem обёртки (сумма − 1) − 1). Превью — своя функция каждой обёртки (общего исходника нет), бот читает её на блоке в одной точке — эта опорная сумма — и считает ⌊x · превью(опорная) / опорная⌋ (math/balancer_v3_buffer.rs).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_bv3_buffer.rs.
+- **Что ставить:** `1000000000000000000000000000000` (10^30) у DEX `balancer-v3-arbitrum@arbitrum` — после записи tools/arbitrum_record/balancer_v3_buffer.py и зелёного теста tests/arbitrum_balancer_v3_buffer.rs (docs/FIRST_RUN.md).
+- **Если не задана:** .optional(): буферы не читаются — пулы с обёртками котируются как раньше (пары обёрток), пар с базовым токеном нет. Не целое десятичное число или 0 — пул не читается с причиной.
+- **Влияет на торговлю:** да — какие пары Balancer V3 есть (монета — базовый токен обёртки) и их котировка (pools/load_balancer_v3_buffer.rs, verify_balancer_v3_buffer.rs, math/balancer_v3_buffer.rs); исполнение — шаг BALANCER_V3_BUF = 27 (нужна сборка исполнителя v5; до неё — без пути исполнения с причиной).
+- **Связанные ключи:** dex.vault, dex.bv3_batch_router, dex.quoter.
+- **Статус:** ещё не в релизе (ветка t244/arb-bv3-buffer).
+
+### `dex.bv3_batch_router`
+
+- **Задача / решение:** T433-F2 (T433-077), решение 474.
+- **Появилась:** 2026-11-20, ветка t244/arb-bv3-buffer.
+- **Кейс:** квотер сверки пар Balancer V3 через буфер ERC4626: Router V3 (dex.quoter) буферы не проходит, BatchRouter V3 — querySwapExactIn с шагами isBuffer (BatchRouter.sol 20241205-v3-batch-router L193-L205) — тот же путь, что шаг 27 исполнителя.
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_bv3_buffer.rs.
+- **Что ставить:** `0xaD89051bEd8d96f045E8912aE1672c6C0bF8a85E` у DEX `balancer-v3-arbitrum@arbitrum` (balancer/balancer-deployments@b55dc2b8 v3/tasks/20241205-v3-batch-router/output/arbitrum.json).
+- **Если не задана:** .optional(): сверка квотером пары через буфер — ошибка «не задана dex.bv3_batch_router» (пара без сверки); пары без буфера — Router V3, как раньше.
+- **Влияет на торговлю:** да — сверка котировки пар через буфер перед сделкой (quote/quoter_balancer_v3_buffer.rs).
+- **Связанные ключи:** dex.bv3_buffer_preview_raw, dex.vault.
+- **Статус:** ещё не в релизе (ветка t244/arb-bv3-buffer).
 ### `dex.chain`
 
 - **Задача / решение:** шаг 1 плана двух сетей (docs/notes/arbitrum/multichain-plan-2026-11-19.md), решение 416.

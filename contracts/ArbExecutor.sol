@@ -26,6 +26,9 @@
 // swap / settle / sendTo), LB20 = 24 (решение 445: пара Liquidity Book v2.0, LFJ V2 Arbitrum), EKUBO = 25 (решение
 // 447: пул Ekubo в ядре Core — lock → locked_6416899205; решение 454 — нативный ETH ключа и forward только у
 // MEVCapture); всё прочее — как v3. Номера шагов v4 — решение 456 (слияние семейств Arbitrum, без пересечений).
+// Решение 474 (нужна сборка v5): + шаг BALANCER_V3_BUF = 27 — пул Balancer V3 с обменом через буфер ERC4626 хранилища
+// (монета шага — базовый токен обёртки пула): в том же unlock, что BALANCER_V3, — erc4626BufferWrapOrUnwrap (WRAP) →
+// swap → erc4626BufferWrapOrUnwrap (UNWRAP) → settle / sendTo. Шаг 23 — как был (обёрток нет).
 // Артефакты contracts/out/ — ещё v3: сборка solc (contracts/build.sh) — вне агентов; пересобирать — только как v4, не на
 // месте v3 (бот: Version::V4, src/venues/bsc_dex/pools/exec_callback.rs since).
 pragma solidity 0.8.37;
@@ -91,6 +94,13 @@ contract ArbExecutor {
     // получателю шага. Недоплата (налог перевода): settle засчитывает min(подсказка, прирост резерва хранилища)
     // (Vault.sol L138-L156) — кредит меньше долга, дельта не нулевая, unlock откатится всё (BalanceNotSettled).
     uint8 internal constant BALANCER_V3 = 23;
+    // Решение 474 (сборка v5): пул Balancer V3 через буфер ERC4626 хранилища (Vault.sol 20241204-v3-vault L1139-L1187).
+    // s.pool — хранилище, data = abi.encode(address пула, address wIn, address wOut): wIn ≠ 0 — tokenIn шага — базовый
+    // токен обёртки wIn (токена пула): сначала WRAP в буфере wIn; wOut ≠ 0 — выход пула (обёртка wOut) → UNWRAP в
+    // буфере wOut, tokenOut шага — её базовый токен. Тот же balancerV3Callback, что у BALANCER_V3 (wIn = wOut = 0).
+    // Обёртка с другим базовым токеном, чем токен шага: хранилище берёт долг в asset() обёртки, settle — в токене шага —
+    // дельты не нулевые, unlock откатится (BalanceNotSettled).
+    uint8 internal constant BALANCER_V3_BUF = 27;
     // Решение 445: пара Liquidity Book v2.0 (LFJ V2, Arbitrum) — вход переводом в пару, swap(swapForY, to): пара сама
     // считает вход = баланс − резерв − накопленные комиссии и платит выход `to` по бинам (без обратного вызова);
     // swapForY = (tokenX() пары == tokenIn) — у v2.0 геттер tokenX(), getTokenX (шаг LB) у неё нет. data пусто.
@@ -124,7 +134,8 @@ contract ArbExecutor {
     // data: V2 — abi.encode(uint32 feePips); CURVE — abi.encode(int128 i, int128 j); STABLE_U256 — abi.encode(uint256 i,
     // uint256 j); SADDLE — abi.encode(uint8 i, uint8 j); STABLE_U256_BNB — abi.encode(uint256 i, uint256 j, bool bnbIn)
     // (bnbIn: true — монета i пула нативная, tokenIn = WBNB; false — монета j нативная, tokenOut = WBNB); METRIC — abi.encode(bool
-    // zeroForOne); BALANCER — abi.encode(bytes32 poolId); BALANCER_V3 — abi.encode(address pool); UNI_V4 —
+    // zeroForOne); BALANCER — abi.encode(bytes32 poolId); BALANCER_V3 — abi.encode(address pool); BALANCER_V3_BUF —
+    // abi.encode(address pool, address wIn, address wOut) (решение 474); UNI_V4 —
     // abi.encode(V4PoolKey); INF_CL / INF_BIN — abi.encode(InfPoolKey); FLUID — abi.encode(bool swap0to1, uint8 native,
     // address liquidity); EKUBO — abi.encode(bytes32 config, bool native, bool forward) (решение 454); остальные —
     // пусто.
@@ -404,7 +415,7 @@ contract ArbExecutor {
             _singleton(s, amount, to);
         } else if (k == FLUID) {
             _fluid(s, amount, to);
-        } else if (k == BALANCER_V3) {
+        } else if (k == BALANCER_V3 || k == BALANCER_V3_BUF) {
             _balancerV3(s, amount, to);
         } else if (k == EKUBO) {
             _ekubo(s, amount, to);
@@ -681,9 +692,18 @@ contract ArbExecutor {
     // Решение 441: шаг Balancer V3 (v4). Хранилище Vault V3 (s.pool) по unlock зовёт у вызывающего ровно переданные данные
     // (Vault.sol 20241204-v3-vault L133-L135) — это вызов balancerV3Callback(cb); после unlock обратный вызов обязан
     // быть («cb»). Метки оплаты прошлых шагов стираются (как в _singleton), expMax = 0 — _pay из хранилища откатится.
+    // Решение 474: у BALANCER_V3_BUF в данных ещё обёртки входа и выхода (буферы); у BALANCER_V3 — нули.
     function _balancerV3(Step calldata s, uint256 amount, address to) internal {
-        address pool = abi.decode(s.data, (address));
-        bytes memory cb = abi.encode(pool, s.tokenIn, s.tokenOut, amount, to);
+        address pool;
+        address wIn;
+        address wOut;
+        if (s.kind == BALANCER_V3_BUF) {
+            (pool, wIn, wOut) = abi.decode(s.data, (address, address, address));
+            require(wIn != address(0) || wOut != address(0), "buf");
+        } else {
+            pool = abi.decode(s.data, (address));
+        }
+        bytes memory cb = abi.encode(pool, s.tokenIn, s.tokenOut, amount, to, wIn, wOut);
         (expPool, expToken, expMax) = (s.pool, address(0), 0);
         expHash = keccak256(cb);
         IBalancerV3Vault(s.pool).unlock(abi.encodeWithSelector(this.balancerV3Callback.selector, cb));
@@ -696,6 +716,10 @@ contract ArbExecutor {
     // перевод ровно суммы хранилищу, settle(вход, сумма) (Vault.sol L138-L156: кредит = прирост баланса, не больше
     // подсказки) → sendTo(выход, получатель шага, выход) (L158-L163). Дельты исполнителя после этого нулевые — иначе
     // хранилище откатит unlock. Ответ пуст.
+    // Решение 474 (BALANCER_V3_BUF): wIn ≠ 0 — до обмена WRAP входа в буфере wIn (хранилище: долг базового токена,
+    // кредит обёртки), обмен — по обёртке; wOut ≠ 0 — после обмена UNWRAP выхода в буфере wOut (долг обёртки, кредит
+    // базового). Обёртки внутри хранилища взаимно гасятся; платится только вход шага (tokenIn), выдаётся выход шага. При
+    // wIn ≠ 0 вход переводится и засчитывается (settle) до WRAP, при wIn = 0 — после обмена, как у шага 23.
     function balancerV3Callback(bytes calldata cb) external returns (bytes memory) {
         address v = expPool;
         require(v != address(0) && msg.sender == v && keccak256(cb) == expHash, "pool");
@@ -703,17 +727,44 @@ contract ArbExecutor {
         expHash = bytes32(0);
         // kind = 0 (EXACT_IN) и userData пусто — значения по умолчанию; поля — прямо в параметры (меньше переменных стека).
         IBalancerV3Vault.VaultSwapParams memory p;
-        address to;
-        (p.pool, p.tokenIn, p.tokenOut, p.amountGivenRaw, to) =
-            abi.decode(cb, (address, address, address, uint256, address));
+        (p.pool, p.tokenIn, p.tokenOut, p.amountGivenRaw) = abi.decode(cb, (address, address, address, uint256));
+        (,,,, address to, address wIn, address wOut) =
+            abi.decode(cb, (address, address, address, uint256, address, address, address));
+        (address tIn, address tOut, uint256 paid) = (p.tokenIn, p.tokenOut, p.amountGivenRaw);
+        if (wIn != address(0)) {
+            // Как BatchRouter (BatchRouter.sol 20241205-v3-batch-router L167-L171: первый шаг — буфер — вход берётся
+            // заранее): вход хранилищу до WRAP — при нехватке буфера хранилище само делает deposit обёртки своим
+            // базовым токеном (Vault.sol L1248-L1271).
+            _transfer(tIn, v, paid);
+            IBalancerV3Vault(v).settle(tIn, paid);
+            p.amountGivenRaw = _buffer(v, 0, wIn, paid);
+            p.tokenIn = wIn;
+        }
+        if (wOut != address(0)) p.tokenOut = wOut;
         p.limitRaw = 1;
         (, uint256 inRaw, uint256 outRaw) = IBalancerV3Vault(v).swap(p);
         require(inRaw == p.amountGivenRaw, "owed");
         require(outRaw > 0, "out");
-        _transfer(p.tokenIn, v, inRaw);
-        IBalancerV3Vault(v).settle(p.tokenIn, inRaw);
-        IBalancerV3Vault(v).sendTo(p.tokenOut, to, outRaw);
+        if (wOut != address(0)) outRaw = _buffer(v, 1, wOut, outRaw);
+        if (wIn == address(0)) {
+            _transfer(tIn, v, paid);
+            IBalancerV3Vault(v).settle(tIn, paid);
+        }
+        IBalancerV3Vault(v).sendTo(tOut, to, outRaw);
         return "";
+    }
+
+    // Решение 474: обёртка / развёртка в буфере ERC4626 хранилища V3 (Vault.sol 20241204-v3-vault L1139-L1187): EXACT_IN
+    // (kind 0), direction 0 — WRAP (вход — базовый токен, выход — обёртка), 1 — UNWRAP; предел 1 (нулевой выход —
+    // откат SwapLimit). Хранилище само проверяет буфер (инициализирован, asset() обёртки = базовый токен буфера, буферы
+    // не на паузе, суммы ≥ наименьшей). Возвращает: выход; хранилище взяло не ровно сумму — откат «buf in».
+    function _buffer(address v, uint8 dir, address w, uint256 amount) internal returns (uint256 out) {
+        uint256 got;
+        (, got, out) = IBalancerV3Vault(v).erc4626BufferWrapOrUnwrap(
+            IBalancerV3Vault.BufferWrapOrUnwrapParams(0, dir, w, amount, 1)
+        );
+        require(got == amount, "buf in");
+        require(out > 0, "buf out");
     }
 
     // Решение 447: шаг пула Ekubo. Открывает ядро (s.pool): Core.lock() с данными шага после селектора

@@ -4,6 +4,7 @@
 //! хранилище — querySwapHook роутера: тот же Vault._swap (onSwap пула, те же балансы, курсы и комиссия), что у
 //! Vault.swap шага BALANCER_V3 исполнителя; изменения откатываются (только eth_call без from: Vault.quote требует
 //! tx.origin = 0).
+//! Решение 474: у пары со стороной через буфер ERC4626 квотер — BatchRouter (quoter_balancer_v3_buffer.rs).
 //! Кто вызывает: quote/quoter_calls.rs (request, decode).
 //! От чего зависит: pools/abi_balancer_v3.rs, pools/registry.rs, ctx.rs.
 //! Настройки: dex.quoter [DEX вида balancer_v3].
@@ -49,6 +50,9 @@ pub fn request(
             "ссылка на пул Balancer V3 — не адрес контракта",
         ));
     };
+    if let Some(r) = super::quoter_balancer_v3_buffer::request(ctx, e, pool, token_in, amount) {
+        return r;
+    }
     let token_out = if token_in == e.pool.token0 {
         e.pool.token1
     } else {
@@ -60,7 +64,11 @@ pub fn request(
     ))
 }
 
-/// Выход из ответа роутера (amountCalculated — выход на точный вход). None — ответ не по ABI. Ошибок нет.
-pub fn decode(out: &[u8]) -> Option<U256> {
+/// Выход из ответа роутера (amountCalculated — выход на точный вход). Решение 474: пара через буфер — ответ
+/// BatchRouter (quoter_balancer_v3_buffer.rs). Принимает: запись пары, ответ. None — ответ не по ABI. Ошибок нет.
+pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
+    if super::quoter_balancer_v3_buffer::buffered(e) {
+        return super::quoter_balancer_v3_buffer::decode(out);
+    }
     R::querySwapSingleTokenExactInCall::abi_decode_returns(out).ok()
 }

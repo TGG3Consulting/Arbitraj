@@ -405,7 +405,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
         return super::quoter_balancer::decode(out);
     }
     if e.family.proto == Proto::BalancerV3 {
-        return super::quoter_balancer_v3::decode(out);
+        return super::quoter_balancer_v3::decode(e, out);
     }
     if matches!(e.family.proto, Proto::LbV21 | Proto::LbV22) {
         return super::quoter_lb::decode(out);

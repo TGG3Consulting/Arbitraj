@@ -26,7 +26,7 @@
 //! balanceOf) перечитывает пул механизм pools/transfer_in.rs (watched: CurveCryptoV1, CurveTricryptoV1), ETH без
 //! события — per_block_crypto.rs (native_in).
 //! Кто вызывает: pools/load_crypto_v1.rs (read, state).
-//! От чего зависит: ctx.rs, node/call.rs, node/rpc.rs, abi_crypto_v1.rs, node/abi.rs (IERC20), gateway/shard_map.rs,
+//! От чего зависит: ctx.rs, node/call.rs, load_crypto_tweak_rpc.rs, abi_crypto_v1.rs, node/abi.rs (IERC20), shard_map.rs,
 //! core/types (CryptoTweak, CryptoTweakV1).
 //! Настройки: dex.native_wrapped [по площадке DEX] (монета WETH20); dex.multicall3 — через node/call.rs.
 //!
@@ -36,9 +36,7 @@
 use std::sync::LazyLock;
 
 use alloy::sol_types::SolCall;
-use alloy_primitives::{Address, B256, Bytes, U256};
-use serde_json::value::RawValue;
-use serde_json::{Value, json};
+use alloy_primitives::{Address, Bytes, U256};
 
 use crate::core::types::pool_crypto::{CryptoTweak, CryptoTweakV1};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -46,9 +44,12 @@ use crate::gateway::shard_map::ShardMap;
 
 use super::super::ctx::Ctx;
 use super::super::node::abi::IERC20;
-use super::super::node::{call, rpc};
+use super::super::node::call;
 use super::abi_crypto::ICryptoPool as P;
 use super::abi_crypto_v1::ICryptoTweakV1 as T;
+
+/// Пачка JSON-RPC (слот not_adjusted, ETH пула) — load_crypto_tweak_rpc.rs (вынесена; пути прежние).
+pub use super::load_crypto_tweak_rpc::{rpc_params, slot_word, words};
 
 /// Слот not_adjusted в раскладке Vyper 0.3.1 (см. шапку).
 pub const NOT_ADJUSTED_SLOT: u64 = 33;
@@ -169,50 +170,6 @@ pub fn calls(pool: Address, s: &Statics) -> Vec<(Address, Bytes)> {
     let of: Bytes = IERC20::balanceOfCall { owner: pool }.abi_encode().into();
     out.extend(s.coins.iter().map(|c| (*c, of.clone())));
     out
-}
-
-/// Параметры пачки JSON-RPC: eth_getStorageAt(пул, слот not_adjusted, блок), eth_getBalance(пул, блок). Ошибок нет.
-pub fn rpc_params(pool: Address, tag: &str) -> Vec<(&'static str, Value)> {
-    let slot = format!("{NOT_ADJUSTED_SLOT:#x}");
-    vec![
-        ("eth_getStorageAt", json!([pool, slot, tag])),
-        ("eth_getBalance", json!([pool, tag])),
-    ]
-}
-
-/// Слово слота и баланс пула (пачка JSON-RPC) как два ответа по 32 байта. Ошибки: узел (вся пачка); ответ одного
-/// запроса не по формату — его Err в списке.
-pub async fn words(
-    ctx: &Ctx,
-    pool: Address,
-    tag: &str,
-) -> GatewayResult<Vec<Result<Bytes, String>>> {
-    let got = rpc::batch(ctx, &rpc_params(pool, tag)).await?;
-    let mut out = Vec::with_capacity(2);
-    for (k, r) in got.into_iter().enumerate() {
-        out.push(match r {
-            Err(e) => Err(e.message),
-            Ok(v) if k == 0 => slot_word(&v),
-            Ok(v) => balance_word(&v),
-        });
-    }
-    Ok(out)
-}
-
-/// Ответ eth_getStorageAt — слово 32 байта. Ошибки (текст): не слово.
-pub fn slot_word(v: &RawValue) -> Result<Bytes, String> {
-    match serde_json::from_str::<B256>(v.get()) {
-        Ok(w) => Ok(Bytes::copy_from_slice(w.as_slice())),
-        Err(e) => Err(format!("eth_getStorageAt: {e}")),
-    }
-}
-
-/// Ответ eth_getBalance (число 0x…) — слово 32 байта. Ошибки (текст): не число.
-fn balance_word(v: &RawValue) -> Result<Bytes, String> {
-    match serde_json::from_str::<U256>(v.get()) {
-        Ok(b) => Ok(Bytes::from(b.to_be_bytes::<32>().to_vec())),
-        Err(e) => Err(format!("eth_getBalance: {e}")),
-    }
 }
 
 /// Разбор (без сети). Принимает: ответы вызовов tweak и затем два слова JSON-RPC (пусто — не читались), монеты пула,

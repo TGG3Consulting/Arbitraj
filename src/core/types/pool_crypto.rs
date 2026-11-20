@@ -115,9 +115,12 @@ pub struct CryptoTweakV1 {
     /// Фактические балансы пула по порядку монет (gulp L482-L487): у монеты WETH20 — ETH пула, у прочих —
     /// `balanceOf(пул)`. Пусто — у tricrypto 2021 (tweak_price `_claim_admin_fees` не зовёт).
     pub gulp: Vec<U256>,
-    /// Текст пула фабрики (CurveCryptoSwap2ETH): условие подстройки с `norm > adjustment_step and old_virtual_price > 0`
-    /// и `_claim_admin_fees` при норме ниже шага (L595, L636-L639). false — CurveCryptoSwap2 без фабрики (EURS/2CRV,
-    /// «2021-10-30. EURS/CryptoSwap.vy» L635, L647, L678-L681: ни того, ни другого).
+    /// Текст пула фабрики (CurveCryptoSwap2ETH): norm и шаг max(adjustment_step, norm / 5) до условия подстройки
+    /// (L585-L590), в условии `norm > adjustment_step and old_virtual_price > 0` (L595), `_claim_admin_fees` и при норме
+    /// ниже шага (L636-L639). false — CurveCryptoSwap2 без фабрики (EURS/2CRV, «2021-10-30. EURS/CryptoSwap.vy»): norm
+    /// и шаг без max — только внутри подстройки (L639-L645), условие без norm / old (L635), без подстройки — без
+    /// `_claim_admin_fees` (L647, L678-L681); оракул — сохранённый (L98), получатель — admin_fee_receiver (L557), токен —
+    /// константа (L92), gulp — balanceOf (L548-L550).
     #[serde(default)]
     pub factory: bool,
     /// Последние цены монет 1..N−1 (`last_prices(k)`; нужны tricrypto 2021 — цена сделки и упаковка, L486-L499).

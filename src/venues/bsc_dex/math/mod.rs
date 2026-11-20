@@ -32,6 +32,7 @@ pub mod crypto_tweak2;
 pub mod crypto_tweak3;
 pub mod crypto_tweak_v1;
 pub mod crypto_tweak_v1_3;
+pub mod crypto_tweak_v1_claim;
 pub mod crypto_v1_2;
 pub mod crypto_v1_3;
 pub mod crypto_y2;

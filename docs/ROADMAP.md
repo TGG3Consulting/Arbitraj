@@ -37,7 +37,9 @@
   load_crypto_v1_decode.rs; exec/executor/entry.rs 565 (+ curve_eth), exec/executor/kind.rs 279 (+ CurveEth).
   Не сделано: модель tweak_price tricrypto 2021 и EURS/2CRV (T472-03: факты разбора — TASKS); исходник ren / wstETH
   основного реестра Arbitrum (T472-10); сборка исполнителя v5 (T472-08). Доделка 3: модели tricrypto / EURS есть,
-  включатся после подтверждения слотов записью (CONFIRMED); pools/load_crypto_tweak_list.rs — 235 строк (шапка с раскладкой).
+  включатся после подтверждения слотов записью (CONFIRMED). Ревью: разбиты load_crypto_v1.rs (decode — load_crypto_v1_decode.rs),
+  load_crypto_tweak_v1.rs (JSON-RPC — load_crypto_tweak_rpc.rs), load_crypto_tweak_list.rs (decode — …_list_decode.rs),
+  crypto_tweak_v1.rs (claim — crypto_tweak_v1_claim.rs); сверх 200 остаются load_crypto_v1.rs 229, load_crypto_tweak_v1.rs 216.
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

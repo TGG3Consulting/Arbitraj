@@ -378,6 +378,20 @@
     curve_crypto.py — tweak_v1 у tricrypto_v1.json и crypto2_v1.json (слоты 9, 31, 35–38, 41 / 6, 9, 30, 34–37, 40 и
     slot_check); тест tests/arb_curve_crypto_tweak_list_live.rs (#[ignore]); после записи и зелёного slot_check —
     CONFIRMED = true (load_crypto_tweak_list.rs, load_crypto_tweak_v1.rs).
+    **Ревью доделки 3:** (а) EURS — шаг и норма как в исходнике: только внутри `if needs_adjustment`, шаг =
+    self.adjustment_step без max(…, norm / 5) («2021-10-30. EURS/CryptoSwap.vy» L639-L645); все отличия текста EURS
+    от фабрики (diff) — в шапке math/crypto_tweak_v1.rs и у CryptoTweakV1.factory. (б) Факт кода: пока CONFIRMED =
+    false, обмен, который откатился бы в tweak_price (Loss / PRICE_MASK / claim), котируется как рабочий, но до
+    отправки его ловит проба: путь исполнителя — exec/executor/trade.rs L149 → remeasure.rs L107 sim::run
+    (eth_simulateV1 execute поверх блока сборки; откат — сделки нет, sim.rs шапка), цикл DEX ↔ DEX —
+    exec/cycle_exec.rs L207 simulate::run (откат — сделки нет), бандл — exec/bundle_send.rs L111 simulate::run_valued.
+    Газа на откат нет; цена — упущенный сигнал и время пробы. Не ловится только откат, возникший между блоком
+    сборки и блоком включения (оракул по времени блока — T472-04). (в) Токен LP EURS 0x3dFe…B9CA:
+    curve-crypto-contract scripts/deploy_arbi_eurs_metapool.py L30 — `CurveTokenV4.deploy("Curve EURS-2Crv",
+    "crvEURSUSD")`; contracts/tricrypto/CurveTokenV4.vy mint_relative L175-L188 — та же формула (d_supply =
+    supply·frac/10^18, прибавка при d_supply > 0), что у CurveTokenV5 фабрики; ABI деплоя «2021-10-30.
+    EURS/token.json» содержит mint_relative. Код в сети с исходником побайтно не сверен (файл в репозитории позже
+    поднят до `# @version 0.3.1`, коммит 0a3a5a1) — сверка формулы на записи (симуляция exchange).
     Прежний разбор (доделка 472) — ниже.
     CurveCryptoSwap2ETH.vy (curve-factory-crypto 7ed1011, Vyper 0.3.1): tweak_price L531-L640, вызов из _exchange
     L643-L740 с xp[j] = баланс ПОСЛЕ выхода с комиссией (не y из newton_y, как у NG) и p_i (цена сделки при dx, dy >

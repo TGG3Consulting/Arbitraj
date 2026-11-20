@@ -44,19 +44,19 @@ use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 use serde_json::json;
 
-use crate::core::types::pool_crypto::{CryptoTweak, CryptoTweakV1};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::gateway::shard_map::ShardMap;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
-use super::super::math::crypto_math3::oracle_at;
-use super::super::math::crypto_tweak_v1_3::price_mask;
 use super::super::node::abi::IERC20;
 use super::super::node::{call, rpc};
 use super::abi_crypto::ICryptoPool as P;
 use super::abi_crypto_v1::{ICryptoTweakPair as R, ICryptoTweakTri as T3, ICryptoTweakV1 as T};
 use super::load_crypto_tweak_v1::slot_word;
+
+/// Разбор ответов — load_crypto_tweak_list_decode.rs (вынесен; путь прежний).
+pub use super::load_crypto_tweak_list_decode::decode;
 
 /// Слот not_adjusted tricrypto 2021 (Vyper 0.2.15, см. шапку).
 pub const TRI_SLOT: u64 = 37;
@@ -174,62 +174,4 @@ pub fn calls(pool: Address, n: usize, token: Address, coins: &[Address]) -> Vec<
         out.extend(coins.iter().map(|c| (*c, of.clone())));
     }
     out
-}
-
-/// Разбор (без сети). Принимает: ответы вызовов tweak и последним — слово слота not_adjusted (пусто — не читались),
-/// число монет, время блока чтения. Возвращает: Ok(None) — не читались; Ok(Some) — состояние; Err — откат вызова.
-pub fn decode(
-    got: &[Result<Bytes, String>],
-    n: usize,
-    now: u64,
-) -> Result<Option<CryptoTweak>, String> {
-    if got.is_empty() {
-        return Ok(None);
-    }
-    let w = |i: usize| -> Result<U256, String> {
-        match got.get(i) {
-            Some(Ok(b)) if b.len() >= 32 => Ok(U256::from_be_slice(&b[..32])),
-            Some(Ok(_)) => Err(format!("ответ tweak {i} короче 32 байт")),
-            Some(Err(r)) => Err(format!("вызов tweak {i} откатился: {r}")),
-            None => Err(format!("нет ответа tweak {i}")),
-        }
-    };
-    let now = U256::from(now);
-    // Индексы: (last_prices, lpt, mht, oracle, xcp_profit, virtual_price, aep, step, totalSupply, слово слота).
-    let (last, lpt, mht, ora): (Vec<U256>, U256, U256, Vec<U256>) = if n == 3 {
-        (vec![w(0)?, w(1)?], w(2)?, w(3)?, vec![w(4)?, w(5)?])
-    } else {
-        (vec![w(0)?], w(1)?, w(2)?, vec![w(3)?])
-    };
-    // Оракул на время блока чтения; откат пересчёта или упаковки (tricrypto) — пусто: модель отказывает.
-    let mut oracle = Vec::with_capacity(ora.len());
-    for (l, o) in last.iter().zip(&ora) {
-        match oracle_at(*l, *o, lpt, mht, now) {
-            Some(x) if n == 2 || lpt >= now || x < price_mask() => oracle.push(x),
-            _ => {
-                oracle.clear();
-                break;
-            }
-        }
-    }
-    let (xp, vp, aep, step, ts) = if n == 3 { (6, 7, 8, 9, 10) } else { (4, 6, 7, 8, 11) };
-    let gulp = if n == 3 { Vec::new() } else { vec![w(12)?, w(13)?] };
-    let slot_word = if n == 3 { 11 } else { 14 };
-    Ok(Some(CryptoTweak {
-        price_oracle: oracle,
-        total_supply: w(ts)?,
-        xcp_profit: w(xp)?,
-        virtual_price: w(vp)?,
-        allowed_extra_profit: w(aep)?,
-        adjustment_step: w(step)?,
-        v1: Some(CryptoTweakV1 {
-            not_adjusted: !w(slot_word)?.is_zero(),
-            xcp_profit_a: if n == 3 { U256::ZERO } else { w(5)? },
-            admin_fee: if n == 3 { U256::ZERO } else { w(9)? },
-            fee_receiver: n == 2 && !w(10)?.is_zero(),
-            gulp,
-            factory: false,
-            last_prices: if n == 3 { last } else { Vec::new() },
-        }),
-    }))
 }

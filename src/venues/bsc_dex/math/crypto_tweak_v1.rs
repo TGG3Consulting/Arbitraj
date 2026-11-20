@@ -21,12 +21,15 @@
 //! входа = +dx). Сохранения состояния (self.*) не откатывают — не моделируются.
 //! Тот же текст у CurveCryptoSwap2 без фабрики (EURS/2CRV, curvefi/curve-crypto-contract 41e6289 «deployment-logs/
 //! 2021-10-30. EURS/CryptoSwap.vy», Vyper 0.3.0: tweak_price L578-L683, `_claim_admin_fees` L541-L575, exchange
-//! L686-L763) с двумя отличиями (CryptoTweakV1.factory = false): в условии подстройки нет `norm > adjustment_step and
-//! old_virtual_price > 0` (L635), без подстройки `_claim_admin_fees` не зовётся (L647, L678-L681); получатель —
-//! admin_fee_receiver пула (L557), токен — константа (L92), gulp — balanceOf (L548-L550); оракул — сохранённый
-//! (`price_oracle` L98 — переменная), пересчёт на время блока — в чтении (load_crypto_tweak_list.rs).
+//! L686-L763), отличия (CryptoTweakV1.factory = false; сверка текстов diff): (а) оракул — сохранённая переменная
+//! (`price_oracle` L98, геттер без пересчёта), пересчёт на время блока — в чтении (load_crypto_tweak_list.rs);
+//! (б) norm и шаг считаются только внутри `if needs_adjustment`, шаг = self.adjustment_step без max(…, norm / 5)
+//! (L639-L645); (в) в условии подстройки нет `norm > adjustment_step and old_virtual_price > 0` (L635); (г) без
+//! подстройки `_claim_admin_fees` не зовётся (L647, L678-L681); (д) в `_claim_admin_fees`: получатель —
+//! admin_fee_receiver пула (L557), токен — константа (L92), gulp — balanceOf обеих монет (L548-L550).
 //! Кто вызывает: math/crypto_swap.rs (exchange_out, CryptoMath::TwoV1 при CryptoTweak.v1).
-//! От чего зависит: core/types (CryptoData, CryptoTweak, CryptoTweakV1), math/crypto_v1_2.rs, crypto_ops.rs, ten.rs.
+//! От чего зависит: core/types (CryptoData, CryptoTweak, CryptoTweakV1), math/crypto_v1_2.rs, crypto_tweak_v1_claim.rs,
+//! crypto_ops.rs, ten.rs.
 //! Настройки: нет.
 //!
 //! Источник: curvefi/curve-factory-crypto 7ed1011 contracts/CurveCryptoSwap2ETH.vy (строки выше; xp() L190-L193),
@@ -37,8 +40,9 @@ use alloy_primitives::U256;
 use crate::core::types::pool_crypto::{CryptoData, CryptoTweak, CryptoTweakV1};
 
 use super::crypto_ops::{au, du, mu, su};
+use super::crypto_tweak_v1_claim;
 use super::crypto_v1_2::{geometric_mean_sorted as gm, newton_d, newton_y};
-use super::ten::{E10, E18};
+use super::ten::E18;
 
 /// Обмен, после которого зовётся tweak_price: индексы монет, вход и выход в единицах монет.
 #[derive(Debug, Clone, Copy)]
@@ -82,22 +86,40 @@ pub fn passes(
             return None;
         }
     }
-    // 4. norm = |price_oracle·10^18/price_scale − 10^18|, adjustment_step = max(…, norm / 5) (L585-L590).
-    let mut norm = du(mu(po, E18)?, ps)?;
-    norm = if norm > E18 { norm - E18 } else { E18 - norm };
-    let step = t.adjustment_step.max(norm / U256::from(5u8));
+    // 4. norm = |price_oracle·10^18/price_scale − 10^18| (проверяемое деление на price_scale). Фабрика: до условия,
+    // adjustment_step = max(self.adjustment_step, norm / 5) (L585-L590); EURS: только внутри `if needs_adjustment`,
+    // adjustment_step = self.adjustment_step без max (EURS/CryptoSwap.vy L639-L645).
+    let norm_step = |max5: bool| -> Option<(U256, U256)> {
+        let n = du(mu(po, E18)?, ps)?;
+        let n = if n > E18 { n - E18 } else { E18 - n };
+        let st = if max5 {
+            t.adjustment_step.max(n / U256::from(5u8))
+        } else {
+            t.adjustment_step
+        };
+        Some((n, st))
+    };
+    let early = if v.factory { Some(norm_step(true)?) } else { None };
     let old = t.virtual_price > U256::ZERO;
     let mut needs = v.not_adjusted;
     if !needs {
         // (virtual_price * 2 - 10**18 > xcp_profit + 2*self.allowed_extra_profit) — проверяемые (L595).
         let lhs = su(mu(vp, two)?, E18)?;
         let rhs = au(xcp_profit, mu(two, t.allowed_extra_profit)?)?;
-        // EURS (factory = false): без `norm > step and old` в условии (EURS/CryptoSwap.vy L635).
-        needs = lhs > rhs && (!v.factory || (norm > step && old));
+        // EURS: без `norm > step and old` в условии (EURS/CryptoSwap.vy L635).
+        let gate = match early {
+            Some((n, st)) => n > st && old,
+            None => true,
+        };
+        needs = lhs > rhs && gate;
     }
     if !needs {
         return Some(());
     }
+    let (norm, step) = match early {
+        Some(x) => x,
+        None => norm_step(false)?,
+    };
     // 5. Подстройка (L599-L617): хватило прибыли — выход без _claim_admin_fees.
     if norm > step && old && adjusted(p, t, xp, ps, po, norm, step, xcp_profit)? {
         return Some(());
@@ -107,7 +129,7 @@ pub fn passes(
     if !v.factory && !(norm > step && old) {
         return Some(());
     }
-    claim(p, t, v, s, xcp_profit, vp)
+    crypto_tweak_v1_claim::claim(p, t, v, s, xcp_profit, vp)
 }
 
 /// Цена сделки p (`_exchange` L746-L753): при dx > 10^5 и dy > 10^5 — _dx·10^18/_dy (вход — монета 0) или _dy·10^18/_dx;
@@ -153,47 +175,4 @@ fn adjusted(
         return Some(false);
     }
     Some(su(mu(two, vp)?, E18)? > xcp_profit)
-}
-
-/// `_claim_admin_fees` (L475-L513) после tweak_price: xcp_profit и virtual_price — значения, только что сохранённые
-/// tweak_price (L582, L624 / L634). Принимает: состояние, tweak, v1, обмен, xcp_profit, virtual_price. Возвращает:
-/// Some(()) — не откатится; None — откатится. Ошибок нет.
-fn claim(
-    p: &CryptoData,
-    t: &CryptoTweak,
-    v: &CryptoTweakV1,
-    s: Swap,
-    xcp_profit: U256,
-    vprice: U256,
-) -> Option<()> {
-    let two = U256::from(2u8);
-    let ps = *p.price_scale.first()?;
-    // Gulp (L482-L487) — фактические балансы после обмена: вход пришёл (+dx), выход ушёл (−dy).
-    let mut g = [*v.gulp.first()?, *v.gulp.get(1)?];
-    g[s.i] = au(g[s.i], s.dx)?;
-    g[s.j] = su(g[s.j], s.dy)?;
-    let mut supply = t.total_supply;
-    let profit = xcp_profit;
-    if profit > v.xcp_profit_a {
-        // fees = (xcp_profit - xcp_profit_a) * self.admin_fee / (2 * 10**10) (L492).
-        let fees = du(mu(profit - v.xcp_profit_a, v.admin_fee)?, mu(two, E10)?)?;
-        if fees > U256::ZERO && v.fee_receiver {
-            // frac = vprice * 10**18 / (vprice - fees) - 10**18 (L496); mint_relative: supply * frac / 10**18.
-            let frac = su(du(mu(vprice, E18)?, su(vprice, fees)?)?, E18)?;
-            supply = au(supply, du(mu(supply, frac)?, E18)?)?;
-            // xcp_profit -= fees*2 (L498): проверяемое вычитание (откат); новое значение дальше в расчёте не
-            // участвует (только сохранение xcp_profit / xcp_profit_a — не откатывает).
-            su(profit, mu(fees, two)?)?;
-        }
-    }
-    // xp() (L190-L193): [b0 * p0, b1 * p1 * price_scale / PRECISION]; D = newton_D (L505).
-    let xp = [
-        mu(g[0], *p.precisions.first()?)?,
-        du(mu(mu(g[1], *p.precisions.get(1)?)?, ps)?, E18)?,
-    ];
-    let d = newton_d(p.a, p.gamma, xp)?;
-    // get_xcp(D) (L469-L472): [D / N, D * PRECISION / (price_scale * N)], gm(x, True); / total_supply (L508).
-    let xq = [du(d, two)?, du(mu(d, E18)?, mu(ps, two)?)?];
-    du(mu(E18, gm(xq)?)?, supply)?;
-    Some(())
 }

@@ -118,7 +118,7 @@ async fn algebra_fee_then_swap_one_state_equals_block_end() {
     };
     let c = native_common::ctx("settle-357-rec-algebra").await;
     assert!(
-        !integral_fee::fits(&c, &before, false),
+        !integral_fee::fits(&c, &before, false, false),
         "без dex.event_refresh_fee_only — прежний Refresh"
     );
     let a = Applied::Refresh(why);

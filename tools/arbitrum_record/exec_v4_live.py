@@ -62,6 +62,10 @@ def args():
     ap.add_argument("--bv3-vault", default="0xbA1333333333a1BA1108E8412f11850A5C319bA9")
     ap.add_argument("--bv3-router", default="0xEAedc32a51c510d35ebC11088fD5fF2b47aACF2E")
     ap.add_argument("--bv3-pool", action="append", default=[], help="пул Balancer V3 (кроме записи balancer_v3.py)")
+    # T477-01 (решение 478): правило приёмки требует MIN_POOLS = 2 доказанных пула на класс (live_rule.rs) — пулы
+    # Balancer V3 ещё и перечислением getPools() фабрик; сколько пулов, которые бот берёт, проверить (чтение на H).
+    ap.add_argument("--bv3-max-pools", type=int, default=40,
+                    help="наибольшее число пулов Balancer V3, которые бот берёт, для подбора суммы")
     # Fluid — Instadapp/fluid-contracts-public@404d73f deployments/arbitrum (fluid_t1.py).
     ap.add_argument("--fluid-resolver", default="0x05Bd8269A20C472b148246De20E6852091BF16Ff")
     # LB v2.0 — joe-docs 61c16665 deployment-addresses/arbitrum.md L52-L58 (lb_v20.py).

@@ -70,6 +70,7 @@ class Node:
 
     def __init__(self, url):
         self.url, self.n, self.log, self.lock = url, 0, [], threading.Lock()
+        self.last_block = None  # T477-01: блок последней eth_simulateV1 (simulate)
 
     def rpc(self, method, params, timeout=120):
         """Ответ узла как есть ({result} или {error}). Ошибки: сетевые, HTTP ≥ 400 (HTTPError)."""
@@ -109,8 +110,12 @@ class Node:
         st = {"stateOverrides": overrides, "calls": calls}
         j = self.rpc("eth_simulateV1", [{"blockStateCalls": [st], "validation": False}, tag], timeout=300)
         if "result" not in j:
+            self.last_block = None
             return None, j.get("error")
-        return j["result"][0]["calls"], None
+        blk = j["result"][0]
+        # T477-01: номер и время симулированного блока последней симуляции — сверка «квотер в том же блоке, что обмен».
+        self.last_block = {"number": blk.get("number"), "timestamp": blk.get("timestamp")}
+        return blk["calls"], None
 
 
 EXEC_SIG = "execute(address,uint256,address,uint256,uint256,(uint8,address,address,address,uint16,bytes)[])"

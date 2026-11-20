@@ -404,7 +404,10 @@
     - T477-01 Класс 23 (Balancer V3) у v4 НЕ принят: в записи один пул (GeckoTerminal balancer_v3.py отдал 1 пул на
       странице 1, страницы 2–5 пусты), нужно ≥ 2; (а) получено ≠ quoter_out — квотер (а) пишется eth_call на H, обмен —
       в блоке симуляции H + 1 (время +12 с), у пула курсы токенов. Правка exec_v4_live.py (квотер (а) — в симуляции того же
-      блока, как у (б)) и источник пулов Balancer V3 (кроме GeckoTerminal) — не сделаны, нужна запись заново.
+      блока, как у (б)) и источник пулов Balancer V3 (кроме GeckoTerminal) — СДЕЛАНО (решение 478): квотер (а) — своя
+      симуляция на том же блоке H + 1 (quoter_out; на H — quoter_out_h), пулы — ещё getPools() фабрик списков. Нужна
+      запись заново: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --date 2026-11-20 --only
+      exec_v4_live` (папка executor_v4_live_<дата H> — если дата другая, строку SOURCES в live_record.rs сменить).
     - T477-02 Ekubo: PoolKeyIndex 0x8989…5718 не знает ни одного из 22 пулов PoolInitialized ядра (poolKeyById = 0) —
       факт Тиграну; tests/arbitrum_ekubo_live.rs (3) под #[ignore]; логов ядра за окна записи 0 (core_logs, core_load).
     - T477-03 Ekubo TWAMM: 3 пула TWAMM — ликвидность 0, ордеров нет: twamm_math_equals_router_quote под #[ignore].

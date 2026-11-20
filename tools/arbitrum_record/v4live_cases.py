@@ -2,8 +2,13 @@
 Что делает: решение 459 (T457-02) — вызовы приёмки исполнителя v4 по правилу решения 400 (формат строк summary.json —
   src/venues/bsc_dex/exec/executor/live_row.rs, правило — live_rule.rs; так же писалась запись
   tests/data/executor_v3_live_2026-11-17): по пулу —
-  (а) case «a»: execute X от W «A → B» поверх блока H (eth_simulateV1), получено = возврат execute, quoter_out — квотер
-      на H (eth_call до симуляции, то же состояние), кредит Swap менеджера, x_left — balanceOf(X) по A и B после вызова;
+  (а) case «a»: execute X от W «A → B» поверх блока H (eth_simulateV1), получено = возврат execute, кредит Swap
+      менеджера, x_left — balanceOf(X) по A и B после вызова; quoter_out — квотер A → B в СВОЕЙ симуляции [квотер] поверх
+      H (T477-01, решение 478, все виды): тот же симулированный блок H + 1 (номер и время сверяются — sim_block_a /
+      sim_block_quoter_a), то же состояние, что перед покупкой. Запись 20.11.2026 показала: квотер eth_call на H (время
+      блока H) у пула Balancer V3 с курсами токенов ≠ обмену в блоке H + 1 (время +12 с); квотер на H — поле
+      quoter_out_h (правило его не сравнивает). Своя симуляция, а не общая с покупкой: квотер Balancer V3 пишет
+      балансы пула (ревью t233, блокер 1);
   (б) case «b»: в ОДНОЙ симуляции: (а) заново, квотер B → A на выход (а) (quoter_out_after_a — то же состояние, что у
       продажи), продажа B → A, x_left; quoter_out — квотер продажи на H (до покупки; правило его не сравнивает).
       У Balancer V3 квотер меняет состояние (ревью t233, блокер 1) — квотер после (а) и продажа — в двух симуляциях
@@ -111,7 +116,26 @@ def case_ab(node, tag, p, a, ctx, tin, tout, amt, qa):
     if cs is None:
         return rows, calls, f"eth_simulateV1 (а): {err}"
     ra = parse_call(cs[0])
-    d, c = _row("a", p, tin, tout, amt, ra, _xleft(cs[1], cs[2]), qa, {"coin": tout})
+    blk_a = node.last_block
+    qcall_a, qdec_a = quote_call(p, a, w_addr, tin, tout, amt)
+    cqa, errqa = node.simulate(tag, ov, [qcall_a])
+    blk_q = node.last_block
+    qa_sim, qa_err = None, None
+    if cqa is None:
+        qa_err = f"eth_simulateV1 (а, квотер): {errqa}"
+    elif blk_q != blk_a:
+        qa_err = f"квотер (а) — другой симулированный блок {blk_q}, обмен — {blk_a}"
+    else:
+        rq = cqa[0].get("returnData", "0x")
+        if cqa[0].get("status") == "0x1" and len(rq) >= 66:
+            qa_sim = qdec_a(rq)
+        else:
+            qa_err = f"квотер (а) в симуляции: статус {cqa[0].get('status')}, {cqa[0].get('error') or rq[:200]}"
+    ea = {"coin": tout, "quoter_out_h": str(qa) if qa is not None else None, "quoter_a_sim": "своя [квотер]",
+          "sim_block_a": blk_a, "sim_block_quoter_a": blk_q}
+    if qa_err:
+        ea["quoter_a_err"] = qa_err
+    d, c = _row("a", p, tin, tout, amt, ra, _xleft(cs[1], cs[2]), qa_sim, ea)
     rows.append(d)
     calls.append(c)
     if not ra["status"]:

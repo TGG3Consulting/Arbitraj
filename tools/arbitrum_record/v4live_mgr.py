@@ -10,7 +10,7 @@
   — не шаг исполнителя (ArbExecutor.sol, UNI_V4) — такие пулы не берутся; с крючком — не берутся (класс «с крючком»
   правило не принимает никогда, live_rule.rs).
   Balancer V3 (docs/FIRST_RUN.md «Balancer V3»; pools/abi_balancer_v3.rs): пулы — из записи balancer_v3.py этой же
-  команды (meta.json pools) и --bv3-pool; токены — Vault.getPoolTokenInfo; квотер — Router
+  команды (meta.json pools), --bv3-pool и (T477-01, решение 478) getPools() фабрик списков meta.json lists; токены — Vault.getPoolTokenInfo; квотер — Router
   querySwapSingleTokenExactIn без from (Vault.quote: tx.origin = 0); кредит — Swap(pool, tokenIn, tokenOut, amountIn,
   amountOut, …) хранилища. В строке записи hooks = 0: у шага BALANCER_V3 класс только «без крючка» (live_class.rs);
   крючок пула — поле bv3_hook. Координатор (T457-02): пулы с крючком, которые бот берёт (вид крючка — как
@@ -134,22 +134,57 @@ def bv3_hook_kind(node, tag, pool, h, lists):
     return None, f"крючок динамической комиссии {hook} не из списков — бот пул не берёт"
 
 
+def _factory_pools(node, tag, lists, skipped):
+    """T477-01: второй источник пулов Balancer V3 — перечисление фабрик списков dex.bv3_*_factories: getPools()
+    (balancer-v3-monorepo@2b9ce4b1 pkg/pool-utils/contracts/BasePoolFactory.sol L73-L75 getPools — массив _pools, L127
+    push при создании пула; так же
+    tools/arbitrum_record/balancer_v3_buffer.py ветки t244). Порядок — с конца списка каждой фабрики (новые пулы
+    первыми). Возвращает: [(пул, фабрика)]; откат getPools — в skipped. Ошибок-исключений нет, кроме сетевых."""
+    out, seen = [], set()
+    for name in BV3_LISTS:
+        for f in lists.get(name, []):
+            r, e = node.call(f, "0x" + sel("getPools()"), tag)
+            if r is None or len(r) < 2 + 64 * 2:
+                skipped.append({"kind": 23, "factory": f, "why": f"getPools() фабрики ({name}): {e or r}"})
+                continue
+            off = word(r, 0) // 32
+            n = word(r, off)
+            for i in reversed(range(n)):
+                pool = adr(r, off + 1 + i)
+                if pool not in seen:
+                    seen.add(pool)
+                    out.append((pool, f))
+    return out
+
+
 def bv3_pools(node, tag, a, skipped):
-    """Пулы Balancer V3: из последней записи balancer_v3.py (meta.json pools, lists) и --bv3-pool; вид крючка — как у
-    бота (bv3_hook_kind), пулы, которые бот не берёт, — в skipped. Ошибок-исключений нет, кроме сетевых."""
-    addrs, lists = list(a.bv3_pool), {}
+    """Пулы Balancer V3: из последней записи balancer_v3.py (meta.json pools, lists), --bv3-pool и (T477-01) перечислением
+    getPools() фабрик списков; вид крючка — как у бота (bv3_hook_kind), пулы, которые бот не берёт, — в skipped; пул с
+    нулевым балансом токена (getPoolTokenInfo balancesRaw) — в skipped. Кандидатов (пулов, которые бот берёт) — не
+    больше --bv3-max-pools (чтение идёт на блоке H — узел хранит только недавнее состояние, решение 460). Поле src —
+    откуда пул. Ошибок-исключений нет, кроме сетевых."""
+    src = {x.lower(): "--bv3-pool" for x in a.bv3_pool}
+    addrs, lists = [x.lower() for x in a.bv3_pool], {}
     recs = sorted(glob.glob(os.path.join(a.data_root, "arbitrum_balancer_v3_*", "meta.json")))
     if recs:
         with open(recs[-1], encoding="utf-8") as fh:
             meta = json.load(fh)
-        addrs += [x for x in meta.get("pools", []) if x not in addrs]
+        for x in meta.get("pools", []):
+            if x.lower() not in addrs:
+                addrs.append(x.lower())
+                src[x.lower()] = "запись balancer_v3.py " + os.path.basename(os.path.dirname(recs[-1]))
         lists = {k: [x.lower() for x in v] for k, v in meta.get("lists", {}).items()}
     if not lists:
         skipped.append({"kind": 23, "why": "нет записи balancer_v3.py со списками фабрик и крючков (meta.json lists)"})
         return []
+    for pool, f in _factory_pools(node, tag, lists, skipped):
+        if pool not in addrs:
+            addrs.append(pool)
+            src[pool] = f"getPools() фабрики {f}"
     out = []
     for pool in addrs:
-        pool = pool.lower()
+        if len(out) >= a.bv3_max_pools:
+            break
         r, e = node.call(a.bv3_vault, "0x" + sel("getPoolTokenInfo(address)") + ad(pool), tag)
         if r is None or len(r) < 66 * 2:
             skipped.append({"kind": 23, "pool_id": pool, "why": f"Vault.getPoolTokenInfo: {e or r}"})
@@ -157,6 +192,10 @@ def bv3_pools(node, tag, a, skipped):
         off = word(r, 0) // 32
         n = word(r, off)
         tokens = [adr(r, off + 1 + i) for i in range(n)]
+        boff = word(r, 2) // 32
+        if any(word(r, boff + 1 + i) == 0 for i in range(n)):
+            skipped.append({"kind": 23, "pool_id": pool, "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"})
+            continue
         h, e = node.call(a.bv3_vault, "0x" + sel("getHooksConfig(address)") + ad(pool), tag)
         if not h or len(h) < 2 + 64 * 11:
             skipped.append({"kind": 23, "pool_id": pool, "why": f"Vault.getHooksConfig: {e or h}"})
@@ -167,7 +206,7 @@ def bv3_pools(node, tag, a, skipped):
             continue
         out.append(dict(fam="bv3", kind=23, pool_id=pool, tokens=tokens, hooks=ZERO, bv3_hook=adr(h, 10),
                         bv3_hook_kind=hk, manager=a.bv3_vault, pool_manager=a.bv3_vault, data="0x" + ad(pool),
-                        step_pool=a.bv3_vault))
+                        step_pool=a.bv3_vault, src=src.get(pool)))
     return out
 
 

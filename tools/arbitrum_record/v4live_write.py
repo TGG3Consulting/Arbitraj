@@ -65,11 +65,15 @@ def write(out, d):
         f"(1 − {a.max_impact_pct}/100)·10·выход(сумма/10)); не больше {a.pools_per_kind} пулов на вид; пропуски — "
         "pools.json skipped",
         "- x_left: ключ «usdt» — токен входа (а) (имя формата записи 17.11, live_row.rs), «coin» — второй токен",
+        "- Квотер (а) (quoter_out строки «a») — своя eth_simulateV1 [квотер] поверх H: тот же симулированный блок H + 1, "
+        "что у покупки (sim_block_a = sim_block_quoter_a); квотер на H — quoter_out_h (не сравнивается; T477-01, "
+        "решение 478). Квотер (б) — quoter_out_after_a (та же симуляция после (а); у Balancer V3 — своя [buy, квотер])",
         "", "## Адреса",
         f"- Uniswap V4: PoolManager {a.v4_pool_manager}, V4Quoter {a.v4_quoter}, StateView {a.v4_state_view} "
         f"(Initialize за {a.v4_blocks} блоков до начала поиска; блок H взят после поиска — решение 460; без крючка, "
         "обе валюты ERC-20)",
-        f"- Balancer V3: Vault {a.bv3_vault}, Router {a.bv3_router} (пулы — запись balancer_v3.py + --bv3-pool; "
+        f"- Balancer V3: Vault {a.bv3_vault}, Router {a.bv3_router} (пулы — запись balancer_v3.py + --bv3-pool + getPools() фабрик "
+        f"списков, не больше {a.bv3_max_pools} пулов, которые бот берёт, — поле src в pools.json; "
         "hooks строки = 0 — у шага 23 класс только «без крючка», крючок пула — bv3_hook, вид — bv3_hook_kind: none / "
         f"static / surge / mev, как pools/balancer_v3_hooks.rs; без крючка до {a.pools_per_kind}, с крючком до "
         f"{a.bv3_per_hook} на вид; нет пула вида: {', '.join(rec.get('bv3_hook_missing', [])) or '—'})",
@@ -89,7 +93,8 @@ def write(out, d):
         lines.append(f"- Ошибки eth_simulateV1: {len(rec['sim_errors'])} (pools.json sim_errors)")
     lines += ["", "## Файлы",
               "- summary.json — по вызову: case, kind, pool_id, manager, pool_manager, hooks, token_in, token_out, "
-              "amount_in, got, quoter_out, quoter_out_after_a (у (б)), got_eq_swap_credit, x_left, status, revert, gas",
+              "amount_in, got, quoter_out ((а) — в той же симуляции), quoter_out_h ((а) — на H), sim_block_a, "
+              "sim_block_quoter_a, quoter_out_after_a (у (б)), got_eq_swap_credit, x_left, status, revert, gas",
               "- calls.json — по вызову: status, returnData, gasUsed, логи целиком, откат, x_left",
               "- hooks_reject.json — откаты крючков V4 (пулы V4 с крючком не выбираются — пусто; откат пула Balancer V3 "
               "с крючком — необъяснённое: класс 23 у бота один)",

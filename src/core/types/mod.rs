@@ -33,6 +33,7 @@ pub mod pool_tick_bin;
 pub mod pool_vault;
 pub mod presell;
 pub mod send;
+pub mod tip_share;
 pub mod trade;
 pub mod transfer;
 pub mod window;
@@ -71,6 +72,7 @@ pub use send::{
     ChainTx, ChannelState, SendChannelInfo, SendChannelStats, SendMethod, TxOutcome, WalletQueue,
     WalletQueueState,
 };
+pub use tip_share::{TipLoss, TipOutcome, TipShare};
 pub use trade::{Fee, Quote, Remeasure, Side, TradeRequest, TradeResult, TradeStatus};
 pub use transfer::{
     AccountBalances, Balance, CoinNetworkInfo, Transfer, TransferStatus, WithdrawRequest,

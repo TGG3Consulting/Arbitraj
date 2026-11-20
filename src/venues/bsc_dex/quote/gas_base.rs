@@ -11,14 +11,14 @@
 //! установлено (docs/TASKS.md, «Решение 437», вопрос 3).
 //! Кто вызывает: quote/gas.rs (кэш на блок, котировка и отправка).
 //! От чего зависит: node/rpc.rs, send/tx_1559.rs, num.rs, ctx.rs.
-//! Настройки: send.priority_fee_gwei, send.max_fee_margin_pct [площадка DEX] — только при dex.gas_mode = eip1559_l1.
+//! Настройки: send.max_fee_margin_pct, send.tip_mode и настройки режима (send/tip_mode.rs) [площадка DEX] — только
+//! при dex.gas_mode = eip1559_l1.
 //!
 //! Поле baseFeePerGas объекта блока — execution-apis (коммит 16caee27) src/schemas/block.yaml, Block.baseFeePerGas;
 //! заголовок EIP-1559 — https://eips.ethereum.org/EIPS/eip-1559 («base_fee_per_gas»); на своём узле Arbitrum — запись
 //! tests/data/arbitrum_node_2026-11-19/06_ws_eth_subscribe_newHeads.json (поле baseFeePerGas в каждом заголовке).
 
 use alloy_primitives::U256;
-use rust_decimal::Decimal;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -26,7 +26,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::rpc;
-use super::super::num;
+use super::super::send::tip_mode;
 use super::super::send::tx_1559::{self, Fees};
 
 /// Из объекта блока нужна только базовая цена газа.
@@ -62,17 +62,11 @@ pub async fn fetch(ctx: &Ctx, block: u64) -> GatewayResult<U256> {
     })
 }
 
-/// Чаевые (maxPriorityFeePerGas), wei, из send.priority_fee_gwei. Ошибки: NotConfigured (не задана, не в wei).
+/// Чаевые (maxPriorityFeePerGas), wei: решение 437 (3) — по режиму send.tip_mode (send/tip_mode.rs): fixed —
+/// send.priority_fee_gwei; profit_share — нижний предел send.tip_floor_gwei (сделка DEX ↔ DEX ставит свои чаевые
+/// перед отправкой, exec/tip_cycle.rs). Ошибки: NotConfigured (режим или его настройки не заданы, не в wei).
 pub fn tip_wei(ctx: &Ctx) -> GatewayResult<u128> {
-    let gwei = ctx.dec("send.priority_fee_gwei")?;
-    num::to_units(gwei * Decimal::from(1_000_000_000u64), 0)
-        .and_then(|v| u128::try_from(v).ok())
-        .ok_or_else(|| {
-            ctx.not_set(
-                "send.priority_fee_gwei",
-                format!("send.priority_fee_gwei = {gwei} не переводится в wei"),
-            )
-        })
+    Ok(tip_mode::read(ctx)?.base_tip())
 }
 
 /// Цена газа в плане: база + чаевые. Принимает: окружение, базу блока. Ошибки: как tip_wei.
@@ -83,8 +77,13 @@ pub fn planned(ctx: &Ctx, base: U256) -> GatewayResult<U256> {
 /// Цены транзакции типа 2 от базы блока: потолок = база × (1 + send.max_fee_margin_pct/100) + чаевые.
 /// Принимает: окружение, базу блока. Ошибки: NotConfigured (запас, чаевые; запас отрицательный), BadResponse (число).
 pub fn fees(ctx: &Ctx, base: U256) -> GatewayResult<Fees> {
+    fees_with(ctx, base, tip_wei(ctx)?)
+}
+
+/// Решение 437 (3): цены типа 2 с заданными чаевыми (выбранными сделкой, exec/tip_cycle.rs). Принимает: окружение,
+/// базу блока, чаевые (wei за газ). Ошибки: NotConfigured (запас), BadResponse (число).
+pub fn fees_with(ctx: &Ctx, base: U256, tip: u128) -> GatewayResult<Fees> {
     let margin = ctx.dec("send.max_fee_margin_pct")?;
-    let tip = tip_wei(ctx)?;
     tx_1559::fees(base, margin, tip).map_err(|e| ctx.err(ErrorCode::BadResponse, e))
 }
 

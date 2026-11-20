@@ -11,15 +11,17 @@
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
+use super::super::quote::gas_base;
 use super::super::send::gas_mode::{self, GasMode};
 use super::super::send::ready::Ready;
 use super::super::send::tx_price::{self, TxPrice};
 use super::super::send::{self};
 use super::txs::Env;
 
-/// Цена газа транзакции. Принимает: окружение, выбранные каналы. Возвращает: цену legacy или типа 2.
+/// Цена газа транзакции. Принимает: окружение, выбранные каналы, чаевые сделки (решение 437 (3): выбранные долей
+/// прибыли, exec/tip_cycle.rs; None — по режиму send.tip_mode; у legacy не читаются). Возвращает: цену legacy или типа 2.
 /// Ошибки: NotConfigured (dex.gas_mode, надбавка, запас, чаевые), StaleData, BadResponse (число), узел.
-pub async fn price(env: &Env, ready: &[Ready]) -> GatewayResult<TxPrice> {
+pub async fn price(env: &Env, ready: &[Ready], tip: Option<u128>) -> GatewayResult<TxPrice> {
     let ctx = &env.ctx;
     let floor = send::gas_floor(ready);
     match gas_mode::read(ctx)? {
@@ -28,6 +30,10 @@ pub async fn price(env: &Env, ready: &[Ready]) -> GatewayResult<TxPrice> {
         )),
         GasMode::Eip1559L1 => {
             let (f, base) = env.gas.fees(ctx, &env.heads).await?;
+            let f = match tip {
+                Some(t) => gas_base::fees_with(ctx, base, t)?,
+                None => f,
+            };
             let f = tx_price::floored(f, floor, base).ok_or_else(|| {
                 ctx.err(
                     ErrorCode::BadResponse,

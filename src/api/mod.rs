@@ -30,6 +30,7 @@ pub mod settings_io;
 pub mod settings_io_fmt;
 pub mod state;
 pub mod static_ui;
+pub mod tip_share;
 pub mod uncapped;
 pub mod usdt_transfer;
 pub mod venues;

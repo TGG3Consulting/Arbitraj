@@ -110,6 +110,7 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "venue.money_event_delayed" => (WARN, "Бот узнал о событии по деньгам с задержкой"),
         "dex.swap_waits_inflow" => (WARN, "Обмен на DEX ждёт поступления в кошелёк"),
         "dex.rebuilt_after_approve" => (INFO, "Обмен на DEX пересобран после разрешения"),
+        "send.tip_share_max" => (WARN, "Доля чаевых DEX дошла до максимума"),
         "send.queue_released" => (OK, "Кошелёк DEX снова работает"),
         "executor.deployed" => (INFO, "Развёртывание исполнителя"),
         "bundle.assembled" => (INFO, "Бандл DEX собран"),

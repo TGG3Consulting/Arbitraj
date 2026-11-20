@@ -20,8 +20,8 @@ use super::state::AppState;
 use super::{
     balances, check, coins, control, core_api, delist, deposit_hold, dex, dex_dry, dex_executor,
     dex_graph, episodes, first_run, journal, report, rules, rules_meta, secrets, settings,
-    settings_io, static_ui, uncapped, usdt_transfer, venues, wallet_queue, wallets, wallets_dex,
-    windows, ws,
+    settings_io, static_ui, tip_share, uncapped, usdt_transfer, venues, wallet_queue, wallets,
+    wallets_dex, windows, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
@@ -49,6 +49,11 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route(
             "/api/venues/{id}/dex-graph/rebuild",
             post(dex_graph::rebuild),
+        )
+        .route("/api/venues/{id}/tip-share", get(tip_share::state))
+        .route(
+            "/api/venues/{id}/tip-share/reset",
+            post(tip_share::reset),
         )
         .route("/api/dex/dry-swap", post(dex_dry::dry_swap))
         .route("/api/dex/dry-cycle", post(dex_dry::dry_cycle))

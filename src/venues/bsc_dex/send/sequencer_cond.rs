@@ -40,6 +40,9 @@ use super::super::node::head_age;
 use super::super::node::heads::Heads;
 use super::ready::Ready;
 
+/// Решение 437 (3): начало пояснения отказа −32003 (explain) — по нему exec/tip_cycle.rs узнаёт «отказано условием».
+pub const REJECTED: &str = "условие eth_sendRawTransactionConditional не выполнено";
+
 /// Метод условной отправки (nitro-geth arbitrum/conditionaltx.go:25, пространство «eth»).
 pub const METHOD: &str = "eth_sendRawTransactionConditional";
 
@@ -102,8 +105,8 @@ pub fn explain(text: &str, mut e: GatewayError) -> GatewayError {
         .and_then(|v| v.pointer("/error/code").and_then(Value::as_i64));
     let why = match code {
         Some(-32003) => {
-            "условие eth_sendRawTransactionConditional не выполнено — секвенсор транзакцию не принял \
-             (nitro-geth arbitrum_types/txoptions.go:79-107)"
+            "условие eth_sendRawTransactionConditional не выполнено — секвенсор транзакцию не \
+             принял (nitro-geth arbitrum_types/txoptions.go:79-107)"
         }
         Some(-32005) => "предел условий превышен (nitro-geth arbitrum_types/txoptions.go:25-33)",
         Some(-32601) => {

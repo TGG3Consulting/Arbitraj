@@ -6,9 +6,9 @@
     Общие настройки отправки (send.*) — на «Площадках». Нет адаптера DEX — «нет данных» с причиной.
     Живое сообщение send_channel — список перечитывается (lib/dex.svelte.js). Над каналами — очередь кошелька
     (components/WalletQueue.svelte) — по каждому кошельку DEX (решение 132): состояние и «Снять очередь после ручной
-    проверки».
+    проверки». Решение 437 (3): у каждой площадки DEX — блок «Доля чаевых (PGA)» (components/TipShare.svelte).
   Кто вызывает: App.svelte.
-  От чего зависит: lib/dex.svelte.js, components/ChannelCard.svelte, WalletQueue.svelte, NoData.svelte.
+  От чего зависит: lib/dex.svelte.js, components/ChannelCard.svelte, WalletQueue.svelte, TipShare.svelte, NoData.svelte.
   Настройки: channel.* (через ChannelCard).
 -->
 <script>
@@ -16,6 +16,7 @@
   import { dex, whyNoDex } from '../lib/dex.svelte.js';
   import ChannelCard from '../components/ChannelCard.svelte';
   import WalletQueue from '../components/WalletQueue.svelte';
+  import TipShare from '../components/TipShare.svelte';
   import NoData from '../components/NoData.svelte';
   import { get } from '../lib/api.js';
 
@@ -55,6 +56,7 @@
     {:else}
       <p class="muted">Кошельков DEX нет — очереди появятся на экране «Маппинг кошельков» (#/wallets).</p>
     {/each}
+    <TipShare {venue} />
     {#each uniqBy(channels, (c) => c.info.id) as channel (channel.info.id)}
       <ChannelCard {venue} {channel} />
     {:else}

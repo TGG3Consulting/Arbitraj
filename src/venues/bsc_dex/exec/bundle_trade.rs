@@ -204,6 +204,7 @@ pub fn bundle_result(
         gas_used: U64::from(gas_used),
         effective_gas_price: U256::ZERO,
         logs,
+        transaction_index: None,
     });
     let done = txs::Done {
         chain,

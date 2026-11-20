@@ -163,6 +163,30 @@
   Нужна запись: на своём узле Arbitrum — eth_simulateV1 (validation = false) обмена и gasEstimateComponents той же
   транзакции, потом квитанция после включения (gasUsed, effectiveGasPrice, gasUsedForL1) — проверка формулы и
   вопроса 3.
+  Часть 3 (динамические чаевые) — СДЕЛАНО: send.tip_mode (fixed / profit_share) и send.tip_floor_gwei,
+  send.tip_cap_gwei, send.tip_share_min_pct, send.tip_share_max_pct, send.tip_share_step_up_pct,
+  send.tip_share_step_down_pct, send.tip_wins_to_step_down (каталог, SETTINGS, SETTINGS_CASES, FIRST_RUN; без значений;
+  не заданы — котировок нет, «Проверить подключение» (Газ сети) — причина). send/tip_mode.rs — режим; quote/gas_base.rs
+  tip_wei — fixed: send.priority_fee_gwei, profit_share: нижний предел (план котировки и транзакции без своей прибыли);
+  exec/tip_cycle.rs choose — у цикла через исполнитель P0 (прибыль без чаевых, газ L2 и L1 по базе), Pmin
+  (dex_dex.min_profit_usd), доля s → чаевые (exec/tip_pick.rs), до проверки порога; отправка — txs::send_tipped;
+  after — в фоне: в блоке — победа; откат — разбор по блоку включения (exec/tip_judge.rs: eth_getLogs по пулам
+  маршрута, транзакции с transactionIndex меньше нашего, их чаевые = effectiveGasPrice − baseFee); отказ −32003 — по
+  следующему блоку после отправки. exec/tip_state.rs — доля, счётчики, последний проигрыш (SQLite venue_state, вид
+  tip_share), подстройка, событие Telegram send.tip_share_max; строка журнала send.tip_loss на каждый проигрыш.
+  Интерфейс: «Каналы отправки» → блок «Доля чаевых (PGA)» (components/TipShare.svelte; GET/POST
+  /api/venues/{id}/tip-share[/reset]). Квитанция — поле transactionIndex (send/receipt.rs).
+  Сделано однозначно, на подтверждение Тиграну:
+  4) Причину отката квитанция не даёт (minOut / deadline — debug_* у узла закрыт): разбирается любой откат транзакции
+     цикла; при откате по deadline перехватчика обычно нет → «по скорости» (доля не меняется).
+  5) В режиме profit_share чаевые транзакций без своей прибыли (разрешения, переводы, ноги CEX ↔ DEX на Arbitrum) и
+     план котировки — нижний предел send.tip_floor_gwei. Так оставить?
+  6) Признак отказа условием −32003 — текст пояснения канала (send/sequencer_cond.rs REJECTED) в ошибке отправки; хеша
+     нашей транзакции в этой ошибке нет — в разборе «нет в сети».
+  7) Каждый проигрыш — строка журнала send.tip_loss; в состоянии (экран) — только последний проигрыш (список всех — в
+     журнале). Нужен ли на экране список?
+  Нужны записи (тестов tip_judge / tip_pick нет): блок Arbitrum с откатом нашей транзакции цикла и перехватчиком на пуле
+  маршрута — eth_getLogs по пулам, квитанции перехватчиков и наша, eth_getBlockByNumber (baseFee).
   Вопросы Тиграну:
   3) Газ плана и газ симуляции (eth_simulateV1, validation = false — check/simulate.rs) у Arbitrum: входит ли в
      gasUsed часть L1, по исходникам не установлено: nitro arbos/tx_processor.go:613-641 начисляет газ L1 при baseFee > 0

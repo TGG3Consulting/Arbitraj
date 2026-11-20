@@ -15,6 +15,8 @@
 //! предел — по цене самой транзакции (exec/txs.rs send_capped).
 //! Решение 437 (2): газ в проверке прибыли — exec/cycle_gas.rs (у eip1559_l1 чаевые только с газа L2, часть L1 —
 //! gasEstimateComponents этой транзакции, запрос одновременно с пробой).
+//! Решение 437 (3): send.tip_mode = profit_share — чаевые от прибыли цикла (exec/tip_cycle.rs choose), отправка
+//! txs::send_tipped, итог — доле чаевых в фоне (tip_cycle::after).
 //! Кто вызывает: exec/cycle_trade.rs.
 //! От чего зависит: exec/executor/{call, callback_at, onchain, pool_pass, sim}.rs, exec/{cycle_steps, cycle_ref, swap_send, txs, result}.rs,
 //! quote/{cycle_legs, cycle_cost}.rs, wallet/{approve_executor, nonce}.rs, check/simulate.rs.
@@ -34,13 +36,14 @@ use super::super::quote::route_calc::Leg;
 use super::super::quote::{Quoting, cycle_legs};
 use super::super::wallet::approve_executor;
 use super::super::wallet::nonce::Nonces;
-use super::cycle_ref;
 use super::cycle_gas;
+use super::cycle_ref;
 use super::cycle_steps::{self, exec_steps, net_check};
 use super::executor::call::{self, ExecCall};
 use super::executor::{onchain, pool_pass, sim};
 use super::result;
 use super::swap_send::{rebuilt_notice, send_approvals, with_approve_gas};
+use super::tip_cycle;
 use super::txs::{self, Env};
 
 /// Сделка через исполнитель. Принимает: котировку, окружение отправки, очередь кошелька, запрос, свежие ноги, адрес
@@ -96,8 +99,11 @@ pub async fn trade(
     )?;
     let out = super::super::num::to_decimal(got, dec)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "выход пробы не в Decimal"))?;
+    // Решение 437 (3): profit_share — чаевые сделки от прибыли цикла (exec/tip_cycle.rs), до проверки порога.
+    let bill = bill.with_units(gas);
+    let (bill, tips) = tip_cycle::choose(q, bill, (out, req.input), &r, &legs).await?;
     // Исполнитель — одна транзакция с чаевыми (txs::send ниже): чаевые и газ их перевода — в проверке.
-    net_check(ctx, (out, req.input), &bill.with_units(gas), &r, true).await?;
+    net_check(ctx, (out, req.input), &bill, &r, true).await?;
     // Решение 233 (дополнение, п. 4): исход неизвестен — «чем найти» цикла (контекст свопа «базовая → базовая» и курсы
     // сделки), позднее выяснение своим узлом теми же функциями (resolve_cycle.rs). Разрешения выше — без него: их
     // «исход неизвестен» несёт отметку approve (exec/swap_send.rs), обмен после них не отправлялся.
@@ -105,9 +111,21 @@ pub async fn trade(
     // Решение 273: пары Solidly с паузой/пределом газа фабрики — заново с фабрики; предел проверяет send_capped.
     let used: Vec<_> = legs.iter().map(|l| &l.entry).collect();
     let cap = super::solidly_gate::fresh_cap(q, &used).await?;
-    let d = txs::send_capped(env, &slot, (executor, c.data(), U256::ZERO), true, None, cap)
-        .await
-        .map_err(|e| sc.attach(e))?;
+    let gas_tip = tips.as_ref().map(|t| t.tip);
+    let sent_head = q.heads.latest().map_or(0, |h| h.number);
+    let res = txs::send_tipped(
+        env,
+        &slot,
+        (executor, c.data(), U256::ZERO),
+        true,
+        None,
+        cap,
+        gas_tip,
+    )
+    .await;
+    // Решение 437 (3): итог — для доли чаевых, в фоне (сделка не ждёт разбора).
+    tip_cycle::after(env, tips, &res, sent_head);
+    let d = res.map_err(|e| sc.attach(e))?;
     drop(slot);
     let t = result::result(ctx, tr, d, wallet, (base, base), (dec, dec), &[])
         .map_err(|e| sc.attach(e))?;

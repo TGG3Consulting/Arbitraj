@@ -501,6 +501,27 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// Решение 437 (3): доля прибыли на чаевые сделок DEX ↔ DEX (сеть dex.gas_mode = eip1559_l1) — текущая доля,
+    /// последние чаевые, счётчики, последний проигрыш (экран «Каналы отправки»). Ошибки: NotApplicable — не DEX.
+    async fn tip_share(&self) -> GatewayResult<crate::core::types::TipShare> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет чаевых сделок",
+        ))
+    }
+
+    /// Решение 437 (3): «Сбросить долю чаевых» — к минимуму send.tip_share_min_pct (счётчики остаются). Принимает: кто
+    /// сбрасывает (для журнала). Возвращает: состояние после сброса. Ошибки: NotApplicable — не DEX; база.
+    async fn reset_tip_share(&self, by: &str) -> GatewayResult<crate::core::types::TipShare> {
+        let _ = by;
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет чаевых сделок",
+        ))
+    }
+
     /// Справочник пулов от индексатора (решение 58): DEX индексатора, пулы монет и что с каждым сделал адаптер
     /// (взят, DEX не подключена, проверка на узле не прошла). Ошибки: NotApplicable — не DEX.
     async fn pool_directory(&self) -> GatewayResult<PoolDirectory> {

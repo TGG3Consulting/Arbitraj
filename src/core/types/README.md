@@ -20,6 +20,7 @@
 | `delist.rs` | DelistItem, Delistings — пары биржи в делистинге (решение 175): тикер, символ, когда прекращаются торги и закрывается вывод, источник в API; unknown — у площадки нет официального источника («неизвестно», не «делистингов нет») |
 | `check.rs` | CheckState, TokenTaxes, CoinCheck, HookImpact (лесенки HookLadder — общие, Arc), HookStep, PoolCheck, TaxKind, BlockReason, CoinBlock |
 | `send.rs` | SendMethod, SendChannelInfo, ChannelState, SendChannelStats, TxOutcome, ChainTx |
+| `tip_share.rs` | Решение 437 (3): TipShare (доля прибыли на чаевые площадки DEX, счётчики, последний проигрыш), TipLoss, TipOutcome |
 | `directory.rs` | IndexerDex, DirectoryStatus, DirectoryPool, DirectoryToken (note — «индексатор не знает пулов», решение 121), PoolDirectory, FactoryScan (поиск по фабрикам на своём узле, решение 121) — справочник пулов (решение 58) |
 | `dry_swap.rs` | DexDrySwap, DrySwapPool — итог «сухой сделки DEX» (решение 121, C4): форма маршрута, пулы, выходы, минимум, газ, причина |
 | `presell.rs` | DexPresell — итог симуляции продажи DEX до покупки (решение 234): кошелёк сделки, форма исполнения, выход после реального налога, ожидаемое, минимумы долей, пополнение, газ |

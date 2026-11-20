@@ -283,6 +283,16 @@ impl Venue for BscDex {
         .await
     }
 
+    /// Решение 437 (3): доля прибыли на чаевые сделок DEX ↔ DEX площадки — exec/tip_state.rs. Ошибок нет.
+    async fn tip_share(&self) -> GatewayResult<crate::core::types::TipShare> {
+        Ok(exec::tip_state::view(&self.p.ctx).await)
+    }
+
+    /// Решение 437 (3): «Сбросить долю чаевых» к минимуму — exec/tip_state.rs. Ошибки: база.
+    async fn reset_tip_share(&self, by: &str) -> GatewayResult<crate::core::types::TipShare> {
+        exec::tip_state::reset(&self.p.ctx, by).await
+    }
+
     /// Балансы кошелька: BNB (eth_getBalance) и известные токены (balanceOf, EIP-20) — wallet/balances.rs. Ошибки: узел, ключ.
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         self.p.ctx.bound()?;

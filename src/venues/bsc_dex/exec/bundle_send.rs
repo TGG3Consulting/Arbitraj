@@ -94,7 +94,7 @@ pub async fn send(
     let wallet = slot.from;
     // Решение 435 (433-д): бандл подписывается legacy-ценой (как было); у сети типа 2 (dex.gas_mode = eip1559_l1)
     // бандлов нет — отказ до симуляции и подписи.
-    let price = match super::tx_fee::price(env, &ready).await? {
+    let price = match super::tx_fee::price(env, &ready, None).await? {
         TxPrice::Legacy(p) => p,
         TxPrice::Eip1559(..) => {
             let why = "бандл не отправляется: у сети площадки модель газа eip1559_l1 (тип 2) — бандлов нет, \

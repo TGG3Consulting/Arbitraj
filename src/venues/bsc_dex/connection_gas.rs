@@ -11,7 +11,8 @@
 //! dex.arb_gas_info, node/arb_min_gas.rs, блок latest): его берёт канал «Секвенсор Arbitrum»; не задана — ошибка части.
 //! Кто вызывает: connection.rs (check).
 //! От чего зависит: send/gas_mode.rs, node/arb_gas.rs, node/arb_min_gas.rs, quote/gas_base.rs, wallet/signer.rs (адрес кошелька пробы), ctx.rs.
-//! Настройки: dex.gas_mode, dex.node_interface, dex.arb_gas_info, send.max_fee_margin_pct, send.priority_fee_gwei [площадка DEX];
+//! Настройки: dex.gas_mode, dex.node_interface, dex.arb_gas_info, send.max_fee_margin_pct, send.tip_mode (решение 437) и
+//! настройки режима (send.priority_fee_gwei / send.tip_*) [площадка DEX];
 //! узел — bsc.node_http_url.
 
 use alloy_primitives::Bytes;
@@ -22,6 +23,7 @@ use super::ctx::Ctx;
 use super::node::{arb_gas, arb_min_gas};
 use super::quote::gas_base;
 use super::send::gas_mode::{self, GasMode};
+use super::send::tip_mode;
 use super::wallet::signer;
 
 /// Проверка модели газа площадки. Принимает: окружение. Возвращает: описание («legacy (gasPrice)», части газа и
@@ -42,9 +44,11 @@ pub async fn check(ctx: &Ctx) -> Result<String, String> {
                 let f = gas_base::fees(ctx, c.base_fee)?;
                 // Решение 436 (Б): нижний предел цены газа сети — минимум канала секвенсора.
                 let min = arb_min_gas::read(ctx, "latest").await?;
+                // Решение 437 (3): режим чаевых (fees выше уже проверил его настройки).
+                let tips = tip_mode::read(ctx)?.as_str();
                 Ok(format!(
                     "{}: перевод — газ {} (L2 {} + L1 {}), baseFee {} wei, оценка цены L1 {} wei; \
-                     maxFeePerGas {} wei, чаевые {} wei; \
+                     maxFeePerGas {} wei, чаевые {} wei (send.tip_mode = {tips}); \
                      минимум цены газа сети (ArbGasInfo) {} wei",
                     GasMode::Eip1559L1.as_str(),
                     c.gas_estimate,

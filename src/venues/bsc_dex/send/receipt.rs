@@ -5,7 +5,7 @@
 //! От чего зависит: node/rpc.rs, num.rs, ctx.rs.
 //! Настройки: нет.
 //!
-//! Квитанция (status, blockNumber, gasUsed, effectiveGasPrice, logs) —
+//! Квитанция (status, blockNumber, gasUsed, effectiveGasPrice, logs, transactionIndex — решение 437) —
 //! https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/transaction.yaml#L127-L165 ;
 //! null, пока нет в блоке — узел BSC internal/ethapi/api.go#L2211-L2229.
 
@@ -30,6 +30,11 @@ pub struct Receipt {
     pub gas_used: U64,
     pub effective_gas_price: U256,
     pub logs: Vec<Log>,
+    /// Решение 437 (3): место транзакции в блоке — для разбора проигрыша по чаевым (exec/tip_judge.rs: кто изменил наш
+    /// пул раньше нас). execution-apis src/schemas/receipt.yaml (transactionIndex); Option — запись без поля не ломает
+    /// разбор.
+    #[serde(default)]
+    pub transaction_index: Option<U64>,
 }
 
 impl Receipt {

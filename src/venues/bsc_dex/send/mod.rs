@@ -47,6 +47,7 @@ pub mod sequencer_cond;
 pub mod settle;
 pub mod stats;
 pub mod tip_gas;
+pub mod tip_mode;
 pub mod track;
 pub mod track_l1;
 pub mod track_util;

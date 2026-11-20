@@ -13,6 +13,7 @@
 //! как было (gasPrice = eth_gasPrice + надбавка, не ниже минимума каналов; legacy-транзакция); eip1559_l1 — тип 2
 //! (maxFeePerGas = база головы × запас + чаевые, quote/gas.rs fees; минимум каналов — по цене, которую заплатит);
 //! предел пары и запас на газ — по потолку цены (maxFeePerGas у типа 2). Не задана — транзакция не уходит.
+//! Решение 437 (3): send_tipped — чаевые типа 2, выбранные сделкой (доля прибыли), вместо чаевых по режиму.
 //! Решение 436 (А): у канала секвенсора с окном channel.cond_time_window_s — условие timestampMax от времени головы
 //! (send/sequencer_cond.rs head_time — до отправки).
 //! Кто вызывает: exec/trade.rs, wallet/transfer.rs; send_capped — exec/executor/trade.rs, exec/cycle_exec.rs.
@@ -97,10 +98,25 @@ pub async fn send(
 pub async fn send_capped(
     env: &Env,
     slot: &Slot,
+    call: (impl Into<TxKind>, Bytes, U256),
+    with_tip: bool,
+    keep: Option<SwapGuard>,
+    cap: Option<U256>,
+) -> GatewayResult<Done> {
+    send_tipped(env, slot, call, with_tip, keep, cap, None).await
+}
+
+/// send_capped со своими чаевыми типа 2 (решение 437 (3): доля прибыли сделки DEX ↔ DEX, exec/tip_cycle.rs).
+/// Принимает: как send_capped и чаевые, wei за газ (None — по режиму send.tip_mode; у legacy не читаются).
+/// Ошибки: как send_capped.
+pub async fn send_tipped(
+    env: &Env,
+    slot: &Slot,
     (to, data, value): (impl Into<TxKind>, Bytes, U256),
     with_tip: bool,
     keep: Option<SwapGuard>,
     cap: Option<U256>,
+    gas_tip: Option<u128>,
 ) -> GatewayResult<Done> {
     let ctx = &env.ctx;
     let cfg = SendCfg::read(ctx)?;
@@ -108,7 +124,7 @@ pub async fn send_capped(
     // рядом с SendCfg до nonce; им же подписывается отмена (Watch).
     let chain = super::super::node::chain_seen::ensure(ctx).await?;
     let ready = send::select(ctx, &env.stats)?;
-    let price = super::tx_fee::price(env, &ready).await?;
+    let price = super::tx_fee::price(env, &ready, gas_tip).await?;
     if let Some(c) = cap.filter(|c| price.cap() > *c) {
         let why = format!(
             "цена газа транзакции {price} wei выше предела пары maxGasPrice {c} wei — своп не отправлен"

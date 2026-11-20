@@ -85,7 +85,8 @@ const AFTER: [(&str, &str, &str); 39] = [
     ("src/venues/kyberswap/trade_fact.rs", "*", ""),
     (
         "src/venues/bsc_dex/exec/txs.rs",
-        "send_capped",
+        // Решение 437 (3): тело отправки — send_tipped (send_capped зовёт её).
+        "send_tipped",
         "send::dispatch(",
     ),
     (
@@ -125,7 +126,7 @@ const AFTER: [(&str, &str, &str); 39] = [
     (
         "src/venues/bsc_dex/exec/cycle_exec.rs",
         "trade",
-        "txs::send_capped(",
+        "txs::send_tipped(",
     ),
     (
         "src/venues/bsc_dex/exec/bundle_trade.rs",

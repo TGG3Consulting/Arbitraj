@@ -20,7 +20,7 @@
 
 use alloy_primitives::{Address, Bytes, U256};
 use rust_decimal::Decimal;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use zeroize::Zeroizing;
 
 use crate::core::types::{ChannelState, SendMethod};
@@ -35,7 +35,7 @@ use super::super::num;
 use super::bloxroute_cloud::NETWORK;
 use super::channel::{Auth, Bundle, Channel, Single};
 use super::seq_opts::{self, Submit};
-use super::sequencer_cond::{self, Cond};
+use super::sequencer_cond::{self, Cond, Terms};
 
 /// Канал, готовый к отправке.
 pub struct Ready {
@@ -140,20 +140,21 @@ fn min_gas(ctx: &Ctx, ch: &Channel, s: &Scope) -> Result<U256, ChannelState> {
 
 impl Ready {
     /// Отправка: одиночная — первая транзакция; бандл — все. Принимает: подписанные транзакции, предел блока бандла,
-    /// время головы (решение 436: у канала с окном — условие timestampMax = время + окно; None — без условия).
+    /// условия (решение 436: у канала с окном — timestampMax = время головы + окно; без времени головы — без условия;
+    /// решение 438: вместе с ним knownAccounts пулов маршрута).
     /// Возвращает: Ok — канал принял. Ошибки: ответ канала (ChannelRejected, GasBelowChannelMin, NonceConflict…), сеть, HTTP.
     pub async fn send(
         &self,
         ctx: &Ctx,
         txs: &[Bytes],
         max_block: u64,
-        head_time: Option<u64>,
+        terms: Terms<'_>,
     ) -> GatewayResult<()> {
-        let cond = match (self.cond, head_time) {
+        let cond = match (self.cond, terms.head_time) {
             (Some(w), Some(t)) => Cond::Until(t.saturating_add(w)),
             _ => Cond::Plain,
         };
-        self.post(ctx, txs, max_block, cond).await
+        self.post(ctx, txs, max_block, (cond, terms.known)).await
     }
 
     /// «Проверить подключение» (send/check.rs): пустая транзакция тем методом, которым канал отправляет; у канала с
@@ -164,22 +165,22 @@ impl Ready {
         } else {
             Cond::Plain
         };
-        self.post(ctx, &[Bytes::new()], 0, cond).await
+        self.post(ctx, &[Bytes::new()], 0, (cond, None)).await
     }
 
-    /// Запрос в канал и разбор ответа. Принимает: транзакции, предел блока, условие. Ошибки: как send; у условной
-    /// отправки — с пояснением кода секвенсора (send/sequencer_cond.rs explain).
+    /// Запрос в канал и разбор ответа. Принимает: транзакции, предел блока, условие и knownAccounts пулов (решение
+    /// 438). Ошибки: как send; у условной отправки — с пояснением кода секвенсора (send/sequencer_cond.rs explain).
     async fn post(
         &self,
         ctx: &Ctx,
         txs: &[Bytes],
         max_block: u64,
-        cond: Cond,
+        (cond, known): (Cond, Option<&Map<String, Value>>),
     ) -> GatewayResult<()> {
         let seq = self.ch.single == Some(Single::Sequencer);
         let conditional = seq && cond != Cond::Plain;
         let sync = seq && !conditional && matches!(self.submit, Submit::Sync(_));
-        let body = self.body(txs, max_block, cond);
+        let body = self.body(txs, max_block, cond, known);
         let auth;
         let mut headers: Vec<(&str, &str)> = Vec::new();
         if let (Auth::Header, Some(k)) = (self.ch.auth, &self.key) {
@@ -198,14 +199,20 @@ impl Ready {
     }
 
     /// Тело запроса в формате канала (условие и eth_sendRawTransactionSync — только у Single::Sequencer).
-    fn body(&self, txs: &[Bytes], max_block: u64, cond: Cond) -> Value {
+    fn body(
+        &self,
+        txs: &[Bytes],
+        max_block: u64,
+        cond: Cond,
+        known: Option<&Map<String, Value>>,
+    ) -> Value {
         let no0x = |b: &Bytes| alloy_primitives::hex::encode(b);
         let (method, params) = match (self.method, self.ch.single, self.ch.bundle) {
             (SendMethod::Single, Some(Single::Raw), _) => {
                 ("eth_sendRawTransaction", json!([txs[0]]))
             }
             (SendMethod::Single, Some(Single::Sequencer), _) if cond != Cond::Plain => {
-                (sequencer_cond::METHOD, sequencer_cond::params(&txs[0], cond))
+                (sequencer_cond::METHOD, sequencer_cond::params(&txs[0], cond, known))
             }
             (SendMethod::Single, Some(Single::Sequencer), _) => match self.submit {
                 Submit::Sync(t) => (seq_opts::SYNC_METHOD, seq_opts::sync_params(&txs[0], t)),

@@ -64,6 +64,7 @@ use crate::storage::journal::Level;
 
 use super::ctx::Ctx;
 use ready::Ready;
+use sequencer_cond::Terms;
 use stats::Stats;
 
 /// Готовые каналы с проверкой правил решения 33. Ошибки: NotConfigured — нет ни одного готового канала или
@@ -133,9 +134,9 @@ impl Dispatched {
 }
 
 /// Отправляет во все выбранные каналы параллельно. Принимает: каналы, подписанную транзакцию, перевод чаевых
-/// (только при одном канале), предел блока бандла, время головы для условия секвенсора (решение 436,
-/// send/sequencer_cond.rs head_time; None — без условия: отмена, каналы без окна). Возвращает: кто принял и кто не
-/// ответил ясно.
+/// (только при одном канале), предел блока бандла, условия секвенсора (решение 436: время головы,
+/// send/sequencer_cond.rs head_time; решение 438: knownAccounts пулов маршрута; Terms::default() — без условия: отмена,
+/// каналы без окна). Возвращает: кто принял и кто не ответил ясно.
 /// Ошибки: ChannelRejected — все каналы ответили отказом и свой узел не знает ни транзакцию, ни перевод чаевых
 /// (решение 154, send/absent.rs: транзакции точно нигде нет; причины всех каналов в тексте).
 pub async fn dispatch(
@@ -145,7 +146,7 @@ pub async fn dispatch(
     tx: &Bytes,
     tip_tx: Option<&Bytes>,
     max_block: u64,
-    head_time: Option<u64>,
+    terms: Terms<'_>,
 ) -> GatewayResult<Dispatched> {
     let jobs = ready.iter().map(|r| {
         let mut txs = vec![tx.clone()];
@@ -153,7 +154,7 @@ pub async fn dispatch(
             txs.push(t.clone());
         }
         async move {
-            let res = r.send(ctx, &txs, max_block, head_time).await;
+            let res = r.send(ctx, &txs, max_block, terms).await;
             (r.ch.id, r.method, res)
         }
     });
@@ -186,9 +187,10 @@ pub async fn dispatch_slice(
             ),
         ));
     }
-    let jobs = ready
-        .iter()
-        .map(|r| async move { (r.ch.id, r.method, r.send(ctx, txs, max_block, None).await) });
+    let jobs = ready.iter().map(|r| async move {
+        let res = r.send(ctx, txs, max_block, Terms::default()).await;
+        (r.ch.id, r.method, res)
+    });
     classify(ctx, stats, join_all(jobs).await, txs, max_block).await
 }
 

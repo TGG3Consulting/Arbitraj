@@ -15,7 +15,8 @@
 //! предел пары и запас на газ — по потолку цены (maxFeePerGas у типа 2). Не задана — транзакция не уходит.
 //! Решение 437 (3): send_tipped — чаевые типа 2, выбранные сделкой (доля прибыли), вместо чаевых по режиму.
 //! Решение 436 (А): у канала секвенсора с окном channel.cond_time_window_s — условие timestampMax от времени головы
-//! (send/sequencer_cond.rs head_time — до отправки).
+//! (send/sequencer_cond.rs head_time — до отправки). Решение 438: send_tipped — и knownAccounts пулов маршрута цикла
+//! (прочитаны на блоке плана, exec/pool_cond_read.rs) — к тому же условию.
 //! Кто вызывает: exec/trade.rs, wallet/transfer.rs; send_capped — exec/executor/trade.rs, exec/cycle_exec.rs.
 //! От чего зависит: exec/tx_fee.rs (цена газа по модели, решение 435), exec/chain_tx.rs (факт; газ перевода чаевых — решение 236, дополнение п. 6), exec/swap_ctx.rs (seed — «чем найти» с чаевыми, решение 231), send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
 //! Настройки: send.* через send/tx.rs (SendCfg — читается до отправки), channel.*.
@@ -23,6 +24,7 @@
 //! eth_estimateGas, legacy-транзакция EIP-155 — ссылки в send/tx.rs; трекер и отмена — send/track.rs, send/cancel.rs.
 
 use alloy_primitives::{B256, Bytes, TxKind, U256};
+use serde_json::{Map, Value};
 
 use crate::core::types::{ChainTx, SendMethod, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -31,6 +33,7 @@ use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
 use super::super::num;
 use super::super::quote::gas::GasPrice;
+use super::super::send::sequencer_cond::Terms;
 use super::super::send::settle::{self, After};
 use super::super::send::stats::Stats;
 use super::super::send::track::{self, Receipt, Tracked, Watch};
@@ -103,12 +106,13 @@ pub async fn send_capped(
     keep: Option<SwapGuard>,
     cap: Option<U256>,
 ) -> GatewayResult<Done> {
-    send_tipped(env, slot, call, with_tip, keep, cap, None).await
+    send_tipped(env, slot, call, with_tip, keep, cap, (None, None)).await
 }
 
-/// send_capped со своими чаевыми типа 2 (решение 437 (3): доля прибыли сделки DEX ↔ DEX, exec/tip_cycle.rs).
-/// Принимает: как send_capped и чаевые, wei за газ (None — по режиму send.tip_mode; у legacy не читаются).
-/// Ошибки: как send_capped.
+/// send_capped со своими чаевыми типа 2 (решение 437 (3): доля прибыли сделки DEX ↔ DEX, exec/tip_cycle.rs) и
+/// условием пулов (решение 438). Принимает: как send_capped и (чаевые, wei за газ — None: по режиму send.tip_mode, у
+/// legacy не читаются; knownAccounts пулов маршрута — None: без условия пулов; уходит только вместе с окном канала
+/// секвенсора). Ошибки: как send_capped.
 pub async fn send_tipped(
     env: &Env,
     slot: &Slot,
@@ -116,7 +120,7 @@ pub async fn send_tipped(
     with_tip: bool,
     keep: Option<SwapGuard>,
     cap: Option<U256>,
-    gas_tip: Option<u128>,
+    (gas_tip, known): (Option<u128>, Option<&Map<String, Value>>),
 ) -> GatewayResult<Done> {
     let ctx = &env.ctx;
     let cfg = SendCfg::read(ctx)?;
@@ -168,7 +172,7 @@ pub async fn send_tipped(
         &signed.raw,
         tip.as_ref().map(|t| &t.0.raw),
         head.number + cfg.bundle_max,
-        head_time,
+        Terms { head_time, known },
     )
     .await?;
     let method = if ready.iter().all(|r| r.method == SendMethod::Bundle) {

@@ -5,8 +5,14 @@
 //! блок; блок позже окна — транзакция не принимается (ошибка −32003) и в сеть не попадает: план сделки по устаревшим
 //! ценам не исполнится, если очередь секвенсора задержала транзакцию дольше окна. Окно не задано — обычная
 //! eth_sendRawTransaction (как до решения 436). Отмена (send/cancel.rs) — всегда без условия: её дело занять nonce.
-//! Окна блока L1 (blockNumberMin/Max) и knownAccounts не ставятся — docs/TASKS.md, «Решение 436».
-//! Кто вызывает: send/ready.rs (окно канала, тело запроса, разбор ошибки), exec/txs.rs (head_time до отправки).
+//! Окна блока L1 (blockNumberMin/Max) не ставятся — docs/TASKS.md, «Решение 436».
+//! Решение 438: у сделки цикла DEX ↔ DEX через исполнитель вместе с timestampMax — knownAccounts пулов маршрута
+//! (значения на блоке плана, exec/pool_cond_read.rs; Terms.known): пул изменился после плана — отказ −32003 «Storage
+//! slot value / root hash condition not met» (txoptions.go:92-104), транзакция в блок не попадает, газ не платится
+//! (nitro arbos/block_processor.go:496, 614-652). Пояснение такого отказа — REJECTED_POOLS. «Проверить подключение» —
+//! по-прежнему с пустыми условиями.
+//! Кто вызывает: send/ready.rs (окно канала, тело запроса, разбор ошибки), exec/txs.rs (head_time до отправки),
+//! exec/pool_cond_read.rs (window), exec/tip_cycle.rs (REJECTED, REJECTED_POOLS).
 //! От чего зависит: node/heads.rs, node/head_age.rs (время головы), send/ready.rs, ctx.rs.
 //! Настройки: channel.cond_time_window_s [канал sequencer].
 //!
@@ -30,7 +36,7 @@
 //!   (content/docs/notices/eth-send-raw-transaction-conditional-deprecation-notice.mdx:12, 26-30).
 
 use alloy_primitives::Bytes;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::settings::scope::Scope;
@@ -42,6 +48,25 @@ use super::ready::Ready;
 
 /// Решение 437 (3): начало пояснения отказа −32003 (explain) — по нему exec/tip_cycle.rs узнаёт «отказано условием».
 pub const REJECTED: &str = "условие eth_sendRawTransactionConditional не выполнено";
+
+/// Решение 438: в пояснении отказа −32003 — условие пулов маршрута (слот или корень хранилища пула изменился после
+/// блока плана; тексты узла — nitro-geth arbitrum_types/txoptions.go:95, 101). По нему exec/tip_cycle.rs отличает
+/// проигрыш конкуренту от истёкшего окна времени.
+pub const REJECTED_POOLS: &str = "условие пулов маршрута не выполнено";
+
+/// Тексты узла при отказе условия хранилища (nitro-geth arbitrum_types/txoptions.go:95, 101).
+const STORAGE_NOT_MET: [&str; 2] = [
+    "Storage root hash condition not met",
+    "Storage slot value condition not met",
+];
+
+/// Решение 438: условия к отправке — время головы (timestampMax = время + окно канала) и knownAccounts пулов
+/// маршрута (None — без условий пулов). По умолчанию — без условий.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Terms<'a> {
+    pub head_time: Option<u64>,
+    pub known: Option<&'a Map<String, Value>>,
+}
 
 /// Метод условной отправки (nitro-geth arbitrum/conditionaltx.go:25, пространство «eth»).
 pub const METHOD: &str = "eth_sendRawTransactionConditional";
@@ -87,11 +112,15 @@ pub async fn head_time(ctx: &Ctx, heads: &Heads, ready: &[Ready]) -> GatewayResu
     Ok(Some(bt.secs))
 }
 
-/// Параметры условной отправки: [raw, options]. Принимает: подписанную транзакцию, условие (Probe или Until).
-/// Возвращает: массив параметров JSON-RPC. Ошибок нет.
-pub fn params(raw: &Bytes, cond: Cond) -> Value {
+/// Параметры условной отправки: [raw, options]. Принимает: подписанную транзакцию, условие (Probe или Until),
+/// knownAccounts пулов (решение 438; только с Until, у Probe — пусто). Возвращает: массив параметров JSON-RPC.
+/// Ошибок нет.
+pub fn params(raw: &Bytes, cond: Cond, known: Option<&Map<String, Value>>) -> Value {
     match cond {
-        Cond::Until(t) => json!([raw, { "knownAccounts": {}, "timestampMax": format!("{t:#x}") }]),
+        Cond::Until(t) => {
+            let known = Value::Object(known.cloned().unwrap_or_default());
+            json!([raw, { "knownAccounts": known, "timestampMax": format!("{t:#x}") }])
+        }
         Cond::Plain | Cond::Probe => json!([raw, { "knownAccounts": {} }]),
     }
 }
@@ -104,6 +133,11 @@ pub fn explain(text: &str, mut e: GatewayError) -> GatewayError {
         .ok()
         .and_then(|v| v.pointer("/error/code").and_then(Value::as_i64));
     let why = match code {
+        Some(-32003) if STORAGE_NOT_MET.iter().any(|m| text.contains(m)) => {
+            "условие eth_sendRawTransactionConditional не выполнено — условие пулов маршрута не \
+             выполнено: пул изменился после блока плана, транзакция в блок не попала, газ не \
+             списан (nitro-geth arbitrum_types/txoptions.go:92-104)"
+        }
         Some(-32003) => {
             "условие eth_sendRawTransactionConditional не выполнено — секвенсор транзакцию не \
              принял (nitro-geth arbitrum_types/txoptions.go:79-107)"

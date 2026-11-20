@@ -6,20 +6,22 @@
 //! ожидаемый выход не ниже границы → курсы (USDT за базовую и за BNB) → форма (exec/cycle_gate.rs): исполнитель
 //! ArbExecutor (exec/cycle_exec.rs) или бандл свопов (exec/cycle_bundle_trade.rs) → итог подписывается исполнителем
 //! (решение 121 B7: «свой сборщик: цикл …»). Отправка — ОДИН раз, без повторов (стартовое правило Тиграна).
+//! Решение 438: при канале sequencer с окном (exec/pool_cond_read.rs wanted) на том же блоке перечтения читается
+//! условие пулов маршрута (knownAccounts) — его берёт исполнитель; пометка условия остаётся в executor после подписи.
 //! Кто вызывает: venue.rs (dex_cycle_trade).
-//! От чего зависит: exec/{cycle_gate, cycle_exec, cycle_bundle_trade, cycle_steps, result}.rs, quote/{cycle_legs,
+//! От чего зависит: exec/{cycle_gate, cycle_exec, cycle_bundle_trade, cycle_steps, pool_cond_read, result}.rs, quote/{cycle_legs,
 //! cycle_cost, cycle}.rs, wallet/{nonce, balances, signer}.rs.
 //! Настройки: dex_dex.execute; через вызываемые — verify.*, exec.executor_address, dex_dex.min_profit_usd, send.*.
 
 use crate::core::types::{CycleTradeRequest, CycleTradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::quote::{Quoting, cycle, cycle_cost, cycle_legs};
+use super::super::quote::{Quoting, cycle, cycle_cost};
 use super::super::wallet::nonce::Nonces;
 use super::super::wallet::{balances, signer};
 use super::cycle_gate::{self, Form};
 use super::txs::Env;
-use super::{cycle_bundle_trade, cycle_exec, cycle_steps};
+use super::{cycle_bundle_trade, cycle_exec, cycle_steps, pool_cond_read};
 
 /// Подпись исполнителя цикла через ArbExecutor (решение 121 B7).
 pub const BY_CYCLE_EXECUTOR: &str = "свой сборщик: цикл через исполнитель";
@@ -45,7 +47,8 @@ pub async fn trade(
         );
         return Err(ctx.err(ErrorCode::Internal, why));
     }
-    let (mut legs, _block) = cycle_legs::fresh(q, &req.cycle).await?;
+    let want = pool_cond_read::wanted(ctx);
+    let (mut legs, _block, conds) = pool_cond_read::fresh(q, &req.cycle, want).await?;
     // Решение «335 (лесенка влияния)», ревью Н4/Б1: сумма цикла вне измеренной лесенки крючка — не отказ, а оценка
     // (quote/hook_curve.rs open). Отдельной пробы квотером нет: перед отправкой весь цикл исполняется пробой
     // eth_simulateV1 на голове (exec/cycle_exec.rs, exec/cycle_bundle_trade.rs) — крючки исполняются на точной сумме,
@@ -67,7 +70,7 @@ pub async fn trade(
     }
     let (res, by) = match cycle_gate::form(ctx, &legs)? {
         Form::Executor(x) => (
-            cycle_exec::trade(q, env, nonces, &req, legs, (x, rates)).await,
+            cycle_exec::trade(q, env, nonces, &req, legs, (x, rates, conds)).await,
             BY_CYCLE_EXECUTOR,
         ),
         Form::Bundle => (
@@ -77,7 +80,11 @@ pub async fn trade(
     };
     match res {
         Ok(mut r) => {
-            r.trade.executor = Some(by.to_string());
+            // Решение 438: пометка условия пулов (exec/cycle_exec.rs) — после подписи через «; », как в result::by.
+            r.trade.executor = Some(match r.trade.executor.take() {
+                Some(note) => format!("{by}; {note}"),
+                None => by.to_string(),
+            });
             Ok(r)
         }
         Err(e) => {

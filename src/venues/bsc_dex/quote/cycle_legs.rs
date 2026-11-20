@@ -10,7 +10,8 @@
 //!   состояние кладётся на КЛОНЫ записей (реестр не трогаем). «Не торгуем вслепую»: не перечитался пул — сделки нет.
 //!
 //! Нативный BNB (адрес 0 у пулов V4/Infinity с нативной валютой) внутри цикла в v1 не исполняется — отказ.
-//! Кто вызывает: quote/cycle_cost.rs, exec/cycle_trade.rs, exec/cycle_dry.rs.
+//! Решение 438: fresh_at — перечтение на заданном блоке (exec/pool_cond_read.rs читает на нём же условие пулов).
+//! Кто вызывает: quote/cycle_cost.rs, exec/cycle_trade.rs, exec/cycle_dry.rs, exec/pool_cond_read.rs.
 //! От чего зависит: quote/{route_calc, select, graph_legs, verify}.rs, pools/{registry, load, load_batch,
 //! load_batch_par}.rs, tokens.rs.
 //! Настройки: verify.max_staleness_blocks, verify.timeout_ms (через verify::limits), verify.read_parallel_max
@@ -44,19 +45,31 @@ pub async fn now(q: &Quoting, c: &DexCycle) -> GatewayResult<Vec<Leg>> {
 /// Ошибки: StaleData (нет головы, пул не перечитан, таймаут verify.timeout_ms, отставание больше
 /// verify.max_staleness_blocks), NoRoute, NotConfigured (verify.*), узел.
 pub async fn fresh(q: &Quoting, c: &DexCycle) -> GatewayResult<(Vec<Leg>, u64)> {
+    let entries = entries(q, c)?;
+    let block = head_block(q)?;
+    fresh_at(q, c, entries, block).await
+}
+
+/// Блок, на котором перечитывается цикл: голова своего узла. Ошибки: StaleData — головы нет.
+pub fn head_block(q: &Quoting) -> GatewayResult<u64> {
+    let no = || {
+        let why = "нет свежего блока для перечтения цикла";
+        q.ctx.err(ErrorCode::StaleData, why)
+    };
+    Ok(q.heads.latest().ok_or_else(no)?.number)
+}
+
+/// Решение 438: ноги цикла на свежем состоянии пулов на ЗАДАННОМ блоке (тот же блок читает условие пулов
+/// exec/pool_cond_read.rs). Принимает: котировку, цикл, записи реестра (entries), блок. Возвращает: ноги и блок.
+/// Ошибки: как fresh.
+pub async fn fresh_at(
+    q: &Quoting,
+    c: &DexCycle,
+    entries: Vec<Entry>,
+    block: u64,
+) -> GatewayResult<(Vec<Leg>, u64)> {
     let ctx = &q.ctx;
     let (max_stale, _drift, timeout_ms) = verify::limits(ctx)?;
-    let entries = entries(q, c)?;
-    let block = q
-        .heads
-        .latest()
-        .ok_or_else(|| {
-            ctx.err(
-                ErrorCode::StaleData,
-                "нет свежего блока для перечтения цикла",
-            )
-        })?
-        .number;
     let wants: Vec<Want> = entries
         .iter()
         .map(|e| Want {
@@ -101,7 +114,7 @@ pub async fn fresh(q: &Quoting, c: &DexCycle) -> GatewayResult<(Vec<Leg>, u64)> 
 
 /// Записи реестра по хопам цикла, по порядку; цикл замкнут (base → … → base), без нативного BNB.
 /// Ошибки: NoRoute.
-fn entries(q: &Quoting, c: &DexCycle) -> GatewayResult<Vec<Entry>> {
+pub fn entries(q: &Quoting, c: &DexCycle) -> GatewayResult<Vec<Entry>> {
     let ctx = &q.ctx;
     let no = |w: String| ctx.err(ErrorCode::NoRoute, w);
     let (Some(first), Some(last)) = (c.hops.first(), c.hops.last()) else {

@@ -131,6 +131,53 @@
   з) докупка (core/executor.rs, через risk::can_open) в остановленной сети отказывает — как и при общем «Стоп»;
   и) chain_off проверяется на отдельном коротком замке до основного (gate_input): сделка, прошедшая проверку за мгновение
      до «Стоп <сеть>», начнётся — то же окно, что у общего «Стоп».
+- **Решение 438 (20.11.2026, ветка t222/arb-known-accounts) — Arbitrum: условие пулов маршрута (knownAccounts) в
+  eth_sendRawTransactionConditional; ждёт сборки и тестов в GitHub (cargo локально не запускался; формат — вручную по
+  правилам rustfmt).** Решение Тиграна 20.11.2026: до отключения метода (17.01.2027) проигрыш «конкурент изменил пул
+  раньше нас» — бесплатный отказ −32003 вместо отката с газом. Факт Тиграна (свой сервер, 20.11.2026): публичный
+  секвенсор принял условие на слот 0 пула V3, изменённого в последнем блоке, транзакция включена через 2 блока —
+  проверки «старого состояния» (TxPreChecker required-state-age) на секвенсоре нет. BSC — без изменений (условие
+  только при канале sequencer с окном).
+  СДЕЛАНО: exec/pool_cond.rs — вид → слоты / корень / без условия (таблица с источниками в шапке): V2 (uniswap_v2,
+  pancakeswap_v2) — слот 8; Uniswap V3 — 0 и 4; PancakeSwap V3 — 0 и 5; Slipstream — 6 и 16; Kyber Elastic — 3 и 4;
+  LB 2.1 — 4 и 5; Uniswap V4 — S = keccak256(PoolId . 6), S и S+3 у PoolManager; V2/V3-форки и прочие пулы со своим
+  контрактом — корень хранилища (eth_getProof storageHash; nitro-geth internal/ethapi/api.go:385 — та же
+  GetStorageRoot, что в проверке txoptions.go:93); Balancer V2, пары общего контракта (WooFi), Infinity — без условия
+  с причиной. exec/pool_cond_read.rs — значения одной пачкой eth_getStorageAt / eth_getProof на блоке перечтения пулов
+  цикла ОДНОВРЕМЕННО с ним (quote/cycle_legs.rs fresh_at; после разрешения — заново); только при включённом канале
+  sequencer с channel.cond_time_window_s (отдельного выключателя нет: снять окно = снять и условие пулов). Отправка —
+  txs::send_tipped (Terms: время головы + knownAccounts; send/ready.rs, send/sequencer_cond.rs params). Пояснение
+  отказа «Storage slot value / root hash condition not met» — REJECTED_POOLS (send/sequencer_cond.rs explain).
+  Интерфейс: журнал send.pool_cond на каждую отправку (блок плана, время чтения, пулы в условии и без него с причиной),
+  та же строка — в карточке сделки (TradeResult.executor после подписи «свой сборщик: цикл …») и в тексте ошибки после
+  отправки; «Проверить подключение» канала — без изменений (пустые условия). Новых настроек нет.
+  Что ловится и что нет (шапка exec/pool_cond.rs): V3-подобные — каждый обмен (slot0) и mint/burn в текущем диапазоне
+  (liquidity); НЕ ловятся mint/burn вне диапазона (только ticks/tickBitmap — v3-core UniswapV3Pool.sol:328-335),
+  состояние крючка V4, время (LB — затухание комиссии; Curve/Balancer — рампа A), внешние оракулы, налог/пауза токена.
+  Вопросы Тиграну:
+  1) Тики и битмап пути V3/V4/Slipstream в условие не ставятся (только slot0 + liquidity): mint/burn вне диапазона на
+     нашем пути меняет итог без отказа (минимум исполнителя откатит платно). Добавить слова тиков пути (eth_getStorageAt
+     ticks[t] слово 0, tickBitmap[w]; номера тиков — по плану обмена)? Цена — больше слотов и ложные отказы при
+     любом добавлении ликвидности на пути.
+  2) Корень хранилища (форки V2/V3, Algebra Integral, Curve, DODO, Maverick и др.) меняется и от записей, не влияющих на
+     цену (переводы LP-токена, collect, наблюдения) — такой отказ бесплатный, но выгодная сделка теряется. Оставить
+     корень или для этих видов условие не ставить, пока раскладка не сверена?
+  3) Отказ −32003 по условию пулов: перехватчик ищется в окне (блок плана, голова своего узла на момент ответа] (ревью
+     437, п. 2). Если изменивший пул стоит в том же блоке, который собирал секвенсор (голова + 1), в окно он не попадает —
+     доля чаевых не меняется, только журнал send.tip_loss. Так оставить?
+  Нужны записи (тестов нет — записей нет):
+  - сверка раскладок развёртываний Arbitrum: на одном блоке N для 2–3 пулов каждого вида — eth_getStorageAt(слоты
+    выше) и геттеры (getReserves, slot0, liquidity, StateView getSlot0/getLiquidity, LB getActiveId/getReserves,
+    Kyber getPoolState/getLiquidityState, Slipstream slot0/liquidity) — Uniswap V2, PancakeSwap V2/V3, Sushi V2/V3,
+    Slipstream, Kyber Elastic, LB 2.1, Uniswap V4 PoolManager; Balancer V2 Vault — слоты по AST
+    (/home/claude/src-ext/reports/arb-known-accounts.md, 3.1) против getPoolTokens (до сверки — без условия);
+  - eth_getProof(пул, [], N) своего узла Nitro (поле storageHash) — тест разбора exec/pool_cond_row.rs root;
+  - ответ секвенсора на условную отправку с неверным значением слота (−32003 «Storage slot value condition not met») —
+    тест send/sequencer_cond.rs explain (REJECTED_POOLS); запись Тиграна 20.11.2026 (принятая транзакция) — тоже в
+    tests/data;
+  - время пачки eth_getStorageAt / eth_getProof от сервера бота до узла Arbitrum (в журнале send.pool_cond — read_ms).
+  Не подтверждено: лимит числа адресов/слотов условия на публичном эндпоинте (в коде nitro лимита нет — только 5 МБ
+  тела HTTP, nitro-geth rpc/http.go:36).
 - **Решение 437 (ревью, правки) (20.11.2026, ветка t222/arb-known-accounts)** — по независимому ревью t221; cargo не
   запускался. СДЕЛАНО: 1) send/track_l1.rs — «выброшена» только при свежей голове своего узла (не старше
   feed.stale_after_ms, SendCfg.stale) и времени её блока ≥ начало слежения + send.drop_wait_ms (caught_up); иначе

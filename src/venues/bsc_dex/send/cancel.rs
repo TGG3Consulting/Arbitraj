@@ -55,6 +55,7 @@ pub async fn send(w: &Watch, price: TxPrice, head: u64) -> GatewayResult<B256> {
     )?;
     let max_block = head + w.cfg.bundle_max;
     // Решение 436: отмена — без условия секвенсора (её дело занять nonce; время головы не нужно).
-    super::dispatch(ctx, &w.stats, &w.ready, &signed.raw, None, max_block, None).await?;
+    let terms = super::sequencer_cond::Terms::default();
+    super::dispatch(ctx, &w.stats, &w.ready, &signed.raw, None, max_block, terms).await?;
     Ok(signed.hash)
 }

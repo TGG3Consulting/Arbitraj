@@ -26,6 +26,14 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
+  (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
+  +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce
+  на голове H), exec/pool_cond_read.rs 201; gateway/contract.rs 977 и venue.rs 700 (+pool_cond_stat) — давно сверх.
+  Дробить: cycle_exec — сборку и пробу (build, below, probe) в cycle_exec_probe.rs; ready.rs — тело запроса (body) в
+  ready_body.rs; txs.rs — send_tipped/send_capped в txs_tipped.rs; send/mod.rs — classify в send/classify.rs; track_l1 —
+  Start/block_secs/caught_up в track_l1_head.rs. Тестов на записях для решений 436–439 нет — нет записей (docs/TASKS.md,
+  «Решение 438», «Решение 439»).
 - Решение 437 (3) (`wc -l`): сверх ориентира 200 и до решения — venues/bsc_dex/exec/txs.rs 268 (было 254; send_tipped), venues/bsc_dex/venue.rs 686 (было 676; tip_share / reset_tip_share), gateway/contract.rs 953 (было 932). Разбор проигрыша (exec/tip_judge.rs) и выбор чаевых (exec/tip_pick.rs) без тестов — нет записей блоков Arbitrum с откатом нашей транзакции и перехватчиком (TASKS, «Решение 437»).
 - Решение 437 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/send/ready.rs 231 (было 212; send/settle.rs 224 (было 216) — «выброшена» без отмены; настройки секвенсора вынесены в send/seq_opts.rs, остаток — разбор channel.* и тело запроса: вынести body() в send/ready_body.rs). SendCfg::read у сети eip1559_l1 по-прежнему требует send.max_wait_blocks / send.cancel_* / send.bundle_max_blocks, которые трекер этой сети не использует (send/track_l1.rs) — вопрос 1 «Решение 437» в TASKS.
 - Решение 436 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/send/ready.rs 212 (было 175; минимум газа и окно условия — можно вынести min_gas в отдельный файл), send/mod.rs 297 (293), exec/txs.rs 252 (246), settings/catalog/dex.rs 215 (214). Тестов на arb_min_gas.rs и sequencer_cond.rs нет — нет записей своего узла Arbitrum (getMinimumGasPrice) и ответа секвенсора (eth_sendRawTransactionConditional) — docs/TASKS.md, «Решение 436». Условная отправка зависит от метода, который Offchain Labs отключает на секвенсоре Arbitrum One 17.01.2027.

@@ -11,8 +11,11 @@
 //! slot value / root hash condition not met» (txoptions.go:92-104), транзакция в блок не попадает, газ не платится
 //! (nitro arbos/block_processor.go:496, 614-652). Пояснение такого отказа — REJECTED_POOLS. «Проверить подключение» —
 //! по-прежнему с пустыми условиями.
-//! Кто вызывает: send/ready.rs (окно канала, тело запроса, разбор ошибки), exec/txs.rs (head_time до отправки),
-//! exec/pool_cond_read.rs (window), exec/tip_cycle.rs (REJECTED, REJECTED_POOLS).
+//! Ревью 438 (E): knownAccounts уходят только в канал sequencer; выбрано несколько каналов — та же транзакция уходит
+//! и в остальные без условия: журнал send.pool_cond с причиной (warn_multi; на экране — send/pool_cond_mode.rs
+//! multi_note).
+//! Кто вызывает: send/ready.rs (окно канала, тело запроса, разбор ошибки), send/mod.rs (warn_multi), exec/txs.rs (head_time до отправки),
+//! send/pool_cond_mode.rs (window), exec/tip_cycle.rs (REJECTED, REJECTED_POOLS).
 //! От чего зависит: node/heads.rs, node/head_age.rs (время головы), send/ready.rs, ctx.rs.
 //! Настройки: channel.cond_time_window_s [канал sequencer].
 //!
@@ -40,6 +43,7 @@ use serde_json::{Map, Value, json};
 
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::settings::scope::Scope;
+use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
 use super::super::node::head_age;
@@ -152,4 +156,23 @@ pub fn explain(text: &str, mut e: GatewayError) -> GatewayError {
     };
     e.message = format!("{} — {why}", e.message);
     e
+}
+
+/// Ревью 438 (E): условие пулов есть, а каналов несколько — строка журнала send.pool_cond в фоне (отправка не ждёт).
+/// Принимает: окружение, выбранные каналы, условия отправки. Ошибок нет.
+pub fn warn_multi(ctx: &Ctx, ready: &[Ready], terms: Terms<'_>) {
+    if ready.len() < 2 || terms.known.is_none_or(Map::is_empty) {
+        return;
+    }
+    let names: Vec<&str> = ready.iter().map(|r| r.ch.title).collect();
+    let msg = format!(
+        "условие пулов действует только при единственном канале sequencer: транзакция ушла \
+         в {} каналов ({}) — в остальные без условия",
+        ready.len(),
+        names.join(", ")
+    );
+    let ctx = ctx.clone();
+    tokio::spawn(async move {
+        ctx.log(Level::Warn, "send.pool_cond", msg, None).await;
+    });
 }

@@ -76,6 +76,7 @@
     Сделки считаются по режиму в действии на момент отправки (pools — только при канале sequencer с окном channel.cond_time_window_s).
     {st.since ? `Отсчёт с ${st.since}.` : ''}
   </p>
+  {#if st.channels_note}<p class="err">{st.channels_note}</p>{/if}
   <table>
     <thead>
       <tr>

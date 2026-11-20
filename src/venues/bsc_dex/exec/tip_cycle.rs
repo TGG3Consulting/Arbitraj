@@ -17,7 +17,7 @@
 //!
 //! Режим fixed, сеть legacy (BSC), бандл — без изменений (choose возвращает Bill как есть, after ничего не делает).
 //! Кто вызывает: exec/cycle_exec.rs.
-//! От чего зависит: exec/{cycle_gas, tip_pick, tip_state, tip_judge, txs}.rs, send/{tip_mode, sequencer_cond, mod}.rs,
+//! От чего зависит: exec/{cycle_gas, tip_pick, tip_state, tip_judge, txs, pool_cond_topics}.rs, send/{tip_mode, sequencer_cond, mod}.rs,
 //! quote/cycle_cost.rs (Rates), num.rs, ctx.rs.
 //! Настройки: send.tip_mode и настройки profit_share (send/tip_mode.rs), dex_dex.min_profit_usd [площадка DEX];
 //! минимум каналов — send::planned_floor (channel.*).
@@ -36,6 +36,7 @@ use super::super::quote::route_calc::Leg;
 use super::super::send::tip_mode::{self, ShareCfg, TipMode};
 use super::super::send::{self, sequencer_cond};
 use super::cycle_gas::Bill;
+use super::pool_cond_topics;
 use super::tip_judge::{self, Probe};
 use super::tip_state;
 use super::txs::{Done, Env};
@@ -47,6 +48,8 @@ pub struct TipPlan {
     /// Чаевые, wei за газ.
     pub tip: u128,
     pub pools: Vec<PoolRef>,
+    /// Ревью 438 (D): topic0 событий, пишущих слоты условия, по пулам (как pools; None — любое событие).
+    pub topics: Vec<Option<Vec<B256>>>,
 }
 
 /// Чаевые сделки цикла. Принимает: котировку, газ транзакции (цена по режиму), (выход, вход) в базовой, курсы, ноги.
@@ -86,6 +89,7 @@ pub async fn choose(
         cfg,
         tip,
         pools: legs.iter().map(|l| l.entry.pool.reference.clone()).collect(),
+        topics: legs.iter().map(|l| pool_cond_topics::topics(&l.entry)).collect(),
     };
     Ok((bill.with_tip(tip), Some(plan)))
 }
@@ -107,6 +111,7 @@ pub fn after(
         index,
         tip: plan.tip,
         pools: plan.pools.clone(),
+        topics: plan.topics.clone(),
     };
     let probe = match res {
         Ok(d) if d.chain.outcome == TxOutcome::Included => None,

@@ -6,7 +6,7 @@
 //! бесплатный отказ −32003 по условию пулов (send/sequencer_cond.rs REJECTED_POOLS); отказ −32003 по окну времени
 //! (REJECTED без пулов); прочие итоги (сбой отправки, «не включена», «исход неизвестен») — только в отправках.
 //!
-//! Режим на момент отправки — режим в действии: pools — условие пулов прочитано для этой сделки (exec/pool_cond_read.rs
+//! Режим на момент отправки — режим в действии: pools — условие пулов прочитано для этой сделки (send/pool_cond_mode.rs
 //! wanted: send.pool_cond_mode = pools и включённый канал sequencer с окном); иначе off (в том числе настройка не задана
 //! или окна нет). Подсчёт и запись — в фоновой задаче после итога (сделка не ждёт); журнал send.pool_cond_stat на
 //! каждый итог (без Telegram). Только у dex.gas_mode = eip1559_l1: у BSC статистики нет, поведение не меняется
@@ -139,8 +139,8 @@ fn outcome_text(out: Outcome) -> String {
 /// Счётчики одной строкой. Ошибок нет.
 fn counts_text(c: &PoolCondCounts) -> String {
     format!(
-        "отправок {}, побед {}, откатов {} (газ {}, не учтён у {}), отказов по условию пулов {}, по окну \
-         времени {}",
+        "отправок {}, побед {}, откатов {} (газ {}, не учтён у {}), отказов по условию \
+         пулов {}, по окну времени {}",
         c.sends,
         c.wins,
         c.reverts,
@@ -159,6 +159,7 @@ pub async fn view(ctx: &Ctx) -> GatewayResult<PoolCondStat> {
     st.venue = ctx.place.id.to_string();
     st.mode = ctx.text("send.pool_cond_mode").ok();
     st.note = pool_cond_mode::read(ctx).err().map(|e| e.message);
+    st.channels_note = pool_cond_mode::multi_note(ctx);
     Ok(st)
 }
 

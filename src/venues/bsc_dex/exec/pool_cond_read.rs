@@ -8,14 +8,16 @@
 //! отправкой нет; время чтения — в журнал сделки (send.pool_cond).
 //! Читается, только если send.pool_cond_mode = pools (решение 439; не задана или off — условия пулов нет, значения
 //! пулов не читаются вовсе, лишних запросов к узлу нет; условная отправка — только с окном времени, решение 436) и у
-//! площадки есть включённый канал sequencer с окном channel.cond_time_window_s (wanted): нет окна — нет условной
-//! отправки, нет и условий пулов (снять после 17.01.2027 = снять окно). Пул без подтверждённых слотов, сбой или срок
-//! чтения — сделка идёт без условия на этот пул, причина в строке.
+//! площадки есть включённый канал sequencer с окном channel.cond_time_window_s (send/pool_cond_mode.rs wanted, ревью
+//! 438 (F) — и только при dex.gas_mode = eip1559_l1): нет окна — нет условной отправки, нет и условий пулов (снять
+//! после 17.01.2027 = снять окно). Пул без подтверждённых слотов, сбой или срок чтения — сделка идёт без условия на этот
+//! пул, причина в строке. Ревью 438 (C): прочитанные слова сверяются с перечитанным состоянием пула
+//! (exec/pool_cond_check.rs) — расхождение: корень хранилища или без условия.
 //! Кто вызывает: exec/cycle_trade.rs, exec/cycle_exec.rs (перечтение после разрешения).
-//! От чего зависит: exec/{pool_cond, pool_cond_row}.rs, quote/{cycle_legs, verify}.rs, node/{rpc, call}.rs, send/{channels,
-//! sequencer_cond, pool_cond_mode}.rs, ctx.rs.
-//! Настройки: send.pool_cond_mode, verify.timeout_ms (срок чтения — тот же, что у перечтения пулов) [площадка DEX];
-//! channel.enabled, channel.cond_time_window_s [канал sequencer].
+//! От чего зависит: exec/{pool_cond, pool_cond_row, pool_cond_check}.rs, quote/{cycle_legs, verify}.rs, node/{rpc,
+//! call}.rs, ctx.rs.
+//! Настройки: verify.timeout_ms (срок чтения — тот же, что у перечтения пулов) [площадка DEX]; режим и каналы —
+//! send/pool_cond_mode.rs wanted (вызывающий).
 //!
 //! Методы (nitro-geth 260bc5dcbd5a16925d7e26145577b2612f30f428): eth_getStorageAt — internal/ethapi/api.go:603-619
 //! (state.GetState — та же функция, что проверка слота, arbitrum_types/txoptions.go:100); eth_getProof —
@@ -28,9 +30,8 @@ use std::time::{Duration, Instant};
 use alloy_primitives::{Address, B256};
 use serde_json::{Map, Value, json};
 
-use crate::core::types::DexCycle;
+use crate::core::types::{DexCycle, PoolRef};
 use crate::gateway::errors::GatewayResult;
-use crate::settings::scope::Scope;
 
 use super::super::ctx::Ctx;
 use super::super::node::call::block_tag;
@@ -38,27 +39,9 @@ use super::super::node::rpc;
 use super::super::pools::registry::Entry;
 use super::super::quote::route_calc::Leg;
 use super::super::quote::{Quoting, cycle_legs, verify};
-use super::super::send::channel::Single;
-use super::super::send::pool_cond_mode::{self, PoolCondMode};
-use super::super::send::{channels, sequencer_cond};
 use super::pool_cond::{self, How};
+use super::pool_cond_check;
 use super::pool_cond_row::{PoolConds, Row, failed, root, word};
-
-/// Условие пулов нужно: send.pool_cond_mode = pools (решение 439; не задана, off или не разобрана — нет) и у площадки
-/// есть включённый канал sequencer с окном channel.cond_time_window_s. Ошибок нет (настройка не читается — канал не в
-/// счёт).
-pub fn wanted(ctx: &Ctx) -> bool {
-    if !matches!(pool_cond_mode::read(ctx), Ok(PoolCondMode::Pools)) {
-        return false;
-    }
-    channels::of(ctx)
-        .filter(|c| c.single == Some(Single::Sequencer))
-        .any(|c| {
-            let s = Scope::Channel(c.id.to_string());
-            ctx.settings.flag_in("channel.enabled", &s).unwrap_or(false)
-                && matches!(sequencer_cond::window(ctx, &s), Ok(Some(_)))
-        })
-}
 
 /// Ноги цикла на свежем состоянии и (если want) условие пулов на том же блоке — одновременно.
 /// Принимает: котировку, цикл, нужно ли условие (wanted). Возвращает: ноги, блок, условие (None — не нужно).
@@ -80,14 +63,17 @@ pub async fn fresh(
         .iter()
         .map(|e| (label(e), pool_cond::rule(e)))
         .collect();
+    let refs: Vec<PoolRef> = entries.iter().map(|e| e.pool.reference.clone()).collect();
     let lim = Duration::from_millis(timeout_ms);
     let reading = tokio::time::timeout(lim, read(ctx, &rules, block));
     let (legs, conds) = tokio::join!(cycle_legs::fresh_at(q, c, entries, block), reading);
     let (legs, block) = legs?;
-    let conds = conds.unwrap_or_else(|_| {
+    let mut conds = conds.unwrap_or_else(|_| {
         let why = format!("чтение условия не уложилось в verify.timeout_ms ({timeout_ms} мс)");
         failed(block, &rules, &why, timeout_ms.into())
     });
+    // Ревью 438 (C): самопроверка слотов по перечитанному состоянию на том же блоке.
+    pool_cond_check::apply(ctx, (&rules, &refs), &legs, &mut conds, lim).await;
     Ok((legs, block, Some(conds)))
 }
 
@@ -185,9 +171,11 @@ async fn read(ctx: &Ctx, rules: &[(String, How)], block: u64) -> PoolConds {
                     Err(format!("значение не прочитано: {}", bad[a]))
                 }
                 How::Slots(_, _, what) => Ok((*what).to_string()),
-                How::Root(a) if matches!(want.get(a), Some(Some(_))) => {
-                    Ok("слоты того же контракта (другой шаг маршрута)".to_string())
-                }
+                How::Root(a) if matches!(want.get(a), Some(Some(_))) => Ok(format!(
+                    "корень не ставится — у адреса одно из двух (txoptions.go:92-104); в условии \
+                     только слоты другого шага того же контракта: {}",
+                    slots_of(rules, *a)
+                )),
                 How::Root(_) => Ok("корень хранилища (eth_getProof storageHash)".to_string()),
             },
         })
@@ -198,4 +186,16 @@ async fn read(ctx: &Ctx, rules: &[(String, How)], block: u64) -> PoolConds {
         rows,
         read_ms: started.elapsed().as_millis(),
     }
+}
+
+/// Ревью 438 (G): что за слоты поставлены у адреса (подписи правил Slots этого адреса). Ошибок нет.
+fn slots_of(rules: &[(String, How)], a: Address) -> String {
+    let what: Vec<&str> = rules
+        .iter()
+        .filter_map(|(_, h)| match h {
+            How::Slots(x, _, w) if *x == a => Some(*w),
+            _ => None,
+        })
+        .collect();
+    what.join("; ")
 }

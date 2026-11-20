@@ -149,6 +149,8 @@ pub async fn dispatch(
     max_block: u64,
     terms: Terms<'_>,
 ) -> GatewayResult<Dispatched> {
+    // Ревью 438 (E): условие пулов при нескольких каналах — журнал с причиной.
+    sequencer_cond::warn_multi(ctx, ready, terms);
     let jobs = ready.iter().map(|r| {
         let mut txs = vec![tx.clone()];
         if let (SendMethod::Bundle, Some(t)) = (r.method, tip_tx) {

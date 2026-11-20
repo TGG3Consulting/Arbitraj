@@ -7,13 +7,22 @@
 //! Не задана — условия пулов нет, как `off` (стартовых значений нет: не задана — функция не работает). Решение
 //! Тиграна 20.11.2026: старт с `off`, по статистике (exec/pool_cond_stat.rs) решить, включать ли `pools`. Значение не
 //! из списка — NotConfigured с причиной: вызывающий условие пулов не ставит, причина — на экране статистики.
-//! Кто вызывает: exec/pool_cond_read.rs (wanted), exec/pool_cond_stat.rs (view — показ режима).
-//! От чего зависит: ctx.rs; варианты — settings/catalog/send.rs POOL_COND_MODES (тест сверяет).
-//! Настройки: send.pool_cond_mode [площадка DEX].
+//! wanted — условие пулов нужно этой сделке: режим pools, dex.gas_mode = eip1559_l1 (ревью 438 (F)) и включённый канал
+//! sequencer с окном channel.cond_time_window_s.
+//! Ревью 438 (E): multi_note — режим pools при нескольких включённых каналах (на экране статистики).
+//! Кто вызывает: exec/cycle_trade.rs (wanted), exec/pool_cond_stat.rs (view — показ режима, multi_note).
+//! От чего зависит: send/{channels, channel, gas_mode, sequencer_cond}.rs, ctx.rs; варианты — settings/catalog/send.rs
+//! POOL_COND_MODES (тест сверяет).
+//! Настройки: send.pool_cond_mode, dex.gas_mode [площадка DEX]; channel.enabled, channel.cond_time_window_s [канал
+//! sequencer].
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::settings::scope::Scope;
 
 use super::super::ctx::Ctx;
+use super::channel::Single;
+use super::gas_mode::{self, GasMode};
+use super::{channels, sequencer_cond};
 
 /// Режим условия пулов.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +59,49 @@ pub fn read(ctx: &Ctx) -> GatewayResult<PoolCondMode> {
             Err(ctx.not_set("send.pool_cond_mode", why))
         }
     }
+}
+
+/// Условие пулов нужно: send.pool_cond_mode = pools (решение 439; не задана, off или не разобрана — нет),
+/// dex.gas_mode = eip1559_l1 (ревью 438 (F)) и у площадки есть включённый канал sequencer с окном
+/// channel.cond_time_window_s. Ошибок нет (настройка не читается — нет).
+pub fn wanted(ctx: &Ctx) -> bool {
+    if !matches!(read(ctx), Ok(PoolCondMode::Pools))
+        || !matches!(gas_mode::read(ctx), Ok(GasMode::Eip1559L1))
+    {
+        return false;
+    }
+    channels::of(ctx)
+        .filter(|c| c.single == Some(Single::Sequencer))
+        .any(|c| {
+            let s = Scope::Channel(c.id.to_string());
+            ctx.settings.flag_in("channel.enabled", &s).unwrap_or(false)
+                && matches!(sequencer_cond::window(ctx, &s), Ok(Some(_)))
+        })
+}
+
+/// Ревью 438 (E): режим pools, а включённых каналов площадки больше одного — knownAccounts уйдут только в канал
+/// sequencer, в остальные та же транзакция уйдёт без условия. Принимает: окружение. Возвращает: причина для экрана
+/// (блок статистики) или None. Ошибок нет.
+pub fn multi_note(ctx: &Ctx) -> Option<String> {
+    if !matches!(read(ctx), Ok(PoolCondMode::Pools)) {
+        return None;
+    }
+    let on: Vec<&str> = channels::of(ctx)
+        .filter(|c| {
+            let s = Scope::Channel(c.id.to_string());
+            ctx.settings.flag_in("channel.enabled", &s).unwrap_or(false)
+        })
+        .map(|c| c.title)
+        .collect();
+    if on.len() < 2 {
+        return None;
+    }
+    Some(format!(
+        "условие пулов действует только при единственном канале sequencer: включено {} \
+         каналов ({}) — при отправке в несколько каналов транзакция уходит в остальные без условия",
+        on.len(),
+        on.join(", ")
+    ))
 }
 
 #[cfg(test)]

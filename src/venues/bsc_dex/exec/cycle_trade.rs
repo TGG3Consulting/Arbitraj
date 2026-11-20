@@ -6,10 +6,12 @@
 //! ожидаемый выход не ниже границы → курсы (USDT за базовую и за BNB) → форма (exec/cycle_gate.rs): исполнитель
 //! ArbExecutor (exec/cycle_exec.rs) или бандл свопов (exec/cycle_bundle_trade.rs) → итог подписывается исполнителем
 //! (решение 121 B7: «свой сборщик: цикл …»). Отправка — ОДИН раз, без повторов (стартовое правило Тиграна).
-//! Решение 438: при канале sequencer с окном (exec/pool_cond_read.rs wanted) на том же блоке перечтения читается
-//! условие пулов маршрута (knownAccounts) — его берёт исполнитель; пометка условия остаётся в executor после подписи.
+//! Решение 438: при канале sequencer с окном (send/pool_cond_mode.rs wanted; решение 439 — только режим pools) на том
+//! же блоке перечтения читается условие пулов маршрута (knownAccounts) — его берёт исполнитель; пометка условия
+//! остаётся в executor после подписи.
 //! Кто вызывает: venue.rs (dex_cycle_trade).
-//! От чего зависит: exec/{cycle_gate, cycle_exec, cycle_bundle_trade, cycle_steps, pool_cond_read, result}.rs, quote/{cycle_legs,
+//! От чего зависит: exec/{cycle_gate, cycle_exec, cycle_bundle_trade, cycle_steps, pool_cond_read, result}.rs,
+//! send/pool_cond_mode.rs, quote/{cycle_legs,
 //! cycle_cost, cycle}.rs, wallet/{nonce, balances, signer}.rs.
 //! Настройки: dex_dex.execute; через вызываемые — verify.*, exec.executor_address, dex_dex.min_profit_usd, send.*.
 
@@ -17,6 +19,7 @@ use crate::core::types::{CycleTradeRequest, CycleTradeResult};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::quote::{Quoting, cycle, cycle_cost};
+use super::super::send::pool_cond_mode;
 use super::super::wallet::nonce::Nonces;
 use super::super::wallet::{balances, signer};
 use super::cycle_gate::{self, Form};
@@ -47,7 +50,7 @@ pub async fn trade(
         );
         return Err(ctx.err(ErrorCode::Internal, why));
     }
-    let want = pool_cond_read::wanted(ctx);
+    let want = pool_cond_mode::wanted(ctx);
     let (mut legs, _block, conds) = pool_cond_read::fresh(q, &req.cycle, want).await?;
     // Решение «335 (лесенка влияния)», ревью Н4/Б1: сумма цикла вне измеренной лесенки крючка — не отказ, а оценка
     // (quote/hook_curve.rs open). Отдельной пробы квотером нет: перед отправкой весь цикл исполняется пробой

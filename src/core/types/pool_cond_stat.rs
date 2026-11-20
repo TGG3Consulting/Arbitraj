@@ -40,6 +40,8 @@ pub struct PoolCondStat {
     /// send.pool_cond_mode сейчас: off / pools (не задана — off); причина, если значение не разобрано.
     pub mode: Option<String>,
     pub note: Option<String>,
+    /// Ревью 438 (E): режим pools при нескольких включённых каналах — условие уйдёт только в канал sequencer.
+    pub channels_note: Option<String>,
     /// Режим off (и настройка не задана) на момент отправки.
     pub off: PoolCondCounts,
     /// Режим pools на момент отправки.

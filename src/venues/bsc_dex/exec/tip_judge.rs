@@ -14,6 +14,8 @@
 //! только журнал (вызывающий, exec/tip_cycle.rs).
 //! Причину отката квитанция не даёт (minOut или deadline — contracts/ArbExecutor.sol:154,165; debug_* у узла закрыт),
 //! поэтому разбирается любой откат транзакции цикла (docs/TASKS.md, «Решение 437»).
+//! Ревью 438 (D): «изменил пул» — лог события, пишущего слоты условия этого пула (topic0 — exec/pool_cond_topics.rs);
+//! у пулов с корнем хранилища или без условия — любой лог пула.
 //! Пул V4 (Singleton) — лог менеджера с topics[1] = PoolId (события менеджера с bytes32 indexed id первым —
 //! pools/abi_v4.rs:25-47, сверка PoolId с topics[1] — pools/discover_v4.rs); пара общего контракта — любой лог
 //! контракта.
@@ -51,6 +53,9 @@ pub struct Probe {
     pub tip: u128,
     /// Пулы маршрута.
     pub pools: Vec<PoolRef>,
+    /// Ревью 438 (D): по пулам (как pools) topic0 событий, пишущих слоты условия (exec/pool_cond_topics.rs); None —
+    /// любое событие пула.
+    pub topics: Vec<Option<Vec<B256>>>,
 }
 
 /// Лог eth_getLogs: только нужные поля.
@@ -128,19 +133,26 @@ async fn rivals(ctx: &Ctx, p: &Probe) -> GatewayResult<Vec<(u64, B256)>> {
         };
         let (b, i) = (b.to::<u64>(), i.to::<u64>());
         let before = p.index.is_none_or(|ours| i < ours);
-        if h != p.ours && before && touches(&l, &p.pools) && !found.iter().any(|f| f.2 == h) {
+        if h != p.ours && before && touches(&l, p) && !found.iter().any(|f| f.2 == h) {
             found.push((b, i, h));
         }
     }
     found.sort_by_key(|f| (f.0, f.1));
     Ok(found.into_iter().map(|(b, _, h)| (b, h)).collect())
 }
-/// Лог относится к пулу маршрута: V4 — менеджер и topics[1] = PoolId; прочие — адрес контракта. Ошибок нет.
-fn touches(l: &RawLog, pools: &[PoolRef]) -> bool {
-    pools.iter().any(|r| match r {
-        PoolRef::Singleton { manager, id } => {
-            l.address == *manager && l.topics.get(1) == Some(id)
-        }
-        other => l.address == other.address(),
+/// Лог относится к пулу маршрута: V4 — менеджер и topics[1] = PoolId; прочие — адрес контракта; ревью 438 (D) — и
+/// topic0 из событий, пишущих слоты условия этого пула (None — любое). Ошибок нет.
+fn touches(l: &RawLog, p: &Probe) -> bool {
+    p.pools.iter().zip(&p.topics).any(|(r, t)| {
+        let at = match r {
+            PoolRef::Singleton { manager, id } => {
+                l.address == *manager && l.topics.get(1) == Some(id)
+            }
+            other => l.address == other.address(),
+        };
+        let kind = t
+            .as_ref()
+            .is_none_or(|t| l.topics.first().is_some_and(|t0| t.contains(t0)));
+        at && kind
     })
 }

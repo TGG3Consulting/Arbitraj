@@ -2,11 +2,11 @@
 //! Что делает: решение 438 — что ставить в условие knownAccounts (eth_sendRawTransactionConditional, секвенсор
 //! Arbitrum) по каждому пулу маршрута цикла DEX ↔ DEX: слоты хранилища (Slots), корень хранилища контракта пула (Root)
 //! или без условия с причиной (Off). Значения читает exec/pool_cond_read.rs на блоке плана.
-//! Решение 439: условие пулов ставится только при send.pool_cond_mode = pools (exec/pool_cond_read.rs wanted); не
+//! Решение 439: условие пулов ставится только при send.pool_cond_mode = pools (send/pool_cond_mode.rs wanted); не
 //! задана или off — правила не применяются, значения пулов не читаются, условная отправка — только с окном времени.
 //! Кто вызывает: exec/pool_cond_read.rs.
 //! От чего зависит: pools/{registry, families}.rs (вид, ссылка на пул), core/types (PoolRef).
-//! Настройки: нет (режим send.pool_cond_mode читает exec/pool_cond_read.rs).
+//! Настройки: нет (режим send.pool_cond_mode читает send/pool_cond_mode.rs wanted).
 //!
 //! Как узел сверяет условие (nitro-geth 260bc5dcbd5a16925d7e26145577b2612f30f428 arbitrum_types/txoptions.go:79-107):
 //! у адреса — либо корень хранилища statedb.GetStorageRoot (:92-97), либо каждый слот statedb.GetState целым словом

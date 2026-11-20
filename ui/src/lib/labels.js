@@ -76,6 +76,7 @@ const CHOICE = {
   smardex: 'SmarDex (фиктивные резервы, средняя цена по времени блока)',
   fluid_t1: 'Fluid DEX T1 (смарт-залог и смарт-долг, мнимые резервы)',
   basin_well: 'Basin (скважины Beanstalk: ConstantProduct2 / Stable2, без комиссии; решение 485)',
+  shell_proteus: 'Shell Protocol Proteus (кусочная гипербола, учёт Ocean)',
   lb_v21: 'Liquidity Book V2.1 (LFJ / Trader Joe: бины, изменчивая комиссия)',
   lb_v20: 'Liquidity Book v2.0 (LFJ V2 / Trader Joe V2: бины, изменчивая комиссия; решение 445)',
   lb_v22: 'Liquidity Book V2.2 (LFJ: бины, изменчивая комиссия, крючки пула)',
@@ -138,6 +139,7 @@ const POOL_KIND = {
   VaultPool: 'Пул в хранилище (Balancer V2)',
   SmartColDebt: 'Смарт-залог и смарт-долг (Fluid DEX T1)',
   BasinWell: 'Скважина Basin (функция скважины ConstantProduct2 / Stable2)',
+  Proteus: 'Кусочная гипербола за учётом Ocean (Shell Protocol Proteus)',
   Crypto: 'Crypto-пул Curve (Twocrypto / Tricrypto)',
 };
 const METHOD = { Single: 'одиночная', Bundle: 'бандл' };

@@ -189,6 +189,8 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
                 IBasinAquifer::BoreWell::SIGNATURE_HASH,
                 false,
             ),
+            // Shell Protocol Proteus (решение 486): фабрики с событием нет — пулы из списка dex.stable_pools (stable_list.rs).
+            Proto::ShellProteus => continue,
             // Liquidity Book v2.0 (решение 445): LBPairCreated фабрики v2.0 (ILBFactory.sol v2.0.0 L26-L32) — подписка не
             // подключена (как у v2.1, техдолг docs/ROADMAP.md): новые пулы — из справочника индексатора.
             Proto::LbV20 => continue,

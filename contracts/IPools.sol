@@ -411,3 +411,28 @@ interface IWombatPool {
         uint256 deadline
     ) external returns (uint256 actualToAmount, uint256 haircut);
 }
+// Решение 486: учётный контракт Shell Protocol (Ocean) — Shell-Protocol/Shell-Protocol@aaa0ccf src/ocean/Interactions.sol
+// (struct Interaction, enum InteractionType: WrapErc20 = 0, UnwrapErc20 = 1, ComputeOutputAmount = 7, UnwrapEther = 8),
+// src/ocean/Ocean.sol L271-L297 (doMultipleInteractions, payable; value — обёртка нативной монеты учёта); Ocean v3
+// Arbitrum (Sourcify 42161 0x96B4f4E401cCD70Ec850C1CF8b405Ad58FD5fB7a, exact_match) — те же подписи (Ocean.sol
+// L190-L201, Interactions.sol). Селектор doMultipleInteractions((bytes32,uint256,uint256,uint256,bytes32)[],uint256[])
+// = 0xd44f70b4.
+interface IShellOcean {
+    struct Interaction {
+        bytes32 interactionTypeAndAddress;
+        uint256 inputToken;
+        uint256 outputToken;
+        uint256 specifiedAmount;
+        bytes32 metadata;
+    }
+
+    function doMultipleInteractions(Interaction[] calldata interactions, uint256[] calldata ids)
+        external
+        payable
+        returns (
+            uint256[] memory burnIds,
+            uint256[] memory burnAmounts,
+            uint256[] memory mintIds,
+            uint256[] memory mintAmounts
+        );
+}

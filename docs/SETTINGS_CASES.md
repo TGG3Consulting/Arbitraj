@@ -2044,6 +2044,30 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** в описании не названы.
 - **Статус:** в релизе 141619bc.
 
+### `dex.proteus_utility_v1`
+
+- **Задача / решение:** T486-01, решение 486.
+- **Появилась:** 2026-11-20, ветка t255/arb-shell.
+- **Кейс:** DECISIONS 486 (2026-11-20): «Shell Protocol — реализация формулы пула — внешний контракт за прокси (implementation(), владелец может сменить); развёрнутые реализации различаются формулой полезности (_getUtility) и BASE_FEE; считать можно только реализацию, исходник которой сверен» — железобетонное правило «все DEX сети».
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (DEX вида shell_proteus); каталог src/settings/catalog/dex_shell.rs.
+- **Что ставить:** у DEX пулов Ocean Shell v2 (dex.vault = 0xC32eB36f886F638fffD836DF44C124074cFe3584): `0x537e2d22cc140c15ec03e99be399223750de7737`, `0xd5a7edb913eae552e341b3ba0704cb2f6971bf7b`, `0xb827ce2b24518eaa13663aff541632c8cb3e8c71` — исходник Sourcify 42161 = Shell-Protocol/Shell-Protocol bfbba01 Proteus.sol (git-блоб 6ad85288; у 0xb827… отличается только BASE_FEE 8000). У DEX Ocean v3 — пусто.
+- **Если не задана:** пулы с реализацией формулы V1 не считаются: проверка и чтение пула — отказ с причиной «реализация не в списках dex.proteus_utility_v1 / _v2» (pools/shell_sides.rs).
+- **Влияет на торговлю:** да — какие пулы Shell считаются и торгуются.
+- **Связанные ключи:** dex.proteus_utility_v2, dex.vault, dex.stable_pools, dex.kind.
+- **Статус:** ещё не в релизе (ветка t255/arb-shell).
+
+### `dex.proteus_utility_v2`
+
+- **Задача / решение:** T486-01, решение 486.
+- **Появилась:** 2026-11-20, ветка t255/arb-shell.
+- **Кейс:** DECISIONS 486 (2026-11-20): то же, формула V2 — квадратное уравнение k(ab − 1)u² + (ay + bx)u + xy/k = 0 в масштабе 1e18 (при a < 0 и b < 0 — меньший корень).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (DEX вида shell_proteus); каталог src/settings/catalog/dex_shell.rs.
+- **Что ставить:** у DEX Ocean Shell v2: `0x243e83365063baa4feda9d71c872dbabe035280b` (ARB+ETH), `0xa70615e0aa71f83253d37d19282e6bac7f42ce07` (TOUCOIN+ETH), `0xcd27114b23a7b913bc778994ae2996897a6d950b` (MAGIC+ETH), `0xdfd421298f09555e32611ac00d1dd3b22a583ebf` (Smolpool), `0x0365d47adfbacc8050dc5a39f18687ba41d092b6` (REUNI+ETH), `0x9b41d5991b20e2f5eb3dbae6d4c4f65f54981ccb` (STG+ETH), `0xe55f3d89043154563cec9b283fa57752442bc56a` (WBTC+USD) — Sourcify 42161 Proteus.sol (git-блоб 3eb2c0c1); у DEX Ocean v3 (0x96B4f4E401cCD70Ec850C1CF8b405Ad58FD5fB7a): `0xf6e9c132fa6f5102ed137014a4512bfc7696c92e` (SHELL+ETH, BASE_FEE immutable).
+- **Если не задана:** пулы с реализацией формулы V2 не считаются (отказ с причиной, pools/shell_sides.rs).
+- **Влияет на торговлю:** да — какие пулы Shell считаются и торгуются.
+- **Связанные ключи:** dex.proteus_utility_v1, dex.vault, dex.stable_pools, dex.kind.
+- **Статус:** ещё не в релизе (ветка t255/arb-shell).
+
 ### `dex.pool_lens`
 
 - **Задача / решение:** номер задачи в коммите не указан, решение 122 (Maverick V2).

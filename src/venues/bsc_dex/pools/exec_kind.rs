@@ -121,6 +121,13 @@ pub enum ExecKind {
     /// block.timestamp)` (BeanstalkFarms/Basin@ecf69233 src/Well.sol L207-L217: вход скважина списывает
     /// transferFrom(исполнитель)); data пусто. Шаг 29 — только исполнитель v5 (exec_callback.rs since).
     Basin,
+    /// Решение 486: пул Shell Protocol (Proteus) — обмен через учётный контракт Ocean: `doMultipleInteractions` с
+    /// wrapErc20 (вход; у нативной монеты учёта — обёртка withdraw и value вызова), computeOutputAmount пула и
+    /// unwrapErc20 / unwrapEther (выход; нативная монета — ETH от Ocean → deposit в обёртку) с GET_BALANCE_DELTA
+    /// (contracts/ArbExecutor.sol _shell). data = abi.encode(address primitive, uint8 native, uint8 decimalsIn)
+    /// (primitive — пул LiquidityPoolProxy, цель computeOutputAmount; пул шага — учёт Ocean). Шаг 31 — только
+    /// исполнитель v5 (exec_callback.rs since).
+    Shell,
 }
 
 impl ExecKind {
@@ -155,6 +162,7 @@ impl ExecKind {
             ExecKind::CurveEth => "CURVE_ETH",
             ExecKind::Wombat => "WOMBAT",
             ExecKind::Basin => "BASIN",
+            ExecKind::Shell => "SHELL",
         }
     }
 
@@ -277,6 +285,10 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "wombat" => ExecKind::Wombat,
         // Решение 485: swapFrom скважины без белого списка вызывающих (Well.sol L207-L217: nonReentrant и срок — общие).
         "basin_well" => ExecKind::Basin,
+        // Решение 486: Ocean.doMultipleInteractions — вызывающий = пользователь, без белого списка (Ocean.sol aaa0ccf
+        // L271-L297, v3 Sourcify 0x96B4f4E4… L190-L201); computeOutputAmount пула — только от Ocean (onlyOcean), учёт
+        // передаёт адрес пользователя (LiquidityPool.sol L135). Шаг 31, только исполнитель v5.
+        "shell_proteus" => ExecKind::Shell,
         _ => return None,
     })
 }

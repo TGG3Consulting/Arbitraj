@@ -90,6 +90,8 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::LbBin(_) => e.bins.as_ref().is_some_and(|b| b.reserves.is_empty()),
         // Пул Fluid DEX T1 (решение 440): пауза, части выключены или нулевые мнимые резервы (quote/fluid_depth.rs).
         PoolState::SmartColDebt(d) => super::fluid_depth::empty(d),
+        // Пул Shell Protocol Proteus (решение 486): заморожен или баланс стороны меньше MIN_BALANCE (shell_depth.rs).
+        PoolState::Proteus(d) => super::shell_depth::empty(d),
         // Ekubo (решение 447): ликвидность 0 и в прочитанной карте нет тиков — обмен не даст выхода (как V3, решение 393).
         PoolState::Ekubo(d) => d.liquidity == 0 && d.ticks.is_empty(),
         // Скважина Basin (решение 485): нулевой резерв или нулевое число LP-токенов (quote/basin_depth.rs).

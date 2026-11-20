@@ -98,6 +98,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut inf_stable = Vec::new();
     let mut fluid = Vec::new();
     let mut basin = Vec::new();
+    let mut shell = Vec::new();
     let mut ekubo = Vec::new();
     let mut wombat = Vec::new();
     let mut v2v3 = Vec::new();
@@ -138,6 +139,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::InfinityStable => inf_stable.push(i),
             Proto::FluidT1 => fluid.push(i),
             Proto::BasinWell => basin.push(i),
+            Proto::ShellProteus => shell.push(i),
             Proto::Ekubo => ekubo.push(i),
             // Решение 484: Wombat — dex.stable_pools, getTokens пула, реализация прокси (verify_wombat.rs).
             Proto::Wombat => wombat.push(i),
@@ -286,6 +288,11 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     // (verify_basin.rs).
     let list: Vec<Candidate> = basin.iter().map(|i| cands[*i].clone()).collect();
     for (i, r) in basin.into_iter().zip(verify_basin::verify(ctx, &list, size).await) {
+        out[i] = Some(r);
+    }
+    // Shell Protocol Proteus (решение 486): список dex.stable_pools, учёт dex.vault, стороны и реализация (verify_shell.rs).
+    let list: Vec<Candidate> = shell.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in shell.into_iter().zip(super::verify_shell::verify(ctx, &list, size).await) {
         out[i] = Some(r);
     }
     // Ekubo (решение 447): ключ у PoolKeyIndex + состояние у ядра (verify_ekubo.rs).

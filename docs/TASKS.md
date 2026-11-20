@@ -843,6 +843,33 @@
   - T483-05 Фабрика старой CL-линии 0xAA2cd7477c451E703f3B9Ba5663334914763edF8 — нет на официальной странице адресов
     Ramses и в найденных официальных репозиториях; основание — DefiLlama «ramses-cl» и Sourcify exact_match прокси →
     RamsesV2Factory. Нужен официальный источник (Тигран) или принять факт цепи (factory() пулов — запись T483-01).
+- **Решение 486 (20.11.2026, ветка t255/arb-shell от origin/feat/arbitrum 2ca8dba2) — Shell Protocol на Arbitrum (вид
+  shell_proteus, Proteus за учётом Ocean); cargo / solc не запускались.** Адреса — docs.shellprotocol.io
+  contract-addresses; исходники — Sourcify 42161 и Shell-Protocol/Shell-Protocol (aaa0ccf, bfbba01); факты — DECISIONS 486.
+  Задачи:
+  - T486-01 Запись своим узлом: `python3 tools/arbitrum_record/shell.py --node http://УЗЕЛ:8547 --pools … --tokens …`
+    (или record_all.py — шаг shell, адреса — record_steps.py), коммит tests/data/arbitrum_shell_<дата>/, снять #[ignore]
+    в tests/arbitrum_shell.rs. Затем завести две DEX (Ocean v3 и Shell v2; id области — Тигран: у GeckoTerminal id Shell
+    не сверен) с dex.kind = shell_proteus, dex.vault, dex.stable_pools, dex.proteus_utility_v1 / _v2 (docs/FIRST_RUN.md)
+    и включить dex.pool_enabled — Тигран. Пулы списка становятся кандидатами только при index.factory_scan = да
+    (источник stable_list.rs, решение 292).
+  - T486-02 Шаг SHELL = 31 — только исходник (нужна сборка исполнителя v5 и EVM-сценарий с официальным кодом Ocean —
+    байткод Ocean есть только в сети/Sourcify, в официальном репозитории развёртываний нет; сценарий не написан).
+  - T486-03 Не покрыто: EvolvingProteus (ETH+USD 0xa2dB…7Ea, реализация 0x618b21dd… — Sourcify exact_match, параметры
+    меняются по времени блока; сторона USD — LP-токен Stablepool), адаптеры Ocean v3 (2CRV Adapter 0x02b4…42e4,
+    wstETH-WETH-BPT Adapter 0xA8Cb…5B4A — Curve2PoolAdapter / BalancerAdapter, Sourcify) — обмен через них — те же пулы
+    Curve 2pool / Balancer, которые бот уже видит напрямую; отдельная ценность — вопрос Тиграну.
+  - T486-04 Пулы, у которых сторона — LP-токен другого пула учёта (Stablepool: LP DAI+USDC / LP USDT+USDC; ETH+USD,
+    WBTC+USD — LP Stablepool): маршрут через deposit/withdraw учёта — отдельная модель; сейчас такие пулы не берутся.
+  - T486-05 Пул wstETH+ETH 0x2EaB95A9… — реализация 0x9019dc9e… на Sourcify не верифицирована (BASE_FEE() = 8000 по
+    чтению 20.11.2026); исходника нет — не считается. В docs у этой строки ссылка эксплорера ведёт на адрес WBTC+USD
+    (0x3402D87D…) — расхождение документации, сообщить Тиграну.
+  - T486-06 Токены сторон TOUCOIN+ETH, REUNI+ETH и Smolpool не опознаны (адресов токенов в docs нет; id стороны — только
+    хеш): пул возьмётся, когда монета подписки / встречный совпадут по keccak256(токен, 0) — без записи адреса.
+  - T486-07 Номер шага 31 выдан координатором (29 — Basin, 30 — Wombat); при слиянии счётчик bnbFrom теста
+    tests/bsc_dex_executor_abi.rs (+2 от SHELL) сложить с другими ветками.
+  - T486-08 exec/dry_fund_holder.rs: держатель токенов Shell — Ocean (dex.vault), ветка не добавлена (честность изъятия
+    у Ocean для пополнения в симуляции не разобрана) — сейчас для Shell держатель = адрес пула (токенов у него нет).
 - **Решение 450 (20.11.2026, ветка t226/arb-dex-code-a) — код T448-01…05; cargo не запускался (формат — вручную).**
   Сделано: dex.sub_dex (несколько семейств под одним id), pancakeswap_v3 (Universal Router PancakeSwap v3), KyberSwap
   Static Fee / Legacy (события создания), dex.balancer_math (библиотеки Balancer v2), поиск iZiSwap по фабрике. Запись

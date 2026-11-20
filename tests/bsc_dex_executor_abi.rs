@@ -8,6 +8,8 @@
 //!   SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), остальные — пусто; селекторы
 //!   обмена новых видов — по официальным подписям; шаг с нативным BNB пула — receive() только от bnbFrom, WBNB
 //!   withdraw/deposit в коде, BNB после маршрута — владельцу (решение «122 X (нативный BNB в стейблсвапах)»);
+//!   решение 486: установок/сбросов bnbFrom в этой ветке 11 = базовые 9 + 2 от шага SHELL (вход в нативной монете
+//!   учёта и выход из Ocean); при слиянии с ветками Basin / Wombat координатор сложит счётчик;
 //! - хеши артефактов совпадают с ArbExecutor.sha256, код в сети — хвост кода создания, слот владельца — из раскладки.
 //! - решение 457: сборка contracts/out/ — v4 (via-IR, solc 0.8.37): SHA-256 кода в сети, размер ≤ 24 576 байт
 //!   (EIP-170), функции и селекторы шагов 22–25 в ABI и коде; селекторы внешних вызовов — exec_callback::has_selector
@@ -161,9 +163,20 @@ fn kinds_match_contract_constants() {
         ("WOMBAT", Params::Wombat),
         // Решение 485: скважина Basin — шаг 29, только v5 (в исходнике; сборки v5 нет).
         ("BASIN", Params::Basin),
+        // Решение 486: пул Shell Protocol Proteus через учёт Ocean — шаг 31, только v5 (сборки v5 нет).
+        ("SHELL", Params::Shell(shell_step(2))),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
+    }
+}
+
+/// Шаг SHELL (решение 486): пул DAI+USDC Shell v2 (docs.shellprotocol.io, contract-addresses), вид нативной монеты.
+fn shell_step(native: u8) -> kind::ShellStep {
+    kind::ShellStep {
+        primitive: address!("0x96C7dC9d473e621a1e3968Cb862803EAEDe21888"),
+        native,
+        dec_in: 6,
     }
 }
 
@@ -208,6 +221,13 @@ fn step_data_layouts() {
     assert_eq!(u32::abi_decode(&v2).unwrap(), 2500);
     let c = Params::Curve { i: 1, j: 0 }.data();
     assert_eq!(<(i128, i128)>::abi_decode_params(&c).unwrap(), (1, 0));
+    // Решение 486: SHELL — abi.encode(address primitive, uint8 native, uint8 decIn): три слова.
+    let sh = Params::Shell(shell_step(1)).data();
+    assert_eq!(sh.len(), 96);
+    assert_eq!(
+        <(Address, U256, U256)>::abi_decode_params(&sh).unwrap(),
+        (shell_step(1).primitive, U256::from(1), U256::from(6))
+    );
     // Решение 472: CURVE_ETH — abi.encode(int128 i, int128 j, bool ethIn): три слова.
     let ce = Params::CurveEth {
         i: 0,
@@ -414,11 +434,14 @@ fn stable_bnb_contract_rules_present() {
     // ждут — слияние t247: по итоговому contracts/ArbExecutor.sol 9 установок и 9 сбросов; шаг WOMBAT = 30, решение 484,
     // нативной монеты не ждёт — по факту исходника после правки установок и сбросов по-прежнему 9). Только строки кода
     // (комментарии тоже содержат «bnbFrom = …»).
+    // ждут — слияние t247: по итоговому contracts/ArbExecutor.sol 9 установок и 9 сбросов; шаг SHELL — две, решение
+    // 486: вход в нативной монете учёта (обёртка) и выход из Ocean — 11). Только строки кода (комментарии тоже
+    // содержат «bnbFrom = …»).
     let code: Vec<&str> =
         src.lines().map(str::trim).filter(|l| l.starts_with("bnbFrom = ")).collect();
     let resets = code.iter().filter(|l| **l == "bnbFrom = address(0);").count();
     let sets = code.len() - resets;
-    assert_eq!(resets, 9);
+    assert_eq!(resets, 11);
     assert_eq!(sets, resets);
     let abi = abi();
     assert_eq!(

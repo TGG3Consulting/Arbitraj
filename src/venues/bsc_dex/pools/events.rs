@@ -2,7 +2,7 @@
 //! Что делает: общий итог применения события пула и выбор разбора по виду пула; topic0 событий для подписки
 //! (все события — глубоким пулам, только добавление ликвидности — мелким).
 //! Кто вызывает: pools/listen_log.rs.
-//! От чего зависит: ramses.rs (решение 483: варианты Ramses), events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, events_ekubo.rs (решение 447), events_wombat.rs (решение 484), families.rs, registry.rs.
+//! От чего зависит: ramses.rs (решение 483: варианты Ramses), events_shell.rs (решение 486), events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, events_ekubo.rs (решение 447), events_wombat.rs (решение 484), families.rs, registry.rs.
 //! Настройки: нет.
 
 use alloy::rpc::types::Log;
@@ -13,7 +13,7 @@ use super::families::{Family, Proto};
 use super::registry::Entry;
 use super::{
     events_algebra, events_algebra_integral, events_balancer, events_balancer_v3, events_basin, events_camelot, events_ekubo, events_lb, events_lb20, events_lb22, events_bin, events_cl, events_crypto, events_curve, events_curve_ng, events_dmm,
-    events_dodo, events_fluid, events_metric, events_elastic, events_izi, events_maverick, events_nomi, events_smardex, events_solidly, events_stable_u,
+    events_dodo, events_fluid, events_shell, events_metric, events_elastic, events_izi, events_maverick, events_nomi, events_smardex, events_solidly, events_stable_u,
     events_v2, events_v3, events_wombat,
 };
 
@@ -65,6 +65,8 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::FluidT1 => events_fluid::topics(),
         // Решение 485: скважина Basin (events_basin.rs).
         Proto::BasinWell => events_basin::topics(),
+        // Shell Protocol Proteus (решение 486): любое событие пула — перечитать (events_shell.rs).
+        Proto::ShellProteus => events_shell::topics(),
         Proto::CamelotV2 => events_camelot::topics(),
         Proto::LbV20 => events_lb20::topics(),
         // Решение 446: LB V2.2 — те же события и HooksParametersSet (events_lb22.rs).
@@ -119,6 +121,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::LbV21 | Proto::LbV22 => events_lb::liquidity_topics(),
         Proto::FluidT1 => events_fluid::liquidity_topics(),
         Proto::BasinWell => events_basin::liquidity_topics(),
+        Proto::ShellProteus => events_shell::liquidity_topics(),
         Proto::CamelotV2 => events_camelot::liquidity_topics(),
         Proto::LbV20 => events_lb20::liquidity_topics(),
         Proto::Ekubo => events_ekubo::liquidity_topics(),
@@ -159,6 +162,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::LbV21 => events_lb::apply(e, log),
         Proto::FluidT1 => events_fluid::apply(e, log),
         Proto::BasinWell => events_basin::apply(e, log),
+        Proto::ShellProteus => events_shell::apply(e, log),
         Proto::CamelotV2 => events_camelot::apply(e, log),
         Proto::LbV20 => events_lb20::apply(e, log),
         Proto::LbV22 => events_lb22::apply(e, log),

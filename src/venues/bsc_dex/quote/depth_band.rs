@@ -507,6 +507,9 @@ fn side(
         (PoolState::BasinWell(d), PoolKind::BasinWell) => {
             super::basin_depth::side(d, token_in, b, buy)
         }
+        // Пул Shell Protocol Proteus (решение 486): средняя цена исполнения формулой пула в полосе, с комиссией
+        // округлением (quote/shell_depth.rs).
+        (PoolState::Proteus(d), PoolKind::Proteus) => super::shell_depth::side(d, token_in, b, buy),
         // Ekubo (решение 447): обмен без комиссии до границы полосы в тиках Ekubo (depth_ekubo.rs).
         // Решение 454: направление — в порядке ключа (нативный ETH); у пула с TWAMM — состояние к блоку сделки (первое из
         // двух времён, quote/ekubo_trade_state.rs).

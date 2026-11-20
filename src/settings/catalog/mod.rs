@@ -1,7 +1,7 @@
 //! Файл: settings/catalog/mod.rs
 //! Что делает: полный список настроек системы — зеркало docs/SETTINGS.md. Значений нет.
 //! Список разбит по файлам: base.rs (базовые), trade.rs (налоги, крючки, возврат USDT, застрявшие монеты,
-//! ручной чёрный список), dex.rs (адаптер DEX и узел BSC), dex_fit.rs (DEX, решение 294), dex_graph.rs (DEX, решение 308), dex_event.rs (Система и DEX, решения 313–315), dex_fail.rs (DEX, решение 339), dex_par.rs (DEX, решения 330–331), dex_ekubo.rs (Ekubo, решение 447), dex_basin.rs (Basin, решение 485), dex_bv3_buffer.rs (буфер ERC4626 Balancer V3, решение 474), index.rs (справочник пулов от индексатора, решение 58),
+//! ручной чёрный список), dex.rs (адаптер DEX и узел BSC), dex_fit.rs (DEX, решение 294), dex_graph.rs (DEX, решение 308), dex_event.rs (Система и DEX, решения 313–315), dex_fail.rs (DEX, решение 339), dex_par.rs (DEX, решения 330–331), dex_ekubo.rs (Ekubo, решение 447), dex_basin.rs (Basin, решение 485), dex_shell.rs (Shell Protocol Proteus, решение 486), dex_bv3_buffer.rs (буфер ERC4626 Balancer V3, решение 474), index.rs (справочник пулов от индексатора, решение 58),
 //! send.rs (отправка и каналы), signals.rs (сухой режим, карточка сигнала, эпизоды — решение 74), uncapped.rs (расчёт
 //! «без потолка» — решение 141), window.rs (окна —
 //! решение 125), gate.rs, okx.rs, binance.rs, bitget.rs и xt.rs (настройки только одной биржи).
@@ -42,6 +42,7 @@ mod dex_elastic;
 mod dex_event;
 mod dex_fail;
 mod dex_par;
+mod dex_shell;
 mod dex_fit;
 mod dex_graph;
 mod dex_lb;
@@ -171,6 +172,7 @@ static PARTS: &[&[SettingDef]] = &[
     dex_fail::DEX_FAIL,
     dex_par::DEX_PAR,
     dex_ekubo::DEX_EKUBO,
+    dex_shell::DEX_SHELL,
     dex_bv3_buffer::DEX_BV3_BUFFER,
     dex_elastic::DEX_ELASTIC,
     dex_wombat::DEX_WOMBAT,

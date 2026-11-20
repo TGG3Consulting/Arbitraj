@@ -23,6 +23,7 @@ pub use super::pool_crypto::{CryptoData, CryptoMath, CryptoTweak};
 pub use super::pool_ekubo::{EkuboData, EkuboMev, EkuboTick, EkuboTwamm};
 pub use super::pool_fictive::FictiveData;
 pub use super::pool_lb::LbBinData;
+pub use super::pool_proteus::{ProteusData, ProteusUtility};
 pub use super::pool_smart::{ColReserves, DebtReserves, SmartColDebtData};
 pub use super::pool_vault::{VaultCurve, VaultPoolData};
 pub use super::pool_solidly::{FeeRule, SolidlyFee, SolidlyGate};
@@ -96,6 +97,10 @@ pub enum PoolKind {
     /// функция скважины от резервов и числа LP-токенов (x·y = s² или стейблсвап). Состояние — BasinWellData
     /// (core/types/pool_basin.rs).
     BasinWell,
+    /// Кусочная гипербола за общим учётным контрактом (решение 486, Shell Protocol Proteus): токены пулов — в одном
+    /// контракте учёта (ERC-1155), обмен — через него (wrap → computeOutputAmount пула → unwrap), формула — внешняя
+    /// реализация пула. Состояние — ProteusData (core/types/pool_proteus.rs).
+    Proteus,
 }
 
 /// Как найти пул в сети.
@@ -283,6 +288,10 @@ pub enum PoolState {
     /// Скважина Basin (решение 485): резервы по порядку токенов скважины, число LP-токенов, функция скважины.
     /// Боксируется, как Pmm. Поля — в BasinWellData (core/types/pool_basin.rs).
     BasinWell(Box<BasinWellData>),
+    /// Пул Proteus (решение 486): учётный контракт, реализация, id и балансы сторон в учёте, параметры срезов, BASE_FEE,
+    /// формула полезности, делитель комиссии вывода. Боксируется, как Pmm. Поля — в ProteusData
+    /// (core/types/pool_proteus.rs).
+    Proteus(Box<ProteusData>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

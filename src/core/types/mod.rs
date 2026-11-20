@@ -32,6 +32,7 @@ pub mod pool_ekubo;
 pub mod pool_fictive;
 pub mod pool_lb;
 pub mod pool_depth;
+pub mod pool_proteus;
 pub mod pool_smart;
 pub mod pool_solidly;
 pub mod pool_stable_debug;
@@ -74,7 +75,8 @@ pub use pool::{
     AmpV2Data, BasinFunction, BasinWellData, ColReserves, CryptoData, CryptoMath, CryptoTweak, DebtReserves, EkuboData, EkuboMev,
     EkuboTick,
     EkuboTwamm, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, LbBinData, OraclePmmData,
-    PmmData, Pool, PoolKind, PoolRef, PoolState, SmartColDebtData, SolidlyFee, SolidlyGate,
+    PmmData, Pool, PoolKind, PoolRef, PoolState, ProteusData, ProteusUtility, SmartColDebtData,
+    SolidlyFee, SolidlyGate,
     StableData, StableGuard, StableNg, TickBinData,
     TickReserves, VaultCurve, VaultPoolData, WombatData,
 };

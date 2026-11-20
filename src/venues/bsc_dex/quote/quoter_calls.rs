@@ -89,6 +89,11 @@ pub fn request(
     if e.family.proto == Proto::BasinWell {
         return super::quoter_basin::request(ctx, e, token_in, amount);
     }
+    // Shell Protocol Proteus (решение 486): квотер — реализация пула swapGivenInputAmount + decimals выхода пачкой
+    // Multicall3 (quoter_shell.rs).
+    if e.family.proto == Proto::ShellProteus {
+        return super::quoter_shell::request(ctx, e, token_in, amount);
+    }
     // Crypto-пулы Curve (решения 442, 453; NG и v1): квотер — сам пул, get_dy(uint256, …) (quoter_crypto.rs).
     if e.family.proto.is_curve_crypto() {
         return super::quoter_crypto::request(ctx, e, token_in, amount);
@@ -430,6 +435,9 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     }
     if e.family.proto == Proto::BasinWell {
         return super::quoter_basin::decode(out);
+    }
+    if e.family.proto == Proto::ShellProteus {
+        return super::quoter_shell::decode(e, out);
     }
     if e.family.proto.is_curve_crypto() {
         return super::quoter_crypto::decode(out);

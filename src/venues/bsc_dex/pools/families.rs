@@ -203,6 +203,14 @@ pub enum Proto {
     /// перечитывание каждым блоком. Нативная монета пула (0xEeee…) — в паре обёртка dex.native_wrapped. Исполнение — шаг
     /// FLUID исполнителя v4 (approve пулу + swapIn). Вид ядра — SmartColDebt.
     FluidT1,
+    /// Shell Protocol Proteus (решение 486; shell_proteus, DEX Shell на Arbitrum): пул LiquidityPoolProxy с внешней
+    /// реализацией Proteus (кусочная гипербола по срезам, полезность u неизменна при обмене); токены всех пулов — в
+    /// учётном контракте Ocean (ERC-1155, dex.vault), обмен — через него (wrap → computeOutputAmount пула → unwrap).
+    /// Фабрики с реестром нет — пулы из списка dex.stable_pools (адреса — docs.shellprotocol.io); формула полезности —
+    /// по спискам сверенных реализаций dex.proteus_utility_v1 / _v2. Математика — порт Proteus.sol и ABDKMath64x64
+    /// (math/proteus_*.rs); перечитывание каждым блоком и на события пула. Исполнение — шаг SHELL исполнителя v5.
+    /// Вид ядра — Proteus.
+    ShellProteus,
     /// Balancer V3 (решение 441, T433-F2; balancer_v3, DEX balancer-v3-arbitrum): хранилище Vault V3 (одно на все пулы,
     /// id пула — его адрес) и пулы фабрик Balancer — весовые (20241205, 20260115) и стейблсвап (20241205, 20250324,
     /// 20260116); выпуск фабрики задаёт правило onSwap (списки dex.bv3_*_factories). Токены — в хранилище; хранилище
@@ -556,6 +564,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "fluid_t1" => (PoolKind::SmartColDebt, Proto::FluidT1, true, false, false),
         // Скважина Basin (решение 485): в графе и сигналах (порт функций скважины); исполнение — шаг BASIN исполнителя v5.
         "basin_well" => (PoolKind::BasinWell, Proto::BasinWell, true, false, false),
+        // Shell Protocol Proteus (решение 486): в графе и сигналах (порт Proteus.sol); исполнение — шаг SHELL исполнителя.
+        "shell_proteus" => (PoolKind::Proteus, Proto::ShellProteus, true, false, false),
         // Slipstream (Topaz v3 на BSC; решения 80, 85): форк Uniswap V3 core — в графе, котируется общей математикой V3
         // (math/swap_cl), НО tradable=false — исполнения пока нет (роутер Slipstream — следующая фаза). graphable=true,
         // tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как THENA Algebra /
@@ -812,6 +822,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Fluid DEX T1 (решение 440): фабрика (isDex) и резолвер FluidDexReservesResolver в dex.quoter — им читается
         // состояние (getPoolReservesAdjusted) и сверяется выход (estimateSwapIn).
         Proto::FluidT1 => list.extend(["dex.factory", "dex.quoter"]),
+        // Shell Protocol Proteus (решение 486): учётный контракт Ocean (dex.vault) и список пулов из документации
+        // (dex.stable_pools); списки реализаций (dex.proteus_utility_v1 / _v2) проверяются у каждого пула.
+        Proto::ShellProteus => list.extend(["dex.vault", "dex.stable_pools"]),
         // Curve Twocrypto-NG / Tricrypto-NG (решение 442): реестр фабрики (get_coins, find_pool_for_coins), версии
         // реализации пула и адреса математики, с исходником которых сверены формулы (verify_crypto.rs).
         Proto::CurveTwocrypto | Proto::CurveTricrypto => list.extend([

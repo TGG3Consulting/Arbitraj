@@ -55,6 +55,7 @@ pub mod depth_band_algebra;
 pub mod depth_ekubo;
 pub mod direct;
 pub mod direct_route;
+pub mod ekubo_trade_state;
 pub mod emptiness;
 pub mod fills;
 pub mod gas;

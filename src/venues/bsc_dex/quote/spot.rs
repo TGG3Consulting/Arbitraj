@@ -103,10 +103,11 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
         }
         // Ekubo (решение 447): цена token0 в token1 = (sqrtRatio 64.128 / 2^128)² (math/ekubo_sqrt.rs to_fixed) — оценка
         // размера пробы (решение 73.19), не сверяемая величина.
+        // Решение 454: монета — token0 КЛЮЧА (нативный ETH — token0 ключа, pools/ekubo_native.rs).
         PoolState::Ekubo(d) => {
             let r = super::super::math::ekubo_sqrt::to_fixed(d.sqrt_ratio);
             let one = U256::from(1u8) << 128usize;
-            if coin0 {
+            if !super::super::pools::ekubo_native::is_token1(d, e.pool.token0, e.coin) {
                 mul_div(mul_div(amount, one, r)?, one, r)
             } else {
                 mul_div(mul_div(amount, r, one)?, r, one)

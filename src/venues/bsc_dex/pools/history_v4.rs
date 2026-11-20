@@ -10,11 +10,13 @@
 //! только известное из памяти и SQLite, к узлу за старым состоянием бот не идёт.
 //! Кто вызывает: pools/market.rs (задача подписки на рынок; при новой подписке прерывается — память и SQLite
 //! остаются согласованными: блок сдвигается только после записи куска).
-//! От чего зависит: ctx.rs, node/rpc.rs, discover.rs, discover_v4.rs, history_start.rs, history_store.rs, scan.rs,
+//! От чего зависит: ctx.rs, node/rpc.rs, discover.rs, history_ekubo.rs (V4 и Ekubo), history_start.rs, history_store.rs, scan.rs,
 //! attach.rs, created.rs (Watch), families.rs.
+//! Решение 454: так же — история пулов Ekubo (PoolInitialized ядра dex.ekubo_core; разбор и правила ключа —
+//! history_ekubo.rs): пулы без регистрации в PoolKeyIndex находятся и подключаются.
 //! Необязательна (решение 58): пулы V4 и Infinity приходят из справочника индексатора с проверкой ключа у менеджера
 //! или PositionManager; история нужна только для пулов Uniswap V4 без позиций через PositionManager.
-//! Настройки: dex.pool_enabled, dex.pool_manager [DEX V4]; dex.logs_block_batch,
+//! Настройки: dex.pool_enabled, dex.pool_manager [DEX V4], dex.ekubo_core [DEX Ekubo]; dex.logs_block_batch,
 //! dex.scan_progress_s, dex.pools_per_sub, dex.history_scan (пауза из интерфейса — history_gate.rs) [bsc_dex].
 //!
 //! eth_blockNumber, eth_getLogs — https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth ;
@@ -31,18 +33,20 @@ use super::super::check::recheck::Recheck;
 use super::super::node::rpc;
 use super::attach::attach;
 use super::created::Watch;
-use super::discover::{self, Found, Scanned, against, is_v4};
+use super::discover::{self, Found, Scanned, against};
 use super::families::{self, Family};
 use super::history_start::{first, start};
 use super::listen::Pools;
-use super::{discover_v4, history_gate, history_store, scan};
+use super::{history_ekubo, history_gate, history_store, scan};
 
 /// Загрузка всех включённых видов V4 параллельно. Ошибка вида — в журнал (остальные виды грузятся).
 /// В конце, если подключены новые пулы, — «новые пулы» циклам крючков и сверки (check/recheck.rs):
 /// до проверки пул с крючком B/C не торгуется. Ошибок нет.
 pub async fn run(p: Pools, scanned: Scanned, watches: Vec<Watch>, wake: Recheck) {
     let mut jobs = Vec::new();
-    for f in families::all(&p.ctx).into_iter().filter(|f| is_v4(f)) {
+    // Решение 454: и Ekubo — история PoolInitialized ядра (history_ekubo.rs).
+    let all = families::all(&p.ctx);
+    for f in all.into_iter().filter(|f| history_ekubo::has_history(f)) {
         if discover::enabled(&p.ctx, f).await {
             jobs.push(family(&p, f, &scanned, &watches));
         }
@@ -81,7 +85,7 @@ async fn load(
     watches: &[Watch],
 ) -> GatewayResult<usize> {
     let ctx = &p.ctx;
-    let manager = ctx.dex_addr("dex.pool_manager", f.id)?;
+    let manager = history_ekubo::source(ctx, f)?;
     let what = format!("{}: история Initialize", f.title);
     // Решение 121 (C1): сначала только известное (память, SQLite) — без узла; выключатель dex.history_scan
     // проверяется ДО поиска блока развёртывания (иначе при «нет» бот всё равно шёл за старым состоянием eth_getCode).
@@ -94,7 +98,7 @@ async fn load(
         Some(n) => n,
         None => first(p, f, manager, scanned).await?,
     };
-    let topics = json!([discover_v4::topic(f)]);
+    let topics = json!([history_ekubo::topic(f)]);
     let batch = scan::batch_size(ctx)?;
     loop {
         let head: U64 = rpc::call(ctx, "eth_blockNumber", json!([])).await?;
@@ -122,7 +126,7 @@ async fn load(
             }
             let end = head.min(next.saturating_add(batch - 1));
             let logs = scan::one(ctx, manager, &topics, next, end, &what).await?;
-            let found = discover_v4::parse_all(ctx, f, &logs)?;
+            let found = history_ekubo::parse_all(ctx, f, &logs)?;
             if let Err(e) = history_store::save(ctx, f, manager, &logs, end).await {
                 ctx.log(Level::Error, "dex.scan", e.message, None).await;
             }

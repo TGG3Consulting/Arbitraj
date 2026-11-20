@@ -272,3 +272,9 @@ Ekubo (решение 447, вид `ekubo`; EkuboProtocol/evm-contracts@61d09daa 
 | `events_ekubo.rs` | События ядра: анонимный обмен (stateAfter), PositionUpdated (stateAfter, тики границ, биты битмапа), PositionFeesCollected (MEVCapture); метка SWAP_MARK |
 | `ekubo_route.rs` | Лог ядра → пул (PoolId из данных) и «topic0» анонимного лога — для session.rs и listen_log.rs |
 | `ekubo_shallow.rs` | Фильтр подписки пачки Ekubo (по адресу ядра без topics / с PositionUpdated) и правило пробуждения мелкого пула |
+| `ekubo_native.rs` | Решение 454: нативный ETH ключа (token0 = 0) ↔ обёртка dex.native_wrapped в паре графа; токены и направление в порядке ключа |
+| `ekubo_ext.rs` | Решение 454: расширение пула — нет / MEVCapture / TWAMM / Oracle / BoostedFees по настройкам; разбор, как каждое меняет обмен |
+| `ekubo_accept.rs` | Решение 454: правила ключа пула (PoolId, расширение, нативный ETH) — общие для справочника и истории |
+| `history_ekubo.rs` | Решение 454: история PoolInitialized ядра (ключ без PoolKeyIndex) и развилки истории V4 / Ekubo |
+| `load_ekubo_twamm.rs` | Решение 454: состояние TWAMM пула — TwammPoolState, слова битмапа времён до горизонта, TimeInfo |
+| `ekubo_hub.rs` | Решение 454: одна подписка на логи ядра (и TWAMM) на площадку с раздачей пачкам по PoolId (источник ws) |

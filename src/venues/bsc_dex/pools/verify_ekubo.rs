@@ -1,43 +1,43 @@
 //! Файл: venues/bsc_dex/pools/verify_ekubo.rs
-//! Что делает: проверка пула Ekubo из справочника индексатора (решение 447; адрес пула у источника — PoolId) на своём
-//! узле одним проходом вызовов: ключ пула у реестра PoolKeyIndex (poolKeyById) и состояние пула у ядра (Core.sload
-//! слота PoolId). Пул берётся, только если: ключ зарегистрирован; keccak256 ключа = PoolId; пул создан (слово состояния
-//! не ноль); токены ключа = монета и встречный токен (адрес монеты — от биржи); token0 — не нативный ETH (адрес 0: шаг
-//! исполнителя и граф работают с ERC-20); расширение — нет или MEVCapture из dex.ekubo_mev_capture (другие расширения
-//! меняют обмен — TWAMM исполняет ордера до обмена, их математики нет). Ключ запоминается (ekubo_keys.rs).
+//! Что делает: проверка пула Ekubo (решения 447, 454; адрес пула у источника — PoolId) на своём узле одним проходом
+//! вызовов: ключ пула у реестра PoolKeyIndex (poolKeyById) — если ключа нет в памяти (ekubo_keys.rs: его кладёт история
+//! и событие PoolInitialized ядра, history_ekubo.rs — ключ сверен с PoolId), и состояние пула у ядра (Core.sload слота
+//! PoolId). Пул берётся, только если: ключ известен (реестр или история ядра); keccak256 ключа = PoolId; пул создан
+//! (слово состояния не ноль); пара пула (нативный ETH — как обёртка dex.native_wrapped, решение 454) = монета и
+//! встречный токен (адрес монеты — от биржи); расширение — нет или официальное из настроек (ekubo_ext.rs). Ключ
+//! запоминается (ekubo_keys.rs). Правила ключа — ekubo_accept.rs.
 //! Кто вызывает: pools/verify.rs.
-//! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_ekubo.rs, ekubo_keys.rs, math/ekubo_config.rs, discover.rs.
-//! Настройки: dex.ekubo_core, dex.ekubo_key_index, dex.ekubo_mev_capture [DEX].
+//! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_ekubo.rs, ekubo_keys.rs, ekubo_accept.rs, discover.rs.
+//! Настройки: dex.ekubo_core, dex.ekubo_key_index [DEX]; через ekubo_accept.rs — dex.native_wrapped и адреса
+//! расширений.
 //!
 //! Источник — EkuboProtocol/evm-contracts@02e0d82f src/PoolKeyIndex.sol L16 (poolKeyById), L61-L63 (не зарегистрирован —
-//! token1 = 0); @61d09daa src/types/poolKey.sol L34-L39 (PoolId), src/types/poolState.sol L28-L32 (создан — слово ≠ 0),
-//! src/math/constants.sol L270 (NATIVE_TOKEN_ADDRESS = 0), src/types/poolConfig.sol L80-L84 (расширение).
+//! token1 = 0); @61d09daa src/types/poolKey.sol L34-L39 (PoolId), src/types/poolState.sol L28-L32 (создан — слово ≠ 0).
 
 use std::str::FromStr;
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, Bytes};
 
-use crate::core::types::PoolRef;
-
 use super::super::ctx::Ctx;
-use super::super::math::ekubo_config::{self, Shape};
 use super::super::node::call;
-use super::abi_ekubo::{IEkuboKeyIndex, pool_id, sload_data, sload_words};
+use super::abi_ekubo::{IEkuboKeyIndex, sload_data, sload_words};
 use super::discover::{Found, sorted};
-use super::ekubo_keys;
+use super::ekubo_accept::{PoolKeyIn, accept};
+use super::ekubo_keys::{self, Key};
 use super::verify::{Candidate, Verdict};
 
-/// Адреса DEX для проверки: ядро, реестр, MEVCapture (None — не задан).
-struct Addrs {
+/// План проверки кандидата: PoolId, ядро, реестр, ключ из памяти (None — спросить реестр).
+struct Plan {
+    id: B256,
     core: Address,
     index: Address,
-    mev: Option<Address>,
+    known: Option<Key>,
 }
 
 /// Проверка пачки кандидатов Ekubo частями по `size` вызовов. Возвращает: итог по каждому. Ошибок нет.
 pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> {
-    let mut plans: Vec<Result<(B256, Addrs), String>> = Vec::new();
+    let mut plans: Vec<Result<Plan, String>> = Vec::new();
     let mut calls: Vec<(Address, Bytes)> = Vec::new();
     for c in cands {
         let plan = (|| {
@@ -48,13 +48,20 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
             let index = ctx
                 .dex_addr("dex.ekubo_key_index", c.family.id)
                 .map_err(|e| e.message)?;
-            let mev = ctx.dex_addr("dex.ekubo_mev_capture", c.family.id).ok();
-            Ok((id, Addrs { core, index, mev }))
+            let known = ekubo_keys::get(ctx.place.id, id);
+            Ok(Plan {
+                id,
+                core,
+                index,
+                known,
+            })
         })();
-        if let Ok((id, a)) = &plan {
-            let key = IEkuboKeyIndex::poolKeyByIdCall { poolId: *id }.abi_encode();
-            calls.push((a.index, Bytes::from(key)));
-            calls.push((a.core, sload_data(&[*id])));
+        if let Ok(p) = &plan {
+            if p.known.is_none() {
+                let key = IEkuboKeyIndex::poolKeyByIdCall { poolId: p.id }.abi_encode();
+                calls.push((p.index, Bytes::from(key)));
+            }
+            calls.push((p.core, sload_data(&[p.id])));
         }
         plans.push(plan);
     }
@@ -63,23 +70,24 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
     let none = || Err("нет ответа".to_string());
     let mut out = Vec::with_capacity(cands.len());
     for (c, plan) in cands.iter().zip(plans) {
-        let (id, a) = match plan {
+        let p = match plan {
             Ok(p) => p,
             Err(w) => {
                 out.push(Verdict::Rejected(w));
                 continue;
             }
         };
-        let key = got.next().unwrap_or_else(none);
+        let key = match p.known {
+            Some(k) => Ok(Ok(k)),
+            None => got.next().unwrap_or_else(none).map(Err),
+        };
         let state = got.next().unwrap_or_else(none);
         out.push(match (key, state) {
             (Err(node), _) | (_, Err(node)) => Verdict::Failed(node),
-            (Ok(key), Ok(state)) => match decide(c, id, &a, key, state) {
-                Ok(f) => {
-                    if let Some(cfg) = f.1 {
-                        ekubo_keys::remember(ctx.place.id, id, cfg);
-                    }
-                    Verdict::Taken(Box::new(f.0))
+            (Ok(key), Ok(state)) => match decide(ctx, c, &p, key, state) {
+                Ok((f, k)) => {
+                    ekubo_keys::remember(ctx.place.id, p.id, k);
+                    Verdict::Taken(Box::new(f))
                 }
                 Err(w) => Verdict::Rejected(w),
             },
@@ -88,62 +96,65 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
     out
 }
 
-/// Решение по ответам (без сети). Принимает: кандидата, PoolId, адреса, ответ poolKeyById, ответ sload.
-/// Возвращает: найденный пул и config ключа или причину отказа.
-fn decide(
+/// Ключ пула: из памяти (токены — по паре кандидата) или из ответа poolKeyById. Ошибки (текст): ответ не по ABI, пула
+/// нет в реестре, нативный ключ без dex.native_wrapped.
+fn key_of(
     c: &Candidate,
-    id: B256,
-    a: &Addrs,
-    key: Result<Bytes, String>,
-    state: Result<Bytes, String>,
-) -> Result<(Found, Option<B256>), String> {
-    let key = key.map_err(|w| format!("PoolKeyIndex.poolKeyById откатился: {w}"))?;
-    let k = IEkuboKeyIndex::poolKeyByIdCall::abi_decode_returns(&key)
-        .map_err(|e| format!("ответ poolKeyById не по ABI: {e}"))?;
-    if k.token1 == Address::ZERO {
-        return Err("пула нет в реестре ключей PoolKeyIndex (dex.ekubo_key_index) — ключ не известен".into());
+    key: Result<Key, Bytes>,
+    wrapped: Option<Address>,
+) -> Result<PoolKeyIn, String> {
+    match key {
+        Ok(k) => {
+            let (a, b) = sorted(c.coin, c.quote);
+            let (token0, token1) = if !k.native {
+                (a, b)
+            } else {
+                // Нативный token0 ключа — обёртка в паре кандидата; другой токен пары — token1 ключа.
+                let w = wrapped.ok_or("ключ пула с нативным ETH, а dex.native_wrapped не задана")?;
+                (Address::ZERO, if a == w { b } else { a })
+            };
+            Ok(PoolKeyIn {
+                token0,
+                token1,
+                config: k.config,
+            })
+        }
+        Err(raw) => {
+            let k = IEkuboKeyIndex::poolKeyByIdCall::abi_decode_returns(&raw)
+                .map_err(|e| format!("ответ poolKeyById не по ABI: {e}"))?;
+            if k.token1 == Address::ZERO {
+                return Err("пула нет в реестре ключей PoolKeyIndex (dex.ekubo_key_index) и в истории ядра — ключ не известен".into());
+            }
+            Ok(PoolKeyIn {
+                token0: k.token0,
+                token1: k.token1,
+                config: k.config,
+            })
+        }
     }
-    if pool_id(k.token0, k.token1, k.config) != id {
-        return Err(format!("ключ пула из PoolKeyIndex даёт другой PoolId, а не {id}"));
-    }
-    let state = state.map_err(|w| format!("Core.sload откатился: {w}"))?;
+}
+
+/// Решение по ответам (без сети). Принимает: окружение, кандидата, план, ключ (память или ответ реестра), ответ sload.
+/// Возвращает: найденный пул и ключ для памяти или причину отказа.
+fn decide(
+    ctx: &Ctx,
+    c: &Candidate,
+    p: &Plan,
+    key: Result<Key, Bytes>,
+    state: Bytes,
+) -> Result<(Found, Key), String> {
+    let k = key_of(c, key, ctx.addr("dex.native_wrapped").ok())?;
     let words = sload_words(&state, 1).ok_or("ответ Core.sload не 32 байта")?;
     if words[0].is_zero() {
         return Err("пул не создан в ядре (состояние — ноль)".into());
     }
-    if k.token0 == Address::ZERO {
-        return Err("token0 пула — нативный ETH (адрес 0): шаг исполнителя и граф — только ERC-20".into());
-    }
-    let ext = ekubo_config::extension(&k.config);
-    if ext != Address::ZERO && Some(ext) != a.mev {
-        return Err(format!(
-            "расширение пула {ext} не поддержано (только без расширения или MEVCapture из dex.ekubo_mev_capture)"
-        ));
-    }
-    if (k.token0, k.token1) != sorted(c.coin, c.quote) {
+    let (mut found, key) = accept(ctx, c.family, p.core, p.id, k)?;
+    if (found.token0, found.token1) != sorted(c.coin, c.quote) {
         return Err(format!(
             "токены пула {} / {} ≠ монета {} и встречный {} (адрес монеты — от биржи)",
-            k.token0, k.token1, c.coin, c.quote
+            found.token0, found.token1, c.coin, c.quote
         ));
     }
-    let spacing = match ekubo_config::shape(&k.config) {
-        Shape::Concentrated { spacing } => Some(spacing as i32),
-        Shape::FullRange | Shape::Stable { .. } => None,
-    };
-    let found = Found {
-        family: c.family,
-        reference: PoolRef::Singleton {
-            manager: a.core,
-            id,
-        },
-        token0: k.token0,
-        token1: k.token1,
-        coin: c.coin,
-        fee_pips: None,
-        tick_spacing: spacing,
-        bin_step: None,
-        key: None,
-        hooks: None,
-    };
-    Ok((found, Some(k.config)))
+    found.coin = c.coin;
+    Ok((found, key))
 }

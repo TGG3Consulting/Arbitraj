@@ -4,13 +4,18 @@
 //! (pools/depth.rs). Состав меняется на том же соединении, без переподключения: сначала подписка с новым составом,
 //! потом отписка от старой (события на стыке приходят дважды — второе отбрасывает реестр по (блок, logIndex),
 //! registry.rs has_applied). Уведомления всех подписок сливаются в один поток; обрыв соединения — сообщение Closed.
+//! Решение 454: пачка Ekubo при источнике ws — не своя подписка, а раздача общей подписки ядра площадки
+//! (ekubo_hub.rs: нагрузка узла не множится на число пачек); номер блока такая пачка спрашивает у соединения хаба.
 //! Кто вызывает: pools/session.rs, pools/admit.rs.
-//! От чего зависит: node/ws.rs (Conn, Sub), node/subs.rs (фильтры), pools/events.rs (topic0), discover.rs (Found).
+//! От чего зависит: node/ws.rs (Conn, Sub), node/subs.rs (фильтры), pools/events.rs (topic0), discover.rs (Found),
+//! ekubo_shallow.rs, ekubo_hub.rs.
 //! Настройки: через node/ws.rs (адрес узла, таймауты).
 //!
 //! eth_subscribe / eth_unsubscribe — execution-apis subscribe.yaml#L1-L60
 //! (https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/subscribe.yaml#L1-L60);
 //! подписки живут, пока живо соединение — https://geth.ethereum.org/docs/interacting-with-geth/rpc/pubsub .
+
+use std::sync::{Arc, Mutex};
 
 use alloy_primitives::{B256, U64};
 use serde_json::value::RawValue;
@@ -21,10 +26,12 @@ use tokio::task::JoinHandle;
 use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 
+use super::super::ctx::Ctx;
 use super::super::node::source::Link;
 use super::super::node::subs;
 use super::discover::Found;
-use super::events;
+use super::ekubo_hub::{self, Hub};
+use super::{ekubo_shallow, events};
 
 /// Сообщение слитого потока подписок пачки.
 pub enum Msg {
@@ -34,10 +41,12 @@ pub enum Msg {
     Closed,
 }
 
-/// Подписка узла и задача, переносящая её уведомления в общий поток.
+/// Подписка узла и задача, переносящая её уведомления в общий поток. Решение 454: раздача хаба Ekubo — без id
+/// подписки узла (hub = true: отписка — только остановка раздачи).
 pub struct Held {
     id: String,
     fwd: JoinHandle<()>,
+    hub: bool,
 }
 
 /// Какие события слушать у пулов.
@@ -58,6 +67,11 @@ pub struct Group {
     pub full: Option<(Held, Vec<usize>)>,
     /// Подписка «только ликвидность» и её пулы.
     pub liquidity: Option<(Held, Vec<usize>)>,
+    /// Решение 454: окружение и имя (хаб Ekubo открывается при первой подписке пачки Ekubo).
+    ctx: Ctx,
+    name: String,
+    /// Решение 454: хаб Ekubo пачки (None — пачка не Ekubo или источник — лента квитанций).
+    hub: Mutex<Option<Arc<Hub>>>,
 }
 
 impl Group {
@@ -72,15 +86,46 @@ impl Group {
             rx,
             full: None,
             liquidity: None,
+            ctx: p.ctx.clone(),
+            name: name.to_string(),
+            hub: Mutex::new(None),
         })
+    }
+
+    /// Хаб Ekubo пачки: свой живой или общий площадки (ekubo_hub::get). Ошибки: как у ekubo_hub::get.
+    async fn hub_of(&self, plan: &ekubo_shallow::Plan) -> GatewayResult<Arc<Hub>> {
+        let held = self.hub.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        if let Some(h) = held.filter(|h| !h.is_closed()) {
+            return Ok(h);
+        }
+        let h = ekubo_hub::get(&self.ctx, &self.name, plan.addrs.clone()).await?;
+        *self.hub.lock().unwrap_or_else(|p| p.into_inner()) = Some(h.clone());
+        Ok(h)
     }
 
     /// Подписка на события пулов. Принимает: пулы одного вида, какие события. Ошибки: узел отказал, обрыв.
     pub async fn subscribe(&self, pools: &[&Found], topics: Topics) -> GatewayResult<Held> {
-        let mut sub = self
-            .conn
-            .subscribe(json!(["logs", filter(pools, topics)]))
-            .await?;
+        // Решение 454: пачка Ekubo — раздача хаба (ws) или фильтр с адресами TWAMM (лента квитанций).
+        let plan = ekubo_shallow::plan(&self.ctx, pools, topics == Topics::Liquidity);
+        let flt = match &plan {
+            Some(pl) if matches!(self.conn, Link::Ws(_)) => {
+                let hub = self.hub_of(pl).await?;
+                let fwd = ekubo_hub::forward(
+                    &hub,
+                    pl.ids.clone(),
+                    pl.topics.clone(),
+                    self.tx.clone(),
+                );
+                return Ok(Held {
+                    id: String::new(),
+                    fwd,
+                    hub: true,
+                });
+            }
+            Some(pl) => ekubo_shallow::filter_of(pl, pl.addrs[0]),
+            None => filter(pools, topics),
+        };
+        let mut sub = self.conn.subscribe(json!(["logs", flt])).await?;
         let tx = self.tx.clone();
         let fwd = tokio::spawn(async move {
             while let Some(m) = sub.rx.recv().await {
@@ -90,12 +135,19 @@ impl Group {
             }
             let _ = tx.send(Msg::Closed);
         });
-        Ok(Held { id: sub.id, fwd })
+        Ok(Held {
+            id: sub.id,
+            fwd,
+            hub: false,
+        })
     }
 
     /// Отписка: eth_unsubscribe и остановка переноса. Ошибки: узел, обрыв (поток уже закрыт).
     pub async fn release(&self, h: Held) -> GatewayResult<()> {
         h.fwd.abort();
+        if h.hub {
+            return Ok(());
+        }
         let _: bool = self.conn.request("eth_unsubscribe", json!([h.id])).await?;
         Ok(())
     }
@@ -103,7 +155,12 @@ impl Group {
     /// Блок узла WebSocket по тому же соединению: всё позже него придёт в подписки, сделанные до запроса.
     /// Ошибки: узел, обрыв.
     pub async fn block(&self) -> GatewayResult<u64> {
-        let b: U64 = self.conn.request("eth_blockNumber", json!([])).await?;
+        // Решение 454: пачка Ekubo на хабе — номер блока по соединению хаба (её логи идут по нему).
+        let hub = self.hub.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let b: U64 = match hub {
+            Some(h) => h.conn.request("eth_blockNumber", json!([])).await?,
+            None => self.conn.request("eth_blockNumber", json!([])).await?,
+        };
         Ok(b.to())
     }
 

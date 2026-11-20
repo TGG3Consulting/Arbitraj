@@ -178,6 +178,12 @@ log.signal_hold (core/book_marks_on.rs).
 | dex.ekubo_mev_capture | DEX ekubo-v3-arbitrum | `0x5555fF9Ff2757500BF4EE020DcfD0210CFfa41Be` | Пулы с расширением MEVCapture | docs.ekubo.org evm-v3 |
 | dex.quoter | DEX ekubo-v3-arbitrum | `0xd26f20001a72a18C002b00e6710000d68700ce00` | MEVCaptureRouter — Router.quote для сверки (и пулов с MEVCapture) | docs.ekubo.org evm-v3 («legacy, v3.1.1») |
 | dex.ekubo_bitmap_words | DEX ekubo-v3-arbitrum | решение Тиграна — *метод:* ln(1 + dex.depth_band_pct/100) / ln(1,000001) / (256 × наименьший шаг тика пулов), вверх до целого; шаги — из записи tools/arbitrum_record/ekubo.py | Глубина прочитанной карты тиков | Решение 447 |
+| dex.ekubo_twamm | DEX ekubo-v3-arbitrum | `0xd4f1060cb9c1a13e1d2d20379b8aa2cf7541ed9b`, `0xd47f1B1eDCfEaBb08F6eBd8FC337c27E636C75BA` | Пулы с TWAMM (оба развёртывания) | evm-contracts broadcast/DeployAll.s.sol/42161 run-1767194711580.json (61d09daa), run-1777073880286.json (8c1b721); второй — docs.ekubo.org evm-v3 |
+| dex.ekubo_twamm_horizon_s | DEX ekubo-v3-arbitrum | решение Тиграна — *метод:* сколько секунд тихий пул с TWAMM должен котироваться без перечитывания (слово битмапа времён — 65 536 с) | Горизонт виртуальных ордеров | Решение 454 |
+| dex.ekubo_oracle | DEX ekubo-v3-arbitrum | `0x517E506700271AEa091b02f42756F5E174Af5230` | Пулы с Oracle (обмен не меняет) | docs.ekubo.org evm-v3; run-1767194711580.json |
+| dex.ekubo_boosted_fees | DEX ekubo-v3-arbitrum | `0xd4B54d0ca6979Da05F25895E6e269E678ba00f9e`, `0x948b9C2C99718034954110cB61a6e08e107745f9` | Пулы с BoostedFees (обмен не меняет) | docs.ekubo.org evm-v3; run-1770053979549.json (69b642d) |
+| dex.ekubo_hub_buffer | arb_dex | решение Тиграна — *метод:* логов ядра в блок (запись core_load.json: logs_per_block) × блоков допустимой задержки пачки | Одна подписка на ядро на площадку | Решение 454 |
+| dex.native_wrapped | arb_dex | WETH Arbitrum — адрес решает Тигран по официальному списку токенов (нужен пулам Ekubo с нативным ETH и Oracle) | Нативный ETH ключа ↔ обёртка | Решение 454 |
 
 ## Нативная монета BNB
 

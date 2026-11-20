@@ -3,11 +3,14 @@
 //! концентрированного пула — слова битмапа тиков по dex.ekubo_bitmap_words по каждую сторону от слова текущего тика и
 //! тики всех установленных битов (TickInfo: liquidityNet, liquidityDelta), у пула с MEVCapture — состояние расширения
 //! (MEVCapture.sload слота PoolId), время блока. Всё одним блоком (номер в каждом запросе). config пула — из памяти ключей
-//! (ekubo_keys.rs, кладёт проверка пула).
+//! (ekubo_keys.rs, кладёт проверка пула или история ядра). Решение 454: нативный ETH ключа — обёртка dex.native_wrapped
+//! в состоянии (EkuboData.native); у пула с TWAMM — состояние расширения (load_ekubo_twamm.rs); Oracle и BoostedFees
+//! обмен не меняют — их состояние не читается (pools/ekubo_ext.rs).
 //! Кто вызывает: pools/load.rs (ветка Proto::Ekubo).
-//! От чего зависит: ctx.rs, node/rpc.rs, abi_ekubo.rs, ekubo_keys.rs, load_smardex.rs (время блока),
+//! От чего зависит: ctx.rs, node/rpc.rs, abi_ekubo.rs, ekubo_keys.rs, ekubo_ext.rs, load_ekubo_twamm.rs,
+//! load_smardex.rs (время блока),
 //! math/ekubo_config.rs, math/ekubo_bitmap.rs, math/ekubo_tick.rs.
-//! Настройки: dex.ekubo_bitmap_words, dex.ekubo_mev_capture [DEX].
+//! Настройки: dex.ekubo_bitmap_words, адреса расширений (ekubo_ext.rs) [DEX]; dex.native_wrapped [площадка DEX].
 //!
 //! Источник — EkuboProtocol/evm-contracts@61d09daa: src/libraries/CoreStorageLayout.sol L47-L93 (слоты),
 //! src/base/ExposedStorage.sol L151-L156 (sload), src/math/tickBitmap.sol L178-L193 (слово и бит тика),
@@ -27,7 +30,8 @@ use super::super::node::call::block_tag;
 use super::super::node::rpc;
 use super::abi_ekubo::{bitmap_slot, decode_state, decode_tick, sload_data, sload_words, tick_slot};
 use super::families::Family;
-use super::{ekubo_keys, load_smardex};
+use super::ekubo_ext::{self, Ext};
+use super::{ekubo_keys, load_ekubo_twamm, load_smardex};
 
 /// Слова битмапа вокруг тика: (первое, последнее), обрезанные до слов MIN_TICK / MAX_TICK. Ошибок нет.
 pub fn words_around(tick: i32, spacing: u32, n: u64) -> (u64, u64) {
@@ -51,8 +55,8 @@ pub fn set_ticks(bitmap: &[(u64, U256)], spacing: u32) -> Vec<i32> {
     out
 }
 
-/// Значения слотов контракта на блоке (Core.sload / MEVCapture.sload). Ошибки: узел, ответ не той длины.
-async fn sload(ctx: &Ctx, at: Address, slots: &[B256], tag: &str) -> GatewayResult<Vec<B256>> {
+/// Значения слотов контракта на блоке (Core.sload / MEVCapture.sload / TWAMM.sload). Ошибки: узел, ответ не той длины.
+pub async fn sload(ctx: &Ctx, at: Address, slots: &[B256], tag: &str) -> GatewayResult<Vec<B256>> {
     if slots.is_empty() {
         return Ok(Vec::new());
     }
@@ -69,8 +73,8 @@ async fn sload(ctx: &Ctx, at: Address, slots: &[B256], tag: &str) -> GatewayResu
 }
 
 /// Состояние пула на блоке. Принимает: окружение, вид, ядро, PoolId, блок. Ошибки: Internal (ключа нет в памяти),
-/// NotConfigured (dex.ekubo_bitmap_words, dex.ekubo_mev_capture у пула с MEVCapture), узел, BadResponse (пул не
-/// создан, расширение пула не то, ответ не той длины).
+/// NotConfigured (dex.ekubo_bitmap_words, dex.native_wrapped у пула с нативным ETH, dex.ekubo_twamm_horizon_s у пула с
+/// TWAMM), узел, BadResponse (пул не создан, расширение не из настроек, ответ не той длины).
 pub async fn load(
     ctx: &Ctx,
     f: &Family,
@@ -79,12 +83,18 @@ pub async fn load(
     block: u64,
 ) -> GatewayResult<PoolState> {
     let bad = |w: String| ctx.err(ErrorCode::BadResponse, format!("{} {id}: {w}", f.title));
-    let Some(config) = ekubo_keys::get(ctx.place.id, id) else {
+    let Some(key) = ekubo_keys::get(ctx.place.id, id) else {
         let why = format!(
             "{} {id}: ключ пула не известен (пул не прошёл проверку)",
             f.title
         );
         return Err(ctx.err(ErrorCode::Internal, why));
+    };
+    let config = key.config;
+    let native = if key.native {
+        Some(ctx.addr("dex.native_wrapped")?)
+    } else {
+        None
     };
     let tag = block_tag(block);
     let state = sload(ctx, core, &[id], &tag).await?;
@@ -117,17 +127,20 @@ pub async fn load(
         }
     }
     let ext = ekubo_config::extension(&config);
-    let mev = if ext == Address::ZERO {
-        None
-    } else {
-        let want = ctx.dex_addr("dex.ekubo_mev_capture", f.id)?;
-        if want != ext {
-            return Err(bad(format!("расширение пула {ext} — не MEVCapture {want}")));
-        }
+    let kind = ekubo_ext::classify(ctx, f.id, ext).map_err(bad)?;
+    let block_ts = load_smardex::block_secs(ctx, block).await?;
+    let mev = if kind == Ext::MevCapture {
         let m = sload(ctx, ext, &[id], &tag).await?;
         Some(mev_state(&m[0]))
+    } else {
+        None
     };
-    let block_ts = load_smardex::block_secs(ctx, block).await?;
+    let twamm = if kind == Ext::Twamm {
+        super::ekubo_route::bind(ext, core);
+        Some(load_ekubo_twamm::load(ctx, f, ext, id, block_ts, &tag).await?)
+    } else {
+        None
+    };
     let d = EkuboData {
         config,
         sqrt_ratio,
@@ -138,6 +151,8 @@ pub async fn load(
         ticks,
         mev,
         block_ts,
+        native,
+        twamm,
     };
     Ok(PoolState::Ekubo(Box::new(d)))
 }

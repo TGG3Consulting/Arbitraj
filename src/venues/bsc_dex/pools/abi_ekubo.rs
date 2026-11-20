@@ -2,7 +2,8 @@
 //! Что делает: ABI и раскладка хранилища Ekubo (решение 447, вид ekubo): ключ пула и PoolId, слоты ядра Core (состояние
 //! пула, тик, слово битмапа) и разбор их значений, вызов Core.sload (несколько слотов одним вызовом), реестр ключей
 //! PoolKeyIndex.poolKeyById, квотер Router.quote (MEVCaptureRouter), события ядра (PoolInitialized, PositionUpdated) и
-//! анонимный лог обмена (log0: locker 20 байт | PoolId | balanceUpdate | stateAfter).
+//! анонимный лог обмена (log0: locker 20 байт | PoolId | balanceUpdate | stateAfter); решение 454 — события TWAMM
+//! (OrderUpdated, анонимный VirtualOrdersExecuted) и PoolId пула ордера.
 //! Кто вызывает: pools/verify_ekubo.rs, load_ekubo.rs, events_ekubo.rs, ekubo_route.rs, quote/quoter_ekubo.rs, exec (шаг EKUBO).
 //! От чего зависит: alloy::sol!, alloy-primitives.
 //! Настройки: нет (адреса — dex.ekubo_core, dex.ekubo_key_index, dex.quoter [DEX]).
@@ -15,6 +16,7 @@
 //! src/types/positionId.sol L17-L29; src/interfaces/ICore.sol L111-L141 (события); src/Core.sol L840-L847 (log0
 //! обмена, 116 байт); src/PoolKeyIndex.sol L16 (poolKeyById — геттер структуры: три поля). Router.quote —
 //! evm-contracts@v3.1.1 src/Router.sol L523-L552 (MEVCaptureRouter v3.1.1 — docs.ekubo.org evm-v3, legacy).
+//! TWAMM — @61d09daa src/interfaces/extensions/ITWAMM.sol L21 (OrderUpdated), src/extensions/TWAMM.sol L70-L81.
 //! Селектор sload() = 0x380eb4e0 (keccak256("sload()")).
 
 use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
@@ -40,12 +42,29 @@ alloy::sol! {
         event PositionFeesCollected(address locker, bytes32 poolId, bytes32 positionId, uint128 amount0, uint128 amount1);
         event FeesAccumulated(bytes32 poolId, uint128 amount0, uint128 amount1);
     }
+
+    interface IEkuboTwamm {
+        event OrderUpdated(address owner, bytes32 salt, EkuboPoolKey orderKey, int112 saleRateDelta);
+    }
 }
 
 /// Селектор Core.sload() (ExposedStorage.sol L151).
 pub const SLOAD: [u8; 4] = [0x38, 0x0e, 0xb4, 0xe0];
 /// Длина данных анонимного лога обмена (Core.sol L841-L846).
 pub const SWAP_LOG_LEN: usize = 116;
+/// Решение 454: длина анонимного лога VirtualOrdersExecuted TWAMM (PoolId | скорость 0 | скорость 1 — 32 + 14 + 14;
+/// TWAMM.sol L70-L81).
+pub const TWAMM_LOG_LEN: usize = 60;
+
+/// Решение 454: PoolId пула ордера TWAMM по ключу ордера (OrderKey: token0, token1, config — комиссия в старших 64 битах
+/// config; orderConfig.sol L13-L17) и адресу TWAMM: config пула = TWAMM << 96 | комиссия << 32 (полный диапазон;
+/// orderKey.sol L55-L61). Ошибок нет.
+pub fn order_pool_id(twamm: Address, token0: Address, token1: Address, order_config: B256) -> B256 {
+    let mut c = [0u8; 32];
+    c[..20].copy_from_slice(twamm.as_slice());
+    c[20..28].copy_from_slice(&order_config[..8]);
+    pool_id(token0, token1, B256::from(c))
+}
 
 /// Смещения слотов ядра (CoreStorageLayout.sol L21, L23, L31) — hex без 0x.
 const TICKS_OFFSET: &str = "435a5eb89a296820174331cf5a3902d9fca683928d56726d8e7acd6efb28c568";

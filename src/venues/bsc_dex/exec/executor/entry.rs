@@ -239,8 +239,13 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             }
         },
         // Решение 447: пул Ekubo — config ключа из прочитанного состояния (токены ключа — токены шага по порядку адресов).
+        // Решение 454: нативный ETH ключа и forward — только у MEVCapture (pools/ekubo_ext.rs).
         ExecKind::Ekubo => match &e.pool.state {
-            PoolState::Ekubo(d) => Params::Ekubo { config: d.config },
+            PoolState::Ekubo(d) => Params::Ekubo {
+                config: d.config,
+                native: d.native.is_some(),
+                forward: d.mev.is_some(),
+            },
             _ => {
                 let why = format!("{}: у пула нет состояния Ekubo", e.family.id);
                 return Err(ctx.err(ErrorCode::NoRoute, why));

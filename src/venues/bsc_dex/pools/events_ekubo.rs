@@ -10,7 +10,9 @@
 //!   (карта там не читалась, расчёт туда не идёт). liquidityNet ушёл бы ниже нуля — карта разошлась → Refresh;
 //! - PositionFeesCollected — состояние обмена не меняет, но у пула с MEVCapture перед сбором расширение обновляет своё
 //!   состояние (beforeCollectFees → accumulatePoolFees, MEVCapture.sol L89-L95) → Updated только у такого пула;
-//! - PoolInitialized, FeesAccumulated — состояние обмена не меняют → Ignored.
+//! - PoolInitialized, FeesAccumulated — состояние обмена не меняют → Ignored;
+//! - решение 454: у пула с TWAMM любое событие пула (ядра и TWAMM: VirtualOrdersExecuted — анонимный log0 60 байт,
+//!   OrderUpdated) → Refresh (состояние расширения перечитывается целиком, pools/load_ekubo_twamm.rs).
 //!
 //! MEVCapture (MEVCapture.sol L183-L206; beforeUpdatePosition — L97-L103 → accumulatePoolFees L105-L125): в новой секунде
 //! расширение записывает (время блока, тик до действия). Время блока берётся из лога (blockTimestamp); его нет — пул
@@ -27,16 +29,27 @@ use crate::core::types::{EkuboData, EkuboTick, PoolRef, PoolState};
 
 use super::super::math::ekubo_bitmap::word_index;
 use super::super::math::ekubo_config::{self, Shape};
-use super::abi_ekubo::{IEkuboCore as C, decode_state, decode_swap_log, position_bounds};
+use super::abi_ekubo::{
+    IEkuboCore as C, IEkuboTwamm as T, decode_state, decode_swap_log, position_bounds,
+};
 use super::events::Applied;
 use super::registry::Entry;
 
 /// Метка анонимного лога обмена в списке «topic0» (у log0 topic0 нет). Ошибок нет.
 pub const SWAP_MARK: B256 = B256::ZERO;
+/// Решение 454: метка анонимного лога VirtualOrdersExecuted расширения TWAMM (60 байт, TWAMM.sol L70-L81) — слово из
+/// единиц, не совпадает ни с одним topic0 (keccak).
+pub const TWAMM_MARK: B256 = B256::repeat_byte(0xff);
 
-/// «topic0» событий, меняющих состояние обмена: анонимный обмен (SWAP_MARK) и PositionUpdated. Ошибок нет.
+/// «topic0» событий, меняющих состояние обмена: анонимный обмен (SWAP_MARK), PositionUpdated; решение 454 — события
+/// TWAMM (VirtualOrdersExecuted — TWAMM_MARK, OrderUpdated). Ошибок нет.
 pub fn topics() -> Vec<B256> {
-    vec![SWAP_MARK, C::PositionUpdated::SIGNATURE_HASH]
+    vec![
+        SWAP_MARK,
+        C::PositionUpdated::SIGNATURE_HASH,
+        TWAMM_MARK,
+        T::OrderUpdated::SIGNATURE_HASH,
+    ]
 }
 
 /// topic0 событий ликвидности (PositionUpdated). Ошибок нет.
@@ -55,6 +68,14 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         return Applied::Refresh(format!("{title}: у пула Ekubo нет состояния"));
     };
     let refresh = |w: &str| Applied::Refresh(format!("{title} {id}: {w}"));
+    // Решение 454: пул с TWAMM — любое событие пула (обмен ядра, позиция, VirtualOrdersExecuted, OrderUpdated) меняет
+    // состояние расширения (время исполнения, скорости, TimeInfo) — пул перечитывается целиком.
+    if d.twamm.is_some() {
+        if super::ekubo_route::pool_id(log) == Some(id) {
+            return refresh("событие пула с TWAMM — перечитать пул и состояние расширения");
+        }
+        return Applied::Ignored;
+    }
     let data = &log.inner.data.data[..];
     if log.topics().is_empty() {
         let Some((pool, _, state)) = decode_swap_log(data) else {

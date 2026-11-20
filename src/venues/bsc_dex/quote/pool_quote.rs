@@ -25,6 +25,7 @@ use super::super::math::{
     balancer_math, bin_swap, dmm, ekubo_mev, ekubo_swap, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
     stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
+use super::super::pools::ekubo_native;
 use super::super::pools::families::Proto;
 use super::super::pools::load_dodo::{net_after_fees, rstate};
 use super::super::pools::registry::Entry;
@@ -485,21 +486,34 @@ pub fn swap(
         }
         // Ekubo (решение 447): порт swap ядра по прочитанному состоянию (math/ekubo_swap.rs), у пула с MEVCapture —
         // доплата с выхода (math/ekubo_mev.rs, худший tickLast). Только точный вход (шаг EKUBO меняет точный вход).
+        // Решение 454: направление — в порядке ключа (нативный ETH — token0 ключа, pools/ekubo_native.rs); у пула с
+        // TWAMM — состояние после виртуальных ордеров к двум возможным временам блока сделки, расчёт по худшему
+        // (quote/ekubo_trade_state.rs).
         (PoolState::Ekubo(d), PoolKind::Ekubo) => {
             if !exact_in {
                 return Err(why("Ekubo: точный выход не поддерживается"));
             }
             let amount: u128 = amount.try_into().map_err(|_| none())?;
-            let r = ekubo_swap::exact_in(d, !zero_for_one, amount).ok_or_else(none)?;
-            let out = match &d.mev {
-                Some(m) => ekubo_mev::out_after(d, m, d.tick, r.tick_after, r.amount_out),
-                None => r.amount_out,
-            };
-            Ok(Swapped {
-                amount_in: U256::from(r.amount_in),
-                amount_out: U256::from(out),
-                complete: r.complete,
-            })
+            let is_token1 = ekubo_native::is_token1(d, e.pool.token0, token_in);
+            let mut best: Option<Swapped> = None;
+            let states = super::ekubo_trade_state::at_trade(d);
+            for s in states.map_err(|w| why(&w))? {
+                let r = ekubo_swap::exact_in(&s, is_token1, amount);
+                let r = r.ok_or_else(none)?;
+                let out = match &s.mev {
+                    Some(m) => ekubo_mev::out_after(&s, m, s.tick, r.tick_after, r.amount_out),
+                    None => r.amount_out,
+                };
+                let one = Swapped {
+                    amount_in: U256::from(r.amount_in),
+                    amount_out: U256::from(out),
+                    complete: r.complete,
+                };
+                if best.as_ref().is_none_or(|b| one.amount_out < b.amount_out) {
+                    best = Some(one);
+                }
+            }
+            best.ok_or_else(none)
         }
         _ => Err(none()),
     }

@@ -106,6 +106,8 @@ fn state(rec: &Value, config: B256, block_ts: u64) -> EkuboData {
         ticks,
         mev,
         block_ts,
+        native: None,
+        twamm: None,
     }
 }
 

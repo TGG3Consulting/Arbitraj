@@ -3,7 +3,9 @@
 //! обмен в ядре под lock с откатом (lockAndExpectRevert), пулы с MEVCapture — через forward к расширению, ответ —
 //! (balanceUpdate, stateAfter). Вызов — точный вход: amount > 0, вход token1 — isToken1, предел цены 0 (роутер ставит
 //! MIN / MAX_SQRT_RATIO — withDefaultSqrtRatioLimit), skipAhead = 0 — как шаг EKUBO исполнителя (те же шаги обмена,
-//! те же округления). Выход — отрицательная дельта пула по выходному токену.
+//! те же округления). Выход — отрицательная дельта пула по выходному токену. Решение 454: ключ с нативным ETH —
+//! token0 = адрес 0 (в паре записи — обёртка); пулы с TWAMM / Oracle / BoostedFees роутер меняет обычным CORE.swap —
+//! ядро само зовёт beforeSwap расширения (виртуальные ордера TWAMM — внутри сверки, на времени блока вызова).
 //! Кто вызывает: quote/quoter_calls.rs (request, decode).
 //! От чего зависит: pools/abi_ekubo.rs, pools/registry.rs, ctx.rs.
 //! Настройки: dex.quoter [DEX] — адрес MEVCaptureRouter (docs.ekubo.org evm-v3: 0xd26f20001a72a18C002b00e6710000d68700ce00).
@@ -20,6 +22,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::pools::abi_ekubo::{EkuboPoolKey, IEkuboRouter as R, decode_balance};
+use super::super::pools::ekubo_native;
 use super::super::pools::registry::Entry;
 
 /// Адрес роутера и данные вызова quote. Принимает: окружение, запись пула, токен входа, сумму.
@@ -36,14 +39,16 @@ pub fn request(
     let amount: i128 = amount
         .try_into()
         .map_err(|_| ctx.err(ErrorCode::NoRoute, "сумма больше int128"))?;
+    // Решение 454: токены — ключа (нативный ETH — адрес 0), направление — в порядке ключа (pools/ekubo_native.rs).
+    let (token0, token1) = ekubo_native::key_tokens(d, e.pool.token0, e.pool.token1);
     let key = EkuboPoolKey {
-        token0: e.pool.token0,
-        token1: e.pool.token1,
+        token0,
+        token1,
         config: d.config,
     };
     let c = R::quoteCall {
         poolKey: key,
-        isToken1: token_in == e.pool.token1,
+        isToken1: ekubo_native::is_token1(d, e.pool.token0, token_in),
         amount,
         sqrtRatioLimit: Default::default(),
         skipAhead: U256::ZERO,

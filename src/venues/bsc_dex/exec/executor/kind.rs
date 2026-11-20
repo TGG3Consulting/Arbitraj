@@ -88,8 +88,15 @@ pub enum Params {
     /// Решение 395 (только v3): пул PancakeSwap Infinity Bin — ключ пула; пул шага — Vault Infinity (dex.vault).
     InfBin { key: InfKey },
     /// Решение 447: пул Ekubo в ядре Core — config ключа пула (токены ключа — токены шага по порядку адресов); пул шага —
-    /// ядро; data = abi.encode(bytes32 config). Шаг есть только у кода исполнителя с EKUBO (pools/exec_callback.rs).
-    Ekubo { config: B256 },
+    /// ядро. Шаг есть только у кода исполнителя с EKUBO (pools/exec_callback.rs). Решение 454: data = abi.encode(bytes32
+    /// config, bool native, bool forward): native — token0 ключа нативный ETH (сторона шага в обёртке wnative
+    /// исполнителя разворачивается), forward — обмен через Core.forward(расширение) (только MEVCapture; TWAMM, Oracle,
+    /// BoostedFees — обычный swap ядра, их beforeSwap зовёт само ядро).
+    Ekubo {
+        config: B256,
+        native: bool,
+        forward: bool,
+    },
 }
 
 impl Params {
@@ -138,7 +145,11 @@ impl Params {
             }
             Params::Metric { zero_for_one } => Bytes::from(zero_for_one.abi_encode()),
             Params::Balancer { pool_id } => Bytes::from(pool_id.abi_encode()),
-            Params::Ekubo { config } => Bytes::from(config.abi_encode()),
+            Params::Ekubo {
+                config,
+                native,
+                forward,
+            } => Bytes::from((config, native, forward).abi_encode_params()),
             // Решение 395: abi.encode(ключ) — статическая структура, слова подряд (как PoolId — keccak тех же байт).
             Params::UniV4 { key } => Bytes::from(key.pool_key().abi()),
             Params::InfCl { key } | Params::InfBin { key } => Bytes::from(key.pool_key().abi()),

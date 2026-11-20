@@ -19,8 +19,11 @@
 //! которые ещё продадут на той же площадке (любой биржи покупки, любой группы — фильтр только sell_on; монеты, уже
 //! проданные в блок котировки, — в состоянии пула и в остаток не входят: Deal.qty уменьшен, след ride_trail); наша
 //! продажа в полёте или исполнившаяся за время котировки — отказ до её итога (ride_settled.rs).
-//! Кто вызывает: costs_source.rs (Live: quote — idle / live, fillable, worst), precheck_dex_sell.rs (sell_ahead).
-//! От чего зависит: coin_ride.rs, costs_quote.rs, ride_trail.rs (sites), trade_ops.rs, engine.rs, core/types.
+//! Решение 480 (Тигран 21.11): к сдвигу добавляется остаток наших продаж с неизвестным исходом на той же площадке
+//! (ride_settled::worst — как ещё не исполненных, худший случай; и без групп и при выключенной докупке) — ahead.
+//! Кто вызывает: costs_source.rs (Live: quote — idle / live, fillable, worst — ahead), precheck_dex_sell.rs (ahead).
+//! От чего зависит: coin_ride.rs, costs_quote.rs, ride_trail.rs (sites), ride_settled.rs (before / after, worst),
+//! trade_ops.rs, engine.rs, core/types.
 //! Настройки: нет (включатель — coin_ride.rs).
 
 use rust_decimal::Decimal;
@@ -79,7 +82,7 @@ pub async fn live(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Resul
         None
     };
     let off = if sell {
-        sell_ahead(core, d)
+        ahead(core, d).map_err(Fail::Stop)?
     } else {
         Decimal::ZERO
     };
@@ -98,9 +101,24 @@ pub async fn live(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Resul
     Ok(q)
 }
 
+/// Что делает: решение 480 — весь сдвиг продажи направления: монеты идущих сделок групп (sell_ahead; докупка
+/// выключена или групп нет — 0, как раньше) плюс остаток наших продаж с неизвестным исходом на площадке продажи
+/// (ride_settled::worst, худший случай). Принимает: ядро, направление. Возвращает: количество (0 — нет).
+/// Ошибки: текст — как у ride_settled::worst.
+pub fn ahead(core: &Core, d: &Direction) -> Result<Decimal, String> {
+    let (unsure, _) = super::ride_settled::worst(core, d)?;
+    let rides = if idle(core, d) {
+        Decimal::ZERO
+    } else {
+        sell_ahead(core, d)
+    };
+    Ok(rides + unsure)
+}
+
 /// Что делает: сколько монет идущих сделок группы будет продано на площадке продажи направления (остаток Deal.qty —
-/// уже проданное отражает след продажи, ride_trail.rs). Принимает: ядро, направление. Возвращает: количество (0 —
-/// нет). Ошибок нет.
+/// уже проданное отражает след продажи, ride_trail.rs). Решение 480: сделка с неизвестным исходом продажи на этой
+/// площадке здесь не считается — её остаток в ahead (ride_settled::worst), без двойного счёта. Принимает: ядро,
+/// направление. Возвращает: количество (0 — нет). Ошибок нет.
 pub fn sell_ahead(core: &Core, d: &Direction) -> Decimal {
     let rides = group_rides(core, d);
     if rides.is_empty() {
@@ -111,7 +129,7 @@ pub fn sell_ahead(core: &Core, d: &Direction) -> Decimal {
         .iter()
         .filter(|r| r.sell_on == d.sell_on)
         .filter_map(|r| deals.get(&r.deal_id))
-        .filter(|x| x.is_open())
+        .filter(|x| x.is_open() && !(x.sale_unsure && x.at == d.sell_on))
         .map(|x| x.qty)
         .sum()
 }

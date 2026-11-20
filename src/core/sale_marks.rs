@@ -7,13 +7,14 @@
 //!   котировки новой сделки, видна по смене счётчика;
 //! - сделки с неизвестным исходом продажи (Deal.sale_unsure, не закрытые и не «Беру на себя») по (площадка, монета) —
 //!   набор ведётся при каждом сохранении сделки (ledger::save, ledger_load) и при итоге продажи в памяти
-//!   (credit_lock::selling); новая сделка монеты на этой площадке не считается (не торгуем вслепую), человеку —
-//!   уведомление deal.sale_unknown_block (одно на сделку, при входе в набор).
+//!   (credit_lock::selling). Решение 480 (Тигран 21.11): монета НЕ блокируется — продажа новой сделки и «довезти» на
+//!   этой площадке считают остаток такой сделки как ещё не исполненную продажу (худший случай, ride_settled::worst);
+//!   человеку — уведомление deal.sale_unknown_block (одно на сделку, при входе в набор): сделку надо разобрать.
 //!
 //! Горячий путь: атомарные счётчики «ордеров в полёте» и «неясных» — 0: без замков; поиск по монете — по ссылке на
 //! ключ (у монеты с адресом контракта без выделения памяти), площадки монеты — коротким списком.
 //! Кто вызывает: credit_lock.rs (order, finish, track), ledger.rs и ledger_load.rs (track), ride_settled.rs (busy,
-//! sales, unsure_of), partial.rs (busy, sales, wait).
+//! sales, unsure_ids), partial.rs (busy, unsure_ids), costs_source.rs (any_unsure).
 //! От чего зависит: coin_key.rs, deal.rs, engine.rs, core/types, deps.rs (уведомление).
 //! Настройки: нет (базовое поведение; уведомление — событие deal.sale_unknown_block в настройках уведомлений).
 
@@ -29,7 +30,7 @@ use super::coin_key::CoinKey;
 use super::deal::{Deal, Step};
 use super::engine::{Core, lk};
 
-/// Событие уведомления: монета на площадке заблокирована — исход продажи сделки неизвестен.
+/// Событие уведомления: исход продажи сделки неизвестен — сделку надо разобрать (решение 480: монету не блокирует).
 pub const EVENT: &str = "deal.sale_unknown_block";
 
 /// Метка во внутренней причине каждого отказа из-за НАШЕЙ продажи (ride_settled.rs): по ней partial.rs отличает этот
@@ -53,7 +54,7 @@ pub struct Marks {
     /// ID сделки → (площадка, монета) с неизвестным исходом продажи.
     unsure: Mutex<HashMap<String, (VenueId, CoinKey)>>,
     unsure_live: AtomicUsize,
-    /// Будит ждущих конца ордера продажи или снятия блокировки «исход неизвестен» (partial.rs).
+    /// Будит ждущих конца ордера продажи (partial.rs).
     pub done: Notify,
 }
 
@@ -159,10 +160,7 @@ pub fn track(core: &Core, d: &Deal) {
             let at = (d.at.clone(), CoinKey::of(&d.direction.asset));
             g.insert(d.id.clone(), at).is_none()
         } else {
-            // Снята — ждущие «довезти» (partial.rs) проверяют снова.
-            if g.remove(&d.id).is_some() {
-                m.done.notify_waiters();
-            }
+            g.remove(&d.id);
             false
         };
         m.unsure_live.store(g.len(), Ordering::Release);
@@ -176,26 +174,35 @@ pub fn track(core: &Core, d: &Deal) {
     }
 }
 
-/// Что делает: сделка с неизвестным исходом продажи монеты на площадке. Принимает: ядро, площадку, монету.
-/// Возвращает: ID сделки; None — нет. Ошибок нет.
-pub fn unsure_of(core: &Core, v: &VenueId, a: &Asset) -> Option<String> {
-    let m = &core.inner.sales;
-    if m.unsure_live.load(Ordering::Acquire) == 0 {
-        return None;
-    }
-    let key = CoinKey::of(a);
-    lk(&m.unsure)
-        .iter()
-        .find(|(_, (x, k))| x == v && k == &key)
-        .map(|(id, _)| id.clone())
+/// Что делает: есть ли сделка с неизвестным исходом продажи монеты на площадке (быстрый путь — атомарный счётчик).
+/// Принимает: ядро, площадку, монету. Ошибок нет.
+pub fn any_unsure(core: &Core, v: &VenueId, a: &Asset) -> bool {
+    !unsure_ids(core, v, a).is_empty()
 }
 
-/// Текст блокировки монеты для человека (Telegram; на «Живом экране» и в журнале отказов — с меткой MARK, её добавляет
-/// ride_settled::unsure). Ошибок нет.
+/// Что делает: все сделки с неизвестным исходом продажи монеты на площадке. Принимает: ядро, площадку, монету.
+/// Возвращает: ID по порядку (пусто — нет). Ошибок нет.
+pub fn unsure_ids(core: &Core, v: &VenueId, a: &Asset) -> Vec<String> {
+    let m = &core.inner.sales;
+    if m.unsure_live.load(Ordering::Acquire) == 0 {
+        return vec![];
+    }
+    let key = CoinKey::of(a);
+    let mut ids: Vec<String> = lk(&m.unsure)
+        .iter()
+        .filter(|(_, (x, k))| x == v && k == &key)
+        .map(|(id, _)| id.clone())
+        .collect();
+    ids.sort_unstable();
+    ids
+}
+
+/// Текст уведомления deal.sale_unknown_block для человека (Telegram). Ошибок нет.
 pub fn blocked_text(d: &Deal) -> String {
     format!(
-        "монета {} на площадке {} заблокирована: исход продажи сделки {} не известен — разберите сделку (экран \
-         «Сделки» / «Ручное управление»); пока не разобрана, новые сделки этой монеты на {} не считаются",
-        d.direction.asset.ticker, d.at.0, d.id, d.at.0
+        "исход продажи сделки {} ({} {} на {}) неизвестен — разберите сделку (экран «Сделки» / «Ручное управление»). \
+         Монета не заблокирована: новые сделки и «довезти» {} на {} не ждут, а считают эту продажу как ещё не \
+         исполненную (худший случай)",
+        d.id, d.qty, d.direction.asset.ticker, d.at.0, d.direction.asset.ticker, d.at.0
     )
 }

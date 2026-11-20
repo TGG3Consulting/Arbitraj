@@ -13,13 +13,18 @@
 //!   этой площадке в полёте (sale_marks::busy — только ордер; котировки-решения режима застрявшей монеты, перегона и
 //!   «продать здесь» без ордера не держат) — котировки нет (отказ с причиной, следующий тик повторит);
 //! - продажа, начатая и законченная, пока шла наша котировка, видна по счётчику итогов (sale_marks::sales) — отказ;
-//! - исход нашей продажи монеты на площадке неизвестен (Deal.sale_unsure) — монета там заблокирована для новых сделок
-//!   (unsure — и без идущих сделок, costs_source.rs; текст и уведомление — sale_marks.rs).
+//! - решение 480 (Тигран 21.11: ничего не зависает из-за другой сделки): исход нашей продажи монеты на площадке
+//!   неизвестен (Deal.sale_unsure) — монета НЕ блокируется; остаток такой сделки (Deal.qty: при неизвестном исходе
+//!   учёт не уменьшен, credit_lock::selling) считается ещё не исполненной продажей впереди нашей (worst — в сдвиг
+//!   ride_quote::ahead, и без идущих сделок и групп). Заведомо консервативно: продала на деле — мы лишь занижаем свою
+//!   цену; не продала и продаст — учтено. Ордер в полёте — короткое ожидание его итога (выше), не вечная блокировка.
 //!
 //! Сделки других монет через общие промежуточные пулы и циклы DEX ↔ DEX здесь не учитываются (docs/TASKS.md, 464).
-//! Кто вызывает: core/ride_quote.rs (live — продажа на B), core/costs_source.rs (unsure).
-//! От чего зависит: sale_marks.rs (busy, sales, unsure_of), coin_ride.rs (идущие), engine.rs, core/types.
+//! Кто вызывает: core/ride_quote.rs (live — продажа на B; ahead — worst), executor.rs и partial.rs (note).
+//! От чего зависит: sale_marks.rs (busy, sales, unsure_ids), coin_ride.rs (идущие), engine.rs, core/types.
 //! Настройки: нет (базовое поведение).
+
+use rust_decimal::Decimal;
 
 use crate::core::types::Direction;
 
@@ -29,7 +34,7 @@ use super::sale_marks::MARK;
 
 /// Что делает: проверка до котировки продажи — ордера нашей продажи этой монеты на площадке продажи в полёте нет.
 /// Принимает: ядро, направление. Возвращает: счётчик итогов продаж (сравнить после котировки — after). Ошибки: текст
-/// причины (ордер в полёте или исход неизвестен).
+/// причины (ордер в полёте).
 pub fn before(core: &Core, d: &Direction) -> Result<u64, String> {
     let seq = super::sale_marks::sales(core, &d.sell_on, &d.asset);
     in_flight(core, d)?;
@@ -50,25 +55,49 @@ pub fn after(core: &Core, d: &Direction, seq: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Что делает: исход нашей продажи монеты на площадке продажи направления неизвестен — текст блокировки (для любого
-/// расчёта продажи, и без идущих сделок). Принимает: ядро, направление. Возвращает: текст; None — блокировки нет.
-/// Ошибок нет.
-pub fn unsure(core: &Core, d: &Direction) -> Option<String> {
-    let id = super::sale_marks::unsure_of(core, &d.sell_on, &d.asset)?;
+/// Что делает: решение 480 — остаток продаж с неизвестным исходом монеты на площадке продажи направления, как ещё не
+/// исполненных (худший случай). Принимает: ядро, направление. Возвращает: (сумма Deal.qty, ID сделок по порядку);
+/// (0, пусто) — таких нет. Ошибки: текст — сделка в наборе есть, а её записи в учёте памяти нет (остаток неизвестен:
+/// не торгуем вслепую, не считаем её нулём).
+pub fn worst(core: &Core, d: &Direction) -> Result<(Decimal, Vec<String>), String> {
+    let ids = super::sale_marks::unsure_ids(core, &d.sell_on, &d.asset);
+    if ids.is_empty() {
+        return Ok((Decimal::ZERO, ids));
+    }
     let deals = super::engine::lk(&core.inner.deals);
-    Some(match deals.get(&id) {
-        Some(x) => {
-            let t = super::sale_marks::blocked_text(x);
-            format!("{t} {MARK}")
+    let mut sum = Decimal::ZERO;
+    for id in &ids {
+        match deals.get(id) {
+            Some(x) => sum += x.qty,
+            None => {
+                return Err(format!(
+                    "{}: исход продажи {} сделки {id} неизвестен, а её записи в учёте нет — остаток не известен, \
+                     котировки нет",
+                    d.sell_on.0, d.asset.ticker
+                ));
+            }
         }
-        None => format!(
-            "монета {} на площадке {} заблокирована: исход продажи сделки {id} не известен — разберите сделку {MARK}",
-            d.asset.ticker, d.sell_on.0
-        ),
-    })
+    }
+    Ok((sum, ids))
 }
 
-/// Ордер продажи монеты на площадке продажи в полёте или исход нашей продажи там неизвестен. Ошибки: текст.
+/// Что делает: строка хронологии / журнала о худшем случае (worst) для продажи направления. Принимает: ядро,
+/// направление. Возвращает: текст; None — продаж с неизвестным исходом там нет. Ошибок нет.
+pub fn note(core: &Core, d: &Direction) -> Option<String> {
+    match worst(core, d) {
+        Ok((_, ids)) if ids.is_empty() => None,
+        Ok((q, ids)) => Some(format!(
+            "Продажа на {}: исход продажи сделки {} неизвестен — посчитано как ещё не исполненная (худший случай): \
+             {q} {} впереди нашей продажи (решение 480)",
+            d.sell_on.0,
+            ids.join(", "),
+            d.asset.ticker
+        )),
+        Err(e) => Some(e),
+    }
+}
+
+/// Ордер продажи монеты на площадке продажи в полёте. Ошибки: текст.
 fn in_flight(core: &Core, d: &Direction) -> Result<(), String> {
     if super::sale_marks::busy(core, &d.sell_on, &d.asset) {
         return Err(format!(
@@ -77,10 +106,7 @@ fn in_flight(core: &Core, d: &Direction) -> Result<(), String> {
             d.sell_on.0, d.asset.ticker, riders(core, d)
         ));
     }
-    match unsure(core, d) {
-        Some(why) => Err(why),
-        None => Ok(()),
-    }
+    Ok(())
 }
 
 /// ID идущих сделок монеты, которые продают на площадке продажи направления (для текста). Ошибок нет.

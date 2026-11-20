@@ -124,9 +124,9 @@ async fn once(core: &Core, d: &Direction, plan: Calc) -> Result<Once, String> {
     let (min_usd, min_pct) = super::venue_dir::thresholds(s, super::venue_dir::of(core, d))?;
     // Задача t179 (решение 394): идут сделки монеты, чьи монеты будут проданы в тот же пул раньше нас, — симуляция
     // (на пуле до них) может план только понизить: выход выше выручки плана (план уже посчитан ПОСЛЕ их монет,
-    // ride_quote.rs) не поднимает прибыль.
-    if !super::ride_quote::idle(core, d)
-        && super::ride_quote::sell_ahead(core, d) > Decimal::ZERO
+    // ride_quote.rs) не поднимает прибыль. Решение 480: так же при нашей продаже с неизвестным исходом в той же
+    // площадке (худший случай, ride_quote::ahead); сдвиг не посчитан (нет записи сделки) — тоже не поднимает.
+    if super::ride_quote::ahead(core, d).ok().is_none_or(|x| x > Decimal::ZERO)
         && sim.out > plan.proceeds
     {
         sim.out = plan.proceeds;

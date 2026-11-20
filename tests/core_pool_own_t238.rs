@@ -8,8 +8,10 @@
 //! - уже исполненная продажа (учёт уменьшен в момент итога, credit_lock::selling) в сдвиг больше не входит, след с её
 //!   блоком ставится сразу: котировка по блоку ниже её блока — отказ, по её блоку — принята; при двух продажах блок
 //!   следа — самый высокий;
-//! - ордер продажи в полёте (credit_lock::selling ждёт итога), исполнившийся за время котировки (счётчик итогов) и с
-//!   неизвестным исходом — котировки нет (ride_settled.rs, sale_marks.rs); котировка-решение без ордера не держит;
+//! - ордер продажи в полёте (credit_lock::selling ждёт итога) и исполнившийся за время котировки (счётчик итогов) —
+//!   котировки нет до итога (ride_settled.rs, sale_marks.rs); котировка-решение без ордера не держит; решение 480 —
+//!   исход неизвестен: не блокировка, остаток сделки впереди продажи новой ровно один раз (худший случай), и после
+//!   перезапуска, и без групп;
 //! - решение 476: approve заранее (sell_approve.rs) — продажа на бирже ничего не отправляет; на DEX без площадки в
 //!   реестре — не блокирует (строка в хронологию, approve перед обменом, как раньше);
 //! - время в пути монеты без своей истории: настройки (37 + 2 = 39 с) или статистика пары gate → bsc_dex по всем монетам
@@ -332,7 +334,7 @@ async fn executed_sale_leaves_projection_and_sets_block() {
 }
 
 #[tokio::test]
-async fn sale_order_in_flight_or_unknown_has_no_quote() {
+async fn sale_order_in_flight_waits_unknown_counted_as_worst() {
     let r = rec();
     let core = start("flight").await;
     let mut gate = in_transit(&r, GATE);
@@ -368,17 +370,23 @@ async fn sale_order_in_flight_or_unknown_has_no_quote() {
     assert!(done.contains("исполнилась, пока шла котировка"), "{done}");
     let seq2 = ride_settled::before(&core, &ku).unwrap();
     assert!(ride_settled::after(&core, &ku, seq2).is_ok());
-    // Исход нашей продажи неизвестен — монета на bsc_dex заблокирована (и без идущих сделок: ride_settled::unsure).
+    // Решение 480: исход нашей продажи неизвестен — монета на bsc_dex НЕ заблокирована: остаток Gate — впереди нашей
+    // продажи ровно один раз (худший случай ride_settled::worst; в сдвиге групп sell_ahead его нет).
     gate.sale_unsure = true;
     ledger::save(&core, &gate).await;
-    let unsure = ride_settled::before(&core, &ku).unwrap_err();
-    let want = format!("исход продажи сделки {GATE} не известен");
-    assert!(unsure.contains(&want), "{unsure}");
-    assert!(ride_settled::unsure(&core, &ku).is_some());
-    // Разобрана (шаг «Беру на себя») — блокировка снята.
+    assert!(ride_settled::before(&core, &ku).is_ok());
+    assert_eq!(ride_quote::sell_ahead(&core, &ku), Decimal::ZERO);
+    assert_eq!(ride_quote::ahead(&core, &ku).unwrap(), gate.qty);
+    let line = ride_settled::note(&core, &ku).unwrap();
+    let want = format!(
+        "исход продажи сделки {GATE} неизвестен — посчитано как ещё не исполненная (худший случай)"
+    );
+    assert!(line.contains(&want), "{line}");
+    // Разобрана (шаг «Беру на себя») — худшего случая нет.
     gate.step = Step::TakenOver;
     ledger::save(&core, &gate).await;
-    assert!(ride_settled::unsure(&core, &ku).is_none());
+    assert!(ride_settled::note(&core, &ku).is_none());
+    assert_eq!(ride_quote::ahead(&core, &ku).unwrap(), Decimal::ZERO);
 }
 
 /// Настройка площадки (тест падает при ошибке).
@@ -471,7 +479,7 @@ async fn order_mark_cleared_on_cancel_and_error() {
 }
 
 #[tokio::test]
-async fn unsure_block_survives_restart_and_blocks_without_groups() {
+async fn unsure_survives_restart_counted_as_worst_without_groups() {
     let r = rec();
     let d = std::env::temp_dir().join(format!("arb-t238-restart-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -485,16 +493,17 @@ async fn unsure_block_survives_restart_and_blocks_without_groups() {
     // Перезапуск на той же базе: набор «исход неизвестен» восстановлен из учёта (ledger_load → sale_marks::track).
     let core = start_in(d).await;
     let ku = dir(&r, "kucoin", "bsc_dex");
-    let why = ride_settled::unsure(&core, &ku).unwrap();
+    // Решение 480: идущих сделок и групп нет — остаток Gate всё равно впереди продажи новой сделки (худший случай).
+    assert_eq!(ride_quote::ahead(&core, &ku).unwrap(), gate.qty);
+    let why = ride_settled::note(&core, &ku).unwrap();
     assert!(why.contains(GATE), "{why}");
-    // Идущих сделок и групп нет — котировка продажи новой сделки всё равно отказана (Live::quote, до шлюза).
+    // Котировка продажи новой сделки не отказана из-за Gate: идёт к шлюзу (площадок в реестре нет — его отказ).
     let live = Live {
         core: &core,
         src: None,
     };
-    match live.quote(&ku, true, Decimal::ONE).await {
-        Err(Fail::Stop(t)) => assert!(t.contains("заблокирована"), "{t}"),
-        other => panic!("ждали отказ Stop, исполнено: {}", other.is_ok()),
+    if let Err(Fail::Stop(t)) = live.quote(&ku, true, Decimal::ONE).await {
+        assert!(!t.contains(GATE), "{t}");
     }
 }
 

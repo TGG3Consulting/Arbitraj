@@ -306,6 +306,10 @@ async fn run(
     ));
     // Решение 464: время в пути плана (T плана) и его источник (настройки, статистика монеты или пары площадок).
     deal.note(super::transit_source::note(core, &d, plan.transit_s));
+    // Решение 480: продажа плана посчитана после остатка наших продаж с неизвестным исходом на B (худший случай).
+    if let Some(line) = super::ride_settled::note(core, &d) {
+        deal.note(line);
+    }
     if let Some(a) = &acc {
         let name = deps.settings.accounts().wallet(&a.0).map(|w| w.name);
         deal.note(format!("Кошелёк DEX: «{}» ({a})", name.unwrap_or_default()));

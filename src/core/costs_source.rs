@@ -14,9 +14,9 @@
 //! Кто вызывает: core/costs.rs (evaluate_on → Live), core/uncapped_replay.rs (свой источник), size_curve.rs.
 //! Решение 394 (t179, докупка): Live при идущих сделках группы — ride_quote.rs, ride_trail.rs (продажа после их монет,
 //! свежесть данных), возврат USDT докупки без фиксированной части (costs_withdraw.rs return_b_top_up).
-//! Решение 464 (t238): исход нашей продажи монеты на площадке продажи неизвестен — котировки продажи нет
-//! (ride_settled::unsure).
-//! От чего зависит: costs_quote.rs, ride_quote.rs, ride_settled.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
+//! Решение 480 (меняет блокировку решения 464): исход нашей продажи монеты на площадке продажи неизвестен — продажа
+//! новой сделки считается после её остатка как ещё не исполненной (худший случай, ride_quote::ahead), и без групп.
+//! От чего зависит: costs_quote.rs, ride_quote.rs, sale_marks.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
 //! Настройки: нет (у источника Live — через costs_quote.rs и convert.rs).
 
 use std::future::Future;
@@ -101,6 +101,26 @@ impl Live<'_> {
         self.src.is_none() && !super::busy_budget::in_shadow()
     }
 
+    /// Решение 480: сдвиг продажи живого расчёта (ride_quote::ahead: группы + продажи с неизвестным исходом); покупка,
+    /// снимок, теневой замер — 0. Ошибки: Stop — как у ride_quote::ahead.
+    fn off(&self, d: &Direction, sell: bool) -> Result<Decimal, Fail> {
+        if sell && self.rides() {
+            super::ride_quote::ahead(self.core, d).map_err(Fail::Stop)
+        } else {
+            Ok(Decimal::ZERO)
+        }
+    }
+
+    /// Котировка как раньше (без сдвигов): снимок / теневой замер, или групп нет и (для продажи) продаж с неизвестным
+    /// исходом на площадке продажи нет — атомарные быстрые пути. Ошибок нет.
+    fn plain(&self, d: &Direction, sell: bool) -> bool {
+        if !self.rides() {
+            return true;
+        }
+        let unsure = sell && super::sale_marks::any_unsure(self.core, &d.sell_on, &d.asset);
+        super::ride_quote::idle(self.core, d) && !unsure
+    }
+
     /// Решение 237: затраты плана снимка (входы момента решения); None — живой расчёт или входы не сняты.
     /// Ошибок нет.
     fn plan(&self) -> Option<&super::plan_costs::PlanCosts> {
@@ -114,15 +134,9 @@ impl Source for Live<'_> {
     /// B (ride_quote.rs) и по данным новее продаж сделок групп (ride_trail.rs); покупка на A — по данным новее покупок
     /// идущих сделок группы. Групп нет — как раньше. Ошибки: как у fetch; Stop — данные не доказуемо свежее.
     async fn quote(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
-        // Решение 464 (t238, ревью): исход нашей продажи монеты на площадке продажи неизвестен — продажи новой сделки
-        // там не считаем и без идущих сделок (не торгуем вслепую; атомарный быстрый путь — sale_marks.rs).
-        if sell
-            && self.rides()
-            && let Some(why) = super::ride_settled::unsure(self.core, d)
-        {
-            return Err(Fail::Stop(why));
-        }
-        if !self.rides() || super::ride_quote::idle(self.core, d) {
+        // Решение 480: исход нашей продажи монеты на площадке продажи неизвестен — не блокировка, а худший случай:
+        // ветка ride_quote::live со сдвигом на её остаток (и без идущих сделок; быстрый путь — sale_marks.rs).
+        if self.plain(d, sell) {
             return super::costs_quote::fetch(self.core, d, sell, qty, self.src).await;
         }
         // Решение 394: ветка докупки — в куче (размер будущего котировки как раньше; путь сделки чувствителен к стеку).
@@ -131,23 +145,21 @@ impl Source for Live<'_> {
 
     /// Решение 250: исполнимое количество — живое через контракт quote_fills (costs_quote.rs fillable); со снимком
     /// рынка — fillable_qty котировки снимка (как раньше). Решение 394: продажа на B при идущих сделках группы на той
-    /// же B — исполнимое на (их монеты + объём) минус их монеты. Ошибки: как у quote.
+    /// же B — исполнимое на (их монеты + объём) минус их монеты; решение 480 — и остаток продаж с неизвестным исходом
+    /// (ride_quote::ahead). Ошибки: как у quote.
     async fn fillable(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Decimal, Fail> {
         if self.src.is_some() {
             return self.quote(d, sell, qty).await.map(|q| q.fillable_qty);
         }
-        let off = if sell && self.rides() && !super::ride_quote::idle(self.core, d) {
-            super::ride_quote::sell_ahead(self.core, d)
-        } else {
-            Decimal::ZERO
-        };
-        // Решение 394: сдвиг 0 (докупка выключена или групп нет) — тот же вызов, что раньше.
+        let off = self.off(d, sell)?;
+        // Решение 394: сдвиг 0 (докупка выключена или групп нет, продаж с неизвестным исходом нет) — тот же вызов.
         let f = super::costs_quote::fillable(self.core, d, sell, qty + off).await?;
         Ok((f - off).max(Decimal::ZERO))
     }
 
     /// Худшая цена (costs_quote.rs worst). Решение 394: живая продажа на B при идущих сделках группы на той же B —
-    /// уровень стакана на (их монеты + объём): наш ордер дойдёт до него, если они продадут раньше. Ошибки: как у worst.
+    /// уровень стакана на (их монеты + объём): наш ордер дойдёт до него, если они продадут раньше; решение 480 — и
+    /// остаток продаж с неизвестным исходом (ride_quote::ahead). Ошибки: как у worst; Stop — как у ahead.
     fn worst(
         &self,
         d: &Direction,
@@ -160,11 +172,7 @@ impl Source for Live<'_> {
         } else {
             (&d.buy_on, Side::Buy)
         };
-        let off = if sell && self.rides() && !super::ride_quote::idle(self.core, d) {
-            super::ride_quote::sell_ahead(self.core, d)
-        } else {
-            Decimal::ZERO
-        };
+        let off = self.off(d, sell)?;
         super::costs_quote::worst(self.core, v, &d.asset, side, qty + off, avg, self.src)
     }
 

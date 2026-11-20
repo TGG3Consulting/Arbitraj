@@ -5,9 +5,12 @@
 //! инициализирован ли пул), isPoolPaused, isVaultPaused (Vault.swap — _ensureUnpaused); у стейблсвапа ещё
 //! getAmplificationParameter (A на блоке с рампой по времени). Неизменяемое — load_balancer_v3_fixed.rs. Собирает
 //! PoolState::VaultPool с частью V3. Балансы и курсы меняются без событий пула — вид перечитывается каждым блоком.
+//! Решение 452: своё у выпуска и крючка (веса LBP / QuantAMM на блоке, окно LBP, виртуальные балансы ReClamm,
+//! параметры StableSurge / MEV Capture, чаевые ArbOS) — load_balancer_v3_kinds.rs, в той же пачке после общих шести.
 //! Кто вызывает: pools/load.rs и pools/load_site.rs (ветка Proto::BalancerV3).
-//! От чего зависит: ctx.rs, node/call.rs, abi_balancer_v3.rs, load_balancer_v3_fixed.rs.
-//! Настройки: dex.vault, dex.bv3_* [DEX вида balancer_v3]; dex.multicall3 [площадка DEX].
+//! От чего зависит: ctx.rs, node/call.rs, abi_balancer_v3.rs, load_balancer_v3_fixed.rs, load_balancer_v3_kinds.rs.
+//! Настройки: dex.vault, dex.bv3_* [DEX вида balancer_v3]; dex.arb_sys, dex.arb_owner_public [площадка DEX; пулы с
+//! MEV Capture]; dex.multicall3 [площадка DEX].
 //!
 //! Источник — шапка abi_balancer_v3.rs; Vault.sol (20241204-v3-vault) L197-L222 (swap: _ensureUnpaused,
 //! withInitializedPool, _loadPoolDataUpdatingBalancesAndYieldFees(ROUND_DOWN) = getCurrentLiveBalances —
@@ -23,10 +26,11 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::node::call;
-use super::abi_balancer_v3::{IBalancerV3Pool as P, IBalancerV3Vault as V};
-use super::balancer_v3_factories::Release;
+use super::abi_balancer_v3::IBalancerV3Vault as V;
+use super::balancer_v3_hooks::HookKind;
 use super::families::Family;
 use super::load_balancer_v3_fixed::{Fixed, fixed};
+use super::load_balancer_v3_kinds as kinds;
 
 /// Состояние пула на блоке. Принимает: окружение, вид DEX, пул, пару, блок-тег. Ошибки: NotConfigured (dex.vault,
 /// dex.bv3_*), узел, ответ не по ABI, пул не принят (крючок обмена, не из фабрик), несогласованное состояние.
@@ -43,7 +47,8 @@ pub async fn load(
 }
 
 /// Сетевое чтение пула без пары (одно чтение на все пары пула, решение 295). Принимает: окружение, вид, пул, блок-тег.
-/// Возвращает: неизменяемое и ответы calls. Ошибки: как load.
+/// Возвращает: неизменяемое и ответы calls. Ошибки: как load; у пула с крючком MEV Capture не заданы dex.arb_sys /
+/// dex.arb_owner_public — NotConfigured.
 pub async fn read(
     ctx: &Ctx,
     f: &Family,
@@ -52,12 +57,23 @@ pub async fn read(
 ) -> GatewayResult<(Fixed, Vec<Result<Bytes, String>>)> {
     let vault = ctx.dex_addr("dex.vault", f.id)?;
     let fx = fixed(ctx, f, vault, pool, tag).await?;
-    let got = call::try_many(ctx, &calls(vault, pool, &fx), tag).await?;
+    let pre = match fx.hook {
+        HookKind::Mev(_) => Some((ctx.addr("dex.arb_sys")?, ctx.addr("dex.arb_owner_public")?)),
+        _ => None,
+    };
+    let got = call::try_many(ctx, &calls(vault, pool, &fx, pre), tag).await?;
     Ok((fx, got))
 }
 
-/// Вызовы пачки чтения (порядок — как разбирает decode; у стейблсвапа седьмой — A пула). Ошибок нет.
-pub fn calls(vault: Address, pool: Address, fx: &Fixed) -> Vec<(Address, Bytes)> {
+/// Вызовы пачки чтения: шесть общих (порядок — как разбирает decode), затем свои у выпуска и крючка
+/// (load_balancer_v3_kinds.rs). Принимает: хранилище, пул, неизменяемое, адреса ArbSys / ArbOwnerPublic (крючок MEV
+/// Capture). Ошибок нет.
+pub fn calls(
+    vault: Address,
+    pool: Address,
+    fx: &Fixed,
+    pre: Option<(Address, Address)>,
+) -> Vec<(Address, Bytes)> {
     let mut l: Vec<(Address, Bytes)> = vec![
         (vault, V::getPoolTokenInfoCall { pool }.abi_encode().into()),
         (vault, V::getCurrentLiveBalancesCall { pool }.abi_encode().into()),
@@ -66,15 +82,14 @@ pub fn calls(vault: Address, pool: Address, fx: &Fixed) -> Vec<(Address, Bytes)>
         (vault, V::isPoolPausedCall { pool }.abi_encode().into()),
         (vault, V::isVaultPausedCall {}.abi_encode().into()),
     ];
-    if !fx.release.weighted() {
-        l.push((pool, P::getAmplificationParameterCall {}.abi_encode().into()));
-    }
+    l.extend(kinds::calls(pool, fx, pre));
     l
 }
 
 /// Разбор ответов пачки (без сети; его же зовут тесты на записанных ответах). Принимает: пул, неизменяемое, ответы
 /// calls, пару. Возвращает: VaultPool с частью V3; пауза пула / хранилища или пул не инициализирован — paused = true.
-/// Ошибки (текст): откат вызова, не по ABI, точность A ≠ 1000, токены изменились, длины не совпали, монеты пары нет.
+/// Ошибки (текст): откат вызова, не по ABI, токены изменились, длины не совпали, монеты пары нет, разбор вида
+/// (load_balancer_v3_kinds.rs).
 pub fn decode(
     pool: Address,
     fx: &Fixed,
@@ -96,36 +111,16 @@ pub fn decode(
     let cfg = V::getPoolConfigCall::abi_decode_returns(ok(3)?).map_err(dec)?;
     let pool_paused = V::isPoolPausedCall::abi_decode_returns(ok(4)?).map_err(dec)?;
     let vault_paused = V::isVaultPausedCall::abi_decode_returns(ok(5)?).map_err(dec)?;
-    let (curve, rule) = match fx.release {
-        Release::Weighted | Release::WeightedMin => {
-            let rule = if fx.release == Release::WeightedMin {
-                VaultV3Rule::WeightedMin {
-                    min: fx.min_balances.clone(),
-                }
-            } else {
-                VaultV3Rule::Weighted
-            };
-            let w = fx.weights.clone();
-            (VaultCurve::Weighted { weights: w }, rule)
-        }
-        Release::Stable | Release::StableGuard => {
-            let a = P::getAmplificationParameterCall::abi_decode_returns(ok(6)?).map_err(dec)?;
-            if a.precision != U256::from(1_000u32) {
-                return Err(format!("точность A {} ≠ 1000 (StableMath.sol L38)", a.precision));
-            }
-            let rule = if fx.release == Release::StableGuard {
-                VaultV3Rule::StableGuard
-            } else {
-                VaultV3Rule::Stable
-            };
-            (VaultCurve::Stable { amp: a.value }, rule)
-        }
-    };
+    let rest = got.get(6..).unwrap_or_default();
+    let last = &info.lastBalancesLiveScaled18;
+    let (curve, rule, hook) = kinds::decode(fx, rest, &live, last, cfg.isPoolInitialized)?;
     let v3 = VaultV3 {
         live,
         rates: rates.tokenRates,
         min_trade: fx.min_trade,
         rule,
+        hook,
+        open: fx.release.open(),
     };
     let paused = pool_paused || vault_paused || !cfg.isPoolInitialized;
     let parts = Parts {
@@ -164,10 +159,14 @@ pub fn state(p: Parts, v3: VaultV3, pair: (Address, Address)) -> Result<PoolStat
     let n = p.tokens.len();
     let weights_ok = match &p.curve {
         VaultCurve::Weighted { weights } => weights.len() == n,
+        // Решение 452: Gyro, ReClamm, LBP с фиксированной ценой — ровно два токена.
+        VaultCurve::V3 => n == 2,
         VaultCurve::Stable { .. } => true,
     };
     let min_ok = match &v3.rule {
         VaultV3Rule::WeightedMin { min } => min.len() == n,
+        // Решение 452: LBP — два токена; нижние балансы — только у выпуска 4.
+        VaultV3Rule::Lbp(l) => n == 2 && (l.min.is_empty() || l.min.len() == n),
         _ => true,
     };
     let lens = [p.balances.len(), p.scaling.len(), v3.live.len(), v3.rates.len()];

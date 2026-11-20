@@ -26,8 +26,11 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
-- Решение 441 (T433-F2, Balancer V3): событие PoolRegistered хранилища V3 не слушается (новые пулы — из справочника
-  индексатора, pools/created_log.rs); исполнитель v4 не пересобран (contracts/build.sh; out/v3/ — копия v3) и нет EVM-теста шага
+- Решение 452 (T433-F2, доделка Balancer V3): обмен через буфер ERC4626 не строится (вопрос docs/TASKS.md «Решение 452»,
+  п. 2); MEV Capture при сборе чаевых ArbOS — без котировки (п. 3); ReClamm 2025 при сдвиге — без котировки (п. 5);
+  тест tests/arbitrum_balancer_v3.rs — #[ignore] до записи узла. `wc -l`: pools/load_balancer_v3_kinds.rs 220 (сверх
+  200), pools/created_log.rs 356 (было 349), pools/families.rs +2.
+- Решение 441 (T433-F2, Balancer V3): событие PoolRegistered хранилища V3 — подключено решением 452; исполнитель v4 не пересобран (contracts/build.sh; out/v3/ — копия v3) и нет EVM-теста шага
   BALANCER_V3 (contracts/evmtest); тест tests/arbitrum_balancer_v3.rs — #[ignore] до записи узла; пулы с крючком обмена и
   виды Gyro / ReClamm / LBP не подключены (docs/TASKS.md, «Решение 441»). `wc -l`: math/balancer_v3.rs, load_balancer_v3.rs —
   в пределах 200; pools/families.rs (было 651) — давно сверх, +Proto::BalancerV3.

@@ -607,14 +607,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::BalancerV2 => list.extend(["dex.vault", "dex.factory"]),
         // Balancer V3 (решение 441): хранилище (состояние, обмен), роутер V3 — квотер сверки querySwapSingleTokenExactIn
         // (dex.quoter), списки фабрик по выпускам (пустой список — у DEX нет фабрик этого выпуска).
-        Proto::BalancerV3 => list.extend([
-            "dex.vault",
-            "dex.quoter",
-            "dex.bv3_weighted_factories",
-            "dex.bv3_weighted_min_factories",
-            "dex.bv3_stable_factories",
-            "dex.bv3_stable_guard_factories",
-        ]),
+        Proto::BalancerV3 => {
+            list.extend(["dex.vault", "dex.quoter"]);
+            // Решение 452: все списки фабрик по выпускам (balancer_v3_factories::LISTS) и списки крючков комиссии.
+            list.extend(super::balancer_v3_factories::LISTS.iter().map(|(n, _)| *n));
+            list.extend(["dex.bv3_stable_surge_hooks", "dex.bv3_mev_capture_hooks"]);
+        }
         // Liquidity Book V2.1 (решение 290): фабрика (getFactory пула и реестр getLBPairInformation). Квотер сверки — сам
         // пул getSwapOut (адрес не нужен).
         Proto::LbV21 => list.push("dex.factory"),

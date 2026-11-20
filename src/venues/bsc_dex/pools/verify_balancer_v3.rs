@@ -2,14 +2,15 @@
 //! Что делает: решение 441 (T433-F2) — проверка пула Balancer V3 из справочника на своём узле (решение 59). Кто
 //! подтверждает пул: (1) хранилище dex.vault знает пул — getPoolTokenInfo(пул) (withRegisteredPool: незарегистрированный
 //! адрес — откат) и отдаёт его токены; (2) пул создан фабрикой DEX — isPoolFromFactory фабрики из dex.bv3_*_factories
-//! (выпуск фабрики = правило расчёта, balancer_v3_factories.rs); (3) у пула нет крючка, участвующего в обмене
-//! (getHooksConfig: динамическая комиссия, beforeSwap, afterSwap — расчёт крючка не сверен); (4) монета и встречный
+//! (выпуск фабрики = правило расчёта, balancer_v3_factories.rs); (3) крючок обмена пула — только официальный крючок
+//! комиссии из списков DEX (решение 452, balancer_v3_hooks.rs: StableSurge, MEV Capture; beforeSwap / afterSwap и чужой
+//! крючок — отказ); (4) монета и встречный
 //! токен — среди токенов пула (CLAUDE.md: адрес токена у биржи = адрес в пуле). Один проход частями по dex.verify_batch.
 //! Кто вызывает: pools/verify.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_balancer_v3.rs, balancer_v3_factories.rs,
-//! load_balancer_v3_fixed.rs (swap_hook), discover.rs, multi_pair.rs, verify.rs.
-//! Настройки: dex.vault, dex.bv3_weighted_factories, dex.bv3_weighted_min_factories, dex.bv3_stable_factories,
-//! dex.bv3_stable_guard_factories [DEX вида balancer_v3].
+//! balancer_v3_hooks.rs, discover.rs, multi_pair.rs, verify.rs.
+//! Настройки: dex.vault, dex.bv3_*_factories, dex.bv3_stable_surge_hooks, dex.bv3_mev_capture_hooks [DEX вида
+//! balancer_v3].
 //!
 //! Источник: VaultExtension.sol (20241204-v3-vault) L520-L549 getPoolTokenInfo (withRegisteredPool), L585-L589
 //! getHooksConfig; BasePoolFactory.sol L69-L72 isPoolFromFactory (только пулы, созданные этой фабрикой).
@@ -25,13 +26,13 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_balancer_v3::{IBalancerV3Factory as F, IBalancerV3Vault as V};
 use super::balancer_v3_factories::{self as fac, Release};
+use super::balancer_v3_hooks::{self, Lists};
 use super::discover::{Found, sorted};
-use super::load_balancer_v3_fixed::swap_hook;
 use super::multi_pair;
 use super::verify::{Candidate, Verdict};
 
-/// Адреса проверки: пул, хранилище, фабрики с выпуском.
-pub type Plan = (Address, Address, Vec<(Address, Release)>);
+/// Адреса проверки: пул, хранилище, фабрики с выпуском, списки крючков (решение 452).
+pub type Plan = (Address, Address, Vec<(Address, Release)>, Lists);
 
 /// Проверка пачки кандидатов. Возвращает: итог по каждому. Ошибок нет (не задана настройка, пул не прошёл — отказ с
 /// причиной; сбой узла — Failed).
@@ -69,12 +70,13 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     let vault = ctx
         .dex_addr("dex.vault", c.family.id)
         .map_err(|e| e.message)?;
-    Ok((pool, vault, fac::all(ctx, c.family.id)?))
+    let hooks = balancer_v3_hooks::lists(ctx, c.family.id)?;
+    Ok((pool, vault, fac::all(ctx, c.family.id)?, hooks))
 }
 
 /// Вызовы проверки: getPoolTokenInfo и getHooksConfig хранилища, isPoolFromFactory каждой фабрики. Ошибок нет.
 pub fn calls(p: &Plan) -> Vec<(Address, Bytes)> {
-    let (pool, vault, list) = p;
+    let (pool, vault, list, _) = p;
     let pool = *pool;
     let mut l: Vec<(Address, Bytes)> = vec![
         (*vault, V::getPoolTokenInfoCall { pool }.abi_encode().into()),
@@ -89,7 +91,7 @@ pub fn calls(p: &Plan) -> Vec<(Address, Bytes)> {
 /// Решение по ответам (без сети). Принимает: кандидата, план, ответы по порядку calls. Возвращает: найденный пул или
 /// причину отказа.
 pub fn decide(c: &Candidate, p: &Plan, a: &[Result<Bytes, String>]) -> Result<Found, String> {
-    let (pool, _, list) = p;
+    let (pool, _, list, hooks_list) = p;
     let at = |i: usize| match a.get(i) {
         Some(Ok(b)) => Ok(b),
         Some(Err(r)) => Err(format!(
@@ -107,10 +109,10 @@ pub fn decide(c: &Candidate, p: &Plan, a: &[Result<Bytes, String>]) -> Result<Fo
             .map_err(|e| format!("isPoolFromFactory: {e}"))?;
         yes.push(r);
     }
-    fac::release(list, &yes).map_err(|w| format!("пул {pool:#x}: {w}"))?;
-    if let Some(why) = swap_hook(&hooks) {
-        return Err(format!("пул {pool:#x}: {why}"));
-    }
+    let release = fac::release(list, &yes).map_err(|w| format!("пул {pool:#x}: {w}"))?;
+    // Решение 452: крючки StableSurge / MEV Capture из списков DEX берутся, прочие крючки обмена — нет.
+    balancer_v3_hooks::kind(hooks_list, &hooks, release)
+        .map_err(|w| format!("пул {pool:#x}: {w}"))?;
     if !info.tokens.contains(&c.coin) || !info.tokens.contains(&c.quote) {
         return Err(format!(
             "среди токенов пула Balancer V3 {pool:#x} нет пары {} / {}",

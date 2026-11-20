@@ -32,6 +32,7 @@ use super::attach;
 use super::created::Watch;
 use super::discover::against;
 use super::discover_v4;
+use super::events_balancer_v3;
 use super::families::{self, Family, Proto};
 use super::index;
 use super::listen::Pools;
@@ -130,9 +131,9 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // TokensRegistered, IVault.sol L235, L273); подписка на них не подключена (техдолг, docs/ROADMAP.md) — новые
             // пулы приходят из справочника индексатора.
             Proto::BalancerV2 => continue,
-            // Balancer V3 (решение 441): пул регистрирует хранилище (PoolRegistered — от адреса Vault, IVaultEvents.sol);
-            // подписка не подключена (техдолг, docs/ROADMAP.md) — новые пулы приходят из справочника индексатора.
-            Proto::BalancerV3 => continue,
+            // Balancer V3 (решение 452): пул регистрирует хранилище — PoolRegistered от адреса Vault (IVaultEvents.sol
+            // L26-L35); кандидат — events_balancer_v3::registered.
+            Proto::BalancerV3 => ("dex.vault", events_balancer_v3::registered_topic(), false),
             // Liquidity Book V2.1 (решение 290): событие фабрики LBPairCreated(tokenX, tokenY, binStep — все indexed,
             // LBPair, pid) (ILBFactory.sol L49-L51) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы
             // приходят из справочника индексатора.
@@ -202,6 +203,12 @@ async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> R
             pool,
             coin: x.coin,
             quote: w.usdt,
+        }
+    } else if f.proto == Proto::BalancerV3 {
+        // Решение 452: токены пула Balancer V3 — в tokenConfig события (пул может быть многотокенным).
+        match events_balancer_v3::registered(f, log, w.usdt, &w.coins)? {
+            Some(c) => c,
+            None => return Ok(()),
         }
     } else {
         candidate(f, log, w.usdt)?

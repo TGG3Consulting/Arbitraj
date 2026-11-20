@@ -6,4 +6,4 @@
 
 | Файл | Что |
 | --- | --- |
-| `balancer_v3.py` | Решение 441 (T433-F2): пулы Balancer V3 — неизменяемое, состояние (как pools/load_balancer_v3.rs) и ответы Router V3 querySwapSingleTokenExactIn на одном блоке; тест — tests/arbitrum_balancer_v3.rs |
+| `balancer_v3.py` | Решения 441, 452 (T433-F2): пулы Balancer V3 всех видов — все вызовы бота к пулу (хранилище, фабрики из списков, виды пулов, крючок, прекомпайлы) и ответы Router V3 querySwapSingleTokenExactIn / ExactOut на одном блоке; тест — tests/arbitrum_balancer_v3.rs |

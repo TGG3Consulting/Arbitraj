@@ -21,10 +21,13 @@ use super::families::Family;
 use super::listen::{End, Pools};
 use super::{aero_cl, aero_cl_head, listen_log, pool_fail};
 
+/// Пулы одного DEX на блоке: семейство и пулы с крючком и шагом тиков.
+type ByDex<'a> = Vec<(&'static Family, Vec<(&'a Found, Address, i32)>)>;
+
 /// Все пулы вида на блоке: по DEX — одна пачка и один налог. Принимает: пулы (с тикерами), номер блока.
 /// Ошибки: End — ядро закрыло канал.
 pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Result<(), End> {
-    let mut by: Vec<(&'static Family, Vec<(&Found, Address, i32)>)> = Vec::new();
+    let mut by: ByDex = Vec::new();
     for (f, _) in pools.iter().copied() {
         let (PoolRef::Contract(a), Some(sp)) = (&f.reference, f.tick_spacing) else {
             continue;

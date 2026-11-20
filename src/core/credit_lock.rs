@@ -15,6 +15,7 @@
 //! будет прочитан (remain_fact.rs); закрытая / взятая человеком сделка счёт не путает. Человеку — остановка сделки
 //! «исход продажи неизвестен» (sell.rs).
 //! Замки — только в памяти (после перезапуска продаж в полёте нет). Пар (биржа, монета) — столько, сколько торговалось.
+//! Решение 463: selling ставит след продажи сделки группы (ride_trail::note_fill) сразу с учётом в памяти.
 //! Кто вызывает: core/sell.rs и core/sell_range_run.rs (selling), core/remain_fact.rs и core/credit_base.rs (fact),
 //! core/credit_apply.rs (sync).
 //! От чего зависит: coin_key.rs, engine.rs (учёт сделок), op_error.rs, tokio::sync::RwLock.
@@ -114,6 +115,11 @@ where
             Err(e) if e.outcome_unknown() => d.sale_unsure = true,
             Err(_) => {}
         }
+    }
+    // Решение 463 (t238): учёт уменьшен — след продажи сделки группы ставится сразу (ride_trail::note_fill), до снятия
+    // охраны: расчёт новой сделки не увидит остаток без проданного при пуле без этой продажи.
+    if let Ok(x) = &r {
+        super::ride_trail::note_fill(core, deal, x);
     }
     drop(g);
     r

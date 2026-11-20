@@ -283,6 +283,7 @@ pub mod reserve;
 pub mod reserve_check;
 pub mod ride_guard;
 pub mod ride_quote;
+pub mod ride_settled;
 pub mod ride_trail;
 pub mod risk;
 pub mod risk_count;

@@ -7,7 +7,9 @@
 //! пулы (пулы одного контракта — один пул, PoolRef::site) по блоку не раньше её блока; маршрут или блок неизвестны —
 //! «данные не доказуемо свежее» (отказ, расчёт повторит следующий тик). Проверка прошла по стакану / её пулам — след
 //! снят. Пишется только у сделок с группой докупки (exec.top_up = да): выключено — следа нет, ничего не меняется.
-//! Кто вызывает: ledger.rs (save → note), costs_source.rs (check).
+//! Решение 463 (t238): след ставится и сразу при учёте продажи в памяти (credit_lock::selling → note_fill), блок следа —
+//! самый высокий из продаж ключа.
+//! Кто вызывает: ledger.rs (save → note), credit_lock.rs (note_fill), ride_quote.rs (check).
 //! От чего зависит: coin_key.rs, deal.rs, trade_ops.rs (вид площадки), engine.rs, core/types.
 //! Настройки: нет.
 
@@ -15,7 +17,7 @@ use std::sync::atomic::Ordering;
 
 use chrono::{DateTime, Utc};
 
-use crate::core::types::{PoolRef, Quote, VenueId};
+use crate::core::types::{PoolRef, Quote, TradeResult, VenueId};
 use crate::gateway::contract::VenueKind;
 
 use super::coin_key::CoinKey;
@@ -55,7 +57,24 @@ pub fn note(core: &Core, deal: &Deal) {
     let Some(s) = deal.sells.iter().max_by_key(|s| s.finished_at) else {
         return;
     };
-    let t = Trail {
+    put(core, deal, s);
+}
+
+/// Что делает: решение 463 (t238) — след продажи сделки группы СРАЗУ, когда её учёт в памяти уменьшен на проданное
+/// (credit_lock::selling), а не только при сохранении (ledger::save идёт позже): между ними расчёт новой сделки видел
+/// бы остаток без проданного, а пул — возможно, ещё без продажи (пропуск её монет). Принимает: ядро, сделку (до
+/// продажи), итог продажи. Ошибок нет; без группы или без исполнения — ничего.
+pub fn note_fill(core: &Core, deal: &Deal, r: &TradeResult) {
+    if deal.group.is_none() || r.filled_qty <= rust_decimal::Decimal::ZERO {
+        return;
+    }
+    put(core, deal, r);
+}
+
+/// След из продажи `s` сделки: решение 463 — у одного ключа хранится самый поздний конец и САМЫЙ ВЫСОКИЙ блок из
+/// продаж (продажи разных сделок могут кончиться не в порядке блоков), пулы — объединение. Ошибок нет.
+fn put(core: &Core, deal: &Deal, s: &TradeResult) {
+    let mut t = Trail {
         deal: deal.id.clone(),
         at: s.finished_at,
         block: s.chain.as_ref().and_then(|c| c.block),
@@ -64,11 +83,32 @@ pub fn note(core: &Core, deal: &Deal) {
     let key = (CoinKey::of(&deal.direction.asset), s.request.venue.clone());
     let mut m = lk(&core.inner.trail);
     match m.get(&key) {
-        Some(old) if old.at >= t.at => {}
-        _ => {
-            if m.insert(key, t).is_none() {
-                core.inner.group_live.fetch_add(1, Ordering::Relaxed);
+        // Блок неизвестен хоть у одной продажи — у следа «неизвестен» (свежесть не доказуема, как раньше).
+        Some(old) if old.at >= t.at && (old.block.is_none() || old.block >= t.block) => {}
+        Some(old) => {
+            if old.at > t.at {
+                t.at = old.at;
+                t.deal = old.deal.clone();
             }
+            t.block = match (t.block, old.block) {
+                (Some(a), Some(b)) => Some(a.max(b)),
+                _ => None,
+            };
+            // Маршрут одной из продаж неизвестен — пулы следа «неизвестны» (проверка по любому маршруту).
+            if old.pools.is_empty() || t.pools.is_empty() {
+                t.pools.clear();
+            } else {
+                for p in &old.pools {
+                    if !t.pools.contains(p) {
+                        t.pools.push(p.clone());
+                    }
+                }
+            }
+            m.insert(key, t);
+        }
+        None => {
+            m.insert(key, t);
+            core.inner.group_live.fetch_add(1, Ordering::Relaxed);
         }
     }
 }

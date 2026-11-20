@@ -5,6 +5,7 @@
 //! От чего зависит: alloy-primitives.
 //! Настройки: нет.
 
+pub mod adaptive_fee;
 pub mod balancer_log_exp;
 pub mod balancer_log_exp_table;
 pub mod balancer_math;
@@ -14,6 +15,7 @@ pub mod bin_swap;
 pub mod curve_math;
 pub mod dmm;
 pub mod dodo_math;
+pub mod fee_algebra_v1;
 pub mod full_math;
 pub mod lb_fee;
 pub mod lb_swap;

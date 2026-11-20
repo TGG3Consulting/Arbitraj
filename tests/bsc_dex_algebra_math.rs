@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use alloy_primitives::{I256, U256};
 
-use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState};
+use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState, NextTick};
 use arb::venues::bsc_dex::math::swap_step::step_v3;
 use arb::venues::bsc_dex::math::tick_math::{MAX_TICK, max_sqrt_ratio, sqrt_ratio_at_tick};
 use arb::venues::bsc_dex::pools::ticks::{TickData, TickMap};
@@ -183,6 +183,7 @@ fn swap_crosses_one_tick() {
         liquidity: l0,
         fee: 600,
         ticks: &tm,
+        next: NextTick::Linked,
     };
     let amount = u("1000000000000000000"); // достаточно, чтобы пересечь тик 60 и продолжить
     let got = swap_algebra::swap(&s, false, true, amount).unwrap();
@@ -223,6 +224,7 @@ fn swap_stops_at_price_limit() {
         liquidity: l0,
         fee: 600,
         ticks: &tm,
+        next: NextTick::Linked,
     };
     let limit = sqrt_ratio_at_tick(30).unwrap(); // предел до тика 60 — тик не пересекается
     let amount = u("1000000000000000000");
@@ -251,6 +253,7 @@ fn swap_partial_at_window_edge() {
         liquidity: 2_000_000_000_000_000_000u128,
         fee: 600,
         ticks: &tm,
+        next: NextTick::Linked,
     };
     // Большая сумма вверх: цена дойдёт до края окна (тик 255), дальше тики неизвестны.
     let got = swap_algebra::swap(&s, false, true, u("1000000000000000000")).unwrap();

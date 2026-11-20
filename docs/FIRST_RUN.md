@@ -167,6 +167,13 @@ log.signal_hold (core/book_marks_on.rs).
 | --- | --- | --- | --- | --- |
 | dex.tick_read_band_algebra_pct | bsc_dex | не задавать, пока dex.tick_read_band_pct не выше 20; при подъёме dex.tick_read_band_pct выше 20 — СНАЧАЛА задать здесь прежнее значение dex.tick_read_band_pct (то, на котором Algebra работала до подъёма), ЗАТЕМ поднимать dex.tick_read_band_pct. *Метод, если прежде dex.tick_read_band_pct не была задана* (окно Algebra было n = dex.tick_words слов в сторону): окно сохраняет любое P, у которого band_words(P, 1) ≤ dex.tick_words, где band_words(P, 1) = ⌈T / 256⌉ + 1, T = ⌊−ln(1 − P/100) / ln 1,0001⌋ (load_v2v3.rs band_words, depth_band.rs band_ticks; нижняя сторона полосы шире верхней); то же неравенство: P < 100 · (1 − 1,0001^−(256 · (dex.tick_words − 1) + 1)). Посчитать по своему dex.tick_words (пример по формуле: при dex.tick_words = 2 — P меньше ≈2,537%). P на границе или выше — окно Algebra шире прежнего | Algebra V1/V1.9 (THENA Fusion) перечитывает пул целиком на каждом Mint/Burn: при шаге сырого битмапа 1 полоса 20% — ±10 слов (21 вызов слов на пул), 70% — ±49 (99 вызовов) + по вызову ticks() на каждый найденный тик. Не задана — Algebra следует dex.tick_read_band_pct | Решения 296, 319; load_algebra.rs raw_band_words |
 
+## Комиссия THENA Fusion по оракулу (решение 463)
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.fusion_fee_horizon_s | bsc_dex | числа нет: не меньше обычной паузы между Swap тихих пулов THENA Fusion (секунды) — посчитать по своей записи: время блока чтения минус время последней точки оракула пула (tests/data/bsc_thena_fusion_2026-11-20_t237: поля at_block / last_timepoint_ts) | тихий пул перечитывает оракул раз в горизонт (край горизонта — pools/fusion_head.rs, fusion_head_read.rs); больше горизонт — реже такие чтения, но больше частей getTimepoints (по dex.fusion_oracle_chunk точек) на каждом чтении оракула | Решение 463; pools/fusion_fee.rs, pools/fusion_oracle.rs |
+| dex.fusion_oracle_chunk | bsc_dex | подобрать по ответу узла: откат части getTimepoints с out of gas (журнал dex.pool, «getTimepoints на время …») — уменьшить; числа нет | факта газа getTimepoints на точку в репозитории нет; предел газа eth_call своего узла — RPCGasCap (docs/notes/own-node-connect-audit-2026-11-03.md, конфиг узла) | Решение 463 (ревью t236); pools/fusion_oracle.rs |
+
 ## Перечитывание Algebra по выходу полосы глубины за карту (решение 320)
 
 | Настройка | Область | Советуем | Обоснование | Источник |

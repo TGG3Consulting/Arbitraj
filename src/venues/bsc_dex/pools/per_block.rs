@@ -24,6 +24,9 @@
 //!   перечитываются все пулы — одной пачкой на блок (ревью 289, per_block_balancer.rs).
 //! • Liquidity Book V2.1 (решение 290): изменчивая часть комиссии считается от времени блока обмена
 //!   (PairParameterHelper.updateReferences L412-L421) — состояние всех пулов одной пачкой на блок (per_block_lb.rs).
+//! • THENA Fusion (решение 463): комиссия следующего блока зависит от времени — на каждой голове пересчитывается
+//!   локально по прочитанным данным оракула, без узла (fusion_head.rs); пул каждым блоком не перечитывается; у края
+//!   горизонта — чтение оракула, одновременно с чтениями остальных видов (ревью t236).
 //! Ещё — события общего контракта WooFi (WooSwap, Upgraded, Paused…): ссылка пар — PoolRef::Member (контракт,
 //! монета), лог приходит от адреса контракта — перечитываются все пары этого контракта на блоке события.
 //! Решение 295: пары многомонетного пула (PoolRef::Multi) видов «каждым блоком» (Curve NG) — одно чтение на контракт
@@ -81,7 +84,7 @@ pub fn needs(f: &Family) -> bool {
 
 /// Есть ли в пачке такие пулы. Ошибок нет.
 pub fn any(pools: &[(Found, String)]) -> bool {
-    pools.iter().any(|(f, _)| needs(f.family))
+    pools.iter().any(|(f, _)| needs(f.family)) || super::fusion_head::any(pools)
 }
 
 /// Перечитывать ли этот пул на каждом блоке. Ревью t118 (решение 286): пул iZiSwap / Biswap V3 без USDT в паре лесенки
@@ -99,8 +102,20 @@ pub fn each_block(f: &Found, usdt: Option<Address>) -> bool {
 }
 
 /// Новый блок: перечитать на нём прочитанные пулы этих видов (не прочитанные ведёт reload::retry). Не прочитался —
-/// пул недостоверен (valid = false) до следующего удачного чтения. Ошибки: End — ядро закрыло канал.
+/// пул недостоверен (valid = false) до следующего удачного чтения. Решение 463 (ревью t236, п. 3): комиссия THENA
+/// Fusion (fusion_head.rs: пересчёт без узла, у края горизонта — чтение оракула) — одновременно с чтениями остальных
+/// видов, а не перед ними. Ошибки: End — ядро закрыло канал (первая из частей).
 pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result<(), End> {
+    let (fusion, rest) = tokio::join!(
+        super::fusion_head::on_head(p, pools, block),
+        others(p, pools, block)
+    );
+    fusion?;
+    rest
+}
+
+/// Виды «каждым блоком» без THENA Fusion (см. on_head). Ошибки: End — ядро закрыло канал.
+async fn others(p: &Pools, pools: &[(Found, String)], block: u64) -> Result<(), End> {
     let usdt = p.tokens.usdt(&p.ctx).ok();
     let mut balancer = Vec::new();
     let mut lb = Vec::new();

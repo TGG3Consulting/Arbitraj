@@ -177,13 +177,14 @@ pub enum PoolState {
     /// динамическая (плагин волатильности), но внутри одного свопа постоянна — её текущее значение берётся из
     /// `globalState()` (fee, единицы 1e-6). `globalState() → (price, tick, fee, timepointIndex, communityFeeToken0,
     /// communityFeeToken1, unlocked)`, `liquidity() → uint128` — IAlgebraPoolState.sol (@cryptoalgebra/v1.9-core).
-    /// Карта тиков читается по СЫРОМУ битмапу `tickTable(int16)` (TickTable индексирует сырой тик, без деления на
-    /// tickSpacing) — math/swap_algebra.rs. Математика — math/swap_algebra.rs.
+    /// Решение 463: у THENA Fusion битмап `tickTable(int16)` СЖАТЫЙ (слово = floor(tick / tickSpacing) >> 8), а `fee` —
+    /// комиссия свопа СЛЕДУЮЩЕГО блока (по оракулу пула, не globalState.fee). Математика — math/swap_algebra.rs.
     Algebra {
         sqrt_price_x96: U256,
         tick: i32,
         liquidity: u128,
-        /// Текущая комиссия пула в пипсах (единицы 1e-6), из globalState.fee — постоянна на весь своп.
+        /// Комиссия пула в пипсах (единицы 1e-6), постоянна на весь своп: THENA Fusion — комиссия следующего блока
+        /// (решение 463), Algebra Integral — по globalState / fee() плагина.
         fee: u32,
     },
     /// PMM DODO (DVM/DPP/DSP, решения 80, 86): состояние кривой с контракта пула (getPMMStateForCall + getUserFeeRate).

@@ -18,7 +18,8 @@
 //!   tick >> 8), поэтому эта карта — ровно то, что дало бы чтение сырого битмапа по тем же словам. Инициализированных
 //!   тиков в этой карте нет (все 17 записанных ответов TickLens, слова 282…298, — пустые списки): эти тесты проверяют
 //!   только окно (слова) против полосы, не содержимое карты. Тик «после Swap» — край окна или первый тик за ним,
-//!   считается из записанного тика и окна load_algebra::raw_word_range (не выдуманное значение).
+//!   считается из записанного тика и окна load_algebra::row_range при шаге карты 1 (не выдуманное значение;
+//!   решение 463: у THENA Fusion окно считается при tickSpacing карты — у этой карты он 1, слова те же, что до 463).
 //! Третий тест (тик ровно hi у Integral) — настоящая запись Algebra Integral tests/data/algebra_integral_2026-11-06/
 //!   probe.json (tests/algebra_integral_common pool_state): пул thena-v3 0x26399a…, обход списка вверх кончился на
 //!   записанном тике −94980, окно load_algebra_integral::window — слова до −373 (hi = −95233), выше hi в карте ровно
@@ -42,7 +43,7 @@ use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::math::tick_math::sqrt_ratio_at_tick;
 use arb::venues::bsc_dex::pools::depth::off_map;
 use arb::venues::bsc_dex::pools::families;
-use arb::venues::bsc_dex::pools::load_algebra::raw_word_range;
+use arb::venues::bsc_dex::pools::load_algebra::row_range;
 use arb::venues::bsc_dex::pools::registry::Entry;
 use arb::venues::bsc_dex::pools::ticks::TickMap;
 
@@ -130,7 +131,7 @@ async fn algebra_off_map_by_setting() {
     set(&c, "dex.depth_band_pct", Some(json!(2))).await;
     let t0 = tick_of(&base);
     // Окно, которое прочитал бы load_algebra вокруг записанного тика (±2 слова при dex.tick_words = 2).
-    let win = raw_word_range(&c, t0).unwrap();
+    let win = row_range(&c, t0, 1).unwrap();
     let v3 = narrowed(&base, win);
     let top = i32::from(win.1) * 256 + 255;
     // Тик у верхнего края окна (полоса 2% ≈ 198 тиков вверх выходит за край) и первый тик за окном.
@@ -180,14 +181,14 @@ async fn algebra_no_reread_when_window_is_already_centered() {
     set(&c, "dex.depth_band_pct", Some(json!(10))).await;
     let t0 = tick_of(&base);
     let fusion = algebra(
-        &narrowed(&base, raw_word_range(&c, t0).unwrap()),
+        &narrowed(&base, row_range(&c, t0, 1).unwrap()),
         "thena_fusion",
     );
     assert_eq!(by_flag(&c, &fusion).await, (false, false, false));
     // Та же карта у V3 (без условия «перечитывание поможет») — полоса вне окна.
     assert!(off_map(
         &c,
-        &narrowed(&base, raw_word_range(&c, t0).unwrap())
+        &narrowed(&base, row_range(&c, t0, 1).unwrap())
     ));
 }
 

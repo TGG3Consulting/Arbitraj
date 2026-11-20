@@ -32,7 +32,7 @@ use super::registry::Entry;
 /// topic0 всех событий пула Integral: Swap/Mint/Burn (как V1.9) + SwapFee + Fee (1.2.2+) и Swap/Burn версии
 /// 1.2.0/1.2.1. Ошибок нет.
 pub fn topics() -> Vec<B256> {
-    let mut t = events_algebra::topics();
+    let mut t = events_algebra::base_topics();
     t.extend([
         P::SwapFee::SIGNATURE_HASH,
         P::Fee::SIGNATURE_HASH,

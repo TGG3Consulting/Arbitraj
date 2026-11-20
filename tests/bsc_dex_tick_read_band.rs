@@ -1,6 +1,6 @@
 //! Файл: tests/bsc_dex_tick_read_band.rs
 //! Что делает: решение 296 — дальность чтения карты тиков dex.tick_read_band_pct (load_v2v3::word_range,
-//! load_algebra::raw_word_range) на текущих тиках и tickSpacing всех пулов V3 / Infinity CL / Uniswap V4 живой записи
+//! load_algebra::row_range при шаге 1) на текущих тиках и tickSpacing всех пулов V3 / Infinity CL / Uniswap V4 живой записи
 //! 2026-10-25 (tests/data/depth_2026-10-25; tickSpacing 1, 10, 40 … 19997):
 //! - настройка не задана — границы ровно прежние: [w − n, w + n], n = max(dex.tick_words, band_words(dex.depth_band_pct))
 //!   (полоса глубины не задана и задана 2% — как на сервере 15.11), у сырого битмапа Algebra n = dex.tick_words;
@@ -22,7 +22,7 @@ mod tick_band_common;
 use rust_decimal::Decimal;
 use serde_json::json;
 
-use arb::venues::bsc_dex::pools::load_algebra::raw_word_range;
+use arb::venues::bsc_dex::pools::load_algebra::row_range;
 use arb::venues::bsc_dex::pools::load_v2v3::{band_words, word_range};
 use arb::venues::bsc_dex::pools::ticks::TickMap;
 
@@ -82,7 +82,7 @@ async fn unset_read_band_keeps_old_bounds_for_every_spacing() {
                 TICK_WORDS,
                 "{tag}: при 2% и без полосы — ±dex.tick_words"
             );
-            let raw = raw_word_range(&c, *tick).unwrap();
+            let raw = row_range(&c, *tick, 1).unwrap();
             let rw = *tick >> 8;
             assert_eq!(
                 raw,
@@ -141,7 +141,7 @@ async fn read_band_adds_words_only_for_small_spacing() {
                 assert_eq!(got, old, "{tag}: tickSpacing 10 при {pct}% — без изменений");
             }
             // Сырой битмап Algebra: шаг 1 — те же слова, что у tickSpacing 1.
-            let raw = raw_word_range(&c, *tick).unwrap();
+            let raw = row_range(&c, *tick, 1).unwrap();
             assert_eq!(half(raw), ts1_words, "{tag}: сырой битмап, {pct}%");
         }
         assert!(

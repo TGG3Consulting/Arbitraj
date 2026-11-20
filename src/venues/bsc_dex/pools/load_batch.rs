@@ -94,8 +94,8 @@ pub async fn states(
         }
     }
     // Bin, KyberSwap Elastic, DODO PMM, Algebra, Solidly и Slipstream — по одному (см. шапку; у Elastic обход списка
-    // тиков не ложится на ступени по словам, у DODO чтение кривой — свой набор вызовов, у Algebra сырой битмап tickTable
-    // индексирует сам тик — не компрессированные слова V3/CL; у Solidly свой Pair-интерфейс (metadata + getFee фабрики);
+    // тиков не ложится на ступени по словам, у DODO чтение кривой — свой набор вызовов, у Algebra (THENA Fusion) сжатый битмап
+    // tickTable и tickSpacing пула читаются своим загрузчиком (load_algebra.rs, решение 463), не ступенями V3/CL; у Solidly свой Pair-интерфейс (metadata + getFee фабрики);
     // у Slipstream — форк Uni V3, но slot0 без feeProtocol и тики прямыми геттерами tickBitmap/ticks, а не через
     // TickLens, как ступени V3; под общие ступени V2/V3 не ложится; load_slipstream.rs).
     for (i, w) in wants.iter().enumerate() {

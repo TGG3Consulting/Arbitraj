@@ -162,6 +162,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
         // шаг 18, v2.
         "lb_v21" => ExecKind::Lb,
+        // Решение 446: LB V2.2 — тот же swap(swapForY, to) и getTokenX() (lfj-gg/joe-v2@v2.2.0 src/LBPair.sol L134,
+        // L493-L579; вызывающий не ограничен), шаг 18 без изменений исполнителя.
+        "lb_v22" => ExecKind::Lb,
         // Решение 395 (t181): пулы внутри менеджеров — шаги v3. Uniswap V4: PoolManager.unlock / swap / sync / settle /
         // take (Uniswap/v4-core@bea7f6d1 src/PoolManager.sol L104-L114, L187-L227, L279-L302); Infinity CL и Bin:
         // Vault.lock / sync / settle / take + CLPoolManager.swap / BinPoolManager.swap (pancakeswap/infinity-core@3c5ef1be

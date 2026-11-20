@@ -1760,6 +1760,30 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** dex.pool_manager.
 - **Статус:** в релизе 141619bc.
 
+### `dex.lb_implementations`
+
+- **Задача / решение:** T433-F7 / T433-067, решение 446.
+- **Появилась:** 2026-11-20, ветка t223-f7/arb-family-f7.
+- **Кейс:** решение 433 (Тигран 20.11.2026: все DEX сети): LFJ V2.2 на Arbitrum One (GeckoTerminal `traderjoe-v2-2-arbitrum`) — пулы Liquidity Book V2.2. Фабрика LBFactory может сменить реализацию пула для новых пулов (setLBPairImplementation, LBFactory.sol L307), а клон навсегда исполняет свою; математика вида — порт исходника lfj-gg/joe-v2@v2.2.0. Чтобы не считать пул чужого кода нашей формулой, пул берётся только при реализации из списка, сверенной с исходником.
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (ключ `traderjoe-v2-2-arbitrum@arbitrum`); каталог src/settings/catalog/dex_lb.rs.
+- **Что ставить:** совета нет, решает Тигран: адреса из записи tools/arbitrum_record/lb_v22.py (implementation() пулов, getLBPairImplementation() фабрики), каждый — после сверки кода реализации с исходником (docs/FIRST_RUN.md).
+- **Если не задана:** в каталоге без .optional(); src/venues/bsc_dex/pools/families.rs required (ветка Proto::LbV22) — DEX «не подключена: не задана dex.lb_implementations» (classify), пулы DEX не проверяются и не торгуются.
+- **Влияет на торговлю:** да — какие пулы LB V2.2 допускаются (pools/verify_lb22.rs third_pass).
+- **Связанные ключи:** dex.kind (`lb_v22`), dex.factory, dex.lb_hooks_allowed.
+- **Статус:** ещё не в релизе (ветка t223-f7/arb-family-f7).
+
+### `dex.lb_hooks_allowed`
+
+- **Задача / решение:** T433-F7 / T433-067, решение 446.
+- **Появилась:** 2026-11-20, ветка t223-f7/arb-family-f7.
+- **Кейс:** у пула Liquidity Book V2.2 есть крючки (lfj-gg/joe-v2@v2.2.0 src/libraries/Hooks.sol): при флаге beforeSwap / afterSwap пул в swap зовёт чужой контракт со всем газом и откатывает обмен, если тот откатился (Hooks.sol L350-L369). Выход обмена крючок не меняет, но может откатить сделку (белый список) и тратит газ. Крючки меняет фабрика в любой момент (событие HooksParametersSet). Какие крючки стоят на пулах Arbitrum — не записано (записи узла нет).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (ключ `traderjoe-v2-2-arbitrum@arbitrum`); каталог src/settings/catalog/dex_lb.rs.
+- **Что ставить:** совета нет, решает Тигран: не задавать, пока запись lb_v22.py не покажет пулы с крючком обмена; адрес крючка — после сверки его кода.
+- **Если не задана:** необязательная; src/venues/bsc_dex/pools/lb_hooks.rs allowed → None, decide: пул без флага обмена берётся, пул с флагом обмена — отказ проверки (verify_lb22.rs) или ошибка чтения (load.rs → lb_hooks::check: пул недостоверен с причиной в журнале dex.pool).
+- **Влияет на торговлю:** да — пулы LB V2.2 с крючком обмена не берутся без адреса крючка в списке.
+- **Связанные ключи:** dex.kind (`lb_v22`), dex.lb_implementations.
+- **Статус:** ещё не в релизе (ветка t223-f7/arb-family-f7).
+
 ### `dex.stable_pools`
 
 - **Задача / решение:** номер задачи в коммите не указан, решение 122.

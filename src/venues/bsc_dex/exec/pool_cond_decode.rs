@@ -69,7 +69,7 @@ fn fits(p: Proto, st: &PoolState) -> bool {
         }
         PoolState::Cl { .. } => p == Proto::UniswapV4,
         PoolState::Elastic { .. } => p == Proto::KyberElastic,
-        PoolState::LbBin(_) => p == Proto::LbV21,
+        PoolState::LbBin(_) => matches!(p, Proto::LbV21 | Proto::LbV22),
         _ => false,
     }
 }

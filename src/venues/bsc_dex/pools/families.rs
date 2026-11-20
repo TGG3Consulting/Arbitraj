@@ -186,6 +186,13 @@ pub enum Proto {
     /// getSwapOut (math/lb_swap.rs, lb_fee.rs); перечитывание каждым блоком (время блока). Квотер сверки — сам пул
     /// getSwapOut. Исполнение — шаг LB исполнителя v2 (вход переводом в пул, swap(swapForY, to)). Вид ядра — LbBin.
     LbV21,
+    /// Liquidity Book V2.2 (решение 446; lb_v22, DEX traderjoe-v2-2-arbitrum — LFJ V2.2 на Arbitrum One): тот же пул,
+    /// что у V2.1 (геттеры, события, swap, getSwapOut — lfj-gg/joe-v2@v2.2.0 1297c38), отличия: крючки пула (вызов
+    /// beforeSwap / afterSwap в swap — pools/lb_hooks.rs: крючок обмена допускается только из dex.lb_hooks_allowed),
+    /// откат обмена при ликвидности бина больше MAX_LIQUIDITY_PER_BIN (math/lb_cap.rs), другая раскладка хранилища
+    /// (_parameters — слот 3, _reserves — 4: защита от повторного входа и Initializable — в своих слотах ERC-7201),
+    /// реализация пула implementation() — из dex.lb_implementations (pools/verify_lb22.rs). Вид ядра — LbBin.
+    LbV22,
 }
 
 impl Proto {
@@ -357,6 +364,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "balancer_v2" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
         // Liquidity Book V2.1 (решение 290): в графе и сигналах (порт getSwapOut); исполнение — шаг LB (только v2).
         "lb_v21" => (PoolKind::LbBin, Proto::LbV21, true, false, false),
+        // Liquidity Book V2.2 (решение 446): тот же путь, что у lb_v21 (порт getSwapOut + откат MAX_LIQUIDITY_PER_BIN), шаг LB.
+        "lb_v22" => (PoolKind::LbBin, Proto::LbV22, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
         // Router их не исполняет (tradable = false); исполнение — шагом контракта-исполнителя: STABLE_U256 у pancake / lista
         // (exchange с индексами uint256), SADDLE у saddle (swap uint8 + deadline) — exec_kind.rs (решение 122 X, стейблсвапы).
@@ -596,6 +605,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Liquidity Book V2.1 (решение 290): фабрика (getFactory пула и реестр getLBPairInformation). Квотер сверки — сам
         // пул getSwapOut (адрес не нужен).
         Proto::LbV21 => list.push("dex.factory"),
+        // Liquidity Book V2.2 (решение 446): ещё реализации пула, сверенные с исходником (implementation() пула).
+        Proto::LbV22 => list.extend(["dex.factory", "dex.lb_implementations"]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

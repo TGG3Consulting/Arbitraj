@@ -26,6 +26,7 @@
 //! | Slipstream | пул | 6 — slot0; 16 — liquidity + maxLiquidityPerTick | velodrome-finance/slipstream 193a6b85 contracts/core/CLPool.sol:41-51 (factory 0 … factoryRegistry 5), 53-69 (slot0 6: 240 бит), 72-95 (7…14), 98-102 (15), 105-107 (16) |
 //! | KyberElastic | пул | 3 — poolData (sqrtP, тики, locked); 4 — baseL, reinvestL | KyberNetwork/ks-elastic-sc 4ab08c0a contracts/PoolStorage.sol:21-32 (PoolData), 62-68 (immutable), 70 (ticks 0), 71 (1), 73 (2), 75 (poolData 3, 4, …); ERC20 токена reinvest — после (Pool.sol:26, правая база) |
 //! | LbV21 | пул | 4 — _parameters (activeId, изменчивость); 5 — _reserves | lfj-gg/joe-v2 v2.1.0 8eeb42d7 src/LBToken.sol:21-31 (0-2), src/libraries/ReentrancyGuard.sol:30 (3), src/LBPair.sol:31 (порядок баз), 58-63 (_parameters 4, _reserves 5) |
+//! | LbV22 (решение 446) | пул | 3 — _parameters; 4 — _reserves | lfj-gg/joe-v2 v2.2.0 1297c38 src/LBToken.sol:21-31 (0-2), src/libraries/ReentrancyGuardUpgradeable.sol:44-50 и OpenZeppelin contracts-upgradeable b40cdf32 Initializable.sol:65-77 (свои слоты ERC-7201 — обычных не занимают), src/LBPair.sol:33 (порядок баз), 63-65 (_parameters 3, _reserves 4); на узле не сверено — запись tools/arbitrum_record/lb_v22.py, самопроверка exec/pool_cond_check.rs |
 //! | UniswapV4 | PoolManager | S = keccak256(PoolId . 6): S — slot0 (цена, тик, комиссии), S+3 — liquidity | Uniswap/v4-core bea7f6d1 src/libraries/StateLibrary.sol:11 (POOLS_SLOT 6), 19 (LIQUIDITY_OFFSET 3), 324-325 (слот пула); src/libraries/Pool.sol:83-91 |
 //! | BalancerV2 | — | без условия | балансы в общем Vault: слоты посчитаны только вручную по AST (/home/claude/src-ext/reports/arb-known-accounts.md, 3.1), не сверены — docs/TASKS.md «Решение 438» |
 //! | WooPP, пары общего контракта (PoolRef::Member) | — | без условия | общий контракт на все монеты, слоты не опубликованы |
@@ -116,6 +117,9 @@ pub fn rule(e: &Entry) -> How {
         }
         (PoolRef::Contract(a), Proto::LbV21) => {
             own(*a, &[4, 5], "_parameters + _reserves (слоты 4, 5)")
+        }
+        (PoolRef::Contract(a), Proto::LbV22) => {
+            own(*a, &[3, 4], "_parameters + _reserves (слоты 3, 4)")
         }
         (PoolRef::Contract(a), _) => How::Root(*a),
         (PoolRef::Multi { contract, .. }, _) => How::Root(*contract),

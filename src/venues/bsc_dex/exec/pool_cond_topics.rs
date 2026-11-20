@@ -10,7 +10,8 @@
 //!   диапазоне — liquidity (v3-core 5ea68a77 UniswapV3Pool.sol:336-351); события — как слушает pools/events_v3.rs;
 //! - Kyber Elastic (poolData, baseL/reinvestL): Swap, Mint, Burn, BurnRTokens (pools/abi_elastic.rs);
 //! - LB 2.1 (_parameters, _reserves): Swap, DepositedToBins, WithdrawnFromBins (lfj-gg/joe-v2 8eeb42d7
-//!   src/LBPair.sol:546-550, 608, 652, 712; pools/abi_lb.rs);
+//!   src/LBPair.sol:546-550, 608, 652, 712; pools/abi_lb.rs); LB 2.2 (решение 446) — те же события
+//!   (v2.2.0 1297c38 src/LBPair.sol:538, 564-568, 677-682, 748-751);
 //! - Uniswap V4 (slot0 и liquidity пула у PoolManager): Swap и ModifyLiquidity с topics[1] = PoolId (pools/abi_v4.rs).
 //!
 //! Не ловятся (сделка не теряет долю чаевых из-за них): записи slot0 без этих событий (V3 setFeeProtocol,
@@ -52,7 +53,7 @@ pub fn topics(e: &Entry) -> Option<Vec<B256>> {
             IElasticPool::Burn::SIGNATURE_HASH,
             IElasticPool::BurnRTokens::SIGNATURE_HASH,
         ],
-        Proto::LbV21 => vec![
+        Proto::LbV21 | Proto::LbV22 => vec![
             ILBPair::Swap::SIGNATURE_HASH,
             ILBPair::DepositedToBins::SIGNATURE_HASH,
             ILBPair::WithdrawnFromBins::SIGNATURE_HASH,

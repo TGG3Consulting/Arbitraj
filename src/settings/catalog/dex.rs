@@ -49,6 +49,7 @@ pub const DEX_KINDS: &[&str] = &[
     "smardex",
     "balancer_v2",
     "lb_v21",
+    "lb_v22",
     "pancake_stableswap",
     "lista_stableswap",
     "saddle_stableswap",

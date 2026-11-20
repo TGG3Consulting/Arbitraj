@@ -70,7 +70,7 @@ pub fn request(
         return super::quoter_balancer::request(ctx, e, token_in, amount);
     }
     // Liquidity Book V2.1 (решение 290): квотер — сам пул, getSwapOut через eth_call (quoter_lb.rs).
-    if e.family.proto == Proto::LbV21 {
+    if matches!(e.family.proto, Proto::LbV21 | Proto::LbV22) {
         return super::quoter_lb::request(ctx, e, token_in, amount);
     }
     let big = || ctx.err(ErrorCode::NoRoute, "сумма больше uint128");
@@ -383,7 +383,7 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     if e.family.proto == Proto::BalancerV2 {
         return super::quoter_balancer::decode(out);
     }
-    if e.family.proto == Proto::LbV21 {
+    if matches!(e.family.proto, Proto::LbV21 | Proto::LbV22) {
         return super::quoter_lb::decode(out);
     }
     // Infinity Stable: основной квотер — CLQuoter (amountOut, gasEstimate), как у Infinity CL (ветка PoolKey ниже).

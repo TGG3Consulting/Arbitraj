@@ -31,7 +31,7 @@ use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_call_with};
 pub use super::verify_rules::{Read, check, fill, registered, registered_for, v2_fee_pips, v3_abi};
 use super::{
-    fee_probe, verify_algebra, verify_balancer, verify_curve, verify_lb, verify_curve_ng, verify_dodo, verify_inf_stable, verify_izi, verify_metric,
+    fee_probe, verify_algebra, verify_balancer, verify_curve, verify_lb, verify_lb22, verify_curve_ng, verify_dodo, verify_inf_stable, verify_izi, verify_metric,
     verify_maverick, verify_solidly, verify_stable_u, verify_v4,
 };
 
@@ -86,6 +86,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut izi = Vec::new();
     let mut balancer = Vec::new();
     let mut lb = Vec::new();
+    let mut lb22 = Vec::new();
     let mut stable_u = Vec::new();
     let mut mav = Vec::new();
     let mut inf_stable = Vec::new();
@@ -102,6 +103,8 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::IziSwap | Proto::BiswapV3 => izi.push(i),
             Proto::BalancerV2 => balancer.push(i),
             Proto::LbV21 => lb.push(i),
+            // Решение 446: LB V2.2 — проверка V2.1 и ещё реализация и крючки пула (verify_lb22.rs).
+            Proto::LbV22 => lb22.push(i),
             Proto::PancakeStable | Proto::ListaStable | Proto::SaddleStable | Proto::WooPP => {
                 stable_u.push(i)
             }
@@ -167,6 +170,11 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     // Liquidity Book V2.1 (решение 290): поля пула + реестр фабрики getLBPairInformation (verify_lb.rs).
     let list: Vec<Candidate> = lb.iter().map(|i| cands[*i].clone()).collect();
     for (i, r) in lb.into_iter().zip(verify_lb::verify(ctx, &list, size).await) {
+        out[i] = Some(r);
+    }
+    // Liquidity Book V2.2 (решение 446): проверка V2.1 + реализация и крючки пула (verify_lb22.rs).
+    let list: Vec<Candidate> = lb22.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in lb22.into_iter().zip(verify_lb22::verify(ctx, &list, size).await) {
         out[i] = Some(r);
     }
     // StableSwap (решение 122 F): список dex.stable_pools + монеты пула (verify_curve.rs).

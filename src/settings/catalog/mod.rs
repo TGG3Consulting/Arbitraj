@@ -10,6 +10,7 @@
 //! решение 125), gate.rs, okx.rs, coinex.rs (настройки только Gate, только OKX, только CoinEx).
 //! решение 125), gate.rs, okx.rs, htx.rs и др. (настройки одной биржи).
 //! cpu.rs — счёт процессора (решения 336–338, задача t157). bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
+//! dex_lb.rs — Liquidity Book V2.2 (решение 446).
 //! lost_events.rs — сообщения ядру и кандидаты не теряются молча (решения 333/334).
 //! write_path.rs — очередь уведомлений, очередь и пачки журнала, synchronous учёта ядра (решения 340, 341, 353).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
@@ -33,6 +34,7 @@ mod dex_fail;
 mod dex_par;
 mod dex_fit;
 mod dex_graph;
+mod dex_lb;
 mod feed_watch;
 mod gate;
 mod htx;
@@ -148,6 +150,7 @@ static PARTS: &[&[SettingDef]] = &[
     dex::DEX,
     dex_fit::DEX_FIT,
     dex_graph::DEX_GRAPH,
+    dex_lb::DEX_LB,
     dex_event::DEX_EVENT,
     dex_fail::DEX_FAIL,
     dex_par::DEX_PAR,

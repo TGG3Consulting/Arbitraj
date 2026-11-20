@@ -179,5 +179,7 @@ pub fn state(
         paused,
         i0,
         i1,
+        // Решение 441: часть хранилища Balancer V3 — у пула V2 её нет.
+        v3: None,
     })))
 }

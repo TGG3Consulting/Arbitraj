@@ -4,6 +4,9 @@
 //! (произведение балансов в степенях весов) или стейблсвап (инвариант с усилением A). Здесь — балансы всех токенов пула
 //! по порядку хранилища, множители точности, комиссия обмена, кривая и индексы пары ребра графа.
 //! Вынесено из pool.rs (предел размера файла).
+//! Решение 441 (T433-F2): пул хранилища Balancer V3 — то же состояние плюс часть V3 (`VaultPoolData.v3`): живые
+//! балансы 18 знаков, курсы токенов, наименьшая сумма обмена хранилища и правило пула (какой фабрикой создан). У пула
+//! Balancer V2 часть V3 пуста (None) — его состояние и расчёт прежние.
 //! Кто вызывает: core/types/pool.rs (PoolState::VaultPool), адаптер DEX (pools/load_balancer.rs создаёт,
 //! math/balancer*.rs считает).
 //! От чего зависит: alloy-primitives, serde.
@@ -40,4 +43,36 @@ pub struct VaultPoolData {
     pub i0: u8,
     /// Индекс токена token1 пары среди токенов пула.
     pub i1: u8,
+    /// Решение 441: часть хранилища Balancer V3 (None — Balancer V2). У V3 `pool_id` — адрес пула в младших 20 байтах
+    /// (id пула V3 — его адрес), `balances` — сырые балансы, `scaling` — множители 10^(18 − decimals) хранилища.
+    #[serde(default)]
+    pub v3: Option<Box<VaultV3>>,
+}
+
+/// Решение 441: часть состояния пула хранилища Balancer V3 на блоке — то, что хранилище передаёт пулу и чем пересчитывает
+/// суммы (Vault.sol 20241204-v3-vault L326-L346, L368-L430). Порядок — порядок токенов пула в хранилище.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VaultV3 {
+    /// Живые балансы (getCurrentLiveBalances: сырой баланс × множитель × курс вниз, после сбора доходности), 18 знаков.
+    pub live: Vec<U256>,
+    /// Курсы токенов (getPoolTokenRates: 1e18 у STANDARD, getRate поставщика у WITH_RATE), 18 знаков.
+    pub rates: Vec<U256>,
+    /// Наименьшая сумма обмена хранилища в 18 знаках (getMinimumTradeAmount; вход и выход обмена меньше — откат).
+    pub min_trade: U256,
+    /// Правило пула — по фабрике, создавшей пул (у разных выпусков фабрик onSwap разный).
+    pub rule: VaultV3Rule,
+}
+
+/// Решение 441: правило onSwap пула Balancer V3 — по выпуску фабрики (исходники — balancer-deployments@b55dc2b8).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum VaultV3Rule {
+    /// Весовой пул 20241205-v3-weighted-pool: баланс входа как есть, нижних балансов нет.
+    Weighted,
+    /// Весовой пул 20260115-v3-weighted-pool-v2: баланс входа + 1 и нижние балансы токенов (getMinTokenBalances, 18
+    /// знаков) — баланс входа до и баланс выхода после обмена не ниже своего нижнего.
+    WeightedMin { min: Vec<U256> },
+    /// Стейблсвап 20241205-v3-stable-pool и 20250324-v3-stable-pool-v2: без проверки дисбаланса.
+    Stable,
+    /// Стейблсвап 20260116-v3-stable-pool-v3: после обмена наибольший / наименьший баланс < 10 000.
+    StableGuard,
 }

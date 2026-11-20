@@ -158,7 +158,7 @@
   (DECISIONS 456, ARCHITECTURE). Все четыре — с Version::V4 (exec_callback.rs since; Ekubo в ветке был с V3 + метка
   кода completePayments — метка оставлена второй проверкой).
   ОСТАЛОСЬ:
-  - T456-01 CI ветки t231/arb-merge (fmt, clippy -D warnings, тесты). Слияние проверено только глазами: исчерпывающие
+  - T456-01 **СДЕЛАНО (CI зелёный: dc28e8fd, e136cbd8; ревью слияния — блокеров нет)** CI ветки t231/arb-merge (fmt, clippy -D warnings, тесты). Слияние проверено только глазами: исчерпывающие
     match по Proto / PoolKind / PoolState / ExecKind / Params / VaultCurve, дубли mod / вариантов / ключей каталога,
     поля LbBinData (v20 + hooks_parameters + swap_blocked) во всех литералах, SETTINGS_CASES по каждому ключу каталога.
   - T456-02 **СДЕЛАНО (решение 457, 20.11.2026)** — исполнитель v4 собран одним разом: `contracts/build.sh`, ArbExecutor —
@@ -351,7 +351,7 @@
      (TokenLimit.available «учитывает max utilization», structs.sol L25-L32); остаток — откат в симуляции перед отправкой.
   г) Какие адреса токенов отдаёт GeckoTerminal у пулов Fluid с ETH (метка 0xEeee… или WETH) — не проверено; при метке
      справочник не сопоставит пару с обёрткой (запись --gt покажет).
-  д) Номер шага FLUID = 22 и Version::V4 — параллельные семейства (T433-F2…F8) могут взять те же номера: при слиянии
+  д) **ЗАКРЫТО (решение 456: FLUID 22, BALANCER_V3 23, LB20 24, EKUBO 25)** Номер шага FLUID = 22 и Version::V4 — параллельные семейства (T433-F2…F8) могут взять те же номера: при слиянии
      перенумеровать (contracts/ArbExecutor.sol, kind.rs, tests/bsc_dex_executor_abi.rs).
   е) Точный выход (swapOut) не портирован — котировка только с точным входом (как SmarDex).
 - **Решение 452 (20.11.2026, ветка t228/arb-balancer-v3-more) — T433-F2: доделка Balancer V3 на Arbitrum (все пулы DEX

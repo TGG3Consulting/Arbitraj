@@ -83,13 +83,17 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-098 | `iziswap@arbitrum` (id — предложение) | iziswap | **нужен код** — пулов нет ни в индексаторе, ни в поиске по фабрике (T448-05) |
 | T433-049 | `pancakeswap-v2-arbitrum@arbitrum` | pancakeswap_v2 | **не подтверждено** — Universal Router на Arbitrum другой (v3 UR), нет варианта формата, параметры UR не прочитаны (T448-01) |
 | T433-050 | `pancakeswap-v3-arbitrum@arbitrum` | pancakeswap_v3 | **не подтверждено** — то же (T448-01) |
-| T433-064 | `pancakeswap-stableswap-arbitrum@arbitrum` | pancake_stableswap | **не подтверждено** — нет официального адреса фабрики Arbitrum (T448-10) |
-| T433-006 | `kyberswap_elastic_arbitrum@arbitrum` | kyber_elastic | **не подтверждено** — адреса только v1, код сделан по v2 (T448-06) |
-| T433-083 | `aero-slipstream-arbitrum@arbitrum` | slipstream | **не подтверждено** — нет официального развёртывания Arbitrum в репозиториях Slipstream (T448-09) |
-| T433-087 | `saddle-finance@arbitrum` (id — предложение) | saddle_stableswap | **не подтверждено** — математика Saddle SwapUtils не сверена с видом (Nerve) (T448-07) |
-| T433-095 | `woofi-swap@arbitrum` (id — предложение) | woofi_v2 | **не подтверждено** — оракул WooracleV2_2_1 не сверен, реализация прокси не прочитана (T448-08) |
+| T433-064 | `pancakeswap-stableswap-arbitrum@arbitrum` | pancake_stableswap | **не подтверждено** — нет официального адреса фабрики Arbitrum; у SmartRouter и v3 UR Arbitrum stableFactory = 0 (T448-10, решение 451, §4.2) |
+| T433-006 | `kyberswap_elastic_arbitrum@arbitrum` | kyber_elastic_v1 | **готово** (решение 451: вариант вида v1; оговорка — запись узла tools/arbitrum_record/kyber_elastic_v1.py; включать ли — Тигран, §4.3) |
+| T433-083 | `aero-slipstream-arbitrum@arbitrum` | — (новое семейство) | **нужен код** — развёртывание Arbitrum найдено (Dromos-Labs/metadex-slipstream-public, «Slipstream V3»), комиссия — от крючка обмена, вид slipstream не подходит (T448-09, решение 451, §4.4) |
+| T433-087 | `saddle-finance@arbitrum` (id — предложение) | saddle_stableswap | **готово** (решение 451: математика = Nerve; swapStorage 7 полей и FlashLoan — исправлено в виде; оговорка — запись tools/arbitrum_record/saddle.py, §4.5) |
+| T433-095 | `woofi-swap@arbitrum` (id — предложение) | woofi_v2 | **готово** (решение 451: оракул = WooracleV2_2 Sourcify, state() как в виде; реализация 0x7b5f…4281 по Sourcify proxyResolution — оговорка: слот и селекторы своим узлом, tools/arbitrum_record/woofi.py, §4.6) |
 
-Итог: из 20 DEX с видом в коде (15 GeckoTerminal + Curve частично + 4 DefiLlama) — **готово 12**, **нужен код 1**,
+Решение 451 (20.11.2026): Kyber Elastic, Saddle, WOOFi → **готово** (с оговорками записи узла), Aero Slipstream →
+**нужен код** (новое семейство), PancakeSwap StableSwap — **не подтверждено**. Итог после 451: **готово 15**, **нужен код
+2**, **не подтверждено 4** (PancakeSwap V2, V3, StableSwap; плюс Sushi V3 — готово, 16-й).
+
+Итог решения 448: из 20 DEX с видом в коде (15 GeckoTerminal + Curve частично + 4 DefiLlama) — **готово 12**, **нужен код 1**,
 **не подтверждено 7**; плюс Sushi V3 (T433-044) — семейство установлено, **готово** (13-й). Готовы частично (пулы
 других семейств под тем же id) — Curve, Balancer V2, KyberSwap Classic: задачи кода T448-02…04.
 
@@ -301,6 +305,24 @@ dex.kind `pancake_stableswap`, нужна dex.factory. Официальная с
 docs/pages/contracts/stableswap/overview.md L9-L12 даёт фабрику только для BNB Smart Chain; адреса Arbitrum в
 официальных источниках этой проверки нет. Исходник развёртывания не сверен (T448-10).
 
+**Решение 451 (проверка 20.11.2026).** Что найдено:
+- StableSwap на Arbitrum есть: @pancakeswap/stable-swap-sdk 2.0.16 (npm, sha256 tgz 6f210b2e…5faa; src/constants/pools/
+  pools.ts — STABLE_SUPPORTED_CHAIN_IDS включает ARBITRUM_ONE), pancakeswap/pancakeswap-ai f8d2f9d
+  packages/plugins/pancakeswap-driver/skills/liquidity-planner/SKILL.md L71, L540 («StableSwap (BSC, Ethereum and
+  Arbitrum)»).
+- Список пулов SDK берёт с API `https://configs.pancakeswap.com/api/data/cached/stableswaps?chainId=42161`
+  (src/config/endpoint.ts, src/constants/pools/index.ts) — из песочницы закрыт (прокси 403, WebFetch не разрешён).
+- Адреса фабрики нет: @pancakeswap/smart-router 7.8.1 (sha256 tgz 24ad6ab1…c71a) — STABLE_SWAP_INFO_ADDRESS
+  [ARBITRUM_ONE] = "" (dist/chunk-3T32IMO3.mjs); SmartRouter Arbitrum `0x32226588378236Fd0c7c4053999F88aC0e5cAc77`
+  (Sourcify 42161 match, contracts/SmartRouter.sol, solc 0.7.6) — constructorArguments: _factoryV2 0x02a8…749e,
+  _deployer 0x41ff…71c9, _factoryV3 0x0bfb…1865, _positionManager 0x46a1…4364, **_stableFactory = 0, _stableInfo = 0**,
+  WETH9 0x82af…bab1 (порядок — swapRouter02Abi конструктора в smart-router dist/evm.mjs L950-L958); v3 Universal Router
+  `0xFE65…9912` (Sourcify) — RouterParameters (contracts/base/RouterImmutables.sol) stableFactory = 0, stableInfo = 0
+  (слова конструктора по выдаче Sourcify; сверить своим узлом: SmartRouter.stableSwapFactory()).
+Итог: официального адреса фабрики StableSwap Arbitrum в прочитанных источниках нет; API конфигов не прочитан.
+Вопрос Тиграну (T448-10): получить ответ API конфигов со своей машины (stableSwapAddress, lpAddress, infoStableSwapAddress
+пулов chainId=42161); без адреса фабрики вид pancake_stableswap не подключается (families.rs: нужна dex.factory).
+
 ### 4.3 KyberSwap Elastic — `kyberswap_elastic_arbitrum@arbitrum` (T433-006)
 
 Официальный репозиторий KyberNetwork/ks-elastic-sc 4ab08c0a README.md L6-L17 — «Deployed contracts for KyberSwap
@@ -313,11 +335,60 @@ currentTick, nearestCurrentTick, locked), getLiquidityState → (baseL, reinvest
 обмена v1 и v2 не сравнивалась. Страница адресов Elastic на docs.kyberswap.com больше не открывается (страница «не
 найдена», в sitemap.md нет Elastic). Задача T448-06.
 
+**Решение 451 — сравнение v1 (Sourcify 42161, исходник фабрики 0x5F1d…D50a: Pool.sol, PoolStorage.sol, PoolTicksState.sol,
+libraries/*) с видом (ks-elastic-sc 4ab08c0, первый коммит v2 0e7713a).** Отличие в математике обмена одно —
+SwapMath.computeSwapStep: v1 `(isExactInput && usedAmount >= specifiedAmount)`, v2 `>` (4ab08c0 SwapMath.sol L60; в
+0e7713a ещё `>=`). Совпадают: calcReachAmount, estimateIncrementalLiquidity, calcIncrementalLiquidity, calcFinalPrice,
+calcReturnedAmount, QuadMath (getSmallerRootOfQuadEqn, sqrt), FullMath.mulDivCeiling, MAX_TICK_DISTANCE = 480, цикл
+Pool.swap (tempNextTick, targetSqrtP, liquidity = baseL + reinvestL, пересечение тика), _getInitialSwapData,
+_updateLiquidityAndCrossTick, раскладка PoolStorage (ticks 0, initializedTicks 1, positions 2, poolData 3…), события
+Swap/Mint/Burn/BurnRTokens, getPoolState/getLiquidityState/ticks/initializedTicks, ISwapCallback.swapCallback, QuoterV2
+`0x0D12…8C1f` (QuoteExactInputSingleParams / QuoteOutput — как IElasticQuoterV2). Прочие отличия v1 на расчёт обмена не
+влияют: нет startSqrtP (тик после неполного шага пересчитывается всегда — наш цикл тик после останова не выдаёт),
+нет PoolOracle, MIN_LIQUIDITY 100000. TicksFeesReader v1 `0x165c…E75D`: getTicksInRange(length = 0) считает длину массива
+иначе — `(MAX_TICK − startTick) / tickDistance` (+1 при startTick 0 / MAX_TICK), у v2 — по MIN_TICK отдельной формулой.
+Сделано: вариант вида **`kyber_elastic_v1`** (pools/family_variant.rs, math/swap_elastic_step.rs compute_swap_step_rule).
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `kyber_elastic_v1` | решение 451 |
+| dex.factory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | ks-elastic-sc README.md L6-L17 (v1), Sourcify full match |
+| dex.router | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | то же |
+| dex.quoter | `0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f` | то же |
+| dex.tick_reader | `0x165c68077ac06c83800d19200e6E2B08D02dE75D` | то же |
+| dex.pool_enabled | да — решает Тигран | — |
+
+Оговорки: (1) запись своего узла (tools/arbitrum_record/kyber_elastic_v1.py) и тест tests/arbitrum_kyber_elastic_v1_live.rs —
+наш расчёт = QuoterV2; (2) getTicksInRange(pool, MIN_TICK, 0) выделяет массив на все возможные тики: у пула с
+tickDistance 1 это ≈1,77 млн слов (расчёт по TicksFeesReader.sol); уложится ли такой вызов в предел газа eth_call узла —
+покажет запись (скрипт пишет ответ или ошибку; относится и к BSC, вид не менялся); (3) вид исполнения не имеет (tradable = false, как у
+kyber_elastic) — только сигнал; (4) включать ли Elastic — решает Тигран (вопрос T448-06; страницы Elastic в документации
+docs.kyberswap.com нет — решение 448).
+
 ### 4.4 Aero Slipstream — `aero-slipstream-arbitrum@arbitrum` (T433-083)
 
 dex.kind `slipstream` требует dex.factory, dex.quoter (+ dex.cl_tick_spacings для поиска). В официальных репозиториях
 aerodrome-finance/slipstream (f8717faa) и velodrome-finance/slipstream (193a6b85) развёртываний Arbitrum нет
 (script/constants/output: только Optimism и Base). Адресов из официального источника нет, ABI не сверен (T448-09).
+
+**Решение 451.** Aero (слияние Aerodrome и Velodrome, запуск 21.10.2026, в т.ч. Arbitrum — aero.xyz/aero-upgrade;
+организация GitHub со страницы — Dromos-Labs). Официальный исходник и адреса: **Dromos-Labs/metadex-slipstream-public**
+`f99f209` — VERSIONS: версия 1.1.0, коммит `cf1ae46f` («export deployed Slipstream V3 source»), развёртывание arbitrum —
+deployment-addresses/cl-arbitrum.json: clFactory `0x88a60ee77392577c355C0acb2A8d476D5a4EC03a`, clPoolImplementation
+`0x1642634C8CB1C9f1B84c9a1a08534F8c3F4E89f8`, swapRouter `0x9Ee35Bf1bd69a03c6F0393582030fCe8Bb93D418`,
+nftPositionManager `0x4857DB576eE0e45F10525eC59527BfD10beeC60b`, dynamicSwapFeeHook `0xC0ed888AfE87ed1AcF01D9f19bB850159e3ce434`,
+clMevTaxModule `0xce015007D03f3E3964938f11c29F24bDB0b945aB`, metaquoter `0x1dDfeC5058180C207F55BB77D95AcDd0d8227868`
+(QuoterV2 в файле нет); крючок — Dromos-Labs/metadex-public `2ce1816` V3/src/hooks/dynamic/DynamicSwapFeeHook.sol,
+ArbDynamicSwapFeeHook.sol (VERSIONS 1.1.0, коммит 79c8d5b6). Лицензия исходников — Dromos Restricted Use License 1.0.
+Сверка с видом slipstream: совпадают slot0 (6 полей, CLPool.sol L55-L71), ticks() (Tick.Info 10 полей, Tick.sol
+L17-L44), getPool(a, b, int24) и PoolCreated (ICLFactory.sol L103, L215), Swap (ICLPoolEvents.sol L72-L80), цикл обмена V3
+(CLPool.sol L567-L670). **Не совпадает комиссия:** state.fee = крючок beforeSwap (CLPool.sol L543-L556; SwapHookLib.sol
+beforeSwap — крючок или tickSpacingToFee), у DynamicSwapFeeHook она зависит от блока (первый обмен в блоке задаёт
+комиссию блока по TWAP-тику, blockFee[pool][номер блока Arbitrum]), от вызывающего (скидка DiscountRegistry), плюс MEV-налог
+mevTaxModule.mevTax(); после цикла afterSwap может добавить комиссию к amountCalculated (SwapHookLib.sol afterSwap).
+fee() пула — «legacy»-представление с пустыми параметрами (CLPool.sol L189-L195), не комиссия конкретного обмена.
+Итог: **нужен код — новое семейство «Slipstream V3 (Aero)»** (комиссия крючка, состояние крючка и модуля MEV, квотер
+Metaquoter), вид slipstream с dex.factory = clFactory котировал бы неверно. Задача T448-09.
 
 ### 4.5 Saddle — `saddle-finance@arbitrum` (T433-087)
 
@@ -329,6 +400,19 @@ swapStorage, calculateSwap, swap, paused (как в виде). Почему не
 bda7578, families.rs Proto::SaddleStable); у Saddle V2-пулов библиотеки SwapUtils + AmplificationUtils другой версии —
 математика не сравнивалась (T448-07). Пулы — только списком (решение 292), индексатор их не отдаёт.
 
+**Решение 451.** Пулы deployments/arbitrum_mainnet связаны с библиотеками SwapUtils `0xcF70E2F3567ba396F3dd04822F78Ecd70Ba46894`
+и AmplificationUtils `0x4f6A43Ad7cba042606dECaCA730d4CE0A57ac62e` (solcInputs/83663b3e…; тексты SwapUtils.sol,
+AmplificationUtils.sol, MathUtils.sol = contracts/*.sol коммита 2cfdd055). Математика совпадает с Nerve: getD L307-L357,
+getY L428-L480, _calculateSwap L519-L540 (dy − dyFee)/multiplier, MAX_LOOP_LIMIT 256 (L124), A_PRECISION 100
+(AmplificationUtils.sol L25), _getAPrecise (рампа, L60-L88), within1. Отличия ABI (исправлены в виде saddle_stableswap,
+поведение на BSC/Nerve то же): swapStorage() — 7 полей, а не 10 (ABI deployments/arbitrum_mainnet/*.json; разбор по длине
+ответа — abi_saddle::swap_fee), событие FlashLoan у SwapFlashLoan (меняет balances, SwapFlashLoan.sol L98-L141) —
+перечитать пул. Swap.sol: только `payable` (c686…/e454… против 83663b…), PermissionlessSwap — свой withdrawAdminFees.
+Настройки: dex.kind `saddle_stableswap`, dex.stable_pools — четыре пула выше. Оговорка — запись tools/arbitrum_record/saddle.py
+(тест tests/arbitrum_saddle_live.rs: 7 слов swapStorage, наш выход = calculateSwap). Шаг исполнителя — ExecKind::Saddle
+(swap(uint8,uint8,uint256,uint256,uint256) — тот же; у Saddle swap дополнительно `dx <= balanceOf(msg.sender)` и вход по
+разнице баланса, SwapUtils.sol L672-L691).
+
 ### 4.6 WOOFi — `woofi-swap@arbitrum` (T433-095)
 
 dex.kind `woofi_v2`; dex.pmm_pool `0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4` (WooPPV2.2) и dex.oracle
@@ -337,6 +421,20 @@ L5. Тот же адрес WooPPV2.2, что на BSC (bnb-smart-chain.md). По
 вид читает state() по IWooracleV2_2 (abi_woo.rs:11-14), в WooPoolV2 f73a0f64 файла WooracleV2_2_1 нет — интерфейс не
 сверен; (2) dex.pool_implementation — адрес реализации из слота EIP-1967 прокси читается только своим узлом (arbiscan и RPC
 из песочницы закрыты). Задача T448-08. Пулы — поиском по фабрике (Q::Woo) и dex.multi_pair.
+
+**Решение 451.** (1) Оракул `0xCf4E…34Ec`: Sourcify 42161 exact match — контракт **WooracleV2_2**
+(contracts/wooracle/WooracleV2_2.sol, solc 0.8.14; та же раскладка, что woonetwork/WooPoolV2 f73a0f64
+contracts/wooracle/WooracleV2_2.sol: TokenInfo, CLOracle, PriceRange, state(address) L325, price(address) L272);
+State {uint128 price; uint64 spread; uint64 coeff; bool woFeasible} — IWooracleV2_2.sol L40-L45 = abi_woo::IWooracle;
+документация woonetwork/docs resources/on-chain-price-feeds.md («Wooracle v2.2.1», Arbitrum — этот адрес, state()) —
+чтение вида подходит, код не менялся. (2) Прокси `0x5520…9FA4`: Sourcify 42161 exact match TransparentUpgradeableProxy
+(блок 317548902), proxyResolution → реализация `0x7b5fDb8C89A616d319202704B0eA18b168654281` — тот же адрес, что
+dex.pool_implementation на BSC (docs/OWN_NODE_SWITCH.md); исходник реализации на Sourcify не найден (как на BSC —
+решение 122 F, 3: своей математики нет, котировка — квотером контракта). Настройки: dex.kind `woofi_v2`, dex.pmm_pool
+`0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4`, dex.oracle `0xCf4EA1688bc23DD93D933edA535F8B72FC8934Ec`,
+dex.pool_implementation `0x7b5fDb8C89A616d319202704B0eA18b168654281`; у площадки index.factory_scan = да. Оговорка —
+слот EIP-1967 и селекторы в коде реализации своим узлом (tools/arbitrum_record/woofi.py, tests/arbitrum_woofi_live.rs);
+вид при другом адресе в слоте пары не берёт (verify_woo.rs).
 
 ## 5. Что не делалось
 

@@ -25,6 +25,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use alloy_primitives::{U256, address};
 use arb::secrets::crypto::KdfParams;
 use arb::settings::scope::Scope;
+use arb::venues::bsc_dex::exec::cycle_gas::Bill;
 use arb::venues::bsc_dex::exec::cycle_steps;
 use arb::venues::bsc_dex::quote::cycle_cost::Rates;
 use arb::venues::bsc_dex::send::tip_gas;
@@ -177,13 +178,14 @@ async fn tip_transfer_gas_in_plan() {
         bnb_in_base: Decimal::new(600, 0),
     };
     let gwei = U256::from(1_000_000_000u64);
-    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), (300_000, gwei), &r, true)
+    let flat = Bill::Flat { units: 300_000, wei: gwei };
+    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), &flat, &r, true)
         .await
         .unwrap();
     assert_eq!(net, dec("0.7474"));
     // Бандл свопов (форма, которая чаевых не шлёт; Тигран 09.11: согласовано, план = факт) — те же настройки, чаевых и
     // газа их перевода в проверке нет; узел не спрашивается.
-    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), (300_000, gwei), &r, false)
+    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), &flat, &r, false)
         .await
         .unwrap();
     assert_eq!(net, dec("0.82"));
@@ -208,7 +210,7 @@ async fn tip_transfer_gas_in_plan() {
         .await
         .unwrap();
     assert_eq!(tip_gas::planned_bnb(&p.ctx, price).await.unwrap(), None);
-    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), (300_000, gwei), &r, true)
+    let net = cycle_steps::net_check(&p.ctx, (dec("101"), dec("100")), &flat, &r, true)
         .await
         .unwrap();
     assert_eq!(net, dec("0.82"));

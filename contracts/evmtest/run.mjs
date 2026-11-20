@@ -20,7 +20,7 @@
 //   contracts/out/ (исполнитель v3, надмножество v2); замороженная v2 — contracts/out/v2/ (сверка с ней — singleton.mjs).
 //   Решение 458 (T457-01): шаги исполнителя v4 с ОФИЦИАЛЬНЫМ кодом протоколов — FLUID (fluid_cases.mjs, Fluid DEX T1 из
 //   артефактов развёртывания Arbitrum), BALANCER_V3 (balancerv3.mjs, Vault V3 из balancer-deployments), EKUBO
-//   (ekubo_cases.mjs, Core / MEVCapture / Positions из broadcast 42161); LB20 — нет (solc 0.8.10 нет в package-lock,
+//   (ekubo_cases.mjs, Core / MEVCapture / Positions из broadcast 42161; T458-02 — пул TWAMM с ордером Orders, ekubo_twamm.mjs); LB20 — нет (solc 0.8.10 нет в package-lock,
 //   артефактов v2.0.0 нет — docs/TASKS.md T457-01). Записи — tests/data/executor_v4_evm_2026-11-20/v4_steps.json.
 // Кто вызывает: человек или агент: `cd contracts/evmtest && npm ci && node run.mjs` (README.md папки).
 // От чего зависит: lib.mjs, world.mjs, review.mjs, contracts/*, vendor/*, fixtures/*.
@@ -42,6 +42,7 @@ import { singleton } from './singleton.mjs';
 import { fluid } from './fluid_cases.mjs';
 import { balancerv3 } from './balancerv3.mjs';
 import { ekubo } from './ekubo_cases.mjs';
+import { ekuboTwamm } from './ekubo_twamm.mjs';
 
 const { check, must, view } = L;
 const { E18, OWNER, LP, OTHER, ERC20, FACT, PAIR, WETH, RE, v2, v1, world, v2Step, stStep, nat, exe, settled, bal, v2Out } = W;
@@ -175,7 +176,7 @@ await balancer();
 await lb();
 const steps = await singleton();
 // Решение 458 (T457-01): шаги FLUID / BALANCER_V3 / EKUBO исполнителя v4 с официальным кодом протоколов.
-const v4steps = { fluid: await fluid(), balancer_v3: await balancerv3(), ekubo: await ekubo() };
+const v4steps = { fluid: await fluid(), balancer_v3: await balancerv3(), ekubo: await ekubo(), ekubo_twamm: await ekuboTwamm() };
 // Решение 457: запись текущей сборки (v4) — в свою папку; запись v3 (executor_v3_evm_2026-11-17) не перезаписывается.
 const out3 = join(L.here, '..', '..', 'tests', 'data', 'executor_v4_evm_2026-11-20');
 mkdirSync(out3, { recursive: true });

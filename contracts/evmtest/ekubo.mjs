@@ -108,17 +108,17 @@ async function env(art = v2) {
 }
 
 /// Ликвидность от LP через официальный Positions: maybeInitializePool(ключ, тик 0) → mintAndDepositWithSalt([-RANGE,
-/// RANGE], по 10 000 каждого токена; нативный token0 — value). Соль у каждой позиции своя: id NFT Positions без соли
+/// RANGE] (range — иной симметричный диапазон: полный диапазон пула TWAMM, решение 458 T458-02), по 10 000 каждого токена; нативный token0 — value). Соль у каждой позиции своя: id NFT Positions без соли
 /// повторяется (откат TokenAlreadyExists при второй). Токены LP одобрены Positions заранее. Ошибки: исключение.
 let salt = 0n;
-async function addLiquidity(e, key, value = 0n) {
+async function addLiquidity(e, key, value = 0n, range = RANGE) {
   const { c, pos } = e;
   const lq = 10_000n * E18;
   const i = await L.call(c, LP, pos, POS.encodeFunctionData('maybeInitializePool', [key, 0]));
   if (!i.ok) throw new Error(`maybeInitializePool: ${i.reason} ${i.ret}`);
   salt += 1n;
   const r = await L.call(c, LP, pos, POS.encodeFunctionData('mintAndDepositWithSalt',
-    ['0x' + salt.toString(16).padStart(64, '0'), key, -RANGE, RANGE, value || lq, lq, 0]), value);
+    ['0x' + salt.toString(16).padStart(64, '0'), key, -range, range, value || lq, lq, 0]), value);
   if (!r.ok) throw new Error(`mintAndDepositWithSalt: ${r.reason} ${r.ret}`);
 }
 
@@ -148,4 +148,4 @@ const empty = async (e, ts) => {
   return (await L.balance(e.c, e.ex)) === 0n;
 };
 
-export { env, addLiquidity, quote, coreSwaps, transfers, empty, step, config, sort, deltas, ZERO, EKUBO, TAX };
+export { ALL, MAN, tx, create2, env, addLiquidity, quote, coreSwaps, transfers, empty, step, config, sort, deltas, ZERO, EKUBO, TAX };

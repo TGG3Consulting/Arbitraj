@@ -52,13 +52,13 @@
 
 ## Решение 458: EVM-сценарии шагов 22, 23, 25 с официальным кодом (T457-01)
 - `evmtest/fluid.mjs` + `fluid_cases.mjs` — FLUID (21 проверка), `evmtest/balancerv3.mjs` — BALANCER_V3 (25), `evmtest/ekubo.mjs`
-  + `ekubo_cases.mjs` — EKUBO (53): ERC-20 обе стороны, нативный вход и выход (FLUID, EKUBO), MEVCapture forward (EKUBO),
+  + `ekubo_cases.mjs` — EKUBO (53), `evmtest/ekubo_twamm.mjs` — EKUBO на пуле TWAMM с активным ордером (16, T458-02): ERC-20 обе стороны, нативный вход и выход (FLUID, EKUBO), MEVCapture forward (EKUBO),
   получено = котировка протокола, на исполнителе пусто, откаты при чужом обратном вызове / неверном пуле / налоговом
   токене, исполнитель v3 — «kind». Код протоколов — байткод развёртывания из официальных репозиториев
   (`evmtest/vendor/{fluid-contracts-public,balancer-deployments,ekubo}`, источники и коммиты — `evmtest/README.md`).
-- `node run.mjs` против `out/` v4: 304 проверки (205 + 99), `ВСЕ ПРОВЕРКИ ПРОШЛИ`. Исполнитель, `IPools.sol`, `out/` не менялись.
+- `node run.mjs` против `out/` v4: 320 проверок (205 + 115), `ВСЕ ПРОВЕРКИ ПРОШЛИ`. Исполнитель, `IPools.sol`, `out/` не менялись.
 - Не покрыто: LB20 (pragma 0.8.10 у lfj-gg/joe-v2@v2.0.0, solc 0.8.10 нет в package-lock, артефактов нет — T458-01),
-  EKUBO с TWAMM (T458-02).
+  EKUBO с TWAMM — сделан (T458-02).
 
 ## Решение 445: шаг LB20 (решение 456: номер 24, было 22 в ветке; решение 457 — собран в v4)
 - `ArbExecutor.sol`: вид шага `LB20 = 24` — пара Liquidity Book v2.0 (LFJ V2, Arbitrum One): вход переводом в пару

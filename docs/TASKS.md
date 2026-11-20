@@ -179,7 +179,10 @@
         0.8.10 нет в package-lock evmtest / contracts; артефактов с байткодом в репозитории нет (нет broadcast / deployments).
         Вопрос Тиграну: разрешить `solc@0.8.10` (npm, как solc-0.8.26) в package.json evmtest — тогда сценарий LB20 тем же
         путём, что singleton.mjs (исходник v2.0.0 в vendor/, настройки foundry.toml: optimizer_runs 800).
-      - T458-02 EKUBO с расширением TWAMM (код развёртывания есть в том же broadcast 42161) — сценарий не написан.
+      - T458-02 **СДЕЛАНО (решение 458)** — EKUBO с расширением TWAMM: contracts/evmtest/ekubo_twamm.mjs, официальные TWAMM
+        (broadcast DeployAll 42161, сборка 61d09da) и Orders (DeployManagers 42161, сборка 8a99714); обмен через пул с
+        активным ордером: получено = котировка ядра с исполнением виртуальных ордеров до block.timestamp, на исполнителе
+        пусто, forward к TWAMM — откат; 16 проверок; `node run.mjs` — 320, все прошли.
     - T457-02 Запись симуляции v4 на живых пулах (как tests/data/executor_v3_live_2026-11-17, решение 400): правило
       deploy_gate сверяет запись с кодом текущей сборки — для v4 записи нет, поэтому «Развернуть исполнитель» для текущей
       сборки ЗАКРЫТО (факт кода: deploy_gate::refusal → verdicts_of(V4) → «запись о другом коде»; тест

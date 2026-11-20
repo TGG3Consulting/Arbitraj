@@ -112,6 +112,10 @@ pub enum ExecKind {
     /// _curveEth). Шаг 28 — только исполнитель v5 (exec_callback.rs since). Вид семейства остаётся CURVE (of); шаг
     /// CURVE_ETH выбирает exec/executor/entry.rs, когда монета пары — нативная монета пула (StableData.native).
     CurveEth,
+    /// Решение 485: скважина Basin — approve скважине ровно на шаг + `swapFrom(tokenIn, tokenOut, сумма, 0, получатель,
+    /// block.timestamp)` (BeanstalkFarms/Basin@ecf69233 src/Well.sol L207-L217: вход скважина списывает
+    /// transferFrom(исполнитель)); data пусто. Шаг 29 — только исполнитель v5 (exec_callback.rs since).
+    Basin,
 }
 
 impl ExecKind {
@@ -144,6 +148,7 @@ impl ExecKind {
             ExecKind::Ekubo => "EKUBO",
             ExecKind::AeroBasic => "AERO_BASIC",
             ExecKind::CurveEth => "CURVE_ETH",
+            ExecKind::Basin => "BASIN",
         }
     }
 
@@ -258,6 +263,8 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 447: Core.lock / swap / forward / startPayments / completePayments / withdraw (EkuboProtocol/evm-contracts
         // @61d09daa src/base/FlashAccountant.sol L146-L187, L190-L221, L224-L381; src/Core.sol L510-L858). Шаг 25 (решение 456).
         "ekubo" => ExecKind::Ekubo,
+        // Решение 485: swapFrom скважины без белого списка вызывающих (Well.sol L207-L217: nonReentrant и срок — общие).
+        "basin_well" => ExecKind::Basin,
         _ => return None,
     })
 }

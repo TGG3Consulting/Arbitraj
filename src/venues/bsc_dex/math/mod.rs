@@ -20,6 +20,7 @@ pub mod balancer_v3_lbp;
 pub mod balancer_v3_pool;
 pub mod balancer_v3_stable;
 pub mod balancer_v3_weighted;
+pub mod basin_well;
 pub mod bin_price;
 pub mod bin_swap;
 pub mod camelot_v2;

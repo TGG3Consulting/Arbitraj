@@ -26,6 +26,11 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 485 (Basin, `wc -l`): tools/arbitrum_record/basin.py 224 (ориентир 200 — вынести разбор ответов words /
+  dyn_array / call_struct в basin_abi.py); общие файлы и так выше 200 получили ветку basin_well — pools/families.rs 876,
+  pools/load.rs, pools/verify.rs, pools/created_log.rs, quote/pool_quote.rs 658, exec/executor/entry.rs 603,
+  contracts/ArbExecutor.sol 1038 (дробить вместе с T456). Шаг BASIN = 29 — только исходник (сборка v5 — T485-04, T472-08).
+  Глубина Stable2 (quote/basin_depth.rs) — оценка по средней цене пробы, не маржинальная цена (как StableSwap).
 - Решение 471: tools/arbitrum_record/pancake_stable.py — 236 строк (ориентир 200): вынести pool_state в
   pancake_stable_pool.py. Общие модули записи recnode.py / gt.py (решение 460) в базе origin/feat/arbitrum ещё нет —
   скрипт со своей обработкой «состояние недоступно» и потолком времени; после слияния 460 — перевести на recnode.fresh.

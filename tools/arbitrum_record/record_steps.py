@@ -123,6 +123,9 @@ def steps(rpc, wallet, ekubo_from):
         # Решение 481 (T472-10): WBTC/renBTC и ETH/wstETH — исходники Sourcify (docs/sources/curve_arbitrum/), адреса —
         # в шапке скрипта; фаза состояния — recnode.fresh.
         ("curve_ren_wsteth", "curve_ren_wsteth.py", ["--node", rpc]),
+        # Решение 485: скважины Basin — адреса (docs.basin.exchange/resources/contracts) в шапке скрипта; фаза состояния —
+        # recnode.fresh.
+        ("basin", "basin.py", ["--node", rpc]),
         ("camelot_v2", "camelot_v2.py", [rpc, "--factory", "0x6EcCab422D763aC031210895C81787E87B43A652"]),
         ("algebra_dir_fee", "algebra_dir_fee.py", algebra),
         ("lb_v20", "lb_v20.py", [rpc, "--factory", "0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982",

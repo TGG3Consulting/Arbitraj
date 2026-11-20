@@ -183,6 +183,11 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "SmarDex не исполняется Universal Router (шаг SMARDEX контракта-исполнителя)",
         )),
+        // Скважина Basin (решение 485): только шаг BASIN исполнителя v5.
+        PoolKind::BasinWell => Err(ctx.err(
+            ErrorCode::Internal,
+            "Basin не исполняется Universal Router (шаг BASIN контракта-исполнителя)",
+        )),
         // Пул со смарт-залогом и смарт-долгом (Fluid DEX T1, решение 440): только шаг FLUID исполнителя.
         PoolKind::SmartColDebt => Err(ctx.err(
             ErrorCode::Internal,

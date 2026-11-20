@@ -175,6 +175,8 @@ fn by_quote(ctx: &Ctx, e: &Edge, token_in: Address) -> Option<Option<Decimal>> {
             let i = if zfo { d.i0 } else { d.i1 };
             d.balances.get(usize::from(i)).copied()
         }
+        // Скважина Basin (решение 485): резерв токена входа (Stable2 — кривая, ConstantProduct2 — как V2).
+        PoolState::BasinWell(d) => Some(d.sides(token_in).0),
         PoolState::V3 {
             sqrt_price_x96,
             liquidity,

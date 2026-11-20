@@ -157,6 +157,8 @@ fn kinds_match_contract_constants() {
                 eth_in: true,
             },
         ),
+        // Решение 485: скважина Basin — шаг 29, только v5 (в исходнике; сборки v5 нет).
+        ("BASIN", Params::Basin),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
@@ -281,6 +283,7 @@ fn step_data_layouts() {
         Params::Maverick,
         Params::Elastic,
         Params::AeroBasic,
+        Params::Basin,
     ] {
         assert!(p.data().is_empty());
     }

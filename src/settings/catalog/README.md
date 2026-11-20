@@ -31,4 +31,5 @@
 | `dex_fail.rs` | Задача t153, решение 339: dex.pool_fail_pause_ms, dex.pool_fail_pause_max_ms — ошибка чтения одного пула не рвёт сессию пачки, повтор пула с растущей паузой |
 | `dex_par.rs` | Задача t153: решение 331 — verify.read_parallel_max (пулы маршрута перед сделкой и ног цикла DEX ↔ DEX одновременно); решение 330 — dex.event_lanes_max, dex.block_read_parallel_max (сессия пачки) |
 | `dex_ekubo.rs` | Решение 447: Ekubo — dex.ekubo_core, dex.ekubo_key_index, dex.ekubo_mev_capture (необязательная), dex.ekubo_bitmap_words |
+| `dex_basin.rs` | Решение 485: Basin — dex.basin_well_impls, dex.basin_cp2, dex.basin_stable2, dex.basin_stable2_lut (необязательные — функции и таблица) |
 | `dex_bv3_buffer.rs` | Решение 474: Balancer V3 через буфер ERC4626 хранилища — dex.bv3_buffer_preview_raw, dex.bv3_batch_router (обе необязательные) |

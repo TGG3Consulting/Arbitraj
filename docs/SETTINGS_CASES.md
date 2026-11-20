@@ -161,7 +161,7 @@
 venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручению техлида, в том числе ключи этих групп от 31.10.2026
 (cf5073e7, первый коммит каталога). Ячейки «Что ставить» и «Если не задана» здесь укорочены («…») — полный текст в записи.
 
-Всего записей: 383.
+Всего записей: 387.
 
 | Ключ | Задача, решение | Что ставить | Если не задана | Статус |
 | --- | --- | --- | --- | --- |
@@ -185,6 +185,10 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.balancer_math` | t226, р. 450 | совета нет, решает Тигран (Arbitrum — по таблице docs/notes/arbitrum/dex-settings-arbitrum.md §2.11) | необязательная: не задана — v1 | ещё не в релизе (ветка t226/arb-dex-code-a) |
 | `dex.balancer_pool` | t243, р. 473 | совета нет, решает Тигран (Arbitrum — по таблице docs/notes/arbitrum/dex-settings-arbitrum.md §2.11, ключ на фабрику) | необязательная: не задана — весовые / стейблсвап, как раньше | ещё не в релизе (ветка t243/arb-balancer-v2-more) |
 | `dex.balancer_stable_factory` | t120, р. 289 | совета нет, решает Тигран | необязательная: Не задана — стейблсвап-пулы DEX не берутся (весовые — берутся) | в релизе 141619bc |
+| `dex.basin_well_impls` | t254, р. 485 | Arbitrum: `0xBA5106bd62b342afAcB93f1078fe60177A62d1a9`, `0xBA510995783111be5301d93CCfD5dE4e3B28e50B` (docs.basin.exchange) | без .optional(): ошибка «не задана»: DEX вида basin_well не подключена | новая (ветка t254/arb-basin) |
+| `dex.basin_cp2` | t254, р. 485 | Arbitrum: `0xBA15000450Bf6d48ec50BD6327A9403E401b72b4` (docs.basin.exchange) и/или адрес из записи узла | необязательная: скважины ConstantProduct2 не берутся | новая (ветка t254/arb-basin) |
+| `dex.basin_stable2` | t254, р. 485 | Arbitrum: `0xba150052e11591D0648b17A0E608511874921CBC` (docs.basin.exchange) | необязательная: скважины Stable2 не берутся | новая (ветка t254/arb-basin) |
+| `dex.basin_stable2_lut` | t254, р. 485 | Arbitrum: `0xBA51055dAD14d3920e1798D2e8A152d91CaDb461` (docs.basin.exchange, A = 1) | необязательная: скважины Stable2 не берутся | новая (ветка t254/arb-basin) |
 | `dex.bin_reread_left_pct` | t154, р. 332 | после приёмки решения 332 — 50 у lb_v21; у pancakeswap_infinity_bin — НЕ задавать, пока нет записи пула … | необязательная: Не задана — как раньше: бины вне полосы не читаются до переподключения | в релизе 141619bc |
 | `dex.block_read_parallel_max` | t153, р. 330 | `2` после выкладки t153 (проверка механизма, число не из замера), дальше — по замеру; если в журнале появятся … | необязательная: Не задана — как раньше, по одному | в релизе 141619bc |
 | `dex.bv3_weighted_factories` | T433-F2, р. 441 | 0xD961E301… (Arbitrum, FIRST_RUN) | без .optional(): DEX вида balancer_v3 не подключена; пустой список — пулов этого выпуска нет | ещё не в релизе (ветка t223-f2/arb-family-f2) |
@@ -2329,6 +2333,11 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
   src/constants/pools/arbitrum.ts L98, L152). Не задана у ключа curve_stableswap_oracle — DEX не подключена; адреса нет
   в списке — отказ проверки «пул … не в dex.stable_pools DEX … (пул Curve с курсом оракула — только список)». Нужна
   ещё dex.native_wrapped площадки (WETH): без неё пул с меткой ETH не читается.
+- **Дополнено решением 485 (t254, 2026-11-20, ветка t254/arb-basin):** и вид dex.kind = `basin_well` — скважины Basin
+  из этого списка (pools/stable_list.rs: монеты — tokens() скважины): скважины Beanstalk на Arbitrum — прокси ERC-1967,
+  событием BoreWell Aquifer'а не приходят. Что ставить (docs/FIRST_RUN.md, раздел Basin) — шесть «Whitelisted Beanstalk
+  Wells» docs.basin.exchange/resources/contracts. У basin_well необязательна (families.rs required её не требует): не
+  задана — скважины только из справочника и BoreWell.
 - **Статус:** в релизе 141619bc.
 
 ### `dex.sub_dex`
@@ -5918,3 +5927,51 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** да — пул с другим крючком не допускается; правило MEV-налога модуля крючка.
 - **Связанные ключи:** dex.kind = slipstream_aero, dex.factory, dex.quoter_virtual, dex.gas_mode, send.tip_mode, send.priority_fee_gwei, send.tip_cap_gwei.
 - **Статус:** новая (ветка t240/arb-aero).
+
+### `dex.basin_well_impls`
+
+- **Задача / решение:** t254 / решение 485.
+- **Появилась:** 2026-11-20, ветка t254/arb-basin.
+- **Кейс:** DECISIONS 485: скважину Basin может выпустить кто угодно со своими компонентами (README Basin) — бот берёт только скважины официальных реализаций: клон Aquifer'а с реализацией из списка или прокси ERC-1967 на такой клон (скважины Beanstalk на Arbitrum — ERC1967Proxy, BeanstalkFarms/Beanstalk@6db8c07c ReseedBean.sol L225-L257).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (ключ arb_dex — с «@arbitrum», решение 435); каталог src/settings/catalog/dex_basin.rs.
+- **Что ставить:** `0xBA5106bd62b342afAcB93f1078fe60177A62d1a9` (Well Implementation), `0xBA510995783111be5301d93CCfD5dE4e3B28e50B` (Upgradable Well) — docs.basin.exchange/resources/contracts, раздел Arbitrum; Sourcify 42161 exact_match (docs/FIRST_RUN.md).
+- **Если не задана:** в каталоге без .optional() — DEX «не подключена: не задана dex.basin_well_impls» (pools/families.rs required). Описание каталога: «Не задана — DEX не подключена».
+- **Влияет на торговлю:** да — какие скважины проверка допускает (pools/verify_basin_judge.rs).
+- **Связанные ключи:** dex.factory (Aquifer), dex.basin_cp2, dex.basin_stable2.
+- **Статус:** новая (ветка t254/arb-basin).
+
+### `dex.basin_cp2`
+
+- **Задача / решение:** t254 / решение 485.
+- **Появилась:** 2026-11-20, ветка t254/arb-basin.
+- **Кейс:** DECISIONS 485: цену скважины задаёт внешняя функция; бот считает только официальную ConstantProduct2 (math/basin_well.rs), функция проверяется при каждом чтении скважины (прокси можно перевести на другую реализацию).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_basin.rs.
+- **Что ставить:** `0xBA15000450Bf6d48ec50BD6327A9403E401b72b4` (docs.basin.exchange, Arbitrum). У ReseedBean.sol Beanstalk (6db8c07c L68-L69) указан `0xbA1500c28C8965521f47F17Fc21A7829D6E1343e` — тоже ConstantProduct2 (Sourcify exact_match, расчёт обмена тот же); какой адрес у скважин на самом деле — покажет запись tools/arbitrum_record/basin.py (wells.json, function), тогда — и его.
+- **Если не задана:** необязательная (src/settings/schema.rs: не задана — функция работает, отключается только описанное): скважины ConstantProduct2 не берутся (причина на экране); не задана и dex.basin_stable2 — DEX не читается (pools/basin_conf.rs).
+- **Влияет на торговлю:** да — какие скважины берутся.
+- **Связанные ключи:** dex.basin_stable2, dex.basin_well_impls.
+- **Статус:** новая (ветка t254/arb-basin).
+
+### `dex.basin_stable2`
+
+- **Задача / решение:** t254 / решение 485.
+- **Появилась:** 2026-11-20, ветка t254/arb-basin.
+- **Кейс:** DECISIONS 485: функция скважины Stable2 (стейблсвап из двух токенов) — порт Stable2.sol; только официальный адрес.
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_basin.rs.
+- **Что ставить:** `0xba150052e11591D0648b17A0E608511874921CBC` (docs.basin.exchange, Arbitrum; Sourcify match, текст исходника = BeanstalkFarms/Basin@ecf69233).
+- **Если не задана:** необязательная: скважины Stable2 не берутся (причина на экране); не задана и dex.basin_cp2 — DEX не читается.
+- **Влияет на торговлю:** да — какие скважины берутся.
+- **Связанные ключи:** dex.basin_stable2_lut, dex.basin_cp2.
+- **Статус:** новая (ветка t254/arb-basin).
+
+### `dex.basin_stable2_lut`
+
+- **Задача / решение:** t254 / решение 485.
+- **Появилась:** 2026-11-20, ветка t254/arb-basin.
+- **Кейс:** DECISIONS 485: A функции Stable2 — immutable без геттера, конструктор берёт его из таблицы (Stable2.sol L60-L66); бот читает getAParameter() таблицы при каждом чтении и при проверке сверяет calcLpTokenSupply функции с нашим расчётом (не та таблица — скважина не берётся).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_basin.rs.
+- **Что ставить:** `0xBA51055dAD14d3920e1798D2e8A152d91CaDb461` («Stable 2 Lookup Table with A = 1», docs.basin.exchange; getAParameter() = 100 при A_PRECISION = 100 — исходник Sourcify).
+- **Если не задана:** необязательная: скважины Stable2 не берутся (pools/load_basin.rs: «нет A»).
+- **Влияет на торговлю:** да — расчёт обмена Stable2.
+- **Связанные ключи:** dex.basin_stable2.
+- **Статус:** новая (ветка t254/arb-basin).

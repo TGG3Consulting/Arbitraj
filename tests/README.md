@@ -1178,3 +1178,9 @@ Ekubo (решение 447, T433-F8 / T433-079) — tests/arbitrum_ekubo_live.rs 
 Решение 472 (T450-02, #[ignore] до записи своим узлом): tests/arbitrum_curve_plain_live.rs — вид curve_stableswap_plain (Curve StableSwap 2021: 2pool Arbitrum, Plain2/3/4Basic фабрики Curve Sidechain/L2): состояние тем же кодом бота (load_curve_plain::calls → ответы по calldata → state_with), наш выход exchange_out_t = get_dy пула побайтно, A_precise() = формула _A() рампы на блоке записи, селектор exchange(int128,int128,uint256,uint256) в коде 2pool и реализаций. Доделка 472: все реализации plain (Balances / ETH / Optimized / EMA — save_p), метапулы (curve_stableswap_meta), симуляция exchange на суммах лесенки (model_revert_equals_pool_revert: пул откатил ↔ наша котировка None). Запись — `python3 tools/arbitrum_record/curve_plain.py --node <узел>` (или record_all.py).
 
 Решение 481 (T472-10, #[ignore] до записи своим узлом): tests/arbitrum_curve_ren_wsteth_live.rs — WBTC/renBTC 0x3E01…F0Fb (curve_stableswap_plain: курсы 10^28 = RATE_MULTIPLIER исходника, наш выход exchange_out_t = get_dy побайтно) и ETH/wstETH 0x6eB2…7d80 (curve_stableswap_oracle: курс wstETH = latestAnswer() оракула пула, get_dy пула = формула get_dy исходника без «− 1» на нашем состоянии, симуляция exchange = наш выход с «− 1»), рампа A, селекторы exchange / oracle() в коде. Запись — `python3 tools/arbitrum_record/curve_ren_wsteth.py --node <узел>` (или record_all.py).
+
+Решение 485 (скважины Basin, вид basin_well): tests/basin_well_math.rs — функции скважин ConstantProduct2 и Stable2
+(math/basin_well.rs) на официальных векторах BeanstalkFarms/Basin@ecf69233 test/functions/{ConstantProduct2,Stable2}.t.sol
+(без записи); tests/arbitrum_basin_live.rs — #[ignore] до записи tools/arbitrum_record/basin.py
+(tests/data/arbitrum_basin_<дата>/): состояние и проверка скважины кодом бота, наш выход = getSwapOut побайтно и =
+симуляции swapFrom (откат ↔ None).

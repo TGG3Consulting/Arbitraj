@@ -32,7 +32,7 @@ use super::family_variant::Variant;
 pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_call_with};
 pub use super::verify_rules::{Read, check, fill, registered, registered_for, v2_fee_pips, v3_abi};
 use super::{
-    fee_probe, verify_algebra, verify_balancer, verify_balancer_v3, verify_crypto, verify_crypto_v1, verify_curve, verify_lb, verify_lb20, verify_lb22, verify_curve_ng, verify_curve_plain, verify_dodo, verify_fluid, verify_inf_stable, verify_izi, verify_metric,
+    fee_probe, verify_algebra, verify_balancer, verify_balancer_v3, verify_basin, verify_crypto, verify_crypto_v1, verify_curve, verify_lb, verify_lb20, verify_lb22, verify_curve_ng, verify_curve_plain, verify_dodo, verify_fluid, verify_inf_stable, verify_izi, verify_metric,
     verify_ekubo, verify_maverick, verify_solidly, verify_stable_u, verify_v4,
 };
 
@@ -97,6 +97,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut mav = Vec::new();
     let mut inf_stable = Vec::new();
     let mut fluid = Vec::new();
+    let mut basin = Vec::new();
     let mut ekubo = Vec::new();
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
@@ -135,6 +136,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::Maverick => mav.push(i),
             Proto::InfinityStable => inf_stable.push(i),
             Proto::FluidT1 => fluid.push(i),
+            Proto::BasinWell => basin.push(i),
             Proto::Ekubo => ekubo.push(i),
             _ => v2v3.push(i),
         }
@@ -275,6 +277,12 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     // Fluid DEX T1 (решение 440): isDex фабрики + constantsView пула (verify_fluid.rs).
     let list: Vec<Candidate> = fluid.iter().map(|i| cands[*i].clone()).collect();
     for (i, r) in fluid.into_iter().zip(verify_fluid::verify(ctx, &list, size).await) {
+        out[i] = Some(r);
+    }
+    // Скважина Basin (решение 485): реестр Aquifer / прокси, функция скважины, сверка calcLpTokenSupply
+    // (verify_basin.rs).
+    let list: Vec<Candidate> = basin.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in basin.into_iter().zip(verify_basin::verify(ctx, &list, size).await) {
         out[i] = Some(r);
     }
     // Ekubo (решение 447): ключ у PoolKeyIndex + состояние у ядра (verify_ekubo.rs).

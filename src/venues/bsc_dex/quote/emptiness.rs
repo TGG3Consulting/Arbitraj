@@ -92,5 +92,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::SmartColDebt(d) => super::fluid_depth::empty(d),
         // Ekubo (решение 447): ликвидность 0 и в прочитанной карте нет тиков — обмен не даст выхода (как V3, решение 393).
         PoolState::Ekubo(d) => d.liquidity == 0 && d.ticks.is_empty(),
+        // Скважина Basin (решение 485): нулевой резерв или нулевое число LP-токенов (quote/basin_depth.rs).
+        PoolState::BasinWell(d) => super::basin_depth::empty(d),
     }
 }

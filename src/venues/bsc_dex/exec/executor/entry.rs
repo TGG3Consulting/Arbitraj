@@ -330,6 +330,15 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             stable(e, k, token_in, stable_native::wrapped(ctx), ver)
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
         }
+        // Решение 485: скважина Basin — шаг без данных (swapFrom по токенам шага); без прочитанного состояния BasinWell
+        // или с токеном входа не из скважины шаг не строится.
+        ExecKind::Basin => match &e.pool.state {
+            PoolState::BasinWell(d) if d.has(token_in) => Params::Basin,
+            _ => {
+                let why = format!("{}: скважина Basin — нет состояния или чужой вход", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         // Решение 470 (T470-06): вид семейства aero_basic — SOLIDLY (ветка выше выбирает AERO_BASIC у кошелька v5);
         // как вид семейства AERO_BASIC не встречается — сюда тоже на случай такой пометки (пауза — та же проверка).
         ExecKind::AeroBasic => match &e.pool.state {

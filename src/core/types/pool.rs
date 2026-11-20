@@ -359,6 +359,12 @@ pub struct StableData {
     /// записи эпизодов.
     #[serde(default)]
     pub pair_d: bool,
+    /// Решение 472 (доделка): после расчёта выхода обмен сохраняет цену пула `save_p` — `pack_prices` откатывает
+    /// обмен, если цена `_get_p` после него ≥ 2^128 (реализации фабрики Curve с оракулом цены: Plain2BasicEMA,
+    /// Plain2ETHEMA; адаптер: math/stable_ema.rs). false — у пула такой проверки нет. `#[serde(default)]` — старые
+    /// записи эпизодов.
+    #[serde(default)]
+    pub ema: bool,
 }
 
 /// Данные шаблона StableSwap-NG (решение «122 (Infinity Stable)») — с контракта пула на блоке. Курсы монет с внешним

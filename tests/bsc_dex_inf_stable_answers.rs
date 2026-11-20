@@ -163,6 +163,7 @@ fn entry(kind: &str) -> Entry {
         native: None,
         input_fee: false,
         pair_d: false,
+        ema: false,
     };
     Entry {
         family: f,

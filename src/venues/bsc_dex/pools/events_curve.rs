@@ -18,7 +18,7 @@ use alloy::sol_types::SolEvent;
 use alloy_primitives::B256;
 
 use super::abi_curve::{IStableSwapV1, MAX_COINS, topics_for};
-use super::abi_curve_plain::ICurvePlain;
+use super::abi_curve_plain::{ICurveMeta, ICurvePlain, ICurvePlainEma};
 use super::events::Applied;
 use super::family_variant::Variant;
 use super::registry::Entry;
@@ -42,12 +42,21 @@ pub fn topics() -> Vec<B256> {
 }
 
 /// topic0 событий пула по варианту исходника: Base — topics(), CurvePlain (решение 472) — ещё RemoveLiquidityOne из
-/// 4 полей и CommitNewFee (Plain2Basic.vy f389123 L48-L52; 2pool Arbitrum — ABI curve-js ab3f1c2). Ошибок нет.
+/// 4 полей и CommitNewFee (Plain2Basic.vy f389123 L48-L52; 2pool Arbitrum — ABI curve-js ab3f1c2), события комиссии
+/// реализаций с оракулом; CurveMeta — то же и TokenExchangeUnderlying. Ошибок нет.
 pub fn topics_of(v: Variant) -> Vec<B256> {
     let mut out = topics();
-    if v == Variant::CurvePlain {
+    if matches!(v, Variant::CurvePlain | Variant::CurveMeta) {
         out.push(ICurvePlain::RemoveLiquidityOne::SIGNATURE_HASH);
         out.push(ICurvePlain::CommitNewFee::SIGNATURE_HASH);
+        // Решение 472 (доделка): реализации с оракулом — смена комиссии CommitNewFee(uint256) / ApplyNewFee(uint256)
+        // (Plain2BasicEMA.vy 5272fd2 L74-L78).
+        out.push(ICurvePlainEma::CommitNewFee::SIGNATURE_HASH);
+        out.push(ICurvePlainEma::ApplyNewFee::SIGNATURE_HASH);
+    }
+    if v == Variant::CurveMeta {
+        // Метапул: обмен через базовый пул (MetaUSD.vy f389123 L48-L53).
+        out.push(ICurveMeta::TokenExchangeUnderlying::SIGNATURE_HASH);
     }
     out
 }

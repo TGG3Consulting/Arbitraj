@@ -189,7 +189,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.curve_crypto_versions` | T433-F3, р. 442; р. 453 | Twocrypto-NG `["v2.1.0", "v2.0.0"]` (v2.0.0 — с dex.curve_crypto_math_v2_0_0), Tricrypto-NG `["v2.0.0"]` | без .optional(): DEX не подключена | ещё не в релизе (t223-f3) |
 | `dex.curve_crypto_math_v2_0_0` | T433-F3a, р. 453 | Twocrypto-NG Arbitrum `["0x2005995a71243be9FB995DaB4742327dc76564Df"]` | необязательная: не задана — пулы с математикой v2.0.0 не берутся | ещё не в релизе (t229) |
 | `dex.curve_crypto_v1_templates` | T433-F3b, р. 453 | crypto v1 фабрики Arbitrum `["0x5bcA7dDF1bcccB2eE8e46c56bfc9d3CDC77262bC"]` | без .optional(): DEX не подключена | ещё не в релизе (t229) |
-| `dex.curve_plain_implementations` | T450-02, р. 472 | Arbitrum `["0x54e8A25d0Ac0E4945b697C80b8372445FEA17A62", "0xe381C25de995d62b453aF8B931aAc84fcCaa7A62", "0x8d53E5De033078367Ad91527c53abfd1Eb6bfa86"]` | необязательная: не задана — пулы фабрики не берутся, только dex.stable_pools | ещё не в релизе (t242) |
+| `dex.curve_plain_implementations` | T450-02, р. 472 | Arbitrum: plain — 14 адресов curve-js stable.ts L168-L183, мета — 4 адреса L159-L166 (docs/FIRST_RUN.md) | необязательная: не задана — пулы фабрики не берутся, только dex.stable_pools | ещё не в релизе (t242) |
 | `dex.curve_ng_versions` | t107, р. 275 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана или пуста — DEX не подключена | в релизе 141619bc |
 | `dex.custom_deployers` | —, р. 188 | совета нет, решает Тигран | необязательная: Не задан — только poolByPair (кастомные пулы отклоняются) | в релизе 141619bc |
 | `dex.event_lanes_max` | t153, р. 330 | `2` после выкладки t153 — проверка механизма, число не из замера; дальше — по замеру (сначала вместе с … | необязательная: Не задана — как раньше: события пачки по одному в сессии | в релизе 141619bc |
@@ -1106,14 +1106,17 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Появилась:** 2026-11-20, ветка t242/arb-curve-plain.
 - **Кейс:** решение 472: plain-пулы старой фабрики Curve Sidechain/L2 на Arbitrum (0xb17b674D9c5CB2e441F8e196a2f048A81355d031) —
   прокси на одну из реализаций фабрики (Basic, Balances, ETH, Optimized, EMA — FactorySidechains.vy fb61207
-  plain_implementations). Формула вида curve_stableswap_plain сверена только с Plain2Basic / Plain3Basic / Plain4Basic
-  (curve-factory f389123, Sourcify 42161 match) — пул фабрики берётся, только если get_implementation_address(pool)
-  фабрики — адрес из списка (pools/verify_curve_plain.rs).
+  plain_implementations). Формула вида curve_stableswap_plain сверена с Plain2/3/4 Basic, Balances, ETH, Optimized
+  (curve-factory f389123) и Plain2BasicEMA / Plain2ETHEMA (5272fd2) — dy та же (Balances — balanceOf, ETH — нативная
+  монета, EMA — save_p); вида curve_stableswap_meta — с MetaUSD / MetaUSDBalances (f389123; MetaFraxUSD* — тот же
+  шаблон над fraxbp) — пул фабрики берётся, только если get_implementation_address(pool) фабрики — адрес из списка
+  (pools/verify_curve_plain.rs; метапул — ещё get_base_pool = coins(1)). Решение 472, доделка (20.11.2026).
 - **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (ключ вида curve_stableswap_plain, например
   дочерний ключ dex.sub_dex у `curve_arbitrum@arbitrum`); каталог src/settings/catalog/dex.rs.
-- **Что ставить:** Arbitrum — `["0x54e8A25d0Ac0E4945b697C80b8372445FEA17A62", "0xe381C25de995d62b453aF8B931aAc84fcCaa7A62",
-  "0x8d53E5De033078367Ad91527c53abfd1Eb6bfa86"]` (curvefi/curve-js ab3f1c2 src/constants/factory/stable.ts L168-L180;
-  docs/FIRST_RUN.md). Вместе с dex.factory = 0xb17b674D9c5CB2e441F8e196a2f048A81355d031.
+- **Что ставить:** Arbitrum, ключ curve_stableswap_plain — `["0x54e8A25d0Ac0E4945b697C80b8372445FEA17A62", "0x73Ec37618683C274D0bBf5f5726aA856B2BDAB81", "0xD68970e266cE1A015953897C7055a5E0bC657Af8", "0x7DA64233Fefb352f8F501B357c018158ED8aA455", "0x6F9fb833501f46CBE6f6A4b6Cf32C834E5A5e8C5", "0x0100fBf414071977B19fC38e6fc7c32FE444F5C9", "0xe381C25de995d62b453aF8B931aAc84fcCaa7A62", "0xc379bA7b8e1c6C48D64e1cf9dD602C97c9fD0F40", "0xAAe75FAebCae43b9d541Fd875622BE48D9B4f5D0", "0x8866414733F22295b7563f9C5299715D2D76CAf4", "0x8d53E5De033078367Ad91527c53abfd1Eb6bfa86", "0x2ac56cEBc2D27c9bB51a11773355E44371Eb88D3", "0x89287c32c2CAC1C76227F6d300B2DBbab6b75C08", "0x06e3C4da96fd076b97b7ca3Ae23527314b6140dF"]`; ключ curve_stableswap_meta — `["0x09672362833d8f703D5395ef3252D4Bfa51c15ca", "0xBE175115BF33E12348ff77CcfEE4726866A0Fbd5", "0x8DEb66a4A40E370355bEe35f12E55Fe9c755d686", "0x3edE9b145F82e9e46C03f8A8F67B77aEE847b632"]`
+  (curvefi/curve-js ab3f1c2 src/constants/factory/stable.ts L158-L183; docs/FIRST_RUN.md). MetaBTCRen
+  (0x094d…6332, 0xF1f8…6ADc) не вносить: базовый пул renBTC — LP-токен не сам пул. Вместе с dex.factory =
+  0xb17b674D9c5CB2e441F8e196a2f048A81355d031.
 - **Если не задана:** необязательная (.optional()): пулы фабрики не берутся — отказ «не в dex.stable_pools и не
   подтверждён фабрикой»; пулы из dex.stable_pools (2pool) — берутся как раньше.
 - **Влияет на торговлю:** да — какие пулы Curve 2021 берутся.

@@ -77,7 +77,12 @@ pub const PAR: &str = "dex.block_read_parallel_max";
 /// Перечитывается ли вид на каждом блоке. Решение 472: и Curve 2021 (вариант CurvePlain вида curve_stableswap_plain —
 /// рампа A по времени блока без событий, у 2pool donate_admin_fees меняет balances без события). Ошибок нет.
 pub fn needs(f: &Family) -> bool {
-    if f.variant == super::family_variant::Variant::CurvePlain {
+    // Решение 472 (доделка): метапул — курс LP базового пула (get_virtual_price) меняется без событий метапула;
+    // Plain*Balances — балансы по balanceOf (переводы на пул без события пула).
+    if matches!(
+        f.variant,
+        super::family_variant::Variant::CurvePlain | super::family_variant::Variant::CurveMeta
+    ) {
         return true;
     }
     matches!(

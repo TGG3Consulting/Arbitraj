@@ -67,6 +67,7 @@
 | `gyro_eclp.rs` | Решение 452: onSwap E-CLP — смещения, квадратное уравнение обмена, точный вход и выход | GyroECLPPool.sol L164-L204, GyroECLPMath.sol L227-L266, L771-L1074 |
 | `reclamm.rs` | Решение 452: ReClamm — постоянное произведение по реальным + виртуальным балансам | reclamm@17262629 ReClammMath.sol L132-L234 |
 | `stable_guard.rs` | Проверка цены пула Lista StableSwap после обмена против оракула (`checkPriceDiff`, `get_dy_without_fee`, новые балансы как в `exchange`) — котировка, уводящая пул за порог, неисполнима (решение 122 F, 3) | lista-dao/moolah eb7d73a `src/dex/StableSwapPool.sol` |
+| `stable_ema.rs` | Решение 472 (доделка): save_p после обмена у plain-пулов Curve с оракулом (Plain2BasicEMA / Plain2ETHEMA) — `_get_p` (проверяемые операции) и `pack_prices` (цена < 2^128); иначе обмен откатился бы | curvefi/curve-factory 5272fd2 `Plain2BasicEMA.vy` |
 | `v2.rs` | getAmountOut / getAmountIn с комиссией из настройки | PancakeLibrary, UniswapV2Library (тест — v2-periphery) |
 | `bin_price.rs` | Цена бина 128.128 | PriceHelper, Uint128x128Math.pow (тест — PriceHelper.t.sol) |
 | `bin_swap.rs` | Обмен в пуле Bin по резервам бинов | BinPool.swap, BinHelper, FeeHelper |

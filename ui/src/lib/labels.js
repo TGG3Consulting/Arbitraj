@@ -58,6 +58,7 @@ const CHOICE = {
   curve_stableswap: 'StableSwap (Curve 2020, Ellipsis)',
   curve_stableswap_ng: 'Curve StableSwap-NG (plain-пул фабрики NG)',
   curve_stableswap_plain: 'Curve StableSwap 2021 (2pool, plain-пулы старой фабрики)',
+  curve_stableswap_meta: 'Curve StableSwap 2021 — метапулы фабрики (над 2pool / fraxbp)',
   curve_twocrypto_ng: 'Curve Twocrypto-NG (crypto-пул из 2 монет)',
   curve_tricrypto_ng: 'Curve Tricrypto-NG (crypto-пул из 3 монет)',
   curve_crypto_v1: 'Curve crypto v1 фабрики (crypto-пул из 2 монет)',

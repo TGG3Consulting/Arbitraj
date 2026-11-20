@@ -8,6 +8,11 @@ holdings (balanceOf монет и ETH пула), decimals монет v1, пул�
 import sys
 
 from curve_crypto_rpc import addr_word, as_addr, as_int, selector, word
+from curve_sim import Sim
+
+# Решение 472 (T472-02): симуляция обмена — exchange(uint256,uint256,uint256,uint256) у NG и v1 (abi_crypto.rs,
+# abi_crypto_v1.rs; шаг STABLE_U256 исполнителя).
+EXCHANGE_U = "exchange(uint256,uint256,uint256,uint256)"
 
 # --- запись -------------------------------------------------------------------------------------------------------------
 
@@ -131,6 +136,7 @@ def ng_rows(node, factory, n, maths, per_math, tag):
             "holdings": holdings(node, p, calls, n, tag),
             "get_dy": ladder(node, p, n, calls, tag),
         })
+        rows[-1]["exchange_sim"] = sims(node, p, n, calls, rows[-1]["get_dy"], tag)
         print(f"NG({n}) {p}: MATH {m}, {len(rows[-1]['get_dy'])} ответов get_dy", file=sys.stderr)
     return count, rows
 
@@ -145,8 +151,24 @@ def v1_row(node, pool, n, tag, factory=None):
         "holdings": holdings(node, pool, calls, n, tag),
         "get_dy": ladder(node, pool, n, calls, tag),
     }
+    row["exchange_sim"] = sims(node, pool, n, calls, row["get_dy"], tag)
     if factory:
         row["factory_get_coins"] = node.call(factory, selector("get_coins(address)") + addr_word(pool), tag)
         row["factory_get_decimals"] = node.call(factory, selector("get_decimals(address)") + addr_word(pool), tag)
     print(f"v1({n}) {pool}: {len(row['get_dy'])} ответов get_dy", file=sys.stderr)
     return row
+
+
+def sims(node, pool, n, calls, rows, tag):
+    """Решение 472 (T472-02): exchange на суммах лесенки — eth_call с подменой баланса и разрешения у пустого
+    отправителя (curve_sim.py), одним пакетом на том же блоке. Возвращает: записи симуляций."""
+    sim = Sim(node.url, tag)
+    coins = [as_addr(answer(calls, "coins(uint256)", word(k))) for k in range(n)]
+    for c in coins:
+        if c:
+            sim.prefill(c, pool)
+    for r in rows:
+        c = coins[int(r["i"])]
+        if c:
+            sim.add(pool, EXCHANGE_U, int(r["i"]), int(r["j"]), int(r["dx"]), c)
+    return sim.run()

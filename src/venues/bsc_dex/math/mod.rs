@@ -72,6 +72,7 @@ pub mod solidly_v1_math;
 pub mod smardex;
 pub mod smardex_swap;
 pub mod sqrt_price_math;
+pub mod stable_ema;
 pub mod stable_guard;
 pub mod stableswap_exchange;
 pub mod stableswap_ng;

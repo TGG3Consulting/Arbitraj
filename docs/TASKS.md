@@ -337,11 +337,12 @@
     tests/arbitrum_curve_plain_live.rs (наш выход = get_dy побайтно, A_precise = формула рампы, селектор exchange из 4
     аргументов в коде 2pool и реализаций — факт для шага CURVE; у 2pool наличие 4-аргументной перегрузки до записи —
     по официальному ABI curve-js).
-  - T472-02 Повторить запись curve_crypto.py (в неё добавлены вызовы состояния tweak_price) → снять #[ignore] у
-    tests/arb_curve_crypto_tweak_live.rs. Тест показывает, сколько сумм лесенки модель отклонила; что пул такой обмен
-    действительно откатит, get_dy не доказывает — нужна симуляция exchange (eth_call / eth_simulateV1 с балансом и
-    approve токена у отправителя: слоты хранения токенов — свои у каждого токена). Вопрос Тиграну: делать ли такую
-    запись-симуляцию (скрипт с подменой состояния по слоту баланса из официальных исходников токенов).
+  - T472-02 Повторить запись curve_crypto.py (в неё добавлены вызовы состояния tweak_price и — доделка 472 —
+    симуляция exchange: exchange_sim) → снять #[ignore] у tests/arb_curve_crypto_tweak_live.rs. **Запись-симуляция
+    сделана** (tools/arbitrum_record/curve_sim.py): eth_call exchange(i, j, dx, 0) на суммах лесенки от пустого адреса
+    с подменой баланса и разрешения (слоты — поиском по кандидатам mapping Solidity / Vyper / ERC-7201 одним eth_call,
+    как exec_v4_live.py решения 459), одним пакетом на блоке состояния; тест сверяет «модель: откат ↔ пул откатил».
+    Та же симуляция — в curve_plain.py (tests/arbitrum_curve_plain_live.rs model_revert_equals_pool_revert).
   - T472-03 Модель tweak_price crypto v1 (фабрика crypto v1 CurveCryptoSwap2ETH.vy 7ed1011 — halfpow L541, newton_D
     L549, L607; tricrypto 2021 CryptoSwap.vy) — НЕ сделана: другой код (halfpow, без K0_prev), нужны свои геттеры
     состояния. До неё котировка v1 откаты tweak_price не учитывает (как было).
@@ -355,10 +356,30 @@
   - T472-06 Настройки (выкладка): дочерний ключ dex.sub_dex у `curve_arbitrum@arbitrum` вида `curve_stableswap_plain`:
     dex.stable_pools = [2pool], dex.factory = 0xb17b…d031, dex.curve_plain_implementations = Plain2/3/4Basic
     (docs/FIRST_RUN.md, docs/notes/arbitrum/dex-settings-arbitrum.md §2.12); dex.pool_enabled — Тигран, после T472-01.
-  - T472-07 Не сделано: реализации фабрики Plain*Optimized (без rates — формула на сырых балансах), Plain*Balances
-    (balanceOf − admin_balances, донаты без события), Plain*ETH (нативный ETH), *EMA (оракул цены) и fraxbp Arbitrum
-    0xC9B8…40d5 (шаблон не сверен) — пулы на них вид не берёт (отказ с причиной). Нужны отдельные варианты по
-    исходникам; адреса реализаций — curve-js factory/stable.ts L168-L183.
+  - T472-07 **Сделано (доделка 472):** реализации фабрики Curve Sidechain/L2 Plain*Optimized (rates = 10^18 —
+    initialize `assert _rate_multipliers[i] == PRECISION`, тот же расчёт), Plain*Balances (balances(i) = balanceOf −
+    admin_balances, обмен по тем же; каждым блоком), Plain*ETH (метка 0xEeee… = dex.native_wrapped,
+    StableData.native), Plain2BasicEMA / Plain2ETHEMA (save_p после обмена — math/stable_ema.rs, StableData.ema,
+    признак — ответ ma_exp_time()) — вид curve_stableswap_plain (сверка текста get_D / get_y / get_dy с Plain*Basic —
+    curve-factory f389123 / 5272fd2); fraxbp 0xC9B8…40d5 — пул фабрики на Plain2Basic (Curve API
+    getPools/arbitrum/factory, implementationAddress 0x54e8…7A62) — берётся фабрикой; метапулы фабрики (MetaUSD,
+    MetaUSDBalances над 2pool; MetaFraxUSD, MetaFraxUSDBalances над fraxbp; Curve API getPools/arbitrum/factory 20.11, крупнейшие —
+    Lumi LUAUSD/2CRV ≈ 3,3 млн USD, Overnight xUSD/FRAXBP ≈ 21 тыс., MIM/2CRV ≈ 6 тыс.) — новый вид
+    curve_stableswap_meta (вариант CurveMeta: курс LP = get_virtual_price базового пула, D_P циклом;
+    load_curve_meta.rs, проверка — get_base_pool фабрики = coins(1)). Настройки — dex-settings-arbitrum.md §2.12.
+  - T472-08 Нужен новый шаг исполнителя (номер вида шага 28 — по поручению): Curve с нативным ETH —
+    exchange{value}(int128, int128, dx, 0) с WETH.withdraw перед входом и WETH.deposit пришедшего ETH (как
+    STABLE_U256_BNB, но селектор exchange(int128,int128,uint256,uint256)). До него пулы Plain*ETH / Plain2ETHEMA —
+    граф и котировка; шаг не строится (exec/executor/entry.rs: «у вида curve шага с BNB нет»). Пулы Arbitrum на ETH-
+    реализациях на 20.11 почти пусты (Curve API: ETHMAXY/ETH ≈ 0,18 USD). Нужна пересборка исполнителя v5.
+  - T472-09 Текст развёрнутого кода реализаций Balances / ETH / Optimized / EMA и метапулов на Arbitrum не сверен с
+    исходником побайтно (Sourcify и обозреватели блоков недоступны из среды — прокси 403): модель — по официальному
+    репозиторию curvefi/curve-factory, сверка формулы — запись (get_dy и симуляция exchange, T472-01).
+  - T472-10 Не сделано (нет проверенного исходника): пулы основного реестра Curve на Arbitrum — WBTC/renBTC
+    0x3E01dD8a5E1fb3481F0F589056b428Fc308AF0Fb (≈ 37 тыс. USD), ETH/wstETH 0x6eB2dc694eB516B16Dc9FBc678C60052BbdD7d80
+    (≈ 69 тыс. USD; нативный ETH), crypto-метапул EURS/2CRV 0xA827a652Ead76c6B0b3D19dba05452E06e25c27e (≈ 3 тыс. USD) —
+    Curve API getPools/arbitrum/main и crypto. Метапулы MetaBTCRen (база — renBTC, LP не сам пул) — не берутся.
+    Нужен верифицированный исходник (Тигран: Arbiscan / Sourcify) — потом вид.
 - **Решение 450 (20.11.2026, ветка t226/arb-dex-code-a) — код T448-01…05; cargo не запускался (формат — вручную).**
   Сделано: dex.sub_dex (несколько семейств под одним id), pancakeswap_v3 (Universal Router PancakeSwap v3), KyberSwap
   Static Fee / Legacy (события создания), dex.balancer_math (библиотеки Balancer v2), поиск iZiSwap по фабрике. Запись
@@ -1282,7 +1303,7 @@
   - T433-002 `uniswap_v3_arbitrum` (Uniswap V3 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-003 `swapr_arbitrum` (Swapr (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-004 `fraxswap_arbitrum` (Fraxswap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-005 `curve_arbitrum` (Curve (Arbitrum)) — частично: StableSwap — сверить и включить; crypto-пулы Twocrypto-NG v2.1.0 / Tricrypto-NG — код сделан (решение 442, T433-F3; ждёт CI и записи узла; под отдельными id DEX — вопрос 1 решения 442); официальные адреса crypto-фабрик — deployments.yaml curvefi (решение 442); T433-F3a (Twocrypto v2.0.0) и T433-F3b (crypto v1) — код сделан (решение 453), ждёт CI и записи узла. **Решение 448: готово для NG; 2pool и crypto — T448-02, T433-F3; решение 450: механизм dex.sub_dex сделан, 2pool / старые plain — T450-02, crypto — T433-F3 дочерним ключом** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md). **Решение 472: 2pool и plain-пулы старой фабрики — вид curve_stableswap_plain (код есть, запись T472-01); откаты tweak_price NG — модель есть (T472-02).**
+  - T433-005 `curve_arbitrum` (Curve (Arbitrum)) — частично: StableSwap — сверить и включить; crypto-пулы Twocrypto-NG v2.1.0 / Tricrypto-NG — код сделан (решение 442, T433-F3; ждёт CI и записи узла; под отдельными id DEX — вопрос 1 решения 442); официальные адреса crypto-фабрик — deployments.yaml curvefi (решение 442); T433-F3a (Twocrypto v2.0.0) и T433-F3b (crypto v1) — код сделан (решение 453), ждёт CI и записи узла. **Решение 448: готово для NG; 2pool и crypto — T448-02, T433-F3; решение 450: механизм dex.sub_dex сделан, 2pool / старые plain — T450-02, crypto — T433-F3 дочерним ключом** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md). **Решение 472: 2pool и plain-пулы старой фабрики — вид curve_stableswap_plain (код есть, запись T472-01); откаты tweak_price NG — модель есть (T472-02). Доделка 472: все реализации plain (Balances / ETH / Optimized / EMA), fraxbp, метапулы фабрики — вид curve_stableswap_meta; ETH-пулы без исполнения (T472-08); ren / wstETH / EURS-2Crv — T472-10.**
   - T433-006 `kyberswap_elastic_arbitrum` (Kyberswap Elastic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-06. Решение 451: готово — вид `kyber_elastic_v1`; ждёт записи узла и решения о включении (T448-06)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-007 `kyberswap_classic_arbitrum` (Kyberswap Classic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово для пулов DMM; Static Fee — T448-04; решение 450: Static Fee и Legacy — код есть, сверка — T450-01 (запись) (дочерние ключи dex.sub_dex)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-008 `elk_finance_arbitrum` (Elk Finance (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.

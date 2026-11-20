@@ -123,5 +123,6 @@ pub async fn load(
         native: None,
         input_fee: false,
         pair_d: false,
+        ema: false,
     })))
 }

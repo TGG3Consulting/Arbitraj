@@ -302,10 +302,22 @@ T433-F3, когда он будет в коде.
 | dex.kind | `curve_stableswap_plain` | решение 472 |
 | dex.stable_pools | `["0x7f90122BF0700F9E7e1F688fe926940E8839F353"]` | curvefi/curve-js ab3f1c2 src/constants/pools/arbitrum.ts L15-L20 (2pool) |
 | dex.factory | `0xb17b674D9c5CB2e441F8e196a2f048A81355d031` | curve-js network_constants.ts L157 (ALIASES_ARBITRUM.factory); Sourcify 42161 match (FactorySidechains.vy, Vyper 0.2.16) |
-| dex.curve_plain_implementations | `["0x54e8A25d0Ac0E4945b697C80b8372445FEA17A62", "0xe381C25de995d62b453aF8B931aAc84fcCaa7A62", "0x8d53E5De033078367Ad91527c53abfd1Eb6bfa86"]` | curve-js factory/stable.ts L168-L180 (Plain2/3/4Basic); Sourcify 42161 match, Vyper 0.2.15 = curve-factory f389123 |
+| dex.curve_plain_implementations | `["0x54e8A25d0Ac0E4945b697C80b8372445FEA17A62", "0x73Ec37618683C274D0bBf5f5726aA856B2BDAB81", "0xD68970e266cE1A015953897C7055a5E0bC657Af8", "0x7DA64233Fefb352f8F501B357c018158ED8aA455", "0x6F9fb833501f46CBE6f6A4b6Cf32C834E5A5e8C5", "0x0100fBf414071977B19fC38e6fc7c32FE444F5C9", "0xe381C25de995d62b453aF8B931aAc84fcCaa7A62", "0xc379bA7b8e1c6C48D64e1cf9dD602C97c9fD0F40", "0xAAe75FAebCae43b9d541Fd875622BE48D9B4f5D0", "0x8866414733F22295b7563f9C5299715D2D76CAf4", "0x8d53E5De033078367Ad91527c53abfd1Eb6bfa86", "0x2ac56cEBc2D27c9bB51a11773355E44371Eb88D3", "0x89287c32c2CAC1C76227F6d300B2DBbab6b75C08", "0x06e3C4da96fd076b97b7ca3Ae23527314b6140dF"]` | curve-js factory/stable.ts L168-L183 (Plain2/3/4 Basic, Balances, ETH, Optimized; Plain2BasicEMA, Plain2ETHEMA) |
 | dex.pool_enabled | после записи T472-01 — Тигран | — |
 
-Пулы фабрики на реализациях Balances / ETH / Optimized / EMA и fraxbp — не берутся (TASKS T472-07).
+Решение 472 (доделка): реализации Balances / ETH / Optimized / EMA — тем же ключом (список выше); fraxbp 0xC9B8…40d5 —
+пул фабрики на Plain2Basic (Curve API getPools/arbitrum/factory: implementationAddress 0x54e8…7A62) — берётся фабрикой.
+Пулы с нативным ETH (Plain*ETH) — граф и котировка; исполнения нет (шагу CURVE исполнителя нужен вход/выход ETH —
+новый шаг, TASKS T472-08).
+
+Метапулы фабрики — второй дочерний ключ (имя — решение Тиграна, например `curve_arbitrum-meta@arbitrum`):
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `curve_stableswap_meta` | решение 472 |
+| dex.factory | `0xb17b674D9c5CB2e441F8e196a2f048A81355d031` | curve-js network_constants.ts L157 |
+| dex.curve_plain_implementations | `["0x09672362833d8f703D5395ef3252D4Bfa51c15ca", "0xBE175115BF33E12348ff77CcfEE4726866A0Fbd5", "0x8DEb66a4A40E370355bEe35f12E55Fe9c755d686", "0x3edE9b145F82e9e46C03f8A8F67B77aEE847b632"]` | curve-js factory/stable.ts L159-L166 (MetaUSD, MetaUSDBalances, MetaFraxUSD, MetaFraxUSDBalances) |
+| dex.pool_enabled | после записи T472-01 — Тигран | — |
 
 ### 2.13 DODO V2 — три ключа (T433-086)
 

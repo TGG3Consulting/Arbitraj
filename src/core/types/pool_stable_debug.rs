@@ -1,7 +1,7 @@
 //! Файл: core/types/pool_stable_debug.rs
-//! Что делает: решение 472 — Debug для StableData: те же поля в том же порядке, что дал бы derive, а поле pair_d
-//! (D_P пары одной строкой — Curve 2021) — только когда оно true. Так текстовые снимки прежних видов
-//! (tests/data/multi_pair_2026-11-15/*.txt, «байт в байт») не меняются, а у Curve 2021 поле видно.
+//! Что делает: решение 472 — Debug для StableData: те же поля в том же порядке, что дал бы derive, а поля pair_d
+//! (D_P пары одной строкой — Curve 2021) и ema (save_p после обмена) — только когда они true. Так текстовые снимки
+//! прежних видов (tests/data/multi_pair_2026-11-15/*.txt, «байт в байт») не меняются, а у Curve 2021 поля видны.
 //! Кто вызывает: format!("{:?}") / {:#?} на StableData (журналы, снимки тестов).
 //! От чего зависит: core/types/pool.rs (StableData).
 //! Настройки: нет.
@@ -30,6 +30,9 @@ impl fmt::Debug for StableData {
             .field("input_fee", &self.input_fee);
         if self.pair_d {
             d.field("pair_d", &self.pair_d);
+        }
+        if self.ema {
+            d.field("ema", &self.ema);
         }
         d.finish()
     }

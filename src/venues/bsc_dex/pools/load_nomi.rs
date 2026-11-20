@@ -111,5 +111,6 @@ pub fn state(
         native: None,
         input_fee: true,
         pair_d: false,
+        ema: false,
     })))
 }

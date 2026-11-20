@@ -8,10 +8,14 @@
 //!    которой сверена математика: адрес из dex.curve_plain_implementations (у фабрики несколько реализаций на число
 //!    монет — Basic, Balances, ETH, Optimized; формула совпадает только у сверенных). Ноль — пул не этой фабрики.
 //!
-//! И в обоих случаях — обе монеты пары среди coins(k) пула (verify_curve::decide). Один проход Multicall3 частями.
-//! Без dex.factory или без dex.curve_plain_implementations путь 2 не работает (пул не из списка — отказ с причиной).
+//! И в обоих случаях — обе монеты пары среди coins(k) пула (метка ETH 0xEeee… — обёртка dex.native_wrapped;
+//! verify_curve_plain_judge.rs). Один проход Multicall3 частями. Без dex.factory или без
+//! dex.curve_plain_implementations путь 2 не работает (пул не из списка — отказ с причиной).
+//! Решение 472 (доделка): метапул (вариант CurveMeta) — только путь 2 и ещё `get_base_pool(pool)` фабрики: базовый
+//! пул должен быть coins(1) метапула (его get_virtual_price — курс монеты 1; load_curve_meta.rs).
 //! Кто вызывает: pools/verify.rs (Proto::CurveStable с вариантом CurvePlain).
-//! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_curve.rs, abi_curve_plain.rs, verify_curve.rs (judge).
+//! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_curve.rs, abi_curve_plain.rs, verify_curve_plain_judge.rs,
+//! family_variant.rs.
 //! Настройки: dex.stable_pools, dex.factory, dex.curve_plain_implementations [DEX].
 //!
 //! Источник реестра: curvefi/curve-factory fb61207 contracts/FactorySidechains.vy L451-L458 (Sourcify 42161 match
@@ -27,13 +31,14 @@ use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_curve::{IStableSwapV1, MAX_COINS};
 use super::abi_curve_plain::ICurvePlainFactory;
+use super::family_variant::Variant;
 use super::verify::{Candidate, Verdict};
-use super::verify_curve::judge;
+use super::verify_curve_plain_judge::{base_of, judge};
 
-/// Кто подтверждает пул: список или фабрика (с её адресом и сверенными реализациями).
+/// Кто подтверждает пул: список или фабрика (с её адресом, сверенными реализациями и признаком метапула).
 enum Plan {
     Listed(Address),
-    Factory(Address, Address, Vec<Address>),
+    Factory(Address, Address, Vec<Address>, bool),
 }
 
 /// Проверка пачки кандидатов. Возвращает: итог по каждому. Ошибок нет (нет подтверждения — отказ с причиной; сбой
@@ -45,9 +50,13 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         let plan = plan(ctx, c);
         match &plan {
             Ok(Plan::Listed(pool)) => push_coins(&mut calls, *pool),
-            Ok(Plan::Factory(pool, factory, _)) => {
+            Ok(Plan::Factory(pool, factory, _, meta)) => {
                 let q = ICurvePlainFactory::get_implementation_addressCall { pool: *pool };
                 calls.push((*factory, q.abi_encode().into()));
+                if *meta {
+                    let q = ICurvePlainFactory::get_base_poolCall { pool: *pool };
+                    calls.push((*factory, q.abi_encode().into()));
+                }
                 push_coins(&mut calls, *pool);
             }
             Err(_) => {}
@@ -58,15 +67,16 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
     let mut got = got.into_iter();
     let mut out = Vec::new();
     for (c, plan) in cands.iter().zip(plans) {
-        let (pool, allowed) = match plan {
-            Ok(Plan::Listed(p)) => (p, None),
-            Ok(Plan::Factory(p, _, list)) => (p, Some(list)),
+        let (pool, allowed, meta) = match plan {
+            Ok(Plan::Listed(p)) => (p, None, false),
+            Ok(Plan::Factory(p, _, list, meta)) => (p, Some(list), meta),
             Err(w) => {
                 out.push(Verdict::Rejected(w));
                 continue;
             }
         };
         let imp = allowed.map(|list| (got.next(), list));
+        let base = if meta { Some(base_of(got.next())) } else { None };
         let part: Vec<call::Piece> = got.by_ref().take(MAX_COINS).collect();
         if let Some((answer, list)) = imp {
             match implementation(answer, &list, pool) {
@@ -81,10 +91,23 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 }
             }
         }
+        let base = match base {
+            None => None,
+            Some(Ok(b)) => Some(b),
+            Some(Err(Some(node))) => {
+                out.push(Verdict::Failed(node));
+                continue;
+            }
+            Some(Err(None)) => {
+                let w = format!("пул {pool:#x}: фабрика не знает его базового пула — не метапул фабрики");
+                out.push(Verdict::Rejected(w));
+                continue;
+            }
+        };
         let answers: Result<Vec<_>, String> = part.into_iter().collect();
         out.push(match answers {
             Err(node) => Verdict::Failed(node),
-            Ok(a) => judge(ctx, c, pool, &a),
+            Ok(a) => judge(ctx, c, pool, &a, base),
         });
     }
     out
@@ -98,18 +121,20 @@ fn push_coins(calls: &mut Vec<(Address, Bytes)>, pool: Address) {
     }
 }
 
-/// План проверки кандидата: в dex.stable_pools — список; иначе фабрика, если заданы dex.factory и
-/// dex.curve_plain_implementations. Возвращает: план или причину отказа. Ошибок нет.
+/// План проверки кандидата: в dex.stable_pools — список (не у метапула: его базовый пул подтверждает только фабрика);
+/// иначе фабрика, если заданы dex.factory и dex.curve_plain_implementations. Возвращает: план или причину отказа.
+/// Ошибок нет.
 fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     let pool = Address::from_str(&c.pool)
         .map_err(|_| format!("«{}» — не адрес контракта пула Curve", c.pool))?;
     let id = c.family.id;
+    let meta = c.family.variant == Variant::CurveMeta;
     let listed = ctx.dex_list("dex.stable_pools", id).unwrap_or_default();
     let known = listed
         .iter()
         .filter_map(|s| Address::from_str(s.trim()).ok())
         .any(|a| a == pool);
-    if known {
+    if known && !meta {
         return Ok(Plan::Listed(pool));
     }
     let factory = ctx.dex_addr("dex.factory", id).map_err(|_| reject(pool, id))?;
@@ -122,7 +147,7 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     if imps.is_empty() {
         return Err(reject(pool, id));
     }
-    Ok(Plan::Factory(pool, factory, imps))
+    Ok(Plan::Factory(pool, factory, imps, meta))
 }
 
 /// Ответ get_implementation_address фабрики: Ok — реализация из списка; Err(None) — не из списка или ноль (пул не

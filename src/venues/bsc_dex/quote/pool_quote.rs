@@ -23,7 +23,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    balancer_math, bin_swap, crypto_swap, dmm, ekubo_mev, ekubo_swap, fluid_check, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
+    balancer_math, bin_swap, crypto_swap, dmm, ekubo_mev, ekubo_swap, fluid_check, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_ema, stable_guard, stableswap_ng,
     stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::ekubo_native;
@@ -397,6 +397,15 @@ pub fn swap(
             {
                 return Err(why(
                     "StableSwap: цена пула после обмена уйдёт от оракула дальше порога пула (обмен откатился бы)",
+                ));
+            }
+            // Решение 472 (доделка): реализации Curve с оракулом цены (Plain2BasicEMA / Plain2ETHEMA) — save_p после
+            // обмена (pack_prices: цена < 2^128), иначе обмен откатится (math/stable_ema.rs).
+            if d.ema
+                && stable_ema::passes(i, j, amount, &d.balances, &d.rates, d.amp, &t).is_none()
+            {
+                return Err(why(
+                    "StableSwap: save_p пула после обмена откатил бы его (цена пула ≥ 2^128)",
                 ));
             }
             Ok(Swapped {

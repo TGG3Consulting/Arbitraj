@@ -106,7 +106,12 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee => algebra.push(i),
             p if p.is_solidly() => solidly.push(i),
             // Решение 472: Curve 2021 (curve_stableswap_plain) — список или реестр фабрики (verify_curve_plain.rs).
-            Proto::CurveStable if c.family.variant == Variant::CurvePlain => curve_plain.push(i),
+            // Решение 472 (доделка): метапул фабрики — тот же путь (реестр фабрики и get_base_pool).
+            Proto::CurveStable
+                if matches!(c.family.variant, Variant::CurvePlain | Variant::CurveMeta) =>
+            {
+                curve_plain.push(i)
+            }
             // Решение 453: tricrypto 2021 — фабрики нет, как Curve 2020: список dex.stable_pools + coins(k).
             Proto::CurveStable | Proto::CurveTricryptoV1 => curve.push(i),
             Proto::CurveNg => curve_ng.push(i),

@@ -236,5 +236,6 @@ pub fn build(
         native: None,
         input_fee: false,
         pair_d: false,
+        ema: false,
     })))
 }

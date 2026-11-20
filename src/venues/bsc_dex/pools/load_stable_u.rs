@@ -240,6 +240,7 @@ pub fn finish(
         native: stable_native::native_index(coins),
         input_fee: false,
         pair_d: false,
+        ema: false,
     })))
 }
 

@@ -33,6 +33,12 @@ pub enum Variant {
     /// 42161 match реализаций 0x54e8…7A62, 0xe381…7A62, 0x8d53…fa86). Чтение — load_curve_plain.rs, проверка —
     /// verify_curve_plain.rs, события — events_curve.rs (topics_of), состояние — каждым блоком (per_block.rs).
     CurvePlain,
+    /// Метапул фабрики Curve Sidechain/L2 (dex.kind = curve_stableswap_meta, решение 472, доделка): тот же протокол и
+    /// шаблон, что CurvePlain, но курс монеты 1 (LP-токен базового пула) — get_virtual_price() базового пула на блоке,
+    /// D_P — циклом. Исходник — MetaUSD.vy / MetaUSDBalances.vy (curvefi/curve-factory f389123); чтение —
+    /// load_curve_meta.rs, проверка — verify_curve_plain.rs (реализация из dex.curve_plain_implementations и
+    /// get_base_pool фабрики = coins(1)), события — events_curve.rs, состояние — каждым блоком (per_block.rs).
+    CurveMeta,
 }
 
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
@@ -40,6 +46,7 @@ pub fn of(kind: &str) -> Variant {
     match kind {
         "kyber_elastic_v1" => Variant::ElasticV1,
         "curve_stableswap_plain" => Variant::CurvePlain,
+        "curve_stableswap_meta" => Variant::CurveMeta,
         _ => Variant::Base,
     }
 }
@@ -56,5 +63,6 @@ mod tests {
         assert_eq!(of("kyber_elastic_v1"), Variant::ElasticV1);
         assert_eq!(of("curve_stableswap"), Variant::Base);
         assert_eq!(of("curve_stableswap_plain"), Variant::CurvePlain);
+        assert_eq!(of("curve_stableswap_meta"), Variant::CurveMeta);
     }
 }

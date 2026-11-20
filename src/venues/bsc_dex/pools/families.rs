@@ -450,6 +450,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Решение 472: Curve StableSwap 2021 (2pool Arbitrum, plain-пулы старой фабрики) — тот же протокол, вариант
         // CurvePlain (family_variant.rs): A_precise(), строгая сходимость, D_P пары; шаг CURVE исполнителя.
         "curve_stableswap_plain" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
+        // Решение 472 (доделка): метапулы фабрики Curve Sidechain/L2 — вариант CurveMeta, шаг CURVE исполнителя.
+        "curve_stableswap_meta" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
         // Curve StableSwap-NG (решение 275): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
         "curve_stableswap_ng" => (PoolKind::StableSwap, Proto::CurveNg, true, false, false),
         // Nomiswap Stable (решение 284): в графе и сигналах; исполнение — шаг NOMI_STABLE контракта-исполнителя (только v2).

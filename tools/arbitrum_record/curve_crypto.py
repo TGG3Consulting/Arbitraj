@@ -46,6 +46,7 @@ import sys
 
 from curve_crypto_pools import LADDER_PPM, code, factory_pools, ng_rows, v1_row
 from curve_crypto_rpc import Node
+from curve_sim import SENDER, Sim
 
 def split(v):
     return [a for a in (v or "").split(",") if a]
@@ -69,6 +70,9 @@ def main():
     a = ap.parse_args()
 
     node = Node(a.node)
+    # Решение 472 (T472-02): отправитель симуляций exchange (curve_sim.py) должен быть пуст.
+    if not Sim(a.node, "latest").empty():
+        sys.exit("ОШИБКА: отправитель симуляции %s не пуст" % SENDER)
     chain = node.rpc("eth_chainId", [])["result"]
     head = int(node.rpc("eth_blockNumber", [])["result"], 16)
     tag = hex(head)
@@ -109,6 +113,7 @@ def main():
         "version(), MATH(), get_coins (и get_decimals у v1) фабрики, код (eth_getCode) пулов, реализаций и математики,",
         "decimals() монет v1, balanceOf(pool) монет и eth_getBalance(pool) (holdings),",
         f"лесенка get_dy(i, j, dx) в обе стороны (dx — доли баланса, ppm: {LADDER_PPM}).",
+        f"Решение 472: exchange_sim — eth_call exchange на тех же суммах с подменой баланса и разрешения у {SENDER}.",
         "Пулы фабрик — с конца pool_list. Откат вызова — поле error.",
         "Читают тесты tests/arb_curve_crypto_live.rs (NG) и tests/arb_curve_crypto_v1_live.rs (v1) — снять #[ignore].",
         "",

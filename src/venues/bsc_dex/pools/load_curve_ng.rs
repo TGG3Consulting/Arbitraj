@@ -156,5 +156,6 @@ pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<Po
         native: None,
         input_fee: false,
         pair_d: false,
+        ema: false,
     })))
 }

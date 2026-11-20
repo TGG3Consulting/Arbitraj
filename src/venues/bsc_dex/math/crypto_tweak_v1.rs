@@ -162,7 +162,7 @@ fn claim(
     g[s.i] = au(g[s.i], s.dx)?;
     g[s.j] = su(g[s.j], s.dy)?;
     let mut supply = t.total_supply;
-    let mut profit = xcp_profit;
+    let profit = xcp_profit;
     if profit > v.xcp_profit_a {
         // fees = (xcp_profit - xcp_profit_a) * self.admin_fee / (2 * 10**10) (L492).
         let fees = du(mu(profit - v.xcp_profit_a, v.admin_fee)?, mu(two, E10)?)?;
@@ -170,8 +170,9 @@ fn claim(
             // frac = vprice * 10**18 / (vprice - fees) - 10**18 (L496); mint_relative: supply * frac / 10**18.
             let frac = su(du(mu(vprice, E18)?, su(vprice, fees)?)?, E18)?;
             supply = au(supply, du(mu(supply, frac)?, E18)?)?;
-            // xcp_profit -= fees*2 (L498).
-            profit = su(profit, mu(fees, two)?)?;
+            // xcp_profit -= fees*2 (L498): проверяемое вычитание (откат); новое значение дальше в расчёте не
+            // участвует (только сохранение xcp_profit / xcp_profit_a — не откатывает).
+            su(profit, mu(fees, two)?)?;
         }
     }
     // xp() (L190-L193): [b0 * p0, b1 * p1 * price_scale / PRECISION]; D = newton_D (L505).

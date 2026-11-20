@@ -12,7 +12,8 @@
 //! недостоверен, отметка долой (listen_log.rs, как у любой ошибки чтения).
 //! Повторное ревью t236, п. 2: Need::Clock — время головы не получено: пулы недостоверны на этот блок без полного
 //! чтения (clock_hold — fusion_clock.rs); на голове со временем fusion_head.rs снимает её (clock_back), если комиссия
-//! по книге считается (комиссия и достоверность — одним изменением реестра, set), иначе ставит Need::Fee (полное чтение).
+//! по книге считается (комиссия и достоверность — одним изменением реестра, set), иначе ставит Need::Fee
+//! (полное чтение).
 //! Кто вызывает: settle.rs (step → next_fee), listen_log.rs (next_fee_open), integral_fee.rs (fee_written),
 //! fusion_clock.rs (clock_hold), fusion_head.rs (on_clock, clock_back).
 //! От чего зависит: settle.rs (Holds, Need), registry.rs, events.rs (Applied), families.rs, abi_algebra.rs (Fee).

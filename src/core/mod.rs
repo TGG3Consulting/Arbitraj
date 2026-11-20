@@ -293,6 +293,7 @@ pub mod rules_apply;
 mod rules_stop;
 pub mod sale_marks;
 pub mod sell;
+pub mod sell_approve;
 pub mod sell_fact;
 pub mod sell_here_ok;
 pub mod sell_loop;

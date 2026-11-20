@@ -645,17 +645,25 @@ async fn run(
     }
     // Решение 151: на кошелёк DEX — зачисление и по приходу в блокчейне (transfers::send_trade).
     let mut gas = Vec::new();
-    let sent = super::transfers::send_trade(
+    let send = super::transfers::send_trade(
         core,
         &deal.id,
         (&d.buy_on, &d.sell_on),
         &d.asset,
         deal.qty,
         &mut gas,
-    )
-    .await;
+    );
+    // Решение 476 (Тигран 20.11): разрешения продажи DEX по плану — заранее, одновременно с переводом (перевод их не
+    // ждёт); продажу ни к чему не обязывают (sell_approve.rs).
+    let early = super::sell_approve::ahead(core, &d, &deal, &plan);
+    let (sent, mut early) = tokio::join!(Box::pin(send), Box::pin(early));
     // Решение 236, дополнение: газ неудачных переводов из кошелька DEX (откат, отмена) — в затраты сделки.
     super::deal_gas::charge(core, &mut deal, &d.buy_on, &mut gas).await;
+    // Решение 476: газ разрешений заранее — в затраты сделки (как approve перед обменом), строка — в хронологию.
+    if let Some(n) = early.note.take() {
+        deal.note(n);
+    }
+    super::deal_gas::charge(core, &mut deal, &d.sell_on, &mut early.gas).await;
     // Решение 413 (третье ревью, М-2): вывода не было (исход известен) — сделка не в пути.
     if matches!(&sent, Err(e) if !e.outcome_unknown()) {
         deal.transit_to = None;

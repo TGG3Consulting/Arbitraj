@@ -447,6 +447,14 @@ impl Venue for BscDex {
         scope(class, exec::presell::run(&q, req.clone())).await
     }
 
+    /// Решение 476: разрешения (approve) продажи заранее, пока монета идёт на кошелёк сделки — exec/preapprove.rs (сборка
+    /// плана как у исполнения, wallet/approve.rs lacking, отправка exec/swap_send.rs send_approvals). Ошибки: как у run.
+    async fn dex_preapprove(&self, req: &TradeRequest) -> GatewayResult<Option<Decimal>> {
+        let (q, env) = (self.p.quoting(), self.p.env());
+        let run = exec::preapprove::run(&q, &env, &self.p.nonces, req.clone());
+        scope(Class::Trade, run).await
+    }
+
     /// «Сухая сделка DEX» через исполнитель ArbExecutor с подставленным в симуляцию кодом (решение 122, часть X) —
     /// проверка исполнителя на живой сети до развёртывания. Ничего не отправляет. Ошибок нет: отказ — причиной в итоге.
     async fn dex_dry_swap_executor(

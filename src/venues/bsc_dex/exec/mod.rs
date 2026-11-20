@@ -62,6 +62,7 @@ pub mod plan;
 pub mod precheck;
 pub mod precheck_quoter;
 pub mod precheck_sim;
+pub mod preapprove;
 pub mod presell;
 pub mod presell_credit;
 pub mod presell_slot;

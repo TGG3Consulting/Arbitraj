@@ -10,12 +10,16 @@
 //!   следа — самый высокий;
 //! - ордер продажи в полёте (credit_lock::selling ждёт итога), исполнившийся за время котировки (счётчик итогов) и с
 //!   неизвестным исходом — котировки нет (ride_settled.rs, sale_marks.rs); котировка-решение без ордера не держит;
+//! - решение 476: approve заранее (sell_approve.rs) — продажа на бирже ничего не отправляет; на DEX без площадки в
+//!   реестре — не блокирует (строка в хронологию, approve перед обменом, как раньше);
 //! - время в пути монеты без своей истории: настройки (37 + 2 = 39 с) или статистика пары gate → bsc_dex по всем монетам
 //!   из записи /api/transits (transits_gate_bsc_dex.json) — transit_source.rs.
 //!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core (coin_ride, ride_quote, ride_trail, ride_settled, credit_lock, sell_turn, ledger),
 //! arb::settings, arb::storage, arb::notify, tests/data/num_pool_2026-11-20.
+
+mod size_common;
 
 use alloy_primitives::{Address, B256};
 use arb::core::Core;
@@ -33,8 +37,8 @@ use arb::core::types::{
     SendMethod, Side, TradeRequest, TradeResult, TradeStatus, TxOutcome, VenueId,
 };
 use arb::core::{
-    coin_ride, credit_lock, ledger, ride_quote, ride_settled, ride_trail, sale_marks, sell_turn,
-    transit, transit_source,
+    coin_ride, credit_lock, ledger, ride_quote, ride_settled, ride_trail, sale_marks, sell_approve,
+    sell_turn, transit, transit_source,
 };
 use arb::gateway::contract::VenueKind;
 use arb::gateway::registry::Registry;
@@ -492,4 +496,27 @@ async fn unsure_block_survives_restart_and_blocks_without_groups() {
         Err(Fail::Stop(t)) => assert!(t.contains("заблокирована"), "{t}"),
         other => panic!("ждали отказ Stop, исполнено: {}", other.is_ok()),
     }
+}
+
+#[tokio::test]
+async fn approve_ahead_only_for_dex_and_never_blocks() {
+    let core = start("approve").await;
+    // План — настоящий расчёт на записанных данных (tests/size_common: CAKE, пул и стакан записи).
+    let rec = size_common::Rec::load("t238-approve").await;
+    let plan = size_common::calc::calc(&rec, size_common::d("5"));
+    let mut dx = size_common::calc::direction();
+    dx.buy_on = VenueId("gate".into());
+    // Продажа на бирже — разрешений DEX нет: ничего не отправляется и не пишется.
+    let mut cex = dx.clone();
+    cex.sell_on = VenueId("kucoin".into());
+    let deal = Deal::new("A1".into(), cex.clone(), json!({}), Decimal::ONE);
+    let a = sell_approve::ahead(&core, &cex, &deal, &plan).await;
+    assert!(a.gas.is_empty() && a.note.is_none());
+    // Продажа на DEX, площадки в реестре нет (не отправить) — не блокирует: строка в хронологию, газа нет, продажа
+    // сделает approve перед обменом, как раньше.
+    let deal = Deal::new("A2".into(), dx.clone(), json!({}), Decimal::ONE);
+    let a = sell_approve::ahead(&core, &dx, &deal, &plan).await;
+    assert!(a.gas.is_empty());
+    let note = a.note.unwrap();
+    assert!(note.contains("продажа сделает его перед обменом"), "{note}");
 }

@@ -319,6 +319,18 @@ T433-F3, когда он будет в коде.
 | dex.curve_plain_implementations | `["0x09672362833d8f703D5395ef3252D4Bfa51c15ca", "0xBE175115BF33E12348ff77CcfEE4726866A0Fbd5", "0x8DEb66a4A40E370355bEe35f12E55Fe9c755d686", "0x3edE9b145F82e9e46C03f8A8F67B77aEE847b632"]` | curve-js factory/stable.ts L159-L166 (MetaUSD, MetaUSDBalances, MetaFraxUSD, MetaFraxUSDBalances) |
 | dex.pool_enabled | после записи T472-01 — Тигран | — |
 
+**Решение 472 (T472-10):** crypto-пул основного реестра EURS/2CRV `0xA827a652Ead76c6B0b3D19dba05452E06e25c27e` — вид
+`curve_crypto2_v1` (вариант CryptoPair протокола tricrypto 2021: пул из списка, две монеты, математика CurveCryptoSwap2).
+Третий дочерний ключ (имя — решение Тиграна, например `curve_arbitrum-eurs@arbitrum`):
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `curve_crypto2_v1` | решение 472 |
+| dex.stable_pools | `["0xA827a652Ead76c6B0b3D19dba05452E06e25c27e"]` | curvefi/curve-crypto-contract 41e6289 «deployment-logs/2021-10-30. EURS/deployment.log» |
+| dex.pool_enabled | после записи (tricrypto_v1.py/curve_crypto.py — T472-10) — Тигран | — |
+
+WBTC/renBTC `0x3E01…0Fb` и ETH/wstETH `0x6eB2…7d80` — исходник не найден (TASKS T472-10), не подключены.
+
 ### 2.13 DODO V2 — три ключа (T433-086)
 
 Пулы DODO индексатор GeckoTerminal в сети arbitrum не отдаёт (dex-coverage-arbitrum.md, строка 86): источник — поиск по

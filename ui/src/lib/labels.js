@@ -63,6 +63,7 @@ const CHOICE = {
   curve_tricrypto_ng: 'Curve Tricrypto-NG (crypto-пул из 3 монет)',
   curve_crypto_v1: 'Curve crypto v1 фабрики (crypto-пул из 2 монет)',
   curve_tricrypto_v1: 'Curve tricrypto 2021 (crypto-пул из 3 монет, без фабрики)',
+  curve_crypto2_v1: 'Curve crypto 2021 из 2 монет без фабрики (EURS/2CRV)',
   nomiswap_stable: 'Nomiswap Stable (стейбл-пара, комиссия со входа)',
   metric_omm: 'Metric OMM (цена провайдера, лесенка ответов пула)',
   iziswap: 'iZiSwap (точки и лимитные ордера, лесенка ответов пула)',

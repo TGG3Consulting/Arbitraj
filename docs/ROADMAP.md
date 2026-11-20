@@ -33,6 +33,10 @@
   прогона узла. Доделка 472: шаг исполнителя для Curve с нативным ETH — T472-08 (вид шага 28, пересборка v5);
   исходники ren / wstETH / EURS-2Crv основного реестра Arbitrum — T472-10; tests/arbitrum_curve_plain_live.rs 230 строк
   (сверх ориентира — помощники записи в одном тесте); quote/pool_quote.rs вырос (+ save_p).
+- Решение 472 (доделка 2, `wc -l`): pools/load_crypto_v1.rs 257 (+ tweak v1, is_killed пары) — дробить: decode — в
+  load_crypto_v1_decode.rs; exec/executor/entry.rs 565 (+ curve_eth), exec/executor/kind.rs 279 (+ CurveEth).
+  Не сделано: модель tweak_price tricrypto 2021 и EURS/2CRV (T472-03: факты разбора — TASKS); исходник ren / wstETH
+  основного реестра Arbitrum (T472-10); сборка исполнителя v5 (T472-08).
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

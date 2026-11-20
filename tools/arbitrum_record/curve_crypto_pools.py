@@ -32,8 +32,9 @@ TWEAK_V1 = ["token()", "factory()", "coins(uint256)", "price_oracle()", "xcp_pro
 SLOTS_V1 = {28: "D()", 31: "xcp_profit_a()", 32: "virtual_price()", 33: None, 34: "admin_actions_deadline()"}
 
 
-def bot_calls(n, v1):
-    """Сигнатуры и аргументы вызовов бота (calldata). n — число монет, v1 — пул первого поколения."""
+def bot_calls(n, v1, pair=False):
+    """Сигнатуры и аргументы вызовов бота (calldata). n — число монет, v1 — пул первого поколения, pair — пара без
+    фабрики (вид curve_crypto2_v1: is_killed() и у двух монет — pools/load_crypto_v1.rs calls_with)."""
     out = [(sig, "") for sig in NG_HEAD]
     if not v1:
         out.append(("precisions()", ""))
@@ -46,7 +47,7 @@ def bot_calls(n, v1):
         for k in range(n - 1):
             out.append(("price_scale(uint256)", word(k)))
     if v1:
-        if n == 3:
+        if n == 3 or pair:
             out.append(("is_killed()", ""))
     else:
         out.append(("MATH()", ""))
@@ -59,10 +60,10 @@ def bot_calls(n, v1):
     return out
 
 
-def record_calls(node, pool, n, v1, tag):
+def record_calls(node, pool, n, v1, tag, pair=False):
     """Ответы на вызовы бота и проверочные — словарь calldata → ответ."""
     calls = {}
-    sigs = bot_calls(n, v1) + ([] if v1 else [("version()", "")])
+    sigs = bot_calls(n, v1, pair) + ([] if v1 else [("version()", "")])
     for sig, args in sigs:
         data = selector(sig) + args
         calls[data] = node.call(pool, data, tag)
@@ -149,8 +150,8 @@ def ng_rows(node, factory, n, maths, per_math, tag):
     return count, rows
 
 
-def v1_row(node, pool, n, tag, factory=None):
-    calls = record_calls(node, pool, n, True, tag)
+def v1_row(node, pool, n, tag, factory=None, pair=False):
+    calls = record_calls(node, pool, n, True, tag, pair)
     row = {
         "pool": pool,
         "calls": calls,
@@ -160,7 +161,7 @@ def v1_row(node, pool, n, tag, factory=None):
         "get_dy": ladder(node, pool, n, calls, tag),
     }
     row["exchange_sim"] = sims(node, pool, n, calls, row["get_dy"], tag)
-    if n == 2:
+    if n == 2 and not pair:
         row["tweak_v1"] = tweak_v1(node, pool, calls, tag)
     if factory:
         row["factory_get_coins"] = node.call(factory, selector("get_coins(address)") + addr_word(pool), tag)

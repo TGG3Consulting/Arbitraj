@@ -65,6 +65,8 @@ def main():
     ap.add_argument("--v1-factory", required=True, help="фабрика crypto v1 (others.log)")
     ap.add_argument("--v1-template", required=True, help="шаблон пула фабрики crypto v1 (others.log)")
     ap.add_argument("--tricrypto-v1-pool", required=True, help="tricrypto 2021 (log.txt)")
+    ap.add_argument("--crypto2-v1-pool", default=None, help="T472-10: crypto-пул из 2 монет без фабрики (EURS/2CRV)")
+    ap.add_argument("--code-pools", default="", help="T472-10: пулы без исходника — только eth_getCode (через запятую)")
     ap.add_argument("--max-pools", type=int, default=20, help="пулов на каждую математику / фабрику v1")
     ap.add_argument("--out", default=None, help="папка (по умолчанию tests/data/arbitrum_curve_crypto_<дата>)")
     a = ap.parse_args()
@@ -98,6 +100,13 @@ def main():
                                    templates=[a.v1_template], code_of={a.v1_template: code(node, a.v1_template, tag)},
                                    pools=v1)
     files["tricrypto_v1.json"] = dict(base, kind="tricrypto_v1", pools=[v1_row(node, a.tricrypto_v1_pool, 3, tag)])
+    # Решение 472 (T472-10): пара без фабрики (вид curve_crypto2_v1) — те же вызовы v1 + is_killed(); код пулов без
+    # исходника (сверка с кодом 2pool — для разбора, не для подключения).
+    if a.crypto2_v1_pool:
+        files["crypto2_v1.json"] = dict(base, kind="crypto2_v1",
+                                        pools=[v1_row(node, a.crypto2_v1_pool, 2, tag, pair=True)])
+    if a.code_pools:
+        files["code_pools.json"] = dict(base, kind="code_pools", code_of={p: code(node, p, tag) for p in split(a.code_pools)})
 
     for name, doc in files.items():
         with open(os.path.join(out, name), "w") as f:

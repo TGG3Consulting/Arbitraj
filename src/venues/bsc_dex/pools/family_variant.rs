@@ -39,6 +39,15 @@ pub enum Variant {
     /// load_curve_meta.rs, проверка — verify_curve_plain.rs (реализация из dex.curve_plain_implementations и
     /// get_base_pool фабрики = coins(1)), события — events_curve.rs, состояние — каждым блоком (per_block.rs).
     CurveMeta,
+    /// Двухмонетный crypto-пул Curve первого поколения без фабрики (dex.kind = curve_crypto2_v1, решение 472, T472-10):
+    /// протокол Proto::CurveTricryptoV1 (пул из списка dex.stable_pools, монеты — coins(k), is_killed), но монет две и
+    /// математика — CurveCryptoSwap2 (CryptoMath::TwoV1). Исходник — EURS/2CRV Arbitrum
+    /// 0xA827a652Ead76c6B0b3D19dba05452E06e25c27e: curvefi/curve-crypto-contract 41e6289 «deployment-logs/2021-10-30.
+    /// EURS/CryptoSwap.vy» (Vyper 0.3.0; адрес — deployment.log того же каталога): geometric_mean, newton_D, newton_y,
+    /// halfpow, get_xcp, _A_gamma — тот же текст, что CurveCryptoSwap2ETH.vy (curve-factory-crypto 7ed1011; сверка
+    /// функций скриптом), exchange L686-L765 — те же действия, что `_exchange` 2ETH (+ assert not is_killed L688).
+    /// Чтение — load_crypto_v1.rs (n = 2 и is_killed()), модель tweak_price v1 фабрики к нему не применяется.
+    CryptoPair,
 }
 
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
@@ -47,6 +56,7 @@ pub fn of(kind: &str) -> Variant {
         "kyber_elastic_v1" => Variant::ElasticV1,
         "curve_stableswap_plain" => Variant::CurvePlain,
         "curve_stableswap_meta" => Variant::CurveMeta,
+        "curve_crypto2_v1" => Variant::CryptoPair,
         _ => Variant::Base,
     }
 }
@@ -64,5 +74,7 @@ mod tests {
         assert_eq!(of("curve_stableswap"), Variant::Base);
         assert_eq!(of("curve_stableswap_plain"), Variant::CurvePlain);
         assert_eq!(of("curve_stableswap_meta"), Variant::CurveMeta);
+        assert_eq!(of("curve_crypto2_v1"), Variant::CryptoPair);
+        assert_eq!(of("curve_tricrypto_v1"), Variant::Base);
     }
 }

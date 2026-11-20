@@ -479,6 +479,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // STABLE_U256 исполнителя (exchange(uint256, uint256, dx, 0) у обоих есть).
         "curve_crypto_v1" => (PoolKind::Crypto, Proto::CurveCryptoV1, true, false, false),
         "curve_tricrypto_v1" => (PoolKind::Crypto, Proto::CurveTricryptoV1, true, false, false),
+        // Решение 472 (T472-10): двухмонетный crypto-пул без фабрики (EURS/2CRV) — протокол tricrypto 2021 из списка,
+        // вариант CryptoPair (две монеты, math TwoV1).
+        "curve_crypto2_v1" => (PoolKind::Crypto, Proto::CurveTricryptoV1, true, false, false),
         // Camelot V2 (решение 443): в графе и сигналах (своя математика пары); исполнение — шаг SOLIDLY исполнителя.
         "camelot_v2" => (PoolKind::Solidly, Proto::CamelotV2, true, false, false),
         // Liquidity Book v2.0 (решение 445): в графе и сигналах (порт swap v2.0); исполнение — шаг LB20 исполнителя.

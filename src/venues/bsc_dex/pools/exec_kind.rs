@@ -196,7 +196,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // L859-L866: вход transferFrom(sender) L709-L716, выход transfer(receiver) L733-L738; curve-crypto-contract
         // a0f8401 «2021-09-13. Arbitrum/CryptoSwap.vy» L591-L686: transferFrom(msg.sender) L614, transfer(msg.sender)
         // L669) — шаг STABLE_U256, без нового кода исполнителя.
-        "curve_crypto_v1" | "curve_tricrypto_v1" => ExecKind::StableU256,
+        "curve_crypto_v1" | "curve_tricrypto_v1" | "curve_crypto2_v1" => ExecKind::StableU256,
         "saddle_stableswap" => ExecKind::Saddle,
         // Решение 284: swap пары — подпись V2, выход — getAmountOut(address, uint256) самой пары (шаг 12, только v2).
         "nomiswap_stable" => ExecKind::NomiStable,

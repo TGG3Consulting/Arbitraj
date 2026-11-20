@@ -207,6 +207,8 @@ log.signal_hold (core/book_marks_on.rs).
 | dex.factory | DEX Curve 2021 мета | `0xb17b674D9c5CB2e441F8e196a2f048A81355d031` | get_implementation_address и get_base_pool фабрики | curve-js network_constants.ts L157 |
 | dex.curve_plain_implementations | DEX Curve 2021 мета | `["0x09672362833d8f703D5395ef3252D4Bfa51c15ca", "0xBE175115BF33E12348ff77CcfEE4726866A0Fbd5", "0x8DEb66a4A40E370355bEe35f12E55Fe9c755d686", "0x3edE9b145F82e9e46C03f8A8F67B77aEE847b632"]` | MetaUSD, MetaUSDBalances, MetaFraxUSD, MetaFraxUSDBalances (MetaBTCRen — нет) | curve-js factory/stable.ts L159-L166 |
 | dex.stable_pools | DEX tricrypto 2021 | `["0x960ea3e3C7FB317332d990873d354E18d7645590"]` | Пул без фабрики — подтверждает список | log.txt «Swap» |
+| dex.kind | DEX Curve crypto EURS (дочерний ключ curve_arbitrum) | `curve_crypto2_v1` | Вид: двухмонетный crypto-пул без фабрики (вариант CryptoPair) | Решение 472 (T472-10) |
+| dex.stable_pools | DEX Curve crypto EURS | `["0xA827a652Ead76c6B0b3D19dba05452E06e25c27e"]` | EURS/2CRV без фабрики — подтверждает список | curve-crypto-contract 41e6289 «2021-10-30. EURS/deployment.log» |
 | dex.pair_lookup_max | DEX crypto v1 | решение Тиграна; *метод:* сколько пулов одной пары держит фабрика (market_counts) — за последним нулевой адрес | find_pool_for_coins и событие создания | Factory.vy L117, L335-L345 |
 | dex.pool_enabled | DEX crypto v1 / tricrypto 2021 | `да` после записи (tools/arbitrum_record/curve_crypto.py) и снятия #[ignore] у tests/arb_curve_crypto_live.rs | Сверка порта с get_dy пула до торговли | Решение 453 |
 

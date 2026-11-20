@@ -31,6 +31,7 @@ use super::super::tokens::Tokens;
 use super::abi_crypto::{ICryptoPool as P, ITricryptoPool as P3};
 use super::abi_crypto_v1::ICryptoPoolV1 as V1;
 use super::families::{Family, Proto};
+use super::family_variant::Variant;
 use super::load_crypto_tweak_v1 as tweak_v1;
 use super::load_lb::{decode_time, time_call};
 use super::load_smardex;
@@ -46,12 +47,17 @@ pub struct Raw {
     pub got: Vec<Result<Bytes, String>>,
     pub now: u64,
     pub decimals: Vec<u8>,
+    /// Читался is_killed() (последним вызовом после price_scale): пулы протокола tricrypto 2021 — tricrypto и пара
+    /// без фабрики (вариант CryptoPair, решение 472).
+    pub killed: bool,
 }
 
 /// Число монет вида: фабрика v1 — 2, tricrypto 2021 — 3. None — не вид v1. Ошибок нет.
 pub fn coins_of(f: &Family) -> Option<usize> {
     match f.proto {
         Proto::CurveCryptoV1 => Some(2),
+        // Решение 472 (T472-10): вариант CryptoPair — две монеты (EURS/2CRV).
+        Proto::CurveTricryptoV1 if f.variant == Variant::CryptoPair => Some(2),
         Proto::CurveTricryptoV1 => Some(3),
         _ => None,
     }
@@ -59,6 +65,11 @@ pub fn coins_of(f: &Family) -> Option<usize> {
 
 /// Вызовы чтения по порядку: HEAD, coins(k)/balances(k), price_scale, у трёх монет — is_killed(). Ошибок нет.
 pub fn calls(pool: Address, n: usize) -> Vec<(Address, Bytes)> {
+    calls_with(pool, n, n == 3)
+}
+
+/// То же с is_killed() последним при `killed` (решение 472: пара без фабрики — CryptoPair). Ошибок нет.
+pub fn calls_with(pool: Address, n: usize, killed: bool) -> Vec<(Address, Bytes)> {
     let mut data: Vec<Bytes> = vec![
         P::ACall {}.abi_encode().into(),
         P::gammaCall {}.abi_encode().into(),
@@ -79,6 +90,8 @@ pub fn calls(pool: Address, n: usize) -> Vec<(Address, Bytes)> {
         for k in 0..n - 1 {
             data.push(P3::price_scaleCall { k: U256::from(k) }.abi_encode().into());
         }
+    }
+    if killed {
         data.push(V1::is_killedCall {}.abi_encode().into());
     }
     data.into_iter().map(|d| (pool, d)).collect()
@@ -98,9 +111,10 @@ pub async fn read(
         return Err(bad(format!("{}: вид не crypto v1", f.title)));
     };
     let tag = call::block_tag(block);
-    let mut all = calls(pool, n);
+    let killed = f.proto == Proto::CurveTricryptoV1;
+    let mut all = calls_with(pool, n, killed);
     // T472-03: tweak_price пула фабрики (2 монеты) — постоянные пула из памяти или одним чтением на этом блоке.
-    let v1 = n == 2;
+    let v1 = f.proto == Proto::CurveCryptoV1;
     if v1 {
         all.extend(tweak_v1::calls(pool, &tweak_v1::statics(ctx, pool, &tag).await?));
     }
@@ -145,6 +159,7 @@ pub async fn read(
         got,
         now,
         decimals,
+        killed,
     })
 }
 
@@ -177,9 +192,9 @@ pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<Po
     data.i1 = index(pair.1)?;
     // Решение 455: crypto v1 фабрики (2 монеты; у tricrypto 2021 self.balance не читается) с монетой
     // dex.native_wrapped — нативный ETH без события (per_block_crypto.rs).
-    data.native_in = raw.n == 2 && per_block_crypto::takes_native(ctx, &coins);
+    data.native_in = raw.n == 2 && !raw.killed && per_block_crypto::takes_native(ctx, &coins);
     // T472-03: состояние tweak_price пула фабрики — ответы после прежних (HEAD, монеты, price_scale).
-    if raw.n == 2 {
+    if raw.n == 2 && !raw.killed {
         let tail = raw.got.get(HEAD + 2 * raw.n + 1..).unwrap_or(&[]);
         let wrapped = ctx.addr("dex.native_wrapped").ok();
         data.tweak = tweak_v1::decode(tail, &coins, wrapped).map_err(&bad)?;
@@ -215,8 +230,9 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData), String> {
     let price_scale = (0..raw.n - 1)
         .map(|k| w(tail + k))
         .collect::<Result<Vec<_>, _>>()?;
-    // is_killed() — только у tricrypto 2021 (exchange: assert not self.is_killed, CryptoSwap.vy L594).
-    let halted = raw.n == 3 && !w(tail + raw.n - 1)?.is_zero();
+    // is_killed() — у tricrypto 2021 (exchange: assert not self.is_killed, CryptoSwap.vy L594) и пары без фабрики
+    // (решение 472: EURS CryptoSwap.vy L688).
+    let halted = raw.killed && !w(tail + raw.n - 1)?.is_zero();
     let t = w(6)?;
     let data = CryptoData {
         balances,

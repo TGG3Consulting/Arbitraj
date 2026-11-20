@@ -57,7 +57,14 @@ fn crypto_v1_tweak_model_on_record() {
             .iter()
             .map(|v| v.as_u64().unwrap() as u8)
             .collect();
-        let raw = load_crypto_v1::Raw { pool, n: 2, got, now, decimals };
+        let raw = load_crypto_v1::Raw {
+            pool,
+            n: 2,
+            got,
+            now,
+            decimals,
+            killed: false,
+        };
         let (coins, mut data) =
             load_crypto_v1::decode(&raw).unwrap_or_else(|w| panic!("{pool}: {w}"));
         let k = piece(&p["factory_get_eth_index"]).unwrap();

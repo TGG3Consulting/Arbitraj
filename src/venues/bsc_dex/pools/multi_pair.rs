@@ -8,7 +8,8 @@
 //! dex.multi_pair = да — тоже ключ с парой (woo_pairs; ссылка пары — прежняя Member, развёртки нет).
 //! Кто вызывает: pools/index.rs (take: режим, ключ, развёртка), verify_curve.rs, verify_curve_ng.rs, verify_balancer.rs,
 //! verify_stable_u.rs (adopt), directory/view.rs, created_log.rs, factory_scan.rs (dir_key), market.rs (fits),
-//! woo_quote.rs и factory_calls.rs (woo_pairs).
+//! woo_quote.rs и factory_calls.rs (woo_pairs). Решение 474: пары «обёртка — её базовый токен» пула Balancer V3
+//! (Snap.pool_twins, verify_balancer_v3_buffer.rs) в развёртке не строятся.
 //! От чего зависит: ctx.rs, families.rs, discover.rs (Found), directory (Snap, IndexedPool), stable_list.rs (pairs).
 //! Настройки: dex.multi_pair, dex.sub_dex [DEX].
 
@@ -199,7 +200,12 @@ pub fn expand(s: &mut Snap) -> HashSet<String> {
         let Some(tokens) = s.pool_tokens.get(&pool).cloned() else {
             continue;
         };
+        let twins = s.pool_twins.get(&pool).cloned().unwrap_or_default();
         for (coin, quote) in pairs(&tokens, &coins, &quotes) {
+            // Решение 474: обёртка ERC4626 и её базовый токен одного пула Balancer V3 — не пара.
+            if super::verify_balancer_v3_buffer::twin(&twins, coin, quote) {
+                continue;
+            }
             let key = dir_key(&s.multi_dex, &dex, &pool, coin, quote);
             if !have.insert(key.clone()) {
                 continue;

@@ -334,6 +334,20 @@ interface IBalancerV3Vault {
         returns (uint256 amountCalculatedRaw, uint256 amountInRaw, uint256 amountOutRaw);
     function settle(address token, uint256 amountHint) external returns (uint256 credit);
     function sendTo(address token, address to, uint256 amount) external;
+    // Решение 474: обмен через буфер ERC4626 хранилища (шаг BALANCER_V3_BUF = 27). IVaultMain.sol L175-L177,
+    // VaultTypes.sol L410-L430 (WrappingDirection WRAP = 0 / UNWRAP = 1, BufferWrapOrUnwrapParams; enum — uint8 в ABI);
+    // Vault.sol L1139-L1187 (onlyWhenUnlocked, буфер инициализирован, буферы не на паузе, сумма ≥ _MINIMUM_WRAP_AMOUNT;
+    // дельты — вызывающему: долг по входу, кредит по выходу; EXACT_IN — выход < limitRaw — откат SwapLimit).
+    struct BufferWrapOrUnwrapParams {
+        uint8 kind;
+        uint8 direction;
+        address wrappedToken;
+        uint256 amountGivenRaw;
+        uint256 limitRaw;
+    }
+    function erc4626BufferWrapOrUnwrap(BufferWrapOrUnwrapParams memory params)
+        external
+        returns (uint256 amountCalculatedRaw, uint256 amountInRaw, uint256 amountOutRaw);
 }
 
 // Решение 447: ядро Ekubo (Core) — EkuboProtocol/evm-contracts@61d09daa (ядро Arbitrum, broadcast DeployAll.s.sol/42161):

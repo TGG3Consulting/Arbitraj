@@ -19,7 +19,7 @@ use alloy_primitives::{B256, U256};
 use serde::{Deserialize, Serialize};
 
 pub use super::pool_vault_v2::V2Curve;
-pub use super::pool_vault_v3::{EclpParams, LbpState, LbpVer, V3Hook};
+pub use super::pool_vault_v3::{EclpParams, LbpState, LbpVer, V3Buffer, V3Hook};
 
 /// Кривая пула хранилища. Математика — в адаптере.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -86,6 +86,10 @@ pub struct VaultV3 {
     /// (StableSurgeHook.sol L136); у пула с onlyVault такой вызов откатывается, обмен невозможен.
     #[serde(default)]
     pub open: bool,
+    /// Решение 474: по индексу токена пула — буфер ERC4626, через который идёт эта сторона пары (монета пары — базовый
+    /// токен обёртки); пусто или None — сторона пары — сам токен пула.
+    #[serde(default)]
+    pub via: Vec<Option<V3Buffer>>,
 }
 
 /// Решение 441: правило onSwap пула Balancer V3 — по выпуску фабрики (исходники — balancer-deployments@b55dc2b8).

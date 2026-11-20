@@ -11,6 +11,8 @@
 //! Infinity) (кодирование ключа — pools/key.rs, то же, что даёт PoolId), FLUID — (bool swap0to1, uint8 native, address
 //! liquidity), остальные — пусто.
 //! Решение 441: BALANCER_V3 = 23 — только v4, data — abi.encode(address пула).
+//! Решение 474: BALANCER_V3_BUF = 27 — только сборка v5 (не собрана), data — abi.encode(address пула, address wIn,
+//! address wOut) — обёртки ERC4626 входа и выхода (0 — сторона без буфера).
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
 //! От чего зависит: exec/executor/abi.rs, alloy sol-types.
 //! Настройки: нет.
@@ -85,6 +87,14 @@ pub enum Params {
     /// Решение 441 (T433-F2; только исполнитель v4): пул Balancer V3 — пул шага хранилище Vault V3 (dex.vault),
     /// data = abi.encode(address пула); обмен — unlock → balancerV3Callback → swap / settle / sendTo.
     BalancerV3 { pool: Address },
+    /// Решение 474 (только сборка v5): пул Balancer V3 через буфер ERC4626 хранилища — w_in ≠ 0: вход шага — базовый
+    /// токен обёртки w_in (WRAP до обмена), w_out ≠ 0: выход пула — обёртка w_out (UNWRAP после обмена). data =
+    /// abi.encode(address пула, address wIn, address wOut).
+    BalancerV3Buf {
+        pool: Address,
+        w_in: Address,
+        w_out: Address,
+    },
     /// Пул Liquidity Book v2.0 (решение 445): вход переводом в пул, swap(swapForY, to); направление контракт берёт по
     /// tokenX() пары v2.0 (getTokenX у v2.0 нет). Данных нет. Шаг 24 — в исходнике contracts/ArbExecutor.sol; в коде
     /// исполнителя — только сборка v4 (pools/exec_callback.rs since; решение 457 — contracts/out/).
@@ -160,6 +170,8 @@ impl Params {
             Params::Fluid(_) => 22,
             // Решение 441: номер 23 = 21 + номер семейства T433-F2 (22 — за F1), чтобы шаги семейств не совпали.
             Params::BalancerV3 { .. } => 23,
+            // Решение 474: номер 27 выдан координатором (26 — у параллельного семейства).
+            Params::BalancerV3Buf { .. } => 27,
             // Решение 456: LB20 = 24 (в ветке t223-f6 было 22 — перенумеровано при слиянии).
             Params::Lb20 => 24,
             // Решение 456: EKUBO = 25 (в ветке t230 было 22 — перенумеровано при слиянии).
@@ -184,6 +196,9 @@ impl Params {
             Params::Metric { zero_for_one } => Bytes::from(zero_for_one.abi_encode()),
             Params::Balancer { pool_id } => Bytes::from(pool_id.abi_encode()),
             Params::BalancerV3 { pool } => Bytes::from(pool.abi_encode()),
+            Params::BalancerV3Buf { pool, w_in, w_out } => {
+                Bytes::from((pool, w_in, w_out).abi_encode_params())
+            }
             Params::Ekubo {
                 config,
                 native,
@@ -248,6 +263,13 @@ pub fn encode(s: &StepSpec) -> Result<ArbExecutor::Step, String> {
             "токен шага StableSwap — метка нативной монеты 0xEeee… (не ERC-20): шаг через пул с BNB — STABLE_U256_BNB с токеном WBNB"
                 .into(),
         );
+    }
+    // Решение 474: у шага BALANCER_V3_BUF хотя бы одна обёртка (иначе контракт: «buf»; без обёрток — шаг 23).
+    if let Params::BalancerV3Buf { w_in, w_out, .. } = s.params
+        && w_in.is_zero()
+        && w_out.is_zero()
+    {
+        return Err("у шага BALANCER_V3_BUF нет обёртки ни входа, ни выхода".into());
     }
     // Ревью 440: у шага FLUID токены — ERC-20 (нативная монета пула — обёрткой, native в данных шага).
     let fluid = matches!(s.params, Params::Fluid(_));

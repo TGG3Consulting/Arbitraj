@@ -95,6 +95,12 @@ pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     if k.singleton() || k == ExecKind::BalancerV3 {
         super::pool_gate::admits(ctx, e, k, hooks).map_err(|w| format!("{}: {w}", e.family.id))?;
     }
+    // Решение 474: пара через буфер ERC4626 — шаг 27, только у исполнителя с BUFFER_MARK в коде.
+    if k == ExecKind::BalancerV3
+        && let Some(why) = super::kind_buffer::refusal(ctx, &e.pool.state)
+    {
+        return Err(format!("{}: {why}", e.family.id));
+    }
     Ok((k, a))
 }
 
@@ -109,6 +115,10 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
     if !k.singleton() {
         // Решение 441 (ревью, п. 2): BALANCER_V3 — то же правило, что в fits.
         if k == ExecKind::BalancerV3 && !super::pool_gate::admitted(ctx, e, k, Address::ZERO) {
+            return false;
+        }
+        // Решение 474: то же правило шага 27, что в fits.
+        if k == ExecKind::BalancerV3 && !super::kind_buffer::ready(ctx, &e.pool.state) {
             return false;
         }
         // Решение 447: у шага EKUBO ссылка — пул в ядре (Singleton), у остальных — не Singleton.
@@ -243,7 +253,11 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         ExecKind::BalancerV3 => match &e.pool.state {
             PoolState::VaultPool(d) if !d.paused && d.v3.is_some() => {
                 let vault = ctx.dex_addr("dex.vault", e.family.id)?;
-                return Ok((Params::BalancerV3 { pool }, vault));
+                // Решение 474: сторона пары через буфер ERC4626 — шаг BALANCER_V3_BUF (kind_buffer.rs).
+                let zero_in = token_in == e.pool.token0;
+                let p = super::kind_buffer::params(d, pool, zero_in)
+                    .unwrap_or(Params::BalancerV3 { pool });
+                return Ok((p, vault));
             }
             _ => {
                 let why = format!("{}: пул Balancer V3 не прочитан или на паузе", e.family.id);

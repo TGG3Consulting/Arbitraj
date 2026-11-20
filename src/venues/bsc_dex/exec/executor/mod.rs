@@ -20,6 +20,7 @@ pub mod dry;
 pub mod entry;
 pub mod fact;
 pub mod kind;
+pub mod kind_buffer;
 pub mod kind_key;
 pub mod live_class;
 pub mod live_proof;

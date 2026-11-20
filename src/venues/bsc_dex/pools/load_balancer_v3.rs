@@ -7,6 +7,8 @@
 //! PoolState::VaultPool с частью V3. Балансы и курсы меняются без событий пула — вид перечитывается каждым блоком.
 //! Решение 452: своё у выпуска и крючка (веса LBP / QuantAMM на блоке, окно LBP, виртуальные балансы ReClamm,
 //! параметры StableSurge / MEV Capture, чаевые ArbOS) — load_balancer_v3_kinds.rs, в той же пачке после общих шести.
+//! Решение 474: буферы ERC4626 токенов пула (load_balancer_v3_buffer.rs) — в конце той же пачки, если задана
+//! dex.bv3_buffer_preview_raw; монета пары может быть базовым токеном обёртки пула (сторона через буфер).
 //! Кто вызывает: pools/load.rs и pools/load_site.rs (ветка Proto::BalancerV3).
 //! От чего зависит: ctx.rs, node/call.rs, abi_balancer_v3.rs, load_balancer_v3_fixed.rs, load_balancer_v3_kinds.rs,
 //! load_balancer_v3_state.rs (сборка и проверка состояния — Parts, state).
@@ -30,6 +32,7 @@ use super::super::node::call;
 use super::abi_balancer_v3::IBalancerV3Vault as V;
 use super::balancer_v3_hooks::HookKind;
 use super::families::Family;
+use super::load_balancer_v3_buffer as buffer;
 use super::load_balancer_v3_fixed::{Fixed, fixed};
 use super::load_balancer_v3_kinds as kinds;
 
@@ -59,7 +62,8 @@ pub async fn read(
     tag: &str,
 ) -> GatewayResult<(Fixed, Vec<Result<Bytes, String>>)> {
     let vault = ctx.dex_addr("dex.vault", f.id)?;
-    let fx = fixed(ctx, f, vault, pool, tag).await?;
+    let mut fx = fixed(ctx, f, vault, pool, tag).await?;
+    fx.buffer = buffer::preview_ref(ctx, f.id)?;
     let pre = match fx.hook {
         HookKind::Mev(_) => Some((ctx.addr("dex.arb_sys")?, ctx.addr("dex.arb_owner_public")?)),
         _ => None,
@@ -86,6 +90,7 @@ pub fn calls(
         (vault, V::isVaultPausedCall {}.abi_encode().into()),
     ];
     l.extend(kinds::calls(pool, fx, pre));
+    l.extend(buffer::calls(vault, fx));
     l
 }
 
@@ -115,11 +120,15 @@ pub fn decode(
     let pool_paused = V::isPoolPausedCall::abi_decode_returns(ok(4)?).map_err(dec)?;
     let vault_paused = V::isVaultPausedCall::abi_decode_returns(ok(5)?).map_err(dec)?;
     let rest = got.get(6..).unwrap_or_default();
+    // Решение 474: ответы буферов — последние buffer::count(fx) (вид их не читает).
+    let tail = got.len().checked_sub(buffer::count(fx)).ok_or("нет ответов буферов")?;
+    let buffers = buffer::decode(fx, &got[tail..])?;
     let last = &info.lastBalancesLiveScaled18;
     let (curve, rule, hook) = kinds::decode(fx, rest, &live, last, cfg.isPoolInitialized)?;
     let v3 = VaultV3 {
         live,
         rates: rates.tokenRates,
+        via: Vec::new(),
         min_trade: fx.min_trade,
         rule,
         hook,
@@ -134,6 +143,7 @@ pub fn decode(
         fee: cfg.staticSwapFeePercentage,
         paused,
         curve,
+        buffers,
     };
     state(parts, v3, pair)
 }

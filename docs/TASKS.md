@@ -542,6 +542,61 @@
   д) **ЗАКРЫТО (решение 456: FLUID 22, BALANCER_V3 23, LB20 24, EKUBO 25)** Номер шага FLUID = 22 и Version::V4 — параллельные семейства (T433-F2…F8) могут взять те же номера: при слиянии
      перенумеровать (contracts/ArbExecutor.sol, kind.rs, tests/bsc_dex_executor_abi.rs).
   е) Точный выход (swapOut) не портирован — котировка только с точным входом (как SmarDex).
+- **Решение 474 (20.11.2026, ветка t244/arb-bv3-buffer) — T433-F2: обмен Balancer V3 через буфер ERC4626 хранилища
+  (boosted-пулы: токен пула — обёртка, монета биржи — базовый токен).** Закрывает вопросы «Решение 452» п. 2 и
+  «Решение 441» п. 5 (решение Тиграна по железному правилу — делать). cargo, rustfmt, clippy, solc, npm локально не
+  запускались — сборка и тесты только в CI. Источники и что сделано — DECISIONS 474.
+  СДЕЛАНО: состояние буфера (core/types V3Buffer, VaultV3.via; pools/load_balancer_v3_buffer.rs — в той же пачке
+  каждым блоком), сторона пары через буфер (load_balancer_v3_state.rs), проверка и развёртка пар с базовыми токенами
+  (verify_balancer_v3_buffer.rs), расчёт WRAP → пул → UNWRAP (math/balancer_v3_buffer.rs, balancer_v3.rs), квотер
+  BatchRouter querySwapExactIn с шагами isBuffer (quote/quoter_balancer_v3_buffer.rs), шаг исполнителя BALANCER_V3_BUF
+  = 27 (contracts/ArbExecutor.sol — общий balancerV3Callback с шагом 23, IPools.sol erc4626BufferWrapOrUnwrap;
+  exec/executor/kind.rs, kind_buffer.rs, entry.rs), настройки dex.bv3_buffer_preview_raw, dex.bv3_batch_router
+  (каталог dex_bv3_buffer.rs, SETTINGS, SETTINGS_CASES, FIRST_RUN), скрипт записи
+  tools/arbitrum_record/balancer_v3_buffer.py (в record_steps.py), тест tests/arbitrum_balancer_v3_buffer.rs (#[ignore]),
+  tests/bsc_dex_executor_abi.rs (номер 27, data, метки нет в v1–v4).
+  НЕ СДЕЛАНО / ВОПРОСЫ:
+  1) **Нужна пересборка исполнителя v5** (шаг 27 есть только в исходнике): contracts/build.sh → out/ = v5, прежний out/
+     (v4) — в out/v4/; exec/executor/code.rs — Version::V5, сверка v4 по out/v4/; хеш и размер кода (EIP-170; сейчас v4
+     21 775 байт); EVM-тест шага 27 с официальным кодом Vault V3 (contracts/evmtest/balancerv3.mjs — сценарий с буфером
+     не написан: в balancer/balancer-deployments@b55dc2b8 задач с кодом обёрток ERC4626 нет (v3/tasks, v3/deprecated:
+     только buffer-router, wrapped-bpt, erc4626-cow-swap-fee-burner); путь — eth_simulateV1 на своём узле поверх живого
+     Vault и живой обёртки); запись приёмки на живых пулах (решение 400: класс шага 27 в live_class.rs ещё
+     не заведён: сейчас пара через буфер допускается приёмкой класса 23 Balancer V3 плюс меткой кода — класс 27 завести
+     до развёртывания v5); развёртывание. До этого пары через буфер — без пути исполнения с причиной (kind_buffer::refusal:
+     вызова erc4626BufferWrapOrUnwrap, селектор 0x43583be5, нет в коде исполнителя кошелька).
+  2) Запись своего узла: `python3 tools/arbitrum_record/record_all.py --rpc <узел> --only balancer_v3_buffer` (или
+     скрипт напрямую — шапка), затем `cargo test --test arbitrum_balancer_v3_buffer -- --ignored`; зелёный — снять
+     #[ignore], задать dex.bv3_buffer_preview_raw и dex.bv3_batch_router.
+  3) ВОПРОС Тиграну: превью обёртки — своя функция у каждой обёртки (Aave StataToken, Morpho, …), бот считает его по
+     одной точке (⌊x · превью(R) / R⌋, только x ≤ R; больше — котировки нет) — не побитово. Ревью t244: при линейном
+     превью (⌊y·a/b⌋ — OZ ERC4626 с виртуальным смещением, Aave stata) расчёт меньше точного на 0–1 единицу (не
+     завышает); у произвольной обёртки EIP-4626 (нелинейные комиссии) граница не гарантирована, возможно завышение;
+     курс обёртки к блоку исполнения меняется в любую сторону (рост курса уменьшает выход WRAP). Защита перед
+     отправкой — точный querySwapExactIn BatchRouter и minOut исполнителя. Достаточно ли так, или нужен порт превью каждой обёртки по её исходнику?
+  4) ВОПРОС Тиграну: сумма, для которой буфера не хватает (выход WRAP > обёртки в буфере / UNWRAP > базового в
+     буфере), котировки не получает — тогда хранилище само зовёт deposit / redeem обёртки (успех — её лимиты, пауза;
+     бот их не читает). Брать такие суммы?
+  5) Точный выход (EXACT_OUT) через буфер не считается (нужны previewMint / previewWithdraw) — amount_in None.
+  6) Как GeckoTerminal показывает boosted-пулы (обёртки или базовые токены) — не проверено (API GeckoTerminal из
+     среды агента недоступен). Если индексатор не находит пул по базовому токену, пары появятся только развёрткой
+     (multi_pair) пула, найденного по другому токену, или по PoolRegistered — событие с базовым токеном не
+     сопоставляется (базовый токен в событии не виден; events_balancer_v3::registered — техдолг).
+  7) Глубина и граница поиска объёма (quote/vault_depth.rs, spot.rs) считают пределы по сырым балансам обёрток — в
+     единицах обёртки, а сторона через буфер — в базовом токене (разница — курс обёртки). Расчёт выхода точный по
+     буферу; потолок поиска — приблизительный (техдолг, docs/ROADMAP.md).
+  8) Выбор буфера при нескольких обёртках пула с одним базовым токеном (например waUSDC и fUSDC одного USDC): сторона
+     пары — первая обёртка по порядку токенов хранилища (getPoolTokenInfo; load_balancer_v3_state.rs). Вторая обёртка
+     для этой монеты не используется — маршрут через неё не рассматривается (вопрос Тиграну: нужен ли выбор лучшей).
+  9) Ревью t244: пара «обёртка — её базовый токен» одного пула (обмен сам в себя через буфер) не строится: кандидат
+     справочника — отказ при проверке, развёртка — пропуск (Snap.pool_twins, запоминается при проверке пула). После
+     перезапуска до повторной проверки пула память пуста — такая пара из сохранённого справочника даст отказ чтения
+     «обе монеты пары — один токен пула» (state(), без торговли).
+  10) Ревью t244: сумма превью больше опорной (x > dex.bv3_buffer_preview_raw) котировки не получает (оценка по одной
+     точке там не ограничена); исполнитель v5 собирается через via-IR (contracts/build.mjs L35) — «stack too deep» в
+     balancerV3Callback проверится только сборкой; tests/bsc_dex_executor_abi.rs v4_kept_after_rebuild требует
+     out/v4/ = v4 после пересборки out/.
+
 - **Решение 452 (20.11.2026, ветка t228/arb-balancer-v3-more) — T433-F2: доделка Balancer V3 на Arbitrum (все пулы DEX
   `balancer-v3-arbitrum`).** cargo, rustfmt, clippy локально не запускались — сборка и тесты только в CI. Источники и
   что сделано — DECISIONS 452. Закрывает вопросы «Решение 441» п. 3 (крючки), п. 4 (виды Gyro / ReClamm / LBP / QuantAMM),
@@ -563,7 +618,7 @@
      снять #[ignore]. До этого dex.pool_enabled у `balancer-v3-arbitrum@arbitrum` не включать. Тестов математики Gyro /
      ReClamm / LBP / QuantAMM без записи нет (официальных записанных векторов для развёрнутого кода в build-info нет) —
      сверка только через запись узла.
-  2) ВОПРОС Тиграну: обмен через буфер ERC4626 (boosted-пулы: токен пула — обёртка, например waArbUSDC; монета биржи —
+  2) ЗАКРЫТО решением 474 (Тигран: делать; «Решение 474» выше). Было — ВОПРОС Тиграну: обмен через буфер ERC4626 (boosted-пулы: токен пула — обёртка, например waArbUSDC; монета биржи —
      базовый токен). Сумма буфера — `wrappedToken.previewDeposit(сумма − 1) − 1` / previewRedeem (Vault.sol 20241204
      L1206-L1344) — функция самой обёртки, у каждой обёртки своя (Aave StataToken, Morpho, …), общего исходника нет;
      исполнение — новый шаг исполнителя (Vault.erc4626BufferWrapOrUnwrap внутри unlock) и пересборка. Нужен ли он? Пока
@@ -630,7 +685,7 @@
   4) ВОПРОС Тиграну: виды пулов Balancer V3 других фабрик (Gyro 2-CLP и E-CLP, ReClamm, LBP, QuantAMM, пулы со своей
      фабрикой) в этой задаче не подключены — пул не из dex.bv3_*_factories отвергается с причиной. Каждый вид — своя
      математика и своя задача (T433-F2a…: Gyro 2-CLP, Gyro E-CLP, ReClamm, LBP).
-  5) Пулы ERC4626 (boosted: токен пула — обёртка, буферы хранилища) считаются как обычные токены с курсом (курс —
+  5) ЗАКРЫТО решением 474. Было: пулы ERC4626 (boosted: токен пула — обёртка, буферы хранилища) считаются как обычные токены с курсом (курс —
      getPoolTokenRates); обмен через буфер (обёртка ↔ базовый токен) не строится — вопрос: нужен ли.
   6) Рампа A стейблсвапа: A читается на блоке чтения (getAmplificationParameter); пересчёта по времени блока между
      чтениями нет — расхождение только во время рампы (вид перечитывается каждым блоком).
@@ -1369,7 +1424,7 @@
   - T433-074 `maverick-v2-arbitrum` (Maverick V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-075 `omni-exchange-v2-arbitrum` (Omni Exchange V2 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-076 `omni-exchange-v3-arbitrum` (Omni Exchange V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-077 `balancer-v3-arbitrum` (Balancer V3 (Arbitrum)) — решения 441, 452: вид `balancer_v3` в коде — все пулы официальных фабрик Arbitrum (весовые, стейблсвап, StableSurge, Gyro 2-CLP / E-CLP, ReClamm, LBP v1–v4, LBP с фиксированной ценой, QuantAMM) и крючки StableSurge / MEV Capture; адреса — docs/FIRST_RUN.md; включение в arb_dex — после записи узла (tools/arbitrum_record/balancer_v3.py) и зелёного теста; буфер ERC4626 и MEV Capture при сборе чаевых — вопросы «Решение 452», п. 2–3.
+  - T433-077 `balancer-v3-arbitrum` (Balancer V3 (Arbitrum)) — решения 441, 452: вид `balancer_v3` в коде — все пулы официальных фабрик Arbitrum (весовые, стейблсвап, StableSurge, Gyro 2-CLP / E-CLP, ReClamm, LBP v1–v4, LBP с фиксированной ценой, QuantAMM) и крючки StableSurge / MEV Capture; адреса — docs/FIRST_RUN.md; включение в arb_dex — после записи узла (tools/arbitrum_record/balancer_v3.py) и зелёного теста; MEV Capture при сборе чаевых — вопрос «Решение 452», п. 3; буфер ERC4626 — решение 474 (в коде; шаг 27 ждёт сборки исполнителя v5, запись tools/arbitrum_record/balancer_v3_buffer.py).
   - T433-078 `fluid-arbitrum` (Fluid (Arbitrum)) — вид `fluid_t1` в коде (решение 440, T433-F1); официальные адреса сверены (deployments/arbitrum: DexFactory 0x9171…9085, DexReservesResolver 0x05Bd…16Ff — docs/FIRST_RUN.md); включить в arb_dex — после записи узла и зелёного tests/arbitrum_fluid_t1.rs (решение 440, «НУЖНО ОТ ТИГРАНА»).
   - T433-079 `ekubo-v3-arbitrum` (Ekubo V3 (Arbitrum)) — **код семейства есть (решения 447, 454: все пулы — нативный ETH, TWAMM / Oracle / BoostedFees, история PoolInitialized ядра, одна подписка на ядро), ждёт CI, записи узла и сборки исполнителя**: адреса официальные — docs/FIRST_RUN.md, раздел «DEX Ekubo сети Arbitrum»; включить в arb_dex (dex.kind = ekubo по ключу DEX площадки) после записей tools/arbitrum_record/ekubo.py и ekubo_more.py и снятия #[ignore] с tests/arbitrum_ekubo_live.rs и tests/arbitrum_ekubo_more_live.rs; вопросы — блоки «Решение 447», «Решение 454».
   - T433-080 `ramses-legacy-arbitrum` (Ramses Legacy (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
@@ -1441,7 +1496,7 @@
   - T433-146 Aero Basic (DefiLlama `aero-basic`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   Семейства кода:
   - T433-F1 Fluid DEX (T1) — СДЕЛАНО в коде (решение 440): математика, чтение, события, проверка, квотер, шаг исполнителя FLUID (v4 — только исходник); осталось: запись узла (tools/arbitrum_record/fluid_t1.py) и снятие #[ignore], сборка и развёртывание исполнителя v4, вопросы а)–е) решения 440.
-  - T433-F2 Balancer V3 — решения 441, 452: СДЕЛАНО в коде (все виды пулов и официальные крючки комиссии Arbitrum, PoolRegistered, шаг BALANCER_V3 исполнителя v4); ОСТАЛОСЬ — запись узла и снятие #[ignore], пересборка и развёртывание исполнителя v4 (план — «Решение 441», ревью), буфер ERC4626 (вопрос «Решение 452», п. 2).
+  - T433-F2 Balancer V3 — решения 441, 452: СДЕЛАНО в коде (все виды пулов и официальные крючки комиссии Arbitrum, PoolRegistered, шаг BALANCER_V3 исполнителя v4); ОСТАЛОСЬ — запись узла и снятие #[ignore], пересборка и развёртывание исполнителя v4 (план — «Решение 441», ревью), буфер ERC4626 — решение 474 (в коде; нужна сборка исполнителя v5 и запись balancer_v3_buffer.py).
   - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — КОД СДЕЛАН (решение 442, ветка t223-f3/arb-family-f3): виды curve_twocrypto_ng / curve_tricrypto_ng, математика, чтение, события, проверка, поиск по фабрике, квотер get_dy, шаг STABLE_U256 (без переразвёртывания исполнителя); ждёт CI и записи узла (tools/arbitrum_record/curve_crypto.py), тесты tests/arb_curve_crypto_live.rs — #[ignore] до записи.
   - T433-F3a Curve Twocrypto-NG v2.0.0 (реализация amm_v2_0_0, math 0x2005995a… Arbitrum) — **код сделан (решение 453)**: исходник d612fde (сверен CREATE2-адресом), формула по MATH() пула; ждёт CI и записи узла.
   - T433-F3b Старые crypto-пулы Curve Arbitrum v1 — tricrypto 0x960ea3e3… (curve-crypto-contract) и фабрика crypto v1 0xE5De15A9… (curve-factory-crypto): **код сделан (решение 453)** — виды `curve_tricrypto_v1`, `curve_crypto_v1`; правки ревью — решение 455 (перевод токена на пул без события, остановленный tricrypto 2021); ждёт CI и записи узла.

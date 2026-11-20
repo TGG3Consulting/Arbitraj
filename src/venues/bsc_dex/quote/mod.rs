@@ -93,6 +93,7 @@ pub mod quoter_crypto;
 pub mod quoter_extra;
 pub mod quoter_balancer;
 pub mod quoter_balancer_v3;
+pub mod quoter_balancer_v3_buffer;
 pub mod quoter_fluid;
 pub mod quoter_lb;
 pub mod quoter_lb20;

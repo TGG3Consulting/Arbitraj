@@ -34,6 +34,11 @@
   Обмен с BPT самого пула (composable stable / stable phantom / managed) не считается — TASKS T473-02. Unit-тестов
   LinearMath / курсов на числах официальных тестов монорепо нет (монорепо в рабочей копии нет) — проверка записью
   balancer_v2_more.py (T473-01).
+- Решение 474 (Balancer V3 через буфер ERC4626): нужна сборка исполнителя v5 (шаг BALANCER_V3_BUF = 27 — только в
+  исходнике), EVM-тест и запись приёмки шага 27 (класс в live_class.rs); квотер vault_depth / spot — пределы по сырым
+  балансам обёрток (сторона через буфер — в базовом токене); PoolRegistered не сопоставляет пул с базовым токеном
+  обёртки; превью обёртки — по одной точке (не побитово, docs/TASKS.md «Решение 474»). `wc -l`: exec/executor/entry.rs
+  539, kind.rs 292, pools/exec_callback.rs 411 — сверх 200 (как в строке решения 456).
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

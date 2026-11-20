@@ -252,6 +252,12 @@ pub fn since(k: ExecKind) -> Version {
     }
 }
 
+/// Решение 474: есть ли вызов (сигнатура) в коде исполнителя версии v — память SEEN (как EKUBO_MARK). Для метки шага
+/// BALANCER_V3_BUF (exec/executor/kind_buffer.rs BUFFER_MARK). Принимает: версию, сигнатуру. Ошибок нет.
+pub fn has_call(v: Version, sig: &str) -> bool {
+    seen_with(v, sig, |r| r.is_none())
+}
+
 /// Решение 447: сигнатура вызова, который есть в коде исполнителя только вместе с шагом EKUBO = 25 (решение 456; шаг зовёт
 /// Core.completePayments(), селектор 0x12e103f1 — EkuboProtocol/evm-contracts@61d09daa src/interfaces/IFlashAccountant.sol
 /// L60). Решение 457: в коде v4 (contracts/out/) селектор есть, в v1–v3 — нет: у кошелька не v4 пулы Ekubo — без пути

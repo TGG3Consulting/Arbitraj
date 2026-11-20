@@ -143,6 +143,7 @@ fn quote_matches_router_v3() {
                 min_trade,
                 hook,
                 extra: extra::decode(release, &more).unwrap(),
+                buffer: None,
             };
             let pre = matches!(hook, HookKind::Mev(_)).then_some((sys, owner));
             let answers = lookup(&calls, &load_balancer_v3::calls(vault, pool, &fx, pre));

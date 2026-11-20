@@ -81,6 +81,9 @@ pub struct Snap {
     pub multi_dex: HashSet<String>,
     /// Решение 295: монеты многомонетного пула (строка адреса пула → монеты), запомненные его проверкой в режиме.
     pub pool_tokens: HashMap<String, Vec<Address>>,
+    /// Решение 474: пары «обёртка ERC4626 — её базовый токен» пула Balancer V3 (строка адреса пула → пары) — в
+    /// развёртке пар не строятся (pools/verify_balancer_v3_buffer.rs twin).
+    pub pool_twins: HashMap<String, Vec<(Address, Address)>>,
     /// Решение 295: развёрнутые пары многомонетных пулов по монете (multi_pair::expand) — источник справочника.
     pub multi: HashMap<Address, Vec<IndexedPool>>,
 }

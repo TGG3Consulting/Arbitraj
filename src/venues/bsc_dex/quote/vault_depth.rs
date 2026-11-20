@@ -141,4 +141,3 @@ fn base(d: &VaultPoolData, i: usize) -> Option<U256> {
     }
     Some(b)
 }
-

@@ -8,6 +8,7 @@
 //! пулов — пачкой (node/call.rs try_chunks: Multicall3 при dex.multicall3, иначе пачка JSON-RPC) частями по
 //! dex.verify_batch — как проверка и перечитывание комиссии пар V2 (pools/verify.rs batch). Сбой узла на части —
 //! только пулы этой части остаются с прежним состоянием (запись в журнал).
+//! Решение 470: пулы Aero Basic — состояние заново (load_aero_basic.rs) тем же проходом.
 //! Кто вызывает: check/quoter_cycle.rs.
 //! От чего зависит: pools/{listen, registry, load_solidly, solidly_fee_read, verify}.rs, node/call.rs (try_chunks),
 //! core/types (PoolState, PoolRef).
@@ -21,9 +22,9 @@ use crate::gateway::errors::GatewayResult;
 use crate::storage::journal::Level;
 
 use super::super::node::call;
-use super::families::Family;
+use super::families::{Family, Proto};
 use super::listen::Pools;
-use super::{load_solidly, solidly_fee_read as read, verify};
+use super::{load_aero_basic, load_solidly, solidly_fee_read as read, verify};
 
 /// Пул Solidly к перечитыванию: ссылка, адрес, флаг stable.
 type Item = (PoolRef, Address, bool);
@@ -33,8 +34,14 @@ type Item = (PoolRef, Address, bool);
 pub async fn refresh(p: &Pools) {
     // Пулы по DEX (порядок первого появления — как у прохода реестра).
     let mut by: Vec<(&'static Family, Vec<Item>)> = Vec::new();
+    let mut aero: Vec<(PoolRef, &'static Family)> = Vec::new();
     for r in p.reg.refs() {
         let Some(e) = p.reg.get(&r) else { continue };
+        // Решение 470: пул Aero Basic — комиссия getBaseFee и пауза фабрики меняются без событий пула: перечитать.
+        if e.family.proto == Proto::AeroBasic {
+            aero.push((r.clone(), e.family));
+            continue;
+        }
         // Решение 443: пары Camelot V2 (тоже PoolState::Solidly) — не Solidly: комиссии у них из события пары.
         if !e.family.proto.is_solidly() {
             continue;
@@ -48,6 +55,9 @@ pub async fn refresh(p: &Pools) {
             Some((_, list)) => list.push(item),
             None => by.push((e.family, vec![item])),
         }
+    }
+    for (r, f) in aero {
+        aero_basic(p, &r, f).await;
     }
     for (f, items) in by {
         if let Err(err) = family(p, f, &items).await {
@@ -121,4 +131,23 @@ fn value(
     }
     let value = load_solidly::fee_u32(ctx, raw).map_err(|e| e.message)?;
     Ok(SolidlyFee { value, rule })
+}
+
+/// Решение 470: пул Aero Basic — состояние заново на последнем блоке (load_aero_basic.rs: комиссия, пауза, правило
+/// MEV-налога) в реестр. Ошибок нет: сбой — в журнал, состояние прежнее (перед отправкой пауза и налог проверяются
+/// заново — exec/solidly_gate.rs fresh_cap).
+async fn aero_basic(p: &Pools, r: &PoolRef, f: &'static Family) {
+    let PoolRef::Contract(pool) = r else { return };
+    match load_aero_basic::load(&p.ctx, f, *pool, "latest").await {
+        Ok(st) => {
+            p.reg.update(r, |x| x.pool.state = st);
+        }
+        Err(err) => {
+            let msg = format!(
+                "{} {pool:#x}: пул Aero Basic не перечитан: {}",
+                f.id, err.message
+            );
+            p.ctx.log(Level::Warn, "dex.index", msg, None).await;
+        }
+    }
 }

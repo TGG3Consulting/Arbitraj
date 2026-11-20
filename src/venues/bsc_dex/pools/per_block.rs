@@ -59,6 +59,7 @@ use crate::core::types::PoolRef;
 
 use super::discover::Found;
 use super::families::{Family, Proto};
+use super::family_variant::Variant;
 use super::listen::{End, Pools};
 use super::{
     ladder_counter, load_batch_par, per_block_balancer, per_block_lb, per_block_par, pool_fail,
@@ -72,27 +73,29 @@ pub use super::per_block_crypto::{any_ramping, killed, moving, ramping, unevente
 /// Настройка предела одновременных чтений пулов блока, пар общего контракта и приёма / повтора (решение 330).
 pub const PAR: &str = "dex.block_read_parallel_max";
 
-/// Перечитывается ли вид на каждом блоке. Ошибок нет.
+/// Перечитывается ли вид на каждом блоке. Решение 470: и Aero Slipstream V3 (вариант SlipstreamAero) — комиссия
+/// крючка меняется по блокам без событий пула (pools/aero_cl.rs). Ошибок нет.
 pub fn needs(f: &Family) -> bool {
-    matches!(
-        f.proto,
-        Proto::ListaStable
-            | Proto::WooPP
-            | Proto::InfinityStable
-            | Proto::CurveNg
-            | Proto::NomiStable
-            | Proto::MetricOmm
-            | Proto::IziSwap
-            | Proto::BiswapV3
-            | Proto::KyberDmm
-            | Proto::Smardex
-            | Proto::BalancerV2
-            | Proto::BalancerV3
-            | Proto::LbV21
-            | Proto::FluidT1
-            | Proto::LbV20
-            | Proto::LbV22
-    )
+    f.variant == Variant::SlipstreamAero
+        || matches!(
+            f.proto,
+            Proto::ListaStable
+                | Proto::WooPP
+                | Proto::InfinityStable
+                | Proto::CurveNg
+                | Proto::NomiStable
+                | Proto::MetricOmm
+                | Proto::IziSwap
+                | Proto::BiswapV3
+                | Proto::KyberDmm
+                | Proto::Smardex
+                | Proto::BalancerV2
+                | Proto::BalancerV3
+                | Proto::LbV21
+                | Proto::FluidT1
+                | Proto::LbV20
+                | Proto::LbV22
+        )
 }
 
 /// Есть ли в пачке такие пулы. Ошибок нет.

@@ -59,6 +59,8 @@ pub fn fill(f: &Family, r: &mut Read, got: &[Result<Bytes, String>]) -> Result<(
         Proto::Smardex => {}
         // Camelot V2 (решение 443): полей сверх factory/token0/token1 нет (verify_calls.rs).
         Proto::CamelotV2 => {}
+        // Решение 470: Aero Basic — полей сверх factory/token0/token1 нет (verify_calls.rs).
+        Proto::AeroBasic => {}
         // KyberSwap Elastic (решение 81): swapFeeUnits → fee (feeUnits), tickDistance → spacing. Нет lmPool (не V3).
         Proto::KyberElastic => {
             r.fee = Some(

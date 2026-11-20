@@ -152,7 +152,8 @@ impl ExecKind {
 pub fn of(kind: &str) -> Option<ExecKind> {
     Some(match kind {
         "pancakeswap_v2" | "uniswap_v2" | "v2_fork" | "v2_fork_executor" => ExecKind::V2,
-        "pancakeswap_v3" | "uniswap_v3" | "v3_fork" | "v3_fork_pancake" | "slipstream" => {
+        "pancakeswap_v3" | "uniswap_v3" | "v3_fork" | "v3_fork_pancake" | "slipstream"
+        | "slipstream_aero" => {
             ExecKind::V3
         }
         "thena_fusion" => ExecKind::Algebra,
@@ -168,6 +169,10 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // address) и swap(uint256, uint256, address, bytes) есть у CamelotPair (Pair.sol L46, L372, L228 — verified-исходник
         // фабрики Arbitrum 0x6EcC…A652, math/camelot_v2.rs); вход = баланс − резерв — так и считает swap пары (L276-L277).
         "camelot_v2" => ExecKind::Solidly,
+        // Решение 470: пул Aero Basic — тот же шаг SOLIDLY: getReserves (три uint256, Pool.sol L530), getAmountOut(uint256,
+        // address) L537 (комиссия getBaseFee без MEV-налога — налог исключён правилом aero_mev.rs) и swap(uint256, uint256,
+        // address, bytes) L143 (metadex-public 1.1.0); вход = баланс − резерв — так и считает swap пула (L161-L162).
+        "aero_basic" => ExecKind::Solidly,
         "dodo_dvm" | "dodo_dpp" | "dodo_dsp" => ExecKind::Dodo,
         // Решение 275: Curve StableSwap-NG — exchange(int128, int128, dx, min_dy) с receiver = msg.sender по умолчанию
         // (curvefi/stableswap-ng 3332cd4, CurveStableSwapNG.vy L504-L531): тот же шаг CURVE.

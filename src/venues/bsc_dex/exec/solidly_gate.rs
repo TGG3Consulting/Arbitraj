@@ -8,6 +8,7 @@
 //!   транзакции (legacy gasPrice; чаевые канала — отдельным переводом, на gasPrice свопа не влияют); свежие
 //!   ограничения, отличные от памяти, — в реестр всем пулам DEX (ревью 273, п. 3).
 //!
+//! Решение 470: у Aero Slipstream V3 — pools/aero_cl.rs fee (крючок, MEV-налог); у Aero Basic перед отправкой — pools/aero_mev.rs fresh (пауза фабрики, правило MEV-налога).
 //! Кто вызывает: quote/cycle_cost.rs, quote/mod.rs (planned), exec/executor/trade.rs, exec/cycle_exec.rs (fresh_cap).
 //! От чего зависит: math/solidly_fee.rs (blocked), pools/{registry, solidly_fee_read}.rs, quote/mod.rs (Quoting),
 //! core/types (PoolState, SolidlyGate).
@@ -15,11 +16,15 @@
 
 use alloy_primitives::U256;
 
-use crate::core::types::{PoolState, SolidlyGate};
+use crate::core::types::{PoolRef, PoolState, SolidlyGate};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
 use super::super::math::solidly_fee;
+use super::super::pools::aero_cl;
+use super::super::pools::aero_mev;
+use super::super::pools::families::Proto;
+use super::super::pools::family_variant::Variant;
 use super::super::pools::registry::{Entry, Registry};
 use super::super::pools::solidly_fee_read;
 use super::super::quote::Quoting;
@@ -57,10 +62,22 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut cap: Option<U256> = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        // Решение 470: пул Aero Slipstream V3 — крючок и правило MEV-налога заново (pools/aero_cl.rs).
+        if f.variant == Variant::SlipstreamAero
+            && let PoolRef::Contract(pool) = e.pool.reference
+        {
+            aero_cl::fee(ctx, f, pool, "latest").await?;
+            continue;
+        }
         if !matches!(e.pool.state, PoolState::Solidly { .. }) || seen.contains(&f.id) {
             continue;
         }
         seen.push(f.id);
+        // Решение 470: Aero Basic — пауза фабрики и правило MEV-налога (pools/aero_mev.rs) заново перед отправкой.
+        if f.proto == Proto::AeroBasic {
+            aero_mev::fresh(ctx, ctx.dex_addr("dex.factory", f.id)?).await?;
+            continue;
+        }
         if !solidly_fee_read::has_gate(ctx, f)? {
             continue;
         }

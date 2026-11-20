@@ -1160,3 +1160,24 @@ ReClamm, LBP, LBP с фиксированной ценой, QuantAMM и пулы
 | dex.kind | DEX `camelot@arbitrum` | `camelot_v2` | Пара CamelotPair: направленная комиссия и stable / volatile — своя математика (math/camelot_v2.rs), проверка и поиск пар — путём V2, шаг SOLIDLY исполнителя | verified-исходник фабрики Arbiscan (src/venues/bsc_dex/pools/abi_camelot.rs) |
 | dex.factory | DEX `camelot@arbitrum` | `0x6EcCab422D763aC031210895C81787E87B43A652` | Фабрика Camelot V2 (AMMv2 Factory): factory() пары, реестр getPair, событие PairCreated | docs.camelot.exchange/contracts/arbitrum/one-mainnet |
 | dex.pool_enabled | DEX `camelot@arbitrum` | «да» — после записи tools/arbitrum_record/camelot_v2.py и прохода тестов tests/arb_dex_camelot_v2.rs | Пулы Camelot V2 в граф и сигналы; сделки — через исполнитель кошелька Arbitrum (шаг SOLIDLY есть у v1/v2/v3) | Решение 443 |
+
+## Aero Basic и Aero Slipstream V3 в сети Arbitrum (решение 470, T451-01/02)
+
+Новые варианты dex.kind: `aero_basic`, `slipstream_aero`; новая настройка — `dex.cl_swap_hook`. Ключи области «DEX»
+площадки arb_dex — с сетью (решение 435); адреса — Dromos-Labs/metadex-public `deployment-addresses/pools-arbitrum.json`
+и Dromos-Labs/metadex-slipstream-public `deployment-addresses/cl-arbitrum.json` (версии 1.1.0). Ключи `aero-basic-…` —
+предложение (у GeckoTerminal Aero Basic нет; DefiLlama `aero-basic`), пулы — поиск по фабрике (index.factory_scan = да).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `aero-basic-volatile@arbitrum` | `aero_basic` | VolatilePool (x·y=k), фабрика одной кривой | metadex-public V3/src/pools/VolatilePool.sol |
+| dex.factory | DEX `aero-basic-volatile@arbitrum` | `0x8E6a9FCd1d638CC760Ffba397605Fe3355dE76D2` | volatilePoolFactory | pools-arbitrum.json |
+| dex.kind | DEX `aero-basic-stable@arbitrum` | `aero_basic` | StablePool (x³y+xy³), фабрика одной кривой | metadex-public V3/src/pools/StablePool.sol |
+| dex.factory | DEX `aero-basic-stable@arbitrum` | `0x78589E876edcEbdce72ee3436ab3c9AD3a7cEF2D` | stablePoolFactory | pools-arbitrum.json |
+| dex.kind | DEX `aero-slipstream-arbitrum@arbitrum` | `slipstream_aero` | CLPool с крючком DynamicSwapFeeHook | metadex-slipstream-public CLPool.sol |
+| dex.factory | DEX `aero-slipstream-arbitrum@arbitrum` | `0x88a60ee77392577c355C0acb2A8d476D5a4EC03a` | clFactory | cl-arbitrum.json |
+| dex.cl_swap_hook | DEX `aero-slipstream-arbitrum@arbitrum` | `0xC0ed888AfE87ed1AcF01D9f19bB850159e3ce434` | dynamicSwapFeeHook | cl-arbitrum.json |
+| dex.quoter_virtual | DEX `aero-slipstream-arbitrum@arbitrum` | `да` | QuoterV2 в развёртывании нет (только metaquoter — не подключён) | cl-arbitrum.json |
+| dex.cl_tick_spacings | DEX `aero-slipstream-arbitrum@arbitrum` | `1, 10, 50, 100, 150, 200, 250` (поиск по фабрике) | слова массива в clFactoryConstructorArgs: 1/100, 10/500, 50/3000, 100/10000, 150/15000, 200/20000, 250/25000 (tickSpacing/fee — разбор слов, сверить tickSpacingToFee своим узлом: tools/arbitrum_record/aero.py) | cl-arbitrum.json |
+| send.priority_fee_gwei / send.tip_cap_gwei | площадка arb_dex | не выше minThreshold модулей MEV-налога с ненулевым priorityFeeMultiplier (аргументы конструкторов: volatile — множитель 1e9, порог 1 gwei; stable — 5e8, 2 gwei; CL — множитель 0, налога нет) | иначе пулы Aero не читаются (pools/aero_mev.rs) | constructor args модулей; читать своим узлом (tools/arbitrum_record/aero.py) |
+| dex.pool_enabled | три DEX выше | «да» — после записи tools/arbitrum_record/aero.py и прохода тестов | решение Тиграна | — |

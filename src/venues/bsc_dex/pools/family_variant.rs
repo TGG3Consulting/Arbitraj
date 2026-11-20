@@ -25,12 +25,18 @@ pub enum Variant {
     /// цикл Pool.swap, _getInitialSwapData, _updateLiquidityAndCrossTick, раскладка PoolStorage) — то же. Отличия вне
     /// расчёта сумм: тик после неполного шага (у v1 нет startSqrtP), MIN_LIQUIDITY, длина массива TicksFeesReader.
     ElasticV1,
+    /// Решение 470 (T451-01): Aero «Slipstream V3» (dex.kind = slipstream_aero; Dromos-Labs/metadex-slipstream-public
+    /// 1.1.0, развёртывание Arbitrum cl-arbitrum.json): тот же CLPool, что у вида slipstream (slot0, ticks, getPool(int24),
+    /// PoolCreated, Swap, цикл обмена), но комиссия обмена — от крючка (DynamicSwapFeeHook): меняется по блокам без
+    /// событий пула — комиссия читается каждым блоком, крючок пула и правило MEV-налога проверяются (pools/aero_cl.rs).
+    SlipstreamAero,
 }
 
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
 pub fn of(kind: &str) -> Variant {
     match kind {
         "kyber_elastic_v1" => Variant::ElasticV1,
+        "slipstream_aero" => Variant::SlipstreamAero,
         _ => Variant::Base,
     }
 }
@@ -45,5 +51,7 @@ mod tests {
         assert_eq!(of("kyber_elastic"), Variant::Base);
         assert_eq!(of("saddle_stableswap"), Variant::Base);
         assert_eq!(of("kyber_elastic_v1"), Variant::ElasticV1);
+        assert_eq!(of("slipstream"), Variant::Base);
+        assert_eq!(of("slipstream_aero"), Variant::SlipstreamAero);
     }
 }

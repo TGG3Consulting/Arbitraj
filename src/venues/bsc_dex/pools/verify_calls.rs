@@ -13,6 +13,7 @@ use alloy_primitives::aliases::{I24, U24};
 use alloy_primitives::{Bytes, keccak256};
 
 use super::super::ctx::Ctx;
+use super::abi_aero_basic::IAeroBasicFactory;
 use super::abi_check::IPoolImmutables as P;
 use super::abi_dmm::IDmmFactory;
 use super::abi_elastic::{IElasticFactory, IElasticPool};
@@ -47,6 +48,9 @@ pub fn field_calls(ctx: &Ctx, f: &Family) -> Result<Vec<Bytes>, String> {
         // Camelot V2 (решение 443): factory/token0/token1 (CamelotPair: public factory, token0, token1 — Pair.sol L16-L18);
         // комиссии, stableSwap и множители — с состоянием (load_camelot.rs), реестр — getPair (registry_call_with).
         Proto::CamelotV2 => {}
+        // Решение 470: Aero Basic — factory/token0/token1 public (metadex-public 1.1.0 Pool.sol L49-L55); комиссия и кривая
+        // — с состоянием (load_aero_basic.rs), реестр — getPool(a, b) (registry_call_with).
+        Proto::AeroBasic => {}
         // KyberSwap Elastic (решение 81): swapFeeUnits (uint24) и tickDistance (int24) вместо fee/tickSpacing/lmPool.
         Proto::KyberElastic => {
             l.push(Bytes::from(IElasticPool::swapFeeUnitsCall {}.abi_encode()));
@@ -99,6 +103,15 @@ pub fn registry_call_with(f: &Family, r: &Read, key: Option<u32>) -> Bytes {
         // Camelot V2 (решение 443): getPair(a, b) — mapping фабрики (CamelotFactory.sol L19, L66-L67).
         Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => Bytes::from(
             IV2Factory::getPairCall {
+                tokenA: r.token0,
+                tokenB: r.token1,
+            }
+            .abi_encode(),
+        ),
+        // Решение 470: Aero Basic — getPool(a, b) фабрики своей кривой (PoolFactory.sol L159-L161, реестр в обе стороны
+        // L334-L335).
+        Proto::AeroBasic => Bytes::from(
+            IAeroBasicFactory::getPoolCall {
                 tokenA: r.token0,
                 tokenB: r.token1,
             }

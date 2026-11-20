@@ -14,8 +14,6 @@
 use alloy_primitives::{Bytes, U64};
 use serde_json::json;
 
-use crate::settings::read::At;
-
 use super::ctx::Ctx;
 use super::errors::Op;
 use super::node::chain_id::same_chain;
@@ -28,7 +26,7 @@ use super::pools::{mids, wrapped};
 /// Адрес резервного узла с ключом. None — резервный не задан. Ошибка — текст (ключ не введён и т.п.).
 fn backup_url(ctx: &Ctx, link: Link) -> Result<Option<zeroize::Zeroizing<String>>, String> {
     let (url, key) = link.names(Node::Backup);
-    if ctx.settings.text(url, At::default()).is_err() {
+    if ctx.settings.text(url, ctx.at()).is_err() {
         return Ok(None);
     }
     ctx.node_url(url, key).map(Some).map_err(|e| e.message)
@@ -57,7 +55,7 @@ pub async fn backup_http(ctx: &Ctx) -> Result<String, String> {
     // Решение 416 (ревью М-1): ответ резервного узла — в подтверждения сети (сверка перед подписью, node/chain_seen.rs).
     if let (Ok(plain), Ok(want)) = (
         ctx.settings
-            .text(Link::Http.names(Node::Backup).0, At::default()),
+            .text(Link::Http.names(Node::Backup).0, ctx.at()),
         super::node::chain_id::chain_id(ctx),
     ) {
         ctx.chains.note(&plain, chain.to(), want);

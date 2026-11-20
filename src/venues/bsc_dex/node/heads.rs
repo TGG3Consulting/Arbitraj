@@ -16,7 +16,7 @@
 //! круга); раньше сон шёл после работы, и при узле на другом сервере период рос на RTT eth_blockNumber и
 //! eth_getBlockByNumber новой головы — на столько же старели «получен … назад» и «создан … назад».
 //! От чего зависит: ctx.rs, node/rpc.rs, node/head_age.rs, node/head_stall.rs, errors.rs.
-//! Настройки: bsc.blocks_poll_ms (вся система), feed.stale_after_ms, feed.max_block_age_ms [bsc_dex]; узел —
+//! Настройки: bsc.blocks_poll_ms (вся система + площадка DEX, решение 435), feed.stale_after_ms, feed.max_block_age_ms [bsc_dex]; узел —
 //! bsc.node_http_url; bsc.node_stall_alert_s (node/head_stall.rs).
 //!
 //! Источники: eth_blockNumber, eth_getBlockByNumber (поле timestamp — hex-число) — execution-apis
@@ -256,7 +256,7 @@ pub fn rest_of(every: Duration, spent: Duration) -> Duration {
 pub fn poll_every(ctx: &Ctx) -> GatewayResult<Duration> {
     let ms = ctx
         .settings
-        .integer("bsc.blocks_poll_ms", crate::settings::read::At::default())
+        .integer("bsc.blocks_poll_ms", ctx.at())
         .map_err(|e| ctx.tag(e))?;
     let stale = ctx.int("feed.stale_after_ms")?;
     if ms >= stale {

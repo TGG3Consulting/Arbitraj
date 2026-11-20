@@ -11,7 +11,7 @@
 //! От чего зависит: ctx.rs, node/queue.rs, gateway/urgency.rs, gateway/rules.rs, gateway/calc_meter.rs (решение 129:
 //! ожидание очереди и время запроса — в счётчик расчёта кандидата), node/req_trail.rs (решение 313: те же времена по
 //! каждому запросу — замеру перечитывания пула по событию), storage/rules.rs.
-//! Настройки: bsc.node_http_rps, bsc.node_background_share_pct (вся система; не задана — строгий порядок без доли
+//! Настройки: bsc.node_http_rps, bsc.node_background_share_pct (вся система + площадка DEX — решение 435; не задана — строгий порядок без доли
 //! фона); правила шлюза для RateLimited.
 //!
 //! HTTP 429 Too Many Requests — RFC 6585, раздел 4 (https://www.rfc-editor.org/rfc/rfc6585#section-4).
@@ -22,7 +22,6 @@ use crate::gateway::calc_meter::{self, Source};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::rules::{RuleAction, pick_rule};
 use crate::gateway::urgency;
-use crate::settings::read::At;
 
 use super::super::ctx::Ctx;
 pub use super::queue::Pace;
@@ -33,7 +32,7 @@ pub use super::queue::Pace;
 pub async fn wait(ctx: &Ctx, weight: usize) -> GatewayResult<()> {
     let rps = ctx
         .settings
-        .integer("bsc.node_http_rps", At::default())
+        .integer("bsc.node_http_rps", ctx.at())
         .map_err(|e| ctx.tag(e))?;
     if rps == 0 {
         let m = "bsc.node_http_rps должна быть больше нуля";
@@ -42,7 +41,7 @@ pub async fn wait(ctx: &Ctx, weight: usize) -> GatewayResult<()> {
     let step = Duration::from_secs_f64(weight.max(1) as f64 / rps as f64);
     let share = match ctx
         .settings
-        .decimal("bsc.node_background_share_pct", At::default())
+        .decimal("bsc.node_background_share_pct", ctx.at())
         .map_err(|e| ctx.tag(e))
     {
         Ok(p) => rust_decimal::prelude::ToPrimitive::to_f64(&p).unwrap_or(0.0),

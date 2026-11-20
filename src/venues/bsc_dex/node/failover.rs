@@ -8,7 +8,7 @@
 //! Кто вызывает: node/rpc.rs (HTTP), node/ws.rs (WebSocket), connection.rs (адреса для проверки).
 //! От чего зависит: ctx.rs (адрес с ключом, журнал).
 //! Настройки: bsc.node_http_url, bsc.node_ws_url, bsc.node_http_url_backup, bsc.node_ws_url_backup,
-//! bsc.node_backup_hold_s (вся система). Секреты: bsc.node_http_key, bsc.node_ws_key, bsc.node_http_key_backup,
+//! bsc.node_backup_hold_s (вся система + площадка DEX, решение 435). Секреты: bsc.node_http_key, bsc.node_ws_key, bsc.node_http_key_backup,
 //! bsc.node_ws_key_backup.
 
 use std::sync::{Arc, Mutex};
@@ -18,7 +18,6 @@ use tokio::time::Instant;
 use zeroize::Zeroizing;
 
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
-use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
@@ -95,7 +94,7 @@ impl Failover {
     pub fn urls(&self, ctx: &Ctx, link: Link) -> GatewayResult<Vec<(Node, Zeroizing<String>)>> {
         let backup = ctx
             .settings
-            .text(link.names(Node::Backup).0, At::default())
+            .text(link.names(Node::Backup).0, ctx.at())
             .is_ok();
         let holding = self
             .slot(link)
@@ -120,7 +119,7 @@ impl Failover {
     pub async fn trip(&self, ctx: &Ctx, link: Link, why: &str) {
         let hold = ctx
             .settings
-            .integer("bsc.node_backup_hold_s", At::default())
+            .integer("bsc.node_backup_hold_s", ctx.at())
             .ok();
         let fresh = {
             let mut slot = self.slot(link).lock().unwrap_or_else(|p| p.into_inner());

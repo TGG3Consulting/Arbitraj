@@ -10,7 +10,7 @@
 //! connection_extra.rs (резервный узел — запоминает ответ «Проверить подключение»).
 //! От чего зависит: ctx.rs (node_url), node/rpc.rs (post), node/jsonrpc.rs, node/failover.rs (имена настроек узлов),
 //! node/chain_id.rs.
-//! Настройки: dex.evm_chain_id [bsc_dex]; bsc.node_http_url, bsc.node_http_url_backup (вся система).
+//! Настройки: dex.evm_chain_id [bsc_dex]; bsc.node_http_url, bsc.node_http_url_backup (вся система + площадка DEX, решение 435).
 //!
 //! eth_chainId — https://github.com/ethereum/execution-apis/tree/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth .
 
@@ -21,7 +21,6 @@ use alloy_primitives::U64;
 use serde_json::json;
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use crate::settings::read::At;
 
 use super::super::ctx::Ctx;
 use super::super::errors::Op;
@@ -83,7 +82,7 @@ pub fn verdict(who: &str, url: &str, got: u64, want: u64) -> Result<(), String> 
 /// Возвращает: (адрес-настройка, chainId) или None — узел не задан (резервный). Ошибки: связь, ответ, ключ узла.
 async fn ask(ctx: &Ctx, node: Node) -> GatewayResult<Option<(String, u64)>> {
     let (url, key) = Link::Http.names(node);
-    let Ok(plain) = ctx.settings.text(url, At::default()) else {
+    let Ok(plain) = ctx.settings.text(url, ctx.at()) else {
         return match node {
             Node::Main => Err(ctx.not_set(
                 url,
@@ -109,7 +108,7 @@ pub async fn ensure(ctx: &Ctx) -> GatewayResult<u64> {
     let want = chain_id::chain_id(ctx)?;
     for (node, who) in [(Node::Main, "основной"), (Node::Backup, "резервный")] {
         let url = Link::Http.names(node).0;
-        if let Ok(plain) = ctx.settings.text(url, At::default())
+        if let Ok(plain) = ctx.settings.text(url, ctx.at())
             && let Some(got) = ctx.chains.get(&plain, want)
         {
             verdict(who, &plain, got, want).map_err(|m| ctx.err(ErrorCode::BadResponse, m))?;

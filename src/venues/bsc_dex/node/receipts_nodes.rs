@@ -7,7 +7,7 @@
 //! (bsc.node_http_url) через общую очередь bsc.node_http_rps, гонка — основной и резервный.
 //! Кто вызывает: node/receipts_io.rs (fetch_block).
 //! От чего зависит: ctx.rs, rpc_race.rs (one, first_accepted), rpc_capped.rs (Capped).
-//! Настройки: bsc.receipts_node_urls, bsc.receipts_node_rps [вся система].
+//! Настройки: bsc.receipts_node_urls, bsc.receipts_node_rps [вся система + площадка DEX — решение 435: Ctx::at].
 //!
 //! Официальный список публичных узлов и их лимит — https://docs.bnbchain.org/bnb-smart-chain/developers/json_rpc/json-rpc-endpoint/ .
 
@@ -18,7 +18,6 @@ use std::time::Duration;
 use tokio::time::Instant;
 
 use crate::gateway::errors::GatewayResult;
-use crate::settings::read::At;
 
 use super::super::ctx::Ctx;
 
@@ -32,7 +31,7 @@ pub struct Nodes {
 /// читается (хранится в неверном виде — не тихий переход на основной узел), список задан, а темп нет (или 0), адрес не
 /// https.
 pub fn list(ctx: &Ctx) -> GatewayResult<Option<(Vec<String>, u64)>> {
-    let urls = match ctx.settings.list("bsc.receipts_node_urls", At::default()) {
+    let urls = match ctx.settings.list("bsc.receipts_node_urls", ctx.at()) {
         Ok(v) if !v.is_empty() => v,
         Ok(_) => return Ok(None),
         Err(e) if e.code == crate::gateway::errors::ErrorCode::NotConfigured => return Ok(None),
@@ -59,9 +58,7 @@ pub fn list(ctx: &Ctx) -> GatewayResult<Option<(Vec<String>, u64)>> {
             ));
         }
     }
-    let rps = ctx
-        .settings
-        .integer("bsc.receipts_node_rps", At::default())?;
+    let rps = ctx.settings.integer("bsc.receipts_node_rps", ctx.at())?;
     if rps == 0 {
         return Err(ctx.not_set(
             "bsc.receipts_node_rps",

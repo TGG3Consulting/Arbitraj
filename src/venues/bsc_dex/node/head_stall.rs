@@ -19,7 +19,7 @@
 //! — канал ядру); tests/bsc_dex_head_stall.rs (step).
 //! От чего зависит: ctx.rs, node/heads.rs (Head), node/head_stall_text.rs (текст), node/head_stall_send.rs (отправка), gateway/events.rs
 //! (MarketEvent::Notice), storage/journal.
-//! Настройки: bsc.node_stall_alert_s (вся система, необязательная); включение событий — notify.event.* с областью
+//! Настройки: bsc.node_stall_alert_s (вся система + площадка DEX — решение 435, необязательная); включение событий — notify.event.* с областью
 //! события (экран «Уведомления»).
 
 use std::sync::{Arc, Mutex};
@@ -28,7 +28,6 @@ use chrono::{DateTime, Utc};
 use tokio::sync::mpsc;
 
 use crate::gateway::events::MarketEvent;
-use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
@@ -118,7 +117,7 @@ impl Stall {
     /// Порог простоя из настройки (задача t122, п. 5: круг опроса читает его ДО fresh()). Принимает: окружение.
     /// Возвращает: секунды; None — не задан (или не читается) — функции нет. Ошибок нет.
     pub fn limit(ctx: &Ctx) -> Option<u64> {
-        ctx.settings.integer(SETTING, At::default()).ok()
+        ctx.settings.integer(SETTING, ctx.at()).ok()
     }
 
     /// Один круг опроса с порогом из настройки (limit, затем step_with). Принимает и ошибок — как step_with.

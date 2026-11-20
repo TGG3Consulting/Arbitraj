@@ -176,7 +176,13 @@
     НЕ сделано: eth_sendRawTransactionConditional — страница docs.arbitrum.io «RPC methods» описывает только смысл
     (knownAccounts, blockNumberMin/Max — окно блока L1, timestampMin/Max — окно времени L2, ошибка −32003), без формата
     запроса и примера; гадать нельзя — вопрос Тиграну (ниже, «Решение 435»).
-  - 433-ж узел по площадке: настройки bsc.node_* читаются с областью площадки (27 мест At::default() в адаптере).
+  - 433-ж — СДЕЛАНО (решение 435): все 21 настройка bsc.* в каталоге — области «вся система + площадка DEX» (GV,
+    .dex_venue()); чтение узла с областью площадки (ctx.at()) — node/heads.rs, receipts_nodes.rs, chain_seen.rs,
+    head_stall.rs, failover.rs, pace.rs, ctx_url.rs (node_url), connection_extra.rs; остальные bsc.* уже читались через
+    ctx.int/ctx.text (область площадки). У bsc_dex своего значения нет — действует прежнее общее (порядок поиска
+    площадка → вся система, settings/store.rs resolve). Остальные At::default() адаптера (risk.min_bnb_balance,
+    sieve.audit_share, hooks.*, tax.*, notify.summary_reasons, лимиты квотера) — не узел, общие намеренно. Секреты
+    ключей узла bsc.node_*_key — общие (свой узел Arbitrum без ключа; имя секрета по площадке — когда понадобится).
   - 433-з ключ области «DEX» с сетью (id@arbitrum) — families.rs, dex_ids.rs, event_flags.rs, ctx.rs dex_*.
   - 433-и статики по площадке (20 файлов, список — step5-plan.md 1.3; onchain.rs, exec_callback.rs — после слияния шага 4).
   - 433-к регистрация arb_dex в main.rs по настройке dex.venues; перед ней — dex.default_chain = bsc на живом боте.

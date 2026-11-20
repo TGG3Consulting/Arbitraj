@@ -5830,3 +5830,15 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** нет — окна.
 - **Связанные ключи:** в описании не названы.
 - **Статус:** в релизе 141619bc.
+
+### `dex.elastic_ticks_chunk`
+
+- **Задача / решение:** T451-03, решение 475.
+- **Появилась:** 2026-11-20, ветка t245/arb-kyber-elastic.
+- **Кейс:** запись своего узла Arbitrum 20.11.2026 (решение 462): TicksFeesReader.getTicksInRange(pool, MIN_TICK, 0) — так бот читал все тики пула KyberSwap Elastic — у 4 пулов из 20 (tickDistance 8 и 10) ответил «out of gas»: при length = 0 читатель выделяет массив на все возможные тики пула (TicksFeesReader.sol L46-L61), память 3a + a²/512 газа ≈ 96 / 62 млн. Бот у таких пулов тиков не прочёл бы. Теперь тики читаются частями getTicksInRange(pool, start, length): первая часть — от MIN_TICK, следующая — от последнего тика прошлой, до MAX_TICK (pools/elastic_ticks.rs).
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (ключ id DEX вида kyber_elastic / kyber_elastic_v1, на arb_dex — `<id>@arbitrum`); каталог src/settings/catalog/dex_elastic.rs.
+- **Что ставить:** `1000` (docs/FIRST_RUN.md: газ одной части ≈ 2,3 млн + память ≈ 5 тыс. — по оценке примерно вчетверо меньше вызова ≈ 10 млн газа, который узел Тиграна выполнил 20.11.2026).
+- **Если не задана:** в каталоге без .optional(); src/venues/bsc_dex/pools/families.rs required (ветка Proto::KyberElastic) — DEX «не подключена: не задана dex.elastic_ticks_chunk» (classify), пулы DEX не проверяются, не читаются и не котируются. **Касается и BSC:** у DEX вида kyber_elastic площадки bsc_dex настройку задать при выкладке (TASKS T475-02), иначе её пулы выпадут из графа. Значение < 2 — ошибка чтения тиков NotConfigured с причиной.
+- **Влияет на торговлю:** косвенно — без неё пулы Elastic не в графе; значение меняет только число вызовов узла, не результат (те же тики).
+- **Связанные ключи:** dex.kind (`kyber_elastic`, `kyber_elastic_v1`), dex.tick_reader.
+- **Статус:** ещё не в релизе (ветка t245/arb-kyber-elastic).

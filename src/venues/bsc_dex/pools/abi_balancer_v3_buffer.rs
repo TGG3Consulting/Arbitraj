@@ -55,4 +55,3 @@ alloy::sol! {
         function querySwapExactIn(SwapPathExactAmountIn[] memory paths, address sender, bytes calldata userData) external returns (uint256[] memory pathAmountsOut, address[] memory tokensOut, uint256[] memory amountsOut);
     }
 }
-

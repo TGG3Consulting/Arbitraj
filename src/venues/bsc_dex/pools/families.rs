@@ -657,10 +657,15 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         ]),
         // KyberSwap Elastic (решение 81): фабрика (проверка пула getPool(t0,t1,swapFeeUnits)), свой роутер (форк
         // исполняется им, UR/Permit2 не нужны — отсечены выше), квотер (сверка QuoterV2.quoteExactInputSingle),
-        // читатель тиков (TicksFeesReader.getTicksInRange — связный список тиков).
-        Proto::KyberElastic => {
-            list.extend(["dex.factory", "dex.router", "dex.quoter", "dex.tick_reader"])
-        }
+        // читатель тиков (TicksFeesReader.getTicksInRange — связный список тиков). Решение 475: длина части чтения тиков
+        // dex.elastic_ticks_chunk (pools/elastic_ticks.rs) — без неё тиков не прочесть, DEX не подключается.
+        Proto::KyberElastic => list.extend([
+            "dex.factory",
+            "dex.router",
+            "dex.quoter",
+            "dex.tick_reader",
+            "dex.elastic_ticks_chunk",
+        ]),
         // DODO PMM (решение 86b): только фабрика DVM/DPP/DSP — ею проверяется пул (getDODOPoolBidirection,
         // решение 59) и слушаются события создания (NewDVM/NewDPP/NewDSP). Квотер — сам пул (адрес из справочника),
         // отдельной настройки dex.quoter не нужно. Роутера нет (tradable=false, исполнение — 86c).

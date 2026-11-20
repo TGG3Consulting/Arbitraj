@@ -148,6 +148,34 @@
   3) OracleLengthIncreased (в ABI abi_lb.rs его нет) — topic0 = keccak256 сигнатуры из ILBPair.sol:76 в коде.
   Нужны записи: отставший узел Arbitrum (головы с временем блока старше порога) — тест track_l1; логи LB с FlashLoan /
   CollectedProtocolFees — тест фильтра tip_judge.
+- **Решение 475 (20.11.2026, ветка t245/arb-kyber-elastic) — KyberSwap Elastic: тики частями (T451-03) и Elastic
+  Legacy на Arbitrum (T462-01); cargo не запускался (формат — вручную), сборка и тесты — в CI.** Сделано: тики пула
+  Elastic читаются частями getTicksInRange(pool, start, dex.elastic_ticks_chunk) (pools/elastic_ticks.rs; load_elastic.rs,
+  prefetch_plan.rs — первая часть заранее); новая настройка dex.elastic_ticks_chunk (каталог dex_elastic.rs, SETTINGS,
+  SETTINGS_CASES, FIRST_RUN — совет 1000), обязательна у вида Elastic (families.rs required); поиск пулов Elastic по
+  фабрике — getPool(a, b, swapFeeUnits) по dex.v3_fee_tiers (factory_calls.rs, как V3); запись своего узла —
+  tools/arbitrum_record/kyber_elastic_legacy.py (в record_steps.py), тест tests/arbitrum_kyber_elastic_legacy_live.rs
+  (#[ignore] до записи); настройки — docs/notes/arbitrum/dex-settings-arbitrum.md §6. Исполнитель не менялся
+  (переразвёртывание не нужно; вид исполнения не имеет — только сигнал, как kyber_elastic). Задачи:
+  - T475-01 Запись своим узлом: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --only
+    kyber_elastic_legacy` (или сам скрипт, шапка), коммит tests/data/arbitrum_kyber_elastic_legacy_<дата>/, снять
+    #[ignore] в tests/arbitrum_kyber_elastic_legacy_live.rs. Скрипту нужны модули ветки t234/arb-merge-2 (gt.py,
+    recnode.py, kyber_elastic_ticks.py, stdhttp.py — в этой ветке байт в байт те же).
+  - T475-02 **Выкладка: dex.elastic_ticks_chunk задать у КАЖДОЙ DEX вида kyber_elastic / kyber_elastic_v1 — и на BSC
+    (bsc_dex), и на arb_dex** (FIRST_RUN — 1000). Без неё DEX «не подключена: не задана dex.elastic_ticks_chunk» — на BSC
+    пулы Elastic выпадут из графа (правило «нет параметра — функция не работает»; раньше тики читались одним вызовом
+    length = 0 без настройки). На живом BSC DEX `kyberswap_elastic_bsc` (вид kyber_elastic) включена (dex.pool_enabled = да, проверено через интерфейс бота 20.11.2026) — при выкладке ОБЯЗАТЕЛЬНО задать ей dex.elastic_ticks_chunk.
+  - T475-03 Вопрос Тиграну: id DEX для Elastic Legacy на arb_dex (предложение `kyberswap_elastic_legacy_arbitrum@arbitrum`)
+    и включение (dex.pool_enabled); у arb_dex — index.factory_scan = да (иначе пулы v1 не найдутся: у GeckoTerminal их
+    нет). Уровни dex.v3_fee_tiers = 8, 10, 40, 300, 1000 — конструктор фабрики v1 (Sourcify 42161); уровни, включённые
+    позже enableSwapFee, видны только событием SwapFeeEnabled — скрипт пишет события фабрики окном --log-blocks
+    (2 000 000 блоков), всей истории нет (решение 460); новый уровень — дописать в dex.v3_fee_tiers.
+  - T475-04 Поиск по фабрике теперь и у kyber_elastic (v2, BSC и Arbitrum): при index.factory_scan = да и заданной
+    dex.v3_fee_tiers у такой DEX — getPool её фабрики по парам; dex.v3_fee_tiers не задана — «не ищется» в заметках
+    прохода, как раньше (задана ли она у Elastic на BSC — проверить при выкладке).
+  Статусы: T451-03 — сделано (решение 475; длина части — настройка, совет 1000 по газу); T462-01 — код и запись
+  готовы, id и включение — Тигран (T475-03). Оговорка: стоимость газа на тик — оценка по EIP-2929 и исходнику, не замер;
+  факт узла — вызов ≈ 10 млн газа выполнен, ≈ 62 млн — «out of gas».
 - **Решение 456 (20.11.2026, ветка t231/arb-merge) — слияние семейств Arbitrum и перенумерация шагов исполнителя v4;
   cargo / npm / solc локально не запускались, push нет — сборка и тесты в CI (запускает координатор).**
   СЛИТО (`git merge --no-ff`, по порядку): t224/arb-dex-settings (448), t226/arb-dex-code-a (450), t227/arb-dex-code-b

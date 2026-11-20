@@ -33,14 +33,14 @@ use super::super::math::tick_math::MIN_TICK;
 use super::super::node::call;
 use super::super::node::prefetch::{Book, Call};
 use super::abi_dodo::IDodoPool;
-use super::abi_elastic::{IElasticPool, ITicksFeesReader};
+use super::abi_elastic::IElasticPool;
+use super::elastic_ticks;
 use super::families::Proto;
 use super::fee_fresh::{self, Extras};
 use super::load_batch::Want;
 use super::load_batch_cl as cl;
 use super::load_batch_ticks::tick_calls;
 use super::load_batch_v2v3::{PoolStateTick, head, parse_head, words};
-use super::load_cl::i24;
 use super::load_dodo::FEE_TRADER;
 use super::load_v2v3::word_range;
 use super::prefetch_ask::Ask;
@@ -182,18 +182,18 @@ fn staged_more(ctx: &Ctx, e: &Entry, b: &Book) -> Option<Vec<Call>> {
     Some(calls)
 }
 
-/// Elastic: вызов всех тиков списка у читателя (как load_elastic.rs). Пусто — нет dex.tick_reader. Ошибок нет.
+/// Elastic: первая часть тиков списка у читателя — тот же вызов, что первый у кода чтения (elastic_ticks.rs read:
+/// getTicksInRange(pool, MIN_TICK, dex.elastic_ticks_chunk), решение 475); следующие части зависят от ответа и заранее
+/// не читаются. Пусто — нет dex.tick_reader или dex.elastic_ticks_chunk. Ошибок нет.
 fn elastic_all(ctx: &Ctx, e: &Entry, pool: Address) -> Vec<Call> {
-    let (Ok(reader), Ok(start)) = (
+    let (Ok(reader), Ok(length)) = (
         ctx.dex_addr("dex.tick_reader", e.family.id),
-        i24(ctx, MIN_TICK),
+        elastic_ticks::chunk(ctx, e.family),
     ) else {
         return Vec::new();
     };
-    let c = ITicksFeesReader::getTicksInRangeCall {
-        pool,
-        startTick: start,
-        length: 0,
-    };
-    vec![enc(reader, &c)]
+    match elastic_ticks::part_call(ctx, pool, MIN_TICK, length) {
+        Ok(c) => vec![enc(reader, &c)],
+        Err(_) => Vec::new(),
+    }
 }

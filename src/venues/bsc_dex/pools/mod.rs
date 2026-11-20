@@ -73,6 +73,7 @@ pub mod ekubo_keys;
 pub mod ekubo_native;
 pub mod ekubo_route;
 pub mod ekubo_shallow;
+pub mod elastic_ticks;
 pub mod emit_pool;
 pub mod event_flags;
 pub mod events;

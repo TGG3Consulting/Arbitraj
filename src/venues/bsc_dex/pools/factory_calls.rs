@@ -12,6 +12,8 @@
 //! (woo_pairs), woo_quote.rs (quote_of).
 //! Решение 450 (T448-05): iZiSwap — pool(монета, встречный, fee) по уровням dex.v3_fee_tiers (iZiSwap нет у
 //! индексатора в сети arbitrum — пулы только поиском по фабрике).
+//! Решение 475 (T462-01): KyberSwap Elastic (kyber_elastic, kyber_elastic_v1) — getPool(монета, встречный,
+//! swapFeeUnits) по уровням dex.v3_fee_tiers (как V3; Elastic Legacy на Arbitrum нет у индексатора).
 //! Maverick V2 (решение 122 F) — lookup(tokenA, tokenB, 0, dex.pair_lookup_max) (не задана — по фабрике не ищется).
 //! PancakeSwap Stable / Lista: пара с обёрткой BNB спрашивается и с меткой 0xEeee… (пул с нативным BNB фабрика хранит
 //! под меткой; решение «122 X (нативный BNB в стейблсвапах)», stable_native.rs) — найденный пул записан с обёрткой.
@@ -72,7 +74,11 @@ pub fn plan(
 ) -> GatewayResult<Plan> {
     let mut out = Plan::default();
     for f in families::all(ctx) {
-        let v3 = matches!(f.proto, Proto::PancakeV3 | Proto::UniswapV3);
+        // Решение 475 (T462-01): KyberSwap Elastic — getPool(a, b, swapFeeUnits) фабрики Elastic по уровням
+        // dex.v3_fee_tiers: та же сигнатура getPool(address,address,uint24), что у V3, реестр — в обе стороны
+        // (ks-elastic-sc 4ab08c0a contracts/Factory.sol L44, createPool L106-L109; фабрика v1 — Sourcify 42161
+        // 0x5F1d…D50a, тот же код). Перечисления пулов у фабрики нет — только реестр по парам.
+        let v3 = matches!(f.proto, Proto::PancakeV3 | Proto::UniswapV3 | Proto::KyberElastic);
         // Решение 450 (T448-05): iZiSwap — pool(a, b, fee) по уровням dex.v3_fee_tiers (как V3).
         let izi = f.proto == Proto::IziSwap;
         let mut qs: Vec<Q> = match f.proto {
@@ -85,7 +91,9 @@ pub fn plan(
             // Curve Twocrypto-NG / Tricrypto-NG (решение 442) и crypto v1 фабрики (решение 453):
             // find_pool_for_coins(a, b, i), i < dex.pair_lookup_max.
             Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 => Vec::new(),
-            Proto::PancakeV3 | Proto::UniswapV3 | Proto::IziSwap => Vec::new(),
+            Proto::PancakeV3 | Proto::UniswapV3 | Proto::IziSwap | Proto::KyberElastic => {
+                Vec::new()
+            }
             p if p.is_solidly() => {
                 let v1 = p == Proto::SolidlyV1;
                 [true, false]

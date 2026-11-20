@@ -82,6 +82,8 @@ def steps(rpc, wallet, ekubo_from):
             "--izi-factory", "0xCFD8A067e1fa03474e79Be646c5f6b6A27847399", "--izi-fee", "100", "--izi-fee", "400",
             "--izi-fee", "2000", "--izi-fee", "10000", "--pancake-ur", "0xFE6508f0015C778Bdcc1fB5465bA5ebE224C9912"]),
         ("kyber_elastic_v1", "kyber_elastic_v1.py", ["--rpc", rpc, "--gt"]),
+        # Решение 475 (T462-01): Elastic Legacy (v1) — пулы реестром фабрики v1 по парам, тики частями.
+        ("kyber_elastic_legacy", "kyber_elastic_legacy.py", ["--rpc", rpc]),
         ("saddle", "saddle.py", ["--rpc", rpc]),
         ("woofi", "woofi.py", ["--rpc", rpc]),
         # Решение 471: PancakeSwap StableSwap — фабрика и пулы по умолчанию в шапке pancake_stable.py.

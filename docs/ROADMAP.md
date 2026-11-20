@@ -39,6 +39,10 @@
   балансам обёрток (сторона через буфер — в базовом токене); PoolRegistered не сопоставляет пул с базовым токеном
   обёртки; превью обёртки — по одной точке (не побитово, docs/TASKS.md «Решение 474»). `wc -l`: exec/executor/entry.rs
   539, kind.rs 292, pools/exec_callback.rs 411 — сверх 200 (как в строке решения 456).
+- Решение 475: тест чтения тиков Elastic частями (pools/elastic_ticks.rs merge) и сверка Elastic Legacy — только на
+  записи tools/arbitrum_record/kyber_elastic_legacy.py (tests/arbitrum_kyber_elastic_legacy_live.rs под #[ignore] до
+  записи, T475-01); газ части на тик — оценка по EIP-2929, не замер (замер — gas у eth_estimateGas, если понадобится).
+  dex.elastic_ticks_chunk обязательна и на BSC — задать при выкладке (T475-02).
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

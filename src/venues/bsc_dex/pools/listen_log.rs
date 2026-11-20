@@ -7,7 +7,8 @@
 //! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs; пересчёт
 //! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
 //! Третье ревью t236: лог, после которого пул «в обновлении» (Integral SwapFee, LB CompositionFees, THENA Fusion Swap /
-//! Fee — settle_fusion.rs shuts), делает пул недостоверным в том же изменении реестра, что его применяет.
+//! Fee — settle_fusion.rs shuts), делает пул недостоверным в том же изменении реестра, что его применяет; недостоверная
+//! в конце запись ядру не отправляется (как у доставки из набора — emit_pool.rs Kept, Live: только valid).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, settle.rs, settle_bins.rs (бины события; ревью 290,
 //! решение 357), integral_fee.rs (решение 325), registry.rs, stale_read.rs (решение 298), pool_fail.rs (решение 339),
@@ -278,6 +279,12 @@ pub async fn on_log(
             note_refill(p, &e);
             // Б1: событие пул не перечитало (запись всё ещё недостоверна) — в очередь повтора.
             let again = revive && !e.valid;
+            // Третье ревью t236 (п. 5): недостоверная запись (пул ждёт повтора, «в обновлении», после ошибки чтения)
+            // ядру не уходит — как у доставки из набора (emit_pool.rs Kept: Live — только valid); ядро вернёт её,
+            // когда запись снова станет достоверной (полное чтение — put и emit).
+            if !e.valid {
+                return Ok(again);
+            }
             emit(p, e.pool).map(|()| again)
         }
         None => Ok(false),

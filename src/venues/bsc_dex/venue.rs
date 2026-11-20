@@ -93,7 +93,10 @@ impl Venue for BscDex {
         // Решение 95: финальная котировка расчёта кандидата (ядро пересчитывает найденный оптимум) при exec.via_kyber —
         // цена KyberSwap, того, кто исполнит обмен; по ней ядро решает «торговать или нет». У KyberSwap нет маршрута
         // (пул, которого он не знает) — наша котировка: исполнит наш собственный сборщик (откат в trade()).
+        // Решение 480 (ревью 4): котировка «только своя математика» (quote_stage::own_scope — пара котировок ядра из
+        // одного источника) — без KyberSwap и «лучшего из двух».
         if crate::gateway::quote_stage::is_final()
+            && !crate::gateway::quote_stage::own_only()
             && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
         {
             // Решение 123: «лучший из двух» — KyberSwap и своя параллельно, берётся лучшая (best_of/quote.rs).
@@ -121,6 +124,7 @@ impl Venue for BscDex {
     /// KyberSwap (решение 95) — как quote. Ошибки: как у quote.
     async fn quote_fills(&self, asset: &Asset, side: Side, qty: Decimal) -> GatewayResult<Decimal> {
         if crate::gateway::quote_stage::is_final()
+            && !crate::gateway::quote_stage::own_only()
             && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
         {
             return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);

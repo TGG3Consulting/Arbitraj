@@ -3,7 +3,8 @@
 //! снимка стакана (core/ride_pair.rs from_snapshot) на записанном стакане Bybit CAKEUSDT 04.11
 //! (tests/data/cex_samples_2026_11_04/bybit_orderbook_CAKEUSDT.json, GET /v5/market/orderbook): наша часть после сдвига
 //! (ride_quote::marginal) — ровно уровни стакана после первых «сдвиг» монет (независимый проход по уровням),
-//! комиссия — от нашей суммы, средняя хуже котировки без сдвига (худший случай консервативен).
+//! комиссия — от нашей суммы (ставка теста TEST_RATE — не из API, см. её комментарий), средняя хуже котировки без
+//! сдвига (худший случай консервативен).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core::ride_pair, arb::core::ride_quote, arb::gateway::frozen, tests/data.
 
@@ -20,7 +21,13 @@ fn d(s: &str) -> Decimal {
     Decimal::from_str(s).unwrap()
 }
 
-/// Снимок продажи по записанному стакану; комиссия — 0.1 % от суммы в USDT (план «в получаемой монете», решение 232).
+/// Ставка тейкера ТЕСТА, не из ответа API: у Bybit ставка — своя у счёта, её отдаёт приватный GET /v5/account/fee-rate
+/// (официальная документация «Get Fee Rate»: https://bybit-exchange.github.io/docs/v5/account/fee-rate — по ней
+/// написан venues/bybit/fees.rs); записанного ответа в tests/data нет. Проверка от ставки не зависит: комиссия нашей
+/// части — разность комиссий двух котировок одного снимка, должна быть ровно «ставка × наша сумма».
+const TEST_RATE: &str = "0.001";
+
+/// Снимок продажи по записанному стакану; комиссия — TEST_RATE от суммы в USDT (план «в получаемой монете», решение 232).
 fn frozen() -> FrozenBook {
     let p = concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -55,7 +62,7 @@ fn frozen() -> FrozenBook {
             exchange_time: None,
             received_at: Utc::now(),
         },
-        fee: BookFee::in_received(d("0.001"), Side::Sell, "CAKE", "USDT"),
+        fee: BookFee::in_received(d(TEST_RATE), Side::Sell, "CAKE", "USDT"),
         taken_at: Utc::now(),
     }
 }
@@ -90,7 +97,7 @@ async fn cex_pair_from_one_snapshot_is_levels_after_shift() {
     assert!(gap < Decimal::new(1, 18), "{} vs {ours}", m.avg_price * qty);
     // Комиссия — от нашей суммы (разность комиссий двух котировок одного снимка).
     let fee: Decimal = m.costs.iter().map(|c| c.amount).sum();
-    assert_eq!(fee, ours * d("0.001"));
+    assert_eq!(fee, ours * d(TEST_RATE));
     // Худший случай консервативен: средняя после сдвига хуже котировки без сдвига.
     let plain = fb.quote(qty).await.unwrap();
     assert!(m.avg_price < plain.avg_price, "{} < {}", m.avg_price, plain.avg_price);

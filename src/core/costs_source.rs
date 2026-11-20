@@ -219,7 +219,14 @@ impl Source for Live<'_> {
         if self.src.is_some() {
             return self.quote_at(d, qty, sh).await.map(|q| q.fillable_qty);
         }
-        let f = super::costs_quote::fillable(self.core, d, true, qty + sh.off).await?;
+        let work = super::costs_quote::fillable(self.core, d, true, qty + sh.off);
+        // Решение 480 (ревью 4): со сдвигом — тем же источником, что пара котировок (своя математика площадки,
+        // ride_pair.rs; без запросов к внешнему исполнителю).
+        let f = if sh.off > Decimal::ZERO {
+            crate::gateway::quote_stage::own_scope(work).await?
+        } else {
+            work.await?
+        };
         Ok((f - sh.off).max(Decimal::ZERO))
     }
 

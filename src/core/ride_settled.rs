@@ -43,7 +43,8 @@ pub fn before(core: &Core, d: &Direction) -> Result<u64, String> {
 }
 
 /// Что делает: проверка после котировки — за время котировки ни один наш ордер продажи монеты на площадке не начался
-/// (в полёте) и не кончился (счётчик итогов тот же). Принимает: ядро, направление, счётчик из before. Ошибки: текст.
+/// (в полёте) и не кончился (счётчик итогов тот же). Принимает: ядро, направление, счётчик (из before или Shift.seq —
+/// снят вместе со сдвигом, ride_shift::read). Ошибки: текст.
 pub fn after(core: &Core, d: &Direction, seq: u64) -> Result<(), String> {
     in_flight(core, d)?;
     if super::sale_marks::sales(core, &d.sell_on, &d.asset) != seq {

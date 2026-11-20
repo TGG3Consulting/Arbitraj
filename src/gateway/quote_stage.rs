@@ -8,7 +8,8 @@
 //! Решение 121 B5: `final_external` — финальная котировка площадки идёт к внешнему исполнителю с лимитом запросов
 //! (KyberSwap при exec.via_kyber = да). Ядро по нему решает, применять ли фильтр kyber.final_gate_usd, не зная
 //! площадок и не импортируя адаптеры: имя переключателя живёт здесь, в шлюзе.
-//! Кто вызывает: core/profit.rs (ставит признак, спрашивает final_external), venues/bsc_dex/venue.rs (читает в quote).
+//! Кто вызывает: core/profit.rs (ставит признак, спрашивает final_external), core/ride_pair.rs (own_scope — пара
+//! котировок из одного источника), venues/bsc_dex/venue.rs (читает is_final и own_only в quote, quote_fills).
 //! От чего зависит: tokio (task_local), settings/read.rs.
 //! Настройки: exec.via_kyber [площадка DEX] — только чтение в final_external.
 
@@ -20,6 +21,8 @@ use crate::settings::store::Store;
 
 tokio::task_local! {
     static FINAL: bool;
+    /// Решение 480 (ревью 4): только своя математика площадки (own_scope).
+    static OWN: bool;
 }
 
 /// Выполняет работу как финальную котировку расчёта. Принимает: работу. Возвращает: её результат. Ошибок нет.
@@ -35,6 +38,20 @@ pub async fn final_if<F: Future>(on: bool, work: F) -> F::Output {
     } else {
         work.await
     }
+}
+
+/// Решение 480 (ревью 4): выполняет работу как котировку СВОЕЙ математикой площадки — адаптер не обращается к
+/// внешнему исполнителю (у DEX — KyberSwap при exec.via_kyber и «лучший из двух»), даже внутри final_scope; признак
+/// финальной котировки (is_final — выбор исполнимого маршрута, ярус счёта) не меняется. Нужно, когда две котировки
+/// должны быть из одного источника (пара котировок marginal, core/ride_pair.rs). Принимает: работу. Возвращает: её
+/// результат. Ошибок нет.
+pub async fn own_scope<F: Future>(work: F) -> F::Output {
+    OWN.scope(true, work).await
+}
+
+/// Решение 480 (ревью 4): идёт ли котировка только своей математикой (own_scope). Не задано — нет. Ошибок нет.
+pub fn own_only() -> bool {
+    OWN.try_with(|o| *o).unwrap_or(false)
 }
 
 /// Идёт ли сейчас финальная котировка расчёта. Не задано — нет. Ошибок нет.

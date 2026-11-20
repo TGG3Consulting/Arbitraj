@@ -22,10 +22,10 @@
 //! Решение 480 (Тигран 21.11): к сдвигу добавляется остаток наших продаж с неизвестным исходом на той же площадке
 //! (ride_settled::worst — как ещё не исполненных, худший случай; и без групп и при выключенной докупке). Ревью 2: сдвиг
 //! снимается один раз на расчёт (ride_shift.rs) и передаётся live_sell; пара котировок marginal — ride_pair.rs (биржа —
-//! один снимок стакана; DEX — две живые котировки, как в решении 394).
+//! один снимок стакана; DEX — две живые котировки своей математикой адаптера, ревью 4).
 //! Кто вызывает: costs_source.rs (Live: idle, live_buy, live_sell, sell_ahead через ride_shift), precheck_dex_sell.rs
 //! (ahead), ride_shift.rs (idle, sell_ahead), partial_back.rs (marginal).
-//! От чего зависит: coin_ride.rs, costs_quote.rs, ride_trail.rs (sites, check), ride_settled.rs (before / after),
+//! От чего зависит: coin_ride.rs, costs_quote.rs, ride_trail.rs (sites, check), ride_settled.rs (in_flight / after),
 //! ride_shift.rs, ride_pair.rs, trade_ops.rs, engine.rs, core/types.
 //! Настройки: нет (включатель — coin_ride.rs).
 

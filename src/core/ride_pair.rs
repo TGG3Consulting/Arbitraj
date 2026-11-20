@@ -7,10 +7,18 @@
 //!   двух» маршрута нет, а DexRoute.block — наименьший блок пулов маршрута, маршруты на «сдвиг + объём» и «сдвиг»
 //!   разные). Факт: состояние пулов двух котировок может различаться на событие между ними (миллисекунды); сдвиг —
 //!   заведомо консервативный (наши продажи впереди считаются ещё не исполненными).
+//!   Ревью 4: обе котировки DEX — из ОДНОГО источника, своей математикой адаптера по реестру пулов
+//!   (gateway::quote_stage::own_scope). Факт кода (venues/bsc_dex/venue.rs quote): источник выбирает адаптер по
+//!   признаку финальной котировки (quote_stage::is_final) и exec.via_kyber — KyberSwap, при NoRoute своя, при «лучшем
+//!   из двух» (exec.dex_best_of) — лучшая из двух, каждый вызов отдельно; задать «только KyberSwap» нельзя (NoRoute —
+//!   своя), «только своя» — признак own_scope (адаптер читает quote_stage::own_only; is_final не меняется — исполнимый
+//!   маршрут графа, решение 300, и ярус счёта как у финальной). Поэтому пара не смешивает исполнителей, а запросов к
+//!   KyberSwap у пары нет (лимит kyber.rps не тратится). Исполнение продажи — по-прежнему выбранным путём (trade);
+//!   цена решения при сдвиге — своя математика, а не цена KyberSwap (решение 95 — только без сдвига).
 //!
 //! Кто вызывает: core/ride_quote.rs (sell_after — расчёт), core/partial_back.rs («продать на A» — путь исполнения).
 //! От чего зависит: dex_account.rs (venue_dir), venue_ticker.rs, trade_ops.rs (kind), exec_book.rs, costs_quote.rs
-//! (classify), gateway (contract, frozen, exit_scope, patience), core/types.
+//! (classify), gateway (contract, frozen, exit_scope, patience, quote_stage), core/types.
 //! Настройки: нет (базовое поведение).
 
 use rust_decimal::Decimal;
@@ -53,8 +61,9 @@ pub async fn live_pair(
         let s = x.quote_snapshot(&on, Side::Sell).await.map_err(cls)?;
         from_snapshot(s.as_ref(), qty, off).await.map_err(cls)?
     } else {
-        let t = x.quote(&on, Side::Sell, qty + off).await.map_err(cls)?;
-        (t, x.quote(&on, Side::Sell, off).await.map_err(cls)?)
+        // Ревью 4: обе — своей математикой адаптера (один источник, без запросов к KyberSwap).
+        let t = own_quote(x.as_ref(), &on, qty + off).await.map_err(cls)?;
+        (t, own_quote(x.as_ref(), &on, off).await.map_err(cls)?)
     };
     let back = |q| super::venue_ticker::quote_back(core, &d.asset, v, q);
     Ok((back(t), back(h)))
@@ -96,14 +105,19 @@ pub async fn exec_pair(
     Ok((back(t), back(h)))
 }
 
-/// Котировка продажи DEX на пути исполнения (как trade_ops sell_quote_of: продажа выхода сделки `deal`, exec_scope).
-/// Ошибки: шлюза.
+/// Котировка продажи DEX своей математикой адаптера (ревью 4: не финальная — один источник у пары). Ошибки: шлюза.
+async fn own_quote(x: &dyn Venue, on: &Asset, n: Decimal) -> GatewayResult<Quote> {
+    crate::gateway::quote_stage::own_scope(x.quote(on, Side::Sell, n)).await
+}
+
+/// Котировка продажи DEX на пути исполнения (как trade_ops sell_quote_of: продажа выхода сделки `deal`, exec_scope),
+/// своей математикой адаптера (ревью 4, own_quote). Ошибки: шлюза.
 async fn exec_quote(
     x: &dyn Venue,
     on: &Asset,
     n: Decimal,
     deal: Option<&str>,
 ) -> GatewayResult<Quote> {
-    let exit = crate::gateway::exit_scope::scope(deal, x.quote(on, Side::Sell, n));
+    let exit = crate::gateway::exit_scope::scope(deal, own_quote(x, on, n));
     crate::gateway::patience::exec_scope(exit).await
 }

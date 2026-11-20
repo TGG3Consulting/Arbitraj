@@ -181,6 +181,7 @@ pub mod off_map_bins_log;
 pub mod order;
 pub mod per_block;
 pub mod per_block_balancer;
+pub mod per_block_crypto;
 pub mod per_block_lb;
 pub mod per_block_par;
 pub mod pool_fail;

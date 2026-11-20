@@ -84,9 +84,8 @@ fn pool_of(f: &Found) -> Option<Address> {
 pub fn filter(pools: &[&Found]) -> Option<Value> {
     let mut to: Vec<B256> = pools
         .iter()
-        .copied()
-        .filter_map(pool_of)
-        .map(Address::into_word)
+        .filter_map(|f: &&Found| pool_of(f))
+        .map(|a: Address| a.into_word())
         .collect();
     to.sort();
     to.dedup();

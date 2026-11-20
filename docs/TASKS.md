@@ -202,6 +202,8 @@
   5) Разбиты: tests/arb_curve_crypto_live.rs (+ arb_curve_crypto_v1_live.rs, curve_crypto_common),
      tools/arbitrum_record/curve_crypto.py (+ curve_crypto_rpc.py, curve_crypto_pools.py); group.rs → group_filter.rs,
      per_block.rs → per_block_crypto.rs. Запись узла — та же команда, что у решения 453 (модули рядом со скриптом).
+  6) Сборка CI коммита 656a0704 (ошибки компиляции): не объявлен модуль pools/per_block_crypto.rs в pools/mod.rs
+     (E0432) — объявлен; transfer_in.rs filter — типы замыканий filter_map / map (E0631, E0599) — исправлены.
   Вопросы 1–2 — ЗАКРЫТЫ решением координатора (дополнение решения 455, продовое, в логике, без выключателя):
   1) ~~Нативный ETH на пул с монетой WETH20~~ — СДЕЛАНО: такие пулы читаются каждым блоком (pools/per_block_crypto.rs
      native / unevented; отметка CryptoData.native_in при чтении — load_crypto.rs, load_crypto_v1.rs, takes_native).

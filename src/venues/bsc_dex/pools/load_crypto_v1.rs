@@ -208,6 +208,7 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData), String> {
         native_in: false,
         i0: 0,
         i1: 0,
+        tweak: None,
     };
     Ok((coins, data))
 }

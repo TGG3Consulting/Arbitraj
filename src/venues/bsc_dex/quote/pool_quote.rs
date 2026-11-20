@@ -493,7 +493,17 @@ pub fn swap(
                 return Err(why("crypto-пул Curve: обмены остановлены (is_killed)"));
             }
             let (i, j) = if zero_for_one { (d.i0, d.i1) } else { (d.i1, d.i0) };
-            let out = crypto_swap::exchange_out(d, i.into(), j.into(), amount).ok_or_else(none)?;
+            let Some(out) = crypto_swap::exchange_out(d, i.into(), j.into(), amount) else {
+                // Решение 472: выход считается, а tweak_price после обмена откатил бы его (math/crypto_tweak2.rs).
+                let mut bare = (**d).clone();
+                bare.tweak = None;
+                if d.tweak.is_some()
+                    && crypto_swap::exchange_out(&bare, i.into(), j.into(), amount).is_some()
+                {
+                    return Err(why("crypto-пул Curve: tweak_price после обмена откатил бы его"));
+                }
+                return Err(none());
+            };
             Ok(Swapped { amount_in: amount, amount_out: out, complete: true })
         }
         // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): порт getSwapOut по прочитанной полосе бинов на

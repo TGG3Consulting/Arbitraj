@@ -15,6 +15,7 @@ from curve_crypto_rpc import addr_word, as_addr, as_int, selector, word
 LADDER_PPM = [1, 100, 1000, 10000, 100000, 500000]
 
 # Вызовы бота: pools/load_crypto.rs calls() (NG) и pools/load_crypto_v1.rs calls() (v1) — тот же порядок и те же данные.
+TWEAK_TAIL = ["totalSupply()", "xcp_profit()", "virtual_price()", "packed_rebalancing_params()"]
 NG_HEAD = ["A()", "gamma()", "D()", "mid_fee()", "out_fee()", "fee_gamma()", "future_A_gamma_time()"]
 
 
@@ -36,6 +37,12 @@ def bot_calls(n, v1):
             out.append(("is_killed()", ""))
     else:
         out.append(("MATH()", ""))
+        # Решение 472: состояние tweak_price NG — pools/load_crypto_tweak.rs calls(), тот же порядок.
+        if n == 2:
+            out.append(("price_oracle()", ""))
+        else:
+            out += [("price_oracle(uint256)", word(k)) for k in range(n - 1)]
+        out += [(sig, "") for sig in TWEAK_TAIL]
     return out
 
 

@@ -8,7 +8,7 @@
 //! Настройки: нет.
 //!
 //! Источник: curvefi/tricrypto-ng ecaa816, contracts/main/CurveCryptoMathOptimized3.vy: `newton_D` L337-L534 (ветка
-//! K0_prev == 0 — L362-L364), `_geometric_mean` L868-L880, `_cbrt` L789-L842 (math/crypto_ops.rs). Вызов в рампе —
+//! K0_prev == 0 — L362-L364; решение 472 — K0_prev ≠ 0, L366-L387), `_geometric_mean` L868-L880, `_cbrt` L789-L842 (math/crypto_ops.rs). Вызов в рампе —
 //! CurveTricryptoOptimizedWETH.vy `_exchange` L901-L913. Математика, развёрнутая в Arbitrum One (0x604388Bb…), — коммит
 //! 2d03e6f, отличие от ecaa816 только в pragma (решение 442).
 
@@ -25,7 +25,7 @@ const A_MULTIPLIER: u64 = 10_000;
 
 /// `_geometric_mean(_x)` (L868-L880): prod = unsafe_div(unsafe_div(x0 * x1, 10**18) * x2, 10**18) (умножения
 /// проверяемые), 0 при prod = 0, иначе _cbrt(prod). Возвращает: среднее или None (переполнение умножения).
-fn geometric_mean(x: [U256; 3]) -> Option<U256> {
+pub fn geometric_mean(x: [U256; 3]) -> Option<U256> {
     let prod = udiv_u(mu(udiv_u(mu(x[0], x[1])?, E18), x[2])?, E18);
     if prod.is_zero() {
         return Some(U256::ZERO);
@@ -37,6 +37,13 @@ fn geometric_mean(x: [U256; 3]) -> Option<U256> {
 /// ценах пула. Возвращает: D или None (откат: assert'ы L354-L355 и L531, переполнение проверяемых операций,
 /// «Did not converge»).
 pub fn newton_d(ann: U256, gamma: U256, xu: [U256; 3]) -> Option<U256> {
+    newton_d_k0(ann, gamma, xu, U256::ZERO)
+}
+
+/// Решение 472: `newton_D(ANN, gamma, x_unsorted, K0_prev)` — так зовёт tweak_price после обмена. K0_prev ≠ 0:
+/// D = _cbrt(unsafe_div(unsafe_div(x0·x1, 10^k)·x2, K0_prev)·27·10^m) по S (L366-L387; умножения проверяемые).
+/// Принимает: как newton_d и K0_prev. Возвращает: D или None (откат).
+pub fn newton_d_k0(ann: U256, gamma: U256, xu: [U256; 3], k0_prev: U256) -> Option<U256> {
     let x = sort(xu);
     // assert x[0] < max_value(uint256) / 10**18 * N_COINS**N_COINS; assert x[0] > 0 (L354-L355).
     let cap = (U256::MAX / E18).wrapping_mul(U256::from(N * N * N));
@@ -45,7 +52,20 @@ pub fn newton_d(ann: U256, gamma: U256, xu: [U256; 3]) -> Option<U256> {
     }
     let n = U256::from(N);
     let s = x[0].wrapping_add(x[1]).wrapping_add(x[2]);
-    let mut d = n.wrapping_mul(geometric_mean(x)?);
+    let mut d = if k0_prev.is_zero() {
+        n.wrapping_mul(geometric_mean(x)?)
+    } else {
+        // S > 10**36: делитель 10**36, хвост 10**12; S > 10**24: 10**24 и 10**6; иначе 10**18 и 1 (`* 27 * хвост`).
+        let (div, tail) = if s > ten::pow(36) {
+            (ten::pow(36), ten::pow(12))
+        } else if s > ten::pow(24) {
+            (ten::pow(24), ten::pow(6))
+        } else {
+            (E18, U256::from(1u8))
+        };
+        let v = udiv_u(mu(udiv_u(mu(x[0], x[1])?, div), x[2])?, k0_prev);
+        cbrt(mu(mu(v, U256::from(27u8))?, tail)?)
+    };
     let one = U256::from(1u8);
     for _ in 0..255 {
         let d_prev = d;

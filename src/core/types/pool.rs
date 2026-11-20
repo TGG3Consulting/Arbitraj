@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use super::market::VenueId;
 pub use super::pool_amp::AmpV2Data;
-pub use super::pool_crypto::{CryptoData, CryptoMath};
+pub use super::pool_crypto::{CryptoData, CryptoMath, CryptoTweak};
 pub use super::pool_ekubo::{EkuboData, EkuboMev, EkuboTick, EkuboTwamm};
 pub use super::pool_fictive::FictiveData;
 pub use super::pool_lb::LbBinData;
@@ -313,7 +313,8 @@ pub struct LadderPoint {
 }
 
 /// Состояние пула StableSwap (решение 122 F) — боксируется в `PoolState::StableSwap`. Математика — в адаптере.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Debug — pool_stable_debug.rs (решение 472: поле pair_d выводится только при true — снимки прежних видов прежние).
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct StableData {
     /// Балансы монет пула по порядку монет пула (`balances(k)`), в единицах монеты.
     pub balances: Vec<U256>,

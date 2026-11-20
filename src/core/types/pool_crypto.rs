@@ -70,4 +70,27 @@ pub struct CryptoData {
     pub i0: u8,
     /// Индекс монеты token1 в пуле.
     pub i1: u8,
+    /// Решение 472: состояние для проверки `tweak_price` после обмена (откат пула после расчёта выхода). None — не
+    /// прочитано (версия без модели — расчёт как раньше). `#[serde(default)]` — старые записи эпизодов.
+    #[serde(default)]
+    pub tweak: Option<CryptoTweak>,
+}
+
+/// Решение 472: то, что читает `tweak_price` crypto-пула после обмена (Twocrypto-NG `tweak_price`) — с контракта пула
+/// на блоке. Проверяет адаптер (math/crypto_tweak2.rs).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CryptoTweak {
+    /// Цена оракула монет 1..N−1 к монете 0 в 18 знаках (`price_oracle()` на блоке чтения — то же скользящее среднее,
+    /// что `tweak_price` считает на блоке обмена).
+    pub price_oracle: Vec<U256>,
+    /// Число LP-токенов (`totalSupply()`).
+    pub total_supply: U256,
+    /// Накопленная доходность (`xcp_profit()`).
+    pub xcp_profit: U256,
+    /// Виртуальная цена LP (`virtual_price()`).
+    pub virtual_price: U256,
+    /// allowed_extra_profit (`packed_rebalancing_params` >> 128).
+    pub allowed_extra_profit: U256,
+    /// adjustment_step (`packed_rebalancing_params` >> 64, младшие 64 бита).
+    pub adjustment_step: U256,
 }

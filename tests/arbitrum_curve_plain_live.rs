@@ -162,6 +162,7 @@ fn exchange_selector_in_code() {
     let code = read("code.json");
     for (a, c) in code.as_object().unwrap() {
         assert!(c["len"].as_i64().unwrap() > 0, "{a}: кода нет");
-        assert!(c["has_exchange4"].as_bool().unwrap(), "{a}: нет exchange(int128,int128,uint256,uint256)");
+        let has = c["has_exchange4"].as_bool().unwrap();
+        assert!(has, "{a}: нет exchange(int128,int128,uint256,uint256)");
     }
 }

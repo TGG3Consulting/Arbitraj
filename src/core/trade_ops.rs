@@ -431,6 +431,21 @@ async fn sell_quote_of(
             v.0, q.fillable_qty
         )));
     }
+    let net = net_of(core, v, a, &q, qty).await?;
+    Ok((net, q, book))
+}
+
+/// Что делает: сколько получим чистыми (USDT) по готовой котировке продажи: количество × средняя минус затраты вне
+/// цены по живым курсам (как у sell_quote; решение 480 — и для котировки «после продаж впереди», ride_quote::marginal).
+/// Принимает: ядро, площадку, монету, котировку, количество. Возвращает: сумму. Ошибки: не задана venue.quote_asset
+/// (NotConfigured), нет курса затрат.
+pub async fn net_of(
+    core: &Core,
+    v: &VenueId,
+    a: &Asset,
+    q: &Quote,
+    qty: Decimal,
+) -> Result<Decimal, OpError> {
     let quote = core
         .inner
         .deps
@@ -462,5 +477,5 @@ async fn sell_quote_of(
     for c in q.costs.iter().filter(|c| !c.in_price) {
         net -= convert::to_usdt(c, &rates)?;
     }
-    Ok((net, q, book))
+    Ok(net)
 }

@@ -225,6 +225,7 @@ pub mod outcome_open;
 pub mod outcome_resolve;
 pub mod pairs_fresh;
 pub mod partial;
+pub mod partial_back;
 pub mod patience_scope;
 pub mod persist;
 pub mod plan_costs;

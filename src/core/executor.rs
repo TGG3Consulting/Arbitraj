@@ -306,9 +306,10 @@ async fn run(
     ));
     // Решение 464: время в пути плана (T плана) и его источник (настройки, статистика монеты или пары площадок).
     deal.note(super::transit_source::note(core, &d, plan.transit_s));
-    // Решение 480: продажа плана посчитана после остатка наших продаж с неизвестным исходом на B (худший случай).
-    if let Some(line) = super::ride_settled::note(core, &d) {
-        deal.note(line);
+    // Решение 480: продажа плана посчитана после остатка наших продаж с неизвестным исходом на B (худший случай) —
+    // строка из того же чтения, что котировка плана (Calc.worst_b), набор при открытии не пересобирается.
+    if let Some(line) = &plan.worst_b {
+        deal.note(line.clone());
     }
     if let Some(a) = &acc {
         let name = deps.settings.accounts().wallet(&a.0).map(|w| w.name);

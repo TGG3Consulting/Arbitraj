@@ -90,6 +90,7 @@ pub fn calc(rec: &Rec, qty: Decimal) -> Calc {
         buy_worst: deepest_ask(rec, qty),
         buy_band: false,
         spend_fee: Decimal::ZERO,
+        worst_b: None,
         size: None,
     }
 }

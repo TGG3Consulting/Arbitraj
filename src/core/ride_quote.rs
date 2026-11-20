@@ -72,19 +72,24 @@ pub fn idle(core: &Core, d: &Direction) -> bool {
 
 /// Что делает: живая котировка стороны при докупке (вызывает costs_source.rs Live, в куче): продажа — после монет
 /// идущих сделок группы и по данным новее продаж сделок групп (ride_trail.rs); покупка — по данным новее их покупки.
-/// Принимает: ядро, направление, сторону (true — продажа на B), количество. Ошибки: как у costs_quote::fetch; Stop —
-/// данные не доказуемо свежее.
-pub async fn live(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
+/// Принимает: ядро, направление, сторону (true — продажа на B), количество. Возвращает: котировку и строку худшего
+/// случая (решение 480; None — не было). Ошибки: как у costs_quote::fetch; Stop — данные не доказуемо свежее.
+pub async fn live(
+    core: &Core,
+    d: &Direction,
+    sell: bool,
+    qty: Decimal,
+) -> Result<(Quote, Option<String>), Fail> {
     // Решение 464 (t238): граница «наша продажа уже в пуле / ещё нет» (ride_settled.rs) — до и после котировки.
     let seq = if sell {
         Some(super::ride_settled::before(core, d).map_err(Fail::Stop)?)
     } else {
         None
     };
-    let off = if sell {
-        ahead(core, d).map_err(Fail::Stop)?
+    let (off, worst) = if sell {
+        ahead_noted(core, d).map_err(Fail::Stop)?
     } else {
-        Decimal::ZERO
+        (Decimal::ZERO, None)
     };
     let q = if off > Decimal::ZERO {
         sell_after(core, d, qty, off).await?
@@ -98,7 +103,7 @@ pub async fn live(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Resul
     } else {
         buy_fresh(core, d, &q).map_err(Fail::Stop)?;
     }
-    Ok(q)
+    Ok((q, worst))
 }
 
 /// Что делает: решение 480 — весь сдвиг продажи направления: монеты идущих сделок групп (sell_ahead; докупка
@@ -106,13 +111,20 @@ pub async fn live(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Resul
 /// (ride_settled::worst, худший случай). Принимает: ядро, направление. Возвращает: количество (0 — нет).
 /// Ошибки: текст — как у ride_settled::worst.
 pub fn ahead(core: &Core, d: &Direction) -> Result<Decimal, String> {
-    let (unsure, _) = super::ride_settled::worst(core, d)?;
+    ahead_noted(core, d).map(|x| x.0)
+}
+
+/// Что делает: как ahead, и строка хронологии о худшем случае из того же чтения набора (ride_settled::text) — её несёт
+/// расчёт (Calc.worst_b) в план сделки и «довезти». Принимает: ядро, направление. Возвращает: (сдвиг, строка; None —
+/// продаж с неизвестным исходом нет). Ошибки: как у ahead.
+pub fn ahead_noted(core: &Core, d: &Direction) -> Result<(Decimal, Option<String>), String> {
+    let (unsure, ids) = super::ride_settled::worst(core, d)?;
     let rides = if idle(core, d) {
         Decimal::ZERO
     } else {
         sell_ahead(core, d)
     };
-    Ok(rides + unsure)
+    Ok((rides + unsure, super::ride_settled::text(d, unsure, &ids)))
 }
 
 /// Что делает: сколько монет идущих сделок группы будет продано на площадке продажи направления (остаток Deal.qty —

@@ -377,7 +377,10 @@ async fn sale_order_in_flight_waits_unknown_counted_as_worst() {
     assert!(ride_settled::before(&core, &ku).is_ok());
     assert_eq!(ride_quote::sell_ahead(&core, &ku), Decimal::ZERO);
     assert_eq!(ride_quote::ahead(&core, &ku).unwrap(), gate.qty);
-    let line = ride_settled::note(&core, &ku).unwrap();
+    // Строка хронологии — из того же чтения набора, что сдвиг (ahead_noted → Calc.worst_b).
+    let (off, line) = ride_quote::ahead_noted(&core, &ku).unwrap();
+    assert_eq!(off, gate.qty);
+    let line = line.unwrap();
     let want = format!(
         "исход продажи сделки {GATE} неизвестен — посчитано как ещё не исполненная (худший случай)"
     );
@@ -385,8 +388,8 @@ async fn sale_order_in_flight_waits_unknown_counted_as_worst() {
     // Разобрана (шаг «Беру на себя») — худшего случая нет.
     gate.step = Step::TakenOver;
     ledger::save(&core, &gate).await;
-    assert!(ride_settled::note(&core, &ku).is_none());
-    assert_eq!(ride_quote::ahead(&core, &ku).unwrap(), Decimal::ZERO);
+    let (off, line) = ride_quote::ahead_noted(&core, &ku).unwrap();
+    assert_eq!((off, line), (Decimal::ZERO, None));
 }
 
 /// Настройка площадки (тест падает при ошибке).
@@ -495,7 +498,7 @@ async fn unsure_survives_restart_counted_as_worst_without_groups() {
     let ku = dir(&r, "kucoin", "bsc_dex");
     // Решение 480: идущих сделок и групп нет — остаток Gate всё равно впереди продажи новой сделки (худший случай).
     assert_eq!(ride_quote::ahead(&core, &ku).unwrap(), gate.qty);
-    let why = ride_settled::note(&core, &ku).unwrap();
+    let why = ride_quote::ahead_noted(&core, &ku).unwrap().1.unwrap();
     assert!(why.contains(GATE), "{why}");
     // Котировка продажи новой сделки не отказана из-за Gate: идёт к шлюзу (площадок в реестре нет — его отказ).
     let live = Live {

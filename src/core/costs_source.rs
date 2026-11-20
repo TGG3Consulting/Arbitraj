@@ -43,6 +43,17 @@ pub trait Source: Sync {
         qty: Decimal,
     ) -> impl Future<Output = Result<Quote, Fail>> + Send;
 
+    /// Что делает: котировка продажи на B и строка хронологии о худшем случае, по которому она посчитана (решение 480,
+    /// ревью: строку несёт расчёт — Calc.worst_b, набор не пересобирается). По умолчанию — quote без строки.
+    /// Принимает: направление, количество. Возвращает: (Quote, строка; None — не было). Ошибки: как у quote.
+    fn quote_sell(
+        &self,
+        d: &Direction,
+        qty: Decimal,
+    ) -> impl Future<Output = Result<(Quote, Option<String>), Fail>> + Send {
+        async move { self.quote(d, true, qty).await.map(|q| (q, None)) }
+    }
+
     /// Что делает: исполнимое количество стороны на объём (решение 250: проверка доли глубины h — costs.rs; цена не
     /// нужна). По умолчанию — fillable_qty котировки quote. Принимает: направление, сторону, количество.
     /// Возвращает: исполнимое количество. Ошибки: как у quote.
@@ -140,7 +151,23 @@ impl Source for Live<'_> {
             return super::costs_quote::fetch(self.core, d, sell, qty, self.src).await;
         }
         // Решение 394: ветка докупки — в куче (размер будущего котировки как раньше; путь сделки чувствителен к стеку).
-        Box::pin(super::ride_quote::live(self.core, d, sell, qty)).await
+        Box::pin(super::ride_quote::live(self.core, d, sell, qty))
+            .await
+            .map(|x| x.0)
+    }
+
+    /// Решение 480 (ревью): как quote продажи, и строка худшего случая из того же чтения набора (ride_quote::live).
+    /// Ошибки: как у quote.
+    async fn quote_sell(
+        &self,
+        d: &Direction,
+        qty: Decimal,
+    ) -> Result<(Quote, Option<String>), Fail> {
+        if self.plain(d, true) {
+            let q = super::costs_quote::fetch(self.core, d, true, qty, self.src).await?;
+            return Ok((q, None));
+        }
+        Box::pin(super::ride_quote::live(self.core, d, true, qty)).await
     }
 
     /// Решение 250: исполнимое количество — живое через контракт quote_fills (costs_quote.rs fillable); со снимком

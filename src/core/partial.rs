@@ -9,10 +9,11 @@
 //! полёте — ждём его итога, это время ордера) — только при этой причине отказа (sale_marks::MARK); прочие отказы —
 //! прежний выбор. Решение 480 (Тигран 21.11, меняет ожидание разбора 464): исход продажи другой сделки Z на B
 //! неизвестен — «довезти» НЕ ждёт: расчёт продажи на B считает остаток Z как ещё не исполненную (худший случай,
-//! ride_quote::ahead), и выбор «довезти» / «продать на A» делается сразу по нему; строка в хронологии и уведомление
+//! ride_quote::ahead), и выбор «довезти» / «продать на A» делается сразу по нему; «продать на A» — с тем же худшим
+//! случаем для наших продаж на A (partial_back.rs); строки из расчёта — в хронологию, уведомление
 //! deal.partial_waits_review (Z надо разобрать, сделка не ждёт).
 //! Кто вызывает: core/executor.rs.
-//! От чего зависит: dirctx.rs, costs.rs, trade_ops.rs, deal.rs, sale_marks.rs, ride_settled.rs (note).
+//! От чего зависит: dirctx.rs, costs.rs, partial_back.rs («продать на A»), deal.rs, sale_marks.rs.
 //! Настройки: через costs.rs и dirctx.rs.
 //!
 //! Осторожность расчёта: затраты покупки в монете из котировки уже вычтены из факта (deal.qty),
@@ -50,71 +51,86 @@ fn deliver_result(c: &Calc, deal: &Deal) -> Decimal {
 /// Итог «довезти» (расчёт на фактический объём). Решение 464 (t238, ревью): отказ ИЗ-ЗА НАШЕЙ продажи этой монеты на
 /// площадке продажи (по причине — метка sale_marks::MARK в тексте отказа ride_settled.rs) — не повод продавать на A:
 /// ордер в полёте или кончился за время расчёта — ждём его конца (время ордера) и считаем снова. Решение 480: продажа
-/// другой сделки с неизвестным исходом на B ожидания не даёт — расчёт уже считает её худшим случаем; строка об этом —
-/// в хронологию, человеку — уведомление WAITS. Другой отказ — прежний выбор. Принимает: ядро, сделку. Ошибки: текст.
-async fn deliver_value(core: &Core, deal: &mut Deal) -> Result<Decimal, String> {
-    let (v, a) = (deal.direction.sell_on.clone(), deal.direction.asset.clone());
-    let r = loop {
+/// другой сделки с неизвестным исходом на B ожидания не даёт — расчёт уже считает её худшим случаем. Другой отказ —
+/// прежний выбор. Принимает: ядро, сделку. Возвращает: (итог, строка худшего случая из расчёта — Calc.worst_b).
+/// Ошибки: текст.
+async fn deliver_value(core: &Core, deal: &Deal) -> Valued {
+    let (v, a) = (&deal.direction.sell_on, &deal.direction.asset);
+    loop {
         // Будильник — до расчёта: конец ордера во время расчёта не теряется.
         let wake = core.inner.sales.done.notified();
         let r = match super::dirctx::DirCtx::build_held(core, &deal.direction) {
             Ok(cx) => super::costs::evaluate(core, &cx, deal.qty)
                 .await
-                .map(|c| deliver_result(&c, deal))
+                .map(|c| (deliver_result(&c, deal), c.worst_b))
                 .map_err(|e| e.to_string()),
             Err(e) => Err(e),
         };
         if !matches!(&r, Err(e) if e.contains(super::sale_marks::MARK)) {
-            break r;
+            return r;
         }
         // Наш ордер в полёте — ждём его конца; кончился за время расчёта — сразу считаем снова (по пулу после него).
-        if super::sale_marks::busy(core, &v, &a) {
+        if super::sale_marks::busy(core, v, a) {
             wake.await;
         }
-    };
-    // Решение 480: худший случай по продажам с неизвестным исходом на B — в хронологию и человеку (сделка не ждёт).
-    if let Some(line) = super::ride_settled::note(core, &deal.direction) {
-        deal.note(format!("Частичная покупка, «довезти»: {line}"));
-        let ids = super::sale_marks::unsure_ids(core, &v, &a).join(", ");
-        let (at, text) = (deal.direction.buy_on.0.clone(), waits_text(deal, &ids));
-        core.inner.deps.notify(WAITS, Some(&at), &text).await;
     }
-    r
 }
 
-/// Событие уведомления (имя прежнее): «довезти» частичной покупки посчитано с худшим случаем по сделке с неизвестным
-/// исходом продажи на B (решение 480: сделка не ждёт).
+/// Итог пути с строкой худшего случая из его расчёта (решение 480) или причина отказа.
+type Valued = Result<(Decimal, Option<String>), String>;
+
+/// Строка худшего случая пути (None — не было или путь не посчитан). Ошибок нет.
+fn line_of(r: &Valued) -> Option<String> {
+    r.as_ref().ok().and_then(|x| x.1.clone())
+}
+
+/// Решение 480: строки худшего случая обоих путей (из их расчётов, набор не пересобирается) — в хронологию; человеку —
+/// уведомление WAITS с теми же строками (сделка не ждёт). Принимает: ядро, сделку, строки «довезти» и «продать на A».
+/// Ошибок нет.
+async fn worst_notes(core: &Core, deal: &mut Deal, notes: [Option<String>; 2]) {
+    let mut lines = Vec::new();
+    for (path, line) in ["«довезти»", "«продать на A»"].iter().zip(notes) {
+        if let Some(line) = line {
+            deal.note(format!("Частичная покупка, {path}: {line}"));
+            lines.push(line);
+        }
+    }
+    if lines.is_empty() {
+        return;
+    }
+    let (at, text) = (deal.direction.buy_on.0.clone(), waits_text(deal, &lines));
+    core.inner.deps.notify(WAITS, Some(&at), &text).await;
+}
+
+/// Событие уведомления (имя прежнее): пути частичной покупки посчитаны с худшим случаем по сделке с неизвестным исходом
+/// продажи на B или A (решение 480: сделка не ждёт).
 pub const WAITS: &str = "deal.partial_waits_review";
 
-/// Текст уведомления WAITS для человека. Принимает: сделку, ID сделок с неизвестным исходом. Ошибок нет.
-pub fn waits_text(deal: &Deal, z: &str) -> String {
+/// Текст уведомления WAITS для человека. Принимает: сделку, строки худшего случая из расчётов. Ошибок нет.
+pub fn waits_text(deal: &Deal, lines: &[String]) -> String {
     let (id, q, d) = (&deal.id, deal.qty, &deal.direction);
-    let (t, a, b) = (&d.asset.ticker, &d.buy_on.0, &d.sell_on.0);
+    let (t, a) = (&d.asset.ticker, &d.buy_on.0);
     format!(
-        "Сделка {id} (частичная покупка: {q} {t} на {a}) не ждёт: «довезти» и «продать на {a}» посчитаны сразу, \
-         продажа сделки {z} на {b} — как ещё не исполненная (её исход неизвестен, худший случай). Разберите {z} — \
-         «Ручное управление»: «Продать сейчас», «Продано вручную» или «Беру на себя»"
+        "Сделка {id} (частичная покупка: {q} {t} на {a}) не ждёт: «довезти» и «продать на {a}» посчитаны сразу. {}. \
+         Разберите сделки с неизвестным исходом продажи — «Ручное управление»: «Продать сейчас», «Продано вручную» \
+         или «Беру на себя»",
+        lines.join("; ")
     )
 }
 
 /// Выбор пути. Принимает: ядро, сделку после частичной покупки. Возвращает: Choice. Ошибок нет.
 pub async fn choose(core: &Core, deal: &mut Deal) -> Choice {
     let deliver = Box::pin(deliver_value(core, deal)).await;
-    let deal = &*deal;
-    // Решение 220: котировка продажи на A — кошельком сделки (им пойдёт продажа).
+    // Решение 220: котировка продажи на A — кошельком сделки (им пойдёт продажа). Решение 480 (ревью): с тем же худшим
+    // случаем, что у B — наши продажи на A с неизвестным исходом впереди (partial_back.rs).
     let back = match super::dex_account::of(core, deal) {
-        Ok(acc) => super::trade_ops::sell_value(
-            core,
-            acc.as_ref(),
-            &deal.direction.buy_on,
-            &deal.direction.asset,
-            deal.qty,
-        )
-        .await
-        .map(|(v, _)| deal.result_if(v)),
+        Ok(acc) => Box::pin(super::partial_back::value(core, acc.as_ref(), deal))
+            .await
+            .map(|(v, n)| (deal.result_if(v), n)),
         Err(e) => Err(e),
     };
-    match (deliver, back) {
+    worst_notes(core, deal, [line_of(&deliver), line_of(&back)]).await;
+    match (deliver.map(|x| x.0), back.map(|x| x.0)) {
         (Ok(d), Ok(b)) if d >= b => Choice::Deliver(d),
         (Ok(_), Ok(b)) => Choice::SellBack(b),
         (Ok(d), Err(_)) => Choice::Deliver(d),

@@ -151,9 +151,9 @@ pub async fn evaluate_capped<S: Source>(
             Fail::TooLarge(t) => Fail::TooLarge(format!("доля глубины B (h = {}): {t}", cx.h)),
             e => e,
         })?;
-    let qb = stage(name_b, src.quote(d, true, sell_qty))
-        .await
-        .and_then(|q| enough(&d.sell_on.0, q, sell_qty))?;
+    // Решение 480 (ревью): строка худшего случая — из того же чтения, что котировка (в Calc.worst_b).
+    let (qb, worst_note) = stage(name_b, src.quote_sell(d, sell_qty)).await?;
+    let qb = enough(&d.sell_on.0, qb, sell_qty)?;
     let worst_b = src.worst(d, true, sell_qty, qb.avg_price)?;
     order_limits(&d.sell_on.0, cx.pair_b.as_ref(), sell_qty, worst_b)?;
     super::price_band::check(&d.sell_on.0, cx.band_b.as_deref(), Side::Sell, worst_b)?;
@@ -273,6 +273,7 @@ pub async fn evaluate_capped<S: Source>(
         buy_worst: worst_a,
         buy_band: cx.band_a.is_some(),
         spend_fee,
+        worst_b: worst_note,
         size: None,
     })
 }

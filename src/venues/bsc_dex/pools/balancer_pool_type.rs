@@ -18,6 +18,9 @@
 //! 20230206-aave-rebalanced-linear-pool-v4, 20230213-yearn-linear-pool, 20230409-erc4626-linear-pool-v4,
 //! 20230409-yearn-linear-pool-v2, 20230410-aave-linear-pool-v5 (виртуальный выпуск = totalSupply − баланс BPT).
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use crate::gateway::errors::ErrorCode;
 
 use super::super::ctx::Ctx;
@@ -98,6 +101,27 @@ pub fn of(ctx: &Ctx, f: &Family) -> Result<Option<PoolType>, String> {
             format!("dex.balancer_pool [{}] = «{}»: известны {}", f.id, v.trim(), known.join(", "))
         }),
     }
+}
+
+/// Вид пулов ключа DEX, прочитанный при последнем чтении неизменяемого пула (load_balancer_fixed.rs fixed) — по id
+/// вида DEX (ключ области «DEX» с сетью). Нужен подписке на события (events_balancer.rs topics): у неё нет окружения
+/// с настройками. Ключа без dex.balancer_pool здесь нет (BSC — прежние четыре события).
+static SEEN: Mutex<Option<HashMap<&'static str, PoolType>>> = Mutex::new(None);
+
+/// Запомнить вид ключа (None — снять). Принимает: вид DEX, вид пулов. Ошибок нет.
+pub fn remember(f: &Family, ty: Option<PoolType>) {
+    let mut g = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    let m = g.get_or_insert_with(HashMap::new);
+    match ty {
+        Some(t) => m.insert(f.id, t),
+        None => m.remove(f.id),
+    };
+}
+
+/// Вид пулов ключа, если он уже читался с dex.balancer_pool. Принимает: вид DEX. Ошибок нет.
+pub fn seen(f: &Family) -> Option<PoolType> {
+    let g = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    g.as_ref().and_then(|m| m.get(f.id).copied())
 }
 
 #[cfg(test)]

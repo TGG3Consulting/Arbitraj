@@ -57,7 +57,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::IziSwap | Proto::BiswapV3 => events_izi::topics(f.proto),
         Proto::KyberDmm => events_dmm::topics(),
         Proto::Smardex => events_smardex::topics(),
-        Proto::BalancerV2 => events_balancer::topics(),
+        Proto::BalancerV2 => events_balancer::topics(f),
         Proto::BalancerV3 => events_balancer_v3::topics(),
         Proto::LbV21 => events_lb::topics(),
         Proto::FluidT1 => events_fluid::topics(),

@@ -71,6 +71,8 @@ pub async fn fixed(
     tag: &str,
 ) -> GatewayResult<Fixed> {
     let ty = balancer_pool_type::of(ctx, f).map_err(|w| ctx.not_set("dex.balancer_pool", w))?;
+    // Решение 473: вид ключа — подписке на события (events_balancer.rs: доп. события только у ключа с видом).
+    balancer_pool_type::remember(f, ty);
     if let Some(mut x) = FIXED
         .lock()
         .unwrap_or_else(|e| e.into_inner())

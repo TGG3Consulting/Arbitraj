@@ -4,8 +4,9 @@
 //! Балансы пула меняет хранилище (Vault) своими событиями от СВОЕГО адреса — подписка по адресу пула их не видит, поэтому
 //! вид ещё перечитывается каждым блоком (pools/per_block.rs). Событий ликвидности у самого пула нет (вход и выход
 //! ликвидности — PoolBalanceChanged хранилища).
-//! Решение 473: и события пулов других фабрик (кеш курсов, поставщики, веса по времени, swapEnabled, комиссия по
-//! времени, пределы цены BPT, токены managed, цели linear — abi_balancer_more.rs topics) → перечитать пул.
+//! Решение 473: у ключа с dex.balancer_pool (вид запомнен при чтении пула — balancer_pool_type.rs seen) — ещё события
+//! своего вида (кеш курсов, поставщики, веса по времени, swapEnabled, комиссия по времени, пределы цены BPT, токены
+//! managed, цели linear — abi_balancer_more.rs topics) → перечитать пул. Ключ без вида (BSC) — прежние четыре.
 //! Кто вызывает: pools/events.rs.
 //! От чего зависит: abi_balancer.rs (topic0 и ссылки на исходник), events.rs, registry.rs.
 //! Настройки: нет.
@@ -15,13 +16,17 @@ use alloy_primitives::B256;
 
 use super::abi_balancer;
 use super::events::Applied;
+use super::families::Family;
 use super::registry::Entry;
 
 /// topic0 событий пула (abi_balancer.rs; BasePool.sol L88, ITemporarilyPausable.sol L24, StablePool.sol L47-L48;
-/// решение 473 — abi_balancer_more.rs).
-/// Ошибок нет.
-pub fn topics() -> Vec<B256> {
-    abi_balancer::topics()
+/// решение 473 — события вида ключа, abi_balancer_more.rs). Принимает: вид DEX. Ошибок нет.
+pub fn topics(f: &Family) -> Vec<B256> {
+    let mut v = abi_balancer::topics();
+    if let Some(t) = super::balancer_pool_type::seen(f) {
+        v.extend(super::abi_balancer_more::topics(t));
+    }
+    v
 }
 
 /// topic0 событий изменения ликвидности самого пула — нет (ликвидность меняет хранилище, IVault.sol L441 PoolBalanceChanged,
@@ -33,7 +38,7 @@ pub fn liquidity_topics() -> Vec<B256> {
 /// Применяет событие: известное событие пула → Refresh, иначе Ignored. Ошибок нет.
 pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     match log.topic0() {
-        Some(t) if topics().contains(t) => Applied::Refresh(format!(
+        Some(t) if topics(e.family).contains(t) => Applied::Refresh(format!(
             "{}: событие пула Balancer V2 — перечитать состояние",
             e.family.title
         )),

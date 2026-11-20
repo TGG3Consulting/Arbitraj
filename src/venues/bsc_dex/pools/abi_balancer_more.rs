@@ -3,8 +3,8 @@
 //! getBptIndex, getRateProviders, getTokenRateCache), meta-stable (getRateProviders, getPriceRateCache), stable phantom
 //! (getScalingFactor, getBptIndex), LBP / investment / managed (getSwapEnabled, getCollectedManagementFees,
 //! getActualSupply, getCircuitBreakerState), linear (getMainIndex, getWrappedIndex, getBptIndex, getWrappedTokenRate,
-//! getTargets, totalSupply), поставщик курса (getRate) и topic0 их событий, после которых пул перечитывается.
-//! Кто вызывает: pools/load_balancer_more*.rs, abi_balancer.rs (topics).
+//! getTargets, totalSupply), поставщик курса (getRate) и topic0 их событий по виду, после которых пул перечитывается.
+//! Кто вызывает: pools/load_balancer_more*.rs, events_balancer.rs (topics по виду).
 //! От чего зависит: alloy::sol!.
 //! Настройки: нет.
 //!
@@ -25,6 +25,8 @@
 
 use alloy::sol_types::SolEvent;
 use alloy_primitives::B256;
+
+use super::balancer_pool_type::PoolType;
 
 alloy::sol! {
     interface IComposable {
@@ -82,23 +84,36 @@ alloy::sol! {
     }
 }
 
-/// topic0 событий пулов решения 473, после которых пул перечитывается (балансы и время меняют курсы и веса и без
-/// событий — пул и так перечитывается каждым блоком, pools/per_block_balancer.rs). Ошибок нет.
-pub fn topics() -> Vec<B256> {
-    vec![
-        IComposable::TokenRateCacheUpdated::SIGNATURE_HASH,
-        IComposable::TokenRateProviderSet::SIGNATURE_HASH,
-        IMetaStable::PriceRateCacheUpdated::SIGNATURE_HASH,
-        IMetaStable::PriceRateProviderSet::SIGNATURE_HASH,
-        IPhantom::TokenRateCacheUpdated::SIGNATURE_HASH,
-        IPhantom::TokenRateProviderSet::SIGNATURE_HASH,
-        ISmartWeighted::GradualWeightUpdateScheduled::SIGNATURE_HASH,
-        ISmartWeighted::SwapEnabledSet::SIGNATURE_HASH,
-        ISmartWeighted::GradualSwapFeeUpdateScheduled::SIGNATURE_HASH,
-        ISmartWeighted::CircuitBreakerSet::SIGNATURE_HASH,
-        ISmartWeighted::ManagementAumFeeCollected::SIGNATURE_HASH,
-        ISmartWeighted::TokenAdded::SIGNATURE_HASH,
-        ISmartWeighted::TokenRemoved::SIGNATURE_HASH,
-        ILinear::TargetsSet::SIGNATURE_HASH,
-    ]
+/// topic0 событий пулов вида (решение 473), после которых пул перечитывается — сверх базовых четырёх
+/// (abi_balancer.rs topics: комиссия, пауза, рампа A). Пул и так перечитывается каждым блоком
+/// (pools/per_block_balancer.rs): события — только ускорение. Принимает: вид. Ошибок нет.
+pub fn topics(ty: PoolType) -> Vec<B256> {
+    match ty {
+        PoolType::Composable => vec![
+            IComposable::TokenRateCacheUpdated::SIGNATURE_HASH,
+            IComposable::TokenRateProviderSet::SIGNATURE_HASH,
+        ],
+        PoolType::Phantom => vec![
+            IPhantom::TokenRateCacheUpdated::SIGNATURE_HASH,
+            IPhantom::TokenRateProviderSet::SIGNATURE_HASH,
+        ],
+        PoolType::MetaStable => vec![
+            IMetaStable::PriceRateCacheUpdated::SIGNATURE_HASH,
+            IMetaStable::PriceRateProviderSet::SIGNATURE_HASH,
+        ],
+        PoolType::Lbp | PoolType::Investment => vec![
+            ISmartWeighted::GradualWeightUpdateScheduled::SIGNATURE_HASH,
+            ISmartWeighted::SwapEnabledSet::SIGNATURE_HASH,
+        ],
+        PoolType::Managed => vec![
+            ISmartWeighted::GradualWeightUpdateScheduled::SIGNATURE_HASH,
+            ISmartWeighted::SwapEnabledSet::SIGNATURE_HASH,
+            ISmartWeighted::GradualSwapFeeUpdateScheduled::SIGNATURE_HASH,
+            ISmartWeighted::CircuitBreakerSet::SIGNATURE_HASH,
+            ISmartWeighted::ManagementAumFeeCollected::SIGNATURE_HASH,
+            ISmartWeighted::TokenAdded::SIGNATURE_HASH,
+            ISmartWeighted::TokenRemoved::SIGNATURE_HASH,
+        ],
+        PoolType::LinearV1 | PoolType::Linear => vec![ILinear::TargetsSet::SIGNATURE_HASH],
+    }
 }

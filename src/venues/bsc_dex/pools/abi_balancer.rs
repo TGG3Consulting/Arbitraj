@@ -71,16 +71,13 @@ alloy::sol! {
 
 /// topic0 событий самого пула, после которых он перечитывается: комиссия, пауза, рампа A. Балансы меняет хранилище своими
 /// событиями (Swap, PoolBalanceChanged, PoolBalanceManaged — лог от адреса Vault, не пула), поэтому вид перечитывается и
-/// на каждом блоке (pools/per_block.rs). Решение 473: и события пулов других фабрик (abi_balancer_more.rs).
-/// Ошибок нет.
+/// на каждом блоке (pools/per_block.rs). Решение 473: события пулов других фабрик — только у DEX с dex.balancer_pool
+/// (abi_balancer_more.rs topics, events_balancer.rs). Ошибок нет.
 pub fn topics() -> Vec<B256> {
-    let mut v = vec![
+    vec![
         IBalancerPool::SwapFeePercentageChanged::SIGNATURE_HASH,
         IBalancerPool::PausedStateChanged::SIGNATURE_HASH,
         IBalancerPool::AmpUpdateStarted::SIGNATURE_HASH,
         IBalancerPool::AmpUpdateStopped::SIGNATURE_HASH,
-    ];
-    // Решение 473: события пулов других фабрик (курсы, веса, swapEnabled, цели, пределы) — abi_balancer_more.rs.
-    v.extend(super::abi_balancer_more::topics());
-    v
+    ]
 }

@@ -13,7 +13,7 @@
 //! dex.curve_plain_implementations путь 2 не работает (пул не из списка — отказ с причиной).
 //! Решение 472 (доделка): метапул (вариант CurveMeta) — только путь 2 и ещё `get_base_pool(pool)` фабрики: базовый
 //! пул должен быть coins(1) метапула (его get_virtual_price — курс монеты 1; load_curve_meta.rs).
-//! Решение 480: пул с курсом оракула (вариант CurveOracle) — только путь 1 (список) и ещё `oracle()` пула: адрес
+//! Решение 481: пул с курсом оракула (вариант CurveOracle) — только путь 1 (список) и ещё `oracle()` пула: адрес
 //! оракула (не ноль) запоминается для чтения (load_curve_oracle.rs remember).
 //! Кто вызывает: pools/verify.rs (Proto::CurveStable с вариантом CurvePlain / CurveMeta / CurveOracle).
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_curve.rs, abi_curve_plain.rs, verify_curve_plain_judge.rs,
@@ -38,7 +38,7 @@ use super::load_curve_oracle;
 use super::verify::{Candidate, Verdict};
 use super::verify_curve_plain_judge::{base_of, judge};
 
-/// Кто подтверждает пул: список, список с oracle() пула (решение 480) или фабрика (с её адресом, сверенными
+/// Кто подтверждает пул: список, список с oracle() пула (решение 481) или фабрика (с её адресом, сверенными
 /// реализациями и признаком метапула).
 enum Plan {
     Listed(Address),
@@ -158,7 +158,7 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
         .iter()
         .filter_map(|s| Address::from_str(s.trim()).ok())
         .any(|a| a == pool);
-    // Решение 480: пул с курсом оракула — фабрики нет, только список.
+    // Решение 481: пул с курсом оракула — фабрики нет, только список.
     if c.family.variant == Variant::CurveOracle {
         return if known {
             Ok(Plan::Oracle(pool))

@@ -1,6 +1,6 @@
 # docs/sources/curve_arbitrum — пулы Curve (Arbitrum One), исходники Sourcify
 
-Решение 480 (T472-10). Текст ниже шапки каждого файла — поле `sources["Vyper_contract.vy"]` ответа
+Решение 481 (T472-10). Текст ниже шапки каждого файла — поле `sources["Vyper_contract.vy"]` ответа
 `https://sourcify.dev/server/v2/contract/42161/<адрес>?fields=sources,compilation` без изменений (SHA-256 — в шапке;
 совпал с посчитанным в браузере). Номера строк в комментариях кода бота — строки исходника (без шапки).
 

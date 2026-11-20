@@ -1,5 +1,5 @@
 //! Файл: tests/arbitrum_curve_ren_wsteth_live.rs
-//! Что делает: решение 480 (T472-10) — пулы Curve WBTC/renBTC 0x3E01…F0Fb (вид curve_stableswap_plain) и ETH/wstETH
+//! Что делает: решение 481 (T472-10) — пулы Curve WBTC/renBTC 0x3E01…F0Fb (вид curve_stableswap_plain) и ETH/wstETH
 //! 0x6eB2…7d80 (вид curve_stableswap_oracle) на записи своего узла Arbitrum: (1) состояние собирается тем же кодом, что
 //! у бота (load_curve_plain::calls / load_curve_oracle::calls → ответы по (адрес, calldata) → state_with): у ren —
 //! курсы 10^28 обеих монет (константа RATE_MULTIPLIER исходника L84 = правило 10^(36 − decimals) при 8 знаках), pair_d;

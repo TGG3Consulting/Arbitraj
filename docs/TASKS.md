@@ -591,7 +591,7 @@
   - T472-09 Текст развёрнутого кода реализаций Balances / ETH / Optimized / EMA и метапулов на Arbitrum не сверен с
     исходником побайтно (Sourcify и обозреватели блоков недоступны из среды — прокси 403): модель — по официальному
     репозиторию curvefi/curve-factory, сверка формулы — запись (get_dy и симуляция exchange, T472-01).
-  - T472-10 **Закрыто решением 480 (20.11.2026): исходники ren и wstETH найдены в Sourcify и сохранены (docs/sources/curve_arbitrum/); ren — вид curve_stableswap_plain (список), wstETH — вид curve_stableswap_oracle; запись — T480-01.** **Доделка 2:** EURS/2CRV 0xA827…c27e — исходник найден: curvefi/curve-crypto-contract 41e6289
+  - T472-10 **Закрыто решением 481 (20.11.2026): исходники ren и wstETH найдены в Sourcify и сохранены (docs/sources/curve_arbitrum/); ren — вид curve_stableswap_plain (список), wstETH — вид curve_stableswap_oracle; запись — T481-01.** **Доделка 2:** EURS/2CRV 0xA827…c27e — исходник найден: curvefi/curve-crypto-contract 41e6289
     «deployment-logs/2021-10-30. EURS/CryptoSwap.vy» (адрес — deployment.log там же), Vyper 0.3.0; geometric_mean /
     newton_D / newton_y / halfpow / get_xcp / _A_gamma — тот же текст, что CurveCryptoSwap2ETH (сверка функций
     скриптом), exchange — те же действия + `assert not is_killed`. Подключён видом `curve_crypto2_v1` (вариант
@@ -615,22 +615,22 @@
     угаданной длины: ожидание записи журнала опросом (20 мс, предел 10 с), конец окна второй проверки — от момента,
     когда отложенная запись видна; окно 2 с. Управляемое время tokio невозможно без правки кода: окно пула — от
     std::time::Instant (depth_log.rs), tokio::time::pause его не двигает. Поведение кода не менялось.
-- **Решение 480 (20.11.2026, ветка t248/arb-curve-ren-wsteth от origin/feat/arbitrum 3d852b93) — T472-10: пулы Curve
+- **Решение 481 (20.11.2026, ветка t248/arb-curve-ren-wsteth от origin/feat/arbitrum 3d852b93) — T472-10: пулы Curve
   WBTC/renBTC и ETH/wstETH (Arbitrum) по исходникам Sourcify; cargo не запускался (формат — вручную).** Сделано:
   исходники как есть — docs/sources/curve_arbitrum/ (SHA-256 совпал с посчитанным в браузере); ren — та же математика,
   что у 2pool (вид curve_stableswap_plain, вторым адресом dex.stable_pools); wstETH — вид curve_stableswap_oracle
   (pools/load_curve_oracle.rs, курс оракула пачкой на блоке, каждым блоком; шаг CURVE_ETH = 28 без правки контракта).
   Задачи:
-  - T480-01 Запись своим узлом: `python3 tools/arbitrum_record/curve_ren_wsteth.py --node http://УЗЕЛ:8547` (или
+  - T481-01 Запись своим узлом: `python3 tools/arbitrum_record/curve_ren_wsteth.py --node http://УЗЕЛ:8547` (или
     record_all.py — шаг curve_ren_wsteth), коммит tests/data/arbitrum_curve_ren_wsteth_<дата>/, снять #[ignore] в
     tests/arbitrum_curve_ren_wsteth_live.rs; затем завести ключи (docs/notes/arbitrum/dex-settings-arbitrum.md §2.12:
     ren — в dex.stable_pools ключа curve_stableswap_plain; дочерний ключ curve_stableswap_oracle) и включить
     dex.pool_enabled — Тигран.
-  - T480-02 is_killed обоих пулов без геттера (`is_killed: bool` — не public). ren: kill_deadline в __init__ не задаётся
+  - T481-02 is_killed обоих пулов без геттера (`is_killed: bool` — не public). ren: kill_deadline в __init__ не задаётся
     (= 0), kill_me требует `kill_deadline > block.timestamp` — остановить пул нельзя (факт исходника L114-L115, L918-L921).
     wstETH: kill_deadline = время развёртывания + 60 суток (L153), до этого срока пул могли остановить — факт текущего
-    состояния покажет симуляция exchange записи T480-01 (пул остановлен — все симуляции откатятся).
-  - T480-03 Исполнение wstETH — только исполнитель v5 (шаг CURVE_ETH, сборки v5 нет — T472-08); до неё пул — граф и
+    состояния покажет симуляция exchange записи T481-01 (пул остановлен — все симуляции откатятся).
+  - T481-03 Исполнение wstETH — только исполнитель v5 (шаг CURVE_ETH, сборки v5 нет — T472-08); до неё пул — граф и
     котировка, шаг не строится с причиной.
 - **Решение 450 (20.11.2026, ветка t226/arb-dex-code-a) — код T448-01…05; cargo не запускался (формат — вручную).**
   Сделано: dex.sub_dex (несколько семейств под одним id), pancakeswap_v3 (Universal Router PancakeSwap v3), KyberSwap

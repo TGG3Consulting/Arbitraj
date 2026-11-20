@@ -194,7 +194,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // у Plain*Basic `_receiver = msg.sender` по умолчанию (curve-factory f389123 Plain2Basic.vy L530-L536), у 2pool —
         // перегрузка из 4 аргументов в официальном ABI curvefi/curve-js ab3f1c2 src/constants/abis/2pool/swap.json.
         // Метапул фабрики (MetaUSD.vy f389123 L606-L612) — та же подпись exchange, монеты — ERC-20 (монета и LP-токен).
-        // Решение 480: пул ETH/wstETH (curve_stableswap_oracle) — exchange(int128, int128, dx, min_dy) payable
+        // Решение 481: пул ETH/wstETH (curve_stableswap_oracle) — exchange(int128, int128, dx, min_dy) payable
         // (docs/sources/curve_arbitrum/0x6eB2…7d80.vy L444); монета пары — всегда нативный ETH пула, поэтому шаг —
         // CURVE_ETH (exec/executor/entry.rs stable → curve_eth, только исполнитель v5).
         "curve_stableswap"

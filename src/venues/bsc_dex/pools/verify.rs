@@ -107,7 +107,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             p if p.is_solidly() => solidly.push(i),
             // Решение 472: Curve 2021 (curve_stableswap_plain) — список или реестр фабрики (verify_curve_plain.rs).
             // Решение 472 (доделка): метапул фабрики — тот же путь (реестр фабрики и get_base_pool).
-            // Решение 480: пул с курсом оракула — тот же путь (список и oracle() пула).
+            // Решение 481: пул с курсом оракула — тот же путь (список и oracle() пула).
             Proto::CurveStable
                 if matches!(
                     c.family.variant,

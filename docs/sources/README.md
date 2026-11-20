@@ -6,4 +6,4 @@
 
 | Папка | Что | Решение |
 | --- | --- | --- |
-| `curve_arbitrum/` | пулы Curve в сети Arbitrum One без исходника в репозиториях curvefi | 480 |
+| `curve_arbitrum/` | пулы Curve в сети Arbitrum One без исходника в репозиториях curvefi | 481 |

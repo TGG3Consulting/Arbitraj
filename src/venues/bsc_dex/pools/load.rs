@@ -95,7 +95,7 @@ pub async fn state(
                 Variant::CurvePlain => load_curve_plain::load(ctx, tokens, a, pair, &tag).await?,
                 // Решение 472 (доделка): метапул — курс LP базового пула (load_curve_meta.rs).
                 Variant::CurveMeta => load_curve_meta::load(ctx, tokens, a, pair, &tag).await?,
-                // Решение 480: пул с курсом оракула и нативным ETH (ETH/wstETH, load_curve_oracle.rs).
+                // Решение 481: пул с курсом оракула и нативным ETH (ETH/wstETH, load_curve_oracle.rs).
                 Variant::CurveOracle => load_curve_oracle::load(ctx, tokens, a, pair, &tag).await?,
                 _ => load_curve::load(ctx, tokens, a, pair, &tag).await?,
             };

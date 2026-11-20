@@ -9,8 +9,8 @@
 # Sourcify: match = match, creationMatch = match, runtimeMatch = null (так в ответе Sourcify — факт; runtime-код не сопоставлен); verifiedAt = 2026-05-13T18:06:52Z.
 # SHA-256 текста исходника (без шапки, без перевода строки в конце) = 8ff5b3d3e49b7f65bf3e7e37d7262581781cf3ef6d45457521620a4898f36d07 — совпал с SHA-256, посчитанным в
 #   браузере по ответу Sourcify.
-# Вид бота: curve_stableswap_oracle (курс wstETH — Oracle(ORACLE).latestAnswer(); решение 480).
-# Кто использует: решение 480 (docs/DECISIONS.md), src/venues/bsc_dex/pools/load_curve_oracle.rs, family_variant.rs,
+# Вид бота: curve_stableswap_oracle (курс wstETH — Oracle(ORACLE).latestAnswer(); решение 481).
+# Кто использует: решение 481 (docs/DECISIONS.md), src/venues/bsc_dex/pools/load_curve_oracle.rs, family_variant.rs,
 #   tests/arbitrum_curve_ren_wsteth_live.rs.
 # ---------------------------------------------------------------------------------------------------------------------
 # @version 0.3.1

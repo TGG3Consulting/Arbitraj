@@ -7,7 +7,7 @@
 //! Кто вызывает: pools/load_batch.rs (states; через него — reload_many.rs load_group: per_block.rs, listen_site.rs,
 //! приём и повтор пачки).
 //! От чего зависит: load.rs (Loaded), families.rs, load_curve.rs, load_curve_plain.rs (решение 472), load_saddle.rs,
-//! load_curve_ng.rs, load_stable_u.rs, load_balancer.rs, load_curve_oracle.rs (решение 480), tokens.rs, node/call.rs
+//! load_curve_ng.rs, load_stable_u.rs, load_balancer.rs, load_curve_oracle.rs (решение 481), tokens.rs, node/call.rs
 //! (block_tag).
 //! Настройки: через загрузчики — dex.vault, dex.factory (Balancer), dex.native_wrapped (PancakeSwap StableSwap, Curve
 //! Plain*ETH).
@@ -52,7 +52,7 @@ pub async fn states(
                 Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
             }
         }
-        // Решение 480: пул с курсом оракула (load_curve_oracle.rs).
+        // Решение 481: пул с курсом оракула (load_curve_oracle.rs).
         Proto::CurveStable if f.variant == Variant::CurveOracle => {
             match load_curve_oracle::read(ctx, tokens, contract, &tag).await {
                 Ok(raw) => pairs.iter().map(|p| load_curve_oracle::state(ctx, &raw, *p)).collect(),

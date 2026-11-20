@@ -7,7 +7,7 @@
 //! 200 строк).
 //! Кто вызывает: pools/verify_curve_plain.rs.
 //! От чего зависит: ctx.rs, load_curve.rs (coins_of), stable_native.rs, verify_woo.rs (found), multi_pair.rs,
-//! load_curve_meta.rs, abi_curve_plain.rs, load_curve_oracle.rs (решение 480: remember оракула пула).
+//! load_curve_meta.rs, abi_curve_plain.rs, load_curve_oracle.rs (решение 481: remember оракула пула).
 //! Настройки: dex.native_wrapped (через stable_native.rs).
 //!
 //! Источники: curvefi/curve-factory f389123 Plain2ETH.vy L132-L135 (coins[0] = 0xEeee…); FactorySidechains.vy fb61207
@@ -47,7 +47,7 @@ pub fn base_of(answer: Option<call::Piece>) -> Result<Address, Option<String>> {
 }
 
 /// Итог по ответам coins(k). Принимает: окружение, кандидата, пул, ответы coins(0..MAX_COINS), базовый пул (Some —
-/// метапул), оракул курса (Some — пул с курсом оракула, решение 480: монет две, coins(0) — метка ETH; оракул
+/// метапул), оракул курса (Some — пул с курсом оракула, решение 481: монет две, coins(0) — метка ETH; оракул
 /// запоминается для чтения). Возвращает: Taken или Rejected с причиной. Ошибок нет.
 pub fn judge(
     ctx: &Ctx,

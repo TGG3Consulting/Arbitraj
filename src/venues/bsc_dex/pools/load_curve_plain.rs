@@ -7,7 +7,7 @@
 //! Множители точности: у Plain*Basic — `rate_multipliers[i] = 10 ** (36 - decimals[i])` фабрики (геттера у пула
 //! нет), у 2pool — константа RATE_MULTIPLIER = 10^30 при двух монетах по 6 знаков — то же правило 10^(36 − decimals),
 //! что у Curve 2020 (load_curve::build). Пары token0/token1 — по адресам монет пула.
-//! Кто вызывает: pools/load.rs, pools/load_site.rs (вариант CurvePlain), load_curve_oracle.rs (решение 480: read_calls,
+//! Кто вызывает: pools/load.rs, pools/load_site.rs (вариант CurvePlain), load_curve_oracle.rs (решение 481: read_calls,
 //! state_with); тест tests/arbitrum_curve_plain_live.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_many), tokens.rs, load_curve.rs (parse, build, Raw), abi_curve_plain.rs,
 //! stable_native.rs.
@@ -90,7 +90,7 @@ pub async fn read(ctx: &Ctx, tokens: &Tokens, pool: Address, tag: &str) -> Gatew
     read_calls(ctx, tokens, pool, tag, &calls, tail).await
 }
 
-/// Решение 480: read с заданными вызовами (calls этого файла и сверху — свои вызовы варианта, load_curve_oracle.rs).
+/// Решение 481: read с заданными вызовами (calls этого файла и сверху — свои вызовы варианта, load_curve_oracle.rs).
 /// Принимает: окружение, токены, пул, блок-тег, вызовы, индекс A_precise(). Ошибки: как у read.
 pub async fn read_calls(
     ctx: &Ctx,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Файл: tools/arbitrum_record/curve_ren_wsteth.py
-# Что делает: решение 480 (T472-10) — запись своего узла Arbitrum для двух пулов Curve без фабрики, исходники которых
+# Что делает: решение 481 (T472-10) — запись своего узла Arbitrum для двух пулов Curve без фабрики, исходники которых
 #   найдены в Sourcify (docs/sources/curve_arbitrum/): WBTC/renBTC 0x3E01…F0Fb (вид curve_stableswap_plain — та же
 #   математика, что у 2pool) и ETH/wstETH 0x6eB2…7d80 (вид curve_stableswap_oracle — курс wstETH от оракула пула).
 #   Только чтение (eth_call, eth_getCode, eth_getBlockByNumber), без ключей, подписей и транзакций. Пишет
@@ -111,7 +111,7 @@ def state_phase(b, sim, oracle, fractions, head):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Запись узла Arbitrum: Curve ren и wstETH (решение 480)")
+    ap = argparse.ArgumentParser(description="Запись узла Arbitrum: Curve ren и wstETH (решение 481)")
     ap.add_argument("--node", required=True, help="HTTP JSON-RPC своего узла Arbitrum")
     ap.add_argument("--fractions", default="0.0001,0.01,0.2", help="доли баланса входа для get_dy и симуляции")
     ap.add_argument("--out", default=None)
@@ -159,7 +159,7 @@ def write(a, chain, head, oracle, recs, code, t0):
         hashes.append((hashlib.sha256(text.encode()).hexdigest(), name))
     with open(os.path.join(out, "README.md"), "w", encoding="utf-8") as f:
         f.write("# Curve WBTC/renBTC и ETH/wstETH (Arbitrum One) — запись своего узла, %s\n\n" % day)
-        f.write("Записано tools/arbitrum_record/curve_ren_wsteth.py (решение 480): только чтение, без ключей и "
+        f.write("Записано tools/arbitrum_record/curve_ren_wsteth.py (решение 481): только чтение, без ключей и "
                 "транзакций.\nБлок B = %d, chainId %s, оракул wstETH %s; симуляции exchange — eth_call с подменой "
                 "состояния от пустого адреса %s.\n" % (int(tag, 16), chain, oracle, SENDER))
         f.write("Файлы и порядок записи — шапка скрипта.\n\n## SHA-256\n\n")

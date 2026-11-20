@@ -6,7 +6,7 @@
 //! (verify_stable_u.rs / verify_curve.rs) → реестр. Список не задан или пуст — ничего (как до 292). Одна пачка на проход.
 //! Кто вызывает: pools/factory_scan.rs (pass); sort — ещё tests/bsc_dex_stable_list_sort.rs.
 //! От чего зависит: ctx.rs, families.rs (all, classify, Proto), abi_saddle.rs, abi_curve.rs, load_saddle.rs,
-//! load_curve.rs, node/call.rs (try_chunks), directory/gt_parse.rs (IndexedPool), stable_native.rs (решение 480:
+//! load_curve.rs, node/call.rs (try_chunks), directory/gt_parse.rs (IndexedPool), stable_native.rs (решение 481:
 //! метка ETH → обёртка у вариантов CurvePlain / CurveOracle).
 //! Настройки: dex.stable_pools [DEX] (через classify — dex.kind, dex.pool_enabled); dex.load_batch [bsc_dex] —
 //! размер пачки передаёт factory_scan.rs; dex.native_wrapped (через stable_native.rs).
@@ -196,7 +196,7 @@ pub fn sort(
     sort_with(pools, answers, coins, quotes, None)
 }
 
-/// Решение 480: sort с обёрткой нативной монеты — у вариантов, чей загрузчик читает метку ETH 0xEeee… (CurvePlain:
+/// Решение 481: sort с обёрткой нативной монеты — у вариантов, чей загрузчик читает метку ETH 0xEeee… (CurvePlain:
 /// Plain*ETH; CurveOracle: ETH/wstETH), метка среди монет пула заменяется обёрткой (stable_native::pair_coins), как
 /// при проверке (verify_curve_plain_judge.rs) — иначе пара с WETH из списка не строится. Прочие виды — без замены.
 /// Принимает: как sort и обёртку (None — не задана). Возвращает: Extra. Ошибок нет.

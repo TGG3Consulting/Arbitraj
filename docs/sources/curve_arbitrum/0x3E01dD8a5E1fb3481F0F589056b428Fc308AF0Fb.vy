@@ -9,8 +9,8 @@
 # Sourcify: match = match, creationMatch = match, runtimeMatch = match; verifiedAt = 2025-03-12T11:39:01Z.
 # SHA-256 текста исходника (без шапки, без перевода строки в конце) = 9c8728cfb2fb92c306e6fa6abd023085d3a5455a62dcb9361cd746fde684241b — совпал с SHA-256, посчитанным в
 #   браузере по ответу Sourcify.
-# Вид бота: curve_stableswap_plain (математика — та же, что у 2pool / Plain2Basic; решение 480).
-# Кто использует: решение 480 (docs/DECISIONS.md), src/venues/bsc_dex/pools/load_curve_plain.rs (вариант CurvePlain),
+# Вид бота: curve_stableswap_plain (математика — та же, что у 2pool / Plain2Basic; решение 481).
+# Кто использует: решение 481 (docs/DECISIONS.md), src/venues/bsc_dex/pools/load_curve_plain.rs (вариант CurvePlain),
 #   tests/arbitrum_curve_ren_wsteth_live.rs.
 # ---------------------------------------------------------------------------------------------------------------------
 # @version 0.2.16

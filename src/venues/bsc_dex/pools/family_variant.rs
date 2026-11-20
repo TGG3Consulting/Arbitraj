@@ -44,7 +44,7 @@ pub enum Variant {
     /// load_curve_meta.rs, проверка — verify_curve_plain.rs (реализация из dex.curve_plain_implementations и
     /// get_base_pool фабрики = coins(1)), события — events_curve.rs, состояние — каждым блоком (per_block.rs).
     CurveMeta,
-    /// Пул Curve StableSwap с курсом оракула и нативным ETH (dex.kind = curve_stableswap_oracle, решение 480, T472-10):
+    /// Пул Curve StableSwap с курсом оракула и нативным ETH (dex.kind = curve_stableswap_oracle, решение 481, T472-10):
     /// ETH/wstETH Arbitrum 0x6eB2dc694eB516B16Dc9FBc678C60052BbdD7d80 (Vyper 0.3.1, Sourcify 42161 creationMatch match,
     /// runtimeMatch null; docs/sources/curve_arbitrum/). Протокол Proto::CurveStable (coins/balances/fee, A_precise,
     /// exchange(int128, int128, dx, min_dy) — те же), пул — из списка dex.stable_pools; отличие от CurvePlain: курс

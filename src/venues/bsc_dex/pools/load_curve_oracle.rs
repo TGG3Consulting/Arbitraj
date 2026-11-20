@@ -1,5 +1,5 @@
 //! Файл: venues/bsc_dex/pools/load_curve_oracle.rs
-//! Что делает: решение 480 (T472-10) — чтение пула Curve StableSwap с курсом оракула (вариант CurveOracle вида
+//! Что делает: решение 481 (T472-10) — чтение пула Curve StableSwap с курсом оракула (вариант CurveOracle вида
 //! curve_stableswap_oracle: ETH/wstETH Arbitrum 0x6eB2dc694eB516B16Dc9FBc678C60052BbdD7d80) на блоке. Пул — две монеты:
 //! нативный ETH (метка 0xEeee…, coins(0)) и wstETH (coins(1)); `exchange(i, j)` считает курсами
 //! `rates = [10^18, Oracle(ORACLE).latestAnswer()]` — курс оракула читается в САМОМ обмене (`_stored_rates`), кеша

@@ -336,7 +336,7 @@ T433-F3, когда он будет в коде.
 | Настройка | Значение | Источник |
 | --- | --- | --- |
 | dex.kind | `curve_stableswap_plain` | решение 472 |
-| dex.stable_pools | `["0x7f90122BF0700F9E7e1F688fe926940E8839F353", "0x3E01dD8a5E1fb3481F0F589056b428Fc308AF0Fb"]` | curvefi/curve-js ab3f1c2 src/constants/pools/arbitrum.ts L15-L20 (2pool), L98 (ren — решение 480: исходник Sourcify, математика та же, что у 2pool) |
+| dex.stable_pools | `["0x7f90122BF0700F9E7e1F688fe926940E8839F353", "0x3E01dD8a5E1fb3481F0F589056b428Fc308AF0Fb"]` | curvefi/curve-js ab3f1c2 src/constants/pools/arbitrum.ts L15-L20 (2pool), L98 (ren — решение 481: исходник Sourcify, математика та же, что у 2pool) |
 | dex.factory | `0xb17b674D9c5CB2e441F8e196a2f048A81355d031` | curve-js network_constants.ts L157 (ALIASES_ARBITRUM.factory); Sourcify 42161 match (FactorySidechains.vy, Vyper 0.2.16) |
 | dex.curve_plain_implementations | `["0x54e8A25d0Ac0E4945b697C80b8372445FEA17A62", "0x73Ec37618683C274D0bBf5f5726aA856B2BDAB81", "0xD68970e266cE1A015953897C7055a5E0bC657Af8", "0x7DA64233Fefb352f8F501B357c018158ED8aA455", "0x6F9fb833501f46CBE6f6A4b6Cf32C834E5A5e8C5", "0x0100fBf414071977B19fC38e6fc7c32FE444F5C9", "0xe381C25de995d62b453aF8B931aAc84fcCaa7A62", "0xc379bA7b8e1c6C48D64e1cf9dD602C97c9fD0F40", "0xAAe75FAebCae43b9d541Fd875622BE48D9B4f5D0", "0x8866414733F22295b7563f9C5299715D2D76CAf4", "0x8d53E5De033078367Ad91527c53abfd1Eb6bfa86", "0x2ac56cEBc2D27c9bB51a11773355E44371Eb88D3", "0x89287c32c2CAC1C76227F6d300B2DBbab6b75C08", "0x06e3C4da96fd076b97b7ca3Ae23527314b6140dF"]` | curve-js factory/stable.ts L168-L183 (Plain2/3/4 Basic, Balances, ETH, Optimized; Plain2BasicEMA, Plain2ETHEMA) |
 | dex.pool_enabled | после записи T472-01 — Тигран | — |
@@ -365,7 +365,7 @@ T433-F3, когда он будет в коде.
 | dex.stable_pools | `["0xA827a652Ead76c6B0b3D19dba05452E06e25c27e"]` | curvefi/curve-crypto-contract 41e6289 «deployment-logs/2021-10-30. EURS/deployment.log» |
 | dex.pool_enabled | после записи (tricrypto_v1.py/curve_crypto.py — T472-10) — Тигран | — |
 
-**Решение 480 (T472-10):** исходники обоих найдены в Sourcify (docs/sources/curve_arbitrum/). WBTC/renBTC
+**Решение 481 (T472-10):** исходники обоих найдены в Sourcify (docs/sources/curve_arbitrum/). WBTC/renBTC
 `0x3E01dD8a5E1fb3481F0F589056b428Fc308AF0Fb` — вторым адресом в dex.stable_pools ключа `curve_stableswap_plain` (таблица
 выше): get_D / get_y / get_dy / exchange — тот же текст, что у Plain2Basic, курс — константа RATE_MULTIPLIER = 10^28 =
 10^(36 − 8) (обе монеты по 8 знаков — curve-js arbitrum.ts wrapped_decimals [8, 8]). ETH/wstETH
@@ -374,10 +374,10 @@ T433-F3, когда он будет в коде.
 
 | Настройка | Значение | Источник |
 | --- | --- | --- |
-| dex.kind | `curve_stableswap_oracle` | решение 480 |
+| dex.kind | `curve_stableswap_oracle` | решение 481 |
 | dex.stable_pools | `["0x6eB2dc694eB516B16Dc9FBc678C60052BbdD7d80"]` | curvefi/curve-js ab3f1c2 src/constants/pools/arbitrum.ts L152 (wsteth) |
 | dex.native_wrapped (площадка arb_dex) | WETH `0x82aF49447D8a07e3bd95BD0d56f35241523fBab1` — уже задана (§0) | без неё пул с меткой ETH не читается |
-| dex.pool_enabled | после записи `curve_ren_wsteth.py` (T480-01) — Тигран | — |
+| dex.pool_enabled | после записи `curve_ren_wsteth.py` (T481-01) — Тигран | — |
 
 Исполнение wstETH — шаг CURVE_ETH = 28, только исполнитель v5 (сборки v5 ещё нет — T472-08); до него пул в графе и
 котировке, шаг не строится (причина «нужен исполнитель v5»).

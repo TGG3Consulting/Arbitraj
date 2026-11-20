@@ -282,6 +282,8 @@ async fn run(
     );
     // Решение 245, дополнение п. 2: момент решения о сделке — в учёт (длительность сделки для «успели бы»).
     deal.decided_at = Some(decided);
+    // Решение 464 (ревью t238): включатель замера — один раз на сделку, им же пользуется ордер продажи (sell.rs).
+    deal.step_timing = on;
     // Решение 394 (докупка): первая сделка группы — группа = её ID; вложенная — ID первой; выключено — группы нет.
     deal.group = match &ride.seat {
         super::coin_ride::Seat::Alone => None,
@@ -302,10 +304,8 @@ async fn run(
         plan.profit_usd.round_dp(4),
         plan.pick_note()
     ));
-    // Решение 464: откуда взято время в пути плана (настройки, статистика монеты или пары площадок).
-    if let Some(t) = super::transit_source::note(core, &d) {
-        deal.note(t);
-    }
+    // Решение 464: время в пути плана (T плана) и его источник (настройки, статистика монеты или пары площадок).
+    deal.note(super::transit_source::note(core, &d, plan.transit_s));
     if let Some(a) = &acc {
         let name = deps.settings.accounts().wallet(&a.0).map(|w| w.name);
         deal.note(format!("Кошелёк DEX: «{}» ({a})", name.unwrap_or_default()));

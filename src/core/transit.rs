@@ -52,7 +52,11 @@ pub async fn load(core: &Core) {
         Ok(list) => {
             let mut t = lk(&core.inner.transits);
             for r in list {
-                t.insert((r.asset, r.from, r.to), r.secs);
+                // Ревью t238: готовая сумма пары площадок (transit_source.rs) — вместе с историей.
+                let after = sum_len(Some(r.secs.as_slice()));
+                let old = t.insert((r.asset, r.from.clone(), r.to.clone()), r.secs);
+                let before = sum_len(old.as_deref());
+                super::transit_source::pair_update(core, (&r.from, &r.to), before, after);
             }
         }
         Err(e) => {
@@ -65,6 +69,11 @@ pub async fn load(core: &Core) {
     }
 }
 
+/// Сумма и длина ряда (None — пусто). Ошибок нет.
+fn sum_len(v: Option<&[Decimal]>) -> (Decimal, usize) {
+    v.map_or((Decimal::ZERO, 0), |x| (x.iter().copied().sum(), x.len()))
+}
+
 /// Записывает фактическое время перевода и сохраняет историю. Ошибка базы — в журнал.
 pub async fn record(core: &Core, asset: &Asset, from: &VenueId, to: &VenueId, secs: Decimal) {
     let rec = {
@@ -72,6 +81,8 @@ pub async fn record(core: &Core, asset: &Asset, from: &VenueId, to: &VenueId, se
         let v = t
             .entry((asset.clone(), from.clone(), to.clone()))
             .or_default();
+        // Ревью t238: ряд до правки — для готовой суммы пары площадок (transit_source.rs).
+        let before = sum_len(Some(v.as_slice()));
         v.push(secs);
         // Решение 118 (Я-4): ряд — не длиннее profit.transit_auto_after пары (больше «авто» не берёт); не задана —
         // ряд не обрезается.
@@ -86,6 +97,8 @@ pub async fn record(core: &Core, asset: &Asset, from: &VenueId, to: &VenueId, se
         {
             v.drain(..v.len() - n);
         }
+        let after = sum_len(Some(v.as_slice()));
+        super::transit_source::pair_update(core, (from, to), before, after);
         Record {
             asset: asset.clone(),
             from: from.clone(),
@@ -136,7 +149,7 @@ pub fn seconds_from(core: &Core, d: &Direction) -> Result<(Decimal, Source), Str
     let manual = (send + credit, Source::Manual);
     // Варианты настройки — manual / manual_auto (settings/catalog/base.rs).
     match mode.as_str() {
-        "manual" => Ok(manual),
+        "manual" => Ok((manual.0, Source::ManualMode)),
         "manual_auto" => {
             let n = s
                 .integer_in("profit.transit_auto_after", &from)

@@ -67,6 +67,8 @@ pub async fn save(core: &Core, deal: &Deal) {
     lk(&core.inner.deals).insert(rec.id.clone(), stored);
     // Решение 405 (М2): набор сделок, которые ещё что-то держат (unsettled.rs) — после записи учёта.
     super::unsettled::track(core, rec);
+    // Решение 464 (t238, ревью): набор «исход продажи неизвестен» по (площадка, монета) — sale_marks.rs.
+    super::sale_marks::track(core, rec);
     // Решение 405 (ревью Н3): сделка сохранена (могла уйти с пути) — ожидания ручных действий проверяют монету.
     core.inner.coin_wake.notify_waiters();
     recompute_exposure(core);

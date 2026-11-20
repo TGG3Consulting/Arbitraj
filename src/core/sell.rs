@@ -45,7 +45,8 @@
 //! (sell_turn_fresh.rs — не раньше прошлой продажи той же монеты на той же площадке) и ордер — под одним ходом; ход
 //! снимается сразу после итога ордера, до продолжений.
 //! Решение 464 (t238): возраст котировки в строке хронологии — к отправке ордера; ордер продажи — «Время по шагам
-//! (ордер продажи …)» при log.step_timing = да (запросы к бирже / узлу BSC: approve, отправка, квитанция).
+//! (ордер продажи …)» при log.step_timing = да, прочитанном один раз на сделку (Deal.step_timing, executor.rs; запросы к
+//! бирже / узлу BSC: approve, отправка, квитанция).
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs,
 //! sell_here_ok.rs (решение 417: sell — продажа здесь при итоге ≥ 0 под ходом).
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
@@ -225,7 +226,7 @@ pub(super) async fn sell(
     // Решение 464: возраст котировки к отправке ордера; замер ордера по шагам (log.step_timing, как у покупки —
     // запросы к бирже и к узлу BSC: approve, отправка, квитанция) — в хронологию сделки.
     let age = (chrono::Utc::now() - q.at).num_milliseconds();
-    let on = super::step_timing::enabled(&core.inner.deps.settings);
+    let on = deal.step_timing;
     // Решение 413: продажа — под общим доступом к счёту (credit_lock.rs): чтение факта для долей другой сделки не идёт,
     // пока ордер в полёте; проданное сразу в учёте памяти.
     let trade = super::trade_ops::trade_seen(

@@ -9,8 +9,11 @@
 //! снят. Пишется только у сделок с группой докупки (exec.top_up = да): выключено — следа нет, ничего не меняется.
 //! Решение 464 (t238): след ставится и сразу при учёте продажи в памяти (credit_lock::selling → note_fill), блок следа —
 //! самый высокий из продаж ключа.
+//! Ревью t238: пулы следа — объединение всех продаж; продажа DEX без блока — свежесть по первому блоку после её конца
+//! (sell_turn_last::first_after), а не отказ до перезапуска.
 //! Кто вызывает: ledger.rs (save → note), credit_lock.rs (note_fill), ride_quote.rs (check).
-//! От чего зависит: coin_key.rs, deal.rs, trade_ops.rs (вид площадки), engine.rs, core/types.
+//! От чего зависит: coin_key.rs, deal.rs, trade_ops.rs (вид площадки), sell_turn_last.rs (first_after), engine.rs,
+//! core/types.
 //! Настройки: нет.
 
 use std::sync::atomic::Ordering;
@@ -31,8 +34,10 @@ pub struct Trail {
     pub deal: String,
     /// Конец продажи (ответ площадки).
     pub at: DateTime<Utc>,
-    /// DEX: блок транзакции продажи; None — неизвестен (у биржи — всегда None).
+    /// DEX: самый высокий известный блок транзакций продаж; None — ни одного известного (у биржи — всегда None).
     pub block: Option<u64>,
+    /// Решение 464 (ревью t238): самый поздний конец продажи с неизвестным блоком (у биржи — не проверяется).
+    pub blind: Option<DateTime<Utc>>,
     /// DEX: пулы маршрута продажи (PoolRef::site); пусто — маршрут неизвестен (агрегатор).
     pub pools: Vec<PoolRef>,
 }
@@ -71,46 +76,42 @@ pub fn note_fill(core: &Core, deal: &Deal, r: &TradeResult) {
     put(core, deal, r);
 }
 
-/// След из продажи `s` сделки: решение 464 — у одного ключа хранится самый поздний конец и САМЫЙ ВЫСОКИЙ блок из
-/// продаж (продажи разных сделок могут кончиться не в порядке блоков), пулы — объединение. Ошибок нет.
+/// След из продажи `s` сделки: решение 464 — у одного ключа хранится самый поздний конец, САМЫЙ ВЫСОКИЙ известный
+/// блок и самый поздний конец продажи DEX с неизвестным блоком (blind) — продажи разных сделок могут кончиться не в
+/// порядке блоков; пулы — объединение всех продаж (ревью t238: и у продажи с более ранним концом). Ошибок нет.
 fn put(core: &Core, deal: &Deal, s: &TradeResult) {
+    let block = s.chain.as_ref().and_then(|c| c.block);
     let mut t = Trail {
         deal: deal.id.clone(),
         at: s.finished_at,
-        block: s.chain.as_ref().and_then(|c| c.block),
+        block,
+        blind: block.is_none().then_some(s.finished_at),
         pools: s.request.route.as_ref().map(sites).unwrap_or_default(),
     };
     let key = (CoinKey::of(&deal.direction.asset), s.request.venue.clone());
     let mut m = lk(&core.inner.trail);
-    match m.get(&key) {
-        // Блок неизвестен хоть у одной продажи — у следа «неизвестен» (свежесть не доказуема, как раньше).
-        Some(old) if old.at >= t.at && (old.block.is_none() || old.block >= t.block) => {}
-        Some(old) => {
-            if old.at > t.at {
-                t.at = old.at;
-                t.deal = old.deal.clone();
+    let Some(old) = m.get(&key) else {
+        m.insert(key, t);
+        core.inner.group_live.fetch_add(1, Ordering::Relaxed);
+        return;
+    };
+    if old.at > t.at {
+        t.at = old.at;
+        t.deal = old.deal.clone();
+    }
+    t.block = t.block.max(old.block);
+    t.blind = t.blind.max(old.blind);
+    // Маршрут одной из продаж неизвестен — пулы следа «неизвестны» (проверка по любому маршруту).
+    if old.pools.is_empty() || t.pools.is_empty() {
+        t.pools.clear();
+    } else {
+        for p in &old.pools {
+            if !t.pools.contains(p) {
+                t.pools.push(p.clone());
             }
-            t.block = match (t.block, old.block) {
-                (Some(a), Some(b)) => Some(a.max(b)),
-                _ => None,
-            };
-            // Маршрут одной из продаж неизвестен — пулы следа «неизвестны» (проверка по любому маршруту).
-            if old.pools.is_empty() || t.pools.is_empty() {
-                t.pools.clear();
-            } else {
-                for p in &old.pools {
-                    if !t.pools.contains(p) {
-                        t.pools.push(p.clone());
-                    }
-                }
-            }
-            m.insert(key, t);
-        }
-        None => {
-            m.insert(key, t);
-            core.inner.group_live.fetch_add(1, Ordering::Relaxed);
         }
     }
+    m.insert(key, t);
 }
 
 /// Что делает: живая котировка продажи `q` на площадке `v` новее следа продажи сделки группы (см. шапку); прошла по
@@ -130,7 +131,17 @@ pub fn check(core: &Core, coin: &CoinKey, v: &VenueId, q: &Quote) -> Result<(), 
             if !touches {
                 return Ok(());
             }
-            t.block.is_some_and(|b| r.block >= b)
+            // Блок известной продажи — маршрут не раньше него; продажа DEX без блока (ревью t238) — маршрут не раньше
+            // первого блока, пришедшего после её конца (как sell_turn_last.rs, без «навсегда до перезапуска»).
+            let known = t.block.is_none_or(|b| r.block >= b);
+            let blind = match t.blind {
+                None => true,
+                Some(at) => {
+                    let b0 = super::sell_turn_last::first_after(core, v, at);
+                    b0.is_some_and(|b0| r.block >= b0)
+                }
+            };
+            known && blind && (t.block.is_some() || t.blind.is_some())
         }
         (VenueKind::Dex, None) => false,
     };
@@ -144,7 +155,8 @@ pub fn check(core: &Core, coin: &CoinKey, v: &VenueId, q: &Quote) -> Result<(), 
         ));
     }
     let mut m = lk(&core.inner.trail);
-    if m.get(&key).is_some_and(|x| x.at == t.at) && m.remove(&key).is_some() {
+    // Снимается тот же след, что проверен (новая продажа могла дописать его за время проверки).
+    if m.get(&key).is_some_and(|x| x == &t) && m.remove(&key).is_some() {
         core.inner.group_live.fetch_sub(1, Ordering::Relaxed);
     }
     Ok(())

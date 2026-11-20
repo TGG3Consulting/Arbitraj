@@ -8,10 +8,11 @@
 //! - уже исполненная продажа (учёт уменьшен в момент итога, credit_lock::selling) в сдвиг больше не входит, след с её
 //!   блоком ставится сразу: котировка по блоку ниже её блока — отказ, по её блоку — принята; при двух продажах блок
 //!   следа — самый высокий;
-//! - продажа в полёте (ход очереди продажи держит sell_turn), исполнившаяся за время котировки (счётчик итогов) и с
-//!   неизвестным исходом — котировки нет (ride_settled.rs);
+//! - ордер продажи в полёте (credit_lock::selling ждёт итога), исполнившийся за время котировки (счётчик итогов) и с
+//!   неизвестным исходом — котировки нет (ride_settled.rs, sale_marks.rs); котировка-решение без ордера не держит;
 //! - время в пути монеты без своей истории: настройки (37 + 2 = 39 с) или статистика пары gate → bsc_dex по всем монетам
 //!   из записи /api/transits (transits_gate_bsc_dex.json) — transit_source.rs.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core (coin_ride, ride_quote, ride_trail, ride_settled, credit_lock, sell_turn, ledger),
 //! arb::settings, arb::storage, arb::notify, tests/data/num_pool_2026-11-20.
@@ -320,37 +321,53 @@ async fn executed_sale_leaves_projection_and_sets_block() {
 }
 
 #[tokio::test]
-async fn sale_in_flight_or_unknown_has_no_quote() {
+async fn sale_order_in_flight_or_unknown_has_no_quote() {
     let r = rec();
     let core = start("flight").await;
     let mut gate = in_transit(&r, GATE);
     ride(&core, &gate).await;
     credited(&core, &r, &mut gate).await;
     let ku = dir(&r, "kucoin", "bsc_dex");
-    let seq = ride_settled::before(&core, &ku).unwrap();
-    assert!(ride_settled::after(&core, &ku, seq).is_ok());
-    // Продажа Gate держит ход (котировка → итог ордера): попала ли в пул, не видно — котировки нет.
+    // Котировка-решение (ход очереди продажи без ордера: режим застрявшей монеты, перегон) новых сделок не держит.
     let coin = gate.direction.asset.clone();
     let turn = sell_turn::try_take(&gate.at, &coin).unwrap();
-    let busy = ride_settled::before(&core, &ku).unwrap_err();
+    let seq = ride_settled::before(&core, &ku).unwrap();
+    assert!(ride_settled::after(&core, &ku, seq).is_ok());
+    drop(turn);
+    // Ордер продажи Gate в полёте (credit_lock::selling ждёт итога): попал ли в пул, не видно — котировки нет.
+    let (tx, rx) = tokio::sync::oneshot::channel::<TradeResult>();
+    let f = async move { Ok::<_, OpError>(rx.await.unwrap()) };
+    let task = {
+        let (core, g) = (core.clone(), gate.clone());
+        tokio::spawn(async move { credit_lock::selling(&core, &g, f).await })
+    };
+    let busy = loop {
+        match ride_settled::before(&core, &ku) {
+            Err(e) => break e,
+            Ok(_) => tokio::task::yield_now().await,
+        }
+    };
     assert!(busy.contains("идёт наша продажа NUM"), "{busy}");
     assert!(busy.contains(GATE), "{busy}");
     assert!(ride_settled::after(&core, &ku, seq).is_err());
-    // Продажа исполнилась, пока шла котировка: счётчик итогов сменился — отказ; следующая котировка — по новому.
-    let s = sale(&r, GATE);
-    turn.done(&core, &gate, s.request.route.as_ref(), &Ok(s.clone()));
+    // Ордер исполнился, пока шла котировка: счётчик итогов сменился — отказ; следующая котировка — по новому.
+    tx.send(sale(&r, GATE)).unwrap();
+    assert!(task.await.unwrap().is_ok());
     let done = ride_settled::after(&core, &ku, seq).unwrap_err();
     assert!(done.contains("исполнилась, пока шла котировка"), "{done}");
     let seq2 = ride_settled::before(&core, &ku).unwrap();
     assert!(ride_settled::after(&core, &ku, seq2).is_ok());
-    // Исход нашей продажи неизвестен — котировки нет.
+    // Исход нашей продажи неизвестен — монета на bsc_dex заблокирована (и без идущих сделок: ride_settled::unsure).
     gate.sale_unsure = true;
     ledger::save(&core, &gate).await;
     let unsure = ride_settled::before(&core, &ku).unwrap_err();
-    assert!(
-        unsure.contains("исход нашей продажи NUM неизвестен"),
-        "{unsure}"
-    );
+    let want = format!("исход продажи сделки {GATE} не известен");
+    assert!(unsure.contains(&want), "{unsure}");
+    assert!(ride_settled::unsure(&core, &ku).is_some());
+    // Разобрана (шаг «Беру на себя») — блокировка снята.
+    gate.step = Step::TakenOver;
+    ledger::save(&core, &gate).await;
+    assert!(ride_settled::unsure(&core, &ku).is_none());
 }
 
 /// Настройка площадки (тест падает при ошибке).

@@ -28,13 +28,8 @@
 //! Оценки НЕ под ходом (М-4: к ордеру не ведут — только текст и решение человека): manual_relay.rs (оценка «продать
 //! здесь» «Продать и перегнать»), sell_unsent.rs (убыток в алерте), manual_sell.rs (убыток кнопки), manual_sold_check.rs
 //! (проверка «Продано вручную»).
-//! Решение 464 (t238, пул общий у своих сделок): снаружи видно, держит ли ход продажа ключа сейчас (busy) и сколько
-//! продаж ключа уже дали итог (sales — счётчик итогов done): расчёт новой сделки (ride_settled.rs) по ним понимает,
-//! что наша продажа в полёте (в состоянии пула её может уже быть, а учёт ещё не уменьшен) или исполнилась, пока он
-//! котировал.
 //! Кто вызывает: core/sell.rs (sell_or_stuck_guarded, market_guarded → sell), core/sell_range_run.rs (branch),
-//! core/sell_turn_fresh.rs (котировка под ходом; once — stuck.rs, relay.rs, relay_here.rs), core/ride_settled.rs
-//! (busy, sales).
+//! core/sell_turn_fresh.rs (котировка под ходом; once — stuck.rs, relay.rs, relay_here.rs).
 //! От чего зависит: sell_turn_last.rs (Last, route_known), coin_key.rs, op_error.rs, deal.rs, core/types, tokio::sync::Mutex.
 //! Настройки: своих нет (базовое поведение, как credit_lock.rs).
 
@@ -65,33 +60,6 @@ pub fn sold_after(v: &VenueId, a: &Asset, t: DateTime<Utc>) -> bool {
         .unwrap_or_else(|p| p.into_inner())
         .get(&(v.clone(), CoinKey::of(a)))
         .is_some_and(|x| *x > t)
-}
-
-/// Решение 464: число итогов продаж по ключу (исполнено или исход неизвестен) — растёт в done.
-type Sales = HashMap<(VenueId, CoinKey), u64>;
-
-static SALES: LazyLock<Mutex<Sales>> = LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// Что делает: решение 464 — сколько продаж ключа уже дали итог (done). Принимает: площадку, монету. Возвращает:
-/// счётчик (0 — не было). Ошибок нет.
-pub fn sales(v: &VenueId, a: &Asset) -> u64 {
-    SALES
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .get(&(v.clone(), CoinKey::of(a)))
-        .copied()
-        .unwrap_or(0)
-}
-
-/// Что делает: решение 464 — ход ключа держит продажа прямо сейчас (котировка → итог ордера; без ожидания и без
-/// создания замка). Принимает: площадку, монету. Возвращает: true — держит. Ошибок нет.
-pub fn busy(v: &VenueId, a: &Asset) -> bool {
-    let slot = TURNS
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .get(&(v.clone(), CoinKey::of(a)))
-        .cloned();
-    slot.is_some_and(|s| s.try_lock().is_err())
 }
 
 /// Замок ключа очереди со следом прошлой продажи.
@@ -163,13 +131,7 @@ impl Turn {
         let key = (deal.at.clone(), CoinKey::of(&deal.direction.asset));
         SOLD.lock()
             .unwrap_or_else(|p| p.into_inner())
-            .insert(key.clone(), last.at);
-        // Решение 464: итог продажи — до снятия хода (ход снимается, когда self уходит из области).
-        *SALES
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .entry(key)
-            .or_default() += 1;
+            .insert(key, last.at);
         *self.g = Some(last);
     }
 }

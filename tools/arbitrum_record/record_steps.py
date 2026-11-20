@@ -100,6 +100,8 @@ def steps(rpc, wallet, ekubo_from):
         ("ekubo", "ekubo.py", ["--rpc", rpc, "--gt"]),
         ("ekubo_more", "ekubo_more.py", ["--rpc", rpc, "--from-block", str(ekubo_from)] if ekubo_from is not None
          else None),
+        # Решение 473: Balancer V2 других фабрик (адреса по умолчанию — FACTORIES в шапке скрипта).
+        ("balancer_v2_more", "balancer_v2_more.py", ["--rpc", rpc]),
         ("exec_v4_live", "exec_v4_live.py", ["--rpc", rpc] + (["--wallet", wallet] if wallet else [])),
     ]
     return out

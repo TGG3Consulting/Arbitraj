@@ -101,6 +101,11 @@ pub enum ExecKind {
     /// (его сторона шага — обёртка wnative), forward: обмен через Core.forward(расширение) у MEVCapture
     /// (contracts/ArbExecutor.sol _ekubo). Есть только у кода исполнителя с шагом EKUBO (exec_callback.rs EKUBO_MARK).
     Ekubo,
+    /// Решение 472 (T472-08): пул Curve с нативным ETH (Plain*ETH / Plain2ETHEMA фабрики Curve) — как CURVE, но монета
+    /// пары нативная: обёртка withdraw → exchange{value} / приход ETH от пула → deposit (contracts/ArbExecutor.sol
+    /// _curveEth). Шаг 28 — только исполнитель v5 (exec_callback.rs since). Вид семейства остаётся CURVE (of); шаг
+    /// CURVE_ETH выбирает exec/executor/entry.rs, когда монета пары — нативная монета пула (StableData.native).
+    CurveEth,
 }
 
 impl ExecKind {
@@ -131,6 +136,7 @@ impl ExecKind {
             ExecKind::InfBin => "INF_BIN",
             ExecKind::Fluid => "FLUID",
             ExecKind::Ekubo => "EKUBO",
+            ExecKind::CurveEth => "CURVE_ETH",
         }
     }
 

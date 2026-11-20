@@ -97,6 +97,14 @@ interface ICurvePool {
     function exchange(int128 i, int128 j, uint256 dx, uint256 minDy) external;
 }
 
+// Решение 472 (T472-08): пул Curve с нативным ETH — curvefi/curve-factory f389123 contracts/implementations/plain-2/
+// Plain2ETH.vy L537-L546 (`@payable`, exchange(i: int128, j: int128, _dx, _min_dy, _receiver = msg.sender) — перегрузка
+// из 4 аргументов), та же подпись — Plain3ETH.vy / Plain4ETH.vy, 5272fd2 Plain2ETHEMA.vy. Возврат (uint256) не
+// декодируется (как ICurvePool): выход шага меряется балансом.
+interface ICurveEthPool {
+    function exchange(int128 i, int128 j, uint256 dx, uint256 minDy) external payable;
+}
+
 // PancakeSwap StableSwap (индексы uint256, payable, ничего не возвращает): pancakeswap/pancake-smart-contracts@cb079908
 // projects/stable-swap/contracts/PancakeStableSwapTwoPool.sol L425-L430 (репозиторий закрыт — копия в форке
 // migo557/pancake-smart-contracts, 1:1 с verified-кодом BscScan пула 0x6D8f…CE5A5 в tintinweb/smart-contract-sanctuary-bsc);

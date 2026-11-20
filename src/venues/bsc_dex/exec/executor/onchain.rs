@@ -150,7 +150,7 @@ async fn inspect(
     }
     // Слот wnative у v2 и v3 один и тот же (слот 1: хранилище v3 не менялось — решение 395).
     let wrapped = match version {
-        Version::V2 | Version::V3 | Version::V4 => Some(Address::from_word(
+        Version::V2 | Version::V3 | Version::V4 | Version::V5 => Some(Address::from_word(
             word(ctx, executor, code::wnative_slot()).await?,
         )),
         Version::V1 => None,

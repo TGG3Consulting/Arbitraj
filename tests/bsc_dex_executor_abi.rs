@@ -137,6 +137,15 @@ fn kinds_match_contract_constants() {
                 forward: false,
             },
         ),
+        // Решение 472 (T472-08): пул Curve с нативным ETH — шаг 28, только v5 (в исходнике; сборки v5 нет).
+        (
+            "CURVE_ETH",
+            Params::CurveEth {
+                i: 0,
+                j: 1,
+                eth_in: true,
+            },
+        ),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
@@ -184,6 +193,18 @@ fn step_data_layouts() {
     assert_eq!(u32::abi_decode(&v2).unwrap(), 2500);
     let c = Params::Curve { i: 1, j: 0 }.data();
     assert_eq!(<(i128, i128)>::abi_decode_params(&c).unwrap(), (1, 0));
+    // Решение 472: CURVE_ETH — abi.encode(int128 i, int128 j, bool ethIn): три слова.
+    let ce = Params::CurveEth {
+        i: 0,
+        j: 2,
+        eth_in: false,
+    }
+    .data();
+    assert_eq!(ce.len(), 96);
+    assert_eq!(
+        <(i128, i128, bool)>::abi_decode_params(&ce).unwrap(),
+        (0, 2, false)
+    );
     // STABLE_U256 — abi.encode(uint256 i, uint256 j); SADDLE — abi.encode(uint8 i, uint8 j): по слову на индекс.
     let u = Params::StableU256 { i: 1, j: 0 }.data();
     assert_eq!(
@@ -346,6 +367,10 @@ fn stable_bnb_contract_rules_present() {
         "bnbFrom = s.tokenIn;",
         "bnbFrom = s.pool;",
         "IStableSwapU256(s.pool).exchange{value: amount}(i, j, amount, 0);",
+        // Решение 472 (T472-08): шаг CURVE_ETH — тот же порядок для пула Curve с нативным ETH.
+        "} else if (k == CURVE_ETH) {",
+        "ICurveEthPool(s.pool).exchange{value: amount}(i, j, amount, 0);",
+        "IWBNB(s.tokenOut).deposit{value: address(this).balance - ethHad}();",
         // Ревью 272 (А3): в обёртку — только BNB, пришедший от пула этим шагом (разность баланса).
         "IWBNB(s.tokenOut).deposit{value: address(this).balance - bnbHad}();",
         "_sweepBnb();",
@@ -354,13 +379,13 @@ fn stable_bnb_contract_rules_present() {
     }
     // bnbFrom обнуляется после каждого вызова, где BNB ждётся: сколько установок — столько обнулений (stable BNB —
     // две, _unwrapAll executeNative — одна, решение 272; шаг FLUID — две, решение 440: вход и выход в нативной монете;
-    // шаг EKUBO — две, решение 454: нативный вход и выход; решение 456 — слияние: 3 + 2 + 2 = 7). Только строки кода
-    // (комментарии тоже содержат «bnbFrom = …»).
+    // шаг EKUBO — две, решение 454: нативный вход и выход; решение 456 — слияние: 3 + 2 + 2 = 7; шаг CURVE_ETH — две,
+    // решение 472: вход и выход в нативном ETH — 9). Только строки кода (комментарии тоже содержат «bnbFrom = …»).
     let code: Vec<&str> =
         src.lines().map(str::trim).filter(|l| l.starts_with("bnbFrom = ")).collect();
     let resets = code.iter().filter(|l| **l == "bnbFrom = address(0);").count();
     let sets = code.len() - resets;
-    assert_eq!(resets, 7);
+    assert_eq!(resets, 9);
     assert_eq!(sets, resets);
     let abi = abi();
     assert_eq!(

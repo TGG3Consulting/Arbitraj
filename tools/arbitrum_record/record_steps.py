@@ -2,8 +2,8 @@
 Что делает: решение 459 (T456-03, T457-02) — список скриптов записи узла Arbitrum для record_all.py: имя, файл и
   аргументы запуска. Адреса — те же официальные значения, что в шапке каждого скрипта и в README этой папки
   (источник — там же: docs/notes/arbitrum/dex-settings-arbitrum.md, docs/FIRST_RUN.md, официальные репозитории).
-  Порядок важен: balancer_v3.py до exec_v4_live.py (пулы Balancer V3 приёмка берёт из его записи), ekubo.py до
-  ekubo_more.py (та же папка записи).
+  Порядок важен: balancer_v3.py до exec_v4_live.py (пулы Balancer V3 приёмка берёт из его записи), ekubo_more.py до
+  ekubo.py (та же папка записи; ekubo.py берёт ключи пулов из pool_initialized.json — решение 479).
   Решение 460: sub_dex — шаг поиска событий 2 000 000 блоков без --log-step (окно 2 000 000 с фильтром по address
   узел Тиграна отдал в прогоне 20.11.2026 — camelot_v2 PairCreated; таймаут — деление пополам); ekubo_more — блок
   ядра из broadcast-файлов Ekubo, --ekubo-from-block — только переопределение.
@@ -104,9 +104,11 @@ def steps(rpc, wallet, ekubo_from):
         ("lb_v20", "lb_v20.py", [rpc, "--factory", "0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982",
                                  "--router", "0x7BFd7192E76D950832c77BB412aaE841049D8D9B"]),
         ("lb_v22", "lb_v22.py", [rpc, "--factory", "0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c"]),
+        # Решение 479: ekubo_more.py ДО ekubo.py — ekubo.py берёт ключи пулов, которых нет в PoolKeyIndex, из
+        # pool_initialized.json той же папки; окно замера логов ядра — 100 000 блоков (2000 дали 0 логов 20.11.2026).
+        ("ekubo_more", "ekubo_more.py", ["--rpc", rpc, "--load-blocks", "100000"]
+         + (["--from-block", str(ekubo_from)] if ekubo_from is not None else [])),
         ("ekubo", "ekubo.py", ["--rpc", rpc, "--gt"]),
-        ("ekubo_more", "ekubo_more.py", ["--rpc", rpc] + (["--from-block", str(ekubo_from)] if ekubo_from is not None
-                                                           else [])),
         ("exec_v4_live", "exec_v4_live.py", ["--rpc", rpc] + (["--wallet", wallet] if wallet else [])),
     ]
     return out

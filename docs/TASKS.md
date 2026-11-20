@@ -408,8 +408,12 @@
       симуляция на том же блоке H + 1 (quoter_out; на H — quoter_out_h), пулы — ещё getPools() фабрик списков. Нужна
       запись заново: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --date 2026-11-20 --only
       exec_v4_live` (папка executor_v4_live_<дата H> — если дата другая, строку SOURCES в live_record.rs сменить).
-    - T477-02 Ekubo: PoolKeyIndex 0x8989…5718 не знает ни одного из 22 пулов PoolInitialized ядра (poolKeyById = 0) —
-      факт Тиграну; tests/arbitrum_ekubo_live.rs (3) под #[ignore]; логов ядра за окна записи 0 (core_logs, core_load).
+    - T477-02 Ekubo — РАЗОБРАНО (решение 479): PoolKeyIndex 0x8989…5718 официальный (тот же Core), но реестр
+      добровольный («Optional registry», register() — по желанию) — пулы не зарегистрированы; бот берёт ключ из истории
+      PoolInitialized ядра. ekubo.py — ключ из pool_initialized.json, окно логов ядра 100 000 блоков; ekubo_more идёт
+      первым. Нужна перезапись: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --date
+      2026-11-20 --only ekubo_more,ekubo`; потом снять #[ignore] в tests/arbitrum_ekubo_live.rs (3) и, если в окне есть
+      логи, ekubo_more core_load_logs_route.
     - T477-03 Ekubo TWAMM: 3 пула TWAMM — ликвидность 0, ордеров нет: twamm_math_equals_router_quote под #[ignore].
     - T477-04 camelot_v2: FeePercentUpdated / SetStableSwap / PairCreated — 0 (потолок 600 с вышел на поиске нижней
       границы, окна событий не прочитаны); real_logs_parsed проверяет только Sync (49).

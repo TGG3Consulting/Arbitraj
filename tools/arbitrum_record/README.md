@@ -22,7 +22,7 @@ broadcast-файлов Ekubo: `contracts/evmtest/vendor/ekubo/broadcast/DeployAl
 algebra_dir_fee, ekubo, sub_dex). Приёмке v4 нужен eth_simulateV1 на узле — без него exec_v4_live.py выходит с причиной.
 
 **Повтор после прогона 20.11.2026 (решение 460), одна строка:** `python3 tools/arbitrum_record/record_all.py --rpc
-http://127.0.0.1:8547 --date 2026-11-20 --only sub_dex,balancer_v3,camelot_v2,lb_v22,ekubo,ekubo_more,exec_v4_live`
+http://127.0.0.1:8547 --date 2026-11-20 --only sub_dex,balancer_v3,camelot_v2,lb_v22,ekubo,ekubo_more,exec_v4_live` (решение 479: ekubo_more.py идёт перед ekubo.py — ekubo.py берёт ключи пулов из pool_initialized.json)
 (Windows — `py tools\arbitrum_record\record_all.py …`). `--date 2026-11-20` — ekubo.py и ekubo_more.py пишут в ту же
 папку `tests/data/arbitrum_ekubo_2026-11-20/` (файлы у них разные: ekubo.py — README.md, meta.json, gt_pools.json,
 pools.json, core_logs.json; ekubo_more.py — README_454.md, more_meta.json, pool_initialized.json, native_pools.json,

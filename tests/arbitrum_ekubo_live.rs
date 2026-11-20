@@ -1,14 +1,18 @@
 //! Файл: tests/arbitrum_ekubo_live.rs
 //! Что делает: решение 447 (Ekubo, T433-F8 / T433-079) — проверки на записи своего узла Arbitrum
 //! (tests/data/arbitrum_ekubo_<дата>/, пишет tools/arbitrum_record/ekubo.py; берётся последняя по имени папка):
-//! 1. ключ пула из PoolKeyIndex.poolKeyById даёт тот же PoolId (abi_ekubo::pool_id) — как проверка verify_ekubo.rs;
+//! 1. ключ пула — из PoolKeyIndex.poolKeyById, а если пула в реестре нет — из события PoolInitialized ядра (решение 479:
+//!    PoolKeyIndex — «Optional registry», регистрация — добровольный register(), evm-contracts@58eef0a
+//!    src/PoolKeyIndex.sol L11, L32; бот так же берёт ключ из истории ядра — history_ekubo.rs, verify_ekubo.rs) —
+//!    даёт тот же PoolId (abi_ekubo::pool_id); у ключа из события PoolId лога (ekubo_route) = PoolId пула;
 //! 2. наш расчёт обмена (math/ekubo_swap.rs по состоянию, собранному как в pools/load_ekubo.rs, + доплата MEVCapture)
 //!    = выход MEVCaptureRouter.quote на том же блоке (quote/quoter_ekubo.rs decode), каждый полный расчёт;
 //! 3. логи ядра за блоки записи: у анонимного лога обмена (log0, 116 байт) и у PositionUpdated PoolId берётся из
 //!    данных (pools/ekubo_route.rs), stateAfter разбирается (abi_ekubo::decode_state).
 //!
-//! Запись второго прогона 20.11.2026 (решение 477): пулов в PoolKeyIndex нет, логов ядра нет — тесты под #[ignore] с
-//! причиной-фактом (математика на пулах с нативным ETH — tests/arbitrum_ekubo_more_live.rs).
+//! Запись второго прогона 20.11.2026 (решение 477): пулов в PoolKeyIndex нет, логов ядра за 2000 блоков нет. Решение
+//! 479: ekubo.py берёт ключ из pool_initialized.json (ekubo_more.py теперь идёт первым), окно логов ядра — 100 000
+//! блоков; тесты под #[ignore] до перезаписи (математика на пулах с нативным ETH — tests/arbitrum_ekubo_more_live.rs).
 //! Кто вызывает: cargo test -- --ignored.
 //! От чего зависит: arb::venues::bsc_dex::{math, pools, quote}, файлы записи. Моков нет.
 
@@ -58,11 +62,17 @@ fn word(v: &Value) -> B256 {
     B256::from_slice(&hex(v))
 }
 
-/// Ключ пула из ответа poolKeyById. None — пула нет в реестре. Ошибки: паника — ответ не по ABI.
+/// Ключ пула: ответ poolKeyById, а если пула нет в реестре — поле key записи (из события PoolInitialized ядра, решение
+/// 479). None — ключа нет ни там, ни там. Ошибки: паника — ответ или поле не по формату.
 fn key(rec: &Value) -> Option<(Address, Address, B256)> {
     let raw = hex(&rec["poolKeyById"]);
     let k = IEkuboKeyIndex::poolKeyByIdCall::abi_decode_returns(&raw).expect("poolKeyById");
-    (k.token1 != Address::ZERO).then_some((k.token0, k.token1, k.config))
+    if k.token1 != Address::ZERO {
+        return Some((k.token0, k.token1, k.config));
+    }
+    let e = rec.get("key")?;
+    let a = |n: &str| e[n].as_str().unwrap().parse::<Address>().unwrap();
+    Some((a("token0"), a("token1"), word(&e["config"])))
 }
 
 /// Состояние пула из записи — как pools/load_ekubo.rs (те же разборщики). Ошибок нет (паника — запись не та).
@@ -113,7 +123,7 @@ fn state(rec: &Value, config: B256, block_ts: u64) -> EkuboData {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20 (526010867): у всех 4 пулов GeckoTerminal poolKeyById PoolKeyIndex 0x8989…5718 = 0 (как и у всех 22 PoolInitialized ядра), логов ядра за 2000 блоков 0 — сверять нечего (TASKS T456-03)"]
+#[ignore = "запись 2026-11-20 (526010867) сделана ekubo.py до решения 479: ключей нет (PoolKeyIndex пуст для этих пулов), логов ядра за 2000 блоков 0 — перезапись ekubo_more + ekubo (TASKS T477-02)"]
 fn key_gives_pool_id() {
     let mut n = 0;
     for rec in json("pools.json").as_array().unwrap() {
@@ -125,13 +135,17 @@ fn key_gives_pool_id() {
         };
         let id = word(&rec["pool_id"]);
         assert_eq!(abi_ekubo::pool_id(t0, t1, config), id);
+        if let Some(ev) = rec.get("key_event") {
+            let log: Log = serde_json::from_value(ev.clone()).expect("лог PoolInitialized");
+            assert_eq!(ekubo_route::pool_id(&log), Some(id), "PoolId события = PoolId пула");
+        }
         n += 1;
     }
     assert!(n > 0, "в записи нет пулов из PoolKeyIndex");
 }
 
 #[test]
-#[ignore = "запись 2026-11-20 (526010867): у всех 4 пулов GeckoTerminal poolKeyById PoolKeyIndex 0x8989…5718 = 0 (как и у всех 22 PoolInitialized ядра), логов ядра за 2000 блоков 0 — сверять нечего (TASKS T456-03)"]
+#[ignore = "запись 2026-11-20 (526010867) сделана ekubo.py до решения 479: ключей нет (PoolKeyIndex пуст для этих пулов), логов ядра за 2000 блоков 0 — перезапись ekubo_more + ekubo (TASKS T477-02)"]
 fn math_equals_router_quote() {
     let ts = json("meta.json")["timestamp"].as_u64().unwrap();
     let mut compared = 0;
@@ -181,7 +195,7 @@ fn math_equals_router_quote() {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20 (526010867): у всех 4 пулов GeckoTerminal poolKeyById PoolKeyIndex 0x8989…5718 = 0 (как и у всех 22 PoolInitialized ядра), логов ядра за 2000 блоков 0 — сверять нечего (TASKS T456-03)"]
+#[ignore = "запись 2026-11-20 (526010867) сделана ekubo.py до решения 479: ключей нет (PoolKeyIndex пуст для этих пулов), логов ядра за 2000 блоков 0 — перезапись ekubo_more + ekubo (TASKS T477-02)"]
 fn core_logs_route() {
     let all = json("core_logs.json");
     let mut swaps = 0;

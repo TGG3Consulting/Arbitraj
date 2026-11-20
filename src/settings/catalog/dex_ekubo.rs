@@ -10,7 +10,7 @@
 //!
 //! Адреса — официальные: docs.ekubo.org/reference/contracts/evm-v3 (Core, MEVCapture, MEVCaptureRouter — один адрес во
 //! всех сетях, Arbitrum — Live); PoolKeyIndex — EkuboProtocol/evm-contracts broadcast/DeployAll.s.sol/42161
-//! (run-1785724793522.json, commit 02e0d82f). Решение 454: TWAMM 0xd4f1060cb9c1a13e1d2d20379b8aa2cf7541ed9b (61d09daa,
+//! (run-1785724793522.json, commit 58eef0a — в 02e0d82f файла нет, решение 479). Решение 454: TWAMM 0xd4f1060cb9c1a13e1d2d20379b8aa2cf7541ed9b (61d09daa,
 //! run-1767194711580.json) и 0xd47f1b1edcfeabb08f6ebd8fc337c27e636c75ba (8c1b721, run-1777073880286.json; он же на
 //! docs.ekubo.org), Oracle 0x517e506700271aea091b02f42756f5e174af5230 (61d09daa), BoostedFees
 //! 0xd4b54d0ca6979da05f25895e6e269e678ba00f9e (concentrated) и 0x948b9c2c99718034954110cb61a6e08e107745f9 (stableswap)

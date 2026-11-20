@@ -14,6 +14,8 @@ pub mod bin_swap;
 pub mod curve_math;
 pub mod dmm;
 pub mod dodo_math;
+pub mod fluid_check;
+pub mod fluid_swap;
 pub mod full_math;
 pub mod lb_fee;
 pub mod lb_swap;

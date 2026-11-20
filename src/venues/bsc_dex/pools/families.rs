@@ -186,6 +186,14 @@ pub enum Proto {
     /// getSwapOut (math/lb_swap.rs, lb_fee.rs); перечитывание каждым блоком (время блока). Квотер сверки — сам пул
     /// getSwapOut. Исполнение — шаг LB исполнителя v2 (вход переводом в пул, swap(swapForY, to)). Вид ядра — LbBin.
     LbV21,
+    /// Fluid DEX T1 (решение 440; fluid_t1, DEX fluid-arbitrum): пул FluidDexT1 (Instadapp/fluid-contracts-public
+    /// @404d73f, poolT1) — ликвидность в слое Liquidity как смарт-залог и/или смарт-долг, x·y=k по мнимым резервам частей
+    /// вокруг центральной цены, обмен делится между частями. Фабрика FluidDexFactory (dex.factory) — isDex; состояние —
+    /// официальный резолвер FluidDexReservesResolver (dex.quoter: getPoolReservesAdjusted, сверка — estimateSwapIn) и
+    /// слова пула; новые пулы — из справочника. Математика — порт _swapIn (math/fluid_swap.rs, fluid_check.rs);
+    /// перечитывание каждым блоком. Нативная монета пула (0xEeee…) — в паре обёртка dex.native_wrapped. Исполнение — шаг
+    /// FLUID исполнителя v4 (approve пулу + swapIn). Вид ядра — SmartColDebt.
+    FluidT1,
 }
 
 impl Proto {
@@ -378,6 +386,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // WooFi WooPPV2 (решение 122 F, 3): в графе и сигналах; своей математики нет (развёрнутый код закрыт) — котировка
         // по лесенке ответов квотера контракта (dex.pmm_ladder_usd, quote/pmm_ladder.rs); шага WOO нет до сухой сделки.
         "woofi_v2" => (PoolKind::OraclePmm, Proto::WooPP, true, false, false),
+        // Fluid DEX T1 (решение 440): в графе и сигналах (порт _swapIn); исполнение — шаг FLUID исполнителя.
+        "fluid_t1" => (PoolKind::SmartColDebt, Proto::FluidT1, true, false, false),
         // Slipstream (Topaz v3 на BSC; решения 80, 85): форк Uniswap V3 core — в графе, котируется общей математикой V3
         // (math/swap_cl), НО tradable=false — исполнения пока нет (роутер Slipstream — следующая фаза). graphable=true,
         // tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как THENA Algebra /
@@ -596,6 +606,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Liquidity Book V2.1 (решение 290): фабрика (getFactory пула и реестр getLBPairInformation). Квотер сверки — сам
         // пул getSwapOut (адрес не нужен).
         Proto::LbV21 => list.push("dex.factory"),
+        // Fluid DEX T1 (решение 440): фабрика (isDex) и резолвер FluidDexReservesResolver в dex.quoter — им читается
+        // состояние (getPoolReservesAdjusted) и сверяется выход (estimateSwapIn).
+        Proto::FluidT1 => list.extend(["dex.factory", "dex.quoter"]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

@@ -29,6 +29,7 @@ pub mod pool_cond_stat;
 pub mod pool_fictive;
 pub mod pool_lb;
 pub mod pool_depth;
+pub mod pool_smart;
 pub mod pool_solidly;
 pub mod pool_tick_bin;
 pub mod pool_vault;
@@ -64,7 +65,7 @@ pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{
     AmpV2Data, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, LbBinData, OraclePmmData, PmmData, Pool, PoolKind, PoolRef,
-    PoolState, SolidlyFee, SolidlyGate, StableData, StableGuard, StableNg, TickBinData,
+    PoolState, SmartColDebtData, SolidlyFee, SolidlyGate, StableData, StableGuard, StableNg, TickBinData,
     TickReserves, VaultCurve, VaultPoolData,
 };
 pub use pool_cond_stat::{PoolCondCounts, PoolCondStat};

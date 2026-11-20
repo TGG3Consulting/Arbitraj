@@ -25,7 +25,14 @@
 Пересборка: `contracts/build.sh` → `git diff contracts/out` (пусто — артефакты в репозитории собраны из этих исходников)
 → `cargo test --test bsc_dex_executor_abi` (ABI, номера видов, хеши) → `cd evmtest && npm ci && node run.mjs`.
 
-## Версии (решения 272, 395)
+## Версии (решения 272, 395, 440)
+- **v4** (решение 440) — v3 + шаг FLUID = 22 (пул Fluid DEX T1: approve пулу ровно на шаг + `swapIn(swap0to1, сумма, 0, to)`;
+  нативная монета пула — через обёртку: вход `withdraw` → `swapIn{value}`, выход — `receive` только от слоя ликвидности из
+  data → `deposit`) и интерфейс `IFluidDexT1` в `IPools.sol`. **Только исходник:** артефакты `out/` ещё v3 (агенту сборка
+  запрещена). Чтобы v4 заработала: `contracts/build.sh` → скопировать прежние `out/ArbExecutor.*` в `out/v3/` → в
+  `src/venues/bsc_dex/exec/executor/code.rs` сделать `out/` = V4, `out/v3/` = V3 (version_of) → `evmtest` (сценарий FLUID —
+  задача решения 440) → «Развернуть исполнитель». До этого шаг FLUID ни у одного кошелька не строится (exec_callback.rs
+  since = V4, причина «нужна сборка исполнителя v4»).
 - **v3** (решение 395, t181) — v2 + шаги UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 (пулы внутри менеджеров Uniswap V4 и
   PancakeSwap Infinity) и обратные вызовы `unlockCallback` / `lockAcquired`. Текущая сборка `out/` — v3; «Развернуть
   исполнитель» разворачивает её. Хранилище то же (owner — слот 0, wnative — слот 1), execute / executeNative — те же.

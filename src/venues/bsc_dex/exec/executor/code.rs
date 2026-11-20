@@ -70,6 +70,10 @@ pub enum Version {
     /// Решение 395 (t181): v2 + шаги UNI_V4 / INF_CL / INF_BIN (contracts/out/ — текущая сборка, её разворачивает кнопка
     /// «Развернуть исполнитель»).
     V3,
+    /// Решение 440: v3 + шаг FLUID = 22 (пул Fluid DEX T1). Есть только в исходнике contracts/ArbExecutor.sol: артефакты
+    /// contracts/out/ ещё v3, version_of её не возвращает — до пересборки (contracts/build.sh: out/ → v4, копия прежних
+    /// артефактов → out/v3/) и переразвёртывания у кошельков её нет.
+    V4,
 }
 
 impl Version {
@@ -79,6 +83,7 @@ impl Version {
             Version::V1 => "v1",
             Version::V2 => "v2",
             Version::V3 => "v3",
+            Version::V4 => "v4",
         }
     }
 
@@ -93,6 +98,7 @@ impl Version {
             "v1" => Some(Version::V1),
             "v2" => Some(Version::V2),
             "v3" => Some(Version::V3),
+            "v4" => Some(Version::V4),
             _ => None,
         }
     }

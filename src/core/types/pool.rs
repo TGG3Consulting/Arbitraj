@@ -19,6 +19,7 @@ use super::market::VenueId;
 pub use super::pool_amp::AmpV2Data;
 pub use super::pool_fictive::FictiveData;
 pub use super::pool_lb::LbBinData;
+pub use super::pool_smart::{ColReserves, DebtReserves, SmartColDebtData};
 pub use super::pool_vault::{VaultCurve, VaultPoolData};
 pub use super::pool_solidly::{FeeRule, SolidlyFee, SolidlyGate};
 pub use super::pool_tick_bin::{TickBinData, TickReserves};
@@ -73,6 +74,10 @@ pub enum PoolKind {
     /// порядку создателя пула; комиссия = база + изменчивая часть, которая растёт с каждым пройденным бином и затухает
     /// по времени блока. Резервы бинов — в адаптере (как у Bin). Состояние — LbBinData.
     LbBin,
+    /// Пул с центральной ценой и мнимыми резервами на заёмной ликвидности (решение 440): ликвидность — в общем слое
+    /// как «смарт-залог» и/или «смарт-долг», x·y=k по мнимым резервам каждой части, обмен делится между частями.
+    /// Свой контракт на пул. Состояние — SmartColDebtData (core/types/pool_smart.rs).
+    SmartColDebt,
 }
 
 /// Как найти пул в сети.
@@ -232,6 +237,10 @@ pub enum PoolState {
     /// Бины с изменчивой комиссией (решение 290): активный бин, шаг, порядок X/Y, параметры комиссии и время блока.
     /// Боксируется, как Pmm. Поля — в LbBinData (core/types/pool_lb.rs).
     LbBin(Box<LbBinData>),
+    /// Пул со смарт-залогом и смарт-долгом (решение 440): резервы частей, центральная цена, комиссия, пределы снятия и
+    /// займа, множители точности, слово цен и время блока. Боксируется, как Pmm. Поля — в SmartColDebtData
+    /// (core/types/pool_smart.rs).
+    SmartColDebt(Box<SmartColDebtData>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

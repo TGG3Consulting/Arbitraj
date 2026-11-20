@@ -63,6 +63,7 @@ const CHOICE = {
   biswap_v3: 'Biswap V3 (форк iZiSwap, лесенка ответов пула)',
   kyber_dmm: 'KyberSwap Classic DMM (усиление amp, динамическая комиссия)',
   smardex: 'SmarDex (фиктивные резервы, средняя цена по времени блока)',
+  fluid_t1: 'Fluid DEX T1 (смарт-залог и смарт-долг, мнимые резервы)',
   lb_v21: 'Liquidity Book V2.1 (LFJ / Trader Joe: бины, изменчивая комиссия)',
   balancer_v2: 'Balancer V2 (хранилище Vault, весовые и стейблсвап-пулы)',
   pancake_stableswap: 'StableSwap PancakeSwap',
@@ -115,6 +116,7 @@ const POOL_KIND = {
   Fictive: 'Фиктивные резервы (SmarDex)',
   LbBin: 'Бины с изменчивой комиссией (Liquidity Book V2.1)',
   VaultPool: 'Пул в хранилище (Balancer V2)',
+  SmartColDebt: 'Смарт-залог и смарт-долг (Fluid DEX T1)',
 };
 const METHOD = { Single: 'одиночная', Bundle: 'бандл' };
 const LEVEL = { Info: 'инфо', Warn: 'внимание', Error: 'ошибка' };

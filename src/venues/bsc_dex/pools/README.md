@@ -99,6 +99,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `dex_rules.rs` | Умный роутер (smart_ok), вид не изменился (still), список DEX для интерфейса |
 | `verify.rs`, `verify_calls.rs`, `verify_rules.rs`, `verify_v4.rs` | Проверка пула на своём узле (V2/V3 — поля и реестр фабрики, своя комиссия V2; V4 — ключ) |
 | `verify_dodo.rs` | Проверка пула DODO PMM (решение 86b): реестр фабрики DVM/DPP/DSP (getDODOPoolBidirection) содержит пул |
+| `verify_fluid.rs` | Проверка пула Fluid DEX T1 (решение 440): isDex(pool) фабрики dex.factory (адрес по DEX_ID пула) + constantsView пула (фабрика, токены; нативная монета 0xEeee… → dex.native_wrapped) |
 | `verify_curve.rs` | Проверка пула StableSwap (решение 122 F): пул в dex.stable_pools DEX и пара среди его coins(k) |
 | `verify_curve_ng.rs` | Проверка пула Curve StableSwap-NG (решение 275): реестр фабрики dex.factory — get_coins(pool) не пуст, is_meta = false, пара среди монет |
 | `verify_lb.rs` | Проверка пула Liquidity Book V2.1 (решение 290): getFactory = dex.factory, токены X/Y = монета и встречный, реестр фабрики getLBPairInformation(X, Y, binStep) = этот адрес (самозванец отсекается) |
@@ -114,6 +115,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `created_log.rs` | Событие создания → проверенный пул → подписка (V2/V3 PairCreated/PoolCreated, V4 Initialize, Elastic PoolCreated, DODO NewDVM/NewDPP/NewDSP, Solidly PoolCreated, Slipstream PoolCreated по int24 tickSpacing) |
 | `abi_v2v3.rs`, `abi_v4.rs` | ABI фабрик, пулов, менеджеров V4, StateView, TickLens (+ сверка topic0 с исследованием) |
 | `abi_elastic.rs` | ABI пула/фабрики/читателя тиков KyberSwap Elastic (решение 81): getPoolState/getLiquidityState/swapFeeUnits/tickDistance/ticks, Swap/Mint/Burn/BurnRTokens, getPool, getTicksInRange |
+| `abi_fluid.rs` | ABI Fluid DEX T1 (решение 440): пул FluidDexT1 (constantsView, constantsView2, readFromStorage, VERSION, swapIn, события), фабрика isDex, резолвер FluidDexReservesResolver (getPoolReservesAdjusted, estimateSwapIn); метка NATIVE и слоты dexVariables / dexVariables2 |
 | `abi_dodo.rs` | ABI пула/фабрики DODO PMM (решение 86b): getPMMStateForCall/getUserFeeRate/_BASE_TOKEN_/_QUOTE_TOKEN_/querySellBase/querySellQuote, DODOSwap/BuyShares/SellShares/RChange/DODOFlashLoan, getDODOPoolBidirection, NewDVM/NewDPP/NewDSP |
 | `abi_curve.rs` | ABI пула StableSwap шаблона Curve 2020 — Ellipsis (решение 122 F): coins/balances/A/fee/get_dy/exchange, события; topic0 событий с массивами uint256[N] — по числу монет (topics_for), MAX_COINS = 8 |
 | `abi_curve_ng.rs` | ABI пула Curve StableSwap-NG v7.0.0 и фабрики NG (curvefi/stableswap-ng 3332cd4): геттеры, get_dy, события с uint256[], get_coins/is_meta |
@@ -161,6 +163,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `discover.rs`, `discover_v4.rs` | Найденный пул, встречный токен, пулы подписки из справочника; разбор Initialize и пул по ключу V4 |
 | `load.rs`, `load_v2v3.rs`, `load_cl.rs`, `load_bin.rs` | Состояние на блоке: резервы, slot0, ликвидность, тики, бины (load_bin.rs, ревью 332 Н7: стороны полосы Infinity Bin — одновременно, getBin и следующий непустой бин — одним кругом) |
 | `load_elastic.rs` | Состояние пула KyberSwap Elastic на блоке (решение 81): getPoolState/getLiquidityState/swapFeeUnits + все тики списка через читатель (getTicksInRange) и ticks() — по одному пулу |
+| `load_fluid.rs` | Состояние пула Fluid DEX T1 на блоке (решение 440): getPoolReservesAdjusted резолвера (центральная цена, резервы смарт-залога и смарт-долга, пределы), constantsView / constantsView2, слова пула, VERSION и время блока одним try_many → PoolState::SmartColDebt; перечитывание каждым блоком |
 | `load_dodo.rs` | Состояние пула DODO PMM на блоке (решение 86b): getPMMStateForCall + getUserFeeRate(0) + _BASE_TOKEN_/_QUOTE_TOKEN_ → PoolState::Pmm; net_after_fees, rstate — по одному пулу |
 | `load_curve.rs` | Состояние пула StableSwap на блоке (решение 122 F): coins(k)/balances(k) до первого отката, A(), fee() одним Multicall3 + rates по decimals монет → PoolState::StableSwap |
 | `load_curve_ng.rs` | Состояние пула Curve NG на блоке одним Multicall3: N_COINS, coins/balances, stored_rates, A_precise, fee, offpeg → StableSwap с шаблоном NG |
@@ -205,6 +208,7 @@ DEX — строки таблицы сопоставления (решение 5
 | `ticks.rs`, `bins.rs` | Карта тиков и резервы бинов (в прочитанных пределах); bins.rs — ещё концы поиска getNextNonEmptyBin NONE_BELOW / NONE_ABOVE и края «сторона прочитана до конца» (ревью 332, Н6) |
 | `events.rs`, `events_v2.rs`, `events_v3.rs`, `events_cl.rs`, `events_bin.rs` | Применение событий |
 | `events_elastic.rs` | События KyberSwap Elastic (решение 81): Swap → цена/тик/baseL; Mint/Burn/BurnRTokens → перечитывание (reinvestL/карта тиков) |
+| `events_fluid.rs` | События Fluid DEX T1 (решение 440): Swap, LogArbitrage, ликвидность, настройки пула → перечитывание пула |
 | `events_dodo.rs` | События DODO PMM (решение 86b): любое событие кривой (DODOSwap/BuyShares/SellShares/RChange/DODOFlashLoan) → перечитывание пула (событие не несёт пост-состояние кривой) |
 | `events_curve.rs` | События StableSwap (решение 122 F): любое событие пула (обмен, ликвидность, комиссия, A) → перечитывание |
 | `events_curve_ng.rs` | События Curve NG (решение 275): любое событие пула → перечитать (ещё — каждый блок) |

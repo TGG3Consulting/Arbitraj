@@ -1010,3 +1010,15 @@ core.rules «Правила для PriceOutOfRange нет»), как у любо
 | risk.drawdown_max_usd | вся система (можно по площадке и по направлению площадки) | Решение 414, необязательна: предел просадки направления от пика в USDT. Совет — `30` (пример Тиграна 19.11). Значения по умолчанию у движка нет |
 | risk.max_daily_loss_total_usd | вся система | Решение 173, необязательна: полный «Стоп» всей системы по убытку дня. Совет — не задавать или `60`. Не задана — общего стопа по убытку нет |
 | risk.min_bnb_balance | кошелёк | Запас BNB на газ — на несколько сделок и отмен; исходя из типичного газа BSC. Подбирает Тигран |
+
+## DEX Fluid DEX T1 на Arbitrum (решение 440)
+
+Область «DEX» — id GeckoTerminal `fluid-arbitrum` площадки arb_dex (ключ с сетью — `fluid-arbitrum@arbitrum`, решение 435, 433-з). Адреса — официальный репозиторий Instadapp/fluid-contracts-public@404d73f91e6806f881f8dabeb30494f93f9e99b7, `deployments/arbitrum/*.json` (поле `address`); исполнение — только после сборки исполнителя v4 (contracts/build.sh) и переразвёртывания.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `fluid-arbitrum` | `fluid_t1` | Пул FluidDexT1 (смарт-залог / смарт-долг, мнимые резервы) — вид решения 440 | deployments/arbitrum/Dex_*.json (ABI пула: swapIn, constantsView, getCollateralReserves) |
+| dex.factory | DEX `fluid-arbitrum` | `0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085` | FluidDexFactory — isDex(pool) подтверждает пул | deployments/arbitrum/DexFactory.json |
+| dex.quoter | DEX `fluid-arbitrum` | `0x05Bd8269A20C472b148246De20E6852091BF16Ff` | FluidDexReservesResolver — состояние пула (getPoolReservesAdjusted) и сверка выхода (estimateSwapIn); конструктор: фабрика 0x9171…9085, Liquidity 0x52Aa…e497, LiquidityResolver 0xca13…5C60 | deployments/arbitrum/DexReservesResolver.json (поле `args`) |
+| dex.pool_enabled | DEX `fluid-arbitrum` | `да` — после записи данных узла (tools/arbitrum_record/fluid_t1.py) и снятия #[ignore] с tests/arbitrum_fluid_t1.rs | Порт _swapIn сверен с пулами Arbitrum только по записи | Решение 440 |
+| dex.native_wrapped | площадка arb_dex | обёртка нативной монеты сети (WETH Arbitrum One) — значение площадки arb_dex | Пулы Fluid с нативной монетой (0xEeee…: USDC/ETH, wstETH/ETH, weETH/ETH, ezETH/ETH, rsETH/ETH, FLUID/ETH) берутся только с ней | Instadapp/fluid-contracts-public poolT1/common/constantVariables.sol L17 (NATIVE_TOKEN) |

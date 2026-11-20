@@ -40,6 +40,11 @@ use super::registry_key;
 /// Имя настройки.
 pub const SETTING: &str = "dex.v3_swap_callback";
 
+/// Решение 440: исполнитель v4 (шаг FLUID = 22) есть только в исходнике contracts/ArbExecutor.sol — артефакты
+/// contracts/out/ ещё v3; кошелька v4 быть не может, пока артефакты не пересобраны и исполнитель не переразвёрнут.
+pub const V4_TODO: &str =
+    "нужна сборка исполнителя v4 (contracts/build.sh, шаг FLUID) и переразвёртывание исполнителя";
+
 /// Память итогов: версия → сигнатура → None — вызов есть, Some — причина.
 type Seen = HashMap<Version, HashMap<String, Option<String>>>;
 
@@ -66,6 +71,8 @@ pub fn check(v: Version, sig: &str) -> Option<String> {
         Version::V1 => code::runtime_v1(),
         Version::V2 => code::runtime_v2(),
         Version::V3 => code::runtime(),
+        // Решение 440: v4 ещё не собрана (contracts/out — v3) — артефакта v4 нет.
+        Version::V4 => Err(V4_TODO.to_string()),
     };
     let ver = v.label();
     match rt {
@@ -168,7 +175,7 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
 /// С какой версии исполнителя есть вид шага (у более ранней диспетчер _step откатывает «kind»). Решение 284: v2 —
 /// NOMI_STABLE = 12, METRIC = 13, IZI = 14 — решение 286, KYBER_DMM = 15 — решение 287, SMARDEX = 16 — решение 288,
 /// BALANCER = 17 — решение 289, LB = 18 — решение 290. Решение 395 (t181): v3 — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21.
-/// Остальные — с v1. Принимает: вид шага. Ошибок нет.
+/// Решение 440: v4 — FLUID = 22. Остальные — с v1. Принимает: вид шага. Ошибок нет.
 pub fn since(k: ExecKind) -> Version {
     match k {
         ExecKind::NomiStable
@@ -179,6 +186,7 @@ pub fn since(k: ExecKind) -> Version {
         | ExecKind::Balancer
         | ExecKind::Lb => Version::V2,
         ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => Version::V3,
+        ExecKind::Fluid => Version::V4,
         _ => Version::V1,
     }
 }
@@ -194,7 +202,9 @@ pub fn v2_only(k: ExecKind) -> bool {
 pub fn step_absent(k: ExecKind, v: Version) -> Option<String> {
     let need = since(k);
     (v < need).then(|| {
-        let todo = if need >= Version::V3 {
+        let todo = if need >= Version::V4 {
+            V4_TODO
+        } else if need >= Version::V3 {
             deploy_gate::need_v3()
         } else {
             "переразверните исполнитель кошелька (экран «Маппинг кошельков»)"

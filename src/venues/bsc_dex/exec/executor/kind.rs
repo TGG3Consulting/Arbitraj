@@ -3,12 +3,13 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); сверяет тест tests/bsc_dex_executor_abi.rs с
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); FLUID = 22 — только v4, решение 440; сверяет тест tests/bsc_dex_executor_abi.rs с
 //! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
 //! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), METRIC — (bool zeroForOne),
 //! BALANCER — (bytes32 poolId), UNI_V4 — abi.encode(PoolKey Uniswap V4), INF_CL / INF_BIN — abi.encode(PoolKey
-//! Infinity) (кодирование ключа — pools/key.rs, то же, что даёт PoolId), остальные — пусто.
+//! Infinity) (кодирование ключа — pools/key.rs, то же, что даёт PoolId), FLUID — (bool swap0to1, uint8 native, address
+//! liquidity), остальные — пусто.
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
 //! От чего зависит: exec/executor/abi.rs, alloy sol-types.
 //! Настройки: нет.
@@ -87,6 +88,29 @@ pub enum Params {
     InfCl { key: InfKey },
     /// Решение 395 (только v3): пул PancakeSwap Infinity Bin — ключ пула; пул шага — Vault Infinity (dex.vault).
     InfBin { key: InfKey },
+    /// Решение 440 (только исполнитель v4): пул Fluid DEX T1 — zero_for_one в порядке токенов САМОГО пула (swap0to1),
+    /// native: 0 — нативной монеты на шаге нет, 1 — вход в нативной монете пула (токен шага — обёртка: withdraw →
+    /// swapIn{value}), 2 — выход в нативной монете (приходит от слоя ликвидности → deposit в обёртку); liquidity — слой
+    /// ликвидности пула (constantsView), только от него контракт принимает нативную монету на шаге.
+    /// data = abi.encode(bool, uint8, address).
+    Fluid(FluidStep),
+}
+
+/// Решение 440: параметры шага FLUID (см. Params::Fluid).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FluidStep {
+    pub zero_for_one: bool,
+    /// 0 — нет нативной монеты, 1 — вход в ней, 2 — выход в ней.
+    pub native: u8,
+    pub liquidity: Address,
+}
+
+impl FluidStep {
+    /// abi.encode(bool zeroForOne, uint8 native, address liquidity) — uint8 занимает слово, как uint256. Ошибок нет.
+    pub fn data(&self) -> Bytes {
+        let t = (self.zero_for_one, U256::from(self.native), self.liquidity);
+        Bytes::from(t.abi_encode_params())
+    }
 }
 
 impl Params {
@@ -115,6 +139,7 @@ impl Params {
             Params::UniV4 { .. } => 19,
             Params::InfCl { .. } => 20,
             Params::InfBin { .. } => 21,
+            Params::Fluid(_) => 22,
         }
     }
 
@@ -137,6 +162,7 @@ impl Params {
             // Решение 395: abi.encode(ключ) — статическая структура, слова подряд (как PoolId — keccak тех же байт).
             Params::UniV4 { key } => Bytes::from(key.pool_key().abi()),
             Params::InfCl { key } | Params::InfBin { key } => Bytes::from(key.pool_key().abi()),
+            Params::Fluid(f) => f.data(),
             _ => Bytes::new(),
         }
     }

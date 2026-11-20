@@ -103,6 +103,8 @@
 | `quoter_maverick.rs` | Сверка Maverick V2 (решения 73, 122 F): MaverickV2Quoter.calculateSwap на точный вход без предела тика (как шаг MAVERICK исполнителя) и разбор amountOut |
 | `quoter_dmm.rs` | Сверка KyberSwap Classic DMM (решение 287): DMMRouter02.getAmountsOut(сумма, [пул], [вход, выход]) — dex.quoter; выход — последний элемент |
 | `quoter_lb.rs` | Сверка Liquidity Book V2.1 (решение 290): getSwapOut(amountIn, swapForY) самого пула через eth_call; остаток входа > 0 — выхода нет (swap откатился бы) |
+| `quoter_fluid.rs` | Сверка Fluid DEX T1 (решение 440): estimateSwapIn(пул, swap0to1, вход, 0) официального резолвера FluidDexReservesResolver (dex.quoter) через eth_call; 0 — выхода нет (пределы слоя ликвидности или скачок цены) |
+| `fluid_depth.rs` | Fluid DEX T1 (решение 440): спот-цена для сизинга пробы, пустота пула, комиссия в процентах и глубина в полосе цены по мнимым резервам частей (оценки, не сверяемые величины) |
 | `quoter_balancer.rs` | Сверка Balancer V2 (решение 289): Vault.queryBatchSwap(GIVEN_IN, шаг по id пула) через eth_call — dex.vault; выход — минус дельта токена выхода |
 | `vault_depth.rs` | Глубина пула Balancer V2 в полосе (решение 289): средняя цена исполнения без комиссии в полосе от цены малой пробы, деление отрезка пополам; весовой — не дальше 30 % баланса входа |
 | `emptiness.rs` | Пустой пул (резерв 0, ликвидность 0, нет бинов) и причины «не хватает ликвидности на сумму сверки» |

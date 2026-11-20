@@ -289,3 +289,13 @@ interface ISingletonSettle {
     function take(address currency, address to, uint256 amount) external;
     function settle() external payable returns (uint256 paid);
 }
+
+// Решение 440: пул Fluid DEX T1 — Instadapp/fluid-contracts-public@404d73f
+// contracts/protocols/dex/poolT1/coreModule/core/main.sol L689-L700 (swapIn; селектор 0x2668dfaa — есть в коде пулов
+// Arbitrum, deployments/arbitrum/Dex_*.json). to == 0xdEaD — оценка откатом; исполнитель передаёт себя или владельца.
+interface IFluidDexT1 {
+    function swapIn(bool swap0to1_, uint256 amountIn_, uint256 amountOutMin_, address to_)
+        external
+        payable
+        returns (uint256 amountOut_);
+}

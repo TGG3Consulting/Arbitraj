@@ -118,9 +118,23 @@ fn kinds_match_contract_constants() {
         ("UNI_V4", Params::UniV4 { key: v4_key() }),
         ("INF_CL", Params::InfCl { key: inf_key() }),
         ("INF_BIN", Params::InfBin { key: inf_key() }),
+        // Решение 440: пул Fluid DEX T1 — только v4.
+        ("FLUID", Params::Fluid(fluid_step(1))),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
+    }
+}
+
+/// Слой ликвидности Fluid в Arbitrum One (Instadapp/fluid-contracts-public@404d73f deployments/arbitrum/Liquidity.json).
+const FLUID_LIQUIDITY: Address = address!("0x52Aa899454998Be5b000Ad077a46Bbe360F4e497");
+
+/// Шаг FLUID (решение 440) с данным видом нативной монеты.
+fn fluid_step(native: u8) -> kind::FluidStep {
+    kind::FluidStep {
+        zero_for_one: true,
+        native,
+        liquidity: FLUID_LIQUIDITY,
     }
 }
 
@@ -186,6 +200,13 @@ fn step_data_layouts() {
     let bl = Params::Balancer { pool_id: id }.data();
     assert_eq!(bl.len(), 32);
     assert_eq!(B256::abi_decode(&bl).unwrap(), id);
+    // FLUID (решение 440) — abi.encode(bool swap0to1, uint8 native, address liquidity): три слова.
+    let fl = Params::Fluid(fluid_step(2)).data();
+    assert_eq!(fl.len(), 96);
+    assert_eq!(
+        <(bool, U256, Address)>::abi_decode_params(&fl).unwrap(),
+        (true, U256::from(2u8), FLUID_LIQUIDITY)
+    );
     let sd = Params::Saddle { i: 2, j: 1 }.data();
     assert_eq!(sd.len(), 64);
     assert_eq!((sd[31], sd[63]), (2, 1));

@@ -92,12 +92,23 @@ pub fn gaps(g: &[String]) -> String {
 
 /// dex.fusion_fee_horizon_s: на сколько секунд после блока чтения берётся начало окна оракула (пересчёт комиссии на
 /// новых головах без узла — fusion_head.rs). Возвращает: секунды (> 0). Ошибки: NotConfigured — не задана, 0 или
-/// столько, что время + WINDOW + 2 не помещается в uint32 (имя настройки — в ошибке).
+/// больше u32::MAX − WINDOW − 1 (secondsAgo getTimepoints — uint32), с честной причиной и именем настройки.
 pub fn horizon(ctx: &Ctx) -> GatewayResult<u32> {
     let h = ctx.int(HORIZON)?;
+    let max = u32::MAX - fee_algebra_v1::WINDOW - 1;
     match u32::try_from(h) {
-        Ok(v) if v > 0 && v <= u32::MAX - fee_algebra_v1::WINDOW - 2 => Ok(v),
-        _ => Err(not_set(ctx, HORIZON, h)),
+        Ok(v) if v > 0 && v <= max => Ok(v),
+        _ if h == 0 => Err(not_set(ctx, HORIZON, "нужно целое больше 0")),
+        // Ревью t236: secondsAgo = WINDOW + горизонт + 1 идёт в getTimepoints(uint32[] secondsAgos).
+        _ => Err(not_set(
+            ctx,
+            HORIZON,
+            &format!(
+                "больше {max}: secondsAgo = WINDOW ({}) + горизонт + 1 не помещается в uint32 \
+                 (getTimepoints(uint32 time, uint32[] secondsAgos, …) оператора)",
+                fee_algebra_v1::WINDOW
+            ),
+        )),
     }
 }
 
@@ -107,16 +118,14 @@ pub fn positive(ctx: &Ctx, name: &str) -> GatewayResult<usize> {
     let n = ctx.int(name)?;
     match usize::try_from(n) {
         Ok(v) if v > 0 => Ok(v),
-        _ => Err(not_set(ctx, name, n)),
+        _ => Err(not_set(ctx, name, "нужно целое больше 0")),
     }
 }
 
-/// NotConfigured «значение не подходит» с именем настройки. Ошибок нет.
-fn not_set(ctx: &Ctx, name: &str, v: u64) -> crate::gateway::errors::GatewayError {
-    let mut e = ctx.err(
-        ErrorCode::NotConfigured,
-        format!("{name} = {v}: нужно целое больше 0"),
-    );
+/// NotConfigured «значение не подходит» с именем настройки и причиной. Ошибок нет.
+fn not_set(ctx: &Ctx, name: &str, why: &str) -> crate::gateway::errors::GatewayError {
+    let v = ctx.int(name).map(|v| v.to_string()).unwrap_or_default();
+    let mut e = ctx.err(ErrorCode::NotConfigured, format!("{name} = {v}: {why}"));
     e.setting = Some(name.to_string());
     e
 }

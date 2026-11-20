@@ -171,6 +171,7 @@ log.signal_hold (core/book_marks_on.rs).
 
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
+| dex.fusion_fee_horizon_s | bsc_dex | числа нет: не меньше обычной паузы между Swap тихих пулов THENA Fusion (секунды) — посчитать по своей записи: время блока чтения минус время последней точки оракула пула (tests/data/bsc_thena_fusion_2026-11-20_t237: поля at_block / last_timepoint_ts) | тихий пул перечитывает оракул раз в горизонт (край горизонта — pools/fusion_head.rs, fusion_head_read.rs); больше горизонт — реже такие чтения, но больше частей getTimepoints (по dex.fusion_oracle_chunk точек) на каждом чтении оракула | Решение 463; pools/fusion_fee.rs, pools/fusion_oracle.rs |
 | dex.fusion_oracle_chunk | bsc_dex | подобрать по ответу узла: откат части getTimepoints с out of gas (журнал dex.pool, «getTimepoints на время …») — уменьшить; числа нет | факта газа getTimepoints на точку в репозитории нет; предел газа eth_call своего узла — RPCGasCap (docs/notes/own-node-connect-audit-2026-11-03.md, конфиг узла) | Решение 463 (ревью t236); pools/fusion_oracle.rs |
 
 ## Перечитывание Algebra по выходу полосы глубины за карту (решение 320)

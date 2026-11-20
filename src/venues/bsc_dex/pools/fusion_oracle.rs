@@ -8,8 +8,7 @@
 //! 2) feeConfig() оператора; начало окна на время блока + 0 … + 1 + горизонт — getTimepoints(время блока + 1 +
 //!    горизонт, [WINDOW + 1 + горизонт, …, WINDOW], tick, index, liquidity) оператора от имени пула (onlyPool: eth_call
 //!    с from = пул, поэтому не Multicall3) ЧАСТЯМИ по dex.fusion_oracle_chunk точек (ревью t236, п. 2): каждая
-//!    часть — отдельный eth_call с тем же time, газ одной части не растёт с горизонтом; размер части — настройка
-//!    (замера газа getTimepoints на точку нет; откат части с out of gas — уменьшить).
+//!    часть — отдельный eth_call с тем же time, газ части не растёт с горизонтом (замера газа на точку нет).
 //!
 //! Откат или ошибка узла на части (пул моложе окна — require 'OLD'; любой другой) — этих значений начала окна нет,
 //! причина части сохраняется (Got.gaps) и попадает в ошибку / журнал, если комиссия без них не считается (ветка
@@ -17,8 +16,7 @@
 //! Кто вызывает: pools/fusion_fee.rs (next_fee).
 //! От чего зависит: ctx.rs, node/call.rs, node/rpc.rs (batch), node/jsonrpc.rs, pools/abi_algebra.rs, load_cl.rs (i24),
 //! math/fee_algebra_v1.rs, math/adaptive_fee.rs.
-//! Настройки: нет (горизонт и размер части передаёт fusion_fee.rs — dex.fusion_fee_horizon_s,
-//! dex.fusion_oracle_chunk).
+//! Настройки: нет (dex.fusion_fee_horizon_s и dex.fusion_oracle_chunk передаёт fusion_fee.rs).
 //!
 //! Источник: код пула THENA Fusion — Sourcify 56, пул 0x1b9a1120…ef7d, полное совпадение (PoolState.sol,
 //! PoolImmutables.sol dataStorageOperator, AlgebraPool.sol timepoints); DataStorageOperator.sol (feeConfig,

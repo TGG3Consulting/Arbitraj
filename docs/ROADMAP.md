@@ -36,6 +36,10 @@
   created_candidate.rs. Решение 450, проверка строки несколькими видами (dex.sub_dex): каждая строка ключа с
   дочерними проверяется всеми видами — вызовов проверки больше в число видов; кешировать «вид пула по адресу» после
   первого подтверждения.
+- Решение 451 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/math/swap_elastic.rs 205 (было 200: ElasticState.v1),
+  math/swap_elastic_step.rs 348 (было 327: compute_swap_step_rule), pools/families.rs (+variant). Дробить: шаг-формулы
+  Elastic (calc_*) — в swap_elastic_formulas.rs. Тесты на записях Arbitrum (Elastic v1, Saddle, WOOFi) — #[ignore] до
+  записи своим узлом (docs/TASKS.md, «Решение 451»).
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

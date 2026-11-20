@@ -26,6 +26,7 @@ use super::super::math::{
     stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
+use super::super::pools::family_variant::Variant;
 use super::super::pools::load_dodo::{net_after_fees, rstate};
 use super::super::pools::registry::Entry;
 
@@ -145,6 +146,7 @@ pub fn swap(
                 reinvest_l: *reinvest_l,
                 fee_units: *fee_units,
                 ticks,
+                v1: e.family.variant == Variant::ElasticV1,
             };
             // is_token0 = направление задано в token0 (= zero_for_one).
             swap_elastic::swap(&s, zero_for_one, exact_in, amount)

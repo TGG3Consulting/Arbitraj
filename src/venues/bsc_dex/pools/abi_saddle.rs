@@ -12,6 +12,22 @@
 //! `getToken(uint8)` L231 (откат «Out of range» за последним индексом), `getTokenBalance(uint8)` L264,
 //! `calculateSwap(uint8,uint8,uint256)` L285, `swap(uint8,uint8,uint256,uint256,uint256 deadline)` L389 (whenNotPaused);
 //! пулов не больше 32 монет — L125; SwapUtils.sol `struct Swap` L69-L95; OwnerPausable.sol — OpenZeppelin Pausable.
+//!
+//! Решение 451 (T448-07, Saddle на Arbitrum): saddle-finance/saddle-contract 2cfdd055 — пулы deployments/arbitrum_mainnet
+//! (SaddleArbUSDPool, SaddleArbUSDPoolV2, SaddleFRAXBPPool — SwapFlashLoan; CommunityfUSDCPool — PermissionlessSwap)
+//! связаны с библиотеками SwapUtils 0xcF70…6894 и AmplificationUtils 0x4f6A…c62e (линковка — поле libraries в
+//! SaddleArbUSDPoolV2.json, SaddleFRAXBPPool.json, CommunityfUSDCPool.json; у SaddleArbUSDPool.json только abi и address —
+//! по нему не подтверждено, но SwapFlashLoan.json того же адреса 0xBea9…56e9 даёт те же libraries; код по адресу закроет
+//! запись tools/arbitrum_record/saddle.py; solcInputs/83663b3e…; тексты
+//! библиотек = contracts/SwapUtils.sol, AmplificationUtils.sol, MathUtils.sol коммита). Математика совпадает с Nerve
+//! (SwapUtils.sol getD L307-L357, getY L428-L480, _calculateSwap L519-L540, MAX_LOOP_LIMIT L124, A_PRECISION —
+//! AmplificationUtils.sol L25, _getAPrecise L60-L88). Отличия ABI: (1) `swapStorage` Saddle — 7 полей (struct Swap
+//! SwapUtils.sol L61-L82 без defaultDepositFee/defaultWithdrawFee/devaddr; Swap.sol L38; ABI deployments/
+//! arbitrum_mainnet/*.json) — swapFee в обоих пятым словом, разбор по длине ответа (swap_fee); (2) у SwapFlashLoan
+//! событие FlashLoan (SwapFlashLoan.sol L36-L42) — flashLoan меняет balances[tokenIndex] (L98-L141): пул перечитывается.
+//! Остальные геттеры, swap, calculateSwap, события обмена и ликвидности, RampA/StopRampA, Paused/Unpaused — те же.
+
+use alloy_primitives::U256;
 
 alloy::sol! {
     /// Пул Saddle (Nerve).
@@ -35,6 +51,28 @@ alloy::sol! {
         function paused() external view returns (bool);
         function calculateSwap(uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 dx) external view returns (uint256);
         function swap(uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 dx, uint256 minDy, uint256 deadline) external returns (uint256);
+    }
+
+    /// Пул Saddle (saddle-contract 2cfdd055, решение 451): swapStorage из 7 полей и FlashLoan у SwapFlashLoan.
+    interface ISaddleOwn {
+        event FlashLoan(address indexed receiver, uint8 tokenIndex, uint256 amount, uint256 amountFee, uint256 protocolFee);
+        function swapStorage() external view returns (uint256 initialA, uint256 futureA, uint256 initialATime, uint256 futureATime, uint256 swapFee, uint256 adminFee, address lpToken);
+    }
+}
+
+/// Решение 451: swapFee из ответа swapStorage() — Nerve (10 слов, ISaddleSwap) или Saddle (7 слов, ISaddleOwn); обе
+/// раскладки — статический кортеж, swapFee пятым словом. Принимает: байты ответа. Возвращает: swapFee; None — длина
+/// не 7 и не 10 слов или ответ не по ABI.
+pub fn swap_fee(out: &[u8]) -> Option<U256> {
+    use alloy::sol_types::SolCall;
+    match out.len() {
+        n if n == 10 * 32 => ISaddleSwap::swapStorageCall::abi_decode_returns(out)
+            .ok()
+            .map(|r| r.swapFee),
+        n if n == 7 * 32 => ISaddleOwn::swapStorageCall::abi_decode_returns(out)
+            .ok()
+            .map(|r| r.swapFee),
+        _ => None,
     }
 }
 
@@ -65,5 +103,11 @@ mod tests {
             topic("TokenSwap(address,uint256,uint256,uint128,uint128)")
         );
         assert!(format!("{:x}", ISaddleSwap::TokenSwap::SIGNATURE_HASH).starts_with("c6c1e063"));
+        // Решение 451: Saddle (saddle-contract SwapFlashLoan.sol L36-L42, Swap.sol L38).
+        assert_eq!(
+            ISaddleOwn::FlashLoan::SIGNATURE_HASH,
+            topic("FlashLoan(address,uint8,uint256,uint256,uint256)")
+        );
+        assert_eq!(ISaddleOwn::swapStorageCall::SELECTOR, ISaddleSwap::swapStorageCall::SELECTOR);
     }
 }

@@ -18,7 +18,7 @@ use alloy_primitives::B256;
 
 use super::abi_curve::MAX_COINS;
 use super::abi_inf_stable as inf_stable;
-use super::abi_saddle::ISaddleSwap as S;
+use super::abi_saddle::{ISaddleOwn as SaddleOwn, ISaddleSwap as S};
 use super::abi_stable_u::{IListaStable as L, IPancakeStable as P, liquidity_topics as liq};
 use super::abi_woo::IWooPP as W;
 use super::events::Applied;
@@ -61,6 +61,8 @@ pub fn topics(p: Proto) -> Vec<B256> {
             S::StopRampA::SIGNATURE_HASH,
             S::Paused::SIGNATURE_HASH,
             S::Unpaused::SIGNATURE_HASH,
+            // Решение 451: Saddle SwapFlashLoan (Arbitrum) — flashLoan меняет баланс пула; у Nerve события нет.
+            SaddleOwn::FlashLoan::SIGNATURE_HASH,
         ],
         Proto::WooPP => vec![
             W::WooSwap::SIGNATURE_HASH,

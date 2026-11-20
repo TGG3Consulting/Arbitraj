@@ -79,6 +79,7 @@ pub mod factory_calls;
 pub mod factory_scan;
 pub mod families;
 pub mod family_intern;
+pub mod family_variant;
 pub mod fee_fresh;
 pub mod fee_override;
 pub mod fee_probe;

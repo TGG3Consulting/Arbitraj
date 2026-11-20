@@ -173,6 +173,34 @@
     0xEaE4…Fd55 (DMMRouter); фактом будет ответ getAmountsOut в записи T450-01 (откат по пулам Legacy — адрес неверен).
   - T450-09 iZiSwap: уровни dex.v3_fee_tiers — конструктор (100, 400, 2000, 10000); включённые позже enableFeeAmount —
     fee2pointDelta своим узлом (запись T450-01).
+- **Решение 451 (20.11.2026, ветка t227/arb-dex-code-b) — T448-06…T448-10: Kyber Elastic v1, Saddle, WOOFi, Aero
+  Slipstream, PancakeSwap StableSwap на Arbitrum; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Подробно —
+  docs/notes/arbitrum/dex-settings-arbitrum.md §4.2–§4.6. СДЕЛАНО: вид `kyber_elastic_v1` (pools/family_variant.rs —
+  Variant по dex.kind, Family.variant; math compute_swap_step_rule); Saddle — abi_saddle::swap_fee (swapStorage 7/10 слов)
+  и FlashLoan в событиях вида saddle_stableswap; WOOFi — код не менялся (оракул сверен). Скрипты записи
+  tools/arbitrum_record/{kyber_elastic_v1,saddle,woofi}.py и тесты tests/arbitrum_{kyber_elastic_v1,saddle,woofi}_live.rs
+  (#[ignore] до записи). Исполнитель не менялся (переразвёртывать не нужно). Новых настроек нет (новое значение dex.kind).
+  Ревью 451: v1 — код фабрики 0x5F1d…D50a в любой сети (README ks-elastic-sc «v1» — в т.ч. BSC); на живом боте BSC
+  kyberswap_elastic_bsc — фабрика 0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A (Sourcify 56: SwapMath `usedAmount >
+  specifiedAmount` — v2), вид kyber_elastic там верен. Вид выбирается по коду фабрики, а не по сети.
+  BSC: kyber_elastic — без изменений; saddle_stableswap — подписка получила topic0 FlashLoan (у Nerve его нет — исходник
+  bda7578 без flashLoan) и разбор swapFee по длине ответа (у Nerve 10 слов — прежний путь).
+  Сделано однозначно, на подтверждение Тиграну:
+  1) Saddle исправлен в том же виде saddle_stableswap, а не отдельным значением dex.kind (математика одна, отличия ABI
+     различаются по ответу). Так оставить?
+  2) Family Debug: поле variant выводится только у не-Base (золотые снимки прежних видов не меняются).
+  Задачи:
+  - T451-01 Новое семейство «Slipstream V3 (Aero)» на Arbitrum: CLPool + крючок DynamicSwapFeeHook (комиссия блока по
+    TWAP-тику, скидка DiscountRegistry по вызывающему, MEV-налог модуля, afterSwap-комиссия), квотер Metaquoter; исходники —
+    Dromos-Labs/metadex-slipstream-public cf1ae46f, metadex-public 79c8d5b6 (лицензия Dromos Restricted Use 1.0).
+  - T451-02 Aero «Basic»-пулы Arbitrum (pools-arbitrum.json: volatilePoolFactory 0x8E6a…76D2, stablePoolFactory 0x7858…EF2D;
+    модули комиссии и MEV-налога) — в таблицу покрытия (GeckoTerminal/DefiLlama id сверить) и сверить с видами solidly_*.
+  - T451-03 TicksFeesReader.getTicksInRange(pool, MIN_TICK, 0) (load_elastic.rs) выделяет массив на все возможные тики
+    (у tickDistance 1 ≈1,77 млн слов) — уложится ли в предел газа eth_call узла, покажет запись (kyber_elastic_v1.py пишет
+    ответ или ошибку); при ошибке — чтение частями (length > 0), вопрос Тиграну. Касается и BSC (вид не менялся).
+  - T451-04 (к T448-01) по Sourcify constructorArguments v3 UR PancakeSwap Arbitrum: permit2 0x31c2…c768, v2Factory
+    0x02a8…749e, v3Factory 0x0bfb…1865, v3Deployer 0x41ff…71c9, v2InitCodeHash 0x5722…4d2d, v3InitCodeHash 0x6ce8…f7e2,
+    stableFactory/stableInfo = 0 (выдача WebFetch, одно слово адреса-заглушки потеряно — сверить своим узлом).
 - **Решение 448 (20.11.2026, ветка t224/arb-dex-settings) — настройки области «DEX» площадки arb_dex для DEX Arbitrum с
   видом пула в коде; код не менялся.** Документ — docs/notes/arbitrum/dex-settings-arbitrum.md (по каждому DEX: ключ
   `<id>@arbitrum`, вид, все настройки со значениями, источник каждого значения, статус), статусы — в
@@ -207,14 +235,31 @@
   - T448-06 KyberSwap Elastic: на Arbitrum развёрнут v1 (README ks-elastic-sc 4ab08c0a, Sourcify full match), вид сделан по
     HEAD (Elastic v2). Сравнить Pool.sol/SwapMath v1 (Sourcify) с 4ab08c0; адресов v2 в официальных источниках нет (страница
     docs.kyberswap.com удалена). Вопрос Тиграну: включать ли Elastic.
+    **Решение 451: СДЕЛАНО** — сравнено, отличие одно (computeSwapStep `>=` у v1), вид `kyber_elastic_v1`. Осталось: запись
+    `python3 tools/arbitrum_record/kyber_elastic_v1.py --rpc <узел> --gt` → снять #[ignore] в
+    tests/arbitrum_kyber_elastic_v1_live.rs; вопрос Тиграну — включать ли (dex.pool_enabled).
   - T448-07 Saddle (Arbitrum): сверить SwapUtils + AmplificationUtils saddle-contract 2cfdd055 с математикой вида
     (Nerve, math/stableswap_v1); пулы — dex-settings-arbitrum.md §4.5.
+    **Решение 451: СДЕЛАНО** — математика та же; swapStorage 7 полей и FlashLoan исправлены в виде. Осталось: запись
+    `python3 tools/arbitrum_record/saddle.py --rpc <узел>` → снять #[ignore] в tests/arbitrum_saddle_live.rs.
   - T448-08 WOOFi (Arbitrum): интерфейс WooracleV2_2_1 (state()) — исходник (Sourcify / официальный репозиторий); реализация
     прокси WooPPV2.2 `0x5520…9FA4` — слот EIP-1967 своим узлом, затем исходник → dex.pool_implementation.
+    **Решение 451: СДЕЛАНО** — оракул = WooracleV2_2 (Sourcify exact match), state() как в виде, код не менялся; реализация
+    по Sourcify proxyResolution — `0x7b5fDb8C89A616d319202704B0eA18b168654281` (как на BSC), исходника на Sourcify нет. Осталось:
+    `python3 tools/arbitrum_record/woofi.py --rpc <узел> --base <монета>…` → снять #[ignore] в tests/arbitrum_woofi_live.rs.
   - T448-09 Aero Slipstream (Arbitrum): официальные адреса и исходник (в репозиториях Slipstream развёртываний Arbitrum нет);
     ABI сверить с видом slipstream.
+    **Решение 451: найдено** — Dromos-Labs/metadex-slipstream-public f99f209 (VERSIONS 1.1.0 = cf1ae46f,
+    deployment-addresses/cl-arbitrum.json) и metadex-public 2ce1816 (DynamicSwapFeeHook). Геттеры, фабрика, Swap — как у
+    вида; комиссия — от крючка обмена (блок, вызывающий, MEV-налог, комиссия после цикла) → **нужен код: новое семейство
+    «Slipstream V3 (Aero)»** (новая задача T451-01). Заодно — те же «Basic»-пулы Aero (pools-arbitrum.json:
+    volatile/stable PoolFactory) в таблице покрытия не учтены — T451-02.
   - T448-10 PancakeSwap StableSwap (Arbitrum): официального адреса фабрики нет (pancake-developer stableswap — только BSC).
     Вопрос Тиграну / источник.
+    **Решение 451: не подтверждено** — StableSwap на Arbitrum есть (stable-swap-sdk 2.0.16, pancakeswap-ai), пулы SDK берёт с
+    API configs.pancakeswap.com (из песочницы закрыт); у SmartRouter 0x3222…AC77 и v3 UR 0xFE65…9912 Arbitrum
+    stableFactory = 0 (Sourcify constructorArguments). Вопрос Тиграну: ответ
+    `https://configs.pancakeswap.com/api/data/cached/stableswaps?chainId=42161` со своей машины (адреса пулов/фабрики).
   - T448-11 LFJ V2.1: getLBPairImplementation() фабрики `0x8e42…fd4e` своим узлом Arbitrum, Sourcify реализации = v2.1.0.
   - T448-12 Уровни комиссии V3 (только для index.factory_scan): feeAmountTickSpacing(100) у Uniswap V3, уровни Sushi V3 —
     своим узлом.
@@ -599,7 +644,7 @@
   - T433-003 `swapr_arbitrum` (Swapr (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-004 `fraxswap_arbitrum` (Fraxswap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-005 `curve_arbitrum` (Curve (Arbitrum)) — частично: вид есть / семейства нет: StableSwap — сверить и включить; crypto-пулы — T433-F3; официальные адреса. **Решение 448: готово для NG; 2pool и crypto — T448-02, T433-F3; решение 450: механизм dex.sub_dex сделан, 2pool / старые plain — T450-02, crypto — T433-F3 дочерним ключом** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
-  - T433-006 `kyberswap_elastic_arbitrum` (Kyberswap Elastic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-06** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-006 `kyberswap_elastic_arbitrum` (Kyberswap Elastic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-06. Решение 451: готово — вид `kyber_elastic_v1`; ждёт записи узла и решения о включении (T448-06)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-007 `kyberswap_classic_arbitrum` (Kyberswap Classic (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово для пулов DMM; Static Fee — T448-04; решение 450: Static Fee и Legacy — код есть, сверка — T450-01 (запись) (дочерние ключи dex.sub_dex)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-008 `elk_finance_arbitrum` (Elk Finance (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-009 `camelot` (Camelot) — семейства нет в коде: семейство T433-F4; официальные адреса; завести и включить в arb_dex.
@@ -657,7 +702,7 @@
   - T433-061 `uniswap-v2-arbitrum` (Uniswap V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-062 `dackieswap-v2-arbitrum` (DackieSwap V2 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-063 `dackieswap-v3-arbitrum` (DackieSwap V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-064 `pancakeswap-stableswap-arbitrum` (Pancakeswap Stableswap (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-10** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-064 `pancakeswap-stableswap-arbitrum` (Pancakeswap Stableswap (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-10. Решение 451: не подтверждено — адреса фабрики нет, вопрос Тиграну (T448-10)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-065 `solidly-v3-arbitrum` (Solidly V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-066 `kewlswap-arbitrum` (KEWLSwap (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-067 `traderjoe-v2-2-arbitrum` (LFJ V2.2 (Arbitrum)) — семейства нет в коде: семейство T433-F7; официальные адреса; завести и включить в arb_dex.
@@ -676,11 +721,11 @@
   - T433-080 `ramses-legacy-arbitrum` (Ramses Legacy (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-081 `ramses-v3-arbitrum` (Ramses V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-082 `rubicon-clmm-arbitrum` (Rubicon CLMM (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-083 `aero-slipstream-arbitrum` (Aero Slipstream (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-09** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-083 `aero-slipstream-arbitrum` (Aero Slipstream (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-09. Решение 451: нужен код — новое семейство «Slipstream V3 (Aero)», T448-09** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-084 `camelot-v4` (Camelot V4) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-085 Shell Protocol (DefiLlama `shell-protocol`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-086 DODO AMM (DefiLlama `dodo-amm`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: готово (пулы — поиском по фабрике), шаблоны — T448-13** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
-  - T433-087 Saddle Finance (DefiLlama `saddle-finance`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: не подтверждено — T448-07** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-087 Saddle Finance (DefiLlama `saddle-finance`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: не подтверждено — T448-07. Решение 451: готово (вид saddle_stableswap исправлен), ждёт записи узла** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-088 Integral (DefiLlama `integral`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-089 WardenSwap (DefiLlama `wardenswap`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-090 Joe DEX (DefiLlama `joe-dex`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
@@ -688,7 +733,7 @@
   - T433-092 Rubicon (DefiLlama `rubicon`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-093 ZipSwap (DefiLlama `zipswap`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-094 Hashflow (DefiLlama `hashflow`, нет в GeckoTerminal) — не пул: источник котировок не-пула: официальный API / контракт, как считать полную стоимость и исполнять; способ — решение Тиграна; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
-  - T433-095 WOOFi Swap (DefiLlama `woofi-swap`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: не подтверждено — T448-08** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-095 WOOFi Swap (DefiLlama `woofi-swap`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: не подтверждено — T448-08. Решение 451: готово, проверка слота реализации и селекторов своим узлом** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-096 Wombat Exchange (DefiLlama `wombat-exchange`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-097 Swapsicle V1 (DefiLlama `swapsicle-v1`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-098 iZiSwap (DefiLlama `iziswap`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: нужен код — T448-05** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md). **Решение 450: код есть, сверка — T450-01 (запись) (Q::Izi, dex.v3_fee_tiers) — включение настройками (dex-settings-arbitrum.md §3.1).**

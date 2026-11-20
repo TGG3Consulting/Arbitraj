@@ -130,6 +130,10 @@ def main():
         fail(f"SHA-256 {a.runtime} = {sha}, в {a.sha_file}: {want} — пересоберите contracts/build.sh")
     code = "".join(raw.decode("ascii").split())  # hex без пробелов и переводов строк — в подмену state override
     code = code if code.startswith("0x") else "0x" + code
+    # Решение 460: события Initialize Uniswap V4 (окно --v4-blocks, долгий поиск логов) — ДО выбора блока H: узел
+    # хранит только недавнее состояние; всё чтение состояния и симуляции — на свежем H после поиска.
+    skipped = []
+    v4_found = mgr.v4_inits(node, int(node.ok("eth_blockNumber", []), 16), a, skipped)
     head = int(node.ok("eth_blockNumber", []), 16)
     tag = hex(head)
     ht = int(node.ok("eth_getBlockByNumber", [tag, False])["timestamp"], 16)
@@ -142,8 +146,8 @@ def main():
     if probe is None:
         fail(f"eth_simulateV1 не работает на узле: {err} — без него нет логов вызова (кредит Swap) и (б) после (а)")
     ctx = {"w": wl, "x": x, "deadline": ht + 600, "slots": {}}
-    rec = {"skipped": [], "summary": [], "calls": [], "hooks_reject": [], "pools": {}, "sim_errors": []}
-    found = {19: mgr.v4_pools(node, tag, head, a, rec["skipped"]), 23: mgr.bv3_pools(node, tag, a, rec["skipped"]),
+    rec = {"skipped": skipped, "summary": [], "calls": [], "hooks_reject": [], "pools": {}, "sim_errors": []}
+    found = {19: mgr.v4_pools(node, tag, v4_found, a, rec["skipped"]), 23: mgr.bv3_pools(node, tag, a, rec["skipped"]),
              22: old.fluid_pools(node, tag, a, rec["skipped"]), 24: old.lb20_pools(node, tag, a, rec["skipped"])}
     chosen = {k: pick(node, tag, a, ctx, v, rec) for k, v in found.items() if k != 23}
     # Координатор (T457-02): класс 23 у бота покрывает и пулы с крючком — по --bv3-per-hook на вид крючка, который

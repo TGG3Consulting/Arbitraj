@@ -5,9 +5,13 @@
   status_code, text, content, json(), raise_for_status(). Узел — постоянное соединение http.client на хост (как
   Session у requests: сотни тысяч eth_call без нового TCP на каждый); при прокси из окружения (HTTP(S)_PROXY) и для
   https — urllib (он сам берёт прокси окружения).
+  Решение 460: (1) ответ узла «historical state … is not available» (узел с короткой историей состояния — Nitro,
+  state-scheme=path) — исключение StaleState сразу здесь, в одном месте для всех скриптов: такой ответ не может
+  попасть в запись как «ошибка вызова»; (2) GeckoTerminal (api.geckoterminal.com) — темп и повтор при 429 (gt.py).
 Кто вызывает: tools/arbitrum_record/*.py (`import stdhttp as requests`).
-От чего зависит: только стандартная библиотека (http.client, urllib, json).
-Ошибки: HTTPError — raise_for_status при коде ≥ 400; сетевые — исключения http.client / urllib как есть (OSError).
+От чего зависит: только стандартная библиотека (http.client, urllib, json), gt.py (темп GeckoTerminal).
+Ошибки: HTTPError — raise_for_status при коде ≥ 400; StaleState — узел уже не хранит состояние запрошенного блока;
+  сетевые — исключения http.client / urllib как есть (OSError).
 """
 
 import http.client
@@ -17,16 +21,29 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import gt
+
+# Решение 460: текст ошибки узла без состояния блока — факт журнала lb_v22 прогона 20.11.2026 (Nitro, path):
+# {'code': -32000, 'message': 'historical state <корень> is not available'}.
+STALE_MARKS = (b"historical state", b"is not available")
+
 
 class HTTPError(Exception):
     """Ответ с кодом ≥ 400 (как requests.HTTPError)."""
 
 
-class Response:
-    """Ответ: код, тело байтами и текстом, разбор JSON."""
+class StaleState(BaseException):
+    """Решение 460: узел ответил «historical state … is not available» — состояния блока записи у него уже нет.
+    Наследник BaseException, а не Exception: скрипты, которые пишут ошибку вызова в запись (`except Exception`), его не
+    перехватывают — запись не получает «ошибку» вместо данных; ловит только recnode.fresh (новый блок) или выход."""
 
-    def __init__(self, status, body, url):
+
+class Response:
+    """Ответ: код, тело байтами и текстом, заголовки (словарь, имена в нижнем регистре), разбор JSON."""
+
+    def __init__(self, status, body, url, headers=None):
         self.status_code, self.content, self.url = status, body, url
+        self.headers = {k.lower(): v for k, v in (headers or {}).items()}
 
     @property
     def text(self):
@@ -73,7 +90,7 @@ class Session:
                 conn.request(method, path, body=body, headers=headers)
                 r = conn.getresponse()
                 data = r.read()
-                return Response(r.status, data, url)
+                return Response(r.status, data, url, dict(r.getheaders()))
             except (socket.timeout, TimeoutError):
                 # Ревью t233, п. 4: таймаут чтения — без повтора, исключение сразу.
                 conn.close()
@@ -90,19 +107,28 @@ class Session:
         raise OSError("недостижимо")
 
     def post(self, url, json=None, data=None, headers=None, timeout=60):
-        """POST; json= — тело JSON. Возвращает Response. Ошибки: сетевые (OSError)."""
+        """POST; json= — тело JSON. Возвращает Response. Ошибки: сетевые (OSError); StaleState — в ответе узла
+        «historical state … is not available» (в т.ч. в одном из ответов пачки)."""
         h = dict(headers or {})
         body = data
         if json is not None:
             body = _json.dumps(json).encode("utf-8")
             h.setdefault("Content-Type", "application/json")
-        return self._send("POST", url, body, h, timeout)
+        r = self._send("POST", url, body, h, timeout)
+        if all(m in r.content for m in STALE_MARKS):
+            at = r.content.find(STALE_MARKS[0])
+            raise StaleState(r.content[at:at + 200].decode("utf-8", "replace"))
+        return r
 
     def get(self, url, params=None, headers=None, timeout=60):
-        """GET; params= — строка запроса. Возвращает Response. Ошибки: сетевые (OSError)."""
+        """GET; params= — строка запроса. GeckoTerminal — через gt.paced (темп, повтор при 429). Возвращает Response.
+        Ошибки: сетевые (OSError)."""
         if params:
             url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
-        return self._send("GET", url, None, dict(headers or {}), timeout)
+        send = lambda: self._send("GET", url, None, dict(headers or {}), timeout)  # noqa: E731
+        if gt.is_gt(url):
+            return gt.paced(send)
+        return send()
 
 
 def _urllib(method, url, body, headers, timeout):
@@ -112,9 +138,9 @@ def _urllib(method, url, body, headers, timeout):
     req = urllib.request.Request(url, data=body, headers=h, method=method)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return Response(r.status, r.read(), url)
+            return Response(r.status, r.read(), url, dict(r.headers.items()))
     except urllib.error.HTTPError as e:
-        return Response(e.code, e.read() or b"", url)
+        return Response(e.code, e.read() or b"", url, dict(e.headers.items()) if e.headers else {})
 
 
 _default = Session()

@@ -32,6 +32,7 @@ import json
 import os
 import sys
 
+import recnode  # решение 460: свежий блок состояния
 import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 FACTORY = "0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a"
@@ -134,6 +135,23 @@ def record_pool(rpc, pool, args, tag):
     return rec
 
 
+def state_phase(rpc, ids, args, head):
+    """Решение 460: пулы и логи за --log-blocks на одном свежем блоке head. Возвращает: (head, пулы, логи). Ошибки:
+    StaleState (recnode.fresh повторит на новом блоке), RuntimeError — ошибка узла в eth_getLogs."""
+    b, tag = int(head["number"], 16), head["number"]
+    pools = []
+    for pool in list(dict.fromkeys(i.lower() for i in ids))[:args.max_pools]:
+        try:
+            pools.append(record_pool(rpc, pool, args, tag))
+        except Exception as e:
+            pools.append({"pool": pool, "error": str(e)})
+    frm = hex(max(0, b - args.log_blocks))
+    addrs = [p["pool"] for p in pools if "error" not in p]
+    logs = {"from": frm, "to": tag,
+            "logs": rpc.call("eth_getLogs", [{"address": addrs, "fromBlock": frm, "toBlock": tag}]) if addrs else []}
+    return head, pools, logs
+
+
 def main():
     ap = argparse.ArgumentParser(description="Запись фактов узла Arbitrum для KyberSwap Elastic v1 (решение 451)")
     ap.add_argument("--rpc", required=True, help="HTTP JSON-RPC своего узла Arbitrum")
@@ -151,18 +169,13 @@ def main():
 
     rpc = Rpc(args.rpc)
     chain = rpc.call("eth_chainId", [])
-    head = rpc.call("eth_getBlockByNumber", ["latest", False])
-    b, tag = int(head["number"], 16), head["number"]
     day = datetime.date.today().isoformat()
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = args.out or os.path.join(root, "tests", "data", "arbitrum_kyber_elastic_v1_" + day)
     os.makedirs(out, exist_ok=True)
-    files = {}
-    meta = {"chainId": chain, "block": b, "block_hex": tag, "timestamp": int(head["timestamp"], 16),
-            "factory": args.factory, "quoter": args.quoter, "reader": args.reader, "sizes": args.sizes,
-            "log_blocks": args.log_blocks}
-    files["meta.json"] = meta
+    files = {"meta.json": None}
 
+    # Решение 460: GeckoTerminal (с паузами темпа — gt.py) — ДО выбора блока B: узел хранит только недавнее состояние.
     ids = list(args.pool)
     if args.gt:
         pages = gt_pages(args.gt_pages)
@@ -173,18 +186,15 @@ def main():
                     a = item.get("attributes", {}).get("address", "")
                     if a.startswith("0x") and len(a) == 42:
                         ids.append(a)
-    pools = []
-    for pool in list(dict.fromkeys(i.lower() for i in ids))[:args.max_pools]:
-        try:
-            pools.append(record_pool(rpc, pool, args, tag))
-        except Exception as e:
-            pools.append({"pool": pool, "error": str(e)})
+    head, pools, logs = recnode.fresh(lambda: rpc.call("eth_getBlockByNumber", ["latest", False]),
+                                      lambda h: state_phase(rpc, ids, args, h))
+    b, tag = int(head["number"], 16), head["number"]
+    meta = {"chainId": chain, "block": b, "block_hex": tag, "timestamp": int(head["timestamp"], 16),
+            "factory": args.factory, "quoter": args.quoter, "reader": args.reader, "sizes": args.sizes,
+            "log_blocks": args.log_blocks}
+    files["meta.json"] = meta
     files["pools.json"] = pools
-    frm = hex(max(0, b - args.log_blocks))
-    addrs = [p["pool"] for p in pools if "error" not in p]
-    files["logs.json"] = {"from": frm, "to": tag,
-                          "logs": rpc.call("eth_getLogs", [{"address": addrs, "fromBlock": frm, "toBlock": tag}])
-                          if addrs else []}
+    files["logs.json"] = logs
 
     hashes = []
     for name, body in files.items():

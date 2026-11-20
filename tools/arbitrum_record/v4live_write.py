@@ -67,7 +67,8 @@ def write(out, d):
         "- x_left: ключ «usdt» — токен входа (а) (имя формата записи 17.11, live_row.rs), «coin» — второй токен",
         "", "## Адреса",
         f"- Uniswap V4: PoolManager {a.v4_pool_manager}, V4Quoter {a.v4_quoter}, StateView {a.v4_state_view} "
-        f"(Initialize за {a.v4_blocks} блоков до H; без крючка, обе валюты ERC-20)",
+        f"(Initialize за {a.v4_blocks} блоков до начала поиска; блок H взят после поиска — решение 460; без крючка, "
+        "обе валюты ERC-20)",
         f"- Balancer V3: Vault {a.bv3_vault}, Router {a.bv3_router} (пулы — запись balancer_v3.py + --bv3-pool; "
         "hooks строки = 0 — у шага 23 класс только «без крючка», крючок пула — bv3_hook, вид — bv3_hook_kind: none / "
         f"static / surge / mev, как pools/balancer_v3_hooks.rs; без крючка до {a.pools_per_kind}, с крючком до "

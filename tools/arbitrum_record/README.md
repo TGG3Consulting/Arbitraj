@@ -14,11 +14,33 @@
 (eth_call, eth_getLogs, eth_getCode, eth_getStorageAt, eth_simulateV1), транзакций нет.
 
 Необязательно: `--wallet 0x…` — адрес кошелька для записи приёмки v4 (адрес, не ключ; без него — пустой адрес);
-`--ekubo-from-block N` — блок развёртывания ядра Ekubo (без него ищется по eth_getCode узла; узел без истории
-состояния ответит ошибкой — тогда ekubo_more.py пропускается с причиной в сводке); `--only ИМЯ` / `--skip ИМЯ` —
-выбрать скрипты; `--timeout С` — предел одного скрипта. Нужен доступ в интернет к api.geckoterminal.com (списки
-пулов kyber_elastic_v1, fluid_t1, balancer_v3, algebra_dir_fee, ekubo). Приёмке v4 нужен eth_simulateV1 на узле —
-без него exec_v4_live.py выходит с причиной.
+`--ekubo-from-block N` — только переопределение блока ядра Ekubo (по умолчанию ekubo_more.py берёт его из официальных
+broadcast-файлов Ekubo: `contracts/evmtest/vendor/ekubo/broadcast/DeployAll.s.sol/42161`, квитанция Core — блок
+416469411); `--only ИМЯ,ИМЯ` / `--skip ИМЯ,ИМЯ` — выбрать скрипты (через запятую или несколько раз; неизвестное имя —
+ошибка с перечнем); `--date ГГГГ-ММ-ДД` — дата папок записи (по умолчанию — сегодня UTC); `--timeout С` — предел одного
+скрипта. Нужен доступ в интернет к api.geckoterminal.com (списки пулов kyber_elastic_v1, fluid_t1, balancer_v3,
+algebra_dir_fee, ekubo). Приёмке v4 нужен eth_simulateV1 на узле — без него exec_v4_live.py выходит с причиной.
+
+**Повтор после прогона 20.11.2026 (решение 460), одна строка:** `python3 tools/arbitrum_record/record_all.py --rpc
+http://127.0.0.1:8547 --date 2026-11-20 --only sub_dex,balancer_v3,camelot_v2,lb_v22,ekubo,ekubo_more,exec_v4_live`
+(Windows — `py tools\arbitrum_record\record_all.py …`). `--date 2026-11-20` — ekubo.py и ekubo_more.py пишут в ту же
+папку `tests/data/arbitrum_ekubo_2026-11-20/` (файлы у них разные: ekubo.py — README.md, meta.json, gt_pools.json,
+pools.json, core_logs.json; ekubo_more.py — README_454.md, more_meta.json, pool_initialized.json, native_pools.json,
+twamm_pools.json, core_load.json); ekubo.py повторяется сам (20.11 записал 0 пулов: GeckoTerminal отдаёт адрес пула
+Ekubo как «<ядро>-<PoolId>», скрипт ждал только PoolId — теперь разбирается), его файлы перезаписываются новой записью;
+sub_dex.py — 20.11 записал 0 пулов (за 2 000 000 блоков событий создания не было), теперь ищет дальше назад;
+exec_v4_live.py — 20.11 вид 23 «нет пулов» (записи balancer_v3.py не было). camelot_v2.py теперь ищет FeePercentUpdated / SetStableSwap до блока первой пары
+фабрики — это долго (20.11: 18 окон по 2 000 000 блоков — 491 с).
+
+Узел с короткой историей состояния (Nitro, `state-scheme=path`: состояние только последних ~128 блоков, логи старых
+блоков есть) — решение 460: (1) любой ответ «historical state … is not available» — исключение `StaleState` в
+`stdhttp.py` (в запись как «ошибка вызова» не попадает); (2) долгие операции (поиск логов, GeckoTerminal) — до выбора
+блока B, всё чтение состояния — на свежем B после них; состояние B удалено — фаза состояния заново на новом блоке
+(`recnode.fresh`, до 3 раз); (3) eth_getLogs с таймаутом узла (-32002 «request timed out») — окно пополам
+(`recnode.logs_split`); (4) GeckoTerminal — пауза 12 с между запросами (меньший из официальных лимитов: «~5 calls/min»
+публичного API без ключа — docs.coingecko.com/docs/keyless-public-api; «30 calls/min» — www.geckoterminal.com/dex-api;
+`ARB_GT_INTERVAL` — другое значение) общая для всех скриптов запуска, при HTTP 429 — Retry-After или 15/30/60/60/60 с,
+до 6 попыток (`gt.py`).
 
 Узел недоступен — сводка с причиной и zip всё равно пишутся (код выхода 1). Дата папок записи одна на весь запуск
 (ekubo.py и ekubo_more.py — в одну папку). Переводы строк contracts/out/ и tests/data/ git не меняет (.gitattributes,
@@ -52,7 +74,10 @@ exec_v4_live.
 | `ekubo_more.py` | 454 | Ekubo, дополнительная запись (после `ekubo.py`, та же папка tests/data/arbitrum_ekubo_<дата>/): PoolInitialized ядра, пулы с нативным ETH, пулы TWAMM, замер нагрузки подписки ядра | `tests/arbitrum_ekubo_more_live.rs` |
 | `record_all.py`, `record_steps.py` | 459 | одна команда: все скрипты ниже по очереди, сводка, zip | — |
 | `exec_v4_live.py` (+ `v4live_rpc.py`, `v4live_slots.py`, `v4live_mgr.py`, `v4live_old.py`, `v4live_cases.py`, `v4live_write.py`) | 400, 459 (T457-02) | приёмка исполнителя v4 на живых пулах: eth_simulateV1 с подменой кода (contracts/out/ArbExecutor.bin-runtime) на пустом адресе, (а) покупка / (б) продажа по видам 19 Uniswap V4 и 23 Balancer V3 (их судит правило 400; у 23 — и пулы с крючком, которые бот берёт: static / StableSurge / MEV Capture, по 2 на вид, `--bv3-per-hook`; вида нет — «нет пулов») (у Balancer V3 квотер после (а) и продажа — две симуляции: Vault.quote состояние не откатывает) и 22 Fluid, 24 LB v2.0, 1 Uniswap V3, 0 Uniswap V2 — tests/data/executor_v4_live_<дата>/ (README с SHA-256 кода и chainId — запись судит кошельки только своей сети, summary.json, hooks_reject.json, calls.json, slots.json, pools.json, raw_rpc.json) | правило — src/venues/bsc_dex/exec/executor/live_rule.rs (см. docs/TASKS.md T457-02) |
-| `stdhttp.py` | 459 | HTTP стандартной библиотеки вместо пакета requests (все скрипты: `import stdhttp as requests`) | — |
+| `stdhttp.py` | 459, 460 | HTTP стандартной библиотеки вместо пакета requests (все скрипты: `import stdhttp as requests`); StaleState — ответ узла «historical state … is not available» | — |
+| `gt.py` | 460 | темп GeckoTerminal (12 с между запросами, общий для скриптов запуска) и повтор при HTTP 429 — для всех скриптов через stdhttp.get | — |
+| `recnode.py` | 460 | logs_split (eth_getLogs: таймаут узла — окно пополам), fresh (фаза чтения состояния на свежем блоке, повтор на новом при StaleState) | — |
+| `camelot_v2_logs.py` | 460 | модуль camelot_v2.py: нижняя граница (PairCreated первой пары фабрики или --from-block) и поиск редких событий с делением окна | — |
 | `algebra_dir_fee.py` | 444 | Algebra V1.9 с направленными комиссиями (T433-F5; Camelot V3) — команда и хеши кода пула — раздел ниже | `tests/arb_dex_algebra_dir.rs` |
 
 ## algebra_dir_fee.py — Algebra V1.9 с направленными комиссиями (решение 444, T433-F5; Camelot V3)

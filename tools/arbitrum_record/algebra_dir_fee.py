@@ -94,6 +94,11 @@ def main():
     a.add_argument("--out", required=True, help="папка tests/data")
     o = a.parse_args()
     n = Node(o.rpc)
+    # Решение 460: GeckoTerminal (с паузой темпа — gt.py) — ДО выбора блока B: узел хранит только недавнее состояние.
+    gecko = None
+    if o.gecko_dex:
+        u = f"https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes/{o.gecko_dex}/pools?page=1"
+        gecko = {"url": u, "response": requests.get(u, timeout=60, headers={"Accept": "application/json"}).json()}
     head = n.ok("eth_getBlockByNumber", ["latest", False])
     tag = head["number"]
     utc = datetime.timezone.utc
@@ -117,11 +122,9 @@ def main():
         return j
 
     pools = [p.lower() for p in o.pool]
-    if o.gecko_dex:
-        u = f"https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes/{o.gecko_dex}/pools?page=1"
-        g = requests.get(u, timeout=60, headers={"Accept": "application/json"}).json()
-        save("geckoterminal_pools.json", {"url": u, "response": g})
-        pools += [d["attributes"]["address"].lower() for d in g["data"][:o.gecko_pools]]
+    if gecko is not None:
+        save("geckoterminal_pools.json", gecko)
+        pools += [d["attributes"]["address"].lower() for d in gecko["response"]["data"][:o.gecko_pools]]
     if not pools:
         sys.exit("нет пулов: --pool или --gecko-dex/--gecko-pools")
     save("meta.json", {"chainId": n.ok("eth_chainId", []), "client": n.call("web3_clientVersion", []),

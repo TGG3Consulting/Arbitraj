@@ -255,6 +255,27 @@
       — initialized_key_gives_pool_id, native_math_equals_router_quote, twamm_math_equals_router_quote, core_load_logs_route
       (arbitrum_ekubo_; ekubo_more пишет в ту же папку).
     Записи приёмки v4 (executor_v4_live_) тест с #[ignore] не ждёт — нужна правка live_proof.rs (T457-02).
+    **Прогон 20.11.2026 (решение 460, ветка t234/arb-merge-2):** узел Тиграна — Nitro, state-scheme=path (состояние
+    только последних ~128 блоков). Прошло 10 из 14: sub_dex, kyber_elastic_v1, saddle, woofi, fluid_t1, curve_crypto,
+    algebra_dir_fee, lb_v20, ekubo, exec_v4_live. Упали: balancer_v3 — HTTP 429 GeckoTerminal на ?page=4 (страницы
+    подряд без паузы); camelot_v2 — eth_getLogs {-32002 «request timed out»} на топик-фильтре без address окном
+    2 000 000 блоков (18 окон от 525985036 назад — fee/stable 0, 491 с); lb_v22 — eth_getCode на блоке, взятом до
+    500 с поиска HooksParametersSet: «historical state … is not available»; ekubo_more — не запущен: поиск блока ядра
+    делением по eth_getCode старых блоков (блок 262992493 — нет состояния). Исправлено (решение 460): GeckoTerminal —
+    пауза и повтор при 429 (gt.py); долгие поиски логов / GeckoTerminal — до выбора блока B во всех скриптах, где были
+    после (camelot_v2, lb_v22, ekubo_more, sub_dex, balancer_v3, kyber_elastic_v1, ekubo, algebra_dir_fee,
+    exec_v4_live); таймаут eth_getLogs — окно пополам; блок ядра Ekubo — broadcast-файлы (416469411); нижняя граница
+    camelot_v2 — PairCreated первой пары фабрики; ответ «historical state …» — исключение (в запись не попадает).
+    Пустоты в прошедших записях: ekubo — 0 пулов (адрес пула GeckoTerminal «<ядро>-<PoolId>», исправлено); sub_dex —
+    0 пулов у всех 11 фабрик (за 2 000 000 блоков событий нет; теперь поиск назад до --max-pools); exec_v4_live — вид 23
+    «нет пулов» (нет записи balancer_v3). Без правки — вопросы / факты Тиграну: woofi — --base не задан (bases пуст,
+    query нет), WooPP.wooracle() = 0xf9b0c8ee13ae2fc0665764ecbdb417685dea8081 ≠ --oracle 0xCf4E…34Ec (woonetwork/docs);
+    kyber_elastic_v1 — у 14 из 20 пулов GeckoTerminal все 14 котировок QuoterV2 откатились, у 2 — часть,
+    getTicksInRange «out of gas» у 4 пулов (тиков нет); algebra_dir_fee — quoteExactInputSingle с кортежем (quoter_v2)
+    откатился во всех 12 вызовах у всех 5 пулов (виртуальный квотер и quoter_v1 ответили); curve_crypto — у 2 пулов
+    Twocrypto (0xb79bbc5c…2b7f, 0x5f0985a8…b18c) все get_dy откатились (data 0x); логи за 2000 блоков: ekubo core_logs
+    и kyber_elastic_v1 logs — 0. Повтор: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547
+    --date 2026-11-20 --only sub_dex,balancer_v3,camelot_v2,lb_v22,ekubo,ekubo_more,exec_v4_live`.
   - T456-04 Выкладка: настройки области «DEX» площадки arb_dex по docs/notes/arbitrum/dex-settings-arbitrum.md и
     FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; развернуть v4 — T457-03.
   - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по

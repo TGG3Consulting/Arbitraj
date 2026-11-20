@@ -3,13 +3,18 @@
 Запись ответов своего узла Arbitrum One для семейства Camelot V2 (решение 443, T433-F4).
 Только чтение (eth_call, eth_getLogs, eth_getCode, eth_getBlockByNumber) — без ключей, подписей и отправки.
 
-Что пишет в tests/data/arbitrum_camelot_v2_<дата>/ (дата — UTC в момент запуска):
+Что пишет в tests/data/arbitrum_camelot_v2_<дата>/ (дата — ARB_RECORD_DATE от record_all.py или UTC в момент запуска):
   probe.json — блок B (номер, хеш, время), фабрика, пары: factory/token0/token1, getReserves (сырой ответ), stableSwap,
                precisionMultiplier0/1, decimals токенов, getPair фабрики, sha256 и длина кода пары, getAmountOut пары
                на суммах в обе стороны — всё на одном блоке B.
   logs.json  — реальные логи: Sync выбранных пар (последние --log-blocks блоков до B), FeePercentUpdated и
-               SetStableSwap пар этой фабрики (поиск назад от B частями по --chunk блоков, пока не наберётся --rare
-               штук каждого или не кончится история), PairCreated фабрики (последние найденные).
+               SetStableSwap пар этой фабрики (поиск назад от головы b0 частями по --chunk блоков, при таймауте узла
+               — половинами, пока не наберётся --rare штук каждого или не пройдена нижняя граница: --from-block или
+               блок PairCreated первой пары фабрики), PairCreated фабрики (последние найденные); rare_search — окно
+               поиска, граница и её источник, «нет событий с блока N» (решение 460, camelot_v2_logs.py).
+
+Порядок (решение 460): узел с короткой историей состояния (Nitro, path) — сначала долгий поиск логов, потом свежий
+блок B и всё чтение состояния на нём (recnode.fresh: состояние B удалено узлом — заново на новом блоке).
   README.md  — что записано, блок, хеши файлов (sha256).
 
 Как выбираются пары: allPairsLength фабрики, равномерная выборка --scan индексов allPairs(i); из пар с ненулевыми
@@ -33,6 +38,8 @@ import os
 import sys
 
 import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
+import recnode  # решение 460: свежий блок состояния после долгих поисков
+from camelot_v2_logs import lower_bound, rare_events  # решение 460: поиск редких событий
 
 # --- keccak256 (Keccak-f[1600], padding 0x01 — как в Ethereum), без внешних библиотек ---
 _RC = [
@@ -177,42 +184,42 @@ def main():
     ap.add_argument("--divs", default="1000000,10000,1000,100,10,3", help="суммы: резерв входа / d")
     ap.add_argument("--log-blocks", type=int, default=20000, help="окно Sync выбранных пар, блоков")
     ap.add_argument("--chunk", type=int, default=2000000, help="часть поиска редких событий, блоков")
-    ap.add_argument("--from-block", type=int, default=0, help="нижняя граница поиска редких событий")
+    ap.add_argument("--from-block", type=int, default=None,
+                    help="нижняя граница поиска редких событий (по умолчанию — блок PairCreated первой пары фабрики)")
+    ap.add_argument("--min-chunk", type=int, default=1000, help="наименьшая часть при делении по таймауту, блоков")
     ap.add_argument("--rare", type=int, default=20, help="сколько FeePercentUpdated / SetStableSwap / PairCreated")
     ap.add_argument("--out", default="tests/data", help="папка tests/data")
     a = ap.parse_args()
     node, fac = Node(a.node), a.factory
     chain = int(node.one("eth_chainId", []), 16)
-    b = int(node.one("eth_blockNumber", []), 16)
+    # Решение 460: сначала долгий поиск логов (без чтения состояния блока B), потом — свежий блок B и всё состояние.
+    b0 = int(node.one("eth_blockNumber", []), 16)
+    say = lambda t: print(t, file=sys.stderr, flush=True)  # noqa: E731
+    bound, bound_why = lower_bound(node, fac, b0, a, S, T, say)
+    rare, searched_to = rare_events(node, fac, b0, bound, a, S, T, say)
+    say(f"поиск событий окончен: блоки {searched_to}..{b0}, fee {len(rare['fee'])}, stable {len(rare['stable'])}, "
+        f"created {len(rare['created'])}")
+    rare_meta = {"to_block": b0, "from_block": searched_to, "lower_bound": bound, "lower_bound_source": bound_why,
+                 "reached_lower_bound": searched_to <= bound,
+                 "note": (f"Поиск дошёл до нижней границы {bound}: FeePercentUpdated — {len(rare['fee'])} шт., "
+                          f"SetStableSwap — {len(rare['stable'])} шт.; других событий пар фабрики в блоках "
+                          f"{bound}..{b0} нет." if searched_to <= bound else "")}
+    probe, lo, sync, b, blk = recnode.fresh(lambda: int(node.one("eth_blockNumber", []), 16),
+                                            lambda b: state_phase(node, fac, b, rare, a), say=say)
+    write(a, chain, fac, b, blk, probe, lo, sync, rare, rare_meta)
+
+
+def state_phase(node, fac, b, rare, a):
+    """Фаза состояния (решение 460): всё чтение пар на одном свежем блоке b, затем Sync за --log-blocks до b.
+    Возвращает: (probe без шапки блока, начало окна Sync, Sync, b, блок узла). Ошибки: StaleState (recnode.fresh
+    повторит на новом блоке), RuntimeError — ошибка узла."""
     blk = node.one("eth_getBlockByNumber", [hex(b), False])
     tag = hex(b)
-    print(f"chainId {chain}, блок {b} {blk['hash']}", file=sys.stderr)
-
+    print(f"блок состояния B {b} {blk['hash']}", file=sys.stderr, flush=True)
     n = word(node.calls([(fac, S["allPairsLength()"])], tag)[0])
     step = max(1, n // max(1, a.scan))
     idx = list(range(0, n, step))
     addrs = [addr_word(x) for x in node.calls([(fac, S["allPairs(uint256)"] + enc_uint(i)) for i in idx], tag) if full(x, 1)]
-    rare = {"fee": [], "stable": [], "created": []}
-    hi = b
-    while hi > a.from_block and any(len(v) < a.rare for v in rare.values()):
-        lo2 = max(a.from_block, hi - a.chunk)
-        got = node.one("eth_getLogs", [{"fromBlock": hex(lo2), "toBlock": hex(hi),
-                                        "topics": [[T["fee"], T["stable"]]]}])
-        own = sorted({g["address"] for g in got})
-        facs = node.calls([(x, S["factory()"]) for x in own], tag) if own else []
-        ours = {x for x, f in zip(own, facs) if full(f, 1) and addr_word(f).lower() == fac.lower()}
-        for g in reversed(got):
-            k = "fee" if g["topics"][0] == T["fee"] else "stable"
-            if g["address"] in ours and len(rare[k]) < a.rare:
-                rare[k].append(g)
-        if len(rare["created"]) < a.rare:
-            cr = node.one("eth_getLogs", [{"fromBlock": hex(lo2), "toBlock": hex(hi), "address": fac,
-                                           "topics": [T["created"]]}])
-            rare["created"] += list(reversed(cr))[: a.rare - len(rare["created"])]
-        print(f"поиск событий {lo2}..{hi}: fee {len(rare['fee'])}, stable {len(rare['stable'])}, "
-              f"created {len(rare['created'])}", file=sys.stderr)
-        hi = lo2 - 1
-
     # Пары из SetStableSwap — кандидаты в стабильные (выборка по индексам их может не задеть).
     extra = sorted({g["address"] for g in rare["stable"]} - {x.lower() for x in addrs})
     addrs += extra
@@ -301,16 +308,21 @@ def main():
     lo = max(0, b - a.log_blocks)
     sync = node.one("eth_getLogs", [{"fromBlock": hex(lo), "toBlock": tag,
                                      "address": [c["pair"] for c in chosen], "topics": [T["sync"]]}])
-    day = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    probe = {"all_pairs_length": n, "scanned": len(addrs), "with_reserves": len(cands), "stable_found": len(stable),
+             "pairs": chosen}
+    return probe, lo, sync, b, blk
+
+
+def write(a, chain, fac, b, blk, st, lo, sync, rare, rare_meta):
+    """probe.json, logs.json, README.md в tests/data/arbitrum_camelot_v2_<дата>/. Ошибки: OSError записи."""
+    day = os.environ.get("ARB_RECORD_DATE") or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     out = os.path.join(a.out, f"arbitrum_camelot_v2_{day}")
     os.makedirs(out, exist_ok=True)
-    probe = {
-        "chain_id": chain, "block": b, "block_hash": blk["hash"], "block_timestamp": int(blk["timestamp"], 16),
-        "factory": fac, "all_pairs_length": n, "scanned": len(addrs), "with_reserves": len(cands),
-        "stable_found": len(stable), "pairs": chosen,
-    }
+    probe = dict({"chain_id": chain, "block": b, "block_hash": blk["hash"],
+                  "block_timestamp": int(blk["timestamp"], 16), "factory": fac}, **st)
+    n, chosen = st["all_pairs_length"], st["pairs"]
     logs = {"sync": sync, "fee_percent_updated": rare["fee"], "set_stable_swap": rare["stable"],
-            "pair_created": rare["created"], "topics": T, "sync_from_block": lo}
+            "pair_created": rare["created"], "topics": T, "sync_from_block": lo, "rare_search": rare_meta}
     files = {"probe.json": probe, "logs.json": logs}
     sums = []
     for name, obj in files.items():
@@ -322,15 +334,19 @@ def main():
 
 Записано скриптом tools/arbitrum_record/camelot_v2.py (только чтение, без ключей и подписей).
 Узел: chainId {chain}. Блок B = {b}, хеш {blk['hash']}, время {int(blk['timestamp'], 16)}.
-Фабрика: {fac}; allPairsLength = {n}; просмотрено {len(addrs)} пар, с резервами {len(cands)}, стабильных
-{len(stable)}; записано {len(chosen)} пар.
+Фабрика: {fac}; allPairsLength = {n}; просмотрено {st['scanned']} пар, с резервами {st['with_reserves']}, стабильных
+{st['stable_found']}; записано {len(chosen)} пар.
 
 ## Файлы
 - probe.json — пары на блоке B: factory/token0/token1, getReserves (сырой ответ), stableSwap, precisionMultiplier0/1,
   decimals, getPair фабрики, sha256 и длина кода пары, getAmountOut [сторона (0 — вход token0), вход, выход или
   null — откат] на суммах «резерв входа / d», d = {a.divs}.
 - logs.json — Sync выбранных пар (блоки {lo}..{b}), FeePercentUpdated и SetStableSwap пар этой фабрики, PairCreated
-  фабрики (поиск назад от B частями по {a.chunk} блоков, до {a.rare} штук каждого).
+  фабрики (решение 460: поиск назад от блока {rare_meta['to_block']} до {rare_meta['from_block']} частями по {a.chunk}
+  блоков, при таймауте узла — половинами; нижняя граница {rare_meta['lower_bound']} — {rare_meta['lower_bound_source']};
+  до {a.rare} штук каждого). {rare_meta['note']}
+  Поиск редких событий — до блока {rare_meta['to_block']}; блок состояния B взят после поиска (узел хранит только
+  недавнее состояние).
 
 ## SHA-256 файлов
 """ + "\n".join(sums) + "\n"

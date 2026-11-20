@@ -4,6 +4,9 @@
   (источник — там же: docs/notes/arbitrum/dex-settings-arbitrum.md, docs/FIRST_RUN.md, официальные репозитории).
   Порядок важен: balancer_v3.py до exec_v4_live.py (пулы Balancer V3 приёмка берёт из его записи), ekubo.py до
   ekubo_more.py (та же папка записи).
+  Решение 460: sub_dex — шаг поиска событий 2 000 000 блоков без --log-step (окно 2 000 000 с фильтром по address
+  узел Тиграна отдал в прогоне 20.11.2026 — camelot_v2 PairCreated; таймаут — деление пополам); ekubo_more — блок
+  ядра из broadcast-файлов Ekubo, --ekubo-from-block — только переопределение.
 Кто вызывает: tools/arbitrum_record/record_all.py.
 От чего зависит: нет.
 Ошибок нет.
@@ -46,8 +49,8 @@ BV3_LISTS = [
 
 
 def steps(rpc, wallet, ekubo_from):
-    """Список (имя, файл, аргументы). Принимает: адрес узла, кошелёк (или None), блок ядра Ekubo (или None — ekubo_more
-    пропускается с причиной). Ошибок нет."""
+    """Список (имя, файл, аргументы). Принимает: адрес узла, кошелёк (или None), блок ядра Ekubo (или None — ekubo_more.py
+    берёт его из официальных broadcast-файлов Ekubo, решение 460). Ошибок нет."""
     algebra = ["--rpc", rpc, "--factory", "0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B",
                "--quoter", "0x0Fc73040b26E9bC8514fA028D998E73A254Fa76E", "--gecko-dex", "camelot-v3",
                "--gecko-pools", "5", "--words", "8", "--bps", "1", "--bps", "10", "--bps", "100",
@@ -60,7 +63,7 @@ def steps(rpc, wallet, ekubo_from):
         bv3 += ["--list", item]
     out = [
         ("sub_dex", "sub_dex.py", [
-            "--node", rpc, "--blocks", "2000000", "--log-step", "100000", "--max-pools", "20",
+            "--node", rpc, "--blocks", "2000000", "--max-pools", "20",
             "--kyber", "DMM:0xD9bfE9979e9CA4b2fe84bA5d4Cf963bBcB376974:0xEaE47c5D99f7B31165a7f0c5f7E0D6afA25CFd55",
             "--kyber", "KS:0x1c758aF0688502e49140230F6b0EBd376d429be5:0x5649B4DD00780e99Bab7Abb4A3d581Ea1aEB23D0",
             "--kyber", "KS_LEGACY:0x51E8D106C646cA58Caf32A47812e95887C071a62:0xC3E2aED41ECdFB1ad41ED20D45377Da98D5489dD",
@@ -98,8 +101,8 @@ def steps(rpc, wallet, ekubo_from):
                                  "--router", "0x7BFd7192E76D950832c77BB412aaE841049D8D9B"]),
         ("lb_v22", "lb_v22.py", [rpc, "--factory", "0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c"]),
         ("ekubo", "ekubo.py", ["--rpc", rpc, "--gt"]),
-        ("ekubo_more", "ekubo_more.py", ["--rpc", rpc, "--from-block", str(ekubo_from)] if ekubo_from is not None
-         else None),
+        ("ekubo_more", "ekubo_more.py", ["--rpc", rpc] + (["--from-block", str(ekubo_from)] if ekubo_from is not None
+                                                           else [])),
         ("exec_v4_live", "exec_v4_live.py", ["--rpc", rpc] + (["--wallet", wallet] if wallet else [])),
     ]
     return out

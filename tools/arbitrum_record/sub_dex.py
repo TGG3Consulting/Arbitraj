@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Запись ответов своего узла Arbitrum One для решения 450 (задачи T448-01…05).
 
-Что делает: на ОДНОМ блоке (номер берётся у узла в начале; события — за окно --blocks блоков до него) читает:
+Что делает: на ОДНОМ блоке B читает (решение 460: сначала поиск событий назад от головы шагами по --blocks блоков, пока
+не наберётся --max-pools пулов каждой фабрики или не пройдена --floor; таймаут узла — часть пополам; потом свежий блок B
+и всё состояние на нём — узел с короткой историей состояния):
   1) KyberSwap Classic (T448-04): события создания пула фабрик DMM / KSFactory / KSFactory Legacy (все три подписи
      PoolCreated), у пулов из событий — factory(), token0(), token1(), ampBps(), getTradeInfo(), реестр фабрики
      getPools(token0, token1) и isPool, ответы роутера своей фабрики getAmountsOut(сумма, [пул], [вход, выход]) лесенкой
@@ -31,8 +33,9 @@
         --balancer-factory wv4:v2:0xc7E5ED1054A24Ef31D827E6F86caA58B3Bc168d7 \\
         --izi-factory 0xCFD8A067e1fa03474e79Be646c5f6b6A27847399 --izi-fee 100 --izi-fee 400 --izi-fee 2000 \\
         --izi-fee 10000 --pancake-ur 0xFE6508f0015C778Bdcc1fB5465bA5ebE224C9912
---blocks и --max-pools — сколько истории событий читать и сколько пулов каждой фабрики записать (решает Тигран: узел
-может ограничивать окно eth_getLogs — тогда скрипт читает окно частями по --log-step блоков).
+--blocks и --max-pools — шаг поиска событий и сколько пулов каждой фабрики записать (решает Тигран: узел может
+ограничивать окно eth_getLogs — тогда скрипт читает шаг частями по --log-step блоков). Запись 20.11.2026: за 2 000 000
+блоков до головы событий создания не было ни у одной фабрики (пулов 0) — поэтому поиск идёт дальше назад.
 """
 
 import argparse
@@ -42,7 +45,10 @@ import json
 import os
 import sys
 
+import recnode  # решение 460: деление окна логов по таймауту, свежий блок состояния
 import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
+
+MIN_CHUNK = 1000  # наименьшая часть eth_getLogs при делении по таймауту (решение 460), блоков
 
 # --- keccak256 (чистый Python: в stdlib только sha3_256 с другим дополнением) ---------------------------------------
 
@@ -163,16 +169,31 @@ class Node:
         return {"ok": j["result"]}
 
     def logs(self, address, topics, frm, to, step):
+        """Логи [frm, to] частями по step блоков; таймаут узла — часть пополам (решение 460, recnode.logs_split).
+        Ошибки: RuntimeError — другая ошибка узла (уменьшить --log-step)."""
+        def one(a, b):
+            j = self.rpc("eth_getLogs", [{"address": address, "topics": topics, "fromBlock": hex(a), "toBlock": hex(b)}])
+            if "error" in j:
+                raise RuntimeError(f"eth_getLogs {address} {a}..{b}: {j['error']} — уменьшите --log-step")
+            return j["result"]
         out = []
         a = frm
         while a <= to:
             b = min(to, a + step - 1)
-            j = self.rpc("eth_getLogs", [{"address": address, "topics": topics, "fromBlock": hex(a), "toBlock": hex(b)}])
-            if "error" in j:
-                raise SystemExit(f"eth_getLogs {address} {a}..{b}: {j['error']} — уменьшите --log-step")
-            out.extend(j["result"])
+            out.extend(recnode.logs_split(one, a, b, MIN_CHUNK, lambda t: print(t, file=sys.stderr, flush=True)))
             a = b + 1
         return out
+
+    def logs_back(self, address, topics, top, args):
+        """Решение 460: события назад от блока top шагами по --blocks, пока не наберётся --max-pools или не пройдена
+        --floor (запись 20.11.2026: за 2 000 000 блоков до головы событий создания не было ни у одной фабрики — пулов 0).
+        Возвращает: {"logs": по возрастанию блоков, "from": нижний пройденный блок, "to": top}. Ошибки: как logs."""
+        out, hi = [], top
+        while hi >= args.floor and len(out) < args.max_pools:
+            lo = max(args.floor, hi - args.blocks + 1)
+            out = self.logs(address, topics, lo, hi, args.log_step) + out
+            hi = lo - 1
+        return {"logs": out, "from": hi + 1, "to": top}
 
 
 def ok(r):
@@ -188,12 +209,18 @@ KYBER_CREATED = [
 ]
 
 
-def kyber(node, tag, head, args):
+def kyber_logs(node, head, args):
+    """События создания пулов фабрик KyberSwap Classic (решение 460: до выбора блока состояния)."""
+    topics = [topic(s) for s in KYBER_CREATED]
+    return {spec: node.logs_back(spec.split(":")[1], [topics], head, args) for spec in args.kyber}
+
+
+def kyber(node, tag, found, args):
     out = []
     topics = [topic(s) for s in KYBER_CREATED]
     for spec in args.kyber:
         name, factory, router = spec.split(":")
-        logs = node.logs(factory, [topics], max(0, head - args.blocks), head, args.log_step)
+        logs = found[spec]["logs"]
         pools = []
         for lg in logs[-args.max_pools:]:
             pool = r_addr(words(lg["data"])[0])
@@ -223,7 +250,8 @@ def kyber(node, tag, head, args):
                                        "answer": node.call(router, data, tag)})
             p["getAmountsOut"] = quotes
             pools.append(p)
-        out.append({"name": name, "factory": factory, "router": router, "logs_total": len(logs), "pools": pools})
+        out.append({"name": name, "factory": factory, "router": router, "logs_total": len(logs),
+                    "logs_from": found[spec]["from"], "logs_to": found[spec]["to"], "pools": pools})
     return {"created_topics": dict(zip(KYBER_CREATED, topics)), "factories": out}
 
 
@@ -243,13 +271,18 @@ def query_batch_swap(pool_id, i, j, amount, assets, me):
             + w_uint(0) + swaps + assets_enc)
 
 
-def balancer(node, tag, head, args):
-    facs = [f.split(":") for f in args.balancer_factory]
+def balancer_logs(node, head, args):
+    """События PoolCreated фабрик Balancer V2 (решение 460: до выбора блока состояния)."""
     created = topic("PoolCreated(address)")  # BasePoolFactory.sol (event PoolCreated(address indexed pool))
+    return {f: node.logs_back(f.split(":")[2], [created], head, args) for f in args.balancer_factory}
+
+
+def balancer(node, tag, found, args):
+    facs = [f.split(":") for f in args.balancer_factory]
     me = "0x" + "00" * 19 + "01"
     out = []
-    for name, math, factory in facs:
-        logs = node.logs(factory, [created], max(0, head - args.blocks), head, args.log_step)
+    for spec, (name, math, factory) in zip(args.balancer_factory, facs):
+        logs = found[spec]["logs"]
         pools = []
         for lg in logs[-args.max_pools:]:
             pool = r_addr(lg["topics"][1][2:])
@@ -289,17 +322,23 @@ def balancer(node, tag, head, args):
                                    "answer": node.call(args.vault, query_batch_swap(pid, i, j, amt, tokens, me), tag)})
             p["queryBatchSwap"] = qs
             pools.append(p)
-        out.append({"name": name, "math": math, "factory": factory, "logs_total": len(logs), "pools": pools})
+        out.append({"name": name, "math": math, "factory": factory, "logs_total": len(logs),
+                    "logs_from": found[spec]["from"], "logs_to": found[spec]["to"], "pools": pools})
     return {"vault": args.vault, "factories": out}
 
 
 # --- iZiSwap ---------------------------------------------------------------------------------------------------------
 
-def izi(node, tag, head, args):
+def izi_logs(node, head, args):
+    """События NewPool фабрики iZiSwap (решение 460: до выбора блока состояния)."""
+    new_pool = topic("NewPool(address,address,uint24,uint24,address)")  # IiZiSwapFactory: NewPool(x, y, fee, delta, pool)
+    return node.logs_back(args.izi_factory, [new_pool], head, args)
+
+
+def izi(node, tag, found, args):
     f = args.izi_factory
     deltas = {str(fee): node.call(f, sel("fee2pointDelta(uint24)") + w_uint(fee), tag) for fee in args.izi_fee}
-    new_pool = topic("NewPool(address,address,uint24,uint24,address)")  # IiZiSwapFactory: NewPool(x, y, fee, delta, pool)
-    logs = node.logs(f, [new_pool], max(0, head - args.blocks), head, args.log_step)
+    logs = found["logs"]
     pools = []
     for lg in logs[-args.max_pools:]:
         ws = words(lg["data"])
@@ -314,13 +353,37 @@ def izi(node, tag, head, args):
                 p["pool_xy"] = node.call(f, sel("pool(address,address,uint24)") + w_addr(ax) + w_addr(ay) + w_uint(fv), tag)
                 p["pool_yx"] = node.call(f, sel("pool(address,address,uint24)") + w_addr(ay) + w_addr(ax) + w_uint(fv), tag)
         pools.append(p)
-    return {"factory": f, "fee2pointDelta": deltas, "logs_total": len(logs), "pools": pools}
+    return {"factory": f, "fee2pointDelta": deltas, "logs_total": len(logs), "logs_from": found["from"],
+            "logs_to": found["to"], "pools": pools}
+
+
+def state_phase(node, head, found, args):
+    """Решение 460: всё чтение состояния на одном блоке head (свежем, после поиска событий). Возвращает: (head, блок
+    узла, файлы записи без block.json). Ошибки: StaleState (recnode.fresh повторит на новом блоке)."""
+    tag = hex(head)
+    blk = node.rpc("eth_getBlockByNumber", [tag, False])["result"]
+    print("блок состояния B", head, file=sys.stderr, flush=True)
+    files = {}
+    if found["kyber"] is not None:
+        files["kyber.json"] = kyber(node, tag, found["kyber"], args)
+    if found["balancer"] is not None:
+        files["balancer.json"] = balancer(node, tag, found["balancer"], args)
+    if found["izi"] is not None:
+        files["izi.json"] = izi(node, tag, found["izi"], args)
+    if args.pancake_ur:
+        j = node.rpc("eth_getCode", [args.pancake_ur, tag])
+        code = j.get("result", "0x")
+        files["pancake_ur.json"] = {"address": args.pancake_ur, "code_len": (len(code) - 2) // 2,
+                                    "code_keccak": "0x" + keccak256(bytes.fromhex(code[2:])).hex()}
+    return head, blk, files
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--node", required=True, help="HTTP JSON-RPC своего узла Arbitrum One")
-    ap.add_argument("--blocks", type=int, required=True, help="окно событий до блока записи")
+    ap.add_argument("--blocks", type=int, required=True,
+                    help="шаг поиска событий назад от головы, блоков (решение 460: шаги, пока не наберётся --max-pools)")
+    ap.add_argument("--floor", type=int, default=0, help="нижняя граница поиска событий, блок")
     ap.add_argument("--log-step", type=int, default=None, help="размер части eth_getLogs (по умолчанию — всё окно)")
     ap.add_argument("--max-pools", type=int, required=True, help="пулов на фабрику (последние по событиям)")
     ap.add_argument("--ladder", type=int, action="append", default=None,
@@ -334,28 +397,22 @@ def main():
     args = ap.parse_args()
     args.ladder = args.ladder or [10000, 1000, 100]
     node = Node(args.node)
-    head = int(node.rpc("eth_blockNumber", [])["result"], 16)
-    args.log_step = args.log_step or (args.blocks + 1)
-    tag = hex(head)
-    blk = node.rpc("eth_getBlockByNumber", [tag, False])["result"]
-    day = datetime.date.today().isoformat()
+    args.log_step = args.log_step or args.blocks
+    if args.balancer_factory and not args.vault:
+        sys.exit("--vault обязателен с --balancer-factory")
+    # Решение 460: сначала все поиски событий (до головы b0, без чтения состояния), потом свежий блок B и всё
+    # состояние на нём (recnode.fresh: состояние B удалено узлом — заново на новом блоке).
+    b0 = int(node.rpc("eth_blockNumber", [])["result"], 16)
+    found = {"kyber": kyber_logs(node, b0, args) if args.kyber else None,
+             "balancer": balancer_logs(node, b0, args) if args.balancer_factory else None,
+             "izi": izi_logs(node, b0, args) if args.izi_factory else None}
+    head, blk, files = recnode.fresh(lambda: int(node.rpc("eth_blockNumber", [])["result"], 16),
+                                     lambda h: state_phase(node, h, found, args))
+    day = os.environ.get("ARB_RECORD_DATE") or datetime.date.today().isoformat()
     root = os.path.join(os.path.dirname(__file__), "..", "..", "tests", "data", f"arbitrum_sub_dex_{day}")
     os.makedirs(root, exist_ok=True)
-    files = {}
-    if args.kyber:
-        files["kyber.json"] = kyber(node, tag, head, args)
-    if args.balancer_factory:
-        if not args.vault:
-            sys.exit("--vault обязателен с --balancer-factory")
-        files["balancer.json"] = balancer(node, tag, head, args)
-    if args.izi_factory:
-        files["izi.json"] = izi(node, tag, head, args)
-    if args.pancake_ur:
-        j = node.rpc("eth_getCode", [args.pancake_ur, tag])
-        code = j.get("result", "0x")
-        files["pancake_ur.json"] = {"address": args.pancake_ur, "code_len": (len(code) - 2) // 2,
-                                    "code_keccak": "0x" + keccak256(bytes.fromhex(code[2:])).hex()}
-    meta = {"block": head, "hash": blk["hash"], "timestamp": int(blk["timestamp"], 16), "args": vars(args)}
+    meta = {"block": head, "hash": blk["hash"], "timestamp": int(blk["timestamp"], 16), "logs_to_block": b0,
+            "args": vars(args)}
     files["block.json"] = meta
     sums = []
     for name, data in files.items():

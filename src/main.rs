@@ -285,6 +285,7 @@ async fn run() -> Result<(), String> {
         raw,
         pace: Default::default(),
         failover: Default::default(),
+        place: arb::venues::bsc_dex::ctx::Place::BSC,
         chains: Default::default(),
         account: None,
         index: Default::default(),
@@ -297,10 +298,10 @@ async fn run() -> Result<(), String> {
         .configure_legacy(arb::settings::accounts::migrate::LegacyCfg {
             name: "BingX".into(),
             secret: arb::venues::bsc_dex::ctx::SECRET_WALLET_KEY.into(),
-            queue_key: arb::venues::bsc_dex::ctx::ID.into(),
+            queue_key: arb::venues::bsc_dex::ctx::BSC_ID.into(),
             executor_setting: "exec.executor_address".into(),
             executor_scope: arb::settings::scope::Scope::Venue(
-                arb::venues::bsc_dex::ctx::ID.into(),
+                arb::venues::bsc_dex::ctx::BSC_ID.into(),
             ),
             rows: vec![
                 arb::venues::bingx::ctx::ID.into(),

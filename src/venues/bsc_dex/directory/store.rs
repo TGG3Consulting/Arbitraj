@@ -16,7 +16,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::storage::journal::Level;
 use crate::storage::venue_state;
 
-use super::super::ctx::{Ctx, ID};
+use super::super::ctx::Ctx;
 use super::TokenEntry;
 use super::gt_parse::IndexedPool;
 
@@ -65,7 +65,7 @@ pub async fn save_token(ctx: &Ctx, net: &str, token: Address, t: &TokenEntry) ->
     let body = serde_json::to_string(&row).map_err(|e| internal(ctx, e))?;
     venue_state::save(
         ctx.journal.db(),
-        ID,
+        ctx.place.id,
         TOKEN,
         &format!("{net}:{token:#x}"),
         body,
@@ -76,7 +76,7 @@ pub async fn save_token(ctx: &Ctx, net: &str, token: Address, t: &TokenEntry) ->
 
 /// Все сохранённые монеты сети: адрес → запись. Повреждённая строка пропускается с записью в журнал. Ошибки: Internal.
 pub async fn load_tokens(ctx: &Ctx, net: &str) -> GatewayResult<Vec<(Address, TokenEntry)>> {
-    let rows = venue_state::list(ctx.journal.db(), ID, TOKEN, &format!("{net}:"))
+    let rows = venue_state::list(ctx.journal.db(), ctx.place.id, TOKEN, &format!("{net}:"))
         .await
         .map_err(|e| internal(ctx, e))?;
     let mut out = Vec::new();
@@ -120,7 +120,7 @@ pub async fn save_dexes(
         dexes: dexes.to_vec(),
     };
     let body = serde_json::to_string(&row).map_err(|e| internal(ctx, e))?;
-    venue_state::save(ctx.journal.db(), ID, DEXES, net, body)
+    venue_state::save(ctx.journal.db(), ctx.place.id, DEXES, net, body)
         .await
         .map_err(|e| internal(ctx, e))
 }
@@ -130,7 +130,7 @@ pub async fn load_dexes(
     ctx: &Ctx,
     net: &str,
 ) -> GatewayResult<Option<(DateTime<Utc>, Vec<IndexerDex>)>> {
-    let body = venue_state::load(ctx.journal.db(), ID, DEXES, net)
+    let body = venue_state::load(ctx.journal.db(), ctx.place.id, DEXES, net)
         .await
         .map_err(|e| internal(ctx, e))?;
     let Some(b) = body else { return Ok(None) };

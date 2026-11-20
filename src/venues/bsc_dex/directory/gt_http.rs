@@ -16,7 +16,7 @@
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::ctx::{Ctx, ID};
+use super::super::ctx::Ctx;
 use super::super::errors;
 use super::{gt_parse, limit};
 
@@ -67,7 +67,7 @@ pub async fn get(ctx: &Ctx, path: &str, page: u32) -> GatewayResult<Got> {
             .await
             .map_err(|f| errors::from_fail(&f, &lim, SOURCE))?;
         ctx.raw
-            .write(ID, "index", &format!("GET {url} → {status} {text}"));
+            .write(ctx.place.id, "index", &format!("GET {url} → {status} {text}"));
         answer(status.as_u16(), page, &text, path)
     })
     .await

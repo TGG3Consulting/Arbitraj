@@ -36,7 +36,7 @@ pub fn details(ctx: &Ctx, e: &Entry) -> Vec<String> {
     let wallets: Vec<_> = ctx
         .settings
         .accounts()
-        .wallets_at(crate::venues::bsc_dex::ctx::ID)
+        .wallets_at(ctx.place.id)
         .into_iter()
         .filter_map(|w| pool_pass::v3(&w).map(|x| (w.name, x)))
         .collect();

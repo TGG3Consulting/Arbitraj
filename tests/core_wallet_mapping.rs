@@ -92,6 +92,7 @@ async fn start(tag: &str) -> (Core, Store, arb::secrets::Vault) {
             raw,
             pace: Default::default(),
             failover: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
             chains: Default::default(),
             account: None,
             index: Default::default(),

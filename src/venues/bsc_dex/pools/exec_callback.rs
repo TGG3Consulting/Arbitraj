@@ -86,7 +86,7 @@ fn wallet_version(ctx: &Ctx, what: &str) -> Result<Option<Version>, String> {
     // Решение 401 (ревью t186, Н1): снимок кошельков без замка и без копии записи.
     let acc = ctx.settings.accounts();
     // Решение 432: исполнитель этой площадки DEX (её сети).
-    acc.with_wallet_at(super::super::ctx::ID, ctx.account.as_deref(), |found| {
+    acc.with_wallet_at(ctx.place.id, ctx.account.as_deref(), |found| {
         let Some(w) = found else { return Ok(None) };
         let Some(x) = w.executor.as_deref() else {
             return Ok(None);

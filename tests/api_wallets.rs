@@ -100,6 +100,7 @@ async fn state() -> AppState {
             raw,
             pace: Default::default(),
             failover: Default::default(),
+            place: arb::venues::bsc_dex::ctx::Place::BSC,
             chains: Default::default(),
             account: None,
             index: Default::default(),

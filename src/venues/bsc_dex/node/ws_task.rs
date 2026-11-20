@@ -29,7 +29,7 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::gateway::errors::GatewayResult;
 
-use super::super::ctx::{Ctx, ID};
+use super::super::ctx::Ctx;
 use super::super::errors::Op;
 use super::jsonrpc;
 use super::ws::SOURCE;
@@ -136,8 +136,8 @@ pub async fn run(
                     Message::Close(c) => break format!("сервер закрыл соединение: {c:?}"),
                     _ => continue,
                 };
-                ctx.raw.write(ID, &name, &text);
-                if let Some(gone) = dispatch(&text, &mut pending, &mut subs) {
+                ctx.raw.write(ctx.place.id, &name, &text);
+                if let Some(gone) = dispatch(&text, &mut pending, &mut subs, ctx.place.id) {
                     // Получатель подписки больше не слушает — отписываемся у узла, чтобы не тратить квоту.
                     let id = next_id;
                     next_id += 1;
@@ -156,11 +156,13 @@ pub async fn run(
 }
 
 /// Раздаёт одно сообщение: уведомление — в поток подписки, ответ — ожидающему по id.
-/// Принимает: текст, ожидающие, подписки. Возвращает: id подписки, получатель которой ушёл (нужна отписка).
+/// Принимает: текст, ожидающие, подписки, id площадки (для лога, решение 435). Возвращает: id подписки, получатель
+/// которой ушёл (нужна отписка).
 fn dispatch(
     text: &str,
     pending: &mut HashMap<u64, Pending>,
     subs: &mut HashMap<String, mpsc::UnboundedSender<Box<RawValue>>>,
+    venue: &str,
 ) -> Option<String> {
     if let Ok(n) = serde_json::from_str::<Notification>(text) {
         if n.method != "eth_subscription" {
@@ -181,7 +183,7 @@ fn dispatch(
         Err(e) => {
             // Решение 108: в лог — само сообщение (первые 500 символов) и причина, чтобы было видно, что это.
             let short: String = text.chars().take(500).collect();
-            tracing::warn!(venue = ID, why = %e, text = %short, "узел прислал непонятное сообщение");
+            tracing::warn!(venue = venue, why = %e, text = %short, "узел прислал непонятное сообщение");
             return None;
         }
     };

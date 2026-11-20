@@ -18,6 +18,7 @@ pub mod connection_extra;
 pub mod connection_gas;
 pub mod connection_sync;
 pub mod ctx;
+pub mod ctx_place;
 pub mod ctx_url;
 pub mod ctx_wallet;
 pub mod directory;

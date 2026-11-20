@@ -1,7 +1,9 @@
 //! Файл: venues/bsc_dex/errors.rs
 //! Что делает: перевод ответов узла BSC (JSON-RPC ошибка, HTTP-статус, сеть) в единые коды шлюза.
 //! Кто вызывает: node/rpc.rs, node/ws.rs, позже send/* (каналы отправки — свои уточнения поверх этого).
-//! От чего зависит: gateway/errors.rs, ctx.rs (ID).
+//! От чего зависит: gateway/errors.rs, ctx_place.rs (BSC_ID).
+//! Решение 435 (433-г): здесь нет окружения Ctx — площадка ошибки ставится первой площадкой DEX (bsc_dex); запросы к узлу
+//! (node/rpc.rs, node/rpc_capped.rs) перепомечают ошибку площадкой своего окружения (Ctx::tag), у bsc_dex — то же самое.
 //! Настройки: нет.
 //!
 //! Источники:
@@ -34,7 +36,7 @@
 
 use crate::gateway::errors::{ErrorCode, GatewayError};
 
-use super::ctx::ID;
+use super::ctx_place::BSC_ID;
 use crate::gateway::http::{Fail, Limits};
 
 /// Какой запрос вернул ошибку: от этого зависит единый код у текстов, которые не распознаны.
@@ -148,13 +150,13 @@ pub fn bad(what: &str, source: &str, raw: &str) -> GatewayError {
     .with_raw(raw)
 }
 
-/// Ошибка с площадкой bsc_dex там, где нет окружения Ctx.
+/// Ошибка с площадкой bsc_dex там, где нет окружения Ctx (запросы к узлу перепомечают её площадкой окружения).
 /// Принимает: код, текст. Возвращает: GatewayError.
 pub fn err(code: ErrorCode, message: impl Into<String>) -> GatewayError {
     GatewayError::new(code, Some(venue()), message)
 }
 
-/// Идентификатор площадки для ошибок.
+/// Идентификатор площадки для ошибок без окружения (первая площадка DEX; запросы к узлу перепомечают — Ctx::tag).
 fn venue() -> crate::core::types::VenueId {
-    crate::core::types::VenueId(ID.to_string())
+    crate::core::types::VenueId(BSC_ID.to_string())
 }

@@ -37,7 +37,8 @@ pub const SECRET_HTTP_KEY: &str = "bsc.node_http_key";
 /// Ошибки: NotConfigured/SecretsLocked (адрес, ключ), Timeout/Unreachable, ответ-ошибка узла, BadResponse.
 pub async fn call<T: DeserializeOwned>(ctx: &Ctx, method: &str, params: Value) -> GatewayResult<T> {
     let raw = call_raw(ctx, method, params).await?;
-    jsonrpc::decode(&raw, SOURCE)
+    // Решение 435: ошибка — с площадкой своего окружения (errors.rs без Ctx ставит bsc_dex).
+    jsonrpc::decode(&raw, SOURCE).map_err(|e| ctx.tag(e))
 }
 
 /// Один запрос к узлу, result — сырой.
@@ -45,7 +46,7 @@ pub async fn call<T: DeserializeOwned>(ctx: &Ctx, method: &str, params: Value) -
 pub async fn call_raw(ctx: &Ctx, method: &str, params: Value) -> GatewayResult<Box<RawValue>> {
     let body = jsonrpc::request(1, method, &params);
     let text = pace::run(ctx, 1, || to_node(ctx, &body)).await?;
-    jsonrpc::parse_text(&text, SOURCE, Op::Read)
+    jsonrpc::parse_text(&text, SOURCE, Op::Read).map_err(|e| ctx.tag(e))
 }
 
 /// Один запрос мимо общей очереди темпа (node/pace.rs) — только для опроса номера блока (node/heads.rs, решение 57):
@@ -58,8 +59,8 @@ pub async fn call_unpaced<T: DeserializeOwned>(
 ) -> GatewayResult<T> {
     let body = jsonrpc::request(1, method, &params);
     let text = to_node(ctx, &body).await?;
-    let raw = jsonrpc::parse_text(&text, SOURCE, Op::Read)?;
-    jsonrpc::decode(&raw, SOURCE)
+    let raw = jsonrpc::parse_text(&text, SOURCE, Op::Read).map_err(|e| ctx.tag(e))?;
+    jsonrpc::decode(&raw, SOURCE).map_err(|e| ctx.tag(e))
 }
 
 /// Пачка запросов одним HTTP-запросом (JSON-RPC batch).
@@ -91,6 +92,7 @@ pub async fn batch(
         (0..calls.len()).map(|_| None).collect();
     for resp in list {
         let (id, res) = jsonrpc::parse(resp, SOURCE, Op::Read, &text);
+        let res = res.map_err(|e| ctx.tag(e));
         if let Some(slot) = id.and_then(|i| out.get_mut(i as usize)) {
             *slot = Some(res);
         }
@@ -153,8 +155,9 @@ pub async fn post(
     }
     let (status, text) = http::exchange(req, lim)
         .await
-        .map_err(|f| errors::from_fail(&f, &lim, source))?;
-    status_ok(status, text, source)
+        .map_err(|f| ctx.tag(errors::from_fail(&f, &lim, source)))?;
+    // Решение 435: ошибка узла или канала — с площадкой своего окружения.
+    status_ok(status, text, source).map_err(|e| ctx.tag(e))
 }
 
 /// Ответ узла с HTTP-статусом: 2xx — текст; иначе — ошибка из тела JSON-RPC или по статусу. Ошибок кроме этих нет.

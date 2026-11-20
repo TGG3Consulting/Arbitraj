@@ -151,7 +151,11 @@
   3) DEX ↔ DEX на Arbitrum: бандлов нет — атомарность только одной транзакцией через исполнитель (развёртывание
      исполнителя в Arbitrum — шаг 4). Ок?
   Осталось (обязательно, порядок — step5-plan.md, раздел 2; приоритетов нет):
-  - 433-г id площадки из окружения вместо константы ID (ctx.rs:26 и 7 файлов, core/deal_card.rs:25, notify/human.rs:50).
+  - 433-г — СДЕЛАНО (решение 435): поле Ctx.place (ctx_place.rs: свой id и все площадки DEX процесса, из main.rs);
+    ctx.rs, ws_task.rs, settings_wait.rs, directory/store.rs, gt_http.rs, history_store.rs, deploy_block.rs, ctx_wallet.rs,
+    pass_view.rs, pass_cycle.rs, onchain.rs, exec_callback.rs — ctx.place.id; errors.rs без Ctx — bsc_dex, запросы к узлу
+    (node/rpc.rs call/call_raw/call_unpaced/batch/post) перепомечают ошибку площадкой окружения; core/deal_card.rs и
+    notify/human.rs — уже решением 432 (имена DEX от ядра). Остаток — см. «Решение 435».
   - 433-д режим газа в отправке: exec/txs.rs, exec/bundle_send.rs, send/cancel.rs (тип 2 с повышением обеих цен),
     wallet/transfer.rs, quote/gas.rs (baseFee головы), exec/gas_fund.rs; настройки запаса maxFee и чаевых (каталог,
     SETTINGS, SETTINGS_CASES, FIRST_RUN, интерфейс). Ревью: с этой задачей в connection_gas.rs «dex.gas_mode не

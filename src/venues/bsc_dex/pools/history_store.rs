@@ -15,7 +15,7 @@ use alloy_primitives::Address;
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::ctx::{Ctx, ID};
+use super::super::ctx::Ctx;
 use super::discover::Found;
 use super::discover_v4;
 use super::families::Family;
@@ -46,14 +46,14 @@ pub async fn load(
             format!("{}: история V4 в SQLite: {e}", f.title),
         )
     };
-    let last = venue_state::load(db, ID, LAST, &id)
+    let last = venue_state::load(db, ctx.place.id, LAST, &id)
         .await
         .map_err(|e| internal(e.to_string()))?;
     let Some(last) = last else { return Ok(None) };
     let last: u64 = last
         .parse()
         .map_err(|_| internal(format!("блок «{last}» не число")))?;
-    let rows = venue_state::list(db, ID, POOL, &format!("{id}:"))
+    let rows = venue_state::list(db, ctx.place.id, POOL, &format!("{id}:"))
         .await
         .map_err(|e| internal(e.to_string()))?;
     let mut logs = Vec::with_capacity(rows.len());
@@ -89,11 +89,11 @@ pub async fn save(
         rows.push((format!("{id}:{pool_id:#x}"), body));
     }
     if !rows.is_empty() {
-        venue_state::save_many(db, ID, POOL, rows)
+        venue_state::save_many(db, ctx.place.id, POOL, rows)
             .await
             .map_err(|e| internal(e.to_string()))?;
     }
-    venue_state::save(db, ID, LAST, &id, last.to_string())
+    venue_state::save(db, ctx.place.id, LAST, &id, last.to_string())
         .await
         .map_err(|e| internal(e.to_string()))
 }

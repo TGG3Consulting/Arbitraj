@@ -30,6 +30,12 @@
   в шаге ожидания), exec/cycle_exec.rs 219 (было 217). Дробить — как в строке ниже (track_l1 — Start/block_time/
   caught_up в track_l1_head.rs). Окно eip1559_l1 вынесено в send/drop_wait.rs (send/tx.rs 197 → 185). Тестов на
   записях для track_l1 (отставший узел), by_cond и загрузки хранилищ нет — нет записей.
+- Решение 450 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/pools/factory_calls.rs 292 (было 284: + iZiSwap),
+  factory_ask.rs 236 (+ Q::Izi), created_log.rs 352 (+ события KSFactory), multi_pair.rs 209 (+ группы dex.sub_dex).
+  Дробить: factory_calls — tiers / spacings / lookup_max в factory_tiers.rs; created_log — candidate в
+  created_candidate.rs. Решение 450, проверка строки несколькими видами (dex.sub_dex): каждая строка ключа с
+  дочерними проверяется всеми видами — вызовов проверки больше в число видов; кешировать «вид пула по адресу» после
+  первого подтверждения.
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

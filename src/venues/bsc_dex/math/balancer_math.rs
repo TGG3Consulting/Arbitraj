@@ -15,6 +15,10 @@
 //! - BaseMinimalSwapInfoPool.sol L54-L89 / BaseGeneralPool.sol (стейбл) L46-L82: точный вход — вход − mulUp(вход,
 //!   комиссия), затем ×множитель; выход — divDown на множитель; точный выход — выход ×множитель, вход divUp на
 //!   множитель, затем divUp(вход, 1 − комиссия);
+//! - решение 450: библиотеки v2 (weighted-pool v2 / v3 / v4, stable-pool-v2; VaultCurve::WeightedV2 / StableV2) —
+//!   FixedPoint.powUp с точными степенями 1/2/4 (pow_up), StableMath v2 (balancer_stable.rs invariant_v2); swap пула
+//!   (BaseMinimalSwapInfoPool.onSwap, BasePool._subtractSwapFeeAmount / _upscale / _downscale*, WeightedMath
+//!   _calcOutGivenIn / _calcInGivenOut) — тот же расчёт, что у v1 (сверено по тексту build-info 20230320-weighted-pool-v4);
 //! - BasePool.sol (весовой) L454-L466, L474-L481, L529-L555: множитель = 10^(18 − decimals), _upscale = Math.mul,
 //!   _downscaleDown = Math.divDown, _downscaleUp = Math.divUp; у стейбла (BasePool.sol L490-L502, L510-L517,
 //!   L574-L616) множитель = 1e18·10^(18 − decimals) с FixedPoint.mulDown / divDown / divUp — те же результаты, поэтому
@@ -69,8 +73,22 @@ pub fn div_up(a: U256, b: U256) -> Option<U256> {
     Some((a.checked_mul(one())? - U256::from(1u8)) / b + U256::from(1u8))
 }
 
-/// powUp (L120-L125): pow + mulUp(pow, MAX_POW_RELATIVE_ERROR = 10000) + 1. None — откат pow или переполнение.
-fn pow_up(x: U256, y: U256) -> Option<U256> {
+/// powUp (L120-L125): pow + mulUp(pow, MAX_POW_RELATIVE_ERROR = 10000) + 1. Решение 450: библиотеки v2 (fast = true;
+/// 20230320-weighted-pool-v4 FixedPoint.sol L134-L150, тот же текст у weighted-pool v2 / v3) — степень 1 → x, 2 →
+/// mulUp(x, x), 4 → mulUp(квадрат, квадрат), остальные — как v1. None — откат pow или переполнение.
+fn pow_up(x: U256, y: U256, fast: bool) -> Option<U256> {
+    if fast {
+        if y == one() {
+            return Some(x);
+        }
+        if y == one() * U256::from(2u8) {
+            return mul_up(x, x);
+        }
+        if y == one() * U256::from(4u8) {
+            let sq = mul_up(x, x)?;
+            return mul_up(sq, sq);
+        }
+    }
     let raw = balancer_log_exp::pow(x, y)?;
     raw.checked_add(mul_up(raw, U256::from(10_000u32))?)?
         .checked_add(U256::from(1u8))
@@ -88,23 +106,33 @@ fn max_ratio() -> U256 {
 
 /// WeightedMath._calcOutGivenIn (L69-L100). Принимает: баланс и вес входа, баланс и вес выхода, вход (всё — 18 знаков,
 /// вход уже без комиссии). None — вход больше 30 % баланса (MAX_IN_RATIO) или откат арифметики.
-pub fn weighted_out(b_in: U256, w_in: U256, b_out: U256, w_out: U256, a_in: U256) -> Option<U256> {
+pub fn weighted_out(
+    (b_in, w_in): (U256, U256),
+    (b_out, w_out): (U256, U256),
+    a_in: U256,
+    fast: bool,
+) -> Option<U256> {
     if a_in > mul_down(b_in, max_ratio())? {
         return None;
     }
     let base = div_up(b_in, b_in.checked_add(a_in)?)?;
-    let power = pow_up(base, div_down(w_in, w_out)?)?;
+    let power = pow_up(base, div_down(w_in, w_out)?, fast)?;
     mul_down(b_out, complement(power))
 }
 
 /// WeightedMath._calcInGivenOut (L104-L138). Принимает: баланс и вес входа, баланс и вес выхода, выход (18 знаков).
 /// Возвращает: вход без комиссии. None — выход больше 30 % баланса (MAX_OUT_RATIO) или откат арифметики.
-pub fn weighted_in(b_in: U256, w_in: U256, b_out: U256, w_out: U256, a_out: U256) -> Option<U256> {
+pub fn weighted_in(
+    (b_in, w_in): (U256, U256),
+    (b_out, w_out): (U256, U256),
+    a_out: U256,
+    fast: bool,
+) -> Option<U256> {
     if a_out > mul_down(b_out, max_ratio())? {
         return None;
     }
     let base = div_up(b_out, b_out.checked_sub(a_out)?)?;
-    let power = pow_up(base, div_up(w_out, w_in)?)?;
+    let power = pow_up(base, div_up(w_out, w_in)?, fast)?;
     mul_up(b_in, power.checked_sub(one())?)
 }
 
@@ -118,15 +146,18 @@ pub fn amount_out(d: &VaultPoolData, i: usize, j: usize, amount_in: U256) -> Opt
     }
     let net = amount_in.checked_sub(mul_up(amount_in, d.fee)?)?;
     let a = net.checked_mul(s_in)?;
+    let b_in = d.balances.get(i)?.checked_mul(s_in)?;
+    let b_out = d.balances.get(j)?.checked_mul(s_out)?;
     let out = match &d.curve {
-        VaultCurve::Weighted { weights } => weighted_out(
-            d.balances.get(i)?.checked_mul(s_in)?,
-            *weights.get(i)?,
-            d.balances.get(j)?.checked_mul(s_out)?,
-            *weights.get(j)?,
-            a,
-        )?,
-        VaultCurve::Stable { amp } => balancer_stable::out_given_in(*amp, &upscaled(d)?, i, j, a)?,
+        VaultCurve::Weighted { weights } | VaultCurve::WeightedV2 { weights } => {
+            let fast = matches!(d.curve, VaultCurve::WeightedV2 { .. });
+            let (wi, wj) = (*weights.get(i)?, *weights.get(j)?);
+            weighted_out((b_in, wi), (b_out, wj), a, fast)?
+        }
+        VaultCurve::Stable { amp } | VaultCurve::StableV2 { amp } => {
+            let v2 = matches!(d.curve, VaultCurve::StableV2 { .. });
+            balancer_stable::out_given_in(*amp, &upscaled(d)?, i, j, a, v2)?
+        }
     };
     Some(out / s_out)
 }
@@ -139,15 +170,18 @@ pub fn amount_in(d: &VaultPoolData, i: usize, j: usize, amount_out: U256) -> Opt
         return None;
     }
     let a = amount_out.checked_mul(s_out)?;
+    let b_in = d.balances.get(i)?.checked_mul(s_in)?;
+    let b_out = d.balances.get(j)?.checked_mul(s_out)?;
     let raw = match &d.curve {
-        VaultCurve::Weighted { weights } => weighted_in(
-            d.balances.get(i)?.checked_mul(s_in)?,
-            *weights.get(i)?,
-            d.balances.get(j)?.checked_mul(s_out)?,
-            *weights.get(j)?,
-            a,
-        )?,
-        VaultCurve::Stable { amp } => balancer_stable::in_given_out(*amp, &upscaled(d)?, i, j, a)?,
+        VaultCurve::Weighted { weights } | VaultCurve::WeightedV2 { weights } => {
+            let fast = matches!(d.curve, VaultCurve::WeightedV2 { .. });
+            let (wi, wj) = (*weights.get(i)?, *weights.get(j)?);
+            weighted_in((b_in, wi), (b_out, wj), a, fast)?
+        }
+        VaultCurve::Stable { amp } | VaultCurve::StableV2 { amp } => {
+            let v2 = matches!(d.curve, VaultCurve::StableV2 { .. });
+            balancer_stable::in_given_out(*amp, &upscaled(d)?, i, j, a, v2)?
+        }
     };
     // _downscaleUp — Math.divUp (не FixedPoint): ceil(raw / множитель).
     let down = if raw.is_zero() {

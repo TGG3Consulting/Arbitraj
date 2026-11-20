@@ -82,12 +82,26 @@ pub async fn take(ctx: &Ctx, only: Option<&HashSet<Address>>) -> GatewayResult<T
 /// Итоги проверки — в справочник: взят / отклонён (в журнал — один раз на пул и причину) / не проверен (узел).
 /// Пул, исключённый проверкой «кто меняет», не берётся. Возвращает: сколько не проверено из-за узла. Ошибок нет.
 pub async fn record(ctx: &Ctx, cands: &[Candidate], verdicts: Vec<Verdict>) -> usize {
+    record_with(ctx, cands, None, verdicts).await
+}
+
+/// Что делает: record с заданными id строк справочника (решение 450: строка индексатора с dex.sub_dex проверяется
+/// видом дочернего ключа, а ключ строки — по id индексатора). Принимает: окружение, кандидатов, id DEX строк по
+/// порядку кандидатов (None — id вида кандидата, как раньше), итоги. Возвращает: сколько не проверено из-за узла.
+/// Ошибок нет.
+pub async fn record_with(
+    ctx: &Ctx,
+    cands: &[Candidate],
+    ids: Option<&[String]>,
+    verdicts: Vec<Verdict>,
+) -> usize {
     let mut failed = 0;
     let mut log = Vec::new();
     ctx.index.with(|s| {
-        for (c, v) in cands.iter().zip(verdicts) {
+        for (n, (c, v)) in cands.iter().zip(verdicts).enumerate() {
+            let id = ids.and_then(|l| l.get(n)).map_or(c.family.id, |x| x.as_str());
             // Решение 295: ключ строки — с парой у DEX в режиме dex.multi_pair, иначе строка пула (как до решения).
-            let key = multi_pair::dir_key(&s.multi_dex, c.family.id, &c.pool, c.coin, c.quote);
+            let key = multi_pair::dir_key(&s.multi_dex, id, &c.pool, c.coin, c.quote);
             let st = match v {
                 Verdict::Taken(f) => match s.banned.get(&f.reference.site()) {
                     Some(why) => DirectoryStatus::Rejected(why.clone()),

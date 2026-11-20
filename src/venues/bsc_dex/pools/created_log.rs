@@ -20,7 +20,7 @@ use super::super::ctx::Ctx;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::directory::pool_key;
 use super::abi_algebra::IAlgebraFactory;
-use super::abi_dmm::IDmmFactory;
+use super::abi_dmm::{self, IDmmFactory};
 use super::abi_dodo::IDodoFactory;
 use super::abi_elastic::IElasticFactory;
 use super::abi_maverick::IMaverickV2Factory;
@@ -157,6 +157,12 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
         };
         if let Ok(addr) = ctx.dex_addr(setting, f.id) {
             out.push((addr, t0, v4, f));
+            // Решение 450: у фабрик KyberSwap Classic Static Fee своё событие PoolCreated (abi_dmm.rs created_topics) —
+            // подписка на все три подписи; фабрика ключа шлёт одно из них.
+            if f.proto == Proto::KyberDmm {
+                let extra = abi_dmm::created_topics().into_iter().filter(|t| *t != t0);
+                out.extend(extra.map(|t| (addr, t, v4, f)));
+            }
         }
     }
     out
@@ -314,10 +320,10 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
                 .map_err(|e| format!("PoolCreated (Slipstream) не по ABI: {e}"))?;
             (e.token0, e.token1, e.pool)
         }
+        // Решение 450: событие DMMFactory, KSFactory или KSFactory Legacy — по topic0 (abi_dmm.rs created).
         Proto::KyberDmm => {
-            let e = IDmmFactory::PoolCreated::decode_log_data(&log.inner.data)
-                .map_err(|e| format!("PoolCreated (KyberSwap DMM) не по ABI: {e}"))?;
-            (e.token0, e.token1, e.pool)
+            let topic = log.topics().first().copied().unwrap_or_default();
+            abi_dmm::created(topic, &log.inner.data)?
         }
         Proto::Maverick => {
             let e = IMaverickV2Factory::PoolCreated::decode_log_data(&log.inner.data)

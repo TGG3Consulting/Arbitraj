@@ -3,7 +3,7 @@
 //! делает: геттеры пула tokenX / tokenY / fee / factory (проверка — verify_izi.rs), реестр фабрики pool(x, y, fee)
 //! (у iZiSwap fee — uint24, у Biswap V3 — uint16: селекторы разные, чужой — откат), topic0 событий пула
 //! (events_izi.rs). Обмен (swapX2Y / swapY2X) и обратные вызовы — в контрактах (contracts/IPools.sol, VirtualQuoter.sol).
-//! Кто вызывает: pools/verify_izi.rs, pools/load_izi.rs, pools/events_izi.rs.
+//! Кто вызывает: pools/verify_izi.rs, pools/load_izi.rs, pools/events_izi.rs, pools/factory_ask.rs (решение 450: поиск по фабрике).
 //! От чего зависит: alloy::sol!, families.rs (Proto).
 //! Настройки: нет (фабрика — dex.factory [DEX]).
 //!

@@ -5,7 +5,7 @@
 //! хранилища + decimals токенов). Вынесено из load_balancer.rs (предел размера файла).
 //! Кто вызывает: pools/load_balancer.rs.
 //! От чего зависит: ctx.rs, node/call.rs, abi_balancer.rs.
-//! Настройки: dex.factory, dex.balancer_stable_factory [DEX].
+//! Настройки: dex.factory, dex.balancer_stable_factory, dex.balancer_math (решение 450) [DEX].
 //!
 //! Источник: BasePool.sol (весовой) L474-L481 / (стейбл) L510-L517 — множитель от decimals, decimals > 18 пул не
 //! принимает (Math.sub(18, decimals)); BasePoolFactory.sol L48-L60 (isPoolFromFactory); BasePool.sol L159-L161 (getPoolId).
@@ -25,12 +25,30 @@ use super::abi_balancer::{
 };
 use super::families::Family;
 
-/// Неизменяемое у пула: id, весовой ли (иначе стейблсвап), множители точности по токену.
+/// Неизменяемое у пула: id, весовой ли (иначе стейблсвап), множители точности по токену; v2 — версия библиотек пула
+/// (решение 450, dex.balancer_math = v2; читается из настройки при каждом чтении — не из памяти).
 #[derive(Clone)]
 pub struct Fixed {
     pub id: B256,
     pub weighted: bool,
     pub scaling: HashMap<Address, U256>,
+    pub v2: bool,
+}
+
+/// Решение 450: версия библиотек пулов ключа DEX — dex.balancer_math: v1 (не задана — v1, как раньше) или v2
+/// (FixedPoint с точными степенями 1/2/4 и StableMath v2 — math/balancer_math.rs). Принимает: окружение, вид DEX.
+/// Возвращает: true — v2. Ошибки (текст): значение не из списка; настройка не читается (ревью 450, п. 4: только «не
+/// задана» — NotConfigured — значит v1, прочие ошибки чтения — ошибка, пул не читается).
+pub fn math_v2(ctx: &Ctx, f: &Family) -> Result<bool, String> {
+    match ctx.dex_text("dex.balancer_math", f.id) {
+        Err(e) if e.code == ErrorCode::NotConfigured => Ok(false),
+        Err(e) => Err(format!("dex.balancer_math [{}]: {}", f.id, e.message)),
+        Ok(v) => match v.trim() {
+            "v1" => Ok(false),
+            "v2" => Ok(true),
+            other => Err(format!("dex.balancer_math [{}] = «{other}»: известны v1, v2", f.id)),
+        },
+    }
 }
 
 /// Память неизменяемого по (площадка DEX, адрес пула) — решение 435 (433-и): пул с тем же адресом в другой сети — другой.
@@ -45,12 +63,14 @@ pub async fn fixed(
     pool: Address,
     tag: &str,
 ) -> GatewayResult<Fixed> {
-    if let Some(x) = FIXED
+    let v2 = math_v2(ctx, f).map_err(|w| ctx.not_set("dex.balancer_math", w))?;
+    if let Some(mut x) = FIXED
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
         .and_then(|m| m.get(&(ctx.place.id, pool)).cloned())
     {
+        x.v2 = v2;
         return Ok(x);
     }
     let bad = |w: String| ctx.err(ErrorCode::BadResponse, format!("Balancer {pool}: {w}"));
@@ -100,6 +120,7 @@ pub async fn fixed(
         id,
         weighted,
         scaling,
+        v2,
     };
     FIXED
         .lock()

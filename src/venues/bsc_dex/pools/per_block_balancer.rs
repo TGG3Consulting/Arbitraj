@@ -9,7 +9,7 @@
 //! node/call.rs (try_chunks, block_tag), loading (через Pools), reload.rs (load_one_block, put_emit, skip_same).
 //! Задача t160: при dex.per_block_skip_same неизменившееся состояние пула ядру не шлётся (reload.rs).
 //! Решение 339: не прочитавшийся пул — pool_fail.rs block_failed (причина, пауза повтора при dex.pool_fail_pause_ms).
-//! Настройки: dex.vault [DEX вида balancer_v2]; dex.load_batch, dex.multicall3 [bsc_dex].
+//! Настройки: dex.vault, dex.balancer_math (решение 450) [DEX вида balancer_v2]; dex.load_batch, dex.multicall3 [bsc_dex].
 
 use alloy_primitives::{Address, Bytes};
 
@@ -20,7 +20,7 @@ use super::discover::Found;
 use super::listen::{End, Pools};
 use super::load::{self, Loaded};
 use super::load_balancer::{self as lb, PER_POOL};
-use super::load_balancer_fixed::{Fixed, cached};
+use super::load_balancer_fixed::{Fixed, cached, math_v2};
 use super::{load_batch, reload};
 
 /// Пул пачки: записи (у пула со своим контрактом — одна; у многомонетного пула в режиме dex.multi_pair — все его пары,
@@ -46,8 +46,13 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
         match (
             cached(p.ctx.place.id, a),
             p.ctx.dex_addr("dex.vault", f.family.id),
+            math_v2(&p.ctx, f.family),
         ) {
-            (Some(fx), Ok(v)) => items.push((vec![f], fx, v, a)),
+            // Решение 450: версия библиотек пула (dex.balancer_math) — из настройки на каждом блоке.
+            (Some(mut fx), Ok(v), Ok(v2)) => {
+                fx.v2 = v2;
+                items.push((vec![f], fx, v, a));
+            }
             _ => {
                 if let Err(why) = reload::load_one_block(p, f, t, block).await? {
                     // Решение 339: причина и пауза повтора — pool_fail.rs (не задана — только valid = false).

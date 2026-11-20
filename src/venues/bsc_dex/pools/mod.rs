@@ -214,6 +214,7 @@ pub mod stable_list;
 pub mod stable_native;
 pub mod stale_read;
 pub mod state_gen;
+pub mod sub_dex;
 pub mod ticks;
 pub mod verify;
 pub mod verify_algebra;

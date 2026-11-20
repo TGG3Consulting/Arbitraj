@@ -3,12 +3,15 @@
 //! проход строк справочника с ключом строки multi_pair::dir_key (у DEX вне режима — строка пула, как до решения),
 //! развёртка недостающих пар взятых многомонетных пулов (multi_pair::expand) и одна проверка новых строк в том же
 //! вызове. Проверка кандидатов — параметром (на узле — verify::verify; тест — разборы на записанных ответах).
+//! Решение 450 (T448-02): у id строки с dex.sub_dex пул проверяется видом своего ключа и видами дочерних ключей
+//! (sub_dex.rs) — итог строки — первый вид, чья проверка пул подтвердила; ключ строки — по id индексатора.
 //! Кто вызывает: pools/index.rs (take), tests/bsc_dex_multi_pair.rs (take_with).
-//! От чего зависит: index.rs (Took, record, summary), verify.rs, families.rs, multi_pair.rs, order.rs, directory.
-//! Настройки: через вызываемые — dex.verify_batch, dex.multi_pair, dex.* [DEX].
+//! От чего зависит: index.rs (Took, record_with, summary), verify.rs, sub_dex.rs, multi_pair.rs, order.rs, directory.
+//! Настройки: через вызываемые — dex.verify_batch, dex.multi_pair, dex.sub_dex, dex.* [DEX].
 
 use std::collections::{BTreeSet, HashSet};
 use std::future::Future;
+use std::ops::Range;
 use std::pin::Pin;
 
 use alloy_primitives::Address;
@@ -17,9 +20,9 @@ use crate::core::types::DirectoryStatus;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
-use super::index::{Took, record, summary};
+use super::index::{Took, record_with, summary};
 use super::verify::{self, Candidate, Verdict};
-use super::{families, multi_pair, order};
+use super::{multi_pair, order, sub_dex};
 
 /// Проверка пачки кандидатов: окружение и кандидаты → итог по каждому (verify.rs на своём узле; тест решения 295 —
 /// разборы на записанных ответах).
@@ -87,6 +90,7 @@ async fn pass(
 ) -> GatewayResult<(usize, BTreeSet<String>)> {
     let multi = ctx.index.with(|s| s.multi_dex.clone());
     let mut cands = Vec::new();
+    let mut rows: Vec<(String, Range<usize>)> = Vec::new();
     let mut unconnected = BTreeSet::new();
     let mut seen = HashSet::new();
     let mut status = Vec::new();
@@ -99,18 +103,21 @@ async fn pass(
         {
             continue;
         }
-        match families::classify(ctx, &p.dex_id) {
-            Err(why) => {
-                unconnected.insert(p.dex_id.clone());
-                status.push((key, DirectoryStatus::NotConnected(why)));
-            }
-            Ok(family) => cands.push(Candidate {
-                family,
-                pool: p.pool,
-                coin: token,
-                quote,
-            }),
+        // Решение 450: вид своего ключа и подключённые дочерние ключи dex.sub_dex (без неё — один вид, как раньше).
+        let (fams, why) = sub_dex::kinds(ctx, &p.dex_id);
+        if fams.is_empty() {
+            unconnected.insert(p.dex_id.clone());
+            status.push((key, DirectoryStatus::NotConnected(why.join("; "))));
+            continue;
         }
+        let start = cands.len();
+        cands.extend(fams.into_iter().map(|family| Candidate {
+            family,
+            pool: p.pool.clone(),
+            coin: token,
+            quote,
+        }));
+        rows.push((p.dex_id.clone(), start..cands.len()));
     }
     let verdicts = check(ctx, &cands).await?;
     ctx.index.with(|s| {
@@ -119,7 +126,35 @@ async fn pass(
             s.status.insert(key, st);
         }
     });
-    let failed = record(ctx, &cands, verdicts).await;
+    let (picked, ids, verdicts) = combine(&cands, rows, verdicts);
+    let failed = record_with(ctx, &picked, Some(&ids), verdicts).await;
     Ok((failed, unconnected))
+}
+
+/// Решение 450: итог строки справочника по итогам её видов (sub_dex::pick). Принимает: кандидатов, строки (id строки,
+/// диапазон её кандидатов), итоги по кандидатам. Возвращает: кандидата-итог строки (взят — его вид, иначе первый), id
+/// строк и итоги — по строкам. Ошибок нет.
+fn combine(
+    cands: &[Candidate],
+    rows: Vec<(String, Range<usize>)>,
+    verdicts: Vec<Verdict>,
+) -> (Vec<Candidate>, Vec<String>, Vec<Verdict>) {
+    let mut it = verdicts.into_iter();
+    let (mut picked, mut ids, mut out) = (Vec::new(), Vec::new(), Vec::new());
+    for (id, r) in rows {
+        let all: Vec<(&str, Verdict)> = cands[r.clone()]
+            .iter()
+            .map(|c| c.family.id)
+            .zip(it.by_ref())
+            .collect();
+        if all.is_empty() {
+            continue;
+        }
+        let (i, v) = sub_dex::pick(all);
+        picked.push(cands[r.start + i].clone());
+        ids.push(id);
+        out.push(v);
+    }
+    (picked, ids, out)
 }
 

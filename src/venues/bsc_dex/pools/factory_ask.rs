@@ -22,15 +22,19 @@
 //!   maverickprotocol/v2-common d91e871, IMaverickV2Factory.sol L352-L357 (постраничный список пулов пары —
 //!   maverick-v2-examples 68e4d2f README.md L8-L25); endIndex — dex.pair_lookup_max;
 //! - KyberSwap Classic DMM getPools(token0, token1) → пулы[] — KyberNetwork/dmm-smart-contracts@e557b57, DMMFactory.sol
-//!   L94-L105 (решение 287).
+//!   L94-L105 (решение 287);
+//! - iZiSwap pool(address,address,uint24) → пул — izumiFinance/iZiSwap-core@3fe21eba iZiSwapFactory.sol L24
+//!   (mapping tokenX ⇒ tokenY ⇒ fee), newPool L123-L124 — обе стороны; развёрнутый код Arbitrum 0xCFD8A067… — Sourcify
+//!   42161 (solc 0.8.4, тот же текст; решение 450).
 
 use alloy::sol_types::SolCall;
-use alloy_primitives::aliases::I24;
+use alloy_primitives::aliases::{I24, U24};
 use alloy_primitives::{Address, Bytes};
 
 use super::abi_algebra::IAlgebraFactory;
 use super::abi_dmm::IDmmFactory;
 use super::abi_dodo::IDodoFactory;
+use super::abi_izi::IIziFactory;
 use super::abi_maverick::IMaverickV2Factory;
 use super::abi_slipstream::ICLFactory;
 use super::abi_solidly::ISolidlyFactory;
@@ -67,6 +71,8 @@ pub enum Q {
     Maverick(u32),
     /// KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары (с разным усилением).
     Dmm,
+    /// Решение 450 (T448-05): iZiSwap — pool(a, b, uint24 fee) по уровню из dex.v3_fee_tiers.
+    Izi(u32),
 }
 
 impl Q {
@@ -86,6 +92,7 @@ impl Q {
             Q::Woo(_) => "state(base)",
             Q::Maverick(_) => "lookup(tokenA, tokenB)",
             Q::Dmm => "getPools",
+            Q::Izi(_) => "pool(tokenX, tokenY, fee)",
         }
     }
 }
@@ -151,6 +158,14 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
             .abi_encode()
             .into()
         }
+        // iZiSwap: реестр заполнен в обе стороны токенов (iZiSwapFactory.sol L123-L124) — порядок любой.
+        Q::Izi(fee) => IIziFactory::poolCall {
+            tokenX: coin,
+            tokenY: quote,
+            fee: U24::from(fee),
+        }
+        .abi_encode()
+        .into(),
         Q::Slipstream(ts) => ICLFactory::getPoolCall {
             tokenA: coin,
             tokenB: quote,
@@ -182,6 +197,10 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
         ],
         Q::Maverick(_) => IMaverickV2Factory::lookupCall::abi_decode_returns(out)
             .map_err(|e| format!("ответ lookup(tokenA, tokenB) не по ABI: {e}"))?,
+        Q::Izi(_) => vec![
+            IIziFactory::poolCall::abi_decode_returns(out)
+                .map_err(|e| format!("ответ pool(tokenX, tokenY, fee) не по ABI: {e}"))?,
+        ],
         Q::Dmm => IDmmFactory::getPoolsCall::abi_decode_returns(out)
             .map_err(|e| format!("ответ getPools не по ABI: {e}"))?,
         Q::Dodo => {

@@ -5,7 +5,7 @@
 //! «баланс выходного токена кошелька ≥ база + сумма минимумов долей» (решение 40; база читается прямо перед подписью —
 //! exec/plan.rs, Plan::data). Разрешения: ERC-20 → Permit2 и Permit2 → Universal Router на сумму входов всех долей.
 //! Кто вызывает: exec/trade_smart.rs.
-//! От чего зависит: exec/chain.rs, exec/plan.rs (Plan), exec/ur.rs (Format), wallet/approve.rs, pools/families.rs.
+//! От чего зависит: exec/chain.rs, exec/plan.rs (Plan), exec/ur.rs (format), wallet/approve.rs, pools/families.rs.
 //! Настройки: smart.universal_router, smart.permit2, dex.deadline_s [bsc_dex]; через вызываемые —
 //! dex.approve_unlimited, dex.permit2_expiration_s.
 //!
@@ -23,7 +23,7 @@ use super::super::pools::families::smart_ok;
 use super::super::wallet::approve;
 use super::chain::{self, Step};
 use super::plan::Plan;
-use super::ur::Format;
+use super::ur;
 
 /// План умного маршрута. Принимает: доли — у каждой шаги (exec/chain.rs: один пул или два через промежуточную), у всех
 /// один токен входа и один выхода; кошелёк; время блока (секунды). Ошибки: NotConfigured (адреса, срок), Internal
@@ -62,7 +62,9 @@ pub async fn build(
             if i == 0 && s.from_wallet {
                 total_in = total_in.saturating_add(s.order.amount_in);
             }
-            commands.push(chain::command(ctx, s, Format::Pancake, wallet)?);
+            // Решение 450: формат — по dex.universal_router_version пула (pancakeswap_infinity или pancakeswap_v3; smart_ok
+            // других не пускает): у обоих входы V2/V3 одни и те же, пулы Infinity v3-роутер не исполняет (swap_v4.rs).
+            commands.push(chain::command(ctx, s, ur::format(ctx, &s.entry)?, wallet)?);
         }
         if let Some(last) = leg.last() {
             total_min = total_min.saturating_add(last.order.min_out);

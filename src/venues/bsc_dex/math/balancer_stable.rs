@@ -15,6 +15,9 @@
 //! несходимость — откат L514, тот же BAL#322). Пул ACSI 0xe901c4e9: все записанные запросы хранилища откатываются BAL#322;
 //! наш invariant() на записанных балансах блока 133699740 не сходится уже на инварианте (тест
 //! tests/bsc_dex_balancer_acsi_live.rs).
+//! Решение 450: библиотеки v2 (balancer-deployments@b55dc2b8 v2/deprecated/20220609-stable-pool-v2/build-info/
+//! StablePoolFactory.json → contracts/StableMath.sol): _AMP_PRECISION = 1e3 (L30), _calculateInvariant L57-L120 — другая
+//! формула (Curve, округление вниз) — invariant_v2; _calcOutGivenIn / _calcInGivenOut / баланс по D — тот же текст.
 //! Math.mul / Math.divUp / Math.divDown / FixedPoint.add / sub — с откатом (здесь None); умножения `*` без Math (Solidity
 //! 0.7 без проверки) — здесь с проверкой: в пределах пула переполнения нет, переполнение — None.
 
@@ -81,6 +84,40 @@ pub fn invariant(amp: U256, b: &[U256], up: bool) -> Option<U256> {
     None
 }
 
+/// Решение 450: _calculateInvariant библиотек v2 (20220609-stable-pool-v2 StableMath.sol L57-L120): D_P = D, затем
+/// D_P = D_P·D / (b_j·n) по всем монетам; D = ((A·n·S / AMP_PRECISION + D_P·n)·D) / ((A·n − AMP_PRECISION)·D /
+/// AMP_PRECISION + (n + 1)·D_P), всё с округлением вниз; 255 раундов, несходимость — откат L119. None — откат.
+pub fn invariant_v2(amp: U256, b: &[U256]) -> Option<U256> {
+    let n = U256::from(b.len());
+    let mut sum = U256::ZERO;
+    for x in b {
+        sum = sum.checked_add(*x)?;
+    }
+    if sum.is_zero() {
+        return Some(sum);
+    }
+    let prec = U256::from(AMP_PRECISION);
+    let at = amp.checked_mul(n)?;
+    let mut d = sum;
+    for _ in 0..ROUNDS {
+        let mut dp = d;
+        for x in b {
+            dp = div(dp.checked_mul(d)?, x.checked_mul(n)?, false)?;
+        }
+        let prev = d;
+        let num = div(at.checked_mul(sum)?, prec, false)?
+            .checked_add(dp.checked_mul(n)?)?
+            .checked_mul(d)?;
+        let den = div(at.checked_sub(prec)?.checked_mul(d)?, prec, false)?
+            .checked_add((n + U256::from(1u8)).checked_mul(dp)?)?;
+        d = div(num, den, false)?;
+        if close(d, prev) {
+            return Some(d);
+        }
+    }
+    None
+}
+
 /// _getTokenBalanceGivenInvariantAndAllOtherBalances (L465-L515). Принимает: A × точность, балансы, D, индекс токена.
 /// None — несходимость за 255 раундов или откат арифметики.
 fn balance_given(amp: U256, b: &[U256], d: U256, t: usize) -> Option<U256> {
@@ -114,20 +151,44 @@ fn balance_given(amp: U256, b: &[U256], d: U256, t: usize) -> Option<U256> {
     None
 }
 
-/// _calcOutGivenIn (L109-L147). Принимает: A × точность, балансы (18 знаков), индексы, вход без комиссии (18 знаков).
-/// Возвращает: выход (18 знаков). None — откат пула.
-pub fn out_given_in(amp: U256, b: &[U256], i: usize, j: usize, a_in: U256) -> Option<U256> {
-    let d = invariant(amp, b, true)?;
+/// _calcOutGivenIn (L109-L147). Принимает: A × точность, балансы (18 знаков), индексы, вход без комиссии (18 знаков),
+/// версию библиотек (решение 450: v2 — D по invariant_v2, StablePool.sol v2 L145-L164 считает D до вызова; формула
+/// выхода и баланс по D — тот же текст, StableMath.sol v2 L125-L164, L474). Возвращает: выход (18 знаков). None — откат
+/// пула.
+pub fn out_given_in(
+    amp: U256,
+    b: &[U256],
+    i: usize,
+    j: usize,
+    a_in: U256,
+    v2: bool,
+) -> Option<U256> {
+    let d = if v2 {
+        invariant_v2(amp, b)?
+    } else {
+        invariant(amp, b, true)?
+    };
     let mut nb = b.to_vec();
     nb[i] = nb.get(i)?.checked_add(a_in)?;
     let fin = balance_given(amp, &nb, d, j)?;
     b.get(j)?.checked_sub(fin)?.checked_sub(U256::from(1u8))
 }
 
-/// _calcInGivenOut (L152-L190). Принимает: A × точность, балансы, индексы, выход (18 знаков). Возвращает: вход без
-/// комиссии (18 знаков). None — откат пула.
-pub fn in_given_out(amp: U256, b: &[U256], i: usize, j: usize, a_out: U256) -> Option<U256> {
-    let d = invariant(amp, b, true)?;
+/// _calcInGivenOut (L152-L190). Принимает: A × точность, балансы, индексы, выход (18 знаков), версию библиотек (как у
+/// out_given_in). Возвращает: вход без комиссии (18 знаков). None — откат пула.
+pub fn in_given_out(
+    amp: U256,
+    b: &[U256],
+    i: usize,
+    j: usize,
+    a_out: U256,
+    v2: bool,
+) -> Option<U256> {
+    let d = if v2 {
+        invariant_v2(amp, b)?
+    } else {
+        invariant(amp, b, true)?
+    };
     let mut nb = b.to_vec();
     nb[j] = nb.get(j)?.checked_sub(a_out)?;
     let fin = balance_given(amp, &nb, d, i)?;

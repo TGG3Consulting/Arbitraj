@@ -5,6 +5,9 @@
 //! вниз по id, иначе вверх. Только точный вход (шаг исполнителя переводит вход и зовёт swap). Бин вне прочитанной полосы
 //! — остановка, итог частичный (complete = false); бины пула кончились — тоже (swap пула откатился бы
 //! LBPair__OutOfLiquidity, getSwapOut вернул бы остаток входа).
+//! Решение 445: пул Liquidity Book v2.0 (LbBinData.v20) — тот же цикл (LBPair.sol v2.0.0 swap L358-L392: бин с резервом
+//! выхода, накопитель по бину, getAmounts; следующий непустой бин — findFirstBin, swapForY — вниз), один бин — по
+//! правилам v2.0 (math/lb20_swap.rs), опорные значения и накопитель — lb_fee.rs (ветка v20).
 //! Кто вызывает: quote/pool_quote.rs, quote/depth_band.rs, tests/bsc_dex_lb_v21_live.rs.
 //! От чего зависит: math/lb_fee.rs, math/bin_price.rs (getPriceFromId — те же строки, что у v2.1.0: Uint128x128Math.pow
 //! сверен построчно), math/full_math.rs (mulShift / shiftDiv — сверены с Uint256x256Math v2.1.0), pools/bins.rs.
@@ -65,7 +68,11 @@ pub fn swap_out(
         if reserve_out != 0 {
             v = lb_fee::accumulate(v, d, id)?;
             let total = lb_fee::total_fee(d, v.acc)?;
-            let (used, got, f) = amounts(id, d.bin_step, reserve_out, total, swap_for_y, left)?;
+            let (used, got, f) = if d.v20 {
+                super::lb20_swap::amounts(id, d.bin_step, (rx, ry), total, swap_for_y, left)?
+            } else {
+                amounts(id, d.bin_step, reserve_out, total, swap_for_y, left)?
+            };
             left -= used;
             out = out.checked_add(got)?;
             fee = fee.checked_add(f)?;

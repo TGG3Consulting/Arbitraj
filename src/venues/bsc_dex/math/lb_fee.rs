@@ -3,7 +3,10 @@
 //! значений по времени блока, накопитель волатильности по пройденным бинам, полная комиссия = база + изменчивая часть) и
 //! FeeHelper (комиссия из суммы с комиссией и сверх суммы, предел MAX_FEE). Изменчивая часть меняется без событий пула —
 //! по времени блока (updateReferences) — поэтому вид перечитывается каждым блоком (pools/per_block_lb.rs).
-//! Кто вызывает: math/lb_swap.rs, quote/steps.rs (комиссия активного бина для экрана).
+//! Решение 445: у пула v2.0 (LbBinData.v20) опорные значения и накопитель — по правилам v2.0 (math/lb20_fee.rs);
+//! полная комиссия (total_fee) у обеих версий одна.
+//! Кто вызывает: math/lb_swap.rs, math/lb20_fee.rs, math/lb20_swap.rs, quote/steps.rs (комиссия активного бина для
+//! экрана), quote/breaks_bins.rs.
 //! От чего зависит: core/types (LbBinData), alloy-primitives (U256).
 //! Настройки: нет.
 //!
@@ -50,6 +53,10 @@ pub struct Volatility {
 /// время блока обмена. Возвращает: изменчивые параметры; None — время блока раньше последнего обновления (вычитание
 /// L413 откатилось бы) или опорная волатильность больше uint20 (L280).
 pub fn references(d: &LbBinData, now: u64) -> Option<Volatility> {
+    // Решение 445: пул v2.0 — FeeHelper v2.0 (lb20_fee.rs).
+    if d.v20 {
+        return super::lb20_fee::references(d, now);
+    }
     let dt = now.checked_sub(d.time_of_last_update)?;
     let mut v = Volatility {
         acc: u64::from(d.volatility_accumulator),
@@ -73,6 +80,10 @@ pub fn references(d: &LbBinData, now: u64) -> Option<Volatility> {
 /// updateVolatilityAccumulator(activeId) (L389-L405): накопитель = min(опорная + |id − опорный| · 10000, предел).
 /// Принимает: изменчивые параметры, состояние (предел), бин. Возвращает: новые параметры; None — больше uint20 (L292).
 pub fn accumulate(v: Volatility, d: &LbBinData, id: u32) -> Option<Volatility> {
+    // Решение 445: пул v2.0 — предел uint24 без отката (lb20_fee.rs).
+    if d.v20 {
+        return Some(super::lb20_fee::accumulate(v, d, id));
+    }
     let delta = v.id_reference.abs_diff(u64::from(id));
     let acc = (v.reference + delta * BASIS_POINT_MAX).min(u64::from(d.max_volatility_accumulator));
     if acc > MASK_UINT20 {

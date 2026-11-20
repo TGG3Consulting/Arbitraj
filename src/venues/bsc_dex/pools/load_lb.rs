@@ -91,6 +91,7 @@ pub fn decode(
         id_reference: v.idReference.to(),
         time_of_last_update: v.timeOfLastUpdate.to(),
         block_ts,
+        v20: false,
     })
 }
 

@@ -370,9 +370,15 @@
   - T470-04 **Координатор: ключи приняты.** Ключи DEX Aero Basic (`aero-basic-volatile@arbitrum`, `aero-basic-stable@arbitrum`) — предложение: у
     GeckoTerminal Aero Basic нет (DefiLlama `aero-basic`); пулы — поиск по фабрике (index.factory_scan) или dex.sub_dex
     (решение 450) под одним ключом — решение Тиграна.
-  - T470-06 Шаг исполнителя для Basic с MEV-налогом > 0: выход по getAmountOutWithTotalFee пула (Pool.sol L548-L555: getFee с
-    msg.sender = исполнитель и tx.gasprice этой транзакции) — вид шага 26, пересборка исполнителя v5. Сейчас: налог в
-    котировке, перед отправкой при налоге > 0 — отказ (aero_mev.rs fresh).
+  - T470-06 **СДЕЛАНО в коде, НУЖНА СБОРКА ИСПОЛНИТЕЛЯ v5.** Шаг AERO_BASIC = 26 (contracts/ArbExecutor.sol _aeroOut +
+    IPools.sol IAeroBasicPool): вход переводом в пул, выход — getAmountOutWithTotalFee пула (Pool.sol L548-L555: getFee с
+    msg.sender = исполнитель и tx.gasprice этой транзакции — та же комиссия, что у swap L172), swap подписи V2. Rust:
+    Params::AeroBasic (kind.rs), ExecKind::AeroBasic + for_version/for_wallet (exec_kind.rs: вид семейства aero_basic
+    остаётся SOLIDLY, у кошелька v5 — AERO_BASIC), since = Version::V5 (exec_callback.rs; code.rs — Version::V5 без
+    артефактов, runtime_of — причина «сборки v5 нет»); отказ «налог > 0» перед отправкой снят для кошелька v5
+    (aero_mev.rs fresh taxed_ok, exec/solidly_gate.rs). **Нужна сборка исполнителя v5** (contracts/build.sh → out/ как v5,
+    out/ v4 заморозить в out/v4/, code.rs: RUNTIME_V4, version_of V5) и EVM-сценарий шага 26 — вне агентов (solc/npm
+    запрещены). До сборки у всех кошельков — SOLIDLY и прежний отказ при налоге > 0.
   - T470-07 НЕ СДЕЛАНО (координатор): порт первой комиссии блока крючка (_getFirstSwapFee + observe TWAP по наблюдениям
     пула на время следующего блока, худшее из «первая/фиксированная»), запись наблюдений и параметров крючка; лёгкое
     чтение Slipstream V3 каждым блоком (только fee() пачкой, полное — по событиям) — сейчас пул перечитывается целиком.

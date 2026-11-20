@@ -137,6 +137,8 @@ fn kinds_match_contract_constants() {
                 forward: false,
             },
         ),
+        // Решение 470 (T470-06): пул Aero Basic — шаг 26, только v5 (в исходнике; сборки v5 нет).
+        ("AERO_BASIC", Params::AeroBasic),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
@@ -236,6 +238,7 @@ fn step_data_layouts() {
         Params::Woo,
         Params::Maverick,
         Params::Elastic,
+        Params::AeroBasic,
     ] {
         assert!(p.data().is_empty());
     }

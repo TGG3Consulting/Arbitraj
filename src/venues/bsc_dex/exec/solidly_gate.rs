@@ -23,6 +23,7 @@ use super::super::ctx::Ctx;
 use super::super::math::solidly_fee;
 use super::super::pools::aero_cl;
 use super::super::pools::aero_mev;
+use super::super::pools::exec_kind::{self, ExecKind};
 use super::super::pools::families::Proto;
 use super::super::pools::family_variant::Variant;
 use super::super::pools::registry::{Entry, Registry};
@@ -73,9 +74,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             continue;
         }
         seen.push(f.id);
-        // Решение 470: Aero Basic — пауза фабрики и правило MEV-налога (pools/aero_mev.rs) заново перед отправкой.
+        // Решение 470: Aero Basic — пауза фабрики и правило MEV-налога (pools/aero_mev.rs) заново перед отправкой;
+        // T470-06: у исполнителя v5 (шаг AERO_BASIC) налог исполняется — проверяется только пауза.
         if f.proto == Proto::AeroBasic {
-            aero_mev::fresh(ctx, ctx.dex_addr("dex.factory", f.id)?).await?;
+            let taxed_ok = exec_kind::for_wallet(ctx, f) == Some(ExecKind::AeroBasic);
+            aero_mev::fresh(ctx, ctx.dex_addr("dex.factory", f.id)?, taxed_ok).await?;
             continue;
         }
         if !solidly_fee_read::has_gate(ctx, f)? {

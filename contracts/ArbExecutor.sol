@@ -28,6 +28,9 @@
 // MEVCapture); всё прочее — как v3. Номера шагов v4 — решение 456 (слияние семейств Arbitrum, без пересечений).
 // Артефакты contracts/out/ — ещё v3: сборка solc (contracts/build.sh) — вне агентов; пересобирать — только как v4, не на
 // месте v3 (бот: Version::V4, src/venues/bsc_dex/pools/exec_callback.rs since).
+// v5 (решение 470, T470-06) — + шаг AERO_BASIC = 26 (пул Aero Basic, Dromos-Labs/metadex-public 79c8d5b6: выход —
+// getAmountOutWithTotalFee пула с MEV-налогом, Pool.sol L548-L555); всё прочее — как v4. Сборки v5 нет: contracts/out/ —
+// v4; пересобрать как v5 (бот: Version::V5) — вне агентов (docs/TASKS.md «Решение 470», «нужна сборка исполнителя v5»).
 pragma solidity 0.8.37;
 
 import "./IPools.sol";
@@ -102,6 +105,12 @@ contract ArbExecutor {
     // откатит обмен: MEVCapture.sol L84-L86); долг входа — startPayments / перевод / completePayments (нативный — ETH
     // ядру value), выход — withdraw (нативный — ETH исполнителю → deposit в обёртку).
     uint8 internal constant EKUBO = 25;
+    // Решение 470 (T470-06, только v5): пул Aero Basic (VolatilePool / StablePool, Dromos-Labs/metadex-public 79c8d5b6
+    // V3/src/pools/Pool.sol) — вход переводом в пул, выход = getAmountOutWithTotalFee(вход, tokenIn) пула (L548-L555:
+    // комиссия factory.getFee(пул, msg.sender, …) — база + MEV-налог по tx.gasprice ЭТОЙ транзакции, та же, что возьмёт
+    // swap L172 — _getSwapFee L389-L397 с тем же msg.sender = исполнитель), swap — подпись V2 (L143). data пусто. Шаг
+    // SOLIDLY считает выход getAmountOut (L537-L545: только базовая комиссия) — при налоге > 0 своп откатился бы по K (L189).
+    uint8 internal constant AERO_BASIC = 26;
     // Пределы цены Ekubo MIN_SQRT_RATIO_RAW / MAX_SQRT_RATIO_RAW (evm-contracts@61d09daa src/types/sqrtRatio.sol L13, L15):
     // тот же предел ставит Router (withDefaultSqrtRatioLimit, swapParameters.sol L74-L82).
     uint256 internal constant EKUBO_MIN_SQRT = 4611797791050542631;
@@ -181,7 +190,7 @@ contract ArbExecutor {
 
     // Исполняет маршрут. Вход amountIn токена tokenIn забирается у владельца (нужен approve на этот контракт);
     // выход tokenOut и все остатки — владельцу; получено владельцем < minOut — откат. Возвращает: получено.
-    // Первый шаг вида «вход переводом в пул» (V2, SOLIDLY, DODO, WOO, NOMI_STABLE, KYBER_DMM, LB, LB20), берущий ВЕСЬ вход (10000 bps, tokenIn маршрута),
+    // Первый шаг вида «вход переводом в пул» (V2, SOLIDLY, DODO, WOO, NOMI_STABLE, KYBER_DMM, LB, LB20, AERO_BASIC), берущий ВЕСЬ вход (10000 bps, tokenIn маршрута),
     // получает вход transferFrom(владелец → пул) напрямую, без захода в исполнитель: налог перевода — один раз
     // (как у Universal Router через Permit2). Для цикла (tokenIn = tokenOut) — как обычно (итог меряется после забора);
     // цикл — ровно одна доля: вход маршрута берёт только первый шаг и целиком (10000 bps). Иначе выход вида с выходом
@@ -347,10 +356,12 @@ contract ArbExecutor {
         require(amount > 0, "amount");
         bool zeroIn = s.tokenIn < s.tokenOut; // token0 < token1 — пулы сортируют токены по адресу (фабрики V2/V3)
         uint8 k = s.kind;
-        if (k == V2 || k == SOLIDLY || k == NOMI_STABLE || k == KYBER_DMM) {
+        if (k == V2 || k == SOLIDLY || k == NOMI_STABLE || k == KYBER_DMM || k == AERO_BASIC) {
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
-            uint256 out = k == V2 ? _v2Out(s, zeroIn) : k == KYBER_DMM ? _dmmOut(s, zeroIn) : _pairOut(s, zeroIn, k == NOMI_STABLE);
-            // swap(uint256,uint256,address,bytes) — одна подпись у пары V2, Solidly, Nomiswap Stable и KyberSwap DMM (IPools.sol).
+            uint256 out = k == V2 ? _v2Out(s, zeroIn) : k == KYBER_DMM ? _dmmOut(s, zeroIn)
+                : k == AERO_BASIC ? _aeroOut(s, zeroIn) : _pairOut(s, zeroIn, k == NOMI_STABLE);
+            // swap(uint256,uint256,address,bytes) — одна подпись у пары V2, Solidly, Nomiswap Stable, KyberSwap DMM и Aero
+            // Basic (IPools.sol).
             IV2Pair(s.pool).swap(zeroIn ? 0 : out, zeroIn ? out : 0, to, "");
         } else if (k == V3 || k == ALGEBRA) {
             _expect(s.pool, s.tokenIn, amount);
@@ -574,6 +585,14 @@ contract ArbExecutor {
         uint256 got = IERC20(s.tokenIn).balanceOf(s.pool) - (zeroIn ? r0 : r1);
         if (nomi) return INomiStablePair(s.pool).getAmountOut(s.tokenIn, got);
         return ISolidlyPair(s.pool).getAmountOut(got, s.tokenIn);
+    }
+
+    // Выход Aero Basic (решение 470, T470-06): вход = баланс пула − резерв (так считает swap пула, Pool.sol L161-L162),
+    // выход — getAmountOutWithTotalFee(вход, tokenIn) пула (L548-L555): комиссия с MEV-налогом этой транзакции.
+    function _aeroOut(Step calldata s, bool zeroIn) internal view returns (uint256) {
+        (uint256 r0, uint256 r1,) = IAeroBasicPool(s.pool).getReserves();
+        uint256 got = IERC20(s.tokenIn).balanceOf(s.pool) - (zeroIn ? r0 : r1);
+        return IAeroBasicPool(s.pool).getAmountOutWithTotalFee(got, s.tokenIn);
     }
 
     // Обратные вызовы пулов: V3 Uniswap/Slipstream (IUniswapV3SwapCallback.sol L16, ICLSwapCallback.sol L16),
@@ -879,7 +898,7 @@ contract ArbExecutor {
     // Виды, у которых вход переводится в пул заранее (а не платится в обратном вызове).
     function _pushed(uint8 k) internal pure returns (bool) {
         return k == V2 || k == SOLIDLY || k == DODO || k == WOO || k == NOMI_STABLE || k == KYBER_DMM || k == LB
-            || k == LB20;
+            || k == LB20 || k == AERO_BASIC;
     }
 
     // Вход в пул: с баланса исполнителя или прямо с владельца (первый шаг, весь вход маршрута).

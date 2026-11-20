@@ -10,6 +10,7 @@
 //! Монета пары — нативный BNB пула (StableData.native, в паре — обёртка WBNB; решение «122 X (нативный BNB в
 //! стейблсвапах)»): вид STABLE_U256_BNB (bnb_in — по тому, вход это или выход); у CURVE / SADDLE — отказ.
 //! Решение 273: пул Solidly с фабрикой на паузе — шаг не строится (NoRoute с причиной).
+//! Решение 470 (T470-06): пул Aero Basic у исполнителя v5 — шаг AERO_BASIC (pools/exec_kind.rs for_wallet).
 //! Решение 442: crypto-пул Curve (Twocrypto-NG / Tricrypto-NG, PoolState::Crypto) — шаг STABLE_U256 (exchange(uint256 i,
 //! uint256 j, dx, 0)), индексы — из состояния пула; пул с halted (tricrypto 2021 is_killed) — не исполняется. Решение
 //! 453: пул в рампе A/gamma исполняется — котировка считает рампу, как контракт (D пересчитывается через newton_D,
@@ -37,7 +38,7 @@ use crate::core::types::{PoolRef, PoolState, SmartColDebtData};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::super::ctx::Ctx;
-use super::super::super::pools::exec_kind::ExecKind;
+use super::super::super::pools::exec_kind::{self, ExecKind};
 use super::super::super::pools::families::{Family, Proto};
 use super::super::super::pools::key::PoolKey;
 use super::super::super::pools::registry::Entry;
@@ -176,6 +177,9 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 );
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
+            // Решение 470 (T470-06): пул Aero Basic у исполнителя v5 — шаг AERO_BASIC (выход с MEV-налогом этой
+            // транзакции; pools/exec_kind.rs for_wallet); у v1–v4 — SOLIDLY (налог > 0 — отказ, pools/aero_mev.rs fresh).
+            _ if exec_kind::for_wallet(ctx, e.family) == Some(ExecKind::AeroBasic) => Params::AeroBasic,
             _ => Params::Solidly,
         },
         ExecKind::Dodo => Params::Dodo,
@@ -304,6 +308,15 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             stable(e, k, token_in, stable_native::wrapped(ctx))
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
         }
+        // Решение 470 (T470-06): вид семейства aero_basic — SOLIDLY (ветка выше выбирает AERO_BASIC у кошелька v5);
+        // как вид семейства AERO_BASIC не встречается — сюда тоже на случай такой пометки (пауза — та же проверка).
+        ExecKind::AeroBasic => match &e.pool.state {
+            PoolState::Solidly { gate, .. } if !gate.paused => Params::AeroBasic,
+            _ => {
+                let why = format!("{}: пул Aero Basic без состояния или на паузе", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
     };
     Ok((p, pool))
 }

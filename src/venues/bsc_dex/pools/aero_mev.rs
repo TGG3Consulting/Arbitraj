@@ -10,7 +10,8 @@
 //! ArbSys.arbOSVersion() = 55 + версия, precompiles/ArbSys.go L67-L69). Значит: сбор выключен — налог 0 всегда.
 //! Включён — налог по наибольшим чаевым режима (fixed — send.priority_fee_gwei, profit_share — send.tip_cap_gwei) и
 //! наименьшему порогу minThreshold (baseFeeFactor·basefee следующего блока неизвестен) — верхняя оценка.
-//! Кто вызывает: pools/load_aero_basic.rs, pools/aero_cl.rs; exec/solidly_gate.rs (fresh — перед отправкой).
+//! Кто вызывает: pools/load_aero_basic.rs, pools/aero_cl.rs, pools/per_block_aero.rs; exec/solidly_gate.rs (fresh —
+//! перед отправкой; решение 470, T470-06: у исполнителя v5 налог не мешает — шаг AERO_BASIC).
 //! От чего зависит: node/call.rs, send/gas_mode.rs, send/tip_mode.rs, pools/abi_aero_basic.rs.
 //! Настройки: dex.arb_sys, dex.arb_owner_public, dex.gas_mode [площадка DEX]; send.tip_mode,
 //! send.priority_fee_gwei, send.tip_cap_gwei [площадка DEX].
@@ -92,15 +93,20 @@ pub fn basic_bps(tax: u32, base: u32) -> u32 {
     tax.div_ceil(100).min(2000u32.saturating_sub(base))
 }
 
-/// Перед отправкой: пауза фабрики Aero Basic и налог её текущего модуля на последнем блоке. Налог > 0 — отказ: шаг
-/// SOLIDLY считает выход getAmountOut без налога, своп откатился бы по K (Pool.sol L172-L193; нужен шаг с
-/// getAmountOutWithTotalFee — TASKS T470-06). Ошибки: NoRoute — пауза (Pool.sol L144) или налог; как tax.
-pub async fn fresh(ctx: &Ctx, factory: Address) -> GatewayResult<()> {
+/// Перед отправкой: пауза фабрики Aero Basic и налог её текущего модуля на последнем блоке. Налог > 0 при шаге SOLIDLY —
+/// отказ: SOLIDLY считает выход getAmountOut без налога, своп откатился бы по K (Pool.sol L172-L193). Решение 470
+/// (T470-06): у исполнителя v5 шаг AERO_BASIC берёт выход getAmountOutWithTotalFee (налог этой транзакции,
+/// L548-L555) — налог не мешает (`taxed_ok`), проверяется только пауза. Принимает: окружение, фабрику, исполнит ли шаг
+/// налог (exec_kind::for_wallet = AERO_BASIC). Ошибки: NoRoute — пауза (Pool.sol L144) или налог при SOLIDLY; как tax.
+pub async fn fresh(ctx: &Ctx, factory: Address, taxed_ok: bool) -> GatewayResult<()> {
     if call::view(ctx, factory, &IAeroBasicFactory::isPausedCall {}, "latest").await? {
         return Err(ctx.err(
             ErrorCode::NoRoute,
             "фабрика Aero Basic на паузе (isPaused) — обмен откатился бы",
         ));
+    }
+    if taxed_ok {
+        return Ok(());
     }
     let ask = IAeroBasicFactory::mevTaxModuleCall {};
     let module = call::view(ctx, factory, &ask, "latest").await?;
@@ -108,7 +114,10 @@ pub async fn fresh(ctx: &Ctx, factory: Address) -> GatewayResult<()> {
         0 => Ok(()),
         t => Err(ctx.err(
             ErrorCode::NoRoute,
-            format!("Aero Basic: MEV-налог {t} пипс — шаг SOLIDLY откатился бы (T470-06)"),
+            format!(
+                "Aero Basic: MEV-налог {t} пипс — шаг SOLIDLY откатился бы; шаг AERO_BASIC — у исполнителя v5 \
+                 (T470-06)"
+            ),
         )),
     }
 }

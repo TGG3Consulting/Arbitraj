@@ -10,7 +10,7 @@
 //!    tweak_price (сколько — в выводе).
 //! 4. Симуляция exchange (exchange_sim): пул отдал выход — наш расчёт с моделью тот же; пул откатил — None.
 //!
-//! Монета WETH20 пула — по get_eth_index фабрики (Factory.vy L422-L431). До записи с tweak_v1 — #[ignore] (на
+//! Монета WETH20 пула — по get_eth_index фабрики (Factory.vy L422-L431), как load_crypto_tweak_v1.rs statics. До записи с tweak_v1 — #[ignore] (на
 //! 20.11.2026 pool_count фабрики crypto v1 Arbitrum = 0 — TASKS T456-03).
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/curve_crypto_common, arb::venues::bsc_dex::{pools::{load_crypto_v1, load_crypto_tweak_v1},
@@ -69,12 +69,9 @@ fn crypto_v1_tweak_model_on_record() {
             load_crypto_v1::decode(&raw).unwrap_or_else(|w| panic!("{pool}: {w}"));
         let k = piece(&p["factory_get_eth_index"]).unwrap();
         let k = U256::from_be_slice(&k[..32]);
-        // Нет монеты WETH (MAX_UINT256) — обёртка, которой нет среди монет: gulp — balanceOf обеих.
-        let weth = match coins.get(k.saturating_to::<usize>()) {
-            Some(c) => *c,
-            None => Address::ZERO,
-        };
-        data.tweak = tv1::decode(&raw.got[12..], &coins, Some(weth)).unwrap();
+        // Нет монеты WETH (MAX_UINT256) — gulp — balanceOf обеих (load_crypto_tweak_v1.rs statics).
+        let eth = (k < U256::from(2u8)).then(|| k.to::<usize>());
+        data.tweak = tv1::decode(&raw.got[12..], &coins, eth).unwrap();
         assert!(data.tweak.is_some(), "{pool}: tweak не прочитан");
         let mut bare = data.clone();
         bare.tweak = None;

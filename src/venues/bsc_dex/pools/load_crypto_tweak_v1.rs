@@ -19,9 +19,12 @@
 //! out_fee 21, admin_fee 22, future_mid_fee 23, future_out_fee 24, future_admin_fee 25, balances L145 → 26–27, D 28,
 //! factory L148 → 29, xcp_profit 30, xcp_profit_a 31, virtual_price 32, not_adjusted L153 → 33,
 //! admin_actions_deadline 34. Сверка на записи (tools/arbitrum_record/curve_crypto.py): слоты 28, 31, 32, 34 = геттеры
-//! D(), xcp_profit_a(), virtual_price(), admin_actions_deadline() (tests/arb_curve_crypto_tweak_live.rs).
-//! Монета WETH20 (immutable без геттера) — dex.native_wrapped (как per_block_crypto.rs takes_native); не задана —
-//! модели нет (tweak = None, расчёт как раньше).
+//! D(), xcp_profit_a(), virtual_price(), admin_actions_deadline() (tests/arb_curve_crypto_tweak_v1_live.rs).
+//! Монета WETH20 (immutable без геттера) — индекс get_eth_index(пул) фабрики (Factory.vy L422-L431; в постоянных);
+//! у пула с такой монетой нужна dex.native_wrapped = эта монета (load_crypto_v1.rs state: не задана — NotConfigured,
+//! пул ждёт настройку), у пула без ETH настройка не нужна. Прямой перевод токена на пул без события (gulp —
+//! balanceOf) перечитывает пул механизм pools/transfer_in.rs (watched: CurveCryptoV1, CurveTricryptoV1), ETH без
+//! события — per_block_crypto.rs (native_in).
 //! Кто вызывает: pools/load_crypto_v1.rs (read, state).
 //! От чего зависит: ctx.rs, node/call.rs, node/rpc.rs, abi_crypto_v1.rs, node/abi.rs (IERC20), gateway/shard_map.rs,
 //! core/types (CryptoTweak, CryptoTweakV1).
@@ -61,6 +64,8 @@ pub struct Statics {
     pub token: Address,
     pub factory: Address,
     pub coins: [Address; 2],
+    /// Индекс монеты WETH фабрики (get_eth_index < 2); None — монеты ETH нет.
+    pub eth: Option<usize>,
 }
 
 /// Постоянные по (площадка DEX, пул).
@@ -92,6 +97,7 @@ pub fn pre_decode(got: &[Result<Bytes, String>]) -> Result<Statics, String> {
         token: a(0)?,
         factory: a(1)?,
         coins: [a(2)?, a(3)?],
+        eth: None,
     })
 }
 
@@ -102,9 +108,48 @@ pub async fn statics(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<Stati
     }
     let got = call::try_many(ctx, &pre_calls(pool), tag).await?;
     let bad = |w: String| ctx.err(ErrorCode::BadResponse, format!("Crypto v1 {pool}: {w}"));
-    let s = pre_decode(&got).map_err(bad)?;
+    let mut s = pre_decode(&got).map_err(&bad)?;
+    // Индекс монеты WETH — у фабрики пула (второе чтение, один раз на пул).
+    let data: Bytes = T::get_eth_indexCall { pool }.abi_encode().into();
+    let got = call::try_many(ctx, &[(s.factory, data)], tag).await?;
+    let k = match got.first() {
+        Some(Ok(b)) => call::decode::<T::get_eth_indexCall>(b)?,
+        Some(Err(r)) => return Err(bad(format!("get_eth_index фабрики откатился: {r}"))),
+        None => return Err(bad("нет ответа get_eth_index".into())),
+    };
+    s.eth = (k < U256::from(2u8)).then(|| k.to::<usize>());
     STATICS.insert((ctx.place.id, pool), s);
     Ok(s)
+}
+
+/// Ревью 472 (п. 6): у пула с монетой WETH фабрики (индекс eth) модель читает ETH пула — нужна dex.native_wrapped,
+/// равная этой монете. Принимает: окружение, пул, монеты, индекс. Ошибки: NotConfigured — настройка не задана (пул ждёт
+/// её, как прочие); BadResponse — настройка не равна монете WETH пула. Без монеты WETH — Ok (настройка не нужна).
+pub fn need_wrapped(
+    ctx: &Ctx,
+    pool: Address,
+    coins: &[Address],
+    eth: Option<usize>,
+) -> GatewayResult<()> {
+    let Some(k) = eth else {
+        return Ok(());
+    };
+    let why = format!("Crypto v1 {pool}: монета {k} — WETH фабрики, модель читает ETH пула");
+    let w = match ctx.addr("dex.native_wrapped") {
+        Ok(w) => w,
+        Err(_) => return Err(ctx.not_set("dex.native_wrapped", why)),
+    };
+    if coins.get(k) == Some(&w) {
+        return Ok(());
+    }
+    let have = coins.get(k);
+    let what = format!("Crypto v1 {pool}: dex.native_wrapped {w} ≠ WETH пула {have:?}");
+    Err(ctx.err(ErrorCode::BadResponse, what))
+}
+
+/// Постоянные пула из памяти (без сети). None — ещё не читались в этом запуске. Ошибок нет.
+pub fn remembered(venue: &'static str, pool: Address) -> Option<Statics> {
+    STATICS.get(&(venue, pool))
 }
 
 /// Вызовы tweak по порядку (CALLS штук; см. шапку). Принимает: пул, его постоянные. Ошибок нет.
@@ -171,16 +216,16 @@ fn balance_word(v: &RawValue) -> Result<Bytes, String> {
 }
 
 /// Разбор (без сети). Принимает: ответы вызовов tweak и затем два слова JSON-RPC (пусто — не читались), монеты пула,
-/// обёртку нативной монеты (dex.native_wrapped). Возвращает: Ok(None) — не читались или обёртка не задана; Ok(Some) —
-/// состояние; Err — откат, ответ короче 32 байт.
+/// индекс монеты WETH (Statics.eth). Возвращает: Ok(None) — не читались; Ok(Some) — состояние; Err — откат, ответ
+/// короче 32 байт.
 pub fn decode(
     got: &[Result<Bytes, String>],
     coins: &[Address],
-    wrapped: Option<Address>,
+    eth: Option<usize>,
 ) -> Result<Option<CryptoTweak>, String> {
-    let Some(weth) = wrapped.filter(|_| !got.is_empty()) else {
+    if got.is_empty() {
         return Ok(None);
-    };
+    }
     let w = |i: usize| -> Result<U256, String> {
         match got.get(i) {
             Some(Ok(b)) if b.len() >= 32 => Ok(U256::from_be_slice(&b[..32])),
@@ -191,8 +236,8 @@ pub fn decode(
     };
     // Монета WETH20 — ETH пула (последнее слово), прочие — balanceOf (вызовы 9, 10).
     let mut gulp = Vec::with_capacity(coins.len());
-    for (k, c) in coins.iter().enumerate() {
-        gulp.push(if *c == weth { w(CALLS + 1)? } else { w(9 + k)? });
+    for k in 0..coins.len() {
+        gulp.push(if eth == Some(k) { w(CALLS + 1)? } else { w(9 + k)? });
     }
     Ok(Some(CryptoTweak {
         price_oracle: vec![w(0)?],

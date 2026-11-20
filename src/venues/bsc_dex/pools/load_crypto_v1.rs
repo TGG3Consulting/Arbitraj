@@ -211,8 +211,12 @@ pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<Po
     // T472-03: состояние tweak_price пула фабрики — ответы после прежних (HEAD, монеты, price_scale).
     if raw.n == 2 && !raw.killed {
         let tail = raw.got.get(HEAD + 2 * raw.n + 1..).unwrap_or(&[]);
-        let wrapped = ctx.addr("dex.native_wrapped").ok();
-        data.tweak = tweak_v1::decode(tail, &coins, wrapped).map_err(&bad)?;
+        let eth = tweak_v1::remembered(ctx.place.id, pool).and_then(|s| s.eth);
+        // Ревью 472 (п. 6): пул с монетой WETH фабрики — нужна dex.native_wrapped (load_crypto_tweak_v1.rs).
+        if !tail.is_empty() {
+            tweak_v1::need_wrapped(ctx, pool, &coins, eth)?;
+        }
+        data.tweak = tweak_v1::decode(tail, &coins, eth).map_err(&bad)?;
     }
     // T472-03: пулы без фабрики — ответы после is_killed (load_crypto_tweak_list.rs).
     if raw.killed {

@@ -47,6 +47,7 @@ mod sol {
             function adjustment_step() external view returns (uint256);
             function admin_fee() external view returns (uint256);
             function fee_receiver() external view returns (address);
+            function get_eth_index(address pool) external view returns (uint256);
             function totalSupply() external view returns (uint256);
         }
 

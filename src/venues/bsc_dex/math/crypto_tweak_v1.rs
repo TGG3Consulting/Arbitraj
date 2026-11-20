@@ -19,6 +19,12 @@
 //! Оракул — price_oracle() на блоке чтения (internal_price_oracle L516-L527 — то же скользящее среднее, что tweak_price
 //! считает на блоке обмена L539-L545): оговорка о времени блока — T472-04. Налог перевода входа не моделируется (gulp
 //! входа = +dx). Сохранения состояния (self.*) не откатывают — не моделируются.
+//! Тот же текст у CurveCryptoSwap2 без фабрики (EURS/2CRV, curvefi/curve-crypto-contract 41e6289 «deployment-logs/
+//! 2021-10-30. EURS/CryptoSwap.vy», Vyper 0.3.0: tweak_price L578-L683, `_claim_admin_fees` L541-L575, exchange
+//! L686-L763) с двумя отличиями (CryptoTweakV1.factory = false): в условии подстройки нет `norm > adjustment_step and
+//! old_virtual_price > 0` (L635), без подстройки `_claim_admin_fees` не зовётся (L647, L678-L681); получатель —
+//! admin_fee_receiver пула (L557), токен — константа (L92), gulp — balanceOf (L548-L550); оракул — сохранённый
+//! (`price_oracle` L98 — переменная), пересчёт на время блока — в чтении (load_crypto_tweak_list.rs).
 //! Кто вызывает: math/crypto_swap.rs (exchange_out, CryptoMath::TwoV1 при CryptoTweak.v1).
 //! От чего зависит: core/types (CryptoData, CryptoTweak, CryptoTweakV1), math/crypto_v1_2.rs, crypto_ops.rs, ten.rs.
 //! Настройки: нет.
@@ -86,7 +92,8 @@ pub fn passes(
         // (virtual_price * 2 - 10**18 > xcp_profit + 2*self.allowed_extra_profit) — проверяемые (L595).
         let lhs = su(mu(vp, two)?, E18)?;
         let rhs = au(xcp_profit, mu(two, t.allowed_extra_profit)?)?;
-        needs = lhs > rhs && norm > step && old;
+        // EURS (factory = false): без `norm > step and old` в условии (EURS/CryptoSwap.vy L635).
+        needs = lhs > rhs && (!v.factory || (norm > step && old));
     }
     if !needs {
         return Some(());
@@ -95,7 +102,11 @@ pub fn passes(
     if norm > step && old && adjusted(p, t, xp, ps, po, norm, step, xcp_profit)? {
         return Some(());
     }
-    // Иначе (L619-L627) и без подстройки (L636-L639) — _claim_admin_fees с virtual_price без подстройки.
+    // Иначе (L619-L627) и без подстройки (L636-L639) — _claim_admin_fees с virtual_price без подстройки. EURS:
+    // без подстройки — выход без _claim_admin_fees (EURS/CryptoSwap.vy L647, L678-L681).
+    if !v.factory && !(norm > step && old) {
+        return Some(());
+    }
     claim(p, t, v, s, xcp_profit, vp)
 }
 

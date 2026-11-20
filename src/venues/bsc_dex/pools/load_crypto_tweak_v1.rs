@@ -51,6 +51,9 @@ use super::abi_crypto_v1::ICryptoTweakV1 as T;
 pub const NOT_ADJUSTED_SLOT: u64 = 33;
 /// Вызовов пачки tweak (без двух слов JSON-RPC в конце).
 pub const CALLS: usize = 11;
+/// Слот not_adjusted подтверждён записью своего узла (slot_check) — до записи false: модель не применяется,
+/// причина — в журнал (load_crypto_tweak_list.rs unconfirmed).
+pub const CONFIRMED: bool = false;
 
 /// Постоянные пула: LP-токен, фабрика, монеты.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,7 +155,7 @@ pub async fn words(
 }
 
 /// Ответ eth_getStorageAt — слово 32 байта. Ошибки (текст): не слово.
-fn slot_word(v: &RawValue) -> Result<Bytes, String> {
+pub fn slot_word(v: &RawValue) -> Result<Bytes, String> {
     match serde_json::from_str::<B256>(v.get()) {
         Ok(w) => Ok(Bytes::copy_from_slice(w.as_slice())),
         Err(e) => Err(format!("eth_getStorageAt: {e}")),
@@ -204,6 +207,8 @@ pub fn decode(
             admin_fee: w(6)?,
             fee_receiver: !w(8)?.is_zero(),
             gulp,
+            factory: true,
+            last_prices: Vec::new(),
         }),
     }))
 }

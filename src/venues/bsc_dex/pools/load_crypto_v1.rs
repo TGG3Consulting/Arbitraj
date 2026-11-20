@@ -32,6 +32,7 @@ use super::abi_crypto::{ICryptoPool as P, ITricryptoPool as P3};
 use super::abi_crypto_v1::ICryptoPoolV1 as V1;
 use super::families::{Family, Proto};
 use super::family_variant::Variant;
+use super::load_crypto_tweak_list as tweak_list;
 use super::load_crypto_tweak_v1 as tweak_v1;
 use super::load_lb::{decode_time, time_call};
 use super::load_smardex;
@@ -113,10 +114,22 @@ pub async fn read(
     let tag = call::block_tag(block);
     let killed = f.proto == Proto::CurveTricryptoV1;
     let mut all = calls_with(pool, n, killed);
-    // T472-03: tweak_price пула фабрики (2 монеты) — постоянные пула из памяти или одним чтением на этом блоке.
-    let v1 = f.proto == Proto::CurveCryptoV1;
+    // T472-03: tweak_price — постоянные пула из памяти или одним чтением на этом блоке; пока слот not_adjusted не
+    // подтверждён записью — без модели (причина — в журнал один раз на пул).
+    let v1 = f.proto == Proto::CurveCryptoV1 && tweak_v1::CONFIRMED;
+    let list = killed && tweak_list::CONFIRMED;
+    if f.proto == Proto::CurveCryptoV1 && !v1 {
+        tweak_list::unconfirmed(ctx, pool, "crypto v1 фабрики (слот 33)");
+    } else if killed && !list {
+        let what = format!("пул без фабрики из {n} монет (слот {})", tweak_list::slot(n));
+        tweak_list::unconfirmed(ctx, pool, &what);
+    }
     if v1 {
         all.extend(tweak_v1::calls(pool, &tweak_v1::statics(ctx, pool, &tag).await?));
+    }
+    if list {
+        let (token, coins) = tweak_list::statics(ctx, pool, n, &tag).await?;
+        all.extend(tweak_list::calls(pool, n, token, &coins));
     }
     let mc = multicall::address(ctx);
     if let Some(m) = mc {
@@ -126,6 +139,8 @@ pub async fn read(
     let words = async {
         if v1 {
             tweak_v1::words(ctx, pool, &tag).await
+        } else if list {
+            tweak_list::words(ctx, pool, n, &tag).await
         } else {
             Ok(Vec::new())
         }
@@ -198,6 +213,11 @@ pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<Po
         let tail = raw.got.get(HEAD + 2 * raw.n + 1..).unwrap_or(&[]);
         let wrapped = ctx.addr("dex.native_wrapped").ok();
         data.tweak = tweak_v1::decode(tail, &coins, wrapped).map_err(&bad)?;
+    }
+    // T472-03: пулы без фабрики — ответы после is_killed (load_crypto_tweak_list.rs).
+    if raw.killed {
+        let tail = raw.got.get(HEAD + 2 * raw.n + raw.n..).unwrap_or(&[]);
+        data.tweak = tweak_list::decode(tail, raw.n, raw.now).map_err(&bad)?;
     }
     Ok(PoolState::Crypto(Box::new(data)))
 }

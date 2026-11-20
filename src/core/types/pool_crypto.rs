@@ -113,6 +113,14 @@ pub struct CryptoTweakV1 {
     /// Получатель комиссий фабрики (`Factory.fee_receiver()`) не нулевой.
     pub fee_receiver: bool,
     /// Фактические балансы пула по порядку монет (gulp L482-L487): у монеты WETH20 — ETH пула, у прочих —
-    /// `balanceOf(пул)`.
+    /// `balanceOf(пул)`. Пусто — у tricrypto 2021 (tweak_price `_claim_admin_fees` не зовёт).
     pub gulp: Vec<U256>,
+    /// Текст пула фабрики (CurveCryptoSwap2ETH): условие подстройки с `norm > adjustment_step and old_virtual_price > 0`
+    /// и `_claim_admin_fees` при норме ниже шага (L595, L636-L639). false — CurveCryptoSwap2 без фабрики (EURS/2CRV,
+    /// «2021-10-30. EURS/CryptoSwap.vy» L635, L647, L678-L681: ни того, ни другого).
+    #[serde(default)]
+    pub factory: bool,
+    /// Последние цены монет 1..N−1 (`last_prices(k)`; нужны tricrypto 2021 — цена сделки и упаковка, L486-L499).
+    #[serde(default)]
+    pub last_prices: Vec<U256>,
 }

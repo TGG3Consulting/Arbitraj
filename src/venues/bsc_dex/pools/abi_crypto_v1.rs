@@ -50,6 +50,23 @@ mod sol {
             function totalSupply() external view returns (uint256);
         }
 
+        // Решение 472 (T472-03): геттеры tweak_price пулов без фабрики — пара CurveCryptoSwap2 (EURS/2CRV, curvefi/
+        // curve-crypto-contract 41e6289 «2021-10-30. EURS/CryptoSwap.vy»: L98 price_oracle (сохранённый), L100
+        // last_prices, L101 last_prices_timestamp, L117 ma_half_time, L143 admin_fee_receiver) и tricrypto 2021
+        // («2021-09-13. Arbitrum/CryptoSwap.vy» L123 last_prices_timestamp, L139 ma_half_time, L267-L280
+        // price_oracle(k) / last_prices(k) — упакованные сохранённые).
+        interface ICryptoTweakPair {
+            function last_prices() external view returns (uint256);
+            function last_prices_timestamp() external view returns (uint256);
+            function ma_half_time() external view returns (uint256);
+            function admin_fee_receiver() external view returns (address);
+        }
+
+        interface ICryptoTweakTri {
+            function last_prices(uint256 k) external view returns (uint256);
+            function price_oracle(uint256 k) external view returns (uint256);
+        }
+
         interface ICryptoFactoryV1 {
             function get_coins(address pool) external view returns (address[2] memory);
 

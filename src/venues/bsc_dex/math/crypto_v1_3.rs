@@ -74,6 +74,12 @@ fn geometric_mean(x: [U256; 3]) -> Option<U256> {
     None
 }
 
+/// `geometric_mean(x)` внешний (L66-L69, sort = True по умолчанию; решение 472 — tweak_price tricrypto 2021): сначала
+/// `sort`, затем тот же цикл. Принимает: x в любом порядке. Возвращает: D или None (откат).
+pub fn geometric_mean_sorted(x: [U256; 3]) -> Option<U256> {
+    geometric_mean(sort(x))
+}
+
 /// `newton_D(ANN, gamma, x_unsorted)` (L96-L167). Принимает: A, gamma, балансы в 18 знаках и ценах пула. Возвращает:
 /// D или None (откат).
 pub fn newton_d(ann: U256, gamma: U256, xu: [U256; 3]) -> Option<U256> {

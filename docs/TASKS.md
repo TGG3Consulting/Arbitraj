@@ -364,6 +364,20 @@
     D 31, xcp_profit_a 35, virtual_price 36, not_adjusted 37, is_killed 38 — сверка соседних слотов на записи нужна.
     EURS/2CRV (curve_crypto2_v1, Vyper 0.3.0) — свой `_claim_admin_fees` (admin_fee_receiver, token — константа),
     раскладка 0.3.0 не считалась. До их моделей котировка этих пулов откаты tweak_price не учитывает (как было).
+    **Доделка 3:** tricrypto 2021 — math/crypto_tweak_v1_3.rs (tweak_price L433-L577: цена сделки и ix, last_prices
+    через newton_y, упаковка `assert p < PRICE_MASK`, Loss, норма Σ ratio², sqrt_int, подстройка; `_claim_admin_fees`
+    tweak_price tricrypto НЕ зовёт — вызовы только claim_admin_fees L962 и apply_new_parameters L1092); EURS/2CRV —
+    та же модель, что 2ETH, с отличиями текста (CryptoTweakV1.factory = false: условие подстройки без norm / old,
+    без подстройки — без `_claim_admin_fees`; admin_fee_receiver, gulp balanceOf); оракул обоих — сохранённый
+    (геттер — переменная), пересчёт на время блока чтения — math/crypto_math3.rs (halfpow, sqrt_int — CurveCryptoMath3
+    d7d04cd L253-L310). Чтение — pools/load_crypto_tweak_list.rs: слоты not_adjusted по исходнику компилятора —
+    tricrypto (Vyper 0.2.15) 37, EURS (Vyper 0.3.0) 36: в 0.2.15 и 0.3.0 каждая функция с @nonreentrant получает свой
+    слот (data_positions.py set_storage_slots обеих версий), шесть функций у обоих — слоты 0–5; номера строк — шапка
+    файла. **Пока номер слота не подтверждён записью (CONFIRMED = false — и у фабрики, слот 33), модель не применяется:
+    вызовы tweak не читаются, котировка как раньше, причина — один раз в журнал (Warn, dex.pool).** Запись:
+    curve_crypto.py — tweak_v1 у tricrypto_v1.json и crypto2_v1.json (слоты 9, 31, 35–38, 41 / 6, 9, 30, 34–37, 40 и
+    slot_check); тест tests/arb_curve_crypto_tweak_list_live.rs (#[ignore]); после записи и зелёного slot_check —
+    CONFIRMED = true (load_crypto_tweak_list.rs, load_crypto_tweak_v1.rs).
     Прежний разбор (доделка 472) — ниже.
     CurveCryptoSwap2ETH.vy (curve-factory-crypto 7ed1011, Vyper 0.3.1): tweak_price L531-L640, вызов из _exchange
     L643-L740 с xp[j] = баланс ПОСЛЕ выхода с комиссией (не y из newton_y, как у NG) и p_i (цена сделки при dx, dy >
@@ -426,7 +440,11 @@
     curve-crypto-contract, curve-factory, curve-factory-crypto, curve-js (только адреса и ABI, pools/arbitrum.ts
     L98, L152) их нет; поиск кода GitHub по адресам — только сторонние списки адресов; Sourcify и Arbiscan из среды
     недоступны (прокси 403 / client_error). Запись curve_crypto.py --code-pools пишет eth_getCode обоих и 2pool
-    (code_pools.json) — для разбора; нужен верифицированный исходник (Тигран: Arbiscan / Sourcify). Прежняя запись:
+    (code_pools.json) — для разбора; нужен верифицированный исходник (Тигран: Arbiscan / Sourcify). Доделка 3: повторно —
+    repo.sourcify.dev и sourcify.dev (WebFetch: SITE_BLOCKED / client_error); поиск кода GitHub в curvefi: ren —
+    адреса в curve-api, curve-js, metaregistry, brownie-tutorial; wstETH — curvefi/curve-zaps
+    contracts/arbitrum/wsteth/pooldata.json: pool_types «oracleRate», LP — отдельный CurveTokenV3, монета 1 с курсом
+    оракула (use_rate) — исходника пула нет ни в одном репозитории curvefi. Прежняя запись:
     0x3E01dD8a5E1fb3481F0F589056b428Fc308AF0Fb (≈ 37 тыс. USD), ETH/wstETH 0x6eB2dc694eB516B16Dc9FBc678C60052BbdD7d80
     (≈ 69 тыс. USD; нативный ETH), crypto-метапул EURS/2CRV 0xA827a652Ead76c6B0b3D19dba05452E06e25c27e (≈ 3 тыс. USD) —
     Curve API getPools/arbitrum/main и crypto. Метапулы MetaBTCRen (база — renBTC, LP не сам пул) — не берутся.

@@ -31,6 +31,23 @@ TWEAK_V1 = ["token()", "factory()", "coins(uint256)", "price_oracle()", "xcp_pro
             "admin_actions_deadline()"]
 SLOTS_V1 = {28: "D()", 31: "xcp_profit_a()", 32: "virtual_price()", 33: None, 34: "admin_actions_deadline()"}
 
+# Решение 472 (T472-03): пулы без фабрики — pools/load_crypto_tweak_list.rs (calls; раскладка Vyper 0.2.15 / 0.3.0 —
+# шапка того же файла). Вызовы на пуле (calldata), сверка соседних слотов с геттерами; None — слот not_adjusted.
+TWEAK_TRI = [("last_prices(uint256)", 0), ("last_prices(uint256)", 1), ("last_prices_timestamp()", None),
+             ("ma_half_time()", None), ("price_oracle(uint256)", 0), ("price_oracle(uint256)", 1),
+             ("xcp_profit()", None), ("xcp_profit_a()", None), ("virtual_price()", None),
+             ("allowed_extra_profit()", None), ("adjustment_step()", None), ("token()", None),
+             ("admin_actions_deadline()", None)]
+TWEAK_PAIR = [("last_prices()", None), ("last_prices_timestamp()", None), ("ma_half_time()", None),
+              ("price_oracle()", None), ("xcp_profit()", None), ("xcp_profit_a()", None), ("virtual_price()", None),
+              ("allowed_extra_profit()", None), ("adjustment_step()", None), ("admin_fee()", None),
+              ("admin_fee_receiver()", None), ("token()", None), ("admin_actions_deadline()", None),
+              ("price_scale()", None)]
+SLOTS_TRI = {9: "last_prices_timestamp()", 31: "D()", 35: "xcp_profit_a()", 36: "virtual_price()", 37: None,
+             38: "is_killed()", 41: "admin_actions_deadline()"}
+SLOTS_PAIR = {6: "price_scale()", 9: "last_prices_timestamp()", 30: "D()", 34: "xcp_profit_a()",
+              35: "virtual_price()", 36: None, 37: "is_killed()", 40: "admin_actions_deadline()"}
+
 
 def bot_calls(n, v1, pair=False):
     """Сигнатуры и аргументы вызовов бота (calldata). n — число монет, v1 — пул первого поколения, pair — пара без
@@ -163,6 +180,8 @@ def v1_row(node, pool, n, tag, factory=None, pair=False):
     row["exchange_sim"] = sims(node, pool, n, calls, row["get_dy"], tag)
     if n == 2 and not pair:
         row["tweak_v1"] = tweak_v1(node, pool, calls, tag)
+    else:
+        row["tweak_v1"] = tweak_list(node, pool, n, calls, tag)
     if factory:
         row["factory_get_coins"] = node.call(factory, selector("get_coins(address)") + addr_word(pool), tag)
         row["factory_get_decimals"] = node.call(factory, selector("get_decimals(address)") + addr_word(pool), tag)
@@ -213,4 +232,32 @@ def tweak_v1(node, pool, calls, tag):
             want = answer(calls, sig).get("result")
             out["slot_check"][str(slot)] = bool(got and want and int(got, 16) == int(want[:66], 16))
     print(f"v1 tweak {pool}: сверка слотов {out['slot_check']}", file=sys.stderr)
+    return out
+
+
+def slots(node, pool, calls, table, tag):
+    """Слоты хранилища из table и сверка с геттерами (True — слово слота = ответ геттера)."""
+    storage, check = {}, {}
+    for slot, sig in table.items():
+        got = node.rpc("eth_getStorageAt", [pool, hex(slot), tag]).get("result")
+        storage[str(slot)] = got
+        if sig:
+            want = answer(calls, sig).get("result")
+            check[str(slot)] = bool(got and want and int(got, 16) == int(want[:66], 16))
+    return storage, check
+
+
+def tweak_list(node, pool, n, calls, tag):
+    """Решение 472 (T472-03): tricrypto 2021 (n = 3) и пара без фабрики (n = 2) — вызовы бота tweak на пуле (в calls),
+    totalSupply() LP-токена (token() пула), слоты и их сверка с геттерами. balanceOf монет — в holdings."""
+    for sig, arg in (TWEAK_TRI if n == 3 else TWEAK_PAIR):
+        data = selector(sig) + ("" if arg is None else word(arg))
+        calls[data] = node.call(pool, data, tag)
+    token = as_addr(answer(calls, "token()"))
+    out = {"token": token, "token_calls": {}}
+    if token:
+        d = selector("totalSupply()")
+        out["token_calls"][d] = node.call(token, d, tag)
+    out["storage"], out["slot_check"] = slots(node, pool, calls, SLOTS_TRI if n == 3 else SLOTS_PAIR, tag)
+    print(f"v1({n}) tweak {pool}: сверка слотов {out['slot_check']}", file=sys.stderr)
     return out

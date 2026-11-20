@@ -131,6 +131,47 @@
   з) докупка (core/executor.rs, через risk::can_open) в остановленной сети отказывает — как и при общем «Стоп»;
   и) chain_off проверяется на отдельном коротком замке до основного (gate_input): сделка, прошедшая проверку за мгновение
      до «Стоп <сеть>», начнётся — то же окно, что у общего «Стоп».
+- **Решение 440 (20.11.2026, ветка t223-f1/arb-family-f1) — семейство T433-F1 Fluid DEX T1 (вид `fluid_t1`, DEX
+  T433-078 `fluid-arbitrum`); cargo не запускался — сборка и тесты в GitHub CI.** СДЕЛАНО (по исходникам
+  Instadapp/fluid-contracts-public@404d73f91e6806f881f8dabeb30494f93f9e99b7 — единственный коммит официального репо):
+  вид ядра PoolKind/PoolState::SmartColDebt (core/types/pool_smart.rs); математика — построчный порт `_swapIn`
+  (math/fluid_swap.rs: приведение входа, пределы суммы, комиссия и доля протокола, _swapRoutingIn, _getAmountOut по
+  мнимым резервам, проверка реальных резервов, новая цена) и проверки (math/fluid_check.rs: пределы снятия/займа как
+  estimateSwapIn резолвера; скачок цены — порт _updateOracle у пула с VERSION(), проверка резолвера у пула без него);
+  чтение — pools/load_fluid.rs (getPoolReservesAdjusted официального резолвера + constantsView/constantsView2,
+  dexVariables/dexVariables2, VERSION, время блока; каждым блоком, per_block.rs); события — pools/events_fluid.rs
+  (22 topic0 → перечитать); проверка — pools/verify_fluid.rs (isDex фабрики + constantsView); сверка — quote/quoter_fluid.rs
+  (estimateSwapIn резолвера, dex.quoter); глубина/спот/пустота/комиссия — quote/fluid_depth.rs; нативная монета пула
+  0xEeee… → dex.native_wrapped; шаг FLUID = 22 в contracts/ArbExecutor.sol (approve пулу + swapIn; нативная монета —
+  withdraw → swapIn{value} / receive только от слоя ликвидности → deposit) + Params::Fluid (exec/executor/kind.rs) +
+  ExecKind::Fluid (since = v4); Version::V4 (exec/executor/code.rs) — пока ни у одного кошелька (артефакты out/ — v3).
+  Скрипт записи tools/arbitrum_record/fluid_t1.py; тест tests/arbitrum_fluid_t1.rs (на записи — #[ignore]).
+  Новых настроек нет (dex.kind = `fluid_t1`, dex.factory, dex.quoter, dex.pool_enabled — существующие; значения —
+  docs/FIRST_RUN.md, раздел решения 440). Интерфейс: вариант `fluid_t1` в «Таблице сопоставления DEX» и подписи вида
+  (ui/src/lib/labels.js).
+  НУЖНО ОТ ТИГРАНА:
+  1) Записать данные своего узла: `python3 tools/arbitrum_record/fluid_t1.py --node <узел> --factory
+     0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085 --resolver 0x05Bd8269A20C472b148246De20E6852091BF16Ff --wrapped
+     <dex.native_wrapped arb_dex> --gt`, закоммитить tests/data/arbitrum_fluid_t1_<дата>/ — затем снять #[ignore] с
+     tests/arbitrum_fluid_t1.rs и только после зелёного теста ставить dex.pool_enabled = да.
+  2) Исполнитель v4: `contracts/build.sh` (агенту сборка запрещена) → копия прежних out/ArbExecutor.* в out/v3/ →
+     code.rs version_of: out/ = V4, out/v3/ = V3 → сценарий FLUID в contracts/evmtest (не написан: официальный код пула
+     Fluid в evmtest не подключён) → «Развернуть исполнитель». До этого Fluid — только граф и сигналы (причина «нужна
+     сборка исполнителя v4»).
+  ВОПРОСЫ (не подтверждено фактом):
+  а) Пулы Fluid в Arbitrum развёрнуты кодом до 1.1.0 (в deployedBytecode Dex_USDC_ETH.json нет PUSH4 VERSION 0xffa1ad74),
+     а в официальном репозитории — только код 1.1.0 (история сквошена в один коммит); исходник развёрнутой версии
+     (Arbiscan / Sourcify) из среды недоступен (прокси 403). Порт — по 1.1.0; совпадение с кодом пула проверит запись
+     (п. 1: swapIn → 0x…dEaD даёт точный выход развёрнутого кода). Расхождение — нужен verified-исходник с Arbiscan.
+  б) Скачок цены у пулов без VERSION() — по проверке резолвера (_priceMoveExceedsLimit, текущая цена пула), как её
+     моделирует сам Fluid; точное правило старого пула не известно (см. а).
+  в) Предел загрузки слоя ликвидности после обмена (_utilizationVerify) не портирован — берутся пределы резолвера
+     (TokenLimit.available «учитывает max utilization», structs.sol L25-L32); остаток — откат в симуляции перед отправкой.
+  г) Какие адреса токенов отдаёт GeckoTerminal у пулов Fluid с ETH (метка 0xEeee… или WETH) — не проверено; при метке
+     справочник не сопоставит пару с обёрткой (запись --gt покажет).
+  д) Номер шага FLUID = 22 и Version::V4 — параллельные семейства (T433-F2…F8) могут взять те же номера: при слиянии
+     перенумеровать (contracts/ArbExecutor.sol, kind.rs, tests/bsc_dex_executor_abi.rs).
+  е) Точный выход (swapOut) не портирован — котировка только с точным входом (как SmarDex).
 - **Решение 438 (ревью t222, правки) (20.11.2026, ветка t222/arb-known-accounts)** — cargo не запускался. СДЕЛАНО: A)
   send/track_l1.rs — caught_up → голова H, затем квитанция и eth_getTransactionCount(from, H); B) начало окна — время
   блока головы при отправке (не часы сервера); C) exec/pool_cond_check.rs + pool_cond_decode.rs — самопроверка слотов
@@ -577,7 +618,7 @@
   - T433-075 `omni-exchange-v2-arbitrum` (Omni Exchange V2 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-076 `omni-exchange-v3-arbitrum` (Omni Exchange V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-077 `balancer-v3-arbitrum` (Balancer V3 (Arbitrum)) — семейства нет в коде: семейство T433-F2; официальные адреса; завести и включить в arb_dex.
-  - T433-078 `fluid-arbitrum` (Fluid (Arbitrum)) — семейства нет в коде: семейство T433-F1; официальные адреса; завести и включить в arb_dex.
+  - T433-078 `fluid-arbitrum` (Fluid (Arbitrum)) — вид `fluid_t1` в коде (решение 440, T433-F1); официальные адреса сверены (deployments/arbitrum: DexFactory 0x9171…9085, DexReservesResolver 0x05Bd…16Ff — docs/FIRST_RUN.md); включить в arb_dex — после записи узла и зелёного tests/arbitrum_fluid_t1.rs (решение 440, «НУЖНО ОТ ТИГРАНА»).
   - T433-079 `ekubo-v3-arbitrum` (Ekubo V3 (Arbitrum)) — семейства нет в коде: семейство T433-F8; официальные адреса; завести и включить в arb_dex.
   - T433-080 `ramses-legacy-arbitrum` (Ramses Legacy (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-081 `ramses-v3-arbitrum` (Ramses V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
@@ -647,7 +688,7 @@
   - T433-145 PancakeSwap X (DefiLlama `pancakeswap-x`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-146 Aero Basic (DefiLlama `aero-basic`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   Семейства кода:
-  - T433-F1 Fluid DEX (T1) — новое семейство пулов: математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+  - T433-F1 Fluid DEX (T1) — СДЕЛАНО в коде (решение 440): математика, чтение, события, проверка, квотер, шаг исполнителя FLUID (v4 — только исходник); осталось: запись узла (tools/arbitrum_record/fluid_t1.py) и снятие #[ignore], сборка и развёртывание исполнителя v4, вопросы а)–е) решения 440.
   - T433-F2 Balancer V3 — новое семейство (хранилище V3, крючки): математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.

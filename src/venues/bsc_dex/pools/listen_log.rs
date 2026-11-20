@@ -6,6 +6,8 @@
 //! уже нет состояния блока события, решение 298, stale_read.rs) — тогда сессия идёт дальше, пул ждёт повтора.
 //! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs; пересчёт
 //! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
+//! Третье ревью t236: лог, после которого пул «в обновлении» (Integral SwapFee, LB CompositionFees, THENA Fusion Swap /
+//! Fee — settle_fusion.rs shuts), делает пул недостоверным в том же изменении реестра, что его применяет.
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, settle.rs, settle_bins.rs (бины события; ревью 290,
 //! решение 357), integral_fee.rs (решение 325), registry.rs, stale_read.rs (решение 298), pool_fail.rs (решение 339),
@@ -119,12 +121,24 @@ pub async fn on_log(
         super::stale_read::defer(&p.reg, &r, block, index);
         return Ok(true);
     }
-    let applied = if log.removed {
-        Applied::Refresh("реорг: событие отменено (removed)".into())
+    // Третье ревью t236 (блокер 1): лог, после которого пул «в обновлении» (settle_fusion.rs shuts: Integral SwapFee,
+    // LB CompositionFees, THENA Fusion Swap / Fee), — valid = false в ТОМ ЖЕ изменении реестра, что применяет лог:
+    // котировка и граф (другие задачи) не видят новую цену с прежней комиссией ни на мгновение. `was` — достоверность
+    // до лога (её вернёт снятие отметки, settle_fusion.rs preset).
+    let (applied, was) = if log.removed {
+        (Applied::Refresh("реорг: событие отменено (removed)".into()), None)
     } else {
         p.reg
-            .update(&r, |e| events::apply(e, log))
-            .unwrap_or(Applied::Ignored)
+            .update(&r, |e| {
+                let was = e.valid;
+                let a = events::apply(e, log);
+                let shut = !waiting && super::settle_fusion::shuts(e.family, log, &a);
+                if shut {
+                    e.valid = false;
+                }
+                (a, shut.then_some(was))
+            })
+            .unwrap_or((Applied::Ignored, None))
     };
     // Решение 325: «только комиссия» — при dex.event_refresh_fee_only, пуле не в очереди повтора, достоверном и с
     // состоянием Algebra (ревью 325, Н2/Н3 — integral_fee::fits); иначе прежний Refresh.
@@ -138,8 +152,13 @@ pub async fn on_log(
     };
     // Решение 357: за этим логом в том же вызове по коду контракта идёт ещё лог пула — пул «в обновлении», ядру не
     // уходит; следующий лог пула той же tx снимает отметку (settle.rs step). Ревью слияния (Н1): у Applied::Fee
-    // (решение 325) отметка ставится ДО чтения комиссии (ветка Fee ниже читает её и выходит): котировка не видит «комиссия
-    // конца блока + цена до Swap» ни на мгновение.
+    // (решение 325) отметка ставится ДО чтения комиссии (ветка Fee ниже читает её и выходит). Третье ревью t236: сама
+    // недостоверность — уже в изменении реестра, применившем лог (выше); здесь — отметка с достоверностью до лога.
+    if let Some(was) = was
+        && super::settle_fusion::shuts(entry.family, log, &applied)
+    {
+        p.holds.preset(&r, block, was);
+    }
     let held = p
         .holds
         .step(&p.reg, (&r, entry.family), log, &applied, waiting);

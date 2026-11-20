@@ -29,6 +29,25 @@ use super::families::{Family, Proto};
 use super::registry::Registry;
 use super::settle::{Holds, Need};
 
+/// Открывает ли лог Need::NextFee: THENA Fusion, Swap (Applied::Fee) или Fee (Updated). Принимает: вид, лог, итог
+/// применения. Ошибок нет.
+pub fn opens(f: &Family, log: &Log, a: &Applied) -> bool {
+    if f.proto != Proto::Algebra {
+        return false;
+    }
+    let fee_log = log
+        .topic0()
+        .is_some_and(|t| *t == IAlgebraPool::Fee::SIGNATURE_HASH);
+    matches!(a, Applied::Fee(_)) || (fee_log && matches!(a, Applied::Updated))
+}
+
+/// Третье ревью t236 (блокер 1): закрывает ли лог пул до следующего лога / чтения — Follow (settle.rs opens: Integral
+/// SwapFee, LB CompositionFees) или Need::NextFee (THENA Fusion). По нему listen_log.rs ставит valid = false в том же
+/// изменении реестра, что применяет лог. Принимает: вид, лог, итог применения. Ошибок нет.
+pub fn shuts(f: &Family, log: &Log, a: &Applied) -> bool {
+    super::settle::opens(f, log, a).is_some() || opens(f, log, a)
+}
+
 impl Holds {
     /// Лог THENA Fusion, после которого нужна комиссия следующего блока: Swap (Applied::Fee) или Fee (Updated) — пул
     /// «в обновлении» (Need::NextFee, транзакция лога). Принимает: реестр, (ссылка, вид), лог, итог применения.
@@ -41,13 +60,7 @@ impl Holds {
         a: &Applied,
     ) -> bool {
         let (r, f) = at;
-        if f.proto != Proto::Algebra {
-            return false;
-        }
-        let fee_log = log
-            .topic0()
-            .is_some_and(|t| *t == IAlgebraPool::Fee::SIGNATURE_HASH);
-        if !matches!(a, Applied::Fee(_)) && !(fee_log && matches!(a, Applied::Updated)) {
+        if !opens(f, log, a) {
             return false;
         }
         let block = log.block_number.unwrap_or_default();
@@ -94,5 +107,22 @@ impl Holds {
         if self.on_clock(r) {
             self.release(reg, r);
         }
+    }
+
+    /// Третье ревью t236 (блокер 1): пул уже недостоверен в ТОМ ЖЕ изменении реестра, что применило лог (listen_log.rs
+    /// apply_held) — отметка заводится с достоверностью ДО лога `was` (её вернёт снятие; hold не перезаписывает
+    /// was_valid существующей отметки). Есть отметка — ничего. Принимает: ссылку, блок, прежнюю достоверность.
+    /// Ошибок нет.
+    pub fn preset(&self, r: &PoolRef, block: u64, was: bool) {
+        self.with(|m| {
+            m.entry(r.clone()).or_insert_with(|| super::settle::Hold {
+                block,
+                was_valid: was,
+                bins: std::collections::BTreeSet::new(),
+                need: None,
+                head: false,
+                tx: None,
+            });
+        });
     }
 }

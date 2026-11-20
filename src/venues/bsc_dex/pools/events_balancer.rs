@@ -35,8 +35,14 @@ pub fn liquidity_topics() -> Vec<B256> {
     Vec::new()
 }
 
-/// Применяет событие: известное событие пула → Refresh, иначе Ignored. Ошибок нет.
+/// Применяет событие: известное событие пула → Refresh, иначе Ignored (TokenAdded / TokenRemoved — и сброс
+/// неизменяемого пула). Ошибок нет.
 pub fn apply(e: &mut Entry, log: &Log) -> Applied {
+    // Решение 473: managed добавил / убрал токен — неизменяемое пула (токены, decimals, BPT) сбросить до перечитывания.
+    let tokens = super::abi_balancer_more::token_set_changed();
+    if log.topic0().is_some_and(|t| tokens.contains(t)) {
+        super::load_balancer_fixed::forget(log.address());
+    }
     match log.topic0() {
         Some(t) if topics(e.family).contains(t) => Applied::Refresh(format!(
             "{}: событие пула Balancer V2 — перечитать состояние",

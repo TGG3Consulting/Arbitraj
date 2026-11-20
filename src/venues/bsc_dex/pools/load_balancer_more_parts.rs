@@ -10,7 +10,7 @@
 //!
 //! Источник — шапка load_balancer_more_curve.rs.
 
-use alloy_primitives::U256;
+use alloy_primitives::{Address, U256};
 
 use crate::core::types::VaultCurve;
 use crate::core::types::pool_vault::V2Curve;
@@ -37,11 +37,18 @@ fn take_time(c: &mut Cur) -> Result<u64, String> {
     }
 }
 
-/// Множители стейблсвапа с курсом на блоке чтения (composable stable, meta-stable, stable phantom). Ошибки (текст):
-/// ответы, нет времени блока, курс больше предела кеша.
-pub fn factors(m: &More, c: &mut Cur) -> Result<Vec<U256>, String> {
+/// Множители стейблсвапа с курсом (composable stable, meta-stable, stable phantom): на блоке чтения и — если у какого-то
+/// токена кеш истекает к следующей секунде (expires < время чтения + 1; пул сравнивает block.timestamp исполнения,
+/// целые секунды, монотонно) — второй набор с курсом поставщика у таких токенов. Курс поставщика нужен только там, где
+/// кеш истёк или истекает: его откат или переполнение у токена с действующим кешем пул не отключают. Возвращает:
+/// (множители, второй набор или None). Ошибки (текст): ответы, нет времени блока, нужный курс поставщика откатился или
+/// больше предела кеша.
+pub fn factors(m: &More, c: &mut Cur) -> Result<(Vec<U256>, Option<Vec<U256>>), String> {
     if m.ty == PoolType::Phantom {
-        return m.tokens.iter().map(|_| c.take::<Ph::getScalingFactorCall>()).collect();
+        // Кеш phantom обновляется после расчёта множителей обмена — обмен по getScalingFactor на блоке.
+        let f: Result<Vec<U256>, String> =
+            m.tokens.iter().map(|_| c.take::<Ph::getScalingFactorCall>()).collect();
+        return Ok((f?, None));
     }
     let cached = if m.ty == PoolType::Composable {
         Some(c.take::<C::getScalingFactorsCall>()?)
@@ -57,7 +64,7 @@ pub fn factors(m: &More, c: &mut Cur) -> Result<Vec<U256>, String> {
             let r = c.take::<M::getPriceRateCacheCall>()?;
             (r.rate, r.expires)
         };
-        fresh.push((t, rate, expires, c.take::<R::getRateCall>()?));
+        fresh.push((t, rate, expires, c.take::<R::getRateCall>()));
     }
     let now = if fresh.is_empty() {
         U256::ZERO
@@ -68,28 +75,47 @@ pub fn factors(m: &More, c: &mut Cur) -> Result<Vec<U256>, String> {
     };
     // Предел курса в кеше: 96 бит (composable, PriceRateCache.sol L41) / 128 бит (meta-stable, L612).
     let bits: usize = if m.ty == PoolType::Composable { 96 } else { 128 };
-    let mut out = Vec::with_capacity(m.tokens.len());
+    let live = |k: usize, t: &Address, r: &Result<U256, String>| -> Result<U256, String> {
+        let r = r.clone().map_err(|w| format!("getRate поставщика токена {t}: {w}"))?;
+        if r >> bits != U256::ZERO {
+            let w = "обмен откатится (PRICE_RATE_OVERFLOW)";
+            return Err(format!("курс {r} токена {t} ≥ 2^{bits} — {w}"));
+        }
+        mul_down(m.dec[k], r).ok_or_else(|| "множитель с курсом не помещается".to_string())
+    };
+    let (mut out, mut alt, mut near) = (Vec::new(), Vec::new(), false);
     for (k, t) in m.tokens.iter().enumerate() {
         let own = cached.as_ref().map(|s| s.get(k).copied());
-        let f = match (fresh.iter().find(|x| x.0 == *t), own) {
-            // Кеш истёк — пул до расчёта берёт курс поставщика (и пишет его в кеш: курс сверх предела — откат).
-            (Some(&(_, _, expires, live)), _) if now > expires => {
-                if live >> bits != U256::ZERO {
-                    let w = "обмен откатится (PRICE_RATE_OVERFLOW)";
-                    return Err(format!("курс {live} токена {t} ≥ 2^{bits} — {w}"));
+        let (f, g) = match (fresh.iter().find(|x| x.0 == *t), own) {
+            // Кеш истёк — пул до расчёта берёт курс поставщика (и пишет его в кеш: сверх предела — откат).
+            (Some((_, _, expires, r)), _) if now > *expires => {
+                let f = live(k, t, r)?;
+                (f, f)
+            }
+            (Some((_, cache, expires, r)), own) => {
+                // Кеш действует: composable — множитель getScalingFactors, meta-stable — decimals·mulDown(кеш).
+                let f = match own {
+                    Some(s) => s.ok_or("getScalingFactors: не по числу токенов")?,
+                    None => mul_down(m.dec[k], *cache).ok_or("множитель с курсом не помещается")?,
+                };
+                // Истекает к следующей секунде — у блока исполнения курс может быть уже поставщика.
+                if *expires < now + U256::from(1u8) {
+                    near = true;
+                    (f, live(k, t, r)?)
+                } else {
+                    (f, f)
                 }
-                mul_down(m.dec[k], live).ok_or("множитель с курсом не помещается")?
             }
-            // Кеш действует: composable — множитель getScalingFactors, meta-stable — decimals·mulDown(кеш).
-            (_, Some(s)) => s.ok_or("getScalingFactors: не по числу токенов")?,
-            (Some(&(_, cache, _, _)), None) => {
-                mul_down(m.dec[k], cache).ok_or("множитель с курсом не помещается")?
+            (None, Some(s)) => {
+                let f = s.ok_or("getScalingFactors: не по числу токенов")?;
+                (f, f)
             }
-            (None, None) => m.dec[k],
+            (None, None) => (m.dec[k], m.dec[k]),
         };
         out.push(f);
+        alt.push(g);
     }
-    Ok(out)
+    Ok((out, near.then_some(alt)))
 }
 
 /// Кривая managed: веса (у BPT — 0), границы цены BPT в единицах хранения пула, фактический выпуск. Ошибки (текст):

@@ -4,7 +4,7 @@
 //! весовой пул (managed v1 / v2) и линейный пул. Пулы LBP и investment — кривая Weighted (math/balancer_math.rs).
 //! Кто вызывает: math/balancer_math.rs (amount_out / amount_in — ветка VaultCurve::V2).
 //! От чего зависит: core/types (VaultPoolData, V2Curve), math/balancer_math.rs (FixedPoint, WeightedMath),
-//! math/balancer_stable.rs (StableMath), math/balancer_linear.rs (LinearMath), alloy-primitives.
+//! math/balancer_rated.rs (стейблсвап с курсами), math/balancer_linear.rs (LinearMath), alloy-primitives.
 //! Настройки: нет (состояние — pools/load_balancer_more.rs).
 //!
 //! Источник (решение 23) — balancer/balancer-deployments@b55dc2b8, build-info задач (выдержки — исходники build-info):
@@ -34,8 +34,8 @@ use crate::core::types::VaultPoolData;
 use crate::core::types::pool_vault::V2Curve;
 
 use super::balancer_linear::{self as lin, Bal, Params, Tok};
-use super::balancer_math::{div_down, div_up, mul_down, mul_up, one, weighted_in, weighted_out};
-use super::balancer_stable;
+use super::balancer_math::{div_down, div_up, mul_down, one, weighted_in, weighted_out};
+use super::balancer_rated;
 
 /// complement: 1 − x, не меньше нуля (FixedPoint.complement).
 fn complement(x: U256) -> U256 {
@@ -49,12 +49,13 @@ pub fn amount_out(d: &VaultPoolData, c: &V2Curve, i: usize, j: usize, a: U256) -
         return None;
     }
     match c {
-        V2Curve::StableRated { amp, factors, bpt, v2 } => {
-            let (f_in, f_out) = (*factors.get(i)?, *factors.get(j)?);
-            let (b, ii, jj) = rated_balances(d, factors, *bpt, i, j)?;
-            let up = mul_down(a.checked_sub(mul_up(a, d.fee)?)?, f_in)?;
-            let out = balancer_stable::out_given_in(*amp, &b, ii, jj, up, *v2)?;
-            div_down(out, f_out)
+        V2Curve::StableRated { amp, factors, bpt, v2, alt } => {
+            // Кеш курса может истечь к блоку исполнения — худший (меньший) выход из двух наборов множителей.
+            let now = balancer_rated::out(d, (*amp, *bpt, *v2), factors, i, j, a)?;
+            match alt {
+                Some(f) => Some(now.min(balancer_rated::out(d, (*amp, *bpt, *v2), f, i, j, a)?)),
+                None => Some(now),
+            }
         }
         V2Curve::Managed { weights, lower, upper, supply, bpt } => {
             if usize::from(*bpt) == i || usize::from(*bpt) == j {
@@ -94,12 +95,13 @@ pub fn amount_in(d: &VaultPoolData, c: &V2Curve, i: usize, j: usize, a: U256) ->
         return None;
     }
     match c {
-        V2Curve::StableRated { amp, factors, bpt, v2 } => {
-            let (f_in, f_out) = (*factors.get(i)?, *factors.get(j)?);
-            let (b, ii, jj) = rated_balances(d, factors, *bpt, i, j)?;
-            let up = mul_down(a, f_out)?;
-            let raw = balancer_stable::in_given_out(*amp, &b, ii, jj, up, *v2)?;
-            div_up(div_up(raw, f_in)?, complement(d.fee))
+        V2Curve::StableRated { amp, factors, bpt, v2, alt } => {
+            // Худший (больший) вход из двух наборов множителей (кеш курса может истечь к блоку исполнения).
+            let now = balancer_rated::in_(d, (*amp, *bpt, *v2), factors, i, j, a)?;
+            match alt {
+                Some(f) => Some(now.max(balancer_rated::in_(d, (*amp, *bpt, *v2), f, i, j, a)?)),
+                None => Some(now),
+            }
         }
         V2Curve::Managed { weights, lower, upper, supply, bpt } => {
             if usize::from(*bpt) == i || usize::from(*bpt) == j {
@@ -132,29 +134,6 @@ pub fn amount_in(d: &VaultPoolData, c: &V2Curve, i: usize, j: usize, a: U256) ->
             div_up(raw, *factors.get(i)?)
         }
     }
-}
-
-/// Балансы стейблсвапа × множители FixedPoint (mulDown) без BPT пула и индексы пары среди них. None — пара с BPT,
-/// длины не совпали, переполнение.
-fn rated_balances(
-    d: &VaultPoolData,
-    factors: &[U256],
-    bpt: Option<u8>,
-    i: usize,
-    j: usize,
-) -> Option<(Vec<U256>, usize, usize)> {
-    let skip = bpt.map(usize::from);
-    if skip == Some(i) || skip == Some(j) || d.balances.len() != factors.len() {
-        return None;
-    }
-    let mut out = Vec::with_capacity(d.balances.len());
-    for (k, (b, f)) in d.balances.iter().zip(factors).enumerate() {
-        if Some(k) != skip {
-            out.push(mul_down(*b, *f)?);
-        }
-    }
-    let shift = |x: usize| x - usize::from(skip.is_some_and(|s| x > s));
-    Some((out, shift(i), shift(j)))
 }
 
 /// CircuitBreakerLib.hasCircuitBreakerTripped (L39-L55): граница 0 — нет предела; цена BPT = Math.div(выпуск × вес,

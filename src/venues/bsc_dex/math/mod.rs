@@ -10,6 +10,7 @@ pub mod balancer_linear;
 pub mod balancer_log_exp;
 pub mod balancer_log_exp_table;
 pub mod balancer_math;
+pub mod balancer_rated;
 pub mod balancer_stable;
 pub mod balancer_v2_more;
 pub mod balancer_v3;

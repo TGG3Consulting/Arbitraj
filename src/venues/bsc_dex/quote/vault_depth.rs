@@ -46,7 +46,8 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     {
         v3.hook = V3Hook::None;
     }
-    let bal_in = *d.balances.get(i)?;
+    // Решение 473: у BPT линейного пула — виртуальный выпуск (в хранилище заранее выпущено 2^112 − 1).
+    let bal_in = base(d, i)?;
     let probe = bal_in / U256::from(PROBE_DIV);
     if probe.is_zero() {
         return Some((U256::ZERO, true));
@@ -126,3 +127,18 @@ fn weighted_cap(d: &VaultPoolData, i: usize, bal_in: U256) -> Option<U256> {
         }
     }
 }
+
+/// Решение 473: база пробы и потолка поиска — баланс входа в хранилище; у BPT линейного пула — виртуальный выпуск
+/// (выпуск − баланс BPT в хранилище, как считает пул: LinearPool.sol L747-L749), иначе проба от 2^112 − 1 даёт откат.
+/// Принимает: состояние, индекс входа. Возвращает: базу в единицах токена. None — индекс вне пула, выпуск < баланса.
+fn base(d: &VaultPoolData, i: usize) -> Option<U256> {
+    let b = *d.balances.get(i)?;
+    if let crate::core::types::VaultCurve::V2(c) = &d.curve
+        && let crate::core::types::pool_vault::V2Curve::Linear { bpt, supply, .. } = &**c
+        && usize::from(*bpt) == i
+    {
+        return supply.checked_sub(b);
+    }
+    Some(b)
+}
+

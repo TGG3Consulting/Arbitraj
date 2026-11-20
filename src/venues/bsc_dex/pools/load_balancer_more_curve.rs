@@ -69,7 +69,9 @@ pub fn decode(
     let mut c = Cur { got, at: 0 };
     let pt = c.take::<V::getPoolTokensCall>()?;
     if pt.tokens != m.tokens {
-        return Err("токены пула в хранилище изменились — перезапуск чтения".into());
+        // Токены изменились (managed: TokenAdded / TokenRemoved) — неизменяемое сбросить, перечитать с узла.
+        super::load_balancer_fixed::forget(super::load_balancer_fixed::pool_of(fx.id));
+        return Err(super::load_balancer_fixed::TOKENS_CHANGED.into());
     }
     let fee = c.take::<P::getSwapFeePercentageCall>()?;
     let mut paused = c.take::<P::getPausedStateCall>()?.paused;
@@ -96,7 +98,7 @@ pub fn decode(
     let bpt = m.bpt.map(|b| b as u8);
     let curve = match m.ty {
         PoolType::Composable | PoolType::MetaStable | PoolType::Phantom => {
-            let factors = parts::factors(m, &mut c)?;
+            let (factors, alt) = parts::factors(m, &mut c)?;
             let v2 = m.ty == PoolType::Composable;
             let bpt = if m.ty == PoolType::MetaStable { None } else { bpt };
             let cv = V2Curve::StableRated {
@@ -104,6 +106,7 @@ pub fn decode(
                 factors,
                 bpt,
                 v2,
+                alt,
             };
             VaultCurve::V2(Box::new(cv))
         }

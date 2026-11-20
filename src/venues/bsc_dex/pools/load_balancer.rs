@@ -141,7 +141,11 @@ pub fn decode(
         .iter()
         .map(|t| fx.scaling.get(t).copied())
         .collect();
-    let scaling = scaling.ok_or("токены пула в хранилище изменились — перезапуск чтения")?;
+    let Some(scaling) = scaling else {
+        // Решение 473: токены изменились — неизменяемое сбросить, следующее чтение возьмёт его с узла.
+        super::load_balancer_fixed::forget(super::load_balancer_fixed::pool_of(fx.id));
+        return Err(super::load_balancer_fixed::TOKENS_CHANGED.into());
+    };
     state(
         fx.id,
         &pt.tokens,

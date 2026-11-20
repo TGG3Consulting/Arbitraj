@@ -155,15 +155,34 @@ pub fn kind(x: &Fixed) -> Option<PoolType> {
     x.more.as_ref().map(|m| m.ty)
 }
 
-/// Что читается из настроек при каждом чтении пула (не из памяти): dex.balancer_math (решение 450) и, у вида
-/// dex.balancer_pool, адрес Multicall3 для времени блока (решение 473). Принимает: окружение, вид DEX, неизменяемое.
+/// Что читается из настроек при каждом чтении пула (не из памяти): dex.balancer_math (решение 450; у вида
+/// dex.balancer_pool не читается) или, у вида dex.balancer_pool, адрес Multicall3 для времени блока (решение 473). Принимает: окружение, вид DEX, неизменяемое.
 /// Ошибки (текст): dex.balancer_math не читается или не из списка.
 pub fn live(ctx: &Ctx, f: &Family, x: &mut Fixed) -> Result<(), String> {
-    x.v2 = math_v2(ctx, f)?;
-    if let Some(m) = x.more.as_mut() {
-        m.time = super::super::node::multicall::address(ctx);
+    // Решение 473: у ключа с dex.balancer_pool версия библиотек задана видом — dex.balancer_math не читается.
+    match x.more.as_mut() {
+        Some(m) => m.time = super::super::node::multicall::address(ctx),
+        None => x.v2 = math_v2(ctx, f)?,
     }
     Ok(())
+}
+
+/// Решение 473: текст отказа разбора, когда токены пула в хранилище не те, что в памяти (managed: TokenAdded /
+/// TokenRemoved).
+pub const TOKENS_CHANGED: &str = "токены пула в хранилище изменились — неизменяемое сброшено, перечитать";
+
+/// Решение 473: сбросить неизменяемое пула в памяти (во всех площадках DEX) — следующее чтение возьмёт его с узла
+/// (токены, decimals, BPT). Зовут: разбор пачки, у которого токены не совпали (pool — из id пула: старшие 20 байт,
+/// PoolRegistry.sol L115-L138), и событие TokenAdded / TokenRemoved пула managed (events_balancer.rs). Ошибок нет.
+pub fn forget(pool: Address) {
+    if let Some(m) = FIXED.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        m.retain(|(_, a), _| *a != pool);
+    }
+}
+
+/// Пул по id Balancer V2 — старшие 20 байт id (PoolRegistry.sol L115-L138). Ошибок нет.
+pub fn pool_of(id: B256) -> Address {
+    Address::from_slice(&id[..20])
 }
 
 /// Неизменяемое пула из памяти без обращения к узлу (пачка каждого блока, per_block_balancer.rs). None — пул ещё не

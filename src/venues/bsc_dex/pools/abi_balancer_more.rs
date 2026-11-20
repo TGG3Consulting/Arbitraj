@@ -117,3 +117,12 @@ pub fn topics(ty: PoolType) -> Vec<B256> {
         PoolType::LinearV1 | PoolType::Linear => vec![ILinear::TargetsSet::SIGNATURE_HASH],
     }
 }
+
+/// topic0 событий managed, после которых токены пула другие (TokenAdded / TokenRemoved — IManagedPool.sol L46-L47):
+/// неизменяемое пула сбрасывается (load_balancer_fixed.rs forget). Ошибок нет.
+pub fn token_set_changed() -> [B256; 2] {
+    [
+        ISmartWeighted::TokenAdded::SIGNATURE_HASH,
+        ISmartWeighted::TokenRemoved::SIGNATURE_HASH,
+    ]
+}

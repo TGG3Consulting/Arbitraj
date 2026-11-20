@@ -25,6 +25,12 @@
   getFee / getAverages (uint32 time, int24 tick, uint16 index, uint128 liquidity) и getTimepoints(time, [0, WINDOW])
   при time = время блока + 0, 1, 3 с; котировки ещё и с blockOverrides.time = время блока + 1 и + 3 (at_plus_1,
   at_plus_3) — комиссия, которую получит своп следующего блока.
+  Решение 463 (t237, повтор записи для порта комиссии следующего блока, T463-02): слово хранилища пула slot 3
+  (eth_getStorageAt; раскладка PoolState.sol исходника THENA, Sourcify 56: slot 0 totalFeeGrowth0Token, 1
+  totalFeeGrowth1Token, 2 globalState (160+24+16+16+16+16+8 бит), 3 = liquidity (младшие 128 бит) |
+  volumePerLiquidityInBlock (старшие 128); PoolImmutables — только immutable) — storage_slot3; точки оракула ещё
+  index + 2 и 0 (timepoints_around); начало окна для бота — getTimepoints(время блока + 1, [WINDOW + 1, WINDOW]) от имени
+  пула (oracle.starts: начало окна на время блока + 0 и + 1 — тот же вызов, что делает бот).
   В конце — zip папки, путь печатается последней строкой.
 Адреса (официальная таблица контрактов THENA — docs.thena.fi/thena/official-links «List of smart contracts»):
   AlgebraFactory 0x306F06C147f064A010530292A1EB6737c3e378e4, Quoter 0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA.
@@ -106,9 +112,11 @@ def pool_record(n, s, o, p, vq_addr, vq_code):
     second += [call(p, s["tickTable(int16)"] + word(w)) for w in list(raw_w) + list(cmp_w)]
     # Оракул динамической комиссии (решение 462): оператор пула, его feeConfig, точки оракула вокруг индекса.
     second.append(call(p, s["dataStorageOperator()"]))
-    tps = [(tp_index + k) % 65536 for k in (-2, -1, 1)]
+    tps = [(tp_index + k) % 65536 for k in (-2, -1, 1, 2)] + [0]
     second += [call(p, s["timepoints(uint256)"] + word(i)) for i in tps]
+    second.append(("eth_getStorageAt", [p, "0x3", tag]))  # liquidity | volumePerLiquidityInBlock (решение 463)
     got = n.batch(second, o.batch)
+    rec["storage_slot3"] = got[-1]
     k = 4 + len(raw_w) + len(cmp_w)
     op_j = got[k]
     rec["dataStorageOperator"] = op_j
@@ -126,10 +134,15 @@ def pool_record(n, s, o, p, vq_addr, vq_code):
             # getTimepoints(time, uint32[] secondsAgos = [0, WINDOW], tick, index, liquidity): массив — хвост ABI.
             oc.append(frm(s["getTimepoints(uint32,uint32[],int24,uint16,uint128)"] + word(t) + word(5 * 32)
                           + word(tick) + word(tp_index) + word(liq) + word(2) + word(0) + word(WINDOW)))
+        # Начало окна на время блока + 0 и + 1 (решение 463): тот же вызов, что делает бот (pools/fusion_fee.rs).
+        t1 = head_ts + 1
+        oc.append(frm(s["getTimepoints(uint32,uint32[],int24,uint16,uint128)"] + word(t1) + word(5 * 32)
+                      + word(tick) + word(tp_index) + word(liq) + word(2) + word(WINDOW + 1) + word(WINDOW)))
         og = n.batch(oc, o.batch)
         rec["oracle"] = {"operator": op, "feeConfig": og[0], "by_time": {
             str(head_ts + d): {"getFee": og[1 + 3 * i], "getAverages": og[2 + 3 * i], "getTimepoints": og[3 + 3 * i]}
-            for i, d in enumerate(AHEAD)}}
+            for i, d in enumerate(AHEAD)}, "starts": {"time": t1, "seconds_agos": [WINDOW + 1, WINDOW],
+                                                      "getTimepoints": og[-1]}}
     rec["timepoints"], rec["poolByPair"] = n.must(got[0], "timepoints"), got[1]
     bal = {t0: int(n.must(got[2], "balanceOf")["result"], 16), t1: int(n.must(got[3], "balanceOf")["result"], 16)}
     rec["balances"] = {t: hex(v) for t, v in bal.items()}

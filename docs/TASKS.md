@@ -316,6 +316,13 @@
       tools/bsc_record/thena_fusion.py --rpc http://127.0.0.1:8545` (Windows — `py tools\bsc_record\thena_fusion.py
       --rpc http://127.0.0.1:8545`) → zip прислать. Тесты в этой ветке (bsc_dex_algebra_family.rs id
       `thena-fusion-bsc` — id области настроек в тесте, не GeckoTerminal) не менялись.
+    - T237-02 (t237, 20.11) **Ещё один короткий повтор записи THENA Fusion — для комиссии следующего блока (решение 463
+      ветки BSC, T463-02).** Факт второй записи (60 пулов): формула getFee (AdaptiveFee от getAverages) и конец окна
+      оракула (DataStorage) сошлись со своим портом; Quoter на время блока + 0/1/3 с у 27 из 60 пулов дал комиссию выше
+      getFee оператора — разницу даёт volumePerLiquidityInBlock пула (internal, геттера нет), которого в записи нет.
+      Скрипт дополнен: storage_slot3 (eth_getStorageAt slot 3 — liquidity | volumePerLiquidityInBlock по раскладке
+      PoolState.sol THENA), timepoints index + 2 и 0, oracle.starts (getTimepoints на время блока + 1 с [WINDOW + 1,
+      WINDOW] — вызов бота). Команда та же: `python3 tools/bsc_record/thena_fusion.py --rpc http://127.0.0.1:8545` → zip.
     - T461-06 **ВАЖНО, вопрос Тиграну + запись.** Факт Sourcify (сеть 56, полное совпадение runtime и creation,
       проверено 20.11 WebFetch): официальный AlgebraPool Deployer THENA 0xc89F69Baa3ff17a842AB2DE89E5Fc8a8e2cc7358
       (таблица контрактов THENA — docs.thena.fi/thena/official-links, «List of smart contracts»; там же AlgebraFactory

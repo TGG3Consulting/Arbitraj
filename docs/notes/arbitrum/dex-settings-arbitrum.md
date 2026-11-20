@@ -94,6 +94,7 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-083 | `aero-slipstream-arbitrum@arbitrum` | slipstream_aero | **решение 470: код есть, запись aero.py** (было: нужен код) — развёртывание Arbitrum найдено (Dromos-Labs/metadex-slipstream-public, «Slipstream V3»), комиссия — от крючка обмена, вид slipstream не подходит (T448-09, решение 451, §4.4) |
 | T433-087 | `saddle-finance@arbitrum` (id — предложение) | saddle_stableswap | **готово** (решение 451: математика = Nerve; swapStorage 7 полей и FlashLoan — исправлено в виде; оговорка — запись tools/arbitrum_record/saddle.py, §4.5) |
 | T433-095 | `woofi-swap@arbitrum` (id — предложение) | woofi_v2 | **готово** (решение 451; решение 462: dex.oracle = wooracle() пула с цепи 0xf9b0…8081, не адрес документации; state() этого оракула — повтор записи woofi.py; реализация 0x7b5f…4281 своим узлом совпала, §4.6) |
+| T433-104 | `zyberswap-v3@arbitrum` (id — предложение; у GeckoTerminal нет) | thena_fusion | **не подтверждено** (решение 487: код пула и комиссии = THENA Fusion по Sourcify; адрес фабрики — не из официального источника, §4.7) |
 
 Решение 451 (20.11.2026): Kyber Elastic, Saddle, WOOFi → **готово** (с оговорками записи узла), Aero Slipstream →
 **нужен код** (новое семейство), PancakeSwap StableSwap — **не подтверждено**. Итог после 451: **готово 15**, **нужен код
@@ -652,6 +653,42 @@ dex.oracle (load_woo.rs, factory_ask.rs) — значит **dex.oracle = `0xf9b0
 записи woofi.py (state по базам у оракула с цепи и у оракула документации, наличие селектора state в коде). Не разберётся —
 пары не берутся (verify_woo.rs), торговли вслепую нет. Котируемая монета пула quoteToken() = USDC
 `0xaf88d065e77c8cc2239327c5edb3a432268e5831`; реализация в слоте EIP-1967 = 0x7b5f…4281 — совпала.
+
+### 4.7 Zyberswap V3 — `zyberswap-v3@arbitrum` (T433-104, решение 487)
+
+Id — предложение, решает Тигран («Добавить DEX», решение 128): у GeckoTerminal пулов Zyberswap V3 нет (`zyberswap` —
+пулы фабрики V2, src-ext dex49/1.md строка 104) — пулы только поиском по фабрике (у площадки arb_dex index.factory_scan =
+да; вид Algebra — Q::Algebra, poolByPair, pools/factory_calls.rs).
+
+**Сверка кода с THENA Fusion (Sourcify v2, 20.11.2026, файлы по имени, построчно).** THENA: фабрика 56
+`0x306F06C147f064A010530292A1EB6737c3e378e4` + деплоер 56 `0xc89F69Baa3ff17a842AB2DE89E5Fc8a8e2cc7358`; Zyberswap: фабрика
+42161 `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` + деплоер 42161 `0x24e85f5f94c6017d2d87b434394e87df4e4d56e3`. Все четыре —
+match, solc 0.7.6+commit.7338295f, optimizer runs 0. Наборы файлов одни (35 имён). **Совпадают дословно 28:**
+AlgebraPoolDeployer, TickTable, TickManager, PriceMovementMath, TokenDeltaMath, TickMath, LiquidityMath, FullMath,
+LowGasSafeMath, SafeCast, Sqrt, TransferHelper, PoolImmutables, **DataStorageOperator, DataStorage, AdaptiveFee**,
+IDataStorageOperator, IAlgebraPool, IAlgebraPoolActions, IAlgebraPoolDerivedState, IAlgebraPoolImmutables, IAlgebraFactory,
+IAlgebraPoolDeployer, IAlgebraVirtualPool, IAlgebraSwapCallback, IAlgebraMintCallback, IAlgebraFlashCallback,
+IERC20Minimal. **Отличаются 7, только комиссией сообщества и хешем кода:** Constants.sol MAX_COMMUNITY_FEE (THENA uint16
+1000, Zyberswap uint8 250); PoolState.sol / IAlgebraPoolState.sol — communityFeeToken0/1 uint16 против uint8 (globalState —
+те же 7 полей; uint8 в слове ABI разбирается и как uint16); IAlgebraPoolPermissionedActions.sol и AlgebraPool.sol
+setCommunityFee(uint16|uint8), IAlgebraPoolEvents.sol CommunityFee(uint16|uint8) (бот это событие не слушает);
+AlgebraPool.sol у THENA ещё строки 68-69 — initialize ставит комиссию сообщества = MAX (у Zyberswap — нет);
+AlgebraFactory.sol — только POOL_INIT_CODE_HASH (THENA 0xd613…2736, Zyberswap 0x6ec6…94a4). Цикл обмена
+(_calculateSwapAndLock), сжатый битмап (TickTable, Constants.TICK_SPACING = 60), запись точки оракула и комиссия
+следующего блока (DataStorageOperator.getFee → AdaptiveFee, DataStorage) — один код. Значит, вид `thena_fusion` (решение
+463: сжатый битмап, fusion_fee.rs / fee_algebra_v1.rs) подходит без изменения кода; исполнение — шаг ALGEBRA исполнителя
+(swap и algebraSwapCallback — IAlgebraPoolActions / IAlgebraSwapCallback совпадают).
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `thena_fusion` | сверка выше (решение 487) |
+| dex.factory | `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` | **не официальный**: адаптер DefiLlama (registries/uniswapV3.js, isAlgebra; src-ext dex49/1.md стр. 104) + Sourcify 42161 match AlgebraFactory; сайт и документация Zyberswap — deadUrl (DefiLlama) |
+| dex.quoter_virtual | да | официального квотера не найдено (dex49/1.md); сверка — обмен самого пула (VirtualQuoter) |
+| dex.pool_enabled | решает Тигран — после записи (T487-01) | — |
+
+У площадки arb_dex для вида нужны dex.fusion_fee_horizon_s и dex.fusion_oracle_chunk (решение 463; совет — docs/FIRST_RUN.md,
+«Zyberswap V3»). **Почему не подтверждено:** адрес фабрики — не из официального источника проекта (официальных страниц нет);
+состояние пулов, feeConfig() оператора и комиссия следующего блока на Arbitrum своим узлом не записаны — T487-01.
 
 ## 5. Что не делалось
 

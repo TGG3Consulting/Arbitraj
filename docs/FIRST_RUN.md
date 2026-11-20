@@ -230,6 +230,22 @@ docs/TASKS.md «Решение 444»).
 | dex.quoter_virtual | DEX `camelot-v3@arbitrum` | `да` | Сверка расчёта — обмен самого пула в eth_call (VirtualQuoter, решение 186): какой квотер развёрнут у Camelot (Quoter или QuoterV2 ветки), не сверено — dex.quoter не задавать | Решение 444, вопрос 1 (docs/TASKS.md) |
 | dex.pool_enabled | DEX `camelot-v3@arbitrum` | `да` — после записи и прохода тестов tests/arb_dex_algebra_dir.rs без метки ignore | Включить пулы DEX в справочник, граф и торговлю | Решение 444 |
 
+## DEX Zyberswap V3 на Arbitrum — вид thena_fusion (решение 487)
+
+Область «DEX» с ключом `zyberswap-v3@arbitrum` (id — предложение, вводит Тигран: у GeckoTerminal пулов Zyberswap V3 нет;
+площадка arb_dex, решение 435). Код пула, сжатый битмап и комиссия оракула — те же, что у THENA Fusion (Sourcify,
+docs/notes/arbitrum/dex-settings-arbitrum.md §4.7). Задавать после записи своего узла (docs/TASKS.md T487-01).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `zyberswap-v3@arbitrum` | `thena_fusion` | код AlgebraV1 с TICK_SPACING = 60 и DataStorageOperator / AdaptiveFee — дословно как у THENA Fusion | Sourcify 42161 фабрика 0x9c2a…8544 и деплоер 0x24e8…56e3 против Sourcify 56 THENA (решение 487) |
+| dex.factory | DEX `zyberswap-v3@arbitrum` | `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` — решение Тиграна (адрес не из официального источника) | проверка пула poolByPair, поиск по фабрике | адаптер DefiLlama + Sourcify 42161 match (dex-settings-arbitrum.md §4.7) |
+| dex.quoter_virtual | DEX `zyberswap-v3@arbitrum` | `да` | официального квотера нет — сверка обменом самого пула | решение 186 |
+| dex.pool_enabled | DEX `zyberswap-v3@arbitrum` | `да` — после записи и теста T487-01 | включить пулы DEX | решение 487 |
+| index.factory_scan | arb_dex | `да` | пулы Zyberswap V3 есть только у фабрики (не у GeckoTerminal) | решение 121 (C3) |
+| dex.fusion_fee_horizon_s | arb_dex | числа нет — как у bsc_dex: по записи своего узла Arbitrum (время блока чтения минус время последней точки оракула пулов) | без неё пулы thena_fusion не читаются (Обязательна для THENA Fusion) | решение 463 |
+| dex.fusion_oracle_chunk | arb_dex | числа нет — по ответу своего узла Arbitrum (откат части getTimepoints с out of gas — уменьшить) | то же | решение 463 |
+
 ## DEX Ekubo сети Arbitrum (решение 447)
 
 Вид пулов `ekubo` (Ekubo V3, id DEX у GeckoTerminal `ekubo-v3-arbitrum`; у площадки arb_dex ключ области «DEX» — с «@arbitrum»,

@@ -13,6 +13,24 @@
 
 ## Ждут решения Тиграна
 
+- **Решение 487 (20.11.2026, ветка t256/arb-merge-bsc от feat/arbitrum 2ca8dba2) — слияние BSC (e49efd67: 419–429, 449,
+  463, 464, 476) в Arbitrum и Zyberswap V3 видом thena_fusion; cargo не запускался (формат — вручную).** Задачи:
+  - T487-01 Zyberswap V3 (Arbitrum): записи своего узла нет. Код пула и комиссии = THENA Fusion (Sourcify, построчно —
+    docs/notes/arbitrum/dex-settings-arbitrum.md §4.7), но фабрика `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` — из
+    адаптера DefiLlama, официального источника нет (сайт и docs — deadUrl). Нужна запись (скрипта для Arbitrum нет:
+    tools/bsc_record/thena_fusion.py — только сеть 56, GeckoTerminal bsc и Quoter THENA): poolByPair пар WETH/USDC.e и
+    WETH/USDC, globalState, сжатые слова tickTable и ticks(), timepoints, dataStorageOperator(), feeConfig(),
+    getTimepoints, котировки VirtualQuoter на нескольких суммах; тест — как tests/bsc_thena_fusion_record.rs на этой
+    записи. До записи dex.pool_enabled не ставить. Вопрос Тиграну: включать ли DEX с фабрикой не из официального
+    источника.
+  - T487-02 Комиссия следующего блока (fee_algebra_v1.rs next_block_fee) берёт время следующего блока = время блока
+    чтения или + 1 с (запись BSC t237: 2 блока в секунду). Для Arbitrum это не проверено: какие интервалы времени между
+    соседними блоками своего узла Arbitrum — по записи T487-01 (времена подряд идущих голов); если бывает больше 1 с,
+    комиссия до следующей головы может отличаться (fusion_head.rs пересчитывает её на каждой голове).
+  - T487-03 Время в пути по статистике пары площадок (решение 464, core/transit_source.rs) — сумма пары (откуда → куда)
+    по всем монетам без сети: при двух сетях переводы BSC и Arbitrum одной пары площадок смешиваются (история монеты —
+    по Asset с сетью, решение 416, пара — нет). Вопрос Тиграну: разделять ли статистику пары по сети.
+
 - **Слияние t247 (20.11.2026, ветка t247/arb-merge-3): исполнитель v5 — одна сборка на три шага.** В исходнике
   contracts/ArbExecutor.sol v5 = v4 + AERO_BASIC = 26 (решение 470, T470-09), BALANCER_V3_BUF = 27 (решение 474) и
   CURVE_ETH = 28 (решение 472, T472-08); Version::V5 одна, причина «нужен v5» — одно имя `exec_callback::need_v5()`

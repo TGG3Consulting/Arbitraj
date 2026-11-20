@@ -171,7 +171,10 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "dodo_dvm" | "dodo_dpp" | "dodo_dsp" => ExecKind::Dodo,
         // Решение 275: Curve StableSwap-NG — exchange(int128, int128, dx, min_dy) с receiver = msg.sender по умолчанию
         // (curvefi/stableswap-ng 3332cd4, CurveStableSwapNG.vy L504-L531): тот же шаг CURVE.
-        "curve_stableswap" | "curve_stableswap_ng" => ExecKind::Curve,
+        // Решение 472: Curve StableSwap 2021 (2pool Arbitrum, Plain*Basic фабрики) — exchange(int128, int128, dx, min_dy):
+        // у Plain*Basic `_receiver = msg.sender` по умолчанию (curve-factory f389123 Plain2Basic.vy L530-L536), у 2pool —
+        // перегрузка из 4 аргументов в официальном ABI curvefi/curve-js ab3f1c2 src/constants/abis/2pool/swap.json.
+        "curve_stableswap" | "curve_stableswap_ng" | "curve_stableswap_plain" => ExecKind::Curve,
         "maverick_v2" => ExecKind::Maverick,
         "pancake_stableswap" | "lista_stableswap" => ExecKind::StableU256,
         // Решение 442: Curve Twocrypto-NG / Tricrypto-NG — exchange(uint256 i, uint256 j, dx, min_dy) с receiver =

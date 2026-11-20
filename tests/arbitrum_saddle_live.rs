@@ -97,6 +97,7 @@ fn math_matches_calculate_swap() {
             amp_precision: st.amp_precision,
             max_rounds: st.max_rounds,
             strict: st.strict,
+            pair_d: st.pair_d,
         };
         for q in p["quotes"].as_array().unwrap() {
             let Ok(raw) = answer(q) else { continue };

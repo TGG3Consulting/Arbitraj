@@ -19,6 +19,10 @@
 //! rate·balance/1e18 при rate = multiplier·1e18), `getY` L531-L582 (откат «Approximation did not converge»),
 //! `_calculateSwap` L611-L630 ((dy − fee)/multiplier — равно (dy − fee)·1e18/rate).
 //!
+//! Решение 472: Template::pair_d — D_P пула из двух монет одной строкой (Curve 2021: 2pool Arbitrum Vyper 0.2.12 и
+//! Plain2Basic фабрики curvefi/curve-factory f389123 Vyper 0.2.15 — get_D L298, get_y L452-L504 (как здесь, A_PRECISION
+//! = 100, 255 раундов, `raise` при несходимости), exchange L530-L595 (выход как здесь)).
+//!
 //! Источник (официальный, решение 23): ellipsis-finance/ellipsis (HEAD 6bdf7788020695b72034f5c9f1fda11c5e3cefb7),
 //! contracts/StableSwap.vy (@version 0.2.11, «(c) Curve.Fi, 2020»): `_xp_mem` L189-L195, `get_D` L198-L223, `get_y`
 //! L359-L402, `get_dy` L405-L416, `exchange` L434-L470. Vyper 0.2 — арифметика checked: переполнение, недобор и
@@ -37,6 +41,9 @@ pub struct Template {
     pub max_rounds: u16,
     /// true — несошедшаяся итерация откатывает обмен (Saddle); false — берётся последнее значение.
     pub strict: bool,
+    /// Решение 472: у пула из двух монет D_P считается одной строкой `D·D/x0·D/x1/N²` (Curve 2021: 2pool Arbitrum,
+    /// Plain2Basic фабрики) — округление иное, чем у цикла `D_P·D/(x·N)`. false — цикл (прочие шаблоны).
+    pub pair_d: bool,
 }
 
 /// Шаблон Curve 2020 (Ellipsis): сырой A, 255 раундов, без отката (StableSwap.vy L206, L382). Ошибок нет.
@@ -45,6 +52,7 @@ pub fn curve2020() -> Template {
         amp_precision: U256::from(1u8),
         max_rounds: 255,
         strict: false,
+        pair_d: false,
     }
 }
 
@@ -96,14 +104,19 @@ pub fn get_d_t(xp: &[U256], amp: U256, t: &Template) -> Option<U256> {
     let mut d = s;
     let ann = amp.checked_mul(n)?;
     for _ in 0..t.max_rounds {
-        let mut d_p = d;
-        for x in xp {
-            let den = x.checked_mul(n)?;
-            if den.is_zero() {
-                return None;
+        let d_p = if t.pair_d && xp.len() == 2 {
+            d_p_pair(xp[0], xp[1], d)?
+        } else {
+            let mut d_p = d;
+            for x in xp {
+                let den = x.checked_mul(n)?;
+                if den.is_zero() {
+                    return None;
+                }
+                d_p = d_p.checked_mul(d)? / den;
             }
-            d_p = d_p.checked_mul(d)? / den;
-        }
+            d_p
+        };
         let prev = d;
         // (Ann·S/AP + D_P·N)·D / ((Ann − AP)·D/AP + (N+1)·D_P); при AP = 1 — формула Curve 2020 дословно.
         let num = (ann.checked_mul(s)? / ap)
@@ -121,6 +134,16 @@ pub fn get_d_t(xp: &[U256], amp: U256, t: &Template) -> Option<U256> {
         }
     }
     if t.strict { None } else { Some(d) }
+}
+
+/// Решение 472: `D_P = D * D / _xp[0] * D / _xp[1] / (N_COINS)**2` (curvefi/curve-factory f389123
+/// Plain2Basic.vy L298; 2pool Arbitrum 0x7f90…F353 — та же строка, Sourcify 42161). Vyper checked: деление на 0 —
+/// откат. Принимает: x0, x1, D. None — нулевой баланс или переполнение.
+fn d_p_pair(x0: U256, x1: U256, d: U256) -> Option<U256> {
+    if x0.is_zero() || x1.is_zero() {
+        return None;
+    }
+    Some((d.checked_mul(d)? / x0).checked_mul(d)? / x1 / U256::from(4u8))
 }
 
 /// `get_y` шаблона Curve 2020 (см. get_y_t). Ошибок нет: None — как у get_y_t.

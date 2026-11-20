@@ -162,6 +162,7 @@ fn entry(kind: &str) -> Entry {
         ng: None,
         native: None,
         input_fee: false,
+        pair_d: false,
     };
     Entry {
         family: f,

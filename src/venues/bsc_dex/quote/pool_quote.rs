@@ -349,6 +349,7 @@ pub fn swap(
                 amp_precision: d.amp_precision,
                 max_rounds: d.max_rounds,
                 strict: d.strict,
+                pair_d: d.pair_d,
             };
             let (i, j) = (i as usize, j as usize);
             // Шаблон StableSwap-NG (Infinity Stable, решение «122 (Infinity Stable)»): динамическая комиссия и D по

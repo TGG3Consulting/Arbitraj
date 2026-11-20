@@ -192,6 +192,7 @@ fn depth_template_uses_pair_invariant() {
             amp_precision: d.amp_precision,
             max_rounds: d.max_rounds,
             strict: d.strict,
+            pair_d: d.pair_d,
         };
         let fee: u64 = p["swapFee"].as_str().unwrap().parse().unwrap();
         for g in p["getAmountOut"].as_array().unwrap() {

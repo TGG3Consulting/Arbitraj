@@ -181,6 +181,7 @@ pub fn build(
         ng: None,
         native: None,
         input_fee: false,
+        pair_d: false,
     })))
 }
 

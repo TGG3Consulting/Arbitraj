@@ -199,6 +199,10 @@ log.signal_hold (core/book_marks_on.rs).
 | dex.kind | DEX crypto v1 / tricrypto 2021 | `curve_crypto_v1` / `curve_tricrypto_v1` | Вид пулов | Решение 453 |
 | dex.factory | DEX crypto v1 | `0xE5De15A9C9bBedb4F5EC13B131E61245f2983A69` | Реестр фабрики (get_coins, find_pool_for_coins), событие CryptoPoolDeployed | others.log «Factory» |
 | dex.curve_crypto_v1_templates | DEX crypto v1 | `["0x5bcA7dDF1bcccB2eE8e46c56bfc9d3CDC77262bC"]` | Шаблон пула, с исходником которого сверена формула (пул — прокси EIP-1167 на него) | others.log «Pool template» |
+| dex.kind | DEX Curve 2021 (дочерний ключ curve_arbitrum) | `curve_stableswap_plain` | Вид: 2pool и plain-пулы старой фабрики | Решение 472 |
+| dex.stable_pools | DEX Curve 2021 | `["0x7f90122BF0700F9E7e1F688fe926940E8839F353"]` | 2pool без фабрики — подтверждает список | curve-js ab3f1c2 pools/arbitrum.ts L15-L20 |
+| dex.factory | DEX Curve 2021 | `0xb17b674D9c5CB2e441F8e196a2f048A81355d031` | Реестр get_implementation_address фабрики Curve Sidechain/L2 | curve-js network_constants.ts L157 |
+| dex.curve_plain_implementations | DEX Curve 2021 | `["0x54e8A25d0Ac0E4945b697C80b8372445FEA17A62", "0xe381C25de995d62b453aF8B931aAc84fcCaa7A62", "0x8d53E5De033078367Ad91527c53abfd1Eb6bfa86"]` | Plain2/3/4Basic — формула сверена (Sourcify 42161 match) | curve-js factory/stable.ts L168-L180 |
 | dex.stable_pools | DEX tricrypto 2021 | `["0x960ea3e3C7FB317332d990873d354E18d7645590"]` | Пул без фабрики — подтверждает список | log.txt «Swap» |
 | dex.pair_lookup_max | DEX crypto v1 | решение Тиграна; *метод:* сколько пулов одной пары держит фабрика (market_counts) — за последним нулевой адрес | find_pool_for_coins и событие создания | Factory.vy L117, L335-L345 |
 | dex.pool_enabled | DEX crypto v1 / tricrypto 2021 | `да` после записи (tools/arbitrum_record/curve_crypto.py) и снятия #[ignore] у tests/arb_curve_crypto_live.rs | Сверка порта с get_dy пула до торговли | Решение 453 |

@@ -21,13 +21,14 @@ use super::bins::BinMap;
 use super::discover::Found;
 use super::families::Family;
 use super::families::Proto;
+use super::family_variant::Variant;
 use super::fee_fresh;
 use super::hooks::DYNAMIC_FEE_FLAG;
 use super::load_algebra_dir;
 use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_ng, load_dmm, load_dodo, load_ekubo,
+    load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_ng, load_curve_plain, load_dmm, load_dodo, load_ekubo,
     load_elastic, load_fluid, load_inf_stable, load_izi, load_lb, load_lb20, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
@@ -89,8 +90,14 @@ pub async fn state(
     // Решение 295: и пара многомонетного пула (PoolRef::Multi) — тот же контракт, состояние этой пары.
     if f.proto == Proto::CurveStable {
         if let Some(a) = reference.own_contract() {
+            // Решение 472: вариант Curve 2021 (curve_stableswap_plain) — A_precise() и свой шаблон (load_curve_plain.rs).
+            let state = if f.variant == Variant::CurvePlain {
+                load_curve_plain::load(ctx, tokens, a, pair, &tag).await?
+            } else {
+                load_curve::load(ctx, tokens, a, pair, &tag).await?
+            };
             return Ok(Loaded {
-                state: load_curve::load(ctx, tokens, a, pair, &tag).await?,
+                state,
                 ticks: None,
                 bins: None,
                 fee_pips: None,

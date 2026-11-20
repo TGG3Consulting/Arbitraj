@@ -25,12 +25,21 @@ pub enum Variant {
     /// цикл Pool.swap, _getInitialSwapData, _updateLiquidityAndCrossTick, раскладка PoolStorage) — то же. Отличия вне
     /// расчёта сумм: тик после неполного шага (у v1 нет startSqrtP), MIN_LIQUIDITY, длина массива TicksFeesReader.
     ElasticV1,
+    /// Curve StableSwap 2021 (dex.kind = curve_stableswap_plain, решение 472): протокол Proto::CurveStable (геттеры
+    /// coins/balances/fee, get_dy и exchange с int128 — те же), но A — `A_precise()` (A·A_PRECISION, A_PRECISION = 100),
+    /// несходимость D/y — откат (`raise`), у пула из двух монет D_P — одной строкой `D·D/x0·D/x1/4`. Исходники: 2pool
+    /// Arbitrum 0x7f90122BF0700F9E7e1F688fe926940E8839F353 (Vyper 0.2.12, Sourcify 42161 match) и Plain2Basic /
+    /// Plain3Basic / Plain4Basic фабрики Curve Sidechain/L2 (curvefi/curve-factory f389123, Vyper 0.2.15; Sourcify
+    /// 42161 match реализаций 0x54e8…7A62, 0xe381…7A62, 0x8d53…fa86). Чтение — load_curve_plain.rs, проверка —
+    /// verify_curve_plain.rs, события — events_curve.rs (topics_of), состояние — каждым блоком (per_block.rs).
+    CurvePlain,
 }
 
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
 pub fn of(kind: &str) -> Variant {
     match kind {
         "kyber_elastic_v1" => Variant::ElasticV1,
+        "curve_stableswap_plain" => Variant::CurvePlain,
         _ => Variant::Base,
     }
 }
@@ -45,5 +54,7 @@ mod tests {
         assert_eq!(of("kyber_elastic"), Variant::Base);
         assert_eq!(of("saddle_stableswap"), Variant::Base);
         assert_eq!(of("kyber_elastic_v1"), Variant::ElasticV1);
+        assert_eq!(of("curve_stableswap"), Variant::Base);
+        assert_eq!(of("curve_stableswap_plain"), Variant::CurvePlain);
     }
 }

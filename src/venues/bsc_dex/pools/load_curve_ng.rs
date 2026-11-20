@@ -155,5 +155,6 @@ pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<Po
         // Монеты plain-пула NG — только ERC-20 (нативной метки нет).
         native: None,
         input_fee: false,
+        pair_d: false,
     })))
 }

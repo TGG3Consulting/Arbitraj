@@ -239,6 +239,7 @@ pub fn finish(
         ng: None,
         native: stable_native::native_index(coins),
         input_fee: false,
+        pair_d: false,
     })))
 }
 

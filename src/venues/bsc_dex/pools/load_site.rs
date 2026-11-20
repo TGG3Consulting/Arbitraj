@@ -6,8 +6,8 @@
 //! не попадают: их чтение — прежнее (load.rs, load_batch.rs).
 //! Кто вызывает: pools/load_batch.rs (states; через него — reload_many.rs load_group: per_block.rs, listen_site.rs,
 //! приём и повтор пачки).
-//! От чего зависит: load.rs (Loaded), families.rs, load_curve.rs, load_saddle.rs, load_curve_ng.rs, load_stable_u.rs,
-//! load_balancer.rs, tokens.rs, node/call.rs (block_tag).
+//! От чего зависит: load.rs (Loaded), families.rs, load_curve.rs, load_curve_plain.rs (решение 472), load_saddle.rs,
+//! load_curve_ng.rs, load_stable_u.rs, load_balancer.rs, tokens.rs, node/call.rs (block_tag).
 //! Настройки: через загрузчики — dex.vault, dex.factory (Balancer), dex.native_wrapped (PancakeSwap StableSwap).
 
 use std::collections::HashMap;
@@ -21,11 +21,12 @@ use super::super::ctx::Ctx;
 use super::super::node::call::block_tag;
 use super::super::tokens::Tokens;
 use super::families::{Family, Proto};
+use super::family_variant::Variant;
 use super::load::Loaded;
 use super::load_batch::Want;
 use super::{
     load_balancer, load_balancer_v3, load_crypto, load_crypto_v1, load_curve, load_curve_ng,
-    load_saddle, load_stable_u,
+    load_curve_plain, load_saddle, load_stable_u,
 };
 
 /// Что делает: состояния всех пар одного контракта на блоке одним чтением. Принимает: окружение, токены (decimals),
@@ -41,6 +42,13 @@ pub async fn states(
 ) -> Vec<GatewayResult<Loaded>> {
     let tag = block_tag(block);
     let built: Vec<GatewayResult<PoolState>> = match f.proto {
+        // Решение 472: вариант Curve 2021 — A_precise() и свой шаблон (load_curve_plain.rs).
+        Proto::CurveStable if f.variant == Variant::CurvePlain => {
+            match load_curve_plain::read(ctx, tokens, contract, &tag).await {
+                Ok(raw) => pairs.iter().map(|p| load_curve_plain::state(ctx, &raw, *p)).collect(),
+                Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
+            }
+        }
         Proto::CurveStable => match load_curve::read(ctx, tokens, contract, &tag).await {
             Ok(raw) => pairs.iter().map(|p| load_curve::state(ctx, &raw, *p)).collect(),
             Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),

@@ -92,6 +92,7 @@ def steps(rpc, wallet, ekubo_from):
             "--v1-factory", "0xE5De15A9C9bBedb4F5EC13B131E61245f2983A69",
             "--v1-template", "0x5bcA7dDF1bcccB2eE8e46c56bfc9d3CDC77262bC",
             "--tricrypto-v1-pool", "0x960ea3e3C7FB317332d990873d354E18d7645590"]),
+        ("curve_plain", "curve_plain.py", ["--node", rpc]),
         ("camelot_v2", "camelot_v2.py", [rpc, "--factory", "0x6EcCab422D763aC031210895C81787E87B43A652"]),
         ("algebra_dir_fee", "algebra_dir_fee.py", algebra),
         ("lb_v20", "lb_v20.py", [rpc, "--factory", "0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982",

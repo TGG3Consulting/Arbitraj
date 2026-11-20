@@ -33,6 +33,7 @@ fn aprec(max_rounds: u16, strict: bool) -> Template {
         amp_precision: U256::from(100u8),
         max_rounds,
         strict,
+        pair_d: false,
     }
 }
 
@@ -144,6 +145,7 @@ async fn stable_steps_take_indices_from_state() {
             i1: 1,
             native: None,
             input_fee: false,
+            pair_d: false,
         };
         Entry {
             family: f,

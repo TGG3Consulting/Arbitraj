@@ -353,6 +353,11 @@ pub struct StableData {
     /// комиссией с выхода (Curve 2020, NG). Математика — в адаптере. `#[serde(default)]` — старые записи эпизодов.
     #[serde(default)]
     pub input_fee: bool,
+    /// Решение 472: D_P пула из двух монет одной строкой `D·D/x0·D/x1/4` (Curve 2021 — 2pool Arbitrum, Plain2Basic
+    /// фабрики; адаптер: math/stableswap_v1.rs Template::pair_d). false — прочие шаблоны. `#[serde(default)]` — старые
+    /// записи эпизодов.
+    #[serde(default)]
+    pub pair_d: bool,
 }
 
 /// Данные шаблона StableSwap-NG (решение «122 (Infinity Stable)») — с контракта пула на блоке. Курсы монет с внешним

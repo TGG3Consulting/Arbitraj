@@ -48,7 +48,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::AlgebraIntegral => events_algebra_integral::topics(),
         Proto::AlgebraDirFee => events_algebra_dir::topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::topics(),
-        Proto::CurveStable => events_curve::topics(),
+        Proto::CurveStable => events_curve::topics_of(f.variant),
         Proto::CurveNg => events_curve_ng::topics(),
         // Crypto-пулы Curve (решения 442, 453: NG и v1): любое событие пула — перечитать (events_crypto.rs).
         Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 | Proto::CurveTricryptoV1 => events_crypto::topics(),

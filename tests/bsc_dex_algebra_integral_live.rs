@@ -17,7 +17,7 @@ mod algebra_integral_common;
 
 use alloy_primitives::U256;
 
-use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState};
+use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState, NextTick};
 
 use algebra_integral_common::{pool_state, probe, word};
 
@@ -60,6 +60,7 @@ fn local_math_equals_virtual_quoter() {
             liquidity: liq,
             fee,
             ticks: &m,
+            next: NextTick::Linked,
         };
         for q in p["quoter"].as_array().unwrap() {
             let raw = q["raw"].as_str().unwrap();
@@ -98,6 +99,7 @@ fn band_depth_algebra_on_live_pools() {
             liquidity: liq,
             fee: 0,
             ticks: &m,
+            next: NextTick::Linked,
         };
         for zfo in [true, false] {
             let (a_in, a_out, _) =

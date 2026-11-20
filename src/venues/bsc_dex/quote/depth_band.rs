@@ -259,6 +259,7 @@ fn side(
                 liquidity: *liquidity,
                 fee: NO_FEE,
                 ticks,
+                next: super::pool_quote::algebra_next(e.family.proto),
             };
             super::depth_band_algebra::algebra(&s, zfo, b, buy).map(|(i, o, f)| (pick(i, o), f))
         }

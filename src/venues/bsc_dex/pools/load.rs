@@ -279,7 +279,7 @@ pub async fn state(
         ));
     }
     // Algebra (THENA Fusion, решения 80, 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_algebra.rs):
-    // globalState + liquidity + сырой битмап tickTable. tickSpacing пулу не нужен (битмап индексирует сырой тик).
+    // globalState + liquidity + tickSpacing + сжатый битмап tickTable (решение 462: код AlgebraV1, строка — 256·spacing).
     if f.proto == Proto::Algebra || f.proto == Proto::AlgebraIntegral {
         if let PoolRef::Contract(a) = reference {
             // Решение 188: у Integral тики — связным списком (load_algebra_integral.rs), состояние то же.

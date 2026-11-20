@@ -531,7 +531,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => list.push("dex.factory"),
         // Algebra (THENA Fusion, решения 80, 81, фаза B): фабрика (проверка пула poolByPair, решение 59; события
         // создания Pool) и квотер (сверка QuoterV2.quoteExactInputSingle без параметра fee, решение 73). Своего
-        // читателя тиков нет — сырой битмап tickTable читается прямо у пула (load_algebra.rs). Роутера нет
+        // читателя тиков нет — сжатый битмап tickTable (решение 462) читается прямо у пула (load_algebra.rs). Роутера нет
         // (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
         Proto::Algebra => list.extend(["dex.factory", "dex.quoter"]),
         // Algebra Integral (решение 188): фабрика (poolByPair, событие Pool — как V1.9); квотер — виртуальный

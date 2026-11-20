@@ -17,7 +17,7 @@ use crate::core::types::{PoolKind, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::math::swap_algebra::{self, AlgebraState};
+use super::super::math::swap_algebra::{self, AlgebraState, NextTick};
 use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
@@ -156,7 +156,8 @@ pub fn swap(
                 .map_err(why)
         }
         // Algebra (THENA Fusion, решения 80, 81): одна ликвидность, динамическая комиссия (globalState.fee, постоянна
-        // на весь своп), СЫРОЙ битмап тиков — своя математика (math/swap_algebra, фаза A). Вид ядра Cl.
+        // на весь своп) — своя математика (math/swap_algebra, фаза A). Вид ядра Cl. Решение 462: цель шага по коду пула
+        // (algebra_next: THENA Fusion — строка сжатого битмапа, Integral — связный список).
         (
             PoolState::Algebra {
                 sqrt_price_x96,
@@ -173,6 +174,7 @@ pub fn swap(
                 liquidity: *liquidity,
                 fee: *fee,
                 ticks,
+                next: algebra_next(e.family.proto),
             };
             swap_algebra::swap(&s, zero_for_one, exact_in, amount)
                 .map(|r| Swapped {
@@ -484,6 +486,17 @@ pub fn swap(
             })
         }
         _ => Err(none()),
+    }
+}
+
+/// Решение 462: цель шага цикла обмена Algebra по коду пула (math/swap_algebra.rs, шапка, пункт 5): Algebra Integral
+/// (связный список тиков) — Linked; THENA Fusion (Proto::Algebra, код AlgebraV1, сжатый битмап) — Row.
+/// Принимает: протокол вида. Возвращает: режим. Ошибок нет.
+pub fn algebra_next(proto: Proto) -> NextTick {
+    if proto == Proto::AlgebraIntegral {
+        NextTick::Linked
+    } else {
+        NextTick::Row
     }
 }
 

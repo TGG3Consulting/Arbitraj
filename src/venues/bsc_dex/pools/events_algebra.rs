@@ -13,8 +13,9 @@
 //! Swap(sender, recipient, amount0, amount1, price=sqrtPrice после обмена, liquidity после обмена, tick после обмена);
 //! Mint(sender, owner, bottomTick, topTick, liquidityAmount, amount0, amount1);
 //! Burn(owner, bottomTick, topTick, liquidityAmount, amount0, amount1). Комиссия пула динамическая: её текущее значение
-//! в Swap не приходит — между перечитываниями держится прежним (globalState.fee из load_algebra.rs); для сверки с
-//! квотером фаза B делает отдельный вызов (решение 73), точечный пересчёт комиссии по событию — кандидат на 81c.
+//! в Swap не приходит; решение 462: её новое значение несёт событие Fee(uint16) (AlgebraPool.sol _getNewFee — первый
+//! своп в блоке, лог до Swap) — применяем; Initialize — перечитать пул. Collect / Flash / CommunityFee / Incentive /
+//! LiquidityCooldown расчёт обмена не меняют (исходник THENA Fusion, Sourcify 56, abi_algebra.rs).
 
 use alloy::rpc::types::Log;
 use alloy::sol_types::SolEvent;
@@ -32,6 +33,8 @@ pub fn topics() -> Vec<B256> {
         IAlgebraPool::Swap::SIGNATURE_HASH,
         IAlgebraPool::Mint::SIGNATURE_HASH,
         IAlgebraPool::Burn::SIGNATURE_HASH,
+        IAlgebraPool::Fee::SIGNATURE_HASH,
+        IAlgebraPool::Initialize::SIGNATURE_HASH,
     ]
 }
 
@@ -62,7 +65,30 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     if t0 == IAlgebraPool::Burn::SIGNATURE_HASH {
         return Applied::Refresh("Algebra Burn: перечитать ликвидность и карту тиков".into());
     }
+    // Решение 462: новая динамическая комиссия первого свопа блока (AlgebraPool.sol _getNewFee → emit Fee) — та, что
+    // записана в globalState.fee и действует до следующего пересчёта.
+    if t0 == IAlgebraPool::Fee::SIGNATURE_HASH {
+        return match IAlgebraPool::Fee::decode_log_data(d) {
+            Ok(f) => fee(e, u32::from(f.fee)),
+            Err(err) => bad("Fee", err),
+        };
+    }
+    // Initialize — начальная цена пула: перечитываем целиком (решение 462).
+    if t0 == IAlgebraPool::Initialize::SIGNATURE_HASH {
+        return Applied::Refresh("Algebra Initialize: перечитать пул".into());
+    }
     Applied::Ignored
+}
+
+/// Новая комиссия пула (событие Fee, решение 462). Ошибок нет.
+fn fee(e: &mut Entry, f: u32) -> Applied {
+    match &mut e.pool.state {
+        PoolState::Algebra { fee, .. } => {
+            *fee = f;
+            Applied::Updated
+        }
+        _ => Applied::Refresh("состояние пула не Algebra".into()),
+    }
 }
 
 /// Состояние после обмена: цена, ликвидность и тик (комиссию Swap не несёт — держится прежней, см. шапку). Ошибок нет.

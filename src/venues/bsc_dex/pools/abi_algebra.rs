@@ -15,6 +15,11 @@
 //! - события (IAlgebraPoolEvents.sol): Swap(sender, recipient, amount0, amount1, price, liquidity, tick),
 //!   Mint(sender, owner, bottomTick, topTick, liquidityAmount, amount0, amount1),
 //!   Burn(owner, bottomTick, topTick, liquidityAmount, amount0, amount1) — Swap несёт цену/ликвидность/тик после обмена;
+//! - решение 462 (исходник пула THENA Fusion, Sourcify 56, пул 0x1b9a…ef7d — код AlgebraV1): communityFeeToken0/1 в
+//!   globalState — uint16 (Constants.MAX_COMMUNITY_FEE = 1000; событие CommunityFee(uint16, uint16)); uint16 читает и
+//!   значения ≤ 255. События, меняющие расчёт обмена: Fee(uint16 fee) — новая динамическая комиссия (AlgebraPool.sol
+//!   _getNewFee, первый своп в блоке, до Swap), Initialize(uint160 price, int24 tick) — начальная цена пула;
+//!   Collect / Flash / CommunityFee / Incentive / LiquidityCooldown цену, ликвидность, тики и комиссию обмена не меняют;
 //! - фабрика (IAlgebraFactory.sol): poolByPair(tokenA, tokenB) → address (ОДИН пул на пару — комиссия динамическая,
 //!   уровней комиссии нет) и событие Pool(token0, token1, pool) создания нового пула.
 
@@ -26,7 +31,9 @@ alloy::sol! {
         event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 price, uint128 liquidity, int24 tick);
         event Mint(address sender, address indexed owner, int24 indexed bottomTick, int24 indexed topTick, uint128 liquidityAmount, uint256 amount0, uint256 amount1);
         event Burn(address indexed owner, int24 indexed bottomTick, int24 indexed topTick, uint128 liquidityAmount, uint256 amount0, uint256 amount1);
-        function globalState() external view returns (uint160 price, int24 tick, uint16 fee, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked);
+        event Fee(uint16 fee);
+        event Initialize(uint160 price, int24 tick);
+        function globalState() external view returns (uint160 price, int24 tick, uint16 fee, uint16 timepointIndex, uint16 communityFeeToken0, uint16 communityFeeToken1, bool unlocked);
         function liquidity() external view returns (uint128);
         function tickSpacing() external view returns (int24);
         function ticks(int24 tick) external view returns (uint128 liquidityTotal, int128 liquidityDelta, uint256 outerFeeGrowth0Token, uint256 outerFeeGrowth1Token, int56 outerTickCumulative, uint160 outerSecondsPerLiquidity, uint32 outerSecondsSpent, bool initialized);
@@ -60,6 +67,11 @@ mod tests {
         assert_eq!(
             IAlgebraPool::Burn::SIGNATURE_HASH,
             topic("Burn(address,int24,int24,uint128,uint256,uint256)")
+        );
+        assert_eq!(IAlgebraPool::Fee::SIGNATURE_HASH, topic("Fee(uint16)"));
+        assert_eq!(
+            IAlgebraPool::Initialize::SIGNATURE_HASH,
+            topic("Initialize(uint160,int24)")
         );
         let sel = |sig: &str| keccak256(sig.as_bytes())[..4].to_vec();
         assert_eq!(

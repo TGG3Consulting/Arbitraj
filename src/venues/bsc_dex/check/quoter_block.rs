@@ -22,7 +22,8 @@
 //! Факты своего узла BSC 12.11.2026 (tests/data/node_limits_2026-11-12): состояние на номер блока — только H … H−127;
 //! eth_getLogs — не больше 5000 блоков (больше не используется: eth_getLogs из сверки убран).
 //! Кто вызывает: check/quoter_verify.rs (at_head — лениво, один раз на пул), check/quoter_one.rs (memory_note).
-//! От чего зависит: node/rpc.rs, node/jsonrpc.rs, pools/load.rs (refresh), pools/registry.rs, tokens.rs.
+//! От чего зависит: node/rpc.rs, node/jsonrpc.rs, pools/load.rs (refresh), pools/fusion_head.rs (same_block — решение
+//! 463: комиссия THENA Fusion того же блока H), pools/registry.rs, tokens.rs.
 //! Настройки: dex.quoter_memory_lag_blocks [bsc_dex] (необязательна); через pools/load.rs — настройки чтения пула.
 //!
 //! eth_blockNumber, eth_call(transaction, block) — execution-apis
@@ -36,6 +37,7 @@ use crate::gateway::errors::ErrorCode;
 
 use super::super::ctx::Ctx;
 use super::super::node::{jsonrpc, rpc};
+use super::super::pools::fusion_head;
 use super::super::pools::listen::Pools;
 use super::super::pools::load;
 use super::super::pools::registry::Entry;
@@ -74,10 +76,14 @@ pub async fn at_head(p: &Pools, e: &Entry) -> Head {
         Err(err) => return no_block(format!("eth_blockNumber: {}", err.message)),
     };
     match load::refresh(&p.ctx, &p.tokens, &p.reg, e, block).await {
-        Ok(entry) => Head::Ready {
-            block,
-            entry: Box::new(entry),
-        },
+        Ok(mut entry) => {
+            // Решение 463: THENA Fusion — комиссия свопа в самом блоке H (квотер зовётся на H), не «следующего блока».
+            fusion_head::same_block(&mut entry, block);
+            Head::Ready {
+                block,
+                entry: Box::new(entry),
+            }
+        }
         Err(err) if err.code == ErrorCode::NotConfigured => Head::Fail((err.message, err.setting)),
         Err(err) => no_block(format!("чтение пула на блоке {block}: {}", err.message)),
     }

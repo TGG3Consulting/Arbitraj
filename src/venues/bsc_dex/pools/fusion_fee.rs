@@ -13,10 +13,13 @@
 //!    имени пула (onlyPool: eth_call с from = пул) — начало окна на время блока и + 1 с. Откат getTimepoints (пул
 //!    моложе окна — require 'OLD') — начала окна нет; расчёт обходится без него, если оно не нужно (ветка «старейшая
 //!    точка моложе окна»), иначе — ошибка.
-//! Кто вызывает: pools/load_algebra.rs (next_fee), pools/integral_fee.rs (read_fee — после Swap THENA Fusion).
+//! Начало окна берётся на время блока + 0 … + 1 + dex.fusion_fee_horizon_s (не задана — 0): по нему комиссия
+//! пересчитывается на каждой новой голове без обращения к узлу (fusion_head.rs; данные — remember).
+//! Кто вызывает: pools/load_algebra.rs (next_fee), pools/integral_fee.rs (read_fee — после Swap THENA Fusion),
+//! pools/fusion_head.rs (read_fee — за горизонтом).
 //! От чего зависит: ctx.rs, node/call.rs, node/rpc.rs (batch), node/jsonrpc.rs, pools/abi_algebra.rs, load_cl.rs (i24),
 //! math/fee_algebra_v1.rs, math/adaptive_fee.rs.
-//! Настройки: нет (базовое поведение: комиссия обмена — та, что даст контракт).
+//! Настройки: dex.fusion_fee_horizon_s [bsc_dex] (необязательна; горизонт начала окна).
 //!
 //! Источник: исходник пула THENA Fusion (Sourcify 56, 0x1b9a1120…ef7d, полное совпадение): PoolState.sol (раскладка
 //! хранилища), PoolImmutables.sol (dataStorageOperator), AlgebraPool.sol timepoints / _getNewFee; DataStorageOperator.sol
@@ -63,9 +66,23 @@ pub async fn read_fee(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<u32>
 /// откат нужного вызова, комиссия не считается (нужного начала окна нет).
 pub async fn next_fee(ctx: &Ctx, pool: Address, head: Head, tag: &str) -> GatewayResult<u32> {
     let (o, ts) = read(ctx, pool, head, tag).await?;
-    fee_algebra_v1::next_block_fee(&o, ts, head.tick)
-        .ok_or_else(|| bad(ctx, pool, "комиссия следующего блока не считается"))
+    let fee = fee_algebra_v1::next_block_fee(&o, ts, head.tick)
+        .ok_or_else(|| bad(ctx, pool, "комиссия следующего блока не считается"))?;
+    // Пересчёт на новых головах без узла (fusion_head.rs) — по этим же данным.
+    let block = u64::from_str_radix(tag.trim_start_matches("0x"), 16).unwrap_or(0);
+    super::fusion_head::remember(pool, block, ts, o);
+    Ok(fee)
 }
+
+/// dex.fusion_fee_horizon_s: на сколько секунд после блока чтения берётся начало окна оракула (пересчёт комиссии на
+/// новых головах без узла — fusion_head.rs). Не задана или не читается — 0 (время блока и + 1 с). Ошибок нет.
+pub fn horizon(ctx: &Ctx) -> u32 {
+    let h = ctx.int(HORIZON).unwrap_or(0);
+    h.min(u64::from(u32::MAX - WINDOW - 2)) as u32
+}
+
+/// Настройка горизонта начала окна (решение 463, задача координатора к T463-02).
+pub const HORIZON: &str = "dex.fusion_fee_horizon_s";
 
 /// Ошибка BadResponse по пулу. Ошибок нет.
 fn bad(ctx: &Ctx, pool: Address, what: &str) -> GatewayError {
@@ -139,11 +156,14 @@ async fn read(ctx: &Ctx, pool: Address, head: Head, tag: &str) -> GatewayResult<
     // block.timestamp пула — uint32 (PoolState._blockTimestamp: усечение).
     let ts = ts as u32;
     let liquidity = (slot & U256::from(u128::MAX)).to::<u128>();
-    let vpl_in_block = (slot >> 128).to::<u128>();
-    let t1 = ts.wrapping_add(1);
+    let vpl_in_block = (slot >> 128usize).to::<u128>();
+    // Начало окна на время блока + 0 … + 1 + горизонт: getTimepoints(время + 1 + h, [WINDOW + 1 + h, …, WINDOW]).
+    let h = horizon(ctx);
+    let end = ts.wrapping_add(1).wrapping_add(h);
+    let ago: Vec<u32> = (0..=h + 1).rev().map(|k| WINDOW + k).collect();
     let gt = Op::getTimepointsCall {
-        time: t1,
-        secondsAgos: vec![WINDOW + 1, WINDOW],
+        time: end,
+        secondsAgos: ago,
         tick: i24(ctx, head.tick)?,
         index: i,
         liquidity,
@@ -167,7 +187,7 @@ async fn read(ctx: &Ctx, pool: Address, head: Head, tag: &str) -> GatewayResult<
     };
     // Откат getTimepoints (пул моложе окна) — начала окна нет (см. шапку).
     let starts = match answer::<Bytes>(got.next()) {
-        Ok(out) => starts(&out, ts)?,
+        Ok(out) => starts(&out, ts, h)?,
         Err(_) => Vec::new(),
     };
     let o = Oracle {
@@ -185,16 +205,16 @@ async fn read(ctx: &Ctx, pool: Address, head: Head, tag: &str) -> GatewayResult<
     Ok((o, ts))
 }
 
-/// Начало окна на время блока и + 1 с из ответа getTimepoints([WINDOW + 1, WINDOW]) на время блока + 1. Ошибки:
-/// ответ не по ABI или не по 2 значения.
-fn starts(out: &Bytes, ts: u32) -> GatewayResult<Vec<(u32, WindowStart)>> {
+/// Начало окна на время блока + 0 … + 1 + h из ответа getTimepoints([WINDOW + 1 + h, …, WINDOW]) на время блока
+/// + 1 + h (значение i — время блока + i). Ошибки: ответ не по ABI или не h + 2 значений.
+fn starts(out: &Bytes, ts: u32, h: u32) -> GatewayResult<Vec<(u32, WindowStart)>> {
     let r = call::decode::<Op::getTimepointsCall>(out)?;
     let n = r.tickCumulatives.len();
     let same = r.volatilityCumulatives.len() == n && r.volumePerAvgLiquiditys.len() == n;
-    if n != 2 || !same {
+    if n as u64 != u64::from(h) + 2 || !same {
         return Err(super::super::errors::err(
             ErrorCode::BadResponse,
-            "getTimepoints: ответ не по 2 значения",
+            "getTimepoints: ответ не той длины",
         ));
     }
     let at = |k: usize| WindowStart {
@@ -202,5 +222,5 @@ fn starts(out: &Bytes, ts: u32) -> GatewayResult<Vec<(u32, WindowStart)>> {
         vol: r.volatilityCumulatives[k].to::<u128>(),
         vpl: r.volumePerAvgLiquiditys[k],
     };
-    Ok(vec![(ts, at(0)), (ts.wrapping_add(1), at(1))])
+    Ok((0..n).map(|k| (ts.wrapping_add(k as u32), at(k))).collect())
 }

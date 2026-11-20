@@ -86,7 +86,7 @@ fn i24(v: i128) -> i32 {
 
 /// uint144 по модулю. Ошибок нет.
 fn u144(v: U256) -> U256 {
-    let m = (U256::from(1u8) << 144) - U256::from(1u8);
+    let m = (U256::from(1u8) << 144usize) - U256::from(1u8);
     v & m
 }
 
@@ -220,11 +220,11 @@ pub fn fee_at(o: &Oracle, time: u32, tick: i32) -> Option<u32> {
     let (va, pa) = if lte(oldest.ts, from, time) {
         let (sv, sp) = window_start(o, time, (new_vol, new_vpl), start)?;
         let va = (new_vol.wrapping_sub(sv) & M88) / u128::from(WINDOW);
-        (va, u144(new_vpl.wrapping_sub(sp)) >> 57)
+        (va, u144(new_vpl.wrapping_sub(sp)) >> 57usize)
     } else if time != oldest.ts {
         let d = u128::from(time.wrapping_sub(oldest.ts));
         let va = (new_vol.wrapping_sub(oldest.vol) & M88) / d;
-        (va, u144(new_vpl.wrapping_sub(oldest.vpl)) >> 57)
+        (va, u144(new_vpl.wrapping_sub(oldest.vpl)) >> 57usize)
     } else {
         (0, U256::ZERO)
     };

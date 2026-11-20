@@ -7,7 +7,8 @@
      событий пула abi_metric.rs topics() — они записаны на BSC).
   3. Логи событий создания (подписка created_log.rs) фабрик обеих DEX за последние --reg-log-blocks блоков
      (recnode.logs_split; окна нет — пусто, это не ошибка): LBPairCreated, PoolCreated (Metric).
-  Всё состояние (п. 1–2) — одним телом recnode.fresh на свежем блоке после логов (решение 460).
+  Всё состояние (п. 1–2) — одним телом recnode.fresh на свежем блоке после логов (решение 460), четырьмя пачками
+  JSON-RPC (ревью t251; _state).
 Кто вызывает: tools/arbitrum_record/forks_482.py (record).
 От чего зависит: recnode.py (fresh, logs_split), curve_plain_pools.py (Batch, call), v4live_rpc.py (sel, w, ad, word,
   topic), curve_crypto_rpc.py (keccak256).
@@ -45,46 +46,50 @@ def _logs(b, addr, sig, head, blocks, say):
     return recnode.logs_split(fetch, max(0, head - blocks), head, 10_000, say)
 
 
-def _lb(b, tag):
-    """Swapline: перечисление и вопросы бота на блоке tag."""
-    n = b.run([call(SWAPLINE, "0x" + sel("getNumberOfLBPairs()"), tag)])[0]
-    cnt = word(n["result"], 0) if n.get("result") else 0
-    pairs = b.run([call(SWAPLINE, "0x" + sel("getLBPairAtIndex(uint256)") + w(i), tag) for i in range(cnt)])
-    out = []
-    for g in pairs:
-        if not g.get("result"):
-            continue
-        p = "0x" + g["result"][-40:]
-        t = b.run([call(p, "0x" + sel(s), tag) for s in ("getTokenX()", "getTokenY()", "getFactory()")])
-        rec = {"pair": p, "getTokenX": t[0], "getTokenY": t[1], "getFactory": t[2]}
-        if t[0].get("result") and t[1].get("result"):
-            d = "0x" + sel("getAllLBPairs(address,address)") + ad("0x" + t[0]["result"][-40:]) \
-                + ad("0x" + t[1]["result"][-40:])
-            rec["getAllLBPairs"] = b.run([call(SWAPLINE, d, tag)])[0]
-        out.append(rec)
-    return {"getNumberOfLBPairs": n, "pairs": out}
-
-
-def _metric(b, tag):
-    """Metric: вопросы metric_list.rs и verify_metric.rs на блоке tag."""
-    n = b.run([call(METRIC, "0x" + sel("nextPoolIdx()"), tag)])[0]
-    cnt = word(n["result"], 0) if n.get("result") else 0
-    idx = b.run([call(METRIC, "0x" + sel("idxToPool(uint256)") + w(i), tag) for i in range(1, cnt)])
-    pools = []
-    for i, g in zip(range(1, cnt), idx):
-        rec = {"idx": i, "idxToPool": g}
-        if g.get("result"):
-            p = "0x" + g["result"][-40:]
-            got = b.run([call(METRIC, "0x" + sel("isPool(address)") + ad(p), tag),
-                         call(p, "0x" + sel("getImmutables()"), tag)])
-            rec.update(pool=p, isPool=got[0], getImmutables=got[1])
-        pools.append(rec)
-    code = None
-    first = next((r["pool"] for r in pools if r.get("pool")), None)
+def _state(b, tag):
+    """Swapline и Metric на блоке tag — пачками по фазам (ревью t251): B1 — счётчики фабрик; B2 — getLBPairAtIndex и
+    idxToPool всех номеров; B3 — getTokenX / getTokenY / getFactory пар, isPool / getImmutables пулов; B4 —
+    getAllLBPairs пар и eth_getCode первого пула Metric. Возвращает: (swapline, metric)."""
+    n_lb, n_mt = b.run([call(SWAPLINE, "0x" + sel("getNumberOfLBPairs()"), tag),
+                        call(METRIC, "0x" + sel("nextPoolIdx()"), tag)])
+    c_lb = word(n_lb["result"], 0) if n_lb.get("result") else 0
+    c_mt = word(n_mt["result"], 0) if n_mt.get("result") else 0
+    got = b.run([call(SWAPLINE, "0x" + sel("getLBPairAtIndex(uint256)") + w(i), tag) for i in range(c_lb)]
+                + [call(METRIC, "0x" + sel("idxToPool(uint256)") + w(i), tag) for i in range(1, c_mt)])
+    pairs = ["0x" + g["result"][-40:] for g in got[:c_lb] if g.get("result")]
+    pools = [{"idx": i, "idxToPool": g} for i, g in zip(range(1, c_mt), got[c_lb:])]
+    for r in pools:
+        if r["idxToPool"].get("result"):
+            r["pool"] = "0x" + r["idxToPool"]["result"][-40:]
+    known = [r for r in pools if r.get("pool")]
+    reqs = []
+    for p in pairs:
+        reqs += [call(p, "0x" + sel(x), tag) for x in ("getTokenX()", "getTokenY()", "getFactory()")]
+    for r in known:
+        reqs += [call(METRIC, "0x" + sel("isPool(address)") + ad(r["pool"]), tag),
+                 call(r["pool"], "0x" + sel("getImmutables()"), tag)]
+    got = b.run(reqs)
+    lb = []
+    for k, p in enumerate(pairs):
+        t = got[3 * k:3 * k + 3]
+        lb.append({"pair": p, "getTokenX": t[0], "getTokenY": t[1], "getFactory": t[2]})
+    for k, r in enumerate(known):
+        r["isPool"], r["getImmutables"] = got[3 * len(pairs) + 2 * k:3 * len(pairs) + 2 * k + 2]
+    reqs, ask = [], []
+    for rec in lb:
+        if rec["getTokenX"].get("result") and rec["getTokenY"].get("result"):
+            d = "0x" + sel("getAllLBPairs(address,address)") + ad("0x" + rec["getTokenX"]["result"][-40:]) \
+                + ad("0x" + rec["getTokenY"]["result"][-40:])
+            reqs.append(call(SWAPLINE, d, tag))
+            ask.append(rec)
+    first = known[0]["pool"] if known else None
     if first:
-        c = b.one("eth_getCode", [first, tag])
-        code = {"pool": first, "code": c.get("result"), "error": c.get("error")}
-    return {"nextPoolIdx": n, "pools": pools, "code": code}
+        reqs.append(("eth_getCode", [first, tag]))
+    got = b.run(reqs)
+    for rec, g in zip(ask, got):
+        rec["getAllLBPairs"] = g
+    code = {"pool": first, "code": got[-1].get("result"), "error": got[-1].get("error")} if first else None
+    return {"getNumberOfLBPairs": n_lb, "pairs": lb}, {"nextPoolIdx": n_mt, "pools": pools, "code": code}
 
 
 def record(b, log_blocks, say):
@@ -99,7 +104,8 @@ def record(b, log_blocks, say):
 
     def body(h):
         tag = h["number"]
-        return {"block": int(tag, 16), "swapline": _lb(b, tag), "metric": _metric(b, tag)}
+        lb, mt = _state(b, tag)
+        return {"block": int(tag, 16), "swapline": lb, "metric": mt}
 
     st = recnode.fresh(lambda: b.one("eth_getBlockByNumber", ["latest", False])["result"], body, say=say)
     st.update(logs=logs, swapline_factory=SWAPLINE, metric_factory=METRIC,

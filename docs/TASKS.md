@@ -628,14 +628,18 @@
     обмена в паре (наш выход принят, выход + 1 откатан) у всех четырёх V2; тики TickLens (Rubicon — свой, Arbidex V3 —
     Uniswap) = ticks(t) пула; математика V3 = виртуальный квотер (и QuoterV2 Rubicon). Затем ключи из §7 и
     dex.pool_enabled — Тигран. Расхождение в любом пункте — DEX не включать, разбор. Правило координатора: TickLens
-    Rubicon не сошёлся с TickLens Uniswap / ticks(t) — dex.tick_lens Rubicon CLMM = TickLens Uniswap 0xbfd8…F573.
-  - T482-02 **Сделано (доделка 482):** Swapline V1 — поиск по фабрике getAllLBPairs (factory_ask.rs Q::Lb) и подписка
+    Rubicon не сошёлся с TickLens Uniswap / ticks(t) — dex.tick_lens Rubicon CLMM = TickLens Uniswap 0xbfd8…F573. Тест
+    по правилу не падает: печатает, какой TickLens совпал с ticks(t) пула («TickLens «dex» / «uniswap» = ticks(t)»), —
+    этот факт записать в README записи и в dex-settings-arbitrum.md §7.6.
+  - T482-02 **Сделано (доделка 482; ревью t251 — только у DEX без справочника индексатора, indexer_gap.rs; пары с
+    ignoredForRouting не берутся):** Swapline V1 — поиск по фабрике getAllLBPairs (factory_ask.rs Q::Lb) и подписка
     LBPairCreated (created_log.rs) у lb_v21; запись — reg.json forks_482.py, тест tests/arbitrum_forks_482_reg_live.rs
     (T482-01). У lb_v22 подписки и поиска нет (фабрика V2.2 не сверялась) — если появится lb_v22 вне GeckoTerminal,
     отдельная задача.
-  - T482-03 **Сделано (доделка 482):** Metric V1 — перечисление фабрики (pools/metric_list.rs: nextPoolIdx, idxToPool,
-    getImmutables) и подписка PoolCreated (created_log.rs; подпись — исходник Arbitrum, на BSC может не совпасть — там
-    пулы, как раньше, из индексатора и перечисления). Запись и тест — T482-01; тест проверяет и topic0 событий пула
+  - T482-03 **Сделано (доделка 482; ревью t251):** Metric V1 — перечисление фабрики (pools/metric_list.rs: nextPoolIdx,
+    idxToPool, getImmutables; прочитанные номера не повторяются) и подписка PoolCreated (created_log.rs) — только у DEX
+    без справочника индексатора (indexer_gap.rs), подписка — только при dex.evm_chain_id = 42161 (подпись подтверждена
+    исходником Arbitrum); на BSC (metric-bsc в списке индексатора) — как раньше. Запись и тест — T482-01; тест проверяет и topic0 событий пула
     abi_metric::topics() (записаны на BSC) в коде пула Arbitrum — если их там нет, пул на Arbitrum не слушается событиями,
     нужен разбор (событие пула Swap в исходнике Arbitrum опубликовано).
   - T482-04 Omni Exchange Flux (код = PancakeSwap Infinity CL): у вида нужны Universal Router, Permit2, CLQuoter — у Omni

@@ -158,6 +158,8 @@ pub mod history_v4;
 pub mod hooks;
 pub mod http_wait;
 pub mod index;
+// Ревью t251 (решение 482): есть ли у DEX справочник индексатора.
+pub mod indexer_gap;
 pub mod index_pass;
 pub mod index_watch;
 pub mod integral_fee;

@@ -5,13 +5,15 @@
 //! Aquila) и = выходу, который пара принимает в симуляции обмена (eth_call swap от пустого адреса, вход ровно dx), а
 //! выход + 1 пара откатывает (проверка K) — комиссия бота ровно комиссия пары;
 //! (2) V3 (Rubicon CLMM, Arbitrum Exchange V3): пул принадлежит фабрике (factory(), getPool), тики TickLens (своего DEX и
-//! Uniswap) = ticks(t) самого пула, наш расчёт math/swap_cl = виртуальному квотеру (и QuoterV2 Rubicon) до wei;
+//! Uniswap; правило T482-01: свой не совпал — берётся совпавший Uniswap, факт печатается) = ticks(t) самого пула, наш
+//! расчёт math/swap_cl = виртуальному квотеру (и QuoterV2 Rubicon) до wei;
 //! (3) ZyberSwap Stableswap (saddle_stableswap): разбор бота load_saddle и math/stableswap_v1 = calculateSwap пула.
 //! Кто вызывает: cargo test. До записи — #[ignore] (tools/arbitrum_record/forks_482.py, шаги forks_482 и zyber_stable
 //! record_steps.py).
 //! От чего зависит: tests/data/arbitrum_forks_482_<дата>/, tests/data/arbitrum_zyber_stable_<дата>/,
 //! arb::venues::bsc_dex::{math::{v2, swap_cl, stableswap_v1}, pools::{load_batch_v2v3, ticks, load_saddle}}.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -26,7 +28,7 @@ use arb::venues::bsc_dex::math::swap_cl::{self, ClState, Version};
 use arb::venues::bsc_dex::math::v2;
 use arb::venues::bsc_dex::pools::load_batch_v2v3::v3_ticks;
 use arb::venues::bsc_dex::pools::load_saddle;
-use arb::venues::bsc_dex::pools::ticks::TickMap;
+use arb::venues::bsc_dex::pools::ticks::{TickData, TickMap};
 
 /// Последняя по имени папка записи tests/data/<prefix>*. Паника — записи нет.
 fn data_dir(prefix: &str) -> PathBuf {
@@ -86,6 +88,23 @@ fn num(v: &Value) -> U256 {
 /// Ответ TickLens записи → байты (откат слова — паника: запись неполная).
 fn lens_bytes(a: &Value) -> Bytes {
     Bytes::from(hex::decode(res(a).expect("TickLens")).unwrap())
+}
+
+/// Сверка тиков TickLens с ticks(t) самого пула: каждый записанный тик с liquidityGross > 0 есть в карте TickLens с
+/// теми же liquidityGross / liquidityNet, и в карте нет тиков, которых пул не знает. Возвращает: Ok или первое
+/// расхождение текстом.
+fn lens_vs_pool(map: &BTreeMap<i32, TickData>, ticks: &[Value]) -> Result<(), String> {
+    for t in ticks {
+        let raw = res(t).ok_or("ticks(t) без ответа")?;
+        let tick = t["tick"].as_i64().unwrap() as i32;
+        let (gross, net) = (word(raw, 0).to::<u128>(), sword(raw, 1));
+        match map.get(&tick) {
+            Some(td) if td.gross == gross && td.net == net => {}
+            None if gross == 0 => {}
+            got => return Err(format!("тик {tick}: TickLens {got:?}, пул ({gross}, {net})")),
+        }
+    }
+    Ok(())
 }
 
 /// Метка ответа — котировка вида `kind` («virtual» / «quoterV2»).
@@ -167,34 +186,34 @@ fn v3_forks_ticks_and_math_equal_quoters() {
         let registry = addr_of(res(&st["getPool"]).unwrap());
         assert_eq!(registry, addr(&p["pool"]), "{case}: getPool");
         let ans = p["answers"].as_array().unwrap();
-        // TickLens своего DEX (если есть) — основной, Uniswap — тот же ответ; тик = ticks(t) пула.
-        let lens = if d["tick_lens"].is_null() {
-            "uniswap"
-        } else {
-            "dex"
-        };
+        // Правило T482-01: TickLens своего DEX (если есть) — основной; не совпал с ticks(t) пула — берётся TickLens
+        // Uniswap, если совпал он (факт печатается). Не совпал ни один — ошибка.
         let words = |name: &str| -> Vec<(i64, Bytes)> {
             ans.iter()
                 .filter(|a| a["mark"][0] == "lens" && a["mark"][1] == name)
                 .map(|a| (a["mark"][2].as_i64().unwrap(), lens_bytes(a)))
                 .collect()
         };
-        let main = words(lens);
-        let raw: Vec<Bytes> = main.iter().map(|(_, b)| b.clone()).collect();
-        let map = v3_ticks(&raw).expect("тики TickLens");
-        if lens == "dex" {
-            let uni: Vec<Bytes> = words("uniswap").into_iter().map(|(_, b)| b).collect();
-            let other = v3_ticks(&uni).expect("TickLens Uniswap");
-            assert_eq!(other, map, "{case}: TickLens DEX ≠ Uniswap");
+        let order: &[&str] = if d["tick_lens"].is_null() {
+            &["uniswap"]
+        } else {
+            &["dex", "uniswap"]
+        };
+        let mut chosen = None;
+        for name in order {
+            let main = words(name);
+            let raw: Vec<Bytes> = main.iter().map(|(_, b)| b.clone()).collect();
+            let map = v3_ticks(&raw).expect("тики TickLens");
+            match lens_vs_pool(&map, p["ticks"].as_array().unwrap()) {
+                Ok(()) => {
+                    println!("{case}: TickLens «{name}» = ticks(t) пула");
+                    chosen = Some((main, map));
+                    break;
+                }
+                Err(why) => println!("{case}: TickLens «{name}» ≠ ticks(t) пула — {why}"),
+            }
         }
-        for t in p["ticks"].as_array().unwrap() {
-            let raw = res(t).expect("ticks(t)");
-            let tick = t["tick"].as_i64().unwrap() as i32;
-            let td = map[&tick];
-            let gross = word(raw, 0).to::<u128>();
-            assert_eq!(gross, td.gross, "{case} тик {tick}: liquidityGross");
-            assert_eq!(sword(raw, 1), td.net, "{case} тик {tick}: liquidityNet");
-        }
+        let (main, map) = chosen.expect("ни один TickLens не совпал с ticks(t) пула");
         let s0 = res(&st["slot0()"]).unwrap();
         let tm = TickMap {
             spacing: sword(res(&st["tickSpacing()"]).unwrap(), 0) as i32,

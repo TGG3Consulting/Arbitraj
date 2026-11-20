@@ -19,6 +19,8 @@
 #   getAPrecise() 0ba81959, swapStorage() 5fd65f0f, paused() 5c975abb, calculateSwap(uint8,uint8,uint256) a95b089f,
 #   decimals() 313ce567. topic0 FlashLoan(address,uint8,uint256,uint256,uint256) 7c186b28…22f0.
 #
+# Ревью t251: чтение пулов — одной фазой recnode.fresh (узел хранит состояние ~128 блоков, решение 460).
+#
 # Запуск: python3 tools/arbitrum_record/saddle.py --rpc http://127.0.0.1:8547 [--pool 0x…]
 
 import argparse
@@ -28,7 +30,9 @@ import json
 import os
 import sys
 
-import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import recnode  # noqa: E402 — ревью t251: фаза состояния на свежем блоке (решение 460)
+import stdhttp as requests  # noqa: E402 — решение 459: стандартная библиотека вместо пакета requests
 
 POOLS = [
     "0xBea9F78090bDB9e662d8CB301A00ad09A5b756e9",  # SaddleArbUSDPool (SwapFlashLoan)
@@ -108,21 +112,26 @@ def main():
 
     rpc = Rpc(args.rpc)
     chain = rpc.call("eth_chainId", [])
-    head = rpc.call("eth_getBlockByNumber", ["latest", False])
+    pools = args.pool or POOLS
+
+    def body(head):
+        """Все пулы на одном блоке head; состояние удалено узлом (StaleState) — recnode.fresh начнёт заново."""
+        recs = []
+        for p in pools:
+            try:
+                recs.append(record_pool(rpc, p, args.sizes, head["number"]))
+            except Exception as e:  # StaleState — BaseException, сюда не попадает
+                recs.append({"pool": p, "error": str(e)})
+        return head, recs
+
+    head, recs = recnode.fresh(lambda: rpc.call("eth_getBlockByNumber", ["latest", False]), body)
     b, tag = int(head["number"], 16), head["number"]
     day = datetime.date.today().isoformat()
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = args.out or os.path.join(root, "tests", "data", "arbitrum_saddle_" + day)
     os.makedirs(out, exist_ok=True)
-    pools = args.pool or POOLS
     files = {"meta.json": {"chainId": chain, "block": b, "block_hex": tag, "timestamp": int(head["timestamp"], 16),
                            "pools": pools, "sizes": args.sizes, "log_blocks": args.log_blocks}}
-    recs = []
-    for p in pools:
-        try:
-            recs.append(record_pool(rpc, p, args.sizes, tag))
-        except Exception as e:
-            recs.append({"pool": p, "error": str(e)})
     files["pools.json"] = recs
     frm = hex(max(0, b - args.log_blocks))
     files["logs.json"] = {"from": frm, "to": tag,

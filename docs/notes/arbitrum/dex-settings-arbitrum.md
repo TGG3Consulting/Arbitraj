@@ -757,7 +757,7 @@ getAmountsOut, function swapExactTokensForTokensSupportingFeeOnTransferTokens); 
 
 | Настройка | Значение | Источник |
 | --- | --- | --- |
-| dex.kind | `v3_fork` | пулы GeckoTerminal `arbidex-v3` 0x837823ed246a7e34a59aa96701c6f2de9e96d592 и 0x48d7e1a9d652ba5f5d80a8dc396df37993659f35 — Sourcify match «UniswapV3Pool» (solc 0.7.6): uniswapV3SwapCallback, SwapMath.computeSwapStep, slot0 с uint8 feeProtocol, Tick.Info — liquidityGross, liquidityNet первыми (TickLens Uniswap читает их); отличие от v3-core — только протокольная доля (defaultProtocolFees фабрики), на выход трейдера не влияет; фабрика swapFee не имеет (проба решения 274 пулы не отсечёт) |
+| dex.kind | `v3_fork` | пулы GeckoTerminal `arbidex-v3` (20.11.2026: 0x837823ed246a7e34a59aa96701c6f2de9e96d592, 0x06537920bde4960713e220bd9cb4844a1461101c, 0x48d7e1a9d652ba5f5d80a8dc396df37993659f35 — пишет forks_482.py); 0x8378…d592 и 0x48d7…9f35 — Sourcify match «UniswapV3Pool» (solc 0.7.6): uniswapV3SwapCallback, SwapMath.computeSwapStep, slot0 с uint8 feeProtocol, Tick.Info — liquidityGross, liquidityNet первыми (TickLens Uniswap читает их); отличие от v3-core — только протокольная доля (defaultProtocolFees фабрики), на выход трейдера не влияет; фабрика swapFee не имеет (проба решения 274 пулы не отсечёт) |
 | dex.factory | `0x855f2c70cf5cb1d56c15ed309a4dfefb88ed909e` | (DefiLlama) registries/uniswapV3.js «arbitrumexchange-v3»; Sourcify match UniswapV3Factory |
 | dex.tick_lens | `0xbfd8137f7d1516D3ea5cA83523914859ec47F573` (TickLens Uniswap V3) | своего у DEX нет; TickLens читает только tickBitmap / ticks переданного пула (v3-periphery TickLens.sol) — совпадение с ticks(t) пула проверяет запись (T482-01) |
 | dex.quoter_virtual | `да` | своего квотера нет (решение 186: обмен самого пула в eth_call) |
@@ -768,7 +768,7 @@ getAmountsOut, function swapExactTokensForTokensSupportingFeeOnTransferTokens); 
 
 | Настройка | Значение | Источник |
 | --- | --- | --- |
-| dex.kind | `v3_fork` | RubiconV3Factory — Sourcify match «UniswapV3Factory» (114 файлов); пул WETH/USDC 0,05 % 0xee57310555a957cec1debb65b1e165d7c9ed700f (getPool фабрики, 20.11) — Sourcify match «UniswapV3Pool»: uniswapV3SwapCallback, slot0 uint8 feeProtocol. POOL_INIT_CODE_HASH Rubicon ≠ Uniswap — бот адрес пула хешем не считает (проверка — getPool фабрики, pools/verify_calls.rs) |
+| dex.kind | `v3_fork` | RubiconV3Factory — Sourcify match «UniswapV3Factory» (114 файлов); пулы getPool фабрики 20.11 (пишет forks_482.py): WETH/USDC 0,05 % 0xee57310555a957cec1debb65b1e165d7c9ed700f — Sourcify match «UniswapV3Pool», WETH/USDC 0,3 % 0x31168cfc7ffe206ba651224b017170953c2ee1b8: uniswapV3SwapCallback, slot0 uint8 feeProtocol. POOL_INIT_CODE_HASH Rubicon ≠ Uniswap — бот адрес пула хешем не считает (проверка — getPool фабрики, pools/verify_calls.rs) |
 | dex.factory | `0x045B7012CbD158C1b48874310F985Adb48aA62ba` | docs.rubicon.finance/developers/deployments (CLMM) |
 | dex.tick_lens | `0xdf7e8987421F541C50f821f8Cf22A6bDA5e1E05b` | там же (TickLens); исходника в Sourcify нет (404), код есть (1385 байт) — совпадение с TickLens Uniswap и ticks(t) проверяет запись (T482-01). **Правило координатора:** не сошлось — dex.tick_lens = `0xbfd8137f7d1516D3ea5cA83523914859ec47F573` (TickLens Uniswap, верифицирован; читает переданный пул) |
 | dex.quoter | `0x22066f5A85076630CF9DEEB0A12186b73CD3284C` (QuoterV2) | там же; Sourcify match QuoterV2 (POOL_INIT_CODE_HASH Rubicon) |
@@ -806,8 +806,10 @@ GeckoTerminal `rubicon-clmm-arbitrum` 20.11.2026 пулов не отдал (п�
 ### 7.9 Swapline V1 — `swapline-v1@arbitrum` (T433-107), вид `lb_v21` (решение 482, доделка — код)
 
 Источник пулов без индексатора (у GeckoTerminal этой DEX нет): поиск по фабрике — getAllLBPairs(монета, встречный)
-(pools/factory_ask.rs Q::Lb; LBFactory.sol L265, токены сортируются — порядок любой) и подписка на LBPairCreated фабрики
-(pools/created_log.rs). Нужно index.factory_scan = да площадки arb_dex.
+(pools/factory_ask.rs Q::Lb; LBFactory.sol L265, токены сортируются — порядок любой; пары с ignoredForRouting = да не
+берутся) и подписка на LBPairCreated фабрики (pools/created_log.rs). Ревью t251: оба — только у DEX, которых нет в
+списке DEX индексатора (pools/indexer_gap.rs: ответ GeckoTerminal /networks/{net}/dexes против id ключа DEX); у DEX из
+списка (LFJ BSC и др.) — как раньше. Нужно index.factory_scan = да площадки arb_dex.
 
 | Настройка | Значение | Источник |
 | --- | --- | --- |
@@ -818,8 +820,10 @@ GeckoTerminal `rubicon-clmm-arbitrum` 20.11.2026 пулов не отдал (п�
 ### 7.10 Metric V1 — `metric-v1@arbitrum` (T433-144), вид `metric_omm` (решение 482, доделка — код)
 
 Источник пулов без индексатора: перечисление фабрики (реестра «пул по паре» у неё нет) — nextPoolIdx(), idxToPool(1..n − 1),
-getImmutables() пулов (pools/metric_list.rs, проход поиска по фабрикам) и подписка на PoolCreated фабрики (created_log.rs).
-Нужно index.factory_scan = да площадки arb_dex.
+getImmutables() пулов (pools/metric_list.rs, проход поиска по фабрикам; три пачки, прочитанные номера не повторяются)
+и подписка на PoolCreated фабрики (created_log.rs). Ревью t251: только у DEX без справочника индексатора (indexer_gap.rs;
+metric-bsc — в списке GeckoTerminal, у него как раньше); подписка PoolCreated — только в сети с dex.evm_chain_id = 42161
+(подпись подтверждена исходником только там). Нужно index.factory_scan = да и dex.evm_chain_id площадки arb_dex.
 
 | Настройка | Значение | Источник |
 | --- | --- | --- |

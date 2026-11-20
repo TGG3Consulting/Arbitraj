@@ -248,9 +248,11 @@ pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
             IIziFactory::poolCall::abi_decode_returns(out)
                 .map_err(|e| format!("ответ pool(tokenX, tokenY, fee) не по ABI: {e}"))?,
         ],
+        // Ревью t251: пары с ignoredForRouting = да (фабрика сняла их с маршрутизации) не берутся.
         Q::Lb => ILBFactory::getAllLBPairsCall::abi_decode_returns(out)
             .map_err(|e| format!("ответ getAllLBPairs не по ABI: {e}"))?
             .into_iter()
+            .filter(|i| !i.ignoredForRouting)
             .map(|i| i.LBPair)
             .collect(),
         Q::Dmm => IDmmFactory::getPoolsCall::abi_decode_returns(out)

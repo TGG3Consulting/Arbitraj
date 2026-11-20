@@ -83,7 +83,7 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-074 | `maverick-v2-arbitrum@arbitrum` | maverick_v2 | **готово** |
 | T433-084 | `camelot-v4@arbitrum` | algebra_integral | **готово** |
 | T433-034 | `traderjoe-v2-1-arbitrum@arbitrum` | lb_v21 | **готово** (оговорка — реализация пары, T448-11) |
-| T433-014 | `balancer_arbitrum@arbitrum` | balancer_v2 | **готово частично** (решение 450: 20210418 / 20210624 — готово; 2Tokens / weighted v2–v4 / stable v2 — код есть, сверка — T450-01 (запись), дочерние ключи, §2.11; composable stable, meta-stable, LBP, linear, managed — нужен код, T450-03…07) |
+| T433-014 | `balancer_arbitrum@arbitrum` | balancer_v2 | **готово частично** (решение 450: 20210418 / 20210624 — готово; 2Tokens / weighted v2–v4 / stable v2 — код есть, сверка — T450-01 (запись), дочерние ключи, §2.11; composable stable, meta-stable, LBP, linear, managed — решение 473: код есть, сверка — запись balancer_v2_more.py) |
 | T433-005 | `curve_arbitrum@arbitrum` | curve_stableswap_ng | **готово частично** (пулы фабрики NG; решение 450: механизм дочерних ключей есть; 2pool / старые plain — нужен код, T450-02; crypto — T433-F3) |
 | T433-086 | `dodo-amm-dvm@arbitrum`, `dodo-amm-dpp@arbitrum`, `dodo-amm-dsp@arbitrum` (id — предложение) | dodo_dvm / dodo_dpp / dodo_dsp | **готово** (пулы — только поиском по фабрике) |
 | T433-098 | `iziswap@arbitrum` (id — предложение) | iziswap | **код есть, сверка — T450-01 (запись)** (решение 450: поиск по фабрике pool(x, y, fee), §3.1) |
@@ -274,6 +274,42 @@ dex.vault = `0xBA12222222228d8Ba445958a75a0704d566BF2C8`, dex.pool_enabled = д�
 Источник адресов — balancer-deployments b55dc2b8 addresses/arbitrum.json. Не сделано (нужен код): composable stable
 v1–v6, meta-stable 20210727, LBP 20210721, investment 20210907, managed, linear (aave / erc4626 / yearn / unbutton),
 stable phantom — T450-03…07.
+
+**Решение 473 (T450-03…07):** пулы остальных фабрик Balancer V2 Arbitrum — код есть (вид задаёт настройка
+`dex.balancer_pool` ключа; сверка — запись `tools/arbitrum_record/balancer_v2_more.py`, тест
+tests/arbitrum_balancer_v2_more_live.rs). По ключу на фабрику — добавить в dex.sub_dex у `balancer_arbitrum@arbitrum`;
+у каждого: dex.kind = `balancer_v2`, dex.vault = `0xBA12222222228d8Ba445958a75a0704d566BF2C8`, dex.pool_enabled — решает
+Тигран, dex.balancer_stable_factory и dex.balancer_math не задавать (при заданном виде не используются); у площадки
+arb_dex должна быть задана dex.multicall3 (время блока — кеш курсов composable stable / meta-stable). Адреса —
+balancer-deployments@b55dc2b8 addresses/arbitrum.json (имена ключей — предложение):
+
+| Ключ | dex.factory | dex.balancer_pool | Задача build-info |
+| --- | --- | --- | --- |
+| `balancer_arbitrum-cs1@arbitrum` | `0xaEb406b0E430BF5Ea2Dc0B9Fe62E4E53f74B3a33` | `composable_stable` | 20220906-composable-stable-pool |
+| `balancer_arbitrum-cs2@arbitrum` | `0x85a80afee867aDf27B50BdB7b76DA70f1E853062` | `composable_stable` | 20221122-composable-stable-pool-v2 |
+| `balancer_arbitrum-cs4@arbitrum` | `0x2498A2B0d6462d2260EAC50aE1C3e03F4829BA95` | `composable_stable` | 20230320-composable-stable-pool-v4 |
+| `balancer_arbitrum-cs5@arbitrum` | `0xA8920455934Da4D853faac1f94Fe7bEf72943eF1` | `composable_stable` | 20230711-composable-stable-pool-v5 |
+| `balancer_arbitrum-cs6@arbitrum` | `0x4bdCc2fb18AEb9e2d281b0278D946445070EAda7` | `composable_stable` | 20240223-composable-stable-pool-v6 |
+| `balancer_arbitrum-sph@arbitrum` | `0xdAE7e32ADc5d490a43cCba1f0c736033F2b4eFca` | `stable_phantom` | 20211208-stable-phantom-pool |
+| `balancer_arbitrum-ms@arbitrum` | `0xEBFD5681977E38Af65A7487DC70B8221D089cCAD` | `meta_stable` | 20210727-meta-stable-pool |
+| `balancer_arbitrum-lbp@arbitrum` | `0x142B9666a0a3A30477b052962ddA81547E7029ab` | `lbp` | 20210721-liquidity-bootstrapping-pool |
+| `balancer_arbitrum-lbpn@arbitrum` | `0x1802953277FD955f9a254B80Aa0582f193cF1d77` | `lbp` | 20211202-no-protocol-fee-lbp |
+| `balancer_arbitrum-inv@arbitrum` | `0xaCd615B3705B9c880E4E7293f1030B34e57B4c1c` | `investment` | 20210907-investment-pool |
+| `balancer_arbitrum-mg1@arbitrum` | `0x956CCab09898C0AF2aCa5e6C229c3aD4E93d9288` | `managed` | 20221021-managed-pool |
+| `balancer_arbitrum-mg2@arbitrum` | `0x8eA89804145c007e7D226001A96955ad53836087` | `managed` | 20230411-managed-pool-v2 |
+| `balancer_arbitrum-la1@arbitrum` | `0xdcdbf71A870cc60C6F9B621E28a7D3Ffd6Dd4965` | `linear_v1` | 20211208-aave-linear-pool |
+| `balancer_arbitrum-le2@arbitrum` | `0x2794953110874981a0d301286c986992022A62a1` | `linear_v1` | 20220404-erc4626-linear-pool-v2 |
+| `balancer_arbitrum-lu@arbitrum` | `0x8878f1273466157a79570DdE1A42130e551B6EAd` | `linear_v1` | 20220425-unbutton-aave-linear-pool |
+| `balancer_arbitrum-la2@arbitrum` | `0xe2E901AB09f37884BA31622dF3Ca7FC19AA443Be` | `linear` | 20220817-aave-rebalanced-linear-pool |
+| `balancer_arbitrum-la4@arbitrum` | `0xf23b4DB826DbA14c0e857029dfF076b1c0264843` | `linear` | 20230206-aave-rebalanced-linear-pool-v4 |
+| `balancer_arbitrum-la5@arbitrum` | `0x7396f99B48e7436b152427bfA3DD6Aa8C7C6d05B` | `linear` | 20230410-aave-linear-pool-v5 |
+| `balancer_arbitrum-ly1@arbitrum` | `0xD8B6b96c88ad626EB6209c4876e3B14f45f8803A` | `linear` | 20230213-yearn-linear-pool |
+| `balancer_arbitrum-ly2@arbitrum` | `0x19DFEF0a828EEC0c85FbB335aa65437417390b85` | `linear` | 20230409-yearn-linear-pool-v2 |
+| `balancer_arbitrum-le4@arbitrum` | `0x7ADbdabaA80F654568421887c12F09E0C7BD9629` | `linear` | 20230409-erc4626-linear-pool-v4 |
+
+Не сделано (решение 473): обмен с BPT самого пула у composable stable / stable phantom / managed (вход / выход
+ликвидности одним токеном — _swapWithBpt / join / exit swap: протокольные комиссии, фактический выпуск) — такие пары не
+берутся (TASKS T473-02). Composable stable v3 (20230206) в сети Arbitrum не развёрнут (addresses/arbitrum.json).
 
 ### 2.12 Curve — `curve_arbitrum@arbitrum` (T433-005), часть StableSwap-NG
 

@@ -11,6 +11,8 @@
 //! очередь повтора с числом неудач из отметки; новый пул и пул без отметки читаются как раньше. В записях журнала —
 //! адрес пула (depth_book::label, как у dex.pool_refresh). При изоляции неудача чтения при приёме — отметка 339
 //! (pool_fail::note: журнал на первую неудачу эпизода и смену кода причины), число повторов — из отметки.
+//! Решение 473: набор topic0 вида изменился за чтение (Balancer V2 с dex.balancer_pool) — постоянная подписка
+//! собирается заново (g.set), временная не остаётся постоянной.
 //! Кто вызывает: pools/session.rs.
 //! От чего зависит: group.rs, depth.rs, depth_book.rs (label), reload.rs, pool_fail.rs (paused, отметки), http_wait.rs,
 //! listen.rs (Pools, End).
@@ -67,6 +69,10 @@ pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -
     }
     m.deep.resize(m.pools.len(), true);
     let list: Vec<&Found> = new.iter().map(|i| &m.pools[*i].0).collect();
+    // Решение 473: события вида Balancer V2 (dex.balancer_pool) известны только после чтения пула — набор topic0 до и
+    // после чтения; изменился — временная подписка не становится постоянной (ниже). У прочих видов набор не меняется.
+    let topics_of = |l: &[&Found]| l.first().map(|f| super::events::topics(f.family));
+    let before = topics_of(&list);
     let tmp = g.subscribe(&list, Topics::Full).await.map_err(broken)?;
     let block = g.block().await.map_err(broken)?;
     http_wait::http_reached(p, block).await.map_err(broken)?;
@@ -136,7 +142,8 @@ pub async fn admit(p: &Pools, g: &mut Group, m: &mut Members, new: Vec<usize>) -
     let full: Vec<usize> = (0..m.pools.len()).filter(|i| m.deep[*i]).collect();
     let thin: Vec<usize> = (0..m.pools.len()).filter(|i| !m.deep[*i]).collect();
     // Начало сессии без мелких пулов: временная подписка и есть постоянная — без второй подписки.
-    if g.full.is_none() && full == new {
+    let same = topics_of(&list) == before;
+    if g.full.is_none() && full == new && same {
         g.full = Some((tmp, new));
     } else {
         g.set(&m.pools, full, Topics::Full).await.map_err(broken)?;

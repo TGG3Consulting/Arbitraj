@@ -9,7 +9,10 @@
 //! getPoolTokens(id) (CLAUDE.md: адрес токена у биржи = адрес в пуле). Два прохода частями по dex.verify_batch.
 //! Кто вызывает: pools/verify.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_balancer.rs, discover.rs, verify.rs.
-//! Настройки: dex.vault, dex.factory, dex.balancer_stable_factory (не задана — стейблсвап-пулы не берутся) [DEX].
+//! Решение 473: при dex.balancer_pool (вид пулов фабрики dex.factory) стейблсвап-фабрика не спрашивается; у видов с
+//! BPT среди токенов (composable stable, stable phantom, managed) пара с BPT пула не берётся.
+//! Настройки: dex.vault, dex.factory, dex.balancer_stable_factory (не задана — стейблсвап-пулы не берутся),
+//! dex.balancer_pool (решение 473) [DEX].
 //!
 //! Источник: IVault.sol L240 (getPool), L334-L341 (getPoolTokens); PoolRegistry.sol L67-L87 (registerPool: id = адрес
 //! msg.sender | специализация | номер), L89-L97 (getPool — withRegisteredPool), L115-L138 (раскладка id); BasePool.sol L155-L161 (getVault, getPoolId);
@@ -91,9 +94,13 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     let wf = ctx
         .dex_addr("dex.factory", c.family.id)
         .map_err(|e| e.message)?;
-    let sf = ctx
-        .dex_addr("dex.balancer_stable_factory", c.family.id)
-        .ok();
+    // Решение 473: вид dex.balancer_pool задан — пулы только фабрики dex.factory (стейблсвап-фабрика не спрашивается).
+    let sf = match super::balancer_pool_type::of(ctx, c.family)? {
+        Some(_) => None,
+        None => ctx
+            .dex_addr("dex.balancer_stable_factory", c.family.id)
+            .ok(),
+    };
     Ok((pool, vault, wf, sf))
 }
 
@@ -201,8 +208,20 @@ pub fn decide(c: &Candidate, p: Plan, a: &[Result<Bytes, String>]) -> Result<Fou
 /// токены пула (getPoolTokens) для развёртки. Принимает: окружение, кандидата, план, ответы. Возвращает: итог.
 /// Ошибок нет.
 pub fn judge(ctx: &Ctx, c: &Candidate, p: Plan, answers: &[Result<Bytes, String>]) -> Verdict {
+    // Решение 473: у composable stable / stable phantom / managed BPT пула — среди его токенов, обмен с ним — вход /
+    // выход ликвидности (не считается): пара с BPT не берётся, в развёртку пар он не идёт.
+    let ty = super::balancer_pool_type::of(ctx, c.family);
+    let own_bpt = matches!(ty, Ok(Some(t)) if t.bpt_excluded());
+    if own_bpt && (c.coin == p.0 || c.quote == p.0) {
+        let w = format!("пара с BPT пула {:#x} — вход / выход ликвидности, не обмен", p.0);
+        return Verdict::Rejected(w);
+    }
+    let mut list = tokens(answers);
+    if own_bpt {
+        list.retain(|t| *t != p.0);
+    }
     match decide(c, p, answers) {
-        Ok(f) => Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &tokens(answers)))),
+        Ok(f) => Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &list))),
         Err(w) => Verdict::Rejected(w),
     }
 }

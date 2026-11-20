@@ -5,7 +5,10 @@
 //! хранилища + decimals токенов). Вынесено из load_balancer.rs (предел размера файла).
 //! Кто вызывает: pools/load_balancer.rs.
 //! От чего зависит: ctx.rs, node/call.rs, abi_balancer.rs.
-//! Настройки: dex.factory, dex.balancer_stable_factory, dex.balancer_math (решение 450) [DEX].
+//! Решение 473: при заданной dex.balancer_pool — пулы только фабрики dex.factory (вид — из настройки), неизменяемое
+//! вида читает load_balancer_more_fixed.rs (поле more).
+//! Настройки: dex.factory, dex.balancer_stable_factory, dex.balancer_math (решение 450), dex.balancer_pool (решение
+//! 473) [DEX]; dex.multicall3 [bsc_dex] (решение 473: время блока для кеша курсов).
 //!
 //! Источник: BasePool.sol (весовой) L474-L481 / (стейбл) L510-L517 — множитель от decimals, decimals > 18 пул не
 //! принимает (Math.sub(18, decimals)); BasePoolFactory.sol L48-L60 (isPoolFromFactory); BasePool.sol L159-L161 (getPoolId).
@@ -23,7 +26,9 @@ use super::super::node::call;
 use super::abi_balancer::{
     IBalancerFactory as F, IBalancerPool as P, IBalancerToken as T, IBalancerVault as V,
 };
+use super::balancer_pool_type::{self, PoolType};
 use super::families::Family;
+use super::load_balancer_more_fixed::{self as more_fixed, More};
 
 /// Неизменяемое у пула: id, весовой ли (иначе стейблсвап), множители точности по токену; v2 — версия библиотек пула
 /// (решение 450, dex.balancer_math = v2; читается из настройки при каждом чтении — не из памяти).
@@ -33,6 +38,8 @@ pub struct Fixed {
     pub weighted: bool,
     pub scaling: HashMap<Address, U256>,
     pub v2: bool,
+    /// Решение 473: вид dex.balancer_pool и его неизменяемое; None — весовой / стейблсвап (как раньше).
+    pub more: Option<Box<More>>,
 }
 
 /// Решение 450: версия библиотек пулов ключа DEX — dex.balancer_math: v1 (не задана — v1, как раньше) или v2
@@ -63,19 +70,26 @@ pub async fn fixed(
     pool: Address,
     tag: &str,
 ) -> GatewayResult<Fixed> {
-    let v2 = math_v2(ctx, f).map_err(|w| ctx.not_set("dex.balancer_math", w))?;
+    let ty = balancer_pool_type::of(ctx, f).map_err(|w| ctx.not_set("dex.balancer_pool", w))?;
+    // Решение 473: вид ключа — подписке на события (events_balancer.rs: доп. события только у ключа с видом).
+    balancer_pool_type::remember(f, ty);
     if let Some(mut x) = FIXED
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
         .and_then(|m| m.get(&(ctx.place.id, pool)).cloned())
+        .filter(|x| kind(x) == ty)
     {
-        x.v2 = v2;
+        live(ctx, f, &mut x).map_err(|w| ctx.not_set("dex.balancer_math", w))?;
         return Ok(x);
     }
     let bad = |w: String| ctx.err(ErrorCode::BadResponse, format!("Balancer {pool}: {w}"));
     let wf = ctx.dex_addr("dex.factory", f.id)?;
-    let sf = ctx.dex_addr("dex.balancer_stable_factory", f.id).ok();
+    // Решение 473: вид задан — пулы только фабрики dex.factory, стейблсвап-фабрика не спрашивается.
+    let sf = match ty {
+        Some(_) => None,
+        None => ctx.dex_addr("dex.balancer_stable_factory", f.id).ok(),
+    };
     let mut calls: Vec<(Address, Bytes)> = vec![
         (pool, P::getPoolIdCall {}.abi_encode().into()),
         (wf, F::isPoolFromFactoryCall { pool }.abi_encode().into()),
@@ -116,18 +130,60 @@ pub async fn fixed(
         }
         scaling.insert(*t, U256::from(10u8).pow(U256::from(18 - d)));
     }
-    let x = Fixed {
-        id,
-        weighted,
-        scaling,
-        v2,
+    let more = match ty {
+        Some(t) => Some(Box::new(more_fixed::read(ctx, t, pool, &tokens, &scaling, tag).await?)),
+        None => None,
     };
+    let mut x = Fixed {
+        id,
+        weighted: ty.map_or(weighted, PoolType::weighted),
+        scaling,
+        v2: false,
+        more,
+    };
+    live(ctx, f, &mut x).map_err(|w| ctx.not_set("dex.balancer_math", w))?;
     FIXED
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get_or_insert_with(HashMap::new)
         .insert((ctx.place.id, pool), x.clone());
     Ok(x)
+}
+
+/// Решение 473: вид неизменяемого (None — весовой / стейблсвап). Ошибок нет.
+pub fn kind(x: &Fixed) -> Option<PoolType> {
+    x.more.as_ref().map(|m| m.ty)
+}
+
+/// Что читается из настроек при каждом чтении пула (не из памяти): dex.balancer_math (решение 450; у вида
+/// dex.balancer_pool не читается) или, у вида dex.balancer_pool, адрес Multicall3 для времени блока (решение 473).
+/// Принимает: окружение, вид DEX, неизменяемое.
+/// Ошибки (текст): dex.balancer_math не читается или не из списка.
+pub fn live(ctx: &Ctx, f: &Family, x: &mut Fixed) -> Result<(), String> {
+    // Решение 473: у ключа с dex.balancer_pool версия библиотек задана видом — dex.balancer_math не читается.
+    match x.more.as_mut() {
+        Some(m) => m.time = super::super::node::multicall::address(ctx),
+        None => x.v2 = math_v2(ctx, f)?,
+    }
+    Ok(())
+}
+
+/// Решение 473: текст отказа разбора, когда токены пула в хранилище не те, что в памяти (managed: TokenAdded /
+/// TokenRemoved).
+pub const TOKENS_CHANGED: &str = "токены пула в хранилище изменились — неизменяемое сброшено";
+
+/// Решение 473: сбросить неизменяемое пула в памяти (во всех площадках DEX) — следующее чтение возьмёт его с узла
+/// (токены, decimals, BPT). Зовут: разбор пачки, у которого токены не совпали (pool — из id пула: старшие 20 байт,
+/// PoolRegistry.sol L115-L138), и событие TokenAdded / TokenRemoved пула managed (events_balancer.rs). Ошибок нет.
+pub fn forget(pool: Address) {
+    if let Some(m) = FIXED.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        m.retain(|(_, a), _| *a != pool);
+    }
+}
+
+/// Пул по id Balancer V2 — старшие 20 байт id (PoolRegistry.sol L115-L138). Ошибок нет.
+pub fn pool_of(id: B256) -> Address {
+    Address::from_slice(&id[..20])
 }
 
 /// Неизменяемое пула из памяти без обращения к узлу (пачка каждого блока, per_block_balancer.rs). None — пул ещё не

@@ -39,7 +39,8 @@ pub fn state(p: Parts, v3: VaultV3, pair: (Address, Address)) -> Result<PoolStat
         VaultCurve::V3 => n == 2,
         VaultCurve::Stable { .. } => true,
         // Решение 456 (слияние с решением 450): кривые библиотек Balancer V2 у пула V3 не бывают.
-        VaultCurve::WeightedV2 { .. } | VaultCurve::StableV2 { .. } => false,
+        // Решение 473: кривые Balancer V2 других фабрик — тоже.
+        VaultCurve::WeightedV2 { .. } | VaultCurve::StableV2 { .. } | VaultCurve::V2(_) => false,
     };
     let min_ok = match &v3.rule {
         VaultV3Rule::WeightedMin { min } => min.len() == n,

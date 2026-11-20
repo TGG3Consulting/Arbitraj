@@ -329,6 +329,26 @@
     FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; развернуть v4 — T457-03.
   - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по
     метке кода». Подтвердить.
+- **Решение 473 (20.11.2026, ветка t243/arb-balancer-v2-more) — T450-03…07: Balancer V2 других фабрик на Arbitrum;
+  cargo не запускался (формат — вручную).** Сделано: dex.balancer_pool (вид фабрики ключа), composable stable v1–v6,
+  stable phantom, meta-stable, LBP (20210721, 20211202), investment, managed v1/v2, linear (linear_v1 / linear) —
+  чтение, математика, события, проверка, квотер (queryBatchSwap), исполнение (шаг BALANCER без изменений —
+  переразвёртывать исполнитель не нужно). Ключи и адреса — docs/notes/arbitrum/dex-settings-arbitrum.md §2.11. Задачи:
+  - T473-01 Запись своим узлом: `python3 tools/arbitrum_record/balancer_v2_more.py --rpc http://<узел>:8547` (входит в
+    record_all.py; recnode.py / gt.py / stdhttp.py решения 460 скопированы из origin/t234/arb-merge-2 байт в байт), коммит
+    tests/data/arbitrum_balancer_v2_more_<дата>/, снять #[ignore] в tests/arbitrum_balancer_v2_more_live.rs. Запись же
+    даёт порядок ликвидности видов по GeckoTerminal (gt.json, тест liquidity_by_type): из песочницы api.geckoterminal.com
+    закрыт (HTTP 403 прокси) — порядок работ взят по номерам задач T450-03…07, не по ликвидности.
+  - T473-02 Обмен с BPT самого пула (composable stable, stable phantom, managed): вход / выход ликвидности одним токеном
+    (_swapWithBpt: _payProtocolFeesBeforeJoinExit, фактический выпуск, StableMath join/exit; managed — _onJoinSwap /
+    _onExitSwap с AUM-комиссией). Сейчас такие пары не берутся (verify_balancer.rs, load_balancer_more_curve.rs).
+  - T473-03 Кеш курса, истекающий к блоку исполнения: **ревью 473 — сделано**. У токена с expires < время чтения + 1
+    второй набор множителей с курсом поставщика (VaultCurve::V2 StableRated.alt), обмен — по худшему из двух; откат
+    getRate поставщика у токена с действующим и не истекающим кешем пул не отключает.
+  - T473-04 managed после TokenAdded / TokenRemoved: **ревью 473 — сделано** (сброс неизменяемого по событию и по
+    несовпадению токенов, load_balancer_fixed.rs forget).
+  - T473-05 Подписка до первого чтения пула: **ревью 473 — сделано** (admit.rs: набор topic0 вида изменился за чтение —
+    постоянная подписка собирается заново).
 - **Решение 450 (20.11.2026, ветка t226/arb-dex-code-a) — код T448-01…05; cargo не запускался (формат — вручную).**
   Сделано: dex.sub_dex (несколько семейств под одним id), pancakeswap_v3 (Universal Router PancakeSwap v3), KyberSwap
   Static Fee / Legacy (события создания), dex.balancer_math (библиотеки Balancer v2), поиск iZiSwap по фабрике. Запись
@@ -345,11 +365,16 @@
     math: формула D/y шаблона), реестр старой фабрики Curve Arbitrum — по официальному источнику. Вопрос Тиграну: старые
     фабричные plain-пулы брать списком dex.stable_pools или реестром фабрики.
   - T450-03 Balancer composable stable v1–v6 — новое семейство (BPT в токенах пула, курсы rate providers с кешем,
-    протокольная комиссия, обмен через BPT — join/exit).
+    протокольная комиссия, обмен через BPT — join/exit). **Решение 473: код есть (обмен без BPT; и stable phantom
+    20211208), сверка — T473-01; обмен с BPT пула — T473-02.**
   - T450-04 Balancer meta-stable (20210727) — курсы rate providers (priceRateCache) — новое семейство или вариант stable.
+    **Решение 473: код есть (dex.balancer_pool = meta_stable), сверка — T473-01.**
   - T450-05 Balancer LBP (20210721) — весовой v1 с меняющимися весами и swapEnabled — сверить исходник, вариант вида.
+    **Решение 473: код есть (lbp; и 20211202 no-protocol-fee — тот же текст пула), сверка — T473-01.**
   - T450-06 Balancer linear (aave/erc4626/yearn/unbutton) — новое семейство (главный и обёрнутый токен, цели).
+    **Решение 473: код есть (linear_v1 / linear по виртуальному выпуску BPT), сверка — T473-01.**
   - T450-07 Balancer investment / managed pools — сверить исходники (managed v1/v2) — вариант вида или новое семейство.
+    **Решение 473: код есть (investment, managed; обмен с BPT managed — T473-02), сверка — T473-01.**
   - T450-08 KyberSwap Classic Legacy: роутер 0xC3E2…89dD — на странице docs.kyberswap.com ссылка обозревателя ведёт на
     0xEaE4…Fd55 (DMMRouter); фактом будет ответ getAmountsOut в записи T450-01 (откат по пулам Legacy — адрес неверен).
   - T450-09 iZiSwap: уровни dex.v3_fee_tiers — конструктор (100, 400, 2000, 10000); включённые позже enableFeeAmount —
@@ -1276,7 +1301,7 @@
   - T433-011 `swapfish` (SwapFish) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-012 `arbswap_arbitrum_one` (Arbswap (Arbitrum One)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-013 `oreoswap` (OreoSwap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-014 `balancer_arbitrum` (Balancer V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово для фабрик 20210418/20210624; остальные — T448-03; решение 450: WeightedPool2Tokens, weighted v2/v3/v4, stable v2 (dex.balancer_math) — код есть, сверка — T450-01 (запись); composable stable, meta-stable, LBP, linear, managed — T450-03…07** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-014 `balancer_arbitrum` (Balancer V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово для фабрик 20210418/20210624; остальные — T448-03; решение 450: WeightedPool2Tokens, weighted v2/v3/v4, stable v2 (dex.balancer_math) — код есть, сверка — T450-01 (запись); composable stable, meta-stable, LBP, linear, managed — T450-03…07; решение 473: код есть, сверка — T473-01 (запись balancer_v2_more.py)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-015 `traderjoe-v2-arbitrum` (LFJ V2 (Arbitrum)) — **код сделан (решение 445)**: вид lb_v20 (семейство
     T433-F6); адреса — официальная документация LFJ (LBFactory v2.0 0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982,
     LBRouter v2.0 0x7BFd7192E76D950832c77BB412aaE841049D8D9B). Осталось: запись своего узла

@@ -9,7 +9,9 @@
 //! node/call.rs (try_chunks, block_tag), loading (через Pools), reload.rs (load_one_block, put_emit, skip_same).
 //! Задача t160: при dex.per_block_skip_same неизменившееся состояние пула ядру не шлётся (reload.rs).
 //! Решение 339: не прочитавшийся пул — pool_fail.rs block_failed (причина, пауза повтора при dex.pool_fail_pause_ms).
-//! Настройки: dex.vault, dex.balancer_math (решение 450) [DEX вида balancer_v2]; dex.load_batch, dex.multicall3 [bsc_dex].
+//! Решение 473: у пула вида dex.balancer_pool своя пачка (load_balancer_more.rs) — части ответов по длине пачки пула.
+//! Настройки: dex.vault, dex.balancer_math (решение 450), dex.balancer_pool (решение 473) [DEX вида balancer_v2];
+//! dex.load_batch, dex.multicall3 [bsc_dex].
 
 use alloy_primitives::{Address, Bytes};
 
@@ -19,8 +21,9 @@ use super::super::node::call;
 use super::discover::Found;
 use super::listen::{End, Pools};
 use super::load::{self, Loaded};
-use super::load_balancer::{self as lb, PER_POOL};
-use super::load_balancer_fixed::{Fixed, cached, math_v2};
+use super::balancer_pool_type;
+use super::load_balancer as lb;
+use super::load_balancer_fixed::{Fixed, cached, kind, live};
 use super::{load_batch, reload};
 
 /// Пул пачки: записи (у пула со своим контрактом — одна; у многомонетного пула в режиме dex.multi_pair — все его пары,
@@ -43,16 +46,15 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
             it.0.push(f);
             continue;
         }
-        match (
-            cached(p.ctx.place.id, a),
-            p.ctx.dex_addr("dex.vault", f.family.id),
-            math_v2(&p.ctx, f.family),
-        ) {
-            // Решение 450: версия библиотек пула (dex.balancer_math) — из настройки на каждом блоке.
-            (Some(mut fx), Ok(v), Ok(v2)) => {
-                fx.v2 = v2;
-                items.push((vec![f], fx, v, a));
-            }
+        // Решение 473: вид dex.balancer_pool сменился на лету — неизменяемое не того вида, пул читается заново.
+        let ty = balancer_pool_type::of(&p.ctx, f.family);
+        // Решение 450: версия библиотек пула (dex.balancer_math) — из настройки на каждом блоке; решение 473: и адрес
+        // Multicall3 (время блока для кеша курсов). Настройка не читается — обычным путём (ошибка с причиной).
+        let fresh = cached(p.ctx.place.id, a)
+            .filter(|x| ty.as_ref().is_ok_and(|t| kind(x) == *t))
+            .and_then(|mut fx| live(&p.ctx, f.family, &mut fx).ok().map(|_| fx));
+        match (fresh, p.ctx.dex_addr("dex.vault", f.family.id)) {
+            (Some(fx), Ok(v)) => items.push((vec![f], fx, v, a)),
             _ => {
                 if let Err(why) = reload::load_one_block(p, f, t, block).await? {
                     // Решение 339: причина и пауза повтора — pool_fail.rs (не задана — только valid = false).
@@ -64,15 +66,21 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
     if items.is_empty() {
         return Ok(());
     }
-    let calls: Vec<(Address, Bytes)> = items
+    // Решение 473: у пулов разных видов разное число вызовов — длины частей по пулу.
+    let per: Vec<Vec<(Address, Bytes)>> = items
         .iter()
-        .flat_map(|(_, fx, v, a)| lb::calls(*v, *a, fx))
+        .map(|(_, fx, v, a)| lb::calls(*v, *a, fx))
         .collect();
+    let lens: Vec<usize> = per.iter().map(Vec::len).collect();
+    let calls: Vec<(Address, Bytes)> = per.into_iter().flatten().collect();
     let size = load_batch::batch(&p.ctx).unwrap_or(calls.len()).max(1);
     let got = call::try_chunks(&p.ctx, &calls, &call::block_tag(block), size).await;
     // Задача t160: неизменившееся состояние ядру не шлётся (reload.rs skip_same, put_emit); не задана — как раньше.
     let skip = reload::skip_same(p);
-    for ((list, fx, _, _), part) in items.iter().zip(got.chunks(PER_POOL)) {
+    let mut rest = got.as_slice();
+    for ((list, fx, _, _), n) in items.iter().zip(lens) {
+        let (part, tail) = rest.split_at(n.min(rest.len()));
+        rest = tail;
         let answers: Result<Vec<_>, String> = part.iter().cloned().collect();
         for f in list {
             let Some(e) = p.reg.get(&f.reference) else {

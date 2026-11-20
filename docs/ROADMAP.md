@@ -29,6 +29,11 @@
 - Решение 471: tools/arbitrum_record/pancake_stable.py — 236 строк (ориентир 200): вынести pool_state в
   pancake_stable_pool.py. Общие модули записи recnode.py / gt.py (решение 460) в базе origin/feat/arbitrum ещё нет —
   скрипт со своей обработкой «состояние недоступно» и потолком времени; после слияния 460 — перевести на recnode.fresh.
+- Решение 473 (Balancer V2 других фабрик, `wc -l`): pools/verify_balancer.rs 238 (было 219: вид dex.balancer_pool и
+  отказ пары с BPT пула), pools/load_balancer.rs 207 (было 195). Дробить: judge / tokens — в verify_balancer_judge.rs.
+  Обмен с BPT самого пула (composable stable / stable phantom / managed) не считается — TASKS T473-02. Unit-тестов
+  LinearMath / курсов на числах официальных тестов монорепо нет (монорепо в рабочей копии нет) — проверка записью
+  balancer_v2_more.py (T473-01).
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

@@ -9,6 +9,7 @@
 //! Balancer V2 часть V3 пуста (None) — его состояние и расчёт прежние.
 //! Решение 452: виды Gyro / ReClamm / LBP / QuantAMM и крючки комиссии — новые правила VaultV3Rule, кривая V3 и поля
 //! hook / open части V3 (типы — core/types/pool_vault_v3.rs).
+//! Решение 473: кривые Balancer V2 других фабрик — VaultCurve::V2 (типы — core/types/pool_vault_v2.rs).
 //! Кто вызывает: core/types/pool.rs (PoolState::VaultPool), адаптер DEX (pools/load_balancer.rs создаёт,
 //! math/balancer*.rs считает).
 //! От чего зависит: alloy-primitives, serde.
@@ -17,6 +18,7 @@
 use alloy_primitives::{B256, U256};
 use serde::{Deserialize, Serialize};
 
+pub use super::pool_vault_v2::V2Curve;
 pub use super::pool_vault_v3::{EclpParams, LbpState, LbpVer, V3Hook};
 
 /// Кривая пула хранилища. Математика — в адаптере.
@@ -35,6 +37,9 @@ pub enum VaultCurve {
     /// Решение 452: пул хранилища Balancer V3, чья формула — не весовая и не стейблсвап (Gyro 2-CLP / E-CLP, ReClamm, LBP
     /// с фиксированной ценой): параметры формулы — в правиле части V3 (`VaultV3.rule`). У Balancer V2 не бывает.
     V3,
+    /// Решение 473: кривые пулов Balancer V2 других фабрик (composable stable, meta-stable, stable phantom, managed,
+    /// linear) — core/types/pool_vault_v2.rs. У Balancer V3 не бывает.
+    V2(Box<V2Curve>),
 }
 
 /// Состояние пула хранилища на блоке — боксируется в `PoolState::VaultPool`.

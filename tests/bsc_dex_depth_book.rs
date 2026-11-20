@@ -8,6 +8,12 @@
 //! - сигнал «пул готов» при росте — ровно один раз, кто бы первым ни посчитал глубину на новом состоянии (как
 //!   экран «Монеты» — depth_facts.rs зовёт тот же Book::depth); повторный расчёт без смены — без сигнала.
 //!
+//! Время (T472, нестабильность): тест не опирается на паузы угаданной длины — ждёт событие (запись в журнале) опросом
+//! с пределом 10 с; конец окна второй проверки считается от момента, когда отложенная запись уже видна в журнале
+//! (окно пула отсчитывается от std::time::Instant записи — depth_log.rs; tokio::time::pause его не двигает, поэтому
+//! управляемое время невозможно без правки кода). Окно — 2 с: остаётся единственное допущение — между сменами внутри
+//! окна проходит меньше 2 с (несколько записей настроек; раньше при окне 1 с запас был ≈ 0,3–0,6 с).
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/native_common, tests/depth_common, arb::venues::bsc_dex::{parts, pools::depth_book,
 //! quote::select}.
@@ -16,7 +22,7 @@ mod depth_common;
 mod native_common;
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 
@@ -42,6 +48,22 @@ async fn said(ctx: &Ctx) -> Vec<String> {
         .collect()
 }
 
+/// Окно журнала dex.depth_log_min_s в тесте, с.
+const WIN: u64 = 2;
+
+/// Ждёт, пока записей о смене станет не меньше `n` (опрос журнала каждые 20 мс, предел 10 с — ожидание события, а не
+/// пауза угаданной длины). Возвращает записи (новые первыми); не дождался — сколько есть (проверка упадёт).
+async fn said_n(ctx: &Ctx, n: usize) -> Vec<String> {
+    let end = Instant::now() + Duration::from_secs(10);
+    loop {
+        let s = said(ctx).await;
+        if s.len() >= n || Instant::now() > end {
+            return s;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 /// Сработает ли сигнал за `ms` мс (ожидание взведено до действия `act`).
 async fn fires(n: &Arc<tokio::sync::Notify>, ms: u64, act: impl FnOnce()) -> bool {
     let w = n.notified();
@@ -61,7 +83,7 @@ async fn hysteresis_journal_and_rise_signal() {
         ("venue.quote_asset", json!("USDT")),
         ("dex.depth_band_pct", json!(2)),
         ("dex.depth_hysteresis_pct", json!(10)),
-        ("dex.depth_log_min_s", json!(1)),
+        ("dex.depth_log_min_s", json!(WIN)),
         ("dex.min_pool_liquidity_usd", json!(700)),
     ] {
         set(&ctx, n, v).await;
@@ -86,11 +108,11 @@ async fn hysteresis_journal_and_rise_signal() {
     // Порог 900: вниз — ниже 810 — мелкий; первая смена — в журнал сразу.
     set(&ctx, "dex.min_pool_liquidity_usd", json!(900)).await;
     assert!(side(Need::Both).unwrap().is_some());
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(said(&ctx).await.len(), 1);
-    assert!(said(&ctx).await[0].contains("покупка — мелкий"));
+    let s = said_n(&ctx, 1).await;
+    assert_eq!(s.len(), 1);
+    assert!(s[0].contains("покупка — мелкий"));
     // Порог 700: снова глубокий — сигнал «пул готов» ровно один раз, хотя первым считал не отбор котировки, а «экран»
-    // (Book::depth, как depth_facts.rs); запись — отложена до конца окна в 1 с.
+    // (Book::depth, как depth_facts.rs); запись — отложена до конца окна в WIN с.
     set(&ctx, "dex.min_pool_liquidity_usd", json!(700)).await;
     let first = || {
         let d = p.registry.depth().depth(&ctx, reg, tok, &e, 18).unwrap();
@@ -102,8 +124,9 @@ async fn hysteresis_journal_and_rise_signal() {
         "второй раз — нет"
     );
     assert_eq!(said(&ctx).await.len(), 1, "внутри окна — не сразу");
-    tokio::time::sleep(Duration::from_millis(1200)).await;
-    let s = said(&ctx).await;
+    let s = said_n(&ctx, 2).await;
+    // Отложенная запись уже в журнале — её окно началось не позже этого мгновения.
+    let w = Instant::now();
     assert_eq!(s.len(), 2, "отложенная смена записана в конце окна");
     assert!(s[0].contains("покупка — глубокий"), "{}", s[0]);
     // Мелкий и снова глубокий внутри окна — в конце окна состояние как записанное: записи нет.
@@ -111,7 +134,9 @@ async fn hysteresis_journal_and_rise_signal() {
     assert!(side(Need::Both).unwrap().is_some());
     set(&ctx, "dex.min_pool_liquidity_usd", json!(700)).await;
     assert_eq!(side(Need::Both), Ok(None));
-    tokio::time::sleep(Duration::from_millis(1200)).await;
+    // Отложенная проверка срабатывает не позже w + WIN; запас 0,5 с — на её задачу и запись (если бы она была).
+    let end = w + Duration::from_secs(WIN) + Duration::from_millis(500);
+    tokio::time::sleep_until(end.into()).await;
     assert_eq!(
         said(&ctx).await.len(),
         2,

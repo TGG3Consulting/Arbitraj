@@ -12,9 +12,10 @@
 //! Источник — cryptoalgebra/AlgebraV1.9, ветка direction-based-fee, коммит a45417ed5048c0a9ad3c673e41a00bb3c3880f6f:
 //! globalState — src/core/contracts/interfaces/pool/IAlgebraPoolState.sol:22-33 (PoolState.sol:8-17); liquidity —
 //! PoolState.sol:27; комиссия обмена по направлению — AlgebraPool.sol:739. Сырой битмап (rowNumber = tick >> 8, без
-//! деления на tickSpacing) — src/core/contracts/libraries/TickTable.sol этой ветки (в коммите a3dc950f до 237524b
-//! битмап был сжат на TICK_SPACING = 60; какая версия у пулов фабрики — проверяет запись: CREATE2 адреса пула с хешем
-//! кода POOL_INIT_CODE_HASH версии, tools/arbitrum_record/algebra_dir_fee.py).
+//! деления на tickSpacing) — src/core/contracts/libraries/TickTable.sol этой ветки (в коммитах 0d5612b … a3dc950
+//! января 2023 битмап сжат на TICK_SPACING = 60; первая версия с направленными комиссиями и сырым битмапом — 4ada8b0,
+//! 06.06.2023). Версию кода каждого пула сверяет проверка пула по CREATE2 (pools/verify_algebra_dir.rs,
+//! dex.pool_code_hashes); запись — tools/arbitrum_record/algebra_dir_fee.py.
 //!
 //! Комиссия — значение globalState на блоке чтения. Первый обмен в новой секунде пишет точку оракула и пересчитывает
 //! комиссии до шага цены (AlgebraPool.sol:777-795, _updateFee :549-558) — этого пересчёта здесь нет (как у THENA

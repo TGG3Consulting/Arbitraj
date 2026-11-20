@@ -12,23 +12,25 @@
 //! Тесты с меткой ignore до записи (метку снять после записи — docs/TASKS.md, «Решение 444»).
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/algebra_dir_common, arb::venues::bsc_dex::{math::{swap_algebra, algebra_fee},
-//! quote::virtual_quoter}.
+//! quote::virtual_quoter, pools::verify_algebra_dir}.
 
 mod algebra_dir_common;
 
 use std::collections::HashSet;
 
-use alloy_primitives::{Address, B256, U256, keccak256};
+use alloy_primitives::{Address, B256, U256};
 
 use arb::core::types::PoolState;
 use arb::venues::bsc_dex::math::algebra_fee::swap_fee;
 use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState};
+use arb::venues::bsc_dex::pools::verify_algebra_dir::pool_address;
 use arb::venues::bsc_dex::quote::virtual_quoter;
 
 use algebra_dir_common::{json, pool_state, pools, result};
 
 /// Хеши кода пула ветки direction-based-fee с feeZto/feeOtz и сырым битмапом (tools/arbitrum_record/README.md,
-/// таблица: коммиты 4ada8b0, 237524b, 4c885a5, cd4fd3b, c63c18f…a45417e).
+/// таблица: коммиты 4ada8b0, 237524b, 4c885a5, cd4fd3b, c63c18f…a45417e) — те же, что советует FIRST_RUN для
+/// dex.pool_code_hashes (ревью 444).
 const RAW_DIR: [&str; 5] = [
     "0xac97ff1b66ef7517262cbf16db0195b400714e8ecb499fc86f349e77f50ae89b",
     "0x0ca66607e4d0ece7798fce9ae13cad1a28be1eee443451573f92ba6e3bcd92b9",
@@ -57,13 +59,10 @@ fn pools_are_directional_raw_bitmap_code() {
     for p in pools() {
         let pool = addr(&p["pool"]);
         let (t0, t1) = (addr(&p["token0"]), addr(&p["token1"]));
-        let mut enc = [0u8; 64];
-        enc[12..32].copy_from_slice(t0.as_slice());
-        enc[44..64].copy_from_slice(t1.as_slice());
-        let salt = keccak256(enc);
+        // Та же функция, что у проверки пула ботом (verify_algebra_dir.rs, ревью 444).
         let hit: Vec<B256> = ok
             .iter()
-            .filter(|h| deployer.create2(salt, **h) == pool)
+            .filter(|h| pool_address(deployer, t0, t1, **h) == pool)
             .copied()
             .collect();
         assert_eq!(

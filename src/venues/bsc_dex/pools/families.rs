@@ -554,7 +554,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // (dex.quoter_virtual = да убирает dex.quoter из списка, virtual_quoter.rs); без него пул не подключается.
         Proto::AlgebraIntegral => list.extend(["dex.factory", "dex.quoter"]),
         // Решение 444: фабрика (poolByPair, событие Pool — как V1.9); квотер — виртуальный (dex.quoter_virtual = да).
-        Proto::AlgebraDirFee => list.extend(["dex.factory", "dex.quoter"]),
+        // Ревью 444: допустимые хеши кода пула (сверка версии по CREATE2 — verify_algebra_dir.rs).
+        Proto::AlgebraDirFee => list.extend(["dex.factory", "dex.pool_code_hashes", "dex.quoter"]),
         // Solidly (Topaz v2, THENA V1; решения 80, 85): только фабрика — ею проверяется пул (getPool(coin, quote,
         // stable), решение 59), читается комиссия (getFee(pool, stable), load_solidly.rs) и слушается событие создания
         // (PoolCreated). Квотер — сам пул (getAmountOut; адрес из справочника), отдельной настройки dex.quoter нет.

@@ -221,6 +221,7 @@ pub mod state_gen;
 pub mod ticks;
 pub mod verify;
 pub mod verify_algebra;
+pub mod verify_algebra_dir;
 pub mod verify_calls;
 pub mod verify_balancer;
 pub mod verify_lb;

@@ -12,6 +12,8 @@
 //! (живая запись 06.11.2026: poolByPair даёт другой адрес). Список деплоеров — dex.custom_deployers [DEX]: пул
 //! принимается, если его вернул poolByPair ИЛИ customPoolByPair хоть одного деплоера списка. Не задан — как раньше
 //! (только poolByPair).
+//! Ревью 444 (algebra_dir_fee): ещё сверка версии кода пула по CREATE2 (poolDeployer фабрики и dex.pool_code_hashes
+//! [DEX]) — verify_algebra_dir.rs; пул другой версии (например, со сжатым битмапом тиков) отклоняется с причиной.
 //! Кто вызывает: pools/verify.rs.
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_algebra.rs, discover.rs (Found, sorted), verify.rs.
 //! Настройки: dex.custom_deployers [DEX] (необязательная, Algebra Integral); dex.factory [DEX] (фабрика Algebra, например THENA Fusion 0x30055F87716d3DFD0E5198C27024481099fB4A98).
@@ -22,7 +24,7 @@
 use std::str::FromStr;
 
 use alloy::sol_types::SolCall;
-use alloy_primitives::{Address, Bytes};
+use alloy_primitives::{Address, B256, Bytes};
 
 use crate::core::types::PoolRef;
 
@@ -33,17 +35,19 @@ use super::abi_algebra_integral::IAlgebraIntegralFactory;
 use super::discover::{Found, sorted};
 use super::families::Proto;
 use super::verify::{Candidate, Verdict};
+use super::verify_algebra_dir;
 
 /// Проверка пачки кандидатов Algebra частями по `size` вызовов. Возвращает: итог по каждому (сбой узла на части —
 /// Failed). Ошибок нет.
 pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> {
     // По каждому кандидату — пул и сколько вызовов фабрики (poolByPair + customPoolByPair деплоеров).
-    let mut plans: Vec<Result<(Address, usize), String>> = Vec::new();
+    // Ревью 444: у algebra_dir_fee ещё допустимые хеши кода пула (последний вызов — poolDeployer фабрики).
+    let mut plans: Vec<Result<Planned, String>> = Vec::new();
     let mut calls: Vec<(Address, Bytes)> = Vec::new();
     for c in cands {
         match plan(ctx, c) {
-            Ok((pool, list)) => {
-                plans.push(Ok((pool, list.len())));
+            Ok((pool, list, hashes)) => {
+                plans.push(Ok((pool, list.len(), hashes)));
                 calls.extend(list);
             }
             Err(w) => plans.push(Err(w)),
@@ -53,22 +57,31 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
     let mut got = got.into_iter();
     let mut out = Vec::new();
     for (c, plan) in cands.iter().zip(plans) {
-        let (pool, n) = match plan {
+        let (pool, n, hashes) = match plan {
             Ok(v) => v,
             Err(w) => {
                 out.push(Verdict::Rejected(w));
                 continue;
             }
         };
-        let answers: Vec<_> = got.by_ref().take(n).collect();
+        let mut answers: Vec<_> = got.by_ref().take(n).collect();
+        if let Some(h) = hashes {
+            let deployer = answers.pop();
+            if let Some(v) = verify_algebra_dir::check(c, pool, deployer, &h) {
+                out.push(v);
+                continue;
+            }
+        }
         out.push(judge(c, pool, answers));
     }
     out
 }
 
 /// Вызовы фабрики для кандидата: poolByPair(coin, quote) и, у Algebra Integral с dex.custom_deployers,
-/// customPoolByPair(деплоер, coin, quote) по каждому. Ошибки (текст): не адрес пула, нет dex.factory, деплоер не адрес.
-fn plan(ctx: &Ctx, c: &Candidate) -> Result<(Address, Vec<(Address, Bytes)>), String> {
+/// customPoolByPair(деплоер, coin, quote) по каждому; у algebra_dir_fee (ревью 444) — последним poolDeployer() и
+/// допустимые хеши кода пула (verify_algebra_dir.rs). Ошибки (текст): не адрес пула, нет dex.factory, деплоер не
+/// адрес, dex.pool_code_hashes не задана / пуста / не хеши.
+fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     let pool = Address::from_str(&c.pool)
         .map_err(|_| format!("«{}» — не адрес контракта пула Algebra", c.pool))?;
     let factory = ctx
@@ -100,8 +113,19 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<(Address, Vec<(Address, Bytes)>), St
             list.push((factory, Bytes::from(data)));
         }
     }
-    Ok((pool, list))
+    if c.family.proto == Proto::AlgebraDirFee {
+        let hashes = verify_algebra_dir::hashes(ctx, c)?;
+        list.push(verify_algebra_dir::deployer_call(factory));
+        return Ok((pool, list, Some(hashes)));
+    }
+    Ok((pool, list, None))
 }
+
+/// План проверки кандидата: адрес пула, вызовы фабрики, допустимые хеши кода пула (только algebra_dir_fee).
+type Plan = (Address, Vec<(Address, Bytes)>, Option<Vec<B256>>);
+
+/// План после сбора вызовов: адрес пула, число вызовов, допустимые хеши кода пула.
+type Planned = (Address, usize, Option<Vec<B256>>);
 
 /// Итог по ответам фабрики: первый ответ — poolByPair (решает decide), остальные — customPoolByPair деплоеров
 /// (любой, вернувший этот пул, подтверждает его). Сбой узла по poolByPair — Failed. Ошибок нет.

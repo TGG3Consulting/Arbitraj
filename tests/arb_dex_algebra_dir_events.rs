@@ -6,6 +6,8 @@
 //!    globalState на блоке B (комиссии меняет только _updateFee, и он всегда шлёт Fee — AlgebraPool.sol:549-558).
 //! 2. Последний лог пула — Swap: после применения цена, тик и ликвидность = globalState и liquidity() на блоке B.
 //! 3. За каждым Fee в той же транзакции идёт ещё лог пула (Swap / Mint / Burn) — основание Follow в pools/settle.rs.
+//! 4. Ревью 444: в записи есть хотя бы один Fee (по всем пулам); topic0 каждого лога пула — из подписки вида
+//!    (events::topics) или из списка событий, не меняющих состояние (not_state).
 //!
 //! Тесты с меткой ignore до записи (метку снять после записи — docs/TASKS.md, «Решение 444»).
 //! Кто вызывает: cargo test.
@@ -17,6 +19,7 @@ mod native_common;
 
 use alloy::rpc::types::Log;
 use alloy::sol_types::SolEvent;
+use alloy_primitives::{B256, keccak256};
 
 use arb::core::types::{PoolRef, PoolState};
 use arb::venues::bsc_dex::pools::abi_algebra::IAlgebraPool;
@@ -37,10 +40,29 @@ fn logs() -> Vec<Log> {
     v
 }
 
+/// topic0 событий пула, которые бот не слушает: не меняют цену, тик, ликвидность, карту тиков и комиссии обмена
+/// (IAlgebraPoolEvents.sol ветки direction-based-fee: Initialize :14 — один раз при создании, Collect :46, Flash :81,
+/// CommunityFee :88, TickSpacing :94 — сырой битмап от шага не зависит, Incentive :100, LiquidityCooldown :113).
+fn not_state() -> Vec<B256> {
+    [
+        "Initialize(uint160,int24)",
+        "Collect(address,address,int24,int24,uint128,uint128)",
+        "Flash(address,address,uint256,uint256,uint256,uint256)",
+        "CommunityFee(uint8,uint8)",
+        "TickSpacing(int24)",
+        "Incentive(address)",
+        "LiquidityCooldown(uint32)",
+    ]
+    .iter()
+    .map(|sig| keccak256(sig.as_bytes()))
+    .collect()
+}
+
 #[test]
 #[ignore = "нет записи: tools/arbitrum_record/algebra_dir_fee.py"]
 fn fee_and_swap_logs_rebuild_recorded_state() {
     let all = logs();
+    let mut fees_all = 0;
     for p in pools() {
         let addr: alloy_primitives::Address = p["pool"].as_str().unwrap().parse().unwrap();
         let (state, _) = pool_state(&p);
@@ -55,9 +77,15 @@ fn fee_and_swap_logs_rebuild_recorded_state() {
             fee_otz: None,
         };
         let mine: Vec<&Log> = all.iter().filter(|g| g.address() == addr).collect();
+        let listened = events::topics(e.family);
         let mut fees = 0;
         for (i, g) in mine.iter().enumerate() {
             let t0 = g.topic0().copied();
+            let t = t0.expect("лог пула без topic0");
+            assert!(
+                listened.contains(&t) || not_state().contains(&t),
+                "{addr}: событие {t} не слушается и не из списка не меняющих состояние"
+            );
             let applied = events::apply(&mut e, g);
             if t0 == Some(IAlgebraDirPool::Fee::SIGNATURE_HASH) {
                 assert_eq!(applied, Applied::Updated, "{addr}: Fee применяется сразу");
@@ -72,6 +100,7 @@ fn fee_and_swap_logs_rebuild_recorded_state() {
         let PoolState::Algebra { fee, fee_otz, .. } = &e.pool.state else {
             panic!("не Algebra");
         };
+        fees_all += fees;
         if fees > 0 {
             assert_eq!(*fee, u32::from(gs.feeZto), "{addr}: feeZto");
             assert_eq!(*fee_otz, Some(u32::from(gs.feeOtz)), "{addr}: feeOtz");
@@ -101,4 +130,5 @@ fn fee_and_swap_logs_rebuild_recorded_state() {
             assert_eq!((s, t, l), (sqrt_price_x96, tick, liquidity), "{addr}: после Swap");
         }
     }
+    assert!(fees_all > 0, "в записи нет ни одного Fee — комиссии по событиям не проверены");
 }

@@ -121,7 +121,7 @@ pub fn algebra_more_at(ctx: &Ctx, pool: Address, b: &Book, tick: i32) -> Vec<Cal
 }
 
 /// Вызовы сырых слов tickTable [lo, hi] пула Algebra V1.9 (и с направленными комиссиями). Ошибок нет.
-pub fn algebra_words(pool: Address, (lo, hi): (i16, i16)) -> Vec<Call> {
+fn algebra_words(pool: Address, (lo, hi): (i16, i16)) -> Vec<Call> {
     (lo..=hi)
         .map(|w| enc(pool, &IAlgebraPool::tickTableCall { wordPosition: w }))
         .collect()

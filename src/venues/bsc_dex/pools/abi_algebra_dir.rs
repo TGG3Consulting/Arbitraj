@@ -3,7 +3,8 @@
 //! чем он отличается от Algebra V1.9 THENA Fusion (pools/abi_algebra.rs) — globalState с двумя комиссиями и событие
 //! Fee с двумя комиссиями. Остальное (Swap/Mint/Burn, liquidity, ticks, tickTable, tickSpacing, фабрика poolByPair и
 //! событие Pool) — то же, что у V1.9, и берётся из abi_algebra.rs.
-//! Кто вызывает: pools/load_algebra_dir.rs, pools/events_algebra_dir.rs, pools/prefetch_algebra_dir.rs, pools/settle.rs.
+//! Кто вызывает: pools/load_algebra_dir.rs, pools/events_algebra_dir.rs, pools/prefetch_algebra_dir.rs, pools/settle.rs,
+//! pools/verify_algebra_dir.rs.
 //! От чего зависит: alloy::sol!.
 //! Настройки: нет.
 //!
@@ -15,7 +16,9 @@
 //!   uint16 feeZto, uint16 feeOtz, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1,
 //!   bool unlocked); хранилище — src/core/contracts/base/PoolState.sol:8-17;
 //! - src/core/contracts/interfaces/pool/IAlgebraPoolEvents.sol:107 — event Fee(uint16 feeZto, uint16 feeOtz);
-//!   испускает AlgebraPool.sol:558 (_updateFee) при каждой смене комиссий.
+//!   испускает AlgebraPool.sol:558 (_updateFee) при каждой смене комиссий;
+//! - src/core/contracts/interfaces/IAlgebraFactory.sol:65 — poolDeployer() → address (ревью 444: сверка адреса пула
+//!   по CREATE2, AlgebraFactory.sol:127-134 — verify_algebra_dir.rs).
 //!
 //! Разница с main (779b5681, = THENA Fusion) по ядру — только комиссии: git diff main..a45417ed по
 //! src/core/contracts/AlgebraPool.sol, PoolState.sol, IAlgebraPoolEvents.sol, IAlgebraPoolState.sol (globalState,
@@ -28,6 +31,10 @@ alloy::sol! {
     interface IAlgebraDirPool {
         event Fee(uint16 feeZto, uint16 feeOtz);
         function globalState() external view returns (uint160 price, int24 tick, uint16 feeZto, uint16 feeOtz, uint16 timepointIndex, uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked);
+    }
+
+    interface IAlgebraDirFactory {
+        function poolDeployer() external view returns (address);
     }
 }
 
@@ -48,6 +55,10 @@ mod tests {
         assert_eq!(
             IAlgebraDirPool::globalStateCall::SELECTOR.to_vec(),
             keccak256(b"globalState()")[..4].to_vec()
+        );
+        assert_eq!(
+            IAlgebraDirFactory::poolDeployerCall::SELECTOR.to_vec(),
+            keccak256(b"poolDeployer()")[..4].to_vec()
         );
         assert_ne!(
             IAlgebraDirPool::Fee::SIGNATURE_HASH,

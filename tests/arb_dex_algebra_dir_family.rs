@@ -1,8 +1,8 @@
 //! Файл: tests/arb_dex_algebra_dir_family.rs
 //! Что делает: решение 444 (T433-F5) — подключение вида algebra_dir_fee (Algebra V1.9 с направленными комиссиями,
 //! Camelot V3) без сети: таблица сопоставления (dex.kind → Proto::AlgebraDirFee, вид ядра Cl, в графе, не tradable —
-//! исполнение шагом ALGEBRA исполнителя), обязательные настройки (фабрика; квотер — виртуальный: с
-//! dex.quoter_virtual = да dex.quoter не нужен), события подписки (Swap/Mint/Burn как у V1.9 + Fee(uint16, uint16)).
+//! исполнение шагом ALGEBRA исполнителя), обязательные настройки (фабрика, хеши кода пула — ревью 444; квотер —
+//! виртуальный: с dex.quoter_virtual = да dex.quoter не нужен), события подписки (Swap/Mint/Burn как у V1.9 + Fee(uint16, uint16)).
 //! Расчёт и события на записи узла — tests/arb_dex_algebra_dir.rs, tests/arb_dex_algebra_dir_events.rs.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex (families, exec_kind, events, abi_algebra_dir, virtual_quoter), arb::settings
@@ -79,10 +79,13 @@ async fn requires_factory_and_virtual_quoter() {
     let c = ctx("req").await;
     let id = "camelot-v3-t444";
     let f = families::make(id, "algebra_dir_fee").unwrap();
-    assert_eq!(families::required(&c, f), vec!["dex.factory", "dex.quoter"]);
+    assert_eq!(
+        families::required(&c, f),
+        vec!["dex.factory", "dex.pool_code_hashes", "dex.quoter"]
+    );
     c.settings
         .set("dex.quoter_virtual", Scope::Dex(id.into()), Some(json!(true)), "тест")
         .await
         .unwrap();
-    assert_eq!(families::required(&c, f), vec!["dex.factory"]);
+    assert_eq!(families::required(&c, f), vec!["dex.factory", "dex.pool_code_hashes"]);
 }

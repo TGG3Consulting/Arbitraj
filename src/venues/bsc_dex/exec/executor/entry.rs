@@ -236,12 +236,14 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             }
         },
         // Решение 440: пул Fluid DEX T1 — направление в порядке токенов самого пула (SmartColDebtData.token0), нативная
-        // монета пула на стороне входа / выхода и слой ликвидности — из прочитанного состояния; пул на паузе не
-        // исполняется.
+        // монета пула на стороне входа / выхода и слой ликвидности — из прочитанного состояния; пул на паузе или токен
+        // входа не из пула (ревью 440) — шаг не строится.
         ExecKind::Fluid => match &e.pool.state {
-            PoolState::SmartColDebt(d) if !d.paused => Params::Fluid(fluid_step(d, token_in)),
+            PoolState::SmartColDebt(d) if !d.paused && d.has(token_in) => {
+                Params::Fluid(fluid_step(d, token_in))
+            }
             _ => {
-                let why = format!("{}: у пула Fluid нет состояния или он на паузе", e.family.id);
+                let why = format!("{}: Fluid — нет состояния, пауза или чужой вход", e.family.id);
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },

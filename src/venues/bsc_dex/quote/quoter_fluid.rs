@@ -22,7 +22,8 @@ use super::super::pools::abi_fluid::IFluidDexReservesResolver as R;
 use super::super::pools::registry::Entry;
 
 /// Адрес резолвера и данные вызова estimateSwapIn. Принимает: окружение, запись пула, токен входа, сумму. Ошибки:
-/// Internal (у пула нет состояния SmartColDebt или ссылка не адрес), NotConfigured (dex.quoter).
+/// Internal (у пула нет состояния SmartColDebt или ссылка не адрес), NoRoute (токен входа не из пула), NotConfigured
+/// (dex.quoter).
 pub fn request(
     ctx: &Ctx,
     e: &Entry,
@@ -33,6 +34,10 @@ pub fn request(
     else {
         return Err(ctx.err(ErrorCode::Internal, "у пула Fluid не прочитано состояние"));
     };
+    // Ревью 440: токен входа не из пула — направление было бы ложным.
+    if !d.has(token_in) {
+        return Err(ctx.err(ErrorCode::NoRoute, "Fluid: токен входа не из пула"));
+    }
     let resolver = ctx.dex_addr("dex.quoter", e.family.id)?;
     let c = R::estimateSwapInCall {
         dex_: *pool,

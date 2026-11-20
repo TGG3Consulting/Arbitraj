@@ -122,7 +122,7 @@ fn coin(t: Address, wrapped: Option<Address>) -> Result<Address, String> {
 /// Сборка состояния из прочитанного (без сети; её же зовут тесты на записанных ответах). Принимает: прочитанное,
 /// обёртку нативной монеты. Возвращает: SmartColDebt. Ошибка (текст) — пул не читается (центральная цена 0 —
 /// резолвер получил откат getPricesAndExchangePrices), токены резолвера ≠ constantsView, время не в u64, нативная
-/// монета без обёртки, обе монеты — нативная и её обёртка.
+/// монета без обёртки, обе монеты — нативная и её обёртка, у включённой части нулевые мнимые резервы.
 pub fn state(r: &Raw, wrapped: Option<Address>) -> Result<PoolState, String> {
     let p = &r.reserves;
     let c = &r.constants;
@@ -136,16 +136,28 @@ pub fn state(r: &Raw, wrapped: Option<Address>) -> Result<PoolState, String> {
         return Err("время блока не в u64".into());
     };
     let token0 = coin(c.token0, wrapped)?;
-    if token0 == coin(c.token1, wrapped)? {
+    let token1 = coin(c.token1, wrapped)?;
+    if token0 == token1 {
         return Err("у пула и нативная монета, и её обёртка — пара неоднозначна".into());
     }
     let cr = &p.collateralReserves;
     let dr = &p.debtReserves;
+    let w2 = r.vars2;
+    // Ревью 440: резолвер при откате getCollateralReserves / getDebtReserves отдаёт нули (resolver main.sol L190, L247) —
+    // у включённой части нулевые мнимые резервы значат «не прочитано», а не цену.
+    let col_zero = cr.token0ImaginaryReserves.is_zero() || cr.token1ImaginaryReserves.is_zero();
+    if bits(w2, 0, 1) == 1 && col_zero {
+        return Err("смарт-залог включён, а его мнимые резервы 0 — резервы не прочитаны".into());
+    }
+    let debt_zero = dr.token0ImaginaryReserves.is_zero() || dr.token1ImaginaryReserves.is_zero();
+    if bits(w2, 1, 1) == 1 && debt_zero {
+        return Err("смарт-долг включён, а его мнимые резервы 0 — резервы не прочитаны".into());
+    }
     let l = &p.limits;
     let s = &r.scales;
-    let w2 = r.vars2;
     Ok(PoolState::SmartColDebt(Box::new(SmartColDebtData {
         token0,
+        token1,
         native0: c.token0 == NATIVE,
         native1: c.token1 == NATIVE,
         col_on: bits(w2, 0, 1) == 1,

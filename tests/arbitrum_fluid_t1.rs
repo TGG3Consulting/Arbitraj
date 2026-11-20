@@ -88,6 +88,7 @@ fn math_matches_pool_and_resolver_on_record() {
     let wrapped: Address = block["wrapped"].as_str().unwrap().parse().unwrap();
     let ts = block["timestamp"].as_u64().unwrap();
     let (mut same, mut checked, mut res_same, mut res_checked) = (0, 0, 0, 0);
+    let mut skipped: Vec<String> = Vec::new();
     for entry in std::fs::read_dir(&d).unwrap() {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap().to_str().unwrap().to_string();
@@ -95,8 +96,13 @@ fn math_matches_pool_and_resolver_on_record() {
             continue;
         }
         let rec = json(&path);
-        let Ok(PoolState::SmartColDebt(s)) = state_of(&rec, wrapped, ts) else {
-            continue;
+        let s = match state_of(&rec, wrapped, ts) {
+            Ok(PoolState::SmartColDebt(s)) => s,
+            Ok(_) => panic!("{name}: состояние не SmartColDebt"),
+            Err(why) => {
+                skipped.push(format!("{name}: {why}"));
+                continue;
+            }
         };
         for q in rec["quotes"].as_array().unwrap() {
             let dir0 = q["swap0to1"].as_bool().unwrap();
@@ -117,7 +123,9 @@ fn math_matches_pool_and_resolver_on_record() {
             };
             let v = dec::<R::estimateSwapInCall>(&r);
             res_checked += 1;
-            if fluid_check::quote_in(&s, dir0, amt) == (!v.is_zero()).then_some(v) {
+            // Резолвер отвечает 0 и при откате, и при нулевом выходе — у нас оба случая «нет выхода».
+            let ours = fluid_check::quote_in(&s, dir0, amt).filter(|x| !x.is_zero());
+            if ours == (!v.is_zero()).then_some(v) {
                 res_same += 1;
             } else {
                 eprintln!("{name} {dir0} {amt}: резолвер {v}");
@@ -125,6 +133,11 @@ fn math_matches_pool_and_resolver_on_record() {
         }
     }
     eprintln!("пул {same}/{checked}, резолвер {res_same}/{res_checked}");
+    // Ревью 440: пул записи без состояния — не молча: причина в выводе, пропусков быть не должно.
+    for w in &skipped {
+        eprintln!("пропущен {w}");
+    }
+    assert!(skipped.is_empty(), "пулы без состояния: {}", skipped.len());
     assert!(checked > 0, "в записи нет обменов");
     assert_eq!(same, checked, "порт _swapIn ≠ пулу");
     assert_eq!(res_same, res_checked, "≠ estimateSwapIn");

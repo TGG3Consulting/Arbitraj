@@ -131,6 +131,16 @@
   з) докупка (core/executor.rs, через risk::can_open) в остановленной сети отказывает — как и при общем «Стоп»;
   и) chain_off проверяется на отдельном коротком замке до основного (gate_input): сделка, прошедшая проверку за мгновение
      до «Стоп <сеть>», начнётся — то же окно, что у общего «Стоп».
+- **Решение 440 (ревью, правки) (20.11.2026, ветка t223-f1/arb-family-f1)** — по независимому ревью (порт _swapIn верен,
+  шаг FLUID безопасен, регрессий BSC нет); cargo не запускался. СДЕЛАНО: 1) из git убран
+  tools/arbitrum_record/__pycache__, `__pycache__/` — в .gitignore; 2) pools/load_fluid.rs state: у включённой части нулевые
+  мнимые резервы — ошибка (резолвер при откате getCollateralReserves / getDebtReserves отдаёт нули — ложная цена в граф
+  не идёт); 3) токен входа — только token0 / token1 пула (SmartColDebtData.token1, has): exec/executor/entry.rs,
+  quote/pool_quote.rs, quote/quoter_fluid.rs; kind.rs encode — у шага FLUID метка 0xEeee… отвергается; 4)
+  math/fluid_check.rs oracle_ok — консервативно: ветка «новая секунда» всегда, при последнем обмене в секунду блока
+  чтения — и ветка «та же секунда»; 5) tests/arbitrum_fluid_t1.rs — пулы без состояния печатаются с причиной и валят
+  тест; 0 у резолвера ↔ «нет выхода» или нулевой выход у нас; 6) quote/fluid_depth.rs — пометка «оценка» (без предела 50 %
+  и проверки резервов).
 - **Решение 440 (20.11.2026, ветка t223-f1/arb-family-f1) — семейство T433-F1 Fluid DEX T1 (вид `fluid_t1`, DEX
   T433-078 `fluid-arbitrum`); cargo не запускался — сборка и тесты в GitHub CI.** СДЕЛАНО (по исходникам
   Instadapp/fluid-contracts-public@404d73f91e6806f881f8dabeb30494f93f9e99b7 — единственный коммит официального репо):

@@ -38,6 +38,8 @@ pub struct DebtReserves {
 pub struct SmartColDebtData {
     /// token0 САМОГО пула (порядок пула, не по адресу; нативная монета уже заменена обёрткой) — по нему направление.
     pub token0: Address,
+    /// token1 самого пула (нативная монета заменена обёрткой) — вход шага только token0 или token1 (ревью 440).
+    pub token1: Address,
     /// token0 / token1 пула — нативная монета (в паре графа стоит обёртка).
     pub native0: bool,
     pub native1: bool,
@@ -72,4 +74,11 @@ pub struct SmartColDebtData {
     pub liquidity: Address,
     /// Время блока чтения (секунды Unix) — к нему проверка скачка цены.
     pub block_ts: u64,
+}
+
+impl SmartColDebtData {
+    /// Токен — одна из монет пула (token0 / token1, нативная монета — обёрткой). Ошибок нет.
+    pub fn has(&self, t: Address) -> bool {
+        t == self.token0 || t == self.token1
+    }
 }

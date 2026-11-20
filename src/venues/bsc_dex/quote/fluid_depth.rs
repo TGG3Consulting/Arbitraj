@@ -64,6 +64,8 @@ pub fn fee_pct(d: &SmartColDebtData) -> Option<Decimal> {
 }
 
 /// Одна часть в полосе: (вход, выход, дошли ли до края реального резерва) в приведённых единицах. None — переполнение.
+/// Ревью 440: это оценка для порога глубины, не обмен — без предела пула «вход ≤ половины мнимых резервов» (main.sol
+/// L194-L202) и без проверки остатка реальных резервов (_verifyToken*Reserves); их применяет котировка (fluid_swap.rs).
 fn part_band(p: &Part, grow: f64) -> Option<(U256, U256, bool)> {
     if p.in_imag.is_zero() || p.out_imag.is_zero() {
         return Some((U256::ZERO, U256::ZERO, false));

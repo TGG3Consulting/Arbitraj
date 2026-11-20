@@ -219,6 +219,11 @@ pub fn encode(s: &StepSpec) -> Result<ArbExecutor::Step, String> {
                 .into(),
         );
     }
+    // Ревью 440: у шага FLUID токены — ERC-20 (нативная монета пула — обёрткой, native в данных шага).
+    let fluid = matches!(s.params, Params::Fluid(_));
+    if fluid && (s.token_in == STABLE_NATIVE || s.token_out == STABLE_NATIVE) {
+        return Err("токен шага FLUID — метка 0xEeee… (не ERC-20): токен шага — обёртка".into());
+    }
     if let Params::V2 { fee_pips } = s.params
         && fee_pips >= 1_000_000
     {

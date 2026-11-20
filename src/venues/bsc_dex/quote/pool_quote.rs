@@ -489,6 +489,9 @@ pub fn swap(
             if !exact_in {
                 return Err(why("Fluid: точный выход не поддерживается"));
             }
+            if !d.has(token_in) {
+                return Err(why("Fluid: токен входа не из пула"));
+            }
             let q = fluid_check::quote_in(d, token_in == d.token0, amount);
             let out = q.ok_or_else(none)?;
             Ok(Swapped {

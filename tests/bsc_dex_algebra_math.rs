@@ -17,9 +17,9 @@ use std::collections::BTreeMap;
 
 use alloy_primitives::{I256, U256};
 
-use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState};
+use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState, NextTick};
 use arb::venues::bsc_dex::math::swap_step::step_v3;
-use arb::venues::bsc_dex::math::tick_math::{MAX_TICK, max_sqrt_ratio, sqrt_ratio_at_tick};
+use arb::venues::bsc_dex::math::tick_math::sqrt_ratio_at_tick;
 use arb::venues::bsc_dex::pools::ticks::{TickData, TickMap};
 
 fn u(s: &str) -> U256 {
@@ -171,7 +171,9 @@ fn one_tick(tick: i32, net: i128) -> TickMap {
 }
 
 /// Часть 2: цикл свопа пересекает один инициализированный тик — итог равен стыковке двух step_v3
-/// (до тика с L0, после тика с L0+net). Направление oneForZero (цена вверх, exactIn).
+/// (до тика с L0, после тика с L0+net). Направление oneForZero (цена вверх, exactIn). Решение 461: цель шага V1.9 —
+/// тик в строке битмапа или край строки (TickTable.nextTickInTheSameRow), поэтому сумма такая, что остаток
+/// исполняется внутри строки 0 (тики 0…255): цель второго шага — край строки, тик 255.
 #[test]
 fn swap_crosses_one_tick() {
     let l0 = 2_000_000_000_000_000_000u128;
@@ -183,11 +185,12 @@ fn swap_crosses_one_tick() {
         liquidity: l0,
         fee: 600,
         ticks: &tm,
+        next: NextTick::Row,
     };
-    let amount = u("1000000000000000000"); // достаточно, чтобы пересечь тик 60 и продолжить
+    let amount = u("10000000000000000"); // пересекает тик 60 и исполняется до края строки (тик 255)
     let got = swap_algebra::swap(&s, false, true, amount).unwrap();
 
-    // Эталон: шаг 1 до цены тика 60 (капает), пересечение (+net), шаг 2 остатком до предела цены.
+    // Эталон: шаг 1 до цены тика 60 (капает), пересечение (+net), шаг 2 остатком к краю строки (не доходит).
     let sqrt60 = sqrt_ratio_at_tick(60).unwrap();
     let a1 = I256::try_from(amount).unwrap();
     let (q1, in1, out1, fe1) = step_v3(p11(), sqrt60, l0, a1, 600).unwrap();
@@ -198,13 +201,12 @@ fn swap_crosses_one_tick() {
     let spent1 = in1 + fe1;
     let rem = amount - spent1;
     let l1 = l0 + net.unsigned_abs(); // oneForZero прибавляет liquidityDelta
-    let limit = max_sqrt_ratio() - U256::from(1u8);
-    let target2 = sqrt_ratio_at_tick(MAX_TICK).unwrap().min(limit);
+    let target2 = sqrt_ratio_at_tick(255).unwrap(); // край строки 0 — цель шага V1.9 после тика 60
     let (q2, in2, out2, fe2) =
         step_v3(sqrt60, target2, l1, I256::try_from(rem).unwrap(), 600).unwrap();
     assert!(
         q2 < target2,
-        "остаток должен исполниться до предела (частичного не ждём)"
+        "остаток должен исполниться внутри строки 0 (до тика 255)"
     );
 
     assert!(got.complete);
@@ -223,6 +225,7 @@ fn swap_stops_at_price_limit() {
         liquidity: l0,
         fee: 600,
         ticks: &tm,
+        next: NextTick::Row,
     };
     let limit = sqrt_ratio_at_tick(30).unwrap(); // предел до тика 60 — тик не пересекается
     let amount = u("1000000000000000000");
@@ -251,6 +254,7 @@ fn swap_partial_at_window_edge() {
         liquidity: 2_000_000_000_000_000_000u128,
         fee: 600,
         ticks: &tm,
+        next: NextTick::Row,
     };
     // Большая сумма вверх: цена дойдёт до края окна (тик 255), дальше тики неизвестны.
     let got = swap_algebra::swap(&s, false, true, u("1000000000000000000")).unwrap();

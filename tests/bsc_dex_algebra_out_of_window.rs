@@ -38,7 +38,7 @@ mod algebra_integral_common;
 use alloy_primitives::U256;
 use serde_json::Value;
 
-use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState, Swapped};
+use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState, NextTick, Swapped};
 use arb::venues::bsc_dex::math::tick_math::{MIN_TICK, sqrt_ratio_at_tick};
 use arb::venues::bsc_dex::pools::ticks::TickMap;
 use arb::venues::bsc_dex::quote::depth_band::band_ticks;
@@ -137,6 +137,7 @@ fn in_window_unchanged_against_recorded_quoter() {
             liquidity: liq,
             fee,
             ticks: &m,
+            next: NextTick::Linked,
         };
         for (zfo, amount, out) in small_quotes(p) {
             let r = swap_algebra::swap(&s, zfo, true, amount).expect("расчёт");
@@ -173,6 +174,7 @@ fn tick_outside_window_gives_zero_incomplete() {
                 liquidity: liq,
                 fee,
                 ticks: &m,
+                next: NextTick::Linked,
             };
             for (zfo, amount, _) in small_quotes(p) {
                 if !ways.contains(&zfo) {
@@ -216,6 +218,7 @@ fn tick_on_upper_edge_up_is_incomplete_down_counts() {
             liquidity: liq,
             fee,
             ticks: &m,
+            next: NextTick::Linked,
         };
         for (zfo, amount, _) in small_quotes(p) {
             let r = swap_algebra::swap(&s, zfo, true, amount).expect("расчёт");
@@ -256,6 +259,7 @@ fn empty_window_gives_zero_incomplete() {
             liquidity: liq,
             fee,
             ticks: &empty,
+            next: NextTick::Linked,
         };
         for (zfo, amount, _) in small_quotes(p) {
             let r = swap_algebra::swap(&s, zfo, true, amount).expect("расчёт");
@@ -272,6 +276,7 @@ fn at(map: &TickMap, sqrt: U256, tick: i32, liq: u128, fee: u32) -> AlgebraState
         liquidity: liq,
         fee,
         ticks: map,
+        next: NextTick::Linked,
     }
 }
 

@@ -22,7 +22,7 @@ use alloy_primitives::{Address, B256, U256};
 
 use arb::core::types::PoolState;
 use arb::venues::bsc_dex::math::algebra_fee::swap_fee;
-use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState};
+use arb::venues::bsc_dex::math::swap_algebra::{self, AlgebraState, NextTick};
 use arb::venues::bsc_dex::pools::verify_algebra_dir::pool_address;
 use arb::venues::bsc_dex::quote::virtual_quoter;
 
@@ -99,6 +99,8 @@ fn math_equals_pool_swap() {
                 liquidity,
                 fee: f,
                 ticks: &map,
+                // Решение 461: V1.9 — цель шага в строке битмапа (TickTable.nextTickInTheSameRow).
+                next: NextTick::Row,
             };
             let ours = swap_algebra::swap(&s, zfo, true, amount).unwrap();
             let at = &q["at_last_timepoint"];

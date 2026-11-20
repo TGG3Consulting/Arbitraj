@@ -291,6 +291,12 @@
       0xE5De15A9… = 0 → под #[ignore]; вопрос Тиграну (фабрика v1 на Arbitrum без пулов). ekubo — пулов 0 (id
       GeckoTerminal «ядро-PoolId», ekubo.py берёт только 66-значные) и логов ядра 0 за 2000 блоков → 3 теста под
       #[ignore]; правка ekubo.py (id после «-»), больший --log-blocks.
+    - T461-05 СДЕЛАНО (CI 20.11, DECISIONS 461 «Дополнение»): math_equals_pool_swap падал на 0x7cccba… zfo=false
+      34138539 (наш 20685556826089520 > пула 20685556221166268). Причина — цикл обмена Algebra V1/V1.9 шагает по строкам
+      битмапа (TickTable.nextTickInTheSameRow), мы прыгали к следующему инициализированному тику. Исправлено
+      (math/swap_algebra.rs NextTick::Row / Linked; quote/pool_quote.rs algebra_next) — затрагивает и BSC THENA Fusion.
+      Ручной расчёт по записи — 29 из 29 полных случаев = swap пула. Проверить зелёный CI: arb_dex_algebra_dir,
+      bsc_dex_algebra_math, bsc_dex_algebra_out_of_window, bsc_dex_algebra_integral_live.
   - T456-04 Выкладка: настройки области «DEX» площадки arb_dex по docs/notes/arbitrum/dex-settings-arbitrum.md и
     FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; развернуть v4 — T457-03.
   - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по

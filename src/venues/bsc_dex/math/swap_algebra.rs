@@ -20,6 +20,15 @@
 //! swap_cl::next_tick), — неполный итог с нулями (complete = false), как у V3, а не шаг к краю окна по другую сторону
 //! цены. Общая функция для THENA Fusion (V1/V1.9) и Algebra Integral, котировки (quote/pool_quote.rs) и глубины
 //! (quote/depth_band_algebra.rs); то же правило — blocked_by_window для перечитывания (pools/off_map_algebra.rs).
+//! (5) Решение 461 (запись узла Arbitrum 20.11, Camelot V3): цель шага у V1/V1.9 — НЕ следующий инициализированный тик,
+//! а TickTable.nextTickInTheSameRow: инициализированный тик в той же строке битмапа (256 сырых тиков) или, если его
+//! нет, край строки (неинициализированный — шаг до него без пересечения). Каждый шаг округляет вход вверх и выход вниз,
+//! поэтому прыжок через край строки давал выход БОЛЬШЕ пула (пул 0x7cccba…, 34138539 token1: 20685556826089520 против
+//! 20685556221166268 у swap пула). Источник: cryptoalgebra/AlgebraV1.9 direction-based-fee a45417ed
+//! src/core/contracts/AlgebraPool.sol:803 (цикл), :835-878 (пересечение / currentTick), libraries/TickTable.sol:65-108;
+//! то же в main 779b5681 (THENA Fusion) — AlgebraPool.sol:796, :828-871, TickTable.sol тот же. У Algebra Integral тики
+//! связаны списком: цель шага — сразу следующий инициализированный тик (cryptoalgebra/Algebra 1ff43e1
+//! src/core/contracts/base/SwapCalculation.sol:85, 123-137) — режим NextTick::Linked (прежнее поведение).
 //! ЭТОТ модуль — только математика (без сети): чтение состояния/тиков, события, квотер, граф — фаза B.
 //! Кто вызывает: quote/pool_quote.rs (котировка), quote/depth_band_algebra.rs (глубина, swap_to),
 //! pools/off_map_algebra.rs (blocked_by_window); тесты.
@@ -40,6 +49,16 @@ use super::tick_math::{MAX_TICK, MIN_TICK, max_sqrt_ratio, min_sqrt_ratio, sqrt_
 
 const OVERFLOW: &str = "переполнение/недобор в математике Algebra";
 
+/// Как цикл обмена выбирает цель шага (шапка, пункт 5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NextTick {
+    /// Algebra V1/V1.9 (THENA Fusion, Camelot V3 — algebra_dir_fee): TickTable.nextTickInTheSameRow —
+    /// инициализированный тик в строке битмапа или край строки.
+    Row,
+    /// Algebra Integral: связный список тиков — сразу следующий инициализированный тик.
+    Linked,
+}
+
 /// Состояние пула Algebra для расчёта обмена.
 pub struct AlgebraState<'a> {
     pub sqrt_price: U256,
@@ -48,6 +67,8 @@ pub struct AlgebraState<'a> {
     /// Комиссия пула в пипсах (единицы 1e-6), постоянная на весь своп (globalState.fee; см. шапку, пункт 2).
     pub fee: u32,
     pub ticks: &'a TickMap,
+    /// Выбор цели шага по версии кода пула (шапка, пункт 5).
+    pub next: NextTick,
 }
 
 /// Итог обмена.
@@ -97,12 +118,20 @@ pub fn swap_to(
         return Ok((partial(U256::ZERO, U256::ZERO), false));
     }
     while !remaining.is_zero() && sqrt != limit {
-        // Следующий инициализированный тик в сторону обмена (TickTable.nextTickInTheSameRow, lte = zeroToOne).
-        // Нет такого в прочитанном окне — идём к краю окна (за ним тики неизвестны: частичный итог).
-        let init = next_init(s.ticks, tick, zero_for_one);
-        let (bound, is_cross) = match init {
-            Some(t) if t >= lo && t <= hi => (t, true),
-            _ => (if zero_for_one { lo } else { hi }, false),
+        let (bound, is_cross) = match s.next {
+            // V1/V1.9: строка, где ищется цель, должна быть прочитана (окно — целые строки); иначе частичный итог.
+            NextTick::Row => {
+                if !starts_in_window(tick, lo, hi, zero_for_one) {
+                    return Ok((partial(total_in, total_out), false));
+                }
+                in_same_row(s.ticks, tick, zero_for_one)
+            }
+            // Integral: следующий инициализированный тик; нет его в прочитанном окне — идём к краю окна (за ним тики
+            // неизвестны: частичный итог).
+            NextTick::Linked => match next_init(s.ticks, tick, zero_for_one) {
+                Some(t) if t >= lo && t <= hi => (t, true),
+                _ => (if zero_for_one { lo } else { hi }, false),
+            },
         };
         let bound = bound.clamp(MIN_TICK, MAX_TICK);
         let sqrt_bound = sqrt_ratio_at_tick(bound).ok_or("цена тика вне диапазона TickMath")?;
@@ -131,7 +160,12 @@ pub fn swap_to(
         total_out = total_out.checked_add(a_out).ok_or(OVERFLOW)?;
         if sqrt == sqrt_bound {
             if !is_cross {
-                // Дошли до края прочитанного окна — за ним тики неизвестны: итог частичный.
+                if s.next == NextTick::Row {
+                    // Край строки без инициализированного тика: ликвидность не меняется (AlgebraPool.sol:835-878).
+                    tick = if zero_for_one { bound - 1 } else { bound };
+                    continue;
+                }
+                // Integral: дошли до края прочитанного окна — за ним тики неизвестны: итог частичный.
                 return Ok((partial(total_in, total_out), false));
             }
             // Пересечение инициализированного тика: liquidity ± liquidityDelta (zeroToOne вычитает, иначе прибавляет —
@@ -169,7 +203,30 @@ pub fn swap_to(
     ))
 }
 
-/// Следующий инициализированный тик карты в сторону обмена (TickTable.nextTickInTheSameRow): zeroToOne (lte) — не
+/// Цель шага V1/V1.9 — порт TickTable.nextTickInTheSameRow (AlgebraV1.9 a45417ed libraries/TickTable.sol:65-108):
+/// lte (zeroToOne) — строка тика `cur` (rowNumber = cur >> 8), наибольший инициализированный тик не выше `cur`, иначе
+/// начало строки; иначе — строка тика cur + 1, наименьший инициализированный тик не ниже cur + 1, иначе конец строки.
+/// boundTick — в пределах [MIN_TICK; MAX_TICK]. Строка должна быть в прочитанном окне (проверяет swap_to).
+/// Возвращает: (тик, инициализирован ли). Ошибок нет.
+fn in_same_row(t: &TickMap, cur: i32, zero_for_one: bool) -> (i32, bool) {
+    let (tick, init) = if zero_for_one {
+        let start = cur - cur.rem_euclid(256);
+        match t.ticks.range(start..=cur).next_back() {
+            Some((k, _)) => (*k, true),
+            None => (start, false),
+        }
+    } else {
+        let from = cur + 1;
+        let end = from - from.rem_euclid(256) + 255;
+        match t.ticks.range(from..=end).next() {
+            Some((k, _)) => (*k, true),
+            None => (end, false),
+        }
+    };
+    (tick.clamp(MIN_TICK, MAX_TICK), init)
+}
+
+/// Следующий инициализированный тик карты в сторону обмена (Algebra Integral, связный список): zeroToOne — не
 /// больше `cur`; иначе — строго больше `cur`. None — в прочитанных тиках такого нет. Ошибок нет.
 fn next_init(t: &TickMap, cur: i32, zero_for_one: bool) -> Option<i32> {
     if zero_for_one {

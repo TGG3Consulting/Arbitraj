@@ -70,4 +70,60 @@ pub struct CryptoData {
     pub i0: u8,
     /// Индекс монеты token1 в пуле.
     pub i1: u8,
+    /// Решение 472: состояние для проверки `tweak_price` после обмена (откат пула после расчёта выхода). None — не
+    /// прочитано (версия без модели — расчёт как раньше). `#[serde(default)]` — старые записи эпизодов.
+    #[serde(default)]
+    pub tweak: Option<CryptoTweak>,
+}
+
+/// Решение 472: то, что читает `tweak_price` crypto-пула после обмена (Twocrypto-NG `tweak_price`) — с контракта пула
+/// на блоке. Проверяет адаптер (math/crypto_tweak2.rs).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CryptoTweak {
+    /// Цена оракула монет 1..N−1 к монете 0 в 18 знаках (`price_oracle()` на блоке чтения — то же скользящее среднее,
+    /// что `tweak_price` считает на блоке обмена).
+    pub price_oracle: Vec<U256>,
+    /// Число LP-токенов (`totalSupply()`).
+    pub total_supply: U256,
+    /// Накопленная доходность (`xcp_profit()`).
+    pub xcp_profit: U256,
+    /// Виртуальная цена LP (`virtual_price()`).
+    pub virtual_price: U256,
+    /// allowed_extra_profit (`packed_rebalancing_params` >> 128).
+    pub allowed_extra_profit: U256,
+    /// adjustment_step (`packed_rebalancing_params` >> 64, младшие 64 бита; у crypto v1 — `adjustment_step()`).
+    pub adjustment_step: U256,
+    /// Решение 472 (T472-03): то, что дополнительно читает `tweak_price` crypto v1 фабрики (CurveCryptoSwap2ETH) и его
+    /// `_claim_admin_fees`. None — у NG и у пулов v1 без этих чтений. `#[serde(default)]` — старые записи эпизодов.
+    #[serde(default)]
+    pub v1: Option<CryptoTweakV1>,
+}
+
+/// Решение 472 (T472-03): состояние ветки подстройки и `_claim_admin_fees` пула crypto v1 фабрики
+/// (curvefi/curve-factory-crypto 7ed1011 CurveCryptoSwap2ETH.vy L475-L513, L592-L640). Проверяет адаптер
+/// (math/crypto_tweak_v1.rs).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CryptoTweakV1 {
+    /// `not_adjusted: bool` (L153, геттера нет) — слово слота хранилища, ненулевое — true.
+    pub not_adjusted: bool,
+    /// Прибыль на последнем сборе комиссий (`xcp_profit_a()`).
+    pub xcp_profit_a: U256,
+    /// Доля админа (`admin_fee()`), числитель над 10^10.
+    pub admin_fee: U256,
+    /// Получатель комиссий фабрики (`Factory.fee_receiver()`) не нулевой.
+    pub fee_receiver: bool,
+    /// Фактические балансы пула по порядку монет (gulp L482-L487): у монеты WETH20 — ETH пула, у прочих —
+    /// `balanceOf(пул)`. Пусто — у tricrypto 2021 (tweak_price `_claim_admin_fees` не зовёт).
+    pub gulp: Vec<U256>,
+    /// Текст пула фабрики (CurveCryptoSwap2ETH): norm и шаг max(adjustment_step, norm / 5) до условия подстройки
+    /// (L585-L590), в условии `norm > adjustment_step and old_virtual_price > 0` (L595), `_claim_admin_fees` и при норме
+    /// ниже шага (L636-L639). false — CurveCryptoSwap2 без фабрики (EURS/2CRV, «2021-10-30. EURS/CryptoSwap.vy»): norm
+    /// и шаг без max — только внутри подстройки (L639-L645), условие без norm / old (L635), без подстройки — без
+    /// `_claim_admin_fees` (L647, L678-L681); оракул — сохранённый (L98), получатель — admin_fee_receiver (L557), токен —
+    /// константа (L92), gulp — balanceOf (L548-L550).
+    #[serde(default)]
+    pub factory: bool,
+    /// Последние цены монет 1..N−1 (`last_prices(k)`; нужны tricrypto 2021 — цена сделки и упаковка, L486-L499).
+    #[serde(default)]
+    pub last_prices: Vec<U256>,
 }

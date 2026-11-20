@@ -126,6 +126,7 @@ fn math_case(probe: &Value, st: &PoolState, pre: &str, q: &str) -> usize {
         amp_precision: d.amp_precision,
         max_rounds: d.max_rounds,
         strict: d.strict,
+        pair_d: d.pair_d,
     };
     assert!(!d.halted);
     let mut n = 0;

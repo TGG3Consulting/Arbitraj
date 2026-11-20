@@ -342,6 +342,7 @@ fn side(
                 amp_precision: d.amp_precision,
                 max_rounds: d.max_rounds,
                 strict: d.strict,
+                pair_d: d.pair_d,
             };
             super::stable_depth::side(
                 &d.balances,

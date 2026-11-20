@@ -65,11 +65,12 @@ pub fn need_v4_for(refused: bool) -> &'static str {
     }
 }
 
-/// Решения 470, 474: «что делать», когда шагу нужен исполнитель v5 (AERO_BASIC = 26, BALANCER_V3_BUF = 27): сборки v5
-/// ещё нет. Одно имя «нужен v5» для всех шагов v5 (слияние t247). Ошибок нет.
+/// Решения 470, 472, 474: «что делать», когда шагу нужен исполнитель v5 (AERO_BASIC = 26, BALANCER_V3_BUF = 27,
+/// CURVE_ETH = 28): сборки v5 ещё нет. Одно имя «нужен v5» для всех шагов v5 (слияние t247: в ветке t242 было
+/// `NEED_V5`). Ошибок нет.
 pub fn need_v5() -> &'static str {
     "нужен исполнитель v5 — сборки v5 ещё нет (contracts/out/ — v4; пересборка и развёртывание — \
-     решения 470, 474, docs/TASKS.md)"
+     решения 470, 472, 474, docs/TASKS.md)"
 }
 
 /// Память итогов: версия → сигнатура → None — вызов есть, Some — причина.
@@ -232,8 +233,9 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
 /// С какой версии исполнителя есть вид шага (у более ранней диспетчер _step откатывает «kind»). Решение 284: v2 —
 /// NOMI_STABLE = 12, METRIC = 13, IZI = 14 — решение 286, KYBER_DMM = 15 — решение 287, SMARDEX = 16 — решение 288,
 /// BALANCER = 17 — решение 289, LB = 18 — решение 290. Решение 395 (t181): v3 — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21.
-/// Решения 440, 441, 445, 447, 456: v4 — FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25. Решение 470: v5 —
-/// AERO_BASIC = 26. Остальные — с v1.
+/// Решения 440, 441, 445, 447, 456: v4 — FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25. Решения 470, 472: v5 —
+/// AERO_BASIC = 26, CURVE_ETH = 28 (BALANCER_V3_BUF = 27, решение 474, — не вид семейства: метка кода
+/// kind_buffer::BUFFER_MARK). Остальные — с v1.
 /// Принимает: вид шага. Ошибок нет.
 pub fn since(k: ExecKind) -> Version {
     match k {
@@ -254,6 +256,8 @@ pub fn since(k: ExecKind) -> Version {
         ExecKind::Ekubo => Version::V4,
         // Решение 470 (T470-06): AERO_BASIC = 26 — только v5 (сборки v5 пока нет: нужна сборка исполнителя v5).
         ExecKind::AeroBasic => Version::V5,
+        // Решение 472 (T472-08): CURVE_ETH = 28 — только v5 (сборки v5 пока нет: нужна сборка исполнителя v5).
+        ExecKind::CurveEth => Version::V5,
         _ => Version::V1,
     }
 }
@@ -331,6 +335,21 @@ pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Решение 472 (T472-08): шаг CURVE_ETH — только v5; у v1–v4 — причина «нужен исполнитель v5» (need_v5); у v5
+    /// сборки нет — check даёт причину, а не «селектор есть».
+    #[test]
+    fn curve_eth_only_v5() {
+        assert_eq!(since(ExecKind::CurveEth), Version::V5);
+        for v in [Version::V1, Version::V2, Version::V3, Version::V4] {
+            let why = step_absent(ExecKind::CurveEth, v).expect("шага нет");
+            assert!(why.contains("CURVE_ETH") && why.contains(need_v5()), "{v:?}: {why}");
+        }
+        assert!(step_absent(ExecKind::CurveEth, Version::V5).is_none());
+        assert!(step_absent(ExecKind::Curve, Version::V1).is_none());
+        assert!(check(Version::V5, "tokenX()").is_some());
+        assert_eq!(Version::parse("v5"), Some(Version::V5));
+    }
 
     /// Решение 445 (ревью): шаг LB20 — только v4; у v1 / v2 / v3 — причина «нужен v4», шаг LB — с v2. Решение 457:
     /// сборка v4 есть — селектор tokenX() (0x16dc165b, ILBPairV20) в коде v4 есть, в v3 (out/v3/) — нет.

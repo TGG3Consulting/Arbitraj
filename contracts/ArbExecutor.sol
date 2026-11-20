@@ -28,13 +28,14 @@
 // MEVCapture); всё прочее — как v3. Номера шагов v4 — решение 456 (слияние семейств Arbitrum, без пересечений).
 // Артефакты contracts/out/ — ещё v3: сборка solc (contracts/build.sh) — вне агентов; пересобирать — только как v4, не на
 // месте v3 (бот: Version::V4, src/venues/bsc_dex/pools/exec_callback.rs since).
-// v5 (решения 470, 474; слияние t247) — + шаги AERO_BASIC = 26 (решение 470, T470-06: пул Aero Basic,
-// Dromos-Labs/metadex-public 79c8d5b6: выход — getAmountOutWithTotalFee пула с MEV-налогом, Pool.sol L548-L555) и
+// v5 (решения 470, 472, 474; слияние t247) — + шаги AERO_BASIC = 26 (решение 470, T470-06: пул Aero Basic,
+// Dromos-Labs/metadex-public 79c8d5b6: выход — getAmountOutWithTotalFee пула с MEV-налогом, Pool.sol L548-L555),
 // BALANCER_V3_BUF = 27 (решение 474: пул Balancer V3 с обменом через буфер ERC4626 хранилища — монета шага — базовый
 // токен обёртки пула: в том же unlock, что BALANCER_V3, — erc4626BufferWrapOrUnwrap (WRAP) → swap →
-// erc4626BufferWrapOrUnwrap (UNWRAP) → settle / sendTo; шаг 23 — как был, обёрток нет); всё прочее — как v4. Сборки v5
-// нет: contracts/out/ — v4; пересобрать как v5 (бот: Version::V5) — вне агентов (docs/TASKS.md «нужна сборка
-// исполнителя v5»).
+// erc4626BufferWrapOrUnwrap (UNWRAP) → settle / sendTo; шаг 23 — как был, обёрток нет) и CURVE_ETH = 28 (решение 472,
+// T472-08: пул Curve с нативным ETH — exchange{value}(int128, int128, uint256, uint256), обёртка withdraw / deposit);
+// всё прочее — как v4. Сборки v5 нет: contracts/out/ — v4; пересобрать как v5 (бот: Version::V5) — вне агентов
+// (docs/TASKS.md «нужна сборка исполнителя v5»).
 pragma solidity 0.8.37;
 
 import "./IPools.sol";
@@ -122,6 +123,12 @@ contract ArbExecutor {
     // swap L172 — _getSwapFee L389-L397 с тем же msg.sender = исполнитель), swap — подпись V2 (L143). data пусто. Шаг
     // SOLIDLY считает выход getAmountOut (L537-L545: только базовая комиссия) — при налоге > 0 своп откатился бы по K (L193).
     uint8 internal constant AERO_BASIC = 26;
+    // Решение 472 (T472-08, только v5): пул Curve с нативным ETH — монета 0xEeee… пула (curvefi/curve-factory f389123
+    // Plain2ETH.vy / Plain3ETH.vy / Plain4ETH.vy, 5272fd2 Plain2ETHEMA.vy: coins[0] = 0xEeee…, Plain2ETH L133).
+    // exchange(int128, int128, uint256, uint256) @payable (L537-L546: перегрузка с _receiver = msg.sender): вход ETH —
+    // `assert msg.value == _dx` (L580), выход ETH — raw_call(_receiver, b"", value=dy) (L606, весь газ). data =
+    // abi.encode(int128 i, int128 j, bool ethIn); токены шага — обёртка wnative и встречная монета (_curveEth).
+    uint8 internal constant CURVE_ETH = 28;
     // Пределы цены Ekubo MIN_SQRT_RATIO_RAW / MAX_SQRT_RATIO_RAW (evm-contracts@61d09daa src/types/sqrtRatio.sol L13, L15):
     // тот же предел ставит Router (withDefaultSqrtRatioLimit, swapParameters.sol L74-L82).
     uint256 internal constant EKUBO_MIN_SQRT = 4611797791050542631;
@@ -147,8 +154,9 @@ contract ArbExecutor {
     // zeroForOne); BALANCER — abi.encode(bytes32 poolId); BALANCER_V3 — abi.encode(address pool); BALANCER_V3_BUF —
     // abi.encode(address pool, address wIn, address wOut) (решение 474); UNI_V4 —
     // abi.encode(V4PoolKey); INF_CL / INF_BIN — abi.encode(InfPoolKey); FLUID — abi.encode(bool swap0to1, uint8 native,
-    // address liquidity); EKUBO — abi.encode(bytes32 config, bool native, bool forward) (решение 454); остальные —
-    // пусто.
+    // address liquidity); EKUBO — abi.encode(bytes32 config, bool native, bool forward) (решение 454); CURVE_ETH —
+    // abi.encode(int128 i, int128 j, bool ethIn) (решение 472: ethIn — монета i нативная, tokenIn = обёртка; иначе
+    // монета j нативная, tokenOut = обёртка); остальные — пусто.
     struct Step {
         uint8 kind;
         address pool;
@@ -206,7 +214,7 @@ contract ArbExecutor {
     // получает вход transferFrom(владелец → пул) напрямую, без захода в исполнитель: налог перевода — один раз
     // (как у Universal Router через Permit2). Для цикла (tokenIn = tokenOut) — как обычно (итог меряется после забора);
     // цикл — ровно одна доля: вход маршрута берёт только первый шаг и целиком (10000 bps). Иначе выход вида с выходом
-    // на исполнитель (CURVE / STABLE_U256 / SADDLE / STABLE_U256_BNB) — тот же токен — посчитался бы входом следующей
+    // на исполнитель (CURVE / STABLE_U256 / SADDLE / STABLE_U256_BNB / CURVE_ETH) — тот же токен — посчитался бы входом следующей
     // доли (ревью).
     function execute(
         address tokenIn,
@@ -247,8 +255,8 @@ contract ArbExecutor {
     //   Покупка: выход шагов в обёртке копится на исполнителе (outTo = исполнитель) — шаг с tokenIn = обёртка потратил бы
     //   уже полученное ([USDT→WBNB, WBNB→USDT] проходил). Продажа: шаг с tokenOut = обёртка вернул бы обёртку в остаток
     //   входа (доли следующих шагов и возврат остатка считались бы с ним), шаг с tokenIn = выход — тратил бы выход,
-    //   оставшийся на исполнителе (виды CURVE / STABLE_U256 / SADDLE). Легальные маршруты (доли, многошаговые, шаг
-    //   STABLE_U256_BNB) так не ходят: вход маршрута только расходуется, выход только копится.
+    //   оставшийся на исполнителе (виды CURVE / STABLE_U256 / SADDLE). Легальные маршруты (доли, многошаговые, шаги
+    //   STABLE_U256_BNB и CURVE_ETH — решение 472) так не ходят: вход маршрута только расходуется, выход только копится.
     // Ревью А3: событие NativeSettled(nativeIn, nativeOut) — только свои операции: продажа — (value, BNB, пришедший при
     //   развороте остатка обёртки), покупка — (0, BNB, пришедший при развороте выхода). Посторонний BNB (selfdestruct) и
     //   посторонний WBNB на исполнителе до шагов уходят владельцу (_sweepBnb, _sweep), но в событие и в «получено» не
@@ -407,6 +415,8 @@ contract ArbExecutor {
             _stable(s, amount);
         } else if (k == STABLE_U256_BNB) {
             _stableBnb(s, amount);
+        } else if (k == CURVE_ETH) {
+            _curveEth(s, amount);
         } else if (k == DODO) {
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             if (IDodoPool(s.pool)._BASE_TOKEN_() == s.tokenIn) IDodoPool(s.pool).sellBase(to);
@@ -514,6 +524,38 @@ contract ArbExecutor {
             // Ревью А3: в обёртку — только BNB, пришедший от пула этим шагом (посторонний BNB остаётся и уходит
             // владельцу в _sweepBnb, в выход шага не попадает).
             IWBNB(s.tokenOut).deposit{value: address(this).balance - bnbHad}();
+        }
+        require(IERC20(s.tokenOut).balanceOf(address(this)) > had, "out");
+    }
+
+    // Решение 472 (T472-08, v5): пул Curve с нативным ETH (CURVE_ETH, ссылки — у константы). Как _stableBnb, но
+    // exchange(int128, int128, uint256, uint256) Curve (ICurveEthPool). Токены шага — обёртка (ERC-20) и встречная монета.
+    // ethIn: обёртка.withdraw(сумма) (ETH приходит от обёртки — bnbFrom = обёртка) → exchange{value: сумма}(i, j, сумма, 0)
+    //   без approve; встречная монета — исполнителю, должна вырасти.
+    // !ethIn: approve пулу ровно на шаг → exchange(i, j, сумма, 0) (ETH приходит от пула — bnbFrom = пул) → пришедший от
+    //   пула ETH (разность баланса) → обёртка.deposit; обёртка исполнителя должна вырасти; разрешение после шага — 0.
+    function _curveEth(Step calldata s, uint256 amount) internal {
+        require(s.tokenIn != NATIVE && s.tokenOut != NATIVE, "native");
+        (int128 i, int128 j, bool ethIn) = abi.decode(s.data, (int128, int128, bool));
+        uint256 had = IERC20(s.tokenOut).balanceOf(address(this));
+        if (ethIn) {
+            require(s.tokenIn.code.length > 0, "token code");
+            bnbFrom = s.tokenIn;
+            IWBNB(s.tokenIn).withdraw(amount);
+            bnbFrom = address(0);
+            ICurveEthPool(s.pool).exchange{value: amount}(i, j, amount, 0);
+        } else {
+            _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount)));
+            uint256 ethHad = address(this).balance;
+            bnbFrom = s.pool;
+            ICurveEthPool(s.pool).exchange(i, j, amount, 0);
+            bnbFrom = address(0);
+            if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
+                _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
+            }
+            require(s.tokenOut.code.length > 0, "token code");
+            // Только ETH, пришедший от пула этим шагом (посторонний остаётся и уходит владельцу в _sweepBnb).
+            IWBNB(s.tokenOut).deposit{value: address(this).balance - ethHad}();
         }
         require(IERC20(s.tokenOut).balanceOf(address(this)) > had, "out");
     }

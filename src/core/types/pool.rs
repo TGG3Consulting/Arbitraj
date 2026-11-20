@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use super::market::VenueId;
 pub use super::pool_amp::AmpV2Data;
-pub use super::pool_crypto::{CryptoData, CryptoMath};
+pub use super::pool_crypto::{CryptoData, CryptoMath, CryptoTweak};
 pub use super::pool_ekubo::{EkuboData, EkuboMev, EkuboTick, EkuboTwamm};
 pub use super::pool_fictive::FictiveData;
 pub use super::pool_lb::LbBinData;
@@ -313,7 +313,8 @@ pub struct LadderPoint {
 }
 
 /// Состояние пула StableSwap (решение 122 F) — боксируется в `PoolState::StableSwap`. Математика — в адаптере.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Debug — pool_stable_debug.rs (решение 472: поле pair_d выводится только при true — снимки прежних видов прежние).
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct StableData {
     /// Балансы монет пула по порядку монет пула (`balances(k)`), в единицах монеты.
     pub balances: Vec<U256>,
@@ -353,6 +354,17 @@ pub struct StableData {
     /// комиссией с выхода (Curve 2020, NG). Математика — в адаптере. `#[serde(default)]` — старые записи эпизодов.
     #[serde(default)]
     pub input_fee: bool,
+    /// Решение 472: D_P пула из двух монет одной строкой `D·D/x0·D/x1/4` (Curve 2021 — 2pool Arbitrum, Plain2Basic
+    /// фабрики; адаптер: math/stableswap_v1.rs Template::pair_d). false — прочие шаблоны. `#[serde(default)]` — старые
+    /// записи эпизодов.
+    #[serde(default)]
+    pub pair_d: bool,
+    /// Решение 472 (доделка): после расчёта выхода обмен сохраняет цену пула `save_p` — `pack_prices` откатывает
+    /// обмен, если цена `_get_p` после него ≥ 2^128 (реализации фабрики Curve с оракулом цены: Plain2BasicEMA,
+    /// Plain2ETHEMA; адаптер: math/stable_ema.rs). false — у пула такой проверки нет. `#[serde(default)]` — старые
+    /// записи эпизодов.
+    #[serde(default)]
+    pub ema: bool,
 }
 
 /// Данные шаблона StableSwap-NG (решение «122 (Infinity Stable)») — с контракта пула на блоке. Курсы монет с внешним

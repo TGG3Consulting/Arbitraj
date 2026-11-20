@@ -110,5 +110,7 @@ pub fn state(
         ng: None,
         native: None,
         input_fee: true,
+        pair_d: false,
+        ema: false,
     })))
 }

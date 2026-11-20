@@ -107,6 +107,11 @@ pub enum ExecKind {
     /// V3/src/pools/Pool.sol L548-L555). Шаг 26 — только исполнитель v5 (exec_callback.rs since). Вид семейства
     /// aero_basic остаётся SOLIDLY (of); шаг AERO_BASIC выбирает for_version по версии исполнителя кошелька.
     AeroBasic,
+    /// Решение 472 (T472-08): пул Curve с нативным ETH (Plain*ETH / Plain2ETHEMA фабрики Curve) — как CURVE, но монета
+    /// пары нативная: обёртка withdraw → exchange{value} / приход ETH от пула → deposit (contracts/ArbExecutor.sol
+    /// _curveEth). Шаг 28 — только исполнитель v5 (exec_callback.rs since). Вид семейства остаётся CURVE (of); шаг
+    /// CURVE_ETH выбирает exec/executor/entry.rs, когда монета пары — нативная монета пула (StableData.native).
+    CurveEth,
 }
 
 impl ExecKind {
@@ -138,6 +143,7 @@ impl ExecKind {
             ExecKind::Fluid => "FLUID",
             ExecKind::Ekubo => "EKUBO",
             ExecKind::AeroBasic => "AERO_BASIC",
+            ExecKind::CurveEth => "CURVE_ETH",
         }
     }
 
@@ -184,7 +190,13 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "dodo_dvm" | "dodo_dpp" | "dodo_dsp" => ExecKind::Dodo,
         // Решение 275: Curve StableSwap-NG — exchange(int128, int128, dx, min_dy) с receiver = msg.sender по умолчанию
         // (curvefi/stableswap-ng 3332cd4, CurveStableSwapNG.vy L504-L531): тот же шаг CURVE.
-        "curve_stableswap" | "curve_stableswap_ng" => ExecKind::Curve,
+        // Решение 472: Curve StableSwap 2021 (2pool Arbitrum, Plain*Basic фабрики) — exchange(int128, int128, dx, min_dy):
+        // у Plain*Basic `_receiver = msg.sender` по умолчанию (curve-factory f389123 Plain2Basic.vy L530-L536), у 2pool —
+        // перегрузка из 4 аргументов в официальном ABI curvefi/curve-js ab3f1c2 src/constants/abis/2pool/swap.json.
+        // Метапул фабрики (MetaUSD.vy f389123 L606-L612) — та же подпись exchange, монеты — ERC-20 (монета и LP-токен).
+        "curve_stableswap" | "curve_stableswap_ng" | "curve_stableswap_plain" | "curve_stableswap_meta" => {
+            ExecKind::Curve
+        }
         "maverick_v2" => ExecKind::Maverick,
         "pancake_stableswap" | "lista_stableswap" => ExecKind::StableU256,
         // Решение 442: Curve Twocrypto-NG / Tricrypto-NG — exchange(uint256 i, uint256 j, dx, min_dy) с receiver =
@@ -197,7 +209,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // L859-L866: вход transferFrom(sender) L709-L716, выход transfer(receiver) L733-L738; curve-crypto-contract
         // a0f8401 «2021-09-13. Arbitrum/CryptoSwap.vy» L591-L686: transferFrom(msg.sender) L614, transfer(msg.sender)
         // L669) — шаг STABLE_U256, без нового кода исполнителя.
-        "curve_crypto_v1" | "curve_tricrypto_v1" => ExecKind::StableU256,
+        "curve_crypto_v1" | "curve_tricrypto_v1" | "curve_crypto2_v1" => ExecKind::StableU256,
         "saddle_stableswap" => ExecKind::Saddle,
         // Решение 284: swap пары — подпись V2, выход — getAmountOut(address, uint256) самой пары (шаг 12, только v2).
         "nomiswap_stable" => ExecKind::NomiStable,

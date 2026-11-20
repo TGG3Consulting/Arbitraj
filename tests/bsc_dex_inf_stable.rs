@@ -90,6 +90,7 @@ fn ng_matches_aprec_template_without_offpeg() {
         amp_precision: U256::from(100u8),
         max_rounds: 255,
         strict: true,
+        pair_d: false,
     };
     let balances = [e18(3_000_000), e18(2_500_000)];
     let rates = [e18(1), e18(1)];

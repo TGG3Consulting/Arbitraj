@@ -33,6 +33,7 @@ pub mod pool_lb;
 pub mod pool_depth;
 pub mod pool_smart;
 pub mod pool_solidly;
+pub mod pool_stable_debug;
 pub mod pool_tick_bin;
 pub mod pool_vault;
 pub mod pool_vault_v2;
@@ -68,7 +69,8 @@ pub use hold::{HoldItem, WithdrawHold, WithdrawReady};
 pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{
-    AmpV2Data, ColReserves, CryptoData, CryptoMath, DebtReserves, EkuboData, EkuboMev, EkuboTick,
+    AmpV2Data, ColReserves, CryptoData, CryptoMath, CryptoTweak, DebtReserves, EkuboData, EkuboMev,
+    EkuboTick,
     EkuboTwamm, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, LbBinData, OraclePmmData,
     PmmData, Pool, PoolKind, PoolRef, PoolState, SmartColDebtData, SolidlyFee, SolidlyGate,
     StableData, StableGuard, StableNg, TickBinData,

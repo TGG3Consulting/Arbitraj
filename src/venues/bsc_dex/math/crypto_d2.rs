@@ -8,7 +8,7 @@
 //! Настройки: нет.
 //!
 //! Источник: curvefi/twocrypto-ng 89c8dfb, contracts/main/CurveCryptoMathOptimized2.vy `newton_D` L376-L460 (ветка
-//! K0_prev == 0 — L398-L399); v2.0.0 — d612fde L368-L452 (та же формула, другие MAX_GAMMA и frac L449). Вызов в рампе —
+//! K0_prev == 0 — L398-L399, решение 472 — K0_prev ≠ 0, L400-L404); v2.0.0 — d612fde L368-L452 (та же формула, другие MAX_GAMMA и frac L449). Вызов в рампе —
 //! CurveTwocryptoOptimized.vy `_exchange` L770-L781 (89c8dfb; у d612fde — тот же текст).
 
 use alloy_primitives::U256;
@@ -27,6 +27,19 @@ const A_MULTIPLIER: u64 = 10_000;
 /// `newton_D(ANN, gamma, x_unsorted, 0)`. Принимает: версию, A (как отдаёт пул), gamma, балансы в 18 знаках и ценах
 /// пула. Возвращает: D или None (откат: assert'ы, переполнение, деление на ноль, «Did not converge»).
 pub fn newton_d(m: CryptoMath, ann: U256, gamma: U256, xu: [U256; 2]) -> Option<U256> {
+    newton_d_k0(m, ann, gamma, xu, U256::ZERO)
+}
+
+/// Решение 472: `newton_D(ANN, gamma, x_unsorted, K0_prev)` — так зовёт tweak_price после обмена (K0_prev — второе
+/// значение get_y). K0_prev ≠ 0: начальное D = isqrt(unsafe_mul(unsafe_div(4·x0·x1 (unsafe), K0_prev), 10^18)), не
+/// больше S (L400-L404). Принимает: как newton_d и K0_prev. Возвращает: D или None (откат).
+pub fn newton_d_k0(
+    m: CryptoMath,
+    ann: U256,
+    gamma: U256,
+    xu: [U256; 2],
+    k0_prev: U256,
+) -> Option<U256> {
     let l = lim2::of(m, gamma);
     if !lim2::a_gamma_ok(&l, ann, gamma) {
         return None;
@@ -42,8 +55,13 @@ pub fn newton_d(m: CryptoMath, ann: U256, gamma: U256, xu: [U256; 2]) -> Option<
     }
     let s = x[0].wrapping_add(x[1]);
     let n = U256::from(N);
-    // D = N_COINS * isqrt(unsafe_mul(x[0], x[1])) (L399).
-    let mut d = mu(n, isqrt(x[0].wrapping_mul(x[1])))?;
+    // D = N_COINS * isqrt(unsafe_mul(x[0], x[1])) (L399); при K0_prev — L402-L404.
+    let mut d = if k0_prev.is_zero() {
+        mu(n, isqrt(x[0].wrapping_mul(x[1])))?
+    } else {
+        let p = U256::from(4u8).wrapping_mul(x[0]).wrapping_mul(x[1]);
+        isqrt(udiv_u(p, k0_prev).wrapping_mul(E18)).min(s)
+    };
     let g1k0_base = au(gamma, E18)?;
     let one = U256::from(1u8);
     for _ in 0..255 {

@@ -122,5 +122,7 @@ pub async fn load(
         // 0xEeee… стейблсвапов, решение «122 X (нативный BNB в стейблсвапах)»).
         native: None,
         input_fee: false,
+        pair_d: false,
+        ema: false,
     })))
 }

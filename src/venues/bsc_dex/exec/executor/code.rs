@@ -89,8 +89,8 @@ pub enum Version {
     /// contracts/out/ — текущая сборка v4, via-IR).
     V4,
     /// Решение 470 (T470-06): v4 + шаг AERO_BASIC = 26 (пул Aero Basic с MEV-налогом); решение 474: шаг
-    /// BALANCER_V3_BUF = 27 (пул Balancer V3 через буфер ERC4626; бот строит по метке кода kind_buffer::BUFFER_MARK).
-    /// Сборки v5 НЕТ (contracts/out/ — v4;
+    /// BALANCER_V3_BUF = 27 (пул Balancer V3 через буфер ERC4626; бот строит по метке кода kind_buffer::BUFFER_MARK);
+    /// решение 472 (T472-08): шаг CURVE_ETH = 28 (пул Curve с нативным ETH). Сборки v5 НЕТ (contracts/out/ — v4;
     /// пересборка — вне агентов, docs/TASKS.md «нужна сборка исполнителя v5»): version_of её не узнаёт, кода для поиска
     /// селекторов нет (runtime_of — причина), кошелёк v5 появится только после сборки и развёртывания.
     V5,
@@ -185,7 +185,10 @@ pub fn runtime_of(v: Version) -> Result<Bytes, String> {
         Version::V2 => runtime_v2(),
         Version::V3 => runtime_v3(),
         Version::V4 => runtime(),
-        Version::V5 => Err("сборки исполнителя v5 нет (out/ — v4; решение 470)".into()),
+        Version::V5 => Err(
+            "сборки исполнителя v5 нет (contracts/out/ — v4; нужна сборка исполнителя v5, решения 470, 472, 474)"
+                .into(),
+        ),
     }
 }
 

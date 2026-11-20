@@ -76,6 +76,7 @@ fn depth(d: &StableData, buy: bool) -> U256 {
         amp_precision: d.amp_precision,
         max_rounds: d.max_rounds,
         strict: d.strict,
+        pair_d: d.pair_d,
     };
     let (ic, iu) = (d.i1 as usize, d.i0 as usize);
     side(&d.balances, &d.rates, curve_amp(d), (ic, iu), BAND, buy, &t)

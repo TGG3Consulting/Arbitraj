@@ -9,6 +9,9 @@
 //! 10^10, 1 у USDT, WBTC, WETH). Рампа у v1 (`if t > 0`, CurveCryptoSwap2ETH.vy L676, CryptoSwap.vy L637): обмен
 //! пересчитывает D всегда, пока future_A_gamma_time > 0 (после конца рампы пул ставит 1) — ramp; A и gamma меняются
 //! по времени блока, пока время блока < future_A_gamma_time — moving (перечитывание каждым блоком, per_block.rs).
+//! Решение 472 (T472-03): у пула фабрики (2 монеты) — ещё состояние tweak_price / _claim_admin_fees
+//! (load_crypto_tweak_v1.rs): вызовы — в той же пачке после прежних (разбор прежних не меняется), слот not_adjusted и
+//! ETH пула — параллельной пачкой JSON-RPC на том же блоке; ответы дописываются в конец Raw.got.
 //! Кто вызывает: pools/load.rs, pools/load_site.rs (пары tricrypto).
 //! От чего зависит: ctx.rs, node/call.rs, node/multicall.rs, tokens.rs, abi_crypto.rs, abi_crypto_v1.rs, load_lb.rs
 //! (время блока Multicall3), load_smardex.rs (время блока без Multicall3), families.rs, per_block_crypto.rs
@@ -18,22 +21,27 @@
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
-use crate::core::types::{CryptoData, CryptoMath, PoolState};
+use crate::core::types::PoolState;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::math::ten;
 use super::super::node::{call, multicall};
 use super::super::tokens::Tokens;
 use super::abi_crypto::{ICryptoPool as P, ITricryptoPool as P3};
 use super::abi_crypto_v1::ICryptoPoolV1 as V1;
 use super::families::{Family, Proto};
+use super::family_variant::Variant;
+use super::load_crypto_tweak_list as tweak_list;
+use super::load_crypto_tweak_v1 as tweak_v1;
 use super::load_lb::{decode_time, time_call};
 use super::load_smardex;
 use super::per_block_crypto;
 
+/// Разбор ответов — load_crypto_v1_decode.rs (вынесен; путь прежний).
+pub use super::load_crypto_v1_decode::decode;
+
 /// Вызовов до монет: A, gamma, D, mid_fee, out_fee, fee_gamma, future_A_gamma_time.
-const HEAD: usize = 7;
+pub(super) const HEAD: usize = 7;
 
 /// Прочитанное: пул, число монет, ответы, время блока, decimals монет (по порядку монет пула).
 pub struct Raw {
@@ -42,12 +50,17 @@ pub struct Raw {
     pub got: Vec<Result<Bytes, String>>,
     pub now: u64,
     pub decimals: Vec<u8>,
+    /// Читался is_killed() (последним вызовом после price_scale): пулы протокола tricrypto 2021 — tricrypto и пара
+    /// без фабрики (вариант CryptoPair, решение 472).
+    pub killed: bool,
 }
 
 /// Число монет вида: фабрика v1 — 2, tricrypto 2021 — 3. None — не вид v1. Ошибок нет.
 pub fn coins_of(f: &Family) -> Option<usize> {
     match f.proto {
         Proto::CurveCryptoV1 => Some(2),
+        // Решение 472 (T472-10): вариант CryptoPair — две монеты (EURS/2CRV).
+        Proto::CurveTricryptoV1 if f.variant == Variant::CryptoPair => Some(2),
         Proto::CurveTricryptoV1 => Some(3),
         _ => None,
     }
@@ -55,6 +68,11 @@ pub fn coins_of(f: &Family) -> Option<usize> {
 
 /// Вызовы чтения по порядку: HEAD, coins(k)/balances(k), price_scale, у трёх монет — is_killed(). Ошибок нет.
 pub fn calls(pool: Address, n: usize) -> Vec<(Address, Bytes)> {
+    calls_with(pool, n, n == 3)
+}
+
+/// То же с is_killed() последним при `killed` (решение 472: пара без фабрики — CryptoPair). Ошибок нет.
+pub fn calls_with(pool: Address, n: usize, killed: bool) -> Vec<(Address, Bytes)> {
     let mut data: Vec<Bytes> = vec![
         P::ACall {}.abi_encode().into(),
         P::gammaCall {}.abi_encode().into(),
@@ -75,6 +93,8 @@ pub fn calls(pool: Address, n: usize) -> Vec<(Address, Bytes)> {
         for k in 0..n - 1 {
             data.push(P3::price_scaleCall { k: U256::from(k) }.abi_encode().into());
         }
+    }
+    if killed {
         data.push(V1::is_killedCall {}.abi_encode().into());
     }
     data.into_iter().map(|d| (pool, d)).collect()
@@ -93,12 +113,42 @@ pub async fn read(
     let Some(n) = coins_of(f) else {
         return Err(bad(format!("{}: вид не crypto v1", f.title)));
     };
-    let mut all = calls(pool, n);
+    let tag = call::block_tag(block);
+    let killed = f.proto == Proto::CurveTricryptoV1;
+    let mut all = calls_with(pool, n, killed);
+    // T472-03: tweak_price — постоянные пула из памяти или одним чтением на этом блоке; пока слот not_adjusted не
+    // подтверждён записью — без модели (причина — в журнал один раз на пул).
+    let v1 = f.proto == Proto::CurveCryptoV1 && tweak_v1::CONFIRMED;
+    let list = killed && tweak_list::CONFIRMED;
+    if f.proto == Proto::CurveCryptoV1 && !v1 {
+        tweak_list::unconfirmed(ctx, pool, "crypto v1 фабрики (слот 33)");
+    } else if killed && !list {
+        let what = format!("пул без фабрики из {n} монет (слот {})", tweak_list::slot(n));
+        tweak_list::unconfirmed(ctx, pool, &what);
+    }
+    if v1 {
+        all.extend(tweak_v1::calls(pool, &tweak_v1::statics(ctx, pool, &tag).await?));
+    }
+    if list {
+        let (token, coins) = tweak_list::statics(ctx, pool, n, &tag).await?;
+        all.extend(tweak_list::calls(pool, n, token, &coins));
+    }
     let mc = multicall::address(ctx);
     if let Some(m) = mc {
         all.push(time_call(m));
     }
-    let mut got = call::try_many(ctx, &all, &call::block_tag(block)).await?;
+    // Пачка вызовов и пачка JSON-RPC tweak — параллельно, на одном блоке.
+    let words = async {
+        if v1 {
+            tweak_v1::words(ctx, pool, &tag).await
+        } else if list {
+            tweak_list::words(ctx, pool, n, &tag).await
+        } else {
+            Ok(Vec::new())
+        }
+    };
+    let (got, words) = tokio::join!(call::try_many(ctx, &all, &tag), words);
+    let mut got = got?;
     if got.len() != all.len() {
         return Err(bad(format!("ответов {} из {}", got.len(), all.len())));
     }
@@ -110,6 +160,8 @@ pub async fn read(
         }
         None => load_smardex::block_secs(ctx, block).await?,
     };
+    // T472-03: слово not_adjusted и ETH пула — в конец ответов (load_crypto_tweak_v1.rs decode).
+    got.extend(words?);
     let mut decimals = Vec::with_capacity(n);
     for k in 0..n {
         let Some(Ok(b)) = got.get(HEAD + 2 * k) else {
@@ -124,6 +176,7 @@ pub async fn read(
         got,
         now,
         decimals,
+        killed,
     })
 }
 
@@ -156,58 +209,21 @@ pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<Po
     data.i1 = index(pair.1)?;
     // Решение 455: crypto v1 фабрики (2 монеты; у tricrypto 2021 self.balance не читается) с монетой
     // dex.native_wrapped — нативный ETH без события (per_block_crypto.rs).
-    data.native_in = raw.n == 2 && per_block_crypto::takes_native(ctx, &coins);
-    Ok(PoolState::Crypto(Box::new(data)))
-}
-
-/// Что делает: разбор ответов (без сети). Принимает: Raw. Возвращает: (монеты, CryptoData с индексами пары 0) или текст
-/// причины (откат вызова, ответ не по ABI, decimals > 18).
-pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData), String> {
-    let got = &raw.got;
-    let ok = |i: usize| match got.get(i) {
-        Some(Ok(b)) => Ok(b),
-        Some(Err(r)) => Err(format!("вызов {i} откатился: {r}")),
-        None => Err(format!("нет ответа на вызов {i}")),
-    };
-    let w = |i: usize| -> Result<U256, String> {
-        let v = ok(i)?.get(..32).ok_or(format!("ответ {i} короче 32 байт"))?;
-        Ok(U256::from_be_slice(v))
-    };
-    let mut coins = Vec::with_capacity(raw.n);
-    let mut balances = Vec::with_capacity(raw.n);
-    let mut precisions = Vec::with_capacity(raw.n);
-    for k in 0..raw.n {
-        let c = P::coinsCall::abi_decode_returns(ok(HEAD + 2 * k)?).map_err(|e| e.to_string())?;
-        coins.push(c);
-        balances.push(w(HEAD + 2 * k + 1)?);
-        let d = *raw.decimals.get(k).ok_or("нет decimals монеты")?;
-        let p = 18u64.checked_sub(d.into()).ok_or(format!("decimals {d} > 18"))?;
-        precisions.push(ten::pow(p));
+    data.native_in = raw.n == 2 && !raw.killed && per_block_crypto::takes_native(ctx, &coins);
+    // T472-03: состояние tweak_price пула фабрики — ответы после прежних (HEAD, монеты, price_scale).
+    if raw.n == 2 && !raw.killed {
+        let tail = raw.got.get(HEAD + 2 * raw.n + 1..).unwrap_or(&[]);
+        let eth = tweak_v1::remembered(ctx.place.id, pool).and_then(|s| s.eth);
+        // Ревью 472 (п. 6): пул с монетой WETH фабрики — нужна dex.native_wrapped (load_crypto_tweak_v1.rs).
+        if !tail.is_empty() {
+            tweak_v1::need_wrapped(ctx, pool, &coins, eth)?;
+        }
+        data.tweak = tweak_v1::decode(tail, &coins, eth).map_err(&bad)?;
     }
-    let tail = HEAD + 2 * raw.n;
-    let price_scale = (0..raw.n - 1)
-        .map(|k| w(tail + k))
-        .collect::<Result<Vec<_>, _>>()?;
-    // is_killed() — только у tricrypto 2021 (exchange: assert not self.is_killed, CryptoSwap.vy L594).
-    let halted = raw.n == 3 && !w(tail + raw.n - 1)?.is_zero();
-    let t = w(6)?;
-    let data = CryptoData {
-        balances,
-        precisions,
-        price_scale,
-        d: w(2)?,
-        a: w(0)?,
-        gamma: w(1)?,
-        mid_fee: w(3)?,
-        out_fee: w(4)?,
-        fee_gamma: w(5)?,
-        math: if raw.n == 2 { CryptoMath::TwoV1 } else { CryptoMath::TriV1 },
-        ramp: !t.is_zero(),
-        moving: t > U256::from(raw.now),
-        halted,
-        native_in: false,
-        i0: 0,
-        i1: 0,
-    };
-    Ok((coins, data))
+    // T472-03: пулы без фабрики — ответы после is_killed (load_crypto_tweak_list.rs).
+    if raw.killed {
+        let tail = raw.got.get(HEAD + 2 * raw.n + raw.n..).unwrap_or(&[]);
+        data.tweak = tweak_list::decode(tail, raw.n, raw.now).map_err(&bad)?;
+    }
+    Ok(PoolState::Crypto(Box::new(data)))
 }

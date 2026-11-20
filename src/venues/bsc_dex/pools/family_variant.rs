@@ -30,6 +30,29 @@ pub enum Variant {
     /// PoolCreated, Swap, цикл обмена), но комиссия обмена — от крючка (DynamicSwapFeeHook): меняется по блокам без
     /// событий пула — комиссия читается каждым блоком, крючок пула и правило MEV-налога проверяются (pools/aero_cl.rs).
     SlipstreamAero,
+    /// Curve StableSwap 2021 (dex.kind = curve_stableswap_plain, решение 472): протокол Proto::CurveStable (геттеры
+    /// coins/balances/fee, get_dy и exchange с int128 — те же), но A — `A_precise()` (A·A_PRECISION, A_PRECISION = 100),
+    /// несходимость D/y — откат (`raise`), у пула из двух монет D_P — одной строкой `D·D/x0·D/x1/4`. Исходники: 2pool
+    /// Arbitrum 0x7f90122BF0700F9E7e1F688fe926940E8839F353 (Vyper 0.2.12, Sourcify 42161 match) и Plain2Basic /
+    /// Plain3Basic / Plain4Basic фабрики Curve Sidechain/L2 (curvefi/curve-factory f389123, Vyper 0.2.15; Sourcify
+    /// 42161 match реализаций 0x54e8…7A62, 0xe381…7A62, 0x8d53…fa86). Чтение — load_curve_plain.rs, проверка —
+    /// verify_curve_plain.rs, события — events_curve.rs (topics_of), состояние — каждым блоком (per_block.rs).
+    CurvePlain,
+    /// Метапул фабрики Curve Sidechain/L2 (dex.kind = curve_stableswap_meta, решение 472, доделка): тот же протокол и
+    /// шаблон, что CurvePlain, но курс монеты 1 (LP-токен базового пула) — get_virtual_price() базового пула на блоке,
+    /// D_P — циклом. Исходник — MetaUSD.vy / MetaUSDBalances.vy (curvefi/curve-factory f389123); чтение —
+    /// load_curve_meta.rs, проверка — verify_curve_plain.rs (реализация из dex.curve_plain_implementations и
+    /// get_base_pool фабрики = coins(1)), события — events_curve.rs, состояние — каждым блоком (per_block.rs).
+    CurveMeta,
+    /// Двухмонетный crypto-пул Curve первого поколения без фабрики (dex.kind = curve_crypto2_v1, решение 472, T472-10):
+    /// протокол Proto::CurveTricryptoV1 (пул из списка dex.stable_pools, монеты — coins(k), is_killed), но монет две и
+    /// математика — CurveCryptoSwap2 (CryptoMath::TwoV1). Исходник — EURS/2CRV Arbitrum
+    /// 0xA827a652Ead76c6B0b3D19dba05452E06e25c27e: curvefi/curve-crypto-contract 41e6289 «deployment-logs/2021-10-30.
+    /// EURS/CryptoSwap.vy» (Vyper 0.3.0; адрес — deployment.log того же каталога): geometric_mean, newton_D, newton_y,
+    /// halfpow, get_xcp, _A_gamma — тот же текст, что CurveCryptoSwap2ETH.vy (curve-factory-crypto 7ed1011; сверка
+    /// функций скриптом), exchange L686-L765 — те же действия, что `_exchange` 2ETH (+ assert not is_killed L688).
+    /// Чтение — load_crypto_v1.rs (n = 2 и is_killed()), модель tweak_price v1 фабрики к нему не применяется.
+    CryptoPair,
 }
 
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
@@ -37,6 +60,9 @@ pub fn of(kind: &str) -> Variant {
     match kind {
         "kyber_elastic_v1" => Variant::ElasticV1,
         "slipstream_aero" => Variant::SlipstreamAero,
+        "curve_stableswap_plain" => Variant::CurvePlain,
+        "curve_stableswap_meta" => Variant::CurveMeta,
+        "curve_crypto2_v1" => Variant::CryptoPair,
         _ => Variant::Base,
     }
 }
@@ -53,5 +79,10 @@ mod tests {
         assert_eq!(of("kyber_elastic_v1"), Variant::ElasticV1);
         assert_eq!(of("slipstream"), Variant::Base);
         assert_eq!(of("slipstream_aero"), Variant::SlipstreamAero);
+        assert_eq!(of("curve_stableswap"), Variant::Base);
+        assert_eq!(of("curve_stableswap_plain"), Variant::CurvePlain);
+        assert_eq!(of("curve_stableswap_meta"), Variant::CurveMeta);
+        assert_eq!(of("curve_crypto2_v1"), Variant::CryptoPair);
+        assert_eq!(of("curve_tricrypto_v1"), Variant::Base);
     }
 }

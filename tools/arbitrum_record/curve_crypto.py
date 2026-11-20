@@ -46,6 +46,7 @@ import sys
 
 from curve_crypto_pools import LADDER_PPM, code, factory_pools, ng_rows, v1_row
 from curve_crypto_rpc import Node, selector
+from curve_sim import SENDER, Sim
 
 def split(v):
     return [a for a in (v or "").split(",") if a]
@@ -64,11 +65,16 @@ def main():
     ap.add_argument("--v1-factory", required=True, help="фабрика crypto v1 (others.log)")
     ap.add_argument("--v1-template", required=True, help="шаблон пула фабрики crypto v1 (others.log)")
     ap.add_argument("--tricrypto-v1-pool", required=True, help="tricrypto 2021 (log.txt)")
+    ap.add_argument("--crypto2-v1-pool", default=None, help="T472-10: crypto-пул из 2 монет без фабрики (EURS/2CRV)")
+    ap.add_argument("--code-pools", default="", help="T472-10: пулы без исходника — только eth_getCode (через запятую)")
     ap.add_argument("--max-pools", type=int, default=20, help="пулов на каждую математику / фабрику v1")
     ap.add_argument("--out", default=None, help="папка (по умолчанию tests/data/arbitrum_curve_crypto_<дата>)")
     a = ap.parse_args()
 
     node = Node(a.node)
+    # Решение 472 (T472-02): отправитель симуляций exchange (curve_sim.py) должен быть пуст.
+    if not Sim(a.node, "latest").empty():
+        sys.exit("ОШИБКА: отправитель симуляции %s не пуст" % SENDER)
     chain = node.rpc("eth_chainId", [])["result"]
     head = int(node.rpc("eth_blockNumber", [])["result"], 16)
     tag = hex(head)
@@ -97,6 +103,13 @@ def main():
                                    templates=[a.v1_template],
                                    code_of={x: code(node, x, tag) for x in (a.v1_template, a.v1_factory)}, pools=v1)
     files["tricrypto_v1.json"] = dict(base, kind="tricrypto_v1", pools=[v1_row(node, a.tricrypto_v1_pool, 3, tag)])
+    # Решение 472 (T472-10): пара без фабрики (вид curve_crypto2_v1) — те же вызовы v1 + is_killed(); код пулов без
+    # исходника (сверка с кодом 2pool — для разбора, не для подключения).
+    if a.crypto2_v1_pool:
+        files["crypto2_v1.json"] = dict(base, kind="crypto2_v1",
+                                        pools=[v1_row(node, a.crypto2_v1_pool, 2, tag, pair=True)])
+    if a.code_pools:
+        files["code_pools.json"] = dict(base, kind="code_pools", code_of={p: code(node, p, tag) for p in split(a.code_pools)})
 
     for name, doc in files.items():
         with open(os.path.join(out, name), "w") as f:
@@ -105,13 +118,17 @@ def main():
     lines = [
         f"# Curve crypto-пулы Arbitrum One — запись своего узла, {date}",
         "",
-        "Скрипт: tools/arbitrum_record/curve_crypto.py (только eth_call / eth_getCode / eth_getBlockByNumber, без ключей).",
+        "Скрипт: tools/arbitrum_record/curve_crypto.py (только eth_call / eth_getCode / eth_getStorageAt / eth_getBalance / eth_getBlockByNumber, без ключей).",
         f"Узел: chainId {chain}; блок {head} ({blk['hash']}), время блока {base['timestamp']}.",
         "",
         "Что записано (на одном блоке): ответы на вызовы бота по calldata (pools/load_crypto.rs, load_crypto_v1.rs),",
         "version(), MATH(), get_coins (и get_decimals у v1) фабрики, код (eth_getCode) пулов, реализаций и математики,",
         "decimals() монет v1, balanceOf(pool) монет и eth_getBalance(pool) (holdings),",
+        "у пулов фабрики crypto v1 — tweak_v1 (решение 472, T472-03): token(), factory(), price_oracle(), xcp_profit(),",
+        "xcp_profit_a(), virtual_price(), allowed_extra_profit(), adjustment_step(), admin_fee(), totalSupply() LP,",
+        "fee_receiver() фабрики, get_eth_index фабрики, слоты 28, 31-34 (33 — not_adjusted) и их сверка с геттерами,",
         f"лесенка get_dy(i, j, dx) в обе стороны (dx — доли баланса, ppm: {LADDER_PPM}).",
+        f"Решение 472: exchange_sim — eth_call exchange на тех же суммах с подменой баланса и разрешения у {SENDER}.",
         "Пулы фабрик — с конца pool_list. Откат вызова — поле error.",
         "Читают тесты tests/arb_curve_crypto_live.rs (NG) и tests/arb_curve_crypto_v1_live.rs (v1) — снять #[ignore].",
         "",

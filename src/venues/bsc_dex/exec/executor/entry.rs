@@ -8,7 +8,9 @@
 //! (PoolState::StableSwap: i0 — token0, i1 — token1), направление — по токену входа шага; так же STABLE_U256
 //! (PancakeSwap Stable, Lista) и SADDLE (Nerve) — решение 122 X, стейблсвапы; пул с halted — не исполняется.
 //! Монета пары — нативный BNB пула (StableData.native, в паре — обёртка WBNB; решение «122 X (нативный BNB в
-//! стейблсвапах)»): вид STABLE_U256_BNB (bnb_in — по тому, вход это или выход); у CURVE / SADDLE — отказ.
+//! стейблсвапах)»): вид STABLE_U256_BNB (bnb_in — по тому, вход это или выход); у SADDLE — отказ; у CURVE (решение
+//! 472, T472-08: пулы Curve с нативным ETH — Plain*ETH / Plain2ETHEMA) — шаг CURVE_ETH = 28 у исполнителя кошелька v5
+//! (exec_callback.rs since), у v1–v4 и у несверенного — отказ с причиной («нужна сборка v5»).
 //! Решение 273: пул Solidly с фабрикой на паузе — шаг не строится (NoRoute с причиной).
 //! Решение 470 (T470-06): пул Aero Basic у исполнителя v5 — шаг AERO_BASIC (pools/exec_kind.rs for_wallet).
 //! Решение 442: crypto-пул Curve (Twocrypto-NG / Tricrypto-NG, PoolState::Crypto) — шаг STABLE_U256 (exchange(uint256 i,
@@ -38,12 +40,14 @@ use crate::core::types::{PoolRef, PoolState, SmartColDebtData};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::super::ctx::Ctx;
+use super::super::super::pools::exec_callback;
 use super::super::super::pools::exec_kind::{self, ExecKind};
 use super::super::super::pools::families::{Family, Proto};
 use super::super::super::pools::key::PoolKey;
 use super::super::super::pools::registry::Entry;
 use super::super::super::pools::stable_native;
 use super::super::super::quote::pool_quote;
+use super::code::Version;
 use super::kind::{FluidStep, InfKey, Params, STABLE_NATIVE, V4Key};
 
 /// Может ли шаг через этот пул идти исполнителем: у семейства есть вид шага (Family.executor_kind) и у пула свой
@@ -320,8 +324,10 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         ExecKind::StableU256 if matches!(e.pool.state, PoolState::Crypto(_)) => {
             crypto_step(e, token_in).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
         }
-        ExecKind::Curve | ExecKind::StableU256 | ExecKind::Saddle => {
-            stable(e, k, token_in, stable_native::wrapped(ctx))
+        // Решение 472: CURVE_ETH как вид семейства не встречается (вид — CURVE, шаг с ETH выбирает stable) — сюда тоже.
+        ExecKind::Curve | ExecKind::CurveEth | ExecKind::StableU256 | ExecKind::Saddle => {
+            let ver = ctx.exec_info().and_then(|(_, v)| v);
+            stable(e, k, token_in, stable_native::wrapped(ctx), ver)
                 .map_err(|w| ctx.err(ErrorCode::NoRoute, w))?
         }
         // Решение 470 (T470-06): вид семейства aero_basic — SOLIDLY (ветка выше выбирает AERO_BASIC у кошелька v5);
@@ -463,12 +469,14 @@ fn crypto_step(e: &Entry, token_in: Address) -> Result<Params, String> {
 /// Индексы шага StableSwap (CURVE, STABLE_U256, SADDLE): i — монета входа, j — выхода. Принимает: пул реестра, вид,
 /// токен входа. Возвращает: параметры шага или причину (состояние не StableSwap; обмены пула остановлены — пауза /
 /// kill / сбой проверки цены Lista; в паре — сама метка 0xEeee…; нативная монета пары у вида без шага с BNB; токен входа
-/// не token0/token1 пула).
+/// не token0/token1 пула). Решение 472: `ver` — сверенная версия исполнителя кошелька (None — не сверена): шаг
+/// CURVE_ETH — только у v5.
 fn stable(
     e: &Entry,
     k: ExecKind,
     token_in: Address,
     wrapped: Option<Address>,
+    ver: Option<Version>,
 ) -> Result<Params, String> {
     let PoolState::StableSwap(d) = &e.pool.state else {
         return Err(format!("{}: у пула нет состояния StableSwap", e.family.id));
@@ -517,6 +525,8 @@ fn stable(
                 j,
                 bnb_in: n == i,
             }),
+            // Решение 472 (T472-08): пул Curve с нативным ETH — шаг CURVE_ETH, только исполнитель v5.
+            ExecKind::Curve | ExecKind::CurveEth => curve_eth(e, i, j, n == i, ver),
             _ => Err(format!(
                 "{}: монета пары — нативный BNB пула, у вида {} шага с BNB нет",
                 e.family.id,
@@ -532,6 +542,36 @@ fn stable(
             j: i128::from(j),
         },
     })
+}
+
+/// Решение 472 (T472-08): шаг CURVE_ETH (пул Curve с нативным ETH). Принимает: пул, индексы i → j, вход ли нативная
+/// монета, сверенную версию исполнителя кошелька. Возвращает: параметры шага или причину (версия не сверена или ниже
+/// v5 — шага CURVE_ETH у исполнителя нет).
+fn curve_eth(
+    e: &Entry,
+    i: u8,
+    j: u8,
+    eth_in: bool,
+    ver: Option<Version>,
+) -> Result<Params, String> {
+    let k = ExecKind::CurveEth;
+    let Some(v) = ver else {
+        return Err(format!(
+            "{}: монета пары — нативный ETH пула Curve; версия исполнителя кошелька не сверена — шаг {} есть только с \
+             исполнителя {}",
+            e.family.id,
+            k.name(),
+            exec_callback::since(k).label()
+        ));
+    };
+    match exec_callback::step_absent(k, v) {
+        None => Ok(Params::CurveEth {
+            i: i128::from(i),
+            j: i128::from(j),
+            eth_in,
+        }),
+        Some(why) => Err(format!("{}: нативный ETH пула Curve: {why}", e.family.id)),
+    }
 }
 
 /// Комиссия пары V2 в долях 1e-6: своя у пары (Pool.fee_pips) или dex.v2_fee_pct DEX × 10000. Ошибки: NotConfigured —

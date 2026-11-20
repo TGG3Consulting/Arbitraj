@@ -6,11 +6,13 @@
 //! (math/crypto_y2.rs get_y, crypto_d2.rs newton_D), Tricrypto-NG (crypto_y3.rs, crypto_d3.rs), crypto v1 — фабрика
 //! (crypto_v1_2.rs) и tricrypto 2021 (crypto_v1_3.rs): у v1 тот же порядок действий обмена (CurveCryptoSwap2ETH.vy
 //! `_exchange` L643-L705, CryptoSwap.vy `exchange` L593-L659), все операции проверяемые — значения те же, что у
-//! формул NG ниже. Где контракт откатился бы — None.
+//! формул NG ниже. Где контракт откатился бы — None. Решение 472: у Twocrypto-NG и Tricrypto-NG при CryptoData.tweak —
+//! и откаты tweak_price после расчёта выхода (math/crypto_tweak2.rs, crypto_tweak3.rs); у crypto v1 фабрики при
+//! CryptoTweak.v1 — math/crypto_tweak_v1.rs (T472-03; и пара EURS/2CRV), у tricrypto 2021 — crypto_tweak_v1_3.rs.
 //! Кто вызывает: quote/pool_quote.rs (ветка Crypto), quote/crypto_depth.rs, quote/spot.rs (spot), quote/steps.rs
 //! (fee, scaled).
 //! От чего зависит: core/types (CryptoData, CryptoMath), math/crypto_ops.rs, crypto_y2.rs, crypto_y3.rs, crypto_d2.rs,
-//! crypto_d3.rs, crypto_v1_2.rs, crypto_v1_3.rs, math/ten.rs.
+//! crypto_d3.rs, crypto_v1_2.rs, crypto_v1_3.rs, crypto_tweak2.rs, crypto_tweak3.rs, crypto_tweak_v1.rs, math/ten.rs.
 //! Настройки: нет.
 //!
 //! Источник: curvefi/twocrypto-ng 89c8dfb, contracts/main/CurveTwocryptoOptimized.vy — `exchange` L364-L404 (вход
@@ -26,7 +28,10 @@ use crate::core::types::{CryptoData, CryptoMath};
 
 use super::crypto_ops::{au, du, mu, su, udiv_u};
 use super::ten::{E10, E18};
-use super::{crypto_d2, crypto_d3, crypto_v1_2, crypto_v1_3, crypto_y2, crypto_y3};
+use super::{
+    crypto_d2, crypto_d3, crypto_tweak2, crypto_tweak3, crypto_tweak_v1, crypto_tweak_v1_3,
+    crypto_v1_2, crypto_v1_3, crypto_y2, crypto_y3,
+};
 
 /// Что делает: выход обмена dx монеты i на монету j (точный вход), как `_exchange` пула. Принимает: состояние пула,
 /// индексы монет пула, вход в единицах монеты i. Возвращает: dy в единицах монеты j или None (откат: i = j, dx = 0,
@@ -46,7 +51,7 @@ pub fn exchange_out(p: &CryptoData, i: usize, j: usize, dx: U256) -> Option<U256
     let mut bal = p.balances.clone();
     bal[i] = au(bal[i], dx)?;
     let mut xp = scaled(p, &bal)?;
-    let y_out = get_y(p, &xp, d, j)?;
+    let (y_out, k0_prev) = get_y(p, &xp, d, j)?;
     let mut dy = su(xp[j], y_out)?;
     xp[j] = su(xp[j], dy)?;
     dy = su(dy, U256::from(1u8))?;
@@ -57,7 +62,37 @@ pub fn exchange_out(p: &CryptoData, i: usize, j: usize, dx: U256) -> Option<U256
     let fee = udiv_u(mu(fee(p, &xp)?, dy)?, E10);
     dy = su(dy, fee)?;
     // y -= dy: баланс выхода не уходит ниже нуля (проверяемое вычитание пула).
-    su(p.balances[j], dy)?;
+    let y = su(p.balances[j], dy)?;
+    // Решение 472: tweak_price после обмена (Twocrypto-NG) — откат пула после расчёта выхода (math/crypto_tweak2.rs).
+    // Tricrypto-NG — math/crypto_tweak3.rs. xp[j] = y·PRECISIONS[j] (·price_scale/10^18 при j > 0, unsafe_div) — как
+    // `_exchange` (Twocrypto L798-L801, Tricrypto L937-L940).
+    if let Some(t) = &p.tweak {
+        let mut yj = mu(y, p.precisions[j])?;
+        if j > 0 {
+            yj = udiv_u(mu(yj, p.price_scale[j - 1])?, E18);
+        }
+        xp[j] = yj;
+        match p.math {
+            CryptoMath::TwoNg210 | CryptoMath::TwoNg200 => {
+                crypto_tweak2::passes(p, t, [xp[0], xp[1]], k0_prev)?
+            }
+            CryptoMath::TriNg => crypto_tweak3::passes(p, t, [xp[0], xp[1], xp[2]], k0_prev)?,
+            // T472-03: crypto v1 фабрики — tweak_price(A_gamma, xp, p, 0) после обмена (CurveCryptoSwap2ETH.vy L755).
+            CryptoMath::TwoV1 => {
+                if let Some(v) = &t.v1 {
+                    let s = crypto_tweak_v1::Swap { i, j, dx, dy };
+                    crypto_tweak_v1::passes(p, t, v, [xp[0], xp[1]], s)?
+                }
+            }
+            // T472-03: tricrypto 2021 — tweak_price(A_gamma, xp, ix, p, 0) (CryptoSwap.vy L691).
+            CryptoMath::TriV1 => {
+                if let Some(v) = &t.v1 {
+                    let s = crypto_tweak_v1::Swap { i, j, dx, dy };
+                    crypto_tweak_v1_3::passes(p, t, v, [xp[0], xp[1], xp[2]], s)?
+                }
+            }
+        }
+    }
     Some(dy)
 }
 
@@ -69,15 +104,29 @@ pub fn coins(m: CryptoMath) -> usize {
     }
 }
 
-/// y при балансах xp и инварианте d по формуле версии (get_y NG — первое значение, newton_y v1). None — откат.
-fn get_y(p: &CryptoData, xp: &[U256], d: U256, j: usize) -> Option<U256> {
+/// (y, K0_prev) при балансах xp и инварианте d по формуле версии (get_y NG — оба значения, newton_y v1 — K0_prev = 0,
+/// его не используют). None — откат.
+fn get_y(p: &CryptoData, xp: &[U256], d: U256, j: usize) -> Option<(U256, U256)> {
+    let pair = |r: [U256; 2]| (r[0], r[1]);
     match p.math {
         CryptoMath::TwoNg210 | CryptoMath::TwoNg200 => {
-            Some(crypto_y2::get_y(p.math, p.a, p.gamma, [xp[0], xp[1]], d, j)?[0])
+            Some(pair(crypto_y2::get_y(p.math, p.a, p.gamma, [xp[0], xp[1]], d, j)?))
         }
-        CryptoMath::TriNg => Some(crypto_y3::get_y(p.a, p.gamma, [xp[0], xp[1], xp[2]], d, j)?[0]),
-        CryptoMath::TwoV1 => crypto_v1_2::newton_y(p.a, p.gamma, [xp[0], xp[1]], d, j),
-        CryptoMath::TriV1 => crypto_v1_3::newton_y(p.a, p.gamma, [xp[0], xp[1], xp[2]], d, j),
+        CryptoMath::TriNg => Some(pair(crypto_y3::get_y(
+            p.a,
+            p.gamma,
+            [xp[0], xp[1], xp[2]],
+            d,
+            j,
+        )?)),
+        CryptoMath::TwoV1 => Some((
+            crypto_v1_2::newton_y(p.a, p.gamma, [xp[0], xp[1]], d, j)?,
+            U256::ZERO,
+        )),
+        CryptoMath::TriV1 => Some((
+            crypto_v1_3::newton_y(p.a, p.gamma, [xp[0], xp[1], xp[2]], d, j)?,
+            U256::ZERO,
+        )),
     }
 }
 

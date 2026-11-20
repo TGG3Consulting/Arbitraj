@@ -48,6 +48,20 @@
   комиссии пачкой (T470-07 сделано: per_block_aero.rs, aero_cl_head.rs; два прохода на блок), полное — по событиям.
   pools/aero_cl_head.rs — 250 строк (два прохода пачки и разбор; дробить разбор в отдельный файл). Исполнитель: шаг
   AERO_BASIC = 26 в исходнике (T470-06) — нужна сборка исполнителя v5 и EVM-сценарий шага (вне агентов).
+- Решение 472 (`wc -l`): сверх ориентира 200 — math/stableswap_v1.rs 214 (+ pair_d), pools/load_crypto.rs 226 (+ вызовы
+  tweak), quote/pool_quote.rs 633 (+ причина отказа tweak_price). Дробить: d_p_pair и Template — в stableswap_tpl.rs;
+  decode load_crypto.rs — в load_crypto_decode.rs. Модель tweak_price crypto v1 — T472-03 (блокеры: not_adjusted без
+  геттера, ветка _claim_admin_fees); сверка моделей симуляцией exchange — запись сделана (T472-02, curve_sim.py), ждёт
+  прогона узла. Доделка 472: шаг исполнителя для Curve с нативным ETH — T472-08 (вид шага 28, пересборка v5);
+  исходники ren / wstETH / EURS-2Crv основного реестра Arbitrum — T472-10; tests/arbitrum_curve_plain_live.rs 230 строк
+  (сверх ориентира — помощники записи в одном тесте); quote/pool_quote.rs вырос (+ save_p).
+- Решение 472 (доделка 2, `wc -l`): pools/load_crypto_v1.rs 257 (+ tweak v1, is_killed пары) — дробить: decode — в
+  load_crypto_v1_decode.rs; exec/executor/entry.rs 565 (+ curve_eth), exec/executor/kind.rs 279 (+ CurveEth).
+  Не сделано: модель tweak_price tricrypto 2021 и EURS/2CRV (T472-03: факты разбора — TASKS); исходник ren / wstETH
+  основного реестра Arbitrum (T472-10); сборка исполнителя v5 (T472-08). Доделка 3: модели tricrypto / EURS есть,
+  включатся после подтверждения слотов записью (CONFIRMED). Ревью: разбиты load_crypto_v1.rs (decode — load_crypto_v1_decode.rs),
+  load_crypto_tweak_v1.rs (JSON-RPC — load_crypto_tweak_rpc.rs), load_crypto_tweak_list.rs (decode — …_list_decode.rs),
+  crypto_tweak_v1.rs (claim — crypto_tweak_v1_claim.rs); сверх 200 остаются load_crypto_v1.rs 229, load_crypto_tweak_v1.rs 216.
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

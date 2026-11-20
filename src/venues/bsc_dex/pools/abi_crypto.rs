@@ -14,6 +14,10 @@
 //!   L112, ClaimAdminFee L117 — массивы uint256[2]), MATH L128, coins L129, future_A_gamma_time L142, balances L149, D
 //!   L150, version L189, exchange L364, get_dy L1522, price_scale() L1596, A L1654, gamma L1664, mid_fee L1674, out_fee
 //!   L1684, fee_gamma L1694, precisions() L1736; CurveTwocryptoFactory.vy: find_pool_for_coins L376, get_coins L404.
+//!   Решение 472 (модель tweak_price): xcp_profit L151, virtual_price L154, packed_rebalancing_params L158, totalSupply
+//!   L193, price_oracle() L1581 (у d612fde — L155, L158, L162, L197, L1653); Tricrypto-NG (CurveTricryptoOptimizedWETH.vy
+//!   ecaa816) — xcp_profit L171, virtual_price L174, packed_rebalancing_params L179, totalSupply L219, price_oracle(k)
+//!   L1734.
 //! - tricrypto-ng ecaa816, contracts/main/CurveTricryptoOptimizedWETH.vy: события L65-L136 (TokenExchange L75,
 //!   AddLiquidity L84 и RemoveLiquidity L91 — uint256[3], RemoveLiquidityOne L96, NewParameters L113 — 6 полей, RampAgamma
 //!   L121, StopRampA L129, ClaimAdminFee L134 — tokens uint256), MATH L148, coins L149, future_A_gamma_time L162, balances
@@ -48,11 +52,21 @@ alloy::sol! {
     interface ITwocryptoPool {
         function price_scale() external view returns (uint256);
         function precisions() external view returns (uint256[2] memory);
+        function price_oracle() external view returns (uint256);
+        function totalSupply() external view returns (uint256);
+        function xcp_profit() external view returns (uint256);
+        function virtual_price() external view returns (uint256);
+        function packed_rebalancing_params() external view returns (uint256);
     }
 
     interface ITricryptoPool {
         function price_scale(uint256 k) external view returns (uint256);
         function precisions() external view returns (uint256[3] memory);
+        function price_oracle(uint256 k) external view returns (uint256);
+        function totalSupply() external view returns (uint256);
+        function xcp_profit() external view returns (uint256);
+        function virtual_price() external view returns (uint256);
+        function packed_rebalancing_params() external view returns (uint256);
     }
 
     interface ITwocryptoFactory {

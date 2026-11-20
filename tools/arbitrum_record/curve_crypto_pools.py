@@ -8,6 +8,11 @@ holdings (balanceOf монет и ETH пула), decimals монет v1, пул�
 import sys
 
 from curve_crypto_rpc import addr_word, as_addr, as_int, selector, word
+from curve_sim import Sim
+
+# Решение 472 (T472-02): симуляция обмена — exchange(uint256,uint256,uint256,uint256) у NG и v1 (abi_crypto.rs,
+# abi_crypto_v1.rs; шаг STABLE_U256 исполнителя).
+EXCHANGE_U = "exchange(uint256,uint256,uint256,uint256)"
 
 # --- запись -------------------------------------------------------------------------------------------------------------
 
@@ -15,11 +20,38 @@ from curve_crypto_rpc import addr_word, as_addr, as_int, selector, word
 LADDER_PPM = [1, 100, 1000, 10000, 100000, 500000]
 
 # Вызовы бота: pools/load_crypto.rs calls() (NG) и pools/load_crypto_v1.rs calls() (v1) — тот же порядок и те же данные.
+TWEAK_TAIL = ["totalSupply()", "xcp_profit()", "virtual_price()", "packed_rebalancing_params()"]
 NG_HEAD = ["A()", "gamma()", "D()", "mid_fee()", "out_fee()", "fee_gamma()", "future_A_gamma_time()"]
 
+# Решение 472 (T472-03): вызовы tweak_price crypto v1 фабрики — pools/load_crypto_tweak_v1.rs (pre_calls, calls;
+# admin_actions_deadline() — только для сверки слота 34). Слоты раскладки Vyper 0.3.1 (шапка того же файла): 33 —
+# not_adjusted (геттера нет), соседние — сверка с геттерами (D 28, xcp_profit_a 31, virtual_price 32, 34).
+TWEAK_V1 = ["token()", "factory()", "coins(uint256)", "price_oracle()", "xcp_profit()", "xcp_profit_a()",
+            "virtual_price()", "allowed_extra_profit()", "adjustment_step()", "admin_fee()",
+            "admin_actions_deadline()"]
+SLOTS_V1 = {28: "D()", 31: "xcp_profit_a()", 32: "virtual_price()", 33: None, 34: "admin_actions_deadline()"}
 
-def bot_calls(n, v1):
-    """Сигнатуры и аргументы вызовов бота (calldata). n — число монет, v1 — пул первого поколения."""
+# Решение 472 (T472-03): пулы без фабрики — pools/load_crypto_tweak_list.rs (calls; раскладка Vyper 0.2.15 / 0.3.0 —
+# шапка того же файла). Вызовы на пуле (calldata), сверка соседних слотов с геттерами; None — слот not_adjusted.
+TWEAK_TRI = [("last_prices(uint256)", 0), ("last_prices(uint256)", 1), ("last_prices_timestamp()", None),
+             ("ma_half_time()", None), ("price_oracle(uint256)", 0), ("price_oracle(uint256)", 1),
+             ("xcp_profit()", None), ("xcp_profit_a()", None), ("virtual_price()", None),
+             ("allowed_extra_profit()", None), ("adjustment_step()", None), ("token()", None),
+             ("admin_actions_deadline()", None)]
+TWEAK_PAIR = [("last_prices()", None), ("last_prices_timestamp()", None), ("ma_half_time()", None),
+              ("price_oracle()", None), ("xcp_profit()", None), ("xcp_profit_a()", None), ("virtual_price()", None),
+              ("allowed_extra_profit()", None), ("adjustment_step()", None), ("admin_fee()", None),
+              ("admin_fee_receiver()", None), ("token()", None), ("admin_actions_deadline()", None),
+              ("price_scale()", None)]
+SLOTS_TRI = {9: "last_prices_timestamp()", 31: "D()", 35: "xcp_profit_a()", 36: "virtual_price()", 37: None,
+             38: "is_killed()", 41: "admin_actions_deadline()"}
+SLOTS_PAIR = {6: "price_scale()", 9: "last_prices_timestamp()", 30: "D()", 34: "xcp_profit_a()",
+              35: "virtual_price()", 36: None, 37: "is_killed()", 40: "admin_actions_deadline()"}
+
+
+def bot_calls(n, v1, pair=False):
+    """Сигнатуры и аргументы вызовов бота (calldata). n — число монет, v1 — пул первого поколения, pair — пара без
+    фабрики (вид curve_crypto2_v1: is_killed() и у двух монет — pools/load_crypto_v1.rs calls_with)."""
     out = [(sig, "") for sig in NG_HEAD]
     if not v1:
         out.append(("precisions()", ""))
@@ -32,17 +64,23 @@ def bot_calls(n, v1):
         for k in range(n - 1):
             out.append(("price_scale(uint256)", word(k)))
     if v1:
-        if n == 3:
+        if n == 3 or pair:
             out.append(("is_killed()", ""))
     else:
         out.append(("MATH()", ""))
+        # Решение 472: состояние tweak_price NG — pools/load_crypto_tweak.rs calls(), тот же порядок.
+        if n == 2:
+            out.append(("price_oracle()", ""))
+        else:
+            out += [("price_oracle(uint256)", word(k)) for k in range(n - 1)]
+        out += [(sig, "") for sig in TWEAK_TAIL]
     return out
 
 
-def record_calls(node, pool, n, v1, tag):
+def record_calls(node, pool, n, v1, tag, pair=False):
     """Ответы на вызовы бота и проверочные — словарь calldata → ответ."""
     calls = {}
-    sigs = bot_calls(n, v1) + ([] if v1 else [("version()", "")])
+    sigs = bot_calls(n, v1, pair) + ([] if v1 else [("version()", "")])
     for sig, args in sigs:
         data = selector(sig) + args
         calls[data] = node.call(pool, data, tag)
@@ -124,12 +162,13 @@ def ng_rows(node, factory, n, maths, per_math, tag):
             "holdings": holdings(node, p, calls, n, tag),
             "get_dy": ladder(node, p, n, calls, tag),
         })
+        rows[-1]["exchange_sim"] = sims(node, p, n, calls, rows[-1]["get_dy"], tag)
         print(f"NG({n}) {p}: MATH {m}, {len(rows[-1]['get_dy'])} ответов get_dy", file=sys.stderr)
     return count, rows
 
 
-def v1_row(node, pool, n, tag, factory=None):
-    calls = record_calls(node, pool, n, True, tag)
+def v1_row(node, pool, n, tag, factory=None, pair=False):
+    calls = record_calls(node, pool, n, True, tag, pair)
     row = {
         "pool": pool,
         "calls": calls,
@@ -138,8 +177,87 @@ def v1_row(node, pool, n, tag, factory=None):
         "holdings": holdings(node, pool, calls, n, tag),
         "get_dy": ladder(node, pool, n, calls, tag),
     }
+    row["exchange_sim"] = sims(node, pool, n, calls, row["get_dy"], tag)
+    if n == 2 and not pair:
+        row["tweak_v1"] = tweak_v1(node, pool, calls, tag)
+    else:
+        row["tweak_v1"] = tweak_list(node, pool, n, calls, tag)
     if factory:
         row["factory_get_coins"] = node.call(factory, selector("get_coins(address)") + addr_word(pool), tag)
         row["factory_get_decimals"] = node.call(factory, selector("get_decimals(address)") + addr_word(pool), tag)
+        # T472-03: индекс монеты WETH фабрики (Factory.vy L422-L431) — какая монета пула WETH20 (gulp — ETH пула).
+        row["factory_get_eth_index"] = node.call(factory, selector("get_eth_index(address)") + addr_word(pool), tag)
     print(f"v1({n}) {pool}: {len(row['get_dy'])} ответов get_dy", file=sys.stderr)
     return row
+
+
+def sims(node, pool, n, calls, rows, tag):
+    """Решение 472 (T472-02): exchange на суммах лесенки — eth_call с подменой баланса и разрешения у пустого
+    отправителя (curve_sim.py), одним пакетом на том же блоке. Возвращает: записи симуляций."""
+    sim = Sim(node.url, tag)
+    coins = [as_addr(answer(calls, "coins(uint256)", word(k))) for k in range(n)]
+    for c in coins:
+        if c:
+            sim.prefill(c, pool)
+    for r in rows:
+        c = coins[int(r["i"])]
+        if c:
+            sim.add(pool, EXCHANGE_U, int(r["i"]), int(r["j"]), int(r["dx"]), c)
+    return sim.run()
+
+
+def tweak_v1(node, pool, calls, tag):
+    """Решение 472 (T472-03): вызовы бота tweak v1 на пуле (в calls), totalSupply() LP-токена, fee_receiver() фабрики,
+    слоты хранилища 28, 31–34 и сверка слотов с геттерами (slot_check: True — слово слота = ответ геттера). balanceOf
+    монет и ETH пула — в holdings."""
+    for sig in TWEAK_V1:
+        if sig == "coins(uint256)":
+            continue
+        data = selector(sig)
+        calls[data] = node.call(pool, data, tag)
+    token = as_addr(answer(calls, "token()"))
+    factory = as_addr(answer(calls, "factory()"))
+    out = {"token": token, "factory": factory, "token_calls": {}, "factory_calls": {}, "storage": {},
+           "slot_check": {}}
+    if token:
+        d = selector("totalSupply()")
+        out["token_calls"][d] = node.call(token, d, tag)
+    if factory:
+        d = selector("fee_receiver()")
+        out["factory_calls"][d] = node.call(factory, d, tag)
+    for slot, sig in SLOTS_V1.items():
+        got = node.rpc("eth_getStorageAt", [pool, hex(slot), tag]).get("result")
+        out["storage"][str(slot)] = got
+        if sig:
+            want = answer(calls, sig).get("result")
+            out["slot_check"][str(slot)] = bool(got and want and int(got, 16) == int(want[:66], 16))
+    print(f"v1 tweak {pool}: сверка слотов {out['slot_check']}", file=sys.stderr)
+    return out
+
+
+def slots(node, pool, calls, table, tag):
+    """Слоты хранилища из table и сверка с геттерами (True — слово слота = ответ геттера)."""
+    storage, check = {}, {}
+    for slot, sig in table.items():
+        got = node.rpc("eth_getStorageAt", [pool, hex(slot), tag]).get("result")
+        storage[str(slot)] = got
+        if sig:
+            want = answer(calls, sig).get("result")
+            check[str(slot)] = bool(got and want and int(got, 16) == int(want[:66], 16))
+    return storage, check
+
+
+def tweak_list(node, pool, n, calls, tag):
+    """Решение 472 (T472-03): tricrypto 2021 (n = 3) и пара без фабрики (n = 2) — вызовы бота tweak на пуле (в calls),
+    totalSupply() LP-токена (token() пула), слоты и их сверка с геттерами. balanceOf монет — в holdings."""
+    for sig, arg in (TWEAK_TRI if n == 3 else TWEAK_PAIR):
+        data = selector(sig) + ("" if arg is None else word(arg))
+        calls[data] = node.call(pool, data, tag)
+    token = as_addr(answer(calls, "token()"))
+    out = {"token": token, "token_calls": {}}
+    if token:
+        d = selector("totalSupply()")
+        out["token_calls"][d] = node.call(token, d, tag)
+    out["storage"], out["slot_check"] = slots(node, pool, calls, SLOTS_TRI if n == 3 else SLOTS_PAIR, tag)
+    print(f"v1({n}) tweak {pool}: сверка слотов {out['slot_check']}", file=sys.stderr)
+    return out

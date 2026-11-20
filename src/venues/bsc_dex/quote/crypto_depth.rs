@@ -31,6 +31,9 @@ pub fn side(d: &CryptoData, i: usize, j: usize, b: f64, buy: bool) -> Option<(U2
     let mut nf = d.clone();
     nf.mid_fee = U256::ZERO;
     nf.out_fee = U256::ZERO;
+    // Решение 472: без комиссии virtual_price не растёт — модель tweak_price (откат обмена) к чистому объёму не
+    // применяется; откат реального обмена проверяет котировка (pool_quote.rs → crypto_swap::exchange_out).
+    nf.tweak = None;
     let out = |x: U256| crypto_swap::exchange_out(&nf, i, j, x);
     let bal_in = *d.balances.get(i)?;
     let probe = bal_in / U256::from(PROBE_DIV);

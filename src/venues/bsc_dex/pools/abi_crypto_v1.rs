@@ -32,6 +32,42 @@ mod sol {
             function is_killed() external view returns (bool);
         }
 
+        // Решение 472 (T472-03): геттеры tweak_price / _claim_admin_fees пула crypto v1 фабрики —
+        // curvefi/curve-factory-crypto 7ed1011 CurveCryptoSwap2ETH.vy L112 token, L126 allowed_extra_profit,
+        // L132 adjustment_step, L140 admin_fee, L148 factory, L150-L152 xcp_profit / xcp_profit_a / virtual_price,
+        // L1341 price_oracle(); Factory.vy L108 fee_receiver; CurveTokenV5.vy L42 totalSupply.
+        interface ICryptoTweakV1 {
+            function token() external view returns (address);
+            function factory() external view returns (address);
+            function price_oracle() external view returns (uint256);
+            function xcp_profit() external view returns (uint256);
+            function xcp_profit_a() external view returns (uint256);
+            function virtual_price() external view returns (uint256);
+            function allowed_extra_profit() external view returns (uint256);
+            function adjustment_step() external view returns (uint256);
+            function admin_fee() external view returns (uint256);
+            function fee_receiver() external view returns (address);
+            function get_eth_index(address pool) external view returns (uint256);
+            function totalSupply() external view returns (uint256);
+        }
+
+        // Решение 472 (T472-03): геттеры tweak_price пулов без фабрики — пара CurveCryptoSwap2 (EURS/2CRV, curvefi/
+        // curve-crypto-contract 41e6289 «2021-10-30. EURS/CryptoSwap.vy»: L98 price_oracle (сохранённый), L100
+        // last_prices, L101 last_prices_timestamp, L117 ma_half_time, L143 admin_fee_receiver) и tricrypto 2021
+        // («2021-09-13. Arbitrum/CryptoSwap.vy» L123 last_prices_timestamp, L139 ma_half_time, L267-L280
+        // price_oracle(k) / last_prices(k) — упакованные сохранённые).
+        interface ICryptoTweakPair {
+            function last_prices() external view returns (uint256);
+            function last_prices_timestamp() external view returns (uint256);
+            function ma_half_time() external view returns (uint256);
+            function admin_fee_receiver() external view returns (address);
+        }
+
+        interface ICryptoTweakTri {
+            function last_prices(uint256 k) external view returns (uint256);
+            function price_oracle(uint256 k) external view returns (uint256);
+        }
+
         interface ICryptoFactoryV1 {
             function get_coins(address pool) external view returns (address[2] memory);
 

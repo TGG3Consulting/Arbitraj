@@ -28,10 +28,11 @@ use super::super::ctx::Ctx;
 use super::super::node::call::{self, Piece};
 use super::discover::Found;
 use super::families::{Family, Proto};
+use super::family_variant::Variant;
 pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_call_with};
 pub use super::verify_rules::{Read, check, fill, registered, registered_for, v2_fee_pips, v3_abi};
 use super::{
-    fee_probe, verify_algebra, verify_balancer, verify_balancer_v3, verify_crypto, verify_crypto_v1, verify_curve, verify_lb, verify_lb20, verify_lb22, verify_curve_ng, verify_dodo, verify_fluid, verify_inf_stable, verify_izi, verify_metric,
+    fee_probe, verify_algebra, verify_balancer, verify_balancer_v3, verify_crypto, verify_crypto_v1, verify_curve, verify_lb, verify_lb20, verify_lb22, verify_curve_ng, verify_curve_plain, verify_dodo, verify_fluid, verify_inf_stable, verify_izi, verify_metric,
     verify_ekubo, verify_maverick, verify_solidly, verify_stable_u, verify_v4,
 };
 
@@ -92,6 +93,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut lb20 = Vec::new();
     let mut lb22 = Vec::new();
     let mut stable_u = Vec::new();
+    let mut curve_plain = Vec::new();
     let mut mav = Vec::new();
     let mut inf_stable = Vec::new();
     let mut fluid = Vec::new();
@@ -103,6 +105,13 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             p if p.is_dodo() => dodo.push(i),
             Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee => algebra.push(i),
             p if p.is_solidly() => solidly.push(i),
+            // Решение 472: Curve 2021 (curve_stableswap_plain) — список или реестр фабрики (verify_curve_plain.rs).
+            // Решение 472 (доделка): метапул фабрики — тот же путь (реестр фабрики и get_base_pool).
+            Proto::CurveStable
+                if matches!(c.family.variant, Variant::CurvePlain | Variant::CurveMeta) =>
+            {
+                curve_plain.push(i)
+            }
             // Решение 453: tricrypto 2021 — фабрики нет, как Curve 2020: список dex.stable_pools + coins(k).
             Proto::CurveStable | Proto::CurveTricryptoV1 => curve.push(i),
             Proto::CurveNg => curve_ng.push(i),
@@ -224,6 +233,14 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     for (i, r) in curve
         .into_iter()
         .zip(verify_curve::verify(ctx, &list, size).await)
+    {
+        out[i] = Some(r);
+    }
+    // Curve 2021 (решение 472): список dex.stable_pools или реестр фабрики + монеты пула (verify_curve_plain.rs).
+    let list: Vec<Candidate> = curve_plain.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in curve_plain
+        .into_iter()
+        .zip(verify_curve_plain::verify(ctx, &list, size).await)
     {
         out[i] = Some(r);
     }

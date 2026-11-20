@@ -8,7 +8,8 @@
 //! (future_A_gamma_time > время блока; `_exchange` Twocrypto L770-L781, Tricrypto L901-L913) — ramp и moving: обмен
 //! пересчитает D через newton_D (math/crypto_swap.rs), A() и gamma() пул отдаёт на время блока чтения, пул
 //! перечитывается каждым блоком, пока рампа идёт (per_block.rs). Решение 455: Tricrypto-NG с монетой dex.native_wrapped
-//! — native_in (каждым блоком, per_block_crypto.rs).
+//! — native_in (каждым блоком, per_block_crypto.rs). Решение 472: Twocrypto-NG и Tricrypto-NG — ещё состояние tweak_price
+//! (load_crypto_tweak.rs) в той же пачке — для модели откатов после обмена (math/crypto_tweak2.rs).
 //! Кто вызывает: pools/load.rs (ветка CurveTwocrypto / CurveTricrypto), pools/load_site.rs (пары многомонетного пула).
 //! От чего зависит: ctx.rs, node/call.rs, node/multicall.rs, abi_crypto.rs, crypto_variant.rs, load_lb.rs (вызов времени блока),
 //! load_smardex.rs (время блока без Multicall3), families.rs, per_block_crypto.rs (takes_native).
@@ -30,6 +31,7 @@ use super::super::node::{call, multicall};
 use super::abi_crypto::{ICryptoPool as P, ITricryptoPool as P3, ITwocryptoPool as P2};
 use super::crypto_variant;
 use super::families::{Family, Proto};
+use super::load_crypto_tweak;
 use super::load_lb::{decode_time, time_call};
 use super::load_smardex;
 use super::per_block_crypto;
@@ -97,6 +99,8 @@ pub async fn read(ctx: &Ctx, f: &Family, pool: Address, block: u64) -> GatewayRe
         return Err(bad(format!("{}: вид не crypto", f.title)));
     };
     let mut all = calls(pool, n);
+    // Решение 472: состояние tweak_price — после вызовов calls (load_crypto_tweak.rs).
+    all.extend(load_crypto_tweak::calls(pool, n));
     let mc = multicall::address(ctx);
     if let Some(m) = mc {
         all.push(time_call(m));
@@ -195,6 +199,8 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData, Address), String> 
         .collect::<Result<Vec<_>, _>>()?;
     let math = P::MATHCall::abi_decode_returns(ok(tail + raw.n - 1)?)
         .map_err(|e| e.to_string())?;
+    // Решение 472: ответы состояния tweak_price — за MATH() (нет — запись без них: модель не применяется).
+    let tweak = load_crypto_tweak::decode(got.get(tail + raw.n..).unwrap_or(&[]), raw.n)?;
     // Рампа A/gamma (`if t > block.timestamp`): обмен пересчитает D (newton_D), A и gamma меняются со временем (шапка).
     let ramp = w(6)? > U256::from(raw.now);
     let data = CryptoData {
@@ -214,6 +220,7 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData, Address), String> 
         native_in: false,
         i0: 0,
         i1: 0,
+        tweak,
     };
     Ok((coins, data, math))
 }

@@ -41,6 +41,8 @@
 //! • Решение 453: crypto-пулы Curve в рампе A/gamma (A и gamma — по времени блока) — пока последнее чтение видит
 //!   рампу (CryptoData.moving, ramping); ревью 453 — и tricrypto 2021, пока is_killed (unkill_me без события;
 //!   per_block_crypto.rs killed).
+//! • Решение 472: Curve 2021 (curve_stableswap_plain — 2pool Arbitrum, Plain*Basic фабрики): рампа A по времени
+//!   блока, у 2pool donate_admin_fees без события — перечитываются все.
 //! • Решение 455: crypto-пулы Curve с переводом токена на пул без события пула (transfer_in.rs due) — один раз, на
 //!   первой голове после перевода, если чтение его ещё не учло.
 //! • Решение 470 (T470-07): пулы Aero Slipstream V3 — ЛЁГКОЕ чтение (light): только комиссия крючка пачкой
@@ -75,8 +77,18 @@ pub use super::per_block_crypto::{any_ramping, killed, moving, ramping, unevente
 /// Настройка предела одновременных чтений пулов блока, пар общего контракта и приёма / повтора (решение 330).
 pub const PAR: &str = "dex.block_read_parallel_max";
 
-/// Перечитывается ли вид на каждом блоке целиком. Ошибок нет.
+/// Перечитывается ли вид на каждом блоке целиком. Решение 472: и Curve 2021 (вариант CurvePlain вида
+/// curve_stableswap_plain — рампа A по времени блока без событий, у 2pool donate_admin_fees меняет balances без
+/// события). Ошибок нет.
 pub fn needs(f: &Family) -> bool {
+    // Решение 472 (доделка): метапул — курс LP базового пула (get_virtual_price) меняется без событий метапула;
+    // Plain*Balances — балансы по balanceOf (переводы на пул без события пула).
+    if matches!(
+        f.variant,
+        super::family_variant::Variant::CurvePlain | super::family_variant::Variant::CurveMeta
+    ) {
+        return true;
+    }
     matches!(
         f.proto,
         Proto::ListaStable

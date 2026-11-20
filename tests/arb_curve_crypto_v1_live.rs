@@ -25,25 +25,26 @@ use arb::venues::bsc_dex::pools::verify_crypto_v1::proxy_target;
 use curve_crypto_common::{answers, code, doc, ladder};
 
 /// Пулы v1: разбор load_crypto_v1 (decimals из записи), наш выход = get_dy пула. Принимает: имя файла, число монет.
-fn check_v1(name: &str, n: usize) {
+/// killed — пулы протокола tricrypto 2021 (is_killed() последним вызовом; решение 472 — и пара без фабрики).
+fn check_v1(name: &str, n: usize, killed: bool) {
     let d = doc(name);
     let now = d["timestamp"].as_u64().unwrap();
     let mut checked = 0;
     for p in d["pools"].as_array().unwrap() {
         let pool = Address::from_str(p["pool"].as_str().unwrap()).unwrap();
-        let got = answers(p, &load_crypto_v1::calls(pool, n));
+        let got = answers(p, &load_crypto_v1::calls_with(pool, n, killed));
         let decimals: Vec<u8> = p["decimals"]
             .as_array()
             .unwrap()
             .iter()
             .map(|v| v.as_u64().unwrap() as u8)
             .collect();
-        let raw = load_crypto_v1::Raw { pool, n, got, now, decimals };
+        let raw = load_crypto_v1::Raw { pool, n, got, now, decimals, killed };
         let (_, data) = load_crypto_v1::decode(&raw).unwrap_or_else(|w| panic!("{pool}: {w}"));
         if data.halted {
             continue;
         }
-        if n == 2 {
+        if n == 2 && !killed {
             let t = proxy_target(&code(&p["code"])).expect("код пула v1 — не прокси EIP-1167");
             let templates = d["templates"].as_array().unwrap();
             assert!(templates.iter().any(|x| Address::from_str(x.as_str().unwrap()).unwrap() == t));
@@ -61,11 +62,18 @@ fn check_v1(name: &str, n: usize) {
 #[test]
 #[ignore = "на Arbitrum у фабрики crypto v1 пулов нет (pool_count = 0, решение 462)"]
 fn crypto_v1_matches_get_dy() {
-    check_v1("crypto_v1.json", 2);
+    check_v1("crypto_v1.json", 2, false);
 }
 
 /// Tricrypto 2021: наш выход = get_dy пула.
 #[test]
 fn tricrypto_v1_matches_get_dy() {
-    check_v1("tricrypto_v1.json", 3);
+    check_v1("tricrypto_v1.json", 3, true);
+}
+
+/// Решение 472 (T472-10): EURS/2CRV (вид curve_crypto2_v1, вариант CryptoPair): наш выход = get_dy пула.
+#[test]
+#[ignore = "нет записи crypto2_v1.json: tools/arbitrum_record/curve_crypto.py --crypto2-v1-pool"]
+fn crypto2_v1_matches_get_dy() {
+    check_v1("crypto2_v1.json", 2, true);
 }

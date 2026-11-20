@@ -3,7 +3,7 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); FLUID = 22 — только v4, решение 440; BALANCER_V3 = 23, LB20 = 24, EKUBO = 25 — только v4, решения 441, 445, 447, 456; AERO_BASIC = 26 — только v5, решение 470 (T470-06); сверяет тест tests/bsc_dex_executor_abi.rs с
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); FLUID = 22 — только v4, решение 440; BALANCER_V3 = 23, LB20 = 24, EKUBO = 25 — только v4, решения 441, 445, 447, 456; AERO_BASIC = 26 — только v5, решение 470 (T470-06); BALANCER_V3_BUF = 27 — только v5, решение 474; CURVE_ETH = 28 — только v5, решение 472 (T472-08); сверяет тест tests/bsc_dex_executor_abi.rs с
 //! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
 //! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), METRIC — (bool zeroForOne),
@@ -13,6 +13,7 @@
 //! Решение 441: BALANCER_V3 = 23 — только v4, data — abi.encode(address пула).
 //! Решение 474: BALANCER_V3_BUF = 27 — только сборка v5 (не собрана), data — abi.encode(address пула, address wIn,
 //! address wOut) — обёртки ERC4626 входа и выхода (0 — сторона без буфера).
+//! Решение 472: CURVE_ETH = 28 — только v5, data — abi.encode(int128 i, int128 j, bool ethIn).
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
 //! От чего зависит: exec/executor/abi.rs, alloy sol-types.
 //! Настройки: нет.
@@ -126,6 +127,10 @@ pub enum Params {
     /// getAmountOutWithTotalFee пула (комиссия с MEV-налогом этой транзакции, Dromos-Labs/metadex-public 79c8d5b6
     /// V3/src/pools/Pool.sol L548-L555), swap — подпись V2. Данных нет.
     AeroBasic,
+    /// Решение 472 (T472-08; только исполнитель v5): пул Curve с нативным ETH — exchange(int128 i, int128 j, dx, 0);
+    /// eth_in — монета i нативная (вход: обёртка withdraw → exchange{value}); иначе монета j (выход: ETH от пула →
+    /// deposit в обёртку). Токены шага — обёртка и встречная монета. data = abi.encode(int128, int128, bool).
+    CurveEth { i: i128, j: i128, eth_in: bool },
 }
 
 /// Решение 440: параметры шага FLUID (см. Params::Fluid).
@@ -182,6 +187,8 @@ impl Params {
             Params::Ekubo { .. } => 25,
             // Решение 470 (T470-06): AERO_BASIC = 26 — только v5 (сборки v5 пока нет).
             Params::AeroBasic => 26,
+            // Решение 472 (T472-08): CURVE_ETH = 28 — только v5 (сборки v5 пока нет).
+            Params::CurveEth { .. } => 28,
         }
     }
 
@@ -190,6 +197,7 @@ impl Params {
         match *self {
             Params::V2 { fee_pips } => Bytes::from(fee_pips.abi_encode()),
             Params::Curve { i, j } => Bytes::from((i, j).abi_encode_params()),
+            Params::CurveEth { i, j, eth_in } => Bytes::from((i, j, eth_in).abi_encode_params()),
             Params::StableU256 { i, j } => {
                 Bytes::from((U256::from(i), U256::from(j)).abi_encode_params())
             }
@@ -263,6 +271,7 @@ pub fn encode(s: &StepSpec) -> Result<ArbExecutor::Step, String> {
             | Params::StableU256 { .. }
             | Params::Saddle { .. }
             | Params::StableU256Bnb { .. }
+            | Params::CurveEth { .. }
     );
     if stable && (s.token_in == STABLE_NATIVE || s.token_out == STABLE_NATIVE) {
         return Err(

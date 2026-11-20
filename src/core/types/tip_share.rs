@@ -41,8 +41,9 @@ pub struct TipLoss {
     pub our_tip_gwei: Decimal,
 }
 
-/// Состояние доли чаевых площадки DEX.
+/// Состояние доли чаевых площадки DEX. Ревью 439 (6): serde(default) — запись SQLite без нового поля разбирается.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TipShare {
     /// Площадка DEX.
     pub venue: String,

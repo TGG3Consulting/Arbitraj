@@ -26,19 +26,43 @@ const ID: &str = "state";
 static ALL: LazyLock<Mutex<HashMap<&'static str, PoolCondStat>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Статистика площадки: из памяти, иначе из базы (нет записи или не разобрана — пустая). Ошибок нет.
+/// Статистика площадки: из памяти, иначе из базы (нет записи — пустое). Ревью 439 (6): база не ответила или
+/// запись не разобрана — пустое только для ответа, в память не кладётся (следующий вызов читает базу снова); журнал
+/// send.pool_cond_stat с причиной. Ошибок нет.
 pub async fn get(ctx: &Ctx) -> PoolCondStat {
-    if let Some(s) = mem(ctx) {
-        return s;
+    match cached(ctx).await {
+        Ok(s) => s,
+        Err(why) => {
+            unloaded(ctx, &why).await;
+            PoolCondStat::default()
+        }
     }
-    let body = venue_state::load(ctx.journal.db(), ctx.place.id, KIND, ID).await;
-    let st: PoolCondStat = body
-        .ok()
-        .flatten()
-        .and_then(|b| serde_json::from_str(&b).ok())
-        .unwrap_or_default();
+}
+
+/// Ревью 439 (6): из памяти, иначе из базы в память. Ошибки: причина — база не ответила или запись не разобрана (в
+/// память ничего не кладётся).
+async fn cached(ctx: &Ctx) -> Result<PoolCondStat, String> {
+    if let Some(s) = mem(ctx) {
+        return Ok(s);
+    }
+    let body = venue_state::load(ctx.journal.db(), ctx.place.id, KIND, ID)
+        .await
+        .map_err(|e| format!("чтение SQLite: {e}"))?;
+    let st: PoolCondStat = match body {
+        None => PoolCondStat::default(),
+        Some(b) => serde_json::from_str(&b).map_err(|e| format!("запись не разобрана: {e}"))?,
+    };
     let mut all = ALL.lock().unwrap_or_else(|p| p.into_inner());
-    all.entry(ctx.place.id).or_insert(st).clone()
+    Ok(all.entry(ctx.place.id).or_insert(st).clone())
+}
+
+/// Ревью 439 (6): журнал «не загружено». Принимает: окружение, причина. Ошибок нет.
+async fn unloaded(ctx: &Ctx, why: &str) {
+    let msg = format!(
+        "Статистика условия пулов не загружена из SQLite ({why}) — пустая не кэшируется, \
+         сохранённая не затирается"
+    );
+    ctx.log(Level::Error, "send.pool_cond_stat", msg, None).await;
 }
 
 /// Копия из памяти. Ошибок нет.
@@ -48,10 +72,15 @@ fn mem(ctx: &Ctx) -> Option<PoolCondStat> {
 }
 
 /// Изменение статистики площадки — синхронно под замком памяти, затем запись в базу (persist). Принимает: окружение,
-/// изменение (его итог возвращается). Возвращает: итог изменения. Ошибок нет.
-pub async fn change<R>(ctx: &Ctx, f: impl FnOnce(&mut PoolCondStat) -> R) -> R {
-    // Первое обращение — загрузка из базы в память (get); дальше всё — в памяти.
-    get(ctx).await;
+/// изменение (его итог возвращается). Возвращает: итог изменения. Ошибки: причина — состояние не
+/// загружено из базы (ревью 439 (6): изменение не применено и не записано, журнал).
+pub async fn change<R>(ctx: &Ctx, f: impl FnOnce(&mut PoolCondStat) -> R) -> Result<R, String> {
+    // Первое обращение — загрузка из базы в память; дальше всё — в памяти. Ревью 439 (6): не загружено — изменение
+    // не применяется и не пишется (сохранённое в базе не затирается пустым).
+    if let Err(why) = cached(ctx).await {
+        unloaded(ctx, &why).await;
+        return Err(why);
+    }
     let out = {
         let mut all = ALL.lock().unwrap_or_else(|p| p.into_inner());
         let st = all.entry(ctx.place.id).or_default();
@@ -60,7 +89,7 @@ pub async fn change<R>(ctx: &Ctx, f: impl FnOnce(&mut PoolCondStat) -> R) -> R {
         r
     };
     persist(ctx).await;
-    out
+    Ok(out)
 }
 
 /// Очередь записи в SQLite: записи идут по одной, каждая берёт ПОСЛЕДНЕЕ состояние из памяти под этой очередью.

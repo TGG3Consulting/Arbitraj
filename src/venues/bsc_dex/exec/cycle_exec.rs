@@ -110,7 +110,9 @@ pub async fn trade(
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "выход пробы не в Decimal"))?;
     // Решение 437 (3): profit_share — чаевые сделки от прибыли цикла (exec/tip_cycle.rs), до проверки порога.
     let bill = bill.with_units(gas);
-    let (bill, tips) = tip_cycle::choose(q, bill, (out, req.input), &r, &legs).await?;
+    // Решение 438: knownAccounts — только непустые; ревью 439 (4) — по ним же фильтр разбора проигрыша (tip_cycle).
+    let known = conds.as_ref().map(|k| &k.known).filter(|k| !k.is_empty());
+    let (bill, tips) = tip_cycle::choose(q, bill, (out, req.input), &r, &legs, known).await?;
     // Исполнитель — одна транзакция с чаевыми (txs::send ниже): чаевые и газ их перевода — в проверке.
     net_check(ctx, (out, req.input), &bill, &r, true).await?;
     // Решение 233 (дополнение, п. 4): исход неизвестен — «чем найти» цикла (контекст свопа «базовая → базовая» и курсы
@@ -121,11 +123,11 @@ pub async fn trade(
     let used: Vec<_> = legs.iter().map(|l| &l.entry).collect();
     let cap = super::solidly_gate::fresh_cap(q, &used).await?;
     let gas_tip = tips.as_ref().map(|t| t.tip);
-    // Решение 438: какие пулы в условии — в журнал до отправки (в фоне), knownAccounts — только непустые.
+    // Решение 438: какие пулы в условии — в журнал до отправки (в фоне).
     let note = conds.as_ref().map(|k| pool_cond_row::log(ctx, &req.deal_id, k));
-    let known = conds.as_ref().map(|k| &k.known).filter(|k| !k.is_empty());
-    // Решение 439: режим для статистики — до отправки (решение 398); итог — в фоне после неё.
-    let stat = pool_cond_stat::begin(ctx, conds.is_some());
+    // Решение 439: режим для статистики — до отправки (решение 398); итог — в фоне после неё. Ревью 439 (5): пустое
+    // условие (ни один пул не попал) — отправка без условия пулов, в статистике off.
+    let stat = pool_cond_stat::begin(ctx, known.is_some());
     let res = txs::send_tipped(
         env,
         &slot,

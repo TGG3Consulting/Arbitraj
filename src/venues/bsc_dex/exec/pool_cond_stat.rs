@@ -7,8 +7,9 @@
 //! (REJECTED без пулов); прочие итоги (сбой отправки, «не включена», «исход неизвестен») — только в отправках.
 //!
 //! Режим на момент отправки — режим в действии: pools — условие пулов прочитано для этой сделки (send/pool_cond_mode.rs
-//! wanted: send.pool_cond_mode = pools и включённый канал sequencer с окном); иначе off (в том числе настройка не задана
-//! или окна нет). Подсчёт и запись — в фоновой задаче после итога (сделка не ждёт); журнал send.pool_cond_stat на
+//! wanted: send.pool_cond_mode = pools и включённый канал sequencer с окном) и непусто (ревью 439 (5): ни один пул не
+//! попал в условие — knownAccounts не ставится, отправка как off); иначе off (в том числе настройка не задана или окна
+//! нет). Подсчёт и запись — в фоновой задаче после итога (сделка не ждёт); журнал send.pool_cond_stat на
 //! каждый итог (без Telegram). Только у dex.gas_mode = eip1559_l1: у BSC статистики нет, поведение не меняется
 //! (applies читается ДО отправки — решение 398, begin).
 //! Кто вызывает: exec/cycle_exec.rs (begin, after), venue.rs (view, reset — экран «Каналы отправки»).
@@ -51,8 +52,8 @@ pub fn applies(ctx: &Ctx) -> GatewayResult<()> {
     Err(ctx.err(ErrorCode::NotApplicable, why))
 }
 
-/// До отправки: режим для статистики. Принимает: окружение, прочитано ли условие пулов для сделки (режим pools в
-/// действии). Возвращает: режим; None — площадка не eip1559_l1 (статистики нет). Ошибок нет.
+/// До отправки: режим для статистики. Принимает: окружение, есть ли у отправки непустое условие пулов (режим pools в
+/// действии; ревью 439 (5)). Возвращает: режим; None — площадка не eip1559_l1 (статистики нет). Ошибок нет.
 pub fn begin(ctx: &Ctx, pools: bool) -> Option<PoolCondMode> {
     applies(ctx).ok()?;
     Some(if pools {
@@ -69,12 +70,16 @@ pub fn after(ctx: &Ctx, mode: Option<PoolCondMode>, deal: &str, res: &GatewayRes
     let out = classify(res);
     let (ctx, deal) = (ctx.clone(), deal.to_string());
     tokio::spawn(async move {
-        let now = change(&ctx, |st| {
+        // Ревью 439 (6): статистика не загружена из базы — итог не учтён (причина — в журнале change).
+        let Ok(now) = change(&ctx, |st| {
             let c = counts(st, mode);
             add(c, out);
             c.clone()
         })
-        .await;
+        .await
+        else {
+            return;
+        };
         let msg = format!(
             "Сделка {deal}: условие пулов {} — {}; всего в режиме: {}",
             mode.as_str(),
@@ -164,7 +169,8 @@ pub async fn view(ctx: &Ctx) -> GatewayResult<PoolCondStat> {
 }
 
 /// «Сбросить статистику»: счётчики обоих режимов — 0, отсчёт — с этого момента; прежние значения — в журнал.
-/// Принимает: окружение, кто сбрасывает. Возвращает: статистику. Ошибки: NotApplicable — площадка не eip1559_l1.
+/// Принимает: окружение, кто сбрасывает. Возвращает: статистику. Ошибки: NotApplicable — площадка не eip1559_l1;
+/// Internal — статистика не загружена из SQLite (ревью 439 (6): сброс не выполнен, сохранённая не затёрта).
 pub async fn reset(ctx: &Ctx, by: &str) -> GatewayResult<PoolCondStat> {
     applies(ctx)?;
     let was = change(ctx, |st| {
@@ -178,7 +184,8 @@ pub async fn reset(ctx: &Ctx, by: &str) -> GatewayResult<PoolCondStat> {
         st.since = Some(Utc::now());
         was
     })
-    .await;
+    .await
+    .map_err(|why| ctx.err(ErrorCode::Internal, format!("сброс не выполнен: {why}")))?;
     let msg = format!("Статистика условия пулов сброшена ({by}); была — {was}");
     ctx.log(Level::Info, "send.pool_cond_stat", msg, None).await;
     view(ctx).await

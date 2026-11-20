@@ -12,8 +12,9 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-/// Счётчики одного режима.
+/// Счётчики одного режима. Ревью 439 (6): serde(default) — запись SQLite без нового поля разбирается (поле — 0).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PoolCondCounts {
     /// Итогов отправки (каждый вызов отправки транзакции цикла, любой итог — в том числе сбой отправки и «исход
     /// неизвестен»; прочие итоги = отправки − победы − откаты − отказы).
@@ -32,8 +33,9 @@ pub struct PoolCondCounts {
     pub rejected_time: u64,
 }
 
-/// Статистика площадки DEX.
+/// Статистика площадки DEX. Ревью 439 (6): serde(default) — запись SQLite без нового поля разбирается.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PoolCondStat {
     /// Площадка DEX.
     pub venue: String,

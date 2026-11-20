@@ -61,7 +61,8 @@ pub async fn record(
     (tip, out): (u128, TipOutcome),
     loss: Option<TipLoss>,
 ) {
-    let (was, now) = change(ctx, |st| {
+    // Ревью 439 (6): состояние не загружено из базы — итог не учтён (причина — в журнале change).
+    let Ok((was, now)) = change(ctx, |st| {
         let was = clamp(st.share_pct, c);
         let mut now = was;
         st.last_tip_gwei = tip_mode::to_gwei(tip);
@@ -90,7 +91,10 @@ pub async fn record(
         }
         (was, now)
     })
-    .await;
+    .await
+    else {
+        return;
+    };
     // Журнал — после изменения и записи (ревью 437, п. 3); победа — тоже строка send.tip_share (п. 8, без Telegram):
     // по ней экран «Доля чаевых» перечитывается.
     match &loss {
@@ -154,7 +158,7 @@ pub async fn view(ctx: &Ctx) -> GatewayResult<TipShare> {
 
 /// «Сбросить долю чаевых»: доля → минимум (не задана), побед подряд — 0; счётчики остаются. Принимает: окружение,
 /// кто сбрасывает. Возвращает: состояние. Ошибки: NotApplicable — площадка не eip1559_l1 (сбой записи в базу — в
-/// журнале, persist).
+/// журнале, persist); Internal — состояние не загружено из SQLite (ревью 439 (6): сброс не выполнен).
 pub async fn reset(ctx: &Ctx, by: &str) -> GatewayResult<TipShare> {
     applies(ctx)?;
     let was = change(ctx, |st| {
@@ -163,7 +167,8 @@ pub async fn reset(ctx: &Ctx, by: &str) -> GatewayResult<TipShare> {
         st.streak = 0;
         was
     })
-    .await;
+    .await
+    .map_err(|why| ctx.err(ErrorCode::Internal, format!("сброс не выполнен: {why}")))?;
     let msg = format!("Доля чаевых сброшена к минимуму send.tip_share_min_pct ({by}); была {was}");
     ctx.log(Level::Info, "send.tip_share", msg, None).await;
     view(ctx).await

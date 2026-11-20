@@ -86,6 +86,7 @@ pub async fn apply(
         let key = format!("{at:#x}");
         match got.iter().find(|(x, _)| *x == at) {
             Some((_, Ok(h))) => {
+                // Ревью 439 (4): по корню фильтр разбора проигрыша — любое событие (pool_cond_topics.rs by_cond).
                 conds.known.insert(key, Value::String(format!("{h:#x}")));
                 let note = format!("корень хранилища (eth_getProof storageHash): {why}");
                 mark(rules, conds, at, Ok(note));

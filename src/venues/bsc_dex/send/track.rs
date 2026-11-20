@@ -37,8 +37,8 @@ pub use super::track_util::{Tracked, Watch};
 /// Ждёт, пока nonce не занят в блоке или исход не признан неизвестным (см. шапку). Возвращает: итог.
 /// Ошибок нет — сбои узла повторяются.
 pub async fn resolve(w: Watch) -> Tracked {
-    if let Some(window) = w.cfg.drop_wait {
-        return super::track_l1::resolve(w, window).await;
+    if let Some(wait) = w.cfg.drop_wait {
+        return super::track_l1::resolve(w, wait).await;
     }
     let ctx = &w.ctx;
     let started = Instant::now();

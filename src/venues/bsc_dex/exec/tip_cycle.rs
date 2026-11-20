@@ -12,6 +12,12 @@
 //!   или в нём никого — доля не меняется, только журнал send.tip_loss; отказ −32003 иного условия (окно времени) —
 //!   не проигрыш конкуренту: журнал, доля не меняется; прочие ошибки и «исход неизвестен» — долю не трогают.
 //!
+//! Ревью 439 (4): фильтр перехватчика (TipPlan.topics) — по итоговому условию отправки (exec/pool_cond_topics.rs
+//! by_cond: слоты заменены корнем, сняты или не прочитаны — любое событие пула). Условия пулов у отправки нет
+//! (send.pool_cond_mode = off или не задана, нет окна, пустое условие) — фильтр по виду DEX (pool_cond_topics.rs
+//! topics): перехватчик отката — транзакция с событием, пишущим слоты цены/ликвидности пула; пулы, у которых по виду
+//! DEX слотов нет (корень или без условия), — любое событие.
+//!
 //! Ревью 437, п. 4: чаевые для pick, net_check и отправки — не ниже (минимум каналов − база), как подпишет
 //! send/tx_price.rs floored (exec/tx_fee.rs).
 //!
@@ -24,6 +30,7 @@
 
 use alloy_primitives::B256;
 use rust_decimal::Decimal;
+use serde_json::{Map, Value};
 
 use crate::core::types::{PoolRef, TipOutcome, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -48,11 +55,13 @@ pub struct TipPlan {
     /// Чаевые, wei за газ.
     pub tip: u128,
     pub pools: Vec<PoolRef>,
-    /// Ревью 438 (D): topic0 событий, пишущих слоты условия, по пулам (как pools; None — любое событие).
+    /// Ревью 438 (D): topic0 событий, пишущих слоты условия, по пулам (как pools; None — любое событие);
+    /// ревью 439 (4) — по итоговому условию отправки (exec/pool_cond_topics.rs by_cond).
     pub topics: Vec<Option<Vec<B256>>>,
 }
 
-/// Чаевые сделки цикла. Принимает: котировку, газ транзакции (цена по режиму), (выход, вход) в базовой, курсы, ноги.
+/// Чаевые сделки цикла. Принимает: котировку, газ транзакции (цена по режиму), (выход, вход) в базовой, курсы, ноги,
+/// knownAccounts отправки (None — условия пулов нет; ревью 439 (4) — фильтр разбора по итоговому условию).
 /// Возвращает: Bill с выбранными чаевыми и TipPlan; не profit_share или не eip1559_l1 — Bill как есть и None.
 /// Ошибки: NotConfigured (режим, пределы, dex_dex.min_profit_usd, каналы), QuoteMismatch — предел по
 /// прибыли ниже нижнего предела чаевых (сделки нет, причина), BadResponse (числа).
@@ -62,6 +71,7 @@ pub async fn choose(
     (out, input): (Decimal, Decimal),
     r: &Rates,
     legs: &[Leg],
+    known: Option<&Map<String, Value>>,
 ) -> GatewayResult<(Bill, Option<TipPlan>)> {
     let ctx = &q.ctx;
     let Bill::Split { l2, base, .. } = bill else {
@@ -89,7 +99,10 @@ pub async fn choose(
         cfg,
         tip,
         pools: legs.iter().map(|l| l.entry.pool.reference.clone()).collect(),
-        topics: legs.iter().map(|l| pool_cond_topics::topics(&l.entry)).collect(),
+        topics: legs
+            .iter()
+            .map(|l| pool_cond_topics::by_cond(&l.entry, known))
+            .collect(),
     };
     Ok((bill.with_tip(tip), Some(plan)))
 }

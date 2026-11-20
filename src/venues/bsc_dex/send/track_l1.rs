@@ -15,8 +15,16 @@
 //!   секвенсора (квитанции нет и nonce не вырос — у отставшего узла, а транзакция в блоке) — ждём дальше;
 //!   ревью 438 (A): сначала caught_up и номер свежей головы H, затем квитанция и eth_getTransactionCount(from, H) — на
 //!   той же голове (голова N+1, пришедшая после ответа о nonce на N, не делает включённую транзакцию «выброшенной»);
-//!   ревью 438 (B): начало окна — время блока головы своего узла на момент отправки (не часы сервера: спешащие часы
-//!   не дают caught_up никогда, отстающие — раньше срока); голов ещё не было — первая пришедшая;
+//!   ревью 438 (B): начало окна — время блока головы своего узла на момент начала слежения (не часы сервера:
+//!   спешащие часы не дают caught_up никогда, отстающие — раньше срока); голов ещё не было — первая пришедшая
+//!   (ревью 439 (2): запоминается в шаге ожидания, когда пришла, а не при первой проверке после окна — иначе окно
+//!   удваивалось);
+//!   ревью 439 (1): feed.stale_after_ms ограничивает только момент получения номера, не время блока — отставший на L
+//!   узел (номер растёт, блоки старые) давал ложное «выброшена» при L > окна. Поэтому блок H не старше
+//!   feed.max_block_age_ms по часам сервера (SendCfg: порог задан и меньше окна — send/drop_wait.rs), и начало окна —
+//!   только блок, который в момент начала слежения был не старше порога; старше — начало окна переносится на первую
+//!   свежую голову H (окно позже, «выброшена» не раньше срока). Порог меньше окна: время блока H ≥ часы − порог ≥
+//!   отправка + окно − порог > отправки — узел видел блоки после отправки;
 //! - исход не установлен за send.queue_max_wait_s — «исход неизвестен» (очередь останавливается).
 //!
 //! Ответ отправки уже разобран до трекера (send/mod.rs classify): ошибка всех каналов и своего узла нет транзакции —
@@ -27,8 +35,8 @@
 //! Решение 398: все настройки — в SendCfg до отправки (drop_wait, replaced_confirm, queue_max_wait, stale); здесь не
 //! читаются (сторож tests/settings_before_send_guard.rs).
 //! Кто вызывает: send/track.rs (resolve при SendCfg.drop_wait).
-//! От чего зависит: node/{rpc, heads, head_age, call}.rs, send/receipt.rs, send/track_util.rs, ctx.rs.
-//! Настройки: нет своих чтений (send.drop_wait_ms и прочие — через SendCfg).
+//! От чего зависит: node/{rpc, heads, head_age, call}.rs, send/{receipt, track_util, drop_wait}.rs, ctx.rs.
+//! Настройки: нет своих чтений (send.drop_wait_ms, feed.max_block_age_ms и прочие — через SendCfg).
 
 use std::time::{Duration, Instant};
 
@@ -40,19 +48,22 @@ use crate::core::types::TxOutcome;
 use crate::storage::journal::Level;
 
 use super::super::node::call::block_tag;
+use super::super::node::head_age::{self, BlockTime};
 use super::super::node::heads::Head;
-use super::super::node::{head_age, rpc};
+use super::super::node::rpc;
+use super::drop_wait::DropWait;
 use super::receipt;
 use super::track_util::{Quiet, Tracked, Watch, heads_rx, landed};
 
-/// Ждёт итога без отмен (см. шапку). Принимает: что отслеживается, окно send.drop_wait_ms. Возвращает: итог.
-/// Ошибок нет — сбои узла повторяются.
-pub async fn resolve(w: Watch, window: Duration) -> Tracked {
+/// Ждёт итога без отмен (см. шапку). Принимает: что отслеживается, окно send.drop_wait_ms и порог возраста блока
+/// feed.max_block_age_ms (SendCfg). Возвращает: итог. Ошибок нет — сбои узла повторяются.
+pub async fn resolve(w: Watch, wait: DropWait) -> Tracked {
     let ctx = &w.ctx;
+    let window = wait.window;
     let started = Instant::now();
-    // Ревью 438 (B): начало окна — время блока головы на момент отправки (читается при первой нужде).
+    // Ревью 438 (B): начало окна — голова на момент начала слежения; время её блока читается при первой нужде.
     let mut start = Start {
-        head: w.heads.latest().map(|h| h.number),
+        head: w.heads.latest().map(|h| (h.number, now_ms())),
         secs: None,
     };
     let mut rx = heads_rx(&w.heads);
@@ -68,6 +79,10 @@ pub async fn resolve(w: Watch, window: Duration) -> Tracked {
             return Tracked::bare(TxOutcome::Pending, Some(why));
         }
         let head = step(&mut rx, &w, started, window).await;
+        // Ревью 439 (2): голов при начале слежения не было — начало окна от первой пришедшей, когда она пришла.
+        if start.head.is_none() && head > 0 {
+            start.head = Some((head, now_ms()));
+        }
         match receipt::find(ctx, &ours).await {
             Ok(Some((i, r))) => return landed(&w, &ours, i, r),
             Ok(None) => quiet.ok("receipt").await,
@@ -96,7 +111,7 @@ pub async fn resolve(w: Watch, window: Duration) -> Tracked {
             }
         }
         // Ревью 438 (A): сначала свежая голова H, затем квитанция и nonce — на ней же.
-        let at = match caught_up(&w, &mut start, window).await {
+        let at = match caught_up(&w, &mut start, wait).await {
             Ok(Some(h)) => h,
             Ok(None) => continue,
             Err(why) => {
@@ -160,31 +175,41 @@ async fn step(
     w.heads.latest().map_or(0, |h| h.number)
 }
 
-/// Ревью 438 (B): начало окна — голова своего узла на момент отправки и время её блока (секунды Unix).
+/// Ревью 438 (B), ревью 439 (1, 2): начало окна — голова своего узла на момент начала слежения и время её блока.
 struct Start {
-    /// Номер головы при отправке; None — голов ещё не было (берётся первая пришедшая).
-    head: Option<u64>,
-    /// Время её блока; None — ещё не прочитано.
+    /// Номер головы и когда она взята началом (миллисекунды Unix, часы сервера); None — голов ещё не было.
+    head: Option<(u64, i64)>,
+    /// Время её блока (секунды Unix); None — ещё не прочитано.
     secs: Option<u64>,
 }
 
+/// Часы сервера, миллисекунды Unix. Ошибок нет.
+fn now_ms() -> i64 {
+    Utc::now().timestamp_millis()
+}
+
 /// Время блока n: из памяти голов, иначе с узла (node/head_age.rs fetch). Ошибки: текст (узел).
-async fn block_secs(w: &Watch, n: u64) -> Result<u64, String> {
-    match w.heads.block_time().filter(|(b, _)| *b == n) {
-        Some((_, t)) => Ok(t),
+async fn block_time(w: &Watch, n: u64) -> Result<BlockTime, String> {
+    match w.heads.block_time_ms().filter(|(b, _)| *b == n) {
+        // Миллисекунды = секунды·1000 + доля секунды < 1000 (node/block_ms.rs) — секунды восстанавливаются точно.
+        Some((_, ms)) => Ok(BlockTime {
+            secs: ms / 1000,
+            millis: ms,
+        }),
         None => head_age::fetch(&w.ctx, n, true)
             .await
-            .map(|t| t.secs)
             .map_err(|e| format!("время блока {n}: {}", e.message)),
     }
 }
 
-/// Ревью 437, п. 1; ревью 438 (A, B): свой узел догнал секвенсор настолько, чтобы верить «квитанции нет, nonce не
-/// вырос»: голова свежая (получена не раньше SendCfg.stale назад) и время её блока не раньше времени блока головы на
-/// момент отправки + окно (оба — время сети, секунды с округлением вниз; часы сервера не участвуют). Принимает:
-/// слежение, начало (меняется: номер и время читаются один раз), окно send.drop_wait_ms. Возвращает: Some(номер
-/// головы H) — догнал, на H читать nonce; None — ещё нет. Ошибки: текст — время блока не прочитано (узел).
-async fn caught_up(w: &Watch, start: &mut Start, window: Duration) -> Result<Option<u64>, String> {
+/// Ревью 437, п. 1; ревью 438 (A, B); ревью 439 (1): свой узел догнал секвенсор настолько, чтобы верить «квитанции
+/// нет, nonce не вырос»: голова H получена не раньше SendCfg.stale назад, блок H не старше feed.max_block_age_ms по
+/// часам сервера, и время блока H не раньше начала + окно (время сети, секунды с округлением вниз). Начало — время
+/// блока головы на момент начала слежения, если тогда он был не старше порога; иначе начало переносится на H (см.
+/// шапку). Принимает: слежение, начало (меняется: читается один раз, переносится один раз), окно и порог (SendCfg).
+/// Возвращает: Some(номер головы H) — догнал, на H читать nonce; None — ещё нет. Ошибки: текст — время блока не
+/// прочитано (узел).
+async fn caught_up(w: &Watch, start: &mut Start, wait: DropWait) -> Result<Option<u64>, String> {
     let Some(h) = w.heads.latest() else {
         return Ok(None);
     };
@@ -193,16 +218,24 @@ async fn caught_up(w: &Watch, start: &mut Start, window: Duration) -> Result<Opt
     if !(0..=stale).contains(&age) {
         return Ok(None);
     }
+    let max_age = i64::try_from(wait.max_block_age.as_millis()).unwrap_or(i64::MAX);
+    let now = block_time(w, h.number).await?;
+    if head_age::age_ms(now.millis) > max_age {
+        // Узел отстаёт от сети: его «квитанции нет» — не факт.
+        return Ok(None);
+    }
     let begin = match start.secs {
         Some(s) => s,
         None => {
-            let n = *start.head.get_or_insert(h.number);
-            let s = block_secs(w, n).await?;
+            let (n, seen) = *start.head.get_or_insert((h.number, now_ms()));
+            let t = block_time(w, n).await?;
+            let lag = seen.saturating_sub(i64::try_from(t.millis).unwrap_or(i64::MAX));
+            // Начало на отставшем узле — начало окна от свежей головы H (окно позже, не раньше срока).
+            let s = if lag > max_age { now.secs } else { t.secs };
             start.secs = Some(s);
             s
         }
     };
-    let now = block_secs(w, h.number).await?;
-    let need = u128::from(begin) * 1000 + window.as_millis();
-    Ok((u128::from(now) * 1000 >= need).then_some(h.number))
+    let need = u128::from(begin) * 1000 + wait.window.as_millis();
+    Ok((u128::from(now.secs) * 1000 >= need).then_some(h.number))
 }

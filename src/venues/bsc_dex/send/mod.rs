@@ -31,6 +31,7 @@ pub mod channel;
 pub mod channels;
 pub mod check;
 pub mod club48;
+pub mod drop_wait;
 pub mod flashblock;
 pub mod gas_mode;
 pub mod jetbuilder;

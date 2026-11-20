@@ -445,6 +445,8 @@ fn decode_batch_answers_with_vault_pause() {
             id: p["pool_id"].as_str().unwrap().parse().unwrap(),
             weighted,
             scaling,
+            // Решение 450: пулы ACSI — библиотеки v1 (20210418 / 20210624).
+            v2: false,
         };
         let w3 =
             |v: &Value| (dec(&v[0]) == U256::from(1u8), dec(&v[1]), dec(&v[2])).abi_encode_params();

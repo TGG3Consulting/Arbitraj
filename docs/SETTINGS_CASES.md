@@ -40,12 +40,13 @@
 или фильтр. Что будет без значения — в записи ключа («Если не задана»). Не включены отметки, которые пишет само ядро
 (coin.entry_blocked_venues, coin.entry_blocked_note, coin.exit_tax_seen_pct).
 
-Всего: 96.
+Всего: 98.
 
 | Ключ | Как влияет | Если не задана (коротко) |
 | --- | --- | --- |
 | `cex_cex.untaxed_ok` | фильтр: открывает биржа ↔ биржа без замера налога (core/transfer_tax.rs) | необязательная: не задана — такого направления нет, причина «налог перевода не измерен» видна на «Монетах» |
 | `check.probe_usdt` | сумма пробы налогов и крючков — фильтр монет и пулов (check/taxes.rs, check/hook_points.rs) | без .optional(): ошибка «не задана»: проба налогов монеты — ошибка «не задана» … |
+| `dex.balancer_math` | расчёт: формула пулов Balancer V2 фабрик ключа — v1 или v2 (math/balancer_math.rs) | необязательная: не задана — v1, как раньше |
 | `dex.balancer_stable_factory` | какие пулы Balancer берутся в расчёт (pools/verify_balancer.rs) | необязательная: Не задана — стейблсвап-пулы DEX не берутся (весовые — берутся) |
 | `dex.cl_tick_spacings` | какие пулы Slipstream находятся по фабрике (pools/factory_calls.rs) | необязательная: Не задана — Slipstream этой DEX по фабрике не ищется |
 | `dex.curve_ng_versions` | какие пулы Curve NG допускаются (pools/verify_curve_ng.rs) | без .optional(): ошибка «не задана»: Не задана или пуста — DEX не подключена |
@@ -75,6 +76,7 @@
 | `dex.solidly_pause_method` | фильтр: пара на паузе не торгуется (pools/solidly_gate_read.rs) | необязательная: Не задан — проверки нет |
 | `dex.stable_hooks` | какие пулы Infinity Stable допускаются (pools/verify_inf_stable.rs) | без .optional(): ошибка «не задана»: Не задана — DEX не подключена |
 | `dex.stable_pools` | какие стейблсвап-пулы допускаются (pools/stable_list.rs) | без .optional(): ошибка «не задана»: Не задана — DEX не подключена |
+| `dex.sub_dex` | какие пулы строки индексатора берутся и каким видом (pools/sub_dex.rs, index_pass.rs) | необязательная: не задана — один вид у ключа, как раньше |
 | `dex.tick_radius` | данные пулов Maverick: сколько тиков читать (pools/load_maverick.rs) | без .optional(): ошибка «не задана»: Не задана — DEX не подключена |
 | `dex.tick_read_band_pct` | данные пулов V3: полоса карты тиков (pools/load_v2v3.rs) | необязательная: Не задана — чтение как раньше |
 | `dex.v3_fee_manager` | расчёт: свежая комиссия V3-форка (pools/fee_watch.rs) | необязательная: Не задан — подписки нет (комиссию всё равно перечитывает dex.v3_fee_source = pool_fee_each_read) |
@@ -172,6 +174,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `delist.refresh_s` | —, р. 175 | `3600` — Совет Тиграна: раз в час — новый делистинг виден задолго до порога delist.block_hours. Binance: вес … | необязательная: Не задано — делистинги не обновляются (одна запись core.not_configured), сделки по делистингу не … | в релизе 141619bc |
 | `delist.st_block` | t26, р. 226 | `нет` — Тигран: метку ST торгуем — «на супер волатильных монетах и появляются нормальные спреды». Делистинг … | необязательная: Не задано или нет — ST торгуется (Тигран: «на супер волатильных монетах и появляются нормальные … | в релизе 141619bc |
 | `dex.algebra_off_map_reread` | t147, р. 320 | bsc_dex: «да» после приёмки решения 320 (до приёмки — не задавать: поведение как раньше); bsc_dex: см. раздел … | необязательная: не задана — как раньше: Algebra перечитывается только по Mint/Burn | в релизе 141619bc |
+| `dex.balancer_math` | t226, р. 450 | совета нет, решает Тигран (Arbitrum — по таблице docs/notes/arbitrum/dex-settings-arbitrum.md §2.11) | необязательная: не задана — v1 | ещё не в релизе (ветка t226/arb-dex-code-a) |
 | `dex.balancer_stable_factory` | t120, р. 289 | совета нет, решает Тигран | необязательная: Не задана — стейблсвап-пулы DEX не берутся (весовые — берутся) | в релизе 141619bc |
 | `dex.bin_reread_left_pct` | t154, р. 332 | после приёмки решения 332 — 50 у lb_v21; у pancakeswap_infinity_bin — НЕ задавать, пока нет записи пула … | необязательная: Не задана — как раньше: бины вне полосы не читаются до переподключения | в релизе 141619bc |
 | `dex.block_read_parallel_max` | t153, р. 330 | `2` после выкладки t153 (проверка механизма, число не из замера), дальше — по замеру; если в журнале появятся … | необязательная: Не задана — как раньше, по одному | в релизе 141619bc |
@@ -233,6 +236,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.solidly_pause_method` | t106, р. 273 | совета нет, решает Тигран | необязательная: Не задан — проверки нет | в релизе 141619bc |
 | `dex.stable_hooks` | —, р. 122 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана — DEX не подключена | в релизе 141619bc |
 | `dex.stable_pools` | —, р. 122 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана — DEX не подключена | в релизе 141619bc |
+| `dex.sub_dex` | t226, р. 450 | совета нет, решает Тигран (Arbitrum — docs/notes/arbitrum/dex-settings-arbitrum.md) | необязательная: не задана — один вид у ключа | ещё не в релизе (ветка t226/arb-dex-code-a) |
 | `dex.tick_radius` | —, р. 122 (Maverick V2) | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана — DEX не подключена | в релизе 141619bc |
 | `dex.tick_read_band_algebra_pct` | t147, р. 319 | не задавать, пока dex.tick_read_band_pct не выше 20; при подъёме dex.tick_read_band_pct выше 20 — СНАЧАЛА … | необязательная: Не задана — Algebra следует dex.tick_read_band_pct, ровно как раньше | в релизе 141619bc |
 | `dex.tick_read_band_pct` | t127, р. 296 | совета нет, решает Тигран | необязательная: Не задана — чтение как раньше | в релизе 141619bc |
@@ -734,6 +738,18 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** да — данные пулов для расчёта: перечитывание Algebra при выходе за полосу (pools/off_map_algebra.rs).
 - **Связанные ключи:** dex.depth_band_pct, dex.tick_words, dex.tick_read_band_algebra_pct, dex.tick_read_band_pct, dex.integral_tick_steps.
 - **Статус:** в релизе 141619bc.
+
+### `dex.balancer_math`
+
+- **Задача / решение:** t226 (T448-03), решение 450.
+- **Появилась:** 2026-11-20, ветка t226/arb-dex-code-a.
+- **Кейс:** Balancer V2 на Arbitrum: под одним id GeckoTerminal balancer_arbitrum — пулы фабрик weighted-pool v2 / v3 / v4 и stable-pool-v2. Их библиотеки (build-info balancer-deployments@b55dc2b8) считают иначе, чем v1, по которой сделан вид: FixedPoint.powUp v2+ — точные степени 1, 2, 4 (пулы 50/50 и 80/20), StableMath v2 — другой инвариант (формула Curve, округление вниз). Без версии обмен таких пулов считался бы с ошибкой.
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (ключ вида balancer_v2); каталог src/settings/catalog/dex.rs (dex.balancer_math).
+- **Что ставить:** совета нет, решает Тигран; по исходникам: v1 — ключи фабрик 20210418 (WeightedPool, WeightedPool2Tokens) и 20210624; v2 — ключи фабрик weighted-pool v2 / v3 / v4 и stable-pool-v2 (docs/notes/arbitrum/dex-settings-arbitrum.md §2.11).
+- **Если не задана:** необязательная; по коду (pools/load_balancer_fixed.rs math_v2): не задана — v1 (как до решения, ACSI Finance BSC); значение не из списка — NotConfigured, пул не читается.
+- **Влияет на торговлю:** да — формула обмена пулов Balancer V2 ключа (math/balancer_math.rs, math/balancer_stable.rs).
+- **Связанные ключи:** dex.factory, dex.balancer_stable_factory, dex.vault, dex.sub_dex.
+- **Статус:** ещё не в релизе (ветка t226/arb-dex-code-a).
 
 ### `dex.balancer_stable_factory`
 
@@ -1771,6 +1787,18 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** да — какие стейблсвап-пулы допускаются (pools/stable_list.rs).
 - **Связанные ключи:** index.factory_scan.
 - **Статус:** в релизе 141619bc.
+
+### `dex.sub_dex`
+
+- **Задача / решение:** t226 (T448-02), решение 450.
+- **Появилась:** 2026-11-20, ветка t226/arb-dex-code-a.
+- **Кейс:** на Arbitrum под одним id индексатора GeckoTerminal лежат пулы разных фабрик с разным кодом: curve_arbitrum (StableSwap-NG, 2pool, Twocrypto / Tricrypto), balancer_arbitrum (WeightedPool 20210418, WeightedPool2Tokens, weighted v2 / v3 / v4, stable v1 / v2, composable stable v1–v6 …), kyberswap_classic_arbitrum (DMM и Static Fee). Одна dex.kind на ключ (pools/families.rs) брала пулы только одной фабрики (docs/notes/arbitrum/dex-settings-arbitrum.md, решение 448).
+- **Где задаётся:** «Настройки», группа «DEX»; область — по DEX (ключ строки индексатора, например balancer_arbitrum@arbitrum); каталог src/settings/catalog/dex.rs (dex.sub_dex).
+- **Что ставить:** совета нет, решает Тигран; для Arbitrum — список дочерних ключей из docs/notes/arbitrum/dex-settings-arbitrum.md (у каждого дочернего — свои dex.kind, dex.pool_enabled, фабрика и адреса).
+- **Если не задана:** необязательная; по коду (pools/sub_dex.rs keys, index_pass.rs pass): не задана — у строки один вид — её ключа, как до решения; ключи другой сети, повтор и сам ключ в списке не берутся.
+- **Влияет на торговлю:** да — какие пулы справочника берутся и каким видом считаются (проверка реестром своей фабрики).
+- **Связанные ключи:** dex.kind, dex.pool_enabled, dex.factory, dex.multi_pair (режим общий у ключа и дочерних).
+- **Статус:** ещё не в релизе (ветка t226/arb-dex-code-a).
 
 ### `dex.tick_radius`
 

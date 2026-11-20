@@ -10,7 +10,7 @@
 //! verify_stable_u.rs (adopt), directory/view.rs, created_log.rs, factory_scan.rs (dir_key), market.rs (fits),
 //! woo_quote.rs и factory_calls.rs (woo_pairs).
 //! От чего зависит: ctx.rs, families.rs, discover.rs (Found), directory (Snap, IndexedPool), stable_list.rs (pairs).
-//! Настройки: dex.multi_pair [DEX].
+//! Настройки: dex.multi_pair, dex.sub_dex [DEX].
 
 use std::collections::HashSet;
 
@@ -43,13 +43,22 @@ pub fn woo_pairs(ctx: &Ctx, f: &Family) -> bool {
 /// Что делает: id DEX, у которых строка справочника — ПАРА (ключ «пул|монета|монета», dir_key): DEX в режиме «все пары
 /// пула» и — решение 305 — DEX вида woofi_v2 с dex.multi_pair = да (woo_pairs: с ключом-строкой пула все пары WooFi
 /// одного контракта сливались в одну запись seen / status / taken — проверялась и бралась одна пара на весь контракт).
+/// Решение 450: ключ с dex.sub_dex и его дочерние ключи — в множестве вместе, если в нём хоть один из них (строка
+/// индексатора и строки развёртки дочернего вида получают один и тот же ключ — без дублей пары).
 /// Принимает: окружение. Возвращает: множество id (пусто — справочник и отбор работают как до решения 295). Ошибок нет.
 pub fn multi_dex(ctx: &Ctx) -> HashSet<String> {
-    families::all(ctx)
+    let mut out: HashSet<String> = families::all(ctx)
         .into_iter()
         .filter(|f| enabled(ctx, f) || woo_pairs(ctx, f))
         .map(|f| f.id.to_string())
-        .collect()
+        .collect();
+    for (parent, subs) in super::sub_dex::groups(ctx) {
+        if out.contains(&parent) || subs.iter().any(|k| out.contains(k)) {
+            out.insert(parent);
+            out.extend(subs);
+        }
+    }
+    out
 }
 
 /// Что делает: ключ строки справочника. Принимает: DEX в режиме, id DEX, строку пула, две монеты пары.

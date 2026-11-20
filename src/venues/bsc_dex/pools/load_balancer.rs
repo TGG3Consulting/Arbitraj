@@ -103,9 +103,13 @@ pub fn decode(
     let vault_paused = P::getPausedStateCall::abi_decode_returns(ok(4)?)
         .map_err(dec)?
         .paused;
+    // Решение 450: fx.v2 (dex.balancer_math = v2) — кривая библиотек v2 (math/balancer_math.rs).
     let curve = if fx.weighted {
-        VaultCurve::Weighted {
-            weights: P::getNormalizedWeightsCall::abi_decode_returns(ok(3)?).map_err(dec)?,
+        let weights = P::getNormalizedWeightsCall::abi_decode_returns(ok(3)?).map_err(dec)?;
+        if fx.v2 {
+            VaultCurve::WeightedV2 { weights }
+        } else {
+            VaultCurve::Weighted { weights }
         }
     } else {
         let a = P::getAmplificationParameterCall::abi_decode_returns(ok(3)?).map_err(dec)?;
@@ -115,7 +119,11 @@ pub fn decode(
                 a.precision
             ));
         }
-        VaultCurve::Stable { amp: a.value }
+        if fx.v2 {
+            VaultCurve::StableV2 { amp: a.value }
+        } else {
+            VaultCurve::Stable { amp: a.value }
+        }
     };
     let scaling: Option<Vec<U256>> = pt
         .tokens
@@ -151,8 +159,8 @@ pub fn state(
 ) -> Result<PoolState, String> {
     let n = tokens.len();
     let weights_ok = match &curve {
-        VaultCurve::Weighted { weights } => weights.len() == n,
-        VaultCurve::Stable { .. } => true,
+        VaultCurve::Weighted { weights } | VaultCurve::WeightedV2 { weights } => weights.len() == n,
+        VaultCurve::Stable { .. } | VaultCurve::StableV2 { .. } => true,
     };
     if n < 2 || balances.len() != n || scaling.len() != n || !weights_ok {
         return Err(format!(

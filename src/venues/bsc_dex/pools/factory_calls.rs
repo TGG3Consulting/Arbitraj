@@ -10,6 +10,8 @@
 //! Кто вызывает: pools/factory_scan.rs.
 //! От чего зависит: families.rs (all, classify, Proto), abi_v2v3.rs (IV2Factory, IV3Factory), ctx.rs, multi_pair.rs
 //! (woo_pairs), woo_quote.rs (quote_of).
+//! Решение 450 (T448-05): iZiSwap — pool(монета, встречный, fee) по уровням dex.v3_fee_tiers (iZiSwap нет у
+//! индексатора в сети arbitrum — пулы только поиском по фабрике).
 //! Maverick V2 (решение 122 F) — lookup(tokenA, tokenB, 0, dex.pair_lookup_max) (не задана — по фабрике не ищется).
 //! PancakeSwap Stable / Lista: пара с обёрткой BNB спрашивается и с меткой 0xEeee… (пул с нативным BNB фабрика хранит
 //! под меткой; решение «122 X (нативный BNB в стейблсвапах)», stable_native.rs) — найденный пул записан с обёрткой.
@@ -71,13 +73,15 @@ pub fn plan(
     let mut out = Plan::default();
     for f in families::all(ctx) {
         let v3 = matches!(f.proto, Proto::PancakeV3 | Proto::UniswapV3);
+        // Решение 450 (T448-05): iZiSwap — pool(a, b, fee) по уровням dex.v3_fee_tiers (как V3).
+        let izi = f.proto == Proto::IziSwap;
         let mut qs: Vec<Q> = match f.proto {
             // Nomiswap Stable (решение 284): реестр фабрики getPair(a, b) — как у V2.
             // SmarDex (решение 288): getPair(a, b) — как V2 (SmardexFactory.sol L20).
             Proto::V2 | Proto::NomiStable | Proto::Smardex => vec![Q::V2],
             // KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары.
             Proto::KyberDmm => vec![Q::Dmm],
-            Proto::PancakeV3 | Proto::UniswapV3 => Vec::new(),
+            Proto::PancakeV3 | Proto::UniswapV3 | Proto::IziSwap => Vec::new(),
             p if p.is_solidly() => {
                 let v1 = p == Proto::SolidlyV1;
                 [true, false]
@@ -130,8 +134,9 @@ pub fn plan(
                 }
             }
         }
-        if v3 {
+        if v3 || izi {
             match tiers(ctx, f.id) {
+                Ok(list) if izi => qs = list.into_iter().map(Q::Izi).collect(),
                 Ok(list) => qs = list.into_iter().map(Q::V3).collect(),
                 Err(why) => {
                     out.notes.push(format!("{}: {why}", f.id));

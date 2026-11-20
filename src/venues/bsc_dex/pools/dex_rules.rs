@@ -13,7 +13,8 @@ use super::super::ctx::Ctx;
 use super::families::{Family, all, classify};
 
 /// Исполняет ли пулы этой DEX умный роутер (решение 38): её dex.universal_router — это smart.universal_router, формат
-/// команд — pancakeswap_infinity и dex.permit2 = smart.permit2. Ошибок нет: не задано — нет.
+/// команд — pancakeswap_infinity (решение 450: или pancakeswap_v3 — Universal Router PancakeSwap v3, пулы V2/V3) и
+/// dex.permit2 = smart.permit2. Ошибок нет: не задано — нет.
 pub fn smart_ok(ctx: &Ctx, f: &Family) -> bool {
     let same = |a: &str, b: &str| match (ctx.dex_addr(a, f.id), ctx.addr(b)) {
         (Ok(x), Ok(y)) => x == y,
@@ -23,7 +24,9 @@ pub fn smart_ok(ctx: &Ctx, f: &Family) -> bool {
     f.tradable
         && same("dex.universal_router", "smart.universal_router")
         && same("dex.permit2", "smart.permit2")
-        && format.as_deref().is_ok_and(|v| v == "pancakeswap_infinity")
+        && format
+            .as_deref()
+            .is_ok_and(|v| v == "pancakeswap_infinity" || v == "pancakeswap_v3")
 }
 
 /// Пул по-прежнему того вида, с которым он взят: DEX подключена и её вид в таблице не менялся (dex.kind и адреса

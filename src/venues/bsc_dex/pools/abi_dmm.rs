@@ -4,6 +4,11 @@
 //! пары может быть НЕСКОЛЬКО пулов с разным усилением), событие PoolCreated; роутер DMMRouter02 — getAmountsOut по
 //! пути пулов (квотер сверки перед сделкой). Поля пула factory/token0/token1 — как у V2 (abi_check.rs), обмен
 //! swap(amount0Out, amount1Out, to, data) — та же подпись и селектор 0x022c0d9f, что у пары V2 (abi_v2v3.rs).
+//! Решение 450 (T448-04): тот же вид — пулы KSPool фабрик Static Fee (KSFactory): код пула = DMMPool без
+//! VolumeTrendRecorder / FeeFomula — getTradeInfo с постоянной feeInPrecision, та же проверка swap (verifyBalance), те же
+//! события Sync / Swap / Mint / Burn, реестр getPools / isPool (dmm-smart-contracts@e557b57 KSPool.sol, KSFactory.sol
+//! L131-L162, KSLibrary.sol = DMMLibrary); другое только событие создания пула (created_topics / created) и обратный
+//! вызов ksSwapCall (исполнитель передаёт пустые данные — вызова нет). Квотер сверки — KSRouter02 своей фабрики.
 //! Кто вызывает: pools/load_dmm.rs, events_dmm.rs, verify_calls.rs, verify_rules.rs, factory_ask.rs, created_log.rs,
 //! quote/quoter_dmm.rs.
 //! От чего зависит: alloy::sol!.
@@ -22,7 +27,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use alloy::sol_types::SolEvent;
-use alloy_primitives::B256;
+use alloy_primitives::{Address, B256, LogData};
 
 alloy::sol! {
     interface IDmmPool {
@@ -43,8 +48,49 @@ alloy::sol! {
         event PoolCreated(address indexed token0, address indexed token1, address pool, uint32 ampBps, uint256 totalPool);
     }
 
+    /// Решение 450 (T448-04): KyberSwap Classic Static Fee — KSFactory (dmm-smart-contracts@e557b57 KSFactory.sol L26-L33;
+    /// Arbitrum 0x1c758aF0…be5 — Sourcify 42161 match, solc 0.6.12, тот же текст): PoolCreated с feeUnits.
+    interface IKsFactory {
+        event PoolCreated(address indexed token0, address indexed token1, address pool, uint32 ampBps, uint24 feeUnits, uint256 totalPool);
+    }
+
+    /// Решение 450: KyberSwap Classic Legacy Static Fee — KSFactory Arbitrum 0x51E8D106…1a62 (Sourcify 42161 match, solc
+    /// 0.6.12): PoolCreated с uint16 feeBps (в репозитории этой версии нет — текст события из верифицированного кода).
+    interface IKsLegacyFactory {
+        event PoolCreated(address indexed token0, address indexed token1, address pool, uint32 ampBps, uint16 feeBps, uint256 totalPool);
+    }
+
     interface IDmmRouter {
         function getAmountsOut(uint256 amountIn, address[] calldata poolsPath, address[] calldata path) external view returns (uint256[] memory amounts);
+    }
+}
+
+/// Решение 450: topic0 событий создания пула фабрик вида kyber_dmm — DMMFactory, KSFactory (Static Fee) и KSFactory
+/// Legacy: у фабрики ключа событие одного из них (по её коду). Ошибок нет.
+pub fn created_topics() -> [B256; 3] {
+    [
+        IDmmFactory::PoolCreated::SIGNATURE_HASH,
+        IKsFactory::PoolCreated::SIGNATURE_HASH,
+        IKsLegacyFactory::PoolCreated::SIGNATURE_HASH,
+    ]
+}
+
+/// Решение 450: событие создания пула любой из трёх фабрик → (token0, token1, пул). Принимает: topic0, данные лога.
+/// Возвращает: тройку или текст «не по ABI / чужое событие». Ошибок нет.
+pub fn created(t0: B256, log: &LogData) -> Result<(Address, Address, Address), String> {
+    let bad =
+        |e: alloy::sol_types::Error| format!("PoolCreated (KyberSwap Classic) не по ABI: {e}");
+    if t0 == IDmmFactory::PoolCreated::SIGNATURE_HASH {
+        let e = IDmmFactory::PoolCreated::decode_log_data(log).map_err(bad)?;
+        Ok((e.token0, e.token1, e.pool))
+    } else if t0 == IKsFactory::PoolCreated::SIGNATURE_HASH {
+        let e = IKsFactory::PoolCreated::decode_log_data(log).map_err(bad)?;
+        Ok((e.token0, e.token1, e.pool))
+    } else if t0 == IKsLegacyFactory::PoolCreated::SIGNATURE_HASH {
+        let e = IKsLegacyFactory::PoolCreated::decode_log_data(log).map_err(bad)?;
+        Ok((e.token0, e.token1, e.pool))
+    } else {
+        Err(format!("{t0} — не PoolCreated фабрик KyberSwap Classic"))
     }
 }
 

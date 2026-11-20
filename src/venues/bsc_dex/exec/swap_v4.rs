@@ -59,6 +59,16 @@ pub fn command(
     o: &Order,
     (from_wallet, to_wallet): (bool, bool),
 ) -> GatewayResult<(u8, Bytes)> {
+    // Решение 450: у Universal Router PancakeSwap v3 команды Infinity нет (Commands.sol: 0x10 = OWNER_CHECK_721).
+    if f == Format::PancakeV3 {
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!(
+                "{}: Universal Router PancakeSwap v3 (pancakeswap_v3) не исполняет пулы V4 / Infinity",
+                e.family.title
+            ),
+        ));
+    }
     let (tin, tout, amount_in, min_out) = (o.token_in, o.token_out, o.amount_in, o.min_out);
     let key = e
         .key

@@ -26,6 +26,10 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 472 (`wc -l`): сверх ориентира 200 — math/stableswap_v1.rs 214 (+ pair_d), pools/load_crypto.rs 226 (+ вызовы
+  tweak), quote/pool_quote.rs 633 (+ причина отказа tweak_price). Дробить: d_p_pair и Template — в stableswap_tpl.rs;
+  decode load_crypto.rs — в load_crypto_decode.rs. Модель tweak_price crypto v1 — T472-03; сверка модели симуляцией
+  exchange — T472-02.
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

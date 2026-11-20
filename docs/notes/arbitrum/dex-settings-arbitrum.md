@@ -294,6 +294,19 @@ Twocrypto/Tricrypto (T433-F3) — T448-02.
 curve_stableswap (Curve 2020 без A_PRECISION) и NG — нужен новый шаблон (T450-02). Crypto-пулы — дочерними ключами вида
 T433-F3, когда он будет в коде.
 
+**Решение 472:** вид `curve_stableswap_plain` есть. Дочерний ключ dex.sub_dex у `curve_arbitrum@arbitrum` (имя —
+решение Тиграна, например `curve_arbitrum-plain@arbitrum`):
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `curve_stableswap_plain` | решение 472 |
+| dex.stable_pools | `["0x7f90122BF0700F9E7e1F688fe926940E8839F353"]` | curvefi/curve-js ab3f1c2 src/constants/pools/arbitrum.ts L15-L20 (2pool) |
+| dex.factory | `0xb17b674D9c5CB2e441F8e196a2f048A81355d031` | curve-js network_constants.ts L157 (ALIASES_ARBITRUM.factory); Sourcify 42161 match (FactorySidechains.vy, Vyper 0.2.16) |
+| dex.curve_plain_implementations | `["0x54e8A25d0Ac0E4945b697C80b8372445FEA17A62", "0xe381C25de995d62b453aF8B931aAc84fcCaa7A62", "0x8d53E5De033078367Ad91527c53abfd1Eb6bfa86"]` | curve-js factory/stable.ts L168-L180 (Plain2/3/4Basic); Sourcify 42161 match, Vyper 0.2.15 = curve-factory f389123 |
+| dex.pool_enabled | после записи T472-01 — Тигран | — |
+
+Пулы фабрики на реализациях Balances / ETH / Optimized / EMA и fraxbp — не берутся (TASKS T472-07).
+
 ### 2.13 DODO V2 — три ключа (T433-086)
 
 Пулы DODO индексатор GeckoTerminal в сети arbitrum не отдаёт (dex-coverage-arbitrum.md, строка 86): источник — поиск по

@@ -279,15 +279,31 @@ async fn run() -> Result<(), String> {
     // (внутри bsc_dex), иначе — собственный сборщик. Код исполнения kyberswap как площадка-цены не регистрируется.
     // Решение 435 (433-к): площадки DEX процесса — bsc_dex и dex.venues (например arb_dex — сеть Arbitrum тем же кодом
     // адаптера); не задана — только bsc_dex, как раньше. Список неверен — запись в журнал, только bsc_dex.
-    let dex_ids = match arb::venues::bsc_dex::dex_venues::extra(&settings) {
-        Ok(extra) => arb::venues::bsc_dex::dex_venues::all(extra),
+    let dex_extra = match arb::venues::bsc_dex::dex_venues::extra(&settings) {
+        Ok(extra) => extra,
         Err(why) => {
             let _ = journal
                 .write(Level::Error, "venue.dex_venues", None, why, None)
                 .await;
-            arb::venues::bsc_dex::dex_venues::all(Vec::new())
+            Vec::new()
         }
     };
+    // Решение 435 (ревью, правки): id, уже занятый площадкой шлюза (биржи зарегистрированы выше), — не площадка DEX:
+    // запись в журнал и в Place.all не входит. Иначе у bsc_dex alone() = false и каналы, виды DEX и справочник BSC
+    // читали бы dex.default_chain (ctx_place.rs default_chain).
+    let mut dex_free: Vec<String> = Vec::with_capacity(dex_extra.len());
+    for id in dex_extra {
+        let vid = arb::core::types::VenueId(id.clone());
+        if registry.get(&vid).await.is_ok() {
+            let why = format!("dex.venues: id «{id}» уже занят площадкой шлюза — пропущен");
+            let _ = journal
+                .write(Level::Error, "venue.dex_venues", None, why, None)
+                .await;
+            continue;
+        }
+        dex_free.push(id);
+    }
+    let dex_ids = arb::venues::bsc_dex::dex_venues::all(dex_free);
     let dex_ctx = arb::venues::bsc_dex::ctx::Ctx {
         settings: settings.clone(),
         vault: vault.clone(),
@@ -332,20 +348,9 @@ async fn run() -> Result<(), String> {
     // Изменение промежуточных монет (решение 52) — пересборка подписки DEX на лету.
     dex.watch_settings(changes.subscribe());
     registry.register(std::sync::Arc::new(dex)).await;
-    // Решение 435 (433-к): остальные площадки DEX (dex.venues) — тот же адаптер со своим id; id, занятый другой
-    // площадкой шлюза, не регистрируется (запись в журнал).
+    // Решение 435 (433-к): остальные площадки DEX (dex.venues) — тот же адаптер со своим id; занятые id отсеяны выше
+    // (в dex_ids их нет).
     for ctx in more_dex {
-        let id = arb::core::types::VenueId(ctx.place.id.to_string());
-        if registry.get(&id).await.is_ok() {
-            let why = format!(
-                "dex.venues: id «{}» уже занят площадкой шлюза — пропущен",
-                id.0
-            );
-            let _ = journal
-                .write(Level::Error, "venue.dex_venues", None, why, None)
-                .await;
-            continue;
-        }
         let more = arb::venues::bsc_dex::BscDex::new(ctx);
         more.watch_settings(changes.subscribe());
         registry.register(std::sync::Arc::new(more)).await;

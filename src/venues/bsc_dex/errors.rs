@@ -2,8 +2,10 @@
 //! Что делает: перевод ответов узла BSC (JSON-RPC ошибка, HTTP-статус, сеть) в единые коды шлюза.
 //! Кто вызывает: node/rpc.rs, node/ws.rs, позже send/* (каналы отправки — свои уточнения поверх этого).
 //! От чего зависит: gateway/errors.rs, ctx_place.rs (BSC_ID).
-//! Решение 435 (433-г): здесь нет окружения Ctx — площадка ошибки ставится первой площадкой DEX (bsc_dex); запросы к узлу
-//! (node/rpc.rs, node/rpc_capped.rs) перепомечают ошибку площадкой своего окружения (Ctx::tag), у bsc_dex — то же самое.
+//! Решение 435 (433-г): здесь нет окружения Ctx — площадка ошибки ставится первой площадкой DEX (bsc_dex). Площадкой
+//! своего окружения (Ctx::tag) ошибку перепомечает только node/rpc.rs; node/rpc_capped.rs, node/ws.rs (request,
+//! subscribe), node/multicall.rs, node/call.rs, node/receipts_handle.rs, node/rpc_race.rs — нет (у arb_dex такие ошибки
+//! с площадкой bsc_dex; техдолг — docs/ROADMAP.md). У bsc_dex — то же самое.
 //! Настройки: нет.
 //!
 //! Источники:

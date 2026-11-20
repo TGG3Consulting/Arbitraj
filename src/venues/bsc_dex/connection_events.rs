@@ -14,18 +14,24 @@
 
 use serde_json::json;
 
-use crate::gateway::errors::GatewayResult;
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::ctx::Ctx;
 use super::node::ws::Conn;
 
-/// Проверка подписки logs. Принимает: окружение. Возвращает: описание (id подписки; без dex.native_wrapped — «не
-/// проверены» с причиной, как часть «Обёртка нативной монеты») или текст причины (нет связи, узел отказал в подписке).
+/// Проверка подписки logs. Принимает: окружение. Возвращает: описание (id подписки; dex.native_wrapped не задана — «не
+/// проверены» с причиной, как часть «Обёртка нативной монеты») или текст причины (dex.native_wrapped задана не адресом —
+/// текст ошибки чтения настройки; нет связи; узел отказал в подписке).
 pub async fn check(ctx: &Ctx) -> Result<String, String> {
-    let Ok(wrapped) = ctx.addr("dex.native_wrapped") else {
-        return Ok(
-            "не проверены: не задана dex.native_wrapped (адрес обёртки — фильтр пробной подписки logs)".into(),
-        );
+    let wrapped = match ctx.addr("dex.native_wrapped") {
+        Ok(a) => a,
+        // Решение 435 (ревью, правки): не задана — проверка не нужна (как раньше); задана неверно — точная причина.
+        Err(e) if e.code == ErrorCode::NotConfigured => {
+            return Ok(
+                "не проверены: не задана dex.native_wrapped (адрес обёртки — фильтр пробной подписки logs)".into(),
+            );
+        }
+        Err(e) => return Err(e.message),
     };
     let run = async {
         let conn = Conn::open(ctx, "check_logs").await?;

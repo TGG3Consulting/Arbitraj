@@ -138,7 +138,9 @@
   **ПЕРЕД ВЫКЛАДКОЙ на живой бот:** (1) задать dex.gas_mode = `legacy` у bsc_dex — без неё BSC не котирует и не
   отправляет, «Проверить подключение» — ошибка «Газ сети» (автоснятие пауз не снимет паузу); (2) dex.default_chain =
   `bsc` — до того, как задавать dex.venues (две сети без неё — ошибка ядра, решение 430). dex.venues на BSC не задавать,
-  пока Arbitrum не нужен.
+  пока Arbitrum не нужен; (3) канал sequencer на BSC не включать (channel.enabled) без channel.chain — при одной
+  площадке DEX он канал BSC (send/channels.rs serves → default_chain → alone), открытый (sequencer.rs private: false), и
+  вместе с каналами билдеров select (send/mod.rs) откажет «Открытый канал включён вместе с другими» — отправка BSC встанет.
   Что у BSC нового (поведение торговли прежнее): обязательная dex.gas_mode; на «Каналах отправки» карточка канала
   sequencer (состояние «не задана channel.enabled» — одно событие SendChannel при первой отправке/котировке) и поле
   channel.chain у каждого канала; в «Проверить подключение» часть «События по WebSocket» (подписка logs на своём узле —
@@ -158,7 +160,10 @@
      на лету без перезапуска?
   6) Значения send.priority_fee_gwei и send.max_fee_margin_pct у arb_dex (вопрос 1 решения 433 о чаевых — тот же).
   Ревью 435 (20.11.2026, dc68bbe6..bac765de, только чтение кода, cargo не запускался) — регрессий BSC при одной площадке
-  и dex.gas_mode = legacy не найдено; исправить:
+  и dex.gas_mode = legacy не найдено; пункты а)–г) СДЕЛАНЫ (решение «435 (ревью, правки)», cargo не запускался):
+  а) main.rs — занятый id отсеивается до Place.all (журнал venue.dex_venues); б) шапка errors.rs по факту, техдолг —
+  ROADMAP; в) три строки документов исправлены; г) connection_events.rs — NotConfigured → «не проверены», иначе
+  причина ошибки; условие выкладки про sequencer — в «ПЕРЕД ВЫКЛАДКОЙ» (3). Исходный текст ревью:
   а) src/main.rs:301 — Place.all = все id dex.venues, а id, занятый площадкой шлюза (main.rs:339), пропускается, но
      остаётся в all: у bsc_dex alone() = false → families::all (pools/families.rs:436), channels::serves
      (send/channels.rs:54), directory/fetch.rs читают dex.default_chain; не задана → у BSC пусто видов DEX и ни одного

@@ -337,8 +337,11 @@ fn stable_bnb_contract_rules_present() {
     }
     // bnbFrom обнуляется после каждого вызова, где BNB ждётся: сколько установок — столько обнулений (stable BNB —
     // две, _unwrapAll executeNative — одна, решение 272; шаг FLUID — две, решение 440: вход и выход в нативной монете).
-    let resets = src.matches("bnbFrom = address(0);").count();
-    let sets = src.matches("bnbFrom = ").count() - resets;
+    // Только строки кода (комментарии тоже содержат «bnbFrom = …»).
+    let code: Vec<&str> =
+        src.lines().map(str::trim).filter(|l| l.starts_with("bnbFrom = ")).collect();
+    let resets = code.iter().filter(|l| **l == "bnbFrom = address(0);").count();
+    let sets = code.len() - resets;
     assert_eq!(resets, 5);
     assert_eq!(sets, resets);
     let abi = abi();

@@ -230,7 +230,7 @@ docs/TASKS.md «Решение 444»).
 | dex.kind | DEX ekubo-v3-arbitrum | `ekubo` | Вид пулов Ekubo (синглтон-ядро) | Решение 447 |
 | dex.pool_enabled | DEX ekubo-v3-arbitrum | `да` — после замера нагрузки (docs/ADAPTER_TEMPLATE.md п. 8) | Подписка на все логи ядра | Решение 447 |
 | dex.ekubo_core | DEX ekubo-v3-arbitrum | `0x00000000000014aA86C5d3c41765bb24e11bd701` | Ядро Core | docs.ekubo.org evm-v3; evm-contracts broadcast/DeployAll.s.sol/42161 run-1767194711580.json |
-| dex.ekubo_key_index | DEX ekubo-v3-arbitrum | `0x898956fc2aed01d5f81f556ff5dcb10534285718` | Реестр ключей пулов | evm-contracts broadcast/DeployAll.s.sol/42161 run-1785724793522.json (commit 02e0d82f) |
+| dex.ekubo_key_index | DEX ekubo-v3-arbitrum | `0x898956fc2aed01d5f81f556ff5dcb10534285718` | Реестр ключей пулов | evm-contracts broadcast/DeployAll.s.sol/42161 run-1785724793522.json (commit 58eef0a; в 02e0d82f файла нет — решение 479). Реестр добровольный: пулов в нём может не быть — ключ бот берёт из истории PoolInitialized ядра |
 | dex.ekubo_mev_capture | DEX ekubo-v3-arbitrum | `0x5555fF9Ff2757500BF4EE020DcfD0210CFfa41Be` | Пулы с расширением MEVCapture | docs.ekubo.org evm-v3 |
 | dex.quoter | DEX ekubo-v3-arbitrum | `0xd26f20001a72a18C002b00e6710000d68700ce00` | MEVCaptureRouter — Router.quote для сверки (и пулов с MEVCapture) | docs.ekubo.org evm-v3 («legacy, v3.1.1») |
 | dex.ekubo_bitmap_words | DEX ekubo-v3-arbitrum | решение Тиграна — *метод:* ln(1 + dex.depth_band_pct/100) / ln(1,000001) / (256 × наименьший шаг тика пулов), вверх до целого; шаги — из записи tools/arbitrum_record/ekubo.py | Глубина прочитанной карты тиков | Решение 447 |

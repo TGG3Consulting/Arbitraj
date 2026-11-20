@@ -1,11 +1,26 @@
 {
  "chainId": "0xa4b1",
- "block": 525984988,
- "block_hex": "0x1f59e4dc",
- "timestamp": 1795192976,
- "factory": "0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a",
- "quoter": "0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f",
- "reader": "0x165c68077ac06c83800d19200e6E2B08D02dE75D",
+ "block": 526003946,
+ "block_hex": "0x1f5a2eea",
+ "timestamp": 1795197986,
+ "versions": {
+  "v1": {
+   "factory": "0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a",
+   "quoter": "0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f",
+   "reader": "0x165c68077ac06c83800d19200e6E2B08D02dE75D"
+  },
+  "v2": {
+   "factory": "0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A",
+   "quoter": "0x4d47fd5a29904Dae0Ef51b1c450C9750F15D7856",
+   "reader": "0x8Fd8Cb948965d9305999D767A02bf79833EADbB3"
+  }
+ },
  "sizes": "0.001,0.01,0.1,1,10,100,1000",
- "log_blocks": 2000
+ "log_blocks": 2000000,
+ "tick_chunk": 1000,
+ "counts": {
+  "v1": 6,
+  "v2": 20,
+  "other": 0
+ }
 }

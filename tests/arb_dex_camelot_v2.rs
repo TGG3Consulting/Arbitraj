@@ -1,7 +1,7 @@
 //! Файл: tests/arb_dex_camelot_v2.rs
 //! Что проверяет: решение 443 (T433-F4) — Camelot V2 (camelot_v2) на РЕАЛЬНЫХ ответах своего узла Arbitrum One,
 //! записанных скриптом tools/arbitrum_record/camelot_v2.py на одном блоке (tests/data/arbitrum_camelot_v2_<дата>/; берётся
-//! последняя по дате папка):
+//! последняя по дате папка; запись прогона 20.11.2026 185857, блок 526018373 — #[ignore] снят, решение 477):
 //! 1. Наша математика (load_camelot::state → math/camelot_v2.rs) на резервах, комиссиях входа, stableSwap и множителях
 //!    блока даёт ТОТ ЖЕ выход, что getAmountOut пары, — все записанные суммы в обе стороны (откат пары — None у нас).
 //! 2. Проверка пары путём V2: поля factory/token0/token1 (verify_rules::fill/check) и реестр getPair фабрики.
@@ -102,7 +102,6 @@ fn pair_of(p: &Value) -> Pair {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/camelot_v2.py"]
 fn math_equals_pair_get_amount_out() {
     let probe = json("probe.json");
     let (mut n, mut stable, mut reverted) = (0, 0, 0);
@@ -128,7 +127,6 @@ fn math_equals_pair_get_amount_out() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/camelot_v2.py"]
 fn pair_verified_by_v2_path() {
     let probe = json("probe.json");
     let fam = families::make("camelot@arbitrum", "camelot_v2").expect("вид");
@@ -155,7 +153,6 @@ fn pair_verified_by_v2_path() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/camelot_v2.py"]
 fn real_logs_parsed() {
     let logs = json("logs.json");
     let fam = families::make("camelot@arbitrum", "camelot_v2").expect("вид");
@@ -198,7 +195,6 @@ fn real_logs_parsed() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/camelot_v2.py"]
 fn one_code_for_all_pairs() {
     let probe = json("probe.json");
     let pairs = probe["pairs"].as_array().unwrap();

@@ -1,14 +1,16 @@
 //! Файл: tests/arb_dex_lb_v22_live.rs
 //! Что проверяет: решение 446 — Liquidity Book V2.2 (lb_v22, LFJ V2.2 на Arbitrum One) на РЕАЛЬНЫХ ответах своего узла
 //! Arbitrum, записанных tools/arbitrum_record/lb_v22.py в tests/data/arbitrum_lb_v22_<дата>/ (берётся последняя папка).
-//! Записи пока нет — тесты на данных помечены #[ignore]; после записи метка снимается.
+//! Запись второго прогона 20.11.2026 (решение 477, блок 526010769, пулов 28) — #[ignore] снят.
 //! 1. Наша математика (load_lb::decode → math/lb_swap.rs swap_out_v22) на записанном состоянии и времени блока даёт ТОТ
 //!    ЖЕ ответ, что getSwapOut пула (остаток входа, выход, комиссия); откат getSwapOut — у нас None.
 //! 2. Проверка пула: первый и второй проход V2.1 (verify_lb) и третий проход V2.2 (verify_lb22: implementation()),
 //!    решение по крючкам (lb_hooks::decide) по записанным ответам; записанная calldata = ABI кода бота (селекторы скрипта сверены).
 //! 3. Условие пулов (exec/pool_cond.rs, слоты 3, 4, 65545): слово 3 — _parameters (активный бин в битах 232..255 =
-//!    getActiveId), слово 4 — _reserves (младшие 128 бит = reserveX, старшие = reserveY getReserves), слово 65545 —
-//!    _hooksParameters (= getLBHooksParameters).
+//!    getActiveId), слово 4 — _reserves минус слово 5 _protocolFees (по половинам: младшие 128 бит — X, старшие — Y) =
+//!    getReserves (joe-v2 v2.2.0 LBPair.sol getReserves: `_reserves.sub(_protocolFees).decode()`; решение 477 — запись:
+//!    у 27 из 28 пулов _reserves ≠ getReserves, разность = _protocolFees у всех 28), слово 65545 — _hooksParameters
+//!    (= getLBHooksParameters).
 //! 4. События: Swap пулов разбирает events_lb (бин = активный после цикла), HooksParametersSet — topic0 abi_lb22.
 //!
 //! Без записи (не данные — факты кода): вид lb_v22 (LbBin, шаг LB) и topic0 событий V2.2.
@@ -114,7 +116,6 @@ fn bins(p: &Value, step: u32) -> BinMap {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/lb_v22.py"]
 fn formula_equals_get_swap_out() {
     let probe = json("probe.json");
     let ts = probe["timestamp"].as_u64().unwrap();
@@ -145,7 +146,6 @@ fn formula_equals_get_swap_out() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/lb_v22.py"]
 fn verify_and_recorded_calldata() {
     let probe = json("probe.json");
     let fam = families::make("traderjoe-v2-2-arbitrum@arbitrum", "lb_v22").expect("вид");
@@ -197,7 +197,6 @@ fn verify_and_recorded_calldata() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/lb_v22.py"]
 fn pool_cond_slots_3_4_65545() {
     let probe = json("probe.json");
     for p in pools(&probe) {
@@ -206,9 +205,11 @@ fn pool_cond_slots_3_4_65545() {
         let id = (w("3") >> 232usize) & U256::from(0xff_ffffu32);
         assert_eq!(id, U256::from(active.to::<u32>()), "{}", p["pool"]);
         let r = ILBPair22::getReservesCall::abi_decode_returns(&out(p, "getReserves")).unwrap();
+        // Решение 477: getReserves = _reserves (слот 4) − _protocolFees (слот 5), по половинам (LBPair.sol v2.2.0).
         let mask = (U256::from(1u8) << 128usize) - U256::from(1u8);
-        assert_eq!(w("4") & mask, U256::from(r.reserveX), "{}", p["pool"]);
-        assert_eq!(w("4") >> 128usize, U256::from(r.reserveY), "{}", p["pool"]);
+        let (res, fees) = (w("4"), w("5"));
+        assert_eq!((res & mask) - (fees & mask), U256::from(r.reserveX), "{}", p["pool"]);
+        assert_eq!((res >> 128usize) - (fees >> 128usize), U256::from(r.reserveY), "{}", p["pool"]);
         // Ревью 446 (С2): слот 65545 — _hooksParameters = getLBHooksParameters.
         let hooks_out = out(p, "getLBHooksParameters");
         let hp = ILBPair22::getLBHooksParametersCall::abi_decode_returns(&hooks_out).unwrap();
@@ -217,7 +218,6 @@ fn pool_cond_slots_3_4_65545() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/lb_v22.py"]
 fn recorded_logs_decode() {
     let logs = json("logs.json");
     let swap = ILBPair::Swap::SIGNATURE_HASH;

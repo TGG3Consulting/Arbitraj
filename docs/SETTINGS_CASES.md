@@ -1226,9 +1226,9 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Появилась:** 2026-11-20, ветка t223-f8/arb-family-f8.
 - **Кейс:** DECISIONS 447 (2026-11-20): «Ekubo — у справочника индексатора адрес пула — PoolId; ключ пула (token0, token1, config) берётся у реестра PoolKeyIndex (poolKeyById) и сверяется: keccak256 ключа = PoolId.»
 - **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_ekubo.rs:20.
-- **Что ставить:** `0x898956fc2aed01d5f81f556ff5dcb10534285718` у DEX ekubo-v3-arbitrum — EkuboProtocol/evm-contracts broadcast/DeployAll.s.sol/42161 (run-1785724793522.json, commit 02e0d82f); на странице контрактов docs.ekubo.org адреса нет (docs/FIRST_RUN.md).
+- **Что ставить:** `0x898956fc2aed01d5f81f556ff5dcb10534285718` у DEX ekubo-v3-arbitrum — EkuboProtocol/evm-contracts broadcast/DeployAll.s.sol/42161 (run-1785724793522.json, commit 58eef0a — в 02e0d82f этого файла нет; конструктор — Core 0x…14aA…d701, блок 490528629; решение 479); на странице контрактов docs.ekubo.org адреса нет (docs/FIRST_RUN.md).
 - **Если не задана:** в каталоге без .optional() — DEX «не подключена: не задана dex.ekubo_key_index». Описание каталога: «Не задан — DEX не подключена»
-- **Влияет на торговлю:** да — какие пулы Ekubo берутся (pools/verify_ekubo.rs): пул без ключа в реестре не берётся.
+- **Влияет на торговлю:** да — какие пулы Ekubo берутся (pools/verify_ekubo.rs): ключ пула — из истории PoolInitialized ядра (ekubo_keys.rs, history_ekubo.rs, решение 454), реестр спрашивается только если ключа в памяти нет; нет ни там, ни там — пул не берётся. Решение 479: реестр «Optional registry» (evm-contracts@58eef0a src/PoolKeyIndex.sol L11, L32 — публичный register(), ядро его не вызывает); запись 20.11.2026 — у 22 пулов из PoolInitialized ядра poolKeyById = 0.
 - **Связанные ключи:** dex.ekubo_core.
 - **Статус:** ещё не в релизе (ветка t223-f8/arb-family-f8).
 

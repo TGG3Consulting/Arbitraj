@@ -90,10 +90,10 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-049 | `pancakeswap-v2-arbitrum@arbitrum` | pancakeswap_v2 | **код есть, сверка — T450-01 (запись)** (решение 450: dex.universal_router_version = `pancakeswap_v3`, §4.1) |
 | T433-050 | `pancakeswap-v3-arbitrum@arbitrum` | pancakeswap_v3 | **код есть, сверка — T450-01 (запись)** (решение 450, §4.1) |
 | T433-064 | `pancakeswap-stableswap-arbitrum@arbitrum` | pancake_stableswap | **готово** (решение 471: фабрика 0x5D5f…a77a — infinity-universal-router DeployArbitrum.s.sol; вид без изменений, шаг STABLE_U256; оговорка — запись tools/arbitrum_record/pancake_stable.py, §4.2) |
-| T433-006 | `kyberswap_elastic_arbitrum@arbitrum` | kyber_elastic_v1 | **готово** (решение 451: вариант вида v1; оговорка — запись узла tools/arbitrum_record/kyber_elastic_v1.py; включать ли — Тигран, §4.3) |
+| T433-006 | `kyberswap_elastic_arbitrum@arbitrum` | kyber_elastic (решение 462; было kyber_elastic_v1) | **готово** (решение 462: пулы GeckoTerminal — фабрика v2 0xC7a5…8C4A, адреса v2 docs.kyberswap.com; оговорка — повтор записи kyber_elastic_v1.py, pools_v2.json; пулы v1 Legacy — T462-01; включать ли — Тигран, §4.3) |
 | T433-083 | `aero-slipstream-arbitrum@arbitrum` | — (новое семейство) | **нужен код** — развёртывание Arbitrum найдено (Dromos-Labs/metadex-slipstream-public, «Slipstream V3»), комиссия — от крючка обмена, вид slipstream не подходит (T448-09, решение 451, §4.4) |
 | T433-087 | `saddle-finance@arbitrum` (id — предложение) | saddle_stableswap | **готово** (решение 451: математика = Nerve; swapStorage 7 полей и FlashLoan — исправлено в виде; оговорка — запись tools/arbitrum_record/saddle.py, §4.5) |
-| T433-095 | `woofi-swap@arbitrum` (id — предложение) | woofi_v2 | **готово** (решение 451: оракул = WooracleV2_2 Sourcify, state() как в виде; реализация 0x7b5f…4281 по Sourcify proxyResolution — оговорка: слот и селекторы своим узлом, tools/arbitrum_record/woofi.py, §4.6) |
+| T433-095 | `woofi-swap@arbitrum` (id — предложение) | woofi_v2 | **готово** (решение 451; решение 462: dex.oracle = wooracle() пула с цепи 0xf9b0…8081, не адрес документации; state() этого оракула — повтор записи woofi.py; реализация 0x7b5f…4281 своим узлом совпала, §4.6) |
 
 Решение 451 (20.11.2026): Kyber Elastic, Saddle, WOOFi → **готово** (с оговорками записи узла), Aero Slipstream →
 **нужен код** (новое семейство), PancakeSwap StableSwap — **не подтверждено**. Итог после 451: **готово 15**, **нужен код
@@ -478,14 +478,33 @@ Swap/Mint/Burn/BurnRTokens, getPoolState/getLiquidityState/ticks/initializedTick
 иначе — `(MAX_TICK − startTick) / tickDistance` (+1 при startTick 0 / MAX_TICK), у v2 — по MIN_TICK отдельной формулой.
 Сделано: вариант вида **`kyber_elastic_v1`** (pools/family_variant.rs, math/swap_elastic_step.rs compute_swap_step_rule).
 
+**Решение 462 (запись своего узла 20.11.2026, блок 525984988) — таблица исправлена.** У всех 20 пулов GeckoTerminal
+`kyberswap_elastic_arbitrum` factory() = `0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A` — фабрика **Elastic v2**
+(docs.kyberswap.com reference/legacy/kyberswap-elastic/contracts/elastic-contract-addresses: Factory 0xC7a5…8C4A, Router
+0xF9c2…eAb4, QuoterV2 0x4d47…7856, TicksFeesReader 0x8Fd8…DbB3 — «13 сетей, в т.ч. Arbitrum»; та же фабрика на BSC —
+SwapMath v2, решение 451). Фабрика v1 0x5F1d…D50a — «Elastic Legacy» (docs.kyberswap.com reference/legacy/elastic-legacy/
+elastic-contract-addresses, Arbitrum). С прежними настройками (v1) бот пулы индексатора не взял бы: проверка пула —
+getPool фабрики dex.factory = адрес пула (pools/verify_calls.rs), а getPool v1 для этих пар — 0 у 14 и другой адрес у 6.
+Для id индексатора `kyberswap_elastic_arbitrum` — вид `kyber_elastic` (v2) и адреса v2:
+
 | Настройка | Значение | Источник |
 | --- | --- | --- |
-| dex.kind | `kyber_elastic_v1` | решение 451 |
-| dex.factory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | ks-elastic-sc README.md L6-L17 (v1), Sourcify full match |
-| dex.router | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | то же |
-| dex.quoter | `0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f` | то же |
-| dex.tick_reader | `0x165c68077ac06c83800d19200e6E2B08D02dE75D` | то же |
+| dex.kind | `kyber_elastic` | решение 462 (factory() пулов GeckoTerminal = 0xC7a5…8C4A) |
+| dex.factory | `0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A` | docs.kyberswap.com Elastic Contract Addresses (Arbitrum) |
+| dex.router | `0xF9c2b5746c946EF883ab2660BbbB1f10A5bdeAb4` | то же |
+| dex.quoter | `0x4d47fd5a29904Dae0Ef51b1c450C9750F15D7856` | то же |
+| dex.tick_reader | `0x8Fd8Cb948965d9305999D767A02bf79833EADbB3` | то же |
 | dex.pool_enabled | да — решает Тигран | — |
+
+Оговорки решения 462: (а) код фабрики v2 на Arbitrum с BSC (где SwapMath v2 сверен по Sourcify 56) не сравнивался —
+сверка расчёта вида kyber_elastic с QuoterV2 v2 — по повторной записи (pools_v2.json, kyber_elastic_v1.py); (б) пулы
+**v1 (Legacy) на Arbitrum есть**: getPool фабрики v1 для 6 пар пулов GeckoTerminal вернул ненулевой адрес; квотер v1
+по ним отвечал, у 2 — откат «ERC20: transfer amount exceeds balance» на крупных суммах (в пуле нет столько монеты).
+В GeckoTerminal их нет; подключение v1 отдельным DEX (вид `kyber_elastic_v1`, настройки v1 ниже, поиск по фабрике) —
+задача T462-01. Прежние значения v1 (для неё): dex.factory `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a`, dex.router
+`0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83`, dex.quoter `0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f`, dex.tick_reader
+`0x165c68077ac06c83800d19200e6E2B08D02dE75D` (ks-elastic-sc README.md L6-L17, Sourcify full match). (в) getTicksInRange
+(pool, MIN_TICK, 0) у пулов с tickDistance 8 и 10 — «out of gas» на узле Тиграна (4 пула из 20) — T451-03.
 
 Оговорки: (1) запись своего узла (tools/arbitrum_record/kyber_elastic_v1.py) и тест tests/arbitrum_kyber_elastic_v1_live.rs —
 наш расчёт = QuoterV2; (2) getTicksInRange(pool, MIN_TICK, 0) выделяет массив на все возможные тики: у пула с
@@ -560,10 +579,21 @@ State {uint128 price; uint64 spread; uint64 coeff; bool woFeasible} — IWooracl
 (блок 317548902), proxyResolution → реализация `0x7b5fDb8C89A616d319202704B0eA18b168654281` — тот же адрес, что
 dex.pool_implementation на BSC (docs/OWN_NODE_SWITCH.md); исходник реализации на Sourcify не найден (как на BSC —
 решение 122 F, 3: своей математики нет, котировка — квотером контракта). Настройки: dex.kind `woofi_v2`, dex.pmm_pool
-`0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4`, dex.oracle `0xCf4EA1688bc23DD93D933edA535F8B72FC8934Ec`,
+`0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4`, dex.oracle — **см. решение 462 ниже** (было 0xCf4E…34Ec),
 dex.pool_implementation `0x7b5fDb8C89A616d319202704B0eA18b168654281`; у площадки index.factory_scan = да. Оговорка —
 слот EIP-1967 и селекторы в коде реализации своим узлом (tools/arbitrum_record/woofi.py, tests/arbitrum_woofi_live.rs);
 вид при другом адресе в слоте пары не берёт (verify_woo.rs).
+
+**Решение 462 (запись своего узла 20.11.2026, блок 525984999).** WooPP.wooracle() =
+`0xf9b0c8ee13ae2fc0665764ecbdb417685dea8081`, а не адрес документации 0xCf4E…34Ec (woonetwork/docs arbitrum-one.md L5 и
+resources/on-chain-price-feeds.md — по-прежнему 0xCf4E…34Ec). Бот сверяет wooracle() пула с dex.oracle и при
+расхождении пары не берёт (verify_woo.rs L38-L42, «оракул WooPPV2 … ≠ dex.oracle»), и state(монета) спрашивает у
+dex.oracle (load_woo.rs, factory_ask.rs) — значит **dex.oracle = `0xf9b0c8ee13ae2fc0665764ecbdb417685dea8081`** (оракул,
+которым пользуется пул). Оговорка: на Sourcify 42161 этот адрес не нашёлся (запрос v2/contract — ошибка клиента; для
+0xCf4E…34Ec тот же запрос — exact match), в документации его нет; разбирается ли его state() ABI вида — покажет повтор
+записи woofi.py (state по базам у оракула с цепи и у оракула документации, наличие селектора state в коде). Не разберётся —
+пары не берутся (verify_woo.rs), торговли вслепую нет. Котируемая монета пула quoteToken() = USDC
+`0xaf88d065e77c8cc2239327c5edb3a432268e5831`; реализация в слоте EIP-1967 = 0x7b5f…4281 — совпала.
 
 ## 5. Что не делалось
 

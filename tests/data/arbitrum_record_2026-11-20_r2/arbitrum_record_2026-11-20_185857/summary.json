@@ -1,0 +1,28 @@
+{
+ "head": 526015688,
+ "error": null,
+ "results": [
+  {
+   "name": "sub_dex",
+   "ok": true,
+   "code": 0,
+   "seconds": 76,
+   "dirs": [
+    "tests/data/arbitrum_sub_dex_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_185857/logs/sub_dex.log"
+  },
+  {
+   "name": "camelot_v2",
+   "ok": true,
+   "code": 0,
+   "seconds": 640,
+   "dirs": [
+    "tests/data/arbitrum_camelot_v2_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_185857/logs/camelot_v2.log"
+  }
+ ]
+}

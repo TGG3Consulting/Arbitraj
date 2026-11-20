@@ -12,11 +12,19 @@
 # Что записывается (на одном блоке B = «latest» на момент запуска, номер — в meta.json):
 #   meta.json        — eth_chainId, номер и время блока B, адреса, аргументы запуска;
 #   gt_pools.json    — ответы GeckoTerminal GET /api/v2/networks/arbitrum/dexes/ekubo-v3-arbitrum/pools?page=N (как есть);
-#   pools.json       — по каждому PoolId (из GeckoTerminal и/или --pool): ответ PoolKeyIndex.poolKeyById (сырой hex),
+#   pools.json       — по каждому PoolId (из GeckoTerminal и/или --pool): ответ PoolKeyIndex.poolKeyById (сырой hex);
+#                      ключа в реестре нет — ключ из события PoolInitialized ядра (pool_initialized.json ekubo_more.py
+#                      той же папки, --initialized; решение 479: PoolKeyIndex — «Optional registry», регистрация —
+#                      публичный register(), ядро его не вызывает — evm-contracts@58eef0a src/PoolKeyIndex.sol L11, L32;
+#                      так же бот: ключ из истории ядра, history_ekubo.rs) — поля key_source,
+#                      key (token0, token1, config), key_event (лог события как есть);
 #                      Core.sload(состояние), слова битмапа (±--words от слова текущего тика), тики установленных битов,
 #                      MEVCapture.sload(PoolId) у пула с этим расширением, decimals токенов, ответы
 #                      MEVCaptureRouter.quote на суммы --sizes в обе стороны (сырой hex; откат — текст ошибки);
-#   core_logs.json   — eth_getLogs всех логов ядра за блоки [B − --log-blocks, B] (анонимный обмен log0, PositionUpdated …).
+#   core_logs.json   — eth_getLogs всех логов ядра за блоки [B − --log-blocks, B]: фильтр — только address ядра, БЕЗ
+#                      topics (анонимный обмен log0 тоже попадает), таймаут — окно пополам (recnode.logs_split). Решение
+#                      479: окно 2000 блоков (≈ 8 мин) 20.11.2026 дало 0 логов — у 4 пулов GeckoTerminal в тот момент
+#                      h1 = 0 сделок, h24 ≤ 27; окно по умолчанию — 100 000 блоков.
 # Селекторы (keccak256 сигнатур, проверено при написании): sload() 0x380eb4e0, poolKeyById(bytes32) 0xea6c8bc7,
 #   quote((address,address,bytes32),bool,int128,uint96,uint256) 0x3bc52842, decimals() 0x313ce567.
 #
@@ -29,6 +37,7 @@ import json
 import os
 import sys
 
+import recnode  # решение 460: свежий блок состояния
 import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 CORE = "0x00000000000014aA86C5d3c41765bb24e11bd701"
@@ -113,14 +122,39 @@ def quote_data(t0, t1, config, is_token1, amount):
         + word(0) + word(0)
 
 
+def initialized_keys(path):
+    """Решение 479: ключи пулов из событий PoolInitialized ядра (pool_initialized.json ekubo_more.py). Данные события —
+    (poolId, token0, token1, config, tick, sqrtRatio) без indexed полей (evm-contracts@61d09daa src/interfaces/ICore.sol
+    L111). Возвращает: {PoolId: (token0, token1, config без 0x, лог)}; файла нет — {}. Ошибок нет."""
+    if not path or not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        logs = json.load(f).get("logs", [])
+    out = {}
+    for lg in logs:
+        d = lg.get("data", "0x")[2:]
+        if len(d) < 64 * 4:
+            continue
+        pid = "0x" + d[0:64]
+        out[pid.lower()] = ("0x" + d[64 + 24:128], "0x" + d[128 + 24:192], d[192:256], lg)
+    return out
+
+
 def record_pool(rpc, pid, args, tag):
     rec = {"pool_id": pid}
     key = rpc.eth_call(args.key_index, SEL_KEY + pid[2:], tag)[2:]
     rec["poolKeyById"] = "0x" + key
     t0, t1, config = "0x" + key[24:64], "0x" + key[88:128], key[128:192]
+    rec["key_source"] = "PoolKeyIndex"
     if int(t1, 16) == 0:
-        rec["note"] = "нет в PoolKeyIndex"
-        return rec
+        ev = args.init_keys.get(pid.lower())
+        if ev is None:
+            rec["note"] = "нет в PoolKeyIndex и в pool_initialized.json (ekubo_more.py)"
+            return rec
+        t0, t1, config, lg = ev
+        rec["key_source"] = "PoolInitialized ядра (pool_initialized.json)"
+        rec["key_event"] = lg
+    rec["key"] = {"token0": t0, "token1": t1, "config": "0x" + config}
     state = sload(rpc, args.core, [int(pid, 16)], tag)[0]
     rec["state"] = "0x" + state
     v = int(state, 16)
@@ -168,6 +202,32 @@ def record_pool(rpc, pid, args, tag):
     return rec
 
 
+def gt_pool_id(addr, core):
+    """PoolId пула из поля attributes.address GeckoTerminal. Факт ответа (gt_pools.json записи 20.11.2026): у
+    ekubo-v3-arbitrum это «<адрес ядра>-<PoolId>» (0x…40 знаков, дефис, 0x…64 знака), а не просто PoolId — запись
+    20.11 из-за этого взяла 0 пулов. Возвращает: (PoolId, None) или (None, причина). Ошибок нет."""
+    pid, owner = addr, None
+    if "-" in addr:
+        owner, pid = addr.rsplit("-", 1)
+    if not (pid.startswith("0x") and len(pid) == 66):
+        return None, f"{addr}: не PoolId"
+    if owner is not None and owner.lower() != core.lower():
+        return None, f"{addr}: ядро {owner} ≠ --core"
+    return pid, None
+
+
+def record_all_pools(rpc, ids, args, tag):
+    """Все пулы на блоке tag (решение 460: фаза состояния). Ошибка пула — в записи пула; StaleState — наружу
+    (recnode.fresh повторит на новом блоке)."""
+    pools = []
+    for pid in dict.fromkeys(i.lower() for i in ids):
+        try:
+            pools.append(record_pool(rpc, pid, args, tag))
+        except Exception as e:
+            pools.append({"pool_id": pid, "error": str(e)})
+    return pools
+
+
 def main():
     ap = argparse.ArgumentParser(description="Запись фактов узла Arbitrum для Ekubo (решение 447)")
     ap.add_argument("--rpc", required=True, help="HTTP JSON-RPC своего узла Arbitrum")
@@ -176,7 +236,10 @@ def main():
     ap.add_argument("--pool", action="append", default=[], help="PoolId (0x…, 32 байта); можно несколько")
     ap.add_argument("--words", type=int, default=4, help="слов битмапа по каждую сторону от слова текущего тика")
     ap.add_argument("--sizes", default="0.001,0.01,0.1,1,10,100,1000", help="суммы входа в единицах токена")
-    ap.add_argument("--log-blocks", type=int, default=2000, help="сколько блоков логов ядра до B")
+    ap.add_argument("--log-blocks", type=int, default=100000, help="сколько блоков логов ядра до B")
+    ap.add_argument("--log-min", type=int, default=1000, help="наименьшее окно деления eth_getLogs при таймауте")
+    ap.add_argument("--initialized", default=None,
+                    help="pool_initialized.json ekubo_more.py (по умолчанию — в папке вывода, если есть)")
     ap.add_argument("--core", default=CORE)
     ap.add_argument("--key-index", default=KEY_INDEX)
     ap.add_argument("--mev", default=MEV_CAPTURE)
@@ -186,42 +249,48 @@ def main():
 
     rpc = Rpc(args.rpc)
     chain = rpc.call("eth_chainId", [])
-    head = rpc.call("eth_getBlockByNumber", ["latest", False])
-    b, tag = int(head["number"], 16), head["number"]
     # Решение 459 (ревью t233, п. 7): дата папки — одна на запуск record_all.py (ARB_RECORD_DATE), иначе сегодня;
     # ekubo_more.py пишет в ту же папку и берёт ту же дату.
     day = os.environ.get("ARB_RECORD_DATE") or datetime.date.today().isoformat()
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = args.out or os.path.join(root, "tests", "data", "arbitrum_ekubo_" + day)
     os.makedirs(out, exist_ok=True)
-    files = {}
+    files = {"meta.json": None}
+    args.init_keys = initialized_keys(args.initialized or os.path.join(out, "pool_initialized.json"))
 
-    meta = {"chainId": chain, "block": b, "block_hex": tag, "timestamp": int(head["timestamp"], 16),
-            "core": args.core, "key_index": args.key_index, "mev_capture": args.mev, "router": args.router,
-            "words": args.words, "sizes": args.sizes, "log_blocks": args.log_blocks}
-    files["meta.json"] = meta
-
-    ids = list(args.pool)
+    # Решение 460: GeckoTerminal (с паузами темпа — gt.py) — ДО выбора блока B: узел хранит только недавнее состояние.
+    ids, skipped = list(args.pool), []
     if args.gt:
         pages = gt_pages(args.gt_pages)
         files["gt_pools.json"] = pages
         for p in pages:
             if p["status"] == 200:
                 for item in json.loads(p["body"]).get("data", []):
-                    addr = item.get("attributes", {}).get("address", "")
-                    if addr.startswith("0x") and len(addr) == 66:
-                        ids.append(addr)
-    pools = []
-    for pid in dict.fromkeys(i.lower() for i in ids):
-        try:
-            pools.append(record_pool(rpc, pid, args, tag))
-        except Exception as e:
-            pools.append({"pool_id": pid, "error": str(e)})
+                    pid, why = gt_pool_id(item.get("attributes", {}).get("address", ""), args.core)
+                    if pid:
+                        ids.append(pid)
+                    else:
+                        skipped.append(why)
+    pools, head = recnode.fresh(lambda: rpc.call("eth_getBlockByNumber", ["latest", False]),
+                                lambda h: (record_all_pools(rpc, ids, args, h["number"]), h))
+    b, tag = int(head["number"], 16), head["number"]
+    meta = {"chainId": chain, "block": b, "block_hex": tag, "timestamp": int(head["timestamp"], 16),
+            "core": args.core, "key_index": args.key_index, "mev_capture": args.mev, "router": args.router,
+            "words": args.words, "sizes": args.sizes, "log_blocks": args.log_blocks, "gt_skipped": skipped,
+            "initialized_keys": len(args.init_keys)}
+    files["meta.json"] = meta
     files["pools.json"] = pools
 
-    frm = hex(max(0, b - args.log_blocks))
-    files["core_logs.json"] = {"from": frm, "to": tag,
-                               "logs": rpc.call("eth_getLogs", [{"address": args.core, "fromBlock": frm, "toBlock": tag}])}
+    # Фильтр — только address ядра, без topics: обмен ядра — анонимный log0 (решение 479).
+    lo = max(0, b - args.log_blocks)
+    def fetch(x, y):
+        return rpc.call("eth_getLogs", [{"address": args.core, "fromBlock": hex(x), "toBlock": hex(y)}])
+
+    def say(t):
+        print(t, file=sys.stderr)
+
+    files["core_logs.json"] = {"from": hex(lo), "to": tag,
+                               "logs": recnode.logs_split(fetch, lo, b, args.log_min, say=say)}
 
     hashes = []
     for name, body in files.items():

@@ -1,0 +1,116 @@
+[
+ {
+  "data": [
+   {
+    "id": "arbitrum_0x5418a64e0cdb20548acb394f5d00a089baf02161",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "1743.92122705392",
+     "base_token_price_native_currency": "1.06912291609944",
+     "quote_token_price_usd": "1916.57070677683",
+     "quote_token_price_native_currency": "1.17496686842992",
+     "base_token_price_quote_token": "0.9099175005",
+     "quote_token_price_base_token": "1.099000733",
+     "address": "0x5418a64e0cdb20548acb394f5d00a089baf02161",
+     "name": "waArbWETH / rETH 0.04%",
+     "pool_created_at": "2025-08-11T12:47:21Z",
+     "fdv_usd": "56114.4083625773",
+     "market_cap_usd": "49587.9985539734",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "-0.193",
+      "h6": "-6.04",
+      "h24": "-5.21"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "h1": {
+       "buys": 20,
+       "sells": 7,
+       "buyers": 12,
+       "sellers": 3,
+       "unique_traders": 14
+      },
+      "h6": {
+       "buys": 22,
+       "sells": 12,
+       "buyers": 14,
+       "sellers": 5,
+       "unique_traders": 18
+      },
+      "h24": {
+       "buys": 24,
+       "sells": 13,
+       "buyers": 14,
+       "sellers": 6,
+       "unique_traders": 19
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "299.6503843525",
+      "h1": "21102.2685695048",
+      "h6": "44113.5113788704",
+      "h24": "45420.4295534998"
+     },
+     "reserve_in_usd": "76959.745"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x4ce13a79f45c1be00bdabd38b764ac28c082704e",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xec70dcb4a1efa46b8f2d97c310c9c4790ba5ffa8",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "balancer-v3-arbitrum",
+       "type": "dex"
+      }
+     }
+    }
+   }
+  ]
+ },
+ {
+  "data": []
+ },
+ {
+  "data": []
+ },
+ {
+  "data": []
+ },
+ {
+  "data": []
+ }
+]

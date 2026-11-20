@@ -1,13 +1,15 @@
-# KyberSwap Elastic v1 (Arbitrum One) — запись своего узла, 2026-11-20
+# KyberSwap Elastic v1 / v2 (Arbitrum One) — запись своего узла, 2026-11-20
 
-Записано tools/arbitrum_record/kyber_elastic_v1.py (решение 451): только чтение, без ключей и подписей.
-Блок B = 525984988 (0x1f59e4dc), время 1795192976, chainId 0xa4b1. Пулов: 20. Узел: http://127.0.0.1:8547.
+Записано tools/arbitrum_record/kyber_elastic_v1.py (решения 451, 462): только чтение, без ключей.
+Блок B = 526003946 (0x1f5a2eea), время 1795197986, chainId 0xa4b1. Пулов: v1 6, v2 20, другие 0; логов 254. Узел: http://127.0.0.1:8547.
 
-Файлы — шапка скрипта. Фабрика 0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a, QuoterV2 0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f, TicksFeesReader 0x165c68077ac06c83800d19200e6E2B08D02dE75D.
+Файлы и адреса — шапка скрипта.
 
 ## SHA-256
 
-27c377a122cc8cb39b3f3c90bf20220347e26a664bdd1487a41a24b4038d5300  meta.json
-8661fe147f025add92abfa82c7eba64f6461c459a61c96dbc399cd6423af99b6  gt_pools.json
-b01b79d910493d3cc466a229ff589f207fe26ad2a648d9546bb0cd110ab993b2  pools.json
-d5635f935bbe8ca50cc283b13ec412e947528829ee44cb6a51ade3fb4b73dc69  logs.json
+8bfb30925adbe46627f53c83be722c4c88ba5d61edceb21849f3078dfe63d282  meta.json
+06a5ddc6ae4b8eb8db888658cd68bb7e0725cec602be8bed4dd23f031e637211  gt_pools.json
+4423218bd74e08ddbe2aeb052469712ee0d525fdfdf06dbbe7275639aefcfe51  pools.json
+22345e904ced4e62bee625155c05495220b068cfc76b265a576e413ce8ecf91a  pools_v2.json
+4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945  pools_other.json
+54acaf3ddcf59271f65b089a580cbbcca8b1ec928fa338db53dddd067accfaac  logs.json

@@ -1,27 +1,39 @@
 #!/usr/bin/env python3
 # Файл: tools/arbitrum_record/kyber_elastic_v1.py
-# Что делает: запись фактов своего узла Arbitrum для KyberSwap Elastic v1 (решение 451, задача T448-06 / T433-006) —
-#   только чтение (eth_call, eth_getLogs, eth_getBlockByNumber), без ключей и подписей. Пишет JSON-файлы в
-#   tests/data/arbitrum_kyber_elastic_v1_<дата>/ и README.md (что записано, блок, хеши файлов). По ним идут тесты
-#   tests/arbitrum_kyber_elastic_v1_live.rs (сейчас #[ignore] — записи нет).
-# Кто вызывает: Тигран на своём сервере (узел Arbitrum), вручную.
-# От чего зависит: Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459). Узел — аргумент --rpc (HTTP JSON-RPC). GeckoTerminal — по желанию (--gt).
-# Настройки: нет (адреса — аргументы; по умолчанию — официальные: KyberNetwork/ks-elastic-sc 4ab08c0a README.md L6-L17,
-#   «Deployed contracts for KyberSwap Elastic v1», Arbitrum; Sourcify 42161 — full match).
+# Что делает: запись фактов своего узла Arbitrum для KyberSwap Elastic (решение 451, задача T448-06 / T433-006;
+#   решение 462 — разбор прогона 20.11.2026) — только чтение (eth_call, eth_getLogs, eth_getBlockByNumber), без ключей.
+#   Пишет JSON-файлы в tests/data/arbitrum_kyber_elastic_v1_<дата>/ и README.md. По pools.json (пулы v1) идут тесты
+#   tests/arbitrum_kyber_elastic_v1_live.rs (сейчас #[ignore]).
+# Кто вызывает: record_all.py (record_steps.py: --rpc --gt) или Тигран вручную.
+# От чего зависит: Python 3 (стандартная библиотека; HTTP — stdhttp.py), recnode.py, kyber_elastic_ticks.py. GeckoTerminal — --gt.
+# Настройки: нет. Адреса — официальные (решение 462):
+#   v1 («Elastic Legacy»): Factory 0x5F1d…D50a, QuoterV2 0x0D12…8C1f, TicksFeesReader 0x165c…E75D — KyberNetwork/ks-elastic-sc
+#     4ab08c0a README.md L6-L17; docs.kyberswap.com reference/legacy/elastic-legacy/elastic-contract-addresses (Arbitrum);
+#   v2 («KyberSwap Elastic»): Factory 0xC7a5…8C4A, QuoterV2 0x4d47…7856, TicksFeesReader 0x8Fd8…DbB3 — docs.kyberswap.com
+#     reference/legacy/kyberswap-elastic/contracts/elastic-contract-addresses (13 сетей, в т.ч. Arbitrum).
 #
-# Что записывается (на одном блоке B = «latest» на момент запуска, номер — в meta.json):
-#   meta.json     — eth_chainId, номер и время блока B, адреса, аргументы запуска;
-#   gt_pools.json — ответы GeckoTerminal /networks/arbitrum/dexes/kyberswap_elastic_arbitrum/pools?page=N (как есть);
-#   pools.json    — по каждому пулу: token0/token1/factory/swapFeeUnits/tickDistance/getPoolState/getLiquidityState
-#                   (сырой hex), фабрика getPool(token0, token1, swapFeeUnits), TicksFeesReader.getTicksInRange(pool,
-#                   MIN_TICK, 0) — как вызывает бот (pools/load_elastic.rs; откат/ошибка узла — текст), ticks(t) каждого
-#                   тика из ответа, decimals токенов, QuoterV2.quoteExactInputSingle на суммы --sizes в обе стороны
-#                   (limitSqrtP = 0; сырой hex; откат — текст);
-#   logs.json     — eth_getLogs пулов за блоки [B − --log-blocks, B] (Swap/Mint/Burn/BurnRTokens и прочие).
-# Селекторы (keccak256 сигнатур, посчитаны при написании): getPoolState() 217ac237, getLiquidityState() ab612f2b,
-#   swapFeeUnits() c79a590e, tickDistance() 48626a8c, token0() 0dfe1681, token1() d21220a7, factory() c45a0155,
-#   ticks(int24) f30dba93, getTicksInRange(address,int24,uint32) 6bea4865, getPool(address,address,uint24) 1698ee82,
-#   quoteExactInputSingle((address,address,uint256,uint24,uint160)) c6a5026a, decimals() 313ce567.
+# Решение 462. Прогон 20.11: все 20 пулов GeckoTerminal kyberswap_elastic_arbitrum — factory() = 0xC7a5…8C4A (v2), а
+#   квотер был v1: QuoterV2 v1 считает адрес пула от СВОЕЙ фабрики (QuoterV2.sol L40-L45 _getPool → PoolAddress.computeAddress)
+#   — пула v1 с такой парой/комиссией нет (getPool v1 = 0 у 14) → вызов в адрес без кода, откат «0x»; у 6 пар пул v1 есть —
+#   квотер котировал ДРУГОЙ пул (v1), а не пул записи. Теперь: версия пула — по factory(), квотер и читатель — своей версии;
+#   пулы v1 — factory() = v1 у пулов GeckoTerminal / --pool и getPool фабрики v1 для пар GeckoTerminal (ненулевой ответ).
+#   getTicksInRange(pool, MIN_TICK, 0) — как вызывает бот (load_elastic.rs; ответ или ошибка пишется как есть); 20.11 у
+#   4 пулов (tickDistance 8 и 10) — «out of gas»: массив maxNumTicks = (MAX_TICK−1)/tickDistance·2+3 слов (TicksFeesReader.sol
+#   L46-L61) — 221 820 / 177 457 слов, стоимость памяти 3a + a²/512 (Yellow Paper) ≈ 96 / 62 млн газа. Поэтому тики ещё и
+#   частями getTicksInRange(pool, start, --tick-chunk) по связному списку (ticks_chunks) — тики есть у каждого пула.
+#   Логи — после фазы состояния за --log-blocks (20.11: 2000 блоков — 0 событий; GeckoTerminal в тот момент: 0 обменов
+#   за m30 по всем 20 пулам) — окно больше, таймаут узла — пополам (recnode.logs_split).
+#
+# Что записывается (состояние — на одном блоке B):
+#   meta.json        — chainId, блок B и его время, адреса v1/v2, аргументы;
+#   gt_pools.json    — ответы GeckoTerminal /networks/arbitrum/dexes/kyberswap_elastic_arbitrum/pools?page=N (как есть);
+#   pools.json       — пулы v1 (factory() = v1): token0/token1/factory/swapFeeUnits/tickDistance/getPoolState/
+#                      getLiquidityState (сырой hex), getPool своей фабрики, getTicksInRange(pool, MIN_TICK, 0),
+#                      ticks_chunks, ticks(t), decimals, QuoterV2.quoteExactInputSingle на --sizes в обе стороны;
+#   pools_v2.json    — то же для пулов v2 (factory() = v2) с квотером и читателем v2;
+#   pools_other.json — кандидаты с другой фабрикой или без ответа factory();
+#   logs.json        — eth_getLogs пулов v1 и v2 за [B − --log-blocks, B] (+ время границ окна).
+# Селекторы — keccak256 сигнатур (шапка kyber_elastic_ticks.py).
 #
 # Запуск: python3 tools/arbitrum_record/kyber_elastic_v1.py --rpc http://127.0.0.1:8547 --gt [--pool 0x…]
 
@@ -32,52 +44,17 @@ import json
 import os
 import sys
 
+import recnode  # решение 460: свежий блок состояния, деление окна логов
 import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
+from kyber_elastic_ticks import Rpc, addr_word, record_pool, try_call, word
 
-FACTORY = "0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a"
-QUOTER = "0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f"
-READER = "0x165c68077ac06c83800d19200e6E2B08D02dE75D"
+VERSIONS = {
+    "v1": {"factory": "0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a", "quoter": "0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f",
+           "reader": "0x165c68077ac06c83800d19200e6E2B08D02dE75D"},
+    "v2": {"factory": "0xC7a590291e07B9fe9E64b86c58fD8fC764308C4A", "quoter": "0x4d47fd5a29904Dae0Ef51b1c450C9750F15D7856",
+           "reader": "0x8Fd8Cb948965d9305999D767A02bf79833EADbB3"},
+}
 GT = "https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes/kyberswap_elastic_arbitrum/pools"
-MIN_TICK = -887272
-MOD = 1 << 256
-
-
-class Rpc:
-    """JSON-RPC узла: один запрос — один вызов; ошибка узла — исключение с текстом."""
-
-    def __init__(self, url):
-        self.url = url
-        self.n = 0
-
-    def call(self, method, params):
-        self.n += 1
-        r = requests.post(self.url, json={"jsonrpc": "2.0", "id": self.n, "method": method, "params": params},
-                          timeout=120)
-        r.raise_for_status()
-        body = r.json()
-        if "error" in body:
-            raise RuntimeError(json.dumps(body["error"]))
-        return body["result"]
-
-    def eth_call(self, to, data, tag):
-        return self.call("eth_call", [{"to": to, "input": "0x" + data}, tag])
-
-
-def word(v):
-    """Число (в т.ч. отрицательное — дополнение до 2^256) → 32 байта hex без 0x."""
-    return format(v % MOD, "064x")
-
-
-def addr_word(a):
-    return word(int(a, 16))
-
-
-def try_call(rpc, to, data, tag):
-    """eth_call → {"ok": hex} или {"error": текст} (откат пишется, а не роняет запись)."""
-    try:
-        return {"ok": rpc.eth_call(to, data, tag)}
-    except Exception as e:
-        return {"error": str(e)}
 
 
 def gt_pages(pages):
@@ -90,79 +67,85 @@ def gt_pages(pages):
     return out
 
 
-def int24_list(hexdata):
-    """Разбор int24[] из ответа ABI: смещение, длина, слова."""
-    raw = hexdata[2:]
-    n = int(raw[64:128], 16)
-    out = []
-    for i in range(n):
-        v = int(raw[128 + 64 * i:192 + 64 * i], 16)
-        out.append(v - MOD if v >> 255 else v)
-    return out
+def addr_of(res):
+    """Адрес из ответа {"ok": hex}; None — откат / нулевой адрес. Ошибок нет."""
+    v = res.get("ok", "")
+    a = "0x" + v[-40:] if len(v) >= 42 else None
+    return a if a and int(a, 16) else None
 
 
-def record_pool(rpc, pool, args, tag):
-    rec = {"pool": pool}
-    for name, sel in [("token0", "0dfe1681"), ("token1", "d21220a7"), ("factory", "c45a0155"),
-                      ("swapFeeUnits", "c79a590e"), ("tickDistance", "48626a8c"), ("getPoolState", "217ac237"),
-                      ("getLiquidityState", "ab612f2b")]:
-        rec[name] = try_call(rpc, pool, sel, tag)
-    t0 = "0x" + rec["token0"]["ok"][-40:]
-    t1 = "0x" + rec["token1"]["ok"][-40:]
-    fee = int(rec["swapFeeUnits"]["ok"], 16)
-    rec["factory_getPool"] = try_call(rpc, args.factory, "1698ee82" + addr_word(t0) + addr_word(t1) + word(fee), tag)
-    rec["decimals"] = {t: try_call(rpc, t, "313ce567", tag) for t in (t0, t1)}
-    rng = try_call(rpc, args.reader, "6bea4865" + addr_word(pool) + word(MIN_TICK) + word(0), tag)
-    rec["getTicksInRange"] = rng
-    ticks = {}
-    if "ok" in rng:
-        for t in int24_list(rng["ok"]):
-            ticks[str(t)] = try_call(rpc, pool, "f30dba93" + word(t), tag)
-            if t >= -MIN_TICK:
-                break
-    rec["ticks"] = ticks
-    quotes = []
-    for a, b in ((t0, t1), (t1, t0)):
-        dec = int(rec["decimals"][a]["ok"], 16)
-        for s in args.sizes.split(","):
-            amount = int(float(s) * 10 ** dec)
-            data = "c6a5026a" + addr_word(a) + addr_word(b) + word(amount) + word(fee) + word(0)
-            q = {"tokenIn": a, "tokenOut": b, "amountIn": str(amount)}
-            q.update(try_call(rpc, args.quoter, data, tag))
-            quotes.append(q)
-    rec["quotes"] = quotes
-    return rec
+def state_phase(rpc, ids, args, head):
+    """Пулы на свежем блоке head: версия по factory(), пулы v1 по getPool фабрики v1 для пар кандидатов. Возвращает:
+    (head, {"v1": […], "v2": […], "other": […]}). Ошибки: StaleState — recnode.fresh повторит на новом блоке."""
+    tag = head["number"]
+    by = {k: v["factory"].lower() for k, v in VERSIONS.items()}
+    out, seen = {"v1": [], "v2": [], "other": []}, set()
+
+    def take(pool, why):
+        if pool in seen:
+            return
+        seen.add(pool)
+        fac = addr_of(try_call(rpc, pool, "c45a0155", tag))
+        ver = next((k for k, f in by.items() if fac and fac.lower() == f), None)
+        if ver is None:
+            out["other"].append({"pool": pool, "factory": fac, "why": why})
+            return
+        try:
+            rec = record_pool(rpc, pool, VERSIONS[ver], args, tag)
+        except Exception as e:  # noqa: BLE001 — ответ не по ABI пишется как есть; StaleState (BaseException) — наружу
+            rec = {"pool": pool, "error": str(e)}
+        rec["version"], rec["found_by"] = ver, why
+        out[ver].append(rec)
+        if ver != "v1" and "error" not in rec:
+            # Пул v1 той же пары и комиссии (getPool фабрики v1) — тоже в запись.
+            t0, t1 = addr_of(rec["token0"]), addr_of(rec["token1"])
+            fee = int(rec["swapFeeUnits"]["ok"], 16)
+            v1 = addr_of(try_call(rpc, VERSIONS["v1"]["factory"], "1698ee82" + addr_word(t0) + addr_word(t1) + word(fee),
+                                  tag))
+            if v1:
+                take(v1.lower(), "getPool фабрики v1 для пары пула " + pool)
+
+    for pool in list(dict.fromkeys(i.lower() for i in ids))[:args.max_pools]:
+        take(pool, "GeckoTerminal / --pool")
+    return head, out
+
+
+def logs_phase(rpc, pools, args, b):
+    """Логи пулов за [B − --log-blocks, B] частями (таймаут — пополам). Возвращает запись logs.json."""
+    lo = max(0, b - args.log_blocks)
+    addrs = [p["pool"] for p in pools]
+    logs = []
+    if addrs:
+        logs = recnode.logs_split(
+            lambda x, y: rpc.call("eth_getLogs", [{"address": addrs, "fromBlock": hex(x), "toBlock": hex(y)}]),
+            lo, b, 1000, lambda t: print(t, file=sys.stderr, flush=True))
+    ts = lambda n: int(rpc.call("eth_getBlockByNumber", [hex(n), False])["timestamp"], 16)  # noqa: E731
+    return {"from": hex(lo), "to": hex(b), "from_timestamp": ts(lo), "to_timestamp": ts(b), "address": addrs,
+            "logs": logs}
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Запись фактов узла Arbitrum для KyberSwap Elastic v1 (решение 451)")
+    ap = argparse.ArgumentParser(description="Запись фактов узла Arbitrum для KyberSwap Elastic v1/v2 (решения 451, 462)")
     ap.add_argument("--rpc", required=True, help="HTTP JSON-RPC своего узла Arbitrum")
     ap.add_argument("--gt", action="store_true", help="записать пулы GeckoTerminal kyberswap_elastic_arbitrum")
     ap.add_argument("--gt-pages", type=int, default=10)
     ap.add_argument("--pool", action="append", default=[], help="адрес пула (0x…); можно несколько")
-    ap.add_argument("--max-pools", type=int, default=30, help="не больше стольких пулов")
+    ap.add_argument("--max-pools", type=int, default=30, help="не больше стольких кандидатов")
     ap.add_argument("--sizes", default="0.001,0.01,0.1,1,10,100,1000", help="суммы входа в единицах токена")
-    ap.add_argument("--log-blocks", type=int, default=2000, help="сколько блоков логов пулов до B")
-    ap.add_argument("--factory", default=FACTORY)
-    ap.add_argument("--quoter", default=QUOTER)
-    ap.add_argument("--reader", default=READER)
+    ap.add_argument("--log-blocks", type=int, default=2000000, help="сколько блоков логов пулов до B")
+    ap.add_argument("--tick-chunk", type=int, default=1000, help="длина части getTicksInRange при чтении частями")
     ap.add_argument("--out", default=None, help="папка вывода (по умолчанию tests/data/arbitrum_kyber_elastic_v1_<дата>)")
     args = ap.parse_args()
 
     rpc = Rpc(args.rpc)
     chain = rpc.call("eth_chainId", [])
-    head = rpc.call("eth_getBlockByNumber", ["latest", False])
-    b, tag = int(head["number"], 16), head["number"]
-    day = datetime.date.today().isoformat()
+    day = os.environ.get("ARB_RECORD_DATE") or datetime.date.today().isoformat()
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = args.out or os.path.join(root, "tests", "data", "arbitrum_kyber_elastic_v1_" + day)
     os.makedirs(out, exist_ok=True)
-    files = {}
-    meta = {"chainId": chain, "block": b, "block_hex": tag, "timestamp": int(head["timestamp"], 16),
-            "factory": args.factory, "quoter": args.quoter, "reader": args.reader, "sizes": args.sizes,
-            "log_blocks": args.log_blocks}
-    files["meta.json"] = meta
+    files = {"meta.json": None}
 
+    # Решение 460: GeckoTerminal (с паузами темпа — gt.py) — ДО выбора блока B: узел хранит только недавнее состояние.
     ids = list(args.pool)
     if args.gt:
         pages = gt_pages(args.gt_pages)
@@ -173,18 +156,17 @@ def main():
                     a = item.get("attributes", {}).get("address", "")
                     if a.startswith("0x") and len(a) == 42:
                         ids.append(a)
-    pools = []
-    for pool in list(dict.fromkeys(i.lower() for i in ids))[:args.max_pools]:
-        try:
-            pools.append(record_pool(rpc, pool, args, tag))
-        except Exception as e:
-            pools.append({"pool": pool, "error": str(e)})
-    files["pools.json"] = pools
-    frm = hex(max(0, b - args.log_blocks))
-    addrs = [p["pool"] for p in pools if "error" not in p]
-    files["logs.json"] = {"from": frm, "to": tag,
-                          "logs": rpc.call("eth_getLogs", [{"address": addrs, "fromBlock": frm, "toBlock": tag}])
-                          if addrs else []}
+    head, pools = recnode.fresh(lambda: rpc.call("eth_getBlockByNumber", ["latest", False]),
+                                lambda h: state_phase(rpc, ids, args, h))
+    b, tag = int(head["number"], 16), head["number"]
+    meta = {"chainId": chain, "block": b, "block_hex": tag, "timestamp": int(head["timestamp"], 16),
+            "versions": VERSIONS, "sizes": args.sizes, "log_blocks": args.log_blocks, "tick_chunk": args.tick_chunk,
+            "counts": {k: len(v) for k, v in pools.items()}}
+    files["meta.json"] = meta
+    files["pools.json"] = pools["v1"]
+    files["pools_v2.json"] = pools["v2"]
+    files["pools_other.json"] = pools["other"]
+    files["logs.json"] = logs_phase(rpc, [p for p in pools["v1"] + pools["v2"] if "error" not in p], args, b)
 
     hashes = []
     for name, body in files.items():
@@ -193,13 +175,12 @@ def main():
             f.write(text)
         hashes.append((hashlib.sha256(text.encode()).hexdigest(), name))
     with open(os.path.join(out, "README.md"), "w", encoding="utf-8") as f:
-        f.write("# KyberSwap Elastic v1 (Arbitrum One) — запись своего узла, %s\n\n" % day)
-        f.write("Записано tools/arbitrum_record/kyber_elastic_v1.py (решение 451): только чтение, без ключей и подписей.\n")
-        f.write("Блок B = %d (%s), время %d, chainId %s. Пулов: %d. Узел: %s.\n\n" % (
-            b, tag, meta["timestamp"], chain, len(pools), args.rpc.split("@")[-1]))
-        f.write("Файлы — шапка скрипта. Фабрика %s, QuoterV2 %s, TicksFeesReader %s.\n\n" % (
-            args.factory, args.quoter, args.reader))
-        f.write("## SHA-256\n\n")
+        f.write("# KyberSwap Elastic v1 / v2 (Arbitrum One) — запись своего узла, %s\n\n" % day)
+        f.write("Записано tools/arbitrum_record/kyber_elastic_v1.py (решения 451, 462): только чтение, без ключей.\n")
+        f.write("Блок B = %d (%s), время %d, chainId %s. Пулов: v1 %d, v2 %d, другие %d; логов %d. Узел: %s.\n\n" % (
+            b, tag, meta["timestamp"], chain, len(pools["v1"]), len(pools["v2"]), len(pools["other"]),
+            len(files["logs.json"]["logs"]), args.rpc.split("@")[-1]))
+        f.write("Файлы и адреса — шапка скрипта.\n\n## SHA-256\n\n")
         for h, n in hashes:
             f.write("%s  %s\n" % (h, n))
     print("записано в", out, file=sys.stderr)

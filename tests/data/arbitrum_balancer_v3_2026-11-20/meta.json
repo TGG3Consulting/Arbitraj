@@ -1,0 +1,73 @@
+{
+ "chain_id": "0xa4b1",
+ "block": 526004176,
+ "block_hash": "0x4c9c81a1953957d3374be8dd51ca95253a64e666f84401d39ec03c79cb428e91",
+ "timestamp": 1795198046,
+ "vault": "0xbA1333333333a1BA1108E8412f11850A5C319bA9",
+ "router": "0xEAedc32a51c510d35ebC11088fD5fF2b47aACF2E",
+ "lists": {
+  "dex.bv3_weighted_factories": [
+   "0xD961E30156C2E0D0d925A0De45f931CB7815e970"
+  ],
+  "dex.bv3_weighted_min_factories": [
+   "0x83bf399FA3DC49Af8fb5c34031a50c7C93F56129"
+  ],
+  "dex.bv3_stable_factories": [
+   "0xEB1eeaBF0126d813589C3D2CfeFFE410D9aE3863"
+  ],
+  "dex.bv3_stable_open_factories": [
+   "0x44d33798dddCdAbc93Fe6a40C80588033Dc502d3",
+   "0x86e67E115f96DF37239E0479441303De0de7bc2b",
+   "0x201efd508c8DfE9DE1a13c2452863A78CB2a86Cc"
+  ],
+  "dex.bv3_stable_guard_factories": [
+   "0x1FC7F1F84CFE61a04224AC8D3F87f56214FeC08c",
+   "0x8A8B9f35765899B3a0291700141470D79EA2eA88"
+  ],
+  "dex.bv3_gyro_2clp_factories": [
+   "0x65A22Ec32c37835Ad5E77Eb6f7452Ac59E113a9F",
+   "0x64b7dfE8a3972639712EFA124D180DC3Ff0f5bcF"
+  ],
+  "dex.bv3_gyro_eclp_factories": [
+   "0x88ED12A90142fDBFe2a28f7d5b48927254C7e760",
+   "0xe31715e75207acC8bfadd96902FF522058928479"
+  ],
+  "dex.bv3_reclamm_factories": [
+   "0xa1D0791a41318c775707C56eAe247AF81a05322C",
+   "0x355bD33F0033066BB3DE396a6d069be57353AD95"
+  ],
+  "dex.bv3_reclamm_v3_factories": [
+   "0x3ccD78683efFffdDc1A16f5553C896ac6D3ab7FF"
+  ],
+  "dex.bv3_lbp_v1_factories": [
+   "0x4BB42f71CAB7Bd13e9f958dA4351B9fa2d3A42FF"
+  ],
+  "dex.bv3_lbp_v2_factories": [
+   "0x8D217CB74f675B46cC2767C8cF0aAB53BE1c4818"
+  ],
+  "dex.bv3_lbp_v3_factories": [
+   "0xF9309a99836b5F07a2440c177C049b0f0A9A2c33"
+  ],
+  "dex.bv3_lbp_v4_factories": [
+   "0x6b7DEd11F15D6AB9959c29cEd3Cd101D69A14c35"
+  ],
+  "dex.bv3_fixed_lbp_factories": [
+   "0x7f246E7Bab4CdC8C7AB41EaDA8290009a5b26E0D"
+  ],
+  "dex.bv3_quantamm_factories": [
+   "0x62B9eC6A5BBEBe4F5C5f46C8A8880df857004295"
+  ],
+  "dex.bv3_stable_surge_hooks": [
+   "0x0Fa0f9990D7969a7aE6f9961d663E4A201Ed6417",
+   "0x7c1b7A97BfAcD39975dE53e989A16c7BC4C78275"
+  ],
+  "dex.bv3_mev_capture_hooks": [
+   "0x5B42eC6D40f7B7965BE5308c70e2603c0281C1E9"
+  ]
+ },
+ "arb_sys": "0x0000000000000000000000000000000000000064",
+ "arb_owner_public": "0x000000000000000000000000000000000000006b",
+ "pools": [
+  "0x5418a64e0cdb20548acb394f5d00a089baf02161"
+ ]
+}

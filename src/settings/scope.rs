@@ -101,21 +101,31 @@ pub fn is_address_id(id: &str) -> bool {
 
 /// Что делает: правило записи id области «DEX» (решение 128): непустой, только строчная латиница, цифры, «-» и «_» —
 /// так пишет id DEX индексатор (все 139 id DEX сети bsc в записи GeckoTerminal 2026-10-24 подходят, тест
-/// tests/settings_dex_id.rs). Это грамматика ключа, а не порог: числа в нём нет.
-/// Принимает: id. Возвращает: Ok(()) или Err(причина по-русски). Ошибки: пустой id, недопустимый символ.
+/// tests/settings_dex_id.rs). Решение 435 (433-з): у площадки DEX не сети по умолчанию ключ — «id@сеть»
+/// (venues/bsc_dex/ctx_place.rs): один «@», обе части — по тому же правилу. Это грамматика ключа, а не порог.
+/// Принимает: id. Возвращает: Ok(()) или Err(причина по-русски). Ошибки: пустой id или часть, недопустимый символ.
 pub fn check_dex_id(id: &str) -> Result<(), String> {
     if id.is_empty() {
         return Err("Не указан id DEX".into());
     }
-    match id
-        .chars()
-        .find(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-' || *c == '_'))
-    {
-        Some(c) => Err(format!(
-            "id DEX «{id}»: недопустимый символ «{c}» — только строчная латиница, цифры, «-» и «_»"
-        )),
-        None => Ok(()),
+    let mut parts = id.splitn(2, '@');
+    for part in parts.by_ref() {
+        if part.is_empty() {
+            return Err(format!(
+                "id DEX «{id}»: пустая часть — нужно «id» или «id@сеть»"
+            ));
+        }
+        if let Some(c) = part
+            .chars()
+            .find(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-' || *c == '_'))
+        {
+            return Err(format!(
+                "id DEX «{id}»: недопустимый символ «{c}» — только строчная латиница, цифры, «-» и «_» (и один «@» \
+                 перед сетью)"
+            ));
+        }
     }
+    Ok(())
 }
 
 /// Что делает: предел длины НОВОГО id области «DEX» (решение 128, настройка dex.id_max_len — необязательная).

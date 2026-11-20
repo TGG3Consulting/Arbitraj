@@ -277,6 +277,17 @@ async fn run() -> Result<(), String> {
     // Площадка DEX — bsc_dex (решение 91): сигналы, цены и подбор размера всегда с нашего узла (WebSocket пулов) и
     // математики пулов. Исполнение свопа по настройке exec.via_kyber [bsc_dex] делегируется агрегатору KyberSwap
     // (внутри bsc_dex), иначе — собственный сборщик. Код исполнения kyberswap как площадка-цены не регистрируется.
+    // Решение 435 (433-к): площадки DEX процесса — bsc_dex и dex.venues (например arb_dex — сеть Arbitrum тем же кодом
+    // адаптера); не задана — только bsc_dex, как раньше. Список неверен — запись в журнал, только bsc_dex.
+    let dex_ids = match arb::venues::bsc_dex::dex_venues::extra(&settings) {
+        Ok(extra) => arb::venues::bsc_dex::dex_venues::all(extra),
+        Err(why) => {
+            let _ = journal
+                .write(Level::Error, "venue.dex_venues", None, why, None)
+                .await;
+            arb::venues::bsc_dex::dex_venues::all(Vec::new())
+        }
+    };
     let dex_ctx = arb::venues::bsc_dex::ctx::Ctx {
         settings: settings.clone(),
         vault: vault.clone(),
@@ -285,11 +296,20 @@ async fn run() -> Result<(), String> {
         raw,
         pace: Default::default(),
         failover: Default::default(),
-        place: arb::venues::bsc_dex::ctx::Place::BSC,
+        place: arb::venues::bsc_dex::ctx::Place {
+            id: arb::venues::bsc_dex::ctx::BSC_ID,
+            all: dex_ids,
+        },
         chains: Default::default(),
         account: None,
         index: Default::default(),
     };
+    // Окружения остальных площадок DEX — до передачи dex_ctx адаптеру bsc_dex.
+    let more_dex: Vec<_> = dex_ids[1..]
+        .iter()
+        .copied()
+        .map(|id| dex_ctx.for_place(id))
+        .collect();
     // Решение 132, пункт 5: перенос прежнего единственного кошелька — один раз, после разблокировки секретов
     // (api/secrets.rs): кошелёк «BingX» с тем же секретом, исполнитель — значение exec.executor_address [bsc_dex],
     // строки маппинга bingx и «пробы». Деньги не переводятся.
@@ -312,6 +332,24 @@ async fn run() -> Result<(), String> {
     // Изменение промежуточных монет (решение 52) — пересборка подписки DEX на лету.
     dex.watch_settings(changes.subscribe());
     registry.register(std::sync::Arc::new(dex)).await;
+    // Решение 435 (433-к): остальные площадки DEX (dex.venues) — тот же адаптер со своим id; id, занятый другой
+    // площадкой шлюза, не регистрируется (запись в журнал).
+    for ctx in more_dex {
+        let id = arb::core::types::VenueId(ctx.place.id.to_string());
+        if registry.get(&id).await.is_ok() {
+            let why = format!(
+                "dex.venues: id «{}» уже занят площадкой шлюза — пропущен",
+                id.0
+            );
+            let _ = journal
+                .write(Level::Error, "venue.dex_venues", None, why, None)
+                .await;
+            continue;
+        }
+        let more = arb::venues::bsc_dex::BscDex::new(ctx);
+        more.watch_settings(changes.subscribe());
+        registry.register(std::sync::Arc::new(more)).await;
+    }
 
     // Ядро: работает с площадками только через шлюз; интерфейс читает его состояние через AppState.core.
     let core = arb::core::Core::start(arb::core::deps::Deps {

@@ -72,6 +72,24 @@ impl Ctx {
         Ok(Some(format!("@{}", self.text("dex.chain")?.trim())))
     }
 
+    /// Решение 435 (433-к): окружение другой площадки DEX того же процесса — те же настройки, секреты, HTTP, журнал и
+    /// сырые сообщения; своё: площадка, очередь узла, резервный узел, подтверждённые сети, справочник; без счёта.
+    /// Принимает: id площадки (из dex.venues, строка живёт весь процесс). Ошибок нет.
+    pub fn for_place(&self, id: &'static str) -> Ctx {
+        Ctx {
+            place: Place {
+                id,
+                all: self.place.all,
+            },
+            pace: Default::default(),
+            failover: Default::default(),
+            chains: Default::default(),
+            index: Default::default(),
+            account: None,
+            ..self.clone()
+        }
+    }
+
     /// Ключ области «DEX» для id DEX индексатора (433-з): «id» у сети по умолчанию, «id@сеть» у другой.
     /// Принимает: id индексатора. Ошибки: как dex_suffix.
     pub fn dex_key(&self, raw: &str) -> GatewayResult<String> {

@@ -21,6 +21,7 @@ pub mod ctx;
 pub mod ctx_place;
 pub mod ctx_url;
 pub mod ctx_wallet;
+pub mod dex_venues;
 pub mod directory;
 pub mod errors;
 pub mod exec;

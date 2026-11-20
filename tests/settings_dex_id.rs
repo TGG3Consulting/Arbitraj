@@ -53,6 +53,29 @@ fn recorded_indexer_ids_pass_rule() {
     }
 }
 
+/// Решение 435 (433-з): ключ области «DEX» площадки другой сети — «id@сеть»; id DEX Arbitrum из записи GeckoTerminal
+/// своего узла (tests/data/arbitrum_node_2026-11-19/geckoterminal/dexes_page1.json) с сетью проходят; «@» без части
+/// или второй «@» — нет.
+#[test]
+fn network_keys_pass_rule() {
+    let p = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/data/arbitrum_node_2026-11-19/geckoterminal/dexes_page1.json"
+    );
+    let (list, _) = gt_parse::dexes(&std::fs::read_to_string(p).unwrap()).unwrap();
+    assert_eq!(list.len(), 84);
+    for d in &list {
+        assert!(
+            check_dex_id(&format!("{}@arbitrum", d.id)).is_ok(),
+            "{}",
+            d.id
+        );
+    }
+    for bad in ["@arbitrum", "camelot@", "camelot@arb@x", "camelot@Arbitrum"] {
+        assert!(check_dex_id(bad).is_err(), "«{bad}» должен быть отклонён");
+    }
+}
+
 #[test]
 fn new_id_length_limit() {
     // Не задана — без предела.

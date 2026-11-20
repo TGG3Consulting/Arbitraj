@@ -3,6 +3,8 @@
 //! (send/gas_mode.rs): legacy — eth_gasPrice с надбавкой, не ниже минимума выбранных каналов (как было до решения
 //! 435, exec/txs.rs); eip1559_l1 — цены типа 2 от базы головы (quote/gas.rs fees: потолок = база × запас + чаевые),
 //! минимум каналов — по цене, которую транзакция заплатит (send/tx_price.rs floored).
+//! Решение 437 (2): здесь только цены транзакции (потолок и чаевые за газ); затраты с разбиением газа L2/L1 —
+//! exec/cycle_gas.rs.
 //! Кто вызывает: exec/txs.rs (send_capped), exec/bundle_send.rs (только legacy — бандлы у сети типа 2 не отправляются).
 //! От чего зависит: exec/txs.rs (Env), quote/gas.rs, send/gas_mode.rs, send/tx_price.rs, send/mod.rs (gas_floor).
 //! Настройки: dex.gas_mode, send.gas_price_markup_pct, send.max_fee_margin_pct, send.priority_fee_gwei [площадка DEX].

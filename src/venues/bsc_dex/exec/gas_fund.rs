@@ -7,6 +7,9 @@
 //! Резерв risk.min_bnb_balance здесь не проверяется — он про продажу самой BNB (native.rs).
 //! Решение 435 (433-д): цена газа здесь — потолок цены транзакции (send/tx_price.rs cap): legacy — gasPrice (как было),
 //! тип 2 — maxFeePerGas (EIP-1559: баланс отправителя обязан покрывать gas_limit × max_fee_per_gas + value).
+//! Решение 437 (2): у eip1559_l1 предпроверка остаётся по maxFeePerGas × весь лимит газа (не по разбиению L2/L1):
+//! это предел списания при проверке узлом — nitro-geth core/state_transition.go:474-480 (buyGas: balanceCheck =
+//! GasLimit × GasFeeCap + Value), а не фактическая плата.
 //! Кто вызывает: exec/txs.rs (send).
 //! От чего зависит: wallet/balances.rs (eth_getBalance), num.rs.
 //! Настройки: нет.

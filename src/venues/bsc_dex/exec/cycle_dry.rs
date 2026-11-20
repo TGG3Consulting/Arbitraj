@@ -11,6 +11,7 @@
 //! Кто вызывает: venue.rs (dex_dry_cycle).
 //! От чего зависит: exec/{cycle_gate, cycle_steps, cycle_bundle, dry_build, dry_sim, dry_surplus_cut}.rs,
 //! exec/executor/{dry, mod}.rs, quote/{cycle_legs, cycle_cost}.rs, wallet/signer.rs.
+//! Решение 437 (2): газ в проверке прибыли — exec/cycle_gas.rs (у eip1559_l1 чаевые только с газа L2).
 //! Настройки: через вызываемые — exec.executor_address, verify.*, dex.*, dex_dex.min_profit_usd, dex.multicall3.
 
 use alloy_primitives::U256;
@@ -24,7 +25,8 @@ use super::super::num;
 use super::super::quote::{Quoting, cycle_cost, cycle_legs};
 use super::super::wallet::signer;
 use super::cycle_gate::{self, Form};
-use super::cycle_steps::{self, exec_steps, net_check, units};
+use super::cycle_gas;
+use super::cycle_steps::{exec_steps, net_check, units};
 use super::dry_build::{Built, Ready};
 use super::dry_sim::{self, Io};
 use super::dry_surplus_cut;
@@ -92,7 +94,8 @@ async fn fill(
         DryMode::Executor => None,
         DryMode::AsTrade => Some(cycle_gate::form(ctx, &legs)?),
     };
-    let (built, base_at, form_text) = match form {
+    // Решение 437 (2): вызов исполнителя (адрес, данные) — для части L1 газа у eip1559_l1; у бандла — нет.
+    let (built, base_at, form_text, call) = match form {
         Some(Form::Bundle) => {
             let floor = units(ctx, req.min_out, dec)?;
             let a =
@@ -103,6 +106,7 @@ async fn fill(
                 Built::Many(a.bundle),
                 Base::timed(at, now),
                 Form::Bundle.text(),
+                None,
             )
         }
         _ => {
@@ -117,7 +121,8 @@ async fn fill(
             )
             .await?;
             let t = format!("цикл: {}", x.form);
-            (Built::Exec(x), Base::timed(at, now), t)
+            let call = Some((x.call.executor, x.call.data()));
+            (Built::Exec(x), Base::timed(at, now), t, call)
         }
     };
     r.form = Some(form_text.clone());
@@ -158,10 +163,17 @@ async fn fill(
     let out = num::to_decimal(need.saturating_add(gain), dec).unwrap_or_default();
     r.sim_out = Some(out);
     let gas = sim.gas_swap.saturating_add(sim.gas_approve);
+    // Решение 437 (2): у eip1559_l1 газ симуляции (обмен и разрешения) — газ L2, часть L1 — по данным вызова
+    // исполнителя (gasEstimateComponents); часть L1 транзакций разрешений отдельно не считается (docs/TASKS.md,
+    // «Решение 437»). Бандл и legacy — без разбиения.
+    let bill = match call {
+        Some(c) => cycle_gas::priced(q, wallet, c).await?,
+        None => cycle_gas::flat(q, 0).await?,
+    };
     let net = net_check(
         ctx,
         (out, req.input),
-        (gas, cycle_steps::wei(q).await?),
+        &bill.with_units(gas),
         &rates,
         // Как у сделки: исполнитель шлёт чаевые, бандл — нет (Тигран 09.11: согласовано, план = факт).
         !matches!(form, Some(Form::Bundle)),

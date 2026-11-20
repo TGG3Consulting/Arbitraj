@@ -148,7 +148,29 @@
   - ответ своего узла Nitro v3.12.4 на eth_sendRawTransactionSync пустой транзакции (есть ли метод в v3.12.4 —
     не проверено: клон nitro-geth 260bc5dc новее/другой ветки) и на настоящую транзакцию (квитанция; код 4 при сроке);
   - сценарий «выброшена» (nonce не вырос за send.drop_wait_ms) — запись квитанции null + eth_getTransactionCount.
+  Часть 2 (газ) — СДЕЛАНО для проверки цикла перед отправкой: exec/cycle_gas.rs Bill — у eip1559_l1 затраты =
+  газ_L2 × (база + чаевые) + газ_L1 × база (nitro arbos/tx_processor.go:627-645: при сборе чаевых часть L1
+  пересчитывается по полной цене — её плата в wei от чаевых не растёт); газ L1 — gasEstimateForL1
+  NodeInterface.gasEstimateComponents самой транзакции (запрос одновременно с пробой, exec/cycle_exec.rs); газ L2 — газ
+  симуляции; исполнитель (cycle_exec), сухая сделка (cycle_dry); бандл — только legacy (без разбиения).
+  Предпроверка средств кошелька (exec/gas_fund.rs) — по maxFeePerGas × весь лимит: nitro-geth
+  core/state_transition.go:474-480 (buyGas). Котировка (quote/gas.rs, gas_base.rs planned): «база + чаевые» на газ
+  плана — части L1 у транзакции до сборки нет.
+  Осталось по части 2 (у eip1559_l1 цена «база + чаевые» на весь газ — чаевые завышены на газ_L1 × чаевые, разбиения
+  нет, нужен gasEstimateComponents каждой такой транзакции): exec/executor/trade.rs (ноги CEX ↔ DEX через
+  исполнитель), exec/verify_gate.rs, exec/dry_paths.rs, exec/native.rs, venue.rs:395, quote/mod.rs:268,
+  quote/cycle_cost.rs (план цикла), wallet/transfer_cost.rs, exec/executor/deploy.rs.
+  Нужна запись: на своём узле Arbitrum — eth_simulateV1 (validation = false) обмена и gasEstimateComponents той же
+  транзакции, потом квитанция после включения (gasUsed, effectiveGasPrice, gasUsedForL1) — проверка формулы и
+  вопроса 3.
   Вопросы Тиграну:
+  3) Газ плана и газ симуляции (eth_simulateV1, validation = false — check/simulate.rs) у Arbitrum: входит ли в
+     gasUsed часть L1, по исходникам не установлено: nitro arbos/tx_processor.go:613-641 начисляет газ L1 при baseFee > 0
+     и SkipL1Charging = false; симуляция идёт в режиме commit (nitro-geth internal/ethapi/simulate.go:292,
+     core.NewMessageCommitContext → IsExecutedOnChain, poster = Coinbase симулированного блока — tx_processor.go:619-623),
+     а плата L1 для такого poster — по l1pricing PosterDataCost (nitro arbos/l1pricing/l1pricing.go:603-616) — без
+     записи не доказать. Сейчас в проверке цикла газ симуляции = газ L2, часть L1 добавляется отдельно (если она уже
+     входит — посчитана дважды по базе, затраты не занижены). Нужна запись (выше).
   1) send.max_wait_blocks, send.cancel_* и send.bundle_max_blocks у arb_dex по-прежнему обязательны (SendCfg::read
      читает их у любой сети), хотя при eip1559_l1 трекер их не использует (кроме replaced_confirm_blocks,
      queue_max_wait_s). Снять обязательность для eip1559_l1? Пока — задать любые допустимые (техдолг ROADMAP).

@@ -11,6 +11,7 @@
 //!   (исполнитель; у бандла — нет, plan_tip; Тигран 09.11: согласовано, план = факт);
 //! - итог сделки цикла (CycleTradeResult) из итога свопа.
 //!
+//! Решение 437 (2): газ в проверке — exec/cycle_gas.rs Bill (у eip1559_l1 чаевые только с газа L2).
 //! Кто вызывает: exec/{cycle_trade, cycle_exec, cycle_bundle_trade, cycle_dry}.rs, quote/cycle_cost.rs (plan_tip).
 //! От чего зависит: quote/{cycle, cycle_cost, route_calc}.rs, exec/{chain, plan}.rs, send/mod.rs, num.rs, core/types.
 //! Настройки: dex_dex.min_profit_usd [bsc_dex] (обязательна для исполнения); через send — channel.* (чаевые).
@@ -30,6 +31,7 @@ use super::super::quote::route_calc::Leg;
 use super::super::quote::{Quoting, cycle};
 use super::super::send;
 use super::chain::Step;
+use super::cycle_gas::Bill;
 use super::plan::Order;
 
 /// Своп цикла в формате ядра: «продать базовую за базовую» на входе req.input не хуже req.min_out. Ошибок нет.
@@ -131,24 +133,26 @@ pub async fn plan_tip(ctx: &Ctx, wei: U256, with_tip: bool) -> GatewayResult<(De
     Ok((tip, tip_gas))
 }
 
-/// Чистая прибыль по симуляции. Принимает: выход и вход (базовая), газ симуляции (единиц), цену газа, курсы, шлёт ли
-/// форма исполнения чаевые (исполнитель — да, бандл — нет; plan_tip).
+/// Чистая прибыль по симуляции. Принимает: выход и вход (базовая), газ транзакции с ценой (решение 437 (2):
+/// exec/cycle_gas.rs Bill — legacy: газ симуляции × цена; eip1559_l1: газ_L2 × (база + чаевые) + газ_L1 × база), курсы,
+/// шлёт ли форма исполнения чаевые канала (исполнитель — да, бандл — нет; plan_tip).
 /// Возвращает: чистую прибыль в базовой. Ошибки: NotConfigured (dex_dex.min_profit_usd), QuoteMismatch — ниже порога,
 /// BadResponse (числа); газ перевода чаевых — как send/tip_gas.rs (ключ кошелька, узел eth_estimateGas).
 /// Тигран 09.11 (согласовано): к чаевым — газ их отдельной транзакции перевода (send/tip_gas.rs, та же цена газа).
 pub async fn net_check(
     ctx: &Ctx,
     (output, input): (Decimal, Decimal),
-    (gas_units, wei): (u64, U256),
+    bill: &Bill,
     r: &Rates,
     with_tip: bool,
 ) -> GatewayResult<Decimal> {
     // Порог — в USDT (решение 124): одна настройка для любой базовой монеты, в базовую — по курсу пулов.
     let min_usd = ctx.dec("dex_dex.min_profit_usd")?;
     let min_profit = min_usd / r.base_usdt;
-    let (tip, tip_gas) = plan_tip(ctx, wei, with_tip).await?;
-    let gas = num::to_decimal(wei.saturating_mul(U256::from(gas_units)), num::BNB_DECIMALS)
+    let (tip, tip_gas) = plan_tip(ctx, bill.price(), with_tip).await?;
+    let gas = num::to_decimal(bill.wei(), num::BNB_DECIMALS)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "газ симуляции не в Decimal"))?;
+    let gas_units = bill.units();
     let net = output - input - (gas + tip + tip_gas) * r.bnb_in_base;
     if net < min_profit {
         let why = format!(

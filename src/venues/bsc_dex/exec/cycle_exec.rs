@@ -13,6 +13,8 @@
 //! дополнение, п. 4): ядро выясняет исход само (resolve_cycle.rs).
 //! Решение 273: перед отправкой — пауза и предел цены газа фабрик пар Solidly заново (exec/solidly_gate.rs fresh_cap),
 //! предел — по цене самой транзакции (exec/txs.rs send_capped).
+//! Решение 437 (2): газ в проверке прибыли — exec/cycle_gas.rs (у eip1559_l1 чаевые только с газа L2, часть L1 —
+//! gasEstimateComponents этой транзакции, запрос одновременно с пробой).
 //! Кто вызывает: exec/cycle_trade.rs.
 //! От чего зависит: exec/executor/{call, callback_at, onchain, pool_pass, sim}.rs, exec/{cycle_steps, cycle_ref, swap_send, txs, result}.rs,
 //! quote/{cycle_legs, cycle_cost}.rs, wallet/{approve_executor, nonce}.rs, check/simulate.rs.
@@ -33,6 +35,7 @@ use super::super::quote::{Quoting, cycle_legs};
 use super::super::wallet::approve_executor;
 use super::super::wallet::nonce::Nonces;
 use super::cycle_ref;
+use super::cycle_gas;
 use super::cycle_steps::{self, exec_steps, net_check};
 use super::executor::call::{self, ExecCall};
 use super::executor::{onchain, pool_pass, sim};
@@ -85,11 +88,16 @@ pub async fn trade(
         }
         rebuilt_notice(env, &tr, at.0);
     }
-    let (got, gas) = probe(ctx, &c, wallet, at).await?;
+    // Решение 437 (2): цена газа (у eip1559_l1 — с частью L1 этой транзакции, NodeInterface) — одновременно с пробой.
+    let call = (executor, c.data());
+    let ((got, gas), bill) = tokio::try_join!(
+        probe(ctx, &c, wallet, at),
+        cycle_gas::priced(q, wallet, call)
+    )?;
     let out = super::super::num::to_decimal(got, dec)
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "выход пробы не в Decimal"))?;
     // Исполнитель — одна транзакция с чаевыми (txs::send ниже): чаевые и газ их перевода — в проверке.
-    net_check(ctx, (out, req.input), (gas, cycle_steps::wei(q).await?), &r, true).await?;
+    net_check(ctx, (out, req.input), &bill.with_units(gas), &r, true).await?;
     // Решение 233 (дополнение, п. 4): исход неизвестен — «чем найти» цикла (контекст свопа «базовая → базовая» и курсы
     // сделки), позднее выяснение своим узлом теми же функциями (resolve_cycle.rs). Разрешения выше — без него: их
     // «исход неизвестен» несёт отметку approve (exec/swap_send.rs), обмен после них не отправлялся.

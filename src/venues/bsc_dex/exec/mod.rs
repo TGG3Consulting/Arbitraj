@@ -24,6 +24,7 @@ pub mod cycle_bundle;
 pub mod cycle_bundle_trade;
 pub mod cycle_dry;
 pub mod cycle_exec;
+pub mod cycle_gas;
 pub mod cycle_gate;
 pub mod cycle_ref;
 pub mod cycle_segment;

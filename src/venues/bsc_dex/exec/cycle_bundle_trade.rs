@@ -34,6 +34,7 @@ use super::super::wallet::nonce::Nonces;
 use super::bundle::Bundle;
 use super::bundle_ref::BundleRef;
 use super::bundle_sim::{build_sim, collect};
+use super::cycle_gas;
 use super::cycle_steps::{self, net_check, units};
 use super::txs::Env;
 use super::{bundle_notify, bundle_send, bundle_trade, cycle_bundle, cycle_ref};
@@ -62,14 +63,9 @@ pub async fn trade(
     let a = cycle_bundle::build_floor(ctx, &legs, (req.input, floor), at4).await?;
     let (out, gas) = measure(ctx, &a.bundle, wallet, base, at, (req.input, dec)).await?;
     // Бандл свопов чаевых не шлёт (send::dispatch_slice) — в проверке их нет (Тигран 09.11: согласовано, план = факт).
-    net_check(
-        ctx,
-        (out, req.input),
-        (gas, cycle_steps::wei(q).await?),
-        &r,
-        false,
-    )
-    .await?;
+    // Решение 437 (2): бандл — только legacy (exec/bundle_send.rs), газ без разбиения.
+    let bill = cycle_gas::flat(q, gas).await?;
+    net_check(ctx, (out, req.input), &bill, &r, false).await?;
     let b = &a.bundle;
     bundle_notify::assembled(&env.stats, ctx, b.swaps, 1, b.txs.len(), first_nonce);
     let entries: Vec<&Entry> = legs.iter().map(|l| &l.entry).collect();

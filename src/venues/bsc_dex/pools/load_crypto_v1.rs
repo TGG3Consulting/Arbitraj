@@ -11,8 +11,9 @@
 //! по времени блока, пока время блока < future_A_gamma_time — moving (перечитывание каждым блоком, per_block.rs).
 //! Кто вызывает: pools/load.rs, pools/load_site.rs (пары tricrypto).
 //! От чего зависит: ctx.rs, node/call.rs, node/multicall.rs, tokens.rs, abi_crypto.rs, abi_crypto_v1.rs, load_lb.rs
-//! (время блока Multicall3), load_smardex.rs (время блока без Multicall3), families.rs.
-//! Настройки: dex.multicall3 [bsc_dex] (как load_crypto.rs).
+//! (время блока Multicall3), load_smardex.rs (время блока без Multicall3), families.rs, per_block_crypto.rs
+//! (takes_native, решение 455).
+//! Настройки: dex.multicall3 [bsc_dex] (как load_crypto.rs); dex.native_wrapped (решение 455).
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
@@ -29,6 +30,7 @@ use super::abi_crypto_v1::ICryptoPoolV1 as V1;
 use super::families::{Family, Proto};
 use super::load_lb::{decode_time, time_call};
 use super::load_smardex;
+use super::per_block_crypto;
 
 /// Вызовов до монет: A, gamma, D, mid_fee, out_fee, fee_gamma, future_A_gamma_time.
 const HEAD: usize = 7;
@@ -152,6 +154,9 @@ pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<Po
     };
     data.i0 = index(pair.0)?;
     data.i1 = index(pair.1)?;
+    // Решение 455: crypto v1 фабрики (2 монеты; у tricrypto 2021 self.balance не читается) с монетой
+    // dex.native_wrapped — нативный ETH без события (per_block_crypto.rs).
+    data.native_in = raw.n == 2 && per_block_crypto::takes_native(ctx, &coins);
     Ok(PoolState::Crypto(Box::new(data)))
 }
 
@@ -200,6 +205,7 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData), String> {
         ramp: !t.is_zero(),
         moving: t > U256::from(raw.now),
         halted,
+        native_in: false,
         i0: 0,
         i1: 0,
     };

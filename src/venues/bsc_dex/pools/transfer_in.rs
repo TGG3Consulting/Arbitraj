@@ -1,5 +1,5 @@
 //! Файл: venues/bsc_dex/pools/transfer_in.rs
-//! Что делает: решение 454 — перевод токена на адрес crypto-пула Curve без события пула. У crypto v1 (фабрика), tricrypto
+//! Что делает: решение 455 — перевод токена на адрес crypto-пула Curve без события пула. У crypto v1 (фабрика), tricrypto
 //! 2021 и Tricrypto-NG `_claim_admin_fees` берёт балансы пула из balanceOf(self) («gulp») и пересчитывает D, а событие
 //! ClaimAdminFee пишет только при xcp_profit > xcp_profit_a, fees > 0 и получателе ≠ 0; claim_admin_fees — внешняя,
 //! её зовёт кто угодно. Значит, токен, переведённый на пул простым transfer (событие пула не пишется), меняет состояние
@@ -25,7 +25,8 @@
 //!   gulp L1193-L1197; ClaimAdminFee L1229 — при условии L1220; newton_D L1232).
 //!
 //! Монета WETH пула с нативным ETH (coins[i] == WETH20): gulp берёт self.balance (те же строки), а `__default__` payable
-//! принимает ETH без события — такой перевод логов не даёт вовсе; вопрос — docs/TASKS.md «Решение 454».
+//! принимает ETH без события — такой перевод логов не даёт вовсе; решение 455 (координатор): такие пулы (crypto v1
+//! фабрики и Tricrypto-NG с монетой dex.native_wrapped) читаются каждым блоком — per_block_crypto.rs native.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

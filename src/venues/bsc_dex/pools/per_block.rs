@@ -39,13 +39,13 @@
 //! • Решение 453: crypto-пулы Curve в рампе A/gamma (A и gamma — по времени блока) — пока последнее чтение видит
 //!   рампу (CryptoData.moving, ramping); ревью 453 — и tricrypto 2021, пока is_killed (unkill_me без события;
 //!   per_block_crypto.rs killed).
-//! • Решение 454: crypto-пулы Curve с переводом токена на пул без события пула (transfer_in.rs due) — один раз, на
+//! • Решение 455: crypto-пулы Curve с переводом токена на пул без события пула (transfer_in.rs due) — один раз, на
 //!   первой голове после перевода, если чтение его ещё не учло.
 //! Кто вызывает: pools/session.rs, session_lanes.rs (ramping), check/memory_proof_rules.rs (unevented).
 //! От чего зависит: listen.rs (Pools, End), reload.rs (load_one, load_one_block), reload_many.rs (load_group_block,
 //! load_group_with),
 //! per_block_par.rs, load_batch_par.rs (limit), pool_fail.rs, discover.rs (Found), families.rs, ladder_counter.rs,
-//! per_block_crypto.rs (решение 453), transfer_in.rs (решение 454),
+//! per_block_crypto.rs (решение 453), transfer_in.rs (решение 455),
 //! refresh_urgency.rs (решение 314: лог общего контракта — класс очереди узла, только при парах контракта).
 //! Настройки: dex.pmm_ladder_counter, dex.pmm_ladder_usd [DEX] (ladder_counter.rs each_block); dex.event_refresh_urgency
 //! (on_member_log); dex.block_read_parallel_max [bsc_dex] (решение 330); через вызываемые — dex.*.
@@ -63,7 +63,7 @@ use super::{
     reload, reload_many,
 };
 
-/// Решения 453, 454: crypto-пулы Curve без событий пула (рампа A/gamma, остановленный tricrypto 2021) —
+/// Решения 453, 455: crypto-пулы Curve без событий пула (рампа A/gamma, остановленный tricrypto 2021) —
 /// per_block_crypto.rs; прежние пути вызова сохранены.
 pub use super::per_block_crypto::{any_ramping, killed, moving, ramping, unevented};
 

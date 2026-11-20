@@ -16,7 +16,7 @@
 //! итог true события пула ставит его в очередь повтора через pool_fail::requeue (pool_fail_note.rs).
 //! Решение 357: новая голова закрывает пулы «в обновлении», чьи логи блока не пришли (settle_close.rs) — после
 //! settle_block (полосы этих пулов дождались), «в пути» — канал пачки плюс события полосы пула.
-//! Решение 454: лог ERC-20 Transfer на адрес crypto-пула Curve пачки (вторая подписка «все события», group.rs) —
+//! Решение 455: лог ERC-20 Transfer на адрес crypto-пула Curve пачки (вторая подписка «все события», group.rs) —
 //! отметка transfer_in.rs; голова читает такие пулы, если перевод не учтён чтением (per_block.rs).
 //! Кто вызывает: pools/listen.rs.
 //! От чего зависит: group.rs, admit.rs, reload.rs, listen_log.rs, events.rs, node/heads.rs, link.rs, settings (рассылка),
@@ -197,7 +197,7 @@ async fn events(
             }
             // Решение 357: и когда есть пулы «в обновлении» — их закрывает голова (settle_close.rs).
             // Решение 453: и когда есть crypto-пулы Curve в рампе A/gamma или остановленные tricrypto 2021
-            // (per_block::any_ramping); решение 454 — и пулы с переводом токена без события пула (transfer_in::any).
+            // (per_block::any_ramping); решение 455 — и пулы с переводом токена без события пула (transfer_in::any).
             changed = heads.changed(), if !m.missing.is_empty() || per_block::any(&m.pools) || p.holds.any()
                 || per_block::any_ramping(p, &m.pools) || super::transfer_in::any(p, &m.pools) => {
                 if changed.is_err() {
@@ -277,7 +277,7 @@ async fn on_log(
     log: &Log,
     (lanes, raw): (&mut EventLanes, Box<RawValue>),
 ) -> Result<(), End> {
-    // Решение 454: ERC-20 Transfer на адрес crypto-пула Curve пачки — отметка, чтение пула на голове (transfer_in.rs).
+    // Решение 455: ERC-20 Transfer на адрес crypto-пула Curve пачки — отметка, чтение пула на голове (transfer_in.rs).
     if super::transfer_in::on_log(p, &m.pools, log) {
         return Ok(());
     }

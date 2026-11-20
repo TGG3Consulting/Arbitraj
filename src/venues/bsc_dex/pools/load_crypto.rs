@@ -7,12 +7,14 @@
 //! Twocrypto-NG v2.0.0, из dex.curve_crypto_math — v2.1.0 / Tricrypto-NG, иначе отказ. Рампа A/gamma
 //! (future_A_gamma_time > время блока; `_exchange` Twocrypto L770-L781, Tricrypto L901-L913) — ramp и moving: обмен
 //! пересчитает D через newton_D (math/crypto_swap.rs), A() и gamma() пул отдаёт на время блока чтения, пул
-//! перечитывается каждым блоком, пока рампа идёт (per_block.rs).
+//! перечитывается каждым блоком, пока рампа идёт (per_block.rs). Решение 455: Tricrypto-NG с монетой dex.native_wrapped
+//! — native_in (каждым блоком, per_block_crypto.rs).
 //! Кто вызывает: pools/load.rs (ветка CurveTwocrypto / CurveTricrypto), pools/load_site.rs (пары многомонетного пула).
 //! От чего зависит: ctx.rs, node/call.rs, node/multicall.rs, abi_crypto.rs, crypto_variant.rs, load_lb.rs (вызов времени блока),
-//! load_smardex.rs (время блока без Multicall3), families.rs.
+//! load_smardex.rs (время блока без Multicall3), families.rs, per_block_crypto.rs (takes_native).
 //! Настройки: dex.multicall3 [bsc_dex] (не задан — пачкой JSON-RPC и время блока eth_getBlockByNumber);
-//! dex.curve_crypto_math, dex.curve_crypto_math_v2_0_0 [DEX] (версия формул по MATH()).
+//! dex.curve_crypto_math, dex.curve_crypto_math_v2_0_0 [DEX] (версия формул по MATH()); dex.native_wrapped
+//! (решение 455).
 //!
 //! Источник — строки геттеров в abi_crypto.rs; `_A_gamma` (рампа) — CurveTwocryptoOptimized.vy L1137-L1159,
 //! CurveTricryptoOptimizedWETH.vy L1263-L1286.
@@ -30,6 +32,7 @@ use super::crypto_variant;
 use super::families::{Family, Proto};
 use super::load_lb::{decode_time, time_call};
 use super::load_smardex;
+use super::per_block_crypto;
 
 /// Вызовов до монет: A, gamma, D, mid_fee, out_fee, fee_gamma, future_A_gamma_time, precisions.
 const HEAD: usize = 8;
@@ -146,6 +149,9 @@ pub fn state(ctx: &Ctx, f: &Family, raw: &Raw, pair: (Address, Address)) -> Gate
     let (i0, i1) = (index(pair.0)?, index(pair.1)?);
     data.i0 = i0;
     data.i1 = i1;
+    // Решение 455: Tricrypto-NG с монетой dex.native_wrapped — нативный ETH без события (per_block_crypto.rs).
+    data.native_in =
+        f.proto == Proto::CurveTricrypto && per_block_crypto::takes_native(ctx, &coins);
     Ok(PoolState::Crypto(Box::new(data)))
 }
 
@@ -205,6 +211,7 @@ pub fn decode(raw: &Raw) -> Result<(Vec<Address>, CryptoData, Address), String> 
         ramp,
         moving: ramp,
         halted: false,
+        native_in: false,
         i0: 0,
         i1: 0,
     };

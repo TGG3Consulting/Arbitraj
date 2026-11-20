@@ -27,7 +27,7 @@
 //! От чего зависит: lanes.rs, listen_log.rs (on_log), stale_read.rs, pool_fail.rs (requeue, base), admit.rs (Members),
 //! group.rs (Msg), listen.rs (Pools, End), load_batch_par.rs (limit), per_block.rs (needs), settle.rs (решение 357 —
 //! отметки пулов «в обновлении»: settle_block ждёт и их полосы, queued — для settle_close.rs), transfer_in.rs (решение
-//! 454: settle_block ждёт и полосы пулов, которые голова читает по переводу токена без события пула).
+//! 455: settle_block ждёт и полосы пулов, которые голова читает по переводу токена без события пула).
 //! Настройки: dex.event_lanes_max [bsc_dex] (необязательная; не задана — события по очереди в сессии, как раньше).
 
 use std::collections::HashMap;

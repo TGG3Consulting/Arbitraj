@@ -82,7 +82,7 @@ fn tick_infos(p: &Value, key: &str) -> BTreeMap<i32, (u128, i128)> {
         .iter()
         .map(|(k, r)| {
             let total = word(&r["result"], 0).to::<u128>();
-            let delta = signed(&r["result"], 1).as_i128();
+            let delta = i128::try_from(signed(&r["result"], 1)).unwrap();
             (k.parse().unwrap(), (total, delta))
         })
         .collect()

@@ -5,12 +5,15 @@
 подписей и отправки транзакций.
 
 Что пишет в tests/data/arbitrum_lb_v22_<дата UTC>/:
-  probe.json — блок B (номер, хеш, время, chainId), фабрика (getLBPairImplementation, getNumberOfLBPairs), пулы — всё
+  probe.json — блок B (номер, хеш, время, chainId), фабрика (getLBPairImplementation, getNumberOfLBPairs),
+               implementations — implementation() ВСЕХ пулов фабрики (уникальный набор, число пулов, примеры), hooks —
+               крючки из getLBHooksParameters всех пулов и из логов HooksParametersSet (адрес, флаги, keccak256 кода),
+               подробные пулы — всё
                на одном блоке B, каждый вызов: calldata и сырой ответ (hex) или текст отката:
                getFactory, getTokenX, getTokenY, getBinStep, getActiveId, getStaticFeeParameters,
                getVariableFeeParameters, getReserves, implementation, getLBHooksParameters; реестр фабрики
-               getLBPairInformation(X, Y, binStep); слова хранилища eth_getStorageAt 0..8 (раскладка: _parameters — 3,
-               _reserves — 4); код клона (eth_getCode); все непустые бины (обход getNextNonEmptyBin от активного в обе
+               getLBPairInformation(X, Y, binStep); слова хранилища eth_getStorageAt 0..8 и 65545 (раскладка:
+               _parameters — 3, _reserves — 4, _hooksParameters — 65545); код клона (eth_getCode); все непустые бины (обход getNextNonEmptyBin от активного в обе
                стороны до края или --max-bins, getBin каждого); getSwapOut на суммах в обе стороны (резерв входа
                пула / d для d из --divs и uint128 max — она больше ликвидности: остаток входа > 0).
   logs.json  — реальные логи выбранных пулов за последние --log-blocks блоков до B (Swap, DepositedToBins, ... — все
@@ -18,14 +21,13 @@
                наберётся --rare штук или не пройдено --rare-blocks блоков).
   README.md  — что записано, блок, sha256 файлов.
 
-Как выбираются пулы: getNumberOfLBPairs фабрики, getLBPairAtIndex(i) для i от последнего назад (--scan штук), из них
-пулы с ненулевыми резервами обеих сторон (getReserves) — первые --pools штук; --pool АДРЕС (можно несколько) —
-добавить свои.
+Как выбираются подробные пулы: --pool АДРЕС (можно несколько), все пулы с крючком (слово крючков не 0) и пулы из логов
+HooksParametersSet, затем пулы с ненулевыми резервами обеих сторон с конца фабрики (из последних --scan) — --pools штук.
 
 Источник ABI — lfj-gg/joe-v2@v2.2.0 (1297c38): src/interfaces/ILBPair.sol, src/interfaces/ILBFactory.sol; адрес
 фабрики — документация LFJ (lfj-gg/joe-docs 61c1666, versioned_docs/version-V2.2/deployment-addresses/arbitrum.md:
-LBFactory 0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c). Селекторы и topic0 — keccak256 подписей (посчитаны при
-написании; тест tests/arb_dex_lb_v22_live.rs сверяет записанную calldata с ABI кода бота).
+LBFactory 0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c). Селекторы и topic0 — keccak256 подписей; скрипт сверяет их
+при запуске (SIGS), тест tests/arb_dex_lb_v22_live.rs сверяет записанную calldata с ABI кода бота.
 
 Установка:  pip install requests
 Запуск:     python3 tools/arbitrum_record/lb_v22.py http://АДРЕС_УЗЛА:8547 \
@@ -40,6 +42,51 @@ import os
 import sys
 
 import requests
+
+
+# --- keccak256 (Keccak-f[1600], padding 0x01 — как в Ethereum), без внешних библиотек ---
+_RC = [
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000, 0x000000000000808B,
+    0x0000000080000001, 0x8000000080008081, 0x8000000000008009, 0x000000000000008A, 0x0000000000000088,
+    0x0000000080008009, 0x000000008000000A, 0x000000008000808B, 0x800000000000008B, 0x8000000000008089,
+    0x8000000000008003, 0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+]
+_ROT = [[0, 36, 3, 41, 18], [1, 44, 10, 45, 2], [62, 6, 43, 15, 61], [28, 55, 25, 21, 56], [27, 20, 39, 8, 14]]
+_M = (1 << 64) - 1
+
+
+def _rol(x, n):
+    return ((x << n) | (x >> (64 - n))) & _M if n else x
+
+
+def _f(a):
+    for rc in _RC:
+        c = [a[x][0] ^ a[x][1] ^ a[x][2] ^ a[x][3] ^ a[x][4] for x in range(5)]
+        d = [c[(x - 1) % 5] ^ _rol(c[(x + 1) % 5], 1) for x in range(5)]
+        a = [[a[x][y] ^ d[x] for y in range(5)] for x in range(5)]
+        b = [[0] * 5 for _ in range(5)]
+        for x in range(5):
+            for y in range(5):
+                b[y][(2 * x + 3 * y) % 5] = _rol(a[x][y], _ROT[x][y])
+        a = [[b[x][y] ^ ((~b[(x + 1) % 5][y]) & b[(x + 2) % 5][y]) for y in range(5)] for x in range(5)]
+        a[0][0] ^= rc
+    return a
+
+
+def keccak256(data: bytes) -> bytes:
+    rate = 136
+    p = bytearray(data) + b"\x01" + b"\x00" * ((rate - (len(data) + 1) % rate) % rate)
+    p[-1] |= 0x80
+    a = [[0] * 5 for _ in range(5)]
+    for off in range(0, len(p), rate):
+        blk = p[off:off + rate]
+        for i in range(rate // 8):
+            a[i % 5][i // 5] ^= int.from_bytes(blk[8 * i:8 * i + 8], "little")
+        a = _f(a)
+    out = b"".join(a[i % 5][i // 5].to_bytes(8, "little") for i in range(4))
+    return out
+
 
 # Селекторы функций и topic0 (keccak256 подписей ILBPair / ILBFactory v2.2.0).
 SEL = {
@@ -62,6 +109,21 @@ SEL = {
     "getLBPairAtIndex": "7daf5d66",  # getLBPairAtIndex(uint256)
 }
 HOOKS_SET_TOPIC = "0x4d24d81a1a6e09c37497747b4c9d67d858ce80438b54df0fa361a24dc742d934"
+SIGS = {
+    "getFactory": "getFactory()", "getTokenX": "getTokenX()", "getTokenY": "getTokenY()",
+    "getBinStep": "getBinStep()", "getActiveId": "getActiveId()", "getBin": "getBin(uint24)",
+    "getNextNonEmptyBin": "getNextNonEmptyBin(bool,uint24)", "getStaticFeeParameters": "getStaticFeeParameters()",
+    "getVariableFeeParameters": "getVariableFeeParameters()", "getReserves": "getReserves()",
+    "getSwapOut": "getSwapOut(uint128,bool)", "implementation": "implementation()",
+    "getLBHooksParameters": "getLBHooksParameters()",
+    "getLBPairInformation": "getLBPairInformation(address,address,uint256)",
+    "getLBPairImplementation": "getLBPairImplementation()", "getNumberOfLBPairs": "getNumberOfLBPairs()",
+    "getLBPairAtIndex": "getLBPairAtIndex(uint256)",
+}
+for _k, _sig in SIGS.items():
+    assert keccak256(_sig.encode()).hex()[:8] == SEL[_k], _k
+assert "0x" + keccak256(b"HooksParametersSet(address,bytes32)").hex() == HOOKS_SET_TOPIC
+
 STATE = [
     "getFactory", "getTokenX", "getTokenY", "getBinStep", "getActiveId", "getStaticFeeParameters",
     "getVariableFeeParameters", "getReserves", "implementation", "getLBHooksParameters",
@@ -104,6 +166,26 @@ class Node:
         return {"data": data, "out": j["result"]}
 
 
+    def calls(self, items, block: str, size: int = 100):
+        """Пачка eth_call (JSON-RPC batch) частями по size: [(to, data)] → ответы как у call, по порядку."""
+        out = []
+        for off in range(0, len(items), size):
+            part = items[off:off + size]
+            body = []
+            for to, data in part:
+                self.n += 1
+                body.append({"jsonrpc": "2.0", "id": self.n, "method": "eth_call",
+                             "params": [{"to": to, "input": data}, block]})
+            r = self.s.post(self.url, json=body, timeout=120)
+            r.raise_for_status()
+            got = {j["id"]: j for j in r.json()}
+            for (to, data), req in zip(part, body):
+                j = got[req["id"]]
+                out.append({"data": data, "revert": json.dumps(j["error"], ensure_ascii=False)} if "error" in j
+                           else {"data": data, "out": j["result"]})
+        return out
+
+
 def u(hexs: str, i: int = 0) -> int:
     h = hexs[2:]
     return int(h[64 * i:64 * i + 64], 16)
@@ -122,7 +204,8 @@ def pool_record(node: Node, pool: str, factory: str, tag: str, divs, max_bins: i
     active = u(c["getActiveId"]["out"])
     rec["registry"] = node.call(factory, "0x" + SEL["getLBPairInformation"] + addr_word(x) + addr_word(y)
                                 + word(step), tag)
-    rec["storage"] = {str(i): node.rpc("eth_getStorageAt", [pool, hex(i), tag]) for i in range(9)}
+    rec["storage"] = {str(i): node.rpc("eth_getStorageAt", [pool, hex(i), tag])
+                      for i in list(range(9)) + [65545]}
     code = node.rpc("eth_getCode", [pool, tag])
     rec["code"] = code
     rec["code_sha256"] = hashlib.sha256(bytes.fromhex(code[2:])).hexdigest()
@@ -186,27 +269,25 @@ def main():
                  "getLBPairImplementation": node.call(factory, "0x" + SEL["getLBPairImplementation"], tag),
                  "getNumberOfLBPairs": node.call(factory, "0x" + SEL["getNumberOfLBPairs"], tag)}}
     total = u(probe["factory_calls"]["getNumberOfLBPairs"]["out"])
-    chosen = [p.lower() for p in a.pool]
-    for i in range(total - 1, max(total - 1 - a.scan, -1), -1):
-        if len(chosen) >= len(a.pool) + a.pools:
-            break
-        r = node.call(factory, "0x" + SEL["getLBPairAtIndex"] + word(i), tag)
-        if "out" not in r:
-            continue
-        p = "0x" + r["out"][-40:]
-        res = node.call(p, "0x" + SEL["getReserves"], tag)
-        if "out" in res and u(res["out"], 0) > 0 and u(res["out"], 1) > 0 and p not in chosen:
-            chosen.append(p)
-    probe["pools"] = []
-    for p in chosen:
-        print(f"пул {p}", file=sys.stderr)
-        probe["pools"].append(pool_record(node, p, factory, tag, divs, a.max_bins))
+
+    # Все пулы фабрики (ревью 446, С4): адрес, implementation(), getLBHooksParameters(), getReserves — уникальный набор
+    # реализаций и крючков всей фабрики (для dex.lb_implementations и dex.lb_hooks_*).
+    idx = node.calls([(factory, "0x" + SEL["getLBPairAtIndex"] + word(i)) for i in range(total)], tag)
+    every = ["0x" + r["out"][-40:] for r in idx if "out" in r]
+    per = node.calls([(p, "0x" + SEL[n]) for p in every for n in ("implementation", "getLBHooksParameters",
+                                                                   "getReserves")], tag)
+    implementations, hooked, reserves = {}, {}, {}
+    for k, p in enumerate(every):
+        imp, hp, res = per[3 * k], per[3 * k + 1], per[3 * k + 2]
+        key = ("0x" + imp["out"][-40:]) if "out" in imp else "откат: " + imp.get("revert", "")
+        implementations.setdefault(key, []).append(p)
+        if "out" in hp and int(hp["out"], 16) != 0:
+            hooked[p] = hp["out"]
+        if "out" in res:
+            reserves[p] = (u(res["out"], 0), u(res["out"], 1))
+    probe["implementations"] = {k: {"pools": len(v), "sample": v[:5]} for k, v in implementations.items()}
 
     logs = {"block": b, "pool_logs": [], "hooks_set": []}
-    frm = max(b - a.log_blocks, 0)
-    if chosen:
-        logs["pool_logs"] = node.rpc("eth_getLogs", [{"address": chosen, "fromBlock": hex(frm), "toBlock": tag}])
-    logs["pool_logs_from"] = frm
     hi, searched = b, 0
     while len(logs["hooks_set"]) < a.rare and hi > 0 and searched < a.rare_blocks:
         lo = max(hi - a.chunk + 1, 0)
@@ -215,6 +296,49 @@ def main():
         searched += hi - lo + 1
         hi = lo - 1
     logs["hooks_set_searched_from"] = hi + 1
+
+    # Крючки: из слов пулов и из логов HooksParametersSet — адрес, флаги, keccak256 кода на блоке B.
+    words = dict(hooked)
+    for l in logs["hooks_set"]:
+        words.setdefault(l["address"].lower() + "@log" + l["blockNumber"], l["data"][:66])
+    hooks = {}
+    for src, w in words.items():
+        v = int(w, 16)
+        h = "0x" + format(v & ((1 << 160) - 1), "040x")
+        e = hooks.setdefault(h, {"flags_bits_160_169": [], "pools": []})
+        e["flags_bits_160_169"].append(format((v >> 160) & 0x3FF, "010b"))
+        e["pools"].append(src)
+    for h, e in hooks.items():
+        if int(h, 16) == 0:
+            continue
+        code = node.rpc("eth_getCode", [h, tag])
+        e["code_keccak256"] = "0x" + keccak256(bytes.fromhex(code[2:])).hex()
+        e["code_len"] = (len(code) - 2) // 2
+    probe["hooks"] = hooks
+
+    # Выборка для подробной записи: свои (--pool), пулы с крючком и пулы из логов HooksParametersSet, затем пулы с
+    # резервами обеих сторон с конца фабрики (--pools штук).
+    chosen = [p.lower() for p in a.pool]
+    extra = list(hooked) + [l["address"].lower() for l in logs["hooks_set"]]
+    for p in extra:
+        if p not in chosen:
+            chosen.append(p)
+    want = len(chosen) + a.pools
+    for p in reversed(every[-a.scan:] if a.scan else every):
+        if len(chosen) >= want:
+            break
+        rx, ry = reserves.get(p, (0, 0))
+        if rx > 0 and ry > 0 and p not in chosen:
+            chosen.append(p)
+    probe["pools"] = []
+    for p in chosen:
+        print(f"пул {p}", file=sys.stderr)
+        probe["pools"].append(pool_record(node, p, factory, tag, divs, a.max_bins))
+
+    frm = max(b - a.log_blocks, 0)
+    if chosen:
+        logs["pool_logs"] = node.rpc("eth_getLogs", [{"address": chosen, "fromBlock": hex(frm), "toBlock": tag}])
+    logs["pool_logs_from"] = frm
 
     day = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     out = a.out or os.path.join("tests", "data", f"arbitrum_lb_v22_{day}")
@@ -234,6 +358,10 @@ def main():
         f"- фабрика {factory}: getNumberOfLBPairs = {total}, getLBPairImplementation = "
         f"{probe['factory_calls']['getLBPairImplementation'].get('out', 'откат')};",
         f"- пулов: {len(probe['pools'])} — " + ", ".join(p["pool"] for p in probe["pools"]) + ";",
+        f"- реализации пулов фабрики (implementation(), все {len(every)} пулов): "
+        + "; ".join(f"{k} — {v['pools']} пулов" for k, v in probe["implementations"].items()) + ";",
+        f"- крючки (слова пулов и логи HooksParametersSet): " + (", ".join(
+            f"{h} (keccak256 кода {e.get('code_keccak256', '—')})" for h, e in probe["hooks"].items()) or "нет") + ";",
         f"- logs.json: логи пулов с блока {frm} до {b} ({len(logs['pool_logs'])} шт.), HooksParametersSet фабрики — "
         f"{len(logs['hooks_set'])} шт. (поиск с блока {logs['hooks_set_searched_from']});",
         "",

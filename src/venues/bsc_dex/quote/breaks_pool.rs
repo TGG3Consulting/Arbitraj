@@ -99,8 +99,9 @@ pub fn pool(e: &Entry, coin: Address, sell: bool, max: U256, n: u32) -> Vec<U256
             _ => Vec::new(),
         },
         (PoolState::LbBin(d), PoolKind::LbBin) => match e.bins.as_ref() {
-            // X — token0 записи, если x_is_token0 (pool_quote.rs ветка LbBin).
-            Some(b) => bins(
+            // X — token0 записи, если x_is_token0 (pool_quote.rs ветка LbBin). Решение 446 (ревью С1): обмен через пул
+            // исключён (swap_blocked) — точек нет.
+            Some(b) if d.swap_blocked.is_none() => bins(
                 b,
                 d.active_id,
                 d.bin_step,
@@ -110,7 +111,7 @@ pub fn pool(e: &Entry, coin: Address, sell: bool, max: U256, n: u32) -> Vec<U256
                 max,
                 n,
             ),
-            None => Vec::new(),
+            _ => Vec::new(),
         },
         (PoolState::OraclePmm(d), PoolKind::OraclePmm) => {
             let points = if zfo == d.base_is_token0 {

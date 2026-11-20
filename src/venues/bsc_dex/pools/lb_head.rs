@@ -28,7 +28,7 @@
 //! неперечитанными бинами события (вывод из неактивного бина — лишняя ликвидность в памяти, «равны» на голове её не
 //! видит). Ревью слияния «357 × 339» (Б1): голова не возвращает достоверность и тому, у кого сняла её сама, — такой
 //! пул per_block_lb.rs читает целиком (settle_head.rs needs_full); недостоверная запись ядру не отправляется.
-//! Кто вызывает: pools/per_block_lb.rs (calls, decode, same, renewed, at_synced, put).
+//! Кто вызывает: pools/per_block_lb.rs (calls, decode, same, renewed, at_synced, put) — lb_v21 и lb_v22 (решение 446).
 //! От чего зависит: load_lb.rs (calls, decode, time_call, decode_time), load.rs (renewed, Loaded), abi_lb.rs (getBin),
 //! node/call.rs, node/multicall.rs, load_batch.rs, load_smardex.rs (block_secs), listen_log.rs, registry.rs,
 //! reload.rs (put_new — задача t160, dex.per_block_skip_same).
@@ -82,7 +82,11 @@ pub fn decode(a: &[Bytes], mem: &LbBinData, ts: u64) -> Result<(LbBinData, (u128
     if a.len() != PER_POOL {
         return Err(format!("ответов {} из {PER_POOL}", a.len()));
     }
-    let d = load_lb::decode(&a[..load_lb::PER_POOL], mem.x_is_token0, mem.bin_step, ts)?;
+    let mut d = load_lb::decode(&a[..load_lb::PER_POOL], mem.x_is_token0, mem.bin_step, ts)?;
+    // Решение 446 (ревью): крючки LB 2.2 голова не читает — их меняет только фабрика с событием HooksParametersSet
+    // (events_lb22.rs → полное чтение); слово крючков и причина исключения обмена — из памяти.
+    d.hooks_parameters = mem.hooks_parameters;
+    d.swap_blocked = mem.swap_blocked.clone();
     let b = P::getBinCall::abi_decode_returns(&a[load_lb::PER_POOL])
         .map_err(|e| format!("getBin: {e}"))?;
     Ok((d, (b.binReserveX, b.binReserveY)))

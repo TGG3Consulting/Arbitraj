@@ -171,16 +171,17 @@ pub async fn state(
     }
     // Liquidity Book V2.1 (решение 290): вид ядра LbBin, пул — отдельный контракт; состояние, время блока и полоса бинов
     // (load_lb.rs).
-    // Решение 446: Liquidity Book V2.2 — то же чтение и до него проверка крючков пула на том же блоке (lb_hooks.rs):
-    // крючок обмена не из dex.lb_hooks_allowed — пул не читается (недостоверен с причиной).
+    // Решение 446 (ревью С1, С3): Liquidity Book V2.2 — то же чтение и в той же пачке слово крючков (lb_hooks.rs load);
+    // недопущенный крючок обмена — не ошибка чтения: состояние пишется, обмен через пул исключён с причиной.
     if matches!(f.proto, Proto::LbV21 | Proto::LbV22) {
         let PoolRef::Contract(a) = reference else {
             return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул LB не того вида", f.title)));
         };
-        if f.proto == Proto::LbV22 {
-            super::lb_hooks::check(ctx, f, *a, &tag).await?;
-        }
-        let (state, bins) = load_lb::load(ctx, tokens, *a, pair, usdt, block).await?;
+        let (state, bins) = if f.proto == Proto::LbV22 {
+            super::lb_hooks::load(ctx, f, tokens, *a, pair, usdt, block).await?
+        } else {
+            load_lb::load(ctx, tokens, *a, pair, usdt, block).await?
+        };
         return Ok(Loaded { state, ticks: None, bins: Some(bins), fee_pips: None });
     }
     // SmarDex (решение 288): вид ядра Fictive, пара — отдельный контракт; состояние и время блока (load_smardex.rs).

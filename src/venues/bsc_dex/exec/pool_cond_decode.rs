@@ -2,7 +2,7 @@
 //! Что делает: ревью 438 (C) — разбор прочитанных слов слотов условия пулов по раскладке контракта и сверка с
 //! состоянием того же пула на том же блоке (quote/cycle_legs.rs fresh_at): V2 — reserve0/1; Uniswap V3, PancakeSwap V3,
 //! Slipstream, Uniswap V4 — sqrtPriceX96, tick, liquidity; Kyber Elastic — sqrtP, currentTick, baseL; LB 2.1 —
-//! activeId. Что делать при расхождении — exec/pool_cond_check.rs.
+//! activeId (LB 2.2 — ещё _hooksParameters целым словом, ревью 446). Что делать при расхождении — exec/pool_cond_check.rs.
 //!
 //! Раскладка в слове (правило Solidity: первое поле слота — в младших битах, docs.soliditylang.org «Layout of State
 //! Variables in Storage»): V2 слот 8 — reserve0 [0,112), reserve1 [112,224) (UniswapV2Pair.sol:22-24); V3-подобные
@@ -107,7 +107,14 @@ fn fields(p: Proto, st: &PoolState, w: &[U256]) -> Result<Vec<Field>, String> {
             ("currentTick", bits(w0, 184, 24), tick24(*tick)),
             ("baseL", bits(w1, 0, 128), U256::from(*base_l)),
         ],
-        PoolState::LbBin(d) => vec![("activeId", bits(w0, 232, 24), U256::from(d.active_id))],
+        PoolState::LbBin(d) => {
+            let mut v = vec![("activeId", bits(w0, 232, 24), U256::from(d.active_id))];
+            // Ревью 446: LB 2.2 — третье слово — _hooksParameters (слот 65545), сверка с прочитанным getLBHooksParameters.
+            if let (Some(hp), Some(w2)) = (d.hooks_parameters, w.get(2)) {
+                v.push(("hooksParameters", *w2, U256::from_be_bytes(hp)));
+            }
+            v
+        }
         _ => return Err(MISMATCH.into()),
     })
 }

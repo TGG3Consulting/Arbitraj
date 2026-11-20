@@ -5,7 +5,8 @@
 //! load_smardex::block_secs), затем полоса бинов (load_lb_bins.rs). Собирает PoolState::LbBin. Пачка состояния без бинов
 //! (calls / decode) — и для перечитывания всех пулов вида каждым блоком (per_block_lb.rs): изменчивая часть комиссии
 //! зависит от времени блока без событий пула.
-//! Кто вызывает: pools/load.rs (ветка Proto::LbV21), pools/per_block_lb.rs (calls, decode).
+//! Кто вызывает: pools/load.rs (ветка Proto::LbV21), pools/lb_hooks.rs (load_with — LB 2.2, решение 446),
+//! pools/lb_head.rs (calls, decode — голова per_block_lb.rs).
 //! От чего зависит: ctx.rs, node/call.rs, node/multicall.rs, abi_lb.rs, abi_smardex.rs (IMulticall3Time),
 //! load_smardex.rs (block_secs), load_lb_bins.rs, load_bin.rs (Depth), tokens.rs.
 //! Настройки: dex.multicall3, dex.bin_depth_usd [bsc_dex].
@@ -91,6 +92,8 @@ pub fn decode(
         id_reference: v.idReference.to(),
         time_of_last_update: v.timeOfLastUpdate.to(),
         block_ts,
+        hooks_parameters: None,
+        swap_blocked: None,
     })
 }
 
@@ -104,6 +107,23 @@ pub async fn load(
     usdt: Address,
     block: u64,
 ) -> GatewayResult<(PoolState, BinMap)> {
+    let (d, bins, _) = load_with(ctx, tokens, pool, pair, usdt, block, &[]).await?;
+    Ok((PoolState::LbBin(Box::new(d)), bins))
+}
+
+/// Как load, но ещё вызовы `extra` в ТОЙ ЖЕ пачке на том же блоке (решение 446, ревью С3: getLBHooksParameters пула
+/// LB 2.2 — lb_hooks.rs). Возвращает: состояние, полосу бинов и ответы extra по порядку (откат — Err с текстом: это
+/// ответ, решает вызывающий). Ошибки: как у load.
+#[allow(clippy::too_many_arguments)]
+pub async fn load_with(
+    ctx: &Ctx,
+    tokens: &Tokens,
+    pool: Address,
+    pair: (Address, Address),
+    usdt: Address,
+    block: u64,
+    extra: &[(Address, Bytes)],
+) -> GatewayResult<(LbBinData, BinMap, Vec<Result<Bytes, String>>)> {
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("LB {pool}: {what}"));
     let mut all = calls(pool);
     all.push((pool, Bytes::from(P::getTokenXCall {}.abi_encode())));
@@ -112,11 +132,14 @@ pub async fn load(
     if let Some(m) = mc {
         all.push(time_call(m));
     }
+    let own = all.len();
+    all.extend_from_slice(extra);
     let tag = call::block_tag(block);
-    let got = call::try_many(ctx, &all, &tag).await?;
+    let mut got = call::try_many(ctx, &all, &tag).await?;
     if got.len() != all.len() {
         return Err(bad(format!("ответов {} из {}", got.len(), all.len())));
     }
+    let rest = got.split_off(own);
     let ok: Vec<Bytes> = got
         .into_iter()
         .enumerate()
@@ -142,5 +165,5 @@ pub async fn load(
         None
     };
     let bins = load_lb_bins::band(ctx, pool, d.active_id, step, depth.as_ref(), &tag).await?;
-    Ok((PoolState::LbBin(Box::new(d)), bins))
+    Ok((d, bins, rest))
 }

@@ -4,7 +4,8 @@
 //! amountOut, fee): остаток входа больше 0 — swap пула на такую сумму откатился бы (LBPair__OutOfLiquidity), выхода нет.
 //! Направление — по порядку X/Y пула из прочитанного состояния (x_is_token0). Вынесено из quoter_calls.rs (предел
 //! размера файла).
-//! Кто вызывает: quote/quoter_calls.rs (request, decode).
+//! Кто вызывает: quote/quoter_calls.rs (request, decode) — lb_v21 и lb_v22 (решение 446: getSwapOut тот же,
+//! lfj-gg/joe-v2@v2.2.0 src/LBPair.sol L434-L478).
 //! От чего зависит: pools/abi_lb.rs, pools/registry.rs, ctx.rs.
 //! Настройки: нет (адрес — сам пул).
 //!

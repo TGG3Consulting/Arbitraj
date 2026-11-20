@@ -51,7 +51,7 @@ pub fn swap_out(
     swap_for_y: bool,
     amount: u128,
 ) -> Option<LbOut> {
-    run(d, bins, now, swap_for_y, amount, false)
+    run(d, bins, now, swap_for_y, amount, Cap::Off)
 }
 
 /// Обмен на точный вход в пуле Liquidity Book V2.2 (решение 446; lfj-gg/joe-v2@v2.2.0 src/LBPair.sol getSwapOut
@@ -64,18 +64,42 @@ pub fn swap_out_v22(
     swap_for_y: bool,
     amount: u128,
 ) -> Option<LbOut> {
-    run(d, bins, now, swap_for_y, amount, true)
+    run(d, bins, now, swap_for_y, amount, Cap::Revert)
 }
 
-/// Цикл getSwapOut (общий для V2.1 и V2.2). cap — проверка ликвидности бина V2.2 (lb_cap::check) после getAmounts.
+/// Глубина пула LB 2.2 (ревью 446, Н2; quote/depth_band.rs): как swap_out_v22, но бин, где V2.2 откатил бы обмен по
+/// ликвидности, — конец доступной ликвидности (итог до него, complete = false), а не «расчёт невозможен».
+pub fn depth_v22(
+    d: &LbBinData,
+    bins: &BinMap,
+    now: u64,
+    swap_for_y: bool,
+    amount: u128,
+) -> Option<LbOut> {
+    run(d, bins, now, swap_for_y, amount, Cap::Stop)
+}
+
+/// Проверка ликвидности бина V2.2 (lb_cap::check) после getAmounts: нет (V2.1), откат (котировка), конец (глубина).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Cap {
+    Off,
+    Revert,
+    Stop,
+}
+
+/// Цикл getSwapOut (общий для V2.1 и V2.2). Обмен через пул исключён адаптером (LbBinData.swap_blocked, решение 446) —
+/// None: котировки нет.
 fn run(
     d: &LbBinData,
     bins: &BinMap,
     now: u64,
     swap_for_y: bool,
     amount: u128,
-    cap: bool,
+    cap: Cap,
 ) -> Option<LbOut> {
+    if d.swap_blocked.is_some() {
+        return None;
+    }
     let mut v: Volatility = lb_fee::references(d, now)?;
     let mut id = d.active_id;
     let (mut left, mut out, mut fee) = (amount, 0u128, 0u128);
@@ -95,8 +119,16 @@ fn run(
             let total = lb_fee::total_fee(d, v.acc)?;
             let (used, got, f, price) =
                 amounts(id, d.bin_step, reserve_out, total, swap_for_y, left)?;
-            if cap {
-                lb_cap::check((rx, ry), price, swap_for_y, used, got)?;
+            if cap != Cap::Off && lb_cap::check((rx, ry), price, swap_for_y, used, got).is_none() {
+                if cap == Cap::Revert {
+                    return None;
+                }
+                return Some(LbOut {
+                    in_left: left,
+                    out,
+                    fee,
+                    complete: false,
+                });
             }
             left -= used;
             out = out.checked_add(got)?;

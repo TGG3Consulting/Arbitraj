@@ -4,10 +4,11 @@
 //! Записи пока нет — тесты на данных помечены #[ignore]; после записи метка снимается.
 //! 1. Наша математика (load_lb::decode → math/lb_swap.rs swap_out_v22) на записанном состоянии и времени блока даёт ТОТ
 //!    ЖЕ ответ, что getSwapOut пула (остаток входа, выход, комиссия); откат getSwapOut — у нас None.
-//! 2. Проверка пула: первый и второй проход V2.1 (verify_lb) и третий проход V2.2 (verify_lb22: implementation(),
-//!    крючки) по записанным ответам; записанная calldata = ABI кода бота (селекторы скрипта сверены).
-//! 3. Условие пулов (exec/pool_cond.rs, слоты 3 и 4): слово 3 — _parameters (активный бин в битах 232..255 =
-//!    getActiveId), слово 4 — _reserves (младшие 128 бит = reserveX, старшие = reserveY getReserves).
+//! 2. Проверка пула: первый и второй проход V2.1 (verify_lb) и третий проход V2.2 (verify_lb22: implementation()),
+//!    решение по крючкам (lb_hooks::decide) по записанным ответам; записанная calldata = ABI кода бота (селекторы скрипта сверены).
+//! 3. Условие пулов (exec/pool_cond.rs, слоты 3, 4, 65545): слово 3 — _parameters (активный бин в битах 232..255 =
+//!    getActiveId), слово 4 — _reserves (младшие 128 бит = reserveX, старшие = reserveY getReserves), слово 65545 —
+//!    _hooksParameters (= getLBHooksParameters).
 //! 4. События: Swap пулов разбирает events_lb (бин = активный после цикла), HooksParametersSet — topic0 abi_lb22.
 //!
 //! Без записи (не данные — факты кода): вид lb_v22 (LbBin, шаг LB) и topic0 событий V2.2.
@@ -176,26 +177,28 @@ fn verify_and_recorded_calldata() {
         let found =
             verify_lb::decide(&cand, (pool, factory), f, &answer(&p["registry"])).expect("реестр");
         assert_eq!(found.bin_step, Some(u32::from(f.2)));
-        // Третий проход: реализация пула в списке — пул берётся (если крючок обмена допущен); не в списке — отказ.
-        let third = [answer(&c["implementation"]), answer(&c["getLBHooksParameters"])];
+        // Третий проход: реализация пула в списке — пул берётся; не в списке — отказ.
+        let third = [answer(&c["implementation"])];
         let imp_out = out(p, "implementation");
         let imp = ILBPair22::implementationCall::abi_decode_returns(&imp_out).unwrap();
+        assert!(verify_lb22::third_pass(&third, &[imp]).is_ok());
+        assert!(verify_lb22::third_pass(&third, &[]).is_err());
+        // Крючки (ревью 446, С1): без флага обмена — обмен разрешён без списка; с флагом — только адрес из списка
+        // (дальше — хеш кода, lb_hooks::code_ok по записи probe["hooks"]).
         let hooks_out = out(p, "getLBHooksParameters");
         let hp = ILBPair22::getLBHooksParametersCall::abi_decode_returns(&hooks_out).unwrap();
         let hook = lb_hooks::hooks_address(hp);
-        assert!(verify_lb22::third_pass(&third, &[imp], Some(&[hook][..])).is_ok());
-        assert!(verify_lb22::third_pass(&third, &[], Some(&[hook][..])).is_err());
-        // Без списка крючков: пул без флага обмена берётся, с флагом — отказ (то же, что lb_hooks::decide).
-        assert_eq!(
-            verify_lb22::third_pass(&third, &[imp], None).is_ok(),
-            lb_hooks::decide(hp, None).is_ok()
-        );
+        match lb_hooks::decide(hp, None) {
+            Ok(None) => {}
+            Ok(Some(_)) => panic!("без списка крючок обмена не допускается"),
+            Err(_) => assert_eq!(lb_hooks::decide(hp, Some(&[hook][..])), Ok(Some(hook))),
+        }
     }
 }
 
 #[test]
 #[ignore = "нет записи: tools/arbitrum_record/lb_v22.py"]
-fn pool_cond_slots_3_and_4() {
+fn pool_cond_slots_3_4_65545() {
     let probe = json("probe.json");
     for p in pools(&probe) {
         let w = |i: &str| U256::from_str(p["storage"][i].as_str().unwrap()).unwrap();
@@ -206,6 +209,10 @@ fn pool_cond_slots_3_and_4() {
         let mask = (U256::from(1u8) << 128usize) - U256::from(1u8);
         assert_eq!(w("4") & mask, U256::from(r.reserveX), "{}", p["pool"]);
         assert_eq!(w("4") >> 128usize, U256::from(r.reserveY), "{}", p["pool"]);
+        // Ревью 446 (С2): слот 65545 — _hooksParameters = getLBHooksParameters.
+        let hooks_out = out(p, "getLBHooksParameters");
+        let hp = ILBPair22::getLBHooksParametersCall::abi_decode_returns(&hooks_out).unwrap();
+        assert_eq!(w("65545"), U256::from_be_bytes(hp.0), "{}", p["pool"]);
     }
 }
 

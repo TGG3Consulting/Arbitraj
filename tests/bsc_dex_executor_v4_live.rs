@@ -11,6 +11,7 @@
 //!    («не проверен»), сеть не задана — закрыто.
 //! 3. Виды 22 / 24 / 1 / 0 (правило не судит): в (б) получено = quoter_out_after_a; quoter_out (б) — квотер на H до (а)
 //!    (другое состояние, не сравнивается), у LB v2.0 (24) он откатился TreeMath__ErrorDepthSearch (null).
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::exec::executor::{code, deploy_gate, live_proof, live_record, live_rule},
 //! pools::exec_kind, serde_json.

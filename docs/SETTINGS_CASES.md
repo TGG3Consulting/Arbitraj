@@ -40,13 +40,14 @@
 или фильтр. Что будет без значения — в записи ключа («Если не задана»). Не включены отметки, которые пишет само ядро
 (coin.entry_blocked_venues, coin.entry_blocked_note, coin.exit_tax_seen_pct).
 
-Всего: 98.
+Всего: 99.
 
 | Ключ | Как влияет | Если не задана (коротко) |
 | --- | --- | --- |
 | `cex_cex.untaxed_ok` | фильтр: открывает биржа ↔ биржа без замера налога (core/transfer_tax.rs) | необязательная: не задана — такого направления нет, причина «налог перевода не измерен» видна на «Монетах» |
 | `check.probe_usdt` | сумма пробы налогов и крючков — фильтр монет и пулов (check/taxes.rs, check/hook_points.rs) | без .optional(): ошибка «не задана»: проба налогов монеты — ошибка «не задана» … |
 | `dex.balancer_math` | расчёт: формула пулов Balancer V2 фабрик ключа — v1 или v2 (math/balancer_math.rs) | необязательная: не задана — v1, как раньше |
+| `dex.balancer_pool` | расчёт: вид пулов фабрики ключа Balancer V2 — composable stable, meta-stable, stable phantom, LBP, investment, managed, linear (pools/balancer_pool_type.rs, math/balancer_v2_more.rs) | необязательная: не задана — весовые / стейблсвап, как раньше |
 | `dex.balancer_stable_factory` | какие пулы Balancer берутся в расчёт (pools/verify_balancer.rs) | необязательная: Не задана — стейблсвап-пулы DEX не берутся (весовые — берутся) |
 | `dex.cl_tick_spacings` | какие пулы Slipstream находятся по фабрике (pools/factory_calls.rs) | необязательная: Не задана — Slipstream этой DEX по фабрике не ищется |
 | `dex.curve_ng_versions` | какие пулы Curve NG допускаются (pools/verify_curve_ng.rs) | без .optional(): ошибка «не задана»: Не задана или пуста — DEX не подключена |
@@ -153,7 +154,7 @@
 venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручению техлида, в том числе ключи этих групп от 31.10.2026
 (cf5073e7, первый коммит каталога). Ячейки «Что ставить» и «Если не задана» здесь укорочены («…») — полный текст в записи.
 
-Всего записей: 360.
+Всего записей: 361.
 
 | Ключ | Задача, решение | Что ставить | Если не задана | Статус |
 | --- | --- | --- | --- | --- |
@@ -175,6 +176,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `delist.st_block` | t26, р. 226 | `нет` — Тигран: метку ST торгуем — «на супер волатильных монетах и появляются нормальные спреды». Делистинг … | необязательная: Не задано или нет — ST торгуется (Тигран: «на супер волатильных монетах и появляются нормальные … | в релизе 141619bc |
 | `dex.algebra_off_map_reread` | t147, р. 320 | bsc_dex: «да» после приёмки решения 320 (до приёмки — не задавать: поведение как раньше); bsc_dex: см. раздел … | необязательная: не задана — как раньше: Algebra перечитывается только по Mint/Burn | в релизе 141619bc |
 | `dex.balancer_math` | t226, р. 450 | совета нет, решает Тигран (Arbitrum — по таблице docs/notes/arbitrum/dex-settings-arbitrum.md §2.11) | необязательная: не задана — v1 | ещё не в релизе (ветка t226/arb-dex-code-a) |
+| `dex.balancer_pool` | t243, р. 473 | совета нет, решает Тигран (Arbitrum — по таблице docs/notes/arbitrum/dex-settings-arbitrum.md §2.11, ключ на фабрику) | необязательная: не задана — весовые / стейблсвап, как раньше | ещё не в релизе (ветка t243/arb-balancer-v2-more) |
 | `dex.balancer_stable_factory` | t120, р. 289 | совета нет, решает Тигран | необязательная: Не задана — стейблсвап-пулы DEX не берутся (весовые — берутся) | в релизе 141619bc |
 | `dex.bin_reread_left_pct` | t154, р. 332 | после приёмки решения 332 — 50 у lb_v21; у pancakeswap_infinity_bin — НЕ задавать, пока нет записи пула … | необязательная: Не задана — как раньше: бины вне полосы не читаются до переподключения | в релизе 141619bc |
 | `dex.block_read_parallel_max` | t153, р. 330 | `2` после выкладки t153 (проверка механизма, число не из замера), дальше — по замеру; если в журнале появятся … | необязательная: Не задана — как раньше, по одному | в релизе 141619bc |
@@ -758,6 +760,18 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** да — формула обмена пулов Balancer V2 ключа (math/balancer_math.rs, math/balancer_stable.rs).
 - **Связанные ключи:** dex.factory, dex.balancer_stable_factory, dex.vault, dex.sub_dex.
 - **Статус:** ещё не в релизе (ветка t226/arb-dex-code-a).
+
+### `dex.balancer_pool`
+
+- **Задача / решение:** t243 (T450-03…07), решение 473.
+- **Появилась:** 2026-11-20, ветка t243/arb-balancer-v2-more.
+- **Кейс:** Balancer V2 на Arbitrum: под id GeckoTerminal balancer_arbitrum кроме весовых и стейблсвап-пулов — пулы фабрик composable stable v1–v6 (BPT среди токенов, курсы rate providers с кешем), meta-stable 20210727 (priceRateCache), stable phantom 20211208, LBP 20210721 / 20211202 (веса меняются по времени, swapEnabled), investment 20210907 (комиссии управляющего вычитаются из балансов), managed v1 / v2 (комиссия от суммы × множитель, пределы цены BPT), linear (главный / обёрнутый токен, цели, виртуальный выпуск BPT). Их обмен по исходникам build-info balancer-deployments@b55dc2b8 считается иначе, чем у весового / стейблсвап-пула; без вида такие пулы не проходят проверку фабрикой ключа.
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (ключ вида balancer_v2, по ключу на фабрику — дочерние ключи dex.sub_dex); каталог src/settings/catalog/dex.rs (dex.balancer_pool).
+- **Что ставить:** совета нет, решает Тигран; по исходникам — вид фабрики ключа из таблицы docs/notes/arbitrum/dex-settings-arbitrum.md §2.11 (composable_stable, stable_phantom, meta_stable, lbp, investment, managed, linear_v1, linear). У composable_stable и meta_stable с курсами нужна dex.multicall3 (время блока для кеша курсов).
+- **Если не задана:** необязательная; по коду (pools/balancer_pool_type.rs of): не задана (NotConfigured) — None: весовые пулы dex.factory и стейблсвап dex.balancer_stable_factory, как до решения; значение не из списка или прочая ошибка чтения — ошибка NotConfigured «dex.balancer_pool», пул не читается (pools/load_balancer_fixed.rs fixed), кандидат справочника — отказ с причиной (pools/verify_balancer.rs plan).
+- **Влияет на торговлю:** да — какие пулы берутся (проверка фабрикой), чтение состояния и формула обмена (math/balancer_v2_more.rs, math/balancer_linear.rs, math/balancer_math.rs).
+- **Связанные ключи:** dex.factory, dex.vault, dex.sub_dex, dex.multicall3, dex.balancer_math, dex.balancer_stable_factory.
+- **Статус:** ещё не в релизе (ветка t243/arb-balancer-v2-more).
 
 ### `dex.balancer_stable_factory`
 

@@ -4,6 +4,8 @@
 //! Балансы пула меняет хранилище (Vault) своими событиями от СВОЕГО адреса — подписка по адресу пула их не видит, поэтому
 //! вид ещё перечитывается каждым блоком (pools/per_block.rs). Событий ликвидности у самого пула нет (вход и выход
 //! ликвидности — PoolBalanceChanged хранилища).
+//! Решение 473: и события пулов других фабрик (кеш курсов, поставщики, веса по времени, swapEnabled, комиссия по
+//! времени, пределы цены BPT, токены managed, цели linear — abi_balancer_more.rs topics) → перечитать пул.
 //! Кто вызывает: pools/events.rs.
 //! От чего зависит: abi_balancer.rs (topic0 и ссылки на исходник), events.rs, registry.rs.
 //! Настройки: нет.
@@ -15,7 +17,8 @@ use super::abi_balancer;
 use super::events::Applied;
 use super::registry::Entry;
 
-/// topic0 событий пула (abi_balancer.rs; BasePool.sol L88, ITemporarilyPausable.sol L24, StablePool.sol L47-L48).
+/// topic0 событий пула (abi_balancer.rs; BasePool.sol L88, ITemporarilyPausable.sol L24, StablePool.sol L47-L48;
+/// решение 473 — abi_balancer_more.rs).
 /// Ошибок нет.
 pub fn topics() -> Vec<B256> {
     abi_balancer::topics()

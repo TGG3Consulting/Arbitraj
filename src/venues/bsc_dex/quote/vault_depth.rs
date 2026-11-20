@@ -74,6 +74,12 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     let cap = match &d.curve {
         crate::core::types::VaultCurve::Weighted { .. }
         | crate::core::types::VaultCurve::WeightedV2 { .. } => weighted_cap(d, i, bal_in)?,
+        // Решение 473: managed — весовой (30 % баланса входа); стейблсвап с курсами и линейный — потолок стейблсвапа
+        // (у LinearMath предела входа нет — сверх баланса выхода формула откатывается).
+        crate::core::types::VaultCurve::V2(c) => match **c {
+            crate::core::types::pool_vault::V2Curve::Managed { .. } => weighted_cap(d, i, bal_in)?,
+            _ => bal_in.checked_mul(U256::from(STABLE_CAP_BALANCES))?,
+        },
         // Решение 452: кривая V3 (Gyro, ReClamm, LBP с фиксированной ценой) — тот же потолок, что у стейблсвапа: сверх
         // ёмкости пула формула откатывается (котировки нет — «не в полосе»).
         crate::core::types::VaultCurve::Stable { .. }

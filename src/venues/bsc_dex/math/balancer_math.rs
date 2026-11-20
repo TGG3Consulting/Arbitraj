@@ -4,6 +4,8 @@
 //! (WeightedMath) или стейблсвап (math/balancer_stable.rs) — и обратное масштабирование с округлением пула.
 //! Кто вызывает: quote/pool_quote.rs (ветка VaultPool), quote/depth_band.rs; тесты на записанных ответах цепи.
 //! Решение 441: состояние с частью V3 (VaultPoolData.v3 — пул Balancer V3) считает math/balancer_v3.rs.
+//! Решение 473: кривую VaultCurve::V2 (composable stable, meta-stable, stable phantom, managed, linear) считает
+//! math/balancer_v2_more.rs.
 //! От чего зависит: core/types (VaultPoolData), math/balancer_log_exp.rs, math/balancer_stable.rs, alloy-primitives.
 //! Настройки: нет (состояние — pools/load_balancer.rs).
 //!
@@ -145,6 +147,10 @@ pub fn amount_out(d: &VaultPoolData, i: usize, j: usize, amount_in: U256) -> Opt
     if let Some(v3) = &d.v3 {
         return super::balancer_v3::amount_out(d, v3, i, j, amount_in);
     }
+    // Решение 473: пулы Balancer V2 других фабрик (math/balancer_v2_more.rs).
+    if let VaultCurve::V2(c) = &d.curve {
+        return super::balancer_v2_more::amount_out(d, c, i, j, amount_in);
+    }
     let (s_in, s_out) = (*d.scaling.get(i)?, *d.scaling.get(j)?);
     if d.paused || i == j || s_out.is_zero() {
         return None;
@@ -163,8 +169,8 @@ pub fn amount_out(d: &VaultPoolData, i: usize, j: usize, amount_in: U256) -> Opt
             let v2 = matches!(d.curve, VaultCurve::StableV2 { .. });
             balancer_stable::out_given_in(*amp, &upscaled(d)?, i, j, a, v2)?
         }
-        // Решение 452: кривая V3 — только у пула с частью V3 (ветка выше).
-        VaultCurve::V3 => return None,
+        // Решение 452: кривая V3 — только у пула с частью V3 (ветка выше); решение 473: V2 — ветка выше.
+        VaultCurve::V3 | VaultCurve::V2(_) => return None,
     };
     Some(out / s_out)
 }
@@ -175,6 +181,10 @@ pub fn amount_in(d: &VaultPoolData, i: usize, j: usize, amount_out: U256) -> Opt
     // Решение 441: пул хранилища Balancer V3 (math/balancer_v3.rs).
     if let Some(v3) = &d.v3 {
         return super::balancer_v3::amount_in(d, v3, i, j, amount_out);
+    }
+    // Решение 473: пулы Balancer V2 других фабрик (math/balancer_v2_more.rs).
+    if let VaultCurve::V2(c) = &d.curve {
+        return super::balancer_v2_more::amount_in(d, c, i, j, amount_out);
     }
     let (s_in, s_out) = (*d.scaling.get(i)?, *d.scaling.get(j)?);
     if d.paused || i == j || s_in.is_zero() {
@@ -193,7 +203,7 @@ pub fn amount_in(d: &VaultPoolData, i: usize, j: usize, amount_out: U256) -> Opt
             let v2 = matches!(d.curve, VaultCurve::StableV2 { .. });
             balancer_stable::in_given_out(*amp, &upscaled(d)?, i, j, a, v2)?
         }
-        VaultCurve::V3 => return None,
+        VaultCurve::V3 | VaultCurve::V2(_) => return None,
     };
     // _downscaleUp — Math.divUp (не FixedPoint): ceil(raw / множитель).
     let down = if raw.is_zero() {

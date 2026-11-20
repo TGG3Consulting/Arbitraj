@@ -10,7 +10,10 @@
 //! Кто вызывает: pools/load.rs (ветка Proto::BalancerV2), pools/per_block_balancer.rs (calls / decode — все пулы вида за
 //! блок одной пачкой).
 //! От чего зависит: ctx.rs, node/call.rs, abi_balancer.rs, load_balancer_fixed.rs (неизменяемое у пула).
-//! Настройки: dex.vault, dex.factory, dex.balancer_stable_factory, dex.balancer_math (решение 450) [DEX]; dex.multicall3 [bsc_dex].
+//! Решение 473: пул вида dex.balancer_pool (composable stable, meta-stable, stable phantom, LBP, investment, managed,
+//! linear) — пачка и разбор load_balancer_more*.rs (calls / decode — ветка Fixed.more).
+//! Настройки: dex.vault, dex.factory, dex.balancer_stable_factory, dex.balancer_math (решение 450), dex.balancer_pool
+//! (решение 473) [DEX]; dex.multicall3 [bsc_dex].
 //!
 //! Источник — шапка abi_balancer.rs; множитель 10^(18 − decimals) — BasePool.sol (весовой) L474-L481, у стейбла
 //! L510-L517 (см. math/balancer_math.rs); точность A — _AMP_PRECISION = 1e3 (StableMath.sol L31, отдаёт
@@ -64,6 +67,10 @@ pub async fn read(
 /// Вызовы пачки чтения пула (PER_POOL штук, порядок — как разбирает decode). Пауза хранилища — getPausedState Vault
 /// (Vault.swap — whenNotPaused, Swaps.sol L66; TemporarilyPausable.sol L70-L83). Ошибок нет.
 pub fn calls(vault: Address, pool: Address, fx: &Fixed) -> Vec<(Address, Bytes)> {
+    // Решение 473: вид dex.balancer_pool — своя пачка (load_balancer_more.rs; первые PER_POOL вызовов — те же).
+    if let Some(m) = &fx.more {
+        return super::load_balancer_more::calls(vault, pool, fx.id, m);
+    }
     let curve: Bytes = if fx.weighted {
         P::getNormalizedWeightsCall {}.abi_encode().into()
     } else {
@@ -89,6 +96,10 @@ pub fn decode(
     got: &[Result<Bytes, String>],
     pair: (Address, Address),
 ) -> Result<PoolState, String> {
+    // Решение 473: вид dex.balancer_pool — свой разбор (load_balancer_more_curve.rs).
+    if let Some(m) = &fx.more {
+        return super::load_balancer_more_curve::decode(fx, m, got, pair);
+    }
     let ok = |i: usize| match got.get(i) {
         Some(Ok(b)) => Ok(b),
         Some(Err(r)) => Err(format!("вызов {i} откатился: {r}")),
@@ -160,7 +171,8 @@ pub fn state(
     let n = tokens.len();
     let weights_ok = match &curve {
         VaultCurve::Weighted { weights } | VaultCurve::WeightedV2 { weights } => weights.len() == n,
-        VaultCurve::Stable { .. } | VaultCurve::StableV2 { .. } => true,
+        // Решение 473: кривые других фабрик — длины сверяет их разбор (load_balancer_more_curve.rs).
+        VaultCurve::Stable { .. } | VaultCurve::StableV2 { .. } | VaultCurve::V2(_) => true,
         // Решение 452: кривая пула Balancer V3 — у пула V2 не бывает.
         VaultCurve::V3 => false,
     };

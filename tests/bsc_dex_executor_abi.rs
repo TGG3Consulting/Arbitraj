@@ -335,9 +335,12 @@ fn stable_bnb_contract_rules_present() {
     ] {
         assert!(src.contains(must), "нет в контракте: {must}");
     }
-    // bnbFrom обнуляется после каждого вызова, где BNB ждётся (три установки — три обнуления; третья — _unwrapAll
-    // executeNative, решение 272).
-    assert_eq!(src.matches("bnbFrom = address(0);").count(), 3);
+    // bnbFrom обнуляется после каждого вызова, где BNB ждётся: сколько установок — столько обнулений (stable BNB —
+    // две, _unwrapAll executeNative — одна, решение 272; шаг FLUID — две, решение 440: вход и выход в нативной монете).
+    let resets = src.matches("bnbFrom = address(0);").count();
+    let sets = src.matches("bnbFrom = ").count() - resets;
+    assert_eq!(resets, 5);
+    assert_eq!(sets, resets);
     let abi = abi();
     assert_eq!(
         abi.receive.as_ref().map(|r| r.state_mutability),

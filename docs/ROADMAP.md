@@ -28,8 +28,11 @@
 ## Техдолг
 - Решение 472 (`wc -l`): сверх ориентира 200 — math/stableswap_v1.rs 214 (+ pair_d), pools/load_crypto.rs 226 (+ вызовы
   tweak), quote/pool_quote.rs 633 (+ причина отказа tweak_price). Дробить: d_p_pair и Template — в stableswap_tpl.rs;
-  decode load_crypto.rs — в load_crypto_decode.rs. Модель tweak_price crypto v1 — T472-03; сверка модели симуляцией
-  exchange — T472-02.
+  decode load_crypto.rs — в load_crypto_decode.rs. Модель tweak_price crypto v1 — T472-03 (блокеры: not_adjusted без
+  геттера, ветка _claim_admin_fees); сверка моделей симуляцией exchange — запись сделана (T472-02, curve_sim.py), ждёт
+  прогона узла. Доделка 472: шаг исполнителя для Curve с нативным ETH — T472-08 (вид шага 28, пересборка v5);
+  исходники ren / wstETH / EURS-2Crv основного реестра Arbitrum — T472-10; tests/arbitrum_curve_plain_live.rs 230 строк
+  (сверх ориентира — помощники записи в одном тесте); quote/pool_quote.rs вырос (+ save_p).
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

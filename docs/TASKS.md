@@ -343,9 +343,22 @@
     с подменой баланса и разрешения (слоты — поиском по кандидатам mapping Solidity / Vyper / ERC-7201 одним eth_call,
     как exec_v4_live.py решения 459), одним пакетом на блоке состояния; тест сверяет «модель: откат ↔ пул откатил».
     Та же симуляция — в curve_plain.py (tests/arbitrum_curve_plain_live.rs model_revert_equals_pool_revert).
-  - T472-03 Модель tweak_price crypto v1 (фабрика crypto v1 CurveCryptoSwap2ETH.vy 7ed1011 — halfpow L541, newton_D
-    L549, L607; tricrypto 2021 CryptoSwap.vy) — НЕ сделана: другой код (halfpow, без K0_prev), нужны свои геттеры
-    состояния. До неё котировка v1 откаты tweak_price не учитывает (как было).
+  - T472-03 Модель tweak_price crypto v1 — **не сделана (доделка 472: разбор по исходникам, блокеры — факты)**.
+    CurveCryptoSwap2ETH.vy (curve-factory-crypto 7ed1011, Vyper 0.3.1): tweak_price L531-L640, вызов из _exchange
+    L643-L740 с xp[j] = баланс ПОСЛЕ выхода с комиссией (не y из newton_y, как у NG) и p_i (цена сделки при dx, dy >
+    10^5; иначе last_prices через newton_y — свои assert'ы); откаты: newton_D (D_unadjusted), newton_y (p_i = 0),
+    geometric_mean(xp, True) (сортировка — иная начальная точка, чем у geometric_mean(x, False) math/crypto_v1_2.rs),
+    `raise "Loss"` при virtual_price < old и future_A_gamma_time == 0 (L579; у NG — `>`), проверяемое
+    `virtual_price * 2 - 10**18` (при not_adjusted = False). Блокеры: (1) `not_adjusted: bool` (L153) — без геттера:
+    ветка подстройки зависит от него; читать — eth_getStorageAt по номеру слота раскладки Vyper 0.3.1 (считается по
+    порядку объявлений; сверить на записи соседними публичными слотами) — не сделано; (2) ветка без подстройки при
+    not_adjusted зовёт _claim_admin_fees (L475-L513): внешние Factory.fee_receiver() и token.mint_relative (L494,
+    L497), «gulp» балансов по balanceOf / self.balance, newton_D по ним, деление на (vprice − fees) — модель требует
+    ещё чтений (xcp_profit_a, admin_fee, fee_receiver, токен LP); (3) totalSupply — у отдельного токена LP (token()).
+    Tricrypto 2021 CryptoSwap.vy (curve-crypto-contract d7d04cd, Vyper 0.3.1) — то же (not_adjusted L158 без геттера,
+    tweak_price L434, raise «Loss» L522, mint_relative L416). Без модели котировка v1 откаты tweak_price не учитывает
+    (как было); симуляция exchange в записи curve_crypto.py (exchange_sim, T472-02) покажет факт откатов v1 —
+    по ней решать (вопрос Тиграну: делать ли модель с чтением слота not_adjusted и ветки _claim_admin_fees).
   - T472-04 Вопрос Тиграну (время блока, как вопрос 1 решения 453): оракул модели — price_oracle() на блоке чтения;
     tweak_price считает его на блоке обмена (то же скользящее среднее с бо́льшим временем). Влияет только на ветку
     подстройки price_scale (её assert'ы — newton_D и доли x/D).

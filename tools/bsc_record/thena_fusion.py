@@ -18,10 +18,17 @@
   дважды: на блоке и с blockOverrides.time = время последней точки оракула (обмен не пересчитывает комиссию);
   sourcify.json — ответы Sourcify (сеть 56) по деплоеру, фабрике, квотеру и первому пулу (после всех блоков);
   geckoterminal_pools.json — список пулов GeckoTerminal; README.md — сводка фактов и SHA-256 файлов.
+  Решение 462 (t237, повторная запись): GeckoTerminal id «thena-fusion» (запись 20.11: «thena-fusion-bsc» не тот),
+  страницы --gecko-pages (по 20 пулов), сжатых слов --words (8) и сырых --raw-words (1) в каждую сторону; данные
+  оракула для динамической комиссии (_getNewFee — первый своп в блоке): dataStorageOperator() пула, feeConfig()
+  оператора, timepoints(index − 2 … index + 1) пула, у оператора от имени пула (eth_call from = пул, onlyPool) —
+  getFee / getAverages (uint32 time, int24 tick, uint16 index, uint128 liquidity) и getTimepoints(time, [0, WINDOW])
+  при time = время блока + 0, 1, 3 с; котировки ещё и с blockOverrides.time = время блока + 1 и + 3 (at_plus_1,
+  at_plus_3) — комиссия, которую получит своп следующего блока.
   В конце — zip папки, путь печатается последней строкой.
 Адреса (официальная таблица контрактов THENA — docs.thena.fi/thena/official-links «List of smart contracts»):
   AlgebraFactory 0x306F06C147f064A010530292A1EB6737c3e378e4, Quoter 0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA.
-  Id DEX GeckoTerminal — thena-fusion-bsc (tests/bsc_dex_algebra_family.rs).
+  Id DEX GeckoTerminal — thena-fusion (ответ GeckoTerminal записи 20.11, tests/data/bsc_thena_fusion_2026-11-20).
 Запуск (из корня репозитория): python3 tools/bsc_record/thena_fusion.py --rpc http://127.0.0.1:8545
 Кто вызывает: Тигран. От чего зависит: стандартная библиотека, tools/arbitrum_record/stdhttp.py, rec_rpc.py рядом.
 """
@@ -42,7 +49,11 @@ from rec_rpc import Node, addr, int24, word, words  # noqa: E402
 
 SIGS = ["poolDeployer()", "poolByPair(address,address)", "token0()", "token1()", "globalState()", "liquidity()",
         "tickSpacing()", "timepoints(uint256)", "tickTable(int16)", "ticks(int24)", "balanceOf(address)",
-        "quoteExactInputSingle(address,address,uint256,uint160)", "quoteExactIn(address,bool,uint256)"]
+        "quoteExactInputSingle(address,address,uint256,uint160)", "quoteExactIn(address,bool,uint256)",
+        "dataStorageOperator()", "feeConfig()", "getFee(uint32,int24,uint16,uint128)",
+        "getAverages(uint32,int24,uint16,uint128)", "getTimepoints(uint32,uint32[],int24,uint16,uint128)"]
+WINDOW = 86400  # DataStorage.WINDOW = 1 days (cryptoalgebra/AlgebraV1 libraries/DataStorage.sol)
+AHEAD = (0, 1, 3)  # время блока + секунды: время свопа следующего блока (оракул и комиссия)
 MAX_TICK = 887272
 
 
@@ -51,11 +62,13 @@ def args():
     a.add_argument("--rpc", required=True, help="HTTP JSON-RPC своего узла BSC")
     a.add_argument("--factory", default="0x306F06C147f064A010530292A1EB6737c3e378e4", help="AlgebraFactory THENA")
     a.add_argument("--quoter", default="0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA", help="Quoter THENA")
-    a.add_argument("--gecko-dex", default="thena-fusion-bsc", help="id DEX GeckoTerminal")
-    a.add_argument("--gecko-pools", type=int, default=8, help="сколько пулов взять с первой страницы GeckoTerminal")
+    a.add_argument("--gecko-dex", default="thena-fusion", help="id DEX GeckoTerminal")
+    a.add_argument("--gecko-pages", type=int, default=3, help="страниц GeckoTerminal (по 20 пулов)")
+    a.add_argument("--gecko-pools", type=int, default=60, help="сколько пулов взять из страниц GeckoTerminal")
     a.add_argument("--pool", action="append", default=[], help="адрес пула (дополнительно; можно несколько)")
     a.add_argument("--init-hash", action="append", default=[], help="POOL_INIT_CODE_HASH версии (несколько)")
-    a.add_argument("--words", type=int, default=2, help="слов tickTable в каждую сторону от слова тика")
+    a.add_argument("--words", type=int, default=8, help="СЖАТЫХ слов tickTable в каждую сторону от слова тика")
+    a.add_argument("--raw-words", type=int, default=1, help="СЫРЫХ слов tickTable в каждую сторону (для факта)")
     a.add_argument("--bps", type=int, action="append", default=[], help="сумма = баланс входа × bps / 10000")
     a.add_argument("--batch", type=int, default=100, help="вызовов в одной пачке JSON-RPC")
     a.add_argument("--vq-runtime", default=os.path.join(ROOT, "contracts", "out", "VirtualQuoter.bin-runtime"))
@@ -84,17 +97,43 @@ def pool_record(n, s, o, p, vq_addr, vq_code):
     tick, tp_index = int24(gs[1]), int(gs[3], 16)  # globalState AlgebraV1: price, tick, fee, timepointIndex, …
     ts = int24(words(rec["tickSpacing()"]["result"])[0])
     rec.update(token0=t0, token1=t1, tick=tick, tick_spacing=ts)
-    raw_w = range((tick >> 8) - o.words, (tick >> 8) + o.words + 1)
+    raw_w = range((tick >> 8) - o.raw_words, (tick >> 8) + o.raw_words + 1)
     cmp_w = range(((tick // ts) >> 8) - o.words, ((tick // ts) >> 8) + o.words + 1) if ts > 0 else range(0)
+    liq = int(words(rec["liquidity()"]["result"])[0], 16)
     second = [call(p, s["timepoints(uint256)"] + word(tp_index)),
               call(o.factory, s["poolByPair(address,address)"] + word(t0) + word(t1)),
               call(t0, s["balanceOf(address)"] + word(p)), call(t1, s["balanceOf(address)"] + word(p))]
     second += [call(p, s["tickTable(int16)"] + word(w)) for w in list(raw_w) + list(cmp_w)]
+    # Оракул динамической комиссии (решение 462): оператор пула, его feeConfig, точки оракула вокруг индекса.
+    second.append(call(p, s["dataStorageOperator()"]))
+    tps = [(tp_index + k) % 65536 for k in (-2, -1, 1)]
+    second += [call(p, s["timepoints(uint256)"] + word(i)) for i in tps]
     got = n.batch(second, o.batch)
+    k = 4 + len(raw_w) + len(cmp_w)
+    op_j = got[k]
+    rec["dataStorageOperator"] = op_j
+    rec["timepoints_around"] = {str(i): got[k + 1 + j] for j, i in enumerate(tps)}
+    head_ts = int(head["timestamp"], 16)
+    if "result" in op_j:
+        op = addr(words(op_j["result"])[0])
+        frm = lambda data: ("eth_call", [{"from": p, "to": op, "data": data}, tag])  # noqa: E731
+        args = lambda t: word(t) + word(tick) + word(tp_index) + word(liq)  # noqa: E731
+        oc = [("eth_call", [{"to": op, "data": s["feeConfig()"]}, tag])]
+        for d in AHEAD:
+            t = head_ts + d
+            oc.append(frm(s["getFee(uint32,int24,uint16,uint128)"] + args(t)))
+            oc.append(frm(s["getAverages(uint32,int24,uint16,uint128)"] + args(t)))
+            # getTimepoints(time, uint32[] secondsAgos = [0, WINDOW], tick, index, liquidity): массив — хвост ABI.
+            oc.append(frm(s["getTimepoints(uint32,uint32[],int24,uint16,uint128)"] + word(t) + word(5 * 32)
+                          + word(tick) + word(tp_index) + word(liq) + word(2) + word(0) + word(WINDOW)))
+        og = n.batch(oc, o.batch)
+        rec["oracle"] = {"operator": op, "feeConfig": og[0], "by_time": {
+            str(head_ts + d): {"getFee": og[1 + 3 * i], "getAverages": og[2 + 3 * i], "getTimepoints": og[3 + 3 * i]}
+            for i, d in enumerate(AHEAD)}}
     rec["timepoints"], rec["poolByPair"] = n.must(got[0], "timepoints"), got[1]
     bal = {t0: int(n.must(got[2], "balanceOf")["result"], 16), t1: int(n.must(got[3], "balanceOf")["result"], 16)}
     rec["balances"] = {t: hex(v) for t, v in bal.items()}
-    rows = got[4:]
+    rows = got[4:4 + len(raw_w) + len(cmp_w)]
     rec["tickTable"] = {str(w): rows[i] for i, w in enumerate(raw_w)}
     rec["tickTable_compressed"] = {str(w): rows[len(raw_w) + i] for i, w in enumerate(cmp_w)}
     keys = []  # (поле записи, тик)
@@ -115,7 +154,8 @@ def pool_record(n, s, o, p, vq_addr, vq_code):
             amt = bal[tin] * bps // 10000
             if amt == 0:
                 continue
-            for at, over in (("at_block", None), ("at_last_timepoint", {"time": hex(last_ts)})):
+            for at, over in (("at_block", None), ("at_last_timepoint", {"time": hex(last_ts)}),
+                             ("at_plus_1", {"time": hex(head_ts + 1)}), ("at_plus_3", {"time": hex(head_ts + 3)})):
                 vq = [{vq_addr: {"code": vq_code}}] + ([over] if over else [])
                 third.append(call(vq_addr, s["quoteExactIn(address,bool,uint256)"] + word(p) + word(int(zfo))
                                   + word(amt), *vq))
@@ -140,8 +180,14 @@ def main():
     o = args()
     n = Node(o.rpc)
     s = {k: n.sel(k) for k in SIGS}
-    u = f"https://api.geckoterminal.com/api/v2/networks/bsc/dexes/{o.gecko_dex}/pools?page=1"
-    g = requests.get(u, timeout=60, headers={"Accept": "application/json"}).json() if o.gecko_pools else {"data": []}
+    u = f"https://api.geckoterminal.com/api/v2/networks/bsc/dexes/{o.gecko_dex}/pools?page="
+    g = {"data": [], "pages": []}
+    for page in range(1, o.gecko_pages + 1 if o.gecko_pools else 1):
+        r = requests.get(u + str(page), timeout=60, headers={"Accept": "application/json"}).json()
+        g["pages"].append(r)
+        g["data"] += r.get("data", [])
+        if not r.get("data"):
+            break
     pools = [p.lower() for p in o.pool] + [d["attributes"]["address"].lower() for d in g["data"][:o.gecko_pools]]
     pools = list(dict.fromkeys(pools))
     if not pools:

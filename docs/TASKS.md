@@ -306,6 +306,16 @@
       !tradable; циклы — exec/cycle_gate.rs form). Смена на Row меняет котировку и глубину живых сделок BSC через THENA
       Fusion (выход был завышен, теперь не больше swap пула). Комментарии «V1/V1.9» → «V1.9» (swap_algebra.rs,
       families.rs:54, pool_quote.rs algebra_next). Доказательство на BSC — T461-06.
+    - T237-01 (t237, 20.11) **Повторная запись THENA Fusion.** Факт записи 20.11 (tests/data/bsc_thena_fusion_2026-11-20,
+      ветка BSC t236): битмап сжатый у всех 8 пулов, математика AlgebraV1 по сжатым строкам = Quoter THENA до wei в 63
+      из 64 случаев (64-й — за записанными словами); исправление — ветка t236/bsc-thena-fusion-v1 (решение 462 BSC).
+      Скрипт tools/bsc_record/thena_fusion.py обновлён: GeckoTerminal id `thena-fusion` (было `thena-fusion-bsc` —
+      GeckoTerminal его не знает), 3 страницы / до 60 пулов, сжатых слов ±8, сырых ±1, данные оракула для динамической
+      комиссии (dataStorageOperator, feeConfig, timepoints вокруг индекса, getFee / getAverages / getTimepoints от
+      имени пула на время блока + 0/1/3 с), котировки на время блока + 1 и + 3 с. Команда: `python3
+      tools/bsc_record/thena_fusion.py --rpc http://127.0.0.1:8545` (Windows — `py tools\bsc_record\thena_fusion.py
+      --rpc http://127.0.0.1:8545`) → zip прислать. Тесты в этой ветке (bsc_dex_algebra_family.rs id
+      `thena-fusion-bsc` — id области настроек в тесте, не GeckoTerminal) не менялись.
     - T461-06 **ВАЖНО, вопрос Тиграну + запись.** Факт Sourcify (сеть 56, полное совпадение runtime и creation,
       проверено 20.11 WebFetch): официальный AlgebraPool Deployer THENA 0xc89F69Baa3ff17a842AB2DE89E5Fc8a8e2cc7358
       (таблица контрактов THENA — docs.thena.fi/thena/official-links, «List of smart contracts»; там же AlgebraFactory

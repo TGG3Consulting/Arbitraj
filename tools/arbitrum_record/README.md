@@ -20,6 +20,10 @@
 пулов kyber_elastic_v1, fluid_t1, balancer_v3, algebra_dir_fee, ekubo). Приёмке v4 нужен eth_simulateV1 на узле —
 без него exec_v4_live.py выходит с причиной.
 
+Узел недоступен — сводка с причиной и zip всё равно пишутся (код выхода 1). Дата папок записи одна на весь запуск
+(ekubo.py и ekubo_more.py — в одну папку). Переводы строк contracts/out/ и tests/data/ git не меняет (.gitattributes,
+`-text`): SHA-256 кода исполнителя на Windows совпадает с ArbExecutor.sha256.
+
 Что запускается (адреса — `record_steps.py`, те же, что в шапках скриптов и ниже): sub_dex, kyber_elastic_v1, saddle,
 woofi, fluid_t1, balancer_v3, curve_crypto, camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo, ekubo_more,
 exec_v4_live.
@@ -47,7 +51,7 @@ exec_v4_live.
 | `curve_crypto_rpc.py`, `curve_crypto_pools.py` | 453 | модули `curve_crypto.py` (ревью 453, файлы ≤ ~200 строк): keccak256, ABI и JSON-RPC узла; чтение пулов (вызовы бота, лесенка get_dy, код, holdings, пулы фабрик) — запускать не нужно, их импортирует `curve_crypto.py` | — |
 | `ekubo_more.py` | 454 | Ekubo, дополнительная запись (после `ekubo.py`, та же папка tests/data/arbitrum_ekubo_<дата>/): PoolInitialized ядра, пулы с нативным ETH, пулы TWAMM, замер нагрузки подписки ядра | `tests/arbitrum_ekubo_more_live.rs` |
 | `record_all.py`, `record_steps.py` | 459 | одна команда: все скрипты ниже по очереди, сводка, zip | — |
-| `exec_v4_live.py` (+ `v4live_rpc.py`, `v4live_slots.py`, `v4live_mgr.py`, `v4live_old.py`, `v4live_cases.py`, `v4live_write.py`) | 400, 459 (T457-02) | приёмка исполнителя v4 на живых пулах: eth_simulateV1 с подменой кода (contracts/out/ArbExecutor.bin-runtime) на пустом адресе, (а) покупка / (б) продажа по видам 19 Uniswap V4 и 23 Balancer V3 (их судит правило 400; у 23 — и пулы с крючком, которые бот берёт: static / StableSurge / MEV Capture, по 2 на вид, `--bv3-per-hook`; вида нет — «нет пулов») и 22 Fluid, 24 LB v2.0, 1 Uniswap V3, 0 Uniswap V2 — tests/data/executor_v4_live_<дата>/ (README с SHA-256 кода и chainId — запись судит кошельки только своей сети, summary.json, hooks_reject.json, calls.json, slots.json, pools.json, raw_rpc.json) | правило — src/venues/bsc_dex/exec/executor/live_rule.rs (см. docs/TASKS.md T457-02) |
+| `exec_v4_live.py` (+ `v4live_rpc.py`, `v4live_slots.py`, `v4live_mgr.py`, `v4live_old.py`, `v4live_cases.py`, `v4live_write.py`) | 400, 459 (T457-02) | приёмка исполнителя v4 на живых пулах: eth_simulateV1 с подменой кода (contracts/out/ArbExecutor.bin-runtime) на пустом адресе, (а) покупка / (б) продажа по видам 19 Uniswap V4 и 23 Balancer V3 (их судит правило 400; у 23 — и пулы с крючком, которые бот берёт: static / StableSurge / MEV Capture, по 2 на вид, `--bv3-per-hook`; вида нет — «нет пулов») (у Balancer V3 квотер после (а) и продажа — две симуляции: Vault.quote состояние не откатывает) и 22 Fluid, 24 LB v2.0, 1 Uniswap V3, 0 Uniswap V2 — tests/data/executor_v4_live_<дата>/ (README с SHA-256 кода и chainId — запись судит кошельки только своей сети, summary.json, hooks_reject.json, calls.json, slots.json, pools.json, raw_rpc.json) | правило — src/venues/bsc_dex/exec/executor/live_rule.rs (см. docs/TASKS.md T457-02) |
 | `stdhttp.py` | 459 | HTTP стандартной библиотеки вместо пакета requests (все скрипты: `import stdhttp as requests`) | — |
 | `algebra_dir_fee.py` | 444 | Algebra V1.9 с направленными комиссиями (T433-F5; Camelot V3) — команда и хеши кода пула — раздел ниже | `tests/arb_dex_algebra_dir.rs` |
 

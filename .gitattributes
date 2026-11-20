@@ -1,0 +1,4 @@
+# Решение 459 (ревью t233, п. 2): артефакты сборки и записи — байт в байт, без преобразования переводов строк
+# (core.autocrlf=true на Windows иначе меняет LF на CRLF и SHA-256 bin-runtime перестаёт совпадать с ArbExecutor.sha256).
+contracts/out/** -text
+tests/data/** -text

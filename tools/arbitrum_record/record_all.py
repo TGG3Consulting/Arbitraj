@@ -105,6 +105,31 @@ def run(name, script, argv, logs, timeout):
             "why": why, "log": os.path.relpath(log, ROOT)}
 
 
+def finish(work, head, results, error=None):
+    """Сводка summary.json, zip (папки записей + рабочая папка) и итог в консоль; выход: 0 — всё прошло, 1 — иначе.
+    Принимает: рабочую папку, голову узла (или None), итоги скриптов, причину отказа запуска (или None)."""
+    with open(os.path.join(work, "summary.json"), "w", encoding="utf-8") as fh:
+        json.dump({"head": head, "error": error, "results": results}, fh, ensure_ascii=False, indent=1)
+    zpath = work + ".zip"
+    dirs = sorted({d for r in results for d in r["dirs"]})
+    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
+        for rel in dirs + [os.path.relpath(work, ROOT)]:
+            for base, _, files in os.walk(os.path.join(ROOT, rel)):
+                for f in files:
+                    full = os.path.join(base, f)
+                    z.write(full, os.path.relpath(full, ROOT))
+    ok = sum(r["ok"] for r in results)
+    say("")
+    if error:
+        say(f"Запуск остановлен: {error}")
+    say(f"Итог: прошло {ok} из {len(results)}.")
+    for r in results:
+        say(f"  {'ок  ' if r['ok'] else 'СБОЙ'} {r['name']}" + ("" if r["ok"] else f": {r['why']}"))
+    say("")
+    say(f"Архив для отправки: {zpath}")
+    sys.exit(0 if ok == len(results) and not error else 1)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Все записи своего узла Arbitrum одной командой (решение 459)")
     ap.add_argument("--rpc", required=True, help="HTTP JSON-RPC своего узла Arbitrum One, например http://127.0.0.1:8547")
@@ -118,7 +143,12 @@ def main():
     work = os.path.join(ROOT, f"arbitrum_record_{stamp}")
     logs = os.path.join(work, "logs")
     os.makedirs(logs, exist_ok=True)
-    head = int(Node(a.rpc).ok("eth_blockNumber", []), 16)
+    # Ревью t233, п. 7: дата папок записи — одна на весь запуск (ekubo.py и ekubo_more.py пишут в одну папку).
+    os.environ["ARB_RECORD_DATE"] = stamp[:10]
+    try:
+        head = int(Node(a.rpc).ok("eth_blockNumber", []), 16)
+    except Exception as e:  # noqa: BLE001 — ревью t233, п. 8: узел недоступен — сводка с причиной и zip, код 1
+        finish(work, None, [], f"узел {a.rpc} не ответил на eth_blockNumber: {type(e).__name__}: {str(e)[:300]}")
     say(f"Узел отвечает, голова {head}. Журналы: {logs}")
     want = lambda n: (not a.only or n in a.only) and n not in a.skip  # noqa: E731
     ek, ek_why = a.ekubo_from_block, None
@@ -138,24 +168,7 @@ def main():
         results.append(r)
         say(f"[{'ок' if r['ok'] else 'СБОЙ'}] {name} за {r['seconds']} с: "
             + (", ".join(r["dirs"]) or "папок нет") + ("" if r["ok"] else f" — {r['why']}"))
-    with open(os.path.join(work, "summary.json"), "w", encoding="utf-8") as fh:
-        json.dump({"head": head, "rpc_given": True, "results": results}, fh, ensure_ascii=False, indent=1)
-    zpath = work + ".zip"
-    dirs = sorted({d for r in results for d in r["dirs"]})
-    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
-        for rel in dirs + [os.path.relpath(work, ROOT)]:
-            for base, _, files in os.walk(os.path.join(ROOT, rel)):
-                for f in files:
-                    full = os.path.join(base, f)
-                    z.write(full, os.path.relpath(full, ROOT))
-    ok = sum(r["ok"] for r in results)
-    say("")
-    say(f"Итог: прошло {ok} из {len(results)}.")
-    for r in results:
-        say(f"  {'ок  ' if r['ok'] else 'СБОЙ'} {r['name']}" + ("" if r["ok"] else f": {r['why']}"))
-    say("")
-    say(f"Архив для отправки: {zpath}")
-    sys.exit(0 if ok == len(results) else 1)
+    finish(work, head, results)
 
 
 if __name__ == "__main__":

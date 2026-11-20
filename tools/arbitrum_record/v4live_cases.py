@@ -6,6 +6,8 @@
       на H (eth_call до симуляции, то же состояние), кредит Swap менеджера, x_left — balanceOf(X) по A и B после вызова;
   (б) case «b»: в ОДНОЙ симуляции: (а) заново, квотер B → A на выход (а) (quoter_out_after_a — то же состояние, что у
       продажи), продажа B → A, x_left; quoter_out — квотер продажи на H (до покупки; правило его не сравнивает).
+      У Balancer V3 квотер меняет состояние (ревью t233, блокер 1) — квотер после (а) и продажа — в двух симуляциях
+      поверх H, обе начинаются с той же (а) (см. case_ab).
   Ключи x_left — «usdt» (токен A, вход (а)) и «coin» (B) — имена формата записи 17.11 (live_row.rs), не монета USDT.
   Подбор суммы — по квотеру на H до симуляции: наибольшая сумма из ряда 10^(d+3) … 10^(d−6) (d — знаков A), у которой
   выход > 0 и не меньше (1 − --max-impact-pct/100)·10·выход(сумма/10) (пул держит сумму без большого сдвига цены).
@@ -60,15 +62,25 @@ def _bal_calls(w_addr, x, tin, tout):
 
 
 def _xleft(c1, c2):
+    """Остатки на X после вызова. Ревью t233, п. 5: если balanceOf(X) не ответил, x_left НЕ пишется (null) — у live_row.rs
+    это «остаток не записан»: пул (а) / (б) не доказан, без ложного «на исполнителе остались токены» (объект с null
+    разбирался бы как ненулевой остаток); причина — поле x_left_error строки и счёт в README записи. Возвращает:
+    (x_left или None, причина или None). Ошибок нет."""
     v1, v2 = uint_of(c1), uint_of(c2)
-    return {"usdt": str(v1) if v1 is not None else None, "coin": str(v2) if v2 is not None else None}
+    if v1 is None or v2 is None:
+        bad = [k for k, v, c in (("usdt", v1, c1), ("coin", v2, c2)) if v is None]
+        return None, "balanceOf(X) не ответил: " + ", ".join(f"{k} ({c.get('error') or c.get('returnData')})"
+                                                            for k, _, c in (("usdt", v1, c1), ("coin", v2, c2))
+                                                            if k in bad)
+    return {"usdt": str(v1), "coin": str(v2)}, None
 
 
 def _credit(p, logs, tout):
     return mgr.credit(p, logs, tout) if p["fam"] in ("v4", "bv3") else None
 
 
-def _row(case, p, tin, tout, amt, res, xl, qo, extra):
+def _row(case, p, tin, tout, amt, res, xlr, qo, extra):
+    xl, xerr = xlr
     got = int(res["returnData"], 16) if res["status"] and len(res["returnData"]) >= 66 else None
     cr = _credit(p, res["logs"], tout)
     d = dict(case=case, kind=p["kind"], pool_id=p["pool_id"], manager=p["manager"], pool_manager=p["pool_manager"],
@@ -81,6 +93,8 @@ def _row(case, p, tin, tout, amt, res, xl, qo, extra):
             d[k] = p[k]
     if got is not None and qo:
         d["diff_vs_quoter_pct"] = round(abs(got - qo) * 100 / qo, 6)
+    if xerr:
+        d["x_left_error"] = xerr
     d.update(extra)
     call = dict(case=case, pool_id=p["pool_id"], status=res["status"], returnData=res["returnData"],
                 gasUsed=res["gasUsed"], logs=res["logs"], revert=res["revert"], error=res["error"], x_left=xl)
@@ -106,17 +120,35 @@ def case_ab(node, tag, p, a, ctx, tin, tout, amt, qa):
     qs, qse = quote_at(node, tag, p, a, w_addr, tout, tin, m)
     qcall, qdec = quote_call(p, a, w_addr, tout, tin, m)
     sell = {"from": w_addr, "to": x, "input": enc_execute(tout, m, tin, 1, ctx["deadline"], [step(p, tout, tin)])}
-    cs2, err2 = node.simulate(tag, ov, [buy] + _bal_calls(w_addr, x, tin, tout) + [qcall, sell]
-                              + _bal_calls(w_addr, x, tin, tout))
-    if cs2 is None:
-        return rows, calls, f"eth_simulateV1 (б): {err2}"
-    ra2, qc, rb = parse_call(cs2[0]), cs2[3], parse_call(cs2[4])
+    bal = _bal_calls(w_addr, x, tin, tout)
+    if p["fam"] == "bv3":
+        # Ревью t233, блокер 1: квотер Balancer V3 состояние НЕ откатывает — Router.querySwapSingleTokenExactIn →
+        # Vault.quote (balancer-v3-monorepo@2b9ce4b1 pkg/vault/contracts/Router.sol L667-L692; VaultExtension.sol
+        # L850-L874: quote лишь пересылает вызов, откат — только у quoteAndRevert L876-L893; RouterHooks.sol L361-L371:
+        # querySwapHook → _swapHook — настоящий swap хранилища с записью балансов пула). В общей симуляции продажа шла бы
+        # по сдвинутому квотером пулу — поэтому квотер «после (а)» — своя симуляция [buy, квотер] поверх H, продажа —
+        # своя [buy, bal, bal, sell, bal, bal]. V4Quoter / QuoterV2 / резолвер Fluid / роутер LB отвечают через откат
+        # или view — у них одна симуляция, как в записи 17.11.
+        cq, errq = node.simulate(tag, ov, [buy, qcall])
+        if cq is None:
+            return rows, calls, f"eth_simulateV1 (б, квотер): {errq}"
+        qc = cq[1]
+        cs2, err2 = node.simulate(tag, ov, [buy] + bal + [sell] + bal)
+        if cs2 is None:
+            return rows, calls, f"eth_simulateV1 (б): {err2}"
+        ra2, rb, xb = parse_call(cs2[0]), parse_call(cs2[3]), _xleft(cs2[4], cs2[5])
+    else:
+        cs2, err2 = node.simulate(tag, ov, [buy] + bal + [qcall, sell] + bal)
+        if cs2 is None:
+            return rows, calls, f"eth_simulateV1 (б): {err2}"
+        ra2, qc, rb, xb = parse_call(cs2[0]), cs2[3], parse_call(cs2[4]), _xleft(cs2[5], cs2[6])
     rd = qc.get("returnData", "0x")
     q_after = qdec(rd) if qc.get("status") == "0x1" and len(rd) >= 66 else None
     extra = {"coin": tout, "quoter_out_after_a": str(q_after) if q_after else None, "quoter_err": qse,
              "a_rerun_got": str(int(ra2["returnData"], 16)) if ra2["status"] else None,
-             "a_rerun_same": ra2["returnData"] == ra["returnData"]}
-    d2, c2 = _row("b", p, tout, tin, m, rb, _xleft(cs2[5], cs2[6]), qs, extra)
+             "a_rerun_same": ra2["returnData"] == ra["returnData"],
+             "quoter_after_a_sim": "отдельная [buy, квотер]" if p["fam"] == "bv3" else "та же, перед продажей"}
+    d2, c2 = _row("b", p, tout, tin, m, rb, xb, qs, extra)
     if q_after and rb["status"]:
         d2["diff_vs_quoter_after_a_pct"] = round(abs(int(rb["returnData"], 16) - q_after) * 100 / q_after, 6)
     rows.append(d2)

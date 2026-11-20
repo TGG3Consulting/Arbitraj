@@ -166,7 +166,9 @@ def main():
     head = rpc.call("eth_getBlockByNumber", ["latest", False])
     b, tag, ts = int(head["number"], 16), head["number"], int(head["timestamp"], 16)
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    out = args.out or os.path.join(root, "tests", "data", "arbitrum_ekubo_" + datetime.date.today().isoformat())
+    # Решение 459 (ревью t233, п. 7): та же дата, что у ekubo.py этого запуска record_all.py (ARB_RECORD_DATE).
+    day = os.environ.get("ARB_RECORD_DATE") or datetime.date.today().isoformat()
+    out = args.out or os.path.join(root, "tests", "data", "arbitrum_ekubo_" + day)
     os.makedirs(out, exist_ok=True)
     twamms = [a.strip().lower() for a in args.twamm.split(",") if a.strip()]
     files = {"more_meta.json": {"block": b, "block_hex": tag, "timestamp": ts, "args": vars(args)}}

@@ -121,12 +121,14 @@ def main():
     node = Node(a.rpc)
     if int(node.ok("eth_chainId", []), 16) != 42161:
         fail("узел не Arbitrum One (chainId ≠ 42161)")
-    raw = open(a.runtime, "rb").read()
+    # Ревью t233, п. 2: SHA-256 — по тексту с переводами строк LF (как файл в репозитории; checkout с
+    # core.autocrlf=true на Windows дал бы CRLF — .gitattributes это запрещает, здесь — вторая защита).
+    raw = open(a.runtime, "rb").read().replace(b"\r\n", b"\n")
     sha = hashlib.sha256(raw).hexdigest()
     want = [ln.split()[0] for ln in open(a.sha_file, encoding="utf-8") if ln.strip().endswith("ArbExecutor.bin-runtime")]
     if want != [sha]:
         fail(f"SHA-256 {a.runtime} = {sha}, в {a.sha_file}: {want} — пересоберите contracts/build.sh")
-    code = raw.decode().strip()
+    code = "".join(raw.decode("ascii").split())  # hex без пробелов и переводов строк — в подмену state override
     code = code if code.startswith("0x") else "0x" + code
     head = int(node.ok("eth_blockNumber", []), 16)
     tag = hex(head)

@@ -204,6 +204,9 @@
       по --bv3-per-hook (2) пула на вид; вида нет — строка «нет пулов» с bv3_hook_kind в summary.json и «нет пула» в
       README записи. Пулы, которые бот не берёт (крючок до / после обмена, чужой крючок динамической комиссии, StableSurge
       у закрытого выпуска, пул не из фабрик списков), — pools.json skipped.
+      Ревью t233 (исправлено, DECISIONS 459): у вида 23 квотер «после (а)» и продажа — две симуляции (квотер Balancer V3
+      пишет балансы пула, Vault.quote не откатывает); x_left = null при неответе balanceOf(X) (пул не доказан, причина —
+      x_left_error); пул Balancer V3 с фабриками разных выпусков — skipped; SHA кода — по тексту с LF + .gitattributes.
     - T457-03 Развёртывание v4 в Arbitrum — Тигран (после T457-02).
   - T456-03 Записи своего узла Arbitrum (tools/arbitrum_record/README.md): sub_dex.py, kyber_elastic_v1.py, saddle.py,
     woofi.py, fluid_t1.py, balancer_v3.py, curve_crypto.py, camelot_v2.py, algebra_dir_fee.py, lb_v20.py, lb_v22.py,

@@ -101,17 +101,19 @@ def bv3_hook_kind(node, tag, pool, h, lists):
     computeDynamicSwapFee, 4 / 5 before / after swap, 10 адрес). Возвращает: (вид, None) или (None, почему бот пул не
     берёт). Ошибок-исключений нет, кроме сетевых."""
     hook = adr(h, 10)
-    release = None
+    # Ревью t233, п. 6: как balancer_v3_factories.rs release — опрашиваются ВСЕ фабрики; подтвердили фабрики разных
+    # выпусков (списков) — пул не берётся.
+    confirmed = []
     for name in BV3_LISTS:
         for f in lists.get(name, []):
             r, _ = node.call(f, "0x" + sel("isPoolFromFactory(address)") + ad(pool), tag)
-            if r and len(r) >= 66 and word(r, 0) == 1:
-                release = name
-                break
-        if release:
-            break
-    if release is None:
+            if r and len(r) >= 66 and word(r, 0) == 1 and name not in confirmed:
+                confirmed.append(name)
+    if not confirmed:
         return None, "пул не из фабрик списков dex.bv3_*_factories"
+    if len(confirmed) > 1:
+        return None, f"пул подтвердили фабрики разных выпусков ({', '.join(confirmed)}) — бот пул не берёт"
+    release = confirmed[0]
     if word(h, 4) or word(h, 5):
         return None, f"крючок {hook} до / после обмена — бот пул не берёт"
     if not word(h, 3):

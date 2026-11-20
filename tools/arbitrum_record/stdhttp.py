@@ -11,6 +11,7 @@
 """
 
 import http.client
+import socket
 import json as _json
 import urllib.error
 import urllib.parse
@@ -64,13 +65,24 @@ class Session:
             if conn is None:
                 conn = http.client.HTTPConnection(key[0], key[1], timeout=timeout)
                 self._conn[key] = conn
+            # Ревью t233, п. 3: таймаут — на каждый запрос (у открытого соединения — и у его сокета).
+            conn.timeout = timeout
+            if conn.sock is not None:
+                conn.sock.settimeout(timeout)
             try:
                 conn.request(method, path, body=body, headers=headers)
                 r = conn.getresponse()
                 data = r.read()
                 return Response(r.status, data, url)
-            except (http.client.HTTPException, ConnectionError, OSError):
-                # Узел закрыл простаивающее соединение — одно новое соединение, затем ошибка как есть.
+            except (socket.timeout, TimeoutError):
+                # Ревью t233, п. 4: таймаут чтения — без повтора, исключение сразу.
+                conn.close()
+                self._conn.pop(key, None)
+                raise
+            except (ConnectionError, http.client.RemoteDisconnected, http.client.CannotSendRequest,
+                    http.client.BadStatusLine):
+                # Узел закрыл простаивающее соединение (разрыв, BrokenPipe — подкласс ConnectionError) — одно новое
+                # соединение, затем ошибка как есть.
                 conn.close()
                 self._conn.pop(key, None)
                 if attempt:

@@ -29,8 +29,10 @@ def _counts(rows, kind):
     cred = [x for x in ok if x.get("got_eq_swap_credit") is True]
     zero = [x for x in r if isinstance(x.get("x_left"), dict) and set(x["x_left"].values()) == {"0"}]
     pools = {x["pool_id"] for x in r}
+    noxl = [x for x in r if x.get("x_left_error")]
     return (f"пулов {len(pools)}; вызовов (а)/(б) {len(r)}, прошли {len(ok)}, получено = квотер в том же состоянии "
-            f"{len(same)}, получено = кредит Swap {len(cred)}, на исполнителе 0 — {len(zero)}")
+            f"{len(same)}, получено = кредит Swap {len(cred)}, на исполнителе 0 — {len(zero)}, остаток не записан "
+            f"(balanceOf(X) не ответил, x_left_error) — {len(noxl)}")
 
 
 def write(out, d):

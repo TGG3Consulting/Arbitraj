@@ -188,7 +188,9 @@ def main():
     chain = rpc.call("eth_chainId", [])
     head = rpc.call("eth_getBlockByNumber", ["latest", False])
     b, tag = int(head["number"], 16), head["number"]
-    day = datetime.date.today().isoformat()
+    # Решение 459 (ревью t233, п. 7): дата папки — одна на запуск record_all.py (ARB_RECORD_DATE), иначе сегодня;
+    # ekubo_more.py пишет в ту же папку и берёт ту же дату.
+    day = os.environ.get("ARB_RECORD_DATE") or datetime.date.today().isoformat()
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = args.out or os.path.join(root, "tests", "data", "arbitrum_ekubo_" + day)
     os.makedirs(out, exist_ok=True)

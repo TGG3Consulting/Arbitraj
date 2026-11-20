@@ -34,6 +34,7 @@ pub mod abi_camelot;
 pub mod abi_aero_basic;
 pub mod aero_cl;
 pub mod aero_cl_head;
+pub mod aero_fee_seen;
 pub mod aero_first_fee;
 pub mod aero_mev;
 pub mod load_aero_basic;

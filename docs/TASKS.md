@@ -387,6 +387,10 @@
   - T470-05 **Запись сделана:** Metaquoter quoteExactInputSingleV3 / V2 в aero_more.py рядом с виртуальным квотером бота и
     getAmountOutWithTotalFee (тест metaquoter_equals_virtual_and_total_fee, #[ignore] до записи). В боте сверка — по-прежнему
     виртуальный квотер (dex.quoter_virtual); подключать ли Metaquoter квотером DEX — по итогам записи (решение Тиграна).
+  - T470-10 **Ревью t240 — СДЕЛАНО:** модули закреплены (dex.aero_fee_module, dex.aero_mev_module — задать по
+    docs/FIRST_RUN.md; адрес модуля крючка Slipstream V3 сверить записью aero.py: hook.mevTaxModule = clMevTaxModule
+    0xce01…45aB); свежая комиссия Slipstream V3 перед отправкой против котировки; чтение старого блока не перетирает
+    комиссию; доказательство памяти для Aero Slipstream включено; ArbOS 9 — сбор чаевых.
   - T470-08 Запись: `python3 tools/arbitrum_record/aero.py --rpc <узел>` (или record_all.py) → снять #[ignore] в
     tests/arbitrum_aero_live.rs и tests/arbitrum_aero_first_fee_live.rs; задать dex.cl_hook_ahead_s.
   - T470-09 **Нужна сборка исполнителя v5** (T470-06): contracts/build.sh → out/ как v5, out/ v4 заморозить в out/v4/,

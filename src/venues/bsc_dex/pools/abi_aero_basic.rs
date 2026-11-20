@@ -18,7 +18,7 @@
 //!   (StablePool.sol L70);
 //! - фабрика (V3/src/factories/PoolFactory.sol): getPool(tokenA, tokenB) L159-L161 (реестр в обе стороны L334-L335),
 //!   isPool L164, isPaused L49 (пул откатывает swap на паузе — Pool.sol L144), getBaseFee(pool, caller, a0, a1, r0, r1)
-//!   L348-L371, mevTaxModule L75; событие PoolCreated(address indexed token0, address indexed token1, address pool,
+//!   L348-L371, mevTaxModule L75, feeModule L58 (ревью t240: закреплён dex.aero_fee_module); событие PoolCreated(address indexed token0, address indexed token1, address pool,
 //!   uint256) — IPoolFactory.sol L53 (без stable, в отличие от Velodrome);
 //! - модуль MEV-налога (V3/src/fees/PriorityFeeMevTaxModule.sol): priorityFeeMultiplier() L72 (uint64),
 //!   minThreshold() L75 (uint96, wei).
@@ -39,6 +39,7 @@ alloy::sol! {
         function isPaused() external view returns (bool);
         function getBaseFee(address pool, address caller, uint256 amount0In, uint256 amount1In, uint256 reserve0, uint256 reserve1) external view returns (uint256);
         function mevTaxModule() external view returns (address);
+        function feeModule() external view returns (address);
     }
 
     interface IAeroMevTaxModule {

@@ -5,7 +5,7 @@
 //! Математика обмена та же, что у Solidly (math/v2.rs, math/swap_solidly.rs): сверено построчно — см. ниже.
 //! Кто вызывает: pools/load.rs (ветка Proto::AeroBasic), pools/solidly_refresh.rs.
 //! От чего зависит: ctx.rs, node/call.rs, pools/{abi_aero_basic, aero_mev, load_solidly}.rs, math/solidly_math.rs.
-//! Настройки: dex.factory [DEX]; через aero_mev.rs — dex.gas_mode, send.tip_mode, send.priority_fee_gwei,
+//! Настройки: dex.factory, dex.aero_fee_module, dex.aero_mev_module [DEX]; через aero_mev.rs — dex.gas_mode, send.tip_mode, send.priority_fee_gwei,
 //! send.tip_cap_gwei [площадка DEX].
 //!
 //! Источник — Dromos-Labs/metadex-public 1.1.0 (79c8d5b6), V3/src:
@@ -35,9 +35,12 @@ use super::aero_mev;
 use super::families::Family;
 use super::load_solidly::fee_u32;
 
+/// Настройка закреплённого модуля комиссии фабрики Basic (по DEX).
+pub const FEE_MODULE: &str = "dex.aero_fee_module";
+
 /// Состояние пула Aero Basic на блоке. Принимает: окружение, вид (id DEX — для dex.factory), адрес пула, тег блока.
 /// Ошибки: не задана dex.factory; узел; ответ не по ABI; POOL_TYPE не 'V2_STABLE'/'V2_VOLATILE'; комиссия ≥ 100%;
-/// MEV-налог возможен (aero_mev.rs).
+/// MEV-налог возможен (aero_mev.rs); NotApplicable — модуль комиссии или MEV-налога фабрики не закреплённый.
 pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayResult<PoolState> {
     let factory = ctx.dex_addr("dex.factory", f.id)?;
     let meta = call::view(ctx, pool, &P::metadataCall {}, tag).await?;
@@ -63,6 +66,18 @@ pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayRes
     let fee = call::view(ctx, factory, &ask, tag).await?;
     let paused = call::view(ctx, factory, &F::isPausedCall {}, tag).await?;
     let module = call::view(ctx, factory, &F::mevTaxModuleCall {}, tag).await?;
+    // Ревью t240: модули комиссии и MEV-налога фабрики закреплены (dex.aero_fee_module, dex.aero_mev_module): формулы
+    // сверены только для их кода (CustomFeeModule — комиссия по адресу пула; PriorityFeeMevTaxModule). Другой — пул не
+    // торгуется (NotApplicable с причиной).
+    let fee_module = call::view(ctx, factory, &F::feeModuleCall {}, tag).await?;
+    let want = ctx.dex_addr(FEE_MODULE, f.id)?;
+    if fee_module != want {
+        return Err(ctx.err(
+            ErrorCode::NotApplicable,
+            format!("{}: модуль комиссии фабрики {fee_module} ≠ {FEE_MODULE} {want}", f.id),
+        ));
+    }
+    aero_mev::pinned(ctx, f.id, module, "фабрики")?;
     // Решение 470 (T470-02): MEV-налог в комиссии по формуле модуля (aero_mev.rs; PoolFactory.getFee L291-L305).
     let base = fee_u32(ctx, fee)?;
     let value = base + aero_mev::basic_bps(aero_mev::tax(ctx, module, tag).await?, base);

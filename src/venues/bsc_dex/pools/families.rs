@@ -767,7 +767,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::CamelotV2 => list.push("dex.factory"),
         // Решение 470: Aero Basic — фабрика своей кривой (реестр getPool, PoolCreated, getBaseFee, isPaused,
         // mevTaxModule). Квотер сверки — сам пул getAmountOut.
-        Proto::AeroBasic => list.push("dex.factory"),
+        // Ревью t240: и закреплённые модули комиссии и MEV-налога фабрики (load_aero_basic.rs, aero_mev.rs pinned).
+        Proto::AeroBasic => {
+            list.extend(["dex.factory", "dex.aero_fee_module", "dex.aero_mev_module"])
+        }
         // Liquidity Book v2.0 (решение 445): фабрика (factory() пула и реестр getLBPairInformation) и квотер сверки —
         // LBRouter v2.0 getSwapOut(пара, вход, swapForY): у пары v2.0 своего getSwapOut нет.
         Proto::LbV20 => list.extend(["dex.factory", "dex.quoter"]),
@@ -797,7 +800,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             // Решение 470: Aero Slipstream V3 — ещё официальный крючок обмена (pools/aero_cl.rs) и окно первой
             // комиссии нового блока (T470-01, pools/aero_cl_head.rs).
             if f.variant == Variant::SlipstreamAero {
-                list.extend(["dex.cl_swap_hook", "dex.cl_hook_ahead_s"]);
+                list.extend(["dex.cl_swap_hook", "dex.cl_hook_ahead_s", "dex.aero_mev_module"]);
             }
         }
         // Maverick V2 (решение 122 F): фабрика (isFactoryPool, PoolCreated), квотер (сверка перед сделкой, решение 73),

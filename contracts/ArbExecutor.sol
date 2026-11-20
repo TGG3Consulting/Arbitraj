@@ -109,7 +109,7 @@ contract ArbExecutor {
     // V3/src/pools/Pool.sol) — вход переводом в пул, выход = getAmountOutWithTotalFee(вход, tokenIn) пула (L548-L555:
     // комиссия factory.getFee(пул, msg.sender, …) — база + MEV-налог по tx.gasprice ЭТОЙ транзакции, та же, что возьмёт
     // swap L172 — _getSwapFee L389-L397 с тем же msg.sender = исполнитель), swap — подпись V2 (L143). data пусто. Шаг
-    // SOLIDLY считает выход getAmountOut (L537-L545: только базовая комиссия) — при налоге > 0 своп откатился бы по K (L189).
+    // SOLIDLY считает выход getAmountOut (L537-L545: только базовая комиссия) — при налоге > 0 своп откатился бы по K (L193).
     uint8 internal constant AERO_BASIC = 26;
     // Пределы цены Ekubo MIN_SQRT_RATIO_RAW / MAX_SQRT_RATIO_RAW (evm-contracts@61d09daa src/types/sqrtRatio.sol L13, L15):
     // тот же предел ставит Router (withDefaultSqrtRatioLimit, swapParameters.sol L74-L82).

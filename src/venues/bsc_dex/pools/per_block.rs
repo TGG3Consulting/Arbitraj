@@ -45,7 +45,7 @@
 //!   первой голове после перевода, если чтение его ещё не учло.
 //! • Решение 470 (T470-07): пулы Aero Slipstream V3 — ЛЁГКОЕ чтение (light): только комиссия крючка пачкой
 //!   (per_block_aero.rs); цена, ликвидность и тики — по событиям пула полным чтением.
-//! Кто вызывает: pools/session.rs, session_lanes.rs (ramping), check/memory_proof_rules.rs (unevented, touched).
+//! Кто вызывает: pools/session.rs, session_lanes.rs (ramping), check/memory_proof_rules.rs (unevented).
 //! От чего зависит: listen.rs (Pools, End), reload.rs (load_one, load_one_block), reload_many.rs (load_group_block,
 //! load_group_with),
 //! per_block_par.rs, load_batch_par.rs (limit), pool_fail.rs, discover.rs (Found), families.rs, ladder_counter.rs,

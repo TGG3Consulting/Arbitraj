@@ -77,6 +77,8 @@
 | `dex.stable_hooks` | какие пулы Infinity Stable допускаются (pools/verify_inf_stable.rs) | без .optional(): ошибка «не задана»: Не задана — DEX не подключена |
 | `dex.cl_swap_hook` | фильтр: пул Aero Slipstream V3 допускается только с официальным крючком обмена (pools/aero_cl.rs) | без .optional(): ошибка «не задана»: Не задана — DEX вида slipstream_aero не подключена |
 | `dex.cl_hook_ahead_s` | расчёт: окно первой комиссии нового блока Aero Slipstream V3 (pools/aero_cl_head.rs) | без .optional(): ошибка «не задана»: Не задана — DEX вида slipstream_aero не подключена |
+| `dex.aero_fee_module` | фильтр: модуль комиссии фабрики Aero Basic закреплён (pools/load_aero_basic.rs) | без .optional(): ошибка «не задана»: Не задана — DEX вида aero_basic не подключена |
+| `dex.aero_mev_module` | фильтр: модуль MEV-налога Aero закреплён (pools/aero_mev.rs pinned) | без .optional(): ошибка «не задана»: Не задана — DEX видов aero_basic / slipstream_aero не подключена |
 | `dex.arb_sys` | расчёт: сбор чаевых сети → MEV-налог Aero (pools/aero_mev.rs) | необязательна: не задана — пулы Aero с ненулевым множителем модуля не читаются |
 | `dex.arb_owner_public` | расчёт: сбор чаевых сети (ArbOS 60+) → MEV-налог Aero (pools/aero_mev.rs) | необязательна: не задана при ArbOS ≥ 60 — пулы Aero с ненулевым множителем модуля не читаются |
 | `dex.stable_pools` | какие стейблсвап-пулы допускаются (pools/stable_list.rs) | без .optional(): ошибка «не задана»: Не задана — DEX не подключена |
@@ -249,6 +251,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.stable_hooks` | —, р. 122 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана — DEX не подключена | в релизе 141619bc |
 | `dex.cl_swap_hook` | t240, р. 470 | Arbitrum One: `0xC0ed888AfE87ed1AcF01D9f19bB850159e3ce434` (cl-arbitrum.json «dynamicSwapFeeHook») | без .optional(): ошибка «не задана»: Не задана — DEX вида slipstream_aero не подключена | новая (ветка t240/arb-aero) |
 | `dex.cl_hook_ahead_s` | t240, р. 470 (T470-01) | совета нет — по записи aero.py (fee() на +1 / +3 с) | без .optional(): ошибка «не задана»: Не задана — DEX вида slipstream_aero не подключена | ещё не в релизе (ветка t240/arb-aero) |
+| `dex.aero_fee_module` | t240, р. 470 (ревью) | volatile `0x7949DE8d67E4F6b8509Bdbb43FF0503aF1247a7A`, stable `0x0195fC76Da986D66B2A468133a1be41E90893Da6` | без .optional(): Не задана — DEX вида aero_basic не подключена | ещё не в релизе (ветка t240/arb-aero) |
+| `dex.aero_mev_module` | t240, р. 470 (ревью) | volatile `0xd724433C0C637c7e273Ac623427D806Ef396c50a`, stable `0x8173816c3638650343B0a67E688AbB966C458130`, Slipstream V3 `0xce015007D03f3E3964938f11c29F24bDB0b945aB` | без .optional(): Не задана — DEX видов aero_basic / slipstream_aero не подключена | ещё не в релизе (ветка t240/arb-aero) |
 | `dex.arb_sys` | t240, р. 470 | Arbitrum One: `0x0000000000000000000000000000000000000064` | необязательна: пулы Aero с ненулевым множителем модуля не читаются | новая (ветка t240/arb-aero) |
 | `dex.arb_owner_public` | t240, р. 470 | Arbitrum One: `0x000000000000000000000000000000000000006b` | необязательна: при ArbOS ≥ 60 пулы Aero с ненулевым множителем модуля не читаются | новая (ветка t240/arb-aero) |
 | `dex.stable_pools` | —, р. 122 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана — DEX не подключена | в релизе 141619bc |
@@ -5800,6 +5804,22 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** нет — окна.
 - **Связанные ключи:** в описании не названы.
 - **Статус:** в релизе 141619bc.
+
+### `dex.aero_fee_module`
+- **Кейс:** решение 470, ревью t240 — комиссия Aero Basic = getBaseFee фабрики через её модуль; формула сверена только для CustomFeeModule (комиссия зависит только от адреса пула). Смена модуля фабрикой (setFeeModule) — другая формула: пул не должен торговаться по старой.
+- **Что ставить:** volatile — `0x7949DE8d67E4F6b8509Bdbb43FF0503aF1247a7A`, stable — `0x0195fC76Da986D66B2A468133a1be41E90893Da6` (Dromos-Labs/metadex-public deployment-addresses/pools-arbitrum.json). (docs/FIRST_RUN.md)
+- **Если не задана:** без .optional(): DEX вида aero_basic не подключена (families.rs required).
+- **Влияет на торговлю:** да — feeModule() фабрики другой: пул не торгуется (NotApplicable с причиной, pools/load_aero_basic.rs).
+- **Связанные ключи:** dex.factory, dex.aero_mev_module.
+- **Статус:** ещё не в релизе (ветка t240/arb-aero).
+
+### `dex.aero_mev_module`
+- **Кейс:** решение 470, ревью t240 — MEV-налог Aero считается по формуле PriorityFeeMevTaxModule; модуль фабрики Basic (setMevTaxModule) и крючка Slipstream V3 можно сменить — другая формула: пул не должен торговаться по старой.
+- **Что ставить:** volatile — `0xd724433C0C637c7e273Ac623427D806Ef396c50a`, stable — `0x8173816c3638650343B0a67E688AbB966C458130` (pools-arbitrum.json); Slipstream V3 — `0xce015007D03f3E3964938f11c29F24bDB0b945aB` (cl-arbitrum.json clMevTaxModule; сверить записью aero.py — mevTaxModule крючка). (docs/FIRST_RUN.md)
+- **Если не задана:** без .optional(): DEX видов aero_basic / slipstream_aero не подключена (families.rs required).
+- **Влияет на торговлю:** да — модуль другой: пул не торгуется (NotApplicable с причиной, pools/aero_mev.rs pinned) — при чтении, каждым блоком и перед отправкой.
+- **Связанные ключи:** dex.factory, dex.cl_swap_hook, dex.aero_fee_module, dex.arb_sys, dex.arb_owner_public.
+- **Статус:** ещё не в релизе (ветка t240/arb-aero).
 
 ### `dex.cl_hook_ahead_s`
 - **Кейс:** решение 470 (T470-01) — комиссия Aero Slipstream V3 в блоке нашей транзакции: первая комиссия нового блока (TWAP-тик по времени этого блока) или blockFee чужого первого обмена; время следующего блока заранее неизвестно — считается окно δ = 0…N секунд, берётся наибольшая.

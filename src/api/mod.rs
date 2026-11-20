@@ -35,6 +35,7 @@ pub mod usdt_transfer;
 pub mod venues;
 pub mod wallet_queue;
 pub mod wallets;
+pub mod wallets_chain;
 pub mod wallets_dex;
 pub mod wallets_migrate;
 pub mod wallets_view;

@@ -1,6 +1,6 @@
 //! Файл: settings/accounts/db.rs
 //! Что делает: загрузка кошельков DEX, маппинга и служебных отметок из SQLite (таблицы dex_wallets, dex_wallet_map,
-//! dex_wallet_meta — storage/db.rs) и чтение истории изменений (dex_wallet_history).
+//! dex_wallet_meta, решение 432 — dex_wallet_exec; storage/db.rs) и чтение истории изменений (dex_wallet_history).
 //! Кто вызывает: settings/store.rs (Store::load), api/wallets.rs (история).
 //! От чего зависит: settings/accounts/mod.rs, storage/db.rs, storage/journal.rs.
 //! Настройки: нет.
@@ -43,11 +43,30 @@ impl Accounts {
                         created_at: r.get(5)?,
                         executor_version: r.get(6)?,
                         executor_wrapped: r.get(7)?,
+                        chains: BTreeMap::new(),
                     })
                 })?;
                 for w in rows {
                     let w = w?;
                     wallets.insert(w.id.clone(), w);
+                }
+                // Решение 432: исполнители на площадках DEX других сетей (строки без кошелька не читаются).
+                let mut q = c.prepare(
+                    "SELECT wallet, venue, executor, executor_version, executor_wrapped FROM dex_wallet_exec",
+                )?;
+                let rows = q.query_map([], |r| {
+                    let x = super::chain_exec::ExecAt {
+                        executor: r.get(2)?,
+                        executor_version: r.get(3)?,
+                        executor_wrapped: r.get(4)?,
+                    };
+                    Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, x))
+                })?;
+                for row in rows {
+                    let (id, venue, x) = row?;
+                    if let Some(w) = wallets.get_mut(&id) {
+                        w.chains.insert(venue, x);
+                    }
                 }
                 let mut map = BTreeMap::new();
                 let mut q = c.prepare("SELECT row, wallet FROM dex_wallet_map")?;

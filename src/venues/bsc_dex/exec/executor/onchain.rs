@@ -25,7 +25,7 @@ use serde_json::json;
 use crate::gateway::contract::ConnectionCheck;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
-use super::super::super::ctx::Ctx;
+use super::super::super::ctx::{Ctx, ID};
 use super::super::super::node::rpc;
 use super::super::super::wallet::signer;
 use super::code::{self, Version};
@@ -84,7 +84,7 @@ async fn remember(ctx: &Ctx, executor: Address, v: Version, wrapped: Option<Addr
     if let Err(e) = ctx
         .settings
         .accounts()
-        .set_executor_version(&w.id, &addr, label, wrap, "сверка кода исполнителя")
+        .set_executor_version_at(ID, &w.id, &addr, label, wrap, "сверка кода исполнителя")
         .await
     {
         let text = format!(

@@ -7,11 +7,14 @@
 //! Изменения — edit.rs (история «было/стало» и журнал), загрузка — db.rs, перенос старого кошелька — migrate.rs.
 //! Решение 401 (ревью t186, Н1): снимок кошельков и маппинга за ArcSwap (snap) — чтение без замка и без копии записи для
 //! горячего пути котировки (with_wallet); снимок обновляется после каждой записи в память (publish).
+//! Решение 432 (две сети): кошелёк один на все сети; исполнитель и очередь nonce — по площадке DEX сети (chain_exec.rs:
+//! Wallet::at, with_wallet_at, set_executor_at); домашняя площадка — прежние поля и прежний ключ очереди.
 //! Кто вызывает: settings/store.rs (создаёт при загрузке, Store::accounts), ядро (core/dex_account.rs), адаптер DEX
 //! (venues/bsc_dex/ctx.rs), api/wallets*.rs.
 //! От чего зависит: storage/db.rs, storage/journal.rs, arc-swap (снимок).
 //! Настройки: нет (это не настройки каталога: свои таблицы и своя история).
 
+pub mod chain_exec;
 pub mod db;
 pub mod edit;
 pub mod edit_map;
@@ -51,6 +54,11 @@ pub struct Wallet {
     /// Ключ строки очереди транзакций в storage/wallet_queue.rs.
     pub queue_key: String,
     pub created_at: String,
+    /// Решение 432: исполнители кошелька на площадках DEX других сетей (id площадки → адрес, версия, обёртка; таблица
+    /// dex_wallet_exec, chain_exec.rs). Исполнитель домашней площадки (где кошелёк заведён — начало queue_key) — поля
+    /// выше, как до решения 432. В JSON — только если не пусто.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub chains: BTreeMap<String, chain_exec::ExecAt>,
 }
 
 /// Всё состояние в памяти.

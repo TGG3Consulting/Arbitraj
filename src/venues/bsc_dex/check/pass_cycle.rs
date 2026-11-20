@@ -39,6 +39,7 @@ use super::super::pools::exec_kind;
 use super::super::pools::families::Proto;
 use super::super::pools::listen::Pools;
 use super::super::pools::registry::Entry;
+use super::super::ctx::ID;
 use super::super::settings_wait;
 use super::pass_judge::Outcome;
 use super::pass_probe;
@@ -116,7 +117,8 @@ async fn each(p: &Pools, list: Vec<PoolRef>, unsettled: bool) {
 /// отстают (решение 72: вердикта нет). Ошибок нет.
 fn executors(p: &Pools) -> Option<Vec<Address>> {
     let acc = p.ctx.settings.accounts();
-    let xs: Vec<Address> = acc.wallets().iter().filter_map(pool_pass::v3).collect();
+    // Решение 432: исполнители этой площадки DEX (её сети).
+    let xs: Vec<Address> = acc.wallets_at(ID).iter().filter_map(pool_pass::v3).collect();
     (!xs.is_empty() && !p.lag.busy()).then_some(xs)
 }
 
@@ -160,7 +162,7 @@ async fn pool(p: &Pools, sources: &Sources, e: &Entry, unsettled: bool) {
     let stable = e.family.proto == Proto::InfinityStable;
     let accepted = live_proof::accepted(k, stable, hooks);
     let r = &e.pool.reference;
-    for w in p.ctx.settings.accounts().wallets() {
+    for w in p.ctx.settings.accounts().wallets_at(ID) {
         let Some(x) = pool_pass::v3(&w) else { continue };
         let prev = pool_pass::get(x, r);
         let deal = matches!(

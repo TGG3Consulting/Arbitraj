@@ -6,6 +6,7 @@
 //!
 //! «В пути» и сделки вне слепка — report/snap_transit.rs.
 //!
+//! Решение 432: площадок DEX несколько — кошелёк строкой на каждой площадке DEX (сети); одна — как раньше.
 //! Кто вызывает: report/snap.rs.
 //! От чего зависит: report/snap.rs (Place, Line, loc, deal_line), report/snap_price.rs, core (chain::default_dex, шлюз, настройки),
 //! core/coin_key.rs, core/venue_ticker.rs, core/balance_sell_check.rs (quote_of), notify/human.rs.
@@ -66,15 +67,35 @@ pub async fn wallets(
     used: &mut [bool],
     deadline: Instant,
 ) -> Vec<Place> {
-    // Решение 430: кошельки — на площадке DEX сети по умолчанию (по сетям — шаг 4 плана, docs/TASKS.md).
-    let dex = crate::core::chain::default_dex(core);
+    // Решение 430: одна площадка DEX — кошельки на площадке DEX сети по умолчанию (как раньше). Решение 432: площадок
+    // DEX несколько — кошелёк на каждой (своя сеть: свой газ, USDT, монеты сделок), подпись «…, сеть <dex.chain>».
+    let all = crate::core::chain::dexes(core);
+    let dexes: Vec<Option<VenueId>> = if all.len() < 2 {
+        vec![crate::core::chain::default_dex(core)]
+    } else {
+        all.into_iter().map(Some).collect()
+    };
+    let many = dexes.len() > 1;
     let mut ws = core.inner.deps.settings.accounts().wallets();
     ws.sort_by(|a, b| a.name.cmp(&b.name));
     let mut out = Vec::new();
-    for w in ws {
+    // Пары (кошелёк, площадка) собраны заранее: итератор с замыканием, живущий через await, ломает вывод
+    // типов будущего для axum (CI 44635049510, «FnOnce is not general enough»).
+    let pairs: Vec<(&_, Option<VenueId>)> = ws
+        .iter()
+        .flat_map(|w| dexes.iter().map(move |d| (w, d.clone())))
+        .collect();
+    for (w, dex) in pairs {
         let acc = DexAccountId(w.id.clone());
+        let net = match (&dex, many) {
+            (Some(v), true) => match crate::core::chain::chain_at(&core.inner.deps.settings, v) {
+                Ok(c) => format!(", сеть {c}"),
+                Err(_) => format!(", площадка {}", v.0),
+            },
+            _ => String::new(),
+        };
         let mut p = Place {
-            name: format!("Кошелёк DEX «{}»", w.name),
+            name: format!("Кошелёк DEX «{}»{net}", w.name),
             unknown: vec![OTHER_TOKENS.into()],
             ..Place::default()
         };

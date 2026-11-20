@@ -14,6 +14,8 @@
     живых пулах», а кнопка «Развернуть исполнитель» недоступна с этой причиной; решение 400 — классы шага v3 и их
     приёмка по записи симуляции, поле executor_v3_classes, таблица в ExecutorDeploy); «Переименовать» (PATCH), «Удалить» (DELETE — бэкенд запрещает,
     пока кошелёк в маппинге или в незавершённой сделке; ключ из секретов не удаляется).
+    Решение 432: площадок DEX две и больше (поле chains) — баланс, проверка и исполнитель по каждой сети
+    (components/WalletChain.svelte); одна — карточка прежняя.
   Кто вызывает: components/WalletList.svelte.
   От чего зависит: lib/api.js, components/{CheckConnection,ExecutorDeploy,CopyAddr,ErrorText}.svelte.
   Настройки: нет.
@@ -25,6 +27,7 @@
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import CopyAddr from './CopyAddr.svelte';
   import ErrorText from './ErrorText.svelte';
+  import WalletChain from './WalletChain.svelte';
 
   /** w — кошелёк из GET /api/wallets; dex — id площадки DEX; unlocked — секреты разблокированы; onchange. */
   let { w, dex, unlocked, onchange } = $props();
@@ -77,7 +80,8 @@
   const setExec = (address) => act(() => put(`/api/wallets/${seg(w.id)}/executor`, { address }));
 
   $effect(() => {
-    if (unlocked && dex) balances();
+    // Решение 432: две сети и больше — балансы читает строка каждой сети (WalletChain).
+    if (unlocked && dex && !w.chains?.length) balances();
     return () => balances.cancel();
   });
 </script>
@@ -97,6 +101,9 @@
   <p class="muted">Ключ: секрет <a href={`#/unlock/${seg(w.secret)}`}><code>{w.secret}</code></a></p>
   <p>Маппинг: {w.rows.length ? w.rows.join(', ') : 'не привязан'}
     {#if w.open_deals.length}· незавершённые сделки: {w.open_deals.join(', ')}{/if}</p>
+  {#if w.chains?.length}
+    {#each w.chains as c (c.venue)}<WalletChain {w} {c} {unlocked} {onchange} />{/each}
+  {:else}
   {#if bal}
     {#if bal.error}<p class="err">Балансы: {bal.error}</p>{/if}
     <p>BNB: {bal.bnb ?? '—'} · {bal.quote ?? 'USDT (venue.quote_asset не задана)'}: {bal.usdt ?? '—'}
@@ -116,5 +123,6 @@
     <input bind:value={exec} placeholder="адрес уже развёрнутого исполнителя (0x…)" />
     <button disabled={!exec}>Записать после проверки</button>
   </form>
+  {/if}
   <ErrorText text={error} />
 </article>

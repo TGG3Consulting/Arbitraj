@@ -123,6 +123,7 @@ impl Accounts {
             executor_wrapped: None,
             queue_key: l.queue_key.to_string(),
             created_at: Utc::now().to_rfc3339(),
+            chains: Default::default(),
         };
         self.insert_locked(w, by).await?;
         if l.executor.is_some() {

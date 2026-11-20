@@ -7,6 +7,8 @@
 //! venue.rs, venue_account.rs, connection.rs.
 //! От чего зависит: ctx.rs, settings/accounts/ (Store::accounts; снимок with_wallet — решение 401, ревью Н1),
 //! exec/executor/code.rs (Version).
+//! Решение 432: кошелёк, исполнитель и ключ очереди — глазами этой площадки DEX (settings/accounts/chain_exec.rs:
+//! wallet_at, with_wallet_at; площадка — ctx.rs ID): у домашней площадки кошелька всё прежнее.
 //! Настройки: нет (кошельки и маппинг — экран «Маппинг кошельков»).
 
 use alloy_primitives::Address;
@@ -14,7 +16,7 @@ use alloy_primitives::Address;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::settings::accounts::{ROW_PROBE, Wallet};
 
-use super::ctx::Ctx;
+use super::ctx::{Ctx, ID};
 use super::exec::executor::code::Version;
 
 /// Подсказка, где задать кошелёк.
@@ -55,7 +57,8 @@ impl Ctx {
                 )
             })?,
         };
-        acc.wallet(&id).ok_or_else(|| {
+        // Решение 432: запись глазами этой площадки DEX — исполнитель и ключ очереди её сети (домашняя — как раньше).
+        acc.wallet_at(ID, &id).ok_or_else(|| {
             self.err(
                 ErrorCode::NotConfigured,
                 format!("Кошелька DEX {id} нет ({SCREEN})"),
@@ -75,7 +78,7 @@ impl Ctx {
     /// (Accounts::with_wallet), без копии записи кошелька.
     pub fn executor(&self) -> GatewayResult<Option<Address>> {
         let acc = self.settings.accounts();
-        acc.with_wallet(self.account.as_deref(), |found| {
+        acc.with_wallet_at(ID, self.account.as_deref(), |found| {
             let Some((w, x)) = found.and_then(|r| r.executor.as_deref().map(|a| (r, a))) else {
                 return Ok(None);
             };
@@ -93,7 +96,7 @@ impl Ctx {
     /// кошелька или исполнителя нет, или адрес не разбирается; Some((адрес, None)) — версия не сверена. Ошибок нет.
     pub fn exec_info(&self) -> Option<(Address, Option<Version>)> {
         let acc = self.settings.accounts();
-        acc.with_wallet(self.account.as_deref(), |found| {
+        acc.with_wallet_at(ID, self.account.as_deref(), |found| {
             let w = found?;
             let x = w.executor.as_deref()?.parse::<Address>().ok()?;
             Some((x, w.executor_version.as_deref().and_then(Version::parse)))

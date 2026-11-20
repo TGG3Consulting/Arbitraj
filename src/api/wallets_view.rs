@@ -7,6 +7,7 @@
 //! предупреждения «деньги смешиваются». Ключей нет никогда.
 //! Кто вызывает: api/wallets.rs (list, map).
 //! От чего зависит: api/{state,wallets_dex}.rs, gateway (реестр), settings/accounts/, core/dex_account.rs.
+//! Решение 432: у кошелька — chains (исполнитель на площадке DEX каждой сети; одна площадка DEX — пусто).
 //! Настройки: нет.
 
 use serde_json::{Value, json};
@@ -57,6 +58,8 @@ pub async fn view(st: &AppState) -> Value {
         },
         Err(_) => (None, Vec::new()),
     };
+    // Решение 432: площадки DEX сетей (две и больше; одна — пусто, экран прежний) — исполнитель кошелька по сети.
+    let nets = super::wallets_chain::chains(st).await;
     let mut wallets = Vec::new();
     for w in a.wallets() {
         let (address, why) = if !unlocked {
@@ -97,6 +100,7 @@ pub async fn view(st: &AppState) -> Value {
             "rows": a.rows_of(&w.id),
             "open_deals": busy,
             "legacy": a.legacy().as_deref() == Some(w.id.as_str()),
+            "chains": by_chain(st, &w, &nets),
         }));
     }
     let rows: Vec<Value> = rows(st)
@@ -116,4 +120,32 @@ pub async fn view(st: &AppState) -> Value {
         "rows": rows,
         "shared": shared,
     })
+}
+
+/// Решение 432: исполнитель кошелька на площадке DEX каждой сети (Wallet::at): площадка, сеть (dex.chain), адрес,
+/// версия, обёртка в исполнителе и dex.native_wrapped площадки, домашняя ли (прежние поля кошелька). Одна площадка
+/// DEX — пусто. Ошибок нет.
+fn by_chain(
+    st: &AppState,
+    w: &crate::settings::accounts::Wallet,
+    nets: &[(crate::core::types::VenueId, Option<String>)],
+) -> Vec<Value> {
+    nets.iter()
+        .map(|(v, chain)| {
+            let x = w.at(&v.0);
+            let at = crate::settings::read::At {
+                venue: Some(&v.0),
+                coin: None,
+            };
+            json!({
+                "venue": v.0,
+                "chain": chain,
+                "home": w.home() == v.0,
+                "executor": x.executor,
+                "executor_version": x.executor_version,
+                "executor_wrapped": x.executor_wrapped,
+                "native_wrapped": st.settings.text("dex.native_wrapped", at).ok(),
+            })
+        })
+        .collect()
 }

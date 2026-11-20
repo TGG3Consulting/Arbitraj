@@ -112,6 +112,15 @@ CREATE TABLE IF NOT EXISTS dex_wallets (
     queue_key TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS dex_wallet_exec (
+    wallet TEXT NOT NULL,
+    venue TEXT NOT NULL,
+    executor TEXT,
+    executor_version TEXT,
+    executor_wrapped TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (wallet, venue)
+);
 CREATE TABLE IF NOT EXISTS dex_wallet_map (
     row TEXT PRIMARY KEY,
     wallet TEXT NOT NULL,

@@ -1,7 +1,7 @@
 //! Файл: api/core_api.rs
 //! Что делает: экраны «Живой экран», «Сделки», «Управление» — данные и команды ядра.
 //! Кто вызывает: интерфейс.
-//! От чего зависит: api/state.rs, core (Core::spreads, deals, control, set_mode, resume_venue, resume_wallet,
+//! От чего зависит: api/state.rs, core (Core::spreads, deals, control, set_mode, set_chain_by (решение 432), resume_venue, resume_wallet,
 //! release_quarantine, reset_daily_limit, reset_venue_daily_limit, transits), core/risk.rs (Mode), storage/journal (через ядро).
 //! Настройки: нет.
 //!
@@ -12,6 +12,8 @@
 //! GET  /api/dry                                   — сухой режим: {state: on|nobudget|broken|off|unset, budget, reason}
 //! GET  /api/control                               — Risk: режим системы, паузы площадок, карантины, итог дня
 //! POST /api/control                               — {mode: "Running" | "Stopped" | "Paused"} → Risk
+//! POST /api/control/chain/{id}                    — решение 432: {run: true|false} — «Старт <сеть>» / «Стоп <сеть>» → Risk;
+//!                                                   сетей меньше двух или сети нет — 400 с причиной
 //! POST /api/control/venue/{id}/resume             — снять паузу площадки → Risk
 //! POST /api/control/wallet/{id}/resume            — снять паузу кошелька DEX от сверки (решение 230) → Risk
 //! POST /api/control/quarantine/{id}/release   — снять карантин монеты (id — адрес контракта или тикер) → Risk
@@ -26,7 +28,7 @@ use crate::core::risk::{Mode, Risk};
 use crate::core::signal::SpreadView;
 use crate::core::types::VenueId;
 
-use super::state::AppState;
+use super::state::{ApiError, AppState};
 
 /// Строки «Живого экрана». Ошибок нет.
 pub async fn spreads(State(st): State<AppState>) -> Json<Vec<SpreadView>> {
@@ -69,6 +71,26 @@ pub struct ModeBody {
 pub async fn set_mode(State(st): State<AppState>, Json(b): Json<ModeBody>) -> Json<Risk> {
     st.core.set_mode(b.mode).await;
     Json(st.core.control())
+}
+
+/// Решение 432: тело команды сети.
+#[derive(Deserialize)]
+pub struct ChainBody {
+    run: bool,
+}
+
+/// Решение 432: «Старт <сеть>» / «Стоп <сеть>» (Core::set_chain_by, core/chain_run.rs). Ошибки: 400 — сетей площадок DEX
+/// меньше двух или такой сети нет (причина); 422 — неверное тело.
+pub async fn set_chain(
+    State(st): State<AppState>,
+    Path(id): Path<String>,
+    Json(b): Json<ChainBody>,
+) -> Result<Json<Risk>, ApiError> {
+    st.core
+        .set_chain_by(&id, b.run, "команда из интерфейса")
+        .await
+        .map_err(ApiError::bad)?;
+    Ok(Json(st.core.control()))
 }
 
 /// Снять паузу площадки (все её паузы) или, по id пары «площадка × тип направления» (решение 258), — только паузу

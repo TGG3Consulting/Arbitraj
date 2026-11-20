@@ -658,6 +658,10 @@ contract ArbExecutor {
     function uniswapV3SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function pancakeV3SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     function squadV3SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
+    // Решение 483 (v5, не собрана): пул Ramses CL (RamsesV2Pool, реализация 0x6553aAEE5a3A482A7d61bb5e093B05140Fe17e21,
+    // Sourcify 42161 match) зовёт IRamsesV2SwapCallback.ramsesV2SwapCallback(int256,int256,bytes) (RamsesV2Pool.sol
+    // L1238, L1256) — тот же swap, что у V3 (L944), тот же _pay.
+    function ramsesV2SwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     // Решение 285: Metric OMM — тот же _pay (только пул текущего шага, долг ≤ суммы шага, токен входа шага).
     function metricOmmSwapCallback(int256 d0, int256 d1, bytes calldata) external { _pay(d0 > 0 ? d0 : d1); }
     // Решение 286: iZiSwap / Biswap V3 — x / y: сколько исполнитель платит (IiZiSwapCallback.sol L19-L39); тот же _pay.

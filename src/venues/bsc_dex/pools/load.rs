@@ -3,7 +3,7 @@
 //! из найденного пула; перечитывание записи (после реорга, обрыва или расхождения карты с событием).
 //! Кто вызывает: pools/listen.rs.
 //! От чего зависит: load_v2v3.rs, load_cl.rs, load_bin.rs, load_lb.rs, load_lb20.rs, load_fluid.rs, load_ekubo.rs
-//! (решение 447), registry.rs, discover.rs, tokens.rs.
+//! (решение 447), load_ramses.rs (решение 483), registry.rs, discover.rs, tokens.rs.
 //! Решение 281: у DEX с dex.v3_fee_source = pool_fee_each_read fee() пула V3 читается с состоянием (fee_fresh.rs) и
 //! заменяет комиссию записи (built, renewed).
 //! Настройки: через вызываемые файлы (dex.tick_words, dex.bin_depth_usd, dex.tick_lens, dex.state_view, dex.v3_fee_source).
@@ -29,7 +29,7 @@ use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
     aero_cl, load_aero_basic, load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_meta, load_curve_ng, load_curve_oracle, load_curve_plain, load_dmm, load_dodo, load_ekubo,
-    load_elastic, load_fluid, load_inf_stable, load_izi, load_lb, load_lb20, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
+    load_elastic, load_fluid, load_inf_stable, load_izi, load_lb, load_lb20, load_maverick, load_metric, load_nomi, load_ramses, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
 
@@ -442,6 +442,24 @@ pub async fn state(
     // slot0 форка (без feeProtocol) + liquidity + тики прямыми геттерами tickBitmap/ticks (не TickLens). Комиссия
     // (fee_pips) уже прочитана с fee() пула при проверке (verify.rs) и хранится в записи. Отсекается до общего пути V3
     // (который читал бы через TickLens и чужой slot0).
+    // Решение 483: Ramses CL / CL V2 — свои ABI slot0 / ticks() и комиссия этого блока (currentFee() / fee()) при
+    // каждом чтении (load_ramses.rs). Отсекается до Slipstream и общего пути V3 (ticks() из 10 полей — не через TickLens).
+    if super::ramses::is_cl(f) {
+        if let PoolRef::Contract(a) = reference {
+            let sp = spacing.ok_or_else(|| missing("tickSpacing"))?;
+            let (state, t, fee) = load_ramses::load(ctx, f, *a, sp, &tag).await?;
+            return Ok(Loaded {
+                state,
+                ticks: Some(t),
+                bins: None,
+                fee_pips: Some(fee),
+            });
+        }
+        return Err(ctx.err(
+            ErrorCode::Internal,
+            format!("{}: ссылка на пул Ramses CL не того вида", f.title),
+        ));
+    }
     if f.proto == Proto::Slipstream {
         if let PoolRef::Contract(a) = reference {
             let sp = spacing.ok_or_else(|| missing("tickSpacing"))?;

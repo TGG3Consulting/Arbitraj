@@ -193,6 +193,9 @@ contract VirtualQuoter {
     function algebraSwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
     function swapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
     function squadV3SwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
+    // Решение 483 (не собрано — нужна пересборка out/VirtualQuoter.*): пул Ramses CL зовёт ramsesV2SwapCallback
+    // (RamsesV2Pool.sol L1238, L1256; Sourcify 42161 match 0x6553aAEE5a3A482A7d61bb5e093B05140Fe17e21).
+    function ramsesV2SwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
     function metricOmmSwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
     function smardexSwapCallback(int256 d0, int256 d1, bytes calldata) external pure { _back(d0, d1); }
 }

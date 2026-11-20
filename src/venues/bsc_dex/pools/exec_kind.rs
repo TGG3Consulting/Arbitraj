@@ -165,10 +165,11 @@ impl ExecKind {
 pub fn of(kind: &str) -> Option<ExecKind> {
     Some(match kind {
         "pancakeswap_v2" | "uniswap_v2" | "v2_fork" | "v2_fork_executor" => ExecKind::V2,
+        // Решение 483: Ramses CL — swap(recipient, zeroForOne, amountSpecified, sqrtPriceLimitX96, data) как у V3
+        // (RamsesV2Pool.sol L944), обратный вызов ramsesV2SwapCallback (L1238) — проверка dex.v3_swap_callback
+        // (exec_callback.rs); Ramses CL V2 — тот же swap и uniswapV3SwapCallback (RamsesV3Pool.sol L436-L442, L662).
         "pancakeswap_v3" | "uniswap_v3" | "v3_fork" | "v3_fork_pancake" | "slipstream"
-        | "slipstream_aero" => {
-            ExecKind::V3
-        }
+        | "slipstream_aero" | "v3_fork_ramses" | "slipstream_ramses" => ExecKind::V3,
         "thena_fusion" => ExecKind::Algebra,
         // Решение 188: swap(recipient, zeroToOne, amountRequired, limitSqrtPrice, data) и algebraSwapCallback у
         // Integral — те же (integral-core 1.2.10 AlgebraPool.sol L246-L252, IAlgebraSwapCallback).
@@ -177,7 +178,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // amountRequired, limitSqrtPrice, data) и algebraSwapCallback(int256, int256, bytes) те же (cryptoalgebra/
         // AlgebraV1.9 a45417ed AlgebraPool.sol:604-610, IAlgebraSwapCallback.sol:18-22) — шаг ALGEBRA, исполнитель тот же.
         "algebra_dir_fee" => ExecKind::Algebra,
-        "solidly_v2" | "solidly_v1" => ExecKind::Solidly,
+        // Решение 483: пара Ramses Legacy — getReserves (uint112, Pair.sol L125), getAmountOut(uint256, address) L452 (уже
+        // с −1) и swap(uint256, uint256, address, bytes) L308; вход = баланс − резерв (L339-L340) — шаг SOLIDLY.
+        "solidly_v2" | "solidly_v1" | "solidly_v1_ramses" => ExecKind::Solidly,
         // Решение 443: пара Camelot V2 — тот же шаг SOLIDLY: getReserves (первые два слова — резервы), getAmountOut(uint256,
         // address) и swap(uint256, uint256, address, bytes) есть у CamelotPair (Pair.sol L46, L372, L228 — verified-исходник
         // фабрики Arbitrum 0x6EcC…A652, math/camelot_v2.rs); вход = баланс − резерв — так и считает swap пары (L276-L277).

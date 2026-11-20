@@ -117,6 +117,11 @@ pub fn rule(e: &Entry) -> How {
         (PoolRef::Contract(a), Proto::PancakeV3) if !f.fork => {
             own(*a, &[0, 5], "slot0 + liquidity (слоты 0, 5)")
         }
+        // Решение 483: Ramses CL V2 — состояние RamsesV3Pool в своём слоте хранилища (PoolStorage.getStorage()), раскладка
+        // CLPool Slipstream к нему не относится: корень хранилища.
+        (PoolRef::Contract(a), Proto::Slipstream) if super::super::pools::ramses::is_cl(f) => {
+            How::Root(*a)
+        }
         (PoolRef::Contract(a), Proto::Slipstream) => {
             own(*a, &[6, 16], "slot0 + liquidity (слоты 6, 16)")
         }

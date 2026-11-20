@@ -1223,3 +1223,29 @@ ReClamm, LBP, LBP с фиксированной ценой, QuantAMM и пулы
 | dex.pool_enabled | три DEX выше | «да» — после записи tools/arbitrum_record/aero.py и прохода тестов | решение Тиграна | — |
 | dex.arb_sys | площадка arb_dex | `0x0000000000000000000000000000000000000064` | ArbSys.arbOSVersion — до ArbOS 60 чаевые не собираются, MEV-налог Aero 0 (решение 470, T470-02) | nitro-precompile-interfaces ArbSys.sol |
 | dex.arb_owner_public | площадка arb_dex | `0x000000000000000000000000000000000000006b` | ArbOwnerPublic.getCollectTips (ArbOS 60+) | nitro-precompile-interfaces ArbOwnerPublic.sol |
+
+## Ramses на Arbitrum (решение 483)
+
+Новые варианты dex.kind: `v3_fork_ramses`, `slipstream_ramses`, `solidly_v1_ramses`; новых ключей нет. Ключи области
+«DEX» площадки arb_dex — с сетью (решение 435), id — GeckoTerminal (`ramses-v2`, `ramses-v3-arbitrum`,
+`ramses-legacy-arbitrum`). Адреса PairFactory, RamsesV3Factory, QuoterV2 — www.ramses.xyz/docs/contract-addresses
+(вкладка Arbitrum); фабрики Ramses CL на официальной странице нет — факт DefiLlama «ramses-cl» и Sourcify 42161
+exact_match прокси (T483-05). Включать (dex.pool_enabled) — после записи tools/arbitrum_record/ramses.py (T483-01).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `ramses-v2@arbitrum` | `v3_fork_ramses` | Ramses CL — RamsesV2Pool: currentFee(), FeeAdjustment, ticks() из 10 полей | Sourcify 42161 0x6553…7e21 RamsesV2Pool.sol |
+| dex.factory | DEX `ramses-v2@arbitrum` | `0xAA2cd7477c451E703f3B9Ba5663334914763edf8` | прокси RamsesV2Factory (getPool(a, b, fee), PoolCreated Uni V3) | DefiLlama ramses-cl; Sourcify exact_match |
+| dex.quoter_virtual | DEX `ramses-v2@arbitrum` | `да` | официального квотера у линии нет; виртуальному нужен ramsesV2SwapCallback — после пересборки (T483-02) | RamsesV2Pool.sol L1238 |
+| dex.v3_swap_callback | DEX `ramses-v2@arbitrum` | `ramsesV2SwapCallback(int256,int256,bytes)` | пул зовёт этот обратный вызов (обязательна для вида) | RamsesV2Pool.sol L1238, L1256 |
+| dex.kind | DEX `ramses-v3-arbitrum@arbitrum` | `slipstream_ramses` | Ramses CL V2 — RamsesV3Pool | Sourcify 42161 RamsesV3PoolDeployer 0xb722…CECD |
+| dex.factory | DEX `ramses-v3-arbitrum@arbitrum` | `0xd0019e86edB35E1fedaaB03aED5c3c60f115d28b` | RamsesV3Factory (getPool(a, b, int24)) | docs Ramses; Sourcify match |
+| dex.quoter | DEX `ramses-v3-arbitrum@arbitrum` | `0x00d4FeA3Dd90C4480992f9c7Ea13b8a6A8F7E124` | QuoterV2 по tickSpacing (= ISlipstreamQuoterV2) | docs Ramses; Sourcify match |
+| dex.cl_tick_spacings | DEX `ramses-v3-arbitrum@arbitrum` | `1, 5, 10, 50, 100, 200` (поиск по фабрике) | tickSpacingInitialFee конструктора фабрики: 1/100, 5/250, 10/500, 50/3000, 100/10000, 200/20000 | RamsesV3Factory.sol L54-L70 |
+| dex.kind | DEX `ramses-legacy-arbitrum@arbitrum` | `solidly_v1_ramses` | Ramses Legacy V2 — Pair: getAmountOut − 1 | Sourcify 42161 PairFactory 0xADd3…Dc3B Pair.sol |
+| dex.factory | DEX `ramses-legacy-arbitrum@arbitrum` | `0xADd32480630A16dfAcEe6eeFcB3ab2181449Dc3B` | PairFactory (getPair(a, b, bool), PairCreated без stable) | docs Ramses; Sourcify match |
+| dex.solidly_fee_source | DEX `ramses-legacy-arbitrum@arbitrum` | `pool` | комиссия — fee() пары (обязательна для вида) | Pair.sol L56 |
+| dex.solidly_fee_method | DEX `ramses-legacy-arbitrum@arbitrum` | `fee()` | view-метод пары | Pair.sol L56 |
+| dex.solidly_fee_rule | DEX `ramses-legacy-arbitrum@arbitrum` | `numerator` | `amountIn -= amountIn·fee/FEE_DENOM` | Pair.sol L455 |
+| dex.solidly_fee_denominator | DEX `ramses-legacy-arbitrum@arbitrum` | `1000000` | FEE_DENOM = 1_000_000 | Pair.sol L63 |
+| dex.pool_enabled | три DEX выше | «да» — после записи ramses.py и прохода тестов; Ramses CL — ещё после пересборки (T483-02) | решение Тиграна | — |

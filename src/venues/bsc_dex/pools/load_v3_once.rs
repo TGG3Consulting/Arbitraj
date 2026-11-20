@@ -68,7 +68,9 @@ pub async fn read(ctx: &Ctx, e: &Entry, at: u64) -> GatewayResult<Option<Loaded>
     let p = &e.pool;
     let applies = e.family.kind == PoolKind::V3
         && matches!(e.family.proto, Proto::PancakeV3 | Proto::UniswapV3)
-        && matches!(p.reference, PoolRef::Contract(_));
+        && matches!(p.reference, PoolRef::Contract(_))
+        // Решение 483: Ramses CL — не TickLens (load_ramses.rs).
+        && !super::ramses::is_cl(e.family);
     let (Some(spacing), PoolState::V3 { tick, .. }, true) = (p.tick_spacing, &p.state, applies)
     else {
         return Ok(None);

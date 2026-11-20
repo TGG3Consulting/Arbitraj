@@ -412,7 +412,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // (Uniswap / PancakeSwap: фабрика getPool, TickLens, QuoterV2 — настройки этой DEX). tradable=false: своего
         // пути через Universal Router нет; исполнение — шаг V3 контракта-исполнителя (exec_kind::via_executor).
         // fork=true оставлен: пул не попадает в классический прямой путь (quote/classic_direct.rs) и не требует UR.
-        "v3_fork" => (PoolKind::V3, Proto::UniswapV3, true, false, true),
+        // Решение 483: Ramses CL — V3-форк ABI Uniswap (вариант RamsesCl: currentFee, ticks из 10 полей, FeeAdjustment,
+        // ramsesV2SwapCallback; pools/ramses.rs, load_ramses.rs).
+        "v3_fork" | "v3_fork_ramses" => (PoolKind::V3, Proto::UniswapV3, true, false, true),
         "v3_fork_pancake" => (PoolKind::V3, Proto::PancakeV3, true, false, true),
         // KyberSwap Elastic (решение 81): в графе, котируется своей математикой (math/swap_elastic). Решение 121 B2:
         // tradable=false — своего пути исполнения нет: в exec/ нет ветки Proto::KyberElastic, а нога форка собиралась
@@ -451,7 +453,11 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "solidly_v2" => (PoolKind::Solidly, Proto::Solidly, true, false, false),
         // Solidly V1 — THENA V1 (решение 122 F): тот же пул, своя фабрика и своя стабильная математика (Proto::SolidlyV1).
         // В графе и сигналах; исполнение — шаг SOLIDLY контракта-исполнителя (exec_kind::via_executor).
-        "solidly_v1" => (PoolKind::Solidly, Proto::SolidlyV1, true, false, false),
+        // Решение 483: Ramses Legacy V2 — тот же вид (вариант RamsesLegacy: getAmountOut − 1, Sync uint112, PairCreated без
+        // stable; pools/ramses.rs).
+        "solidly_v1" | "solidly_v1_ramses" => {
+            (PoolKind::Solidly, Proto::SolidlyV1, true, false, false)
+        }
         // StableSwap (Ellipsis; решение 122 F): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
         "curve_stableswap" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
         // Решение 472: Curve StableSwap 2021 (2pool Arbitrum, plain-пулы старой фабрики) — тот же протокол, вариант
@@ -531,7 +537,11 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Solidly — в графе и для сигналов, но guard executable (quote/graph_route.rs, cycle.rs) по family.tradable в
         // авто-сделку не пускает. Вид ядра — V3 (PoolState::V3), чтение/дискавери/квотер — свои (два отличия от Uni V3).
         // Решение 470: Aero Slipstream V3 — тот же CLPool (вариант SlipstreamAero: комиссия крючка, pools/aero_cl.rs).
-        "slipstream" | "slipstream_aero" => (PoolKind::V3, Proto::Slipstream, true, false, false),
+        // Решение 483: Ramses CL V2 — тот же протокол (вариант RamsesClV2: свои slot0 / ticks / Mint / PoolCreated и
+        // FeeAdjustment; pools/ramses.rs, load_ramses.rs).
+        "slipstream" | "slipstream_aero" | "slipstream_ramses" => {
+            (PoolKind::V3, Proto::Slipstream, true, false, false)
+        }
         // Maverick V2 (решение 122 F): в графе и сигналах (порт расчёта команды Maverick); исполнение — шаг MAVERICK
         // контракта-исполнителя (exec_kind::via_executor), своего пути через Universal Router нет.
         "maverick_v2" => (PoolKind::TickBin, Proto::Maverick, true, false, false),
@@ -664,6 +674,11 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 Err(_) => list.push("dex.v2_fee_source"),
             }
         }
+        // Решение 483: Ramses CL — тики прямыми геттерами пула (load_ramses.rs, TickLens не нужен); пул зовёт
+        // ramsesV2SwapCallback (RamsesV2Pool.sol L1238) — без dex.v3_swap_callback исполнитель не проверить.
+        Proto::UniswapV3 if f.variant == Variant::RamsesCl => {
+            list.extend(["dex.factory", "dex.quoter", "dex.v3_swap_callback"])
+        }
         Proto::PancakeV3 | Proto::UniswapV3 => {
             list.extend(["dex.factory", "dex.tick_lens", "dex.quoter"])
         }
@@ -727,6 +742,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 ) {
                     list.push("dex.solidly_fee_denominator");
                 }
+            }
+            // Решение 483: у пары Ramses Legacy нет getFee(bool) фабрики THENA — комиссия только fee() пары
+            // (Pair.sol L56), источник обязателен.
+            let no_source = ctx.dex_text("dex.solidly_fee_source", f.id).is_err();
+            if f.variant == Variant::RamsesLegacy && no_source {
+                list.push("dex.solidly_fee_source");
             }
         }
         // StableSwap (решение 122 F): фабрики нет — пул подтверждает список адресов из официальной документации DEX.

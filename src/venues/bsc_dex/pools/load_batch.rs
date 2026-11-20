@@ -241,6 +241,8 @@ pub fn one_by_one(f: &Family) -> bool {
         || f.proto == Proto::AlgebraDirFee
         || f.proto.is_solidly()
         || f.proto == Proto::Slipstream
+        // Решение 483: Ramses CL (v3_fork_ramses) — свои ABI и тики без TickLens (load_ramses.rs).
+        || super::ramses::is_cl(f)
         || f.proto.is_stable()
         || f.proto == Proto::WooPP
         || f.proto == Proto::Maverick

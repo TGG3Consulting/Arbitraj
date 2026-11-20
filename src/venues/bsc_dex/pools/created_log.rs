@@ -7,7 +7,7 @@
 //! фабрик crypto-пулов Curve (created_crypto.rs).
 //! Пул из события попадает в справочник (показ и итог проверки — index::record). Встречный токен — наблюдателя.
 //! Кто вызывает: pools/created.rs.
-//! От чего зависит: ctx.rs, families.rs, verify.rs, discover_v4.rs, history_ekubo.rs (решение 454: PoolInitialized ядра Ekubo), discover.rs (against), attach.rs, abi_v2v3.rs, abi_v4.rs.
+//! От чего зависит: ctx.rs, families.rs, verify.rs, discover_v4.rs, history_ekubo.rs (решение 454: PoolInitialized ядра Ekubo), discover.rs (against), attach.rs, abi_v2v3.rs, abi_v4.rs, ramses.rs (решение 483).
 //! Настройки: dex.factory, dex.pool_manager, dex.stable_hooks [DEX].
 //!
 //! События — research/flow/bsc_dex.md (схема п. 2: PairCreated(token0, token1, pair, n), PoolCreated(token0, token1,
@@ -193,6 +193,8 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
                 false,
             ),
         };
+        // Решение 483: варианты Ramses со своей подписью события создания (ramses.rs created_topic).
+        let t0 = super::ramses::created_topic(f).unwrap_or(t0);
         if let Ok(addr) = ctx.dex_addr(setting, f.id) {
             out.push((addr, t0, v4, f));
             // Решение 450: у фабрик KyberSwap Classic Static Fee своё событие PoolCreated (abi_dmm.rs created_topics) —
@@ -330,6 +332,8 @@ fn remember(p: &Pools, w: &Watch, c: &Candidate) {
 /// встречном поле не тот токен.
 pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candidate, String> {
     let (t0, t1, pool) = match f.proto {
+        // Решение 483: Ramses CL V2 (PoolCreated Uniswap V3) и Ramses Legacy (PairCreated без stable) — ramses.rs.
+        _ if super::ramses::created_topic(f).is_some() => super::ramses::created(f, log)?,
         Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => {
             let e = IV2Factory::PairCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("PairCreated не по ABI: {e}"))?;

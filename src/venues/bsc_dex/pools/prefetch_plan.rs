@@ -85,7 +85,11 @@ fn want(e: &Entry) -> Want<'_> {
 fn staged(e: &Entry) -> bool {
     match e.family.kind {
         PoolKind::V2 | PoolKind::Cl => !super::load_batch::one_by_one(e.family),
-        PoolKind::V3 => matches!(e.family.proto, Proto::PancakeV3 | Proto::UniswapV3),
+        // Решение 483: Ramses CL (ABI V3 Uniswap) читается по одному — не ступенями TickLens.
+        PoolKind::V3 => {
+            matches!(e.family.proto, Proto::PancakeV3 | Proto::UniswapV3)
+                && !super::ramses::is_cl(e.family)
+        }
         _ => false,
     }
 }
@@ -119,6 +123,8 @@ fn first_calls(ctx: &Ctx, e: &Entry) -> Vec<Call> {
         return l;
     }
     match (e.family.proto, &p.reference) {
+        // Решение 483: Ramses CL V2 — slot0 / ticks() другой длины (load_ramses.rs): заранее не читается.
+        (Proto::Slipstream, _) if super::ramses::is_cl(e.family) => Vec::new(),
         (Proto::Slipstream, PoolRef::Contract(a)) => prefetch_ticks::slip_first(ctx, e, *a),
         (Proto::Algebra, PoolRef::Contract(a)) => prefetch_ticks::algebra_first(ctx, e, *a),
         (Proto::AlgebraDirFee, PoolRef::Contract(a)) => prefetch_algebra_dir::first(ctx, e, *a),
@@ -147,6 +153,7 @@ pub fn more(ctx: &Ctx, e: &Entry, b: &Book) -> Ask {
         return staged_more(ctx, e, b).unwrap_or_default().into();
     }
     match (e.family.proto, &e.pool.reference) {
+        (Proto::Slipstream, _) if super::ramses::is_cl(e.family) => Ask::default(),
         (Proto::Slipstream, PoolRef::Contract(a)) => {
             prefetch_ticks::slip_more(ctx, e, *a, b).into()
         }

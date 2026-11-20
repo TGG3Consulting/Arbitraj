@@ -3,7 +3,8 @@
 //! проверки, но другое правило математики у развёрнутого кода. Вариант задаётся значением dex.kind (отдельное значение
 //! на вариант — Тигран выбирает его в интерфейсе, как вид), хранится в виде DEX (Family::variant) и читается
 //! математикой на горячем пути без обращения к хранилищу настроек.
-//! Кто вызывает: pools/families.rs (make — при создании вида), quote/pool_quote.rs, quote/depth_band.rs.
+//! Кто вызывает: pools/families.rs (make — при создании вида), quote/pool_quote.rs, quote/depth_band.rs, pools/ramses.rs
+//! (решение 483).
 //! От чего зависит: нет.
 //! Настройки: dex.kind [DEX] (значение выбирает вариант).
 //!
@@ -62,6 +63,28 @@ pub enum Variant {
     /// функций скриптом), exchange L686-L765 — те же действия, что `_exchange` 2ETH (+ assert not is_killed L688).
     /// Чтение — load_crypto_v1.rs (n = 2 и is_killed()), модель tweak_price v1 фабрики к нему не применяется.
     CryptoPair,
+    /// Решение 483: Ramses CL — старая CL-линия (dex.kind = v3_fork_ramses; пул RamsesV2Pool за RamsesBeaconProxy,
+    /// реализация 0x6553aAEE5a3A482A7d61bb5e093B05140Fe17e21, Sourcify 42161 match, solc 0.7.6). Протокол — Uniswap V3
+    /// (slot0 с uint8 feeProtocol L239-L263, Swap / Mint / Burn — IRamsesV2PoolEvents.sol L21-L80, getPool(a, b, fee)
+    /// фабрики). Отличия: комиссия обмена — `currentFee()` (L216-L218, states.fee в computeSwapStep L1044-L1056), а
+    /// `fee()` — начальная (L199-L201, ключ реестра фабрики); меняется setFee фабрики (ProtocolActions.sol L75-L85,
+    /// событие пула FeeAdjustment(uint24, uint24) L26, L84); ticks() — 10 полей (L338-L370, liquidityNet — 2-е);
+    /// обратный вызов обмена — `ramsesV2SwapCallback` (L1238, L1256). Чтение — load_ramses.rs, события — ramses.rs.
+    RamsesCl,
+    /// Решение 483: Ramses CL V2 — линия V3 (dex.kind = slipstream_ramses; RamsesV3Pool — исходник в Sourcify 42161 match
+    /// RamsesV3PoolDeployer 0xb722efaAbe807FAeA16068f595EaA9aa1a62CECD, solc 0.8.28). Протокол — Slipstream (getPool(a, b,
+    /// int24 tickSpacing), QuoterV2 по tickSpacing, uniswapV3SwapCallback L662, L671). Отличия: slot0 из 7 полей (uint24
+    /// feeProtocol, L817-L842), ticks() из 8 полей (L896-L920), PoolCreated фабрики — подпись Uniswap V3
+    /// (IRamsesV3Factory.sol L13-L15), Mint с полем `uint256 index` (IRamsesV3PoolEvents.sol L22-L31), комиссия `fee()`
+    /// (L798-L800) меняется setFee (ProtocolActions.sol L80-L87: событие пула FeeAdjustment(uint24, uint24)).
+    RamsesClV2,
+    /// Решение 483: Ramses Legacy V2 — форк Solidly (dex.kind = solidly_v1_ramses; PairFactory
+    /// 0xADd32480630A16dfAcEe6eeFcB3ab2181449Dc3B, Sourcify 42161 match, solc 0.8.30, contracts/Pair.sol). Протокол —
+    /// Solidly V1 (metadata L479-L493, getPair(a, b, bool) PairFactory.sol L30, _k / _f / _d / _get_y L405-L449 — те же
+    /// формулы, что THENA V1, math/solidly_v1_math.rs). Отличия: getAmountOut = `_getAmountOut(...) - 1` (L452-L458),
+    /// комиссия — `fee()` пары над FEE_DENOM = 1 000 000 (L56, L63; настройки dex.solidly_fee_*), Sync(uint112, uint112)
+    /// (IPair.sol L15), PairCreated(token0, token1, pair, uint256) без stable (IPairFactory.sol L5).
+    RamsesLegacy,
 }
 
 /// Вариант по значению dex.kind. Принимает: значение dex.kind. Возвращает: вариант (неизвестное — Base). Ошибок нет.
@@ -73,6 +96,9 @@ pub fn of(kind: &str) -> Variant {
         "curve_stableswap_meta" => Variant::CurveMeta,
         "curve_stableswap_oracle" => Variant::CurveOracle,
         "curve_crypto2_v1" => Variant::CryptoPair,
+        "v3_fork_ramses" => Variant::RamsesCl,
+        "slipstream_ramses" => Variant::RamsesClV2,
+        "solidly_v1_ramses" => Variant::RamsesLegacy,
         _ => Variant::Base,
     }
 }
@@ -95,5 +121,10 @@ mod tests {
         assert_eq!(of("curve_stableswap_oracle"), Variant::CurveOracle);
         assert_eq!(of("curve_crypto2_v1"), Variant::CryptoPair);
         assert_eq!(of("curve_tricrypto_v1"), Variant::Base);
+        assert_eq!(of("v3_fork"), Variant::Base);
+        assert_eq!(of("v3_fork_ramses"), Variant::RamsesCl);
+        assert_eq!(of("slipstream_ramses"), Variant::RamsesClV2);
+        assert_eq!(of("solidly_v1"), Variant::Base);
+        assert_eq!(of("solidly_v1_ramses"), Variant::RamsesLegacy);
     }
 }

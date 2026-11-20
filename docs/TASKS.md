@@ -627,7 +627,8 @@
     #[ignore] у трёх тестов tests/arbitrum_forks_482_live.rs. Тест проверяет: getAmountsOut Joe / Aquila и симуляцию
     обмена в паре (наш выход принят, выход + 1 откатан) у всех четырёх V2; тики TickLens (Rubicon — свой, Arbidex V3 —
     Uniswap) = ticks(t) пула; математика V3 = виртуальный квотер (и QuoterV2 Rubicon). Затем ключи из §7 и
-    dex.pool_enabled — Тигран. Расхождение в любом пункте — DEX не включать, разбор.
+    dex.pool_enabled — Тигран. Расхождение в любом пункте — DEX не включать, разбор. Правило координатора: TickLens
+    Rubicon не сошёлся с TickLens Uniswap / ticks(t) — dex.tick_lens Rubicon CLMM = TickLens Uniswap 0xbfd8…F573.
   - T482-02 **Сделано (доделка 482):** Swapline V1 — поиск по фабрике getAllLBPairs (factory_ask.rs Q::Lb) и подписка
     LBPairCreated (created_log.rs) у lb_v21; запись — reg.json forks_482.py, тест tests/arbitrum_forks_482_reg_live.rs
     (T482-01). У lb_v22 подписки и поиска нет (фабрика V2.2 не сверялась) — если появится lb_v22 вне GeckoTerminal,
@@ -638,9 +639,12 @@
     abi_metric::topics() (записаны на BSC) в коде пула Arbitrum — если их там нет, пул на Arbitrum не слушается событиями,
     нужен разбор (событие пула Swap в исходнике Arbitrum опубликовано).
   - T482-04 Omni Exchange Flux (код = PancakeSwap Infinity CL): у вида нужны Universal Router, Permit2, CLQuoter — у Omni
-    официально не найдены (сайт мёртв, адреса Vault / CLPoolManager — только адаптер DefiLlama). Варианты (решает
-    Тигран): вид Infinity CL «только исполнитель» (tradable = нет, шаг INF_CL v3) + виртуальный квотер для менеджера CL —
-    код; либо найти официальные адреса. TVL $5.85 (DefiLlama 20.11.2026).
+    не найдены (сайт мёртв, адреса Vault / CLPoolManager — только адаптер DefiLlama). Проверено по поручению
+    координатора: шаг исполнителя INF_CL есть (exec_kind.rs, исполнитель v3) — исполнять без Universal Router можно, но
+    нужен (1) вариант вида Infinity CL «только исполнитель» (tradable = нет, без UR / Permit2 в required) и (2) квотер:
+    contracts/VirtualQuoter.sol умеет только обмен самого пула (quoteExactIn / quoteMetric / quoteSmardex / quoteIzi),
+    для пула внутри менеджера — новая функция Vault.lock / lockAcquired → правка контракта и пересборка (solc запрещён в
+    ветке — «нужна пересборка VirtualQuoter»). CLQuoter PancakeSwap привязан к своему Vault. TVL $5.85 (DefiLlama 20.11.2026).
   - T482-05 Integral SIZE — оракульный Relayer (не AMM): новое семейство; функции квоты Relayer в docs не названы —
     читать исходник Relayer (адрес docs.integral.link 0x3c69…5f42) в Sourcify, затем вид.
   - T482-06 Clipper — RFQ: адаптер по API Clipper (документация API и адрес пула Arbitrum не найдены; api.clipper.exchange
@@ -665,18 +669,20 @@
     новое семейство.
   - T482-17 Raindex — книга заявок Rainlang (OrderBook v5 0x8dF8…94ab): новое семейство (quote2 / takeOrders3).
   - T482-18 Mangrove — ончейн-книга (Mangrove 0x109d…3f61, MgvReader 0x7E10…1875): новое семейство.
-  - T482-19 Skate AMM — кросс-сетевой, обмен не атомарный (executeTask отдельным вызовом): решение Тиграна, как брать.
+  - T482-19 Skate AMM — кросс-сетевой, обмен не атомарный (executeTask отдельным вызовом): решение Тиграна, как брать
+    (координатор 20.11: способ — позже, задача остаётся).
   - T482-20 Kaliber — PropAMM, официальных docs / адресов / исходника нет (контракты 0x1545…7312, 0xf639…FC63 — DefiLlama,
     Sourcify 404): найти официальный источник.
   - T482-21 1inch Aqua — SwapVM-стратегии, тейкеры — KYB-резолверы 1inch (tx.origin держит токен): решение Тиграна (KYB) и
-    новое семейство.
+    новое семейство (координатор 20.11: способ — позже, задача остаётся).
   - T482-22 PancakeSwap X — интенты UniswapX (ExclusiveDutchOrderReactor, адрес — DefiLlama): роль филлера — решение
-    Тиграна.
+    Тиграна (координатор 20.11: способ — позже, задача остаётся).
   - T482-23 Renegade — dark pool / RFQ (ключ EXTERNAL_MATCH_KEY от команды): адаптер RFQ.
   - T482-24 Tristero — dark pool / маршрутизатор по API (getQuote, Permit2): адаптер по API.
   - T482-25 Cables Finance — RFQ / perp, адресов в docs нет, TVL 0: найти официальный источник спота.
   - T482-26 Alphix — пул Uniswap V4 с крючком JIT (beforeSwap добавляет ликвидность): своя математика по StateView
-    исказит выход — котировать квотером V4 или не допускать крючок (hooks.allowed_groups) — решение Тиграна.
+    исказит выход — котировать квотером V4 или не допускать крючок (hooks.allowed_groups) — решение Тиграна
+    (координатор 20.11: способ — позже, задача остаётся).
   - T482-27 Chronos V2 — движок и адреса не найдены (docs недоступны; DefiLlama deadUrl, TVL $252): найти.
   - T482-28 Horiza — форк Uniswap V3 (пост Horiza), фабрика не найдена (deadUrl, TVL $660): найти и сверить.
   - T482-29 Thick — код и адреса не опубликованы (TVL $413): найти официальный источник.

@@ -705,8 +705,10 @@ tools/arbitrum_record/forks_482.py (шаг `forks_482`) и saddle.py (шаг `zy
 tests/arbitrum_forks_482_live.rs (#[ignore] до записи, T482-01). dex.pool_enabled ставит Тигран — после записи и теста.
 Id без строки GeckoTerminal — предложение (решает Тигран); пулы таких DEX — поиск по фабрике (index.factory_scan площадки
 arb_dex = да: V2 — getPair, V3 — getPool по dex.v3_fee_tiers; pools/factory_calls.rs) или dex.stable_pools.
-Адрес «(DefiLlama)» — из адаптера DefiLlama-Adapters (не официальный источник DEX: сайт DEX мёртв, docs нет); код по нему
-верифицирован в Sourcify — это факт кода, не факт принадлежности DEX (оговорка в строке).
+Адрес «(DefiLlama)» — из адаптера DefiLlama-Adapters (не официальный источник DEX: сайт DEX мёртв, docs нет).
+**Основание (решение координатора по 482, Тигран: «взрослые продовые решения»):** адрес из адаптера DefiLlama при коде,
+подтверждённом Sourcify (exact_match / match) и сверенном с видом бота, — принимается как источник адреса
+(«адаптер DefiLlama + код Sourcify»): Swapsicle V1, Arbitrum Exchange V2 / V3, ZyberSwap Stableswap, Swapline V1.
 
 ### 7.1 Joe DEX / LFJ V1 — `joe-dex@arbitrum` (T433-090), вид `v2_fork`
 
@@ -768,7 +770,7 @@ getAmountsOut, function swapExactTokensForTokensSupportingFeeOnTransferTokens); 
 | --- | --- | --- |
 | dex.kind | `v3_fork` | RubiconV3Factory — Sourcify match «UniswapV3Factory» (114 файлов); пул WETH/USDC 0,05 % 0xee57310555a957cec1debb65b1e165d7c9ed700f (getPool фабрики, 20.11) — Sourcify match «UniswapV3Pool»: uniswapV3SwapCallback, slot0 uint8 feeProtocol. POOL_INIT_CODE_HASH Rubicon ≠ Uniswap — бот адрес пула хешем не считает (проверка — getPool фабрики, pools/verify_calls.rs) |
 | dex.factory | `0x045B7012CbD158C1b48874310F985Adb48aA62ba` | docs.rubicon.finance/developers/deployments (CLMM) |
-| dex.tick_lens | `0xdf7e8987421F541C50f821f8Cf22A6bDA5e1E05b` | там же (TickLens); исходника в Sourcify нет (404), код есть (1385 байт) — совпадение с TickLens Uniswap и ticks(t) проверяет запись (T482-01) |
+| dex.tick_lens | `0xdf7e8987421F541C50f821f8Cf22A6bDA5e1E05b` | там же (TickLens); исходника в Sourcify нет (404), код есть (1385 байт) — совпадение с TickLens Uniswap и ticks(t) проверяет запись (T482-01). **Правило координатора:** не сошлось — dex.tick_lens = `0xbfd8137f7d1516D3ea5cA83523914859ec47F573` (TickLens Uniswap, верифицирован; читает переданный пул) |
 | dex.quoter | `0x22066f5A85076630CF9DEEB0A12186b73CD3284C` (QuoterV2) | там же; Sourcify match QuoterV2 (POOL_INIT_CODE_HASH Rubicon) |
 | dex.v3_fee_tiers | `500, 3000, 10000` | конструктор фабрики (Sourcify): [500] = 10, [3000] = 60, [10000] = 200 |
 | dex.pool_enabled | да — решает Тигран (после T482-01) | — |
@@ -790,9 +792,14 @@ GeckoTerminal `rubicon-clmm-arbitrum` 20.11.2026 пулов не отдал (п�
 - **Swapline V1** и **Metric V1** — были здесь до доделки 482: источник пулов сделан кодом (§7.9, §7.10).
 - **Omni Exchange Flux** (`omni-exchange-flux`, T433-133) — код Vault / CLPoolManager = PancakeSwap Infinity (dex49/3.md,
   Sourcify match, побайтно с BSC). Не подключено: вид `pancakeswap_infinity_cl` tradable и не форк — required() требует
-  dex.universal_router, dex.universal_router_version, dex.permit2 и dex.quoter (families.rs L645-L651, L670-L672);
-  виртуальный квотер Infinity CL не поддерживает (quote/virtual_quoter.rs supports). Universal Router и CLQuoter Omni
-  официально не найдены. Задача T482-04.
+  dex.universal_router, dex.universal_router_version, dex.permit2 и dex.quoter (families.rs L645-L651, L670-L672).
+  Проверка по поручению координатора: шаг исполнителя INF_CL есть (exec_kind.rs: pancakeswap_infinity_cl → InfCl,
+  Vault.lock → lockAcquired → CLPoolManager.swap, только исполнитель v3) — исполнить без Universal Router можно было бы,
+  но (1) нет вида «Infinity CL только через исполнитель» (tradable = нет) — нужен вариант вида; (2) квотера нет:
+  виртуальный квотер умеет только обмен самого пула с обратным вызовом (contracts/VirtualQuoter.sol: quoteExactIn,
+  quoteMetric, quoteSmardex, quoteIzi; quote/virtual_quoter.rs supports — без InfinityCl), для пула внутри менеджера
+  нужна новая функция VirtualQuoter (Vault.lock / lockAcquired) — правка контракта и пересборка (solc). CLQuoter
+  PancakeSwap привязан к своему Vault — к Vault Omni не подходит. Задача T482-04 остаётся.
 - **AutoRange** (`autorange`, T433-143) — не DEX: хранилища позиций Uniswap V3 (фабрика хранилищ — uniswapV3Factory
   0x1F98431c…F984, dex49/4.md); ликвидность — в пулах `uniswap_v3_arbitrum@arbitrum` (§2.2). Настроек не нужно.
 

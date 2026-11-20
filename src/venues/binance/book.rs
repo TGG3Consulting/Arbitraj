@@ -3,7 +3,7 @@
 //! получим за Q монет) с комиссией тейкера нашего аккаунта (fee_rates.rs, вариант venue.fee_deduction).
 //! Решение 217: freeze — снимок стакана и плана комиссии (gateway/frozen.rs FrozenBook) для контракта quote_snapshot;
 //! живая котировка — тот же снимок на один вызов (одна формула).
-//! Кто вызывает: ws_conn.rs (кладёт стакан), mod.rs (quote для ядра, book_confirmed), book_print.rs (print).
+//! Кто вызывает: ws_conn.rs и fast.rs (кладут стакан; решение 425 — rebind), mod.rs (quote для ядра, book_confirmed), book_print.rs (print).
 //! От чего зависит: core/types, fees.rs, fee_rates.rs, discount_balance.rs, ctx.rs.
 //! Настройки: feed.stale_after_ms (соединение молчит дольше — данные устарели); venue.book_stale_ms [binance]
 //! (обязательна) — кадра стакана пары нет дольше — котировки нет; venue.fee_deduction [binance] (обязательна);
@@ -95,6 +95,17 @@ impl Books {
         let m = self.map.read().unwrap_or_else(|p| p.into_inner());
         if let Some((_, _, seen, _)) = m.get(ticker) {
             seen.store(now_ms(), Ordering::Relaxed);
+        }
+    }
+
+    /// Решение 425: стакан пары совпал по содержимому с кадром другого соединения (страховка JSON, fast.rs) — живость
+    /// стакана теперь по этому соединению, время кадра пары — сейчас (тихая пара без изменений SBE не устаревает).
+    /// Стакана нет — ничего. Ошибок нет.
+    pub fn rebind(&self, ticker: &str, alive: Alive) {
+        let mut m = self.map.write().unwrap_or_else(|p| p.into_inner());
+        if let Some(e) = m.get_mut(ticker) {
+            e.1 = alive;
+            e.2.store(now_ms(), Ordering::Relaxed);
         }
     }
 

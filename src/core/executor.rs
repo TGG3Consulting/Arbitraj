@@ -282,6 +282,8 @@ async fn run(
     );
     // Решение 245, дополнение п. 2: момент решения о сделке — в учёт (длительность сделки для «успели бы»).
     deal.decided_at = Some(decided);
+    // Решение 464 (ревью t238): включатель замера — один раз на сделку, им же пользуется ордер продажи (sell.rs).
+    deal.step_timing = on;
     // Решение 394 (докупка): первая сделка группы — группа = её ID; вложенная — ID первой; выключено — группы нет.
     deal.group = match &ride.seat {
         super::coin_ride::Seat::Alone => None,
@@ -302,6 +304,8 @@ async fn run(
         plan.profit_usd.round_dp(4),
         plan.pick_note()
     ));
+    // Решение 464: время в пути плана (T плана) и его источник (настройки, статистика монеты или пары площадок).
+    deal.note(super::transit_source::note(core, &d, plan.transit_s));
     if let Some(a) = &acc {
         let name = deps.settings.accounts().wallet(&a.0).map(|w| w.name);
         deal.note(format!("Кошелёк DEX: «{}» ({a})", name.unwrap_or_default()));
@@ -575,7 +579,7 @@ async fn run(
         .await;
     if r.filled_qty < plan.qty {
         // Решение 48: больший итог из «довезти» и «продать на A»; застрявшая монета не включается.
-        match super::partial::choose(core, &deal).await {
+        match super::partial::choose(core, &mut deal).await {
             super::partial::Choice::Deliver(x) => {
                 deal.note(format!(
                     "Частичная покупка: довезти и продать (итог {} USDT)",
@@ -640,6 +644,9 @@ async fn run(
         super::coin_group::joined(core, g);
     }
     // Решение 151: на кошелёк DEX — зачисление и по приходу в блокчейне (transfers::send_trade).
+    // Решение 476 (Тигран 20.11; ревью t238): разрешения продажи DEX по плану — заранее, отдельной задачей: ни перевод,
+    // ни продажа её не ждут; продажу ни к чему не обязывают (sell_approve.rs).
+    super::sell_approve::start(core, &d, &deal, &plan);
     let mut gas = Vec::new();
     let sent = super::transfers::send_trade(
         core,
@@ -678,6 +685,8 @@ async fn run(
         }
     }
     deal.step = Step::Selling;
+    // Решение 476: итог разрешений заранее, если уже есть, — в хронологию и затраты (не ждём его).
+    super::sell_approve::collect(core, &mut deal).await;
     super::ledger::save(core, &deal).await;
     super::sell::sell_or_stuck(core, deal).await;
 }

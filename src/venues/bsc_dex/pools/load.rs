@@ -397,7 +397,8 @@ pub async fn state(
         ));
     }
     // Algebra (THENA Fusion, решения 80, 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_algebra.rs):
-    // globalState + liquidity + сырой битмап tickTable. tickSpacing пулу не нужен (битмап индексирует сырой тик).
+    // globalState + liquidity + tickSpacing + сжатый битмап tickTable (решение 463: код AlgebraV1, строка —
+    // 256·spacing); у Algebra V1.9 с направленными комиссиями (решение 444) — сырой битмап, tickSpacing не нужен.
     if matches!(f.proto, Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee) {
         if let PoolRef::Contract(a) = reference {
             // Решение 188: у Integral тики — связным списком (load_algebra_integral.rs), состояние то же. Решение 444:
@@ -407,7 +408,7 @@ pub async fn state(
             } else if f.proto == Proto::AlgebraDirFee {
                 load_algebra_dir::load(ctx, *a, &tag).await?
             } else {
-                load_algebra::load(ctx, *a, &tag).await?
+                load_algebra::load(ctx, *a, spacing, &tag).await?
             };
             return Ok(Loaded {
                 state,
@@ -549,6 +550,7 @@ pub async fn entry(
 pub fn built(ctx: &Ctx, p: &Found, ticker: &str, usdt: Address, block: u64, l: Loaded) -> Entry {
     // Свежая fee() пула (решение 281) — вместо комиссии из проверки; без неё — как раньше.
     let fee_pips = l.fee_pips.or(p.fee_pips.filter(|f| *f != DYNAMIC_FEE_FLAG));
+    let tick_spacing = known_spacing(p.family, p.tick_spacing, &l);
     let pool = Pool {
         venue: ctx.venue(),
         family: p.family.id.to_string(),
@@ -557,7 +559,7 @@ pub fn built(ctx: &Ctx, p: &Found, ticker: &str, usdt: Address, block: u64, l: L
         token0: p.token0,
         token1: p.token1,
         fee_pips,
-        tick_spacing: p.tick_spacing,
+        tick_spacing,
         bin_step: p.bin_step,
         hooks: p.hooks.clone(),
         state: l.state,
@@ -608,9 +610,21 @@ pub async fn refresh(
     Ok(renewed(e, block, l))
 }
 
+/// Ревью t236 (решение 463): tickSpacing пула THENA Fusion неизменен (Constants.TICK_SPACING кода пула) — после
+/// первого чтения (load_algebra.rs) он хранится в Pool.tick_spacing записи, и перечитывание его не запрашивает. Другие
+/// виды — прежнее значение. Принимает: вид, прежний tickSpacing, прочитанное. Возвращает: tickSpacing записи. Ошибок нет.
+fn known_spacing(f: &Family, old: Option<i32>, l: &Loaded) -> Option<i32> {
+    if f.proto != Proto::Algebra {
+        return old;
+    }
+    let map = l.ticks.as_ref().map(|m| m.spacing);
+    old.or(map)
+}
+
 /// Запись с новым состоянием на блоке (valid = true). Ошибок нет.
 pub fn renewed(e: &Entry, block: u64, l: Loaded) -> Entry {
     let mut out = e.clone();
+    out.pool.tick_spacing = known_spacing(e.family, e.pool.tick_spacing, &l);
     out.pool.state = l.state;
     // Свежая fee() пула на этом блоке (решение 281); None — комиссия записи прежняя.
     if let Some(fee) = l.fee_pips {

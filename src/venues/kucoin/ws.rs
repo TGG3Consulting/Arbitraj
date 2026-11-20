@@ -6,6 +6,9 @@
 //! От чего зависит: ws_conn.rs, bullet.rs, book.rs, ctx.rs, gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_subs_per_sec (≤ 10), venue.ws_reconnect_pause_ms, venue.depth_levels (5 или 50) [kucoin],
 //! http.timeout_ms (время на подключение). Адрес, пинг и срок понга — из ответа bullet (не настройки).
+//! Решение 423: venue.full_book_per_sec [kucoin] задана (и venue.ws_reconnect_pause_ms — пауза повторной
+//! пересинхронизации пары после разрыва) — быстрый стакан (изменения /market/level2 + снимок Full OrderBook) поверх
+//! снимков; не задана — только снимки, как до решения 423. Читается при каждом подключении.
 //!
 //! Официально (https://www.kucoin.com/docs-new/rate-limit-rule-classic): «100 per 10 seconds» сообщений клиента на
 //! соединение, «Maximum 100» тем в одном запросе подписки, «Spot/Margin is limited to 400» тем на соединение; сервер
@@ -43,6 +46,9 @@ pub struct Cfg {
     pub levels: u64,
     pub sub_gap: Duration,
     pub connect_timeout: Duration,
+    /// Решение 423: быстрый стакан включён — пауза повторной пересинхронизации пары после разрыва
+    /// (venue.ws_reconnect_pause_ms); None — только снимки.
+    pub fast: Option<Duration>,
 }
 
 /// Работает, пока жив канал out: подключается заново после каждого обрыва.
@@ -124,9 +130,18 @@ pub fn config(ctx: &Ctx) -> Result<Cfg, String> {
             "venue.depth_levels = {levels}: у KuCoin только {DEPTH_LEVELS:?}"
         ));
     }
+    // Решение 423: быстрый стакан — при заданных venue.full_book_per_sec и venue.ws_reconnect_pause_ms.
+    let fast = match (
+        super::full_book::pace(ctx),
+        ctx.int("venue.ws_reconnect_pause_ms"),
+    ) {
+        (Ok(_), Ok(ms)) => Some(Duration::from_millis(ms)),
+        _ => None,
+    };
     Ok(Cfg {
         levels,
         sub_gap: Duration::from_secs_f64(1.0 / per_sec as f64),
         connect_timeout: ctx.http_timeout().map_err(|e| e.message)?,
+        fast,
     })
 }

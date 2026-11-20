@@ -194,8 +194,9 @@ pub enum PoolState {
     /// динамическая (плагин волатильности), но внутри одного свопа постоянна — её текущее значение берётся из
     /// `globalState()` (fee, единицы 1e-6). `globalState() → (price, tick, fee, timepointIndex, communityFeeToken0,
     /// communityFeeToken1, unlocked)`, `liquidity() → uint128` — IAlgebraPoolState.sol (@cryptoalgebra/v1.9-core).
-    /// Карта тиков читается по СЫРОМУ битмапу `tickTable(int16)` (TickTable индексирует сырой тик, без деления на
-    /// tickSpacing) — math/swap_algebra.rs. Математика — math/swap_algebra.rs.
+    /// Битмап `tickTable(int16)`: у THENA Fusion (код AlgebraV1, решение 463) СЖАТЫЙ (слово = floor(tick /
+    /// tickSpacing) >> 8), у Algebra V1.9 Camelot V3 (решение 461) СЫРОЙ (слово = tick >> 8). У THENA Fusion `fee` —
+    /// комиссия свопа СЛЕДУЮЩЕГО блока (по оракулу пула, не globalState.fee). Математика — math/swap_algebra.rs.
     /// Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3) — globalState несёт две комиссии (feeZto,
     /// feeOtz); `fee` — комиссия обмена token0 → token1 (feeZto), `fee_otz` — token1 → token0 (feeOtz). У видов с одной
     /// комиссией `fee_otz` = None (обе стороны — `fee`): сериализация таких пулов прежняя (поле не пишется).
@@ -203,8 +204,9 @@ pub enum PoolState {
         sqrt_price_x96: U256,
         tick: i32,
         liquidity: u128,
-        /// Текущая комиссия пула в пипсах (единицы 1e-6), из globalState.fee — постоянна на весь своп. У направленных
-        /// комиссий — комиссия обмена token0 → token1 (feeZto).
+        /// Комиссия пула в пипсах (единицы 1e-6), постоянна на весь своп: THENA Fusion — комиссия следующего блока
+        /// (решение 463), Algebra Integral — по globalState / fee() плагина, Camelot V3 — globalState.feeZto
+        /// (комиссия обмена token0 → token1).
         fee: u32,
         /// Решение 444: комиссия обмена token1 → token0 (feeOtz, пипсы) у Algebra V1.9 с направленными комиссиями;
         /// None — одна комиссия на обе стороны (THENA Fusion, Algebra Integral).

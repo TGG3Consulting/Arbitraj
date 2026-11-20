@@ -81,6 +81,11 @@ pub struct FactoryScan {
     pub enabled: bool,
     /// Когда закончен последний проход. None — ещё не было.
     pub at: Option<DateTime<Utc>>,
+    /// Решение 449: когда начат последний проход. Список DEX и их настройки (dex.kind, dex.pool_enabled, адреса)
+    /// читаются в его начале — заметки `notes` и счётчики итога `at` отражают настройки на этот момент. Позже `at`
+    /// (или `at` нет) — проход идёт сейчас. None — проходов ещё не было.
+    #[serde(default)]
+    pub started: Option<DateTime<Utc>>,
     /// Сколько вызовов getPair / getPool отправлено (пачками Multicall3 по dex.load_batch).
     pub calls: usize,
     /// Сколько пулов нашли фабрики (ненулевой адрес) — все, до проверки на своём узле.

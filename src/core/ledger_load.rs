@@ -116,6 +116,8 @@ pub async fn load(core: &Core) {
             lk(&core.inner.deals).insert(d.id.clone(), d.clone());
             // Решение 405 (М2): набор сделок, которые ещё что-то держат (unsettled.rs).
             super::unsettled::track(core, &d);
+            // Решение 464 (t238, ревью): исход продажи неизвестен — монета на площадке заблокирована (sale_marks.rs).
+            super::sale_marks::track(core, &d);
         }
     }
     recompute_exposure(core);

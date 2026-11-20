@@ -13,6 +13,10 @@
 //! = да (как Bybit, решение 136; проверить на записанных кадрах). Разрыв: стакан пары недостоверен до следующего
 //! снимка — пересподписка одной пары у Phemex невозможна («orderbook.unsubscribe … unsubscribes all orderbook related
 //! subscriptions»), а снимок приходит сам не реже раза в 60 с (без бесконечного круга ресинков, урок 12).
+//! Решение 427: контрольный снимок — «for client self-verification»: если у снимка тот же sequence, что у последнего
+//! применённого кадра («Latest message sequence» — изменений между ними не было), его уровни сравниваются с верхними
+//! уровнями стакана в памяти (столько же уровней, сколько в снимке); расхождение — Applied::Differs (стакан был неверен,
+//! снимок его заменил). Другой sequence — не сравнивается: связь номера снимка с номерами изменений не описана.
 
 use std::collections::BTreeMap;
 
@@ -26,6 +30,8 @@ use super::num;
 pub enum Applied {
     /// Стакан изменился — отдать ядру.
     Changed,
+    /// Решение 427: снимок с тем же sequence разошёлся со стаканом в памяти — стакан заменён снимком (отдать ядру, счёт).
+    Differs,
     /// Изменение до снимка (после разрыва) — пропущено, стакан по-прежнему недостоверен.
     Waiting,
     /// Разрыв: стакан недостоверен до нового снимка (причина).
@@ -39,6 +45,13 @@ pub struct LocalBook {
     asks: BTreeMap<i64, i64>,
     /// sequence последнего применённого кадра; None — снимка ещё не было (или стакан сброшен).
     seq: Option<i64>,
+}
+
+/// Решение 427: уровни стороны стакана в памяти (от лучшей цены) равны уровням снимка — по числу и по значениям.
+/// Принимает: уровни в памяти, уровни снимка. Возвращает: да/нет. Ошибок нет.
+fn same_side<'a>(ours: impl Iterator<Item = (&'a i64, &'a i64)>, theirs: &[RawLevel]) -> bool {
+    let ours: Vec<RawLevel> = ours.map(|(p, q)| (*p, *q)).collect();
+    ours == theirs
 }
 
 /// Уровни стороны: новое количество, 0 — убрать. Ошибок нет.
@@ -59,7 +72,9 @@ impl LocalBook {
         let Some(seq) = f.seq else {
             return self.reset("кадр без sequence".into());
         };
+        let mut differs = false;
         if f.snapshot {
+            differs = self.seq == Some(seq) && !self.same_top(f);
             self.bids.clear();
             self.asks.clear();
         } else {
@@ -79,7 +94,22 @@ impl LocalBook {
         put(&mut self.bids, &f.bids);
         put(&mut self.asks, &f.asks);
         self.seq = Some(seq);
-        Applied::Changed
+        if differs {
+            Applied::Differs
+        } else {
+            Applied::Changed
+        }
+    }
+
+    /// Решение 427: верх стакана в памяти совпадает со снимком — столько уровней каждой стороны, сколько в снимке
+    /// (уровни снимка упорядочиваются от лучшей цены). Принимает: кадр-снимок. Возвращает: да/нет. Ошибок нет.
+    fn same_top(&self, f: &Frame) -> bool {
+        let mut tb: Vec<RawLevel> = f.bids.clone();
+        tb.sort_by_key(|l| std::cmp::Reverse(l.0));
+        let mut ta: Vec<RawLevel> = f.asks.clone();
+        ta.sort_by_key(|l| l.0);
+        same_side(self.bids.iter().rev().take(tb.len()), &tb)
+            && same_side(self.asks.iter().take(ta.len()), &ta)
     }
 
     /// Сбрасывает стакан (недостоверен до снимка). Возвращает: Gap с причиной. Ошибок нет.

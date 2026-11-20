@@ -15,7 +15,7 @@
 //! Не задана dex.quoter_memory_lag_blocks — доказательство не выполняется (Unproven с её именем — видно в журнале).
 //! Кто вызывает: exec/quoter_refetch_proof.rs (judge — фоном и перед сделкой, и по «память отстаёт» сверки).
 //! От чего зависит: check/memory_proof_rules.rs, node/rpc.rs, pools/load.rs, pools/registry.rs,
-//! exec/quoter_refetch_note.rs, check/quoter_block.rs (MEMORY_LAG).
+//! exec/quoter_refetch_note.rs, check/quoter_block.rs (MEMORY_LAG), pools/fusion_book.rs (isolated — решение 463).
 //! Настройки: dex.quoter_memory_lag_blocks [bsc_dex]; через pools/load.rs — настройки чтения вида пула.
 //!
 //! eth_getLogs(filter: address, topics, fromBlock, toBlock) — execution-apis
@@ -28,7 +28,7 @@ use crate::gateway::errors::GatewayResult;
 use super::super::ctx::Ctx;
 use super::super::exec::quoter_refetch_note;
 use super::super::node::rpc;
-use super::super::pools::load;
+use super::super::pools::{fusion_book, load};
 use super::super::pools::registry::{Entry, Registry};
 use super::super::tokens::Tokens;
 use super::memory_proof_rules::{self as rules, Unapplied};
@@ -132,7 +132,8 @@ pub async fn prove(
     let read;
     let node = match at_head {
         Some(n) => n,
-        None => match load::refresh(ctx, tokens, reg, mem, head).await {
+        // Решение 463 (повторное ревью t236): оракул THENA Fusion этого чтения — не в книгу (fusion_book.rs).
+        None => match fusion_book::isolated(load::refresh(ctx, tokens, reg, mem, head)).await {
             Ok(n) => {
                 read = n;
                 &read

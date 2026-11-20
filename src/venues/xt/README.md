@@ -28,6 +28,8 @@
 | `trade.rs`, `order_state.rs` | `POST /v4/order` (тело JSON, свой clientOrderId — 18 знаков `b|s` + мс + номер попытки, шаблон `^[a-zA-Z0-9_]{4,22}`, решение 263), итог `GET /v4/order?orderId=` (Query single, 50/s), отмена `DELETE`; поиск по clientOrderId при неизвестном итоге; комиссия — `fee`/`feeCurrency` (`deductServices` в документации нет — решение 263) |
 | `market_sell.rs` | Решение 268: рыночная продажа (контракт `trade_market_sell`) — ордер типа «market» на количество базовой монеты после отказа лимитного ордера «цена вне диапазона»; правила пары и разбор итога — те же, что у лимитного (`order_rules.rs`, `trade.rs`); код PriceOutOfRange рыночный ордер не отдаёт |
 | `book_version.rs` | Решения 202/213: версия стакана пары по REST `GET /v4/public/depth` для сторожа ядра — при `depth_update` номер (`lastUpdateId` ↔ номер локального стакана, «Orderbook manage»), при `depth` — первые `venue.depth_levels` уровней (по содержимому); Решение 238: тот же запрос — снимок стакана для ордера (`snapshot`, контракт `quote_rest`), все уровни ответа |
+| `backup.rs`, `backup_conn.rs` | Решение 419 (дополнение и ревью): страховка быстрого стакана — при `depth_update` параллельно снимки `depth@{symbol},{venue.depth_levels}` (если 5/10/20/50); ядру — локальный стакан, пока он синхронизирован и отдан последним, иначе снимки; «не старее отданного» — по порядку получения (у depth_update нет времени биржи). Разрыв — ядру снимок depth@, принятый после последнего изменения быстрого, а если такого нет — стакан пары снимается до следующего снимка. Сверка (ревью 419): два снимка depth@ подряд не равны верху быстрого (общие уровни), быстрый между ними не менялся — расхождение: ядру снимок, быстрый заново со снимка REST (не раньше `venue.ws_reconnect_pause_ms`). Счёт разрывов и расхождений — журнал `venue.fast_book` (склейка решения 334) |
+| `ws_dial.rs` | Решение 419: подключение к публичному WebSocket со сжатием permessage-deflate (RFC 7692) — клиент yawc (tokio-tungstenite сжатие не умеет); с 2026-12-10 08:00 UTC XT отвергает публичные соединения без сжатия. Включено всегда, настройки нет; Ping сервера yawc отвечает сам |
 | `book.rs`, `depth.rs`, `ws.rs`, `ws_conn.rs`, `ws_book.rs`, `local_book.rs`, `snapshots.rs` | Сторож пар (решение 202): учёт свежести на каждом кадре, переподписка пары `unsubscribe` + `subscribe`, переподключение соединения; подтверждённая тихая пара свежа до срока (`book.rs`). Стаканы: `depth@{symbol},{levels}` (снимки 1000 мс; тот же updateId — без отдачи ядру) или `depth_update@{symbol}` (100 мс) + снимок REST `/v4/public/depth` из общей очереди (≤ 10/с); текст `ping` раз в `venue.ws_ping_ms`; котировка по ставке тейкера пары. Дополнение 10.11 к 202/213: при переподписке пары сторожем — сразу снимок REST из той же очереди (`ws_book.rs` resub): `depth_update` — стакан пары заново со снимка (номер = `lastUpdateId`), `depth` — верхние `venue.depth_levels` уровней ядру, если кадр `depth@` ещё не пришёл (`ws_diff.rs`) |
 | `wallet.rs`, `networks_parse.rs` | `/v4/public/wallet/support/currency` + `/v4/public/currencies` (кэш): сеть BSC (`chain`), `contract`, ввод/вывод по сети и по монете, комиссия и минимум вывода; ненулевой `depositFeeRate` — ввод по сети закрыт; минимум депозита — `depositMinAmount` («0» — минимум 0, решение 370; нет поля — `venue.deposit_min_absent_ok`; gateway/deposit_min.rs) |
 | `deposit_addr.rs` | Адрес депозита, кэш (монета, сеть); memo — отказ; DEPOSIT_006/007 — «адрес создаётся»; решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
@@ -43,9 +45,12 @@
 - Лимиты: 429 — «IP или apiKey будет заблокирован», Retry-After нет. Рынок 10/с на IP, `/v4/balances` 10/с на ключ,
   `POST /v4/order` 20/с, `/v4/withdraw` (вывод и статус) 1/с. Лимитов WebSocket (тем на соединение, сообщений в
   секунду, соединений с IP) в документации нет — подбор живым замером (решение 109).
-- WebSocket: документация требует заголовок `Sec-Websocket-Extensions: permessage-deflate`; tokio-tungstenite 0.30
-  сжатие не умеет — подключение без заголовка. Если XT не отдаёт кадры без сжатия — нужна другая библиотека
-  WebSocket (решение Тиграна).
+- WebSocket (решение 419): «Starting December 10, 2026, 08:00 (UTC) (16:00 UTC+8), the public WebSocket market data
+  endpoint will only accept connections that negotiate permessage-deflate compression (RFC 7692). Connections without
+  compression will be rejected.»; «Private streams and REST APIs are not affected.»; «Message content and format are
+  unchanged.» (https://doc.xt.com/docs/spot/WebSocket%20Public/wss-general, IncrementalDepth). Параметров расширения
+  документация не задаёт. Публичное соединение открывается через yawc со сжатием всегда (`ws_dial.rs`); приватного
+  потока у адаптера нет. Разбор кадров (`depth.rs`) не менялся.
 - Ставки комиссии по ключу в API нет — расчёт по `takerFeeRate` пары; факт комиссии — по ордеру (урок 23).
 - Решение 232: покупка — комиссия в монете (факт бота 08.11: WIN, 0.002 от количества). Решение 263: факт комиссии —
   только `fee`/`feeCurrency` ответа ордера; `deductServices` (скидка оплатой в XT) в действующей документации нет — не
@@ -61,7 +66,8 @@
 ## Проверить на живых ответах (вопросы — в отчёте решения 167)
 
 1. Заголовки `validate-*` (документация) или `xt-validate-*` (SDK pyxt); hex строчными или заглавными (AUTH_103).
-2. Принимает ли `wss://stream.xt.com/public` клиента без permessage-deflate.
+2. ~~Принимает ли `wss://stream.xt.com/public` клиента без permessage-deflate~~ — с 2026-12-10 нет (документация);
+   решение 419: подключение со сжатием. Проверить на живом: в журнале нет обрывов XT, кадры стаканов идут.
 3. Название сети BSC в `chain` (`venue.bsc_network`), поле `contract` у CAKE и USDT (регистр), у BNB.
 4. `depositFeeRate` у сети BSC: 0 или число (смысл — вопрос Тиграну); регистр `currency` в справочнике и балансах.
 5. Типы чисел (строка/число) в `/v4/public/symbol`, `null` в фильтрах, `version` без изменений (поле `symbols`?).

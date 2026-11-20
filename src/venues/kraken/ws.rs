@@ -5,7 +5,13 @@
 //! Кто вызывает: market.rs (по задаче на соединение), user_stream_conn.rs (config_ping — те же сроки пинга).
 //! От чего зависит: ws_conn.rs, book.rs, ctx.rs, market.rs (Sub), gateway/feed_reg.rs (решение 202).
 //! Настройки: venue.ws_url, venue.depth_levels (10, 25, 100, 500, 1000), venue.ws_ping_ms, venue.ws_silence_ms,
-//! venue.ws_streams_per_msg, venue.ws_subs_per_sec, venue.ws_reconnect_pause_ms [kraken], http.timeout_ms.
+//! venue.ws_streams_per_msg, venue.ws_subs_per_sec, venue.ws_reconnect_pause_ms [kraken], http.timeout_ms;
+//! решение 426 — venue.book_standby_depth [kraken] (глубина соединения-страховки; не задана — страховки нет).
+//!
+//! Решение 426: соединение — основное или страховка (standby_emit.rs Link). Страховка подписывает те же пары с глубиной
+//! venue.book_standby_depth, учёт её свежести — вне сторожа ядра (standby.rs Arbiter::feed); обрыв любого соединения —
+//! его пары теряют стакан через выбор (у основного — сразу стакан страховки, где он сверен), а не «недостоверен» сразу.
+//! Настройка страховки снята — соединение-страховка останавливается (журнал); возвращается со следующей подпиской.
 //!
 //! Официально: адрес публичного WebSocket v2 — wss://ws.kraken.com/v2 (https://docs.kraken.com/exchange/api-reference/
 //! spot-websocket.md; только настройка); глубина book — «10, 25, 100, 500, 1000» (spot-websocket-v2/book.md); сервер
@@ -15,12 +21,16 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
+use crate::gateway::core_out_book::{BookOut, Fed};
+use crate::gateway::errors::ErrorCode;
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
 
 use super::book::Books;
 use super::ctx::Ctx;
 use super::market::Sub;
+use super::standby::Role;
+use super::standby_emit::{Link, Out};
 use super::ws_conn;
 
 /// Глубины канала book — официальный перечень depth.
@@ -53,35 +63,58 @@ pub struct Cfg {
 }
 
 /// Работает, пока жив канал out: подключается заново после каждого обрыва.
-/// Принимает: окружение, имя соединения, пары, стаканы, канал ядра.
+/// Принимает: окружение, имя соединения, пары, стаканы, канал ядра, роль и выбор стакана (решение 426).
 pub async fn run(
     ctx: Ctx,
     name: String,
     subs: Vec<Sub>,
     books: Books,
     out: mpsc::Sender<MarketEvent>,
+    link: Link,
 ) {
     // Решение 202: свежесть пар соединения и команды сторожа ядра (переподписать пару, переподключить соединение).
+    // Решение 426: страховка — в своём учёте выбора, сторож ядра её не видит.
     let tickers: Vec<String> = subs.iter().map(|s| s.asset.ticker.clone()).collect();
-    let (feed, mut cmd) = books.feed.register(&name, &tickers);
+    let reg = match (&link.arb, link.role) {
+        (Some(arb), Role::Standby) => &arb.feed,
+        _ => &books.feed,
+    };
+    let (feed, mut cmd) = reg.register(&name, &tickers);
+    let kept = BookOut::new(&out, ctx.venue(), &ctx.settings, &ctx.journal);
+    let o = Out {
+        ctx: &ctx,
+        books: &books,
+        out: &out,
+        kept: &kept,
+    };
     while !out.is_closed() {
-        let end = match config(&ctx) {
+        let end = match config_for(&ctx, link.role) {
             Ok(cfg) => {
                 let w = ws_conn::Watch {
                     feed: &feed,
                     cmd: &mut cmd,
+                    link: &link,
                 };
                 ws_conn::session(&ctx, &name, &subs, &books, &out, cfg, w).await
             }
             Err(e) => {
                 let m = format!("WebSocket {name} остановлен: {e}");
                 ctx.log(Level::Error, "venue.ws", m).await;
+                // Решение 426: остановленное соединение не держит стаканы своих пар в выборе. Без страховки — как
+                // раньше: стаканы не трогаются (ревью 426: lose без выбора — это invalidate, раньше его здесь не было).
+                if link.arb.is_some() {
+                    for s in &subs {
+                        o.lose(&link, &s.asset.ticker).await;
+                    }
+                }
                 return;
             }
         };
         let End::Broken(why) = end else { return };
         for s in &subs {
-            invalidate(&ctx, &books, &out, &s.asset.ticker);
+            if let Some(Fed::Closed) = o.lose(&link, &s.asset.ticker).await {
+                return;
+            }
         }
         let Ok(pause) = ctx.int("venue.ws_reconnect_pause_ms") else {
             let m = format!(
@@ -119,6 +152,35 @@ pub fn config_ping(ctx: &Ctx) -> Result<(Duration, Duration), String> {
         ));
     }
     Ok((Duration::from_millis(ping), Duration::from_millis(silence)))
+}
+
+/// Решение 426: глубина соединения-страховки venue.book_standby_depth. Возвращает: None — не задана (страховки нет).
+/// Ошибка — текст: не из перечня канала book («10, 25, 100, 500, 1000») или больше venue.depth_levels (ядру всё равно
+/// уходит не больше venue.depth_levels уровней), настройка хранится неверно.
+pub fn standby_depth(ctx: &Ctx) -> Result<Option<u64>, String> {
+    let d = match ctx.int("venue.book_standby_depth") {
+        Ok(d) => d,
+        Err(e) if e.code == ErrorCode::NotConfigured => return Ok(None),
+        Err(e) => return Err(e.message),
+    };
+    let main = ctx.int("venue.depth_levels").map_err(|e| e.message)?;
+    if !DEPTHS.contains(&d) || d > main {
+        return Err(format!(
+            "venue.book_standby_depth = {d}: у Kraken 10, 25, 100, 500 или 1000 и не больше venue.depth_levels = {main}"
+        ));
+    }
+    Ok(Some(d))
+}
+
+/// Настройки соединения по роли: страховка — та же, что у основного, с глубиной venue.book_standby_depth.
+/// Ошибка — как у config; у страховки ещё «venue.book_standby_depth не задана» (страховка снята).
+fn config_for(ctx: &Ctx, role: Role) -> Result<Cfg, String> {
+    let mut cfg = config(ctx)?;
+    if role == Role::Standby {
+        cfg.depth = standby_depth(ctx)?
+            .ok_or("venue.book_standby_depth не задана — страховка стакана снята")?;
+    }
+    Ok(cfg)
 }
 
 /// Читает настройки соединения. Ошибка — текст «не задана …» или «вне пределов документации».

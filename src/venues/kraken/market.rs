@@ -5,7 +5,9 @@
 //! при каждой подписке, в том числе пустой.
 //! Кто вызывает: subs.rs (подписка из контракта и пересподписка при смене справочника пар).
 //! От чего зависит: ws.rs, symbols.rs, pairs.rs, book.rs, ctx.rs.
-//! Настройки: venue.ws_symbols_per_conn [kraken].
+//! Настройки: venue.ws_symbols_per_conn [kraken]; решение 426 — venue.book_standby_depth [kraken] (задана — у каждого
+//! соединения стаканов «market-N» есть соединение-страховка «standby-N» с теми же парами и общим выбором стакана
+//! standby.rs; запускаются после всех основных — ограничитель попыток подключения отдаёт слоты по порядку).
 //!
 //! Официально (https://docs.kraken.com/exchange/guides/websockets/introduction.md): соединений — «approximately 150
 //! attempts per rolling 10 minutes» на IP, сверх — бан IP на 10 минут (ограничитель — ws_req.rs). Сколько символов в
@@ -22,6 +24,8 @@ use crate::storage::journal::Level;
 use super::book::Books;
 use super::ctx::Ctx;
 use super::pairs::Snapshot;
+use super::standby::{Arbiter, Role};
+use super::standby_emit::Link;
 use super::symbols::Symbols;
 use super::ws;
 
@@ -50,6 +54,7 @@ pub async fn subscribe(
     }
     // Настройки соединения проверяются до запуска: ошибка видна сразу, а не в журнале каждого соединения.
     ws::config(ctx).map_err(|m| bad(ctx, m))?;
+    let standby = ws::standby_depth(ctx).map_err(|m| bad(ctx, m))?.is_some();
     symbols.ensure_fresh(ctx).await?;
     let snap = Snapshot::build(symbols, &assets);
     if !snap.missing.is_empty() {
@@ -82,13 +87,42 @@ pub async fn subscribe(
     // Решение 202: прежние соединения остановлены (subs.rs) — сторож видит только соединения этой подписки.
     books.feed.clear();
     let mut tasks = Vec::new();
+    let mut spares = Vec::new();
     for (i, chunk) in subs.chunks(per_conn).enumerate() {
+        let arb = standby.then(|| std::sync::Arc::new(Arbiter::default()));
+        let main = Link {
+            role: Role::Main,
+            arb: arb.clone(),
+        };
         tasks.push(tokio::spawn(ws::run(
             ctx.clone(),
             format!("market-{}", i + 1),
             chunk.to_vec(),
             books.clone(),
             out.clone(),
+            main,
+        )));
+        if arb.is_some() {
+            spares.push((
+                i,
+                chunk.to_vec(),
+                Link {
+                    role: Role::Standby,
+                    arb,
+                },
+            ));
+        }
+    }
+    // Решение 426: страховки — после всех основных (слоты подключения по порядку, ws_req.rs connect_slot).
+    for (i, chunk, link) in spares {
+        let name = format!("standby-{}", i + 1);
+        tasks.push(tokio::spawn(ws::run(
+            ctx.clone(),
+            name,
+            chunk,
+            books.clone(),
+            out.clone(),
+            link,
         )));
     }
     let syms: Vec<String> = snap.books.iter().map(|(_, s)| s.clone()).collect();

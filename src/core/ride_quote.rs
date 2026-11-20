@@ -15,6 +15,10 @@
 //! той же площадке продажи, покупка — те, что купили на той же площадке покупки (фильтры sell_ahead / buy_fresh).
 //! Только живой расчёт сделки (снимок рынка решения 217 и теневой замер решения 267 — без изменений, costs_source.rs)
 //! и только сделки с группой докупки (exec.top_up = да): выключено — ничего не меняется.
+//! Решение 464 (t238, Тигран 20.11): котировка продажи = пул как есть + сдвиг от ВСЕХ своих идущих сделок монеты,
+//! которые ещё продадут на той же площадке (любой биржи покупки, любой группы — фильтр только sell_on; монеты, уже
+//! проданные в блок котировки, — в состоянии пула и в остаток не входят: Deal.qty уменьшен, след ride_trail); наша
+//! продажа в полёте или исполнившаяся за время котировки — отказ до её итога (ride_settled.rs).
 //! Кто вызывает: costs_source.rs (Live: quote — idle / live, fillable, worst), precheck_dex_sell.rs (sell_ahead).
 //! От чего зависит: coin_ride.rs, costs_quote.rs, ride_trail.rs (sites), trade_ops.rs, engine.rs, core/types.
 //! Настройки: нет (включатель — coin_ride.rs).
@@ -68,6 +72,12 @@ pub fn idle(core: &Core, d: &Direction) -> bool {
 /// Принимает: ядро, направление, сторону (true — продажа на B), количество. Ошибки: как у costs_quote::fetch; Stop —
 /// данные не доказуемо свежее.
 pub async fn live(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
+    // Решение 464 (t238): граница «наша продажа уже в пуле / ещё нет» (ride_settled.rs) — до и после котировки.
+    let seq = if sell {
+        Some(super::ride_settled::before(core, d).map_err(Fail::Stop)?)
+    } else {
+        None
+    };
     let off = if sell {
         sell_ahead(core, d)
     } else {
@@ -78,7 +88,8 @@ pub async fn live(core: &Core, d: &Direction, sell: bool, qty: Decimal) -> Resul
     } else {
         Box::pin(super::costs_quote::fetch(core, d, sell, qty, None)).await?
     };
-    if sell {
+    if let Some(seq) = seq {
+        super::ride_settled::after(core, d, seq).map_err(Fail::Stop)?;
         super::ride_trail::check(core, &CoinKey::of(&d.asset), &d.sell_on, &q)
             .map_err(Fail::Stop)?;
     } else {

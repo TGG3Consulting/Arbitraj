@@ -4,7 +4,7 @@
 //!   Router/Permit2/роутера/читателя тиков — graphable, но НЕ tradable, исполнения пока нет);
 //! (2) разбор ответа globalState()/ticks() по ABI (IAlgebraPool) на структуре официального контракта
 //!   (@cryptoalgebra/v1.9-core) — поля встают на свои места;
-//! (3) восстановление СЫРЫХ тиков из слова битмапа tickTable (raw_ticks): бит b слова w → тик w·256 + b, без tickSpacing;
+//! (3) восстановление тиков из слова битмапа tickTable (row_ticks, решение 463): бит b слова w → тик (w·256 + b)·spacing;
 //! (4) проверка пула через фабрику Algebra (verify_algebra::decide на ABI-ответе poolByPair) — принимает свой пул,
 //!   отвергает чужой.
 //! Кто вызывает: cargo test.
@@ -26,7 +26,7 @@ use arb::storage::raw_log::RawLog;
 use arb::venues::bsc_dex::ctx::Ctx;
 use arb::venues::bsc_dex::pools::abi_algebra::IAlgebraPool;
 use arb::venues::bsc_dex::pools::families::{self, Proto};
-use arb::venues::bsc_dex::pools::load_algebra::raw_ticks;
+use arb::venues::bsc_dex::pools::load_algebra::row_ticks;
 use arb::venues::bsc_dex::pools::verify::{Candidate, Verdict};
 use arb::venues::bsc_dex::pools::verify_algebra::decide;
 
@@ -196,22 +196,25 @@ fn algebra_ticks_abi() {
     assert_eq!(t.liquidityDelta, delta);
 }
 
-/// Восстановление СЫРЫХ тиков из слова битмапа tickTable (raw_ticks): бит b слова w → тик w·256 + b (TickTable.sol,
-/// БЕЗ деления на tickSpacing). Проверяем положительное и отрицательное слово.
+/// Восстановление тиков из слова битмапа tickTable (row_ticks): бит b слова w → тик (w·256 + b)·spacing (решение 463:
+/// THENA Fusion — код AlgebraV1, TickTable сжимает тик на TICK_SPACING). Шаг 1 — прежние числа; шаг 60 — как у пулов
+/// записи tests/data/bsc_thena_fusion_2026-11-20. Проверяем положительное и отрицательное слово.
 #[test]
 fn algebra_raw_ticks_from_bitmap() {
     // Слово 0, биты 0 и 60 → тики 0 и 60.
     let w0 = (U256::from(1u8) << 0) | (U256::from(1u8) << 60);
-    assert_eq!(raw_ticks(0, &[w0]), vec![0, 60]);
+    assert_eq!(row_ticks(0, &[w0], 1), vec![0, 60]);
+    assert_eq!(row_ticks(0, &[w0], 60), vec![0, 3600]);
 
     // Слово −1, бит 255 → тик −1·256 + 255 = −1 (сырой тик рядом с нулём ниже него).
     let wm1 = U256::from(1u8) << 255;
-    assert_eq!(raw_ticks(-1, &[wm1]), vec![-1]);
+    assert_eq!(row_ticks(-1, &[wm1], 1), vec![-1]);
+    assert_eq!(row_ticks(-1, &[wm1], 60), vec![-60]);
 
     // Два слова подряд: первое = −1 (бит 0 → тик −256), второе = 0 (бит 1 → тик 1).
     let a = U256::from(1u8) << 0;
     let b = U256::from(1u8) << 1;
-    assert_eq!(raw_ticks(-1, &[a, b]), vec![-256, 1]);
+    assert_eq!(row_ticks(-1, &[a, b], 1), vec![-256, 1]);
 }
 
 /// Проверка пула фабрикой Algebra (verify_algebra::decide на ABI-ответе poolByPair): свой пул принят, чужой отвергнут.

@@ -24,9 +24,10 @@ use super::events::Applied;
 use super::events_algebra;
 use super::registry::Entry;
 
-/// topic0 всех слушаемых событий пула: Swap/Mint/Burn (как V1.9) + Fee(uint16, uint16). Ошибок нет.
+/// topic0 всех слушаемых событий пула: Swap/Mint/Burn (как V1.9) + Fee(uint16, uint16). Слияние с решением 463:
+/// base_topics — без Fee(uint16) / Initialize THENA Fusion (набор подписок прежний, как у Integral). Ошибок нет.
 pub fn topics() -> Vec<B256> {
-    let mut t = events_algebra::topics();
+    let mut t = events_algebra::base_topics();
     t.push(IAlgebraDirPool::Fee::SIGNATURE_HASH);
     t
 }

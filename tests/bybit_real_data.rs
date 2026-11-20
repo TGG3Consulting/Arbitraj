@@ -92,12 +92,14 @@ fn orderbook_stream_live() {
                 symbol,
                 snapshot,
                 u,
+                seq,
                 ts,
                 bids,
                 asks,
             } => {
                 assert_eq!(symbol, "CAKEUSDT");
                 assert!(ts.is_some());
+                assert!(seq.is_some(), "seq в каждом кадре стакана (решение 428)");
                 if snapshot {
                     snaps += 1;
                 } else {

@@ -129,6 +129,11 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
         "Секретный ключ Binance (Secret Key; подпись HMAC SHA256)",
     ),
     (
+        "binance.sbe_api_key",
+        "binance",
+        "Решение 425: API-ключ Binance типа Ed25519 (API Key из API Management) — только для быстрого стакана SBE (stream-sbe.binance.com, заголовок X-MBX-APIKEY, прав не нужно); приватный ключ Ed25519 не вводится. Не введён — стакан JSON, как раньше",
+    ),
+    (
         "xt.api_key",
         "xt",
         "API-ключ XT.com (AppKey; заголовок validate-appkey)",

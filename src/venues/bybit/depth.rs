@@ -10,7 +10,8 @@
 //! - Orderbook https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook — topic, type («snapshot», «delta»),
 //!   ts, data.s, data.b / data.a (массивы [цена, количество] строками; количество 0 — уровень удалить), data.u
 //!   («Update ID»; «u=1 … snapshot data due to the restart of the service»), data.seq, cts. В примечании: у спота «ts»
-//!   приходит строкой ("1772694601512"), в таблице — number: читаются оба вида.
+//!   приходит строкой ("1772694601512"), в таблице — number: читаются оба вида. seq — «Cross sequence… compare different
+//!   levels orderbook data» (решение 428: порядок кадров основной глубины и страховки, backup.rs).
 //! - Connect https://bybit-exchange.github.io/docs/v5/ws/connect — ответ подписки спота {"success":true,"ret_msg":
 //!   "subscribe","conn_id":…,"req_id":…,"op":"subscribe"}, pong {"success":true,"ret_msg":"pong",…,"op":"ping"}.
 
@@ -74,11 +75,13 @@ pub struct Ack {
 
 /// Что пришло в кадре.
 pub enum Msg<'a> {
-    /// Стакан: символ, снимок ли, номер u, время площадки (мс), уровни строками.
+    /// Стакан: символ, снимок ли, номер u, seq (решение 428: «Cross sequence», сравнение разных глубин; None — нет в
+    /// кадре), время площадки (мс), уровни строками.
     Book {
         symbol: &'a str,
         snapshot: bool,
         u: i64,
+        seq: Option<i64>,
         ts: Option<i64>,
         bids: Vec<[&'a str; 2]>,
         asks: Vec<[&'a str; 2]>,
@@ -144,6 +147,7 @@ pub fn parse(text: &str) -> Msg<'_> {
         symbol: data.s,
         snapshot,
         u,
+        seq: data.seq.as_ref().and_then(int_of),
         ts: f.ts.as_ref().and_then(int_of),
         bids: data.b,
         asks: data.a,

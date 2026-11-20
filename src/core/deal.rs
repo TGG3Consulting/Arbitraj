@@ -173,6 +173,10 @@ pub struct Deal {
     /// Только в памяти.
     #[serde(skip)]
     pub fact_fresh: Option<Box<(Step, Decimal, VenueId)>>,
+    /// Решение 464 (t238, ревью): включатель log.step_timing, прочитанный один раз на сделку (executor.rs) — им же
+    /// пользуется замер ордера продажи (sell.rs). Только в памяти (после перезапуска — выключен).
+    #[serde(skip)]
+    pub step_timing: bool,
     /// Решение 413 (четвёртое ревью С-7, пятое ревью): продажа сделки на бирже кончилась «исход неизвестен» — её учёт не
     /// согласован с балансом: счёт (биржа, монета) «неясно» (credit_lock::unsure), её монеты — не «подтверждённые» в
     /// распределении других. Снимается успешной продажей или прочитанным фактом этой сделки. В учёте (переживает
@@ -227,6 +231,7 @@ impl Deal {
             transit_to: None,
             fact_unread: false,
             fact_fresh: None,
+            step_timing: false,
             sale_unsure: false,
             started_at: now,
             updated_at: now,

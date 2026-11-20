@@ -360,25 +360,25 @@ async fn fee_only_needs_valid_algebra_pool() {
     let e = integral(&d["pools"][0]);
     let id = e.family.id;
     // Не задана — прежний Refresh.
-    assert!(!integral_fee::fits(&c, &e, false));
+    assert!(!integral_fee::fits(&c, &e, false, false));
     set_dex(&c, event_flags::FEE_ONLY, id, Some(json!(true))).await;
     assert!(
-        until(|| integral_fee::fits(&c, &e, false)).await,
+        until(|| integral_fee::fits(&c, &e, false, false)).await,
         "смена на лету"
     );
     // Пул ждёт повтора (решение 298) — прежний путь.
-    assert!(!integral_fee::fits(&c, &e, true));
+    assert!(!integral_fee::fits(&c, &e, true, false));
     // Н2: недостоверный пул — полная перечитка (она вернёт достоверность).
     let mut bad = e.clone();
     bad.valid = false;
-    assert!(!integral_fee::fits(&c, &bad, false));
+    assert!(!integral_fee::fits(&c, &bad, false, false));
     // Н3: состояние не Algebra — комиссию некуда записать, полная перечитка.
     let mut other = e.clone();
     other.pool.state = native_common::entry("algebra_integral", None).pool.state;
-    assert!(!integral_fee::fits(&c, &other, false));
+    assert!(!integral_fee::fits(&c, &other, false, false));
     set_dex(&c, event_flags::FEE_ONLY, id, Some(json!(false))).await;
     assert!(
-        until(|| !integral_fee::fits(&c, &e, false)).await,
+        until(|| !integral_fee::fits(&c, &e, false, false)).await,
         "«нет» на лету"
     );
 }

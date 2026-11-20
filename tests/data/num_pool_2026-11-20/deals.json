@@ -1,0 +1,56 @@
+{
+  "_source": "Живой бот 20.11.2026, GET /api/deals (только чтение), монета NUM; поля сделок выписаны без изменений значений (часть полей)",
+  "asset": { "ticker": "NUM", "bsc_contract": "0xeceb87cf00dcbf2d4e2880223743ff087a995ad9" },
+  "pool": "0xf89068b387771c706f5451c25204f9f2d42e371d",
+  "pool_family": "pancakeswap-v3-bsc",
+  "deals": [
+    {
+      "id": "20261120180718098NUM", "buy_on": "gate", "sell_on": "bsc_dex", "group": "20261120180718098NUM",
+      "started_at": "2026-11-20T18:07:18.098176889Z",
+      "buy_filled": "53493", "buy_avg": "0.001937", "buy_finished_at": "2026-11-20T18:07:18.420441300Z",
+      "plan_qty": "53493", "plan_sell_qty": "53203.82", "plan_sell_avg": "0.002001258883131425339721847", "plan_transit_s": "39",
+      "sent": "53440", "credited": "53203.820000000000000000", "credited_at": "2026-11-20T18:08:16.876648507Z",
+      "sell": { "qty": "53203.820000000000000000", "avg": "0.0017337983392614366902978019", "finished_at": "2026-11-20T18:08:21.401166312Z",
+                "block": 134740547, "route_block": 134740545, "worst": "0.0017231811563814143498858728", "expected_out": "92.140522684933286851" }
+    },
+    {
+      "id": "20261120180725680NUM", "buy_on": "kucoin", "sell_on": "bsc_dex", "group": "20261120180725680NUM",
+      "started_at": "2026-11-20T18:07:25.680393101Z",
+      "buy_filled": "5073.5571", "buy_avg": "0.00178", "buy_finished_at": "2026-11-20T18:07:26.236797261Z",
+      "plan_qty": "5073.5571", "plan_sell_qty": "4873.55710000", "plan_sell_avg": "0.0019684834405197411020381806", "plan_transit_s": "21",
+      "sent": "5073.55710000", "credited": "4873.557100000000000000", "credited_at": "2026-11-20T18:07:59.333505380Z",
+      "sell": { "qty": "4873.557100000000000000", "avg": "0.0017605222947690234902551978", "finished_at": "2026-11-20T18:08:01.357213351Z",
+                "block": 134740502, "route_block": 134740500, "worst": "0.0017480700336024695914684163", "expected_out": "8.562129772422667593" }
+    },
+    {
+      "id": "20261120180733956NUM", "buy_on": "kucoin", "sell_on": "bsc_dex", "group": "20261120180725680NUM",
+      "started_at": "2026-11-20T18:07:33.956081789Z",
+      "buy_filled": "19566.1271", "buy_avg": "0.00168", "buy_finished_at": "2026-11-20T18:07:35.412852258Z",
+      "plan_qty": "19566.1271", "plan_sell_qty": "19366.12710000", "plan_sell_avg": "0.0018420743457703885789843854", "plan_transit_s": "21",
+      "sent": "19566.12710000", "credited": "19366.127100000000000000", "credited_at": "2026-11-20T18:07:59.333503087Z",
+      "sell": { "qty": "19366.127100000000000000", "avg": "0.0017536796518476529044880636", "finished_at": "2026-11-20T18:08:04.352931998Z",
+                "block": 134740509, "route_block": 134740505, "worst": "0.0017415129572765989069363280", "expected_out": "33.895840479312044510" }
+    },
+    {
+      "id": "20261120180737357NUM", "buy_on": "kucoin", "sell_on": "bsc_dex", "group": "20261120180725680NUM",
+      "started_at": "2026-11-20T18:07:37.357086521Z",
+      "buy_filled": "6173.27", "buy_avg": "0.0017193832583055657698432111", "buy_finished_at": "2026-11-20T18:07:38.342324411Z",
+      "plan_qty": "6173.2700", "plan_sell_qty": "5973.27000000", "plan_sell_avg": "0.0018299565571066003097131049", "plan_transit_s": "21",
+      "sent": "6173.27000000", "credited": "5973.270000000000000000", "credited_at": "2026-11-20T18:07:59.333498991Z",
+      "sell": { "qty": "5973.270000000000000000", "avg": "0.0017614021137967090806208325", "finished_at": "2026-11-20T18:08:02.389092699Z",
+                "block": 134740505, "route_block": 134740503, "worst": "0.0017525951032277255352177283", "expected_out": "10.521330404278468450" }
+    }
+  ],
+  "transit_settings": {
+    "_source": "GET /api/settings 20.11.2026",
+    "profit.transit_mode[gate]": "manual_auto", "profit.transit_auto_after[gate]": 5,
+    "profit.transit_manual_s[gate]": 37, "profit.transit_credit_s[bsc_dex]": 2,
+    "profit.transit_manual_s[kucoin]": 19
+  },
+  "transits_after": {
+    "_source": "GET /api/transits 20.11.2026 после сделок: история NUM",
+    "NUM gate>bsc_dex": { "count": 1, "avg_s": "58.052" },
+    "NUM kucoin>bsc_dex": { "count": 5, "avg_s": "27.72480" },
+    "all coins gate>bsc_dex": { "coins": 60, "transfers": 123, "avg_s": "49.1" }
+  }
+}

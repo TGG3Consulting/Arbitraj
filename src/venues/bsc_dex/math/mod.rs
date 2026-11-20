@@ -5,6 +5,7 @@
 //! От чего зависит: alloy-primitives.
 //! Настройки: нет.
 
+pub mod adaptive_fee;
 pub mod algebra_fee;
 pub mod balancer_linear;
 pub mod balancer_log_exp;
@@ -56,6 +57,7 @@ pub mod ekubo_tick;
 pub mod ekubo_time;
 pub mod ekubo_twamm;
 pub mod ekubo_virtual;
+pub mod fee_algebra_v1;
 pub mod fluid_check;
 pub mod fluid_swap;
 pub mod full_math;

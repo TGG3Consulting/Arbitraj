@@ -6,10 +6,15 @@
 //! уже нет состояния блока события, решение 298, stale_read.rs) — тогда сессия идёт дальше, пул ждёт повтора.
 //! Там же: недостоверность пачки пулов (invalidate) и USDT найденного пула (found_usdt) — для listen.rs; пересчёт
 //! глубины пула на каждой отправке ядру (pools/depth.rs touch, решение 73).
+//! Третье ревью t236: лог, после которого пул «в обновлении» (Integral SwapFee, LB CompositionFees, THENA Fusion Swap /
+//! Fee — settle_fusion.rs shuts), делает пул недостоверным в том же изменении реестра, что его применяет; недостоверная
+//! в конце запись ядру не отправляется (как у доставки из набора — emit_pool.rs Kept, Live: только valid).
 //! Кто вызывает: pools/session.rs (лог глубокого пула), pools/listen.rs (invalidate).
 //! От чего зависит: ctx.rs, node/rpc.rs, events.rs, load.rs, settle.rs, settle_bins.rs (бины события; ревью 290,
 //! решение 357), integral_fee.rs (решение 325), registry.rs, stale_read.rs (решение 298), pool_fail.rs (решение 339),
-//! refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321).
+//! refresh_event.rs (перечитывание по событию; решение 313 — замер), emit_pool.rs (решение 321), fusion_book.rs
+//! (orphan — решение 463), settle_fusion.rs (решение 463, ревью t236: shuts — недостоверность в том же изменении
+//! реестра, что применяет лог; preset — отметка с достоверностью до лога; next_fee_open — Fee перед Swap той же tx).
 //! Решение 313: события пула, не ушедшие ядру из-за полного канала, считаются (emit → lost_events.rs). Решение 321:
 //! emit вынесен в emit_pool.rs (здесь — реэкспорт для прежних вызывающих) — при dex.pool_events_keep = да событие не
 //! теряется, а ждёт места в канале (gateway/core_out.rs, решение 324).
@@ -97,15 +102,22 @@ pub async fn on_log(
     // ставит его на перечитку (итог true — вызывающий ставит в очередь повтора), если событие само его не перечитало:
     // иначе пул, чьи события только применяются (Applied::Updated), остался бы недостоверным навсегда.
     // Решение 357: пул «в обновлении» недостоверен отметкой settle.rs — его снимает приход логов или голова, не повтор.
+    // Четвёртое ревью t236: и пул «в обновлении», недостоверный уже ДО отметки (was_valid = false), — снятие отметки
+    // вернёт ему недостоверность, а следующего лога у тихого пула может не быть: в очередь повтора после снятия (ниже —
+    // `again`; лог, оставивший отметку, выходит раньше и в очередь не ставит).
     let revive = !waiting
         && !entry.valid
-        && !p.holds.pending(&r)
+        && (!p.holds.pending(&r) || p.holds.get(&r).is_some_and(|h| !h.was_valid))
         && super::pool_fail::base(&p.ctx).is_some();
     let (Some(block), Some(index)) = (log.block_number, log.log_index) else {
         return Err(End::Broken(
             "лог подписки без blockNumber/logIndex — порядок событий неизвестен".into(),
         ));
     };
+    // Решение 463 (ревью t236): реорг — данные оракула THENA Fusion с этого блока и позже долой (fusion_book.rs).
+    if log.removed {
+        super::fusion_book::orphan(p.ctx.place.id, &r, block);
+    }
     if !log.removed && entry.has_applied(block, index) {
         return Ok(revive);
     }
@@ -118,23 +130,44 @@ pub async fn on_log(
         super::stale_read::defer(&p.reg, &r, block, index);
         return Ok(true);
     }
-    let applied = if log.removed {
-        Applied::Refresh("реорг: событие отменено (removed)".into())
+    // Третье ревью t236 (блокер 1): лог, после которого пул «в обновлении» (settle_fusion.rs shuts: Integral SwapFee,
+    // LB CompositionFees, THENA Fusion Swap / Fee), — valid = false в ТОМ ЖЕ изменении реестра, что применяет лог:
+    // котировка и граф (другие задачи) не видят новую цену с прежней комиссией ни на мгновение. `was` — достоверность
+    // до лога (её вернёт снятие отметки, settle_fusion.rs preset).
+    let (applied, was) = if log.removed {
+        (Applied::Refresh("реорг: событие отменено (removed)".into()), None)
     } else {
         p.reg
-            .update(&r, |e| events::apply(e, log))
-            .unwrap_or(Applied::Ignored)
+            .update(&r, |e| {
+                let was = e.valid;
+                let a = events::apply(e, log);
+                let shut = !waiting && super::settle_fusion::shuts(e.family, log, &a);
+                if shut {
+                    e.valid = false;
+                }
+                (a, shut.then_some(was))
+            })
+            .unwrap_or((Applied::Ignored, None))
     };
     // Решение 325: «только комиссия» — при dex.event_refresh_fee_only, пуле не в очереди повтора, достоверном и с
     // состоянием Algebra (ревью 325, Н2/Н3 — integral_fee::fits); иначе прежний Refresh.
+    // Решение 463 (повторное ревью t236): THENA Fusion после Fee той же tx — «только комиссия» (settle_fusion.rs).
+    let open = p.holds.next_fee_open(&r, block, log.transaction_index);
     let applied = match applied {
-        Applied::Fee(why) if !integral_fee::fits(&p.ctx, &entry, waiting) => Applied::Refresh(why),
+        Applied::Fee(why) if !integral_fee::fits(&p.ctx, &entry, waiting, open) => {
+            Applied::Refresh(why)
+        }
         x => x,
     };
     // Решение 357: за этим логом в том же вызове по коду контракта идёт ещё лог пула — пул «в обновлении», ядру не
     // уходит; следующий лог пула той же tx снимает отметку (settle.rs step). Ревью слияния (Н1): у Applied::Fee
-    // (решение 325) отметка ставится ДО чтения комиссии (ветка Fee ниже читает её и выходит): котировка не видит «комиссия
-    // конца блока + цена до Swap» ни на мгновение.
+    // (решение 325) отметка ставится ДО чтения комиссии (ветка Fee ниже читает её и выходит). Третье ревью t236: сама
+    // недостоверность — уже в изменении реестра, применившем лог (выше); здесь — отметка с достоверностью до лога.
+    if let Some(was) = was
+        && super::settle_fusion::shuts(entry.family, log, &applied)
+    {
+        p.holds.preset(&r, block, was);
+    }
     let held = p
         .holds
         .step(&p.reg, (&r, entry.family), log, &applied, waiting);
@@ -166,7 +199,8 @@ pub async fn on_log(
             // Ревью 325 (Н4): класс очереди и замер (причина «fee») — refresh_event.rs fee.
             match refresh_event::fee(p, &entry, &r, (block, log.log_index), queued).await {
                 // Решение 357 при 325: SwapFee — пул уже «в обновлении» (step выше, до чтения) до Swap той же tx.
-                Ok(()) if held => return Ok(false),
+                // Решение 463: у THENA Fusion отметку снимает сама запись комиссии (settle_fusion.rs) — тогда дальше.
+                Ok(()) if held && p.holds.pending(&r) => return Ok(false),
                 Ok(()) => match p.reg.get(&r) {
                     Some(e) if super::depth::off_map(&p.ctx, &e) => {
                         refresh_event::off_map(p, &e, block, queued)
@@ -253,6 +287,14 @@ pub async fn on_log(
             note_refill(p, &e);
             // Б1: событие пул не перечитало (запись всё ещё недостоверна) — в очередь повтора.
             let again = revive && !e.valid;
+            // Третье ревью t236 (п. 5): недостоверная запись (пул ждёт повтора, «в обновлении», после ошибки чтения)
+            // ядру не уходит — как у доставки из набора (emit_pool.rs Kept: Live — только valid). Ядро получит её,
+            // когда достоверность вернётся: полное чтение (put и emit), снятие отметки логами того же действия
+            // (settle.rs release / settle_fusion.rs fee_written — затем этот же путь), снятие Need::Clock
+            // (fusion_head.rs set — emit при новой комиссии).
+            if !e.valid {
+                return Ok(again);
+            }
             emit(p, e.pool).map(|()| again)
         }
         None => Ok(false),

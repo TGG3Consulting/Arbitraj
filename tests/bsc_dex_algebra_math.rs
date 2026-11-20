@@ -164,7 +164,7 @@ fn one_tick(tick: i32, net: i128) -> TickMap {
         },
     );
     TickMap {
-        spacing: 60,
+        spacing: 1, // сырой битмап Algebra V1.9 (Camelot V3, решение 461)
         ticks: ticks.into(),
         words: (i16::MIN, i16::MAX),
     }
@@ -244,7 +244,7 @@ fn swap_stops_at_price_limit() {
 #[test]
 fn swap_partial_at_window_edge() {
     let tm = TickMap {
-        spacing: 60,
+        spacing: 1,
         ticks: BTreeMap::new().into(),
         words: (0, 0), // окно сырых тиков [0, 255]
     };

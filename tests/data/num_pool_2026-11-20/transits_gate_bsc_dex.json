@@ -1,0 +1,307 @@
+{
+ "_source": "Живой бот 20.11.2026, GET /api/transits (только чтение) после сделок NUM: строки from = gate, to = bsc_dex (монета, число записанных переводов, среднее, с). Адреса контрактов не выписаны — монета в тесте по тикеру.",
+ "from": "gate",
+ "to": "bsc_dex",
+ "rows": [
+  {
+   "ticker": "USDT",
+   "count": 5,
+   "avg_s": "48.70940"
+  },
+  {
+   "ticker": "NFE",
+   "count": 2,
+   "avg_s": "25.82150"
+  },
+  {
+   "ticker": "RION",
+   "count": 5,
+   "avg_s": "82.836"
+  },
+  {
+   "ticker": "GAFI",
+   "count": 2,
+   "avg_s": "45.157"
+  },
+  {
+   "ticker": "NIZA",
+   "count": 2,
+   "avg_s": "41.25850"
+  },
+  {
+   "ticker": "GMRX",
+   "count": 1,
+   "avg_s": "17.235"
+  },
+  {
+   "ticker": "CYBER",
+   "count": 1,
+   "avg_s": "49.468"
+  },
+  {
+   "ticker": "EPT",
+   "count": 4,
+   "avg_s": "53.90750"
+  },
+  {
+   "ticker": "NETX",
+   "count": 3,
+   "avg_s": "33.830666666666666666666666667"
+  },
+  {
+   "ticker": "ZIX",
+   "count": 5,
+   "avg_s": "50.96580"
+  },
+  {
+   "ticker": "GMT",
+   "count": 1,
+   "avg_s": "44.737"
+  },
+  {
+   "ticker": "CTP",
+   "count": 1,
+   "avg_s": "44.712"
+  },
+  {
+   "ticker": "MEPAD",
+   "count": 1,
+   "avg_s": "37.792"
+  },
+  {
+   "ticker": "GAIN",
+   "count": 2,
+   "avg_s": "55.13350"
+  },
+  {
+   "ticker": "MMPRO",
+   "count": 1,
+   "avg_s": "71.022"
+  },
+  {
+   "ticker": "PRAI",
+   "count": 1,
+   "avg_s": "65.981"
+  },
+  {
+   "ticker": "ADAPAD",
+   "count": 1,
+   "avg_s": "78.816"
+  },
+  {
+   "ticker": "MY",
+   "count": 5,
+   "avg_s": "39.16480"
+  },
+  {
+   "ticker": "3KDS",
+   "count": 1,
+   "avg_s": "46.522"
+  },
+  {
+   "ticker": "HOD",
+   "count": 3,
+   "avg_s": "56.057333333333333333333333333"
+  },
+  {
+   "ticker": "PAL",
+   "count": 1,
+   "avg_s": "86.664"
+  },
+  {
+   "ticker": "AI",
+   "count": 1,
+   "avg_s": "25.325"
+  },
+  {
+   "ticker": "GF",
+   "count": 3,
+   "avg_s": "60.963666666666666666666666667"
+  },
+  {
+   "ticker": "GTAI",
+   "count": 3,
+   "avg_s": "106.01533333333333333333333333"
+  },
+  {
+   "ticker": "GIGGLE",
+   "count": 1,
+   "avg_s": "84.385"
+  },
+  {
+   "ticker": "ZYRA",
+   "count": 2,
+   "avg_s": "49.27150"
+  },
+  {
+   "ticker": "KILO",
+   "count": 1,
+   "avg_s": "21.078"
+  },
+  {
+   "ticker": "ZIG",
+   "count": 5,
+   "avg_s": "53.42320"
+  },
+  {
+   "ticker": "OBI",
+   "count": 1,
+   "avg_s": "25.51"
+  },
+  {
+   "ticker": "CFX",
+   "count": 1,
+   "avg_s": "50.734"
+  },
+  {
+   "ticker": "UAI",
+   "count": 1,
+   "avg_s": "65.462"
+  },
+  {
+   "ticker": "ISP",
+   "count": 1,
+   "avg_s": "77.241"
+  },
+  {
+   "ticker": "DN",
+   "count": 1,
+   "avg_s": "50.664"
+  },
+  {
+   "ticker": "NUM",
+   "count": 1,
+   "avg_s": "58.052"
+  },
+  {
+   "ticker": "PIGGY",
+   "count": 2,
+   "avg_s": "54.19550"
+  },
+  {
+   "ticker": "CHEEL",
+   "count": 1,
+   "avg_s": "24.336"
+  },
+  {
+   "ticker": "MITO",
+   "count": 1,
+   "avg_s": "97.271"
+  },
+  {
+   "ticker": "BID",
+   "count": 1,
+   "avg_s": "39.705"
+  },
+  {
+   "ticker": "10SET",
+   "count": 5,
+   "avg_s": "35.17060"
+  },
+  {
+   "ticker": "FAR",
+   "count": 3,
+   "avg_s": "51.465666666666666666666666667"
+  },
+  {
+   "ticker": "BGSC",
+   "count": 1,
+   "avg_s": "41.833"
+  },
+  {
+   "ticker": "ST",
+   "count": 1,
+   "avg_s": "23.892"
+  },
+  {
+   "ticker": "XCN",
+   "count": 3,
+   "avg_s": "45.450666666666666666666666667"
+  },
+  {
+   "ticker": "ALEO",
+   "count": 3,
+   "avg_s": "34.037333333333333333333333333"
+  },
+  {
+   "ticker": "UP",
+   "count": 1,
+   "avg_s": "58.981"
+  },
+  {
+   "ticker": "CHEEMS",
+   "count": 2,
+   "avg_s": "22.04850"
+  },
+  {
+   "ticker": "BRIC",
+   "count": 3,
+   "avg_s": "66.252333333333333333333333333"
+  },
+  {
+   "ticker": "TT",
+   "count": 1,
+   "avg_s": "65.48"
+  },
+  {
+   "ticker": "DOME",
+   "count": 1,
+   "avg_s": "53.118"
+  },
+  {
+   "ticker": "AKE",
+   "count": 1,
+   "avg_s": "26.816"
+  },
+  {
+   "ticker": "BABYSHARK",
+   "count": 2,
+   "avg_s": "30.85150"
+  },
+  {
+   "ticker": "ATA",
+   "count": 1,
+   "avg_s": "66.398"
+  },
+  {
+   "ticker": "WBAI",
+   "count": 1,
+   "avg_s": "18.702"
+  },
+  {
+   "ticker": "4STOCK",
+   "count": 1,
+   "avg_s": "34.977"
+  },
+  {
+   "ticker": "OWL",
+   "count": 2,
+   "avg_s": "62.74950"
+  },
+  {
+   "ticker": "STRM",
+   "count": 5,
+   "avg_s": "32.16140"
+  },
+  {
+   "ticker": "SOPH",
+   "count": 3,
+   "avg_s": "29.527"
+  },
+  {
+   "ticker": "BREV",
+   "count": 3,
+   "avg_s": "36.896333333333333333333333333"
+  },
+  {
+   "ticker": "PORT3",
+   "count": 4,
+   "avg_s": "46.16225"
+  },
+  {
+   "ticker": "BELONG",
+   "count": 1,
+   "avg_s": "40.979"
+  }
+ ]
+}

@@ -3,7 +3,8 @@
 //! Всё общение с Binance — внутри этой папки; наружу — только типы ядра и единые ошибки шлюза.
 //! Кто вызывает: main.rs (создаёт и регистрирует в реестре шлюза).
 //! От чего зависит: файлы этой папки, gateway, settings, secrets, storage.
-//! Настройки: venue.* с областью «binance», feed.stale_after_ms; секреты binance.api_key, binance.api_secret.
+//! Настройки: venue.* с областью «binance», feed.stale_after_ms; секреты binance.api_key, binance.api_secret,
+//! binance.sbe_api_key (решение 425: быстрый стакан SBE — sbe_*.rs, fast.rs).
 //!
 //! Только по официальной документации Binance (https://developers.binance.com/legacy-docs/binance-spot-api-docs/ и
 //! Wallet SAPI https://developers.binance.com/docs/wallet/). Ссылки — в шапке каждого файла и в README.md папки.
@@ -21,6 +22,9 @@ pub mod deposits;
 pub mod depth;
 pub mod discount_balance;
 pub mod errors;
+pub mod fast;
+pub mod fast_check;
+pub mod fast_sbe;
 pub mod fee_rates;
 pub mod feed;
 pub mod fees;
@@ -38,6 +42,13 @@ pub mod pairs_watch;
 pub mod price_band;
 pub mod reply;
 pub mod rest;
+pub mod sbe;
+pub mod sbe_book;
+pub mod sbe_check;
+pub mod sbe_conn;
+pub mod sbe_pair;
+pub mod sbe_run;
+pub mod sbe_snap;
 pub mod sign;
 pub mod subs;
 pub mod symbols;
@@ -124,7 +135,12 @@ impl Venue for Binance {
     }
 
     async fn check_connection(&self) -> GatewayResult<ConnectionCheck> {
-        Ok(key_check::check(&self.ctx).await)
+        // Решение 425: ключ HMAC (торговля) и ключ Ed25519 потоков SBE (быстрый стакан) — каждый со своим итогом.
+        let mut c = key_check::check(&self.ctx).await;
+        let (ok, sbe) = sbe_check::check(&self.ctx).await;
+        c.ok &= ok;
+        c.details = format!("{} · {sbe}", c.details);
+        Ok(c)
     }
 
     async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>> {

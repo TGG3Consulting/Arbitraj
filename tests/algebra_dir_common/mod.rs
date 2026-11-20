@@ -2,7 +2,8 @@
 //! Что делает: решение 444 — общее для тестов на записи своего узла Arbitrum вида algebra_dir_fee (Algebra V1.9 с
 //! направленными комиссиями, Camelot V3): поиск папки записи tests/data/arbitrum_algebra_dir_fee_<дата>/ (пишет
 //! tools/arbitrum_record/algebra_dir_fee.py), чтение файлов, разбор ответов узла и состояние пула с картой сырых
-//! тиков — теми же функциями, что у бота (load_algebra_dir::state_of, load_algebra::raw_ticks).
+//! тиков — теми же функциями, что у бота (load_algebra_dir::state_of, load_algebra::row_ticks при шаге 1 — сырой
+//! битмап).
 //! Кто вызывает: tests/arb_dex_algebra_dir.rs, tests/arb_dex_algebra_dir_events.rs.
 //! От чего зависит: arb::venues::bsc_dex::pools::{abi_algebra_dir, abi_algebra, load_algebra, load_algebra_dir, ticks},
 //! serde_json.
@@ -20,7 +21,7 @@ use serde_json::Value;
 use arb::core::types::PoolState;
 use arb::venues::bsc_dex::pools::abi_algebra::IAlgebraPool;
 use arb::venues::bsc_dex::pools::abi_algebra_dir::IAlgebraDirPool;
-use arb::venues::bsc_dex::pools::load_algebra::raw_ticks;
+use arb::venues::bsc_dex::pools::load_algebra::row_ticks;
 use arb::venues::bsc_dex::pools::load_algebra_dir::state_of;
 use arb::venues::bsc_dex::pools::ticks::{TickData, TickMap};
 
@@ -98,7 +99,7 @@ pub fn pool_state(p: &Value) -> (PoolState, TickMap) {
     let hi = ws.last().unwrap().0;
     let words: Vec<_> = ws.iter().map(|(_, v)| *v).collect();
     let mut map = BTreeMap::new();
-    for t in raw_ticks(lo, &words) {
+    for t in row_ticks(lo, &words, 1) {
         let raw = result(&p["ticks"][t.to_string()]).expect("ticks() установленного бита записан");
         let i = IAlgebraPool::ticksCall::abi_decode_returns(&raw).unwrap();
         if i.liquidityTotal > 0 {

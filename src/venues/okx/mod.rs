@@ -12,6 +12,7 @@
 
 pub mod account;
 pub mod all_balances;
+pub mod backup;
 pub mod book;
 pub mod book_print;
 pub mod ctx;
@@ -22,6 +23,7 @@ pub mod deposit_event;
 pub mod deposits;
 pub mod depth;
 pub mod errors;
+pub mod failover;
 pub mod fees;
 pub mod fund_move;
 pub mod local_book;

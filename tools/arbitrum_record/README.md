@@ -11,7 +11,7 @@
 Скрипты по очереди пишут свои папки `tests/data/…`; упавший скрипт не останавливает остальные. В конце — сводка (что
 записано, что упало и почему) и строка «Архив для отправки: …zip» — этот zip прислать. Журналы каждого скрипта — в
 `arbitrum_record_<время>/logs/` (в git не идут). Ключей и приватных данных скрипты не просят: только чтение узла
-(eth_call, eth_getLogs, eth_getCode, eth_getStorageAt, eth_simulateV1), транзакций нет.
+(eth_call, eth_getLogs, eth_getCode, eth_getStorageAt, eth_getBlockByNumber, eth_simulateV1), транзакций нет.
 
 Необязательно: `--wallet 0x…` — адрес кошелька для записи приёмки v4 (адрес, не ключ; без него — пустой адрес);
 `--ekubo-from-block N` — только переопределение блока ядра Ekubo (по умолчанию ekubo_more.py берёт его из официальных
@@ -19,7 +19,7 @@ broadcast-файлов Ekubo: `contracts/evmtest/vendor/ekubo/broadcast/DeployAl
 416469411); `--only ИМЯ,ИМЯ` / `--skip ИМЯ,ИМЯ` — выбрать скрипты (через запятую или несколько раз; неизвестное имя —
 ошибка с перечнем); `--date ГГГГ-ММ-ДД` — дата папок записи (по умолчанию — сегодня UTC); `--timeout С` — предел одного
 скрипта. Нужен доступ в интернет к api.geckoterminal.com (списки пулов kyber_elastic_v1, fluid_t1, balancer_v3,
-algebra_dir_fee, ekubo). Приёмке v4 нужен eth_simulateV1 на узле — без него exec_v4_live.py выходит с причиной.
+algebra_dir_fee, ekubo, sub_dex). Приёмке v4 нужен eth_simulateV1 на узле — без него exec_v4_live.py выходит с причиной.
 
 **Повтор после прогона 20.11.2026 (решение 460), одна строка:** `python3 tools/arbitrum_record/record_all.py --rpc
 http://127.0.0.1:8547 --date 2026-11-20 --only sub_dex,balancer_v3,camelot_v2,lb_v22,ekubo,ekubo_more,exec_v4_live`
@@ -28,9 +28,35 @@ http://127.0.0.1:8547 --date 2026-11-20 --only sub_dex,balancer_v3,camelot_v2,lb
 pools.json, core_logs.json; ekubo_more.py — README_454.md, more_meta.json, pool_initialized.json, native_pools.json,
 twamm_pools.json, core_load.json); ekubo.py повторяется сам (20.11 записал 0 пулов: GeckoTerminal отдаёт адрес пула
 Ekubo как «<ядро>-<PoolId>», скрипт ждал только PoolId — теперь разбирается), его файлы перезаписываются новой записью;
-sub_dex.py — 20.11 записал 0 пулов (за 2 000 000 блоков событий создания не было), теперь ищет дальше назад;
-exec_v4_live.py — 20.11 вид 23 «нет пулов» (записи balancer_v3.py не было). camelot_v2.py теперь ищет FeePercentUpdated / SetStableSwap до блока первой пары
-фабрики — это долго (20.11: 18 окон по 2 000 000 блоков — 491 с).
+sub_dex.py — 20.11 записал 0 пулов (за 2 000 000 блоков событий создания не было; поиск назад окнами тоже не годится —
+раздел ниже); exec_v4_live.py — 20.11 вид 23 «нет пулов» (записи balancer_v3.py не было). camelot_v2.py ищет
+FeePercentUpdated / SetStableSwap до блока первой пары фабрики — это долго (20.11: 18 окон по 2 000 000 блоков — 491 с),
+теперь с потолком времени (раздел ниже).
+
+**sub_dex без скана истории, потолок времени (решение 460, п. 9–10).** Факт узла Тиграна (Nitro, state-scheme=path):
+sub_dex.py с поиском событий создания назад окнами eth_getLogs за 37 мин прошёл ~144 млн блоков из ~526 млн — на каждом
+окне таймаут и деление. Теперь пулы — без скана истории (`sub_dex_find.py`): KyberSwap Classic — с конца списка
+allPools(i) / allPoolsLength() трёх фабрик (eth_call, свежий блок; dmm-smart-contracts@e557b57 DMMFactory.sol L20,
+L90-L92, KSFactory.sol L24, L127-L129; Legacy — тот же репозиторий до 195e3e9) и пулы GeckoTerminal
+kyberswap_classic_arbitrum со своей factory(); Balancer V2 — перечисления у фабрик нет: пулы GeckoTerminal
+balancer_arbitrum, фабрика — isPoolFromFactory = 1; iZiSwap — перечисления нет и в GeckoTerminal DEX нет: реестр
+pool(x, y, fee) по парам токенов (токены пулов сети GeckoTerminal и `--izi-token`), factory() пула = фабрика. Событие
+создания читает только тест KyberSwap Classic (`kyber_classic_created_and_math`: p["log"] каждого пула; тесты Balancer V2
+и iZiSwap событий не читают) — берётся узким окном eth_getLogs (±1 ч, затем ±1 сут — `--created-margin`) вокруг блока
+pool_created_at GeckoTerminal; блок по времени — бинпоиск по времени заголовков eth_getBlockByNumber. Заголовки — не
+состояние: «The Nitro node databases have the raw data of all blocks, including pre-Nitro blocks»
+(docs.arbitrum.io/run-arbitrum-node/more-types/run-classic-node); geth хранит заголовки, тела и квитанции старых блоков
+во freezer отдельно от состояния (geth.ethereum.org/docs/fundamentals/databases). Узел не отдал заголовок — причина в
+записи пула («узел не отдал заголовок блока N: …»), без зависания. Пул без события — в kyber.json `pools_no_log` с
+причиной (состояние записано), с событием — в `pools`. Для справки (docs.arbitrum.io/run-arbitrum-node/nitro/
+cli-flags-reference): `execution.rpc.log-history` — «maximum number of blocks from head where a log search index is
+maintained», по умолчанию 9 400 000; значение на узле Тиграна не проверено. Потолок времени: sub_dex.py `--time-limit`
+(по умолчанию 600 с) — вышел во время поиска пулов: состояние найденного пишется, причина — в block.json и README записи,
+код выхода 3 (в сводке record_all — «СБОЙ sub_dex: запись неполная — …»); camelot_v2.py `--time-limit` (600 с) — поиск
+границы и редких событий останавливается, в logs.json rare_search — «искали с блока X по Y, событий N», запись идёт
+дальше. Потолок проверяется между запросами; один запрос к узлу — не дольше своего таймаута HTTP (120 с).
+Повтор: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --date 2026-11-20 --only sub_dex`
+(Windows — `py tools\arbitrum_record\record_all.py …`; нужен api.geckoterminal.com).
 
 **Повтор по разбору пустот 20.11.2026 (решение 462):** `python3 tools/arbitrum_record/record_all.py --rpc
 http://127.0.0.1:8547 --date 2026-11-20 --only kyber_elastic_v1,woofi,curve_crypto` — kyber_elastic_v1 и woofi обязательно
@@ -52,7 +78,8 @@ assert get_y), не скрипт.
 (`recnode.logs_split`); (4) GeckoTerminal — пауза 12 с между запросами (меньший из официальных лимитов: «~5 calls/min»
 публичного API без ключа — docs.coingecko.com/docs/keyless-public-api; «30 calls/min» — www.geckoterminal.com/dex-api;
 `ARB_GT_INTERVAL` — другое значение) общая для всех скриптов запуска, при HTTP 429 — Retry-After или 15/30/60/60/60 с,
-до 6 попыток (`gt.py`).
+до 6 попыток (`gt.py`); (5) п. 9–10 — без скана истории в sub_dex.py, потолок времени sub_dex.py и camelot_v2.py
+(раздел выше).
 
 Узел недоступен — сводка с причиной и zip всё равно пишутся (код выхода 1). Дата папок записи одна на весь запуск
 (ekubo.py и ekubo_more.py — в одну папку). Переводы строк contracts/out/ и tests/data/ git не меняет (.gitattributes,
@@ -74,7 +101,7 @@ exec_v4_live.
 | `kyber_elastic_v1.py` (+ `kyber_elastic_ticks.py`) | 451 (T448-06), 462 | пулы KyberSwap Elastic v1 и v2 (версия — по factory() пула; pools.json — v1, pools_v2.json — v2): состояние, тики (как бот и частями), QuoterV2 своей версии, getPool фабрики, логи | `tests/arbitrum_kyber_elastic_v1_live.rs` |
 | `saddle.py` | 451 (T448-07) | пулы Saddle: монеты, балансы, A, swapStorage (7 слов), calculateSwap, логи | `tests/arbitrum_saddle_live.rs` |
 | `woofi.py` | 451 (T448-08), 462 | WooPPV2.2: слот EIP-1967, селекторы в коде реализации, оракул с цепи (wooracle()) и из документации — state(), базы — токены событий WooSwap, query | `tests/arbitrum_woofi_live.rs` |
-| `sub_dex.py` | 450 (T448-01…05) | KyberSwap Classic DMM / Static Fee / Legacy (события создания, getTradeInfo, getPools, getAmountsOut роутеров), Balancer V2 по фабрикам с версией библиотек (состояние, isPoolFromFactory, queryBatchSwap), iZiSwap (fee2pointDelta, NewPool, реестр pool(x, y, fee)), код Universal Router PancakeSwap v3 — tests/data/arbitrum_sub_dex_<дата>/ | `tests/arbitrum_sub_dex_live.rs` |
+| `sub_dex.py` (+ `sub_dex_find.py`) | 450 (T448-01…05), 460 п. 9 | KyberSwap Classic DMM / Static Fee / Legacy (пулы — хвост allPools и GeckoTerminal; событие создания — окном вокруг pool_created_at; getTradeInfo, getPools, getAmountsOut роутеров), Balancer V2 по фабрикам с версией библиотек (пулы GeckoTerminal; состояние, isPoolFromFactory, queryBatchSwap), iZiSwap (fee2pointDelta, пулы реестра pool(x, y, fee) по парам токенов), код Universal Router PancakeSwap v3 — tests/data/arbitrum_sub_dex_<дата>/; потолок времени --time-limit | `tests/arbitrum_sub_dex_live.rs` |
 | `fluid_t1.py` | 440 | Fluid DEX T1 (решение 440): состояние всех пулов резолвера на одном блоке и лесенка обменов (swapIn пула → 0x…dEaD, estimateSwapIn резолвера) — для tests/arbitrum_fluid_t1.rs | `tests/arbitrum_fluid_t1.rs` |
 | `balancer_v3.py` | 441 | Решения 441, 452 (T433-F2): пулы Balancer V3 всех видов — все вызовы бота к пулу (хранилище, фабрики из списков, виды пулов, крючок, прекомпайлы) и ответы Router V3 querySwapSingleTokenExactIn / ExactOut на одном блоке; тест — tests/arbitrum_balancer_v3.rs | `tests/arbitrum_balancer_v3.rs` |
 | `curve_crypto.py` | 442 | Curve crypto-пулы (решения 442, 453): Twocrypto-NG (v2.1.0 и v2.0.0 — по MATH()), Tricrypto-NG, фабрика crypto v1, tricrypto 2021 — ответы на вызовы бота по calldata, проверка (get_coins, version, MATH, get_decimals), eth_getCode реализаций / математики / пулов, balanceOf и ETH пулов, decimals монет v1, лесенка get_dy — tests/data/arbitrum_curve_crypto_<дата>/ | tests/arb_curve_crypto_live.rs (NG), tests/arb_curve_crypto_v1_live.rs (v1) | `tests/arb_curve_crypto_live.rs`, `tests/arb_curve_crypto_v1_live.rs` |
@@ -88,8 +115,9 @@ exec_v4_live.
 | `exec_v4_live.py` (+ `v4live_rpc.py`, `v4live_slots.py`, `v4live_mgr.py`, `v4live_old.py`, `v4live_cases.py`, `v4live_write.py`) | 400, 459 (T457-02) | приёмка исполнителя v4 на живых пулах: eth_simulateV1 с подменой кода (contracts/out/ArbExecutor.bin-runtime) на пустом адресе, (а) покупка / (б) продажа по видам 19 Uniswap V4 и 23 Balancer V3 (их судит правило 400; у 23 — и пулы с крючком, которые бот берёт: static / StableSurge / MEV Capture, по 2 на вид, `--bv3-per-hook`; вида нет — «нет пулов») (у Balancer V3 квотер после (а) и продажа — две симуляции: Vault.quote состояние не откатывает) и 22 Fluid, 24 LB v2.0, 1 Uniswap V3, 0 Uniswap V2 — tests/data/executor_v4_live_<дата>/ (README с SHA-256 кода и chainId — запись судит кошельки только своей сети, summary.json, hooks_reject.json, calls.json, slots.json, pools.json, raw_rpc.json) | правило — src/venues/bsc_dex/exec/executor/live_rule.rs (см. docs/TASKS.md T457-02) |
 | `stdhttp.py` | 459, 460 | HTTP стандартной библиотеки вместо пакета requests (все скрипты: `import stdhttp as requests`); StaleState — ответ узла «historical state … is not available» | — |
 | `gt.py` | 460 | темп GeckoTerminal (12 с между запросами, общий для скриптов запуска) и повтор при HTTP 429 — для всех скриптов через stdhttp.get | — |
-| `recnode.py` | 460 | logs_split (eth_getLogs: таймаут узла — окно пополам), fresh (фаза чтения состояния на свежем блоке, повтор на новом при StaleState) | — |
-| `camelot_v2_logs.py` | 460 | модуль camelot_v2.py: нижняя граница (PairCreated первой пары фабрики или --from-block) и поиск редких событий с делением окна | — |
+| `recnode.py` | 460 | logs_split (eth_getLogs: таймаут узла — окно пополам), fresh (фаза чтения состояния на свежем блоке, повтор на новом при StaleState); п. 9 — Deadline / TimeUp (потолок времени), block_at_time (блок по времени заголовков) | — |
+| `sub_dex_find.py` | 460 п. 9 | модуль sub_dex.py: пулы без скана истории (allPools фабрик KyberSwap Classic, GeckoTerminal kyberswap_classic_arbitrum / balancer_arbitrum / пулы сети, реестр iZiSwap по парам), событие создания узким окном вокруг pool_created_at | — |
+| `camelot_v2_logs.py` | 460 | модуль camelot_v2.py: нижняя граница (PairCreated первой пары фабрики или --from-block) и поиск редких событий с делением окна; п. 10 — потолок времени | — |
 | `algebra_dir_fee.py` | 444 | Algebra V1.9 с направленными комиссиями (T433-F5; Camelot V3) — команда и хеши кода пула — раздел ниже | `tests/arb_dex_algebra_dir.rs` |
 
 ## algebra_dir_fee.py — Algebra V1.9 с направленными комиссиями (решение 444, T433-F5; Camelot V3)

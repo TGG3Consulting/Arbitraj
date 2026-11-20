@@ -11,7 +11,9 @@
                SetStableSwap пар этой фабрики (поиск назад от головы b0 частями по --chunk блоков, при таймауте узла
                — половинами, пока не наберётся --rare штук каждого или не пройдена нижняя граница: --from-block или
                блок PairCreated первой пары фабрики), PairCreated фабрики (последние найденные); rare_search — окно
-               поиска, граница и её источник, «нет событий с блока N» (решение 460, camelot_v2_logs.py).
+               поиска, граница и её источник, «нет событий с блока N» (решение 460, camelot_v2_logs.py);
+               потолок --time-limit (решение 460 п. 10, по умолчанию 600 с): вышел — «искали с блока X по Y, событий N»,
+               запись идёт дальше (состояние пар, Sync).
 
 Порядок (решение 460): узел с короткой историей состояния (Nitro, path) — сначала долгий поиск логов, потом свежий
 блок B и всё чтение состояния на нём (recnode.fresh: состояние B удалено узлом — заново на новом блоке).
@@ -188,20 +190,28 @@ def main():
                     help="нижняя граница поиска редких событий (по умолчанию — блок PairCreated первой пары фабрики)")
     ap.add_argument("--min-chunk", type=int, default=1000, help="наименьшая часть при делении по таймауту, блоков")
     ap.add_argument("--rare", type=int, default=20, help="сколько FeePercentUpdated / SetStableSwap / PairCreated")
+    ap.add_argument("--time-limit", type=int, default=600,
+                    help="потолок времени поиска границы и редких событий, с (решение 460 п. 10; 0 — без потолка): вышел — "
+                         "в запись «искали с блока X по Y, событий N», запись идёт дальше")
     ap.add_argument("--out", default="tests/data", help="папка tests/data")
     a = ap.parse_args()
+    a.deadline = recnode.Deadline(a.time_limit)  # решение 460 п. 10
     node, fac = Node(a.node), a.factory
     chain = int(node.one("eth_chainId", []), 16)
     # Решение 460: сначала долгий поиск логов (без чтения состояния блока B), потом — свежий блок B и всё состояние.
     b0 = int(node.one("eth_blockNumber", []), 16)
     say = lambda t: print(t, file=sys.stderr, flush=True)  # noqa: E731
     bound, bound_why = lower_bound(node, fac, b0, a, S, T, say)
-    rare, searched_to = rare_events(node, fac, b0, bound, a, S, T, say)
+    rare, searched_to, stopped = rare_events(node, fac, b0, bound, a, S, T, say)
     say(f"поиск событий окончен: блоки {searched_to}..{b0}, fee {len(rare['fee'])}, stable {len(rare['stable'])}, "
-        f"created {len(rare['created'])}")
+        f"created {len(rare['created'])}" + (f" — {stopped}" if stopped else ""))
+    found = (f"FeePercentUpdated — {len(rare['fee'])} шт., SetStableSwap — {len(rare['stable'])} шт., "
+             f"PairCreated — {len(rare['created'])} шт.")
     rare_meta = {"to_block": b0, "from_block": searched_to, "lower_bound": bound, "lower_bound_source": bound_why,
-                 "reached_lower_bound": searched_to <= bound,
-                 "note": (f"Поиск дошёл до нижней границы {bound}: FeePercentUpdated — {len(rare['fee'])} шт., "
+                 "reached_lower_bound": searched_to <= bound, "time_limit_s": a.time_limit, "stopped": stopped,
+                 "note": (f"Поиск остановлен потолком времени ({stopped}): искали с блока {searched_to} по {b0}, "
+                          f"событий: {found}." if stopped else
+                          f"Поиск дошёл до нижней границы {bound}: FeePercentUpdated — {len(rare['fee'])} шт., "
                           f"SetStableSwap — {len(rare['stable'])} шт.; других событий пар фабрики в блоках "
                           f"{bound}..{b0} нет." if searched_to <= bound else "")}
     probe, lo, sync, b, blk = recnode.fresh(lambda: int(node.one("eth_blockNumber", []), 16),

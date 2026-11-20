@@ -9,6 +9,8 @@
   ядра из broadcast-файлов Ekubo, --ekubo-from-block — только переопределение.
   Решение 462: woofi — только --rpc (оракул — wooracle() пула с цепи, базы — события WooSwap); kyber_elastic_v1 — версия
   пула по factory(), адреса v1 и v2 — в шапке скрипта.
+  Решение 460 п. 9–10: sub_dex — без поиска событий назад (--blocks убран): пулы — перечисление фабрик, GeckoTerminal, реестр по
+  парам, потолок времени --time-limit (по умолчанию 600 с); camelot_v2 — тот же потолок для редких событий.
 Кто вызывает: tools/arbitrum_record/record_all.py.
 От чего зависит: нет.
 Ошибок нет.
@@ -65,7 +67,7 @@ def steps(rpc, wallet, ekubo_from):
         bv3 += ["--list", item]
     out = [
         ("sub_dex", "sub_dex.py", [
-            "--node", rpc, "--blocks", "2000000", "--max-pools", "20",
+            "--node", rpc, "--max-pools", "20",
             "--kyber", "DMM:0xD9bfE9979e9CA4b2fe84bA5d4Cf963bBcB376974:0xEaE47c5D99f7B31165a7f0c5f7E0D6afA25CFd55",
             "--kyber", "KS:0x1c758aF0688502e49140230F6b0EBd376d429be5:0x5649B4DD00780e99Bab7Abb4A3d581Ea1aEB23D0",
             "--kyber", "KS_LEGACY:0x51E8D106C646cA58Caf32A47812e95887C071a62:0xC3E2aED41ECdFB1ad41ED20D45377Da98D5489dD",

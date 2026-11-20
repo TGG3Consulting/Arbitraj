@@ -12,9 +12,13 @@
      camelot_v2.py), не ошибка.
   Прогон 20.11.2026: eth_getLogs {'code': -32002, 'message': 'request timed out'} на окне 2 000 000 блоков
   (поиск с головы 525985036 назад, 18 окон прошли без событий fee/stable).
+  Решение 460 п. 10: потолок времени a.deadline (recnode.Deadline, --time-limit camelot_v2.py) — проверяется перед каждой
+  частью eth_getLogs; вышел — поиск границы / событий останавливается, в запись — «искали с блока X по Y, событий N»
+  (окно, прерванное на середине, не засчитывается — его события не берутся). Один запрос к узлу — не дольше таймаута
+  HTTP Node (120 с).
 Кто вызывает: tools/arbitrum_record/camelot_v2.py.
 От чего зависит: recnode.py (logs_split); узел — объект Node из camelot_v2.py (one, calls).
-Ошибки: ошибки узла (кроме таймаута, который делит окно) — исключения как есть.
+Ошибки: ошибки узла (кроме таймаута, который делит окно) — исключения как есть; TimeUp не выходит наружу.
 """
 
 import recnode
@@ -36,7 +40,7 @@ def _full(h):
 def _logs(node, flt, lo, hi, a, say):
     """eth_getLogs окна [lo, hi] с делением по таймауту. Возвращает список по возрастанию блоков."""
     return recnode.logs_split(lambda x, y: node.one("eth_getLogs", [dict(flt, fromBlock=hex(x), toBlock=hex(y))]),
-                              lo, hi, a.min_chunk, say)
+                              lo, hi, a.min_chunk, say, a.deadline)
 
 
 def lower_bound(node, fac, b0, a, S, T, say):
@@ -52,7 +56,10 @@ def lower_bound(node, fac, b0, a, S, T, say):
         return 0, f"token0/token1 первой пары {pair0} не ответили — граница 0"
     t0, t1 = ("0x" + format(_word(x), "064x") for x in tk)
     say(f"нижняя граница: PairCreated первой пары {pair0} (блоки 0..{b0})")
-    got = _logs(node, {"address": fac, "topics": [T["created"], t0, t1]}, 0, b0, a, say)
+    try:
+        got = _logs(node, {"address": fac, "topics": [T["created"], t0, t1]}, 0, b0, a, say)
+    except recnode.TimeUp as e:
+        return 0, f"PairCreated первой пары {pair0} не найден: {e} — граница 0"
     for g in got:
         if _addr(g["data"], 0).lower() == pair0.lower():
             n = int(g["blockNumber"], 16)
@@ -62,24 +69,31 @@ def lower_bound(node, fac, b0, a, S, T, say):
 
 def rare_events(node, fac, b0, bound, a, S, T, say):
     """Редкие события назад от b0 до bound. Возвращает: (словарь fee/stable/created — новые первыми, нижний
-    пройденный блок). Ошибки: ошибки узла."""
+    пройденный блок, причина остановки по потолку времени или None). Окно засчитывается целиком или никак.
+    Ошибки: ошибки узла."""
     rare = {"fee": [], "stable": [], "created": []}
     hi = b0
     while hi >= bound and any(len(v) < a.rare for v in rare.values()):
         lo2 = max(bound, hi - a.chunk + 1)
-        if len(rare["fee"]) < a.rare or len(rare["stable"]) < a.rare:
-            got = _logs(node, {"topics": [[T["fee"], T["stable"]]]}, lo2, hi, a, say)
-            own = sorted({g["address"] for g in got})
-            facs = node.calls([(x, S["factory()"]) for x in own], "latest") if own else []
-            ours = {x for x, f in zip(own, facs) if _full(f) and _addr(f).lower() == fac.lower()}
-            for g in reversed(got):
-                k = "fee" if g["topics"][0] == T["fee"] else "stable"
-                if g["address"] in ours and len(rare[k]) < a.rare:
-                    rare[k].append(g)
-        if len(rare["created"]) < a.rare:
-            cr = _logs(node, {"address": fac, "topics": [T["created"]]}, lo2, hi, a, say)
-            rare["created"] += list(reversed(cr))[: a.rare - len(rare["created"])]
+        add = {"fee": [], "stable": [], "created": []}
+        try:
+            if len(rare["fee"]) < a.rare or len(rare["stable"]) < a.rare:
+                got = _logs(node, {"topics": [[T["fee"], T["stable"]]]}, lo2, hi, a, say)
+                own = sorted({g["address"] for g in got})
+                facs = node.calls([(x, S["factory()"]) for x in own], "latest") if own else []
+                ours = {x for x, f in zip(own, facs) if _full(f) and _addr(f).lower() == fac.lower()}
+                for g in reversed(got):
+                    k = "fee" if g["topics"][0] == T["fee"] else "stable"
+                    if g["address"] in ours and len(rare[k]) + len(add[k]) < a.rare:
+                        add[k].append(g)
+            if len(rare["created"]) < a.rare:
+                cr = _logs(node, {"address": fac, "topics": [T["created"]]}, lo2, hi, a, say)
+                add["created"] = list(reversed(cr))[: a.rare - len(rare["created"])]
+        except recnode.TimeUp as e:
+            return rare, hi + 1, str(e)
+        for k in rare:
+            rare[k] += add[k]
         say(f"поиск событий {lo2}..{hi}: fee {len(rare['fee'])}, stable {len(rare['stable'])}, "
             f"created {len(rare['created'])}")
         hi = lo2 - 1
-    return rare, hi + 1
+    return rare, hi + 1, None

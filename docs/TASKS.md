@@ -267,7 +267,7 @@
     exec_v4_live); таймаут eth_getLogs — окно пополам; блок ядра Ekubo — broadcast-файлы (416469411); нижняя граница
     camelot_v2 — PairCreated первой пары фабрики; ответ «historical state …» — исключение (в запись не попадает).
     Пустоты в прошедших записях: ekubo — 0 пулов (адрес пула GeckoTerminal «<ядро>-<PoolId>», исправлено); sub_dex —
-    0 пулов у всех 11 фабрик (за 2 000 000 блоков событий нет; теперь поиск назад до --max-pools); exec_v4_live — вид 23
+    0 пулов у всех 11 фабрик (за 2 000 000 блоков событий нет; был поиск назад до --max-pools — заменён, п. 9 ниже); exec_v4_live — вид 23
     «нет пулов» (нет записи balancer_v3). Без правки — вопросы / факты Тиграну: woofi — --base не задан (bases пуст,
     query нет), WooPP.wooracle() = 0xf9b0c8ee13ae2fc0665764ecbdb417685dea8081 ≠ --oracle 0xCf4E…34Ec (woonetwork/docs);
     kyber_elastic_v1 — у 14 из 20 пулов GeckoTerminal все 14 котировок QuoterV2 откатились, у 2 — часть,
@@ -304,6 +304,19 @@
     pool_count v1), algebra_dir_fee — не нужен (запись полная; quoter_v2 у Camelot нет): `python3
     tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --date 2026-11-20 --only kyber_elastic_v1,woofi,curve_crypto`
     (+ скрипты повтора решения 460 выше, если ещё не повторялись).
+    **sub_dex без скана истории, потолок времени (решение 460, п. 9–10, ветка t234/arb-merge-2):** факт узла Тиграна —
+    sub_dex.py с поиском событий создания назад окнами eth_getLogs за 37 мин прошёл ~144 млн блоков из ~526 млн (на
+    каждом окне таймаут и деление). Теперь (sub_dex_find.py): KyberSwap Classic — хвост allPools(i) трёх фабрик + пулы
+    GeckoTerminal kyberswap_classic_arbitrum со своей factory(); Balancer V2 — пулы GeckoTerminal balancer_arbitrum,
+    фабрика по isPoolFromFactory; iZiSwap — реестр pool(x, y, fee) по парам токенов (токены пулов сети GeckoTerminal,
+    --izi-token). Событие создания — только для теста kyber_classic_created_and_math (p["log"]): узким окном eth_getLogs
+    вокруг блока pool_created_at GeckoTerminal (блок — бинпоиск по времени заголовков eth_getBlockByNumber; заголовки
+    старых блоков у Nitro есть — docs.arbitrum.io run-classic-node). Пул без события — kyber.json pools_no_log (тест его
+    не читает). Потолок времени --time-limit 600 с: sub_dex — пишет найденное, код 3 с причиной; camelot_v2 — «искали с
+    блока X по Y, событий N», запись дальше. Повтор: `python3 tools/arbitrum_record/record_all.py --rpc
+    http://127.0.0.1:8547 --date 2026-11-20 --only sub_dex` (+ camelot_v2, если ещё не повторялся). Открыто: у
+    KyberSwap Classic событие есть только у пулов, которые есть в GeckoTerminal; если pool_created_at GeckoTerminal не
+    совпадёт с блоком создания (окно ±1 сут) — pools пуст, причина в log_search, тест так и скажет «нет ответов роутеров».
   - T462-01 KyberSwap Elastic v1 (Legacy) на Arbitrum: пулы есть (getPool фабрики v1 для 6 пар пулов GeckoTerminal), в
     GeckoTerminal их нет — отдельный DEX (вид kyber_elastic_v1, поиск по фабрике 0x5F1d…D50a) в таблицу покрытия; id и
     включение — Тигран.

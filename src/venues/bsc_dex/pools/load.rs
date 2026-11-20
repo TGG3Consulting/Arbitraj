@@ -489,7 +489,8 @@ fn known_spacing(f: &Family, old: Option<i32>, l: &Loaded) -> Option<i32> {
     if f.proto != Proto::Algebra {
         return old;
     }
-    old.or(l.ticks.as_ref().map(|m| m.spacing))
+    let map = l.ticks.as_ref().map(|m| m.spacing);
+    old.or(map)
 }
 
 /// Запись с новым состоянием на блоке (valid = true). Ошибок нет.

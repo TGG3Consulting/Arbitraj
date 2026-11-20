@@ -10,8 +10,16 @@
 //!   uint8 communityFeeToken0, uint8 communityFeeToken1, bool unlocked); liquidity() → uint128; tickSpacing() → int24;
 //!   ticks(int24) → (uint128 liquidityTotal, int128 liquidityDelta, uint256 outerFeeGrowth0Token,
 //!   uint256 outerFeeGrowth1Token, int56 outerTickCumulative, uint160 outerSecondsPerLiquidity,
-//!   uint32 outerSecondsSpent, bool initialized); tickTable(int16 wordPosition) → uint256 (битмап СЫРОГО тика:
-//!   rowNumber = tick >> 8, bitNumber = tick & 0xFF — TickTable.sol, БЕЗ деления на tickSpacing, в отличие от V3);
+//!   uint32 outerSecondsSpent, bool initialized); tickTable(int16 wordPosition) → uint256 (решение 463: у THENA Fusion
+//!   битмап СЖАТОГО тика — rowNumber = floor(tick / TICK_SPACING) >> 8, TickTable.sol исходника THENA);
+//! - решение 463 (T463-02, комиссия следующего блока; исходник THENA, Sourcify 56, и ответы записи t237):
+//!   dataStorageOperator() → address (PoolImmutables.sol), timepoints(uint256) → (bool initialized, uint32
+//!   blockTimestamp, int56 tickCumulative, uint160 secondsPerLiquidityCumulative, uint88 volatilityCumulative, int24
+//!   averageTick, uint144 volumePerLiquidityCumulative) (DataStorage.Timepoint, 7 слов ответа); оператор
+//!   (DataStorageOperator.sol): feeConfig() → AdaptiveFee.Configuration (alpha1, alpha2 uint16; beta1, beta2 uint32;
+//!   gamma1, gamma2 uint16; volumeBeta uint32; volumeGamma, baseFee uint16 — 9 слов), getTimepoints(uint32 time,
+//!   uint32[] secondsAgos, int24 tick, uint16 index, uint128 liquidity) → (int56[], uint160[], uint112[], uint256[]) —
+//!   только от имени пула (onlyPool: eth_call с from = пул);
 //! - события (IAlgebraPoolEvents.sol): Swap(sender, recipient, amount0, amount1, price, liquidity, tick),
 //!   Mint(sender, owner, bottomTick, topTick, liquidityAmount, amount0, amount1),
 //!   Burn(owner, bottomTick, topTick, liquidityAmount, amount0, amount1) — Swap несёт цену/ликвидность/тик после обмена;
@@ -38,6 +46,13 @@ alloy::sol! {
         function tickSpacing() external view returns (int24);
         function ticks(int24 tick) external view returns (uint128 liquidityTotal, int128 liquidityDelta, uint256 outerFeeGrowth0Token, uint256 outerFeeGrowth1Token, int56 outerTickCumulative, uint160 outerSecondsPerLiquidity, uint32 outerSecondsSpent, bool initialized);
         function tickTable(int16 wordPosition) external view returns (uint256);
+        function dataStorageOperator() external view returns (address);
+        function timepoints(uint256 index) external view returns (bool initialized, uint32 blockTimestamp, int56 tickCumulative, uint160 secondsPerLiquidityCumulative, uint88 volatilityCumulative, int24 averageTick, uint144 volumePerLiquidityCumulative);
+    }
+
+    interface IDataStorageOperator {
+        function feeConfig() external view returns (uint16 alpha1, uint16 alpha2, uint32 beta1, uint32 beta2, uint16 gamma1, uint16 gamma2, uint32 volumeBeta, uint16 volumeGamma, uint16 baseFee);
+        function getTimepoints(uint32 time, uint32[] secondsAgos, int24 tick, uint16 index, uint128 liquidity) external view returns (int56[] tickCumulatives, uint160[] secondsPerLiquidityCumulatives, uint112[] volatilityCumulatives, uint256[] volumePerAvgLiquiditys);
     }
 
     interface IAlgebraFactory {
@@ -93,6 +108,22 @@ mod tests {
         assert_eq!(
             IAlgebraPool::tickTableCall::SELECTOR.to_vec(),
             sel("tickTable(int16)")
+        );
+        assert_eq!(
+            IAlgebraPool::timepointsCall::SELECTOR.to_vec(),
+            sel("timepoints(uint256)")
+        );
+        assert_eq!(
+            IAlgebraPool::dataStorageOperatorCall::SELECTOR.to_vec(),
+            sel("dataStorageOperator()")
+        );
+        assert_eq!(
+            IDataStorageOperator::feeConfigCall::SELECTOR.to_vec(),
+            sel("feeConfig()")
+        );
+        assert_eq!(
+            IDataStorageOperator::getTimepointsCall::SELECTOR.to_vec(),
+            sel("getTimepoints(uint32,uint32[],int24,uint16,uint128)")
         );
         assert_eq!(
             IAlgebraFactory::poolByPairCall::SELECTOR.to_vec(),

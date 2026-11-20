@@ -79,9 +79,8 @@ fn slip_words(pool: Address, (lo, hi): (i16, i16)) -> Vec<Call> {
 /// tickSpacing пула THENA Fusion, известный записи (ревью t236: Pool.tick_spacing — load.rs known_spacing, иначе шаг
 /// прочитанной карты). None — ещё не читался. Ошибок нет.
 fn algebra_spacing(e: &Entry) -> Option<i32> {
-    e.pool
-        .tick_spacing
-        .or(e.ticks.as_ref().map(|m| m.spacing))
+    let map = e.ticks.as_ref().map(|m| m.spacing);
+    e.pool.tick_spacing.or(map)
 }
 
 /// THENA Fusion (решение 463): globalState, liquidity и сжатые слова tickTable вокруг тика записи при известном шаге
@@ -111,9 +110,9 @@ pub fn algebra_more(ctx: &Ctx, e: &Entry, pool: Address, b: &Book) -> Vec<Call> 
     let Some(gs) = got(b, pool, &IAlgebraPool::globalStateCall {}) else {
         return Vec::new();
     };
-    let Some(sp) = algebra_spacing(e)
-        .or_else(|| got(b, pool, &IAlgebraPool::tickSpacingCall {}).map(|s| s.as_i32()))
-    else {
+    let read = got(b, pool, &IAlgebraPool::tickSpacingCall {});
+    let read = read.map(|s| s.as_i32());
+    let Some(sp) = algebra_spacing(e).or(read) else {
         return Vec::new();
     };
     let Ok(sp) = spacing_of(ctx, sp) else {

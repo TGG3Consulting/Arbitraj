@@ -12,7 +12,7 @@
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use alloy_primitives::{I256, U256};
 use serde_json::Value;
@@ -32,17 +32,26 @@ pub const T237: &str = "tests/data/bsc_thena_fusion_2026-11-20_t237";
 /// Ошибок нет (тест падает).
 pub fn pools(rel: &str, n: usize) -> Vec<Value> {
     let d = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel);
-    let mut names: Vec<_> = std::fs::read_dir(d)
+    let mut names: Vec<PathBuf> = std::fs::read_dir(d)
         .unwrap()
         .map(|e| e.unwrap().path())
-        .filter(|p| p.file_name().unwrap().to_str().unwrap().starts_with("pool_"))
+        .filter(|p| is_pool(p))
         .collect();
     names.sort();
     assert_eq!(names.len(), n, "пулов в записи {rel}");
-    names
-        .iter()
-        .map(|p| serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap())
-        .collect()
+    names.iter().map(|p| read_json(p)).collect()
+}
+
+/// Файл пула записи (pool_<адрес>.json). Ошибок нет.
+fn is_pool(p: &Path) -> bool {
+    let name = p.file_name().and_then(|n| n.to_str());
+    name.is_some_and(|n| n.starts_with("pool_"))
+}
+
+/// JSON файла. Ошибок нет (тест падает).
+fn read_json(p: &Path) -> Value {
+    let text = std::fs::read_to_string(p).unwrap();
+    serde_json::from_str(&text).unwrap()
 }
 
 /// Слово `i` ответа eth_call (hex «0x…»). Ошибок нет (тест падает).
@@ -94,8 +103,12 @@ pub fn map_of(p: &Value) -> TickMap {
         let r = &infos[t.to_string()]["result"];
         let total = word(r, 0).to::<u128>();
         let delta = i128::try_from(signed(r, 1)).unwrap();
-        assert!(total > 0, "{}: тик {t} сжатого битмапа без ликвидности", p["pool"]);
-        m.insert(t, TickData { gross: total, net: delta });
+        assert!(total > 0, "{}: тик {t} без ликвидности", p["pool"]);
+        let data = TickData {
+            gross: total,
+            net: delta,
+        };
+        m.insert(t, data);
     }
     TickMap {
         spacing,

@@ -19,7 +19,10 @@
 //! (dynamic).
 //! От чего зависит: abi_algebra_integral.rs, node/call.rs (try_many, decode, block_tag), registry.rs, listen.rs (Pools),
 //! event_flags.rs (настройка в памяти).
-//! Настройки: dex.event_refresh_fee_only [DEX]; dex.multicall3 [bsc_dex] (через try_many).
+//! Решение 463 (T463-02): тем же путём после Swap пула THENA Fusion (events_algebra.rs → Applied::Fee) перечитывается
+//! комиссия следующего блока (fusion_fee.rs read_fee) — всегда, без dex.event_refresh_fee_only (базовое поведение:
+//! комиссия обмена — та, что даст контракт); остальные условия fits — те же.
+//! Настройки: dex.event_refresh_fee_only [DEX] (не для THENA Fusion); dex.multicall3 [bsc_dex] (через try_many).
 //!
 //! ABI — cryptoalgebra/Algebra, integral-core 1.2.10, коммит 1ff43e11407872f7c09b001cdeee1a59d2c334ec:
 //! https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/core/contracts/interfaces/pool/IAlgebraPoolState.sol#L44
@@ -38,6 +41,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::node::call::{self, block_tag};
 use super::abi_algebra_integral::{DYNAMIC_FEE, IAlgebraIntegralPool as P};
+use super::families::Proto;
 use super::listen::Pools;
 use super::registry::Entry;
 
@@ -50,10 +54,9 @@ pub fn dynamic(plugin_config: u8) -> bool {
 /// пул не ждёт повтора (решение 298), достоверен (ревью 325, Н2) и его состояние — Algebra (Н3). Иначе — прежний
 /// Refresh. Принимает: окружение, запись пула (до события), ждёт ли пул повтора. Ошибок нет.
 pub fn fits(ctx: &Ctx, e: &Entry, waiting: bool) -> bool {
-    !waiting
-        && e.valid
-        && matches!(e.pool.state, PoolState::Algebra { .. })
-        && super::event_flags::fee_only(ctx, e.family)
+    // Решение 463: THENA Fusion — комиссия следующего блока после Swap — базовое поведение, без настройки.
+    let allowed = e.family.proto == Proto::Algebra || super::event_flags::fee_only(ctx, e.family);
+    !waiting && e.valid && matches!(e.pool.state, PoolState::Algebra { .. }) && allowed
 }
 
 /// Комиссия пула на блоке одним обращением. Принимает: окружение, пул, блок-тег.
@@ -85,17 +88,30 @@ pub async fn read(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<u32> {
 }
 
 /// Перечитывает только комиссию пула на блоке события и отмечает событие учтённым (как Applied::Updated в
-/// events.rs: блок, позиция лога). Принимает: окружение пачки, ссылку, блок и logIndex события.
+/// events.rs: блок, позиция лога). Принимает: окружение пачки, ссылку, протокол вида (THENA Fusion — комиссия
+/// следующего блока, решение 463), блок и logIndex события.
 /// Ошибки: как у read; Internal — ссылка не на свой контракт или состояние пула не Algebra (ревью 325, Н3: событие не
 /// отмечается учтённым).
-pub async fn apply(p: &Pools, r: &PoolRef, block: u64, index: Option<u64>) -> GatewayResult<()> {
+pub async fn apply(
+    p: &Pools,
+    r: &PoolRef,
+    proto: Proto,
+    block: u64,
+    index: Option<u64>,
+) -> GatewayResult<()> {
     let PoolRef::Contract(pool) = r else {
         return Err(p.ctx.err(
             ErrorCode::Internal,
             "Algebra Integral: ссылка на пул не того вида",
         ));
     };
-    let fee = read(&p.ctx, *pool, &block_tag(block)).await?;
+    let tag = block_tag(block);
+    // Решение 463: THENA Fusion — комиссия следующего блока по оракулу пула (fusion_fee.rs); Integral — как раньше.
+    let fee = if proto == Proto::Algebra {
+        super::fusion_fee::read_fee(&p.ctx, *pool, &tag).await?
+    } else {
+        read(&p.ctx, *pool, &tag).await?
+    };
     // Пула нет в реестре (снят) — записывать некуда, как у Updated (listen_log.rs: дальше — ничего).
     match p.reg.update(r, |e| set_fee(e, fee, block, index)) {
         Some(false) => Err(p.ctx.err(

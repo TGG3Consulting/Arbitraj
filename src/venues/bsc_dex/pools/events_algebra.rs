@@ -16,6 +16,9 @@
 //! в Swap не приходит; решение 463: её новое значение несёт событие Fee(uint16) (AlgebraPool.sol _getNewFee — первый
 //! своп в блоке, лог до Swap) — применяем; Initialize — перечитать пул. Collect / Flash / CommunityFee / Incentive /
 //! LiquidityCooldown расчёт обмена не меняют (исходник THENA Fusion, Sourcify 56, abi_algebra.rs).
+//! Решение 463 (T463-02): у THENA Fusion (Proto::Algebra; Integral зовёт этот apply для Swap / Mint / Burn — у него
+//! прежнее Updated) Swap после применения — Applied::Fee: комиссия следующего блока перечитывается на блоке события
+//! (pools/integral_fee.rs apply → pools/fusion_fee.rs read_fee). Fee — комиссия текущего блока (до Swap той же tx).
 
 use alloy::rpc::types::Log;
 use alloy::sol_types::SolEvent;
@@ -25,6 +28,7 @@ use crate::core::types::PoolState;
 
 use super::abi_algebra::IAlgebraPool;
 use super::events::Applied;
+use super::families::Proto;
 use super::registry::Entry;
 
 /// topic0 всех событий пула THENA Fusion (вид thena_fusion): Swap / Mint / Burn и (решение 463) Fee / Initialize.
@@ -64,7 +68,14 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     };
     if t0 == IAlgebraPool::Swap::SIGNATURE_HASH {
         return match IAlgebraPool::Swap::decode_log_data(d) {
-            Ok(s) => swap(e, U256::from(s.price), s.liquidity, s.tick.as_i32()),
+            Ok(s) => match swap(e, U256::from(s.price), s.liquidity, s.tick.as_i32()) {
+                // Решение 463 (T463-02): у THENA Fusion Swap меняет точку оракула и volumePerLiquidityInBlock —
+                // комиссию следующего блока перечитать на блоке события (integral_fee.rs apply → fusion_fee.rs).
+                Applied::Updated if e.family.proto == Proto::Algebra => {
+                    Applied::Fee("THENA Fusion Swap: комиссия следующего блока".into())
+                }
+                x => x,
+            },
             Err(err) => bad("Swap", err),
         };
     }

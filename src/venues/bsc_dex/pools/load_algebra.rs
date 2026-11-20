@@ -7,7 +7,9 @@
 //! Читается по одному пулу (как Elastic/Bin): целевой Multicall3 идёт через call::view_many (node/call.rs).
 //! Кто вызывает: pools/load.rs (и через него load_batch.rs для Algebra); row_range / row_ticks — ещё
 //! pools/prefetch_ticks.rs (заранее читаемые вызовы, решение 325) и pools/off_map_algebra.rs (решение 320).
-//! От чего зависит: ctx.rs, node/call.rs (view/view_many, Multicall3 — решение 83), pools/abi_algebra.rs, load_cl.rs
+//! Решение 463 (T463-02): комиссия состояния — та, что получит своп СЛЕДУЮЩЕГО блока (pools/fusion_fee.rs next_fee:
+//! оракул пула, math/fee_algebra_v1.rs), не globalState.fee.
+//! От чего зависит: ctx.rs, node/call.rs (view/view_many, Multicall3 — решение 83), pools/abi_algebra.rs, fusion_fee.rs, load_cl.rs
 //! (i24), load_v2v3.rs (band_words, read_band_words), ticks.rs, core/types (PoolState).
 //! Настройки: dex.tick_words [bsc_dex] (сколько слов битмапа читать в каждую сторону от текущего);
 //! dex.tick_read_band_pct [bsc_dex] (необязательная, решение 296: не меньше слов полосы чтения при шаге пула);
@@ -35,6 +37,7 @@ use crate::gateway::errors::{ErrorCode, GatewayResult};
 use super::super::ctx::Ctx;
 use super::super::node::call;
 use super::abi_algebra::IAlgebraPool;
+use super::fusion_fee::{self, Head};
 use super::load_cl::i24;
 use super::load_v2v3::{band_words, read_band_words};
 use super::ticks::{TickData, TickMap};
@@ -60,11 +63,19 @@ pub async fn load(
     };
     let spacing = spacing_of(ctx, spacing)?;
     let tick = gs.tick.as_i32();
+    // Решение 463 (T463-02): комиссия свопа СЛЕДУЮЩЕГО блока (первый своп блока пересчитывает её по оракулу), а не
+    // globalState.fee — с ней считают котировка и глубина (pools/fusion_fee.rs).
+    let head = Head {
+        tick,
+        index: gs.timepointIndex,
+        fee: u32::from(gs.fee),
+    };
+    let fee = fusion_fee::next_fee(ctx, pool, head, tag).await?;
     let state = PoolState::Algebra {
         sqrt_price_x96: U256::from(gs.price),
         tick,
         liquidity,
-        fee: u32::from(gs.fee),
+        fee,
     };
     // Окно СЖАТЫХ слов битмапа вокруг текущего тика: слово = floor(tick / spacing) >> 8, по n слов в каждую сторону
     // (row_range). Полоса цены dex.depth_band_pct сюда не разворачивается (как до решения 463): если обмен выйдет за

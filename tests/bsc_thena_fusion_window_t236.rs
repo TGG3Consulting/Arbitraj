@@ -82,16 +82,19 @@ async fn window_and_off_map_on_record() {
         let PoolState::Algebra { tick, .. } = e.pool.state else {
             unreachable!()
         };
-        assert_eq!(m.spacing, 60, "{}", p["pool"]);
-        assert_eq!(row_range(&c, tick, m.spacing).unwrap(), m.words, "{}: окно = записанные строки", p["pool"]);
+        let name = p["pool"].as_str().unwrap();
+        assert_eq!(m.spacing, 60, "{name}");
+        let win = row_range(&c, tick, m.spacing).unwrap();
+        assert_eq!(win, m.words, "{name}: окно = записанные строки");
         let top = (i32::from(m.words.1) * 256 + 255) * m.spacing;
         let (edge, out) = (top - 10, top + m.spacing);
         set(&c, FLAG, None).await;
-        assert!(!off_map(&c, &moved(&e, out)), "{}: настройка не задана", p["pool"]);
+        let (at_edge, beyond) = (moved(&e, edge), moved(&e, out));
+        assert!(!off_map(&c, &beyond), "{name}: настройка не задана");
         set(&c, FLAG, Some(json!(true))).await;
-        assert!(!off_map(&c, &e), "{}: полоса внутри окна", p["pool"]);
-        assert!(off_map(&c, &moved(&e, edge)), "{}: полоса за краем окна", p["pool"]);
-        assert!(off_map(&c, &moved(&e, out)), "{}: тик за окном", p["pool"]);
+        assert!(!off_map(&c, &e), "{name}: полоса внутри окна");
+        assert!(off_map(&c, &at_edge), "{name}: полоса за краем окна");
+        assert!(off_map(&c, &beyond), "{name}: тик за окном");
         set(&c, FLAG, None).await;
     }
 }
@@ -104,13 +107,15 @@ fn band_depth_on_record() {
         for zfo in [true, false] {
             let case = format!("{} zfo={zfo}", p["pool"]);
             let (a_in, a_out, reached) = depth_band_algebra::algebra(&s, zfo, 0.02, !zfo).unwrap();
-            assert!(reached, "{case}: граница полосы 2 % внутри записанных строк");
-            assert!(a_in > U256::ZERO && a_out > U256::ZERO, "{case}: глубина не пуста");
+            assert!(reached, "{case}: граница полосы внутри строк");
+            let filled = a_in > U256::ZERO && a_out > U256::ZERO;
+            assert!(filled, "{case}: глубина не пуста");
             // Та же сумма до той же границы — тот же итог (граница достигнута ровно этой суммой).
             let edge = if zfo { s.tick - 202 } else { s.tick + 198 };
             let limit = sqrt_ratio_at_tick(edge).unwrap();
             let (r, at) = swap_algebra::swap_to(&s, zfo, true, a_in, limit).unwrap();
-            assert_eq!((r.amount_in, r.amount_out, at), (a_in, a_out, true), "{case}: граница 202 / 198 тиков");
+            let same = (r.amount_in, r.amount_out, at) == (a_in, a_out, true);
+            assert!(same, "{case}: граница 202 / 198 тиков");
             // Без предела та же сумма уходит не ближе границы: выход не меньше глубины (шаг округляет цену в сторону
             // обмена — на записи до +2 156 881 wei у 0x2465…584f, Python-копия кода Rust).
             let free = swap_algebra::swap(&s, zfo, true, a_in).unwrap();

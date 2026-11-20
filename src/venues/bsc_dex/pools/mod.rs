@@ -84,6 +84,7 @@ pub mod fee_override;
 pub mod fee_probe;
 pub mod fee_refresh;
 pub mod fee_watch;
+pub mod fusion_fee;
 pub mod graph;
 pub mod graph_alarm;
 pub mod graph_alarm_owner;

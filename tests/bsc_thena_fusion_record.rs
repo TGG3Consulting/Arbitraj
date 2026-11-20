@@ -18,7 +18,7 @@
 //! quote::pool_quote}; serde_json.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{I256, U256};
@@ -38,17 +38,26 @@ fn dir() -> PathBuf {
 
 /// Файлы пулов записи (8 штук, по имени). Ошибок нет (тест падает).
 fn pools() -> Vec<Value> {
-    let mut names: Vec<_> = std::fs::read_dir(dir())
+    let mut names: Vec<PathBuf> = std::fs::read_dir(dir())
         .unwrap()
         .map(|e| e.unwrap().path())
-        .filter(|p| p.file_name().unwrap().to_str().unwrap().starts_with("pool_"))
+        .filter(|p| is_pool(p))
         .collect();
     names.sort();
     assert_eq!(names.len(), 8, "пулов в записи");
-    names
-        .iter()
-        .map(|p| serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap())
-        .collect()
+    names.iter().map(|p| read_json(p)).collect()
+}
+
+/// Файл пула записи (pool_<адрес>.json). Ошибок нет.
+fn is_pool(p: &Path) -> bool {
+    let name = p.file_name().and_then(|n| n.to_str());
+    name.is_some_and(|n| n.starts_with("pool_"))
+}
+
+/// JSON файла. Ошибок нет (тест падает).
+fn read_json(p: &Path) -> Value {
+    let text = std::fs::read_to_string(p).unwrap();
+    serde_json::from_str(&text).unwrap()
 }
 
 /// Слово `i` ответа eth_call (hex «0x…»). Ошибок нет (тест падает).
@@ -101,8 +110,12 @@ fn map_of(p: &Value) -> TickMap {
     let mut m = BTreeMap::new();
     for t in row_ticks(first, &vals, spacing) {
         let (total, delta) = infos[&t];
-        assert!(total > 0, "{}: тик {t} сжатого битмапа без ликвидности", p["pool"]);
-        m.insert(t, TickData { gross: total, net: delta });
+        assert!(total > 0, "{}: тик {t} без ликвидности", p["pool"]);
+        let data = TickData {
+            gross: total,
+            net: delta,
+        };
+        m.insert(t, data);
     }
     TickMap {
         spacing,
@@ -115,14 +128,16 @@ fn map_of(p: &Value) -> TickMap {
 fn bitmap_is_compressed() {
     let mut raw_empty = 0;
     for p in pools() {
-        assert_eq!(p["tick_spacing"].as_i64(), Some(60), "{}: tickSpacing", p["pool"]);
+        let name = p["pool"].as_str().unwrap();
+        assert_eq!(p["tick_spacing"].as_i64(), Some(60), "{name}");
         let raw = words(&p, "tickTable");
         if raw.iter().all(|(_, x)| x.is_zero()) {
             raw_empty += 1;
         }
         let m = map_of(&p);
-        assert!(!m.ticks.is_empty(), "{}: сжатая карта пуста", p["pool"]);
-        assert!(m.ticks.keys().all(|t| t % 60 == 0), "{}: тик не кратен шагу", p["pool"]);
+        assert!(!m.ticks.is_empty(), "{name}: сжатая карта пуста");
+        let aligned = m.ticks.keys().all(|t| t % 60 == 0);
+        assert!(aligned, "{name}: тик не кратен шагу");
     }
     assert_eq!(raw_empty, 7, "сырые слова пусты у 7 из 8 пулов");
 }
@@ -144,12 +159,14 @@ fn bot_math_equals_thena_quoter() {
         };
         for q in p["quotes"].as_array().unwrap() {
             let zfo = q["zero_for_one"].as_bool().unwrap();
-            let amount = U256::from_str_radix(q["amount_in"].as_str().unwrap().trim_start_matches("0x"), 16).unwrap();
-            let lt = &q["at_last_timepoint"];
-            let quoter = word(&lt["quoter"]["result"], 0);
-            assert_eq!(word(&lt["quoter"]["result"], 1).to::<u32>(), s.fee, "{}: комиссия квотера", p["pool"]);
-            let (v_in, v_out) = (word(&lt["virtual"]["result"], 0), word(&lt["virtual"]["result"], 1));
-            assert_eq!(v_out, quoter, "{}: виртуальный квотер = Quoter", p["pool"]);
+            let hex = q["amount_in"].as_str().unwrap().trim_start_matches("0x");
+            let amount = U256::from_str_radix(hex, 16).unwrap();
+            let (qr, vr) = (&q["at_last_timepoint"]["quoter"], &q["at_last_timepoint"]["virtual"]);
+            let quoter = word(&qr["result"], 0);
+            let name = p["pool"].as_str().unwrap();
+            assert_eq!(word(&qr["result"], 1).to::<u32>(), s.fee, "{name}");
+            let (v_in, v_out) = (word(&vr["result"], 0), word(&vr["result"], 1));
+            assert_eq!(v_out, quoter, "{name}: виртуальный квотер = Quoter");
             let r = swap_algebra::swap(&s, zfo, true, amount).expect("расчёт");
             let case = format!("{} zfo={zfo} bps={}", p["pool"], q["bps"]);
             if r.complete {
@@ -174,8 +191,10 @@ fn first_swap_in_block_changes_fee() {
     let fee = word(&p["globalState()"]["result"], 2).to::<u32>();
     let q = &p["quotes"][0];
     assert_eq!(fee, 1537);
-    assert_eq!(word(&q["at_last_timepoint"]["quoter"]["result"], 1).to::<u32>(), 1537);
-    assert_eq!(word(&q["at_block"]["quoter"]["result"], 1).to::<u32>(), 1539);
+    let at_last = word(&q["at_last_timepoint"]["quoter"]["result"], 1);
+    let at_block = word(&q["at_block"]["quoter"]["result"], 1);
+    assert_eq!(at_last.to::<u32>(), 1537);
+    assert_eq!(at_block.to::<u32>(), 1539);
 }
 
 /// Ответы globalState() записи разбираются ABI бота (abi_algebra.rs: communityFeeToken0/1 — uint16, решение 463) в те же

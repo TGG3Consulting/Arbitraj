@@ -129,7 +129,7 @@ pub async fn finish(
             from: c.from.clone(),
             to: c.to.clone(),
             ticker: c.asset.ticker.clone(),
-            coin: super::coin_key::scope_id(&c.asset),
+            coin: super::coin_key::scope_id(c.asset),
             venue_ref: c.created.venue_ref.clone(),
             hash: hash.clone(),
             started: c.started,

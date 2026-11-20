@@ -104,6 +104,8 @@
 | `quoter_maverick.rs` | Сверка Maverick V2 (решения 73, 122 F): MaverickV2Quoter.calculateSwap на точный вход без предела тика (как шаг MAVERICK исполнителя) и разбор amountOut |
 | `quoter_dmm.rs` | Сверка KyberSwap Classic DMM (решение 287): DMMRouter02.getAmountsOut(сумма, [пул], [вход, выход]) — dex.quoter; выход — последний элемент |
 | `quoter_lb.rs` | Сверка Liquidity Book V2.1 (решение 290): getSwapOut(amountIn, swapForY) самого пула через eth_call; остаток входа > 0 — выхода нет (swap откатился бы) |
+| `quoter_basin.rs` | Сверка скважины Basin (решение 485): getSwapOut(from, to, вход) самой скважины через eth_call |
+| `basin_depth.rs` | Скважина Basin (решение 485): спот-цена для сизинга пробы (ConstantProduct2 — отношение резервов, Stable2 — средняя цена пробы), пустота, глубина в полосе по средней цене исполнения (удвоение + двоичный поиск) |
 | `quoter_fluid.rs` | Сверка Fluid DEX T1 (решение 440): estimateSwapIn(пул, swap0to1, вход, 0) официального резолвера FluidDexReservesResolver (dex.quoter) через eth_call; 0 — выхода нет (пределы слоя ликвидности или скачок цены) |
 | `fluid_depth.rs` | Fluid DEX T1 (решение 440): спот-цена для сизинга пробы, пустота пула, комиссия в процентах и глубина в полосе цены по мнимым резервам частей (оценки, не сверяемые величины) |
 | `quoter_balancer_v3.rs` | Сверка Balancer V3 (решение 441): Router V3 querySwapSingleTokenExactIn(пул, вход, выход, сумма, 0, «») через eth_call без from (Vault.quote — tx.origin = 0) — dex.quoter |

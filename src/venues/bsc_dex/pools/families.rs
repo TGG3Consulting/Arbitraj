@@ -283,6 +283,14 @@ pub enum Proto {
     /// (quote/quoter_wombat.rs). Исполнение — шаг WOMBAT исполнителя v5. Многомонетный. Вид ядра — StableSwap (часть
     /// StableData.wombat).
     Wombat,
+    /// Скважина Basin (решение 485; basin_well, DEX Basin на Arbitrum): Well (BeanstalkFarms/Basin@ecf69233) — пул из
+    /// двух токенов без своей комиссии, цену задаёт функция скважины ConstantProduct2 или Stable2 (адреса —
+    /// dex.basin_cp2 / dex.basin_stable2, A Stable2 — dex.basin_stable2_lut) от резервов и totalSupply. Реестр — Aquifer
+    /// (dex.factory: wellImplementation, событие BoreWell); скважины Beanstalk — прокси ERC-1967 на клон WellUpgradeable
+    /// (реализации — dex.basin_well_impls). Состояние — load_basin.rs, события Swap / Shift — events_basin.rs, проверка —
+    /// verify_basin.rs, математика — math/basin_well.rs, сверка — getSwapOut самой скважины. Исполнение — шаг BASIN
+    /// исполнителя v5 (approve скважине + swapFrom). Вид ядра — BasinWell.
+    BasinWell,
 }
 
 impl Proto {
@@ -546,6 +554,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "wombat" => (PoolKind::StableSwap, Proto::Wombat, true, false, false),
         // Fluid DEX T1 (решение 440): в графе и сигналах (порт _swapIn); исполнение — шаг FLUID исполнителя.
         "fluid_t1" => (PoolKind::SmartColDebt, Proto::FluidT1, true, false, false),
+        // Скважина Basin (решение 485): в графе и сигналах (порт функций скважины); исполнение — шаг BASIN исполнителя v5.
+        "basin_well" => (PoolKind::BasinWell, Proto::BasinWell, true, false, false),
         // Slipstream (Topaz v3 на BSC; решения 80, 85): форк Uniswap V3 core — в графе, котируется общей математикой V3
         // (math/swap_cl), НО tradable=false — исполнения пока нет (роутер Slipstream — следующая фаза). graphable=true,
         // tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как THENA Algebra /
@@ -837,6 +847,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             "dex.ekubo_bitmap_words",
             "dex.quoter",
         ]),
+        // Скважина Basin (решение 485): Aquifer (реестр wellImplementation, BoreWell) и допущенные реализации скважин;
+        // функции (dex.basin_cp2 / dex.basin_stable2 — хотя бы одна) проверяет pools/basin_conf.rs.
+        Proto::BasinWell => list.extend(["dex.factory", "dex.basin_well_impls"]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

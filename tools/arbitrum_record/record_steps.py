@@ -142,6 +142,9 @@ def steps(rpc, wallet, ekubo_from):
         # Решение 484: Wombat Exchange — 17 пулов официальной страницы docs.wombat.exchange (адреса — wombat_calls.py),
         # фаза состояния — recnode.fresh; квотер quotePotentialSwap и симуляция swap на долях cash.
         ("wombat", "wombat.py", ["--node", rpc]),
+        # Решение 485: скважины Basin — адреса (docs.basin.exchange/resources/contracts) в шапке скрипта; фаза состояния —
+        # recnode.fresh.
+        ("basin", "basin.py", ["--node", rpc]),
         ("camelot_v2", "camelot_v2.py", [rpc, "--factory", "0x6EcCab422D763aC031210895C81787E87B43A652"]),
         ("algebra_dir_fee", "algebra_dir_fee.py", algebra),
         # Решение 487 (T487-01): Zyberswap V3 — вид thena_fusion; пулы poolByPair фабрики, адреса — в шапке скрипта,

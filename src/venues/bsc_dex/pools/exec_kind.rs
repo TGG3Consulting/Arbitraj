@@ -117,6 +117,10 @@ pub enum ExecKind {
     /// выхода (wombat-exchange/v1-core 2ac067b8 PoolV2.sol L843-L876). Шаг 30 — только исполнитель v5 (exec_callback.rs
     /// since).
     Wombat,
+    /// Решение 485: скважина Basin — approve скважине ровно на шаг + `swapFrom(tokenIn, tokenOut, сумма, 0, получатель,
+    /// block.timestamp)` (BeanstalkFarms/Basin@ecf69233 src/Well.sol L207-L217: вход скважина списывает
+    /// transferFrom(исполнитель)); data пусто. Шаг 29 — только исполнитель v5 (exec_callback.rs since).
+    Basin,
 }
 
 impl ExecKind {
@@ -150,6 +154,7 @@ impl ExecKind {
             ExecKind::AeroBasic => "AERO_BASIC",
             ExecKind::CurveEth => "CURVE_ETH",
             ExecKind::Wombat => "WOMBAT",
+            ExecKind::Basin => "BASIN",
         }
     }
 
@@ -270,6 +275,8 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 484: PoolV2.swap — вызывающий не ограничен (nonReentrant, whenNotPaused, срок, пауза актива входа;
         // PoolV2.sol L843-L876), вход — safeTransferFrom(msg.sender) по разрешению пулу; шаг 30, только v5.
         "wombat" => ExecKind::Wombat,
+        // Решение 485: swapFrom скважины без белого списка вызывающих (Well.sol L207-L217: nonReentrant и срок — общие).
+        "basin_well" => ExecKind::Basin,
         _ => return None,
     })
 }

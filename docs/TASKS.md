@@ -771,6 +771,33 @@
   - T484-06 Динамические пулы: getRelativePrice() активов (PriceFeedAsset, WstETHAsset, AnkrStakingAsset, jUsdcAsset)
     читается вызовом на блоке, формула цены не повторяется; DynamicAsset.sol развёрнутых активов ≠ v1-core (052671 против
     a55783) — бот её не использует.
+- **Решение 485 (20.11.2026, ветка t254/arb-basin от origin/feat/arbitrum 2ca8dba2) — Basin (скважины Beanstalk) на
+  Arbitrum, вид basin_well; cargo не запускался (формат — вручную).** Сделано: математика ConstantProduct2 / Stable2
+  (math/basin_well.rs, тест на официальных векторах — tests/basin_well_math.rs), чтение, события Swap / Shift, проверка
+  (реестр Aquifer / прокси по слоту ERC-1967, сверка calcReserve на сдвинутых резервах — ревью t254), квотер getSwapOut, глубина, шаг BASIN = 29 (v5, только
+  исходник), настройки dex.basin_*, запись tools/arbitrum_record/basin.py, тест tests/arbitrum_basin_live.rs (#[ignore]).
+  Итог по DEX (таблицу покрытия правит t251): Basin — код есть, ждёт записи узла и сборки исполнителя v5. Задачи:
+  - T485-01 Запись своим узлом: `python3 tools/arbitrum_record/basin.py --node http://УЗЕЛ:8547` (или record_all.py — шаг
+    basin), коммит tests/data/arbitrum_basin_<дата>/, снять #[ignore] в tests/arbitrum_basin_live.rs; затем завести ключи
+    (docs/FIRST_RUN.md, раздел Basin) и включить dex.pool_enabled — Тигран.
+  - T485-02 Адрес ConstantProduct2 скважин: docs.basin.exchange — 0xBA15000450Bf6d48ec50BD6327A9403E401b72b4, а
+    ReseedBean.sol Beanstalk (6db8c07c L68-L69), которым развёрнуты скважины, — 0xbA1500c28C8965521f47F17Fc21A7829D6E1343e
+    (оба — ConstantProduct2, Sourcify exact_match; расчёт обмена одинаковый, отличия — calcRate / calcReserveAtRatio и
+    version). То же у MultiFlowPump: docs — 0xBA150002…5b13, ReseedBean.sol — 0xBA150000D1E90C3a1FC4CC385bB43C403b4a006c
+    (на обмен не влияет). Какая функция у каждой скважины — покажет запись T485-01 (wells.json, поле function); её
+    адрес — в dex.basin_cp2 (вопрос Тиграну: ставить оба адреса или только фактический).
+  - T485-03 id Basin у GeckoTerminal (ключ области «DEX» arb_dex) не сверен: api.geckoterminal.com из среды агента закрыт
+    (403 прокси). Решает Тигран; до этого скважины — из dex.stable_pools (index.factory_scan = да) и BoreWell.
+  - T485-04 Нужна сборка исполнителя v5 (шаг BASIN = 29; вместе с T472-08) и EVM-сценарий шага с официальным кодом
+    скважины (байткод Well — в репозитории Basin нет развёртываний Arbitrum; сценарий не написан). Номер 29 координатором
+    не выдан — взят следующий свободный (на 20.11 ни в одной ветке origin не занят): при слиянии сверить.
+  - T485-05 **Частично сделано (ревью t254, решение координатора по правилу Тиграна 20.11):** прокси признаётся по
+    слоту ERC-1967 (eth_getStorageAt — прямое чтение хранилища, не ответ контракта getImplementation), реализация из
+    слота — по wellImplementation Aquifer'а из dex.basin_well_impls; проверяется при каждом полном чтении (в том числе
+    после Upgraded) и в проверке кандидата — не прошло, пул недостоверен с причиной. Осталось: хеш кода самого прокси.
+    Правило координатора: если код прокси у всех шести официальных скважин одинаков — сравнивать keccak кода скважины
+    с keccak кода прокси из dex.stable_pools первого чтения; иначе — только слот. Факт «одинаков ли код» покажет запись
+    T485-01 (code.json, sha256 по адресу скважины) — до неё сделано «только слот».
 - **Решение 481 (20.11.2026, ветка t248/arb-curve-ren-wsteth от origin/feat/arbitrum 3d852b93) — T472-10: пулы Curve
   WBTC/renBTC и ETH/wstETH (Arbitrum) по исходникам Sourcify; cargo не запускался (формат — вручную).** Сделано:
   исходники как есть — docs/sources/curve_arbitrum/ (SHA-256 совпал с посчитанным в браузере); ren — та же математика,

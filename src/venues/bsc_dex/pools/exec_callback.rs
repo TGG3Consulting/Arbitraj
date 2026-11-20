@@ -235,7 +235,7 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
 /// BALANCER = 17 — решение 289, LB = 18 — решение 290. Решение 395 (t181): v3 — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21.
 /// Решения 440, 441, 445, 447, 456: v4 — FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25. Решения 470, 472: v5 —
 /// AERO_BASIC = 26, CURVE_ETH = 28 (BALANCER_V3_BUF = 27, решение 474, — не вид семейства: метка кода
-/// kind_buffer::BUFFER_MARK). Остальные — с v1.
+/// kind_buffer::BUFFER_MARK). Решение 485: v5 — BASIN = 29. Остальные — с v1.
 /// Принимает: вид шага. Ошибок нет.
 pub fn since(k: ExecKind) -> Version {
     match k {
@@ -260,6 +260,8 @@ pub fn since(k: ExecKind) -> Version {
         ExecKind::CurveEth => Version::V5,
         // Решение 484: WOMBAT = 30 — только v5 (сборки v5 пока нет: нужна сборка исполнителя v5).
         ExecKind::Wombat => Version::V5,
+        // Решение 485: BASIN = 29 — только v5 (сборки v5 пока нет: нужна сборка исполнителя v5).
+        ExecKind::Basin => Version::V5,
         _ => Version::V1,
     }
 }

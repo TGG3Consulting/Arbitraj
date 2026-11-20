@@ -1233,3 +1233,8 @@ Ekubo (решение 447, T433-F8 / T433-079) — tests/arbitrum_ekubo_live.rs 
 _pausedAssets = isPaused(монета) у реализаций с геттером, наш quotePotentialSwap (math/wombat.rs potential) = ответ пула
 побайтно, наш выход swap (swap_out) = симуляция swap (откат — None). Запись — tools/arbitrum_record/wombat.py.
 Чистые тесты math/wombat_core.rs (корень с приближением: сходимость / качание = откат по газу, округление int256 к нулю).
+Решение 485 (скважины Basin, вид basin_well): tests/basin_well_math.rs — функции скважин ConstantProduct2 и Stable2
+(math/basin_well.rs) на официальных векторах BeanstalkFarms/Basin@ecf69233 test/functions/{ConstantProduct2,Stable2}.t.sol
+(без записи); tests/arbitrum_basin_live.rs — #[ignore] до записи tools/arbitrum_record/basin.py
+(tests/data/arbitrum_basin_<дата>/): состояние и проверка скважины кодом бота, наш выход = getSwapOut побайтно и =
+симуляции swapFrom (откат ↔ None).

@@ -337,6 +337,12 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             PoolState::StableSwap(d) if !d.halted && wombat_open(d, e, token_in) => Params::Wombat,
             _ => {
                 let why = format!("{}: Wombat не прочитан или на паузе", e.family.id);
+        // Решение 485: скважина Basin — шаг без данных (swapFrom по токенам шага); без прочитанного состояния BasinWell
+        // или с токеном входа не из скважины шаг не строится.
+        ExecKind::Basin => match &e.pool.state {
+            PoolState::BasinWell(d) if d.has(token_in) => Params::Basin,
+            _ => {
+                let why = format!("{}: скважина Basin — нет состояния или чужой вход", e.family.id);
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },

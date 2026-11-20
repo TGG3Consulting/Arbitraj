@@ -5,6 +5,8 @@
 //! читаются у самого пула (getToken(k) / coins(k) до первого отката — load_saddle::tokens_of, load_curve::coins_of),
 //! кандидат — каждая пара (монета подписки, встречный), обе монеты которой в пуле; дальше — index::take → проверка
 //! (verify_stable_u.rs / verify_curve.rs) → реестр. Список не задан или пуст — ничего (как до 292). Одна пачка на проход.
+//! Решение 485: и вид basin_well — скважины Basin из dex.stable_pools (официальный список скважин; прокси скважин
+//! Beanstalk событием BoreWell не приходят), монеты — tokens() скважины.
 //! Кто вызывает: pools/factory_scan.rs (pass); sort — ещё tests/bsc_dex_stable_list_sort.rs.
 //! От чего зависит: ctx.rs, families.rs (all, classify, Proto), abi_saddle.rs, abi_curve.rs, load_saddle.rs,
 //! load_curve.rs, node/call.rs (try_chunks), directory/gt_parse.rs (IndexedPool), stable_native.rs (решение 481:
@@ -25,6 +27,7 @@ use alloy_primitives::{Address, Bytes, U256};
 use super::super::ctx::Ctx;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::node::call;
+use super::abi_basin::IBasinWell;
 use super::abi_curve::{IStableSwapV1, MAX_COINS};
 use super::abi_saddle::{ISaddleSwap, MAX_TOKENS};
 use super::abi_wombat::IWombatPool;
@@ -50,9 +53,10 @@ pub struct Extra {
 pub fn is_listed_kind(proto: Proto) -> bool {
     // Решение 453: tricrypto 2021 (curve_tricrypto_v1) — тоже пул из списка, монеты — coins(k).
     // Решение 484: Wombat — пул из списка, монеты — getTokens() одним вызовом.
+    // Решение 485: скважина Basin — список официальных скважин (docs.basin.exchange/resources/contracts), монеты — tokens().
     matches!(
         proto,
-        Proto::SaddleStable | Proto::CurveStable | Proto::CurveTricryptoV1 | Proto::Wombat
+        Proto::SaddleStable | Proto::CurveStable | Proto::CurveTricryptoV1 | Proto::Wombat | Proto::BasinWell
     )
 }
 
@@ -66,6 +70,8 @@ pub fn token_calls(proto: Proto, pool: Address) -> Vec<(Address, Bytes)> {
             })
             .collect(),
         Proto::Wombat => vec![(pool, IWombatPool::getTokensCall {}.abi_encode().into())],
+        // Решение 485: скважина Basin — все токены одним tokens() (Well.sol L106-L108).
+        Proto::BasinWell => vec![(pool, IBasinWell::tokensCall {}.abi_encode().into())],
         _ => (0..MAX_COINS)
             .map(|k| {
                 let data = IStableSwapV1::coinsCall { i: U256::from(k) }.abi_encode();
@@ -85,6 +91,11 @@ pub fn tokens(proto: Proto, answers: &[Result<Bytes, String>]) -> Result<Vec<Add
                 .map_err(|e| format!("ответ getTokens() не по ABI: {e}")),
             Some(Err(r)) => Err(format!("getTokens() откатился: {r}")),
             None => Err("нет ответа getTokens()".into()),
+        Proto::BasinWell => match answers.first() {
+            Some(Ok(b)) => IBasinWell::tokensCall::abi_decode_returns(b)
+                .map_err(|_| "tokens() скважины не по ABI".to_string()),
+            Some(Err(r)) => Err(format!("tokens() скважины откатился: {r}")),
+            None => Err("нет ответа tokens() скважины".to_string()),
         },
         _ => coins_of(answers),
     }

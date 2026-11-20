@@ -36,7 +36,8 @@
 // T472-08: пул Curve с нативным ETH — exchange{value}(int128, int128, uint256, uint256), обёртка withdraw / deposit),
 // WOMBAT = 30 (решение 484: пул Wombat Exchange — approve пулу + swap(from, to, сумма, 1, to, block.timestamp));
 // всё прочее — как v4. Сборки v5 нет: contracts/out/ — v4; пересобрать как v5 (бот: Version::V5) — вне агентов
-// (docs/TASKS.md «нужна сборка исполнителя v5»).
+// (docs/TASKS.md «нужна сборка исполнителя v5»). Решение 485 (v5): + шаг BASIN = 29 (скважина Basin: approve скважине
+// ровно на шаг → swapFrom(tokenIn, tokenOut, сумма, 0, получатель, block.timestamp)).
 pragma solidity 0.8.37;
 
 import "./IPools.sol";
@@ -136,6 +137,11 @@ contract ArbExecutor {
     // входа (L855); вход — IERC20(fromToken).safeTransferFrom(msg.sender, актив входа, fromAmount) (L872) по разрешению
     // пулу, выход — toAsset.transferUnderlyingToken(to, выход) (L873). Нативной монеты нет. data пусто.
     uint8 internal constant WOMBAT = 30;
+    // Решение 485 (только v5): скважина Basin (BeanstalkFarms/Basin@ecf69233 src/Well.sol L207-L217) — approve скважине
+    // ровно на шаг → swapFrom(tokenIn, tokenOut, сумма, 0, получатель `to`, block.timestamp): скважина сама списывает
+    // transferFrom(исполнитель → скважина, сумма) (L215) и переводит выход `to` (L258). Своей комиссии нет. Налог перевода
+    // входа — откат InvalidReserves в _setReserves (L711-L718: резерв больше баланса). data пусто.
+    uint8 internal constant BASIN = 29;
     // Пределы цены Ekubo MIN_SQRT_RATIO_RAW / MAX_SQRT_RATIO_RAW (evm-contracts@61d09daa src/types/sqrtRatio.sol L13, L15):
     // тот же предел ставит Router (withDefaultSqrtRatioLimit, swapParameters.sol L74-L82).
     uint256 internal constant EKUBO_MIN_SQRT = 4611797791050542631;
@@ -426,6 +432,8 @@ contract ArbExecutor {
             _curveEth(s, amount);
         } else if (k == WOMBAT) {
             _wombat(s, amount, to);
+        } else if (k == BASIN) {
+            _basin(s, amount, to);
         } else if (k == DODO) {
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             if (IDodoPool(s.pool)._BASE_TOKEN_() == s.tokenIn) IDodoPool(s.pool).sellBase(to);
@@ -535,6 +543,17 @@ contract ArbExecutor {
             IWBNB(s.tokenOut).deposit{value: address(this).balance - bnbHad}();
         }
         require(IERC20(s.tokenOut).balanceOf(address(this)) > had, "out");
+    }
+
+    // Решение 485 (v5): скважина Basin (BASIN, ссылки — у константы). Срок — block.timestamp (срок транзакции проверен в
+    // execute); нижний предел выхода 0 — итог маршрута проверяет minOut. Разрешение после шага — 0.
+    function _basin(Step calldata s, uint256 amount, address to) internal {
+        require(s.tokenIn != NATIVE && s.tokenOut != NATIVE, "native");
+        _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount)));
+        IBasinWell(s.pool).swapFrom(s.tokenIn, s.tokenOut, amount, 0, to, block.timestamp);
+        if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
+            _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
+        }
     }
 
     // Решение 472 (T472-08, v5): пул Curve с нативным ETH (CURVE_ETH, ссылки — у константы). Как _stableBnb, но

@@ -87,7 +87,7 @@ assert get_y), не скрипт.
 
 Что запускается (адреса — `record_steps.py`, те же, что в шапках скриптов и ниже): sub_dex, kyber_elastic_v1, kyber_elastic_legacy,
 saddle, woofi, pancake_stable, aero (решение 470), fluid_t1, balancer_v3, balancer_v3_buffer, curve_crypto, curve_plain,
-curve_ren_wsteth (решение 481), forks_482 и zyber_stable (решение 482), wombat (решение 484),
+curve_ren_wsteth (решение 481), forks_482 и zyber_stable (решение 482), wombat (решение 484), basin (решение 485),
 camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo_more, ekubo, balancer_v2_more, exec_v4_live.
 
 Тесты проекта — только на реально записанных ответах (CLAUDE.md). У разработчика нет доступа к узлу Arbitrum: после
@@ -115,6 +115,7 @@ camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo_more, ekubo, balancer_v2_more
 | `saddle.py` (шаг `zyber_stable`) | 482 | ZyberSwap Stableswap 0x969f…cfb8 — тот же разбор, что Saddle — tests/data/arbitrum_zyber_stable_<дата>/ | `tests/arbitrum_forks_482_live.rs` |
 | `forks_482_reg.py` (часть forks_482.py) | 482 (доделка) | Swapline V1: getNumberOfLBPairs / getLBPairAtIndex, getTokenX/Y, getFactory пар, getAllLBPairs; Metric V1: nextPoolIdx, idxToPool, isPool, getImmutables, код первого пула; логи LBPairCreated / PoolCreated за --reg-log-blocks — reg.json той же папки | `tests/arbitrum_forks_482_reg_live.rs` |
 | `wombat.py` (+ `wombat_calls.py`) | 484 | Wombat Exchange — 17 пулов docs.wombat.exchange: вызовы бота ступеней чтения (load_wombat_calls.rs), слоты реализации EIP-1967 и _pausedAssets, isPaused(монета), quotePotentialSwap и симуляция swap на долях cash (`--fractions`), фаза состояния — recnode.fresh → tests/data/arbitrum_wombat_<дата>/ | tests/arbitrum_wombat_live.rs (#[ignore] до записи) |
+| `basin.py` | 485 | Скважины Basin — шесть «Whitelisted Beanstalk Wells» (docs.basin.exchange): на свежем блоке B (recnode.fresh) слот реализации ERC-1967 (eth_getStorageAt), ответы на вызовы бота по calldata (load_basin.rs calls, calcReserve на сдвинутых резервах — второй проход verify_basin_judge.rs, насосы), getSwapOut на долях резерва в обе стороны, симуляции swapFrom на тех же суммах (curve_sim.py), код скважин, реализаций прокси и функций — tests/data/arbitrum_basin_<дата>/ | `tests/arbitrum_basin_live.rs` |
 | `camelot_v2.py` | 443 | Решение 443 (T433-F4): Camelot V2 — пары фабрики (резервы, комиссии входа, stableSwap, множители точности, getPair, код), getAmountOut пары на суммах в обе стороны на одном блоке; логи Sync, FeePercentUpdated, SetStableSwap, PairCreated. Запуск: `python3 tools/arbitrum_record/camelot_v2.py http://УЗЕЛ:8547 --factory 0x6EcCab422D763aC031210895C81787E87B43A652` (из корня репозитория) | — |
 | `lb_v20.py` | 445 | Liquidity Book v2.0 (LFJ V2, вид lb_v20, решение 445) | фабрика v2.0, состояние пулов, все бины, getSwapOut роутера v2.0, слоты условия, логи; тест — tests/bsc_dex_lb_v20_arbitrum.rs | `tests/bsc_dex_lb_v20_arbitrum.rs` |
 | `lb_v22.py` | 446 | Liquidity Book V2.2 — LFJ V2.2 (решение 446, T433-F7): `python3 tools/arbitrum_record/lb_v22.py http://УЗЕЛ:8547 --factory 0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | tests/arb_dex_lb_v22_live.rs | `tests/arb_dex_lb_v22_live.rs` |

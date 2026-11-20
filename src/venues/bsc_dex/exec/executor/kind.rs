@@ -3,7 +3,7 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); FLUID = 22 — только v4, решение 440; BALANCER_V3 = 23, LB20 = 24, EKUBO = 25 — только v4, решения 441, 445, 447, 456; AERO_BASIC = 26 — только v5, решение 470 (T470-06); BALANCER_V3_BUF = 27 — только v5, решение 474; CURVE_ETH = 28 — только v5, решение 472 (T472-08); WOMBAT = 30 — только v5, решение 484; сверяет тест tests/bsc_dex_executor_abi.rs с
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); FLUID = 22 — только v4, решение 440; BALANCER_V3 = 23, LB20 = 24, EKUBO = 25 — только v4, решения 441, 445, 447, 456; AERO_BASIC = 26 — только v5, решение 470 (T470-06); BALANCER_V3_BUF = 27 — только v5, решение 474; CURVE_ETH = 28 — только v5, решение 472 (T472-08); BASIN = 29 — только v5, решение 485; WOMBAT = 30 — только v5, решение 484; сверяет тест tests/bsc_dex_executor_abi.rs с
 //! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
 //! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), METRIC — (bool zeroForOne),
@@ -14,6 +14,7 @@
 //! Решение 474: BALANCER_V3_BUF = 27 — только сборка v5 (не собрана), data — abi.encode(address пула, address wIn,
 //! address wOut) — обёртки ERC4626 входа и выхода (0 — сторона без буфера).
 //! Решение 472: CURVE_ETH = 28 — только v5, data — abi.encode(int128 i, int128 j, bool ethIn).
+//! Решение 485: BASIN = 29 — только v5, data пусто (направление — токены шага: swapFrom(tokenIn, tokenOut, …)).
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
 //! От чего зависит: exec/executor/abi.rs, alloy sol-types.
 //! Настройки: нет.
@@ -134,6 +135,10 @@ pub enum Params {
     /// Решение 484 (только исполнитель v5): пул Wombat Exchange — approve пулу ровно на шаг + swap(tokenIn, tokenOut,
     /// вход, 1, to, block.timestamp) (wombat-exchange/v1-core 2ac067b8 PoolV2.sol L843-L876). Данных нет.
     Wombat,
+    /// Решение 485 (только исполнитель v5): скважина Basin — approve скважине ровно на шаг + swapFrom(tokenIn,
+    /// tokenOut, сумма, 0, получатель, block.timestamp) (BeanstalkFarms/Basin@ecf69233 src/Well.sol L207-L217). Данных
+    /// нет: направление — токены шага.
+    Basin,
 }
 
 /// Решение 440: параметры шага FLUID (см. Params::Fluid).
@@ -195,6 +200,8 @@ impl Params {
             // Решение 484: WOMBAT = 30 — только v5 (сборки v5 пока нет; номер выдан координатором: 29 — Basin,
             // 31 — Shell).
             Params::Wombat => 30,
+            // Решение 485: BASIN = 29 — только v5 (сборки v5 пока нет).
+            Params::Basin => 29,
         }
     }
 

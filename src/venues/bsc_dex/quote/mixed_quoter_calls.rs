@@ -179,6 +179,13 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "SmarDex не исполняется умным маршрутом (только шаг SMARDEX контракта-исполнителя)",
             ));
         }
+        // Скважина Basin (решение 485): MixedQuoter её не знает — сверка getSwapOut самой скважины, только шаг BASIN.
+        PoolKind::BasinWell => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "Basin не исполняется умным маршрутом (только шаг BASIN контракта-исполнителя)",
+            ));
+        }
         // Пул со смарт-залогом и смарт-долгом (Fluid DEX T1, решение 440): MixedQuoter его не знает — сверка estimateSwapIn.
         PoolKind::SmartColDebt => {
             return Err(ctx.err(

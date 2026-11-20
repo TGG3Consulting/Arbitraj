@@ -113,6 +113,20 @@ interface ICurveEthPool {
     function exchange(int128 i, int128 j, uint256 dx, uint256 minDy) external payable;
 }
 
+// Решение 485: скважина Basin — BeanstalkFarms/Basin@ecf69233 src/Well.sol L207-L217 (swapFrom: IERC20 fromToken,
+// IERC20 toToken, amountIn, minAmountOut, recipient, deadline → amountOut; IERC20 в ABI — address). Возврат не
+// декодируется: выход уходит получателю шага.
+interface IBasinWell {
+    function swapFrom(
+        address fromToken,
+        address toToken,
+        uint256 amountIn,
+        uint256 minAmountOut,
+        address recipient,
+        uint256 deadline
+    ) external returns (uint256 amountOut);
+}
+
 // PancakeSwap StableSwap (индексы uint256, payable, ничего не возвращает): pancakeswap/pancake-smart-contracts@cb079908
 // projects/stable-swap/contracts/PancakeStableSwapTwoPool.sol L425-L430 (репозиторий закрыт — копия в форке
 // migo557/pancake-smart-contracts, 1:1 с verified-кодом BscScan пула 0x6D8f…CE5A5 в tintinweb/smart-contract-sanctuary-bsc);

@@ -159,6 +159,8 @@ fn kinds_match_contract_constants() {
         ),
         // Решение 484: пул Wombat Exchange — шаг 30, только v5 (в исходнике; сборки v5 нет).
         ("WOMBAT", Params::Wombat),
+        // Решение 485: скважина Basin — шаг 29, только v5 (в исходнике; сборки v5 нет).
+        ("BASIN", Params::Basin),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
@@ -284,6 +286,7 @@ fn step_data_layouts() {
         Params::Elastic,
         Params::AeroBasic,
         Params::Wombat,
+        Params::Basin,
     ] {
         assert!(p.data().is_empty());
     }

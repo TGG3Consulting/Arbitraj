@@ -23,7 +23,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    balancer_math, bin_swap, crypto_swap, dmm, ekubo_mev, ekubo_swap, fluid_check, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_ema, stable_guard, stableswap_ng,
+    balancer_math, basin_well, bin_swap, crypto_swap, dmm, ekubo_mev, ekubo_swap, fluid_check, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_ema, stable_guard, stableswap_ng,
     stableswap_nomi, stableswap_v1, swap_solidly, v2, wombat,
 };
 use super::super::pools::ekubo_native;
@@ -563,6 +563,22 @@ pub fn swap(
         }
         // Пул Fluid DEX T1 (решение 440): порт _swapIn пула и проверки пределов слоя ликвидности и скачка цены
         // (math/fluid_swap.rs, fluid_check.rs); направление — по token0 самого пула. Только точный вход.
+        // Скважина Basin (решение 485): swapFrom — резерв_j − calcReserve функции скважины (math/basin_well.rs); своей
+        // комиссии нет. Только точный вход (шаг — swapFrom).
+        (PoolState::BasinWell(d), PoolKind::BasinWell) => {
+            if !exact_in {
+                return Err(why("Basin: точный выход не поддерживается"));
+            }
+            if !d.has(token_in) {
+                return Err(why("Basin: токен входа не из скважины"));
+            }
+            let out = basin_well::swap_out(d, token_in, amount).ok_or_else(none)?;
+            Ok(Swapped {
+                amount_in: amount,
+                amount_out: out,
+                complete: true,
+            })
+        }
         (PoolState::SmartColDebt(d), PoolKind::SmartColDebt) => {
             if !exact_in {
                 return Err(why("Fluid: точный выход не поддерживается"));

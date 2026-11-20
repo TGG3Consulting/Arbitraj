@@ -28,7 +28,7 @@ use super::load_algebra_dir;
 use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
-    aero_cl, load_aero_basic, load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_meta, load_curve_ng, load_curve_oracle, load_curve_plain, load_dmm, load_dodo, load_ekubo,
+    aero_cl, load_aero_basic, load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_basin, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_meta, load_curve_ng, load_curve_oracle, load_curve_plain, load_dmm, load_dodo, load_ekubo,
     load_elastic, load_fluid, load_inf_stable, load_izi, load_lb, load_lb20, load_maverick, load_metric, load_nomi, load_ramses, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_wombat, load_woo,
 };
@@ -244,6 +244,20 @@ pub async fn state(
         let resolver = ctx.dex_addr("dex.quoter", f.id)?;
         return Ok(Loaded {
             state: load_fluid::load(ctx, resolver, *a, block).await?,
+            ticks: None,
+            bins: None,
+            fee_pips: None,
+        });
+    }
+    // Скважина Basin (решение 485): вид ядра BasinWell, скважина — отдельный контракт; слот ERC-1967 и одно try_many
+    // (load_basin.rs).
+    if f.proto == Proto::BasinWell {
+        let PoolRef::Contract(a) = reference else {
+            let why = format!("{}: ссылка на скважину Basin не того вида", f.title);
+            return Err(ctx.err(ErrorCode::Internal, why));
+        };
+        return Ok(Loaded {
+            state: load_basin::load(ctx, f.id, *a, block).await?,
             ticks: None,
             bins: None,
             fee_pips: None,

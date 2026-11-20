@@ -503,6 +503,10 @@ fn side(
         (PoolState::SmartColDebt(d), PoolKind::SmartColDebt) => {
             super::fluid_depth::side(d, token_in, b, buy)
         }
+        // Скважина Basin (решение 485): средняя цена исполнения в полосе (quote/basin_depth.rs); комиссии нет.
+        (PoolState::BasinWell(d), PoolKind::BasinWell) => {
+            super::basin_depth::side(d, token_in, b, buy)
+        }
         // Ekubo (решение 447): обмен без комиссии до границы полосы в тиках Ekubo (depth_ekubo.rs).
         // Решение 454: направление — в порядке ключа (нативный ETH); у пула с TWAMM — состояние к блоку сделки (первое из
         // двух времён, quote/ekubo_trade_state.rs).

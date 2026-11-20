@@ -25,6 +25,7 @@ use super::super::directory::gt_parse::IndexedPool;
 use super::super::directory::pool_key;
 use super::abi_aero_basic::IAeroBasicFactory;
 use super::abi_algebra::IAlgebraFactory;
+use super::abi_basin::IBasinAquifer;
 use super::abi_dmm::{self, IDmmFactory};
 use super::abi_dodo::IDodoFactory;
 use super::abi_ekubo::IEkuboCore;
@@ -180,6 +181,14 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // (factory/main.sol L62) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы приходят из
             // справочника индексатора.
             Proto::FluidT1 => continue,
+            // Скважина Basin (решение 485): BoreWell(well, implementation, tokens, wellFunction, pumps, wellData) фабрики
+            // Aquifer — поля не индексированы (IAquifer.sol L42-L44, Aquifer.sol L81-L88). Прокси скважин Beanstalk
+            // этим событием не приходят (событие несёт клон за прокси) — они из справочника и dex.stable_pools.
+            Proto::BasinWell => (
+                "dex.factory",
+                IBasinAquifer::BoreWell::SIGNATURE_HASH,
+                false,
+            ),
             // Liquidity Book v2.0 (решение 445): LBPairCreated фабрики v2.0 (ILBFactory.sol v2.0.0 L26-L32) — подписка не
             // подключена (как у v2.1, техдолг docs/ROADMAP.md): новые пулы — из справочника индексатора.
             Proto::LbV20 => continue,
@@ -427,6 +436,15 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
         Proto::KyberDmm => {
             let topic = log.topics().first().copied().unwrap_or_default();
             abi_dmm::created(topic, &log.inner.data)?
+        }
+        // Решение 485: BoreWell Aquifer — скважина и её токены (функции ConstantProduct2 / Stable2 — только два токена).
+        Proto::BasinWell => {
+            let e = IBasinAquifer::BoreWell::decode_log_data(&log.inner.data)
+                .map_err(|e| format!("BoreWell (Basin) не по ABI: {e}"))?;
+            if e.tokens.len() != 2 {
+                return Err(format!("BoreWell: скважина из {} токенов", e.tokens.len()));
+            }
+            (e.tokens[0], e.tokens[1], e.well)
         }
         Proto::Maverick => {
             let e = IMaverickV2Factory::PoolCreated::decode_log_data(&log.inner.data)

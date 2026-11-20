@@ -258,6 +258,8 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
         // quote/pmm_ladder.rs), квотер возвращает выход обмена — комиссия пула уже в нём; отдельной строки нет — 0
         // (строка затрат «в цене», in_price, — для прозрачности, в прибыль не вычитается).
         (PoolState::OraclePmm(_), _) => Ok(Decimal::ZERO),
+        // Скважина Basin (решение 485): своей комиссии у скважины нет (Well.sol: выход задаёт только функция скважины).
+        (PoolState::BasinWell(_), _) => Ok(Decimal::ZERO),
         // Пул Fluid DEX T1 (решение 440): комиссия обмена над 1e6 → проценты = fee / 1e4 (quote/fluid_depth.rs).
         (PoolState::SmartColDebt(d), _) => super::fluid_depth::fee_pct(d).ok_or_else(|| {
             ctx.err(ErrorCode::BadResponse, "комиссия Fluid не помещается в Decimal")

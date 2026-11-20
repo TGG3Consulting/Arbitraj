@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use super::market::VenueId;
 pub use super::pool_amp::AmpV2Data;
+pub use super::pool_basin::{BasinFunction, BasinWellData};
 pub use super::pool_crypto::{CryptoData, CryptoMath, CryptoTweak};
 pub use super::pool_ekubo::{EkuboData, EkuboMev, EkuboTick, EkuboTwamm};
 pub use super::pool_fictive::FictiveData;
@@ -91,6 +92,10 @@ pub enum PoolKind {
     /// стейблсвап / полный диапазон; комиссия 0.64 со входа; расширение пула (MEVCapture — доплата за пройденные тики).
     /// Состояние — EkuboData (тики и битмап — в нём).
     Ekubo,
+    /// Скважина Basin (решение 485): свой контракт на пул из двух токенов, своей комиссии нет, цену задаёт внешняя
+    /// функция скважины от резервов и числа LP-токенов (x·y = s² или стейблсвап). Состояние — BasinWellData
+    /// (core/types/pool_basin.rs).
+    BasinWell,
 }
 
 /// Как найти пул в сети.
@@ -275,6 +280,9 @@ pub enum PoolState {
     /// Синглтон-ядро Ekubo (решение 447): config, цена, тик, ликвидность, битмап и тики, MEVCapture, время блока.
     /// Боксируется, как Pmm. Поля — в EkuboData (core/types/pool_ekubo.rs).
     Ekubo(Box<EkuboData>),
+    /// Скважина Basin (решение 485): резервы по порядку токенов скважины, число LP-токенов, функция скважины.
+    /// Боксируется, как Pmm. Поля — в BasinWellData (core/types/pool_basin.rs).
+    BasinWell(Box<BasinWellData>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

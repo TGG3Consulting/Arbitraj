@@ -1341,3 +1341,21 @@ proxyResolution каждого пула (docs/sources/wombat_arbitrum/README.md)
 | dex.wombat_implementations | DEX `wombat-exchange-arbitrum@arbitrum` | `["0x82E62f4e174E3C5e1641Df670c91Ac6Ab8541518","0x6A4b5988692F8C47eA3BcCFB8A127288db61f5E1","0x30E27c4E1C9D8845a961CA703bf4B5e46e1F554c","0x3ccC0dC754E380cDA16EF94292F278bbc4Ff463E","0xC096FF2606152eD2A06dd12F15A3c0466Aa5A9fa","0xbEd0509801634CcC29Fa9f2faD764Bf194c7927d","0x9cbeE53A48390A3205B14F6B8e48Ca81Fe105dEE","0x38D2259fDeEdc94Eaf915a872139c985Ce36d5Ad","0x44A0e2AC2c99D5cB2910ec1784DD158b7fa3A642"]` | Реализации HighCovRatioFeePoolV2 (exact_match), тексты пути обмена = v1-core 2ac067b8 | Sourcify 42161 |
 | dex.wombat_dynamic_implementations | DEX `wombat-exchange-arbitrum@arbitrum` | `["0x4d1CC84a33462c35ad3dd68756d330CBbA087053","0x3DbF3e359a570D46CF5a663AC92DC7Cae77110FB","0x7585bae98800C621b427Fe045EA3b4052559C11b"]` | Реализации DynamicPoolV2 (frxETH; wstETH и ankrETH; jUSDC) | Sourcify 42161 |
 | dex.pool_enabled | DEX `wombat-exchange-arbitrum@arbitrum` | `да` — после записи tools/arbitrum_record/wombat.py и прохода tests/arbitrum_wombat_live.rs (снять #[ignore]) | Пулы в граф и сигналы; сделки — шаг WOMBAT = 30 только у исполнителя v5 (сборки v5 нет) | Решение 484 |
+## Basin (скважины Beanstalk) в сети Arbitrum (решение 485)
+
+Новый вариант dex.kind — `basin_well`; новые настройки — `dex.basin_well_impls`, `dex.basin_cp2`, `dex.basin_stable2`,
+`dex.basin_stable2_lut`. Область «DEX» площадки arb_dex; ключ — id DEX у GeckoTerminal с «@arbitrum» (решение 435):
+id Basin у GeckoTerminal НЕ сверен (api.geckoterminal.com из среды агента закрыт) — решает Тигран (TASKS T485-03).
+Адреса — docs.basin.exchange/resources/contracts (раздел Arbitrum), Sourcify 42161. Шаг BASIN исполнителя есть только в
+исходнике (v5, сборки нет) — до сборки и развёртывания скважины в графе и сигналах, без исполнения.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX Basin (arb_dex) | `basin_well` | Скважина Basin: функция ConstantProduct2 / Stable2 от резервов и totalSupply, своей комиссии нет | BeanstalkFarms/Basin@ecf69233 src/Well.sol |
+| dex.factory | DEX Basin (arb_dex) | `0xBA51AAAa8C2f911AE672e783707Ceb2dA6E97521` | Aquifer: реестр wellImplementation, событие BoreWell | docs.basin.exchange; Sourcify exact_match |
+| dex.basin_well_impls | DEX Basin (arb_dex) | `0xBA5106bd62b342afAcB93f1078fe60177A62d1a9`, `0xBA510995783111be5301d93CCfD5dE4e3B28e50B` | Well Implementation и Upgradable Well | docs.basin.exchange; Sourcify exact_match |
+| dex.basin_cp2 | DEX Basin (arb_dex) | `0xBA15000450Bf6d48ec50BD6327A9403E401b72b4`; если запись узла покажет у скважин `0xbA1500c28C8965521f47F17Fc21A7829D6E1343e` (ReseedBean.sol Beanstalk) — добавить и его | ConstantProduct2 | docs.basin.exchange; BeanstalkFarms/Beanstalk@6db8c07c ReseedBean.sol L68-L69; Sourcify exact_match (оба) |
+| dex.basin_stable2 | DEX Basin (arb_dex) | `0xba150052e11591D0648b17A0E608511874921CBC` | Stable2 (скважины BEAN:USDC, BEAN:USDT) | docs.basin.exchange; Sourcify match |
+| dex.basin_stable2_lut | DEX Basin (arb_dex) | `0xBA51055dAD14d3920e1798D2e8A152d91CaDb461` (список; порядок — как dex.basin_stable2) | Таблица Stable2, A = 1 (getAParameter() = 100) | docs.basin.exchange; Sourcify exact_match |
+| dex.stable_pools | DEX Basin (arb_dex) | `0xBeA00Aa8130aCaD047E137ec68693C005f8736Ce`, `0xBEa00BbE8b5da39a3F57824a1a13Ec2a8848D74F`, `0xBeA00Cc9F93E9a8aC0DFdfF2D64Ba38eb9C2e48c`, `0xBea00DDe4b34ACDcB1a30442bD2B39CA8Be1b09c`, `0xBea00ee04D8289aEd04f92EA122a96dC76A91bd7`, `0xbEA00fF437ca7E8354B174339643B4d1814bED33` | Скважины Beanstalk (прокси ERC-1967 — событием BoreWell не приходят); источник — при index.factory_scan = да | docs.basin.exchange «Whitelisted Beanstalk Wells» |
+| dex.pool_enabled | DEX Basin (arb_dex) | `да` — после записи tools/arbitrum_record/basin.py и снятия #[ignore] с tests/arbitrum_basin_live.rs | Математика сверяется с getSwapOut и симуляцией swapFrom только по записи | Решение 485 |

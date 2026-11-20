@@ -29,6 +29,11 @@
 - Решение 484 (Wombat): нужна сборка исполнителя v5 (шаг WOMBAT = 30 — только в исходнике) и EVM-сценарий шага;
   Cross Chain Pool (CoreV3 / PoolV3) не портирован (TASKS T484-03); pools/stable_list.rs — 263 строки (было 249; ориентир
   200): вынести token_calls / tokens видов в stable_list_tokens.rs; exec/executor/entry.rs — 620 строк (было 594).
+- Решение 485 (Basin, `wc -l`): tools/arbitrum_record/basin.py 271 после ревью t254 (ориентир 200 — вынести разбор ответов words /
+  dyn_array / call_struct в basin_abi.py); общие файлы и так выше 200 получили ветку basin_well — pools/families.rs 876,
+  pools/load.rs, pools/verify.rs, pools/created_log.rs, quote/pool_quote.rs 658, exec/executor/entry.rs 603,
+  contracts/ArbExecutor.sol 1038 (дробить вместе с T456). Шаг BASIN = 29 — только исходник (сборка v5 — T485-04, T472-08).
+  Глубина Stable2 (quote/basin_depth.rs) — оценка по средней цене пробы, не маржинальная цена (как StableSwap).
 - Решение 471: tools/arbitrum_record/pancake_stable.py — 236 строк (ориентир 200): вынести pool_state в
   pancake_stable_pool.py. Общие модули записи recnode.py / gt.py (решение 460) в базе origin/feat/arbitrum ещё нет —
   скрипт со своей обработкой «состояние недоступно» и потолком времени; после слияния 460 — перевести на recnode.fresh.

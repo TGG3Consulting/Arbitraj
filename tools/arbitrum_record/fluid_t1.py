@@ -8,7 +8,7 @@
 #   main.sol L338) и estimateSwapIn резолвера (сверка бота, quote/quoter_fluid.rs). Ключей и подписей нет — только
 #   eth_call / eth_getBlockByNumber. Пишет JSON в tests/data/arbitrum_fluid_t1_<дата>/ и README.md с блоком и SHA-256.
 # Кто вызывает: Тигран, со своего сервера (узел Arbitrum — аргумент).
-# От чего зависит: Python 3, requests.
+# От чего зависит: Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459).
 # Настройки: нет (адреса — аргументы; официальные значения — docs/FIRST_RUN.md, раздел решения 440).
 #
 # Запуск (адреса — Instadapp/fluid-contracts-public@404d73f deployments/arbitrum/*.json):
@@ -25,7 +25,7 @@ import json
 import os
 import sys
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 DEAD = "0x000000000000000000000000000000000000dead"
 # Селекторы — keccak256 подписей исходника (pools/abi_fluid.rs, там же сверка с кодом в сети).

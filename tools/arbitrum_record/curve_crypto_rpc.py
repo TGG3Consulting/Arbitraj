@@ -4,7 +4,7 @@ keccak256 (чистый Python), селекторы и слова ABI, JSON-RPC 
 Кто вызывает: tools/arbitrum_record/curve_crypto_pools.py, curve_crypto.py.
 """
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 # --- keccak256 (чистый Python: в stdlib только sha3_256 с другим дополнением) ---------------------------------------
 

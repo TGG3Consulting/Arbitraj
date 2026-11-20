@@ -18,7 +18,7 @@ eth_getBlockByNumber (чтение).
 Разбито по ревью 453 (файлы ≤ ~200 строк): curve_crypto_rpc.py — keccak256, ABI, JSON-RPC; curve_crypto_pools.py —
 чтение пулов; здесь — аргументы, файлы и README записи. Модули лежат рядом и импортируются из папки скрипта.
 
-Запуск (Python 3, requests; адреса — официальные журналы развёртывания curvefi, см. docs/FIRST_RUN.md):
+Запуск (Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459); адреса — официальные журналы развёртывания curvefi, см. docs/FIRST_RUN.md):
     python3 tools/arbitrum_record/curve_crypto.py --node http://АДРЕС_УЗЛА:8547 \\
         --twocrypto-factory 0x98EE851a00abeE0d95D08cF4CA2BdCE32aeaAF7F \\
         --twocrypto-math 0x1Fd8Af16DC4BEBd950521308D55d0543b6cDF4A1 \\

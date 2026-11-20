@@ -177,10 +177,53 @@
       bsc_dex_executor_v3_live приведён к этому факту). Вопрос Тиграну: снимать запрет для v4 записью симуляции (как v3)
       или иным правилом. Тексты запрета и подсказки need_v3 (deploy_gate.rs, WalletRow.svelte) говорят «v3 не принят» —
       при текущей сборке v4 это неточно (у v3 запись принята; закрыт v4); правка — после ответа.
+      **Решение 459 (20.11.2026, ветка t233/arb-record-all) — запись подготовлена, ждёт прогона Тиграном:**
+      `tools/arbitrum_record/exec_v4_live.py` (входит в record_all.py) — eth_simulateV1 своего узла поверх блока H, код
+      contracts/out/ArbExecutor.bin-runtime (SHA-256 сверяется с ArbExecutor.sha256 до прогона) на пустом адресе X, (а)
+      покупка и (б) продажа (квотер в той же симуляции после (а)) по видам 19 Uniswap V4 без крючка и 23 Balancer V3 (их
+      судит правило 400, live_class.rs CLASSES), плюс 22 Fluid, 24 LB v2.0, 1 Uniswap V3, 0 Uniswap V2 (правило не судит —
+      свидетельство); 25 Ekubo в запись НЕ вошёл (шаг требует config / native / forward ключа и квотер MEVCaptureRouter —
+      не сделано, проверка шага — T457-01). Папка tests/data/executor_v4_live_<дата>/ — формат записи 17.11 (README со
+      строкой «sha256 симулированного bin-runtime: <sha>», summary.json, hooks_reject.json, calls.json, slots.json,
+      pools.json, raw_rpc.json). ФАКТ кода: запись сама по себе бот НЕ откроет — live_proof.rs вшивает одну запись
+      (include_str tests/data/executor_v3_live_2026-11-17) и судит её для V4 по SHA v4 → «запись о другом коде». После
+      записи (один коммит): live_proof.rs — для Version::V4 свои README / SUMMARY / REJECT из новой папки (RECORD по
+      версии в текстах), tests/bsc_dex_executor_v3_live.rs:255 (assert refusal().is_some()) — под факт новой записи, тест
+      записи v4 по образцу bsc_dex_executor_v3_live.rs. Вопросы Тиграну: (1) запись v4 — Arbitrum, а классы 19/20/21
+      у кошельков BSC с v4 тогда судятся по ней же (код один): пулов Infinity CL / Bin в записи Arbitrum нет (в
+      dex-settings-arbitrum.md такого DEX нет) — у BSC-кошелька с v4 эти классы будут «не проверен». Нужна ли отдельная запись v4 на BSC (тот же скрипт с адресами BSC) и объединение записей
+      по сети? (2) Пулы Balancer V3 с крючком (бот считает их тем же классом 23 «без крючка») — в запись по умолчанию не
+      берутся; включать ли?
     - T457-03 Развёртывание v4 в Arbitrum — Тигран (после T457-02).
   - T456-03 Записи своего узла Arbitrum (tools/arbitrum_record/README.md): sub_dex.py, kyber_elastic_v1.py, saddle.py,
     woofi.py, fluid_t1.py, balancer_v3.py, curve_crypto.py, camelot_v2.py, algebra_dir_fee.py, lb_v20.py, lb_v22.py,
     ekubo.py + ekubo_more.py → коммит tests/data/arbitrum_*_<дата>/ и снятие #[ignore] в тестах семейств.
+    **Решение 459 (20.11.2026, ветка t233/arb-record-all):** одна команда — `py tools\arbitrum_record\record_all.py
+    --rpc http://УЗЕЛ:8547` (Windows) / `python3 tools/arbitrum_record/record_all.py --rpc http://УЗЕЛ:8547` (Linux):
+    все скрипты выше + exec_v4_live.py (T457-02), только стандартная библиотека Python 3 (stdhttp.py вместо requests),
+    без вопросов, сводка и один zip. Ждёт прогона Тиграном. После записи снять #[ignore] (папка — последняя по имени
+    tests/data/<префикс><дата>):
+    - tests/arbitrum_sub_dex_live.rs — kyber_classic_created_and_math, balancer_v2_versions_match_vault,
+      iziswap_factory_registry (arbitrum_sub_dex_);
+    - tests/arbitrum_kyber_elastic_v1_live.rs — v1_math_matches_quoter, v1_factory_confirms_pool (arbitrum_kyber_elastic_v1_);
+    - tests/arbitrum_saddle_live.rs — swap_storage_is_seven_words, math_matches_calculate_swap (arbitrum_saddle_);
+    - tests/arbitrum_woofi_live.rs — implementation_has_selectors, oracle_state_decodes (arbitrum_woofi_);
+    - tests/arbitrum_fluid_t1.rs — math_matches_pool_and_resolver_on_record (arbitrum_fluid_t1_);
+    - tests/arbitrum_balancer_v3.rs — quote_matches_router_v3 (arbitrum_balancer_v3_);
+    - tests/arb_curve_crypto_live.rs — twocrypto_matches_get_dy, tricrypto_matches_get_dy, twocrypto_code_matches_source;
+      tests/arb_curve_crypto_v1_live.rs — crypto_v1_matches_get_dy, tricrypto_v1_matches_get_dy (arbitrum_curve_crypto_);
+    - tests/arb_dex_camelot_v2.rs — math_equals_pair_get_amount_out, pair_verified_by_v2_path, real_logs_parsed,
+      one_code_for_all_pairs (arbitrum_camelot_v2_);
+    - tests/arb_dex_algebra_dir.rs — pools_are_directional_raw_bitmap_code, math_equals_pool_swap;
+      tests/arb_dex_algebra_dir_events.rs — fee_and_swap_logs_rebuild_recorded_state (arbitrum_algebra_dir_fee_);
+    - tests/bsc_dex_lb_v20_arbitrum.rs — formula_equals_router_get_swap_out, calls_match_encoders_and_head_decodes,
+      verify_takes_recorded_pools, events_give_touched_bins, condition_slots_match_state (arbitrum_lb_v20_);
+    - tests/arb_dex_lb_v22_live.rs — formula_equals_get_swap_out, verify_and_recorded_calldata, pool_cond_slots_3_4_65545,
+      recorded_logs_decode (arbitrum_lb_v22_);
+    - tests/arbitrum_ekubo_live.rs — key_gives_pool_id, math_equals_router_quote, core_logs_route; tests/arbitrum_ekubo_more_live.rs
+      — initialized_key_gives_pool_id, native_math_equals_router_quote, twamm_math_equals_router_quote, core_load_logs_route
+      (arbitrum_ekubo_; ekubo_more пишет в ту же папку).
+    Записи приёмки v4 (executor_v4_live_) тест с #[ignore] не ждёт — нужна правка live_proof.rs (T457-02).
   - T456-04 Выкладка: настройки области «DEX» площадки arb_dex по docs/notes/arbitrum/dex-settings-arbitrum.md и
     FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; развернуть v4 — T457-03.
   - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по

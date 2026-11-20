@@ -20,7 +20,7 @@
 docs.camelot.exchange/contracts/arbitrum/one-mainnet), тот же текст CamelotPair, что в коде бота
 (src/venues/bsc_dex/pools/abi_camelot.rs). Селекторы и topic0 считаются здесь keccak256 от подписей.
 
-Установка:  pip install requests
+Установка:  не нужна (стандартная библиотека Python 3; HTTP — stdhttp.py, решение 459)
 Запуск:     python3 tools/arbitrum_record/camelot_v2.py http://АДРЕС_УЗЛА:8547 \
                 --factory 0x6EcCab422D763aC031210895C81787E87B43A652
             (из корня репозитория; --out — другая папка tests/data)
@@ -32,7 +32,7 @@ import json
 import os
 import sys
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 # --- keccak256 (Keccak-f[1600], padding 0x01 — как в Ethereum), без внешних библиотек ---
 _RC = [

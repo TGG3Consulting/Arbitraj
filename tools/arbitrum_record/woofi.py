@@ -5,7 +5,7 @@
 #   tests/data/arbitrum_woofi_<дата>/ и README.md (блок, хеши). По ним идут тесты tests/arbitrum_woofi_live.rs
 #   (сейчас #[ignore] — записи нет).
 # Кто вызывает: Тигран на своём сервере (узел Arbitrum), вручную.
-# От чего зависит: Python 3, requests. Узел — аргумент --rpc.
+# От чего зависит: Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459). Узел — аргумент --rpc.
 # Настройки: нет (адреса — аргументы; по умолчанию — woonetwork/docs 9bcc162d references/readme/arbitrum-one.md L5:
 #   WooPPV2.2 0x5520…9FA4, WooracleV2_2_1 0xCf4E…34Ec; монеты — --base, адреса вводит запускающий).
 #
@@ -27,7 +27,7 @@ import json
 import os
 import sys
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 WOOPP = "0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4"
 ORACLE = "0xCf4EA1688bc23DD93D933edA535F8B72FC8934Ec"

@@ -29,7 +29,7 @@ HooksParametersSet, затем пулы с ненулевыми резервам
 LBFactory 0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c). Селекторы и topic0 — keccak256 подписей; скрипт сверяет их
 при запуске (SIGS), тест tests/arb_dex_lb_v22_live.rs сверяет записанную calldata с ABI кода бота.
 
-Установка:  pip install requests
+Установка:  не нужна (стандартная библиотека Python 3; HTTP — stdhttp.py, решение 459)
 Запуск:     python3 tools/arbitrum_record/lb_v22.py http://АДРЕС_УЗЛА:8547 \
                 --factory 0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c
             (из корня репозитория; --out — другая папка)
@@ -41,7 +41,7 @@ import json
 import os
 import sys
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 
 # --- keccak256 (Keccak-f[1600], padding 0x01 — как в Ethereum), без внешних библиотек ---

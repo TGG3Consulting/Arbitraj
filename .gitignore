@@ -14,6 +14,8 @@ secrets.enc
 *.sqlite-journal
 *.db
 *.zst
+# Рабочая папка и архив tools/arbitrum_record/record_all.py (решение 459) — присылаются, не коммитятся
+/arbitrum_record_*
 
 # Интерфейс
 /ui/node_modules/

@@ -5,7 +5,7 @@
 #   tests/data/arbitrum_ekubo_<дата>/ и README.md (что записано, блок, хеши файлов). По этим файлам идут тесты
 #   tests/arbitrum_ekubo_live.rs (сейчас #[ignore] — записи нет).
 # Кто вызывает: Тигран на своём сервере (узел Arbitrum), вручную.
-# От чего зависит: Python 3, requests. Узел — аргумент --rpc (HTTP JSON-RPC). GeckoTerminal — по желанию (--gt).
+# От чего зависит: Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459). Узел — аргумент --rpc (HTTP JSON-RPC). GeckoTerminal — по желанию (--gt).
 # Настройки: нет (адреса — аргументы; по умолчанию — официальные: docs.ekubo.org/reference/contracts/evm-v3 и
 #   EkuboProtocol/evm-contracts broadcast/DeployAll.s.sol/42161).
 #
@@ -29,7 +29,7 @@ import json
 import os
 import sys
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 CORE = "0x00000000000014aA86C5d3c41765bb24e11bd701"
 KEY_INDEX = "0x898956fc2aed01d5f81f556ff5dcb10534285718"

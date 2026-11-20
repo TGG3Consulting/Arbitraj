@@ -5,7 +5,7 @@
 #   tests/data/arbitrum_saddle_<дата>/ и README.md (что записано, блок, хеши). По ним идут тесты
 #   tests/arbitrum_saddle_live.rs (сейчас #[ignore] — записи нет).
 # Кто вызывает: Тигран на своём сервере (узел Arbitrum), вручную.
-# От чего зависит: Python 3, requests. Узел — аргумент --rpc (HTTP JSON-RPC).
+# От чего зависит: Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459). Узел — аргумент --rpc (HTTP JSON-RPC).
 # Настройки: нет (пулы — аргументы --pool; по умолчанию — плоские пулы saddle-finance/saddle-contract 2cfdd055
 #   deployments/arbitrum_mainnet: SaddleArbUSDPool, SaddleArbUSDPoolV2, SaddleFRAXBPPool, CommunityfUSDCPool).
 #
@@ -28,7 +28,7 @@ import json
 import os
 import sys
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 POOLS = [
     "0xBea9F78090bDB9e662d8CB301A00ad09A5b756e9",  # SaddleArbUSDPool (SwapFlashLoan)

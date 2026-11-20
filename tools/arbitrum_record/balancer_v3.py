@@ -7,7 +7,7 @@
 #   бота; и ответы Router V3 querySwapSingleTokenExactIn / ExactOut на несколько сумм по каждой паре токенов пула
 #   (eth_call БЕЗ from — Vault.quote требует tx.origin = 0). Ключей и подписей нет.
 # Кто вызывает: Тигран вручную (README ниже); тест — tests/arbitrum_balancer_v3.rs (сверяет расчёт бота с роутером).
-# От чего зависит: Python 3, requests. Адрес узла и все адреса контрактов — аргументы (официальные значения —
+# От чего зависит: Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459). Адрес узла и все адреса контрактов — аргументы (официальные значения —
 #   docs/FIRST_RUN.md, «DEX Balancer V3 на Arbitrum»: balancer/balancer-deployments@b55dc2b8 output/arbitrum.json,
 #   QuantAMMProtocol/deployment@e7867165).
 #
@@ -40,7 +40,7 @@ import json
 import os
 import sys
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 # --- keccak256 (Keccak-f[1600], padding 0x01 — как в Ethereum; нужен только для селекторов функций) ---
 _RC = [

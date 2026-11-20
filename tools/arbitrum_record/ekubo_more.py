@@ -13,7 +13,7 @@
 #                        (logs_per_block, bytes_per_block): столько получала бы КАЖДАЯ пачка Ekubo до решения 454 и
 #                        получает один хаб площадки после.
 # Кто вызывает: Тигран на своём сервере (узел Arbitrum), вручную, после tools/arbitrum_record/ekubo.py.
-# От чего зависит: Python 3, requests, tools/arbitrum_record/ekubo.py (общие функции). Узел — аргумент --rpc.
+# От чего зависит: Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459), tools/arbitrum_record/ekubo.py (общие функции). Узел — аргумент --rpc.
 # Настройки: нет (адреса — аргументы; по умолчанию — официальные, broadcast DeployAll.s.sol/42161, docs.ekubo.org).
 #
 # Источники: evm-contracts@61d09daa src/interfaces/ICore.sol L111 (PoolInitialized), TWAMMStorageLayout.sol L20-L64,

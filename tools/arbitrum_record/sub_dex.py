@@ -16,7 +16,7 @@
 Пишет JSON-файлы и README (блок, время, хеш блока, SHA-256 файлов) в tests/data/arbitrum_sub_dex_<дата>/. Только чтение
 (eth_blockNumber, eth_getBlockByNumber, eth_getLogs, eth_call, eth_getCode) — ключей, подписей и транзакций нет.
 
-Запуск (Python 3, requests), адреса — docs/notes/arbitrum/dex-settings-arbitrum.md (официальные источники):
+Запуск (Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459)), адреса — docs/notes/arbitrum/dex-settings-arbitrum.md (официальные источники):
     python3 tools/arbitrum_record/sub_dex.py --node http://АДРЕС_УЗЛА:8547 --blocks 2000000 --max-pools 20 \\
         --kyber DMM:0xD9bfE9979e9CA4b2fe84bA5d4Cf963bBcB376974:0xEaE47c5D99f7B31165a7f0c5f7E0D6afA25CFd55 \\
         --kyber KS:0x1c758aF0688502e49140230F6b0EBd376d429be5:0x5649B4DD00780e99Bab7Abb4A3d581Ea1aEB23D0 \\
@@ -42,7 +42,7 @@ import json
 import os
 import sys
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 # --- keccak256 (чистый Python: в stdlib только sha3_256 с другим дополнением) ---------------------------------------
 

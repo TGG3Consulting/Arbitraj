@@ -1,13 +1,35 @@
 # tools/arbitrum_record — запись ответов своего узла Arbitrum One для тестов
 
-Тесты проекта — только на реально записанных ответах (CLAUDE.md). У разработчика нет доступа к узлу Arbitrum, поэтому
-скрипт записи пишет Тигран со своего сервера: скрипт кладёт JSON и README (блок, хеши) в tests/data/, после записи с
-тестов снимается #[ignore]. Скрипты только читают (eth_call, eth_getLogs, eth_getCode, eth_getBlockByNumber): ключей,
-подписей и транзакций нет. Python 3 + requests; адрес узла — аргумент.
+## Одна команда (решение 459)
 
-Скрипты записи своего узла Arbitrum (Python 3, requests). Каждый пишет JSON-файлы и README.md (блок, хеши SHA-256) в
-`tests/data/arbitrum_<семейство>_<дата>/`; тесты на эти файлы стоят с `#[ignore = "нет записи: …"]` — после записи
-метку снимают. Адрес узла — аргумент (`--rpc` или иной — см. шапку скрипта); адреса контрактов по умолчанию — из официальных источников (в шапке скрипта).
+Из корня репозитория, адрес — HTTP JSON-RPC своего узла Arbitrum (WebSocket не нужен):
+
+- Windows: `py tools\arbitrum_record\record_all.py --rpc http://АДРЕС_УЗЛА:8547`
+- Linux: `python3 tools/arbitrum_record/record_all.py --rpc http://АДРЕС_УЗЛА:8547`
+
+Нужен только Python 3.8+ (стандартная библиотека; `pip` не нужен — HTTP через `stdhttp.py`). Вопросов в процессе нет.
+Скрипты по очереди пишут свои папки `tests/data/…`; упавший скрипт не останавливает остальные. В конце — сводка (что
+записано, что упало и почему) и строка «Архив для отправки: …zip» — этот zip прислать. Журналы каждого скрипта — в
+`arbitrum_record_<время>/logs/` (в git не идут). Ключей и приватных данных скрипты не просят: только чтение узла
+(eth_call, eth_getLogs, eth_getCode, eth_getStorageAt, eth_simulateV1), транзакций нет.
+
+Необязательно: `--wallet 0x…` — адрес кошелька для записи приёмки v4 (адрес, не ключ; без него — пустой адрес);
+`--ekubo-from-block N` — блок развёртывания ядра Ekubo (без него ищется по eth_getCode узла; узел без истории
+состояния ответит ошибкой — тогда ekubo_more.py пропускается с причиной в сводке); `--only ИМЯ` / `--skip ИМЯ` —
+выбрать скрипты; `--timeout С` — предел одного скрипта. Нужен доступ в интернет к api.geckoterminal.com (списки
+пулов kyber_elastic_v1, fluid_t1, balancer_v3, algebra_dir_fee, ekubo). Приёмке v4 нужен eth_simulateV1 на узле —
+без него exec_v4_live.py выходит с причиной.
+
+Что запускается (адреса — `record_steps.py`, те же, что в шапках скриптов и ниже): sub_dex, kyber_elastic_v1, saddle,
+woofi, fluid_t1, balancer_v3, curve_crypto, camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo, ekubo_more,
+exec_v4_live.
+
+Тесты проекта — только на реально записанных ответах (CLAUDE.md). У разработчика нет доступа к узлу Arbitrum: после
+записи папки `tests/data/arbitrum_*_<дата>/` и `tests/data/executor_v4_live_<дата>/` коммитятся, с тестов снимается
+`#[ignore]` (список — docs/TASKS.md, T456-03).
+
+Каждый скрипт пишет JSON-файлы и README.md (блок, хеши SHA-256) в `tests/data/arbitrum_<семейство>_<дата>/`; адрес
+узла — аргумент (`--rpc` или иной — см. шапку скрипта); адреса контрактов — из официальных источников (в шапке скрипта).
 
 | Скрипт | Решение | Что пишет | Тест |
 | --- | --- | --- | --- |
@@ -18,12 +40,15 @@
 | `fluid_t1.py` | 440 | Fluid DEX T1 (решение 440): состояние всех пулов резолвера на одном блоке и лесенка обменов (swapIn пула → 0x…dEaD, estimateSwapIn резолвера) — для tests/arbitrum_fluid_t1.rs | `tests/arbitrum_fluid_t1.rs` |
 | `balancer_v3.py` | 441 | Решения 441, 452 (T433-F2): пулы Balancer V3 всех видов — все вызовы бота к пулу (хранилище, фабрики из списков, виды пулов, крючок, прекомпайлы) и ответы Router V3 querySwapSingleTokenExactIn / ExactOut на одном блоке; тест — tests/arbitrum_balancer_v3.rs | `tests/arbitrum_balancer_v3.rs` |
 | `curve_crypto.py` | 442 | Curve crypto-пулы (решения 442, 453): Twocrypto-NG (v2.1.0 и v2.0.0 — по MATH()), Tricrypto-NG, фабрика crypto v1, tricrypto 2021 — ответы на вызовы бота по calldata, проверка (get_coins, version, MATH, get_decimals), eth_getCode реализаций / математики / пулов, balanceOf и ETH пулов, decimals монет v1, лесенка get_dy — tests/data/arbitrum_curve_crypto_<дата>/ | tests/arb_curve_crypto_live.rs (NG), tests/arb_curve_crypto_v1_live.rs (v1) | `tests/arb_curve_crypto_live.rs`, `tests/arb_curve_crypto_v1_live.rs` |
-| `camelot_v2.py` | 443 | Решение 443 (T433-F4): Camelot V2 — пары фабрики (резервы, комиссии входа, stableSwap, множители точности, getPair, код), getAmountOut пары на суммах в обе стороны на одном блоке; логи Sync, FeePercentUpdated, SetStableSwap, PairCreated. Запуск: `python3 tools/arbitrum_record/camelot_v2.py http://УЗЕЛ:8547 --factory 0x6EcCab422D763aC031210895C81787E87B43A652` (из корня репозитория; `pip install requests`) | — |
+| `camelot_v2.py` | 443 | Решение 443 (T433-F4): Camelot V2 — пары фабрики (резервы, комиссии входа, stableSwap, множители точности, getPair, код), getAmountOut пары на суммах в обе стороны на одном блоке; логи Sync, FeePercentUpdated, SetStableSwap, PairCreated. Запуск: `python3 tools/arbitrum_record/camelot_v2.py http://УЗЕЛ:8547 --factory 0x6EcCab422D763aC031210895C81787E87B43A652` (из корня репозитория) | — |
 | `lb_v20.py` | 445 | Liquidity Book v2.0 (LFJ V2, вид lb_v20, решение 445) | фабрика v2.0, состояние пулов, все бины, getSwapOut роутера v2.0, слоты условия, логи; тест — tests/bsc_dex_lb_v20_arbitrum.rs | `tests/bsc_dex_lb_v20_arbitrum.rs` |
 | `lb_v22.py` | 446 | Liquidity Book V2.2 — LFJ V2.2 (решение 446, T433-F7): `python3 tools/arbitrum_record/lb_v22.py http://УЗЕЛ:8547 --factory 0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | tests/arb_dex_lb_v22_live.rs | `tests/arb_dex_lb_v22_live.rs` |
 | `ekubo.py` | 447 | Ekubo (решение 447, T433-F8): пулы GeckoTerminal ekubo-v3-arbitrum и/или `--pool`, ключи PoolKeyIndex, Core.sload (состояние, битмап, тики), MEVCapture.sload, MEVCaptureRouter.quote, логи ядра | tests/arbitrum_ekubo_live.rs | `tests/arbitrum_ekubo_live.rs` |
 | `curve_crypto_rpc.py`, `curve_crypto_pools.py` | 453 | модули `curve_crypto.py` (ревью 453, файлы ≤ ~200 строк): keccak256, ABI и JSON-RPC узла; чтение пулов (вызовы бота, лесенка get_dy, код, holdings, пулы фабрик) — запускать не нужно, их импортирует `curve_crypto.py` | — |
 | `ekubo_more.py` | 454 | Ekubo, дополнительная запись (после `ekubo.py`, та же папка tests/data/arbitrum_ekubo_<дата>/): PoolInitialized ядра, пулы с нативным ETH, пулы TWAMM, замер нагрузки подписки ядра | `tests/arbitrum_ekubo_more_live.rs` |
+| `record_all.py`, `record_steps.py` | 459 | одна команда: все скрипты ниже по очереди, сводка, zip | — |
+| `exec_v4_live.py` (+ `v4live_rpc.py`, `v4live_slots.py`, `v4live_mgr.py`, `v4live_old.py`, `v4live_cases.py`, `v4live_write.py`) | 400, 459 (T457-02) | приёмка исполнителя v4 на живых пулах: eth_simulateV1 с подменой кода (contracts/out/ArbExecutor.bin-runtime) на пустом адресе, (а) покупка / (б) продажа по видам 19 Uniswap V4 и 23 Balancer V3 (их судит правило 400) и 22 Fluid, 24 LB v2.0, 1 Uniswap V3, 0 Uniswap V2 — tests/data/executor_v4_live_<дата>/ (README с SHA-256 кода, summary.json, hooks_reject.json, calls.json, slots.json, pools.json, raw_rpc.json) | правило — src/venues/bsc_dex/exec/executor/live_rule.rs (см. docs/TASKS.md T457-02) |
+| `stdhttp.py` | 459 | HTTP стандартной библиотеки вместо пакета requests (все скрипты: `import stdhttp as requests`) | — |
 | `algebra_dir_fee.py` | 444 | Algebra V1.9 с направленными комиссиями (T433-F5; Camelot V3) — команда и хеши кода пула — раздел ниже | `tests/arb_dex_algebra_dir.rs` |
 
 ## algebra_dir_fee.py — Algebra V1.9 с направленными комиссиями (решение 444, T433-F5; Camelot V3)

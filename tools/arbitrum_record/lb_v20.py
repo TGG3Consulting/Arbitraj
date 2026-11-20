@@ -9,7 +9,7 @@
 #   Только чтение: eth_call / eth_getStorageAt / eth_getCode / eth_getLogs / eth_getBlockByNumber / eth_chainId.
 #   Ключей, подписей и транзакций нет. Пишет сырые пары «запрос → ответ» JSON-RPC.
 # Кто вызывает: Тигран вручную (tests/*: tests/bsc_dex_lb_v20_arbitrum.rs читает записанное).
-# От чего зависит: Python 3, requests.
+# От чего зависит: Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459).
 # Запуск: python3 tools/arbitrum_record/lb_v20.py http://<узел>:8547 [--pools 0x…,0x…] [--max-pools 5]
 #   [--max-bins 300] [--log-blocks 20000] --factory <LBFactory v2.0> --router <LBRouter v2.0>
 #   Адреса фабрики и роутера v2.0 — обязательные аргументы (ревью 445: без зашитых адресов). Официальные значения —
@@ -28,7 +28,7 @@ import json
 import os
 import sys
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 SEL = {
     "getNumberOfLBPairs()": "0x4e937c3a",

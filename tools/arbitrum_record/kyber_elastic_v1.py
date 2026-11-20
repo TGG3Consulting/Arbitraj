@@ -5,7 +5,7 @@
 #   tests/data/arbitrum_kyber_elastic_v1_<дата>/ и README.md (что записано, блок, хеши файлов). По ним идут тесты
 #   tests/arbitrum_kyber_elastic_v1_live.rs (сейчас #[ignore] — записи нет).
 # Кто вызывает: Тигран на своём сервере (узел Arbitrum), вручную.
-# От чего зависит: Python 3, requests. Узел — аргумент --rpc (HTTP JSON-RPC). GeckoTerminal — по желанию (--gt).
+# От чего зависит: Python 3 (стандартная библиотека; HTTP — stdhttp.py, решение 459). Узел — аргумент --rpc (HTTP JSON-RPC). GeckoTerminal — по желанию (--gt).
 # Настройки: нет (адреса — аргументы; по умолчанию — официальные: KyberNetwork/ks-elastic-sc 4ab08c0a README.md L6-L17,
 #   «Deployed contracts for KyberSwap Elastic v1», Arbitrum; Sourcify 42161 — full match).
 #
@@ -32,7 +32,7 @@ import json
 import os
 import sys
 
-import requests
+import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 FACTORY = "0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a"
 QUOTER = "0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f"

@@ -76,18 +76,27 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         out.push(match (r, u) {
             (Err(v), _) => v,
             (Ok(_), Err(node)) => Verdict::Failed(node),
-            (Ok((p, a)), Ok(u)) => match decide(c, &p, &a, &u) {
-                Ok(f) => {
-                    let mut tokens = tokens(&a);
-                    for x in &u {
-                        if !tokens.contains(x) {
-                            tokens.push(*x);
+            // Решение 474 (ревью t244): обёртка и её же базовый токен одного пула — пара не строится.
+            (Ok(_), Ok(u)) if buffer::twin(&u, c.coin, c.quote) => Verdict::Rejected(format!(
+                "{} / {} — обёртка ERC4626 и её базовый токен одного пула Balancer V3 (пул не нужен)",
+                c.coin, c.quote
+            )),
+            (Ok((p, a)), Ok(u)) => {
+                let under: Vec<Address> = u.iter().map(|x| x.1).collect();
+                match decide(c, &p, &a, &under) {
+                    Ok(f) => {
+                        let mut tokens = tokens(&a);
+                        for x in &under {
+                            if !tokens.contains(x) {
+                                tokens.push(*x);
+                            }
                         }
+                        buffer::remember(ctx, p.0, &u);
+                        Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &tokens)))
                     }
-                    Verdict::Taken(Box::new(multi_pair::adopt(ctx, f, &tokens)))
+                    Err(w) => Verdict::Rejected(w),
                 }
-                Err(w) => Verdict::Rejected(w),
-            },
+            }
         });
     }
     out

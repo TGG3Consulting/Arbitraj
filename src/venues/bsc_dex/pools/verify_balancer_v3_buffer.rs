@@ -2,8 +2,9 @@
 //! Что делает: решение 474 — второй проход проверки пулов Balancer V3: базовые токены буферов ERC4626 хранилища для
 //! токенов пула (getERC4626BufferAsset; 0 — буфера нет). С ними монета пары может быть базовым токеном обёртки пула
 //! (обмен через буфер), и они же идут в развёртку пар многомонетного пула. Только если задана опорная сумма превью
-//! (dex.bv3_buffer_preview_raw): без неё буферы не читаются и пары через буфер не строятся.
-//! Кто вызывает: pools/verify_balancer_v3.rs.
+//! (dex.bv3_buffer_preview_raw): без неё буферы не читаются и пары через буфер не строятся. Ревью t244: пара «обёртка
+//! — её базовый токен» одного пула не строится — ни кандидатом справочника, ни развёрткой (Snap.pool_twins).
+//! Кто вызывает: pools/verify_balancer_v3.rs, pools/multi_pair.rs (twin).
 //! От чего зависит: ctx.rs, node/call.rs (try_chunks), abi_balancer_v3_buffer.rs, load_balancer_v3_buffer.rs
 //! (preview_ref).
 //! Настройки: dex.bv3_buffer_preview_raw [DEX вида balancer_v3].
@@ -26,14 +27,14 @@ pub fn enabled(ctx: &Ctx, id: &str) -> bool {
     matches!(preview_ref(ctx, id), Ok(Some(_)))
 }
 
-/// Базовые токены буферов по пулам. Принимает: окружение, по пулу (хранилище, токены пула; пусто — пул без второго
-/// прохода), размер части пачки. Возвращает: по пулу — ненулевые базовые токены (по порядку токенов) или сбой узла
-/// (текст). Откат вызова или ответ не по ABI — у токена буфера нет. Ошибок иных нет.
+/// Пары «обёртка — её базовый токен» по пулам. Принимает: окружение, по пулу (хранилище, токены пула; пусто — пул без
+/// второго прохода), размер части пачки. Возвращает: по пулу — (токен пула, ненулевой базовый токен его буфера) по
+/// порядку токенов или сбой узла (текст). Откат вызова или ответ не по ABI — у токена буфера нет. Ошибок иных нет.
 pub async fn assets(
     ctx: &Ctx,
     lists: &[(Address, Vec<Address>)],
     size: usize,
-) -> Vec<Result<Vec<Address>, String>> {
+) -> Vec<Result<Vec<(Address, Address)>, String>> {
     let all: Vec<(Address, Bytes)> = lists
         .iter()
         .flat_map(|(vault, tokens)| {
@@ -52,25 +53,36 @@ pub async fn assets(
     let mut out = Vec::with_capacity(lists.len());
     for (_, tokens) in lists {
         let part: Vec<call::Piece> = got.by_ref().take(tokens.len()).collect();
-        out.push(decide(part));
+        out.push(decide(tokens, part));
     }
     out
 }
 
-/// Разбор ответов одного пула (без сети). Принимает: ответы по токенам. Возвращает: ненулевые базовые токены или сбой
-/// узла. Ошибок иных нет.
-fn decide(part: Vec<call::Piece>) -> Result<Vec<Address>, String> {
+/// Разбор ответов одного пула (без сети). Принимает: токены пула, ответы по токенам. Возвращает: пары (обёртка,
+/// базовый токен) или сбой узла. Ошибок иных нет.
+fn decide(tokens: &[Address], part: Vec<call::Piece>) -> Result<Vec<(Address, Address)>, String> {
     let mut out = Vec::new();
-    for p in part {
+    for (t, p) in tokens.iter().zip(part) {
         let answer = p?;
         let a = answer
             .ok()
             .and_then(|b| B::getERC4626BufferAssetCall::abi_decode_returns(&b).ok());
-        if let Some(a) = a.filter(|a| !a.is_zero())
-            && !out.contains(&a)
-        {
-            out.push(a);
+        if let Some(a) = a.filter(|a| !a.is_zero()) {
+            out.push((*t, a));
         }
     }
     Ok(out)
+}
+
+/// Пара — обёртка и её же базовый токен в одном пуле (обмен «сам в себя» через буфер, пул не нужен): такая пара не
+/// строится. Принимает: пары обёрток пула, две монеты. Ошибок нет.
+pub fn twin(pairs: &[(Address, Address)], a: Address, b: Address) -> bool {
+    pairs.iter().any(|&(w, u)| (w, u) == (a, b) || (u, w) == (a, b))
+}
+
+/// Запомнить пары «обёртка — базовый токен» пула для развёртки пар (multi_pair::expand их не строит). Принимает:
+/// окружение, пул, пары. Ошибок нет.
+pub fn remember(ctx: &Ctx, pool: Address, pairs: &[(Address, Address)]) {
+    let key = format!("{pool:#x}");
+    ctx.index.with(|s| s.pool_twins.insert(key, pairs.to_vec()));
 }

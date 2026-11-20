@@ -51,6 +51,18 @@ pub fn refusal(ctx: &Ctx, state: &PoolState) -> Option<String> {
     }
 }
 
+/// То же, что `refusal(ctx, state).is_none()`, без строк — горячий путь котировки (entry.rs fits_ok). Принимает:
+/// окружение, состояние пула. Ошибок нет.
+pub fn ready(ctx: &Ctx, state: &PoolState) -> bool {
+    let PoolState::VaultPool(d) = state else {
+        return true;
+    };
+    if !has_buffer(d) {
+        return true;
+    }
+    matches!(ctx.exec_info(), Some((_, Some(v))) if exec_callback::has_call(v, BUFFER_MARK))
+}
+
 /// Есть ли у пары сторона через буфер. Принимает: состояние пула. Ошибок нет.
 pub fn has_buffer(d: &VaultPoolData) -> bool {
     wrappers(d, true).is_some()

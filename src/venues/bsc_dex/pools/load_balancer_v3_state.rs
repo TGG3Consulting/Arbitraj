@@ -73,6 +73,8 @@ pub fn state(p: Parts, mut v3: VaultV3, pair: (Address, Address)) -> Result<Pool
         Ok::<u8, String>(k as u8)
     };
     let (i0, i1) = (index(pair.0)?, index(pair.1)?);
+    // Обёртка и её же базовый токен одного пула: такая пара не строится (verify_balancer_v3_buffer.rs twin); здесь —
+    // защита, если пара пришла из сохранённого справочника до повторной проверки пула.
     if i0 == i1 {
         return Err(format!("обе монеты пары — один токен пула {}", p.tokens[i0 as usize]));
     }

@@ -118,7 +118,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
             return false;
         }
         // Решение 474: то же правило шага 27, что в fits.
-        if k == ExecKind::BalancerV3 && super::kind_buffer::refusal(ctx, &e.pool.state).is_some() {
+        if k == ExecKind::BalancerV3 && !super::kind_buffer::ready(ctx, &e.pool.state) {
             return false;
         }
         // Решение 447: у шага EKUBO ссылка — пул в ядре (Singleton), у остальных — не Singleton.

@@ -8,8 +8,10 @@
 //!    с точными превью обёртки на суммах обмена (опорная сумма = сумма превью, записанные previewDeposit / previewRedeem)
 //!    и без предела остатка буфера (запрос хранилища его не проверяет, Vault.sol L1231, L1352) = ответу BatchRouter
 //!    querySwapExactIn того же блока; откат роутера — расчёт None.
-//! 3. Превью по одной точке (опорная сумма dex.bv3_buffer_preview_raw) отличается от точного превью обёртки не больше
-//!    чем на 1 единицу токена (утверждение шапки math/balancer_v3_buffer.rs).
+//! 3. Превью по одной точке (опорная сумма dex.bv3_buffer_preview_raw; сумма ≤ опорной) не больше точного превью
+//!    обёртки и меньше его не больше чем на 1 единицу токена — граница для линейного превью (шапка
+//!    math/balancer_v3_buffer.rs, «Точность»); у записанной обёртки с нелинейным превью тест упадёт — это факт для
+//!    решения Тиграна, не ошибка расчёта хранилища.
 //!
 //! Пока записи нет — тест помечен #[ignore] (запуск после записи: cargo test --test arbitrum_balancer_v3_buffer --
 //! --ignored; затем метку снять).
@@ -204,8 +206,7 @@ fn buffer_quote_matches_batch_router() {
                         let ours = balancer_v3_buffer::wrap(&free, amount);
                         if let Some(o) = ours.filter(|_| amount >= b.min_wrap) {
                             let t = dep - one;
-                            let gap = o.max(t) - o.min(t);
-                            assert!(gap <= one, "WRAP {pool:#x} {amount}: {o} / {t}");
+                            assert!(o <= t && t - o <= one, "WRAP {pool:#x} {amount}: {o} / {t}");
                             near += 1;
                         }
                     }
@@ -223,8 +224,7 @@ fn buffer_quote_matches_batch_router() {
                         let ours = balancer_v3_buffer::unwrap(&free, x + one);
                         if let Some(o) = ours {
                             let t = red - one;
-                            let gap = o.max(t) - o.min(t);
-                            assert!(gap <= one, "UNWRAP {pool:#x} {x}: {o} / {t}");
+                            assert!(o <= t && t - o <= one, "UNWRAP {pool:#x} {x}: {o} / {t}");
                             near += 1;
                         }
                         let mut v = d.v3.take().unwrap();

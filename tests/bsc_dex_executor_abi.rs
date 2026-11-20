@@ -519,3 +519,37 @@ fn buffer_step_only_in_source() {
     .unwrap();
     assert!(src.contains("IBalancerV3Vault(v).erc4626BufferWrapOrUnwrap("));
 }
+
+/// SHA-256 кода в сети исполнителя v4 (contracts/README.md, решение 457; contracts/out/ArbExecutor.sha256 сборки v4).
+const V4_RUNTIME_SHA: &str = "2bf86e58e5719f88d709bcf06350570cbd60318f1e49e9f9d3a9c85c3ee10762";
+
+/// Ревью t244 (решение 474): пересборка исполнителя (v5, шаг 27) не должна потерять код v4 — по нему бот сверяет
+/// развёрнутые кошельки v4. Сейчас contracts/out/ = v4 (тест проходит сразу); если out/ ≠ v4 — обязателен out/v4/ с
+/// кодом v4 и строкой хеша в его ArbExecutor.sha256 (иначе красный CI). Хеш v4 записан и в contracts/README.md.
+#[test]
+fn v4_kept_after_rebuild() {
+    use sha2::{Digest, Sha256};
+    let out = concat!(env!("CARGO_MANIFEST_DIR"), "/contracts/out");
+    let sha = |p: &str| {
+        std::fs::read_to_string(p)
+            .ok()
+            .map(|t| alloy_primitives::hex::encode(Sha256::digest(t.as_bytes())))
+    };
+    let readme = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/contracts/README.md"
+    ))
+    .unwrap();
+    assert!(readme.contains(V4_RUNTIME_SHA), "хеш v4 в contracts/README.md");
+    if sha(&format!("{out}/ArbExecutor.bin-runtime")).as_deref() == Some(V4_RUNTIME_SHA) {
+        return;
+    }
+    let v4 = format!("{out}/v4");
+    assert_eq!(
+        sha(&format!("{v4}/ArbExecutor.bin-runtime")).as_deref(),
+        Some(V4_RUNTIME_SHA),
+        "out/ пересобран — код v4 должен лежать в contracts/out/v4/"
+    );
+    let rec = std::fs::read_to_string(format!("{v4}/ArbExecutor.sha256")).unwrap_or_default();
+    assert!(rec.contains(&format!("{V4_RUNTIME_SHA}  ArbExecutor.bin-runtime")));
+}

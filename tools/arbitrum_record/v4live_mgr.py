@@ -41,9 +41,10 @@ def _s24(x):
     return x - (1 << 24) if x >> 23 else x
 
 
-def v4_pools(node, tag, head, a, skipped):
-    """Пулы Uniswap V4 без крючка, обе валюты ERC-20, ликвидность > 0 (новые — первыми). Ошибок-исключений нет, кроме
-    сетевых."""
+def v4_inits(node, head, a, skipped):
+    """События Initialize PoolManager за --v4-blocks до head (решение 460: только логи, до выбора блока H — узел хранит
+    только недавнее состояние): пулы без крючка, обе валюты ERC-20, PoolId = keccak256(ключа); новые — первыми.
+    Ошибок-исключений нет, кроме сетевых."""
     found, lo = [], max(0, head - a.v4_blocks)
     hi, chunk = head, a.log_chunk
     while hi >= lo and len(found) < a.v4_scan:
@@ -70,6 +71,12 @@ def v4_pools(node, tag, head, a, skipped):
                 continue
             found.append({"pid": pid, "c0": c0, "c1": c1, "key": "0x" + key})
         hi = start - 1
+    return found
+
+
+def v4_pools(node, tag, found, a, skipped):
+    """Ликвидность (StateView.getLiquidity на блоке H) найденных пулов: остаются пулы с ликвидностью > 0. Ошибок-
+    исключений нет, кроме сетевых и StaleState."""
     out = []
     for p in found:
         r, e = node.call(a.v4_state_view, "0x" + sel("getLiquidity(bytes32)") + p["pid"][2:], tag)

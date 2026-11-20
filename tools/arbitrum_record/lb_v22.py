@@ -17,8 +17,13 @@
                стороны до края или --max-bins, getBin каждого); getSwapOut на суммах в обе стороны (резерв входа
                пула / d для d из --divs и uint128 max — она больше ликвидности: остаток входа > 0).
   logs.json  — реальные логи выбранных пулов за последние --log-blocks блоков до B (Swap, DepositedToBins, ... — все
-               topic0) и логи HooksParametersSet всех пулов фабрики (поиск назад от B частями по --chunk блоков, пока не
-               наберётся --rare штук или не пройдено --rare-blocks блоков).
+               topic0) и логи HooksParametersSet всех пулов фабрики (поиск назад от головы b0 частями по --chunk блоков,
+               при таймауте узла — половинами, пока не наберётся --rare штук или не пройдено --rare-blocks блоков;
+               hooks_set_searched_from / _to — окно поиска).
+
+Порядок (решение 460): узел с короткой историей состояния (Nitro, path; прогон 20.11.2026 — eth_getCode на блоке,
+взятом до 500 с поиска логов: «historical state … is not available») — сначала поиск HooksParametersSet, потом свежий
+блок B и всё чтение состояния на нём (recnode.fresh: состояние B удалено узлом — заново на новом блоке).
   README.md  — что записано, блок, sha256 файлов.
 
 Как выбираются подробные пулы: --pool АДРЕС (можно несколько), все пулы с крючком (слово крючков не 0) и пулы из логов
@@ -41,6 +46,7 @@ import json
 import os
 import sys
 
+import recnode  # решение 460: деление окна логов по таймауту, свежий блок состояния
 import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 
@@ -241,29 +247,14 @@ def pool_record(node: Node, pool: str, factory: str, tag: str, divs, max_bins: i
     return rec
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Запись LB V2.2 (LFJ) со своего узла Arbitrum One")
-    ap.add_argument("node", help="адрес JSON-RPC своего узла, например http://127.0.0.1:8547")
-    ap.add_argument("--factory", required=True, help="LBFactory V2.2 (документация LFJ)")
-    ap.add_argument("--pool", action="append", default=[], help="свой пул (можно несколько раз)")
-    ap.add_argument("--pools", type=int, default=5, help="сколько пулов с резервами взять из фабрики")
-    ap.add_argument("--scan", type=int, default=200, help="сколько последних индексов фабрики просмотреть")
-    ap.add_argument("--divs", default="10000,1000,100,10,1", help="делители суммы getSwapOut")
-    ap.add_argument("--max-bins", type=int, default=2000, help="предел обхода бинов в одну сторону")
-    ap.add_argument("--log-blocks", type=int, default=20000, help="логи пулов за последние N блоков")
-    ap.add_argument("--chunk", type=int, default=50000, help="размер части eth_getLogs при поиске назад")
-    ap.add_argument("--rare", type=int, default=5, help="сколько логов HooksParametersSet искать")
-    ap.add_argument("--rare-blocks", type=int, default=50_000_000, help="предел поиска назад, блоков")
-    ap.add_argument("--out", default=None, help="папка записи (по умолчанию tests/data/arbitrum_lb_v22_<дата>)")
-    a = ap.parse_args()
-
-    node = Node(a.node)
-    factory = a.factory.lower()
-    divs = [float(x) for x in a.divs.split(",")]
-    chain = node.rpc("eth_chainId", [])
-    blk = node.rpc("eth_getBlockByNumber", ["latest", False])
+def state_phase(node, a, factory, divs, chain, blk, hooks_set):
+    """Решение 460: всё чтение СОСТОЯНИЯ на одном свежем блоке blk (фабрика, все пулы, крючки, подробные пулы) и логи
+    пулов за --log-blocks до него. Принимает: узел, аргументы, фабрику, делители, chainId, блок узла («latest»),
+    найденные HooksParametersSet. Возвращает: (probe, logs, номер блока, блок, число пулов, адреса пулов, начало окна
+    логов). Ошибки: StaleState (recnode.fresh повторит на новом блоке), RuntimeError — ошибка узла."""
     tag = blk["number"]
     b = int(tag, 16)
+    print(f"блок состояния B {b} {blk['hash']}", file=sys.stderr, flush=True)
     probe = {"chain_id": chain, "block": b, "block_hash": blk["hash"], "timestamp": int(blk["timestamp"], 16),
              "factory": factory, "factory_calls": {
                  "getLBPairImplementation": node.call(factory, "0x" + SEL["getLBPairImplementation"], tag),
@@ -287,15 +278,7 @@ def main():
             reserves[p] = (u(res["out"], 0), u(res["out"], 1))
     probe["implementations"] = {k: {"pools": len(v), "sample": v[:5]} for k, v in implementations.items()}
 
-    logs = {"block": b, "pool_logs": [], "hooks_set": []}
-    hi, searched = b, 0
-    while len(logs["hooks_set"]) < a.rare and hi > 0 and searched < a.rare_blocks:
-        lo = max(hi - a.chunk + 1, 0)
-        got = node.rpc("eth_getLogs", [{"topics": [HOOKS_SET_TOPIC], "fromBlock": hex(lo), "toBlock": hex(hi)}])
-        logs["hooks_set"].extend(got)
-        searched += hi - lo + 1
-        hi = lo - 1
-    logs["hooks_set_searched_from"] = hi + 1
+    logs = {"block": b, "pool_logs": [], "hooks_set": list(hooks_set)}
 
     # Крючки: из слов пулов и из логов HooksParametersSet — адрес, флаги, keccak256 кода на блоке B.
     words = dict(hooked)
@@ -340,7 +323,54 @@ def main():
         logs["pool_logs"] = node.rpc("eth_getLogs", [{"address": chosen, "fromBlock": hex(frm), "toBlock": tag}])
     logs["pool_logs_from"] = frm
 
-    day = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    return probe, logs, b, blk, total, every, frm
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Запись LB V2.2 (LFJ) со своего узла Arbitrum One")
+    ap.add_argument("node", help="адрес JSON-RPC своего узла, например http://127.0.0.1:8547")
+    ap.add_argument("--factory", required=True, help="LBFactory V2.2 (документация LFJ)")
+    ap.add_argument("--pool", action="append", default=[], help="свой пул (можно несколько раз)")
+    ap.add_argument("--pools", type=int, default=5, help="сколько пулов с резервами взять из фабрики")
+    ap.add_argument("--scan", type=int, default=200, help="сколько последних индексов фабрики просмотреть")
+    ap.add_argument("--divs", default="10000,1000,100,10,1", help="делители суммы getSwapOut")
+    ap.add_argument("--max-bins", type=int, default=2000, help="предел обхода бинов в одну сторону")
+    ap.add_argument("--log-blocks", type=int, default=20000, help="логи пулов за последние N блоков")
+    ap.add_argument("--chunk", type=int, default=50000, help="размер части eth_getLogs при поиске назад")
+    ap.add_argument("--rare", type=int, default=5, help="сколько логов HooksParametersSet искать")
+    ap.add_argument("--rare-blocks", type=int, default=50_000_000, help="предел поиска назад, блоков")
+    ap.add_argument("--min-chunk", type=int, default=1000, help="наименьшая часть eth_getLogs при делении по таймауту")
+    ap.add_argument("--out", default=None, help="папка записи (по умолчанию tests/data/arbitrum_lb_v22_<дата>)")
+    a = ap.parse_args()
+
+    node = Node(a.node)
+    factory = a.factory.lower()
+    divs = [float(x) for x in a.divs.split(",")]
+    chain = node.rpc("eth_chainId", [])
+    say = lambda t: print(t, file=sys.stderr, flush=True)  # noqa: E731
+
+    # Решение 460: сначала долгий поиск логов HooksParametersSet (без чтения состояния), от головы b0 назад; при
+    # таймауте узла окно делится пополам (recnode.logs_split).
+    b0 = int(node.rpc("eth_blockNumber", []), 16)
+    hooks_set = []
+    hi, searched = b0, 0
+    while len(hooks_set) < a.rare and hi > 0 and searched < a.rare_blocks:
+        lo = max(hi - a.chunk + 1, 0)
+        hooks_set.extend(recnode.logs_split(
+            lambda x, y: node.rpc("eth_getLogs", [{"topics": [HOOKS_SET_TOPIC], "fromBlock": hex(x),
+                                                   "toBlock": hex(y)}]), lo, hi, a.min_chunk, say))
+        searched += hi - lo + 1
+        hi = lo - 1
+    say(f"HooksParametersSet: {len(hooks_set)} шт. в блоках {hi + 1}..{b0}")
+
+    # Свежий блок B — всё состояние на нём; состояние удалено узлом — заново на новом блоке (recnode.fresh).
+    probe, logs, b, blk, total, every, frm = recnode.fresh(
+        lambda: node.rpc("eth_getBlockByNumber", ["latest", False]),
+        lambda blk: state_phase(node, a, factory, divs, chain, blk, hooks_set), say=say)
+    logs["hooks_set_searched_from"] = hi + 1
+    logs["hooks_set_searched_to"] = b0
+
+    day = os.environ.get("ARB_RECORD_DATE") or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     out = a.out or os.path.join("tests", "data", f"arbitrum_lb_v22_{day}")
     os.makedirs(out, exist_ok=True)
     files = {"probe.json": probe, "logs.json": logs}
@@ -363,7 +393,8 @@ def main():
         f"- крючки (слова пулов и логи HooksParametersSet): " + (", ".join(
             f"{h} (keccak256 кода {e.get('code_keccak256', '—')})" for h, e in probe["hooks"].items()) or "нет") + ";",
         f"- logs.json: логи пулов с блока {frm} до {b} ({len(logs['pool_logs'])} шт.), HooksParametersSet фабрики — "
-        f"{len(logs['hooks_set'])} шт. (поиск с блока {logs['hooks_set_searched_from']});",
+        f"{len(logs['hooks_set'])} шт. (поиск с блока {logs['hooks_set_searched_from']} до "
+        f"{logs['hooks_set_searched_to']}; блок B взят после поиска — решение 460);",
         "",
         "sha256 файлов (UTF-8 текста):",
     ] + [f"- {k}: {v}" for k, v in sums.items()] + [

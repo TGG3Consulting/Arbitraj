@@ -29,6 +29,7 @@ import json
 import os
 import sys
 
+import recnode  # решение 460: свежий блок состояния
 import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 CORE = "0x00000000000014aA86C5d3c41765bb24e11bd701"
@@ -168,6 +169,32 @@ def record_pool(rpc, pid, args, tag):
     return rec
 
 
+def gt_pool_id(addr, core):
+    """PoolId пула из поля attributes.address GeckoTerminal. Факт ответа (gt_pools.json записи 20.11.2026): у
+    ekubo-v3-arbitrum это «<адрес ядра>-<PoolId>» (0x…40 знаков, дефис, 0x…64 знака), а не просто PoolId — запись
+    20.11 из-за этого взяла 0 пулов. Возвращает: (PoolId, None) или (None, причина). Ошибок нет."""
+    pid, owner = addr, None
+    if "-" in addr:
+        owner, pid = addr.rsplit("-", 1)
+    if not (pid.startswith("0x") and len(pid) == 66):
+        return None, f"{addr}: не PoolId"
+    if owner is not None and owner.lower() != core.lower():
+        return None, f"{addr}: ядро {owner} ≠ --core"
+    return pid, None
+
+
+def record_all_pools(rpc, ids, args, tag):
+    """Все пулы на блоке tag (решение 460: фаза состояния). Ошибка пула — в записи пула; StaleState — наружу
+    (recnode.fresh повторит на новом блоке)."""
+    pools = []
+    for pid in dict.fromkeys(i.lower() for i in ids):
+        try:
+            pools.append(record_pool(rpc, pid, args, tag))
+        except Exception as e:
+            pools.append({"pool_id": pid, "error": str(e)})
+    return pools
+
+
 def main():
     ap = argparse.ArgumentParser(description="Запись фактов узла Arbitrum для Ekubo (решение 447)")
     ap.add_argument("--rpc", required=True, help="HTTP JSON-RPC своего узла Arbitrum")
@@ -186,37 +213,34 @@ def main():
 
     rpc = Rpc(args.rpc)
     chain = rpc.call("eth_chainId", [])
-    head = rpc.call("eth_getBlockByNumber", ["latest", False])
-    b, tag = int(head["number"], 16), head["number"]
     # Решение 459 (ревью t233, п. 7): дата папки — одна на запуск record_all.py (ARB_RECORD_DATE), иначе сегодня;
     # ekubo_more.py пишет в ту же папку и берёт ту же дату.
     day = os.environ.get("ARB_RECORD_DATE") or datetime.date.today().isoformat()
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = args.out or os.path.join(root, "tests", "data", "arbitrum_ekubo_" + day)
     os.makedirs(out, exist_ok=True)
-    files = {}
+    files = {"meta.json": None}
 
-    meta = {"chainId": chain, "block": b, "block_hex": tag, "timestamp": int(head["timestamp"], 16),
-            "core": args.core, "key_index": args.key_index, "mev_capture": args.mev, "router": args.router,
-            "words": args.words, "sizes": args.sizes, "log_blocks": args.log_blocks}
-    files["meta.json"] = meta
-
-    ids = list(args.pool)
+    # Решение 460: GeckoTerminal (с паузами темпа — gt.py) — ДО выбора блока B: узел хранит только недавнее состояние.
+    ids, skipped = list(args.pool), []
     if args.gt:
         pages = gt_pages(args.gt_pages)
         files["gt_pools.json"] = pages
         for p in pages:
             if p["status"] == 200:
                 for item in json.loads(p["body"]).get("data", []):
-                    addr = item.get("attributes", {}).get("address", "")
-                    if addr.startswith("0x") and len(addr) == 66:
-                        ids.append(addr)
-    pools = []
-    for pid in dict.fromkeys(i.lower() for i in ids):
-        try:
-            pools.append(record_pool(rpc, pid, args, tag))
-        except Exception as e:
-            pools.append({"pool_id": pid, "error": str(e)})
+                    pid, why = gt_pool_id(item.get("attributes", {}).get("address", ""), args.core)
+                    if pid:
+                        ids.append(pid)
+                    else:
+                        skipped.append(why)
+    pools, head = recnode.fresh(lambda: rpc.call("eth_getBlockByNumber", ["latest", False]),
+                                lambda h: (record_all_pools(rpc, ids, args, h["number"]), h))
+    b, tag = int(head["number"], 16), head["number"]
+    meta = {"chainId": chain, "block": b, "block_hex": tag, "timestamp": int(head["timestamp"], 16),
+            "core": args.core, "key_index": args.key_index, "mev_capture": args.mev, "router": args.router,
+            "words": args.words, "sizes": args.sizes, "log_blocks": args.log_blocks, "gt_skipped": skipped}
+    files["meta.json"] = meta
     files["pools.json"] = pools
 
     frm = hex(max(0, b - args.log_blocks))

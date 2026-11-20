@@ -9,6 +9,11 @@
 Кто вызывает: Тигран, из корня репозитория:
   Windows: py tools\\arbitrum_record\\record_all.py --rpc http://УЗЕЛ:8547
   Linux:   python3 tools/arbitrum_record/record_all.py --rpc http://УЗЕЛ:8547
+  Решение 460: --only / --skip — имена через запятую; --date — дата папок записи (повтор упавших — дата первого
+  запуска: ekubo_more.py дописывает папку ekubo.py, файлы у них разные); блок ядра Ekubo — из broadcast-файлов Ekubo
+  (поиска по eth_getCode старых блоков больше нет: узел без истории состояния его не отдаёт); темп GeckoTerminal —
+  общий файл ARB_GT_STAMP в рабочей папке запуска (gt.py).
+  Повтор только упавших 20.11.2026 (одна строка для Тиграна — README этой папки).
 От чего зависит: Python 3.8+ (только стандартная библиотека; HTTP — stdhttp.py), record_steps.py, скрипты этой папки;
   GeckoTerminal (api.geckoterminal.com) — списки пулов у kyber_elastic_v1, fluid_t1, balancer_v3, algebra_dir_fee, ekubo.
 Ошибки: код выхода 0 — все скрипты прошли, 1 — хотя бы один упал (сводка и архив пишутся в обоих случаях).
@@ -31,10 +36,6 @@ sys.path.insert(0, HERE)
 import record_steps  # noqa: E402
 from v4live_rpc import Node  # noqa: E402
 
-# Ядро Ekubo (ekubo.py CORE — broadcast DeployAll.s.sol/42161, docs.ekubo.org).
-EKUBO_CORE = "0x00000000000014aA86C5d3c41765bb24e11bd701"
-
-
 def say(*parts):
     """Печать, не падающая на консоли Windows без UTF-8."""
     text = " ".join(str(p) for p in parts)
@@ -42,32 +43,6 @@ def say(*parts):
         print(text, flush=True)
     except UnicodeEncodeError:
         print(text.encode("ascii", "replace").decode(), flush=True)
-
-
-def ekubo_block(rpc, head):
-    """Первый блок с кодом ядра Ekubo (поиск делением по eth_getCode). Возвращает: (блок, None) или (None, причина) —
-    узел без истории состояния отвечает ошибкой, тогда блок задаётся --ekubo-from-block."""
-    node = Node(rpc)
-
-    def has(b):
-        j = node.rpc("eth_getCode", [EKUBO_CORE, hex(b)])
-        if "result" not in j:
-            raise RuntimeError(f"eth_getCode на блоке {b}: {j.get('error')}")
-        return j["result"] not in ("0x", "")
-
-    try:
-        if not has(head):
-            return None, "на голове у адреса ядра нет кода"
-        lo, hi = 0, head
-        while lo < hi:
-            mid = (lo + hi) // 2
-            if has(mid):
-                hi = mid
-            else:
-                lo = mid + 1
-        return lo, None
-    except (RuntimeError, OSError) as e:
-        return None, str(e)[:300]
 
 
 def touched(since):
@@ -134,34 +109,44 @@ def main():
     ap = argparse.ArgumentParser(description="Все записи своего узла Arbitrum одной командой (решение 459)")
     ap.add_argument("--rpc", required=True, help="HTTP JSON-RPC своего узла Arbitrum One, например http://127.0.0.1:8547")
     ap.add_argument("--wallet", help="адрес кошелька для записи приёмки v4 (необязательно; адрес, не ключ)")
-    ap.add_argument("--ekubo-from-block", type=int, help="блок развёртывания ядра Ekubo (иначе — поиск по узлу)")
-    ap.add_argument("--only", action="append", default=[], help="запустить только эти скрипты (имя без .py)")
-    ap.add_argument("--skip", action="append", default=[], help="пропустить эти скрипты")
+    ap.add_argument("--ekubo-from-block", type=int,
+                    help="переопределить блок развёртывания ядра Ekubo (по умолчанию — из broadcast-файлов Ekubo)")
+    ap.add_argument("--only", action="append", default=[],
+                    help="запустить только эти скрипты (имя без .py; через запятую или несколько раз)")
+    ap.add_argument("--skip", action="append", default=[], help="пропустить эти скрипты (через запятую или несколько раз)")
+    ap.add_argument("--date", help="дата папок записи ГГГГ-ММ-ДД (по умолчанию — сегодня UTC); повтор упавших — дата "
+                                   "первого запуска, чтобы ekubo_more.py дописал папку ekubo.py")
     ap.add_argument("--timeout", type=int, default=None, help="предел времени одного скрипта, с (по умолчанию нет)")
     a = ap.parse_args()
+    # Решение 460: «--only a,b» — список через запятую (прогон 20.11.2026: повтор упавших одной строкой).
+    a.only = [n.strip() for x in a.only for n in x.split(",") if n.strip()]
+    a.skip = [n.strip() for x in a.skip for n in x.split(",") if n.strip()]
+    known = [n for n, _, _ in record_steps.steps("", None, None)]
+    bad = [n for n in a.only + a.skip if n not in known]
+    if bad:
+        ap.error(f"нет таких скриптов: {', '.join(bad)}; есть: {', '.join(known)}")
+    if a.date:
+        try:
+            datetime.date.fromisoformat(a.date)
+        except ValueError:
+            ap.error(f"--date {a.date}: нужна дата ГГГГ-ММ-ДД")
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d_%H%M%S")
     work = os.path.join(ROOT, f"arbitrum_record_{stamp}")
     logs = os.path.join(work, "logs")
     os.makedirs(logs, exist_ok=True)
     # Ревью t233, п. 7: дата папок записи — одна на весь запуск (ekubo.py и ekubo_more.py пишут в одну папку).
-    os.environ["ARB_RECORD_DATE"] = stamp[:10]
+    os.environ["ARB_RECORD_DATE"] = a.date or stamp[:10]
+    # Решение 460: темп GeckoTerminal общий для всех скриптов запуска — время последнего запроса в файле (gt.py).
+    os.environ["ARB_GT_STAMP"] = os.path.join(work, "gt_last_request.txt")
     try:
         head = int(Node(a.rpc).ok("eth_blockNumber", []), 16)
     except Exception as e:  # noqa: BLE001 — ревью t233, п. 8: узел недоступен — сводка с причиной и zip, код 1
         finish(work, None, [], f"узел {a.rpc} не ответил на eth_blockNumber: {type(e).__name__}: {str(e)[:300]}")
     say(f"Узел отвечает, голова {head}. Журналы: {logs}")
     want = lambda n: (not a.only or n in a.only) and n not in a.skip  # noqa: E731
-    ek, ek_why = a.ekubo_from_block, None
-    if ek is None and want("ekubo_more"):
-        ek, ek_why = ekubo_block(a.rpc, head)
     results = []
-    for name, script, argv in record_steps.steps(a.rpc, a.wallet, ek):
+    for name, script, argv in record_steps.steps(a.rpc, a.wallet, a.ekubo_from_block):
         if not want(name):
-            continue
-        if argv is None:
-            results.append({"name": name, "ok": False, "code": None, "seconds": 0, "dirs": [], "log": None,
-                            "why": f"не запущен: блок ядра Ekubo не найден ({ek_why}) — задайте --ekubo-from-block"})
-            say(f"[--] {name}: {results[-1]['why']}")
             continue
         say(f"[..] {name} …")
         r = run(name, script, argv, logs, a.timeout)

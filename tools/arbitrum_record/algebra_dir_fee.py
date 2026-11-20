@@ -12,7 +12,9 @@ tests/data/arbitrum_algebra_dir_fee_<дата UTC>/:
                   виртуальный квотер бота — код contracts/out/VirtualQuoter.bin-runtime подменой по адресу)
                   на суммы --bps (доли баланса входа пула, в 1/10000) в обе стороны; каждый квотер — дважды:
                   на блоке B как есть и с blockOverrides.time = время последней точки оракула пула (тогда обмен
-                  не пересчитывает комиссии — AlgebraPool.sol:777-795);
+                  не пересчитывает комиссии — AlgebraPool.sol:777-795); решение 462: вариант квотера, селектора
+                  которого нет в eth_getCode --quoter, не вызывается ({"skipped": …}); factory.json → quoter —
+                  длина кода и наличие обоих селекторов (Camelot 0x0Fc7…a76E — Quoter v1, без кортежного варианта);
   logs.json     — eth_getLogs пулов за [B − --log-blocks, B] (все события: Swap/Mint/Burn/Fee);
   geckoterminal_pools.json — ответ GeckoTerminal, если пулы взяты оттуда (--gecko-dex);
   README.md     — что записано, блок, SHA-256 файлов.
@@ -94,6 +96,11 @@ def main():
     a.add_argument("--out", required=True, help="папка tests/data")
     o = a.parse_args()
     n = Node(o.rpc)
+    # Решение 460: GeckoTerminal (с паузой темпа — gt.py) — ДО выбора блока B: узел хранит только недавнее состояние.
+    gecko = None
+    if o.gecko_dex:
+        u = f"https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes/{o.gecko_dex}/pools?page=1"
+        gecko = {"url": u, "response": requests.get(u, timeout=60, headers={"Accept": "application/json"}).json()}
     head = n.ok("eth_getBlockByNumber", ["latest", False])
     tag = head["number"]
     utc = datetime.timezone.utc
@@ -117,11 +124,9 @@ def main():
         return j
 
     pools = [p.lower() for p in o.pool]
-    if o.gecko_dex:
-        u = f"https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes/{o.gecko_dex}/pools?page=1"
-        g = requests.get(u, timeout=60, headers={"Accept": "application/json"}).json()
-        save("geckoterminal_pools.json", {"url": u, "response": g})
-        pools += [d["attributes"]["address"].lower() for d in g["data"][:o.gecko_pools]]
+    if gecko is not None:
+        save("geckoterminal_pools.json", gecko)
+        pools += [d["attributes"]["address"].lower() for d in gecko["response"]["data"][:o.gecko_pools]]
     if not pools:
         sys.exit("нет пулов: --pool или --gecko-dex/--gecko-pools")
     save("meta.json", {"chainId": n.ok("eth_chainId", []), "client": n.call("web3_clientVersion", []),
@@ -136,6 +141,16 @@ def main():
     vq_addr = "0x" + n.sha3("0x" + b"arb.virtual_quoter".hex())[-40:]
     vq_code = "0x" + open(o.vq_runtime).read().strip().replace("0x", "")
     fac = {"factory": o.factory, "poolDeployer": deployer, "init_hashes": o.init_hash, "pools": {}}
+    # Решение 462: какой вариант quoteExactInputSingle есть в коде квотера (PUSH4 селектора в eth_getCode). Прогон 20.11:
+    # 0x0Fc7…a76E — Sourcify 42161 contracts/lens/Quoter.sol:Quoter, в ABI только (address,address,uint256,uint160);
+    # вызов с кортежем (QuoterV2) откатывался «0x» во всех 60 вызовах (v1 — 60 из 60 ответов) — функции нет. Вариант без функции не вызывается.
+    q_has = {}
+    if o.quoter:
+        qcode = n.ok("eth_getCode", [o.quoter, tag])
+        q_has = {v: ("63" + s[k][2:]) in qcode[2:] for k, v in (
+            ("quoteExactInputSingle(address,address,uint256,uint160)", "quoter_v1"),
+            ("quoteExactInputSingle((address,address,uint256,uint160))", "quoter_v2"))}
+        fac["quoter"] = {"address": o.quoter, "code_len": len(qcode) // 2 - 1, "has_selector": q_has}
     for p in pools:
         rec = {"pool": p}
         r = lambda sig, args="": must(eth_call(p, s[sig] + args))  # noqa: E731
@@ -178,10 +193,10 @@ def main():
                                                    + word(int(zfo)) + word(amt), vq)}
                     if o.quoter:
                         args = word(tin) + word(tout) + word(amt) + word(0)
-                        q[name]["quoter_v1"] = eth_call(
-                            o.quoter, s["quoteExactInputSingle(address,address,uint256,uint160)"] + args, over)
-                        q[name]["quoter_v2"] = eth_call(
-                            o.quoter, s["quoteExactInputSingle((address,address,uint256,uint160))"] + args, over)
+                        for v, sig in (("quoter_v1", "quoteExactInputSingle(address,address,uint256,uint160)"),
+                                       ("quoter_v2", "quoteExactInputSingle((address,address,uint256,uint160))")):
+                            q[name][v] = (eth_call(o.quoter, s[sig] + args, over) if q_has.get(v) else
+                                          {"skipped": f"селектора {s[sig]} нет в коде квотера {o.quoter}"})
                 rec["quotes"].append(q)
         rec["last_timepoint_ts"] = last_ts
         save(f"pool_{p}.json", rec)

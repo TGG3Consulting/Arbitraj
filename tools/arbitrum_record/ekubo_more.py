@@ -2,7 +2,7 @@
 # Файл: tools/arbitrum_record/ekubo_more.py
 # Что делает: дополнительная запись своего узла Arbitrum для Ekubo (решение 454) — только чтение (eth_call, eth_getLogs,
 #   eth_getBlockByNumber), без ключей и подписей. Пишет в ту же папку tests/data/arbitrum_ekubo_<дата>/ (или --out):
-#   more_meta.json     — блок B, адреса, аргументы;
+#   more_meta.json     — блок B, адреса, аргументы, from_block_source — откуда нижняя граница поиска;
 #   pool_initialized.json — все PoolInitialized ядра за блоки [--from-block, B] (как есть) — история ключей без
 #                        PoolKeyIndex; сводка: сколько с нативным ETH, по расширениям, сколько нет в PoolKeyIndex;
 #   native_pools.json  — пулы с token0 = 0 (до --max-native): ключ из события, состояние, битмап, тики, MEVCapture,
@@ -21,10 +21,16 @@
 #   keccak256("PoolInitialized(bytes32,(address,address,bytes32),int32,uint96)") = 0x5e4688b3…154d (посчитано
 #   pycryptodome при написании; аргумент --topic; сверка с SIGNATURE_HASH — тест tests/arbitrum_ekubo_more_live.rs).
 #
-# Запуск: python3 tools/arbitrum_record/ekubo_more.py --rpc http://127.0.0.1:8547 --from-block <блок ядра>
+# Решение 460: блок развёртывания ядра — по умолчанию из официальных broadcast-файлов Ekubo (core_block;
+#   contracts/evmtest/vendor/ekubo/broadcast/DeployAll.s.sol/42161 — квитанция CREATE2 Core: блок 416469411),
+#   --from-block — только переопределение. Узел с короткой историей состояния (Nitro, path): сначала поиск
+#   PoolInitialized (таймаут — окно пополам), потом свежий блок B и всё состояние на нём (recnode.fresh).
+#
+# Запуск: python3 tools/arbitrum_record/ekubo_more.py --rpc http://127.0.0.1:8547 [--from-block <блок ядра>]
 
 import argparse
 import datetime
+import glob
 import hashlib
 import json
 import os
@@ -32,6 +38,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ekubo as base  # noqa: E402 — общие функции записи Ekubo (решение 447)
+import recnode  # noqa: E402 — решение 460: деление окна логов, свежий блок состояния
 
 TWAMM = "0xd4f1060cb9c1a13e1d2d20379b8aa2cf7541ed9b,0xd47f1b1edcfeabb08f6ebd8fc337c27e636c75ba"
 # TWAMMStorageLayout.sol L22, L24.
@@ -68,13 +75,46 @@ def words_until(last, end):
             out.append(t >> 16)
 
 
-def logs_range(rpc, flt, frm, to, chunk):
+def logs_range(rpc, flt, frm, to, chunk, min_chunk=1000):
+    """Логи [frm, to] частями по chunk блоков; таймаут узла — часть пополам (решение 460, recnode.logs_split).
+    Ошибки: ошибки узла (кроме таймаута) — RuntimeError."""
     out = []
     while frm <= to:
         end = min(to, frm + chunk - 1)
-        out += rpc.call("eth_getLogs", [dict(flt, fromBlock=hex(frm), toBlock=hex(end))])
+        out += recnode.logs_split(lambda a, b: rpc.call("eth_getLogs", [dict(flt, fromBlock=hex(a), toBlock=hex(b))]),
+                                  frm, end, min_chunk, lambda t: print(t, file=sys.stderr, flush=True))
         frm = end + 1
     return out
+
+
+def core_block(path, core):
+    """Решение 460: блок развёртывания ядра Ekubo — квитанция транзакции CREATE2 контракта Core с адресом core в
+    официальных broadcast-файлах Ekubo (contracts/evmtest/vendor/ekubo/broadcast/DeployAll.s.sol/42161/run-*.json:
+    transactions[].contractName / contractAddress / hash → receipts[].transactionHash / blockNumber). Возвращает:
+    (блок, файл) или (None, причина). Ошибок-исключений нет."""
+    found, why = [], "нет файлов " + path
+    for f in sorted(glob.glob(path)):
+        try:
+            with open(f, encoding="utf-8") as fh:
+                j = json.load(fh)
+        except (OSError, ValueError) as e:
+            why = f"{f}: {e}"
+            continue
+        tx = {t.get("hash"): t for t in j.get("transactions", [])
+              if t.get("contractName") == "Core" and str(t.get("contractAddress", "")).lower() == core.lower()}
+        for r in j.get("receipts", []):
+            if r.get("transactionHash") in tx and r.get("status") in ("0x1", 1, "1"):
+                n = r["blockNumber"]
+                found.append((int(n, 16) if isinstance(n, str) else int(n),
+                              "квитанция развёртывания Core в " + os.path.relpath(f, ROOT)))
+    if not found:
+        return None, f"квитанции развёртывания Core {core} в broadcast нет ({why})"
+    return min(found)
+
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BROADCAST = os.path.join(ROOT, "contracts", "evmtest", "vendor", "ekubo", "broadcast", "DeployAll.s.sol", "42161",
+                         "run-*.json")
 
 
 def record_key(rpc, pid, t0, t1, config, args, tag):
@@ -141,39 +181,15 @@ def record_twamm(rpc, rec, twamm, ts, args, tag):
                                                              for t, x in zip(times, infos)]}
 
 
-def main():
-    ap = argparse.ArgumentParser(description="Запись фактов узла Arbitrum для Ekubo (решение 454)")
-    ap.add_argument("--rpc", required=True)
-    ap.add_argument("--from-block", type=int, required=True, help="с какого блока искать PoolInitialized ядра")
-    ap.add_argument("--chunk", type=int, default=50000, help="блоков в одном eth_getLogs")
-    ap.add_argument("--topic", default="0x5e4688b340694b7c7fd30047fd082117dc46e32acfbf81a44bb1fac0ae65154d",
-                    help="topic0 PoolInitialized (сверяет тест Rust по SIGNATURE_HASH)")
-    ap.add_argument("--twamm", default=TWAMM)
-    ap.add_argument("--horizon", type=int, default=86400, help="секунд времён TWAMM после блока B")
-    ap.add_argument("--max-native", type=int, default=20)
-    ap.add_argument("--max-twamm", type=int, default=20)
-    ap.add_argument("--load-blocks", type=int, default=2000)
-    ap.add_argument("--words", type=int, default=4)
-    ap.add_argument("--sizes", default="0.001,0.01,0.1,1,10,100,1000")
-    ap.add_argument("--core", default=base.CORE)
-    ap.add_argument("--key-index", default=base.KEY_INDEX)
-    ap.add_argument("--mev", default=base.MEV_CAPTURE)
-    ap.add_argument("--router", default=base.ROUTER)
-    ap.add_argument("--out", default=None)
-    args = ap.parse_args()
-
-    rpc = base.Rpc(args.rpc)
-    head = rpc.call("eth_getBlockByNumber", ["latest", False])
+def state_phase(rpc, args, head, b0, inits, flt, twamms, src):
+    """Фаза состояния (решение 460) на свежем блоке head: хвост PoolInitialized (b0, B], ключи, пулы с нативным ETH и
+    TWAMM, замер нагрузки до B. Возвращает словарь файлов записи. Ошибки: StaleState (recnode.fresh повторит на новом
+    блоке), RuntimeError — ошибка узла."""
     b, tag, ts = int(head["number"], 16), head["number"], int(head["timestamp"], 16)
-    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    # Решение 459 (ревью t233, п. 7): та же дата, что у ekubo.py этого запуска record_all.py (ARB_RECORD_DATE).
-    day = os.environ.get("ARB_RECORD_DATE") or datetime.date.today().isoformat()
-    out = args.out or os.path.join(root, "tests", "data", "arbitrum_ekubo_" + day)
-    os.makedirs(out, exist_ok=True)
-    twamms = [a.strip().lower() for a in args.twamm.split(",") if a.strip()]
-    files = {"more_meta.json": {"block": b, "block_hex": tag, "timestamp": ts, "args": vars(args)}}
-
-    inits = logs_range(rpc, {"address": args.core, "topics": [args.topic]}, args.from_block, b, args.chunk)
+    print(f"блок состояния B {b}", file=sys.stderr, flush=True)
+    inits = inits + (logs_range(rpc, flt, b0 + 1, b, args.chunk) if b > b0 else [])
+    files = {"more_meta.json": {"block": b, "block_hex": tag, "timestamp": ts, "from_block_source": src,
+                                "args": vars(args)}}
     summary = {"total": len(inits), "native": 0, "extensions": {}, "not_in_key_index": 0}
     natives, tw = [], []
     for lg in inits:
@@ -205,6 +221,58 @@ def main():
     n = b - frm + 1
     files["core_load.json"] = {"from": frm, "to": b, "blocks": n, "logs": len(logs), "bytes": size,
                                "logs_per_block": len(logs) / n, "bytes_per_block": size / n}
+    return files
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Запись фактов узла Arbitrum для Ekubo (решение 454)")
+    ap.add_argument("--rpc", required=True)
+    ap.add_argument("--from-block", type=int, default=None,
+                    help="с какого блока искать PoolInitialized ядра (по умолчанию — блок развёртывания Core из "
+                         "broadcast-файлов Ekubo; аргумент — только переопределение)")
+    ap.add_argument("--chunk", type=int, default=50000, help="блоков в одном eth_getLogs")
+    ap.add_argument("--topic", default="0x5e4688b340694b7c7fd30047fd082117dc46e32acfbf81a44bb1fac0ae65154d",
+                    help="topic0 PoolInitialized (сверяет тест Rust по SIGNATURE_HASH)")
+    ap.add_argument("--twamm", default=TWAMM)
+    ap.add_argument("--horizon", type=int, default=86400, help="секунд времён TWAMM после блока B")
+    ap.add_argument("--max-native", type=int, default=20)
+    ap.add_argument("--max-twamm", type=int, default=20)
+    ap.add_argument("--load-blocks", type=int, default=2000)
+    ap.add_argument("--words", type=int, default=4)
+    ap.add_argument("--sizes", default="0.001,0.01,0.1,1,10,100,1000")
+    ap.add_argument("--core", default=base.CORE)
+    ap.add_argument("--key-index", default=base.KEY_INDEX)
+    ap.add_argument("--mev", default=base.MEV_CAPTURE)
+    ap.add_argument("--router", default=base.ROUTER)
+    ap.add_argument("--out", default=None)
+    args = ap.parse_args()
+
+    rpc = base.Rpc(args.rpc)
+    say = lambda t: print(t, file=sys.stderr, flush=True)  # noqa: E731
+    src = "задан --from-block"
+    if args.from_block is None:
+        # Решение 460: блок ядра — из официальных broadcast-файлов Ekubo (узел без истории состояния не может найти его
+        # поиском по eth_getCode старых блоков — прогон 20.11.2026: «historical state … is not available»).
+        args.from_block, src = core_block(BROADCAST, args.core)
+        if args.from_block is None:
+            sys.exit(f"блок ядра Ekubo не найден: {src} — задайте --from-block")
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    # Решение 459 (ревью t233, п. 7): та же дата, что у ekubo.py этого запуска record_all.py (ARB_RECORD_DATE).
+    day = os.environ.get("ARB_RECORD_DATE") or datetime.date.today().isoformat()
+    out = args.out or os.path.join(root, "tests", "data", "arbitrum_ekubo_" + day)
+    os.makedirs(out, exist_ok=True)
+    twamms = [a.strip().lower() for a in args.twamm.split(",") if a.strip()]
+
+    # Решение 460: сначала долгий поиск PoolInitialized до головы b0 (без чтения состояния), потом свежий блок B: хвост
+    # логов (b0, B] и всё состояние на B; состояние удалено узлом — заново на новом блоке (recnode.fresh).
+    b0 = int(rpc.call("eth_blockNumber", []), 16)
+    flt = {"address": args.core, "topics": [args.topic]}
+    say(f"PoolInitialized ядра: блоки {args.from_block}..{b0} ({src})")
+    inits = logs_range(rpc, flt, args.from_block, b0, args.chunk)
+    files = recnode.fresh(lambda: rpc.call("eth_getBlockByNumber", ["latest", False]),
+                          lambda head: state_phase(rpc, args, head, b0, inits, flt, twamms, src), say=say)
+    b, tag, ts = files["more_meta.json"]["block"], files["more_meta.json"]["block_hex"], files["more_meta.json"]["timestamp"]
+    summary = files["pool_initialized.json"]["summary"]
 
     hashes = []
     for name, body in files.items():
@@ -215,7 +283,10 @@ def main():
     with open(os.path.join(out, "README_454.md"), "w", encoding="utf-8") as f:
         f.write("# Ekubo (Arbitrum One) — дополнительная запись (решение 454)\n\n")
         f.write("tools/arbitrum_record/ekubo_more.py: только чтение. Блок B = %d (%s), время %d.\n" % (b, tag, ts))
-        f.write("PoolInitialized: %s.\n\n## SHA-256\n\n" % json.dumps(summary, ensure_ascii=False))
+        f.write("PoolInitialized с блока %d (%s) до B: %s.\n" % (args.from_block, files["more_meta.json"][
+            "from_block_source"], json.dumps(summary, ensure_ascii=False)))
+        f.write("Решение 460: поиск PoolInitialized — до чтения состояния; блок B взят после поиска (узел хранит только "
+                "недавнее состояние), хвост логов до B дочитан.\n\n## SHA-256\n\n")
         for h, nm in hashes:
             f.write("%s  %s\n" % (h, nm))
     print("записано в", out, file=sys.stderr)

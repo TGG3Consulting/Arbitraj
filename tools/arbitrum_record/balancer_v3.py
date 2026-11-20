@@ -32,6 +32,8 @@
 #     --list dex.bv3_stable_surge_hooks=0x0Fa0f9990D7969a7aE6f9961d663E4A201Ed6417,0x7c1b7A97BfAcD39975dE53e989A16c7BC4C78275 \
 #     --list dex.bv3_mev_capture_hooks=0x5B42eC6D40f7B7965BE5308c70e2603c0281C1E9 --gt-pages 5
 #   (пулы — с GeckoTerminal dex balancer-v3-arbitrum, страниц --gt-pages; или явно --pools a,b,c)
+# Решение 460: прогон 20.11.2026 — HTTP 429 GeckoTerminal на ?page=4 (страницы подряд без паузы). Теперь темп и повтор
+#   при 429 — gt.py (через stdhttp.get); страницы — до выбора блока B, всё состояние — на свежем B (recnode.fresh).
 
 import argparse
 import datetime
@@ -40,6 +42,7 @@ import json
 import os
 import sys
 
+import recnode  # решение 460: свежий блок состояния
 import stdhttp as requests  # решение 459: стандартная библиотека вместо пакета requests
 
 # --- keccak256 (Keccak-f[1600], padding 0x01 — как в Ethereum; нужен только для селекторов функций) ---
@@ -162,47 +165,20 @@ HOOK_POOL = ["getMaxSurgeFeePercentage(address)", "getSurgeThresholdPercentage(a
 HOOK_GLOBAL = ["isMevTaxEnabled()", "getMaxMevSwapFeePercentage()"]
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--rpc", required=True, help="HTTP JSON-RPC своего узла Arbitrum")
-    ap.add_argument("--vault", required=True)
-    ap.add_argument("--router", required=True)
-    ap.add_argument("--list", action="append", default=[],
-                    help="настройка=адрес,адрес — списки dex.bv3_*_factories и dex.bv3_*_hooks (как в docs/FIRST_RUN.md)")
-    ap.add_argument("--arb-sys", default="0x0000000000000000000000000000000000000064", help="dex.arb_sys")
-    ap.add_argument("--arb-owner-public", default="0x000000000000000000000000000000000000006b",
-                    help="dex.arb_owner_public")
-    ap.add_argument("--pools", default="", help="адреса пулов через запятую")
-    ap.add_argument("--gt-pages", type=int, default=0, help="сколько страниц пулов взять с GeckoTerminal")
-    ap.add_argument("--block", default="", help="номер блока (по умолчанию — текущая голова)")
-    ap.add_argument("--out", default="", help="папка записи (по умолчанию tests/data/arbitrum_balancer_v3_<дата>)")
-    a = ap.parse_args()
-
-    node = Node(a.rpc)
-    chain = node.rpc("eth_chainId", [])["result"]
-    head = int(a.block) if a.block else int(node.rpc("eth_blockNumber", [])["result"], 16)
+def state_phase(node, a, head, chain, lists, factories, pools, gt):
+    """Решение 460: всё чтение состояния на одном блоке head (свежем, взятом после GeckoTerminal): meta.json, pool_*.json,
+    geckoterminal_pools.json. Возвращает: (head, блок узла, дата, папка). Ошибки: StaleState (recnode.fresh повторит на
+    новом блоке), HTTPError / OSError — сеть."""
     tag = hex(head)
+    print("блок состояния B", head, file=sys.stderr, flush=True)
     blk = node.rpc("eth_getBlockByNumber", [tag, False])["result"]
-    date = datetime.datetime.utcfromtimestamp(int(blk["timestamp"], 16)).strftime("%Y-%m-%d")
+    date = datetime.datetime.fromtimestamp(int(blk["timestamp"], 16), datetime.timezone.utc).strftime("%Y-%m-%d")
     out = a.out or os.path.join("tests", "data", f"arbitrum_balancer_v3_{date}")
     os.makedirs(out, exist_ok=True)
 
-    lists = {}
-    for item in a.list:
-        name, _, addrs = item.partition("=")
-        lists[name.strip()] = [x.strip() for x in addrs.split(",") if x.strip()]
-    factories = [f for n, l in lists.items() if n.endswith("_factories") for f in l]
-
-    pools = [x.strip() for x in a.pools.split(",") if x.strip()]
-    if a.gt_pages:
-        gt = gt_pools(a.gt_pages)
+    if gt is not None:
         with open(os.path.join(out, "geckoterminal_pools.json"), "w") as fh:
             json.dump(gt, fh, indent=1)
-        for page in gt:
-            for p in page.get("data", []):
-                addr = p.get("attributes", {}).get("address")
-                if addr and addr not in pools:
-                    pools.append(addr)
 
     meta = {"chain_id": chain, "block": head, "block_hash": blk["hash"], "timestamp": int(blk["timestamp"], 16),
             "vault": a.vault, "router": a.router, "lists": lists, "arb_sys": a.arb_sys,
@@ -261,6 +237,48 @@ def main():
             json.dump(rec, fh, indent=1)
         print(pool, "вызовов:", len(rec["calls"]), "квот:", len(rec["quotes"]) + len(rec["quotes_out"]), file=sys.stderr)
 
+    return head, blk, date, out
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--rpc", required=True, help="HTTP JSON-RPC своего узла Arbitrum")
+    ap.add_argument("--vault", required=True)
+    ap.add_argument("--router", required=True)
+    ap.add_argument("--list", action="append", default=[],
+                    help="настройка=адрес,адрес — списки dex.bv3_*_factories и dex.bv3_*_hooks (как в docs/FIRST_RUN.md)")
+    ap.add_argument("--arb-sys", default="0x0000000000000000000000000000000000000064", help="dex.arb_sys")
+    ap.add_argument("--arb-owner-public", default="0x000000000000000000000000000000000000006b",
+                    help="dex.arb_owner_public")
+    ap.add_argument("--pools", default="", help="адреса пулов через запятую")
+    ap.add_argument("--gt-pages", type=int, default=0, help="сколько страниц пулов взять с GeckoTerminal")
+    ap.add_argument("--block", default="", help="номер блока (по умолчанию — текущая голова)")
+    ap.add_argument("--out", default="", help="папка записи (по умолчанию tests/data/arbitrum_balancer_v3_<дата>)")
+    a = ap.parse_args()
+
+    node = Node(a.rpc)
+    chain = node.rpc("eth_chainId", [])["result"]
+    lists = {}
+    for item in a.list:
+        name, _, addrs = item.partition("=")
+        lists[name.strip()] = [x.strip() for x in addrs.split(",") if x.strip()]
+    factories = [f for n, l in lists.items() if n.endswith("_factories") for f in l]
+
+    # Решение 460: GeckoTerminal (с паузами темпа и повтором при 429 — gt.py) — ДО выбора блока B: узел хранит только
+    # недавнее состояние, а страницы с паузами идут минуты.
+    pools = [x.strip() for x in a.pools.split(",") if x.strip()]
+    gt = gt_pools(a.gt_pages) if a.gt_pages else None
+    for page in gt or []:
+        for p in page.get("data", []):
+            addr = p.get("attributes", {}).get("address")
+            if addr and addr not in pools:
+                pools.append(addr)
+
+    def head():
+        return int(a.block) if a.block else int(node.rpc("eth_blockNumber", [])["result"], 16)
+
+    head, blk, date, out = recnode.fresh(head, lambda h: state_phase(node, a, h, chain, lists, factories, pools, gt))
+
     lines = [f"# Balancer V3 на Arbitrum — запись своего узла (решения 441, 452)", "",
              f"Блок {head}, хеш {blk['hash']}, время {blk['timestamp']} ({date}), chainId {chain}.",
              "Только eth_call (чтение), без from; ключей и подписей нет. Скрипт — tools/arbitrum_record/balancer_v3.py.",
@@ -269,7 +287,9 @@ def main():
              "Файлы: meta.json — блок, адреса, списки, пулы; pool_<адрес>.json — calls (все вызовы, которые бот может "
              "сделать к пулу: хранилище, фабрики, виды пулов, крючок, прекомпайлы; to, data, result или error), quotes "
              "(Router V3 querySwapSingleTokenExactIn: i, j, сумма, ответ), quotes_out (querySwapSingleTokenExactOut: "
-             "i, j, точный выход, ответ — вход); geckoterminal_pools.json — ответ GeckoTerminal (если --gt-pages).", "",
+             "i, j, точный выход, ответ — вход); geckoterminal_pools.json — ответ GeckoTerminal (если --gt-pages).",
+             "Решение 460: страницы GeckoTerminal — до выбора блока (узел хранит только недавнее состояние), блок взят "
+             "после них.", "",
              "## SHA-256 файлов"]
     for name in sorted(os.listdir(out)):
         if name == "README.md":

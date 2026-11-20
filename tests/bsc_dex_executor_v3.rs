@@ -175,13 +175,15 @@ fn recorded_infinity_keys_encode_as_manager_answers() {
 
 #[test]
 fn versions_and_steps() {
-    let (v4, v3, v2, v1) = (
+    let (v5, v4, v3, v2, v1) = (
         code::runtime().unwrap(),
+        code::runtime_v4().unwrap(),
         code::runtime_v3().unwrap(),
         code::runtime_v2().unwrap(),
         code::runtime_v1().unwrap(),
     );
-    // Решение 457: текущая сборка contracts/out/ — v4.
+    // Решение 488: текущая сборка contracts/out/ — v5; v4 — замороженная копия out/v4/.
+    assert_eq!(code::version_of(&v5).unwrap(), Some(Version::V5));
     assert_eq!(code::version_of(&v4).unwrap(), Some(Version::V4));
     assert_eq!(code::version_of(&v3).unwrap(), Some(Version::V3));
     assert_eq!(code::version_of(&v2).unwrap(), Some(Version::V2));

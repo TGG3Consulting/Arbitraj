@@ -51,17 +51,21 @@ fn abi(path: &str) -> JsonAbi {
 
 #[test]
 fn version_by_code_in_chain() {
-    // Решение 395 (t181): v2 — замороженная копия contracts/out/v2/; решение 457: текущая сборка contracts/out/ — v4,
-    // v3 — замороженная копия contracts/out/v3/.
-    let v4 = code::runtime().expect("код v4 сверен");
+    // Решение 395 (t181): v2 — замороженная копия contracts/out/v2/; решение 488: текущая сборка contracts/out/ — v5,
+    // v4 / v3 — замороженные копии contracts/out/v4/ и v3/.
+    let v5 = code::runtime().expect("код v5 сверен");
+    let v4 = code::runtime_v4().expect("код v4 сверен по out/v4/ArbExecutor.sha256");
     let v3 = code::runtime_v3().expect("код v3 сверен по out/v3/ArbExecutor.sha256");
     let v2 = code::runtime_v2().expect("код v2 сверен по out/v2/ArbExecutor.sha256");
     let v1 = code::runtime_v1().expect("код v1 сверен по out/v1/ArbExecutor.sha256");
     assert_ne!(v1, v2);
     assert_ne!(v2, v3);
     assert_ne!(v3, v4);
+    assert_ne!(v4, v5);
+    // Свежеразвёрнутый v5 опознаётся как V5, уже развёрнутый v4 в сети — как V4 (по хешу v4).
+    assert_eq!(code::version_of(&v5).unwrap(), Some(Version::V5));
+    assert_eq!(code::current_version().unwrap(), Version::V5);
     assert_eq!(code::version_of(&v4).unwrap(), Some(Version::V4));
-    assert_eq!(code::current_version().unwrap(), Version::V4);
     assert_eq!(code::version_of(&v3).unwrap(), Some(Version::V3));
     assert_eq!(code::version_of(&v2).unwrap(), Some(Version::V2));
     assert_eq!(code::version_of(&v1).unwrap(), Some(Version::V1));

@@ -49,6 +49,7 @@ pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayRes
         decimals1: meta.dec1,
         fee,
         gate,
+        fee1: None,
     })
 }
 

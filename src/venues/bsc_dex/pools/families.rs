@@ -186,6 +186,14 @@ pub enum Proto {
     /// getSwapOut (math/lb_swap.rs, lb_fee.rs); перечитывание каждым блоком (время блока). Квотер сверки — сам пул
     /// getSwapOut. Исполнение — шаг LB исполнителя v2 (вход переводом в пул, swap(swapForY, to)). Вид ядра — LbBin.
     LbV21,
+    /// Camelot V2 (решение 443, T433-F4; camelot_v2, DEX camelot сети Arbitrum): пара CamelotPair — резервы uint112,
+    /// НАПРАВЛЕННАЯ комиссия (token0FeePercent / token1FeePercent над 100000, меняется событием FeePercentUpdated) и
+    /// флаг stableSwap (volatile — x·y=k, stable — x³y+xy³; меняется событием SetStableSwap). Фабрика getPair /
+    /// PairCreated, поля пары factory/token0/token1, Sync / Mint, обмен swap(out0, out1, to, data) — как у V2 (проверка
+    /// и поиск — путём V2). Состояние — PoolState::Solidly с fee1 (load_camelot.rs), события — events_camelot.rs,
+    /// математика — math/camelot_v2.rs (арифметика Solidity 0.5), квотер — сама пара getAmountOut(uint256, address)
+    /// (селектор тот же, что у Solidly). Исполнение — шаг SOLIDLY исполнителя. Вид ядра — Solidly.
+    CamelotV2,
 }
 
 impl Proto {
@@ -357,6 +365,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "balancer_v2" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
         // Liquidity Book V2.1 (решение 290): в графе и сигналах (порт getSwapOut); исполнение — шаг LB (только v2).
         "lb_v21" => (PoolKind::LbBin, Proto::LbV21, true, false, false),
+        // Camelot V2 (решение 443): в графе и сигналах (своя математика пары); исполнение — шаг SOLIDLY исполнителя.
+        "camelot_v2" => (PoolKind::Solidly, Proto::CamelotV2, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
         // Router их не исполняет (tradable = false); исполнение — шагом контракта-исполнителя: STABLE_U256 у pancake / lista
         // (exchange с индексами uint256), SADDLE у saddle (swap uint8 + deadline) — exec_kind.rs (решение 122 X, стейблсвапы).
@@ -596,6 +606,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Liquidity Book V2.1 (решение 290): фабрика (getFactory пула и реестр getLBPairInformation). Квотер сверки — сам
         // пул getSwapOut (адрес не нужен).
         Proto::LbV21 => list.push("dex.factory"),
+        // Camelot V2 (решение 443): фабрика (factory() пары, реестр getPair, событие PairCreated — как V2). Квотер сверки —
+        // сама пара getAmountOut (адрес не нужен).
+        Proto::CamelotV2 => list.push("dex.factory"),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

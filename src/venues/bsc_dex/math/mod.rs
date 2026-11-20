@@ -11,6 +11,7 @@ pub mod balancer_math;
 pub mod balancer_stable;
 pub mod bin_price;
 pub mod bin_swap;
+pub mod camelot_v2;
 pub mod curve_math;
 pub mod dmm;
 pub mod dodo_math;

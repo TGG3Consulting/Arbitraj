@@ -212,6 +212,7 @@ fn pool_record_reads_both_formats() {
         decimals1: u(&m["dec1"]),
         fee: fee_of("veplus", d, p),
         gate: SolidlyGate::default(),
+        fee1: None,
     };
     let mut v = serde_json::to_value(&state).unwrap();
     let fee = v["Solidly"]["fee"].clone();

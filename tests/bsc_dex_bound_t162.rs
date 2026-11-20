@@ -270,6 +270,7 @@ async fn solidly_volatile_rate_covers_get_amount_out() {
                     },
                 },
                 gate: Default::default(),
+                fee1: None,
             };
             for g in p["getAmountOut"].as_array().unwrap() {
                 let tin: Address = g[1].as_str().unwrap().parse().unwrap();

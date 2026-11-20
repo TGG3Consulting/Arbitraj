@@ -36,6 +36,7 @@ pub mod breaks;
 pub mod breaks_bins;
 pub mod breaks_hook;
 pub mod breaks_pool;
+pub mod camelot_quote;
 pub mod classic_direct;
 pub mod costs;
 pub mod cpu;

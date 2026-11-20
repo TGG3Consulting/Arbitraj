@@ -74,7 +74,8 @@ pub fn plan(
         let mut qs: Vec<Q> = match f.proto {
             // Nomiswap Stable (решение 284): реестр фабрики getPair(a, b) — как у V2.
             // SmarDex (решение 288): getPair(a, b) — как V2 (SmardexFactory.sol L20).
-            Proto::V2 | Proto::NomiStable | Proto::Smardex => vec![Q::V2],
+            // Camelot V2 (решение 443): getPair(a, b) — как V2 (CamelotFactory.sol L19).
+            Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => vec![Q::V2],
             // KyberSwap Classic DMM (решение 287): getPools(a, b) — все пулы пары.
             Proto::KyberDmm => vec![Q::Dmm],
             Proto::PancakeV3 | Proto::UniswapV3 => Vec::new(),

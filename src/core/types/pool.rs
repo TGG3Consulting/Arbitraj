@@ -210,6 +210,11 @@ pub enum PoolState {
         /// Ограничения обмена пары (пауза фабрики, предел цены газа); по умолчанию — нет.
         #[serde(default)]
         gate: SolidlyGate,
+        /// Решение 443: направленная комиссия (пара Camelot V2 — token0FeePercent / token1FeePercent): Some — комиссия
+        /// при входе token1, а `fee` — при входе token0; None — одна комиссия `fee` на оба направления (Solidly). Старые
+        /// записи без поля читаются как None; None не пишется (запись Solidly побайтно прежняя).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fee1: Option<SolidlyFee>,
     },
     /// StableSwap (решение 122 F): балансы всех монет пула, множители точности, A и комиссия — всё, что нужно
     /// инварианту. Боксируется (много U256), как Pmm. Поля — в StableData.

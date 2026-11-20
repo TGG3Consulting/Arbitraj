@@ -94,6 +94,7 @@ pub fn tokens(proto: Proto, answers: &[Result<Bytes, String>]) -> Result<Vec<Add
                 .map_err(|e| format!("ответ getTokens() не по ABI: {e}")),
             Some(Err(r)) => Err(format!("getTokens() откатился: {r}")),
             None => Err("нет ответа getTokens()".into()),
+        },
         Proto::BasinWell => match answers.first() {
             Some(Ok(b)) => IBasinWell::tokensCall::abi_decode_returns(b)
                 .map_err(|_| "tokens() скважины не по ABI".to_string()),

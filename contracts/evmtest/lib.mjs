@@ -5,7 +5,7 @@
 //   Vault / CLPoolManager / BinPoolManager PancakeSwap Infinity — solc 0.8.26 из vendor/v4-core, vendor/infinity-core), EVM ethereumjs (хардфорк Cancun — EIP-1153
 //   transient), развёртывание и вызовы, разбор отката и событий.
 // Кто вызывает: contracts/evmtest/run.mjs.
-// От чего зависит: npm @ethereumjs/{evm, common, statemanager, util}, ethers (ABI), solc 0.8.37 / 0.5.16 / 0.6.6 / 0.8.26 —
+// От чего зависит: npm @ethereumjs/{evm, common, statemanager, util}, ethers (ABI), solc 0.8.37 / 0.5.16 / 0.6.6 / 0.8.26 / 0.8.10 —
 //   версии в package.json / package-lock.json; contracts/*.sol, contracts/out/*, vendor/*, fixtures/*.
 // Настройки: нет.
 
@@ -53,6 +53,8 @@ export const solc05 = require('solc-0.5.16');
 export const solc06 = require('solc-0.6.6');
 // Решение 395 (t181): официальные Uniswap v4-core и PancakeSwap infinity-core — pragma 0.8.26 (foundry.toml: via_ir, cancun).
 export const solc0826 = require('solc-0.8.26');
+// Решение 458 (T458-01): официальный LFJ V2.0 (lfj-gg/joe-v2@v2.0.0) — pragma `solidity 0.8.10`.
+export const solc0810 = require('solc-0.8.10');
 
 /// Артефакт из contracts/out/ (или out/v1/): код создания, код в сети, ABI.
 export function artifact(dir) {

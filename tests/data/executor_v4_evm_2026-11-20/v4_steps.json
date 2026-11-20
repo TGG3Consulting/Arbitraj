@@ -138,5 +138,28 @@
         "gas": "114562"
       }
     ]
+  },
+  "lb20": {
+    "note": "EVM ethereumjs Cancun, contracts/out v4, официальный LBPair LFJ v2.0.0 (solc 0.8.10, runs 800) — contracts/evmtest/lb20.mjs",
+    "cases": [
+      {
+        "kind": 24,
+        "pair": "0xe4f18B8b47E53DCe5cF5D2B15a4463F707748c82",
+        "token_in": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "token_out": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "amount_in": "100000000000000000000",
+        "got": "99900000000000000000",
+        "gas": "120348"
+      },
+      {
+        "kind": 24,
+        "pair": "0xe4f18B8b47E53DCe5cF5D2B15a4463F707748c82",
+        "token_in": "0x9c1d531622dbe0cdc7cda6268fcd3bf43c1a0b7e",
+        "token_out": "0x3806fc578c5452986a08380399e0004e236254eb",
+        "amount_in": "100000000000000000000",
+        "got": "99900000000000000000",
+        "gas": "113465"
+      }
+    ]
   }
 }

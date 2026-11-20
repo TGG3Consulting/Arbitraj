@@ -175,10 +175,12 @@
       ekubo.mjs + ekubo_cases.mjs (EkuboProtocol/evm-contracts broadcast 42161: Core / MEVCapture @61d09da, Positions
       @8a99714; ERC-20, нативный вход / выход, MEVCapture forward, защита) — 53. `node run.mjs`: 304 проверки (205 прежних
       + 99), ВСЕ ПРОВЕРКИ ПРОШЛИ. ОСТАЛОСЬ:
-      - T458-01 LB20 (24): официальный LBPair v2.0 — `pragma solidity 0.8.10` (lfj-gg/joe-v2@v2.0.0 src/LBPair.sol L3), solc
-        0.8.10 нет в package-lock evmtest / contracts; артефактов с байткодом в репозитории нет (нет broadcast / deployments).
-        Вопрос Тиграну: разрешить `solc@0.8.10` (npm, как solc-0.8.26) в package.json evmtest — тогда сценарий LB20 тем же
-        путём, что singleton.mjs (исходник v2.0.0 в vendor/, настройки foundry.toml: optimizer_runs 800).
+      - T458-01 **СДЕЛАНО (решение 458; solc 0.8.10 — «да» Тиграна 20.11.2026, коммит 5d8ce4cc)** — LB20 (24):
+        contracts/evmtest/lb20.mjs, официальные LBFactory / LBPair / LBRouter lfj-gg/joe-v2@v2.0.0 (07f10212) + OpenZeppelin
+        @109778c1 (vendor/joe-v2), solc 0.8.10, optimizer runs 800 (foundry.toml тега), развёртывание как
+        script/deploy-core.s.sol, пресет binStep 10 (bips-config.sol); котировка — LBRouter.getSwapOut; обе стороны, через
+        несколько бинов, две доли, чужая пара / пара V2 / шаг LB по паре v2.0 — откат, v3 — «kind»; 17 проверок;
+        `node run.mjs` — 337, все прошли.
       - T458-02 **СДЕЛАНО (решение 458)** — EKUBO с расширением TWAMM: contracts/evmtest/ekubo_twamm.mjs, официальные TWAMM
         (broadcast DeployAll 42161, сборка 61d09da) и Orders (DeployManagers 42161, сборка 8a99714); обмен через пул с
         активным ордером: получено = котировка ядра с исполнением виртуальных ордеров до block.timestamp, на исполнителе

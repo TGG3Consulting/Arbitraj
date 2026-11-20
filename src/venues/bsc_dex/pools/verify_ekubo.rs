@@ -141,9 +141,15 @@ fn decide(
     ctx: &Ctx,
     c: &Candidate,
     p: &Plan,
-    key: Result<Key, Bytes>,
-    state: Bytes,
+    key: Result<Key, Result<Bytes, String>>,
+    state: Result<Bytes, String>,
 ) -> Result<(Found, Key), String> {
+    // Ответ узла: Ok — данные, Err — откат вызова (call::try_chunks, внутренний Result).
+    let key = match key {
+        Ok(k) => Ok(k),
+        Err(r) => Err(r.map_err(|w| format!("PoolKeyIndex.poolKeyById откатился: {w}"))?),
+    };
+    let state = state.map_err(|w| format!("Core.sload откатился: {w}"))?;
     let k = key_of(c, key, ctx.addr("dex.native_wrapped").ok())?;
     let words = sload_words(&state, 1).ok_or("ответ Core.sload не 32 байта")?;
     if words[0].is_zero() {

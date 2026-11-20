@@ -22,6 +22,7 @@ use crate::settings::scope::Scope;
 use super::super::ctx::Ctx;
 use super::super::ctx_place::own_dex;
 use super::exec_kind::{self, ExecKind};
+use super::family_variant::Variant;
 
 /// Протокол вида пула: от него зависит ABI событий и чтение состояния.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -257,6 +258,9 @@ pub struct Family {
     /// Вид шага контракта-исполнителя (решение 122, часть F; pools/exec_kind.rs). None — исполнитель пулы этого вида
     /// не вызывает. Исполнимость через исполнитель — exec_kind::via_executor (нужен ещё exec.executor_address).
     pub executor_kind: Option<ExecKind>,
+    /// Решение 451: вариант исходника внутри протокола (pools/family_variant.rs; по значению dex.kind). Base — у всех
+    /// прежних видов. В Debug выводится только не Base (золотые снимки прежних видов — побайтно прежние).
+    pub variant: Variant,
     /// Ревью 325 (Н1): настройки решения 325 этого DEX в ячейках памяти (event_flags.rs) — путь события пула не
     /// читает хранилище на каждое событие. Не часть значения вида: в Debug не входит; вид один на процесс (&'static,
     /// без Clone) — все пользователи видят одну и ту же живую ячейку.
@@ -267,16 +271,19 @@ impl std::fmt::Debug for Family {
     /// Что делает: тот же вывод, что дал бы #[derive(Debug)] без поля `event` (те же имена и порядок полей).
     /// Ошибок нет (кроме ошибки форматтера).
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Family")
-            .field("id", &self.id)
+        let mut d = f.debug_struct("Family");
+        d.field("id", &self.id)
             .field("kind", &self.kind)
             .field("proto", &self.proto)
             .field("title", &self.title)
             .field("graphable", &self.graphable)
             .field("tradable", &self.tradable)
             .field("fork", &self.fork)
-            .field("executor_kind", &self.executor_kind)
-            .finish()
+            .field("executor_kind", &self.executor_kind);
+        if self.variant != Variant::Base {
+            d.field("variant", &self.variant);
+        }
+        d.finish()
     }
 }
 
@@ -314,7 +321,11 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // executable в quote/graph_route.rs). fork=true оставлен: так пул не попадает в классический прямой путь
         // (quote/mod.rs, фильтр !fork) и не требует Universal Router/Permit2 (required). Чтение состояния/события/
         // квотер — свои (не как Infinity/V4). Вид ядра — Cl, ссылка на пул — отдельный контракт (как V3).
-        "kyber_elastic" => (PoolKind::Cl, Proto::KyberElastic, true, false, true),
+        // Решение 451: kyber_elastic_v1 — тот же вид для развёртываний Elastic v1 (Arbitrum), отличие — правило шага
+        // SwapMath (pools/family_variant.rs Variant::ElasticV1).
+        "kyber_elastic" | "kyber_elastic_v1" => {
+            (PoolKind::Cl, Proto::KyberElastic, true, false, true)
+        }
         // DODO PMM (решения 80, 86b): в графе (своя математика math/swap_dodo), НО tradable=false — исполнения
         // пока нет (роутер DODO — фаза 86c). graphable=true, tradable=false, fork=false (ни UR, ни свой
         // роутер-форк): как v3_fork до появления пути исполнения, но в графе (экзотическая математика берётся).
@@ -406,6 +417,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
 pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
     let (pk, proto, graphable, tradable, fork) = spec(kind)?;
     let executor_kind = exec_kind::of(kind);
+    let variant = super::family_variant::of(kind);
     Some(super::family_intern::intern(
         id,
         |f| {
@@ -414,6 +426,7 @@ pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
                 && f.tradable == tradable
                 && f.fork == fork
                 && f.executor_kind == executor_kind
+                && f.variant == variant
         },
         |id| Family {
             id,
@@ -424,6 +437,7 @@ pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
             tradable,
             fork,
             executor_kind,
+            variant,
             event: super::event_flags::EventFlags::new(),
         },
     ))

@@ -137,6 +137,7 @@ fn swap_loop_crosses_tick() {
         reinvest_l: 0,
         fee_units: FEE,
         ticks: &t,
+        v1: false,
     };
     assert_eq!(
         swap_elastic::swap(&s, false, true, U256::from(50_000_000_000_000_000u64)).unwrap(),
@@ -155,6 +156,7 @@ fn swap_loop_crosses_tick() {
         reinvest_l: 0,
         fee_units: FEE,
         ticks: &t2,
+        v1: false,
     };
     assert_eq!(
         swap_elastic::swap(&s2, false, true, U256::from(2_000_000_000_000_000_000u64)).unwrap(),
@@ -178,6 +180,7 @@ fn swap_loop_incomplete_outside_window() {
         reinvest_l: 0,
         fee_units: FEE,
         ticks: &t,
+        v1: false,
     };
     let out =
         swap_elastic::swap(&s, false, true, U256::from(2_000_000_000_000_000_000u64)).unwrap();

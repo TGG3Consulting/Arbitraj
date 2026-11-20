@@ -280,6 +280,7 @@ pub struct Step {
 /// SwapMath.computeSwapStep: один шаг обмена к targetSqrtP (не превышая его). Принимает: ликвидность baseL+reinvestL,
 /// текущую/целевую sqrtP, комиссию feeUnits, остаток суммы (знак: + exactInput, − exactOutput), флаги exactInput и
 /// token0. Возвращает: шаг. None — переполнение/недобор (при |Δцены| ≤ ~5% и валидных входах не наступает).
+/// Правило Elastic v2 (HEAD 4ab08c0 SwapMath.sol L60: `usedAmount > specifiedAmount`).
 pub fn compute_swap_step(
     liquidity: U256,
     current: U256,
@@ -288,6 +289,25 @@ pub fn compute_swap_step(
     specified: I256,
     exact_in: bool,
     is_token0: bool,
+) -> Option<Step> {
+    compute_swap_step_rule(liquidity, current, target, fee, specified, exact_in, is_token0, false)
+}
+
+/// Решение 451: computeSwapStep с выбором правила. v1 = true — KyberSwap Elastic v1 (Sourcify 42161 Factory
+/// 0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a, contracts/libraries/SwapMath.sol computeSwapStep:
+/// `(isExactInput && usedAmount >= specifiedAmount)` — при точном равенстве сумма считается остатком, цена — по
+/// calcFinalPrice, тик не пересекается); false — v2 (`>`). Остальные формулы v1 и v2 совпадают (сверено по Sourcify).
+/// Принимает и возвращает — как compute_swap_step.
+#[allow(clippy::too_many_arguments)]
+pub fn compute_swap_step_rule(
+    liquidity: U256,
+    current: U256,
+    target: U256,
+    fee: u32,
+    specified: I256,
+    exact_in: bool,
+    is_token0: bool,
+    v1: bool,
 ) -> Option<Step> {
     if current == target {
         return Some(Step {
@@ -299,7 +319,8 @@ pub fn compute_swap_step(
     }
     let mut used = calc_reach_amount(liquidity, current, target, fee, exact_in, is_token0)?;
     let mut next_sqrt = U256::ZERO;
-    if (exact_in && used > specified) || (!exact_in && used <= specified) {
+    let over = if v1 { used >= specified } else { used > specified };
+    if (exact_in && over) || (!exact_in && used <= specified) {
         used = specified;
     } else {
         next_sqrt = target;

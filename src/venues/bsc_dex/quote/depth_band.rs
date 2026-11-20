@@ -34,6 +34,7 @@ use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::tick_math::{MAX_TICK, MIN_TICK, sqrt_ratio_at_tick};
 use super::super::math::{bin_swap, dmm, v2};
 use super::super::num;
+use super::super::pools::family_variant::Variant;
 use super::super::pools::registry::{Entry, Registry};
 use super::super::tokens::Tokens;
 use super::rate;
@@ -239,6 +240,7 @@ fn side(
                 reinvest_l: *reinvest_l,
                 fee_units: NO_FEE,
                 ticks,
+                v1: e.family.variant == Variant::ElasticV1,
             };
             elastic(&s, zfo, b, buy).map(|(i, o, f)| (pick(i, o), f))
         }

@@ -15,6 +15,7 @@
 //! битмапа — иначе ΔL-компаундинг разойдётся с QuoterV2.
 //! Настройки: нет (комиссия пула feeUnits передаётся вызывающим — читается с контракта в 81b).
 //!
+//! Решение 451: ElasticState.v1 — развёртывания Elastic v1 (Arbitrum; цикл Pool.swap тот же, отличие — правило шага).
 //! Источники (официальные, решение 23): KyberNetwork/ks-elastic-sc (HEAD 4ab08c0): цикл swap и tempNextTick-ограничение
 //! MAX_TICK_DISTANCE — contracts/Pool.sol; _updateLiquidityAndCrossTick (liquidityNet к baseL: +net вверх, −net вниз),
 //! _getInitialSwapData (nextTick: вверх строго выше, вниз ≤ текущего) — contracts/PoolTicksState.sol.
@@ -28,7 +29,7 @@ use super::tick_math::{MAX_TICK, MIN_TICK, max_sqrt_ratio, min_sqrt_ratio, sqrt_
 // Шаг-математика Elastic (math/swap_elastic_step.rs) — для котировки (81b) и тестов — доступна через этот модуль.
 pub use super::swap_elastic_step::{
     Step, calc_final_price, calc_incremental_liquidity, calc_reach_amount, calc_returned_amount,
-    compute_swap_step, estimate_incremental_liquidity,
+    compute_swap_step, compute_swap_step_rule, estimate_incremental_liquidity,
 };
 
 /// MathConstants.sol: не больше стольких тиков за шаг (держит допущение ~5% движения цены в calcReachAmount).
@@ -44,6 +45,8 @@ pub struct ElasticState<'a> {
     /// Комиссия пула в feeUnits (FEE_UNITS = 100000 = 100%).
     pub fee_units: u32,
     pub ticks: &'a TickMap,
+    /// Решение 451: true — правило шага Elastic v1 (math/swap_elastic_step::compute_swap_step_rule).
+    pub v1: bool,
 }
 
 /// Итог обмена.
@@ -83,7 +86,7 @@ pub fn swap_to(
     limit: U256,
 ) -> Result<(Swapped, bool), &'static str> {
     let will_up = exact_in != is_token0;
-    let fee = s.fee_units;
+    let (fee, v1) = (s.fee_units, s.v1);
     let (mut sqrt, mut cur_tick) = (s.sqrt_p, s.current_tick);
     let (mut base_l, mut reinvest_l) = (U256::from(s.base_l), U256::from(s.reinvest_l));
     let mut specified = if exact_in {
@@ -117,8 +120,10 @@ pub fn swap_to(
             next_sqrt_full
         };
         let liquidity = base_l.checked_add(reinvest_l).ok_or(OVERFLOW)?;
-        let st = compute_swap_step(liquidity, sqrt, target, fee, specified, exact_in, is_token0)
-            .ok_or("шаг Elastic не считается (переполнение)")?;
+        let st = compute_swap_step_rule(
+            liquidity, sqrt, target, fee, specified, exact_in, is_token0, v1,
+        )
+        .ok_or("шаг Elastic не считается (переполнение)")?;
         sqrt = st.next_sqrt;
         specified = specified.checked_sub(st.used).ok_or(OVERFLOW)?;
         total_used = total_used.checked_add(abs(st.used)).ok_or(OVERFLOW)?;

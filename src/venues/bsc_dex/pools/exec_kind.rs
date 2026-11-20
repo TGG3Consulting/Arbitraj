@@ -247,7 +247,12 @@ mod tests {
     /// решение 395: V4 и Infinity — шаги v3).
     #[test]
     fn every_kind_is_decided() {
-        let none = ["kyber_elastic", "woofi_v2", "unsupported"];
+        let none = [
+            "kyber_elastic",
+            "kyber_elastic_v1",
+            "woofi_v2",
+            "unsupported",
+        ];
         for k in DEX_KINDS {
             assert_eq!(of(k).is_none(), none.contains(k), "{k}");
         }

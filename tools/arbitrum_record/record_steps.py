@@ -77,6 +77,8 @@ def steps(rpc, wallet, ekubo_from):
         ("kyber_elastic_v1", "kyber_elastic_v1.py", ["--rpc", rpc, "--gt"]),
         ("saddle", "saddle.py", ["--rpc", rpc]),
         ("woofi", "woofi.py", ["--rpc", rpc]),
+        # Решение 470: Aero Basic и Slipstream V3 — фабрики перечислением allPools, всё на одном блоке.
+        ("aero", "aero.py", ["--rpc", rpc, "--max-pools", "20"]),
         ("fluid_t1", "fluid_t1.py", ["--node", rpc, "--factory", "0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085",
                                      "--resolver", "0x05Bd8269A20C472b148246De20E6852091BF16Ff",
                                      "--wrapped", "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", "--gt"]),

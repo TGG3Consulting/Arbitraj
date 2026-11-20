@@ -26,6 +26,9 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 470 (Aero): pools/load.rs, families.rs, created_log.rs, verify_calls.rs получили ветки aero_basic /
+  slipstream_aero (файлы и так выше 200 — дробить вместе с T456). Пул Slipstream V3 перечитывается целиком каждым блоком
+  (per_block) ради комиссии крючка — нагрузка на узел; легче — только fee() пачкой (fee_refresh.rs all) — после записи.
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

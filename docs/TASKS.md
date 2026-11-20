@@ -354,6 +354,23 @@
     0xEaE4…Fd55 (DMMRouter); фактом будет ответ getAmountsOut в записи T450-01 (откат по пулам Legacy — адрес неверен).
   - T450-09 iZiSwap: уровни dex.v3_fee_tiers — конструктор (100, 400, 2000, 10000); включённые позже enableFeeAmount —
     fee2pointDelta своим узлом (запись T450-01).
+- **Решение 470 (20.11.2026, ветка t240/arb-aero) — T451-01, T451-02: Aero Basic (`aero_basic`) и Aero Slipstream V3
+  (`slipstream_aero`).** Код — DECISIONS 470; исполнитель не менялся (шаги SOLIDLY и V3), переразвёртывание не нужно.
+  Новая настройка dex.cl_swap_hook. Настройки DEX — docs/FIRST_RUN.md «Aero Basic и Aero Slipstream V3». Запись:
+  `python3 tools/arbitrum_record/aero.py --rpc <узел>` (или record_all.py) → снять #[ignore] в tests/arbitrum_aero_live.rs.
+  - T470-01 Вопрос Тиграну: комиссия Slipstream V3 в котировке — fee() пула на блоке головы (без скидки); в блоке нашей
+    транзакции крючок может посчитать другую (первая комиссия блока — TWAP по времени нового блока; чужой обмен раньше
+    задаёт blockFee, DynamicSwapFeeHook.sol L524-L667). Точной «комиссии следующего блока» без симуляции нет; защита —
+    minOut исполнителя. Так оставить или считать первую комиссию блока своим портом (_getFirstSwapFee + observe)?
+  - T470-02 Вопрос Тиграну: tx.gasprice в Nitro при чаевых — правило MEV-налога взято по верхней оценке (gasprice ≤
+    baseFee + чаевые). При profit_share верхний предел send.tip_cap_gwei выше minThreshold модуля (volatile 1 gwei,
+    stable 2 gwei по аргументам конструкторов) — пулы Basic не читаются. Нужен ли учёт налога в котировке вместо отказа?
+  - T470-03 Запись aero.py: проверить своим узлом feeModule() фабрик = volatile/stableCustomFeeModule
+    (0x7949…7a7A, 0x0195…3Da6), mevTaxModule() = 0xd724…c50a / 0x8173…8130, параметры модулей; tickSpacingToFee CL.
+  - T470-04 Ключи DEX Aero Basic (`aero-basic-volatile@arbitrum`, `aero-basic-stable@arbitrum`) — предложение: у
+    GeckoTerminal Aero Basic нет (DefiLlama `aero-basic`); пулы — поиск по фабрике (index.factory_scan) или dex.sub_dex
+    (решение 450) под одним ключом — решение Тиграна.
+  - T470-05 Metaquoter (0x1dDf…7868) не подключён — сверка с квотером через виртуальный квотер (dex.quoter_virtual).
 - **Решение 451 (20.11.2026, ветка t227/arb-dex-code-b) — T448-06…T448-10: Kyber Elastic v1, Saddle, WOOFi, Aero
   Slipstream, PancakeSwap StableSwap на Arbitrum; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Подробно —
   docs/notes/arbitrum/dex-settings-arbitrum.md §4.2–§4.6. СДЕЛАНО: вид `kyber_elastic_v1` (pools/family_variant.rs —
@@ -371,10 +388,10 @@
      различаются по ответу). Так оставить?
   2) Family Debug: поле variant выводится только у не-Base (золотые снимки прежних видов не меняются).
   Задачи:
-  - T451-01 Новое семейство «Slipstream V3 (Aero)» на Arbitrum: CLPool + крючок DynamicSwapFeeHook (комиссия блока по
+  - T451-01 **Решение 470: СДЕЛАНО** (вариант slipstream_aero; вопросы T470-01/02, запись T470-03). Новое семейство «Slipstream V3 (Aero)» на Arbitrum: CLPool + крючок DynamicSwapFeeHook (комиссия блока по
     TWAP-тику, скидка DiscountRegistry по вызывающему, MEV-налог модуля, afterSwap-комиссия), квотер Metaquoter; исходники —
     Dromos-Labs/metadex-slipstream-public cf1ae46f, metadex-public 79c8d5b6 (лицензия Dromos Restricted Use 1.0).
-  - T451-02 Aero «Basic»-пулы Arbitrum (pools-arbitrum.json: volatilePoolFactory 0x8E6a…76D2, stablePoolFactory 0x7858…EF2D;
+  - T451-02 **Решение 470: СДЕЛАНО** (вид aero_basic, шаг SOLIDLY; запись T470-03, ключи T470-04). Aero «Basic»-пулы Arbitrum (pools-arbitrum.json: volatilePoolFactory 0x8E6a…76D2, stablePoolFactory 0x7858…EF2D;
     модули комиссии и MEV-налога) — в таблицу покрытия (GeckoTerminal/DefiLlama id сверить) и сверить с видами solidly_*.
   - T451-03 TicksFeesReader.getTicksInRange(pool, MIN_TICK, 0) (load_elastic.rs) выделяет массив на все возможные тики
     (у tickDistance 1 ≈1,77 млн слов) — уложится ли в предел газа eth_call узла, покажет запись (kyber_elastic_v1.py пишет
@@ -1331,7 +1348,7 @@
   - T433-080 `ramses-legacy-arbitrum` (Ramses Legacy (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-081 `ramses-v3-arbitrum` (Ramses V3 (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-082 `rubicon-clmm-arbitrum` (Rubicon CLMM (Arbitrum)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
-  - T433-083 `aero-slipstream-arbitrum` (Aero Slipstream (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-09. Решение 451: нужен код — новое семейство «Slipstream V3 (Aero)», T448-09** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
+  - T433-083 `aero-slipstream-arbitrum` (Aero Slipstream (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: не подтверждено — T448-09. Решение 451: нужен код — новое семейство «Slipstream V3 (Aero)», T448-09. Решение 470: код есть — вид `slipstream_aero`, сверка — запись aero.py (T470-03)** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-084 `camelot-v4` (Camelot V4) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить. **Решение 448: готово** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
   - T433-085 Shell Protocol (DefiLlama `shell-protocol`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-086 DODO AMM (DefiLlama `dodo-amm`, нет в GeckoTerminal) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи. **Решение 448: готово (пулы — поиском по фабрике), шаблоны — T448-13** (настройки — docs/notes/arbitrum/dex-settings-arbitrum.md).
@@ -1394,7 +1411,7 @@
   - T433-143 AutoRange (DefiLlama `autorange`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-144 Metric V1 (DefiLlama `metric-v1`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   - T433-145 PancakeSwap X (DefiLlama `pancakeswap-x`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
-  - T433-146 Aero Basic (DefiLlama `aero-basic`, нет в GeckoTerminal) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
+  - T433-146 Aero Basic (DefiLlama `aero-basic`, нет в GeckoTerminal) — **Решение 470: вид `aero_basic` (код есть, запись T470-03, ключи T470-04).** Было: семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей; пулы — не из индексатора GeckoTerminal: источник справочника пулов тоже часть задачи.
   Семейства кода:
   - T433-F1 Fluid DEX (T1) — СДЕЛАНО в коде (решение 440): математика, чтение, события, проверка, квотер, шаг исполнителя FLUID (v4 — только исходник); осталось: запись узла (tools/arbitrum_record/fluid_t1.py) и снятие #[ignore], сборка и развёртывание исполнителя v4, вопросы а)–е) решения 440.
   - T433-F2 Balancer V3 — решения 441, 452: СДЕЛАНО в коде (все виды пулов и официальные крючки комиссии Arbitrum, PoolRegistered, шаг BALANCER_V3 исполнителя v4); ОСТАЛОСЬ — запись узла и снятие #[ignore], пересборка и развёртывание исполнителя v4 (план — «Решение 441», ревью), буфер ERC4626 (вопрос «Решение 452», п. 2).

@@ -25,7 +25,7 @@
 `-text`): SHA-256 кода исполнителя на Windows совпадает с ArbExecutor.sha256.
 
 Что запускается (адреса — `record_steps.py`, те же, что в шапках скриптов и ниже): sub_dex, kyber_elastic_v1, saddle,
-woofi, fluid_t1, balancer_v3, curve_crypto, camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo, ekubo_more,
+woofi, aero (решение 470), fluid_t1, balancer_v3, curve_crypto, camelot_v2, algebra_dir_fee, lb_v20, lb_v22, ekubo, ekubo_more,
 exec_v4_live.
 
 Тесты проекта — только на реально записанных ответах (CLAUDE.md). У разработчика нет доступа к узлу Arbitrum: после
@@ -109,3 +109,11 @@ python3 tools/arbitrum_record/algebra_dir_fee.py --rpc http://<узел>:8547 \
 `--log-blocks 20000` (≈ 1,4 ч при блоке 250 мс) — значения для теста, не настройки бота; при отказе узла по диапазону
 eth_getLogs — уменьшить. Другие DEX Arbitrum на Algebra (кандидаты — docs/TASKS.md «Решение 444», вопрос 3): тот же
 скрипт со своей фабрикой — совпадение CREATE2 с одним из хешей = пулы этой версии кода.
+
+## aero.py (решение 470, T451-01/02)
+
+Aero Basic (volatile/stable PoolFactory) и Aero Slipstream V3 (clFactory, крючок DynamicSwapFeeHook) — адреса
+Dromos-Labs/metadex-public и metadex-slipstream-public 1.1.0 (pools-arbitrum.json, cl-arbitrum.json). Всё на одном
+свежем блоке: фабрики, модули комиссии и MEV-налога, последние `--max-pools` пулов перечислением allPools(i), по пулам
+Basic — metadata/POOL_TYPE/getReserves/getBaseFee/getPool и getAmountOut на доли резерва; по пулам CL — slot0, fee(),
+крючок. Пишет `tests/data/arbitrum_aero_<дата>/`. Тесты — tests/arbitrum_aero_live.rs (снять #[ignore]).

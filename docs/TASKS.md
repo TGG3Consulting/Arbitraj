@@ -419,6 +419,41 @@
   connection_gas.rs); канал sequencer на BSC не включать без channel.chain — при одной площадке он канал BSC
   (channels.rs serves → default_chain → alone), открытый (sequencer.rs private: false), и вместе с каналами билдеров
   select (send/mod.rs) откажет «Открытый канал включён вместе с другими» — отправка BSC встанет.
+- **Решение 445 (20.11.2026, ветка t223-f6/arb-family-f6) — семейство T433-F6: Liquidity Book v2.0 (LFJ V2 / Trader
+  Joe V2) на Arbitrum One, вид lb_v20; ждёт сборки и тестов в GitHub (cargo, rustfmt, solc локально не запускались).**
+  Сделано: математика (точный порт lfj-gg/joe-v2@v2.0.0 07f10212: math/lb20_fee.rs, lb20_swap.rs, ветки v20 в lb_fee.rs и
+  lb_swap.rs; признак LbBinData.v20), чтение (load_lb20.rs, load_lb20_bins.rs, lb20_head.rs; каждым блоком — per_block_lb.rs
+  с разным числом вызовов на пул), события (events_lb20.rs), проверка пула (verify_lb20.rs), квотер сверки LBRouter v2.0
+  getSwapOut (quote/quoter_lb20.rs, dex.quoter), «в обновлении» (settle.rs, settle_read.rs), условие пулов секвенсора
+  (слоты 6, 7, 10 — exec/pool_cond*.rs), шаг исполнителя LB20 = 22 (contracts/ArbExecutor.sol, IPools.sol; Rust —
+  kind.rs, exec_kind.rs, entry.rs), вариант dex.kind lb_v20 (каталог, ярлык интерфейса), скрипт записи
+  tools/arbitrum_record/lb_v20.py, тесты tests/bsc_dex_lb_v20_arbitrum.rs (на записи — #[ignore]). DEX семейства в таблице
+  покрытия Arbitrum — один: T433-015 `traderjoe-v2-arbitrum` (DefiLlama `joe-v2` — та же строка). BSC — без изменений
+  (bsc_dex и вид lb_v21 ведут себя как раньше: v20 = false). Осталось:
+  1) Записать свой узел: `python3 tools/arbitrum_record/lb_v20.py http://<узел Arbitrum>` → tests/data/arbitrum_lb_v20_<дата>/
+     (коммит записи), снять #[ignore] с тестов tests/bsc_dex_lb_v20_arbitrum.rs, прогон CI. Там же — сверка нашей
+     формулы с getSwapOut роутера v2.0 на всех бинах.
+  2) Исполнитель: артефакты contracts/out/ НЕ пересобраны (solc агентам запрещён) — шаг LB20 есть только в исходнике; бот
+     его не строит, пока в коде сверенной версии нет селектора tokenX() (pools/exec_callback.rs code_probe). Нужно
+     (техлид / Тигран): решить версию сборки (v4: скопировать out/ → out/v3/, Version::V4 и runtime_v3 в
+     exec/executor/code.rs, onchain.rs; или пересобрать v3 на месте), пересобрать contracts/build.sh, тест
+     bsc_dex_executor_abi, evmtest (фикстуры пары v2.0 нет — нужен LbV20Fixture.sol по образцу LbFixture.sol), развернуть
+     исполнитель в Arbitrum. Номер вида 22 могут занять и другие семейства T433-F* в параллельных ветках — при слиянии
+     развести номера (контракт и kind.rs).
+  3) Включение в arb_dex (после записи и CI): область DEX `traderjoe-v2-arbitrum@arbitrum` — dex.kind = lb_v20,
+     dex.factory = 0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982, dex.quoter = 0x7BFd7192E76D950832c77BB412aaE841049D8D9B
+     (LBRouter v2.0), dex.pool_enabled = да (docs/FIRST_RUN.md, раздел «DEX Arbitrum: LFJ V2»).
+  Вопросы Тиграну:
+  1) Байткод реализации пары v2.0 на Arbitrum с исходником v2.0.0 не сверен (Sourcify / Arbiscan недоступны из среды
+     агента, узла нет): тег v2.0.0 — 04.01.2023 («fix protocol fees», правка _setFees — только займ), развёртывание
+     Arbitrum могло быть сделано раньше тега. Обмен и комиссия между коммитами до тега не менялись (LBPair.sol, FeeHelper.sol,
+     SwapHelper.sol — git log v2.0.0); факт совпадения — тест на записи (наша формула = getSwapOut роутера). Скрипт
+     пишет код реализации и его SHA-256 — сверку с Arbiscan («Contract Source Code Verified») сделать вам?
+  2) Конец стороны бинов у v2.0: findFirstNonEmptyBinId при отсутствии бина ОТКАТЫВАЕТСЯ (TreeMath.sol L60), а не
+     возвращает 0 / 0xFFFFFF, как v2.1. Загрузчик считает любой откат этого вызова (а не сбой узла) концом стороны —
+     по коду функции других откатов нет. Ок?
+  3) Слоты условия пулов LB v2.0 (6, 7, 10) выведены из раскладки исходника v2.0.0 и сверены с ассемблером пары (L1032-
+     L1084); живого факта нет — тест condition_slots_match_state на записи.
 - **Решение 433 (19.11.2026, ветка t217/arb-step5-adapter) — две сети, шаг 5: площадка DEX сети Arbitrum (arb_dex);
   ждёт сборки и тестов в GitHub (cargo локально не запускался).** ЖЕЛЕЗОБЕТОННОЕ ПРАВИЛО ТИГРАНА (20.11.2026): «Не
   пропустить ни единого DEX. Все DEX, которые есть, — без разделения на мелкие/крупные, без «можно потом». Ты ничего не
@@ -514,7 +549,12 @@
   - T433-012 `arbswap_arbitrum_one` (Arbswap (Arbitrum One)) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-013 `oreoswap` (OreoSwap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-014 `balancer_arbitrum` (Balancer V2 (Arbitrum)) — вид есть в коде: сверить ABI развёртывания Arbitrum с видом кода (исходник / верифицированный код), официальные адреса; завести DEX в области «DEX» площадки arb_dex (ключ с сетью, 433-з) и включить.
-  - T433-015 `traderjoe-v2-arbitrum` (LFJ V2 (Arbitrum)) — семейства нет в коде: семейство T433-F6; официальные адреса; завести и включить в arb_dex.
+  - T433-015 `traderjoe-v2-arbitrum` (LFJ V2 (Arbitrum)) — **код сделан (решение 445)**: вид lb_v20 (семейство
+    T433-F6); адреса — официальная документация LFJ (LBFactory v2.0 0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982,
+    LBRouter v2.0 0x7BFd7192E76D950832c77BB412aaE841049D8D9B). Осталось: запись своего узла
+    (tools/arbitrum_record/lb_v20.py) и снятие #[ignore]; задать в области DEX площадки arb_dex
+    (`traderjoe-v2-arbitrum@arbitrum`) dex.kind = lb_v20, dex.factory, dex.quoter, dex.pool_enabled; шаг LB20 —
+    после пересборки исполнителя (блок «Решение 445»).
   - T433-016 `magicswap` (Magicswap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-017 `zyberswap` (Zyberswap) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
   - T433-018 `solidlizard` (SolidLizard) — семейство не установлено: установить семейство пулов по официальной документации или верифицированному коду DEX; вид есть в коде — сверить и включить, нет — новое семейство отдельной задачей.
@@ -652,7 +692,9 @@
   - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
-  - T433-F6 Liquidity Book v2.0 (LFJ V2) — новое семейство (в коде только v2.1); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+  - T433-F6 Liquidity Book v2.0 (LFJ V2) — **код сделан (решение 445)**: вид lb_v20 (математика, чтение, события,
+    проверка, квотер LBRouter v2.0, условие пулов, шаг LB20 в исходнике исполнителя); тесты на записи — #[ignore] до
+    записи tools/arbitrum_record/lb_v20.py. Осталось — блок «Решение 445».
   - T433-F7 Liquidity Book v2.2 (LFJ V2.2) — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-F8 Ekubo — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
   - T433-R1 Записать ответ DefiLlama overview/dexs/arbitrum со своего сервера в tests/data (сейчас — чтение WebFetch 19.11).

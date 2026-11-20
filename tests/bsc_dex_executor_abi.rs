@@ -118,6 +118,8 @@ fn kinds_match_contract_constants() {
         ("UNI_V4", Params::UniV4 { key: v4_key() }),
         ("INF_CL", Params::InfCl { key: inf_key() }),
         ("INF_BIN", Params::InfBin { key: inf_key() }),
+        // Решение 445: пул Liquidity Book v2.0 — шаг 22 (исходник; артефакты — после пересборки).
+        ("LB20", Params::Lb20),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");

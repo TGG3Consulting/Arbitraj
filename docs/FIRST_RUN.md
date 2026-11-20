@@ -217,6 +217,20 @@ log.signal_hold (core/book_marks_on.rs).
 | log.bin_reread_interval_s | вся система | `60` вместе с dex.bin_reread_left_pct | Видно, какие пулы перечитываются по 332 (Info) и где проверка не считается и пул молча остался бы мелким (Warn) — не чаще раза в минуту на пул. Не задана — этих записей нет | Ревью 332 (Н2, Н7); pools/off_map_bins_log.rs |
 | dex.algebra_off_map_reread | bsc_dex | см. раздел решения 320 выше — «да» | **Ревью 332 (Н4): решение 332 «для всех видов» у Algebra (THENA Fusion — Algebra V1/V1.9, Algebra Integral) действует ТОЛЬКО при dex.algebra_off_map_reread = да.** Без неё у Algebra дыра «цена ушла за прочитанное окно» остаётся (pools/depth.rs off_map: Algebra — только под 320); dex.bin_reread_left_pct её не закрывает | Решения 320, 332 |
 
+## DEX Arbitrum: LFJ V2 — Liquidity Book v2.0 (решение 445)
+
+Область «DEX» площадки arb_dex, ключ `traderjoe-v2-arbitrum@arbitrum` (решение 435: ключ DEX с сетью). Задавать после
+записи своего узла (tools/arbitrum_record/lb_v20.py) и зелёного CI тестов tests/bsc_dex_lb_v20_arbitrum.rs без #[ignore].
+Новых настроек нет — новый вариант dex.kind.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `traderjoe-v2-arbitrum@arbitrum` | `lb_v20` | Пулы LFJ V2 — Liquidity Book v2.0 (ABI и правила v2.0; вид lb_v21 с ними не работает: у пары v2.0 нет getTokenX, getActiveId, getSwapOut) | lfj-gg/joe-v2@v2.0.0 (07f10212) src/interfaces/ILBPair.sol |
+| dex.factory | DEX `traderjoe-v2-arbitrum@arbitrum` | `0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982` | LBFactory v2.0 Arbitrum One: factory() пула и реестр getLBPairInformation подтверждают пул | traderjoe-xyz/joe-docs 61c16665 versioned_docs/version-V2.2/deployment-addresses/arbitrum.md L52-L58; lfj-gg/joe-sdk-v2 a6f5a8c3 src/constants/v2Addrs.ts L52-L59 |
+| dex.quoter | DEX `traderjoe-v2-arbitrum@arbitrum` | `0x7BFd7192E76D950832c77BB412aaE841049D8D9B` | LBRouter v2.0 Arbitrum One — квотер сверки getSwapOut(пара, вход, swapForY) | там же (LBRouter, V2.0); src/LBRouter.sol L149-L186 |
+| dex.pool_enabled | DEX `traderjoe-v2-arbitrum@arbitrum` | `да` — после записи и CI | Включить пулы DEX в arb_dex | Решение 445 |
+| dex.bin_depth_usd | площадка arb_dex | как у bsc_dex (решение 290) — решение Тиграна | Глубина полосы бинов в обе стороны от активного | Решение 290 |
+
 ## Промежуточное состояние пула не в ядро (решение 357)
 
 Настраивать нечего: это базовое поведение (исправление ошибки с риском денег, не под настройкой). Совет: держать заданной

@@ -26,6 +26,13 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 445 (Liquidity Book v2.0, LFJ V2 Arbitrum; `wc -l`): сверх ориентира 200 — pools/lb_head.rs 234 (было 195;
+  +calls_for, per_pool, is_v20 — перенести в lb20_head.rs вместе с выбором версии), pools/exec_callback.rs 309 (+code_probe,
+  probe_absent), давно сверх — families.rs, verify.rs, load.rs, settle.rs, exec_kind.rs, entry.rs, ArbExecutor.sol.
+  Новые пулы lb_v20 — только из справочника индексатора (подписка на LBPairCreated фабрики v2.0 не подключена, как у
+  lb_v21). Шаг LB20 исполнителя — в исходнике, артефакты contracts/out/ не пересобраны (версия сборки, evmtest с
+  фикстурой пары v2.0 — docs/TASKS.md, «Решение 445»). Тесты на записи узла Arbitrum — #[ignore] до записи
+  tools/arbitrum_record/lb_v20.py.
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

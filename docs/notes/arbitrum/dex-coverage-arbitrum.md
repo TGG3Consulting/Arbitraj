@@ -40,7 +40,7 @@
 | 12 | `arbswap_arbitrum_one` | Arbswap (Arbitrum One) | — | — | **семейство не установлено** | не сверены | T433-012 |
 | 13 | `oreoswap` | OreoSwap | — | — | **семейство не установлено** | не сверены | T433-013 |
 | 14 | `balancer_arbitrum` | Balancer V2 (Arbitrum) | Balancer V2 | `balancer_v2` — src/venues/bsc_dex/pools/families.rs:356 | **вид есть в коде** | не сверены | T433-014 |
-| 15 | `traderjoe-v2-arbitrum` | LFJ V2 (Arbitrum) | Liquidity Book v2.0 | (в коде только `lb_v21` — src/venues/bsc_dex/pools/families.rs:358) | **семейства нет в коде** | не сверены | T433-015 |
+| 15 | `traderjoe-v2-arbitrum` | LFJ V2 (Arbitrum) | Liquidity Book v2.0 | `lb_v20` — src/venues/bsc_dex/pools/families.rs (решение 445) | **вид есть в коде (решение 445)**: ждёт записи узла (tools/arbitrum_record/lb_v20.py) и пересборки исполнителя (шаг LB20) | официальная документация LFJ (traderjoe-xyz/joe-docs 61c16665 versioned_docs/version-V2.2/deployment-addresses/arbitrum.md L52-L58): LBFactory 0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982, LBRouter 0x7BFd7192E76D950832c77BB412aaE841049D8D9B, LBQuoter 0x7f281f22eDB332807A039073a7F34A4A215bE89e | T433-015 |
 | 16 | `magicswap` | Magicswap | — | — | **семейство не установлено** | не сверены | T433-016 |
 | 17 | `zyberswap` | Zyberswap | — | — | **семейство не установлено** | не сверены | T433-017 |
 | 18 | `solidlizard` | SolidLizard | — | — | **семейство не установлено** | не сверены | T433-018 |
@@ -302,7 +302,7 @@
 - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
-- T433-F6 Liquidity Book v2.0 (LFJ V2) — новое семейство (в коде только v2.1); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+- T433-F6 Liquidity Book v2.0 (LFJ V2) — **код сделан (решение 445)**: вид lb_v20 (математика, чтение, события, проверка, квотер LBRouter v2.0, условие пулов, шаг LB20 в исходнике исполнителя); тесты на записи своего узла — после tools/arbitrum_record/lb_v20.py (до записи #[ignore]); шаг исполнителя — после пересборки contracts/out/ (docs/TASKS.md, «Решение 445»).
 - T433-F7 Liquidity Book v2.2 (LFJ V2.2) — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F8 Ekubo — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 

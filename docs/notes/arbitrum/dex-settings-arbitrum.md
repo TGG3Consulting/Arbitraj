@@ -1,5 +1,10 @@
 # Настройки области «DEX» площадки arb_dex — DEX Arbitrum One с видом пула в коде (решение 448, 20.11.2026)
 
+**Решение 450 (20.11.2026, ветка t226/arb-dex-code-a):** код T448-01…05 сделан — статусы ниже обновлены (пометка
+«решение 450»): PancakeSwap V2 / V3 — готово (`pancakeswap_v3`), iZiSwap — готово (поиск по фабрике), KyberSwap Classic
+Static Fee и Legacy — готово (дочерние ключи dex.sub_dex), Balancer V2 — + 2Tokens, weighted v2/v3/v4, stable v2
+(dex.balancer_math), Curve — механизм есть, 2pool / старые plain — T450-02, crypto — T433-F3.
+
 Задача: для каждого DEX Arbitrum One со статусом «вид есть в коде» (docs/notes/arbitrum/dex-coverage-arbitrum.md,
 задачи T433-*) — полный набор настроек области «DEX», как у DEX BSC: вид, адреса, правило комиссии, включение. Код не
 менялся. Задачи кода и проверки — docs/TASKS.md, блок «Решение 448».
@@ -72,17 +77,17 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 | T433-073 | `uniswap-v4-arbitrum@arbitrum` | uniswap_v4 | **готово** |
 | T433-001 | `sushiswap_arbitrum@arbitrum` | v2_fork | **готово** |
 | T433-044 (новое) | `sushiswap-v3-arbitrum@arbitrum` | v3_fork | **готово** (семейство установлено этой проверкой) |
-| T433-007 | `kyberswap_classic_arbitrum@arbitrum` | kyber_dmm | **готово** (только пулы DMM; пулы Static Fee — нужен код, T448-04) |
+| T433-007 | `kyberswap_classic_arbitrum@arbitrum` | kyber_dmm | **готово** (DMM; решение 450: Static Fee и Legacy — дочерние ключи, §2.6) |
 | T433-051 | `smardex-arbitrum@arbitrum` | smardex | **готово** |
 | T433-074 | `maverick-v2-arbitrum@arbitrum` | maverick_v2 | **готово** |
 | T433-084 | `camelot-v4@arbitrum` | algebra_integral | **готово** |
 | T433-034 | `traderjoe-v2-1-arbitrum@arbitrum` | lb_v21 | **готово** (оговорка — реализация пары, T448-11) |
-| T433-014 | `balancer_arbitrum@arbitrum` | balancer_v2 | **готово** (только фабрики 20210418 / 20210624; остальные — нужен код, T448-02, T448-03) |
-| T433-005 | `curve_arbitrum@arbitrum` | curve_stableswap_ng | **готово** (только пулы фабрики NG; 2pool и crypto — нужен код, T448-02, T433-F3) |
+| T433-014 | `balancer_arbitrum@arbitrum` | balancer_v2 | **готово частично** (решение 450: 20210418 / 2Tokens / 20210624 / weighted v2–v4 / stable v2 — дочерние ключи, §2.11; composable stable, meta-stable, LBP, linear, managed — нужен код, T450-03…07) |
+| T433-005 | `curve_arbitrum@arbitrum` | curve_stableswap_ng | **готово частично** (пулы фабрики NG; решение 450: механизм дочерних ключей есть; 2pool / старые plain — нужен код, T450-02; crypto — T433-F3) |
 | T433-086 | `dodo-amm-dvm@arbitrum`, `dodo-amm-dpp@arbitrum`, `dodo-amm-dsp@arbitrum` (id — предложение) | dodo_dvm / dodo_dpp / dodo_dsp | **готово** (пулы — только поиском по фабрике) |
-| T433-098 | `iziswap@arbitrum` (id — предложение) | iziswap | **нужен код** — пулов нет ни в индексаторе, ни в поиске по фабрике (T448-05) |
-| T433-049 | `pancakeswap-v2-arbitrum@arbitrum` | pancakeswap_v2 | **не подтверждено** — Universal Router на Arbitrum другой (v3 UR), нет варианта формата, параметры UR не прочитаны (T448-01) |
-| T433-050 | `pancakeswap-v3-arbitrum@arbitrum` | pancakeswap_v3 | **не подтверждено** — то же (T448-01) |
+| T433-098 | `iziswap@arbitrum` (id — предложение) | iziswap | **готово** (решение 450: поиск по фабрике pool(x, y, fee), §3.1) |
+| T433-049 | `pancakeswap-v2-arbitrum@arbitrum` | pancakeswap_v2 | **готово** (решение 450: dex.universal_router_version = `pancakeswap_v3`, §4.1) |
+| T433-050 | `pancakeswap-v3-arbitrum@arbitrum` | pancakeswap_v3 | **готово** (решение 450, §4.1) |
 | T433-064 | `pancakeswap-stableswap-arbitrum@arbitrum` | pancake_stableswap | **не подтверждено** — нет официального адреса фабрики Arbitrum (T448-10) |
 | T433-006 | `kyberswap_elastic_arbitrum@arbitrum` | kyber_elastic | **не подтверждено** — адреса только v1, код сделан по v2 (T448-06) |
 | T433-083 | `aero-slipstream-arbitrum@arbitrum` | slipstream | **не подтверждено** — нет официального развёртывания Arbitrum в репозиториях Slipstream (T448-09) |
@@ -92,6 +97,8 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 Итог: из 20 DEX с видом в коде (15 GeckoTerminal + Curve частично + 4 DefiLlama) — **готово 12**, **нужен код 1**,
 **не подтверждено 7**; плюс Sushi V3 (T433-044) — семейство установлено, **готово** (13-й). Готовы частично (пулы
 других семейств под тем же id) — Curve, Balancer V2, KyberSwap Classic: задачи кода T448-02…04.
+Решение 450: + PancakeSwap V2, PancakeSwap V3, iZiSwap — готово; KyberSwap Classic — полностью (DMM + Static Fee + Legacy);
+Balancer V2 и Curve — частично (нужен код: T450-02…07).
 
 ## 2. Готово к включению настройками
 
@@ -168,6 +175,18 @@ docs.dodoex.io/en/developer/contracts/dodo-v1-v2/contracts-address/arbitrum.
 `0x5649B4DD00780e99Bab7Abb4A3d581Ea1aEB23D0`) и Legacy Static Fee (KSFactory `0x51E8D106C646cA58Caf32A47812e95887C071a62`).
 Их пулы под тем же id GeckoTerminal не пройдут проверку фабрики DMM — нужен код (T448-02, T448-04).
 
+**Решение 450:** KSPool = DMMPool с постоянной комиссией (dmm-smart-contracts@e557b57; Sourcify 42161 обеих KSFactory —
+match), тот же вид. У `kyberswap_classic_arbitrum@arbitrum` — dex.sub_dex = `kyberswap_classic_arbitrum-ks@arbitrum,
+kyberswap_classic_arbitrum-ksl@arbitrum` (имена — предложение, решает Тигран); дочерние ключи:
+
+| Ключ | dex.kind | dex.factory | dex.quoter | dex.pool_enabled |
+| --- | --- | --- | --- | --- |
+| `kyberswap_classic_arbitrum-ks@arbitrum` | `kyber_dmm` | `0x1c758aF0688502e49140230F6b0EBd376d429be5` (KSFactory Static Fee) | `0x5649B4DD00780e99Bab7Abb4A3d581Ea1aEB23D0` (KSRouter) | да |
+| `kyberswap_classic_arbitrum-ksl@arbitrum` | `kyber_dmm` | `0x51E8D106C646cA58Caf32A47812e95887C071a62` (KSFactory Legacy) | `0xC3E2aED41ECdFB1ad41ED20D45377Da98D5489dD` (KSRouter Legacy) | да |
+
+Источник адресов — docs.kyberswap.com Classic Contract Addresses (Arbitrum). Оговорка: у Legacy KSRouter ссылка
+обозревателя на странице ведёт на адрес DMMRouter — проверка ответом getAmountsOut в записи (T450-08).
+
 ### 2.7 SmarDex — `smardex-arbitrum@arbitrum` (T433-051)
 
 | Настройка | Значение | Источник |
@@ -230,6 +249,27 @@ WeightedPool2TokensFactory `0xCF0a32Bbef8F064969F21f7e02328FB577382018` (та ж
 `0xc7E5ED1054A24Ef31D827E6F86caA58B3Bc168d7`, stable-pool-v2 `0xEF44D6786b2b4d544b7850Fe67CE6381626Bf2D6`, composable
 stable v1–v6 (v2/deprecated/*composable-stable-pool*/output/arbitrum.json) — T448-03.
 
+**Решение 450:** сверка build-info (balancer-deployments@b55dc2b8): WeightedPool2Tokens (задача 20210418) — тот же расчёт
+обмена, что WeightedPool v1 (onSwap L255-L310, FixedPoint и WeightedMath задачи); weighted-pool v2 / v3 / v4 —
+WeightedMath._calcOutGivenIn / _calcInGivenOut тот же текст, FixedPoint.powUp с точными степенями 1/2/4 (L134-L150),
+множители — только decimals (курсы rate providers в обмен не входят — только в протокольную комиссию); stable-pool-v2
+— StableMath._calculateInvariant по формуле Curve с округлением вниз (L57-L120). Настройка dex.balancer_math задаёт версию
+у ключа. У `balancer_arbitrum@arbitrum` — dex.sub_dex = `balancer_arbitrum-w2t@arbitrum, balancer_arbitrum-wv2@arbitrum,
+balancer_arbitrum-wv3@arbitrum, balancer_arbitrum-wv4@arbitrum` (имена — предложение); у каждого dex.kind = `balancer_v2`,
+dex.vault = `0xBA12222222228d8Ba445958a75a0704d566BF2C8`, dex.pool_enabled = да и:
+
+| Ключ | dex.factory | dex.balancer_stable_factory | dex.balancer_math |
+| --- | --- | --- | --- |
+| `balancer_arbitrum@arbitrum` (как выше) | `0x7dFdEF5f…312B` (20210418) | `0x2433477A…53Fd` (20210624) | не задавать (v1) |
+| `balancer_arbitrum-w2t@arbitrum` | `0xCF0a32Bbef8F064969F21f7e02328FB577382018` (WeightedPool2TokensFactory, 20210418) | — | не задавать (v1) |
+| `balancer_arbitrum-wv2@arbitrum` | `0x8df6EfEc5547e31B0eb7d1291B511FF8a2bf987c` (20220908-weighted-pool-v2) | `0xEF44D6786b2b4d544b7850Fe67CE6381626Bf2D6` (20220609-stable-pool-v2) | `v2` |
+| `balancer_arbitrum-wv3@arbitrum` | `0xf1665E19bc105BE4EDD3739F88315cC699cc5b65` (20230206-weighted-pool-v3) | — | `v2` |
+| `balancer_arbitrum-wv4@arbitrum` | `0xc7E5ED1054A24Ef31D827E6F86caA58B3Bc168d7` (20230320-weighted-pool-v4) | — | `v2` |
+
+Источник адресов — balancer-deployments b55dc2b8 addresses/arbitrum.json. Не сделано (нужен код): composable stable
+v1–v6, meta-stable 20210727, LBP 20210721, investment 20210907, managed, linear (aave / erc4626 / yearn / unbutton),
+stable phantom — T450-03…07.
+
 ### 2.12 Curve — `curve_arbitrum@arbitrum` (T433-005), часть StableSwap-NG
 
 | Настройка | Значение | Источник |
@@ -244,6 +284,11 @@ stable v1–v6 (v2/deprecated/*composable-stable-pool*/output/arbitrum.json) —
 2pool `0x7f90122BF0700F9E7e1F688fe926940E8839F353` (set_up_base_pools.py L76; шаблон не сверен с curve_stableswap),
 Twocrypto/Tricrypto (T433-F3) — T448-02.
 
+**Решение 450:** механизм дочерних ключей есть (dex.sub_dex у `curve_arbitrum@arbitrum`). 2pool — Vyper 0.2.12 (Sourcify
+42161 match): A_PRECISION = 100, A_precise(), RATE_MULTIPLIER, двухмонетная формула D — не совпадает с шаблоном вида
+curve_stableswap (Curve 2020 без A_PRECISION) и NG — нужен новый шаблон (T450-02). Crypto-пулы — дочерними ключами вида
+T433-F3, когда он будет в коде.
+
 ### 2.13 DODO V2 — три ключа (T433-086)
 
 Пулы DODO индексатор GeckoTerminal в сети arbitrum не отдаёт (dex-coverage-arbitrum.md, строка 86): источник — поиск по
@@ -257,9 +302,9 @@ Twocrypto/Tricrypto (T433-F3) — T448-02.
 
 dex.pool_enabled = да у каждого. Оговорка: шаблоны пулов (клоны) фабрик на Arbitrum не прочитаны — T448-13.
 
-## 3. Нужен код
+## 3. Нужен код (решение 450: сделан)
 
-### 3.1 iZiSwap — `iziswap@arbitrum` (T433-098)
+### 3.1 iZiSwap — `iziswap@arbitrum` (T433-098) — готово (решение 450)
 
 Значения есть: dex.kind `iziswap`, dex.factory `0xCFD8A067e1fa03474e79Be646c5f6b6A27847399` (izumi-docs
 deployed_contracts/mainnet.rst L53-L64, «Arbitrum (chainId: 42161) (updated on 2023.07.17)», Core factory), dex.quoter_virtual
@@ -267,6 +312,12 @@ deployed_contracts/mainnet.rst L53-L64, «Arbitrum (chainId: 42161) (updated on 
 GeckoTerminal arbitrum, а поиск по фабрике вид iziswap не умеет (factory_calls.rs:72-103 — `_ => continue`): пулы не
 появятся в справочнике. Задача T448-05. Модули ядра Arbitrum (swapX2YModule `0xAC9788cf…`, swapY2XModule `0x93C22Fbe…`)
 отличаются адресами от BSC — код пула сверить тогда же.
+
+**Решение 450:** поиск по фабрике — pool(монета, встречный, fee) по уровням dex.v3_fee_tiers (factory_ask.rs Q::Izi).
+Фабрика Arbitrum — Sourcify 42161 (iZiSwapFactory, solc 0.8.4): fee2pointDelta конструктора 100 / 400 / 2000 / 10000,
+реестр pool пишется в обе стороны — как iZiSwap-core@3fe21eba. Настройки: dex.kind `iziswap`, dex.factory (выше),
+dex.quoter_virtual = да, dex.pmm_ladder_usd — Тигран, dex.v3_fee_tiers = `100, 400, 2000, 10000` (проверка
+fee2pointDelta своим узлом — запись T450-01), dex.pool_enabled = да; у arb_dex — index.factory_scan = да.
 
 ## 4. Не подтверждено
 
@@ -284,7 +335,7 @@ GeckoTerminal arbitrum, а поиск по фабрике вид iziswap не у
 | dex.v3_fee_tiers (необяз.) | — | `100, 500, 2500, 10000` | pancake-v3-contracts 98684794 PancakeV3Factory.sol L41-L53 (конструктор) |
 | dex.universal_router | `0xFE6508f0015C778Bdcc1fB5465bA5ebE224C9912` | то же | universal-router/addresses.md L37 — раздел «PancakeSwap v3 Universal Router»; Infinity UR на Arbitrum нет (там же L10-L20: только BSC, Base, Robinhood) |
 | dex.permit2 | `0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768` | то же | permit2/addresses.md L9 |
-| dex.universal_router_version | **нет подходящего варианта** | то же | см. ниже |
+| dex.universal_router_version | `pancakeswap_v3` (решение 450) | то же | см. ниже |
 
 Почему не подтверждено: у BSC эти DEX исполняет Infinity UR (`pancakeswap_infinity`). На Arbitrum — v3 UR. Sourcify
 42161 `0xFE65…9912`: exact match UniversalRouter, solc 0.8.17; Commands.sol: V3_SWAP_EXACT_IN 0x00, V2_SWAP_EXACT_IN
@@ -294,6 +345,14 @@ amountOutMin, path, payerIsUser) — те же байты, что пишет к�
 (permit2, v2Factory, v3Deployer, v2InitCodeHash, v3InitCodeHash — RouterParameters). Вариант `pancakeswap_infinity`
 включает умный роутер Infinity (dex_rules.rs:16-27), `2.0` — имя Uniswap. Нужен вариант формата для v3 UR PancakeSwap
 или решение Тиграна (T448-01).
+
+**Решение 450 — готово:** вариант `pancakeswap_v3` (exec/ur.rs Format::PancakeV3). Прочитано (Sourcify 42161 exact_match):
+BALANCE_CHECK_ERC20 — abi.decode(address owner, address token, uint256 minBalance), успех — balanceOf(owner) ≥ minBalance;
+WRAP_ETH / UNWRAP_WETH — (address, uint256); Constants: CONTRACT_BALANCE = 1 << 255, ADDRESS_THIS = address(2);
+Payments.pay — CONTRACT_BALANCE = весь баланс роутера; 0x10 = OWNER_CHECK_721 (Infinity нет). Параметры конструктора
+(RouterParameters): permit2 `0x31c2F6fc…c768`, weth9 `0x82aF4944…Bab1`, v2Factory `0x02a84c1b…749E`, v3Factory
+`0x0BFbCF9f…1865`, v3Deployer `0x41ff9AA7…71c9` (= PancakeV3PoolDeployer, pancake-developer v3/addresses.md L12),
+v2InitCodeHash `0x57224589…4d2d`, v3InitCodeHash `0x6ce8eb47…f7e2`. Пулы Infinity этим форматом не исполняются.
 
 ### 4.2 PancakeSwap StableSwap — `pancakeswap-stableswap-arbitrum@arbitrum` (T433-064)
 

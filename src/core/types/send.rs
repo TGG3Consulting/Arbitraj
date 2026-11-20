@@ -53,6 +53,10 @@ pub struct SendChannelInfo {
     pub secret: Option<String>,
     /// Ссылки на официальную документацию канала.
     pub docs: Vec<String>,
+    /// Решение 436 (ревью): канал вида «секвенсор Arbitrum» — минимум цены газа с узла (channel.min_gas_price_gwei не
+    /// читается), свои настройки отправки (channel.cond_time_window_s и другие — список в ChannelCard.svelte).
+    #[serde(default)]
+    pub sequencer: bool,
 }
 
 /// Состояние канала сейчас.

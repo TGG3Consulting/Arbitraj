@@ -7,7 +7,7 @@
 //! eth_sendRawTransaction (как до решения 436). Отмена (send/cancel.rs) — всегда без условия: её дело занять nonce.
 //! Окна блока L1 (blockNumberMin/Max) и knownAccounts не ставятся — docs/TASKS.md, «Решение 436».
 //! Кто вызывает: send/ready.rs (окно канала, тело запроса, разбор ошибки), exec/txs.rs (head_time до отправки).
-//! От чего зависит: node/heads.rs (время головы), send/ready.rs, ctx.rs.
+//! От чего зависит: node/heads.rs, node/head_age.rs (время головы), send/ready.rs, ctx.rs.
 //! Настройки: channel.cond_time_window_s [канал sequencer].
 //!
 //! Источники (клоны: OffchainLabs/go-ethereum 260bc5dcbd5a16925d7e26145577b2612f30f428 — «nitro-geth»;
@@ -36,6 +36,7 @@ use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 use crate::settings::scope::Scope;
 
 use super::super::ctx::Ctx;
+use super::super::node::head_age;
 use super::super::node::heads::Heads;
 use super::ready::Ready;
 
@@ -64,13 +65,23 @@ pub fn window(ctx: &Ctx, s: &Scope) -> Result<Option<u64>, GatewayError> {
 }
 
 /// Время головы для условия — только если у какого-то из выбранных каналов задано окно (иначе узел не спрашивается).
-/// Читается ДО отправки (решение 398). Принимает: окружение, головы, каналы. Возвращает: секунды Unix или None.
-/// Ошибки: как Heads::at (нет свежего блока — StaleData; узел).
+/// Читается ДО отправки (решение 398). Ревью 436: время именно блока головы — Heads::at, пока время головы ещё тянет
+/// другой запрос, отдаёт время прошлого блока (решение 89, для расчёта); для условия оно дало бы раннее timestampMax
+/// и лишние отказы −32003, поэтому тогда время головы читается с узла (node/head_age.rs fetch) и запоминается.
+/// Принимает: окружение, головы, каналы. Возвращает: секунды Unix или None.
+/// Ошибки: как Heads::at (нет свежего блока — StaleData; узел); BadResponse (узел не знает блок).
 pub async fn head_time(ctx: &Ctx, heads: &Heads, ready: &[Ready]) -> GatewayResult<Option<u64>> {
     if ready.iter().all(|r| r.cond.is_none()) {
         return Ok(None);
     }
-    Ok(Some(heads.at(ctx).await?.1))
+    let head = heads.fresh(ctx)?.number;
+    let (n, t) = heads.at(ctx).await?;
+    if n == head {
+        return Ok(Some(t));
+    }
+    let bt = head_age::fetch(ctx, head, true).await?;
+    heads.remember_time(head, bt);
+    Ok(Some(bt.secs))
 }
 
 /// Параметры условной отправки: [raw, options]. Принимает: подписанную транзакцию, условие (Probe или Until).

@@ -91,6 +91,7 @@ impl Channel {
             tips: self.tips,
             secret: self.secret(),
             docs: self.docs.iter().map(|s| s.to_string()).collect(),
+            sequencer: self.single == Some(Single::Sequencer),
         }
     }
 }

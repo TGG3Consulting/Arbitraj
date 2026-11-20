@@ -3,7 +3,8 @@
   Что делает: один канал отправки на экране «Каналы отправки» (решения 33, 41–44): название, открытый/закрытый,
     способы по документации, ссылки; состояние и статистика (отправлено, отклонено, в блоке, откатов, газ впустую —
     SendChannelStats; null — «нет данных»); все настройки области «канал» (вкл/выкл, адрес, способ — только из
-    способов канала, мин. цена газа, чаевые — только если у канала они есть); ключ канала; «Проверить подключение».
+    способов канала, мин. цена газа, чаевые — только если у канала они есть; у секвенсора Arbitrum — свои настройки
+    отправки и без мин. цены газа, решение 436, ревью); ключ канала; «Проверить подключение».
   Кто вызывает: pages/Channels.svelte.
   От чего зависит: lib/settings.svelte.js, lib/secrets.svelte.js, lib/labels.js, components/SettingEditor.svelte,
     SecretRow.svelte, CheckConnection.svelte.
@@ -26,9 +27,18 @@
 
   // Настройки чаевых (channel.tip_*) показываются только у каналов с чаевыми по документации (SendChannelInfo.tips).
   const TIP_PREFIX = 'channel.tip_';
+  // Решение 436 (ревью): настройки, которые читает только канал вида «секвенсор Arbitrum» (send/ready.rs,
+  // send/sequencer_cond.rs); у него же не читается минимум газа канала — он с узла (node/arb_min_gas.rs).
+  const SEQUENCER_ONLY = ['channel.cond_time_window_s'];
+  const NOT_SEQUENCER = ['channel.min_gas_price_gwei'];
+  const byKind = (name) =>
+    info.sequencer ? !NOT_SEQUENCER.includes(name) : !SEQUENCER_ONLY.includes(name);
   const defs = $derived(
     (store.schema?.settings ?? []).filter(
-      (d) => d.scopes.includes('Channel') && (info.tips || !d.name.startsWith(TIP_PREFIX)),
+      (d) =>
+        d.scopes.includes('Channel') &&
+        (info.tips || !d.name.startsWith(TIP_PREFIX)) &&
+        byKind(d.name),
     ),
   );
   /** Способы канала в виде вариантов настройки: SendMethod «Single» ↔ вариант «single» (src/core/types/send.rs). */

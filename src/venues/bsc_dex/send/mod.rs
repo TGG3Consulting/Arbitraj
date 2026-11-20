@@ -37,6 +37,7 @@ pub mod jetbuilder;
 pub mod mev_guard;
 pub mod nodereal;
 pub mod nodereal_api;
+pub mod pool_cond_mode;
 pub mod public;
 pub mod ready;
 pub mod receipt;

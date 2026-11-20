@@ -19,9 +19,10 @@
 //! txs::send_tipped, итог — доле чаевых в фоне (tip_cycle::after).
 //! Решение 438: knownAccounts пулов маршрута (блок плана, exec/pool_cond_read.rs) — в условную отправку секвенсора;
 //! пулы в условии и без него — журнал send.pool_cond (в фоне), TradeResult.executor и текст ошибки после отправки.
+//! Решение 439: итог отправки — в статистику условия пулов по режиму в действии (exec/pool_cond_stat.rs, в фоне).
 //! Кто вызывает: exec/cycle_trade.rs.
 //! От чего зависит: exec/executor/{call, callback_at, onchain, pool_pass, sim}.rs, exec/{cycle_steps, cycle_ref, swap_send, txs, result,
-//! pool_cond_read, pool_cond_row}.rs,
+//! pool_cond_read, pool_cond_row, pool_cond_stat}.rs,
 //! quote/{cycle_legs, cycle_cost}.rs, wallet/{approve_executor, nonce}.rs, check/simulate.rs.
 //! Настройки: exec.executor_address; через вызываемые — dex.deadline_s, dex.approve_unlimited, verify.*, send.*,
 //! channel.*, dex_dex.min_profit_usd.
@@ -46,6 +47,7 @@ use super::executor::call::{self, ExecCall};
 use super::executor::{onchain, pool_pass, sim};
 use super::pool_cond_read;
 use super::pool_cond_row::{self, PoolConds};
+use super::pool_cond_stat;
 use super::result;
 use super::swap_send::{rebuilt_notice, send_approvals, with_approve_gas};
 use super::tip_cycle;
@@ -122,6 +124,8 @@ pub async fn trade(
     // Решение 438: какие пулы в условии — в журнал до отправки (в фоне), knownAccounts — только непустые.
     let note = conds.as_ref().map(|k| pool_cond_row::log(ctx, &req.deal_id, k));
     let known = conds.as_ref().map(|k| &k.known).filter(|k| !k.is_empty());
+    // Решение 439: режим для статистики — до отправки (решение 398); итог — в фоне после неё.
+    let stat = pool_cond_stat::begin(ctx, conds.is_some());
     let res = txs::send_tipped(
         env,
         &slot,
@@ -135,6 +139,7 @@ pub async fn trade(
     // Решение 437 (3): итог — для доли чаевых, в фоне (сделка не ждёт разбора); решение 438 — с блоком плана.
     let plan_block = conds.as_ref().filter(|k| !k.known.is_empty()).map(|k| k.block);
     tip_cycle::after(env, tips, &res, plan_block);
+    pool_cond_stat::after(ctx, stat, &req.deal_id, &res);
     let with_note = |mut e: GatewayError| {
         if let Some(n) = &note {
             e.message = format!("{}; {n}", e.message);

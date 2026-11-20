@@ -160,6 +160,7 @@ log.signal_hold (core/book_marks_on.rs).
 | send.tip_share_step_up_pct | по площадке DEX | у arb_dex при profit_share — решение Тиграна | Динамические чаевые (решение 437 (3)) | /home/claude/src-ext/reports/arb-tips.md, раздел 3; nitro arbos/tx_processor.go:627-645; pga/tx.go:43-46 |
 | send.tip_share_step_down_pct | по площадке DEX | у arb_dex при profit_share — решение Тиграна | Динамические чаевые (решение 437 (3)) | /home/claude/src-ext/reports/arb-tips.md, раздел 3; nitro arbos/tx_processor.go:627-645; pga/tx.go:43-46 |
 | send.tip_wins_to_step_down | по площадке DEX | у arb_dex при profit_share — решение Тиграна | Динамические чаевые (решение 437 (3)) | /home/claude/src-ext/reports/arb-tips.md, раздел 3; nitro arbos/tx_processor.go:627-645; pga/tx.go:43-46 |
+| send.pool_cond_mode | по площадке DEX | у bsc_dex не задавать; у arb_dex — `off` на старте (решение Тиграна 20.11.2026: не терять сделки); `pools` — после статистики (экран «Каналы отправки», блок «Условие пулов: статистика»), решение Тиграна | Режим условия пулов маршрута в условной отправке секвенсора (решение 439) | nitro-geth arbitrum_types/txoptions.go:79-107; решение 438 |
 
 ## Нативная монета BNB
 

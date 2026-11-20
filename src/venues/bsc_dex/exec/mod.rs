@@ -63,6 +63,8 @@ pub mod plan;
 pub mod pool_cond;
 pub mod pool_cond_read;
 pub mod pool_cond_row;
+pub mod pool_cond_stat;
+pub mod pool_cond_stat_store;
 pub mod precheck;
 pub mod precheck_quoter;
 pub mod precheck_sim;

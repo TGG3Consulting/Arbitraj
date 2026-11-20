@@ -522,6 +522,30 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// Решение 439: статистика сделок цикла DEX ↔ DEX через исполнитель по режиму условия пулов send.pool_cond_mode
+    /// (off / pools) — экран «Каналы отправки». Ошибки: NotApplicable — не DEX или сеть не eip1559_l1.
+    async fn pool_cond_stat(&self) -> GatewayResult<crate::core::types::PoolCondStat> {
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет условия пулов",
+        ))
+    }
+
+    /// Решение 439: «Сбросить статистику» условия пулов (счётчики обоих режимов — 0). Принимает: кто сбрасывает (для
+    /// журнала). Возвращает: статистику после сброса. Ошибки: NotApplicable — не DEX или сеть не eip1559_l1.
+    async fn reset_pool_cond_stat(
+        &self,
+        by: &str,
+    ) -> GatewayResult<crate::core::types::PoolCondStat> {
+        let _ = by;
+        Err(GatewayError::new(
+            ErrorCode::NotApplicable,
+            Some(self.id()),
+            "у площадки нет условия пулов",
+        ))
+    }
+
     /// Справочник пулов от индексатора (решение 58): DEX индексатора, пулы монет и что с каждым сделал адаптер
     /// (взят, DEX не подключена, проверка на узле не прошла). Ошибки: NotApplicable — не DEX.
     async fn pool_directory(&self) -> GatewayResult<PoolDirectory> {

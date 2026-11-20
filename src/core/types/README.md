@@ -21,6 +21,7 @@
 | `check.rs` | CheckState, TokenTaxes, CoinCheck, HookImpact (лесенки HookLadder — общие, Arc), HookStep, PoolCheck, TaxKind, BlockReason, CoinBlock |
 | `send.rs` | SendMethod, SendChannelInfo, ChannelState, SendChannelStats, TxOutcome, ChainTx |
 | `tip_share.rs` | Решение 437 (3): TipShare (доля прибыли на чаевые площадки DEX, счётчики, последний проигрыш), TipLoss, TipOutcome |
+| `pool_cond_stat.rs` | Решение 439: PoolCondStat (статистика сделок цикла через исполнитель по режиму send.pool_cond_mode на момент отправки: off / pools), PoolCondCounts (отправки, победы, откаты и их газ в нативной монете, отказы по условию пулов и по окну времени) |
 | `directory.rs` | IndexerDex, DirectoryStatus, DirectoryPool, DirectoryToken (note — «индексатор не знает пулов», решение 121), PoolDirectory, FactoryScan (поиск по фабрикам на своём узле, решение 121) — справочник пулов (решение 58) |
 | `dry_swap.rs` | DexDrySwap, DrySwapPool — итог «сухой сделки DEX» (решение 121, C4): форма маршрута, пулы, выходы, минимум, газ, причина |
 | `presell.rs` | DexPresell — итог симуляции продажи DEX до покупки (решение 234): кошелёк сделки, форма исполнения, выход после реального налога, ожидаемое, минимумы долей, пополнение, газ |

@@ -19,9 +19,9 @@ use super::guard::{self, Guard};
 use super::state::AppState;
 use super::{
     balances, check, coins, control, core_api, delist, deposit_hold, dex, dex_dry, dex_executor,
-    dex_graph, episodes, first_run, journal, report, rules, rules_meta, secrets, settings,
-    settings_io, static_ui, tip_share, uncapped, usdt_transfer, venues, wallet_queue, wallets,
-    wallets_dex, windows, ws,
+    dex_graph, episodes, first_run, journal, pool_cond_stat, report, rules, rules_meta, secrets,
+    settings, settings_io, static_ui, tip_share, uncapped, usdt_transfer, venues, wallet_queue,
+    wallets, wallets_dex, windows, ws,
 };
 
 /// Собирает все маршруты API и, если задана папка, раздачу интерфейса — всё под защитой
@@ -54,6 +54,14 @@ pub fn router(state: AppState, guard: Guard, ui_dir: Option<PathBuf>) -> Router 
         .route(
             "/api/venues/{id}/tip-share/reset",
             post(tip_share::reset),
+        )
+        .route(
+            "/api/venues/{id}/pool-cond-stat",
+            get(pool_cond_stat::state),
+        )
+        .route(
+            "/api/venues/{id}/pool-cond-stat/reset",
+            post(pool_cond_stat::reset),
         )
         .route("/api/dex/dry-swap", post(dex_dry::dry_swap))
         .route("/api/dex/dry-cycle", post(dex_dry::dry_cycle))

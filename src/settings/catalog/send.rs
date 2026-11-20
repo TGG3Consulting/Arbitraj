@@ -21,6 +21,10 @@ pub const SUBMIT_METHODS: &[&str] = &["raw", "sync"];
 /// Решение 437 (3): варианты send.tip_mode — тот же список разбирает venues/bsc_dex/send/tip_mode.rs (тест сверяет).
 pub const TIP_MODES: &[&str] = &["fixed", "profit_share"];
 
+/// Решение 439: варианты send.pool_cond_mode — тот же список разбирает venues/bsc_dex/send/pool_cond_mode.rs (тест
+/// сверяет).
+pub const POOL_COND_MODES: &[&str] = &["off", "pools"];
+
 /// Настройки отправки. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static SEND: &[SettingDef] = &[
@@ -45,6 +49,7 @@ pub static SEND: &[SettingDef] = &[
     d("Отправка", "send.tip_share_step_up_pct", K::Decimal, L::NonNegative, "%", V, "Решение 437 (3): только profit_share — на сколько процентных пунктов поднять долю после проигрыша по чаевым (нас опередила транзакция с чаевыми выше наших на пуле маршрута). Не задана — котировок и отправки площадки нет").optional().dex_venue(),
     d("Отправка", "send.tip_share_step_down_pct", K::Decimal, L::NonNegative, "%", V, "Решение 437 (3): только profit_share — на сколько процентных пунктов снизить долю после send.tip_wins_to_step_down побед подряд. Не задана — котировок и отправки площадки нет").optional().dex_venue(),
     d("Отправка", "send.tip_wins_to_step_down", K::Integer, L::Positive, "побед", V, "Решение 437 (3): только profit_share — сколько побед подряд (сделка в блоке без отката) до снижения доли; любой проигрыш обнуляет счёт. Не задана — котировок и отправки площадки нет").optional().dex_venue(),
+    d("Отправка", "send.pool_cond_mode", K::Choice, L::None, "режим", V, "Решение 439: только при dex.gas_mode = eip1559_l1 (Arbitrum) и канале sequencer с окном channel.cond_time_window_s — условие пулов маршрута сделки DEX ↔ DEX через исполнитель в условной отправке секвенсора. off — без условия пулов: условная отправка только с окном времени (как решение 436); пул изменился безвредно — сделка идёт, итог хуже плана откатит minOut исполнителя (платно). pools — с условием пулов (knownAccounts, решение 438): пул маршрута изменился после блока плана — бесплатный отказ −32003, сделка теряется. Значения пулов читаются только при pools. Не задана — условия пулов нет (как off). Статистика по режимам — экран «Каналы отправки», блок «Условие пулов: статистика»").choices(POOL_COND_MODES).optional().dex_venue(),
     d("Кошелёк", "send.deposit_confirmations", K::Integer, L::NonNegative, "блоков", V, "Зачисление в кошелёк: «Зачислен» только когда после блока перевода прошло столько блоков и перевод на кошелёк ненулевой").dex_venue(),
     d("Каналы отправки", "channel.enabled", K::Bool, L::None, "да/нет", CH, "Канал включён (несколько закрытых — параллельно, без чаевых; открытый — только один)"),
     d("Каналы отправки", "channel.url", K::Url, L::None, "URL", CH, "Адрес канала из его официальной документации; ключ в адресе — как {key}"),

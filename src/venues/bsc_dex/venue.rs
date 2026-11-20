@@ -294,6 +294,19 @@ impl Venue for BscDex {
         exec::tip_state::reset(&self.p.ctx, by).await
     }
 
+    /// Решение 439: статистика условия пулов площадки — exec/pool_cond_stat.rs. Ошибки: NotApplicable (не eip1559_l1).
+    async fn pool_cond_stat(&self) -> GatewayResult<crate::core::types::PoolCondStat> {
+        exec::pool_cond_stat::view(&self.p.ctx).await
+    }
+
+    /// Решение 439: «Сбросить статистику» условия пулов — exec/pool_cond_stat.rs. Ошибки: NotApplicable.
+    async fn reset_pool_cond_stat(
+        &self,
+        by: &str,
+    ) -> GatewayResult<crate::core::types::PoolCondStat> {
+        exec::pool_cond_stat::reset(&self.p.ctx, by).await
+    }
+
     /// Балансы кошелька: BNB (eth_getBalance) и известные токены (balanceOf, EIP-20) — wallet/balances.rs. Ошибки: узел, ключ.
     async fn balances(&self) -> GatewayResult<Vec<Balance>> {
         self.p.ctx.bound()?;

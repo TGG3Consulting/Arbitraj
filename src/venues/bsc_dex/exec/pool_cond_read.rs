@@ -6,14 +6,16 @@
 //! план не видел. Чтение — одна пачка JSON-RPC (eth_getStorageAt по слотам, eth_getProof по корням — правила
 //! exec/pool_cond.rs) ОДНОВРЕМЕННО с перечтением пулов (Multicall3) на этом блоке: лишнего круга до узла перед
 //! отправкой нет; время чтения — в журнал сделки (send.pool_cond).
-//! Читается, только если у площадки есть включённый канал sequencer с окном channel.cond_time_window_s (wanted):
-//! отдельного выключателя нет — нет окна, нет условной отправки, нет и условий пулов (снять после 17.01.2027 = снять
-//! окно). Пул без подтверждённых слотов, сбой или срок чтения — сделка идёт без условия на этот пул, причина в строке.
+//! Читается, только если send.pool_cond_mode = pools (решение 439; не задана или off — условия пулов нет, значения
+//! пулов не читаются вовсе, лишних запросов к узлу нет; условная отправка — только с окном времени, решение 436) и у
+//! площадки есть включённый канал sequencer с окном channel.cond_time_window_s (wanted): нет окна — нет условной
+//! отправки, нет и условий пулов (снять после 17.01.2027 = снять окно). Пул без подтверждённых слотов, сбой или срок
+//! чтения — сделка идёт без условия на этот пул, причина в строке.
 //! Кто вызывает: exec/cycle_trade.rs, exec/cycle_exec.rs (перечтение после разрешения).
 //! От чего зависит: exec/{pool_cond, pool_cond_row}.rs, quote/{cycle_legs, verify}.rs, node/{rpc, call}.rs, send/{channels,
-//! sequencer_cond}.rs, ctx.rs.
-//! Настройки: channel.enabled, channel.cond_time_window_s [канал sequencer]; verify.timeout_ms (срок чтения — тот же,
-//! что у перечтения пулов) [площадка DEX].
+//! sequencer_cond, pool_cond_mode}.rs, ctx.rs.
+//! Настройки: send.pool_cond_mode, verify.timeout_ms (срок чтения — тот же, что у перечтения пулов) [площадка DEX];
+//! channel.enabled, channel.cond_time_window_s [канал sequencer].
 //!
 //! Методы (nitro-geth 260bc5dcbd5a16925d7e26145577b2612f30f428): eth_getStorageAt — internal/ethapi/api.go:603-619
 //! (state.GetState — та же функция, что проверка слота, arbitrum_types/txoptions.go:100); eth_getProof —
@@ -37,13 +39,18 @@ use super::super::pools::registry::Entry;
 use super::super::quote::route_calc::Leg;
 use super::super::quote::{Quoting, cycle_legs, verify};
 use super::super::send::channel::Single;
+use super::super::send::pool_cond_mode::{self, PoolCondMode};
 use super::super::send::{channels, sequencer_cond};
 use super::pool_cond::{self, How};
 use super::pool_cond_row::{PoolConds, Row, failed, root, word};
 
-/// Условие пулов нужно: у площадки есть включённый канал sequencer с окном channel.cond_time_window_s. Ошибок нет
-/// (настройка не читается — канал не в счёт).
+/// Условие пулов нужно: send.pool_cond_mode = pools (решение 439; не задана, off или не разобрана — нет) и у площадки
+/// есть включённый канал sequencer с окном channel.cond_time_window_s. Ошибок нет (настройка не читается — канал не в
+/// счёт).
 pub fn wanted(ctx: &Ctx) -> bool {
+    if !matches!(pool_cond_mode::read(ctx), Ok(PoolCondMode::Pools)) {
+        return false;
+    }
     channels::of(ctx)
         .filter(|c| c.single == Some(Single::Sequencer))
         .any(|c| {

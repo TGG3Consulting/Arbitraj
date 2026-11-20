@@ -112,6 +112,12 @@ pub enum ExecKind {
     /// _curveEth). Шаг 28 — только исполнитель v5 (exec_callback.rs since). Вид семейства остаётся CURVE (of); шаг
     /// CURVE_ETH выбирает exec/executor/entry.rs, когда монета пары — нативная монета пула (StableData.native).
     CurveEth,
+    /// Решение 486: пул Shell Protocol (Proteus) — обмен через учётный контракт Ocean: `doMultipleInteractions` с
+    /// wrapErc20 (вход; у нативной монеты учёта — обёртка withdraw и value вызова), computeOutputAmount пула и
+    /// unwrapErc20 / unwrapEther (выход; нативная монета — ETH от Ocean → deposit в обёртку) с GET_BALANCE_DELTA
+    /// (contracts/ArbExecutor.sol _shell). data = abi.encode(uint8 native, uint8 decimalsIn). Шаг 31 — только
+    /// исполнитель v5 (exec_callback.rs since).
+    Shell,
 }
 
 impl ExecKind {
@@ -144,6 +150,7 @@ impl ExecKind {
             ExecKind::Ekubo => "EKUBO",
             ExecKind::AeroBasic => "AERO_BASIC",
             ExecKind::CurveEth => "CURVE_ETH",
+            ExecKind::Shell => "SHELL",
         }
     }
 
@@ -258,6 +265,10 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 447: Core.lock / swap / forward / startPayments / completePayments / withdraw (EkuboProtocol/evm-contracts
         // @61d09daa src/base/FlashAccountant.sol L146-L187, L190-L221, L224-L381; src/Core.sol L510-L858). Шаг 25 (решение 456).
         "ekubo" => ExecKind::Ekubo,
+        // Решение 486: Ocean.doMultipleInteractions — вызывающий = пользователь, без белого списка (Ocean.sol aaa0ccf
+        // L271-L297, v3 Sourcify 0x96B4f4E4… L190-L201); computeOutputAmount пула — только от Ocean (onlyOcean), учёт
+        // передаёт адрес пользователя (LiquidityPool.sol L135). Шаг 31, только исполнитель v5.
+        "shell_proteus" => ExecKind::Shell,
         _ => return None,
     })
 }

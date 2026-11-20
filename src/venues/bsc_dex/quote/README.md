@@ -106,6 +106,8 @@
 | `quoter_lb.rs` | Сверка Liquidity Book V2.1 (решение 290): getSwapOut(amountIn, swapForY) самого пула через eth_call; остаток входа > 0 — выхода нет (swap откатился бы) |
 | `quoter_fluid.rs` | Сверка Fluid DEX T1 (решение 440): estimateSwapIn(пул, swap0to1, вход, 0) официального резолвера FluidDexReservesResolver (dex.quoter) через eth_call; 0 — выхода нет (пределы слоя ликвидности или скачок цены) |
 | `fluid_depth.rs` | Fluid DEX T1 (решение 440): спот-цена для сизинга пробы, пустота пула, комиссия в процентах и глубина в полосе цены по мнимым резервам частей (оценки, не сверяемые величины) |
+| `quoter_shell.rs` | Сверка Shell Protocol Proteus (решение 486): реализация пула swapGivenInputAmount(балансы прочитанного состояния, вход в единицах учёта, сторона) и decimals() токена выхода — одной пачкой Multicall3; выход переводится в знаки токена с комиссией вывода учёта |
+| `shell_depth.rs` | Shell Protocol Proteus (решение 486): спот малой пробы формулой пула, пустота (заморожен / баланс < MIN_BALANCE), комиссия ≈ 2·100/BASE_FEE % и глубина в полосе по средней цене исполнения (бисекция формулой пула) |
 | `quoter_balancer_v3.rs` | Сверка Balancer V3 (решение 441): Router V3 querySwapSingleTokenExactIn(пул, вход, выход, сумма, 0, «») через eth_call без from (Vault.quote — tx.origin = 0) — dex.quoter |
 | `quoter_balancer_v3_buffer.rs` | Решение 474: сверка пары Balancer V3 через буфер ERC4626 — BatchRouter V3 (dex.bv3_batch_router) querySwapExactIn с путём «буфер → пул → буфер» (шаги isBuffer), ответ — pathAmountsOut[0]; обёртки пары по направлению (wrappers — общие с шагом 27) |
 | `quoter_crypto.rs` | Сверка crypto-пула Curve (решение 442): get_dy(i, j, dx) самого пула через eth_call (индексы — из состояния Crypto) |

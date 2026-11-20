@@ -108,6 +108,7 @@ pub fn needs(f: &Family) -> bool {
             | Proto::BalancerV3
             | Proto::LbV21
             | Proto::FluidT1
+            | Proto::ShellProteus
             | Proto::LbV20
             | Proto::LbV22
     )

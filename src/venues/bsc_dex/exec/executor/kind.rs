@@ -14,6 +14,7 @@
 //! Решение 474: BALANCER_V3_BUF = 27 — только сборка v5 (не собрана), data — abi.encode(address пула, address wIn,
 //! address wOut) — обёртки ERC4626 входа и выхода (0 — сторона без буфера).
 //! Решение 472: CURVE_ETH = 28 — только v5, data — abi.encode(int128 i, int128 j, bool ethIn).
+//! Решение 486: SHELL = 31 — только v5, data — abi.encode(address primitive, uint8 native, uint8 decIn).
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
 //! От чего зависит: exec/executor/abi.rs, alloy sol-types.
 //! Настройки: нет.
@@ -131,6 +132,30 @@ pub enum Params {
     /// eth_in — монета i нативная (вход: обёртка withdraw → exchange{value}); иначе монета j (выход: ETH от пула →
     /// deposit в обёртку). Токены шага — обёртка и встречная монета. data = abi.encode(int128, int128, bool).
     CurveEth { i: i128, j: i128, eth_in: bool },
+    /// Решение 486 (только исполнитель v5): пул Shell Protocol Proteus — обмен через учёт Ocean (пул шага — Ocean):
+    /// doMultipleInteractions(wrap входа, computeOutputAmount пула, unwrap выхода). data = abi.encode(address
+    /// primitive, uint8 native, uint8 decIn) — см. ShellStep.
+    Shell(ShellStep),
+}
+
+/// Решение 486: параметры шага SHELL (см. Params::Shell).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShellStep {
+    /// Пул (LiquidityPoolProxy) — primitive взаимодействия computeOutputAmount.
+    pub primitive: Address,
+    /// 0 — обе стороны ERC-20; 1 — вход в нативной монете учёта (токен шага — обёртка: withdraw → value вызова);
+    /// 2 — выход в нативной монете (ETH от Ocean → deposit в обёртку).
+    pub native: u8,
+    /// Знаков токена входа (≤ 18): wrapErc20 точной суммой = сумма · 10^(18 − decIn).
+    pub dec_in: u8,
+}
+
+impl ShellStep {
+    /// abi.encode(address primitive, uint8 native, uint8 decIn) — uint8 занимает слово. Ошибок нет.
+    pub fn data(&self) -> Bytes {
+        let t = (self.primitive, U256::from(self.native), U256::from(self.dec_in));
+        Bytes::from(t.abi_encode_params())
+    }
 }
 
 /// Решение 440: параметры шага FLUID (см. Params::Fluid).
@@ -189,6 +214,8 @@ impl Params {
             Params::AeroBasic => 26,
             // Решение 472 (T472-08): CURVE_ETH = 28 — только v5 (сборки v5 пока нет).
             Params::CurveEth { .. } => 28,
+            // Решение 486: SHELL = 31 — только v5 (сборки v5 пока нет).
+            Params::Shell(_) => 31,
         }
     }
 
@@ -222,6 +249,7 @@ impl Params {
             Params::UniV4 { key } => Bytes::from(key.pool_key().abi()),
             Params::InfCl { key } | Params::InfBin { key } => Bytes::from(key.pool_key().abi()),
             Params::Fluid(f) => f.data(),
+            Params::Shell(s) => s.data(),
             _ => Bytes::new(),
         }
     }

@@ -559,6 +559,20 @@ pub fn swap(
                 complete: true,
             })
         }
+        // Пул Shell Protocol Proteus (решение 486): порт swapGivenInputAmount реализации и пути учёта Ocean (вход в
+        // единицы учёта, выход — unwrap с комиссией вывода и знаками токена; math/proteus_swap.rs). Только точный вход.
+        (PoolState::Proteus(d), PoolKind::Proteus) => {
+            if !exact_in {
+                return Err(why("Shell: точный выход не поддерживается"));
+            }
+            let in_x = d.is_x(token_in).ok_or_else(|| why("Shell: токен входа не из пула"))?;
+            let out = super::super::math::proteus_swap::quote_in(d, in_x, amount).ok_or_else(none)?;
+            Ok(Swapped {
+                amount_in: amount,
+                amount_out: out,
+                complete: true,
+            })
+        }
         // Ekubo (решение 447): порт swap ядра по прочитанному состоянию (math/ekubo_swap.rs), у пула с MEVCapture —
         // доплата с выхода (math/ekubo_mev.rs, худший tickLast). Только точный вход (шаг EKUBO меняет точный вход).
         // Решение 454: направление — в порядке ключа (нативный ETH — token0 ключа, pools/ekubo_native.rs); у пула с

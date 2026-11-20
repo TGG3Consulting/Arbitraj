@@ -32,6 +32,7 @@
 //! | BalancerV2 | — | без условия | балансы в общем Vault: слоты посчитаны только вручную по AST (/home/claude/src-ext/reports/arb-known-accounts.md, 3.1), не сверены — docs/TASKS.md «Решение 438» |
 //! | BalancerV3 | — | без условия | решение 441: балансы в общем Vault V3, курсы — у поставщиков курса; слоты не сверены |
 //! | WooPP, пары общего контракта (PoolRef::Member) | — | без условия | общий контракт на все монеты, слоты не опубликованы |
+//! | ShellProteus | — | без условия | балансы пула — в учёте Ocean (ERC-1155), обмен не пишет хранилище пула; слоты Ocean не сверены (решение 486) |
 //! | InfinityCl, InfinityBin, InfinityStable | — | без условия | виды только BSC (в Arbitrum нет), слоты менеджера/крючка не сверены |
 //! | прочие виды со своим контрактом на пул (Algebra, AlgebraIntegral, Solidly*, Curve*, PancakeStable, Lista, Saddle, Nomi, DODO, KyberDmm, Smardex, Maverick, iZi, BiswapV3, MetricOmm, FluidT1) | пул | корень (eth_getProof … storageHash) | раскладка не подтверждена (Algebra Integral: версия Camelot V4 не сверена; Vyper, закрытые исходники; Fluid T1 — исходник развёрнутых пулов до 1.1.0 не опубликован; резервы Fluid лежат в слое Liquidity — корень пула ловит обмены по пулу, но не операции других пользователей слоя ликвидности) |
 //!
@@ -99,6 +100,10 @@ pub fn rule(e: &Entry) -> How {
         // Решение 441: балансы и курсы пула V3 — в хранилище Vault V3 и у поставщиков курса; слоты не сверены.
         (_, Proto::BalancerV3) => How::Off(
             "Balancer V3: балансы пула в общем Vault V3, курсы — у поставщиков курса; слоты не сверены (решение 441)",
+        ),
+        // Решение 486: балансы пула Shell — в учёте Ocean (ERC-1155); корень хранилища пула обмен не меняет.
+        (_, Proto::ShellProteus) => How::Off(
+            "Shell: балансы пула в учёте Ocean (ERC-1155), слоты Ocean не сверены (решение 486)",
         ),
         (_, Proto::InfinityCl | Proto::InfinityBin | Proto::InfinityStable) => How::Off(
             "PancakeSwap Infinity: вид только BSC, слоты менеджера и крючка не сверены",

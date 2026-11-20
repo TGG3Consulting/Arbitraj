@@ -252,6 +252,7 @@ pub fn one_by_one(f: &Family) -> bool {
         || f.proto == Proto::BalancerV3
         || f.proto == Proto::LbV21
         || f.proto == Proto::FluidT1
+        || f.proto == Proto::ShellProteus
         || f.proto.is_curve_crypto()
         || f.proto == Proto::CamelotV2
         || f.proto == Proto::AeroBasic

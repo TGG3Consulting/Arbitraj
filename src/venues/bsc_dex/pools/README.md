@@ -258,6 +258,12 @@ DEX — строки таблицы сопоставления (решение 5
 | `events.rs`, `events_v2.rs`, `events_v3.rs`, `events_cl.rs`, `events_bin.rs` | Применение событий |
 | `events_elastic.rs` | События KyberSwap Elastic (решение 81): Swap → цена/тик/baseL; Mint/Burn/BurnRTokens → перечитывание (reinvestL/карта тиков) |
 | `events_fluid.rs` | События Fluid DEX T1 (решение 440): Swap, LogArbitrage, ликвидность, настройки пула → перечитывание пула |
+| `abi_shell.rs` | ABI Shell Protocol (решение 486): пул LiquidityPoolProxy (ocean, xToken, yToken, implementation, poolFrozen, события), реализация Proteus (getSlopes / getAs / getBs / getKs, BASE_FEE, swapGivenInputAmount), учёт Ocean (balanceOfBatch, unwrapFeeDivisor), decimals; id токена в учёте keccak256(токен, 0), нативная монета — метка «Ether» |
+| `shell_sides.rs` | Shell (решение 486): стороны пула (id в учёте) ↔ токены пары (keccak256 или нативная монета учёта → dex.native_wrapped); формула полезности реализации по спискам dex.proteus_utility_v1 / _v2 |
+| `shell_list.rs` | Shell (решение 486): пулы dex.stable_pools — источник справочника (stable_list.rs), монеты пула — среди монет подписки и встречных по id в учёте |
+| `verify_shell.rs` | Проверка пула Shell (решение 486): адрес в dex.stable_pools, учёт ocean() = dex.vault, стороны = монета и встречный, реализация в списках сверенных |
+| `load_shell.rs` | Состояние пула Shell на блоке (решение 486): поля пула; балансы и комиссия вывода учёта, параметры срезов и BASE_FEE реализации, decimals токенов — PoolState::Proteus |
+| `events_shell.rs` | События пула Shell (решение 486): Swap / Deposit / Withdraw / InitialLiquidity / ImplementationChanged / PoolFrozen → перечитать пул; ещё каждым блоком |
 | `events_dodo.rs` | События DODO PMM (решение 86b): любое событие кривой (DODOSwap/BuyShares/SellShares/RChange/DODOFlashLoan) → перечитывание пула (событие не несёт пост-состояние кривой) |
 | `events_curve.rs` | События StableSwap (решение 122 F): любое событие пула (обмен, ликвидность, комиссия, A) → перечитывание |
 | `events_curve_ng.rs` | События Curve NG (решение 275): любое событие пула → перечитать (ещё — каждый блок) |

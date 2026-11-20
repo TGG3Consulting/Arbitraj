@@ -157,9 +157,20 @@ fn kinds_match_contract_constants() {
                 eth_in: true,
             },
         ),
+        // Решение 486: пул Shell Protocol Proteus через учёт Ocean — шаг 31, только v5 (сборки v5 нет).
+        ("SHELL", Params::Shell(shell_step(2))),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
+    }
+}
+
+/// Шаг SHELL (решение 486): пул DAI+USDC Shell v2 (docs.shellprotocol.io, contract-addresses), вид нативной монеты.
+fn shell_step(native: u8) -> kind::ShellStep {
+    kind::ShellStep {
+        primitive: address!("0x96C7dC9d473e621a1e3968Cb862803EAEDe21888"),
+        native,
+        dec_in: 6,
     }
 }
 
@@ -204,6 +215,13 @@ fn step_data_layouts() {
     assert_eq!(u32::abi_decode(&v2).unwrap(), 2500);
     let c = Params::Curve { i: 1, j: 0 }.data();
     assert_eq!(<(i128, i128)>::abi_decode_params(&c).unwrap(), (1, 0));
+    // Решение 486: SHELL — abi.encode(address primitive, uint8 native, uint8 decIn): три слова.
+    let sh = Params::Shell(shell_step(1)).data();
+    assert_eq!(sh.len(), 96);
+    assert_eq!(
+        <(Address, u8, u8)>::abi_decode_params(&sh).unwrap(),
+        (shell_step(1).primitive, 1, 6)
+    );
     // Решение 472: CURVE_ETH — abi.encode(int128 i, int128 j, bool ethIn): три слова.
     let ce = Params::CurveEth {
         i: 0,
@@ -405,13 +423,14 @@ fn stable_bnb_contract_rules_present() {
     // две, _unwrapAll executeNative — одна, решение 272; шаг FLUID — две, решение 440: вход и выход в нативной монете;
     // шаг EKUBO — две, решение 454: нативный вход и выход; решение 456 — слияние: 3 + 2 + 2 = 7; шаг CURVE_ETH — две,
     // решение 472: вход и выход в нативном ETH — 9; шаги v5 AERO_BASIC = 26 и BALANCER_V3_BUF = 27 нативной монеты не
-    // ждут — слияние t247: по итоговому contracts/ArbExecutor.sol 9 установок и 9 сбросов). Только строки кода
-    // (комментарии тоже содержат «bnbFrom = …»).
+    // ждут — слияние t247: по итоговому contracts/ArbExecutor.sol 9 установок и 9 сбросов; шаг SHELL — две, решение
+    // 486: вход в нативной монете учёта (обёртка) и выход из Ocean — 11). Только строки кода (комментарии тоже
+    // содержат «bnbFrom = …»).
     let code: Vec<&str> =
         src.lines().map(str::trim).filter(|l| l.starts_with("bnbFrom = ")).collect();
     let resets = code.iter().filter(|l| **l == "bnbFrom = address(0);").count();
     let sets = code.len() - resets;
-    assert_eq!(resets, 9);
+    assert_eq!(resets, 11);
     assert_eq!(sets, resets);
     let abi = abi();
     assert_eq!(

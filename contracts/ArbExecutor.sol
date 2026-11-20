@@ -34,7 +34,9 @@
 // токен обёртки пула: в том же unlock, что BALANCER_V3, — erc4626BufferWrapOrUnwrap (WRAP) → swap →
 // erc4626BufferWrapOrUnwrap (UNWRAP) → settle / sendTo; шаг 23 — как был, обёрток нет) и CURVE_ETH = 28 (решение 472,
 // T472-08: пул Curve с нативным ETH — exchange{value}(int128, int128, uint256, uint256), обёртка withdraw / deposit);
-// всё прочее — как v4. Сборки v5 нет: contracts/out/ — v4; пересобрать как v5 (бот: Version::V5) — вне агентов
+// всё прочее — как v4. Решение 486: v5 — ещё шаг SHELL = 31 (пул Shell Protocol Proteus через учёт Ocean:
+// doMultipleInteractions wrap → computeOutputAmount → unwrap, нативная монета учёта — через обёртку). Сборки v5 нет:
+// contracts/out/ — v4; пересобрать как v5 (бот: Version::V5) — вне агентов
 // (docs/TASKS.md «нужна сборка исполнителя v5»).
 pragma solidity 0.8.37;
 
@@ -129,6 +131,17 @@ contract ArbExecutor {
     // `assert msg.value == _dx` (L580), выход ETH — raw_call(_receiver, b"", value=dy) (L606, весь газ). data =
     // abi.encode(int128 i, int128 j, bool ethIn); токены шага — обёртка wnative и встречная монета (_curveEth).
     uint8 internal constant CURVE_ETH = 28;
+    // Решение 486 (только v5): пул Shell Protocol Proteus — обмен через учётный контракт Ocean (s.pool = Ocean, пул —
+    // primitive взаимодействия): Ocean.doMultipleInteractions([wrapErc20(tokenIn, сумма · 10^(18 − decIn)),
+    // computeOutputAmount(пул, idIn, idOut, GET_BALANCE_DELTA), unwrapErc20(tokenOut, GET_BALANCE_DELTA)], [idIn, idOut])
+    // — дельты учёта в конце нулевые, ERC-1155 исполнителю не начисляется (Shell-Protocol aaa0ccf Ocean.sol L513-L620;
+    // GET_BALANCE_DELTA = type(uint256).max L108; _erc20Wrap: transferFrom ровно суммы при decIn ≤ 18 — L980-L1032,
+    // L1293-L1318). data = abi.encode(address primitive, uint8 native, uint8 decIn): native 1 — вход в нативной монете
+    // учёта (токен шага — обёртка: withdraw → value вызова, wrap-взаимодействия нет: Ocean сам зачисляет msg.value L531),
+    // 2 — выход в ней (unwrapEther: ETH от Ocean transfer'ом — receive пускает только Ocean; → deposit в обёртку).
+    uint8 internal constant SHELL = 31;
+    // Метка нативной монеты учёта Ocean: hexadecimal(ascii("Ether")) (Ocean.sol aaa0ccf L197) — константа протокола.
+    address internal constant SHELL_ETHER = address(0x4574686572);
     // Пределы цены Ekubo MIN_SQRT_RATIO_RAW / MAX_SQRT_RATIO_RAW (evm-contracts@61d09daa src/types/sqrtRatio.sol L13, L15):
     // тот же предел ставит Router (withDefaultSqrtRatioLimit, swapParameters.sol L74-L82).
     uint256 internal constant EKUBO_MIN_SQRT = 4611797791050542631;
@@ -156,7 +169,8 @@ contract ArbExecutor {
     // abi.encode(V4PoolKey); INF_CL / INF_BIN — abi.encode(InfPoolKey); FLUID — abi.encode(bool swap0to1, uint8 native,
     // address liquidity); EKUBO — abi.encode(bytes32 config, bool native, bool forward) (решение 454); CURVE_ETH —
     // abi.encode(int128 i, int128 j, bool ethIn) (решение 472: ethIn — монета i нативная, tokenIn = обёртка; иначе
-    // монета j нативная, tokenOut = обёртка); остальные — пусто.
+    // монета j нативная, tokenOut = обёртка); SHELL — abi.encode(address primitive, uint8 native, uint8 decIn) (решение
+    // 486); остальные — пусто.
     struct Step {
         uint8 kind;
         address pool;
@@ -441,6 +455,8 @@ contract ArbExecutor {
             _balancerV3(s, amount, to);
         } else if (k == EKUBO) {
             _ekubo(s, amount, to);
+        } else if (k == SHELL) {
+            _shell(s, amount);
         } else if (k == WOO) {
             uint256 had = IERC20(s.tokenIn).balanceOf(s.pool);
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
@@ -595,6 +611,65 @@ contract ArbExecutor {
         if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
             _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
         }
+    }
+
+    // Решение 486 (v5): пул Shell Protocol Proteus (SHELL, ссылки — у константы). Выход — исполнителю (msg.sender
+    // учёта), дальше _sweep; должен вырасти. Порог выхода шага 0 (metadata = 0: minimumOutputAmount пула) — итог
+    // маршрута проверяет minOut. Разрешение учёту после шага — 0.
+    function _shell(Step calldata s, uint256 amount) internal {
+        (address prim, uint8 nat, uint8 dec) = abi.decode(s.data, (address, uint8, uint8));
+        require(nat <= 2 && dec <= 18, "shell");
+        address ocean = s.pool;
+        uint256 inId = _oceanId(nat == 1 ? SHELL_ETHER : s.tokenIn);
+        uint256 outId = _oceanId(nat == 2 ? SHELL_ETHER : s.tokenOut);
+        IShellOcean.Interaction[] memory it = new IShellOcean.Interaction[](nat == 1 ? 2 : 3);
+        uint256 n;
+        if (nat != 1) {
+            it[n++] = IShellOcean.Interaction(_ia(0, s.tokenIn), 0, 0, amount * 10 ** (18 - dec), 0);
+        }
+        it[n++] = IShellOcean.Interaction(_ia(7, prim), inId, outId, type(uint256).max, 0);
+        it[n] = nat == 2
+            ? IShellOcean.Interaction(_ia(8, address(0)), 0, 0, type(uint256).max, 0)
+            : IShellOcean.Interaction(_ia(1, s.tokenOut), 0, 0, type(uint256).max, 0);
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = inId;
+        ids[1] = outId;
+        uint256 had = IERC20(s.tokenOut).balanceOf(address(this));
+        if (nat == 1) {
+            require(s.tokenIn.code.length > 0, "token code");
+            bnbFrom = s.tokenIn;
+            IWBNB(s.tokenIn).withdraw(amount);
+            bnbFrom = address(0);
+            IShellOcean(ocean).doMultipleInteractions{value: amount}(it, ids);
+        } else {
+            _call(s.tokenIn, abi.encodeCall(IERC20.approve, (ocean, amount)));
+            if (nat == 2) {
+                require(s.tokenOut.code.length > 0, "token code");
+                uint256 ethHad = address(this).balance;
+                bnbFrom = ocean;
+                IShellOcean(ocean).doMultipleInteractions(it, ids);
+                bnbFrom = address(0);
+                // Только ETH, пришедший от Ocean этим шагом (посторонний уходит владельцу в _sweepBnb).
+                IWBNB(s.tokenOut).deposit{value: address(this).balance - ethHad}();
+            } else {
+                IShellOcean(ocean).doMultipleInteractions(it, ids);
+            }
+            if (IERC20(s.tokenIn).allowance(address(this), ocean) > 0) {
+                _call(s.tokenIn, abi.encodeCall(IERC20.approve, (ocean, 0)));
+            }
+        }
+        require(IERC20(s.tokenOut).balanceOf(address(this)) > had, "out");
+    }
+
+    // id токена в учёте Ocean: keccak256(abi.encodePacked(адрес, uint256(0))) (OceanERC1155.sol aaa0ccf L307-L313).
+    function _oceanId(address t) internal pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(t, uint256(0))));
+    }
+
+    // interactionTypeAndAddress: старший байт — вид взаимодействия, младшие 20 — адрес (Ocean.sol
+    // _unpackInteractionTypeAndAddress: uint8(bytes32[0]), address(uint160(uint256(...)))).
+    function _ia(uint8 t, address a) internal pure returns (bytes32) {
+        return bytes32((uint256(t) << 248) | uint256(uint160(a)));
     }
 
     // Приём BNB — только от bnbFrom (transient). Укладывается в 2300 газа (стипендия transfer у WBNB.withdraw; пулы

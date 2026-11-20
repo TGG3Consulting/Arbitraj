@@ -254,6 +254,11 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
         (PoolState::SmartColDebt(d), _) => super::fluid_depth::fee_pct(d).ok_or_else(|| {
             ctx.err(ErrorCode::BadResponse, "комиссия Fluid не помещается в Decimal")
         }),
+        // Пул Shell Protocol Proteus (решение 486): вход и выход округляются на сумму / BASE_FEE — ≈ 2 · 100 / BASE_FEE %
+        // (quote/shell_depth.rs); точная комиссия — в выходе котировки (math/proteus_swap.rs).
+        (PoolState::Proteus(d), _) => super::shell_depth::fee_pct(d).ok_or_else(|| {
+            ctx.err(ErrorCode::BadResponse, "BASE_FEE пула Shell не считается в проценты")
+        }),
         // Ekubo (решение 447): комиссия пула 0.64 (config, math/ekubo_config.rs) → проценты = fee · 100 / 2^64 (в 18
         // знаках); доплата MEVCapture — в выходе котировки (pool_quote.rs), отдельной строкой не идёт.
         (PoolState::Ekubo(d), _) => {

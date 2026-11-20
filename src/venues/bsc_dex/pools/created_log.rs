@@ -161,6 +161,8 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // (factory/main.sol L62) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы приходят из
             // справочника индексатора.
             Proto::FluidT1 => continue,
+            // Shell Protocol Proteus (решение 486): фабрики с событием нет — пулы из списка dex.stable_pools (stable_list.rs).
+            Proto::ShellProteus => continue,
             // Liquidity Book v2.0 (решение 445): LBPairCreated фабрики v2.0 (ILBFactory.sol v2.0.0 L26-L32) — подписка не
             // подключена (как у v2.1, техдолг docs/ROADMAP.md): новые пулы — из справочника индексатора.
             Proto::LbV20 => continue,

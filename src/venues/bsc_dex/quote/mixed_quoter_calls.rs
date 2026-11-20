@@ -186,5 +186,12 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "Fluid не исполняется умным маршрутом (только шаг FLUID контракта-исполнителя)",
             ));
         }
+        // Пул Shell Protocol Proteus (решение 486): MixedQuoter его не знает — сверка реализацией пула.
+        PoolKind::Proteus => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "Shell не исполняется умным маршрутом (только шаг SHELL контракта-исполнителя)",
+            ));
+        }
     })
 }

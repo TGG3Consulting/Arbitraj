@@ -132,6 +132,9 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
         // Пул Fluid DEX T1 (решение 440): отношение мнимых резервов основной части (quote/fluid_depth.rs) — оценка размера
         // пробы (решение 73.19), не сверяемая величина.
         PoolState::SmartColDebt(d) => super::fluid_depth::spot(d, e.coin, amount),
+        // Пул Shell Protocol Proteus (решение 486): спот малой пробы формулой пула (quote/shell_depth.rs) — оценка
+        // размера пробы, не сверяемая величина.
+        PoolState::Proteus(d) => super::shell_depth::spot(d, e.coin, amount),
         PoolState::V3 { sqrt_price_x96, .. }
         | PoolState::Cl { sqrt_price_x96, .. }
         | PoolState::Elastic { sqrt_price_x96, .. }

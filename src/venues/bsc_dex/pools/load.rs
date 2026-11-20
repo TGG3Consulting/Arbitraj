@@ -249,6 +249,19 @@ pub async fn state(
             fee_pips: None,
         });
     }
+    // Shell Protocol Proteus (решение 486): вид ядра Proteus — поля пула, балансы в учёте Ocean (dex.vault), параметры
+    // реализации и знаки токенов (load_shell.rs).
+    if f.proto == Proto::ShellProteus {
+        let PoolRef::Contract(a) = reference else {
+            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на пул Shell не того вида", f.title)));
+        };
+        return Ok(Loaded {
+            state: super::load_shell::load(ctx, f.id, *a, pair, block).await?,
+            ticks: None,
+            bins: None,
+            fee_pips: None,
+        });
+    }
     // Camelot V2 (решение 443): вид ядра Solidly, пара — отдельный контракт; одно try_many (load_camelot.rs).
     if f.proto == Proto::CamelotV2 {
         let PoolRef::Contract(a) = reference else {

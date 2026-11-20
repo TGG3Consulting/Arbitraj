@@ -36,7 +36,7 @@ use alloy_primitives::Address;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
-use crate::core::types::{PoolRef, PoolState, SmartColDebtData};
+use crate::core::types::{PoolRef, PoolState, ProteusData, SmartColDebtData};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::super::ctx::Ctx;
@@ -48,7 +48,7 @@ use super::super::super::pools::registry::Entry;
 use super::super::super::pools::stable_native;
 use super::super::super::quote::pool_quote;
 use super::code::Version;
-use super::kind::{FluidStep, InfKey, Params, STABLE_NATIVE, V4Key};
+use super::kind::{FluidStep, InfKey, Params, STABLE_NATIVE, ShellStep, V4Key};
 
 /// Может ли шаг через этот пул идти исполнителем: у семейства есть вид шага (Family.executor_kind) и у пула свой
 /// контракт. Принимает: семейство и ссылку на пул (хватает хопа маршрута). Возвращает: вид шага и адрес пула или
@@ -292,6 +292,18 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             }
             _ => {
                 let why = format!("{}: Fluid — нет состояния, пауза или чужой вход", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
+        // Решение 486: пул Shell Protocol Proteus — шаг вызывает учёт Ocean (ocean() пула, проверен = dex.vault), data —
+        // пул, нативная сторона учёта на входе / выходе и знаки токена входа (shell_step); заморожен или вход не из пула —
+        // шаг не строится.
+        ExecKind::Shell => match &e.pool.state {
+            PoolState::Proteus(d) if !d.frozen && d.is_x(token_in).is_some() => {
+                return shell_step(d, pool, token_in).map_err(|w| ctx.err(ErrorCode::NoRoute, w));
+            }
+            _ => {
+                let why = format!("{}: Shell — нет состояния, заморожен или чужой вход", e.family.id);
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
@@ -591,4 +603,25 @@ fn fee_pips(ctx: &Ctx, e: &Entry) -> GatewayResult<u32> {
             format!("{}: комиссия {pct}% вне диапазона", e.family.id),
         )
     })
+}
+
+/// Решение 486: шаг SHELL. Принимает: состояние пула Proteus, адрес пула (прокси — primitive учёта), токен входа.
+/// Возвращает: (параметры, учёт Ocean — контракт шага) или причину (токен не из пула, знаков входа больше 18 — учёт
+/// округлил бы вход с пылью).
+fn shell_step(
+    d: &ProteusData,
+    pool: Address,
+    token_in: Address,
+) -> Result<(Params, Address), String> {
+    let in_x = d.is_x(token_in).ok_or("Shell: токен входа не из пула")?;
+    let (native_in, native_out, dec_in) = if in_x {
+        (d.native_x, d.native_y, d.dec_x)
+    } else {
+        (d.native_y, d.native_x, d.dec_y)
+    };
+    if dec_in > 18 {
+        return Err(format!("Shell: у токена входа {dec_in} знаков (> 18) — вход в учёт не точен"));
+    }
+    let native = if native_in { 1 } else if native_out { 2 } else { 0 };
+    Ok((Params::Shell(ShellStep { primitive: pool, native, dec_in }), d.ocean))
 }

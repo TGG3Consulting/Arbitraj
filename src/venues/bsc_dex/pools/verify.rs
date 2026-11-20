@@ -97,6 +97,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut mav = Vec::new();
     let mut inf_stable = Vec::new();
     let mut fluid = Vec::new();
+    let mut shell = Vec::new();
     let mut ekubo = Vec::new();
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
@@ -135,6 +136,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::Maverick => mav.push(i),
             Proto::InfinityStable => inf_stable.push(i),
             Proto::FluidT1 => fluid.push(i),
+            Proto::ShellProteus => shell.push(i),
             Proto::Ekubo => ekubo.push(i),
             _ => v2v3.push(i),
         }
@@ -275,6 +277,11 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     // Fluid DEX T1 (решение 440): isDex фабрики + constantsView пула (verify_fluid.rs).
     let list: Vec<Candidate> = fluid.iter().map(|i| cands[*i].clone()).collect();
     for (i, r) in fluid.into_iter().zip(verify_fluid::verify(ctx, &list, size).await) {
+        out[i] = Some(r);
+    }
+    // Shell Protocol Proteus (решение 486): список dex.stable_pools, учёт dex.vault, стороны и реализация (verify_shell.rs).
+    let list: Vec<Candidate> = shell.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in shell.into_iter().zip(super::verify_shell::verify(ctx, &list, size).await) {
         out[i] = Some(r);
     }
     // Ekubo (решение 447): ключ у PoolKeyIndex + состояние у ядра (verify_ekubo.rs).

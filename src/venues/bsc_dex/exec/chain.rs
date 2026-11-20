@@ -188,5 +188,10 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "Fluid не исполняется Universal Router (шаг FLUID контракта-исполнителя)",
         )),
+        // Пул Shell Protocol Proteus (решение 486): только шаг SHELL исполнителя (через учёт Ocean).
+        PoolKind::Proteus => Err(ctx.err(
+            ErrorCode::Internal,
+            "Shell не исполняется Universal Router (шаг SHELL контракта-исполнителя)",
+        )),
     }
 }

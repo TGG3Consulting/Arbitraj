@@ -4,6 +4,7 @@
 //! читаются у самого пула (getToken(k) / coins(k) до первого отката — load_saddle::tokens_of, load_curve::coins_of),
 //! кандидат — каждая пара (монета подписки, встречный), обе монеты которой в пуле; дальше — index::take → проверка
 //! (verify_stable_u.rs / verify_curve.rs) → реестр. Список не задан или пуст — ничего (как до 292). Одна пачка на проход.
+//! Решение 486: и пулы Shell Protocol (shell_proteus) — стороны пула по id в учёте среди монет и встречных (shell_list.rs).
 //! Кто вызывает: pools/factory_scan.rs (pass); sort — ещё tests/bsc_dex_stable_list_sort.rs.
 //! От чего зависит: ctx.rs, families.rs (all, classify, Proto), abi_saddle.rs, abi_curve.rs, load_saddle.rs,
 //! load_curve.rs, node/call.rs (try_chunks), directory/gt_parse.rs (IndexedPool), stable_native.rs (решение 481:
@@ -47,12 +48,17 @@ pub struct Extra {
 /// Вид, у которого список dex.stable_pools — источник пулов (решение 292). Ошибок нет.
 pub fn is_listed_kind(proto: Proto) -> bool {
     // Решение 453: tricrypto 2021 (curve_tricrypto_v1) — тоже пул из списка, монеты — coins(k).
-    matches!(proto, Proto::SaddleStable | Proto::CurveStable | Proto::CurveTricryptoV1)
+    // Решение 486: пулы Shell Protocol (shell_proteus) — тоже из списка, стороны — по id в учёте (shell_list.rs).
+    matches!(
+        proto,
+        Proto::SaddleStable | Proto::CurveStable | Proto::CurveTricryptoV1 | Proto::ShellProteus
+    )
 }
 
 /// Вызовы «монеты пула»: Saddle — getToken(0..MAX_TOKENS), Curve 2020 — coins(0..MAX_COINS). Ошибок нет.
 pub fn token_calls(proto: Proto, pool: Address) -> Vec<(Address, Bytes)> {
     match proto {
+        Proto::ShellProteus => super::shell_list::calls(pool),
         Proto::SaddleStable => (0..MAX_TOKENS)
             .map(|k| {
                 let data = ISaddleSwap::getTokenCall { index: k as u8 }.abi_encode();
@@ -217,7 +223,14 @@ pub fn sort_with(
             continue;
         };
         let native_ok = matches!(f.variant, Variant::CurvePlain | Variant::CurveOracle);
-        let mapped = tokens(f.proto, &answers).and_then(|t| {
+        let mapped = if f.proto == Proto::ShellProteus {
+            let mut cands: Vec<Address> = coins.keys().copied().collect();
+            cands.extend(quotes.iter().copied());
+            super::shell_list::tokens(&answers, &cands, wrapped)
+        } else {
+            tokens(f.proto, &answers)
+        };
+        let mapped = mapped.and_then(|t| {
             if native_ok {
                 stable_native::pair_coins(&t, wrapped)
             } else {

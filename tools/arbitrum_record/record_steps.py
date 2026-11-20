@@ -123,6 +123,20 @@ def steps(rpc, wallet, ekubo_from):
         # Решение 481 (T472-10): WBTC/renBTC и ETH/wstETH — исходники Sourcify (docs/sources/curve_arbitrum/), адреса —
         # в шапке скрипта; фаза состояния — recnode.fresh.
         ("curve_ren_wsteth", "curve_ren_wsteth.py", ["--node", rpc]),
+        # Решение 486: Shell Protocol Proteus — пулы из docs.shellprotocol.io/start-here/reference-library/
+        # contract-addresses (SHELL+ETH — Ocean v3; DAI+USDC, USDT+USDC, ARB+ETH, TOUCOIN+ETH, MAGIC+ETH, Smolpool,
+        # REUNI+ETH, STG+ETH — Shell v2); кандидаты сторон — DAI, USDC.e, USDT, ARB, MAGIC, STG, SHELL (Arbitrum One).
+        ("shell", "shell.py", ["--node", rpc, "--pools",
+                               "0xC32A9fC5665aFFCe85CF043472F718029577F7E0,0x96C7dC9d473e621a1e3968Cb862803EAEDe21888,"
+                               "0x0cb736ea2AD425221c368407CAAFDD323b7bDc83,0xA16F40437213020A167c230E4667ff8f13640f75,"
+                               "0x81F6F6664E8Ece1E81bc9097084373c1dDDb8Daa,0x0699645f2fd448398272ae07f82eee8d0388de1c,"
+                               "0x6896177ee52659f22a87b180e8fcb2c850a7427e,0x3917c74FDeC42071E29461c849bceB81cBC3059c,"
+                               "0xe043EB17Cc12C3fD4f5EaC765D0f1b965975F470",
+                               "--tokens",
+                               "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1,0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8,"
+                               "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9,0x912CE59144191C1204E64559FE8253a0e49E6548,"
+                               "0x539bdE0d7Dbd336b79148AA742883198BBF60342,0x6694340fc020c5E6B96567843da2df01b2CE1eb6,"
+                               "0xe47ba52f326806559c1deC7ddd997F6957d0317D"]),
         ("camelot_v2", "camelot_v2.py", [rpc, "--factory", "0x6EcCab422D763aC031210895C81787E87B43A652"]),
         ("algebra_dir_fee", "algebra_dir_fee.py", algebra),
         ("lb_v20", "lb_v20.py", [rpc, "--factory", "0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982",

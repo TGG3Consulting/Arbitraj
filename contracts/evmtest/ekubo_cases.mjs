@@ -108,7 +108,8 @@ export async function ekubo() {
     const np = await L.call(c, OWNER, ex, exe(usdt, E18, coin, 0n, [step(core, usdt, coin, other)]));
     check(!np.ok && np.ret.slice(0, 10) === '0x486aa307', 'EKUBO: пул с другим config не создан — откат ядра PoolNotInitialized() (0x486aa307)');
     const nc = await L.call(c, OWNER, ex, exe(usdt, E18, coin, 0n, [step(pairCU, usdt, coin, kU[2])]));
-    check(!nc.ok, `EKUBO: «ядро» шага — пара V2 — откат (${nc.reason})`);
+    // У PancakePair нет lock() и нет fallback — откат без данных; _ekuboCall пробрасывает его как есть.
+    check(!nc.ok && nc.ret === '0x', 'EKUBO: «ядро» шага — пара V2 (нет lock) — откат без данных');
     const nw = await L.call(c, OWNER, ex, exe(usdt, E18, coin, 0n, [step(core, usdt, coin, kU[2], true)]));
     check(!nw.ok && nw.reason === 'wnative', 'EKUBO: native у шага без обёртки исполнителя — откат «wnative»');
     const tax = await L.deploy(c, LP, K.TAX, ['uint256'], [10n ** 30n]);

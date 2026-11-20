@@ -49,15 +49,15 @@
 - EVM-сценарии шагов 22–25 с официальным кодом — сделаны (решение 458, ниже); запись симуляции v4 на живых пулах (без неё правило решения 400 закрывает «Развернуть
   исполнитель» для текущей сборки); развёртывание v4 в Arbitrum — Тигран (docs/TASKS.md, решение 457).
 
-## Решение 458: EVM-сценарии шагов 22, 23, 25 с официальным кодом (T457-01)
+## Решение 458: EVM-сценарии шагов 22–25 с официальным кодом (T457-01, T458-01, T458-02)
 - `evmtest/fluid.mjs` + `fluid_cases.mjs` — FLUID (21 проверка), `evmtest/balancerv3.mjs` — BALANCER_V3 (25), `evmtest/ekubo.mjs`
-  + `ekubo_cases.mjs` — EKUBO (53), `evmtest/ekubo_twamm.mjs` — EKUBO на пуле TWAMM с активным ордером (16, T458-02): ERC-20 обе стороны, нативный вход и выход (FLUID, EKUBO), MEVCapture forward (EKUBO),
+  + `ekubo_cases.mjs` — EKUBO (53), `evmtest/ekubo_twamm.mjs` — EKUBO на пуле TWAMM с активным ордером, оба TWAMM сети 0xd4f1 / 0xd47f (32, T458-02): ERC-20 обе стороны, нативный вход и выход (FLUID, EKUBO), MEVCapture forward (EKUBO),
   получено = котировка протокола, на исполнителе пусто, откаты при чужом обратном вызове / неверном пуле / налоговом
   токене, исполнитель v3 — «kind». Код протоколов — байткод развёртывания из официальных репозиториев
   (`evmtest/vendor/{fluid-contracts-public,balancer-deployments,ekubo}`, источники и коммиты — `evmtest/README.md`).
-- `node run.mjs` против `out/` v4: 320 проверок (205 + 115), `ВСЕ ПРОВЕРКИ ПРОШЛИ`. Исполнитель, `IPools.sol`, `out/` не менялись.
+- `node run.mjs` против `out/` v4: 353 проверки (205 + 148), `ВСЕ ПРОВЕРКИ ПРОШЛИ`. Исполнитель, `IPools.sol`, `out/` не менялись.
 - LB20 (T458-01): `evmtest/lb20.mjs` — официальные LBFactory / LBPair / LBRouter lfj-gg/joe-v2@v2.0.0, solc 0.8.10, runs 800
-  (17 проверок); EKUBO с TWAMM — сделан (T458-02). Итого `node run.mjs` — 337 проверок.
+  (17 проверок; собран из исходника тега — побайтно с кодом в сети не сверялся); EKUBO с TWAMM — сделан (T458-02).
 
 ## Решение 445: шаг LB20 (решение 456: номер 24, было 22 в ветке; решение 457 — собран в v4)
 - `ArbExecutor.sol`: вид шага `LB20 = 24` — пара Liquidity Book v2.0 (LFJ V2, Arbitrum One): вход переводом в пару

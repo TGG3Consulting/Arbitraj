@@ -3,7 +3,9 @@
 //   код из файлов развёртывания Arbitrum (vendor/ekubo/broadcast, EkuboProtocol/evm-contracts):
 //   TWAMM 0xd4f1…ed9b — DeployAll.s.sol/42161/run-1767194711580.json (коммит ccb3a419, сборка 61d09da; исходник
 //   src/extensions/TWAMM.sol @61d09daa), менеджер ордеров Orders 0xff6c…0644 (аргумент — этот TWAMM) —
-//   DeployManagers.s.sol/42161/run-1767205373297.json (коммит 504b42f6, сборка 8a99714; src/Orders.sol). Развёртывание —
+//   DeployManagers.s.sol/42161/run-1767205373297.json (коммит 504b42f6, сборка 8a99714; src/Orders.sol); второй TWAMM сети
+//   0xd47f…75ba — DeployAll.s.sol/42161/run-1777073880286.json (коммит 941eb76a, сборка 8c1b721) с Orders 0x3325…98b4 —
+//   DeployManagers.s.sol/42161/run-1777130801606.json (коммит 20c92e22, сборка 34bbea9); сценарий T1–T3 — на обоих. Развёртывание —
 //   тем же CREATE2-прокси, что ekubo.mjs (адреса = адресам в сети).
 //   Пул TWAMM — полный диапазон (TWAMM.sol L633-L651 afterInitializePool: FullRangePoolOnly), ликвидность — Positions
 //   на [MIN_TICK, MAX_TICK]; ордер продажи token0 заводит LP официальным Orders.mintAndIncreaseSellAmount (Orders.sol
@@ -23,6 +25,8 @@
 import { Interface } from 'ethers';
 import * as L from './lib.mjs';
 import * as W from './world.mjs';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import * as K from './ekubo.mjs';
 
 const { check, must } = L;
@@ -36,12 +40,21 @@ const hex = (v) => '0x' + v.toString(16).padStart(64, '0');
 const voe = (r, twamm) => r.logs.filter((l) => l.address.toLowerCase() === twamm.toLowerCase() && l.topics.length === 0
   && (l.data.length - 2) / 2 === 60);
 
-/// Мир ekubo.mjs + TWAMM, Orders, пул TWAMM USDT/COIN (полный диапазон) с ликвидностью и ордером продажи token0.
-async function envTwamm() {
+const bc = (p) => JSON.parse(readFileSync(join(L.here, 'vendor', 'ekubo', 'broadcast', p), 'utf8'));
+// Два TWAMM сети (настройки бота: src/settings/catalog/dex_ekubo.rs, SETTINGS_CASES.md): у каждого свой Orders, ядро общее.
+const VARIANTS = [
+  { name: 'TWAMM 0xd4f1 (сборка 61d09da)', all: K.ALL, man: K.MAN },
+  // DeployAll.s.sol/42161/run-1777073880286.json (коммит 941eb76a, сборка 8c1b721) — TWAMM 0xd47f…75ba;
+  // DeployManagers.s.sol/42161/run-1777130801606.json (коммит 20c92e22, сборка 34bbea9) — Orders 0x3325…98b4.
+  { name: 'TWAMM 0xd47f (сборка 8c1b721)', all: bc('DeployAll.s.sol/42161/run-1777073880286.json'), man: bc('DeployManagers.s.sol/42161/run-1777130801606.json') },
+];
+
+/// Мир ekubo.mjs + TWAMM и Orders варианта v, пул TWAMM USDT/COIN (полный диапазон) с ликвидностью и ордером продажи token0.
+async function envTwamm(v) {
   const e = await K.env();
   const { c, usdt, coin } = e;
-  const twamm = await K.create2(c, K.tx(K.ALL, 'TWAMM'));
-  const orders = await K.create2(c, K.tx(K.MAN, 'Orders'));
+  const twamm = await K.create2(c, K.tx(v.all, 'TWAMM'));
+  const orders = await K.create2(c, K.tx(v.man, 'Orders'));
   const [t0, t1] = K.sort(usdt, coin);
   const kT = [t0, t1, hex((BigInt(twamm) << 96n) | (FEE << 32n))]; // createFullRangePoolConfig (poolConfig.sol L175-L180)
   c.ts = 1_767_200_000n;
@@ -57,39 +70,49 @@ async function envTwamm() {
 
 export async function ekuboTwamm() {
   const record = { note: 'EVM ethereumjs Cancun + CLZ, contracts/out v4, официальные TWAMM / Orders (broadcast 42161) — contracts/evmtest/ekubo_twamm.mjs', cases: [] };
-  {
-    const e = await envTwamm();
+  for (const V of VARIANTS) {
+    const e = await envTwamm(V);
     const { c, ex, core, twamm, kT, end } = e;
-    check(end > c.ts, `TWAMM: ордер продажи token0 активен (конец ${end}, время блока ${c.ts})`);
+    const T = `EKUBO ${V.name}`;
+    check(end > c.ts, `${T}: ордер продажи token0 активен (конец ${end}, время блока ${c.ts})`);
     for (const [tin, tout] of [[kT[0], kT[1]], [kT[1], kT[0]]]) {
       const dir = `${tin === e.usdt ? 'USDT' : 'COIN'} → ${tout === e.usdt ? 'USDT' : 'COIN'}`;
       const amt = 100n * E18;
       const [owe, q] = await quote(e, kT, tin, amt);
-      check(owe === amt && q > 0n, `EKUBO TWAMM ${dir}: котировка ядра с исполнением ордеров до block.timestamp — вход ${owe}, выход ${q}`);
+      check(owe === amt && q > 0n, `${T} ${dir}: котировка ядра с исполнением ордеров до block.timestamp — вход ${owe}, выход ${q}`);
       const s = step(core, tin, tout, kT[2]);
       const bad = await L.call(c, OWNER, ex, exe(tin, amt, tout, q + 1n, [s]));
-      check(!bad.ok && bad.reason === 'minOut', `EKUBO TWAMM ${dir}: minOut = котировка + 1 — откат «minOut»`);
+      check(!bad.ok && bad.reason === 'minOut', `${T} ${dir}: minOut = котировка + 1 — откат «minOut»`);
       const ib = await bal(c, tin, OWNER);
       const ob = await bal(c, tout, OWNER);
       const r = await L.call(c, OWNER, ex, exe(tin, amt, tout, q, [s]));
-      check(r.ok, `EKUBO TWAMM ${dir}: обмен прошёл (газ ${r.gas})`);
+      check(r.ok, `${T} ${dir}: обмен прошёл (газ ${r.gas})`);
       const v = voe(r, twamm);
       check(v.length === 1 && BigInt('0x' + v[0].data.slice(66, 94)) > 0n && coreSwaps(r, core).length === 2,
-        `EKUBO TWAMM ${dir}: в транзакции исполнены виртуальные ордера (VirtualOrdersExecuted с saleRate0 > 0 + обмен ядра ордеров), затем обмен шага`);
+        `${T} ${dir}: в транзакции исполнены виртуальные ордера (VirtualOrdersExecuted с saleRate0 > 0 + обмен ядра ордеров), затем обмен шага`);
       const got = (await bal(c, tout, OWNER)) - ob;
-      check(got === q && ib - (await bal(c, tin, OWNER)) === amt, `EKUBO TWAMM ${dir}: получено ${got} = котировка, списано ровно amountIn`);
-      check(await empty(e, [tin, tout]), `EKUBO TWAMM ${dir}: на исполнителе пусто`);
+      check(got === q && ib - (await bal(c, tin, OWNER)) === amt, `${T} ${dir}: получено ${got} = котировка, списано ровно amountIn`);
+      check(await empty(e, [tin, tout]), `${T} ${dir}: на исполнителе пусто`);
       const [, q2] = await quote(e, kT, tin, amt);
+      const ob2 = await bal(c, tout, OWNER);
       const r2 = await L.call(c, OWNER, ex, exe(tin, amt, tout, q2, [s]));
-      check(r2.ok && coreSwaps(r2, core).length === 1 && voe(r2, twamm).length === 0,
-        `EKUBO TWAMM ${dir}: второй обмен в том же блоке — ордера уже исполнены, одна запись обмена ядра, получено = котировка ${q2}`);
+      check(r2.ok && coreSwaps(r2, core).length === 1 && voe(r2, twamm).length === 0 && (await bal(c, tout, OWNER)) - ob2 === q2,
+        `${T} ${dir}: второй обмен в том же блоке — ордера уже исполнены, одна запись обмена ядра, получено = котировка ${q2}`);
       record.cases.push({ kind: K.EKUBO, core, extension: twamm, token_in: tin, token_out: tout, data: s[5], amount_in: amt.toString(), got: got.toString(), gas: r.gas.toString() });
       c.ts += 600n; // следующая сторона — новый блок: снова есть что исполнять
     }
     const ub = await bal(c, kT[0], OWNER);
+    // Откат без данных: TWAMM.handleForwardData — `revert()` (TWAMM.sol L389-L391); ядро (forward) и исполнитель
+    // (_ekuboCall) пробрасывают его как есть. Что откатился именно вызов расширения (селектор 0x00000001 —
+    // FlashAccountant.sol L200-L201) без данных — по ходу исполнения EVM (beforeMessage / afterMessage).
+    const twammRev = [];
+    const h = (r) => { if (r.execResult.exceptionError && r.execResult.returnValue.length === 0) twammRev.push(1); };
+    const on = (m) => { if (m.to?.toString().toLowerCase() === twamm.toLowerCase() && m.data[0] === 0 && m.data[1] === 0 && m.data[2] === 0 && m.data[3] === 1) c.evm.events.once('afterMessage', h); };
+    c.evm.events.on('beforeMessage', on);
     const f = await L.call(c, OWNER, ex, exe(kT[0], E18, kT[1], 0n, [step(core, kT[0], kT[1], kT[2], false, true)]));
-    check(!f.ok && f.ret === '0x' && (await bal(c, kT[0], OWNER)) === ub,
-      'EKUBO TWAMM с forward = true — откат расширения без данных (callType = token0 ключа, TWAMM.handleForwardData revert()), владелец при своих');
+    c.evm.events.off('beforeMessage', on);
+    check(!f.ok && f.ret === '0x' && twammRev.length === 1 && (await bal(c, kT[0], OWNER)) === ub,
+      `${T} с forward = true — откатился вызов расширения forwarded_2374103877 без данных (callType = token0 ключа ≠ 0 / 1 → revert()), весь обмен откатился без данных, владелец при своих`);
   }
   return record;
 }

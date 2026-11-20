@@ -77,8 +77,12 @@ async function env(art = v2) {
 }
 
 /// Котировка LBRouter.getSwapOut(пара, вход, swapForY). Возвращает выход.
-const quote = async (e, swapForY, amt) => BigInt((await L.call(e.c, OWNER, e.router,
-  new Interface(ROUTER.abi).encodeFunctionData('getSwapOut', [e.pair, amt, swapForY]))).ret.slice(0, 66));
+/// Ошибки: исключение, если getSwapOut откатился.
+const quote = async (e, swapForY, amt) => {
+  const r = await L.call(e.c, OWNER, e.router, new Interface(ROUTER.abi).encodeFunctionData('getSwapOut', [e.pair, amt, swapForY]));
+  if (!r.ok) throw new Error(`getSwapOut: откат ${r.reason} ${r.ret.slice(0, 74)}`);
+  return BigInt(r.ret.slice(0, 66));
+};
 
 /// Сумма amountOut событий Swap пары (по бинам) в итоге вызова.
 const swapOut = (r, pair) => r.logs.filter((l) => l.address.toLowerCase() === pair.toLowerCase() && l.topics[0] === P.getEvent('Swap').topicHash)
@@ -127,13 +131,15 @@ export async function lb20() {
     const e = await env();
     const { c, ex, usdt, coin, other, pairCU, pair } = e;
     const v2p = await L.call(c, OWNER, ex, exe(usdt, E18, coin, 0n, [step(pairCU, usdt, coin)]));
-    check(!v2p.ok, `LB20: «пара» шага — пара V2 (нет tokenX) — откат (${v2p.reason})`);
+    // У PancakePair нет tokenX() и нет fallback — откат без данных (перевод входа в пару откатывается вместе с ним).
+    check(!v2p.ok && v2p.ret === '0x', 'LB20: «пара» шага — пара V2 (нет tokenX) — откат без данных');
     const ub = await bal(c, usdt, OWNER);
     const fo = await L.call(c, OWNER, ex, exe(usdt, E18, coin, 0n, [step(other, usdt, coin)]));
     check(!fo.ok && P.parseError(fo.ret)?.name === 'LBPair__InsufficientAmounts' && (await bal(c, usdt, OWNER)) === ub,
       'LB20: чужая пара LB v2.0 (WETH/COIN) — откат LBPair__InsufficientAmounts, владелец при своих');
     const v21 = await L.call(c, OWNER, ex, exe(usdt, E18, coin, 0n, [step(pair, usdt, coin, 10000, 18)]));
-    check(!v21.ok, `LB20: шаг LB (18, getTokenX v2.1) по паре v2.0 — откат (${v21.reason})`);
+    // У LBPair v2.0 нет getTokenX() и нет fallback — откат без данных.
+    check(!v21.ok && v21.ret === '0x', 'LB20: шаг LB (18, getTokenX v2.1) по паре v2.0 — откат без данных');
   }
   {
     const e = await env(W.v3f);

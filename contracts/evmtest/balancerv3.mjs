@@ -191,7 +191,8 @@ export async function balancerv3() {
     const np = await L.call(c, OWNER, ex, exe(usdt, E18, coin, 0n, [step(vault, pair, usdt, coin)]));
     check(!np.ok && err(np) === 'PoolNotInitialized', `пул не зарегистрирован в хранилище (адрес пары V2) — откат Vault.swap ${err(np)}`);
     const nv = await L.call(c, OWNER, ex, exe(usdt, E18, coin, 0n, [step(pair, pool, usdt, coin)]));
-    check(!nv.ok, `«хранилище» шага — не хранилище (пара V2) — откат (${nv.reason})`);
+    // У PancakePair нет unlock и нет fallback — откат без данных.
+    check(!nv.ok && nv.ret === '0x', '«хранилище» шага — не хранилище (пара V2, нет unlock) — откат без данных');
     // Токен с налогом 1 % (fixtures/TaxToken.sol) в пуле: settle засчитает min(подсказка, прирост) — долг не погашен.
     const tax = await L.deploy(c, LP, TAX, ['uint256'], [10n ** 30n]);
     await must(c, LP, tax, TAX.abi, 'setExempt', [lp, true]);

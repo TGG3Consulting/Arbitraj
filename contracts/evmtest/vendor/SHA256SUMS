@@ -140,7 +140,6 @@ b7b0c4379346af0701f5e4df9c861295d4a3af91dc3b15eb4356ebc571303df9  ./v4-core/lice
 afe4d7de04f55f35f25bae046a96baa4137709b9df13d90b76c643a1317df6b8  ./v4-core/test/utils/CurrencySettler.sol
 3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986  ./balancer-deployments/LICENSE
 b5c255fa38a8f1c8be03fc8026f5bef0b720c8c4594908b67c87e651626a4772  ./balancer-deployments/v2/tasks/20210418-authorizer/artifact/Authorizer.json
-d65aafdb32f5783a40af189500d159fa4588e2ff4eafd27ccce1d75f9a833ffb  ./balancer-deployments/v3/deprecated/20241205-v3-weighted-pool/artifact/WeightedPool.json
 2481ca457cb71223c232d01d91ae23811e52368bec8158eadf1251b2420ff6fa  ./balancer-deployments/v3/deprecated/20241205-v3-weighted-pool/artifact/WeightedPoolFactory.json
 c4bdb00e1e3d2372a6a5073aa7cb63ef9b9e6fce093f50bfccfc52002fbf6f32  ./balancer-deployments/v3/tasks/20241204-v3-vault/artifact/Vault.json
 876bc6fc4eeec224a3c8125e7fa9ddbd9db8772ecc399bb11ffebf3248e1839e  ./balancer-deployments/v3/tasks/20241204-v3-vault/artifact/VaultAdmin.json
@@ -201,3 +200,5 @@ cb7821b69f58eea11d709db605f2620ec2a2146df4b71918335049f4692415b6  ./joe-v2/src/l
 8343a85fb0fb279136c5762f6455be8a104ca44812ca3f55b4e0fb9885b6d1bf  ./joe-v2/src/libraries/SwapHelper.sol
 1289ec05f9b730c312782ed2a537caee3f103406304f7ae1667babd7853ad887  ./joe-v2/src/libraries/TokenHelper.sol
 391ffd3683e4b074ad40d683bcf59b1bb8952303d19392ccc49345486be812d3  ./joe-v2/src/libraries/TreeMath.sol
+0ad13075746a8679eff5ec8d2f58b90f1767408f2c1a85f84e416ff3bce8bb6a  ./ekubo/broadcast/DeployAll.s.sol/42161/run-1777073880286.json
+00600e7702326a4020b3b34dcbd0b43598318d5cf73bfba27d4e012d956aa48c  ./ekubo/broadcast/DeployManagers.s.sol/42161/run-1777130801606.json

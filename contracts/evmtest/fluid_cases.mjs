@@ -130,9 +130,14 @@ export async function fluid() {
       && (await bal(c, w, OWNER)) - wb === BigInt(s2[0].amountOut) && await emptyEx(c, ex, [usdt, coin, w]),
       `FLUID двумя шагами USDT → COIN → WETH (нативный выход): вход второго = выход первого, владелец получил выход второго, на исполнителе пусто (газ ${r.gas})`);
     const np = await L.call(c, OWNER, ex, exe(usdt, E18, coin, 0n, [step(pairCU, usdt, coin, zfU, 0, liq)]));
-    check(!np.ok, `FLUID: «пул» шага — пара V2 — откат (${np.reason})`);
+    // У PancakePair нет swapIn и нет fallback — вызов откатывается без данных, исполнитель пробрасывает как есть.
+    check(!np.ok && np.ret === '0x', 'FLUID: «пул» шага — пара V2 (нет swapIn) — откат без данных');
     const wd = await L.call(c, OWNER, ex, exe(usdt, E18, coin, 0n, [step(pU, usdt, coin, !zfU, 0, liq)]));
-    check(!wd.ok, `FLUID: направление не по токенам шага — откат (${wd.reason ?? wd.ret.slice(0, 10)})`);
+    // Пул просит другой токен (COIN), разрешение исполнителя — только на USDT: transferFrom в liquidityCallback не проходит —
+    // FluidSafeTransferError(71001 = SafeTransfer__TransferFromFailed, libraries/errorTypes.sol L23).
+    const wde = F.POOL.parseError(wd.ret);
+    check(!wd.ok && wde?.name === 'FluidSafeTransferError' && BigInt(wde.args[0]) === 71001n,
+      'FLUID: направление не по токенам шага — откат FluidSafeTransferError(71001, TransferFromFailed)');
   }
   {
     const e = await F.env(W.v3f);

@@ -45,6 +45,7 @@ async fn ctx(max_per_edge: i64) -> Ctx {
             raw: RawLog::start(d.join("raw"), settings.clone()),
             pace: Default::default(),
             failover: Default::default(),
+            evm_chain: Default::default(),
             place: arb::venues::bsc_dex::ctx::Place::BSC,
             chains: Default::default(),
             account: None,

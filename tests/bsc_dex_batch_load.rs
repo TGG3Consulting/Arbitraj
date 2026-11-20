@@ -81,6 +81,7 @@ async fn ctx() -> Ctx {
             raw: RawLog::start(d.join("raw"), settings.clone()),
             pace: Default::default(),
             failover: Default::default(),
+            evm_chain: Default::default(),
             place: arb::venues::bsc_dex::ctx::Place::BSC,
             chains: Default::default(),
             account: None,

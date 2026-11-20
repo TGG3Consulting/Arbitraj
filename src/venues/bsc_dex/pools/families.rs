@@ -51,7 +51,7 @@ pub enum Proto {
     /// DODO PMM — DODOStablePool (DSP): двусторонний пул, хранит цели/RState; querySellBase/Quote возвращают
     /// 4 значения, как DPP.
     DodoDsp,
-    /// Algebra V1/V1.9 (THENA Fusion и форки, решения 80, 81): отдельный контракт на пул (как V3), одна ликвидность,
+    /// Algebra V1.9 (THENA Fusion и форки, решения 80, 81): отдельный контракт на пул (как V3), одна ликвидность,
     /// динамическая комиссия (globalState.fee), СЫРОЙ битмап тиков (tickTable). Свои геттеры/события/квотер (QuoterV2
     /// без параметра fee), своя фабрика (poolByPair — один пул на пару). Математика — math/swap_algebra.rs.
     Algebra,
@@ -426,10 +426,10 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "dodo_dvm" => (PoolKind::Pmm, Proto::DodoDvm, true, false, false),
         "dodo_dpp" => (PoolKind::Pmm, Proto::DodoDpp, true, false, false),
         "dodo_dsp" => (PoolKind::Pmm, Proto::DodoDsp, true, false, false),
-        // Algebra (THENA Fusion, решения 80, 81, фаза B): в графе (своя математика math/swap_algebra), НО
-        // tradable=false — исполнения пока нет (роутер Algebra — следующая фаза). graphable=true, tradable=false,
-        // fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как DODO 86b — в графе и для
-        // сигналов, но guard executable (quote/graph_route.rs) в авто-сделку не пускает. Вид ядра — Cl.
+        // Algebra (THENA Fusion, решения 80, 81, фаза B): в графе (своя математика math/swap_algebra). tradable=false —
+        // только про Universal Router / бандл (UR своей фабрики и свой роутер-форк не подключены); исполнение —
+        // шаг ALGEBRA контракта-исполнителя ArbExecutor (exec_kind.rs, с v1; решение 122 X): маршрут, где каждый шаг —
+        // вид исполнителя, идёт через него раньше проверки tradable (quote/graph_exec.rs, exec/cycle_gate.rs). Вид ядра — Cl.
         "thena_fusion" => (PoolKind::Cl, Proto::Algebra, true, false, false),
         // Algebra Integral (THENA V3, DexSwap; решение 188): как thena_fusion — в графе (математика swap_algebra),
         // исполнение — шаг ALGEBRA контракта-исполнителя (тот же swap + algebraSwapCallback, exec_kind.rs).

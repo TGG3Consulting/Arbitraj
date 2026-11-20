@@ -85,6 +85,7 @@ impl Ctx {
             failover: Default::default(),
             chains: Default::default(),
             index: Default::default(),
+            evm_chain: Default::default(),
             account: None,
             ..self.clone()
         }

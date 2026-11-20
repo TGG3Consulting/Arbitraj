@@ -240,8 +240,12 @@
       - T461-01 Класс 23 (Balancer V3) не проверен: запись balancer_v3.py упала (HTTP 429 GeckoTerminal), exec_v4_live
         брал пулы bv3 из неё. После повтора balancer_v3.py (T461-02) — ПОВТОР exec_v4_live.py и новая папка
         executor_v4_live_<дата> (строка SOURCES в live_record.rs заменяется в том же коммите).
-      - T461-04 Горячий путь pool_gate::decide теперь читает dex.evm_chain_id (Store::cache под RwLock, как
-        exec_callback::usable) — проверить на живом боте нагрузку; при необходимости — снимок сети в Ctx.
+      - T461-04 СДЕЛАНО (ревью t235): pool_gate::decide читает сеть из ячейки окружения Ctx.evm_chain
+        (venues/bsc_dex/ctx_chain.rs, Ctx::chain_id — OnceLock + атомарная загрузка, без Store::resolve и строк;
+        перечитывание по рассылке изменений настроек — gateway/setting_cell.rs watch; main.rs создаёт ячейку при
+        старте каждой площадки DEX); live_proof::chain_of — то же. Сторож tests/pool_pass_hot_guard.rs: chain_id /
+        chain_from в списке, комментарий — Store::cache после решения 409 за ArcSwap. Запись v3 17.11: сеть — строка
+        «- chainId: 56» README_repo.md (сырой README не правится), live_record.rs читает её chain_in, константы нет.
     - T457-03 Развёртывание v4 в Arbitrum — Тигран (после T457-02; запись разрешает развёртывание только в Arbitrum).
   - T456-03 Записи своего узла Arbitrum (tools/arbitrum_record/README.md): sub_dex.py, kyber_elastic_v1.py, saddle.py,
     woofi.py, fluid_t1.py, balancer_v3.py, curve_crypto.py, camelot_v2.py, algebra_dir_fee.py, lb_v20.py, lb_v22.py,
@@ -297,6 +301,30 @@
       (math/swap_algebra.rs NextTick::Row / Linked; quote/pool_quote.rs algebra_next) — затрагивает и BSC THENA Fusion.
       Ручной расчёт по записи — 29 из 29 полных случаев = swap пула. Проверить зелёный CI: arb_dex_algebra_dir,
       bsc_dex_algebra_math, bsc_dex_algebra_out_of_window, bsc_dex_algebra_integral_live.
+      Ревью t235 (исправление факта): «исполнения THENA Fusion нет» — НЕВЕРНО. Пулы thena_fusion исполняются через
+      ArbExecutor (exec_kind.rs:158 → ExecKind::Algebra, since V1; quote/graph_exec.rs:65-71 — раньше проверки
+      !tradable; циклы — exec/cycle_gate.rs form). Смена на Row меняет котировку и глубину живых сделок BSC через THENA
+      Fusion (выход был завышен, теперь не больше swap пула). Комментарии «V1/V1.9» → «V1.9» (swap_algebra.rs,
+      families.rs:54, pool_quote.rs algebra_next). Доказательство на BSC — T461-06.
+    - T461-06 **ВАЖНО, вопрос Тиграну + запись.** Факт Sourcify (сеть 56, полное совпадение runtime и creation,
+      проверено 20.11 WebFetch): официальный AlgebraPool Deployer THENA 0xc89F69Baa3ff17a842AB2DE89E5Fc8a8e2cc7358
+      (таблица контрактов THENA — docs.thena.fi/thena/official-links, «List of smart contracts»; там же AlgebraFactory
+      0x306F06C147f064A010530292A1EB6737c3e378e4 — Sourcify match, Quoter 0xeA68020D6A9532EeC42D4dB0f92B83580c39b2cA)
+      собран solc 0.7.6 из исходника, где contracts/libraries/Constants.sol `TICK_SPACING = 60`, а TickTable.toggleTick и
+      nextTickInTheSameRow СЖИМАЮТ тик на Constants.TICK_SPACING (`tick /= Constants.TICK_SPACING`; `sdiv(tick,
+      tickSpacing)`), PoolImmutables.tickSpacing() = Constants.TICK_SPACING — это код AlgebraV1 (cryptoalgebra/AlgebraV1
+      master libraries/TickTable.sol, тот же текст), не AlgebraV1.9 main 779b5681 (TickTable без сжатия — rowNumber =
+      tick >> 8). Бот читает thena_fusion СЫРЫМ битмапом (pools/load_algebra.rs: слово = tick >> 8, тик бита = w·256 + b,
+      spacing 1) и шагает режимом Row по сырым строкам. Если пулы фабрики созданы этим деплоером — карта тиков бота у
+      THENA Fusion неверна (читаются не те слова; при сжатом битмапе окно сырых слов вокруг tick >> 8 — другие слова),
+      котировка и глубина THENA Fusion неверны, а пулы исполняются через ArbExecutor. Вывод о пулах — только после записи:
+      `python3 tools/bsc_record/thena_fusion.py --rpc http://127.0.0.1:8545` (свой узел BSC; Windows — `py
+      tools\bsc_record\thena_fusion.py --rpc http://127.0.0.1:8545`) → tests/data/bsc_thena_fusion_<дата>/ и zip (путь —
+      последняя строка). Запись пишет оба толкования слов битмапа (сырое и сжатое), код пулов и keccak, poolDeployer
+      фабрики, CREATE2 по хешам AlgebraV1.9 main (0xbce37a54…97e7) и AlgebraV1 master (0x6ec6c9c8…94a4), котировки
+      виртуального квотера и Quoter THENA. Тест tests/bsc_thena_fusion_row_live.rs (3 теста под #[ignore]) —
+      bitmap_is_raw_as_bot_reads решает толкование; math_equals_pool_swap — режим Row. Вопрос Тиграну: до записи —
+      выключить исполнение THENA Fusion (снять вид thena_fusion из dex.kind площадки BSC) или ждать записи?
   - T456-04 Выкладка: настройки области «DEX» площадки arb_dex по docs/notes/arbitrum/dex-settings-arbitrum.md и
     FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; развернуть v4 — T457-03.
   - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по

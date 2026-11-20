@@ -8,8 +8,8 @@
 //!    вызов квотера в ТОЙ ЖЕ симуляции сразу перед execute (б), его ответ = получено (raw_rpc).
 //! 3. Правило (live_rule.rs) на записи: приняты ровно Uniswap V4 без крючка и Infinity CL без крючка; счёт пулов по
 //!    классам; развёртывание кода v3 в сети BSC разрешено; шаги непринятых классов (с крючком, Bin, Stable) — отказ
-//!    admits_for. Решение 461: запись — пары (v3, chainId 56); v3 в Arbitrum — записи нет, «не проверен». Запись
-//!    текущей сборки v4 — tests/bsc_dex_executor_v4_live.rs.
+//!    admits_for. Решение 461: запись — пары (v3, chainId 56; строка «- chainId: 56» README_repo.md); v3 в Arbitrum
+//!    — записи нет, «не проверен». Запись текущей сборки v4 — tests/bsc_dex_executor_v4_live.rs.
 //! 4. Правило строгое на изменённой записи: без SHA в README — ничего не принято; без hooks_reject.json — у CL с
 //!    крючком необъяснённые откаты.
 //! 5. Ревью t185: остаток на исполнителе = 0 и квотер (а) на H — по raw_rpc (не по сводке); строгость на изменённой
@@ -17,8 +17,8 @@
 //!    x_left пустой / без ключа токена; получено = квотер = 0; SHA не в строке «sha256 симулированного bin-runtime:».
 //!
 //! Кто вызывает: cargo test.
-//! От чего зависит: arb::venues::bsc_dex::exec::executor::{code, deploy_gate, live_proof, live_rule}, pools::exec_kind,
-//! zstd, serde_json.
+//! От чего зависит: arb::venues::bsc_dex::exec::executor::{code, deploy_gate, live_proof, live_record, live_rule},
+//! pools::exec_kind, zstd, serde_json.
 
 use std::collections::BTreeMap;
 
@@ -27,7 +27,7 @@ use serde_json::Value;
 
 use arb::venues::bsc_dex::exec::executor::live_rule::{self, Class, Hook};
 use arb::venues::bsc_dex::exec::executor::code::{self, Version};
-use arb::venues::bsc_dex::exec::executor::{deploy_gate, live_proof};
+use arb::venues::bsc_dex::exec::executor::{deploy_gate, live_proof, live_record};
 use arb::venues::bsc_dex::pools::exec_kind::ExecKind;
 
 const DIR: &str = "tests/data/executor_v3_live_2026-11-17";
@@ -76,6 +76,9 @@ fn record_bound_to_current_code() {
         text("README.md").contains(cur),
         "README записи — о текущем коде"
     );
+    // Решение 461 (ревью t235, п. 5): сеть записи — строка «- chainId: 56» README_repo.md (в сыром README её нет).
+    let chain = live_record::chain_in(&text("README_repo.md"), &text("summary.json"));
+    assert_eq!(chain, Ok(56));
     let runtime = std::fs::read_to_string(format!(
         "{}/contracts/out/v3/ArbExecutor.bin-runtime",
         env!("CARGO_MANIFEST_DIR")

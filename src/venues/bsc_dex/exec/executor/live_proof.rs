@@ -30,9 +30,10 @@ use super::live_record;
 pub use super::live_record::{Verdicts, pair};
 use super::live_rule::{Class, Hook};
 
-/// Сеть площадки DEX окружения (dex.evm_chain_id). None — не задана: записи для такой сети нет. Ошибок нет.
+/// Сеть площадки DEX окружения (dex.evm_chain_id). None — не задана: записи для такой сети нет. Ревью t235: из ячейки
+/// окружения (Ctx::chain_id, ctx_chain.rs) — без строк и замков. Ошибок нет.
 pub fn chain_of(ctx: &Ctx) -> Option<u64> {
-    ctx.int("dex.evm_chain_id").ok()
+    ctx.chain_id()
 }
 
 /// Каталог записи пары (для текстов): None — записи нет. Ошибок нет.

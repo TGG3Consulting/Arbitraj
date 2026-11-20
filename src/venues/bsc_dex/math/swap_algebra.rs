@@ -1,5 +1,5 @@
 //! Файл: venues/bsc_dex/math/swap_algebra.rs
-//! Что делает: цикл обмена в пуле Algebra (THENA Fusion и другие форки Algebra V1/V1.9; решения 80, 81) по локальной
+//! Что делает: цикл обмена в пуле Algebra (THENA Fusion и другие форки Algebra V1.9; решения 80, 81) по локальной
 //! карте тиков — порт `_calculateSwapAndLock` официального контракта AlgebraPool. Идёт шагами: следующий
 //! инициализированный тик в сторону обмена → шаг (math/swap_step::step_v3) → пересечение тика (liquidityDelta).
 //! Главное про Algebra (по офдокам, решение 23):
@@ -18,9 +18,9 @@
 //! Ликвидность одна (u128), reinvestL у Algebra нет (это Elastic).
 //! (4) Решение 323: текущий тик вне окна, нужного обмену (вниз — lo ≤ tick ≤ hi, вверх — lo − 1 ≤ tick < hi, как V3
 //! swap_cl::next_tick), — неполный итог с нулями (complete = false), как у V3, а не шаг к краю окна по другую сторону
-//! цены. Общая функция для THENA Fusion (V1/V1.9) и Algebra Integral, котировки (quote/pool_quote.rs) и глубины
+//! цены. Общая функция для THENA Fusion (V1.9) и Algebra Integral, котировки (quote/pool_quote.rs) и глубины
 //! (quote/depth_band_algebra.rs); то же правило — blocked_by_window для перечитывания (pools/off_map_algebra.rs).
-//! (5) Решение 461 (запись узла Arbitrum 20.11, Camelot V3): цель шага у V1/V1.9 — НЕ следующий инициализированный тик,
+//! (5) Решение 461 (запись узла Arbitrum 20.11, Camelot V3): цель шага у V1.9 — НЕ следующий инициализированный тик,
 //! а TickTable.nextTickInTheSameRow: инициализированный тик в той же строке битмапа (256 сырых тиков) или, если его
 //! нет, край строки (неинициализированный — шаг до него без пересечения). Каждый шаг округляет вход вверх и выход вниз,
 //! поэтому прыжок через край строки давал выход БОЛЬШЕ пула (пул 0x7cccba…, 34138539 token1: 20685556826089520 против
@@ -29,6 +29,12 @@
 //! то же в main 779b5681 (THENA Fusion) — AlgebraPool.sol:796, :828-871, TickTable.sol тот же. У Algebra Integral тики
 //! связаны списком: цель шага — сразу следующий инициализированный тик (cryptoalgebra/Algebra 1ff43e1
 //! src/core/contracts/base/SwapCalculation.sol:85, 123-137) — режим NextTick::Linked (прежнее поведение).
+//! Ревью t235: правило строки с СЫРЫМИ тиками — только V1.9. У Algebra V1 (cryptoalgebra/AlgebraV1 master
+//! libraries/TickTable.sol) toggleTick и nextTickInTheSameRow делят тик на Constants.TICK_SPACING (строка битмапа —
+//! 256 сжатых тиков, как у Uniswap V3) — для V1 режим Row неверен. Отдельного вида «Algebra V1» в боте нет, но
+//! исходник официального деплоера THENA Fusion на BSC (Sourcify 56, 0xc89F69…7358, полное совпадение) — код AlgebraV1
+//! (Constants.TICK_SPACING = 60, сжатие тика): версия пулов thena_fusion — запись tools/bsc_record/thena_fusion.py
+//! (docs/TASKS.md T461-06).
 //! ЭТОТ модуль — только математика (без сети): чтение состояния/тиков, события, квотер, граф — фаза B.
 //! Кто вызывает: quote/pool_quote.rs (котировка), quote/depth_band_algebra.rs (глубина, swap_to),
 //! pools/off_map_algebra.rs (blocked_by_window); тесты.
@@ -52,8 +58,11 @@ const OVERFLOW: &str = "переполнение/недобор в матема�
 /// Как цикл обмена выбирает цель шага (шапка, пункт 5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NextTick {
-    /// Algebra V1/V1.9 (THENA Fusion, Camelot V3 — algebra_dir_fee): TickTable.nextTickInTheSameRow —
-    /// инициализированный тик в строке битмапа или край строки.
+    /// Algebra V1.9 (THENA Fusion, Camelot V3 — algebra_dir_fee): TickTable.nextTickInTheSameRow —
+    /// инициализированный тик в строке битмапа (256 СЫРЫХ тиков) или край строки. Не для Algebra V1 (cryptoalgebra/
+    /// AlgebraV1 master libraries/TickTable.sol: toggleTick и nextTickInTheSameRow сжимают тик на
+    /// Constants.TICK_SPACING — строка = 256 сжатых тиков). Ревью t235: исходник официального деплоера THENA Fusion
+    /// (Sourcify 56, 0xc89F…7358) — код AlgebraV1 (TICK_SPACING = 60, сжатие); версия пулов — запись T461-06.
     Row,
     /// Algebra Integral: связный список тиков — сразу следующий инициализированный тик.
     Linked,
@@ -119,7 +128,7 @@ pub fn swap_to(
     }
     while !remaining.is_zero() && sqrt != limit {
         let (bound, is_cross) = match s.next {
-            // V1/V1.9: строка, где ищется цель, должна быть прочитана (окно — целые строки); иначе частичный итог.
+            // V1.9: строка, где ищется цель, должна быть прочитана (окно — целые строки); иначе частичный итог.
             NextTick::Row => {
                 if !starts_in_window(tick, lo, hi, zero_for_one) {
                     return Ok((partial(total_in, total_out), false));
@@ -203,7 +212,7 @@ pub fn swap_to(
     ))
 }
 
-/// Цель шага V1/V1.9 — порт TickTable.nextTickInTheSameRow (AlgebraV1.9 a45417ed libraries/TickTable.sol:65-108):
+/// Цель шага V1.9 — порт TickTable.nextTickInTheSameRow (AlgebraV1.9 a45417ed libraries/TickTable.sol:65-108):
 /// lte (zeroToOne) — строка тика `cur` (rowNumber = cur >> 8), наибольший инициализированный тик не выше `cur`, иначе
 /// начало строки; иначе — строка тика cur + 1, наименьший инициализированный тик не ниже cur + 1, иначе конец строки.
 /// boundTick — в пределах [MIN_TICK; MAX_TICK]. Строка должна быть в прочитанном окне (проверяет swap_to).

@@ -575,7 +575,7 @@ pub fn swap(
 }
 
 /// Решение 461: цель шага цикла обмена Algebra по версии кода пула (math/swap_algebra.rs, шапка, пункт 5) — Integral
-/// (связный список тиков) — следующий инициализированный тик, V1/V1.9 (THENA Fusion, Camelot V3) — строка битмапа.
+/// (связный список тиков) — следующий инициализированный тик, V1.9 (THENA Fusion, Camelot V3) — строка битмапа.
 /// Принимает: протокол вида. Возвращает: режим. Ошибок нет.
 pub fn algebra_next(proto: Proto) -> NextTick {
     if proto == Proto::AlgebraIntegral {

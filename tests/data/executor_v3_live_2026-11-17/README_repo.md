@@ -13,3 +13,11 @@
 summary.json с calls.json (статус, возврат execute, кредит события Swap менеджера) и raw_rpc.json.zst (код исполнителя в
 stateOverrides = contracts/out/ArbExecutor.bin-runtime; квотер в той же симуляции сразу перед (б)). Правило приёмки —
 docs/DECISIONS.md, решение 400.
+
+## Сеть записи (решение 461)
+
+В сыром `README.md` строки chainId нет (сырые файлы не правятся). Сеть записи — BSC, по факту сырого README: строка
+«WBNB (dex.native_wrapped, bsc_dex): 0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c» и адреса пулов BSC; запись — со
+своего узла BSC. Бот читает сеть записи из строки ниже (src/venues/bsc_dex/exec/executor/live_record.rs, `chain_in`):
+
+- chainId: 56

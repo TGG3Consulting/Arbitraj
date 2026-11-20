@@ -22,18 +22,15 @@ use serde_json::Value;
 use super::code::{self, Version};
 use super::live_rule::{self, CLASSES, Verdict};
 
-/// Сеть записи v3 2026-11-17 — chainId BSC (в её README строки chainId нет; запись — со своего узла BSC, README:
-/// «WBNB (dex.native_wrapped, bsc_dex): 0xbb4c…», адреса BSC). Факт записи, не настройка.
-const V3_RECORD_CHAIN: u64 = 56;
-
-/// Вшитая запись: версия кода, каталог, тексты, сеть (Some — задана здесь, None — из строки README «- chainId: N»).
+/// Вшитая запись: версия кода, каталог, тексты; chain_doc — текст со строкой «- chainId: N» (README записи или, если в
+/// сыром README её нет, README_repo.md папки).
 struct Source {
     version: Version,
     dir: &'static str,
     readme: &'static str,
     summary: &'static str,
     reject: &'static str,
-    chain: Option<u64>,
+    chain_doc: &'static str,
 }
 
 const SOURCES: [Source; 2] = [
@@ -52,7 +49,10 @@ const SOURCES: [Source; 2] = [
             env!("CARGO_MANIFEST_DIR"),
             "/tests/data/executor_v3_live_2026-11-17/hooks_reject.json"
         )),
-        chain: Some(V3_RECORD_CHAIN),
+        chain_doc: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v3_live_2026-11-17/README_repo.md"
+        )),
     },
     Source {
         version: Version::V4,
@@ -69,7 +69,10 @@ const SOURCES: [Source; 2] = [
             env!("CARGO_MANIFEST_DIR"),
             "/tests/data/executor_v4_live_2026-11-20/hooks_reject.json"
         )),
-        chain: None,
+        chain_doc: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v4_live_2026-11-20/README.md"
+        )),
     },
 ];
 
@@ -87,31 +90,30 @@ pub struct Judged {
     pub verdicts: Verdicts,
 }
 
-/// Сеть записи по README и summary.json: строка README «- chainId: N» (ровно одна) и поле chain_id строк summary.json
-/// (у каждой строки, где оно есть, — то же N). Принимает: тексты README и summary.json. Возвращает: chainId. Ошибки
-/// (текст): строки нет или их несколько, число не читается, summary.json не JSON, chain_id строки другой.
-pub fn chain_in(readme: &str, summary: &str) -> Result<u64, String> {
+/// Сеть записи по тексту chain_doc и summary.json: строка «- chainId: N» (ровно одна) и поле chain_id строк
+/// summary.json (у каждой строки, где оно есть, — то же N). Принимает: текст со строкой chainId (README или
+/// README_repo.md) и summary.json. Возвращает: chainId. Ошибки (текст): строки нет или их несколько, число не
+/// читается, summary.json не JSON, chain_id строки другой.
+pub fn chain_in(doc: &str, summary: &str) -> Result<u64, String> {
     const MARK: &str = "- chainId:";
-    let found: Vec<&str> = readme
+    let found: Vec<&str> = doc
         .lines()
         .filter_map(|l| l.trim_start().strip_prefix(MARK))
         .map(|rest| rest.split_whitespace().next().unwrap_or_default())
         .collect();
     let [one] = found.as_slice() else {
         return Err(format!(
-            "в README записи строк «{MARK} N» {} — нужна ровно одна",
+            "в README записи (или README_repo.md) строк «{MARK} N» {} — нужна ровно одна",
             found.len()
         ));
     };
-    let chain: u64 = one
-        .parse()
-        .map_err(|e| format!("README: chainId «{one}»: {e}"))?;
+    let chain: u64 = one.parse().map_err(|e| format!("chainId «{one}»: {e}"))?;
     let rows: Vec<Value> =
         serde_json::from_str(summary).map_err(|e| format!("summary.json: {e}"))?;
     for r in &rows {
         let c = &r["chain_id"];
         if !c.is_null() && c.as_u64() != Some(chain) {
-            return Err(format!("summary.json: chain_id строки {c} ≠ chainId README {chain}"));
+            return Err(format!("summary.json: chain_id строки {c} ≠ chainId записи {chain}"));
         }
     }
     Ok(chain)
@@ -124,10 +126,7 @@ pub fn all() -> &'static [Judged] {
         SOURCES
             .iter()
             .map(|s| {
-                let chain = match s.chain {
-                    Some(c) => Ok(c),
-                    None => chain_in(s.readme, s.summary),
-                };
+                let chain = chain_in(s.chain_doc, s.summary);
                 let verdicts = match &chain {
                     Err(e) => Err(format!("сеть записи не прочитана — {e}")),
                     Ok(_) => live_rule::judge(

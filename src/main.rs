@@ -312,6 +312,7 @@ async fn run() -> Result<(), String> {
         raw,
         pace: Default::default(),
         failover: Default::default(),
+        evm_chain: Default::default(),
         place: arb::venues::bsc_dex::ctx::Place {
             id: arb::venues::bsc_dex::ctx::BSC_ID,
             all: dex_ids,
@@ -326,6 +327,12 @@ async fn run() -> Result<(), String> {
         .copied()
         .map(|id| dex_ctx.for_place(id))
         .collect();
+    // Ревью t235 (решение 461): ячейка chainId (dex.evm_chain_id) каждой площадки DEX — при старте (ctx_chain.rs);
+    // дальше её перечитывает рассылка изменений настроек.
+    let _ = dex_ctx.chain_id();
+    for c in &more_dex {
+        let _ = c.chain_id();
+    }
     // Решение 132, пункт 5: перенос прежнего единственного кошелька — один раз, после разблокировки секретов
     // (api/secrets.rs): кошелёк «BingX» с тем же секретом, исполнитель — значение exec.executor_address [bsc_dex],
     // строки маппинга bingx и «пробы». Деньги не переводятся.

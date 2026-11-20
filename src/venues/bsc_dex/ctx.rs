@@ -2,6 +2,7 @@
 //! Что делает: общее окружение адаптера DEX — настройки (площадка, DEX/вид пула, канал), секреты,
 //! HTTP-клиент, журнал, запись сырых сообщений — и чтение настроек в одном месте.
 //! Адрес узла с ключом провайдера (node_url, with_key) — ctx_url.rs. Кошелёк счёта (решение 132) — ctx_wallet.rs.
+//! chainId площадки для горячего пути (поле evm_chain, Ctx::chain_id; ревью t235) — ctx_chain.rs.
 //! Кто вызывает: все файлы адаптера DEX.
 //! От чего зависит: settings, secrets, storage (journal, raw_log), core/types.
 //! Решение 435 (433-г): id площадки — поле Ctx.place (ctx_place.rs, из main.rs), а не константа: тот же код обслуживает
@@ -53,6 +54,9 @@ pub struct Ctx {
     pub account: Option<String>,
     /// Решение 435 (433-г): площадка окружения — свой id и все площадки DEX процесса (ctx_place.rs).
     pub place: Place,
+    /// Ревью t235 (решение 461): chainId сети площадки (dex.evm_chain_id) — ячейка горячего пути (ctx_chain.rs,
+    /// Ctx::chain_id): без строк и замков, перечитывается по изменению настройки.
+    pub evm_chain: super::ctx_chain::ChainCell,
 }
 
 impl Ctx {

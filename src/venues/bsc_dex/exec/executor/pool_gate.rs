@@ -15,8 +15,8 @@
 //! причины строит только admits (лениво, при отказе: журнал, сигнал, сделка).
 //! Кто вызывает: exec/executor/{entry, call}.rs.
 //! От чего зависит: exec/executor/{live_proof, pool_pass}.rs, pools/{registry, families, exec_kind}.rs, ctx.rs,
-//! ctx_wallet.rs (exec_info).
-//! Настройки: нет.
+//! ctx_wallet.rs (exec_info), ctx_chain.rs (chain_id — сеть площадки без строк, ревью t235).
+//! Настройки: нет (читается dex.evm_chain_id — ячейкой Ctx).
 
 use alloy_primitives::Address;
 
@@ -56,7 +56,8 @@ pub fn decide(ctx: &Ctx, e: &Entry, k: ExecKind, hooks: Address) -> Result<Admit
     // до решения).
     // Решение 461: и записью сети площадки кошелька (dex.evm_chain_id) — записи для пары нет, класс не принят.
     let ver = ctx.exec_info().and_then(|(_, v)| v).unwrap_or(Version::V3);
-    let chain = super::live_proof::chain_of(ctx);
+    // Ревью t235: сеть — поле окружения (ячейка ctx_chain.rs), без Store::resolve и выделений.
+    let chain = ctx.chain_id();
     let record = super::live_proof::accepted_for(ver, chain, k, stable, hooks);
     let by_record = if record {
         Ok(Admit::Record)

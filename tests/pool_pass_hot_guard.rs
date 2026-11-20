@@ -9,15 +9,20 @@
 //! - самые частые (fits_ok, decide, admitted, kind, accepted_for, find, exec_info, with_wallet, via_executor, usable) —
 //!   ещё и без строк (`format!`) и копий (`.clone()`): текст причины строится лениво (pool_gate.rs refusal, entry.rs fits).
 //!
-//! Чего сторож не ловит (docs/TASKS.md, ревью t186): вызовы из этих функций в другие (чтение настроек каталога
-//! Store::cache под RwLock — ctx.dex_text в exec_callback::usable, live_proof::chain_of (dex.evm_chain_id) в
-//! pool_gate::decide, как и во всех чтениях настроек котировки; память SEEN
-//! под Mutex — только у DEX с заданной dex.v3_swap_callback).
+//! Ревью t235: сеть площадки в pool_gate::decide — ячейка окружения Ctx::chain_id (ctx_chain.rs: загрузка OnceLock и
+//! атомарная загрузка, без Store::resolve); chain_id и chain_from — в списке (без замков; ячейка создаётся один раз с
+//! копией хранилища — не строгие).
+//!
+//! Чего сторож не ловит (docs/TASKS.md, ревью t186): вызовы из этих функций в другие. Чтение настроек каталога —
+//! Store::cache после решения 409 неизменяемый снимок за ArcSwap (settings/snapshot.rs, без замка), но Store::resolve /
+//! get_exact строят строку области (Scope::Venue / Scope::Dex — выделение на вызов): ctx.dex_text в
+//! exec_callback::usable, как и во всех чтениях настроек котировки; память SEEN под Mutex — только у DEX с заданной
+//! dex.v3_swap_callback (решение 409: SEEN — снимок без замка, замок только у записи нового селектора).
 //! Кто вызывает: cargo test.
 //! От чего зависит: исходники src/ (только чтение).
 
 /// (файл, функция, строгий ли — без строк и копий).
-const HOT: [(&str, &str, bool); 14] = [
+const HOT: [(&str, &str, bool); 16] = [
     ("src/venues/bsc_dex/exec/executor/entry.rs", "fits_ok", true),
     ("src/venues/bsc_dex/exec/executor/entry.rs", "fits", false),
     (
@@ -64,6 +69,8 @@ const HOT: [(&str, &str, bool); 14] = [
     ("src/venues/bsc_dex/ctx_wallet.rs", "exec_info", true),
     ("src/settings/accounts/mod.rs", "with_wallet", true),
     ("src/venues/bsc_dex/ctx_wallet.rs", "executor", false),
+    ("src/venues/bsc_dex/ctx_chain.rs", "chain_id", false),
+    ("src/venues/bsc_dex/ctx_chain.rs", "chain_from", false),
 ];
 
 /// Запрещено во всех функциях пути.

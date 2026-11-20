@@ -33,6 +33,8 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "deal.transfer_credited" => (OK, "Перевод зачислен"),
         "deal.credit_hold" => (WARN, "Биржа зачислила меньше записи депозита"),
         "deal.no_fact" => (WARN, "Баланс биржи не читается — сделка ждёт"),
+        "deal.sale_unknown_block" => (STOP, "Монета заблокирована: исход продажи неизвестен"),
+        "deal.partial_waits_review" => (WARN, "Сделка ждёт разбора другой сделки"),
         "transfer.to_trading_failed" => (WARN, "Зачислено, но не переведено на торговый счёт"),
         "deal.sell_filled" => (OK, "Продано"),
         "deal.dust" => (INFO, "После продажи остался остаток монеты"),

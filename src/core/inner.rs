@@ -101,6 +101,11 @@ pub struct Inner {
     pub slip_off: Mutex<Option<String>>,
     /// История времени в пути: (монета, A, B) → длительности переводов по порядку, секунды (transit.rs).
     pub transits: Mutex<HashMap<TransitKey, Vec<Decimal>>>,
+    /// Решение 464 (t238, ревью): готовые суммы переводов пар площадок по всем монетам (transit_source.rs).
+    pub transit_pairs: super::transit_source::Pairs,
+    /// Решение 464 (t238, ревью): ордера продажи в полёте, итоги продаж и сделки с неизвестным исходом продажи по
+    /// (площадка, монета) — для расчёта новых сделок (sale_marks.rs).
+    pub sales: super::sale_marks::Marks,
     /// Ожидаемые зачисления переводов и площадки, приславшие события баланса (credit_watch.rs, решение 76).
     pub credits: super::credit_watch::Credits,
     /// Деньги в открытых сделках (limits.rs). Ведёт executor.rs.
@@ -271,6 +276,8 @@ impl Inner {
             last_reject: Default::default(),
             slip_off: Mutex::default(),
             transits: Mutex::default(),
+            transit_pairs: Default::default(),
+            sales: Default::default(),
             credits: Default::default(),
             exposure: Mutex::default(),
             market_tx,

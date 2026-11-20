@@ -14,7 +14,9 @@
 //! Кто вызывает: core/costs.rs (evaluate_on → Live), core/uncapped_replay.rs (свой источник), size_curve.rs.
 //! Решение 394 (t179, докупка): Live при идущих сделках группы — ride_quote.rs, ride_trail.rs (продажа после их монет,
 //! свежесть данных), возврат USDT докупки без фиксированной части (costs_withdraw.rs return_b_top_up).
-//! От чего зависит: costs_quote.rs, ride_quote.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
+//! Решение 464 (t238): исход нашей продажи монеты на площадке продажи неизвестен — котировки продажи нет
+//! (ride_settled::unsure).
+//! От чего зависит: costs_quote.rs, ride_quote.rs, ride_settled.rs, costs_withdraw.rs, plan_costs.rs, convert.rs, dirctx.rs, frozen.rs, engine.rs.
 //! Настройки: нет (у источника Live — через costs_quote.rs и convert.rs).
 
 use std::future::Future;
@@ -112,6 +114,14 @@ impl Source for Live<'_> {
     /// B (ride_quote.rs) и по данным новее продаж сделок групп (ride_trail.rs); покупка на A — по данным новее покупок
     /// идущих сделок группы. Групп нет — как раньше. Ошибки: как у fetch; Stop — данные не доказуемо свежее.
     async fn quote(&self, d: &Direction, sell: bool, qty: Decimal) -> Result<Quote, Fail> {
+        // Решение 464 (t238, ревью): исход нашей продажи монеты на площадке продажи неизвестен — продажи новой сделки
+        // там не считаем и без идущих сделок (не торгуем вслепую; атомарный быстрый путь — sale_marks.rs).
+        if sell
+            && self.rides()
+            && let Some(why) = super::ride_settled::unsure(self.core, d)
+        {
+            return Err(Fail::Stop(why));
+        }
         if !self.rides() || super::ride_quote::idle(self.core, d) {
             return super::costs_quote::fetch(self.core, d, sell, qty, self.src).await;
         }

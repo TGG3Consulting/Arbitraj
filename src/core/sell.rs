@@ -44,6 +44,9 @@
 //! Решение 415 (t200, живой LQR 19.11): после факта — ход очереди продажи счёта (sell_turn.rs): котировка продажи
 //! (sell_turn_fresh.rs — не раньше прошлой продажи той же монеты на той же площадке) и ордер — под одним ходом; ход
 //! снимается сразу после итога ордера, до продолжений.
+//! Решение 464 (t238): возраст котировки в строке хронологии — к отправке ордера; ордер продажи — «Время по шагам
+//! (ордер продажи …)» при log.step_timing = да, прочитанном один раз на сделку (Deal.step_timing, executor.rs; запросы к
+//! бирже / узлу BSC: approve, отправка, квитанция).
 //! Кто вызывает: executor.rs, stuck.rs, manual.rs, manual_halted.rs, manual_sell.rs, manual_relay.rs, relay_here.rs,
 //! sell_here_ok.rs (решение 417: sell — продажа здесь при итоге ≥ 0 под ходом).
 //! От чего зависит: trade_ops.rs, fills.rs, ledger.rs, stuck.rs, manual.rs, deal.rs, sell_slip.rs, sell_unsent.rs,
@@ -175,8 +178,10 @@ pub async fn market_guarded(core: &Core, deal: Deal, why: &str, g: Guard) {
 /// Строка хронологии (решение 227): котировка продажи (средняя, исполнимо из запрошенного, возраст котировки) и худшая
 /// цена ордера со стаканом, по которому посчитана (возраст стакана ядра; у DEX — от средней с допуском).
 /// Принимает: котировку, количество ордера, худшую цену (None — до расчёта не дошло). Ошибок нет.
-fn quote_note(q: &Quote, qty: Decimal, w: Option<&super::trade_ops::Worst>) -> String {
-    let age = (chrono::Utc::now() - q.at).num_milliseconds();
+/// Решение 464 (t238, живой NUM 20.11: «котировке 2525 мс» у первой продажи Gate): возраст котировки — на момент
+/// отправки ордера (`age`, мс), а не на момент записи строки после итога ордера (раньше в него входили approve, ожидание
+/// блока и откат — время ордера, не котировки; само время ордера — строкой «Время по шагам (ордер продажи …)»).
+fn quote_note(q: &Quote, qty: Decimal, w: Option<&super::trade_ops::Worst>, age: i64) -> String {
     let worst = match w {
         Some(w) => match w.book_age_ms {
             // Решение 238: стакан потока устарел — котировка и худшая цена по одному снимку REST.
@@ -193,7 +198,7 @@ fn quote_note(q: &Quote, qty: Decimal, w: Option<&super::trade_ops::Worst>) -> S
         None => "худшая цена ордера не посчитана".to_string(),
     };
     format!(
-        "Котировка продажи на {}: средняя {}, исполнимо {} из {qty} (котировке {age} мс); {worst}",
+        "Котировка продажи на {}: средняя {}, исполнимо {} из {qty} (котировке {age} мс к отправке ордера); {worst}",
         q.venue.0, q.avg_price, q.fillable_qty
     )
 }
@@ -218,6 +223,10 @@ pub(super) async fn sell(
     let (v, a) = (deal.at.clone(), deal.direction.asset.clone());
     let mut seen = None;
     let mut gas = Vec::new();
+    // Решение 464: возраст котировки к отправке ордера; замер ордера по шагам (log.step_timing, как у покупки —
+    // запросы к бирже и к узлу BSC: approve, отправка, квитанция) — в хронологию сделки.
+    let age = (chrono::Utc::now() - q.at).num_milliseconds();
+    let on = deal.step_timing;
     // Решение 413: продажа — под общим доступом к счёту (credit_lock.rs): чтение факта для долей другой сделки не идёт,
     // пока ордер в полёте; проданное сразу в учёте памяти.
     let trade = super::trade_ops::trade_seen(
@@ -239,14 +248,22 @@ pub(super) async fn sell(
         false,
     );
     // Ревью CI t198 (переполнение стека): продажа под замком — в куче.
-    let mut res = Box::pin(super::credit_lock::selling(core, &deal, trade)).await;
+    let (mut res, order) = super::step_timing::measure_if(
+        on,
+        Box::pin(super::credit_lock::selling(core, &deal, trade)),
+    )
+    .await;
     // Решение 415: итог ордера есть, учёт сделки в памяти уже обновлён (credit_lock::selling) — ход очереди снимается
     // до любых продолжений (ветка 268, режим застрявшей монеты, повтор, алерт — без очереди; ветка 268 берёт свой ход).
     turn.done(core, &deal, q.route.as_ref(), &res);
     // Решение 236, дополнение: approve, чаевые, газ неудачных попыток — в затраты сделки.
     super::deal_gas::charge(core, &mut deal, &v, &mut gas).await;
     // Решение 227: котировка продажи и стакан худшей цены — в хронологию сделки (разбор живых случаев вроде JCT).
-    deal.note(quote_note(&q, deal.qty, seen.as_ref()));
+    deal.note(quote_note(&q, deal.qty, seen.as_ref(), age));
+    super::step_timing::note(
+        &mut deal,
+        order.map(|o| o.reqs_text(&format!("ордер продажи {}", v.0))),
+    );
     // Решение 268 (Тигран 14.11): биржа отклонила лимитный ордер продажи «цена вне разрешённого диапазона» — свежий
     // стакан и то же условие, по которому продажа решена (rule): выполнено — рыночный ордер (не больше одного на
     // площадку в сделке); его итог (факт или ошибка) разбирается ниже тем же кодом, что у лимитного. Обычная продажа

@@ -15,6 +15,8 @@
 //! будет прочитан (remain_fact.rs); закрытая / взятая человеком сделка счёт не путает. Человеку — остановка сделки
 //! «исход продажи неизвестен» (sell.rs).
 //! Замки — только в памяти (после перезапуска продаж в полёте нет). Пар (биржа, монета) — столько, сколько торговалось.
+//! Решение 464: selling ставит след продажи сделки группы (ride_trail::note_fill) сразу с учётом в памяти, отметку
+//! «ордер продажи в полёте» и итог продажи (sale_marks.rs), набор «исход неизвестен» (sale_marks::track).
 //! Кто вызывает: core/sell.rs и core/sell_range_run.rs (selling), core/remain_fact.rs и core/credit_base.rs (fact),
 //! core/credit_apply.rs (sync).
 //! От чего зависит: coin_key.rs, engine.rs (учёт сделок), op_error.rs, tokio::sync::RwLock.
@@ -89,6 +91,7 @@ pub fn sync(core: &Core, deal: &Deal) {
         d.at = deal.at.clone();
         d.credit = deal.credit.clone();
         d.sale_unsure = deal.sale_unsure;
+        super::sale_marks::track(core, d);
         // Восьмое ревью t198: и хронология — строка решения не теряется при записи учёта из памяти (круг сверки).
         d.timeline = deal.timeline.clone();
     }
@@ -102,6 +105,9 @@ where
     F: Future<Output = Result<TradeResult, OpError>>,
 {
     let g = sale(&deal.at, &deal.direction.asset).await;
+    // Решение 464 (t238, ревью): ордер продажи в полёте — до его итога (sale_marks.rs; котировки-решения без ордера
+    // отметки не ставят).
+    let mark = super::sale_marks::order(core, &deal.at, &deal.direction.asset);
     let r = f.await;
     if let Some(d) = lk(&core.inner.deals).get_mut(&deal.id) {
         match &r {
@@ -114,7 +120,20 @@ where
             Err(e) if e.outcome_unknown() => d.sale_unsure = true,
             Err(_) => {}
         }
+        // Решение 464: набор «исход продажи неизвестен» по (площадка, монета) — сразу с учётом памяти.
+        super::sale_marks::track(core, d);
     }
+    // Решение 464 (t238): учёт уменьшен — след продажи сделки группы ставится сразу (ride_trail::note_fill), до снятия
+    // охраны: расчёт новой сделки не увидит остаток без проданного при пуле без этой продажи.
+    if let Ok(x) = &r {
+        super::ride_trail::note_fill(core, deal, x);
+    }
+    // Итог продажи (исполнено или исход неизвестен) — до снятия отметки «в полёте» (ride_settled.rs).
+    let counted = match &r {
+        Ok(x) => x.filled_qty > rust_decimal::Decimal::ZERO,
+        Err(e) => e.outcome_unknown(),
+    };
+    mark.finish(counted);
     drop(g);
     r
 }

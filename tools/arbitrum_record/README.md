@@ -109,3 +109,14 @@ python3 tools/arbitrum_record/algebra_dir_fee.py --rpc http://<узел>:8547 \
 `--log-blocks 20000` (≈ 1,4 ч при блоке 250 мс) — значения для теста, не настройки бота; при отказе узла по диапазону
 eth_getLogs — уменьшить. Другие DEX Arbitrum на Algebra (кандидаты — docs/TASKS.md «Решение 444», вопрос 3): тот же
 скрипт со своей фабрикой — совпадение CREATE2 с одним из хешей = пулы этой версии кода.
+
+## kyber_elastic_legacy.py — KyberSwap Elastic Legacy (v1) на Arbitrum (решение 475, T462-01)
+
+Пулы фабрики v1 `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` (в GeckoTerminal их нет — там только v2): реестр фабрики
+getPool(a, b, swapFeeUnits) по парам токенов-кандидатов (GeckoTerminal — только список токенов) и уровням 8, 10, 40,
+300, 1000 (конструктор фабрики, Sourcify 42161); перечисления пулов у фабрики нет. По найденным пулам — состояние, тики
+частями (`--tick-chunk`, как бот с dex.elastic_ticks_chunk) и одним вызовом, ticks(t), QuoterV2 v1; события PoolCreated /
+SwapFeeEnabled фабрики узким окном `--log-blocks`; потолок времени `--time-limit`. Пишет
+`tests/data/arbitrum_kyber_elastic_legacy_<дата>/`, тест — `tests/arbitrum_kyber_elastic_legacy_live.rs`. Запуск:
+`python3 tools/arbitrum_record/kyber_elastic_legacy.py --rpc http://УЗЕЛ:8547` (или record_all.py `--only kyber_elastic_legacy`).
+Модули `gt.py`, `recnode.py`, `kyber_elastic_ticks.py`, `stdhttp.py` — те же, что в ветке t234/arb-merge-2 (байт в байт).

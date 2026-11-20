@@ -502,3 +502,29 @@ dex.pool_implementation `0x7b5fDb8C89A616d319202704B0eA18b168654281`; у пло�
   задачах T448-*.
 - Настройки площадки arb_dex (область V) — вне этой задачи.
 - dex.pool_enabled ни у одной DEX не ставился — настройки задаёт Тигран в интерфейсе (CLAUDE.md, «Стек»).
+
+## 6. KyberSwap Elastic Legacy (v1) — `kyberswap_elastic_legacy_arbitrum@arbitrum` (T462-01, решение 475)
+
+Id — предложение, решает Тигран (T475-03). Пулы фабрики Elastic v1 есть на Arbitrum (решение 462: getPool фабрики v1
+для 6 пар пулов GeckoTerminal — ненулевой адрес), у GeckoTerminal их нет (там — v2 `kyberswap_elastic_arbitrum`,
+factory() = 0xC7a5…8C4A). Поэтому отдельный DEX с поиском по фабрике. Перечисления пулов у фабрики нет (Factory.sol: только
+mapping getPool, ks-elastic-sc 4ab08c0a L44; фабрика v1 — Sourcify 42161, тот же реестр, в обе стороны) — поиск
+getPool(монета, встречный, swapFeeUnits) по уровням dex.v3_fee_tiers (pools/factory_calls.rs, решение 475; селектор тот
+же, что у V3). Пул проверяется как у kyber_elastic (getPool фабрики dex.factory = пул, pools/verify_calls.rs).
+
+| Настройка | Значение | Источник |
+| --- | --- | --- |
+| dex.kind | `kyber_elastic_v1` | решение 451 (правило шага SwapMath v1) |
+| dex.factory | `0x5F1dddbf348aC2fbe22a163e30F99F9ECE3DD50a` | ks-elastic-sc 4ab08c0a README.md L6-L17; docs.kyberswap.com reference/legacy/elastic-legacy/elastic-contract-addresses (Arbitrum); Sourcify 42161 full match |
+| dex.router | `0xC1e7dFE73E1598E3910EF4C7845B68A9Ab6F4c83` | то же |
+| dex.quoter | `0x0D125c15D54cA1F8a813C74A81aEe34ebB508C1f` | то же |
+| dex.tick_reader | `0x165c68077ac06c83800d19200e6E2B08D02dE75D` | то же |
+| dex.v3_fee_tiers | `8, 10, 40, 300, 1000` | конструктор фабрики v1 (Sourcify 42161 0x5F1d…D50a: feeAmountTickDistance[8] = 1, [10] = 1, [40] = 8, [300] = 60, [1000] = 200); с цепи — fees.json записи |
+| dex.elastic_ticks_chunk | `1000` | решение 475, docs/FIRST_RUN.md (газ части) |
+| dex.pool_enabled | да — решает Тигран | — |
+
+У площадки arb_dex — index.factory_scan = да. Оговорки: (1) уровни, включённые позже enableSwapFee, видны только
+событием SwapFeeEnabled — kyber_elastic_legacy.py пишет события фабрики окном 2 000 000 блоков (всей истории нет —
+решение 460); (2) сверка расчёта v1 с QuoterV2 v1 и тиков частями — tests/arbitrum_kyber_elastic_legacy_live.rs после
+записи (T475-01); (3) исполнения у вида нет (tradable = false) — только сигнал, исполнитель не менялся. У
+`kyberswap_elastic_arbitrum@arbitrum` (v2, §4.3) тоже нужна dex.elastic_ticks_chunk (решение 475).

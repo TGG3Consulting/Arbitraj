@@ -300,6 +300,7 @@
 | 144 | Metric V1 | `metric-v1` | Dexs | Metric (на BSC — Metric OMM, `metric_omm` — src/venues/bsc_dex/pools/families.rs:347); версия на Arbitrum не сверена (docs/notes/arbitrum/docs-check-2026-11-20.md) | — | **семейство не установлено** | не сверены | T433-144 |
 | 145 | PancakeSwap X | `pancakeswap-x` | Dexs | — | — | **семейство не установлено** | не сверены | T433-145 |
 | 146 | Aero Basic | `aero-basic` | Dexs | — | — | **семейство не установлено** | не сверены | T433-146 |
+| 6a (решение 475) | KyberSwap Elastic Legacy (v1) — в DefiLlama под `kyberswap-elastic` вместе с v2, у GeckoTerminal пулов нет | — | Dexs | KyberSwap Elastic v1: фабрика 0x5F1d…D50a (ks-elastic-sc 4ab08c0a README.md L6-L17, docs.kyberswap.com «Elastic Legacy Contract Addresses», Sourcify 42161) | `kyber_elastic_v1` — src/venues/bsc_dex/pools/families.rs; поиск по фабрике — pools/factory_calls.rs (getPool по dex.v3_fee_tiers) | **код есть, сверка — запись tools/arbitrum_record/kyber_elastic_legacy.py (T475-01); id и включение — Тигран (T475-03)** | docs/notes/arbitrum/dex-settings-arbitrum.md §6 | T462-01 |
 
 ## 4. Семейства, которых нет в коде (задачи кода)
 

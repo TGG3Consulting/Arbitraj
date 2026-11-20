@@ -11,6 +11,7 @@
 //! решение 125), gate.rs, okx.rs, htx.rs и др. (настройки одной биржи).
 //! cpu.rs — счёт процессора (решения 336–338, задача t157). bingx.rs — только BingX (решение 293). book_events.rs — стаканы бирж при полном канале ядра (решение 324).
 //! dex_lb.rs — Liquidity Book V2.2 (решение 446).
+//! dex_elastic.rs — KyberSwap Elastic, части чтения тиков (решение 475).
 //! lost_events.rs — сообщения ядру и кандидаты не теряются молча (решения 333/334).
 //! write_path.rs — очередь уведомлений, очередь и пачки журнала, synchronous учёта ядра (решения 340, 341, 353).
 //! Кто вызывает: settings/store.rs (проверка имени и типа), api/settings.rs (схема для интерфейса).
@@ -30,6 +31,7 @@ mod coinex;
 mod cpu;
 pub mod dex;
 mod dex_ekubo;
+mod dex_elastic;
 mod dex_event;
 mod dex_fail;
 mod dex_par;
@@ -156,6 +158,7 @@ static PARTS: &[&[SettingDef]] = &[
     dex_fail::DEX_FAIL,
     dex_par::DEX_PAR,
     dex_ekubo::DEX_EKUBO,
+    dex_elastic::DEX_ELASTIC,
     index::INDEX,
     kyber::KYBER,
     send::SEND,

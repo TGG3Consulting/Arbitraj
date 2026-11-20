@@ -1,7 +1,7 @@
 //! Файл: tests/bsc_dex_elastic_family.rs
 //! Что делает: подключение семейства KyberSwap Elastic (решение 81) без сети — таблица сопоставления (dex.kind =
 //! kyber_elastic; решение 121 B2 — только сигнал, не исполним), набор обязательных настроек (фабрика/роутер/квотер/
-//! читатель тиков, БЕЗ Universal Router и Permit2 — форк), и заглушка сверки котировки с квотером на реальной записи (пока записи нет — #[ignore]).
+//! читатель тиков, длина части тиков — решение 475, БЕЗ Universal Router и Permit2 — форк), и заглушка сверки котировки с квотером на реальной записи (пока записи нет — #[ignore]).
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::pools::families, arb::settings (настоящая SQLite во временной папке).
 //! Математика Elastic на официальных значениях — tests/bsc_dex_elastic_math.rs (81a).
@@ -90,7 +90,13 @@ async fn elastic_family_requirements() {
 
     // Обязательные настройки: фабрика, роутер, квотер, читатель тиков — и ни UR, ни Permit2.
     let req = families::required(&c, f);
-    for name in ["dex.factory", "dex.router", "dex.quoter", "dex.tick_reader"] {
+    for name in [
+        "dex.factory",
+        "dex.router",
+        "dex.quoter",
+        "dex.tick_reader",
+        "dex.elastic_ticks_chunk",
+    ] {
         assert!(req.contains(&name), "нет {name} в required(): {req:?}");
     }
     for name in [
@@ -116,6 +122,15 @@ async fn elastic_family_requirements() {
         ],
     )
     .await;
+    // Решение 475: без длины части чтения тиков (dex.elastic_ticks_chunk) DEX не подключается.
+    assert!(
+        families::classify(&c, id)
+            .unwrap_err()
+            .contains("не задана dex.elastic_ticks_chunk"),
+        "{}",
+        families::classify(&c, id).unwrap_err()
+    );
+    set(&c, &[("dex.elastic_ticks_chunk", s.clone(), json!(1000))]).await;
     let f = families::classify(&c, id).unwrap();
     assert_eq!((f.graphable, f.tradable, f.fork), (true, false, true));
 }

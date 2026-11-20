@@ -26,6 +26,12 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 444 (`wc -l`): сверх ориентира 200 и до решения — venues/bsc_dex/pools/families.rs 663 (было 651), pools/load.rs
+  506 (было 502), pools/settle.rs 265, quote/pool_quote.rs 527, quote/quoter_calls.rs 458, quote/virtual_quoter.rs 235,
+  quote/steps.rs 245, core/types/pool.rs 435 — давно сверх; новые файлы вида ≤ 61 строки. Условие пулов Arbitrum
+  (exec/pool_cond.rs) для algebra_dir_fee — корень хранилища (как прочие Algebra): слоты globalState / liquidity
+  (PoolState.sol:24, :27 ветки direction-based-fee) не сверены по раскладке развёрнутого кода — задача.
+  Пересчёт комиссий первым обменом новой секунды (AlgebraPool.sol:777-795) не моделируется — как у THENA Fusion.
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

@@ -18,7 +18,7 @@
 установлено** — в этой проверке нет официального источника, какое у DEX семейство пулов. «Вид есть в коде» ≠ «подключено»:
 у Arbitrum нет ни одной DEX, подключённой в настройках (площадка arb_dex ещё не поднята — step5-plan.md).
 
-Итог по 84 DEX GeckoTerminal: вид есть в коде — 15, частично — 1, семейства нет — 7,
+Итог по 84 DEX GeckoTerminal: вид есть в коде — 16 (Camelot V3 — решение 444), частично — 1, семейства нет — 6,
 семейство не установлено — 61, не пул — 0. Из DefiLlama сверх GeckoTerminal — 62 DEX.
 **У каждой строки — задача с номером (docs/TASKS.md, «Решение 433»). Приоритетов нет: все задачи обязательны.**
 
@@ -58,7 +58,7 @@
 | 30 | `auragi` | Auragi | — | — | **семейство не установлено** | не сверены | T433-030 |
 | 31 | `aegis` | Aegis | — | — | **семейство не установлено** | не сверены | T433-031 |
 | 32 | `mm-finance-v3-arbitrum` | MM Finance V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-032 |
-| 33 | `camelot-v3` | Camelot V3 | Algebra 1.9 с направленными комиссиями feeZtO/feeOtZ (docs/notes/arbitrum/docs-check-2026-11-20.md) | (вид Algebra с одной комиссией — `thena_fusion` — src/venues/bsc_dex/pools/families.rs:328) | **семейства нет в коде** | docs.camelot.exchange/contracts/arbitrum/one-mainnet: AMM V3 AlgebraFactory 0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B, Quoter 0x0Fc73040b26E9bC8514fA028D998E73A254Fa76E, SwapRouter 0x1F721E2E82F6676FCE4eA07A5958cF098D339e18 | T433-033 |
+| 33 | `camelot-v3` | Camelot V3 | Algebra 1.9 с направленными комиссиями feeZtO/feeOtZ (docs/notes/arbitrum/docs-check-2026-11-20.md; исходник — cryptoalgebra/AlgebraV1.9 ветка direction-based-fee a45417ed, решение 444) | `algebra_dir_fee` — src/venues/bsc_dex/pools/families.rs (решение 444) | **вид есть в коде** (решение 444; запись узла и включение — TASKS «Решение 444») | docs.camelot.exchange/contracts/arbitrum/one-mainnet: AMM V3 AlgebraFactory 0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B, Quoter 0x0Fc73040b26E9bC8514fA028D998E73A254Fa76E, SwapRouter 0x1F721E2E82F6676FCE4eA07A5958cF098D339e18 | T433-033 |
 | 34 | `traderjoe-v2-1-arbitrum` | LFJ V2.1 (Arbitrum) | Liquidity Book v2.1 | `lb_v21` — src/venues/bsc_dex/pools/families.rs:358 | **вид есть в коде** | не сверены | T433-034 |
 | 35 | `arbswap-stableswap-arbitrum` | Arbswap StableSwap (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-035 |
 | 36 | `whitehole-arbitrum` | Whitehole (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-036 |
@@ -301,7 +301,7 @@
 - T433-F2 Balancer V3 — новое семейство (хранилище V3, крючки): математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
-- T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+- T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — **код сделан (решение 444)**: вид `algebra_dir_fee` (pools/abi_algebra_dir.rs, load_algebra_dir.rs, events_algebra_dir.rs, prefetch_algebra_dir.rs, math/algebra_fee.rs); тесты на записи своего узла — после записи tools/arbitrum_record/algebra_dir_fee.py (до неё — ignore). Другие DEX Arbitrum на этой версии — не подтверждены (TASKS «Решение 444», вопрос 3).
 - T433-F6 Liquidity Book v2.0 (LFJ V2) — новое семейство (в коде только v2.1); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F7 Liquidity Book v2.2 (LFJ V2.2) — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F8 Ekubo — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.

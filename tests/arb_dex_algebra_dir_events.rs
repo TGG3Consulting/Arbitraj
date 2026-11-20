@@ -6,6 +6,7 @@
 //!    globalState на блоке B (комиссии меняет только _updateFee, и он всегда шлёт Fee — AlgebraPool.sol:549-558).
 //! 2. Последний лог пула — Swap: после применения цена, тик и ликвидность = globalState и liquidity() на блоке B.
 //! 3. За каждым Fee в той же транзакции идёт ещё лог пула (Swap / Mint / Burn) — основание Follow в pools/settle.rs.
+//!
 //! Тесты с меткой ignore до записи (метку снять после записи — docs/TASKS.md, «Решение 444»).
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/algebra_dir_common, tests/native_common (entry), arb::venues::bsc_dex::pools::{events,

@@ -9,8 +9,12 @@
 //! неизвестен» с «чем найти», как при Pending (решение 231): исход выясняет ядро. В «чем найти» — и хеши отправленных
 //! трекером отмен (журнал отмен send/track_util.rs CancelLog): позднее выяснение проверяет и их квитанции.
 //! Решение 273: send_capped — с пределом цены газа (пары Solidly с maxGasPrice): цена выше — транзакции нет.
+//! Решение 435 (433-д): цена газа и вид транзакции — по модели газа площадки dex.gas_mode (send/tx_price.rs): legacy —
+//! как было (gasPrice = eth_gasPrice + надбавка, не ниже минимума каналов; legacy-транзакция); eip1559_l1 — тип 2
+//! (maxFeePerGas = база головы × запас + чаевые, quote/gas.rs fees; минимум каналов — по цене, которую заплатит);
+//! предел пары и запас на газ — по потолку цены (maxFeePerGas у типа 2). Не задана — транзакция не уходит.
 //! Кто вызывает: exec/trade.rs, wallet/transfer.rs; send_capped — exec/executor/trade.rs, exec/cycle_exec.rs.
-//! От чего зависит: exec/chain_tx.rs (факт; газ перевода чаевых — решение 236, дополнение п. 6), exec/swap_ctx.rs (seed — «чем найти» с чаевыми, решение 231), send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
+//! От чего зависит: exec/tx_fee.rs (цена газа по модели, решение 435), exec/chain_tx.rs (факт; газ перевода чаевых — решение 236, дополнение п. 6), exec/swap_ctx.rs (seed — «чем найти» с чаевыми, решение 231), send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
 //! Настройки: send.* через send/tx.rs (SendCfg — читается до отправки), channel.*.
 //!
 //! eth_estimateGas, legacy-транзакция EIP-155 — ссылки в send/tx.rs; трекер и отмена — send/track.rs, send/cancel.rs.
@@ -102,12 +106,8 @@ pub async fn send_capped(
     // рядом с SendCfg до nonce; им же подписывается отмена (Watch).
     let chain = super::super::node::chain_seen::ensure(ctx).await?;
     let ready = send::select(ctx, &env.stats)?;
-    let price = env
-        .gas
-        .wei(ctx, &env.heads)
-        .await?
-        .max(send::gas_floor(&ready));
-    if let Some(c) = cap.filter(|c| price > *c) {
+    let price = super::tx_fee::price(env, &ready).await?;
+    if let Some(c) = cap.filter(|c| price.cap() > *c) {
         let why = format!(
             "цена газа транзакции {price} wei выше предела пары maxGasPrice {c} wei — своп не отправлен"
         );
@@ -121,32 +121,23 @@ pub async fn send_capped(
     // отправки ключ и маппинг кошельков не читаются.
     ctx.bound()?;
     let key = signer::signer(ctx)?;
-    let sign = |t: alloy::consensus::TxLegacy| {
-        signer::sign_with(&key, t)
-            .map_err(|e| ctx.err(ErrorCode::Internal, format!("Подпись транзакции: {e}")))
+    let sign = |nonce: u64, gas: u64, call: (TxKind, U256, Bytes)| {
+        price.sign(ctx, &key, "Подпись транзакции", chain, nonce, gas, call)
     };
-    let signed = sign(tx::legacy(ctx, chain, nonce, price, gas, to, value, data)?)?;
+    let signed = sign(nonce, gas, (to, value, data))?;
     let mut tip_cost = None;
     let tip = match send::tip(&ready).filter(|_| with_tip) {
         Some((tip_to, amount)) => {
             let g = tx::limit(ctx, from, tip_to, &Bytes::new(), amount).await?;
             tip_cost = Some((amount, g));
-            let t = tx::legacy(
-                ctx,
-                chain,
-                nonce + 1,
-                price,
-                g,
-                tip_to,
-                amount,
-                Bytes::new(),
-            )?;
-            Some((sign(t)?, amount))
+            let t = sign(nonce + 1, g, (TxKind::Call(tip_to), amount, Bytes::new()))?;
+            Some((t, amount))
         }
         None => None,
     };
-    // Решение 247, п. З: BNB на газ (value + газ + чаевые с газом их перевода) — до отправки, с понятной причиной.
-    let need = super::gas_fund::need_wei(value, price, gas, tip_cost);
+    // Решение 247, п. З: BNB на газ (value + газ + чаевые с газом их перевода) — до отправки, с понятной причиной;
+    // решение 435: по потолку цены (EIP-1559 — gas_limit × maxFeePerGas).
+    let need = super::gas_fund::need_wei(value, price.cap(), gas, tip_cost);
     super::gas_fund::ensure(ctx, from, need).await?;
     let head = env.heads.fresh(ctx)?;
     let d = send::dispatch(

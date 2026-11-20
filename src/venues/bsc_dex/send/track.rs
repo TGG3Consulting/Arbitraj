@@ -111,7 +111,7 @@ pub async fn resolve(w: Watch) -> Tracked {
             return Tracked::bare(TxOutcome::Pending, Some(why));
         }
         price = match cancel::price(ctx, price, &w.cfg, &w.ready) {
-            Ok(p) if p <= w.cfg.cancel_max_wei => p,
+            Ok(p) if p.cap() <= w.cfg.cancel_max_wei => p,
             Ok(p) => {
                 let why =
                     format!("цена газа следующей отмены {p} wei выше send.cancel_max_gas_gwei");

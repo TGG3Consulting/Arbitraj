@@ -107,9 +107,11 @@ async fn max_wait_must_cover_bundle_blocks() {
     set(&c, "send.max_wait_blocks", json!(5)).await;
     let cfg = SendCfg::read(&c).unwrap();
     // Отмена: 100 wei × 1,125 = 112,5 → вверх 113; каналов нет — нижней границы нет.
+    // Решение 435: legacy-цена (dex.gas_mode = legacy) — та же арифметика, что до модели газа.
+    use arb::venues::bsc_dex::send::tx_price::TxPrice;
     assert_eq!(
-        cancel::price(&c, U256::from(100u8), &cfg, &[]).unwrap(),
-        U256::from(113u8)
+        cancel::price(&c, TxPrice::Legacy(U256::from(100u8)), &cfg, &[]).unwrap(),
+        TxPrice::Legacy(U256::from(113u8))
     );
 }
 

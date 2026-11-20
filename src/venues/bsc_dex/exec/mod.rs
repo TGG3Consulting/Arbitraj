@@ -87,6 +87,7 @@ pub mod trade_hooks;
 pub mod trade_probe;
 pub mod trade_probe_plan;
 pub mod trade_smart;
+pub mod tx_fee;
 pub mod txs;
 pub mod universal;
 pub mod ur;

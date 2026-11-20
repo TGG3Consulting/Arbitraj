@@ -46,6 +46,7 @@ pub mod track;
 pub mod track_util;
 pub mod tx;
 pub mod tx_1559;
+pub mod tx_price;
 
 use alloy_primitives::{Bytes, U256};
 use futures_util::future::join_all;

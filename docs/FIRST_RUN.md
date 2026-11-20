@@ -140,6 +140,8 @@ log.signal_hold (core/book_marks_on.rs).
 | venue.arbitrum_contract_chain | площадка CoinEx | *метод:* chain_info.chain_name сети Arbitrum One в живом ответе GET /v2/assets/info (записи нет — не угадывать) | Адрес контракта CoinEx у сети Arbitrum (решение 431) | /v2/assets/info |
 | dex.gas_mode | по площадке DEX | `legacy` у bsc_dex; у площадки Arbitrum (arb_dex, когда появится) — `eip1559_l1` | Модель газа сети: BSC — одна цена gasPrice (legacy), Arbitrum — EIP-1559 + газ с частью L1 | Решение 433; BSC — research/flow/bsc_dex.md, раздел 5 (база газа 0); Arbitrum — docs.arbitrum.io «Gas and fees» |
 | dex.node_interface | по площадке DEX | у bsc_dex не задавать; у arb_dex — `0x00000000000000000000000000000000000000C8` | Адрес NodeInterface узла Nitro: части газа (L2, L1, baseFee) | docs.arbitrum.io, NodeInterface reference («available at address 0xc8»); запись узла tests/data/arbitrum_node_2026-11-19/05_*.json |
+| send.max_fee_margin_pct | по площадке DEX | у bsc_dex не задавать; у arb_dex — *метод:* по разбросу baseFee своего узла (запись 06: baseFee трёх блоков 20 000 000…20 086 000 wei — разброс 0,43 %); значение — решение Тиграна | Запас потолка maxFeePerGas над baseFee головы (решение 435): рост базы до включения не выбрасывает транзакцию; кошелёк держит газ × maxFee | EIP-1559 «Specification»; docs.arbitrum.io «Gas and fees»; tests/data/arbitrum_node_2026-11-19/06_*.json |
+| send.priority_fee_gwei | по площадке DEX | у bsc_dex не задавать; у arb_dex — решение Тиграна (документация не называет ставку для очереди секвенсора — решение 433, вопрос 1) | Чаевые maxPriorityFeePerGas транзакции типа 2 (решение 435); газ в плане = газ × (baseFee + чаевые) | docs.arbitrum.io «Gas and fees» |
 
 ## Нативная монета BNB
 

@@ -5,6 +5,8 @@
 //! что уйдут в транзакцию: exec/txs.rs) + чаевые (сумма + газ их перевода). Не хватает — отказ до отправки с понятной
 //! причиной (InsufficientBalance: «на газ нужно N BNB, на кошельке M — пополните BNB»), транзакция не уходит.
 //! Резерв risk.min_bnb_balance здесь не проверяется — он про продажу самой BNB (native.rs).
+//! Решение 435 (433-д): цена газа здесь — потолок цены транзакции (send/tx_price.rs cap): legacy — gasPrice (как было),
+//! тип 2 — maxFeePerGas (EIP-1559: баланс отправителя обязан покрывать gas_limit × max_fee_per_gas + value).
 //! Кто вызывает: exec/txs.rs (send).
 //! От чего зависит: wallet/balances.rs (eth_getBalance), num.rs.
 //! Настройки: нет.

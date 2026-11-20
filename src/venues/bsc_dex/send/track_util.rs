@@ -10,7 +10,7 @@
 //! «В блоке» засчитывается каналу, только если отправляли в один канал (ответ техлида в Issue #7, send/README.md).
 
 use alloy::signers::local::PrivateKeySigner;
-use alloy_primitives::{Address, B256, U64, U256};
+use alloy_primitives::{Address, B256, U64};
 
 use crate::core::types::TxOutcome;
 use crate::storage::journal::Level;
@@ -68,8 +68,8 @@ pub struct Watch {
     pub hash: B256,
     pub nonce: u64,
     pub from: Address,
-    /// Цена газа исходной транзакции, wei.
-    pub price: U256,
+    /// Цена газа исходной транзакции (решение 435: legacy — gasPrice, тип 2 — maxFee и чаевые; send/tx_price.rs).
+    pub price: super::tx_price::TxPrice,
     pub sent_block: u64,
     /// Каналы, принявшие (или не ответившие ясно) — для счётчиков.
     pub channels: Vec<String>,

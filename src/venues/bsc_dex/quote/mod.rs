@@ -57,6 +57,7 @@ pub mod direct_route;
 pub mod emptiness;
 pub mod fills;
 pub mod gas;
+pub mod gas_base;
 pub mod graph_exec;
 pub mod graph_executor;
 pub mod graph_fit;

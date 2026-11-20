@@ -95,7 +95,8 @@
 | `approve_bundle.rs` | Решение 271 (дополнение): газ разрешений графа, исполняемого бандлом, — по тем же группам, что exec/bundle.rs: группы Universal Router (ERC-20 → Permit2, Permit2 → UR) и пары (токен, роутер форка) (ERC-20 approve); сумма замеров по группам без разрешений |
 | `native_gas.rs` | BNB (решение 62): затрата WrapGas — газ WRAP_ETH / UNWRAP_WETH сверх обмена токеном WBNB (замер check/native_probe.rs); не измерен — котировки нет |
 | `costs.rs` | Котировка ядру: средняя цена, маршрут, затраты (комиссия пула, налоги, крючок — в цене; газ — отдельно, BNB) |
-| `gas.rs` | Цена газа `eth_gasPrice` + `send.gas_price_markup_pct`, раз в блок (в котировке — не ниже минимума каналов) |
+| `gas.rs` | Цена газа раз в блок (в котировке — не ниже минимума каналов) по модели dex.gas_mode (решение 435): legacy — `eth_gasPrice` + `send.gas_price_markup_pct`; eip1559_l1 — baseFee головы + чаевые; fees — цены типа 2 для отправки |
+| `gas_base.rs` | Решение 435 (433-д): baseFeePerGas блока (eth_getBlockByNumber), чаевые send.priority_fee_gwei, цены типа 2 (запас send.max_fee_margin_pct) — для dex.gas_mode = eip1559_l1 |
 | `quoter.rs` | Выход по квотеру DEX (eth_call на «latest» или на блоке — out_at, решение 261) и сверка с математикой (`dex.quoter_max_diff_pct`; favours_us — расхождение в нашу сторону) |
 | `quoter_calls.rs` | Данные вызова квотера и разбор ответа (eth_call и симуляция); DODO PMM — сам пул querySellBase/querySellQuote (решение 86b); Solidly — сам пул getAmountOut (решения 80, 85); Slipstream — свой QuoterV2 по int24 tickSpacing (решения 80, 85) Infinity Stable — CLQuoter (основной). |
 | `quoter_extra.rs` | Дополнительный квотер сверки — get_dy крючка Infinity Stable, параллельно с основным (решение «122 (Infinity Stable, ответы)»): расхождение, откат или сбой — сделки нет; решение 261 — на блоке сверки пула, перед сделкой односторонне |

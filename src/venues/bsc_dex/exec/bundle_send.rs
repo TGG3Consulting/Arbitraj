@@ -47,6 +47,7 @@ use super::super::send::receipt::{self, Receipt};
 use super::super::send::settle::{self, After};
 use super::super::send::track_util::{self, Quiet, Tracked};
 use super::super::send::tx::SendCfg;
+use super::super::send::tx_price::TxPrice;
 use super::super::send::{self};
 use super::super::wallet::nonce::Slot;
 use super::super::wallet::signer;
@@ -91,11 +92,16 @@ pub async fn send(
     let picked = send::bundle_pick::pick(ctx, send::select(ctx, &env.stats)?)?;
     let ready = picked.ready;
     let wallet = slot.from;
-    let price = env
-        .gas
-        .wei(ctx, &env.heads)
-        .await?
-        .max(send::gas_floor(&ready));
+    // Решение 435 (433-д): бандл подписывается legacy-ценой (как было); у сети типа 2 (dex.gas_mode = eip1559_l1)
+    // бандлов нет — отказ до симуляции и подписи.
+    let price = match super::tx_fee::price(env, &ready).await? {
+        TxPrice::Legacy(p) => p,
+        TxPrice::Eip1559(..) => {
+            let why = "бандл не отправляется: у сети площадки модель газа eip1559_l1 (тип 2) — бандлов нет, \
+                       исполнение только одной транзакцией через исполнитель";
+            return Err(ctx.err(ErrorCode::NotApplicable, why));
+        }
+    };
     // Решение 127: симулированный блок — время головы + 1 с (check/sim_base.rs), срок бандла dex.deadline_s не раздувается.
     let (at, _now) = sim_base::head(ctx, &env.heads).await?;
     let margin = ctx.dec("send.gas_limit_margin_pct")?;

@@ -72,7 +72,7 @@ const READS: [&str; 31] = [
 ];
 
 /// (файл от корня, функция или «*» — весь файл, метка отправки; пусто — вся функция после отправки).
-const AFTER: [(&str, &str, &str); 37] = [
+const AFTER: [(&str, &str, &str); 38] = [
     ("src/venues/kyberswap/tx.rs", "send", "node::send_raw("),
     ("src/venues/kyberswap/tx.rs", "track", ""),
     (
@@ -100,6 +100,8 @@ const AFTER: [(&str, &str, &str); 37] = [
     ("src/venues/bsc_dex/send/settle.rs", "*", ""),
     ("src/venues/bsc_dex/send/receipt.rs", "*", ""),
     ("src/venues/bsc_dex/send/cancel.rs", "send", ""),
+    // Решение 435 (433-д): цена и подпись отмены по модели газа — без чтения настроек (всё из Watch).
+    ("src/venues/bsc_dex/send/tx_price.rs", "*", ""),
     ("src/venues/bsc_dex/exec/chain_tx.rs", "*", ""),
     ("src/venues/bsc_dex/exec/result.rs", "*", ""),
     ("src/venues/bsc_dex/exec/executor/fact.rs", "*", ""),

@@ -156,11 +156,15 @@
     pass_view.rs, pass_cycle.rs, onchain.rs, exec_callback.rs — ctx.place.id; errors.rs без Ctx — bsc_dex, запросы к узлу
     (node/rpc.rs call/call_raw/call_unpaced/batch/post) перепомечают ошибку площадкой окружения; core/deal_card.rs и
     notify/human.rs — уже решением 432 (имена DEX от ядра). Остаток — см. «Решение 435».
-  - 433-д режим газа в отправке: exec/txs.rs, exec/bundle_send.rs, send/cancel.rs (тип 2 с повышением обеих цен),
-    wallet/transfer.rs, quote/gas.rs (baseFee головы), exec/gas_fund.rs; настройки запаса maxFee и чаевых (каталог,
-    SETTINGS, SETTINGS_CASES, FIRST_RUN, интерфейс). Ревью: с этой задачей в connection_gas.rs «dex.gas_mode не
-    задана» вернуть в ошибку части «Газ сети» (сейчас пометка — решение «433 (ревью)»), а dex.gas_mode у bsc_dex задать
-    на живом боте до выкладки 433-д (иначе автоснятие пауз BSC и «Подключено» перестанут проходить).
+  - 433-д — СДЕЛАНО (решение 435): цена газа по dex.gas_mode — quote/gas.rs (legacy — eth_gasPrice + надбавка, как было;
+    eip1559_l1 — baseFeePerGas головы + чаевые, quote/gas_base.rs), exec/tx_fee.rs (цена транзакции), send/tx_price.rs
+    (подпись legacy/тип 2, потолок цены, отмена — обе цены выше прошлых), exec/txs.rs (своп, чаевые, перевод
+    wallet/transfer.rs через txs::send), send/cancel.rs и send/track.rs, exec/gas_fund.rs (потолок цены), бандл —
+    только legacy (exec/bundle_send.rs: при eip1559_l1 — отказ до симуляции). Новые настройки send.max_fee_margin_pct,
+    send.priority_fee_gwei (каталог, SETTINGS, SETTINGS_CASES, FIRST_RUN; экран «Настройки» и карточка площадки — из
+    каталога). connection_gas.rs: «dex.gas_mode не задана» — снова ошибка части «Газ сети».
+    **ПЕРЕД ВЫКЛАДКОЙ: задать dex.gas_mode = legacy у bsc_dex на живом боте** — без неё BSC не котирует, не отправляет,
+    «Проверить подключение» — ошибка «Газ сети», автоснятие пауз не снимет паузу.
   - 433 (ревью) — СДЕЛАНО (решение 435): строка с хешем самого README.md из tests/data/arbitrum_node_2026-11-19/README.md
     убрана; хеши 9 файлов сверены (sha256sum -c — все совпадают).
   - 433-е канал секвенсора (адрес — настройка), одиночная отправка; бандл на площадке без бандловых каналов — отказ до

@@ -7,9 +7,14 @@
 //! Минимум канала отправки (channel.min_gas_price_gwei) применяется при отправке (exec/txs.rs) и в котировке (quote/mod.rs).
 //! Решение 237: pinned — цена газа, закреплённая на момент снимка котировки (venues/bsc_dex/frozen.rs): котировка по
 //! снимку считает газ по цене момента решения, а не по цене блока, пришедшего позже.
-//! Кто вызывает: quote/mod.rs, exec/txs.rs, wallet/transfer.rs, frozen.rs (pinned).
-//! От чего зависит: node/rpc.rs, node/heads.rs, num.rs.
-//! Настройки: send.gas_price_markup_pct [bsc_dex]; узел — bsc.node_http_url.
+//! Решение 435 (433-д): модель газа площадки dex.gas_mode (send/gas_mode.rs) читается на каждом запросе цены:
+//! legacy — как было (eth_gasPrice + надбавка); eip1559_l1 — база блока головы (baseFeePerGas, quote/gas_base.rs) +
+//! чаевые send.priority_fee_gwei, а для отправки — цены типа 2 (fees). Не задана — цены нет (NotConfigured), котировки
+//! и отправки площадки нет. Кэш помнит модель: смена модели на лету — новый запрос к узлу.
+//! Кто вызывает: quote/mod.rs, exec/txs.rs, exec/bundle_send.rs, wallet/transfer.rs, frozen.rs (pinned).
+//! От чего зависит: node/rpc.rs, node/heads.rs, num.rs, send/gas_mode.rs, quote/gas_base.rs.
+//! Настройки: dex.gas_mode, send.gas_price_markup_pct (legacy), send.priority_fee_gwei и send.max_fee_margin_pct
+//! (eip1559_l1) [площадка DEX]; узел — bsc.node_http_url.
 //!
 //! eth_gasPrice → wei — https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/fee_market.yaml ;
 //! «цену газа брать eth_gasPrice + запас из настроек, без зашитого минимума» — research/flow/bsc_dex.md, раздел 5.
@@ -26,11 +31,15 @@ use super::super::ctx::Ctx;
 use super::super::node::heads::Heads;
 use super::super::node::rpc;
 use super::super::num;
+use super::super::send::gas_mode::{self, GasMode};
+use super::super::send::tx_1559::Fees;
+use super::gas_base;
 
 /// Цена газа с кэшем на блок. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct GasPrice {
-    cache: Arc<Mutex<Option<(u64, U256)>>>,
+    /// (блок, модель газа, цена узла: eth_gasPrice у legacy, baseFeePerGas у eip1559_l1).
+    cache: Arc<Mutex<Option<(u64, GasMode, U256)>>>,
     /// Один запрос на блок на всех: одновременные промахи ждут первого (решение 61).
     flight: Arc<tokio::sync::Mutex<()>>,
     /// Решение 237: закреплена на момент снимка — узел не спрашивается, свежесть блока не проверяется.
@@ -52,37 +61,58 @@ impl GasPrice {
     /// Решение 352: цена газа в памяти — (блок, цена без надбавки); None — ещё не запрашивалась. Котировка на голове с
     /// этим номером берёт ровно её (hit в wei). Ошибок нет.
     pub fn known(&self) -> Option<(u64, U256)> {
-        *self.cache.lock().unwrap_or_else(|p| p.into_inner())
+        self.cache
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .map(|(b, _, p)| (b, p))
     }
 
-    /// Цена газа в wei с надбавкой (закреплённая — решение 237: без узла и без проверки свежести блока).
-    /// Ошибки: StaleData (нет свежего блока; у закреплённой — цены не было), NotConfigured (надбавка), узел.
+    /// Цена газа в wei для плана: legacy — с надбавкой; eip1559_l1 — база + чаевые (закреплённая — решение 237: без
+    /// узла и без проверки свежести блока).
+    /// Ошибки: StaleData (нет свежего блока; у закреплённой — цены не было), NotConfigured (dex.gas_mode, надбавка,
+    /// чаевые), узел.
     pub async fn wei(&self, ctx: &Ctx, heads: &Heads) -> GatewayResult<U256> {
+        let (mode, base) = self.base(ctx, heads).await?;
+        self.marked(ctx, mode, base)
+    }
+
+    /// Решение 435 (433-д): цены транзакции типа 2 (eip1559_l1) от той же базы, что wei. Принимает: окружение, головы.
+    /// Возвращает: (цены, база блока). Ошибки: как wei; NotConfigured — модель площадки не eip1559_l1 или нет запаса.
+    pub async fn fees(&self, ctx: &Ctx, heads: &Heads) -> GatewayResult<(Fees, U256)> {
+        let (mode, base) = self.base(ctx, heads).await?;
+        if mode != GasMode::Eip1559L1 {
+            let why = format!(
+                "цены типа 2 — только при dex.gas_mode = eip1559_l1 (сейчас {})",
+                mode.as_str()
+            );
+            return Err(ctx.not_set("dex.gas_mode", why));
+        }
+        Ok((gas_base::fees(ctx, base)?, base))
+    }
+
+    /// Цена узла (без надбавки и чаевых) и модель газа — из кэша на блок или с узла (решения 89, 237).
+    /// Ошибки: как wei.
+    async fn base(&self, ctx: &Ctx, heads: &Heads) -> GatewayResult<(GasMode, U256)> {
         if self.pinned {
-            let p = self
-                .cache
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .map(|(_, p)| p);
-            let p = p.ok_or_else(|| {
+            let p = *self.cache.lock().unwrap_or_else(|p| p.into_inner());
+            let (_, mode, p) = p.ok_or_else(|| {
                 ctx.err(
                     ErrorCode::StaleData,
                     "цены газа на момент снимка в памяти не было — газ по снимку не посчитать",
                 )
             })?;
-            return self.marked(ctx, p);
+            return Ok((mode, p));
         }
+        let mode = gas_mode::read(ctx)?;
         let head = heads.fresh(ctx)?;
         let hit = || match *self.cache.lock().unwrap_or_else(|p| p.into_inner()) {
-            Some((b, p)) if b == head.number => Some(p),
+            Some((b, m, p)) if b == head.number && m == mode => Some(p),
             _ => None,
         };
-        // Последняя известная цена любого блока — чтобы расчёт не ждал узел (решение 89).
-        let last = || {
-            self.cache
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .map(|(_, p)| p)
+        // Последняя известная цена любого блока (той же модели) — чтобы расчёт не ждал узел (решение 89).
+        let last = || match *self.cache.lock().unwrap_or_else(|p| p.into_inner()) {
+            Some((_, m, p)) if m == mode => Some(p),
+            _ => None,
         };
         let base = match hit() {
             Some(p) => p,
@@ -90,7 +120,7 @@ impl GasPrice {
                 // Ведущий: на этом блоке кэша нет и никто не тянет — обновляем с узла.
                 Ok(_one) => match hit() {
                     Some(p) => p,
-                    None => self.fetch(ctx, head.number).await?,
+                    None => self.fetch(ctx, head.number, mode).await?,
                 },
                 // Кто-то уже тянет (обычно фоновый прогрев): берём последнюю известную цену, не блокируемся на узле.
                 Err(_) => match last() {
@@ -100,18 +130,22 @@ impl GasPrice {
                         let _one = self.flight.lock().await;
                         match hit() {
                             Some(p) => p,
-                            None => self.fetch(ctx, head.number).await?,
+                            None => self.fetch(ctx, head.number, mode).await?,
                         }
                     }
                 },
             },
         };
-        self.marked(ctx, base)
+        Ok((mode, base))
     }
 
-    /// Цена с надбавкой send.gas_price_markup_pct. Принимает: окружение, цену узла в wei. Возвращает: wei.
-    /// Ошибки: NotConfigured (надбавка), BadResponse (не считается).
-    fn marked(&self, ctx: &Ctx, base: U256) -> GatewayResult<U256> {
+    /// Цена для плана: legacy — с надбавкой send.gas_price_markup_pct; eip1559_l1 — база + чаевые (gas_base.rs).
+    /// Принимает: окружение, модель, цену узла в wei. Возвращает: wei.
+    /// Ошибки: NotConfigured (надбавка, чаевые), BadResponse (не считается).
+    fn marked(&self, ctx: &Ctx, mode: GasMode, base: U256) -> GatewayResult<U256> {
+        if mode == GasMode::Eip1559L1 {
+            return gas_base::planned(ctx, base);
+        }
         let markup = ctx.dec("send.gas_price_markup_pct")?;
         let bad = || {
             ctx.err(
@@ -124,11 +158,15 @@ impl GasPrice {
         num::to_units(v, 0).ok_or_else(bad)
     }
 
-    /// Обновляет кэш цены газа с узла (eth_gasPrice). Держится под flight — один запрос на всех.
-    /// Принимает: окружение, номер блока. Возвращает: цену в wei. Ошибки: узел.
-    async fn fetch(&self, ctx: &Ctx, block: u64) -> GatewayResult<U256> {
-        let p: U256 = rpc::call(ctx, "eth_gasPrice", json!([])).await?;
-        *self.cache.lock().unwrap_or_else(|x| x.into_inner()) = Some((block, p));
+    /// Обновляет кэш цены газа с узла: legacy — eth_gasPrice; eip1559_l1 — baseFeePerGas блока (gas_base.rs).
+    /// Держится под flight — один запрос на всех. Принимает: окружение, номер блока, модель. Возвращает: цену в wei.
+    /// Ошибки: узел.
+    async fn fetch(&self, ctx: &Ctx, block: u64, mode: GasMode) -> GatewayResult<U256> {
+        let p: U256 = match mode {
+            GasMode::Legacy => rpc::call(ctx, "eth_gasPrice", json!([])).await?,
+            GasMode::Eip1559L1 => gas_base::fetch(ctx, block).await?,
+        };
+        *self.cache.lock().unwrap_or_else(|x| x.into_inner()) = Some((block, mode, p));
         Ok(p)
     }
 }

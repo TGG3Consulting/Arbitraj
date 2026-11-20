@@ -40,6 +40,12 @@
   math/swap_elastic_step.rs 348 (было 327: compute_swap_step_rule), pools/families.rs (+variant). Дробить: шаг-формулы
   Elastic (calc_*) — в swap_elastic_formulas.rs. Тесты на записях Arbitrum (Elastic v1, Saddle, WOOFi) — #[ignore] до
   записи своим узлом (docs/TASKS.md, «Решение 451»).
+- Решение 440 (Fluid DEX T1): тест tests/arbitrum_fluid_t1.rs на записи узла — #[ignore] до записи
+  (tools/arbitrum_record/fluid_t1.py); исполнитель v4 (шаг FLUID) — только исходник: сборка contracts/build.sh, out/v3/,
+  version_of, сценарий evmtest FLUID; подписка на LogDexDeployed фабрики Fluid не подключена (событие без токенов —
+  новые пулы только из справочника); точный выход (swapOut) не портирован; _utilizationVerify — через пределы резолвера;
+  сверх ориентира 200 строк — math/fluid_swap.rs 241, exec/executor/kind.rs 235 (было 209), pools/families.rs, quote/pool_quote.rs,
+  quote/depth_band.rs (давно сверх).
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

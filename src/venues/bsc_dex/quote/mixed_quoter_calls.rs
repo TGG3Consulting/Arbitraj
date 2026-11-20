@@ -165,5 +165,12 @@ fn hop(ctx: &Ctx, e: &Entry) -> GatewayResult<(u8, Bytes)> {
                 "SmarDex не исполняется умным маршрутом (только шаг SMARDEX контракта-исполнителя)",
             ));
         }
+        // Пул со смарт-залогом и смарт-долгом (Fluid DEX T1, решение 440): MixedQuoter его не знает — сверка estimateSwapIn.
+        PoolKind::SmartColDebt => {
+            return Err(ctx.err(
+                ErrorCode::Internal,
+                "Fluid не исполняется умным маршрутом (только шаг FLUID контракта-исполнителя)",
+            ));
+        }
     })
 }

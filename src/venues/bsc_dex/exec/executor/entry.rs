@@ -29,7 +29,7 @@ use alloy_primitives::Address;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 
-use crate::core::types::{PoolRef, PoolState};
+use crate::core::types::{PoolRef, PoolState, SmartColDebtData};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::super::ctx::Ctx;
@@ -39,7 +39,7 @@ use super::super::super::pools::key::PoolKey;
 use super::super::super::pools::registry::Entry;
 use super::super::super::pools::stable_native;
 use super::super::super::quote::pool_quote;
-use super::kind::{InfKey, Params, STABLE_NATIVE, V4Key};
+use super::kind::{FluidStep, InfKey, Params, STABLE_NATIVE, V4Key};
 
 /// Может ли шаг через этот пул идти исполнителем: у семейства есть вид шага (Family.executor_kind) и у пула свой
 /// контракт. Принимает: семейство и ссылку на пул (хватает хопа маршрута). Возвращает: вид шага и адрес пула или
@@ -235,6 +235,18 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },
+        // Решение 440: пул Fluid DEX T1 — направление в порядке токенов самого пула (SmartColDebtData.token0), нативная
+        // монета пула на стороне входа / выхода и слой ликвидности — из прочитанного состояния; пул на паузе или токен
+        // входа не из пула (ревью 440) — шаг не строится.
+        ExecKind::Fluid => match &e.pool.state {
+            PoolState::SmartColDebt(d) if !d.paused && d.has(token_in) => {
+                Params::Fluid(fluid_step(d, token_in))
+            }
+            _ => {
+                let why = format!("{}: Fluid — нет состояния, пауза или чужой вход", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
         ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => {
             return singleton(ctx, e, k);
         }
@@ -244,6 +256,29 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         }
     };
     Ok((p, pool))
+}
+
+/// Решение 440: параметры шага FLUID. Принимает: состояние пула, токен входа шага (в паре — обёртка нативной монеты).
+/// Возвращает: направление по token0 пула и где нативная монета (1 — вход, 2 — выход, 0 — нет). Ошибок нет.
+fn fluid_step(d: &SmartColDebtData, token_in: Address) -> FluidStep {
+    let zero_for_one = token_in == d.token0;
+    let (native_in, native_out) = if zero_for_one {
+        (d.native0, d.native1)
+    } else {
+        (d.native1, d.native0)
+    };
+    let native = if native_in {
+        1
+    } else if native_out {
+        2
+    } else {
+        0
+    };
+    FluidStep {
+        zero_for_one,
+        native,
+        liquidity: d.liquidity,
+    }
 }
 
 /// Решение 395: шаг пула внутри менеджера. Ключ — из реестра (Entry.key, его же берёт Universal Router — exec/swap_v4.rs),

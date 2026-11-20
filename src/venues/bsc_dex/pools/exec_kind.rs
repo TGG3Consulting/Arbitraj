@@ -82,6 +82,11 @@ pub enum ExecKind {
     /// Решение 395: пул PancakeSwap Infinity Bin — как InfCl, обмен `BinPoolManager.swap(ключ, swapForY, −вход, «»)`.
     /// Только исполнитель v3.
     InfBin,
+    /// Решение 440: пул Fluid DEX T1 — approve пулу ровно на шаг + `pool.swapIn(swap0to1, вход, 0, получатель)` (вход
+    /// пул списывает transferFrom исполнителя в обратном вызове слоя ликвидности); нативная монета пула — через обёртку
+    /// (withdraw → swapIn{value} / приход от слоя ликвидности → deposit); data = abi.encode(bool swap0to1, uint8 native,
+    /// address liquidity). Только исполнитель v4.
+    Fluid,
 }
 
 impl ExecKind {
@@ -108,6 +113,7 @@ impl ExecKind {
             ExecKind::UniV4 => "UNI_V4",
             ExecKind::InfCl => "INF_CL",
             ExecKind::InfBin => "INF_BIN",
+            ExecKind::Fluid => "FLUID",
         }
     }
 
@@ -171,6 +177,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "uniswap_v4" => ExecKind::UniV4,
         "pancakeswap_infinity_cl" | "pancake_infinity_stable" => ExecKind::InfCl,
         "pancakeswap_infinity_bin" => ExecKind::InfBin,
+        // Решение 440: swapIn пула без белого списка вызывающих (poolT1 main.sol L51-L58, L689-L700: пауза и
+        // повторный вход — общие для всех); шаг 22, только v4.
+        "fluid_t1" => ExecKind::Fluid,
         _ => return None,
     })
 }

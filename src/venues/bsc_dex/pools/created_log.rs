@@ -134,6 +134,10 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // LBPair, pid) (ILBFactory.sol L49-L51) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы
             // приходят из справочника индексатора.
             Proto::LbV21 => continue,
+            // Fluid DEX T1 (решение 440): событие фабрики LogDexDeployed(dex, dexId) токенов не несёт
+            // (factory/main.sol L62) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы приходят из
+            // справочника индексатора.
+            Proto::FluidT1 => continue,
             // KyberSwap Classic DMM (решение 287): PoolCreated(token0 indexed, token1 indexed, pool, ampBps, totalPool) фабрики
             // (DMMFactory.sol L22-L28, L60).
             Proto::KyberDmm => (

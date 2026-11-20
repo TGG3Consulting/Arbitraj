@@ -18,7 +18,7 @@
 установлено** — в этой проверке нет официального источника, какое у DEX семейство пулов. «Вид есть в коде» ≠ «подключено»:
 у Arbitrum нет ни одной DEX, подключённой в настройках (площадка arb_dex ещё не поднята — step5-plan.md).
 
-Итог по 84 DEX GeckoTerminal: вид есть в коде — 15, частично — 1, семейства нет — 7,
+Итог по 84 DEX GeckoTerminal: вид есть в коде — 16 (решение 440: + Fluid), частично — 1, семейства нет — 6,
 семейство не установлено — 61, не пул — 0. Из DefiLlama сверх GeckoTerminal — 62 DEX.
 **Решение 448 (20.11.2026):** Sushi V3 (строка 44) — семейство установлено (v3_fork): GeckoTerminal — вид есть в коде 16,
 семейство не установлено 60. Настройки области «DEX» arb_dex для всех DEX с видом в коде — docs/notes/arbitrum/dex-settings-arbitrum.md:
@@ -107,7 +107,7 @@
 | 75 | `omni-exchange-v2-arbitrum` | Omni Exchange V2 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-075 |
 | 76 | `omni-exchange-v3-arbitrum` | Omni Exchange V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-076 |
 | 77 | `balancer-v3-arbitrum` | Balancer V3 (Arbitrum) | Balancer V3 (docs/notes/arbitrum/docs-check-2026-11-20.md) | — | **семейства нет в коде** | не сверены | T433-077 |
-| 78 | `fluid-arbitrum` | Fluid (Arbitrum) | Fluid DEX T1 (docs/notes/arbitrum/docs-check-2026-11-20.md) | — | **семейства нет в коде** | не сверены | T433-078 |
+| 78 | `fluid-arbitrum` | Fluid (Arbitrum) | Fluid DEX T1 (docs/notes/arbitrum/docs-check-2026-11-20.md) | `fluid_t1` — src/venues/bsc_dex/pools/families.rs (решение 440) | **вид есть в коде** (решение 440; включение — после записи узла) | Instadapp/fluid-contracts-public@404d73f deployments/arbitrum: DexFactory 0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085, DexReservesResolver 0x05Bd8269A20C472b148246De20E6852091BF16Ff, Liquidity 0x52Aa899454998Be5b000Ad077a46Bbe360F4e497 | T433-078 |
 | 79 | `ekubo-v3-arbitrum` | Ekubo V3 (Arbitrum) | Ekubo | — | **семейства нет в коде** | не сверены | T433-079 |
 | 80 | `ramses-legacy-arbitrum` | Ramses Legacy (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-080 |
 | 81 | `ramses-v3-arbitrum` | Ramses V3 (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-081 |
@@ -301,7 +301,7 @@
 
 ## 4. Семейства, которых нет в коде (задачи кода)
 
-- T433-F1 Fluid DEX (T1) — новое семейство пулов: математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+- T433-F1 Fluid DEX (T1) — СДЕЛАНО в коде (решение 440, вид `fluid_t1`; осталось: запись узла tools/arbitrum_record/fluid_t1.py, сборка исполнителя v4 — docs/TASKS.md «Решение 440») — новое семейство пулов: математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F2 Balancer V3 — новое семейство (хранилище V3, крючки): математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.

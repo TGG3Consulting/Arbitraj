@@ -30,7 +30,7 @@
 //! | BalancerV2 | — | без условия | балансы в общем Vault: слоты посчитаны только вручную по AST (/home/claude/src-ext/reports/arb-known-accounts.md, 3.1), не сверены — docs/TASKS.md «Решение 438» |
 //! | WooPP, пары общего контракта (PoolRef::Member) | — | без условия | общий контракт на все монеты, слоты не опубликованы |
 //! | InfinityCl, InfinityBin, InfinityStable | — | без условия | виды только BSC (в Arbitrum нет), слоты менеджера/крючка не сверены |
-//! | прочие виды со своим контрактом на пул (Algebra, AlgebraIntegral, Solidly*, Curve*, PancakeStable, Lista, Saddle, Nomi, DODO, KyberDmm, Smardex, Maverick, iZi, BiswapV3, MetricOmm) | пул | корень (eth_getProof … storageHash) | раскладка не подтверждена (Algebra Integral: версия Camelot V4 не сверена; Vyper, закрытые исходники) |
+//! | прочие виды со своим контрактом на пул (Algebra, AlgebraIntegral, Solidly*, Curve*, PancakeStable, Lista, Saddle, Nomi, DODO, KyberDmm, Smardex, Maverick, iZi, BiswapV3, MetricOmm, FluidT1) | пул | корень (eth_getProof … storageHash) | раскладка не подтверждена (Algebra Integral: версия Camelot V4 не сверена; Vyper, закрытые исходники; Fluid T1 — исходник развёрнутых пулов до 1.1.0 не опубликован; резервы Fluid лежат в слое Liquidity — корень пула ловит обмены по пулу, но не операции других пользователей слоя ликвидности) |
 //!
 //! Что ловится, что нет (V3 и форки, V4, Slipstream, Kyber Elastic): любой обмен пишет slot0 (цена) — ловится каждый
 //! обмен конкурента; mint/burn в текущем диапазоне пишут liquidity — ловятся (v3-core UniswapV3Pool.sol:336-351).

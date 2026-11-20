@@ -173,5 +173,10 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
             ErrorCode::Internal,
             "SmarDex не исполняется Universal Router (шаг SMARDEX контракта-исполнителя)",
         )),
+        // Пул со смарт-залогом и смарт-долгом (Fluid DEX T1, решение 440): только шаг FLUID исполнителя.
+        PoolKind::SmartColDebt => Err(ctx.err(
+            ErrorCode::Internal,
+            "Fluid не исполняется Universal Router (шаг FLUID контракта-исполнителя)",
+        )),
     }
 }

@@ -455,6 +455,11 @@ fn side(
                 .ok_or("расчёт бинов Liquidity Book невозможен")?;
             Ok((pick(U256::from(u128::MAX - r.in_left), U256::from(r.out)), false))
         }
+        // Пул Fluid DEX T1 (решение 440): x·y=k по мнимым резервам частей без комиссии до сдвига цены на полосу, не
+        // дальше реального резерва (quote/fluid_depth.rs).
+        (PoolState::SmartColDebt(d), PoolKind::SmartColDebt) => {
+            super::fluid_depth::side(d, token_in, b, buy)
+        }
         _ => Err("вид пула и состояние не совпадают".into()),
     }
 }

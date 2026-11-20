@@ -118,9 +118,23 @@ fn kinds_match_contract_constants() {
         ("UNI_V4", Params::UniV4 { key: v4_key() }),
         ("INF_CL", Params::InfCl { key: inf_key() }),
         ("INF_BIN", Params::InfBin { key: inf_key() }),
+        // Решение 440: пул Fluid DEX T1 — только v4.
+        ("FLUID", Params::Fluid(fluid_step(1))),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
+    }
+}
+
+/// Слой ликвидности Fluid в Arbitrum One (Instadapp/fluid-contracts-public@404d73f deployments/arbitrum/Liquidity.json).
+const FLUID_LIQUIDITY: Address = address!("0x52Aa899454998Be5b000Ad077a46Bbe360F4e497");
+
+/// Шаг FLUID (решение 440) с данным видом нативной монеты.
+fn fluid_step(native: u8) -> kind::FluidStep {
+    kind::FluidStep {
+        zero_for_one: true,
+        native,
+        liquidity: FLUID_LIQUIDITY,
     }
 }
 
@@ -186,6 +200,13 @@ fn step_data_layouts() {
     let bl = Params::Balancer { pool_id: id }.data();
     assert_eq!(bl.len(), 32);
     assert_eq!(B256::abi_decode(&bl).unwrap(), id);
+    // FLUID (решение 440) — abi.encode(bool swap0to1, uint8 native, address liquidity): три слова.
+    let fl = Params::Fluid(fluid_step(2)).data();
+    assert_eq!(fl.len(), 96);
+    assert_eq!(
+        <(bool, U256, Address)>::abi_decode_params(&fl).unwrap(),
+        (true, U256::from(2u8), FLUID_LIQUIDITY)
+    );
     let sd = Params::Saddle { i: 2, j: 1 }.data();
     assert_eq!(sd.len(), 64);
     assert_eq!((sd[31], sd[63]), (2, 1));
@@ -314,9 +335,15 @@ fn stable_bnb_contract_rules_present() {
     ] {
         assert!(src.contains(must), "нет в контракте: {must}");
     }
-    // bnbFrom обнуляется после каждого вызова, где BNB ждётся (три установки — три обнуления; третья — _unwrapAll
-    // executeNative, решение 272).
-    assert_eq!(src.matches("bnbFrom = address(0);").count(), 3);
+    // bnbFrom обнуляется после каждого вызова, где BNB ждётся: сколько установок — столько обнулений (stable BNB —
+    // две, _unwrapAll executeNative — одна, решение 272; шаг FLUID — две, решение 440: вход и выход в нативной монете).
+    // Только строки кода (комментарии тоже содержат «bnbFrom = …»).
+    let code: Vec<&str> =
+        src.lines().map(str::trim).filter(|l| l.starts_with("bnbFrom = ")).collect();
+    let resets = code.iter().filter(|l| **l == "bnbFrom = address(0);").count();
+    let sets = code.len() - resets;
+    assert_eq!(resets, 5);
+    assert_eq!(sets, resets);
     let abi = abi();
     assert_eq!(
         abi.receive.as_ref().map(|r| r.state_mutability),

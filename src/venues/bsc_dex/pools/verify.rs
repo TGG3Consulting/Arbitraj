@@ -31,7 +31,7 @@ use super::families::{Family, Proto};
 pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_call_with};
 pub use super::verify_rules::{Read, check, fill, registered, registered_for, v2_fee_pips, v3_abi};
 use super::{
-    fee_probe, verify_algebra, verify_balancer, verify_curve, verify_lb, verify_curve_ng, verify_dodo, verify_inf_stable, verify_izi, verify_metric,
+    fee_probe, verify_algebra, verify_balancer, verify_curve, verify_lb, verify_curve_ng, verify_dodo, verify_fluid, verify_inf_stable, verify_izi, verify_metric,
     verify_maverick, verify_solidly, verify_stable_u, verify_v4,
 };
 
@@ -89,6 +89,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut stable_u = Vec::new();
     let mut mav = Vec::new();
     let mut inf_stable = Vec::new();
+    let mut fluid = Vec::new();
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
@@ -107,6 +108,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             }
             Proto::Maverick => mav.push(i),
             Proto::InfinityStable => inf_stable.push(i),
+            Proto::FluidT1 => fluid.push(i),
             _ => v2v3.push(i),
         }
     }
@@ -199,6 +201,11 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
         .into_iter()
         .zip(verify_inf_stable::verify(ctx, &list, size).await)
     {
+        out[i] = Some(r);
+    }
+    // Fluid DEX T1 (решение 440): isDex фабрики + constantsView пула (verify_fluid.rs).
+    let list: Vec<Candidate> = fluid.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in fluid.into_iter().zip(verify_fluid::verify(ctx, &list, size).await) {
         out[i] = Some(r);
     }
     let list: Vec<Candidate> = v2v3.iter().map(|i| cands[*i].clone()).collect();

@@ -22,7 +22,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    balancer_math, bin_swap, dmm, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
+    balancer_math, bin_swap, dmm, fluid_check, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
     stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
@@ -483,6 +483,23 @@ pub fn swap(
                 amount_in: U256::from(amount - r.in_left),
                 amount_out: U256::from(r.out),
                 complete: r.complete,
+            })
+        }
+        // Пул Fluid DEX T1 (решение 440): порт _swapIn пула и проверки пределов слоя ликвидности и скачка цены
+        // (math/fluid_swap.rs, fluid_check.rs); направление — по token0 самого пула. Только точный вход.
+        (PoolState::SmartColDebt(d), PoolKind::SmartColDebt) => {
+            if !exact_in {
+                return Err(why("Fluid: точный выход не поддерживается"));
+            }
+            if !d.has(token_in) {
+                return Err(why("Fluid: токен входа не из пула"));
+            }
+            let q = fluid_check::quote_in(d, token_in == d.token0, amount);
+            let out = q.ok_or_else(none)?;
+            Ok(Swapped {
+                amount_in: amount,
+                amount_out: out,
+                complete: true,
             })
         }
         _ => Err(none()),

@@ -19,7 +19,9 @@
 // адрес обёртки нативной монеты (wnative, слот 1 — один раз, сеттера нет; ревью 272, А1). v3 (решение 395, t181) —
 // + шаги пулов внутри общего менеджера: UNI_V4 (Uniswap V4 PoolManager: unlock → unlockCallback), INF_CL и INF_BIN
 // (PancakeSwap Infinity Vault: lock → lockAcquired; Infinity Stable — пул в крючке пула CL, тот же INF_CL). execute,
-// executeNative, хранилище (owner — слот 0, wnative — слот 1) и прежние виды — без изменений.
+// executeNative, хранилище (owner — слот 0, wnative — слот 1) и прежние виды — без изменений. v4 (решение 440) — + шаг
+// FLUID = 22 (пул Fluid DEX T1, нативная монета пула через обёртку); артефакты contracts/out/ — ещё v3, до пересборки
+// contracts/build.sh v4 не развёртывается.
 pragma solidity 0.8.37;
 
 import "./IPools.sol";
@@ -72,6 +74,11 @@ contract ArbExecutor {
     uint8 internal constant UNI_V4 = 19;
     uint8 internal constant INF_CL = 20;
     uint8 internal constant INF_BIN = 21;
+    // Решение 440 (только v4): пул Fluid DEX T1 — approve пулу ровно на шаг + swapIn(swap0to1, сумма, 0, to); вход пул
+    // списывает transferFrom(исполнитель → слой ликвидности) в своём liquidityCallback; data = abi.encode(bool swap0to1,
+    // uint8 native, address liquidity) — native 1: вход в нативной монете пула (токен шага — обёртка: withdraw →
+    // swapIn{value}), 2: выход в нативной монете (приходит от liquidity → deposit в обёртку), 0: оба токена ERC-20.
+    uint8 internal constant FLUID = 22;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -91,7 +98,7 @@ contract ArbExecutor {
     // uint256 j); SADDLE — abi.encode(uint8 i, uint8 j); STABLE_U256_BNB — abi.encode(uint256 i, uint256 j, bool bnbIn)
     // (bnbIn: true — монета i пула нативная, tokenIn = WBNB; false — монета j нативная, tokenOut = WBNB); METRIC — abi.encode(bool
     // zeroForOne); BALANCER — abi.encode(bytes32 poolId); UNI_V4 — abi.encode(V4PoolKey); INF_CL / INF_BIN —
-    // abi.encode(InfPoolKey); остальные — пусто.
+    // abi.encode(InfPoolKey); FLUID — abi.encode(bool swap0to1, uint8 native, address liquidity); остальные — пусто.
     struct Step {
         uint8 kind;
         address pool;
@@ -349,6 +356,8 @@ contract ArbExecutor {
             ILBPair(s.pool).swap(ILBPair(s.pool).getTokenX() == s.tokenIn, to);
         } else if (k == UNI_V4 || k == INF_CL || k == INF_BIN) {
             _singleton(s, amount, to);
+        } else if (k == FLUID) {
+            _fluid(s, amount, to);
         } else if (k == WOO) {
             uint256 had = IERC20(s.tokenIn).balanceOf(s.pool);
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
@@ -434,6 +443,43 @@ contract ArbExecutor {
             IWBNB(s.tokenOut).deposit{value: address(this).balance - bnbHad}();
         }
         require(IERC20(s.tokenOut).balanceOf(address(this)) > had, "out");
+    }
+
+    // Решение 440 (v4): пул Fluid DEX T1 (Instadapp/fluid-contracts-public@404d73f poolT1/coreModule/core/main.sol
+    // L51-L338 _swapIn, L689-L700 swapIn, L889-L905 liquidityCallback). Вход ERC-20 списывает сам пул:
+    // safeTransferFrom(исполнитель → слой ликвидности) в liquidityCallback — approve пулу ровно на шаг, разрешение после
+    // шага — 0. Вход в нативной монете пула (native = 1): msg.value == сумма (L83-L86) — WBNB-обёртка шага withdraw
+    // (нативная монета приходит от обёртки — bnbFrom) → swapIn{value}. Выход в нативной монете (native = 2): слой
+    // ликвидности шлёт её call с газом 50000 (libraries/safeTransfer.sol L71-L83) — receive пускает только liquidity из
+    // data (bnbFrom) на время swapIn; пришедшее этим шагом → deposit в обёртку; выход шага — исполнителю (дальше
+    // _sweep), должен вырасти. Порог выхода шага 0 — итог маршрута проверяет minOut.
+    function _fluid(Step calldata s, uint256 amount, address to) internal {
+        (bool zf, uint8 nat, address liq) = abi.decode(s.data, (bool, uint8, address));
+        if (nat == 1) {
+            require(s.tokenIn.code.length > 0, "token code");
+            bnbFrom = s.tokenIn;
+            IWBNB(s.tokenIn).withdraw(amount);
+            bnbFrom = address(0);
+            IFluidDexT1(s.pool).swapIn{value: amount}(zf, amount, 0, to);
+            return;
+        }
+        require(nat <= 2, "native");
+        _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount)));
+        if (nat == 2) {
+            require(s.tokenOut.code.length > 0, "token code");
+            uint256 had = IERC20(s.tokenOut).balanceOf(address(this));
+            uint256 bnbHad = address(this).balance;
+            bnbFrom = liq;
+            IFluidDexT1(s.pool).swapIn(zf, amount, 0, address(this));
+            bnbFrom = address(0);
+            IWBNB(s.tokenOut).deposit{value: address(this).balance - bnbHad}();
+            require(IERC20(s.tokenOut).balanceOf(address(this)) > had, "out");
+        } else {
+            IFluidDexT1(s.pool).swapIn(zf, amount, 0, to);
+        }
+        if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
+            _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
+        }
     }
 
     // Приём BNB — только от bnbFrom (transient). Укладывается в 2300 газа (стипендия transfer у WBNB.withdraw; пулы

@@ -1,9 +1,10 @@
 //! Файл: tests/arbitrum_basin_live.rs
 //! Что делает: решение 485 — скважины Basin (вид basin_well) на записи своего узла Arbitrum
 //! (tests/data/arbitrum_basin_<дата>/, tools/arbitrum_record/basin.py; #[ignore], пока записи нет):
-//! 1. состояние собирается тем же кодом, что у бота (load_basin::calls → ответы по (адрес, calldata) → decode → state);
-//! 2. проверка скважины (verify_basin_judge first / second на ответах тех же вызовов) — скважина берётся: реестр
-//!    Aquifer или прокси на допущенную реализацию, calcLpTokenSupply функции = наш расчёт (версия функции, A Stable2);
+//! 1. состояние собирается тем же кодом, что у бота (слот ERC-1967 записи, load_basin::calls → ответы по (адрес,
+//!    calldata) → decode → state): реализация допущена (клон Aquifer'а или прокси по слоту), функция из списков;
+//! 2. проверка скважины (verify_basin_judge first / second на ответах тех же вызовов) — скважина берётся:
+//!    calcReserve функции на сдвинутых резервах = наш расчёт (версия функции, A Stable2) или «не сверено» с причиной;
 //! 3. наш выход (math/basin_well.rs swap_out) = getSwapOut скважины побайтно на каждой записанной сумме;
 //! 4. симуляция swapFrom на тех же суммах (eth_call с подменой баланса и разрешения): скважина отдала выход — наш
 //!    выход тот же; откатила — наша котировка None.
@@ -12,8 +13,9 @@
 //! От чего зависит: arb::venues::bsc_dex::{pools::{load_basin, basin_conf, verify_basin_judge}, math::basin_well}.
 
 use std::path::PathBuf;
+use std::str::FromStr;
 
-use alloy_primitives::{Address, Bytes, U256, hex};
+use alloy_primitives::{Address, B256, Bytes, U256, hex};
 use serde_json::Value;
 
 use arb::core::types::PoolState;
@@ -74,7 +76,7 @@ fn conf(meta: &Value) -> BasinConf {
         impls: addrs(&meta["impls"]),
         cp2: addrs(&meta["cp2"]),
         stable2: addrs(&meta["stable2"]),
-        lut: Some(addr(&meta["lut"])),
+        luts: addrs(&meta["luts"]),
     }
 }
 
@@ -99,18 +101,24 @@ fn basin_wells_match_node() {
         if let Some(e) = w.get("error") {
             panic!("скважина {well:#x}: запись с ошибкой {e}");
         }
-        // 1. Состояние — вызовы бота.
-        let calls = load_basin::calls(well, conf.lut);
-        let raw = load_basin::decode(&answers(w, &calls)).expect("ответы чтения");
-        let PoolState::BasinWell(d) = load_basin::state(&raw, &conf).expect("состояние") else {
+        // 1. Состояние — вызовы бота (слот ERC-1967 — из записи eth_getStorageAt).
+        let slot = w["impl_slot"].as_str().expect("слот ERC-1967 не записан");
+        let slot_impl = Address::from_word(B256::from_str(slot).expect("слово"));
+        let calls = load_basin::calls(well, &conf, slot_impl);
+        let raw = load_basin::decode(&answers(w, &calls), slot_impl).expect("ответы чтения");
+        let st = load_basin::state(&raw, &conf, well).expect("состояние");
+        let PoolState::BasinWell(d) = st else {
             panic!("не BasinWell");
         };
-        // 2. Проверка — первый и второй проход.
-        let pair = (d.token0, d.token1);
-        let fc = judge::first_calls(well, conf.aquifer, conf.lut);
-        let f = judge::first(well, pair, &conf, &answers(w, &fc)).expect("первый проход");
-        let sc = judge::second_calls(&f, &conf);
-        judge::second(&f, &conf, &answers(w, &sc)).expect("второй проход");
+        // 2. Проверка — первый и второй проход («не сверено» — только скважина в точке равновесия / пустая).
+        let f = judge::first(well, (d.token0, d.token1), &conf, &raw).expect("первый проход");
+        match judge::second_calls(&f) {
+            Ok(sc) => judge::second(&f, &answers(w, &sc)).expect("второй проход"),
+            Err(why) => {
+                let made = !w["shifted"].is_null();
+                assert!(!made, "{well:#x}: {why}, а запись сверку сделала");
+            }
+        }
         // 3. getSwapOut — побайтно.
         let tok = [d.token0, d.token1];
         for q in w["get_swap_out"].as_array().expect("get_swap_out") {

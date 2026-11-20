@@ -1,18 +1,17 @@
 //! Файл: venues/bsc_dex/pools/abi_basin.rs
 //! Что делает: ABI Basin (решение 485, вид basin_well): скважина Well — tokens, wellFunction, aquifer, getReserves,
-//! totalSupply, getSwapOut (сверка выхода), swapFrom (шаг BASIN исполнителя), getImplementation (только у
-//! WellUpgradeable за прокси ERC-1967), события скважины (Swap, Shift, Sync, AddLiquidity, RemoveLiquidity,
+//! totalSupply, getSwapOut (сверка выхода), swapFrom (шаг BASIN исполнителя), события скважины (Swap, Shift, Sync, AddLiquidity, RemoveLiquidity,
 //! RemoveLiquidityOneToken — все поля не индексированы) и Upgraded прокси; фабрика Aquifer — wellImplementation,
-//! событие BoreWell; функции скважины — calcLpTokenSupply (сверка A Stable2 при проверке); таблица Stable2 —
-//! getAParameter.
+//! событие BoreWell; функции скважины — calcReserve (сверка версии функции и A Stable2 при проверке); таблица
+//! Stable2 — getAParameter. Реализация прокси читается из слота ERC-1967 (basin_conf.rs impl_slot), не вызовом.
 //! Кто вызывает: pools/{load_basin, verify_basin, events_basin, created_log}.rs, quote/quoter_basin.rs.
 //! От чего зависит: alloy::sol!.
 //! Настройки: нет (Aquifer — dex.factory, списки — dex.basin_* [DEX]).
 //!
 //! Источник (официальный): BeanstalkFarms/Basin@ecf69233 — src/interfaces/IWell.sol L10-L13 (Call), L31-L77
 //! (события), src/Well.sol L106-L158 (tokens, wellFunction, aquifer), L207-L279 (swapFrom, getSwapOut), L694-L696
-//! (getReserves), src/WellUpgradeable.sol L132-L134 (getImplementation), src/interfaces/IAquifer.sol L42-L44
-//! (BoreWell), src/Aquifer.sol L22 (wellImplementation), src/interfaces/IWellFunction.sol (calcLpTokenSupply),
+//! (getReserves), src/interfaces/IAquifer.sol L42-L44
+//! (BoreWell), src/Aquifer.sol L22 (wellImplementation), src/interfaces/IWellFunction.sol (calcReserve),
 //! src/interfaces/ILookupTable.sol (getAParameter). Upgraded(address indexed) — OpenZeppelin ERC1967Upgrade
 //! (прокси скважин Beanstalk на Arbitrum — ERC1967Proxy: BeanstalkFarms/Beanstalk@6db8c07c
 //! protocol/contracts/beanstalk/init/reseed/L2/ReseedBean.sol L147, L225-L257).
@@ -44,7 +43,6 @@ alloy::sol! {
             address recipient,
             uint256 deadline
         ) external returns (uint256 amountOut);
-        function getImplementation() external view returns (address);
 
         event Swap(
             address fromToken,
@@ -83,8 +81,12 @@ alloy::sol! {
     }
 
     interface IBasinWellFunction {
-        function calcLpTokenSupply(uint256[] memory reserves, bytes memory data)
-            external view returns (uint256 lpTokenSupply);
+        function calcReserve(
+            uint256[] memory reserves,
+            uint256 j,
+            uint256 lpTokenSupply,
+            bytes memory data
+        ) external view returns (uint256 reserve);
     }
 
     interface IBasinLookupTable {

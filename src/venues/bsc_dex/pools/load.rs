@@ -249,10 +249,12 @@ pub async fn state(
             fee_pips: None,
         });
     }
-    // Скважина Basin (решение 485): вид ядра BasinWell, скважина — отдельный контракт; одно try_many (load_basin.rs).
+    // Скважина Basin (решение 485): вид ядра BasinWell, скважина — отдельный контракт; слот ERC-1967 и одно try_many
+    // (load_basin.rs).
     if f.proto == Proto::BasinWell {
         let PoolRef::Contract(a) = reference else {
-            return Err(ctx.err(ErrorCode::Internal, format!("{}: ссылка на скважину Basin не того вида", f.title)));
+            let why = format!("{}: ссылка на скважину Basin не того вида", f.title);
+            return Err(ctx.err(ErrorCode::Internal, why));
         };
         return Ok(Loaded {
             state: load_basin::load(ctx, f.id, *a, block).await?,

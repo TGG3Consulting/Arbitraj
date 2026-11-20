@@ -9,7 +9,8 @@
   номеру. Все симуляции и проверки подмены (balanceOf / allowance с подменой) — ОДНИМ пакетом JSON-RPC: узел хранит
   состояние ~128 блоков. Вход в нативном ETH (метка 0xEeee… plain-пула) — баланс W подменой и value = dx. Ответ —
   выход пула или откат. Только чтение (eth_call): транзакций, ключей и подписей нет.
-Кто вызывает: tools/arbitrum_record/curve_plain.py, curve_crypto.py, curve_ren_wsteth.py, basin.py (решение 485).
+Кто вызывает: tools/arbitrum_record/curve_plain.py, curve_crypto.py, curve_ren_wsteth.py,
+  basin.py (решение 485).
 От чего зависит: v4live_rpc.py (Node, sel, w, ad, word, decode_revert), v4live_slots.py (_find, кандидаты),
   curve_crypto_rpc.py (keccak256), stdhttp.py.
 Ошибки: исключений нет (кроме сетевых) — слот не найден / откат — запись с полем error.
@@ -76,9 +77,9 @@ class Sim:
             self.bal[token.lower()] = slots.balance_of(self.node, self.tag, token, SENDER) or 0
 
     def add(self, pool, sig, i, j, dx, token_in, data=None):
-        """Копит симуляцию exchange(i, j, dx, 0) пула от W (sig — подпись: int128 или uint256 индексы). Решение 485:
-        data — готовые calldata другого обмена (swapFrom скважины Basin, tools/arbitrum_record/basin.py); None —
-        exchange(i, j, dx, 0) по sig."""
+        """Копит симуляцию exchange(i, j, dx, 0) пула от W (sig — подпись: int128 или uint256 индексы).
+        Решение 485: data — готовые calldata другого обмена (swapFrom скважины Basin, basin.py);
+        None — exchange(i, j, dx, 0) по sig."""
         rec = {"pool": pool, "i": i, "j": j, "dx": str(dx), "sig": sig}
         data = data or "0x" + sel(sig) + w(i) + w(j) + w(dx) + w(0)
         tx = {"from": SENDER, "to": pool, "input": data}

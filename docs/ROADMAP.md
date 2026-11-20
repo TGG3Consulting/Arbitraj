@@ -26,7 +26,7 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
-- Решение 485 (Basin, `wc -l`): tools/arbitrum_record/basin.py 224 (ориентир 200 — вынести разбор ответов words /
+- Решение 485 (Basin, `wc -l`): tools/arbitrum_record/basin.py 271 после ревью t254 (ориентир 200 — вынести разбор ответов words /
   dyn_array / call_struct в basin_abi.py); общие файлы и так выше 200 получили ветку basin_well — pools/families.rs 876,
   pools/load.rs, pools/verify.rs, pools/created_log.rs, quote/pool_quote.rs 658, exec/executor/entry.rs 603,
   contracts/ArbExecutor.sol 1038 (дробить вместе с T456). Шаг BASIN = 29 — только исходник (сборка v5 — T485-04, T472-08).

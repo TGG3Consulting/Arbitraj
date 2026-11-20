@@ -4,8 +4,10 @@
 //!   amountOut, число LP не меняется (swapFrom L247-L260, swapTo L301-L314, swapFromFeeOnTransfer — amountIn уже
 //!   фактически пришедший, L232);
 //! - Shift(reserves, toToken, amountOut, recipient) — резервы после сдвига целиком из события (L395-L405), LP те же;
-//! - Sync, AddLiquidity, RemoveLiquidity*, Upgraded прокси — перечитать скважину целиком (меняют число LP-токенов или,
-//!   у прокси, реализацию и функцию скважины — load_basin.rs проверит её заново).
+//! - Sync, AddLiquidity, RemoveLiquidity*, Upgraded прокси — перечитать скважину целиком: первые меняют число
+//!   LP-токенов, Upgraded — реализацию прокси; полное чтение (load_basin.rs) заново читает слот реализации ERC-1967
+//!   (eth_getStorageAt), сверяет его с Aquifer (dex.basin_well_impls) и функцию скважины со списками — не прошло,
+//!   пул недостоверен (ошибка чтения с причиной).
 //!
 //! Событие не сходится (токен не из скважины, резерв ушёл бы ниже нуля, массив не из двух резервов) — перечитать.
 //! Кто вызывает: pools/events.rs.

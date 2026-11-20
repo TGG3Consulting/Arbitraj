@@ -4,14 +4,18 @@
 //! функции скважины ConstantProduct2 (calcReserve с округлением вверх, calcLpTokenSupply — sqrt) и Stable2 (итерации
 //! calcReserve и calcLpTokenSupply с точностью 1, масштаб резервов к 18 знакам). Своей комиссии у скважины нет.
 //! Переполнение, деление на ноль, неуспех итерации (у контракта — откат) — None.
-//! Кто вызывает: quote/pool_quote.rs, quote/basin_depth.rs, pools/verify_basin.rs (calcLpTokenSupply для сверки A).
+//! Кто вызывает: quote/pool_quote.rs, quote/basin_depth.rs, pools/verify_basin_judge.rs (calc_reserve — сверка версии
+//! функции и A), tests/basin_well_math.rs (calcLpTokenSupply — официальные векторы).
 //! От чего зависит: core/types (BasinWellData, BasinFunction), alloy-primitives.
 //! Настройки: нет.
 //!
 //! Источник (официальный): BeanstalkFarms/Basin@ecf69233 — src/Well.sol, src/functions/ConstantProduct2.sol,
 //! src/functions/Stable2.sol, src/libraries/LibMath.sol L14-L17 (roundUpDiv). Развёрнутые на Arbitrum
 //! ConstantProduct2 0xBA15…72b4 и Stable2 0xba15…1CBC — те же тексты (Sourcify 42161, SHA-256 исходника совпал с
-//! ecf69233); Well / WellUpgradeable развёрнуты с 5d12098 / 6b51015 — отличия от ecf69233 только в переносах строк.
+//! ecf69233). Well Implementation 0xBA51…a1d9 и Aquifer — Well.sol 01723b6 (= 67abd9c): отличия от ecf69233 —
+//! @author, init без `virtual`, `if (…) revert InvalidReserves();` в _setReserves одной строкой (та же проверка) и
+//! переносы строк; Upgradable Well 0xBA51…e50B — Well.sol 5d12098 и WellUpgradeable.sol 6b51015: отличия — только
+//! переносы строк. В _swapFrom, getSwapOut, _getReserves, _calcReserve, _updatePumps изменений по смыслу нет.
 //! Константы ниже — константы контрактов (не настройки).
 
 use alloy_primitives::{Address, U256};
@@ -146,7 +150,7 @@ pub fn calc_reserve(d: &BasinWellData, r: [U256; 2], j: usize, s: U256) -> Optio
     }
 }
 
-/// calcLpTokenSupply функции скважины на резервах состояния (сверка A / версии функции — pools/verify_basin.rs).
+/// calcLpTokenSupply функции скважины на резервах состояния (в обмене не участвует; для сверки и тестов).
 /// Возвращает: число LP-токенов или None (откат контракта).
 pub fn lp_supply(d: &BasinWellData) -> Option<U256> {
     let r = [d.reserve0, d.reserve1];

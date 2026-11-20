@@ -1,24 +1,30 @@
 #!/usr/bin/env python3
 # Файл: tools/arbitrum_record/basin.py
-# Что делает: решение 485 — запись своего узла Arbitrum для скважин Basin (вид basin_well): официальные «Whitelisted
-#   Beanstalk Wells» (docs.basin.exchange/resources/contracts). Только чтение (eth_call, eth_getCode,
-#   eth_getBlockByNumber), без ключей, подписей и транзакций. Пишет tests/data/arbitrum_basin_<дата>/ (meta.json,
-#   wells.json, README.md). Тест — tests/arbitrum_basin_live.rs (#[ignore] до записи).
+# Что делает: решение 485 — запись своего узла Arbitrum для скважин Basin (вид basin_well):
+#   официальные «Whitelisted Beanstalk Wells» (docs.basin.exchange/resources/contracts). Только
+#   чтение (eth_call, eth_getStorageAt, eth_getCode, eth_getBlockByNumber), без ключей, подписей и
+#   транзакций. Пишет
+#   tests/data/arbitrum_basin_<дата>/ (meta.json, wells.json, README.md). Тест —
+#   tests/arbitrum_basin_live.rs (#[ignore] до записи).
 # Кто вызывает: Тигран (record_all.py → record_steps.py) или вручную.
-# От чего зависит: Python 3.8+ (стандартная библиотека), curve_plain_pools.py (Batch, call, key), curve_sim.py (Sim —
-#   симуляция обмена от пустого адреса с подменой баланса и разрешения), curve_crypto_rpc.py (selector, word,
-#   addr_word), recnode.py (fresh), stdhttp.py. Узел — аргумент --node.
+# От чего зависит: Python 3.8+ (стандартная библиотека), curve_plain_pools.py (Batch, call, key),
+#   curve_sim.py (Sim — симуляция обмена от пустого адреса с подменой баланса и разрешения),
+#   curve_crypto_rpc.py (selector, word, addr_word), recnode.py (fresh), stdhttp.py. Узел — аргумент
+#   --node.
 # Настройки: нет. Адреса — официальные: docs.basin.exchange/resources/contracts (раздел Arbitrum).
 #
-# Порядок (узел хранит состояние ~128 блоков — решение 460): 1) на «latest» — tokens() скважин и слоты баланса /
-#   разрешения их токенов для симуляции (curve_sim.py); 2) фаза состояния на свежем блоке B (recnode.fresh: узел уже
-#   удалил состояние — фаза заново на новом блоке): ОДНИМ пакетом — ответы на вызовы бота по (адрес, calldata):
-#   чтение load_basin.rs calls (getReserves, totalSupply, wellFunction, tokens, getAParameter() таблицы Stable2) и
-#   первый проход проверки verify_basin_judge.rs first_calls (wellImplementation(скважина) Aquifer, getImplementation,
-#   aquifer()), ещё numberOfPumps() и pumps() (насосы — для справки); ОДНИМ пакетом — второй проход проверки
-#   (wellImplementation(реализация прокси), calcLpTokenSupply(резервы, данные) функции) и getSwapOut(from, to, вход)
-#   на долях резерва входа (--fractions) в обе стороны; ОДНИМ пакетом — симуляции swapFrom(from, to, вход, 0, W,
-#   2^256 − 1) на тех же суммах (curve_sim.py); eth_getCode скважин, реализаций прокси и функций.
+# Порядок (узел хранит состояние ~128 блоков — решение 460): 1) на «latest» — tokens() скважин и
+#   слоты баланса / разрешения их токенов для симуляции (curve_sim.py); 2) фаза состояния на свежем
+#   блоке B (recnode.fresh: узел уже удалил состояние — фаза заново на новом блоке): ОДНИМ пакетом —
+#   eth_getStorageAt слота реализации ERC-1967 каждой скважины и ответы на вызовы бота по (адрес,
+#   calldata) — load_basin.rs calls (getReserves, totalSupply, wellFunction, tokens,
+#   wellImplementation(скважина) Aquifer, getAParameter() таблицы Stable2), ещё numberOfPumps() и
+#   pumps() (насосы — для справки); ОДНИМ пакетом — wellImplementation(реализация из слота; ноль —
+#   не прокси), второй проход проверки verify_basin_judge.rs (calcReserve(сдвинутые резервы, 1,
+#   totalSupply, данные) функции — тот же сдвиг, что shifted) и getSwapOut(from, to, вход) на долях
+#   резерва входа (--fractions) в обе стороны; ОДНИМ пакетом — симуляции swapFrom(from, to, вход, 0,
+#   W, 2^256 − 1) на тех же суммах (curve_sim.py); eth_getCode скважин, реализаций прокси и функций
+#   (sha256 — сравнить код прокси шести скважин, TASKS T485-05).
 #
 # Запуск: python3 tools/arbitrum_record/basin.py --node http://УЗЕЛ:8547
 
@@ -39,8 +45,8 @@ from curve_sim import SENDER, Sim  # noqa: E402
 # docs.basin.exchange/resources/contracts, раздел Arbitrum.
 AQUIFER = "0xBA51AAAa8C2f911AE672e783707Ceb2dA6E97521"
 IMPLS = ["0xBA5106bd62b342afAcB93f1078fe60177A62d1a9", "0xBA510995783111be5301d93CCfD5dE4e3B28e50B"]
-# ConstantProduct2: docs.basin.exchange и BeanstalkFarms/Beanstalk@6db8c07c ReseedBean.sol L68-L69 (оба — Sourcify
-# exact_match); какой у скважин — покажет запись (wells.json, function).
+# ConstantProduct2: docs.basin.exchange и BeanstalkFarms/Beanstalk@6db8c07c ReseedBean.sol L68-L69
+# (оба — Sourcify exact_match); какой у скважин — покажет запись (wells.json, function).
 CP2 = ["0xBA15000450Bf6d48ec50BD6327A9403E401b72b4", "0xbA1500c28C8965521f47F17Fc21A7829D6E1343e"]
 STABLE2 = ["0xba150052e11591D0648b17A0E608511874921CBC"]
 LUT = "0xBA51055dAD14d3920e1798D2e8A152d91CaDb461"
@@ -53,6 +59,8 @@ WELLS = [
     "0xbEA00fF437ca7E8354B174339643B4d1814bED33",  # BEAN:USDT
 ]
 SWAP_FROM = "swapFrom(address,address,uint256,uint256,address,uint256)"
+# EIP-1967: bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1).
+IMPL_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
 MAXU = 2**256 - 1
 
 
@@ -83,36 +91,65 @@ def call_struct(h):
     return target, "0x" + raw[off + 32:off + 32 + n].hex()
 
 
-def enc_calc_lp(reserves, data_hex):
-    """calldata calcLpTokenSupply(uint256[] reserves, bytes data)."""
+def enc_calc_reserve(reserves, j, supply, data_hex):
+    """calldata calcReserve(uint256[] reserves, uint256 j, uint256 lpTokenSupply, bytes data)."""
     d = bytes.fromhex(data_hex[2:])
-    head = word(64) + word(64 + 32 * (1 + len(reserves)))
+    head = word(128) + word(j) + word(supply) + word(128 + 32 * (1 + len(reserves)))
     arr = word(len(reserves)) + "".join(word(r) for r in reserves)
     pad = d + b"\0" * ((32 - len(d) % 32) % 32)
-    return selector("calcLpTokenSupply(uint256[],bytes)") + head + arr + word(len(d)) + pad.hex()
+    sig = selector("calcReserve(uint256[],uint256,uint256,bytes)")
+    return sig + head + arr + word(len(d)) + pad.hex()
+
+
+def shifted(function, data_hex, reserves, supply):
+    """Сдвинутые резервы сверки — как verify_basin_judge.rs shifted. None — «не сверено»."""
+    r0, r1 = reserves
+    k = 1
+    if function.lower() in [a.lower() for a in STABLE2]:
+        dec0 = int(data_hex[2:66], 16) if len(data_hex) >= 66 else 0
+        dec0 = 18 if dec0 == 0 else dec0
+        if dec0 > 18:
+            return None
+        k = 10 ** (18 - dec0)
+    if supply == 0 or r0 == 0:
+        return None
+    x0 = r0 * k
+    s0 = r0 + r0 // 2 if x0 * 2 >= supply else r0 // 2
+    if s0 == 0 or s0 * k * 2 == supply:
+        return None
+    return [s0, r1]
 
 
 def bot_calls(well):
-    """(адрес, calldata) первой пачки: load_basin.rs calls, verify_basin_judge.rs first_calls и насосы."""
-    out = [(well, selector(s)) for s in ["getReserves()", "totalSupply()", "wellFunction()", "tokens()",
-                                          "getImplementation()", "aquifer()", "numberOfPumps()", "pumps()"]]
-    out.append((LUT, selector("getAParameter()")))
+    """(адрес, calldata) первой пачки: load_basin.rs calls (кроме wellImplementation реализации из
+    слота — она во второй пачке) и насосы."""
+    sigs = ["getReserves()", "totalSupply()", "wellFunction()", "tokens()", "numberOfPumps()",
+            "pumps()"]
+    out = [(well, selector(s)) for s in sigs]
     out.append((AQUIFER, selector("wellImplementation(address)") + addr_word(well)))
+    out.append((LUT, selector("getAParameter()")))
     return out
 
 
 def state_phase(b, sim, fractions, head):
-    """Фаза состояния на блоке head. Возвращает: (head, recs, code). StaleState — наружу (recnode.fresh)."""
+    """Фаза состояния на блоке head. Возвращает: (head, recs, code). StaleState — наружу
+    (recnode.fresh)."""
     tag = head["number"]
     sim.tag, sim.reqs, sim.recs = tag, [], []
     reqs, keys = [], []
     for well in WELLS:
+        reqs.append(("eth_getStorageAt", [well, IMPL_SLOT, tag]))
+        keys.append((well, "slot"))
         for to, d in bot_calls(well):
             reqs.append(call(to, d, tag))
             keys.append((well, key(to, d)))
     recs = {wl: {"well": wl, "answers": {}} for wl in WELLS}
     for (wl, k), x in zip(keys, b.run(reqs)):
-        recs[wl]["answers"][k] = x
+        if k == "slot":
+            recs[wl]["impl_slot"] = x.get("result")
+            recs[wl]["impl_slot_error"] = x.get("error")
+        else:
+            recs[wl]["answers"][k] = x
     reqs, keys = [], []
     for wl in WELLS:
         r, a = recs[wl], recs[wl]["answers"]
@@ -121,19 +158,23 @@ def state_phase(b, sim, fractions, head):
             r["tokens"] = ["0x%040x" % t for t in dyn_array(get("tokens()"))]
             r["reserves"] = [str(x) for x in dyn_array(get("getReserves()"))]
             r["function"], r["function_data"] = call_struct(get("wellFunction()"))
-        except Exception as e:  # ответ скважины не разобран — запись с причиной, остальные скважины идут дальше
+        except Exception as e:  # ответ не разобран — запись с причиной, остальные скважины дальше
             r["error"] = "ответ скважины не разобран: %s" % e
             continue
-        imp = get("getImplementation()")
-        r["proxy_impl"] = "0x" + imp[-40:] if imp and len(imp) >= 42 else None
-        if r["proxy_impl"]:
-            d = selector("wellImplementation(address)") + addr_word(r["proxy_impl"])
-            reqs.append(call(AQUIFER, d, tag))
-            keys.append((wl, key(AQUIFER, d)))
-        d = enc_calc_lp([int(x) for x in r["reserves"]], r["function_data"])
-        reqs.append(call(r["function"], d, tag))
-        keys.append((wl, key(r["function"], d)))
+        slot = r.get("impl_slot") or ("0x" + "0" * 64)
+        imp = "0x" + slot[-40:]
+        r["proxy_impl"] = None if int(imp, 16) == 0 else imp
+        d = selector("wellImplementation(address)") + addr_word(imp)
+        reqs.append(call(AQUIFER, d, tag))
+        keys.append((wl, key(AQUIFER, d)))
         res = [int(x) for x in r["reserves"]]
+        supply = int(get("totalSupply()") or "0x0", 16)
+        sh = shifted(r["function"], r["function_data"], res, supply)
+        r["shifted"] = [str(x) for x in sh] if sh else None
+        if sh:
+            d = enc_calc_reserve(sh, 1, supply, r["function_data"])
+            reqs.append(call(r["function"], d, tag))
+            keys.append((wl, key(r["function"], d)))
         for i in range(2):
             j = 1 - i
             for f in fractions.split(","):
@@ -142,8 +183,8 @@ def state_phase(b, sim, fractions, head):
                      + addr_word(r["tokens"][j]) + word(dx))
                 reqs.append(call(wl, d, tag))
                 keys.append((wl, ("swap_out", i, j, dx)))
-                data = (selector(SWAP_FROM) + addr_word(r["tokens"][i]) + addr_word(r["tokens"][j]) + word(dx)
-                        + word(0) + addr_word(SENDER) + word(MAXU))
+                data = (selector(SWAP_FROM) + addr_word(r["tokens"][i]) + addr_word(r["tokens"][j])
+                        + word(dx) + word(0) + addr_word(SENDER) + word(MAXU))
                 sim.add(wl, SWAP_FROM, i, j, dx, r["tokens"][i], data=data)
     for (wl, k), x in zip(keys, b.run(reqs)):
         if isinstance(k, tuple):
@@ -154,11 +195,13 @@ def state_phase(b, sim, fractions, head):
     for s in sim.run():
         recs[s["pool"]].setdefault("swap_from_sim", []).append(s)
     code = {}
-    addrs = list(WELLS) + [r.get("proxy_impl") for r in recs.values()] + [r.get("function") for r in recs.values()]
+    addrs = list(WELLS) + [r.get("proxy_impl") for r in recs.values()]
+    addrs += [r.get("function") for r in recs.values()]
     for addr in sorted({x.lower() for x in addrs if x}):
         c = b.one("eth_getCode", [addr, tag])
         h = c.get("result") or ""
-        code[addr] = {"len": max(0, len(h) // 2 - 1), "sha256": hashlib.sha256(h.encode()).hexdigest(),
+        code[addr] = {"len": max(0, len(h) // 2 - 1),
+                      "sha256": hashlib.sha256(h.encode()).hexdigest(),
                       "has_swap_from": selector(SWAP_FROM)[2:] in h, "error": c.get("error")}
     return head, recs, code
 
@@ -166,7 +209,8 @@ def state_phase(b, sim, fractions, head):
 def main():
     ap = argparse.ArgumentParser(description="Запись узла Arbitrum: скважины Basin (решение 485)")
     ap.add_argument("--node", required=True, help="HTTP JSON-RPC своего узла Arbitrum")
-    ap.add_argument("--fractions", default="0.0001,0.01,0.2", help="доли резерва входа для getSwapOut и симуляции")
+    ap.add_argument("--fractions", default="0.0001,0.01,0.2",
+                    help="доли резерва входа для getSwapOut и симуляции")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     t0 = time.time()
@@ -183,8 +227,9 @@ def main():
             continue
         for t in dyn_array(x["result"]):
             sim.prefill("0x%040x" % t, wl)
-    head, recs, code = recnode.fresh(lambda: b.one("eth_getBlockByNumber", ["latest", False])["result"],
-                                     lambda h: state_phase(b, sim, a.fractions, h), say=say)
+    head, recs, code = recnode.fresh(
+        lambda: b.one("eth_getBlockByNumber", ["latest", False])["result"],
+        lambda h: state_phase(b, sim, a.fractions, h), say=say)
     write(a, chain, head, recs, code, t0)
 
 
@@ -193,8 +238,9 @@ def write(a, chain, head, recs, code, t0):
     tag = head["number"]
     files = {
         "meta.json": {"chainId": chain, "block": int(tag, 16), "block_hex": tag,
-                      "timestamp": int(head["timestamp"], 16), "aquifer": AQUIFER, "impls": IMPLS, "cp2": CP2,
-                      "stable2": STABLE2, "lut": LUT, "wells": WELLS, "sim_sender": SENDER,
+                      "timestamp": int(head["timestamp"], 16), "aquifer": AQUIFER, "impls": IMPLS,
+                      "cp2": CP2, "stable2": STABLE2, "luts": [LUT], "wells": WELLS,
+                      "sim_sender": SENDER,
                       "fractions": a.fractions, "seconds": round(time.time() - t0, 1)},
         "wells.json": [recs[wl] for wl in WELLS],
         "code.json": code,
@@ -211,8 +257,9 @@ def write(a, chain, head, recs, code, t0):
         hashes.append((hashlib.sha256(text.encode()).hexdigest(), name))
     with open(os.path.join(out, "README.md"), "w", encoding="utf-8") as f:
         f.write("# Скважины Basin (Arbitrum One) — запись своего узла, %s\n\n" % day)
-        f.write("Записано tools/arbitrum_record/basin.py (решение 485): только чтение, без ключей и транзакций.\n"
-                "Блок B = %d, chainId %s; симуляции swapFrom — eth_call с подменой состояния от пустого адреса %s.\n"
+        f.write("Записано tools/arbitrum_record/basin.py (решение 485): только чтение, без ключей "
+                "и транзакций.\nБлок B = %d, chainId %s; симуляции swapFrom — eth_call с подменой "
+                "состояния от пустого адреса %s.\n"
                 % (int(tag, 16), chain, SENDER))
         f.write("Файлы и порядок записи — шапка скрипта.\n\n## SHA-256\n\n")
         for h, n in hashes:

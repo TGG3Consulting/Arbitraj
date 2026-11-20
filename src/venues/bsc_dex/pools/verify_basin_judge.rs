@@ -1,119 +1,51 @@
 //! Файл: venues/bsc_dex/pools/verify_basin_judge.rs
 //! Что делает: решение 485 — решения проверки скважины Basin по ответам узла (без сети; их же зовут тесты на записи):
-//! - первый проход (first_calls / first): Aquifer.wellImplementation(скважина), getImplementation() скважины (есть только
-//!   у WellUpgradeable за прокси ERC-1967; откат — не прокси), aquifer(), tokens(), wellFunction(), getReserves();
-//!   скважина Aquifer'а dex.factory, два токена = монета и встречный, функция из списков;
-//! - второй проход (second_calls / second): у прокси — Aquifer.wellImplementation(реализация прокси) из
-//!   dex.basin_well_impls (скважины Beanstalk на Arbitrum — ERC1967Proxy на клон WellUpgradeable, выпущенный Aquifer:
-//!   BeanstalkFarms/Beanstalk@6db8c07c ReseedBean.sol L225-L257); функция скважины calcLpTokenSupply(резервы, данные)
-//!   = наш расчёт (math/basin_well.rs) — сверка версии функции и, у Stable2, A из dex.basin_stable2_lut.
+//! - первый проход (first): те же ответы, что у чтения бота (load_basin.rs: слот ERC-1967, пачка calls) — состояние
+//!   собирается (реализация допущена — basin_conf.rs impl_ok, функция из списков), два токена = монета и встречный;
+//! - второй проход (second_calls / second): calcReserve функции скважины на СДВИНУТЫХ резервах = наш расчёт
+//!   (math/basin_well.rs) — сверка версии функции и, у Stable2, A таблицы dex.basin_stable2_lut.
 //!
-//! Кто вызывает: pools/verify_basin.rs.
+//! Почему calcReserve, а не calcLpTokenSupply на текущих резервах (ревью t254): при равных приведённых резервах
+//! инвариант Stable2 даёт D = b0 + b1 при любом A (точка равновесия лежит на кривой каждого A) — такая сверка A не
+//! доказывает. calcReserve(резервы', j = 1, D) зависит от A, если приведённый резерв 0 не равен D/2; сдвиг уводит его
+//! от D/2: при 2·x0 ≥ D — x0 + x0/2, иначе — x0/2 (расстояние до D/2 растёт на x0/2). Ровно D/2, пустая скважина
+//! (D = 0 или x0 = 0) — «не сверено», скважина не берётся до другого состояния.
+//!
+//! Кто вызывает: pools/verify_basin.rs; tests/arbitrum_basin_live.rs.
 //! От чего зависит: abi_basin.rs, basin_conf.rs, load_basin.rs (state), math/basin_well.rs, discover.rs.
 //! Настройки: нет (настройки — BasinConf).
 //!
-//! Источник: BeanstalkFarms/Basin@ecf69233 src/Aquifer.sol L22, L79; src/WellUpgradeable.sol L132-L134; src/Well.sol
-//! L106-L158, L694-L696.
+//! Источник: BeanstalkFarms/Basin@ecf69233 src/functions/Stable2.sol L132-L162 (calcReserve), L419-L426 (масштаб),
+//! src/functions/ConstantProduct2.sol L62-L74.
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
 
-use crate::core::types::{BasinWellData, PoolState};
+use crate::core::types::{BasinFunction, BasinWellData, PoolState};
 
 use super::super::math::basin_well;
-use super::abi_basin::{
-    IBasinAquifer as A, IBasinLookupTable as L, IBasinWell as W, IBasinWellFunction as F,
-};
+use super::abi_basin::IBasinWellFunction as F;
 use super::basin_conf::BasinConf;
 use super::discover::sorted;
 use super::load_basin::{self, Raw};
 
-/// Вызовов первого прохода на скважину без таблицы Stable2 (с таблицей — на один больше: getAParameter()).
-pub const FIRST: usize = 6;
-
-/// Итог первого прохода: состояние скважины и реализация прокси, которую надо проверить вторым проходом (None —
-/// скважина сама выпущена Aquifer'ом с допущенной реализацией).
+/// Итог первого прохода: состояние скважины, функция и её данные.
 #[derive(Debug, Clone)]
 pub struct First {
     pub data: BasinWellData,
     pub function: Address,
     pub function_data: Bytes,
-    pub proxy_impl: Option<Address>,
 }
 
-/// Вызовы первого прохода. Принимает: скважину, Aquifer, таблицу Stable2 (None — не задана). Возвращает: FIRST
-/// вызовов по порядку и getAParameter() таблицы последним, если она задана.
-pub fn first_calls(well: Address, aquifer: Address, lut: Option<Address>) -> Vec<(Address, Bytes)> {
-    let mut out = vec![
-        (aquifer, A::wellImplementationCall { well }.abi_encode().into()),
-        (well, W::getImplementationCall {}.abi_encode().into()),
-        (well, W::aquiferCall {}.abi_encode().into()),
-        (well, W::tokensCall {}.abi_encode().into()),
-        (well, W::wellFunctionCall {}.abi_encode().into()),
-        (well, W::getReservesCall {}.abi_encode().into()),
-    ];
-    if let Some(l) = lut {
-        out.push((l, L::getAParameterCall {}.abi_encode().into()));
-    }
-    out
-}
-
-/// Первый проход. Принимает: скважину, монету и встречный кандидата, настройки, ответы first_calls (откат — Err).
+/// Первый проход. Принимает: скважину, монету и встречный кандидата, настройки, разобранные ответы чтения.
 /// Возвращает: First или причину отказа.
 pub fn first(
     well: Address,
     pair: (Address, Address),
     conf: &BasinConf,
-    a: &[Result<Bytes, String>],
+    raw: &Raw,
 ) -> Result<First, String> {
-    let ok = |i: usize, what: &str| match a.get(i) {
-        Some(Ok(b)) => Ok(b.clone()),
-        Some(Err(r)) => Err(format!("скважина {well:#x}: {what} откатился: {r}")),
-        None => Err(format!("скважина {well:#x}: нет ответа {what}")),
-    };
-    let abi = |what: &str| format!("скважина {well:#x}: ответ {what} не по ABI");
-    let registered = A::wellImplementationCall::abi_decode_returns(&ok(0, "wellImplementation")?)
-        .map_err(|_| abi("wellImplementation"))?;
-    let aq = W::aquiferCall::abi_decode_returns(&ok(2, "aquifer()")?)
-        .map_err(|_| abi("aquifer()"))?;
-    if aq != conf.aquifer {
-        return Err(format!("aquifer() скважины {aq:#x} ≠ dex.factory {:#x}", conf.aquifer));
-    }
-    let proxy_impl = if conf.impls.contains(&registered) {
-        None
-    } else {
-        // Не клон Aquifer'а с допущенной реализацией — тогда только прокси ERC-1967 на такой клон.
-        let imp = match a.get(1) {
-            Some(Ok(b)) => W::getImplementationCall::abi_decode_returns(b).ok(),
-            _ => None,
-        };
-        match imp {
-            Some(i) if !i.is_zero() => Some(i),
-            _ => {
-                return Err(format!(
-                    "скважина {well:#x}: реализация в Aquifer {registered:#x} не из dex.basin_well_impls, и это не \
-                     прокси скважины (getImplementation)"
-                ));
-            }
-        }
-    };
-    let f = W::wellFunctionCall::abi_decode_returns(&ok(4, "wellFunction()")?)
-        .map_err(|_| abi("wellFunction()"))?;
-    // Число LP-токенов проверке не нужно (сверка — calcLpTokenSupply по резервам): supply = 0 только здесь.
-    let raw = Raw {
-        reserves: W::getReservesCall::abi_decode_returns(&ok(5, "getReserves")?)
-            .map_err(|_| abi("getReserves"))?,
-        supply: U256::ZERO,
-        function: f.target,
-        function_data: f.data.clone(),
-        tokens: W::tokensCall::abi_decode_returns(&ok(3, "tokens()")?)
-            .map_err(|_| abi("tokens()"))?,
-        lut_a: match a.get(FIRST) {
-            Some(Ok(b)) => L::getAParameterCall::abi_decode_returns(b).ok(),
-            _ => None,
-        },
-    };
-    let PoolState::BasinWell(d) = load_basin::state(&raw, conf)? else {
+    let PoolState::BasinWell(d) = load_basin::state(raw, conf, well)? else {
         return Err("состояние скважины не BasinWell".into());
     };
     if d.token0 == d.token1 || sorted(d.token0, d.token1) != sorted(pair.0, pair.1) {
@@ -124,57 +56,74 @@ pub fn first(
     }
     Ok(First {
         data: *d,
-        function: f.target,
-        function_data: f.data,
-        proxy_impl,
+        function: raw.function,
+        function_data: raw.function_data.clone(),
     })
 }
 
-/// Вызовы второго прохода: [wellImplementation(реализация прокси)], calcLpTokenSupply(резервы, данные) функции.
-/// Принимает: итог первого прохода, настройки. Возвращает: вызовы по порядку.
-pub fn second_calls(f: &First, conf: &BasinConf) -> Vec<(Address, Bytes)> {
-    let mut out = Vec::new();
-    if let Some(i) = f.proxy_impl {
-        out.push((conf.aquifer, A::wellImplementationCall { well: i }.abi_encode().into()));
+/// 10^(18 − знаки) резерва 0 (Stable2 getScaledReserves); ConstantProduct2 — 1. None — знаков больше 18.
+fn scale0(d: &BasinWellData) -> Option<U256> {
+    match d.function {
+        BasinFunction::ConstantProduct2 => Some(U256::from(1u8)),
+        BasinFunction::Stable2 { dec0, .. } => {
+            let e = 18u8.checked_sub(dec0)?;
+            Some(U256::from(10u8).pow(U256::from(e)))
+        }
     }
-    let reserves = vec![f.data.reserve0, f.data.reserve1];
-    let c = F::calcLpTokenSupplyCall {
-        reserves,
-        data: f.function_data.clone(),
-    };
-    out.push((f.function, c.abi_encode().into()));
-    out
 }
 
-/// Второй проход. Принимает: итог первого, настройки, ответы second_calls. Возвращает: Ok — скважина берётся; Err —
-/// причина (реализация прокси не допущена; calcLpTokenSupply функции ≠ нашему расчёту — другая версия функции или,
-/// у Stable2, другая таблица A).
-pub fn second(f: &First, conf: &BasinConf, a: &[Result<Bytes, String>]) -> Result<(), String> {
-    let mut k = 0;
-    let mut next = || {
-        k += 1;
-        match a.get(k - 1) {
-            Some(Ok(b)) => Ok(b.clone()),
-            Some(Err(r)) => Err(format!("второй проход проверки скважины: откат {r}")),
-            None => Err("второй проход проверки скважины: нет ответа".to_string()),
-        }
-    };
-    if let Some(i) = f.proxy_impl {
-        let reg = A::wellImplementationCall::abi_decode_returns(&next()?)
-            .map_err(|_| "wellImplementation не по ABI".to_string())?;
-        if !conf.impls.contains(&reg) {
-            return Err(format!(
-                "реализация прокси {i:#x}: в Aquifer — {reg:#x}, не из dex.basin_well_impls"
-            ));
-        }
+/// Сдвинутые резервы сверки (см. шапку). Возвращает: [резерв 0', резерв 1] или причину «не сверено».
+pub fn shifted(d: &BasinWellData) -> Result<[U256; 2], String> {
+    let nope = |why: &str| format!("сверка функции скважины не сделана: {why} — не сверено");
+    if d.supply.is_zero() || d.reserve0.is_zero() {
+        return Err(nope("скважина пуста"));
     }
-    let theirs = F::calcLpTokenSupplyCall::abi_decode_returns(&next()?)
-        .map_err(|_| "calcLpTokenSupply не по ABI".to_string())?;
-    let ours = basin_well::lp_supply(&f.data);
-    if ours != Some(theirs) {
+    let k = scale0(d).ok_or_else(|| nope("знаков больше 18"))?;
+    let x0 = d.reserve0.checked_mul(k).ok_or_else(|| nope("переполнение"))?;
+    let two = U256::from(2u8);
+    let r0 = if x0.checked_mul(two).is_none_or(|v| v >= d.supply) {
+        d.reserve0 + d.reserve0 / two
+    } else {
+        d.reserve0 / two
+    };
+    let x = r0.checked_mul(k).and_then(|v| v.checked_mul(two));
+    if r0.is_zero() || x == Some(d.supply) {
+        return Err(nope("резерв в точке равновесия"));
+    }
+    Ok([r0, d.reserve1])
+}
+
+/// Вызов второго прохода: calcReserve(сдвинутые резервы, 1, totalSupply, данные) функции. Принимает: итог первого
+/// прохода. Возвращает: вызов или причину «не сверено».
+pub fn second_calls(f: &First) -> Result<Vec<(Address, Bytes)>, String> {
+    let r = shifted(&f.data)?;
+    let c = F::calcReserveCall {
+        reserves: r.to_vec(),
+        j: U256::from(1u8),
+        lpTokenSupply: f.data.supply,
+        data: f.function_data.clone(),
+    };
+    Ok(vec![(f.function, c.abi_encode().into())])
+}
+
+/// Второй проход. Принимает: итог первого, ответы second_calls. Возвращает: Ok — скважина берётся; Err — причина
+/// (calcReserve функции ≠ нашему расчёту: функция другой версии или, у Stable2, таблица A не её; откат функции при
+/// нашем «расчёт есть» и наоборот).
+pub fn second(f: &First, a: &[Result<Bytes, String>]) -> Result<(), String> {
+    let r = shifted(&f.data)?;
+    let ours = basin_well::calc_reserve(&f.data, r, 1, f.data.supply);
+    let theirs = match a.first() {
+        Some(Ok(b)) => Some(
+            F::calcReserveCall::abi_decode_returns(b)
+                .map_err(|_| "calcReserve не по ABI".to_string())?,
+        ),
+        Some(Err(_)) => None,
+        None => return Err("второй проход проверки скважины: нет ответа".into()),
+    };
+    if ours != theirs {
         return Err(format!(
-            "calcLpTokenSupply функции {:#x} = {theirs}, наш расчёт — {ours:?}: функция другой версии или A таблицы \
-             dex.basin_stable2_lut не её",
+            "calcReserve функции {:#x} = {theirs:?}, наш расчёт — {ours:?}: функция другой \
+             версии или A таблицы dex.basin_stable2_lut не её",
             f.function
         ));
     }

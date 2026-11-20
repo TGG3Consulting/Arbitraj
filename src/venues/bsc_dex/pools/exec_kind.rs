@@ -112,7 +112,7 @@ pub enum ExecKind {
     /// _curveEth). Шаг 28 — только исполнитель v5 (exec_callback.rs since). Вид семейства остаётся CURVE (of); шаг
     /// CURVE_ETH выбирает exec/executor/entry.rs, когда монета пары — нативная монета пула (StableData.native).
     CurveEth,
-    /// Решение 484: пул Wombat Exchange — approve пулу ровно на шаг + `pool.swap(tokenIn, tokenOut, вход, 0, to,
+    /// Решение 484: пул Wombat Exchange — approve пулу ровно на шаг + `pool.swap(tokenIn, tokenOut, вход, 1, to,
     /// block.timestamp)`: пул списывает вход transferFrom(исполнитель → актив входа) и переводит выход `to` из актива
     /// выхода (wombat-exchange/v1-core 2ac067b8 PoolV2.sol L843-L876). Шаг 30 — только исполнитель v5 (exec_callback.rs
     /// since).

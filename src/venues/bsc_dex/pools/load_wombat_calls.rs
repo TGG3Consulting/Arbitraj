@@ -2,10 +2,11 @@
 //! Что делает: решение 484 — вызовы чтения пула Wombat и разбор ответов без сети (тест на записи узла собирает то же
 //! состояние из тех же ответов): ступень 1 — getTokens, ampFactor, haircutRate, startCovRatio, endCovRatio, paused
 //! пула; ступень 2 — addressOfAsset(монета) по каждой монете; ступень 3 — у каждого актива underlyingToken,
-//! underlyingTokenDecimals, pool, cash, liability и (динамический пул) getRelativePrice. Сборка состояния — build
+//! underlyingTokenDecimals, pool, cash, liability и (динамический пул) getRelativePrice; при известных монетах и активах
+//! (load_wombat_memo.rs) — одна пачка меняющихся величин (vary_calls / parse_vary). Сборка состояния — build
 //! (load_wombat_build.rs, вынесено по размеру файла).
 //! Кто вызывает: pools/load_wombat.rs; tests/arbitrum_wombat_live.rs.
-//! От чего зависит: abi_wombat.rs, load_wombat_build.rs.
+//! От чего зависит: abi_wombat.rs, load_wombat_build.rs, load_wombat_memo.rs (Fixed).
 //! Настройки: нет.
 //!
 //! Источник — шапка abi_wombat.rs (геттеры PoolV2 / HighCovRatioFeePoolV2 / Asset / DynamicAsset).
@@ -15,6 +16,7 @@ use alloy_primitives::{Address, Bytes, U256};
 
 use super::abi_wombat::{IWombatAsset as A, IWombatPool as P};
 pub use super::load_wombat_build::build;
+use super::load_wombat_memo::Fixed;
 
 /// Ответ вызова пачки: байты или текст отката.
 type Ans = Result<Bytes, String>;
@@ -151,4 +153,51 @@ pub fn parse_detail(
         });
     }
     Ok(out)
+}
+
+/// Решение 484 (ревью t253): вызовы чтения каждым блоком при известных монетах и активах (load_wombat_memo.rs) — одна
+/// пачка: ampFactor, haircutRate, startCovRatio, endCovRatio, paused пула и у каждого актива cash, liability
+/// (динамический пул — ещё getRelativePrice). Ошибок нет.
+pub fn vary_calls(pool: Address, assets: &[Address], dynamic: bool) -> Vec<(Address, Bytes)> {
+    let mut out = head_calls(pool).split_off(1);
+    for a in assets {
+        out.push((*a, A::cashCall {}.abi_encode().into()));
+        out.push((*a, A::liabilityCall {}.abi_encode().into()));
+        if dynamic {
+            out.push((*a, A::getRelativePriceCall {}.abi_encode().into()));
+        }
+    }
+    out
+}
+
+/// Разбор vary_calls. Принимает: ответы, неизменные части пула, динамический ли пул. Возвращает: (Head, стороны) или
+/// причину (откат, не по ABI).
+pub fn parse_vary(got: &[Ans], fixed: &Fixed, dynamic: bool) -> Result<(Head, Vec<Side>), String> {
+    let head = Head {
+        tokens: fixed.tokens.clone(),
+        amp: dec::<P::ampFactorCall>(got, 0, "ampFactor()")?,
+        haircut: dec::<P::haircutRateCall>(got, 1, "haircutRate()")?,
+        start_cov: U256::from(dec::<P::startCovRatioCall>(got, 2, "startCovRatio()")?),
+        end_cov: U256::from(dec::<P::endCovRatioCall>(got, 3, "endCovRatio()")?),
+        paused: dec::<P::pausedCall>(got, 4, "paused()")?,
+    };
+    let n = if dynamic { 3 } else { 2 };
+    let mut sides = Vec::with_capacity(fixed.assets.len());
+    for (k, d) in fixed.decimals.iter().enumerate() {
+        let at = 5 + k * n;
+        let cash = dec::<A::cashCall>(got, at, "cash()")?.to::<u128>();
+        let liability = dec::<A::liabilityCall>(got, at + 1, "liability()")?.to::<u128>();
+        let price = if dynamic {
+            Some(dec::<A::getRelativePriceCall>(got, at + 2, "getRelativePrice()")?)
+        } else {
+            None
+        };
+        sides.push(Side {
+            cash: U256::from(cash),
+            liability: U256::from(liability),
+            decimals: *d,
+            price,
+        });
+    }
+    Ok((head, sides))
 }

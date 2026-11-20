@@ -359,3 +359,4 @@ Ekubo (решение 447, вид `ekubo`; EkuboProtocol/evm-contracts@61d09daa 
 | `load_wombat_build.rs` | Решение 484: сборка PoolState::StableSwap со StableData.wombat из разобранных ответов |
 | `verify_wombat.rs` | Решение 484: проверка пула Wombat — dex.stable_pools, монеты пары среди getTokens(), реализация прокси сверена |
 | `events_wombat.rs` | Решение 484: события пула Wombat — любое → перечитать (и каждым блоком: mintFee, цены активов — без событий) |
+| `load_wombat_memo.rs` | Решение 484 (ревью): память монет, активов и decimals пула Wombat до AssetAdded / AssetRemoved или проверки — каждым блоком читаются только меняющиеся величины |

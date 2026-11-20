@@ -132,7 +132,7 @@ pub enum Params {
     /// deposit в обёртку). Токены шага — обёртка и встречная монета. data = abi.encode(int128, int128, bool).
     CurveEth { i: i128, j: i128, eth_in: bool },
     /// Решение 484 (только исполнитель v5): пул Wombat Exchange — approve пулу ровно на шаг + swap(tokenIn, tokenOut,
-    /// вход, 0, to, block.timestamp) (wombat-exchange/v1-core 2ac067b8 PoolV2.sol L843-L876). Данных нет.
+    /// вход, 1, to, block.timestamp) (wombat-exchange/v1-core 2ac067b8 PoolV2.sol L843-L876). Данных нет.
     Wombat,
 }
 

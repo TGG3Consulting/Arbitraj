@@ -336,7 +336,7 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         ExecKind::Wombat => match &e.pool.state {
             PoolState::StableSwap(d) if !d.halted && wombat_open(d, e, token_in) => Params::Wombat,
             _ => {
-                let why = format!("{}: Wombat не прочитан, на паузе или вход на паузе", e.family.id);
+                let why = format!("{}: Wombat не прочитан или на паузе", e.family.id);
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },

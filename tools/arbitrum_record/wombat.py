@@ -16,7 +16,8 @@
 #   (реализация EIP-1967, _pausedAssets[монета]); ПАКЕТОМ — addressOfAsset(монета) и isPaused(монета) (у реализаций без
 #   геттера — откат, пишется как есть: сверка слота 201); ПАКЕТОМ — ступень 3 у каждого актива (underlyingToken,
 #   underlyingTokenDecimals, pool, cash, liability, getRelativePrice); ПАКЕТОМ — quotePotentialSwap(i → j, dx) на долях
-#   cash монеты входа (--fractions); ОДНИМ ПАКЕТОМ — симуляции swap(i → j, dx, 0, W, 2^256 − 1) на тех же суммах.
+#   cash монеты входа (--fractions); ОДНИМ ПАКЕТОМ — симуляции swap(i → j, dx, 1, W, 2^256 − 1) на тех же суммах (минимум 1 — как шаг
+#   WOMBAT исполнителя).
 #
 # Запуск: python3 tools/arbitrum_record/wombat.py --node http://УЗЕЛ:8547
 

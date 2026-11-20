@@ -81,7 +81,7 @@ def tokens_of(hexres):
 
 class WSim(Sim):
     """Симуляция swap пула Wombat от пустого W: баланс монеты входа = текущий + dx, разрешение W → пул = 2^256 − 1;
-    swap(from, to, dx, 0, W, 2^256 − 1). Слоты — Sim._slots (поиск один раз на токен)."""
+    swap(from, to, dx, 1, W, 2^256 − 1) — минимум 1, как у шага WOMBAT исполнителя. Слоты — Sim._slots (поиск один раз на токен)."""
 
     def add_swap(self, pool, t_in, t_out, dx):
         rec = {"pool": pool, "from": t_in, "to": t_out, "dx": str(dx), "sig": SWAP}
@@ -94,7 +94,7 @@ class WSim(Sim):
             self.bal[t_in.lower()] = slots.balance_of(self.node, self.tag, t_in, SENDER) or 0
         bal = self.bal[t_in.lower()]
         ov = {t_in: {"stateDiff": {b[2]: "0x" + w(bal + dx), _allow_slot(a[0], a[1], SENDER, pool): "0x" + w(MAXU)}}}
-        data = "0x" + sel(SWAP) + ad(t_in) + ad(t_out) + w(dx) + w(0) + ad(SENDER) + w(MAXU)
+        data = "0x" + sel(SWAP) + ad(t_in) + ad(t_out) + w(dx) + w(1) + ad(SENDER) + w(MAXU)
         q = "0x" + sel("allowance(address,address)") + ad(SENDER) + ad(pool)
         checks = [("eth_call", [{"to": t_in, "input": q}, self.tag, ov]),
                   ("eth_call", [{"to": t_in, "input": "0x" + sel("balanceOf(address)") + ad(SENDER)}, self.tag, ov])]

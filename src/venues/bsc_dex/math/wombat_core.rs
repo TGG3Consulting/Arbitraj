@@ -11,12 +11,13 @@
 //!
 //! Источник (развёрнутые реализации Arbitrum совпадают побайтно — docs/sources/wombat_arbitrum/README.md):
 //! wombat-exchange/v1-core 2ac067b8 contracts/wombat-core/libraries/DSMath.sol L37-L64 (wmul, wdiv, toWad, fromWad),
-//! libraries/SignedSafeMath.sol L16-L23 (wdiv, wmul), L40-L57 (sqrt(y, guess)), L60-L67 (toWad),
+//! libraries/SignedSafeMath.sol L16-L23 (wdiv, wmul), L40-L57 (sqrt(y, guess)),
 //! pool/CoreV2.sol L31-L64 (_swapQuoteFunc, _solveQuad).
 
 use alloy_primitives::{I256, U256};
 
-/// Предел итераций корня (не порог торговли: на цепи сходимость от y или приближения — сотни шагов, дальше — газ).
+/// Предел итераций корня — только защита цикла от зависания: контракт число итераций не ограничивает (его предел —
+/// газ транзакции), качание ловится отдельно; это не порог торговли и не факт поведения на цепи.
 const MAX_ITER: u32 = 1024;
 
 /// WAD = 10^18 (DSMath.sol L21). Ошибок нет.
@@ -64,15 +65,6 @@ pub fn from_wad(x: U256, d: u8) -> Option<U256> {
     }
 }
 
-/// SignedSafeMath.toWad (L60-L67) — для int256 суммы квотера. None — переполнение.
-pub fn to_wad_i(x: I256, d: u8) -> Option<I256> {
-    match d {
-        0..=17 => x.checked_mul(I256::from_raw(ten(18 - d))),
-        18 => Some(x),
-        _ => x.checked_div(I256::from_raw(ten(d - 18))),
-    }
-}
-
 /// 10^n (n ≤ 77). Ошибок нет.
 fn ten(n: u8) -> U256 {
     U256::from(10u8).pow(U256::from(n))
@@ -92,7 +84,7 @@ pub fn wdiv_i(x: I256, y: I256) -> Option<I256> {
         .checked_div(y)
 }
 
-/// SignedSafeMath.sqrt(y, guess) (L45-L57): Вавилон с начальным приближением. None — переполнение (−guess у MIN),
+/// SignedSafeMath.sqrt(y, guess) (L40-L57): Вавилон с начальным приближением. None — переполнение (−guess у MIN),
 /// качание между двумя значениями или MAX_ITER (на цепи — исчерпание газа, откат).
 pub fn sqrt_guess(y: I256, guess: I256) -> Option<I256> {
     if y > int(3) {

@@ -21,6 +21,7 @@ use super::super::ctx::Ctx;
 use super::super::node::{call, rpc};
 use super::abi_wombat::{IWombatPool as P, implementation_slot};
 use super::load_wombat::kind_of;
+use super::load_wombat_memo;
 use super::multi_pair;
 use super::verify::{Candidate, Verdict};
 use super::verify_woo;
@@ -82,6 +83,8 @@ async fn one(ctx: &Ctx, c: &Candidate) -> Result<Result<super::discover::Found, 
     if let Err(why) = kind_of(ctx, c.family, Address::from_word(word)) {
         return Ok(Err(format!("пул {pool:#x}: {why}")));
     }
+    // Ревью t253: проверка — полное чтение пула заново (монеты и активы из памяти забываются).
+    load_wombat_memo::forget(c.family.id, pool);
     let found = verify_woo::found(c, PoolRef::Contract(pool));
     Ok(Ok(multi_pair::adopt(ctx, found, &tokens)))
 }

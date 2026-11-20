@@ -3,9 +3,11 @@
 //! (1) состояние собирается тем же кодом, что у бота (load_wombat_calls: head_calls → parse_head, asset_calls →
 //! parse_assets, detail_calls → parse_detail, build), ответы — по (адрес, calldata); реализация прокси и паузы активов —
 //! по тем же слотам (abi_wombat: implementation_slot, paused_slot); пул с реализацией не из сверенных списков
-//! (Cross Chain — CrossChainPool на CoreV3) пропускается с выводом причины; (2) слот 201 _pausedAssets = isPaused(монета)
+//! (Cross Chain — CrossChainPool на CoreV3) пропускается с выводом причины; чтение каждым блоком (vary_calls /
+//! parse_vary, ревью t253) = полному; (2) слот 201 _pausedAssets = isPaused(монета)
 //! у реализаций с геттером; (3) наш выход quotePotentialSwap (math/wombat.rs potential) = ответ пула побайтно, откат
-//! пула — наш None; (4) симуляция swap (eth_call с подменой баланса и разрешения): пул отдал выход — наш выход swap
+//! пула — наш None; (4) симуляция swap с минимумом 1, как шаг WOMBAT (eth_call с подменой баланса и разрешения): пул
+//! отдал выход — наш выход swap
 //! (swap_out) тот же; пул откатил — наш None.
 //! Кто вызывает: cargo test. До записи — #[ignore].
 //! От чего зависит: tests/data/arbitrum_wombat_<дата>/ (pools.json), arb::venues::bsc_dex::{pools::{abi_wombat,
@@ -21,7 +23,9 @@ use serde_json::Value;
 use arb::core::types::PoolState;
 use arb::venues::bsc_dex::math::wombat::{potential, swap_out};
 use arb::venues::bsc_dex::pools::abi_wombat::{implementation_slot, paused_slot};
+use arb::venues::bsc_dex::pools::load_wombat::without_price;
 use arb::venues::bsc_dex::pools::load_wombat_calls as c;
+use arb::venues::bsc_dex::pools::load_wombat_memo::Fixed;
 
 /// Реализации HighCovRatioFeePoolV2 пулов docs.wombat.exchange (Sourcify).
 const PLAIN: [Address; 9] = [
@@ -115,6 +119,17 @@ fn wombat_state_quote_and_swap_match_node() {
         let assets = c::parse_assets(&lookup(p, &c::asset_calls(pool, &tokens)), &tokens).unwrap();
         let got = lookup(p, &c::detail_calls(&assets, dynamic));
         let sides = c::parse_detail(&got, pool, &tokens, dynamic).expect("ступень 3");
+        // Ревью t253: чтение каждым блоком при известных монетах и активах (load_wombat_memo.rs) — одна пачка
+        // (vary_calls с getRelativePrice у всех активов, у не динамического пула ответы цены отбрасываются) даёт то же.
+        let fixed = Fixed {
+            tokens: tokens.clone(),
+            assets: assets.clone(),
+            decimals: sides.iter().map(|s| s.decimals).collect(),
+        };
+        let all = lookup(p, &c::vary_calls(pool, &assets, true));
+        let got = if dynamic { all } else { without_price(all, assets.len()) };
+        let (h2, s2) = c::parse_vary(&got, &fixed, dynamic).expect("каждым блоком");
+        assert_eq!((&h2, &s2), (&head, &sides), "{pool:#x}: чтение каждым блоком ≠ полному");
         let paused: Vec<bool> =
             tokens.iter().map(|t| !slot(p, pool, paused_slot(*t)).is_zero()).collect();
         // Слот 201 = isPaused(монета) у реализаций с геттером (откат — геттера нет, сверять нечем).

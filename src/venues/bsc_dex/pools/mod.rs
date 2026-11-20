@@ -240,6 +240,7 @@ pub mod load_v3_once;
 pub mod load_wombat;
 pub mod load_wombat_build;
 pub mod load_wombat_calls;
+pub mod load_wombat_memo;
 pub mod load_woo;
 pub mod load_woo_ladder;
 pub mod loading;

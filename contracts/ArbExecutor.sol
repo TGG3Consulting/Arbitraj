@@ -34,7 +34,7 @@
 // токен обёртки пула: в том же unlock, что BALANCER_V3, — erc4626BufferWrapOrUnwrap (WRAP) → swap →
 // erc4626BufferWrapOrUnwrap (UNWRAP) → settle / sendTo; шаг 23 — как был, обёрток нет) и CURVE_ETH = 28 (решение 472,
 // T472-08: пул Curve с нативным ETH — exchange{value}(int128, int128, uint256, uint256), обёртка withdraw / deposit),
-// WOMBAT = 30 (решение 484: пул Wombat Exchange — approve пулу + swap(from, to, сумма, 0, to, block.timestamp));
+// WOMBAT = 30 (решение 484: пул Wombat Exchange — approve пулу + swap(from, to, сумма, 1, to, block.timestamp));
 // всё прочее — как v4. Сборки v5 нет: contracts/out/ — v4; пересобрать как v5 (бот: Version::V5) — вне агентов
 // (docs/TASKS.md «нужна сборка исполнителя v5»).
 pragma solidity 0.8.37;
@@ -998,13 +998,15 @@ contract ArbExecutor {
         }
     }
 
-    // Решение 484 (v5): пул Wombat (WOMBAT, ссылки — у константы). approve пулу ровно на шаг (пул списывает вход
-    // transferFrom(исполнитель → актив входа)), swap с минимумом 0 (итог маршрута проверяет minOut), срок —
-    // block.timestamp (срок всей транзакции проверен в execute); выход — `to` прямо из актива выхода. Разрешение после
-    // шага — 0.
+    // Решение 484 (v5): пул Wombat (WOMBAT, ссылки — у константы). Токены шага — ERC-20 (метка 0xEeee… — «native», как
+    // _stable). approve пулу ровно на шаг (пул списывает вход transferFrom(исполнитель → актив входа)), swap с минимумом
+    // 1: нулевой выход откатывает _checkAmount пула (PoolV2.sol L146-L148: minimumToAmount.toWad > выход), итог
+    // маршрута проверяет minOut; срок — block.timestamp (срок всей транзакции проверен в execute); выход — `to` прямо из
+    // актива выхода. Разрешение после шага — 0.
     function _wombat(Step calldata s, uint256 amount, address to) internal {
+        require(s.tokenIn != NATIVE && s.tokenOut != NATIVE, "native");
         _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, amount)));
-        IWombatPool(s.pool).swap(s.tokenIn, s.tokenOut, amount, 0, to, block.timestamp);
+        IWombatPool(s.pool).swap(s.tokenIn, s.tokenOut, amount, 1, to, block.timestamp);
         if (IERC20(s.tokenIn).allowance(address(this), s.pool) > 0) {
             _call(s.tokenIn, abi.encodeCall(IERC20.approve, (s.pool, 0)));
         }

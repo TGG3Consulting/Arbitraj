@@ -6,7 +6,7 @@
 //! cash и liability актива), setCovRatioFeeParam — без события, цены активов динамического пула (getRelativePrice) —
 //! внешние.
 //! Кто вызывает: pools/events.rs.
-//! От чего зависит: abi_wombat.rs, events.rs, registry.rs.
+//! От чего зависит: abi_wombat.rs, events.rs, registry.rs, load_wombat_memo.rs (forget).
 //! Настройки: нет.
 //!
 //! Сигнатуры — abi_wombat.rs (wombat-exchange/v1-core 2ac067b8 PoolV2.sol L82-L114, PausableAssets.sol L13, L18,
@@ -18,6 +18,7 @@ use alloy_primitives::B256;
 
 use super::abi_wombat::IWombatPool as P;
 use super::events::Applied;
+use super::load_wombat_memo;
 use super::registry::Entry;
 
 /// topic0 всех событий пула, меняющих состояние. Ошибок нет.
@@ -44,7 +45,13 @@ pub fn liquidity_topics() -> Vec<B256> {
 }
 
 /// Применяет событие: известное событие пула → Refresh. Ошибок нет.
+/// Ревью t253: AssetAdded / AssetRemoved меняют монеты и активы пула — память неизменных частей (load_wombat_memo.rs)
+/// забывается, перечитывание будет полным.
 pub fn apply(e: &mut Entry, log: &Log) -> Applied {
+    let assets = [P::AssetAdded::SIGNATURE_HASH, P::AssetRemoved::SIGNATURE_HASH];
+    if log.topic0().is_some_and(|t| assets.contains(t)) {
+        load_wombat_memo::forget(e.family.id, log.address());
+    }
     match log.topic0() {
         Some(t) if topics().contains(t) => Applied::Refresh(format!(
             "{}: событие пула Wombat — перечитать состояние",

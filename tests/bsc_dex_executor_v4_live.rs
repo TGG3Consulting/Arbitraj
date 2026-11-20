@@ -3,17 +3,19 @@
 //! One (tests/data/executor_v4_live_2026-11-20, tools/arbitrum_record/exec_v4_live.py — eth_simulateV1 своего узла на
 //! H = 526043647, только чтение; четвёртый прогон Тиграна 20.11.2026 (журнал — tests/data/arbitrum_record_2026-11-20_r4),
 //! скрипт решения 478 с отсевом пулов Balancer V3 на паузе — запись H = 526041320 заменена). Без сети:
-//! 1. Сторож: строка README «sha256 симулированного bin-runtime» несёт SHA-256 contracts/out/ArbExecutor.bin-runtime
-//!    (v4); строка «- chainId: 42161» = поле chain_id строк summary.json = eth_chainId узла в raw_rpc.json; в каждой
-//!    симуляции код подменён только у X и побайтно = bin-runtime v4, блок — H.
+//! 1. Сторож: строка README «sha256 симулированного bin-runtime» несёт SHA-256 кода v4 (решение 488: v4 заморожен в
+//!    contracts/out/v4/ArbExecutor.bin-runtime, out/ теперь v5 — runtime_sha256_of(V4)); строка «- chainId: 42161» = поле
+//!    chain_id строк summary.json = eth_chainId узла в raw_rpc.json; в каждой симуляции код подменён только у X и
+//!    побайтно = bin-runtime v4 (out/v4/), блок — H.
 //! 2. Вердикт правила (live_rule.rs) для пары (v4, 42161): приняты Uniswap V4 (вид 19) без крючка (3 из 3 пулов) и
 //!    Balancer V3 (23) без крючка (2 из 2): 0x5418…2161 (пул без крючка, запись balancer_v3.py) и 0x412d…6fc6 (крючок
 //!    StableSurge 0x7c1b…8275, bv3_hook_kind surge; getPools() фабрики 0x201e…86cc); у каждого (а) и (б) — статус 1,
 //!    x_left 0 / 0, получено = кредит Swap хранилища, (а) получено = quoter_out (квотер своей симуляции на том же
 //!    блоке), (б) получено = quoter_out_after_a. В строке записи hooks = 0: шаг BALANCER_V3 бот судит классом «без
 //!    крючка» для любого пула (exec/executor/entry.rs — pool_gate::admitted(…, Address::ZERO)). Виды крючка static /
-//!    mev — «нет пулов». 20 / 21 — пулов нет; с крючком — не принимается. Развёртывание v4 кошельком площадки Arbitrum
-//!    разрешено, BSC — записи нет («не проверен»), сеть не задана — закрыто.
+//!    mev — «нет пулов». 20 / 21 — пулов нет; с крючком — не принимается. По записи v4 развёртывание v4 кошельком
+//!    площадки Arbitrum было бы разрешено; решение 488: текущая сборка — v5, записи приёмки v5 нет — развёртывание
+//!    текущей сборки закрыто во всех сетях (T488-02).
 //! 3. Виды 22 / 24 / 1 / 0 (правило не судит): в (б) получено = quoter_out_after_a; quoter_out (б) — квотер на H до (а)
 //!    (другое состояние, не сравнивается), у LB v2.0 (24) он откатился TreeMath__ErrorDepthSearch (null).
 //!
@@ -69,8 +71,9 @@ fn record_bound_to_v4_code_and_arbitrum() {
     let chain = live_record::chain_in(&readme, &text("summary.json"));
     assert_eq!(chain, Ok(42161));
     assert!(live_record::chain_in("без строки сети", "[]").is_err());
+    // Решение 488: запись сделана кодом v4 — он заморожен в contracts/out/v4/ (out/ теперь v5).
     let runtime = std::fs::read_to_string(format!(
-        "{}/contracts/out/ArbExecutor.bin-runtime",
+        "{}/contracts/out/v4/ArbExecutor.bin-runtime",
         env!("CARGO_MANIFEST_DIR")
     ))
     .unwrap();
@@ -131,13 +134,14 @@ fn verdict_v4_arbitrum_by_rule() {
     assert!(why(class(19, Hook::With)).contains("класс с крючком"));
     // Виды 22 / 24 / 1 / 0 правило не судит — их классов нет.
     assert!(v.iter().all(|x| [19, 20, 21, 23].contains(&x.class.kind)));
-    // Текущая сборка — v4: кошелёк площадки Arbitrum — развёртывание разрешено; BSC — записи нет, закрыто.
-    assert_eq!(code::current_version(), Ok(Version::V4));
-    assert!(deploy_gate::refusal_at(ARB).is_none());
-    let bsc = deploy_gate::refusal_at(BSC).expect("записи v4 в BSC нет");
-    assert!(bsc.contains("записи приёмки для версии v4 в сети chainId 56 нет"), "{bsc}");
-    assert!(deploy_gate::refusal_at(None).is_some());
-    assert!(!deploy_gate::closed_everywhere());
+    // Решение 488: текущая сборка — v5, записи приёмки v5 ещё нет (T488-02) — развёртывание v5 закрыто во всех сетях;
+    // запись v4 осталась (с ней бот сверяет уже развёрнутые v4 — verdicts_of(V4) в тесте verdict_v4_arbitrum_by_rule).
+    assert_eq!(code::current_version(), Ok(Version::V5));
+    for chain in [ARB, BSC, None] {
+        let why = deploy_gate::refusal_at(chain).expect("записи v5 нет — развёртывание закрыто");
+        assert!(why.contains("v5"), "{why}");
+    }
+    assert!(deploy_gate::closed_everywhere());
     // Шаги: Uniswap V4 без крючка и Balancer V3 у v4 — только в Arbitrum; не шаг менеджера — всегда.
     assert!(v4(ARB, ExecKind::UniV4));
     assert!(!v4(BSC, ExecKind::UniV4));

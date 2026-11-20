@@ -128,7 +128,7 @@ fn kinds_match_contract_constants() {
         ("FLUID", Params::Fluid(fluid_step(1))),
         // Решение 441: пул Balancer V3 — только v4.
         ("BALANCER_V3", Params::BalancerV3 { pool: Address::ZERO }),
-        // Решение 474: пул Balancer V3 через буфер ERC4626 — шаг 27 (сборка v5 не собрана).
+        // Решение 474: пул Balancer V3 через буфер ERC4626 — шаг 27 (решение 488 — в сборке v5 out/).
         (
             "BALANCER_V3_BUF",
             Params::BalancerV3Buf {
@@ -148,9 +148,9 @@ fn kinds_match_contract_constants() {
                 forward: false,
             },
         ),
-        // Решение 470 (T470-06): пул Aero Basic — шаг 26, только v5 (в исходнике; сборки v5 нет).
+        // Решение 470 (T470-06): пул Aero Basic — шаг 26, только v5 (решение 488 — в сборке v5 out/).
         ("AERO_BASIC", Params::AeroBasic),
-        // Решение 472 (T472-08): пул Curve с нативным ETH — шаг 28, только v5 (в исходнике; сборки v5 нет).
+        // Решение 472 (T472-08): пул Curve с нативным ETH — шаг 28, только v5 (решение 488 — в сборке v5 out/).
         (
             "CURVE_ETH",
             Params::CurveEth {
@@ -159,11 +159,11 @@ fn kinds_match_contract_constants() {
                 eth_in: true,
             },
         ),
-        // Решение 484: пул Wombat Exchange — шаг 30, только v5 (в исходнике; сборки v5 нет).
+        // Решение 484: пул Wombat Exchange — шаг 30, только v5 (решение 488 — в сборке v5 out/).
         ("WOMBAT", Params::Wombat),
-        // Решение 485: скважина Basin — шаг 29, только v5 (в исходнике; сборки v5 нет).
+        // Решение 485: скважина Basin — шаг 29, только v5 (решение 488 — в сборке v5 out/).
         ("BASIN", Params::Basin),
-        // Решение 486: пул Shell Protocol Proteus через учёт Ocean — шаг 31, только v5 (сборки v5 нет).
+        // Решение 486: пул Shell Protocol Proteus через учёт Ocean — шаг 31, только v5 (решение 488 — в сборке v5 out/).
         ("SHELL", Params::Shell(shell_step(2))),
     ];
     for (name, p) in all {
@@ -528,21 +528,21 @@ fn stable_kinds_call_official_selectors() {
 fn v4_build_size_hash_and_step_selectors() {
     use alloy_primitives::keccak256;
     let rt = code::runtime().unwrap();
-    assert_eq!(rt.len(), 21_775, "размер кода в сети v4");
-    assert!(rt.len() <= 24_576, "EIP-170");
+    assert_eq!(rt.len(), 24_542, "размер кода в сети v5 (решение 488)");
+    assert!(rt.len() <= 24_576, "EIP-170 (запас 34 байта)");
     assert_eq!(
         code::runtime_sha256(),
-        Some("2bf86e58e5719f88d709bcf06350570cbd60318f1e49e9f9d3a9c85c3ee10762")
+        Some("36643fab78603cb0ac92620dae73729bceb07b4bb44f04be74a16a5ef57150ab")
     );
-    assert_eq!(code::current_version().unwrap(), code::Version::V4);
+    assert_eq!(code::current_version().unwrap(), code::Version::V5);
     let abi = abi();
     for sig in ["balancerV3Callback(bytes)", "locked_6416899205(uint256)"] {
         let name = sig.split('(').next().unwrap();
         assert_eq!(abi.function(name).expect(sig)[0].signature(), sig);
     }
     let v3 = code::runtime_v3().unwrap();
-    // FLUID — swapIn (IFluidDexT1), BALANCER_V3 — balancerV3Callback, LB20 — tokenX() пары v2.0, EKUBO —
-    // completePayments() ядра (селекторы — подписи contracts/IPools.sol).
+    // Шаги v4 (FLUID swapIn, BALANCER_V3 balancerV3Callback, LB20 tokenX, EKUBO completePayments) есть и в v5
+    // (надмножество), и нет в v3 (селекторы — подписи contracts/IPools.sol).
     for sig in [
         "swapIn(bool,uint256,uint256,address)",
         "balancerV3Callback(bytes)",
@@ -550,27 +550,28 @@ fn v4_build_size_hash_and_step_selectors() {
         "completePayments()",
     ] {
         let s = &keccak256(sig.as_bytes())[..4];
-        assert!(has_selector(&rt, s), "{sig} в коде v4");
+        assert!(has_selector(&rt, s), "{sig} в коде v5");
         assert!(!has_selector(&v3, s), "{sig} — нет в коде v3");
     }
 }
 
-/// Решение 474: вызова erc4626BufferWrapOrUnwrap (метка шага BALANCER_V3_BUF = 27, kind_buffer::BUFFER_MARK, селектор
-/// 0x43583be5) нет ни в одной собранной версии исполнителя (out/, out/v3/, out/v2/, out/v1/) — шаг 27 бот не строит,
-/// пока нет сборки v5. Исходник contracts/ArbExecutor.sol шаг содержит.
+/// Решения 474, 488: вызов erc4626BufferWrapOrUnwrap (метка шага BALANCER_V3_BUF = 27, kind_buffer::BUFFER_MARK, селектор
+/// 0x43583be5) есть в сборке v5 (contracts/out/), но не в прежних версиях (out/v4/, v3/, v2/, v1/) — развёрнутые кошельки
+/// v1…v4 шаг 27 не строят (нет селектора, pools/exec_callback.rs BUFFER_MARK). Исходник contracts/ArbExecutor.sol шаг содержит.
 #[test]
-fn buffer_step_only_in_source() {
+fn buffer_step_in_v5_not_older() {
     use alloy_primitives::keccak256;
     use arb::venues::bsc_dex::exec::executor::kind_buffer::BUFFER_MARK;
     let sel = &keccak256(BUFFER_MARK.as_bytes())[..4];
     assert_eq!(sel, [0x43, 0x58, 0x3b, 0xe5]);
+    assert!(has_selector(&code::runtime().unwrap(), sel), "шаг 27 есть в v5");
     for rt in [
-        code::runtime().unwrap(),
+        code::runtime_v4().unwrap(),
         code::runtime_v3().unwrap(),
         code::runtime_v2().unwrap(),
         code::runtime_v1().unwrap(),
     ] {
-        assert!(!has_selector(&rt, sel));
+        assert!(!has_selector(&rt, sel), "шаг 27 только в v5");
     }
     let src = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),

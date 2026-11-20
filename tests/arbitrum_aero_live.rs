@@ -39,8 +39,8 @@ fn kinds_and_steps() {
     assert_eq!(f.variant, Variant::Base);
 }
 
-/// Решение 470 (T470-06): шаг AERO_BASIC = 26 — только исполнитель v5 (сборки нет); вид семейства aero_basic —
-/// SOLIDLY, у сверенного v5 — AERO_BASIC, у v4 и ниже — SOLIDLY.
+/// Решение 470 (T470-06): шаг AERO_BASIC = 26 — только исполнитель v5 (решение 488: сборка v5 есть; до записи приёмки и
+/// развёртывания шаг не исполняется); вид семейства aero_basic — SOLIDLY, у сверенного v5 — AERO_BASIC, у v4 и ниже — SOLIDLY.
 #[test]
 fn aero_basic_step_needs_v5() {
     assert_eq!(Params::AeroBasic.kind(), 26);
@@ -50,7 +50,8 @@ fn aero_basic_step_needs_v5() {
     assert!(why.contains("AERO_BASIC") && why.contains("v5"), "{why}");
     assert!(exec_callback::step_absent(ExecKind::AeroBasic, Version::V5).is_none());
     assert_eq!(Version::parse("v5"), Some(Version::V5));
-    assert!(code::runtime_of(Version::V5).is_err());
+    // Решение 488: сборка v5 есть — runtime_of(V5) даёт её код (для поиска селекторов шагов v5).
+    assert!(code::runtime_of(Version::V5).is_ok());
     let f = families::make("aero-basic-volatile@arbitrum", "aero_basic").unwrap();
     assert_eq!(f.executor_kind, Some(ExecKind::Solidly));
     let v5 = exec_kind::for_version(f, Some(Version::V5));

@@ -55,6 +55,13 @@ pub async fn fee(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayResu
         ));
     }
     let module = call::view(ctx, hook, &IAeroSwapHook::mevTaxModuleCall {}, tag).await?;
-    aero_mev::check(ctx, module, tag).await?;
-    fee_fresh::read(ctx, pool, tag).await
+    let tax = aero_mev::tax(ctx, module, tag).await?;
+    let view = fee_fresh::read(ctx, pool, tag).await?;
+    Ok(total(view, tax))
+}
+
+/// Комиссия цикла: fee() пула (eth_call — налог 0) + налог, не выше 100000 (SwapHookLib.cap L54-L59, _SWAP_FEE_CEIL
+/// L24; крючок складывает «динамическая + налог» — DynamicSwapFeeHook.sol L296-L306). Ошибок нет.
+pub fn total(view: u32, tax: u32) -> u32 {
+    view.saturating_add(tax).min(100_000)
 }

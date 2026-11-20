@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/pools/load_aero_basic.rs
 //! Что делает: решение 470 (T451-02) — состояние пула Aero «Basic» (VolatilePool / StablePool, Arbitrum) на блоке в
 //! PoolState::Solidly: резервы и 10^decimals — metadata() пула (6 полей, без stable), кривая — POOL_TYPE() пула,
-//! комиссия — getBaseFee фабрики (числитель над 10000), пауза — isPaused() фабрики, MEV-налог — правило aero_mev.rs.
+//! комиссия — getBaseFee фабрики + MEV-налог по формуле модуля (aero_mev.rs; числитель над 10000), пауза — isPaused().
 //! Математика обмена та же, что у Solidly (math/v2.rs, math/swap_solidly.rs): сверено построчно — см. ниже.
 //! Кто вызывает: pools/load.rs (ветка Proto::AeroBasic), pools/solidly_refresh.rs.
 //! От чего зависит: ctx.rs, node/call.rs, pools/{abi_aero_basic, aero_mev, load_solidly}.rs, math/solidly_math.rs.
@@ -63,7 +63,9 @@ pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayRes
     let fee = call::view(ctx, factory, &ask, tag).await?;
     let paused = call::view(ctx, factory, &F::isPausedCall {}, tag).await?;
     let module = call::view(ctx, factory, &F::mevTaxModuleCall {}, tag).await?;
-    aero_mev::check(ctx, module, tag).await?;
+    // Решение 470 (T470-02): MEV-налог в комиссии по формуле модуля (aero_mev.rs; PoolFactory.getFee L291-L305).
+    let base = fee_u32(ctx, fee)?;
+    let value = base + aero_mev::basic_bps(aero_mev::tax(ctx, module, tag).await?, base);
     Ok(PoolState::Solidly {
         reserve0: meta.r0,
         reserve1: meta.r1,
@@ -71,7 +73,7 @@ pub async fn load(ctx: &Ctx, f: &Family, pool: Address, tag: &str) -> GatewayRes
         decimals0: meta.dec0,
         decimals1: meta.dec1,
         fee: SolidlyFee {
-            value: fee_u32(ctx, fee)?,
+            value,
             rule: FeeRule::Numerator {
                 denominator: fee_denominator().to::<u32>(),
             },

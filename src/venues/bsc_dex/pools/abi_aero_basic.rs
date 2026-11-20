@@ -45,6 +45,16 @@ alloy::sol! {
         function minThreshold() external view returns (uint96);
         function priorityFeeMultiplier() external view returns (uint64);
     }
+
+    // Прекомпили Nitro (OffchainLabs/nitro-precompile-interfaces): ArbSys.sol L38 (55 + версия ArbOS),
+    // ArbOwnerPublic.sol L92 (с ArbOS 60).
+    interface IArbSys {
+        function arbOSVersion() external view returns (uint256);
+    }
+
+    interface IArbOwnerPublic {
+        function getCollectTips() external view returns (bool);
+    }
 }
 
 /// POOL_TYPE() стабильного пула: bytes32('V2_STABLE') — StablePool.sol L70. Ошибок нет.
@@ -96,6 +106,8 @@ mod tests {
             IAeroMevTaxModule::priorityFeeMultiplierCall::SELECTOR.to_vec(),
             sel("priorityFeeMultiplier()")
         );
+        assert_eq!(IArbSys::arbOSVersionCall::SELECTOR.to_vec(), sel("arbOSVersion()"));
+        assert_eq!(IArbOwnerPublic::getCollectTipsCall::SELECTOR.to_vec(), sel("getCollectTips()"));
         assert_eq!(&stable_type()[..9], b"V2_STABLE");
         assert_eq!(&volatile_type()[..11], b"V2_VOLATILE");
     }

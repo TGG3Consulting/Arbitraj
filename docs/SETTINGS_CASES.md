@@ -76,6 +76,8 @@
 | `dex.solidly_pause_method` | фильтр: пара на паузе не торгуется (pools/solidly_gate_read.rs) | необязательная: Не задан — проверки нет |
 | `dex.stable_hooks` | какие пулы Infinity Stable допускаются (pools/verify_inf_stable.rs) | без .optional(): ошибка «не задана»: Не задана — DEX не подключена |
 | `dex.cl_swap_hook` | фильтр: пул Aero Slipstream V3 допускается только с официальным крючком обмена (pools/aero_cl.rs) | без .optional(): ошибка «не задана»: Не задана — DEX вида slipstream_aero не подключена |
+| `dex.arb_sys` | расчёт: сбор чаевых сети → MEV-налог Aero (pools/aero_mev.rs) | необязательна: не задана — пулы Aero с ненулевым множителем модуля не читаются |
+| `dex.arb_owner_public` | расчёт: сбор чаевых сети (ArbOS 60+) → MEV-налог Aero (pools/aero_mev.rs) | необязательна: не задана при ArbOS ≥ 60 — пулы Aero с ненулевым множителем модуля не читаются |
 | `dex.stable_pools` | какие стейблсвап-пулы допускаются (pools/stable_list.rs) | без .optional(): ошибка «не задана»: Не задана — DEX не подключена |
 | `dex.sub_dex` | какие пулы строки индексатора берутся и каким видом (pools/sub_dex.rs, index_pass.rs) | необязательная: не задана — один вид у ключа, как раньше |
 | `dex.tick_radius` | данные пулов Maverick: сколько тиков читать (pools/load_maverick.rs) | без .optional(): ошибка «не задана»: Не задана — DEX не подключена |
@@ -245,6 +247,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.solidly_pause_method` | t106, р. 273 | совета нет, решает Тигран | необязательная: Не задан — проверки нет | в релизе 141619bc |
 | `dex.stable_hooks` | —, р. 122 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана — DEX не подключена | в релизе 141619bc |
 | `dex.cl_swap_hook` | t240, р. 470 | Arbitrum One: `0xC0ed888AfE87ed1AcF01D9f19bB850159e3ce434` (cl-arbitrum.json «dynamicSwapFeeHook») | без .optional(): ошибка «не задана»: Не задана — DEX вида slipstream_aero не подключена | новая (ветка t240/arb-aero) |
+| `dex.arb_sys` | t240, р. 470 | Arbitrum One: `0x0000000000000000000000000000000000000064` | необязательна: пулы Aero с ненулевым множителем модуля не читаются | новая (ветка t240/arb-aero) |
+| `dex.arb_owner_public` | t240, р. 470 | Arbitrum One: `0x000000000000000000000000000000000000006b` | необязательна: при ArbOS ≥ 60 пулы Aero с ненулевым множителем модуля не читаются | новая (ветка t240/arb-aero) |
 | `dex.stable_pools` | —, р. 122 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана — DEX не подключена | в релизе 141619bc |
 | `dex.sub_dex` | t226, р. 450 | совета нет, решает Тигран (Arbitrum — docs/notes/arbitrum/dex-settings-arbitrum.md) | необязательная: не задана — один вид у ключа | ещё не в релизе (ветка t226/arb-dex-code-a) |
 | `dex.tick_radius` | —, р. 122 (Maverick V2) | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задана — DEX не подключена | в релизе 141619bc |
@@ -5801,4 +5805,20 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Если не задана:** без .optional(): DEX вида slipstream_aero не подключена (families.rs required), пулы не читаются.
 - **Влияет на торговлю:** да — пул с другим крючком не допускается; правило MEV-налога модуля крючка.
 - **Связанные ключи:** dex.kind = slipstream_aero, dex.factory, dex.quoter_virtual, dex.gas_mode, send.tip_mode, send.priority_fee_gwei, send.tip_cap_gwei.
+- **Статус:** новая (ветка t240/arb-aero).
+
+### `dex.arb_sys`
+- **Кейс:** решение 470 (T470-02) — MEV-налог Aero зависит от tx.gasprice; в Nitro до ArbOS 60 чаевые не собираются (tx.gasprice = basefee).
+- **Что ставить:** `0x0000000000000000000000000000000000000064` (ArbSys, nitro-precompile-interfaces). (docs/FIRST_RUN.md)
+- **Если не задана:** пулы Aero с ненулевым множителем модуля MEV-налога не читаются (причина в журнале).
+- **Влияет на торговлю:** да — комиссия пулов Aero.
+- **Связанные ключи:** dex.arb_owner_public, send.tip_mode, send.priority_fee_gwei, send.tip_cap_gwei.
+- **Статус:** новая (ветка t240/arb-aero).
+
+### `dex.arb_owner_public`
+- **Кейс:** решение 470 (T470-02) — с ArbOS 60 сбор чаевых — настройка сети (getCollectTips).
+- **Что ставить:** `0x000000000000000000000000000000000000006b` (ArbOwnerPublic). (docs/FIRST_RUN.md)
+- **Если не задана:** при ArbOS ≥ 60 пулы Aero с ненулевым множителем модуля не читаются.
+- **Влияет на торговлю:** да — комиссия пулов Aero.
+- **Связанные ключи:** dex.arb_sys.
 - **Статус:** новая (ветка t240/arb-aero).

@@ -62,9 +62,9 @@ export async function executor(c, from, art, wnative) {
 }
 
 /// Цепь с владельцем, WBNB, USDT, COIN, парами (USDT/WBNB 60000:100, COIN/WBNB 1000:100, COIN/USDT 1000:60000),
-/// пулом-фикстурой BNB/COIN и исполнителем версии art.
-export async function world(art = v2) {
-  const c = await L.chain();
+/// пулом-фикстурой BNB/COIN и исполнителем версии art. opts — настройки цепи (lib.mjs chain; решение 458: clz).
+export async function world(art = v2, opts = {}) {
+  const c = await L.chain(opts);
   for (const a of [OWNER, LP, OTHER]) await L.fund(c, a, 100_000n * E18);
   const w = await L.deploy(c, LP, WETH);
   const usdt = await L.deploy(c, LP, ERC20, ['uint256'], [10n ** 30n]);

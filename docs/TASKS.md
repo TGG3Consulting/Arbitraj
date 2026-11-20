@@ -167,10 +167,28 @@
     out/ = V4, out/v3/ = V3; тесты под факт сборки (bsc_dex_executor_abi / _v2 / _v3 / _v3_live, exec_callback
     lb20_only_v4 + via_ir_selector_form). cargo не запускался — проверка тестов в CI (T456-01).
     ОСТАЛОСЬ после сборки (решение 457):
-    - T457-01 EVM-сценарии шагов 22–25 в contracts/evmtest с ОФИЦИАЛЬНЫМ кодом: Fluid DEX T1 (Instadapp/fluid-contracts-public),
-      Balancer V3 Vault (balancer-deployments 20241204-v3-vault), LFJ V2.0 LBPair (lfj-gg/joe-v2@v2.0.0), Ekubo Core
-      (EkuboProtocol/evm-contracts@61d09daa; ERC-20, нативный вход / выход, MEVCapture, TWAMM). Сейчас шаги 22–25 на EVM
-      не проверены.
+    - T457-01 **СДЕЛАНО (решение 458, 20.11.2026; ветка t232/arb-v4-evmtest)** — EVM-сценарии шагов 22–25 в
+      contracts/evmtest с ОФИЦИАЛЬНЫМ кодом (FLUID / BALANCER_V3 / EKUBO — байткод развёртывания из официальных
+      репозиториев; LB20 — исходник тега, T458-01): FLUID —
+      fluid.mjs + fluid_cases.mjs (Instadapp/fluid-contracts-public@404d73f deployments/arbitrum: Liquidity, Admin/User
+      модули, Dex_USDC_ETH и его операции; ERC-20, нативный вход и выход, два шага, защита) — 21 проверка; BALANCER_V3 —
+      balancerv3.mjs (balancer/balancer-deployments@b55dc2b8 20241204-v3-vault + 20241205 weighted) — 25; EKUBO —
+      ekubo.mjs + ekubo_cases.mjs (EkuboProtocol/evm-contracts broadcast 42161: Core / MEVCapture @61d09da, Positions
+      @8a99714; ERC-20, нативный вход / выход, MEVCapture forward, защита) — 53; EKUBO с TWAMM (оба TWAMM) — 32 (T458-02);
+      LB20 — 17 (T458-01). Итог `node run.mjs`: 353 проверки (205 прежних + 148), ВСЕ ПРОВЕРКИ ПРОШЛИ. Подзадачи:
+      - T458-01 **СДЕЛАНО (решение 458; solc 0.8.10 — «да» Тиграна 20.11.2026, коммит 5d8ce4cc)** — LB20 (24):
+        contracts/evmtest/lb20.mjs, официальные LBFactory / LBPair / LBRouter lfj-gg/joe-v2@v2.0.0 (07f10212) + OpenZeppelin
+        @109778c1 (vendor/joe-v2), solc 0.8.10, optimizer runs 800 (foundry.toml тега), развёртывание как
+        script/deploy-core.s.sol, пресет binStep 10 (bips-config.sol); котировка — LBRouter.getSwapOut; обе стороны, через
+        несколько бинов, две доли, чужая пара / пара V2 / шаг LB по паре v2.0 — откат, v3 — «kind»; 17 проверок;
+        `node run.mjs` — 337, все прошли.
+      - T458-02 **СДЕЛАНО (решение 458)** — EKUBO с расширением TWAMM: contracts/evmtest/ekubo_twamm.mjs, оба TWAMM сети из
+        официальных broadcast 42161: 0xd4f1 (DeployAll run-1767194711580, сборка 61d09da) + Orders 0xff6c (DeployManagers
+        run-1767205373297, сборка 8a99714) и 0xd47f (DeployAll run-1777073880286, сборка 8c1b721) + Orders 0x3325 (DeployManagers
+        run-1777130801606, сборка 34bbea9), ядро общее; обмен через пул с
+        активным ордером: получено = котировка ядра с исполнением виртуальных ордеров до block.timestamp, на исполнителе
+        пусто, второй обмен в блоке — без исполнения (получено = котировка), forward к TWAMM — откат вызова расширения без
+        данных; по 16 проверок на каждый TWAMM (32).
     - T457-02 Запись симуляции v4 на живых пулах (как tests/data/executor_v3_live_2026-11-17, решение 400): правило
       deploy_gate сверяет запись с кодом текущей сборки — для v4 записи нет, поэтому «Развернуть исполнитель» для текущей
       сборки ЗАКРЫТО (факт кода: deploy_gate::refusal → verdicts_of(V4) → «запись о другом коде»; тест

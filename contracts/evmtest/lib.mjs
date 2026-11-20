@@ -5,7 +5,7 @@
 //   Vault / CLPoolManager / BinPoolManager PancakeSwap Infinity — solc 0.8.26 из vendor/v4-core, vendor/infinity-core), EVM ethereumjs (хардфорк Cancun — EIP-1153
 //   transient), развёртывание и вызовы, разбор отката и событий.
 // Кто вызывает: contracts/evmtest/run.mjs.
-// От чего зависит: npm @ethereumjs/{evm, common, statemanager, util}, ethers (ABI), solc 0.8.37 / 0.5.16 / 0.6.6 / 0.8.26 —
+// От чего зависит: npm @ethereumjs/{evm, common, statemanager, util}, ethers (ABI), solc 0.8.37 / 0.5.16 / 0.6.6 / 0.8.26 / 0.8.10 —
 //   версии в package.json / package-lock.json; contracts/*.sol, contracts/out/*, vendor/*, fixtures/*.
 // Настройки: нет.
 
@@ -53,6 +53,8 @@ export const solc05 = require('solc-0.5.16');
 export const solc06 = require('solc-0.6.6');
 // Решение 395 (t181): официальные Uniswap v4-core и PancakeSwap infinity-core — pragma 0.8.26 (foundry.toml: via_ir, cancun).
 export const solc0826 = require('solc-0.8.26');
+// Решение 458 (T458-01): официальный LFJ V2.0 (lfj-gg/joe-v2@v2.0.0) — pragma `solidity 0.8.10`.
+export const solc0810 = require('solc-0.8.10');
 
 /// Артефакт из contracts/out/ (или out/v1/): код создания, код в сети, ABI.
 export function artifact(dir) {
@@ -61,13 +63,26 @@ export function artifact(dir) {
 }
 
 /// Цепь: EVM Cancun и счета с балансом. Поле ts (bigint) — время блока вызовов (проверка deadline); не задано —
-/// блок по умолчанию ethereumjs (время 0).
-export async function chain() {
+/// блок по умолчанию ethereumjs (время 0). opts.clz (решение 458) — добавить опкод CLZ (0x1e, EIP-7939, хардфорк
+/// Osaka): его нет в @ethereumjs/evm 3.1.1, а официальный код Ekubo (solc 0.8.33, evm_version osaka) его исполняет.
+export async function chain(opts = {}) {
   const common = new Common({ chain: Chain.Mainnet, hardfork: Hardfork.Cancun });
   const sm = new DefaultStateManager();
-  const evm = await EVM.create({ common, stateManager: sm });
+  const evm = await EVM.create({ common, stateManager: sm, customOpcodes: opts.clz ? [CLZ] : [] });
   return { evm, sm, ts: undefined };
 }
+
+/// Опкод CLZ по EIP-7939 (https://eips.ethereum.org/EIPS/eip-7939): снять x, положить число ведущих нулевых битов
+/// 256-битного x (x = 0 → 256); газ 5. Через customOpcodes @ethereumjs/evm 3.1.1 (dist/esm/types.d.ts, CustomOpcode).
+const CLZ = {
+  opcode: 0x1e,
+  opcodeName: 'CLZ',
+  baseFee: 5,
+  logicFunction(runState) {
+    const x = runState.stack.pop();
+    runState.stack.push(x === 0n ? 256n : 256n - BigInt(x.toString(2).length));
+  },
+};
 
 /// Блок с заданным временем — те же поля, что defaultBlock() @ethereumjs/evm 3.1.1 (dist/esm/evm.js), кроме timestamp.
 function blockAt(ts) {

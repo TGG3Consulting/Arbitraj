@@ -10,8 +10,8 @@
 //!    Router V3 того же блока: querySwapSingleTokenExactIn (amount_out) и querySwapSingleTokenExactOut (amount_in, ревью
 //!    441 п. 3) для каждой пары и суммы; откат роутера — расчёт None.
 //!
-//! Пока записи нет — тест помечен #[ignore] (запуск после записи: cargo test --test arbitrum_balancer_v3 -- --ignored;
-//! затем метку снять).
+//! Запись второго прогона 20.11.2026 (решение 477, блок 526004176): пул один — 0x5418…2161 (StablePool, выпуск
+//! «открытый», без крючка; GeckoTerminal отдал один пул); #[ignore] снят.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::pools::{balancer_v3_factories, balancer_v3_hooks, load_balancer_v3,
 //! load_balancer_v3_extra, load_balancer_v3_fixed}, arb::venues::bsc_dex::math::balancer_math, serde_json. Моков нет.
@@ -104,7 +104,6 @@ fn quoted_out(b: &[u8]) -> Option<U256> {
 
 /// Расчёт бота = ответ Router V3 на каждой записанной сумме (точный вход и точный выход; откат роутера — None у бота).
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/balancer_v3.py"]
 fn quote_matches_router_v3() {
     let (mut same, mut skipped) = (0usize, Vec::new());
     for dir in dirs() {

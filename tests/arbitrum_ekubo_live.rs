@@ -7,7 +7,8 @@
 //! 3. логи ядра за блоки записи: у анонимного лога обмена (log0, 116 байт) и у PositionUpdated PoolId берётся из
 //!    данных (pools/ekubo_route.rs), stateAfter разбирается (abi_ekubo::decode_state).
 //!
-//! Записи пока нет (у бота нет доступа к узлу Arbitrum) — тесты помечены #[ignore]; после записи метку снимаем.
+//! Запись второго прогона 20.11.2026 (решение 477): пулов в PoolKeyIndex нет, логов ядра нет — тесты под #[ignore] с
+//! причиной-фактом (математика на пулах с нативным ETH — tests/arbitrum_ekubo_more_live.rs).
 //! Кто вызывает: cargo test -- --ignored.
 //! От чего зависит: arb::venues::bsc_dex::{math, pools, quote}, файлы записи. Моков нет.
 
@@ -112,7 +113,7 @@ fn state(rec: &Value, config: B256, block_ts: u64) -> EkuboData {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20: пулов 0 (id GeckoTerminal — «ядро-PoolId», ekubo.py берёт только строки из 66 знаков) и логов ядра 0 за 2000 блоков — повтор ekubo.py (TASKS T456-03)"]
+#[ignore = "запись 2026-11-20 (526010867): у всех 4 пулов GeckoTerminal poolKeyById PoolKeyIndex 0x8989…5718 = 0 (как и у всех 22 PoolInitialized ядра), логов ядра за 2000 блоков 0 — сверять нечего (TASKS T456-03)"]
 fn key_gives_pool_id() {
     let mut n = 0;
     for rec in json("pools.json").as_array().unwrap() {
@@ -130,7 +131,7 @@ fn key_gives_pool_id() {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20: пулов 0 (id GeckoTerminal — «ядро-PoolId», ekubo.py берёт только строки из 66 знаков) и логов ядра 0 за 2000 блоков — повтор ekubo.py (TASKS T456-03)"]
+#[ignore = "запись 2026-11-20 (526010867): у всех 4 пулов GeckoTerminal poolKeyById PoolKeyIndex 0x8989…5718 = 0 (как и у всех 22 PoolInitialized ядра), логов ядра за 2000 блоков 0 — сверять нечего (TASKS T456-03)"]
 fn math_equals_router_quote() {
     let ts = json("meta.json")["timestamp"].as_u64().unwrap();
     let mut compared = 0;
@@ -180,7 +181,7 @@ fn math_equals_router_quote() {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20: пулов 0 (id GeckoTerminal — «ядро-PoolId», ekubo.py берёт только строки из 66 знаков) и логов ядра 0 за 2000 блоков — повтор ekubo.py (TASKS T456-03)"]
+#[ignore = "запись 2026-11-20 (526010867): у всех 4 пулов GeckoTerminal poolKeyById PoolKeyIndex 0x8989…5718 = 0 (как и у всех 22 PoolInitialized ядра), логов ядра за 2000 блоков 0 — сверять нечего (TASKS T456-03)"]
 fn core_logs_route() {
     let all = json("core_logs.json");
     let mut swaps = 0;

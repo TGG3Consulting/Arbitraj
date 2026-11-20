@@ -1,7 +1,7 @@
 //! Файл: tests/arbitrum_sub_dex_live.rs
 //! Что проверяет: решение 450 (T448-03, T448-04, T448-05) на РЕАЛЬНЫХ ответах своего узла Arbitrum One, записанных
-//! tools/arbitrum_record/sub_dex.py на одном блоке (tests/data/arbitrum_sub_dex_<дата>/; записи пока нет — тесты под
-//! #[ignore], после записи метку снять).
+//! tools/arbitrum_record/sub_dex.py на одном блоке (tests/data/arbitrum_sub_dex_<дата>/; запись второго прогона
+//! 20.11.2026, блок 526015961 — #[ignore] снят, решение 477).
 //! 1. KyberSwap Classic: событие создания пула каждой из трёх фабрик (DMM, KSFactory, KSFactory Legacy) разбирается
 //!    abi_dmm::created в (token0, token1, пул) события; factory() пула = фабрика, getPools фабрики содержит пул; выход
 //!    math/dmm.rs по getTradeInfo блока = ответ getAmountsOut роутера своей фабрики (откат роутера — у нас None).
@@ -10,7 +10,7 @@
 //! 3. iZiSwap: ответ реестра pool(x, y, fee) в обоих порядках разбирается factory_ask::decode_q(Q::Izi) в адрес пула
 //!    события; fee2pointDelta уровней записи ≠ 0.
 //!
-//! Кто вызывает: cargo test -- --ignored (после записи).
+//! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{math::{dmm, balancer_math}, pools::{abi_dmm, factory_ask, load_balancer}}.
 
 use alloy_primitives::{Address, B256, Bytes, I256, LogData, U256};
@@ -69,7 +69,6 @@ fn dyn_list(w: &[U256], head: usize) -> Vec<U256> {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20 пуста: событий создания пулов за окно 2 000 000 блоков нет (logs_total 0 у всех фабрик) — повтор sub_dex.py с большим --blocks (TASKS T456-03)"]
 fn kyber_classic_created_and_math() {
     let k = json("kyber.json");
     let mut checked = 0;
@@ -121,7 +120,6 @@ fn kyber_classic_created_and_math() {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20 пуста: событий создания пулов за окно 2 000 000 блоков нет (logs_total 0 у всех фабрик) — повтор sub_dex.py с большим --blocks (TASKS T456-03)"]
 fn balancer_v2_versions_match_vault() {
     let b = json("balancer.json");
     let mut checked = 0;
@@ -203,7 +201,6 @@ fn balancer_v2_versions_match_vault() {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20 пуста: событий создания пулов за окно 2 000 000 блоков нет (logs_total 0 у всех фабрик) — повтор sub_dex.py с большим --blocks (TASKS T456-03)"]
 fn iziswap_factory_registry() {
     let z = json("izi.json");
     for (fee, d) in z["fee2pointDelta"].as_object().unwrap() {

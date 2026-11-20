@@ -390,6 +390,28 @@
       виртуального квотера и Quoter THENA. Тест tests/bsc_thena_fusion_row_live.rs (3 теста под #[ignore]) —
       bitmap_is_raw_as_bot_reads решает толкование; math_equals_pool_swap — режим Row. Вопрос Тиграну: до записи —
       выключить исполнение THENA Fusion (снять вид thena_fusion из dex.kind площадки BSC) или ждать записи?
+    **Второй прогон 20.11 (решение 477, ветка t246/arb-records-2):** прогоны 180614 (kyber_elastic_v1, woofi, balancer_v3,
+    curve_crypto, lb_v22, ekubo, ekubo_more, exec_v4_live прошли; camelot_v2 упал — таймаут eth_getLogs) и 185857
+    (sub_dex, camelot_v2 прошли) — tests/data/arbitrum_record_2026-11-20_r2/. Записи с тем же именем заменены.
+    #[ignore] СНЯТ: woofi (2), kyber_elastic_v1 (2), sub_dex (3), balancer_v3 (1), camelot_v2 (4), lb_v22 (4),
+    ekubo_more initialized_key_gives_pool_id и native_math_equals_router_quote. Python-пересчёт кода бота по записям —
+    расхождений 0 (elastic v1 66/66, dmm 18/18, Balancer V2 531/531, Balancer V3 20/20, Camelot V2 282/282, LB V2.2
+    336/336, Ekubo native 9/9). Тест lb_v22 pool_cond_slots_3_4_65545 исправлен: getReserves = слот 4 − слот 5
+    (_protocolFees), LBPair.sol v2.2.0. T461-02, T461-03 по sub_dex / kyber / woofi / balancer_v3 / camelot_v2 / lb_v22 /
+    ekubo_more — ЗАКРЫТЫ записью. Крупный файл: arbitrum_kyber_elastic_v1_2026-11-20/pools_v2.json — 20 423 737 байт
+    (тесты не читают).
+    ОСТАЛОСЬ:
+    - T477-01 Класс 23 (Balancer V3) у v4 НЕ принят: в записи один пул (GeckoTerminal balancer_v3.py отдал 1 пул на
+      странице 1, страницы 2–5 пусты), нужно ≥ 2; (а) получено ≠ quoter_out — квотер (а) пишется eth_call на H, обмен —
+      в блоке симуляции H + 1 (время +12 с), у пула курсы токенов. Правка exec_v4_live.py (квотер (а) — в симуляции того же
+      блока, как у (б)) и источник пулов Balancer V3 (кроме GeckoTerminal) — не сделаны, нужна запись заново.
+    - T477-02 Ekubo: PoolKeyIndex 0x8989…5718 не знает ни одного из 22 пулов PoolInitialized ядра (poolKeyById = 0) —
+      факт Тиграну; tests/arbitrum_ekubo_live.rs (3) под #[ignore]; логов ядра за окна записи 0 (core_logs, core_load).
+    - T477-03 Ekubo TWAMM: 3 пула TWAMM — ликвидность 0, ордеров нет: twamm_math_equals_router_quote под #[ignore].
+    - T477-04 camelot_v2: FeePercentUpdated / SetStableSwap / PairCreated — 0 (потолок 600 с вышел на поиске нижней
+      границы, окна событий не прочитаны); real_logs_parsed проверяет только Sync (49).
+    - T477-05 tricrypto_v1 (arb_curve_crypto_v1_live) — новое состояние того же пула, Python-пересчёта не было: смотреть CI.
+    - T477-06 Приёмка v4: (v4, 42161) — принят только Uniswap V4 без крючка (3 из 3); развёртывание v4 в Arbitrum разрешено.
   - T456-04 Выкладка: настройки области «DEX» площадки arb_dex по docs/notes/arbitrum/dex-settings-arbitrum.md и
     FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; развернуть v4 — T457-03.
   - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по

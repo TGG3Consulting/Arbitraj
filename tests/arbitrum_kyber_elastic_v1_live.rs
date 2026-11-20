@@ -4,7 +4,9 @@
 //! getLiquidityState, swapFeeUnits), тики (TicksFeesReader.getTicksInRange + ticks(t)) и ответы
 //! quoteExactInputSingle на суммы в обе стороны. Наш выход должен совпасть с returnedAmount квотера побайтно
 //! (квотер вызывает тот же Pool.swap в try/catch — ks-elastic-sc QuoterV2.sol). Плюс: getPool фабрики = пул.
-//! Кто вызывает: cargo test -- --ignored (после записи).
+//! Запись второго прогона 20.11.2026 (решение 477, блок 526003946): пулов фабрики v1 — 6, ответов квотера v1 — 66;
+//! #[ignore] снят (pools_v2.json — пулы v2, тест его не читает).
+//! Кто вызывает: cargo test.
 //! От чего зависит: tests/data/arbitrum_kyber_elastic_v1_<дата>/ (tools/arbitrum_record/kyber_elastic_v1.py),
 //! arb::venues::bsc_dex::{math::swap_elastic, pools::{abi_elastic, load_elastic, ticks}, node::abi_dex}.
 
@@ -60,7 +62,6 @@ fn pools() -> Vec<Value> {
 
 /// Наш выход Elastic v1 = returnedAmount QuoterV2 на каждой записанной сумме (откат квотера — пропуск).
 #[test]
-#[ignore = "запись 2026-11-20 не о v1: у всех 20 пулов GeckoTerminal factory() = 0xc7a590291e07…, не фабрика v1 0x5F1dddbf…; getPool v1 ≠ пул — повтор kyber_elastic_v1.py с отбором пулов фабрики v1 (TASKS T456-03)"]
 fn v1_math_matches_quoter() {
     let pools = pools();
     assert!(!pools.is_empty(), "в записи нет пулов с тиками");
@@ -121,7 +122,6 @@ fn v1_math_matches_quoter() {
 
 /// Фабрика v1: getPool(token0, token1, swapFeeUnits) = адрес пула (проверка пула pools/verify_calls.rs).
 #[test]
-#[ignore = "запись 2026-11-20 не о v1: у всех 20 пулов GeckoTerminal factory() = 0xc7a590291e07…, не фабрика v1 0x5F1dddbf…; getPool v1 ≠ пул — повтор kyber_elastic_v1.py с отбором пулов фабрики v1 (TASKS T456-03)"]
 fn v1_factory_confirms_pool() {
     for p in pools() {
         let got = ret::<IElasticFactory::getPoolCall>(&p["factory_getPool"]);

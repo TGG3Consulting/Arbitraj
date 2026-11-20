@@ -11,8 +11,7 @@
 //! - ордер продажи в полёте (credit_lock::selling ждёт итога) и исполнившийся за время котировки (счётчик итогов) —
 //!   котировки нет до итога (ride_settled.rs, sale_marks.rs); котировка-решение без ордера не держит; решение 480 —
 //!   исход неизвестен: не блокировка, остаток сделки впереди продажи новой ровно один раз (худший случай), и после
-//!   перезапуска, и без групп (ride_shift::read — одно чтение сдвига); пара котировок marginal DEX — по одному блоку
-//!   пула (ride_pair::same_state на записанных маршрутах);
+//!   перезапуска, и без групп (ride_shift::read — одно чтение сдвига);
 //! - решение 476: approve заранее (sell_approve.rs) — продажа на бирже ничего не отправляет; на DEX без площадки в
 //!   реестре — не блокирует (строка в хронологию, approve перед обменом, как раньше);
 //! - время в пути монеты без своей истории: настройки (37 + 2 = 39 с) или статистика пары gate → bsc_dex по всем монетам
@@ -40,8 +39,8 @@ use arb::core::types::{
     SendMethod, Side, TradeRequest, TradeResult, TradeStatus, TxOutcome, VenueId,
 };
 use arb::core::{
-    coin_ride, credit_lock, ledger, ride_pair, ride_quote, ride_settled, ride_shift, ride_trail,
-    sale_marks, sell_approve, sell_turn, transit, transit_source,
+    coin_ride, credit_lock, ledger, ride_quote, ride_settled, ride_shift, ride_trail, sale_marks,
+    sell_approve, sell_turn, transit, transit_source,
 };
 use arb::gateway::contract::VenueKind;
 use arb::gateway::registry::Registry;
@@ -332,10 +331,6 @@ async fn executed_sale_leaves_projection_and_sets_block() {
     let (q505, q509) = (quote_at(&r, 134740505), quote_at(&r, 134740509));
     assert!(ride_trail::check(&core, &key, &v, &q505).is_err());
     assert!(ride_trail::check(&core, &key, &v, &q509).is_ok());
-    // Решение 480 (ревью 2): пара котировок marginal DEX — только по одному блоку пула (записанные маршруты NUM).
-    assert!(ride_pair::same_state(&v, &q505, &q505).is_ok());
-    let two = ride_pair::same_state(&v, &q505, &q509).unwrap_err();
-    assert!(two.contains("134740505") && two.contains("134740509"), "{two}");
 }
 
 #[tokio::test]

@@ -47,7 +47,7 @@
   мешает (coin_ride::joinable). Снимок «посторонних» при Z не пишется (credit_base.rs read) — доля не выше записи ×
   (1 − удержание), без ожидания.
   (7) СДЕЛАНО (решение 480, ревью): «продать на A» частичной покупки — с тем же худшим случаем (core/partial_back.rs:
-  ride_quote::ahead_noted для площадки A, ride_quote::marginal, trade_ops::net_of).
+  ride_shift::read для площадки A, ride_pair::exec_pair, ride_quote::marginal, trade_ops::net_of).
   После выкладки: при log.step_timing = да смотреть строки «Время по шагам (ордер продажи …)» у продаж DEX; в
   хронологии новых сделок — строка «Время в пути …» (источник T: настройки / монета / пара площадок).
 

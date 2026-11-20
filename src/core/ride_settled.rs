@@ -20,8 +20,8 @@
 //!   цену; не продала и продаст — учтено. Ордер в полёте — короткое ожидание его итога (выше), не вечная блокировка.
 //!
 //! Сделки других монет через общие промежуточные пулы и циклы DEX ↔ DEX здесь не учитываются (docs/TASKS.md, 464).
-//! Кто вызывает: core/ride_quote.rs (live_sell — before / after), core/partial_back.rs (before / after), core/ride_shift.rs
-//! (worst, text).
+//! Кто вызывает: core/ride_quote.rs (live_sell — in_flight / after), core/partial_back.rs (in_flight / after),
+//! core/ride_shift.rs (worst, text), tests (before).
 //! От чего зависит: sale_marks.rs (busy, sales, unsure_ids), coin_ride.rs (идущие), engine.rs, core/types.
 //! Настройки: нет (базовое поведение).
 
@@ -98,8 +98,9 @@ pub fn text(d: &Direction, q: Decimal, ids: &[String]) -> Option<String> {
     ))
 }
 
-/// Ордер продажи монеты на площадке продажи в полёте. Ошибки: текст.
-fn in_flight(core: &Core, d: &Direction) -> Result<(), String> {
+/// Что делает: ордер нашей продажи монеты на площадке продажи в полёте — отказ (ревью 3: проверка до котировки при
+/// счётчике итогов, снятом вместе со сдвигом — ride_shift::read). Принимает: ядро, направление. Ошибки: текст с MARK.
+pub fn in_flight(core: &Core, d: &Direction) -> Result<(), String> {
     if super::sale_marks::busy(core, &d.sell_on, &d.asset) {
         return Err(format!(
             "{}: идёт наша продажа {} ({}) — попала ли она уже в пул, по которому считаем, не видно: ждём её итога, \

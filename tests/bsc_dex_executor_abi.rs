@@ -323,9 +323,15 @@ fn stable_bnb_contract_rules_present() {
     ] {
         assert!(src.contains(must), "нет в контракте: {must}");
     }
-    // bnbFrom обнуляется после каждого вызова, где BNB ждётся (три установки — три обнуления; третья — _unwrapAll
-    // executeNative, решение 272).
-    assert_eq!(src.matches("bnbFrom = address(0);").count(), 3);
+    // bnbFrom обнуляется после каждого вызова, где BNB ждётся: сколько установок — столько обнулений (_unwrapAll
+    // executeNative, решение 272; нативный шаг Ekubo, решение 454). Только строки кода — комментарии тоже содержат
+    // «bnbFrom = …».
+    let code: Vec<&str> =
+        src.lines().map(str::trim).filter(|l| l.starts_with("bnbFrom = ")).collect();
+    let resets = code.iter().filter(|l| **l == "bnbFrom = address(0);").count();
+    let sets = code.len() - resets;
+    assert_eq!(resets, 5);
+    assert_eq!(sets, resets);
     let abi = abi();
     assert_eq!(
         abi.receive.as_ref().map(|r| r.state_mutability),

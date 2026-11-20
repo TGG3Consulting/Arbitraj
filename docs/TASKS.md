@@ -15,15 +15,13 @@
 
 - **Решение 487 (20.11.2026, ветка t256/arb-merge-bsc от feat/arbitrum 2ca8dba2) — слияние BSC (e49efd67: 419–429, 449,
   463, 464, 476) в Arbitrum и Zyberswap V3 видом thena_fusion; cargo не запускался (формат — вручную).** Задачи:
-  - T487-01 Zyberswap V3 (Arbitrum): записи своего узла нет. Код пула и комиссии = THENA Fusion (Sourcify, построчно —
-    docs/notes/arbitrum/dex-settings-arbitrum.md §4.7), но фабрика `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` — из
-    адаптера DefiLlama, официального источника нет (сайт и docs — deadUrl). Нужна запись (скрипта для Arbitrum нет:
-    tools/bsc_record/thena_fusion.py — только сеть 56, GeckoTerminal bsc и Quoter THENA): poolByPair пар WETH/USDC.e и
-    WETH/USDC, globalState, сжатые слова tickTable и ticks(), timepoints, dataStorageOperator(), feeConfig(),
-    getTimepoints, котировки VirtualQuoter на нескольких суммах; тест — как tests/bsc_thena_fusion_record.rs на этой
-    записи. До записи dex.pool_enabled не ставить. Вопрос Тиграну: включать ли DEX с фабрикой не из официального
-    источника.
-  - T487-02 Комиссия следующего блока (fee_algebra_v1.rs next_block_fee) берёт время следующего блока = время блока
+  - T487-01 Zyberswap V3 (Arbitrum): **адрес фабрики** `0x9c2abd632771b433e5e7507bcaa41ca3b25d8544` — источник
+    «адаптер DefiLlama + код подтверждён Sourcify»; принцип принят координатором (как решение 482), помечен в
+    dex-settings-arbitrum.md §4.7 и FIRST_RUN. Осталось: запись своим узлом — `python3 tools/arbitrum_record/zyberswap_v3.py
+    --rpc http://УЗЕЛ:8547` (или record_all.py, шаг zyberswap_v3; пулы — poolByPair WETH/USDC, другие пары —
+    `--pair-token`, пулы — `--pool`), коммит tests/data/arbitrum_zyberswap_v3_<дата>/, снять #[ignore] в
+    tests/arbitrum_zyberswap_v3_live.rs; dex.pool_enabled — Тигран после записи.
+  - T487-02 (проверяет запись T487-01: heads.json, тест next_block_same_or_next_second) Комиссия следующего блока (fee_algebra_v1.rs next_block_fee) берёт время следующего блока = время блока
     чтения или + 1 с (запись BSC t237: 2 блока в секунду). Для Arbitrum это не проверено: какие интервалы времени между
     соседними блоками своего узла Arbitrum — по записи T487-01 (времена подряд идущих голов); если бывает больше 1 с,
     комиссия до следующей головы может отличаться (fusion_head.rs пересчитывает её на каждой голове).

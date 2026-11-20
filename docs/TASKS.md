@@ -362,14 +362,20 @@
     транзакции крючок может посчитать другую (первая комиссия блока — TWAP по времени нового блока; чужой обмен раньше
     задаёт blockFee, DynamicSwapFeeHook.sol L524-L667). Точной «комиссии следующего блока» без симуляции нет; защита —
     minOut исполнителя. Так оставить или считать первую комиссию блока своим портом (_getFirstSwapFee + observe)?
-  - T470-02 Вопрос Тиграну: tx.gasprice в Nitro при чаевых — правило MEV-налога взято по верхней оценке (gasprice ≤
+  - T470-02 **Координатор: налог по формуле. СДЕЛАНО** (8ac32c60: aero_mev.rs tax — формула модуля, сбор чаевых — ArbSys/ArbOwnerPublic, факт nitro ccc5c828 tx_processor.go L995-L1035). Было: вопрос Тиграну: tx.gasprice в Nitro при чаевых — правило MEV-налога взято по верхней оценке (gasprice ≤
     baseFee + чаевые). При profit_share верхний предел send.tip_cap_gwei выше minThreshold модуля (volatile 1 gwei,
     stable 2 gwei по аргументам конструкторов) — пулы Basic не читаются. Нужен ли учёт налога в котировке вместо отказа?
   - T470-03 Запись aero.py: проверить своим узлом feeModule() фабрик = volatile/stableCustomFeeModule
     (0x7949…7a7A, 0x0195…3Da6), mevTaxModule() = 0xd724…c50a / 0x8173…8130, параметры модулей; tickSpacingToFee CL.
-  - T470-04 Ключи DEX Aero Basic (`aero-basic-volatile@arbitrum`, `aero-basic-stable@arbitrum`) — предложение: у
+  - T470-04 **Координатор: ключи приняты.** Ключи DEX Aero Basic (`aero-basic-volatile@arbitrum`, `aero-basic-stable@arbitrum`) — предложение: у
     GeckoTerminal Aero Basic нет (DefiLlama `aero-basic`); пулы — поиск по фабрике (index.factory_scan) или dex.sub_dex
     (решение 450) под одним ключом — решение Тиграна.
+  - T470-06 Шаг исполнителя для Basic с MEV-налогом > 0: выход по getAmountOutWithTotalFee пула (Pool.sol L548-L555: getFee с
+    msg.sender = исполнитель и tx.gasprice этой транзакции) — вид шага 26, пересборка исполнителя v5. Сейчас: налог в
+    котировке, перед отправкой при налоге > 0 — отказ (aero_mev.rs fresh).
+  - T470-07 НЕ СДЕЛАНО (координатор): порт первой комиссии блока крючка (_getFirstSwapFee + observe TWAP по наблюдениям
+    пула на время следующего блока, худшее из «первая/фиксированная»), запись наблюдений и параметров крючка; лёгкое
+    чтение Slipstream V3 каждым блоком (только fee() пачкой, полное — по событиям) — сейчас пул перечитывается целиком.
   - T470-05 Metaquoter (0x1dDf…7868) не подключён — сверка с квотером через виртуальный квотер (dex.quoter_virtual).
 - **Решение 451 (20.11.2026, ветка t227/arb-dex-code-b) — T448-06…T448-10: Kyber Elastic v1, Saddle, WOOFi, Aero
   Slipstream, PancakeSwap StableSwap на Arbitrum; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Подробно —

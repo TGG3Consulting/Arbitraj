@@ -11,9 +11,13 @@
 //! Источник (решение 23): Shell-Protocol/Shell-Protocol@bfbba01 src/proteus/Proteus.sol — INT_MAX L15,
 //! MAX_BALANCE_AMOUNT_RATIO L27, FIXED_FEE L31, swapGivenInputAmount L58-L84, _swap L264-L332,
 //! _checkAmountWithBalance L753-L760, _checkBalances L768-L778, _applyFeeByRounding L788-L817 (BASE_FEE развёрнутых
-//! реализаций: 4000 / 8000 — константа, 800 — константа или immutable v3; читается BASE_FEE()). LiquidityPoolProxy
-//! (Sourcify 42161, оба выпуска) swapGivenInputAmount L49-L61: баланс входа минус вход — учёт зачислил вход пулу до
-//! вызова, т. е. реализации передаются балансы ДО обмена. Ocean (Shell-Protocol aaa0ccf src/ocean/Ocean.sol и
+//! реализаций: 4000 / 8000 — константа, 800 — константа или immutable v3; читается BASE_FEE()). Реализация получает
+//! балансы пула ДО обмена при обоих Ocean, но по-разному: v3 (Ocean 0x96B4f4E4…) зачисляет вход пулу ДО
+//! computeOutputAmount, а прокси вычитает вход (0xC32A9fC5… LiquidityPoolProxy.swapGivenInputAmount L49-L61
+//! `xBalance -= inputAmount`); v2 (Old Ocean aaa0ccf _computeOutputAmount → _updateBalancesOfPrimitive) зачисляет вход
+//! ПОСЛЕ computeOutputAmount, а прокси вход НЕ вычитает (bfbba01 LiquidityPoolProxy.swapGivenInputAmount L66-L77) — у
+//! обоих реализации приходит баланс пула до этого обмена. Порт (и квотер) зовут реализацию с прочитанным balanceOfBatch
+//! — учёт ещё без входа, т. е. баланс до обмена, — поэтому вход не вычитают. Ocean (aaa0ccf src/ocean/Ocean.sol и
 //! Sourcify 42161 0x96B4f4E4… Ocean.sol): _erc20Wrap / _determineTransferAmount / _convertDecimals (v3 L682-L704,
 //! L913-L976), _erc20Unwrap L726-L741, _etherUnwrap L823-L829, _calculateUnwrapFee L987-L989.
 

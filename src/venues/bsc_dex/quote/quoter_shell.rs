@@ -1,7 +1,9 @@
 //! Файл: venues/bsc_dex/quote/quoter_shell.rs
 //! Что делает: квотер сверки пула Shell Protocol Proteus (решение 486) — сама реализация формулы пула:
-//! swapGivenInputAmount(xBalance, yBalance, вход, сторона) — та же функция, которую при обмене зовёт прокси пула
-//! (LiquidityPoolProxy.swapGivenInputAmount L49-L61 передаёт балансы ДО обмена). Балансы — прочитанного состояния,
+//! swapGivenInputAmount(xBalance, yBalance, вход, сторона) — та же функция реализации, которой при обмене прокси
+//! пула передаёт балансы пула ДО обмена (у Ocean v3 прокси вычитает вход из _getBalances, у v2 — не вычитает, т. к.
+//! вход зачисляется после; см. math/proteus_swap.rs). Балансы — прочитанного состояния (balanceOfBatch учёта, ещё без
+//! входа = баланс до обмена),
 //! вход — в единицах учёта (сумма · 10^(18 − знаков)). Ответ реализации — в единицах учёта; в знаки токена выхода он
 //! переводится с decimals() токена выхода (тем же eth_call — пачкой Multicall3 с вызовом реализации) и комиссией
 //! вывода учёта прочитанного состояния (как unwrap Ocean). Отдельного квотера у Shell нет.
@@ -43,7 +45,10 @@ pub fn request(
     let input = to_ocean(amount, dec_in)
         .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Shell: вход не переводится в единицы учёта"))?;
     let mc = multicall::address(ctx).ok_or_else(|| {
-        ctx.not_set("dex.multicall3", "сверка пула Shell — пачкой Multicall3 (реализация и decimals)")
+        ctx.not_set(
+            "dex.multicall3",
+            "сверка пула Shell — пачкой Multicall3 (реализация, decimals)",
+        )
     })?;
     let swap = R::swapGivenInputAmountCall {
         xBalance: d.x_bal,

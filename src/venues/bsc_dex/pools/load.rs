@@ -249,7 +249,7 @@ pub async fn state(
             fee_pips: None,
         });
     }
-    // Shell Protocol Proteus (решение 486): вид ядра Proteus — поля пула, балансы в учёте Ocean (dex.vault), параметры
+    // Shell Protocol Proteus (решение 486): вид ядра Proteus — поля пула, балансы в учёте Ocean, параметры
     // реализации и знаки токенов (load_shell.rs).
     if f.proto == Proto::ShellProteus {
         let PoolRef::Contract(a) = reference else {

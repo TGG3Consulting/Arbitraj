@@ -115,7 +115,8 @@ pub enum ExecKind {
     /// Решение 486: пул Shell Protocol (Proteus) — обмен через учётный контракт Ocean: `doMultipleInteractions` с
     /// wrapErc20 (вход; у нативной монеты учёта — обёртка withdraw и value вызова), computeOutputAmount пула и
     /// unwrapErc20 / unwrapEther (выход; нативная монета — ETH от Ocean → deposit в обёртку) с GET_BALANCE_DELTA
-    /// (contracts/ArbExecutor.sol _shell). data = abi.encode(uint8 native, uint8 decimalsIn). Шаг 31 — только
+    /// (contracts/ArbExecutor.sol _shell). data = abi.encode(address primitive, uint8 native, uint8 decimalsIn)
+    /// (primitive — пул LiquidityPoolProxy, цель computeOutputAmount; пул шага — учёт Ocean). Шаг 31 — только
     /// исполнитель v5 (exec_callback.rs since).
     Shell,
 }

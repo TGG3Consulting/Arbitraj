@@ -228,7 +228,7 @@ contract ArbExecutor {
     // получает вход transferFrom(владелец → пул) напрямую, без захода в исполнитель: налог перевода — один раз
     // (как у Universal Router через Permit2). Для цикла (tokenIn = tokenOut) — как обычно (итог меряется после забора);
     // цикл — ровно одна доля: вход маршрута берёт только первый шаг и целиком (10000 bps). Иначе выход вида с выходом
-    // на исполнитель (CURVE / STABLE_U256 / SADDLE / STABLE_U256_BNB / CURVE_ETH) — тот же токен — посчитался бы входом следующей
+    // на исполнитель (CURVE / STABLE_U256 / SADDLE / STABLE_U256_BNB / CURVE_ETH / SHELL) — тот же токен — посчитался бы входом следующей
     // доли (ревью).
     function execute(
         address tokenIn,

@@ -12,5 +12,10 @@
   "paused": true
  },
  "oracle_code_has_state": true,
- "oracle_code_len": 15458
+ "oracle_code_len": 13378,
+ "oracle_docs": {
+  "address": "0xCf4EA1688bc23DD93D933edA535F8B72FC8934Ec",
+  "code_len": 15458,
+  "code_has_state": true
+ }
 }

@@ -1,0 +1,103 @@
+{
+ "head": 526003898,
+ "error": null,
+ "results": [
+  {
+   "name": "kyber_elastic_v1",
+   "ok": true,
+   "code": 0,
+   "seconds": 16,
+   "dirs": [
+    "tests/data/arbitrum_kyber_elastic_v1_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_180614/logs/kyber_elastic_v1.log"
+  },
+  {
+   "name": "woofi",
+   "ok": true,
+   "code": 0,
+   "seconds": 6,
+   "dirs": [
+    "tests/data/arbitrum_woofi_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_180614/logs/woofi.log"
+  },
+  {
+   "name": "balancer_v3",
+   "ok": true,
+   "code": 0,
+   "seconds": 50,
+   "dirs": [
+    "tests/data/arbitrum_balancer_v3_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_180614/logs/balancer_v3.log"
+  },
+  {
+   "name": "curve_crypto",
+   "ok": true,
+   "code": 0,
+   "seconds": 6,
+   "dirs": [
+    "tests/data/arbitrum_curve_crypto_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_180614/logs/curve_crypto.log"
+  },
+  {
+   "name": "camelot_v2",
+   "ok": false,
+   "code": -15,
+   "seconds": 1299,
+   "dirs": [],
+   "why": "eth_getLogs 41094079..45203486: таймаут узла — делю на 41094079..43148782 и 43148783..45203486",
+   "log": "arbitrum_record_2026-11-20_180614/logs/camelot_v2.log"
+  },
+  {
+   "name": "lb_v22",
+   "ok": true,
+   "code": 0,
+   "seconds": 506,
+   "dirs": [
+    "tests/data/arbitrum_lb_v22_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_180614/logs/lb_v22.log"
+  },
+  {
+   "name": "ekubo",
+   "ok": true,
+   "code": 0,
+   "seconds": 12,
+   "dirs": [
+    "tests/data/arbitrum_ekubo_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_180614/logs/ekubo.log"
+  },
+  {
+   "name": "ekubo_more",
+   "ok": true,
+   "code": 0,
+   "seconds": 1222,
+   "dirs": [
+    "tests/data/arbitrum_ekubo_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_180614/logs/ekubo_more.log"
+  },
+  {
+   "name": "exec_v4_live",
+   "ok": true,
+   "code": 0,
+   "seconds": 6,
+   "dirs": [
+    "tests/data/executor_v4_live_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_180614/logs/exec_v4_live.log"
+  }
+ ]
+}

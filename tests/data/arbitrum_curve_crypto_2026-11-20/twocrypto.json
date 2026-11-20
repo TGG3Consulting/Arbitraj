@@ -1,8 +1,8 @@
 {
  "chain_id": "0xa4b1",
- "block": 525985014,
- "block_hash": "0xf20ed4d6281542ddcf8181f95fcb5946a14cc320e0ba19ead91b1e6474da4ef1",
- "timestamp": 1795192982,
+ "block": 526004176,
+ "block_hash": "0x4c9c81a1953957d3374be8dd51ca95253a64e666f84401d39ec03c79cb428e91",
+ "timestamp": 1795198046,
  "kind": "twocrypto",
  "factory": "0x98EE851a00abeE0d95D08cF4CA2BdCE32aeaAF7F",
  "pool_count": 142,

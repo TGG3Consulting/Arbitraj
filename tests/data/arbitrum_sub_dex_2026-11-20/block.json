@@ -1,12 +1,18 @@
 {
- "block": 525984987,
- "hash": "0x95bb5b380fa6232a6152476fb9d73f33eb1e2e18bb42a4b8714c4a7287f77c1c",
- "timestamp": 1795192975,
+ "block": 526015961,
+ "hash": "0x9126c8095bb51d0f0ab519411444fe7689501ce920ad02bfca34218909a263d7",
+ "timestamp": 1795201210,
+ "search_head": 526015688,
+ "stopped": [],
  "args": {
   "node": "http://127.0.0.1:8547",
-  "blocks": 2000000,
-  "log_step": 100000,
   "max_pools": 20,
+  "time_limit": 600,
+  "gt_pages": 3,
+  "created_margin": [
+   3600,
+   86400
+  ],
   "ladder": [
    10000,
    1000,
@@ -34,6 +40,9 @@
    2000,
    10000
   ],
+  "izi_token": [],
+  "izi_tokens": 12,
+  "izi_gt_pages": 1,
   "pancake_ur": "0xFE6508f0015C778Bdcc1fB5465bA5ebE224C9912"
  }
 }

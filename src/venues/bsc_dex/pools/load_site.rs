@@ -7,7 +7,8 @@
 //! Кто вызывает: pools/load_batch.rs (states; через него — reload_many.rs load_group: per_block.rs, listen_site.rs,
 //! приём и повтор пачки).
 //! От чего зависит: load.rs (Loaded), families.rs, load_curve.rs, load_curve_plain.rs (решение 472), load_saddle.rs,
-//! load_curve_ng.rs, load_stable_u.rs, load_balancer.rs, load_curve_oracle.rs (решение 481), tokens.rs, node/call.rs
+//! load_curve_ng.rs, load_stable_u.rs, load_balancer.rs, load_curve_oracle.rs (решение 481), load_wombat.rs (решение
+//! 484), tokens.rs, node/call.rs
 //! (block_tag).
 //! Настройки: через загрузчики — dex.vault, dex.factory (Balancer), dex.native_wrapped (PancakeSwap StableSwap, Curve
 //! Plain*ETH).
@@ -28,7 +29,7 @@ use super::load::Loaded;
 use super::load_batch::Want;
 use super::{
     load_balancer, load_balancer_v3, load_crypto, load_crypto_v1, load_curve, load_curve_meta,
-    load_curve_ng, load_curve_oracle, load_curve_plain, load_saddle, load_stable_u,
+    load_curve_ng, load_curve_oracle, load_curve_plain, load_saddle, load_stable_u, load_wombat,
 };
 
 /// Что делает: состояния всех пар одного контракта на блоке одним чтением. Принимает: окружение, токены (decimals),
@@ -85,6 +86,11 @@ pub async fn states(
         // Tricrypto 2021 (решение 453): одно чтение пула на все пары (load_crypto_v1.rs).
         Proto::CurveTricryptoV1 => match load_crypto_v1::read(ctx, tokens, f, contract, block).await {
             Ok(raw) => pairs.iter().map(|p| load_crypto_v1::state(ctx, &raw, *p)).collect(),
+            Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
+        },
+        // Решение 484: Wombat — одно чтение пула на все пары (load_wombat.rs).
+        Proto::Wombat => match load_wombat::read(ctx, f, contract, &tag).await {
+            Ok(raw) => pairs.iter().map(|p| load_wombat::state(ctx, &raw, *p)).collect(),
             Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
         },
         Proto::PancakeStable => match pancake_read(ctx, tokens, contract, &tag).await {

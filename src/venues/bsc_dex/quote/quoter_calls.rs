@@ -61,6 +61,10 @@ pub fn request(
     if let Some(what) = virtual_only(e.family.proto) {
         return Err(virtual_missing(ctx, e, what));
     }
+    // Решение 484: Wombat — сам пул quotePotentialSwap (quoter_wombat.rs).
+    if e.family.proto == Proto::Wombat {
+        return super::quoter_wombat::request(ctx, e, token_in, amount);
+    }
     // KyberSwap Classic DMM (решение 287): квотер — DMMRouter02.getAmountsOut по пути из одного пула (quoter_dmm.rs).
     if e.family.proto == Proto::KyberDmm {
         return super::quoter_dmm::request(ctx, e, token_in, amount);
@@ -404,6 +408,9 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     }
     if e.family.proto == Proto::KyberDmm {
         return super::quoter_dmm::decode(out);
+    }
+    if e.family.proto == Proto::Wombat {
+        return super::quoter_wombat::decode(out);
     }
     if e.family.proto == Proto::BalancerV2 {
         return super::quoter_balancer::decode(out);

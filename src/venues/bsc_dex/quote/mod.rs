@@ -101,6 +101,7 @@ pub mod quoter_dmm;
 pub mod quoter_ekubo;
 pub mod quoter_maverick;
 pub mod quoter_revert;
+pub mod quoter_wombat;
 pub mod quote_timing;
 pub mod quote_timing_log;
 pub mod quote_timing_outer;
@@ -142,6 +143,7 @@ pub mod v2_pair_sim;
 pub mod via_pools;
 pub mod virtual_quoter;
 pub mod warm;
+pub mod wombat_depth;
 
 use rust_decimal::Decimal;
 

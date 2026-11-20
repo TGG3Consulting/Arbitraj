@@ -7,3 +7,4 @@
 | Папка | Что | Решение |
 | --- | --- | --- |
 | `curve_arbitrum/` | пулы Curve в сети Arbitrum One без исходника в репозиториях curvefi | 481 |
+| `wombat_arbitrum/` | пулы Wombat Exchange в сети Arbitrum One: сверка развёрнутых реализаций (Sourcify) с wombat-exchange/v1-core 2ac067b8 — хеши и отличия (тексты — в репозитории wombat-exchange) | 484 |

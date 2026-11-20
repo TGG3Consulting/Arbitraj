@@ -2,7 +2,8 @@
 //! Что делает: общий итог применения события пула и выбор разбора по виду пула; topic0 событий для подписки
 //! (все события — глубоким пулам, только добавление ликвидности — мелким).
 //! Кто вызывает: pools/listen_log.rs.
-//! От чего зависит: events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, events_ekubo.rs (решение 447), families.rs, registry.rs.
+//! От чего зависит: events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, events_ekubo.rs (решение 447),
+//! events_wombat.rs (решение 484), families.rs, registry.rs.
 //! Настройки: нет.
 
 use alloy::rpc::types::Log;
@@ -14,7 +15,7 @@ use super::registry::Entry;
 use super::{
     events_algebra, events_algebra_integral, events_balancer, events_balancer_v3, events_camelot, events_ekubo, events_lb, events_lb20, events_lb22, events_bin, events_cl, events_crypto, events_curve, events_curve_ng, events_dmm,
     events_dodo, events_fluid, events_metric, events_elastic, events_izi, events_maverick, events_nomi, events_smardex, events_solidly, events_stable_u,
-    events_v2, events_v3,
+    events_v2, events_v3, events_wombat,
 };
 
 /// Что произошло с записью после события.
@@ -74,6 +75,8 @@ pub fn topics(f: &Family) -> Vec<B256> {
         | Proto::WooPP
         | Proto::InfinityStable => events_stable_u::topics(f.proto),
         Proto::Maverick => events_maverick::topics(),
+        // Решение 484: Wombat — любое событие пула → перечитать (events_wombat.rs).
+        Proto::Wombat => events_wombat::topics(),
     }
 }
 
@@ -120,6 +123,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         | Proto::WooPP
         | Proto::InfinityStable => events_stable_u::liquidity_topics(f.proto),
         Proto::Maverick => events_maverick::liquidity_topics(),
+        Proto::Wombat => events_wombat::liquidity_topics(),
     }
 }
 
@@ -158,6 +162,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         | Proto::WooPP
         | Proto::InfinityStable => events_stable_u::apply(e, log),
         Proto::Maverick => events_maverick::apply(e, log),
+        Proto::Wombat => events_wombat::apply(e, log),
     };
     if let Some(b) = log.block_number
         && matches!(r, Applied::Updated | Applied::Bins(_))

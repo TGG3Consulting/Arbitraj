@@ -83,6 +83,7 @@ const CHOICE = {
   pancake_stableswap: 'StableSwap PancakeSwap',
   lista_stableswap: 'StableSwap Lista (с оракулом)',
   saddle_stableswap: 'StableSwap Saddle (Nerve)',
+  wombat: 'Wombat Exchange (покрытие cash / liability, haircut; решение 484)',
   woofi_v2: 'WooFi WooPPV2 (лесенка цен пула)',
   maverick_v2: 'Maverick V2 (тики-бины, кривая квотера)',
   pancake_infinity_stable: 'PancakeSwap Infinity Stable (StableSwap-NG в крючке CL)',

@@ -615,6 +615,34 @@
     угаданной длины: ожидание записи журнала опросом (20 мс, предел 10 с), конец окна второй проверки — от момента,
     когда отложенная запись видна; окно 2 с. Управляемое время tokio невозможно без правки кода: окно пула — от
     std::time::Instant (depth_log.rs), tokio::time::pause его не двигает. Поведение кода не менялось.
+- **Решение 484 (20.11.2026, ветка t253/arb-wombat от origin/feat/arbitrum 2ca8dba2) — Wombat Exchange на Arbitrum (строка
+  96 исследования dex49/0.md, TVL ≈ $138,7 тыс.); cargo / solc не запускались (формат — вручную).** Сделано: вид `wombat`
+  (Proto::Wombat, вид ядра StableSwap с частью StableData.wombat): математика CoreV2 / PoolV2 / HighCovRatioFeePoolV2 /
+  DynamicPoolV2 один-в-один (math/wombat_core.rs, math/wombat.rs; v1-core 2ac067b8 = развёрнутые реализации по пути
+  обмена — docs/sources/wombat_arbitrum/README.md), чтение (load_wombat*.rs, каждым блоком), события, проверка,
+  квотер quotePotentialSwap, глубина, шаг WOMBAT = 30 исполнителя (только сборка v5 — номер выдан координатором), запись
+  tools/arbitrum_record/wombat.py, тест tests/arbitrum_wombat_live.rs (#[ignore]). Задачи:
+  - T484-01 Запись своим узлом: `python3 tools/arbitrum_record/wombat.py --node http://УЗЕЛ:8547` (или record_all.py —
+    шаг wombat), коммит tests/data/arbitrum_wombat_<дата>/, снять #[ignore] в tests/arbitrum_wombat_live.rs; затем
+    ключ области «DEX» (предложение `wombat-exchange-arbitrum@arbitrum`) и настройки — docs/FIRST_RUN.md, раздел
+    «Wombat Exchange в сети Arbitrum (решение 484)»; dex.pool_enabled — Тигран.
+  - T484-02 Нужна пересборка исполнителя v5 (шаг WOMBAT = 30 — только в исходнике contracts/ArbExecutor.sol, `out/` —
+    v4) и EVM-сценарий шага (официального байткода пула в репозитории развёртываний Wombat нет — v1-core без
+    deployments; сценарий не написан). До сборки пулы Wombat — граф, котировки и сигналы; шаг не строится с причиной
+    «нужен исполнитель v5». Номер 30: 29 — шаг ветки Basin, 31 — Shell (сверить при слиянии).
+  - T484-03 Cross Chain Pool 0xe788…1145 — реализация CrossChainPool (0xe1C8…F454, Sourcify match, solc 0.8.18) на
+    CoreV3 / PoolV3 / HighCovRatioFeePoolV3: этих файлов в wombat-exchange/v1-core нет (только Sourcify); CoreV3.sol против
+    CoreV2 — 551 строка отличий, PoolV3 против PoolV2 — 381 (сравнение в браузере). Математика не портирована — пул в
+    dex.stable_pools не вписывать (без реализации в списках чтение откажет). Нужно: перенести исходник Sourcify в
+    docs/sources/ и порт CoreV3 (отдельная задача). TVL пула — не проверялся.
+  - T484-04 Пауза актива: у реализаций без геттера isPaused (PausableAssets c39623 — Main…qWOM, FRAX-MAI-USD+, frxETH)
+    бот читает слот 201 (storageLayout Sourcify всех 12 реализаций — факт); сверка слота с isPaused — записью T484-01
+    (у реализаций с геттером).
+  - T484-05 Глубина (quote/wombat_depth.rs): опорная цена — средняя цена пробы 1/PROBE_DIV баланса входа (формулы
+    маржинальной цены в контракте нет) — оценка размера, не сверяемая величина.
+  - T484-06 Динамические пулы: getRelativePrice() активов (PriceFeedAsset, WstETHAsset, AnkrStakingAsset, jUsdcAsset)
+    читается вызовом на блоке, формула цены не повторяется; DynamicAsset.sol развёрнутых активов ≠ v1-core (052671 против
+    a55783) — бот её не использует.
 - **Решение 481 (20.11.2026, ветка t248/arb-curve-ren-wsteth от origin/feat/arbitrum 3d852b93) — T472-10: пулы Curve
   WBTC/renBTC и ETH/wstETH (Arbitrum) по исходникам Sourcify; cargo не запускался (формат — вручную).** Сделано:
   исходники как есть — docs/sources/curve_arbitrum/ (SHA-256 совпал с посчитанным в браузере); ren — та же математика,

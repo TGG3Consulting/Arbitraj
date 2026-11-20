@@ -382,3 +382,18 @@ interface IEkuboCore {
     function completePayments() external;
     function withdraw() external;
 }
+
+// Решение 484: пул Wombat Exchange — wombat-exchange/v1-core 2ac067b8 contracts/wombat-core/pool/PoolV2.sol L843-L850
+// (swap: вход — safeTransferFrom(msg.sender) по разрешению пулу, выход — получателю `to`; ответ — выход и haircut).
+// Развёрнутые реализации Arbitrum (HighCovRatioFeePoolV2 / DynamicPoolV2) — та же подпись (Sourcify; сверка —
+// docs/sources/wombat_arbitrum/README.md).
+interface IWombatPool {
+    function swap(
+        address fromToken,
+        address toToken,
+        uint256 fromAmount,
+        uint256 minimumToAmount,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 actualToAmount, uint256 haircut);
+}

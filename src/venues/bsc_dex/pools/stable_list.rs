@@ -1,6 +1,7 @@
 //! Файл: venues/bsc_dex/pools/stable_list.rs
-//! Что делает: решение 292 — пулы dex.stable_pools видов saddle_stableswap (Nerve) и curve_stableswap (Ellipsis,
-//! Curve 2020) — источник справочника при поиске по фабрикам (index.factory_scan = да), без индексатора: монеты пула
+//! Что делает: решение 292 — пулы dex.stable_pools видов saddle_stableswap (Nerve), curve_stableswap (Ellipsis,
+//! Curve 2020) и wombat (решение 484: монеты — getTokens() пула) — источник справочника при поиске по фабрикам
+//! (index.factory_scan = да), без индексатора: монеты пула
 //! читаются у самого пула (getToken(k) / coins(k) до первого отката — load_saddle::tokens_of, load_curve::coins_of),
 //! кандидат — каждая пара (монета подписки, встречный), обе монеты которой в пуле; дальше — index::take → проверка
 //! (verify_stable_u.rs / verify_curve.rs) → реестр. Список не задан или пуст — ничего (как до 292). Одна пачка на проход.
@@ -26,6 +27,7 @@ use super::super::directory::gt_parse::IndexedPool;
 use super::super::node::call;
 use super::abi_curve::{IStableSwapV1, MAX_COINS};
 use super::abi_saddle::{ISaddleSwap, MAX_TOKENS};
+use super::abi_wombat::IWombatPool;
 use super::families::{self, Family, Proto};
 use super::family_variant::Variant;
 use super::load_curve::coins_of;
@@ -47,7 +49,11 @@ pub struct Extra {
 /// Вид, у которого список dex.stable_pools — источник пулов (решение 292). Ошибок нет.
 pub fn is_listed_kind(proto: Proto) -> bool {
     // Решение 453: tricrypto 2021 (curve_tricrypto_v1) — тоже пул из списка, монеты — coins(k).
-    matches!(proto, Proto::SaddleStable | Proto::CurveStable | Proto::CurveTricryptoV1)
+    // Решение 484: Wombat — пул из списка, монеты — getTokens() одним вызовом.
+    matches!(
+        proto,
+        Proto::SaddleStable | Proto::CurveStable | Proto::CurveTricryptoV1 | Proto::Wombat
+    )
 }
 
 /// Вызовы «монеты пула»: Saddle — getToken(0..MAX_TOKENS), Curve 2020 — coins(0..MAX_COINS). Ошибок нет.
@@ -59,6 +65,7 @@ pub fn token_calls(proto: Proto, pool: Address) -> Vec<(Address, Bytes)> {
                 (pool, data.into())
             })
             .collect(),
+        Proto::Wombat => vec![(pool, IWombatPool::getTokensCall {}.abi_encode().into())],
         _ => (0..MAX_COINS)
             .map(|k| {
                 let data = IStableSwapV1::coinsCall { i: U256::from(k) }.abi_encode();
@@ -72,6 +79,13 @@ pub fn token_calls(proto: Proto, pool: Address) -> Vec<(Address, Bytes)> {
 pub fn tokens(proto: Proto, answers: &[Result<Bytes, String>]) -> Result<Vec<Address>, String> {
     match proto {
         Proto::SaddleStable => tokens_of(answers),
+        // Решение 484: getTokens() — массив одним ответом (PoolV2.sol L359).
+        Proto::Wombat => match answers.first() {
+            Some(Ok(b)) => IWombatPool::getTokensCall::abi_decode_returns(b)
+                .map_err(|e| format!("ответ getTokens() не по ABI: {e}")),
+            Some(Err(r)) => Err(format!("getTokens() откатился: {r}")),
+            None => Err("нет ответа getTokens()".into()),
+        },
         _ => coins_of(answers),
     }
 }

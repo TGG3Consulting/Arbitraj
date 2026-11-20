@@ -30,7 +30,7 @@ use super::ticks::TickMap;
 use super::{
     aero_cl, load_aero_basic, load_algebra, load_algebra_integral, load_balancer, load_balancer_v3, load_bin, load_camelot, load_cl, load_crypto, load_crypto_v1, load_curve, load_curve_meta, load_curve_ng, load_curve_oracle, load_curve_plain, load_dmm, load_dodo, load_ekubo,
     load_elastic, load_fluid, load_inf_stable, load_izi, load_lb, load_lb20, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
-    load_solidly, load_stable_u, load_v2v3, load_woo,
+    load_solidly, load_stable_u, load_v2v3, load_wombat, load_woo,
 };
 
 /// Прочитанное состояние.
@@ -322,6 +322,23 @@ pub async fn state(
             ErrorCode::Internal,
             format!("{}: ссылка на пару Nomiswap Stable не того вида", f.title),
         ));
+    }
+    // Решение 484: Wombat — вид ядра StableSwap (часть StableData.wombat), чтение — load_wombat.rs (и пара многомонетного
+    // пула — PoolRef::Multi, когда пара читается одна).
+    if f.proto == Proto::Wombat {
+        let a = match reference {
+            PoolRef::Contract(a) | PoolRef::Multi { contract: a, .. } => a,
+            _ => {
+                let why = format!("{}: ссылка на пул Wombat не того вида", f.title);
+                return Err(ctx.err(ErrorCode::Internal, why));
+            }
+        };
+        return Ok(Loaded {
+            state: load_wombat::load(ctx, f, *a, pair, &tag).await?,
+            ticks: None,
+            bins: None,
+            fee_pips: None,
+        });
     }
     // PancakeSwap / Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: вид ядра StableSwap, свои чтения
     // (load_stable_u.rs, load_saddle.rs). WooFi — пара общего контракта (PoolRef::Member), состояние оракула (load_woo.rs).

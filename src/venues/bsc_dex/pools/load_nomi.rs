@@ -112,5 +112,6 @@ pub fn state(
         input_fee: true,
         pair_d: false,
         ema: false,
+        wombat: None,
     })))
 }

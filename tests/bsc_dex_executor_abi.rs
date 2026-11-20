@@ -157,6 +157,8 @@ fn kinds_match_contract_constants() {
                 eth_in: true,
             },
         ),
+        // Решение 484: пул Wombat Exchange — шаг 30, только v5 (в исходнике; сборки v5 нет).
+        ("WOMBAT", Params::Wombat),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");
@@ -281,6 +283,7 @@ fn step_data_layouts() {
         Params::Maverick,
         Params::Elastic,
         Params::AeroBasic,
+        Params::Wombat,
     ] {
         assert!(p.data().is_empty());
     }
@@ -405,7 +408,8 @@ fn stable_bnb_contract_rules_present() {
     // две, _unwrapAll executeNative — одна, решение 272; шаг FLUID — две, решение 440: вход и выход в нативной монете;
     // шаг EKUBO — две, решение 454: нативный вход и выход; решение 456 — слияние: 3 + 2 + 2 = 7; шаг CURVE_ETH — две,
     // решение 472: вход и выход в нативном ETH — 9; шаги v5 AERO_BASIC = 26 и BALANCER_V3_BUF = 27 нативной монеты не
-    // ждут — слияние t247: по итоговому contracts/ArbExecutor.sol 9 установок и 9 сбросов). Только строки кода
+    // ждут — слияние t247: по итоговому contracts/ArbExecutor.sol 9 установок и 9 сбросов; шаг WOMBAT = 30, решение 484,
+    // нативной монеты не ждёт — по факту исходника после правки установок и сбросов по-прежнему 9). Только строки кода
     // (комментарии тоже содержат «bnbFrom = …»).
     let code: Vec<&str> =
         src.lines().map(str::trim).filter(|l| l.starts_with("bnbFrom = ")).collect();

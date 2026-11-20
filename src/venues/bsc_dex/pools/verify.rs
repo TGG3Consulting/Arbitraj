@@ -33,7 +33,7 @@ pub use super::verify_calls::{fee_method, field_calls, registry_call, registry_c
 pub use super::verify_rules::{Read, check, fill, registered, registered_for, v2_fee_pips, v3_abi};
 use super::{
     fee_probe, verify_algebra, verify_balancer, verify_balancer_v3, verify_crypto, verify_crypto_v1, verify_curve, verify_lb, verify_lb20, verify_lb22, verify_curve_ng, verify_curve_plain, verify_dodo, verify_fluid, verify_inf_stable, verify_izi, verify_metric,
-    verify_ekubo, verify_maverick, verify_solidly, verify_stable_u, verify_v4,
+    verify_ekubo, verify_maverick, verify_solidly, verify_stable_u, verify_v4, verify_wombat,
 };
 
 /// Кандидат на проверку: DEX (вид), пул как у источника (адрес или PoolId), монета и встречный токен.
@@ -98,6 +98,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut inf_stable = Vec::new();
     let mut fluid = Vec::new();
     let mut ekubo = Vec::new();
+    let mut wombat = Vec::new();
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
@@ -136,6 +137,8 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
             Proto::InfinityStable => inf_stable.push(i),
             Proto::FluidT1 => fluid.push(i),
             Proto::Ekubo => ekubo.push(i),
+            // Решение 484: Wombat — dex.stable_pools, getTokens пула, реализация прокси (verify_wombat.rs).
+            Proto::Wombat => wombat.push(i),
             _ => v2v3.push(i),
         }
     }
@@ -280,6 +283,10 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     // Ekubo (решение 447): ключ у PoolKeyIndex + состояние у ядра (verify_ekubo.rs).
     let list: Vec<Candidate> = ekubo.iter().map(|i| cands[*i].clone()).collect();
     for (i, r) in ekubo.into_iter().zip(verify_ekubo::verify(ctx, &list, size).await) {
+        out[i] = Some(r);
+    }
+    let list: Vec<Candidate> = wombat.iter().map(|i| cands[*i].clone()).collect();
+    for (i, r) in wombat.into_iter().zip(verify_wombat::verify(ctx, &list).await) {
         out[i] = Some(r);
     }
     let list: Vec<Candidate> = v2v3.iter().map(|i| cands[*i].clone()).collect();

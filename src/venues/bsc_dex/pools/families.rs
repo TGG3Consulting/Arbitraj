@@ -186,6 +186,14 @@ pub enum Proto {
     /// getSwapOut (math/lb_swap.rs, lb_fee.rs); перечитывание каждым блоком (время блока). Квотер сверки — сам пул
     /// getSwapOut. Исполнение — шаг LB исполнителя v2 (вход переводом в пул, swap(swapForY, to)). Вид ядра — LbBin.
     LbV21,
+    /// Ekubo (решение 447; ekubo, DEX ekubo-v3-arbitrum): синглтон-ядро Core (EkuboProtocol/evm-contracts@61d09daa) — все
+    /// пулы в одном контракте, ключ (token0, token1, config: расширение, комиссия 0.64, шаг тика или стейблсвап), PoolId =
+    /// keccak256 ключа. Ссылка — PoolRef::Singleton (Core, PoolId). Ключ пула — у PoolKeyIndex (verify_ekubo.rs);
+    /// состояние, битмап и тики — Core.sload (load_ekubo.rs); события Core — анонимный лог обмена (log0) и PositionUpdated
+    /// (events_ekubo.rs); математика — math/ekubo_swap.rs; расширения — нет или MEVCapture (доплата — math/ekubo_mev.rs).
+    /// Сверка — Router.quote (MEVCaptureRouter, dex.quoter). Исполнение — шаг EKUBO исполнителя (lock → swap / forward).
+    /// Вид ядра — Ekubo.
+    Ekubo,
 }
 
 impl Proto {
@@ -357,6 +365,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "balancer_v2" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
         // Liquidity Book V2.1 (решение 290): в графе и сигналах (порт getSwapOut); исполнение — шаг LB (только v2).
         "lb_v21" => (PoolKind::LbBin, Proto::LbV21, true, false, false),
+        // Ekubo (решение 447): в графе и сигналах (порт swap ядра); исполнение — шаг EKUBO исполнителя.
+        "ekubo" => (PoolKind::Ekubo, Proto::Ekubo, true, false, false),
         // PancakeSwap StableSwap, Lista StableSwap, Saddle (Nerve) — решение 122 F, 3: в графе и сигналах; Universal
         // Router их не исполняет (tradable = false); исполнение — шагом контракта-исполнителя: STABLE_U256 у pancake / lista
         // (exchange с индексами uint256), SADDLE у saddle (swap uint8 + deadline) — exec_kind.rs (решение 122 X, стейблсвапы).
@@ -596,6 +606,15 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Liquidity Book V2.1 (решение 290): фабрика (getFactory пула и реестр getLBPairInformation). Квотер сверки — сам
         // пул getSwapOut (адрес не нужен).
         Proto::LbV21 => list.push("dex.factory"),
+        // Ekubo (решение 447): ядро (состояние, события, обмен), PoolKeyIndex (ключ пула по PoolId), слова битмапа и
+        // квотер сверки (Router.quote — MEVCaptureRouter). Расширение MEVCapture — по желанию (не задано — пулы с ним
+        // не берутся).
+        Proto::Ekubo => list.extend([
+            "dex.ekubo_core",
+            "dex.ekubo_key_index",
+            "dex.ekubo_bitmap_words",
+            "dex.quoter",
+        ]),
         // PancakeSwap / Lista StableSwap: реестр фабрики (getPairInfo / getPairInfos) подтверждает пул.
         Proto::PancakeStable | Proto::ListaStable => list.push("dex.factory"),
         // Saddle (Nerve): фабрики нет — список адресов пулов из официальной документации.

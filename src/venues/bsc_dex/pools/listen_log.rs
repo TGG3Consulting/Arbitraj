@@ -82,7 +82,11 @@ pub async fn on_log(
                 id: *id,
             }
         }
-        _ => PoolRef::Contract(log.address()),
+        // Решение 447: пул Ekubo — PoolId в данных лога ядра (ekubo_route.rs).
+        _ => match super::ekubo_route::singleton(log) {
+            Some(r) if p.reg.contains(&r) => r,
+            _ => PoolRef::Contract(log.address()),
+        },
     };
     let Some(entry) = p.reg.get(&r) else {
         return Ok(false);

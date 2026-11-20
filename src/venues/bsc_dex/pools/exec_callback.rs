@@ -112,6 +112,11 @@ pub fn usable(ctx: &Ctx, f: &Family, ver: Option<Version>) -> bool {
     {
         return false;
     }
+    // Решение 447: шаг EKUBO — только у кода исполнителя, где есть вызов Core.completePayments() (EKUBO_MARK).
+    let ekubo = f.executor_kind == Some(ExecKind::Ekubo);
+    if ekubo && !ver.is_some_and(|v| seen_with(v, EKUBO_MARK, |r| r.is_none())) {
+        return false;
+    }
     let Ok(text) = ctx.dex_text(SETTING, f.id) else {
         return true;
     };
@@ -153,6 +158,11 @@ pub fn missing(ctx: &Ctx, f: &Family) -> Option<String> {
     if let Some(why) = step_missing(ctx, f) {
         return Some(why);
     }
+    if f.executor_kind == Some(ExecKind::Ekubo)
+        && let Some(why) = ekubo_absent(ctx)
+    {
+        return Some(why);
+    }
     let sig = ctx.dex_text(SETTING, f.id).ok()?.trim().to_string();
     if sig.is_empty() {
         return None;
@@ -178,9 +188,31 @@ pub fn since(k: ExecKind) -> Version {
         | ExecKind::Smardex
         | ExecKind::Balancer
         | ExecKind::Lb => Version::V2,
-        ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => Version::V3,
+        ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin | ExecKind::Ekubo => Version::V3,
         _ => Version::V1,
     }
+}
+
+/// Решение 447: сигнатура вызова, который есть в коде исполнителя только вместе с шагом EKUBO = 22 (шаг зовёт
+/// Core.completePayments(), селектор 0x12e103f1 — EkuboProtocol/evm-contracts@61d09daa src/interfaces/IFlashAccountant.sol
+/// L60). Артефакт contracts/out/ собран до шага EKUBO (сборка solc — не в этой задаче, contracts/README.md): пока
+/// селектора в коде нет, пулы Ekubo — без пути исполнения с причиной.
+pub const EKUBO_MARK: &str = "completePayments()";
+
+/// Причина «у исполнителя кошелька нет шага EKUBO». Принимает: окружение. Возвращает: None — шаг есть или
+/// исполнителя нет (это решает executor_set). Ошибок нет.
+fn ekubo_absent(ctx: &Ctx) -> Option<String> {
+    let v = match wallet_version(ctx, "шаг EKUBO") {
+        Ok(Some(v)) => v,
+        Ok(None) => return None,
+        Err(why) => return Some(why),
+    };
+    seen_with(v, EKUBO_MARK, |r| r.clone()).map(|why| {
+        format!(
+            "шаг EKUBO: {why}; код исполнителя с шагом EKUBO ещё не собран (contracts/build.sh) — пересобрать и \
+             переразвернуть"
+        )
+    })
 }
 
 /// Вид шага появился в v2 (решения 284–290: есть у v2 и v3, нет у v1) — прежнее имя, им пользуются тесты видов. Ошибок нет.

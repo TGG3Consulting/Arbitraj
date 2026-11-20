@@ -1,7 +1,7 @@
 //! Файл: core/types/mod.rs
 //! Что делает: общие типы ядра — единый язык данных между ядром, шлюзом, адаптерами и интерфейсом.
 //! Кто вызывает: весь проект.
-//! От чего зависит: account.rs (id счёта DEX, решение 132), chain.rs (id сети, решение 416), balance.rs, market.rs, pool.rs, trade.rs, fee.rs (часть комиссии ордера), cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs, dex_graph.rs (фоновый граф маршрутов DEX, решение 308), cycle_trade.rs, dry_swap.rs, executor.rs, hold.rs (удержания вывода, решение 150), presell.rs (симуляция продажи DEX до покупки, решение 234), delist.rs (делистинги, решение 175), manual_feed.rs (записи экрана «Ручное управление» с кнопками, решение 156), window.rs, pool_cond_stat.rs (статистика условия пулов, решение 439).
+//! От чего зависит: account.rs (id счёта DEX, решение 132), chain.rs (id сети, решение 416), balance.rs, market.rs, pool.rs, trade.rs, fee.rs (часть комиссии ордера), cost.rs, transfer.rs, check.rs, send.rs, control.rs, directory.rs, dex_cycle.rs, dex_graph.rs (фоновый граф маршрутов DEX, решение 308), cycle_trade.rs, dry_swap.rs, executor.rs, hold.rs (удержания вывода, решение 150), presell.rs (симуляция продажи DEX до покупки, решение 234), delist.rs (делистинги, решение 175), manual_feed.rs (записи экрана «Ручное управление» с кнопками, решение 156), window.rs, pool_cond_stat.rs (статистика условия пулов, решение 439), pool_ekubo.rs (пул Ekubo, решение 447).
 //! Настройки: нет.
 //!
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
@@ -26,6 +26,7 @@ pub mod market;
 pub mod pool;
 pub mod pool_amp;
 pub mod pool_cond_stat;
+pub mod pool_ekubo;
 pub mod pool_fictive;
 pub mod pool_lb;
 pub mod pool_depth;
@@ -63,7 +64,7 @@ pub use hold::{HoldItem, WithdrawHold, WithdrawReady};
 pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{
-    AmpV2Data, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, LbBinData, OraclePmmData, PmmData, Pool, PoolKind, PoolRef,
+    AmpV2Data, EkuboData, EkuboMev, EkuboTick, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, LbBinData, OraclePmmData, PmmData, Pool, PoolKind, PoolRef,
     PoolState, SolidlyFee, SolidlyGate, StableData, StableGuard, StableNg, TickBinData,
     TickReserves, VaultCurve, VaultPoolData,
 };

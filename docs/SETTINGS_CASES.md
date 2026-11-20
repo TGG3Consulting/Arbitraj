@@ -831,6 +831,54 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** в описании не названы.
 - **Статус:** в релизе 141619bc.
 
+### `dex.ekubo_bitmap_words`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 447.
+- **Появилась:** 2026-11-20, ветка t223-f8/arb-family-f8.
+- **Кейс:** DECISIONS 447 (2026-11-20): «Ekubo — состояние пула читается Core.sload: слова битмапа тиков по dex.ekubo_bitmap_words по каждую сторону от слова текущего тика и тики установленных битов; расчёт обмена за прочитанными словами не идёт (частичный).»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX (id области — ключ DEX площадки, у arb_dex с «@arbitrum», решение 435); каталог src/settings/catalog/dex_ekubo.rs:22.
+- **Что ставить:** совета нет, решает Тигран — *метод:* слово = 256 шагов тика пула (цена тика 1,000001^tick); слов должно хватать на полосу dex.depth_band_pct у пула с наименьшим шагом: ln(1 + полоса) / ln(1,000001) / (256 × шаг); шаги пулов — из записи tools/arbitrum_record/ekubo.py (docs/FIRST_RUN.md).
+- **Если не задана:** в каталоге без .optional() — DEX «не подключена: не задана dex.ekubo_bitmap_words» (pools/families.rs required); чтение пула — ошибка «не задана» (pools/load_ekubo.rs). Описание каталога: «Не задана — DEX не подключена»
+- **Влияет на торговлю:** да — глубина расчёта обмена в пулах Ekubo (pools/load_ekubo.rs, math/ekubo_swap.rs).
+- **Связанные ключи:** dex.ekubo_core, dex.depth_band_pct.
+- **Статус:** ещё не в релизе (ветка t223-f8/arb-family-f8).
+
+### `dex.ekubo_core`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 447.
+- **Появилась:** 2026-11-20, ветка t223-f8/arb-family-f8.
+- **Кейс:** DECISIONS 447 (2026-11-20): «Ekubo — все пулы в одном ядре Core: состояние, тики и битмап читаются sload ядра, события (анонимный лог обмена, PositionUpdated) — от ядра, обмен — шаг EKUBO исполнителя через Core.lock.»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_ekubo.rs:19.
+- **Что ставить:** `0x00000000000014aA86C5d3c41765bb24e11bd701` у DEX ekubo-v3-arbitrum площадки arb_dex — docs.ekubo.org/reference/contracts/evm-v3 (Core, один адрес во всех сетях, Arbitrum — Live) = broadcast/DeployAll.s.sol/42161 evm-contracts (docs/FIRST_RUN.md).
+- **Если не задана:** в каталоге без .optional() — DEX «не подключена: не задана dex.ekubo_core» (pools/families.rs required). Описание каталога: «Не задан — DEX не подключена»
+- **Влияет на торговлю:** да — без неё пулы Ekubo не проверяются, не читаются и не исполняются (pools/verify_ekubo.rs).
+- **Связанные ключи:** dex.ekubo_key_index, dex.ekubo_mev_capture, dex.quoter.
+- **Статус:** ещё не в релизе (ветка t223-f8/arb-family-f8).
+
+### `dex.ekubo_key_index`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 447.
+- **Появилась:** 2026-11-20, ветка t223-f8/arb-family-f8.
+- **Кейс:** DECISIONS 447 (2026-11-20): «Ekubo — у справочника индексатора адрес пула — PoolId; ключ пула (token0, token1, config) берётся у реестра PoolKeyIndex (poolKeyById) и сверяется: keccak256 ключа = PoolId.»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_ekubo.rs:20.
+- **Что ставить:** `0x898956fc2aed01d5f81f556ff5dcb10534285718` у DEX ekubo-v3-arbitrum — EkuboProtocol/evm-contracts broadcast/DeployAll.s.sol/42161 (run-1785724793522.json, commit 02e0d82f); на странице контрактов docs.ekubo.org адреса нет (docs/FIRST_RUN.md).
+- **Если не задана:** в каталоге без .optional() — DEX «не подключена: не задана dex.ekubo_key_index». Описание каталога: «Не задан — DEX не подключена»
+- **Влияет на торговлю:** да — какие пулы Ekubo берутся (pools/verify_ekubo.rs): пул без ключа в реестре не берётся.
+- **Связанные ключи:** dex.ekubo_core.
+- **Статус:** ещё не в релизе (ветка t223-f8/arb-family-f8).
+
+### `dex.ekubo_mev_capture`
+
+- **Задача / решение:** T433-F8 / T433-079, решение 447.
+- **Появилась:** 2026-11-20, ветка t223-f8/arb-family-f8.
+- **Кейс:** DECISIONS 447 (2026-11-20): «Ekubo — пулы с расширением MEVCapture: обмен через Core.forward к расширению, расчёт — с доплатой за тики, пройденные с начала секунды (MEVCapture.sol L177-L258); другие расширения не берутся.»
+- **Где задаётся:** «Настройки», группа «Контракты DEX»; область — по DEX; каталог src/settings/catalog/dex_ekubo.rs:21.
+- **Что ставить:** `0x5555fF9Ff2757500BF4EE020DcfD0210CFfa41Be` у DEX ekubo-v3-arbitrum — docs.ekubo.org/reference/contracts/evm-v3 (MEVCapture) = broadcast/DeployAll.s.sol/42161 (docs/FIRST_RUN.md).
+- **Если не задана:** необязательная (src/settings/schema.rs: не задана — функция работает, отключается только описанное). Описание каталога: «Не задан — пулы с MEVCapture не берутся (пулы без расширения — берутся)»
+- **Влияет на торговлю:** да — какие пулы Ekubo берутся и доплата MEVCapture в котировке (pools/verify_ekubo.rs, math/ekubo_mev.rs).
+- **Связанные ключи:** dex.ekubo_core, dex.quoter (MEVCaptureRouter).
+- **Статус:** ещё не в релизе (ветка t223-f8/arb-family-f8).
+
 ### `dex.event_lanes_max`
 
 - **Задача / решение:** t153, решение 330.

@@ -28,3 +28,4 @@
 | `gate.rs` | Только Gate (решение 135): venue.book_interval, venue.window_diff_interval, venue.rate_limit_pause_ms, venue.order_history_limit |
 | `dex_fail.rs` | Задача t153, решение 339: dex.pool_fail_pause_ms, dex.pool_fail_pause_max_ms — ошибка чтения одного пула не рвёт сессию пачки, повтор пула с растущей паузой |
 | `dex_par.rs` | Задача t153: решение 331 — verify.read_parallel_max (пулы маршрута перед сделкой и ног цикла DEX ↔ DEX одновременно); решение 330 — dex.event_lanes_max, dex.block_read_parallel_max (сессия пачки) |
+| `dex_ekubo.rs` | Решение 447: Ekubo — dex.ekubo_core, dex.ekubo_key_index, dex.ekubo_mev_capture (необязательная), dex.ekubo_bitmap_words |

@@ -153,6 +153,10 @@ pub fn filter(pools: &[&Found], topics: Topics) -> Value {
     let Some(first) = pools.first() else {
         return json!({});
     };
+    // Решение 447: Ekubo — события ядра без PoolId в topics (ekubo_shallow.rs filter).
+    if let Some(f) = super::ekubo_shallow::filter(first, topics == Topics::Liquidity) {
+        return f;
+    }
     let topic0: Vec<B256> = match topics {
         Topics::Full => events::topics(first.family),
         Topics::Liquidity => events::liquidity_topics(first.family),

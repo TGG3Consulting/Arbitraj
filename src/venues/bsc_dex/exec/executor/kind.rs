@@ -3,7 +3,7 @@
 //! DEX: вид шага с его параметрами (Params), пул, токены, доля входа (StepSpec) → шаг ABI контракта (abi::ArbExecutor::Step).
 //! Часть F (новые семейства: Curve, WooFi, Maverick…) строит шаги только через `encode` — ABI и числа видов здесь.
 //! Номера видов — константы контракта contracts/ArbExecutor.sol (V2 = 0 … ELASTIC = 8, STABLE_U256 = 9, SADDLE = 10,
-//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); сверяет тест tests/bsc_dex_executor_abi.rs с
+//! STABLE_U256_BNB = 11, NOMI_STABLE = 12 — только v2, решение 284; METRIC = 13 — только v2, решение 285; IZI = 14 — только v2, решение 286; KYBER_DMM = 15 — только v2, решение 287; SMARDEX = 16 — только v2, решение 288; BALANCER = 17 — только v2, решение 289; LB = 18 — только v2, решение 290; UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только v3, решение 395 (t181); EKUBO = 22 — решение 447; сверяет тест tests/bsc_dex_executor_abi.rs с
 //! исходником); раскладка data — комментарий Step в
 //! контракте: V2 — abi.encode(uint32 feePips), CURVE — (int128 i, int128 j), STABLE_U256 — (uint256 i, uint256 j),
 //! SADDLE — (uint8 i, uint8 j), STABLE_U256_BNB — (uint256 i, uint256 j, bool bnbIn), METRIC — (bool zeroForOne),
@@ -87,6 +87,9 @@ pub enum Params {
     InfCl { key: InfKey },
     /// Решение 395 (только v3): пул PancakeSwap Infinity Bin — ключ пула; пул шага — Vault Infinity (dex.vault).
     InfBin { key: InfKey },
+    /// Решение 447: пул Ekubo в ядре Core — config ключа пула (токены ключа — токены шага по порядку адресов); пул шага —
+    /// ядро; data = abi.encode(bytes32 config). Шаг есть только у кода исполнителя с EKUBO (pools/exec_callback.rs).
+    Ekubo { config: B256 },
 }
 
 impl Params {
@@ -115,6 +118,7 @@ impl Params {
             Params::UniV4 { .. } => 19,
             Params::InfCl { .. } => 20,
             Params::InfBin { .. } => 21,
+            Params::Ekubo { .. } => 22,
         }
     }
 
@@ -134,6 +138,7 @@ impl Params {
             }
             Params::Metric { zero_for_one } => Bytes::from(zero_for_one.abi_encode()),
             Params::Balancer { pool_id } => Bytes::from(pool_id.abi_encode()),
+            Params::Ekubo { config } => Bytes::from(config.abi_encode()),
             // Решение 395: abi.encode(ключ) — статическая структура, слова подряд (как PoolId — keccak тех же байт).
             Params::UniV4 { key } => Bytes::from(key.pool_key().abi()),
             Params::InfCl { key } | Params::InfBin { key } => Bytes::from(key.pool_key().abi()),

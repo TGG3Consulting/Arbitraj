@@ -2,7 +2,7 @@
 //! Что делает: чтение состояния любого пула на заданном блоке (по его виду) и сборка записи реестра
 //! из найденного пула; перечитывание записи (после реорга, обрыва или расхождения карты с событием).
 //! Кто вызывает: pools/listen.rs.
-//! От чего зависит: load_v2v3.rs, load_cl.rs, load_bin.rs, load_lb.rs, registry.rs, discover.rs, tokens.rs.
+//! От чего зависит: load_v2v3.rs, load_cl.rs, load_bin.rs, load_lb.rs, load_ekubo.rs (решение 447), registry.rs, discover.rs, tokens.rs.
 //! Решение 281: у DEX с dex.v3_fee_source = pool_fee_each_read fee() пула V3 читается с состоянием (fee_fresh.rs) и
 //! заменяет комиссию записи (built, renewed).
 //! Настройки: через вызываемые файлы (dex.tick_words, dex.bin_depth_usd, dex.tick_lens, dex.state_view, dex.v3_fee_source).
@@ -25,7 +25,7 @@ use super::hooks::DYNAMIC_FEE_FLAG;
 use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
-    load_algebra, load_algebra_integral, load_balancer, load_bin, load_cl, load_curve, load_curve_ng, load_dmm, load_dodo,
+    load_algebra, load_algebra_integral, load_balancer, load_bin, load_cl, load_curve, load_curve_ng, load_dmm, load_dodo, load_ekubo,
     load_elastic, load_inf_stable, load_izi, load_lb, load_maverick, load_metric, load_nomi, load_saddle, load_slipstream, load_smardex,
     load_solidly, load_stable_u, load_v2v3, load_woo,
 };
@@ -177,6 +177,20 @@ pub async fn state(
         };
         let (state, bins) = load_lb::load(ctx, tokens, *a, pair, usdt, block).await?;
         return Ok(Loaded { state, ticks: None, bins: Some(bins), fee_pips: None });
+    }
+    // Ekubo (решение 447): вид ядра Ekubo, пул — в ядре (PoolId); состояние, битмап, тики, MEVCapture и время блока
+    // (load_ekubo.rs).
+    if f.proto == Proto::Ekubo {
+        let PoolRef::Singleton { manager, id } = reference else {
+            let why = format!("{}: ссылка на пул Ekubo не того вида", f.title);
+            return Err(ctx.err(ErrorCode::Internal, why));
+        };
+        return Ok(Loaded {
+            state: load_ekubo::load(ctx, f, *manager, *id, block).await?,
+            ticks: None,
+            bins: None,
+            fee_pips: None,
+        });
     }
     // SmarDex (решение 288): вид ядра Fictive, пара — отдельный контракт; состояние и время блока (load_smardex.rs).
     if f.proto == Proto::Smardex {

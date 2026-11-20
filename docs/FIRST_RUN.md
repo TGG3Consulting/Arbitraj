@@ -162,6 +162,23 @@ log.signal_hold (core/book_marks_on.rs).
 | send.tip_wins_to_step_down | по площадке DEX | у arb_dex при profit_share — решение Тиграна | Динамические чаевые (решение 437 (3)) | /home/claude/src-ext/reports/arb-tips.md, раздел 3; nitro arbos/tx_processor.go:627-645; pga/tx.go:43-46 |
 | send.pool_cond_mode | по площадке DEX | у bsc_dex не задавать; у arb_dex — `off` на старте (решение Тиграна 20.11.2026: не терять сделки); `pools` — после статистики (экран «Каналы отправки», блок «Условие пулов: статистика»), решение Тиграна | Режим условия пулов маршрута в условной отправке секвенсора (решение 439) | nitro-geth arbitrum_types/txoptions.go:79-107; решение 438 |
 
+## DEX Ekubo сети Arbitrum (решение 447)
+
+Вид пулов `ekubo` (Ekubo V3, id DEX у GeckoTerminal `ekubo-v3-arbitrum`; у площадки arb_dex ключ области «DEX» — с «@arbitrum»,
+решение 435). Адреса — официальные (docs.ekubo.org/reference/contracts/evm-v3; PoolKeyIndex — broadcast evm-contracts).
+Шаг EKUBO исполнителя появится только после сборки contracts/out с ним и переразвёртывания (contracts/README.md) — до этого
+пулы Ekubo в графе и сигналах, без исполнения.
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX ekubo-v3-arbitrum | `ekubo` | Вид пулов Ekubo (синглтон-ядро) | Решение 447 |
+| dex.pool_enabled | DEX ekubo-v3-arbitrum | `да` — после замера нагрузки (docs/ADAPTER_TEMPLATE.md п. 8) | Подписка на все логи ядра | Решение 447 |
+| dex.ekubo_core | DEX ekubo-v3-arbitrum | `0x00000000000014aA86C5d3c41765bb24e11bd701` | Ядро Core | docs.ekubo.org evm-v3; evm-contracts broadcast/DeployAll.s.sol/42161 run-1767194711580.json |
+| dex.ekubo_key_index | DEX ekubo-v3-arbitrum | `0x898956fc2aed01d5f81f556ff5dcb10534285718` | Реестр ключей пулов | evm-contracts broadcast/DeployAll.s.sol/42161 run-1785724793522.json (commit 02e0d82f) |
+| dex.ekubo_mev_capture | DEX ekubo-v3-arbitrum | `0x5555fF9Ff2757500BF4EE020DcfD0210CFfa41Be` | Пулы с расширением MEVCapture | docs.ekubo.org evm-v3 |
+| dex.quoter | DEX ekubo-v3-arbitrum | `0xd26f20001a72a18C002b00e6710000d68700ce00` | MEVCaptureRouter — Router.quote для сверки (и пулов с MEVCapture) | docs.ekubo.org evm-v3 («legacy, v3.1.1») |
+| dex.ekubo_bitmap_words | DEX ekubo-v3-arbitrum | решение Тиграна — *метод:* ln(1 + dex.depth_band_pct/100) / ln(1,000001) / (256 × наименьший шаг тика пулов), вверх до целого; шаги — из записи tools/arbitrum_record/ekubo.py | Глубина прочитанной карты тиков | Решение 447 |
+
 ## Нативная монета BNB
 
 У BNB нет адреса контракта — он сопоставляется с обёрткой WBNB.

@@ -69,6 +69,8 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
         PoolRef::Member { contract, .. } => Ok((k, *contract)),
         // Решение 295: пара многомонетного пула — шаг по контракту пула (индексы/токены — из записи пары).
         PoolRef::Multi { contract, .. } => Ok((k, *contract)),
+        // Решение 447: пул Ekubo — в ядре; шаг EKUBO открывает само ядро (lock), адрес шага — ядро.
+        PoolRef::Singleton { manager, .. } if k == ExecKind::Ekubo => Ok((k, *manager)),
         PoolRef::Singleton { .. } => Err(format!(
             "{}: пул внутри менеджера исполнитель не вызывает",
             f.id
@@ -100,7 +102,8 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
         return false;
     };
     if !k.singleton() {
-        return !matches!(e.pool.reference, PoolRef::Singleton { .. });
+        // Решение 447: у шага EKUBO ссылка — пул в ядре (Singleton), у остальных — не Singleton.
+        return matches!(e.pool.reference, PoolRef::Singleton { .. }) == (k == ExecKind::Ekubo);
     }
     let reference = match &e.pool.reference {
         PoolRef::Singleton { .. } => true,
@@ -232,6 +235,14 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             PoolState::LbBin(_) => Params::Lb,
             _ => {
                 let why = format!("{}: у пула нет состояния Liquidity Book", e.family.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            }
+        },
+        // Решение 447: пул Ekubo — config ключа из прочитанного состояния (токены ключа — токены шага по порядку адресов).
+        ExecKind::Ekubo => match &e.pool.state {
+            PoolState::Ekubo(d) => Params::Ekubo { config: d.config },
+            _ => {
+                let why = format!("{}: у пула нет состояния Ekubo", e.family.id);
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },

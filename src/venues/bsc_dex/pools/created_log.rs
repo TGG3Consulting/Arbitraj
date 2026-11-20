@@ -134,6 +134,9 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // LBPair, pid) (ILBFactory.sol L49-L51) — подписка не подключена (техдолг, docs/ROADMAP.md): новые пулы
             // приходят из справочника индексатора.
             Proto::LbV21 => continue,
+            // Ekubo (решение 447): PoolInitialized ядра — без indexed полей (ICore.sol L111), фильтра по встречному токену
+            // нет; новые пулы приходят из справочника индексатора (ключ — у PoolKeyIndex).
+            Proto::Ekubo => continue,
             // KyberSwap Classic DMM (решение 287): PoolCreated(token0 indexed, token1 indexed, pool, ampBps, totalPool) фабрики
             // (DMMFactory.sol L22-L28, L60).
             Proto::KyberDmm => (

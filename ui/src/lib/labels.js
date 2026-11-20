@@ -64,6 +64,7 @@ const CHOICE = {
   kyber_dmm: 'KyberSwap Classic DMM (усиление amp, динамическая комиссия)',
   smardex: 'SmarDex (фиктивные резервы, средняя цена по времени блока)',
   lb_v21: 'Liquidity Book V2.1 (LFJ / Trader Joe: бины, изменчивая комиссия)',
+  ekubo: 'Ekubo (синглтон-ядро, тики 1e-6, расширение MEVCapture)',
   balancer_v2: 'Balancer V2 (хранилище Vault, весовые и стейблсвап-пулы)',
   pancake_stableswap: 'StableSwap PancakeSwap',
   lista_stableswap: 'StableSwap Lista (с оракулом)',
@@ -114,6 +115,7 @@ const POOL_KIND = {
   AmpV2: 'V2 с усилением (KyberSwap DMM)',
   Fictive: 'Фиктивные резервы (SmarDex)',
   LbBin: 'Бины с изменчивой комиссией (Liquidity Book V2.1)',
+  Ekubo: 'Пул в ядре Ekubo',
   VaultPool: 'Пул в хранилище (Balancer V2)',
 };
 const METHOD = { Single: 'одиночная', Bundle: 'бандл' };

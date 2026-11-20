@@ -260,3 +260,15 @@ DEX — строки таблицы сопоставления (решение 5
   → `TreeMath.findFirstRight`) — строго ниже. Сделано по коду (`load_bin.rs`).
 
 Algebra Integral (решение 188): `abi_algebra_integral.rs` (геттеры и события комиссии Integral), `load_algebra_integral.rs` (тики связным списком, комиссия fee() плагина), `events_algebra_integral.rs` (SwapFee/Fee; Swap/Mint/Burn — `events_algebra.rs`). Математика, проверка и исполнение — общие с Algebra V1.9.
+
+Ekubo (решение 447, вид `ekubo`; EkuboProtocol/evm-contracts@61d09daa — ядро Arbitrum):
+
+| Файл | Что делает |
+| --- | --- |
+| `abi_ekubo.rs` | Ключ пула и PoolId, слоты ядра (состояние, тик, слово битмапа) и разбор значений, Core.sload, PoolKeyIndex.poolKeyById, Router.quote, события ядра, анонимный лог обмена (log0) |
+| `ekubo_keys.rs` | Память config ключей пулов по (площадка, PoolId) — кладёт проверка, читает загрузка |
+| `verify_ekubo.rs` | Проверка пула из справочника: ключ у PoolKeyIndex = PoolId, пул создан в ядре, токены = монета и встречный, token0 не нативный ETH, расширение — нет или MEVCapture |
+| `load_ekubo.rs` | Состояние на блоке: Core.sload состояния, слов битмапа (dex.ekubo_bitmap_words) и тиков; MEVCapture.sload; время блока |
+| `events_ekubo.rs` | События ядра: анонимный обмен (stateAfter), PositionUpdated (stateAfter, тики границ, биты битмапа), PositionFeesCollected (MEVCapture); метка SWAP_MARK |
+| `ekubo_route.rs` | Лог ядра → пул (PoolId из данных) и «topic0» анонимного лога — для session.rs и listen_log.rs |
+| `ekubo_shallow.rs` | Фильтр подписки пачки Ekubo (по адресу ядра без topics / с PositionUpdated) и правило пробуждения мелкого пула |

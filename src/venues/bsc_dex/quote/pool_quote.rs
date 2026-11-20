@@ -22,7 +22,7 @@ use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::{
-    balancer_math, bin_swap, dmm, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
+    balancer_math, bin_swap, dmm, ekubo_mev, ekubo_swap, lb_swap, maverick_swap, smardex_swap, solidly_fee, solidly_v1_math, stable_guard, stableswap_ng,
     stableswap_nomi, stableswap_v1, swap_solidly, v2,
 };
 use super::super::pools::families::Proto;
@@ -480,6 +480,24 @@ pub fn swap(
             Ok(Swapped {
                 amount_in: U256::from(amount - r.in_left),
                 amount_out: U256::from(r.out),
+                complete: r.complete,
+            })
+        }
+        // Ekubo (решение 447): порт swap ядра по прочитанному состоянию (math/ekubo_swap.rs), у пула с MEVCapture —
+        // доплата с выхода (math/ekubo_mev.rs, худший tickLast). Только точный вход (шаг EKUBO меняет точный вход).
+        (PoolState::Ekubo(d), PoolKind::Ekubo) => {
+            if !exact_in {
+                return Err(why("Ekubo: точный выход не поддерживается"));
+            }
+            let amount: u128 = amount.try_into().map_err(|_| none())?;
+            let r = ekubo_swap::exact_in(d, !zero_for_one, amount).ok_or_else(none)?;
+            let out = match &d.mev {
+                Some(m) => ekubo_mev::out_after(d, m, d.tick, r.tick_after, r.amount_out),
+                None => r.amount_out,
+            };
+            Ok(Swapped {
+                amount_in: U256::from(r.amount_in),
+                amount_out: U256::from(out),
                 complete: r.complete,
             })
         }

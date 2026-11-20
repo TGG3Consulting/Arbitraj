@@ -118,6 +118,8 @@ fn kinds_match_contract_constants() {
         ("UNI_V4", Params::UniV4 { key: v4_key() }),
         ("INF_CL", Params::InfCl { key: inf_key() }),
         ("INF_BIN", Params::InfBin { key: inf_key() }),
+        // Решение 447: пул Ekubo в ядре Core (артефакты out/ с шагом ещё не собраны — сверяется исходник).
+        ("EKUBO", Params::Ekubo { config: B256::ZERO }),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");

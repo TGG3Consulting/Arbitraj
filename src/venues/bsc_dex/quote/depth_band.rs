@@ -453,6 +453,8 @@ fn side(
                 .ok_or("расчёт бинов Liquidity Book невозможен")?;
             Ok((pick(U256::from(u128::MAX - r.in_left), U256::from(r.out)), false))
         }
+        // Ekubo (решение 447): обмен без комиссии до границы полосы в тиках Ekubo (depth_ekubo.rs).
+        (PoolState::Ekubo(d), PoolKind::Ekubo) => super::depth_ekubo::side(d, zfo, b, buy),
         _ => Err("вид пула и состояние не совпадают".into()),
     }
 }

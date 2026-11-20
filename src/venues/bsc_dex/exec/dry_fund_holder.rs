@@ -81,7 +81,8 @@ pub fn fallback(ctx: &Ctx) -> GatewayResult<Option<&'static str>> {
 /// Возвращает: адрес держателя или None — не известен. Ошибок нет.
 pub fn holder(proto: Proto, reference: &PoolRef, vault: Option<Address>) -> Option<Address> {
     match (reference, proto) {
-        (PoolRef::Singleton { manager, .. }, Proto::UniswapV4) => Some(*manager),
+        // Решение 447: Ekubo — все токены пулов держит ядро Core (Core.sol L40-L42: «Singleton contract holding all tokens»).
+        (PoolRef::Singleton { manager, .. }, Proto::UniswapV4 | Proto::Ekubo) => Some(*manager),
         (PoolRef::Singleton { .. }, _) => vault,
         // Balancer V2 и Infinity Stable (ссылка — адрес крючка): токены пула лежат в Vault, а не у контракта по ссылке.
         (_, Proto::BalancerV2 | Proto::InfinityStable) => vault,

@@ -2,7 +2,7 @@
 //! Что делает: общий итог применения события пула и выбор разбора по виду пула; topic0 событий для подписки
 //! (все события — глубоким пулам, только добавление ликвидности — мелким).
 //! Кто вызывает: pools/listen_log.rs.
-//! От чего зависит: events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, families.rs, registry.rs.
+//! От чего зависит: events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, events_ekubo.rs (решение 447), families.rs, registry.rs.
 //! Настройки: нет.
 
 use alloy::rpc::types::Log;
@@ -11,7 +11,7 @@ use alloy_primitives::B256;
 use super::families::{Family, Proto};
 use super::registry::Entry;
 use super::{
-    events_algebra, events_algebra_integral, events_balancer, events_lb, events_bin, events_cl, events_curve, events_curve_ng, events_dmm,
+    events_algebra, events_algebra_integral, events_balancer, events_ekubo, events_lb, events_bin, events_cl, events_curve, events_curve_ng, events_dmm,
     events_dodo, events_metric, events_elastic, events_izi, events_maverick, events_nomi, events_smardex, events_solidly, events_stable_u,
     events_v2, events_v3,
 };
@@ -55,6 +55,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::Smardex => events_smardex::topics(),
         Proto::BalancerV2 => events_balancer::topics(),
         Proto::LbV21 => events_lb::topics(),
+        Proto::Ekubo => events_ekubo::topics(),
         // PancakeSwap / Lista StableSwap, Saddle, WooFi — решение 122 F, 3; Infinity Stable (события крючка) —
         // решение «122 (Infinity Stable)» (events_stable_u.rs).
         Proto::PancakeStable
@@ -96,6 +97,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::Smardex => events_smardex::liquidity_topics(),
         Proto::BalancerV2 => events_balancer::liquidity_topics(),
         Proto::LbV21 => events_lb::liquidity_topics(),
+        Proto::Ekubo => events_ekubo::liquidity_topics(),
         Proto::PancakeStable
         | Proto::ListaStable
         | Proto::SaddleStable
@@ -126,6 +128,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::Smardex => events_smardex::apply(e, log),
         Proto::BalancerV2 => events_balancer::apply(e, log),
         Proto::LbV21 => events_lb::apply(e, log),
+        Proto::Ekubo => events_ekubo::apply(e, log),
         Proto::PancakeStable
         | Proto::ListaStable
         | Proto::SaddleStable

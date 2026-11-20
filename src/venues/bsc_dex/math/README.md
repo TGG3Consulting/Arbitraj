@@ -42,3 +42,10 @@
 | `v2.rs` | getAmountOut / getAmountIn с комиссией из настройки | PancakeLibrary, UniswapV2Library (тест — v2-periphery) |
 | `bin_price.rs` | Цена бина 128.128 | PriceHelper, Uint128x128Math.pow (тест — PriceHelper.t.sol) |
 | `bin_swap.rs` | Обмен в пуле Bin по резервам бинов | BinPool.swap, BinHelper, FeeHelper |
+| `ekubo_sqrt.rs` | Ekubo (решение 447): сжатая цена SqrtRatio ↔ 64.128 (`to_fixed`, `to_sqrt_ratio`), цена после суммы token0 / token1 (`next_from_amount0/1`), комиссия 0.64 (`compute_fee`, `amount_before_fee`); векторы официальных тестов | EkuboProtocol/evm-contracts@61d09daa `src/types/sqrtRatio.sol`, `src/math/sqrtRatio.sol`, `src/math/fee.sol` |
+| `ekubo_delta.rs` | Ekubo: суммы token0 / token1 между ценами (`amount0`, `amount1`, отсортированные варианты) с округлением ядра; векторы официальных тестов | `src/math/delta.sol` |
+| `ekubo_tick.rs` | Ekubo: тик ↔ сжатая цена (`to_sqrt_ratio_at`, `tick_at`), MIN_TICK / MAX_TICK; векторы официальных тестов | `src/math/ticks.sol`, `src/math/constants.sol` |
+| `ekubo_config.rs` | Ekubo: разбор config ключа пула — расширение, комиссия, вид (концентрированный / полный диапазон / стейблсвап с диапазоном) | `src/types/poolConfig.sol` |
+| `ekubo_bitmap.rs` | Ekubo: слово и бит тика, поиск следующего / предыдущего тика при skipAhead = 0 по прочитанным словам | `src/math/tickBitmap.sol`, `src/types/bitmap.sol` |
+| `ekubo_swap.rs` | Ekubo: обмен на точный вход — цикл swap ядра (шаги до тиков, комиссия со входа, пересечение тиков, стейблсвап) | `src/Core.sol` L510-L858 |
+| `ekubo_mev.rs` | Ekubo: доплата расширения MEVCapture с выхода (тики, пройденные с начала секунды), худший из возможных tickLast | `src/extensions/MEVCapture.sol` L177-L258 |

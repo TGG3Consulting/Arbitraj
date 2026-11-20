@@ -19,7 +19,8 @@
 // адрес обёртки нативной монеты (wnative, слот 1 — один раз, сеттера нет; ревью 272, А1). v3 (решение 395, t181) —
 // + шаги пулов внутри общего менеджера: UNI_V4 (Uniswap V4 PoolManager: unlock → unlockCallback), INF_CL и INF_BIN
 // (PancakeSwap Infinity Vault: lock → lockAcquired; Infinity Stable — пул в крючке пула CL, тот же INF_CL). execute,
-// executeNative, хранилище (owner — слот 0, wnative — слот 1) и прежние виды — без изменений.
+// executeNative, хранилище (owner — слот 0, wnative — слот 1) и прежние виды — без изменений. Решение 447 — + шаг EKUBO
+// (пул Ekubo в ядре Core: lock → locked_6416899205); артефакты out/ с этим шагом ещё не собраны (contracts/README.md).
 pragma solidity 0.8.37;
 
 import "./IPools.sol";
@@ -72,6 +73,15 @@ contract ArbExecutor {
     uint8 internal constant UNI_V4 = 19;
     uint8 internal constant INF_CL = 20;
     uint8 internal constant INF_BIN = 21;
+    // Решение 447: пул Ekubo в ядре Core (EkuboProtocol/evm-contracts@61d09daa). s.pool — ядро; data = abi.encode(bytes32
+    // config) ключа пула (token0 / token1 — токены шага по порядку адресов). Core.lock → locked_6416899205 → обмен:
+    // без расширения — swap_6269342730 ядра, с расширением (MEVCapture) — Core.forward(расширение) (иначе расширение
+    // откатит обмен: MEVCapture.sol L84-L86); долг входа — startPayments / перевод / completePayments, выход — withdraw.
+    uint8 internal constant EKUBO = 22;
+    // Пределы цены Ekubo MIN_SQRT_RATIO_RAW / MAX_SQRT_RATIO_RAW (evm-contracts@61d09daa src/types/sqrtRatio.sol L60, L62):
+    // тот же предел ставит Router (withDefaultSqrtRatioLimit, swapParameters.sol L271-L279).
+    uint256 internal constant EKUBO_MIN_SQRT = 4611797791050542631;
+    uint256 internal constant EKUBO_MAX_SQRT = 79227682466138141934206691491;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -349,6 +359,8 @@ contract ArbExecutor {
             ILBPair(s.pool).swap(ILBPair(s.pool).getTokenX() == s.tokenIn, to);
         } else if (k == UNI_V4 || k == INF_CL || k == INF_BIN) {
             _singleton(s, amount, to);
+        } else if (k == EKUBO) {
+            _ekubo(s, amount, to);
         } else if (k == WOO) {
             uint256 had = IERC20(s.tokenIn).balanceOf(s.pool);
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
@@ -579,6 +591,69 @@ contract ArbExecutor {
         } else {
             require(k == INF_BIN, "kind");
             IInfBinPoolManager(key.poolManager).swap(key, zf, -int128(int256(amount)), "");
+        }
+    }
+
+    // Решение 447: шаг пула Ekubo. Открывает ядро (s.pool): Core.lock() с данными шага после селектора
+    // (FlashAccountant.sol L146-L187) — ядро вызывает locked_6416899205 у исполнителя с теми же данными; пускается только
+    // от s.pool и только с данными этого шага (хеш в transient), один раз; не было вызова — откат «cb». Метки оплаты
+    // V3-обратных вызовов прошлых шагов стираются. Сумма ≤ int128 (SwapParameters.amount — int128).
+    function _ekubo(Step calldata s, uint256 amount, address to) internal {
+        require(amount <= uint256(uint128(type(int128).max)), "int");
+        bytes32 config = abi.decode(s.data, (bytes32));
+        bytes memory cb = abi.encode(s.tokenIn, s.tokenOut, amount, to, config);
+        (expPool, expToken, expMax) = (s.pool, address(0), 0);
+        expHash = keccak256(cb);
+        _ekuboCall(s.pool, abi.encodePacked(IEkuboCore.lock.selector, cb));
+        require(expHash == bytes32(0), "cb");
+    }
+
+    // Обратный вызов ядра Ekubo (IFlashAccountant.sol L7: селектор 0x00000000; данные шага — после id, msg.data[36:]).
+    // Только ядро текущего шага и только данные шага, один раз. Обмен на точный вход: SwapParameters = предел цены << 160 |
+    // сумма << 32 | isToken1 << 31 | skipAhead 0 (swapParameters.sol L239-L255). Без расширения — swap_6269342730 ядра
+    // (ключ 3 слова + параметры, Core.sol L510-L525); с расширением — forward(расширение) с abi.encode(ключ, параметры)
+    // (MEVCapture.sol L177-L179, ответ — abi.encode(balanceUpdate, stateAfter), L256-L257). balanceUpdate — delta0 << 128 |
+    // delta1 (poolBalanceUpdate.sol L7-L17): долг входа 0 < долг ≤ суммы шага, выход < 0. Долг гасится startPayments /
+    // перевод ровно долга / completePayments (оплачено = прирост баланса ядра: токен с налогом недоплатит — ядро откатит
+    // DebtsNotZeroed), выход — withdraw прямо получателю шага `to`. Ошибки: «pool», «native», «owed», «out».
+    function locked_6416899205(uint256) external {
+        address core = expPool;
+        bytes calldata data = msg.data[36:];
+        require(core != address(0) && msg.sender == core && keccak256(data) == expHash, "pool");
+        expPool = address(0);
+        expHash = bytes32(0);
+        (address tIn, address tOut, uint256 amount, address to, bytes32 config) =
+            abi.decode(data, (address, address, uint256, address, bytes32));
+        require(tIn != address(0) && tOut != address(0), "native");
+        bool isToken1 = tIn > tOut;
+        (address t0, address t1) = isToken1 ? (tOut, tIn) : (tIn, tOut);
+        uint256 limit = isToken1 ? EKUBO_MAX_SQRT : EKUBO_MIN_SQRT;
+        bytes32 params = bytes32((limit << 160) | (amount << 32) | (isToken1 ? uint256(1) << 31 : 0));
+        address ext = address(uint160(uint256(config) >> 96));
+        bytes memory r = ext == address(0)
+            ? _ekuboCall(core, abi.encodePacked(bytes4(0), abi.encode(t0, t1, config), params))
+            : _ekuboCall(core, abi.encodePacked(IEkuboCore.forward.selector, abi.encode(ext, t0, t1, config, params)));
+        (bytes32 balanceUpdate,) = abi.decode(r, (bytes32, bytes32));
+        int128 d0 = int128(uint128(uint256(balanceUpdate) >> 128));
+        int128 d1 = int128(uint128(uint256(balanceUpdate)));
+        (int128 owe, int128 got) = isToken1 ? (d1, d0) : (d0, d1);
+        require(owe > 0 && uint256(uint128(owe)) <= amount, "owed");
+        require(got < 0, "out");
+        _ekuboCall(core, abi.encodePacked(IEkuboCore.startPayments.selector, abi.encode(tIn)));
+        _transfer(tIn, core, uint256(uint128(owe)));
+        _ekuboCall(core, abi.encodePacked(IEkuboCore.completePayments.selector, abi.encode(tIn)));
+        _ekuboCall(core, abi.encodePacked(IEkuboCore.withdraw.selector, tOut, to, uint128(-got)));
+    }
+
+    // Вызов ядра Ekubo с готовыми данными (не ABI: ядро читает calldata само); откат ядра пробрасывается как есть.
+    // Возвращает: ответ.
+    function _ekuboCall(address core, bytes memory data) internal returns (bytes memory r) {
+        bool ok;
+        (ok, r) = core.call(data);
+        if (!ok) {
+            assembly {
+                revert(add(r, 32), mload(r))
+            }
         }
     }
 

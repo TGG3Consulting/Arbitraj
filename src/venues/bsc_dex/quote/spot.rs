@@ -101,6 +101,17 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
                 mul_div(amount, price, one)
             }
         }
+        // Ekubo (решение 447): цена token0 в token1 = (sqrtRatio 64.128 / 2^128)² (math/ekubo_sqrt.rs to_fixed) — оценка
+        // размера пробы (решение 73.19), не сверяемая величина.
+        PoolState::Ekubo(d) => {
+            let r = super::super::math::ekubo_sqrt::to_fixed(d.sqrt_ratio);
+            let one = U256::from(1u8) << 128usize;
+            if coin0 {
+                mul_div(mul_div(amount, one, r)?, one, r)
+            } else {
+                mul_div(mul_div(amount, r, one)?, r, one)
+            }
+        }
         // V2 с усилением (KyberSwap Classic DMM, решение 287): спот-цена — отношение ВИРТУАЛЬНЫХ резервов (по ним формула).
         PoolState::AmpV2(d) => {
             let (vc, vu) = if coin0 {

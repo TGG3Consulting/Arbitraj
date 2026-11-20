@@ -82,6 +82,10 @@ pub enum ExecKind {
     /// Решение 395: пул PancakeSwap Infinity Bin — как InfCl, обмен `BinPoolManager.swap(ключ, swapForY, −вход, «»)`.
     /// Только исполнитель v3.
     InfBin,
+    /// Решение 447: пул Ekubo в ядре Core — `Core.lock()` → `locked_6416899205` → `swap_6269342730` (у пула с
+    /// MEVCapture — `forward(расширение)`) → `startPayments` / перевод / `completePayments` долга, `withdraw` выхода;
+    /// data = abi.encode(bytes32 config). Есть только у кода исполнителя с шагом EKUBO (exec_callback.rs EKUBO_MARK).
+    Ekubo,
 }
 
 impl ExecKind {
@@ -108,6 +112,7 @@ impl ExecKind {
             ExecKind::UniV4 => "UNI_V4",
             ExecKind::InfCl => "INF_CL",
             ExecKind::InfBin => "INF_BIN",
+            ExecKind::Ekubo => "EKUBO",
         }
     }
 
@@ -171,6 +176,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "uniswap_v4" => ExecKind::UniV4,
         "pancakeswap_infinity_cl" | "pancake_infinity_stable" => ExecKind::InfCl,
         "pancakeswap_infinity_bin" => ExecKind::InfBin,
+        // Решение 447: Core.lock / swap / forward / startPayments / completePayments / withdraw (EkuboProtocol/evm-contracts
+        // @61d09daa src/base/FlashAccountant.sol L146-L187, L190-L221, L224-L381; src/Core.sol L510-L858). Шаг 22.
+        "ekubo" => ExecKind::Ekubo,
         _ => return None,
     })
 }

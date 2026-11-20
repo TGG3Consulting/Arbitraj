@@ -1,18 +1,19 @@
 //! Файл: tests/bsc_dex_executor_v4_live.rs
 //! Что делает: решение 461 (T457-02) — приёмка исполнителя v4 по классам шага на записи симуляции живых пулов Arbitrum
 //! One (tests/data/executor_v4_live_2026-11-20, tools/arbitrum_record/exec_v4_live.py — eth_simulateV1 своего узла на
-//! H = 526015524, только чтение; второй прогон Тиграна 20.11.2026, решение 477 — запись первого прогона H = 525988838
-//! заменена). Без сети:
+//! H = 526041320, только чтение; третий прогон Тиграна 20.11.2026 (журнал — tests/data/arbitrum_record_2026-11-20_r3),
+//! скрипт решения 478 — запись прогона H = 526015524 заменена). Без сети:
 //! 1. Сторож: строка README «sha256 симулированного bin-runtime» несёт SHA-256 contracts/out/ArbExecutor.bin-runtime
 //!    (v4); строка «- chainId: 42161» = поле chain_id строк summary.json = eth_chainId узла в raw_rpc.json; в каждой
 //!    симуляции код подменён только у X и побайтно = bin-runtime v4, блок — H.
 //! 2. Вердикт правила (live_rule.rs) для пары (v4, 42161): принят ровно Uniswap V4 (вид 19) без крючка (3 из 3 пулов);
-//!    Balancer V3 (23) без крючка — НЕ принят (решение 477): пул в записи один (0x5418…2161 — все пулы, что дал
-//!    GeckoTerminal записи balancer_v3.py), доказано 0 из 1 (нужно не меньше 2), и (а) получено 9043978293110494464 ≠
-//!    quoter_out 9043978265916190129 — квотер записан eth_call на H (время 1795201093), обмен — в блоке симуляции H + 1
-//!    (время 1795201105, raw_rpc.json); (б) получено = quoter_out_after_a. Виды крючка static / surge / mev — «нет
-//!    пулов». 20 / 21 — пулов нет; с крючком — не принимается. Развёртывание v4 кошельком площадки Arbitrum
-//!    разрешено, BSC — записи нет («не проверен»), сеть не задана — закрыто.
+//!    Balancer V3 (23) без крючка — НЕ принят: пул в записи один (0x5418…2161), он доказан ((а) получено = quoter_out —
+//!    квотер своей симуляции на том же блоке, решение 478; (б) получено = quoter_out_after_a), но доказано 1 из 1, нужно
+//!    не меньше 2 (MIN_POOLS). Остальные 56 пулов Balancer V3 записи — skipped (pools.json): 35 — квотер подбора суммы
+//!    откатился PoolPaused(pool) (0xd971f597), 14 — нулевой баланс токена, 4 — слоты баланса токена не найдены, 3 —
+//!    чужой крючок динамической комиссии. Виды крючка static / surge / mev — «нет пулов».
+//!    20 / 21 — пулов нет; с крючком — не принимается. Развёртывание v4 кошельком площадки Arbitrum разрешено, BSC —
+//!    записи нет («не проверен»), сеть не задана — закрыто.
 //! 3. Виды 22 / 24 / 1 / 0 (правило не судит): в (б) получено = quoter_out_after_a; quoter_out (б) — квотер на H до (а)
 //!    (другое состояние, не сравнивается), у LB v2.0 (24) он откатился TreeMath__ErrorDepthSearch (null).
 //!
@@ -31,8 +32,8 @@ use arb::venues::bsc_dex::exec::executor::{deploy_gate, live_proof, live_record}
 use arb::venues::bsc_dex::pools::exec_kind::ExecKind;
 
 const DIR: &str = "tests/data/executor_v4_live_2026-11-20";
-/// Блок записи H = 526015524 (README записи).
-const TAG: &str = "0x1f5a5c24";
+/// Блок записи H = 526041320 (README записи).
+const TAG: &str = "0x1f5ac0e8";
 /// Адрес X исполнителя в симуляции (README записи: пустой адрес с подменой кода).
 const X: &str = "0xc229fddb2d54db2eead21fa50e9611faab114c6c";
 /// Сеть записи — Arbitrum One (README: «- chainId: 42161»).
@@ -118,19 +119,16 @@ fn verdict_v4_arbitrum_by_rule() {
         (class(20, Hook::Stable), (0, 0, false)),
         (class(21, Hook::Without), (0, 0, false)),
         (class(21, Hook::With), (0, 0, false)),
-        // Решение 477: пул Balancer V3 в записи один; (а) получено ≠ квотер на H (квотер — блок H, обмен — блок H + 1).
-        (class(23, Hook::Without), (1, 0, false)),
+        // Пул Balancer V3 в записи один — доказан, но нужно не меньше 2 (MIN_POOLS).
+        (class(23, Hook::Without), (1, 1, false)),
     ]
     .into_iter()
     .collect();
     assert_eq!(got, want);
     let why = |c: Class| v.iter().find(|x| x.class == c).unwrap().why.clone();
     let w23 = why(class(23, Hook::Without));
-    assert!(w23.contains("доказано пулов 0 из 1 (нужно не меньше 2)"), "{w23}");
-    assert!(
-        w23.contains("(a) пул 0x5418a64e0cdb20548acb394f5d00a089baf02161: получено ≠ квотер"),
-        "{w23}"
-    );
+    assert!(w23.contains("доказано пулов 1 из 1 (нужно не меньше 2)"), "{w23}");
+    assert!(!w23.contains("необъяснённое"), "{w23}");
     assert!(!w23.contains("«нет пулов»"), "{w23}");
     assert!(why(class(19, Hook::With)).contains("класс с крючком"));
     // Виды 22 / 24 / 1 / 0 правило не судит — их классов нет.

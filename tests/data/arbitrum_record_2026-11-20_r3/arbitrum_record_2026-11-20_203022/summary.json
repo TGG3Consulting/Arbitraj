@@ -1,0 +1,39 @@
+{
+ "head": 526036550,
+ "error": null,
+ "results": [
+  {
+   "name": "ekubo_more",
+   "ok": true,
+   "code": 0,
+   "seconds": 1229,
+   "dirs": [
+    "tests/data/arbitrum_ekubo_2026-11-21"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_203022/logs/ekubo_more.log"
+  },
+  {
+   "name": "ekubo",
+   "ok": true,
+   "code": 0,
+   "seconds": 13,
+   "dirs": [
+    "tests/data/arbitrum_ekubo_2026-11-21"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_203022/logs/ekubo.log"
+  },
+  {
+   "name": "exec_v4_live",
+   "ok": true,
+   "code": 0,
+   "seconds": 9,
+   "dirs": [
+    "tests/data/executor_v4_live_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_203022/logs/exec_v4_live.log"
+  }
+ ]
+}

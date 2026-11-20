@@ -10,10 +10,10 @@
 //! 3. логи ядра за блоки записи: у анонимного лога обмена (log0, 116 байт) и у PositionUpdated PoolId берётся из
 //!    данных (pools/ekubo_route.rs), stateAfter разбирается (abi_ekubo::decode_state).
 //!
-//! Запись второго прогона 20.11.2026 (решение 477): пулов в PoolKeyIndex нет, логов ядра за 2000 блоков нет. Решение
-//! 479: ekubo.py берёт ключ из pool_initialized.json (ekubo_more.py теперь идёт первым), окно логов ядра — 100 000
-//! блоков; тесты под #[ignore] до перезаписи (математика на пулах с нативным ETH — tests/arbitrum_ekubo_more_live.rs).
-//! Кто вызывает: cargo test -- --ignored.
+//! Запись 21.11.2026 (tests/data/arbitrum_ekubo_2026-11-21, блок 526041314, решение 479): у 4 пулов GeckoTerminal ключ
+//! из PoolInitialized ядра (в PoolKeyIndex их нет), полных расчётов 15 — все = Router.quote (Python-пересчёт), логов ядра
+//! за 100 000 блоков 12 (все — log0 обмена) — #[ignore] снят.
+//! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{math, pools, quote}, файлы записи. Моков нет.
 
 use alloy::rpc::types::Log;
@@ -123,7 +123,6 @@ fn state(rec: &Value, config: B256, block_ts: u64) -> EkuboData {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20 (526010867) сделана ekubo.py до решения 479: ключей нет (PoolKeyIndex пуст для этих пулов), логов ядра за 2000 блоков 0 — перезапись ekubo_more + ekubo (TASKS T477-02)"]
 fn key_gives_pool_id() {
     let mut n = 0;
     for rec in json("pools.json").as_array().unwrap() {
@@ -145,7 +144,6 @@ fn key_gives_pool_id() {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20 (526010867) сделана ekubo.py до решения 479: ключей нет (PoolKeyIndex пуст для этих пулов), логов ядра за 2000 блоков 0 — перезапись ekubo_more + ekubo (TASKS T477-02)"]
 fn math_equals_router_quote() {
     let ts = json("meta.json")["timestamp"].as_u64().unwrap();
     let mut compared = 0;
@@ -195,7 +193,6 @@ fn math_equals_router_quote() {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20 (526010867) сделана ekubo.py до решения 479: ключей нет (PoolKeyIndex пуст для этих пулов), логов ядра за 2000 блоков 0 — перезапись ekubo_more + ekubo (TASKS T477-02)"]
 fn core_logs_route() {
     let all = json("core_logs.json");
     let mut swaps = 0;

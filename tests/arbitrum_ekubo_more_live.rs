@@ -9,9 +9,10 @@
 //!    исполняет их внутри сверки на том же блоке);
 //! 5. замер нагрузки (core_load.json): логи ядра есть, PoolId обмена находится по данным (pools/ekubo_route.rs).
 //!
-//! Запись второго прогона 20.11.2026 (решение 477, блок 526015513): п. 2, 3 — #[ignore] снят; п. 4, 5 — под #[ignore]
-//! с причиной-фактом записи.
-//! Кто вызывает: cargo test (п. 1–3), cargo test -- --ignored (п. 4–5).
+//! Запись 21.11.2026 (tests/data/arbitrum_ekubo_2026-11-21, блок 526041266, решение 479): п. 2, 3, 5 — без #[ignore]
+//! (PoolInitialized 22, пулы с нативным ETH — 9 полных расчётов = Router.quote, логов ядра за 100 001 блок 12); п. 4 — под
+//! #[ignore] с причиной-фактом записи.
+//! Кто вызывает: cargo test (п. 1–3, 5), cargo test -- --ignored (п. 4).
 //! От чего зависит: tests/ekubo_more_common (чтение записи, состояние пула, сверка с Router.quote),
 //! arb::venues::bsc_dex::{math, pools}, файлы записи. Моков нет.
 
@@ -69,7 +70,7 @@ fn native_math_equals_router_quote() {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20 (526015513): у всех 3 пулов TWAMM ликвидность 0 и скорости ордеров 0, Router.quote — 0 / 0, полных расчётов нет — сверять нечего (TASKS T456-03)"]
+#[ignore = "записи 2026-11-20 и 2026-11-21 (526041266): у всех 3 пулов TWAMM ликвидность 0, скорости ордеров 0, времён ордеров нет — полных расчётов нет, сверять нечего (TASKS T477-03)"]
 fn twamm_math_equals_router_quote() {
     let ts = json("more_meta.json")["timestamp"].as_u64().unwrap();
     let mut n = 0;
@@ -86,7 +87,6 @@ fn twamm_math_equals_router_quote() {
 }
 
 #[test]
-#[ignore = "запись 2026-11-20: логов ядра Ekubo за блоки 526013513..526015513 — 0 (core_load.json) — сверять нечего (TASKS T456-03)"]
 fn core_load_logs_route() {
     let load = json("core_load.json");
     assert!(load["logs"].as_u64().unwrap() > 0, "логов ядра за окно замера нет");

@@ -448,6 +448,14 @@
       первым. Нужна перезапись: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --date
       2026-11-20 --only ekubo_more,ekubo`; потом снять #[ignore] в tests/arbitrum_ekubo_live.rs (3) и, если в окне есть
       логи, ekubo_more core_load_logs_route.
+      Запись 21.11 (решение 479): ключи у 4 пулов из PoolInitialized, 15 + 9 расчётов = Router.quote, логов ядра 12 —
+      #[ignore] снят у tests/arbitrum_ekubo_live.rs (3) и ekubo_more core_load_logs_route. T477-02 ЗАКРЫТ.
+    - T477-01 Запись 21.11 (решение 478): (а) и (б) = квотер у всех 14 пулов; класс 23 — 1 пул, доказан, но нужно ≥ 2 —
+      НЕ принят. Из 56 пропущенных пулов Balancer V3 35 — на паузе (PoolPaused), они заняли лимит --bv3-max-pools;
+      скрипт теперь отсекает Vault.isPoolPaused. Нужна перезапись: `python3 tools/arbitrum_record/record_all.py --rpc
+      http://127.0.0.1:8547 --date 2026-11-20 --only exec_v4_live` (папка executor_v4_live_<дата H>; другая дата —
+      сменить путь в live_record.rs и tests/bsc_dex_executor_v4_live.rs). Если пулов без паузы с ненулевым балансом
+      меньше 2 — класс 23 на Arbitrum не доказать этой записью (факт сети), это вопрос Тиграну.
     - T477-03 Ekubo TWAMM: 3 пула TWAMM — ликвидность 0, ордеров нет: twamm_math_equals_router_quote под #[ignore].
     - T477-04 camelot_v2: FeePercentUpdated / SetStableSwap / PairCreated — 0 (потолок 600 с вышел на поиске нижней
       границы, окна событий не прочитаны); real_logs_parsed проверяет только Sync (49).

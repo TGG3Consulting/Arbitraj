@@ -196,6 +196,17 @@ def bv3_pools(node, tag, a, skipped):
         if any(word(r, boff + 1 + i) == 0 for i in range(n)):
             skipped.append({"kind": 23, "pool_id": pool, "why": "баланс токена пула 0 (getPoolTokenInfo balancesRaw)"})
             continue
+        # Запись 21.11.2026 (решение 478, «Запись 21.11»): 35 из 56 пропущенных пулов — квотер откатился
+        # PoolPaused(pool) (0xd971f597), они съели лимит --bv3-max-pools. Пул на паузе бот не котирует
+        # (VaultPoolData.paused) — отсекаем до счёта: Vault.isPoolPaused(pool) (IVaultExtension.sol L294, как
+        # pools/abi_balancer_v3.rs; селектор 0x6c9bc732).
+        r2, e2 = node.call(a.bv3_vault, "0x" + sel("isPoolPaused(address)") + ad(pool), tag)
+        if r2 is None or len(r2) < 66:
+            skipped.append({"kind": 23, "pool_id": pool, "why": f"Vault.isPoolPaused: {e2 or r2}"})
+            continue
+        if word(r2, 0):
+            skipped.append({"kind": 23, "pool_id": pool, "why": "пул на паузе (Vault.isPoolPaused = true)"})
+            continue
         h, e = node.call(a.bv3_vault, "0x" + sel("getHooksConfig(address)") + ad(pool), tag)
         if not h or len(h) < 2 + 64 * 11:
             skipped.append({"kind": 23, "pool_id": pool, "why": f"Vault.getHooksConfig: {e or h}"})

@@ -742,6 +742,7 @@ https://www.geckoterminal.com — гайд https://brand.coingecko.com/resources
 | channel.tip_enabled | Чаевые билдеру включены | да/нет |
 | channel.tip_bnb | Сумма чаевых | BNB |
 | channel.tip_address | Куда переводить чаевые — адрес из официальной документации канала | адрес |
+| channel.chain | Решение 435 (433-е): id сети канала (как dex.chain площадки DEX). Задана — канал только у площадки DEX с той же dex.chain; не задана — канал сети по умолчанию (одна площадка DEX — все её каналы без сети, как раньше; несколько — площадка с dex.chain = dex.default_chain). Каналам BSC не задавать; каналу sequencer (Секвенсор Arbitrum) — сеть площадки arb_dex. Необязательная | id сети |
 
 ## Уведомления в Telegram
 

@@ -41,8 +41,7 @@ static UNITS: LazyLock<Mutex<HashMap<Key, u64>>> = LazyLock::new(|| Mutex::new(H
 /// плане нет (send::planned_tip). Ошибки: ключ кошелька, узел (eth_estimateGas — текст узла: например, на кошельке
 /// меньше BNB, чем чаевые; та же оценка при отправке откажет так же).
 pub async fn planned_units(ctx: &Ctx) -> GatewayResult<Option<u64>> {
-    let ready: Vec<Ready> = super::channels::ALL
-        .iter()
+    let ready: Vec<Ready> = super::channels::of(ctx)
         .filter_map(|c| super::ready::prepare(ctx, c).ok())
         .collect();
     let Some((to, amount)) = super::tip(&ready) else {

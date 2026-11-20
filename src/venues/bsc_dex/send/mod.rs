@@ -39,6 +39,7 @@ pub mod public;
 pub mod ready;
 pub mod receipt;
 pub mod reject_log;
+pub mod sequencer;
 pub mod settle;
 pub mod stats;
 pub mod tip_gas;
@@ -63,7 +64,8 @@ use stats::Stats;
 /// открытый канал включён вместе с закрытыми / не один.
 pub fn select(ctx: &Ctx, stats: &Stats) -> GatewayResult<Vec<Ready>> {
     let mut ready = Vec::new();
-    for ch in channels::ALL {
+    // Решение 435 (433-е): только каналы сети этой площадки DEX (send/channels.rs serves).
+    for ch in channels::of(ctx) {
         match ready::prepare(ctx, ch) {
             Ok(r) => ready.push(r),
             Err(state) => {
@@ -232,8 +234,7 @@ async fn classify(
 /// Чаевые, которые будут заплачены при текущих настройках каналов (для расчёта затрат, решение 35):
 /// только если готов ровно один канал, бандлом и с включёнными чаевыми. Возвращает: сумму в wei. Ошибок нет.
 pub fn planned_tip(ctx: &Ctx) -> Option<U256> {
-    let ready: Vec<Ready> = channels::ALL
-        .iter()
+    let ready: Vec<Ready> = channels::of(ctx)
         .filter_map(|c| ready::prepare(ctx, c).ok())
         .collect();
     tip(&ready).map(|(_, amount)| amount)
@@ -245,8 +246,7 @@ pub fn planned_tip(ctx: &Ctx) -> Option<U256> {
 /// бандлового канала (одиночные исключаются из отправки бандла, send/bundle_pick.rs). Возвращает: Ok или понятную
 /// причину. Ошибок нет.
 pub fn planned_bundle_ok(ctx: &Ctx) -> Result<(), String> {
-    let ready: Vec<Ready> = channels::ALL
-        .iter()
+    let ready: Vec<Ready> = channels::of(ctx)
         .filter_map(|c| ready::prepare(ctx, c).ok())
         .collect();
     if ready.is_empty() {
@@ -274,8 +274,7 @@ pub fn planned_bundle_ok(ctx: &Ctx) -> Result<(), String> {
 /// Нижняя граница цены газа по каналам, готовым сейчас (для расчёта затрат: газ в котировке не ниже того, с которым
 /// транзакция реально уйдёт). Ошибки: NotConfigured — нет ни одного готового канала.
 pub fn planned_floor(ctx: &Ctx) -> GatewayResult<U256> {
-    let ready: Vec<Ready> = channels::ALL
-        .iter()
+    let ready: Vec<Ready> = channels::of(ctx)
         .filter_map(|c| ready::prepare(ctx, c).ok())
         .collect();
     if ready.is_empty() {

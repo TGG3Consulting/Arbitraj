@@ -167,8 +167,15 @@
     «Проверить подключение» — ошибка «Газ сети», автоснятие пауз не снимет паузу.
   - 433 (ревью) — СДЕЛАНО (решение 435): строка с хешем самого README.md из tests/data/arbitrum_node_2026-11-19/README.md
     убрана; хеши 9 файлов сверены (sha256sum -c — все совпадают).
-  - 433-е канал секвенсора (адрес — настройка), одиночная отправка; бандл на площадке без бандловых каналов — отказ до
-    отправки с причиной; eth_sendRawTransactionConditional — по документации.
+  - 433-е — СДЕЛАНО (решение 435): канал send/sequencer.rs (id `sequencer`, одиночная eth_sendRawTransaction, адрес —
+    channel.url; docs.arbitrum.io «RPC endpoints and providers»); сеть канала — новая настройка channel.chain
+    (send/channels.rs serves/of: задана — канал только площадки DEX той же dex.chain; не задана — сеть по умолчанию; одна
+    площадка DEX — все каналы без сети, как раньше). Бандл на площадке без бандловых каналов — отказ до отправки уже есть:
+    котировка — send::planned_bundle_ok (сигнал без сделки, причина), отправка — dispatch_slice (до первой отправки) и
+    bundle_pick; у сети типа 2 — отказ в exec/bundle_send.rs до симуляции (433-д).
+    НЕ сделано: eth_sendRawTransactionConditional — страница docs.arbitrum.io «RPC methods» описывает только смысл
+    (knownAccounts, blockNumberMin/Max — окно блока L1, timestampMin/Max — окно времени L2, ошибка −32003), без формата
+    запроса и примера; гадать нельзя — вопрос Тиграну (ниже, «Решение 435»).
   - 433-ж узел по площадке: настройки bsc.node_* читаются с областью площадки (27 мест At::default() в адаптере).
   - 433-з ключ области «DEX» с сетью (id@arbitrum) — families.rs, dex_ids.rs, event_flags.rs, ctx.rs dex_*.
   - 433-и статики по площадке (20 файлов, список — step5-plan.md 1.3; onchain.rs, exec_callback.rs — после слияния шага 4).

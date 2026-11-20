@@ -42,3 +42,4 @@
 | `v2.rs` | getAmountOut / getAmountIn с комиссией из настройки | PancakeLibrary, UniswapV2Library (тест — v2-periphery) |
 | `bin_price.rs` | Цена бина 128.128 | PriceHelper, Uint128x128Math.pow (тест — PriceHelper.t.sol) |
 | `bin_swap.rs` | Обмен в пуле Bin по резервам бинов | BinPool.swap, BinHelper, FeeHelper |
+| `algebra_fee.rs` | Решение 444: комиссия обмена Algebra по направлению (Algebra V1.9 с направленными комиссиями — feeZto / feeOtz; у одной комиссии — она на обе стороны) | cryptoalgebra/AlgebraV1.9 direction-based-fee a45417ed `AlgebraPool.sol:739` |

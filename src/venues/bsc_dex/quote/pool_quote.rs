@@ -17,6 +17,7 @@ use crate::core::types::{PoolKind, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::math::algebra_fee;
 use super::super::math::swap_algebra::{self, AlgebraState};
 use super::super::math::swap_cl::{self, ClState, Swapped, Version};
 use super::super::math::swap_dodo::{self, PmmState};
@@ -156,13 +157,15 @@ pub fn swap(
                 .map_err(why)
         }
         // Algebra (THENA Fusion, решения 80, 81): одна ликвидность, динамическая комиссия (globalState.fee, постоянна
-        // на весь своп), СЫРОЙ битмап тиков — своя математика (math/swap_algebra, фаза A). Вид ядра Cl.
+        // на весь своп), СЫРОЙ битмап тиков — своя математика (math/swap_algebra, фаза A). Вид ядра Cl. Решение 444:
+        // у направленных комиссий (Camelot V3) — комиссия своей стороны (math/algebra_fee.rs).
         (
             PoolState::Algebra {
                 sqrt_price_x96,
                 tick,
                 liquidity,
                 fee,
+                fee_otz,
             },
             _,
         ) => {
@@ -171,7 +174,7 @@ pub fn swap(
                 sqrt_price: *sqrt_price_x96,
                 tick: *tick,
                 liquidity: *liquidity,
-                fee: *fee,
+                fee: algebra_fee::swap_fee(*fee, *fee_otz, zero_for_one),
                 ticks,
             };
             swap_algebra::swap(&s, zero_for_one, exact_in, amount)

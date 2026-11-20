@@ -162,6 +162,19 @@ log.signal_hold (core/book_marks_on.rs).
 | send.tip_wins_to_step_down | по площадке DEX | у arb_dex при profit_share — решение Тиграна | Динамические чаевые (решение 437 (3)) | /home/claude/src-ext/reports/arb-tips.md, раздел 3; nitro arbos/tx_processor.go:627-645; pga/tx.go:43-46 |
 | send.pool_cond_mode | по площадке DEX | у bsc_dex не задавать; у arb_dex — `off` на старте (решение Тиграна 20.11.2026: не терять сделки); `pools` — после статистики (экран «Каналы отправки», блок «Условие пулов: статистика»), решение Тиграна | Режим условия пулов маршрута в условной отправке секвенсора (решение 439) | nitro-geth arbitrum_types/txoptions.go:79-107; решение 438 |
 
+## DEX Camelot V3 на Arbitrum — Algebra V1.9 с направленными комиссиями (решение 444)
+
+Область «DEX» с ключом `camelot-v3@arbitrum` (id GeckoTerminal `camelot-v3`, площадка arb_dex; решение 435, 433-з).
+Задавать, когда поднята площадка arb_dex (dex.venues) и записан тест вида (tools/arbitrum_record/algebra_dir_fee.py,
+docs/TASKS.md «Решение 444»).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `camelot-v3@arbitrum` | `algebra_dir_fee` | Camelot V3 — Algebra V1.9 с направленными комиссиями (feeZto / feeOtz) | docs.camelot.exchange/protocol/amm-v3 («based on Algebra's V1.9», directional fees); cryptoalgebra/AlgebraV1.9 ветка direction-based-fee a45417ed |
+| dex.factory | DEX `camelot-v3@arbitrum` | `0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B` | AlgebraFactory Camelot V3: проверка пула poolByPair, событие создания Pool | docs.camelot.exchange/contracts/arbitrum/one-mainnet («AMM V3 AlgebraFactory») |
+| dex.quoter_virtual | DEX `camelot-v3@arbitrum` | `да` | Сверка расчёта — обмен самого пула в eth_call (VirtualQuoter, решение 186): какой квотер развёрнут у Camelot (Quoter или QuoterV2 ветки), не сверено — dex.quoter не задавать | Решение 444, вопрос 1 (docs/TASKS.md) |
+| dex.pool_enabled | DEX `camelot-v3@arbitrum` | `да` — после записи и прохода тестов tests/arb_dex_algebra_dir.rs без метки ignore | Включить пулы DEX в справочник, граф и торговлю | Решение 444 |
+
 ## Нативная монета BNB
 
 У BNB нет адреса контракта — он сопоставляется с обёрткой WBNB.

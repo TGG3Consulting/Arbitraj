@@ -7,6 +7,7 @@
 //! Настройки: dex.* (docs/SETTINGS.md, раздел «DEX» и «Контракты вида пула»), venue.quote_asset [bsc_dex].
 
 pub mod abi_algebra;
+pub mod abi_algebra_dir;
 pub mod abi_algebra_integral;
 pub mod abi_check;
 pub mod abi_curve;
@@ -53,6 +54,7 @@ pub mod emit_pool;
 pub mod event_flags;
 pub mod events;
 pub mod events_algebra;
+pub mod events_algebra_dir;
 pub mod events_algebra_integral;
 pub mod events_bin;
 pub mod events_cl;
@@ -127,6 +129,7 @@ pub mod listen_log;
 pub mod listen_site;
 pub mod load;
 pub mod load_algebra;
+pub mod load_algebra_dir;
 pub mod load_algebra_integral;
 pub mod load_batch;
 pub mod load_batch_par;
@@ -178,6 +181,7 @@ pub mod per_block_par;
 pub mod pool_fail;
 pub mod pool_fail_note;
 pub mod pool_unread;
+pub mod prefetch_algebra_dir;
 pub mod prefetch_ask;
 pub mod prefetch_integral;
 pub mod prefetch_memo;

@@ -9,7 +9,8 @@
 //!   у узла на конце блока (a) не равен активному бину памяти — по коду контрактов логи этого пула в блоке ещё идут
 //!   (LB: Swap на каждый пройденный бин, LBPair.sol L499-L541; активный бин меняет только обмен) — settle_bins.rs;
 //! • Follow — лог, за которым по коду контракта в ТОМ ЖЕ вызове всегда идёт ещё лог пула: Algebra Integral SwapFee →
-//!   Swap (AlgebraPool.sol _emitSwapEvent, integral-core 1ff43e1: emit SwapFee, затем emit Swap); LB CompositionFees →
+//!   Swap (AlgebraPool.sol _emitSwapEvent, integral-core 1ff43e1: emit SwapFee, затем emit Swap); Algebra V1.9 с
+//!   направленными комиссиями Fee → Swap / Mint / Burn (решение 444, AlgebraV1.9 a45417ed); LB CompositionFees →
 //!   DepositedToBins (LBPair.sol v2.1.0 mint: CompositionFees в _updateBin цикла, DepositedToBins в конце mint).
 //! Отметка head (ревью слияния «357 × 339»): чтение LB на голове не прочиталось (per_block_lb.rs) — пул недостоверен и
 //! «нужно полное чтение»: следующая голова читает его ЦЕЛИКОМ (бины тоже), голова LB достоверность не поднимает
@@ -27,7 +28,7 @@
 //! Снятие отметок, которые своих логов уже не дождутся (lost, forget_all, keep_only), — settle_lost.rs.
 //! Кто вызывает: pools/listen_log.rs (step, forget), settle_bins.rs, settle_close.rs, settle_head.rs, settle_lost.rs,
 //! per_block_lb.rs (pending), registry.rs (forget при put достоверной записи).
-//! От чего зависит: registry.rs, events.rs (Applied), families.rs, abi_lb.rs, abi_algebra_integral.rs.
+//! От чего зависит: registry.rs, events.rs (Applied), families.rs, abi_lb.rs, abi_algebra_integral.rs, abi_algebra_dir.rs.
 //! Настройки: нет (базовое поведение; предел — блоки сети, не время).
 //!
 //! Замки: свой std::sync::Mutex карты отметок и замок реестра никогда не берутся вложенно (сначала реестр, потом карта,
@@ -42,6 +43,7 @@ use alloy::sol_types::SolEvent;
 
 use crate::core::types::{PoolRef, PoolState};
 
+use super::abi_algebra_dir::IAlgebraDirPool as AlgebraDir;
 use super::abi_algebra_integral::IAlgebraIntegralPool as Integral;
 use super::abi_lb::ILBPair as Lb;
 use super::events::Applied;
@@ -114,6 +116,12 @@ pub fn opens(f: &Family, log: &Log, applied: &Applied) -> Option<Vec<u32>> {
         (Proto::AlgebraIntegral, Applied::Updated | Applied::Fee(_))
             if *t0 == Integral::SwapFee::SIGNATURE_HASH =>
         {
+            Some(Vec::new())
+        }
+        // Решение 444: Fee(feeZto, feeOtz) Algebra V1.9 с направленными комиссиями испускает только _updateFee, и за
+        // ним в том же вызове всегда идёт Swap / Mint / Burn (cryptoalgebra/AlgebraV1.9 a45417ed AlgebraPool.sol:365,
+        // :497, :545, :549-558, :636, :686, :791-793; events_algebra_dir.rs).
+        (Proto::AlgebraDirFee, Applied::Updated) if *t0 == AlgebraDir::Fee::SIGNATURE_HASH => {
             Some(Vec::new())
         }
         (Proto::LbV21, Applied::Bins(ids)) if *t0 == Lb::CompositionFees::SIGNATURE_HASH => {

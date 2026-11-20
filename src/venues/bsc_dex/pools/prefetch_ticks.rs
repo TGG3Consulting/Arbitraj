@@ -96,7 +96,13 @@ pub fn algebra_more(ctx: &Ctx, pool: Address, b: &Book) -> Vec<Call> {
     let Some(gs) = got(b, pool, &IAlgebraPool::globalStateCall {}) else {
         return Vec::new();
     };
-    let Ok((lo, hi)) = raw_word_range(ctx, gs.tick.as_i32()) else {
+    algebra_more_at(ctx, pool, b, gs.tick.as_i32())
+}
+
+/// Algebra V1.9 (и с направленными комиссиями — решение 444, prefetch_algebra_dir.rs): по тику globalState — слова
+/// настоящего диапазона; все в книге — ticks() по их битам. Принимает: окружение, пул, книгу, тик. Ошибок нет.
+pub fn algebra_more_at(ctx: &Ctx, pool: Address, b: &Book, tick: i32) -> Vec<Call> {
+    let Ok((lo, hi)) = raw_word_range(ctx, tick) else {
         return Vec::new();
     };
     let mut calls = algebra_words(pool, (lo, hi));
@@ -114,8 +120,8 @@ pub fn algebra_more(ctx: &Ctx, pool: Address, b: &Book) -> Vec<Call> {
     calls
 }
 
-/// Вызовы сырых слов tickTable [lo, hi] пула Algebra V1.9. Ошибок нет.
-fn algebra_words(pool: Address, (lo, hi): (i16, i16)) -> Vec<Call> {
+/// Вызовы сырых слов tickTable [lo, hi] пула Algebra V1.9 (и с направленными комиссиями). Ошибок нет.
+pub fn algebra_words(pool: Address, (lo, hi): (i16, i16)) -> Vec<Call> {
     (lo..=hi)
         .map(|w| enc(pool, &IAlgebraPool::tickTableCall { wordPosition: w }))
         .collect()

@@ -260,3 +260,5 @@ DEX — строки таблицы сопоставления (решение 5
   → `TreeMath.findFirstRight`) — строго ниже. Сделано по коду (`load_bin.rs`).
 
 Algebra Integral (решение 188): `abi_algebra_integral.rs` (геттеры и события комиссии Integral), `load_algebra_integral.rs` (тики связным списком, комиссия fee() плагина), `events_algebra_integral.rs` (SwapFee/Fee; Swap/Mint/Burn — `events_algebra.rs`). Математика, проверка и исполнение — общие с Algebra V1.9.
+
+Algebra V1.9 с направленными комиссиями (решение 444, вид `algebra_dir_fee` — Camelot V3 на Arbitrum): `abi_algebra_dir.rs` (globalState с feeZto/feeOtz, событие Fee(feeZto, feeOtz)), `load_algebra_dir.rs` (globalState своего ABI; карта сырых тиков — `load_algebra.rs` tick_map), `events_algebra_dir.rs` (Fee — обе комиссии сразу; Swap/Mint/Burn — `events_algebra.rs`), `prefetch_algebra_dir.rs` (предзагрузка решения 325). Состояние — PoolState::Algebra с fee_otz; комиссия стороны — math/algebra_fee.rs; проверка, фабрика, исполнение (шаг ALGEBRA) — общие с Algebra V1.9; Fee → Follow в settle.rs.

@@ -85,6 +85,7 @@ fn algebra_at(state: &Value, block: u64) -> PoolState {
         tick,
         liquidity: word(s["liquidity"].as_str().unwrap(), 0).to::<u128>(),
         fee: word(s["fee"].as_str().unwrap(), 0).to::<u32>(),
+        fee_otz: None,
     }
 }
 

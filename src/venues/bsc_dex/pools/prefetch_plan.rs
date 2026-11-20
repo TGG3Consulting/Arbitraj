@@ -45,7 +45,7 @@ use super::load_dodo::FEE_TRADER;
 use super::load_v2v3::word_range;
 use super::prefetch_ask::Ask;
 use super::registry::Entry;
-use super::{prefetch_integral, prefetch_ticks};
+use super::{prefetch_algebra_dir, prefetch_integral, prefetch_ticks};
 
 /// Вызов: контракт и ABI-данные. Ошибок нет.
 pub fn enc<C: SolCall>(to: Address, c: &C) -> Call {
@@ -121,6 +121,7 @@ fn first_calls(ctx: &Ctx, e: &Entry) -> Vec<Call> {
     match (e.family.proto, &p.reference) {
         (Proto::Slipstream, PoolRef::Contract(a)) => prefetch_ticks::slip_first(ctx, e, *a),
         (Proto::Algebra, PoolRef::Contract(a)) => prefetch_ticks::algebra_first(ctx, e, *a),
+        (Proto::AlgebraDirFee, PoolRef::Contract(a)) => prefetch_algebra_dir::first(ctx, e, *a),
         (Proto::KyberElastic, PoolRef::Contract(a)) => {
             let mut l = vec![
                 enc(*a, &IElasticPool::getPoolStateCall {}),
@@ -150,6 +151,9 @@ pub fn more(ctx: &Ctx, e: &Entry, b: &Book) -> Ask {
             prefetch_ticks::slip_more(ctx, e, *a, b).into()
         }
         (Proto::Algebra, PoolRef::Contract(a)) => prefetch_ticks::algebra_more(ctx, *a, b).into(),
+        (Proto::AlgebraDirFee, PoolRef::Contract(a)) => {
+            prefetch_algebra_dir::more(ctx, *a, b).into()
+        }
         (Proto::AlgebraIntegral, PoolRef::Contract(a)) => prefetch_integral::more(ctx, *a, b),
         // KyberSwap Elastic: ticks() списка — одним view_many кода чтения (ревью 325, Н5), заранее не читаются.
         _ => Ask::default(),

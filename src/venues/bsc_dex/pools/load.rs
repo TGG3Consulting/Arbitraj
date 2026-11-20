@@ -22,6 +22,7 @@ use super::families::Family;
 use super::families::Proto;
 use super::fee_fresh;
 use super::hooks::DYNAMIC_FEE_FLAG;
+use super::load_algebra_dir;
 use super::registry::{Entry, Registry};
 use super::ticks::TickMap;
 use super::{
@@ -280,11 +281,14 @@ pub async fn state(
     }
     // Algebra (THENA Fusion, решения 80, 81): вид ядра Cl, но пул — отдельный контракт, чтение своё (load_algebra.rs):
     // globalState + liquidity + сырой битмап tickTable. tickSpacing пулу не нужен (битмап индексирует сырой тик).
-    if f.proto == Proto::Algebra || f.proto == Proto::AlgebraIntegral {
+    if matches!(f.proto, Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee) {
         if let PoolRef::Contract(a) = reference {
-            // Решение 188: у Integral тики — связным списком (load_algebra_integral.rs), состояние то же.
+            // Решение 188: у Integral тики — связным списком (load_algebra_integral.rs), состояние то же. Решение 444:
+            // у направленных комиссий — свой globalState (load_algebra_dir.rs), карта — та же, что у V1.9.
             let (state, t) = if f.proto == Proto::AlgebraIntegral {
                 load_algebra_integral::load(ctx, *a, &tag).await?
+            } else if f.proto == Proto::AlgebraDirFee {
+                load_algebra_dir::load(ctx, *a, &tag).await?
             } else {
                 load_algebra::load(ctx, *a, &tag).await?
             };

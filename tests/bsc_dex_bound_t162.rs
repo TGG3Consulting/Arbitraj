@@ -223,6 +223,7 @@ async fn algebra_rate_covers_quoter() {
             tick,
             liquidity: liq,
             fee,
+            fee_otz: None,
         };
         let e = entry(&rec.pool, PoolKind::Cl, state, None);
         for q in p["quoter"].as_array().unwrap() {

@@ -329,6 +329,7 @@ fn algebra_entry() -> arb::venues::bsc_dex::pools::registry::Entry {
                 tick: tick_of(gs),
                 liquidity: liq,
                 fee,
+                fee_otz: None,
             },
             block: v["block"].as_u64().unwrap_or(0),
             received_at: chrono::Utc::now(),

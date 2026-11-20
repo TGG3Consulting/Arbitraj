@@ -141,6 +141,7 @@ fn integral(p: &Value) -> Entry {
         tick,
         liquidity,
         fee,
+        fee_otz: None,
     };
     e.ticks = Some(map);
     e

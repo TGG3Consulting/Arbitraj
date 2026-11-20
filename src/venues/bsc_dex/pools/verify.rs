@@ -94,7 +94,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
         match c.family.proto {
             Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4 => v4.push(i),
             p if p.is_dodo() => dodo.push(i),
-            Proto::Algebra | Proto::AlgebraIntegral => algebra.push(i),
+            Proto::Algebra | Proto::AlgebraIntegral | Proto::AlgebraDirFee => algebra.push(i),
             p if p.is_solidly() => solidly.push(i),
             Proto::CurveStable => curve.push(i),
             Proto::CurveNg => curve_ng.push(i),

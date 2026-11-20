@@ -52,7 +52,10 @@ pub fn enabled(ctx: &Ctx) -> bool {
 /// считается (dex.tick_words не задана) — false. Ошибок нет.
 pub fn helps(ctx: &Ctx, e: &Entry, map: &TickMap, tick: i32) -> bool {
     match e.family.proto {
-        Proto::Algebra => raw_word_range(ctx, tick).is_ok_and(|w| w != map.words),
+        // Решение 444: тот же сырой битмап у Algebra V1.9 с направленными комиссиями.
+        Proto::Algebra | Proto::AlgebraDirFee => {
+            raw_word_range(ctx, tick).is_ok_and(|w| w != map.words)
+        }
         Proto::AlgebraIntegral => integral_helps(ctx, map, tick),
         _ => false,
     }

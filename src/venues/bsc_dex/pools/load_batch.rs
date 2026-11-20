@@ -238,6 +238,7 @@ pub fn one_by_one(f: &Family) -> bool {
         || f.proto.is_dodo()
         || f.proto == Proto::Algebra
         || f.proto == Proto::AlgebraIntegral
+        || f.proto == Proto::AlgebraDirFee
         || f.proto.is_solidly()
         || f.proto == Proto::Slipstream
         || f.proto.is_stable()

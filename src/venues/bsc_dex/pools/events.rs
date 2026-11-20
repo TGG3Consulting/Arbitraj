@@ -8,6 +8,7 @@
 use alloy::rpc::types::Log;
 use alloy_primitives::B256;
 
+use super::events_algebra_dir;
 use super::families::{Family, Proto};
 use super::registry::Entry;
 use super::{
@@ -45,6 +46,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::topics(),
         Proto::Algebra => events_algebra::topics(),
         Proto::AlgebraIntegral => events_algebra_integral::topics(),
+        Proto::AlgebraDirFee => events_algebra_dir::topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::topics(),
         Proto::CurveStable => events_curve::topics(),
         Proto::CurveNg => events_curve_ng::topics(),
@@ -86,6 +88,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::liquidity_topics(),
         Proto::Algebra => events_algebra::liquidity_topics(),
         Proto::AlgebraIntegral => events_algebra_integral::liquidity_topics(),
+        Proto::AlgebraDirFee => events_algebra_dir::liquidity_topics(),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::liquidity_topics(),
         Proto::CurveStable => events_curve::liquidity_topics(),
         Proto::CurveNg => events_curve_ng::liquidity_topics(),
@@ -116,6 +119,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         Proto::DodoDvm | Proto::DodoDpp | Proto::DodoDsp => events_dodo::apply(e, log),
         Proto::Algebra => events_algebra::apply(e, log),
         Proto::AlgebraIntegral => events_algebra_integral::apply(e, log),
+        Proto::AlgebraDirFee => events_algebra_dir::apply(e, log),
         Proto::Solidly | Proto::SolidlyV1 => events_solidly::apply(e, log),
         Proto::CurveStable => events_curve::apply(e, log),
         Proto::CurveNg => events_curve_ng::apply(e, log),

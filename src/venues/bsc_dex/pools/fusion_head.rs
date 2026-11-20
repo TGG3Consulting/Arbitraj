@@ -1,77 +1,143 @@
 //! Файл: venues/bsc_dex/pools/fusion_head.rs
-//! Что делает: решение 463 (T463-02, решение координатора 20.11) — комиссия THENA Fusion следующего блока зависит от
-//! ВРЕМЕНИ (новая точка оракула: волатильность за время с последней точки, начало окна WINDOW сдвигается), а не только
-//! от событий пула. Узел спрашивается только по событиям пула (fusion_fee.rs: чтение пула, Swap); на каждой новой голове
-//! комиссия пересчитывается ЛОКАЛЬНО по уже прочитанным данным оракула (remember) на время следующего блока (время
-//! головы — node/heads.rs at: один eth_getBlockByNumber на блок на всех, общий с deadline). Изменилась — пул уходит ядру.
-//! Данные оракула покрывают начало окна до времени блока чтения + 1 + dex.fusion_fee_horizon_s; голова за этим
-//! пределом (пул молчит дольше горизонта): настройка задана — оракул пула перечитывается на голове (fusion_fee.rs
-//! read_fee, одно чтение на горизонт), не задана — комиссия держится прежней (как до этого файла).
-//! Ещё — комиссия ТОГО ЖЕ блока для сверки с квотером на блоке (решение 73: eth_call квотера на блоке H идёт со временем
-//! H — комиссия свопа на H, а не «+ 1 с»): same_block (check/quoter_block.rs).
-//! Кто вызывает: pools/fusion_fee.rs (remember), pools/per_block.rs (any, on_head), check/quoter_block.rs (same_block).
-//! От чего зависит: math/fee_algebra_v1.rs, fusion_fee.rs, listen.rs (Pools), emit_pool.rs (emit), registry.rs,
-//! settle.rs (pending), pool_fail.rs (paused), node/heads.rs, node/call.rs (block_tag).
-//! Настройки: dex.fusion_fee_horizon_s [bsc_dex] (через fusion_fee.rs).
+//! Что делает: решение 463 (T463-02, решение координатора 20.11; ревью t236) — комиссия THENA Fusion следующего блока
+//! зависит от ВРЕМЕНИ (новая точка оракула: волатильность за время с последней точки, начало окна WINDOW сдвигается), а
+//! не только от событий пула. Узел спрашивается по событиям пула (fusion_fee.rs: чтение пула, Swap); на каждой новой
+//! голове комиссия пересчитывается ЛОКАЛЬНО по прочитанным данным оракула (книга — remember) на время следующего блока.
+//! Время головы — node/heads.rs time_since: время блока головы или более нового, никогда не более старого (ревью п. 4).
+//! Изменилась — пул уходит ядру.
+//! Не торгуем вслепую (ревью п. 1): комиссию следующего блока посчитать нельзя (времени головы нет; данных оракула нет
+//! или они старее состояния пула; время головы раньше времени чтения или последней точки оракула — без wrapping_sub;
+//! начала окна на нужное время нет) — пул недостоверен: отметка settle.rs Need::Fee (valid = false, ядру не уходит),
+//! причина — журнал dex.pool. Достоверность возвращает только полное чтение пула (settle_close.rs на следующей голове;
+//! не прочитался — причина, пауза и повтор решения 339; первый лог пула — очередь повтора, settle_lost.rs).
+//! Край горизонта (ревью п. 3): на следующей голове начала окна уже не хватит (комиссия на время головы + 1 с не
+//! считается) — оракул пула перечитывается на этой голове заранее, одновременно у всех таких пулов
+//! (fusion_head_read.rs), пока комиссия ещё известна. Пул на паузе решения 339 заранее не перечитывается.
+//! Книга (ревью п. 4): снятые пулы — forget (registry.rs retain); лог пула с removed (реорг) — orphan: данные,
+//! прочитанные на блоке лога или позже, долой (могли быть с сиротского блока; сравнение номера блока).
+//! Сверка с квотером на блоке (решение 73): same_block — комиссия свопа в САМОМ блоке H по данным оракула ЭТОГО ЖЕ
+//! чтения (own_read: чтение сверки пишет данные в свою ячейку задачи, а не в книгу).
+//! Кто вызывает: pools/fusion_fee.rs (remember), pools/per_block.rs (any, on_head), check/quoter_block.rs (own_read,
+//! same_block), registry.rs (forget), listen_log.rs (orphan).
+//! От чего зависит: math/fee_algebra_v1.rs, fusion_oracle.rs (Got), fusion_head_read.rs, listen.rs (Pools),
+//! emit_pool.rs, registry.rs, settle.rs (pending, hold, Need::Fee), pool_fail.rs (paused), node/heads.rs,
+//! depth_book.rs (label).
+//! Настройки: через fusion_fee.rs — dex.fusion_fee_horizon_s [bsc_dex].
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
 use alloy_primitives::Address;
 
 use crate::core::types::{Pool, PoolRef, PoolState};
+use crate::storage::journal::Level;
 
-use super::super::math::fee_algebra_v1::{self, Oracle};
-use super::super::node::call::block_tag;
+use super::super::math::fee_algebra_v1;
 use super::discover::Found;
 use super::families::Proto;
+use super::fusion_oracle::Got;
 use super::listen::{End, Pools};
 use super::registry::Entry;
+use super::settle::Need;
 
-/// Данные оракула пула, прочитанные на блоке.
-struct Held {
-    block: u64,
-    ts: u32,
-    oracle: Oracle,
+/// Данные оракула пула, прочитанные на блоке `block`.
+#[derive(Debug, Clone)]
+pub struct Held {
+    pub block: u64,
+    pub got: Got,
 }
 
 /// Последние прочитанные данные оракула по адресу пула THENA Fusion.
 static BOOK: LazyLock<Mutex<HashMap<Address, Held>>> = LazyLock::new(Default::default);
+
+tokio::task_local! {
+    /// Ячейка чтения сверки (own_read): задана — remember пишет сюда, а не в книгу.
+    static OWN: RefCell<Option<Held>>;
+}
 
 /// Книга под замком (отравленный замок — данные как есть). Ошибок нет.
 fn book() -> MutexGuard<'static, HashMap<Address, Held>> {
     BOOK.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// Запоминает данные оракула пула, прочитанные на блоке `block` со временем `ts` (более старые не вытесняют более
-/// новые). Ошибок нет.
-pub fn remember(pool: Address, block: u64, ts: u32, oracle: Oracle) {
+/// Запоминает данные оракула пула, прочитанные на блоке `block` (в ячейку own_read, если задача в ней; иначе в книгу:
+/// более старый блок не вытесняет более новый, тот же номер — заменяет: после реорга это канонический блок).
+/// Ошибок нет.
+pub fn remember(pool: Address, block: u64, got: Got) {
+    let mut held = Some(Held { block, got });
+    if OWN.try_with(|c| *c.borrow_mut() = held.take()).is_ok() {
+        return;
+    }
+    let Some(held) = held else {
+        return;
+    };
     let mut m = book();
     if m.get(&pool).is_some_and(|h| h.block > block) {
         return;
     }
-    m.insert(pool, Held { block, ts, oracle });
+    m.insert(pool, held);
 }
 
-/// Сверка с квотером на блоке (решение 73): в свежем состоянии пула, прочитанном на `block`, комиссия — та, что
-/// получит своп в САМОМ этом блоке (fee_at на время блока: точка оракула этого блока уже записана — globalState.fee,
-/// иначе пересчёт). Не THENA Fusion или данных этого блока нет — состояние не меняется. Ошибок нет.
-pub fn same_block(e: &mut Entry, block: u64) {
-    let PoolRef::Contract(addr) = e.pool.reference else {
-        return;
-    };
+/// Чтение `f` с ячейкой own_read: данные оракула, прочитанные внутри (fusion_fee.rs next_fee), — в итог, не в книгу.
+/// Принимает: future чтения. Возвращает: (итог чтения, данные оракула; None — не читались). Ошибок нет.
+pub async fn own_read<F: Future>(f: F) -> (F::Output, Option<Held>) {
+    OWN.scope(RefCell::new(None), async {
+        let out = f.await;
+        (out, OWN.with(|c| c.borrow_mut().take()))
+    })
+    .await
+}
+
+/// Сверка с квотером на блоке (решение 73): в свежем состоянии пула, прочитанном на `block`, комиссия — та, что получит
+/// своп в САМОМ этом блоке (fee_at на время блока чтения), по данным оракула этого же чтения `own`. Не THENA Fusion —
+/// ничего. Принимает: запись, данные чтения, блок. Ошибки (текст): данных чтения нет / не того блока, комиссия не
+/// считается.
+pub fn same_block(e: &mut Entry, own: Option<&Held>, block: u64) -> Result<(), String> {
     if e.family.proto != Proto::Algebra {
-        return;
+        return Ok(());
     }
     let PoolState::Algebra { tick, fee, .. } = &mut e.pool.state else {
+        return Ok(());
+    };
+    let Some(h) = own.filter(|h| h.block == block) else {
+        return Err(format!("THENA Fusion: данных оракула чтения на блоке {block} нет"));
+    };
+    let o = &h.got.oracle;
+    if h.got.ts < o.last.ts {
+        return Err(format!("THENA Fusion: время блока {block} раньше последней точки оракула"));
+    }
+    match fee_algebra_v1::fee_at(o, h.got.ts, *tick) {
+        Some(f) => {
+            *fee = f;
+            Ok(())
+        }
+        None => Err(format!(
+            "THENA Fusion: комиссия блока {block} не считается{}",
+            super::fusion_fee::gaps(&h.got.gaps)
+        )),
+    }
+}
+
+/// Пулы `gone` сняты из реестра — их данные долой. Ошибок нет.
+pub fn forget(gone: &[PoolRef]) {
+    let mut m = book();
+    for r in gone {
+        if let PoolRef::Contract(a) = r {
+            m.remove(a);
+        }
+    }
+}
+
+/// Лог пула с removed (реорг) на блоке `block`: данные, прочитанные на нём или позже, долой. Ошибок нет.
+pub fn orphan(r: &PoolRef, block: u64) {
+    let PoolRef::Contract(a) = r else {
         return;
     };
-    let m = book();
-    let Some(h) = m.get(&addr).filter(|h| h.block == block) else {
-        return;
-    };
-    if let Some(f) = fee_algebra_v1::fee_at(&h.oracle, h.ts, *tick) {
-        *fee = f;
+    let mut m = book();
+    if m.get(a).is_some_and(|h| h.block >= block) {
+        m.remove(a);
     }
 }
 
@@ -82,85 +148,122 @@ pub fn any(pools: &[(Found, String)]) -> bool {
 
 /// Итог шага головы по пулу.
 enum Step {
-    /// Комиссия изменилась — пул ядру (в коробке: пул крупнее прочих вариантов).
-    Changed(Box<Pool>),
-    /// Данных оракула на это время нет (за горизонтом или старее записи).
-    Read,
-    /// Ничего не делать.
+    /// Комиссия известна; Some — новая (не равна записи); edge — край горизонта.
+    Fee(Option<u32>, bool),
+    /// Комиссия не считается — причина.
+    Dark(String),
+    /// Ничего не делать (недостоверен, не Algebra).
     Skip,
 }
 
-/// Новая голова `block`: комиссия следующего блока каждого пула THENA Fusion пачки — по данным оракула без узла (см.
-/// шапку). Принимает: окружение пачки, пулы, номер головы. Ошибки: End — ядро закрыло канал.
+/// Новая голова `block`: комиссия следующего блока каждого пула THENA Fusion пачки — по книге без узла (см. шапку).
+/// Принимает: окружение пачки, пулы, номер головы. Ошибки: End — ядро закрыло канал.
 pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result<(), End> {
     if !any(pools) {
         return Ok(());
     }
-    // Время головы: кэш node/heads.rs (один запрос на блок на всех); нет — пересчёта на этой голове нет.
-    let Ok((_, ts)) = p.heads.at(&p.ctx).await else {
-        return Ok(());
+    let ts = match p.heads.time_since(&p.ctx, block).await {
+        Ok((_, t)) => u32::try_from(t).map_err(|_| format!("время головы {t} вне uint32")),
+        Err(e) => Err(format!("время головы {block} не получено: {}", e.message)),
     };
-    let ts = ts as u32;
-    let reread = p.ctx.int(super::fusion_fee::HORIZON).is_ok();
-    for (f, _) in pools {
-        if f.family.proto != Proto::Algebra {
-            continue;
-        }
+    let mut due = Vec::new();
+    for (f, t) in pools {
         let r = &f.reference;
         let PoolRef::Contract(addr) = *r else {
             continue;
         };
-        if p.holds.pending(r) || super::pool_fail::paused(p, r) {
+        if f.family.proto != Proto::Algebra || p.holds.pending(r) {
             continue;
         }
-        match p.reg.update(r, |e| step(e, addr, ts)) {
-            Some(Step::Changed(pool)) => super::emit_pool::emit(p, *pool)?,
-            Some(Step::Read) if reread => read(p, r, addr, block).await?,
-            _ => {}
+        // Чтение записи без изменения реестра (версия реестра растёт только при новой комиссии).
+        let Some(e) = p.reg.entry(r) else {
+            continue;
+        };
+        match step(&e, addr, &ts) {
+            Step::Fee(new, edge) => {
+                if let Some(n) = new
+                    && let Some(Some(pool)) = p.reg.update(r, |e| set(e, n))
+                {
+                    super::emit_pool::emit(p, pool)?;
+                }
+                if edge && !super::pool_fail::paused(p, r) {
+                    due.push((f, t.as_str(), addr));
+                }
+            }
+            Step::Dark(why) => dark(p, f, t, block, &why).await,
+            Step::Skip => {}
         }
     }
-    Ok(())
+    super::fusion_head_read::ahead(p, &due, block).await
 }
 
-/// Пересчёт комиссии записи по книге на время головы `ts`. Данные книги — не старее состояния записи
-/// (synced_block). Принимает: запись, адрес, время головы. Возвращает: итог шага. Ошибок нет.
-fn step(e: &mut Entry, addr: Address, ts: u32) -> Step {
+/// Пересчёт комиссии записи по книге на время головы. Данные книги — не старее состояния записи (synced_block).
+/// Принимает: запись, адрес, время головы или причина его отсутствия. Возвращает: итог шага. Ошибок нет.
+fn step(e: &Entry, addr: Address, ts: &Result<u32, String>) -> Step {
     if !e.valid {
         return Step::Skip;
     }
     let synced = e.synced_block;
-    let PoolState::Algebra { tick, fee, .. } = &mut e.pool.state else {
+    let PoolState::Algebra { tick, fee, .. } = &e.pool.state else {
         return Step::Skip;
     };
-    let m = book();
-    let Some(h) = m.get(&addr).filter(|h| h.block >= synced) else {
-        return Step::Read;
+    let ts = match ts {
+        Ok(t) => *t,
+        Err(why) => return Step::Dark(why.clone()),
     };
-    match fee_algebra_v1::next_block_fee(&h.oracle, ts, *tick) {
-        Some(n) if n != *fee => {
-            *fee = n;
-            Step::Changed(Box::new(e.pool.clone()))
-        }
-        Some(_) => Step::Skip,
-        None => Step::Read,
+    let m = book();
+    let Some(h) = m.get(&addr) else {
+        return Step::Dark("данных оракула нет".into());
+    };
+    if h.block < synced {
+        return Step::Dark(format!(
+            "данные оракула (блок {}) старее состояния пула (блок {synced})",
+            h.block
+        ));
     }
+    let (o, read_ts) = (&h.got.oracle, h.got.ts);
+    if ts < read_ts || ts < o.last.ts {
+        return Step::Dark(format!(
+            "время головы {ts} раньше времени чтения {read_ts} или последней точки оракула {}",
+            o.last.ts
+        ));
+    }
+    let Some(n) = fee_algebra_v1::next_block_fee(o, ts, *tick) else {
+        return Step::Dark(format!(
+            "нет начала окна оракула на время {ts} и + 1 с (прочитано на блоке {}, время {read_ts}, горизонт \
+             dex.fusion_fee_horizon_s){}",
+            h.block,
+            super::fusion_fee::gaps(&h.got.gaps)
+        ));
+    };
+    let edge = fee_algebra_v1::next_block_fee(o, ts.saturating_add(1), *tick).is_none();
+    Step::Fee((n != *fee).then_some(n), edge)
 }
 
-/// За горизонтом: оракул пула на голове (fusion_fee.rs read_fee) и комиссия в запись; отметки учтённых событий не
-/// меняются (события блока применит сессия). Сбой чтения — комиссия прежняя (пул не трогается). Ошибки: End.
-async fn read(p: &Pools, r: &PoolRef, addr: Address, block: u64) -> Result<(), End> {
-    let Ok(f) = super::fusion_fee::read_fee(&p.ctx, addr, &block_tag(block)).await else {
-        return Ok(());
-    };
-    let changed = p.reg.update(r, |e| match &mut e.pool.state {
-        PoolState::Algebra { fee, .. } if *fee != f => {
-            *fee = f;
+/// Новая комиссия `n` — в запись, если пул достоверен. Возвращает: пул ядру, если комиссия изменилась. Ошибок нет.
+fn set(e: &mut Entry, n: u32) -> Option<Pool> {
+    if !e.valid {
+        return None;
+    }
+    match &mut e.pool.state {
+        PoolState::Algebra { fee, .. } if *fee != n => {
+            *fee = n;
             Some(e.pool.clone())
         }
         _ => None,
-    });
-    match changed.flatten() {
-        Some(pool) => super::emit_pool::emit(p, pool),
-        None => Ok(()),
     }
+}
+
+/// Комиссия не считается: пул недостоверен до полного чтения (settle.rs Need::Fee) и причина в журнал. Принимает:
+/// окружение, пул, тикер, голова, причина. Ошибок нет.
+async fn dark(p: &Pools, f: &Found, t: &str, block: u64, why: &str) {
+    p.holds
+        .hold(&p.reg, &f.reference, (block, Need::Fee), Vec::new(), false);
+    let msg = format!(
+        "{} {t} ({}): комиссия следующего блока на голове {block} не считается: {why} — пул недостоверен (в \
+         котировки и сделки не идёт, ядру не уходит) до полного чтения на следующей голове (решение 463)",
+        f.family.title,
+        super::depth_book::label(&f.reference)
+    );
+    p.ctx.log(Level::Warn, "dex.pool", msg, None).await;
 }

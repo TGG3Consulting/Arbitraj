@@ -47,7 +47,8 @@ impl Holds {
             Some(Need::Active(_)) => block != h.block,
             Some(Need::Follow) => block != h.block || tx != h.tx,
             // Решение 382: память неверна — любой лог пула ставит его на полное чтение сразу (не ждать головы).
-            Some(Need::Reread) => true,
+            // Решение 463 (ревью t236): комиссия THENA Fusion не считается — так же.
+            Some(Need::Reread | Need::Fee) => true,
             None => false,
         })
     }

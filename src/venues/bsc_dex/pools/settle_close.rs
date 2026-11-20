@@ -14,7 +14,8 @@
 //! подписка, затем отписка старой) два потока «все события» идут одновременно — закрытие может случиться раньше; это
 //! полное чтение пула на голове (не возврат достоверности), лишняя работа, не деньги. Числа и настройки нет.
 //! Решение 382: так же закрывается отметка Need::Reread (память пула разошлась с узлом) — полное чтение на голове выше
-//! блока отметки.
+//! блока отметки. Решение 463 (ревью t236): и Need::Fee (комиссия THENA Fusion следующего блока не считалась —
+//! fusion_head.rs).
 //! Кто вызывает: pools/session.rs (ветка новой головы, до reload::retry).
 //! От чего зависит: settle.rs (Holds, Hold), reload.rs (load_one), stale_read.rs (waiting), pool_fail.rs (note, requeue,
 //! base), invalidated.rs, admit.rs (Members), refresh_urgency.rs (класс dex.event_refresh_urgency), listen.rs.
@@ -68,7 +69,13 @@ pub async fn on_head(
         if stale_read::waiting(missing, i) {
             continue;
         }
-        let msg = if h.need == Some(Need::Reread) {
+        let msg = if h.need == Some(Need::Fee) {
+            format!(
+                "{} {t}: комиссия следующего блока не считалась на голове {} — пул перечитывается целиком на голове \
+                 {at} (решение 463; до этого пул не котировался и ядру не отправлялся)",
+                f.family.title, h.block
+            )
+        } else if h.need == Some(Need::Reread) {
             format!(
                 "{} {t}: память пула разошлась с узлом на блоке {} — пул перечитывается целиком на голове {at} \
                  (решение 382; до этого пул не котировался и ядру не отправлялся)",

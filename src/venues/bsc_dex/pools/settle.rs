@@ -22,6 +22,7 @@
 //! ожидаемые логи потеряны: отметка снимается БЕЗ возврата достоверности, пул — на полное чтение (listen_log.rs).
 //! Отметки пачки снимает и invalidate (обрыв сессии).
 //! Решение 382: Need::Reread — память пула доказанно разошлась с узлом, нужно полное чтение (settle_reread.rs).
+//! Решение 463 (ревью t236): Need::Fee — комиссия THENA Fusion следующего блока не считается (fusion_head.rs), так же.
 //! Пределы: Active/Follow закрывает приход недостающих логов, иначе — голова сети выше блока отметки, когда логам этого
 //! пула негде ждать (settle_close.rs: полное чтение пула на голове).
 //! Снятие отметок, которые своих логов уже не дождутся (lost, forget_all, keep_only), — settle_lost.rs.
@@ -60,6 +61,18 @@ pub enum Need {
     /// (settle_close.rs) или первый же лог пула (settle_lost.rs lost → очередь повтора). Достоверность возвращает только
     /// полное чтение (registry.rs put). Своими логами не снимается, Active/Follow её не заменяют.
     Reread,
+    /// Решение 463 (ревью t236, п. 1): комиссию THENA Fusion следующего блока на голове посчитать нельзя
+    /// (fusion_head.rs) — пул ждёт ПОЛНОГО чтения, как Reread (settle_close.rs на голове выше блока отметки, первый лог
+    /// пула — settle_lost.rs). Достоверность возвращает только полное чтение.
+    Fee,
+}
+
+impl Need {
+    /// Ждёт ли отметка полного чтения (Reread, Fee): своими логами не снимается, ожиданием логов не заменяется.
+    /// Ошибок нет.
+    pub fn full(self) -> bool {
+        matches!(self, Need::Reread | Need::Fee)
+    }
 }
 
 /// Отметка пула.
@@ -173,7 +186,7 @@ impl Holds {
             h.block = at.0;
             // Решение 382: «нужно полное чтение» не заменяется ожиданием логов (снятие Active/Follow вернуло бы
             // достоверность пулу с доказанно неверной памятью).
-            if h.need != Some(Need::Reread) {
+            if !h.need.is_some_and(Need::full) {
                 h.need = Some(at.1);
             }
             h.tx = None;
@@ -193,7 +206,7 @@ impl Holds {
         }
         let back = self.with(|m| match m.get(r).map(|h| (h.head, h.need)) {
             // Решение 382: ждёт полного чтения — снимает только оно (registry.rs put).
-            Some((_, Some(Need::Reread))) => None,
+            Some((_, Some(Need::Reread | Need::Fee))) => None,
             Some((true, _)) => {
                 if let Some(h) = m.get_mut(r) {
                     h.need = None;

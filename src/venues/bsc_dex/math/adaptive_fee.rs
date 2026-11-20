@@ -6,10 +6,11 @@
 //! От чего зависит: alloy-primitives (U256).
 //! Настройки: нет (параметры — feeConfig() оператора пула, читает pools/fusion_fee.rs).
 //!
-//! Источник: исходник пула THENA Fusion (Sourcify 56, пул 0x1b9a1120…ef7d, полное совпадение) —
-//! contracts/libraries/AdaptiveFee.sol (= cryptoalgebra/AlgebraV1 master src/core/contracts/libraries/AdaptiveFee.sol);
-//! делитель волатильности 15 — DataStorageOperator.getFee (`volatilityAverage / 15`). Факт записи своего узла
-//! (tests/data/bsc_thena_fusion_2026-11-20_t237): getFee оператора = эта формула от getAverages у 60 пулов × 3 времени.
+//! Источник: AdaptiveFee.sol — cryptoalgebra/AlgebraV1 master src/core/contracts/libraries/AdaptiveFee.sol; делитель
+//! волатильности 15 — DataStorageOperator.getFee (`volatilityAverage / 15`) той же ветки. «Полное совпадение» Sourcify
+//! (56, пул 0x1b9a1120…ef7d) относится к коду ПУЛА THENA Fusion, не к оператору. С оператором THENA совпали численно на
+//! записи своего узла (tests/data/bsc_thena_fusion_2026-11-20_t237): getFee оператора = эта формула от getAverages у
+//! 60 пулов × 3 времени.
 
 use alloy_primitives::U256;
 
@@ -30,7 +31,7 @@ pub struct FeeConfig {
 /// AdaptiveFee.getFee: baseFee + sigmoid(volumePerLiquidity, volumeGamma, min(s1 + s2, uint16 max), volumeBeta), где
 /// s1, s2 — сигмоиды волатильности. Итог — uint16 (контракт обрезает; alpha1 + alpha2 + baseFee ≤ uint16 max по
 /// changeFeeConfiguration). Принимает: волатильность (уже / 15), объём на ликвидность, параметры. Возвращает:
-/// комиссию (пипсы, 1e-6); None — gamma = 0 (в контракте — деление на ноль, откат). Ошибок нет.
+/// комиссию (пипсы, 1e-6); None — какая-то gamma = 0 (см. sigmoid). Ошибок нет.
 pub fn get_fee(volatility: U256, volume_per_liquidity: U256, c: &FeeConfig) -> Option<u32> {
     let s = sigmoid(volatility, c.gamma1, c.alpha1, U256::from(c.beta1))?
         + sigmoid(volatility, c.gamma2, c.alpha2, U256::from(c.beta2))?;
@@ -42,7 +43,9 @@ pub fn get_fee(volatility: U256, volume_per_liquidity: U256, c: &FeeConfig) -> O
 }
 
 /// sigmoid: α / (1 + e^((β − x) / γ)) в целых (AdaptiveFee.sol). Принимает: x, γ, α, β. Возвращает: значение (≤ α);
-/// None — γ = 0. Ошибок нет.
+/// None — γ = 0. Контракт при γ = 0 НЕ откатывается (x − β ≥ 6γ = 0 или β − x ≥ 0 — ранний выход до деления, итог
+/// α или ноль), но changeFeeConfiguration оператора AlgebraV1 требует gamma1, gamma2, volumeGamma > 0 — такой
+/// feeConfig не бывает; встретился — ответ не тот, комиссия не считается (пул не торгуется). Ошибок нет.
 fn sigmoid(x: U256, g: u16, alpha: u16, beta: U256) -> Option<U256> {
     if g == 0 {
         return None;

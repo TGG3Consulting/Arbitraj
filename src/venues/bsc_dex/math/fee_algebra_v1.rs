@@ -11,13 +11,15 @@
 //! От чего зависит: math/adaptive_fee.rs, alloy-primitives (I256, U256).
 //! Настройки: нет.
 //!
-//! Источник: исходник пула THENA Fusion (Sourcify 56, пул 0x1b9a1120…ef7d, полное совпадение) — AlgebraPool.sol
-//! (_calculateSwapAndLock: _writeTimepoint(cache.timepointIndex, blockTimestamp, cache.startTick, currentLiquidity,
-//! cache.volumePerLiquidityInBlock), при новом индексе cache.fee = _getNewFee(blockTimestamp, currentTick,
-//! newTimepointIndex, currentLiquidity)); библиотека DataStorage.sol = cryptoalgebra/AlgebraV1 master
-//! src/core/contracts/libraries/DataStorage.sol (write, createNewTimepoint, _volatilityOnRange, _getAverageTick,
-//! getSingleTimepoint, getAverages, lteConsideringOverflow). Факт записи tests/data/bsc_thena_fusion_2026-11-20_t237
-//! (60 пулов): этот порт при volumePerLiquidityInBlock = 0 = getFee оператора на время блока + 0 / 1 / 3 с (180 из 180).
+//! Источник: код пула THENA Fusion — Sourcify 56, пул 0x1b9a1120…ef7d («полное совпадение» относится к коду ПУЛА):
+//! AlgebraPool.sol (_calculateSwapAndLock: _writeTimepoint(cache.timepointIndex, blockTimestamp, cache.startTick,
+//! currentLiquidity, cache.volumePerLiquidityInBlock), при новом индексе cache.fee = _getNewFee(blockTimestamp,
+//! currentTick, newTimepointIndex, currentLiquidity)). Библиотека DataStorage.sol и делитель 15
+//! (DataStorageOperator.getFee) — из cryptoalgebra/AlgebraV1 master (src/core/contracts/libraries/DataStorage.sol:
+//! write, createNewTimepoint, _volatilityOnRange, _getAverageTick, getSingleTimepoint, getAverages,
+//! lteConsideringOverflow), не из верифицированного кода оператора THENA; с оператором THENA совпали численно на
+//! записи tests/data/bsc_thena_fusion_2026-11-20_t237 (60 пулов): этот порт при volumePerLiquidityInBlock = 0 = getFee
+//! оператора на время блока + 0 / 1 / 3 с (180 из 180).
 //! Арифметика — как solc 0.7.6 (без проверок переполнения): int56 / uint88 / uint144 / uint32 — по модулю ширины.
 
 use alloy_primitives::{I256, U256};

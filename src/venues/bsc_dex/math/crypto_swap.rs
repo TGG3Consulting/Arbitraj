@@ -5,7 +5,8 @@
 //! (math/crypto_y2.rs, `_fee` пула), три — Tricrypto-NG (math/crypto_y3.rs, `reduction_coefficient` математики).
 //! Рампа A/gamma (обмен пересчитал бы D через newton_D) сюда не доходит: пул в рампе — halted (pools/load_crypto.rs).
 //! Где контракт откатился бы — None.
-//! Кто вызывает: quote/pool_quote.rs (ветка Crypto), quote/crypto_spot.rs.
+//! Кто вызывает: quote/pool_quote.rs (ветка Crypto), quote/crypto_depth.rs, quote/spot.rs (spot), quote/steps.rs
+//! (fee, scaled).
 //! От чего зависит: core/types (CryptoData), math/crypto_ops.rs, math/crypto_y2.rs, math/crypto_y3.rs, math/ten.rs.
 //! Настройки: нет.
 //!

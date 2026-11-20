@@ -25,8 +25,10 @@
 //!   L94-L105 (решение 287);
 //! - Curve Twocrypto-NG / Tricrypto-NG find_pool_for_coins(_from, _to, i) → пул (решение 442) — curvefi/twocrypto-ng
 //!   89c8dfb CurveTwocryptoFactory.vy L376-L386, curvefi/tricrypto-ng ecaa816 CurveL2TricryptoFactory.vy L369-L379:
-//!   `self.markets[from ^ to][i]` — порядок токенов любой (ключ — XOR адресов), i за последним пулом пары — откат
-//!   (выход за DynArray), он означает «пулов больше нет» (factory_scan.rs не считает его ошибкой).
+//!   `self.markets[from ^ to][i]` — порядок токенов любой (ключ — XOR адресов). За последним пулом пары: у
+//!   Twocrypto-NG — откат (markets — DynArray, CurveTwocryptoFactory.vy L91), у Tricrypto-NG L2 — нулевой адрес
+//!   (address[4294967296], CurveL2TricryptoFactory.vy L89). factory_scan.rs не считает ошибкой откат при i > 0; нулевой
+//!   адрес отбрасывается как «пула нет».
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::aliases::I24;

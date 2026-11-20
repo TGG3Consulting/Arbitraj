@@ -56,7 +56,7 @@
 | `dex.min_pool_liquidity_usd` | фильтр и расчёт: глубина пула по стороне (pools/depth_book.rs, quote/shallow_pick.rs) | без .optional(): ошибка «не задана»: глубина пулов не считается — ошибка «не задана» … |
 | `dex.multi_pair` | расчёт: пары многомонетных пулов как рёбра графа (pools/multi_pair.rs) | необязательная: не задана — одна пара на пул, как до решения 295 (у WooFi — как до решения 305) |
 | `dex.oracle` | какие пулы WooFi допускаются (pools/verify_woo.rs) | без .optional(): ошибка «не задана»: Не задан — DEX не подключена |
-| `dex.pair_lookup_max` | какие пулы Maverick находятся по фабрике (pools/factory_calls.rs) | необязательная: Не задана — Maverick V2 по фабрике не ищется |
+| `dex.pair_lookup_max` | какие пулы Maverick и crypto-пулы Curve находятся по фабрике (pools/factory_calls.rs) | необязательная: Не задана — Maverick V2 / crypto-пулы Curve по фабрике не ищутся |
 | `dex.pmm_ladder_usd` | расчёт: лесенка цен WooFi (pools/load_woo_ladder.rs) | необязательная: Не задана — пара WooFi только сигнал |
 | `dex.pmm_pool` | какой контракт WooPPV2 берётся (pools/factory_calls.rs) | без .optional(): ошибка «не задана»: Не задан — DEX не подключена |
 | `dex.pool_implementation` | какие пулы WooFi допускаются (pools/verify_woo.rs) | без .optional(): ошибка «не задана»: Не задан — DEX не подключена |
@@ -204,7 +204,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 | `dex.min_pool_liquidity_usd` * | —, р. 73 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: глубина пулов не считается — ошибка «не задана» … | в релизе 141619bc |
 | `dex.multi_pair` | t126, р. 295 | совета нет, решает Тигран | необязательная: не задана — одна пара на пул, как до решения 295 (у WooFi — как до решения 305) | в релизе 141619bc |
 | `dex.oracle` | —, р. 122 | совета нет, решает Тигран | без .optional(): ошибка «не задана»: Не задан — DEX не подключена | в релизе 141619bc |
-| `dex.pair_lookup_max` | —, р. 122 (Maverick V2) | совета нет, решает Тигран | необязательная: Не задана — Maverick V2 по фабрике не ищется | в релизе 141619bc |
+| `dex.pair_lookup_max` | —, р. 122 (Maverick V2); р. 442 (Curve crypto) | совета нет, решает Тигран | необязательная: Не задана — Maverick V2 / crypto-пулы Curve по фабрике не ищутся | в релизе 141619bc; смысл расширен (t223-f3) |
 | `dex.per_block_skip_same` | t153, р. 339 (ревью, t153) | `да` только при dex.pool_events_keep = да (без неё не действует) | необязательная: Не задана / нет — как раньше: событие на каждое чтение | в релизе 141619bc |
 | `dex.pmm_ladder_counter` | t136, р. 306 | не задавать при первом запуске; «да» у DEX с заданной dex.pmm_ladder_usd — после приёмки решения 306 и … | необязательная: Не задана / «нет» — пары не с USDT без лесенки, как раньше (решение 297) | в релизе 141619bc |
 | `dex.pmm_ladder_usd` | —, р. 122 | совета нет, решает Тигран | необязательная: Не задана — пара WooFi только сигнал | в релизе 141619bc |
@@ -1433,8 +1433,12 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Что ставить:** совета нет, решает Тигран
 - **Если не задана:** необязательная (src/settings/schema.rs:137-139: не задана — функция работает, отключается только описанное). Описание каталога (src/settings/catalog/dex.rs:167): «Не задана — Maverick V2 по фабрике не ищется»
 - **Влияет на торговлю:** да — какие пулы Maverick находятся по фабрике (pools/factory_calls.rs).
+- **Смысл расширен (решение 442, ревью):** Curve Twocrypto-NG / Tricrypto-NG — find_pool_for_coins(a, b, i) для
+  i = 0 … это число − 1. За последним пулом пары у Twocrypto-NG — откат (DynArray, CurveTwocryptoFactory.vy L91; при
+  i > 0 не ошибка, при i = 0 — в заметке «вызовов откатилось»), у Tricrypto-NG L2 — нулевой адрес (address[4294967296],
+  CurveL2TricryptoFactory.vy L89). Не задана — crypto-пулы этой DEX по фабрике не ищутся.
 - **Связанные ключи:** index.factory_scan.
-- **Статус:** в релизе 141619bc.
+- **Статус:** в релизе 141619bc; смысл расширен — ветка t223-f3.
 
 ### `dex.per_block_skip_same`
 

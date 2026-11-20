@@ -146,6 +146,8 @@
   → tests/data/arbitrum_curve_crypto_<дата>/ (twocrypto.json, tricrypto.json, README с блоком и хешами); затем снять
   #[ignore] у tests/arb_curve_crypto_live.rs (наша формула = get_dy пула на каждой сумме). До записи — dex.pool_enabled
   этих DEX не включать.
+  Ревью 442 (правки — DECISIONS «442 (ревью, правки)», ветка t229): откат find_pool_for_coins пропускается только при
+  i > 0; у Tricrypto-NG L2 за последним пулом — нулевой адрес (не откат); тексты dex.pair_lookup_max обновлены.
   Вопросы Тиграну / не сделано (обязательно, приоритетов нет):
   1) Один id GeckoTerminal — один вид: у Curve Arbitrum все пулы (StableSwap и crypto) под id `curve_arbitrum`. Сейчас
      crypto-пулы берутся под отдельными id DEX, заданными вручную (`…@arbitrum`), — их пулы приходят только из поиска по

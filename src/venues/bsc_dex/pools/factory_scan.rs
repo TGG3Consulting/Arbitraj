@@ -168,8 +168,9 @@ fn sort(plan: &Plan, answers: Vec<call::Piece>, coins: &HashMap<Address, String>
                     continue;
                 }
             },
-            // Решение 442: откат find_pool_for_coins Curve crypto — номер за последним пулом пары (factory_ask.rs), не ошибка.
-            Ok(Err(_)) if matches!(ask.q, Q::CurveCrypto(_)) => continue,
+            // Решение 442 (ревью): откат find_pool_for_coins при i > 0 — у Twocrypto-NG номер за последним пулом пары
+            // (DynArray, factory_ask.rs), не ошибка; откат при i = 0 — в «вызовов откатилось» (неверная фабрика).
+            Ok(Err(_)) if matches!(ask.q, Q::CurveCrypto(i) if i > 0) => continue,
             Ok(Err(_)) => {
                 reverted += 1;
                 continue;

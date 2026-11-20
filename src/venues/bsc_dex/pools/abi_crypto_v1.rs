@@ -32,6 +32,24 @@ mod sol {
             function is_killed() external view returns (bool);
         }
 
+        // Решение 472 (T472-03): геттеры tweak_price / _claim_admin_fees пула crypto v1 фабрики —
+        // curvefi/curve-factory-crypto 7ed1011 CurveCryptoSwap2ETH.vy L112 token, L126 allowed_extra_profit,
+        // L132 adjustment_step, L140 admin_fee, L148 factory, L150-L152 xcp_profit / xcp_profit_a / virtual_price,
+        // L1341 price_oracle(); Factory.vy L108 fee_receiver; CurveTokenV5.vy L42 totalSupply.
+        interface ICryptoTweakV1 {
+            function token() external view returns (address);
+            function factory() external view returns (address);
+            function price_oracle() external view returns (uint256);
+            function xcp_profit() external view returns (uint256);
+            function xcp_profit_a() external view returns (uint256);
+            function virtual_price() external view returns (uint256);
+            function allowed_extra_profit() external view returns (uint256);
+            function adjustment_step() external view returns (uint256);
+            function admin_fee() external view returns (uint256);
+            function fee_receiver() external view returns (address);
+            function totalSupply() external view returns (uint256);
+        }
+
         interface ICryptoFactoryV1 {
             function get_coins(address pool) external view returns (address[2] memory);
 

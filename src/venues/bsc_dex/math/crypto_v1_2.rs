@@ -54,6 +54,12 @@ fn geometric_mean(x: [U256; 2]) -> Option<U256> {
     None
 }
 
+/// `geometric_mean(x, True)` (L246-L269; решение 472 — tweak_price, get_xcp): сначала по убыванию (`if sort and x[0] <
+/// x[1]`), затем тот же цикл. Принимает: x в любом порядке. Возвращает: D или None (откат).
+pub fn geometric_mean_sorted(x: [U256; 2]) -> Option<U256> {
+    geometric_mean(if x[0] < x[1] { [x[1], x[0]] } else { x })
+}
+
 /// `newton_D(ANN, gamma, x_unsorted)` (L274-L345). Принимает: A, gamma, балансы в 18 знаках и цене пула. Возвращает: D
 /// или None (откат).
 pub fn newton_d(ann: U256, gamma: U256, xu: [U256; 2]) -> Option<U256> {

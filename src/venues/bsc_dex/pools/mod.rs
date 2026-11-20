@@ -175,6 +175,7 @@ pub mod load_camelot;
 pub mod load_cl;
 pub mod load_crypto;
 pub mod load_crypto_tweak;
+pub mod load_crypto_tweak_v1;
 pub mod load_crypto_v1;
 pub mod load_curve;
 pub mod load_curve_meta;

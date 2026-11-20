@@ -9,6 +9,9 @@
 //! 10^10, 1 у USDT, WBTC, WETH). Рампа у v1 (`if t > 0`, CurveCryptoSwap2ETH.vy L676, CryptoSwap.vy L637): обмен
 //! пересчитывает D всегда, пока future_A_gamma_time > 0 (после конца рампы пул ставит 1) — ramp; A и gamma меняются
 //! по времени блока, пока время блока < future_A_gamma_time — moving (перечитывание каждым блоком, per_block.rs).
+//! Решение 472 (T472-03): у пула фабрики (2 монеты) — ещё состояние tweak_price / _claim_admin_fees
+//! (load_crypto_tweak_v1.rs): вызовы — в той же пачке после прежних (разбор прежних не меняется), слот not_adjusted и
+//! ETH пула — параллельной пачкой JSON-RPC на том же блоке; ответы дописываются в конец Raw.got.
 //! Кто вызывает: pools/load.rs, pools/load_site.rs (пары tricrypto).
 //! От чего зависит: ctx.rs, node/call.rs, node/multicall.rs, tokens.rs, abi_crypto.rs, abi_crypto_v1.rs, load_lb.rs
 //! (время блока Multicall3), load_smardex.rs (время блока без Multicall3), families.rs, per_block_crypto.rs
@@ -28,6 +31,7 @@ use super::super::tokens::Tokens;
 use super::abi_crypto::{ICryptoPool as P, ITricryptoPool as P3};
 use super::abi_crypto_v1::ICryptoPoolV1 as V1;
 use super::families::{Family, Proto};
+use super::load_crypto_tweak_v1 as tweak_v1;
 use super::load_lb::{decode_time, time_call};
 use super::load_smardex;
 use super::per_block_crypto;
@@ -93,12 +97,27 @@ pub async fn read(
     let Some(n) = coins_of(f) else {
         return Err(bad(format!("{}: вид не crypto v1", f.title)));
     };
+    let tag = call::block_tag(block);
     let mut all = calls(pool, n);
+    // T472-03: tweak_price пула фабрики (2 монеты) — постоянные пула из памяти или одним чтением на этом блоке.
+    let v1 = n == 2;
+    if v1 {
+        all.extend(tweak_v1::calls(pool, &tweak_v1::statics(ctx, pool, &tag).await?));
+    }
     let mc = multicall::address(ctx);
     if let Some(m) = mc {
         all.push(time_call(m));
     }
-    let mut got = call::try_many(ctx, &all, &call::block_tag(block)).await?;
+    // Пачка вызовов и пачка JSON-RPC tweak — параллельно, на одном блоке.
+    let words = async {
+        if v1 {
+            tweak_v1::words(ctx, pool, &tag).await
+        } else {
+            Ok(Vec::new())
+        }
+    };
+    let (got, words) = tokio::join!(call::try_many(ctx, &all, &tag), words);
+    let mut got = got?;
     if got.len() != all.len() {
         return Err(bad(format!("ответов {} из {}", got.len(), all.len())));
     }
@@ -110,6 +129,8 @@ pub async fn read(
         }
         None => load_smardex::block_secs(ctx, block).await?,
     };
+    // T472-03: слово not_adjusted и ETH пула — в конец ответов (load_crypto_tweak_v1.rs decode).
+    got.extend(words?);
     let mut decimals = Vec::with_capacity(n);
     for k in 0..n {
         let Some(Ok(b)) = got.get(HEAD + 2 * k) else {
@@ -157,6 +178,12 @@ pub fn state(ctx: &Ctx, raw: &Raw, pair: (Address, Address)) -> GatewayResult<Po
     // Решение 455: crypto v1 фабрики (2 монеты; у tricrypto 2021 self.balance не читается) с монетой
     // dex.native_wrapped — нативный ETH без события (per_block_crypto.rs).
     data.native_in = raw.n == 2 && per_block_crypto::takes_native(ctx, &coins);
+    // T472-03: состояние tweak_price пула фабрики — ответы после прежних (HEAD, монеты, price_scale).
+    if raw.n == 2 {
+        let tail = raw.got.get(HEAD + 2 * raw.n + 1..).unwrap_or(&[]);
+        let wrapped = ctx.addr("dex.native_wrapped").ok();
+        data.tweak = tweak_v1::decode(tail, &coins, wrapped).map_err(&bad)?;
+    }
     Ok(PoolState::Crypto(Box::new(data)))
 }
 

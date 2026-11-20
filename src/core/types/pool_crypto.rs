@@ -91,6 +91,28 @@ pub struct CryptoTweak {
     pub virtual_price: U256,
     /// allowed_extra_profit (`packed_rebalancing_params` >> 128).
     pub allowed_extra_profit: U256,
-    /// adjustment_step (`packed_rebalancing_params` >> 64, младшие 64 бита).
+    /// adjustment_step (`packed_rebalancing_params` >> 64, младшие 64 бита; у crypto v1 — `adjustment_step()`).
     pub adjustment_step: U256,
+    /// Решение 472 (T472-03): то, что дополнительно читает `tweak_price` crypto v1 фабрики (CurveCryptoSwap2ETH) и его
+    /// `_claim_admin_fees`. None — у NG и у пулов v1 без этих чтений. `#[serde(default)]` — старые записи эпизодов.
+    #[serde(default)]
+    pub v1: Option<CryptoTweakV1>,
+}
+
+/// Решение 472 (T472-03): состояние ветки подстройки и `_claim_admin_fees` пула crypto v1 фабрики
+/// (curvefi/curve-factory-crypto 7ed1011 CurveCryptoSwap2ETH.vy L475-L513, L592-L640). Проверяет адаптер
+/// (math/crypto_tweak_v1.rs).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CryptoTweakV1 {
+    /// `not_adjusted: bool` (L153, геттера нет) — слово слота хранилища, ненулевое — true.
+    pub not_adjusted: bool,
+    /// Прибыль на последнем сборе комиссий (`xcp_profit_a()`).
+    pub xcp_profit_a: U256,
+    /// Доля админа (`admin_fee()`), числитель над 10^10.
+    pub admin_fee: U256,
+    /// Получатель комиссий фабрики (`Factory.fee_receiver()`) не нулевой.
+    pub fee_receiver: bool,
+    /// Фактические балансы пула по порядку монет (gulp L482-L487): у монеты WETH20 — ETH пула, у прочих —
+    /// `balanceOf(пул)`.
+    pub gulp: Vec<U256>,
 }

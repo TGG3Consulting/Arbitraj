@@ -7,11 +7,12 @@
 //! (crypto_v1_2.rs) и tricrypto 2021 (crypto_v1_3.rs): у v1 тот же порядок действий обмена (CurveCryptoSwap2ETH.vy
 //! `_exchange` L643-L705, CryptoSwap.vy `exchange` L593-L659), все операции проверяемые — значения те же, что у
 //! формул NG ниже. Где контракт откатился бы — None. Решение 472: у Twocrypto-NG и Tricrypto-NG при CryptoData.tweak —
-//! и откаты tweak_price после расчёта выхода (math/crypto_tweak2.rs, crypto_tweak3.rs); у v1 модели нет (TASKS 472).
+//! и откаты tweak_price после расчёта выхода (math/crypto_tweak2.rs, crypto_tweak3.rs); у crypto v1 фабрики при
+//! CryptoTweak.v1 — math/crypto_tweak_v1.rs (T472-03); у tricrypto 2021 модели нет (TASKS 472).
 //! Кто вызывает: quote/pool_quote.rs (ветка Crypto), quote/crypto_depth.rs, quote/spot.rs (spot), quote/steps.rs
 //! (fee, scaled).
 //! От чего зависит: core/types (CryptoData, CryptoMath), math/crypto_ops.rs, crypto_y2.rs, crypto_y3.rs, crypto_d2.rs,
-//! crypto_d3.rs, crypto_v1_2.rs, crypto_v1_3.rs, crypto_tweak2.rs, crypto_tweak3.rs, math/ten.rs.
+//! crypto_d3.rs, crypto_v1_2.rs, crypto_v1_3.rs, crypto_tweak2.rs, crypto_tweak3.rs, crypto_tweak_v1.rs, math/ten.rs.
 //! Настройки: нет.
 //!
 //! Источник: curvefi/twocrypto-ng 89c8dfb, contracts/main/CurveTwocryptoOptimized.vy — `exchange` L364-L404 (вход
@@ -28,8 +29,8 @@ use crate::core::types::{CryptoData, CryptoMath};
 use super::crypto_ops::{au, du, mu, su, udiv_u};
 use super::ten::{E10, E18};
 use super::{
-    crypto_d2, crypto_d3, crypto_tweak2, crypto_tweak3, crypto_v1_2, crypto_v1_3, crypto_y2,
-    crypto_y3,
+    crypto_d2, crypto_d3, crypto_tweak2, crypto_tweak3, crypto_tweak_v1, crypto_v1_2, crypto_v1_3,
+    crypto_y2, crypto_y3,
 };
 
 /// Что делает: выход обмена dx монеты i на монету j (точный вход), как `_exchange` пула. Принимает: состояние пула,
@@ -76,7 +77,14 @@ pub fn exchange_out(p: &CryptoData, i: usize, j: usize, dx: U256) -> Option<U256
                 crypto_tweak2::passes(p, t, [xp[0], xp[1]], k0_prev)?
             }
             CryptoMath::TriNg => crypto_tweak3::passes(p, t, [xp[0], xp[1], xp[2]], k0_prev)?,
-            CryptoMath::TwoV1 | CryptoMath::TriV1 => {}
+            // T472-03: crypto v1 фабрики — tweak_price(A_gamma, xp, p, 0) после обмена (CurveCryptoSwap2ETH.vy L755).
+            CryptoMath::TwoV1 => {
+                if let Some(v) = &t.v1 {
+                    let s = crypto_tweak_v1::Swap { i, j, dx, dy };
+                    crypto_tweak_v1::passes(p, t, v, [xp[0], xp[1]], s)?
+                }
+            }
+            CryptoMath::TriV1 => {}
         }
     }
     Some(dy)

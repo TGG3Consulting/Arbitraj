@@ -68,5 +68,6 @@ pub fn decode(got: &[Result<Bytes, String>], n: usize) -> Result<Option<CryptoTw
         virtual_price: w(o + 2)?,
         allowed_extra_profit: (packed >> 128usize) & mask,
         adjustment_step: (packed >> 64usize) & mask,
+        v1: None,
     }))
 }

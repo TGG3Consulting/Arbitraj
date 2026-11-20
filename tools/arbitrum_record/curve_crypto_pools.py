@@ -23,6 +23,14 @@ LADDER_PPM = [1, 100, 1000, 10000, 100000, 500000]
 TWEAK_TAIL = ["totalSupply()", "xcp_profit()", "virtual_price()", "packed_rebalancing_params()"]
 NG_HEAD = ["A()", "gamma()", "D()", "mid_fee()", "out_fee()", "fee_gamma()", "future_A_gamma_time()"]
 
+# Решение 472 (T472-03): вызовы tweak_price crypto v1 фабрики — pools/load_crypto_tweak_v1.rs (pre_calls, calls;
+# admin_actions_deadline() — только для сверки слота 34). Слоты раскладки Vyper 0.3.1 (шапка того же файла): 33 —
+# not_adjusted (геттера нет), соседние — сверка с геттерами (D 28, xcp_profit_a 31, virtual_price 32, 34).
+TWEAK_V1 = ["token()", "factory()", "coins(uint256)", "price_oracle()", "xcp_profit()", "xcp_profit_a()",
+            "virtual_price()", "allowed_extra_profit()", "adjustment_step()", "admin_fee()",
+            "admin_actions_deadline()"]
+SLOTS_V1 = {28: "D()", 31: "xcp_profit_a()", 32: "virtual_price()", 33: None, 34: "admin_actions_deadline()"}
+
 
 def bot_calls(n, v1):
     """Сигнатуры и аргументы вызовов бота (calldata). n — число монет, v1 — пул первого поколения."""
@@ -152,9 +160,13 @@ def v1_row(node, pool, n, tag, factory=None):
         "get_dy": ladder(node, pool, n, calls, tag),
     }
     row["exchange_sim"] = sims(node, pool, n, calls, row["get_dy"], tag)
+    if n == 2:
+        row["tweak_v1"] = tweak_v1(node, pool, calls, tag)
     if factory:
         row["factory_get_coins"] = node.call(factory, selector("get_coins(address)") + addr_word(pool), tag)
         row["factory_get_decimals"] = node.call(factory, selector("get_decimals(address)") + addr_word(pool), tag)
+        # T472-03: индекс монеты WETH фабрики (Factory.vy L422-L431) — какая монета пула WETH20 (gulp — ETH пула).
+        row["factory_get_eth_index"] = node.call(factory, selector("get_eth_index(address)") + addr_word(pool), tag)
     print(f"v1({n}) {pool}: {len(row['get_dy'])} ответов get_dy", file=sys.stderr)
     return row
 
@@ -172,3 +184,32 @@ def sims(node, pool, n, calls, rows, tag):
         if c:
             sim.add(pool, EXCHANGE_U, int(r["i"]), int(r["j"]), int(r["dx"]), c)
     return sim.run()
+
+
+def tweak_v1(node, pool, calls, tag):
+    """Решение 472 (T472-03): вызовы бота tweak v1 на пуле (в calls), totalSupply() LP-токена, fee_receiver() фабрики,
+    слоты хранилища 28, 31–34 и сверка слотов с геттерами (slot_check: True — слово слота = ответ геттера). balanceOf
+    монет и ETH пула — в holdings."""
+    for sig in TWEAK_V1:
+        if sig == "coins(uint256)":
+            continue
+        data = selector(sig)
+        calls[data] = node.call(pool, data, tag)
+    token = as_addr(answer(calls, "token()"))
+    factory = as_addr(answer(calls, "factory()"))
+    out = {"token": token, "factory": factory, "token_calls": {}, "factory_calls": {}, "storage": {},
+           "slot_check": {}}
+    if token:
+        d = selector("totalSupply()")
+        out["token_calls"][d] = node.call(token, d, tag)
+    if factory:
+        d = selector("fee_receiver()")
+        out["factory_calls"][d] = node.call(factory, d, tag)
+    for slot, sig in SLOTS_V1.items():
+        got = node.rpc("eth_getStorageAt", [pool, hex(slot), tag]).get("result")
+        out["storage"][str(slot)] = got
+        if sig:
+            want = answer(calls, sig).get("result")
+            out["slot_check"][str(slot)] = bool(got and want and int(got, 16) == int(want[:66], 16))
+    print(f"v1 tweak {pool}: сверка слотов {out['slot_check']}", file=sys.stderr)
+    return out

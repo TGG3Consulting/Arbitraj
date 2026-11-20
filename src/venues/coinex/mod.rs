@@ -32,6 +32,7 @@ pub mod order_fee;
 pub mod order_result;
 pub mod order_rules;
 pub mod order_state;
+pub mod own_chains;
 pub mod pairs;
 pub mod pairs_watch;
 pub mod reply;

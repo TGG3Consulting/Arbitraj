@@ -73,9 +73,19 @@ pub fn build(
             own = super::registry_chains::nets_of(nets, g.tag.as_ref());
             let u = match &g.tag {
                 None => usdt,
-                Some(_) => super::registry_build::usdt_address(&own, quote).ok(),
+                Some(_) => super::registry_build::usdt_address_in(&own, quote, g.tag.as_ref()).ok(),
             };
             (&own, u)
+        };
+        // Решение 431: имя сети биржи для своей группы — presence.rs различает «нет сети» и «сеть есть, адреса нет» по
+        // имени сети ЭТОЙ группы (сеть по умолчанию — venue.bsc_network, как раньше; другая — venue.<сеть>_network).
+        let names_own;
+        let names_g = match &g.tag {
+            None => bsc_network,
+            Some(c) => {
+                names_own = other_names(s, venues, c);
+                &names_own
+            }
         };
         // Ревью К1 (решение 211): нативная монета и обёртка — общая настройка площадок DEX сети (native.rs).
         let native = super::native::read(s, &g.dex).ok().flatten();
@@ -85,7 +95,7 @@ pub fn build(
                 networks: nets_g,
                 usdt: usdt_g,
                 quote,
-                bsc_network,
+                bsc_network: names_g,
                 pairs_fresh: &pairs_fresh,
                 market,
                 pool_ok: &pool_ok,
@@ -102,4 +112,26 @@ pub fn build(
         out.extend(part_g);
     }
     out
+}
+
+/// Что делает: имя сети `c` у каждой биржи (venue.<c>_network, gateway/own_nets.rs; решение 431). Принимает: хранилище,
+/// площадки, сеть. Возвращает: биржа → имя (не задано — биржи нет в карте). Ошибок нет.
+fn other_names(
+    s: &crate::settings::store::Store,
+    venues: &[(VenueId, VenueKind)],
+    c: &crate::core::types::ChainId,
+) -> HashMap<VenueId, String> {
+    venues
+        .iter()
+        .filter(|(_, k)| *k == VenueKind::Cex)
+        .filter_map(|(v, _)| {
+            let at = crate::settings::read::At {
+                venue: Some(&v.0),
+                coin: None,
+            };
+            crate::gateway::own_nets::name_of(s, at, Some(c))
+                .ok()
+                .map(|n| (v.clone(), n))
+        })
+        .collect()
 }

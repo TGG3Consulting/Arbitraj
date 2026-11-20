@@ -49,18 +49,20 @@ pub struct Parsed {
 }
 
 /// Что делает: сети формата ядра.
-/// Принимает: ответ /spot/currencies (массив или одна монета), ответ /wallet/withdraw_status (массив), сеть BSC,
+/// Принимает: ответ /spot/currencies (массив или одна монета), ответ /wallet/withdraw_status (массив), свои сети
+/// (решение 431: BSC и другие — gateway/own_nets.rs; «BSC» — только BSC; адрес addr — у каждой своей сети),
 /// площадку, «минимум депозита неизвестен — 0», сведения монет (Extra), точность пары монеты (запасная).
 /// Ошибки: BadResponse — ответ не массив или у монеты нет поля currency.
 pub fn parse_networks(
     currencies: &Value,
     withdraw: &Value,
-    bsc: &str,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
     venue: &VenueId,
     min_ok: bool,
     extra: &HashMap<String, Extra>,
     pair_precision: &dyn Fn(&str) -> Option<u32>,
 ) -> GatewayResult<Parsed> {
+    let own = own.into();
     // Решение 131: без копии справочника — одна монета (GET /spot/currencies/{currency}) — срез из одного элемента.
     let coins: &[Value] = match currencies {
         Value::Array(a) => a,
@@ -89,8 +91,9 @@ pub fn parse_networks(
             let Some(chain) = num::text_opt(n, "name") else {
                 continue;
             };
-            let is_bsc = chain == bsc;
-            let contract = is_bsc
+            let is_bsc = own.is_bsc(&chain);
+            let contract = own
+                .has(&chain)
                 .then(|| num::text_opt(n, "addr").and_then(|a| a.parse().ok()))
                 .flatten();
             let off = |f: &str| matches!(n.get(f), Some(Value::Bool(true)));

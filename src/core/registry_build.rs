@@ -44,25 +44,48 @@ pub struct Inputs<'a> {
     pub native: Option<&'a super::native::Native>,
 }
 
-/// Адрес USDT в BSC: из справочника бирж (котируемая монета в сети BSC).
+/// Адрес USDT в BSC: из справочника бирж (котируемая монета в сети BSC — сети по умолчанию; решение 431: только записи
+/// без сети, запись другой сети — с Asset.chain, core/net_chain.rs).
 /// Возвращает: адрес; Err — ни одна биржа его не дала или биржи расходятся (тогда DEX не торгуется).
 pub fn usdt_address(
     networks: &Networks,
     quote: &HashMap<VenueId, String>,
 ) -> Result<Address, String> {
+    usdt_address_in(networks, quote, None)
+}
+
+/// Что делает: адрес USDT сети `tag` (решение 431) — только записи справочника этой сети (Asset.chain = tag).
+/// Принимает: справочник, котируемые монеты бирж, сеть (None — сеть по умолчанию). Возвращает: адрес.
+/// Ошибки: текст — ни одна биржа его не дала или биржи расходятся.
+pub fn usdt_address_in(
+    networks: &Networks,
+    quote: &HashMap<VenueId, String>,
+    tag: Option<&crate::core::types::ChainId>,
+) -> Result<Address, String> {
     let mut found: Vec<(VenueId, Address)> = vec![];
     for (v, list) in networks {
         let Some(q) = quote.get(v) else { continue };
-        for i in list.iter().filter(|i| &i.asset.ticker == q) {
+        for i in list
+            .iter()
+            .filter(|i| &i.asset.ticker == q && i.asset.chain.as_ref() == tag)
+        {
             if let Some(a) = i.asset.contract {
                 found.push((v.clone(), a));
             }
         }
     }
     match found.first() {
-        None => Err("ни одна биржа не сообщила адрес котируемой монеты (USDT) в сети BSC".into()),
+        None => Err(match tag {
+            None => "ни одна биржа не сообщила адрес котируемой монеты (USDT) в сети BSC".into(),
+            Some(c) => {
+                format!("ни одна биржа не сообщила адрес котируемой монеты (USDT) в сети {c}")
+            }
+        }),
         Some((_, a)) if found.iter().all(|(_, b)| b == a) => Ok(*a),
-        Some(_) => Err(format!("биржи дают разные адреса USDT в BSC: {found:?}")),
+        Some(_) => Err(match tag {
+            None => format!("биржи дают разные адреса USDT в BSC: {found:?}"),
+            Some(c) => format!("биржи дают разные адреса USDT в сети {c}: {found:?}"),
+        }),
     }
 }
 

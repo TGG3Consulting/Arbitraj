@@ -5,7 +5,7 @@
 //! (для вывода и адреса депозита); стоимость вывода.
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs, transfers.rs.
 //! От чего зависит: rest.rs (Req, heavy), networks_parse.rs, ctx.rs, core/types.
-//! Настройки: venue.bsc_network [okx] — сеть BSC ядра (часть chain после «<монета>-», по живому ответу справочника;
+//! Настройки (решение 431: и venue.arbitrum_network [okx] — свои сети, gateway/own_nets.rs): venue.bsc_network [okx] — сеть BSC ядра (часть chain после «<монета>-», по живому ответу справочника;
 //! значения по умолчанию нет), venue.deposit_min_absent_ok [okx] (нет minDep — считать 0), venue.networks_fresh_ms [okx]
 //! (необязательная).
 //!
@@ -61,7 +61,7 @@ pub async fn coin_networks(ctx: &Ctx, nets: &Networks) -> GatewayResult<Vec<Coin
     if let Some(list) = fresh.and_then(|f| nets.cached(f)) {
         return Ok(Arc::unwrap_or_clone(list));
     }
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let r = Req {
         method: Method::GET,
@@ -92,7 +92,7 @@ pub async fn coin_networks(ctx: &Ctx, nets: &Networks) -> GatewayResult<Vec<Coin
 
 /// Одна монета — тот же запрос с ccy= (решение 113). Возвращает: разбор (сети и chain OKX). Ошибки: как coin_networks.
 pub async fn one(ctx: &Ctx, ticker: &str) -> GatewayResult<Parsed> {
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let data = rest::get(ctx, PATH, vec![("ccy", ticker.to_string())]).await?;
     let p = parse(&data, &bsc, &ctx.venue(), min_ok)?;

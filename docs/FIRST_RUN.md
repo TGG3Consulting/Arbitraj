@@ -136,6 +136,8 @@ log.signal_hold (core/book_marks_on.rs).
 | dex.evm_chain_id | по площадке DEX | `56` | Номер цепи BSC mainnet: подпись транзакций (EIP-155) и сверка eth_chainId узла | docs.bnbchain.org, JSON-RPC endpoint «ChainID 56» |
 | dex.gas_ticker | по площадке DEX | `BNB` | Тикер монеты газа сети BSC: газ и чаевые в затратах, баланс газа кошелька, стакан газа бирж | Газ сети BSC платится в BNB |
 | dex.default_chain | вся система | не задавать, пока площадка DEX одна; при второй сети (Arbitrum) — `bsc` | Сеть по умолчанию: монеты без сети (весь учёт BSC до двух сетей) | Ключи и записи BSC остаются прежними |
+| venue.arbitrum_network | по бирже | BingX `ARBITRUM`, KuCoin `arbitrum`, Gate `ARBEVM`; остальным — *метод:* по живому ответу справочника сетей биржи (то же поле, что у venue.bsc_network); не задавать, пока нет площадки DEX Arbitrum | Имя сети Arbitrum One у биржи (решение 431) | Записанные ответы: tests/data/bingx_2026-10-24/config_getall.json, cex_samples_2026_11_04/kucoin_currencies_v3.json, gate_spot_currencies.json |
+| venue.arbitrum_contract_chain | площадка CoinEx | *метод:* chain_info.chain_name сети Arbitrum One в живом ответе GET /v2/assets/info (записи нет — не угадывать) | Адрес контракта CoinEx у сети Arbitrum (решение 431) | /v2/assets/info |
 
 ## Нативная монета BNB
 

@@ -5,7 +5,8 @@
 //! для того же адреса контракта или — если включено (решение 52) — пул с промежуточной монетой из списка.
 //! Кто вызывает: core/registry.rs (build).
 //! От чего зависит: core/types, market_state.rs, registry.rs (Presence, Exclusion, Inputs).
-//! Настройки: нет своих (название сети BSC — venue.bsc_network — читает rebuild.rs).
+//! Настройки: нет своих (имя сети группы — venue.bsc_network или, решение 431, venue.<сеть>_network — читают rebuild.rs и
+//! rebuild_build.rs).
 
 use alloy_primitives::Address;
 
@@ -22,7 +23,9 @@ use super::registry::{Exclusion, Inputs, Presence};
 /// через API нельзя ни купить, ни продать → биржа не примет наш ордер на паре (решение 254, order_block) → стакан не
 /// пришёл.
 /// Покупка и продажа через API по отдельности закрывают свою сторону (can_buy / can_sell), а не всю монету.
-/// Принимает: биржу, тикер, сети монеты, название сети BSC (None — не задано), свежесть справочника пар, рынок.
+/// Решение 431: `nets` — записи сети группы справочника (core/net_chain.rs, registry_chains.rs), `bsc` — имя этой сети у
+/// биржи (сеть по умолчанию — venue.bsc_network; другая — venue.<сеть>_network).
+/// Принимает: биржу, тикер, сети монеты, имя сети группы (None — не задано), свежесть справочника пар, рынок.
 /// Ошибок нет.
 pub fn cex(
     venue: &VenueId,

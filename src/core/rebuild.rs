@@ -33,7 +33,7 @@ pub async fn run(core: Core) {
 }
 
 /// Настройки, от которых зависит справочник: их изменение — всегда толчок пересборки.
-const REGISTRY: [&str; 11] = [
+const REGISTRY: [&str; 12] = [
     "coin.",
     "cex_cex.",
     "tax.",
@@ -43,6 +43,8 @@ const REGISTRY: [&str; 11] = [
     "venue.cex_cex",
     "venue.quote_asset",
     "venue.bsc_network",
+    // Решение 431: имя сети Arbitrum у биржи (gateway/own_nets.rs OTHER) — справочник по сетям.
+    "venue.arbitrum_network",
     "venue.symbols_stale_s",
     "dex.intermediate_",
     // Решение 181: монеты для цены затрат — в подписке биржи (subscribe.rs).
@@ -59,7 +61,8 @@ pub async fn watch_settings(core: Core) {
         super::coin_book::on_setting(&c.name);
         // Решение 196: биржу включили — поднять поток, если молчит; выключили — держать до закрытия сделок.
         super::feed_live::on_setting(&core, &c);
-        if super::native::affects(&c.name) {
+        // Решение 431: имена своих сетей биржи (gateway/own_nets.rs) — тоже: адрес по сети и привязка к сети ядра.
+        if super::native::affects(&c.name) || crate::gateway::own_nets::affects(&c.name) {
             core.inner.kick_networks.notify_waiters();
         }
         if retry_on(&c.name, lk(&core.inner.subs).any_failed()) {

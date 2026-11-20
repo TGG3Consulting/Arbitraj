@@ -49,11 +49,14 @@ impl Core {
     }
 
     /// Строка одной монеты по адресу контракта (t84, GET /api/coins/{address}) — та же функция строки, что у
-    /// coins_json. Один адрес — одна запись справочника (решение 211, core/registry_build.rs: ключ — адрес).
+    /// coins_json. Один адрес — одна запись справочника (решение 211, core/registry_build.rs: ключ — адрес). Решение 431:
+    /// монета сети по умолчанию (без сети); адрес в другой сети — другая монета, её ключ в API — вопрос Тиграну (TASKS).
     /// Принимает: адрес. Возвращает: строку или None — монеты с таким адресом в справочнике нет. Ошибок нет.
     pub fn coin_json(&self, address: Address) -> Option<Value> {
         let coins = rd(&self.inner.coins);
-        let c = coins.all().find(|c| c.asset.contract == Some(address))?;
+        let c = coins
+            .all()
+            .find(|c| c.asset.chain.is_none() && c.asset.contract == Some(address))?;
         let market = rd(&self.inner.market);
         let usdt = rd(&self.inner.usdt).clone().ok();
         let nets = rd(&self.inner.networks);

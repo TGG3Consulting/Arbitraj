@@ -69,7 +69,8 @@ pub fn nets_of(nets: &Networks, tag: Option<&ChainId>) -> Networks {
         .collect()
 }
 
-/// Что делает: адреса USDT сетей не по умолчанию — из справочников сетей бирж этой сети (registry_build::usdt_address).
+/// Что делает: адреса USDT сетей не по умолчанию — из справочников сетей бирж этой сети (registry_build::usdt_address_in;
+/// записи сети — по Asset.chain, решение 431).
 /// Сеть, по которой биржи адреса не дали, — без записи. Принимает: группы, справочник сетей, котируемые монеты бирж.
 /// Возвращает: сеть → адрес. Ошибок нет.
 pub fn usdt_other(
@@ -80,7 +81,7 @@ pub fn usdt_other(
     let mut out = HashMap::new();
     for g in groups {
         if let Some(c) = &g.tag
-            && let Ok(a) = super::registry_build::usdt_address(&nets_of(nets, Some(c)), quote)
+            && let Ok(a) = super::registry_build::usdt_address_in(nets, quote, Some(c))
         {
             out.insert(c.clone(), a);
         }

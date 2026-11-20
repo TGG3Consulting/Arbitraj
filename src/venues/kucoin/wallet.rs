@@ -5,7 +5,7 @@
 //! стоимость вывода.
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs.
 //! От чего зависит: rest.rs (Req, heavy), networks_parse.rs, ctx.rs, core/types.
-//! Настройки: venue.bsc_network [kucoin] — chainId сети BSC (по живому ответу справочника; значения по умолчанию нет),
+//! Настройки (решение 431: и venue.arbitrum_network [kucoin] — свои сети, gateway/own_nets.rs): venue.bsc_network [kucoin] — chainId сети BSC (по живому ответу справочника; значения по умолчанию нет),
 //! venue.deposit_min_absent_ok [kucoin] (нет depositMinSize — считать 0), venue.networks_fresh_ms [kucoin] (необязательная).
 //!
 //! Официально: Get All Currencies (пул Public, вес 3) https://www.kucoin.com/docs-new/api-3470152, Get Currency
@@ -54,7 +54,7 @@ pub async fn coin_networks(ctx: &Ctx, nets: &Networks) -> GatewayResult<Vec<Coin
 
 /// Сети одной монеты — отдельным запросом Get Currency (решение 113). Ошибки: как coin_networks; монеты нет — пусто.
 pub async fn coin_networks_of(ctx: &Ctx, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let path = format!("/api/v3/currencies/{ticker}");
     let data = rest::public(ctx, &path, vec![], Pool::Public).await?;
@@ -75,7 +75,7 @@ async fn shared(ctx: &Ctx, nets: &Networks) -> GatewayResult<Arc<Vec<CoinNetwork
     if let Some(list) = fresh.and_then(|f| nets.cached(f)) {
         return Ok(list);
     }
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let r = Req {
         method: Method::GET,

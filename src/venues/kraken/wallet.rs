@@ -5,7 +5,7 @@
 //! стоимость вывода.
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs, transfers.rs.
 //! От чего зависит: methods.rs, networks_parse.rs, ctx.rs, core/types.
-//! Настройки: venue.bsc_network [kraken] — network_name сети BSC в методах Funding (по живому ответу; значения по
+//! Настройки (решение 431: и venue.arbitrum_network [kraken] — свои сети, gateway/own_nets.rs): venue.bsc_network [kraken] — network_name сети BSC в методах Funding (по живому ответу; значения по
 //! умолчанию нет), venue.deposit_min_absent_ok [kraken] (нет minimum_amount — считать 0), venue.networks_fresh_ms [kraken]
 //! (необязательная).
 //!
@@ -63,7 +63,7 @@ pub async fn one(ctx: &Ctx, ticker: &str) -> GatewayResult<Parsed> {
 
 /// Чтение и разбор (вне рабочих потоков). Принимает: монету (None — все). Ошибки: настройки, запросы.
 async fn load(ctx: &Ctx, ticker: Option<&str>) -> GatewayResult<Parsed> {
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     let dep = methods::list(ctx, Dir::Deposit, ticker).await?;
     let wd = methods::list(ctx, Dir::Withdraw, ticker).await?;

@@ -48,6 +48,7 @@
 | `pairs.rs`, `pairs_watch.rs`, `subs.rs`, `market.rs` | Снимок пар и SpotPairs, фоновое обновление справочника, подписка (решение 131) |
 | `fees.rs` | Ставки ключа по одной паре фоном (venue.fee_requests_per_sec); единицы — venue.fee_rate_percent |
 | `wallet.rs`, `networks_parse.rs`, `contracts.rs` | Монеты и сети (весь — вне рабочих потоков, за Arc; одна — ?ccy=), адрес контракта из /assets/info |
+| `own_chains.rs` | Решение 431: свои сети CoinEx (BSC обязательна; Arbitrum — venue.arbitrum_network + venue.arbitrum_contract_chain) и разбор справочника с адресами по каждой своей сети |
 | `delist.rs` | Решение 175: делистинги — `delisted_at` пар GET /v2/spot/market («Expected time to be delisted, in milliseconds»), только пары с venue.quote_asset |
 | `deposit_addr.rs` | Адрес депозита (кэш; memo — не поддерживается); решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
 | `deposits.rs` | Статус депозита по tx_id |

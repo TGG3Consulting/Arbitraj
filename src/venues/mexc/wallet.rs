@@ -6,7 +6,7 @@
 //! (coin_networks_of) — фильтром общего справочника без копии всех монет.
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs (имя сети).
 //! От чего зависит: rest.rs, networks_parse.rs (разбор), ctx.rs, symbols.rs (точность), core/types.
-//! Настройки: venue.bsc_network [mexc] — код netWork сети BSC (тот, что принимает новый вывод; ядро сравнивает с ним
+//! Настройки (решение 431: и venue.arbitrum_network [mexc] — свои сети, gateway/own_nets.rs): venue.bsc_network [mexc] — код netWork сети BSC (тот, что принимает новый вывод; ядро сравнивает с ним
 //! название сети монеты), venue.deposit_min_absent_ok [mexc] (решение 107: минимального депозита в API MEXC нет),
 //! venue.networks_fresh_ms [mexc] (необязательная; не задана — запрос каждый раз).
 //!
@@ -103,7 +103,7 @@ async fn shared(
     if let Some(list) = fresh.and_then(|f| nets.cached(f)) {
         return Ok(list);
     }
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min_ok = ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false);
     symbols.ensure_fresh(ctx).await?;
     let data = rest::signed_heavy(

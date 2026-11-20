@@ -59,6 +59,49 @@
      нет имени сети биржи по сети (шаг 3);
   л) файлы выросли сверх ~200 строк: subscribe.rs 272, native.rs 224, deal_gas.rs 223, balances_cache.rs 211,
      rebuild.rs 203 (transfers.rs, dirctx.rs были больше и до 430) — разнести при шаге 3.
+- **Решение 431 (19.11.2026, ветка t215/arb-step3-cex-nets от feat/arbitrum) — две сети, шаг 3: биржи по сетям; ждёт
+  сборки и тестов в GitHub (cargo локально не запускался).** План и инвентарь — docs/notes/arbitrum/step3-plan.md.
+  Сделано: имя сети биржи по сети ядра (gateway/own_nets.rs: venue.bsc_network; venue.<сеть>_network — новая
+  venue.arbitrum_network; CoinEx — venue.arbitrum_contract_chain); 14 бирж отдают адрес контракта у каждой своей сети;
+  привязка записей к сети ядра — core/net_chain.rs; presence, USDT, precheck, перевод, промежуточные, подписка биржи,
+  tick — по (сеть, адрес) (блок 430: пп. ж, и, к — сделаны; coins_view — монета без сети); KuCoin/OKX fund_move и XT
+  deposits — сеть по Asset.chain. Выкладка BSC: новых обязательных настроек нет; venue.arbitrum_network задавать при
+  подключении площадки DEX Arbitrum (до неё адрес Arbitrum ядро снимает — справочник BSC прежний).
+  Вопросы Тиграну:
+  1) Правило имени настройки сети у биржи — `venue.<id сети>_network` (id — dex.chain площадки DEX): для Arbitrum id сети
+     должен быть именно `arbitrum` (иначе имя сети биржи не найдётся). Ок? Альтернатива — одна настройка-список
+     «сеть=имя» на биржу.
+  2) Ключи второй сети — «bingx:cex_dex@arbitrum» (пара venue_dir) и «arbitrum:0x…» (область «монета», API
+     GET /api/coins/{address} — сейчас монета без сети) — не решено (блок 430, п. а).
+  3) Остаток монеты биржи один на все сети (решение 416, core/coin_account.rs): карту remember_saved шаг 3 НЕ пополняет —
+     запись для монеты BSC сменила бы ключ счёта (CoinKey::of → CoinKey::Venue) у живых сделок BSC. Как делить: ключ
+     монеты другой сети = ключ монеты BSC с тем же тикером биржи (BSC-ключи не меняются)?
+  4) KuCoin withdraw_hold (квота вывода USDT, kucoin/withdraw_quota.rs:38) — по сети venue.bsc_network: в контракте
+     withdraw_hold(quote) нет сети; квоты по сетям — изменение стыка (docs/AGENTS.md). Нужно ли до Arbitrum?
+  Осталось (до шага 5; на BSC не влияет):
+  а) core/ticker_index.rs map (биржа, тикер) → одна монета: монета Arbitrum с тем же тикером биржи не будится стаканом
+     биржи (блок 430 г); by_token/venue_ticker — по адресу без сети;
+  б) Gate: круг минимумов депозита (deposit_plan.rs:44-61, deposit_min.rs:156) — только монеты с открытым вводом в BSC;
+     Extra.deposit_min — на монету (min_deposit_amount адреса депозита BSC) ставится всем сетям монеты — для Arbitrum
+     проверить по документации Gate, на монету минимум или на сеть;
+  в) Kraken «Проверить подключение» (account.rs:150) — вывод USDT только по сети BSC; network_hint — подсказка имён только
+     для venue.bsc_network;
+  г) InertKey (rebuild.rs) — имена сети BSC; имена других сетей входят в ключ только через справочник сетей (смена
+     venue.arbitrum_network толкает справочник — записи меняются).
+  Ревью 431 (19.11.2026, регрессий BSC не найдено; спорное — на BSC не влияет, только при двух площадках DEX):
+  д) Вопрос Тиграну: dex.default_chain ≠ bsc (например arbitrum, а BSC — вторая сеть). Факт кода: own_nets::setting_of(None)
+     = venue.bsc_network и setting_of(Some(bsc)) = venue.bsc_network — одна настройка на две сети; net_chain::others
+     смотрит только own_nets::OTHER (venue.arbitrum_network), а у площадки Arbitrum tag = None → её имя не находит
+     сеть (адрес Arbitrum снимается), записи сети venue.bsc_network ядро считает монетами сети по умолчанию (Arbitrum).
+     Предложение: при двух сетях требовать dex.default_chain = сеть, чьё имя у биржи — venue.bsc_network (ошибка с
+     причиной в rebuild), либо правило имени по dex.default_chain.
+  е) core/subscribe_assets.rs intermediate_assets: бирже промежуточная монета DEX другой сети идёт без сети
+     (chain None, адрес Arbitrum) — one_book её не сводит; одинаковый тикер промежуточной в двух сетях даст бирже две
+     записи на один стакан (как до 431 — шаг 2).
+  ж) HTX wallet.rs: неоднозначные сети не-BSC («тикер/сеть») пишутся в журнал под заголовком «…с именем сети BSC…» —
+     текст поправить при подключении Arbitrum (текст BSC не менялся намеренно).
+  з) rebuild.rs REGISTRY — «venue.arbitrum_network» строкой рядом с own_nets::OTHER: новая сеть = правка в двух местах
+     (тест own_nets проверяет только каталог); свести к own_nets::affects.
 - **Решение 416 — перенесено в следующие шаги плана (docs/notes/arbitrum/multichain-plan-2026-11-19.md):**
   1) ДО того, как адаптер DEX начнёт ставить сеть в монету (шаг 2): перенос `chain = None` → сеть (записи учёта
      core_state, учёт сделок, окна; карты в памяти) или «действующая сеть» в равенстве — иначе старая монета (None) ≠

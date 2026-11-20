@@ -3,7 +3,7 @@
 //! контракта у сети BSC, флаги ввода/вывода, комиссия, пределы, шаг суммы вывода, минимум депозита по решению человека.
 //! Кто вызывает: wallet.rs (в spawn_blocking), tests/binance_real_data.rs.
 //! От чего зависит: num.rs, errors.rs, core/types.
-//! Настройки: нет (код сети BSC и правило минимума депозита передаёт wallet.rs).
+//! Настройки: нет (коды своих сетей — BSC и, решение 431, Arbitrum — и правило минимума депозита передаёт wallet.rs).
 //!
 //! Официально: GET /sapi/v1/capital/config/getall (Wallet «All Coins' Information», вес IP 10) — монета: coin,
 //! networkList[]: network, name, depositEnable, withdrawEnable, withdrawFee, withdrawMin, withdrawMax,
@@ -18,6 +18,7 @@ use serde_json::Value;
 
 use crate::core::types::{Asset, CoinNetworkInfo, VenueId};
 use crate::gateway::errors::GatewayResult;
+use crate::gateway::own_nets::OwnNets;
 
 use super::{errors, num};
 
@@ -38,15 +39,17 @@ pub struct Parsed {
     pub skipped: Vec<String>,
 }
 
-/// Что делает: разбор getall. Принимает: ответ (массив монет), код сети BSC, площадку, правило минимума депозита.
+/// Что делает: разбор getall. Принимает: ответ (массив монет), свои сети (решение 431: код BSC и коды других сетей —
+/// gateway/own_nets.rs; «BSC» — только BSC), площадку, правило минимума депозита.
 /// Возвращает: Parsed — сеть с неразборчивым полем исключается, остальные работают.
 /// Ошибки: BadResponse — ответ не массив или у монеты нет coin.
 pub fn parse_networks(
     data: &Value,
-    bsc: &str,
+    own: impl Into<OwnNets>,
     venue: &VenueId,
     min: DepositMin,
 ) -> GatewayResult<Parsed> {
+    let own = own.into();
     let coins = data
         .as_array()
         .ok_or_else(|| errors::bad("config/getall не массив", &data.to_string()))?;
@@ -60,7 +63,7 @@ pub fn parse_networks(
             let Some(code) = num::text_opt(n, "network") else {
                 continue;
             };
-            match one(n, &ticker, &code, code == bsc, venue, min) {
+            match one(n, &ticker, &code, own.has(&code), venue, min) {
                 Ok(i) => p.list.push(i),
                 Err(why) => p.skipped.push(format!("{ticker}/{code}: {why}")),
             }
@@ -69,7 +72,7 @@ pub fn parse_networks(
     Ok(p)
 }
 
-/// Одна сеть монеты. Ошибка — текст причины (сеть пропускается).
+/// Одна сеть монеты (`is_bsc` — своя сеть: адрес и проверка denomination). Ошибка — текст причины (сеть пропускается).
 fn one(
     n: &Value,
     ticker: &str,

@@ -2,7 +2,7 @@
 //! Что делает: справочник монет и сетей BingX и стоимость вывода (адрес депозита — deposit_addr.rs).
 //! Кто вызывает: mod.rs (функции контракта).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, core/types.
-//! Настройки: venue.bsc_network.
+//! Настройки: venue.bsc_network, venue.arbitrum_network (решение 431 — имена своих сетей, gateway/own_nets.rs).
 //!
 //! Официальная документация (docs-v3 и api-ai-skills/spot-wallet):
 //! - GET /openApi/wallets/v1/capital/config/getall — networkList: network, depositEnable, withdrawEnable,
@@ -18,14 +18,16 @@ use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, CoinNetworkInfo, Cost, CostKind, VenueId};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::own_nets::{self, OwnNets};
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
 use super::{num, rest};
 
-/// Справочник: все монеты BingX и их сети. Адрес контракта ставится, если сеть — BSC (venue.bsc_network).
+/// Справочник: все монеты BingX и их сети. Адрес контракта ставится у своих сетей (решение 431: venue.bsc_network и
+/// заданная venue.arbitrum_network).
 pub async fn coin_networks(ctx: &Ctx) -> GatewayResult<Vec<CoinNetworkInfo>> {
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let data = rest::signed(
         ctx,
         Method::GET,
@@ -42,7 +44,7 @@ pub async fn coin_networks(ctx: &Ctx) -> GatewayResult<Vec<CoinNetworkInfo>> {
 /// без параметра; на всякий случай берутся только записи этой монеты (если биржа вернёт больше).
 /// Принимает: тикер монеты BingX. Возвращает: её сети. Ошибки: как coin_networks.
 pub async fn coin_networks_of(ctx: &Ctx, ticker: &str) -> GatewayResult<Vec<CoinNetworkInfo>> {
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let data = rest::signed(
         ctx,
         Method::GET,
@@ -57,14 +59,16 @@ pub async fn coin_networks_of(ctx: &Ctx, ticker: &str) -> GatewayResult<Vec<Coin
         .collect())
 }
 
-/// Разбор ответа config/getall (data — массив монет с networkList). Адрес контракта ставится только сети с названием
-/// bsc (venue.bsc_network); пустой или неразборчивый адрес (у BNB в BEP20 — "") — None: ядро покажет «сеть BSC есть,
-/// адреса контракта нет». Принимает: data ответа, название сети BSC, площадку. Ошибки: BadResponse — формат.
+/// Разбор ответа config/getall (data — массив монет с networkList). Адрес контракта ставится только своим сетям (`own`:
+/// venue.bsc_network и, решение 431, другие заданные имена — gateway/own_nets.rs; «BEP20» — только BSC, как раньше);
+/// пустой или неразборчивый адрес (у BNB в BEP20 — "") — None: ядро покажет «сеть BSC есть, адреса контракта нет».
+/// Принимает: data ответа, свои сети, площадку. Ошибки: BadResponse — формат.
 pub fn parse_networks(
     data: &Value,
-    bsc: &str,
+    own: impl Into<OwnNets>,
     venue: &VenueId,
 ) -> GatewayResult<Vec<CoinNetworkInfo>> {
+    let own = own.into();
     let coins = data
         .as_array()
         .ok_or_else(|| errors::bad("data не массив", &data.to_string()))?;
@@ -73,7 +77,7 @@ pub fn parse_networks(
         let ticker = num::text(c, "coin")?;
         for n in num::arr(c, "networkList")? {
             let network = num::text(n, "network")?;
-            let contract = if network == bsc {
+            let contract = if own.has(&network) {
                 num::text_opt(n, "contractAddress").and_then(|a| a.parse().ok())
             } else {
                 None

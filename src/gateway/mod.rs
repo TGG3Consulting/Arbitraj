@@ -44,6 +44,7 @@ mod keep_last_state;
 pub mod log_clock;
 pub mod lost_log;
 pub mod network_hint;
+pub mod own_nets;
 pub mod patience;
 pub mod pending;
 pub mod price_band;

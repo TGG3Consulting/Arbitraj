@@ -68,13 +68,19 @@ pub fn apply(
     n: &Native,
 ) -> Vec<CoinNetworkInfo> {
     let Some(bsc) = bsc else { return list };
-    if list.iter().any(|i| i.asset.contract == Some(n.wrapped)) {
+    // Решение 431: только записи сети по умолчанию (у записей другой сети — Asset.chain, core/net_chain.rs).
+    if list
+        .iter()
+        .any(|i| i.asset.chain.is_none() && i.asset.contract == Some(n.wrapped))
+    {
         return list;
     }
-    for i in list
-        .iter_mut()
-        .filter(|i| i.asset.ticker == n.ticker && i.network == bsc && i.asset.contract.is_none())
-    {
+    for i in list.iter_mut().filter(|i| {
+        i.asset.ticker == n.ticker
+            && i.network == bsc
+            && i.asset.chain.is_none()
+            && i.asset.contract.is_none()
+    }) {
         i.asset.contract = Some(n.wrapped);
     }
     list

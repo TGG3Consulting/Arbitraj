@@ -45,16 +45,18 @@ pub struct Parsed {
     pub notes: Vec<String>,
 }
 
-/// Что делает: разбор. Принимает: методы ввода, методы вывода, активы спота, сеть BSC ядра (venue.bsc_network),
+/// Что делает: разбор. Принимает: методы ввода, методы вывода, активы спота, свои сети (решение 431: venue.bsc_network
+/// и другие — gateway/own_nets.rs; «BSC» — только BSC; адрес — у каждой своей сети),
 /// площадку, «минимум депозита неизвестен — 0». Возвращает: Parsed. Ошибка BadResponse — у метода нет обязательных полей.
 pub fn parse(
     dep: &[Value],
     wd: &[Value],
     assets: &HashMap<String, AssetInfo>,
-    bsc: &str,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
     venue: &VenueId,
     min_ok: bool,
 ) -> GatewayResult<Parsed> {
+    let own = own.into();
     let mut p = Parsed::default();
     let d = group(dep, Dir::Deposit, &mut p)?;
     let w = group(wd, Dir::Withdraw, &mut p)?;
@@ -96,7 +98,7 @@ pub fn parse(
         if wm.is_some_and(|m| !m.pct.is_zero()) {
             p.notes.push(format!("{ticker}/{net}: процентная комиссия вывода — ядро её не считает (комиссия неизвестна)"));
         }
-        let is_bsc = net == bsc;
+        let is_own = own.has(net);
         let (cd, cw) = (
             dm.and_then(|m| m.contract.clone()),
             wm.and_then(|m| m.contract.clone()),
@@ -109,7 +111,7 @@ pub fn parse(
         } else {
             cw.or(cd)
         };
-        let contract = raw.filter(|_| is_bsc).and_then(|a| {
+        let contract = raw.filter(|_| is_own).and_then(|a| {
             let parsed = a.parse().ok();
             if parsed.is_none() {
                 p.notes

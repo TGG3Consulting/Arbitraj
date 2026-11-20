@@ -34,9 +34,15 @@ pub struct Parsed {
     pub percent_fee: Vec<String>,
 }
 
-/// Что делает: разбор coin/query-info. Принимает: result ответа, название сети BSC, площадку.
+/// Что делает: разбор coin/query-info. Принимает: result ответа, свои сети (решение 431: BSC и другие —
+/// gateway/own_nets.rs; «BSC» — только BSC), площадку. Адрес — у каждой своей сети; пометка процента — у BSC.
 /// Возвращает: Parsed — сеть с неразборчивым полем исключается, остальные работают. Ошибка BadResponse — нет rows.
-pub fn parse_networks(data: &Value, bsc: &str, venue: &VenueId) -> GatewayResult<Parsed> {
+pub fn parse_networks(
+    data: &Value,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
+    venue: &VenueId,
+) -> GatewayResult<Parsed> {
+    let own = own.into();
     let mut p = Parsed::default();
     for c in num::arr(data, "rows")? {
         let ticker = num::text(c, "coin")?;
@@ -47,9 +53,9 @@ pub fn parse_networks(data: &Value, bsc: &str, venue: &VenueId) -> GatewayResult
             let Some(chain) = num::text_opt(n, "chain") else {
                 continue;
             };
-            match one(n, &ticker, &chain, chain == bsc, venue) {
+            match one(n, &ticker, &chain, own.has(&chain), venue) {
                 Ok((info, pct)) => {
-                    if let Some(v) = pct.filter(|_| chain == bsc) {
+                    if let Some(v) = pct.filter(|_| own.is_bsc(&chain)) {
                         p.percent_fee.push(format!("{ticker}={v}"));
                     }
                     p.list.push(info);

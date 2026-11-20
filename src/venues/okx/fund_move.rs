@@ -7,7 +7,8 @@
 //! От чего зависит: rest.rs, num.rs, ctx.rs, deposit_addr.rs, getrandom.
 //! Настройки: venue.deposit_to_spot [okx] (да — переводить зачисленное 6 → 18, если адрес зачисляет на Funding),
 //! venue.withdraw_from_trade [okx] (да — перед выводом переводить сумму 18 → 6), venue.transfer_poll_ms,
-//! venue.transfer_wait_ms [okx] (опрос итога), venue.bsc_network (адрес депозита — на какой счёт).
+//! venue.transfer_wait_ms [okx] (опрос итога), venue.bsc_network / venue.arbitrum_network (адрес депозита —
+//! на какой счёт; сеть — по Asset.chain монеты, решение 431).
 //!
 //! Официально (https://www.okx.com/docs-v5/en/, «Funding Account → REST API»):
 //! - «Funds transfer» POST /api/v5/asset/transfer (2 запроса/с, User ID + монета; «Only API keys with Transfer privilege
@@ -35,8 +36,8 @@ use super::{num, rest};
 /// type перевода внутри своего счёта — «0: transfer within account».
 const WITHIN_ACCOUNT: &str = "0";
 
-/// Что делает: зачисленный депозит — с Funding на Trading, если включено venue.deposit_to_spot и адрес депозита сети BSC
-/// зачисляет на Funding. Принимает: монету, сумму. Возвращает: None — переводить не нужно; Some(текст) — переведено.
+/// Что делает: зачисленный депозит — с Funding на Trading, если включено venue.deposit_to_spot и адрес депозита сети
+/// монеты (решение 431: сеть по Asset.chain) зачисляет на Funding. Принимает: монету, сумму. Возвращает: None — переводить не нужно; Some(текст) — переведено.
 /// Ошибки: адрес депозита, сумма, коды OKX, OutcomeUnknown.
 pub async fn to_trade(
     ctx: &Ctx,
@@ -47,7 +48,9 @@ pub async fn to_trade(
     if !ctx.flag("venue.deposit_to_spot").unwrap_or(false) {
         return Ok(None);
     }
-    let net = ctx.text("venue.bsc_network")?;
+    // Решение 431: сеть — по монете запроса (Asset.chain; без сети — venue.bsc_network, как раньше).
+    let net = crate::gateway::own_nets::name_of(&ctx.settings, ctx.at(), asset.chain.as_ref())
+        .map_err(|e| ctx.tag(e))?;
     if addrs.get(ctx, asset, &net).await?.to == TRADING {
         return Ok(None);
     }

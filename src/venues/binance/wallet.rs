@@ -3,7 +3,8 @@
 //! стоимость вывода. Справочник — за `Arc` (без копий), ответ и разбор — вне рабочих потоков tokio (решение 131).
 //! Кто вызывает: mod.rs (функции контракта), deposit_addr.rs.
 //! От чего зависит: rest.rs, networks_parse.rs, ctx.rs, core/types.
-//! Настройки: venue.bsc_network [binance] (код сети BSC — его принимает вывод и адрес депозита),
+//! Настройки: venue.bsc_network [binance] (код сети BSC — его принимает вывод и адрес депозита), venue.arbitrum_network
+//! [binance] (решение 431 — свои сети, gateway/own_nets.rs),
 //! venue.deposit_dust_as_min [binance], venue.deposit_min_absent_ok [binance] (минимум депозита — решение человека,
 //! урок 21), venue.networks_fresh_ms [binance] (необязательная; не задана — запрос каждый раз).
 //!
@@ -68,7 +69,7 @@ pub async fn shared(ctx: &Ctx, nets: &Networks) -> GatewayResult<Arc<Vec<CoinNet
             return Ok(list.clone());
         }
     }
-    let bsc = ctx.text("venue.bsc_network")?;
+    let bsc = crate::gateway::own_nets::read(&ctx.settings, ctx.at()).map_err(|e| ctx.tag(e))?;
     let min = DepositMin {
         dust_as_min: ctx.flag("venue.deposit_dust_as_min").unwrap_or(false),
         absent_ok: ctx.flag("venue.deposit_min_absent_ok").unwrap_or(false),

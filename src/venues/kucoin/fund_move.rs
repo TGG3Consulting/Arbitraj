@@ -5,7 +5,8 @@
 //! Кто вызывает: mod.rs (deposit_to_trading), transfers.rs (перед выводом).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, deposit_addr.rs, getrandom.
 //! Настройки: venue.deposit_to_spot [kucoin] (да — переводить зачисленное с main на trade), venue.withdraw_from_trade
-//! [kucoin] (да — перед выводом переводить сумму с trade на main), venue.bsc_network (адрес депозита — на какой счёт).
+//! [kucoin] (да — перед выводом переводить сумму с trade на main), venue.bsc_network / venue.arbitrum_network (адрес депозита —
+//! на какой счёт; сеть — по Asset.chain монеты, решение 431).
 //!
 //! Официально:
 //! - Flex Transfer POST /api/v3/accounts/universal-transfer (право FlexTransfers, пул Management, вес 4)
@@ -34,8 +35,8 @@ use super::{num, rest};
 pub const MAIN: &str = "MAIN";
 pub const TRADE: &str = "TRADE";
 
-/// Что делает: зачисленный депозит — с main на trade, если включено venue.deposit_to_spot и адрес депозита сети BSC
-/// зачисляет на MAIN. Принимает: монету, сумму. Возвращает: None — переводить не нужно; Some(текст) — переведено.
+/// Что делает: зачисленный депозит — с main на trade, если включено venue.deposit_to_spot и адрес депозита сети монеты
+/// (решение 431: сеть по Asset.chain) зачисляет на MAIN. Принимает: монету, сумму. Возвращает: None — переводить не нужно; Some(текст) — переведено.
 /// Ошибки: адрес депозита, сумма, коды KuCoin, OutcomeUnknown.
 pub async fn to_trade(
     ctx: &Ctx,
@@ -46,7 +47,10 @@ pub async fn to_trade(
     if !ctx.flag("venue.deposit_to_spot").unwrap_or(false) {
         return Ok(None);
     }
-    let chain = ctx.text("venue.bsc_network")?;
+    // Решение 431: сеть — по монете запроса (Asset.chain: без сети — venue.bsc_network, как раньше; другая сеть —
+    // её имя у биржи, gateway/own_nets.rs), а не зашитая сеть BSC.
+    let chain = crate::gateway::own_nets::name_of(&ctx.settings, ctx.at(), asset.chain.as_ref())
+        .map_err(|e| ctx.tag(e))?;
     if addrs.get(ctx, asset, &chain).await?.to == TRADE {
         return Ok(None);
     }

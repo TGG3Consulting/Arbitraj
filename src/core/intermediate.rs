@@ -47,12 +47,24 @@ pub fn read(s: &Store, venue: &VenueId) -> Intermediate {
     }
 }
 
-/// Тикер токена по адресу контракта — из справочника бирж. None — ни одна биржа не знает этот адрес.
+/// Тикер токена по адресу контракта — из справочника бирж (сеть по умолчанию; решение 431 — ticker_of_in). None — ни
+/// одна биржа не знает этот адрес.
 pub fn ticker_of(networks: &super::registry_build::Networks, addr: Address) -> Option<String> {
+    ticker_of_in(networks, None, addr)
+}
+
+/// Что делает: тикер токена по сети и адресу (решение 431: запись справочника этой сети — Asset.chain; адрес в другой
+/// сети — другая монета). Принимает: справочник, сеть (None — по умолчанию), адрес. Возвращает: тикер или None.
+/// Ошибок нет.
+pub fn ticker_of_in(
+    networks: &super::registry_build::Networks,
+    chain: Option<&crate::core::types::ChainId>,
+    addr: Address,
+) -> Option<String> {
     networks
         .values()
         .flat_map(|l| l.iter())
-        .find(|i| i.asset.contract == Some(addr))
+        .find(|i| i.asset.contract == Some(addr) && i.asset.chain.as_ref() == chain)
         .map(|i| i.asset.ticker.clone())
 }
 

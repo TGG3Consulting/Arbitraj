@@ -51,7 +51,13 @@ pub fn coins(data: &Value) -> Vec<&Value> {
 /// Что делает: разбор справочника.
 /// Принимает: ответ, имя сети BSC (venue.bsc_network), площадку, «минимум депозита неизвестен — 0».
 /// Возвращает: Parsed. Ошибка BadResponse — ответ не массив и не объект или у монеты нет поля coin.
-pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayResult<Parsed> {
+pub fn parse(
+    data: &Value,
+    own: impl Into<crate::gateway::own_nets::OwnNets>,
+    venue: &VenueId,
+    min_ok: bool,
+) -> GatewayResult<Parsed> {
+    let own = own.into();
     if !data.is_array() && !data.is_object() {
         return Err(super::errors::bad(
             "currencies: ответ не массив и не объект",
@@ -70,8 +76,8 @@ pub fn parse(data: &Value, bsc: &str, venue: &VenueId, min_ok: bool) -> GatewayR
                 p.skipped.push(format!("{ticker}: сеть без blockchain"));
                 continue;
             };
-            let is_bsc = chain == bsc;
-            match network(n, &ticker, &chain, is_bsc, delisted, venue, min_ok) {
+            let is_bsc = own.is_bsc(&chain);
+            match network(n, &ticker, &chain, own.has(&chain), delisted, venue, min_ok) {
                 Ok(info) => {
                     if is_bsc && num::text_opt(n, "currencyType").as_deref() == Some(PAYMENT_ID) {
                         p.need_memo.push(ticker.clone());

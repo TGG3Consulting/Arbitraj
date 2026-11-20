@@ -4,7 +4,8 @@
 //! pools/load_algebra.rs: row_ticks, тики с liquidityTotal > 0, окно — записанные строки), состояние для
 //! math/swap_algebra (режим pool_quote::algebra_next(Proto::Algebra) = Row).
 //! Кто вызывает: tests/bsc_thena_fusion_window_t236.rs (ревью t236: off_map и глубина на записи 20.11),
-//! tests/bsc_thena_fusion_math_t237.rs и tests/bsc_thena_fusion_fee_t237.rs (запись t237).
+//! tests/bsc_thena_fusion_math_t237.rs и tests/bsc_thena_fusion_fee_t237.rs (запись t237),
+//! tests/bsc_thena_fusion_fee_slot3.rs (запись со слотом 3).
 //! От чего зависит: arb::venues::bsc_dex::{math::swap_algebra, pools::{families, load_algebra, ticks},
 //! quote::pool_quote}; serde_json.
 //! Настройки: нет.
@@ -27,6 +28,8 @@ use arb::venues::bsc_dex::quote::pool_quote::algebra_next;
 pub const FIRST: &str = "tests/data/bsc_thena_fusion_2026-11-20";
 /// Запись t237 (60 пулов GeckoTerminal «thena-fusion», данные оракула комиссии).
 pub const T237: &str = "tests/data/bsc_thena_fusion_2026-11-20_t237";
+/// Повтор записи со слотом 3 (volumePerLiquidityInBlock), точками index + 2 и 0 и началом окна бота (T463-02).
+pub const SLOT3: &str = "tests/data/bsc_thena_fusion_2026-11-20_slot3";
 
 /// Файлы пулов записи `rel` (путь от корня репозитория), по имени. Принимает: путь, ожидаемое число пулов.
 /// Ошибок нет (тест падает).

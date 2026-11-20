@@ -81,7 +81,6 @@ fn pool_out(v: &Value) -> Option<U256> {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/fluid_t1.py"]
 fn math_matches_pool_and_resolver_on_record() {
     let d = dir();
     let block = json(&d.join("block.json"));

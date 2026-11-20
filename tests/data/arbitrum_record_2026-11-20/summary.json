@@ -1,0 +1,152 @@
+{
+ "head": 525984987,
+ "error": null,
+ "results": [
+  {
+   "name": "sub_dex",
+   "ok": true,
+   "code": 0,
+   "seconds": 0,
+   "dirs": [
+    "tests/data/arbitrum_sub_dex_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_164256/logs/sub_dex.log"
+  },
+  {
+   "name": "kyber_elastic_v1",
+   "ok": true,
+   "code": 0,
+   "seconds": 3,
+   "dirs": [
+    "tests/data/arbitrum_kyber_elastic_v1_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_164256/logs/kyber_elastic_v1.log"
+  },
+  {
+   "name": "saddle",
+   "ok": true,
+   "code": 0,
+   "seconds": 0,
+   "dirs": [
+    "tests/data/arbitrum_saddle_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_164256/logs/saddle.log"
+  },
+  {
+   "name": "woofi",
+   "ok": true,
+   "code": 0,
+   "seconds": 0,
+   "dirs": [
+    "tests/data/arbitrum_woofi_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_164256/logs/woofi.log"
+  },
+  {
+   "name": "fluid_t1",
+   "ok": true,
+   "code": 0,
+   "seconds": 3,
+   "dirs": [
+    "tests/data/arbitrum_fluid_t1_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_164256/logs/fluid_t1.log"
+  },
+  {
+   "name": "balancer_v3",
+   "ok": false,
+   "code": 1,
+   "seconds": 1,
+   "dirs": [],
+   "why": "stdhttp.HTTPError: HTTP 429 https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes/balancer-v3-arbitrum/pools?page=4: {\"status\":{\"error_code\":429,\"error_message\":\"You've exceeded the Rate Limit. Please visit https://www.coingecko.com/en/api/pricing to subscribe to our API plans for higher rate",
+   "log": "arbitrum_record_2026-11-20_164256/logs/balancer_v3.log"
+  },
+  {
+   "name": "curve_crypto",
+   "ok": true,
+   "code": 0,
+   "seconds": 5,
+   "dirs": [
+    "tests/data/arbitrum_curve_crypto_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_164256/logs/curve_crypto.log"
+  },
+  {
+   "name": "camelot_v2",
+   "ok": false,
+   "code": 1,
+   "seconds": 491,
+   "dirs": [],
+   "why": "RuntimeError: eth_getLogs: {'code': -32002, 'message': 'request timed out'}",
+   "log": "arbitrum_record_2026-11-20_164256/logs/camelot_v2.log"
+  },
+  {
+   "name": "algebra_dir_fee",
+   "ok": true,
+   "code": 0,
+   "seconds": 2,
+   "dirs": [
+    "tests/data/arbitrum_algebra_dir_fee_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_164256/logs/algebra_dir_fee.log"
+  },
+  {
+   "name": "lb_v20",
+   "ok": true,
+   "code": 0,
+   "seconds": 2,
+   "dirs": [
+    "tests/data/arbitrum_lb_v20_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_164256/logs/lb_v20.log"
+  },
+  {
+   "name": "lb_v22",
+   "ok": false,
+   "code": 1,
+   "seconds": 501,
+   "dirs": [],
+   "why": "RuntimeError: eth_getCode: {'code': -32000, 'message': 'historical state 0d0878aa15db56f38dc3e74f4a0bb3c5e3944f027237c21e5e7633c5193f1293 is not available'}",
+   "log": "arbitrum_record_2026-11-20_164256/logs/lb_v22.log"
+  },
+  {
+   "name": "ekubo",
+   "ok": true,
+   "code": 0,
+   "seconds": 1,
+   "dirs": [
+    "tests/data/arbitrum_ekubo_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_164256/logs/ekubo.log"
+  },
+  {
+   "name": "ekubo_more",
+   "ok": false,
+   "code": null,
+   "seconds": 0,
+   "dirs": [],
+   "log": null,
+   "why": "не запущен: блок ядра Ekubo не найден (eth_getCode на блоке 262992493: {'code': -32000, 'message': 'historical state 847abe2a89f0333de4dc0c6fdbbd4fc7f06f9582d8243d313837ca88d9c204cb is not available'}) — задайте --ekubo-from-block"
+  },
+  {
+   "name": "exec_v4_live",
+   "ok": true,
+   "code": 0,
+   "seconds": 5,
+   "dirs": [
+    "tests/data/executor_v4_live_2026-11-20"
+   ],
+   "why": "",
+   "log": "arbitrum_record_2026-11-20_164256/logs/exec_v4_live.log"
+  }
+ ]
+}

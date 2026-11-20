@@ -474,8 +474,10 @@ async fn bundle_first_only_for_manager_routes_with_old_path() {
 #[test]
 fn live_warning_tied_to_runtime_hash() {
     use arb::venues::bsc_dex::exec::executor::{deploy_gate, live_rule};
-    let w = deploy_gate::refusal_for(&Ok(Vec::new())).expect("ничего не принято");
-    assert!(w.contains(deploy_gate::NOT_ACCEPTED), "{w}");
+    let w = deploy_gate::refusal_for(Version::V3, Some(56), &Ok(Vec::new()));
+    let w = w.expect("ничего не принято");
+    let head = deploy_gate::not_accepted(Version::V3, Some(56));
+    assert!(w.contains(&head), "{w}");
     let other =
         live_rule::judge("README другой сборки", "[]", "[]", code::runtime_sha256()).unwrap();
     assert!(

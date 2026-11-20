@@ -1,0 +1,30 @@
+{
+ "created_topics": {
+  "PoolCreated(address,address,address,uint32,uint256)": "0xfc574402c445e75f2b79b67884ff9c662244dce454c5ae68935fcd0bebb7c8ff",
+  "PoolCreated(address,address,address,uint32,uint24,uint256)": "0xb6bce363b712c921bead4bcc977289440eb6172eb89e258e3a25bd49ca806de6",
+  "PoolCreated(address,address,address,uint32,uint16,uint256)": "0x127844fe96226cbca38ca390cb374ebe4be3e9a2d43b21c58fd2c14501c0051d"
+ },
+ "factories": [
+  {
+   "name": "DMM",
+   "factory": "0xD9bfE9979e9CA4b2fe84bA5d4Cf963bBcB376974",
+   "router": "0xEaE47c5D99f7B31165a7f0c5f7E0D6afA25CFd55",
+   "logs_total": 0,
+   "pools": []
+  },
+  {
+   "name": "KS",
+   "factory": "0x1c758aF0688502e49140230F6b0EBd376d429be5",
+   "router": "0x5649B4DD00780e99Bab7Abb4A3d581Ea1aEB23D0",
+   "logs_total": 0,
+   "pools": []
+  },
+  {
+   "name": "KS_LEGACY",
+   "factory": "0x51E8D106C646cA58Caf32A47812e95887C071a62",
+   "router": "0xC3E2aED41ECdFB1ad41ED20D45377Da98D5489dD",
+   "logs_total": 0,
+   "pools": []
+  }
+ ]
+}

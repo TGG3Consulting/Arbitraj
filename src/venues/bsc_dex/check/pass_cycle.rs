@@ -178,7 +178,10 @@ async fn pool(p: &Pools, sources: &Sources, e: &Entry, unsettled: bool) {
         let Some(x) = pool_pass::v3(&w) else { continue };
         // Решение 441 (ревью, п. 1): запись сверяется с кодом версии исполнителя этого кошелька (v3 или v4).
         let ver = w.executor_version.as_deref().and_then(Version::parse);
-        let accepted = live_proof::accepted_for(ver.unwrap_or(Version::V3), k, stable, hooks);
+        // Решение 461: и записью сети площадки (dex.evm_chain_id).
+        let chain = live_proof::chain_of(&p.ctx);
+        let accepted =
+            live_proof::accepted_for(ver.unwrap_or(Version::V3), chain, k, stable, hooks);
         let prev = pool_pass::get(p.ctx.place.id, x, r);
         let deal = matches!(
             prev.as_ref().map(|f| &f.state),

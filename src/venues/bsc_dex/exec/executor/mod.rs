@@ -23,6 +23,7 @@ pub mod kind;
 pub mod kind_key;
 pub mod live_class;
 pub mod live_proof;
+pub mod live_record;
 pub mod live_row;
 pub mod live_rule;
 pub mod onchain;

@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "/home/ubuntu/arb-record/tools/arbitrum_record/lb_v22.py", line 380, in <module>
+    main()
+  File "/home/ubuntu/arb-record/tools/arbitrum_record/lb_v22.py", line 314, in main
+    code = node.rpc("eth_getCode", [h, tag])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/arb-record/tools/arbitrum_record/lb_v22.py", line 154, in rpc
+    raise RuntimeError(f"{method}: {j['error']}")
+RuntimeError: eth_getCode: {'code': -32000, 'message': 'historical state 0d0878aa15db56f38dc3e74f4a0bb3c5e3944f027237c21e5e7633c5193f1293 is not available'}

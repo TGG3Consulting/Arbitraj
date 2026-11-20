@@ -267,6 +267,14 @@ pub fn describe(ctx: &Ctx, f: &Family) -> String {
     }
 }
 
+/// Решение 461: что приняла запись приёмки версии исполнителя кошелька (не сверена — v3, как pool_gate.rs) в сети
+/// площадки (dex.evm_chain_id). Ошибок нет.
+fn wallet_listing(ctx: &Ctx) -> String {
+    use super::super::exec::executor::{code::Version, live_proof};
+    let ver = ctx.exec_info().and_then(|(_, v)| v).unwrap_or(Version::V3);
+    live_proof::listing_for(ver, live_proof::chain_of(ctx))
+}
+
 /// Часть describe про исполнитель. Ошибок нет.
 fn describe_exec(ctx: &Ctx, f: &Family) -> String {
     if let (Some(k), Some(why)) = (f.executor_kind, exec_callback::missing(ctx, f)) {
@@ -276,10 +284,10 @@ fn describe_exec(ctx: &Ctx, f: &Family) -> String {
         // Решение 400: у шага пула менеджера — классы, принятые записью симуляции на живых пулах; решение 401 — и пул
         // непринятого класса, прошедший пробу через исполнитель кошелька (отвергнутый пробой — нет).
         (Some(k), true) if k.singleton() => format!(
-            "исполнитель: шаг {} — исполнимо через ArbExecutor v3 в принятых классах или после пробы пула через \
+            "исполнитель: шаг {} — исполнимо через ArbExecutor в принятых классах или после пробы пула через \
              исполнитель кошелька (решение 401; {})",
             k.name(),
-            super::super::exec::executor::live_proof::listing()
+            wallet_listing(ctx)
         ),
         (Some(k), true) => format!(
             "исполнитель: шаг {} — исполнимо через ArbExecutor",

@@ -69,7 +69,7 @@ fn dyn_list(w: &[U256], head: usize) -> Vec<U256> {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/sub_dex.py"]
+#[ignore = "запись 2026-11-20 пуста: событий создания пулов за окно 2 000 000 блоков нет (logs_total 0 у всех фабрик) — повтор sub_dex.py с большим --blocks (TASKS T456-03)"]
 fn kyber_classic_created_and_math() {
     let k = json("kyber.json");
     let mut checked = 0;
@@ -121,7 +121,7 @@ fn kyber_classic_created_and_math() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/sub_dex.py"]
+#[ignore = "запись 2026-11-20 пуста: событий создания пулов за окно 2 000 000 блоков нет (logs_total 0 у всех фабрик) — повтор sub_dex.py с большим --blocks (TASKS T456-03)"]
 fn balancer_v2_versions_match_vault() {
     let b = json("balancer.json");
     let mut checked = 0;
@@ -203,7 +203,7 @@ fn balancer_v2_versions_match_vault() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/sub_dex.py"]
+#[ignore = "запись 2026-11-20 пуста: событий создания пулов за окно 2 000 000 блоков нет (logs_total 0 у всех фабрик) — повтор sub_dex.py с большим --blocks (TASKS T456-03)"]
 fn iziswap_factory_registry() {
     let z = json("izi.json");
     for (fee, d) in z["fee2pointDelta"].as_object().unwrap() {

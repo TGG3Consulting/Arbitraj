@@ -43,7 +43,7 @@ fn ok(v: &Value) -> Vec<u8> {
 
 /// Селекторы вида есть в коде реализации прокси и оракула.
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/woofi.py"]
+#[ignore = "запись 2026-11-20: wooracle() пула = 0xf9b0c8ee…, а оракул записи 0xCf4EA168…; bases пуст (record_all без --base) — повтор woofi.py (TASKS T456-03)"]
 fn implementation_has_selectors() {
     let p = rec("proxy.json");
     for (k, v) in p["selectors"].as_object().unwrap() {
@@ -54,7 +54,7 @@ fn implementation_has_selectors() {
 
 /// state(base) разбирается ABI вида; wooracle() пула = оракул записи.
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/woofi.py"]
+#[ignore = "запись 2026-11-20: wooracle() пула = 0xf9b0c8ee…, а оракул записи 0xCf4EA168…; bases пуст (record_all без --base) — повтор woofi.py (TASKS T456-03)"]
 fn oracle_state_decodes() {
     let meta = rec("meta.json");
     let pool = rec("pool.json");

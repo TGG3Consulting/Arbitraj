@@ -7,8 +7,9 @@
 //!    got_eq_swap_credit получено = положительная сумма события Swap менеджера этого пула; у (б) квотер «после (а)» —
 //!    вызов квотера в ТОЙ ЖЕ симуляции сразу перед execute (б), его ответ = получено (raw_rpc).
 //! 3. Правило (live_rule.rs) на записи: приняты ровно Uniswap V4 без крючка и Infinity CL без крючка; счёт пулов по
-//!    классам; развёртывание кода v3 разрешено (решение 457: текущей сборки v4 — закрыто, записи о её коде нет); шаги
-//!    непринятых классов (с крючком, Bin, Stable) — отказ admits.
+//!    классам; развёртывание кода v3 в сети BSC разрешено; шаги непринятых классов (с крючком, Bin, Stable) — отказ
+//!    admits_for. Решение 461: запись — пары (v3, chainId 56); v3 в Arbitrum — записи нет, «не проверен». Запись
+//!    текущей сборки v4 — tests/bsc_dex_executor_v4_live.rs.
 //! 4. Правило строгое на изменённой записи: без SHA в README — ничего не принято; без hooks_reject.json — у CL с
 //!    крючком необъяснённые откаты.
 //! 5. Ревью t185: остаток на исполнителе = 0 и квотер (а) на H — по raw_rpc (не по сводке); строгость на изменённой
@@ -34,6 +35,10 @@ const DIR: &str = "tests/data/executor_v3_live_2026-11-17";
 const TAG: &str = "0x7ff4ca0";
 /// Адрес X исполнителя в симуляции (README записи: пустой адрес с подменой кода).
 const X: &str = "0x00000000000000000000000000000000a4b0e0c3";
+/// Сеть записи — свой узел BSC (README записи: «WBNB (dex.native_wrapped, bsc_dex)»; решение 461 — пара (v3, 56)).
+const BSC: Option<u64> = Some(56);
+/// Сеть Arbitrum One — записи v3 в ней нет (решение 461).
+const ARB: Option<u64> = Some(42161);
 
 /// Текст файла записи. Ошибок нет (паника — файла нет).
 fn text(name: &str) -> String {
@@ -219,9 +224,16 @@ fn class(kind: u8, hook: Hook) -> Class {
     Class { kind, hook }
 }
 
+/// Решение 461: admits_for записи пары (v3, BSC). Ошибок нет.
+fn v3(k: ExecKind, stable: bool, h: Address) -> Result<(), String> {
+    live_proof::admits_for(Version::V3, BSC, k, stable, h)
+}
+
 #[test]
 fn accepted_classes_from_record() {
-    let v = live_proof::verdicts().as_ref().expect("запись разобрана");
+    let v = live_proof::verdicts_of(Version::V3, BSC)
+        .as_ref()
+        .expect("запись разобрана");
     let got: BTreeMap<Class, (usize, usize, bool)> = v
         .iter()
         .map(|x| (x.class, (x.pools, x.proven, x.accepted)))
@@ -248,29 +260,34 @@ fn accepted_classes_from_record() {
         !why(class(20, Hook::With)).contains("необъяснённое"),
         "откаты крючков — в hooks_reject"
     );
-    // Для кода v3 запись разрешает развёртывание (принят хотя бы один класс); шаги — по классам. Решение 457: текущая
-    // сборка contracts/out/ — v4, записи симуляции о её коде нет — развёртывание текущей сборки закрыто (решение 441,
-    // ревью п. 1: запись сверяется с кодом, который будет развёрнут).
-    assert!(deploy_gate::refusal_for(live_proof::verdicts()).is_none());
-    assert!(deploy_gate::refusal().is_some());
+    // Для кода v3 в сети BSC запись разрешает развёртывание (принят хотя бы один класс); шаги — по классам. Решение
+    // 461: запись — пары (v3, chainId 56); у v3 в другой сети (Arbitrum) записи нет — все классы «не проверен».
+    let listed = live_proof::verdicts_of(Version::V3, BSC);
+    assert!(deploy_gate::refusal_for(Version::V3, BSC, listed).is_none());
     let hook = Address::repeat_byte(0x11);
-    assert!(live_proof::admits(ExecKind::UniV4, false, Address::ZERO).is_ok());
-    assert!(live_proof::admits(ExecKind::InfCl, false, Address::ZERO).is_ok());
-    assert!(live_proof::admits(ExecKind::UniV4, false, hook).is_err());
-    assert!(live_proof::admits(ExecKind::InfCl, false, hook).is_err());
-    assert!(live_proof::admits(ExecKind::InfCl, true, hook).is_err());
-    assert!(live_proof::admits(ExecKind::BalancerV3, false, Address::ZERO).is_err());
-    let bin = live_proof::admits(ExecKind::InfBin, false, Address::ZERO).expect_err("Bin");
+    assert!(v3(ExecKind::UniV4, false, Address::ZERO).is_ok());
+    assert!(v3(ExecKind::InfCl, false, Address::ZERO).is_ok());
+    assert!(v3(ExecKind::UniV4, false, hook).is_err());
+    assert!(v3(ExecKind::InfCl, false, hook).is_err());
+    assert!(v3(ExecKind::InfCl, true, hook).is_err());
+    assert!(v3(ExecKind::BalancerV3, false, Address::ZERO).is_err());
+    let bin = v3(ExecKind::InfBin, false, Address::ZERO).expect_err("Bin");
     assert!(bin.contains("не принят на живых пулах"), "{bin}");
     assert!(
-        live_proof::admits(ExecKind::V2, false, Address::ZERO).is_ok(),
+        v3(ExecKind::V2, false, Address::ZERO).is_ok(),
         "не шаг менеджера"
     );
-    let list = live_proof::listing();
+    let list = live_proof::listing_for(Version::V3, BSC);
     assert!(
         list.contains("Uniswap V4 (вид 19) без крючка") && list.contains("не приняты"),
         "{list}"
     );
+    assert!(list.contains(DIR), "{list}");
+    let other = live_proof::admits_for(Version::V3, ARB, ExecKind::UniV4, false, Address::ZERO);
+    let other = other.expect_err("записи v3 в Arbitrum нет");
+    assert!(other.contains("не проверен"), "{other}");
+    let ok = live_proof::accepted_for(Version::V3, ARB, ExecKind::UniV4, false, Address::ZERO);
+    assert!(!ok);
 }
 
 #[test]
@@ -282,7 +299,7 @@ fn rule_is_strict_on_altered_record() {
         none.iter().all(|x| !x.accepted),
         "запись о другом коде — ничего не принято"
     );
-    assert!(deploy_gate::refusal_for(&Ok(none)).is_some());
+    assert!(deploy_gate::refusal_for(Version::V3, BSC, &Ok(none)).is_some());
     let bare = live_rule::judge(&text("README.md"), &summary, "[]", cur).unwrap();
     let cl_hook = bare
         .iter()

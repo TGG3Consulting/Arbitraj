@@ -9,8 +9,8 @@
 //! конструктор молча (навсегда — сеттера нет). Не совпал с текущей dex.native_wrapped — не отправляем. После блока: код по адресу
 //! (eth_getCode) сверяется с ArbExecutor.bin-runtime. Адрес в exec.executor_address Тигран вписывает сам.
 //! Решение 399 / 400: пока в записи симуляции на живых пулах у текущей сборки (v3; решение 441 — v4 после пересборки
-//! contracts/build.sh, запись сверяется с её кодом — live_proof::verdicts_current) не принят ни один класс шага
-//! (deploy_gate.rs, live_proof.rs), развёртывание запрещено: deploy отказывает (NotApplicable, 400) до ключа, nonce и
+//! contracts/build.sh, запись сверяется с её кодом — live_proof::verdicts_current; решение 461 — запись сети площадки
+//! кошелька, dex.evm_chain_id) не принят ни один класс шага (deploy_gate.rs, live_proof.rs), развёртывание запрещено: deploy отказывает (NotApplicable, 400) до ключа, nonce и
 //! сети; оценка отдаёт причину в поле warning — интерфейс показывает её и не даёт отправить; поле classes — принятые и
 //! непринятые классы. Обходной настройки нет.
 //! Кто вызывает: venue.rs (контракт dex_executor_quote / dex_executor_deploy), exec/executor/dry.rs (next_nonce).
@@ -27,7 +27,7 @@
 use alloy_primitives::{Address, Bytes, TxKind, U64, U256};
 use serde_json::json;
 
-use crate::core::types::{ExecutorDeployQuote, ExecutorDeployed, TxOutcome};
+use crate::core::types::{ExecutorClassProof, ExecutorDeployQuote, ExecutorDeployed, TxOutcome};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::gateway::events::MarketEvent;
 use crate::storage::journal::Level;
@@ -104,9 +104,10 @@ pub async fn quote(q: &Quoting, env: &Env) -> GatewayResult<ExecutorDeployQuote>
         wnative,
         note,
         // Решение 399: причина запрета развёртывания (None — разрешено); интерфейс не даёт отправить при Some.
-        warning: deploy_gate::refusal(),
-        // Решение 400: принятые и непринятые классы шага v3 — окно развёртывания показывает их таблицей.
-        classes: live_proof::proofs(),
+        warning: deploy_gate::refusal_at(live_proof::chain_of(ctx)),
+        // Решение 400: принятые и непринятые классы шага текущей сборки в сети кошелька (решение 461) — окно
+        // развёртывания показывает их таблицей.
+        classes: current_proofs(ctx),
     })
 }
 
@@ -149,7 +150,8 @@ pub async fn deploy(
     confirmed: (&str, Address),
 ) -> GatewayResult<ExecutorDeployed> {
     let ctx = &q.ctx;
-    gate(deploy_gate::refusal()).map_err(|why| ctx.err(ErrorCode::NotApplicable, why))?;
+    let refused = deploy_gate::refusal_at(live_proof::chain_of(ctx));
+    gate(refused).map_err(|why| ctx.err(ErrorCode::NotApplicable, why))?;
     let (bin, wnative) = bytecode(ctx)?;
     confirm(confirmed, wnative).map_err(|why| ctx.err(ErrorCode::QuoteMismatch, why))?;
     // Решение 398: эталон кода в сети (ArbExecutor.bin-runtime, сверка по хешу) — до отправки: после неё сверка не
@@ -195,6 +197,16 @@ pub async fn deploy(
     })
 }
 
+/// Решение 461: классы шага текущей сборки по записи приёмки сети кошелька окружения (сборка не сверена — пусто).
+/// Ошибок нет.
+fn current_proofs(ctx: &Ctx) -> Vec<ExecutorClassProof> {
+    let chain = live_proof::chain_of(ctx);
+    match code::current_version() {
+        Ok(v) => live_proof::proofs(v, chain),
+        Err(_) => Vec::new(),
+    }
+}
+
 /// Решение 399: пропуск развёртывания. Принимает: причину запрета (deploy_gate::refusal). Возвращает: Ok — запрета нет;
 /// Err(причина) — отказ. Ошибок иных нет.
 pub fn gate(refusal: Option<String>) -> Result<(), String> {
@@ -227,10 +239,11 @@ mod tests {
         assert!(confirm(("00", a), a).is_err_and(|w| w.contains("SHA-256")));
     }
 
-    /// Решения 399 / 400: развёртывание запрещено, пока в записи не принят ни один класс шага; принят хотя бы один —
-    /// пропуск. Вердикты — правило live_rule.rs на данных (без записи) и на вшитой записи текущей сборки.
+    /// Решения 399 / 400 / 461: развёртывание запрещено, пока в записи пары (версия, сеть) не принят ни один класс шага;
+    /// принят хотя бы один — пропуск. Вердикты — правило live_rule.rs на данных (без записи) и на вшитых записях.
     #[test]
     fn deploy_refused_until_a_class_is_accepted() {
+        use super::super::code::Version;
         use super::super::live_rule::{CLASSES, Verdict};
         let v = |accepted: bool| Verdict {
             class: CLASSES[0],
@@ -239,19 +252,26 @@ mod tests {
             accepted,
             why: "тест".into(),
         };
-        let none = gate(deploy_gate::refusal_for(&Ok(vec![v(false)])));
-        assert!(
-            none.is_err_and(|w| w.contains(deploy_gate::NOT_ACCEPTED) && w.contains("не приняты"))
-        );
-        let bad = gate(deploy_gate::refusal_for(&Err("нет записи".into())));
-        assert!(bad.is_err_and(|w| w.contains("нет записи")));
-        assert!(gate(deploy_gate::refusal_for(&Ok(vec![v(false), v(true)]))).is_ok());
-        // Текущая сборка: запрет ровно тогда, когда запись не приняла ни одного класса (без обходной настройки).
-        let accepted = live_proof::verdicts_current()
-            .as_ref()
-            .is_ok_and(|l| l.iter().any(|x| x.accepted));
-        assert_eq!(gate(deploy_gate::refusal()).is_ok(), accepted);
-        assert_eq!(deploy_gate::need_v3(), deploy_gate::need_v3_for(!accepted));
+        let (v4, bsc) = (Version::V4, Some(56));
+        let list = Ok(vec![v(false)]);
+        let none = deploy_gate::refusal_for(v4, bsc, &list).expect("запрет");
+        assert!(none.contains(&deploy_gate::not_accepted(v4, bsc)));
+        assert!(none.contains("не приняты"));
+        let bad = deploy_gate::refusal_for(v4, bsc, &Err("нет записи".into()));
+        assert!(bad.is_some_and(|w| w.contains("нет записи")));
+        let two = Ok(vec![v(false), v(true)]);
+        assert!(deploy_gate::refusal_for(v4, bsc, &two).is_none());
+        // Решение 461: текущая сборка в каждой сети — запрет ровно тогда, когда запись пары (версия, сеть) не приняла
+        // ни одного класса (записи нет — «не проверен», запрет; без обходной настройки).
+        for chain in [Some(42161), Some(56), None] {
+            let accepted = match live_proof::verdicts_current(chain) {
+                Ok((_, Ok(l))) => l.iter().any(|x| x.accepted),
+                _ => false,
+            };
+            assert_eq!(deploy_gate::refusal_at(chain).is_none(), accepted);
+        }
+        let closed = deploy_gate::closed_everywhere();
+        assert_eq!(deploy_gate::need_v3(), deploy_gate::need_v3_for(closed));
         assert!(!deploy_gate::need_v3_for(true).contains("переразверн"));
     }
 }

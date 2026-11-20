@@ -1,0 +1,9 @@
+{
+ "chainId": "0xa4b1",
+ "factory": "0x91716C4EDA1Fb55e84Bf8b4c7085f84285c19085",
+ "hash": "0xef8df2e005278ee1927b20416d8cac9388c1a0d4a2da3b1bda24472796e2e2da",
+ "number": 525984979,
+ "resolver": "0x05Bd8269A20C472b148246De20E6852091BF16Ff",
+ "timestamp": 1795192973,
+ "wrapped": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"
+}

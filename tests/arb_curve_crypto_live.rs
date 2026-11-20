@@ -12,8 +12,8 @@
 //! 3. Код (eth_getCode) математики и реализаций Twocrypto-NG — ровно код, собранный из исходника (Vyper 0.3.10,
 //!    twocrypto-ng d612fde — v2.0.0, 99b5192 — v2.1.0; хеши ниже), код пулов начинается кодом своей реализации.
 //!
-//! Пока записи нет, тесты помечены #[ignore] — снять после записи со своего узла (данных узла Arbitrum у разработчика
-//! нет; тесты — только на записанных ответах, CLAUDE.md).
+//! Запись tests/data/arbitrum_curve_crypto_2026-11-20 — метки #[ignore] сняты (решение 461; тесты — только на
+//! записанных ответах, CLAUDE.md).
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/curve_crypto_common (запись, лесенка), arb::venues::bsc_dex::pools::{load_crypto,
 //! crypto_variant}. Моков нет.
@@ -82,21 +82,18 @@ fn check_ng(name: &str, n: usize) {
 
 /// Twocrypto-NG v2.1.0 и v2.0.0: наш выход = get_dy пула на каждой записанной сумме.
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/curve_crypto.py"]
 fn twocrypto_matches_get_dy() {
     check_ng("twocrypto.json", 2);
 }
 
 /// Tricrypto-NG: наш выход = get_dy пула на каждой записанной сумме.
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/curve_crypto.py"]
 fn tricrypto_matches_get_dy() {
     check_ng("tricrypto.json", 3);
 }
 
 /// Код Twocrypto-NG на узле = код из исходника (математика, реализации, начало кода пулов по их MATH()).
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/curve_crypto.py"]
 fn twocrypto_code_matches_source() {
     let d = doc("twocrypto.json");
     let math = |k: usize| d["maths"][k].as_str().unwrap().to_string();

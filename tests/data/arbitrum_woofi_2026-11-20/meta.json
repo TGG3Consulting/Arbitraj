@@ -1,0 +1,10 @@
+{
+ "chainId": "0xa4b1",
+ "block": 525984999,
+ "block_hex": "0x1f59e4e7",
+ "timestamp": 1795192979,
+ "woopp": "0x5520385bFcf07Ec87C4c53A7d8d65595Dff69FA4",
+ "oracle": "0xCf4EA1688bc23DD93D933edA535F8B72FC8934Ec",
+ "bases": [],
+ "sizes": "0.001,0.1,10,1000"
+}

@@ -1,0 +1,14 @@
+{
+ "chainId": "0xa4b1",
+ "block": 525984998,
+ "block_hex": "0x1f59e4e6",
+ "timestamp": 1795192978,
+ "pools": [
+  "0xBea9F78090bDB9e662d8CB301A00ad09A5b756e9",
+  "0xfeEa4D1BacB0519E8f952460A70719944fe56Ee0",
+  "0x401AFbc31ad2A3Bc0eD8960d63eFcDEA749b4849",
+  "0x773f9144969FA19CdB4cAE1ef19D7A381f5F6922"
+ ],
+ "sizes": "0.01,1,100,10000,1000000",
+ "log_blocks": 20000
+}

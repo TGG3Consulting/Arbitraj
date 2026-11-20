@@ -1,0 +1,88 @@
+{
+ "what": "Liquidity Book v2.0 (LFJ V2), Arbitrum One \u2014 \u0440\u0435\u0448\u0435\u043d\u0438\u0435 445",
+ "block": 525986940,
+ "block_hash": "0x010e3c1acfedd5d01293955cbe8533f9e22095255a7c7b30a0da93d504560509",
+ "timestamp": 1795193481,
+ "chain_id": {
+  "request": {
+   "jsonrpc": "2.0",
+   "id": 1,
+   "method": "eth_chainId",
+   "params": []
+  },
+  "response": {
+   "jsonrpc": "2.0",
+   "id": 1,
+   "result": "0xa4b1"
+  }
+ },
+ "head": {
+  "request": {
+   "jsonrpc": "2.0",
+   "id": 2,
+   "method": "eth_blockNumber",
+   "params": []
+  },
+  "response": {
+   "jsonrpc": "2.0",
+   "id": 2,
+   "result": "0x1f59ec7c"
+  }
+ },
+ "header": {
+  "request": {
+   "jsonrpc": "2.0",
+   "id": 3,
+   "method": "eth_getBlockByNumber",
+   "params": [
+    "0x1f59ec7c",
+    false
+   ]
+  },
+  "response": {
+   "jsonrpc": "2.0",
+   "id": 3,
+   "result": {
+    "baseFeePerGas": "0x131aa00",
+    "difficulty": "0x1",
+    "extraData": "0x33e515fdbf9e2de2456364bdb5bf11a1010b3f06f574430b2c213ab2613f744a",
+    "gasLimit": "0x4000000000000",
+    "gasUsed": "0x5e3a7",
+    "hash": "0x010e3c1acfedd5d01293955cbe8533f9e22095255a7c7b30a0da93d504560509",
+    "l1BlockNumber": "0x193b60d",
+    "logsBloom": "0x00000000000000000000000000002000000000000000000800000000080000000000080002000000000040000000000000080001000000000000000000000000000000000018000000000408000000000000000000000000000000004000000020000000000000000000000000000000000000080000000400000810000000000800000000000001000000000000000800010000000000000000000004002000000000000000000004000000000000000000002000000000000000000000000000022002000000200000000000000010000000000000002000000000000040000000000000000000000000000000200000000000000000000000000000410000",
+    "miner": "0xa4b000000000000000000073657175656e636572",
+    "mixHash": "0x0000000000029049000000000193b60d000000000000003d0001000000000000",
+    "nonce": "0x0000000000280bb4",
+    "number": "0x1f59ec7c",
+    "parentHash": "0xabd19f88fa7b7fecb9c15be76ea9436630100cc1f861309943d2008040494f42",
+    "receiptsRoot": "0xb72dc820eb84bfb5c94f7bc936ead61f38807e64fd8b291a76359447467e68a1",
+    "sendCount": "0x29049",
+    "sendRoot": "0x33e515fdbf9e2de2456364bdb5bf11a1010b3f06f574430b2c213ab2613f744a",
+    "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "size": "0x928",
+    "stateRoot": "0x6e90fbdeb8a786431f74e872a079c857af5ec59ad64d1b0de0ba0eab1d95f74f",
+    "timestamp": "0x6b007a89",
+    "transactions": [
+     "0x0c0b86d53fed315604da10182c85545f4f02a009dbf8a409537890ac863d8299",
+     "0xdcdd4fd59cb4faadfde852bbca297a69e6ee6c4c687324f825a0642bdfab75eb",
+     "0x85ce52b9227dd98aa47641c0b35e07ed7c7049755a85499b1551b67468173c29",
+     "0xd8d440e65b08a4024e75ccdefaf08c61223b086b50bc0fa5c5804a49addc2acc"
+    ],
+    "transactionsRoot": "0xe53dafe0325ea320ba605f1245e77f345ccc4f20fc8b1358241a4f47b6eb102c",
+    "uncles": []
+   }
+  }
+ },
+ "factory": "0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982",
+ "router": "0x7BFd7192E76D950832c77BB412aaE841049D8D9B",
+ "pools": [
+  "0x13fda18516eafe5e8ae930f86fa51ae4b6c35e8f",
+  "0x2d7d00424d7e61a198afda2109407d60199ecffe",
+  "0x7ec3717f70894f6d9ba0be00774610394ce006ee",
+  "0x5fbbef48ce0850e5a73bc3f4a6e903458b3c0af4",
+  "0x021352af332c70817e25a47578a8f0d8c0fa9210"
+ ],
+ "max_bins": 300,
+ "log_blocks": 20000
+}

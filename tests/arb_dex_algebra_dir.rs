@@ -9,7 +9,7 @@
 //!    оракула пула (обмен тогда не пересчитывает комиссии, AlgebraPool.sol:777-795), обе стороны, все суммы записи.
 //!    Quoter v1 отдаёт и комиссию обмена — она равна комиссии стороны из globalState.
 //!
-//! Тесты с меткой ignore до записи (метку снять после записи — docs/TASKS.md, «Решение 444»).
+//! Запись tests/data/arbitrum_algebra_dir_fee_2026-11-20 — метка ignore снята (решение 461).
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/algebra_dir_common, arb::venues::bsc_dex::{math::{swap_algebra, algebra_fee},
 //! quote::virtual_quoter, pools::verify_algebra_dir}.
@@ -51,7 +51,6 @@ fn hex_u256(v: &serde_json::Value) -> U256 {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/algebra_dir_fee.py"]
 fn pools_are_directional_raw_bitmap_code() {
     let fac = json("factory.json");
     let deployer = addr(&fac["poolDeployer"]);
@@ -76,7 +75,6 @@ fn pools_are_directional_raw_bitmap_code() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/algebra_dir_fee.py"]
 fn math_equals_pool_swap() {
     let mut compared = 0;
     for p in pools() {

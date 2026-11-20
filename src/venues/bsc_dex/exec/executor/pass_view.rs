@@ -15,22 +15,31 @@ use crate::core::types::ExecutorClassProof;
 use super::super::super::ctx::Ctx;
 use super::super::super::pools::families::Proto;
 use super::super::super::pools::registry::{Entry, Registry};
+use super::code::Version;
 use super::live_class::Class;
 use super::pool_pass::{self, State};
 use super::{entry, live_proof};
 
-/// Класс шага пула менеджера и принят ли он записью. None — не шаг менеджера или форма шага не строится. Ошибок нет.
-fn class(e: &Entry) -> Option<(Class, bool)> {
+/// Версия исполнителя кошелька окружения (не сверена — v3, как pool_gate.rs) и сеть площадки (решение 461). Ошибок нет.
+fn pair_of(ctx: &Ctx) -> (Version, Option<u64>) {
+    let ver = ctx.exec_info().and_then(|(_, v)| v).unwrap_or(Version::V3);
+    (ver, live_proof::chain_of(ctx))
+}
+
+/// Класс шага пула менеджера и принят ли он записью пары кошелька (решение 461). None — не шаг менеджера или форма
+/// шага не строится. Ошибок нет.
+fn class(ctx: &Ctx, e: &Entry) -> Option<(Class, bool)> {
     let (k, _, hooks) = entry::shape(e).ok()?;
     let stable = e.family.proto == Proto::InfinityStable;
     let c = live_proof::class_of(k, stable, hooks)?;
-    Some((c, live_proof::admits(k, stable, hooks).is_ok()))
+    let (ver, chain) = pair_of(ctx);
+    Some((c, live_proof::accepted_for(ver, chain, k, stable, hooks)))
 }
 
 /// Строки карточки пула (см. шапку). Пусто — не шаг менеджера или ни у одного кошелька нет исполнителя v3.
 /// Принимает: окружение, пул. Ошибок нет.
 pub fn details(ctx: &Ctx, e: &Entry) -> Vec<String> {
-    let Some((c, accepted)) = class(e) else {
+    let Some((c, accepted)) = class(ctx, e) else {
         return Vec::new();
     };
     let wallets: Vec<_> = ctx
@@ -65,7 +74,8 @@ pub fn details(ctx: &Ctx, e: &Entry) -> Vec<String> {
 /// Классы шага v3 со сводкой по пулам кошелька окружения (см. шапку). Принимает: окружение (кошелёк), реестр пулов.
 /// Ошибок нет.
 pub fn proofs(ctx: &Ctx, reg: &Registry) -> Vec<ExecutorClassProof> {
-    let mut list = live_proof::proofs();
+    let (ver, chain) = pair_of(ctx);
+    let mut list = live_proof::proofs(ver, chain);
     let Some(x) = ctx.wallet().ok().and_then(|w| pool_pass::v3(&w)) else {
         for p in &mut list {
             p.live = "у кошелька нет исполнителя v3 — проба пулов через исполнитель не идёт".into();
@@ -76,7 +86,9 @@ pub fn proofs(ctx: &Ctx, reg: &Registry) -> Vec<ExecutorClassProof> {
     let mut counts: Vec<(Class, [usize; 3])> = Vec::new();
     for r in reg.refs() {
         let Some(e) = reg.get(&r) else { continue };
-        let Some((c, _)) = class(&e) else { continue };
+        let Some((c, _)) = class(ctx, &e) else {
+            continue;
+        };
         let slot = match pool_pass::get(ctx.place.id, x, &r).map(|f| f.state) {
             Some(State::Passed) => 0,
             Some(State::Rejected { .. }) => 1,

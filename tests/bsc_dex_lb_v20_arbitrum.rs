@@ -3,8 +3,8 @@
 //! Без записи (идут всегда): селекторы и topic0 ABI v2.0 (pools/abi_lb20.rs — alloy) = keccak256 подписей исходника
 //! lfj-gg/joe-v2@v2.0.0 и = константам скрипта записи tools/arbitrum_record/lb_v20.py; вид lb_v20 (LbBin, шаг
 //! LB20 = 24 — решение 456, без данных).
-//! На записи своего узла Arbitrum (tests/data/arbitrum_lb_v20_<дата>/, скрипт tools/arbitrum_record/lb_v20.py; до записи —
-//! #[ignore]):
+//! На записи своего узла Arbitrum (tests/data/arbitrum_lb_v20_<дата>/, скрипт tools/arbitrum_record/lb_v20.py; запись
+//! 2026-11-20 — без #[ignore], решение 461):
 //! 1. Наша математика (load_lb20::decode → math/lb_swap.rs с ветками v20) на записанном состоянии, всех бинах и времени
 //!    блока = LBRouter v2.0 getSwapOut (выход и комиссии) на каждой сумме обеих сторон; откат роутера — у нас неполный
 //!    обмен или откат; запросы записи = наши кодировщики (calls / first_calls / calls_for).
@@ -235,7 +235,6 @@ fn kind_and_step() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/lb_v20.py"]
 fn formula_equals_router_get_swap_out() {
     let (mut equal, mut reverted) = (0, 0);
     for p in pools() {
@@ -285,7 +284,6 @@ fn formula_equals_router_get_swap_out() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/lb_v20.py"]
 fn calls_match_encoders_and_head_decodes() {
     for p in pools() {
         let pool: Address = p["pool"].as_str().unwrap().parse().unwrap();
@@ -310,7 +308,6 @@ fn calls_match_encoders_and_head_decodes() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/lb_v20.py"]
 fn verify_takes_recorded_pools() {
     let fam = families::make("traderjoe-v2-arbitrum@arbitrum", "lb_v20").expect("вид");
     let meta = json("meta.json");
@@ -341,7 +338,6 @@ fn verify_takes_recorded_pools() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/lb_v20.py"]
 fn events_give_touched_bins() {
     let mut n = 0;
     for p in json("meta.json")["pools"].as_array().unwrap() {
@@ -371,7 +367,6 @@ fn events_give_touched_bins() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/lb_v20.py"]
 fn condition_slots_match_state() {
     for p in pools() {
         let d = state(&p);

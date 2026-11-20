@@ -8,7 +8,8 @@
 //!    (is_killed) не сверяется.
 //! 3. У пулов фабрики crypto v1 код — прокси EIP-1167 на шаблон из записи (verify_crypto_v1.rs proxy_target).
 //!
-//! Пока записи нет, тесты помечены #[ignore] — снять после записи со своего узла.
+//! Запись tests/data/arbitrum_curve_crypto_2026-11-20 (решение 461): tricrypto_v1 — без #[ignore]; crypto_v1 — под
+//! #[ignore] (у фабрики v1 на блоке записи pool_count = 0).
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/curve_crypto_common, arb::venues::bsc_dex::pools::{load_crypto_v1, verify_crypto_v1}.
 //! Моков нет.
@@ -54,14 +55,13 @@ fn check_v1(name: &str, n: usize) {
 
 /// Фабрика crypto v1: наш выход = get_dy пула; код пула — прокси на шаблон из журнала развёртывания.
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/curve_crypto.py"]
+#[ignore = "запись 2026-11-20: pool_count фабрики crypto v1 0xE5De15A9… = 0 — пулов нет, сверять нечего (TASKS T456-03)"]
 fn crypto_v1_matches_get_dy() {
     check_v1("crypto_v1.json", 2);
 }
 
 /// Tricrypto 2021: наш выход = get_dy пула.
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/curve_crypto.py"]
 fn tricrypto_v1_matches_get_dy() {
     check_v1("tricrypto_v1.json", 3);
 }

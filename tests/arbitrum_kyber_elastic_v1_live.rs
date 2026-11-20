@@ -60,7 +60,7 @@ fn pools() -> Vec<Value> {
 
 /// Наш выход Elastic v1 = returnedAmount QuoterV2 на каждой записанной сумме (откат квотера — пропуск).
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/kyber_elastic_v1.py"]
+#[ignore = "запись 2026-11-20 не о v1: у всех 20 пулов GeckoTerminal factory() = 0xc7a590291e07…, не фабрика v1 0x5F1dddbf…; getPool v1 ≠ пул — повтор kyber_elastic_v1.py с отбором пулов фабрики v1 (TASKS T456-03)"]
 fn v1_math_matches_quoter() {
     let pools = pools();
     assert!(!pools.is_empty(), "в записи нет пулов с тиками");
@@ -121,7 +121,7 @@ fn v1_math_matches_quoter() {
 
 /// Фабрика v1: getPool(token0, token1, swapFeeUnits) = адрес пула (проверка пула pools/verify_calls.rs).
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/kyber_elastic_v1.py"]
+#[ignore = "запись 2026-11-20 не о v1: у всех 20 пулов GeckoTerminal factory() = 0xc7a590291e07…, не фабрика v1 0x5F1dddbf…; getPool v1 ≠ пул — повтор kyber_elastic_v1.py с отбором пулов фабрики v1 (TASKS T456-03)"]
 fn v1_factory_confirms_pool() {
     for p in pools() {
         let got = ret::<IElasticFactory::getPoolCall>(&p["factory_getPool"]);

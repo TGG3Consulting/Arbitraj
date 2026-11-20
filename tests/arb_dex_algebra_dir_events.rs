@@ -9,7 +9,7 @@
 //! 4. Ревью 444: в записи есть хотя бы один Fee (по всем пулам); topic0 каждого лога пула — из подписки вида
 //!    (events::topics) или из списка событий, не меняющих состояние (not_state).
 //!
-//! Тесты с меткой ignore до записи (метку снять после записи — docs/TASKS.md, «Решение 444»).
+//! Запись tests/data/arbitrum_algebra_dir_fee_2026-11-20 — метка ignore снята (решение 461).
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/algebra_dir_common, tests/native_common (entry), arb::venues::bsc_dex::pools::{events,
 //! abi_algebra_dir, abi_algebra}.
@@ -59,7 +59,6 @@ fn not_state() -> Vec<B256> {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/algebra_dir_fee.py"]
 fn fee_and_swap_logs_rebuild_recorded_state() {
     let all = logs();
     let mut fees_all = 0;

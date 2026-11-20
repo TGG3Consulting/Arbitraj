@@ -184,7 +184,7 @@ fn describe(
         (_, Some(have), Some(want)) if have == want => format!(
             "версия {}, обёртка {have:#x} = dex.native_wrapped (нативный BNB монетой сделки идёт){}",
             v.label(),
-            v3_note(v)
+            v3_note(ctx, v)
         ),
         (_, have, want) => format!(
             "версия {}, но обёртка в исполнителе {} ≠ dex.native_wrapped {} — нативный BNB через этот исполнитель НЕ \
@@ -192,7 +192,7 @@ fn describe(
             v.label(),
             have.map_or("не прочитана".into(), |a| format!("{a:#x}")),
             want.map_or("(не задана)".into(), |a| format!("{a:#x}")),
-            v3_note(v)
+            v3_note(ctx, v)
         ),
     };
     format!(
@@ -202,13 +202,14 @@ fn describe(
 
 /// Решение 395 (t181): хвост текста сверки про шаги пулов внутри менеджеров (Uniswap V4, PancakeSwap Infinity).
 /// Решение 399 (Н2): у v1 / v2 «что делать» — deploy_gate::need_v3 (пока v3 не принят — без призыва переразвернуть).
-/// Ошибок нет.
-fn v3_note(v: Version) -> String {
+/// Решение 461: у v3 / v4 — запись приёмки версии кошелька в сети площадки (dex.evm_chain_id). Принимает: окружение,
+/// версию. Ошибок нет.
+fn v3_note(ctx: &Ctx, v: Version) -> String {
     if v >= Version::V3 {
         // Решение 400: шаги есть в коде, исполняются только классы, принятые записью симуляции на живых пулах.
         format!(
             "; шаги Uniswap V4 и PancakeSwap Infinity (CL, Bin, Stable) в коде есть — {}",
-            live_proof::listing_for(v)
+            live_proof::listing_for(v, live_proof::chain_of(ctx))
         )
     } else {
         format!(

@@ -54,8 +54,10 @@ pub fn decide(ctx: &Ctx, e: &Entry, k: ExecKind, hooks: Address) -> Result<Admit
     }
     // Решение 441 (ревью, п. 1): запись сверяется с кодом версии исполнителя кошелька (версия не сверена — v3, как
     // до решения).
+    // Решение 461: и записью сети площадки кошелька (dex.evm_chain_id) — записи для пары нет, класс не принят.
     let ver = ctx.exec_info().and_then(|(_, v)| v).unwrap_or(Version::V3);
-    let record = super::live_proof::accepted_for(ver, k, stable, hooks);
+    let chain = super::live_proof::chain_of(ctx);
+    let record = super::live_proof::accepted_for(ver, chain, k, stable, hooks);
     let by_record = if record {
         Ok(Admit::Record)
     } else {
@@ -93,7 +95,9 @@ fn refusal(ctx: &Ctx, e: &Entry, k: ExecKind, hooks: Address, r: Refuse) -> Stri
         Refuse::Rejected => line,
         Refuse::Class => {
             let stable = e.family.proto == Proto::InfinityStable;
-            let class = super::live_proof::admits(k, stable, hooks)
+            let ver = ctx.exec_info().and_then(|(_, v)| v).unwrap_or(Version::V3);
+            let chain = super::live_proof::chain_of(ctx);
+            let class = super::live_proof::admits_for(ver, chain, k, stable, hooks)
                 .err()
                 .unwrap_or_default();
             format!("{class}; этот пул: {line}")

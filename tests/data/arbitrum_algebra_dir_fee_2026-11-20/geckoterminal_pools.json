@@ -1,0 +1,1967 @@
+{
+ "url": "https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes/camelot-v3/pools?page=1",
+ "response": {
+  "data": [
+   {
+    "id": "arbitrum_0xb1026b8e7276e7ac75410f1fcbbe21796e8f7526",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.998808651030078",
+     "base_token_price_native_currency": "0.000607963791402786",
+     "quote_token_price_usd": "1641.95",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.0006079637914",
+     "quote_token_price_base_token": "1644.834797962",
+     "address": "0xb1026b8e7276e7ac75410f1fcbbe21796e8f7526",
+     "name": "USDC / WETH 0.01%",
+     "pool_created_at": "2023-06-23T02:23:53Z",
+     "fdv_usd": "2758047137.66906",
+     "market_cap_usd": "68226084568.2134",
+     "price_change_percentage": {
+      "m5": "-0.002",
+      "m15": "0.057",
+      "m30": "-0.301",
+      "h1": "-0.083",
+      "h6": "-0.077",
+      "h24": "-0.111"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 1,
+       "sells": 2,
+       "buyers": 1,
+       "sellers": 1,
+       "unique_traders": 2
+      },
+      "m15": {
+       "buys": 6,
+       "sells": 8,
+       "buyers": 3,
+       "sellers": 1,
+       "unique_traders": 3
+      },
+      "m30": {
+       "buys": 14,
+       "sells": 14,
+       "buyers": 7,
+       "sellers": 2,
+       "unique_traders": 8
+      },
+      "h1": {
+       "buys": 40,
+       "sells": 40,
+       "buyers": 16,
+       "sellers": 6,
+       "unique_traders": 21
+      },
+      "h6": {
+       "buys": 934,
+       "sells": 917,
+       "buyers": 120,
+       "sellers": 103,
+       "unique_traders": 181
+      },
+      "h24": {
+       "buys": 3500,
+       "sells": 3515,
+       "buyers": 305,
+       "sellers": 263,
+       "unique_traders": 435
+      }
+     },
+     "volume_usd": {
+      "m5": "24.3902808642",
+      "m15": "111.2378788936",
+      "m30": "229.264660843",
+      "h1": "783.0931433622",
+      "h6": "63510.9967096596",
+      "h24": "312897.889708531"
+     },
+     "reserve_in_usd": "190480.485"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xe51635ae8136abac44906a8f230c2d235e9c195f",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.113830328593554",
+     "base_token_price_native_currency": "0.0000693396365693195",
+     "quote_token_price_usd": "1641.95",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.00006933963657",
+     "quote_token_price_base_token": "14421.7658106744",
+     "address": "0xe51635ae8136abac44906a8f230c2d235e9c195f",
+     "name": "ARB / WETH 0.025%",
+     "pool_created_at": "2023-06-23T02:30:49Z",
+     "fdv_usd": "1143435309.02061",
+     "market_cap_usd": "800138545.270035",
+     "price_change_percentage": {
+      "m5": "-0.365",
+      "m15": "0.068",
+      "m30": "0.182",
+      "h1": "0.822",
+      "h6": "-4.459",
+      "h24": "-7.236"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 1,
+       "sells": 7,
+       "buyers": 1,
+       "sellers": 2,
+       "unique_traders": 3
+      },
+      "m15": {
+       "buys": 10,
+       "sells": 14,
+       "buyers": 5,
+       "sellers": 3,
+       "unique_traders": 7
+      },
+      "m30": {
+       "buys": 28,
+       "sells": 27,
+       "buyers": 7,
+       "sellers": 5,
+       "unique_traders": 11
+      },
+      "h1": {
+       "buys": 90,
+       "sells": 87,
+       "buyers": 29,
+       "sellers": 25,
+       "unique_traders": 51
+      },
+      "h6": {
+       "buys": 372,
+       "sells": 380,
+       "buyers": 60,
+       "sellers": 76,
+       "unique_traders": 108
+      },
+      "h24": {
+       "buys": 1268,
+       "sells": 1286,
+       "buyers": 126,
+       "sellers": 168,
+       "unique_traders": 207
+      }
+     },
+     "volume_usd": {
+      "m5": "180.8608851393",
+      "m15": "658.8409541494",
+      "m30": "1520.7821592348",
+      "h1": "4915.584609052",
+      "h6": "19207.5762359459",
+      "h24": "80015.724452753"
+     },
+     "reserve_in_usd": "38532.5473"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x912ce59144191c1204e64559fe8253a0e49e6548",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xd845f7d4f4deb9ff5bcf09d140ef13718f6f6c71",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "59409.0212933789",
+     "base_token_price_native_currency": "36.2230601905976",
+     "quote_token_price_usd": "1641.81",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "36.2230601906",
+     "quote_token_price_base_token": "0.02760672331",
+     "address": "0xd845f7d4f4deb9ff5bcf09d140ef13718f6f6c71",
+     "name": "WBTC / WETH 0.009%",
+     "pool_created_at": "2023-06-28T09:06:38Z",
+     "fdv_usd": "452617596.445927",
+     "market_cap_usd": "452545532.091218",
+     "price_change_percentage": {
+      "m5": "-0.081",
+      "m15": "0.281",
+      "m30": "-0.147",
+      "h1": "-0.218",
+      "h6": "-4.388",
+      "h24": "-5.972"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 9,
+       "sells": 10,
+       "buyers": 7,
+       "sellers": 9,
+       "unique_traders": 14
+      },
+      "m15": {
+       "buys": 26,
+       "sells": 23,
+       "buyers": 13,
+       "sellers": 16,
+       "unique_traders": 27
+      },
+      "m30": {
+       "buys": 49,
+       "sells": 48,
+       "buyers": 24,
+       "sellers": 24,
+       "unique_traders": 45
+      },
+      "h1": {
+       "buys": 130,
+       "sells": 125,
+       "buyers": 51,
+       "sellers": 50,
+       "unique_traders": 90
+      },
+      "h6": {
+       "buys": 461,
+       "sells": 416,
+       "buyers": 110,
+       "sellers": 106,
+       "unique_traders": 174
+      },
+      "h24": {
+       "buys": 986,
+       "sells": 928,
+       "buyers": 183,
+       "sellers": 187,
+       "unique_traders": 294
+      }
+     },
+     "volume_usd": {
+      "m5": "1101.488288381",
+      "m15": "2927.1569111407",
+      "m30": "6247.580285819",
+      "h1": "16366.5445126781",
+      "h6": "52291.9741194597",
+      "h24": "125610.410460917"
+     },
+     "reserve_in_usd": "44501.9378"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0x7cccba38e2d959fe135e79aebb57ccb27b128358",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "1641.95",
+     "base_token_price_native_currency": "1.0",
+     "quote_token_price_usd": "0.997242703289101",
+     "quote_token_price_native_currency": "0.000607740231859465",
+     "base_token_price_quote_token": "1645.439856664",
+     "quote_token_price_base_token": "0.0006077402319",
+     "address": "0x7cccba38e2d959fe135e79aebb57ccb27b128358",
+     "name": "WETH / USDT 0.01%",
+     "pool_created_at": "2023-06-28T12:26:30Z",
+     "fdv_usd": "208030419.175108",
+     "market_cap_usd": "206622069.72844",
+     "price_change_percentage": {
+      "m5": "-0.082",
+      "m15": "0.12",
+      "m30": "-0.32",
+      "h1": "-0.823",
+      "h6": "-6.576",
+      "h24": "-7.923"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 5,
+       "sells": 5,
+       "buyers": 1,
+       "sellers": 2,
+       "unique_traders": 2
+      },
+      "m15": {
+       "buys": 13,
+       "sells": 11,
+       "buyers": 1,
+       "sellers": 2,
+       "unique_traders": 2
+      },
+      "m30": {
+       "buys": 25,
+       "sells": 25,
+       "buyers": 1,
+       "sellers": 5,
+       "unique_traders": 5
+      },
+      "h1": {
+       "buys": 73,
+       "sells": 70,
+       "buyers": 8,
+       "sellers": 13,
+       "unique_traders": 20
+      },
+      "h6": {
+       "buys": 280,
+       "sells": 299,
+       "buyers": 30,
+       "sellers": 29,
+       "unique_traders": 55
+      },
+      "h24": {
+       "buys": 714,
+       "sells": 736,
+       "buyers": 50,
+       "sellers": 62,
+       "unique_traders": 102
+      }
+     },
+     "volume_usd": {
+      "m5": "109.6624033607",
+      "m15": "268.5928677388",
+      "m30": "602.2735827809",
+      "h1": "1753.760973661",
+      "h6": "6462.7045431322",
+      "h24": "17973.9563374734"
+     },
+     "reserve_in_usd": "12697.8477"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xfae2ae0a9f87fd35b5b0e24b47bac796a7eefea1",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.113825073612625",
+     "base_token_price_native_currency": "0.0000693396365693195",
+     "quote_token_price_usd": "0.997365473980607",
+     "quote_token_price_native_currency": "0.000607427433223062",
+     "base_token_price_quote_token": "0.1141529552",
+     "quote_token_price_base_token": "8.7601761889",
+     "address": "0xfae2ae0a9f87fd35b5b0e24b47bac796a7eefea1",
+     "name": "ARB / USDC 0.025%",
+     "pool_created_at": "2023-08-08T16:46:23Z",
+     "fdv_usd": "1144407751.77144",
+     "market_cap_usd": "800819028.828547",
+     "price_change_percentage": {
+      "m5": "-0.109",
+      "m15": "0.137",
+      "m30": "0.267",
+      "h1": "0.816",
+      "h6": "-4.301",
+      "h24": "-7.256"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 2,
+       "sells": 2,
+       "buyers": 1,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buys": 4,
+       "sells": 4,
+       "buyers": 1,
+       "sellers": 2,
+       "unique_traders": 2
+      },
+      "m30": {
+       "buys": 7,
+       "sells": 6,
+       "buyers": 1,
+       "sellers": 2,
+       "unique_traders": 2
+      },
+      "h1": {
+       "buys": 36,
+       "sells": 30,
+       "buyers": 5,
+       "sellers": 7,
+       "unique_traders": 10
+      },
+      "h6": {
+       "buys": 115,
+       "sells": 130,
+       "buyers": 15,
+       "sellers": 29,
+       "unique_traders": 40
+      },
+      "h24": {
+       "buys": 380,
+       "sells": 388,
+       "buyers": 43,
+       "sellers": 59,
+       "unique_traders": 92
+      }
+     },
+     "volume_usd": {
+      "m5": "28.2514541649",
+      "m15": "51.3126104023",
+      "m30": "93.4877586429",
+      "h1": "520.5940902042",
+      "h6": "1775.7590110445",
+      "h24": "5973.1109606856"
+     },
+     "reserve_in_usd": "25738.3872"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x912ce59144191c1204e64559fe8253a0e49e6548",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xc86eb7b85807020b4548ee05b54bfc956eebbfcd",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.998987335043573",
+     "base_token_price_native_currency": "0.000608415198418693",
+     "quote_token_price_usd": "0.99938665177535",
+     "quote_token_price_native_currency": "0.000608658395064009",
+     "base_token_price_quote_token": "0.9996004382",
+     "quote_token_price_base_token": "1.0003997215",
+     "address": "0xc86eb7b85807020b4548ee05b54bfc956eebbfcd",
+     "name": "USDC / USDC",
+     "pool_created_at": "2023-06-23T02:17:44Z",
+     "fdv_usd": "2756481933.31978",
+     "market_cap_usd": "68187365953.5668",
+     "price_change_percentage": {
+      "m5": "-0.262",
+      "m15": "-0.109",
+      "m30": "-0.278",
+      "h1": "-0.182",
+      "h6": "-0.189",
+      "h24": "-0.453"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 6,
+       "sells": 3,
+       "buyers": 6,
+       "sellers": 3,
+       "unique_traders": 9
+      },
+      "m15": {
+       "buys": 15,
+       "sells": 8,
+       "buyers": 12,
+       "sellers": 5,
+       "unique_traders": 17
+      },
+      "m30": {
+       "buys": 30,
+       "sells": 17,
+       "buyers": 24,
+       "sellers": 11,
+       "unique_traders": 35
+      },
+      "h1": {
+       "buys": 70,
+       "sells": 46,
+       "buyers": 51,
+       "sellers": 29,
+       "unique_traders": 73
+      },
+      "h6": {
+       "buys": 211,
+       "sells": 109,
+       "buyers": 140,
+       "sellers": 70,
+       "unique_traders": 186
+      },
+      "h24": {
+       "buys": 418,
+       "sells": 261,
+       "buyers": 232,
+       "sellers": 129,
+       "unique_traders": 311
+      }
+     },
+     "volume_usd": {
+      "m5": "3048.7194415599",
+      "m15": "33465.927496875",
+      "m30": "88324.857176551",
+      "h1": "142736.069089272",
+      "h6": "430568.3176467",
+      "h24": "1026765.07250569"
+     },
+     "reserve_in_usd": "64344.3038"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0x9b6ff025aee245d314c09f57b72f0de6e231c3a6",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.299264594515483",
+     "base_token_price_native_currency": "0.000180948427144052",
+     "quote_token_price_usd": "1641.95",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.0001809484271",
+     "quote_token_price_base_token": "5526.436542076",
+     "address": "0x9b6ff025aee245d314c09f57b72f0de6e231c3a6",
+     "name": "GNS / WETH 0.3%",
+     "pool_created_at": "2024-06-11T00:45:18Z",
+     "fdv_usd": "5755837.04546166",
+     "market_cap_usd": "7168076.16279291",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0.507",
+      "m30": "0.857",
+      "h1": "2.398",
+      "h6": "-7.838",
+      "h24": "-5.544"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 3,
+       "sells": 1,
+       "buyers": 3,
+       "sellers": 1,
+       "unique_traders": 4
+      },
+      "m30": {
+       "buys": 4,
+       "sells": 1,
+       "buyers": 4,
+       "sellers": 1,
+       "unique_traders": 5
+      },
+      "h1": {
+       "buys": 20,
+       "sells": 1,
+       "buyers": 13,
+       "sellers": 1,
+       "unique_traders": 14
+      },
+      "h6": {
+       "buys": 101,
+       "sells": 45,
+       "buyers": 28,
+       "sellers": 18,
+       "unique_traders": 40
+      },
+      "h24": {
+       "buys": 330,
+       "sells": 220,
+       "buyers": 59,
+       "sellers": 52,
+       "unique_traders": 78
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "167.3584724273",
+      "m30": "219.2969295537",
+      "h1": "692.3263138473",
+      "h6": "4874.0427771883",
+      "h24": "34239.7671520623"
+     },
+     "reserve_in_usd": "151992.0276"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x18c11fd286c5ec11c3b683caa813b77f5163a122",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xe8795cf9c2309ecfe05df028eb0f21d5d6e3a951",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "8.33721583038828",
+     "base_token_price_native_currency": "0.00509789491039112",
+     "quote_token_price_usd": "1641.95",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.00509789491",
+     "quote_token_price_base_token": "196.159398649",
+     "address": "0xe8795cf9c2309ecfe05df028eb0f21d5d6e3a951",
+     "name": "LINK / WETH 0.1%",
+     "pool_created_at": "2023-10-31T00:37:02Z",
+     "fdv_usd": "15471422.8055525",
+     "market_cap_usd": "6392803959.32986",
+     "price_change_percentage": {
+      "m5": "-0.162",
+      "m15": "-0.158",
+      "m30": "0.094",
+      "h1": "0.065",
+      "h6": "-5.736",
+      "h24": "-7.721"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 6,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buys": 2,
+       "sells": 6,
+       "buyers": 1,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 8,
+       "sells": 6,
+       "buyers": 4,
+       "sellers": 1,
+       "unique_traders": 4
+      },
+      "h1": {
+       "buys": 36,
+       "sells": 15,
+       "buyers": 11,
+       "sellers": 9,
+       "unique_traders": 19
+      },
+      "h6": {
+       "buys": 118,
+       "sells": 101,
+       "buyers": 18,
+       "sellers": 21,
+       "unique_traders": 35
+      },
+      "h24": {
+       "buys": 265,
+       "sells": 252,
+       "buyers": 42,
+       "sellers": 31,
+       "unique_traders": 63
+      }
+     },
+     "volume_usd": {
+      "m5": "363.8009173033",
+      "m15": "475.3217614789",
+      "m30": "932.896345027",
+      "h1": "4623.3341940379",
+      "h6": "16262.7880313868",
+      "h24": "49696.1219249513"
+     },
+     "reserve_in_usd": "71580.2018"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0xf97f4df75117a78c1a5a0dbb814af92458539fb4",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xc99be44383bc8d82357f5a1d9ae9976ee9d75bee",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "6.75368523231546",
+     "base_token_price_native_currency": "0.00411871842444232",
+     "quote_token_price_usd": "1641.36",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.004118718424",
+     "quote_token_price_base_token": "242.793970587",
+     "address": "0xc99be44383bc8d82357f5a1d9ae9976ee9d75bee",
+     "name": "GMX / WETH 0.625%",
+     "pool_created_at": "2023-08-09T21:30:16Z",
+     "fdv_usd": "74193259.2407214",
+     "market_cap_usd": "72528948.5558984",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "-0.129",
+      "m30": "-0.038",
+      "h1": "-1.182",
+      "h6": "-2.754",
+      "h24": "-5.362"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 2,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 7,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "h1": {
+       "buys": 11,
+       "sells": 9,
+       "buyers": 4,
+       "sellers": 2,
+       "unique_traders": 5
+      },
+      "h6": {
+       "buys": 94,
+       "sells": 51,
+       "buyers": 16,
+       "sellers": 5,
+       "unique_traders": 18
+      },
+      "h24": {
+       "buys": 216,
+       "sells": 148,
+       "buyers": 37,
+       "sellers": 27,
+       "unique_traders": 54
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "64.7460455712",
+      "m30": "283.7165223776",
+      "h1": "1438.8327928828",
+      "h6": "7249.7690008186",
+      "h24": "22846.827722182"
+     },
+     "reserve_in_usd": "49752.5628"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0x0f143fc50d6c71fee95d6ec1030e62d788507b84",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.439253765884653",
+     "base_token_price_native_currency": "0.00026776655731706",
+     "quote_token_price_usd": "1641.6",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.0002677665573",
+     "quote_token_price_base_token": "3734.596321586",
+     "address": "0x0f143fc50d6c71fee95d6ec1030e62d788507b84",
+     "name": "ETHFI / WETH 0.246%",
+     "pool_created_at": "2024-07-07T16:00:29Z",
+     "fdv_usd": "3334877.08406631",
+     "market_cap_usd": "438610697.947469",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "-0.477",
+      "m30": "-1.209",
+      "h1": "-1.694",
+      "h6": "-7.146",
+      "h24": "-12.474"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 5,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 4,
+       "sells": 15,
+       "buyers": 2,
+       "sellers": 1,
+       "unique_traders": 2
+      },
+      "h1": {
+       "buys": 11,
+       "sells": 16,
+       "buyers": 6,
+       "sellers": 2,
+       "unique_traders": 7
+      },
+      "h6": {
+       "buys": 56,
+       "sells": 52,
+       "buyers": 9,
+       "sellers": 8,
+       "unique_traders": 15
+      },
+      "h24": {
+       "buys": 146,
+       "sells": 153,
+       "buyers": 12,
+       "sellers": 15,
+       "unique_traders": 24
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "87.4814308857",
+      "m30": "399.05090001",
+      "h1": "659.4152281932",
+      "h6": "3055.4574434621",
+      "h24": "7935.5951524568"
+     },
+     "reserve_in_usd": "87635.6566"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x7189fb5b6504bbff6a852b13b7b82a3c118fdc27",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xe461f84c3fe6bcdd1162eb0ef4284f3bb6e4cad3",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "1.24784981934156",
+     "base_token_price_native_currency": "0.000759991239142103",
+     "quote_token_price_usd": "1641.95",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.0007599912391",
+     "quote_token_price_base_token": "1315.804641549",
+     "address": "0xe461f84c3fe6bcdd1162eb0ef4284f3bb6e4cad3",
+     "name": "PENDLE / WETH 0.325%",
+     "pool_created_at": "2023-06-26T20:37:42Z",
+     "fdv_usd": "18481577.4015593",
+     "market_cap_usd": "217382631.714444",
+     "price_change_percentage": {
+      "m5": "-0.156",
+      "m15": "-0.321",
+      "m30": "-0.214",
+      "h1": "0.22",
+      "h6": "-7.644",
+      "h24": "-10.86"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 3,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buys": 5,
+       "sells": 3,
+       "buyers": 1,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 10,
+       "sells": 3,
+       "buyers": 4,
+       "sellers": 1,
+       "unique_traders": 4
+      },
+      "h1": {
+       "buys": 30,
+       "sells": 7,
+       "buyers": 6,
+       "sellers": 5,
+       "unique_traders": 10
+      },
+      "h6": {
+       "buys": 30,
+       "sells": 42,
+       "buyers": 6,
+       "sellers": 24,
+       "unique_traders": 27
+      },
+      "h24": {
+       "buys": 99,
+       "sells": 157,
+       "buyers": 15,
+       "sellers": 53,
+       "unique_traders": 63
+      }
+     },
+     "volume_usd": {
+      "m5": "98.4874075812",
+      "m15": "293.4525108673",
+      "m30": "524.2192825146",
+      "h1": "1291.4554254569",
+      "h6": "3079.4958373554",
+      "h24": "15628.7270482891"
+     },
+     "reserve_in_usd": "53902.9198"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x0c880f6761f1af8d9aa9c466984b80dab9a8c9e8",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0x521aa84ab3fcc4c05cabac24dc3682339887b126",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "1641.95",
+     "base_token_price_native_currency": "1.0",
+     "quote_token_price_usd": "0.999460141706091",
+     "quote_token_price_native_currency": "0.000607588519592488",
+     "base_token_price_quote_token": "1645.850715992",
+     "quote_token_price_base_token": "0.0006075885196",
+     "address": "0x521aa84ab3fcc4c05cabac24dc3682339887b126",
+     "name": "WETH / USDC 0.015%",
+     "pool_created_at": "2023-06-23T02:03:29Z",
+     "fdv_usd": "208251083.24646",
+     "market_cap_usd": "206841239.921522",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0.049",
+      "h1": "-0.643",
+      "h6": "-6.322",
+      "h24": "-7.117"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 1,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 1,
+       "sells": 2,
+       "buyers": 1,
+       "sellers": 2,
+       "unique_traders": 3
+      },
+      "h1": {
+       "buys": 14,
+       "sells": 14,
+       "buyers": 11,
+       "sellers": 14,
+       "unique_traders": 22
+      },
+      "h6": {
+       "buys": 34,
+       "sells": 48,
+       "buyers": 23,
+       "sellers": 36,
+       "unique_traders": 43
+      },
+      "h24": {
+       "buys": 72,
+       "sells": 91,
+       "buyers": 38,
+       "sellers": 53,
+       "unique_traders": 73
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "8.7942255289",
+      "m30": "25.8478208403",
+      "h1": "223.6529932256",
+      "h6": "691.3692625817",
+      "h24": "1454.8118921556"
+     },
+     "reserve_in_usd": "2321.3889"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0x105ba85d9047daf3f9fe941d8188d4b9a6900388",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "1.19389650353194",
+     "base_token_price_native_currency": "0.000727166904153484",
+     "quote_token_price_usd": "1641.73",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.0007271669042",
+     "quote_token_price_base_token": "1375.200100951",
+     "address": "0x105ba85d9047daf3f9fe941d8188d4b9a6900388",
+     "name": "ZRO / WETH 0.441%",
+     "pool_created_at": "2024-06-23T20:11:55Z",
+     "fdv_usd": "31826025.0103751",
+     "market_cap_usd": "477530100.378083",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0.728",
+      "m30": "1.553",
+      "h1": "1.985",
+      "h6": "-5.057",
+      "h24": "-13.907"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buys": 5,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 5,
+       "sells": 1,
+       "buyers": 1,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "h1": {
+       "buys": 22,
+       "sells": 3,
+       "buyers": 2,
+       "sellers": 1,
+       "unique_traders": 2
+      },
+      "h6": {
+       "buys": 32,
+       "sells": 20,
+       "buyers": 4,
+       "sellers": 4,
+       "unique_traders": 7
+      },
+      "h24": {
+       "buys": 65,
+       "sells": 97,
+       "buyers": 6,
+       "sellers": 24,
+       "unique_traders": 28
+      }
+     },
+     "volume_usd": {
+      "m5": "9.0002022341",
+      "m15": "53.0410859704",
+      "m30": "64.6995511569",
+      "h1": "303.6107389065",
+      "h6": "770.4340639679",
+      "h24": "2528.5948453459"
+     },
+     "reserve_in_usd": "14238.1512"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x6985884c4392d348587b19cb9eaaf157f13271cd",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xd5ede52ddd347faf45f1345968b3ee4e579239b4",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.13295479727046",
+     "base_token_price_native_currency": "0.0000804103971061524",
+     "quote_token_price_usd": "1649.98",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.00008041039711",
+     "quote_token_price_base_token": "12436.2027298518",
+     "address": "0xd5ede52ddd347faf45f1345968b3ee4e579239b4",
+     "name": "APEX / WETH 0.589%",
+     "pool_created_at": "2024-01-14T13:52:42Z",
+     "fdv_usd": "32389158.1687196",
+     "market_cap_usd": "20995292.5014925",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "1.024",
+      "h6": "-2.649",
+      "h24": "-10.017"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 5,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "h6": {
+       "buys": 11,
+       "sells": 3,
+       "buyers": 2,
+       "sellers": 1,
+       "unique_traders": 2
+      },
+      "h24": {
+       "buys": 81,
+       "sells": 62,
+       "buyers": 19,
+       "sellers": 10,
+       "unique_traders": 23
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "82.0555",
+      "h6": "269.9499659718",
+      "h24": "3103.5373766793"
+     },
+     "reserve_in_usd": "8560.9631"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x61a1ff55c5216b636a294a07d77c6f4df10d3b56",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xa17afcab059f3c6751f5b64347b5a503c3291868",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "1.00148637591168",
+     "base_token_price_native_currency": "0.000610111835606695",
+     "quote_token_price_usd": "1.00020800310918",
+     "quote_token_price_native_currency": "0.000609333042808426",
+     "base_token_price_quote_token": "1.001278107",
+     "quote_token_price_base_token": "0.9987235245",
+     "address": "0xa17afcab059f3c6751f5b64347b5a503c3291868",
+     "name": "USDC / USDT 0.003%",
+     "pool_created_at": "2023-06-28T17:30:43Z",
+     "fdv_usd": "2763716547.00239",
+     "market_cap_usd": "68366329307.0883",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0.153",
+      "m30": "0.078",
+      "h1": "0.198",
+      "h6": "0.066",
+      "h24": "-0.189"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 1,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buys": 1,
+       "sells": 4,
+       "buyers": 1,
+       "sellers": 4,
+       "unique_traders": 4
+      },
+      "m30": {
+       "buys": 3,
+       "sells": 8,
+       "buyers": 2,
+       "sellers": 5,
+       "unique_traders": 6
+      },
+      "h1": {
+       "buys": 12,
+       "sells": 10,
+       "buyers": 2,
+       "sellers": 7,
+       "unique_traders": 8
+      },
+      "h6": {
+       "buys": 27,
+       "sells": 16,
+       "buyers": 6,
+       "sellers": 9,
+       "unique_traders": 14
+      },
+      "h24": {
+       "buys": 80,
+       "sells": 61,
+       "buyers": 28,
+       "sellers": 29,
+       "unique_traders": 55
+      }
+     },
+     "volume_usd": {
+      "m5": "159.795111968",
+      "m15": "936.6548707045",
+      "m30": "2758.5586980081",
+      "h1": "4167.8878504408",
+      "h6": "6171.6552512063",
+      "h24": "26019.5388276306"
+     },
+     "reserve_in_usd": "23505.0959"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0x1106db7165a8d4a8559b441ecdee14a5d5070dbc",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.0644314821911308",
+     "base_token_price_native_currency": "0.0000392134655340025",
+     "quote_token_price_usd": "1641.36",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.00003921346553",
+     "quote_token_price_base_token": "25501.4441182937",
+     "address": "0x1106db7165a8d4a8559b441ecdee14a5d5070dbc",
+     "name": "MAGIC / WETH 0.205%",
+     "pool_created_at": "2023-09-16T12:22:22Z",
+     "fdv_usd": "20403285.4046432",
+     "market_cap_usd": "21909665.5861576",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "-0.471",
+      "m30": "-0.91",
+      "h1": "0.407",
+      "h6": "-5.543",
+      "h24": "-6.75"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 1,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 3,
+       "buyers": 0,
+       "sellers": 2,
+       "unique_traders": 2
+      },
+      "m30": {
+       "buys": 1,
+       "sells": 3,
+       "buyers": 1,
+       "sellers": 2,
+       "unique_traders": 2
+      },
+      "h1": {
+       "buys": 11,
+       "sells": 3,
+       "buyers": 1,
+       "sellers": 2,
+       "unique_traders": 2
+      },
+      "h6": {
+       "buys": 29,
+       "sells": 23,
+       "buyers": 3,
+       "sellers": 3,
+       "unique_traders": 5
+      },
+      "h24": {
+       "buys": 64,
+       "sells": 56,
+       "buyers": 5,
+       "sellers": 5,
+       "unique_traders": 8
+      }
+     },
+     "volume_usd": {
+      "m5": "6.2688792087",
+      "m15": "19.3127325409",
+      "m30": "27.5118167472",
+      "h1": "105.5646776198",
+      "h6": "343.9507571586",
+      "h24": "936.9792496172"
+     },
+     "reserve_in_usd": "13851.8247"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x539bde0d7dbd336b79148aa742883198bbf60342",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0x45fae8d0d2ace73544baab452f9020925afccc75",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.999999663825963",
+     "base_token_price_native_currency": "0.00060922467837554",
+     "quote_token_price_usd": "0.996767591233507",
+     "quote_token_price_native_currency": "0.000607255619327968",
+     "base_token_price_quote_token": "1.0032425539",
+     "quote_token_price_base_token": "0.9967679263",
+     "address": "0x45fae8d0d2ace73544baab452f9020925afccc75",
+     "name": "USDC / DAI 0.005%",
+     "pool_created_at": "2023-08-08T19:09:21Z",
+     "fdv_usd": "2759613794.40357",
+     "market_cap_usd": "68264839110.657",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "-0.246",
+      "h1": "-0.956",
+      "h6": "0.052",
+      "h24": "0.048"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 2,
+       "sells": 0,
+       "buyers": 2,
+       "sellers": 0,
+       "unique_traders": 2
+      },
+      "h1": {
+       "buys": 7,
+       "sells": 1,
+       "buyers": 7,
+       "sellers": 1,
+       "unique_traders": 8
+      },
+      "h6": {
+       "buys": 13,
+       "sells": 7,
+       "buyers": 13,
+       "sellers": 6,
+       "unique_traders": 18
+      },
+      "h24": {
+       "buys": 52,
+       "sells": 36,
+       "buyers": 28,
+       "sellers": 32,
+       "unique_traders": 54
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "535.4540419942",
+      "m30": "585.5643463435",
+      "h1": "7721.5082154512",
+      "h6": "37057.3777573959",
+      "h24": "68108.2622708631"
+     },
+     "reserve_in_usd": "105975.5579"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0x1f3572baee36360d23e976c244e08160523ce7eb",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.296627822897902",
+     "base_token_price_native_currency": "0.000179285391401581",
+     "quote_token_price_usd": "1.00281185421762",
+     "quote_token_price_native_currency": "0.000606951812552654",
+     "base_token_price_quote_token": "0.2953865327",
+     "quote_token_price_base_token": "3.3853946928",
+     "address": "0x1f3572baee36360d23e976c244e08160523ce7eb",
+     "name": "GNS / USDC 0.561%",
+     "pool_created_at": "2024-06-08T13:09:47Z",
+     "fdv_usd": "5717977.59707132",
+     "market_cap_usd": "7120927.60604958",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "2.254",
+      "h6": "-8.403",
+      "h24": "-6.099"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 4,
+       "sells": 0,
+       "buyers": 2,
+       "sellers": 0,
+       "unique_traders": 2
+      },
+      "h6": {
+       "buys": 6,
+       "sells": 18,
+       "buyers": 4,
+       "sellers": 15,
+       "unique_traders": 18
+      },
+      "h24": {
+       "buys": 34,
+       "sells": 43,
+       "buyers": 18,
+       "sellers": 35,
+       "unique_traders": 45
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "33.2154793536",
+      "h6": "253.6655989997",
+      "h24": "1394.042416074"
+     },
+     "reserve_in_usd": "7456.7517"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x18c11fd286c5ec11c3b683caa813b77f5163a122",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xdeb89de4bb6ecf5bfed581eb049308b52d9b2da7",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "2050.51851064146",
+     "base_token_price_native_currency": "1.24692548667038",
+     "quote_token_price_usd": "1644.38",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "1.2469254867",
+     "quote_token_price_base_token": "0.8019725402",
+     "address": "0xdeb89de4bb6ecf5bfed581eb049308b52d9b2da7",
+     "name": "wstETH / WETH 0.005%",
+     "pool_created_at": "2023-07-04T06:50:35Z",
+     "fdv_usd": "103359047.034462",
+     "market_cap_usd": "103361901.622445",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0.031",
+      "h1": "-0.622",
+      "h6": "-6.332",
+      "h24": "-6.346"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 1,
+       "buyers": 0,
+       "sellers": 1,
+       "unique_traders": 1
+      },
+      "m30": {
+       "buys": 6,
+       "sells": 4,
+       "buyers": 5,
+       "sellers": 4,
+       "unique_traders": 9
+      },
+      "h1": {
+       "buys": 10,
+       "sells": 8,
+       "buyers": 9,
+       "sellers": 7,
+       "unique_traders": 16
+      },
+      "h6": {
+       "buys": 23,
+       "sells": 16,
+       "buyers": 19,
+       "sellers": 12,
+       "unique_traders": 29
+      },
+      "h24": {
+       "buys": 38,
+       "sells": 22,
+       "buyers": 28,
+       "sellers": 17,
+       "unique_traders": 43
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "111.8171020922",
+      "m30": "8789.5059887519",
+      "h1": "9636.2397449649",
+      "h6": "13105.9590603643",
+      "h24": "17018.4187639633"
+     },
+     "reserve_in_usd": "19605.704"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x5979d7b546e38e414f7e9822514be443a4800529",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   },
+   {
+    "id": "arbitrum_0xba1cf57b1a7401cc24622366808cea1f209a2c50",
+    "type": "pool",
+    "attributes": {
+     "base_token_price_usd": "0.00506281791426146",
+     "base_token_price_native_currency": "0.00000303761301384918",
+     "quote_token_price_usd": "1630.81",
+     "quote_token_price_native_currency": "1.0",
+     "base_token_price_quote_token": "0.000003037613014",
+     "quote_token_price_base_token": "329205.858495065",
+     "address": "0xba1cf57b1a7401cc24622366808cea1f209a2c50",
+     "name": "XAI / WETH 0.4%",
+     "pool_created_at": "2024-01-09T09:49:59Z",
+     "fdv_usd": "11255586.6495887",
+     "market_cap_usd": "10792379.0487868",
+     "price_change_percentage": {
+      "m5": "0",
+      "m15": "0",
+      "m30": "0",
+      "h1": "0",
+      "h6": "-0.678",
+      "h24": "-5.725"
+     },
+     "transactions": {
+      "m5": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m15": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "m30": {
+       "buys": 0,
+       "sells": 0,
+       "buyers": 0,
+       "sellers": 0,
+       "unique_traders": 0
+      },
+      "h1": {
+       "buys": 1,
+       "sells": 0,
+       "buyers": 1,
+       "sellers": 0,
+       "unique_traders": 1
+      },
+      "h6": {
+       "buys": 5,
+       "sells": 2,
+       "buyers": 3,
+       "sellers": 2,
+       "unique_traders": 5
+      },
+      "h24": {
+       "buys": 29,
+       "sells": 24,
+       "buyers": 16,
+       "sellers": 17,
+       "unique_traders": 27
+      }
+     },
+     "volume_usd": {
+      "m5": "0.0",
+      "m15": "0.0",
+      "m30": "0.0",
+      "h1": "5.4009032817",
+      "h6": "40.2144325177",
+      "h24": "346.8980165217"
+     },
+     "reserve_in_usd": "1290.6195"
+    },
+    "relationships": {
+     "base_token": {
+      "data": {
+       "id": "arbitrum_0x4cb9a7ae498cedcbb5eae9f25736ae7d428c9d66",
+       "type": "token"
+      }
+     },
+     "quote_token": {
+      "data": {
+       "id": "arbitrum_0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+       "type": "token"
+      }
+     },
+     "dex": {
+      "data": {
+       "id": "camelot-v3",
+       "type": "dex"
+      }
+     }
+    }
+   }
+  ]
+ }
+}

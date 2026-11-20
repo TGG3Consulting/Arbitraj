@@ -1,0 +1,28 @@
+chainId 42161, блок 525985036 0x153a74493220201a62755663f68dfd2acaacea58d7bc9978457657afc72db922
+поиск событий 523985036..525985036: fee 0, stable 0, created 2
+поиск событий 521985035..523985035: fee 0, stable 0, created 2
+поиск событий 519985034..521985034: fee 0, stable 0, created 2
+поиск событий 517985033..519985033: fee 0, stable 0, created 2
+поиск событий 515985032..517985032: fee 0, stable 0, created 2
+поиск событий 513985031..515985031: fee 0, stable 0, created 2
+поиск событий 511985030..513985030: fee 0, stable 0, created 2
+поиск событий 509985029..511985029: fee 0, stable 0, created 2
+поиск событий 507985028..509985028: fee 0, stable 0, created 4
+поиск событий 505985027..507985027: fee 0, stable 0, created 20
+поиск событий 503985026..505985026: fee 0, stable 0, created 20
+поиск событий 501985025..503985025: fee 0, stable 0, created 20
+поиск событий 499985024..501985024: fee 0, stable 0, created 20
+поиск событий 497985023..499985023: fee 0, stable 0, created 20
+поиск событий 495985022..497985022: fee 0, stable 0, created 20
+поиск событий 493985021..495985021: fee 0, stable 0, created 20
+поиск событий 491985020..493985020: fee 0, stable 0, created 20
+поиск событий 489985019..491985019: fee 0, stable 0, created 20
+Traceback (most recent call last):
+  File "/home/ubuntu/arb-record/tools/arbitrum_record/camelot_v2.py", line 343, in <module>
+    main()
+  File "/home/ubuntu/arb-record/tools/arbitrum_record/camelot_v2.py", line 199, in main
+    got = node.one("eth_getLogs", [{"fromBlock": hex(lo2), "toBlock": hex(hi),
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/arb-record/tools/arbitrum_record/camelot_v2.py", line 110, in one
+    raise RuntimeError(f"{m}: {res['error']}")
+RuntimeError: eth_getLogs: {'code': -32002, 'message': 'request timed out'}

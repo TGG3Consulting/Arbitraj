@@ -112,7 +112,7 @@ fn state(rec: &Value, config: B256, block_ts: u64) -> EkuboData {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/ekubo.py"]
+#[ignore = "запись 2026-11-20: пулов 0 (id GeckoTerminal — «ядро-PoolId», ekubo.py берёт только строки из 66 знаков) и логов ядра 0 за 2000 блоков — повтор ekubo.py (TASKS T456-03)"]
 fn key_gives_pool_id() {
     let mut n = 0;
     for rec in json("pools.json").as_array().unwrap() {
@@ -130,7 +130,7 @@ fn key_gives_pool_id() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/ekubo.py"]
+#[ignore = "запись 2026-11-20: пулов 0 (id GeckoTerminal — «ядро-PoolId», ekubo.py берёт только строки из 66 знаков) и логов ядра 0 за 2000 блоков — повтор ekubo.py (TASKS T456-03)"]
 fn math_equals_router_quote() {
     let ts = json("meta.json")["timestamp"].as_u64().unwrap();
     let mut compared = 0;
@@ -180,7 +180,7 @@ fn math_equals_router_quote() {
 }
 
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/ekubo.py"]
+#[ignore = "запись 2026-11-20: пулов 0 (id GeckoTerminal — «ядро-PoolId», ekubo.py берёт только строки из 66 знаков) и логов ядра 0 за 2000 блоков — повтор ekubo.py (TASKS T456-03)"]
 fn core_logs_route() {
     let all = json("core_logs.json");
     let mut swaps = 0;

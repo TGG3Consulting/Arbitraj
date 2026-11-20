@@ -3,20 +3,21 @@
 //! tests/settings_before_send_guard.rs). 17.11 на живом боте нашли борьбу 48 потоков за замок на пути котировки; путь
 //! исполнимости шага исполнителем не должен брать замки общих структур:
 //! - функции пути (entry fits_ok / fits / singleton, exec_kind via_executor, exec_callback usable, pool_gate decide /
-//!   admitted / admits, pool_pass kind, live_proof accepted, Ctx::exec_info, Accounts::with_wallet) не содержат
-//!   `.read()`, `.write()`, `.lock()`, чтения записи кошелька с копией (`.wallet()`, `.wallets()`, `wallet_name(`) и
-//!   полного факта пробы (`pool_pass::get(`);
-//! - самые частые (fits_ok, decide, admitted, kind, accepted, exec_info, with_wallet, via_executor, usable) — ещё и без
-//!   строк (`format!`) и копий (`.clone()`): текст причины строится лениво (pool_gate.rs refusal, entry.rs fits).
+//!   admitted / admits, pool_pass kind, live_proof accepted_for и live_record find (решение 461: запись пары версия ×
+//!   сеть), Ctx::exec_info, Accounts::with_wallet) не содержат `.read()`, `.write()`, `.lock()`, чтения записи
+//!   кошелька с копией (`.wallet()`, `.wallets()`, `wallet_name(`) и полного факта пробы (`pool_pass::get(`);
+//! - самые частые (fits_ok, decide, admitted, kind, accepted_for, find, exec_info, with_wallet, via_executor, usable) —
+//!   ещё и без строк (`format!`) и копий (`.clone()`): текст причины строится лениво (pool_gate.rs refusal, entry.rs fits).
 //!
 //! Чего сторож не ловит (docs/TASKS.md, ревью t186): вызовы из этих функций в другие (чтение настроек каталога
-//! Store::cache под RwLock — ctx.dex_text в exec_callback::usable, как и во всех чтениях настроек котировки; память SEEN
+//! Store::cache под RwLock — ctx.dex_text в exec_callback::usable, live_proof::chain_of (dex.evm_chain_id) в
+//! pool_gate::decide, как и во всех чтениях настроек котировки; память SEEN
 //! под Mutex — только у DEX с заданной dex.v3_swap_callback).
 //! Кто вызывает: cargo test.
 //! От чего зависит: исходники src/ (только чтение).
 
 /// (файл, функция, строгий ли — без строк и копий).
-const HOT: [(&str, &str, bool); 13] = [
+const HOT: [(&str, &str, bool); 14] = [
     ("src/venues/bsc_dex/exec/executor/entry.rs", "fits_ok", true),
     ("src/venues/bsc_dex/exec/executor/entry.rs", "fits", false),
     (
@@ -52,7 +53,12 @@ const HOT: [(&str, &str, bool); 13] = [
     ),
     (
         "src/venues/bsc_dex/exec/executor/live_proof.rs",
-        "accepted",
+        "accepted_for",
+        true,
+    ),
+    (
+        "src/venues/bsc_dex/exec/executor/live_record.rs",
+        "find",
         true,
     ),
     ("src/venues/bsc_dex/ctx_wallet.rs", "exec_info", true),

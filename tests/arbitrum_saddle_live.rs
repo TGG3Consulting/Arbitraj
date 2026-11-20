@@ -3,7 +3,7 @@
 //! (1) swapStorage() — 7 слов, swapFee берётся abi_saddle::swap_fee; (2) разбор и сборка состояния тем же кодом, что у
 //! бота (load_saddle::parse / build — шаблон A_PRECISION = 100, 256 раундов, откат); (3) наш выход
 //! (math/stableswap_v1::exchange_out_t) = calculateSwap пула на каждой записанной сумме и паре (i, j).
-//! Кто вызывает: cargo test -- --ignored (после записи).
+//! Кто вызывает: cargo test (запись tests/data/arbitrum_saddle_2026-11-20, решение 461).
 //! От чего зависит: tests/data/arbitrum_saddle_<дата>/ (tools/arbitrum_record/saddle.py),
 //! arb::venues::bsc_dex::{pools::{abi_saddle, load_saddle}, math::stableswap_v1}.
 
@@ -55,7 +55,6 @@ fn pools() -> Vec<Value> {
 
 /// swapStorage() у пулов Saddle Arbitrum — 7 слов (struct Swap без полей Nerve), swapFee разбирается.
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/saddle.py"]
 fn swap_storage_is_seven_words() {
     for p in pools() {
         let raw = answer(&p["swapStorage"]).expect("swapStorage");
@@ -66,7 +65,6 @@ fn swap_storage_is_seven_words() {
 
 /// Состояние тем же разбором, что у бота, и наш выход = calculateSwap пула.
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/saddle.py"]
 fn math_matches_calculate_swap() {
     let mut checked = 0;
     for p in pools() {

@@ -579,10 +579,11 @@ impl Venue for BscDex {
         scope(Class::Check, exec::executor::deploy::quote(&q, &env)).await
     }
 
-    /// Решение 399: причина запрета развёртывания исполнителя (текущая сборка v3 не принята на живых пулах —
-    /// exec/executor/deploy_gate.rs). None — разрешено. Ошибок нет.
+    /// Решение 399: причина запрета развёртывания исполнителя (запись приёмки версии текущей сборки в сети площадки —
+    /// решение 461 — не приняла ни одного класса или её нет; exec/executor/deploy_gate.rs). None — разрешено. Ошибок нет.
     fn dex_executor_refusal(&self) -> Option<String> {
-        exec::executor::deploy_gate::refusal()
+        let chain = exec::executor::live_proof::chain_of(&self.p.ctx);
+        exec::executor::deploy_gate::refusal_at(chain)
     }
 
     /// Решение 400: классы шага исполнителя v3 и их приёмка по записи симуляции на живых пулах

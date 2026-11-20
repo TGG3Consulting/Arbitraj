@@ -225,7 +225,24 @@
       Ревью t233 (исправлено, DECISIONS 459): у вида 23 квотер «после (а)» и продажа — две симуляции (квотер Balancer V3
       пишет балансы пула, Vault.quote не откатывает); x_left = null при неответе balanceOf(X) (пул не доказан, причина —
       x_left_error); пул Balancer V3 с фабриками разных выпусков — skipped; SHA кода — по тексту с LF + .gitattributes.
-    - T457-03 Развёртывание v4 в Arbitrum — Тигран (после T457-02).
+      **СДЕЛАНО (решение 461, 20.11.2026, ветка t235/arb-records) — по факту прогона Тиграна 20.11:** запись
+      tests/data/executor_v4_live_2026-11-20 (H = 525988838, chainId 42161, SHA bin-runtime v4 2bf86e58…0762) вшита;
+      записи приёмки — по ключу (Version, chainId), exec/executor/live_record.rs (v3 2026-11-17 — chainId 56 в коде);
+      кошелёк судится записью своей версии и сети площадки (dex.evm_chain_id), записи для пары нет — «не проверен»;
+      deploy_gate::refusal_at(chain), тексты «запись приёмки для версии X в сети chainId Y …» (и WalletRow.svelte);
+      тесты — tests/bsc_dex_executor_v4_live.rs (новый), bsc_dex_executor_v3_live.rs, bsc_dex_executor_v3.rs, deploy.rs,
+      pool_pass_hot_guard.rs. ВЕРДИКТ v4 в Arbitrum (правило live_rule.rs): принят только Uniswap V4 (19) без крючка (3
+      из 3); 19 с крючком — не принимается; 20 / 21 — пулов нет; 23 Balancer V3 — «нет пулов» (не проверен). Виды 22 /
+      24 / 1 / 0 правило не судит: в (б) получено = quoter_out_after_a (второе число лога — quoter_out «на H», до (а),
+      не сравнивается; у 24 он null — откат TreeMath__ErrorDepthSearch). Развёртывание v4 кошельком площадки Arbitrum
+      разрешено, BSC — закрыто (записи v4 в BSC нет). cargo не запускался — проверка в CI.
+      ОСТАЛОСЬ:
+      - T461-01 Класс 23 (Balancer V3) не проверен: запись balancer_v3.py упала (HTTP 429 GeckoTerminal), exec_v4_live
+        брал пулы bv3 из неё. После повтора balancer_v3.py (T461-02) — ПОВТОР exec_v4_live.py и новая папка
+        executor_v4_live_<дата> (строка SOURCES в live_record.rs заменяется в том же коммите).
+      - T461-04 Горячий путь pool_gate::decide теперь читает dex.evm_chain_id (Store::cache под RwLock, как
+        exec_callback::usable) — проверить на живом боте нагрузку; при необходимости — снимок сети в Ctx.
+    - T457-03 Развёртывание v4 в Arbitrum — Тигран (после T457-02; запись разрешает развёртывание только в Arbitrum).
   - T456-03 Записи своего узла Arbitrum (tools/arbitrum_record/README.md): sub_dex.py, kyber_elastic_v1.py, saddle.py,
     woofi.py, fluid_t1.py, balancer_v3.py, curve_crypto.py, camelot_v2.py, algebra_dir_fee.py, lb_v20.py, lb_v22.py,
     ekubo.py + ekubo_more.py → коммит tests/data/arbitrum_*_<дата>/ и снятие #[ignore] в тестах семейств.
@@ -255,6 +272,25 @@
       — initialized_key_gives_pool_id, native_math_equals_router_quote, twamm_math_equals_router_quote, core_load_logs_route
       (arbitrum_ekubo_; ekubo_more пишет в ту же папку).
     Записи приёмки v4 (executor_v4_live_) тест с #[ignore] не ждёт — нужна правка live_proof.rs (T457-02).
+    **Прогон Тиграна 20.11 (решение 461, ветка t235/arb-records):** 10 из 14 — tests/data/arbitrum_record_2026-11-20
+    (summary.json, logs/). Подключены *_2026-11-20: sub_dex, kyber_elastic_v1, saddle, woofi, fluid_t1, curve_crypto,
+    algebra_dir_fee, lb_v20, ekubo (только ekubo.py), executor_v4_live. #[ignore] СНЯТ: saddle (2), fluid_t1 (1),
+    arb_curve_crypto_live (3), arb_curve_crypto_v1_live tricrypto_v1, arb_dex_algebra_dir (2), arb_dex_algebra_dir_events
+    (1), bsc_dex_lb_v20_arbitrum (5). ОСТАВЛЕН с причиной (тест ↔ запись):
+    - T461-02 Повторить упавшие: balancer_v3.py (HTTP 429 GeckoTerminal на page=4 — повтор позже / меньше --gt-pages),
+      camelot_v2.py (eth_getLogs: request timed out — окно событий меньше), lb_v22.py (eth_getCode: historical state …
+      is not available — узел без нужного состояния), ekubo_more.py (блок ядра Ekubo — historical state not available;
+      задать --ekubo-from-block). Тесты balancer_v3 / camelot_v2 / lb_v22 / ekubo_more — под #[ignore] до записи.
+    - T461-03 Записи прошли, но не годятся для тестов (оставлены как есть, сырые не правились):
+      sub_dex — logs_total 0 у всех фабрик (событий создания за окно --blocks 2 000 000 нет) → 3 теста под #[ignore];
+      повтор с большим --blocks. kyber_elastic_v1 — у всех 20 пулов GeckoTerminal factory() = 0xc7a590291e07…, не
+      фабрика v1 0x5F1dddbf… (getPool v1 = 0 у 14, другой адрес у 6) → 2 теста под #[ignore]; правка скрипта (брать
+      пулы фабрики v1) — вопрос Тиграну: что за фабрика 0xc7a5… и нужна ли она боту. woofi — wooracle() WooPP =
+      0xf9b0c8ee…, оракул записи 0xCf4EA168… (умолчание скрипта), bases пуст (record_all без --base) → 2 теста под
+      #[ignore]; повтор с --oracle 0xf9b0c8ee… и --base. arb_curve_crypto_v1_live crypto_v1 — pool_count фабрики
+      0xE5De15A9… = 0 → под #[ignore]; вопрос Тиграну (фабрика v1 на Arbitrum без пулов). ekubo — пулов 0 (id
+      GeckoTerminal «ядро-PoolId», ekubo.py берёт только 66-значные) и логов ядра 0 за 2000 блоков → 3 теста под
+      #[ignore]; правка ekubo.py (id после «-»), больший --log-blocks.
   - T456-04 Выкладка: настройки области «DEX» площадки arb_dex по docs/notes/arbitrum/dex-settings-arbitrum.md и
     FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; развернуть v4 — T457-03.
   - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по

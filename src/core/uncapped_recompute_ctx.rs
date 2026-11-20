@@ -119,7 +119,7 @@ pub fn prepare(
         text("venue.quote_asset", &dir.buy_on)?,
         text("venue.quote_asset", &dir.sell_on)?,
     );
-    let coin = crate::settings::scope::coin_id(&dir.asset.ticker, dir.asset.contract.as_ref());
+    let coin = super::coin_key::scope_id(&dir.asset);
     let coin_at = SAt {
         venue: None,
         coin: Some(&coin),

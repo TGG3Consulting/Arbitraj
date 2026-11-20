@@ -90,7 +90,7 @@ pub async fn collect(core: &Core, deal: &mut Deal) {
 /// Ожидание до продажи, с: наибольшее из T плана (вверх до секунды) и transfer.max_time_s монеты на площадке
 /// покупки (не задана — только T). Ошибок нет.
 fn horizon(core: &Core, d: &Direction, plan: &Calc) -> u64 {
-    let coin = crate::settings::scope::coin_id(&d.asset.ticker, d.asset.contract.as_ref());
+    let coin = super::coin_key::scope_id(&d.asset);
     let at = At {
         venue: Some(&d.buy_on.0),
         coin: Some(&coin),

@@ -204,7 +204,7 @@ impl DirCtx {
                 )?
             }
         };
-        let coin = crate::settings::scope::coin_id(&dir.asset.ticker, dir.asset.contract.as_ref());
+        let coin = super::coin_key::scope_id(&dir.asset);
         let coin_at = At {
             venue: None,
             coin: Some(&coin),

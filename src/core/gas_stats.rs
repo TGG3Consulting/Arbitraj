@@ -60,11 +60,9 @@ pub async fn load(core: &Core) {
 
 /// Сохраняет и публикует статистику монеты.
 async fn store(core: &Core, s: CoinGasStats) {
-    let id = s
-        .asset
-        .contract
-        .map(|a| a.to_string())
-        .unwrap_or(s.asset.ticker.clone());
+    // Решение 487 (сети в id): у монеты другой сети — «…@сеть» (иначе её статистика затирала бы статистику BSC той же
+    // монеты в базе); сеть по умолчанию — id прежний.
+    let id = super::coin_key::rid(&s.asset);
     if let Err(e) = super::persist::save(&core.inner.deps.db, KIND, &id, &s).await {
         core.inner
             .deps

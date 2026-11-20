@@ -174,14 +174,20 @@ fn current(core: &Core) -> Option<Cfg> {
     r.ok()
 }
 
-/// id эпизода: время до мс, тикер, площадки — только буквы, цифры и «-» (годится как имя файла). Ошибок нет.
-fn new_id(d: &Direction, now: chrono::DateTime<Utc>) -> String {
+/// id эпизода: время до мс, тикер, площадки — только буквы, цифры и «-» (годится как имя файла). Решение 487 (сети в
+/// id): у монеты другой сети ещё «-сеть» (направления одной пары бирж в BSC и Arbitrum в одну мс не делят id); сеть по
+/// умолчанию — id прежний. Ошибок нет.
+pub fn new_id(d: &Direction, now: chrono::DateTime<Utc>) -> String {
     let clean = |s: &str| -> String { s.chars().filter(char::is_ascii_alphanumeric).collect() };
-    format!(
+    let base = format!(
         "{}-{}-{}-{}",
         now.format("%Y%m%d%H%M%S%3f"),
         clean(&d.asset.ticker),
         clean(&d.buy_on.0),
         clean(&d.sell_on.0)
-    )
+    );
+    match &d.asset.chain {
+        Some(c) => format!("{base}-{}", clean(&c.0)),
+        None => base,
+    }
 }

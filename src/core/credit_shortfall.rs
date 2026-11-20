@@ -120,7 +120,7 @@ pub async fn check(
     )
     .await;
     // Решение 408 (исключение из решения 157): «Убрать из чёрного списка» на тревоге (e:ub → «Да/Нет» → Unblacklist).
-    let coin = crate::settings::scope::coin_id(&asset.ticker, asset.contract.as_ref());
+    let coin = super::coin_key::scope_id(asset);
     let acts = vec![crate::notify::acts::e::unblacklist(&coin, &asset.ticker)];
     deps.notify_acts("coin.credit_shortfall", Some(&to.0), &text, acts)
         .await;

@@ -94,6 +94,21 @@ pub fn coin_id(ticker: &str, contract: Option<&alloy_primitives::Address>) -> St
     }
 }
 
+/// Что делает: решение 487 (сети в id) — id области «монета» монеты сети `chain`: как coin_id, у монеты другой сети
+/// (chain = Some) — с суффиксом «@сеть» («0x…@arbitrum»): настройки монеты BSC и монеты Arbitrum с тем же адресом не
+/// сливаются. Сеть по умолчанию (chain = None, решение 430) — id прежний, старые значения читаются как есть.
+/// Принимает: тикер, адрес, id сети. Возвращает: id. Ошибок нет.
+pub fn coin_id_in(
+    ticker: &str,
+    contract: Option<&alloy_primitives::Address>,
+    chain: Option<&str>,
+) -> String {
+    match chain {
+        Some(c) => format!("{}@{c}", coin_id(ticker, contract)),
+        None => coin_id(ticker, contract),
+    }
+}
+
 /// Что делает: id области «монета» — адрес (решение 211), а не старая запись по тикеру. Ошибок нет.
 pub fn is_address_id(id: &str) -> bool {
     id.len() == 42 && id.starts_with("0x") && id[2..].bytes().all(|b| b.is_ascii_hexdigit())

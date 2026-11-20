@@ -47,10 +47,7 @@ impl TaxLimits {
 /// общая для её записей на разных биржах (ревью М3: только показ — такие монеты не торгуются). Принимает: хранилище,
 /// монету, тикеры площадок монеты. Ошибок нет.
 pub fn manual(s: &Store, asset: &Asset, tickers: &[&str]) -> Option<Option<String>> {
-    let own = Scope::Coin(crate::settings::scope::coin_id(
-        &asset.ticker,
-        asset.contract.as_ref(),
-    ));
+    let own = Scope::Coin(super::coin_key::scope_id(asset));
     if s.get_exact("coin.blocked", &own)
         .and_then(|v| v.as_bool())
         .is_some()
@@ -79,10 +76,7 @@ fn marked(s: &Store, scope: &Scope) -> Option<Option<String>> {
 
 /// Область «монета» для записи блокировки (решение 211: по адресу). Ошибок нет.
 pub fn coin_scope(asset: &Asset) -> Scope {
-    Scope::Coin(crate::settings::scope::coin_id(
-        &asset.ticker,
-        asset.contract.as_ref(),
-    ))
+    Scope::Coin(super::coin_key::scope_id(asset))
 }
 
 /// Причина блокировки монеты или её отсутствие.

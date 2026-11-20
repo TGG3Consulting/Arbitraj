@@ -8,6 +8,9 @@
 //! Проход — при старте подписки и после изменения index.factory_scan или dex.* (без опроса; пачка изменений — один
 //! проход по итоговым настройкам, решение 279); часть без ответа узла — повтор через dex.verify_retry_s. Найденное не
 //! стирается (пары у фабрики не удаляются); выключили — справочник фабрик очищается (подключённые пулы слушаются).
+//! Решение 430: начало прохода — в итоге (FactoryScan.started) и в журнал: список DEX и их настройки читаются в начале
+//! прохода, итог (at, заметки) пишется в конце — без времени начала заметка «не подключена» у DEX, подключённой во
+//! время долгого прохода, выглядела как ошибка настроек. Изменение dex.* во время прохода даёт следующий проход.
 //! Кто вызывает: pools/index.rs (begin — задача рядом с обновлением индексатора).
 //! От чего зависит: ctx.rs, factory_calls.rs, woo_quote.rs, node/call.rs (try_chunks: Multicall3), directory (Snap), settings/live.rs.
 //! Решение 305: до плана — quoteToken() контрактов WooFi с dex.multi_pair = да (woo_quote.rs read) — в план.
@@ -74,6 +77,13 @@ async fn pass(
         Err(e) if e.code == ErrorCode::NotConfigured => return off(ctx, None),
         Err(e) => return off(ctx, Some(e.message)),
     }
+    let started = Utc::now();
+    ctx.index.with(|s| {
+        s.factory_scan.enabled = true;
+        s.factory_scan.started = Some(started);
+    });
+    let msg = "Поиск пулов по фабрикам: проход начат (DEX и их настройки — на этот момент)";
+    ctx.log(Level::Info, "dex.index", msg.to_string(), None).await;
     let mut coin_list: Vec<Address> = coins.keys().copied().collect();
     coin_list.sort();
     let mut quote_list: Vec<Address> = quotes.iter().copied().collect();
@@ -126,6 +136,7 @@ async fn pass(
         s.factory_scan = FactoryScan {
             enabled: true,
             at: Some(Utc::now()),
+            started: Some(started),
             calls: n_calls,
             found: s.factory.values().map(Vec::len).sum(),
             taken: 0,

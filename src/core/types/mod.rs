@@ -64,7 +64,7 @@ pub use hold::{HoldItem, WithdrawHold, WithdrawReady};
 pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{
-    AmpV2Data, EkuboData, EkuboMev, EkuboTick, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, LbBinData, OraclePmmData, PmmData, Pool, PoolKind, PoolRef,
+    AmpV2Data, EkuboData, EkuboMev, EkuboTick, EkuboTwamm, FeeRule, FictiveData, HookGroup, HookInfo, LadderPoint, LbBinData, OraclePmmData, PmmData, Pool, PoolKind, PoolRef,
     PoolState, SolidlyFee, SolidlyGate, StableData, StableGuard, StableNg, TickBinData,
     TickReserves, VaultCurve, VaultPoolData,
 };

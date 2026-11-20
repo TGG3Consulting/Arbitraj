@@ -43,6 +43,10 @@ pub struct Out {
     pub tick_after: i32,
     /// Цена после обмена равна пределу (обмен дошёл до предела цены).
     pub at_limit: bool,
+    /// Решение 454: сжатая цена после обмена (виртуальные ордера TWAMM — math/ekubo_virtual.rs).
+    pub sqrt_after: U256,
+    /// Решение 454: активная ликвидность после обмена.
+    pub liquidity_after: u128,
 }
 
 /// Обмен на точный вход до предела цены MIN / MAX_SQRT_RATIO (как шаг EKUBO и квотер сверки). Принимает: состояние,
@@ -79,6 +83,8 @@ pub fn exact_in_to(d: &EkuboData, is_token1: bool, amount: u128, limit: U256) ->
             complete,
             tick_after: tick,
             at_limit: sqrt == limit,
+            sqrt_after: sqrt,
+            liquidity_after: liquidity,
         });
     }
     loop {
@@ -164,6 +170,8 @@ pub fn exact_in_to(d: &EkuboData, is_token1: bool, amount: u128, limit: U256) ->
         complete,
         tick_after: tick,
         at_limit: sqrt == limit,
+        sqrt_after: sqrt,
+        liquidity_after: liquidity,
     })
 }
 

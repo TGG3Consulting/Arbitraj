@@ -13,8 +13,10 @@
 //! src/types/poolState.sol L10-L46 (sqrtRatio 96 бит << 160 | tick 32 бита << 128 | liquidity 128 бит),
 //! src/types/poolConfig.sol L46-L123 (config), src/types/tickInfo.sol L12-L35 (liquidityNet << 128 | liquidityDelta),
 //! src/math/tickBitmap.sol L174-L193 (слово битмапа), src/types/mevCapturePoolState.sol L8-L26.
+//! Решение 454: нативный ETH ключа (token0 = адрес 0 — src/math/constants.sol L270) — поле native; расширение TWAMM —
+//! EkuboTwamm (src/types/twammPoolState.sol L14-L44, src/types/timeInfo.sol L5-L37, src/math/timeBitmap.sol L7-L21).
 
-use alloy_primitives::{B256, U256};
+use alloy_primitives::{Address, B256, U256};
 use serde::{Deserialize, Serialize};
 
 /// Состояние пула Ekubo на блоке — боксируется в `PoolState::Ekubo`.
@@ -38,6 +40,33 @@ pub struct EkuboData {
     pub mev: Option<EkuboMev>,
     /// Время блока чтения, секунды Unix (по нему котировка решает, какой tickLast возьмёт MEVCapture).
     pub block_ts: u64,
+    /// Решение 454: token0 ключа — нативный ETH (адрес 0); в паре пула и графе вместо него — эта обёртка
+    /// (dex.native_wrapped). None — оба токена ключа ERC-20.
+    #[serde(default)]
+    pub native: Option<Address>,
+    /// Решение 454: состояние расширения TWAMM пула (None — у пула нет TWAMM).
+    #[serde(default)]
+    pub twamm: Option<EkuboTwamm>,
+}
+
+/// Состояние TWAMM по пулу (решение 454): TwammPoolState, прочитанные слова битмапа времён и TimeInfo их времён.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EkuboTwamm {
+    /// lastVirtualOrderExecutionTime (uint32, время по модулю 2^32).
+    pub last: u32,
+    /// saleRateToken0 (uint112, 32 дробных бита).
+    pub rate0: u128,
+    /// saleRateToken1 (uint112).
+    pub rate1: u128,
+    /// Прочитанные слова битмапа времён (слово = время >> 16), по возрастанию; непрочитанное слово — край расчёта.
+    pub words: Vec<u64>,
+    /// Ненулевые прочитанные слова: (слово, биты).
+    pub bitmap: Vec<(u64, U256)>,
+    /// TimeInfo установленных битов прочитанных слов: (время, saleRateDeltaToken0, saleRateDeltaToken1), по времени.
+    pub times: Vec<(u64, i128, i128)>,
+    /// Время, до которого (включительно) котировка может считать виртуальные ордера: прочитаны все слова допустимых
+    /// времён до него (pools/load_ekubo_twamm.rs).
+    pub until: u64,
 }
 
 /// Инициализированный тик пула Ekubo: TickInfo ядра.

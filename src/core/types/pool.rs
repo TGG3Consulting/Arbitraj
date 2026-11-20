@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use super::market::VenueId;
 pub use super::pool_amp::AmpV2Data;
-pub use super::pool_ekubo::{EkuboData, EkuboMev, EkuboTick};
+pub use super::pool_ekubo::{EkuboData, EkuboMev, EkuboTick, EkuboTwamm};
 pub use super::pool_fictive::FictiveData;
 pub use super::pool_lb::LbBinData;
 pub use super::pool_vault::{VaultCurve, VaultPoolData};

@@ -14,6 +14,7 @@ pub mod best_of;
 pub mod check;
 pub mod coins;
 pub mod connection;
+pub mod connection_events;
 pub mod connection_extra;
 pub mod connection_gas;
 pub mod connection_sync;

@@ -4,7 +4,8 @@
 //! нет, ответ техлида в Issue #7), доступ к истории состояния для включённых видов пулов V4 (блок развёртывания
 //! менеджера по eth_getCode — pools/deploy_block.rs; без архивного узла пулы V4 не найти), кошелёк (ключ → адрес,
 //! баланс BNB), резервный узел HTTP и WebSocket и Multicall3 (connection_extra.rs), синхронизация узла и возраст
-//! головы (connection_sync.rs, решение 121), модель газа сети (connection_gas.rs, решение 433). Ответ — «Подключено»
+//! головы (connection_sync.rs, решение 121), модель газа сети (connection_gas.rs, решение 433), подписка logs по
+//! WebSocket (connection_events.rs, решение 435). Ответ — «Подключено»
 //! или точная причина по каждой части.
 //! Кто вызывает: mod.rs (контракт: check_connection) ← api (кнопка на экране «Площадки»).
 //! От чего зависит: ctx.rs, node/rpc.rs, node/ws.rs, wallet/signer.rs, wallet/balances.rs, pools/deploy_block.rs, pools/families.rs,
@@ -45,6 +46,11 @@ pub async fn check(ctx: &Ctx) -> ConnectionCheck {
             super::connection_sync::check(ctx).await,
         ),
         ("Узел WebSocket", ws(ctx).await),
+        // Решение 435 (433-м): узел по WebSocket принимает подписку logs (события пулов).
+        (
+            "События по WebSocket",
+            super::connection_events::check(ctx).await,
+        ),
         (
             "Резервный узел HTTP",
             super::connection_extra::backup_http(ctx).await,

@@ -1,6 +1,6 @@
 //! Файл: venues/bsc_dex/exec/executor/live_class.rs
 //! Что делает: решение 400 (t185) — класс шага исполнителя v3 для приёмки на живых пулах: номер вида шага контракта
-//! (kind.rs: UNI_V4 = 19, INF_CL = 20, INF_BIN = 21) и крючок пула (без крючка, с крючком, Infinity Stable); все классы
+//! (kind.rs: UNI_V4 = 19, INF_CL = 20, INF_BIN = 21; решение 441 — BALANCER_V3 = 23) и крючок пула (без крючка, с крючком, Infinity Stable); все классы
 //! и их имена для интерфейса (вынесено из live_rule.rs: файл был больше 200 строк).
 //! Кто вызывает: exec/executor/{live_rule, live_row, live_proof}.rs, тесты (через реэкспорт live_rule).
 //! От чего зависит: нет.
@@ -25,7 +25,9 @@ pub struct Class {
 }
 
 /// Все классы шагов пулов менеджеров исполнителя v3 (виды шага контракта 19–21; Infinity Stable — только вид 20).
-pub const CLASSES: [Class; 7] = [
+/// Решение 441 (ревью, п. 2): + шаг BALANCER_V3 = 23 (хранилище Vault V3, v4) — запрещён, пока запись симуляции на
+/// живых пулах его не примет (крючок ключа у шага нет — класс только «без крючка»).
+pub const CLASSES: [Class; 8] = [
     Class {
         kind: 19,
         hook: Hook::Without,
@@ -54,6 +56,10 @@ pub const CLASSES: [Class; 7] = [
         kind: 21,
         hook: Hook::With,
     },
+    Class {
+        kind: 23,
+        hook: Hook::Without,
+    },
 ];
 
 impl Class {
@@ -63,6 +69,7 @@ impl Class {
             19 => "Uniswap V4",
             20 => "Infinity CL",
             21 => "Infinity Bin",
+            23 => "Balancer V3",
             _ => "вид ?",
         };
         match self.hook {

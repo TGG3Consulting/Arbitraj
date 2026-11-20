@@ -122,16 +122,21 @@ async fn inspect(
         return Ok(Err(format!("по адресу {executor:#x} нет кода контракта")));
     }
     let Some(version) = code::version_of(&have).map_err(internal)? else {
-        let (v3, v2, v1) = (
+        // Решение 441 (ревью, п. 7): текущая сборка contracts/out/ — v4 после пересборки (до неё побайтно v3), v3 —
+        // замороженная копия contracts/out/v3/.
+        let (cur, v3, v2, v1) = (
             code::runtime().map_err(internal)?,
+            code::runtime_v3().map_err(internal)?,
             code::runtime_v2().map_err(internal)?,
             code::runtime_v1().map_err(internal)?,
         );
         return Ok(Err(format!(
-            "код по адресу {executor:#x} ({} байт) не совпал ни с v3 contracts/out/ArbExecutor.bin-runtime ({} байт), ни \
-             с v2 contracts/out/v2/ArbExecutor.bin-runtime ({} байт), ни с v1 contracts/out/v1/ArbExecutor.bin-runtime \
-             ({} байт)",
+            "код по адресу {executor:#x} ({} байт) не совпал ни с текущей сборкой contracts/out/ArbExecutor.bin-runtime \
+             ({} байт), ни с v3 contracts/out/v3/ArbExecutor.bin-runtime ({} байт), ни с v2 \
+             contracts/out/v2/ArbExecutor.bin-runtime ({} байт), ни с v1 contracts/out/v1/ArbExecutor.bin-runtime ({} \
+             байт)",
             have.len(),
+            cur.len(),
             v3.len(),
             v2.len(),
             v1.len()
@@ -203,7 +208,7 @@ fn v3_note(v: Version) -> String {
         // Решение 400: шаги есть в коде, исполняются только классы, принятые записью симуляции на живых пулах.
         format!(
             "; шаги Uniswap V4 и PancakeSwap Infinity (CL, Bin, Stable) в коде есть — {}",
-            live_proof::listing()
+            live_proof::listing_for(v)
         )
     } else {
         format!(

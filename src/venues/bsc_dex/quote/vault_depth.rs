@@ -61,9 +61,7 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     };
     // Верхняя граница поиска: весовой — 30 % баланса входа (больше пул откатит), стейблсвап — STABLE_CAP_BALANCES балансов.
     let cap = match &d.curve {
-        crate::core::types::VaultCurve::Weighted { .. } => {
-            balancer_math::mul_down(bal_in, U256::from(3u8) * super::super::math::ten::E17)?
-        }
+        crate::core::types::VaultCurve::Weighted { .. } => weighted_cap(d, i, bal_in)?,
         crate::core::types::VaultCurve::Stable { .. } => {
             bal_in.checked_mul(U256::from(STABLE_CAP_BALANCES))?
         }
@@ -89,4 +87,20 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     }
     let o = balancer_math::amount_out(&nf, i, j, lo)?;
     Some((if buy { lo } else { o }, true))
+}
+
+/// Потолок поиска весового пула — 30 % баланса входа (MAX_IN_RATIO; больше пул откатит). Решение 441 (ревью, п. 6): у
+/// пула Balancer V3 предел — на живом балансе 18 знаков (WeightedMath V3 L173-L178: вход хранилища в 18 знаках с
+/// курсом), в единицах токена — 30 % живого баланса / курс / множитель точности. Принимает: состояние, индекс входа,
+/// сырой баланс входа. Возвращает: потолок в единицах токена. None — переполнение, нулевой курс или множитель.
+fn weighted_cap(d: &VaultPoolData, i: usize, bal_in: U256) -> Option<U256> {
+    let ratio = U256::from(3u8) * super::super::math::ten::E17;
+    match &d.v3 {
+        None => balancer_math::mul_down(bal_in, ratio),
+        Some(v3) => {
+            let live = balancer_math::mul_down(*v3.live.get(i)?, ratio)?;
+            let per_rate = balancer_math::div_down(live, *v3.rates.get(i)?)?;
+            per_rate.checked_div(*d.scaling.get(i)?)
+        }
+    }
 }

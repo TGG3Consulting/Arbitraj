@@ -31,6 +31,9 @@
   BALANCER_V3 (contracts/evmtest); тест tests/arbitrum_balancer_v3.rs — #[ignore] до записи узла; пулы с крючком обмена и
   виды Gyro / ReClamm / LBP не подключены (docs/TASKS.md, «Решение 441»). `wc -l`: math/balancer_v3.rs, load_balancer_v3.rs —
   в пределах 200; pools/families.rs (было 651) — давно сверх, +Proto::BalancerV3.
+- Ревью 441 (п. 7): exec/executor/code.rs — 283 строки → 306 (+runtime_sha256_of, current_version), сверх ориентира 200
+  (вынести версии v1–v3 в отдельный файл); live_proof.rs 156 → 198; пересборка v4 и её тесты — план в docs/TASKS.md
+  («Решение 441», ревью).
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

@@ -19,7 +19,8 @@
 //! 20260115-v3-weighted-pool-v2 IWeightedPool.sol L60 getNormalizedWeights, L79 getMinTokenBalances;
 //! 20241205-v3-stable-pool StablePool.sol L77 / L83 AmpUpdateStarted / AmpUpdateStopped, L261-L264
 //! getAmplificationParameter; фабрики — v3-pool-utils BasePoolFactory.sol L69-L72 isPoolFromFactory. Роутер: build-info
-//! v3/tasks/20250307-v3-router-v2 → contracts/Router.sol L992-L1021 querySwapSingleTokenExactIn (через Vault.quote —
+//! v3/tasks/20250307-v3-router-v2 → contracts/Router.sol L992-L1021 querySwapSingleTokenExactIn, L1024-L1053 querySwapSingleTokenExactOut (ревью 441, п. 3: сверка
+//! обратного расчёта на записи; через Vault.quote —
 //! только eth_call без from: tx.origin = 0, EVMCallModeHelpers.isStaticCall, VaultExtension.sol L849-L866).
 
 // Код функций и событий генерирует alloy::sol! — число аргументов задаёт ABI контракта, а не мы.
@@ -106,6 +107,7 @@ alloy::sol! {
 
     interface IBalancerV3Router {
         function querySwapSingleTokenExactIn(address pool, address tokenIn, address tokenOut, uint256 exactAmountIn, address sender, bytes memory userData) external returns (uint256 amountCalculated);
+        function querySwapSingleTokenExactOut(address pool, address tokenIn, address tokenOut, uint256 exactAmountOut, address sender, bytes memory userData) external returns (uint256 amountCalculated);
     }
 }
 

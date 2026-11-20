@@ -77,7 +77,8 @@ contract ArbExecutor {
     // Решение 441 (только v4): пул Balancer V3. s.pool — хранилище Vault V3, data = abi.encode(address пула). Шаг открывает
     // хранилище (unlock), обмен и расчёт — в balancerV3Callback (только от s.pool и только с данными шага — хеш в
     // transient, как у UNI_V4): swap(EXACT_IN, сумма, предел 1) → перевод ровно суммы хранилищу + settle → sendTo выхода
-    // получателю шага. Недоплата (налог перевода) — долг не погашен, хранилище откатит всё (BalanceNotSettled).
+    // получателю шага. Недоплата (налог перевода): settle засчитывает min(подсказка, прирост резерва хранилища)
+    // (Vault.sol L138-L156) — кредит меньше долга, дельта не нулевая, unlock откатится всё (BalanceNotSettled).
     uint8 internal constant BALANCER_V3 = 23;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).

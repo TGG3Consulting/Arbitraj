@@ -172,6 +172,33 @@
      чтениями нет — расхождение только во время рампы (вид перечитывается каждым блоком).
   7) Событие PoolRegistered хранилища (новые пулы без индексатора) не слушается — новые пулы приходят из справочника
      (техдолг, docs/ROADMAP.md).
+  Ревью 441 (20.11.2026, ветка t228/arb-balancer-v3-more; математика хранилища и пулов побитово верна, callback
+  безопасен, регрессий BSC нет). ПРАВЛЕНО (коммит «Решение 441 (ревью, правки)»):
+  а) запись решения 400 (tests/data/executor_v3_live_2026-11-17) сверяется с SHA-256 кода ТОЙ версии, что стоит у
+     кошелька (exec/executor/code.rs runtime_sha256_of: v3 — contracts/out/v3/ArbExecutor.sha256, v4 —
+     contracts/out/ArbExecutor.sha256; live_proof::verdicts_of / accepted_for / listing_for; pool_gate.rs и
+     check/pass_cycle.rs — по версии исполнителя кошелька); запрет развёртывания (deploy_gate::refusal) — по коду
+     текущей сборки (live_proof::verdicts_current: до пересборки v3, после — v4). После пересборки v4 кошельки с v3
+     работают как до неё; у кошелька с v4 классы 19 / 20 / 21 не приняты, развёртывание v4 запрещено, пока нет записи
+     симуляции о коде v4 (новый каталог tests/data/executor_v4_live_<дата> и путь в live_proof.rs).
+  б) шаг BALANCER_V3 (23) — класс решения 400 (live_class.rs CLASSES, live_proof::number; entry.rs fits / fits_ok через
+     pool_gate): до записи о приёмке на живых пулах шаг исполнителем не идёт.
+  в) tools/arbitrum_record/balancer_v3.py пишет и querySwapSingleTokenExactOut (quotes_out), тест сверяет
+     balancer_math::amount_in.
+  г) тест tests/bsc_dex_executor_v3.rs frozen_v3_is_v3: version_of(runtime_v3()) == V3, запись — по SHA v3.
+  д) формулировка недоплаты (ArbExecutor.sol, contracts/README.md): settle = min(подсказка, прирост резерва).
+  е) quote/vault_depth.rs: потолок поиска весового пула V3 — 30 % живого баланса / курс / множитель.
+  ж) комментарии полей Parts (load_balancer_v3.rs), текст сверки кода (onchain.rs: текущая сборка, v3, v2, v1),
+     deploy.rs — «текущая сборка (v3, после пересборки — v4)».
+  ПЛАН ПЕРЕСБОРКИ v4 (не сделана, только в GitHub CI / у Тиграна): 1) contracts/build.sh → contracts/out/ = v4, out/v3/
+  не трогать; 2) тесты, что упадут и как править: tests/bsc_dex_executor_v2.rs version_by_code_in_chain (L55-L60:
+  runtime() — уже не V3: ждать V4 и добавить v3 = runtime_v3()), tests/bsc_dex_executor_v3.rs versions_and_steps (то
+  же), tests/bsc_dex_executor_v3_live.rs accepted_classes_from_record (deploy_gate::refusal() — по коду v4: без записи
+  о v4 — Some), размер кода в contracts/README.md; 3) EVM-тест шага BALANCER_V3 с официальным кодом Vault V3
+  (contracts/evmtest: развернуть Vault / VaultExtension / VaultAdmin из build-info 20241204-v3-vault или eth_simulateV1
+  на своём узле Arbitrum поверх живого Vault 0xbA13…9bA9: unlock → balancerV3Callback → swap / settle / sendTo, сверка
+  выхода с querySwapSingleTokenExactIn того же блока, остаток исполнителя 0); 4) запись симуляции на живых пулах о коде
+  v4 (классы 19 / 20 / 21 и 23) — только после неё у кошельков с v4 шаги идут и разрешено развёртывание.
 - **Решение 438 (ревью t222, правки) (20.11.2026, ветка t222/arb-known-accounts)** — cargo не запускался. СДЕЛАНО: A)
   send/track_l1.rs — caught_up → голова H, затем квитанция и eth_getTransactionCount(from, H); B) начало окна — время
   блока головы при отправке (не часы сервера); C) exec/pool_cond_check.rs + pool_cond_decode.rs — самопроверка слотов

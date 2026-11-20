@@ -142,6 +142,28 @@ pub fn runtime_sha256() -> Option<&'static str> {
     recorded("ArbExecutor.bin-runtime")
 }
 
+/// Решение 441 (ревью, п. 1): записанный SHA-256 bin-runtime данной версии — запись симуляции на живых пулах
+/// (решение 400) сверяется с кодом той версии, что стоит у кошелька: v3 — contracts/out/v3/ArbExecutor.sha256
+/// (замороженная копия), v4 — contracts/out/ArbExecutor.sha256 (текущая сборка). У v1 / v2 шагов менеджеров нет — None.
+/// Ошибок нет (None — строки нет или версия без шагов менеджеров).
+pub fn runtime_sha256_of(v: Version) -> Option<&'static str> {
+    match v {
+        Version::V1 | Version::V2 => None,
+        Version::V3 => recorded_in(SHA_V3, "ArbExecutor.bin-runtime"),
+        Version::V4 => runtime_sha256(),
+    }
+}
+
+/// Версия текущей сборки contracts/out/ (её разворачивает кнопка «Развернуть исполнитель»): до пересборки
+/// contracts/build.sh — V3 (побайтно out/v3/), после — V4. Ошибки (текст): артефакт не сверен по хешу.
+pub fn current_version() -> Result<Version, String> {
+    Ok(if runtime()? == runtime_v3()? {
+        Version::V3
+    } else {
+        Version::V4
+    })
+}
+
 /// Код в сети версии v3 (решение 441: замороженная копия). Ошибки: как checked (хеш — из contracts/out/v3/ArbExecutor.sha256).
 pub fn runtime_v3() -> Result<Bytes, String> {
     checked_in(
@@ -242,7 +264,8 @@ pub fn creation_with(wnative: alloy_primitives::Address) -> Result<Bytes, String
     Ok(Bytes::from(v))
 }
 
-/// Код исполнителя в сети — текущая сборка (с решения 395 — v3). Ошибки: как checked.
+/// Код исполнителя в сети — текущая сборка (решение 395 — v3; решение 441 — v4 после пересборки contracts/build.sh, до
+/// неё — побайтно v3). Ошибки: как checked.
 pub fn runtime() -> Result<Bytes, String> {
     checked("ArbExecutor.bin-runtime", RUNTIME)
 }

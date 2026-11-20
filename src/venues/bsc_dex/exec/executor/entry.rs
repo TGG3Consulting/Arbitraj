@@ -85,7 +85,8 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 /// supported. Ошибок иных нет.
 pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     let (k, a, hooks) = shape(e)?;
-    if k.singleton() {
+    // Решение 441 (ревью, п. 2): шаг BALANCER_V3 — тоже только по записи о приёмке на живых пулах (pool_gate.rs).
+    if k.singleton() || k == ExecKind::BalancerV3 {
         super::pool_gate::admits(ctx, e, k, hooks).map_err(|w| format!("{}: {w}", e.family.id))?;
     }
     Ok((k, a))
@@ -100,6 +101,10 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
         return false;
     };
     if !k.singleton() {
+        // Решение 441 (ревью, п. 2): BALANCER_V3 — то же правило, что в fits.
+        if k == ExecKind::BalancerV3 && !super::pool_gate::admitted(ctx, e, k, Address::ZERO) {
+            return false;
+        }
         return !matches!(e.pool.reference, PoolRef::Singleton { .. });
     }
     let reference = match &e.pool.reference {

@@ -3,8 +3,8 @@
 # Что делает: решение 441 (T433-F2) — запись ответов своего узла Arbitrum для пулов Balancer V3 на ОДНОМ блоке (только
 #   чтение, eth_call): неизменяемое пула (крючки, токены, наименьшая сумма хранилища, isPoolFromFactory каждой фабрики,
 #   веса, нижние балансы), состояние (живые балансы, курсы, конфигурация, паузы, A) — теми же вызовами и в том же
-#   порядке, что бот (pools/load_balancer_v3*.rs), и ответы квотера Router V3 querySwapSingleTokenExactIn на несколько
-#   сумм по каждой паре токенов пула (eth_call БЕЗ from — Vault.quote требует tx.origin = 0). Ключей и подписей нет.
+#   порядке, что бот (pools/load_balancer_v3*.rs), и ответы квотера Router V3 querySwapSingleTokenExactIn и
+#   querySwapSingleTokenExactOut (ревью 441, п. 3) на несколько сумм по каждой паре токенов пула (eth_call БЕЗ from — Vault.quote требует tx.origin = 0). Ключей и подписей нет.
 # Кто вызывает: Тигран вручную (README ниже); тест — tests/arbitrum_balancer_v3.rs (сверяет расчёт бота с роутером).
 # От чего зависит: Python 3, requests. Адрес узла и все адреса контрактов — аргументы (официальные значения —
 #   balancer/balancer-deployments@b55dc2b8 output/arbitrum.json, пример команды — README в папке записи).
@@ -206,6 +206,9 @@ def main():
             tokens = ["0x" + format(t, "040x") for t in dyn_array(ws, 0)]
             raw = dyn_array(ws, 2)
             q = sel("querySwapSingleTokenExactIn(address,address,address,uint256,address,bytes)")
+            # Ревью 441, п. 3: и точный выход (querySwapSingleTokenExactOut) — сверка обратного расчёта бота (amount_in).
+            qo = sel("querySwapSingleTokenExactOut(address,address,address,uint256,address,bytes)")
+            rec["quotes_out"] = []
             for i, ti in enumerate(tokens):
                 for j, tj in enumerate(tokens):
                     if i == j:
@@ -218,6 +221,14 @@ def main():
                                 + word_int(0xC0) + word_int(0))
                         r = node.call(a.router, data, tag)
                         rec["quotes"].append(dict(r, i=i, j=j, token_in=ti, token_out=tj, amount=str(amt)))
+                    for div in (1_000_000, 10_000, 1_000, 100, 10):
+                        amt = raw[j] // div
+                        if amt == 0:
+                            continue
+                        data = (qo + pw + word_addr(ti) + word_addr(tj) + word_int(amt) + word_addr("0x0")
+                                + word_int(0xC0) + word_int(0))
+                        r = node.call(a.router, data, tag)
+                        rec["quotes_out"].append(dict(r, i=i, j=j, token_in=ti, token_out=tj, amount=str(amt)))
         with open(os.path.join(out, f"pool_{pool.lower()}.json"), "w") as fh:
             json.dump(rec, fh, indent=1)
         print(pool, "квот:", len(rec["quotes"]), file=sys.stderr)
@@ -227,7 +238,8 @@ def main():
              "Только eth_call (чтение), без from; ключей и подписей нет. Скрипт — tools/arbitrum_record/balancer_v3.py.",
              f"Хранилище {a.vault}, роутер {a.router}; фабрики — meta.json. Пулов: {len(pools)}.", "",
              "Файлы: meta.json — блок, адреса, список пулов; pool_<адрес>.json — fixed (неизменяемое), state (вызовы "
-             "в порядке load_balancer_v3::calls), quotes (Router V3 querySwapSingleTokenExactIn: i, j, сумма, ответ); "
+             "в порядке load_balancer_v3::calls), quotes (Router V3 querySwapSingleTokenExactIn: i, j, сумма, ответ), quotes_out "
+             "(querySwapSingleTokenExactOut: i, j, точный выход, ответ — вход); "
              "geckoterminal_pools.json — ответ GeckoTerminal (если --gt-pages).", "", "## SHA-256 файлов"]
     for name in sorted(os.listdir(out)):
         if name == "README.md":

@@ -5,7 +5,8 @@
 //!    обмена и пулы не из фабрик только считаются (их котировка не сверяется: бот их не берёт).
 //! 2. Состояние — тем же разбором, что у чтения на узле (load_balancer_v3::decode по ответам в порядке calls).
 //! 3. Расчёт бота (math/balancer_math.rs → math/balancer_v3.rs) на записанном состоянии = ответу Router V3
-//!    querySwapSingleTokenExactIn того же блока для каждой пары и суммы; откат роутера — расчёт None.
+//!    querySwapSingleTokenExactIn того же блока для каждой пары и суммы; откат роутера — расчёт None; ревью 441, п. 3 —
+//!    и обратный расчёт (amount_in) = querySwapSingleTokenExactOut.
 //!
 //! Пока записи нет — тесты помечены #[ignore] (запуск после записи: cargo test --test arbitrum_balancer_v3 -- --ignored;
 //! затем метку снять).
@@ -22,7 +23,7 @@ use serde_json::Value;
 use arb::core::types::PoolState;
 use arb::venues::bsc_dex::math::balancer_math;
 use arb::venues::bsc_dex::pools::abi_balancer_v3::{
-    IBalancerV3Factory as F, IBalancerV3Pool as P, IBalancerV3Vault as V,
+    IBalancerV3Factory as F, IBalancerV3Pool as P, IBalancerV3Router as R, IBalancerV3Vault as V,
 };
 use arb::venues::bsc_dex::pools::balancer_v3_factories::{self as fac, Release};
 use arb::venues::bsc_dex::pools::load_balancer_v3;
@@ -166,6 +167,23 @@ fn quote_matches_router_v3() {
                 let ours = balancer_math::amount_out(&d, i, j, amount);
                 let theirs = answer(q).ok().and_then(|b| quoter_balancer_v3::decode(&b));
                 assert_eq!(ours, theirs, "пул {pool:#x} {i}→{j} сумма {amount}");
+                same += 1;
+            }
+            // Ревью 441, п. 3: точный выход — обратный расчёт бота (amount_in) = querySwapSingleTokenExactOut.
+            for q in p["quotes_out"].as_array().into_iter().flatten() {
+                let i = q["i"].as_u64().unwrap() as usize;
+                let j = q["j"].as_u64().unwrap() as usize;
+                let pair = (fx.tokens[i], fx.tokens[j]);
+                let st = load_balancer_v3::decode(pool, &fx, &answers, pair).unwrap();
+                let PoolState::VaultPool(d) = st else {
+                    panic!("не VaultPool");
+                };
+                let amount = U256::from_str_radix(q["amount"].as_str().unwrap(), 10).unwrap();
+                let ours = balancer_math::amount_in(&d, i, j, amount);
+                let theirs = answer(q)
+                    .ok()
+                    .and_then(|b| R::querySwapSingleTokenExactOutCall::abi_decode_returns(&b).ok());
+                assert_eq!(ours, theirs, "пул {pool:#x} {i}→{j} точный выход {amount}");
                 same += 1;
             }
         }

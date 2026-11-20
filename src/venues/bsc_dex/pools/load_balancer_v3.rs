@@ -142,12 +142,19 @@ pub fn decode(
 
 /// Части состояния пула без части V3 (сборка — state).
 pub struct Parts<'a> {
+    /// Адрес пула (id пула V3 — его адрес).
     pub pool: Address,
+    /// Токены пула в порядке хранилища (getPoolTokenInfo).
     pub tokens: &'a [Address],
+    /// Сырые балансы хранилища в единицах токена (getPoolTokenInfo balancesRaw).
     pub balances: Vec<U256>,
+    /// Множители точности 10^(18 − decimals) (getPoolTokenRates decimalScalingFactors).
     pub scaling: Vec<U256>,
+    /// Статическая комиссия обмена, 18 знаков (getPoolConfig staticSwapFeePercentage).
     pub fee: U256,
+    /// Пауза пула или хранилища, либо пул не инициализирован (обменов нет).
     pub paused: bool,
+    /// Кривая пула и её параметры.
     pub curve: VaultCurve,
 }
 

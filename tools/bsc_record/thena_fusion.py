@@ -135,13 +135,13 @@ def pool_record(n, s, o, p, vq_addr, vq_code):
             oc.append(frm(s["getTimepoints(uint32,uint32[],int24,uint16,uint128)"] + word(t) + word(5 * 32)
                           + word(tick) + word(tp_index) + word(liq) + word(2) + word(0) + word(WINDOW)))
         # Начало окна на время блока + 0 и + 1 (решение 463): тот же вызов, что делает бот (pools/fusion_fee.rs).
-        t1 = head_ts + 1
-        oc.append(frm(s["getTimepoints(uint32,uint32[],int24,uint16,uint128)"] + word(t1) + word(5 * 32)
+        ts1 = head_ts + 1
+        oc.append(frm(s["getTimepoints(uint32,uint32[],int24,uint16,uint128)"] + word(ts1) + word(5 * 32)
                       + word(tick) + word(tp_index) + word(liq) + word(2) + word(WINDOW + 1) + word(WINDOW)))
         og = n.batch(oc, o.batch)
         rec["oracle"] = {"operator": op, "feeConfig": og[0], "by_time": {
             str(head_ts + d): {"getFee": og[1 + 3 * i], "getAverages": og[2 + 3 * i], "getTimepoints": og[3 + 3 * i]}
-            for i, d in enumerate(AHEAD)}, "starts": {"time": t1, "seconds_agos": [WINDOW + 1, WINDOW],
+            for i, d in enumerate(AHEAD)}, "starts": {"time": ts1, "seconds_agos": [WINDOW + 1, WINDOW],
                                                       "getTimepoints": og[-1]}}
     rec["timepoints"], rec["poolByPair"] = n.must(got[0], "timepoints"), got[1]
     bal = {t0: int(n.must(got[2], "balanceOf")["result"], 16), t1: int(n.must(got[3], "balanceOf")["result"], 16)}

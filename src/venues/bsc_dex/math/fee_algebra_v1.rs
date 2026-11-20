@@ -30,8 +30,10 @@ use super::adaptive_fee::{FeeConfig, get_fee};
 pub const WINDOW: u32 = 86_400;
 /// Предел dex.fusion_fee_horizon_s (секунды): secondsAgo = WINDOW + горизонт + 1 — элемент uint32[] secondsAgos
 /// getTimepoints оператора (DataStorageOperator.sol AlgebraV1). Одна константа на код (pools/fusion_fee.rs horizon) и
-/// каталог настроек (settings/catalog/dex.rs .max) — четвёртое ревью t236.
-pub const HORIZON_MAX: u32 = u32::MAX - WINDOW - 1;
+/// каталог настроек (settings/catalog/dex.rs FUSION_HORIZON_MAX — источник) — четвёртое ревью t236.
+pub const HORIZON_MAX: u32 = crate::settings::catalog::dex::FUSION_HORIZON_MAX as u32;
+// Предел каталога совпадает с протоколом: u32::MAX − WINDOW − 1 (иначе сборка не пройдёт).
+const _: () = assert!(HORIZON_MAX == u32::MAX - WINDOW - 1);
 /// Делитель средней волатильности в DataStorageOperator.getFee (`volatilityAverage / 15`).
 const VOLATILITY_DIV: u128 = 15;
 

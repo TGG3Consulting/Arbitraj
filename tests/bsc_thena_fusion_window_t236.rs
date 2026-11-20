@@ -11,6 +11,7 @@
 //!    в полосе 2 % (граница 202 тика вниз / 198 вверх — depth_band::band_ticks) у всех 8 пулов в обе стороны: граница
 //!    внутри записанных строк — дошли до неё (reached); swap_to той же суммой до той же границы — тот же итог; без предела
 //!    выход не меньше (цена шага округляется в сторону обмена); полоса 1 % не глубже 2 %.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/thena_fusion_common, tests/tick_band_common (ctx, set), tests/native_common (entry),
 //! tests/depth_common; arb::venues::bsc_dex::{pools::{depth, load_algebra}, quote::depth_band_algebra, math}.

@@ -13,6 +13,7 @@
 //! 3. Своп (Quoter) на T: комиссия не ниже getFee оператора у всех 180; у 27 пулов (81 случай) — выше: своп пишет
 //!    точку с volumePerLiquidityInBlock пула (слот 3, в записи его нет — нужен повтор записи T237-02); у 33 пулов
 //!    (99 случаев) — равна. Пример 0x1b93…2210: getFee 1542 = Quoter 1542 на + 0 / 1 / 3 с, globalState.fee 1537.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: tests/thena_fusion_common; arb::venues::bsc_dex::math::{adaptive_fee, fee_algebra_v1}.
 

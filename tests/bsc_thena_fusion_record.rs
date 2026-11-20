@@ -13,6 +13,7 @@
 //! 3. Динамическая комиссия: у пула 0x1b93…2210 Quoter при времени блока записи (`at_block`, первый своп в новом
 //!    блоке — _getNewFee) вернул комиссию 1539, а globalState.fee = 1537 — факт для задачи T463-02 (комиссия
 //!    следующего блока), тест его фиксирует.
+//!
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::venues::bsc_dex::{math::swap_algebra, pools::{load_algebra, ticks, families},
 //! quote::pool_quote}; serde_json.

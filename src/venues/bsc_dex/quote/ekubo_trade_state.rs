@@ -29,8 +29,9 @@ pub fn at_trade(d: &EkuboData) -> Result<Vec<EkuboData>, String> {
     for at in [t, t + 1] {
         let s = advance(d, at).ok_or_else(|| {
             format!(
-                "TWAMM: виртуальные ордера к времени {at} не считаются — время за прочитанным горизонтом \
-                 (dex.ekubo_twamm_horizon_s) или расчёт откатился бы; пул нужно перечитать"
+                "TWAMM: виртуальные ордера к времени {at} не считаются — время за \
+                 прочитанным горизонтом (dex.ekubo_twamm_horizon_s) или расчёт откатился бы; \
+                 пул нужно перечитать"
             )
         })?;
         out.push(s);

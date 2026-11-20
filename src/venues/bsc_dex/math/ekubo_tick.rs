@@ -7,14 +7,14 @@
 //! Настройки: нет.
 //!
 //! Источник — EkuboProtocol/evm-contracts@61d09daa: src/math/ticks.sol L22-L80 (tickToSqrtRatio; константы — строки
-//! L30-L71, переписаны из файла скриптом без правки), L82-L164 (sqrtRatioToTick); src/math/constants.sol L254-L258
+//! L30-L71, переписаны из файла скриптом без правки), L99-L164 (sqrtRatioToTick; константы L82-L93); src/math/constants.sol L10, L14
 //! (MIN_TICK, MAX_TICK). Деление со знаком «>>» Solidity для int256 — арифметический сдвиг (вниз к −∞).
 
 use alloy_primitives::U256;
 
 use super::ekubo_sqrt::{to_fixed, to_sqrt_ratio};
 
-/// MIN_TICK / MAX_TICK (constants.sol L254, L258).
+/// MIN_TICK / MAX_TICK (constants.sol L10, L14).
 pub const MIN_TICK: i32 = -88_722_835;
 pub const MAX_TICK: i32 = 88_722_835;
 

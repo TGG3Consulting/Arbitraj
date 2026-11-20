@@ -9,7 +9,7 @@
 //! От чего зависит: core/types (EkuboData), discover.rs (sorted).
 //! Настройки: нет (обёртку передаёт вызывающий — dex.native_wrapped).
 //!
-//! Источник — EkuboProtocol/evm-contracts@61d09daa: src/math/constants.sol L270 (NATIVE_TOKEN_ADDRESS = 0),
+//! Источник — EkuboProtocol/evm-contracts@61d09daa: src/math/constants.sol L26 (NATIVE_TOKEN_ADDRESS = 0),
 //! src/types/poolKey.sol L11-L18 (token0 < token1 — нативная всегда token0), src/base/FlashAccountant.sol L384-L393
 //! (оплата нативной монетой — receive ядра), L348-L356 (выплата нативной — call{value}).
 
@@ -32,9 +32,8 @@ pub fn pair(
         return Ok((a, b, None));
     }
     let Some(w) = wrapped else {
-        return Err(
-            "token0 пула — нативный ETH (адрес 0), а dex.native_wrapped не задана — сопоставить его не с чем".into(),
-        );
+        let why = "token0 пула — нативный ETH (адрес 0), а dex.native_wrapped не задана";
+        return Err(why.into());
     };
     if t1 == w {
         return Err(format!(

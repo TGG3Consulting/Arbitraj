@@ -11,7 +11,7 @@
 //! Настройки: dex.ekubo_core, dex.ekubo_key_index [DEX]; через ekubo_accept.rs — dex.native_wrapped и адреса
 //! расширений.
 //!
-//! Источник — EkuboProtocol/evm-contracts@02e0d82f src/PoolKeyIndex.sol L16 (poolKeyById), L61-L63 (не зарегистрирован —
+//! Источник — EkuboProtocol/evm-contracts@02e0d82f src/PoolKeyIndex.sol L16 (poolKeyById), L57-L59 (не зарегистрирован —
 //! token1 = 0); @61d09daa src/types/poolKey.sol L34-L39 (PoolId), src/types/poolState.sol L28-L32 (создан — слово ≠ 0).
 
 use std::str::FromStr;
@@ -123,7 +123,8 @@ fn key_of(
             let k = IEkuboKeyIndex::poolKeyByIdCall::abi_decode_returns(&raw)
                 .map_err(|e| format!("ответ poolKeyById не по ABI: {e}"))?;
             if k.token1 == Address::ZERO {
-                return Err("пула нет в реестре ключей PoolKeyIndex (dex.ekubo_key_index) и в истории ядра — ключ не известен".into());
+                let why = "пула нет в PoolKeyIndex (dex.ekubo_key_index) и в истории ядра";
+                return Err(format!("{why} — ключ не известен"));
             }
             Ok(PoolKeyIn {
                 token0: k.token0,

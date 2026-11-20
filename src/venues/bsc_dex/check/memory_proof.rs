@@ -55,7 +55,10 @@ pub enum Proof {
 /// Логи пула за блоки [from, to] (eth_getLogs). Ошибки: узел (в том числе предел диапазона), ответ не по виду.
 async fn logs_of(ctx: &Ctx, e: &Entry, from: u64, to: u64) -> GatewayResult<Vec<Log>> {
     let f = rules::filter(e, from, to);
-    rpc::call(ctx, "eth_getLogs", serde_json::json!([f])).await
+    let mut logs: Vec<Log> = rpc::call(ctx, "eth_getLogs", serde_json::json!([f])).await?;
+    // Ревью 447: у Ekubo фильтр — все логи ядра, логи пула — по PoolId из данных.
+    logs.retain(|l| rules::mine(e, l));
+    Ok(logs)
 }
 
 /// Итог по разбору логов (чистая): пропуск у own-пула — Wrong с позицией; неприменённые — Lag; нет — None (дальше

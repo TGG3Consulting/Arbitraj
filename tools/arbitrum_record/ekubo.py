@@ -42,7 +42,7 @@ SEL_KEY = "ea6c8bc7"
 SEL_QUOTE = "3bc52842"
 SEL_DECIMALS = "313ce567"
 
-# CoreStorageLayout.sol L23, L31 (evm-contracts@61d09daa); tickBitmap.sol L174; constants.sol L254, L258.
+# CoreStorageLayout.sol L23, L31 (evm-contracts@61d09daa); tickBitmap.sol L10; constants.sol L10, L14.
 TICKS_OFFSET = 0x435A5EB89A296820174331CF5A3902D9FCA683928D56726D8E7ACD6EFB28C568
 BITMAPS_OFFSET = 0x3DEF450D0010A2FEF515CE5EBA4B363B5A0F42FDD4C53E1C737975DB05A2E3A5
 BITMAP_OFFSET = 89421695
@@ -77,19 +77,19 @@ def word(v):
 
 
 def sload(rpc, at, slots, tag):
-    """Core/MEVCapture.sload(): значения слотов подряд (ExposedStorage.sol L151-L156)."""
+    """Core/MEVCapture.sload(): значения слотов подряд (ExposedStorage.sol L15-L20)."""
     raw = rpc.eth_call(at, SEL_SLOAD + "".join(word(s) for s in slots), tag)[2:]
     return [raw[i * 64:(i + 1) * 64] for i in range(len(slots))]
 
 
 def word_index(tick, spacing):
-    """tickToBitmapWordAndIndex (tickBitmap.sol L178-L184): floor(tick / spacing) + смещение; слово — >> 8."""
+    """tickToBitmapWordAndIndex (tickBitmap.sol L14-L20): floor(tick / spacing) + смещение; слово — >> 8."""
     raw = tick // spacing + BITMAP_OFFSET
     return raw >> 8, raw & 0xFF
 
 
 def tick_of(w, i, spacing):
-    """bitmapWordAndIndexToTick (tickBitmap.sol L188-L193)."""
+    """bitmapWordAndIndexToTick (tickBitmap.sol L24-L29)."""
     return ((w << 8) + i - BITMAP_OFFSET) * spacing
 
 

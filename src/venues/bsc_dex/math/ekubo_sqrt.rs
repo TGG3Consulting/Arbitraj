@@ -8,25 +8,25 @@
 //!
 //! Источник — EkuboProtocol/evm-contracts@61d09daa716d5ee4f4814d901bf1b671db1d29db (ядро Arbitrum — broadcast
 //! DeployAll.s.sol/42161 run-1767194711580.json, commit 61d09da; файлы ниже до HEAD e5574ab не менялись):
-//! src/types/sqrtRatio.sol L60-L71 (константы), L106-L146 (toSqrtRatio), L149-L153 (toFixed);
+//! src/types/sqrtRatio.sol L13-L24 (константы), L59-L99 (toSqrtRatio), L102-L106 (toFixed);
 //! src/math/sqrtRatio.sol L10-L64 (nextSqrtRatioFromAmount0), L67-L101 (nextSqrtRatioFromAmount1);
-//! src/math/fee.sol L225-L244 (computeFee, amountBeforeFee). Solady FixedPointMathLib: fullMulDivUp = ceil(a·b/d) с
+//! src/math/fee.sol L6-L10, L15-L25 (computeFee, amountBeforeFee). Solady FixedPointMathLib: fullMulDivUp = ceil(a·b/d) с
 //! откатом при переполнении, rawDiv(a, 0) = 0, zeroFloorSub = max(a − b, 0).
 
 use alloy_primitives::U256;
 
 use super::full_math::mul_div_up;
 
-/// MIN_SQRT_RATIO_RAW (sqrtRatio.sol L60).
+/// MIN_SQRT_RATIO_RAW (types/sqrtRatio.sol L13).
 pub const MIN_SQRT_RATIO: u128 = 4_611_797_791_050_542_631;
-/// MAX_SQRT_RATIO_RAW (sqrtRatio.sol L62).
+/// MAX_SQRT_RATIO_RAW (types/sqrtRatio.sol L15).
 pub const MAX_SQRT_RATIO: u128 = 79_227_682_466_138_141_934_206_691_491;
-/// type(uint96).max — «переполнение» nextSqrtRatioFromAmount0/1 (sqrtRatio.sol L33, L40, L48, L96).
+/// type(uint96).max — «переполнение» nextSqrtRatioFromAmount0/1 (math/sqrtRatio.sol L33, L40, L48, L96).
 pub const U96_MAX: u128 = (1u128 << 96) - 1;
-/// BIT_MASK = 2^95 | 2^94 (sqrtRatio.sol L69).
+/// BIT_MASK = 2^95 | 2^94 (types/sqrtRatio.sol L22).
 const BIT_MASK: u128 = 0xc000_0000_0000_0000_0000_0000;
 
-/// MAX_FIXED_VALUE_ROUND_UP = 2^192 − 2^98 (sqrtRatio.sol L102-L103).
+/// MAX_FIXED_VALUE_ROUND_UP = 2^192 − 2^98 (types/sqrtRatio.sol L55-L56).
 fn max_fixed_round_up() -> U256 {
     (U256::from(1u8) << 192) - (U256::from(1u8) << 98)
 }
@@ -40,7 +40,7 @@ pub fn to_fixed(r: U256) -> U256 {
 
 /// toSqrtRatio: 64.128 → сжатое значение с округлением вверх или вниз. None — ValueOverflowsSqrtRatioContainer.
 pub fn to_sqrt_ratio(sr: U256, round_up: bool) -> Option<U256> {
-    // (сдвиг, граница области, метка старших бит) — четыре области sqrtRatio.sol L112-L138.
+    // (сдвиг, граница области, метка старших бит) — четыре области types/sqrtRatio.sol L59-L99.
     let regions: [(usize, usize, u128); 4] = [
         (2, 96, 0),
         (34, 128, 1u128 << 94),
@@ -123,13 +123,13 @@ pub fn next_from_amount1(sqrt: U256, liquidity: u128, amount: i128) -> Option<U2
     }
 }
 
-/// computeFee (fee.sol L225-L229): комиссия со суммы, вверх — (amount·fee + 2^64 − 1) >> 64. Ошибок нет.
+/// computeFee (fee.sol L6-L10): комиссия со суммы, вверх — (amount·fee + 2^64 − 1) >> 64. Ошибок нет.
 pub fn compute_fee(amount: u128, fee: u64) -> u128 {
     let v = (U256::from(amount) * U256::from(fee) + U256::from(u64::MAX)) >> 64usize;
     v.to::<u128>()
 }
 
-/// amountBeforeFee (fee.sol L234-L244): сумма до комиссии, вверх — ceil((afterFee << 64) / (2^64 − fee)).
+/// amountBeforeFee (fee.sol L15-L25): сумма до комиссии, вверх — ceil((afterFee << 64) / (2^64 − fee)).
 /// None — AmountBeforeFeeOverflow (результат больше 128 бит).
 pub fn amount_before_fee(after: u128, fee: u64) -> Option<u128> {
     let v = U256::from(after) << 64usize;
@@ -157,7 +157,7 @@ mod tests {
         U256::from_str_radix(s, 10).unwrap()
     }
 
-    /// ONE = 2^95 + 2^62 (sqrtRatio.sol L71) — это ровно 1.0 в 64.128, и обратно без потерь.
+    /// ONE = 2^95 + 2^62 (types/sqrtRatio.sol L24) — это ровно 1.0 в 64.128, и обратно без потерь.
     #[test]
     fn one_round_trip() {
         assert_eq!(to_fixed(one()), U256::from(1u8) << 128usize);

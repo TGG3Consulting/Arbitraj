@@ -12,7 +12,7 @@
 //! Источник — EkuboProtocol/evm-contracts@61d09daa src/extensions/MEVCapture.sol L177-L258 (handleForwardData: L183-L206
 //! — tickLast и обновление в новой секунде, L208 — обмен в ядре, L211-L213 — доплата
 //! min(uint64.max, ((|tick − tickLast| << 64) / tickSpacing · fee) >> 64), L232-L248 — точный вход: с выхода
-//! computeFee(выход, доплата)); src/types/mevCapturePoolState.sol L10-L20.
+//! computeFee(выход, доплата)); src/types/mevCapturePoolState.sol L4-L25.
 
 use alloy_primitives::U256;
 
@@ -40,7 +40,13 @@ pub fn additional_fee(d: &EkuboData, tick_after: i32, tick_last: i32) -> u64 {
 
 /// Выход после доплаты MEVCapture (худший из возможных tickLast следующего блока). Принимает: состояние, состояние
 /// расширения, тик пула до обмена, тик после, выход ядра. Возвращает: выход владельцу. Ошибок нет.
-pub fn out_after(d: &EkuboData, m: &EkuboMev, tick_before: i32, tick_after: i32, out: u128) -> u128 {
+pub fn out_after(
+    d: &EkuboData,
+    m: &EkuboMev,
+    tick_before: i32,
+    tick_after: i32,
+    out: u128,
+) -> u128 {
     let net = |last: i32| out - compute_fee(out, additional_fee(d, tick_after, last));
     let new_second = net(tick_before);
     if u64::from(m.last_update_time) >= d.block_ts {

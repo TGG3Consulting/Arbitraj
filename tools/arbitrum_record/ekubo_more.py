@@ -103,7 +103,7 @@ def record_key(rpc, pid, t0, t1, config, args, tag):
     dec = []
     for t in (t0, t1):
         if int(t, 16) == 0:
-            dec.append(18)  # нативный ETH: 18 знаков (NATIVE_TOKEN_ADDRESS, constants.sol L270)
+            dec.append(18)  # нативный ETH: 18 знаков (NATIVE_TOKEN_ADDRESS, constants.sol L26)
             continue
         try:
             dec.append(int(rpc.eth_call(t, base.SEL_DECIMALS, tag), 16))

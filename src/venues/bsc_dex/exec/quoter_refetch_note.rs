@@ -7,11 +7,14 @@
 //! событие Swap / Sync) или карта тиков (пропущенный Mint / Burn) — без чтения узла задним числом.
 //! differs / ticks_differ — различаются ли записи; ошибку памяти доказывает только check/memory_proof.rs (логи узла
 //! за [блок памяти, H] и сравнение на H, когда все логи применены).
+//! Ревью 447: верх пула Ekubo сравнивается без времени блока чтения и окна слов битмапа (quoter_refetch_ekubo.rs).
 //! Кто вызывает: exec/quoter_refetch.rs, check/memory_proof.rs; тесты (tests/bsc_dex_quoter_refetch_382.rs).
 //! От чего зависит: pools/registry.rs (Entry), pools/ticks.rs (TickMap).
 //! Настройки: нет.
 
 use std::collections::BTreeSet;
+
+use crate::core::types::PoolState;
 
 use super::super::pools::registry::Entry;
 use super::super::pools::ticks::TickMap;
@@ -59,7 +62,16 @@ pub fn tick_diff(mem: &TickMap, fresh: &TickMap) -> TickDiff {
 /// логи пула до блока узла применены памятью (check/memory_proof.rs).
 /// Принимает: запись памяти, запись, перечитанную на блоке. Ошибок нет.
 pub fn differs(mem: &Entry, fresh: &Entry) -> bool {
-    mem.pool.state != fresh.pool.state || ticks_differ(mem, fresh)
+    state_differs(mem, fresh) || ticks_differ(mem, fresh)
+}
+
+/// Различается ли верх состояния. Ревью 447: у Ekubo — без времени чтения и окна слов (quoter_refetch_ekubo.rs).
+/// Ошибок нет.
+pub fn state_differs(mem: &Entry, fresh: &Entry) -> bool {
+    match (&mem.pool.state, &fresh.pool.state) {
+        (PoolState::Ekubo(a), PoolState::Ekubo(b)) => !super::quoter_refetch_ekubo::same(a, b),
+        (a, b) => a != b,
+    }
 }
 
 /// Не совпадает ли карта тиков в общих словах (у пулов без карты — нет). Ошибок нет.
@@ -81,7 +93,7 @@ pub fn note(mem: &Entry, fresh: &Entry, block: u64) -> String {
         mem.synced_log
             .map_or(String::new(), |i| format!(", logIndex {i}"))
     );
-    let top = if mem.pool.state == fresh.pool.state {
+    let top = if !state_differs(mem, fresh) {
         "верх состояния совпадает с узлом".to_string()
     } else {
         format!(

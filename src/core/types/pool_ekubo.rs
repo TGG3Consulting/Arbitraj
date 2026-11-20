@@ -10,10 +10,10 @@
 //! Настройки: нет.
 //!
 //! Поля — по исходникам EkuboProtocol/evm-contracts@61d09daa (развёрнутое ядро Arbitrum, broadcast/DeployAll.s.sol/42161):
-//! src/types/poolState.sol L10-L46 (sqrtRatio 96 бит << 160 | tick 32 бита << 128 | liquidity 128 бит),
-//! src/types/poolConfig.sol L46-L123 (config), src/types/tickInfo.sol L12-L35 (liquidityNet << 128 | liquidityDelta),
-//! src/math/tickBitmap.sol L174-L193 (слово битмапа), src/types/mevCapturePoolState.sol L8-L26.
-//! Решение 454: нативный ETH ключа (token0 = адрес 0 — src/math/constants.sol L270) — поле native; расширение TWAMM —
+//! src/types/poolState.sol L6-L47 (sqrtRatio 96 бит << 160 | tick 32 бита << 128 | liquidity 128 бит),
+//! src/types/poolConfig.sol L32-L134 (config), src/types/tickInfo.sol L4-L32 (liquidityNet << 128 | liquidityDelta),
+//! src/math/tickBitmap.sol L14-L29 (слово битмапа), src/types/mevCapturePoolState.sol L4-L25.
+//! Решение 454: нативный ETH ключа (token0 = адрес 0 — src/math/constants.sol L26) — поле native; расширение TWAMM —
 //! EkuboTwamm (src/types/twammPoolState.sol L14-L44, src/types/timeInfo.sol L5-L37, src/math/timeBitmap.sol L7-L21).
 
 use alloy_primitives::{Address, B256, U256};

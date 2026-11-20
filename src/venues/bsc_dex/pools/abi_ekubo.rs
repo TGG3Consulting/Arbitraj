@@ -11,11 +11,11 @@
 //! Источник — EkuboProtocol/evm-contracts@61d09daa (ядро Arbitrum): src/types/poolKey.sol L11-L18, L34-L39 (ключ,
 //! PoolId = keccak256 96 байт ключа); src/libraries/CoreStorageLayout.sol L21-L31 (смещения), L47-L49 (состояние — слот
 //! PoolId), L64-L68 (тик — PoolId + TICKS_OFFSET + tick), L89-L93 (битмап — PoolId + BITMAPS_OFFSET + слово);
-//! src/base/ExposedStorage.sol L151-L156 (sload(): слоты подряд после селектора, ответ — значения подряд);
-//! src/types/poolState.sol L10-L46; src/types/tickInfo.sol L12-L35; src/types/poolBalanceUpdate.sol L7-L17;
+//! src/base/ExposedStorage.sol L15-L20 (sload(): слоты подряд после селектора, ответ — значения подряд);
+//! src/types/poolState.sol L6-L47; src/types/tickInfo.sol L4-L32; src/types/poolBalanceUpdate.sol L4-L25;
 //! src/types/positionId.sol L17-L29; src/interfaces/ICore.sol L111-L141 (события); src/Core.sol L840-L847 (log0
 //! обмена, 116 байт); src/PoolKeyIndex.sol L16 (poolKeyById — геттер структуры: три поля). Router.quote —
-//! evm-contracts@v3.1.1 src/Router.sol L523-L552 (MEVCaptureRouter v3.1.1 — docs.ekubo.org evm-v3, legacy).
+//! evm-contracts@v3.1.1 src/Router.sol L523-L553 (MEVCaptureRouter v3.1.1 — docs.ekubo.org evm-v3, legacy).
 //! TWAMM — @61d09daa src/interfaces/extensions/ITWAMM.sol L21 (OrderUpdated), src/extensions/TWAMM.sol L70-L81.
 //! Селектор sload() = 0x380eb4e0 (keccak256("sload()")).
 
@@ -48,7 +48,7 @@ alloy::sol! {
     }
 }
 
-/// Селектор Core.sload() (ExposedStorage.sol L151).
+/// Селектор Core.sload() (ExposedStorage.sol L15).
 pub const SLOAD: [u8; 4] = [0x38, 0x0e, 0xb4, 0xe0];
 /// Длина данных анонимного лога обмена (Core.sol L841-L846).
 pub const SWAP_LOG_LEN: usize = 116;
@@ -127,14 +127,14 @@ pub fn decode_state(w: &B256) -> (U256, i32, u128) {
     (sqrt, tick, liquidity)
 }
 
-/// TickInfo (tickInfo.sol L24-L29): (liquidityNet — старшие 128 бит, liquidityDelta — младшие со знаком). Ошибок нет.
+/// TickInfo (tickInfo.sol L8-L25): (liquidityNet — старшие 128 бит, liquidityDelta — младшие со знаком). Ошибок нет.
 pub fn decode_tick(w: &B256) -> (u128, i128) {
     let mut hi = [0u8; 16];
     hi.copy_from_slice(&w[..16]);
     (u128::from_be_bytes(hi), i128::from_be_bytes(low16(w)))
 }
 
-/// PoolBalanceUpdate (poolBalanceUpdate.sol L7-L17): (delta0 — старшие 128 бит, delta1 — младшие), со знаком. Ошибок нет.
+/// PoolBalanceUpdate (poolBalanceUpdate.sol L8-L18): (delta0 — старшие 128 бит, delta1 — младшие), со знаком. Ошибок нет.
 pub fn decode_balance(w: &B256) -> (i128, i128) {
     let mut hi = [0u8; 16];
     hi.copy_from_slice(&w[..16]);

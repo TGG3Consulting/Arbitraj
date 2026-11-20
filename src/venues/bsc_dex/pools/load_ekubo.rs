@@ -13,7 +13,7 @@
 //! Настройки: dex.ekubo_bitmap_words, адреса расширений (ekubo_ext.rs) [DEX]; dex.native_wrapped [площадка DEX].
 //!
 //! Источник — EkuboProtocol/evm-contracts@61d09daa: src/libraries/CoreStorageLayout.sol L47-L93 (слоты),
-//! src/base/ExposedStorage.sol L151-L156 (sload), src/math/tickBitmap.sol L178-L193 (слово и бит тика),
+//! src/base/ExposedStorage.sol L15-L20 (sload), src/math/tickBitmap.sol L14-L29 (слово и бит тика),
 //! src/extensions/MEVCapture.sol L42 (ExposedStorage), L48-L52 (состояние пула — слот PoolId).
 
 use alloy_primitives::{Address, B256, Bytes, U256};
@@ -157,7 +157,7 @@ pub async fn load(
     Ok(PoolState::Ekubo(Box::new(d)))
 }
 
-/// MEVCapturePoolState (mevCapturePoolState.sol L10-L20): lastUpdateTime — старшие 32 бита, tickLast — младшие 32 со
+/// MEVCapturePoolState (mevCapturePoolState.sol L8-L18): lastUpdateTime — старшие 32 бита, tickLast — младшие 32 со
 /// знаком. Ошибок нет.
 pub fn mev_state(w: &B256) -> EkuboMev {
     EkuboMev {

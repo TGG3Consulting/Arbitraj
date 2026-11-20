@@ -11,7 +11,7 @@
 //! dex.ekubo_oracle, dex.ekubo_boosted_fees [DEX].
 //!
 //! Источник — EkuboProtocol/evm-contracts@61d09daa src/types/poolKey.sol L34-L39 (PoolId), src/types/poolConfig.sol
-//! L80-L84 (расширение), L97-L123 (вид пула).
+//! L41-L45 (расширение), L58-L84 (вид пула).
 
 use alloy_primitives::{Address, B256};
 

@@ -82,7 +82,8 @@ pub fn classify(ctx: &Ctx, dex: &str, ext: Address) -> Result<Ext, String> {
         return Ok(Ext::BoostedFees);
     }
     Err(format!(
-        "расширение пула {ext:#x} не задано ни в одной настройке расширений Ekubo (dex.ekubo_mev_capture, \
-         dex.ekubo_twamm, dex.ekubo_oracle, dex.ekubo_boosted_fees) — пул не берётся"
+        "расширение пула {ext:#x} не задано ни в одной настройке расширений Ekubo \
+         (dex.ekubo_mev_capture, dex.ekubo_twamm, dex.ekubo_oracle, dex.ekubo_boosted_fees) — \
+         пул не берётся"
     ))
 }

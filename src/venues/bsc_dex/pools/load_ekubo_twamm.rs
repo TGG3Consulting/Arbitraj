@@ -9,8 +9,8 @@
 //! Настройки: dex.ekubo_twamm_horizon_s [DEX].
 //!
 //! Источник — EkuboProtocol/evm-contracts@61d09daa src/libraries/TWAMMStorageLayout.sol L20-L24 (смещения), L34-L36
-//! (состояние — слот PoolId), L50-L54 (битмап времён — PoolId + TIME_BITMAPS_OFFSET + слово), L60-L64 (TimeInfo —
-//! PoolId + TIME_INFOS_OFFSET + время); src/types/twammPoolState.sol L14-L44 (время — младшие 32 бита, скорость
+//! (состояние — слот PoolId), L50-L54 (битмап времён — PoolId + TIME_BITMAPS + слово), L60-L64 (TimeInfo —
+//! PoolId + TIME_INFOS + время); src/types/twammPoolState.sol L14-L44 (время — младшие 32 бита, скорость
 //! token0 — биты 32..143, token1 — 144..255); src/types/timeInfo.sol L5-L37 (дельты — int112 в битах 112..223 и
 //! 0..111); src/extensions/TWAMM.sol L12, L60 (ExposedStorage: sload()).
 
@@ -25,9 +25,9 @@ use super::super::math::ekubo_virtual::real_last;
 use super::families::Family;
 use super::load_ekubo::sload;
 
-/// Смещения TWAMMStorageLayout (L22, L24) — hex без 0x.
-const TIME_BITMAPS_OFFSET: &str = "07f3f693b68a1a1b1b3315d4b74217931d60e9dc7f1af4989f50e7ab31c8820e";
-const TIME_INFOS_OFFSET: &str = "70db18ef1c685b7aa06d1ac5ea2d101c7261974df22a15951f768f92187043fb";
+/// Смещения TWAMMStorageLayout TIME_BITMAPS_OFFSET / TIME_INFOS_OFFSET (L22, L24) — hex без 0x.
+const TIME_BITMAPS: &str = "07f3f693b68a1a1b1b3315d4b74217931d60e9dc7f1af4989f50e7ab31c8820e";
+const TIME_INFOS: &str = "70db18ef1c685b7aa06d1ac5ea2d101c7261974df22a15951f768f92187043fb";
 
 /// Слот PoolId + смещение + n (по модулю 2^256). Ошибок нет.
 fn slot(id: B256, offset: &str, n: u64) -> B256 {
@@ -79,7 +79,7 @@ pub async fn load(
     let words = words_until(real, until);
     let slots: Vec<B256> = words
         .iter()
-        .map(|w| slot(id, TIME_BITMAPS_OFFSET, *w))
+        .map(|w| slot(id, TIME_BITMAPS, *w))
         .collect();
     let got = sload(ctx, twamm, &slots, tag).await?;
     let mut bitmap = Vec::new();
@@ -97,7 +97,7 @@ pub async fn load(
             }
         }
     }
-    let slots: Vec<B256> = at.iter().map(|t| slot(id, TIME_INFOS_OFFSET, *t)).collect();
+    let slots: Vec<B256> = at.iter().map(|t| slot(id, TIME_INFOS, *t)).collect();
     let got = sload(ctx, twamm, &slots, tag).await?;
     let times = at
         .iter()

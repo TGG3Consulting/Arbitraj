@@ -6,10 +6,10 @@
 //! От чего зависит: alloy-primitives, math/ekubo_tick.rs (MIN_TICK, MAX_TICK).
 //! Настройки: нет.
 //!
-//! Источник — EkuboProtocol/evm-contracts@61d09daa src/types/poolConfig.sol: L71-L75 (fee: биты 32..95), L80-L84
-//! (extension: старшие 160 бит), L97-L102 (tickSpacing: биты 0..30), L107-L112 (стейблсвап — бит 31 равен 0), L118-L123
-//! (полный диапазон — младшие 32 бита нули), L129-L134 (усиление: биты 24..30), L141-L147 (центр: биты 0..23 со знаком ×
-//! 16), L150-L156 (ширина = MAX_TICK >> усиление), L162-L173 (диапазон, обрезанный до MIN_TICK / MAX_TICK).
+//! Источник — EkuboProtocol/evm-contracts@61d09daa src/types/poolConfig.sol: L32-L36 (fee: биты 32..95), L41-L45
+//! (extension: старшие 160 бит), L58-L63 (tickSpacing: биты 0..30), L68-L73 (стейблсвап — бит 31 равен 0), L79-L84
+//! (полный диапазон — младшие 32 бита нули), L90-L95 (усиление: биты 24..30), L102-L108 (центр: биты 0..23 со знаком ×
+//! 16), L111-L117 (ширина = MAX_TICK >> усиление), L123-L134 (диапазон, обрезанный до MIN_TICK / MAX_TICK).
 
 use alloy_primitives::{Address, B256};
 
@@ -43,7 +43,7 @@ pub fn extension(c: &B256) -> Address {
     Address::from_slice(&c[..20])
 }
 
-/// Вид пула. Ошибок нет (config проверен ядром при создании пула — poolConfig.sol L249-L264).
+/// Вид пула. Ошибок нет (config проверен ядром при создании пула — poolConfig.sol L210-L225).
 pub fn shape(c: &B256) -> Shape {
     let t = type_bits(c);
     if t & 0x8000_0000 != 0 {

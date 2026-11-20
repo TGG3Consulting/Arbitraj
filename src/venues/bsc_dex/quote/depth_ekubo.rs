@@ -9,7 +9,7 @@
 //! Настройки: нет (полосу даёт вызывающий — dex.depth_band_pct).
 //!
 //! Источник — EkuboProtocol/evm-contracts@61d09daa src/math/ticks.sol L12 («sqrtRatio = sqrt(1.000001^tick)»),
-//! src/types/poolConfig.sol L71-L75 (комиссия — биты 32..95 config: обнуляются в копии состояния).
+//! src/types/poolConfig.sol L32-L36 (комиссия — биты 32..95 config: обнуляются в копии состояния).
 
 use alloy_primitives::U256;
 

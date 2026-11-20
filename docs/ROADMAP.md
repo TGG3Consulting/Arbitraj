@@ -31,6 +31,8 @@
   exec/executor/kind.rs 214 (209), contracts/ArbExecutor.sol 731. Артефакты contracts/out без шага EKUBO (сборка solc —
   contracts/README.md); EVM-теста шага EKUBO нет. exec/tip_judge.rs и check/memory_proof_rules.rs не знают логов ядра
   Ekubo (PoolId в данных). Пачки пулов Ekubo подписаны на все логи ядра — замер нагрузки (TASKS, «Решение 447»).
+  Ревью 447: tools/arbitrum_record/ekubo.py 244 строки сверх ориентира — вынести общие функции (Rpc, sload, разбор
+  битмапа, quote_data) в tools/arbitrum_record/ekubo_common.py (им пользуется и ekubo_more.py, решение 454).
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

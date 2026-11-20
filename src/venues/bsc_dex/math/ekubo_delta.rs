@@ -6,8 +6,8 @@
 //! От чего зависит: alloy-primitives, math/full_math.rs, math/ekubo_sqrt.rs.
 //! Настройки: нет.
 //!
-//! Источник — EkuboProtocol/evm-contracts@61d09daa: src/math/delta.sol L111-L123 (sortAndConvertToFixedSqrtRatios),
-//! L126-L170 (amount0Delta, amount0DeltaSorted), L173-L219 (amount1Delta, amount1DeltaSorted). Solady: fullMulDivUp —
+//! Источник — EkuboProtocol/evm-contracts@61d09daa: src/math/delta.sol L10-L22 (sortAndConvertToFixedSqrtRatios),
+//! L25-L69 (amount0Delta, amount0DeltaSorted), L72-L118 (amount1Delta, amount1DeltaSorted). Solady: fullMulDivUp —
 //! ceil, fullMulDivUnchecked — floor без проверки (результат меньше liquidityX128), fullMulDivN(x, y, 128) — floor(x·y / 2^128).
 
 use alloy_primitives::U256;
@@ -21,7 +21,7 @@ pub fn sorted(a: U256, b: U256) -> (U256, U256) {
     if x > y { (y, x) } else { (x, y) }
 }
 
-/// amount0DeltaSorted (delta.sol L135-L170). Принимает: цены 64.128 (lower ≤ upper, ненулевые), ликвидность,
+/// amount0DeltaSorted (delta.sol L34-L69). Принимает: цены 64.128 (lower ≤ upper, ненулевые), ликвидность,
 /// округление вверх. Возвращает: сумму token0. None — откат (результат больше 128 бит, переполнение).
 pub fn amount0_sorted(lower: U256, upper: U256, liquidity: u128, round_up: bool) -> Option<u128> {
     if lower.is_zero() || upper.is_zero() {
@@ -42,7 +42,7 @@ pub fn amount0_sorted(lower: U256, upper: U256, liquidity: u128, round_up: bool)
     (r >> 128usize).is_zero().then(|| r.to::<u128>())
 }
 
-/// amount1DeltaSorted (delta.sol L181-L219). Принимает: цены 64.128 (lower ≤ upper), ликвидность, округление вверх.
+/// amount1DeltaSorted (delta.sol L80-L118). Принимает: цены 64.128 (lower ≤ upper), ликвидность, округление вверх.
 /// Возвращает: сумму token1. None — откат (результат больше 128 бит).
 pub fn amount1_sorted(lower: U256, upper: U256, liquidity: u128, round_up: bool) -> Option<u128> {
     let diff = upper - lower;
@@ -58,13 +58,13 @@ pub fn amount1_sorted(lower: U256, upper: U256, liquidity: u128, round_up: bool)
     (r >> 128usize).is_zero().then(|| r.to::<u128>())
 }
 
-/// amount0Delta (delta.sol L126-L132): по двум сжатым ценам в любом порядке. None — откат.
+/// amount0Delta (delta.sol L25-L31): по двум сжатым ценам в любом порядке. None — откат.
 pub fn amount0(a: U256, b: U256, liquidity: u128, round_up: bool) -> Option<u128> {
     let (lo, hi) = sorted(a, b);
     amount0_sorted(lo, hi, liquidity, round_up)
 }
 
-/// amount1Delta (delta.sol L173-L179): по двум сжатым ценам в любом порядке. None — откат.
+/// amount1Delta (delta.sol L72-L78): по двум сжатым ценам в любом порядке. None — откат.
 pub fn amount1(a: U256, b: U256, liquidity: u128, round_up: bool) -> Option<u128> {
     let (lo, hi) = sorted(a, b);
     amount1_sorted(lo, hi, liquidity, round_up)

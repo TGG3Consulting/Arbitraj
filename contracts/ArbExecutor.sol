@@ -82,8 +82,8 @@ contract ArbExecutor {
     // откатит обмен: MEVCapture.sol L84-L86); долг входа — startPayments / перевод / completePayments (нативный — ETH
     // ядру value), выход — withdraw (нативный — ETH исполнителю → deposit в обёртку).
     uint8 internal constant EKUBO = 22;
-    // Пределы цены Ekubo MIN_SQRT_RATIO_RAW / MAX_SQRT_RATIO_RAW (evm-contracts@61d09daa src/types/sqrtRatio.sol L60, L62):
-    // тот же предел ставит Router (withDefaultSqrtRatioLimit, swapParameters.sol L271-L279).
+    // Пределы цены Ekubo MIN_SQRT_RATIO_RAW / MAX_SQRT_RATIO_RAW (evm-contracts@61d09daa src/types/sqrtRatio.sol L13, L15):
+    // тот же предел ставит Router (withDefaultSqrtRatioLimit, swapParameters.sol L74-L82).
     uint256 internal constant EKUBO_MIN_SQRT = 4611797791050542631;
     uint256 internal constant EKUBO_MAX_SQRT = 79227682466138141934206691491;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
@@ -649,10 +649,10 @@ contract ArbExecutor {
     }
 
     // Обмен на точный вход: SwapParameters = предел цены << 160 | сумма << 32 | isToken1 << 31 | skipAhead 0
-    // (swapParameters.sol L239-L255); isToken1 — по адресам ключа (нативная — 0, всегда token0). forward = false —
+    // (createSwapParameters, swapParameters.sol L42-L58); isToken1 — по адресам ключа (нативная — 0, всегда token0). forward = false —
     // swap_6269342730 ядра (ключ 3 слова + параметры, Core.sol L510-L525); true — forward(расширение) с abi.encode(ключ,
-    // параметры) (MEVCapture.sol L177-L179, ответ — abi.encode(balanceUpdate, stateAfter), L256-L257). balanceUpdate —
-    // delta0 << 128 | delta1 (poolBalanceUpdate.sol L7-L17). Возвращает: (долг входа, выход); 0 < долг ≤ суммы шага
+    // параметры) (MEVCapture.sol L177-L179, ответ — abi.encode(balanceUpdate, stateAfter), L258). balanceUpdate —
+    // delta0 << 128 | delta1 (poolBalanceUpdate.sol L4-L25). Возвращает: (долг входа, выход); 0 < долг ≤ суммы шага
     // (иначе «owed»), выход > 0 (иначе «out»).
     function _ekuboSwap(address core, address kIn, address kOut, EkuboCb memory c)
         internal

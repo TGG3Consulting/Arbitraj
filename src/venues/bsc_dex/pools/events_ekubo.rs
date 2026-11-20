@@ -2,7 +2,8 @@
 //! Что делает: события пулов Ekubo (решение 447) — «topic0» для подписки и применение к записи пула. Все события — от
 //! ядра Core (пул внутри ядра, PoolId — в данных, не в topics):
 //! - анонимный лог обмена (log0, 116 байт: locker | PoolId | balanceUpdate | stateAfter; Core.sol L840-L847) — состояние
-//!   после обмена целиком (цена, тик, ликвидность) → Updated. В подписке у него нет topic0: метка — B256::ZERO
+//!   после обмена целиком (цена, тик, ликвидность) → Updated; ревью 447: слово нового тика вне прочитанных слов
+//!   битмапа → Refresh (пул перечитывается вокруг новой цены). В подписке у него нет topic0: метка — B256::ZERO
 //!   (ekubo_route.rs topic);
 //! - PositionUpdated (ICore.sol L119-L126; Core.sol L358-L450) — stateAfter, у концентрированного пула ещё тики границ
 //!   позиции: нижний — liquidityDelta += Δ, верхний — −= Δ, liquidityNet += Δ у обоих (Core.sol L285-L319, _updateTick),
@@ -41,12 +42,14 @@ pub const SWAP_MARK: B256 = B256::ZERO;
 /// единиц, не совпадает ни с одним topic0 (keccak).
 pub const TWAMM_MARK: B256 = B256::repeat_byte(0xff);
 
-/// «topic0» событий, меняющих состояние обмена: анонимный обмен (SWAP_MARK), PositionUpdated; решение 454 — события
-/// TWAMM (VirtualOrdersExecuted — TWAMM_MARK, OrderUpdated). Ошибок нет.
+/// «topic0» событий, меняющих состояние обмена: анонимный обмен (SWAP_MARK), PositionUpdated, PositionFeesCollected
+/// (ревью 447: у пула с MEVCapture сбор комиссий в новой секунде пишет tickLast = текущий тик — модель доплаты); решение
+/// 454 — события TWAMM (VirtualOrdersExecuted — TWAMM_MARK, OrderUpdated). Ошибок нет.
 pub fn topics() -> Vec<B256> {
     vec![
         SWAP_MARK,
         C::PositionUpdated::SIGNATURE_HASH,
+        C::PositionFeesCollected::SIGNATURE_HASH,
         TWAMM_MARK,
         T::OrderUpdated::SIGNATURE_HASH,
     ]
@@ -88,6 +91,9 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
             return refresh("нет времени блока в логе — состояние MEVCapture перечитать");
         }
         set_state(d, &state);
+        if !in_words(d) {
+            return refresh("цена ушла за прочитанные слова битмапа — перечитать пул");
+        }
         return Applied::Updated;
     }
     if log.topic0() == Some(&C::PositionFeesCollected::SIGNATURE_HASH) {
@@ -125,6 +131,19 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     }
     set_state(d, &ev.stateAfter);
     Applied::Updated
+}
+
+/// Ревью 447: слово текущего тика — среди прочитанных слов битмапа (у не концентрированного пула — всегда да). Иначе
+/// расчёт обмена с текущей цены сразу упрётся в непрочитанное слово (частичный) — пул перечитывается вокруг новой цены.
+/// Ошибок нет.
+fn in_words(d: &EkuboData) -> bool {
+    match ekubo_config::shape(&d.config) {
+        Shape::Concentrated { spacing } => {
+            let (w, _) = word_index(d.tick, spacing);
+            (d.words.0..=d.words.1).contains(&w)
+        }
+        Shape::FullRange | Shape::Stable { .. } => true,
+    }
 }
 
 /// Цена, тик и ликвидность из stateAfter. Ошибок нет.
@@ -196,7 +215,7 @@ fn update_tick(d: &mut EkuboData, spacing: u32, tick: i32, delta: i128, upper: b
     true
 }
 
-/// Переключает бит слова битмапа (flipTick, tickBitmap.sol L200-L204). Нулевое слово не хранится. Ошибок нет.
+/// Переключает бит слова битмапа (flipTick, tickBitmap.sol L36-L40). Нулевое слово не хранится. Ошибок нет.
 fn flip(d: &mut EkuboData, word: u64, bit: u32) {
     let mask = U256::from(1u8) << bit as usize;
     match d.bitmap.binary_search_by_key(&word, |(w, _)| *w) {

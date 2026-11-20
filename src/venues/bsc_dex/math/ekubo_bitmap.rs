@@ -7,10 +7,10 @@
 //! От чего зависит: alloy-primitives, core/types (EkuboData), math/ekubo_tick.rs.
 //! Настройки: нет.
 //!
-//! Источник — EkuboProtocol/evm-contracts@61d09daa: src/math/tickBitmap.sol L174 (TICK_BITMAP_STORAGE_OFFSET), L178-L184
-//! (tickToBitmapWordAndIndex: floor(tick / spacing) + смещение; слово — >> 8, бит — & 0xff), L188-L193
-//! (bitmapWordAndIndexToTick), L206-L244 (findNextInitializedTick), L246-L282 (findPrevInitializedTick);
-//! src/types/bitmap.sol L333-L340 (leSetBit — старший бит ≤ index), L350-L355 (geSetBit — младший бит ≥ index).
+//! Источник — EkuboProtocol/evm-contracts@61d09daa: src/math/tickBitmap.sol L10 (TICK_BITMAP_STORAGE_OFFSET), L14-L20
+//! (tickToBitmapWordAndIndex: floor(tick / spacing) + смещение; слово — >> 8, бит — & 0xff), L24-L29
+//! (bitmapWordAndIndexToTick), L42-L80 (findNextInitializedTick), L82-L118 (findPrevInitializedTick);
+//! src/types/bitmap.sol L51-L58 (leSetBit — старший бит ≤ index), L68-L73 (geSetBit — младший бит ≥ index).
 
 use alloy_primitives::U256;
 
@@ -18,7 +18,7 @@ use crate::core::types::EkuboData;
 
 use super::ekubo_tick::{MAX_TICK, MIN_TICK};
 
-/// TICK_BITMAP_STORAGE_OFFSET (tickBitmap.sol L174).
+/// TICK_BITMAP_STORAGE_OFFSET (tickBitmap.sol L10).
 pub const OFFSET: i64 = 89_421_695;
 
 /// Слово и бит тика. Принимает: тик, шаг (> 0). Возвращает: (слово, бит). Ошибок нет.

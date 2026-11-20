@@ -11,8 +11,8 @@
 //! Настройки: dex.quoter [DEX] — адрес MEVCaptureRouter (docs.ekubo.org evm-v3: 0xd26f20001a72a18C002b00e6710000d68700ce00).
 //!
 //! Источник — EkuboProtocol/evm-contracts@v3.1.1 (сборка MEVCaptureRouter, docs.ekubo.org evm-v3 «legacy, v3.1.1»):
-//! src/Router.sol L509-L552 (quote), src/MEVCaptureRouter.sol L27-L44 (_swap: MEVCapture — forward);
-//! @61d09daa src/types/swapParameters.sol L271-L279 (withDefaultSqrtRatioLimit), src/types/poolBalanceUpdate.sol L7-L17.
+//! src/Router.sol L523-L553 (quote), src/MEVCaptureRouter.sol L27-L44 (_swap: MEVCapture — forward);
+//! @61d09daa src/types/swapParameters.sol L74-L82 (withDefaultSqrtRatioLimit), src/types/poolBalanceUpdate.sol L4-L25.
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};

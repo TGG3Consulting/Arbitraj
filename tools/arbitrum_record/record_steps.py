@@ -7,6 +7,8 @@
   Решение 460: sub_dex — шаг поиска событий 2 000 000 блоков без --log-step (окно 2 000 000 с фильтром по address
   узел Тиграна отдал в прогоне 20.11.2026 — camelot_v2 PairCreated; таймаут — деление пополам); ekubo_more — блок
   ядра из broadcast-файлов Ekubo, --ekubo-from-block — только переопределение.
+  Решение 462: woofi — только --rpc (оракул — wooracle() пула с цепи, базы — события WooSwap); kyber_elastic_v1 — версия
+  пула по factory(), адреса v1 и v2 — в шапке скрипта.
 Кто вызывает: tools/arbitrum_record/record_all.py.
 От чего зависит: нет.
 Ошибок нет.

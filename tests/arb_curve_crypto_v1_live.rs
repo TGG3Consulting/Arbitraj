@@ -53,8 +53,11 @@ fn check_v1(name: &str, n: usize) {
 }
 
 /// Фабрика crypto v1: наш выход = get_dy пула; код пула — прокси на шаблон из журнала развёртывания.
+/// Решение 462: на Arbitrum пулов нет — запись 20.11.2026 (блок 525985014): pool_count фабрики 0xE5De…3A69 = 0 (тогда
+/// скрипт не отличал 0 от отката — теперь пишет сырой ответ pool_count_raw); официальный Curve API
+/// getPools/arbitrum/factory-crypto — 0 пулов. Тест остаётся под #[ignore] (сверять нечего).
 #[test]
-#[ignore = "нет записи: tools/arbitrum_record/curve_crypto.py"]
+#[ignore = "на Arbitrum у фабрики crypto v1 пулов нет (pool_count = 0, решение 462)"]
 fn crypto_v1_matches_get_dy() {
     check_v1("crypto_v1.json", 2);
 }

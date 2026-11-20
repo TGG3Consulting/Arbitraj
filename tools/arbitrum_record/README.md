@@ -32,6 +32,18 @@ sub_dex.py — 20.11 записал 0 пулов (за 2 000 000 блоков с
 exec_v4_live.py — 20.11 вид 23 «нет пулов» (записи balancer_v3.py не было). camelot_v2.py теперь ищет FeePercentUpdated / SetStableSwap до блока первой пары
 фабрики — это долго (20.11: 18 окон по 2 000 000 блоков — 491 с).
 
+**Повтор по разбору пустот 20.11.2026 (решение 462):** `python3 tools/arbitrum_record/record_all.py --rpc
+http://127.0.0.1:8547 --date 2026-11-20 --only kyber_elastic_v1,woofi,curve_crypto` — kyber_elastic_v1 и woofi обязательно
+(записи 20.11 неполные), curve_crypto — по желанию (сырой ответ pool_count фабрики crypto v1); algebra_dir_fee повторять
+не нужно. Что исправлено: woofi.py — оракул берётся с цепи (WooPP.wooracle(); 20.11 — 0xf9b0…8081, документация —
+0xCf4E…34Ec, пишется рядом), базы — токены событий WooSwap пула (раньше без --base баз не было); kyber_elastic_v1.py —
+версия пула по factory() (все 20 пулов GeckoTerminal — Elastic v2, фабрика 0xC7a5…8C4A), квотер и читатель тиков своей
+версии (адреса v1 и v2 — шапка), пулы v1 — getPool фабрики v1 для пар GeckoTerminal, тики ещё частями (getTicksInRange
+(pool, MIN_TICK, 0) у tickDistance 8 и 10 — «out of gas»), окно логов 2 000 000 блоков (2000 блоков — 0 событий);
+algebra_dir_fee.py — вариант квотера, которого нет в коде (у Camelot 0x0Fc7…a76E нет кортежного), не вызывается;
+curve_crypto.py — сырой pool_count и код фабрики crypto v1. Откаты get_dy двух Twocrypto — факт протокола (D < 10^17,
+assert get_y), не скрипт.
+
 Узел с короткой историей состояния (Nitro, `state-scheme=path`: состояние только последних ~128 блоков, логи старых
 блоков есть) — решение 460: (1) любой ответ «historical state … is not available» — исключение `StaleState` в
 `stdhttp.py` (в запись как «ошибка вызова» не попадает); (2) долгие операции (поиск логов, GeckoTerminal) — до выбора
@@ -59,9 +71,9 @@ exec_v4_live.
 
 | Скрипт | Решение | Что пишет | Тест |
 | --- | --- | --- | --- |
-| `kyber_elastic_v1.py` | 451 (T448-06) | пулы KyberSwap Elastic v1: состояние, тики, QuoterV2, getPool фабрики, логи | `tests/arbitrum_kyber_elastic_v1_live.rs` |
+| `kyber_elastic_v1.py` (+ `kyber_elastic_ticks.py`) | 451 (T448-06), 462 | пулы KyberSwap Elastic v1 и v2 (версия — по factory() пула; pools.json — v1, pools_v2.json — v2): состояние, тики (как бот и частями), QuoterV2 своей версии, getPool фабрики, логи | `tests/arbitrum_kyber_elastic_v1_live.rs` |
 | `saddle.py` | 451 (T448-07) | пулы Saddle: монеты, балансы, A, swapStorage (7 слов), calculateSwap, логи | `tests/arbitrum_saddle_live.rs` |
-| `woofi.py` | 451 (T448-08) | WooPPV2.2: слот EIP-1967, селекторы в коде реализации, state() оракула, query | `tests/arbitrum_woofi_live.rs` |
+| `woofi.py` | 451 (T448-08), 462 | WooPPV2.2: слот EIP-1967, селекторы в коде реализации, оракул с цепи (wooracle()) и из документации — state(), базы — токены событий WooSwap, query | `tests/arbitrum_woofi_live.rs` |
 | `sub_dex.py` | 450 (T448-01…05) | KyberSwap Classic DMM / Static Fee / Legacy (события создания, getTradeInfo, getPools, getAmountsOut роутеров), Balancer V2 по фабрикам с версией библиотек (состояние, isPoolFromFactory, queryBatchSwap), iZiSwap (fee2pointDelta, NewPool, реестр pool(x, y, fee)), код Universal Router PancakeSwap v3 — tests/data/arbitrum_sub_dex_<дата>/ | `tests/arbitrum_sub_dex_live.rs` |
 | `fluid_t1.py` | 440 | Fluid DEX T1 (решение 440): состояние всех пулов резолвера на одном блоке и лесенка обменов (swapIn пула → 0x…dEaD, estimateSwapIn резолвера) — для tests/arbitrum_fluid_t1.rs | `tests/arbitrum_fluid_t1.rs` |
 | `balancer_v3.py` | 441 | Решения 441, 452 (T433-F2): пулы Balancer V3 всех видов — все вызовы бота к пулу (хранилище, фабрики из списков, виды пулов, крючок, прекомпайлы) и ответы Router V3 querySwapSingleTokenExactIn / ExactOut на одном блоке; тест — tests/arbitrum_balancer_v3.rs | `tests/arbitrum_balancer_v3.rs` |

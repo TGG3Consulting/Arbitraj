@@ -45,7 +45,7 @@ import os
 import sys
 
 from curve_crypto_pools import LADDER_PPM, code, factory_pools, ng_rows, v1_row
-from curve_crypto_rpc import Node
+from curve_crypto_rpc import Node, selector
 
 def split(v):
     return [a for a in (v or "").split(",") if a]
@@ -90,9 +90,12 @@ def main():
 
     count, at = factory_pools(node, a.v1_factory, tag)
     v1 = [v1_row(node, p, 2, tag, a.v1_factory) for p in (at(k) for k in list(reversed(range(count)))[: a.max_pools]) if p]
+    # Решение 462: pool_count = 0 и откат вызова раньше не различались (factory_pools: «or 0») — сырой ответ и код
+    # фабрики пишутся рядом. Прогон 20.11: 0; Curve API getPools/arbitrum/factory-crypto — тоже 0 пулов.
     files["crypto_v1.json"] = dict(base, kind="crypto_v1", factory=a.v1_factory, pool_count=count,
-                                   templates=[a.v1_template], code_of={a.v1_template: code(node, a.v1_template, tag)},
-                                   pools=v1)
+                                   pool_count_raw=node.call(a.v1_factory, selector("pool_count()"), tag),
+                                   templates=[a.v1_template],
+                                   code_of={x: code(node, x, tag) for x in (a.v1_template, a.v1_factory)}, pools=v1)
     files["tricrypto_v1.json"] = dict(base, kind="tricrypto_v1", pools=[v1_row(node, a.tricrypto_v1_pool, 3, tag)])
 
     for name, doc in files.items():

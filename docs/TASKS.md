@@ -276,6 +276,37 @@
     Twocrypto (0xb79bbc5c…2b7f, 0x5f0985a8…b18c) все get_dy откатились (data 0x); логи за 2000 блоков: ekubo core_logs
     и kyber_elastic_v1 logs — 0. Повтор: `python3 tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547
     --date 2026-11-20 --only sub_dex,balancer_v3,camelot_v2,lb_v22,ekubo,ekubo_more,exec_v4_live`.
+    **Разбор пустот (решение 462, ветка t234/arb-merge-2):**
+    1) woofi — оракул: wooracle() пула 0xf9b0…8081 (факт цепи) ≠ 0xCf4E…34Ec документации; бот сверяет wooracle() = dex.oracle
+       (verify_woo.rs) — **dex.oracle Arbitrum = 0xf9b0c8ee13ae2fc0665764ecbdb417685dea8081** (dex-settings-arbitrum.md §4.6
+       исправлен); на Sourcify адрес не найден — state() по ABI вида покажет повтор. woofi.py: оракул — с цепи, базы — токены
+       событий WooSwap пула за --log-blocks (кроме quoteToken() = USDC 0xaf88…5831), без ручных параметров.
+    2) kyber_elastic_v1 — все 20 пулов GeckoTerminal: factory() = 0xC7a5…8C4A (Elastic v2, docs.kyberswap.com «Elastic
+       Contract Addresses»), квотер был v1 (0x0D12…8C1f): он считает адрес пула от своей фабрики (QuoterV2.sol L40-L45) —
+       у 14 пар пула v1 нет (getPool v1 = 0) → откат «0x»; у 6 пар пул v1 есть — котировался пул v1 (у 2 на крупных суммах
+       «ERC20: transfer amount exceeds balance»). **Настройки бота для kyberswap_elastic_arbitrum были неверны** (v1) — теперь
+       kyber_elastic + адреса v2 (§4.3). «out of gas» getTicksInRange(pool, MIN_TICK, 0) — 4 пула с tickDistance 8 и 10
+       (массив 221 820 / 177 457 слов; газ памяти 3a + a²/512 ≈ 96 / 62 млн) — T451-03. Скрипт: версия по factory(), квотер
+       и читатель своей версии, пулы v1 — getPool v1 для пар GeckoTerminal; тики ещё частями (--tick-chunk); pools.json — v1,
+       pools_v2.json — v2.
+    3) algebra_dir_fee — quoter_v2: у 0x0Fc7…a76E (Sourcify 42161 contracts/lens/Quoter.sol:Quoter) в ABI только
+       quoteExactInputSingle(address,address,uint256,uint160); кортежного варианта нет → откат «0x» во всех 60 вызовах.
+       Бот для вида — только виртуальный квотер (quoter_calls.rs virtual_only) — не задет. Скрипт: вариант без селектора в
+       коде квотера не вызывается (skipped).
+    4) curve_crypto — 0xb79b…2b7f (v2.1.0) и 0x5f09…b18c (v2.0.0): D() = 99 875 751 290 812 287 и 97 308 451 761 717 643
+       < 10^17; get_y математики: `assert _D > 10**17 - 1` (twocrypto-ng 89c8dfb prod-v2.1.0 L240, d612fde v2.0.0 L236,
+       CurveCryptoMathOptimized2.vy) — факт протокола (пул почти пуст); наш crypto_y2.rs (lim2::d_ok) — тоже None.
+       crypto v1: pool_count фабрики 0xE5De…3A69 = 0, Curve API getPools/arbitrum/factory-crypto — 0 пулов; тест
+       crypto_v1_matches_get_dy — #[ignore] с этой причиной; скрипт пишет сырой ответ pool_count (раньше откат = 0).
+    5) логи kyber за 2000 блоков — 0: окно (GeckoTerminal в момент записи — 0 обменов за m30 у всех 20 пулов). Окно
+       --log-blocks 2 000 000, таймаут — пополам, логи — после фазы состояния, время границ окна — в logs.json.
+    Повтор решения 462: обязательно kyber_elastic_v1 и woofi (записи 20.11 неполные), curve_crypto — по желанию (сырой
+    pool_count v1), algebra_dir_fee — не нужен (запись полная; quoter_v2 у Camelot нет): `python3
+    tools/arbitrum_record/record_all.py --rpc http://127.0.0.1:8547 --date 2026-11-20 --only kyber_elastic_v1,woofi,curve_crypto`
+    (+ скрипты повтора решения 460 выше, если ещё не повторялись).
+  - T462-01 KyberSwap Elastic v1 (Legacy) на Arbitrum: пулы есть (getPool фабрики v1 для 6 пар пулов GeckoTerminal), в
+    GeckoTerminal их нет — отдельный DEX (вид kyber_elastic_v1, поиск по фабрике 0x5F1d…D50a) в таблицу покрытия; id и
+    включение — Тигран.
   - T456-04 Выкладка: настройки области «DEX» площадки arb_dex по docs/notes/arbitrum/dex-settings-arbitrum.md и
     FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; развернуть v4 — T457-03.
   - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по
@@ -330,6 +361,10 @@
   - T451-03 TicksFeesReader.getTicksInRange(pool, MIN_TICK, 0) (load_elastic.rs) выделяет массив на все возможные тики
     (у tickDistance 1 ≈1,77 млн слов) — уложится ли в предел газа eth_call узла, покажет запись (kyber_elastic_v1.py пишет
     ответ или ошибку); при ошибке — чтение частями (length > 0), вопрос Тиграну. Касается и BSC (вид не менялся).
+    Факт записи 20.11.2026 (решение 462): узел Тиграна — «out of gas» у 4 из 20 пулов Arbitrum (tickDistance 8 и 10:
+    221 820 / 177 457 слов); tickDistance 25…200 — ответ есть. Бот у таких пулов тиков не прочтёт — нужно чтение частями
+    (getTicksInRange(pool, start, length) по связному списку, как ticks_by_chunks в tools/arbitrum_record/
+    kyber_elastic_ticks.py); длина части — новая настройка, решает Тигран.
   - T451-04 (к T448-01) по Sourcify constructorArguments v3 UR PancakeSwap Arbitrum: permit2 0x31c2…c768, v2Factory
     0x02a8…749e, v3Factory 0x0bfb…1865, v3Deployer 0x41ff…71c9, v2InitCodeHash 0x5722…4d2d, v3InitCodeHash 0x6ce8…f7e2,
     stableFactory/stableInfo = 0 (выдача WebFetch, одно слово адреса-заглушки потеряно — сверить своим узлом).

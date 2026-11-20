@@ -1,9 +1,9 @@
 //! Файл: tests/arbitrum_woofi_live.rs
 //! Что делает: решение 451 (T448-08) — WOOFi WooPPV2.2 на Arbitrum на записи своего узла: (1) в коде реализации прокси
 //! (слот EIP-1967) есть селекторы вызовов, которыми пользуется вид woofi_v2 (query, tryQuery, swap, quoteToken,
-//! wooracle, paused), у оракула — state(address); (2) ответ state(base) оракула WooracleV2_2 (Sourcify 42161 exact
-//! match, contracts/wooracle/WooracleV2_2.sol) разбирается ABI вида (abi_woo::IWooracle — 4 слова); (3) wooracle()
-//! пула = записанный оракул.
+//! wooracle, paused), у оракула — state(address); (2) ответ state(base) оракула разбирается ABI вида
+//! (abi_woo::IWooracle — 4 слова); (3) wooracle() пула = записанный оракул. Решение 462: оракул записи — wooracle()
+//! пула с цепи (20.11.2026: 0xf9b0…8081, не адрес документации 0xCf4E…34Ec — тот пишется рядом для сравнения).
 //! Кто вызывает: cargo test -- --ignored (после записи).
 //! От чего зависит: tests/data/arbitrum_woofi_<дата>/ (tools/arbitrum_record/woofi.py), arb::venues::bsc_dex::pools::abi_woo.
 

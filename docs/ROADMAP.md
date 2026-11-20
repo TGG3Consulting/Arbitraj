@@ -26,6 +26,12 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
+  245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
+  в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,
+  pools/load.rs 600, quote/pool_quote.rs 610, exec/executor/entry.rs 525. Дробить: group.rs — subscribe / forward /
+  hub_of в group_sub.rs; kind.rs — FluidStep и data() видов v4 в kind_v4.rs; ветки видов в families.rs / load.rs /
+  pool_quote.rs — по файлу на семейство. Исполнитель v4 не собран (docs/TASKS.md «Решение 456», T456-02).
 - Ревью 439 (правки, `wc -l`): send/track_l1.rs 241 (было 208: проверка возраста блока H и начала окна, первая голова
   в шаге ожидания), exec/cycle_exec.rs 219 (было 217). Дробить — как в строке ниже (track_l1 — Start/block_time/
   caught_up в track_l1_head.rs). Окно eip1559_l1 вынесено в send/drop_wait.rs (send/tx.rs 197 → 185). Тестов на

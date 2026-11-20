@@ -22,3 +22,61 @@
 | `lb_v20.py` | 445 | Liquidity Book v2.0 (LFJ V2, вид lb_v20, решение 445) | фабрика v2.0, состояние пулов, все бины, getSwapOut роутера v2.0, слоты условия, логи; тест — tests/bsc_dex_lb_v20_arbitrum.rs | `tests/bsc_dex_lb_v20_arbitrum.rs` |
 | `lb_v22.py` | 446 | Liquidity Book V2.2 — LFJ V2.2 (решение 446, T433-F7): `python3 tools/arbitrum_record/lb_v22.py http://УЗЕЛ:8547 --factory 0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | tests/arb_dex_lb_v22_live.rs | `tests/arb_dex_lb_v22_live.rs` |
 | `ekubo.py` | 447 | Ekubo (решение 447, T433-F8): пулы GeckoTerminal ekubo-v3-arbitrum и/или `--pool`, ключи PoolKeyIndex, Core.sload (состояние, битмап, тики), MEVCapture.sload, MEVCaptureRouter.quote, логи ядра | tests/arbitrum_ekubo_live.rs | `tests/arbitrum_ekubo_live.rs` |
+| `curve_crypto_rpc.py`, `curve_crypto_pools.py` | 453 | модули `curve_crypto.py` (ревью 453, файлы ≤ ~200 строк): keccak256, ABI и JSON-RPC узла; чтение пулов (вызовы бота, лесенка get_dy, код, holdings, пулы фабрик) — запускать не нужно, их импортирует `curve_crypto.py` | — |
+| `ekubo_more.py` | 454 | Ekubo, дополнительная запись (после `ekubo.py`, та же папка tests/data/arbitrum_ekubo_<дата>/): PoolInitialized ядра, пулы с нативным ETH, пулы TWAMM, замер нагрузки подписки ядра | `tests/arbitrum_ekubo_more_live.rs` |
+| `algebra_dir_fee.py` | 444 | Algebra V1.9 с направленными комиссиями (T433-F5; Camelot V3) — команда и хеши кода пула — раздел ниже | `tests/arb_dex_algebra_dir.rs` |
+
+## algebra_dir_fee.py — Algebra V1.9 с направленными комиссиями (решение 444, T433-F5; Camelot V3)
+
+Адреса — docs.camelot.exchange/contracts/arbitrum/one-mainnet («AMM V3»): AlgebraFactory
+`0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B`, Quoter `0x0Fc73040b26E9bC8514fA028D998E73A254Fa76E`.
+
+Хеши кода пула (`--init-hash`) — все значения POOL_INIT_CODE_HASH в истории ветки direction-based-fee
+cryptoalgebra/AlgebraV1.9 до a45417e (src/core/contracts/AlgebraFactory.sol; коммит, где значение впервые;
+«направленные» — feeZto/feeOtz в base/PoolState.sol, «битмап» — TickTable.sol со сжатием на TICK_SPACING или без):
+
+| Хеш | Коммит | Направленные комиссии | Битмап тиков |
+| --- | --- | --- | --- |
+| 0x77066034e31fe5172b86f4cf68f7e01dd6954f2e8292e6796c9bf7e99dbae477 | 0d5612b (2023-01-10) | да | сжатый (60) |
+| 0xb785aaed76f65b185ee1fe081ef2233b7473b6c47bc008865f64dac83f4982f4 | a3dc950 (2023-01-10; начало аудита Paladin 14.06.2023) | да | сжатый (60) |
+| 0xb994c319655d0a2474f63ef4c8c5c9ee051c08ddd25e75c6a36c89e8a2a229e7 | affd004 (2023-06-05, ветка v1-modified) | нет | сырой |
+| 0x4e92c1fd81a5c8ce82f5a90742e3376c5b258017e149fd0629068ecc9aab43c6 | 82ef500 (2023-06-05, ветка v1-modified) | нет | сырой |
+| 0xac97ff1b66ef7517262cbf16db0195b400714e8ecb499fc86f349e77f50ae89b | 4ada8b0 (2023-06-06) | да | сырой |
+| 0xdcb95b809dca000f4ce04aa004b723fef2dbb3704db3c0389699bc70f0e42c79 | ade9e23 (2023-06-06, ветка v1-modified) | нет | сырой |
+| 0x0ca66607e4d0ece7798fce9ae13cad1a28be1eee443451573f92ba6e3bcd92b9 | 237524b (2023-06-06; конец аудита Paladin 14.06.2023) | да | сырой |
+| 0x5d100e2dbf4b80b9451c29380def0d6c4abeb3db0d166c81fda155a89e106dbd | 4c885a5 (2023-06-13) | да | сырой |
+| 0xab9acbcae566bd662fb801895320dc3dd170e64394f78600b969ab128a3a40fd | cd4fd3b (2023-06-14) | да | сырой |
+| 0x6c1bebd370ba84753516bc1393c0d0a6c645856da55f5393ac8ab3d6dbc861d3 | c63c18f (2023-06-14) … a45417e | да | сырой |
+
+Аудит «Algebra Protocol Tick Spacing Upgrade» (Paladin, 14.06.2023; docs.camelot.exchange/references/audits, раздел
+AMM V3) — сравнение a3dc950f…237524b репозитория cryptoalgebra/Algebra; оба коммита есть в ветке direction-based-fee
+AlgebraV1.9. Какой код у пулов Camelot V3 — отвечает только запись (совпадение CREATE2).
+
+Код бота читает СЫРОЙ битмап (load_algebra.rs). Тест `tests/arb_dex_algebra_dir.rs` проверяет, что адрес каждого
+записанного пула = CREATE2(poolDeployer, keccak256(abi.encode(token0, token1)), хеш) для хеша версии с направленными комиссиями и сырым битмапом.
+
+Команда (из корня репозитория; адрес узла — свой):
+
+```
+python3 tools/arbitrum_record/algebra_dir_fee.py --rpc http://<узел>:8547 \
+  --factory 0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B \
+  --quoter 0x0Fc73040b26E9bC8514fA028D998E73A254Fa76E \
+  --gecko-dex camelot-v3 --gecko-pools 5 \
+  --init-hash 0x77066034e31fe5172b86f4cf68f7e01dd6954f2e8292e6796c9bf7e99dbae477 \
+  --init-hash 0xb785aaed76f65b185ee1fe081ef2233b7473b6c47bc008865f64dac83f4982f4 \
+  --init-hash 0xb994c319655d0a2474f63ef4c8c5c9ee051c08ddd25e75c6a36c89e8a2a229e7 \
+  --init-hash 0x4e92c1fd81a5c8ce82f5a90742e3376c5b258017e149fd0629068ecc9aab43c6 \
+  --init-hash 0xac97ff1b66ef7517262cbf16db0195b400714e8ecb499fc86f349e77f50ae89b \
+  --init-hash 0xdcb95b809dca000f4ce04aa004b723fef2dbb3704db3c0389699bc70f0e42c79 \
+  --init-hash 0x0ca66607e4d0ece7798fce9ae13cad1a28be1eee443451573f92ba6e3bcd92b9 \
+  --init-hash 0x5d100e2dbf4b80b9451c29380def0d6c4abeb3db0d166c81fda155a89e106dbd \
+  --init-hash 0xab9acbcae566bd662fb801895320dc3dd170e64394f78600b969ab128a3a40fd \
+  --init-hash 0x6c1bebd370ba84753516bc1393c0d0a6c645856da55f5393ac8ab3d6dbc861d3 \
+  --words 8 --bps 1 --bps 10 --bps 100 --log-blocks 20000 \
+  --vq-runtime contracts/out/VirtualQuoter.bin-runtime --out tests/data
+```
+
+`--words 8` (слов сырого битмапа в каждую сторону, ≈ ±20% цены), `--bps` (доли баланса входа пула: 0,01%, 0,1%, 1%) и
+`--log-blocks 20000` (≈ 1,4 ч при блоке 250 мс) — значения для теста, не настройки бота; при отказе узла по диапазону
+eth_getLogs — уменьшить. Другие DEX Arbitrum на Algebra (кандидаты — docs/TASKS.md «Решение 444», вопрос 3): тот же
+скрипт со своей фабрикой — совпадение CREATE2 с одним из хешей = пулы этой версии кода.

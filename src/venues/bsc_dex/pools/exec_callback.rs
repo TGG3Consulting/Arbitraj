@@ -272,7 +272,6 @@ pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

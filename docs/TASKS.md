@@ -148,6 +148,35 @@
   3) OracleLengthIncreased (в ABI abi_lb.rs его нет) — topic0 = keccak256 сигнатуры из ILBPair.sol:76 в коде.
   Нужны записи: отставший узел Arbitrum (головы с временем блока старше порога) — тест track_l1; логи LB с FlashLoan /
   CollectedProtocolFees — тест фильтра tip_judge.
+- **Решение 456 (20.11.2026, ветка t231/arb-merge) — слияние семейств Arbitrum и перенумерация шагов исполнителя v4;
+  cargo / npm / solc локально не запускались, push нет — сборка и тесты в CI (запускает координатор).**
+  СЛИТО (`git merge --no-ff`, по порядку): t224/arb-dex-settings (448), t226/arb-dex-code-a (450), t227/arb-dex-code-b
+  (451), t223-f1/arb-family-f1 (440 Fluid), t228/arb-balancer-v3-more (441 + 452, с t223-f2), t229/arb-curve-crypto-more
+  (442 + 453 + 455, с t223-f3), t223-f4/arb-family-f4 (443 Camelot V2), t223-f5/arb-family-f5 (444 Camelot V3),
+  t223-f6/arb-family-f6 (445 LFJ V2.0), t223-f7/arb-family-f7 (446 LFJ V2.2), t230/arb-ekubo-more (447 + 454, с t223-f8).
+  Номера шагов v4: FLUID = 22, BALANCER_V3 = 23, LB20 = 24 (было 22), EKUBO = 25 (было 22); BSC 0–21 — без изменений
+  (DECISIONS 456, ARCHITECTURE). Все четыре — с Version::V4 (exec_callback.rs since; Ekubo в ветке был с V3 + метка
+  кода completePayments — метка оставлена второй проверкой).
+  ОСТАЛОСЬ:
+  - T456-01 CI ветки t231/arb-merge (fmt, clippy -D warnings, тесты). Слияние проверено только глазами: исчерпывающие
+    match по Proto / PoolKind / PoolState / ExecKind / Params / VaultCurve, дубли mod / вариантов / ключей каталога,
+    поля LbBinData (v20 + hooks_parameters + swap_blocked) во всех литералах, SETTINGS_CASES по каждому ключу каталога.
+  - T456-02 **Исполнитель v4 — собрать одним разом** (шаги FLUID, BALANCER_V3, LB20, EKUBO — только исходник):
+    contracts/out/v3/ уже заморожен (t228, code.rs runtime_v3 / version_of / current_version) → `contracts/build.sh`
+    (out/ = v4) → `git diff contracts/out`, хеши ArbExecutor.sha256 и размер кода в contracts/README.md (предел EIP-170
+    — 24 576 байт; v3 — 20 102: проверить, что v4 со всеми четырьмя шагами в него входит) → тесты, завязанные на «out/ =
+    v3»: tests/bsc_dex_executor_v3.rs (version_of текущей сборки — V4), pools/exec_callback.rs тест lb20_only_v4
+    (check(V4, «tokenX()») после сборки станет None — заменить на проверку селектора), прогнать tests/bsc_dex_executor_abi.rs
+    на новом ABI out/ → evmtest шагов FLUID, BALANCER_V3, LB20,
+    EKUBO (ERC-20, нативный вход / выход, MEVCapture, TWAMM) → «Развернуть исполнитель» в Arbitrum. До сборки шаги не
+    строятся ни у одного кошелька (причина V4_TODO).
+  - T456-03 Записи своего узла Arbitrum (tools/arbitrum_record/README.md): sub_dex.py, kyber_elastic_v1.py, saddle.py,
+    woofi.py, fluid_t1.py, balancer_v3.py, curve_crypto.py, camelot_v2.py, algebra_dir_fee.py, lb_v20.py, lb_v22.py,
+    ekubo.py + ekubo_more.py → коммит tests/data/arbitrum_*_<дата>/ и снятие #[ignore] в тестах семейств.
+  - T456-04 Выкладка: настройки области «DEX» площадки arb_dex по docs/notes/arbitrum/dex-settings-arbitrum.md и
+    FIRST_RUN (dex.kind, адреса, списки фабрик) — задаёт Тигран; dex.pool_enabled — Тигран; после T456-02 — развернуть v4.
+  - T456-05 Вопрос Тиграну: шаг EKUBO — с исполнителя v4 (единая схема версий решения 456), в ветке t230 был «с v3 по
+    метке кода». Подтвердить.
 - **Решение 450 (20.11.2026, ветка t226/arb-dex-code-a) — код T448-01…05; cargo не запускался (формат — вручную).**
   Сделано: dex.sub_dex (несколько семейств под одним id), pancakeswap_v3 (Universal Router PancakeSwap v3), KyberSwap
   Static Fee / Legacy (события создания), dex.balancer_math (библиотеки Balancer v2), поиск iZiSwap по фабрике. Запись

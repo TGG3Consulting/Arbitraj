@@ -223,7 +223,6 @@ fn versions_and_steps() {
     }
 }
 
-
 /// Решение 441 (ревью, п. 4): замороженный код v3 (contracts/out/v3/) — всегда v3, и до, и после пересборки v4.
 #[test]
 fn frozen_v3_is_v3() {

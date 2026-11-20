@@ -506,17 +506,28 @@ async fn approve_ahead_only_for_dex_and_never_blocks() {
     let plan = size_common::calc::calc(&rec, size_common::d("5"));
     let mut dx = size_common::calc::direction();
     dx.buy_on = VenueId("gate".into());
-    // Продажа на бирже — разрешений DEX нет: ничего не отправляется и не пишется.
+    // Продажа на бирже — разрешений DEX нет: задачи нет, вносить нечего.
     let mut cex = dx.clone();
     cex.sell_on = VenueId("kucoin".into());
-    let deal = Deal::new("A1".into(), cex.clone(), json!({}), Decimal::ONE);
-    let a = sell_approve::ahead(&core, &cex, &deal, &plan).await;
-    assert!(a.gas.is_empty() && a.note.is_none());
-    // Продажа на DEX, площадки в реестре нет (не отправить) — не блокирует: строка в хронологию, газа нет, продажа
-    // сделает approve перед обменом, как раньше.
-    let deal = Deal::new("A2".into(), dx.clone(), json!({}), Decimal::ONE);
-    let a = sell_approve::ahead(&core, &dx, &deal, &plan).await;
-    assert!(a.gas.is_empty());
-    let note = a.note.unwrap();
+    let mut deal = Deal::new("T238A1".into(), cex.clone(), json!({}), Decimal::ONE);
+    sell_approve::start(&core, &cex, &deal, &plan);
+    tokio::task::yield_now().await;
+    let before = deal.timeline.len();
+    sell_approve::collect(&core, &mut deal).await;
+    assert_eq!(deal.timeline.len(), before);
+    // Продажа на DEX, площадки в реестре нет — отдельная задача, сделку не держит; её итог — строкой при collect
+    // (продажа сделает approve перед обменом, как раньше), газа нет.
+    let mut deal = Deal::new("T238A2".into(), dx.clone(), json!({}), Decimal::ONE);
+    let spent = deal.spent;
+    sell_approve::start(&core, &dx, &deal, &plan);
+    let mut n = 0;
+    while !deal.timeline.iter().any(|(_, t)| t.contains("approve заранее")) {
+        assert!(n < 10_000, "задача разрешений не кончилась");
+        n += 1;
+        tokio::task::yield_now().await;
+        sell_approve::collect(&core, &mut deal).await;
+    }
+    assert_eq!(deal.spent, spent);
+    let note = &deal.timeline.last().unwrap().1;
     assert!(note.contains("продажа сделает его перед обменом"), "{note}");
 }

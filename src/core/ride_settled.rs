@@ -57,7 +57,10 @@ pub fn unsure(core: &Core, d: &Direction) -> Option<String> {
     let id = super::sale_marks::unsure_of(core, &d.sell_on, &d.asset)?;
     let deals = super::engine::lk(&core.inner.deals);
     Some(match deals.get(&id) {
-        Some(x) => super::sale_marks::blocked_text(x),
+        Some(x) => {
+            let t = super::sale_marks::blocked_text(x);
+            format!("{t} {MARK}")
+        }
         None => format!(
             "монета {} на площадке {} заблокирована: исход продажи сделки {id} не известен — разберите сделку {MARK}",
             d.asset.ticker, d.sell_on.0

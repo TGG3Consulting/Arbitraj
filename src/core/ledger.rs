@@ -117,6 +117,8 @@ pub async fn finish_paused(core: &Core, deal: &mut Deal, step: Step, why: &str, 
     if matches!(step, Step::Closed | Step::TakenOver) {
         deal.sale_unsure = false;
     }
+    // Решение 476 (ревью t238): итог разрешений заранее, если ещё не внесён, — в затраты до итога сделки.
+    Box::pin(super::sell_approve::collect(core, deal)).await;
     // Решение 180: место в окне выводов, не дошедшее до вывода, освобождается.
     super::withdraw_limit::release(core, &deal.id);
     deal.step = step;

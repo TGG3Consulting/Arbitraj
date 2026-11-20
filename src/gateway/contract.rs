@@ -278,11 +278,16 @@ pub trait Venue: Send + Sync {
 
     /// Решение 476 (Тигран 20.11, меняет решение 303): разрешения (approve) продажи `req` ЗАРАНЕЕ — пока монета идёт на
     /// кошелёк сделки (вид на счёт сделки, for_account): площадка собирает план продажи, как поставит его исполнение, и
-    /// отправляет разрешения, которых ему не хватает сейчас; обмен не отправляется. Возвращает: газ разрешений в BNB
+    /// отправляет разрешения, которых ему не хватает сейчас; обмен не отправляется; horizon_s — сколько секунд ждать до
+    /// продажи (срок нового разрешения должен его пережить). Возвращает: газ разрешений в BNB
     /// (None — отправлять было нечего). Ошибки: сбой сборки или отправки (газ уже отправленных — approve_gas_bnb);
     /// NotApplicable — площадка разрешений не знает.
-    async fn dex_preapprove(&self, req: &TradeRequest) -> GatewayResult<Option<Decimal>> {
-        let _ = req;
+    async fn dex_preapprove(
+        &self,
+        req: &TradeRequest,
+        horizon_s: u64,
+    ) -> GatewayResult<Option<Decimal>> {
+        let _ = (req, horizon_s);
         Err(GatewayError::new(
             ErrorCode::NotApplicable,
             Some(self.id()),

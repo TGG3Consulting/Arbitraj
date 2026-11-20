@@ -7,7 +7,7 @@
 | Файл | Что делает |
 | --- | --- |
 | `ArbExecutor.sol` | Исполнитель: владелец, execute, шаги двенадцати видов, обратные вызовы пулов, приём BNB только от ожидаемого адреса (receive), возврат остатков |
-| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — восемнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286; KYBER_DMM, решение 287; SMARDEX, решение 288; BALANCER, решение 289; LB, решение 290; v3 — двадцати одного: UNI_V4, INF_CL, INF_BIN, решение 395), обратные вызовы пулов (v3 — ещё unlockCallback / lockAcquired менеджеров Uniswap V4 и PancakeSwap Infinity; v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286; smardexSwapCallback, решение 288), приём BNB только от ожидаемого адреса (receive), возврат остатков |
+| `ArbExecutor.sol` | Исполнитель: владелец, execute, executeNative (v2, решение 272), шаги двенадцати видов (v2 — восемнадцати: NOMI_STABLE, решение 284; METRIC, решение 285; IZI, решение 286; KYBER_DMM, решение 287; SMARDEX, решение 288; BALANCER, решение 289; LB, решение 290; v3 — двадцати одного: UNI_V4, INF_CL, INF_BIN, решение 395; исходник после решения 445 — двадцати двух: LB20, артефакты не пересобраны), обратные вызовы пулов (v3 — ещё unlockCallback / lockAcquired менеджеров Uniswap V4 и PancakeSwap Infinity; v2 — ещё squadV3SwapCallback, задача t114; metricOmmSwapCallback, решение 285; swapX2YCallback / swapY2XCallback, решение 286; smardexSwapCallback, решение 288), приём BNB только от ожидаемого адреса (receive), возврат остатков |
 | `VirtualQuoter.sol` | Решение 186 (решение 288: + quoteSmardex и smardexSwapCallback — пара SmarDex): виртуальный квотер — НЕ разворачивается; бот подставляет его код в eth_call (state override) и спрашивает выход у самого пула (swap + откат в обратном вызове). Собирается отдельным заданием solc в `out/VirtualQuoter.bin-runtime`, `.abi`, `.sha256`. Решение 274: ещё обратный вызов swapCallback (SheepDex SpePool); решение 281: squadV3SwapCallback (SquadSwap V3, 0xc4e21d86); решение 285: quoteMetric + metricOmmSwapCallback (Metric OMM, 0xc3251075); решение 286: quoteIzi + swapX2YCallback / swapY2XCallback (iZiSwap / Biswap V3, 0x18780684 / 0xd3e1c284; откат 64 байтами — оплата с флагом края пула и выход) |
 | `IPools.sol` | Интерфейсы токена, WBNB и пулов — только вызываемые функции, подписи из официальных исходников (ссылки в файле); решение 395 — PoolManager Uniswap V4, Vault / CLPoolManager / BinPoolManager PancakeSwap Infinity |
 | `build.mjs` | Сборка solc-js стандартным JSON-входом: оптимизатор (200 прогонов), EVM `cancun`; пишет `out/` и хеши |
@@ -26,7 +26,20 @@
 Пересборка: `contracts/build.sh` → `git diff contracts/out` (пусто — артефакты в репозитории собраны из этих исходников)
 → `cargo test --test bsc_dex_executor_abi` (ABI, номера видов, хеши) → `cd evmtest && npm ci && node run.mjs`.
 
-## Версии (решения 272, 395, 440, 441, 456)
+## Решение 445: шаг LB20 (решение 456: номер 24, было 22 в ветке) — исходник изменён, артефакты НЕ пересобраны
+- `ArbExecutor.sol`: вид шага `LB20 = 24` — пара Liquidity Book v2.0 (LFJ V2, Arbitrum One): вход переводом в пару
+  (`_pushed` — прямой вход первым шагом разрешён), `swap(tokenX() == tokenIn, to)`; `IPools.sol`: `ILBPairV20` (tokenX,
+  swap — lfj-gg/joe-v2@v2.0.0). Шаг LB (= 18) с парой v2.0 не работает: у неё нет `getTokenX`.
+- `contracts/out/` (v3) этим решением **не пересобран**: сборка solc (`contracts/build.sh`) агентам запрещена. Нужно:
+  новая сборка — ТОЛЬКО v4 (ревью 445: пересборка «на месте v3» недопустима — кошелёк со старым v3 прошёл бы проверку по
+  артефакту, а контракт откатил бы «kind»). Перед пересборкой скопировать `out/` в `out/v3/`, завести runtime_v3 и
+  version_of → V4 по `out/` в exec/executor/code.rs (Version::V4 уже заведена, since(LB20) = V4), пересобрать, прогнать
+  `cargo test --test bsc_dex_executor_abi` и `evmtest`, развернуть исполнитель в сети Arbitrum (docs/TASKS.md, «Решение
+  445»). До этого ни один кошелёк не сверен как v4 — бот шаг LB20 не строит, пулы lb_v20 без пути через исполнитель с
+  причиной «сборки v4 нет — пересоберите как v4 и переразверните» (`src/venues/bsc_dex/pools/exec_callback.rs`
+  step_absent).
+
+## Версии (решения 272, 395, 440, 441, 445, 456)
 - **v4** (решение 440) — v3 + шаг FLUID = 22 (пул Fluid DEX T1: approve пулу ровно на шаг + `swapIn(swap0to1, сумма, 0, to)`;
   нативная монета пула — через обёртку: вход `withdraw` → `swapIn{value}`, выход — `receive` только от слоя ликвидности из
   data → `deposit`) и интерфейс `IFluidDexT1` в `IPools.sol`. **Только исходник:** артефакты `out/` ещё v3 (агенту сборка

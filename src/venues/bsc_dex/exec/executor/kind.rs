@@ -85,6 +85,10 @@ pub enum Params {
     /// Решение 441 (T433-F2; только исполнитель v4): пул Balancer V3 — пул шага хранилище Vault V3 (dex.vault),
     /// data = abi.encode(address пула); обмен — unlock → balancerV3Callback → swap / settle / sendTo.
     BalancerV3 { pool: Address },
+    /// Пул Liquidity Book v2.0 (решение 445): вход переводом в пул, swap(swapForY, to); направление контракт берёт по
+    /// tokenX() пары v2.0 (getTokenX у v2.0 нет). Данных нет. Шаг 24 — в исходнике contracts/ArbExecutor.sol; в коде
+    /// исполнителя — только сборка v4 (pools/exec_callback.rs since; сборки v4 ещё нет).
+    Lb20,
     /// Решение 395 (t181; только исполнитель v3): пул Uniswap V4 внутри PoolManager — ключ пула; пул шага — PoolManager.
     UniV4 { key: V4Key },
     /// Решение 395 (только v3): пул PancakeSwap Infinity CL (и Infinity Stable — пул в крючке CL) — ключ пула (менеджер —
@@ -146,6 +150,8 @@ impl Params {
             Params::Fluid(_) => 22,
             // Решение 441: номер 23 = 21 + номер семейства T433-F2 (22 — за F1), чтобы шаги семейств не совпали.
             Params::BalancerV3 { .. } => 23,
+            // Решение 456: LB20 = 24 (в ветке t223-f6 было 22 — перенумеровано при слиянии).
+            Params::Lb20 => 24,
         }
     }
 

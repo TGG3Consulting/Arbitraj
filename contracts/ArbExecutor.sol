@@ -20,10 +20,12 @@
 // + шаги пулов внутри общего менеджера: UNI_V4 (Uniswap V4 PoolManager: unlock → unlockCallback), INF_CL и INF_BIN
 // (PancakeSwap Infinity Vault: lock → lockAcquired; Infinity Stable — пул в крючке пула CL, тот же INF_CL). execute,
 // executeNative, хранилище (owner — слот 0, wnative — слот 1) и прежние виды — без изменений.
-// v4 (решения 440, 441, 456) — + шаги FLUID = 22 (решение 440: пул Fluid DEX T1, нативная монета пула через обёртку),
-// BALANCER_V3 = 23 (решение 441, T433-F2: пул Balancer V3 — Vault V3 unlock → balancerV3Callback → swap / settle /
-// sendTo); всё прочее — как v3. Номера шагов v4 — решение 456 (слияние семейств Arbitrum, без пересечений). Артефакты
-// contracts/out/ — ещё v3, до пересборки contracts/build.sh v4 не развёртывается.
+// v4 (решения 440, 441, 445, 456) — + шаги FLUID = 22 (решение 440: пул Fluid DEX T1, нативная монета пула через
+// обёртку), BALANCER_V3 = 23 (решение 441, T433-F2: пул Balancer V3 — Vault V3 unlock → balancerV3Callback → swap /
+// settle / sendTo), LB20 = 24 (решение 445: пара Liquidity Book v2.0, LFJ V2 Arbitrum); всё прочее — как v3. Номера
+// шагов v4 — решение 456 (слияние семейств Arbitrum, без пересечений). Артефакты contracts/out/ — ещё v3: сборка solc
+// (contracts/build.sh) — вне агентов; пересобирать — только как v4, не на месте v3 (бот: Version::V4,
+// src/venues/bsc_dex/pools/exec_callback.rs since).
 pragma solidity 0.8.37;
 
 import "./IPools.sol";
@@ -87,6 +89,10 @@ contract ArbExecutor {
     // получателю шага. Недоплата (налог перевода): settle засчитывает min(подсказка, прирост резерва хранилища)
     // (Vault.sol L138-L156) — кредит меньше долга, дельта не нулевая, unlock откатится всё (BalanceNotSettled).
     uint8 internal constant BALANCER_V3 = 23;
+    // Решение 445: пара Liquidity Book v2.0 (LFJ V2, Arbitrum) — вход переводом в пару, swap(swapForY, to): пара сама
+    // считает вход = баланс − резерв − накопленные комиссии и платит выход `to` по бинам (без обратного вызова);
+    // swapForY = (tokenX() пары == tokenIn) — у v2.0 геттер tokenX(), getTokenX (шаг LB) у неё нет. data пусто.
+    uint8 internal constant LB20 = 24;
     // BNB_ADDRESS пулов StableSwap (PancakeStableSwapTwoPool.sol L39, Lista StableSwapPool.sol L54) — метка нативной
     // монеты, не ERC-20: токеном шага быть не может (у шагов с BNB токен шага — обёртка WBNB).
     address internal constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -150,7 +156,7 @@ contract ArbExecutor {
 
     // Исполняет маршрут. Вход amountIn токена tokenIn забирается у владельца (нужен approve на этот контракт);
     // выход tokenOut и все остатки — владельцу; получено владельцем < minOut — откат. Возвращает: получено.
-    // Первый шаг вида «вход переводом в пул» (V2, SOLIDLY, DODO, WOO, NOMI_STABLE, KYBER_DMM, LB), берущий ВЕСЬ вход (10000 bps, tokenIn маршрута),
+    // Первый шаг вида «вход переводом в пул» (V2, SOLIDLY, DODO, WOO, NOMI_STABLE, KYBER_DMM, LB, LB20), берущий ВЕСЬ вход (10000 bps, tokenIn маршрута),
     // получает вход transferFrom(владелец → пул) напрямую, без захода в исполнитель: налог перевода — один раз
     // (как у Universal Router через Permit2). Для цикла (tokenIn = tokenOut) — как обычно (итог меряется после забора);
     // цикл — ровно одна доля: вход маршрута берёт только первый шаг и целиком (10000 bps). Иначе выход вида с выходом
@@ -363,6 +369,12 @@ contract ArbExecutor {
             // L544; выход — transfer `to` (L552-L556). getTokenX — аргумент клона (L132-L134).
             _send(s.tokenIn, s.pool, amount, fromOwner > 0);
             ILBPair(s.pool).swap(ILBPair(s.pool).getTokenX() == s.tokenIn, to);
+        } else if (k == LB20) {
+            // LBPair v2.0 swap (lfj-gg/joe-v2@v2.0.0 src/LBPair.sol L335-L429): вход = баланс − резерв − комиссии пары
+            // (L343-L345, TokenHelper.sol L61-L71), нулевой вход — откат L347, бинов не хватило — откат дерева бинов
+            // (TreeMath.sol L60); выход — safeTransfer `to` (L422-L428). tokenX — переменная пары (L56, initialize L131).
+            _send(s.tokenIn, s.pool, amount, fromOwner > 0);
+            ILBPairV20(s.pool).swap(ILBPairV20(s.pool).tokenX() == s.tokenIn, to);
         } else if (k == UNI_V4 || k == INF_CL || k == INF_BIN) {
             _singleton(s, amount, to);
         } else if (k == FLUID) {
@@ -724,7 +736,8 @@ contract ArbExecutor {
 
     // Виды, у которых вход переводится в пул заранее (а не платится в обратном вызове).
     function _pushed(uint8 k) internal pure returns (bool) {
-        return k == V2 || k == SOLIDLY || k == DODO || k == WOO || k == NOMI_STABLE || k == KYBER_DMM || k == LB;
+        return k == V2 || k == SOLIDLY || k == DODO || k == WOO || k == NOMI_STABLE || k == KYBER_DMM || k == LB
+            || k == LB20;
     }
 
     // Вход в пул: с баланса исполнителя или прямо с владельца (первый шаг, весь вход маршрута).

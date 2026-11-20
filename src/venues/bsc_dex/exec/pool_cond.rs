@@ -26,6 +26,7 @@
 //! | Slipstream | пул | 6 — slot0; 16 — liquidity + maxLiquidityPerTick | velodrome-finance/slipstream 193a6b85 contracts/core/CLPool.sol:41-51 (factory 0 … factoryRegistry 5), 53-69 (slot0 6: 240 бит), 72-95 (7…14), 98-102 (15), 105-107 (16) |
 //! | KyberElastic | пул | 3 — poolData (sqrtP, тики, locked); 4 — baseL, reinvestL | KyberNetwork/ks-elastic-sc 4ab08c0a contracts/PoolStorage.sol:21-32 (PoolData), 62-68 (immutable), 70 (ticks 0), 71 (1), 73 (2), 75 (poolData 3, 4, …); ERC20 токена reinvest — после (Pool.sol:26, правая база) |
 //! | LbV21 | пул | 4 — _parameters (activeId, изменчивость); 5 — _reserves | lfj-gg/joe-v2 v2.1.0 8eeb42d7 src/LBToken.sol:21-31 (0-2), src/libraries/ReentrancyGuard.sol:30 (3), src/LBPair.sol:31 (порядок баз), 58-63 (_parameters 4, _reserves 5) |
+//! | LbV20 | пул | 6 — activeId + reserveX; 7 — reserveY + оракул; 10 — _feeParameters | lfj-gg/joe-v2 v2.0.0 07f10212 src/LBToken.sol:18-24 (0-2), src/libraries/ReentrancyGuardUpgradeable.sol:25 (3), src/LBPair.sol:26 (порядок баз), 51 (immutable), 56 (tokenX 4), 59 (tokenY 5), 65 (_pairInformation 6-9: src/interfaces/ILBPair.sol:40-51 — 24+136 = 160 бит → 6; 136+16+16+16+40+16 = 240 → 7; feesX 8, feesY 9), 68 (_feeParameters 10); сверка с кодом пары: _getReservesAndId L1032-L1041 (слот+1 — reserveY, слот — activeId, reserveX со сдвига 24), _getGlobalFees L1083-L1084 (слот+2, +3) |
 //! | UniswapV4 | PoolManager | S = keccak256(PoolId . 6): S — slot0 (цена, тик, комиссии), S+3 — liquidity | Uniswap/v4-core bea7f6d1 src/libraries/StateLibrary.sol:11 (POOLS_SLOT 6), 19 (LIQUIDITY_OFFSET 3), 324-325 (слот пула); src/libraries/Pool.sol:83-91 |
 //! | BalancerV2 | — | без условия | балансы в общем Vault: слоты посчитаны только вручную по AST (/home/claude/src-ext/reports/arb-known-accounts.md, 3.1), не сверены — docs/TASKS.md «Решение 438» |
 //! | BalancerV3 | — | без условия | решение 441: балансы в общем Vault V3, курсы — у поставщиков курса; слоты не сверены |
@@ -41,7 +42,9 @@
 //! условие не ставятся — вопрос в docs/TASKS.md («Решение 438»). V4: состояние крючка (hook) не ловится.
 //! V2: любой swap/mint/burn/sync идёт через _update и пишет слот 8 (UniswapV2Pair.sol:73-82). LB: обмен пишет
 //! _parameters и _reserves, mint/burn — _reserves (LBPair.sol:546-550, 608, 652, 712); затухание комиссии по времени
-//! блока — без записи, не ловится. Корень: ловит любую запись в хранилище пула, в том числе не влияющую на цену
+//! блока — без записи, не ловится. LB v2.0 (решение 445): обмен пишет _pairInformation целиком и _feeParameters
+//! (LBPair.sol v2.0.0 L419-L420), mint/burn — резервы пары в слотах 6, 7 (L650, L737-L738); займ и сбор комиссий
+//! пишут слоты 8, 9 (не в условии: выход не меняют). Корень: ловит любую запись в хранилище пула, в том числе не влияющую на цену
 //! (переводы LP-токена, collect, наблюдения) — такой отказ бесплатный, но сделка теряется.
 
 use alloy_primitives::{Address, B256, U256, keccak256};
@@ -121,6 +124,10 @@ pub fn rule(e: &Entry) -> How {
         }
         (PoolRef::Contract(a), Proto::LbV21) => {
             own(*a, &[4, 5], "_parameters + _reserves (слоты 4, 5)")
+        }
+        // Решение 445: LB v2.0 — раскладка v2.0.0 (таблица в шапке).
+        (PoolRef::Contract(a), Proto::LbV20) => {
+            own(*a, &[6, 7, 10], "_pairInformation + _feeParameters (слоты 6, 7, 10)")
         }
         (PoolRef::Contract(a), _) => How::Root(*a),
         (PoolRef::Multi { contract, .. }, _) => How::Root(*contract),

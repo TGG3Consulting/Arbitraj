@@ -74,7 +74,7 @@ const SHA_V1: &str = include_str!(concat!(
 ));
 
 /// Версия исполнителя по коду в сети (решение 272). Hash — ключ памяти pools/exec_callback.rs (версия, сигнатура).
-/// Порядок (Ord) — порядок выпуска: V1 < V2 < V3; каждая следующая — надмножество предыдущей (решение 395).
+/// Порядок (Ord) — порядок выпуска: V1 < V2 < V3 < V4; каждая следующая — надмножество предыдущей (решение 395).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Version {
     /// Только execute (contracts/out/v1/): нативный BNB монетой сделки не идёт.

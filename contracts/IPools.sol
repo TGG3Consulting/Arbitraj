@@ -204,6 +204,17 @@ interface ILBPair {
     function swap(bool swapForY, address to) external returns (bytes32 amountsOut);
 }
 
+// Решение 445: Liquidity Book v2.0 (LFJ V2; Arbitrum One — фабрика 0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982,
+// официальная документация traderjoe-xyz/joe-docs 61c16665 versioned_docs/version-V2.2/deployment-addresses/arbitrum.md
+// L52-L58): lfj-gg/joe-v2@v2.0.0 (07f10212) src/interfaces/ILBPair.sol L148 (tokenX), L206 (swap(bool, address) returns
+// (uint256 amountXOut, uint256 amountYOut)); src/LBPair.sol L335-L429 (вход переводится в пару заранее, вызывающий не
+// ограничен — только nonReentrant; выход — safeTransfer `to`). Селектор swap(bool,address) — тот же 0x53c059a0, что у
+// v2.1; ответ не разбирается.
+interface ILBPairV20 {
+    function tokenX() external view returns (address);
+    function swap(bool swapForY, address to) external returns (uint256 amountXOut, uint256 amountYOut);
+}
+
 // Решение 395 (t181, исполнитель v3): пулы внутри общего менеджера — Uniswap V4 и PancakeSwap Infinity (CL, Bin;
 // Infinity Stable — пул в крючке пула CL). Обмен идёт только внутри «открытого» менеджера: исполнитель зовёт unlock
 // (Uniswap) / lock (Infinity), менеджер вызывает у него unlockCallback / lockAcquired, внутри — swap, затем долг входа

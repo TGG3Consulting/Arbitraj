@@ -37,6 +37,7 @@ use serde_json::{Map, Value};
 
 use super::super::pools::abi_elastic::IElasticPool;
 use super::super::pools::abi_lb::ILBPair;
+use super::super::pools::abi_lb20::ILBPairV20;
 use super::super::pools::abi_v2v3::IV2Pair;
 use super::super::pools::abi_v4::IUniswapV4;
 use super::super::pools::events_v3;
@@ -91,6 +92,12 @@ pub fn topics(e: &Entry) -> Option<Vec<B256>> {
             ILBPair::StaticFeeParametersSet::SIGNATURE_HASH,
             // joe-v2 v2.1.0 8eeb42d7 src/interfaces/ILBPair.sol:76.
             keccak256("OracleLengthIncreased(address,uint16)"),
+        ],
+        // Решение 445: LB v2.0 — события на бин (abi_lb20.rs).
+        Proto::LbV20 => vec![
+            ILBPairV20::Swap::SIGNATURE_HASH,
+            ILBPairV20::DepositedToBin::SIGNATURE_HASH,
+            ILBPairV20::WithdrawnFromBin::SIGNATURE_HASH,
         ],
         Proto::UniswapV4 => vec![
             IUniswapV4::Swap::SIGNATURE_HASH,

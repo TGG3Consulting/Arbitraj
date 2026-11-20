@@ -77,6 +77,10 @@ pub enum ExecKind {
     /// пул, вход, выход, сумма, предел 1)` → перевод входа хранилищу + `settle`, `sendTo` выхода получателю шага; пул шага —
     /// хранилище, data = abi.encode(address пула). Только исполнитель v4.
     BalancerV3,
+    /// Liquidity Book v2.0 (решение 445): перевод входа в пул + `pair.swap(swapForY = (tokenX() пула == вход), to)`
+    /// (у пары v2.0 нет getTokenX — шаг LB v2.1 откатился бы); без обратного вызова, data пусто. Шаг 24 — в исходнике
+    /// contracts/ArbExecutor.sol; в коде исполнителя — только сборка v4 (exec_callback.rs since; её ещё нет).
+    Lb20,
     /// Решение 395 (t181): пул Uniswap V4 внутри PoolManager — `unlock` → `unlockCallback` → `swap(ключ, …)` → `sync` /
     /// перевод / `settle` долга, `take` выхода; data = abi.encode(PoolKey). Только исполнитель v3.
     UniV4,
@@ -115,6 +119,7 @@ impl ExecKind {
             ExecKind::Balancer => "BALANCER",
             ExecKind::Lb => "LB",
             ExecKind::BalancerV3 => "BALANCER_V3",
+            ExecKind::Lb20 => "LB20",
             ExecKind::UniV4 => "UNI_V4",
             ExecKind::InfCl => "INF_CL",
             ExecKind::InfBin => "INF_BIN",
@@ -195,6 +200,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 441: Vault V3 — unlock / swap / settle / sendTo любым контрактом (Vault.sol 20241204-v3-vault L133-L163,
         // L197-L291: onlyWhenUnlocked, без белого списка); шаг 23, только исполнитель v4 (EVM-проба — после записи с узла).
         "balancer_v3" => ExecKind::BalancerV3,
+        // Решение 445: LBPair v2.0 swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв −
+        // накопленные комиссии (lfj-gg/joe-v2@v2.0.0 src/LBPair.sol L335-L347, TokenHelper.sol L61-L71); шаг 24 (LB20).
+        "lb_v20" => ExecKind::Lb20,
         // Решение 395 (t181): пулы внутри менеджеров — шаги v3. Uniswap V4: PoolManager.unlock / swap / sync / settle /
         // take (Uniswap/v4-core@bea7f6d1 src/PoolManager.sol L104-L114, L187-L227, L279-L302); Infinity CL и Bin:
         // Vault.lock / sync / settle / take + CLPoolManager.swap / BinPoolManager.swap (pancakeswap/infinity-core@3c5ef1be

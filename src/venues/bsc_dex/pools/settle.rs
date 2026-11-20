@@ -46,6 +46,7 @@ use crate::core::types::{PoolRef, PoolState};
 use super::abi_algebra_dir::IAlgebraDirPool as AlgebraDir;
 use super::abi_algebra_integral::IAlgebraIntegralPool as Integral;
 use super::abi_lb::ILBPair as Lb;
+use super::abi_lb20::ILBPairV20 as Lb20;
 use super::events::Applied;
 use super::families::{Family, Proto};
 use super::registry::{Entry, Registry};
@@ -103,7 +104,7 @@ pub fn active(e: &Entry) -> Option<u32> {
 
 /// Вид из бинов (его отметки снимает settle_bins.rs). Ошибок нет.
 pub fn bin_kind(f: &Family) -> bool {
-    matches!(f.proto, Proto::LbV21 | Proto::InfinityBin)
+    matches!(f.proto, Proto::LbV21 | Proto::LbV20 | Proto::InfinityBin)
 }
 
 /// Лог, за которым в том же вызове по коду контракта всегда идёт ещё лог пула (см. шапку). Принимает: вид, лог,
@@ -125,6 +126,11 @@ pub fn opens(f: &Family, log: &Log, applied: &Applied) -> Option<Vec<u32>> {
             Some(Vec::new())
         }
         (Proto::LbV21, Applied::Bins(ids)) if *t0 == Lb::CompositionFees::SIGNATURE_HASH => {
+            Some(ids.clone())
+        }
+        // Решение 445: LB v2.0 — CompositionFee бина, за ним в той же итерации mint всегда DepositedToBin того же бина
+        // (LBPair.sol v2.0.0 L602-L608, L639).
+        (Proto::LbV20, Applied::Bins(ids)) if *t0 == Lb20::CompositionFee::SIGNATURE_HASH => {
             Some(ids.clone())
         }
         _ => None,

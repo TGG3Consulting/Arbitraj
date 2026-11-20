@@ -22,6 +22,8 @@
 //! Решение 395 (t181): шаги пулов внутри менеджеров — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только у исполнителя v3
 //! (since): у кошелька v1 / v2 — пулы Uniswap V4 / PancakeSwap Infinity без пути ЧЕРЕЗ ИСПОЛНИТЕЛЬ (свой Universal Router у
 //! них остаётся — family.tradable); артефакт версии для поиска селектора: v1 — out/v1/, v2 — out/v2/, v3 — out/.
+//! Решение 445 (ревью): шаг LB20 = 24 (решение 456; Liquidity Book v2.0) — только у исполнителя v4 (since); сборки v4 в
+//! contracts/out/ ещё нет — шаг не строится ни у одного кошелька (причина «пересоберите как v4 и переразверните»).
 //! Решение 409 (t194): память итогов SEEN — снимок за ArcSwap (чтение без замка на горячем пути котировки).
 //! Настройки: dex.v3_swap_callback [DEX] (необязательная).
 
@@ -189,6 +191,8 @@ pub fn since(k: ExecKind) -> Version {
         ExecKind::Fluid => Version::V4,
         // Решение 441: BALANCER_V3 = 23 — с v4.
         ExecKind::BalancerV3 => Version::V4,
+        // Решение 445 (ревью): LB20 — только v4 (сборки v4 ещё нет — шаг не строится ни у одного кошелька).
+        ExecKind::Lb20 => Version::V4,
         _ => Version::V1,
     }
 }
@@ -233,9 +237,23 @@ pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Решение 445 (ревью): шаг LB20 — только v4; у v1 / v2 / v3 — причина «сборки v4 нет», шаг LB — с v2.
+    #[test]
+    fn lb20_only_v4() {
+        assert_eq!(since(ExecKind::Lb20), Version::V4);
+        for v in [Version::V1, Version::V2, Version::V3] {
+            let why = step_absent(ExecKind::Lb20, v).expect("шага нет");
+            assert!(why.contains("LB20") && why.contains("v4"), "{v:?}: {why}");
+        }
+        assert!(step_absent(ExecKind::Lb20, Version::V4).is_none());
+        assert!(step_absent(ExecKind::Lb, Version::V3).is_none());
+        assert!(check(Version::V4, "tokenX()").is_some());
+    }
 
     /// Селектор squadV3SwapCallback = 0xc4e21d86 (SquadV3Pool.sol L794): в артефакте v1 его нет, в v2 (t114) и v3
     /// (решение 395, текущая сборка contracts/out/) есть; pancakeV3SwapCallback / uniswapV3SwapCallback — во всех (тот же

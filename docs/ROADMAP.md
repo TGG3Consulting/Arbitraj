@@ -88,6 +88,13 @@
   (exec/pool_cond.rs) для algebra_dir_fee — корень хранилища (как прочие Algebra): слоты globalState / liquidity
   (PoolState.sol:24, :27 ветки direction-based-fee) не сверены по раскладке развёрнутого кода — задача.
   Пересчёт комиссий первым обменом новой секунды (AlgebraPool.sol:777-795) не моделируется — как у THENA Fusion.
+- Решение 445 (Liquidity Book v2.0, LFJ V2 Arbitrum; `wc -l`): ветки v20 чтения головы — в lb20_head.rs (ревью 445);
+  давно сверх ориентира 200 — exec_callback.rs, families.rs, verify.rs, load.rs, settle.rs, exec_kind.rs, entry.rs,
+  ArbExecutor.sol. Шаг LB20 — только сборка v4 (Version::V4 заведена, сборки нет).
+  Новые пулы lb_v20 — только из справочника индексатора (подписка на LBPairCreated фабрики v2.0 не подключена, как у
+  lb_v21). Шаг LB20 исполнителя — в исходнике, артефакты contracts/out/ не пересобраны (версия сборки, evmtest с
+  фикстурой пары v2.0 — docs/TASKS.md, «Решение 445»). Тесты на записи узла Arbitrum — #[ignore] до записи
+  tools/arbitrum_record/lb_v20.py.
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

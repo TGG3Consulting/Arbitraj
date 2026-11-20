@@ -122,6 +122,8 @@ fn kinds_match_contract_constants() {
         ("FLUID", Params::Fluid(fluid_step(1))),
         // Решение 441: пул Balancer V3 — только v4.
         ("BALANCER_V3", Params::BalancerV3 { pool: Address::ZERO }),
+        // Решение 445: пул Liquidity Book v2.0 — шаг 24 (решение 456; исходник, артефакты — после пересборки).
+        ("LB20", Params::Lb20),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");

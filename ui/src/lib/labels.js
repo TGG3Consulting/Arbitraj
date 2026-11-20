@@ -69,6 +69,7 @@ const CHOICE = {
   smardex: 'SmarDex (фиктивные резервы, средняя цена по времени блока)',
   fluid_t1: 'Fluid DEX T1 (смарт-залог и смарт-долг, мнимые резервы)',
   lb_v21: 'Liquidity Book V2.1 (LFJ / Trader Joe: бины, изменчивая комиссия)',
+  lb_v20: 'Liquidity Book v2.0 (LFJ V2 / Trader Joe V2: бины, изменчивая комиссия; решение 445)',
   balancer_v2: 'Balancer V2 (хранилище Vault, весовые и стейблсвап-пулы)',
   balancer_v3: 'Balancer V3 (хранилище Vault V3, весовые и стейблсвап-пулы фабрик, без крючков обмена)',
   camelot_v2: 'Camelot V2 (направленная комиссия, stable / volatile пары)',

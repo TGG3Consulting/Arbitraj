@@ -90,6 +90,7 @@ pub fn needs(f: &Family) -> bool {
             | Proto::BalancerV3
             | Proto::LbV21
             | Proto::FluidT1
+            | Proto::LbV20
     )
 }
 
@@ -151,7 +152,8 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
             continue;
         }
         // Решение 290: пулы Liquidity Book V2.1 — все вместе одной пачкой (per_block_lb.rs).
-        if f.family.proto == Proto::LbV21 {
+        // Решение 445: и Liquidity Book v2.0 — той же пачкой (свои вызовы на пул — lb_head.rs calls_for).
+        if matches!(f.family.proto, Proto::LbV21 | Proto::LbV20) {
             lb.push(x);
             continue;
         }

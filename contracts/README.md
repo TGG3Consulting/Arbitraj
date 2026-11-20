@@ -34,6 +34,10 @@
   (предел EIP-170 — 24 576); (3) EVM-тест шага EKUBO с официальным кодом ядра Ekubo (`evmtest/`, как singleton.mjs);
   (4) переразвернуть исполнитель кошелька Arbitrum. До этого бот не строит шаг EKUBO: в коде исполнителя нет вызова
   completePayments() (`pools/exec_callback.rs` EKUBO_MARK) — пулы Ekubo в графе и сигналах без пути исполнения.
+  Решение 454: data шага EKUBO = abi.encode(bytes32 config, bool native, bool forward); native — token0 ключа нативный
+  ETH (вход — wnative.withdraw(долг) → ETH ядру value, receive ядра гасит долг; выход — withdraw исполнителю → deposit в
+  wnative → получателю шага), forward — только MEVCapture (TWAMM / Oracle / BoostedFees — обычный swap ядра). EVM-тест
+  шага: ERC-20, нативный вход, нативный выход, MEVCapture, TWAMM.
 - **v3** (решение 395, t181) — v2 + шаги UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 (пулы внутри менеджеров Uniswap V4 и
   PancakeSwap Infinity) и обратные вызовы `unlockCallback` / `lockAcquired`. Текущая сборка `out/` — v3; «Развернуть
   исполнитель» разворачивает её. Хранилище то же (owner — слот 0, wnative — слот 1), execute / executeNative — те же.

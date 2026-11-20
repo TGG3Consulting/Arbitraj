@@ -76,7 +76,7 @@ def _row(case, p, tin, tout, amt, res, xl, qo, extra):
              got=str(got) if got is not None else None, quoter_out=str(qo) if qo is not None else None, ur_out=None,
              gas=res["gasUsed"], status=res["status"], revert=res["revert"], x_left=xl, swap_credit=cr,
              got_eq_swap_credit=(abs(cr["out_side"]) == got) if (cr and got is not None) else None)
-    for k in ("bv3_hook", "fee", "liquidity"):
+    for k in ("bv3_hook", "bv3_hook_kind", "fee", "liquidity"):
         if k in p:
             d[k] = p[k]
     if got is not None and qo:

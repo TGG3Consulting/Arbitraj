@@ -50,6 +50,7 @@ def write(out, d):
         "не отправлено, ключи не использовались. Скрипт — tools/arbitrum_record/exec_v4_live.py (решения 400, 459).", "",
         "## Параметры",
         f"- Код: contracts/out/ArbExecutor.bin-runtime (сборка v4, решение 457)",
+        f"- chainId: {d['chain_id']} (Arbitrum One; запись судит кошельки только этой сети — TASKS T457-02)",
         f"- sha256 симулированного bin-runtime: {d['sha']} (совпал со строкой ArbExecutor.bin-runtime в "
         "ArbExecutor.sha256)",
         f"- H (блок симуляции и всех eth_call) = {d['head']}, время блока H = {d['ht']}, deadline = H.time + 600 = "
@@ -66,21 +67,29 @@ def write(out, d):
         f"- Uniswap V4: PoolManager {a.v4_pool_manager}, V4Quoter {a.v4_quoter}, StateView {a.v4_state_view} "
         f"(Initialize за {a.v4_blocks} блоков до H; без крючка, обе валюты ERC-20)",
         f"- Balancer V3: Vault {a.bv3_vault}, Router {a.bv3_router} (пулы — запись balancer_v3.py + --bv3-pool; "
-        "hooks строки = 0 — у шага 23 класс только «без крючка», крючок пула — bv3_hook)",
+        "hooks строки = 0 — у шага 23 класс только «без крючка», крючок пула — bv3_hook, вид — bv3_hook_kind: none / "
+        f"static / surge / mev, как pools/balancer_v3_hooks.rs; без крючка до {a.pools_per_kind}, с крючком до "
+        f"{a.bv3_per_hook} на вид; нет пула вида: {', '.join(rec.get('bv3_hook_missing', [])) or '—'})",
         f"- Fluid: резолвер {a.fluid_resolver}; LB v2.0: фабрика {a.lb20_factory}, роутер {a.lb20_router}",
         f"- Uniswap V3: фабрика {a.v3_factory}, QuoterV2 {a.v3_quoter}, уровни {a.v3_fee}; Uniswap V2: фабрика "
         f"{a.v2_factory}, комиссия {a.v2_fee_pips} pips",
         "", "## Счёт по видам (вердикт по классам — правило бота live_rule.rs; виды 0, 1, 22, 24 правило не судит)"]
     for k in (19, 23, 22, 24, 1, 0):
-        empty = any(x.get("case") == "нет пулов" and x.get("kind") == k for x in rec["summary"])
+        empty = not any(x.get("kind") == k and x["case"] in ("a", "b") for x in rec["summary"])
         lines.append(f"- Вид {k}, {NAMES[k]}: " + ("НЕТ ПУЛОВ (НЕПРОВЕРЕН)" if empty else _counts(rec["summary"], k)))
+        if k == 23:
+            for hk in ("none", "static", "surge", "mev"):
+                rows = [x for x in rec["summary"] if x.get("bv3_hook_kind") == hk]
+                lines.append(f"  - крючок {hk}: " + ("нет пула" if hk in rec.get("bv3_hook_missing", []) or not rows
+                                                     else _counts(rows, 23)))
     if rec["sim_errors"]:
         lines.append(f"- Ошибки eth_simulateV1: {len(rec['sim_errors'])} (pools.json sim_errors)")
     lines += ["", "## Файлы",
               "- summary.json — по вызову: case, kind, pool_id, manager, pool_manager, hooks, token_in, token_out, "
               "amount_in, got, quoter_out, quoter_out_after_a (у (б)), got_eq_swap_credit, x_left, status, revert, gas",
               "- calls.json — по вызову: status, returnData, gasUsed, логи целиком, откат, x_left",
-              "- hooks_reject.json — откаты крючков (пулы с крючком не выбирались — пусто)",
+              "- hooks_reject.json — откаты крючков V4 (пулы V4 с крючком не выбираются — пусто; откат пула Balancer V3 "
+              "с крючком — необъяснённое: класс 23 у бота один)",
               "- slots.json, pools.json (выбранные, пропущенные, ошибки симуляции), raw_rpc.json — все запросы",
               "", "## SHA-256 файлов"]
     for name in sorted(os.listdir(out)):

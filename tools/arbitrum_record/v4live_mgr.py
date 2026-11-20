@@ -13,7 +13,10 @@
   команды (meta.json pools) и --bv3-pool; токены — Vault.getPoolTokenInfo; квотер — Router
   querySwapSingleTokenExactIn без from (Vault.quote: tx.origin = 0); кредит — Swap(pool, tokenIn, tokenOut, amountIn,
   amountOut, …) хранилища. В строке записи hooks = 0: у шага BALANCER_V3 класс только «без крючка» (live_class.rs);
-  крючок пула — поле bv3_hook.
+  крючок пула — поле bv3_hook. Координатор (T457-02): пулы с крючком, которые бот берёт (вид крючка — как
+  pools/balancer_v3_hooks.rs kind: static — крючок без динамической комиссии, surge — StableSurge из
+  dex.bv3_stable_surge_hooks у «открытого» выпуска, mev — MEV Capture из dex.bv3_mev_capture_hooks; списки — meta.json
+  записи balancer_v3.py), тоже входят в запись — поле bv3_hook_kind; пулы, которые бот не берёт, — skipped.
 Кто вызывает: tools/arbitrum_record/exec_v4_live.py.
 От чего зависит: v4live_rpc.py.
 Ошибки: сбой узла — исключение как есть; пул, у которого вызов не ответил, пропускается (причина — в списке skipped).
@@ -81,14 +84,60 @@ def v4_pools(node, tag, head, a, skipped):
     return out
 
 
+# Порядок проверки фабрик и «открытые» выпуски — pools/balancer_v3_factories.rs LISTS и Release::open.
+BV3_LISTS = ["dex.bv3_weighted_factories", "dex.bv3_weighted_min_factories", "dex.bv3_stable_factories",
+             "dex.bv3_stable_open_factories", "dex.bv3_stable_guard_factories", "dex.bv3_gyro_2clp_factories",
+             "dex.bv3_gyro_eclp_factories", "dex.bv3_reclamm_factories", "dex.bv3_reclamm_v3_factories",
+             "dex.bv3_lbp_v1_factories", "dex.bv3_lbp_v2_factories", "dex.bv3_lbp_v3_factories",
+             "dex.bv3_lbp_v4_factories", "dex.bv3_fixed_lbp_factories", "dex.bv3_quantamm_factories"]
+BV3_OPEN = {"dex.bv3_weighted_min_factories", "dex.bv3_stable_open_factories", "dex.bv3_stable_guard_factories",
+            "dex.bv3_lbp_v3_factories", "dex.bv3_lbp_v4_factories", "dex.bv3_fixed_lbp_factories"}
+# Вид крючка пула в записи (поле bv3_hook_kind): как pools/balancer_v3_hooks.rs kind.
+BV3_HOOK_KINDS = ["none", "static", "surge", "mev"]
+
+
+def bv3_hook_kind(node, tag, pool, h, lists):
+    """Вид крючка так, как его берёт бот (balancer_v3_hooks.rs kind; HooksConfig — VaultTypes.sol L73-L85: слово 3
+    computeDynamicSwapFee, 4 / 5 before / after swap, 10 адрес). Возвращает: (вид, None) или (None, почему бот пул не
+    берёт). Ошибок-исключений нет, кроме сетевых."""
+    hook = adr(h, 10)
+    release = None
+    for name in BV3_LISTS:
+        for f in lists.get(name, []):
+            r, _ = node.call(f, "0x" + sel("isPoolFromFactory(address)") + ad(pool), tag)
+            if r and len(r) >= 66 and word(r, 0) == 1:
+                release = name
+                break
+        if release:
+            break
+    if release is None:
+        return None, "пул не из фабрик списков dex.bv3_*_factories"
+    if word(h, 4) or word(h, 5):
+        return None, f"крючок {hook} до / после обмена — бот пул не берёт"
+    if not word(h, 3):
+        return ("none" if hook == ZERO else "static"), None
+    if hook in lists.get("dex.bv3_stable_surge_hooks", []):
+        if release not in BV3_OPEN:
+            return None, f"StableSurge {hook} у выпуска {release} (onSwap только хранилищу) — бот пул не берёт"
+        return "surge", None
+    if hook in lists.get("dex.bv3_mev_capture_hooks", []):
+        return "mev", None
+    return None, f"крючок динамической комиссии {hook} не из списков — бот пул не берёт"
+
+
 def bv3_pools(node, tag, a, skipped):
-    """Пулы Balancer V3: из последней записи balancer_v3.py (meta.json pools) и --bv3-pool. Ошибок-исключений нет,
-    кроме сетевых."""
-    addrs = list(a.bv3_pool)
+    """Пулы Balancer V3: из последней записи balancer_v3.py (meta.json pools, lists) и --bv3-pool; вид крючка — как у
+    бота (bv3_hook_kind), пулы, которые бот не берёт, — в skipped. Ошибок-исключений нет, кроме сетевых."""
+    addrs, lists = list(a.bv3_pool), {}
     recs = sorted(glob.glob(os.path.join(a.data_root, "arbitrum_balancer_v3_*", "meta.json")))
     if recs:
         with open(recs[-1], encoding="utf-8") as fh:
-            addrs += [x for x in json.load(fh).get("pools", []) if x not in addrs]
+            meta = json.load(fh)
+        addrs += [x for x in meta.get("pools", []) if x not in addrs]
+        lists = {k: [x.lower() for x in v] for k, v in meta.get("lists", {}).items()}
+    if not lists:
+        skipped.append({"kind": 23, "why": "нет записи balancer_v3.py со списками фабрик и крючков (meta.json lists)"})
+        return []
     out = []
     for pool in addrs:
         pool = pool.lower()
@@ -100,12 +149,15 @@ def bv3_pools(node, tag, a, skipped):
         n = word(r, off)
         tokens = [adr(r, off + 1 + i) for i in range(n)]
         h, e = node.call(a.bv3_vault, "0x" + sel("getHooksConfig(address)") + ad(pool), tag)
-        hook = adr(h, 10) if h and len(h) >= 2 + 64 * 11 else None
-        if hook is None:
+        if not h or len(h) < 2 + 64 * 11:
             skipped.append({"kind": 23, "pool_id": pool, "why": f"Vault.getHooksConfig: {e or h}"})
             continue
-        out.append(dict(fam="bv3", kind=23, pool_id=pool, tokens=tokens, hooks=ZERO, bv3_hook=hook,
-                        manager=a.bv3_vault, pool_manager=a.bv3_vault, data="0x" + ad(pool),
+        hk, why = bv3_hook_kind(node, tag, pool, h, lists)
+        if hk is None:
+            skipped.append({"kind": 23, "pool_id": pool, "why": why})
+            continue
+        out.append(dict(fam="bv3", kind=23, pool_id=pool, tokens=tokens, hooks=ZERO, bv3_hook=adr(h, 10),
+                        bv3_hook_kind=hk, manager=a.bv3_vault, pool_manager=a.bv3_vault, data="0x" + ad(pool),
                         step_pool=a.bv3_vault))
     return out
 

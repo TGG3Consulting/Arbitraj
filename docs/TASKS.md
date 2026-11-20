@@ -189,11 +189,21 @@
       (include_str tests/data/executor_v3_live_2026-11-17) и судит её для V4 по SHA v4 → «запись о другом коде». После
       записи (один коммит): live_proof.rs — для Version::V4 свои README / SUMMARY / REJECT из новой папки (RECORD по
       версии в текстах), tests/bsc_dex_executor_v3_live.rs:255 (assert refusal().is_some()) — под факт новой записи, тест
-      записи v4 по образцу bsc_dex_executor_v3_live.rs. Вопросы Тиграну: (1) запись v4 — Arbitrum, а классы 19/20/21
-      у кошельков BSC с v4 тогда судятся по ней же (код один): пулов Infinity CL / Bin в записи Arbitrum нет (в
-      dex-settings-arbitrum.md такого DEX нет) — у BSC-кошелька с v4 эти классы будут «не проверен». Нужна ли отдельная запись v4 на BSC (тот же скрипт с адресами BSC) и объединение записей
-      по сети? (2) Пулы Balancer V3 с крючком (бот считает их тем же классом 23 «без крючка») — в запись по умолчанию не
-      берутся; включать ли?
+      записи v4 по образцу bsc_dex_executor_v3_live.rs.
+      Решения координатора (20.11.2026, вместо вопросов): (1) запись приёмки привязана к паре (версия кода, сеть) — ПЛАН
+      правки live_proof.rs после прихода записи: записи по ключу (Version, chainId), chainId — из README («- chainId:
+      42161») и поля chain_id строк summary.json записи (exec_v4_live.py пишет оба уже сейчас); кошелёк судится только
+      записью своей сети (verdicts_of(версия, сеть) — chainId площадки кошелька); записи для пары нет — все классы «не
+      проверен», шаги менеджеров не идут (осторожно, сделок нет). BSC-кошелёк с v4 при одной записи Arbitrum — «не
+      проверен»; запись v4 на BSC — только когда v4 будут ставить на BSC (тот же скрипт с адресами BSC). Запись v3
+      17.11 — пара (v3, 56): у неё chainId в README нет — при правке ключ этой записи задать в коде из её README
+      («свой узел BSC», адреса BSC) или дописать строку chainId в README_repo.md. (2) Пулы Balancer V3 с крючком, которые
+      бот берёт, ВКЛЮЧЕНЫ в запись по умолчанию (класс 23 у бота один): вид крючка — как pools/balancer_v3_hooks.rs kind
+      (static — крючок без динамической комиссии; surge — StableSurge из dex.bv3_stable_surge_hooks у «открытого»
+      выпуска Release::open; mev — MEV Capture из dex.bv3_mev_capture_hooks; списки — meta.json записи balancer_v3.py),
+      по --bv3-per-hook (2) пула на вид; вида нет — строка «нет пулов» с bv3_hook_kind в summary.json и «нет пула» в
+      README записи. Пулы, которые бот не берёт (крючок до / после обмена, чужой крючок динамической комиссии, StableSurge
+      у закрытого выпуска, пул не из фабрик списков), — pools.json skipped.
     - T457-03 Развёртывание v4 в Arbitrum — Тигран (после T457-02).
   - T456-03 Записи своего узла Arbitrum (tools/arbitrum_record/README.md): sub_dex.py, kyber_elastic_v1.py, saddle.py,
     woofi.py, fluid_t1.py, balancer_v3.py, curve_crypto.py, camelot_v2.py, algebra_dir_fee.py, lb_v20.py, lb_v22.py,

@@ -48,6 +48,8 @@ def args():
     ap.add_argument("--wnative", default="0x82aF49447D8a07e3bd95BD0d56f35241523fBab1")
     ap.add_argument("--base", action="append", default=None, help="предпочитаемый вход (а); по умолчанию WETH")
     ap.add_argument("--pools-per-kind", type=int, default=3)
+    ap.add_argument("--bv3-per-hook", type=int, default=2,
+                    help="пулов Balancer V3 на каждый вид крючка, который бот берёт (static, surge, mev)")
     ap.add_argument("--max-impact-pct", type=float, default=3.0)
     ap.add_argument("--log-chunk", type=int, default=500000, help="блоков в одном eth_getLogs")
     # Uniswap V4 — Uniswap/docs v4/deployments.mdx L76-L80 (dex-settings-arbitrum.md §2.3).
@@ -87,11 +89,11 @@ def empty(node, tag, addr):
     return node.ok("eth_getCode", [addr, tag]) == "0x" and int(node.ok("eth_getBalance", [addr, tag]), 16) == 0
 
 
-def pick(node, tag, a, ctx, cands, rec):
+def pick(node, tag, a, ctx, cands, rec, limit=None):
     """Выбор пулов вида ДО симуляции: слоты токенов найдены, сумма подобрана квотером. Ошибок-исключений нет."""
     chosen = []
     for p in cands:
-        if len(chosen) >= a.pools_per_kind:
+        if len(chosen) >= (limit or a.pools_per_kind):
             break
         tin = next((t for t in p["tokens"] if t in a.base), p["tokens"][0])
         tout = next(t for t in p["tokens"] if t != tin)
@@ -141,7 +143,18 @@ def main():
     rec = {"skipped": [], "summary": [], "calls": [], "hooks_reject": [], "pools": {}, "sim_errors": []}
     found = {19: mgr.v4_pools(node, tag, head, a, rec["skipped"]), 23: mgr.bv3_pools(node, tag, a, rec["skipped"]),
              22: old.fluid_pools(node, tag, a, rec["skipped"]), 24: old.lb20_pools(node, tag, a, rec["skipped"])}
-    chosen = {k: pick(node, tag, a, ctx, v, rec) for k, v in found.items()}
+    chosen = {k: pick(node, tag, a, ctx, v, rec) for k, v in found.items() if k != 23}
+    # Координатор (T457-02): класс 23 у бота покрывает и пулы с крючком — по --bv3-per-hook на вид крючка, который
+    # бот берёт (v4live_mgr.bv3_hook_kind); вида нет на Arbitrum — строка «нет пулов» с bv3_hook_kind.
+    chosen[23], rec["bv3_hook_missing"] = [], []
+    for hk in mgr.BV3_HOOK_KINDS:
+        got = pick(node, tag, a, ctx, [p for p in found[23] if p["bv3_hook_kind"] == hk], rec,
+                   None if hk == "none" else a.bv3_per_hook)
+        chosen[23] += got
+        if not got and hk != "none":
+            rec["bv3_hook_missing"].append(hk)
+            rec["summary"].append({"case": "нет пулов", "kind": 23, "bv3_hook_kind": hk,
+                                   "note": "пула Balancer V3 с этим видом крючка, который бот берёт, нет"})
     pairs = []
     for lst in chosen.values():
         for p, tin, tout, _, _ in lst:
@@ -174,7 +187,9 @@ def main():
                   file=sys.stderr, flush=True)
     date = datetime.datetime.fromtimestamp(ht, datetime.timezone.utc).strftime("%Y-%m-%d")
     out = a.out or os.path.join(a.data_root, f"executor_v4_live_{date}")
-    write(out, dict(a=a, sha=sha, head=head, ht=ht, x=x, w=wl, rec=rec, slots=ctx["slots"], log=node.log))
+    for r in rec["summary"]:
+        r["chain_id"] = 42161  # пара (версия кода, сеть) записи — план правки live_proof.rs, TASKS T457-02
+    write(out, dict(chain_id=42161, a=a, sha=sha, head=head, ht=ht, x=x, w=wl, rec=rec, slots=ctx["slots"], log=node.log))
     print("записано:", out, file=sys.stderr)
 
 

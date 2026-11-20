@@ -125,7 +125,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Crypto-пулы Curve (решение 453): события фабрик TwocryptoPoolDeployed / TricryptoPoolDeployed (адрес пула —
             // неиндексированное поле) и CryptoPoolDeployed фабрики v1 (адреса нет — поиск по фабрике на блоке события),
             // created_crypto.rs. У tricrypto 2021 фабрики нет — пул из dex.stable_pools.
-            p if p.is_curve_crypto() => match created_crypto::topic(p) {
+            p @ (Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 | Proto::CurveTricryptoV1) => match created_crypto::topic(p) {
                 Some(t) => ("dex.factory", t, false),
                 None => continue,
             },

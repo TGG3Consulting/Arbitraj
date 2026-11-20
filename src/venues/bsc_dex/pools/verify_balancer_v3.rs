@@ -38,6 +38,9 @@ use super::verify_balancer_v3_buffer as buffer;
 /// Адреса проверки: пул, хранилище, фабрики с выпуском, списки крючков (решение 452).
 pub type Plan = (Address, Address, Vec<(Address, Release)>, Lists);
 
+/// Первый проход: план и ответы его вызовов, либо готовый итог (отказ / сбой узла).
+type First = Result<(Plan, Vec<Result<Bytes, String>>), Verdict>;
+
 /// Проверка пачки кандидатов. Возвращает: итог по каждому. Ошибок нет (не задана настройка, пул не прошёл — отказ с
 /// причиной; сбой узла — Failed).
 pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> {
@@ -45,7 +48,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
     let all: Vec<(Address, Bytes)> = plans.iter().flatten().flat_map(calls).collect();
     let got = call::try_chunks(ctx, &all, "latest", size).await;
     let mut got = got.into_iter();
-    let mut first: Vec<Result<(Plan, Vec<Result<Bytes, String>>), Verdict>> = Vec::new();
+    let mut first: Vec<First> = Vec::new();
     for p in plans {
         first.push(match p {
             Err(w) => Err(Verdict::Rejected(w)),

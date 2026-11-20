@@ -13,6 +13,8 @@
 //! SwapUtils.sol L150 (MAX_LOOP_LIMIT = 256), L153 (A_PRECISION = 100), getD L393-L430 / getY L531-L582 (откат).
 //! Оговорка: множитель пула задаётся параметром конструктора decimals, а не decimals() токена (публичного геттера
 //! множителей нет) — расхождение поймает сверка с квотером calculateSwap (решение 73).
+//! Решение 451: тот же разбор у пулов Saddle Arbitrum (saddle-contract 2cfdd055: Swap.sol L122-L150 — множители
+//! 10^(18 − decimals), SwapUtils.sol — те же getD/getY/_calculateSwap); swapStorage — 7 полей (abi_saddle::swap_fee).
 
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, Bytes, U256};
@@ -24,7 +26,7 @@ use super::super::ctx::Ctx;
 use super::super::math::stableswap_v1::rate_for_decimals;
 use super::super::node::call;
 use super::super::tokens::Tokens;
-use super::abi_saddle::{ISaddleSwap as S, MAX_TOKENS};
+use super::abi_saddle::{ISaddleSwap as S, MAX_TOKENS, swap_fee};
 
 /// Монеты пула по ответам getToken(k) (без сети): до первого отката. Нужна проверке пула (verify_saddle.rs).
 /// Принимает: ответы getToken(0..MAX_TOKENS). Возвращает: адреса или текст «не по ABI». Ошибок нет.
@@ -166,7 +168,9 @@ pub fn parse(
         None => Err(bad(format!("нет ответа {}", head.len() + i))),
     };
     let amp = call::decode::<S::getAPreciseCall>(ok(0)?)?;
-    let fee = call::decode::<S::swapStorageCall>(ok(1)?)?.swapFee;
+    // Решение 451: swapStorage Nerve (10 полей) и Saddle saddle-contract (7 полей) — abi_saddle::swap_fee.
+    let fee = swap_fee(ok(1)?)
+        .ok_or_else(|| bad("swapStorage() не по ABI (не 7 и не 10 слов)".into()))?;
     let paused = call::decode::<S::pausedCall>(ok(2)?)?;
     let index = |t: Address| {
         coins

@@ -65,9 +65,11 @@ pub fn need_v4_for(refused: bool) -> &'static str {
     }
 }
 
-/// Решение 470: «что делать», когда виду шага нужен исполнитель v5 (AERO_BASIC = 26): сборки v5 ещё нет.
-pub const NEED_V5: &str = "нужен исполнитель v5 — сборки v5 ещё нет (contracts/out/ — v4; пересборка и развёртывание — \
-                           решение 470, docs/TASKS.md)";
+/// Решение 470: «что делать», когда виду шага нужен исполнитель v5 (AERO_BASIC = 26): сборки v5 ещё нет. Ошибок нет.
+pub fn need_v5() -> &'static str {
+    "нужен исполнитель v5 — сборки v5 ещё нет (contracts/out/ — v4; пересборка и развёртывание — \
+     решение 470, docs/TASKS.md)"
+}
 
 /// Память итогов: версия → сигнатура → None — вызов есть, Some — причина.
 type Seen = HashMap<Version, HashMap<String, Option<String>>>;
@@ -289,7 +291,7 @@ pub fn step_absent(k: ExecKind, v: Version) -> Option<String> {
     let need = since(k);
     (v < need).then(|| {
         let todo = if need >= Version::V5 {
-            NEED_V5
+            need_v5()
         } else if need >= Version::V4 {
             need_v4()
         } else if need >= Version::V3 {

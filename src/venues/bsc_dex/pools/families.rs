@@ -794,9 +794,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // dex.tick_lens не нужен. Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
         Proto::Slipstream => {
             list.extend(["dex.factory", "dex.quoter"]);
-            // Решение 470: Aero Slipstream V3 — ещё официальный крючок обмена (pools/aero_cl.rs).
+            // Решение 470: Aero Slipstream V3 — ещё официальный крючок обмена (pools/aero_cl.rs) и окно первой
+            // комиссии нового блока (T470-01, pools/aero_cl_head.rs).
             if f.variant == Variant::SlipstreamAero {
-                list.push("dex.cl_swap_hook");
+                list.extend(["dex.cl_swap_hook", "dex.cl_hook_ahead_s"]);
             }
         }
         // Maverick V2 (решение 122 F): фабрика (isFactoryPool, PoolCreated), квотер (сверка перед сделкой, решение 73),

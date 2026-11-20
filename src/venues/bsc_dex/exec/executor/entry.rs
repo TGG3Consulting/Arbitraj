@@ -179,7 +179,9 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             }
             // Решение 470 (T470-06): пул Aero Basic у исполнителя v5 — шаг AERO_BASIC (выход с MEV-налогом этой
             // транзакции; pools/exec_kind.rs for_wallet); у v1–v4 — SOLIDLY (налог > 0 — отказ, pools/aero_mev.rs fresh).
-            _ if exec_kind::for_wallet(ctx, e.family) == Some(ExecKind::AeroBasic) => Params::AeroBasic,
+            _ if exec_kind::for_wallet(ctx, e.family) == Some(ExecKind::AeroBasic) => {
+                Params::AeroBasic
+            }
             _ => Params::Solidly,
         },
         ExecKind::Dodo => Params::Dodo,

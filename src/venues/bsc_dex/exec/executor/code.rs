@@ -183,9 +183,7 @@ pub fn runtime_of(v: Version) -> Result<Bytes, String> {
         Version::V2 => runtime_v2(),
         Version::V3 => runtime_v3(),
         Version::V4 => runtime(),
-        Version::V5 => Err(
-            "сборки исполнителя v5 нет (contracts/out/ — v4; нужна сборка исполнителя v5, решение 470)".into(),
-        ),
+        Version::V5 => Err("сборки исполнителя v5 нет (out/ — v4; решение 470)".into()),
     }
 }
 

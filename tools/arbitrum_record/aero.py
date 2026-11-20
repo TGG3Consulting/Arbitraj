@@ -6,10 +6,13 @@ StablePool) и Aero «Slipstream V3» (CLPool с крючком DynamicSwapFeeHo
 последние --max-pools пулов каждой фабрики перечислением allPools(i) (скана истории нет), по каждому пулу Basic —
 metadata, POOL_TYPE, getReserves, factory/token0/token1, getBaseFee(pool, 0, 0, 0, r0, r1), getPool(t0, t1) и
 getAmountOut пула на доли резерва в обе стороны; по каждому пулу CL — slot0, liquidity, tickSpacing, fee(),
-getPoolSwapHook, tickSpacingToFee, mevTaxModule крючка и его параметры. Пишет tests/data/arbitrum_aero_<дата>/
+getPoolSwapHook, tickSpacingToFee, mevTaxModule крючка и его параметры. Решение 470 (T470-01, T470-05, T470-06) — ещё
+(aero_more.py): параметры крючка, dynamicFeeConfig, blockFee, наблюдения и observe пула, fee() на время блока + 1 / + 3 с
+(blockOverrides), котировки Metaquoter и виртуального квотера, getAmountOutWithTotalFee пулов Basic.
+Пишет tests/data/arbitrum_aero_<дата>/
 (record.json + README.md: блок, хеш блока, sha256 файла). Ключей и подписей нет — только eth_call.
 Кто вызывает: Тигран вручную или record_all.py (record_steps.py).
-От чего зависит: Python 3.8+, stdhttp.py (стандартная библиотека).
+От чего зависит: Python 3.8+, stdhttp.py (стандартная библиотека), aero_more.py.
 Источник адресов: Dromos-Labs/metadex-public 1.1.0 deployment-addresses/pools-arbitrum.json и
 Dromos-Labs/metadex-slipstream-public 1.1.0 deployment-addresses/cl-arbitrum.json. Селекторы — keccak256 сигнатур
 исходников (тест src/venues/bsc_dex/pools/abi_aero_basic.rs сверяет их же).
@@ -24,6 +27,7 @@ import os
 import sys
 import time
 
+import aero_more
 import stdhttp as requests
 
 VOLATILE_FACTORY = "0x8E6a9FCd1d638CC760Ffba397605Fe3355dE76D2"
@@ -118,16 +122,20 @@ def basic(rpc, factory, tag, n):
                 amt = r // div
                 if tok and amt > 0:
                     q = rpc.call(p, SEL["getAmountOut"] + word(amt) + addr(tok), tag)
-                    x["quotes"].append({"tokenIn": tok, "amountIn": str(amt), "out": q})
+                    more = aero_more.basic_quote_more(rpc, p, tok, amt, tag)
+                    x["quotes"].append({"tokenIn": tok, "amountIn": str(amt), "out": q, "more": more})
         rec["pools"].append(x)
     return rec
 
 
-def cl(rpc, tag, n):
+def cl(rpc, head, n):
+    tag = head["number"]
     rec = {"allPoolsLength": None, "hook": {}}
     hook_mev = as_addr(rpc.call(CL_HOOK, SEL["mevTaxModule"], tag))
+    params = aero_more.hook_params(rpc, CL_HOOK, tag)
     rec["hook"] = {"mevTaxModule": hook_mev, "mevModuleParams": module_params(rpc, hook_mev, tag),
-                   "discountRegistry": rpc.call(CL_FACTORY, SEL["discountRegistry"], tag)}
+                   "discountRegistry": rpc.call(CL_FACTORY, SEL["discountRegistry"], tag), "params": params}
+    vq = aero_more.vq(rpc)
     rec["allPoolsLength"], pools = last_pools(rpc, CL_FACTORY, tag, n)
     rec["pools"] = []
     for p in pools:
@@ -140,6 +148,8 @@ def cl(rpc, tag, n):
             if ts >= 1 << 255:
                 ts -= 1 << 256
             x["tickSpacingToFee"] = rpc.call(CL_FACTORY, SEL["tickSpacingToFee"] + word(ts), tag)
+        # Решение 470 (T470-01, T470-05): первая комиссия нового блока и котировки Metaquoter / виртуального квотера.
+        aero_more.cl_first_fee(rpc, CL_HOOK, x, tag, head, params, vq)
         rec["pools"].append(x)
     return rec
 
@@ -158,7 +168,7 @@ def main():
            "baseFeePerGas": head.get("baseFeePerGas"),
            "volatile": basic(rpc, VOLATILE_FACTORY, tag, a.max_pools),
            "stable": basic(rpc, STABLE_FACTORY, tag, a.max_pools),
-           "cl": cl(rpc, tag, a.max_pools)}
+           "cl": cl(rpc, head, a.max_pools)}
     day = datetime.date.today().isoformat()
     d = os.path.join(a.out, "arbitrum_aero_" + day)
     os.makedirs(d, exist_ok=True)

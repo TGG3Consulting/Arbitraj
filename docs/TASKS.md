@@ -358,10 +358,12 @@
   (`slipstream_aero`).** Код — DECISIONS 470; исполнитель не менялся (шаги SOLIDLY и V3), переразвёртывание не нужно.
   Новая настройка dex.cl_swap_hook. Настройки DEX — docs/FIRST_RUN.md «Aero Basic и Aero Slipstream V3». Запись:
   `python3 tools/arbitrum_record/aero.py --rpc <узел>` (или record_all.py) → снять #[ignore] в tests/arbitrum_aero_live.rs.
-  - T470-01 Вопрос Тиграну: комиссия Slipstream V3 в котировке — fee() пула на блоке головы (без скидки); в блоке нашей
-    транзакции крючок может посчитать другую (первая комиссия блока — TWAP по времени нового блока; чужой обмен раньше
-    задаёт blockFee, DynamicSwapFeeHook.sol L524-L667). Точной «комиссии следующего блока» без симуляции нет; защита —
-    minOut исполнителя. Так оставить или считать первую комиссию блока своим портом (_getFirstSwapFee + observe)?
+  - T470-01 **СДЕЛАНО (координатор: порт).** Котировка — max(fee() пула, первая комиссия нового блока на время блока + δ,
+    δ = 0…dex.cl_hook_ahead_s) + налог (pools/aero_first_fee.rs, aero_cl_head.rs). Новая настройка dex.cl_hook_ahead_s —
+    значение решает Тигран по записи (fee_at +1/+3 с). Сверка — tests/arbitrum_aero_first_fee_live.rs после записи aero.py.
+    Вопросы по записи: (а) принимает ли Nitro blockOverrides в eth_call и меняет ли number ArbSys.arbBlockNumber (ключ
+    blockFee у ArbDynamicSwapFeeHook); (б) скидка DiscountRegistry для caller = 0 и MEV-налог при eth_call — 0 (тест
+    сравнивает fee() с портом без скидки и налога).
   - T470-02 **Координатор: налог по формуле. СДЕЛАНО** (8ac32c60: aero_mev.rs tax — формула модуля, сбор чаевых — ArbSys/ArbOwnerPublic, факт nitro ccc5c828 tx_processor.go L995-L1035). Было: вопрос Тиграну: tx.gasprice в Nitro при чаевых — правило MEV-налога взято по верхней оценке (gasprice ≤
     baseFee + чаевые). При profit_share верхний предел send.tip_cap_gwei выше minThreshold модуля (volatile 1 gwei,
     stable 2 gwei по аргументам конструкторов) — пулы Basic не читаются. Нужен ли учёт налога в котировке вместо отказа?
@@ -379,10 +381,17 @@
     (aero_mev.rs fresh taxed_ok, exec/solidly_gate.rs). **Нужна сборка исполнителя v5** (contracts/build.sh → out/ как v5,
     out/ v4 заморозить в out/v4/, code.rs: RUNTIME_V4, version_of V5) и EVM-сценарий шага 26 — вне агентов (solc/npm
     запрещены). До сборки у всех кошельков — SOLIDLY и прежний отказ при налоге > 0.
-  - T470-07 НЕ СДЕЛАНО (координатор): порт первой комиссии блока крючка (_getFirstSwapFee + observe TWAP по наблюдениям
-    пула на время следующего блока, худшее из «первая/фиксированная»), запись наблюдений и параметров крючка; лёгкое
-    чтение Slipstream V3 каждым блоком (только fee() пачкой, полное — по событиям) — сейчас пул перечитывается целиком.
-  - T470-05 Metaquoter (0x1dDf…7868) не подключён — сверка с квотером через виртуальный квотер (dex.quoter_virtual).
+  - T470-07 **СДЕЛАНО.** Порт первой комиссии (T470-01); лёгкое чтение каждым блоком — pools/per_block_aero.rs (только
+    комиссия пачкой: fee(), slot0, dynamicFeeConfig, tickSpacingToFee + наблюдения и observe; налог — раз на DEX), полное
+    — по событиям пула; запись наблюдений и параметров крючка — tools/arbitrum_record/aero_more.py.
+  - T470-05 **Запись сделана:** Metaquoter quoteExactInputSingleV3 / V2 в aero_more.py рядом с виртуальным квотером бота и
+    getAmountOutWithTotalFee (тест metaquoter_equals_virtual_and_total_fee, #[ignore] до записи). В боте сверка — по-прежнему
+    виртуальный квотер (dex.quoter_virtual); подключать ли Metaquoter квотером DEX — по итогам записи (решение Тиграна).
+  - T470-08 Запись: `python3 tools/arbitrum_record/aero.py --rpc <узел>` (или record_all.py) → снять #[ignore] в
+    tests/arbitrum_aero_live.rs и tests/arbitrum_aero_first_fee_live.rs; задать dex.cl_hook_ahead_s.
+  - T470-09 **Нужна сборка исполнителя v5** (T470-06): contracts/build.sh → out/ как v5, out/ v4 заморозить в out/v4/,
+    code.rs (RUNTIME_V4, version_of → V5, current_version), EVM-сценарий шага AERO_BASIC с официальным байткодом пула Aero
+    (если он есть в официальном репозитории развёртываний) — вне агентов (solc/npm запрещены).
 - **Решение 451 (20.11.2026, ветка t227/arb-dex-code-b) — T448-06…T448-10: Kyber Elastic v1, Saddle, WOOFi, Aero
   Slipstream, PancakeSwap StableSwap на Arbitrum; ждёт сборки и тестов в GitHub (cargo локально не запускался).** Подробно —
   docs/notes/arbitrum/dex-settings-arbitrum.md §4.2–§4.6. СДЕЛАНО: вид `kyber_elastic_v1` (pools/family_variant.rs —

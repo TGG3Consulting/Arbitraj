@@ -300,7 +300,7 @@ pub fn describe(ctx: &Ctx, f: &Family) -> String {
 /// Решение 461: что приняла запись приёмки версии исполнителя кошелька (не сверена — v3, как pool_gate.rs) в сети
 /// площадки (dex.evm_chain_id). Ошибок нет.
 fn wallet_listing(ctx: &Ctx) -> String {
-    use super::super::exec::executor::{code::Version, live_proof};
+    use super::super::exec::executor::live_proof;
     let ver = ctx.exec_info().and_then(|(_, v)| v).unwrap_or(Version::V3);
     live_proof::listing_for(ver, live_proof::chain_of(ctx))
 }

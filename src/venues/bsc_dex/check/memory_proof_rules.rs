@@ -126,7 +126,8 @@ pub fn per_block_gate(mem: &Entry, head: u64) -> Option<String> {
 /// остановленный tricrypto 2021, решение 455 — с нативным ETH на пул с WETH (per_block::unevented) и вид с переводом
 /// токена на пул без события пула (transfer_in::watched). Принимает: запись памяти. Ошибок нет.
 fn each_block(e: &Entry) -> bool {
-    per_block::needs(e.family) || per_block::unevented(e) || transfer_in::watched(e.family)
+    // Решение 470 (T470-07): и лёгкое чтение комиссии каждым блоком (per_block::light — Aero Slipstream V3).
+    per_block::touched(e.family) || per_block::unevented(e) || transfer_in::watched(e.family)
 }
 
 /// Доказывают ли неприменённые логи этого пула пропуск события (см. шапку). Ошибок нет.

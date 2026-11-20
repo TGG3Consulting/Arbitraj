@@ -5799,6 +5799,14 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** в описании не названы.
 - **Статус:** в релизе 141619bc.
 
+### `dex.cl_hook_ahead_s`
+- **Кейс:** решение 470 (T470-01) — комиссия Aero Slipstream V3 в блоке нашей транзакции: первая комиссия нового блока (TWAP-тик по времени этого блока) или blockFee чужого первого обмена; время следующего блока заранее неизвестно — считается окно δ = 0…N секунд, берётся наибольшая.
+- **Что ставить:** совета нет — решает Тигран по записи tools/arbitrum_record/aero.py (ответы fee()/getBeforeSwapFee на время блока +1 и +3 с); 0 — только время блока чтения.
+- **Если не задана:** без .optional(): DEX вида slipstream_aero не подключена (families.rs required), пулы не читаются.
+- **Влияет на торговлю:** да — комиссия котировки пулов Aero Slipstream V3 (pools/aero_cl_head.rs).
+- **Связанные ключи:** dex.cl_swap_hook, dex.factory, dex.load_batch.
+- **Статус:** ещё не в релизе (ветка t240/arb-aero).
+
 ### `dex.cl_swap_hook`
 - **Кейс:** решение 470 (T451-01) — Aero Slipstream V3 на Arbitrum: комиссия обмена задаёт крючок пула; сверен только DynamicSwapFeeHook (Dromos-Labs/metadex-public 1.1.0).
 - **Что ставить:** адрес DynamicSwapFeeHook сети; Arbitrum One — `0xC0ed888AfE87ed1AcF01D9f19bB850159e3ce434` (Dromos-Labs/metadex-slipstream-public deployment-addresses/cl-arbitrum.json). (docs/FIRST_RUN.md)

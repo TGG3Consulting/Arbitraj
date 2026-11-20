@@ -27,8 +27,10 @@
 
 ## Техдолг
 - Решение 470 (Aero): pools/load.rs, families.rs, created_log.rs, verify_calls.rs получили ветки aero_basic /
-  slipstream_aero (файлы и так выше 200 — дробить вместе с T456). Пул Slipstream V3 перечитывается целиком каждым блоком
-  (per_block) ради комиссии крючка — нагрузка на узел; легче — только fee() пачкой (fee_refresh.rs all) — после записи.
+  slipstream_aero (файлы и так выше 200 — дробить вместе с T456). Пул Slipstream V3 каждым блоком — лёгкое чтение
+  комиссии пачкой (T470-07 сделано: per_block_aero.rs, aero_cl_head.rs; два прохода на блок), полное — по событиям.
+  pools/aero_cl_head.rs — 250 строк (два прохода пачки и разбор; дробить разбор в отдельный файл). Исполнитель: шаг
+  AERO_BASIC = 26 в исходнике (T470-06) — нужна сборка исполнителя v5 и EVM-сценарий шага (вне агентов).
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

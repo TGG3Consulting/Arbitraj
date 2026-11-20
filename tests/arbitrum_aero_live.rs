@@ -13,8 +13,11 @@ use alloy_primitives::{Address, B256, U256};
 use serde_json::Value;
 
 use arb::core::types::{FeeRule, PoolKind, SolidlyFee};
+use arb::venues::bsc_dex::exec::executor::code::{self, Version};
+use arb::venues::bsc_dex::exec::executor::kind::Params;
 use arb::venues::bsc_dex::math::{solidly_fee, swap_solidly, v2};
 use arb::venues::bsc_dex::pools::abi_aero_basic::{stable_type, volatile_type};
+use arb::venues::bsc_dex::pools::exec_callback;
 use arb::venues::bsc_dex::pools::exec_kind::{self, ExecKind};
 use arb::venues::bsc_dex::pools::families::{self, Proto};
 use arb::venues::bsc_dex::pools::family_variant::Variant;
@@ -34,6 +37,28 @@ fn kinds_and_steps() {
     assert_eq!(f.variant, Variant::SlipstreamAero);
     let f = families::make("slipstream_bsc", "slipstream").unwrap();
     assert_eq!(f.variant, Variant::Base);
+}
+
+/// Решение 470 (T470-06): шаг AERO_BASIC = 26 — только исполнитель v5 (сборки нет); вид семейства aero_basic —
+/// SOLIDLY, у сверенного v5 — AERO_BASIC, у v4 и ниже — SOLIDLY.
+#[test]
+fn aero_basic_step_needs_v5() {
+    assert_eq!(Params::AeroBasic.kind(), 26);
+    assert!(Params::AeroBasic.data().is_empty());
+    assert_eq!(exec_callback::since(ExecKind::AeroBasic), Version::V5);
+    let why = exec_callback::step_absent(ExecKind::AeroBasic, Version::V4).expect("у v4 шага нет");
+    assert!(why.contains("AERO_BASIC") && why.contains("v5"), "{why}");
+    assert!(exec_callback::step_absent(ExecKind::AeroBasic, Version::V5).is_none());
+    assert_eq!(Version::parse("v5"), Some(Version::V5));
+    assert!(code::runtime_of(Version::V5).is_err());
+    let f = families::make("aero-basic-volatile@arbitrum", "aero_basic").unwrap();
+    assert_eq!(f.executor_kind, Some(ExecKind::Solidly));
+    let v5 = exec_kind::for_version(f, Some(Version::V5));
+    assert_eq!(v5, Some(ExecKind::AeroBasic));
+    assert_eq!(exec_kind::for_version(f, Some(Version::V4)), Some(ExecKind::Solidly));
+    assert_eq!(exec_kind::for_version(f, None), Some(ExecKind::Solidly));
+    let cl = families::make("aero-slipstream-arbitrum@arbitrum", "slipstream_aero").unwrap();
+    assert_eq!(exec_kind::for_version(cl, Some(Version::V5)), Some(ExecKind::V3));
 }
 
 fn record() -> Value {

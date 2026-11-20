@@ -117,3 +117,11 @@ Dromos-Labs/metadex-public и metadex-slipstream-public 1.1.0 (pools-arbitrum.js
 свежем блоке: фабрики, модули комиссии и MEV-налога, последние `--max-pools` пулов перечислением allPools(i), по пулам
 Basic — metadata/POOL_TYPE/getReserves/getBaseFee/getPool и getAmountOut на доли резерва; по пулам CL — slot0, fee(),
 крючок. Пишет `tests/data/arbitrum_aero_<дата>/`. Тесты — tests/arbitrum_aero_live.rs (снять #[ignore]).
+
+Решение 470 (T470-01, T470-05, T470-06) — `aero_more.py` (вызывается из aero.py, тот же блок): параметры крючка
+(secondsAgo, defaultScalingFactor, defaultFeeCap), dynamicFeeConfig и blockFee пула, observations((index + 1) % card) и
+observations(0), observe([secondsAgo − δ, 0]) для δ = 0, 1, 3; fee() пула с blockOverrides {time: + δ} и {time, number:
+блок + 1}; котировки Metaquoter (`0x1dDf…7868`, cl-arbitrum.json) quoteExactInputSingleV3 и виртуального квотера бота на
+блоке и на + 1 / + 3 с; у пулов Basic — getAmountOutWithTotalFee и Metaquoter quoteExactInputSingleV2. Тесты —
+tests/arbitrum_aero_first_fee_live.rs (снять #[ignore]). Если узел не принимает blockOverrides в eth_call — в записи
+ошибка узла по этим вызовам (это факт для Тиграна, не сбой скрипта).

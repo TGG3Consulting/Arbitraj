@@ -43,7 +43,9 @@
 //!   per_block_crypto.rs killed).
 //! • Решение 455: crypto-пулы Curve с переводом токена на пул без события пула (transfer_in.rs due) — один раз, на
 //!   первой голове после перевода, если чтение его ещё не учло.
-//! Кто вызывает: pools/session.rs, session_lanes.rs (ramping), check/memory_proof_rules.rs (unevented).
+//! • Решение 470 (T470-07): пулы Aero Slipstream V3 — ЛЁГКОЕ чтение (light): только комиссия крючка пачкой
+//!   (per_block_aero.rs); цена, ликвидность и тики — по событиям пула полным чтением.
+//! Кто вызывает: pools/session.rs, session_lanes.rs (ramping), check/memory_proof_rules.rs (unevented, touched).
 //! От чего зависит: listen.rs (Pools, End), reload.rs (load_one, load_one_block), reload_many.rs (load_group_block,
 //! load_group_with),
 //! per_block_par.rs, load_batch_par.rs (limit), pool_fail.rs, discover.rs (Found), families.rs, ladder_counter.rs,
@@ -62,8 +64,8 @@ use super::families::{Family, Proto};
 use super::family_variant::Variant;
 use super::listen::{End, Pools};
 use super::{
-    ladder_counter, load_batch_par, per_block_balancer, per_block_lb, per_block_par, pool_fail,
-    reload, reload_many,
+    ladder_counter, load_batch_par, per_block_aero, per_block_balancer, per_block_lb, per_block_par,
+    pool_fail, reload, reload_many,
 };
 
 /// Решения 453, 455: crypto-пулы Curve без событий пула (рампа A/gamma, остановленный tricrypto 2021) —
@@ -73,34 +75,43 @@ pub use super::per_block_crypto::{any_ramping, killed, moving, ramping, unevente
 /// Настройка предела одновременных чтений пулов блока, пар общего контракта и приёма / повтора (решение 330).
 pub const PAR: &str = "dex.block_read_parallel_max";
 
-/// Перечитывается ли вид на каждом блоке. Решение 470: и Aero Slipstream V3 (вариант SlipstreamAero) — комиссия
-/// крючка меняется по блокам без событий пула (pools/aero_cl.rs). Ошибок нет.
+/// Перечитывается ли вид на каждом блоке целиком. Ошибок нет.
 pub fn needs(f: &Family) -> bool {
+    matches!(
+        f.proto,
+        Proto::ListaStable
+            | Proto::WooPP
+            | Proto::InfinityStable
+            | Proto::CurveNg
+            | Proto::NomiStable
+            | Proto::MetricOmm
+            | Proto::IziSwap
+            | Proto::BiswapV3
+            | Proto::KyberDmm
+            | Proto::Smardex
+            | Proto::BalancerV2
+            | Proto::BalancerV3
+            | Proto::LbV21
+            | Proto::FluidT1
+            | Proto::LbV20
+            | Proto::LbV22
+    )
+}
+
+/// Решение 470 (T470-07): лёгкое чтение каждым блоком — только комиссия крючка (Aero Slipstream V3, вариант
+/// SlipstreamAero: per_block_aero.rs); состояние пула — по событиям. Ошибок нет.
+pub fn light(f: &Family) -> bool {
     f.variant == Variant::SlipstreamAero
-        || matches!(
-            f.proto,
-            Proto::ListaStable
-                | Proto::WooPP
-                | Proto::InfinityStable
-                | Proto::CurveNg
-                | Proto::NomiStable
-                | Proto::MetricOmm
-                | Proto::IziSwap
-                | Proto::BiswapV3
-                | Proto::KyberDmm
-                | Proto::Smardex
-                | Proto::BalancerV2
-                | Proto::BalancerV3
-                | Proto::LbV21
-                | Proto::FluidT1
-                | Proto::LbV20
-                | Proto::LbV22
-        )
+}
+
+/// Чтение каждым блоком — полное (needs) или лёгкое (light). Ошибок нет.
+pub fn touched(f: &Family) -> bool {
+    needs(f) || light(f)
 }
 
 /// Есть ли в пачке такие пулы. Ошибок нет.
 pub fn any(pools: &[(Found, String)]) -> bool {
-    pools.iter().any(|(f, _)| needs(f.family))
+    pools.iter().any(|(f, _)| touched(f.family))
 }
 
 /// Перечитывать ли этот пул на каждом блоке. Ревью t118 (решение 286): пул iZiSwap / Biswap V3 без USDT в паре лесенки
@@ -134,6 +145,14 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
             || super::transfer_in::due(p, f))
             && !pool_fail::paused(p, &f.reference)
     };
+    // Решение 470 (T470-07): пулы Aero Slipstream V3 — лёгкое чтение комиссии пачкой (per_block_aero.rs).
+    let aero: Vec<&(Found, String)> = pools
+        .iter()
+        .filter(|(f, _)| light(f.family) && !pool_fail::paused(p, &f.reference))
+        .collect();
+    if !aero.is_empty() {
+        per_block_aero::on_head(p, &aero, block).await?;
+    }
     // Решение 330: задан предел — свои пулы копятся и читаются одновременно (per_block_par.rs); не задан — по одному.
     let par = load_batch_par::limit(&p.ctx, PAR);
     let mut singles: Vec<(&Found, &str)> = Vec::new();

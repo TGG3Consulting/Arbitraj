@@ -63,11 +63,16 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut cap: Option<U256> = None;
     for e in entries.iter().copied() {
         let f = e.family;
-        // Решение 470: пул Aero Slipstream V3 — крючок и правило MEV-налога заново (pools/aero_cl.rs).
+        // Решение 470: пул Aero Slipstream V3 — крючок и правило MEV-налога заново (pools/aero_cl.rs; T470-01 — тем же
+        // чтением, что и котировка: первая комиссия следующего блока). Защита от расхождения комиссии — minOut.
         if f.variant == Variant::SlipstreamAero
             && let PoolRef::Contract(pool) = e.pool.reference
         {
-            aero_cl::fee(ctx, f, pool, "latest").await?;
+            let Some(spacing) = e.pool.tick_spacing else {
+                let why = format!("{}: у пула Aero Slipstream V3 нет tickSpacing", f.id);
+                return Err(ctx.err(ErrorCode::NoRoute, why));
+            };
+            aero_cl::fee_latest(ctx, f, pool, spacing).await?;
             continue;
         }
         if !matches!(e.pool.state, PoolState::Solidly { .. }) || seen.contains(&f.id) {

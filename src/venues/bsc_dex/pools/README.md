@@ -333,3 +333,6 @@ Ekubo (решение 447, вид `ekubo`; EkuboProtocol/evm-contracts@61d09daa 
 | `load_aero_basic.rs` | Состояние пула Aero Basic в PoolState::Solidly: резервы, кривая по POOL_TYPE, комиссия getBaseFee, пауза фабрики, правило MEV-налога |
 | `aero_mev.rs` | Правило «MEV-налог 0»: множитель модуля 0 или наибольшие чаевые режима ≤ minThreshold (тип 2, eip1559_l1); fresh — пауза и правило перед отправкой |
 | `aero_cl.rs` | Aero Slipstream V3 (вариант SlipstreamAero вида slipstream): крючок пула = dex.cl_swap_hook, правило MEV-налога крючка, комиссия — fee() пула на блоке |
+| `aero_first_fee.rs` | Решение 470 (T470-01): порт первой комиссии нового блока крючка DynamicSwapFeeHook (_getFirstSwapFee, _getDynamicFee — TWAP-тик на время блока + δ), худшая за δ = 0…N — без узла |
+| `aero_cl_head.rs` | Решение 470 (T470-01, T470-07): комиссия пулов Aero Slipstream V3 пачкой (два прохода: fee(), slot0, конфиг крючка, tickSpacingToFee; наблюдения и observe на каждое δ) — наибольшая из fee() и первой комиссии следующего блока |
+| `per_block_aero.rs` | Решение 470 (T470-07): лёгкое чтение каждым блоком — только комиссия крючка (+ MEV-налог) в запись реестра; состояние пула — по событиям |

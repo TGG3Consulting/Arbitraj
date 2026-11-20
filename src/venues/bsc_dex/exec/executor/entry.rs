@@ -303,7 +303,7 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
                 return shell_step(d, pool, token_in).map_err(|w| ctx.err(ErrorCode::NoRoute, w));
             }
             _ => {
-                let why = format!("{}: Shell — нет состояния, заморожен или чужой вход", e.family.id);
+                let why = format!("{}: Shell — нет состояния, заморожен, чужой вход", e.family.id);
                 return Err(ctx.err(ErrorCode::NoRoute, why));
             }
         },

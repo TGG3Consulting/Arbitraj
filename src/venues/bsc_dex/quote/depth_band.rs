@@ -15,7 +15,7 @@
 //! (решение 205), а не ошибка.
 //! Решение 307: band_from_rate — перевод в USDT по пулам, взятым один раз на подготовку (pools/depth_key.rs Rate).
 //! Кто вызывает: pools/depth_book.rs.
-//! От чего зависит: math/swap_cl.rs, math/tick_math.rs, math/v2.rs, quote/pool_quote.rs, quote/rate.rs, num.rs.
+//! От чего зависит: math/swap_cl.rs, math/tick_math.rs, math/v2.rs, math/solidly_v1_math.rs (решение 483: variant_out), quote/pool_quote.rs, quote/rate.rs, num.rs.
 //! Настройки: полосу dex.depth_band_pct [bsc_dex] даёт вызывающий.
 //!
 //! Цена тика: sqrtPriceX96 = sqrt(1,0001^tick)·2^96 — Uniswap v3-core contracts/libraries/TickMath.sol (getSqrtRatioAtTick).
@@ -32,7 +32,7 @@ use super::super::ctx::Ctx;
 use super::super::math::swap_cl::{self, ClState, Version};
 use super::super::math::swap_elastic::{self, ElasticState};
 use super::super::math::tick_math::{MAX_TICK, MIN_TICK, sqrt_ratio_at_tick};
-use super::super::math::{bin_swap, dmm, v2};
+use super::super::math::{bin_swap, dmm, solidly_v1_math, v2};
 use super::super::num;
 use super::super::pools::family_variant::Variant;
 use super::super::pools::registry::{Entry, Registry};
@@ -298,6 +298,16 @@ fn side(
             },
             _,
         ) => {
+            // Решение 483: у Ramses Legacy выход пары на 1 меньше формулы (Pair.sol L457) — на продаже (сумма —
+            // выход пары) тот же variant_out, что в pool_quote.rs.
+            let minus_one = |r: (U256, bool)| -> Result<(U256, bool), String> {
+                if buy || r.0.is_zero() {
+                    return Ok(r);
+                }
+                let out = solidly_v1_math::variant_out(e.family.variant, r.0)
+                    .ok_or("выход пары меньше 1")?;
+                Ok((out, r.1))
+            };
             if *stable {
                 // Монета — token0? (solidly_depth сам раскладывает монету/встречный по направлению buy/sell).
                 let coin_is_token0 = e.coin == e.pool.token0;
@@ -311,6 +321,7 @@ fn side(
                     buy,
                 )
                 .ok_or_else(|| "расчёт глубины стабильного пула Solidly невозможен".to_string())
+                .and_then(minus_one)
             } else {
                 let (r_in, r_out) = if zfo {
                     (*reserve0, *reserve1)
@@ -325,7 +336,7 @@ fn side(
                 let f = U256::from((grow * SCALE) as u128);
                 let eff =
                     r_in.checked_mul(f).ok_or("переполнение резерва")? / U256::from(SCALE as u128);
-                Ok(pair_depth(eff, r_in, r_out, buy))
+                minus_one(pair_depth(eff, r_in, r_out, buy))
             }
         }
         // StableSwap (решение 122 F): средняя цена исполнения в полосе (quote/stable_depth.rs), без комиссии.

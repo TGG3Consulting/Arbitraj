@@ -14,6 +14,7 @@
   парам, потолок времени --time-limit (по умолчанию 600 с); camelot_v2 — тот же потолок для редких событий.
   Решение 482: forks_482 — форки V2 / V3, подключённые настройками (адреса — шапка forks_482.py); zyber_stable — тот
   же saddle.py на пуле ZyberSwap Stableswap в свою папку tests/data/arbitrum_zyber_stable_<дата>.
+  Решение 483: ramses — пулы Ramses (три DEX), скрипт ramses.py.
 Кто вызывает: tools/arbitrum_record/record_all.py.
 От чего зависит: нет (дата папки zyber_stable — ARB_RECORD_DATE, её ставит record_all.py).
 Ошибок нет.
@@ -153,6 +154,9 @@ def steps(rpc, wallet, ekubo_from):
         ("ekubo", "ekubo.py", ["--rpc", rpc, "--gt"]),
         # Решение 473: Balancer V2 других фабрик (адреса по умолчанию — FACTORIES в шапке скрипта).
         ("balancer_v2_more", "balancer_v2_more.py", ["--rpc", rpc]),
+        # Решение 483: Ramses CL / CL V2 / Legacy V2 — пулы GeckoTerminal и allPairs, проба обмена swap (eth_call с
+        # переопределением кода вызывающего), QuoterV2, getAmountOut пар; адреса — в шапке скрипта.
+        ("ramses", "ramses.py", ["--rpc", rpc]),
         ("exec_v4_live", "exec_v4_live.py", ["--rpc", rpc] + (["--wallet", wallet] if wallet else [])),
     ]
     return out

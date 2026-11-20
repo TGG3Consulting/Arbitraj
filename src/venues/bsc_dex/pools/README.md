@@ -362,3 +362,11 @@ Ekubo (решение 447, вид `ekubo`; EkuboProtocol/evm-contracts@61d09daa 
 | `aero_cl_head.rs` | Решение 470 (T470-01, T470-07): комиссия пулов Aero Slipstream V3 пачкой (два прохода: fee(), slot0, конфиг крючка, tickSpacingToFee; наблюдения и observe на каждое δ) — наибольшая из fee() и первой комиссии следующего блока |
 | `per_block_aero.rs` | Решение 470 (T470-07): лёгкое чтение каждым блоком — только комиссия крючка (+ MEV-налог) в запись реестра; состояние пула — по событиям |
 | `aero_fee_seen.rs` | Ревью t240: комиссия Aero Slipstream V3 из чтения старого блока не перетирает комиссию более нового (память блок → комиссия по пулу) |
+
+Решение 483 — Ramses на Arbitrum (варианты видов, `family_variant.rs`: RamsesCl, RamsesClV2, RamsesLegacy):
+
+| Файл | Что делает |
+| --- | --- |
+| `abi_ramses.rs` | ABI отличий Ramses: slot0 / ticks() обеих CL-линий, currentFee() старой линии, Mint линии V3 (с index), FeeAdjustment пула; тест сверяет подписи с исходниками Sourcify |
+| `ramses.rs` | События и создание пулов вариантов Ramses: FeeAdjustment → комиссия записи, Mint с index, Sync(uint112, uint112) легаси, PoolCreated Uniswap V3 / PairCreated без stable |
+| `load_ramses.rs` | Состояние пула Ramses CL / CL V2: slot0 своей длины, liquidity, tickBitmap + ticks() прямыми геттерами, комиссия currentFee() / fee() при каждом чтении |

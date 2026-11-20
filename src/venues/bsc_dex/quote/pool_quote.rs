@@ -244,6 +244,8 @@ pub fn swap(
         // volatile → обычная V2 x·y=k (math/v2). Комиссия пула — fee (числитель над 10000) из состояния: stable передаёт
         // его прямо в get_amount_out, volatile — дробью (10000−fee)/10000 в v2. Стабильная сторона — только точный вход
         // (обратной формулы get_y под точный выход нет); волатильная — обе стороны (V2).
+        // Решение 483: Ramses Legacy (вариант Solidly V1) — выход getAmountOut пары на 1 меньше формулы (Pair.sol L457:
+        // `_getAmountOut(...) - 1`; math/solidly_v1_math.rs variant_out / variant_want).
         // Решение 122 F: Solidly V1 (THENA V1) — своя стабильная математика Pair.sol (math/solidly_v1_math); точный вход
         // волатильного пула — формула контракта (вход минус floor(in·fee/10000), затем in·R/(R+in) — одинакова у THENA V1
         // и Velodrome), а не V2-дробь (она округляет вход иначе); точный выход волатильного — по-прежнему V2-обратная
@@ -298,6 +300,7 @@ pub fn swap(
                 } else {
                     swap_solidly::get_amount_out(net()?, r_in, r_out, dec_in, dec_out, U256::ZERO)
                 }
+                .and_then(|o| solidly_v1_math::variant_out(e.family.variant, o))
                 .ok_or_else(none)?;
                 Ok(Swapped {
                     amount_in: amount,
@@ -310,6 +313,7 @@ pub fn swap(
                 let ratio = solidly_fee::keep_ratio(fee).ok_or_else(none)?;
                 if exact_in {
                     solidly_v1_math::volatile_amount_out(net()?, r_in, r_out, U256::ZERO)
+                        .and_then(|o| solidly_v1_math::variant_out(e.family.variant, o))
                         .map(|o| Swapped {
                             amount_in: amount,
                             amount_out: o,
@@ -317,7 +321,10 @@ pub fn swap(
                         })
                         .ok_or_else(none)
                 } else {
-                    v2::amount_in(amount, r_in, r_out, ratio)
+                    // Решение 483: у Ramses Legacy выход пары на 1 меньше формулы — формуле нужен выход + 1.
+                    let want = solidly_v1_math::variant_want(e.family.variant, amount)
+                        .ok_or_else(none)?;
+                    v2::amount_in(want, r_in, r_out, ratio)
                         .map(|i| Swapped {
                             amount_in: i,
                             amount_out: amount,

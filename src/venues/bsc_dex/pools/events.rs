@@ -2,7 +2,7 @@
 //! Что делает: общий итог применения события пула и выбор разбора по виду пула; topic0 событий для подписки
 //! (все события — глубоким пулам, только добавление ликвидности — мелким).
 //! Кто вызывает: pools/listen_log.rs.
-//! От чего зависит: events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, events_ekubo.rs (решение 447), families.rs, registry.rs.
+//! От чего зависит: ramses.rs (решение 483: варианты Ramses), events_v2.rs, events_v3.rs, events_cl.rs, events_bin.rs, events_ekubo.rs (решение 447), families.rs, registry.rs.
 //! Настройки: нет.
 
 use alloy::rpc::types::Log;
@@ -37,6 +37,8 @@ pub enum Applied {
 /// topic0 событий, которые слушаются у пулов этого вида. Ошибок нет.
 pub fn topics(f: &Family) -> Vec<B256> {
     match f.proto {
+        // Решение 483: варианты Ramses — свои события (FeeAdjustment, Mint с index, Sync uint112; ramses.rs).
+        _ if super::ramses::handles(f) => super::ramses::topics(f),
         Proto::V2 => events_v2::topics(),
         // Slipstream (Topaz v3) — форк Uni V3, события пула идентичны (events_v3; topics(Slipstream) даёт Swap Uni V3).
         Proto::PancakeV3 | Proto::UniswapV3 | Proto::Slipstream => events_v3::topics(f.proto),
@@ -86,6 +88,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
     use super::abi_v4::{IInfinityBin, IInfinityCl, IUniswapV4};
     use alloy::sol_types::SolEvent;
     match f.proto {
+        _ if super::ramses::handles(f) => super::ramses::liquidity_topics(f),
         Proto::V2 => vec![IV2Pair::Mint::SIGNATURE_HASH],
         Proto::PancakeV3 | Proto::UniswapV3 | Proto::Slipstream => {
             vec![IV3Pool::Mint::SIGNATURE_HASH]
@@ -126,6 +129,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
 /// Применяет событие к записи. Принимает: запись, лог. Возвращает: Applied. Ошибок нет (разбор не удался → Refresh).
 pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     let r = match e.family.proto {
+        _ if super::ramses::handles(e.family) => super::ramses::apply(e, log),
         Proto::V2 => events_v2::apply(e, log),
         Proto::PancakeV3 | Proto::UniswapV3 | Proto::Slipstream => events_v3::apply(e, log),
         Proto::InfinityCl | Proto::UniswapV4 => events_cl::apply(e, log),

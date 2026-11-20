@@ -212,3 +212,11 @@ observations(0), observe([secondsAgo − δ, 0]) для δ = 0, 1, 3; fee() пу
 блоке и на + 1 / + 3 с; у пулов Basic — getAmountOutWithTotalFee и Metaquoter quoteExactInputSingleV2. Тесты —
 tests/arbitrum_aero_first_fee_live.rs (снять #[ignore]). Если узел не принимает blockOverrides в eth_call — в записи
 ошибка узла по этим вызовам (это факт для Тиграна, не сбой скрипта).
+
+**Ramses (решение 483):** `ramses.py` (+ `ramses_calls.py`) — пулы Ramses CL (GeckoTerminal `ramses-v2`), Ramses CL V2
+(`ramses-v3-arbitrum`) и пары Ramses Legacy V2 (allPairs фабрики 0xADd3…Dc3B) на одном свежем блоке: slot0, liquidity,
+fee() / currentFee(), слова tickBitmap и ticks(), реестры фабрик, проба обмена swap пула (eth_call с переопределением
+кода вызывающего: код откатывается с данными обратного вызова — дельты обмена), QuoterV2 линии V3, getAmountOut пар;
+логи FeeAdjustment / Mint / Sync / PairCreated окном `--log-blocks`. Повтор: `python3 tools/arbitrum_record/record_all.py
+--rpc http://127.0.0.1:8547 --only ramses` (Windows — `py tools\arbitrum_record\record_all.py …`; нужен
+api.geckoterminal.com). Тест — `tests/arbitrum_ramses_live.rs` (снять #[ignore] после записи).

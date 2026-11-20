@@ -34,6 +34,12 @@
   Обмен с BPT самого пула (composable stable / stable phantom / managed) не считается — TASKS T473-02. Unit-тестов
   LinearMath / курсов на числах официальных тестов монорепо нет (монорепо в рабочей копии нет) — проверка записью
   balancer_v2_more.py (T473-01).
+- Решение 483 (Ramses на Arbitrum): Ramses CL исполним и сверяем только после пересборки исполнителя v5 и
+  out/VirtualQuoter.* (ramsesV2SwapCallback — в исходниках; T483-02). Подписки на SetPairFee фабрики легаси нет —
+  комиссия пары перечитывается путём решения 273 (T483-04). `wc -l`: pools/created_log.rs, load.rs, events.rs — и так
+  больше 200 (добавлены развилки по 2–17 строк); новые файлы — abi_ramses.rs 98, load_ramses.rs 112, ramses.rs 155,
+  ramses_calls.py 94; больше 200: tests/arbitrum_ramses_live.rs 287 и tools/arbitrum_record/ramses.py 207 (дробить:
+  тест — на файлы CL и легаси, скрипт — легаси в ramses_legacy.py).
 - Решение 474 (Balancer V3 через буфер ERC4626): нужна сборка исполнителя v5 (шаг BALANCER_V3_BUF = 27 — только в
   исходнике), EVM-тест и запись приёмки шага 27 (класс в live_class.rs); квотер vault_depth / spot — пределы по сырым
   балансам обёрток (сторона через буфер — в базовом токене); PoolRegistered не сопоставляет пул с базовым токеном

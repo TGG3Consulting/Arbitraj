@@ -2278,6 +2278,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Если не задана:** необязательная (src/settings/schema.rs:137-139: не задана — функция работает, отключается только описанное). Описание каталога (src/settings/catalog/dex.rs:190): «Не задано — как раньше по виду пула (THENA V1 — getFee(stable), Topaz — getFee(pool, stable); правило — числитель над 10000)»
 - **Влияет на торговлю:** да — расчёт: откуда комиссия пула Solidly (pools/solidly_fee_read.rs).
 - **Связанные ключи:** dex.solidly_fee_method, dex.solidly_fee_method_stable.
+- **Решение 483:** у вида `solidly_v1_ramses` (Ramses Legacy V2) обязательна — не задана: DEX не подключена
+  (families.rs required); ставить `pool` (fee() пары, Pair.sol L56) с правилом numerator над 1000000 (docs/FIRST_RUN.md).
 - **Статус:** в релизе 141619bc.
 
 ### `dex.solidly_max_gas_method`
@@ -2479,6 +2481,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Если не задана:** необязательная (src/settings/schema.rs:137-139: не задана — функция работает, отключается только описанное). Описание каталога (src/settings/catalog/dex.rs:188): «Не задана — проверки нет (как раньше)»
 - **Влияет на торговлю:** да — исполнение: обмен через пул V3-форка (pools/exec_callback.rs).
 - **Связанные ключи:** в описании не названы.
+- **Решение 483:** у вида `v3_fork_ramses` (Ramses CL) обязательна — не задана: DEX не подключена (families.rs
+  required); ставить `ramsesV2SwapCallback(int256,int256,bytes)` (RamsesV2Pool.sol L1238, L1256).
 - **Статус:** в релизе 141619bc.
 
 ### `dex_dex.base_tokens`

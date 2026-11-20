@@ -27,6 +27,10 @@ pub mod abi_metric;
 pub mod abi_nomi;
 pub mod abi_saddle;
 pub mod abi_slipstream;
+// Решение 483: варианты Ramses (Arbitrum) — ABI отличий, события и создание пулов, чтение CL-линий.
+pub mod abi_ramses;
+pub mod load_ramses;
+pub mod ramses;
 pub mod abi_smardex;
 pub mod abi_balancer;
 pub mod abi_balancer_more;

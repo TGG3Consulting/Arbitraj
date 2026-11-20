@@ -33,13 +33,10 @@
     (pools/fusion_head.rs), горизонт начала окна — dex.fusion_fee_horizon_s (после выкладки задать; за горизонтом —
     перечитывание оракула на голове); (в) СДЕЛАНО: сверка с квотером на блоке берёт комиссию того же блока
     (fusion_head::same_block). **Ревью t236 — исправлено (DECISIONS 463, «Ревью t236»):** комиссия не считается → пул
-    недостоверен до полного чтения (settle.rs Need::Fee); dex.fusion_fee_horizon_s обязательна, 1…86400; getTimepoints
-    частями по 64 точки (pools/fusion_oracle.rs), откат части — причина в журнал; чтение у края горизонта — пулы
-    одновременно (pools/fusion_head_read.rs), одновременно с остальными видами; время головы — heads.rs time_since;
-    книга — forget / orphan; сверка — данные оракула этого же чтения (own_read). **Ждёт решения Тиграна:** размер части
-    getTimepoints 64 точки (константа CHUNK, fusion_oracle.rs) и предел горизонта 86400 заданы при исправлении ревью —
-    замера газа getTimepoints на точку нет (узел: RPCGasCap = 100M по docs/notes/own-node-connect-audit-2026-11-03.md);
-    оставить константами или замерить на своём узле. **Проверка ветки volumePerLiquidityInBlock ≠ 0 (порт = Quoter
+    недостоверен до полного чтения (settle.rs Need::Fee); dex.fusion_fee_horizon_s обязательна, больше 0; getTimepoints
+    частями по dex.fusion_oracle_chunk точек (pools/fusion_oracle.rs), откат части — причина в журнал; чтение у края
+    горизонта — пулы одновременно (pools/fusion_head_read.rs), одновременно с остальными видами; время головы — heads.rs
+    time_since; книга — forget / orphan; сверка — данные оракула этого же чтения (own_read). **Проверка ветки volumePerLiquidityInBlock ≠ 0 (порт = Quoter
     при объёме блока) ждёт записи слота 3 — повтор записи Тиграна, скрипт t237 45da3813; до неё THENA Fusion НЕ
     включать (dex.pool_enabled = нет).** Открыто: «память отстаёт» сверки (dex.quoter_memory_lag_blocks) сравнивает и комиссию —
     у THENA Fusion в памяти комиссия следующего блока, в свежем состоянии — того же блока: при заданной настройке

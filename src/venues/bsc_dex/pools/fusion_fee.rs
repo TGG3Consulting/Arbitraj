@@ -9,13 +9,14 @@
 //! Начало окна берётся на время блока + 0 … + 1 + dex.fusion_fee_horizon_s: по нему комиссия пересчитывается на каждой
 //! новой голове без обращения к узлу (fusion_head.rs; данные — remember). Ревью t236 (пп. 1, 2): настройка обязательна
 //! и больше 0 (не задана — NotConfigured с её именем: пул не читается и ждёт её, revive.rs; 0 — так же: при 0 тихий
-//! пул перечитывался бы каждым блоком); верхняя граница — в каталоге (settings/catalog/dex.rs). Комиссия следующего
+//! пул перечитывался бы каждым блоком); так же обязательна dex.fusion_oracle_chunk (> 0). Комиссия следующего
 //! блока не считается — ошибка с причиной, включая причины отсутствующих частей начала окна (откат getTimepoints).
 //! Кто вызывает: pools/load_algebra.rs (next_fee), pools/integral_fee.rs (read_fee — после Swap THENA Fusion),
 //! pools/fusion_head_read.rs (read_fee — край горизонта на голове).
 //! От чего зависит: ctx.rs, node/call.rs, pools/abi_algebra.rs, fusion_oracle.rs, fusion_head.rs (remember),
 //! math/fee_algebra_v1.rs.
-//! Настройки: dex.fusion_fee_horizon_s [bsc_dex] (обязательна для THENA Fusion; горизонт начала окна, секунды).
+//! Настройки: dex.fusion_fee_horizon_s [bsc_dex] (обязательна для THENA Fusion; горизонт начала окна, секунды);
+//! dex.fusion_oracle_chunk [bsc_dex] (обязательна; точек в одном eth_call getTimepoints).
 //!
 //! Источник: код пула THENA Fusion — Sourcify 56, пул 0x1b9a1120…ef7d, полное совпадение (AlgebraPool.sol globalState,
 //! _getNewFee); оператор — см. fusion_oracle.rs.
@@ -40,6 +41,8 @@ pub struct Head {
 
 /// Настройка горизонта начала окна (решение 463, задача координатора к T463-02).
 pub const HORIZON: &str = "dex.fusion_fee_horizon_s";
+/// Настройка: точек начала окна в одном eth_call getTimepoints (ревью t236: размер части — не константа кода).
+pub const CHUNK: &str = "dex.fusion_oracle_chunk";
 
 /// Комиссия следующего блока: globalState пула на блоке, затем next_fee. Принимает: окружение, пул, блок-тег.
 /// Возвращает: комиссию (пипсы). Ошибки: как у next_fee.
@@ -55,11 +58,13 @@ pub async fn read_fee(ctx: &Ctx, pool: Address, tag: &str) -> GatewayResult<u32>
 
 /// Комиссия следующего блока по состоянию пула `head` на блоке `tag` (fee_algebra_v1::next_block_fee); данные — в
 /// книгу fusion_head.rs (remember). Принимает: окружение, пул, состояние, блок-тег. Возвращает: комиссию (пипсы).
-/// Ошибки: NotConfigured (dex.fusion_fee_horizon_s не задана или 0); узел; BadResponse — ответ не по ABI, откат
-/// нужного вызова, комиссия не считается (нужного начала окна нет — с причинами частей getTimepoints).
+/// Ошибки: NotConfigured (dex.fusion_fee_horizon_s или dex.fusion_oracle_chunk не задана или 0); узел;
+/// BadResponse — ответ не по ABI, откат нужного вызова, комиссия не считается (нужного начала окна нет — с причинами
+/// частей getTimepoints).
 pub async fn next_fee(ctx: &Ctx, pool: Address, head: Head, tag: &str) -> GatewayResult<u32> {
     let h = horizon(ctx)?;
-    let got = fusion_oracle::read(ctx, pool, head, tag, h).await?;
+    let chunk = positive(ctx, CHUNK)?;
+    let got = fusion_oracle::read(ctx, pool, head, tag, (h, chunk)).await?;
     let Some(fee) = fee_algebra_v1::next_block_fee(&got.oracle, got.ts, head.tick) else {
         let why = format!(
             "комиссия следующего блока (время блока {} и + 1 с) не считается — нет начала окна оракула на это время \
@@ -86,18 +91,31 @@ pub fn gaps(g: &[String]) -> String {
 
 /// dex.fusion_fee_horizon_s: на сколько секунд после блока чтения берётся начало окна оракула (пересчёт комиссии на
 /// новых головах без узла — fusion_head.rs). Возвращает: секунды (> 0). Ошибки: NotConfigured — не задана, 0 или
-/// больше u32 (имя настройки — в ошибке).
+/// столько, что время + WINDOW + 2 не помещается в uint32 (имя настройки — в ошибке).
 pub fn horizon(ctx: &Ctx) -> GatewayResult<u32> {
     let h = ctx.int(HORIZON)?;
     match u32::try_from(h) {
         Ok(v) if v > 0 && v <= u32::MAX - fee_algebra_v1::WINDOW - 2 => Ok(v),
-        _ => {
-            let mut e = ctx.err(
-                ErrorCode::NotConfigured,
-                format!("{HORIZON} = {h}: нужно целое больше 0 (секунды)"),
-            );
-            e.setting = Some(HORIZON.to_string());
-            Err(e)
-        }
+        _ => Err(not_set(ctx, HORIZON, h)),
     }
+}
+
+/// Целая настройка больше 0 (dex.fusion_oracle_chunk). Принимает: окружение, имя. Возвращает: значение.
+/// Ошибки: NotConfigured — не задана или 0 (имя настройки — в ошибке).
+pub fn positive(ctx: &Ctx, name: &str) -> GatewayResult<usize> {
+    let n = ctx.int(name)?;
+    match usize::try_from(n) {
+        Ok(v) if v > 0 => Ok(v),
+        _ => Err(not_set(ctx, name, n)),
+    }
+}
+
+/// NotConfigured «значение не подходит» с именем настройки. Ошибок нет.
+fn not_set(ctx: &Ctx, name: &str, v: u64) -> crate::gateway::errors::GatewayError {
+    let mut e = ctx.err(
+        ErrorCode::NotConfigured,
+        format!("{name} = {v}: нужно целое больше 0"),
+    );
+    e.setting = Some(name.to_string());
+    e
 }

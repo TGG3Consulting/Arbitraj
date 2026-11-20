@@ -7,9 +7,9 @@
 //!    volumePerLiquidityInBlock); заголовок блока (время);
 //! 2) feeConfig() оператора; начало окна на время блока + 0 … + 1 + горизонт — getTimepoints(время блока + 1 +
 //!    горизонт, [WINDOW + 1 + горизонт, …, WINDOW], tick, index, liquidity) оператора от имени пула (onlyPool: eth_call
-//!    с from = пул, поэтому не Multicall3) ЧАСТЯМИ по CHUNK точек (ревью t236, п. 2): каждая часть — отдельный
-//!    eth_call с тем же time, газ одной части не растёт с горизонтом; размер части — константа кода (структура
-//!    запроса, не порог торговли; замера газа getTimepoints на точку нет — TASKS T463-02).
+//!    с from = пул, поэтому не Multicall3) ЧАСТЯМИ по dex.fusion_oracle_chunk точек (ревью t236, п. 2): каждая
+//!    часть — отдельный eth_call с тем же time, газ одной части не растёт с горизонтом; размер части — настройка
+//!    (замера газа getTimepoints на точку нет; откат части с out of gas — уменьшить).
 //!
 //! Откат или ошибка узла на части (пул моложе окна — require 'OLD'; любой другой) — этих значений начала окна нет,
 //! причина части сохраняется (Got.gaps) и попадает в ошибку / журнал, если комиссия без них не считается (ветка
@@ -17,7 +17,8 @@
 //! Кто вызывает: pools/fusion_fee.rs (next_fee).
 //! От чего зависит: ctx.rs, node/call.rs, node/rpc.rs (batch), node/jsonrpc.rs, pools/abi_algebra.rs, load_cl.rs (i24),
 //! math/fee_algebra_v1.rs, math/adaptive_fee.rs.
-//! Настройки: нет (горизонт передаёт fusion_fee.rs — dex.fusion_fee_horizon_s).
+//! Настройки: нет (горизонт и размер части передаёт fusion_fee.rs — dex.fusion_fee_horizon_s,
+//! dex.fusion_oracle_chunk).
 //!
 //! Источник: код пула THENA Fusion — Sourcify 56, пул 0x1b9a1120…ef7d, полное совпадение (PoolState.sol,
 //! PoolImmutables.sol dataStorageOperator, AlgebraPool.sol timepoints); DataStorageOperator.sol (feeConfig,
@@ -39,9 +40,6 @@ use super::super::node::rpc::{self, SOURCE};
 use super::abi_algebra::{IAlgebraPool as P, IDataStorageOperator as Op};
 use super::fusion_fee::Head;
 use super::load_cl::i24;
-
-/// Точек начала окна в одном eth_call getTimepoints (см. шапку).
-pub const CHUNK: usize = 64;
 
 /// Данные оракула, прочитанные на блоке: оракул, время блока, причины отсутствующих частей начала окна.
 #[derive(Debug, Clone)]
@@ -93,9 +91,16 @@ fn timepoint(b: &Bytes) -> GatewayResult<Timepoint> {
     })
 }
 
-/// Данные оракула пула на блоке (см. шапку). Принимает: окружение, пул, состояние пула, блок-тег, горизонт (с).
-/// Возвращает: Got. Ошибки: узел, BadResponse (ответ не по ABI, нет timestamp, часть начала окна не той длины).
-pub async fn read(ctx: &Ctx, pool: Address, head: Head, tag: &str, h: u32) -> GatewayResult<Got> {
+/// Данные оракула пула на блоке (см. шапку). Принимает: окружение, пул, состояние пула, блок-тег, (горизонт (с),
+/// точек в части getTimepoints, > 0). Возвращает: Got. Ошибки: узел, BadResponse (ответ не по ABI, нет timestamp,
+/// часть начала окна не той длины).
+pub async fn read(
+    ctx: &Ctx,
+    pool: Address,
+    head: Head,
+    tag: &str,
+    (h, chunk): (u32, usize),
+) -> GatewayResult<Got> {
     let i = head.index;
     let idx = [i.wrapping_sub(1), i, i.wrapping_add(1), i.wrapping_add(2), 0];
     let op_call = P::dataStorageOperatorCall {}.abi_encode();
@@ -129,7 +134,7 @@ pub async fn read(ctx: &Ctx, pool: Address, head: Head, tag: &str, h: u32) -> Ga
     let ago: Vec<u32> = (0..n).map(|k| WINDOW + (n - 1 - k)).collect();
     let end = ts.wrapping_add(1).wrapping_add(h);
     let mut b = vec![eth_call(None, op, Op::feeConfigCall {}.abi_encode(), tag)];
-    for part in ago.chunks(CHUNK) {
+    for part in ago.chunks(chunk) {
         let gt = Op::getTimepointsCall {
             time: end,
             secondsAgos: part.to_vec(),
@@ -153,8 +158,8 @@ pub async fn read(ctx: &Ctx, pool: Address, head: Head, tag: &str, h: u32) -> Ga
         base_fee: c.baseFee,
     };
     let (mut starts, mut gaps) = (Vec::with_capacity(ago.len()), Vec::new());
-    for (j, part) in ago.chunks(CHUNK).enumerate() {
-        let t0 = ts.wrapping_add((j * CHUNK) as u32);
+    for (j, part) in ago.chunks(chunk).enumerate() {
+        let t0 = ts.wrapping_add((j * chunk) as u32);
         let t1 = t0.wrapping_add(part.len() as u32 - 1);
         match answer::<Bytes>(got.next()) {
             Ok(out) => starts.extend(part_starts(&out, t0, part.len())?),

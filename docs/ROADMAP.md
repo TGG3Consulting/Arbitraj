@@ -26,6 +26,11 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 473 (Balancer V2 других фабрик, `wc -l`): pools/verify_balancer.rs 238 (было 219: вид dex.balancer_pool и
+  отказ пары с BPT пула), pools/load_balancer.rs 207 (было 195). Дробить: judge / tokens — в verify_balancer_judge.rs.
+  Обмен с BPT самого пула (composable stable / stable phantom / managed) не считается — TASKS T473-02. Unit-тестов
+  LinearMath / курсов на числах официальных тестов монорепо нет (монорепо в рабочей копии нет) — проверка записью
+  balancer_v2_more.py (T473-01).
 - Решение 456 (слияние семейств Arbitrum, `wc -l`): сверх ориентира 200 после слияния — venues/bsc_dex/pools/group.rs
   245 (было 209: подписка Transfer решения 455 + хаб Ekubo решения 454 в одной Held), math/lb_swap.rs 215 (v2.0 + V2.2
   в одном цикле), pools/exec_callback.rs 323, exec/executor/kind.rs 270, pools/exec_kind.rs 317, pools/families.rs 824,

@@ -11,10 +11,13 @@
 //! legacy — как было (eth_gasPrice + надбавка); eip1559_l1 — база блока головы (baseFeePerGas, quote/gas_base.rs) +
 //! чаевые send.priority_fee_gwei, а для отправки — цены типа 2 (fees). Не задана — цены нет (NotConfigured), котировки
 //! и отправки площадки нет. Кэш помнит модель: смена модели на лету — новый запрос к узлу.
+//! Решение 436 (Б): при eip1559_l1 вместе с baseFee блока (одновременно) читается минимум цены газа сети —
+//! ArbGasInfo.getMinimumGasPrice (node/arb_min_gas.rs, dex.arb_gas_info; не задана — не читается); сбой чтения —
+//! цены газа на этом блоке нет. Минимум берёт канал «Секвенсор Arbitrum» (send/ready.rs). Отдельного опроса нет.
 //! Кто вызывает: quote/mod.rs, exec/txs.rs, exec/bundle_send.rs, wallet/transfer.rs, frozen.rs (pinned).
-//! От чего зависит: node/rpc.rs, node/heads.rs, num.rs, send/gas_mode.rs, quote/gas_base.rs.
+//! От чего зависит: node/rpc.rs, node/heads.rs, num.rs, send/gas_mode.rs, quote/gas_base.rs, node/arb_min_gas.rs.
 //! Настройки: dex.gas_mode, send.gas_price_markup_pct (legacy), send.priority_fee_gwei и send.max_fee_margin_pct
-//! (eip1559_l1) [площадка DEX]; узел — bsc.node_http_url.
+//! (eip1559_l1), dex.arb_gas_info (eip1559_l1, решение 436) [площадка DEX]; узел — bsc.node_http_url.
 //!
 //! eth_gasPrice → wei — https://github.com/ethereum/execution-apis/blob/16caee274b0d4fb7a0316f294029adac88a75a09/src/eth/fee_market.yaml ;
 //! «цену газа брать eth_gasPrice + запас из настроек, без зашитого минимума» — research/flow/bsc_dex.md, раздел 5.
@@ -28,6 +31,7 @@ use serde_json::json;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
+use super::super::node::arb_min_gas;
 use super::super::node::heads::Heads;
 use super::super::node::rpc;
 use super::super::num;
@@ -158,13 +162,21 @@ impl GasPrice {
         num::to_units(v, 0).ok_or_else(bad)
     }
 
-    /// Обновляет кэш цены газа с узла: legacy — eth_gasPrice; eip1559_l1 — baseFeePerGas блока (gas_base.rs).
+    /// Обновляет кэш цены газа с узла: legacy — eth_gasPrice; eip1559_l1 — baseFeePerGas блока (gas_base.rs) и
+    /// минимум цены газа сети (node/arb_min_gas.rs refresh, решение 436).
     /// Держится под flight — один запрос на всех. Принимает: окружение, номер блока, модель. Возвращает: цену в wei.
     /// Ошибки: узел.
     async fn fetch(&self, ctx: &Ctx, block: u64, mode: GasMode) -> GatewayResult<U256> {
         let p: U256 = match mode {
             GasMode::Legacy => rpc::call(ctx, "eth_gasPrice", json!([])).await?,
-            GasMode::Eip1559L1 => gas_base::fetch(ctx, block).await?,
+            GasMode::Eip1559L1 => {
+                // Решение 436 (Б): минимум цены газа сети (ArbGasInfo) — с узла, вместе с baseFee того же блока.
+                let (p, ()) = tokio::try_join!(
+                    gas_base::fetch(ctx, block),
+                    arb_min_gas::refresh(ctx, block)
+                )?;
+                p
+            }
         };
         *self.cache.lock().unwrap_or_else(|x| x.into_inner()) = Some((block, mode, p));
         Ok(p)

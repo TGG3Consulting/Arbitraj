@@ -7,6 +7,7 @@
 pub mod abi;
 pub mod abi_dex;
 pub mod arb_gas;
+pub mod arb_min_gas;
 pub mod block_ms;
 pub mod call;
 pub mod chain_id;

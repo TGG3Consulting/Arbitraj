@@ -13,6 +13,8 @@
 //! как было (gasPrice = eth_gasPrice + надбавка, не ниже минимума каналов; legacy-транзакция); eip1559_l1 — тип 2
 //! (maxFeePerGas = база головы × запас + чаевые, quote/gas.rs fees; минимум каналов — по цене, которую заплатит);
 //! предел пары и запас на газ — по потолку цены (maxFeePerGas у типа 2). Не задана — транзакция не уходит.
+//! Решение 436 (А): у канала секвенсора с окном channel.cond_time_window_s — условие timestampMax от времени головы
+//! (send/sequencer_cond.rs head_time — до отправки).
 //! Кто вызывает: exec/trade.rs, wallet/transfer.rs; send_capped — exec/executor/trade.rs, exec/cycle_exec.rs.
 //! От чего зависит: exec/tx_fee.rs (цена газа по модели, решение 435), exec/chain_tx.rs (факт; газ перевода чаевых — решение 236, дополнение п. 6), exec/swap_ctx.rs (seed — «чем найти» с чаевыми, решение 231), send/*, quote/gas.rs, wallet/signer.rs, wallet/nonce.rs, wallet/inflows.rs, node/heads.rs, num.rs.
 //! Настройки: send.* через send/tx.rs (SendCfg — читается до отправки), channel.*.
@@ -140,6 +142,9 @@ pub async fn send_capped(
     let need = super::gas_fund::need_wei(value, price.cap(), gas, tip_cost);
     super::gas_fund::ensure(ctx, from, need).await?;
     let head = env.heads.fresh(ctx)?;
+    // Решение 436 (А): время головы для условия секвенсора Arbitrum — до отправки (решение 398); каналов с окном
+    // channel.cond_time_window_s нет — None, узел не спрашивается.
+    let head_time = send::sequencer_cond::head_time(ctx, &env.heads, &ready).await?;
     let d = send::dispatch(
         ctx,
         &env.stats,
@@ -147,6 +152,7 @@ pub async fn send_capped(
         &signed.raw,
         tip.as_ref().map(|t| &t.0.raw),
         head.number + cfg.bundle_max,
+        head_time,
     )
     .await?;
     let method = if ready.iter().all(|r| r.method == SendMethod::Bundle) {

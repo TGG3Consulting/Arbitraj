@@ -123,7 +123,7 @@ Permit2, Multicall3, исполнитель с тем же nonce, токены-�
 | 433-в | Сборка транзакции EIP-1559 (тип 2) | send/tx_1559.rs | сделано: сборка, maxFee/чаевые, цена по EIP-1559; тест подписи типа 2 на chainId и baseFee из записей 01/05. В отправку — 433-д |
 | 433-г | Id площадки из окружения (1.1) | ctx.rs и 7 файлов | сделано (решение 435): Ctx.place (ctx_place.rs); deal_card.rs, human.rs — решением 432 |
 | 433-д | Включение `dex.gas_mode` в отправку: exec/txs.rs:118-149, exec/bundle_send.rs, send/cancel.rs (отмена — тип 2 с повышением обеих цен), wallet/transfer.rs, quote/gas.rs (baseFee головы вместо eth_gasPrice), предпроверка газа exec/gas_fund.rs; запас `maxFee` и чаевые — настройки | send/, exec/, quote/ | сделано (решение 435): quote/gas.rs, gas_base.rs, exec/tx_fee.rs, send/tx_price.rs; send.max_fee_margin_pct, send.priority_fee_gwei; бандл — только legacy |
-| 433-е | Канал секвенсора: отдельный канал списка send/channels.rs с адресом-настройкой, одиночная отправка; бандл на площадке без бандловых каналов — отказ до отправки с причиной | send/sequencer.rs | сделано (решение 435): sequencer.rs, channel.chain (channels.rs serves); conditional — вопрос (нет формата в документации) |
+| 433-е | Канал секвенсора: отдельный канал списка send/channels.rs с адресом-настройкой, одиночная отправка; бандл на площадке без бандловых каналов — отказ до отправки с причиной | send/sequencer.rs | сделано (решение 435): sequencer.rs, channel.chain (channels.rs serves); conditional — сделан решением 436 (формат по исходникам Nitro, send/sequencer_cond.rs) |
 | 433-ж | Узел по площадке: `bsc.*` → «вся система + площадка», чтение `At{venue}` (27 мест `At::default()` в адаптере) | catalog/dex.rs:65-86, node/*, ctx_url.rs:22 | сделано (решение 435): 21 настройка bsc.* — GV; узловые места At::default() → ctx.at(); остальные At::default() — не узел (общие намеренно) |
 | 433-з | Область «DEX» с сетью (1.2) | ctx.rs, families.rs, dex_ids.rs, event_flags.rs, directory | сделано (решение 435): перевод на входе справочника (directory/fetch.rs), Family.id — ключ (ctx.rs dex_*, event_flags без правок), свои ключи — families::all, dex_ids::extra; check_dex_id допускает «@» |
 | 433-и | Статики по площадке (1.3) | 20 файлов | сделано (решение 435); без правок по факту кода: callback_at/exec_callback SEEN (ключ — версия и сигнатура артефакта), prefetch_memo (уже по VenueId), cycle_tally (уже по площадке), fee_probe/ladder_counter/solidly_gate_read (id DEX — ключ с сетью) |
@@ -148,6 +148,7 @@ Permit2, Multicall3, исполнитель с тем же nonce, токены-�
 
 Сделаны 433-г, д, е, ж, з, и, к, м и ревью README записи узла (статусы — таблица раздела 2, подробности — docs/TASKS.md,
 «Решение 435» и «Решение 433», «Осталось»). Не сделаны: 433-л (ждёт вопроса 2 решения 433) и
-eth_sendRawTransactionConditional (в документации нет формата запроса — вопрос). Перед выкладкой — dex.gas_mode = legacy
+eth_sendRawTransactionConditional — сделан решением 436 (формат по исходникам Nitro; метод отключают на секвенсоре
+Arbitrum One 17.01.2027; минимум газа канала — с узла, ArbGasInfo). Перед выкладкой — dex.gas_mode = legacy
 у bsc_dex и dex.default_chain = bsc до dex.venues. Отличие от плана 1.2: dex_key не ставится в ctx.rs dex_* — вид пула
 Family.id уже ключ, перевод id индексатора — один раз на входе справочника (directory/fetch.rs).

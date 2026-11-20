@@ -8,6 +8,8 @@
 //! Решение 299: send.bundle_skip_single = да — одиночные каналы исключаются из отправки бандла (send/bundle_pick.rs).
 //! Решение 303, дополнение (журнал): строка send.channel_rejected по каналу — с данными ошибки канала, расшифровкой
 //! Permit2, хешем транзакции и пределом блока бандла (reject_log.rs).
+//! Решение 436: dispatch передаёт каналу время головы — секвенсор Arbitrum с окном шлёт условную отправку
+//! (send/sequencer_cond.rs); бандл (dispatch_slice) — без условия.
 //! Кто вызывает: exec/*, wallet/transfer.rs, mod.rs (send_channels, check_send_channel).
 //! От чего зависит: файлы этой папки, ctx.rs.
 //! Настройки: channel.* [канал], send.* [bsc_dex].
@@ -40,6 +42,7 @@ pub mod ready;
 pub mod receipt;
 pub mod reject_log;
 pub mod sequencer;
+pub mod sequencer_cond;
 pub mod settle;
 pub mod stats;
 pub mod tip_gas;
@@ -127,7 +130,9 @@ impl Dispatched {
 }
 
 /// Отправляет во все выбранные каналы параллельно. Принимает: каналы, подписанную транзакцию, перевод чаевых
-/// (только при одном канале), предел блока бандла. Возвращает: кто принял и кто не ответил ясно.
+/// (только при одном канале), предел блока бандла, время головы для условия секвенсора (решение 436,
+/// send/sequencer_cond.rs head_time; None — без условия: отмена, каналы без окна). Возвращает: кто принял и кто не
+/// ответил ясно.
 /// Ошибки: ChannelRejected — все каналы ответили отказом и свой узел не знает ни транзакцию, ни перевод чаевых
 /// (решение 154, send/absent.rs: транзакции точно нигде нет; причины всех каналов в тексте).
 pub async fn dispatch(
@@ -137,13 +142,17 @@ pub async fn dispatch(
     tx: &Bytes,
     tip_tx: Option<&Bytes>,
     max_block: u64,
+    head_time: Option<u64>,
 ) -> GatewayResult<Dispatched> {
     let jobs = ready.iter().map(|r| {
         let mut txs = vec![tx.clone()];
         if let (SendMethod::Bundle, Some(t)) = (r.method, tip_tx) {
             txs.push(t.clone());
         }
-        async move { (r.ch.id, r.method, r.send(ctx, &txs, max_block).await) }
+        async move {
+            let res = r.send(ctx, &txs, max_block, head_time).await;
+            (r.ch.id, r.method, res)
+        }
     });
     let mut all = vec![tx.clone()];
     all.extend(tip_tx.cloned());
@@ -156,7 +165,8 @@ pub async fn dispatch(
 /// eth_sendBundle без разрешения на откат). Принимает: каналы, подписанные транзакции бандла по порядку, предел блока.
 /// Возвращает: кто принял и кто не ответил ясно. Ошибки: NotConfigured (есть не-бандл канал), ChannelRejected (никто).
 /// Решение 299: при send.bundle_skip_single = да одиночные каналы исключает заранее вызывающий (send/bundle_pick.rs
-/// pick) — сюда они не доходят; проверка ниже остаётся защитой.
+/// pick) — сюда они не доходят; проверка ниже остаётся защитой. Решение 436: без условия секвенсора (у секвенсора
+/// бандла нет).
 pub async fn dispatch_slice(
     ctx: &Ctx,
     stats: &Stats,
@@ -175,7 +185,7 @@ pub async fn dispatch_slice(
     }
     let jobs = ready
         .iter()
-        .map(|r| async move { (r.ch.id, r.method, r.send(ctx, txs, max_block).await) });
+        .map(|r| async move { (r.ch.id, r.method, r.send(ctx, txs, max_block, None).await) });
     classify(ctx, stats, join_all(jobs).await, txs, max_block).await
 }
 

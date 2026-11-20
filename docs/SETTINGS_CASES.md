@@ -951,6 +951,18 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Связанные ключи:** dex.gas_mode.
 - **Статус:** ещё не в релизе (ветка t217/arb-step5-adapter).
 
+### `dex.arb_gas_info`
+
+- **Задача / решение:** решение 436 (Б), Тигран 20.11.2026: минимальная цена газа канала у Arbitrum — с узла, а не руками.
+- **Появилась:** 2026-11-20, ветка t220/arb-conditional-mingas.
+- **Кейс:** у канала «Секвенсор Arbitrum» в документации нет своего минимума цены газа, а channel.min_gas_price_gwei обязана быть > 0 (вопрос 3 решения 435). У сети есть нижний предел цены газа — getMinimumGasPrice прекомпиля ArbGasInfo (docs.arbitrum.io «Gas and fees»; nitro precompiles/ArbGasInfo.go:175-178 — L2PricingState.MinBaseFeeWei); его меняет только владелец сети (ArbOwner.SetMinimumL2BaseFee). Адрес прекомпиля — настройка, не код (CLAUDE.md: никаких зашитых адресов; так же dex.node_interface).
+- **Где задаётся:** «Настройки», группа «DEX» и «Площадки» → карточка площадки DEX; область — по площадке DEX; каталог src/settings/catalog/dex.rs (после dex.node_interface).
+- **Что ставить:** у bsc_dex — не задавать; у arb_dex — `0x000000000000000000000000000000000000006C` (docs.arbitrum.io «Contract addresses», ArbGasInfo у Arbitrum One; go-ethereum Nitro core/types/arbitrum_signer.go:18 — 0x6c).
+- **Если не задана:** необязательная. При dex.gas_mode = eip1559_l1 минимум не читается (src/venues/bsc_dex/node/arb_min_gas.rs refresh), канал sequencer не готов — состояние «Не задана настройка dex.arb_gas_info» (send/ready.rs min_gas → arb_min_gas::floor), отправки площадки нет («Нет ни одного готового канала отправки»); «Проверить подключение», часть «Газ сети» (connection_gas.rs) — та же причина. При legacy (BSC) не читается.
+- **Влияет на торговлю:** да — у Arbitrum без неё канал секвенсора не готов и транзакций нет; заданная — минимум цены газа канала (send/tx_price.rs floored: чаевые поднимаются до «минимум − baseFee», если минимум выше baseFee + чаевые; по nitro arbos/l2pricing/model.go:204-209 baseFee не ниже минимума).
+- **Связанные ключи:** dex.gas_mode, dex.node_interface, channel.min_gas_price_gwei (у sequencer не читается).
+- **Статус:** ещё не в релизе (ветка t220/arb-conditional-mingas).
+
 ### `send.max_fee_margin_pct`
 
 - **Задача / решение:** задача 433-д, решение 435 (шаг 5б двух сетей, docs/notes/arbitrum/step5-plan.md, 1.4).
@@ -998,6 +1010,18 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Влияет на торговлю:** да — какие каналы отправляют транзакции площадки.
 - **Связанные ключи:** dex.chain, dex.default_chain, channel.enabled, channel.url.
 - **Статус:** ещё не в релизе (ветка t219/arb-step5b).
+
+### `channel.cond_time_window_s`
+
+- **Задача / решение:** решение 436 (А), Тигран 20.11.2026: eth_sendRawTransactionConditional — сделать, формат — по исходникам Nitro.
+- **Появилась:** 2026-11-20, ветка t220/arb-conditional-mingas.
+- **Кейс:** у Arbitrum нет мемпула, но у секвенсора есть очередь (по умолчанию 1024 транзакции, срок 12 с — docs.arbitrum.io «RPC endpoints and providers»). Транзакция, простоявшая в очереди, исполнилась бы на ценах позже плана. Условие timestampMax (nitro-geth arbitrum_types/txoptions.go:71-77, 89-91) запрещает секвенсору ставить её в блок позже окна — отказ −32003, транзакции в сети нет.
+- **Где задаётся:** «Настройки», группа «Каналы отправки» (область — канал sequencer) и экран «Каналы»; каталог src/settings/catalog/send.rs (после channel.chain).
+- **Что ставить:** каналам BSC — не задавать (не читается). Каналу `sequencer` — решение Тиграна; *метод:* окно не меньше времени от головы до постановки в блок (блок Arbitrum ≈ 250 мс, время блока — целые секунды, txoptions.go сравнивает секунды) и не больше времени, за которое план сделки ещё верен. До 17.01.2027 — потом метод на секвенсоре Arbitrum One отключают (docs.arbitrum.io, уведомление об отключении eth_sendRawTransactionConditional).
+- **Если не задана:** необязательная. Канал sequencer отправляет обычной eth_sendRawTransaction, как до решения 436 (src/venues/bsc_dex/send/ready.rs send → Cond::Plain; sequencer_cond.rs window → None; head_time — узел не спрашивается).
+- **Влияет на торговлю:** да — при заданной транзакция, не поставленная в блок до окна, отвергается секвенсором (ChannelRejected; свой узел подтверждает отсутствие — решение 154); при −32601 (метод отключён) — канал отвечает NotConfigured с причиной «снимите channel.cond_time_window_s».
+- **Связанные ключи:** channel.url, channel.method, channel.chain, channel.enabled.
+- **Статус:** ещё не в релизе (ветка t220/arb-conditional-mingas).
 
 ### `dex.graph_alert_min_s`
 

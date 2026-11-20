@@ -8,6 +8,7 @@
 //! Решение 435 (433-д): вид отмены — как у исходной (send/tx_price.rs): legacy — gasPrice выше прошлой; тип 2 (сеть
 //! eip1559_l1) — обе цены (maxFeePerGas и чаевые) выше прошлых на ту же надбавку; потолок отмены сверяется по потолку
 //! цены (send/track.rs).
+//! Решение 436: отмена уходит без условия eth_sendRawTransactionConditional (send/sequencer_cond.rs) — обычной отправкой.
 //! Кто вызывает: send/track.rs.
 //! От чего зависит: send/mod.rs (dispatch, gas_floor), send/tx.rs, send/tx_price.rs, send/track_util.rs (Watch).
 //! Настройки: send.cancel_gas_bump_pct, send.bundle_max_blocks, send.gas_limit_margin_pct (все — через SendCfg).
@@ -53,6 +54,7 @@ pub async fn send(w: &Watch, price: TxPrice, head: u64) -> GatewayResult<B256> {
         call,
     )?;
     let max_block = head + w.cfg.bundle_max;
-    super::dispatch(ctx, &w.stats, &w.ready, &signed.raw, None, max_block).await?;
+    // Решение 436: отмена — без условия секвенсора (её дело занять nonce; время головы не нужно).
+    super::dispatch(ctx, &w.stats, &w.ready, &signed.raw, None, max_block, None).await?;
     Ok(signed.hash)
 }

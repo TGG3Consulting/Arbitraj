@@ -28,40 +28,46 @@ use super::factory_calls::lookup_max;
 use super::families::{Family, Proto};
 use super::verify::Candidate;
 
-alloy::sol! {
-    interface INgFactory {
-        event TwocryptoPoolDeployed(
-            address pool,
-            string name,
-            string symbol,
-            address[2] coins,
-            address math,
-            bytes32 salt,
-            uint256[2] precisions,
-            uint256 packed_A_gamma,
-            uint256 packed_fee_params,
-            uint256 packed_rebalancing_params,
-            uint256 packed_prices,
-            address deployer
-        );
+// События и функции контрактов Curve несут больше 7 полей — clippy::too_many_arguments на сгенерированных
+// конструкторах alloy::sol! (код макроса, не наш).
+#[allow(clippy::too_many_arguments)]
+mod sol {
+    alloy::sol! {
+        interface INgFactory {
+            event TwocryptoPoolDeployed(
+                address pool,
+                string name,
+                string symbol,
+                address[2] coins,
+                address math,
+                bytes32 salt,
+                uint256[2] precisions,
+                uint256 packed_A_gamma,
+                uint256 packed_fee_params,
+                uint256 packed_rebalancing_params,
+                uint256 packed_prices,
+                address deployer
+            );
 
-        event TricryptoPoolDeployed(
-            address pool,
-            string name,
-            string symbol,
-            address weth,
-            address[3] coins,
-            address math,
-            bytes32 salt,
-            uint256 packed_precisions,
-            uint256 packed_A_gamma,
-            uint256 packed_fee_params,
-            uint256 packed_rebalancing_params,
-            uint256 packed_prices,
-            address deployer
-        );
+            event TricryptoPoolDeployed(
+                address pool,
+                string name,
+                string symbol,
+                address weth,
+                address[3] coins,
+                address math,
+                bytes32 salt,
+                uint256 packed_precisions,
+                uint256 packed_A_gamma,
+                uint256 packed_fee_params,
+                uint256 packed_rebalancing_params,
+                uint256 packed_prices,
+                address deployer
+            );
+        }
     }
 }
+pub use sol::*;
 
 /// topic0 события создания пула фабрики вида. None — у вида нет события фабрики (tricrypto 2021). Ошибок нет.
 pub fn topic(proto: Proto) -> Option<B256> {

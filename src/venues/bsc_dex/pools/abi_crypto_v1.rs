@@ -22,32 +22,38 @@ use std::sync::LazyLock;
 
 use alloy_primitives::{B256, keccak256};
 
-alloy::sol! {
-    interface ICryptoPoolV1 {
-        function price_scale() external view returns (uint256);
-        function is_killed() external view returns (bool);
-    }
+// События и функции контрактов Curve несут больше 7 полей — clippy::too_many_arguments на сгенерированных
+// конструкторах alloy::sol! (код макроса, не наш).
+#[allow(clippy::too_many_arguments)]
+mod sol {
+    alloy::sol! {
+        interface ICryptoPoolV1 {
+            function price_scale() external view returns (uint256);
+            function is_killed() external view returns (bool);
+        }
 
-    interface ICryptoFactoryV1 {
-        function get_coins(address pool) external view returns (address[2] memory);
+        interface ICryptoFactoryV1 {
+            function get_coins(address pool) external view returns (address[2] memory);
 
-        event CryptoPoolDeployed(
-            address token,
-            address[2] coins,
-            uint256 A,
-            uint256 gamma,
-            uint256 mid_fee,
-            uint256 out_fee,
-            uint256 allowed_extra_profit,
-            uint256 fee_gamma,
-            uint256 adjustment_step,
-            uint256 admin_fee,
-            uint256 ma_half_time,
-            uint256 initial_price,
-            address deployer
-        );
+            event CryptoPoolDeployed(
+                address token,
+                address[2] coins,
+                uint256 A,
+                uint256 gamma,
+                uint256 mid_fee,
+                uint256 out_fee,
+                uint256 allowed_extra_profit,
+                uint256 fee_gamma,
+                uint256 adjustment_step,
+                uint256 admin_fee,
+                uint256 ma_half_time,
+                uint256 initial_price,
+                address deployer
+            );
+        }
     }
 }
+pub use sol::*;
 
 /// Подписи событий изменения ликвидности пулов v1 (2 и 3 монеты), которых нет у NG — их слушают мелкие пулы
 /// (pools/depth.rs). RemoveLiquidity(address,uint256[N],uint256) у v1 и NG одна и та же (abi_crypto.rs).

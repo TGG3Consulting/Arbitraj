@@ -20,6 +20,7 @@ pub mod ekubo_delta;
 pub mod ekubo_exp2;
 pub mod ekubo_mev;
 pub mod ekubo_sqrt;
+pub mod ekubo_step;
 pub mod ekubo_swap;
 pub mod ekubo_tick;
 pub mod ekubo_time;

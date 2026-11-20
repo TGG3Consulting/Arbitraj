@@ -47,6 +47,7 @@
 | `ekubo_tick.rs` | Ekubo: тик ↔ сжатая цена (`to_sqrt_ratio_at`, `tick_at`), MIN_TICK / MAX_TICK; векторы официальных тестов | `src/math/ticks.sol`, `src/math/constants.sol` |
 | `ekubo_config.rs` | Ekubo: разбор config ключа пула — расширение, комиссия, вид (концентрированный / полный диапазон / стейблсвап с диапазоном) | `src/types/poolConfig.sol` |
 | `ekubo_bitmap.rs` | Ekubo: слово и бит тика, поиск следующего / предыдущего тика при skipAhead = 0 по прочитанным словам | `src/math/tickBitmap.sol`, `src/types/bitmap.sol` |
+| `ekubo_step.rs` | Ekubo: следующий тик шага обмена (полный диапазон, границы стейблсвапа, битмап концентрированного пула) — вынесен из `ekubo_swap.rs` | `src/Core.sol` L576-L620 |
 | `ekubo_swap.rs` | Ekubo: обмен на точный вход — цикл swap ядра (шаги до тиков, комиссия со входа, пересечение тиков, стейблсвап) | `src/Core.sol` L510-L858 |
 | `ekubo_mev.rs` | Ekubo: доплата расширения MEVCapture с выхода (тики, пройденные с начала секунды), худший из возможных tickLast | `src/extensions/MEVCapture.sol` L177-L258 |
 | `ekubo_exp2.rs` | Ekubo (решение 454): exp2 5.64 → 64.64 — порт exp2.sol; векторы официального теста |

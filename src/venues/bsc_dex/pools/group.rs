@@ -7,7 +7,7 @@
 //! Решение 454: пачка Ekubo при источнике ws — не своя подписка, а раздача общей подписки ядра площадки
 //! (ekubo_hub.rs: нагрузка узла не множится на число пачек); номер блока такая пачка спрашивает у соединения хаба.
 //! Кто вызывает: pools/session.rs, pools/admit.rs.
-//! От чего зависит: node/ws.rs (Conn, Sub), node/subs.rs (фильтры), pools/events.rs (topic0), discover.rs (Found),
+//! От чего зависит: node/ws.rs (Conn, Sub), group_filter.rs (фильтр logs пачки, индекс пулов), discover.rs (Found),
 //! ekubo_shallow.rs, ekubo_hub.rs.
 //! Настройки: через node/ws.rs (адрес узла, таймауты).
 //!
@@ -17,21 +17,22 @@
 
 use std::sync::{Arc, Mutex};
 
-use alloy_primitives::{B256, U64};
+use alloy_primitives::U64;
+use serde_json::json;
 use serde_json::value::RawValue;
-use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use crate::core::types::PoolRef;
 use crate::gateway::errors::GatewayResult;
 
 use super::super::ctx::Ctx;
 use super::super::node::source::Link;
-use super::super::node::subs;
 use super::discover::Found;
 use super::ekubo_hub::{self, Hub};
-use super::{ekubo_shallow, events};
+use super::ekubo_shallow;
+
+// Вид событий, фильтр, индекс и адреса Multi пачки — group_filter.rs (прежние пути group::Topics / filter / …).
+pub use super::group_filter::{Topics, filter, index, multi_sites};
 
 /// Сообщение слитого потока подписок пачки.
 pub enum Msg {
@@ -47,15 +48,6 @@ pub struct Held {
     id: String,
     fwd: JoinHandle<()>,
     hub: bool,
-}
-
-/// Какие события слушать у пулов.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Topics {
-    /// Все события, по которым ведётся состояние (events::topics).
-    Full,
-    /// Только добавление ликвидности (events::liquidity_topics).
-    Liquidity,
 }
 
 /// Соединение пачки и её постоянные подписки.
@@ -203,68 +195,4 @@ impl Drop for Group {
             h.fwd.abort();
         }
     }
-}
-
-/// Фильтр logs для пулов одного вида: V2/V3 — по адресам пулов, V4 — по PoolId у менеджера. Ошибок нет.
-pub fn filter(pools: &[&Found], topics: Topics) -> Value {
-    let Some(first) = pools.first() else {
-        return json!({});
-    };
-    // Решение 447: Ekubo — события ядра без PoolId в topics (ekubo_shallow.rs filter).
-    if let Some(f) = super::ekubo_shallow::filter(first, topics == Topics::Liquidity) {
-        return f;
-    }
-    let topic0: Vec<B256> = match topics {
-        Topics::Full => events::topics(first.family),
-        Topics::Liquidity => events::liquidity_topics(first.family),
-    };
-    match first.reference {
-        // Пара общего контракта (PMM от оракула, решение 122 F, 3) — по адресу общего контракта (события у него).
-        // Решение 295: пары многомонетного пула — по адресу его контракта (одна строка адреса на все пары).
-        PoolRef::Contract(_) | PoolRef::Member { .. } | PoolRef::Multi { .. } => {
-            let mut addrs: Vec<_> = pools
-                .iter()
-                .filter_map(|f| match f.reference {
-                    PoolRef::Contract(a) => Some(a),
-                    PoolRef::Member { contract, .. } => Some(contract),
-                    PoolRef::Multi { contract, .. } => Some(contract),
-                    PoolRef::Singleton { .. } => None,
-                })
-                .collect();
-            addrs.sort();
-            addrs.dedup();
-            subs::by_address(&addrs, &topic0)
-        }
-        PoolRef::Singleton { manager, .. } => {
-            let ids: Vec<_> = pools
-                .iter()
-                .filter_map(|f| match f.reference {
-                    PoolRef::Singleton { id, .. } => Some(id),
-                    PoolRef::Contract(_) | PoolRef::Member { .. } | PoolRef::Multi { .. } => None,
-                })
-                .collect();
-            subs::by_pool_id(manager, &ids, &topic0)
-        }
-    }
-}
-
-/// Индекс пулов пачки по ссылке (pools/session.rs: лог → пул). Ошибок нет.
-pub fn index(pools: &[(Found, String)]) -> std::collections::HashMap<PoolRef, usize> {
-    pools
-        .iter()
-        .enumerate()
-        .map(|(i, (f, _))| (f.reference.clone(), i))
-        .collect()
-}
-
-/// Адреса контрактов пар многомонетных пулов (PoolRef::Multi) пачки (решение 295, ревью): лог такого адреса идёт и в
-/// listen_site.rs, даже если в пачке есть Contract того же адреса. Пусто — пар Multi нет. Ошибок нет.
-pub fn multi_sites(pools: &[(Found, String)]) -> std::collections::HashSet<alloy_primitives::Address> {
-    pools
-        .iter()
-        .filter_map(|(f, _)| match f.reference {
-            PoolRef::Multi { contract, .. } => Some(contract),
-            _ => None,
-        })
-        .collect()
 }

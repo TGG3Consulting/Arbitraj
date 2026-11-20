@@ -1,8 +1,8 @@
 //! Файл: venues/bsc_dex/math/ekubo_time.rs
 //! Что делает: времена ордеров TWAMM Ekubo (решение 454) — точный порт: шаг допустимого времени (растёт степенями 16 с
 //! удалением от текущего), следующее допустимое время, слово и бит времени в битмапе времён и поиск следующего
-//! инициализированного времени по прочитанным словам битмапа. Слово, которого контракт коснулся бы, не прочитано —
-//! None (расчёт не идёт за край прочитанного).
+//! инициализированного времени по прочитанным словам битмапа. Слово, от которого зависит результат, не прочитано —
+//! None (расчёт не идёт за край прочитанного); слово первого допустимого времени за пределом поиска не нужно (search).
 //! Кто вызывает: math/ekubo_virtual.rs, pools/load_ekubo_twamm.rs (какие слова читать).
 //! От чего зависит: alloy-primitives, core/types (EkuboTwamm).
 //! Настройки: нет.
@@ -81,11 +81,17 @@ pub fn find_next(t: &EkuboTwamm, from: u64) -> Option<(u64, bool)> {
 
 /// searchForNextInitializedTime: наименьшее инициализированное время в (from, until] или until. Принимает: состояние,
 /// реальное время последнего исполнения (база допустимых времён), from, until. None — нужное слово не прочитано.
+///
+/// Допустимое время за `until`: контракт читает его слово (timeBitmap.sol L76), но результат от слова не зависит —
+/// findNextInitializedTime возвращает время ≥ своего fromTime (допустимые времена кратны 256: шаг computeStepSize —
+/// 256 или степень 16 ≥ 4096, time.sol L17-L31; бит ищется от индекса fromTime вверх, а без бита — индекс 255,
+/// timeBitmap.sol L40-L52), и L77-L80 сводят его к (until, false). Поэтому здесь — сразу (until, false) без слова:
+/// край горизонта dex.ekubo_twamm_horizon_s точен, хотя слово первого допустимого времени за ним не прочитано.
 pub fn search(t: &EkuboTwamm, last: u64, from: u64, until: u64) -> Option<(u64, bool)> {
     let (mut next, mut init) = (from, false);
     while !init && next != until {
         let valid = next_valid_time(last, next);
-        if valid == 0 {
+        if valid == 0 || valid > until {
             return Some((until, false));
         }
         (next, init) = find_next(t, valid)?;
@@ -96,7 +102,8 @@ pub fn search(t: &EkuboTwamm, last: u64, from: u64, until: u64) -> Option<(u64, 
     Some((next, init))
 }
 
-/// Слова битмапа, которых коснётся поиск до `end`: слова всех допустимых времён (от `last`) в (last, end]. Ошибок нет.
+/// Слова битмапа, от которых зависит поиск до любого предела ≤ `end`: слова всех допустимых времён (от `last`) в
+/// (last, end] (первое допустимое время за пределом поиска слова не требует — search). Ошибок нет.
 pub fn words_until(last: u64, end: u64) -> Vec<u64> {
     let mut out: Vec<u64> = Vec::new();
     let mut t = last;

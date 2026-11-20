@@ -6,12 +6,12 @@
 //! останавливается: complete = false (сколько входа принято до края карты). Доплата MEVCapture — math/ekubo_mev.rs.
 //! Кто вызывает: quote/pool_quote.rs (ветка Ekubo), quote/depth_band.rs.
 //! От чего зависит: core/types (EkuboData), math/ekubo_sqrt.rs, ekubo_delta.rs, ekubo_tick.rs, ekubo_bitmap.rs,
-//! ekubo_config.rs.
+//! ekubo_config.rs, ekubo_step.rs (следующий тик шага).
 //! Настройки: нет.
 //!
-//! Источник — EkuboProtocol/evm-contracts@61d09daa src/Core.sol L510-L858 (swap): L545 (нулевая сумма / цена = предел —
-//! без обмена), L550-L558 (направление: increasing = isToken1 xor isExactOut), L576-L620 (следующий тик: стейблсвап /
-//! битмап), L622-L623 (предел шага), L627-L629 (пустой шаг — до предела), L638-L652 (комиссия со входа и цена по сумме),
+//! Источник — EkuboProtocol/evm-contracts@61d09daa src/Core.sol L510-L858 (swap): L544-L545 (нулевая сумма / цена =
+//! предел — без обмена), L550-L558 (направление: increasing = isToken1 xor isExactOut; проверка предела — только при
+//! обмене), L576-L620 (следующий тик: стейблсвап / битмап — ekubo_step.rs), L622-L623 (предел шага), L627-L629 (пустой шаг — до предела), L638-L652 (комиссия со входа и цена по сумме),
 //! L666-L701 (упёрлись в предел шага: суммы по границе, вход с комиссией amountBeforeFee), L702-L727 (сумма кончилась
 //! внутри шага), L728-L738 (цена не сдвинулась — весь остаток в комиссию), L756-L808 (пересечение тика, ликвидность ±
 //! liquidityDelta; иначе тик по цене), L810-L812 (выход из цикла), L815-L826 (итог). Только exact-in: исполнитель
@@ -21,14 +21,15 @@ use alloy_primitives::U256;
 
 use crate::core::types::EkuboData;
 
-use super::ekubo_bitmap::{self, delta_at};
-use super::ekubo_config::{self, Shape};
+use super::ekubo_bitmap::delta_at;
+use super::ekubo_config;
 use super::ekubo_delta::{amount0, amount0_sorted, amount1, amount1_sorted, sorted};
 use super::ekubo_sqrt::{
     MAX_SQRT_RATIO, MIN_SQRT_RATIO, amount_before_fee, compute_fee, next_from_amount0,
     next_from_amount1,
 };
-use super::ekubo_tick::{MAX_TICK, MIN_TICK, tick_at, to_sqrt_ratio_at};
+use super::ekubo_step::next_step;
+use super::ekubo_tick::{tick_at, to_sqrt_ratio_at};
 
 /// Итог обмена.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,13 +70,12 @@ pub fn exact_in_to(d: &EkuboData, is_token1: bool, amount: u128, limit: U256) ->
     let fee = ekubo_config::fee(&d.config);
     let shape = ekubo_config::shape(&d.config);
     let increasing = is_token1;
-    if limit != d.sqrt_ratio && (limit < d.sqrt_ratio) == increasing {
-        return None;
-    }
     let (mut sqrt, mut tick, mut liquidity) = (d.sqrt_ratio, d.tick, d.liquidity);
     let mut remaining = specified;
     let mut calculated: u128 = 0;
     let mut complete = true;
+    // Порядок как в ядре: сначала «сумма 0 / цена = предел» — обмена нет (Core.sol L544-L545), и только при обмене —
+    // направление предела (L556-L558).
     if remaining == 0 || sqrt == limit {
         return Some(Out {
             amount_in: 0,
@@ -86,6 +86,9 @@ pub fn exact_in_to(d: &EkuboData, is_token1: bool, amount: u128, limit: U256) ->
             sqrt_after: sqrt,
             liquidity_after: liquidity,
         });
+    }
+    if (limit < sqrt) == increasing {
+        return None;
     }
     loop {
         let (next_tick, initialized, step_liquidity) = match next_step(d, shape, tick, increasing) {
@@ -173,34 +176,4 @@ pub fn exact_in_to(d: &EkuboData, is_token1: bool, amount: u128, limit: U256) ->
         sqrt_after: sqrt,
         liquidity_after: liquidity,
     })
-}
-
-/// Следующий тик шага: (тик, инициализирован, ликвидность шага активна). None — слово битмапа не прочитано.
-/// Стейблсвап — Core.sol L576-L602, концентрированный — L604-L619 (skipAhead = 0). Ошибок нет.
-fn next_step(
-    d: &EkuboData,
-    shape: Shape,
-    tick: i32,
-    increasing: bool,
-) -> Option<(i32, bool, bool)> {
-    match shape {
-        Shape::FullRange => Some((if increasing { MAX_TICK } else { MIN_TICK }, false, true)),
-        Shape::Stable { lower, upper } => {
-            if (lower..upper).contains(&tick) {
-                return Some((if increasing { upper } else { lower }, false, true));
-            }
-            if tick < lower {
-                return Some((if increasing { lower } else { MIN_TICK }, false, false));
-            }
-            Some((if increasing { MAX_TICK } else { upper }, false, false))
-        }
-        Shape::Concentrated { spacing } => {
-            let (t, i) = if increasing {
-                ekubo_bitmap::next(d, tick, spacing)?
-            } else {
-                ekubo_bitmap::prev(d, tick, spacing)?
-            };
-            Some((t, i, true))
-        }
-    }
 }

@@ -691,8 +691,21 @@
   2) Исполнитель: шаг EKUBO изменён (data = config, native, forward; _ekuboPay / _ekuboTake) — собрать contracts, EVM-тест
      шага EKUBO с официальным ядром (ERC-20, нативный вход, нативный выход, MEVCapture forward, TWAMM без forward),
      переразвернуть исполнитель кошелька Arbitrum (contracts/README.md). wnative исполнителя Arbitrum = WETH Arbitrum
-     (dex.native_wrapped arb_dex): WETH Arbitrum должен иметь deposit()/withdraw(uint256) — проверить по verified-коду
-     при сборке (не сверено фактом в этой задаче).
+     (dex.native_wrapped arb_dex). **Сверено фактом (ревью 454, 20.11.2026):** WETH Arbitrum One —
+     `0x82aF49447D8a07e3bd95BD0d56f35241523fBab1` (официальный список адресов Arbitrum: OffchainLabs/arbitrum-docs@5ce1a9e1
+     content/partials/_reference-arbitrum-contract-addresses-partial.mdx L73, «L2 Weth»; https://docs.arbitrum.io/partials/_reference-arbitrum-contract-addresses-partial);
+     на arbiscan — TransparentUpgradeableProxy, реализация `0x8b194bEae1d3e0788A1a35173978001ACDFba668` — aeWETH,
+     solc v0.6.11, «Source Code Verified (Exact Match)» (https://arbiscan.io/token/0x82af49447d8a07e3bd95bd0d56f35241523fbab1#code,
+     https://arbiscan.io/token/0x8b194bEae1d3e0788A1a35173978001ACDFba668#code), Sourcify — полное совпадение
+     (https://sourcify.dev/server/v2/contract/42161/0x8b194bEae1d3e0788A1a35173978001ACDFba668?fields=sources).
+     Исходник — OffchainLabs/token-bridge-contracts contracts/tokenbridge/libraries/aeWETH.sol (версия 0.6.11 —
+     f7cae4224 L50-L70; текущая 0.8 a4bb3f53 — то же тело): `deposit()` payable → `_mint(msg.sender, msg.value)`,
+     `withdraw(uint256)` → `withdrawTo(msg.sender, amount)` → `_burn` и `account.call{ value: amount }("")` +
+     `require(success, "FAIL_TRANSFER")` — **call со всем газом, не transfer 2300** (transfer заменён на call коммитом
+     6171a34ad от 24.06.2021 «forward gas in aeWETH for bridgeBurn and withdrawTo»; текст реализации на Sourcify — call).
+     Значит receive() ArbExecutor (`require(msg.sender == bnbFrom)`, transient) получает весь газ — ограничения 2300 нет;
+     ядро Ekubo тоже шлёт ETH `call(gas(), …)` (FlashAccountant.sol L350). Сигнатуры IWBNB исполнителя (deposit(),
+     withdraw(uint256)) совпадают с ABI реализации. Проблем нет; остаётся сборка, EVM-тест и переразвёртывание.
   3) Новые настройки задать: dex.ekubo_twamm, dex.ekubo_twamm_horizon_s, dex.ekubo_oracle, dex.ekubo_boosted_fees (DEX
      ekubo-v3-arbitrum), dex.ekubo_hub_buffer и dex.native_wrapped (arb_dex) — docs/FIRST_RUN.md.
   Вопросы Тиграну:
@@ -706,6 +719,24 @@
      сейчас показывает пулы с валютой 0x0 «не поддержан» (directory/mod.rs is_native). Пулы с ETH всё равно находятся
      историей PoolInitialized.
   4) Хаб: при обрыве общей подписки переподключаются ВСЕ пачки Ekubo площадки (перечитывание всех пулов) — допустимо?
+- **Ревью 447/454 (20.11.2026, ветка t230/arb-ekubo-more) — исправлено:**
+  1) math/ekubo_mev.rs — номера строк MEVCapture.sol@61d09daa сверены: tickLast L183-L184, обновление в новой секунде
+     L191-L207, CORE.swap L209, доплата L212-L215, точный выход L218-L236, точный вход L237-L251.
+  2) pools/exec_kind.rs (Ekubo) — data шага = abi.encode(bytes32 config, bool native, bool forward), как
+     contracts/ArbExecutor.sol _ekubo.
+  3) math/ekubo_swap.rs exact_in_to — порядок как в ядре (Core.sol L544-L558): сначала «сумма 0 / цена = предел» —
+     без обмена, направление предела — только при обмене (раньше нулевая сумма с пределом не в ту сторону давала None).
+  4) math/ekubo_time.rs search — первое допустимое время за пределом поиска: контракт читает его слово
+     (timeBitmap.sol L76), но результат от слова не зависит (findNextInitializedTime даёт время ≥ fromTime, L77-L80
+     сводят к (until, false)) — возвращается (until, false) без слова. Пул TWAMM котируется до конца
+     dex.ekubo_twamm_horizon_s включительно (раньше мог перестать раньше, если это слово не прочитано). Чтение слов
+     (load_ekubo_twamm.rs words_until) не менялось — его хватает.
+  5) Файлы > 200 строк разбиты: math/ekubo_swap.rs 206 → 179 (+ ekubo_step.rs 45), pools/events_ekubo.rs 230 → 174
+     (+ events_ekubo_ticks.rs 74), pools/group.rs 270 → 198 (+ group_filter.rs 92, реэкспорт group::Topics / filter /
+     index / multi_sites — вызовы не менялись), tests/arbitrum_ekubo_more_live.rs 214 → 95 (+ tests/ekubo_more_common/mod.rs
+     135). contracts/IPools.sol 308 и contracts/ArbExecutor.sol 799 — в техдолг (ROADMAP).
+  6) WETH Arbitrum — сверено (п. 2 выше «Решение 454»): deposit()/withdraw(uint256) есть, ETH — call со всем газом.
+  Ждёт CI (cargo локально не запускался).
 - **Решение 416 — перенесено в следующие шаги плана (docs/notes/arbitrum/multichain-plan-2026-11-19.md):**
   1) ДО того, как адаптер DEX начнёт ставить сеть в монету (шаг 2): перенос `chain = None` → сеть (записи учёта
      core_state, учёт сделок, окна; карты в памяти) или «действующая сеть» в равенстве — иначе старая монета (None) ≠

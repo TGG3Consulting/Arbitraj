@@ -33,10 +33,18 @@
   ревью 447). Подписка на все логи ядра — одна на площадку (хаб, решение 454), замер — запись ekubo_more.py.
   Ревью 447: tools/arbitrum_record/ekubo.py 244 строки сверх ориентира — вынести общие функции (Rpc, sload, разбор
   битмапа, quote_data) в tools/arbitrum_record/ekubo_common.py (им пользуется и ekubo_more.py, решение 454).
-- Решение 454 (Ekubo, `wc -l`): сверх ориентира 200 — pools/group.rs 265 (хаб; вынести hub_of / plan в group_ekubo.rs),
-  tools/arbitrum_record/ekubo_more.py 223, contracts/ArbExecutor.sol 799; exec/tip_judge.rs и check/memory_proof_rules.rs
-  закрыты (447). Артефакты contracts/out без шага EKUBO с native / forward; EVM-теста нет. Тихий пул с TWAMM дольше
-  dex.ekubo_twamm_horizon_s не котируется до перечитывания (TASKS, «Решение 454», вопрос 2).
+- Решение 454 (Ekubo, `wc -l`): сверх ориентира 200 — tools/arbitrum_record/ekubo_more.py 223, contracts/ArbExecutor.sol
+  799; exec/tip_judge.rs и check/memory_proof_rules.rs закрыты (447). Артефакты contracts/out без шага EKUBO с native /
+  forward; EVM-теста нет. Тихий пул с TWAMM дольше dex.ekubo_twamm_horizon_s не котируется до перечитывания (TASKS,
+  «Решение 454», вопрос 2; край горизонта теперь точен — ревью 454, math/ekubo_time.rs search).
+- Ревью 447/454 (`wc -l`, 20.11.2026): разбиты pools/group.rs (270 → 198, + group_filter.rs 92), pools/events_ekubo.rs
+  (230 → 174, + events_ekubo_ticks.rs 74), math/ekubo_swap.rs (206 → 179, + ekubo_step.rs 45),
+  tests/arbitrum_ekubo_more_live.rs (214 → 95, + tests/ekubo_more_common/mod.rs 135). Осталось сверх ориентира:
+  contracts/IPools.sol 308 строк (интерфейсы всех площадок в одном файле — разнести по семействам: IPoolsV2V3.sol,
+  IPoolsStable.sol, IPoolsSingleton.sol (V4 / Infinity / Ekubo) с импортом в ArbExecutor.sol), contracts/ArbExecutor.sol
+  799 строк (шаги видов — вынести в абстрактные контракты по семействам, наследуемые ArbExecutor; после — пересборка
+  и сверка раскладки хранилища с contracts/out/ArbExecutor.layout.json, слот 0 — кошелёк), math/ekubo_sqrt.rs 230
+  (векторы официальных тестов — в tests/).
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

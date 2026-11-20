@@ -9,10 +9,11 @@
 //! От чего зависит: alloy-primitives, core/types (EkuboData), math/ekubo_sqrt.rs (compute_fee), math/ekubo_config.rs.
 //! Настройки: нет.
 //!
-//! Источник — EkuboProtocol/evm-contracts@61d09daa src/extensions/MEVCapture.sol L177-L258 (handleForwardData: L183-L206
-//! — tickLast и обновление в новой секунде, L208 — обмен в ядре, L211-L213 — доплата
-//! min(uint64.max, ((|tick − tickLast| << 64) / tickSpacing · fee) >> 64), L232-L248 — точный вход: с выхода
-//! computeFee(выход, доплата)); src/types/mevCapturePoolState.sol L4-L25.
+//! Источник — EkuboProtocol/evm-contracts@61d09daa src/extensions/MEVCapture.sol L177-L260 (handleForwardData:
+//! L183-L184 — чтение lastUpdateTime и tickLast, L191-L207 — обновление в новой секунде (tickLast = тик пула до
+//! обмена), L209 — обмен в ядре CORE.swap, L212-L215 — доплата
+//! min(uint64.max, ((|tick − tickLast| << 64) / tickSpacing · fee) >> 64), L218-L236 — точный выход (не используется),
+//! L237-L251 — точный вход: с выхода computeFee(выход, доплата)); src/types/mevCapturePoolState.sol L4-L25.
 
 use alloy_primitives::U256;
 

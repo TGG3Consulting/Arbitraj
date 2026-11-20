@@ -84,7 +84,9 @@ pub enum ExecKind {
     InfBin,
     /// Решение 447: пул Ekubo в ядре Core — `Core.lock()` → `locked_6416899205` → `swap_6269342730` (у пула с
     /// MEVCapture — `forward(расширение)`) → `startPayments` / перевод / `completePayments` долга, `withdraw` выхода;
-    /// data = abi.encode(bytes32 config). Есть только у кода исполнителя с шагом EKUBO (exec_callback.rs EKUBO_MARK).
+    /// решение 454: data = abi.encode(bytes32 config, bool native, bool forward) — native: token0 ключа нативный ETH
+    /// (его сторона шага — обёртка wnative), forward: обмен через Core.forward(расширение) у MEVCapture
+    /// (contracts/ArbExecutor.sol _ekubo). Есть только у кода исполнителя с шагом EKUBO (exec_callback.rs EKUBO_MARK).
     Ekubo,
 }
 

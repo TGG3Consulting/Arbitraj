@@ -18,7 +18,7 @@
 установлено** — в этой проверке нет официального источника, какое у DEX семейство пулов. «Вид есть в коде» ≠ «подключено»:
 у Arbitrum нет ни одной DEX, подключённой в настройках (площадка arb_dex ещё не поднята — step5-plan.md).
 
-Итог по 84 DEX GeckoTerminal: вид есть в коде — 15, частично — 1, семейства нет — 7,
+Итог по 84 DEX GeckoTerminal: вид есть в коде — 16 (решение 443: +camelot), частично — 1, семейства нет — 6,
 семейство не установлено — 61, не пул — 0. Из DefiLlama сверх GeckoTerminal — 62 DEX.
 **У каждой строки — задача с номером (docs/TASKS.md, «Решение 433»). Приоритетов нет: все задачи обязательны.**
 
@@ -34,7 +34,7 @@
 | 6 | `kyberswap_elastic_arbitrum` | Kyberswap Elastic (Arbitrum) | KyberSwap Elastic | `kyber_elastic` — src/venues/bsc_dex/pools/families.rs:316 | **вид есть в коде** | не сверены | T433-006 |
 | 7 | `kyberswap_classic_arbitrum` | Kyberswap Classic (Arbitrum) | KyberSwap Classic DMM | `kyber_dmm` — src/venues/bsc_dex/pools/families.rs:352 | **вид есть в коде** | не сверены | T433-007 |
 | 8 | `elk_finance_arbitrum` | Elk Finance (Arbitrum) | — | — | **семейство не установлено** | не сверены | T433-008 |
-| 9 | `camelot` | Camelot | Camelot V2: направленные комиссии, стабильные пары (docs/notes/arbitrum/docs-check-2026-11-20.md) | — | **семейства нет в коде** | docs.camelot.exchange/contracts/arbitrum/one-mainnet: AMM V2 Factory 0x6EcCab422D763aC031210895C81787E87B43A652, Router 0xc873fEcbd354f5A56E00E710B90EF4201db2448d | T433-009 |
+| 9 | `camelot` | Camelot | Camelot V2: направленные комиссии, стабильные пары (docs/notes/arbitrum/docs-check-2026-11-20.md) | `camelot_v2` — src/venues/bsc_dex/pools/families.rs (решение 443) | **вид есть в коде** (решение 443; тесты на записи своего узла ждут записи tools/arbitrum_record/camelot_v2.py) | docs.camelot.exchange/contracts/arbitrum/one-mainnet: AMM V2 Factory 0x6EcCab422D763aC031210895C81787E87B43A652 (dex.factory), Router 0xc873fEcbd354f5A56E00E710B90EF4201db2448d (не нужен: исполнение — шаг SOLIDLY исполнителя) | T433-009 |
 | 10 | `3xcalibur` | 3xcalibur | — | — | **семейство не установлено** | не сверены | T433-010 |
 | 11 | `swapfish` | SwapFish | — | — | **семейство не установлено** | не сверены | T433-011 |
 | 12 | `arbswap_arbitrum_one` | Arbswap (Arbitrum One) | — | — | **семейство не установлено** | не сверены | T433-012 |
@@ -300,7 +300,7 @@
 - T433-F1 Fluid DEX (T1) — новое семейство пулов: математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F2 Balancer V3 — новое семейство (хранилище V3, крючки): математика, чтение, события, проверка, квотер, шаг исполнителя; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F3 Curve Twocrypto / Tricrypto (crypto-пулы) — новое семейство; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
-- T433-F4 Camelot V2 — пара с направленными комиссиями и стабильными парами — новое семейство (или расширение V2); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
+- T433-F4 Camelot V2 — **сделано в коде (решение 443)**: вид `camelot_v2` (математика пары, чтение, события, проверка путём V2, квотер — пара, шаг SOLIDLY исполнителя); тесты на записи своего узла — после запуска tools/arbitrum_record/camelot_v2.py (сейчас #[ignore]). Другие DEX этого семейства в таблицах не установлены (у строк «семейство не установлено» — свои задачи T433-NNN; найденный форк Camelot V2 включается тем же видом после сверки исходника пары).
 - T433-F5 Camelot V3 — Algebra 1.9 с направленными комиссиями (feeZtO/feeOtZ) — расширение вида Algebra; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F6 Liquidity Book v2.0 (LFJ V2) — новое семейство (в коде только v2.1); файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.
 - T433-F7 Liquidity Book v2.2 (LFJ V2.2) — новое семейство или расширение lb_v21; файлы по образцу существующих видов (pools/families.rs, pools/load_*, events_*, verify_*, math/), тесты — на записанных ответах своего узла Arbitrum.

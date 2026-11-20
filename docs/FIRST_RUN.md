@@ -1010,3 +1010,14 @@ core.rules «Правила для PriceOutOfRange нет»), как у любо
 | risk.drawdown_max_usd | вся система (можно по площадке и по направлению площадки) | Решение 414, необязательна: предел просадки направления от пика в USDT. Совет — `30` (пример Тиграна 19.11). Значения по умолчанию у движка нет |
 | risk.max_daily_loss_total_usd | вся система | Решение 173, необязательна: полный «Стоп» всей системы по убытку дня. Совет — не задавать или `60`. Не задана — общего стопа по убытку нет |
 | risk.min_bnb_balance | кошелёк | Запас BNB на газ — на несколько сделок и отмен; исходя из типичного газа BSC. Подбирает Тигран |
+
+## Camelot V2 в сети Arbitrum (решение 443, T433-F4)
+
+Новых настроек нет: вид пула `camelot_v2` — новый вариант dex.kind. Задаётся в области «DEX» площадки arb_dex (ключ
+`camelot@arbitrum` — id GeckoTerminal `camelot` с сетью, решение 435), когда площадка arb_dex поднята (dex.venues).
+
+| Настройка | Область | Советуем | Обоснование | Источник |
+| --- | --- | --- | --- | --- |
+| dex.kind | DEX `camelot@arbitrum` | `camelot_v2` | Пара CamelotPair: направленная комиссия и stable / volatile — своя математика (math/camelot_v2.rs), проверка и поиск пар — путём V2, шаг SOLIDLY исполнителя | verified-исходник фабрики Arbiscan (src/venues/bsc_dex/pools/abi_camelot.rs) |
+| dex.factory | DEX `camelot@arbitrum` | `0x6EcCab422D763aC031210895C81787E87B43A652` | Фабрика Camelot V2 (AMMv2 Factory): factory() пары, реестр getPair, событие PairCreated | docs.camelot.exchange/contracts/arbitrum/one-mainnet |
+| dex.pool_enabled | DEX `camelot@arbitrum` | «да» — после записи tools/arbitrum_record/camelot_v2.py и прохода тестов tests/arb_dex_camelot_v2.rs | Пулы Camelot V2 в граф и сигналы; сделки — через исполнитель кошелька Arbitrum (шаг SOLIDLY есть у v1/v2/v3) | Решение 443 |

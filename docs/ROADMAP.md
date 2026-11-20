@@ -26,6 +26,12 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
+- Решение 443 (`wc -l`): сверх ориентира 200 и до решения — venues/bsc_dex/quote/pool_quote.rs 532 (было 524; ветка
+  Camelot V2), pools/families.rs 664 (651), pools/load.rs 514 (502), quote/quoter_calls.rs 458 (457), quote/steps.rs 246
+  (242), core/types/pool.rs 432 (427). Глубина стабильной пары Camelot V2 (quote/depth_band.rs → quote/solidly_depth.rs)
+  считается формулами Velodrome (тот же инвариант x³y+xy³, другое округление и проверки) — оценка полосы, не котировка;
+  своя глубина по math/camelot_v2.rs — задача. Тесты на записи узла Arbitrum — #[ignore] до записи
+  (tools/arbitrum_record/camelot_v2.py).
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

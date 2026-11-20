@@ -14,6 +14,8 @@
 //! Оракул — price_oracle() пула на блоке чтения: это то же скользящее среднее (internal_price_oracle L1450-L1482),
 //! что tweak_price считает на блоке обмена (L847-L876), но на время блока чтения — та же оговорка о времени блока,
 //! что у рампы A/gamma (вопрос 1 решения 453). Сохранения состояния (self.*) не моделируются — они не откатывают.
+//! `and` Vyper укорачивается (T472-05: vyperlang/vyper v0.3.10 docs/types.rst L48-L49) — правая часть условия
+//! считается только при истинной левой.
 //! Кто вызывает: math/crypto_swap.rs (exchange_out, Twocrypto-NG при CryptoData.tweak).
 //! От чего зависит: core/types (CryptoData, CryptoMath, CryptoTweak), math/crypto_d2.rs, crypto_p2.rs, crypto_ops.rs,
 //! math/ten.rs.
@@ -101,9 +103,12 @@ fn rebalance(p: &CryptoData, t: &CryptoTweak, xp: [U256; 2], ps: U256, po: U256)
     // 10**18 * isqrt(xp[0] * xp[1]) проверяемые (L976-L978).
     let x1 = du(mu(d, E18)?, mu(two, p_new)?)?;
     let vp_new = udiv_u(mu(E18, isqrt(mu(udiv_u(d, two), x1)?))?, t.total_supply);
-    // if old_virtual_price > 10**18 and 2 * old_virtual_price - 10**18 > xcp_profit (L981-L984): при vp_new > 10^18
-    // вычитание ниже нуля не уходит; укорачивает ли Vyper 0.3.10 `and` — не сверено, поэтому проверяемое вычитание
-    // считается всегда (осторожно: при vp_new < 0,5·10^18 обмен считается откатившимся).
-    su(mu(two, vp_new)?, E18)?;
+    // if old_virtual_price > 10**18 and 2 * old_virtual_price - 10**18 > xcp_profit (L981-L984): `and` Vyper
+    // укорачивается, как в Python (vyperlang/vyper v0.3.10 docs/types.rst L48-L49; кодогенерация — `if x { y } { 0 }`,
+    // vyper/codegen/expr.py L588-L603) — правая часть (проверяемые умножение и вычитание) считается только при
+    // vp_new > 10^18, тогда вычитание ниже нуля не уходит; итог условия на откат не влияет.
+    if vp_new > E18 {
+        su(mu(two, vp_new)?, E18)?;
+    }
     Some(())
 }

@@ -348,10 +348,10 @@
   - T472-04 Вопрос Тиграну (время блока, как вопрос 1 решения 453): оракул модели — price_oracle() на блоке чтения;
     tweak_price считает его на блоке обмена (то же скользящее среднее с бо́льшим временем). Влияет только на ветку
     подстройки price_scale (её assert'ы — newton_D и доли x/D).
-  - T472-05 Вопрос Тиграну: короткое замыкание `and` в Vyper 0.3.10 (условие принятия подстройки
-    `old_virtual_price > 10**18 and 2 * old_virtual_price - 10**18 > xcp_profit`) не сверено с документацией Vyper —
-    модель считает вычитание всегда (при virtual_price < 0,5·10^18 обмен считается откатившимся; на живых пулах такого
-    значения нет). Сверить по докам Vyper — и снять осторожность, если замыкание есть.
+  - T472-05 **Сделано:** `and` Vyper укорачивается, как в Python — документация Vyper той же версии (vyperlang/vyper
+    v0.3.10 docs/types.rst L48-L49; та же фраза — в v0.2.12…v0.3.9) и кодогенерация (vyper/codegen/expr.py
+    L588-L603: `x and y` → `if x { y } { 0 }`); пулы NG — `# pragma version 0.3.10`. Модели crypto_tweak2.rs /
+    crypto_tweak3.rs считают правую часть условия только при virtual_price > 10^18 (ложного отката нет).
   - T472-06 Настройки (выкладка): дочерний ключ dex.sub_dex у `curve_arbitrum@arbitrum` вида `curve_stableswap_plain`:
     dex.stable_pools = [2pool], dex.factory = 0xb17b…d031, dex.curve_plain_implementations = Plain2/3/4Basic
     (docs/FIRST_RUN.md, docs/notes/arbitrum/dex-settings-arbitrum.md §2.12); dex.pool_enabled — Тигран, после T472-01.

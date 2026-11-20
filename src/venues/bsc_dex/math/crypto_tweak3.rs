@@ -110,9 +110,10 @@ fn rebalance(
         *xk = du(mu(d, E18)?, mu(three, pn)?)?;
     }
     let vp_new = udiv_u(mu(E18, crypto_d3::geometric_mean(x)?)?, t.total_supply);
-    // `old_virtual_price > 10**18 and 2 * old_virtual_price - 10**18 > xcp_profit` (L1150-L1153): короткое замыкание
-    // `and` у Vyper 0.3.10 не сверено — вычитание считается всегда (осторожно, как crypto_tweak2.rs).
-    let take = su(mu(U256::from(2u8), vp_new)?, E18)? > xcp_profit && vp_new > E18;
+    // `old_virtual_price > 10**18 and 2 * old_virtual_price - 10**18 > xcp_profit` (L1150-L1153): `and` Vyper
+    // укорачивается, как в Python (vyperlang/vyper v0.3.10 docs/types.rst L48-L49; vyper/codegen/expr.py L588-L603) —
+    // правая часть (проверяемые операции) считается только при vp_new > 10^18.
+    let take = vp_new > E18 && su(mu(U256::from(2u8), vp_new)?, E18)? > xcp_profit;
     // Подстройка принята — p_new упаковывается (L1155): assert p < PRICE_MASK.
     if take && !p_new.iter().all(|v| packable(*v)) {
         return None;

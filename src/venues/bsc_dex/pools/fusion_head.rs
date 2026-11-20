@@ -1,28 +1,19 @@
 //! Файл: venues/bsc_dex/pools/fusion_head.rs
-//! Что делает: решение 463 (T463-02, решение координатора 20.11; ревью t236) — комиссия THENA Fusion следующего блока
-//! зависит от ВРЕМЕНИ (новая точка оракула: волатильность за время с последней точки, начало окна WINDOW сдвигается), а
-//! не только от событий пула. Узел спрашивается по событиям пула (fusion_fee.rs: чтение пула, Swap); на каждой новой
-//! голове комиссия пересчитывается ЛОКАЛЬНО по прочитанным данным оракула (книга — fusion_book.rs) на время следующего
-//! блока.
-//! Время головы — node/heads.rs time_since: время блока головы или более нового, никогда не более старого (ревью п. 4).
-//! Изменилась — пул уходит ядру.
-//! Не торгуем вслепую (ревью п. 1): комиссию следующего блока посчитать нельзя (данных оракула нет
-//! или они старее состояния пула; время головы раньше времени чтения или последней точки оракула — без wrapping_sub;
-//! начала окна на нужное время нет) — пул недостоверен: отметка settle.rs Need::Fee (valid = false, ядру не уходит),
-//! причина — журнал dex.pool. Достоверность возвращает только полное чтение пула (settle_close.rs на следующей голове;
-//! не прочитался — причина, пауза и повтор решения 339; первый лог пула — очередь повтора, settle_lost.rs).
-//! Край горизонта (ревью п. 3): на следующей голове начала окна уже не хватит (комиссия на время головы + 1 с не
-//! считается) — оракул пула перечитывается на этой голове заранее, одновременно у всех таких пулов
-//! (fusion_head_read.rs), пока комиссия ещё известна. Пул на паузе решения 339 заранее не перечитывается.
-//! Книга, её чистка (forget, orphan) и комиссия того же блока для сверки (own_read, same_block) — fusion_book.rs.
-//! Повторное ревью t236: времени головы нет — fusion_clock.rs (Need::Clock, без полного чтения; снимается здесь,
-//! если книга покрывает); спящие пулы (asleep) пропускаются.
+//! Что делает: решение 463 (T463-02, координатор 20.11; ревью t236) — комиссия THENA Fusion следующего блока зависит
+//! от ВРЕМЕНИ (новая точка оракула, сдвиг окна WINDOW), не только от событий пула. Узел — по событиям пула
+//! (fusion_fee.rs); на каждой голове комиссия пересчитывается ЛОКАЛЬНО по книге (fusion_book.rs) на время следующего
+//! блока; время головы — node/heads.rs time_since (не старее головы). Изменилась — пул ядру.
+//! Не торгуем вслепую: не считается (нет данных оракула или они старее пула; время головы раньше чтения или последней
+//! точки — без wrapping_sub; нет начала окна) — пул недостоверен (settle.rs Need::Fee, ядру не уходит, причина —
+//! журнал dex.pool) до полного чтения (settle_close.rs; сбой — пауза и повтор 339). Край горизонта — оракул заранее,
+//! пулы одновременно (fusion_head_read.rs; пул на паузе 339 — нет). Времени головы нет — fusion_clock.rs (Need::Clock,
+//! без полного чтения; снимается здесь, если книга покрывает). Спящие пулы (asleep) пропускаются.
+//! Комиссия и снятие Need::Clock — одним изменением реестра (сначала комиссия, затем достоверность); запись,
+//! изменившаяся после расчёта ((synced_block, synced_log, state_gen)), не перетирается.
 //! Кто вызывает: pools/per_block.rs (any, on_head).
-//! От чего зависит: math/fee_algebra_v1.rs, fusion_book.rs (with, Held), fusion_head_read.rs, listen.rs (Pools),
-//! emit_pool.rs, registry.rs, settle.rs (pending, hold, Need::Fee), settle_fusion.rs (on_clock, clock_back),
-//! fusion_clock.rs (lost), pool_fail.rs (paused), node/heads.rs, depth_book.rs (label).
-//! Третье ревью t236 (пп. 2, 3): комиссия и снятие Need::Clock — одним изменением реестра (сначала комиссия, затем
-//! достоверность); запись новее той, по которой посчитана комиссия (synced_block), не перетирается.
+//! От чего зависит: math/fee_algebra_v1.rs, fusion_book.rs (with, Held), fusion_head_read.rs, fusion_clock.rs (lost),
+//! listen.rs (Pools), emit_pool.rs, registry.rs, settle.rs (pending, hold, Need::Fee), settle_fusion.rs (on_clock,
+//! clock_back), pool_fail.rs (paused), node/heads.rs, depth_book.rs (label).
 //! Настройки: через fusion_fee.rs — dex.fusion_fee_horizon_s [bsc_dex].
 
 use alloy_primitives::Address;
@@ -94,7 +85,7 @@ pub async fn on_head(p: &Pools, pools: &[(Found, String)], block: u64) -> Result
                 } else {
                     None
                 };
-                let done = p.reg.update(r, |x| set(x, new, e.synced_block, was));
+                let done = p.reg.update(r, |x| set(x, new, stamp(&e), was));
                 if clock && matches!(done, Some(Some(_))) {
                     p.holds.clock_back(r);
                 }
@@ -158,12 +149,23 @@ fn judge(h: Option<&Held>, (synced, ts): (u64, u32), (tick, fee): (i32, u32)) ->
     Step::Fee((n != fee).then_some(n), edge)
 }
 
+/// Отметка записи, по которой посчитана комиссия: (synced_block, synced_log, state_gen) — четвёртое ревью t236.
+/// Ошибок нет.
+fn stamp(e: &Entry) -> (u64, Option<u64>, u64) {
+    (e.synced_block, e.synced_log, e.state_gen)
+}
+
 /// Комиссия `n` (None — та же) в запись, затем достоверность `was` (Need::Clock снимается) — одним изменением; запись
-/// новее посчитанной (`synced` ≠ synced_block) — ничего (третье ревью t236, п. 3). Недостоверная без `was` — ничего.
-/// Принимает: запись, комиссию, synced_block расчёта, достоверность до отметки Clock. Возвращает: None — запись новее;
+/// изменилась после расчёта (`at` ≠ stamp) — ничего (ревью t236). Недостоверная без `was` — ничего. Принимает:
+/// запись, комиссию, отметку записи расчёта, достоверность до отметки Clock. Возвращает: None — запись изменилась;
 /// Some(пул ядру, если комиссия изменилась и пул достоверен). Ошибок нет.
-fn set(e: &mut Entry, n: Option<u32>, synced: u64, was: Option<bool>) -> Option<Option<Pool>> {
-    if e.synced_block != synced {
+fn set(
+    e: &mut Entry,
+    n: Option<u32>,
+    at: (u64, Option<u64>, u64),
+    was: Option<bool>,
+) -> Option<Option<Pool>> {
+    if stamp(e) != at {
         return None;
     }
     if !e.valid && was.is_none() {

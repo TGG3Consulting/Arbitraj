@@ -95,7 +95,7 @@ pub fn gaps(g: &[String]) -> String {
 /// больше u32::MAX − WINDOW − 1 (secondsAgo getTimepoints — uint32), с честной причиной и именем настройки.
 pub fn horizon(ctx: &Ctx) -> GatewayResult<u32> {
     let h = ctx.int(HORIZON)?;
-    let max = u32::MAX - fee_algebra_v1::WINDOW - 1;
+    let max = fee_algebra_v1::HORIZON_MAX;
     match u32::try_from(h) {
         Ok(v) if v > 0 && v <= max => Ok(v),
         _ if h == 0 => Err(not_set(ctx, HORIZON, "нужно целое больше 0")),

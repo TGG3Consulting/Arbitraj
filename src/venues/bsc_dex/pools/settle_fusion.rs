@@ -14,8 +14,8 @@
 //! чтения (clock_hold — fusion_clock.rs); на голове со временем fusion_head.rs снимает её (clock_back), если комиссия
 //! по книге считается (комиссия и достоверность — одним изменением реестра, set), иначе ставит Need::Fee
 //! (полное чтение).
-//! Кто вызывает: settle.rs (step → next_fee), listen_log.rs (next_fee_open), integral_fee.rs (fee_written),
-//! fusion_clock.rs (clock_hold), fusion_head.rs (on_clock, clock_back).
+//! Кто вызывает: settle.rs (step → next_fee), listen_log.rs (shuts, preset, next_fee_open), integral_fee.rs
+//! (fee_written), fusion_clock.rs (clock_hold), fusion_head.rs (on_clock, clock_back).
 //! От чего зависит: settle.rs (Holds, Need), registry.rs, events.rs (Applied), families.rs, abi_algebra.rs (Fee).
 //! Настройки: нет (базовое поведение).
 
@@ -111,9 +111,9 @@ impl Holds {
         }
     }
 
-    /// Третье ревью t236 (блокер 1): пул уже недостоверен в ТОМ ЖЕ изменении реестра, что применило лог (listen_log.rs
-    /// apply_held) — отметка заводится с достоверностью ДО лога `was` (её вернёт снятие; hold не перезаписывает
-    /// was_valid существующей отметки). Есть отметка — ничего. Принимает: ссылку, блок, прежнюю достоверность.
+    /// Третье ревью t236 (блокер 1): пул уже недостоверен в ТОМ ЖЕ изменении реестра, что применило лог
+    /// (listen_log.rs: reg.update с events::apply и shuts) — отметка заводится с достоверностью ДО лога `was` (её
+    /// вернёт снятие; hold не перезаписывает was_valid существующей отметки). Есть отметка — ничего. Принимает: ссылку, блок, прежнюю достоверность.
     /// Ошибок нет.
     pub fn preset(&self, r: &PoolRef, block: u64, was: bool) {
         self.with(|m| {

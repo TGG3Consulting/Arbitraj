@@ -341,6 +341,15 @@ source = "Газ сети BSC платится в BNB (решение 416, ре�
 rationale = "Тикер монеты газа: газ и чаевые в затратах, баланс газа кошелька, стакан газа бирж (цена газа в USDT). Раньше было зашито «BNB» в коде."
 prefill = { kind = "Venue", id = "bsc_dex" }
 
+[[section.rec]]
+name = "dex.gas_mode"
+area = "по площадке DEX"
+unit = "модель газа"
+value = "legacy"
+source = "Решение 433; BSC — research/flow/bsc_dex.md, раздел 5 (база газа BSC всегда 0)"
+rationale = "Модель газа сети: у BSC одна цена gasPrice и legacy-транзакция, как было. У площадки Arbitrum (arb_dex) — eip1559_l1."
+prefill = { kind = "Venue", id = "bsc_dex" }
+
 [[section]]
 title = "Нативная монета BNB"
 intro = "Чтобы торговать BNB на DEX: у BNB нет адреса контракта, поэтому он сопоставляется с обёрткой WBNB."

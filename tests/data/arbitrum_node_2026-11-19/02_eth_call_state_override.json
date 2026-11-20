@@ -1,0 +1,53 @@
+{
+  "note": "balanceOf(USDT) with state override substituting the holder balance",
+  "usdt": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+  "holder": "0x1111111111111111111111111111111111111111",
+  "substituted_balance": "0x00000000000000000000000000000000000000000000000000000000deadbeef",
+  "method": "stateDiff",
+  "balances_mapping_slot_index": 51,
+  "storage_slot": "0x8df201bd27f2966348a2a146b04f0d259c4e6d127bc13c15dc7ac7298c950197",
+  "request": {
+    "method": "eth_call",
+    "params": [
+      {
+        "to": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+        "data": "0x70a082310000000000000000000000001111111111111111111111111111111111111111"
+      },
+      "latest",
+      {
+        "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9": {
+          "stateDiff": {
+            "0x8df201bd27f2966348a2a146b04f0d259c4e6d127bc13c15dc7ac7298c950197": "0x00000000000000000000000000000000000000000000000000000000deadbeef"
+          }
+        }
+      }
+    ]
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "0x00000000000000000000000000000000000000000000000000000000deadbeef"
+  },
+  "code_override_demo": {
+    "request": {
+      "method": "eth_call",
+      "params": [
+        {
+          "to": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+          "data": "0x70a082310000000000000000000000001111111111111111111111111111111111111111"
+        },
+        "latest",
+        {
+          "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9": {
+            "code": "0x7f0000000000000000000000000000000000000000000000000de0b6b3a764000060005260206000f3"
+          }
+        }
+      ]
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000"
+    }
+  }
+}

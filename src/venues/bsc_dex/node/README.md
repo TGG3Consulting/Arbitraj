@@ -4,6 +4,7 @@
 | --- | --- |
 | `mod.rs` | Модуль (chainId больше не константа — решение 416, chain_id.rs) |
 | `chain_id.rs` | Решение 416: номер цепи EVM площадки из настройки dex.evm_chain_id (подпись EIP-155), сверка eth_chainId узла (`same_chain` — «Проверить подключение»; `check_start` — перед подпиской на рынок: dex.chain и dex.evm_chain_id заданы, узел той же сети) |
+| `arb_gas.rs` | Решение 433: газ Arbitrum с частью L1 — NodeInterface gasEstimateComponents (адрес dex.node_interface) через eth_call: весь газ (= eth_estimateGas), часть L1, baseFee L2, оценка цены L1; тесты — на записи своего узла (tests/data/arbitrum_node_2026-11-19/04, 05) |
 | `chain_seen.rs` | Решение 416 (ревью М-1): подтверждённая сеть узлов HTTP (основной, резервный) в Ctx.chains и сверка перед подписью (ensure — рядом с SendCfg до nonce): узел другой сети — отказ с причиной; сменили адрес узла или dex.evm_chain_id — сверка заново; тикер газа, прочитанный перед отправкой |
 | `jsonrpc.rs` | Запрос JSON-RPC 2.0 и разбор ответа/ошибки в единые коды |
 | `rpc.rs` | HTTP: одиночный запрос, пачка (batch), общий POST JSON (для каналов отправки) |

@@ -93,6 +93,11 @@ const CHOICE_BY_SETTING = {
     factory_swap_fee: 'комиссия от фабрики swapFee (SheepDex)',
     pool_fee_each_read: 'fee() пула при каждом чтении (SquadSwap V3)',
   },
+  // Решение 433: модель газа сети площадки DEX.
+  'dex.gas_mode': {
+    legacy: 'legacy — одна цена gasPrice (BSC)',
+    eip1559_l1: 'EIP-1559 + газ L1 (Arbitrum)',
+  },
   // Решение 302: запасной источник пополнения в симуляции.
   'presell.fund_fallback': {
     singleton: 'держатель-синглтон (Uniswap V4 PoolManager / Infinity Vault)',

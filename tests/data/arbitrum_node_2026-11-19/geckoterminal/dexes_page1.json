@@ -1,0 +1,598 @@
+{
+  "data": [
+    {
+      "id": "sushiswap_arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "SushiSwap (Arbitrum)"
+      }
+    },
+    {
+      "id": "uniswap_v3_arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Uniswap V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "swapr_arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Swapr (Arbitrum)"
+      }
+    },
+    {
+      "id": "fraxswap_arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Fraxswap (Arbitrum)"
+      }
+    },
+    {
+      "id": "curve_arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Curve (Arbitrum)"
+      }
+    },
+    {
+      "id": "kyberswap_elastic_arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Kyberswap Elastic (Arbitrum)"
+      }
+    },
+    {
+      "id": "kyberswap_classic_arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Kyberswap Classic (Arbitrum)"
+      }
+    },
+    {
+      "id": "elk_finance_arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Elk Finance (Arbitrum)"
+      }
+    },
+    {
+      "id": "camelot",
+      "type": "dex",
+      "attributes": {
+        "name": "Camelot"
+      }
+    },
+    {
+      "id": "3xcalibur",
+      "type": "dex",
+      "attributes": {
+        "name": "3xcalibur"
+      }
+    },
+    {
+      "id": "swapfish",
+      "type": "dex",
+      "attributes": {
+        "name": "SwapFish"
+      }
+    },
+    {
+      "id": "arbswap_arbitrum_one",
+      "type": "dex",
+      "attributes": {
+        "name": "Arbswap (Arbitrum One)"
+      }
+    },
+    {
+      "id": "oreoswap",
+      "type": "dex",
+      "attributes": {
+        "name": "OreoSwap"
+      }
+    },
+    {
+      "id": "balancer_arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Balancer V2 (Arbitrum)"
+      }
+    },
+    {
+      "id": "traderjoe-v2-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "LFJ V2 (Arbitrum)"
+      }
+    },
+    {
+      "id": "magicswap",
+      "type": "dex",
+      "attributes": {
+        "name": "Magicswap"
+      }
+    },
+    {
+      "id": "zyberswap",
+      "type": "dex",
+      "attributes": {
+        "name": "Zyberswap"
+      }
+    },
+    {
+      "id": "solidlizard",
+      "type": "dex",
+      "attributes": {
+        "name": "SolidLizard"
+      }
+    },
+    {
+      "id": "sharkyswap",
+      "type": "dex",
+      "attributes": {
+        "name": "SharkySwap"
+      }
+    },
+    {
+      "id": "alienfi",
+      "type": "dex",
+      "attributes": {
+        "name": "AlienFi"
+      }
+    },
+    {
+      "id": "arbiswap",
+      "type": "dex",
+      "attributes": {
+        "name": "ArbiSwap"
+      }
+    },
+    {
+      "id": "sterling",
+      "type": "dex",
+      "attributes": {
+        "name": "Sterling"
+      }
+    },
+    {
+      "id": "oasisswap",
+      "type": "dex",
+      "attributes": {
+        "name": "OasisSwap"
+      }
+    },
+    {
+      "id": "mindgames-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Mindgames (Arbitrum)"
+      }
+    },
+    {
+      "id": "archly-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Archly (Arbitrum)"
+      }
+    },
+    {
+      "id": "arbidex",
+      "type": "dex",
+      "attributes": {
+        "name": "Arbidex"
+      }
+    },
+    {
+      "id": "apeswap-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Apeswap (Arbitrum)"
+      }
+    },
+    {
+      "id": "mm-finance-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "MM Finance (Arbitrum)"
+      }
+    },
+    {
+      "id": "ramses",
+      "type": "dex",
+      "attributes": {
+        "name": "Ramses"
+      }
+    },
+    {
+      "id": "auragi",
+      "type": "dex",
+      "attributes": {
+        "name": "Auragi"
+      }
+    },
+    {
+      "id": "aegis",
+      "type": "dex",
+      "attributes": {
+        "name": "Aegis"
+      }
+    },
+    {
+      "id": "mm-finance-v3-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "MM Finance V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "camelot-v3",
+      "type": "dex",
+      "attributes": {
+        "name": "Camelot V3"
+      }
+    },
+    {
+      "id": "traderjoe-v2-1-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "LFJ V2.1 (Arbitrum)"
+      }
+    },
+    {
+      "id": "arbswap-stableswap-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Arbswap StableSwap (Arbitrum)"
+      }
+    },
+    {
+      "id": "whitehole-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Whitehole (Arbitrum)"
+      }
+    },
+    {
+      "id": "chronos",
+      "type": "dex",
+      "attributes": {
+        "name": "Chronos"
+      }
+    },
+    {
+      "id": "lfgswap-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "LFGswap (Arbitrum)"
+      }
+    },
+    {
+      "id": "swaprum",
+      "type": "dex",
+      "attributes": {
+        "name": "Swaprum"
+      }
+    },
+    {
+      "id": "solunea-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Solunea (Arbitrum)"
+      }
+    },
+    {
+      "id": "arbidex-v3",
+      "type": "dex",
+      "attributes": {
+        "name": "Arbidex V3"
+      }
+    },
+    {
+      "id": "crescentswap",
+      "type": "dex",
+      "attributes": {
+        "name": "CrescentSwap"
+      }
+    },
+    {
+      "id": "ramses-v2",
+      "type": "dex",
+      "attributes": {
+        "name": "Ramses V2"
+      }
+    },
+    {
+      "id": "sushiswap-v3-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Sushiswap V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "dexswap",
+      "type": "dex",
+      "attributes": {
+        "name": "dexSWAP"
+      }
+    },
+    {
+      "id": "forge-sx",
+      "type": "dex",
+      "attributes": {
+        "name": "Forge Sx"
+      }
+    },
+    {
+      "id": "degenbrains",
+      "type": "dex",
+      "attributes": {
+        "name": "Degenbrains"
+      }
+    },
+    {
+      "id": "spartadex",
+      "type": "dex",
+      "attributes": {
+        "name": "SpartaDEX"
+      }
+    },
+    {
+      "id": "pancakeswap-v2-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Pancakeswap V2 (Arbitrum)"
+      }
+    },
+    {
+      "id": "pancakeswap-v3-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Pancakeswap V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "smardex-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "SmarDex (Arbitrum)"
+      }
+    },
+    {
+      "id": "darwinswap",
+      "type": "dex",
+      "attributes": {
+        "name": "DarwinSwap"
+      }
+    },
+    {
+      "id": "pixelswap-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "PixelSwap (Arbitrum)"
+      }
+    },
+    {
+      "id": "antfarm-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Antfarm (Arbitrum)"
+      }
+    },
+    {
+      "id": "dex-on-crypto-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Dex on Crypto (Arbitrum)"
+      }
+    },
+    {
+      "id": "shekelswap",
+      "type": "dex",
+      "attributes": {
+        "name": "ShekelSwap"
+      }
+    },
+    {
+      "id": "spinaqdex",
+      "type": "dex",
+      "attributes": {
+        "name": "SpinaqDex"
+      }
+    },
+    {
+      "id": "woken-exchange-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Woken Exchange (Arbitrum)"
+      }
+    },
+    {
+      "id": "kaleidoswap-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "KaleidoSwap (Arbitrum)"
+      }
+    },
+    {
+      "id": "gasx",
+      "type": "dex",
+      "attributes": {
+        "name": "GasX"
+      }
+    },
+    {
+      "id": "uniswap-v2-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Uniswap V2 (Arbitrum)"
+      }
+    },
+    {
+      "id": "dackieswap-v2-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "DackieSwap V2 (Arbitrum)"
+      }
+    },
+    {
+      "id": "dackieswap-v3-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "DackieSwap V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "pancakeswap-stableswap-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Pancakeswap Stableswap (Arbitrum)"
+      }
+    },
+    {
+      "id": "solidly-v3-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Solidly V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "kewlswap-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "KEWLSwap (Arbitrum)"
+      }
+    },
+    {
+      "id": "traderjoe-v2-2-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "LFJ V2.2 (Arbitrum)"
+      }
+    },
+    {
+      "id": "moonbase-alpha",
+      "type": "dex",
+      "attributes": {
+        "name": "Moonbase Alpha"
+      }
+    },
+    {
+      "id": "deltaswap",
+      "type": "dex",
+      "attributes": {
+        "name": "Deltaswap (Arbitrum)"
+      }
+    },
+    {
+      "id": "ethervista-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "EtherVista (Arbitrum)"
+      }
+    },
+    {
+      "id": "squadswap-v2-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "SquadSwap V2 (Arbitrum)"
+      }
+    },
+    {
+      "id": "squadswap-v3-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "SquadSwap V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "uniswap-v4-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Uniswap V4 (Arbitrum)"
+      }
+    },
+    {
+      "id": "maverick-v2-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Maverick V2 (Arbitrum)"
+      }
+    },
+    {
+      "id": "omni-exchange-v2-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Omni Exchange V2 (Arbitrum)"
+      }
+    },
+    {
+      "id": "omni-exchange-v3-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Omni Exchange V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "balancer-v3-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Balancer V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "fluid-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Fluid (Arbitrum)"
+      }
+    },
+    {
+      "id": "ekubo-v3-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Ekubo V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "ramses-legacy-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Ramses Legacy (Arbitrum)"
+      }
+    },
+    {
+      "id": "ramses-v3-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Ramses V3 (Arbitrum)"
+      }
+    },
+    {
+      "id": "rubicon-clmm-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Rubicon CLMM (Arbitrum)"
+      }
+    },
+    {
+      "id": "aero-slipstream-arbitrum",
+      "type": "dex",
+      "attributes": {
+        "name": "Aero Slipstream (Arbitrum)"
+      }
+    },
+    {
+      "id": "camelot-v4",
+      "type": "dex",
+      "attributes": {
+        "name": "Camelot V4"
+      }
+    }
+  ],
+  "links": {
+    "first": "https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes?page=1",
+    "prev": null,
+    "next": null,
+    "last": "https://api.geckoterminal.com/api/v2/networks/arbitrum/dexes?page=1"
+  }
+}

@@ -1,0 +1,51 @@
+=== УЗЕЛ ARBITRUM (arb-node / 37.59.21.151) — Thu Nov 19 23:02:58 UTC 2026 ===
+
+Nitro версия (web3_clientVersion):
+{"jsonrpc":"2.0","id":1,"result":"nitro/v3.12.4+960ca0a-20261110T061047Z/linux-amd64/go1.25.12"}
+  образ: offchainlabs/nitro-node:v3.12.4-960ca0a-stripped
+  требование >= v3.12.1: ВЫПОЛНЕНО (v3.12.4)
+
+Синхронизация: eth_syncing = {"jsonrpc":"2.0","id":1,"result":false}
+Номер блока: 0x1f565868 (525752424)
+chainId: 0xa4b1 (42161 = Arbitrum One)
+
+Флаги запуска (http/ws/api):
+   --parent-chain.connection.url=http://arb-l1proxy:8549
+   --parent-chain.blob-client.beacon-url=https://ethereum-beacon-api.publicnode.com
+   --chain.name=arb1
+   --persistent.chain=/home/user/.arbitrum/arb1
+   --execution.caching.state-scheme=path
+   --http.addr=0.0.0.0
+   --http.port=8547
+   --http.api=net,web3,eth,arb
+   --http.vhosts=*
+   --http.corsdomain=*
+   --ws.addr=0.0.0.0
+   --ws.port=8548
+   --ws.api=net,web3,eth,arb
+   --ws.origins=*
+   --node.feed.input.url=wss://arb1.arbitrum.io/feed
+   --node.staker.enable=false
+   --execution.parent-chain-reader.use-finality-data=false
+
+Слушает (на хосте arb-node):
+  HTTP: 127.0.0.1:8547   WS: 127.0.0.1:8548   (контейнер биндит 0.0.0.0, публикация docker -p ТОЛЬКО на 127.0.0.1 — наружу НЕ слушает)
+
+Фаервол (ufw):
+  Status: active
+  
+  To                         Action      From
+  --                         ------      ----
+  22/tcp                     ALLOW       Anywhere                  
+  30311/tcp                  ALLOW       Anywhere                  
+  30311/udp                  ALLOW       Anywhere                  
+  22/tcp (v6)                ALLOW       Anywhere (v6)             
+  30311/tcp (v6)             ALLOW       Anywhere (v6)             
+  30311/udp (v6)             ALLOW       Anywhere (v6)             
+  
+  Порты 8547/8548 в ufw НЕ открыты и привязаны к 127.0.0.1 -> снаружи недоступны.
+  Открыты наружу: 22/tcp (ssh), 30311 tcp+udp (p2p, не используется — слушателя нет).
+
+Доступ для бота (arb-node-2 / 51.75.112.165):
+  Обратный SSH-туннель (systemd arb-rpc-tunnel): arb-node-2 127.0.0.1:8547->8547, 127.0.0.1:8548->8548.
+  Бот на arb-node-2 читает Arbitrum по http://127.0.0.1:8547 (ws://127.0.0.1:8548).

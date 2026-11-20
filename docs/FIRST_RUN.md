@@ -138,6 +138,8 @@ log.signal_hold (core/book_marks_on.rs).
 | dex.default_chain | вся система | не задавать, пока площадка DEX одна; при второй сети (Arbitrum) — `bsc` | Сеть по умолчанию: монеты без сети (весь учёт BSC до двух сетей) | Ключи и записи BSC остаются прежними |
 | venue.arbitrum_network | по бирже | BingX `ARBITRUM`, KuCoin `arbitrum`, Gate `ARBEVM`; остальным — *метод:* по живому ответу справочника сетей биржи (то же поле, что у venue.bsc_network); не задавать, пока нет площадки DEX Arbitrum | Имя сети Arbitrum One у биржи (решение 431) | Записанные ответы: tests/data/bingx_2026-10-24/config_getall.json, cex_samples_2026_11_04/kucoin_currencies_v3.json, gate_spot_currencies.json |
 | venue.arbitrum_contract_chain | площадка CoinEx | *метод:* chain_info.chain_name сети Arbitrum One в живом ответе GET /v2/assets/info (записи нет — не угадывать) | Адрес контракта CoinEx у сети Arbitrum (решение 431) | /v2/assets/info |
+| dex.gas_mode | по площадке DEX | `legacy` у bsc_dex; у площадки Arbitrum (arb_dex, когда появится) — `eip1559_l1` | Модель газа сети: BSC — одна цена gasPrice (legacy), Arbitrum — EIP-1559 + газ с частью L1 | Решение 433; BSC — research/flow/bsc_dex.md, раздел 5 (база газа 0); Arbitrum — docs.arbitrum.io «Gas and fees» |
+| dex.node_interface | по площадке DEX | у bsc_dex не задавать; у arb_dex — `0x00000000000000000000000000000000000000C8` | Адрес NodeInterface узла Nitro: части газа (L2, L1, baseFee) | docs.arbitrum.io, NodeInterface reference («available at address 0xc8»); запись узла tests/data/arbitrum_node_2026-11-19/05_*.json |
 
 ## Нативная монета BNB
 

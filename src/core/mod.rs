@@ -367,6 +367,7 @@ pub mod transfer_tax;
 pub mod transfer_watch;
 pub mod transfers;
 pub mod transit;
+pub mod transit_source;
 pub mod types;
 pub mod uncapped;
 pub mod uncapped_entry;

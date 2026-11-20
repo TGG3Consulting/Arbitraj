@@ -1,5 +1,5 @@
 //! Файл: tests/core_pool_own_t238.rs
-//! Что делает: решение 463 (t238) — учёт своих идущих сделок через один пул на записанных сделках NUM живого бота
+//! Что делает: решение 464 (t238) — учёт своих идущих сделок через один пул на записанных сделках NUM живого бота
 //! 20.11.2026 (tests/data/num_pool_2026-11-20/deals.json: Gate → DEX и три KuCoin → DEX, пул PCS V3 0xf89068…371d),
 //! на настоящем ядре и SQLite во временной папке (площадок в реестре нет, моков нет):
 //! - сдвиг от идущих сделок ДРУГОЙ биржи покупки: продажа новой KuCoin-сделки — после монет сделки Gate (как в живом
@@ -9,7 +9,9 @@
 //!   блоком ставится сразу: котировка по блоку ниже её блока — отказ, по её блоку — принята; при двух продажах блок
 //!   следа — самый высокий;
 //! - продажа в полёте (ход очереди продажи держит sell_turn), исполнившаяся за время котировки (счётчик итогов) и с
-//!   неизвестным исходом — котировки нет (ride_settled.rs).
+//!   неизвестным исходом — котировки нет (ride_settled.rs);
+//! - время в пути монеты без своей истории: настройки (37 + 2 = 39 с) или статистика пары gate → bsc_dex по всем монетам
+//!   из записи /api/transits (transits_gate_bsc_dex.json) — transit_source.rs.
 //! Кто вызывает: cargo test.
 //! От чего зависит: arb::core (coin_ride, ride_quote, ride_trail, ride_settled, credit_lock, sell_turn, ledger),
 //! arb::settings, arb::storage, arb::notify, tests/data/num_pool_2026-11-20.
@@ -22,11 +24,15 @@ use arb::core::deal::{Deal, Step};
 use arb::core::deal_group::DealGroup;
 use arb::core::deps::Deps;
 use arb::core::op_error::OpError;
+use arb::core::transit_source::Source;
 use arb::core::types::{
     Asset, ChainTx, DexRoute, Direction, PoolKind, PoolRef, Quote, RouteHop, RouteLeg, RouteMode,
     SendMethod, Side, TradeRequest, TradeResult, TradeStatus, TxOutcome, VenueId,
 };
-use arb::core::{coin_ride, credit_lock, ledger, ride_quote, ride_settled, ride_trail, sell_turn};
+use arb::core::{
+    coin_ride, credit_lock, ledger, ride_quote, ride_settled, ride_trail, sell_turn, transit,
+    transit_source,
+};
 use arb::gateway::contract::VenueKind;
 use arb::gateway::registry::Registry;
 use arb::notify::dispatch::Notifier;
@@ -344,5 +350,70 @@ async fn sale_in_flight_or_unknown_has_no_quote() {
     assert!(
         unsure.contains("исход нашей продажи NUM неизвестен"),
         "{unsure}"
+    );
+}
+
+/// Настройка площадки (тест падает при ошибке).
+async fn set_on(core: &Core, name: &str, venue: &str, v: Value) {
+    let s = &core.inner.deps.settings;
+    let at = Scope::Venue(venue.into());
+    s.set(name, at, Some(v), "тест").await.unwrap();
+}
+
+#[tokio::test]
+async fn transit_takes_pair_statistics_when_coin_has_none() {
+    let r = rec();
+    let core = start("transit").await;
+    // Настройки живого бота 20.11 (запись transit_settings).
+    set_on(&core, "profit.transit_mode", "gate", json!("manual_auto")).await;
+    set_on(&core, "profit.transit_auto_after", "gate", json!(5)).await;
+    set_on(&core, "profit.transit_manual_s", "gate", json!(37)).await;
+    set_on(&core, "profit.transit_credit_s", "bsc_dex", json!(2)).await;
+    let d = dir(&r, "gate", "bsc_dex");
+    // Ни монеты, ни пары — из настроек: 37 + 2 = 39 с (план сделки Gate NUM).
+    let (secs, src) = transit::seconds_from(&core, &d).unwrap();
+    assert_eq!((secs, src), (Decimal::from(39), Source::Manual));
+    // История пары gate → bsc_dex из /api/transits: у каждой монеты её число переводов со средним (сумма та же).
+    let p = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/data/num_pool_2026-11-20/transits_gate_bsc_dex.json"
+    );
+    let text = std::fs::read_to_string(p).unwrap();
+    let t: Value = serde_json::from_str(&text).unwrap();
+    let (gate, dex) = (VenueId("gate".into()), VenueId("bsc_dex".into()));
+    let (mut sum, mut count) = (Decimal::ZERO, 0usize);
+    for row in t["rows"].as_array().unwrap() {
+        let a = Asset {
+            ticker: sv(row, "ticker").into(),
+            bsc_contract: None,
+        };
+        // NUM — до сделки Gate своей истории не было: её строку кладём последней.
+        if a.ticker == "NUM" {
+            continue;
+        }
+        let n = row["count"].as_u64().unwrap() as usize;
+        for _ in 0..n {
+            transit::record(&core, &a, &gate, &dex, dv(row, "avg_s")).await;
+        }
+        sum += dv(row, "avg_s") * Decimal::from(n);
+        count += n;
+    }
+    // Своих переводов у NUM нет, у пары 122 перевода 59 монет — среднее пары, не 39 с.
+    let (secs, src) = transit::seconds_from(&core, &d).unwrap();
+    assert_eq!(src, Source::Pair(122, 59));
+    // Суммы с длинными дробями — порядок сложения другой: сравнение до 1e-20 с.
+    let want = sum / Decimal::from(count);
+    let gap = (secs - want).abs();
+    assert!(gap < Decimal::new(1, 20), "{secs} vs {want}");
+    assert!(secs > Decimal::from(39));
+    // Перевод NUM этой сделки (58,052 с) — у монеты 1 < 5: всё ещё пара, 123 перевода, среднее 49,1 с (как /api/transits).
+    transit::record(&core, &d.asset, &gate, &dex, "58.052".parse().unwrap()).await;
+    let (secs, src) = transit::seconds_from(&core, &d).unwrap();
+    assert_eq!(src, Source::Pair(123, 60));
+    assert_eq!(secs.round_dp(1), "49.1".parse::<Decimal>().unwrap());
+    let line = transit_source::text(&d, secs, &src);
+    assert!(
+        line.contains("статистика пары gate → bsc_dex по всем монетам, 123 переводов"),
+        "{line}"
     );
 }

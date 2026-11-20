@@ -302,6 +302,10 @@ async fn run(
         plan.profit_usd.round_dp(4),
         plan.pick_note()
     ));
+    // Решение 464: откуда взято время в пути плана (настройки, статистика монеты или пары площадок).
+    if let Some(t) = super::transit_source::note(core, &d) {
+        deal.note(t);
+    }
     if let Some(a) = &acc {
         let name = deps.settings.accounts().wallet(&a.0).map(|w| w.name);
         deal.note(format!("Кошелёк DEX: «{}» ({a})", name.unwrap_or_default()));

@@ -3,31 +3,32 @@
 //! то же правило глубины, что у v2.1 (load_lb_bins.rs band: сторона читается, пока стоимость прочитанных бинов в USDT не
 //! достигнет dex.bin_depth_usd, у пары без USDT — до конца), но следующий непустой бин — findFirstNonEmptyBinId(id,
 //! swapForY) пула v2.0. Отличие v2.0: бина в эту сторону нет — вызов ОТКАТЫВАЕТСЯ (TreeMath__ErrorDepthSearch или
-//! арифметика BitMath на краю дерева), а не возвращает 0 / 0xFFFFFF; функция только читает дерево бинов, других
-//! откатов у неё нет — откат вызова (ответ узла «вызов откатился») = сторона прочитана до конца. Сбой узла — ошибка.
+//! арифметика BitMath на краю дерева — Panic(0x11)), а не возвращает 0 / 0xFFFFFF. Ревью 445: краем стороны считается
+//! только откат с этими данными (edge); иной откат, откат без данных и сбой узла — ошибка чтения.
 //! Края полосы «до конца» — те же константы bins.rs (NONE_ABOVE / NONE_BELOW), что у v2.1: off_map_bins.rs и
 //! lb_swap.rs работают с полосой одинаково.
 //! Кто вызывает: pools/load_lb20.rs (band).
-//! От чего зависит: ctx.rs, node/call.rs (try_many), abi_lb20.rs, bins.rs, load_bin.rs (Depth, usdt_value),
+//! От чего зависит: ctx.rs, node/call.rs (try_many), node/multicall.rs, node/rpc.rs (eth_call), abi_lb20.rs, bins.rs, load_bin.rs (Depth, usdt_value),
 //! load_lb_bins.rs (bin — getBin того же селектора).
 //! Настройки: dex.bin_depth_usd [площадка DEX].
 //!
 //! Источник: lfj-gg/joe-v2, тег v2.0.0 (07f10212) — src/LBPair.sol L257-L259 (findFirstNonEmptyBinId →
 //! _tree.findFirstBin(_id, _swapForY)), L265-L267 (getBin); src/libraries/TreeMath.sol L21-L67 (findFirstBin: swapForY →
-//! правая сторона дерева = меньшие id; не найдено в глубине 0 — откат L60); src/libraries/BitMath.sol L13-L19
+//! правая сторона дерева = меньшие id; не найдено в глубине 0 — откат L60); src/libraries/BitMath.sol L14-L20
 //! (closestBit: _bit − 1 / _bit + 1 вне unchecked — на краю откат solc 0.8.10).
 
 use std::collections::BTreeMap;
 
-use alloy::sol_types::SolCall;
+use alloy::sol_types::{Panic, PanicKind, SolCall, SolError};
 use alloy_primitives::aliases::U24;
 use alloy_primitives::{Address, Bytes};
 use rust_decimal::Decimal;
+use serde_json::json;
 
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 
 use super::super::ctx::Ctx;
-use super::super::node::call;
+use super::super::node::{call, multicall, rpc};
 use super::abi_lb20::ILBPairV20 as P;
 use super::bins::{BinMap, NONE_ABOVE, NONE_BELOW};
 use super::load_bin::{Depth, usdt_value};
@@ -91,7 +92,8 @@ pub async fn band(
 }
 
 /// Следующий непустой бин (down — вниз по id, swapForY = true). Принимает: окружение, пул, бин, сторону, тег блока.
-/// Возвращает: Some(id) или None — откат вызова (бинов в эту сторону нет, см. шапку). Ошибки: узел, ответ не по ABI.
+/// Возвращает: Some(id) или None — откат с данными края (edge: бинов в эту сторону нет, см. шапку). Ошибки: узел,
+/// ответ не по ABI, иной откат или откат без данных (BadResponse / ошибка узла).
 pub async fn next_bin(
     ctx: &Ctx,
     pool: Address,
@@ -103,24 +105,52 @@ pub async fn next_bin(
         id_: U24::from(id),
         sentTokenY: down,
     };
-    let got = call::try_many(ctx, &[(pool, Bytes::from(c.abi_encode()))], tag).await?;
-    match got.into_iter().next() {
-        Some(Ok(b)) => Ok(Some(call::decode::<P::findFirstNonEmptyBinIdCall>(&b)?.to())),
-        // Откат: Multicall3 — «вызов откатился: 0x…» (node/multicall.rs), пачка JSON-RPC — текст узла «execution
-        // reverted» (errors.rs from_rpc). Иная ошибка части пачки — сбой узла, не край.
-        Some(Err(w)) if reverted(&w) => Ok(None),
-        Some(Err(w)) => Err(ctx.err(
+    let data = Bytes::from(c.abi_encode());
+    let not_edge = |w: &str| {
+        ctx.err(
             ErrorCode::BadResponse,
-            format!("LB v2.0 {pool}: findFirstNonEmptyBinId({id}): {w}"),
-        )),
-        None => Err(ctx.err(
-            ErrorCode::BadResponse,
-            format!("LB v2.0 {pool}: нет ответа findFirstNonEmptyBinId({id})"),
-        )),
+            format!("LB v2.0 {pool}: findFirstNonEmptyBinId({id}): откат не на краю: {w}"),
+        )
+    };
+    // Multicall3: откат части пачки — текст «вызов откатился: 0x<данные>» (node/multicall.rs).
+    if multicall::address(ctx).is_some() {
+        let got = call::try_many(ctx, &[(pool, data)], tag).await?;
+        return match got.into_iter().next() {
+            Some(Ok(b)) => Ok(Some(call::decode::<P::findFirstNonEmptyBinIdCall>(&b)?.to())),
+            Some(Err(w)) if mc_data(&w).is_some_and(|d| edge(&d)) => Ok(None),
+            Some(Err(w)) => Err(not_edge(w.as_str())),
+            None => Err(not_edge("нет ответа")),
+        };
+    }
+    // Без Multicall3: eth_call, данные отката — поле error.data сырого ответа узла (errors.rs from_rpc with_raw).
+    let req = json!([{ "to": pool, "input": data }, tag]);
+    match rpc::call::<Bytes>(ctx, "eth_call", req).await {
+        Ok(b) => Ok(Some(call::decode::<P::findFirstNonEmptyBinIdCall>(&b)?.to())),
+        Err(e) if raw_edge(e.raw.as_deref()) => Ok(None),
+        Err(e) => Err(e),
     }
 }
 
-/// Ответ части пачки — откат вызова (а не сбой узла). Принимает: текст ответа. Ошибок нет.
-pub fn reverted(w: &str) -> bool {
-    w.contains("откатился") || w.to_ascii_lowercase().contains("execution reverted")
+/// Данные отката «бинов в эту сторону нет» (см. шапку): ровно селектор TreeMath__ErrorDepthSearch() или
+/// Panic(0x11) — переполнение uint8 в BitMath.closestBit на краю дерева (код паники — документация Solidity, «Panic via
+/// assert and Error via require»). Принимает: данные отката. Ошибок нет.
+pub fn edge(data: &[u8]) -> bool {
+    data == &P::TreeMath__ErrorDepthSearch::SELECTOR[..]
+        || data == Panic::from(PanicKind::UnderOverflow).abi_encode().as_slice()
+}
+
+/// Данные отката из текста части пачки Multicall3 («вызов откатился: 0x…»). None — не тот вид. Ошибок нет.
+pub fn mc_data(w: &str) -> Option<Vec<u8>> {
+    alloy_primitives::hex::decode(w.strip_prefix("вызов откатился: ")?).ok()
+}
+
+/// Сырой ответ узла — откат с данными края (rpc_data, edge). Ошибок нет.
+fn raw_edge(raw: Option<&str>) -> bool {
+    raw.and_then(rpc_data).is_some_and(|d| edge(&d))
+}
+
+/// Данные отката из сырого ответа JSON-RPC (error.data). None — поля нет или не hex. Ошибок нет.
+pub fn rpc_data(raw: &str) -> Option<Vec<u8>> {
+    let v: serde_json::Value = serde_json::from_str(raw).ok()?;
+    alloy_primitives::hex::decode(v["error"]["data"].as_str()?).ok()
 }

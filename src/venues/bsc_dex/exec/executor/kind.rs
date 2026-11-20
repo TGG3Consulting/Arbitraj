@@ -82,7 +82,7 @@ pub enum Params {
     Lb,
     /// Пул Liquidity Book v2.0 (решение 445): вход переводом в пул, swap(swapForY, to); направление контракт берёт по
     /// tokenX() пары v2.0 (getTokenX у v2.0 нет). Данных нет. Шаг 22 — в исходнике contracts/ArbExecutor.sol; в коде
-    /// исполнителя — после пересборки (pools/exec_callback.rs code_probe).
+    /// исполнителя — только сборка v4 (pools/exec_callback.rs since; сборки v4 ещё нет).
     Lb20,
     /// Решение 395 (t181; только исполнитель v3): пул Uniswap V4 внутри PoolManager — ключ пула; пул шага — PoolManager.
     UniV4 { key: V4Key },

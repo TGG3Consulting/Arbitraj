@@ -60,7 +60,7 @@ const SHA_V1: &str = include_str!(concat!(
 ));
 
 /// Версия исполнителя по коду в сети (решение 272). Hash — ключ памяти pools/exec_callback.rs (версия, сигнатура).
-/// Порядок (Ord) — порядок выпуска: V1 < V2 < V3; каждая следующая — надмножество предыдущей (решение 395).
+/// Порядок (Ord) — порядок выпуска: V1 < V2 < V3 < V4; каждая следующая — надмножество предыдущей (решение 395).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Version {
     /// Только execute (contracts/out/v1/): нативный BNB монетой сделки не идёт.
@@ -70,6 +70,10 @@ pub enum Version {
     /// Решение 395 (t181): v2 + шаги UNI_V4 / INF_CL / INF_BIN (contracts/out/ — текущая сборка, её разворачивает кнопка
     /// «Развернуть исполнитель»).
     V3,
+    /// Решение 445 (ревью): v3 + шаг LB20 = 22 (пара Liquidity Book v2.0) — есть только в исходнике
+    /// contracts/ArbExecutor.sol; сборки v4 в contracts/out/ ещё нет (solc вне агентов), поэтому version_of её не
+    /// возвращает и ни один кошелёк не сверен как v4 — шаг LB20 не строится, пока не будет сборки (exec_callback.rs).
+    V4,
 }
 
 impl Version {
@@ -79,6 +83,7 @@ impl Version {
             Version::V1 => "v1",
             Version::V2 => "v2",
             Version::V3 => "v3",
+            Version::V4 => "v4",
         }
     }
 
@@ -93,6 +98,7 @@ impl Version {
             "v1" => Some(Version::V1),
             "v2" => Some(Version::V2),
             "v3" => Some(Version::V3),
+            "v4" => Some(Version::V4),
             _ => None,
         }
     }

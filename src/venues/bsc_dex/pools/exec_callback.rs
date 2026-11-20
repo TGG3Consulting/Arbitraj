@@ -22,9 +22,8 @@
 //! Решение 395 (t181): шаги пулов внутри менеджеров — UNI_V4 = 19, INF_CL = 20, INF_BIN = 21 — только у исполнителя v3
 //! (since): у кошелька v1 / v2 — пулы Uniswap V4 / PancakeSwap Infinity без пути ЧЕРЕЗ ИСПОЛНИТЕЛЬ (свой Universal Router у
 //! них остаётся — family.tradable); артефакт версии для поиска селектора: v1 — out/v1/, v2 — out/v2/, v3 — out/.
-//! Решение 445: шаг LB20 = 22 (Liquidity Book v2.0) — с v3 и только при признаке в коде сверенной версии (code_probe:
-//! PUSH4 tokenX() — его зовёт только LB20); артефакты contracts/out/ решением 445 не пересобраны — шага нет ни у одной
-//! версии до пересборки (probe_absent — причина «пересоберите и переразверните»).
+//! Решение 445 (ревью): шаг LB20 = 22 (Liquidity Book v2.0) — только у исполнителя v4 (since); сборки v4 в
+//! contracts/out/ ещё нет — шаг не строится ни у одного кошелька (причина «пересоберите как v4 и переразверните»).
 //! Решение 409 (t194): память итогов SEEN — снимок за ArcSwap (чтение без замка на горячем пути котировки).
 //! Настройки: dex.v3_swap_callback [DEX] (необязательная).
 
@@ -69,6 +68,8 @@ pub fn check(v: Version, sig: &str) -> Option<String> {
         Version::V1 => code::runtime_v1(),
         Version::V2 => code::runtime_v2(),
         Version::V3 => code::runtime(),
+        // Решение 445 (ревью): сборки v4 в репозитории нет — селектор не проверить.
+        Version::V4 => Err("сборки v4 в contracts/out/ ещё нет (решение 445)".to_string()),
     };
     let ver = v.label();
     match rt {
@@ -112,12 +113,6 @@ fn wallet_version(ctx: &Ctx, what: &str) -> Result<Option<Version>, String> {
 pub fn usable(ctx: &Ctx, f: &Family, ver: Option<Version>) -> bool {
     if let Some(k) = f.executor_kind.filter(|k| since(*k) > Version::V1)
         && !ver.is_some_and(|v| v >= since(k))
-    {
-        return false;
-    }
-    // Решение 445: вид шага с признаком в коде (code_probe) — селектор есть в коде сверенной версии.
-    if let Some(sig) = f.executor_kind.and_then(code_probe)
-        && !ver.is_some_and(|v| seen_with(v, sig, |r| r.is_none()))
     {
         return false;
     }
@@ -187,22 +182,10 @@ pub fn since(k: ExecKind) -> Version {
         | ExecKind::Smardex
         | ExecKind::Balancer
         | ExecKind::Lb => Version::V2,
-        // Решение 445: LB20 — не раньше v3 (v1 / v2 — замороженные артефакты без него) и только при признаке в коде
-        // сверенной версии (code_probe).
-        ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin | ExecKind::Lb20 => Version::V3,
+        ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => Version::V3,
+        // Решение 445 (ревью): LB20 — только v4 (сборки v4 ещё нет — шаг не строится ни у одного кошелька).
+        ExecKind::Lb20 => Version::V4,
         _ => Version::V1,
-    }
-}
-
-/// Решение 445: признак вида шага в коде исполнителя — селектор, который зовёт ТОЛЬКО этот шаг (PUSH4 в коде версии).
-/// Нужен виду, добавленному в contracts/ArbExecutor.sol без пересборки артефактов contracts/out/ (сборка solc — вне
-/// агентов): пока в коде сверенной версии селектора нет — шага нет (пулы DEX без пути через исполнитель, причина —
-/// step_missing). LB20 — tokenX() пары Liquidity Book v2.0 (0x16dc165b; в артефактах v1, v2, v3 на решении 445 его
-/// нет — тест code_probe_absent_until_rebuild). Ошибок нет.
-pub fn code_probe(k: ExecKind) -> Option<&'static str> {
-    match k {
-        ExecKind::Lb20 => Some("tokenX()"),
-        _ => None,
     }
 }
 
@@ -217,7 +200,10 @@ pub fn v2_only(k: ExecKind) -> bool {
 pub fn step_absent(k: ExecKind, v: Version) -> Option<String> {
     let need = since(k);
     (v < need).then(|| {
-        let todo = if need >= Version::V3 {
+        let todo = if need >= Version::V4 {
+            "сборки v4 в contracts/out/ нет: шаг есть только в исходнике contracts/ArbExecutor.sol (решение 445) — \
+             пересоберите contracts/build.sh как v4 и переразверните исполнитель кошелька"
+        } else if need >= Version::V3 {
             deploy_gate::need_v3()
         } else {
             "переразверните исполнитель кошелька (экран «Маппинг кошельков»)"
@@ -238,41 +224,28 @@ pub fn step_missing(ctx: &Ctx, f: &Family) -> Option<String> {
     let k = f.executor_kind.filter(|k| since(*k) > Version::V1)?;
     let what = format!("шаг исполнителя {}", k.name());
     match wallet_version(ctx, &what) {
-        Ok(Some(v)) => step_absent(k, v).or_else(|| probe_absent(k, v)),
+        Ok(Some(v)) => step_absent(k, v),
         Ok(None) => None,
         Err(why) => Some(why),
     }
 }
 
-/// Решение 445: причина «вид шага в исходнике есть, а в коде исполнителя версии v — нет» (code_probe). None — признака
-/// у вида нет или селектор в коде есть. Принимает: вид, версию. Ошибок нет.
-pub fn probe_absent(k: ExecKind, v: Version) -> Option<String> {
-    let sig = code_probe(k)?;
-    seen_with(v, sig, |r| r.is_some()).then(|| {
-        format!(
-            "в коде исполнителя {} нет шага {} (селектор {sig} не найден): шаг добавлен в contracts/ArbExecutor.sol \
-             решением 445, артефакты contracts/out/ не пересобраны — пересоберите contracts/build.sh и переразверните \
-             исполнитель кошелька",
-            v.label(),
-            k.name()
-        )
-    })
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Решение 445: признак шага LB20 — tokenX() = 0x16dc165b; в артефактах v1, v2 и v3 (contracts/out/ на решении 445)
-    /// его нет — шаг LB20 недоступен до пересборки contracts/build.sh (probe_absent — причина у каждой версии).
+    /// Решение 445 (ревью): шаг LB20 — только v4; у v1 / v2 / v3 — причина «сборки v4 нет», шаг LB — с v2.
     #[test]
-    fn code_probe_absent_until_rebuild() {
-        let sel = registry_key::selector(code_probe(ExecKind::Lb20).unwrap());
-        assert_eq!(sel.to_vec(), vec![0x16, 0xdc, 0x16, 0x5b]);
+    fn lb20_only_v4() {
+        assert_eq!(since(ExecKind::Lb20), Version::V4);
         for v in [Version::V1, Version::V2, Version::V3] {
-            assert!(probe_absent(ExecKind::Lb20, v).is_some_and(|w| w.contains("LB20")), "{v:?}");
-            assert!(probe_absent(ExecKind::Lb, v).is_none(), "{v:?}");
+            let why = step_absent(ExecKind::Lb20, v).expect("шага нет");
+            assert!(why.contains("LB20") && why.contains("v4"), "{v:?}: {why}");
         }
+        assert!(step_absent(ExecKind::Lb20, Version::V4).is_none());
+        assert!(step_absent(ExecKind::Lb, Version::V3).is_none());
+        assert!(check(Version::V4, "tokenX()").is_some());
     }
 
     /// Селектор squadV3SwapCallback = 0xc4e21d86 (SquadV3Pool.sol L794): в артефакте v1 его нет, в v2 (t114) и v3

@@ -26,9 +26,9 @@
 Этап 6 таблицы (Gate, MEXC, другие СЕТИ) — после v1; к покрытию BSC-DEX не относится. «Другие DEX» в строке 6 означает DEX в других сетях, не на BSC: все DEX НА BSC входят в п.2 выше и делаются до тестов.
 
 ## Техдолг
-- Решение 445 (Liquidity Book v2.0, LFJ V2 Arbitrum; `wc -l`): сверх ориентира 200 — pools/lb_head.rs 234 (было 195;
-  +calls_for, per_pool, is_v20 — перенести в lb20_head.rs вместе с выбором версии), pools/exec_callback.rs 309 (+code_probe,
-  probe_absent), давно сверх — families.rs, verify.rs, load.rs, settle.rs, exec_kind.rs, entry.rs, ArbExecutor.sol.
+- Решение 445 (Liquidity Book v2.0, LFJ V2 Arbitrum; `wc -l`): ветки v20 чтения головы — в lb20_head.rs (ревью 445);
+  давно сверх ориентира 200 — exec_callback.rs, families.rs, verify.rs, load.rs, settle.rs, exec_kind.rs, entry.rs,
+  ArbExecutor.sol. Шаг LB20 — только сборка v4 (Version::V4 заведена, сборки нет).
   Новые пулы lb_v20 — только из справочника индексатора (подписка на LBPairCreated фабрики v2.0 не подключена, как у
   lb_v21). Шаг LB20 исполнителя — в исходнике, артефакты contracts/out/ не пересобраны (версия сборки, evmtest с
   фикстурой пары v2.0 — docs/TASKS.md, «Решение 445»). Тесты на записи узла Arbitrum — #[ignore] до записи

@@ -21,8 +21,8 @@
 // (PancakeSwap Infinity Vault: lock → lockAcquired; Infinity Stable — пул в крючке пула CL, тот же INF_CL). execute,
 // executeNative, хранилище (owner — слот 0, wnative — слот 1) и прежние виды — без изменений. Решение 445 — + шаг
 // LB20 = 22 (пара Liquidity Book v2.0, LFJ V2 Arbitrum); артефакты contracts/out/ этим решением НЕ пересобраны
-// (сборка solc — contracts/build.sh, вне агентов): до пересборки шага нет в коде ни одной версии (бот проверяет по
-// селектору tokenX() в коде — src/venues/bsc_dex/pools/exec_callback.rs code_probe).
+// (сборка solc — contracts/build.sh, вне агентов): шаг есть только у сборки v4 (бот: Version::V4,
+// src/venues/bsc_dex/pools/exec_callback.rs since); пересобирать — только как v4, не на месте v3.
 pragma solidity 0.8.37;
 
 import "./IPools.sol";

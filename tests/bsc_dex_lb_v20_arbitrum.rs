@@ -35,7 +35,7 @@ use arb::venues::bsc_dex::pools::exec_kind::{self, ExecKind};
 use arb::venues::bsc_dex::pools::families::{self, Proto};
 use arb::venues::bsc_dex::pools::verify::Candidate;
 use arb::venues::bsc_dex::pools::{
-    events_lb20, lb20_head, lb_head, load_lb20, verify_lb, verify_lb20,
+    events_lb20, lb20_head, lb_head, load_lb20, load_lb20_bins, verify_lb, verify_lb20,
 };
 use arb::venues::bsc_dex::quote::quoter_lb20;
 
@@ -135,6 +135,11 @@ fn bins(p: &Value, d: &LbBinData) -> BinMap {
             }
         }
         if p["bins"]["ends"][side] == "revert" {
+            // Ревью 445: край стороны — откат с данными TreeMath__ErrorDepthSearch() или Panic(0x11) (load_lb20_bins edge).
+            let last = p["bins"][side].as_array().unwrap().last().unwrap();
+            let data = &last["next"]["response"]["error"]["data"];
+            let data = alloy_primitives::hex::decode(data.as_str().unwrap()).unwrap();
+            assert!(load_lb20_bins::edge(&data), "{side}: {}", last["next"]);
             if down {
                 range.0 = NONE_ABOVE
             } else {
@@ -225,8 +230,8 @@ fn kind_and_step() {
     assert_eq!(exec_kind::of("lb_v20"), Some(ExecKind::Lb20));
     assert_eq!(Params::Lb20.kind(), 22);
     assert!(Params::Lb20.data().is_empty());
-    assert_eq!(lb_head::per_pool(true), 3);
-    assert_eq!(lb_head::per_pool(false), lb_head::PER_POOL);
+    assert_eq!(lb20_head::per_pool(true), 3);
+    assert_eq!(lb20_head::per_pool(false), lb_head::PER_POOL);
 }
 
 #[test]
@@ -290,7 +295,7 @@ fn calls_match_encoders_and_head_decodes() {
         assert_eq!(calls[0].1, input(&c["getReservesAndId()"]));
         assert_eq!(calls[1].1, input(&c["feeParameters()"]));
         let head = lb20_head::calls(pool, d.active_id);
-        assert_eq!(head.len(), lb_head::per_pool(true));
+        assert_eq!(head.len(), lb20_head::per_pool(true));
         assert_eq!(head[2].1, input(&p["bins"]["active"]));
         let a = vec![
             answer(&c["getReservesAndId()"]).unwrap(),

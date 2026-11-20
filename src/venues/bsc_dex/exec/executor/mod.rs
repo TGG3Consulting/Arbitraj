@@ -71,7 +71,7 @@ pub fn native_block(ctx: &Ctx) -> Option<String> {
     };
     match w.executor_version.as_deref().and_then(code::Version::parse) {
         // Решение 395: v3 — надмножество v2 (executeNative тот же).
-        Some(code::Version::V2 | code::Version::V3) => {}
+        Some(code::Version::V2 | code::Version::V3 | code::Version::V4) => {}
         Some(code::Version::V1) => {
             return Some(format!(
                 "у кошелька «{}» исполнитель {x} версии v1 (executeNative нет) — переразверните исполнитель",

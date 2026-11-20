@@ -12,7 +12,7 @@
 //! уходит (его закрывают логи или settle_close.rs); не прочитался на голове — settle_head.rs head_failed (недостоверен,
 //! «нужно полное чтение»): следующие головы читают его ЦЕЛИКОМ (reload::load_one_block), голова достоверность не
 //! поднимает никогда (ревью слияния «357 × 339», Б1).
-//! Решение 445: и пулы Liquidity Book v2.0 (вид lb_v20) в той же пачке — вызовы на пул по версии (lb_head.rs calls_for,
+//! Решение 445: и пулы Liquidity Book v2.0 (вид lb_v20) в той же пачке — вызовы на пул по версии (lb20_head.rs calls_for,
 //! per_pool: v2.0 — getReservesAndId, feeParameters, getBin).
 //! Кто вызывает: pools/per_block.rs (on_head).
 //! От чего зависит: load_lb.rs, load_batch.rs (batch), load_smardex.rs (block_secs),
@@ -30,7 +30,7 @@ use crate::core::types::PoolState;
 
 use super::super::node::{call, multicall};
 use super::discover::Found;
-use super::lb_head;
+use super::{lb20_head, lb_head};
 use super::listen::{End, Pools};
 use super::load_lb;
 use super::{load_batch, load_smardex, reload};
@@ -65,9 +65,9 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
         .flat_map(|f| {
             let active = p.reg.get(&f.reference).and_then(|e| lb_head::active_of(&e));
             // Ревью 332 (Б1): + getBin(активный бин памяти); ready выше — запись LB есть (иначе бин 0 — «не равны»).
-            // Решение 445: v2.0 — свои вызовы (lb_head.rs calls_for).
-            let v20 = lb_head::is_v20(f);
-            lb_head::calls_for(f.reference.address(), active.unwrap_or_default(), v20)
+            // Решение 445: v2.0 — свои вызовы (lb20_head.rs calls_for).
+            let v20 = lb20_head::is_v20(f);
+            lb20_head::calls_for(f.reference.address(), active.unwrap_or_default(), v20)
         })
         .collect();
     let mc = multicall::address(&p.ctx);
@@ -89,7 +89,7 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
     // Решение 445: у пулов v2.0 и v2.1 вызовов на пул разное число — части по per_pool каждого.
     let mut at = 0usize;
     for f in items.iter() {
-        let n = lb_head::per_pool(lb_head::is_v20(f));
+        let n = lb20_head::per_pool(lb20_head::is_v20(f));
         let part = got.get(at..at + n).unwrap_or(&[]);
         at += n;
         let Some(e) = p.reg.get(&f.reference) else {

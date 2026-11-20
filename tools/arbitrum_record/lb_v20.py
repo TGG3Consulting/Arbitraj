@@ -11,10 +11,10 @@
 # Кто вызывает: Тигран вручную (tests/*: tests/bsc_dex_lb_v20_arbitrum.rs читает записанное).
 # От чего зависит: Python 3, requests.
 # Запуск: python3 tools/arbitrum_record/lb_v20.py http://<узел>:8547 [--pools 0x…,0x…] [--max-pools 5]
-#   [--max-bins 300] [--log-blocks 20000]
-#   Адреса фабрики и роутера v2.0 — аргументы (--factory, --router); по умолчанию — официальная документация LFJ
-#   (traderjoe-xyz/joe-docs 61c16665 versioned_docs/version-V2.2/deployment-addresses/arbitrum.md L52-L58):
-#   LBFactory 0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982, LBRouter 0x7BFd7192E76D950832c77BB412aaE841049D8D9B.
+#   [--max-bins 300] [--log-blocks 20000] --factory <LBFactory v2.0> --router <LBRouter v2.0>
+#   Адреса фабрики и роутера v2.0 — обязательные аргументы (ревью 445: без зашитых адресов). Официальные значения —
+#   документация LFJ (traderjoe-xyz/joe-docs 61c16665 versioned_docs/version-V2.2/deployment-addresses/arbitrum.md
+#   L52-L58): LBFactory 0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982, LBRouter 0x7BFd7192E76D950832c77BB412aaE841049D8D9B.
 # Выход: tests/data/arbitrum_lb_v20_<дата UTC>/ — meta.json, factory.json, pool_<адрес>.json, logs_<адрес>.json,
 #   README.md.
 #
@@ -29,9 +29,6 @@ import os
 import sys
 
 import requests
-
-FACTORY = "0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982"
-ROUTER = "0x7BFd7192E76D950832c77BB412aaE841049D8D9B"
 
 SEL = {
     "getNumberOfLBPairs()": "0x4e937c3a",
@@ -55,6 +52,10 @@ TOPICS = {
     "WithdrawnFromBin": "0xda5e7177dface55f5e0eff7dfc67420a1db4243ddfcf0ecc84ed93e034dd8cc2",
     "CompositionFee": "0x56f8e764728c77dd99ffbc1b64e6d02e227e6ec8214f165d4ef31351de136a0d",
 }
+
+# Данные отката «бинов в эту сторону нет»: селектор TreeMath__ErrorDepthSearch() и Panic(0x11) (src/libraries/TreeMath.sol
+# L60; BitMath.sol L19 — переполнение uint8). Иной откат — не край стороны (конец записи — «error»).
+EDGE = {"0x10d64861", "0x4e487b71" + format(0x11, "064x")}
 
 # Доли суммарного резерва входного токена пары для getSwapOut: от пыли до больше пула (ожидается откат роутера).
 FRACTIONS = [(1, 1_000_000), (1, 10_000), (1, 1_000), (1, 100), (1, 10), (1, 2), (2, 1)]
@@ -105,8 +106,8 @@ def eth_call(rpc, to, data, tag):
 def main():
     ap = argparse.ArgumentParser(description="Запись ответов узла Arbitrum для Liquidity Book v2.0 (решение 445)")
     ap.add_argument("node", help="адрес HTTP JSON-RPC своего узла Arbitrum One")
-    ap.add_argument("--factory", default=FACTORY)
-    ap.add_argument("--router", default=ROUTER)
+    ap.add_argument("--factory", required=True, help="адрес LBFactory v2.0")
+    ap.add_argument("--router", required=True, help="адрес LBRouter v2.0 (getSwapOut)")
     ap.add_argument("--pools", default="", help="адреса пулов через запятую (иначе — первые непустые из фабрики)")
     ap.add_argument("--max-pools", type=int, default=5)
     ap.add_argument("--max-bins", type=int, default=300, help="предел бинов на сторону")
@@ -217,7 +218,8 @@ def record_pool(rpc, a, p, tag):
             nx = eth_call(rpc, p, SEL["findFirstNonEmptyBinId(uint24,bool)"] + word(cur) + word(1 if down else 0), tag)
             if not result(nx):
                 rec["bins"][side].append({"next": nx})
-                ends[side] = "revert"
+                data = (nx["response"].get("error") or {}).get("data", "")
+                ends[side] = "revert" if str(data).lower() in EDGE else "error"
                 break
             nid = u256(result(nx))
             b = eth_call(rpc, p, SEL["getBin(uint24)"] + word(nid), tag)

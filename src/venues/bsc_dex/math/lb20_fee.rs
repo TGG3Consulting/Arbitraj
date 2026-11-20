@@ -11,7 +11,7 @@
 //! - предела MAX_FEE у пула нет (у v2.1 — откат FeeHelper__FeeTooLarge): комиссия больше 1e18 — откат вычитания
 //!   PRECISION − fee (L130, solc 0.8.10 checked), ровно 1e18 — деление на ноль; сумма комиссии — safe128
 //!   (getFeeAmountDistribution L154). Фабрика v2.0 сама держит базу + наибольшую изменчивую часть ≤ 10 %
-//!   (LBFactory.sol L565-L572).
+//!   (LBFactory.sol L562-L572).
 //!
 //! Кто вызывает: math/lb_fee.rs (references, accumulate — ветка v20), math/lb20_swap.rs.
 //! От чего зависит: core/types (LbBinData), math/lb_fee.rs (Volatility, PRECISION), alloy-primitives (U256).
@@ -21,7 +21,7 @@
 //! src/libraries/FeeHelper.sol: FeeParameters L29-L44, updateVariableFeeParameters L57-L77, updateVolatilityAccumulated
 //! L82-L88, getBaseFee L93-L97, getVariableFee L102-L112, getFeeAmountFrom L119-L121, getFeeAmount L128-L132,
 //! getFeeAmountDistribution L149-L159, getTotalFee L164-L168; src/libraries/Constants.sol L12-L13 (PRECISION,
-//! BASIS_POINT_MAX); src/LBFactory.sol L540-L586 (_getPackedFeeParameters: проверки фабрики).
+//! BASIS_POINT_MAX); src/LBFactory.sol L540-L589 (_getPackedFeeParameters: проверки фабрики).
 
 use alloy_primitives::U256;
 

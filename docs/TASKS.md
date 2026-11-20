@@ -430,13 +430,16 @@
   tools/arbitrum_record/lb_v20.py, тесты tests/bsc_dex_lb_v20_arbitrum.rs (на записи — #[ignore]). DEX семейства в таблице
   покрытия Arbitrum — один: T433-015 `traderjoe-v2-arbitrum` (DefiLlama `joe-v2` — та же строка). BSC — без изменений
   (bsc_dex и вид lb_v21 ведут себя как раньше: v20 = false). Осталось:
-  1) Записать свой узел: `python3 tools/arbitrum_record/lb_v20.py http://<узел Arbitrum>` → tests/data/arbitrum_lb_v20_<дата>/
+  1) Записать свой узел: `python3 tools/arbitrum_record/lb_v20.py http://<узел Arbitrum> --factory
+     0x1886D09C9Ade0c5DB822D85D21678Db67B6c2982 --router 0x7BFd7192E76D950832c77BB412aaE841049D8D9B` →
+     tests/data/arbitrum_lb_v20_<дата>/
      (коммит записи), снять #[ignore] с тестов tests/bsc_dex_lb_v20_arbitrum.rs, прогон CI. Там же — сверка нашей
      формулы с getSwapOut роутера v2.0 на всех бинах.
-  2) Исполнитель: артефакты contracts/out/ НЕ пересобраны (solc агентам запрещён) — шаг LB20 есть только в исходнике; бот
-     его не строит, пока в коде сверенной версии нет селектора tokenX() (pools/exec_callback.rs code_probe). Нужно
-     (техлид / Тигран): решить версию сборки (v4: скопировать out/ → out/v3/, Version::V4 и runtime_v3 в
-     exec/executor/code.rs, onchain.rs; или пересобрать v3 на месте), пересобрать contracts/build.sh, тест
+  2) Исполнитель: артефакты contracts/out/ НЕ пересобраны (solc агентам запрещён) — шаг LB20 есть только в исходнике;
+     since(LB20) = Version::V4 (ревью 445), сборки v4 нет — бот шаг не строит ни у одного кошелька. Нужно (техлид /
+     Тигран): только сборка v4 (не на месте v3 — кошелёк со старым v3 прошёл бы проверку по артефакту, контракт откатил
+     бы «kind»): скопировать out/ → out/v3/, runtime_v3 и version_of → V4 в exec/executor/code.rs, onchain.rs,
+     пересобрать contracts/build.sh, тест
      bsc_dex_executor_abi, evmtest (фикстуры пары v2.0 нет — нужен LbV20Fixture.sol по образцу LbFixture.sol), развернуть
      исполнитель в Arbitrum. Номер вида 22 могут занять и другие семейства T433-F* в параллельных ветках — при слиянии
      развести номера (контракт и kind.rs).
@@ -450,8 +453,9 @@
      SwapHelper.sol — git log v2.0.0); факт совпадения — тест на записи (наша формула = getSwapOut роутера). Скрипт
      пишет код реализации и его SHA-256 — сверку с Arbiscan («Contract Source Code Verified») сделать вам?
   2) Конец стороны бинов у v2.0: findFirstNonEmptyBinId при отсутствии бина ОТКАТЫВАЕТСЯ (TreeMath.sol L60), а не
-     возвращает 0 / 0xFFFFFF, как v2.1. Загрузчик считает любой откат этого вызова (а не сбой узла) концом стороны —
-     по коду функции других откатов нет. Ок?
+     возвращает 0 / 0xFFFFFF, как v2.1. Ревью 445: краем стороны считается только откат с данными
+     TreeMath__ErrorDepthSearch() или Panic(0x11); иной откат и откат без данных — ошибка чтения пула. Проверка —
+     тест на записи (данные отката записанных краёв).
   3) Слоты условия пулов LB v2.0 (6, 7, 10) выведены из раскладки исходника v2.0.0 и сверены с ассемблером пары (L1032-
      L1084); живого факта нет — тест condition_slots_match_state на записи.
 - **Решение 433 (19.11.2026, ветка t217/arb-step5-adapter) — две сети, шаг 5: площадка DEX сети Arbitrum (arb_dex);

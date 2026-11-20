@@ -1235,7 +1235,7 @@ exact_match прокси (T483-05). Включать (dex.pool_enabled) — по
 | Настройка | Область | Советуем | Обоснование | Источник |
 | --- | --- | --- | --- | --- |
 | dex.kind | DEX `ramses-v2@arbitrum` | `v3_fork_ramses` | Ramses CL — RamsesV2Pool: currentFee(), FeeAdjustment, ticks() из 10 полей | Sourcify 42161 0x6553…7e21 RamsesV2Pool.sol |
-| dex.factory | DEX `ramses-v2@arbitrum` | `0xAA2cd7477c451E703f3B9Ba5663334914763edf8` | прокси RamsesV2Factory (getPool(a, b, fee), PoolCreated Uni V3) | DefiLlama ramses-cl; Sourcify exact_match |
+| dex.factory | DEX `ramses-v2@arbitrum` | `0xAA2cd7477c451E703f3B9Ba5663334914763edF8` | прокси RamsesV2Factory (getPool(a, b, fee), PoolCreated Uni V3) | DefiLlama ramses-cl; Sourcify exact_match |
 | dex.quoter_virtual | DEX `ramses-v2@arbitrum` | `да` | официального квотера у линии нет; виртуальному нужен ramsesV2SwapCallback — после пересборки (T483-02) | RamsesV2Pool.sol L1238 |
 | dex.v3_swap_callback | DEX `ramses-v2@arbitrum` | `ramsesV2SwapCallback(int256,int256,bytes)` | пул зовёт этот обратный вызов (обязательна для вида) | RamsesV2Pool.sol L1238, L1256 |
 | dex.kind | DEX `ramses-v3-arbitrum@arbitrum` | `slipstream_ramses` | Ramses CL V2 — RamsesV3Pool | Sourcify 42161 RamsesV3PoolDeployer 0xb722…CECD |

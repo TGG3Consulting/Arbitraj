@@ -235,7 +235,7 @@ fn legacy_math_equals_get_amount_out() {
 #[ignore = "нет записи: tools/arbitrum_record/ramses.py"]
 fn registries_match() {
     let r = record();
-    let cl_factory: Address = "0xAA2cd7477c451E703f3B9Ba5663334914763edf8".parse().unwrap();
+    let cl_factory: Address = "0xAA2cd7477c451E703f3B9Ba5663334914763edF8".parse().unwrap();
     let v3_factory: Address = "0xd0019e86edB35E1fedaaB03aED5c3c60f115d28b".parse().unwrap();
     for (line, f) in [("cl", cl_factory), ("v3", v3_factory)] {
         for p in r[line].as_array().unwrap() {

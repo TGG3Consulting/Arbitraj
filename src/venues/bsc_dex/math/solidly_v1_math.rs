@@ -6,7 +6,8 @@
 //! при несходимости (возвращает последнее y). Инвариант до свопа `_k` — та же форма `_a·_b`, что у Velodrome
 //! (swap_solidly::k). Волатильный пул — `amountIn·reserveB / (reserveA + amountIn)` после вычета комиссии из входа
 //! (одинаково у THENA V1 и Velodrome — `volatile_amount_out`).
-//! Кто вызывает: quote/pool_quote.rs (ветка Solidly по виду пула); тесты (tests/arbitrum_ramses_live.rs).
+//! Кто вызывает: quote/pool_quote.rs (ветка Solidly по виду пула), quote/depth_band.rs (variant_out); тесты
+//! (tests/arbitrum_ramses_live.rs).
 //! От чего зависит: math/solidly_math.rs (d, e18, fee_denominator), math/swap_solidly.rs (k), pools/family_variant.rs
 //! (решение 483).
 //! Настройки: нет (резервы, decimals, комиссия — с контракта пула и фабрики, load_solidly.rs).

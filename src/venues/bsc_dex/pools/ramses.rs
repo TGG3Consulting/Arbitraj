@@ -14,7 +14,7 @@
 //! Библиотека ProtocolActions — внешняя (функции external, вызов DELEGATECALL), поэтому FeeAdjustment приходит с
 //! адресом пула (у старой линии — адрес RamsesBeaconProxy). Источники — шапка abi_ramses.rs.
 //! Кто вызывает: pools/events.rs (topics, liquidity_topics, apply), pools/created_log.rs (created_topic, created),
-//! exec/pool_cond_topics.rs (slot_topics), pools/load.rs, load_batch.rs, prefetch_plan.rs, load_v3_once.rs (is_cl).
+//! pools/load.rs, load_batch.rs, prefetch_plan.rs, load_v3_once.rs (is_cl).
 //! От чего зависит: abi_ramses.rs, abi_v2v3.rs, events_v3.rs, events.rs (Applied), families.rs, family_variant.rs,
 //! registry.rs, core/types (PoolState).
 //! Настройки: нет.
@@ -43,7 +43,8 @@ pub fn handles(f: &Family) -> bool {
     is_cl(f) || f.variant == Variant::RamsesLegacy
 }
 
-/// topic0 событий, пишущих цену и ликвидность пула (без FeeAdjustment). None — не вариант Ramses. Ошибок нет.
+/// topic0 событий, пишущих цену и ликвидность пула (без FeeAdjustment; основа topics). None — не вариант Ramses.
+/// Ошибок нет.
 pub fn slot_topics(f: &Family) -> Option<Vec<B256>> {
     let swap = IUniswapV3Pool::Swap::SIGNATURE_HASH;
     let burn = IV3Pool::Burn::SIGNATURE_HASH;

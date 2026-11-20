@@ -43,7 +43,6 @@ use super::super::pools::abi_v2v3::IV2Pair;
 use super::super::pools::abi_v4::IUniswapV4;
 use super::super::pools::events_v3;
 use super::super::pools::families::Proto;
-use super::super::pools::ramses;
 use super::super::pools::registry::Entry;
 use super::pool_cond::{self, How};
 
@@ -77,8 +76,6 @@ pub fn topics(e: &Entry) -> Option<Vec<B256>> {
             IV2Pair::Swap::SIGNATURE_HASH,
             IV2Pair::Mint::SIGNATURE_HASH,
         ],
-        // Решение 483: варианты Ramses — свой Mint у CL V2, Sync uint112 у легаси (pools/ramses.rs).
-        _ if ramses::handles(e.family) => ramses::slot_topics(e.family).unwrap_or_default(),
         Proto::UniswapV3 | Proto::PancakeV3 | Proto::Slipstream => events_v3::topics(p),
         Proto::KyberElastic => vec![
             IElasticPool::Swap::SIGNATURE_HASH,

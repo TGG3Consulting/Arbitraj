@@ -19,7 +19,7 @@
 Кто вызывает: Тигран вручную или record_all.py (record_steps.py).
 От чего зависит: Python 3.8+, stdhttp.py, recnode.py, gt.py (через stdhttp), camelot_v2.py (keccak256), ramses_calls.py.
 Источники адресов: PairFactory, RamsesV3Factory, QuoterV2 — www.ramses.xyz/docs/contract-addresses (вкладка Arbitrum,
-  20.11.2026); фабрика старой CL-линии 0xAA2cd7477c451E703f3B9Ba5663334914763edf8 — на официальной странице её нет:
+  20.11.2026); фабрика старой CL-линии 0xAA2cd7477c451E703f3B9Ba5663334914763edF8 — на официальной странице её нет:
   факт — адаптер DefiLlama «ramses-cl» и Sourcify 42161 exact_match (RamsesTransparentUpgradeableProxy → RamsesV2Factory
   0xF896d16fa56A625802b6013F9f9202790ec69908); запись сверяет factory() каждого пула. Пулы — GeckoTerminal ramses-v2,
   ramses-v3-arbitrum (решение 483: таблица 1, строки 43, 81); пары легаси — allPairs(i) фабрики.
@@ -38,7 +38,7 @@ import stdhttp as requests
 from camelot_v2 import topic
 from ramses_calls import a_of, addr, balance, bitmap_and_ticks, call, probe, w, word
 
-CL_FACTORY = "0xAA2cd7477c451E703f3B9Ba5663334914763edf8"
+CL_FACTORY = "0xAA2cd7477c451E703f3B9Ba5663334914763edF8"
 V3_FACTORY = "0xd0019e86edB35E1fedaaB03aED5c3c60f115d28b"
 V3_QUOTER = "0x00d4FeA3Dd90C4480992f9c7Ea13b8a6A8F7E124"
 PAIR_FACTORY = "0xADd32480630A16dfAcEe6eeFcB3ab2181449Dc3B"

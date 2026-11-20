@@ -28,6 +28,7 @@
 //! | LbV21 | пул | 4 — _parameters (activeId, изменчивость); 5 — _reserves | lfj-gg/joe-v2 v2.1.0 8eeb42d7 src/LBToken.sol:21-31 (0-2), src/libraries/ReentrancyGuard.sol:30 (3), src/LBPair.sol:31 (порядок баз), 58-63 (_parameters 4, _reserves 5) |
 //! | UniswapV4 | PoolManager | S = keccak256(PoolId . 6): S — slot0 (цена, тик, комиссии), S+3 — liquidity | Uniswap/v4-core bea7f6d1 src/libraries/StateLibrary.sol:11 (POOLS_SLOT 6), 19 (LIQUIDITY_OFFSET 3), 324-325 (слот пула); src/libraries/Pool.sol:83-91 |
 //! | BalancerV2 | — | без условия | балансы в общем Vault: слоты посчитаны только вручную по AST (/home/claude/src-ext/reports/arb-known-accounts.md, 3.1), не сверены — docs/TASKS.md «Решение 438» |
+//! | BalancerV3 | — | без условия | решение 441: балансы в общем Vault V3, курсы — у поставщиков курса; слоты не сверены |
 //! | WooPP, пары общего контракта (PoolRef::Member) | — | без условия | общий контракт на все монеты, слоты не опубликованы |
 //! | InfinityCl, InfinityBin, InfinityStable | — | без условия | виды только BSC (в Arbitrum нет), слоты менеджера/крючка не сверены |
 //! | прочие виды со своим контрактом на пул (Algebra, AlgebraIntegral, Solidly*, Curve*, PancakeStable, Lista, Saddle, Nomi, DODO, KyberDmm, Smardex, Maverick, iZi, BiswapV3, MetricOmm, FluidT1) | пул | корень (eth_getProof … storageHash) | раскладка не подтверждена (Algebra Integral: версия Camelot V4 не сверена; Vyper, закрытые исходники; Fluid T1 — исходник развёрнутых пулов до 1.1.0 не опубликован; резервы Fluid лежат в слое Liquidity — корень пула ловит обмены по пулу, но не операции других пользователей слоя ликвидности) |
@@ -90,6 +91,10 @@ pub fn rule(e: &Entry) -> How {
     match (&e.pool.reference, f.proto) {
         (_, Proto::BalancerV2) => How::Off(
             "Balancer V2: балансы пула в общем Vault, слоты Vault не сверены (docs/TASKS.md, решение 438)",
+        ),
+        // Решение 441: балансы и курсы пула V3 — в хранилище Vault V3 и у поставщиков курса; слоты не сверены.
+        (_, Proto::BalancerV3) => How::Off(
+            "Balancer V3: балансы пула в общем Vault V3, курсы — у поставщиков курса; слоты не сверены (решение 441)",
         ),
         (_, Proto::InfinityCl | Proto::InfinityBin | Proto::InfinityStable) => How::Off(
             "PancakeSwap Infinity: вид только BSC, слоты менеджера и крючка не сверены",

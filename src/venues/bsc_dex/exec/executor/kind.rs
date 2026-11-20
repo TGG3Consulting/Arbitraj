@@ -10,6 +10,7 @@
 //! BALANCER — (bytes32 poolId), UNI_V4 — abi.encode(PoolKey Uniswap V4), INF_CL / INF_BIN — abi.encode(PoolKey
 //! Infinity) (кодирование ключа — pools/key.rs, то же, что даёт PoolId), FLUID — (bool swap0to1, uint8 native, address
 //! liquidity), остальные — пусто.
+//! Решение 441: BALANCER_V3 = 23 — только v4, data — abi.encode(address пула).
 //! Кто вызывает: exec/executor/{call, entry}.rs; часть F (новые семейства).
 //! От чего зависит: exec/executor/abi.rs, alloy sol-types.
 //! Настройки: нет.
@@ -81,6 +82,9 @@ pub enum Params {
     /// Пул Liquidity Book V2.1 (решение 290; только исполнитель v2): вход переводом в пул, swap(swapForY, to);
     /// направление контракт берёт по getTokenX() пула (порядок X/Y — создателя пула, не адреса). Данных нет.
     Lb,
+    /// Решение 441 (T433-F2; только исполнитель v4): пул Balancer V3 — пул шага хранилище Vault V3 (dex.vault),
+    /// data = abi.encode(address пула); обмен — unlock → balancerV3Callback → swap / settle / sendTo.
+    BalancerV3 { pool: Address },
     /// Решение 395 (t181; только исполнитель v3): пул Uniswap V4 внутри PoolManager — ключ пула; пул шага — PoolManager.
     UniV4 { key: V4Key },
     /// Решение 395 (только v3): пул PancakeSwap Infinity CL (и Infinity Stable — пул в крючке CL) — ключ пула (менеджер —
@@ -140,6 +144,8 @@ impl Params {
             Params::InfCl { .. } => 20,
             Params::InfBin { .. } => 21,
             Params::Fluid(_) => 22,
+            // Решение 441: номер 23 = 21 + номер семейства T433-F2 (22 — за F1), чтобы шаги семейств не совпали.
+            Params::BalancerV3 { .. } => 23,
         }
     }
 
@@ -159,6 +165,7 @@ impl Params {
             }
             Params::Metric { zero_for_one } => Bytes::from(zero_for_one.abi_encode()),
             Params::Balancer { pool_id } => Bytes::from(pool_id.abi_encode()),
+            Params::BalancerV3 { pool } => Bytes::from(pool.abi_encode()),
             // Решение 395: abi.encode(ключ) — статическая структура, слова подряд (как PoolId — keccak тех же байт).
             Params::UniV4 { key } => Bytes::from(key.pool_key().abi()),
             Params::InfCl { key } | Params::InfBin { key } => Bytes::from(key.pool_key().abi()),

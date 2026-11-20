@@ -24,7 +24,8 @@ use alloy_primitives::{Address, U256};
 use serde_json::Value;
 
 use arb::venues::bsc_dex::exec::executor::live_rule::{self, Class, Hook};
-use arb::venues::bsc_dex::exec::executor::{code, deploy_gate, live_proof};
+use arb::venues::bsc_dex::exec::executor::code::{self, Version};
+use arb::venues::bsc_dex::exec::executor::{deploy_gate, live_proof};
 use arb::venues::bsc_dex::pools::exec_kind::ExecKind;
 
 const DIR: &str = "tests/data/executor_v3_live_2026-11-17";
@@ -64,13 +65,13 @@ fn dec(v: &Value) -> Option<U256> {
 
 #[test]
 fn record_bound_to_current_code() {
-    let cur = code::runtime_sha256().expect("SHA-256 bin-runtime записан");
+    let cur = code::runtime_sha256_of(Version::V3).expect("SHA-256 bin-runtime записан");
     assert!(
         text("README.md").contains(cur),
         "README записи — о текущем коде"
     );
     let runtime = std::fs::read_to_string(format!(
-        "{}/contracts/out/ArbExecutor.bin-runtime",
+        "{}/contracts/out/v3/ArbExecutor.bin-runtime",
         env!("CARGO_MANIFEST_DIR")
     ))
     .unwrap();
@@ -232,6 +233,8 @@ fn accepted_classes_from_record() {
         (class(20, Hook::Stable), (0, 0, false)),
         (class(21, Hook::Without), (1, 0, false)),
         (class(21, Hook::With), (0, 0, false)),
+        // Решение 441 (ревью, п. 2): шага BALANCER_V3 в записи нет — не принят.
+        (class(23, Hook::Without), (0, 0, false)),
     ]
     .into_iter()
     .collect();
@@ -252,6 +255,7 @@ fn accepted_classes_from_record() {
     assert!(live_proof::admits(ExecKind::UniV4, false, hook).is_err());
     assert!(live_proof::admits(ExecKind::InfCl, false, hook).is_err());
     assert!(live_proof::admits(ExecKind::InfCl, true, hook).is_err());
+    assert!(live_proof::admits(ExecKind::BalancerV3, false, Address::ZERO).is_err());
     let bin = live_proof::admits(ExecKind::InfBin, false, Address::ZERO).expect_err("Bin");
     assert!(bin.contains("не принят на живых пулах"), "{bin}");
     assert!(
@@ -268,7 +272,7 @@ fn accepted_classes_from_record() {
 #[test]
 fn rule_is_strict_on_altered_record() {
     let (summary, reject) = (text("summary.json"), text("hooks_reject.json"));
-    let cur = code::runtime_sha256();
+    let cur = code::runtime_sha256_of(Version::V3);
     let none = live_rule::judge("README без хеша", &summary, &reject, cur).unwrap();
     assert!(
         none.iter().all(|x| !x.accepted),
@@ -375,7 +379,7 @@ fn judge_with(readme: &str, summary: &Value, reject: &Value) -> Vec<live_rule::V
         readme,
         &summary.to_string(),
         &reject.to_string(),
-        code::runtime_sha256(),
+        code::runtime_sha256_of(Version::V3),
     )
     .unwrap()
 }
@@ -458,7 +462,7 @@ fn rule_strict_review_t185() {
     let v = judge_with(&readme, &s3, &reject);
     assert!(!accepted(&v, v4) && accepted(&v, cl), "нули");
     // 4. SHA текущего кода — в README, но не в строке «sha256 симулированного bin-runtime:» — ничего не принято.
-    let cur = code::runtime_sha256().unwrap();
+    let cur = code::runtime_sha256_of(Version::V3).unwrap();
     let other = format!(
         "- sha256 симулированного bin-runtime: {} (другая сборка)\nКод НЕ совпал с {cur}\n",
         "0".repeat(64)

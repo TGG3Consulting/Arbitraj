@@ -33,6 +33,7 @@ use crate::core::types::PoolRef;
 use crate::settings::read::At;
 use crate::storage::journal::Level;
 
+use super::super::exec::executor::code::Version;
 use super::super::exec::executor::pool_pass::{self, Fact, State};
 use super::super::exec::executor::{entry, live_proof};
 use super::super::pools::exec_kind;
@@ -172,10 +173,12 @@ async fn pool(p: &Pools, sources: &Sources, e: &Entry, unsettled: bool) {
         return;
     }
     let stable = e.family.proto == Proto::InfinityStable;
-    let accepted = live_proof::accepted(k, stable, hooks);
     let r = &e.pool.reference;
     for w in p.ctx.settings.accounts().wallets_at(p.ctx.place.id) {
         let Some(x) = pool_pass::v3(&w) else { continue };
+        // Решение 441 (ревью, п. 1): запись сверяется с кодом версии исполнителя этого кошелька (v3 или v4).
+        let ver = w.executor_version.as_deref().and_then(Version::parse);
+        let accepted = live_proof::accepted_for(ver.unwrap_or(Version::V3), k, stable, hooks);
         let prev = pool_pass::get(p.ctx.place.id, x, r);
         let deal = matches!(
             prev.as_ref().map(|f| &f.state),

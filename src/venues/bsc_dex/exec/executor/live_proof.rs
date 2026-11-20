@@ -3,7 +3,8 @@
 //! и Infinity Stable) из записи симуляции на живых пулах сети, вшитой в сборку (include_str): каталог
 //! tests/data/executor_v3_live_2026-11-17/ — README.md (SHA-256 симулированного bin-runtime), summary.json (по вызову),
 //! hooks_reject.json (откаты крючков). Правило — exec/executor/live_rule.rs. Здесь:
-//! - verdicts: вердикты по классам для текущей сборки (SHA-256 bin-runtime из ArbExecutor.sha256), один раз за запуск;
+//! - verdicts: вердикты по классам для кода v3 (решение 441, ревью п. 1: SHA-256 bin-runtime той версии, что у
+//!   кошелька — verdicts_of; v3 — contracts/out/v3/ArbExecutor.sha256), один раз за запуск на версию;
 //! - admits: исполним ли шаг пула менеджера исполнителем v3 — только если его класс принят (одно правило для котировки
 //!   и сделки: exec/executor/entry.rs fits и singleton — их зовут quote/graph_executor.rs all_via, quote/graph_fit.rs,
 //!   exec/executor/mod.rs takes, exec/cycle_gate.rs, check/probe_exec.rs, call::build);
@@ -24,7 +25,7 @@ use alloy_primitives::Address;
 use crate::core::types::ExecutorClassProof;
 
 use super::super::super::pools::exec_kind::ExecKind;
-use super::code;
+use super::code::{self, Version};
 use super::live_rule::{self, Class, Hook, Verdict};
 
 /// Каталог записи (для текстов и тестов).
@@ -43,19 +44,50 @@ const REJECT: &str = include_str!(concat!(
     "/tests/data/executor_v3_live_2026-11-17/hooks_reject.json"
 ));
 
-/// Вердикты записи для текущей сборки (порядок live_rule::CLASSES). Ошибки (текст): запись не разобрана.
+/// Вердикты записи для кода версии v3 (порядок live_rule::CLASSES) — версии, к которой относится запись 17.11 и которая
+/// стоит у кошельков. Ошибки (текст): запись не разобрана.
 pub fn verdicts() -> &'static Result<Vec<Verdict>, String> {
-    static V: OnceLock<Result<Vec<Verdict>, String>> = OnceLock::new();
-    V.get_or_init(|| live_rule::judge(README, SUMMARY, REJECT, code::runtime_sha256()))
+    verdicts_of(Version::V3)
 }
 
-/// Номер вида шага контракта у шага пула менеджера (kind.rs Params::kind: UNI_V4 = 19, INF_CL = 20, INF_BIN = 21);
+/// Решение 441 (ревью, п. 1): вердикты записи для кода данной версии — запись сверяется с SHA-256 bin-runtime той
+/// версии, что стоит у кошелька (code::runtime_sha256_of: v3 — out/v3/, v4 — out/). После пересборки v4 записи о коде
+/// v4 нет — у кошелька с v4 классы не приняты («запись о другом коде»), у кошельков с v3 — как до пересборки. У v1 / v2
+/// шагов менеджеров нет. Один разбор на версию за запуск. Ошибки (текст): запись не разобрана, у версии шагов нет.
+pub fn verdicts_of(v: Version) -> &'static Result<Vec<Verdict>, String> {
+    static V3: OnceLock<Result<Vec<Verdict>, String>> = OnceLock::new();
+    static V4: OnceLock<Result<Vec<Verdict>, String>> = OnceLock::new();
+    static NONE: OnceLock<Result<Vec<Verdict>, String>> = OnceLock::new();
+    let cell = match v {
+        Version::V3 => &V3,
+        Version::V4 => &V4,
+        Version::V1 | Version::V2 => {
+            return NONE.get_or_init(|| Err("у исполнителя v1 / v2 шагов менеджеров нет".into()));
+        }
+    };
+    cell.get_or_init(|| live_rule::judge(README, SUMMARY, REJECT, code::runtime_sha256_of(v)))
+}
+
+/// Вердикты для текущей сборки contracts/out/ (её разворачивает кнопка; до пересборки — v3, после — v4). Ошибки
+/// (текст): артефакт не сверен, запись не разобрана.
+pub fn verdicts_current() -> &'static Result<Vec<Verdict>, String> {
+    static BAD: OnceLock<Result<Vec<Verdict>, String>> = OnceLock::new();
+    match code::current_version() {
+        Ok(v) => verdicts_of(v),
+        Err(e) => BAD.get_or_init(|| Err(e)),
+    }
+}
+
+/// Номер вида шага контракта у шага пула менеджера (kind.rs Params::kind: UNI_V4 = 19, INF_CL = 20, INF_BIN = 21,
+/// решение 441 — BALANCER_V3 = 23);
 /// None — не шаг менеджера (решению 400 не подлежит). Ошибок нет.
 pub fn number(k: ExecKind) -> Option<u8> {
     match k {
         ExecKind::UniV4 => Some(19),
         ExecKind::InfCl => Some(20),
         ExecKind::InfBin => Some(21),
+        // Решение 441 (ревью, п. 2): шаг BALANCER_V3 — тоже только по записи о приёмке на живых пулах (её пока нет).
+        ExecKind::BalancerV3 => Some(23),
         _ => None,
     }
 }
@@ -84,10 +116,15 @@ pub fn admits(k: ExecKind, stable: bool, hooks: Address) -> Result<(), String> {
 /// Решение 401, ревью t186 (Н1): то же, что `admits(..).is_ok()`, без строк — для горячего пути котировки
 /// (pool_gate.rs decide). Вердикты — OnceLock (после первого разбора чтение без замка). Ошибок нет.
 pub fn accepted(k: ExecKind, stable: bool, hooks: Address) -> bool {
+    accepted_for(Version::V3, k, stable, hooks)
+}
+
+/// Решение 441 (ревью, п. 1): то же для кода данной версии исполнителя кошелька. Ошибок нет.
+pub fn accepted_for(v: Version, k: ExecKind, stable: bool, hooks: Address) -> bool {
     let Some(c) = class_of(k, stable, hooks) else {
         return true;
     };
-    match verdicts() {
+    match verdicts_of(v) {
         Ok(list) => list.iter().any(|x| x.class == c && x.accepted),
         Err(_) => false,
     }
@@ -131,9 +168,14 @@ pub fn listing_of(v: &Result<Vec<Verdict>, String>) -> String {
     )
 }
 
-/// listing_of для текущей сборки. Ошибок нет.
+/// listing_of для кода v3 (кошельки с v3). Ошибок нет.
 pub fn listing() -> String {
     listing_of(verdicts())
+}
+
+/// Решение 441 (ревью, п. 1): listing_of для кода данной версии (сверка исполнителя кошелька, onchain.rs). Ошибок нет.
+pub fn listing_for(v: Version) -> String {
+    listing_of(verdicts_of(v))
 }
 
 /// Строки для интерфейса (окно кошельков / развёртывания). Запись не разобрана — пусто (причина — в запрете

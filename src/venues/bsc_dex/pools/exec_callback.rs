@@ -40,10 +40,11 @@ use super::registry_key;
 /// Имя настройки.
 pub const SETTING: &str = "dex.v3_swap_callback";
 
-/// Решение 440: исполнитель v4 (шаг FLUID = 22) есть только в исходнике contracts/ArbExecutor.sol — артефакты
-/// contracts/out/ ещё v3; кошелька v4 быть не может, пока артефакты не пересобраны и исполнитель не переразвёрнут.
+/// Решения 440, 441, 456: исполнитель v4 (шаги FLUID = 22, BALANCER_V3 = 23, LB20 = 24, EKUBO = 25) есть только в
+/// исходнике contracts/ArbExecutor.sol — артефакты contracts/out/ ещё v3; кошелька v4 быть не может, пока артефакты не
+/// пересобраны (contracts/build.sh) и исполнитель не переразвёрнут.
 pub const V4_TODO: &str =
-    "нужна сборка исполнителя v4 (contracts/build.sh, шаг FLUID) и переразвёртывание исполнителя";
+    "нужен исполнитель v4: пересоберите contracts/build.sh и переразверните (решение 456)";
 
 /// Память итогов: версия → сигнатура → None — вызов есть, Some — причина.
 type Seen = HashMap<Version, HashMap<String, Option<String>>>;
@@ -70,9 +71,8 @@ pub fn check(v: Version, sig: &str) -> Option<String> {
     let rt = match v {
         Version::V1 => code::runtime_v1(),
         Version::V2 => code::runtime_v2(),
-        Version::V3 => code::runtime(),
-        // Решение 440: v4 ещё не собрана (contracts/out — v3) — артефакта v4 нет.
-        Version::V4 => Err(V4_TODO.to_string()),
+        Version::V3 => code::runtime_v3(),
+        Version::V4 => code::runtime(),
     };
     let ver = v.label();
     match rt {
@@ -187,6 +187,8 @@ pub fn since(k: ExecKind) -> Version {
         | ExecKind::Lb => Version::V2,
         ExecKind::UniV4 | ExecKind::InfCl | ExecKind::InfBin => Version::V3,
         ExecKind::Fluid => Version::V4,
+        // Решение 441: BALANCER_V3 = 23 — с v4.
+        ExecKind::BalancerV3 => Version::V4,
         _ => Version::V1,
     }
 }

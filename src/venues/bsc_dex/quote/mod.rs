@@ -87,6 +87,7 @@ pub mod quoter;
 pub mod quoter_calls;
 pub mod quoter_extra;
 pub mod quoter_balancer;
+pub mod quoter_balancer_v3;
 pub mod quoter_fluid;
 pub mod quoter_lb;
 pub mod quoter_dmm;

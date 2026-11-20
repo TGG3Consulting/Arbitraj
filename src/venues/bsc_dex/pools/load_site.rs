@@ -23,7 +23,9 @@ use super::super::tokens::Tokens;
 use super::families::{Family, Proto};
 use super::load::Loaded;
 use super::load_batch::Want;
-use super::{load_balancer, load_curve, load_curve_ng, load_saddle, load_stable_u};
+use super::{
+    load_balancer, load_balancer_v3, load_curve, load_curve_ng, load_saddle, load_stable_u,
+};
 
 /// Что делает: состояния всех пар одного контракта на блоке одним чтением. Принимает: окружение, токены (decimals),
 /// вид DEX, контракт пула, пары (token0, token1), блок. Возвращает: по каждой паре Loaded или причину; сбой чтения —
@@ -60,6 +62,18 @@ pub async fn states(
                 .map(|p| {
                     load_balancer::decode(&fx, &got, *p).map_err(|w| {
                         ctx.err(ErrorCode::BadResponse, format!("Balancer {contract}: {w}"))
+                    })
+                })
+                .collect(),
+            Err(e) => pairs.iter().map(|_| Err(e.clone())).collect(),
+        },
+        // Решение 441: Balancer V3 — одно чтение на пул, разбор по паре (load_balancer_v3.rs).
+        Proto::BalancerV3 => match load_balancer_v3::read(ctx, f, contract, &tag).await {
+            Ok((fx, got)) => pairs
+                .iter()
+                .map(|p| {
+                    load_balancer_v3::decode(contract, &fx, &got, *p).map_err(|w| {
+                        ctx.err(ErrorCode::BadResponse, format!("Balancer V3 {contract}: {w}"))
                     })
                 })
                 .collect(),

@@ -24,6 +24,7 @@ use super::super::super::ctx::Ctx;
 use super::super::super::pools::exec_kind::ExecKind;
 use super::super::super::pools::families::Proto;
 use super::super::super::pools::registry::Entry;
+use super::code::Version;
 use super::pool_pass::{self, Gated, Kind};
 
 /// Чем шаг допущен.
@@ -48,10 +49,13 @@ pub enum Refuse {
 /// крючок ключа. Возвращает: чем допущен или почему нет. Ошибок иных нет.
 pub fn decide(ctx: &Ctx, e: &Entry, k: ExecKind, hooks: Address) -> Result<Admit, Refuse> {
     let stable = e.family.proto == Proto::InfinityStable;
-    let record = super::live_proof::accepted(k, stable, hooks);
     if super::live_proof::number(k).is_none() {
         return Ok(Admit::Record);
     }
+    // Решение 441 (ревью, п. 1): запись сверяется с кодом версии исполнителя кошелька (версия не сверена — v3, как
+    // до решения).
+    let ver = ctx.exec_info().and_then(|(_, v)| v).unwrap_or(Version::V3);
+    let record = super::live_proof::accepted_for(ver, k, stable, hooks);
     let by_record = if record {
         Ok(Admit::Record)
     } else {

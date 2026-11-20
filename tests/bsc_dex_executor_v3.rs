@@ -223,6 +223,16 @@ fn versions_and_steps() {
     }
 }
 
+
+/// Решение 441 (ревью, п. 4): замороженный код v3 (contracts/out/v3/) — всегда v3, и до, и после пересборки v4.
+#[test]
+fn frozen_v3_is_v3() {
+    let v3 = code::runtime_v3().expect("код v3 сверен по out/v3/ArbExecutor.sha256");
+    assert_eq!(code::version_of(&v3).unwrap(), Some(Version::V3));
+    // Запись решения 400 сверяется с SHA-256 кода v3 (out/v3/), а не текущей сборки.
+    assert!(code::runtime_sha256_of(Version::V3).is_some());
+    assert_eq!(code::runtime_sha256_of(Version::V2), None);
+}
 fn abi(path: &str) -> JsonAbi {
     let text = std::fs::read_to_string(format!("{}/{path}", env!("CARGO_MANIFEST_DIR"))).unwrap();
     serde_json::from_str(&text).unwrap()

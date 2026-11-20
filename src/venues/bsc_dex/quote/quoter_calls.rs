@@ -69,6 +69,10 @@ pub fn request(
     if e.family.proto == Proto::BalancerV2 {
         return super::quoter_balancer::request(ctx, e, token_in, amount);
     }
+    // Balancer V3 (решение 441): квотер — Router V3 querySwapSingleTokenExactIn (quoter_balancer_v3.rs).
+    if e.family.proto == Proto::BalancerV3 {
+        return super::quoter_balancer_v3::request(ctx, e, token_in, amount);
+    }
     // Liquidity Book V2.1 (решение 290): квотер — сам пул, getSwapOut через eth_call (quoter_lb.rs).
     if e.family.proto == Proto::LbV21 {
         return super::quoter_lb::request(ctx, e, token_in, amount);
@@ -386,6 +390,9 @@ pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
     }
     if e.family.proto == Proto::BalancerV2 {
         return super::quoter_balancer::decode(out);
+    }
+    if e.family.proto == Proto::BalancerV3 {
+        return super::quoter_balancer_v3::decode(out);
     }
     if e.family.proto == Proto::LbV21 {
         return super::quoter_lb::decode(out);

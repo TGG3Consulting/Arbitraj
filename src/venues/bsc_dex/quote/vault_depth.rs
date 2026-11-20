@@ -1,16 +1,20 @@
 //! Файл: venues/bsc_dex/quote/vault_depth.rs
-//! Что делает: глубина пула в общем хранилище (Balancer V2, решение 289) по направлению в полосе цены (решение 73) —
-//! без комиссии пула (чистый объём, решение Тиграна к 73): средняя цена исполнения не выходит за полосу от цены малой
-//! пробы (покупка — не выше p0·(1+b), продажа — не ниже p0·(1−b)). Поиск суммы — делением отрезка пополам по той же
-//! формуле, что котировка (math/balancer_math.rs с нулевой комиссией). Весовой пул не берёт вход больше 30 % баланса
-//! (MAX_IN_RATIO) — тогда глубина до этого предела и full = false.
+//! Что делает: глубина пула в общем хранилище (Balancer V2, решение 289; Balancer V3, решения 441 и 452) по направлению
+//! в полосе цены (решение 73) — без комиссии пула (чистый объём, решение 73 п. 17): средняя цена исполнения не выходит
+//! за полосу от цены малой пробы (покупка — не выше p0·(1+b), продажа — не ниже p0·(1−b)). Поиск суммы — делением
+//! отрезка пополам по той же формуле, что котировка (math/balancer_math.rs с нулевой комиссией). Весовой пул не берёт
+//! вход больше 30 % баланса (MAX_IN_RATIO) — тогда глубина до этого предела и full = false. Balancer V3 с крючком
+//! StableSurge: статическая комиссия 0 не снимает надбавку всплеска (math/balancer_v3_hook.rs: 0 + наибольшая·часть),
+//! поэтому для глубины крючок снимается — комиссии нет целиком (решение 73 п. 17). Пул StableSurge с onSwap только для
+//! хранилища (open = false) не трогается: крючок откатывает обмен — пул неторгуемый, глубины нет. MEV Capture не
+//! трогается (при нулевых чаевых комиссия и так статическая, 0).
 //! Кто вызывает: quote/depth_band.rs (ветка VaultPool).
-//! От чего зависит: core/types (VaultPoolData), math/balancer_math.rs.
+//! От чего зависит: core/types (VaultPoolData, V3Hook), math/balancer_math.rs.
 //! Настройки: нет (полосу даёт вызывающий).
 
 use alloy_primitives::U256;
 
-use crate::core::types::VaultPoolData;
+use crate::core::types::pool_vault::{V3Hook, VaultPoolData};
 
 use super::super::math::balancer_math;
 
@@ -35,6 +39,13 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     }
     let mut nf = d.clone();
     nf.fee = U256::ZERO;
+    // Решение 73 п. 17: без всей комиссии — у StableSurge снять надбавку всплеска (open = false — откат, не трогать).
+    if let Some(v3) = nf.v3.as_mut()
+        && v3.open
+        && matches!(v3.hook, V3Hook::Surge { .. })
+    {
+        v3.hook = V3Hook::None;
+    }
     let bal_in = *d.balances.get(i)?;
     let probe = bal_in / U256::from(PROBE_DIV);
     if probe.is_zero() {
@@ -62,11 +73,12 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     // Верхняя граница поиска: весовой — 30 % баланса входа (больше пул откатит), стейблсвап — STABLE_CAP_BALANCES балансов.
     let cap = match &d.curve {
         crate::core::types::VaultCurve::Weighted { .. }
-        | crate::core::types::VaultCurve::WeightedV2 { .. } => {
-            balancer_math::mul_down(bal_in, U256::from(3u8) * super::super::math::ten::E17)?
-        }
+        | crate::core::types::VaultCurve::WeightedV2 { .. } => weighted_cap(d, i, bal_in)?,
+        // Решение 452: кривая V3 (Gyro, ReClamm, LBP с фиксированной ценой) — тот же потолок, что у стейблсвапа: сверх
+        // ёмкости пула формула откатывается (котировки нет — «не в полосе»).
         crate::core::types::VaultCurve::Stable { .. }
-        | crate::core::types::VaultCurve::StableV2 { .. } => {
+        | crate::core::types::VaultCurve::StableV2 { .. }
+        | crate::core::types::VaultCurve::V3 => {
             bal_in.checked_mul(U256::from(STABLE_CAP_BALANCES))?
         }
     };
@@ -91,4 +103,20 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     }
     let o = balancer_math::amount_out(&nf, i, j, lo)?;
     Some((if buy { lo } else { o }, true))
+}
+
+/// Потолок поиска весового пула — 30 % баланса входа (MAX_IN_RATIO; больше пул откатит). Решение 441 (ревью, п. 6): у
+/// пула Balancer V3 предел — на живом балансе 18 знаков (WeightedMath V3 L173-L178: вход хранилища в 18 знаках с
+/// курсом), в единицах токена — 30 % живого баланса / курс / множитель точности. Принимает: состояние, индекс входа,
+/// сырой баланс входа. Возвращает: потолок в единицах токена. None — переполнение, нулевой курс или множитель.
+fn weighted_cap(d: &VaultPoolData, i: usize, bal_in: U256) -> Option<U256> {
+    let ratio = U256::from(3u8) * super::super::math::ten::E17;
+    match &d.v3 {
+        None => balancer_math::mul_down(bal_in, ratio),
+        Some(v3) => {
+            let live = balancer_math::mul_down(*v3.live.get(i)?, ratio)?;
+            let per_rate = balancer_math::div_down(live, *v3.rates.get(i)?)?;
+            per_rate.checked_div(*d.scaling.get(i)?)
+        }
+    }
 }

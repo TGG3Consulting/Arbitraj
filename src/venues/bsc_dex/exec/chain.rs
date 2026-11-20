@@ -161,7 +161,7 @@ pub fn command(ctx: &Ctx, s: &Step, f: Format, wallet: Address) -> GatewayResult
         // Пул в общем хранилище (Balancer V2, решение 289): только шаг BALANCER исполнителя v2.
         PoolKind::VaultPool => Err(ctx.err(
             ErrorCode::Internal,
-            "Balancer V2 не исполняется Universal Router (шаг BALANCER контракта-исполнителя)",
+            "Balancer V2 / V3 не исполняется Universal Router (шаги BALANCER / BALANCER_V3 исполнителя)",
         )),
         // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): только шаг LB исполнителя v2.
         PoolKind::LbBin => Err(ctx.err(

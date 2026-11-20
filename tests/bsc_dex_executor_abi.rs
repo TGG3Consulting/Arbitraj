@@ -120,6 +120,8 @@ fn kinds_match_contract_constants() {
         ("INF_BIN", Params::InfBin { key: inf_key() }),
         // Решение 440: пул Fluid DEX T1 — только v4.
         ("FLUID", Params::Fluid(fluid_step(1))),
+        // Решение 441: пул Balancer V3 — только v4.
+        ("BALANCER_V3", Params::BalancerV3 { pool: Address::ZERO }),
     ];
     for (name, p) in all {
         assert_eq!(p.kind(), constant(name), "вид {name}");

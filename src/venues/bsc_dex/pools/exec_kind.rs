@@ -73,6 +73,10 @@ pub enum ExecKind {
     /// Liquidity Book V2.1 (решение 290): перевод входа в пул + `pair.swap(swapForY = (getTokenX() пула == вход), to)`;
     /// без обратного вызова, data пусто. Только исполнитель v2.
     Lb,
+    /// Решение 441 (T433-F2): пул Balancer V3 — `Vault.unlock` → `balancerV3Callback` исполнителя → `Vault.swap(EXACT_IN,
+    /// пул, вход, выход, сумма, предел 1)` → перевод входа хранилищу + `settle`, `sendTo` выхода получателю шага; пул шага —
+    /// хранилище, data = abi.encode(address пула). Только исполнитель v4.
+    BalancerV3,
     /// Решение 395 (t181): пул Uniswap V4 внутри PoolManager — `unlock` → `unlockCallback` → `swap(ключ, …)` → `sync` /
     /// перевод / `settle` долга, `take` выхода; data = abi.encode(PoolKey). Только исполнитель v3.
     UniV4,
@@ -110,6 +114,7 @@ impl ExecKind {
             ExecKind::Smardex => "SMARDEX",
             ExecKind::Balancer => "BALANCER",
             ExecKind::Lb => "LB",
+            ExecKind::BalancerV3 => "BALANCER_V3",
             ExecKind::UniV4 => "UNI_V4",
             ExecKind::InfCl => "INF_CL",
             ExecKind::InfBin => "INF_BIN",
@@ -168,6 +173,9 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
         // шаг 18, v2.
         "lb_v21" => ExecKind::Lb,
+        // Решение 441: Vault V3 — unlock / swap / settle / sendTo любым контрактом (Vault.sol 20241204-v3-vault L133-L163,
+        // L197-L291: onlyWhenUnlocked, без белого списка); шаг 23, только исполнитель v4 (EVM-проба — после записи с узла).
+        "balancer_v3" => ExecKind::BalancerV3,
         // Решение 395 (t181): пулы внутри менеджеров — шаги v3. Uniswap V4: PoolManager.unlock / swap / sync / settle /
         // take (Uniswap/v4-core@bea7f6d1 src/PoolManager.sol L104-L114, L187-L227, L279-L302); Infinity CL и Bin:
         // Vault.lock / sync / settle / take + CLPoolManager.swap / BinPoolManager.swap (pancakeswap/infinity-core@3c5ef1be

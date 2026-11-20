@@ -46,6 +46,18 @@
   новые пулы только из справочника); точный выход (swapOut) не портирован; _utilizationVerify — через пределы резолвера;
   сверх ориентира 200 строк — math/fluid_swap.rs 241, exec/executor/kind.rs 235 (было 209), pools/families.rs, quote/pool_quote.rs,
   quote/depth_band.rs (давно сверх).
+- Решение 452 (T433-F2, доделка Balancer V3): обмен через буфер ERC4626 не строится (вопрос docs/TASKS.md «Решение 452»,
+  п. 2); MEV Capture при сборе чаевых ArbOS — без котировки (п. 3); ReClamm 2025 при сдвиге — без котировки (п. 5);
+  тест tests/arbitrum_balancer_v3.rs — #[ignore] до записи узла. `wc -l`: pools/created_log.rs 356 (было 349),
+  pools/families.rs +2; pools/load_balancer_v3_kinds.rs 220 и load_balancer_v3.rs 201 — разбиты ревью (180 / 138, новые
+  load_balancer_v3_reclamm.rs, load_balancer_v3_state.rs).
+- Решение 441 (T433-F2, Balancer V3): событие PoolRegistered хранилища V3 — подключено решением 452; исполнитель v4 не пересобран (contracts/build.sh; out/v3/ — копия v3) и нет EVM-теста шага
+  BALANCER_V3 (contracts/evmtest); тест tests/arbitrum_balancer_v3.rs — #[ignore] до записи узла; пулы с крючком обмена и
+  виды Gyro / ReClamm / LBP не подключены (docs/TASKS.md, «Решение 441»). `wc -l`: math/balancer_v3.rs, load_balancer_v3.rs —
+  в пределах 200; pools/families.rs (было 651) — давно сверх, +Proto::BalancerV3.
+- Ревью 441 (п. 7): exec/executor/code.rs — 283 строки → 306 (+runtime_sha256_of, current_version), сверх ориентира 200
+  (вынести версии v1–v3 в отдельный файл); live_proof.rs 156 → 198; пересборка v4 и её тесты — план в docs/TASKS.md
+  («Решение 441», ревью).
 - Решение 438 (ревью t222, п. H) и решение 439 (`wc -l`): сверх ориентира 200 — venues/bsc_dex/exec/cycle_exec.rs 217
   (было 212 до 439: +статистика условия пулов), send/ready.rs 238, exec/txs.rs 272, send/mod.rs 305 (было 302:
   +журнал «условие пулов при нескольких каналах»), send/track_l1.rs 208 (было 166: caught_up по времени блока и nonce

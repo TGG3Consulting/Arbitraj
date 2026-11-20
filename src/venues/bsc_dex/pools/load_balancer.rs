@@ -161,6 +161,8 @@ pub fn state(
     let weights_ok = match &curve {
         VaultCurve::Weighted { weights } | VaultCurve::WeightedV2 { weights } => weights.len() == n,
         VaultCurve::Stable { .. } | VaultCurve::StableV2 { .. } => true,
+        // Решение 452: кривая пула Balancer V3 — у пула V2 не бывает.
+        VaultCurve::V3 => false,
     };
     if n < 2 || balances.len() != n || scaling.len() != n || !weights_ok {
         return Err(format!(
@@ -187,5 +189,7 @@ pub fn state(
         paused,
         i0,
         i1,
+        // Решение 441: часть хранилища Balancer V3 — у пула V2 её нет.
+        v3: None,
     })))
 }

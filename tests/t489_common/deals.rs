@@ -2,9 +2,11 @@
 //! Что делает: решение 489 — сделки тестов через настоящий arb::core::ledger::save (учёт памяти, unsettled, SQLite ядра
 //! t198_common, feed_hold::on_saved и net_hold::on_saved — тот же путь, что у бота): идущая сделка bingx → площадка
 //! DEX (решение 196: держит площадку), её правка и сохранение, части возврата USDT («идёт», «ждёт повтора»,
-//! «вернулись», «не вернулись»), ожидание общего возврата группы; память ядра «сеть держат сделки» (Inner.net_held).
-//! Кто вызывает: tests/core_net_chain_489_held.rs, tests/core_net_chain_489_bsc.rs, tests/core_net_chain_489_recap.rs.
-//! От чего зависит: arb::core (deal, deal_group, ledger, usdt_return_state). Моков нет.
+//! «вернулись», «не вернулись»), ожидание общего возврата группы; память ядра «сеть держат сделки» (Inner.net_held);
+//! remember — учёт памяти без сохранения (для проверки возвращаемого значения net_hold::on_saved).
+//! Кто вызывает: tests/core_net_chain_489_held.rs, tests/core_net_chain_489_bsc.rs, tests/core_net_chain_489_recap.rs,
+//! tests/core_net_chain_489_flush.rs.
+//! От чего зависит: arb::core (deal, deal_group, ledger, unsettled, usdt_return_state). Моков нет.
 
 #![allow(dead_code)]
 
@@ -39,6 +41,13 @@ pub fn new_deal(id: &str, dex: &str, chain: Option<ChainId>) -> Deal {
 /// Идущая сделка bingx → `dex` (держит площадку по решению 196), сохранена ledger::save. Ошибок нет.
 pub async fn hold(core: &Core, id: &str, dex: &str, chain: Option<ChainId>) {
     arb::core::ledger::save(core, &new_deal(id, dex, chain)).await;
+}
+
+/// Сделка — в учёт памяти и набор незавершённых (как первые шаги ledger::save: учёт, unsettled::track), без записи в
+/// базу и без net_hold::on_saved — его тест зовёт сам и проверяет возвращаемое значение. Ошибок нет.
+pub fn remember(core: &Core, d: &Deal) {
+    core.inner.deals.lock().unwrap().insert(d.id.clone(), d.clone());
+    arb::core::unsettled::track(core, d);
 }
 
 /// Правка сделки `id` из учёта и сохранение ledger::save. Паника — сделки нет.

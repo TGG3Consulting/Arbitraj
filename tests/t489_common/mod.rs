@@ -50,11 +50,6 @@ pub fn symbols_at_ms(dir: &str) -> i64 {
     }
 }
 
-/// Код файла без строк-комментариев (t198_common::code_of) — проверки «правила по исходникам». Паника — файла нет.
-pub fn code_of(f: &str) -> String {
-    t198_common::code_of(f)
-}
-
 /// Площадка по id. Ошибок нет.
 pub fn v(id: &str) -> VenueId {
     VenueId(id.into())
@@ -110,6 +105,18 @@ pub async fn start(name: &str, with_arb: bool, arb_on: bool) -> Core {
             set(&core, "venue.enabled", a, json!(true)).await;
         }
     }
+    core
+}
+
+/// Ядро без настроек: реестр bingx (биржа), bsc_dex, arb_dex — обе DEX не включены (venue.enabled не задана), записей
+/// настроек нет — фоновым задачам ядра (rebuild.rs watch_settings, пересборка) нечего делать: переходы сети и толчки
+/// проверяются без посторонних толчков (тест на одном потоке без await между шагами). Ошибок нет.
+pub async fn bare(name: &str) -> Core {
+    let core = t198_common::start(name).await;
+    let mut kinds = vec![(v("bingx"), VenueKind::Cex)];
+    kinds.push((v("bsc_dex"), VenueKind::Dex));
+    kinds.push((v("arb_dex"), VenueKind::Dex));
+    *core.inner.kinds.write().unwrap() = kinds;
     core
 }
 

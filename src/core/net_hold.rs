@@ -13,7 +13,8 @@
 //! нет (повторный захват: «Перегнать» по «не вернулись», «Вернуть боту») — отметка и толчок; отпускание: площадка из
 //! памяти больше не держится — убрать и толчок. Толчок — перечитывание справочника сетей бирж без потери (net_kick.rs)
 //! и пересборка. Повторные сохранения без перехода толчков не дают.
-//! Кто вызывает: core/chain_play.rs (holds_net_any, mark), core/ledger.rs (on_saved).
+//! Отметку ставит и снимает и chain_play.rs live (переход виден там раньше on_saved) — толкает тот, кто сменил отметку.
+//! Кто вызывает: core/chain_play.rs (holds_net_any, mark, unmark), core/ledger.rs (on_saved).
 //! От чего зависит: feed_hold.rs (holds), unsettled.rs, usdt_return_parts.rs, usdt_return_state.rs, deal.rs,
 //! deal_group.rs, daily_venue.rs, registry_sync.rs (venue.enabled), net_kick.rs, engine.rs.
 //! Настройки: venue.enabled (через registry_sync::enabled).
@@ -88,6 +89,12 @@ pub fn mark(core: &Core, v: &VenueId) -> bool {
     lk(&core.inner.net_held).insert(v.clone())
 }
 
+/// Что делает: снимает отметку «сеть держат сделки». Принимает: ядро, площадку. Возвращает: была ли отметка.
+/// Ошибок нет. Замок: net_held (коротко).
+pub fn unmark(core: &Core, v: &VenueId) -> bool {
+    lk(&core.inner.net_held).remove(v)
+}
+
 /// Что делает: сделка `d` сохранена — захват (её площадка — DEX, не включена, сделка держит её сеть, отметки нет) и
 /// отпускание (площадки из памяти: включили — забыть без толчка; держателей нет — убрать); был переход — толчок
 /// перечитывания справочника сетей бирж (net_kick.rs) и пересборки. Принимает: ядро, сделку. Возвращает: был ли толчок.
@@ -106,8 +113,8 @@ pub fn on_saved(core: &Core, d: &Deal) -> bool {
         if !on && holds_net_any(core, &v) {
             continue;
         }
-        lk(&core.inner.net_held).remove(&v);
-        kick |= !on;
+        // Снял отметку кто-то раньше (chain_play.rs live — он и толкнул) — второго толчка нет.
+        kick |= unmark(core, &v) && !on;
     }
     if kick {
         super::net_kick::kick(core);

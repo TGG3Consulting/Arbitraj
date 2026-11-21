@@ -53,7 +53,7 @@ type Book = (Vec<CoinEntry>, Vec<CoinEntry>);
 async fn state(name: &str, raw: &[CoinNetworkInfo], n: u8) -> (Vec<CoinNetworkInfo>, Book) {
     let core = start(name, n > 1, n == 4).await;
     if n == 3 {
-        hold(&core, "H489", "arb_dex", Some(arb_chain()));
+        hold(&core, "H489", "arb_dex", Some(arb_chain())).await;
     }
     let nets = feed(&core, NEW, raw.to_vec());
     let book = bsc_book(&core);

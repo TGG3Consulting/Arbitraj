@@ -126,7 +126,7 @@ pub async fn evaluate(
             });
         if view.state == State::Anomaly && !was_anomaly {
             // ТЗ, шаг 3: аномальный спред — перечитать статусы ввода и вывода напрямую из API.
-            core.inner.kick_networks.notify_waiters();
+            super::net_kick::kick(core);
         }
         if view.state == State::Candidate {
             if !was_candidate {

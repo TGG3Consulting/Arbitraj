@@ -88,8 +88,8 @@ pub async fn save(core: &Core, deal: &Deal) {
         core.inner.live.send(CoreEvent::Deal(v));
     }
     super::feed_hold::on_saved(core, rec); // Решение 196: сделка закрылась — снять поток выключенной площадки.
-    // Решение 489: сеть выключенной площадки DEX отпущена (сделок и возвратов USDT по ней нет) — один толчок.
-    super::net_hold::on_saved(core);
+    // Решение 489: сеть выключенной площадки DEX захвачена этой сделкой или отпущена — один толчок (net_hold.rs).
+    super::net_hold::on_saved(core, rec);
     // Решение 394: сделка группы докупки — след её продажи (ride_trail.rs) и общий возврат, если она ушла с пути
     // последней из идущих (coin_group.rs); без группы — ничего.
     if rec.group.is_some() {

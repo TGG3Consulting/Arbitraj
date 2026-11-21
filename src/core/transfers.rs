@@ -13,7 +13,7 @@
 //! с выводом (credit_base.rs; вывод его не ждёт); принимается, только если ответил до ответа на запрос вывода (seal), после
 //! зачисления привязывается к хешу вывода.
 //! Кто вызывает: executor.rs (перевод сделки — send_trade), relay.rs (перегон — send_trade, решение 227), usdt_relay_retry.rs (USDT).
-//! От чего зависит: engine.rs, usdt_accepted.rs (решение 405: вывод перегона USDT принят), wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
+//! От чего зависит: engine.rs, net_ready.rs (решение 489: вывод монеты другой сети — только с записью справочника), usdt_accepted.rs (решение 405: вывод перегона USDT принят), wait.rs, rules_apply.rs, risk.rs, registry (сети BSC площадок), credit_expect.rs,
 //! precheck_deposit.rs (target_on — монета и сеть адреса получателя, решение 316), credit_watch.rs, transfer_credit.rs, credit_chain.rs, transfer_chain.rs.
 //! Решение 411: адрес биржи-получателя — из памяти под ключом API, запрос — по триггеру (deposit_proof.rs); отказ вывода
 //! InvalidAddress — пометка «спросить адрес заново».
@@ -317,6 +317,8 @@ async fn go(
     let gw_from = deps.gw.get_as(from, acc).await.map_err(|e| e.message)?;
     let gw_to = deps.gw.get_as(to, acc).await.map_err(|e| e.message)?;
     let net_from = network(core, asset, from)?;
+    // Решение 489: монета другой сети — без записи справочника сетей отправителя (точность, шаг) вывода нет.
+    super::net_ready::withdraw(core, from, asset, &net_from)?;
     // Решение 316: монета и сеть адреса получателя — тот же target_on, что у предпроверки и прогрева адресов
     // (precheck_deposit.rs): ключ кэша адаптера один по построению.
     let super::precheck_deposit::Target {

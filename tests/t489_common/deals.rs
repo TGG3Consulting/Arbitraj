@@ -1,9 +1,10 @@
 //! Файл: tests/t489_common/deals.rs
-//! Что делает: решение 489 — сделки тестов: идущая сделка bingx → площадка DEX (решение 196: держит площадку), её
-//! изменение и сохранение, как ledger.rs save (учёт памяти, затем feed_hold::on_saved и net_hold::on_saved): закрытие,
-//! закрытие с идущим возвратом USDT, конец возврата.
-//! Кто вызывает: tests/core_net_chain_489_held.rs, tests/core_net_chain_489_bsc.rs.
-//! От чего зависит: arb::core (deal, feed_hold, net_hold, usdt_return_state). Моков нет.
+//! Что делает: решение 489 — сделки тестов через настоящий arb::core::ledger::save (учёт памяти, unsettled, SQLite ядра
+//! t198_common, feed_hold::on_saved и net_hold::on_saved — тот же путь, что у бота): идущая сделка bingx → площадка
+//! DEX (решение 196: держит площадку), её правка и сохранение, части возврата USDT («идёт», «ждёт повтора»,
+//! «вернулись», «не вернулись»), ожидание общего возврата группы; память ядра «сеть держат сделки» (Inner.net_held).
+//! Кто вызывает: tests/core_net_chain_489_held.rs, tests/core_net_chain_489_bsc.rs, tests/core_net_chain_489_recap.rs.
+//! От чего зависит: arb::core (deal, deal_group, ledger, usdt_return_state). Моков нет.
 
 #![allow(dead_code)]
 
@@ -12,6 +13,7 @@ use serde_json::json;
 
 use arb::core::Core;
 use arb::core::deal::{Deal, Step};
+use arb::core::deal_group::DealGroup;
 use arb::core::types::{Asset, ChainId, Direction, VenueId};
 use arb::core::usdt_return_state::UsdtReturn;
 
@@ -20,9 +22,8 @@ fn v(id: &str) -> VenueId {
     VenueId(id.into())
 }
 
-/// Идущая сделка bingx → `dex` монеты сети `chain` (шаг «покупка» — открыта): по решению 196 держит площадку `dex`.
-/// Ошибок нет.
-pub fn hold(core: &Core, id: &str, dex: &str, chain: Option<ChainId>) {
+/// Новая сделка bingx → `dex` монеты сети `chain` (шаг «покупка» — открыта). Ошибок нет.
+pub fn new_deal(id: &str, dex: &str, chain: Option<ChainId>) -> Deal {
     let dir = Direction {
         asset: Asset {
             chain,
@@ -32,50 +33,76 @@ pub fn hold(core: &Core, id: &str, dex: &str, chain: Option<ChainId>) {
         buy_on: v("bingx"),
         sell_on: v(dex),
     };
-    let d = Deal::new(id.into(), dir, json!({}), Decimal::ZERO);
-    core.inner.deals.lock().unwrap().insert(id.into(), d);
+    Deal::new(id.into(), dir, json!({}), Decimal::ZERO)
 }
 
-/// Меняет сделку `id` и сохраняет — как ledger.rs save: запись в учёт памяти, затем feed_hold::on_saved и
-/// net_hold::on_saved. Возвращает: был ли толчок перечитывания справочника сетей (net_hold). Паника — сделки нет.
-pub fn save(core: &Core, id: &str, f: impl FnOnce(&mut Deal)) -> bool {
-    let mut deals = core.inner.deals.lock().unwrap();
-    let d = deals.get_mut(id).unwrap();
-    f(d);
-    let rec = d.clone();
-    drop(deals);
-    arb::core::feed_hold::on_saved(core, &rec);
-    arb::core::net_hold::on_saved(core)
+/// Идущая сделка bingx → `dex` (держит площадку по решению 196), сохранена ledger::save. Ошибок нет.
+pub async fn hold(core: &Core, id: &str, dex: &str, chain: Option<ChainId>) {
+    arb::core::ledger::save(core, &new_deal(id, dex, chain)).await;
 }
 
-/// Сделка `id` закрыта, возврат USDT не начат. Возвращает: был ли толчок (save). Паника — сделки нет.
-pub fn close(core: &Core, id: &str) -> bool {
-    save(core, id, |d| d.step = Step::Closed)
+/// Правка сделки `id` из учёта и сохранение ledger::save. Паника — сделки нет.
+pub async fn edit(core: &Core, id: &str, f: impl FnOnce(&mut Deal)) {
+    let mut d = core.inner.deals.lock().unwrap().get(id).cloned().unwrap();
+    f(&mut d);
+    arb::core::ledger::save(core, &d).await;
 }
 
-/// Сделка `id` закрыта, возврат USDT идёт (часть «идёт» `from` → `to`, как usdt_return_state.rs). Возвращает: был ли
-/// толчок (save). Паника — сделки нет.
-pub fn close_returning(core: &Core, id: &str, from: &str, to: &str) -> bool {
-    let part = UsdtReturn::Pending {
-        amount: Decimal::ONE,
-        from: v(from),
-        to: v(to),
-    };
-    save(core, id, |d| {
+/// Часть возврата USDT 1 USDT `from` → `to` в состоянии `kind`: «идёт», «ждёт повтора», «вернулись», «не вернулись».
+/// Паника — неизвестное состояние.
+pub fn part(kind: &str, from: &str, to: &str) -> UsdtReturn {
+    let (amount, from, to) = (Decimal::ONE, v(from), v(to));
+    match kind {
+        "pending" => UsdtReturn::Pending { amount, from, to },
+        "retrying" => UsdtReturn::Retrying {
+            amount,
+            from,
+            to,
+            tries: 1,
+            why: "тест".into(),
+        },
+        "done" => UsdtReturn::Done {
+            amount,
+            credited: amount,
+            from,
+            to,
+            sent: None,
+            fee_usd: None,
+        },
+        "not_returned" => UsdtReturn::NotReturned {
+            amount,
+            at: from,
+            why: "тест".into(),
+        },
+        _ => panic!("состояние части {kind}"),
+    }
+}
+
+/// Сделка `id` закрыта с частью возврата `p` (ledger::save). Паника — сделки нет.
+pub async fn closed_with(core: &Core, id: &str, p: UsdtReturn) {
+    edit(core, id, |d| {
         d.step = Step::Closed;
-        d.usdt_return = Some(part);
+        d.usdt_return = Some(p);
     })
+    .await;
 }
 
-/// Возврат USDT сделки `id` закончен (часть «вернулись»). Возвращает: был ли толчок (save). Паника — сделки нет.
-pub fn return_done(core: &Core, id: &str, from: &str, to: &str) -> bool {
-    let part = UsdtReturn::Done {
-        amount: Decimal::ONE,
-        credited: Decimal::ONE,
-        from: v(from),
-        to: v(to),
-        sent: None,
-        fee_usd: None,
+/// Сделка `id` закрыта, её выручка ждёт общего возврата группы `group` с площадки `from` (DealGroup.wait; сделка — не
+/// первая группы). Паника — сделки нет.
+pub async fn group_waits(core: &Core, id: &str, group: &str, from: &str) {
+    let g = DealGroup {
+        id: group.into(),
+        wait: Some((v(from), Decimal::ONE)),
+        ..Default::default()
     };
-    save(core, id, |d| d.usdt_return = Some(part))
+    edit(core, id, |d| {
+        d.step = Step::Closed;
+        d.group = Some(Box::new(g));
+    })
+    .await;
+}
+
+/// Сеть площадки `dex` в памяти ядра «держат сделки» (Inner.net_held). Ошибок нет.
+pub fn net_held(core: &Core, dex: &str) -> bool {
+    core.inner.net_held.lock().unwrap().contains(&v(dex))
 }

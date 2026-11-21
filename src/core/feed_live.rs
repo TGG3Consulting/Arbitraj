@@ -84,7 +84,7 @@ impl Core {
                     )
                 } else {
                     let had = lk(&self.inner.subs).reset(venue);
-                    self.inner.kick_networks.notify_waiters();
+                    super::net_kick::kick(self);
                     self.request_rebuild();
                     let state = match (had, age) {
                         (false, _) => "подписки не было".to_string(),

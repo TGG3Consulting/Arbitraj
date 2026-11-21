@@ -11,7 +11,7 @@
 //! перегон (relay) и режим «отдельно». Решение 236: перегон возвращает итог (Relayed: ушло, зачислено, газ в USDT) —
 //! затраты возврата входят в итог сделки (deal_return_cost.rs).
 //! Кто вызывает: usdt_return_job.rs (relay, relay_try), usdt_return_retry.rs (relay_try, решение 163), reconcile.rs (separate).
-//! От чего зависит: transfers.rs, engine.rs (адрес USDT), dry.rs, deal_return_cost.rs (Relayed, газ в USDT), settings.
+//! От чего зависит: transfers.rs, net_ready.rs (решение 489: USDT сети, «перечитывается»), engine.rs (адрес USDT), dry.rs, deal_return_cost.rs (Relayed, газ в USDT), settings.
 //! Решение 249: «отдельно» биржа → биржа — только если разрешено venue.cex_cex обеих и списком venue.cex_cex_deny
 //! донора (cex_link::pair); иначе этот донор не берётся.
 //! Настройки: usdt_return.mode, usdt_return.low_balance_usd, usdt_return.amount_usd (по площадке), venue.quote_asset;
@@ -52,7 +52,8 @@ pub(super) fn usdt(core: &Core, venue: &VenueId) -> Result<Asset, String> {
     } else {
         None
     };
-    let addr = super::registry_chains::usdt_of(core, tag.as_ref())?;
+    // Решение 489: сеть захвачена, справочник ещё не перечитан — причина «перечитывается» (net_ready.rs).
+    let addr = super::net_ready::usdt_of(core, venue, tag.as_ref())?;
     Ok(Asset {
         chain: tag,
         ticker,

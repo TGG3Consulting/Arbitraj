@@ -14,6 +14,12 @@
   dde2ce065859d5f192bcdef2920e3035e7bd26bfa1444cfb84691d29e88de347 (2304 пары). Отбор: пары «<монета>-USDT» монет
   config_getall.json выше (69 пар, у USDT и SYK пары нет).
 
+Вырезки (этот репозиторий): `config_getall.json` — 61109 байт, sha256
+4acd8eef6bdab1cc13ad27c8645ca7cd2368d4ef788fd19836154ea1b4230453; `symbols.json` — 26970 байт, sha256
+970b0f6a26b0372e5442f0cefbc3107bbd2532730a8f271949b440610e3b1c75 (JSON с отступом 1, объекты монет и пар — без
+изменений).
+
 Время ответа symbols (t) тесты берут как время получения справочника пар (tests/t489_common symbols_at_ms).
 
-Кто читает: tests/core_net_chain_489.rs, tests/core_net_chain_489_held.rs, tests/core_net_chain_489_bsc.rs.
+Кто читает: tests/core_net_chain_489.rs, tests/core_net_chain_489_held.rs, tests/core_net_chain_489_bsc.rs,
+tests/core_net_chain_489_recap.rs.

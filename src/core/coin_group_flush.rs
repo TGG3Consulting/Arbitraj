@@ -1,8 +1,9 @@
 //! Файл: core/coin_group_flush.rs
 //! Что делает: решение 394 (t179) — ОДИН общий возврат USDT группы докупки (вынесено из coin_group.rs — размер файла;
 //! ревью 2 t179 — Н1, ревью 3 — Б1, Н2, Н4). Порядок:
-//! - носитель — первая сделка группы, если её часть в пуле, иначе первая отложенная; под замком учёта у всех частей
-//!   снимается wait, у остальных — «общий возврат в сделке …» (shared_in), у носителя — итог группы (GroupSum);
+//! - носитель — первая сделка группы, если её часть в пуле, иначе первая отложенная; в копиях записей (из учёта под
+//!   замком) у всех частей снимается wait, у остальных — «общий возврат в сделке …» (shared_in), у носителя — итог
+//!   группы (GroupSum); в учёт копии попадают только сохранением (решение 489: снятый wait виден вместе с частью «идёт»);
 //! - перегон готовится у носителя ОДНОЙ частью учёта на всю сумму (состояние «идёт»); сумма выше максимума вывода
 //!   площадки (справочник сетей ядра) — куски не больше максимума (pieces), уходят ПО ОЧЕРЕДИ в той же задаче
 //!   перегона, каждый со своим ID вывода (usdt_return_pieces.rs); ниже минимума — одним выводом, как у одиночной;
@@ -80,11 +81,15 @@ pub(super) async fn flush(core: &Core, g: &str, parts: Vec<Part>, was: bool) {
     let bearer = parts.iter().find(|p| p.deal == g).cloned().unwrap_or(first);
     let others: Vec<&Part> = parts.iter().filter(|p| p.deal != bearer.deal).collect();
     let total: Decimal = parts.iter().map(|p| p.amount).sum();
+    // Решение 489: правки — только в копиях; в учёт они попадают сохранением (носитель первым — вместе с частью «идёт»
+    // общего возврата). Снятое ожидание (wait) не видно в учёте раньше, чем появится эта часть: держатель сети площадки
+    // возврата (net_hold.rs) не пропадает ни на миг.
     let (copies, lead) = {
-        let mut deals = lk(&core.inner.deals);
+        let deals = lk(&core.inner.deals);
         let mut copies = vec![];
         for p in &others {
-            if let Some(d) = deals.get_mut(&p.deal) {
+            if let Some(d) = deals.get(&p.deal) {
+                let mut d = d.clone();
                 if let Some(x) = d.group.as_mut() {
                     x.wait = None;
                     x.shared_in = Some(bearer.deal.clone());
@@ -93,10 +98,11 @@ pub(super) async fn flush(core: &Core, g: &str, parts: Vec<Part>, was: bool) {
                     "Возврат USDT: 0 — общий возврат группы в сделке {} (решение 394)",
                     bearer.deal
                 ));
-                copies.push(d.clone());
+                copies.push(d);
             }
         }
-        let lead = deals.get_mut(&bearer.deal).map(|d| {
+        let lead = deals.get(&bearer.deal).map(|d| {
+            let mut d = d.clone();
             if let Some(x) = d.group.as_mut() {
                 x.wait = None;
                 x.shared_in = None;
@@ -109,7 +115,7 @@ pub(super) async fn flush(core: &Core, g: &str, parts: Vec<Part>, was: bool) {
                     });
                 }
             }
-            d.clone()
+            d
         });
         (copies, lead)
     };

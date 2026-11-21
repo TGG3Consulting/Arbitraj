@@ -3,7 +3,7 @@
 //! у core/rebuild.rs, без фоновой задачи пересборки: тест детерминирован), USDT сетей не по умолчанию (как rebuild.rs
 //! usdt_other), наборы подписки DEX и биржи по тем же условиям, что core/subscribe.rs wanted, монеты сети с адресами из
 //! набора.
-//! Кто вызывает: tests/core_net_chain_489.rs, tests/core_net_chain_489_held.rs.
+//! Кто вызывает: tests/core_net_chain_489.rs, tests/core_net_chain_489_held.rs, tests/core_net_chain_489_recap.rs.
 //! От чего зависит: arb::core (chain, rebuild_build, registry_build, registry_chains, registry_sync, subscribe).
 //! Моков нет.
 

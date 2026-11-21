@@ -7,7 +7,7 @@
 //! SpotPairs, как его шлёт адаптер; адреса, которые BingX даёт только в сети ARBITRUM; идущая сделка через arb_dex
 //! (решение 196: держит площадку), её закрытие и возврат USDT — deals.rs; справочник монет и наборы подписки — book.rs.
 //! Кто вызывает: tests/core_net_chain_489.rs, tests/core_net_chain_489_bsc.rs, tests/core_net_chain_489_held.rs,
-//! tests/core_net_chain_489_mexc.rs.
+//! tests/core_net_chain_489_mexc.rs, tests/core_net_chain_489_recap.rs.
 //! От чего зависит: arb::core::net_chain, arb::venues::bingx, arb::gateway::own_nets, t198_common. Моков нет.
 
 #![allow(dead_code)]
@@ -48,6 +48,11 @@ pub fn symbols_at_ms(dir: &str) -> i64 {
         NEW => 1795259800908,
         _ => panic!("время symbols записи {dir} не внесено"),
     }
+}
+
+/// Код файла без строк-комментариев (t198_common::code_of) — проверки «правила по исходникам». Паника — файла нет.
+pub fn code_of(f: &str) -> String {
+    t198_common::code_of(f)
 }
 
 /// Площадка по id. Ошибок нет.

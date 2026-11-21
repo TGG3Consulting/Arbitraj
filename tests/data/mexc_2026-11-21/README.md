@@ -9,6 +9,9 @@
   Отбор (8 монет, порядок ответа): USDT; первые четыре монеты с контрактом в ARB и BSC (RDNT, USDC, MLK, SKATE — у MLK и
   SKATE один адрес в обеих сетях); первые три с ARB без BSC (CATCHOLD, SEX, BFR).
 
+Вырезка (этот репозиторий): `config_getall.json` — 21264 байт, sha256
+055c5a680f4fced3f2ec9e6f9d812c8ecddf341fd1243a75c77275599d0d9230 (JSON с отступом 1, объекты монет — без изменений).
+
 exchangeInfo (t = 1795261715798) тесту не нужен — не положен.
 
 Кто читает: tests/core_net_chain_489_mexc.rs.

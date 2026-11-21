@@ -10,7 +10,8 @@
 //! Настройки: venue.enabled, venue.networks_poll_ms, venue.status_poll_ms, venue.status_bulk_min,
 //! venue.status_confirm_polls (по площадке; сглаживание мигания статусов — status_debounce.rs, решение 112);
 //! сопоставление нативной монеты с обёрткой (решение 62) — native.rs; venue.networks_fresh_ms — толчок внутри окна
-//! свежести ждёт его конца (решение 129).
+//! свежести ждёт его конца (решение 129). Решение 489: толчок во время запроса не теряется — поколение толчков
+//! (net_kick.rs): пришёл за проход — следующий проход без паузы.
 //! Решение 129: справочник без изменений (кроме времени получения) пересборку справочника монет не толкает.
 
 use std::collections::HashMap;
@@ -55,6 +56,7 @@ pub async fn run(core: Core, venue: VenueId) {
     // Решение 112: смена статуса ввода/вывода принимается после venue.status_confirm_polls опросов подряд.
     let mut debounce = super::status_debounce::Debounce::default();
     loop {
+        let seen = super::net_kick::generation(&core);
         if enabled(&core, &venue) {
             if let Some(wait) = fresh_left(&core, &venue, fetched) {
                 tokio::time::sleep(wait).await;
@@ -109,10 +111,11 @@ pub async fn run(core: Core, venue: VenueId) {
                 Err(_) => {}
             }
         }
+        // Решение 489: толчок за время прохода не теряется — пауза пропускается (net_kick.rs).
         if poll_name(&deps.settings, &venue) == NETWORKS_POLL {
-            own.pause(&deps, &core.inner.kick_networks).await;
+            super::net_kick::pause(&core, &mut own, seen).await;
         } else {
-            pacer.pause(&deps, &core.inner.kick_networks).await;
+            super::net_kick::pause(&core, &mut pacer, seen).await;
         }
     }
 }

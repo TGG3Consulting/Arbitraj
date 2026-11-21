@@ -66,7 +66,7 @@ pub async fn watch_settings(core: Core) {
             || crate::gateway::own_nets::affects(&c.name)
             || super::net_chain::affects(&core, &c)
         {
-            core.inner.kick_networks.notify_waiters();
+            super::net_kick::kick(&core);
         }
         if retry_on(&c.name, lk(&core.inner.subs).any_failed()) {
             core.request_rebuild();

@@ -226,6 +226,8 @@ pub mod maxwin_view;
 pub mod native;
 pub mod net_chain;
 pub mod net_hold;
+pub mod net_kick;
+pub mod net_ready;
 pub mod networks_merge;
 pub mod op_error;
 pub mod outcome_open;

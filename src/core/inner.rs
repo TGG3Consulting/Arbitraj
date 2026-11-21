@@ -118,6 +118,8 @@ pub struct Inner {
     pub market_tx: mpsc::Sender<MarketEvent>,
     /// «Толчок» обновления сетей бирж (аномальный спред — перечитать статусы ввода и вывода).
     pub kick_networks: Notify,
+    /// Решение 489: поколение толчков справочника сетей (net_kick.rs) — толчок во время запроса справочника не теряется.
+    pub networks_gen: std::sync::atomic::AtomicU64,
     /// «Толчок» пересборки справочника (несколько толчков подряд сливаются в одну пересборку).
     pub kick_rebuild: Notify,
     /// Тики монет — для режима «Ожидание» и ожидания котировки (stuck.rs).
@@ -288,6 +290,7 @@ impl Inner {
             exposure: Mutex::default(),
             market_tx,
             kick_networks: Notify::new(),
+            networks_gen: std::sync::atomic::AtomicU64::new(0),
             kick_rebuild: Notify::new(),
             coin_ticks,
             risk: Mutex::default(),

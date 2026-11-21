@@ -162,7 +162,7 @@ async fn fact_try(
     core: &Core,
     deal: &Deal,
     v: &VenueId,
-) -> Result<Decimal, (String, Option<GatewayError>)> {
+) -> Result<Decimal, (String, Option<Box<GatewayError>>)> {
     let a = &deal.direction.asset;
     let gw = super::dex_account::venue_of(core, deal, v)
         .await
@@ -175,7 +175,7 @@ async fn fact_try(
     let on = super::venue_ticker::ticker_on(core, a, v);
     let accs = gw.account_balances().await.map_err(|e| {
         let t = format!("{}: балансы счетов: {}", v.0, e.message);
-        (t, Some(e))
+        (t, Some(Box::new(e)))
     })?;
     let mut sum = Decimal::ZERO;
     for acc in accs

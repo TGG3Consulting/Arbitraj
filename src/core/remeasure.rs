@@ -92,7 +92,8 @@ pub fn of(deal: &Deal, value: Decimal, gross: Decimal, g: Guard) -> Option<Remea
 /// недостачи нет. Ошибок нет.
 pub fn tax_seen_pct(deal: &Deal) -> Option<Decimal> {
     let coin = &deal.direction.asset.ticker;
-    let pair = deal.transfers.chunks_exact(2).rev().find(|p| {
+    let (pairs, _) = deal.transfers.as_chunks::<2>();
+    let pair = pairs.iter().rev().find(|p| {
         p[1].venue == deal.at && &p[0].asset.ticker == coin && p[0].venue != p[1].venue
     })?;
     let (sent, got) = (&pair[0], &pair[1]);

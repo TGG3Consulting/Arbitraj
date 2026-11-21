@@ -40,10 +40,10 @@ async fn recapture_by_manual_relay_and_return_to_bot() {
     assert_eq!(vela.asset.contract, None, "сети arbitrum нет");
 
     // «Перегнать»: часть «идёт» → ledger::save — захват с толчком.
-    let gen = net_kick::generation(&core);
+    let was = net_kick::generation(&core);
     closed_with(&core, "R489", part("pending", "arb_dex", "bingx")).await;
     assert!(net_held(&core, "arb_dex"), "повторный захват");
-    assert!(net_kick::generation(&core) > gen, "толчок перечитывания");
+    assert!(net_kick::generation(&core) > was, "толчок перечитывания");
     // Справочник сетей ещё прежний — USDT сети и вывод монеты сети: «перечитывается», денег нет.
     let usdt = arb::core::net_ready::usdt_of(&core, &v("arb_dex"), Some(&a));
     let reread = usdt.as_ref().is_err_and(|e| e.contains(REREAD));
@@ -63,13 +63,13 @@ async fn recapture_by_manual_relay_and_return_to_bot() {
     // Возврат закончен — отпущена; «Вернуть боту» на arb_dex — новая сделка на продаже — захват с толчком.
     closed_with(&core, "R489", part("done", "arb_dex", "bingx")).await;
     assert!(!net_held(&core, "arb_dex"));
-    let gen = net_kick::generation(&core);
+    let was = net_kick::generation(&core);
     let mut back = new_deal("B489", "arb_dex", Some(a));
     back.at = v("arb_dex");
     back.step = Step::Selling;
     arb::core::ledger::save(&core, &back).await;
     assert!(net_held(&core, "arb_dex"), "«Вернуть боту» — захват");
-    assert!(net_kick::generation(&core) > gen, "толчок перечитывания");
+    assert!(net_kick::generation(&core) > was, "толчок перечитывания");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

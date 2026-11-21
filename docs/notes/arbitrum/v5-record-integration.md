@@ -88,3 +88,10 @@ Arbitrum (arb_dex, `dex.evm_chain_id` = 42161) сейчас нельзя — `fi
 3. Тигран включает направления Arbitrum (venue.enabled / направления решения 85) и жмёт «Старт».
 
 До шага 1 Arbitrum-сделки DEX не исполняются (деплой закрыт) — запуск безопасен.
+
+## Выполнено (21.11.2026, свой узел Arbitrum One — nitro v3.12.4, eth_simulateV1)
+
+- Запись: `tools/arbitrum_record/exec_v5_live.py` (копия exec_v4_live.py; `v4live_write.py` получил подписи версии) → `tests/data/executor_v5_live_2026-11-21/` (H = 526309916, bin-runtime v5 sha256 `36643fab…50ab`, chainId 42161, 30 вызовов (а)/(б) — все статус 1; виды 19 (3 пула), 23 (2 пула, без крючка и StableSurge), 22, 24, 1, 0; крючки static / mev — «нет пулов»; hooks_reject.json пуст).
+- `live_record.rs`: `SOURCES: [Source; 3]` + элемент v5; тест `tests/bsc_dex_executor_v5_live.rs`; в `tests/bsc_dex_executor_v4_live.rs` утверждение «v5 закрыт во всех сетях» заменено на «открыт в Arbitrum, закрыт в BSC и без сети» (иначе тест v4 упал бы после добавления записи).
+- Новые виды v5 (26 AERO_BASIC, 27 BALANCER_V3_BUF, 28 CURVE_ETH …) этой записью не покрыты: в записи для них нет случая симуляции (README записи). Правило live_rule.rs их не судит.
+- Проверка `deploy_gate::refusal_at(Some(42161))` = None — только в CI (локально сборку не запускали).

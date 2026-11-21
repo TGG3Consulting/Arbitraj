@@ -6,6 +6,9 @@
 //!   задана здесь по факту README: «WBNB (dex.native_wrapped, bsc_dex)», адреса BSC, решение 400);
 //! - v4, chainId из строки README «- chainId: 42161» — tests/data/executor_v4_live_2026-11-20 (свой узел Arbitrum One,
 //!   H = 526043647 — четвёртый прогон 20.11, решение 478; tools/arbitrum_record/exec_v4_live.py, решение 459); поле chain_id строк summary.json должно с ней совпасть.
+//! - v5, chainId из строки README «- chainId: 42161» — tests/data/executor_v5_live_2026-11-21 (свой узел Arbitrum One,
+//!   H = 526309916; tools/arbitrum_record/exec_v5_live.py — копия exec_v4_live.py под сборку v5, решение 488; docs/notes/arbitrum/
+//!   v5-record-integration.md);
 //!
 //! Вердикты — правило live_rule.rs (SHA-256 bin-runtime той версии — code::runtime_sha256_of), один разбор за запуск.
 //! Записи для пары нет — missing: все классы «не проверен» (текст с парой — pair).
@@ -33,7 +36,7 @@ struct Source {
     chain_doc: &'static str,
 }
 
-const SOURCES: [Source; 2] = [
+const SOURCES: [Source; 3] = [
     Source {
         version: Version::V3,
         dir: "tests/data/executor_v3_live_2026-11-17",
@@ -72,6 +75,26 @@ const SOURCES: [Source; 2] = [
         chain_doc: include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/data/executor_v4_live_2026-11-20/README.md"
+        )),
+    },
+    Source {
+        version: Version::V5,
+        dir: "tests/data/executor_v5_live_2026-11-21",
+        readme: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_live_2026-11-21/README.md"
+        )),
+        summary: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_live_2026-11-21/summary.json"
+        )),
+        reject: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_live_2026-11-21/hooks_reject.json"
+        )),
+        chain_doc: include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/executor_v5_live_2026-11-21/README.md"
         )),
     },
 ];

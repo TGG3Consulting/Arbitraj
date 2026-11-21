@@ -56,6 +56,18 @@
     выключенной площадки DEX после «Вернуть боту» до перечитывания — перевода нет: цели перегона только через
     relay::targets_why (relay.rs:65-72: монета в справочнике и присутствие с выводом на площадке монеты), у выключенной
     площадки присутствия нет (как у выключенной биржи по решению 196 и до 489).
+- **Решение 490 (21.11.2026, ветка t260/add-dex-network от feat/arbitrum a3f8f568) — «Добавить DEX» для площадки DEX любой
+  сети (Тигран: «ДА!» — в этом же релизе).** Выбор площадки DEX + сырой id; суффикс сети — с сервера
+  (`GET /api/venues/{id}/dex-key-suffix`, правило одно — `settings/dex_key.rs`, им же пользуется `ctx_place.rs`); новый ключ
+  «id@сеть» без площадки DEX этой сети или с сетью по умолчанию сервер отклоняет в PUT /api/settings (импорт не проверяет).
+  cargo / npm не запускались — сборка, clippy, svelte-check и тест `tests/settings_dex_key_490.rs` — в CI. Задачи:
+  - T490-01 **Живая проверка после выкладки.** «Настройки» → карточка dex.kind → площадка arb_dex → id `dodo-amm-dvm` →
+    «Добавить DEX» → строка `dodo-amm-dvm@arbitrum (добавлена руками …)` → задать dex.kind → после сохранения ключ — в
+    `GET /api/venues/arb_dex/dex-families` (pools/dex_ids.rs extra, Source::Settings) и во всех карточках области «DEX».
+    Затем — остальные DEX Arbitrum без индексатора по docs/notes/arbitrum/dex-settings-arbitrum.md и docs/FIRST_RUN.md.
+    Отказы: id на bsc_dex с «@» нельзя ввести (checkDexId); PUT «x@arbitrun» → «нет площадки DEX сети «arbitrun»».
+  - T490-02 **Тестов интерфейса в проекте нет** (ни vitest, ни *.test.* в ui/) — checkDexId(id, suffix) и сборка ключа в
+    components/DexAdder.svelte автотестом не покрыты; инфраструктуру не заводили (постановка). Нужна — отдельной задачей.
 
 - **Решение 488 (20.11.2026, ветка t258/exec-v5-build) — исполнитель v5 собран (T488-01); привязка версии v5 в коде бота.**
   `contracts/out/` = v5 (v4 + шаги AERO_BASIC = 26, BALANCER_V3_BUF = 27, CURVE_ETH = 28, BASIN = 29, WOMBAT = 30, SHELL = 31;

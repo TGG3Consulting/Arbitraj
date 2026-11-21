@@ -15,6 +15,7 @@ pub mod dex;
 pub mod dex_dry;
 pub mod dex_executor;
 pub mod dex_graph;
+pub mod dex_key;
 pub mod episodes;
 pub mod first_run;
 pub mod guard;

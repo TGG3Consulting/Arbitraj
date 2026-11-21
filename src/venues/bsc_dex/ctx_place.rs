@@ -11,11 +11,13 @@
 //! все чтения области «DEX» идут по нему; свои ключи площадки — own_dex (families::all, dex_ids::extra).
 //! Кто вызывает: ctx.rs (venue, at, log), main.rs (создание окружений), send/channels.rs (serves), directory/fetch.rs
 //! (dex_key), pools/families.rs и pools/dex_ids.rs (dex_suffix, own_dex), тесты (Place::BSC — одна площадка bsc_dex).
-//! От чего зависит: ctx.rs (чтение настроек).
+//! От чего зависит: ctx.rs (чтение настроек), settings/dex_key.rs (правило суффикса сети — одно на площадку, интерфейс и
+//! проверку ключа при записи, решение 490).
 //! Настройки: dex.chain [площадка DEX], dex.default_chain (вся система; только при нескольких площадках DEX); список
 //! площадок DEX — dex.venues (читает main.rs).
 
 use crate::gateway::errors::GatewayResult;
+use crate::settings::dex_key;
 use crate::settings::read::At;
 
 use super::ctx::Ctx;
@@ -50,26 +52,25 @@ impl Ctx {
     /// Сеть площадки — сеть по умолчанию (решение 430): площадка DEX в процессе одна — да, без чтения настроек (как до
     /// решения 435); несколько — dex.chain площадки равна dex.default_chain. Принимает: окружение.
     /// Ошибки: NotConfigured — при нескольких площадках не задана dex.chain или dex.default_chain.
+    /// Решение 490: это «суффикса ключа нет» — правило одно, settings/dex_key.rs suffix.
     pub fn default_chain(&self) -> GatewayResult<bool> {
-        if self.place.alone() {
-            return Ok(true);
-        }
-        let own = self.text("dex.chain")?;
-        let def = self
-            .settings
-            .text("dex.default_chain", At::default())
-            .map_err(|e| self.tag(e))?;
-        Ok(own.trim() == def.trim())
+        Ok(self.dex_suffix()?.is_none())
     }
 
     /// Суффикс ключа области «DEX» этой площадки (433-з): None — сеть по умолчанию (ключ = id индексатора, как раньше);
-    /// Some(«@сеть») — другая сеть (dex.chain). Принимает: окружение.
+    /// Some(«@сеть») — другая сеть (dex.chain). Решение 490: правило — settings/dex_key.rs suffix (то же отдаёт
+    /// интерфейсу GET /api/venues/{id}/dex-key-suffix). Принимает: окружение.
     /// Ошибки: NotConfigured — при нескольких площадках DEX не задана dex.chain или dex.default_chain.
     pub fn dex_suffix(&self) -> GatewayResult<Option<String>> {
-        if self.default_chain()? {
-            return Ok(None);
-        }
-        Ok(Some(format!("@{}", self.text("dex.chain")?.trim())))
+        dex_key::suffix(
+            self.place.alone(),
+            || self.text("dex.chain"),
+            || {
+                self.settings
+                    .text("dex.default_chain", At::default())
+                    .map_err(|e| self.tag(e))
+            },
+        )
     }
 
     /// Решение 435 (433-к): окружение другой площадки DEX того же процесса — те же настройки, секреты, HTTP, журнал и
